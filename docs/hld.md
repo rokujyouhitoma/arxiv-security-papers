@@ -25,12 +25,12 @@ flowchart TD
     subgraph OutputsStorage ["成果物集約ストレージ (outputs/)"]
         C1["outputs/raw_data/<br/>(JSON, Abstract TXT, PDF, Full TXT)"]
         C2["outputs/okf_papers/<br/>(OKF v0.2 Markdown)"]
-        subgraph ExecSummaries ["outputs/executive_summaries/ (ソート済み01-07層)"]
+        subgraph ExecSummaries ["outputs/executive_summaries/ (ソート済み01-05層)"]
             D1["01_per_run/ (1日4回)"]
             D2["02_daily/ (1日)"]
-            D4["04_monthly/ (月次)"]
-            D5["05_quarterly/ (四半期)"]
-            D7["07_annual/ (通期)"]
+            D3["03_monthly/ (月次)"]
+            D4["04_quarterly/ (四半期)"]
+            D5["05_annual/ (通期)"]
         end
         C3["outputs/index.md & log.md<br/>(OKFカタログ & ログ)"]
     end
@@ -47,9 +47,9 @@ flowchart TD
     C2 -->|入力| B6
     B6 -->|生成| D1
     B6 -->|生成| D2
+    B6 -->|生成| D3
     B6 -->|生成| D4
     B6 -->|生成| D5
-    B6 -->|生成| D7
     B6 --> B7
     B7 -->|更新| C3
 ```
@@ -74,17 +74,17 @@ flowchart TD
 │   ├── executive_summaries/            # 階層型日本語エグゼクティブサマリー
 │   │   ├── 01_per_run/                 # 1. 取得時ごとサマリー (1日4回)
 │   │   ├── 02_daily/                   # 2. 日次統合サマリー (1日)
-│   │   ├── 04_monthly/                 # 4. 月次サマリー (月次)
-│   │   ├── 05_quarterly/               # 5. 四半期サマリー (四半期)
-│   │   └── 07_annual/                  # 7. 通期サマリー (通期)
+│   │   ├── 03_monthly/                 # 3. 月次サマリー (月次)
+│   │   ├── 04_quarterly/               # 4. 四半期サマリー (四半期)
+│   │   └── 05_annual/                  # 5. 通期サマリー (通期)
 │   ├── index.md                        # 全成果物へのナビゲーションを提供する OKF Root Index
 │   └── log.md                          # 実行ログ
 ├── templates/                          # 【レポート・ドキュメント用テンプレート集】
 │   ├── 01_per_run.md.template          # 取得時サマリーテンプレート
 │   ├── 02_daily.md.template            # 日次サマリーテンプレート
-│   ├── 04_monthly.md.template          # 月次サマリーテンプレート
-│   ├── 05_quarterly.md.template        # 四半期サマリーテンプレート
-│   ├── 07_annual.md.template           # 通期サマリーテンプレート
+│   ├── 03_monthly.md.template          # 月次サマリーテンプレート
+│   ├── 04_quarterly.md.template        # 四半期サマリーテンプレート
+│   ├── 05_annual.md.template           # 通期サマリーテンプレート
 │   └── okf_paper.md.template           # OKF 論文ドキュメントテンプレート
 ├── processed_papers.json               # 処理済み論文の冪等性保持状態
 ├── config.json                         # システム構成設定ファイル

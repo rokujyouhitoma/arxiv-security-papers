@@ -621,14 +621,14 @@ def generate_monthly_summary(workspace_dir, config):
 
         filepath = os.path.join(monthly_dir, f"monthly_{day_str}.md")
         table_md = build_summary_table_md(monthly_papers, filepath)
-        raw_template = load_template("04_monthly.md.template", """---
+        raw_template = load_template("03_monthly.md.template", """---
 type: "executive-summary-monthly"
 title: "arXiv セキュリティ 月次エグゼクティブサマリー ({date_str})"
 description: "過去30日間に収集されたセキュリティ論文 {count} 件の月次包括レポート"
 timestamp: "{timestamp}"
 ---
 
-# 📊 04_monthly: 月次エグゼクティブサマリー報告書 (直近30日間: {date_str})
+# 📊 03_monthly: 月次エグゼクティブサマリー報告書 (直近30日間: {date_str})
 
 **集計日時**: {datetime_utc}  
 **直近30日間の総論文数**: {count} 件  
@@ -695,14 +695,14 @@ def generate_quarterly_summary(workspace_dir, config):
 
         filepath = os.path.join(q_dir, f"quarterly_{day_str}.md")
         table_md = build_summary_table_md(quarterly_papers, filepath)
-        raw_template = load_template("05_quarterly.md.template", """---
+        raw_template = load_template("04_quarterly.md.template", """---
 type: "executive-summary-quarterly"
 title: "arXiv セキュリティ 四半期エグゼクティブサマリー ({date_str})"
 description: "過去90日間に収集されたセキュリティ論文 {count} 件の四半期包括レポート"
 timestamp: "{timestamp}"
 ---
 
-# 🏢 05_quarterly: 四半期エグゼクティブサマリー報告書 (直近90日間: {date_str})
+# 🏢 04_quarterly: 四半期エグゼクティブサマリー報告書 (直近90日間: {date_str})
 
 **集計日時**: {datetime_utc}  
 **直近90日間の総論文数**: {count} 件  
@@ -771,14 +771,14 @@ def generate_annual_summary(workspace_dir, config):
 
         filepath = os.path.join(a_dir, f"annual_{day_str}.md")
         table_md = build_summary_table_md(annual_papers, filepath)
-        raw_template = load_template("07_annual.md.template", """---
+        raw_template = load_template("05_annual.md.template", """---
 type: "executive-summary-annual"
 title: "arXiv セキュリティ 通期エグゼクティブサマリー ({date_str})"
 description: "過去365日間に収集されたセキュリティ論文 {count} 件の通期包括レポート"
 timestamp: "{timestamp}"
 ---
 
-# 🏆 07_annual: 通期エグゼクティブサマリー報告書 (直近365日間: {date_str})
+# 🏆 05_annual: 通期エグゼクティブサマリー報告書 (直近365日間: {date_str})
 
 **集計日時**: {datetime_utc}  
 **直近365日間の総論文数**: {count} 件  
@@ -845,7 +845,7 @@ timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
 # 🛡️ arXiv セキュリティ論文 ナレッジカタログ (Google OKF v0.2)
 
 > [!INFO]
-> このカタログは、arXiv (`cs.CR`) から取得したセキュリティ論文について、**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、および**日本語表形式エグゼクティブサマリー (01_per_run, 02_daily, 04_monthly, 05_quarterly, 07_annual)** を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供します。
+> このカタログは、arXiv (`cs.CR`) から取得したセキュリティ論文について、**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、および**日本語表形式エグゼクティブサマリー (01_per_run, 02_daily, 03_monthly, 04_quarterly, 05_annual)** を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供します。
 
 ---
 
@@ -855,9 +855,9 @@ timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
 |---|---|---|---|
 | ⏱️ **01_per_run** | `01_per_run/` | 取得時ごと (1日4回) | [{os.path.basename(per_run_path)}]({rel_pr_file}) |
 | 📅 **02_daily** | `02_daily/` | 最新日 ({date_str}) | [{os.path.basename(daily_path)}]({rel_d_file}) |
-| 📊 **04_monthly** | `04_monthly/` | 過去30日間 | [{os.path.basename(monthly_path)}]({rel_m_file}) |
-| 🏢 **05_quarterly** | `05_quarterly/` | 過去90日間 | [{os.path.basename(quarterly_path)}]({rel_q_file}) |
-| 🏆 **07_annual** | `07_annual/` | 過去365日間 | [{os.path.basename(annual_path)}]({rel_a_file}) |
+| 📊 **03_monthly** | `03_monthly/` | 過去30日間 | [{os.path.basename(monthly_path)}]({rel_m_file}) |
+| 🏢 **04_quarterly** | `04_quarterly/` | 過去90日間 | [{os.path.basename(quarterly_path)}]({rel_q_file}) |
+| 🏆 **05_annual** | `05_annual/` | 過去365日間 | [{os.path.basename(annual_path)}]({rel_a_file}) |
 
 ---
 
@@ -1035,9 +1035,9 @@ def main():
     print(f"Processed Papers: {len(processed_items)}")
     print(f"01_per_run: {os.path.relpath(per_run_path, workspace_dir)}")
     print(f"02_daily: {os.path.relpath(daily_path, workspace_dir)}")
-    print(f"04_monthly: {os.path.relpath(monthly_path, workspace_dir)}")
-    print(f"05_quarterly: {os.path.relpath(quarterly_path, workspace_dir)}")
-    print(f"07_annual: {os.path.relpath(annual_path, workspace_dir)}")
+    print(f"03_monthly: {os.path.relpath(monthly_path, workspace_dir)}")
+    print(f"04_quarterly: {os.path.relpath(quarterly_path, workspace_dir)}")
+    print(f"05_annual: {os.path.relpath(annual_path, workspace_dir)}")
     print(f"Index File: {config['paths']['index_file']}")
 
 if __name__ == "__main__":

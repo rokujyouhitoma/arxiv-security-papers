@@ -28,8 +28,8 @@
 ### 2.2 テンプレートファイル構成 (`templates/`)
 - `01_per_run.md.template`: 取得時サマリー用テンプレート
 - `02_daily.md.template`: 日次サマリー用テンプレート
-- `04_monthly.md.template`: 月次サマリー用テンプレート
-- `05_quarterly.md.template`: 四半期サマリー用テンプレート
-- `07_annual.md.template`: 通期サマリー用テンプレート
+- `03_monthly.md.template`: 月次サマリー用テンプレート
+- `04_quarterly.md.template`: 四半期サマリー用テンプレート
+- `05_annual.md.template`: 通期サマリー用テンプレート
 - `okf_paper.md.template`: OKF 論文ドキュメント用テンプレート
 
