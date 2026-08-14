@@ -733,79 +733,7 @@ timestamp: "{timestamp}"
 
     return last_filepath
 
-def generate_semi_annual_summary(workspace_dir, config):
-    okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
-    sa_dir = os.path.join(workspace_dir, config["paths"]["semi_annual_dir"])
-    os.makedirs(sa_dir, exist_ok=True)
-    
-    last_filepath = ""
-    if not os.path.exists(okf_root):
-        return last_filepath
 
-    all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
-    if not all_days:
-        return last_filepath
-    max_day = all_days[-1]
-    
-    for day_str in all_days:
-        try:
-            ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except Exception:
-            continue
-
-        is_semi_annual_end = ref_dt.strftime("%m-%d") in ["06-30", "12-31"]
-        is_latest = (day_str == max_day)
-        if not (is_semi_annual_end or is_latest):
-            continue
-
-        semi_papers = []
-        for i in range(180):
-            target_day = (ref_dt - timedelta(days=i)).strftime("%Y-%m-%d")
-            target_dir = os.path.join(okf_root, target_day)
-            if os.path.exists(target_dir):
-                for f in sorted(os.listdir(target_dir)):
-                    if f.endswith(".md"):
-                        semi_papers.append(os.path.join(target_dir, f))
-
-        filepath = os.path.join(sa_dir, f"semi_annual_{day_str}.md")
-        table_md = build_summary_table_md(semi_papers, filepath)
-        raw_template = load_template("06_semi_annual.md.template", """---
-type: "executive-summary-semi-annual"
-title: "arXiv セキュリティ 半期エグゼクティブサマリー ({date_str})"
-description: "過去180日間に収集されたセキュリティ論文 {count} 件の半期包括レポート"
-timestamp: "{timestamp}"
----
-
-# 📈 06_semi_annual: 半期エグゼクティブサマリー報告書 (直近180日間: {date_str})
-
-**集計日時**: {datetime_utc}  
-**直近180日間の総論文数**: {count} 件  
-
----
-
-## 💡 エグゼクティブサマリー (Executive Summary)
-
-本報告書は直近180日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する半期戦略レポートです。半期単位での脅威領域の推移およびセキュリティ技術の発展動向を総括しています。
-
----
-
-## 📌 半期セキュリティ論文一覧 (日本語表形式)
-
-{table_md}
-""", workspace_dir, config)
-
-        content = raw_template.format(
-            date_str=day_str,
-            count=len(semi_papers),
-            timestamp=ref_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
-            datetime_utc=ref_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            table_md=table_md if semi_papers else "過去180日間の論文データはありません。"
-        )
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-        last_filepath = filepath
-
-    return last_filepath
 
 def generate_annual_summary(workspace_dir, config):
     okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
@@ -881,7 +809,7 @@ timestamp: "{timestamp}"
 
     return last_filepath
 
-def update_index_and_log(workspace_dir, new_items, per_run_path, daily_path, monthly_path, quarterly_path, semi_annual_path, annual_path, config):
+def update_index_and_log(workspace_dir, new_items, per_run_path, daily_path, monthly_path, quarterly_path, annual_path, config):
     index_path = os.path.join(workspace_dir, config["paths"]["index_file"])
     log_path = os.path.join(workspace_dir, config["paths"]["log_file"])
     index_dir = os.path.dirname(index_path)
@@ -905,7 +833,6 @@ def update_index_and_log(workspace_dir, new_items, per_run_path, daily_path, mon
     rel_d_file = os.path.relpath(daily_path, index_dir) if daily_path else "N/A"
     rel_m_file = os.path.relpath(monthly_path, index_dir) if monthly_path else "N/A"
     rel_q_file = os.path.relpath(quarterly_path, index_dir) if quarterly_path else "N/A"
-    rel_sa_file = os.path.relpath(semi_annual_path, index_dir) if semi_annual_path else "N/A"
     rel_a_file = os.path.relpath(annual_path, index_dir) if annual_path else "N/A"
     
     index_content = f"""---
@@ -918,7 +845,7 @@ timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
 # 🛡️ arXiv セキュリティ論文 ナレッジカタログ (Google OKF v0.2)
 
 > [!INFO]
-> このカタログは、arXiv (`cs.CR`) から取得したセキュリティ論文について、**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、および**日本語表形式エグゼクティブサマリー (01_per_run, 02_daily, 04_monthly 〜 07_annual)** を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供します。
+> このカタログは、arXiv (`cs.CR`) から取得したセキュリティ論文について、**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、および**日本語表形式エグゼクティブサマリー (01_per_run, 02_daily, 04_monthly, 05_quarterly, 07_annual)** を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供します。
 
 ---
 
@@ -930,7 +857,6 @@ timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
 | 📅 **02_daily** | `02_daily/` | 最新日 ({date_str}) | [{os.path.basename(daily_path)}]({rel_d_file}) |
 | 📊 **04_monthly** | `04_monthly/` | 過去30日間 | [{os.path.basename(monthly_path)}]({rel_m_file}) |
 | 🏢 **05_quarterly** | `05_quarterly/` | 過去90日間 | [{os.path.basename(quarterly_path)}]({rel_q_file}) |
-| 📈 **06_semi_annual** | `06_semi_annual/` | 過去180日間 | [{os.path.basename(semi_annual_path)}]({rel_sa_file}) |
 | 🏆 **07_annual** | `07_annual/` | 過去365日間 | [{os.path.basename(annual_path)}]({rel_a_file}) |
 
 ---
@@ -1097,13 +1023,12 @@ def main():
     daily_path = generate_all_daily_summaries(workspace_dir, config)
     monthly_path = generate_monthly_summary(workspace_dir, config)
     quarterly_path = generate_quarterly_summary(workspace_dir, config)
-    semi_annual_path = generate_semi_annual_summary(workspace_dir, config)
     annual_path = generate_annual_summary(workspace_dir, config)
     
     update_index_and_log(
         workspace_dir, processed_items,
         per_run_path, daily_path, monthly_path,
-        quarterly_path, semi_annual_path, annual_path, config
+        quarterly_path, annual_path, config
     )
     
     print("\n--- 160-Day Backfill PDF & TXT Fetching & Executive Summary Generation Complete ---")
@@ -1112,7 +1037,6 @@ def main():
     print(f"02_daily: {os.path.relpath(daily_path, workspace_dir)}")
     print(f"04_monthly: {os.path.relpath(monthly_path, workspace_dir)}")
     print(f"05_quarterly: {os.path.relpath(quarterly_path, workspace_dir)}")
-    print(f"06_semi_annual: {os.path.relpath(semi_annual_path, workspace_dir)}")
     print(f"07_annual: {os.path.relpath(annual_path, workspace_dir)}")
     print(f"Index File: {config['paths']['index_file']}")
 
