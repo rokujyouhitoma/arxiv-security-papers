@@ -85,6 +85,15 @@ flowchart TD
 │   │   └── 07_annual/                  # 7. 通期サマリー (過去365日間)
 │   ├── index.md                        # 全成果物へのナビゲーションを提供する OKF Root Index
 │   └── log.md                          # 実行ログ
+├── templates/                          # 【レポート・ドキュメント用テンプレート集】
+│   ├── 01_per_run.md.template          # 取得時サマリーテンプレート
+│   ├── 02_daily.md.template            # 日次サマリーテンプレート
+│   ├── 03_weekly.md.template           # 週次サマリーテンプレート
+│   ├── 04_monthly.md.template          # 月次サマリーテンプレート
+│   ├── 05_quarterly.md.template        # 四半期サマリーテンプレート
+│   ├── 06_semi_annual.md.template      # 半期サマリーテンプレート
+│   ├── 07_annual.md.template           # 通期サマリーテンプレート
+│   └── okf_paper.md.template           # OKF 論文ドキュメントテンプレート
 ├── processed_papers.json               # 処理済み論文の冪等性保持状態
 ├── config.json                         # システム構成設定ファイル
 └── arxiv_okf_fetcher.py                # コア処理実行スクリプト
