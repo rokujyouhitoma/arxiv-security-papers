@@ -570,24 +570,37 @@ timestamp: "{timestamp}"
                 
     return last_daily_path
 
+PAPER_META_CACHE = {}
+
+def get_paper_meta_cached(pf):
+    mtime = os.path.getmtime(pf) if os.path.exists(pf) else 0
+    if pf in PAPER_META_CACHE and PAPER_META_CACHE[pf]["mtime"] == mtime:
+        return PAPER_META_CACHE[pf]["data"]
+    
+    with open(pf, "r", encoding="utf-8") as f:
+        text = f.read()
+        
+    title_match = re.search(r'^title:\s*"([^"]+)"', text, re.MULTILINE)
+    title_ja_match = re.search(r'^title_ja:\s*"([^"]+)"', text, re.MULTILINE)
+    desc_match = re.search(r'^description:\s*"([^"]+)"', text, re.MULTILINE)
+    arxiv_match = re.search(r'arXiv ID = \[`([^`]+)`\]', text)
+    pub_match = re.search(r'published_date:\s*"([^"]+)"', text)
+    
+    title = title_match.group(1) if title_match else os.path.basename(pf)
+    title_ja = title_ja_match.group(1) if title_ja_match else translate_title_ja(title)
+    desc = desc_match.group(1) if desc_match else ""
+    arxiv_id = arxiv_match.group(1) if arxiv_match else os.path.basename(pf).replace('.md', '')
+    pub_date = pub_match.group(1)[:10] if pub_match else "N/A"
+
+    data = (pub_date, title, title_ja, arxiv_id, desc)
+    PAPER_META_CACHE[pf] = {"mtime": mtime, "data": data}
+    return data
+
 def build_summary_table_md(paper_files, filepath):
     rows = []
     for idx, pf in enumerate(paper_files, 1):
         rel_okf = os.path.relpath(pf, os.path.dirname(filepath))
-        with open(pf, "r", encoding="utf-8") as f:
-            text = f.read()
-            
-        title_match = re.search(r'^title:\s*"([^"]+)"', text, re.MULTILINE)
-        title_ja_match = re.search(r'^title_ja:\s*"([^"]+)"', text, re.MULTILINE)
-        desc_match = re.search(r'^description:\s*"([^"]+)"', text, re.MULTILINE)
-        arxiv_match = re.search(r'arXiv ID = \[`([^`]+)`\]', text)
-        pub_match = re.search(r'published_date:\s*"([^"]+)"', text)
-        
-        title = title_match.group(1) if title_match else os.path.basename(pf)
-        title_ja = title_ja_match.group(1) if title_ja_match else translate_title_ja(title)
-        desc = desc_match.group(1) if desc_match else ""
-        arxiv_id = arxiv_match.group(1) if arxiv_match else os.path.basename(pf).replace('.md', '')
-        pub_date = pub_match.group(1)[:10] if pub_match else "N/A"
+        pub_date, title, title_ja, arxiv_id, desc = get_paper_meta_cached(pf)
         
         c_title = title.replace('|', '&#124;')
         c_title_ja = title_ja.replace('|', '&#124;')
@@ -664,26 +677,34 @@ timestamp: "{timestamp}"
     return last_filepath
 
 def generate_monthly_summary(workspace_dir, config):
-    now_dt = datetime.now(timezone.utc)
-    date_str = now_dt.strftime("%Y-%m-%d")
-    
     okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
-    monthly_papers = []
-    
-    for i in range(30):
-        day_str = (now_dt - timedelta(days=i)).strftime("%Y-%m-%d")
-        day_dir = os.path.join(okf_root, day_str)
-        if os.path.exists(day_dir):
-            for f in sorted(os.listdir(day_dir)):
-                if f.endswith(".md"):
-                    monthly_papers.append(os.path.join(day_dir, f))
-                    
     monthly_dir = os.path.join(workspace_dir, config["paths"]["monthly_dir"])
     os.makedirs(monthly_dir, exist_ok=True)
-    filepath = os.path.join(monthly_dir, f"monthly_{date_str}.md")
     
-    table_md = build_summary_table_md(monthly_papers, filepath)
-    raw_template = load_template("04_monthly.md.template", """---
+    last_filepath = ""
+    if not os.path.exists(okf_root):
+        return last_filepath
+
+    all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    
+    for day_str in all_days:
+        try:
+            ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+        monthly_papers = []
+        for i in range(30):
+            target_day = (ref_dt - timedelta(days=i)).strftime("%Y-%m-%d")
+            target_dir = os.path.join(okf_root, target_day)
+            if os.path.exists(target_dir):
+                for f in sorted(os.listdir(target_dir)):
+                    if f.endswith(".md"):
+                        monthly_papers.append(os.path.join(target_dir, f))
+
+        filepath = os.path.join(monthly_dir, f"monthly_{day_str}.md")
+        table_md = build_summary_table_md(monthly_papers, filepath)
+        raw_template = load_template("04_monthly.md.template", """---
 type: "executive-summary-monthly"
 title: "arXiv セキュリティ 月次エグゼクティブサマリー ({date_str})"
 description: "過去30日間に収集されたセキュリティ論文 {count} 件の月次包括レポート"
@@ -697,43 +718,59 @@ timestamp: "{timestamp}"
 
 ---
 
+## 💡 エグゼクティブサマリー (Executive Summary)
+
+本報告書は直近30日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する月次包括サマリーです。中長期的な研究傾向、脅威分析、最新の防御モデルに関する知見を集計しています。
+
+---
+
 ## 📌 月次セキュリティ論文一覧 (日本語表形式)
 
 {table_md}
 """, workspace_dir, config)
 
-    content = raw_template.format(
-        date_str=date_str,
-        count=len(monthly_papers),
-        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        table_md=table_md if monthly_papers else "過去30日間の論文データはありません。"
-    )
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-    return filepath
+        content = raw_template.format(
+            date_str=day_str,
+            count=len(monthly_papers),
+            timestamp=ref_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            datetime_utc=ref_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+            table_md=table_md if monthly_papers else "過去30日間の論文データはありません。"
+        )
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        last_filepath = filepath
+
+    return last_filepath
 
 def generate_quarterly_summary(workspace_dir, config):
-    now_dt = datetime.now(timezone.utc)
-    date_str = now_dt.strftime("%Y-%m-%d")
-    
     okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
-    quarterly_papers = []
-    
-    for i in range(90):
-        day_str = (now_dt - timedelta(days=i)).strftime("%Y-%m-%d")
-        day_dir = os.path.join(okf_root, day_str)
-        if os.path.exists(day_dir):
-            for f in sorted(os.listdir(day_dir)):
-                if f.endswith(".md"):
-                    quarterly_papers.append(os.path.join(day_dir, f))
-                    
     q_dir = os.path.join(workspace_dir, config["paths"]["quarterly_dir"])
     os.makedirs(q_dir, exist_ok=True)
-    filepath = os.path.join(q_dir, f"quarterly_{date_str}.md")
     
-    table_md = build_summary_table_md(quarterly_papers, filepath)
-    raw_template = load_template("05_quarterly.md.template", """---
+    last_filepath = ""
+    if not os.path.exists(okf_root):
+        return last_filepath
+
+    all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    
+    for day_str in all_days:
+        try:
+            ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+        quarterly_papers = []
+        for i in range(90):
+            target_day = (ref_dt - timedelta(days=i)).strftime("%Y-%m-%d")
+            target_dir = os.path.join(okf_root, target_day)
+            if os.path.exists(target_dir):
+                for f in sorted(os.listdir(target_dir)):
+                    if f.endswith(".md"):
+                        quarterly_papers.append(os.path.join(target_dir, f))
+
+        filepath = os.path.join(q_dir, f"quarterly_{day_str}.md")
+        table_md = build_summary_table_md(quarterly_papers, filepath)
+        raw_template = load_template("05_quarterly.md.template", """---
 type: "executive-summary-quarterly"
 title: "arXiv セキュリティ 四半期エグゼクティブサマリー ({date_str})"
 description: "過去90日間に収集されたセキュリティ論文 {count} 件の四半期包括レポート"
@@ -747,43 +784,59 @@ timestamp: "{timestamp}"
 
 ---
 
+## 💡 エグゼクティブサマリー (Executive Summary)
+
+本報告書は直近90日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する四半期分析レポートです。経営層およびセキュリティ管理者が四半期ごとのセキュリティ動向と研究ロードマップを評価するための包括要約です。
+
+---
+
 ## 📌 四半期セキュリティ論文一覧 (日本語表形式)
 
 {table_md}
 """, workspace_dir, config)
 
-    content = raw_template.format(
-        date_str=date_str,
-        count=len(quarterly_papers),
-        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        table_md=table_md if quarterly_papers else "過去90日間の論文データはありません。"
-    )
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-    return filepath
+        content = raw_template.format(
+            date_str=day_str,
+            count=len(quarterly_papers),
+            timestamp=ref_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            datetime_utc=ref_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+            table_md=table_md if quarterly_papers else "過去90日間の論文データはありません。"
+        )
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        last_filepath = filepath
+
+    return last_filepath
 
 def generate_semi_annual_summary(workspace_dir, config):
-    now_dt = datetime.now(timezone.utc)
-    date_str = now_dt.strftime("%Y-%m-%d")
-    
     okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
-    semi_papers = []
-    
-    for i in range(180):
-        day_str = (now_dt - timedelta(days=i)).strftime("%Y-%m-%d")
-        day_dir = os.path.join(okf_root, day_str)
-        if os.path.exists(day_dir):
-            for f in sorted(os.listdir(day_dir)):
-                if f.endswith(".md"):
-                    semi_papers.append(os.path.join(day_dir, f))
-                    
     sa_dir = os.path.join(workspace_dir, config["paths"]["semi_annual_dir"])
     os.makedirs(sa_dir, exist_ok=True)
-    filepath = os.path.join(sa_dir, f"semi_annual_{date_str}.md")
     
-    table_md = build_summary_table_md(semi_papers, filepath)
-    raw_template = load_template("06_semi_annual.md.template", """---
+    last_filepath = ""
+    if not os.path.exists(okf_root):
+        return last_filepath
+
+    all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    
+    for day_str in all_days:
+        try:
+            ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+        semi_papers = []
+        for i in range(180):
+            target_day = (ref_dt - timedelta(days=i)).strftime("%Y-%m-%d")
+            target_dir = os.path.join(okf_root, target_day)
+            if os.path.exists(target_dir):
+                for f in sorted(os.listdir(target_dir)):
+                    if f.endswith(".md"):
+                        semi_papers.append(os.path.join(target_dir, f))
+
+        filepath = os.path.join(sa_dir, f"semi_annual_{day_str}.md")
+        table_md = build_summary_table_md(semi_papers, filepath)
+        raw_template = load_template("06_semi_annual.md.template", """---
 type: "executive-summary-semi-annual"
 title: "arXiv セキュリティ 半期エグゼクティブサマリー ({date_str})"
 description: "過去180日間に収集されたセキュリティ論文 {count} 件の半期包括レポート"
@@ -797,43 +850,59 @@ timestamp: "{timestamp}"
 
 ---
 
+## 💡 エグゼクティブサマリー (Executive Summary)
+
+本報告書は直近180日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する半期戦略レポートです。半期単位での脅威領域の推移およびセキュリティ技術の発展動向を総括しています。
+
+---
+
 ## 📌 半期セキュリティ論文一覧 (日本語表形式)
 
 {table_md}
 """, workspace_dir, config)
 
-    content = raw_template.format(
-        date_str=date_str,
-        count=len(semi_papers),
-        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        table_md=table_md if semi_papers else "過去180日間の論文データはありません。"
-    )
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-    return filepath
+        content = raw_template.format(
+            date_str=day_str,
+            count=len(semi_papers),
+            timestamp=ref_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            datetime_utc=ref_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+            table_md=table_md if semi_papers else "過去180日間の論文データはありません。"
+        )
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        last_filepath = filepath
+
+    return last_filepath
 
 def generate_annual_summary(workspace_dir, config):
-    now_dt = datetime.now(timezone.utc)
-    date_str = now_dt.strftime("%Y-%m-%d")
-    
     okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
-    annual_papers = []
-    
-    for i in range(365):
-        day_str = (now_dt - timedelta(days=i)).strftime("%Y-%m-%d")
-        day_dir = os.path.join(okf_root, day_str)
-        if os.path.exists(day_dir):
-            for f in sorted(os.listdir(day_dir)):
-                if f.endswith(".md"):
-                    annual_papers.append(os.path.join(day_dir, f))
-                    
     a_dir = os.path.join(workspace_dir, config["paths"]["annual_dir"])
     os.makedirs(a_dir, exist_ok=True)
-    filepath = os.path.join(a_dir, f"annual_{date_str}.md")
     
-    table_md = build_summary_table_md(annual_papers, filepath)
-    raw_template = load_template("07_annual.md.template", """---
+    last_filepath = ""
+    if not os.path.exists(okf_root):
+        return last_filepath
+
+    all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    
+    for day_str in all_days:
+        try:
+            ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+        annual_papers = []
+        for i in range(365):
+            target_day = (ref_dt - timedelta(days=i)).strftime("%Y-%m-%d")
+            target_dir = os.path.join(okf_root, target_day)
+            if os.path.exists(target_dir):
+                for f in sorted(os.listdir(target_dir)):
+                    if f.endswith(".md"):
+                        annual_papers.append(os.path.join(target_dir, f))
+
+        filepath = os.path.join(a_dir, f"annual_{day_str}.md")
+        table_md = build_summary_table_md(annual_papers, filepath)
+        raw_template = load_template("07_annual.md.template", """---
 type: "executive-summary-annual"
 title: "arXiv セキュリティ 通期エグゼクティブサマリー ({date_str})"
 description: "過去365日間に収集されたセキュリティ論文 {count} 件の通期包括レポート"
@@ -847,21 +916,29 @@ timestamp: "{timestamp}"
 
 ---
 
+## 💡 エグゼクティブサマリー (Executive Summary)
+
+本報告書は直近365日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する通期総括レポートです。年間を通じたセキュリティ研究の全容、主要な技術革新、セキュリティ戦略における重点項目を集約しています。
+
+---
+
 ## 📌 通期セキュリティ論文一覧 (日本語表形式)
 
 {table_md}
 """, workspace_dir, config)
 
-    content = raw_template.format(
-        date_str=date_str,
-        count=len(annual_papers),
-        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        table_md=table_md if annual_papers else "過去365日間の論文データはありません。"
-    )
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-    return filepath
+        content = raw_template.format(
+            date_str=day_str,
+            count=len(annual_papers),
+            timestamp=ref_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            datetime_utc=ref_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+            table_md=table_md if annual_papers else "過去365日間の論文データはありません。"
+        )
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        last_filepath = filepath
+
+    return last_filepath
 
 def update_index_and_log(workspace_dir, new_items, per_run_path, daily_path, weekly_path, monthly_path, quarterly_path, semi_annual_path, annual_path, config):
     index_path = os.path.join(workspace_dir, config["paths"]["index_file"])
