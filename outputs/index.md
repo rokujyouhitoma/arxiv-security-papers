@@ -2,7 +2,7 @@
 type: "catalog-index"
 title: "arXiv セキュリティ論文 OKF ナレッジカタログ"
 description: "arXiv cs.CR から取得したセキュリティ論文Rawデータ（JSON/PDF/TXT）、OKFドキュメント、および7層の日本語エグゼクティブサマリー一覧"
-timestamp: "2026-08-14T07:15:38Z"
+timestamp: "2026-08-14T07:54:22Z"
 ---
 
 # 🛡️ arXiv セキュリティ論文 ナレッジカタログ (Google OKF v0.2)
@@ -16,7 +16,7 @@ timestamp: "2026-08-14T07:15:38Z"
 
 | 項番 & 区分 | ディレクトリ名 | 対象範囲 | 最新サマリーファイル (相対リンク) |
 |---|---|---|---|
-| ⏱️ **01_per_run** | `01_per_run/` | 取得時ごと (1日4回) | [run_0715.md](executive_summaries/01_per_run/2026-08-14/run_0715.md) |
+| ⏱️ **01_per_run** | `01_per_run/` | 取得時ごと (1日4回) | [run_0754.md](executive_summaries/01_per_run/2026-08-14/run_0754.md) |
 | 📅 **02_daily** | `02_daily/` | 最新日 (2026-08-14) | [2026-08-13.md](executive_summaries/02_daily/2026-08-13.md) |
 | 🗓️ **03_weekly** | `03_weekly/` | 過去7日間 | [weekly_2026-08-14.md](executive_summaries/03_weekly/weekly_2026-08-14.md) |
 | 📊 **04_monthly** | `04_monthly/` | 過去30日間 | [monthly_2026-08-14.md](executive_summaries/04_monthly/monthly_2026-08-14.md) |

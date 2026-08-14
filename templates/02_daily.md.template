@@ -1,0 +1,17 @@
+---
+type: "executive-summary-daily"
+title: "arXiv セキュリティ 日次エグゼクティブサマリー ({day})"
+description: "{day} 公開のセキュリティ論文 {count} 件の日次統合レポート"
+timestamp: "{timestamp}"
+---
+
+# 📅 02_daily: 日次エグゼクティブサマリー報告書 ({day})
+
+**対象日付**: {day}  
+**論文数**: {count} 件  
+
+---
+
+## 📌 {day} のセキュリティ論文一覧 (日本語表形式)
+
+{table_md}

@@ -1,0 +1,17 @@
+---
+type: "executive-summary-per-run"
+title: "arXiv セキュリティ 取得時エグゼクティブサマリー ({date_str} {time_str} UTC)"
+description: "{date_str} {time_str} 取得分のセキュリティ論文 {count} 件の実行サマリー"
+timestamp: "{timestamp}"
+---
+
+# ⏱️ 01_per_run: 取得時エグゼクティブサマリー報告書 ({date_str} {time_str} UTC)
+
+**取得日時**: {date_str} {time_str} UTC  
+**新着論文数**: {count} 件  
+
+---
+
+## 📌 今回のバッチで処理されたセキュリティ論文一覧 (日本語表形式)
+
+{table_md}

@@ -1,6 +1,6 @@
 {
   "2608.13465v1": {
-    "processed_at": "2026-08-14T04:52:53.492750+00:00",
+    "processed_at": "2026-08-14T07:54:15.435260+00:00",
     "published": "2026-08-13T16:46:56Z",
     "title": "Concept Drift Detection and Adaptive Retraining of Malware Classification Models",
     "title_ja": "マルウェア分類モデルにおけるコンセプトドリフト検出と適応的再学習",
@@ -8,7 +8,7 @@
     "okf_path": "outputs/okf_papers/2026-08-13/2608.13465.md"
   },
   "2608.13450v1": {
-    "processed_at": "2026-08-14T04:52:53.493742+00:00",
+    "processed_at": "2026-08-14T07:54:15.435579+00:00",
     "published": "2026-08-13T16:33:44Z",
     "title": "LLM-Assisted Dynamic Threat Analysis for Attacker-Reachable Software Weaknesses in Autonomous Vehicles",
     "title_ja": "自動運転車両における攻撃者到達可能なソフトウェア脆弱性のLLM支援動的脅威分析",

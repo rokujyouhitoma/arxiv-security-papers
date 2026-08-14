@@ -300,6 +300,17 @@ def generate_japanese_executive_summary(paper):
         ]
     }
 
+def load_template(template_name, default_content, workspace_dir, config):
+    templates_dir = config.get("paths", {}).get("templates_dir", "templates")
+    template_path = os.path.join(workspace_dir, templates_dir, template_name)
+    if os.path.exists(template_path):
+        try:
+            with open(template_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            pass
+    return default_content
+
 def build_okf_from_raw(raw_meta_path, workspace_dir, config):
     with open(raw_meta_path, "r", encoding="utf-8") as f:
         paper = json.load(f)
@@ -341,19 +352,19 @@ def build_okf_from_raw(raw_meta_path, workspace_dir, config):
     tags_yaml = "\n".join([f'  - "{t}"' for t in tags])
     rec_list = "\n".join([f"- {r}" for r in exec_summary["executive_recommendations"]])
     
-    okf_content = f"""---
+    raw_template = load_template("okf_paper.md.template", """---
 type: "security-paper"
-title: "{paper['title'].replace('\"', '\\\"')}"
-title_ja: "{title_ja.replace('\"', '\\\"')}"
-description: "{exec_summary['one_liner'].replace('\"', '\\\"')}"
-resource: "{paper['abs_url']}"
+title: "{title}"
+title_ja: "{title_ja}"
+description: "{description}"
+resource: "{resource}"
 tags:
 {tags_yaml}
-timestamp: "{now_iso}"
+timestamp: "{timestamp}"
 provenance:
   source: "arxiv.org"
   raw_meta_file: "{rel_raw_meta_from_okf}"
-  published_date: "{pub_date}"
+  published_date: "{published_date}"
   authors:
 {authors_yaml}
 trust:
@@ -361,25 +372,25 @@ trust:
   confidence: "high"
 ---
 
-# {paper['title']}
+# {title}
 ### (日本語題名: {title_ja})
 
 > [!NOTE]
-> **OKF Metadata**: Type = `security-paper` | arXiv ID = [`{paper['arxiv_id']}`]({paper['abs_url']}) | Raw Meta = [`{os.path.basename(raw_meta_path)}`]({rel_raw_meta_from_okf})
+> **OKF Metadata**: Type = `security-paper` | arXiv ID = [`{arxiv_id}`]({resource}) | Raw Meta = [`{raw_meta_basename}`]({rel_raw_meta_from_okf})
 
 ## エグゼクティブサマリー (Executive Summary)
 
 ### 1. 概要 (Overview & Key Finding)
-{exec_summary['overview']}
+{overview}
 
 ### 2. 背景とセキュリティ上の課題 (Background & Problem)
-{exec_summary['background']}
+{background}
 
 ### 3. 提案アプローチ・技術革新 (Technical Innovation)
-{exec_summary['technical_approach']}
+{technical_approach}
 
 ### 4. セキュリティ影響と実験結果 (Results & Impact)
-{exec_summary['results_impact']}
+{results_impact}
 
 ### 5. 経営層・セキュリティ管理者向け推奨アクション (Executive Recommendations)
 {rec_list}
@@ -388,17 +399,42 @@ trust:
 
 ## 原論文情報 (Original Paper Metadata & Raw Data)
 
-- **arXiv ID**: `{paper['arxiv_id']}`
-- **論文URL**: [{paper['abs_url']}]({paper['abs_url']})
-- **PDFリンク**: [{paper['pdf_url']}]({paper['pdf_url']})
-- **著者**: {', '.join(paper['authors'])}
-- **公開日時**: `{paper['published']}`
-- **カテゴリ**: `{', '.join(paper['categories'])}`
+- **arXiv ID**: `{arxiv_id}`
+- **論文URL**: [{resource}]({resource})
+- **PDFリンク**: [{pdf_url}]({pdf_url})
+- **著者**: {authors_str}
+- **公開日時**: `{published_date}`
+- **カテゴリ**: `{categories_str}`
 - **保存済みRawデータ**: [`JSON`]({rel_raw_meta_from_okf}) | {pdf_link_str} | {txt_link_str}
 
 ### Abstract (原文)
-> {paper['summary']}
-"""
+> {summary}
+""", workspace_dir, config)
+
+    okf_content = raw_template.format(
+        title=paper['title'].replace('"', '\\"'),
+        title_ja=title_ja.replace('"', '\\"'),
+        description=exec_summary['one_liner'].replace('"', '\\"'),
+        resource=paper['abs_url'],
+        tags_yaml=tags_yaml,
+        timestamp=now_iso,
+        rel_raw_meta_from_okf=rel_raw_meta_from_okf,
+        published_date=pub_date,
+        authors_yaml=authors_yaml,
+        arxiv_id=paper['arxiv_id'],
+        raw_meta_basename=os.path.basename(raw_meta_path),
+        overview=exec_summary['overview'],
+        background=exec_summary['background'],
+        technical_approach=exec_summary['technical_approach'],
+        results_impact=exec_summary['results_impact'],
+        rec_list=rec_list,
+        pdf_url=paper['pdf_url'],
+        authors_str=', '.join(paper['authors']),
+        categories_str=', '.join(paper['categories']),
+        pdf_link_str=pdf_link_str,
+        txt_link_str=txt_link_str,
+        summary=paper['summary']
+    )
 
     rel_okf_path = os.path.relpath(okf_file_path, workspace_dir)
     with open(okf_file_path, "w", encoding="utf-8") as f:
@@ -438,27 +474,32 @@ def generate_per_run_summary(processed_items, workspace_dir, config):
 
     table_md = "| 項番 | 公開日 | 論文タイトル (原題 & OKFリンク) | 論文タイトル (日本語訳) | arXiv ID | エグゼクティブ要約 (日本語) |\n|---|---|---|---|---|---|\n" + "\n".join(rows)
 
-    content = f"""---
+    raw_template = load_template("01_per_run.md.template", """---
 type: "executive-summary-per-run"
-title: "arXiv セキュリティ 取得単位エグゼクティブサマリー ({date_str} {now_dt.strftime('%H:%M')} UTC)"
-description: "取得バッチ ({now_dt.strftime('%H:%M')} UTC) にて処理された {len(processed_items)} 件の論文日本語サマリー"
-timestamp: "{now_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
-provenance:
-  batch_time: "{now_dt.strftime('%H:%M')} UTC"
-  paper_count: {len(processed_items)}
+title: "arXiv セキュリティ 取得時エグゼクティブサマリー ({date_str} {time_str} UTC)"
+description: "{date_str} {time_str} 取得分のセキュリティ論文 {count} 件の実行サマリー"
+timestamp: "{timestamp}"
 ---
 
-# ⏱️ 01_per_run: 取得単位エグゼクティブサマリー報告書 ({date_str} {now_dt.strftime('%H:%M')} UTC)
+# ⏱️ 01_per_run: 取得時エグゼクティブサマリー報告書 ({date_str} {time_str} UTC)
 
-**実行日時**: {now_dt.strftime('%Y-%m-%d %H:%M:%S UTC')}  
-**処理件数**: {len(processed_items)} 件  
+**取得日時**: {date_str} {time_str} UTC  
+**新着論文数**: {count} 件  
 
 ---
 
-## 📌 バッチ収録論文一覧 (日本語表形式)
+## 📌 今回のバッチで処理されたセキュリティ論文一覧 (日本語表形式)
 
 {table_md}
-"""
+""", workspace_dir, config)
+
+    content = raw_template.format(
+        date_str=date_str,
+        time_str=now_dt.strftime('%H:%M'),
+        count=len(processed_items),
+        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        table_md=table_md if rows else "処理された論文はありません。"
+    )
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
     return filepath
@@ -498,25 +539,31 @@ def generate_all_daily_summaries(workspace_dir, config):
                     rows.append(f"| {idx} | [{c_title}]({rel_okf}) | {c_title_ja} | [`{arxiv_id}`](https://arxiv.org/abs/{arxiv_id}) | {c_desc} |")
                     
                 table_md = "| 項番 | 論文タイトル (原題 & OKFリンク) | 論文タイトル (日本語訳) | arXiv ID | エグゼクティブ要約 (日本語) |\n|---|---|---|---|---|\n" + "\n".join(rows)
-                    
-                content = f"""---
+                raw_template = load_template("02_daily.md.template", """---
 type: "executive-summary-daily"
 title: "arXiv セキュリティ 日次エグゼクティブサマリー ({day})"
-description: "{day} 公開のセキュリティ論文 {len(paper_files)} 件の日次統合レポート"
-timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
+description: "{day} 公開のセキュリティ論文 {count} 件の日次統合レポート"
+timestamp: "{timestamp}"
 ---
 
 # 📅 02_daily: 日次エグゼクティブサマリー報告書 ({day})
 
 **対象日付**: {day}  
-**論文数**: {len(paper_files)} 件  
+**論文数**: {count} 件  
 
 ---
 
 ## 📌 {day} のセキュリティ論文一覧 (日本語表形式)
 
-{table_md if rows else "該当日の論文データはありません。"}
-"""
+{table_md}
+""", workspace_dir, config)
+
+                content = raw_template.format(
+                    day=day,
+                    count=len(paper_files),
+                    timestamp=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                    table_md=table_md if rows else "該当日の論文データはありません。"
+                )
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
                 last_daily_path = filepath
@@ -570,25 +617,32 @@ def generate_weekly_summary(workspace_dir, config):
     filepath = os.path.join(weekly_dir, f"weekly_{date_str}.md")
     
     table_md = build_summary_table_md(weekly_papers, filepath)
-
-    content = f"""---
+    raw_template = load_template("03_weekly.md.template", """---
 type: "executive-summary-weekly"
 title: "arXiv セキュリティ 週次エグゼクティブサマリー ({date_str})"
-description: "過去7日間に収集されたセキュリティ論文 {len(weekly_papers)} 件の週次動向サマリー"
-timestamp: "{now_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+description: "過去7日間に収集されたセキュリティ論文 {count} 件の週次包括レポート"
+timestamp: "{timestamp}"
 ---
 
 # 🗓️ 03_weekly: 週次エグゼクティブサマリー報告書 (直近7日間: {date_str})
 
-**集計日時**: {now_dt.strftime('%Y-%m-%d %H:%M:%S UTC')}  
-**直近7日間の総論文数**: {len(weekly_papers)} 件  
+**集計日時**: {datetime_utc}  
+**直近7日間の総論文数**: {count} 件  
 
 ---
 
 ## 📌 週次セキュリティ論文一覧 (日本語表形式)
 
-{table_md if weekly_papers else "過去7日間の論文データはありません。"}
-"""
+{table_md}
+""", workspace_dir, config)
+
+    content = raw_template.format(
+        date_str=date_str,
+        count=len(weekly_papers),
+        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        table_md=table_md if weekly_papers else "過去7日間の論文データはありません。"
+    )
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
     return filepath
@@ -613,25 +667,32 @@ def generate_monthly_summary(workspace_dir, config):
     filepath = os.path.join(monthly_dir, f"monthly_{date_str}.md")
     
     table_md = build_summary_table_md(monthly_papers, filepath)
-
-    content = f"""---
+    raw_template = load_template("04_monthly.md.template", """---
 type: "executive-summary-monthly"
 title: "arXiv セキュリティ 月次エグゼクティブサマリー ({date_str})"
-description: "過去30日間に収集されたセキュリティ論文 {len(monthly_papers)} 件の月次包括レポート"
-timestamp: "{now_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+description: "過去30日間に収集されたセキュリティ論文 {count} 件の月次包括レポート"
+timestamp: "{timestamp}"
 ---
 
 # 📊 04_monthly: 月次エグゼクティブサマリー報告書 (直近30日間: {date_str})
 
-**集計日時**: {now_dt.strftime('%Y-%m-%d %H:%M:%S UTC')}  
-**直近30日間の総論文数**: {len(monthly_papers)} 件  
+**集計日時**: {datetime_utc}  
+**直近30日間の総論文数**: {count} 件  
 
 ---
 
 ## 📌 月次セキュリティ論文一覧 (日本語表形式)
 
-{table_md if monthly_papers else "過去30日間の論文データはありません。"}
-"""
+{table_md}
+""", workspace_dir, config)
+
+    content = raw_template.format(
+        date_str=date_str,
+        count=len(monthly_papers),
+        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        table_md=table_md if monthly_papers else "過去30日間の論文データはありません。"
+    )
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
     return filepath
@@ -656,25 +717,32 @@ def generate_quarterly_summary(workspace_dir, config):
     filepath = os.path.join(q_dir, f"quarterly_{date_str}.md")
     
     table_md = build_summary_table_md(quarterly_papers, filepath)
-
-    content = f"""---
+    raw_template = load_template("05_quarterly.md.template", """---
 type: "executive-summary-quarterly"
 title: "arXiv セキュリティ 四半期エグゼクティブサマリー ({date_str})"
-description: "過去90日間に収集されたセキュリティ論文 {len(quarterly_papers)} 件の四半期包括レポート"
-timestamp: "{now_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+description: "過去90日間に収集されたセキュリティ論文 {count} 件の四半期包括レポート"
+timestamp: "{timestamp}"
 ---
 
 # 🏢 05_quarterly: 四半期エグゼクティブサマリー報告書 (直近90日間: {date_str})
 
-**集計日時**: {now_dt.strftime('%Y-%m-%d %H:%M:%S UTC')}  
-**直近90日間の総論文数**: {len(quarterly_papers)} 件  
+**集計日時**: {datetime_utc}  
+**直近90日間の総論文数**: {count} 件  
 
 ---
 
 ## 📌 四半期セキュリティ論文一覧 (日本語表形式)
 
-{table_md if quarterly_papers else "過去90日間の論文データはありません。"}
-"""
+{table_md}
+""", workspace_dir, config)
+
+    content = raw_template.format(
+        date_str=date_str,
+        count=len(quarterly_papers),
+        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        table_md=table_md if quarterly_papers else "過去90日間の論文データはありません。"
+    )
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
     return filepath
@@ -699,25 +767,32 @@ def generate_semi_annual_summary(workspace_dir, config):
     filepath = os.path.join(sa_dir, f"semi_annual_{date_str}.md")
     
     table_md = build_summary_table_md(semi_papers, filepath)
-
-    content = f"""---
+    raw_template = load_template("06_semi_annual.md.template", """---
 type: "executive-summary-semi-annual"
 title: "arXiv セキュリティ 半期エグゼクティブサマリー ({date_str})"
-description: "過去180日間に収集されたセキュリティ論文 {len(semi_papers)} 件の半期戦略レポート"
-timestamp: "{now_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+description: "過去180日間に収集されたセキュリティ論文 {count} 件の半期包括レポート"
+timestamp: "{timestamp}"
 ---
 
 # 📈 06_semi_annual: 半期エグゼクティブサマリー報告書 (直近180日間: {date_str})
 
-**集計日時**: {now_dt.strftime('%Y-%m-%d %H:%M:%S UTC')}  
-**直近180日間の総論文数**: {len(semi_papers)} 件  
+**集計日時**: {datetime_utc}  
+**直近180日間の総論文数**: {count} 件  
 
 ---
 
 ## 📌 半期セキュリティ論文一覧 (日本語表形式)
 
-{table_md if semi_papers else "過去180日間の論文データはありません。"}
-"""
+{table_md}
+""", workspace_dir, config)
+
+    content = raw_template.format(
+        date_str=date_str,
+        count=len(semi_papers),
+        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        table_md=table_md if semi_papers else "過去180日間の論文データはありません。"
+    )
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
     return filepath
@@ -742,25 +817,32 @@ def generate_annual_summary(workspace_dir, config):
     filepath = os.path.join(a_dir, f"annual_{date_str}.md")
     
     table_md = build_summary_table_md(annual_papers, filepath)
-
-    content = f"""---
+    raw_template = load_template("07_annual.md.template", """---
 type: "executive-summary-annual"
 title: "arXiv セキュリティ 通期エグゼクティブサマリー ({date_str})"
-description: "過去365日間に収集されたセキュリティ論文 {len(annual_papers)} 件の通期総括レポート"
-timestamp: "{now_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+description: "過去365日間に収集されたセキュリティ論文 {count} 件の通期包括レポート"
+timestamp: "{timestamp}"
 ---
 
-# 🏆 07_annual: 通期エグゼクティブサマリー総括報告書 (直近365日間: {date_str})
+# 🏆 07_annual: 通期エグゼクティブサマリー報告書 (直近365日間: {date_str})
 
-**集計日時**: {now_dt.strftime('%Y-%m-%d %H:%M:%S UTC')}  
-**通期の総論文数**: {len(annual_papers)} 件  
+**集計日時**: {datetime_utc}  
+**直近365日間の総論文数**: {count} 件  
 
 ---
 
 ## 📌 通期セキュリティ論文一覧 (日本語表形式)
 
-{table_md if annual_papers else "過去365日間の論文データはありません。"}
-"""
+{table_md}
+""", workspace_dir, config)
+
+    content = raw_template.format(
+        date_str=date_str,
+        count=len(annual_papers),
+        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        table_md=table_md if annual_papers else "過去365日間の論文データはありません。"
+    )
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
     return filepath
