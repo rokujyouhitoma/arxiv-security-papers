@@ -10,6 +10,8 @@ import sys
 import json
 import re
 import urllib.request
+import urllib.parse
+import argparse
 import subprocess
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -198,7 +200,7 @@ def fetch_arxiv_papers(query="cat:cs.CR", max_results=3500):
     
     while start < max_results:
         fetch_count = min(chunk_size, max_results - start)
-        api_url = f"https://export.arxiv.org/api/query?search_query={query}&sortBy=submittedDate&sortOrder=descending&start={start}&max_results={fetch_count}"
+        api_url = f"https://export.arxiv.org/api/query?search_query={urllib.parse.quote(query)}&sortBy=submittedDate&sortOrder=descending&start={start}&max_results={fetch_count}"
         req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"})
         
         try:
@@ -235,7 +237,7 @@ def fetch_single_pdf_and_text(paper, raw_dir):
         pdf_url = paper.get("pdf_url") or f"https://arxiv.org/pdf/{paper['arxiv_id']}.pdf"
         try:
             req = urllib.request.Request(pdf_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 pdf_data = resp.read()
                 with open(pdf_path, "wb") as f:
                     f.write(pdf_data)
@@ -244,7 +246,7 @@ def fetch_single_pdf_and_text(paper, raw_dir):
             
     if os.path.exists(pdf_path) and not os.path.exists(txt_path):
         try:
-            subprocess.run(["pdftotext", pdf_path, txt_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            subprocess.run(["pdftotext", pdf_path, txt_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=10)
         except Exception:
             pass
 
@@ -869,11 +871,32 @@ timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
             f.write(r + "\n")
 
 def main():
+    parser = argparse.ArgumentParser(description="arXiv Security Papers OKF & Summary Generator")
+    parser.add_argument("--start-date", type=str, help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", type=str, help="End date (YYYY-MM-DD)")
+    parser.add_argument("--max-results", type=int, help="Max results to fetch")
+    parser.add_argument("--force", action="store_true", help="Force reprocessing existing papers")
+    args, unknown = parser.parse_known_args()
+
     config = load_config()
     workspace_dir = os.path.dirname(os.path.abspath(__file__))
     
-    days_back = config["arxiv"].get("days_back", 160)
-    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
+    query = config["arxiv"]["query"]
+    start_dt = None
+    end_dt = None
+
+    if args.start_date:
+        start_dt = datetime.strptime(args.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        if args.end_date:
+            end_dt = datetime.strptime(args.end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+        else:
+            end_dt = datetime.now(timezone.utc)
+        start_str = args.start_date.replace("-", "")
+        end_str = (args.end_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")).replace("-", "")
+        query = f"cat:cs.CR AND submittedDate:[{start_str}0000 TO {end_str}2359]"
+    else:
+        days_back = config["arxiv"].get("days_back", 160)
+        start_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
     
     state_path = os.path.join(workspace_dir, config["paths"]["state_file"])
     processed_state = {}
@@ -884,10 +907,10 @@ def main():
         except Exception:
             processed_state = {}
             
-    max_results = config["arxiv"].get("max_results_per_run", 3500)
-    print(f"[{datetime.now().isoformat()}] Fetching papers from arXiv (days_back={days_back}, max_results={max_results})...")
+    max_results = args.max_results if args.max_results is not None else config["arxiv"].get("max_results_per_run", 3500)
+    print(f"[{datetime.now().isoformat()}] Fetching papers from arXiv (query={query}, max_results={max_results})...")
     papers = fetch_arxiv_papers(
-        query=config["arxiv"]["query"],
+        query=query,
         max_results=max_results
     )
     
@@ -905,12 +928,14 @@ def main():
         if pub_str and len(pub_str) >= 10:
             try:
                 pub_dt = datetime.strptime(pub_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                if pub_dt < cutoff_date:
+                if start_dt and pub_dt < start_dt:
+                    continue
+                if end_dt and pub_dt > end_dt:
                     continue
             except Exception:
                 pass
 
-        if arxiv_id in processed_state and not ("--force" in sys.argv):
+        if arxiv_id in processed_state and not (args.force or "--force" in sys.argv):
             continue
             
         raw_meta_path = save_raw_paper_data(paper, workspace_dir, config)

@@ -3,8 +3,8 @@
     "query": "cat:cs.CR",
     "sort_by": "submittedDate",
     "sort_order": "descending",
-    "max_results_per_run": 3500,
-    "days_back": 160
+    "max_results_per_run": 12000,
+    "days_back": 365
   },
   "okf": {
     "version": "v0.2",
