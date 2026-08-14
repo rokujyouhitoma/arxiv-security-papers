@@ -598,26 +598,34 @@ def build_summary_table_md(paper_files, filepath):
     return "| 項番 | 公開日 | 論文タイトル (原題 & OKFリンク) | 論文タイトル (日本語訳) | arXiv ID | エグゼクティブ要約 (日本語) |\n|---|---|---|---|---|---|\n" + "\n".join(rows)
 
 def generate_weekly_summary(workspace_dir, config):
-    now_dt = datetime.now(timezone.utc)
-    date_str = now_dt.strftime("%Y-%m-%d")
-    
     okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
-    weekly_papers = []
-    
-    for i in range(7):
-        day_str = (now_dt - timedelta(days=i)).strftime("%Y-%m-%d")
-        day_dir = os.path.join(okf_root, day_str)
-        if os.path.exists(day_dir):
-            for f in sorted(os.listdir(day_dir)):
-                if f.endswith(".md"):
-                    weekly_papers.append(os.path.join(day_dir, f))
-                    
     weekly_dir = os.path.join(workspace_dir, config["paths"]["weekly_dir"])
     os.makedirs(weekly_dir, exist_ok=True)
-    filepath = os.path.join(weekly_dir, f"weekly_{date_str}.md")
     
-    table_md = build_summary_table_md(weekly_papers, filepath)
-    raw_template = load_template("03_weekly.md.template", """---
+    last_filepath = ""
+    if not os.path.exists(okf_root):
+        return last_filepath
+
+    all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    
+    for day_str in all_days:
+        try:
+            ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+        weekly_papers = []
+        for i in range(7):
+            target_day = (ref_dt - timedelta(days=i)).strftime("%Y-%m-%d")
+            target_dir = os.path.join(okf_root, target_day)
+            if os.path.exists(target_dir):
+                for f in sorted(os.listdir(target_dir)):
+                    if f.endswith(".md"):
+                        weekly_papers.append(os.path.join(target_dir, f))
+
+        filepath = os.path.join(weekly_dir, f"weekly_{day_str}.md")
+        table_md = build_summary_table_md(weekly_papers, filepath)
+        raw_template = load_template("03_weekly.md.template", """---
 type: "executive-summary-weekly"
 title: "arXiv セキュリティ 週次エグゼクティブサマリー ({date_str})"
 description: "過去7日間に収集されたセキュリティ論文 {count} 件の週次包括レポート"
@@ -631,21 +639,29 @@ timestamp: "{timestamp}"
 
 ---
 
+## 💡 エグゼクティブサマリー (Executive Summary)
+
+本報告書は直近7日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する週次包括サマリーです。直近の技術動向およびセキュリティ研究トレンドを把握するための要約一覧を提供します。
+
+---
+
 ## 📌 週次セキュリティ論文一覧 (日本語表形式)
 
 {table_md}
 """, workspace_dir, config)
 
-    content = raw_template.format(
-        date_str=date_str,
-        count=len(weekly_papers),
-        timestamp=now_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        datetime_utc=now_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        table_md=table_md if weekly_papers else "過去7日間の論文データはありません。"
-    )
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-    return filepath
+        content = raw_template.format(
+            date_str=day_str,
+            count=len(weekly_papers),
+            timestamp=ref_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            datetime_utc=ref_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
+            table_md=table_md if weekly_papers else "過去7日間の論文データはありません。"
+        )
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        last_filepath = filepath
+
+    return last_filepath
 
 def generate_monthly_summary(workspace_dir, config):
     now_dt = datetime.now(timezone.utc)
