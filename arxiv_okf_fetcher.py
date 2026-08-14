@@ -23,34 +23,7 @@ def load_config():
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
-    return {
-        "arxiv": {
-            "query": "cat:cs.CR",
-            "sort_by": "submittedDate",
-            "sort_order": "descending",
-            "max_results_per_run": 3500,
-            "days_back": 160
-        },
-        "okf": {
-            "version": "v0.2",
-            "default_tags": ["cs.CR", "cybersecurity", "arXiv", "executive-summary"]
-        },
-        "paths": {
-            "outputs_dir": "outputs",
-            "raw_data_dir": "outputs/raw_data",
-            "okf_papers_dir": "outputs/okf_papers",
-            "per_run_dir": "outputs/executive_summaries/01_per_run",
-            "daily_dir": "outputs/executive_summaries/02_daily",
-            "weekly_dir": "outputs/executive_summaries/03_weekly",
-            "monthly_dir": "outputs/executive_summaries/04_monthly",
-            "quarterly_dir": "outputs/executive_summaries/05_quarterly",
-            "semi_annual_dir": "outputs/executive_summaries/06_semi_annual",
-            "annual_dir": "outputs/executive_summaries/07_annual",
-            "index_file": "outputs/index.md",
-            "log_file": "outputs/log.md",
-            "state_file": "processed_papers.json"
-        }
-    }
+
 
 def clean_text(text):
     if not text:
@@ -610,71 +583,7 @@ def build_summary_table_md(paper_files, filepath):
         
     return "| 項番 | 公開日 | 論文タイトル (原題 & OKFリンク) | 論文タイトル (日本語訳) | arXiv ID | エグゼクティブ要約 (日本語) |\n|---|---|---|---|---|---|\n" + "\n".join(rows)
 
-def generate_weekly_summary(workspace_dir, config):
-    okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
-    weekly_dir = os.path.join(workspace_dir, config["paths"]["weekly_dir"])
-    os.makedirs(weekly_dir, exist_ok=True)
-    
-    last_filepath = ""
-    if not os.path.exists(okf_root):
-        return last_filepath
 
-    all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
-    
-    for day_str in all_days:
-        try:
-            ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except Exception:
-            continue
-
-        weekly_papers = []
-        for i in range(7):
-            target_day = (ref_dt - timedelta(days=i)).strftime("%Y-%m-%d")
-            target_dir = os.path.join(okf_root, target_day)
-            if os.path.exists(target_dir):
-                for f in sorted(os.listdir(target_dir)):
-                    if f.endswith(".md"):
-                        weekly_papers.append(os.path.join(target_dir, f))
-
-        filepath = os.path.join(weekly_dir, f"weekly_{day_str}.md")
-        table_md = build_summary_table_md(weekly_papers, filepath)
-        raw_template = load_template("03_weekly.md.template", """---
-type: "executive-summary-weekly"
-title: "arXiv セキュリティ 週次エグゼクティブサマリー ({date_str})"
-description: "過去7日間に収集されたセキュリティ論文 {count} 件の週次包括レポート"
-timestamp: "{timestamp}"
----
-
-# 🗓️ 03_weekly: 週次エグゼクティブサマリー報告書 (直近7日間: {date_str})
-
-**集計日時**: {datetime_utc}  
-**直近7日間の総論文数**: {count} 件  
-
----
-
-## 💡 エグゼクティブサマリー (Executive Summary)
-
-本報告書は直近7日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する週次包括サマリーです。直近の技術動向およびセキュリティ研究トレンドを把握するための要約一覧を提供します。
-
----
-
-## 📌 週次セキュリティ論文一覧 (日本語表形式)
-
-{table_md}
-""", workspace_dir, config)
-
-        content = raw_template.format(
-            date_str=day_str,
-            count=len(weekly_papers),
-            timestamp=ref_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
-            datetime_utc=ref_dt.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            table_md=table_md if weekly_papers else "過去7日間の論文データはありません。"
-        )
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-        last_filepath = filepath
-
-    return last_filepath
 
 def generate_monthly_summary(workspace_dir, config):
     okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
@@ -686,11 +595,19 @@ def generate_monthly_summary(workspace_dir, config):
         return last_filepath
 
     all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    if not all_days:
+        return last_filepath
+    max_day = all_days[-1]
     
     for day_str in all_days:
         try:
             ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except Exception:
+            continue
+
+        is_month_end = (ref_dt + timedelta(days=1)).month != ref_dt.month
+        is_latest = (day_str == max_day)
+        if not (is_month_end or is_latest):
             continue
 
         monthly_papers = []
@@ -752,11 +669,19 @@ def generate_quarterly_summary(workspace_dir, config):
         return last_filepath
 
     all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    if not all_days:
+        return last_filepath
+    max_day = all_days[-1]
     
     for day_str in all_days:
         try:
             ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except Exception:
+            continue
+
+        is_quarter_end = ref_dt.strftime("%m-%d") in ["03-31", "06-30", "09-30", "12-31"]
+        is_latest = (day_str == max_day)
+        if not (is_quarter_end or is_latest):
             continue
 
         quarterly_papers = []
@@ -818,11 +743,19 @@ def generate_semi_annual_summary(workspace_dir, config):
         return last_filepath
 
     all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    if not all_days:
+        return last_filepath
+    max_day = all_days[-1]
     
     for day_str in all_days:
         try:
             ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except Exception:
+            continue
+
+        is_semi_annual_end = ref_dt.strftime("%m-%d") in ["06-30", "12-31"]
+        is_latest = (day_str == max_day)
+        if not (is_semi_annual_end or is_latest):
             continue
 
         semi_papers = []
@@ -884,11 +817,19 @@ def generate_annual_summary(workspace_dir, config):
         return last_filepath
 
     all_days = sorted([d for d in os.listdir(okf_root) if os.path.isdir(os.path.join(okf_root, d))])
+    if not all_days:
+        return last_filepath
+    max_day = all_days[-1]
     
     for day_str in all_days:
         try:
             ref_dt = datetime.strptime(day_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except Exception:
+            continue
+
+        is_annual_end = ref_dt.strftime("%m-%d") == "12-31"
+        is_latest = (day_str == max_day)
+        if not (is_annual_end or is_latest):
             continue
 
         annual_papers = []
@@ -940,7 +881,7 @@ timestamp: "{timestamp}"
 
     return last_filepath
 
-def update_index_and_log(workspace_dir, new_items, per_run_path, daily_path, weekly_path, monthly_path, quarterly_path, semi_annual_path, annual_path, config):
+def update_index_and_log(workspace_dir, new_items, per_run_path, daily_path, monthly_path, quarterly_path, semi_annual_path, annual_path, config):
     index_path = os.path.join(workspace_dir, config["paths"]["index_file"])
     log_path = os.path.join(workspace_dir, config["paths"]["log_file"])
     index_dir = os.path.dirname(index_path)
@@ -962,7 +903,6 @@ def update_index_and_log(workspace_dir, new_items, per_run_path, daily_path, wee
             
     rel_pr_file = os.path.relpath(per_run_path, index_dir) if per_run_path else "N/A"
     rel_d_file = os.path.relpath(daily_path, index_dir) if daily_path else "N/A"
-    rel_w_file = os.path.relpath(weekly_path, index_dir) if weekly_path else "N/A"
     rel_m_file = os.path.relpath(monthly_path, index_dir) if monthly_path else "N/A"
     rel_q_file = os.path.relpath(quarterly_path, index_dir) if quarterly_path else "N/A"
     rel_sa_file = os.path.relpath(semi_annual_path, index_dir) if semi_annual_path else "N/A"
@@ -971,24 +911,23 @@ def update_index_and_log(workspace_dir, new_items, per_run_path, daily_path, wee
     index_content = f"""---
 type: "catalog-index"
 title: "arXiv セキュリティ論文 OKF ナレッジカタログ"
-description: "arXiv cs.CR から取得したセキュリティ論文Rawデータ（JSON/PDF/TXT）、OKFドキュメント、および7層の日本語エグゼクティブサマリー一覧"
+description: "arXiv cs.CR から取得したセキュリティ論文Rawデータ（JSON/PDF/TXT）、OKFドキュメント、および各階層の日本語エグゼクティブサマリー一覧"
 timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
 ---
 
 # 🛡️ arXiv セキュリティ論文 ナレッジカタログ (Google OKF v0.2)
 
 > [!INFO]
-> このカタログは、arXiv (`cs.CR`) から取得したセキュリティ論文について、**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、および**7層の日本語表形式エグゼクティブサマリー (01_per_run 〜 07_annual)** を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供します。
+> このカタログは、arXiv (`cs.CR`) から取得したセキュリティ論文について、**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、および**日本語表形式エグゼクティブサマリー (01_per_run, 02_daily, 04_monthly 〜 07_annual)** を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供します。
 
 ---
 
-## 📊 ソート済みエグゼクティブサマリー層 (01〜07 日本語サマリー)
+## 📊 ソート済みエグゼクティブサマリー層 (日本語サマリー)
 
 | 項番 & 区分 | ディレクトリ名 | 対象範囲 | 最新サマリーファイル (相対リンク) |
 |---|---|---|---|
 | ⏱️ **01_per_run** | `01_per_run/` | 取得時ごと (1日4回) | [{os.path.basename(per_run_path)}]({rel_pr_file}) |
 | 📅 **02_daily** | `02_daily/` | 最新日 ({date_str}) | [{os.path.basename(daily_path)}]({rel_d_file}) |
-| 🗓️ **03_weekly** | `03_weekly/` | 過去7日間 | [{os.path.basename(weekly_path)}]({rel_w_file}) |
 | 📊 **04_monthly** | `04_monthly/` | 過去30日間 | [{os.path.basename(monthly_path)}]({rel_m_file}) |
 | 🏢 **05_quarterly** | `05_quarterly/` | 過去90日間 | [{os.path.basename(quarterly_path)}]({rel_q_file}) |
 | 📈 **06_semi_annual** | `06_semi_annual/` | 過去180日間 | [{os.path.basename(semi_annual_path)}]({rel_sa_file}) |
@@ -1156,7 +1095,6 @@ def main():
             f.write(f"# Run Summary ({date_str} {time_str} UTC)\nNo new papers processed in this run.\n")
         
     daily_path = generate_all_daily_summaries(workspace_dir, config)
-    weekly_path = generate_weekly_summary(workspace_dir, config)
     monthly_path = generate_monthly_summary(workspace_dir, config)
     quarterly_path = generate_quarterly_summary(workspace_dir, config)
     semi_annual_path = generate_semi_annual_summary(workspace_dir, config)
@@ -1164,7 +1102,7 @@ def main():
     
     update_index_and_log(
         workspace_dir, processed_items,
-        per_run_path, daily_path, weekly_path, monthly_path,
+        per_run_path, daily_path, monthly_path,
         quarterly_path, semi_annual_path, annual_path, config
     )
     
@@ -1172,7 +1110,6 @@ def main():
     print(f"Processed Papers: {len(processed_items)}")
     print(f"01_per_run: {os.path.relpath(per_run_path, workspace_dir)}")
     print(f"02_daily: {os.path.relpath(daily_path, workspace_dir)}")
-    print(f"03_weekly: {os.path.relpath(weekly_path, workspace_dir)}")
     print(f"04_monthly: {os.path.relpath(monthly_path, workspace_dir)}")
     print(f"05_quarterly: {os.path.relpath(quarterly_path, workspace_dir)}")
     print(f"06_semi_annual: {os.path.relpath(semi_annual_path, workspace_dir)}")

@@ -16,7 +16,6 @@
     "okf_papers_dir": "outputs/okf_papers",
     "per_run_dir": "outputs/executive_summaries/01_per_run",
     "daily_dir": "outputs/executive_summaries/02_daily",
-    "weekly_dir": "outputs/executive_summaries/03_weekly",
     "monthly_dir": "outputs/executive_summaries/04_monthly",
     "quarterly_dir": "outputs/executive_summaries/05_quarterly",
     "semi_annual_dir": "outputs/executive_summaries/06_semi_annual",

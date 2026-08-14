@@ -28,11 +28,10 @@ flowchart TD
         subgraph ExecSummaries ["outputs/executive_summaries/ (ソート済み01-07層)"]
             D1["01_per_run/ (1日4回)"]
             D2["02_daily/ (1日)"]
-            D3["03_weekly/ (7日)"]
-            D4["04_monthly/ (30日)"]
-            D5["05_quarterly/ (90日)"]
-            D6["06_semi_annual/ (180日)"]
-            D7["07_annual/ (365日)"]
+            D4["04_monthly/ (月次)"]
+            D5["05_quarterly/ (四半期)"]
+            D6["06_semi_annual/ (半期)"]
+            D7["07_annual/ (通期)"]
         end
         C3["outputs/index.md & log.md<br/>(OKFカタログ & ログ)"]
     end
@@ -49,7 +48,6 @@ flowchart TD
     C2 -->|入力| B6
     B6 -->|生成| D1
     B6 -->|生成| D2
-    B6 -->|生成| D3
     B6 -->|生成| D4
     B6 -->|生成| D5
     B6 -->|生成| D6
@@ -75,20 +73,18 @@ flowchart TD
 │   │       ├── <clean_id>.pdf          # ダウンロードした原論文 PDF
 │   │       └── <clean_id>.txt          # pdftotext により抽出した全文 TXT
 │   ├── okf_papers/                     # Google OKF v0.2 形式ドキュメント (Markdown)
-│   ├── executive_summaries/            # 7層の項番付き日本語エグゼクティブサマリー
+│   ├── executive_summaries/            # 階層型日本語エグゼクティブサマリー
 │   │   ├── 01_per_run/                 # 1. 取得時ごとサマリー (1日4回)
 │   │   ├── 02_daily/                   # 2. 日次統合サマリー (1日)
-│   │   ├── 03_weekly/                  # 3. 週次サマリー (過去7日間)
-│   │   ├── 04_monthly/                 # 4. 月次サマリー (過去30日間)
-│   │   ├── 05_quarterly/               # 5. 四半期サマリー (過去90日間)
-│   │   ├── 06_semi_annual/             # 6. 半期サマリー (過去180日間)
-│   │   └── 07_annual/                  # 7. 通期サマリー (過去365日間)
+│   │   ├── 04_monthly/                 # 4. 月次サマリー (月次)
+│   │   ├── 05_quarterly/               # 5. 四半期サマリー (四半期)
+│   │   ├── 06_semi_annual/             # 6. 半期サマリー (半期)
+│   │   └── 07_annual/                  # 7. 通期サマリー (通期)
 │   ├── index.md                        # 全成果物へのナビゲーションを提供する OKF Root Index
 │   └── log.md                          # 実行ログ
 ├── templates/                          # 【レポート・ドキュメント用テンプレート集】
 │   ├── 01_per_run.md.template          # 取得時サマリーテンプレート
 │   ├── 02_daily.md.template            # 日次サマリーテンプレート
-│   ├── 03_weekly.md.template           # 週次サマリーテンプレート
 │   ├── 04_monthly.md.template          # 月次サマリーテンプレート
 │   ├── 05_quarterly.md.template        # 四半期サマリーテンプレート
 │   ├── 06_semi_annual.md.template      # 半期サマリーテンプレート
