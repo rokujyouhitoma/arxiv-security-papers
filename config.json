@@ -18,7 +18,6 @@
     "daily_dir": "outputs/executive_summaries/02_daily",
     "monthly_dir": "outputs/executive_summaries/04_monthly",
     "quarterly_dir": "outputs/executive_summaries/05_quarterly",
-    "semi_annual_dir": "outputs/executive_summaries/06_semi_annual",
     "annual_dir": "outputs/executive_summaries/07_annual",
     "index_file": "outputs/index.md",
     "log_file": "outputs/log.md",
