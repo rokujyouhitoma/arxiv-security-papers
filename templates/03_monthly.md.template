@@ -1,0 +1,23 @@
+---
+type: "executive-summary-monthly"
+title: "arXiv セキュリティ 月次エグゼクティブサマリー ({date_str})"
+description: "過去30日間に収集されたセキュリティ論文 {count} 件の月次包括レポート"
+timestamp: "{timestamp}"
+---
+
+# 📊 03_monthly: 月次エグゼクティブサマリー報告書 (直近30日間: {date_str})
+
+**集計日時**: {datetime_utc}  
+**直近30日間の総論文数**: {count} 件  
+
+---
+
+## 💡 エグゼクティブサマリー (Executive Summary)
+
+本報告書は直近30日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する月次包括サマリーです。中長期的な研究傾向、脅威分析、最新の防御モデルに関する知見を集計しています。
+
+---
+
+## 📌 月次セキュリティ論文一覧 (日本語表形式)
+
+{table_md}

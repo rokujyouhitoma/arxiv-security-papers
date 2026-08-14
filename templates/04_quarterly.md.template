@@ -1,0 +1,23 @@
+---
+type: "executive-summary-quarterly"
+title: "arXiv セキュリティ 四半期エグゼクティブサマリー ({date_str})"
+description: "過去90日間に収集されたセキュリティ論文 {count} 件の四半期包括レポート"
+timestamp: "{timestamp}"
+---
+
+# 🏢 04_quarterly: 四半期エグゼクティブサマリー報告書 (直近90日間: {date_str})
+
+**集計日時**: {datetime_utc}  
+**直近90日間の総論文数**: {count} 件  
+
+---
+
+## 💡 エグゼクティブサマリー (Executive Summary)
+
+本報告書は直近90日間（{date_str} 時点）に収集・処理されたセキュリティ論文 {count} 件に関する四半期分析レポートです。経営層およびセキュリティ管理者が四半期ごとのセキュリティ動向と研究ロードマップを評価するための包括要約です。
+
+---
+
+## 📌 四半期セキュリティ論文一覧 (日本語表形式)
+
+{table_md}
