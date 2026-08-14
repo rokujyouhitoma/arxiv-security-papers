@@ -1,0 +1,28 @@
+{
+  "arxiv": {
+    "query": "cat:cs.CR",
+    "sort_by": "submittedDate",
+    "sort_order": "descending",
+    "max_results_per_run": 3500,
+    "days_back": 160
+  },
+  "okf": {
+    "version": "v0.2",
+    "default_tags": ["cs.CR", "cybersecurity", "arXiv", "executive-summary"]
+  },
+  "paths": {
+    "outputs_dir": "outputs",
+    "raw_data_dir": "outputs/raw_data",
+    "okf_papers_dir": "outputs/okf_papers",
+    "per_run_dir": "outputs/executive_summaries/01_per_run",
+    "daily_dir": "outputs/executive_summaries/02_daily",
+    "weekly_dir": "outputs/executive_summaries/03_weekly",
+    "monthly_dir": "outputs/executive_summaries/04_monthly",
+    "quarterly_dir": "outputs/executive_summaries/05_quarterly",
+    "semi_annual_dir": "outputs/executive_summaries/06_semi_annual",
+    "annual_dir": "outputs/executive_summaries/07_annual",
+    "index_file": "outputs/index.md",
+    "log_file": "outputs/log.md",
+    "state_file": "processed_papers.json"
+  }
+}
