@@ -16,4 +16,5 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **002** | [セキュリティ同義語拡張・マルチフィールドハイブリッドスコアリング・段落チャンク化による検索エンジンおよび VectorDB の高度化](closed/002-enhance-search-engine-and-vector-db.md) | Feature | 2026-08-15 | [002-enhance-search-engine-and-vector-db.md](closed/002-enhance-search-engine-and-vector-db.md) |
 | **001** | [MCP サーバおよびベクトル DB セマンティック検索エンジンの導入](closed/001-implement-mcp-server-and-vector-db.md) | Feature | 2026-08-15 | [001-implement-mcp-server-and-vector-db.md](closed/001-implement-mcp-server-and-vector-db.md) |
