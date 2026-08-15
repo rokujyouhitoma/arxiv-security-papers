@@ -30,6 +30,11 @@
 ## [Unreleased]
 
 ### [Added]
+- **5手法統合マルチエンジン・ハイブリッド検索 ＆ 自動特徴語抽出・事前注釈 (Issue 006)**:
+  - `src/vector_engine.py` (v3.0.0): **転置インデックス (Inverted Index)**、**Okapi BM25 確率ランク ($k_1=1.5, b=0.75$)**、**FM-Index (BWT/Suffix Array による部分文字列高速検索)**、**ベクトル概念 TF-IDF**、および **時間減衰 Recency Boost** を融合した 5 手法統合ハイブリッド検索エンジンの実装
+  - `extract_feature_keywords`: セキュリティパターン抽出およびドメイン専門用語頻度解析による自動特徴語抽出・事前注釈 (`annotated_keywords`) 機能の導入
+  - `src/synonym_expander.py`: Web, AI/LLM, System/IoT, Quantum, SOC/Incident 等のセキュリティドメインシノニム辞書の飛躍的拡充
+  - `tests/test_vector_engine.py`: FMIndex 単体テストおよびマルチエンジンフュージョン検索テストの追加
 - **Google Closure Compiler ツール統合 ＆ JS モジュール分割 (Issue 005 & Issue 004)**:
   - `yuzora` リポジトリの仕様に準拠し、`tools/closure-compiler/closure-compiler-v20240317.jar` を配備し `Makefile` に `make build_js` ターゲットを追加
   - `site/js/`: Lexer (`lexer.js`), Parser (`parser.js`), Evaluator (`evaluator.js`), Renderer (`renderer.js`), Orchestrator (`markdown_compiler.js`) にファイル分割モジュール化し、`site/externs.js` による型保護と Closure Compiler 最適化ミニファイ (`site/app-min.js`) を実現

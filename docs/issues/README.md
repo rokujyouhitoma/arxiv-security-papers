@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **006** | [日本語 IR 検索エンジンの高度化 ＆ 自動特徴語抽出・事前注釈・FM-Index/BM25/転置統合](closed/006-enhance-japanese-ir-and-pre-annotations.md) | Feature | 2026-08-15 | [006-enhance-japanese-ir-and-pre-annotations.md](closed/006-enhance-japanese-ir-and-pre-annotations.md) |
 | **005** | [yuzora 準拠の Google Closure Compiler ツール配置およびビルド設定統合](closed/005-integrate-closure-compiler-tooling.md) | Feature | 2026-08-15 | [005-integrate-closure-compiler-tooling.md](closed/005-integrate-closure-compiler-tooling.md) |
 | **004** | [Lexer, Parser, AST, Evaluator, Renderer による Markdown Compiler Engine の構築](closed/004-implement-markdown-compiler-engine.md) | Feature | 2026-08-15 | [004-implement-markdown-compiler-engine.md](closed/004-implement-markdown-compiler-engine.md) |
 | **003** | [MCP サーバおよび VectorDB をバックエンドとしたモダン Web 検索 UI の構築](closed/003-implement-web-search-ui-and-mcp-backend.md) | Feature | 2026-08-15 | [003-implement-web-search-ui-and-mcp-backend.md](closed/003-implement-web-search-ui-and-mcp-backend.md) |

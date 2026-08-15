@@ -24,19 +24,26 @@
 
 ---
 
-### 1.2 ベクトル検索エンジンモジュール ([`src/vector_engine.py`](../../src/vector_engine.py))
+### 1.2 5手法統合マルチエンジン検索モジュール ([`src/vector_engine.py`](../../src/vector_engine.py))
+
+#### `FMIndex(text: str)`
+- **クラス概要**: Suffix Array / Burrows-Wheeler Transform (BWT) に基づく軽量全文部分文字列インデックス。
+- **`count_substring(query: str) -> int`**: Suffix Array 上の二分探索により、日本語・英語問わず任意の完全部分文字列出現回数を $O(\log N)$ で計数。
 
 #### `VectorEngine(workspace_dir=None)`
-- **クラス概要**: 全 OKF ドキュメントを解析し、セマンティックベクトル＋BM25ハイブリッド検索インデックス（`outputs/vector_db/index.json`）を維持・検索。
+- **クラス概要**: 5 大検索エンジン（ベクトル概念 TF-IDF、Okapi BM25、転置インデックス、FM-Index、最新性減衰ブースト）を維持・統合フュージョン検索。
 
-#### `tokenize(text: str)` -> `list[str]`
-- **アルゴリズム**: 英語アルファベット・数値トークンおよび日本語文字（ひらがな・カタカナ・漢字）を正規表現抽出。
+#### `tokenize(text: str) -> list[str]`
+- **アルゴリズム**: 英数字トークン、日本語単語、および日本語 2-gram / 3-gram 文字 N-gram を抽出し、部分一致適合率を高精度化。
 
-#### `build_index()` -> `int`
-- **目的**: `outputs/okf_papers/` 配下の全 `.md` ファイルを走査し、TF-IDF 重み付け計算および語彙辞書作成を行い `outputs/vector_db/index.json` に永続保存。
+#### `extract_feature_keywords(title: str, desc: str, content: str) -> list[str]`
+- **自動注釈**: セキュリティ知識パターン（マルウェア解析, ペンテスト, 自動運転, 暗号, LLM脱獄, ファジング, ゼロトラスト, サイドチャネル）および高頻度ドメイン専門用語を自動抽出・事前注釈。
 
-#### `search(query: str, top_k: int = 5, category: str = None)` -> `list[dict]`
-- **目的**: 検索クエリに対するスコアリング（TF-IDF + 完全一致ボーナス 2.0）を行い、上位 `top_k` 件の適合論文リストをスコア順で返却。
+#### `calculate_bm25_score(query_tokens: list, doc: dict) -> float`
+- **確率的ランク**: $BM25(q, d) = \sum IDF(t) \cdot \frac{f(t,d)(k_1+1)}{f(t,d)+k_1(1-b+b\frac{|d|}{avgdl})}$ ($k_1=1.5, b=0.75$) による長さ正規化スコア計算。
+
+#### `search(query: str, top_k: int = 5, category: str = None) -> list[dict]`
+- **フュージョンスコア**: Vector (30%) + BM25 (30%) + Inverted Keywords (20%) + FM-Index (20%) の加重和に対し、経過時間による Recency Decay Boost ($1.0 + 0.5 \cdot e^{-\Delta days/180}$) を乗算してソート返却。
 
 ---
 

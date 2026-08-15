@@ -11,28 +11,52 @@ import re
 class SynonymExpander:
     SYNONYM_GROUPS = [
         # Penetration Testing & Exploitation
-        {"ペンテスト", "ペネトレーションテスト", "侵入テスト", "penetration testing", "penetration-testing", "pentest", "exploit", "exploitability", "atobench"},
-        
+        {
+            "ペンテスト", "ペネトレーションテスト", "侵入テスト", "脆弱性検証", "エクスプロイト",
+            "penetration testing", "penetration-testing", "pentest", "exploit", "exploitability", "atobench"
+        },
+
         # Autonomous Vehicles & Automotive Security
-        {"自動運転", "自動運転車", "自動運転車両", "autonomous vehicle", "autonomous vehicles", "autonomous driving", "autoware", "av"},
+        {
+            "自動運転", "自動運転車", "自動運転車両", "車載ネットワーク", "canバス",
+            "autonomous vehicle", "autonomous vehicles", "autonomous driving", "autoware", "av"
+        },
 
         # Malware & Threat Analysis
-        {"マルウェア", "マルウェア検出", "悪意のあるソフトウェア", "malware", "ransomware", "trojan", "spyware", "rootkit", "botnet"},
+        {
+            "マルウェア", "マルウェア検出", "マルウェア解析", "悪意のあるソフトウェア", "ランサムウェア", "身代金型", "ボットネット",
+            "malware", "ransomware", "trojan", "spyware", "rootkit", "botnet", "virus"
+        },
 
-        # Cryptography & Quantum Security
-        {"暗号", "暗号解読", "耐量子暗号", "公開鍵暗号", "cryptography", "crypto", "post-quantum", "pqc", "lattice-based", "encryption"},
+        # Cryptography, Quantum & Privacy
+        {
+            "暗号", "暗号解読", "耐量子暗号", "公開鍵暗号", "同態暗号", "ホモモルフィック暗号", "ゼロ知識証明", "差分プライバシー",
+            "cryptography", "crypto", "post-quantum", "pqc", "lattice-based", "encryption", "homomorphic", "zkp", "zero-knowledge", "differential privacy"
+        },
 
         # LLM & AI Security
-        {"llm", "大言語モデル", "大規模言語モデル", "生成ai", "large language model", "prompt injection", "jailbreak", "rag", "agent"},
+        {
+            "llm", "大言語モデル", "大規模言語モデル", "生成ai", "脱獄", "プロンプトインジェクション", "モデル抽出", "ポイズニング", "アドバーサリアル攻撃", "敵対的サンプル",
+            "large language model", "prompt injection", "jailbreak", "rag", "agent", "adversarial attack", "poisoning", "backdoor"
+        },
 
-        # Vulnerabilities & Threat Modeling
-        {"脆弱性", "弱点", "脅威分析", "vulnerability", "vulnerabilities", "weakness", "stride", "cwe", "cve", "mitre"},
+        # Vulnerabilities, Web & Threat Modeling
+        {
+            "脆弱性", "弱点", "脅威分析", "脅威モデリング", "ファジング", "クロスサイトスクリプティング", "sqlインジェクション",
+            "vulnerability", "vulnerabilities", "weakness", "stride", "cwe", "cve", "cvss", "mitre", "mitre att&ck", "fuzzing", "xss", "sqli", "injection"
+        },
 
         # Zero Trust & IAM
-        {"ゼロトラスト", "アイデンティティ管理", "zero trust", "zero-trust", "iam", "oauth", "pkce", "pdp", "pep"},
+        {
+            "ゼロトラスト", "アイデンティティ管理", "アクセス制御", "権限昇格",
+            "zero trust", "zero-trust", "iam", "oauth", "pkce", "pdp", "pep", "access control", "privilege escalation"
+        },
 
-        # Network & Infrastructure
-        {"ネットワーク", "トポロジ", "ファイアウォール", "侵入検知", "network", "topology", "firewall", "ids", "ips", "sdn"}
+        # Network, System & Hardware Security
+        {
+            "ネットワーク", "トポロジ", "ファイアウォール", "侵入検知", "サイドチャネル", "サイドチャネル攻撃", "マイクロアーキテクチャ", "ファームウェア", "iot", "組み込みセキュリティ",
+            "network", "topology", "firewall", "ids", "ips", "sdn", "side-channel", "microarchitecture", "firmware", "iot"
+        }
     ]
 
     def __init__(self):
@@ -47,6 +71,8 @@ class SynonymExpander:
 
     def expand_token(self, token):
         """Expands a single token into its synonyms."""
+        if not token:
+            return set()
         token_lower = token.lower()
         if token_lower in self.lookup:
             return set(self.lookup[token_lower])
@@ -57,25 +83,26 @@ class SynonymExpander:
         if not query:
             return []
 
+        query_clean = query.strip().lower()
         # Extract tokens from query
-        raw_tokens = re.findall(r'[a-zA-Z0-9_\-]+', query.lower())
+        raw_tokens = re.findall(r'[a-zA-Z0-9_\-]+', query_clean)
         ja_tokens = re.findall(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+', query)
-        
-        all_raw = set(raw_tokens + ja_tokens + [query.strip().lower()])
+
+        all_raw = set(raw_tokens + ja_tokens + [query_clean])
         expanded = set(all_raw)
 
         for token in all_raw:
             expanded.update(self.expand_token(token))
-            # Also check if token matches substring in lookup
+            # Substring matching against lookup
             for term in self.lookup:
                 if term in token or token in term:
                     expanded.update(self.lookup[term])
 
-        return list(expanded)
+        return [t for t in expanded if t]
 
 
 if __name__ == "__main__":
     expander = SynonymExpander()
-    test_queries = ["ペンテスト自動化", "自動運転の脆弱性", "暗号"]
+    test_queries = ["マルウェア解析", "LLM脱獄", "ファジング", "サイドチャネル"]
     for q in test_queries:
         print(f"Query: '{q}' -> Expanded: {expander.expand_query(q)}")
