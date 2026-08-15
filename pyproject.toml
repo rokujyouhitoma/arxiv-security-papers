@@ -40,3 +40,10 @@ line-length = 88
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-n 2"
+
+[tool.mypy]
+mypy_path = "src"
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+explicit_package_bases = true
