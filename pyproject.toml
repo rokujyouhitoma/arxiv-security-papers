@@ -20,7 +20,6 @@ pytest-xdist = "^3.5"
 mypy = "^1.8"
 radon = "^6.0"
 xenon = "^0.9"
-taskipy = "^1.12"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -33,11 +32,6 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 line_length = 88
-
-[tool.taskipy.tasks]
-format = { cmd = "task flake8", help = "format code" }
-flake8 = "flake8 --max-line-length=120 src tests"
-mypy = "mypy src"
 
 [tool.black]
 line-length = 88
