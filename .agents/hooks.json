@@ -1,0 +1,13 @@
+{
+  "name": "arxiv-security-papers-hooks",
+  "version": "1.0.0",
+  "description": "Pre-commit and quality governance lifecycle hooks for arxiv-security-papers",
+  "hooks": {
+    "pre-commit": {
+      "commands": [
+        "make py_compile",
+        "grep -rn 'file:///' docs/ outputs/ .agents/ || true"
+      ]
+    }
+  }
+}
