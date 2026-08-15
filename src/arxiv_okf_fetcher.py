@@ -9,8 +9,10 @@ import os
 import sys
 import json
 import re
+import time
 import urllib.request
 import urllib.parse
+import urllib.error
 import argparse
 import subprocess
 import xml.etree.ElementTree as ET
@@ -181,21 +183,38 @@ def fetch_arxiv_papers(query="cat:cs.CR", max_results=3500):
         api_url = f"https://export.arxiv.org/api/query?search_query={urllib.parse.quote(query)}&sortBy=submittedDate&sortOrder=descending&start={start}&max_results={fetch_count}"
         req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"})
         
-        try:
-            with urllib.request.urlopen(req, timeout=25) as response:
-                xml_data = response.read()
-                root = ET.fromstring(xml_data)
-                namespaces = {"atom": "http://www.w3.org/2005/Atom"}
-                entries = root.findall("atom:entry", namespaces)
-                if not entries:
+        success = False
+        for retry in range(4):
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    xml_data = response.read()
+                    root = ET.fromstring(xml_data)
+                    namespaces = {"atom": "http://www.w3.org/2005/Atom"}
+                    entries = root.findall("atom:entry", namespaces)
+                    if not entries:
+                        success = True
+                        break
+                    chunk_papers = [parse_arxiv_entry(e) for e in entries]
+                    all_papers.extend(chunk_papers)
+                    start += len(chunk_papers)
+                    success = True
+                    if len(chunk_papers) < fetch_count:
+                        return all_papers
                     break
-                chunk_papers = [parse_arxiv_entry(e) for e in entries]
-                all_papers.extend(chunk_papers)
-                start += len(chunk_papers)
-                if len(chunk_papers) < fetch_count:
+            except urllib.error.HTTPError as he:
+                if he.code in (429, 503) and retry < 3:
+                    wait_time = (2 ** retry) * 4
+                    print(f"[INFO] arXiv API returned HTTP {he.code}. Retrying in {wait_time}s (attempt {retry+1}/3)...", file=sys.stderr)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"[WARN] API fetch failed at start={start} ({he}), breaking...", file=sys.stderr)
                     break
-        except Exception as e:
-            print(f"[WARN] API fetch failed at start={start} ({e}), breaking...", file=sys.stderr)
+            except Exception as e:
+                print(f"[WARN] API fetch failed at start={start} ({e}), breaking...", file=sys.stderr)
+                break
+                
+        if not success:
             break
             
     return all_papers
@@ -929,7 +948,8 @@ def main():
     else:
         workspace_dir = current_dir
     
-    query = config["arxiv"]["query"]
+    config = load_config()
+    query = config.get("arxiv", {}).get("query", "cat:cs.CR")
     start_dt = None
     end_dt = None
 
