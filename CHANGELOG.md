@@ -30,6 +30,12 @@
 ## [Unreleased]
 
 ### [Added]
+- **PEP 3333 WSGI Web サーバー ＆ MCP ゲートウェイ統合 (Issue 007)**:
+  - `src/web_server.py`: Python 標準 Web サーバー共通仕様である **PEP 3333 (WSGI v1.0.1)** に完全準拠した `WSGIApplication` および `application(environ, start_response)` エントリポイントの実装
+  - Gunicorn / uWSGI / `wsgiref` によるマルチワーカー本番ホストおよびコンテナデプロイ対応
+  - `src/mcp_server.py`: `--http` オプションによる HTTP/WSGI サーバーダイレクト起動機能の追加
+  - `tests/test_web_server.py`: WSGI `environ` モックを用いた 12 項目の単体テスト（API ルーティング、CORS ヘッダー、パストラバーサル防御、不正 JSON エラーハンドリング）の拡充
+  - `docs/designs/DSN-07-web_portal_and_markdown_compiler.md`: WSGI アーキテクチャ構成図および Gunicorn 連携仕様の追記
 - **5手法統合マルチエンジン・ハイブリッド検索 ＆ 自動特徴語抽出・事前注釈 (Issue 006)**:
   - `src/vector_engine.py` (v3.0.0): **転置インデックス (Inverted Index)**、**Okapi BM25 確率ランク ($k_1=1.5, b=0.75$)**、**FM-Index (BWT/Suffix Array による部分文字列高速検索)**、**ベクトル概念 TF-IDF**、および **時間減衰 Recency Boost** を融合した 5 手法統合ハイブリッド検索エンジンの実装
   - `extract_feature_keywords`: セキュリティパターン抽出およびドメイン専門用語頻度解析による自動特徴語抽出・事前注釈 (`annotated_keywords`) 機能の導入

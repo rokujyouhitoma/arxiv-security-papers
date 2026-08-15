@@ -15,11 +15,16 @@ flowchart TD
         JS --> State["HTML5 History API (pushState)"]
     end
 
-    subgraph WebServer ["Python HTTP REST API (src/web_server.py:8000)"]
-        JS -->|GET /api/search?q=...| API1["Search Handler"]
-        JS -->|GET /api/paper/<id>| API2["Paper Summary Handler"]
-        JS -->|GET /api/trends?period=...| API3["Trends Handler"]
-        JS -->|POST /api/mcp| API4["MCP Test Sandbox"]
+    subgraph WebServer ["PEP 3333 WSGI Web Server (src/web_server.py)"]
+        WSGI["WSGI Server: wsgiref / Gunicorn / uWSGI"] --> App["WSGIApplication: application(environ, start_response)"]
+        App --> SecurityGuard{"Path Traversal Check\nis_safe_workspace_path"}
+        SecurityGuard -->|Safe| Dispatcher{Router}
+        Dispatcher -->|GET /api/search| API1["Search Handler (VECTOR_ENGINE)"]
+        Dispatcher -->|GET /api/paper/<id>| API2["Paper Summary Handler"]
+        Dispatcher -->|GET /api/trends| API3["Trends Handler"]
+        Dispatcher -->|GET /api/stats| API4["Stats Handler"]
+        Dispatcher -->|POST /api/mcp| API5["MCP JSON-RPC Sandbox"]
+        Dispatcher -->|GET /*| Static["Static Streaming (site/)"]
     end
 
     subgraph ClientCompiler ["Markdown Compiler Engine (site/js/)"]
@@ -31,6 +36,25 @@ flowchart TD
         Renderer --> DOM["HTML5 DOM & mermaid.run()"]
     end
 ```
+
+### 1.1 PEP 3333 WSGI 仕様 ＆ サーバー構成
+
+`src/web_server.py` は、Python 標準の Web サーバー規格 **PEP 3333 (WSGI v1.0.1)** に完全準拠しています。
+
+- **WSGI Callable**: `application(environ, start_response)` / `app = application`
+- **内蔵スタンドアロンサーバー**: `wsgiref.simple_server.make_server`（`make run_web` で起動）
+- **マルチワーカー・コンテナ連携**:
+  ```bash
+  # Gunicorn による本番マルチワーカー起動
+  gunicorn -w 4 -b 0.0.0.0:8000 src.web_server:app
+
+  # uWSGI による起動
+  uwsgi --http :8000 --wsgi-file src/web_server.py --callable application
+  ```
+- **セキュリティ制御**:
+  - `is_safe_workspace_path` および `os.path.commonpath` によるパストラバーサル防御 (`403 Forbidden`)
+  - `CONTENT_LENGTH` 上限 1MB 制限による DoS 防御 (`413 Payload Too Large`)
+  - 全 API に対する標準 CORS ヘッダー（`Access-Control-Allow-Origin: *`）付与
 
 ---
 

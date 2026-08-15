@@ -269,5 +269,12 @@ def run_jsonrpc_server():
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--manifest":
         print(json.dumps(TOOLS_MANIFEST, ensure_ascii=False, indent=2))
+    elif len(sys.argv) > 1 and sys.argv[1] == "--http":
+        from web_server import run_web_server
+
+        port = 8000
+        if len(sys.argv) > 2 and sys.argv[2].isdigit():
+            port = int(sys.argv[2])
+        run_web_server(port=port)
     else:
         run_jsonrpc_server()
