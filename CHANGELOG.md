@@ -30,6 +30,9 @@
 ## [Unreleased]
 
 ### [Added]
+- **セキュリティ専門用語シノニム拡張 ＆ マルチフィールドハイブリッド検索エンジン (Issue 002)**:
+  - `registered-information-security-specialist-examination` の高品質モジュール設計を参考に、`src/synonym_expander.py` (日英セキュリティ用語相互拡張) を開発・統合
+  - `src/vector_engine.py` (v2.0.0): フィールド重み付け (Title:3.5, Tags:3.0, Description:2.5, Abstract:1.5) とシノニム展開を組み込んだハイブリッド検索スコアを実装 (適合率大幅向上)
 - **[MNG-01] 文書管理台帳 ＆ `docs/` ディレクトリ統廃合**:
   - `docs/processes/MNG-01-document_ledger.md`: ゆうぞら (Yuzora) 標準仕様をテーラリングした文書管理台帳およびプレフィックス管理体系 (MNG, REQ, DSN, MCP, ISS) の導入
   - `docs/` 配下を `processes/`, `requirements/`, `designs/`, `mcp/`, `issues/` に構造化し、`docs/README.md` マスターポータルを作成
