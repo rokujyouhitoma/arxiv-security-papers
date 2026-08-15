@@ -134,4 +134,4 @@ mypy: activate ## mypy
 
 .PHONY: pytest
 pytest: activate ## pytest
-	${VENV_BIN}/pytest --cov=src --cov-report=term-missing -v ${TESTS} || ${VENV_BIN}/pytest || true
+	${VENV_BIN}/pytest -n 2 --cov=src --cov-report=term-missing -v ${TESTS} || ${VENV_BIN}/pytest -n 2 || true
