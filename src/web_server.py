@@ -86,7 +86,10 @@ class ArxivWebServerHandler(SimpleHTTPRequestHandler):
             })
             return
 
-        # Default: Serve static files from site/
+        # Default: Serve static files from site/ (/search or / serves index.html)
+        if path in ["/", "/search"] or not os.path.exists(os.path.join(SITE_DIR, path.lstrip("/"))):
+            if not path.startswith("/api/"):
+                self.path = "/index.html" + ("?" + parsed_url.query if parsed_url.query else "")
         super().do_GET()
 
     def do_POST(self):

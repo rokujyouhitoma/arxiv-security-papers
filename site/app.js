@@ -23,10 +23,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const runMcpBtn = document.getElementById('runMcpBtn');
   const mcpOutput = document.getElementById('mcpOutput');
 
-  // Initialize Stats
+  // Parse URL GET Parameters (Google-style ?q=クエリ&tag=カテゴリ)
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialQuery = urlParams.get('q') || urlParams.get('query');
+  const initialTag = urlParams.get('tag') || urlParams.get('category');
+
+  if (initialTag) {
+    activeTag = initialTag;
+    document.querySelectorAll('.filter-chip').forEach(c => {
+      if (c.getAttribute('data-tag') === initialTag) c.classList.add('active');
+      else c.classList.remove('active');
+    });
+  }
+
+  // Initialize Stats & Search
   fetchStats();
-  // Perform initial search
-  performSearch("ペンテスト");
+  const queryToRun = initialQuery !== null ? initialQuery : "ペンテスト";
+  searchInput.value = queryToRun;
+  performSearch(queryToRun, false);
 
   // Tab Switching
   document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -50,14 +64,28 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       activeTag = chip.getAttribute('data-tag');
-      performSearch(searchInput.value);
+      performSearch(searchInput.value, true);
     });
   });
 
   // Search Events
-  searchBtn.addEventListener('click', () => performSearch(searchInput.value));
+  searchBtn.addEventListener('click', () => performSearch(searchInput.value, true));
   searchInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') performSearch(searchInput.value);
+    if (e.key === 'Enter') performSearch(searchInput.value, true);
+  });
+
+  // Browser Navigation History (Popstate)
+  window.addEventListener('popstate', () => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q') || '';
+    const tag = params.get('tag') || '';
+    activeTag = tag;
+    document.querySelectorAll('.filter-chip').forEach(c => {
+      if (c.getAttribute('data-tag') === tag) c.classList.add('active');
+      else c.classList.remove('active');
+    });
+    searchInput.value = q;
+    performSearch(q, false);
   });
 
   // Fetch System Stats
@@ -73,8 +101,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Perform RAG Search
-  async function performSearch(query) {
+  // Perform RAG Search & Update URL
+  async function performSearch(query, updateUrl = true) {
+    if (updateUrl) {
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (activeTag) params.set('tag', activeTag);
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      history.pushState({ q: query, tag: activeTag }, '', newUrl);
+    }
+
     const startTime = performance.now();
     resultsGrid.innerHTML = '<p style="color: var(--text-muted);">検索中...</p>';
     
@@ -143,7 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modalPaperTitle.textContent = data.content.match(/title:\s*"(.*?)"/)?.[1] || arxivId;
         modalPaperTitleJa.textContent = data.content.match(/title_ja:\s*"(.*?)"/)?.[1] || '';
         
-        // Convert Markdown content into HTML blocks
         let bodyHtml = escapeHtml(data.content)
           .replace(/# (.*?)\n/g, '<h2 style="font-family: var(--font-heading); color:#fff; margin-top:1.5rem;">$1</h2>')
           .replace(/## (.*?)\n/g, '<h3 style="color:var(--accent-secondary); margin-top:1rem;">$1</h3>')
