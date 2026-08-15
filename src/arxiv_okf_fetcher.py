@@ -18,6 +18,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
+from typing import Any, Dict
 
 def load_config():
     possible_paths = [
@@ -567,7 +568,7 @@ timestamp: "{timestamp}"
                 
     return last_daily_path
 
-PAPER_META_CACHE = {}
+PAPER_META_CACHE: Dict[str, Any] = {}
 
 def get_paper_meta_cached(pf):
     mtime = os.path.getmtime(pf) if os.path.exists(pf) else 0
