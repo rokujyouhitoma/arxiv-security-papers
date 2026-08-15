@@ -56,9 +56,14 @@ flowchart TD
 - **自動化・堅牢性**: 1日4回 (00:00, 06:00, 12:00, 18:00 UTC/JST) のバックグラウンド Cron バッチ (`schedule` ツール) による自律運用。Primary (arXiv API) / Fallback (arXiv RSS) の二重通信冗長化を標準装備。
 - **知識標準化**: **Google Open Knowledge Format (OKF) v0.2** 仕様に準拠した YAML フロントマター付きナレッジ構造化。
 
-### 🧠 ピラー 2: セキュリティ同義語拡張 Vector RAG 検索基盤
-- **ハイブリッドスコアリング**: Title(3.5), Tags(3.0), Description(2.5), Abstract(1.5) の多重フィールド加重スコアリング。
-- **日英バイリンガル展開**: 「ペンテスト ⇄ penetration testing ⇄ exploit」「自動運転 ⇄ autonomous vehicle ⇄ Autoware」等の専門用語辞書による検索適合率の向上。
+### 🧠 ピラー 2: 5 手法統合ハイブリッド検索基盤 (Multi-Engine Search)
+- **5 大インデックス検索エンジンの統合フュージョン**:
+  1. **ベクトル概念 TF-IDF スコア**: Title(3.5), Keywords(4.0), Tags(3.0), Desc(2.5), Content(1.0) の多重フィールド加重概念スコアリング。
+  2. **Okapi BM25 確率ランクスコア**: TF 飽和 ($k_1=1.5$) および文書長正規化 ($b=0.75$) による高確信度スコアリング。
+  3. **転置インデックス (Inverted Index)**: トークン/ドメインキーワードから文書 ID への高速逆引きインデックス。
+  4. **FM-Index (Full-text Substring Index)**: Burrows-Wheeler 変換 (BWT) / Suffix Array による日本語任意部分文字列高速検索。
+  5. **論文最新性ブースト (Recency Decay Factor)**: 経過日数に応じた時間減衰重み付け。
+- **セキュリティ同義語拡張**: 「ペンテスト ⇄ penetration testing」「自動運転 ⇄ autonomous vehicle」「LLM ⇄ 脱獄 ⇄ prompt injection」「マルウェア ⇄ ransomware」等の高度専門用語辞書による再現率（Recall）の飛躍的向上。
 
 ### 🔌 ピラー 3: AI エージェント連動基盤 (Model Context Protocol)
 - **標準オープン規格**: Model Context Protocol (MCP) JSON-RPC 2.0 インターフェースを完全実装。
