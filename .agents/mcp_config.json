@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "arxiv-security-papers": {
+      "command": "python3",
+      "args": [
+        "src/mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "src"
+      }
+    }
+  }
+}

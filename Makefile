@@ -14,7 +14,7 @@ help: ## help command
 
 .PHONY: clean
 clean: ## clean virtualenv and build artifacts
-	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache
+	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache outputs/vector_db/
 
 .PHONY: setup
 setup: activate install ## setup venv, activate and install python libraries
@@ -37,6 +37,8 @@ static_analysis: radon-cc radon-raw radon-mi radon-hal xenon mypy py_compile ## 
 .PHONY: py_compile
 py_compile: activate ## py_compile syntax check
 	${VENV_PYTHON} -m py_compile ${SRC}
+	${VENV_PYTHON} -m py_compile src/vector_engine.py
+	${VENV_PYTHON} -m py_compile src/mcp_server.py
 
 .PHONY: test
 test: pytest ## pytest
@@ -45,21 +47,33 @@ test: pytest ## pytest
 build: activate ## run python build / compile check
 	${VENV_PYTHON} -m py_compile ${SRC}
 
+.PHONY: build_vector_db
+build_vector_db: activate ## Build or rebuild semantic vector index
+	${VENV_PYTHON} src/vector_engine.py --build
+
+.PHONY: run_mcp_server
+run_mcp_server: activate ## Launch standard Model Context Protocol (MCP) server
+	${VENV_PYTHON} src/mcp_server.py
+
+.PHONY: rag_query
+rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q="LLM Jailbreak"
+	${VENV_PYTHON} src/vector_engine.py --query "$(Q)"
+
 .PHONY: run
 run: activate ## run python code inside venv
 	${VENV_PYTHON} ${SRC}
 
 .PHONY: isort
 isort: activate ## isort
-	${VENV_BIN}/isort ${SRC} ${TESTS} || true
+	${VENV_BIN}/isort ${SRC} src/vector_engine.py src/mcp_server.py ${TESTS} || true
 
 .PHONY: black
 black: activate ## black
-	${VENV_BIN}/black ${SRC} ${TESTS} || true
+	${VENV_BIN}/black ${SRC} src/vector_engine.py src/mcp_server.py ${TESTS} || true
 
 .PHONY: flake8
 flake8: activate ## flake8
-	${VENV_BIN}/flake8 ${SRC} ${TESTS} || true
+	${VENV_BIN}/flake8 ${SRC} src/vector_engine.py src/mcp_server.py ${TESTS} || true
 
 .PHONY: radon-cc
 radon-cc: activate ## radon compute Cyclomatic Complexity (CC)
