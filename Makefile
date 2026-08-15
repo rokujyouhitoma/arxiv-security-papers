@@ -38,7 +38,9 @@ static_analysis: radon-cc radon-raw radon-mi radon-hal xenon mypy py_compile ## 
 py_compile: activate ## py_compile syntax check
 	${VENV_PYTHON} -m py_compile ${SRC}
 	${VENV_PYTHON} -m py_compile src/vector_engine.py
+	${VENV_PYTHON} -m py_compile src/synonym_expander.py
 	${VENV_PYTHON} -m py_compile src/mcp_server.py
+	${VENV_PYTHON} -m py_compile src/web_server.py
 
 .PHONY: test
 test: pytest ## pytest
@@ -55,6 +57,10 @@ build_vector_db: activate ## Build or rebuild semantic vector index
 run_mcp_server: activate ## Launch standard Model Context Protocol (MCP) server
 	${VENV_PYTHON} src/mcp_server.py
 
+.PHONY: run_web
+run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (http://localhost:8000)
+	${VENV_PYTHON} src/web_server.py --port 8000
+
 .PHONY: rag_query
 rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q="LLM Jailbreak"
 	${VENV_PYTHON} src/vector_engine.py --query "$(Q)"
@@ -65,15 +71,15 @@ run: activate ## run python code inside venv
 
 .PHONY: isort
 isort: activate ## isort
-	${VENV_BIN}/isort ${SRC} src/vector_engine.py src/mcp_server.py ${TESTS} || true
+	${VENV_BIN}/isort ${SRC} src/vector_engine.py src/synonym_expander.py src/mcp_server.py src/web_server.py ${TESTS} || true
 
 .PHONY: black
 black: activate ## black
-	${VENV_BIN}/black ${SRC} src/vector_engine.py src/mcp_server.py ${TESTS} || true
+	${VENV_BIN}/black ${SRC} src/vector_engine.py src/synonym_expander.py src/mcp_server.py src/web_server.py ${TESTS} || true
 
 .PHONY: flake8
 flake8: activate ## flake8
-	${VENV_BIN}/flake8 ${SRC} src/vector_engine.py src/mcp_server.py ${TESTS} || true
+	${VENV_BIN}/flake8 ${SRC} src/vector_engine.py src/synonym_expander.py src/mcp_server.py src/web_server.py ${TESTS} || true
 
 .PHONY: radon-cc
 radon-cc: activate ## radon compute Cyclomatic Complexity (CC)

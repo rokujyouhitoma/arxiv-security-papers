@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>arXiv Security Papers — AI ナレッジ & MCP 検索ポータル</title>
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- Mermaid.js for Trend Diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="logo">
+        <span class="logo-icon">🛡️</span>
+        <div class="logo-text">
+          <h1>arXiv Security <span>Portal</span></h1>
+          <p>Google OKF v0.2 | MCP JSON-RPC Server | Hybrid Vector Search</p>
+        </div>
+      </div>
+      <div class="stats-badge" id="statsBadge">
+        <span class="badge-dot"></span>
+        <span id="totalPapersCount">14,169</span> 論文インデックス済み
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="app-nav">
+    <div class="nav-container">
+      <button class="nav-btn active" data-tab="searchTab">🔍 セマンティック RAG 検索</button>
+      <button class="nav-btn" data-tab="trendsTab">📊 トレンド & Mermaid マップ</button>
+      <button class="nav-btn" data-tab="mcpTab">🔌 MCP ツールサンドボックス</button>
+    </div>
+  </nav>
+
+  <!-- Main Content Container -->
+  <main class="main-container">
+    <!-- TAB 1: SEARCH -->
+    <section id="searchTab" class="tab-content active">
+      <div class="search-box-card glass-panel">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" placeholder="検索クエリを入力（例: ペンテスト自動化, 自動運転 脆弱性, LLM jailbreak）..." autofocus>
+          <button id="searchBtn" class="btn btn-primary">検索実行</button>
+        </div>
+        <div class="tag-filters" id="tagFilters">
+          <span class="filter-label">推奨カテゴリ:</span>
+          <button class="filter-chip active" data-tag="">すべて</button>
+          <button class="filter-chip" data-tag="cs.CR">cs.CR (暗号・セキュリティ)</button>
+          <button class="filter-chip" data-tag="malware">マルウェア検出</button>
+          <button class="filter-chip" data-tag="autonomous">自動運転</button>
+          <button class="filter-chip" data-tag="llm">LLM / AI セキュリティ</button>
+          <button class="filter-chip" data-tag="pentest">ペンテスト</button>
+        </div>
+      </div>
+
+      <!-- Search Results Area -->
+      <div class="results-header">
+        <h2 id="resultsCount">検索結果 (0件)</h2>
+        <span class="search-time" id="searchTime"></span>
+      </div>
+
+      <div id="resultsGrid" class="results-grid">
+        <!-- Paper Cards will be dynamically inserted here -->
+      </div>
+    </section>
+
+    <!-- TAB 2: TRENDS -->
+    <section id="trendsTab" class="tab-content">
+      <div class="glass-panel trend-control-panel">
+        <h2>📊 階層別エグゼクティブサマリー & トレンド</h2>
+        <div class="period-selector">
+          <button class="period-btn active" data-period="monthly">一か月分 (03_monthly)</button>
+          <button class="period-btn" data-period="quarterly">四半期 (04_quarterly)</button>
+          <button class="period-btn" data-period="annual">通期総括 (05_annual)</button>
+        </div>
+      </div>
+      <div id="trendContent" class="glass-panel trend-content">
+        <!-- Trend markdown / mermaid output -->
+        <p class="loading-text">トレンドデータを読み込み中...</p>
+      </div>
+    </section>
+
+    <!-- TAB 3: MCP SANDBOX -->
+    <section id="mcpTab" class="tab-content">
+      <div class="glass-panel mcp-sandbox-panel">
+        <h2>🔌 Model Context Protocol (MCP) JSON-RPC サンドボックス</h2>
+        <p class="section-desc">AI エージェントや外部クライアントが呼出す MCP ツールをブラウザ上からテスト実行できます。</p>
+        
+        <div class="mcp-form">
+          <div class="form-group">
+            <label for="mcpToolSelect">実行する MCP ツール名:</label>
+            <select id="mcpToolSelect">
+              <option value="search_security_papers">search_security_papers (類似論文検索)</option>
+              <option value="get_paper_summary">get_paper_summary (OKF 構造化要約取得)</option>
+              <option value="get_latest_trends">get_latest_trends (トレンドレポート取得)</option>
+              <option value="query_attack_technique">query_attack_technique (MITRE ATT&CK 逆引き)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="mcpArgsInput">引数 (JSON 形式):</label>
+            <textarea id="mcpArgsInput" rows="4">{\n  "query": "ペンテスト自動化",\n  "top_k": 5\n}</textarea>
+          </div>
+
+          <button id="runMcpBtn" class="btn btn-secondary">⚡ MCP ツール呼び出し実行</button>
+        </div>
+
+        <div class="mcp-output-wrapper">
+          <h3>JSON-RPC レスポンス:</h3>
+          <pre id="mcpOutput" class="code-block">{ "status": "idle" }</pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal for Paper OKF View -->
+  <div id="paperModal" class="modal-backdrop hidden">
+    <div class="modal-card glass-panel">
+      <button id="closeModalBtn" class="modal-close-btn">&times;</button>
+      <div class="modal-header">
+        <span class="modal-badge" id="modalPaperId">arXiv: 0000.00000</span>
+        <h2 id="modalPaperTitle">論文タイトル</h2>
+        <p class="modal-subtitle" id="modalPaperTitleJa">日本語タイトル</p>
+      </div>
+      <div class="modal-body" id="modalPaperBody">
+        <!-- Paper details -->
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <p>© 2026 arxiv-security-papers | Built with Google OKF v0.2 & Model Context Protocol</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
