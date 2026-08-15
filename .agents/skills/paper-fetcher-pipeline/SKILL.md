@@ -38,10 +38,10 @@ description: arXiv API (cs.CR) からの論文データフェッチ、160日間�
 2. 処理済みリスト `processed_papers.json` が正常にロードできることを確認。
 
 ### Step 2: arXiv フェッチスクリプト実行
-1. コアスクリプト `arxiv_okf_fetcher.py` を実行：
-   - 通常実行: `python3 arxiv_okf_fetcher.py`
-   - 過去160日さかのぼりフェッチ: `python3 arxiv_okf_fetcher.py --backfill 160`
-   - 強制再取得実行: `python3 arxiv_okf_fetcher.py --force`
+1. コアスクリプト `src/arxiv_okf_fetcher.py` を実行：
+   - 通常実行: `python3 src/arxiv_okf_fetcher.py`
+   - 過去160日さかのぼりフェッチ: `python3 src/arxiv_okf_fetcher.py --backfill 160`
+   - 強制再取得実行: `python3 src/arxiv_okf_fetcher.py --force`
 
 ### Step 3: 原本保存データの検証
 1. `outputs/raw_data/YYYY-MM-DD/` に4つのファイル形式が正しく生成されているかアサート：

@@ -56,8 +56,8 @@ outputs/executive_summaries/
 1. `outputs/executive_summaries/` 配下に `01_per_run`, `02_daily`, `03_monthly`, `04_quarterly`, `05_annual` が存在することを確認。
 
 ### Step 2: サマリー生成スクリプト実行
-1. `arxiv_okf_fetcher.py` のサマリー生成モジュールを実行：
-   - 全層サマリー更新: `python3 arxiv_okf_fetcher.py --update-summaries`
+1. `src/arxiv_okf_fetcher.py` のサマリー生成モジュールを実行：
+   - 全層サマリー更新: `python3 src/arxiv_okf_fetcher.py --update-summaries`
 
 ### Step 3: サマリー品質アサーション (Quality Gate 4)
 1. **完全日本語化チェック**: 英語の要約や未翻訳タイトルが表内に残っていないこと。
