@@ -80,14 +80,37 @@ flowchart TD
 │   ├── vector_db/                      # セマンティックベクトル検索インデックス
 │   ├── index.md                        # 全成果物ナビゲーションインデックス
 │   └── log.md                          # パイプラインログ
-├── src/                                # パイプラインソースコード
+├── site/                               # Modern Web Application (Glassmorphic UI)
+│   ├── js/                             # 分割コンパイラモジュール群
+│   │   ├── lexer.js                    # MarkdownLexer (トークナイザー)
+│   │   ├── parser.js                   # MarkdownParser (DocumentNode AST 構築)
+│   │   ├── evaluator.js                # MarkdownEvaluator (インライン装飾 & Mermaid ID評価)
+│   │   ├── renderer.js                 # MarkdownRenderer (HTML5 & Mermaid 描画)
+│   │   └── markdown_compiler.js        # Compiler Engine オーケストレーター
+│   ├── app.js                          # フロントエンド UI 制御
+│   ├── app-min.js                      # Closure Compiler 最適化ミニファイ JS
+│   ├── externs.js                      # Closure Compiler 外部シンボル保護定義
+│   ├── style.css                       # Glassmorphism ダークモード CSS
+│   └── index.html                      # シングルページアプリケーション (SPA) 画面
+├── tools/                              # ビルドツール
+│   └── closure-compiler/               # Google Closure Compiler (yuzora 準拠)
+│       ├── closure-compiler-v20240317.jar
+│       ├── setup_compiler.py
+│       └── LICENSE
+├── src/                                # バックエンド・パイプラインソースコード
 │   ├── __init__.py
 │   ├── arxiv_okf_fetcher.py            # データ収集・OKF変換・サマリー生成
-│   ├── vector_engine.py                # セマンティック＋BM25ハイブリッド検索エンジン
-│   └── mcp_server.py                   # MCP JSON-RPC 2.0 サーバ
+│   ├── vector_engine.py                # 同義語拡張＋マルチフィールドハイブリッド検索
+│   ├── synonym_expander.py             # 日英セキュリティ専門用語シノニム拡張
+│   ├── mcp_server.py                   # MCP JSON-RPC 2.0 サーバ
+│   └── web_server.py                   # REST API ＆ 静的 Web サーバー
 ├── templates/                          # サマリーおよび OKF レポート用テンプレート
 ├── tests/                              # pytest 単体テストスイート
 │   ├── __init__.py
+│   ├── test_fetcher.py
+│   ├── test_mcp_server.py
+│   ├── test_vector_engine.py
+│   └── test_web_server.py
 │   ├── test_fetcher.py
 │   └── test_mcp_server.py
 ├── .gitignore
