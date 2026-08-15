@@ -108,3 +108,18 @@ flowchart TD
 1. **パスバウンダリ検証**: すべてのファイル・データアクセスにおいて `os.path.realpath` による境界検証を強制し、機密ファイル (`.env`, `.ssh`) へのアクセスを防止。
 2. **品質管理ゲート (Quality Gates)**: `make py_compile`, `make static_analysis`, `make test` により、Python / JS 構文エラー 0 件、絶対パスリンク 0 件、テスト全件 PASS を遵守。
 3. **連続稼働性と冪等性**: `processed_papers.json` による重複処理防止および障害時リカバリ設計。
+
+---
+
+## 6. 要求事項トレーサビリティ・マトリクス (Requirements Traceability Matrix)
+
+| 要求 ID (REQ-01) | 要求事項 (WHAT / WHY) | HLD 基本設計コンポーネント (HOW) |
+| :---: | --- | --- |
+| **REQ-FR-01** | セキュリティ論文の連続追跡と原本保存 | ピラー 1: `src/arxiv_okf_fetcher.py` (API/RSS Fallback, PDF Fetcher) |
+| **REQ-FR-02** | 構造化ナレッジ標準化 | ピラー 1: Google OKF v0.2 Converter (`outputs/okf_papers/`) |
+| **REQ-FR-03** | 5階層エグゼクティブサマリー生成 | ピラー 1: Summary Generator (`outputs/executive_summaries/01_〜05_`) |
+| **REQ-FR-04** | 高精度セマンティック検索 ＆ 専門用語拡張 | ピラー 2: `src/vector_engine.py` + `src/synonym_expander.py` |
+| **REQ-FR-05** | AI エージェント相互運用プロトコル | ピラー 3: `src/mcp_server.py` (MCP JSON-RPC 2.0 4大ツール) |
+| **REQ-FR-06** | 直感型 Web ポータル ＆ ブックマーク可能 URL | ピラー 4: `src/web_server.py` + `site/index.html` + `app.js` (?q=, ?tag=) |
+| **REQ-FR-07** | リッチドキュメント・動的図表レンダリング | ピラー 4: `site/js/` Markdown Compiler Engine + Mermaid.js |
+| **REQ-NFR-01〜06** | 信頼性・セキュリティ・性能・品質保証 | 各サブシステムガード, Google Closure Compiler (`site/app-min.js`), Quality Gates |
