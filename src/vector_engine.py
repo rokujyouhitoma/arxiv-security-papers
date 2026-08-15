@@ -160,34 +160,39 @@ class VectorEngine:
             self.build_index()
 
         # Expand query using SynonymExpander
-        expanded_query_tokens = self.expander.expand_query(query)
-        if not expanded_query_tokens:
-            return []
+        expanded_query_tokens = self.expander.expand_query(query) if query and query.strip() else []
 
         scores = []
         for doc in self.documents:
-            if category and category.lower() not in [t.lower() for t in doc.get("tags", [])]:
-                continue
+            if category:
+                cat_lower = category.lower()
+                doc_all = f"{doc.get('title', '')} {doc.get('description', '')} {' '.join(doc.get('tags', []))}".lower()
+                cat_synonyms = self.expander.expand_token(cat_lower)
+                if not any(syn in doc_all for syn in cat_synonyms):
+                    continue
 
-            score = 0.0
-            doc_title = doc.get("title", "").lower()
-            doc_desc = doc.get("description", "").lower()
-            doc_tags = " ".join(doc.get("tags", [])).lower()
+            if not expanded_query_tokens:
+                score = 1.0
+            else:
+                score = 0.0
+                doc_title = doc.get("title", "").lower()
+                doc_desc = doc.get("description", "").lower()
+                doc_tags = " ".join(doc.get("tags", [])).lower()
 
-            for qt in expanded_query_tokens:
-                # Multi-field weighted scoring
-                if qt in doc.get("title_tokens", []) or qt in doc_title:
-                    score += self.FIELD_WEIGHTS["title"] * self.idf.get(qt, 1.2)
-                if qt in doc.get("tags_tokens", []) or qt in doc_tags:
-                    score += self.FIELD_WEIGHTS["tags"] * self.idf.get(qt, 1.2)
-                if qt in doc.get("desc_tokens", []) or qt in doc_desc:
-                    score += self.FIELD_WEIGHTS["description"] * self.idf.get(qt, 1.2)
+                for qt in expanded_query_tokens:
+                    # Multi-field weighted scoring
+                    if qt in doc.get("title_tokens", []) or qt in doc_title:
+                        score += self.FIELD_WEIGHTS["title"] * self.idf.get(qt, 1.2)
+                    if qt in doc.get("tags_tokens", []) or qt in doc_tags:
+                        score += self.FIELD_WEIGHTS["tags"] * self.idf.get(qt, 1.2)
+                    if qt in doc.get("desc_tokens", []) or qt in doc_desc:
+                        score += self.FIELD_WEIGHTS["description"] * self.idf.get(qt, 1.2)
 
-                # Direct string match bonus
-                if qt in doc_title:
-                    score += 3.0
-                if qt in doc_desc:
-                    score += 2.0
+                    # Direct string match bonus
+                    if qt in doc_title:
+                        score += 3.0
+                    if qt in doc_desc:
+                        score += 2.0
 
             if score > 0:
                 scores.append({
