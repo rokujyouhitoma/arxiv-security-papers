@@ -1,5 +1,6 @@
 # Large raw data files & downloaded PDFs
 outputs/raw_data/
+outputs/vector_db/
 
 # Virtual Environment
 .venv/
