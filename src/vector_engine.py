@@ -356,6 +356,16 @@ class VectorEngine:
                         self.documents.append(d)
                         self.documents_by_id[d["id"]] = d
                         self.doc_full_texts[d["id"]] = f"{d.get('title', '')} {d.get('description', '')} {' '.join(d.get('annotated_keywords', []))}".lower()
+
+                    if not self.inverted_index or len(self.inverted_index) < 10:
+                        self.inverted_index = defaultdict(list)
+                        self.inverted_keyword_index = defaultdict(list)
+                        for d in self.documents:
+                            unique_tokens = set(d.get("tokens", []))
+                            for t in unique_tokens:
+                                self.inverted_index[t].append(d["id"])
+                            for kw in d.get("annotated_keywords", []):
+                                self.inverted_keyword_index[kw.lower()].append(d["id"])
             except Exception:
                 self.documents = []
                 self.documents_by_id = {}
@@ -381,28 +391,43 @@ class VectorEngine:
         if not self.documents:
             self.build_index()
 
-        expanded_query_tokens = self.expander.expand_query(query) if query and query.strip() else []
+        query_terms = self.expander.expand_query(query) if query and query.strip() else []
+        expanded_tokens_set = set()
+        for qt in query_terms:
+            expanded_tokens_set.update(self.tokenize(qt))
+        expanded_query_tokens = list(expanded_tokens_set)
         t_tokenize_end = time.perf_counter()
 
-        # Candidate Pruning via Inverted Index
+        # Candidate Pruning via Inverted Index (Exclude high-frequency single chars and stop words)
         t_prune_start = time.perf_counter()
+        STOP_WORDS = {"test", "testing", "using", "paper", "with", "from", "that", "this", "have", "been", "were", "where", "what", "how", "when", "some", "more", "such", "system", "data", "base", "based"}
         candidate_ids = None
         if expanded_query_tokens:
             candidate_ids = set()
-            for qt in expanded_query_tokens:
-                qt_lower = qt.lower()
-                if qt_lower in self.inverted_index:
-                    candidate_ids.update(self.inverted_index[qt_lower])
-                if qt_lower in self.inverted_keyword_index:
-                    candidate_ids.update(self.inverted_keyword_index[qt_lower])
+            prune_tokens = set()
+            for t in query_terms:
+                t_clean = t.lower().strip()
+                if len(t_clean) >= 2 and t_clean not in STOP_WORDS:
+                    prune_tokens.add(t_clean)
 
-            # If no inverted match, evaluate all docs as fallback
-            if not candidate_ids:
-                target_docs = self.documents
-            else:
+            for ptoken in prune_tokens:
+                if ptoken in self.inverted_index:
+                    candidate_ids.update(self.inverted_index[ptoken])
+                if ptoken in self.inverted_keyword_index:
+                    candidate_ids.update(self.inverted_keyword_index[ptoken])
+
+            if candidate_ids:
                 target_docs = [self.documents_by_id[did] for did in candidate_ids if did in self.documents_by_id]
+                if len(target_docs) > 500:
+                    def candidate_priority(d):
+                        text = self.doc_full_texts.get(d["id"], "")
+                        return sum(2 if ptoken in text else 0 for ptoken in prune_tokens)
+                    target_docs.sort(key=candidate_priority, reverse=True)
+                    target_docs = target_docs[:500]
+            else:
+                target_docs = self.documents[:500]
         else:
-            target_docs = self.documents
+            target_docs = self.documents[:500]
         t_prune_end = time.perf_counter()
 
         # Scoring Candidates
