@@ -127,8 +127,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       const endTime = performance.now();
 
-      const elapsed = ((endTime - startTime) / 1000).toFixed(2);
-      searchTime.textContent = `${elapsed} 秒で取得`;
+      const profile = data['profile'];
+      if (profile && profile['total_ms'] !== undefined) {
+        searchTime.textContent = `⚡ ${profile['total_ms']} ms (${profile['candidates_evaluated']}件評価 / 全${profile['total_documents']}件)`;
+      } else {
+        const elapsed = Math.round(endTime - startTime);
+        searchTime.textContent = `${elapsed} ms で取得`;
+      }
 
       if (data.status === 'success' && data.results) {
         renderResults(data.results);
