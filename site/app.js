@@ -103,22 +103,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Perform RAG Search & Update URL
   async function performSearch(query, updateUrl = true) {
+    const cleanQuery = (query === null || query === undefined) ? '' : String(query).trim();
+
     if (updateUrl) {
       const params = new URLSearchParams();
-      if (query) params.set('q', query);
+      if (cleanQuery) params.set('q', cleanQuery);
       if (activeTag) params.set('tag', activeTag);
       const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-      history.pushState({ q: query, tag: activeTag }, '', newUrl);
+      history.pushState({ q: cleanQuery, tag: activeTag }, '', newUrl);
     }
 
     const startTime = performance.now();
     resultsGrid.innerHTML = '<p style="color: var(--text-muted);">検索中...</p>';
     
     try {
-      let url = `/api/search?q=${encodeURIComponent(query)}&top_k=12`;
+      let url = `/api/search?q=${encodeURIComponent(cleanQuery)}&top_k=12`;
       if (activeTag) url += `&category=${encodeURIComponent(activeTag)}`;
 
       const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      }
       const data = await res.json();
       const endTime = performance.now();
 
