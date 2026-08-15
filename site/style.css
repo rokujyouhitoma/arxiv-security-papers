@@ -501,3 +501,132 @@ body {
   font-size: 0.85rem;
   margin-top: auto;
 }
+
+/* Compiled Markdown Engine Styles */
+.md-h1 {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--panel-border);
+  padding-bottom: 0.5rem;
+}
+
+.md-h2 {
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--accent-secondary);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.md-h3 {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #fff;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.md-p {
+  line-height: 1.75;
+  margin-bottom: 1rem;
+  color: #e5e7eb;
+}
+
+.md-hr {
+  border: none;
+  border-top: 1px solid var(--panel-border);
+  margin: 1.5rem 0;
+}
+
+.md-blockquote {
+  border-left: 4px solid var(--accent-primary);
+  background: rgba(99, 102, 241, 0.08);
+  padding: 0.75rem 1.25rem;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: 1.25rem;
+  color: #d1d5db;
+  font-style: italic;
+}
+
+.md-list {
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+  line-height: 1.7;
+}
+
+.md-list li {
+  margin-bottom: 0.4rem;
+}
+
+.md-bold {
+  color: #fff;
+  font-weight: 700;
+}
+
+.md-inline-code {
+  background: rgba(255, 255, 255, 0.08);
+  color: #38bdf8;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.88rem;
+}
+
+.md-link {
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+.md-link:hover {
+  color: var(--accent-secondary);
+}
+
+.md-table-wrapper {
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--panel-border);
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.md-table th {
+  background: rgba(99, 102, 241, 0.2);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.md-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #d1d5db;
+}
+
+.md-table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.md-mermaid-wrapper {
+  background: rgba(11, 15, 25, 0.8);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}

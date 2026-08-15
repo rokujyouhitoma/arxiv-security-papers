@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **004** | [Lexer, Parser, AST, Evaluator, Renderer による Markdown Compiler Engine の構築](closed/004-implement-markdown-compiler-engine.md) | Feature | 2026-08-15 | [004-implement-markdown-compiler-engine.md](closed/004-implement-markdown-compiler-engine.md) |
 | **003** | [MCP サーバおよび VectorDB をバックエンドとしたモダン Web 検索 UI の構築](closed/003-implement-web-search-ui-and-mcp-backend.md) | Feature | 2026-08-15 | [003-implement-web-search-ui-and-mcp-backend.md](closed/003-implement-web-search-ui-and-mcp-backend.md) |
 | **002** | [セキュリティ同義語拡張・マルチフィールドハイブリッドスコアリング・段落チャンク化による検索エンジンおよび VectorDB の高度化](closed/002-enhance-search-engine-and-vector-db.md) | Feature | 2026-08-15 | [002-enhance-search-engine-and-vector-db.md](closed/002-enhance-search-engine-and-vector-db.md) |
 | **001** | [MCP サーバおよびベクトル DB セマンティック検索エンジンの導入](closed/001-implement-mcp-server-and-vector-db.md) | Feature | 2026-08-15 | [001-implement-mcp-server-and-vector-db.md](closed/001-implement-mcp-server-and-vector-db.md) |
