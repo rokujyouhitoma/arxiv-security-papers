@@ -43,6 +43,9 @@
   - `.agents/hooks.json` によるコミット前全自動構文チェック (`make py_compile`) および絶対パス排除ガバナンスフック
 
 ### [Changed]
+- **ディレクトリ構造再編成**:
+  - `arxiv_okf_fetcher.py` を `src/arxiv_okf_fetcher.py` へ移動し、Python 標準パッケージ構成（`src/`）に適合
+  - 単体テストスイート `tests/test_fetcher.py` を追加し、`pytest` によるカバレッジ自動計測を整備
 - **Skill & Agent 統廃合**:
   - 旧試験対策用リポジトリの Skill・Agent・ルールを全廃し、`arxiv-security-papers` 専有版へ刷新
   - `refine-content-data` を `refine-okf-data` に改称し、OKF ドキュメントおよび要約推敲専用手順へリビルド
