@@ -30,6 +30,10 @@
 ## [Unreleased]
 
 ### [Added]
+- **Glassmorphism Web 検索 UI ＆ MCP バックエンドサーバー (Issue 003)**:
+  - `src/web_server.py`: REST API (`/api/search`, `/api/paper/`, `/api/trends`, `/api/mcp`) および静的 Web 配信を提供する Python HTTP サーバーの構築
+  - `site/`: リッチ Glassmorphism ダークモード Web UI (`index.html`, `style.css`, `app.js`) を開発 (リアルタイム RAG 検索, OKF モーダルプレビュー, Mermaid マインドマップ動的描画, MCP JSON-RPC テストサンドボックス統合)
+  - `Makefile`: `make run_web` コマンドを追加し、`http://localhost:8000` での即時ポータル起動を実現
 - **セキュリティ専門用語シノニム拡張 ＆ マルチフィールドハイブリッド検索エンジン (Issue 002)**:
   - `registered-information-security-specialist-examination` の高品質モジュール設計を参考に、`src/synonym_expander.py` (日英セキュリティ用語相互拡張) を開発・統合
   - `src/vector_engine.py` (v2.0.0): フィールド重み付け (Title:3.5, Tags:3.0, Description:2.5, Abstract:1.5) とシノニム展開を組み込んだハイブリッド検索スコアを実装 (適合率大幅向上)
