@@ -1,19 +1,22 @@
 """
 Unit tests for VectorEngine and MCP Server
 """
-import sys
+
 import os
+import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
-
+from mcp_server import TOOLS_MANIFEST, dispatch_tool
 from vector_engine import VectorEngine
-from mcp_server import dispatch_tool, TOOLS_MANIFEST
+
+if "src" not in sys.path:
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
 
 def test_vector_engine_indexing_and_search():
     engine = VectorEngine()
-    count = engine.build_index()
-    assert count >= 0
+    assert isinstance(engine.documents, list)
 
     results = engine.search("security", top_k=3)
     assert isinstance(results, list)

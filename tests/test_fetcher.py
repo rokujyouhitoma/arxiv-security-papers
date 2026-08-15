@@ -1,13 +1,17 @@
 """
 Unit tests for arxiv_okf_fetcher core module.
 """
-import sys
-import os
 
-# Add src to python path for testing
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+import os
+import sys
 
 from arxiv_okf_fetcher import clean_text, load_config, translate_title_ja
+
+# Add src to python path for standalone execution
+if "src" not in sys.path:
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
 
 def test_clean_text():
@@ -24,6 +28,8 @@ def test_load_config():
 
 
 def test_translate_title_ja():
-    title = "TeleGapper: On the (un)reliability of Privacy Policies in Telegram Mini apps"
+    title = (
+        "TeleGapper: On the (un)reliability of Privacy Policies in Telegram Mini apps"
+    )
     translated = translate_title_ja(title)
     assert "Telegram" in translated

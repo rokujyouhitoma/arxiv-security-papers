@@ -53,9 +53,9 @@ You MUST follow this structured, issue-driven development lifecycle for all modi
    - Before modifying code or schemas, refine the issue using `polish-issue`.
    - Map dependencies, implementation steps, target files, branch name, and Definition of Done (DoD).
 
-3. **Implementation & Python Quality Gates**:
+3. **Implementation & Mandatory Quality Gates**:
    - Follow feature branch naming (`feat/<issue-id>-<desc>`, `fix/<issue-id>-<desc>`, `refactor/<issue-id>-<desc>`).
-   - Run `make py_compile` and verify syntax cleanliness.
+   - You MUST ALWAYS execute the triple quality gate: `make format`, `make static_analysis`, and `make test` (or `make check` / `make verify_quality`).
    - Run `verify-quality-gates` to validate OKF v0.2 schemas, relative links, idempotency state, and directory consistency.
 
 4. **Issue Closing & Git Workflow (`git-workflow`)**:
