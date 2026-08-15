@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div>
           <div class="card-top">
             <span class="arxiv-id-tag">arXiv: ${paper.id}</span>
-            <span class="score-badge">Score: ${paper.score}</span>
+            <span class="score-badge">Score: ${paper['score']}</span>
           </div>
           <h3 class="card-title">${escapeHtml(paper.title)}</h3>
           <p class="card-desc">${escapeHtml(paper.description || '要約情報なし')}</p>
