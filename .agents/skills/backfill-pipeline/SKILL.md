@@ -37,11 +37,11 @@ description: arXiv API のレート制限 (HTTP 429) や通信遅延を考慮し
 
 ### Step 1: 事前確認
 1. ディスク容量を確認（PDFダウンロード用に十分な容量があること）。
-2. `python3 arxiv_okf_fetcher.py --help` を実行しバックフィルオプションを確認。
+2. `python3 src/arxiv_okf_fetcher.py --help` を実行しバックフィルオプションを確認。
 
 ### Step 2: バックフィルフェッチの実行
 1. 以下のコマンドを実行して過去160日分のバックフィルを開始：
-   - 実行: `python3 arxiv_okf_fetcher.py --backfill 160`
+   - 実行: `python3 src/arxiv_okf_fetcher.py --backfill 160`
 2. 通信ログを確認し、レート制限が発生していないかアサート。
 
 ### Step 3: データ整合性 & 冪等性チェック
@@ -50,5 +50,5 @@ description: arXiv API のレート制限 (HTTP 429) や通信遅延を考慮し
 
 ### Step 4: 5層サマリー一括再生成 (`--update-summaries`)
 1. バックフィル完了後、全サマリー層を最新データで更新：
-   - 実行: `python3 arxiv_okf_fetcher.py --update-summaries`
+   - 実行: `python3 src/arxiv_okf_fetcher.py --update-summaries`
 2. `verify-quality-gates` スキルを実行し、品質管理ゲート（相対パス違反0件、サマリー完全日本語化等）を PASS することを確認。

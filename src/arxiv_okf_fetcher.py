@@ -17,12 +17,17 @@ import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-
 def load_config():
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+    possible_paths = [
+        os.path.join(os.path.dirname(__file__), "..", "config.json"),
+        os.path.join(os.path.dirname(__file__), "config.json"),
+        os.path.abspath("config.json")
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    return {}
 
 
 def clean_text(text):
@@ -918,8 +923,11 @@ def main():
     parser.add_argument("--force", action="store_true", help="Force reprocessing existing papers")
     args, unknown = parser.parse_known_args()
 
-    config = load_config()
-    workspace_dir = os.path.dirname(os.path.abspath(__file__))
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if os.path.exists(os.path.join(current_dir, "..", "config.json")):
+        workspace_dir = os.path.abspath(os.path.join(current_dir, ".."))
+    else:
+        workspace_dir = current_dir
     
     query = config["arxiv"]["query"]
     start_dt = None

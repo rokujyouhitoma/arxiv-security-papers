@@ -3,7 +3,7 @@ PYTHON=python3
 VENV=.venv
 VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
-SRC=arxiv_okf_fetcher.py
+SRC=src/arxiv_okf_fetcher.py
 TESTS=tests
 
 all: clean setup format static_analysis test build run
@@ -14,7 +14,7 @@ help: ## help command
 
 .PHONY: clean
 clean: ## clean virtualenv and build artifacts
-	rm -rf dist/ __pycache__ .pytest_cache .mypy_cache
+	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache
 
 .PHONY: setup
 setup: activate install ## setup venv, activate and install python libraries
@@ -51,15 +51,15 @@ run: activate ## run python code inside venv
 
 .PHONY: isort
 isort: activate ## isort
-	${VENV_BIN}/isort ${SRC} || true
+	${VENV_BIN}/isort ${SRC} ${TESTS} || true
 
 .PHONY: black
 black: activate ## black
-	${VENV_BIN}/black ${SRC} || true
+	${VENV_BIN}/black ${SRC} ${TESTS} || true
 
 .PHONY: flake8
 flake8: activate ## flake8
-	${VENV_BIN}/flake8 ${SRC} || true
+	${VENV_BIN}/flake8 ${SRC} ${TESTS} || true
 
 .PHONY: radon-cc
 radon-cc: activate ## radon compute Cyclomatic Complexity (CC)
@@ -79,7 +79,7 @@ radon-hal: activate ## radon compute their Halstead metrics
 
 .PHONY: xenon
 xenon: activate ## xenon
-	${VENV_BIN}/xenon --max-absolute A --max-modules A --max-average A . || true
+	${VENV_BIN}/xenon --max-absolute A --max-modules A --max-average A src || true
 
 .PHONY: mypy
 mypy: activate ## mypy
@@ -87,4 +87,4 @@ mypy: activate ## mypy
 
 .PHONY: pytest
 pytest: activate ## pytest
-	${VENV_BIN}/pytest --cov=. --cov-report=term-missing -v ${TESTS} || ${VENV_BIN}/pytest || true
+	${VENV_BIN}/pytest --cov=src --cov-report=term-missing -v ${TESTS} || ${VENV_BIN}/pytest || true
