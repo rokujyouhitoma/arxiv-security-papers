@@ -24,7 +24,24 @@ All major feature additions, pipeline modifications, schema changes, and documen
 
 ---
 
-## 2. Development & Issue Workflow Rules
+## 2. Antigravity IDE & 2.0 Integration Rules
+
+Agents MUST leverage the native capabilities of Antigravity IDE and Antigravity 2.0:
+
+1. **Scheduled Tasks (`schedule` / `/schedule`)**:
+   - Automated 4x daily execution (`00:00`, `06:00`, `12:00`, `18:00`) configured via background cron (`schedule` tool) executing `make run`.
+2. **Artifacts & Mermaid Diagrams (`write_to_file` / `mermaid`)**:
+   - Executive summaries (03_monthly, 04_quarterly, 05_annual) MUST include dynamic Mermaid mindmaps and structured markdown artifacts for immediate visual previewing.
+3. **Browser Subagent (`browser_subagent`)**:
+   - When verifying external CVEs, NIST SP 800 controls, or MITRE ATT&CK techniques, agents MUST invoke `browser_subagent` to verify primary sources.
+4. **Slash Command & Goal Execution (`/goal`, `/schedule`, `/learn`)**:
+   - Long-running multi-step operations (e.g. 160-day historical backfill) MUST be executed autonomously under `/goal` mode without stopping mid-way until all DoD quality criteria pass.
+5. **Diagnostic Auto-Fix & Makefile Quality Enforcement**:
+   - All code edits MUST pass `make py_compile` and `make static_analysis`. Linter or compiler errors MUST be resolved via Diagnostic Auto-Fix protocols.
+
+---
+
+## 3. Development & Issue Workflow Rules
 
 You MUST follow this structured, issue-driven development lifecycle for all modifications, documentations, and new features:
 
@@ -38,7 +55,7 @@ You MUST follow this structured, issue-driven development lifecycle for all modi
 
 3. **Implementation & Python Quality Gates**:
    - Follow feature branch naming (`feat/<issue-id>-<desc>`, `fix/<issue-id>-<desc>`, `refactor/<issue-id>-<desc>`).
-   - Run `python3 -m py_compile arxiv_okf_fetcher.py` and verify syntax cleanliness.
+   - Run `make py_compile` and verify syntax cleanliness.
    - Run `verify-quality-gates` to validate OKF v0.2 schemas, relative links, idempotency state, and directory consistency.
 
 4. **Issue Closing & Git Workflow (`git-workflow`)**:
@@ -48,7 +65,7 @@ You MUST follow this structured, issue-driven development lifecycle for all modi
 
 ---
 
-## 3. Google OKF v0.2 Specification Compliance
+## 4. Google OKF v0.2 Specification Compliance
 
 - All converted paper markdown documents in `outputs/okf_papers/YYYY-MM-DD/<clean_id>.md` MUST conform to Google Open Knowledge Format (OKF) v0.2.
 - Mandatory YAML Frontmatter keys:
@@ -63,7 +80,7 @@ You MUST follow this structured, issue-driven development lifecycle for all modi
 
 ---
 
-## 4. 5-Tier Executive Summaries (01-05 Sequential Directories)
+## 5. 5-Tier Executive Summaries (01-05 Sequential Directories)
 
 Executive summaries in `outputs/executive_summaries/` MUST be maintained in sorted, zero-padded sequential directories (01_ to 05_):
 
@@ -78,7 +95,7 @@ Executive summaries in `outputs/executive_summaries/` MUST be maintained in sort
 
 ---
 
-## 5. Raw Data Preservation & Idempotency Rules
+## 6. Raw Data Preservation & Idempotency Rules
 
 - **Raw Data Storage**: `outputs/raw_data/YYYY-MM-DD/` MUST contain:
   - `<clean_id>_meta.json` (arXiv API JSON metadata)
@@ -90,7 +107,7 @@ Executive summaries in `outputs/executive_summaries/` MUST be maintained in sort
 
 ---
 
-## 6. Relative Link & Documentation Rules
+## 7. Relative Link & Documentation Rules
 
 - **Relative Paths Only**:
   - You MUST strictly use relative paths (never absolute paths like `file:///workspace/...` or `/root/...`) for all internal links across all `.md` files in `docs/`, `outputs/`, and `.agents/`.
