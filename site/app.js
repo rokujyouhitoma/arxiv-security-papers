@@ -184,12 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
         modalPaperTitle.textContent = data.content.match(/title:\s*"(.*?)"/)?.[1] || arxivId;
         modalPaperTitleJa.textContent = data.content.match(/title_ja:\s*"(.*?)"/)?.[1] || '';
         
-        let bodyHtml = escapeHtml(data.content)
-          .replace(/# (.*?)\n/g, '<h2 style="font-family: var(--font-heading); color:#fff; margin-top:1.5rem;">$1</h2>')
-          .replace(/## (.*?)\n/g, '<h3 style="color:var(--accent-secondary); margin-top:1rem;">$1</h3>')
-          .replace(/### (.*?)\n/g, '<h4 style="color:#fff; margin-top:0.75rem;">$1</h4>')
-          .replace(/\n\n/g, '<br/><br/>');
-        modalPaperBody.innerHTML = bodyHtml;
+        const compiled = window.MarkdownCompiler.compile(data.content);
+        modalPaperBody.innerHTML = compiled.html;
+        window.MarkdownCompiler.renderMermaid(modalPaperBody);
       }
     } catch (err) {
       modalPaperBody.innerHTML = `<p style="color:#ef4444;">取得エラー: ${err.message}</p>`;
@@ -217,12 +214,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch(`/api/trends?period=${period}`);
       const data = await res.json();
       if (data.status === 'success' && data.content) {
-        let html = escapeHtml(data.content)
-          .replace(/# (.*?)\n/g, '<h1 style="color:#fff; font-family:var(--font-heading); margin-bottom:1rem;">$1</h1>')
-          .replace(/## (.*?)\n/g, '<h2 style="color:var(--accent-secondary); margin-top:1.5rem;">$1</h2>')
-          .replace(/### (.*?)\n/g, '<h3 style="color:#fff; margin-top:1rem;">$1</h3>')
-          .replace(/\n\n/g, '<br/><br/>');
-        trendContent.innerHTML = html;
+        const compiled = window.MarkdownCompiler.compile(data.content);
+        trendContent.innerHTML = compiled.html;
+        window.MarkdownCompiler.renderMermaid(trendContent);
       }
     } catch (err) {
       trendContent.innerHTML = `<p style="color:#ef4444;">トレンド取得エラー: ${err.message}</p>`;
