@@ -1,0 +1,10 @@
+# Python development & static analysis tools for arxiv-security-papers
+isort
+black
+flake8
+radon
+xenon
+mypy
+pytest
+pytest-cov
+poetry

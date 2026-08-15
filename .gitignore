@@ -1,2 +1,38 @@
-# Large raw data files
+# Large raw data files & downloaded PDFs
 outputs/raw_data/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+.env
+
+# Python Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Static Analysis & Test Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build & Distribution
+dist/
+build/
+*.egg-info/
+
+# Logs & Temporary Files
+*.log
+fetch.log
+
+# Operating System & IDE Files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
