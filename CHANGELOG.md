@@ -30,6 +30,11 @@
 ## [Unreleased]
 
 ### [Added]
+- **MCP サーバ ＆ ベクトル DB セマンティック検索基盤 (Issue 001)**:
+  - `src/vector_engine.py`: 14,000件以上の全 OKF 論文ドキュメントを永続インデックス化するセマンティックベクトル＋BM25ハイブリッド検索エンジンの実装
+  - `src/mcp_server.py`: 標準 Model Context Protocol JSON-RPC サーバを実装し、4大 MCP ツール (`search_security_papers`, `get_paper_summary`, `get_latest_trends`, `query_attack_technique`) を提供
+  - `.agents/mcp_config.json`: ワークスペース用 MCP サーバ自動登録設定の配置
+  - `Makefile`: `make build_vector_db`, `make run_mcp_server`, `make rag_query Q="クエリ"` ターゲットの追加
 - **Antigravity IDE & 2.0 連携機能**:
   - `schedule` ツールによる **1日4回 (00:00, 06:00, 12:00, 18:00 UTC/JST)** のバックグラウンド自動実行 Cron タスクの構築
   - Artifacts および Mermaid マインドマップによる最新動向のリアルタイム可視化
