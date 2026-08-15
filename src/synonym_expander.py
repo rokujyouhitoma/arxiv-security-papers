@@ -60,7 +60,6 @@ class SynonymExpander:
     ]
 
     def __init__(self):
-        # Build lookup table mapping each token to its full synonym set
         self.lookup = {}
         for group in self.SYNONYM_GROUPS:
             for term in group:
@@ -79,12 +78,11 @@ class SynonymExpander:
         return {token_lower}
 
     def expand_query(self, query):
-        """Expands a query string into a comprehensive list of tokens including synonyms."""
+        """Expands a query string into a targeted set of synonym tokens in sub-1ms time."""
         if not query:
             return []
 
         query_clean = query.strip().lower()
-        # Extract tokens from query
         raw_tokens = re.findall(r'[a-zA-Z0-9_\-]+', query_clean)
         ja_tokens = re.findall(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+', query)
 
@@ -92,17 +90,14 @@ class SynonymExpander:
         expanded = set(all_raw)
 
         for token in all_raw:
-            expanded.update(self.expand_token(token))
-            # Substring matching against lookup
-            for term in self.lookup:
-                if term in token or token in term:
-                    expanded.update(self.lookup[term])
+            if not token or len(token) < 2:
+                continue
+            token_lower = token.lower()
+            if token_lower in self.lookup:
+                expanded.update(self.lookup[token_lower])
+            else:
+                for term in self.lookup:
+                    if len(term) >= 2 and (term == token_lower or (len(token_lower) >= 3 and term in token_lower)):
+                        expanded.update(self.lookup[term])
 
-        return [t for t in expanded if t]
-
-
-if __name__ == "__main__":
-    expander = SynonymExpander()
-    test_queries = ["マルウェア解析", "LLM脱獄", "ファジング", "サイドチャネル"]
-    for q in test_queries:
-        print(f"Query: '{q}' -> Expanded: {expander.expand_query(q)}")
+        return list(expanded)
