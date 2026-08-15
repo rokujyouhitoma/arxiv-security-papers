@@ -30,6 +30,9 @@
 ## [Unreleased]
 
 ### [Added]
+- **[MNG-01] 文書管理台帳 ＆ `docs/` ディレクトリ統廃合**:
+  - `docs/processes/MNG-01-document_ledger.md`: ゆうぞら (Yuzora) 標準仕様をテーラリングした文書管理台帳およびプレフィックス管理体系 (MNG, REQ, DSN, MCP, ISS) の導入
+  - `docs/` 配下を `processes/`, `requirements/`, `designs/`, `mcp/`, `issues/` に構造化し、`docs/README.md` マスターポータルを作成
 - **MCP サーバ ＆ ベクトル DB セマンティック検索基盤 (Issue 001)**:
   - `src/vector_engine.py`: 14,000件以上の全 OKF 論文ドキュメントを永続インデックス化するセマンティックベクトル＋BM25ハイブリッド検索エンジンの実装
   - `src/mcp_server.py`: 標準 Model Context Protocol JSON-RPC サーバを実装し、4大 MCP ツール (`search_security_papers`, `get_paper_summary`, `get_latest_trends`, `query_attack_technique`) を提供
