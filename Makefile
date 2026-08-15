@@ -3,7 +3,13 @@ PYTHON=python3
 VENV=.venv
 VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
+
 SRC=src/arxiv_okf_fetcher.py
+PYTHON_SRCS = src/arxiv_okf_fetcher.py \
+              src/vector_engine.py \
+              src/synonym_expander.py \
+              src/mcp_server.py \
+              src/web_server.py
 TESTS=tests
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar
@@ -44,12 +50,10 @@ format: isort black flake8 ## format python code
 static_analysis: radon-cc radon-raw radon-mi radon-hal xenon mypy py_compile ## static analysis
 
 .PHONY: py_compile
-py_compile: activate ## py_compile syntax check
-	${VENV_PYTHON} -m py_compile ${SRC}
-	${VENV_PYTHON} -m py_compile src/vector_engine.py
-	${VENV_PYTHON} -m py_compile src/synonym_expander.py
-	${VENV_PYTHON} -m py_compile src/mcp_server.py
-	${VENV_PYTHON} -m py_compile src/web_server.py
+py_compile: activate ## py_compile syntax check for all python sources
+	@for py in $(PYTHON_SRCS); do \
+		${VENV_PYTHON} -m py_compile $$py || exit 1; \
+	done
 
 .PHONY: build_js
 build_js: ## Build minified JS bundle using Google Closure Compiler (yuzora spec)
@@ -66,9 +70,11 @@ build_js: ## Build minified JS bundle using Google Closure Compiler (yuzora spec
 .PHONY: test
 test: pytest ## pytest
 
+.PHONY: verify_quality
+verify_quality: py_compile static_analysis build_js test ## Mandatory Quality Verification Gate across Python & JS
+
 .PHONY: build
-build: activate build_js ## run python build / compile check and JS compilation
-	${VENV_PYTHON} -m py_compile ${SRC}
+build: activate build_js py_compile ## run python build / compile check and JS compilation
 
 .PHONY: build_vector_db
 build_vector_db: activate ## Build or rebuild semantic vector index
@@ -92,31 +98,31 @@ run: activate ## run python code inside venv
 
 .PHONY: isort
 isort: activate ## isort
-	${VENV_BIN}/isort ${SRC} src/vector_engine.py src/synonym_expander.py src/mcp_server.py src/web_server.py ${TESTS} || true
+	${VENV_BIN}/isort $(PYTHON_SRCS) ${TESTS} || true
 
 .PHONY: black
 black: activate ## black
-	${VENV_BIN}/black ${SRC} src/vector_engine.py src/synonym_expander.py src/mcp_server.py src/web_server.py ${TESTS} || true
+	${VENV_BIN}/black $(PYTHON_SRCS) ${TESTS} || true
 
 .PHONY: flake8
 flake8: activate ## flake8
-	${VENV_BIN}/flake8 ${SRC} src/vector_engine.py src/synonym_expander.py src/mcp_server.py src/web_server.py ${TESTS} || true
+	${VENV_BIN}/flake8 $(PYTHON_SRCS) ${TESTS} || true
 
 .PHONY: radon-cc
 radon-cc: activate ## radon compute Cyclomatic Complexity (CC)
-	${VENV_BIN}/radon cc ${SRC} -s -a -na || true
+	${VENV_BIN}/radon cc $(PYTHON_SRCS) -s -a -na || true
 
 .PHONY: radon-raw
 radon-raw: activate ## radon compute raw metrics
-	${VENV_BIN}/radon raw ${SRC} || true
+	${VENV_BIN}/radon raw $(PYTHON_SRCS) || true
 
 .PHONY: radon-mi
 radon-mi: activate ## radon compute the Maintainability Index
-	${VENV_BIN}/radon mi ${SRC} -s -na || true
+	${VENV_BIN}/radon mi $(PYTHON_SRCS) -s -na || true
 
 .PHONY: radon-hal
 radon-hal: activate ## radon compute their Halstead metrics
-	${VENV_BIN}/radon hal ${SRC} || true
+	${VENV_BIN}/radon hal $(PYTHON_SRCS) || true
 
 .PHONY: xenon
 xenon: activate ## xenon
@@ -124,7 +130,7 @@ xenon: activate ## xenon
 
 .PHONY: mypy
 mypy: activate ## mypy
-	${VENV_BIN}/mypy ${SRC} || true
+	${VENV_BIN}/mypy $(PYTHON_SRCS) || true
 
 .PHONY: pytest
 pytest: activate ## pytest

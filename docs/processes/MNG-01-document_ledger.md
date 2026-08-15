@@ -33,8 +33,14 @@
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **[MNG-01] 文書管理台帳** | [processes/MNG-01-document_ledger.md](MNG-01-document_ledger.md) | 全ドキュメントの一覧管理、命名・採番規則、REQ/DSN 分掌方針を定義する中央台帳。 | 管理基準 (Governance) | PM, SA, 全エージェント | PM | ドキュメント追加・分掌変更時 |
 | **[REQ-01] 要求事項定義書** | [requirements/REQ-01-system_requirements.md](../requirements/REQ-01-system_requirements.md) | システムの背景・事業目的 (WHY) および達成すべき機能・非機能要求事項 (WHAT) を定義。 | **WHAT / WHY** | ST, SA, PM, QA, AU | ST | 背景・事業目標・要求変更時 |
+| **[REQ-02] 主要機能一覧** | [requirements/REQ-02-feature_list.md](../requirements/REQ-02-feature_list.md) | 主要機能 (F-01〜F-08) の全マスター一覧、設計ページリンク、およびモジュール関係性マップ。 | **Feature Master** | PM, SA, 全エージェント | PM | 機能追加・更新時 |
 | **[DSN-01] 基本設計書 (HLD)** | [designs/DSN-01-high_level_design.md](../designs/DSN-01-high_level_design.md) | システム全体の論理アーキテクチャ、4大ピラー、要求追跡マトリクス (HLD HOW) を定義。 | **High-Level HOW** | SA, ST, PM, 開発 | SA | アーキテクチャ・構造変更時 |
 | **[DSN-02] 詳細設計書 (LLD)** | [designs/DSN-02-low_level_design.md](../designs/DSN-02-low_level_design.md) | Python/JS モジュール仕様、関数シグネチャ、データ構造、ツール設定 (Detailed HOW) を定義。 | **Detailed HOW** | SA, 開発, SQA | SA | モジュール・コード仕様変更時 |
+| **[DSN-03] 収集・OKF変換設計** | [designs/DSN-03-paper_collector_and_okf_converter.md](../designs/DSN-03-paper_collector_and_okf_converter.md) | F-01 (arXiv収集/PDF抽出/原本保存) および F-02 (Google OKF v0.2 変換) の個別機能設計。 | **Feature HOW** | SA, 開発 | SA | 収集/変換アルゴリズム変更時 |
+| **[DSN-04] サマリー生成設計** | [designs/DSN-04-five_tier_executive_summaries.md](../designs/DSN-04-five_tier_executive_summaries.md) | F-03 (01_per_run〜05_annual 5階層サマリー/完全日本語化/表形式/Mermaid) の個別機能設計。 | **Feature HOW** | SA, 開発, UI/UX | SA | サマリー構造改訂時 |
+| **[DSN-05] 5手法検索エンジン設計**| [designs/DSN-05-multi_engine_hybrid_search.md](../designs/DSN-05-multi_engine_hybrid_search.md) | F-04 (Vector, BM25, Inverted, FM-Index, Recency 5手法フュージョン検索) の個別機能設計。 | **Feature HOW** | SA, IR, 開発 | SA, IR | 検索アルゴリズム変更時 |
+| **[DSN-06] MCP サーバ設計** | [designs/DSN-06-mcp_server_and_ai_integration.md](../designs/DSN-06-mcp_server_and_ai_integration.md) | F-05 (MCP JSON-RPC 2.0 4大ツール/パス境界セキュリティガード) の個別機能設計。 | **Feature HOW** | SA, AI, SC | SA | MCP ツール拡張時 |
+| **[DSN-07] Web/Compiler設計** | [designs/DSN-07-web_portal_and_markdown_compiler.md](../designs/DSN-07-web_portal_and_markdown_compiler.md) | F-06 (Web UI), F-07 (Markdown Compiler Engine), F-08 (Closure Compiler) の個別機能設計。 | **Feature HOW** | SA, UI/UX, 開発 | SA | Web画面・コンパイラ変更時 |
 | **[MCP-01] MCP & Vector DB 仕様書** | [mcp/MCP-01-mcp_server_specification.md](../mcp/MCP-01-mcp_server_specification.md) | MCP JSON-RPC サーバ 4大ツールおよびセマンティック Vector DB インデックス仕様。 | 特化仕様 (Specialized HOW) | AI Agent, IR, SC | SA, IR | MCP ツール拡張・アルゴリズム改訂時 |
 | **[ISS-00] Issue 台帳** | [issues/README.md](../issues/README.md) | プロジェクトの全 Issue (起票・進行中・完了) を一括追跡・管理する中央台帳。 | 作業管理 (Issues) | PM, 開発チーム | PM | Issue 新規作成・ステータス変更時 |
 
