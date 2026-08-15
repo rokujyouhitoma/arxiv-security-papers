@@ -78,4 +78,72 @@
     "security": 1.021
   }
 }
+
+---
+
+## 3. Markdown Compiler Engine モジュール構造仕様 (`site/js/`)
+
+### 3.1 Lexer モジュール ([`site/js/lexer.js`](../../site/js/lexer.js))
+- **クラス**: `MarkdownLexer`
+- **目的**: マークダウン文字列を行・ブロック単位でトークナイズ。
+- **対応トークン**:
+  - `HEADING`: `#`, `##`, `###` 見出し
+  - `TABLE`: `| Col1 | Col2 |` マークダウンテーブル
+  - `MERMAID`: ```mermaid ブロック
+  - `CODE_BLOCK`: ```lang コードブロック
+  - `LIST`: `- item` リスト
+  - `BLOCKQUOTE`: `> text` 引用
+  - `HR`: `---` 水平線
+  - `PARAGRAPH`: 通常段落テキスト
+
+### 3.2 Parser モジュール ([`site/js/parser.js`](../../site/js/parser.js))
+- **クラス**: `MarkdownParser`
+- **目的**: トークンストリームから抽象構文木 (`DocumentNode` AST) を構築。
+
+### 3.3 Evaluator モジュール ([`site/js/evaluator.js`](../../site/js/evaluator.js))
+- **クラス**: `MarkdownEvaluator`
+- **目的**: AST ノードを走査し、インライン装飾（`**太字**`, `` `コード` ``, `[リンク](url)`）のトランスフォームおよび Mermaid ID のユニーク割り当てを実施。
+
+### 3.4 Renderer モジュール ([`site/js/renderer.js`](../../site/js/renderer.js))
+- **クラス**: `MarkdownRenderer`
+- **目的**: AST から HTML5 DOM 要素（`.md-table`, `.md-h1`〜`.md-h3`, `.md-blockquote`）を生成し、`mermaid.run()` を非同期実行して図を描画。
+
+### 3.5 Compiler Orchestrator ([`site/js/markdown_compiler.js`](../../site/js/markdown_compiler.js))
+- **クラス**: `MarkdownCompilerEngine`
+- **公開インタフェース**: `window.MarkdownCompiler.compile(rawMarkdown)` ＆ `window.MarkdownCompiler.renderMermaid(container)`
+
+---
+
+## 4. Google Closure Compiler ツール ＆ ビルド仕様 (`yuzora` 準拠)
+
+### 4.1 ツール配置 (`tools/closure-compiler/`)
+- `tools/closure-compiler/closure-compiler-v20240317.jar`: Google Closure Compiler 本体 JAR
+- `tools/closure-compiler/setup_compiler.py`: JAR 自動取得・バックアップスクリプト
+- `tools/closure-compiler/LICENSE`: Apache 2.0 ライセンス
+
+### 4.2 外部シンボル保護 (`site/externs.js`)
+- Closure Compiler 最適化時に、`mermaid`, `MarkdownCompiler`, `fetch`, `history`, `performance` などの外部シンボル名が縮小改変（Rename）されるのを防止する型定義宣言ファイル。
+
+### 4.3 Makefile ビルド定義
+```makefile
+COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar
+JS_SRCS = site/js/lexer.js \
+          site/js/parser.js \
+          site/js/evaluator.js \
+          site/js/renderer.js \
+          site/js/markdown_compiler.js \
+          site/app.js
+JS_OUT = site/app-min.js
+
+build_js:
+	python3 tools/closure-compiler/setup_compiler.py
+	java -jar $(COMPILER) \
+		--compilation_level SIMPLE_OPTIMIZATIONS \
+		--warning_level VERBOSE \
+		--language_in ECMASCRIPT_NEXT \
+		--language_out ECMASCRIPT_2020 \
+		--externs site/externs.js \
+		--js $(JS_SRCS) \
+		--js_output_file $(JS_OUT)
+```
 ```

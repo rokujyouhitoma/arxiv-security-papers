@@ -6,6 +6,15 @@ VENV_PYTHON=${VENV_BIN}/python
 SRC=src/arxiv_okf_fetcher.py
 TESTS=tests
 
+COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar
+JS_SRCS = site/js/lexer.js \
+          site/js/parser.js \
+          site/js/evaluator.js \
+          site/js/renderer.js \
+          site/js/markdown_compiler.js \
+          site/app.js
+JS_OUT = site/app-min.js
+
 all: clean setup format static_analysis test build run
 
 .PHONY: help
@@ -14,7 +23,7 @@ help: ## help command
 
 .PHONY: clean
 clean: ## clean virtualenv and build artifacts
-	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache outputs/vector_db/
+	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache outputs/vector_db/ ${JS_OUT}
 
 .PHONY: setup
 setup: activate install ## setup venv, activate and install python libraries
@@ -42,11 +51,23 @@ py_compile: activate ## py_compile syntax check
 	${VENV_PYTHON} -m py_compile src/mcp_server.py
 	${VENV_PYTHON} -m py_compile src/web_server.py
 
+.PHONY: build_js
+build_js: ## Build minified JS bundle using Google Closure Compiler (yuzora spec)
+	python3 tools/closure-compiler/setup_compiler.py
+	java -jar $(COMPILER) \
+		--compilation_level SIMPLE_OPTIMIZATIONS \
+		--warning_level VERBOSE \
+		--language_in ECMASCRIPT_NEXT \
+		--language_out ECMASCRIPT_2020 \
+		--externs site/externs.js \
+		--js $(JS_SRCS) \
+		--js_output_file $(JS_OUT)
+
 .PHONY: test
 test: pytest ## pytest
 
 .PHONY: build
-build: activate ## run python build / compile check
+build: activate build_js ## run python build / compile check and JS compilation
 	${VENV_PYTHON} -m py_compile ${SRC}
 
 .PHONY: build_vector_db
