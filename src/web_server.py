@@ -56,8 +56,14 @@ class ArxivWebServerHandler(SimpleHTTPRequestHandler):
             q = query_params.get("q", [""])[0]
             top_k = int(query_params.get("top_k", [10])[0])
             category = query_params.get("category", [None])[0]
-            results = VECTOR_ENGINE.search(q, top_k=top_k, category=category)
-            self._send_json_response({"status": "success", "query": q, "count": len(results), "results": results})
+            results, profile = VECTOR_ENGINE.search_with_profile(q, top_k=top_k, category=category)
+            self._send_json_response({
+                "status": "success",
+                "query": q,
+                "count": len(results),
+                "results": results,
+                "profile": profile
+            })
             return
 
         # API: Paper Details
