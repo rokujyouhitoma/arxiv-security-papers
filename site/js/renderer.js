@@ -11,7 +11,7 @@ class MarkdownRenderer {
     const mermaidElements = [];
 
     for (const node of evaluatedAst.children) {
-      const ev = node.evaluated;
+      const ev = node['evaluated'] || {};
 
       switch (node.type) {
         case 'HEADING':
