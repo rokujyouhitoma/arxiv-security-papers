@@ -1,13 +1,17 @@
 """
 Unit tests for SynonymExpander, FMIndex, and 5-Method Multi-Engine VectorEngine
 """
-import sys
-import os
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+import os
+import sys
 
 from synonym_expander import SynonymExpander
-from vector_engine import VectorEngine, FMIndex
+from vector_engine import FMIndex, VectorEngine
+
+if "src" not in sys.path:
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
 
 def test_synonym_expander():

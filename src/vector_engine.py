@@ -11,14 +11,14 @@ Integrates 5 Specialized Indexing Techniques:
 5. 論文最新性ブースト (Recency Decay Factor): 経過日数に応じた時間減衰重み付け
 """
 
-import os
-import sys
 import json
-import re
 import math
+import os
+import re
 import time
 from collections import Counter, defaultdict
 from datetime import datetime
+
 from synonym_expander import SynonymExpander
 
 
@@ -27,6 +27,7 @@ class FMIndex:
     FM-Index / Suffix Array Substring Search Engine
     Allows exact substring count and matching across full text.
     """
+
     def __init__(self, text=""):
         self.text = text.lower() if text else ""
         self.suffix_array = []
@@ -80,11 +81,11 @@ class FMIndex:
 class VectorEngine:
     FIELD_WEIGHTS = {
         "title": 3.5,
-        "keywords": 4.0,   # Pre-annotated feature terms
+        "keywords": 4.0,  # Pre-annotated feature terms
         "tags": 3.0,
         "description": 2.5,
         "abstract": 1.5,
-        "content": 1.0
+        "content": 1.0,
     }
 
     # BM25 Hyperparameters
@@ -93,14 +94,38 @@ class VectorEngine:
 
     # Core Security Feature Patterns for Pre-Annotation & Inverted Indexing
     SECURITY_PATTERNS = [
-        (r'(?i)malware|マルウェア|ランサムウェア|ボットネット|トロイの木馬|spyware|ransomware', 'マルウェア・脅威解析'),
-        (r'(?i)penetration|pentest|ペンテスト|侵入テスト|エクスプロイト|exploit', 'ペネトレーションテスト・脆弱性検証'),
-        (r'(?i)autonomous|autoware|自動運転|車載|can bus', '自動運転・車載セキュリティ'),
-        (r'(?i)crypto|cryptography|pqc|post-quantum|暗号|耐量子|同態暗号|ゼロ知識|zkp', '暗号・プライバシー技術'),
-        (r'(?i)llm|jailbreak|prompt injection|脱獄|大言語モデル|生成ai|プロンプトインジェクション', 'LLM・AIセキュリティ'),
-        (r'(?i)fuzzing|fuzzer|ファジング|vulnerability|脆弱性|cve|cwe|stride', 'ファジング・脆弱性調査'),
-        (r'(?i)zero trust|zero-trust|ゼロトラスト|iam|アクセス制御|権限昇格', 'ゼロトラスト・アクセス制御'),
-        (r'(?i)side-channel|side channel|サイドチャネル|マイクロアーキテクチャ|ファームウェア|iot', 'サイドチャネル・組込みセキュリティ'),
+        (
+            r"(?i)malware|マルウェア|ランサムウェア|ボットネット|トロイの木馬|spyware|ransomware",
+            "マルウェア・脅威解析",
+        ),
+        (
+            r"(?i)penetration|pentest|ペンテスト|侵入テスト|エクスプロイト|exploit",
+            "ペネトレーションテスト・脆弱性検証",
+        ),
+        (
+            r"(?i)autonomous|autoware|自動運転|車載|can bus",
+            "自動運転・車載セキュリティ",
+        ),
+        (
+            r"(?i)crypto|cryptography|pqc|post-quantum|暗号|耐量子|同態暗号|ゼロ知識|zkp",
+            "暗号・プライバシー技術",
+        ),
+        (
+            r"(?i)llm|jailbreak|prompt injection|脱獄|大言語モデル|生成ai|プロンプトインジェクション",
+            "LLM・AIセキュリティ",
+        ),
+        (
+            r"(?i)fuzzing|fuzzer|ファジング|vulnerability|脆弱性|cve|cwe|stride",
+            "ファジング・脆弱性調査",
+        ),
+        (
+            r"(?i)zero trust|zero-trust|ゼロトラスト|iam|アクセス制御|権限昇格",
+            "ゼロトラスト・アクセス制御",
+        ),
+        (
+            r"(?i)side-channel|side channel|サイドチャネル|マイクロアーキテクチャ|ファームウェア|iot",
+            "サイドチャネル・組込みセキュリティ",
+        ),
     ]
 
     def __init__(self, workspace_dir=None):
@@ -127,18 +152,20 @@ class VectorEngine:
         if not text:
             return []
         text_lower = text.lower()
-        words = re.findall(r'[a-zA-Z0-9_\-]+', text_lower)
+        words = re.findall(r"[a-zA-Z0-9_\-]+", text_lower)
 
-        ja_words = re.findall(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+', text)
+        ja_words = re.findall(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+", text)
         ja_ngrams = []
         for ja_w in ja_words:
             ja_ngrams.append(ja_w.lower())
             if len(ja_w) >= 2:
                 for i in range(len(ja_w) - 1):
-                    ja_ngrams.append(ja_w[i:i+2].lower())
+                    end_idx2 = i + 2
+                    ja_ngrams.append(ja_w[i:end_idx2].lower())
             if len(ja_w) >= 3:
                 for i in range(len(ja_w) - 2):
-                    ja_ngrams.append(ja_w[i:i+3].lower())
+                    end_idx3 = i + 3
+                    ja_ngrams.append(ja_w[i:end_idx3].lower())
 
         return words + ja_words + ja_ngrams
 
@@ -151,12 +178,23 @@ class VectorEngine:
             if re.search(pattern, combined_text):
                 extracted.add(label)
 
-        ja_terms = re.findall(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]{3,}', combined_text)
-        en_terms = re.findall(r'[a-zA-Z]{4,}', combined_text.lower())
+        ja_terms = re.findall(
+            r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]{3,}", combined_text
+        )
+        en_terms = re.findall(r"[a-zA-Z]{4,}", combined_text.lower())
 
         counts = Counter(ja_terms + en_terms)
         for term, freq in counts.most_common(5):
-            if freq >= 2 and term.lower() not in {"this", "that", "with", "from", "paper", "security", "using", "proposed"}:
+            if freq >= 2 and term.lower() not in {
+                "this",
+                "that",
+                "with",
+                "from",
+                "paper",
+                "security",
+                "using",
+                "proposed",
+            }:
                 extracted.add(term)
 
         return list(extracted)
@@ -177,7 +215,9 @@ class VectorEngine:
                 tf = doc_tf[qt]
                 idf_val = self.idf.get(qt, 1.0)
                 numerator = tf * (self.BM25_K1 + 1)
-                denominator = tf + self.BM25_K1 * (1 - self.BM25_B + self.BM25_B * (doc_len / self.avg_doc_len))
+                denominator = tf + self.BM25_K1 * (
+                    1 - self.BM25_B + self.BM25_B * (doc_len / self.avg_doc_len)
+                )
                 score += idf_val * (numerator / denominator)
 
         return score
@@ -186,7 +226,10 @@ class VectorEngine:
         """Computes exact substring match score using fast full text substring search."""
         doc_id = doc.get("id")
         if doc_id not in self.doc_full_texts:
-            self.doc_full_texts[doc_id] = f"{doc.get('title', '')} {doc.get('description', '')} {' '.join(doc.get('annotated_keywords', []))}".lower()
+            kw_str = " ".join(doc.get("annotated_keywords", []))
+            self.doc_full_texts[doc_id] = (
+                f"{doc.get('title', '')} {doc.get('description', '')} {kw_str}".lower()
+            )
 
         full_text = self.doc_full_texts[doc_id]
         score = 0.0
@@ -235,17 +278,23 @@ class VectorEngine:
                                 title_match = re.search(r'title:\s*"(.*?)"', yaml_text)
                                 if title_match:
                                     title = title_match.group(1)
-                                desc_match = re.search(r'description:\s*"(.*?)"', yaml_text)
+                                desc_match = re.search(
+                                    r'description:\s*"(.*?)"', yaml_text
+                                )
                                 if desc_match:
                                     desc = desc_match.group(1)
-                                date_match = re.search(r'published_date:\s*"(.*?)"', yaml_text)
+                                date_match = re.search(
+                                    r'published_date:\s*"(.*?)"', yaml_text
+                                )
                                 if date_match:
                                     pub_date = date_match.group(1)
                                 tags_match = re.findall(r'-\s*"(.*?)"', yaml_text)
                                 if tags_match:
                                     tags = tags_match
 
-                        annotated_keywords = self.extract_feature_keywords(title, desc, content)
+                        annotated_keywords = self.extract_feature_keywords(
+                            title, desc, content
+                        )
 
                         title_tokens = self.tokenize(title)
                         desc_tokens = self.tokenize(desc)
@@ -253,7 +302,13 @@ class VectorEngine:
                         keywords_tokens = self.tokenize(" ".join(annotated_keywords))
                         content_tokens = self.tokenize(content[:1000])
 
-                        all_tokens = title_tokens + desc_tokens + tags_tokens + keywords_tokens + content_tokens
+                        all_tokens = (
+                            title_tokens
+                            + desc_tokens
+                            + tags_tokens
+                            + keywords_tokens
+                            + content_tokens
+                        )
                         token_counts = dict(Counter(all_tokens))
 
                         doc_entry = {
@@ -269,7 +324,7 @@ class VectorEngine:
                             "tags_tokens": tags_tokens,
                             "keywords_tokens": keywords_tokens,
                             "tokens": all_tokens,
-                            "token_counts": token_counts
+                            "token_counts": token_counts,
                         }
                         docs.append(doc_entry)
 
@@ -296,7 +351,10 @@ class VectorEngine:
                 self.inverted_keyword_index[kw.lower()].append(doc["id"])
 
         self.avg_doc_len = (total_len / total_docs) if total_docs > 0 else 0
-        self.idf = {t: math.log((total_docs + 1) / (freq + 1)) + 1.0 for t, freq in doc_freq.items()}
+        self.idf = {
+            t: math.log((total_docs + 1) / (freq + 1)) + 1.0
+            for t, freq in doc_freq.items()
+        }
         self.documents = docs
         self.documents_by_id = {d["id"]: d for d in docs}
         self.save_index()
@@ -305,21 +363,23 @@ class VectorEngine:
     def save_index(self):
         serializable_docs = []
         for doc in self.documents:
-            serializable_docs.append({
-                "id": doc["id"],
-                "title": doc["title"],
-                "description": doc["description"],
-                "tags": doc["tags"],
-                "annotated_keywords": doc.get("annotated_keywords", []),
-                "published_date": doc.get("published_date", ""),
-                "path": doc["path"],
-                "title_tokens": doc.get("title_tokens", []),
-                "desc_tokens": doc.get("desc_tokens", []),
-                "tags_tokens": doc.get("tags_tokens", []),
-                "keywords_tokens": doc.get("keywords_tokens", []),
-                "tokens": doc.get("tokens", []),
-                "token_counts": doc.get("token_counts", {})
-            })
+            serializable_docs.append(
+                {
+                    "id": doc["id"],
+                    "title": doc["title"],
+                    "description": doc["description"],
+                    "tags": doc["tags"],
+                    "annotated_keywords": doc.get("annotated_keywords", []),
+                    "published_date": doc.get("published_date", ""),
+                    "path": doc["path"],
+                    "title_tokens": doc.get("title_tokens", []),
+                    "desc_tokens": doc.get("desc_tokens", []),
+                    "tags_tokens": doc.get("tags_tokens", []),
+                    "keywords_tokens": doc.get("keywords_tokens", []),
+                    "tokens": doc.get("tokens", []),
+                    "token_counts": doc.get("token_counts", {}),
+                }
+            )
         data = {
             "version": "3.1.0",
             "updated_at": datetime.now().isoformat(),
@@ -328,7 +388,7 @@ class VectorEngine:
             "idf": self.idf,
             "avg_doc_len": self.avg_doc_len,
             "inverted_index": dict(self.inverted_index),
-            "inverted_keywords": dict(self.inverted_keyword_index)
+            "inverted_keywords": dict(self.inverted_keyword_index),
         }
         with open(self.index_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -340,22 +400,43 @@ class VectorEngine:
                     data = json.load(f)
                     self.idf = data.get("idf", {})
                     self.avg_doc_len = data.get("avg_doc_len", 0)
-                    self.inverted_index = defaultdict(list, data.get("inverted_index", {}))
-                    self.inverted_keyword_index = defaultdict(list, data.get("inverted_keywords", {}))
+                    self.inverted_index = defaultdict(
+                        list, data.get("inverted_index", {})
+                    )
+                    self.inverted_keyword_index = defaultdict(
+                        list, data.get("inverted_keywords", {})
+                    )
                     raw_docs = data.get("documents", [])
                     self.documents = []
                     self.documents_by_id = {}
+                    needed_save = False
                     for d in raw_docs:
                         if "title_tokens" not in d:
+                            needed_save = True
                             d["title_tokens"] = self.tokenize(d.get("title", ""))
                             d["desc_tokens"] = self.tokenize(d.get("description", ""))
-                            d["tags_tokens"] = self.tokenize(" ".join(d.get("tags", [])))
-                            d["keywords_tokens"] = self.tokenize(" ".join(d.get("annotated_keywords", [])))
-                            d["tokens"] = d["title_tokens"] + d["desc_tokens"] + d["tags_tokens"] + d["keywords_tokens"]
+                            d["tags_tokens"] = self.tokenize(
+                                " ".join(d.get("tags", []))
+                            )
+                            d["keywords_tokens"] = self.tokenize(
+                                " ".join(d.get("annotated_keywords", []))
+                            )
+                            d["tokens"] = (
+                                d["title_tokens"]
+                                + d["desc_tokens"]
+                                + d["tags_tokens"]
+                                + d["keywords_tokens"]
+                            )
                             d["token_counts"] = dict(Counter(d["tokens"]))
                         self.documents.append(d)
                         self.documents_by_id[d["id"]] = d
-                        self.doc_full_texts[d["id"]] = f"{d.get('title', '')} {d.get('description', '')} {' '.join(d.get('annotated_keywords', []))}".lower()
+                        kw_str = " ".join(d.get("annotated_keywords", []))
+                        self.doc_full_texts[d["id"]] = (
+                            f"{d.get('title', '')} {d.get('description', '')} {kw_str}".lower()
+                        )
+
+                    if needed_save:
+                        self.save_index()
 
                     if not self.inverted_index or len(self.inverted_index) < 10:
                         self.inverted_index = defaultdict(list)
@@ -391,7 +472,9 @@ class VectorEngine:
         if not self.documents:
             self.build_index()
 
-        query_terms = self.expander.expand_query(query) if query and query.strip() else []
+        query_terms = (
+            self.expander.expand_query(query) if query and query.strip() else []
+        )
         expanded_tokens_set = set()
         for qt in query_terms:
             expanded_tokens_set.update(self.tokenize(qt))
@@ -400,7 +483,30 @@ class VectorEngine:
 
         # Candidate Pruning via Inverted Index (Exclude high-frequency single chars and stop words)
         t_prune_start = time.perf_counter()
-        STOP_WORDS = {"test", "testing", "using", "paper", "with", "from", "that", "this", "have", "been", "were", "where", "what", "how", "when", "some", "more", "such", "system", "data", "base", "based"}
+        STOP_WORDS = {
+            "test",
+            "testing",
+            "using",
+            "paper",
+            "with",
+            "from",
+            "that",
+            "this",
+            "have",
+            "been",
+            "were",
+            "where",
+            "what",
+            "how",
+            "when",
+            "some",
+            "more",
+            "such",
+            "system",
+            "data",
+            "base",
+            "based",
+        }
         candidate_ids = None
         if expanded_query_tokens:
             candidate_ids = set()
@@ -417,11 +523,17 @@ class VectorEngine:
                     candidate_ids.update(self.inverted_keyword_index[ptoken])
 
             if candidate_ids:
-                target_docs = [self.documents_by_id[did] for did in candidate_ids if did in self.documents_by_id]
+                target_docs = [
+                    self.documents_by_id[did]
+                    for did in candidate_ids
+                    if did in self.documents_by_id
+                ]
                 if len(target_docs) > 500:
+
                     def candidate_priority(d):
-                        text = self.doc_full_texts.get(d["id"], "")
-                        return sum(2 if ptoken in text else 0 for ptoken in prune_tokens)
+                        t_counts = d.get("token_counts", {})
+                        return sum(t_counts.get(ptoken, 0) for ptoken in prune_tokens)
+
                     target_docs.sort(key=candidate_priority, reverse=True)
                     target_docs = target_docs[:500]
             else:
@@ -481,22 +593,31 @@ class VectorEngine:
                 fm_score = self.calculate_fm_index_score(expanded_query_tokens, doc)
 
                 # 5. Recency Decay Boost
-                recency_boost = self.calculate_recency_boost(doc.get("published_date", ""))
+                recency_boost = self.calculate_recency_boost(
+                    doc.get("published_date", "")
+                )
 
                 # Multi-Engine Score Fusion (Vector:30%, BM25:30%, Inverted:20%, FM-Index:20%) * Recency
-                total_score = (vector_score * 0.3 + bm25_score * 0.3 + inverted_score * 0.2 + fm_score * 0.2) * recency_boost
+                total_score = (
+                    vector_score * 0.3
+                    + bm25_score * 0.3
+                    + inverted_score * 0.2
+                    + fm_score * 0.2
+                ) * recency_boost
 
             if total_score > 0:
-                scores.append({
-                    "id": doc.get("id"),
-                    "title": doc.get("title"),
-                    "description": doc.get("description"),
-                    "tags": doc.get("tags", []),
-                    "annotated_keywords": doc.get("annotated_keywords", []),
-                    "published_date": doc.get("published_date", ""),
-                    "path": doc.get("path"),
-                    "score": round(total_score, 4)
-                })
+                scores.append(
+                    {
+                        "id": doc.get("id"),
+                        "title": doc.get("title"),
+                        "description": doc.get("description"),
+                        "tags": doc.get("tags", []),
+                        "annotated_keywords": doc.get("annotated_keywords", []),
+                        "published_date": doc.get("published_date", ""),
+                        "path": doc.get("path"),
+                        "score": round(total_score, 4),
+                    }
+                )
 
         scores.sort(key=lambda x: x["score"], reverse=True)
         results = scores[:top_k]
@@ -511,7 +632,7 @@ class VectorEngine:
             "total_ms": round((t_total_end - t0) * 1000, 3),
             "candidates_evaluated": len(target_docs),
             "total_documents": len(self.documents),
-            "cached": False
+            "cached": False,
         }
 
         # Cache results for ultra-fast sub-1ms response
@@ -524,20 +645,33 @@ class VectorEngine:
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Advanced Multi-Engine Hybrid Search Engine for arXiv Security Papers")
-    parser.add_argument("--build", action="store_true", help="Build or rebuild multi-engine hybrid index")
+
+    parser = argparse.ArgumentParser(
+        description="Advanced Multi-Engine Hybrid Search Engine for arXiv Security Papers"
+    )
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help="Build or rebuild multi-engine hybrid index",
+    )
     parser.add_argument("--query", type=str, help="Search query string")
-    parser.add_argument("--top-k", type=int, default=5, help="Number of results to return")
+    parser.add_argument(
+        "--top-k", type=int, default=5, help="Number of results to return"
+    )
     args = parser.parse_args()
 
     engine = VectorEngine()
     if args.build:
         count = engine.build_index()
-        print(f"✅ Multi-Engine Hybrid Index built successfully (v3.1.0 Performance Edition). Total documents: {count}")
+        print(
+            f"✅ Multi-Engine Hybrid Index built successfully (v3.1.0 Performance Edition). Total documents: {count}"
+        )
 
     if args.query:
         results, profile = engine.search_with_profile(args.query, top_k=args.top_k)
-        print(f"\n🔍 Multi-Engine Hybrid Search Results for '{args.query}' (Time: {profile['total_ms']} ms):")
+        print(
+            f"\n🔍 Multi-Engine Hybrid Search Results for '{args.query}' (Time: {profile['total_ms']} ms):"
+        )
         for i, res in enumerate(results, 1):
             print(f"{i}. [{res['score']}] {res['title']} ({res['id']})")
             print(f"   要約: {res['description']}")

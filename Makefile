@@ -32,7 +32,22 @@ clean: ## clean virtualenv and build artifacts
 	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache outputs/vector_db/ ${JS_OUT}
 
 .PHONY: setup
-setup: activate install ## setup venv, activate and install python libraries
+setup: activate install setup_hooks ## setup venv, activate, install python libraries, and setup git hooks
+
+.PHONY: setup_hooks
+setup_hooks: ## Setup Git pre-commit hooks for mandatory format, static_analysis, test
+	@mkdir -p .githooks
+	@echo '#!/bin/sh' > .githooks/pre-commit
+	@echo 'set -e' >> .githooks/pre-commit
+	@echo 'echo "=== [Pre-Commit Gate] 1/3: make format ==="' >> .githooks/pre-commit
+	@echo 'make format' >> .githooks/pre-commit
+	@echo 'echo "=== [Pre-Commit Gate] 2/3: make static_analysis ==="' >> .githooks/pre-commit
+	@echo 'make static_analysis' >> .githooks/pre-commit
+	@echo 'echo "=== [Pre-Commit Gate] 3/3: make test ==="' >> .githooks/pre-commit
+	@echo 'make test' >> .githooks/pre-commit
+	@chmod +x .githooks/pre-commit
+	@git config core.hooksPath .githooks
+	@echo "Git pre-commit hooks configured successfully in .githooks"
 
 .PHONY: activate
 activate: ## Create and activate venv
@@ -70,11 +85,14 @@ build_js: ## Build minified JS bundle using Google Closure Compiler (yuzora spec
 .PHONY: test
 test: pytest ## pytest
 
+.PHONY: check
+check: format static_analysis test ## Run mandatory format, static_analysis, and test quality gates
+
 .PHONY: verify_quality
-verify_quality: py_compile static_analysis build_js test ## Mandatory Quality Verification Gate across Python & JS
+verify_quality: format static_analysis test build_js ## Mandatory Quality Verification Gate across Python & JS
 
 .PHONY: build
-build: activate build_js py_compile ## run python build / compile check and JS compilation
+build: activate format static_analysis test build_js py_compile ## run mandatory quality gates (format, static_analysis, test) and build JS/Python
 
 .PHONY: build_vector_db
 build_vector_db: activate ## Build or rebuild semantic vector index
@@ -134,4 +152,4 @@ mypy: activate ## mypy
 
 .PHONY: pytest
 pytest: activate ## pytest
-	${VENV_BIN}/pytest -n 2 --cov=src --cov-report=term-missing -v ${TESTS} || ${VENV_BIN}/pytest -n 2 || true
+	${VENV_BIN}/pytest -v ${TESTS}

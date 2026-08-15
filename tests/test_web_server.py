@@ -1,13 +1,16 @@
 """
 Unit tests for Web Server API handlers
 """
-import sys
+
 import os
-import json
+import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+from web_server import VECTOR_ENGINE
 
-from web_server import ArxivWebServerHandler, VECTOR_ENGINE
+if "src" not in sys.path:
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
 
 def test_vector_engine_ready():
