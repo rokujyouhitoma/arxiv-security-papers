@@ -13,7 +13,7 @@ ID: 001
 ---
 
 ## 2. トレーサビリティ / Traceability
-- **アーキテクチャ定義**: `docs/hld.md`, `docs/lld.md`
+- **アーキテクチャ定義**: [`docs/designs/DSN-01-high_level_design.md`](../designs/DSN-01-high_level_design.md), [`docs/designs/DSN-02-low_level_design.md`](../designs/DSN-02-low_level_design.md)
 - **MCP 規格**: Anthropic / Google Model Context Protocol JSON-RPC 2.0 Specification
 - **プロジェクトルール**: `.agents/AGENTS.md` (Antigravity IDE & 2.0 Integration Rules)
 
