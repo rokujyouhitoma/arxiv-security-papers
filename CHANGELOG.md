@@ -30,6 +30,10 @@
 ## [Unreleased]
 
 ### [Added]
+- **Google Closure Compiler ツール統合 ＆ JS モジュール分割 (Issue 005 & Issue 004)**:
+  - `yuzora` リポジトリの仕様に準拠し、`tools/closure-compiler/closure-compiler-v20240317.jar` を配備し `Makefile` に `make build_js` ターゲットを追加
+  - `site/js/`: Lexer (`lexer.js`), Parser (`parser.js`), Evaluator (`evaluator.js`), Renderer (`renderer.js`), Orchestrator (`markdown_compiler.js`) にファイル分割モジュール化し、`site/externs.js` による型保護と Closure Compiler 最適化ミニファイ (`site/app-min.js`) を実現
+  - `docs/designs/DSN-01-high_level_design.md` および `DSN-02-low_level_design.md` にモジュール構造とビルド仕様を反映
 - **Glassmorphism Web 検索 UI ＆ MCP バックエンドサーバー (Issue 003)**:
   - `src/web_server.py`: REST API (`/api/search`, `/api/paper/`, `/api/trends`, `/api/mcp`) および静的 Web 配信を提供する Python HTTP サーバーの構築
   - `site/`: リッチ Glassmorphism ダークモード Web UI (`index.html`, `style.css`, `app.js`) を開発 (リアルタイム RAG 検索, OKF モーダルプレビュー, Mermaid マインドマップ動的描画, MCP JSON-RPC テストサンドボックス統合)
