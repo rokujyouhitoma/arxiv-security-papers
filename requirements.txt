@@ -7,5 +7,6 @@ xenon
 mypy
 pytest
 pytest-cov
+pytest-xdist
 poetry
 taskipy
