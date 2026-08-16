@@ -17,9 +17,14 @@ if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp_server import (
+    PROMPTS_MANIFEST,
+    RESOURCES_MANIFEST,
+    TOOLS_MANIFEST,
     dispatch_tool,
     handle_get_latest_trends,
     handle_get_paper_summary,
+    handle_get_prompt,
+    handle_read_resource,
     is_safe_workspace_path,
 )
 from vector_engine import VectorEngine
@@ -168,12 +173,64 @@ class WSGIApplication:
         body_data = wsgi_input.read(content_length).decode("utf-8", errors="replace")
         try:
             payload = json.loads(body_data)
+            method = payload.get("method")
+            req_id = payload.get("id")
+
+            # Standard MCP JSON-RPC 2.0 Routing
+            if method:
+                params = payload.get("params", {})
+                if method == "tools/list":
+                    return self._response_json(
+                        start_response,
+                        {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}},
+                    )
+                elif method == "tools/call":
+                    t_name = params.get("name")
+                    t_args = params.get("arguments", {})
+                    output = dispatch_tool(t_name, t_args)
+                    return self._response_json(
+                        start_response,
+                        {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]
+                            },
+                        },
+                    )
+                elif method == "resources/list":
+                    return self._response_json(
+                        start_response,
+                        {"jsonrpc": "2.0", "id": req_id, "result": {"resources": RESOURCES_MANIFEST}},
+                    )
+                elif method == "resources/read":
+                    uri = params.get("uri", "")
+                    output = handle_read_resource(uri)
+                    return self._response_json(
+                        start_response,
+                        {"jsonrpc": "2.0", "id": req_id, "result": output},
+                    )
+                elif method == "prompts/list":
+                    return self._response_json(
+                        start_response,
+                        {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": PROMPTS_MANIFEST}},
+                    )
+                elif method == "prompts/get":
+                    p_name = params.get("name")
+                    p_args = params.get("arguments", {})
+                    output = handle_get_prompt(p_name, p_args)
+                    return self._response_json(
+                        start_response,
+                        {"jsonrpc": "2.0", "id": req_id, "result": output},
+                    )
+
+            # Fallback legacy format: {"name": ..., "arguments": ...}
             name = payload.get("name")
             arguments = payload.get("arguments", {})
             if not name:
                 return self._response_json(
                     start_response,
-                    {"status": "error", "message": "Missing 'name' in JSON payload"},
+                    {"status": "error", "message": "Missing 'name' or 'method' in JSON payload"},
                     status="400 Bad Request",
                 )
             result = dispatch_tool(name, arguments)
