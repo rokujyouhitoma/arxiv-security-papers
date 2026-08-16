@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalPaperTitle = document.getElementById('modalPaperTitle');
   const modalPaperTitleJa = document.getElementById('modalPaperTitleJa');
   const modalPaperBody = document.getElementById('modalPaperBody');
+  const modalArxivLink = document.getElementById('modalArxivLink');
+  const modalPdfLink = document.getElementById('modalPdfLink');
 
   const trendContent = document.getElementById('trendContent');
   const mcpToolSelect = document.getElementById('mcpToolSelect');
@@ -142,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsCount.textContent = '検索結果 (0件)';
       }
     } catch (err) {
-      resultsGrid.innerHTML = `<p style="color: #ef4444;">検索エラーが発生しました: ${err.message}</p>`;
+      resultsGrid.innerHTML = `<p style="color: #ef4444;">検索エラーが発生しました: ${escapeHtml(err.message)}</p>`;
     }
   }
 
@@ -155,11 +157,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     resultsGrid.innerHTML = results.map(paper => `
-      <div class="glass-panel paper-card" onclick="openPaperModal('${paper.id}')">
+      <div class="glass-panel paper-card" onclick="openPaperModal('${escapeHtml(paper.id)}')">
         <div>
           <div class="card-top">
-            <span class="arxiv-id-tag">arXiv: ${paper.id}</span>
-            <span class="score-badge">Score: ${paper['score']}</span>
+            <span class="arxiv-id-tag">arXiv: ${escapeHtml(paper.id)}</span>
+            <span class="score-badge">Score: ${escapeHtml(String(paper['score']))}</span>
           </div>
           <h3 class="card-title">${escapeHtml(paper.title)}</h3>
           <p class="card-desc">${escapeHtml(paper.description || '要約情報なし')}</p>
@@ -174,13 +176,17 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
-  // Modal Dialog handling
+  // Modal Dialog handling (Fullscreen Viewer)
   window.openPaperModal = async function(arxivId) {
     paperModal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
     modalPaperId.textContent = `arXiv: ${arxivId}`;
+    if (modalArxivLink) modalArxivLink.href = `https://arxiv.org/abs/${encodeURIComponent(arxivId)}`;
+    if (modalPdfLink) modalPdfLink.href = `https://arxiv.org/pdf/${encodeURIComponent(arxivId)}.pdf`;
+
     modalPaperTitle.textContent = '読み込み中...';
     modalPaperTitleJa.textContent = '';
-    modalPaperBody.innerHTML = '<p>OKF ドキュメントを取得中...</p>';
+    modalPaperBody.innerHTML = '<p class="loading-text">OKF ドキュメントを取得中...</p>';
 
     try {
       const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}`);
@@ -194,13 +200,20 @@ document.addEventListener('DOMContentLoaded', () => {
         window.MarkdownCompiler.renderMermaid(modalPaperBody);
       }
     } catch (err) {
-      modalPaperBody.innerHTML = `<p style="color:#ef4444;">取得エラー: ${err.message}</p>`;
+      modalPaperBody.innerHTML = `<p style="color:#ef4444;">取得エラー: ${escapeHtml(err.message)}</p>`;
     }
   };
 
-  closeModalBtn.addEventListener('click', () => paperModal.classList.add('hidden'));
-  paperModal.addEventListener('click', (e) => {
-    if (e.target === paperModal) paperModal.classList.add('hidden');
+  function closeFullscreenModal() {
+    paperModal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  closeModalBtn.addEventListener('click', closeFullscreenModal);
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !paperModal.classList.contains('hidden')) {
+      closeFullscreenModal();
+    }
   });
 
   // Trends Tab
@@ -216,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchTrends(period) {
     trendContent.innerHTML = '<p class="loading-text">トレンドデータを取得中...</p>';
     try {
-      const res = await fetch(`/api/trends?period=${period}`);
+      const res = await fetch(`/api/trends?period=${encodeURIComponent(period)}`);
       const data = await res.json();
       if (data.status === 'success' && data.content) {
         const compiled = window.MarkdownCompiler.compile(data.content);
@@ -224,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.MarkdownCompiler.renderMermaid(trendContent);
       }
     } catch (err) {
-      trendContent.innerHTML = `<p style="color:#ef4444;">トレンド取得エラー: ${err.message}</p>`;
+      trendContent.innerHTML = `<p style="color:#ef4444;">トレンド取得エラー: ${escapeHtml(err.message)}</p>`;
     }
   }
 
