@@ -49,7 +49,13 @@ flowchart TD
 - **目的**: Suffix Array 上の二分探索により、日本語の任意の複合語・部分文字列（例: `マルウェア解析`, `自動運転セキュリティ`）を $O(\log N)$ で完全一致計数・スコアリング。
 
 ### 2.4 ベクトル概念 TF-IDF (Vector TF-IDF)
-- **フィールド重み付け**: Title(3.5), Keywords(4.0), Tags(3.0), Description(2.5), Content(1.0)
+- **フィールド重み付け (`FIELD_WEIGHTS`)**:
+  - Title: 3.5
+  - Keywords: 4.0
+  - Tags: 3.0
+  - Description: 2.5
+  - **Abstract (アブストラクト全文)**: 1.5
+  - Content: 1.0
 
 ### 2.5 論文最新性ブースト (Recency Decay Factor)
 - **数式**:
@@ -57,6 +63,8 @@ flowchart TD
 
 ---
 
-## 3. 自動特徴語抽出 ＆ 事前注釈 (Pre-Annotation)
+## 3. 自動特徴語抽出 ＆ アブストラクト事前インデックス化
 
-`extract_feature_keywords()` は、論文の Title, Description, Content からセキュリティナレッジパターン（マルウェア, ペンテスト, 自動運転, 暗号, LLM脱獄, ファジング, ゼロトラスト, サイドチャネル）およびドメイン頻出語を自動抽出し、`annotated_keywords` メタデータとして事前注釈インデックス化します。
+1. `extract_feature_keywords()` は、論文の Title, Description, Content からセキュリティナレッジパターン（マルウェア, ペンテスト, 自動運転, 暗号, LLM脱獄, ファジング, ゼロトラスト, サイドチャネル）およびドメイン頻出語を自動抽出し、`annotated_keywords` メタデータとして事前注釈インデックス化します。
+2. `extract_abstract_from_okf()` は、OKF マークダウン内の `### Abstract (原文)` 引用ブロック（`> ...`）を解析・トークン化し、`abstract_tokens` としてインデックスに保持します。これにより、タイトルに現れない評価対象モデル（例: `Claude Mythos`, `GPT-5.5`, `CyberGym` 等）の言及論文も網羅的に高速検索（< 10ms）可能となります。
+

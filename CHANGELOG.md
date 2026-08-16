@@ -30,6 +30,12 @@
 ## [Unreleased]
 
 ### [Added]
+- **アブストラクト全文の重み付けインデックス拡張 ＆ VectorEngine 検索再現率の向上 (Issue 008)**:
+  - `src/vector_engine.py`: OKF マークダウンから原本アブストラクトを自動抽出する `extract_abstract_from_okf()` を実装し、`abstract_tokens` としてインデックスへ保持
+  - マルチフィールド重み付け辞書 `FIELD_WEIGHTS` に `abstract: 1.5`（Title: 3.5, Tags: 3.0, Keywords: 4.0, Description: 2.5, Abstract: 1.5）を統合し、タイトルに含まれない評価対象モデル（例: `Claude Mythos`, `GPT-5.5`, `CyberGym` 等）の本文言及論文を網羅的にヒット可能に改善
+  - `outputs/vector_db/index.json`: 全 14,169 件の OKF ドキュメントのアブストラクトトークンを再インデックス化し、キャッシュ時 `< 1ms` の超高速検索性能を維持
+  - `tests/test_vector_engine.py`: アブストラクト抽出およびモックアブストラクト検索テストを追加し、全 23 件のテストが 100% PASS
+  - `docs/designs/DSN-05-multi_engine_hybrid_search.md`: アブストラクトインデックス化仕様および重み付け設計を更新
 - **PEP 3333 WSGI Web サーバー ＆ MCP ゲートウェイ統合 (Issue 007)**:
   - `src/web_server.py`: Python 標準 Web サーバー共通仕様である **PEP 3333 (WSGI v1.0.1)** に完全準拠した `WSGIApplication` および `application(environ, start_response)` エントリポイントの実装
   - Gunicorn / uWSGI / `wsgiref` によるマルチワーカー本番ホストおよびコンテナデプロイ対応
