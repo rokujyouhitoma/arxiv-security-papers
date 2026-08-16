@@ -56,7 +56,11 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/search/server/cache/__init__.py \
               src/search/server/cache/solr_cache.py \
               src/search/server/handler/__init__.py \
-              src/search/server/handler/select_handler.py
+              src/search/server/handler/select_handler.py \
+              src/search/eval/__init__.py \
+              src/search/eval/metrics.py \
+              src/search/eval/dataset.py \
+              src/search/eval/evaluator.py
 TESTS=tests
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar
@@ -152,6 +156,10 @@ run_mcp_server: activate ## Launch standard Model Context Protocol (MCP) server
 .PHONY: run_observability_mcp
 run_observability_mcp: activate ## Launch Observability & Profiling MCP server for AI coding agents
 	${VENV_PYTHON} src/observability_mcp_server.py
+
+.PHONY: eval_search
+eval_search: activate ## Run search engine quality benchmark (Precision@K, Recall@K, MAP, MRR, NDCG)
+	PYTHONPATH=src ${VENV_PYTHON} -c "from search.eval.evaluator import SearchEvaluator; from search.server.handler.select_handler import SelectHandler; h = SelectHandler(); e = SearchEvaluator(); r = e.evaluate(lambda q, k: [d.get('id', '') for d in h.handle_select(query=q, top_k=k).get('response', {}).get('docs', [])]); print(e.generate_markdown_report(r))"
 
 .PHONY: run_web
 run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (http://localhost:8000)
