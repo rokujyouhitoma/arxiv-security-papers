@@ -4,7 +4,7 @@ Lucene-style Postings Lists & Multi-Field Inverted Index.
 """
 
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 
 class PostingsList:
@@ -66,13 +66,13 @@ class MultiFieldPostingsIndex:
         for t, plist in self.field_indexes[field].items():
             if abs(len(t) - len(term_lower)) > max_distance:
                 continue
-            if self._levenshtein(t, term_lower) <= max_distance:
+            if self._levenshtein(t, term_lower, max_distance=max_distance) <= max_distance:
                 for doc_id, _ in plist.get_docs():
                     matched_docs.add(doc_id)
         return matched_docs
 
     @staticmethod
-    def _levenshtein(s1: str, s2: str) -> int:
+    def _levenshtein(s1: str, s2: str, max_distance: Optional[int] = None) -> int:
         if s1 == s2:
             return 0
         if not s1:
@@ -80,12 +80,30 @@ class MultiFieldPostingsIndex:
         if not s2:
             return len(s1)
 
-        v0 = list(range(len(s2) + 1))
-        v1 = [0] * (len(s2) + 1)
-        for i in range(len(s1)):
+        # Ensure s2 is the shorter string to minimize buffer allocation
+        if len(s1) < len(s2):
+            s1, s2 = s2, s1
+
+        len_s1, len_s2 = len(s1), len(s2)
+        if max_distance is not None and (len_s1 - len_s2) > max_distance:
+            return max_distance + 1
+
+        v0 = list(range(len_s2 + 1))
+        v1 = [0] * (len_s2 + 1)
+
+        for i, c1 in enumerate(s1):
             v1[0] = i + 1
-            for j in range(len(s2)):
-                cost = 0 if s1[i] == s2[j] else 1
-                v1[j + 1] = min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost)
-            v0 = v1[:]
-        return v1[len(s2)]
+            min_val = v1[0]
+            for j, c2 in enumerate(s2):
+                cost = 0 if c1 == c2 else 1
+                val = min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost)
+                v1[j + 1] = val
+                if val < min_val:
+                    min_val = val
+
+            if max_distance is not None and min_val > max_distance:
+                return max_distance + 1
+
+            v0, v1 = v1, v0
+
+        return v0[len_s2]
