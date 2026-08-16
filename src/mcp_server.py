@@ -20,7 +20,14 @@ def get_workspace_dir():
 
 
 WORKSPACE_DIR = get_workspace_dir()
-VECTOR_ENGINE = VectorEngine(workspace_dir=WORKSPACE_DIR)
+_VECTOR_ENGINE = None
+
+
+def get_vector_engine() -> VectorEngine:
+    global _VECTOR_ENGINE
+    if _VECTOR_ENGINE is None:
+        _VECTOR_ENGINE = VectorEngine(workspace_dir=WORKSPACE_DIR)
+    return _VECTOR_ENGINE
 
 TOOLS_MANIFEST = [
     {
@@ -274,7 +281,7 @@ def handle_search_security_papers(args):
     query = args.get("query", "")
     top_k = args.get("top_k", 5)
     category = args.get("category")
-    results = VECTOR_ENGINE.search(query, top_k=top_k, category=category)
+    results = get_vector_engine().search(query, top_k=top_k, category=category)
     return {
         "status": "success",
         "query": query,
@@ -288,7 +295,7 @@ def handle_search_papers_hybrid(args):
     top_k = args.get("top_k", 10)
     category = args.get("category")
     facets = {"category": category} if category else None
-    resp = VECTOR_ENGINE.search_hybrid_pipeline(query, facets=facets, top_k=top_k)
+    resp = get_vector_engine().search_hybrid_pipeline(query, facets=facets, top_k=top_k)
     return {
         "status": "success",
         "data": resp,
@@ -298,7 +305,7 @@ def handle_search_papers_hybrid(args):
 def handle_query_knowledge_graph(args):
     entity = args.get("entity", "")
     max_depth = args.get("max_depth", 2)
-    graph_res = VECTOR_ENGINE.knowledge_graph.get_neighbors(entity, max_depth=max_depth)
+    graph_res = get_vector_engine().knowledge_graph.get_neighbors(entity, max_depth=max_depth)
     return {
         "status": "success",
         "graph": graph_res,
@@ -310,9 +317,13 @@ def is_safe_workspace_path(file_path):
         return False
     abs_path = os.path.realpath(file_path)
     abs_workspace = os.path.realpath(WORKSPACE_DIR)
-    if not abs_path.startswith(abs_workspace):
+    try:
+        if os.path.commonpath([abs_workspace, abs_path]) != abs_workspace:
+            return False
+    except ValueError:
         return False
-    sensitive_keywords = [".ssh", ".aws", ".env", "etc/passwd", "etc/shadow"]
+
+    sensitive_keywords = [".ssh", ".aws", ".env", "etc/passwd", "etc/shadow", ".git/config"]
     if any(k in abs_path for k in sensitive_keywords):
         return False
     return True
@@ -394,7 +405,7 @@ def handle_get_latest_trends(args):
 
 def handle_query_attack_technique(args):
     technique_id = args.get("technique_id", "").lower()
-    results = VECTOR_ENGINE.search(technique_id, top_k=10)
+    results = get_vector_engine().search(technique_id, top_k=10)
     return {
         "status": "success",
         "technique_id": technique_id,
@@ -405,7 +416,7 @@ def handle_query_attack_technique(args):
 
 def handle_get_related_papers_graph(args):
     arxiv_id = args.get("arxiv_id", "").strip().replace("/", "_").replace("..", "")
-    return VECTOR_ENGINE.get_related_papers(arxiv_id)
+    return get_vector_engine().get_related_papers(arxiv_id)
 
 
 CWE_MITIGATION_DATABASE = {
@@ -568,7 +579,7 @@ def handle_verify_code_security(args):
 
     # Search relevant academic security papers using code keywords
     query_terms = " ".join([w["name"] for w in warnings]) if warnings else code[:100]
-    relevant_papers = VECTOR_ENGINE.search(query_terms, top_k=3)
+    relevant_papers = get_vector_engine().search(query_terms, top_k=3)
 
     risk_level = (
         "HIGH"
@@ -603,7 +614,7 @@ def handle_get_cwe_mitigation_recipe(args):
     data = CWE_MITIGATION_DATABASE.get(cwe_id)
     if not data:
         # Fallback search in VectorEngine
-        results = VECTOR_ENGINE.search(cwe_id, top_k=5)
+        results = get_vector_engine().search(cwe_id, top_k=5)
         return {
             "status": "success",
             "cwe_id": cwe_id,
@@ -616,7 +627,7 @@ def handle_get_cwe_mitigation_recipe(args):
             "academic_papers": results,
         }
 
-    relevant_papers = VECTOR_ENGINE.search(f"{cwe_id} {data['name']}", top_k=5)
+    relevant_papers = get_vector_engine().search(f"{cwe_id} {data['name']}", top_k=5)
     return {
         "status": "success",
         "cwe_id": cwe_id,

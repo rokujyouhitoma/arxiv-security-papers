@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **022** | [DSN-11準拠: ASTセキュリティガードの多層堅牢化とパストラバーサル防御の実装](closed/022-ast-security-guard-hardening-and-traversal-defense.md) | Security | 2026-08-16 | [022-ast-security-guard-hardening-and-traversal-defense.md](closed/022-ast-security-guard-hardening-and-traversal-defense.md) |
 | **021** | [情報検索評価フレームワーク（Precision@K / Recall@K / F1 / MAP / MRR / NDCG）の実装](closed/021-search-engine-evaluation-framework.md) | Feature | 2026-08-16 | [021-search-engine-evaluation-framework.md](closed/021-search-engine-evaluation-framework.md) |
 | **020** | [ホットパスにおける多重ループ解消・アルゴリズム最適化と可観測性ベンチマーク実証](closed/020-hotpath-loop-optimization-and-benchmarking.md) | Performance | 2026-08-16 | [020-hotpath-loop-optimization-and-benchmarking.md](closed/020-hotpath-loop-optimization-and-benchmarking.md) |
 | **019** | [AIコーディングエージェント向け可観測性（Observability）特化型 MCP サーバーの実装](closed/019-observability-mcp-server-for-ai-coding-agents.md) | Feature | 2026-08-16 | [019-observability-mcp-server-for-ai-coding-agents.md](closed/019-observability-mcp-server-for-ai-coding-agents.md) |
