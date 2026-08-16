@@ -12,10 +12,11 @@
 
 ---
 
-## 2. 完了済み Issue 一覧 (Closed Issues)
+## 2. 完了・アーカイブ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **018** | [Python標準ライブラリを活用した計測可能性（可観測性・プロファイリング）基盤の構築](closed/018-standard-library-observability-and-profiling-framework.md) | Feature | 2026-08-16 | [018-standard-library-observability-and-profiling-framework.md](closed/018-standard-library-observability-and-profiling-framework.md) |
 | **017** | [Apache Lucene / Solr パラダイムに基づく検索エンジン2層分離リアーキテクチャ](closed/017-rearchitect-search-engine-to-lucene-solr-paradigm.md) | Feature | 2026-08-16 | [017-rearchitect-search-engine-to-lucene-solr-paradigm.md](closed/017-rearchitect-search-engine-to-lucene-solr-paradigm.md) |
 | **016** | [検索エンジン機能モジュール別再設計・ハイブリッド検索パイプライン高度化](closed/016-modularize-and-enhance-hybrid-search-engine.md) | Feature | 2026-08-16 | [016-modularize-and-enhance-hybrid-search-engine.md](closed/016-modularize-and-enhance-hybrid-search-engine.md) |
 | **015** | [コーディングエージェント向け MCP サーバー超高度化（Resources / Prompts / セキュアコーディング支援ツール・Graph-RAG 統合）](closed/015-enrich-mcp-server-for-coding-agents-with-resources-prompts-and-security-tools.md) | Feature | 2026-08-16 | [015-enrich-mcp-server-for-coding-agents-with-resources-prompts-and-security-tools.md](closed/015-enrich-mcp-server-for-coding-agents-with-resources-prompts-and-security-tools.md) |

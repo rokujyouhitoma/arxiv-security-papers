@@ -529,3 +529,49 @@ def test_solr_server_select_handler_and_faceting():
     )
     assert res_filtered["response"]["numFound"] == 1
     assert res_filtered["response"]["docs"][0]["id"] == "doc_1"
+
+    # 3. Observability Header Check
+    assert "QTime" in res["responseHeader"]
+    assert "cpu_time_ms" in res["responseHeader"]
+    assert "peak_memory_kb" in res["responseHeader"]
+
+
+def test_observability_and_profiling_framework():
+    """Validates Python standard library observability tools (time, tracemalloc, cProfile, timeit, dis)."""
+    from search.utils.profiler import (
+        ExecutionProfiler,
+        analyze_bytecode,
+        benchmark_function,
+        profile_function,
+    )
+
+    # 1. ExecutionProfiler (time & tracemalloc)
+    with ExecutionProfiler("sample_block", track_memory=True) as prof:
+        _ = [x**2 for x in range(5000)]
+
+    assert prof.metrics is not None
+    assert prof.metrics.wall_time_ms >= 0.0
+    assert prof.metrics.cpu_time_ms >= 0.0
+    assert prof.metrics.peak_memory_kb >= 0.0
+    metric_dict = prof.metrics.to_dict()
+    assert metric_dict["name"] == "sample_block"
+
+    # 2. cProfile & pstats
+    def sample_func(n: int) -> int:
+        return sum(i for i in range(n))
+
+    result, stats_output = profile_function(sample_func, 1000, top_n=5)
+    assert result == 499500
+    assert "function calls" in stats_output
+
+    # 3. timeit micro-benchmark
+    bench = benchmark_function(sample_func, number=50, repeat=2, n=100)
+    assert "min_time_ms" in bench
+    assert "avg_time_ms" in bench
+    assert bench["repeats"] == 2
+
+    # 4. dis bytecode analysis
+    dis_res = analyze_bytecode(sample_func)
+    assert dis_res["function_name"] == "sample_func"
+    assert dis_res["total_instructions"] > 0
+    assert any(i["opname"] == "RETURN_VALUE" for i in dis_res["instructions"])

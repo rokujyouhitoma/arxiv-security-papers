@@ -120,11 +120,12 @@ flowchart TD
 
 ---
 
-## 5. ガバナンス・品質保証・SLA (Governance & Quality Assurance)
+## 5. ガバナンス・品質保証・オブザーバビリティ (Governance & Observability)
 
 1. **パスバウンダリ検証**: すべてのファイル・データアクセスにおいて `os.path.realpath` による境界検証を強制し、機密ファイル (`.env`, `.ssh`) へのアクセスを防止。
 2. **品質管理ゲート (Quality Gates)**: `make py_compile`, `make static_analysis`, `make test` により、Python / JS 構文エラー 0 件、絶対パスリンク 0 件、テスト全件 PASS を遵守。
 3. **連続稼働性と冪等性**: `processed_papers.json` による重複処理防止および障害時リカバリ設計。
+4. **設計原則: 計測可能性・オブザーバビリティ (DSN-09)**: Python 標準ライブラリ (`time.perf_counter`, `time.process_time`, `tracemalloc`, `cProfile`, `pstats`, `timeit`, `dis`) を駆使し、低オーバーヘッドな常時レイテンシ・メモリ計測と決定論的プロファイリングを統合保証。
 
 ---
 
