@@ -68,13 +68,14 @@
 ### 2.1 ベクトル ＆ 高度多段階インデックス JSON スキーマ (`outputs/vector_db/index.json`)
 ```json
 {
-  "version": "2.0.0",
-  "updated_at": "2026-08-16T17:20:00+09:00",
+  "version": "3.4.0",
+  "updated_at": "2026-08-16T18:50:00+09:00",
   "total_documents": 14169,
   "documents": [
     {
       "id": "2606.07005",
       "title": "The Sound of Malware",
+      "authors": ["John Doe", "Alice Smith"],
       "description": "要約本文...",
       "tags": ["cs.CR", "malware"],
       "published": "2026-06-05",

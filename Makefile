@@ -11,6 +11,10 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/mcp_server.py \
               src/web_server.py \
               src/search/__init__.py \
+              src/search/field_schema.py \
+              src/search/analyzer.py \
+              src/search/query_parser.py \
+              src/search/highlighter.py \
               src/search/fm_index.py \
               src/search/query_cache.py \
               src/search/faceted_index.py \

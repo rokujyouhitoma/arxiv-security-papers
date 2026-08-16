@@ -108,3 +108,24 @@ $$\text{FinalScore}(d) = RRF(d) \times \text{RecencyBoost}(d) \times (1.0 + \alp
 
 1. `extract_feature_keywords()` は、論文の Title, Description, Content からセキュリティナレッジパターン（マルウェア, ペンテスト, 自動運転, 暗号, LLM脱獄, ファジング, ゼロトラスト, サイドチャネル）およびドメイン頻出語を自動抽出し、`annotated_keywords` メタデータとして事前注釈インデックス化します。
 2. `extract_abstract_from_okf()` は、OKF マークダウン内の `### Abstract (原文)` 引用ブロック（`> ...`）を解析・トークン化し、`abstract_tokens` としてインデックスに保持します。これにより、タイトルに現れない評価対象モデル（例: `Claude Mythos`, `GPT-5.5`, `CyberGym` 等）の言及論文も網羅的に高速検索（< 10ms）可能となります。
+
+---
+
+## 5. 多層フィールド別転置インデックス・高度クエリパーサー・動的ハイライト仕様
+
+### 5.1 多層フィールドスキーマ (`MultiFieldPostingsIndex`)
+- **フィールド型構造**:
+  - `title` ($w=4.0$), `author` ($w=3.5$), `keywords` ($w=3.0$), `tags` ($w=2.5$), `description` ($w=2.0$), `abstract` ($w=2.0$), `content` ($w=1.0$)
+- **位置情報保持**:
+  - 単語出現位置（Positions）を保持し、フレーズスロップ検索および文脈特定を $O(1)$ で実行。
+
+### 5.2 多機能クエリ構文解析器 (`EnterpriseQueryParser`)
+- **フィールド指定**: `author:Nakatani`, `title:malware`, `tag:cs.CR`
+- **ブーリアン論理**: `+malware -android`, `fuzzing AND (cve OR exploit)`
+- **フレーズスロップ**: `"acoustic side-channel"~2`
+- **前方一致 ＆ ファジー**: `Nakat*`, `Nakatani~1`
+- **マルチフィールド展開**: 単一キーワード入力時は全重み付きフィールドへ自動展開。
+
+### 5.3 動的スニペットハイライト (`DynamicHighlighter`)
+- クエリ一致語の周辺（前後 120 文字）を自動抽出し、HTML サニタイズを施した上で `<mark class="highlight">...</mark>` で強調表示。
+

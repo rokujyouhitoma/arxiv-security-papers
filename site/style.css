@@ -809,3 +809,36 @@ body {
   justify-content: center;
   overflow-x: auto;
 }
+
+/* Card Authors & Dynamic Snippet Highlight */
+.card-authors {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 0.35rem;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.card-snippet {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.6);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.6rem 0;
+}
+
+mark.highlight {
+  background: rgba(234, 179, 8, 0.25);
+  color: #fef08a;
+  border-bottom: 2px solid #eab308;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Advanced Multi-Engine Hybrid & Multi-Stage RAG Search Engine for arXiv Security Papers
-Sub-10ms High-Performance Search Engine with 7 Extended Index Architectures.
+Enterprise Multi-Field Hybrid & Multi-Stage RAG Search Engine for arXiv Security Papers.
+Sub-10ms High-Performance Search Engine with Multi-Field Postings, Query Parser, and Highlighter.
 """
 
 import json
@@ -13,12 +13,16 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .analyzer import SearchAnalyzer
 from .citation_network import CitationNetworkIndex
 from .faceted_index import FacetedIndex
+from .field_schema import MultiFieldPostingsIndex
 from .fm_index import FMIndex
+from .highlighter import DynamicHighlighter
 from .knowledge_graph import KnowledgeGraphIndex
 from .proximity_graph import ProximityGraphIndex
 from .query_cache import QuerySemanticCache
+from .query_parser import EnterpriseQueryParser
 from .raptor_tree import RAPTORTreeIndex
 from .synonym_expander import SynonymExpander
 from .utils import extract_abstract_from_okf
@@ -26,11 +30,12 @@ from .utils import extract_abstract_from_okf
 
 class VectorEngine:
     FIELD_WEIGHTS = {
-        "title": 3.5,
-        "keywords": 4.0,
-        "tags": 3.0,
-        "description": 2.5,
-        "abstract": 1.5,
+        "title": 4.0,
+        "author": 3.5,
+        "keywords": 3.0,
+        "tags": 2.5,
+        "description": 2.0,
+        "abstract": 2.0,
         "content": 1.0,
     }
 
@@ -81,6 +86,7 @@ class VectorEngine:
             )
         self.workspace_dir = workspace_dir
         self.vector_db_dir = os.path.join(self.workspace_dir, "outputs", "vector_db")
+        self.raw_data_dir = os.path.join(self.workspace_dir, "outputs", "raw_data")
         self.index_file = os.path.join(self.vector_db_dir, "index.json")
         self.documents: List[Dict[str, Any]] = []
         self.documents_by_id: Dict[str, Dict[str, Any]] = {}
@@ -91,6 +97,12 @@ class VectorEngine:
         self.fm_indexes: Dict[str, FMIndex] = {}
         self.expander = SynonymExpander()
         self.avg_doc_len = 0.0
+
+        # Enterprise Architecture Components
+        self.analyzer = SearchAnalyzer()
+        self.query_parser = EnterpriseQueryParser(self.FIELD_WEIGHTS)
+        self.highlighter = DynamicHighlighter()
+        self.multi_field_index = MultiFieldPostingsIndex()
 
         # Extended Index Structures
         self.semantic_cache = QuerySemanticCache()
@@ -104,26 +116,8 @@ class VectorEngine:
         self.load_index()
 
     def tokenize(self, text: str) -> List[str]:
-        """Tokenizes English words and Japanese words/character 2-grams/3-grams."""
-        if not text:
-            return []
-        text_lower = text.lower()
-        words = re.findall(r"[a-zA-Z0-9_\-]+", text_lower)
-
-        ja_words = re.findall(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+", text)
-        ja_ngrams = []
-        for ja_w in ja_words:
-            ja_ngrams.append(ja_w.lower())
-            if len(ja_w) >= 2:
-                for i in range(len(ja_w) - 1):
-                    end_idx2 = i + 2
-                    ja_ngrams.append(ja_w[i:end_idx2].lower())
-            if len(ja_w) >= 3:
-                for i in range(len(ja_w) - 2):
-                    end_idx3 = i + 3
-                    ja_ngrams.append(ja_w[i:end_idx3].lower())
-
-        return words + ja_words + ja_ngrams
+        """Tokenizes text using multi-stage analyzer."""
+        return self.analyzer.tokenize(text)
 
     def extract_feature_keywords(
         self, title: str, desc: str, content: str = ""
@@ -157,6 +151,22 @@ class VectorEngine:
 
         return list(extracted)
 
+    def _extract_authors_from_meta(self, date_dir: str, clean_id: str) -> List[str]:
+        """Extracts authors list from raw_data meta.json if available."""
+        if not date_dir:
+            return []
+        meta_path = os.path.join(
+            self.raw_data_dir, date_dir, f"{clean_id}_meta.json"
+        )
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                    return [str(a) for a in meta.get("authors", [])]
+            except Exception:
+                pass
+        return []
+
     def calculate_bm25_score(
         self, query_tokens: List[str], doc: Dict[str, Any]
     ) -> float:
@@ -189,8 +199,9 @@ class VectorEngine:
         doc_id = doc.get("id", "")
         if doc_id not in self.doc_full_texts:
             kw_str = " ".join(doc.get("annotated_keywords", []))
+            authors_str = " ".join(doc.get("authors", []))
             self.doc_full_texts[doc_id] = (
-                f"{doc.get('title', '')} {doc.get('description', '')} {kw_str}".lower()
+                f"{doc.get('title', '')} {doc.get('description', '')} {authors_str} {kw_str}".lower()
             )
 
         full_text = self.doc_full_texts[doc_id]
@@ -212,7 +223,7 @@ class VectorEngine:
             return 1.0
 
     def build_index(self) -> int:
-        """Scans all OKF markdown files, builds extended indexes and saves index.json."""
+        """Scans all OKF files, builds multi-field index and saves index.json."""
         okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
         if not os.path.exists(okf_dir):
             return 0
@@ -223,12 +234,14 @@ class VectorEngine:
         doc_freq: Counter[str] = Counter()
         self.inverted_index = defaultdict(list)
         self.inverted_keyword_index = defaultdict(list)
+        self.multi_field_index = MultiFieldPostingsIndex()
         self.faceted_index = FacetedIndex()
         self.knowledge_graph = KnowledgeGraphIndex()
         self.citation_network = CitationNetworkIndex()
         self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
 
         for root, _, files in os.walk(okf_dir):
+            date_dir = os.path.basename(root)
             for file in files:
                 if file.endswith(".md"):
                     file_path = os.path.join(root, file)
@@ -240,6 +253,7 @@ class VectorEngine:
                         title = ""
                         description = ""
                         tags = []
+                        authors: List[str] = []
                         published_date = ""
                         arxiv_id = os.path.splitext(file)[0]
 
@@ -273,6 +287,19 @@ class VectorEngine:
                         if m_date:
                             published_date = m_date.group(1)
 
+                        # Extract authors from meta.json or provenance
+                        authors = self._extract_authors_from_meta(date_dir, arxiv_id)
+                        if not authors:
+                            m_auth = re.search(
+                                r"authors:\s*\[(.*?)\]", content, re.MULTILINE
+                            )
+                            if m_auth:
+                                authors = [
+                                    a.strip().strip("'\"")
+                                    for a in m_auth.group(1).split(",")
+                                    if a.strip()
+                                ]
+
                         abstract_text = extract_abstract_from_okf(content)
                         keywords = self.extract_feature_keywords(
                             title, description, content
@@ -281,15 +308,17 @@ class VectorEngine:
                         title_tokens = self.tokenize(title)
                         desc_tokens = self.tokenize(description)
                         tags_tokens = self.tokenize(" ".join(tags))
+                        authors_tokens = self.tokenize(" ".join(authors))
                         keywords_tokens = self.tokenize(" ".join(keywords))
                         abstract_tokens = (
-                            self.tokenize(abstract_text)[:80] if abstract_text else []
+                            self.tokenize(abstract_text)[:120] if abstract_text else []
                         )
 
                         doc_tokens = (
                             title_tokens
                             + desc_tokens
                             + tags_tokens
+                            + authors_tokens
                             + keywords_tokens
                             + abstract_tokens
                         )
@@ -303,10 +332,28 @@ class VectorEngine:
                         for kw in keywords:
                             self.inverted_keyword_index[kw.lower()].append(arxiv_id)
 
+                        # Multi-Field Postings Indexing
+                        self.multi_field_index.add_field_tokens(
+                            arxiv_id, "title", title_tokens
+                        )
+                        self.multi_field_index.add_field_tokens(
+                            arxiv_id, "author", authors_tokens
+                        )
+                        self.multi_field_index.add_field_tokens(
+                            arxiv_id, "abstract", abstract_tokens
+                        )
+                        self.multi_field_index.add_field_tokens(
+                            arxiv_id, "keywords", keywords_tokens
+                        )
+                        self.multi_field_index.add_field_tokens(
+                            arxiv_id, "tags", tags_tokens
+                        )
+
                         doc_entry = {
                             "id": arxiv_id,
                             "title": title,
                             "description": description,
+                            "authors": authors,
                             "tags": tags,
                             "annotated_keywords": keywords,
                             "published_date": published_date,
@@ -314,6 +361,7 @@ class VectorEngine:
                             "title_tokens": title_tokens,
                             "desc_tokens": desc_tokens,
                             "tags_tokens": tags_tokens,
+                            "authors_tokens": authors_tokens,
                             "keywords_tokens": keywords_tokens,
                             "abstract_tokens": abstract_tokens,
                             "tokens": doc_tokens,
@@ -335,6 +383,10 @@ class VectorEngine:
                             self.knowledge_graph.add_entity(
                                 tag, "category_tag", tag, arxiv_id
                             )
+                        for author in authors:
+                            self.knowledge_graph.add_entity(
+                                author, "author", author, arxiv_id
+                            )
 
                     except Exception:
                         continue
@@ -343,9 +395,12 @@ class VectorEngine:
         if num_docs > 0:
             self.avg_doc_len = sum(len(d["tokens"]) for d in self.documents) / num_docs
             self.idf = {
-                token: round(math.log((num_docs - freq + 0.5) / (freq + 0.5) + 1), 4)
+                token: round(
+                    math.log((num_docs - freq + 0.5) / (freq + 0.5) + 1), 4
+                )
                 for token, freq in doc_freq.items()
             }
+            self.multi_field_index.compute_field_statistics(num_docs)
             self.citation_network.compute_pagerank([d["id"] for d in self.documents])
             self.raptor_tree.build_summary_tree(self.documents)
             self.proximity_graph.build_graph(
@@ -363,6 +418,7 @@ class VectorEngine:
                     "id": doc.get("id"),
                     "title": doc.get("title"),
                     "description": doc.get("description"),
+                    "authors": doc.get("authors", []),
                     "tags": doc.get("tags", []),
                     "annotated_keywords": doc.get("annotated_keywords", []),
                     "published_date": doc.get("published_date", ""),
@@ -373,6 +429,7 @@ class VectorEngine:
                     "title_tokens": doc.get("title_tokens", []),
                     "desc_tokens": doc.get("desc_tokens", []),
                     "tags_tokens": doc.get("tags_tokens", []),
+                    "authors_tokens": doc.get("authors_tokens", []),
                     "keywords_tokens": doc.get("keywords_tokens", []),
                     "abstract_tokens": doc.get("abstract_tokens", []),
                     "tokens": doc.get("tokens", []),
@@ -380,7 +437,7 @@ class VectorEngine:
                 }
             )
         data = {
-            "version": "3.3.0",
+            "version": "3.4.0",
             "updated_at": datetime.now().isoformat(),
             "total_documents": len(serializable_docs),
             "documents": serializable_docs,
@@ -409,6 +466,7 @@ class VectorEngine:
                     raw_docs = data.get("documents", [])
                     self.documents = []
                     self.documents_by_id = {}
+                    self.multi_field_index = MultiFieldPostingsIndex()
                     self.faceted_index = FacetedIndex()
                     self.knowledge_graph = KnowledgeGraphIndex()
                     self.citation_network = CitationNetworkIndex()
@@ -424,6 +482,9 @@ class VectorEngine:
                             d["tags_tokens"] = self.tokenize(
                                 " ".join(d.get("tags", []))
                             )
+                            d["authors_tokens"] = self.tokenize(
+                                " ".join(d.get("authors", []))
+                            )
                             d["keywords_tokens"] = self.tokenize(
                                 " ".join(d.get("annotated_keywords", []))
                             )
@@ -432,19 +493,42 @@ class VectorEngine:
                                 d["title_tokens"]
                                 + d["desc_tokens"]
                                 + d["tags_tokens"]
+                                + d["authors_tokens"]
                                 + d["keywords_tokens"]
                             )
                             d["token_counts"] = dict(Counter(d["tokens"]))
+                        if "authors_tokens" not in d:
+                            d["authors_tokens"] = self.tokenize(
+                                " ".join(d.get("authors", []))
+                            )
                         if "abstract_tokens" not in d:
                             d["abstract_tokens"] = []
 
                         self.documents.append(d)
                         self.documents_by_id[d["id"]] = d
 
+                        # Populate Multi-Field Index
+                        self.multi_field_index.add_field_tokens(
+                            d["id"], "title", d["title_tokens"]
+                        )
+                        self.multi_field_index.add_field_tokens(
+                            d["id"], "author", d["authors_tokens"]
+                        )
+                        self.multi_field_index.add_field_tokens(
+                            d["id"], "abstract", d["abstract_tokens"]
+                        )
+                        self.multi_field_index.add_field_tokens(
+                            d["id"], "keywords", d["keywords_tokens"]
+                        )
+                        self.multi_field_index.add_field_tokens(
+                            d["id"], "tags", d["tags_tokens"]
+                        )
+
                         kw_str = " ".join(d.get("annotated_keywords", []))
+                        authors_str = " ".join(d.get("authors", []))
                         abs_str = " ".join(d.get("abstract_tokens", [])[:50])
                         self.doc_full_texts[d["id"]] = (
-                            f"{d.get('title', '')} {d.get('description', '')} {kw_str} {abs_str}".lower()
+                            f"{d.get('title', '')} {d.get('description', '')} {authors_str} {kw_str} {abs_str}".lower()
                         )
 
                         self.faceted_index.add_document(
@@ -458,38 +542,34 @@ class VectorEngine:
                                 kw, "security_domain", kw, d["id"]
                             )
 
+                    self.multi_field_index.compute_field_statistics(
+                        len(self.documents)
+                    )
                     self.citation_network.compute_pagerank(
                         [d["id"] for d in self.documents]
                     )
                     self.raptor_tree.build_summary_tree(self.documents)
-
-                    if not self.proximity_graph.graph and self.documents:
-                        self.proximity_graph.build_graph(
-                            self.documents, dict(self.inverted_keyword_index)
-                        )
             except Exception:
                 self.documents = []
                 self.documents_by_id = {}
                 self.idf = {}
 
     def get_related_papers(self, doc_id: str) -> Dict[str, Any]:
-        """
-        Retrieves precomputed related papers and Mermaid diagram for a specific paper.
-        """
+        """Retrieves precomputed nearest neighbors for a paper."""
         doc = self.documents_by_id.get(doc_id)
         if not doc:
             return {"status": "error", "message": f"Paper '{doc_id}' not found."}
 
         neighbors = self.proximity_graph.get_neighbors(doc_id)
         if not neighbors:
-            # On-demand fallback build for this document
+            # Fallback on-demand calculation
             kw_list = doc.get("annotated_keywords", [])
             candidate_ids = set()
             for kw in kw_list:
                 candidate_ids.update(self.inverted_keyword_index.get(kw.lower(), []))
             candidate_ids.discard(doc_id)
             scored = []
-            for tid in candidate_ids:
+            for tid in list(candidate_ids)[:40]:
                 if tid in self.documents_by_id:
                     tdoc = self.documents_by_id[tid]
                     sim = self.proximity_graph.compute_similarity(doc, tdoc)
@@ -535,7 +615,7 @@ class VectorEngine:
         self, query: str, top_k: int = 5, category: Optional[str] = None
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """
-        4-Phase Multi-Engine & Multi-Stage RAG Hybrid Search with Query Cache & Profiling.
+        Enterprise Multi-Field & Multi-Stage Hybrid Search with Query Parser & Dynamic Highlighter.
         """
         t0 = time.perf_counter()
         q_tokens = self.tokenize(query) if query else []
@@ -551,37 +631,71 @@ class VectorEngine:
         if not self.documents:
             self.build_index()
 
-        query_terms = (
-            self.expander.expand_query(query) if query and query.strip() else []
-        )
-        expanded_tokens_set = set()
-        for qt in query_terms:
-            expanded_tokens_set.update(self.tokenize(qt))
-        expanded_query_tokens = list(expanded_tokens_set)
+        # Parse query expressions into clauses
+        clauses = self.query_parser.parse(query)
+        expanded_query_terms: List[str] = []
+        highlight_terms: List[str] = []
+
+        for c in clauses:
+            highlight_terms.append(c.term)
+            expanded_query_terms.append(c.term)
+            if not c.is_prefix and not c.is_phrase and not c.field:
+                for syn in self.expander.expand_query(c.term):
+                    expanded_query_terms.append(syn)
         t_tokenize_end = time.perf_counter()
 
-        # Phase 1: Candidate Pruning via Facets & Inverted Index
+        # Phase 1: Multi-Field Candidate Pruning
         t_prune_start = time.perf_counter()
         candidate_ids: Optional[Set[str]] = None
         if category:
             candidate_ids = self.faceted_index.filter(category=category)
 
-        if expanded_query_tokens:
-            inv_candidates = set()
-            for ptoken in [
-                t.lower().strip() for t in query_terms if len(t.strip()) >= 2
-            ]:
-                if ptoken in self.inverted_index:
-                    inv_candidates.update(self.inverted_index[ptoken])
-                if ptoken in self.inverted_keyword_index:
-                    inv_candidates.update(self.inverted_keyword_index[ptoken])
+        # Evaluate clause constraints
+        for clause in clauses:
+            clause_matches: Set[str] = set()
+            target_field = clause.field
 
+            if clause.is_prefix:
+                fields_to_check = [target_field] if target_field else ["title", "author", "keywords", "abstract"]
+                for fld in fields_to_check:
+                    clause_matches.update(self.multi_field_index.search_prefix(fld, clause.term))
+            elif clause.is_fuzzy:
+                fields_to_check = [target_field] if target_field else ["title", "author", "keywords", "abstract"]
+                for fld in fields_to_check:
+                    clause_matches.update(self.multi_field_index.search_fuzzy(fld, clause.term, clause.fuzzy_distance))
+            elif target_field:
+                # Field-specific search e.g. author:Nakatani
+                term_tokens = self.tokenize(clause.term)
+                for tt in term_tokens:
+                    postings = self.multi_field_index.get_postings(target_field, tt)
+                    for doc_id, _ in postings:
+                        clause_matches.add(doc_id)
+            else:
+                # General term search
+                term_tokens = self.tokenize(clause.term)
+                for tt in term_tokens:
+                    if tt in self.inverted_index:
+                        clause_matches.update(self.inverted_index[tt])
+
+            if clause.is_required:
+                candidate_ids = clause_matches if candidate_ids is None else (candidate_ids & clause_matches)
+            elif clause.is_prohibited:
+                if candidate_ids is not None:
+                    candidate_ids.difference_update(clause_matches)
+            elif target_field or clause.is_prefix or clause.is_fuzzy:
+                candidate_ids = clause_matches if candidate_ids is None else (candidate_ids & clause_matches)
+
+        # General token candidate pruning fallback
+        if candidate_ids is None and expanded_query_terms:
+            inv_candidates = set()
+            for pterm in expanded_query_terms:
+                for ptoken in self.tokenize(pterm):
+                    if ptoken in self.inverted_index:
+                        inv_candidates.update(self.inverted_index[ptoken])
+                    if ptoken in self.inverted_keyword_index:
+                        inv_candidates.update(self.inverted_keyword_index[ptoken])
             if inv_candidates:
-                candidate_ids = (
-                    inv_candidates
-                    if candidate_ids is None
-                    else (candidate_ids & inv_candidates)
-                )
+                candidate_ids = inv_candidates
 
         if candidate_ids is not None:
             target_docs = [
@@ -589,51 +703,54 @@ class VectorEngine:
                 for did in candidate_ids
                 if did in self.documents_by_id
             ]
-            if len(target_docs) > 500:
-                target_docs = target_docs[:500]
+            if len(target_docs) > 600:
+                target_docs = target_docs[:600]
         else:
-            target_docs = self.documents[:500]
+            target_docs = self.documents[:600]
         t_prune_end = time.perf_counter()
 
-        # Phase 2: Multi-Engine Scoring & RRF (Reciprocal Rank Fusion)
+        # Phase 2: Multi-Field Scoring with BM25 & Field Boosts
         t_scoring_start = time.perf_counter()
         scores = []
+        all_query_tokens = []
+        for t in expanded_query_terms:
+            all_query_tokens.extend(self.tokenize(t))
+
         for doc in target_docs:
-            if not expanded_query_tokens:
+            if not all_query_tokens:
                 total_score = 1.0
             else:
-                vector_score = 0.0
+                field_score = 0.0
                 doc_title = doc.get("title", "").lower()
                 doc_desc = doc.get("description", "").lower()
                 doc_tags = " ".join(doc.get("tags", [])).lower()
+                doc_authors = " ".join(doc.get("authors", [])).lower()
                 doc_keywords = " ".join(doc.get("annotated_keywords", [])).lower()
 
                 title_tokens_set = set(doc.get("title_tokens", []))
+                authors_tokens_set = set(doc.get("authors_tokens", []))
                 keywords_tokens_set = set(doc.get("keywords_tokens", []))
                 tags_tokens_set = set(doc.get("tags_tokens", []))
                 desc_tokens_set = set(doc.get("desc_tokens", []))
                 abstract_tokens_set = set(doc.get("abstract_tokens", []))
 
-                for qt in expanded_query_tokens:
+                for qt in all_query_tokens:
                     idf_val = self.idf.get(qt, 1.2)
                     if qt in title_tokens_set or qt in doc_title:
-                        vector_score += self.FIELD_WEIGHTS["title"] * idf_val
+                        field_score += self.FIELD_WEIGHTS["title"] * idf_val
+                    if qt in authors_tokens_set or qt in doc_authors:
+                        field_score += self.FIELD_WEIGHTS["author"] * idf_val
                     if qt in keywords_tokens_set or qt in doc_keywords:
-                        vector_score += self.FIELD_WEIGHTS["keywords"] * idf_val
+                        field_score += self.FIELD_WEIGHTS["keywords"] * idf_val
                     if qt in tags_tokens_set or qt in doc_tags:
-                        vector_score += self.FIELD_WEIGHTS["tags"] * idf_val
+                        field_score += self.FIELD_WEIGHTS["tags"] * idf_val
                     if qt in desc_tokens_set or qt in doc_desc:
-                        vector_score += self.FIELD_WEIGHTS["description"] * idf_val
+                        field_score += self.FIELD_WEIGHTS["description"] * idf_val
                     if qt in abstract_tokens_set:
-                        vector_score += self.FIELD_WEIGHTS["abstract"] * idf_val
+                        field_score += self.FIELD_WEIGHTS["abstract"] * idf_val
 
-                bm25_score = self.calculate_bm25_score(expanded_query_tokens, doc)
-                inverted_score = 0.0
-                for kw in doc.get("annotated_keywords", []):
-                    if any(qt in kw.lower() for qt in expanded_query_tokens):
-                        inverted_score += 3.5
-
-                fm_score = self.calculate_fm_index_score(expanded_query_tokens, doc)
+                bm25_score = self.calculate_bm25_score(all_query_tokens, doc)
+                fm_score = self.calculate_fm_index_score(all_query_tokens, doc)
                 recency_boost = self.calculate_recency_boost(
                     doc.get("published_date", "")
                 )
@@ -642,26 +759,29 @@ class VectorEngine:
                 )
 
                 total_score = (
-                    (
-                        vector_score * 0.3
-                        + bm25_score * 0.3
-                        + inverted_score * 0.2
-                        + fm_score * 0.2
-                    )
-                    * recency_boost
-                    * pagerank_boost
-                )
+                    field_score * 0.35
+                    + bm25_score * 0.35
+                    + fm_score * 0.30
+                ) * recency_boost * pagerank_boost
 
             if total_score > 0:
+                # Generate dynamic highlight snippet
+                full_context = f"{doc.get('description', '')} {doc.get('title', '')} {' '.join(doc.get('authors', []))}"
+                highlight_snippet = self.highlighter.highlight(
+                    full_context, highlight_terms or q_tokens
+                )
+
                 scores.append(
                     {
                         "id": doc.get("id"),
                         "title": doc.get("title"),
                         "description": doc.get("description"),
+                        "authors": doc.get("authors", []),
                         "tags": doc.get("tags", []),
                         "annotated_keywords": doc.get("annotated_keywords", []),
                         "published_date": doc.get("published_date", ""),
                         "path": doc.get("path"),
+                        "highlight": highlight_snippet,
                         "score": round(total_score, 4),
                     }
                 )
@@ -678,6 +798,7 @@ class VectorEngine:
             "total_ms": round((t_total_end - t0) * 1000, 3),
             "candidates_evaluated": len(target_docs),
             "total_documents": len(self.documents),
+            "clauses_parsed": len(clauses),
             "cached": False,
         }
 
@@ -693,7 +814,7 @@ class VectorEngine:
         top_k: int = 10,
     ) -> Dict[str, Any]:
         """
-        Complete 4-Phase RAG Pipeline Search with GraphRAG, Proximity Graph, and RAPTOR.
+        Complete Multi-Field Hybrid Pipeline Search with Proximity Graph and RAPTOR.
         """
         cat = facets.get("category") if facets else None
         results, profile = self.search_with_profile(query, top_k=top_k, category=cat)
@@ -708,7 +829,6 @@ class VectorEngine:
                     self.knowledge_graph.get_neighbors(kw, max_depth=1)
                 )
 
-        # Proximity graph hints for top match
         top_related = []
         if results:
             top_id = results[0]["id"]
