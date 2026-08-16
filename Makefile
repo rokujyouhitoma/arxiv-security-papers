@@ -7,7 +7,6 @@ VENV_PYTHON=${VENV_BIN}/python
 SRC=src/arxiv_okf_fetcher.py
 PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/vector_engine.py \
-              src/synonym_expander.py \
               src/mcp_server.py \
               src/web_server.py \
               src/search/__init__.py \
