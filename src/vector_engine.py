@@ -78,6 +78,24 @@ class FMIndex:
             return self.text.count(q)
 
 
+def extract_abstract_from_okf(content):
+    """Extracts raw abstract text from OKF markdown content."""
+    # Pattern 1: Under ### Abstract (原文) or ### Abstract followed by blockquote
+    m = re.search(r"###\s*Abstract[^\n]*\n+((?:>[^\n]*\n*)+)", content, re.IGNORECASE)
+    if m:
+        lines = [
+            line.lstrip(">").strip() for line in m.group(1).splitlines() if line.strip()
+        ]
+        return " ".join(lines).strip()
+
+    # Pattern 2: Standalone blockquote starting after metadata section
+    quotes = re.findall(r"^>\s*(.+)$", content, flags=re.MULTILINE)
+    if quotes:
+        return " ".join(quotes).strip()
+
+    return ""
+
+
 class VectorEngine:
     FIELD_WEIGHTS = {
         "title": 3.5,
@@ -295,11 +313,15 @@ class VectorEngine:
                         annotated_keywords = self.extract_feature_keywords(
                             title, desc, content
                         )
+                        abstract_text = extract_abstract_from_okf(content)
 
                         title_tokens = self.tokenize(title)
                         desc_tokens = self.tokenize(desc)
                         tags_tokens = self.tokenize(" ".join(tags))
                         keywords_tokens = self.tokenize(" ".join(annotated_keywords))
+                        abstract_tokens = (
+                            self.tokenize(abstract_text) if abstract_text else []
+                        )
                         content_tokens = self.tokenize(content[:1000])
 
                         all_tokens = (
@@ -307,6 +329,7 @@ class VectorEngine:
                             + desc_tokens
                             + tags_tokens
                             + keywords_tokens
+                            + abstract_tokens
                             + content_tokens
                         )
                         token_counts = dict(Counter(all_tokens))
@@ -323,12 +346,13 @@ class VectorEngine:
                             "desc_tokens": desc_tokens,
                             "tags_tokens": tags_tokens,
                             "keywords_tokens": keywords_tokens,
+                            "abstract_tokens": abstract_tokens,
                             "tokens": all_tokens,
                             "token_counts": token_counts,
                         }
                         docs.append(doc_entry)
 
-                        full_text = f"{title} {desc} {' '.join(annotated_keywords)}"
+                        full_text = f"{title} {desc} {' '.join(annotated_keywords)} {abstract_text[:300]}"
                         self.doc_full_texts[clean_id] = full_text.lower()
 
         # Calculate IDF and Average Document Length for BM25
@@ -376,6 +400,7 @@ class VectorEngine:
                     "desc_tokens": doc.get("desc_tokens", []),
                     "tags_tokens": doc.get("tags_tokens", []),
                     "keywords_tokens": doc.get("keywords_tokens", []),
+                    "abstract_tokens": doc.get("abstract_tokens", []),
                     "tokens": doc.get("tokens", []),
                     "token_counts": doc.get("token_counts", {}),
                 }
@@ -421,6 +446,7 @@ class VectorEngine:
                             d["keywords_tokens"] = self.tokenize(
                                 " ".join(d.get("annotated_keywords", []))
                             )
+                            d["abstract_tokens"] = []
                             d["tokens"] = (
                                 d["title_tokens"]
                                 + d["desc_tokens"]
@@ -428,11 +454,14 @@ class VectorEngine:
                                 + d["keywords_tokens"]
                             )
                             d["token_counts"] = dict(Counter(d["tokens"]))
+                        if "abstract_tokens" not in d:
+                            d["abstract_tokens"] = []
                         self.documents.append(d)
                         self.documents_by_id[d["id"]] = d
                         kw_str = " ".join(d.get("annotated_keywords", []))
+                        abs_str = " ".join(d.get("abstract_tokens", [])[:50])
                         self.doc_full_texts[d["id"]] = (
-                            f"{d.get('title', '')} {d.get('description', '')} {kw_str}".lower()
+                            f"{d.get('title', '')} {d.get('description', '')} {kw_str} {abs_str}".lower()
                         )
 
                     if needed_save:
@@ -567,6 +596,7 @@ class VectorEngine:
                 keywords_tokens_set = set(doc.get("keywords_tokens", []))
                 tags_tokens_set = set(doc.get("tags_tokens", []))
                 desc_tokens_set = set(doc.get("desc_tokens", []))
+                abstract_tokens_set = set(doc.get("abstract_tokens", []))
 
                 for qt in expanded_query_tokens:
                     idf_val = self.idf.get(qt, 1.2)
@@ -578,6 +608,8 @@ class VectorEngine:
                         vector_score += self.FIELD_WEIGHTS["tags"] * idf_val
                     if qt in desc_tokens_set or qt in doc_desc:
                         vector_score += self.FIELD_WEIGHTS["description"] * idf_val
+                    if qt in abstract_tokens_set:
+                        vector_score += self.FIELD_WEIGHTS["abstract"] * idf_val
 
                 # 2. Okapi BM25 Probabilistic Score
                 bm25_score = self.calculate_bm25_score(expanded_query_tokens, doc)

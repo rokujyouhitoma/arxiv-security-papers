@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **008** | [アブストラクト全文の重み付けインデックス拡張 ＆ VectorEngine 検索再現率の向上](closed/008-expand-vector-engine-with-fulltext-abstract-indexing.md) | Feature | 2026-08-16 | [008-expand-vector-engine-with-fulltext-abstract-indexing.md](closed/008-expand-vector-engine-with-fulltext-abstract-indexing.md) |
 | **007** | [Web サーバーの PEP 3333 WSGI インターフェース対応](closed/007-support-wsgi-interface-for-web-server.md) | Feature | 2026-08-16 | [007-support-wsgi-interface-for-web-server.md](closed/007-support-wsgi-interface-for-web-server.md) |
 | **006** | [日本語 IR 検索エンジンの高度化 ＆ 自動特徴語抽出・事前注釈・FM-Index/BM25/転置統合](closed/006-enhance-japanese-ir-and-pre-annotations.md) | Feature | 2026-08-15 | [006-enhance-japanese-ir-and-pre-annotations.md](closed/006-enhance-japanese-ir-and-pre-annotations.md) |
 | **005** | [yuzora 準拠の Google Closure Compiler ツール配置およびビルド設定統合](closed/005-integrate-closure-compiler-tooling.md) | Feature | 2026-08-15 | [005-integrate-closure-compiler-tooling.md](closed/005-integrate-closure-compiler-tooling.md) |
