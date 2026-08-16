@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **019** | [AIコーディングエージェント向け可観測性（Observability）特化型 MCP サーバーの実装](closed/019-observability-mcp-server-for-ai-coding-agents.md) | Feature | 2026-08-16 | [019-observability-mcp-server-for-ai-coding-agents.md](closed/019-observability-mcp-server-for-ai-coding-agents.md) |
 | **018** | [Python標準ライブラリを活用した計測可能性（可観測性・プロファイリング）基盤の構築](closed/018-standard-library-observability-and-profiling-framework.md) | Feature | 2026-08-16 | [018-standard-library-observability-and-profiling-framework.md](closed/018-standard-library-observability-and-profiling-framework.md) |
 | **017** | [Apache Lucene / Solr パラダイムに基づく検索エンジン2層分離リアーキテクチャ](closed/017-rearchitect-search-engine-to-lucene-solr-paradigm.md) | Feature | 2026-08-16 | [017-rearchitect-search-engine-to-lucene-solr-paradigm.md](closed/017-rearchitect-search-engine-to-lucene-solr-paradigm.md) |
 | **016** | [検索エンジン機能モジュール別再設計・ハイブリッド検索パイプライン高度化](closed/016-modularize-and-enhance-hybrid-search-engine.md) | Feature | 2026-08-16 | [016-modularize-and-enhance-hybrid-search-engine.md](closed/016-modularize-and-enhance-hybrid-search-engine.md) |
