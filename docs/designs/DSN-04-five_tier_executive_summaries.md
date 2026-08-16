@@ -36,8 +36,8 @@ outputs/executive_summaries/
 
 | arxiv_id | タイトル (日本語) | カテゴリ | 要約 (1文) | 詳細リンク |
 | :---: | --- | :---: | --- | :---: |
-| **2606.07005** | 超音波サイドチャネル攻撃の脅威 | cs.CR / マルウェア | エアギャップ環境での超音波漏洩を実証 | [OKF詳細](file:///workspace/arxiv-security-papers/outputs/okf_papers/2026-06-05/2606.07005.md) |
-| **2608.12511** | LLM プロンプトインジェクション自動検知 | cs.CR / AI | RAG パイプラインにおける堅牢な防御法を提案 | [OKF詳細](file:///workspace/arxiv-security-papers/outputs/okf_papers/2026-08-12/2608.12511.md) |
+| **2606.07005** | 超音波サイドチャネル攻撃の脅威 | cs.CR / マルウェア | エアギャップ環境での超音波漏洩を実証 | [OKF詳細](../../outputs/okf_papers/2026-06-05/2606.07005.md) |
+| **2608.12511** | LLM プロンプトインジェクション自動検知 | cs.CR / AI | RAG パイプラインにおける堅牢な防御法を提案 | [OKF詳細](../../outputs/okf_papers/2026-08-12/2608.12511.md) |
 
 ## 2. 動的技術トレンド構成図
 

@@ -29,6 +29,15 @@
 
 ## [Unreleased]
 
+### [Changed]
+- **Python 3.14.7 ランタイム移行 ＆ .venv 仮想環境の再構築 (Issue 009)**:
+  - 開発・実行ランタイムを Python 3.14.7 (`~/.local/python-3.14.7/bin/python3`) へアップグレードし、`.venv` 仮想環境を再作成
+  - `requirements.txt`: Python 3.14.7 に適合した最新解析ツール群 (`isort-8.0.1`, `black-26.5.1`, `flake8-7.3.0`, `mypy-2.3.1`, `pytest-9.1.1`, `poetry-2.4.1` 等) を完全導入
+  - `Makefile`: `PYTHON` パス解決ロジックを更新し、`~/.local/python-3.14.7/bin/python3` を優先検出するように設定
+  - `pyproject.toml`: 依存 Python バージョンを `>=3.14` に更新し、`[tool.mypy]` の `python_version = "3.14"` へ同期
+  - `tests/test_web_server.py`: `WSGIApplication` の型アサーションテストを追加し、flake8 F401 警告を解消
+  - `docs/designs/DSN-01-high_level_design.md` & `docs/designs/DSN-02-low_level_design.md`: Python 3.14.7 実行仕様およびディレクトリツリー表記を更新
+
 ### [Added]
 - **アブストラクト全文の重み付けインデックス拡張 ＆ VectorEngine 検索再現率の向上 (Issue 008)**:
   - `src/vector_engine.py`: OKF マークダウンから原本アブストラクトを自動抽出する `extract_abstract_from_okf()` を実装し、`abstract_tokens` としてインデックスへ保持

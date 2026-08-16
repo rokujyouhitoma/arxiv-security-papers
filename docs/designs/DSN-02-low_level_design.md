@@ -142,8 +142,8 @@ JS_SRCS = site/js/lexer.js \
           site/app.js
 JS_OUT = site/app-min.js
 
-build_js:
-	python3 tools/closure-compiler/setup_compiler.py
+build_js: activate
+	${VENV_PYTHON} tools/closure-compiler/setup_compiler.py
 	java -jar $(COMPILER) \
 		--compilation_level SIMPLE_OPTIMIZATIONS \
 		--warning_level VERBOSE \
@@ -152,5 +152,4 @@ build_js:
 		--externs site/externs.js \
 		--js $(JS_SRCS) \
 		--js_output_file $(JS_OUT)
-```
 ```
