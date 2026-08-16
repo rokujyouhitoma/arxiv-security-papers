@@ -5,7 +5,7 @@ Unit tests for SynonymExpander, FMIndex, and Extended Multi-Stage RAG VectorEngi
 import os
 import sys
 
-from synonym_expander import SynonymExpander
+from search import SynonymExpander
 from vector_engine import (
     CitationNetworkIndex,
     FacetedIndex,
@@ -292,8 +292,7 @@ def test_enterprise_author_and_field_search():
 
 
 def test_query_context_and_intent():
-    from search.query_parser import EnterpriseQueryParser, QueryContext
-    from synonym_expander import SynonymExpander
+    from search.query import EnterpriseQueryParser, QueryContext, SynonymExpander
 
     parser = EnterpriseQueryParser()
     expander = SynonymExpander()
