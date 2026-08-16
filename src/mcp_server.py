@@ -281,11 +281,28 @@ def handle_search_security_papers(args):
     query = args.get("query", "")
     top_k = args.get("top_k", 5)
     category = args.get("category")
+    compact = args.get("compact", True)
     results = get_vector_engine().search(query, top_k=top_k, category=category)
+
+    if compact:
+        compact_results = []
+        for r in results:
+            compact_results.append({
+                "id": r.get("id"),
+                "title": r.get("title"),
+                "title_ja": r.get("title_ja", r.get("title")),
+                "category": r.get("category"),
+                "tags": r.get("tags", [])[:5],
+                "score": round(r.get("score", 0.0), 4),
+                "summary": r.get("description", r.get("abstract", ""))[:180] + "...",
+            })
+        results = compact_results
+
     return {
         "status": "success",
         "query": query,
         "count": len(results),
+        "compact": compact,
         "results": results,
     }
 
@@ -294,10 +311,24 @@ def handle_search_papers_hybrid(args):
     query = args.get("query", "")
     top_k = args.get("top_k", 10)
     category = args.get("category")
+    compact = args.get("compact", True)
     facets = {"category": category} if category else None
     resp = get_vector_engine().search_hybrid_pipeline(query, facets=facets, top_k=top_k)
+
+    if compact and "results" in resp:
+        compact_docs = []
+        for d in resp.get("results", []):
+            compact_docs.append({
+                "id": d.get("id"),
+                "title": d.get("title"),
+                "score": round(d.get("score", 0.0), 4),
+                "summary": d.get("description", d.get("abstract", ""))[:180] + "...",
+            })
+        resp["results"] = compact_docs
+
     return {
         "status": "success",
+        "compact": compact,
         "data": resp,
     }
 

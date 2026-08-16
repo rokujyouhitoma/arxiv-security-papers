@@ -9,6 +9,8 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/vector_engine.py \
               src/mcp_server.py \
               src/observability_mcp_server.py \
+              src/threat_defense_mcp_server.py \
+              src/tech_radar_mcp_server.py \
               src/web_server.py \
               src/search/__init__.py \
               src/search/utils/__init__.py \
@@ -156,6 +158,14 @@ run_mcp_server: activate ## Launch standard Model Context Protocol (MCP) server
 .PHONY: run_observability_mcp
 run_observability_mcp: activate ## Launch Observability & Profiling MCP server for AI coding agents
 	${VENV_PYTHON} src/observability_mcp_server.py
+
+.PHONY: run_threat_defense_mcp
+run_threat_defense_mcp: activate ## Launch Threat Defense & Secure Patch MCP server
+	${VENV_PYTHON} src/threat_defense_mcp_server.py
+
+.PHONY: run_tech_radar_mcp
+run_tech_radar_mcp: activate ## Launch Tech Radar & Threat Intelligence MCP server
+	${VENV_PYTHON} src/tech_radar_mcp_server.py
 
 .PHONY: eval_search
 eval_search: activate ## Run search engine quality benchmark (Precision@K, Recall@K, MAP, MRR, NDCG)

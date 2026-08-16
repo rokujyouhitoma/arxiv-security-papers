@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **023** | [DSN-12準拠: MCP 戦略的エコシステム拡張（Phase 1〜Phase 3）の実装](closed/023-mcp-strategic-ecosystem-expansion.md) | Feature | 2026-08-16 | [023-mcp-strategic-ecosystem-expansion.md](closed/023-mcp-strategic-ecosystem-expansion.md) |
 | **022** | [DSN-11準拠: ASTセキュリティガードの多層堅牢化とパストラバーサル防御の実装](closed/022-ast-security-guard-hardening-and-traversal-defense.md) | Security | 2026-08-16 | [022-ast-security-guard-hardening-and-traversal-defense.md](closed/022-ast-security-guard-hardening-and-traversal-defense.md) |
 | **021** | [情報検索評価フレームワーク（Precision@K / Recall@K / F1 / MAP / MRR / NDCG）の実装](closed/021-search-engine-evaluation-framework.md) | Feature | 2026-08-16 | [021-search-engine-evaluation-framework.md](closed/021-search-engine-evaluation-framework.md) |
 | **020** | [ホットパスにおける多重ループ解消・アルゴリズム最適化と可観測性ベンチマーク実証](closed/020-hotpath-loop-optimization-and-benchmarking.md) | Performance | 2026-08-16 | [020-hotpath-loop-optimization-and-benchmarking.md](closed/020-hotpath-loop-optimization-and-benchmarking.md) |

@@ -17,6 +17,24 @@
       "env": {
         "PYTHONPATH": "src"
       }
+    },
+    "arxiv-security-threat-defense": {
+      "command": "python3",
+      "args": [
+        "src/threat_defense_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "src"
+      }
+    },
+    "arxiv-security-tech-radar": {
+      "command": "python3",
+      "args": [
+        "src/tech_radar_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "src"
+      }
     }
   }
 }
