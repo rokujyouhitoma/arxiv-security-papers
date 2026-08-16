@@ -9,7 +9,17 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/vector_engine.py \
               src/synonym_expander.py \
               src/mcp_server.py \
-              src/web_server.py
+              src/web_server.py \
+              src/search/__init__.py \
+              src/search/fm_index.py \
+              src/search/query_cache.py \
+              src/search/faceted_index.py \
+              src/search/knowledge_graph.py \
+              src/search/citation_network.py \
+              src/search/raptor_tree.py \
+              src/search/synonym_expander.py \
+              src/search/vector_engine.py \
+              src/search/utils.py
 TESTS=tests
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar

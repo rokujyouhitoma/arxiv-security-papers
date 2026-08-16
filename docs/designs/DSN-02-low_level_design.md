@@ -65,11 +65,11 @@
 
 ## 2. 成果物データ構造・テンプレート仕様
 
-### 2.1 ベクトルインデックス JSON スキーマ (`outputs/vector_db/index.json`)
+### 2.1 ベクトル ＆ 高度多段階インデックス JSON スキーマ (`outputs/vector_db/index.json`)
 ```json
 {
-  "version": "1.0.0",
-  "updated_at": "2026-08-15T21:05:40+09:00",
+  "version": "2.0.0",
+  "updated_at": "2026-08-16T17:20:00+09:00",
   "total_documents": 14169,
   "documents": [
     {
@@ -77,14 +77,50 @@
       "title": "The Sound of Malware",
       "description": "要約本文...",
       "tags": ["cs.CR", "malware"],
-      "path": "outputs/okf_papers/2026-06-05/2606.07005.md"
+      "published": "2026-06-05",
+      "path": "outputs/okf_papers/2026-06-05/2606.07005.md",
+      "annotated_keywords": ["マルウェア", "サイドチャネル"],
+      "pagerank": 0.00142
     }
   ],
   "idf": {
     "malware": 3.452,
     "security": 1.021
+  },
+  "facets": {
+    "years": {"2026": [0, 1, 2]},
+    "categories": {"cs.CR": [0, 1, 2]},
+    "tags": {"malware": [0]}
+  },
+  "knowledge_graph": {
+    "nodes": [
+      {"id": "CVE-2026-1001", "type": "vulnerability"},
+      {"id": "SoundMalware", "type": "attack_technique"}
+    ],
+    "edges": [
+      {"source": "SoundMalware", "target": "CVE-2026-1001", "relation": "exploits"}
+    ]
+  },
+  "citation_network": {
+    "citations": {
+      "2606.07005": ["2605.01234"]
+    },
+    "pagerank": {
+      "2606.07005": 0.00142
+    }
+  },
+  "raptor_tree": {
+    "clusters": [
+      {
+        "id": "cluster-001",
+        "level": 1,
+        "summary": "音響サイドチャネルマルウェアおよび攻撃手法の包括的動向",
+        "doc_ids": ["2606.07005"]
+      }
+    ]
   }
 }
+```
 
 ---
 
