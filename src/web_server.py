@@ -30,11 +30,17 @@ from mcp.papers_server import (
 from vector_engine import VectorEngine
 
 
-def get_workspace_dir():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    if os.path.exists(os.path.join(current_dir, "..", "config.json")):
-        return os.path.abspath(os.path.join(current_dir, ".."))
-    return current_dir
+def get_workspace_dir() -> str:
+    cur = os.path.abspath(os.path.dirname(__file__))
+    while cur != os.path.dirname(cur):
+        if (
+            os.path.exists(os.path.join(cur, "pyproject.toml"))
+            or os.path.exists(os.path.join(cur, "Makefile"))
+            or os.path.exists(os.path.join(cur, ".agents"))
+        ):
+            return cur
+        cur = os.path.dirname(cur)
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
 WORKSPACE_DIR = get_workspace_dir()
