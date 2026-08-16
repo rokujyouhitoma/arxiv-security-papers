@@ -1,5 +1,5 @@
 PACKAGE=arxiv_okf_fetcher
-PYTHON=python3
+PYTHON ?= $(shell if [ -x "$$HOME/.local/python-3.14.7/bin/python3" ]; then echo "$$HOME/.local/python-3.14.7/bin/python3"; elif [ -x "/root/.local/python-3.14.7/bin/python3" ]; then echo "/root/.local/python-3.14.7/bin/python3"; elif command -v python3.14 >/dev/null 2>&1; then command -v python3.14; else which python3; fi)
 VENV=.venv
 VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
@@ -71,8 +71,8 @@ py_compile: activate ## py_compile syntax check for all python sources
 	done
 
 .PHONY: build_js
-build_js: ## Build minified JS bundle using Google Closure Compiler (yuzora spec)
-	python3 tools/closure-compiler/setup_compiler.py
+build_js: activate ## Build minified JS bundle using Google Closure Compiler (yuzora spec)
+	${VENV_PYTHON} tools/closure-compiler/setup_compiler.py
 	java -jar $(COMPILER) \
 		--compilation_level SIMPLE_OPTIMIZATIONS \
 		--warning_level VERBOSE \

@@ -71,6 +71,7 @@ def test_search_handler_logic():
 
 
 def test_wsgi_app_get_index_html():
+    assert isinstance(application, WSGIApplication)
     status, headers, body = call_wsgi(application, method="GET", path="/")
     assert status.startswith("200")
     header_dict = dict(headers)

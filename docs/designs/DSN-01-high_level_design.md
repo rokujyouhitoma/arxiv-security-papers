@@ -98,7 +98,7 @@ flowchart TD
 │   └── index.html                      # Web Portal メイン画面
 ├── tools/                              # ビルド・最適化ツール
 │   └── closure-compiler/               # Google Closure Compiler ツールチェーン
-└── src/                                # バックエンドコアエンジン (Python 3.12)
+└── src/                                # バックエンドコアエンジン (Python 3.14.7)
     ├── arxiv_okf_fetcher.py            # データ自動収集・サマリー生成
     ├── vector_engine.py                # セマンティック VectorDB エンジン
     ├── synonym_expander.py             # 用語同義語拡張エンジン
