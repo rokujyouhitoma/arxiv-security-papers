@@ -118,6 +118,16 @@
         "doc_ids": ["2606.07005"]
       }
     ]
+  },
+  "proximity_graph": {
+    "2606.07005": [
+      {
+        "target_id": "2605.01234",
+        "title": "Acoustic Side-Channel Attacks",
+        "similarity": 0.884,
+        "shared_keywords": ["サイドチャネル", "マルウェア"]
+      }
+    ]
   }
 }
 ```

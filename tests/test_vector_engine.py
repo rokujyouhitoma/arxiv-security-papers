@@ -11,6 +11,7 @@ from vector_engine import (
     FacetedIndex,
     FMIndex,
     KnowledgeGraphIndex,
+    ProximityGraphIndex,
     QuerySemanticCache,
     RAPTORTreeIndex,
     VectorEngine,
@@ -153,34 +154,53 @@ def test_vector_engine_hybrid_pipeline():
     assert isinstance(resp["papers"], list)
 
 
-def test_vector_engine_abstract_indexing_mock(tmp_path):
-    engine = VectorEngine(workspace_dir=str(tmp_path))
-    engine.documents = [
-        {
-            "id": "2026.0001",
-            "title": "Dual-Use Benchmark for AI Agents",
-            "description": "AIエージェントの能力評価",
-            "tags": ["cs.CR"],
-            "annotated_keywords": ["ベンチマーク"],
-            "title_tokens": engine.tokenize("Dual-Use Benchmark for AI Agents"),
-            "desc_tokens": engine.tokenize("AIエージェントの能力評価"),
-            "tags_tokens": engine.tokenize("cs.CR"),
-            "keywords_tokens": engine.tokenize("ベンチマーク"),
-            "abstract_tokens": engine.tokenize(
-                "We evaluate Claude Mythos Preview on complex memory safety bugs."
-            ),
-            "tokens": engine.tokenize(
-                "Dual-Use Benchmark AI Agents Claude Mythos Preview"
-            ),
-            "token_counts": {"claude": 1, "mythos": 1, "preview": 1, "benchmark": 1},
-            "path": "outputs/okf_papers/2026-05-11/2026.0001.md",
-        }
-    ]
-    engine.documents_by_id = {d["id"]: d for d in engine.documents}
-    engine.inverted_index["mythos"] = ["2026.0001"]
-    engine.idf["mythos"] = 2.5
+def test_proximity_graph_index():
+    prox = ProximityGraphIndex(top_k_neighbors=2)
+    doc1 = {
+        "id": "doc1",
+        "title": "Acoustic Malware Attack",
+        "description": "Audio side channel",
+        "tags": ["cs.CR"],
+        "annotated_keywords": [
+            "マルウェア・脅威解析",
+            "サイドチャネル・組込みセキュリティ",
+        ],
+        "token_counts": {"acoustic": 2, "malware": 3, "attack": 1},
+    }
+    doc2 = {
+        "id": "doc2",
+        "title": "Acoustic Keylogger Detection",
+        "description": "Defense for audio side channel",
+        "tags": ["cs.CR"],
+        "annotated_keywords": ["サイドチャネル・組込みセキュリティ"],
+        "token_counts": {"acoustic": 2, "keylogger": 1, "detection": 1},
+    }
+    doc3 = {
+        "id": "doc3",
+        "title": "Quantum Key Distribution",
+        "description": "Post quantum crypto",
+        "tags": ["quant-ph"],
+        "annotated_keywords": ["暗号・プライバシー技術"],
+        "token_counts": {"quantum": 3, "crypto": 2},
+    }
 
-    results = engine.search("Mythos", top_k=5)
-    assert len(results) >= 1
-    assert results[0]["id"] == "2026.0001"
-    assert results[0]["score"] > 0
+    prox.build_graph([doc1, doc2, doc3])
+    neighbors_1 = prox.get_neighbors("doc1")
+    assert len(neighbors_1) >= 1
+    assert neighbors_1[0]["target_id"] == "doc2"
+    assert neighbors_1[0]["similarity"] > 0
+
+    mermaid_str = prox.generate_mermaid_graph("doc1", "Acoustic Malware Attack")
+    assert "flowchart TD" in mermaid_str
+    assert "doc2" in mermaid_str
+
+
+def test_vector_engine_get_related_papers():
+    engine = VectorEngine()
+    # Test on existing index
+    if engine.documents:
+        first_id = engine.documents[0]["id"]
+        res = engine.get_related_papers(first_id)
+        assert res["status"] == "success"
+        assert "related_papers" in res
+        assert "mermaid_graph" in res

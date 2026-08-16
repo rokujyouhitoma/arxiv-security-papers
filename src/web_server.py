@@ -104,8 +104,18 @@ class WSGIApplication:
         )
 
     def _handle_paper(self, start_response, path):
-        arxiv_id = path.replace("/api/paper/", "").strip()
+        sub_path = path.replace("/api/paper/", "").strip()
+        if sub_path.endswith("/related"):
+            arxiv_id = sub_path.replace("/related", "").strip()
+            return self._handle_paper_related(start_response, arxiv_id)
+
+        arxiv_id = sub_path
         res = handle_get_paper_summary({"arxiv_id": arxiv_id})
+        status = "200 OK" if res.get("status") == "success" else "404 Not Found"
+        return self._response_json(start_response, res, status=status)
+
+    def _handle_paper_related(self, start_response, arxiv_id):
+        res = self.vector_engine.get_related_papers(arxiv_id)
         status = "200 OK" if res.get("status") == "success" else "404 Not Found"
         return self._response_json(start_response, res, status=status)
 
