@@ -3,7 +3,7 @@
     "arxiv-security-papers": {
       "command": "python3",
       "args": [
-        "src/mcp_server.py"
+        "src/mcp/papers_server.py"
       ],
       "env": {
         "PYTHONPATH": "src"
@@ -12,7 +12,7 @@
     "arxiv-security-observability": {
       "command": "python3",
       "args": [
-        "src/observability_mcp_server.py"
+        "src/mcp/observability_server.py"
       ],
       "env": {
         "PYTHONPATH": "src"
@@ -21,7 +21,7 @@
     "arxiv-security-threat-defense": {
       "command": "python3",
       "args": [
-        "src/threat_defense_mcp_server.py"
+        "src/mcp/threat_defense_server.py"
       ],
       "env": {
         "PYTHONPATH": "src"
@@ -30,7 +30,7 @@
     "arxiv-security-tech-radar": {
       "command": "python3",
       "args": [
-        "src/tech_radar_mcp_server.py"
+        "src/mcp/tech_radar_server.py"
       ],
       "env": {
         "PYTHONPATH": "src"
@@ -38,4 +38,3 @@
     }
   }
 }
-

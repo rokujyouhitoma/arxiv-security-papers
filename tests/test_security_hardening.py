@@ -11,8 +11,8 @@ if "src" not in sys.path:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 import pytest
-from observability_mcp_server import validate_safe_code
-from mcp_server import is_safe_workspace_path, WORKSPACE_DIR
+from mcp.observability_server import validate_safe_code
+from mcp.papers_server import is_safe_workspace_path, WORKSPACE_DIR
 
 
 def test_ast_guard_blocks_prohibited_modules():

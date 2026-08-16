@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **024** | [MCPサーバー群の `src/mcp/` パッケージ集約と共通JSON-RPC基盤の確立](closed/024-consolidate-mcp-servers-into-src-mcp.md) | Refactor | 2026-08-16 | [024-consolidate-mcp-servers-into-src-mcp.md](closed/024-consolidate-mcp-servers-into-src-mcp.md) |
 | **023** | [DSN-12準拠: MCP 戦略的エコシステム拡張（Phase 1〜Phase 3）の実装](closed/023-mcp-strategic-ecosystem-expansion.md) | Feature | 2026-08-16 | [023-mcp-strategic-ecosystem-expansion.md](closed/023-mcp-strategic-ecosystem-expansion.md) |
 | **022** | [DSN-11準拠: ASTセキュリティガードの多層堅牢化とパストラバーサル防御の実装](closed/022-ast-security-guard-hardening-and-traversal-defense.md) | Security | 2026-08-16 | [022-ast-security-guard-hardening-and-traversal-defense.md](closed/022-ast-security-guard-hardening-and-traversal-defense.md) |
 | **021** | [情報検索評価フレームワーク（Precision@K / Recall@K / F1 / MAP / MRR / NDCG）の実装](closed/021-search-engine-evaluation-framework.md) | Feature | 2026-08-16 | [021-search-engine-evaluation-framework.md](closed/021-search-engine-evaluation-framework.md) |
