@@ -47,6 +47,51 @@ TOOLS_MANIFEST = [
         },
     },
     {
+        "name": "search_papers_hybrid",
+        "description": (
+            "Execute full 4-stage RAG hybrid pipeline search combining Inverted/BM25/Dense vectors, "
+            "GraphRAG entity context, PageRank authority boost, and RAPTOR summary clusters."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query or security problem description",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of matching papers to return",
+                    "default": 10,
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category filter e.g. cs.CR",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "query_knowledge_graph",
+        "description": "Explore security entities (CVE, techniques, tools) and their graph relationships (GraphRAG).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "description": "Entity name or keyword e.g. マルウェア・脅威解析, CVE-2026-1001",
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "Max hop depth for graph traversal",
+                    "default": 2,
+                },
+            },
+            "required": ["entity"],
+        },
+    },
+    {
         "name": "get_paper_summary",
         "description": "Fetch the 100% Japanese executive summary and OKF v0.2 metadata for a specific arXiv ID.",
         "inputSchema": {
@@ -104,6 +149,28 @@ def handle_search_security_papers(args):
         "query": query,
         "count": len(results),
         "results": results,
+    }
+
+
+def handle_search_papers_hybrid(args):
+    query = args.get("query", "")
+    top_k = args.get("top_k", 10)
+    category = args.get("category")
+    facets = {"category": category} if category else None
+    resp = VECTOR_ENGINE.search_hybrid_pipeline(query, facets=facets, top_k=top_k)
+    return {
+        "status": "success",
+        "data": resp,
+    }
+
+
+def handle_query_knowledge_graph(args):
+    entity = args.get("entity", "")
+    max_depth = args.get("max_depth", 2)
+    graph_res = VECTOR_ENGINE.knowledge_graph.get_neighbors(entity, max_depth=max_depth)
+    return {
+        "status": "success",
+        "graph": graph_res,
     }
 
 
@@ -208,6 +275,10 @@ def handle_query_attack_technique(args):
 def dispatch_tool(name, arguments):
     if name == "search_security_papers":
         return handle_search_security_papers(arguments)
+    elif name == "search_papers_hybrid":
+        return handle_search_papers_hybrid(arguments)
+    elif name == "query_knowledge_graph":
+        return handle_query_knowledge_graph(arguments)
     elif name == "get_paper_summary":
         return handle_get_paper_summary(arguments)
     elif name == "get_latest_trends":
