@@ -46,9 +46,10 @@ class WSGIApplication:
     PEP 3333 Compliant WSGI Application for arXiv Security Papers Web & MCP Gateway.
     """
 
-    def __init__(self, site_dir=SITE_DIR, vector_engine=VECTOR_ENGINE):
+    def __init__(self, site_dir=SITE_DIR, vector_engine=VECTOR_ENGINE, workspace_dir=WORKSPACE_DIR):
         self.site_dir = site_dir
         self.vector_engine = vector_engine
+        self.workspace_dir = workspace_dir
 
     def _response_json(self, start_response, data, status="200 OK"):
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
@@ -185,17 +186,32 @@ class WSGIApplication:
             )
 
     def _handle_static(self, start_response, path):
-        rel_path = path.lstrip("/")
-        if rel_path in ["", "search"]:
-            rel_path = "index.html"
-
-        target_file = os.path.realpath(os.path.join(self.site_dir, rel_path))
+        raw_data_dir = os.path.realpath(os.path.join(self.workspace_dir, "outputs", "raw_data"))
+        outputs_dir = os.path.realpath(os.path.join(self.workspace_dir, "outputs"))
         abs_site_dir = os.path.realpath(self.site_dir)
 
-        # Ensure target_file is strictly within self.site_dir (CWE-22 path traversal prevention)
+        is_raw_data = path.startswith("/raw_data/")
+        is_outputs = path.startswith("/outputs/")
+
+        if is_raw_data:
+            rel = path[len("/raw_data/"):].lstrip("/")
+            target_file = os.path.realpath(os.path.join(raw_data_dir, rel))
+            base_dir = raw_data_dir
+        elif is_outputs:
+            rel = path[len("/outputs/"):].lstrip("/")
+            target_file = os.path.realpath(os.path.join(outputs_dir, rel))
+            base_dir = outputs_dir
+        else:
+            rel_path = path.lstrip("/")
+            if rel_path in ["", "search", "trends", "dashboard"]:
+                rel_path = "index.html"
+            target_file = os.path.realpath(os.path.join(self.site_dir, rel_path))
+            base_dir = abs_site_dir
+
+        # Ensure target_file is strictly within base_dir (CWE-22 path traversal prevention)
         try:
-            common = os.path.commonpath([abs_site_dir, target_file])
-            if common != abs_site_dir:
+            common = os.path.commonpath([base_dir, target_file])
+            if common != base_dir or not is_safe_workspace_path(target_file):
                 return self._response_json(
                     start_response,
                     {"status": "error", "message": "Access Denied"},
@@ -208,13 +224,15 @@ class WSGIApplication:
                 status="403 Forbidden",
             )
 
-        if not os.path.isfile(target_file) or not is_safe_workspace_path(target_file):
-            # SPA Fallback to index.html for non-API routes
-            fallback_index = os.path.join(self.site_dir, "index.html")
-            if os.path.isfile(fallback_index):
-                return self._response_file(
-                    start_response, fallback_index, "text/html; charset=utf-8"
-                )
+        if not os.path.isfile(target_file):
+            has_extension = bool(os.path.splitext(target_file)[1])
+            # Only fallback to index.html for extension-less SPA navigation routes in site_dir
+            if not is_raw_data and not is_outputs and not has_extension:
+                fallback_index = os.path.join(self.site_dir, "index.html")
+                if os.path.isfile(fallback_index):
+                    return self._response_file(
+                        start_response, fallback_index, "text/html; charset=utf-8"
+                    )
             return self._response_json(
                 start_response,
                 {"status": "error", "message": "File Not Found"},
@@ -222,9 +240,11 @@ class WSGIApplication:
             )
 
         mime_type, _ = mimetypes.guess_type(target_file)
-        if mime_type is None:
+        if target_file.endswith(".md"):
+            mime_type = "text/plain; charset=utf-8"
+        elif mime_type is None:
             mime_type = "application/octet-stream"
-        if mime_type.startswith("text/") or mime_type in [
+        elif mime_type.startswith("text/") or mime_type in [
             "application/javascript",
             "application/json",
         ]:

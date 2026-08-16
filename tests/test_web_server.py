@@ -187,3 +187,30 @@ def test_wsgi_app_get_paper_related():
 def test_wsgi_app_method_not_allowed():
     status, headers, body = call_wsgi(application, method="PUT", path="/api/search")
     assert status.startswith("405")
+
+
+def test_wsgi_app_get_raw_data_txt():
+    # Find any existing txt file in outputs/raw_data/
+    import glob
+    txt_files = glob.glob("outputs/raw_data/*/*.txt")
+    if txt_files:
+        sample_path = "/" + txt_files[0].replace("outputs/", "")
+        status, headers, body = call_wsgi(application, method="GET", path=sample_path)
+        assert status.startswith("200")
+        header_dict = dict(headers)
+        assert "text/plain" in header_dict.get("Content-Type", "")
+        assert len(body) > 0
+
+
+def test_wsgi_app_get_raw_data_missing_and_traversal():
+    # Missing raw_data should return 404, NOT index.html fallback
+    status, headers, body = call_wsgi(
+        application, method="GET", path="/raw_data/2026-01-01/missing_file_9999.txt"
+    )
+    assert status.startswith("404")
+
+    # Traversal should return 403
+    status, headers, body = call_wsgi(
+        application, method="GET", path="/raw_data/../../../etc/passwd"
+    )
+    assert status.startswith("403")
