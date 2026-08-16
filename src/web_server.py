@@ -10,7 +10,9 @@ import mimetypes
 import os
 import re
 import sys
+import threading
 import urllib.parse
+from datetime import datetime, timezone
 from wsgiref.simple_server import make_server
 
 if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
@@ -46,6 +48,48 @@ def get_workspace_dir() -> str:
 WORKSPACE_DIR = get_workspace_dir()
 SITE_DIR = os.path.join(WORKSPACE_DIR, "site")
 VECTOR_ENGINE = VectorEngine(workspace_dir=WORKSPACE_DIR)
+
+# -------------------------------------------------------------------------
+# Query Logger: records every /api/search call to outputs/logs/query_log.jsonl
+# Thread-safe, append-only JSONL format for offline analytics.
+# -------------------------------------------------------------------------
+_LOG_LOCK = threading.Lock()
+_QUERY_LOG_PATH = os.path.join(WORKSPACE_DIR, "outputs", "logs", "query_log.jsonl")
+
+
+def _ensure_log_dir() -> None:
+    os.makedirs(os.path.dirname(_QUERY_LOG_PATH), exist_ok=True)
+
+
+def log_query(
+    query: str,
+    top_k: int,
+    category: str | None,
+    result_count: int,
+    profile: dict,
+    remote_addr: str = "-",
+) -> None:
+    """Appends one JSONL record to the query log. Thread-safe."""
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "query": query,
+        "top_k": top_k,
+        "category": category,
+        "result_count": result_count,
+        "total_ms": profile.get("total_ms"),
+        "candidates_evaluated": profile.get("candidates_evaluated"),
+        "clauses_parsed": profile.get("clauses_parsed"),
+        "intent": profile.get("intent"),
+        "cached": profile.get("cached", False),
+        "remote_addr": remote_addr,
+    }
+    try:
+        _ensure_log_dir()
+        with _LOG_LOCK:
+            with open(_QUERY_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        sys.stderr.write(f"[QueryLogger] Failed to write log: {e}\n")
 
 CORS_HEADERS = [
     ("Access-Control-Allow-Origin", "*"),
@@ -100,7 +144,7 @@ class WSGIApplication:
         start_response("200 OK", headers)
         return [b""]
 
-    def _handle_search(self, start_response, query_params):
+    def _handle_search(self, start_response, query_params, remote_addr: str = "-"):
         q = query_params.get("q", [""])[0]
         top_k_val = query_params.get("top_k", ["10"])[0]
         try:
@@ -110,6 +154,15 @@ class WSGIApplication:
         category = query_params.get("category", [None])[0]
         results, profile = self.vector_engine.search_with_profile(
             q, top_k=top_k, category=category
+        )
+        # Async-safe query logging
+        log_query(
+            query=q,
+            top_k=top_k,
+            category=category,
+            result_count=len(results),
+            profile=profile,
+            remote_addr=remote_addr,
         )
         return self._response_json(
             start_response,
@@ -457,8 +510,9 @@ class WSGIApplication:
             return self._handle_options(start_response)
 
         if method in ["GET", "HEAD"]:
+            remote_addr = environ.get("REMOTE_ADDR", "-")
             if path == "/api/search":
-                res = self._handle_search(start_response, query_params)
+                res = self._handle_search(start_response, query_params, remote_addr=remote_addr)
             elif path.startswith("/api/paper/"):
                 res = self._handle_paper(start_response, path)
             elif path == "/api/trends":
