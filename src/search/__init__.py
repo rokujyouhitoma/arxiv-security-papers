@@ -1,36 +1,52 @@
 #!/usr/bin/env python3
 """
 Search Package for arXiv Security Papers.
-Modularized enterprise search components providing:
-- MultiFieldPostingsIndex (Multi-Field Inverted Index & Postings Lists)
-- SearchAnalyzer (Multi-Stage Analyzer Pipeline)
-- EnterpriseQueryParser (Multi-Field, Boolean, Phrase, Prefix, Fuzzy Query Parser)
-- DynamicHighlighter (Safe Snippet Highlighter)
-- FMIndex (Suffix Array / BWT Substring Search)
-- QuerySemanticCache (Semantic Cache & Fast Lookup)
-- FacetedIndex (Faceted & Temporal Filter)
-- KnowledgeGraphIndex (Entity Relationships & GraphRAG)
-- CitationNetworkIndex (Citation Authority & PageRank)
-- RAPTORTreeIndex (Hierarchical Clustering & Summaries)
-- SynonymExpander (Security Synonyms & IR Recall Boost)
-- ProximityGraphIndex (Paper-to-Paper Topological k-NN Proximity Graph)
-- VectorEngine (Enterprise Multi-Field & Hybrid RAG Engine)
+Modularized enterprise search architecture structured into functional subpackages:
+- ingestion: SearchAnalyzer, MultiFieldPostingsIndex, FMIndex, FacetedIndex, RAPTORTreeIndex
+- query: EnterpriseQueryParser, QueryClause, QueryContext, SynonymExpander, QuerySemanticCache
+- ranking: CitationNetworkIndex, KnowledgeGraphIndex, ProximityGraphIndex
+- presentation: DynamicHighlighter
+- vector_engine: VectorEngine
 """
 
-from .analyzer import SearchAnalyzer
-from .citation_network import CitationNetworkIndex
-from .faceted_index import FacetedIndex
-from .field_schema import FieldType, MultiFieldPostingsIndex
-from .fm_index import FMIndex
-from .highlighter import DynamicHighlighter
-from .knowledge_graph import KnowledgeGraphIndex
-from .proximity_graph import ProximityGraphIndex
-from .query_cache import QuerySemanticCache
-from .query_parser import EnterpriseQueryParser, QueryClause
-from .raptor_tree import RAPTORTreeIndex
-from .synonym_expander import SynonymExpander
+import sys
+
+# Subpackages
+from . import ingestion, presentation, query, ranking
+from .ingestion import (
+    FacetedIndex,
+    FieldType,
+    FMIndex,
+    MultiFieldPostingsIndex,
+    RAPTORTreeIndex,
+    SearchAnalyzer,
+    TokenOffset,
+)
+from .presentation import DynamicHighlighter
+from .query import (
+    EnterpriseQueryParser,
+    QueryClause,
+    QueryContext,
+    QuerySemanticCache,
+    SynonymExpander,
+)
+from .ranking import CitationNetworkIndex, KnowledgeGraphIndex, ProximityGraphIndex
 from .utils import extract_abstract_from_okf
 from .vector_engine import VectorEngine
+
+# Backward compatibility aliases for legacy direct module imports (e.g. search.query_parser)
+sys.modules[__name__ + ".analyzer"] = ingestion.analyzer
+sys.modules[__name__ + ".field_schema"] = ingestion.field_schema
+sys.modules[__name__ + ".fm_index"] = ingestion.fm_index
+sys.modules[__name__ + ".faceted_index"] = ingestion.faceted_index
+sys.modules[__name__ + ".raptor_tree"] = ingestion.raptor_tree
+sys.modules[__name__ + ".query_parser"] = query.query_parser
+sys.modules[__name__ + ".synonym_expander"] = query.synonym_expander
+sys.modules[__name__ + ".query_cache"] = query.query_cache
+sys.modules[__name__ + ".knowledge_graph"] = ranking.knowledge_graph
+sys.modules[__name__ + ".proximity_graph"] = ranking.proximity_graph
+sys.modules[__name__ + ".citation_network"] = ranking.citation_network
+sys.modules[__name__ + ".highlighter"] = presentation.highlighter
 
 __all__ = [
     "CitationNetworkIndex",
@@ -43,10 +59,16 @@ __all__ = [
     "MultiFieldPostingsIndex",
     "ProximityGraphIndex",
     "QueryClause",
+    "QueryContext",
     "QuerySemanticCache",
     "RAPTORTreeIndex",
     "SearchAnalyzer",
     "SynonymExpander",
+    "TokenOffset",
     "VectorEngine",
     "extract_abstract_from_okf",
+    "ingestion",
+    "presentation",
+    "query",
+    "ranking",
 ]

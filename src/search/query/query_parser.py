@@ -6,7 +6,7 @@ Boolean operators (+/-, AND/OR/NOT), Phrase slop, Prefix (term*), and Fuzzy (ter
 """
 
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 
 class QueryClause:
@@ -92,9 +92,7 @@ class EnterpriseQueryParser:
         # Tokenize with regex handling quotes, modifiers, and field prefixes
         # Matches: [+/-]? [field:]? ("phrase"~N | term~N | term* | term)
         pattern = re.compile(
-            r'([+\-])?'
-            r'(?:([a-zA-Z_]+):)?'
-            r'(?:"([^"]+)"(?:~(\d+))?|([^\s"]+))'
+            r"([+\-])?" r"(?:([a-zA-Z_]+):)?" r'(?:"([^"]+)"(?:~(\d+))?|([^\s"]+))'
         )
 
         clauses: List[QueryClause] = []
@@ -112,7 +110,10 @@ class EnterpriseQueryParser:
             if field_raw:
                 field_lower = field_raw.lower()
                 field_canon = self.FIELD_ALIAS.get(field_lower, field_lower)
-                if field_canon in self.ALLOWED_FIELDS or field_canon in self.default_field_weights:
+                if (
+                    field_canon in self.ALLOWED_FIELDS
+                    or field_canon in self.default_field_weights
+                ):
                     field = field_canon
 
             if phrase_content is not None:
@@ -177,3 +178,86 @@ class EnterpriseQueryParser:
                     )
 
         return clauses
+
+    def create_context(
+        self,
+        raw_query: str,
+        expander: Optional[Any] = None,
+    ) -> "QueryContext":
+        """Creates a fully resolved QueryContext from raw query string."""
+        raw_clean = (raw_query or "").strip()
+        clauses = self.parse(raw_clean)
+        target_fields: Set[str] = {c.field for c in clauses if c.field is not None}
+
+        # Expand synonyms if expander is provided
+        expanded_tokens: List[str] = []
+        if expander and hasattr(expander, "expand_query"):
+            expanded_tokens = expander.expand_query(raw_clean)
+        else:
+            expanded_tokens = [c.term.lower() for c in clauses if c.term]
+
+        # Intent classification heuristics
+        intent = "general"
+        if target_fields:
+            intent = "field_specific"
+        elif any(c.is_required or c.is_prohibited for c in clauses):
+            intent = "boolean_filtered"
+        elif any(c.is_phrase for c in clauses):
+            intent = "phrase_match"
+        elif len(raw_clean.split()) > 5:
+            intent = "natural_language_qa"
+
+        is_hybrid = not (target_fields and "content" not in target_fields)
+
+        return QueryContext(
+            raw_query=raw_clean,
+            normalized_query=raw_clean.lower(),
+            clauses=clauses,
+            expanded_tokens=expanded_tokens,
+            target_fields=target_fields,
+            intent=intent,
+            is_hybrid_eligible=is_hybrid,
+        )
+
+
+class QueryContext:
+    """Unified query context carrying parsed clauses, synonyms, target fields, and search intent."""
+
+    def __init__(
+        self,
+        raw_query: str,
+        normalized_query: str,
+        clauses: List[QueryClause],
+        expanded_tokens: List[str],
+        target_fields: Set[str],
+        intent: str = "general",
+        is_hybrid_eligible: bool = True,
+    ) -> None:
+        self.raw_query = raw_query
+        self.normalized_query = normalized_query
+        self.clauses = clauses
+        self.expanded_tokens = expanded_tokens
+        self.target_fields = target_fields
+        self.intent = intent
+        self.is_hybrid_eligible = is_hybrid_eligible
+
+    @property
+    def has_field_constraints(self) -> bool:
+        """Returns True if query has explicit field targeting (e.g. title:xxx)."""
+        return len(self.target_fields) > 0
+
+    @property
+    def required_clauses(self) -> List[QueryClause]:
+        """Returns clauses marked with + / required."""
+        return [c for c in self.clauses if c.is_required]
+
+    @property
+    def prohibited_clauses(self) -> List[QueryClause]:
+        """Returns clauses marked with - / prohibited."""
+        return [c for c in self.clauses if c.is_prohibited]
+
+    def __repr__(self) -> str:
+        return (
+            f"QueryContext(raw='{self.raw_query}', clauses={len(self.clauses)}, "
+            f"tokens={len(self.expanded_tokens)}, fields={self.target_fields}, intent='{self.intent}')"
+        )

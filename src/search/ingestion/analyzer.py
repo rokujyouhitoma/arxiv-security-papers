@@ -7,7 +7,7 @@ Provides Tokenization, Unicode/Case Normalization, Japanese Morph/NGram, Edge-N-
 import re
 from typing import List
 
-from .synonym_expander import SynonymExpander
+from ..query.synonym_expander import SynonymExpander
 
 
 class TokenOffset:
@@ -51,10 +51,10 @@ class SearchAnalyzer:
             tokens.append(ja_lower)
             if len(ja_w) >= 2:
                 for i in range(len(ja_w) - 1):
-                    tokens.append(ja_lower[i:i + 2])
+                    tokens.append(ja_lower[i : i + 2])
             if len(ja_w) >= 3:
                 for i in range(len(ja_w) - 2):
-                    tokens.append(ja_lower[i:i + 3])
+                    tokens.append(ja_lower[i : i + 3])
 
         return tokens
 
@@ -69,24 +69,20 @@ class SearchAnalyzer:
 
         # Find all alphanumeric words with spans
         for m in re.finditer(r"[a-zA-Z0-9_\-]+", text):
-            token_offsets.append(
-                TokenOffset(m.group(0).lower(), m.start(), m.end())
-            )
+            token_offsets.append(TokenOffset(m.group(0).lower(), m.start(), m.end()))
 
         # Find all Japanese chunks with spans
         for m in re.finditer(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+", text):
             ja_str = m.group(0)
             base_start = m.start()
-            token_offsets.append(
-                TokenOffset(ja_str.lower(), base_start, m.end())
-            )
+            token_offsets.append(TokenOffset(ja_str.lower(), base_start, m.end()))
 
             # Character 2-grams
             if len(ja_str) >= 2:
                 for i in range(len(ja_str) - 1):
                     token_offsets.append(
                         TokenOffset(
-                            ja_str[i:i + 2].lower(),
+                            ja_str[i : i + 2].lower(),
                             base_start + i,
                             base_start + i + 2,
                         )

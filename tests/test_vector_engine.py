@@ -249,7 +249,9 @@ def test_query_parser():
     from search.query_parser import EnterpriseQueryParser
 
     parser = EnterpriseQueryParser()
-    clauses = parser.parse('author:Nakatani +title:malware "deep learning"~2 pen* sound~1')
+    clauses = parser.parse(
+        'author:Nakatani +title:malware "deep learning"~2 pen* sound~1'
+    )
     assert len(clauses) >= 5
 
     c_author = next(c for c in clauses if c.field == "author")
@@ -287,3 +289,100 @@ def test_enterprise_author_and_field_search():
     results, profile = engine.search_with_profile("author:Nakatani", top_k=5)
     assert isinstance(results, list)
     assert profile["total_ms"] >= 0
+
+
+def test_query_context_and_intent():
+    from search.query_parser import EnterpriseQueryParser, QueryContext
+    from synonym_expander import SynonymExpander
+
+    parser = EnterpriseQueryParser()
+    expander = SynonymExpander()
+
+    # Test field specific intent
+    ctx_field = parser.create_context("title:malware +author:Smith", expander=expander)
+    assert isinstance(ctx_field, QueryContext)
+    assert ctx_field.has_field_constraints is True
+    assert "title" in ctx_field.target_fields
+    assert ctx_field.intent == "field_specific"
+    assert len(ctx_field.required_clauses) == 1
+
+    # Test boolean filter intent
+    ctx_bool = parser.create_context("+malware -ransomware", expander=expander)
+    assert ctx_bool.intent == "boolean_filtered"
+    assert len(ctx_bool.prohibited_clauses) == 1
+
+    # Test general synonym expansion in context
+    ctx_syn = parser.create_context("ペンテスト", expander=expander)
+    assert (
+        "penetration testing" in ctx_syn.expanded_tokens
+        or "exploit" in ctx_syn.expanded_tokens
+    )
+
+
+def test_modular_search_pipeline():
+    engine = VectorEngine()
+    if os.path.exists(engine.index_file):
+        engine.load_index()
+    else:
+        engine.build_index()
+
+    # Step 1: Query Context Preparation
+    ctx = engine.prepare_query_context("title:security")
+    assert ctx.raw_query == "title:security"
+
+    # Step 2: Retrieval
+    candidates = engine.retrieve_candidates(ctx, max_candidates=50)
+    assert isinstance(candidates, list)
+
+    # Step 3: Reranking
+    ranked = engine.rerank_candidates(ctx, candidates, top_k=3)
+    assert isinstance(ranked, list)
+
+    # Step 4: Formatting
+    presentation = engine.format_presentation(ctx, ranked)
+    assert isinstance(presentation, list)
+    if presentation:
+        assert "highlight" in presentation[0]
+        assert "score" in presentation[0]
+
+
+def test_subpackages_structure():
+    # Test Ingestion subpackage
+    from search.ingestion import FMIndex, MultiFieldPostingsIndex, SearchAnalyzer
+
+    analyzer = SearchAnalyzer()
+    assert len(analyzer.tokenize("cybersecurity")) > 0
+    fm = FMIndex("test text")
+    assert fm.count_substring("test") == 1
+    mf = MultiFieldPostingsIndex()
+    assert mf is not None
+
+    # Test Query subpackage
+    from search.query import EnterpriseQueryParser, QueryContext, SynonymExpander
+
+    parser = EnterpriseQueryParser()
+    ctx = parser.create_context("author:Smith")
+    assert isinstance(ctx, QueryContext)
+    exp = SynonymExpander()
+    assert "exploit" in exp.expand_query("ペンテスト")
+
+    # Test Ranking subpackage
+    from search.ranking import (
+        CitationNetworkIndex,
+        KnowledgeGraphIndex,
+        ProximityGraphIndex,
+    )
+
+    kg = KnowledgeGraphIndex()
+    assert kg is not None
+    cn = CitationNetworkIndex()
+    assert cn is not None
+    pg = ProximityGraphIndex()
+    assert pg is not None
+
+    # Test Presentation subpackage
+    from search.presentation import DynamicHighlighter
+
+    hl = DynamicHighlighter()
+    hl_res = hl.highlight("RapidPen automated tool", ["RapidPen"])
+    assert "mark" in hl_res

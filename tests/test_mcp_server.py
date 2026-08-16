@@ -78,7 +78,9 @@ def test_mcp_dispatch_tool():
     assert res_rel["status"] == "error"
 
     # verify_code_security
-    code = "def query_db(uid):\n    cursor.execute(f'SELECT * FROM users WHERE id={uid}')"
+    code = (
+        "def query_db(uid):\n    cursor.execute(f'SELECT * FROM users WHERE id={uid}')"
+    )
     res_sec = dispatch_tool("verify_code_security", {"code_snippet": code})
     assert res_sec["status"] == "success"
     assert res_sec["risk_level"] == "HIGH"
@@ -101,9 +103,13 @@ def test_mcp_resources_and_prompts():
     assert "CWE-89" in res_tax["text"]
 
     # Prompts get
-    p_audit = handle_get_prompt("audit_code_with_papers", {"code": "print('hello')", "language": "python"})
+    p_audit = handle_get_prompt(
+        "audit_code_with_papers", {"code": "print('hello')", "language": "python"}
+    )
     assert "messages" in p_audit
     assert len(p_audit["messages"]) > 0
 
-    p_cwe = handle_get_prompt("recommend_cwe_mitigation", {"cwe_id": "CWE-78", "language": "python"})
+    p_cwe = handle_get_prompt(
+        "recommend_cwe_mitigation", {"cwe_id": "CWE-78", "language": "python"}
+    )
     assert "messages" in p_cwe
