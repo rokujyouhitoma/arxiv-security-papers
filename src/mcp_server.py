@@ -136,6 +136,23 @@ TOOLS_MANIFEST = [
             "required": ["technique_id"],
         },
     },
+    {
+        "name": "get_related_papers_graph",
+        "description": (
+            "Retrieve topological k-NN proximity graph and Mermaid visualization "
+            "for a given paper to explore connected research."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "arxiv_id": {
+                    "type": "string",
+                    "description": "arXiv paper ID e.g. 2608.02671",
+                }
+            },
+            "required": ["arxiv_id"],
+        },
+    },
 ]
 
 
@@ -272,6 +289,11 @@ def handle_query_attack_technique(args):
     }
 
 
+def handle_get_related_papers_graph(args):
+    arxiv_id = args.get("arxiv_id", "").strip().replace("/", "_").replace("..", "")
+    return VECTOR_ENGINE.get_related_papers(arxiv_id)
+
+
 def dispatch_tool(name, arguments):
     if name == "search_security_papers":
         return handle_search_security_papers(arguments)
@@ -285,6 +307,8 @@ def dispatch_tool(name, arguments):
         return handle_get_latest_trends(arguments)
     elif name == "query_attack_technique":
         return handle_query_attack_technique(arguments)
+    elif name == "get_related_papers_graph":
+        return handle_get_related_papers_graph(arguments)
     else:
         return {"status": "error", "message": f"Unknown tool: '{name}'"}
 

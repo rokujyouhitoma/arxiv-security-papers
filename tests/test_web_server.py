@@ -165,6 +165,25 @@ def test_wsgi_app_not_found():
     assert status.startswith("404")
 
 
+def test_wsgi_app_get_paper_related():
+    if VECTOR_ENGINE.documents:
+        first_id = VECTOR_ENGINE.documents[0]["id"]
+        status, headers, body = call_wsgi(
+            application, method="GET", path=f"/api/paper/{first_id}/related"
+        )
+        assert status.startswith("200")
+        data = json.loads(body.decode("utf-8"))
+        assert data["status"] == "success"
+        assert "related_papers" in data
+        assert "mermaid_graph" in data
+
+    # Non-existent paper
+    status, headers, body = call_wsgi(
+        application, method="GET", path="/api/paper/nonexistent_9999/related"
+    )
+    assert status.startswith("404")
+
+
 def test_wsgi_app_method_not_allowed():
     status, headers, body = call_wsgi(application, method="PUT", path="/api/search")
     assert status.startswith("405")

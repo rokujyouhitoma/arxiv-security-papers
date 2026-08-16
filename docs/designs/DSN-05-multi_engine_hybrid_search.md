@@ -73,6 +73,13 @@ flowchart TD
 - **データ構造**: `query_embeddings`, `cached_result_ids`, `ttl`, `hit_count`
 - **目的**: 過去クエリの埋め込みベクトルと検索結果をキャッシュし、類似度 $\ge 0.95$ の同一・類似問い合わせを超低レイテンシ（$< 1\text{ms}$）で即時返却。
 
+### 2.7 論文間トポロジカル近傍グラフ (k-NN Proximity Graph)
+- **クラス**: `ProximityGraphIndex` (`src/search/proximity_graph.py`)
+- **データ構造**: `graph`: 各論文 ID $\to$ 上位近傍論文リスト（`target_id`, `similarity`, `shared_keywords`, `title`）
+- **類似度関数**:
+  $$S(d_i, d_j) = 0.50 \cdot \text{CosineSim}(v_i, v_j) + 0.35 \cdot \text{Jaccard}(K_i, K_j) + 0.15 \cdot \text{CategoryMatch}(d_i, d_j)$$
+- **目的**: 被引用関係のない潜在的関連論文（Citation Blind Spot）の即時特定と、Connected Papers 型トポロジー可視化。
+
 ---
 
 ## 3. 4 フェーズ検索・推論パイプラインの詳細

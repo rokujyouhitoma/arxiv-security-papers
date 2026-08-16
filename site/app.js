@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
-  // Modal Dialog handling (Fullscreen Viewer)
+  // Modal Dialog handling (Fullscreen Viewer with Topology Network)
   window.openPaperModal = async function(arxivId) {
     paperModal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -197,12 +197,62 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const compiled = window.MarkdownCompiler.compile(data.content);
         modalPaperBody.innerHTML = compiled.html;
+
+        // Fetch & Render Related Papers Proximity Network
+        fetchRelatedPapersTopology(arxivId, modalPaperBody);
+
         window.MarkdownCompiler.renderMermaid(modalPaperBody);
       }
     } catch (err) {
       modalPaperBody.innerHTML = `<p style="color:#ef4444;">取得エラー: ${escapeHtml(err.message)}</p>`;
     }
   };
+
+  async function fetchRelatedPapersTopology(arxivId, container) {
+    try {
+      const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/related`);
+      const data = await res.json();
+      if (data.status === 'success' && data.related_papers && data.related_papers.length > 0) {
+        const section = document.createElement('div');
+        section.className = 'related-papers-section';
+        
+        let graphHtml = '';
+        if (data.mermaid_graph) {
+          graphHtml = `
+            <div class="related-graph-box">
+              <div class="mermaid">${escapeHtml(data.mermaid_graph)}</div>
+            </div>
+          `;
+        }
+
+        const cardsHtml = data.related_papers.map(p => `
+          <div class="related-card" onclick="openPaperModal('${escapeHtml(p['target_id'] || '')}')">
+            <div class="related-card-top">
+              <span class="arxiv-id-tag">arXiv: ${escapeHtml(p['target_id'] || '')}</span>
+              <span class="sim-badge">類似度: ${Math.round((p['similarity'] || 0) * 100)}%</span>
+            </div>
+            <h4 class="related-card-title">${escapeHtml(p['title'] || p['target_id'] || '')}</h4>
+            <p class="related-card-desc">${escapeHtml(p['description'] || '関連研究')}</p>
+            <div class="card-tags">
+              ${(p['shared_keywords'] || []).slice(0, 2).map(kw => `<span class="mini-tag">${escapeHtml(kw)}</span>`).join('')}
+            </div>
+          </div>
+        `).join('');
+
+        section.innerHTML = `
+          <h3 class="related-section-title">🔗 関連論文トポロジーネットワーク (Connected Papers)</h3>
+          <p class="related-section-desc">ベクトル距離・共通特徴語から事前計算された、もっとも関連性の高い近傍論文群です。クリックで直接閲覧できます。</p>
+          ${graphHtml}
+          <div class="related-grid">${cardsHtml}</div>
+        `;
+
+        container.appendChild(section);
+        window.MarkdownCompiler.renderMermaid(section);
+      }
+    } catch (e) {
+      console.warn('Could not load related papers:', e);
+    }
+  }
 
   function closeFullscreenModal() {
     paperModal.classList.add('hidden');

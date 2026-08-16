@@ -9,6 +9,7 @@ Modularized search components providing:
 - CitationNetworkIndex (Citation Authority & PageRank)
 - RAPTORTreeIndex (Hierarchical Clustering & Summaries)
 - SynonymExpander (Security Synonyms & IR Recall Boost)
+- ProximityGraphIndex (Paper-to-Paper Topological k-NN Proximity Graph)
 - VectorEngine (4-Stage Hybrid RAG Engine)
 """
 
@@ -16,6 +17,7 @@ from .citation_network import CitationNetworkIndex
 from .faceted_index import FacetedIndex
 from .fm_index import FMIndex
 from .knowledge_graph import KnowledgeGraphIndex
+from .proximity_graph import ProximityGraphIndex
 from .query_cache import QuerySemanticCache
 from .raptor_tree import RAPTORTreeIndex
 from .synonym_expander import SynonymExpander
@@ -27,6 +29,7 @@ __all__ = [
     "FacetedIndex",
     "FMIndex",
     "KnowledgeGraphIndex",
+    "ProximityGraphIndex",
     "QuerySemanticCache",
     "RAPTORTreeIndex",
     "SynonymExpander",

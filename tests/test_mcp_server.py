@@ -31,6 +31,7 @@ def test_mcp_tools_manifest():
     assert "get_paper_summary" in tool_names
     assert "get_latest_trends" in tool_names
     assert "query_attack_technique" in tool_names
+    assert "get_related_papers_graph" in tool_names
 
 
 def test_mcp_dispatch_tool():
@@ -49,6 +50,11 @@ def test_mcp_dispatch_tool():
     )
     assert res_kg["status"] == "success"
     assert "graph" in res_kg
+
+    res_rel = dispatch_tool(
+        "get_related_papers_graph", {"arxiv_id": "nonexistent_id_9999"}
+    )
+    assert res_rel["status"] == "error"
 
     unknown = dispatch_tool("nonexistent_tool", {})
     assert unknown["status"] == "error"

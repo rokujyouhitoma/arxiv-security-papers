@@ -17,6 +17,7 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/search/knowledge_graph.py \
               src/search/citation_network.py \
               src/search/raptor_tree.py \
+              src/search/proximity_graph.py \
               src/search/synonym_expander.py \
               src/search/vector_engine.py \
               src/search/utils.py

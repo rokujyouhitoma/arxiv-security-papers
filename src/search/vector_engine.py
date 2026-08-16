@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Advanced Multi-Engine Hybrid & Multi-Stage RAG Search Engine for arXiv Security Papers
-Sub-10ms High-Performance Search Engine with 6 Extended Index Architectures.
+Sub-10ms High-Performance Search Engine with 7 Extended Index Architectures.
 """
 
 import json
@@ -17,6 +17,7 @@ from .citation_network import CitationNetworkIndex
 from .faceted_index import FacetedIndex
 from .fm_index import FMIndex
 from .knowledge_graph import KnowledgeGraphIndex
+from .proximity_graph import ProximityGraphIndex
 from .query_cache import QuerySemanticCache
 from .raptor_tree import RAPTORTreeIndex
 from .synonym_expander import SynonymExpander
@@ -97,6 +98,7 @@ class VectorEngine:
         self.knowledge_graph = KnowledgeGraphIndex()
         self.citation_network = CitationNetworkIndex()
         self.raptor_tree = RAPTORTreeIndex()
+        self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
 
         os.makedirs(self.vector_db_dir, exist_ok=True)
         self.load_index()
@@ -224,6 +226,7 @@ class VectorEngine:
         self.faceted_index = FacetedIndex()
         self.knowledge_graph = KnowledgeGraphIndex()
         self.citation_network = CitationNetworkIndex()
+        self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
 
         for root, _, files in os.walk(okf_dir):
             for file in files:
@@ -345,6 +348,9 @@ class VectorEngine:
             }
             self.citation_network.compute_pagerank([d["id"] for d in self.documents])
             self.raptor_tree.build_summary_tree(self.documents)
+            self.proximity_graph.build_graph(
+                self.documents, dict(self.inverted_keyword_index)
+            )
 
         self.save_index()
         return len(self.documents)
@@ -374,7 +380,7 @@ class VectorEngine:
                 }
             )
         data = {
-            "version": "3.2.0",
+            "version": "3.3.0",
             "updated_at": datetime.now().isoformat(),
             "total_documents": len(serializable_docs),
             "documents": serializable_docs,
@@ -382,6 +388,7 @@ class VectorEngine:
             "avg_doc_len": self.avg_doc_len,
             "inverted_index": dict(self.inverted_index),
             "inverted_keywords": dict(self.inverted_keyword_index),
+            "proximity_graph": dict(self.proximity_graph.graph),
         }
         with open(self.index_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -405,6 +412,10 @@ class VectorEngine:
                     self.faceted_index = FacetedIndex()
                     self.knowledge_graph = KnowledgeGraphIndex()
                     self.citation_network = CitationNetworkIndex()
+                    self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
+                    self.proximity_graph.graph = defaultdict(
+                        list, data.get("proximity_graph", {})
+                    )
 
                     for d in raw_docs:
                         if "title_tokens" not in d:
@@ -451,10 +462,68 @@ class VectorEngine:
                         [d["id"] for d in self.documents]
                     )
                     self.raptor_tree.build_summary_tree(self.documents)
+
+                    if not self.proximity_graph.graph and self.documents:
+                        self.proximity_graph.build_graph(
+                            self.documents, dict(self.inverted_keyword_index)
+                        )
             except Exception:
                 self.documents = []
                 self.documents_by_id = {}
                 self.idf = {}
+
+    def get_related_papers(self, doc_id: str) -> Dict[str, Any]:
+        """
+        Retrieves precomputed related papers and Mermaid diagram for a specific paper.
+        """
+        doc = self.documents_by_id.get(doc_id)
+        if not doc:
+            return {"status": "error", "message": f"Paper '{doc_id}' not found."}
+
+        neighbors = self.proximity_graph.get_neighbors(doc_id)
+        if not neighbors:
+            # On-demand fallback build for this document
+            kw_list = doc.get("annotated_keywords", [])
+            candidate_ids = set()
+            for kw in kw_list:
+                candidate_ids.update(self.inverted_keyword_index.get(kw.lower(), []))
+            candidate_ids.discard(doc_id)
+            scored = []
+            for tid in candidate_ids:
+                if tid in self.documents_by_id:
+                    tdoc = self.documents_by_id[tid]
+                    sim = self.proximity_graph.compute_similarity(doc, tdoc)
+                    if sim > 0.05:
+                        shared_kw = list(
+                            set(doc.get("annotated_keywords", []))
+                            & set(tdoc.get("annotated_keywords", []))
+                        )
+                        scored.append(
+                            {
+                                "target_id": tid,
+                                "title": tdoc.get("title", ""),
+                                "description": tdoc.get("description", ""),
+                                "similarity": round(sim, 4),
+                                "shared_keywords": shared_kw,
+                                "path": tdoc.get("path", ""),
+                                "published_date": tdoc.get("published_date", ""),
+                            }
+                        )
+            scored.sort(key=lambda x: x["similarity"], reverse=True)
+            neighbors = scored[:6]
+            self.proximity_graph.graph[doc_id] = neighbors
+
+        mermaid_str = self.proximity_graph.generate_mermaid_graph(
+            doc_id, doc.get("title", "")
+        )
+        return {
+            "status": "success",
+            "paper_id": doc_id,
+            "title": doc.get("title", ""),
+            "related_count": len(neighbors),
+            "related_papers": neighbors,
+            "mermaid_graph": mermaid_str,
+        }
 
     def search(
         self, query: str, top_k: int = 5, category: Optional[str] = None
@@ -624,7 +693,7 @@ class VectorEngine:
         top_k: int = 10,
     ) -> Dict[str, Any]:
         """
-        Complete 4-Phase RAG Pipeline Search with GraphRAG and RAPTOR Summary Expansion.
+        Complete 4-Phase RAG Pipeline Search with GraphRAG, Proximity Graph, and RAPTOR.
         """
         cat = facets.get("category") if facets else None
         results, profile = self.search_with_profile(query, top_k=top_k, category=cat)
@@ -639,11 +708,18 @@ class VectorEngine:
                     self.knowledge_graph.get_neighbors(kw, max_depth=1)
                 )
 
+        # Proximity graph hints for top match
+        top_related = []
+        if results:
+            top_id = results[0]["id"]
+            top_related = self.proximity_graph.get_neighbors(top_id)
+
         return {
             "query": query,
             "total_matches": len(results),
             "papers": results,
             "profile": profile,
+            "top_paper_related": top_related,
             "raptor_macro_summaries": raptor_summaries,
             "graph_entities": graph_context,
             "cache_stats": self.semantic_cache.get_stats(),
