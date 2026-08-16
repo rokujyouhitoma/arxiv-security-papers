@@ -69,20 +69,60 @@ def log_query(
     profile: dict,
     remote_addr: str = "-",
 ) -> None:
-    """Appends one JSONL record to the query log. Thread-safe."""
+    """Appends one JSONL record to the query log and prints performance metrics to server log. Thread-safe."""
+    total_ms = profile.get("total_ms", 0.0)
+    tokenize_ms = profile.get("tokenize_ms", 0.0)
+    pruning_ms = profile.get("candidate_pruning_ms", 0.0)
+    scoring_ms = profile.get("scoring_ms", 0.0)
+    candidates_eval = profile.get("candidates_evaluated", 0)
+    total_docs = profile.get("total_documents", 0)
+    cached = profile.get("cached", False)
+    intent = profile.get("intent", "general")
+    clauses_parsed = profile.get("clauses_parsed", 0)
+
+    # Compute throughput (evaluated docs / sec)
+    throughput = round(candidates_eval / (total_ms / 1000.0), 1) if total_ms > 0 else 0.0
+
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "query": query,
         "top_k": top_k,
         "category": category,
         "result_count": result_count,
-        "total_ms": profile.get("total_ms"),
-        "candidates_evaluated": profile.get("candidates_evaluated"),
-        "clauses_parsed": profile.get("clauses_parsed"),
-        "intent": profile.get("intent"),
-        "cached": profile.get("cached", False),
+        "performance": {
+            "total_ms": total_ms,
+            "tokenize_ms": tokenize_ms,
+            "candidate_pruning_ms": pruning_ms,
+            "scoring_ms": scoring_ms,
+            "candidates_evaluated": candidates_eval,
+            "total_documents": total_docs,
+            "throughput_docs_per_sec": throughput,
+            "clauses_parsed": clauses_parsed,
+            "intent": intent,
+            "cached": cached,
+        },
+        # Flat keys for backward compatibility
+        "total_ms": total_ms,
+        "tokenize_ms": tokenize_ms,
+        "candidate_pruning_ms": pruning_ms,
+        "scoring_ms": scoring_ms,
+        "candidates_evaluated": candidates_eval,
+        "clauses_parsed": clauses_parsed,
+        "intent": intent,
+        "cached": cached,
         "remote_addr": remote_addr,
     }
+
+    # 1. Output formatted performance log to server stdout/stderr for real-time observability
+    log_line = (
+        f"[PERF] ⚡ Query: \"{query}\" | Total: {total_ms:.2f}ms "
+        f"[Tokenize: {tokenize_ms:.2f}ms, Prune: {pruning_ms:.2f}ms, Score: {scoring_ms:.2f}ms] | "
+        f"Hits: {result_count}/{top_k} | Eval: {candidates_eval}/{total_docs} docs ({throughput} docs/s) | "
+        f"Intent: {intent} | Cached: {cached}"
+    )
+    print(log_line, flush=True)
+
+    # 2. Append structured record to query_log.jsonl
     try:
         _ensure_log_dir()
         with _LOG_LOCK:

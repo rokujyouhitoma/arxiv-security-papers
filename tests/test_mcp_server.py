@@ -1,11 +1,12 @@
-"""
-Unit tests for VectorEngine and MCP Server
-"""
-
 import os
 import sys
 
-from mcp_server import (
+if "src" not in sys.path:
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
+
+from mcp.papers_server import (
     PROMPTS_MANIFEST,
     RESOURCES_MANIFEST,
     TOOLS_MANIFEST,
@@ -14,11 +15,6 @@ from mcp_server import (
     handle_read_resource,
 )
 from vector_engine import VectorEngine
-
-if "src" not in sys.path:
-    sys.path.insert(
-        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    )
 
 
 def test_vector_engine_indexing_and_search():
