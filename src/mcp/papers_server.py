@@ -894,7 +894,7 @@ def run_jsonrpc_server():
             sys.stderr.write(f"Error handling request: {e}\n")
 
 
-if __name__ == "__main__":
+def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--manifest":
         print(
             json.dumps(
@@ -916,3 +916,7 @@ if __name__ == "__main__":
         run_web_server(port=port)
     else:
         run_jsonrpc_server()
+
+
+if __name__ == "__main__":
+    main()

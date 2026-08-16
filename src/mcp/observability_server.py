@@ -644,5 +644,7 @@ def run_server() -> None:
             sys.stdout.flush()
 
 
+main = run_server
+
 if __name__ == "__main__":
-    run_server()
+    main()

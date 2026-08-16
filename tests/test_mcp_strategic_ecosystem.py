@@ -14,13 +14,13 @@ if "src" not in sys.path:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 import pytest
-from mcp_server import handle_search_security_papers, handle_search_papers_hybrid
-from threat_defense_mcp_server import (
+from mcp.papers_server import handle_search_security_papers, handle_search_papers_hybrid
+from mcp.threat_defense_server import (
     handle_generate_semgrep_rule,
     handle_synthesize_secure_patch,
     handle_check_threat_coverage,
 )
-from tech_radar_mcp_server import (
+from mcp.tech_radar_server import (
     handle_get_technology_radar,
     handle_predict_emerging_threats,
 )
@@ -47,8 +47,8 @@ def test_phase1_compact_search_reduces_token_payload(monkeypatch):
                 "content": "Full extracted paper markdown with thousands of characters...",
             }]
 
-    from mcp_server import get_vector_engine
-    monkeypatch.setattr("mcp_server.get_vector_engine", lambda: MockEngine())
+    from mcp.papers_server import get_vector_engine
+    monkeypatch.setattr("mcp.papers_server.get_vector_engine", lambda: MockEngine())
 
     # Compact search
     res = handle_search_security_papers({"query": "quantum", "compact": True})
