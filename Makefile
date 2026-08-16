@@ -27,7 +27,34 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/search/ranking/proximity_graph.py \
               src/search/ranking/citation_network.py \
               src/search/presentation/__init__.py \
-              src/search/presentation/highlighter.py
+              src/search/presentation/highlighter.py \
+              src/search/core/__init__.py \
+              src/search/core/analysis/__init__.py \
+              src/search/core/analysis/char_filter.py \
+              src/search/core/analysis/tokenizer.py \
+              src/search/core/analysis/token_filter.py \
+              src/search/core/store/__init__.py \
+              src/search/core/store/directory.py \
+              src/search/core/store/segment.py \
+              src/search/core/index/__init__.py \
+              src/search/core/index/postings.py \
+              src/search/core/index/doc_values.py \
+              src/search/core/index/stored_fields.py \
+              src/search/core/search/__init__.py \
+              src/search/core/search/query.py \
+              src/search/core/search/similarity.py \
+              src/search/core/search/collector.py \
+              src/search/server/__init__.py \
+              src/search/server/schema/__init__.py \
+              src/search/server/schema/managed_schema.py \
+              src/search/server/facet/__init__.py \
+              src/search/server/facet/facet_engine.py \
+              src/search/server/highlight/__init__.py \
+              src/search/server/highlight/highlighter.py \
+              src/search/server/cache/__init__.py \
+              src/search/server/cache/solr_cache.py \
+              src/search/server/handler/__init__.py \
+              src/search/server/handler/select_handler.py
 TESTS=tests
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar

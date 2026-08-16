@@ -98,12 +98,24 @@ flowchart TD
 │   └── index.html                      # Web Portal メイン画面
 ├── tools/                              # ビルド・最適化ツール
 │   └── closure-compiler/               # Google Closure Compiler ツールチェーン
-└── src/                                # バックエンドコアエンジン (Python 3.14.7)
-    ├── arxiv_okf_fetcher.py            # データ自動収集・サマリー生成
-    ├── vector_engine.py                # セマンティック VectorDB エンジン
-    ├── synonym_expander.py             # 用語同義語拡張エンジン
-    ├── mcp_server.py                   # MCP JSON-RPC 2.0 サーバー
-    └── web_server.py                   # HTTP API ＆ 静的ポータルサーバー
+├── src/                                # バックエンドコアエンジン (Python 3.14.7)
+│   ├── arxiv_okf_fetcher.py            # データ自動収集・サマリー生成
+│   ├── mcp_server.py                   # MCP JSON-RPC 2.0 サーバー
+│   ├── web_server.py                   # HTTP API ＆ 静的ポータルサーバー (WSGI)
+│   └── search/                         # 【Lucene/Solr 2層分離検索アーキテクチャ (DSN-08)】
+│       ├── __init__.py                 # 統合ファサード & エクスポート
+│       ├── vector_engine.py            # 検索オーケストレーター
+│       ├── core/                       # 【Lucene層】コア検索ライブラリ (Analysis, Index, Search)
+│       │   ├── analysis/               # CharFilter, Tokenizer, TokenFilter
+│       │   ├── store/                  # Directory, Segment, SegmentMerger
+│       │   ├── index/                  # Postings, DocValues, StoredFields, HNSW
+│       │   └── search/                 # Query, QueryParser, Similarity, Collector
+│       └── server/                     # 【Solr層】エンタープライズ検索サーバー
+│           ├── schema/                 # ManagedIndexSchema
+│           ├── handler/                # SelectHandler, SuggestHandler, UpdateHandler
+│           ├── facet/                  # FacetEngine
+│           ├── highlight/              # FastVectorHighlighter
+│           └── cache/                  # FilterCache, QueryResultCache
 ```
 
 ---

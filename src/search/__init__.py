@@ -1,18 +1,47 @@
 #!/usr/bin/env python3
 """
 Search Package for arXiv Security Papers.
-Modularized enterprise search architecture structured into functional subpackages:
-- ingestion: SearchAnalyzer, MultiFieldPostingsIndex, FMIndex, FacetedIndex, RAPTORTreeIndex
-- query: EnterpriseQueryParser, QueryClause, QueryContext, SynonymExpander, QuerySemanticCache
-- ranking: CitationNetworkIndex, KnowledgeGraphIndex, ProximityGraphIndex
-- presentation: DynamicHighlighter
-- vector_engine: VectorEngine
+Modularized 2-tier search architecture:
+- core: Lucene-equivalent core search engine (analysis, store, index, search)
+- server: Solr-equivalent enterprise search server (schema, handler, facet, highlight, cache)
+- legacy functional subpackages: ingestion, query, ranking, presentation, vector_engine
 """
 
 import sys
 
 # Subpackages
-from . import ingestion, presentation, query, ranking
+from . import core, ingestion, presentation, query, ranking, server
+from .core import (
+    Analyzer,
+    BM25Similarity,
+    BooleanClause,
+    BooleanQuery,
+    CharFilter,
+    DeletedDocsBitset,
+    Directory,
+    DocValues,
+    FSDirectory,
+    FuzzyQuery,
+    HTMLStripCharFilter,
+    LowerCaseFilter,
+    PhraseQuery,
+    PostingsList,
+    PrefixQuery,
+    RAMDirectory,
+    ScoreDoc,
+    SegmentInfo,
+    Similarity,
+    StandardTokenizer,
+    StopWordFilter,
+    StoredFields,
+    TermQuery,
+    Token,
+    TokenFilter,
+    Tokenizer,
+    TopDocs,
+    TopDocsCollector,
+    UnicodeNormalizeCharFilter,
+)
 from .ingestion import (
     FacetedIndex,
     FieldType,
@@ -31,6 +60,16 @@ from .query import (
     SynonymExpander,
 )
 from .ranking import CitationNetworkIndex, KnowledgeGraphIndex, ProximityGraphIndex
+from .server import (
+    FacetEngine,
+    FastVectorHighlighter,
+    FieldDefinition,
+    FilterCache,
+    LRUCache,
+    ManagedIndexSchema,
+    QueryResultCache,
+    SelectHandler,
+)
 from .utils import extract_abstract_from_okf
 from .vector_engine import VectorEngine
 
@@ -49,26 +88,66 @@ sys.modules[__name__ + ".citation_network"] = ranking.citation_network
 sys.modules[__name__ + ".highlighter"] = presentation.highlighter
 
 __all__ = [
+    "Analyzer",
+    "BM25Similarity",
+    "BooleanClause",
+    "BooleanQuery",
+    "CharFilter",
     "CitationNetworkIndex",
+    "DeletedDocsBitset",
+    "Directory",
+    "DocValues",
     "DynamicHighlighter",
     "EnterpriseQueryParser",
+    "FacetEngine",
     "FacetedIndex",
+    "FastVectorHighlighter",
+    "FieldDefinition",
     "FieldType",
+    "FilterCache",
     "FMIndex",
+    "FSDirectory",
+    "FuzzyQuery",
+    "HTMLStripCharFilter",
     "KnowledgeGraphIndex",
+    "LRUCache",
+    "LowerCaseFilter",
+    "ManagedIndexSchema",
     "MultiFieldPostingsIndex",
+    "PhraseQuery",
+    "PostingsList",
+    "PrefixQuery",
     "ProximityGraphIndex",
+    "Query",
     "QueryClause",
     "QueryContext",
+    "QueryResultCache",
     "QuerySemanticCache",
+    "RAMDirectory",
     "RAPTORTreeIndex",
+    "ScoreDoc",
     "SearchAnalyzer",
+    "SegmentInfo",
+    "SelectHandler",
+    "Similarity",
+    "StandardTokenizer",
+    "StopWordFilter",
+    "StoredFields",
     "SynonymExpander",
+    "TermQuery",
+    "Token",
+    "TokenFilter",
     "TokenOffset",
+    "Tokenizer",
+    "TopDocs",
+    "TopDocsCollector",
+    "UnicodeNormalizeCharFilter",
     "VectorEngine",
+    "core",
     "extract_abstract_from_okf",
     "ingestion",
     "presentation",
     "query",
     "ranking",
+    "server",
 ]
