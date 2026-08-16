@@ -8,6 +8,7 @@ SRC=src/arxiv_okf_fetcher.py
 PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/vector_engine.py \
               src/mcp_server.py \
+              src/observability_mcp_server.py \
               src/web_server.py \
               src/search/__init__.py \
               src/search/utils/__init__.py \
@@ -147,6 +148,10 @@ build_vector_db: activate ## Build or rebuild semantic vector index
 .PHONY: run_mcp_server
 run_mcp_server: activate ## Launch standard Model Context Protocol (MCP) server
 	${VENV_PYTHON} src/mcp_server.py
+
+.PHONY: run_observability_mcp
+run_observability_mcp: activate ## Launch Observability & Profiling MCP server for AI coding agents
+	${VENV_PYTHON} src/observability_mcp_server.py
 
 .PHONY: run_web
 run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (http://localhost:8000)
