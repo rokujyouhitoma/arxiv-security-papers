@@ -214,3 +214,36 @@ def test_wsgi_app_get_raw_data_missing_and_traversal():
         application, method="GET", path="/raw_data/../../../etc/passwd"
     )
     assert status.startswith("403")
+
+
+def test_wsgi_app_get_preview_html():
+    if VECTOR_ENGINE.documents:
+        first_id = VECTOR_ENGINE.documents[0]["id"]
+        status, headers, body = call_wsgi(
+            application, method="GET", path=f"/preview/{first_id}"
+        )
+        assert status.startswith("200")
+        header_dict = dict(headers)
+        assert "text/html" in header_dict.get("Content-Type", "")
+        html_str = body.decode("utf-8")
+        assert "Google OKF Preview" in html_str
+        assert first_id in html_str
+
+    # Non-existent preview
+    status, headers, body = call_wsgi(
+        application, method="GET", path="/preview/nonexistent_9999"
+    )
+    assert status.startswith("404")
+
+
+def test_wsgi_app_get_okf_md_plain():
+    import glob
+    md_files = glob.glob("outputs/okf_papers/*/*.md")
+    if md_files:
+        sample_path = "/" + md_files[0]
+        status, headers, body = call_wsgi(application, method="GET", path=sample_path)
+        assert status.startswith("200")
+        header_dict = dict(headers)
+        assert "text/plain" in header_dict.get("Content-Type", "")
+        md_text = body.decode("utf-8")
+        assert "type: \"security-paper\"" in md_text or "type: security-paper" in md_text

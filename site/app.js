@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalPaperBody = document.getElementById('modalPaperBody');
   const modalArxivLink = document.getElementById('modalArxivLink');
   const modalPdfLink = document.getElementById('modalPdfLink');
+  const modalOkfLink = document.getElementById('modalOkfLink');
 
   const trendContent = document.getElementById('trendContent');
   const mcpToolSelect = document.getElementById('mcpToolSelect');
@@ -160,10 +161,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const authors = (paper['authors'] || []).slice(0, 3).join(', ');
       const authorsBadge = authors ? `<div class="card-authors">👥 著者: ${escapeHtml(authors)}</div>` : '';
       const highlightHtml = paper['highlight'] ? `<div class="card-snippet">${paper['highlight']}</div>` : `<p class="card-desc">${escapeHtml(paper.description || '要約情報なし')}</p>`;
+      const okfPath = paper.path ? ('/' + encodeURI(paper.path)) : '#';
+      const previewUrl = `/preview/${encodeURIComponent(paper.id)}`;
 
       return `
-      <div class="glass-panel paper-card" onclick="openPaperModal('${escapeHtml(paper.id)}')">
-        <div>
+      <div class="glass-panel paper-card">
+        <div style="cursor: pointer;" onclick="openPaperModal('${escapeHtml(paper.id)}')">
           <div class="card-top">
             <span class="arxiv-id-tag">arXiv: ${escapeHtml(paper.id)}</span>
             <span class="score-badge">Score: ${escapeHtml(String(paper['score']))}</span>
@@ -174,9 +177,13 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="card-footer">
           <div class="card-tags">
-            ${(paper.tags || []).slice(0, 3).map(t => `<span class="mini-tag">${escapeHtml(t)}</span>`).join('')}
+            ${(paper.tags || []).slice(0, 2).map(t => `<span class="mini-tag">${escapeHtml(t)}</span>`).join('')}
           </div>
-          <span style="font-size: 0.8rem; color: var(--accent-primary);">詳細を見る &rarr;</span>
+          <div class="card-actions-row">
+            <a href="${okfPath}" target="_blank" rel="noopener" class="card-action-link" title="生の OKF Markdown をプレーンテキストで表示" onclick="event.stopPropagation()">📝 .md</a>
+            <a href="${previewUrl}" target="_blank" rel="noopener" class="card-action-link" title="スタンドアロン HTML プレビュー" onclick="event.stopPropagation()">👁️ プレビュー ↗</a>
+            <button class="card-action-btn" onclick="openPaperModal('${escapeHtml(paper.id)}')">詳細 &rarr;</button>
+          </div>
         </div>
       </div>
       `;
@@ -199,6 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}`);
       const data = await res.json();
       if (data.status === 'success' && data.content) {
+        if (modalOkfLink && data.path) modalOkfLink.href = '/' + encodeURI(data.path);
         modalPaperTitle.textContent = data.content.match(/title:\s*"(.*?)"/)?.[1] || arxivId;
         modalPaperTitleJa.textContent = data.content.match(/title_ja:\s*"(.*?)"/)?.[1] || '';
         

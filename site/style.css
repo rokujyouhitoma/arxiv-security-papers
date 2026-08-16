@@ -349,6 +349,46 @@ body {
   border-radius: 4px;
 }
 
+.card-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.card-action-link {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.card-action-link:hover {
+  color: #fff;
+  background: rgba(99, 102, 241, 0.25);
+  border-color: var(--accent-primary);
+}
+
+.card-action-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.card-action-btn:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
 /* Trends Section */
 .trend-control-panel {
   padding: 1.5rem;
