@@ -10,7 +10,7 @@ import sys
 if "src" not in sys.path:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from observability_mcp_server import dispatch_rpc_request
+from mcp.observability_server import dispatch_rpc_request
 
 
 def test_mcp_initialize():
