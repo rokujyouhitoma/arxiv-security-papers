@@ -120,17 +120,27 @@
     </section>
   </main>
 
-  <!-- Modal for Paper OKF View -->
+  <!-- Fullscreen Paper OKF Viewer -->
   <div id="paperModal" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel">
-      <button id="closeModalBtn" class="modal-close-btn">&times;</button>
+    <div class="modal-card fullscreen-modal">
+      <div class="modal-top-bar">
+        <div class="modal-top-meta">
+          <span class="modal-badge" id="modalPaperId">arXiv: 0000.00000</span>
+          <a id="modalArxivLink" href="#" target="_blank" rel="noopener" class="btn-link-action">arXiv 原本 ↗</a>
+          <a id="modalPdfLink" href="#" target="_blank" rel="noopener" class="btn-link-action">PDF 📄</a>
+        </div>
+        <div class="modal-top-actions">
+          <button id="closeModalBtn" class="fullscreen-close-btn" title="閉じる (Esc)">✕ 閉じる</button>
+        </div>
+      </div>
       <div class="modal-header">
-        <span class="modal-badge" id="modalPaperId">arXiv: 0000.00000</span>
         <h2 id="modalPaperTitle">論文タイトル</h2>
         <p class="modal-subtitle" id="modalPaperTitleJa">日本語タイトル</p>
       </div>
-      <div class="modal-body" id="modalPaperBody">
-        <!-- Paper details -->
+      <div class="modal-body-container">
+        <div class="modal-body" id="modalPaperBody">
+          <!-- Paper details -->
+        </div>
       </div>
     </div>
   </div>
