@@ -10,7 +10,8 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/mcp_server.py \
               src/web_server.py \
               src/search/__init__.py \
-              src/search/utils.py \
+              src/search/utils/__init__.py \
+              src/search/utils/profiler.py \
               src/search/vector_engine.py \
               src/search/ingestion/__init__.py \
               src/search/ingestion/analyzer.py \

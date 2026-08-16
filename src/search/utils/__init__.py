@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """
-Search and OKF Document Parsing Utilities.
+Search Utilities Subpackage (Observability, Profiling, and Document Parsing).
 """
 
 import re
+
+from .profiler import (
+    ExecutionMetrics,
+    ExecutionProfiler,
+    analyze_bytecode,
+    benchmark_function,
+    profile_function,
+)
 
 
 def extract_abstract_from_okf(content: str) -> str:
@@ -20,3 +28,13 @@ def extract_abstract_from_okf(content: str) -> str:
         return " ".join(quotes).strip()
 
     return ""
+
+
+__all__ = [
+    "ExecutionMetrics",
+    "ExecutionProfiler",
+    "analyze_bytecode",
+    "benchmark_function",
+    "extract_abstract_from_okf",
+    "profile_function",
+]
