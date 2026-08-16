@@ -311,8 +311,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const selected = mcpToolSelect.value;
     if (selected === 'search_security_papers') {
       mcpArgsInput.value = JSON.stringify({ query: "ペンテスト自動化", top_k: 5 }, null, 2);
+    } else if (selected === 'verify_code_security') {
+      mcpArgsInput.value = JSON.stringify({
+        code_snippet: "def login(user, pwd):\n    query = f\"SELECT * FROM users WHERE u='{user}' AND p='{pwd}'\"\n    cursor.execute(query)",
+        language: "python"
+      }, null, 2);
+    } else if (selected === 'get_cwe_mitigation_recipe') {
+      mcpArgsInput.value = JSON.stringify({ cwe_id: "CWE-89" }, null, 2);
+    } else if (selected === 'get_related_papers_graph') {
+      mcpArgsInput.value = JSON.stringify({ arxiv_id: "2502.16730" }, null, 2);
     } else if (selected === 'get_paper_summary') {
-      mcpArgsInput.value = JSON.stringify({ arxiv_id: "2608.12996" }, null, 2);
+      mcpArgsInput.value = JSON.stringify({ arxiv_id: "2502.16730" }, null, 2);
     } else if (selected === 'get_latest_trends') {
       mcpArgsInput.value = JSON.stringify({ period: "monthly" }, null, 2);
     } else if (selected === 'query_attack_technique') {
