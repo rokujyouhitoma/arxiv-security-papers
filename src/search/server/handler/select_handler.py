@@ -75,34 +75,34 @@ class SelectHandler:
                         else (filtered_doc_ids & cached_ids)
                     )
 
-            # 2. Candidate Retrieval & Scoring
-            collector = TopDocsCollector(top_k=top_k)
+            # 2. Candidate Retrieval & Scoring (Term-at-a-time Inverted Index Accumulator)
             all_docs = self.stored_fields.all_documents()
             total_docs = len(all_docs)
+            doc_scores: Dict[str, float] = {}
 
-            for doc in all_docs:
-                doc_id = doc.get("id", "")
-                if filtered_doc_ids is not None and doc_id not in filtered_doc_ids:
-                    continue
+            if not q_terms:
+                for doc in all_docs:
+                    did = doc.get("id", "")
+                    if filtered_doc_ids is None or did in filtered_doc_ids:
+                        doc_scores[did] = 1.0
+            else:
+                for term in q_terms:
+                    for fname, fdef in self.schema.fields.items():
+                        postings = self.postings.get_postings(fname, term)
+                        if not postings:
+                            continue
+                        idf = self.similarity.compute_idf(len(postings), total_docs)
+                        boost = fdef.boost
+                        for pid, tf in postings:
+                            if filtered_doc_ids is not None and pid not in filtered_doc_ids:
+                                continue
+                            bm25 = self.similarity.score(tf, 100, 100.0, idf)
+                            doc_scores[pid] = doc_scores.get(pid, 0.0) + bm25 * boost
 
-                score = 0.0
-                if not q_terms:
-                    score = 1.0
-                else:
-                    for term in q_terms:
-                        # Check fields in schema with boosts
-                        for fname, fdef in self.schema.fields.items():
-                            postings = self.postings.get_postings(fname, term)
-                            for pid, tf in postings:
-                                if pid == doc_id:
-                                    idf = self.similarity.compute_idf(
-                                        len(postings), total_docs
-                                    )
-                                    bm25 = self.similarity.score(tf, 100, 100.0, idf)
-                                    score += bm25 * fdef.boost
-
+            collector = TopDocsCollector(top_k=top_k)
+            for did, score in doc_scores.items():
                 if score > 0:
-                    collector.collect(doc_id, score)
+                    collector.collect(did, score)
 
             top_docs = collector.get_top_docs()
 

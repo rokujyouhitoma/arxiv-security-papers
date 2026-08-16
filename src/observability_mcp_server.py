@@ -20,7 +20,7 @@ import sys
 import time
 import timeit
 import tracemalloc
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 if "src" not in sys.path:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
@@ -184,7 +184,11 @@ def handle_benchmark_alternatives(params: Dict[str, Any]) -> Dict[str, Any]:
 
         try:
             compiled = compile(code, f"<mcp_bench_{name}>", "exec")
-            timer = timeit.Timer(lambda c=compiled: exec(c, {}, {}))
+
+            def _run_candidate(c: Any = compiled) -> None:
+                exec(c, {}, {})
+
+            timer = timeit.Timer(_run_candidate)
             times = timer.repeat(repeat=repeat, number=number)
             min_time_ms = round((min(times) / number) * 1000.0, 5)
             avg_time_ms = round((sum(times) / len(times) / number) * 1000.0, 5)
@@ -403,7 +407,8 @@ def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
             }
 
-        handler = TOOLS_REGISTRY[tool_name]["handler"]
+        raw_handler = TOOLS_REGISTRY[tool_name]["handler"]
+        handler = cast(Callable[[Dict[str, Any]], Dict[str, Any]], raw_handler)
         result = handler(tool_args)
         return {
             "jsonrpc": "2.0",

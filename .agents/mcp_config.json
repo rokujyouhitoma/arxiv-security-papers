@@ -8,6 +8,16 @@
       "env": {
         "PYTHONPATH": "src"
       }
+    },
+    "arxiv-security-observability": {
+      "command": "python3",
+      "args": [
+        "src/observability_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "src"
+      }
     }
   }
 }
+

@@ -24,7 +24,7 @@ class ProximityGraphIndex:
         Computes composite similarity between two papers:
         S(a, b) = 0.50 * CosineSim(tokens) + 0.35 * Jaccard(keywords) + 0.15 * CategoryMatch
         """
-        # 1. Token Overlap / Cosine Sim Approximation
+        # 1. Token Overlap / Cosine Sim Approximation (using precomputed norm if present)
         counts_a = doc_a.get("token_counts", {})
         counts_b = doc_b.get("token_counts", {})
         shared_tokens = set(counts_a.keys()) & set(counts_b.keys())
@@ -32,22 +32,22 @@ class ProximityGraphIndex:
             token_sim = 0.0
         else:
             dot_product = sum(counts_a[t] * counts_b[t] for t in shared_tokens)
-            norm_a = sum(v * v for v in counts_a.values()) ** 0.5
-            norm_b = sum(v * v for v in counts_b.values()) ** 0.5
+            norm_a = doc_a.get("_norm") or (sum(v * v for v in counts_a.values()) ** 0.5)
+            norm_b = doc_b.get("_norm") or (sum(v * v for v in counts_b.values()) ** 0.5)
             token_sim = (
                 (dot_product / (norm_a * norm_b)) if norm_a > 0 and norm_b > 0 else 0.0
             )
 
         # 2. Security Keywords Jaccard Similarity
-        kw_a = set(doc_a.get("annotated_keywords", []))
-        kw_b = set(doc_b.get("annotated_keywords", []))
+        kw_a = doc_a.get("_kw_set") or set(doc_a.get("annotated_keywords", []))
+        kw_b = doc_b.get("_kw_set") or set(doc_b.get("annotated_keywords", []))
         shared_kw = kw_a & kw_b
         union_kw = kw_a | kw_b
         kw_sim = (len(shared_kw) / len(union_kw)) if union_kw else 0.0
 
         # 3. Category & Tag Overlap
-        tags_a = set(t.lower() for t in doc_a.get("tags", []))
-        tags_b = set(t.lower() for t in doc_b.get("tags", []))
+        tags_a = doc_a.get("_tags_set") or set(t.lower() for t in doc_a.get("tags", []))
+        tags_b = doc_b.get("_tags_set") or set(t.lower() for t in doc_b.get("tags", []))
         shared_tags = tags_a & tags_b
         cat_sim = 1.0 if shared_tags else 0.0
 
@@ -59,10 +59,17 @@ class ProximityGraphIndex:
         inverted_keywords: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         """
-        Builds the k-NN proximity graph using inverted keywords for candidate pruning.
+        Builds the k-NN proximity graph using inverted keywords and precomputed document vectors.
         """
         self.graph.clear()
         doc_map = {d["id"]: d for d in documents}
+
+        # Precompute norms and sets once per document
+        for doc in documents:
+            counts = doc.get("token_counts", {})
+            doc["_norm"] = sum(v * v for v in counts.values()) ** 0.5 if counts else 1.0
+            doc["_kw_set"] = set(doc.get("annotated_keywords", []))
+            doc["_tags_set"] = set(t.lower() for t in doc.get("tags", []))
 
         for doc in documents:
             doc_id = doc["id"]
@@ -94,10 +101,7 @@ class ProximityGraphIndex:
                 target_doc = doc_map[target_id]
                 sim = self.compute_similarity(doc, target_doc)
                 if sim > 0.05:
-                    shared_kw = list(
-                        set(doc.get("annotated_keywords", []))
-                        & set(target_doc.get("annotated_keywords", []))
-                    )
+                    shared_kw = list(doc["_kw_set"] & target_doc["_kw_set"])
                     scored_neighbors.append(
                         {
                             "target_id": target_id,
