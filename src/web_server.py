@@ -53,7 +53,12 @@ class WSGIApplication:
     PEP 3333 Compliant WSGI Application for arXiv Security Papers Web & MCP Gateway.
     """
 
-    def __init__(self, site_dir=SITE_DIR, vector_engine=VECTOR_ENGINE, workspace_dir=WORKSPACE_DIR):
+    def __init__(
+        self,
+        site_dir=SITE_DIR,
+        vector_engine=VECTOR_ENGINE,
+        workspace_dir=WORKSPACE_DIR,
+    ):
         self.site_dir = site_dir
         self.vector_engine = vector_engine
         self.workspace_dir = workspace_dir
@@ -182,7 +187,11 @@ class WSGIApplication:
                 if method == "tools/list":
                     return self._response_json(
                         start_response,
-                        {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}},
+                        {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {"tools": TOOLS_MANIFEST},
+                        },
                     )
                 elif method == "tools/call":
                     t_name = params.get("name")
@@ -194,14 +203,23 @@ class WSGIApplication:
                             "jsonrpc": "2.0",
                             "id": req_id,
                             "result": {
-                                "content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": json.dumps(output, ensure_ascii=False),
+                                    }
+                                ]
                             },
                         },
                     )
                 elif method == "resources/list":
                     return self._response_json(
                         start_response,
-                        {"jsonrpc": "2.0", "id": req_id, "result": {"resources": RESOURCES_MANIFEST}},
+                        {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {"resources": RESOURCES_MANIFEST},
+                        },
                     )
                 elif method == "resources/read":
                     uri = params.get("uri", "")
@@ -213,7 +231,11 @@ class WSGIApplication:
                 elif method == "prompts/list":
                     return self._response_json(
                         start_response,
-                        {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": PROMPTS_MANIFEST}},
+                        {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {"prompts": PROMPTS_MANIFEST},
+                        },
                     )
                 elif method == "prompts/get":
                     p_name = params.get("name")
@@ -230,7 +252,10 @@ class WSGIApplication:
             if not name:
                 return self._response_json(
                     start_response,
-                    {"status": "error", "message": "Missing 'name' or 'method' in JSON payload"},
+                    {
+                        "status": "error",
+                        "message": "Missing 'name' or 'method' in JSON payload",
+                    },
                     status="400 Bad Request",
                 )
             result = dispatch_tool(name, arguments)
@@ -245,7 +270,9 @@ class WSGIApplication:
             )
 
     def _handle_static(self, start_response, path):
-        raw_data_dir = os.path.realpath(os.path.join(self.workspace_dir, "outputs", "raw_data"))
+        raw_data_dir = os.path.realpath(
+            os.path.join(self.workspace_dir, "outputs", "raw_data")
+        )
         outputs_dir = os.path.realpath(os.path.join(self.workspace_dir, "outputs"))
         abs_site_dir = os.path.realpath(self.site_dir)
 
@@ -253,11 +280,11 @@ class WSGIApplication:
         is_outputs = path.startswith("/outputs/")
 
         if is_raw_data:
-            rel = path[len("/raw_data/"):].lstrip("/")
+            rel = path[len("/raw_data/") :].lstrip("/")
             target_file = os.path.realpath(os.path.join(raw_data_dir, rel))
             base_dir = raw_data_dir
         elif is_outputs:
-            rel = path[len("/outputs/"):].lstrip("/")
+            rel = path[len("/outputs/") :].lstrip("/")
             target_file = os.path.realpath(os.path.join(outputs_dir, rel))
             base_dir = outputs_dir
         else:
@@ -312,7 +339,9 @@ class WSGIApplication:
         return self._response_file(start_response, target_file, mime_type)
 
     def _handle_preview(self, start_response, path):
-        arxiv_id = path.replace("/preview/", "").strip().replace("/", "_").replace("..", "")
+        arxiv_id = (
+            path.replace("/preview/", "").strip().replace("/", "_").replace("..", "")
+        )
         res = handle_get_paper_summary({"arxiv_id": arxiv_id})
         if res.get("status") != "success":
             return self._response_json(
@@ -334,7 +363,9 @@ class WSGIApplication:
         authors_m = re.search(r"^authors:\s*\[(.*?)\]", content, re.MULTILINE)
         authors_str = authors_m.group(1) if authors_m else ""
 
-        date_m = re.search(r"^timestamp:\s*[\"']?([0-9]{4}-[0-9]{2}-[0-9]{2})", content, re.MULTILINE)
+        date_m = re.search(
+            r"^timestamp:\s*[\"']?([0-9]{4}-[0-9]{2}-[0-9]{2})", content, re.MULTILINE
+        )
         date_str = date_m.group(1) if date_m else ""
 
         escaped_content = json.dumps(content, ensure_ascii=False)
@@ -419,24 +450,29 @@ class WSGIApplication:
         if method == "OPTIONS":
             return self._handle_options(start_response)
 
-        if method == "GET":
+        if method in ["GET", "HEAD"]:
             if path == "/api/search":
-                return self._handle_search(start_response, query_params)
-            if path.startswith("/api/paper/"):
-                return self._handle_paper(start_response, path)
-            if path == "/api/trends":
-                return self._handle_trends(start_response, query_params)
-            if path == "/api/stats":
-                return self._handle_stats(start_response)
-            if path.startswith("/preview/"):
-                return self._handle_preview(start_response, path)
-            if path.startswith("/api/"):
-                return self._response_json(
+                res = self._handle_search(start_response, query_params)
+            elif path.startswith("/api/paper/"):
+                res = self._handle_paper(start_response, path)
+            elif path == "/api/trends":
+                res = self._handle_trends(start_response, query_params)
+            elif path == "/api/stats":
+                res = self._handle_stats(start_response)
+            elif path.startswith("/preview/"):
+                res = self._handle_preview(start_response, path)
+            elif path.startswith("/api/"):
+                res = self._response_json(
                     start_response,
                     {"status": "error", "message": "API endpoint not found"},
                     status="404 Not Found",
                 )
-            return self._handle_static(start_response, path)
+            else:
+                res = self._handle_static(start_response, path)
+
+            if method == "HEAD":
+                return [b""]
+            return res
 
         if method == "POST":
             if path == "/api/mcp":

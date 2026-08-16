@@ -419,8 +419,17 @@ CWE_MITIGATION_DATABASE = {
             "Apply principle of least privilege on database connection accounts",
         ],
         "keywords": [
-            "sql", "select", "insert", "update", "delete", "cursor.execute",
-            "query", "database", "sqlite", "postgres", "mysql",
+            "sql",
+            "select",
+            "insert",
+            "update",
+            "delete",
+            "cursor.execute",
+            "query",
+            "database",
+            "sqlite",
+            "postgres",
+            "mysql",
         ],
     },
     "CWE-78": {
@@ -432,7 +441,16 @@ CWE_MITIGATION_DATABASE = {
             "Pass arguments as a list of strings: subprocess.run(['ls', '-la', target_dir], check=True)",
             "Validate and sanitize all command arguments with strict allow-lists",
         ],
-        "keywords": ["subprocess", "os.system", "os.popen", "exec", "eval", "shell=True", "shlex", "spawn"],
+        "keywords": [
+            "subprocess",
+            "os.system",
+            "os.popen",
+            "exec",
+            "eval",
+            "shell=True",
+            "shlex",
+            "spawn",
+        ],
     },
     "CWE-22": {
         "name": "Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')",
@@ -443,7 +461,16 @@ CWE_MITIGATION_DATABASE = {
             "Verify that commonpath([base_dir, target_file]) == base_dir",
             "Reject paths containing suspicious sequences (../, etc/passwd, .ssh, .env)",
         ],
-        "keywords": ["open(", "os.path.join", "path", "filepath", "filename", "read_file", "write_file", "../"],
+        "keywords": [
+            "open(",
+            "os.path.join",
+            "path",
+            "filepath",
+            "filename",
+            "read_file",
+            "write_file",
+            "../",
+        ],
     },
     "CWE-79": {
         "name": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
@@ -455,7 +482,13 @@ CWE_MITIGATION_DATABASE = {
             "Use template engines with auto-escaping enabled by default",
         ],
         "keywords": [
-            "<script>", "innerHTML", "document.write", "dangerouslySetInnerHTML", "html", "render", "template"
+            "<script>",
+            "innerHTML",
+            "document.write",
+            "dangerouslySetInnerHTML",
+            "html",
+            "render",
+            "template",
         ],
     },
     "CWE-327": {
@@ -468,7 +501,18 @@ CWE_MITIGATION_DATABASE = {
             "Use Argon2id or bcrypt for password hashing with appropriate work factors",
         ],
         "keywords": [
-            "md5", "sha1", "des", "rc4", "crypto", "cipher", "aes", "rsa", "hash", "hmac", "encrypt", "decrypt"
+            "md5",
+            "sha1",
+            "des",
+            "rc4",
+            "crypto",
+            "cipher",
+            "aes",
+            "rsa",
+            "hash",
+            "hmac",
+            "encrypt",
+            "decrypt",
         ],
     },
     "CWE-502": {
@@ -480,7 +524,14 @@ CWE_MITIGATION_DATABASE = {
             "Use yaml.safe_load() instead of yaml.load()",
             "Sign and verify serialized payloads using HMAC if serialization is unavoidable",
         ],
-        "keywords": ["pickle.loads", "pickle.load", "yaml.load", "marshal.loads", "unpickle", "deserialize"],
+        "keywords": [
+            "pickle.loads",
+            "pickle.load",
+            "yaml.load",
+            "marshal.loads",
+            "unpickle",
+            "deserialize",
+        ],
     },
 }
 
@@ -504,20 +555,26 @@ def handle_verify_code_security(args):
         hits = [kw for kw in data["keywords"] if kw in code_lower]
         if hits:
             matched_cwes.append(cwe_id)
-            warnings.append({
-                "cwe_id": cwe_id,
-                "name": data["name"],
-                "risk": data["risk"],
-                "trigger_keywords": hits[:3],
-                "description": data["description"],
-            })
+            warnings.append(
+                {
+                    "cwe_id": cwe_id,
+                    "name": data["name"],
+                    "risk": data["risk"],
+                    "trigger_keywords": hits[:3],
+                    "description": data["description"],
+                }
+            )
             suggested_mitigations.extend(data["secure_patterns"])
 
     # Search relevant academic security papers using code keywords
     query_terms = " ".join([w["name"] for w in warnings]) if warnings else code[:100]
     relevant_papers = VECTOR_ENGINE.search(query_terms, top_k=3)
 
-    risk_level = "HIGH" if any(w["risk"] == "HIGH" for w in warnings) else ("MEDIUM" if warnings else "LOW")
+    risk_level = (
+        "HIGH"
+        if any(w["risk"] == "HIGH" for w in warnings)
+        else ("MEDIUM" if warnings else "LOW")
+    )
 
     return {
         "status": "success",
@@ -553,7 +610,9 @@ def handle_get_cwe_mitigation_recipe(args):
             "name": f"Academic references for {cwe_id}",
             "risk": "MEDIUM",
             "description": f"Custom weakness exploration for {cwe_id}",
-            "secure_patterns": ["Review academic reference papers for state-of-the-art defense mitigations."],
+            "secure_patterns": [
+                "Review academic reference papers for state-of-the-art defense mitigations."
+            ],
             "academic_papers": results,
         }
 
@@ -646,8 +705,10 @@ def handle_get_prompt(name, arguments):
         cwe_id = arguments.get("cwe_id", "CWE-89")
         lang = arguments.get("language", "python")
         recipe = handle_get_cwe_mitigation_recipe({"cwe_id": cwe_id})
-        cwe_name = recipe.get('name', '')
-        patterns = "\n".join([f"- {p}" for p in recipe.get("secure_coding_patterns", [])])
+        cwe_name = recipe.get("name", "")
+        patterns = "\n".join(
+            [f"- {p}" for p in recipe.get("secure_coding_patterns", [])]
+        )
         prompt_text = (
             f"Generate an enterprise-grade secure implementation in {lang} preventing {cwe_id} ({cwe_name}).\n\n"
             f"Security Requirements:\n{patterns}\n\n"
@@ -735,7 +796,10 @@ def run_jsonrpc_server():
                     res = {
                         "jsonrpc": "2.0",
                         "id": req_id,
-                        "error": {"code": -32602, "message": output.get("message", "Resource error")},
+                        "error": {
+                            "code": -32602,
+                            "message": output.get("message", "Resource error"),
+                        },
                     }
                 else:
                     res = {
@@ -765,7 +829,10 @@ def run_jsonrpc_server():
                     res = {
                         "jsonrpc": "2.0",
                         "id": req_id,
-                        "error": {"code": -32602, "message": output.get("message", "Prompt error")},
+                        "error": {
+                            "code": -32602,
+                            "message": output.get("message", "Prompt error"),
+                        },
                     }
                 else:
                     res = {
@@ -787,11 +854,17 @@ def run_jsonrpc_server():
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--manifest":
-        print(json.dumps({
-            "tools": TOOLS_MANIFEST,
-            "resources": RESOURCES_MANIFEST,
-            "prompts": PROMPTS_MANIFEST,
-        }, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "tools": TOOLS_MANIFEST,
+                    "resources": RESOURCES_MANIFEST,
+                    "prompts": PROMPTS_MANIFEST,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     elif len(sys.argv) > 1 and sys.argv[1] == "--http":
         from web_server import run_web_server
 

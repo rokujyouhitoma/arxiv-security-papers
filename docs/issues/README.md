@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **016** | [検索エンジン機能モジュール別再設計・ハイブリッド検索パイプライン高度化](closed/016-modularize-and-enhance-hybrid-search-engine.md) | Feature | 2026-08-16 | [016-modularize-and-enhance-hybrid-search-engine.md](closed/016-modularize-and-enhance-hybrid-search-engine.md) |
 | **015** | [コーディングエージェント向け MCP サーバー超高度化（Resources / Prompts / セキュアコーディング支援ツール・Graph-RAG 統合）](closed/015-enrich-mcp-server-for-coding-agents-with-resources-prompts-and-security-tools.md) | Feature | 2026-08-16 | [015-enrich-mcp-server-for-coding-agents-with-resources-prompts-and-security-tools.md](closed/015-enrich-mcp-server-for-coding-agents-with-resources-prompts-and-security-tools.md) |
 | **014** | [OKF .md プレーンテキスト配信 ＆ 独立 HTML プレビュー画面の実装と検索結果リンク配置](closed/014-support-okf-markdown-link-and-rich-html-preview.md) | Feature | 2026-08-16 | [014-support-okf-markdown-link-and-rich-html-preview.md](closed/014-support-okf-markdown-link-and-rich-html-preview.md) |
 | **013** | [Raw データ（.txt / .pdf / .json）の直接静的配信とプレーンテキスト表示の最適化](closed/013-support-raw-data-static-serving-and-plain-text-delivery.md) | Fix | 2026-08-16 | [013-support-raw-data-static-serving-and-plain-text-delivery.md](closed/013-support-raw-data-static-serving-and-plain-text-delivery.md) |

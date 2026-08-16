@@ -192,6 +192,7 @@ def test_wsgi_app_method_not_allowed():
 def test_wsgi_app_get_raw_data_txt():
     # Find any existing txt file in outputs/raw_data/
     import glob
+
     txt_files = glob.glob("outputs/raw_data/*/*.txt")
     if txt_files:
         sample_path = "/" + txt_files[0].replace("outputs/", "")
@@ -238,6 +239,7 @@ def test_wsgi_app_get_preview_html():
 
 def test_wsgi_app_get_okf_md_plain():
     import glob
+
     md_files = glob.glob("outputs/okf_papers/*/*.md")
     if md_files:
         sample_path = "/" + md_files[0]
@@ -246,4 +248,4 @@ def test_wsgi_app_get_okf_md_plain():
         header_dict = dict(headers)
         assert "text/plain" in header_dict.get("Content-Type", "")
         md_text = body.decode("utf-8")
-        assert "type: \"security-paper\"" in md_text or "type: security-paper" in md_text
+        assert 'type: "security-paper"' in md_text or "type: security-paper" in md_text

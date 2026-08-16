@@ -35,9 +35,7 @@ class MultiFieldPostingsIndex:
         )
         self.avg_field_lengths: Dict[str, float] = defaultdict(float)
 
-    def add_field_tokens(
-        self, doc_id: str, field_name: str, tokens: List[str]
-    ) -> None:
+    def add_field_tokens(self, doc_id: str, field_name: str, tokens: List[str]) -> None:
         """Indexes token positions for a specific document field."""
         if field_name not in self.fields:
             self.fields[field_name] = defaultdict(list)
@@ -59,22 +57,17 @@ class MultiFieldPostingsIndex:
             return
         for field_name in self.fields:
             total_tokens = sum(
-                self.doc_lengths[d].get(field_name, 0)
-                for d in self.doc_lengths
+                self.doc_lengths[d].get(field_name, 0) for d in self.doc_lengths
             )
             self.avg_field_lengths[field_name] = total_tokens / total_docs
 
-    def get_postings(
-        self, field_name: str, term: str
-    ) -> List[Tuple[str, List[int]]]:
+    def get_postings(self, field_name: str, term: str) -> List[Tuple[str, List[int]]]:
         """Returns postings list for a given field and term."""
         norm_term = term.lower().strip()
         field_dict = self.fields.get(field_name, {})
         return field_dict.get(norm_term, [])
 
-    def search_prefix(
-        self, field_name: str, prefix: str
-    ) -> Set[str]:
+    def search_prefix(self, field_name: str, prefix: str) -> Set[str]:
         """Returns matching doc_ids for a term prefix (e.g. 'Nakat*')."""
         norm_p = prefix.lower().strip()
         doc_ids: Set[str] = set()

@@ -11,20 +11,24 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/mcp_server.py \
               src/web_server.py \
               src/search/__init__.py \
-              src/search/field_schema.py \
-              src/search/analyzer.py \
-              src/search/query_parser.py \
-              src/search/highlighter.py \
-              src/search/fm_index.py \
-              src/search/query_cache.py \
-              src/search/faceted_index.py \
-              src/search/knowledge_graph.py \
-              src/search/citation_network.py \
-              src/search/raptor_tree.py \
-              src/search/proximity_graph.py \
-              src/search/synonym_expander.py \
+              src/search/utils.py \
               src/search/vector_engine.py \
-              src/search/utils.py
+              src/search/ingestion/__init__.py \
+              src/search/ingestion/analyzer.py \
+              src/search/ingestion/field_schema.py \
+              src/search/ingestion/fm_index.py \
+              src/search/ingestion/faceted_index.py \
+              src/search/ingestion/raptor_tree.py \
+              src/search/query/__init__.py \
+              src/search/query/query_parser.py \
+              src/search/query/synonym_expander.py \
+              src/search/query/query_cache.py \
+              src/search/ranking/__init__.py \
+              src/search/ranking/knowledge_graph.py \
+              src/search/ranking/proximity_graph.py \
+              src/search/ranking/citation_network.py \
+              src/search/presentation/__init__.py \
+              src/search/presentation/highlighter.py
 TESTS=tests
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar

@@ -13,18 +13,21 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .analyzer import SearchAnalyzer
-from .citation_network import CitationNetworkIndex
-from .faceted_index import FacetedIndex
-from .field_schema import MultiFieldPostingsIndex
-from .fm_index import FMIndex
-from .highlighter import DynamicHighlighter
-from .knowledge_graph import KnowledgeGraphIndex
-from .proximity_graph import ProximityGraphIndex
-from .query_cache import QuerySemanticCache
-from .query_parser import EnterpriseQueryParser
-from .raptor_tree import RAPTORTreeIndex
-from .synonym_expander import SynonymExpander
+from .ingestion import (
+    FacetedIndex,
+    FMIndex,
+    MultiFieldPostingsIndex,
+    RAPTORTreeIndex,
+    SearchAnalyzer,
+)
+from .presentation import DynamicHighlighter
+from .query import (
+    EnterpriseQueryParser,
+    QueryContext,
+    QuerySemanticCache,
+    SynonymExpander,
+)
+from .ranking import CitationNetworkIndex, KnowledgeGraphIndex, ProximityGraphIndex
 from .utils import extract_abstract_from_okf
 
 
@@ -155,9 +158,7 @@ class VectorEngine:
         """Extracts authors list from raw_data meta.json if available."""
         if not date_dir:
             return []
-        meta_path = os.path.join(
-            self.raw_data_dir, date_dir, f"{clean_id}_meta.json"
-        )
+        meta_path = os.path.join(self.raw_data_dir, date_dir, f"{clean_id}_meta.json")
         if os.path.exists(meta_path):
             try:
                 with open(meta_path, "r", encoding="utf-8") as f:
@@ -395,9 +396,7 @@ class VectorEngine:
         if num_docs > 0:
             self.avg_doc_len = sum(len(d["tokens"]) for d in self.documents) / num_docs
             self.idf = {
-                token: round(
-                    math.log((num_docs - freq + 0.5) / (freq + 0.5) + 1), 4
-                )
+                token: round(math.log((num_docs - freq + 0.5) / (freq + 0.5) + 1), 4)
                 for token, freq in doc_freq.items()
             }
             self.multi_field_index.compute_field_statistics(num_docs)
@@ -542,9 +541,7 @@ class VectorEngine:
                                 kw, "security_domain", kw, d["id"]
                             )
 
-                    self.multi_field_index.compute_field_statistics(
-                        len(self.documents)
-                    )
+                    self.multi_field_index.compute_field_statistics(len(self.documents))
                     self.citation_network.compute_pagerank(
                         [d["id"] for d in self.documents]
                     )
@@ -611,84 +608,80 @@ class VectorEngine:
         results, _ = self.search_with_profile(query, top_k=top_k, category=category)
         return results
 
-    def search_with_profile(
-        self, query: str, top_k: int = 5, category: Optional[str] = None
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-        """
-        Enterprise Multi-Field & Multi-Stage Hybrid Search with Query Parser & Dynamic Highlighter.
-        """
-        t0 = time.perf_counter()
-        q_tokens = self.tokenize(query) if query else []
+    def prepare_query_context(self, query: str) -> QueryContext:
+        """Module 1: Query Understanding & Context Preparation."""
+        return self.query_parser.create_context(query, self.expander)
 
-        # Phase 0: Semantic Cache Check
-        cached_res = self.semantic_cache.get(f"{query}|{category}", q_tokens)
-        if cached_res:
-            res, prof = cached_res
-            prof["cached"] = True
-            return res[:top_k], prof
-
-        t_tokenize_start = time.perf_counter()
-        if not self.documents:
-            self.build_index()
-
-        # Parse query expressions into clauses
-        clauses = self.query_parser.parse(query)
-        expanded_query_terms: List[str] = []
-        highlight_terms: List[str] = []
-
-        for c in clauses:
-            highlight_terms.append(c.term)
-            expanded_query_terms.append(c.term)
-            if not c.is_prefix and not c.is_phrase and not c.field:
-                for syn in self.expander.expand_query(c.term):
-                    expanded_query_terms.append(syn)
-        t_tokenize_end = time.perf_counter()
-
-        # Phase 1: Multi-Field Candidate Pruning
-        t_prune_start = time.perf_counter()
+    def retrieve_candidates(
+        self,
+        ctx: QueryContext,
+        category: Optional[str] = None,
+        max_candidates: int = 600,
+    ) -> List[Dict[str, Any]]:
+        """Module 2: Hybrid Retrieval & Multi-Field Candidate Pruning."""
         candidate_ids: Optional[Set[str]] = None
         if category:
             candidate_ids = self.faceted_index.filter(category=category)
 
         # Evaluate clause constraints
-        for clause in clauses:
+        for clause in ctx.clauses:
             clause_matches: Set[str] = set()
             target_field = clause.field
 
             if clause.is_prefix:
-                fields_to_check = [target_field] if target_field else ["title", "author", "keywords", "abstract"]
+                fields_to_check = (
+                    [target_field]
+                    if target_field
+                    else ["title", "author", "keywords", "abstract"]
+                )
                 for fld in fields_to_check:
-                    clause_matches.update(self.multi_field_index.search_prefix(fld, clause.term))
+                    clause_matches.update(
+                        self.multi_field_index.search_prefix(fld, clause.term)
+                    )
             elif clause.is_fuzzy:
-                fields_to_check = [target_field] if target_field else ["title", "author", "keywords", "abstract"]
+                fields_to_check = (
+                    [target_field]
+                    if target_field
+                    else ["title", "author", "keywords", "abstract"]
+                )
                 for fld in fields_to_check:
-                    clause_matches.update(self.multi_field_index.search_fuzzy(fld, clause.term, clause.fuzzy_distance))
+                    clause_matches.update(
+                        self.multi_field_index.search_fuzzy(
+                            fld, clause.term, clause.fuzzy_distance
+                        )
+                    )
             elif target_field:
-                # Field-specific search e.g. author:Nakatani
                 term_tokens = self.tokenize(clause.term)
                 for tt in term_tokens:
                     postings = self.multi_field_index.get_postings(target_field, tt)
                     for doc_id, _ in postings:
                         clause_matches.add(doc_id)
             else:
-                # General term search
                 term_tokens = self.tokenize(clause.term)
                 for tt in term_tokens:
                     if tt in self.inverted_index:
                         clause_matches.update(self.inverted_index[tt])
 
             if clause.is_required:
-                candidate_ids = clause_matches if candidate_ids is None else (candidate_ids & clause_matches)
+                candidate_ids = (
+                    clause_matches
+                    if candidate_ids is None
+                    else (candidate_ids & clause_matches)
+                )
             elif clause.is_prohibited:
                 if candidate_ids is not None:
                     candidate_ids.difference_update(clause_matches)
             elif target_field or clause.is_prefix or clause.is_fuzzy:
-                candidate_ids = clause_matches if candidate_ids is None else (candidate_ids & clause_matches)
+                candidate_ids = (
+                    clause_matches
+                    if candidate_ids is None
+                    else (candidate_ids & clause_matches)
+                )
 
         # General token candidate pruning fallback
-        if candidate_ids is None and expanded_query_terms:
+        if candidate_ids is None and ctx.expanded_tokens:
             inv_candidates = set()
-            for pterm in expanded_query_terms:
+            for pterm in ctx.expanded_tokens:
                 for ptoken in self.tokenize(pterm):
                     if ptoken in self.inverted_index:
                         inv_candidates.update(self.inverted_index[ptoken])
@@ -703,17 +696,23 @@ class VectorEngine:
                 for did in candidate_ids
                 if did in self.documents_by_id
             ]
-            if len(target_docs) > 600:
-                target_docs = target_docs[:600]
+            if len(target_docs) > max_candidates:
+                target_docs = target_docs[:max_candidates]
         else:
-            target_docs = self.documents[:600]
-        t_prune_end = time.perf_counter()
+            target_docs = self.documents[:max_candidates]
 
-        # Phase 2: Multi-Field Scoring with BM25 & Field Boosts
-        t_scoring_start = time.perf_counter()
-        scores = []
+        return target_docs
+
+    def rerank_candidates(
+        self,
+        ctx: QueryContext,
+        target_docs: List[Dict[str, Any]],
+        top_k: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Module 3: Multi-Stage Ranking & Multi-Field Scoring."""
+        scores: List[Dict[str, Any]] = []
         all_query_tokens = []
-        for t in expanded_query_terms:
+        for t in ctx.expanded_tokens:
             all_query_tokens.extend(self.tokenize(t))
 
         for doc in target_docs:
@@ -759,36 +758,94 @@ class VectorEngine:
                 )
 
                 total_score = (
-                    field_score * 0.35
-                    + bm25_score * 0.35
-                    + fm_score * 0.30
-                ) * recency_boost * pagerank_boost
-
-            if total_score > 0:
-                # Generate dynamic highlight snippet
-                full_context = f"{doc.get('description', '')} {doc.get('title', '')} {' '.join(doc.get('authors', []))}"
-                highlight_snippet = self.highlighter.highlight(
-                    full_context, highlight_terms or q_tokens
+                    (field_score * 0.35 + bm25_score * 0.35 + fm_score * 0.30)
+                    * recency_boost
+                    * pagerank_boost
                 )
 
+            if total_score > 0:
                 scores.append(
                     {
-                        "id": doc.get("id"),
-                        "title": doc.get("title"),
-                        "description": doc.get("description"),
-                        "authors": doc.get("authors", []),
-                        "tags": doc.get("tags", []),
-                        "annotated_keywords": doc.get("annotated_keywords", []),
-                        "published_date": doc.get("published_date", ""),
-                        "path": doc.get("path"),
-                        "highlight": highlight_snippet,
+                        "doc": doc,
                         "score": round(total_score, 4),
                     }
                 )
 
-        scores.sort(key=lambda x: x["score"], reverse=True)
-        results = scores[:top_k]
+        scores.sort(key=lambda x: float(x["score"]), reverse=True)
+        return scores[:top_k]
+
+    def format_presentation(
+        self,
+        ctx: QueryContext,
+        ranked_items: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Module 4: Presentation, Snippet & Dynamic Highlighting."""
+        highlight_terms = [c.term for c in ctx.clauses]
+        if not highlight_terms and ctx.normalized_query:
+            highlight_terms = self.tokenize(ctx.normalized_query)
+
+        results = []
+        for item in ranked_items:
+            doc = item["doc"]
+            full_context = f"{doc.get('description', '')} {doc.get('title', '')} {' '.join(doc.get('authors', []))}"
+            highlight_snippet = self.highlighter.highlight(
+                full_context, highlight_terms
+            )
+
+            results.append(
+                {
+                    "id": doc.get("id"),
+                    "title": doc.get("title"),
+                    "description": doc.get("description"),
+                    "authors": doc.get("authors", []),
+                    "tags": doc.get("tags", []),
+                    "annotated_keywords": doc.get("annotated_keywords", []),
+                    "published_date": doc.get("published_date", ""),
+                    "path": doc.get("path"),
+                    "highlight": highlight_snippet,
+                    "score": item["score"],
+                }
+            )
+        return results
+
+    def search_with_profile(
+        self, query: str, top_k: int = 5, category: Optional[str] = None
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        Enterprise Multi-Field & Multi-Stage Hybrid Search with Query Parser & Dynamic Highlighter.
+        """
+        t0 = time.perf_counter()
+        q_tokens = self.tokenize(query) if query else []
+
+        # Phase 0: Semantic Cache Check
+        cached_res = self.semantic_cache.get(f"{query}|{category}", q_tokens)
+        if cached_res:
+            res, prof = cached_res
+            prof["cached"] = True
+            return res[:top_k], prof
+
+        t_tokenize_start = time.perf_counter()
+        if not self.documents:
+            self.build_index()
+
+        # Step 1: Query Context Preparation
+        ctx = self.prepare_query_context(query)
+        t_tokenize_end = time.perf_counter()
+
+        # Step 2: Multi-Field Candidate Retrieval
+        t_prune_start = time.perf_counter()
+        target_docs = self.retrieve_candidates(
+            ctx, category=category, max_candidates=600
+        )
+        t_prune_end = time.perf_counter()
+
+        # Step 3: Multi-Stage Scoring & Reranking
+        t_scoring_start = time.perf_counter()
+        ranked_items = self.rerank_candidates(ctx, target_docs, top_k=top_k)
         t_scoring_end = time.perf_counter()
+
+        # Step 4: Presentation & Highlight Generation
+        results = self.format_presentation(ctx, ranked_items)
         t_total_end = time.perf_counter()
 
         profile = {
@@ -798,7 +855,8 @@ class VectorEngine:
             "total_ms": round((t_total_end - t0) * 1000, 3),
             "candidates_evaluated": len(target_docs),
             "total_documents": len(self.documents),
-            "clauses_parsed": len(clauses),
+            "clauses_parsed": len(ctx.clauses),
+            "intent": ctx.intent,
             "cached": False,
         }
 

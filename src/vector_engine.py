@@ -54,7 +54,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Build or rebuild enterprise multi-field hybrid index",
     )
-    parser.add_argument("--query", type=str, help="Search query string e.g. 'author:Nakatani' or 'malware'")
+    parser.add_argument(
+        "--query",
+        type=str,
+        help="Search query string e.g. 'author:Nakatani' or 'malware'",
+    )
     parser.add_argument(
         "--top-k", type=int, default=5, help="Number of results to return"
     )

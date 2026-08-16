@@ -6,7 +6,7 @@ Extracts context snippets around query hits with safe HTML-escaped highlight tag
 
 import html
 import re
-from typing import List
+from typing import List, Optional
 
 
 class DynamicHighlighter:
@@ -24,9 +24,7 @@ class DynamicHighlighter:
         self.post_tag = post_tag
         self.snippet_length = snippet_length
 
-    def highlight(
-        self, text: str, query_terms: List[str]
-    ) -> str:
+    def highlight(self, text: str, query_terms: List[str]) -> str:
         """
         Extracts the most relevant snippet from text and applies highlight tags.
         """
@@ -36,9 +34,7 @@ class DynamicHighlighter:
 
         # Clean query terms
         terms = [
-            re.escape(t.lower().strip())
-            for t in query_terms
-            if len(t.strip()) >= 2
+            re.escape(t.lower().strip()) for t in query_terms if len(t.strip()) >= 2
         ]
         if not terms:
             safe_text = html.escape(text[: self.snippet_length])
@@ -84,3 +80,19 @@ class DynamicHighlighter:
         prefix = "..." if snippet_start > 0 else ""
         suffix = "..." if snippet_end < len(text) else ""
         return f"{prefix}{highlighted}{suffix}"
+
+    def highlight_document(
+        self,
+        doc: dict,
+        query_terms: List[str],
+        fields: Optional[List[str]] = None,
+    ) -> dict:
+        """Extracts and highlights snippets for target fields in a document."""
+        if fields is None:
+            fields = ["title", "description", "abstract"]
+        snippets = {}
+        for f in fields:
+            val = doc.get(f, "")
+            if isinstance(val, str) and val:
+                snippets[f] = self.highlight(val, query_terms)
+        return snippets
