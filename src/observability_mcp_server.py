@@ -20,7 +20,7 @@ import sys
 import time
 import timeit
 import tracemalloc
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, cast
 
 if "src" not in sys.path:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
@@ -269,6 +269,31 @@ def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def handle_evaluate_search_quality(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Runs IR evaluation benchmark against ground-truth datasets and returns Precision, Recall, MAP, MRR, NDCG."""
+    from search.eval.dataset import DEFAULT_SECURITY_GOLD_STANDARD
+    from search.eval.evaluator import SearchEvaluator
+    from search.server.handler.select_handler import SelectHandler
+
+    top_k = params.get("top_k", 5)
+    handler = SelectHandler()
+    evaluator = SearchEvaluator(queries=DEFAULT_SECURITY_GOLD_STANDARD, top_k=top_k)
+
+    def _search(q: str, k: int) -> Sequence[str]:
+        resp = handler.handle_select(query=q, top_k=k)
+        docs = resp.get("response", {}).get("docs", [])
+        return [str(d.get("id", "")) for d in docs]
+
+    eval_res = evaluator.evaluate(_search)
+    markdown_report = evaluator.generate_markdown_report(eval_res)
+
+    return {
+        "summary": eval_res["summary"],
+        "markdown_report": markdown_report,
+        "query_details": eval_res["query_details"],
+    }
+
+
 # ---------------------------------------------------------------------------
 # MCP Tool & Resource Registries
 # ---------------------------------------------------------------------------
@@ -338,6 +363,16 @@ TOOLS_REGISTRY = {
         "description": "Retrieves live search engine metrics, cache hit ratios, and runtime health stats.",
         "inputSchema": {"type": "object", "properties": {}},
         "handler": handle_get_system_metrics,
+    },
+    "evaluate_search_quality": {
+        "description": "Evaluates search engine accuracy across Precision@K, Recall@K, F1, MAP, MRR, and NDCG@K using standard benchmark datasets.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "top_k": {"type": "integer", "description": "Top-K documents to evaluate", "default": 5},
+            },
+        },
+        "handler": handle_evaluate_search_quality,
     },
 }
 
