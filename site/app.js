@@ -156,7 +156,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    resultsGrid.innerHTML = results.map(paper => `
+    resultsGrid.innerHTML = results.map(paper => {
+      const authors = (paper['authors'] || []).slice(0, 3).join(', ');
+      const authorsBadge = authors ? `<div class="card-authors">👥 著者: ${escapeHtml(authors)}</div>` : '';
+      const highlightHtml = paper['highlight'] ? `<div class="card-snippet">${paper['highlight']}</div>` : `<p class="card-desc">${escapeHtml(paper.description || '要約情報なし')}</p>`;
+
+      return `
       <div class="glass-panel paper-card" onclick="openPaperModal('${escapeHtml(paper.id)}')">
         <div>
           <div class="card-top">
@@ -164,7 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="score-badge">Score: ${escapeHtml(String(paper['score']))}</span>
           </div>
           <h3 class="card-title">${escapeHtml(paper.title)}</h3>
-          <p class="card-desc">${escapeHtml(paper.description || '要約情報なし')}</p>
+          ${authorsBadge}
+          ${highlightHtml}
         </div>
         <div class="card-footer">
           <div class="card-tags">
@@ -173,7 +179,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <span style="font-size: 0.8rem; color: var(--accent-primary);">詳細を見る &rarr;</span>
         </div>
       </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   // Modal Dialog handling (Fullscreen Viewer with Topology Network)

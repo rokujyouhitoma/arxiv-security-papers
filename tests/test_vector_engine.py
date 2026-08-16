@@ -204,3 +204,86 @@ def test_vector_engine_get_related_papers():
         assert res["status"] == "success"
         assert "related_papers" in res
         assert "mermaid_graph" in res
+
+
+def test_multi_field_schema_postings():
+    from search.field_schema import MultiFieldPostingsIndex
+
+    idx = MultiFieldPostingsIndex()
+    idx.add_field_tokens("doc1", "title", ["rapidpen", "penetration", "testing"])
+    idx.add_field_tokens("doc1", "author", ["tohru", "nakatani"])
+    idx.add_field_tokens("doc2", "title", ["malware", "analysis"])
+    idx.add_field_tokens("doc2", "author", ["john", "doe"])
+    idx.compute_field_statistics(2)
+
+    # Postings check
+    postings = idx.get_postings("author", "nakatani")
+    assert len(postings) == 1
+    assert postings[0][0] == "doc1"
+    assert postings[0][1] == [1]
+
+    # Prefix search
+    pref_matches = idx.search_prefix("author", "nakat")
+    assert "doc1" in pref_matches
+
+    # Fuzzy search
+    fuzz_matches = idx.search_fuzzy("author", "nakatany", max_distance=1)
+    assert "doc1" in fuzz_matches
+
+
+def test_search_analyzer():
+    from search.analyzer import SearchAnalyzer
+
+    analyzer = SearchAnalyzer()
+    tokens = analyzer.tokenize("RapidPen ペネトレーションテスト 脆弱性")
+    assert "rapidpen" in tokens
+    assert "ペネトレーションテスト" in tokens
+
+    offsets = analyzer.tokenize_with_offsets("RapidPen malware test")
+    assert len(offsets) >= 3
+    assert offsets[0].text == "rapidpen"
+    assert offsets[0].start == 0
+
+
+def test_query_parser():
+    from search.query_parser import EnterpriseQueryParser
+
+    parser = EnterpriseQueryParser()
+    clauses = parser.parse('author:Nakatani +title:malware "deep learning"~2 pen* sound~1')
+    assert len(clauses) >= 5
+
+    c_author = next(c for c in clauses if c.field == "author")
+    assert c_author.term == "Nakatani"
+
+    c_title = next(c for c in clauses if c.field == "title")
+    assert c_title.term == "malware"
+    assert c_title.is_required is True
+
+    c_phrase = next(c for c in clauses if c.is_phrase)
+    assert c_phrase.term == "deep learning"
+    assert c_phrase.phrase_slop == 2
+
+    c_pref = next(c for c in clauses if c.is_prefix)
+    assert c_pref.term == "pen"
+
+    c_fuzz = next(c for c in clauses if c.is_fuzzy)
+    assert c_fuzz.term == "sound"
+
+
+def test_dynamic_highlighter():
+    from search.highlighter import DynamicHighlighter
+
+    hl = DynamicHighlighter()
+    text = "This paper presents RapidPen, an automated penetration testing tool."
+    res = hl.highlight(text, ["RapidPen", "penetration"])
+    assert '<mark class="highlight">' in res
+    assert "</mark>" in res
+    assert "RapidPen" in res
+
+
+def test_enterprise_author_and_field_search():
+    engine = VectorEngine()
+    # Test query parsing and search
+    results, profile = engine.search_with_profile("author:Nakatani", top_k=5)
+    assert isinstance(results, list)
+    assert profile["total_ms"] >= 0

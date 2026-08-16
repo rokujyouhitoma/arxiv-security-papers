@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **012** | [多層フィールド別転置インデックス・高度クエリパーサー・動的ハイライトによるエンタープライズ検索エンジンへの全面リアーキテクチャ](closed/012-rearchitect-to-enterprise-multifield-search-engine.md) | Refactor | 2026-08-16 | [012-rearchitect-to-enterprise-multifield-search-engine.md](closed/012-rearchitect-to-enterprise-multifield-search-engine.md) |
 | **011** | [論文間トポロジカル近傍グラフ（k-NN Proximity Graph）の事前計算 ＆ 関連論文ネットワーク可視化](closed/011-implement-paper-proximity-graph-and-topology-visualization.md) | Feature | 2026-08-16 | [011-implement-paper-proximity-graph-and-topology-visualization.md](closed/011-implement-paper-proximity-graph-and-topology-visualization.md) |
 | **010** | [高度インデックス体系（密ベクトルANN・ナレッジグラフ・RAPTOR・ファセット・引用網・セマンティックキャッシュ）および多段階検索パイプラインの統合](closed/010-integrate-advanced-index-types-and-multi-stage-rag-pipeline.md) | Feature | 2026-08-16 | [010-integrate-advanced-index-types-and-multi-stage-rag-pipeline.md](closed/010-integrate-advanced-index-types-and-multi-stage-rag-pipeline.md) |
 | **009** | [Python 3.14.7 へのアップグレード ＆ venv 仮想環境の再構築](closed/009-rebuild-venv-and-upgrade-to-python-3-14.md) | Enhancement | 2026-08-16 | [009-rebuild-venv-and-upgrade-to-python-3-14.md](closed/009-rebuild-venv-and-upgrade-to-python-3-14.md) |
