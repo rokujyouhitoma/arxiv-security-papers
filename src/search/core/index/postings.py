@@ -66,7 +66,10 @@ class MultiFieldPostingsIndex:
         for t, plist in self.field_indexes[field].items():
             if abs(len(t) - len(term_lower)) > max_distance:
                 continue
-            if self._levenshtein(t, term_lower, max_distance=max_distance) <= max_distance:
+            if (
+                self._levenshtein(t, term_lower, max_distance=max_distance)
+                <= max_distance
+            ):
                 for doc_id, _ in plist.get_docs():
                     matched_docs.add(doc_id)
         return matched_docs

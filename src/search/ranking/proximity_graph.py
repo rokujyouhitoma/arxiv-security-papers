@@ -32,8 +32,12 @@ class ProximityGraphIndex:
             token_sim = 0.0
         else:
             dot_product = sum(counts_a[t] * counts_b[t] for t in shared_tokens)
-            norm_a = doc_a.get("_norm") or (sum(v * v for v in counts_a.values()) ** 0.5)
-            norm_b = doc_b.get("_norm") or (sum(v * v for v in counts_b.values()) ** 0.5)
+            norm_a = doc_a.get("_norm") or (
+                sum(v * v for v in counts_a.values()) ** 0.5
+            )
+            norm_b = doc_b.get("_norm") or (
+                sum(v * v for v in counts_b.values()) ** 0.5
+            )
             token_sim = (
                 (dot_product / (norm_a * norm_b)) if norm_a > 0 and norm_b > 0 else 0.0
             )

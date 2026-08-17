@@ -4,7 +4,6 @@ Solr-style Select Request Handler (/select).
 Orchestrates Query Parsing, FilterCache evaluation, Core Index Retrieval, BM25 Scoring, Faceting, and Highlighting.
 """
 
-import time
 from typing import Any, Dict, List, Optional, Set
 
 from ...core.analysis.token_filter import Analyzer
@@ -94,7 +93,10 @@ class SelectHandler:
                         idf = self.similarity.compute_idf(len(postings), total_docs)
                         boost = fdef.boost
                         for pid, tf in postings:
-                            if filtered_doc_ids is not None and pid not in filtered_doc_ids:
+                            if (
+                                filtered_doc_ids is not None
+                                and pid not in filtered_doc_ids
+                            ):
                                 continue
                             bm25 = self.similarity.score(tf, 100, 100.0, idf)
                             doc_scores[pid] = doc_scores.get(pid, 0.0) + bm25 * boost

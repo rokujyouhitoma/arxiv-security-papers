@@ -11,7 +11,7 @@ Provides pure, standard implementations of:
 """
 
 import math
-from typing import Dict, List, Sequence, Set, Union
+from typing import Dict, Sequence, Set, Union
 
 
 def compute_precision_at_k(

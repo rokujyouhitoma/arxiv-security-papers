@@ -31,6 +31,7 @@ build/
 # Logs & Temporary Files
 *.log
 fetch.log
+outputs/logs/
 
 # Operating System & IDE Files
 .DS_Store

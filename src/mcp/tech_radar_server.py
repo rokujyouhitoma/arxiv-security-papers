@@ -6,9 +6,8 @@ and emerging threat forecasts based on arXiv security papers.
 """
 
 import json
-import os
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 # ---------------------------------------------------------------------------
 # Tech-Radar & Trend Synthesis Knowledge Engine
@@ -16,25 +15,90 @@ from typing import Any, Dict, List, Optional
 
 SECURITY_TECH_RADAR = {
     "adopt": [
-        {"name": "Zero Trust Architecture (ZTA)", "category": "architecture", "ring": "Adopt", "evidence": "Over 2,400 papers, NIST SP 800-207 standard enforcement, Microsegmentation maturity."},
-        {"name": "Pickle-Free Safe Serialization (JSON / SafeTensors)", "category": "data-safety", "ring": "Adopt", "evidence": "PickleFuzzer & EOP bypasses proven; zero-pickle policy required for ML & systems."},
-        {"name": "AST-Level Static Code Sandboxing", "category": "application-security", "ring": "Adopt", "evidence": "SAGA & QRS papers demonstrate 100% precision in preventing dynamic code injections."},
-        {"name": "Symbolic CFG & Neuro-Symbolic SAST", "category": "devsecops", "ring": "Adopt", "evidence": "Combines CodeQL determinism with LLM semantic reasoning, discovering real-world CVEs."},
+        {
+            "name": "Zero Trust Architecture (ZTA)",
+            "category": "architecture",
+            "ring": "Adopt",
+            "evidence": "Over 2,400 papers, NIST SP 800-207 standard enforcement, Microsegmentation maturity.",
+        },
+        {
+            "name": "Pickle-Free Safe Serialization (JSON / SafeTensors)",
+            "category": "data-safety",
+            "ring": "Adopt",
+            "evidence": "PickleFuzzer & EOP bypasses proven; zero-pickle policy required for ML & systems.",
+        },
+        {
+            "name": "AST-Level Static Code Sandboxing",
+            "category": "application-security",
+            "ring": "Adopt",
+            "evidence": "SAGA & QRS papers demonstrate 100% precision in preventing dynamic code injections.",
+        },
+        {
+            "name": "Symbolic CFG & Neuro-Symbolic SAST",
+            "category": "devsecops",
+            "ring": "Adopt",
+            "evidence": "Combines CodeQL determinism with LLM semantic reasoning, discovering real-world CVEs.",
+        },
     ],
     "trial": [
-        {"name": "Post-Quantum Cryptography (ML-KEM / ML-DSA)", "category": "cryptography", "ring": "Trial", "evidence": "NIST standardized Kyber/Dilithium; active lattice-based key exchange migration."},
-        {"name": "Multi-Agent Security Code Auditing (Plan-and-Execute)", "category": "ai-security", "ring": "Trial", "evidence": "CHASE & PYPILINE demonstrate 98%+ recall with sub-second per-package triage."},
-        {"name": "Confidential Computing & Hardware Enclaves (TEE)", "category": "infrastructure", "ring": "Trial", "evidence": "AMD SEV-SNP / Intel TDX protection against untrusted hypervisors."},
+        {
+            "name": "Post-Quantum Cryptography (ML-KEM / ML-DSA)",
+            "category": "cryptography",
+            "ring": "Trial",
+            "evidence": "NIST standardized Kyber/Dilithium; active lattice-based key exchange migration.",
+        },
+        {
+            "name": "Multi-Agent Security Code Auditing (Plan-and-Execute)",
+            "category": "ai-security",
+            "ring": "Trial",
+            "evidence": "CHASE & PYPILINE demonstrate 98%+ recall with sub-second per-package triage.",
+        },
+        {
+            "name": "Confidential Computing & Hardware Enclaves (TEE)",
+            "category": "infrastructure",
+            "ring": "Trial",
+            "evidence": "AMD SEV-SNP / Intel TDX protection against untrusted hypervisors.",
+        },
     ],
     "assess": [
-        {"name": "Device Context Protocol (DCP) for MCU IoT", "category": "iot-security", "ring": "Assess", "evidence": "Lightweight sub-50-byte framing preventing prompt-injected LLM tool misuse."},
-        {"name": "Slopsquatting & LLM Hallucination Pre-registration Defense", "category": "supply-chain", "ring": "Assess", "evidence": "Frontier models invent 100+ identical package names; proactive reservation needed."},
-        {"name": "Exception-Oriented Programming (EOP) Scanning", "category": "malware-analysis", "ring": "Assess", "evidence": "New evasion paradigm bypassing conventional static bytecode analyzers."},
+        {
+            "name": "Device Context Protocol (DCP) for MCU IoT",
+            "category": "iot-security",
+            "ring": "Assess",
+            "evidence": "Lightweight sub-50-byte framing preventing prompt-injected LLM tool misuse.",
+        },
+        {
+            "name": "Slopsquatting & LLM Hallucination Pre-registration Defense",
+            "category": "supply-chain",
+            "ring": "Assess",
+            "evidence": "Frontier models invent 100+ identical package names; proactive reservation needed.",
+        },
+        {
+            "name": "Exception-Oriented Programming (EOP) Scanning",
+            "category": "malware-analysis",
+            "ring": "Assess",
+            "evidence": "New evasion paradigm bypassing conventional static bytecode analyzers.",
+        },
     ],
     "hold": [
-        {"name": "Single-Commit SAST Snapshot Scanning", "category": "devsecops", "ring": "Hold", "evidence": "CrossCommitVuln-Bench proves 87% of multi-commit vulnerabilities evade per-commit tools."},
-        {"name": "Unrestricted Python Pickle ML Loading", "category": "data-safety", "ring": "Hold", "evidence": "Fatal RCE vulnerabilities in Hugging Face / model registries; deprecated in secure ML."},
-        {"name": "Trust-on-First-Use SourceRank Repositories", "category": "supply-chain", "ring": "Hold", "evidence": "URL confusion and evasion attacks inflate SourceRank for malicious PyPI packages."},
+        {
+            "name": "Single-Commit SAST Snapshot Scanning",
+            "category": "devsecops",
+            "ring": "Hold",
+            "evidence": "CrossCommitVuln-Bench proves 87% of multi-commit vulnerabilities evade per-commit tools.",
+        },
+        {
+            "name": "Unrestricted Python Pickle ML Loading",
+            "category": "data-safety",
+            "ring": "Hold",
+            "evidence": "Fatal RCE vulnerabilities in Hugging Face / model registries; deprecated in secure ML.",
+        },
+        {
+            "name": "Trust-on-First-Use SourceRank Repositories",
+            "category": "supply-chain",
+            "ring": "Hold",
+            "evidence": "URL confusion and evasion attacks inflate SourceRank for malicious PyPI packages.",
+        },
     ],
 }
 
@@ -44,31 +108,48 @@ EMERGING_THREAT_FORECASTS = [
         "title": "LLM Package Hallucination Exploitation (Slopsquatting)",
         "severity": "HIGH",
         "vector": "Software Supply Chain",
-        "description": "Adversaries pre-register hallucinated package names repeatedly produced by GPT/Claude/DeepSeek code assistants.",
-        "mitigation": "Private registry mirroring with strict namespace reservation and zero-dependency base policies.",
+        "description": (
+            "Adversaries pre-register hallucinated package names repeatedly produced by "
+            "GPT/Claude/DeepSeek code assistants."
+        ),
+        "mitigation": (
+            "Private registry mirroring with strict namespace reservation and zero-dependency base policies."
+        ),
     },
     {
         "threat_id": "THREAT-2026-02",
         "title": "Pickle VM Implementation Discrepancy & EOP Model Poisoning",
         "severity": "CRITICAL",
         "vector": "AI/ML Infrastructure",
-        "description": "Multi-engine PVM opcode mismatches allow attackers to craft stealthy models executing arbitrary code on load.",
-        "mitigation": "Mandate SafeTensors / ONNX format and block untrusted pickle deserialization entirely.",
+        "description": (
+            "Multi-engine PVM opcode mismatches allow attackers to craft stealthy models "
+            "executing arbitrary code on load."
+        ),
+        "mitigation": (
+            "Mandate SafeTensors / ONNX format and block untrusted pickle deserialization entirely."
+        ),
     },
     {
         "threat_id": "THREAT-2026-03",
         "title": "Multi-Commit Evasive Supply-Chain Infiltration",
         "severity": "HIGH",
         "vector": "Source Code Integrity",
-        "description": "Exploitable condition introduced across benign-looking micro-commits to defeat snapshot CI scanners.",
-        "mitigation": "Full-repository multi-commit dependency tracking and whole-codebase invariant verification.",
+        "description": (
+            "Exploitable condition introduced across benign-looking micro-commits to defeat snapshot CI scanners."
+        ),
+        "mitigation": (
+            "Full-repository multi-commit dependency tracking and whole-codebase invariant verification."
+        ),
     },
 ]
 
 TOOLS_MANIFEST = [
     {
         "name": "get_technology_radar",
-        "description": "Generate an executive Technology Radar (Adopt, Trial, Assess, Hold) summarizing security trends from arXiv papers.",
+        "description": (
+            "Generate an executive Technology Radar (Adopt, Trial, Assess, Hold) "
+            "summarizing security trends from arXiv papers."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -78,14 +159,19 @@ TOOLS_MANIFEST = [
                 },
                 "category": {
                     "type": "string",
-                    "description": "Optional category filter: 'cryptography', 'ai-security', 'supply-chain', 'architecture'",
+                    "description": (
+                        "Optional category filter: 'cryptography', 'ai-security', 'supply-chain', 'architecture'"
+                    ),
                 },
             },
         },
     },
     {
         "name": "predict_emerging_threats",
-        "description": "Forecast emerging cybersecurity threats and attack vectors based on latest research velocity and surge keywords.",
+        "description": (
+            "Forecast emerging cybersecurity threats and attack vectors based on "
+            "latest research velocity and surge keywords."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -142,7 +228,11 @@ def handle_predict_emerging_threats(params: Dict[str, Any]) -> Dict[str, Any]:
     severity_order = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0}
     min_rank = severity_order.get(min_sev, 2)
 
-    threats = [t for t in EMERGING_THREAT_FORECASTS if severity_order.get(t["severity"], 0) >= min_rank]
+    threats = [
+        t
+        for t in EMERGING_THREAT_FORECASTS
+        if severity_order.get(t["severity"], 0) >= min_rank
+    ]
 
     return {
         "status": "success",
@@ -163,7 +253,11 @@ def main():
             req_id = req.get("id")
 
             if method == "tools/list":
-                resp = {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}}
+                resp = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {"tools": TOOLS_MANIFEST},
+                }
             elif method == "tools/call":
                 p = req.get("params", {})
                 tool_name = p.get("name")
@@ -176,7 +270,18 @@ def main():
                 else:
                     res = {"error": f"Unknown tool '{tool_name}'"}
 
-                resp = {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False, indent=2)}]}}
+                resp = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(res, ensure_ascii=False, indent=2),
+                            }
+                        ]
+                    },
+                }
             else:
                 resp = {"jsonrpc": "2.0", "id": req_id, "result": {}}
 

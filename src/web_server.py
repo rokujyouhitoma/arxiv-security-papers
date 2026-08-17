@@ -81,7 +81,9 @@ def log_query(
     clauses_parsed = profile.get("clauses_parsed", 0)
 
     # Compute throughput (evaluated docs / sec)
-    throughput = round(candidates_eval / (total_ms / 1000.0), 1) if total_ms > 0 else 0.0
+    throughput = (
+        round(candidates_eval / (total_ms / 1000.0), 1) if total_ms > 0 else 0.0
+    )
 
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -115,7 +117,7 @@ def log_query(
 
     # 1. Output formatted performance log to server stdout/stderr for real-time observability
     log_line = (
-        f"[PERF] ⚡ Query: \"{query}\" | Total: {total_ms:.2f}ms "
+        f'[PERF] ⚡ Query: "{query}" | Total: {total_ms:.2f}ms '
         f"[Tokenize: {tokenize_ms:.2f}ms, Prune: {pruning_ms:.2f}ms, Score: {scoring_ms:.2f}ms] | "
         f"Hits: {result_count}/{top_k} | Eval: {candidates_eval}/{total_docs} docs ({throughput} docs/s) | "
         f"Intent: {intent} | Cached: {cached}"
@@ -130,6 +132,7 @@ def log_query(
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception as e:
         sys.stderr.write(f"[QueryLogger] Failed to write log: {e}\n")
+
 
 CORS_HEADERS = [
     ("Access-Control-Allow-Origin", "*"),
@@ -552,7 +555,9 @@ class WSGIApplication:
         if method in ["GET", "HEAD"]:
             remote_addr = environ.get("REMOTE_ADDR", "-")
             if path == "/api/search":
-                res = self._handle_search(start_response, query_params, remote_addr=remote_addr)
+                res = self._handle_search(
+                    start_response, query_params, remote_addr=remote_addr
+                )
             elif path.startswith("/api/paper/"):
                 res = self._handle_paper(start_response, path)
             elif path == "/api/trends":
