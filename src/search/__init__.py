@@ -10,7 +10,7 @@ Modularized 2-tier search architecture:
 import sys
 
 # Subpackages
-from . import core, ingestion, presentation, query, ranking, server
+from . import core, ingestion, presentation, query, ranking, server, vector
 from .core import (
     Analyzer,
     BM25Similarity,
@@ -71,6 +71,13 @@ from .server import (
     SelectHandler,
 )
 from .utils import extract_abstract_from_okf
+from .vector import (
+    DeterministicEmbedding,
+    HNSWIndex,
+    RRFHybridScorer,
+    VectorStorage,
+    VectorStorageSecurityError,
+)
 from .vector_engine import VectorEngine
 
 # Backward compatibility aliases for legacy direct module imports (e.g. search.query_parser)
@@ -95,6 +102,7 @@ __all__ = [
     "CharFilter",
     "CitationNetworkIndex",
     "DeletedDocsBitset",
+    "DeterministicEmbedding",
     "Directory",
     "DocValues",
     "DynamicHighlighter",
@@ -108,6 +116,7 @@ __all__ = [
     "FMIndex",
     "FSDirectory",
     "FuzzyQuery",
+    "HNSWIndex",
     "HTMLStripCharFilter",
     "KnowledgeGraphIndex",
     "LRUCache",
@@ -125,6 +134,7 @@ __all__ = [
     "QuerySemanticCache",
     "RAMDirectory",
     "RAPTORTreeIndex",
+    "RRFHybridScorer",
     "ScoreDoc",
     "SearchAnalyzer",
     "SegmentInfo",
@@ -143,6 +153,8 @@ __all__ = [
     "TopDocsCollector",
     "UnicodeNormalizeCharFilter",
     "VectorEngine",
+    "VectorStorage",
+    "VectorStorageSecurityError",
     "core",
     "extract_abstract_from_okf",
     "ingestion",
@@ -150,4 +162,5 @@ __all__ = [
     "query",
     "ranking",
     "server",
+    "vector",
 ]
