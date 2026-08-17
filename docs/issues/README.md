@@ -8,7 +8,10 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当ブランチ / ファイル |
 | :---: | --- | :---: | :---: | :---: | --- |
-| - | 現在進行中のアクティブ Issue はありません | - | - | - | - |
+| **031** | [`src/fetcher/` の ETL 3層（`ingestion` / `transformer` / `reporter`）アーキテクチャ分離](031-refactor-fetcher-into-etl-pipeline-architecture.md) | Feature / Refactor | High | New | `feat/031-fetcher-etl-pipeline-architecture` |
+| **032** | [共通セキュリティ＆コンプライアンス基盤（`src/security/`）の独立集約](032-consolidate-unified-security-guard-and-rbac.md) | Feature / Security | Medium | New | `feat/032-consolidate-unified-security-framework` |
+| **033** | [`src/database/` の内部エンジン進化（B+Tree インデックスおよび Cost-Based Query Planner の分離・実装）](033-enhance-database-with-btree-index-and-cost-based-planner.md) | Feature | Medium | New | `feat/033-database-btree-and-query-planner` |
+| **034** | [Web サーバーの API Gateway 化と UI プレゼンテーション層の完全分離（`src/gateway/` / `src/presentation/`）](034-split-web-server-into-api-gateway-and-ui-presentation.md) | Feature / Arch | Low | New | `feat/034-split-gateway-and-presentation` |
 
 ---
 
