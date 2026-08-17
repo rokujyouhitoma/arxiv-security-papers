@@ -10,6 +10,17 @@ PYTHON_SRCS = src/__init__.py \
               src/vector_engine.py \
               src/fetcher/__init__.py \
               src/fetcher/arxiv_okf_fetcher.py \
+              src/fetcher/ingestion/__init__.py \
+              src/fetcher/ingestion/arxiv_client.py \
+              src/fetcher/ingestion/pdf_extractor.py \
+              src/fetcher/transformer/__init__.py \
+              src/fetcher/transformer/translator.py \
+              src/fetcher/transformer/tagger.py \
+              src/fetcher/transformer/okf_serializer.py \
+              src/fetcher/reporter/__init__.py \
+              src/fetcher/reporter/summary_generator.py \
+              src/fetcher/reporter/diagram_generator.py \
+              src/fetcher/reporter/index_updater.py \
               src/web/__init__.py \
               src/web/web_server.py \
               src/web_server.py \

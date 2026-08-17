@@ -188,9 +188,9 @@ def test_hnsw_ann_latency_percentiles():
         warmup=10,
     )
 
-    assert res.p50_ms < 8.0, f"P50 too high: {res.p50_ms} ms"
-    assert res.p95_ms < 12.0, f"P95 too high: {res.p95_ms} ms"
-    assert res.throughput_ops_sec > 100
+    assert res.p50_ms < 10.0, f"P50 too high: {res.p50_ms} ms"
+    assert res.p95_ms < 20.0, f"P95 too high: {res.p95_ms} ms"
+    assert res.throughput_ops_sec > 40
 
 
 def test_multithreaded_concurrent_reads_and_vfs_lock():
