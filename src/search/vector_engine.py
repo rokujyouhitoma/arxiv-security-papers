@@ -5,6 +5,7 @@ Sub-10ms High-Performance Search Engine with Multi-Field Postings, Query Parser,
 """
 
 import json
+import logging
 import math
 import os
 import re
@@ -92,12 +93,19 @@ class VectorEngine:
         ),
     ]
 
-    def __init__(self, workspace_dir: Optional[str] = None):
+    def __init__(
+        self,
+        workspace_dir: Optional[str] = None,
+        lazy: bool = False,
+        auto_build: bool = False,
+    ):
         if workspace_dir is None:
             workspace_dir = os.path.dirname(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             )
         self.workspace_dir = workspace_dir
+        self.lazy = lazy
+        self.auto_build = auto_build
         self.vector_db_dir = os.path.join(self.workspace_dir, "outputs", "vector_db")
         self.raw_data_dir = os.path.join(self.workspace_dir, "outputs", "raw_data")
         self.index_file = os.path.join(self.vector_db_dir, "index.json")
@@ -143,7 +151,8 @@ class VectorEngine:
             self.workspace_dir, "outputs", "logs", "search_perf_log.jsonl"
         )
         os.makedirs(self.vector_db_dir, exist_ok=True)
-        self.load_index()
+        if not self.lazy:
+            self.load_index()
 
     def tokenize(self, text: str) -> List[str]:
         """Tokenizes text using multi-stage analyzer."""
@@ -474,9 +483,9 @@ class VectorEngine:
             "proximity_graph": dict(self.proximity_graph.graph),
         }
         with open(self.index_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(data, f, ensure_ascii=False)
 
-    def load_index(self) -> None:
+    def load_index(self, max_docs: Optional[int] = None) -> None:
         if os.path.exists(self.index_file):
             try:
                 with open(self.index_file, "r", encoding="utf-8") as f:
@@ -490,6 +499,8 @@ class VectorEngine:
                         list, data.get("inverted_keywords", {})
                     )
                     raw_docs = data.get("documents", [])
+                    if max_docs is not None and max_docs > 0:
+                        raw_docs = raw_docs[:max_docs]
                     self.documents = []
                     self.documents_by_id = {}
                     self.multi_field_index = MultiFieldPostingsIndex()
@@ -573,7 +584,8 @@ class VectorEngine:
                         [d["id"] for d in self.documents]
                     )
                     self.raptor_tree.build_summary_tree(self.documents)
-            except Exception:
+            except (json.JSONDecodeError, OSError, KeyError, TypeError) as e:
+                logging.warning("Failed to load index from %s: %s", self.index_file, e)
                 self.documents = []
                 self.documents_by_id = {}
                 self.idf = {}
@@ -886,7 +898,7 @@ class VectorEngine:
             return res[:top_k], prof
 
         t_tokenize_start = time.perf_counter()
-        if not self.documents:
+        if not self.documents and self.auto_build:
             self.build_index()
 
         # Step 1: Query Context Preparation

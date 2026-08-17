@@ -13,16 +13,27 @@ from mcp.papers_server import (
     dispatch_tool,
     handle_get_prompt,
     handle_read_resource,
+    set_vector_engine,
 )
 from vector_engine import VectorEngine
 
 
+def setup_module():
+    engine = VectorEngine(lazy=True)
+    engine.knowledge_graph.add_entity(
+        "マルウェア・脅威解析", "domain", "malware", "test_id_1"
+    )
+    set_vector_engine(engine)
+
+
 def test_vector_engine_indexing_and_search():
-    engine = VectorEngine()
+    engine = VectorEngine(lazy=True)
     assert isinstance(engine.documents, list)
+    assert len(engine.documents) == 0
 
     results = engine.search("security", top_k=3)
     assert isinstance(results, list)
+    assert len(results) == 0
 
 
 def test_mcp_manifests():

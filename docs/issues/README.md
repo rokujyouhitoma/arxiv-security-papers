@@ -19,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **035** | [VectorEngine テスト `test_vector_engine_indexing_and_search` が 312MB index.json の同期ロードによりブロック](closed/035-fix-vector-engine-test-blocking-on-312mb-index-load.md) | Bug | 2026-08-18 | [035-fix-vector-engine-test-blocking-on-312mb-index-load.md](closed/035-fix-vector-engine-test-blocking-on-312mb-index-load.md) |
 | **031** | [`src/fetcher/` の ETL 3層（`ingestion` / `transformer` / `reporter`）アーキテクチャ分離](closed/031-refactor-fetcher-into-etl-pipeline-architecture.md) | Feature / Refactor | 2026-08-17 | [031-refactor-fetcher-into-etl-pipeline-architecture.md](closed/031-refactor-fetcher-into-etl-pipeline-architecture.md) |
 | **030** | [4層ベクトルDBの重厚な性能・メモリプロファイリング評価およびSQL互換性テスト拡充](closed/030-database-performance-memory-profiling-and-sql-test-expansion.md) | Performance / Test | 2026-08-17 | [030-database-performance-memory-profiling-and-sql-test-expansion.md](closed/030-database-performance-memory-profiling-and-sql-test-expansion.md) |
 | **029** | [`tests/` および `src/` ディレクトリのパッケージ階層（`database/`, `fetcher/`, `mcp/`, `search/`, `web/`）1:1完全対応化](closed/029-reorganize-tests-by-package-hierarchy.md) | Refactor | 2026-08-17 | [029-reorganize-tests-by-package-hierarchy.md](closed/029-reorganize-tests-by-package-hierarchy.md) |
