@@ -213,21 +213,7 @@ class SQLParser:
                     r"\s+(AND|OR)$", "", where_raw, flags=re.IGNORECASE
                 ).strip()
 
-            # Parse simple equality clauses (only columns starting with letters/underscore)
-            eq_matches = re.findall(
-                r"([a-zA-Z_][a-zA-Z0-9_]*)\s*(=|!=|>|<)\s*('[^']*'|\"[^\"]*\"|[0-9\.]+)",
-                where_raw,
-            )
-            for col, op, val in eq_matches:
-                clean_val = val.strip("'\"")
-                if clean_val.isdigit():
-                    v: Any = int(clean_val)
-                else:
-                    try:
-                        v = float(clean_val)
-                    except ValueError:
-                        v = clean_val
-                where_clauses.append({"column": col, "operator": op, "value": v})
+            where_clauses.extend(self._extract_where_clauses(where_raw))
 
         return SelectStatement(
             command_type=SQLCommandType.SELECT,
@@ -241,14 +227,76 @@ class SQLParser:
             limit=limit_val,
         )
 
+    def _extract_where_clauses(self, where_raw: str) -> List[Dict[str, Any]]:
+        clauses: List[Dict[str, Any]] = []
+        if not where_raw:
+            return clauses
+
+        or_parts = re.split(r"\s+OR\s+", where_raw, flags=re.IGNORECASE)
+        if len(or_parts) > 1:
+            for part in or_parts:
+                sub_clauses = self._extract_simple_clauses(part)
+                clauses.append({"logic": "OR_BRANCH", "clauses": sub_clauses})
+            return clauses
+
+        return self._extract_simple_clauses(where_raw)
+
+    def _extract_simple_clauses(self, text: str) -> List[Dict[str, Any]]:
+        clauses: List[Dict[str, Any]] = []
+        if not text:
+            return clauses
+
+        # 1. LIKE: col LIKE '%pattern%'
+        for m in re.finditer(
+            r"([a-zA-Z_][a-zA-Z0-9_]*)\s+LIKE\s+('[^']*'|\"[^\"]*\")",
+            text,
+            re.IGNORECASE,
+        ):
+            col = m.group(1)
+            val = m.group(2).strip("'\"")
+            clauses.append({"column": col, "operator": "LIKE", "value": val})
+
+        # 2. IN: col IN ('a', 'b') or col IN (1, 2)
+        for m in re.finditer(
+            r"([a-zA-Z_][a-zA-Z0-9_]*)\s+(NOT\s+IN|IN)\s*\((.*?)\)",
+            text,
+            re.IGNORECASE,
+        ):
+            col = m.group(1)
+            op = m.group(2).upper()
+            items_raw = m.group(3)
+            items = [x.strip().strip("'\"") for x in items_raw.split(",")]
+            clauses.append({"column": col, "operator": op, "value": items})
+
+        # 3. Standard comparison operators: >=, <=, !=, =, >, <
+        eq_matches = re.finditer(
+            r"([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|<=|!=|=|>|<)\s*('[^']*'|\"[^\"]*\"|[0-9\.]+)",
+            text,
+        )
+        for m in eq_matches:
+            col = m.group(1)
+            op = m.group(2)
+            val = m.group(3)
+            clean_val = val.strip("'\"")
+            if clean_val.isdigit():
+                v: Any = int(clean_val)
+            else:
+                try:
+                    v = float(clean_val)
+                except ValueError:
+                    v = clean_val
+            clauses.append({"column": col, "operator": op, "value": v})
+
+        return clauses
+
     def _parse_insert(self, sql: str) -> InsertStatement:
         m = re.match(
-            r"INSERT\s+INTO\s+([a-zA-Z0-9_]+)\s*\((.+?)\)\s*VALUES\s*\((.+)\)",
+            r"INSERT\s+INTO\s+([a-zA-Z0-9_]+)\s*\((.*?)\)\s*VALUES\s*\((.*?)\)",
             sql,
             re.IGNORECASE | re.DOTALL,
         )
         if not m:
-            raise SQLParseError(f"Malformed INSERT INTO syntax: {sql}")
+            raise SQLParseError(f"Malformed INSERT syntax: {sql}")
 
         table_name = m.group(1).strip()
         cols_raw = m.group(2).strip()
@@ -296,19 +344,18 @@ class SQLParser:
         assignments: Dict[str, Any] = {}
         for item in set_raw.split(","):
             if "=" in item:
-                k, v = item.split("=", 1)
-                assignments[k.strip()] = v.strip().strip("'\"")
+                k, v_raw = item.split("=", 1)
+                clean_v = v_raw.strip().strip("'\"")
+                if clean_v.isdigit():
+                    v_val: Any = int(clean_v)
+                else:
+                    try:
+                        v_val = float(clean_v)
+                    except ValueError:
+                        v_val = clean_v
+                assignments[k.strip()] = v_val
 
-        where_clauses: List[Dict[str, Any]] = []
-        if where_raw:
-            eq_matches = re.findall(
-                r"([a-zA-Z0-9_]+)\s*(=|!=)\s*('[^']*'|\"[^\"]*\"|[0-9\.]+)",
-                where_raw,
-            )
-            for col, op, val in eq_matches:
-                where_clauses.append(
-                    {"column": col, "operator": op, "value": val.strip("'\"")}
-                )
+        where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
 
         return UpdateStatement(
             command_type=SQLCommandType.UPDATE,
@@ -329,17 +376,7 @@ class SQLParser:
 
         table_name = m.group(1).strip()
         where_raw = m.group(2)
-
-        where_clauses: List[Dict[str, Any]] = []
-        if where_raw:
-            eq_matches = re.findall(
-                r"([a-zA-Z0-9_]+)\s*(=|!=)\s*('[^']*'|\"[^\"]*\"|[0-9\.]+)",
-                where_raw,
-            )
-            for col, op, val in eq_matches:
-                where_clauses.append(
-                    {"column": col, "operator": op, "value": val.strip("'\"")}
-                )
+        where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
 
         return DeleteStatement(
             command_type=SQLCommandType.DELETE,
@@ -350,19 +387,25 @@ class SQLParser:
 
     def _parse_grant(self, sql: str) -> GrantStatement:
         m = re.match(
-            r"GRANT\s+([a-zA-Z0-9_]+)\s+ON\s+([a-zA-Z0-9_]+)\s+TO\s+([a-zA-Z0-9_]+)",
+            r"GRANT\s+(.+?)(?:\s+ON\s+([a-zA-Z0-9_\*]+))?\s+TO\s+([a-zA-Z0-9_]+)$",
             sql,
             re.IGNORECASE,
         )
         if not m:
             raise SQLParseError(f"Malformed GRANT syntax: {sql}")
 
+        perm = m.group(1).strip().upper()
+        if perm in ("ALL PRIVILEGES", "ALL"):
+            perm = "ALL"
+        table_name = m.group(2) or "*"
+        role_name = m.group(3).strip()
+
         return GrantStatement(
             command_type=SQLCommandType.GRANT,
             raw_sql=sql,
-            permission=m.group(1).upper(),
-            table_name=m.group(2),
-            role=m.group(3),
+            permission=perm,
+            table_name=table_name,
+            role=role_name,
         )
 
     def _parse_revoke(self, sql: str) -> RevokeStatement:

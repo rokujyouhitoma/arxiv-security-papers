@@ -8,7 +8,7 @@ and Write-Ahead Logging (WAL) transaction boundaries.
 import os
 import threading
 from collections import OrderedDict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from .vfs import VFSFile, get_vfs
 
@@ -16,11 +16,17 @@ PAGE_SIZE = 4096
 
 
 class Page:
-    """Fixed-size 4KB memory page with dirty tracking."""
+    """Represents a single in-memory 4096-byte database page."""
 
-    def __init__(self, page_id: int, data: bytearray, is_dirty: bool = False) -> None:
+    def __init__(
+        self, page_id: int, data: Union[bytearray, bytes], is_dirty: bool = False
+    ) -> None:
         self.page_id = page_id
-        self.data = data
+        self.data = (
+            bytearray(data)
+            if isinstance(data, (bytes, bytearray))
+            else bytearray(PAGE_SIZE)
+        )
         self.is_dirty = is_dirty
 
 
@@ -31,6 +37,10 @@ class PageCache:
         self.capacity = capacity
         self._cache: OrderedDict[int, Page] = OrderedDict()
         self._lock = threading.RLock()
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._cache)
 
     def get(self, page_id: int) -> Optional[Page]:
         with self._lock:

@@ -20,6 +20,7 @@ class AccessController:
     """
 
     def __init__(self) -> None:
+        self.current_role = "admin"
         # role -> table_name -> set of permissions
         self._grants: Dict[str, Dict[str, Set[str]]] = defaultdict(
             lambda: defaultdict(set)
@@ -31,6 +32,7 @@ class AccessController:
         # Admin has ALL on wildcard '*'
         self._grants["admin"]["*"].add("ALL")
         self._grants["analyst"]["*"].add("SELECT")
+        self._grants["analyst"]["*"].add("INSERT")
         self._grants["guest"]["*"].add("SELECT")
 
     def grant(self, permission: str, table_name: str, role: str) -> None:
