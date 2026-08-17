@@ -4,16 +4,21 @@ VENV=.venv
 VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
 
-SRC=src/arxiv_okf_fetcher.py
-PYTHON_SRCS = src/arxiv_okf_fetcher.py \
+SRC=src/fetcher/arxiv_okf_fetcher.py
+PYTHON_SRCS = src/__init__.py \
+              src/arxiv_okf_fetcher.py \
               src/vector_engine.py \
+              src/fetcher/__init__.py \
+              src/fetcher/arxiv_okf_fetcher.py \
+              src/web/__init__.py \
+              src/web/web_server.py \
+              src/web_server.py \
               src/mcp/__init__.py \
               src/mcp/base.py \
               src/mcp/papers_server.py \
               src/mcp/observability_server.py \
               src/mcp/threat_defense_server.py \
               src/mcp/tech_radar_server.py \
-              src/web_server.py \
               src/database/__init__.py \
               src/database/storage.py \
               src/database/embedding.py \
