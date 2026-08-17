@@ -32,6 +32,10 @@ class CitationNetworkIndex:
             return {}
 
         initial_score = 1.0 / N
+        if not self.inbound and not self.citations:
+            self.pagerank = {doc_id: initial_score for doc_id in all_doc_ids}
+            return self.pagerank
+
         ranks = {doc_id: initial_score for doc_id in all_doc_ids}
 
         for _ in range(max_iter):

@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import time
+from typing import Optional
 
 from mcp.base import log_mcp_performance
 from vector_engine import VectorEngine
@@ -36,6 +37,11 @@ def get_vector_engine() -> VectorEngine:
     if _VECTOR_ENGINE is None:
         _VECTOR_ENGINE = VectorEngine(workspace_dir=WORKSPACE_DIR)
     return _VECTOR_ENGINE
+
+
+def set_vector_engine(engine: Optional[VectorEngine] = None) -> None:
+    global _VECTOR_ENGINE
+    _VECTOR_ENGINE = engine
 
 
 TOOLS_MANIFEST = [
