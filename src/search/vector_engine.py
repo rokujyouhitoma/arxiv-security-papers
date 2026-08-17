@@ -31,6 +31,14 @@ from .query import (
 )
 from .ranking import CitationNetworkIndex, KnowledgeGraphIndex, ProximityGraphIndex
 from .utils import extract_abstract_from_okf
+from .vector import (
+    DeterministicEmbedding,
+    HNSWIndex,
+    RRFHybridScorer,
+    VectorDBClient,
+    VectorDBProtocolHandler,
+    VectorStorage,
+)
 
 
 class VectorEngine:
@@ -116,6 +124,20 @@ class VectorEngine:
         self.citation_network = CitationNetworkIndex()
         self.raptor_tree = RAPTORTreeIndex()
         self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
+
+        # Binary Vector Storage and HNSW Index (Protocol-driven)
+        self.embedding = DeterministicEmbedding(dim=128)
+        self.hnsw_index = HNSWIndex(dim=128)
+        self.rrf_scorer = RRFHybridScorer(k=60)
+        self.vector_storage_path = os.path.join(self.vector_db_dir, "vectors.vdb")
+        self.hnsw_index_path = os.path.join(self.vector_db_dir, "hnsw_index.json")
+        self.vector_storage = VectorStorage(self.vector_storage_path, dim=128)
+        self.vector_protocol_handler = VectorDBProtocolHandler(
+            storage=self.vector_storage,
+            index=self.hnsw_index,
+            embedding=self.embedding,
+        )
+        self.vector_client = VectorDBClient(handler=self.vector_protocol_handler)
 
         self.search_perf_log_path = os.path.join(
             self.workspace_dir, "outputs", "logs", "search_perf_log.jsonl"
@@ -961,3 +983,30 @@ class VectorEngine:
             "graph_entities": graph_context,
             "cache_stats": self.semantic_cache.get_stats(),
         }
+
+    def search_vector_ann(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        Searches nearest neighbor papers strictly via Vector DB Protocol Client.
+        """
+        matches = self.vector_client.search_knn(text=query, top_k=top_k)
+        results = []
+        for m in matches:
+            idx = m.get("index", -1)
+            if 0 <= idx < len(self.documents):
+                doc = dict(self.documents[idx])
+                doc["vector_similarity"] = m.get("score", 0.0)
+                doc["score"] = m.get("score", 0.0)
+                results.append(doc)
+        return results
+
+    def search_rrf_hybrid(
+        self, query: str, top_k: int = 10, category: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Executes Lexical BM25 and Semantic Vector search, fused via Reciprocal Rank Fusion (RRF).
+        """
+        bm25_results, _ = self.search_with_profile(
+            query, top_k=top_k * 2, category=category
+        )
+        vector_results = self.search_vector_ann(query, top_k=top_k * 2)
+        return self.rrf_scorer.fuse(bm25_results, vector_results, top_k=top_k)

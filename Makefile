@@ -14,10 +14,32 @@ PYTHON_SRCS = src/arxiv_okf_fetcher.py \
               src/mcp/threat_defense_server.py \
               src/mcp/tech_radar_server.py \
               src/web_server.py \
+              src/database/__init__.py \
+              src/database/storage.py \
+              src/database/embedding.py \
+              src/database/index.py \
+              src/database/protocol.py \
+              src/database/client.py \
+              src/database/driver.py \
+              src/database/sqlite_bridge.py \
+              src/database/sqlite_engine.py \
+              src/database/vfs.py \
+              src/database/pager.py \
+              src/database/vdbe.py \
+              src/database/codegen.py \
+              src/database/compiler.py \
+              src/database/sql/__init__.py \
+              src/database/sql/ast.py \
+              src/database/sql/parser.py \
+              src/database/sql/security.py \
+              src/database/sql/transaction.py \
+              src/database/sql/executor.py \
               src/search/__init__.py \
               src/search/utils/__init__.py \
               src/search/utils/profiler.py \
               src/search/vector_engine.py \
+              src/search/vector/__init__.py \
+              src/search/vector/hybrid.py \
               src/search/ingestion/__init__.py \
               src/search/ingestion/analyzer.py \
               src/search/ingestion/field_schema.py \

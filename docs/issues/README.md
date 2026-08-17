@@ -6,9 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当ブランチ / ファイル |
-| :---: | --- | :---: | :---: | :---: | --- |
-| - | (現在アクティブな Issue はありません) | - | - | - | - |
+*現在アクティブなオープン Issue はありません。*
 
 ---
 
@@ -16,6 +14,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **028** | [SQLite型4層アーキテクチャ（VFS / Pager / VDBE / Compiler）に基づくゼロ依存ベクトルDB再設計・実装](closed/028-sqlite-inspired-vdbe-vfs-vector-architecture.md) | Feature | 2026-08-17 | [028-sqlite-inspired-vdbe-vfs-vector-architecture.md](closed/028-sqlite-inspired-vdbe-vfs-vector-architecture.md) |
+| **027** | [ゼロ依存 / 純Python製 5大SQLコマンド体系（DDL / DQL / DML / DCL / TCL）エンジンおよび Python 標準 SQLite / PEP 249 DB-API 2.0 接続インターフェースの実装](closed/027-pure-python-sql-engine-support.md) | Feature | 2026-08-17 | [027-pure-python-sql-engine-support.md](closed/027-pure-python-sql-engine-support.md) |
+| **026** | [ゼロ依存 / 純Python製ベクトルストレージ・近似近傍探索 (ANN/HNSW) エンジンおよび プロトコル駆動型疎結合基盤の実装](closed/026-pure-python-vector-storage-and-ann-engine.md) | Feature | 2026-08-17 | [026-pure-python-vector-storage-and-ann-engine.md](closed/026-pure-python-vector-storage-and-ann-engine.md) |
 | **025** | [MCP および検索エンジンにおける処理速度・メモリ可観測性の統合とログダンプ・計測基盤の実装](closed/025-unified-performance-and-memory-observability.md) | Feature | 2026-08-17 | [025-unified-performance-and-memory-observability.md](closed/025-unified-performance-and-memory-observability.md) |
 | **024** | [MCPサーバー群の `src/mcp/` パッケージ集約と共通JSON-RPC基盤の確立](closed/024-consolidate-mcp-servers-into-src-mcp.md) | Refactor | 2026-08-16 | [024-consolidate-mcp-servers-into-src-mcp.md](closed/024-consolidate-mcp-servers-into-src-mcp.md) |
 | **023** | [DSN-12準拠: MCP 戦略的エコシステム拡張（Phase 1〜Phase 3）の実装](closed/023-mcp-strategic-ecosystem-expansion.md) | Feature | 2026-08-16 | [023-mcp-strategic-ecosystem-expansion.md](closed/023-mcp-strategic-ecosystem-expansion.md) |
