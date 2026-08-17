@@ -9,10 +9,12 @@ import os
 import sys
 
 if "src" not in sys.path:
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
 from mcp.observability_server import dispatch_rpc_request
-from search.eval.dataset import DEFAULT_SECURITY_GOLD_STANDARD, EvaluationQuery
+from search.eval.dataset import EvaluationQuery
 from search.eval.evaluator import SearchEvaluator
 from search.eval.metrics import (
     compute_average_precision,
@@ -97,7 +99,9 @@ def test_ndcg_at_k():
 
 def test_search_evaluator_harness():
     queries = [
-        EvaluationQuery("TQ1", "zero trust", "zero-trust", ["d1", "d2"], {"d1": 3.0, "d2": 2.0}),
+        EvaluationQuery(
+            "TQ1", "zero trust", "zero-trust", ["d1", "d2"], {"d1": 3.0, "d2": 2.0}
+        ),
         EvaluationQuery("TQ2", "quantum crypto", "crypto", ["d3"], {"d3": 3.0}),
     ]
     evaluator = SearchEvaluator(queries=queries, top_k=3)

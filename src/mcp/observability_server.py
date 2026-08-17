@@ -20,10 +20,12 @@ import sys
 import time
 import timeit
 import tracemalloc
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, cast
 
 if "src" not in sys.path:
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
 SERVER_NAME = "arxiv-security-observability-mcp-server"
 SERVER_VERSION = "1.0.0"
@@ -117,8 +119,13 @@ def validate_safe_code(code_str: str) -> Optional[str]:
         # 2. Block dangerous calls and reflection functions
         elif isinstance(node, ast.Call):
             if isinstance(node.func, ast.Attribute):
-                if node.func.attr in BLOCKED_CALLS or node.func.attr in BLOCKED_BUILTIN_FUNCS:
-                    return f"Security Exception: Call to '{node.func.attr}' is prohibited."
+                if (
+                    node.func.attr in BLOCKED_CALLS
+                    or node.func.attr in BLOCKED_BUILTIN_FUNCS
+                ):
+                    return (
+                        f"Security Exception: Call to '{node.func.attr}' is prohibited."
+                    )
             elif isinstance(node.func, ast.Name):
                 if node.func.id in BLOCKED_BUILTIN_FUNCS:
                     return f"Security Exception: Dynamic call to '{node.func.id}' is prohibited."
@@ -126,7 +133,9 @@ def validate_safe_code(code_str: str) -> Optional[str]:
                 # 3. Block destructive open() modes
                 if node.func.id == "open" and len(node.args) >= 2:
                     mode_arg = node.args[1]
-                    if isinstance(mode_arg, ast.Constant) and isinstance(mode_arg.value, str):
+                    if isinstance(mode_arg, ast.Constant) and isinstance(
+                        mode_arg.value, str
+                    ):
                         mode_str = mode_arg.value
                         if any(c in mode_str for c in ("w", "a", "x", "+")):
                             return f"Security Exception: File modification mode '{mode_str}' in open() is prohibited."
@@ -145,6 +154,7 @@ def validate_safe_code(code_str: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Tool Implementations
 # ---------------------------------------------------------------------------
+
 
 def handle_profile_code_performance(params: Dict[str, Any]) -> Dict[str, Any]:
     """Profiles Python code execution using cProfile and pstats with AST safety checks."""
@@ -221,11 +231,13 @@ def handle_track_memory_allocations(params: Dict[str, Any]) -> Dict[str, Any]:
     top_stats = snapshot.statistics("lineno")
     allocations: List[Dict[str, Any]] = []
     for stat in top_stats[:top_lines]:
-        allocations.append({
-            "traceback": str(stat.traceback),
-            "size_kb": round(stat.size / 1024.0, 3),
-            "count": stat.count,
-        })
+        allocations.append(
+            {
+                "traceback": str(stat.traceback),
+                "size_kb": round(stat.size / 1024.0, 3),
+                "count": stat.count,
+            }
+        )
 
     return {
         "current_memory_kb": round(cur / 1024.0, 3),
@@ -242,7 +254,9 @@ def handle_benchmark_alternatives(params: Dict[str, Any]) -> Dict[str, Any]:
     repeat = params.get("repeat", 3)
 
     if not candidates or not isinstance(candidates, list):
-        return {"error": "Parameter 'candidates' must be a non-empty list of {name, code}."}
+        return {
+            "error": "Parameter 'candidates' must be a non-empty list of {name, code}."
+        }
 
     results: List[Dict[str, Any]] = []
     for cand in candidates:
@@ -266,11 +280,13 @@ def handle_benchmark_alternatives(params: Dict[str, Any]) -> Dict[str, Any]:
             times = timer.repeat(repeat=repeat, number=number)
             min_time_ms = round((min(times) / number) * 1000.0, 5)
             avg_time_ms = round((sum(times) / len(times) / number) * 1000.0, 5)
-            results.append({
-                "name": name,
-                "min_time_ms": min_time_ms,
-                "avg_time_ms": avg_time_ms,
-            })
+            results.append(
+                {
+                    "name": name,
+                    "min_time_ms": min_time_ms,
+                    "avg_time_ms": avg_time_ms,
+                }
+            )
         except Exception as e:
             results.append({"name": name, "error": str(e)})
 
@@ -312,12 +328,14 @@ def handle_inspect_bytecode(params: Dict[str, Any]) -> Dict[str, Any]:
         for instr in dis.get_instructions(compiled):
             opname = instr.opname
             op_counts[opname] = op_counts.get(opname, 0) + 1
-            instructions.append({
-                "opname": opname,
-                "opcode": instr.opcode,
-                "argval": str(instr.argval),
-                "offset": instr.offset,
-            })
+            instructions.append(
+                {
+                    "opname": opname,
+                    "opcode": instr.opcode,
+                    "argval": str(instr.argval),
+                    "offset": instr.offset,
+                }
+            )
     except Exception as e:
         return {"error": f"Disassembly error: {str(e)}"}
 
@@ -331,6 +349,7 @@ def handle_inspect_bytecode(params: Dict[str, Any]) -> Dict[str, Any]:
 def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
     """Returns system and search engine runtime metrics."""
     from search.server.cache import FilterCache, QueryResultCache
+
     fc = FilterCache()
     qc = QueryResultCache()
 
@@ -374,32 +393,57 @@ def handle_evaluate_search_quality(params: Dict[str, Any]) -> Dict[str, Any]:
 
 TOOLS_REGISTRY = {
     "profile_code_performance": {
-        "description": "Profiles Python code execution with cProfile + pstats to identify top bottleneck functions and cumulative times.",
+        "description": (
+            "Profiles Python code execution with cProfile + pstats to identify top bottleneck functions "
+            "and cumulative times."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "code": {"type": "string", "description": "Python code snippet or function to profile"},
-                "top_n": {"type": "integer", "description": "Number of top bottleneck functions to return", "default": 10},
-                "sort_by": {"type": "string", "description": "Sort key: cumtime, tottime, or calls", "default": "cumtime"},
+                "code": {
+                    "type": "string",
+                    "description": "Python code snippet or function to profile",
+                },
+                "top_n": {
+                    "type": "integer",
+                    "description": "Number of top bottleneck functions to return",
+                    "default": 10,
+                },
+                "sort_by": {
+                    "type": "string",
+                    "description": "Sort key: cumtime, tottime, or calls",
+                    "default": "cumtime",
+                },
             },
             "required": ["code"],
         },
         "handler": handle_profile_code_performance,
     },
     "track_memory_allocations": {
-        "description": "Tracks peak RAM consumption and line-by-line memory allocation using tracemalloc to diagnose leaks.",
+        "description": (
+            "Tracks peak RAM consumption and line-by-line memory allocation using tracemalloc to diagnose leaks."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "code": {"type": "string", "description": "Python code snippet to execute and trace"},
-                "top_lines": {"type": "integer", "description": "Number of top allocation lines to return", "default": 5},
+                "code": {
+                    "type": "string",
+                    "description": "Python code snippet to execute and trace",
+                },
+                "top_lines": {
+                    "type": "integer",
+                    "description": "Number of top allocation lines to return",
+                    "default": 5,
+                },
             },
             "required": ["code"],
         },
         "handler": handle_track_memory_allocations,
     },
     "benchmark_alternatives": {
-        "description": "Micro-benchmarks multiple Python code candidates using timeit and determines the fastest implementation.",
+        "description": (
+            "Micro-benchmarks multiple Python code candidates using timeit and determines the fastest implementation."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -415,19 +459,33 @@ TOOLS_REGISTRY = {
                     },
                     "description": "List of candidate implementations to benchmark",
                 },
-                "number": {"type": "integer", "description": "Iterations per test run", "default": 100},
-                "repeat": {"type": "integer", "description": "Repeat count", "default": 3},
+                "number": {
+                    "type": "integer",
+                    "description": "Iterations per test run",
+                    "default": 100,
+                },
+                "repeat": {
+                    "type": "integer",
+                    "description": "Repeat count",
+                    "default": 3,
+                },
             },
             "required": ["candidates"],
         },
         "handler": handle_benchmark_alternatives,
     },
     "inspect_bytecode": {
-        "description": "Disassembles Python code into bytecode instructions using the dis standard library to verify low-level efficiency.",
+        "description": (
+            "Disassembles Python code into bytecode instructions using the dis standard library "
+            "to verify low-level efficiency."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "code": {"type": "string", "description": "Python code to disassemble into bytecode"},
+                "code": {
+                    "type": "string",
+                    "description": "Python code to disassemble into bytecode",
+                },
             },
             "required": ["code"],
         },
@@ -439,11 +497,18 @@ TOOLS_REGISTRY = {
         "handler": handle_get_system_metrics,
     },
     "evaluate_search_quality": {
-        "description": "Evaluates search engine accuracy across Precision@K, Recall@K, F1, MAP, MRR, and NDCG@K using standard benchmark datasets.",
+        "description": (
+            "Evaluates search engine accuracy across Precision@K, Recall@K, F1, MAP, MRR, and NDCG@K "
+            "using standard benchmark datasets."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "top_k": {"type": "integer", "description": "Top-K documents to evaluate", "default": 5},
+                "top_k": {
+                    "type": "integer",
+                    "description": "Top-K documents to evaluate",
+                    "default": 5,
+                },
             },
         },
         "handler": handle_evaluate_search_quality,
@@ -465,10 +530,20 @@ RESOURCES_REGISTRY = {
 
 PROMPTS_REGISTRY = {
     "optimize_bottleneck_prompt": {
-        "description": "Template to instruct AI coding agents to refactor code based on cProfile and tracemalloc results.",
+        "description": (
+            "Template to instruct AI coding agents to refactor code based on cProfile and tracemalloc results."
+        ),
         "arguments": [
-            {"name": "function_name", "description": "Name of the target function", "required": True},
-            {"name": "profile_summary", "description": "cProfile/pstats summary output", "required": True},
+            {
+                "name": "function_name",
+                "description": "Name of the target function",
+                "required": True,
+            },
+            {
+                "name": "profile_summary",
+                "description": "cProfile/pstats summary output",
+                "required": True,
+            },
         ],
     },
 }
@@ -477,6 +552,7 @@ PROMPTS_REGISTRY = {
 # ---------------------------------------------------------------------------
 # JSON-RPC 2.0 Dispatcher
 # ---------------------------------------------------------------------------
+
 
 def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Dispatches a single JSON-RPC 2.0 request."""
@@ -523,7 +599,12 @@ def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "jsonrpc": "2.0",
             "id": req_id,
             "result": {
-                "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}]
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(result, ensure_ascii=False, indent=2),
+                    }
+                ]
             },
         }
 
@@ -547,7 +628,13 @@ def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "contents": [{"uri": uri, "mimeType": "application/json", "text": json.dumps(metrics, indent=2)}]
+                    "contents": [
+                        {
+                            "uri": uri,
+                            "mimeType": "application/json",
+                            "text": json.dumps(metrics, indent=2),
+                        }
+                    ]
                 },
             }
         elif uri == "observability://schema/profiler":
@@ -564,7 +651,13 @@ def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "contents": [{"uri": uri, "mimeType": "application/json", "text": json.dumps(schema_doc, indent=2)}]
+                    "contents": [
+                        {
+                            "uri": uri,
+                            "mimeType": "application/json",
+                            "text": json.dumps(schema_doc, indent=2),
+                        }
+                    ]
                 },
             }
         else:
@@ -639,7 +732,11 @@ def run_server() -> None:
                 sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
                 sys.stdout.flush()
         except json.JSONDecodeError:
-            err = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}}
+            err = {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32700, "message": "Parse error"},
+            }
             sys.stdout.write(json.dumps(err) + "\n")
             sys.stdout.flush()
 

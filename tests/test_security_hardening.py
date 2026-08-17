@@ -8,11 +8,12 @@ import os
 import sys
 
 if "src" not in sys.path:
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
-import pytest
 from mcp.observability_server import validate_safe_code
-from mcp.papers_server import is_safe_workspace_path, WORKSPACE_DIR
+from mcp.papers_server import WORKSPACE_DIR, is_safe_workspace_path
 
 
 def test_ast_guard_blocks_prohibited_modules():
@@ -104,7 +105,11 @@ def test_is_safe_workspace_path_boundaries():
     assert is_safe_workspace_path(traversal_path) is False
 
     # Path prefix confusion (e.g. /workspace/arxiv-security-papers-fake)
-    fake_sibling = os.path.join(os.path.dirname(WORKSPACE_DIR), os.path.basename(WORKSPACE_DIR) + "-fake", "paper.md")
+    fake_sibling = os.path.join(
+        os.path.dirname(WORKSPACE_DIR),
+        os.path.basename(WORKSPACE_DIR) + "-fake",
+        "paper.md",
+    )
     assert is_safe_workspace_path(fake_sibling) is False
 
     # Sensitive files within workspace

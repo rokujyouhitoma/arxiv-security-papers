@@ -207,7 +207,7 @@ def test_vector_engine_get_related_papers():
 
 
 def test_multi_field_schema_postings():
-    from search.field_schema import MultiFieldPostingsIndex
+    from search.ingestion.field_schema import MultiFieldPostingsIndex
 
     idx = MultiFieldPostingsIndex()
     idx.add_field_tokens("doc1", "title", ["rapidpen", "penetration", "testing"])
@@ -232,7 +232,7 @@ def test_multi_field_schema_postings():
 
 
 def test_search_analyzer():
-    from search.analyzer import SearchAnalyzer
+    from search.ingestion.analyzer import SearchAnalyzer
 
     analyzer = SearchAnalyzer()
     tokens = analyzer.tokenize("RapidPen ペネトレーションテスト 脆弱性")
@@ -246,7 +246,7 @@ def test_search_analyzer():
 
 
 def test_query_parser():
-    from search.query_parser import EnterpriseQueryParser
+    from search.query.query_parser import EnterpriseQueryParser
 
     parser = EnterpriseQueryParser()
     clauses = parser.parse(
@@ -273,7 +273,7 @@ def test_query_parser():
 
 
 def test_dynamic_highlighter():
-    from search.highlighter import DynamicHighlighter
+    from search.presentation.highlighter import DynamicHighlighter
 
     hl = DynamicHighlighter()
     text = "This paper presents RapidPen, an automated penetration testing tool."

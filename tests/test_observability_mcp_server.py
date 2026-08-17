@@ -8,7 +8,9 @@ import os
 import sys
 
 if "src" not in sys.path:
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
 from mcp.observability_server import dispatch_rpc_request
 
@@ -19,7 +21,10 @@ def test_mcp_initialize():
     assert resp is not None
     assert resp["id"] == 1
     assert "capabilities" in resp["result"]
-    assert resp["result"]["serverInfo"]["name"] == "arxiv-security-observability-mcp-server"
+    assert (
+        resp["result"]["serverInfo"]["name"]
+        == "arxiv-security-observability-mcp-server"
+    )
 
 
 def test_mcp_tools_list():
@@ -91,7 +96,10 @@ def test_mcp_tool_benchmark_alternatives():
             "arguments": {
                 "candidates": [
                     {"name": "list_comp", "code": "res = [x * 2 for x in range(100)]"},
-                    {"name": "for_loop", "code": "res = []\nfor x in range(100):\n    res.append(x * 2)"},
+                    {
+                        "name": "for_loop",
+                        "code": "res = []\nfor x in range(100):\n    res.append(x * 2)",
+                    },
                 ],
                 "number": 50,
                 "repeat": 2,
@@ -156,7 +164,10 @@ def test_mcp_resources_and_prompts():
         "method": "prompts/get",
         "params": {
             "name": "optimize_bottleneck_prompt",
-            "arguments": {"function_name": "calc_score", "profile_summary": "10.5s in loop"},
+            "arguments": {
+                "function_name": "calc_score",
+                "profile_summary": "10.5s in loop",
+            },
         },
     }
     resp_prompt = dispatch_rpc_request(req_prompt)

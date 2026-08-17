@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Gold Standard Evaluation Dataset for arXiv Security Papers.
-Contains curated queries, category tags, relevant document IDs, and graded relevance scores (1: relevant, 2: highly relevant, 3: perfect).
+Contains curated queries, category tags, relevant document IDs, and graded relevance scores
+(1: relevant, 2: highly relevant, 3: perfect).
 """
 
 from typing import Dict, List, Optional

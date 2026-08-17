@@ -8,7 +8,9 @@ import glob
 import json
 import os
 import sys
+import time
 
+from mcp.base import log_mcp_performance
 from vector_engine import VectorEngine
 
 
@@ -34,6 +36,7 @@ def get_vector_engine() -> VectorEngine:
     if _VECTOR_ENGINE is None:
         _VECTOR_ENGINE = VectorEngine(workspace_dir=WORKSPACE_DIR)
     return _VECTOR_ENGINE
+
 
 TOOLS_MANIFEST = [
     {
@@ -293,15 +296,18 @@ def handle_search_security_papers(args):
     if compact:
         compact_results = []
         for r in results:
-            compact_results.append({
-                "id": r.get("id"),
-                "title": r.get("title"),
-                "title_ja": r.get("title_ja", r.get("title")),
-                "category": r.get("category"),
-                "tags": r.get("tags", [])[:5],
-                "score": round(r.get("score", 0.0), 4),
-                "summary": r.get("description", r.get("abstract", ""))[:180] + "...",
-            })
+            compact_results.append(
+                {
+                    "id": r.get("id"),
+                    "title": r.get("title"),
+                    "title_ja": r.get("title_ja", r.get("title")),
+                    "category": r.get("category"),
+                    "tags": r.get("tags", [])[:5],
+                    "score": round(r.get("score", 0.0), 4),
+                    "summary": r.get("description", r.get("abstract", ""))[:180]
+                    + "...",
+                }
+            )
         results = compact_results
 
     return {
@@ -324,12 +330,15 @@ def handle_search_papers_hybrid(args):
     if compact and "results" in resp:
         compact_docs = []
         for d in resp.get("results", []):
-            compact_docs.append({
-                "id": d.get("id"),
-                "title": d.get("title"),
-                "score": round(d.get("score", 0.0), 4),
-                "summary": d.get("description", d.get("abstract", ""))[:180] + "...",
-            })
+            compact_docs.append(
+                {
+                    "id": d.get("id"),
+                    "title": d.get("title"),
+                    "score": round(d.get("score", 0.0), 4),
+                    "summary": d.get("description", d.get("abstract", ""))[:180]
+                    + "...",
+                }
+            )
         resp["results"] = compact_docs
 
     return {
@@ -342,7 +351,9 @@ def handle_search_papers_hybrid(args):
 def handle_query_knowledge_graph(args):
     entity = args.get("entity", "")
     max_depth = args.get("max_depth", 2)
-    graph_res = get_vector_engine().knowledge_graph.get_neighbors(entity, max_depth=max_depth)
+    graph_res = get_vector_engine().knowledge_graph.get_neighbors(
+        entity, max_depth=max_depth
+    )
     return {
         "status": "success",
         "graph": graph_res,
@@ -360,7 +371,14 @@ def is_safe_workspace_path(file_path):
     except ValueError:
         return False
 
-    sensitive_keywords = [".ssh", ".aws", ".env", "etc/passwd", "etc/shadow", ".git/config"]
+    sensitive_keywords = [
+        ".ssh",
+        ".aws",
+        ".env",
+        "etc/passwd",
+        "etc/shadow",
+        ".git/config",
+    ]
     if any(k in abs_path for k in sensitive_keywords):
         return False
     return True
@@ -814,9 +832,36 @@ def run_jsonrpc_server():
                     "result": {"tools": TOOLS_MANIFEST},
                 }
             elif method == "tools/call":
-                tool_name = params.get("name")
+                tool_name = params.get("name", "")
                 tool_args = params.get("arguments", {})
+                t0 = time.perf_counter()
                 output = dispatch_tool(tool_name, tool_args)
+                exec_ms = (time.perf_counter() - t0) * 1000.0
+
+                status = (
+                    "error"
+                    if isinstance(output, dict) and output.get("status") == "error"
+                    else "success"
+                )
+                metrics = {}
+                if isinstance(output, dict):
+                    if "count" in output:
+                        metrics["hits"] = output["count"]
+                    elif "results" in output and isinstance(output["results"], list):
+                        metrics["hits"] = len(output["results"])
+                    elif "papers" in output and isinstance(output["papers"], list):
+                        metrics["hits"] = len(output["papers"])
+
+                log_mcp_performance(
+                    server_name="arxiv-security-papers",
+                    method="tools/call",
+                    name=tool_name,
+                    execution_ms=exec_ms,
+                    status=status,
+                    args_summary=tool_args,
+                    metrics=metrics,
+                )
+
                 res = {
                     "jsonrpc": "2.0",
                     "id": req_id,
@@ -839,8 +884,19 @@ def run_jsonrpc_server():
                 }
             elif method == "resources/read":
                 uri = params.get("uri", "")
+                t0 = time.perf_counter()
                 output = handle_read_resource(uri)
+                exec_ms = (time.perf_counter() - t0) * 1000.0
+
                 if output.get("status") == "error":
+                    log_mcp_performance(
+                        server_name="arxiv-security-papers",
+                        method="resources/read",
+                        name=uri,
+                        execution_ms=exec_ms,
+                        status="error",
+                        error_message=output.get("message"),
+                    )
                     res = {
                         "jsonrpc": "2.0",
                         "id": req_id,
@@ -850,6 +906,13 @@ def run_jsonrpc_server():
                         },
                     }
                 else:
+                    log_mcp_performance(
+                        server_name="arxiv-security-papers",
+                        method="resources/read",
+                        name=uri,
+                        execution_ms=exec_ms,
+                        status="success",
+                    )
                     res = {
                         "jsonrpc": "2.0",
                         "id": req_id,
@@ -870,10 +933,22 @@ def run_jsonrpc_server():
                     "result": {"prompts": PROMPTS_MANIFEST},
                 }
             elif method == "prompts/get":
-                prompt_name = params.get("name")
+                prompt_name = params.get("name", "")
                 prompt_args = params.get("arguments", {})
+                t0 = time.perf_counter()
                 output = handle_get_prompt(prompt_name, prompt_args)
+                exec_ms = (time.perf_counter() - t0) * 1000.0
+
                 if output.get("status") == "error":
+                    log_mcp_performance(
+                        server_name="arxiv-security-papers",
+                        method="prompts/get",
+                        name=prompt_name,
+                        execution_ms=exec_ms,
+                        status="error",
+                        args_summary=prompt_args,
+                        error_message=output.get("message"),
+                    )
                     res = {
                         "jsonrpc": "2.0",
                         "id": req_id,
@@ -883,6 +958,14 @@ def run_jsonrpc_server():
                         },
                     }
                 else:
+                    log_mcp_performance(
+                        server_name="arxiv-security-papers",
+                        method="prompts/get",
+                        name=prompt_name,
+                        execution_ms=exec_ms,
+                        status="success",
+                        args_summary=prompt_args,
+                    )
                     res = {
                         "jsonrpc": "2.0",
                         "id": req_id,

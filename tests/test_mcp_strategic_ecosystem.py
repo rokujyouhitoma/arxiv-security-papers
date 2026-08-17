@@ -11,43 +11,46 @@ import os
 import sys
 
 if "src" not in sys.path:
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    )
 
-import pytest
-from mcp.papers_server import handle_search_security_papers, handle_search_papers_hybrid
-from mcp.threat_defense_server import (
-    handle_generate_semgrep_rule,
-    handle_synthesize_secure_patch,
-    handle_check_threat_coverage,
-)
+from mcp.papers_server import handle_search_security_papers
 from mcp.tech_radar_server import (
     handle_get_technology_radar,
     handle_predict_emerging_threats,
 )
-
+from mcp.threat_defense_server import (
+    handle_check_threat_coverage,
+    handle_generate_semgrep_rule,
+    handle_synthesize_secure_patch,
+)
 
 # ---------------------------------------------------------------------------
 # Phase 1: Two-Stage Compact Retrieval Tests
 # ---------------------------------------------------------------------------
 
+
 def test_phase1_compact_search_reduces_token_payload(monkeypatch):
     """Verify compact mode returns stripped summary fields to conserve AI context."""
+
     # Mock get_vector_engine
     class MockEngine:
         def search(self, query, top_k=5, category=None):
-            return [{
-                "id": "2608.12345",
-                "title": "Quantum Resistance in Lattice Cryptography",
-                "title_ja": "格子暗号における耐量子性",
-                "category": "cryptography",
-                "tags": ["crypto", "pqc", "lattice"],
-                "score": 0.9523,
-                "description": "Short executive summary.",
-                "abstract": "A very long abstract text that consumes hundreds of tokens...",
-                "content": "Full extracted paper markdown with thousands of characters...",
-            }]
+            return [
+                {
+                    "id": "2608.12345",
+                    "title": "Quantum Resistance in Lattice Cryptography",
+                    "title_ja": "格子暗号における耐量子性",
+                    "category": "cryptography",
+                    "tags": ["crypto", "pqc", "lattice"],
+                    "score": 0.9523,
+                    "description": "Short executive summary.",
+                    "abstract": "A very long abstract text that consumes hundreds of tokens...",
+                    "content": "Full extracted paper markdown with thousands of characters...",
+                }
+            ]
 
-    from mcp.papers_server import get_vector_engine
     monkeypatch.setattr("mcp.papers_server.get_vector_engine", lambda: MockEngine())
 
     # Compact search
@@ -61,12 +64,13 @@ def test_phase1_compact_search_reduces_token_payload(monkeypatch):
     assert "title" in doc
     assert "summary" in doc
     assert "abstract" not in doc  # Stripped for token savings
-    assert "content" not in doc   # Stripped for token savings
+    assert "content" not in doc  # Stripped for token savings
 
 
 # ---------------------------------------------------------------------------
 # Phase 2: Threat Defense & Patch Synthesis Tests
 # ---------------------------------------------------------------------------
+
 
 def test_phase2_generate_semgrep_rule():
     """Verify Semgrep YAML rule synthesis from CWE-502."""
@@ -90,7 +94,12 @@ def test_phase2_synthesize_secure_patch_pickle():
 
 def test_phase2_check_threat_coverage_scoring():
     """Verify MITRE/NIST defense coverage scoring."""
-    defenses = ["pickle-free", "ast-guard", "zero-dependency", "commonpath-traversal-guard"]
+    defenses = [
+        "pickle-free",
+        "ast-guard",
+        "zero-dependency",
+        "commonpath-traversal-guard",
+    ]
     res = handle_check_threat_coverage({"declared_defenses": defenses})
     assert res["status"] == "success"
     assert res["coverage_score"] >= 0.8
@@ -101,6 +110,7 @@ def test_phase2_check_threat_coverage_scoring():
 # ---------------------------------------------------------------------------
 # Phase 3: Tech-Radar & Threat Forecast Tests
 # ---------------------------------------------------------------------------
+
 
 def test_phase3_get_technology_radar_filtering():
     """Verify Tech-Radar extraction and ring categorization."""
