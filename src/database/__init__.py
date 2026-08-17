@@ -14,6 +14,7 @@ from .driver import Connection, Cursor, DatabaseError, connect
 from .embedding import DeterministicEmbedding
 from .index import HNSWIndex
 from .pager import PAGE_SIZE, Page, PageCache, Pager
+from .profiler import DatabaseProfiler, ProfileResult
 from .protocol import VectorDBProtocolError, VectorDBProtocolHandler
 from .sql import (
     AccessController,
@@ -104,4 +105,7 @@ __all__ = [
     "register_vector_functions",
     "sync_from_vector_storage",
     "sync_to_vector_storage",
+    # Profiler & Metrics
+    "DatabaseProfiler",
+    "ProfileResult",
 ]

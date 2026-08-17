@@ -193,6 +193,35 @@ class VectorStorage:
         }
         self.open_mmap()
 
+    def append_batch(
+        self,
+        vectors: Sequence[Sequence[float]],
+        metadata: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[int]:
+        """
+        Appends a batch of vectors and metadata to binary storage.
+        """
+        if not vectors:
+            return []
+        count = len(vectors)
+        meta_list = metadata or [{"id": str(self.count + i)} for i in range(count)]
+        if count != len(meta_list):
+            raise ValueError(
+                f"Vectors count ({count}) != metadata count ({len(meta_list)})"
+            )
+
+        all_vecs = self.get_all_vectors()
+        for v in vectors:
+            if len(v) != self.dim:
+                raise ValueError(f"Vector dimension {len(v)} != expected {self.dim}")
+            all_vecs.append(tuple(v))
+
+        new_meta = list(self.metadata)
+        new_meta.extend(meta_list)
+        start_idx = len(all_vecs) - count
+        self.write_all(all_vecs, new_meta)
+        return list(range(start_idx, len(all_vecs)))
+
     def append(
         self, vector: Sequence[float], metadata: Optional[Dict[str, Any]] = None
     ) -> int:

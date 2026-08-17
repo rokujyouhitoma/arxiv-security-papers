@@ -6,7 +6,9 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在アクティブなオープン Issue はありません。*
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当ブランチ / ファイル |
+| :---: | --- | :---: | :---: | :---: | --- |
+| - | 現在進行中のアクティブ Issue はありません | - | - | - | - |
 
 ---
 
@@ -14,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **030** | [4層ベクトルDBの重厚な性能・メモリプロファイリング評価およびSQL互換性テスト拡充](closed/030-database-performance-memory-profiling-and-sql-test-expansion.md) | Performance / Test | 2026-08-17 | [030-database-performance-memory-profiling-and-sql-test-expansion.md](closed/030-database-performance-memory-profiling-and-sql-test-expansion.md) |
 | **029** | [`tests/` および `src/` ディレクトリのパッケージ階層（`database/`, `fetcher/`, `mcp/`, `search/`, `web/`）1:1完全対応化](closed/029-reorganize-tests-by-package-hierarchy.md) | Refactor | 2026-08-17 | [029-reorganize-tests-by-package-hierarchy.md](closed/029-reorganize-tests-by-package-hierarchy.md) |
 | **028** | [SQLite型4層アーキテクチャ（VFS / Pager / VDBE / Compiler）に基づくゼロ依存ベクトルDB再設計・実装](closed/028-sqlite-inspired-vdbe-vfs-vector-architecture.md) | Feature | 2026-08-17 | [028-sqlite-inspired-vdbe-vfs-vector-architecture.md](closed/028-sqlite-inspired-vdbe-vfs-vector-architecture.md) |
 | **027** | [ゼロ依存 / 純Python製 5大SQLコマンド体系（DDL / DQL / DML / DCL / TCL）エンジンおよび Python 標準 SQLite / PEP 249 DB-API 2.0 接続インターフェースの実装](closed/027-pure-python-sql-engine-support.md) | Feature | 2026-08-17 | [027-pure-python-sql-engine-support.md](closed/027-pure-python-sql-engine-support.md) |

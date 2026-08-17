@@ -32,6 +32,33 @@ class SQLCommandType(str, Enum):
     COMMIT = "COMMIT"
     ROLLBACK = "ROLLBACK"
 
+    @property
+    def category(self) -> str:
+        """Returns the high-level SQL category (DDL, DQL, DML, DCL, TCL)."""
+        if self in (
+            SQLCommandType.CREATE_TABLE,
+            SQLCommandType.DROP_TABLE,
+            SQLCommandType.CREATE_INDEX,
+        ):
+            return "DDL"
+        if self == SQLCommandType.SELECT:
+            return "DQL"
+        if self in (
+            SQLCommandType.INSERT,
+            SQLCommandType.UPDATE,
+            SQLCommandType.DELETE,
+        ):
+            return "DML"
+        if self in (SQLCommandType.GRANT, SQLCommandType.REVOKE):
+            return "DCL"
+        if self in (
+            SQLCommandType.BEGIN,
+            SQLCommandType.COMMIT,
+            SQLCommandType.ROLLBACK,
+        ):
+            return "TCL"
+        return "SQL"
+
 
 @dataclass
 class ColumnDef:
@@ -45,6 +72,10 @@ class ColumnDef:
 class SQLStatement:
     command_type: SQLCommandType
     raw_sql: str
+
+    @property
+    def category(self) -> str:
+        return self.command_type.category
 
 
 # DDL

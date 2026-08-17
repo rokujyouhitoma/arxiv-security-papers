@@ -61,7 +61,8 @@ class Cursor:
         self._rows = result.get("rows", [])
         self._pos = 0
         self.rowcount = result.get(
-            "updated_count", result.get("deleted_count", len(self._rows))
+            "updated_count",
+            result.get("deleted_count", result.get("inserted_count", len(self._rows))),
         )
 
         if self._rows:

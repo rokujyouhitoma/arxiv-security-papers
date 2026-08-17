@@ -114,6 +114,10 @@ class HNSWIndex:
         sorted_candidates = sorted(candidates, key=lambda x: x[0])
         return [node for _, node in sorted_candidates[:max_m]]
 
+    def insert(self, node_id: int, vector: Sequence[float]) -> None:
+        """Alias for add_item for standard index API consistency."""
+        self.add_item(node_id, vector)
+
     def add_item(self, node_id: int, vector: Sequence[float]) -> None:
         """Inserts a vector into the HNSW index."""
         if len(vector) != self.dim:

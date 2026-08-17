@@ -4,6 +4,8 @@ SQL Execution Engine for Pure Python Vector Database.
 Evaluates DDL, DQL, DML, DCL, and TCL AST nodes against underlying vector storages and schemas.
 """
 
+import os
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..embedding import DeterministicEmbedding
@@ -63,15 +65,20 @@ class SQLExecutor:
         default_storage: Optional[VectorStorage] = None,
         default_index: Optional[HNSWIndex] = None,
         embedding: Optional[DeterministicEmbedding] = None,
+        catalog: Optional[TableCatalog] = None,
+        access_controller: Optional[AccessController] = None,
+        tx_manager: Optional[TransactionManager] = None,
     ) -> None:
         self.parser = SQLParser()
-        self.access_controller = AccessController()
-        self.tx_manager = TransactionManager()
+        self.access_controller = access_controller or AccessController()
+        self.tx_manager = tx_manager or TransactionManager()
         self.embedding = embedding or DeterministicEmbedding(dim=128)
 
         # Default tables
         self.tables: Dict[str, TableCatalog] = {}
-        if default_storage:
+        if catalog is not None:
+            self.tables[catalog.name] = catalog
+        elif default_storage:
             table_name = "papers"
             self.tables[table_name] = TableCatalog(
                 name=table_name,
@@ -80,22 +87,105 @@ class SQLExecutor:
             )
 
     def execute(
-        self, sql: str, role: str = "admin", params: Optional[Dict[str, Any]] = None
+        self,
+        sql: str,
+        role: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Parses and executes a raw SQL statement with RBAC enforcement and TCL support.
         """
+        effective_role = role or self.access_controller.current_role
         stmt = self.parser.parse(sql)
-        return self.execute_statement(stmt, role=role)
+        return self.execute_statement(stmt, role=effective_role)
+
+    def _matches_where_clause(
+        self, record: Dict[str, Any], clauses: List[Dict[str, Any]]
+    ) -> bool:
+        """Evaluates WHERE conditions against a record dictionary."""
+        if not clauses:
+            return True
+
+        if any(c.get("logic") == "OR_BRANCH" for c in clauses):
+            for branch in clauses:
+                if branch.get("logic") == "OR_BRANCH":
+                    if self._matches_where_clause(record, branch.get("clauses", [])):
+                        return True
+            return False
+
+        for clause in clauses:
+            col = clause["column"]
+            op = clause["operator"].upper()
+            expected = clause["value"]
+            actual = record.get(col)
+
+            if op == "=":
+                if str(actual) != str(expected):
+                    return False
+            elif op == "!=":
+                if str(actual) == str(expected):
+                    return False
+            elif actual is None:
+                return False
+            elif op == ">=":
+                try:
+                    if float(str(actual)) < float(str(expected)):
+                        return False
+                except (ValueError, TypeError):
+                    if str(actual) < str(expected):
+                        return False
+            elif op == "<=":
+                try:
+                    if float(str(actual)) > float(str(expected)):
+                        return False
+                except (ValueError, TypeError):
+                    if str(actual) > str(expected):
+                        return False
+            elif op == ">":
+                try:
+                    if float(str(actual)) <= float(str(expected)):
+                        return False
+                except (ValueError, TypeError):
+                    if str(actual) <= str(expected):
+                        return False
+            elif op == "<":
+                try:
+                    if float(str(actual)) >= float(str(expected)):
+                        return False
+                except (ValueError, TypeError):
+                    if str(actual) >= str(expected):
+                        return False
+            elif op == "LIKE":
+                pattern = str(expected).replace("%", ".*")
+                if not re.search(pattern, str(actual or ""), re.IGNORECASE):
+                    return False
+            elif op in ("IN", "NOT IN"):
+                in_list = (
+                    expected if isinstance(expected, (list, tuple, set)) else [expected]
+                )
+                in_str_list = [str(x) for x in in_list]
+                is_member = (actual in in_list) or (str(actual) in in_str_list)
+                if op == "IN" and not is_member:
+                    return False
+                if op == "NOT IN" and is_member:
+                    return False
+        return True
 
     def execute_statement(
-        self, stmt: SQLStatement, role: str = "admin"
+        self, stmt: SQLStatement, role: Optional[str] = None
     ) -> Dict[str, Any]:
+        effective_role = role or self.access_controller.current_role
         cmd = stmt.command_type
 
         # 1. TCL
         if cmd == SQLCommandType.BEGIN:
-            self.tx_manager.begin()
+            snapshots = {}
+            for t_name, table in self.tables.items():
+                snapshots[t_name] = {
+                    "vectors": list(table.storage.get_all_vectors()),
+                    "metadata": [dict(m) for m in table.storage.metadata],
+                }
+            self.tx_manager.begin(current_state_snapshot=snapshots)
             return {
                 "command": "BEGIN",
                 "status": "ok",
@@ -111,7 +201,14 @@ class SQLExecutor:
             }
 
         if cmd == SQLCommandType.ROLLBACK:
-            _ = self.tx_manager.rollback()
+            snapshot = self.tx_manager.rollback()
+            if snapshot:
+                for t_name, state in snapshot.items():
+                    if t_name in self.tables:
+                        table = self.tables[t_name]
+                        table.storage.write_all(state["vectors"], state["metadata"])
+                        table.index = HNSWIndex(dim=table.storage.dim)
+                        table.index.build_from_storage(state["vectors"])
             return {
                 "command": "ROLLBACK",
                 "status": "ok",
@@ -120,7 +217,9 @@ class SQLExecutor:
 
         # 2. DCL
         if isinstance(stmt, GrantStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "ADMIN")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "ADMIN"
+            )
             self.access_controller.grant(stmt.permission, stmt.table_name, stmt.role)
             return {
                 "command": "GRANT",
@@ -129,7 +228,9 @@ class SQLExecutor:
             }
 
         if isinstance(stmt, RevokeStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "ADMIN")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "ADMIN"
+            )
             self.access_controller.revoke(stmt.permission, stmt.table_name, stmt.role)
             return {
                 "command": "REVOKE",
@@ -139,7 +240,9 @@ class SQLExecutor:
 
         # 3. DDL
         if isinstance(stmt, CreateTableStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "ADMIN")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "ADMIN"
+            )
             if stmt.table_name in self.tables and not stmt.if_not_exists:
                 raise SQLExecutionError(f"Table '{stmt.table_name}' already exists")
 
@@ -153,7 +256,18 @@ class SQLExecutor:
                     if m:
                         dim = int(m.group(1))
 
-            storage_path = f"outputs/database/{stmt.table_name}.vdb"
+            base_dir = "outputs/database"
+            if self.tables:
+                first_table = next(iter(self.tables.values()))
+                if first_table.storage and first_table.storage.file_path:
+                    base_dir = os.path.dirname(first_table.storage.file_path)
+
+            storage_path = os.path.join(base_dir, f"{stmt.table_name}.vdb")
+            if os.path.exists(storage_path):
+                try:
+                    os.remove(storage_path)
+                except Exception:
+                    pass
             storage = VectorStorage(storage_path, dim=dim)
             self.tables[stmt.table_name] = TableCatalog(
                 name=stmt.table_name,
@@ -169,7 +283,9 @@ class SQLExecutor:
             }
 
         if isinstance(stmt, DropTableStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "ADMIN")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "ADMIN"
+            )
             if stmt.table_name not in self.tables:
                 if not stmt.if_exists:
                     raise SQLExecutionError(f"Table '{stmt.table_name}' not found")
@@ -179,7 +295,9 @@ class SQLExecutor:
             return {"command": "DROP_TABLE", "status": "ok", "dropped": True}
 
         if isinstance(stmt, CreateIndexStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "ADMIN")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "ADMIN"
+            )
             table = self._get_table(stmt.table_name)
             table.index = HNSWIndex(dim=table.storage.dim)
             table.index.build_from_storage(table.storage.get_all_vectors())
@@ -193,7 +311,9 @@ class SQLExecutor:
 
         # 4. DQL
         if isinstance(stmt, SelectStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "SELECT")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "SELECT"
+            )
             table = self._get_table(stmt.table_name)
             rows: List[Dict[str, Any]] = []
 
@@ -216,23 +336,9 @@ class SQLExecutor:
                     rows.append(item)
 
             # Apply WHERE filtering
-            filtered_rows: List[Dict[str, Any]] = []
-            for r in rows:
-                match = True
-                for clause in stmt.where_clauses:
-                    col = clause["column"]
-                    op = clause["operator"]
-                    expected = clause["value"]
-                    actual = r.get(col)
-
-                    if op == "=" and str(actual) != str(expected):
-                        match = False
-                        break
-                    elif op == "!=" and str(actual) == str(expected):
-                        match = False
-                        break
-                if match:
-                    filtered_rows.append(r)
+            filtered_rows = [
+                r for r in rows if self._matches_where_clause(r, stmt.where_clauses)
+            ]
 
             # Apply ORDER BY
             if stmt.order_by:
@@ -264,7 +370,9 @@ class SQLExecutor:
 
         # 5. DML
         if isinstance(stmt, InsertStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "INSERT")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "INSERT"
+            )
             table = self._get_table(stmt.table_name)
 
             col_val_map = dict(zip(stmt.columns, stmt.values))
@@ -293,23 +401,18 @@ class SQLExecutor:
                 "status": "ok",
                 "table": stmt.table_name,
                 "id": doc_id,
+                "inserted_count": 1,
             }
 
         if isinstance(stmt, UpdateStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "UPDATE")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "UPDATE"
+            )
             table = self._get_table(stmt.table_name)
             updated_count = 0
 
             for idx, meta in enumerate(table.storage.metadata):
-                match = True
-                for clause in stmt.where_clauses:
-                    col = clause["column"]
-                    op = clause["operator"]
-                    val = clause["value"]
-                    if op == "=" and str(meta.get(col)) != str(val):
-                        match = False
-                        break
-                if match:
+                if self._matches_where_clause(meta, stmt.where_clauses):
                     for k, v in stmt.assignments.items():
                         meta[k] = v
                     updated_count += 1
@@ -327,7 +430,9 @@ class SQLExecutor:
             }
 
         if isinstance(stmt, DeleteStatement):
-            self.access_controller.enforce_permission(role, stmt.table_name, "DELETE")
+            self.access_controller.enforce_permission(
+                effective_role, stmt.table_name, "DELETE"
+            )
             table = self._get_table(stmt.table_name)
 
             new_vecs: List[Tuple[float, ...]] = []
@@ -335,15 +440,9 @@ class SQLExecutor:
             deleted_count = 0
 
             for idx, meta in enumerate(table.storage.metadata):
-                match = True
-                for clause in stmt.where_clauses:
-                    col = clause["column"]
-                    op = clause["operator"]
-                    val = clause["value"]
-                    if op == "=" and str(meta.get(col)) != str(val):
-                        match = False
-                        break
-                if match and stmt.where_clauses:
+                if stmt.where_clauses and self._matches_where_clause(
+                    meta, stmt.where_clauses
+                ):
                     deleted_count += 1
                 else:
                     new_vecs.append(table.storage.get_vector(idx))

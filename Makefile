@@ -20,6 +20,7 @@ PYTHON_SRCS = src/__init__.py \
               src/mcp/threat_defense_server.py \
               src/mcp/tech_radar_server.py \
               src/database/__init__.py \
+              src/database/profiler.py \
               src/database/storage.py \
               src/database/embedding.py \
               src/database/index.py \
