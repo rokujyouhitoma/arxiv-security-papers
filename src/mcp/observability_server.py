@@ -402,11 +402,17 @@ def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
         peak_ram_kb = round(peak_bytes / 1024.0, 2)
 
     # Aggregated log stats
-    mcp_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=50)
-    search_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=50)
+    mcp_records = _read_recent_jsonl_records(
+        os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=50
+    )
+    search_records = _read_recent_jsonl_records(
+        os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=50
+    )
 
     mcp_lats = [r.get("execution_ms", 0.0) for r in mcp_records]
-    search_lats = [r.get("performance", {}).get("total_ms", 0.0) for r in search_records]
+    search_lats = [
+        r.get("performance", {}).get("total_ms", 0.0) for r in search_records
+    ]
 
     return {
         "status": "healthy",
@@ -421,9 +427,13 @@ def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
         "query_cache_stats": qc.stats(),
         "recent_activity": {
             "mcp_calls_sampled": len(mcp_records),
-            "mcp_avg_latency_ms": round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0,
+            "mcp_avg_latency_ms": (
+                round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0
+            ),
             "search_queries_sampled": len(search_records),
-            "search_avg_latency_ms": round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0,
+            "search_avg_latency_ms": (
+                round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0
+            ),
         },
     }
 
@@ -438,7 +448,9 @@ def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
     if log_type in ("mcp", "all"):
         files_to_read.append(("mcp", os.path.join(LOGS_DIR, "mcp_perf_log.jsonl")))
     if log_type in ("search", "all"):
-        files_to_read.append(("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl")))
+        files_to_read.append(
+            ("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl"))
+        )
     if log_type in ("query", "all"):
         files_to_read.append(("query", os.path.join(LOGS_DIR, "query_log.jsonl")))
 
@@ -460,7 +472,9 @@ def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
     all_records = all_records[:limit]
 
     latencies = [
-        r.get("execution_ms") or r.get("performance", {}).get("total_ms", 0.0) or r.get("total_ms", 0.0)
+        r.get("execution_ms")
+        or r.get("performance", {}).get("total_ms", 0.0)
+        or r.get("total_ms", 0.0)
         for r in all_records
     ]
     peak_mems = [
@@ -473,7 +487,9 @@ def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
         "log_type": log_type,
         "record_count": len(all_records),
         "summary": {
-            "avg_latency_ms": round(sum(latencies) / len(latencies), 3) if latencies else 0.0,
+            "avg_latency_ms": (
+                round(sum(latencies) / len(latencies), 3) if latencies else 0.0
+            ),
             "max_latency_ms": round(max(latencies), 3) if latencies else 0.0,
             "max_peak_memory_kb": round(max(peak_mems), 3) if peak_mems else 0.0,
         },
@@ -484,25 +500,37 @@ def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
 def handle_dump_performance_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
     """Generates a structured observability report across MCP and Search Engine."""
     fmt = params.get("format", "markdown").lower()
-    mcp_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=100)
-    search_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=100)
+    mcp_records = _read_recent_jsonl_records(
+        os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=100
+    )
+    search_records = _read_recent_jsonl_records(
+        os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=100
+    )
 
     mcp_lats = [r.get("execution_ms", 0.0) for r in mcp_records]
     mcp_peaks = [r.get("peak_memory_kb", 0.0) for r in mcp_records]
 
-    search_lats = [r.get("performance", {}).get("total_ms", 0.0) for r in search_records]
-    search_peaks = [r.get("performance", {}).get("peak_memory_kb", 0.0) for r in search_records]
+    search_lats = [
+        r.get("performance", {}).get("total_ms", 0.0) for r in search_records
+    ]
+    search_peaks = [
+        r.get("performance", {}).get("peak_memory_kb", 0.0) for r in search_records
+    ]
 
     cur_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     mcp_stats: Dict[str, Any] = {
         "total_calls": len(mcp_records),
-        "avg_execution_ms": round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0,
+        "avg_execution_ms": (
+            round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0
+        ),
         "max_execution_ms": round(max(mcp_lats), 3) if mcp_lats else 0.0,
         "max_peak_memory_kb": round(max(mcp_peaks), 3) if mcp_peaks else 0.0,
     }
     search_stats: Dict[str, Any] = {
         "total_queries": len(search_records),
-        "avg_latency_ms": round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0,
+        "avg_latency_ms": (
+            round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0
+        ),
         "max_latency_ms": round(max(search_lats), 3) if search_lats else 0.0,
         "max_peak_memory_kb": round(max(search_peaks), 3) if search_peaks else 0.0,
     }
