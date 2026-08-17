@@ -5,13 +5,7 @@ Unit tests for arxiv_okf_fetcher core module.
 import os
 import sys
 
-from arxiv_okf_fetcher import clean_text, load_config, translate_title_ja
-
-# Add src to python path for standalone execution
-if "src" not in sys.path:
-    sys.path.insert(
-        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    )
+from fetcher import clean_text, load_config, translate_title_ja
 
 
 def test_clean_text():

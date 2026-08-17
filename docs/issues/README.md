@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **029** | [`tests/` および `src/` ディレクトリのパッケージ階層（`database/`, `fetcher/`, `mcp/`, `search/`, `web/`）1:1完全対応化](closed/029-reorganize-tests-by-package-hierarchy.md) | Refactor | 2026-08-17 | [029-reorganize-tests-by-package-hierarchy.md](closed/029-reorganize-tests-by-package-hierarchy.md) |
 | **028** | [SQLite型4層アーキテクチャ（VFS / Pager / VDBE / Compiler）に基づくゼロ依存ベクトルDB再設計・実装](closed/028-sqlite-inspired-vdbe-vfs-vector-architecture.md) | Feature | 2026-08-17 | [028-sqlite-inspired-vdbe-vfs-vector-architecture.md](closed/028-sqlite-inspired-vdbe-vfs-vector-architecture.md) |
 | **027** | [ゼロ依存 / 純Python製 5大SQLコマンド体系（DDL / DQL / DML / DCL / TCL）エンジンおよび Python 標準 SQLite / PEP 249 DB-API 2.0 接続インターフェースの実装](closed/027-pure-python-sql-engine-support.md) | Feature | 2026-08-17 | [027-pure-python-sql-engine-support.md](closed/027-pure-python-sql-engine-support.md) |
 | **026** | [ゼロ依存 / 純Python製ベクトルストレージ・近似近傍探索 (ANN/HNSW) エンジンおよび プロトコル駆動型疎結合基盤の実装](closed/026-pure-python-vector-storage-and-ann-engine.md) | Feature | 2026-08-17 | [026-pure-python-vector-storage-and-ann-engine.md](closed/026-pure-python-vector-storage-and-ann-engine.md) |
