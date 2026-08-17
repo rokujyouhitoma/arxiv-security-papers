@@ -30,12 +30,14 @@ class ExecutionMetrics:
         cpu_time_ms: float = 0.0,
         current_memory_kb: float = 0.0,
         peak_memory_kb: float = 0.0,
+        memory_delta_kb: float = 0.0,
     ) -> None:
         self.name = name
         self.wall_time_ms = round(wall_time_ms, 3)
         self.cpu_time_ms = round(cpu_time_ms, 3)
         self.current_memory_kb = round(current_memory_kb, 3)
         self.peak_memory_kb = round(peak_memory_kb, 3)
+        self.memory_delta_kb = round(memory_delta_kb, 3)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -44,12 +46,13 @@ class ExecutionMetrics:
             "cpu_time_ms": self.cpu_time_ms,
             "current_memory_kb": self.current_memory_kb,
             "peak_memory_kb": self.peak_memory_kb,
+            "memory_delta_kb": self.memory_delta_kb,
         }
 
     def __repr__(self) -> str:
         return (
             f"ExecutionMetrics(name='{self.name}', wall={self.wall_time_ms}ms, "
-            f"cpu={self.cpu_time_ms}ms, peak_mem={self.peak_memory_kb}KB)"
+            f"cpu={self.cpu_time_ms}ms, peak_mem={self.peak_memory_kb}KB, delta_mem={self.memory_delta_kb}KB)"
         )
 
 
@@ -64,6 +67,7 @@ class ExecutionProfiler:
         self.metrics: Optional[ExecutionMetrics] = None
         self._start_wall: float = 0.0
         self._start_cpu: float = 0.0
+        self._start_memory_bytes: int = 0
         self._was_tracemalloc_running: bool = False
 
     def __enter__(self) -> "ExecutionProfiler":
@@ -72,6 +76,8 @@ class ExecutionProfiler:
             if not self._was_tracemalloc_running:
                 tracemalloc.start()
             tracemalloc.reset_peak()
+            cur, _ = tracemalloc.get_traced_memory()
+            self._start_memory_bytes = cur
 
         self._start_cpu = time.process_time()
         self._start_wall = time.perf_counter()
@@ -86,10 +92,12 @@ class ExecutionProfiler:
 
         current_kb = 0.0
         peak_kb = 0.0
+        delta_kb = 0.0
         if self.track_memory:
             cur, peak = tracemalloc.get_traced_memory()
             current_kb = cur / 1024.0
             peak_kb = peak / 1024.0
+            delta_kb = (cur - self._start_memory_bytes) / 1024.0
             if not self._was_tracemalloc_running:
                 tracemalloc.stop()
 
@@ -99,6 +107,7 @@ class ExecutionProfiler:
             cpu_time_ms=cpu_ms,
             current_memory_kb=current_kb,
             peak_memory_kb=peak_kb,
+            memory_delta_kb=delta_kb,
         )
 
 

@@ -172,3 +172,112 @@ def test_mcp_resources_and_prompts():
     }
     resp_prompt = dispatch_rpc_request(req_prompt)
     assert "calc_score" in resp_prompt["result"]["messages"][0]["content"]["text"]
+
+
+def test_mcp_system_metrics_memory_and_activity():
+    req = {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+            "name": "get_system_metrics",
+            "arguments": {},
+        },
+    }
+    resp = dispatch_rpc_request(req)
+    assert resp is not None
+    content_text = resp["result"]["content"][0]["text"]
+    data = json.loads(content_text)
+    assert data["status"] == "healthy"
+    assert "memory" in data
+    assert "current_ram_kb" in data["memory"]
+    assert "recent_activity" in data
+
+
+def test_mcp_get_performance_logs_and_dump():
+    # 1. get_performance_logs
+    req_logs = {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {
+            "name": "get_performance_logs",
+            "arguments": {"log_type": "all", "limit": 10},
+        },
+    }
+    resp_logs = dispatch_rpc_request(req_logs)
+    assert resp_logs is not None
+    data_logs = json.loads(resp_logs["result"]["content"][0]["text"])
+    assert data_logs["status"] == "success"
+    assert "summary" in data_logs
+    assert "avg_latency_ms" in data_logs["summary"]
+
+    # 2. dump_performance_metrics markdown
+    req_dump_md = {
+        "jsonrpc": "2.0",
+        "id": 12,
+        "method": "tools/call",
+        "params": {
+            "name": "dump_performance_metrics",
+            "arguments": {"format": "markdown"},
+        },
+    }
+    resp_dump_md = dispatch_rpc_request(req_dump_md)
+    assert resp_dump_md is not None
+    data_dump_md = json.loads(resp_dump_md["result"]["content"][0]["text"])
+    assert data_dump_md["status"] == "success"
+    assert "# 📊 統合可観測性" in data_dump_md["markdown_report"]
+
+    # 3. dump_performance_metrics json
+    req_dump_json = {
+        "jsonrpc": "2.0",
+        "id": 13,
+        "method": "tools/call",
+        "params": {
+            "name": "dump_performance_metrics",
+            "arguments": {"format": "json"},
+        },
+    }
+    resp_dump_json = dispatch_rpc_request(req_dump_json)
+    assert resp_dump_json is not None
+    data_dump_json = json.loads(resp_dump_json["result"]["content"][0]["text"])
+    assert data_dump_json["status"] == "success"
+    assert "mcp" in data_dump_json["metrics"]
+    assert "search" in data_dump_json["metrics"]
+
+
+def test_mcp_base_and_search_logging_integration():
+    from mcp.base import log_mcp_performance
+
+    # Test MCP performance logging with memory and cpu metrics
+    log_mcp_performance(
+        server_name="test-server",
+        method="tools/call",
+        name="test_tool",
+        execution_ms=12.345,
+        status="success",
+        cpu_ms=8.12,
+        peak_memory_kb=256.0,
+        memory_delta_kb=64.0,
+        args_summary={"query": "test"},
+        metrics={"count": 5},
+    )
+
+    # Verify get_performance_logs sees the entry
+    req = {
+        "jsonrpc": "2.0",
+        "id": 14,
+        "method": "tools/call",
+        "params": {
+            "name": "get_performance_logs",
+            "arguments": {"log_type": "mcp", "limit": 5},
+        },
+    }
+    resp = dispatch_rpc_request(req)
+    assert resp is not None
+    data = json.loads(resp["result"]["content"][0]["text"])
+    assert data["status"] == "success"
+    assert len(data["records"]) > 0
+    recent = data["records"][0]
+    assert "cpu_ms" in recent
+    assert "peak_memory_kb" in recent
