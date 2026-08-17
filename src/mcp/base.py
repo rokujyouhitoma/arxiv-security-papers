@@ -9,6 +9,7 @@ import os
 import sys
 import threading
 import time
+import tracemalloc
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -43,12 +44,16 @@ def log_mcp_performance(
     name: str,
     execution_ms: float,
     status: str = "success",
+    cpu_ms: float = 0.0,
+    peak_memory_kb: float = 0.0,
+    memory_delta_kb: float = 0.0,
     args_summary: Optional[Dict[str, Any]] = None,
     metrics: Optional[Dict[str, Any]] = None,
     error_message: Optional[str] = None,
 ) -> None:
     """
-    Logs MCP server execution performance to both stderr (console) and outputs/logs/mcp_perf_log.jsonl.
+    Logs MCP server execution performance (time, CPU, and memory) to both stderr (console)
+    and outputs/logs/mcp_perf_log.jsonl.
     Uses stderr to preserve stdout for JSON-RPC communication without protocol interference.
     """
     metrics_data = metrics or {}
@@ -60,6 +65,9 @@ def log_mcp_performance(
         "method": method,
         "name": name,
         "execution_ms": round(execution_ms, 3),
+        "cpu_ms": round(cpu_ms, 3),
+        "peak_memory_kb": round(peak_memory_kb, 3),
+        "memory_delta_kb": round(memory_delta_kb, 3),
         "status": status,
         "args": args_data,
         "metrics": metrics_data,
@@ -77,7 +85,8 @@ def log_mcp_performance(
     # 1. Output formatted real-time performance line to stderr
     log_line = (
         f"[MCP-PERF] ⚡ [{server_name}] {method} '{name}' | "
-        f"Time: {execution_ms:.2f}ms | Status: {status}{metrics_part}{err_part}"
+        f"Time: {execution_ms:.2f}ms (CPU: {cpu_ms:.2f}ms) | Peak RAM: {peak_memory_kb:.1f}KB | "
+        f"Status: {status}{metrics_part}{err_part}"
     )
     sys.stderr.write(log_line + "\n")
     sys.stderr.flush()
@@ -109,7 +118,7 @@ def run_mcp_server(
 ) -> None:
     """
     Standard event loop processing JSON-RPC messages from stdin, dispatching tools/prompts/resources,
-    and recording performance measurements.
+    and recording wall-clock, CPU, and memory performance measurements.
     """
     tools = tools_manifest or []
     t_handlers = tool_handlers or {}
@@ -139,11 +148,23 @@ def run_mcp_server(
                 tool_name = p.get("name", "")
                 args = p.get("arguments", {})
 
-                t0 = time.perf_counter()
+                was_tracing = tracemalloc.is_tracing()
+                if not was_tracing:
+                    tracemalloc.start()
+                tracemalloc.reset_peak()
+                t0_wall = time.perf_counter()
+                t0_cpu = time.process_time()
+                start_mem, _ = tracemalloc.get_traced_memory()
+
                 if tool_name in t_handlers:
                     try:
                         res = t_handlers[tool_name](args)
-                        exec_ms = (time.perf_counter() - t0) * 1000.0
+                        exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+                        cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+                        end_mem, peak_mem = tracemalloc.get_traced_memory()
+                        peak_kb = peak_mem / 1024.0
+                        delta_kb = (end_mem - start_mem) / 1024.0
+
                         status = (
                             "error"
                             if isinstance(res, dict) and res.get("status") == "error"
@@ -166,11 +187,19 @@ def run_mcp_server(
                             name=tool_name,
                             execution_ms=exec_ms,
                             status=status,
+                            cpu_ms=cpu_ms,
+                            peak_memory_kb=peak_kb,
+                            memory_delta_kb=delta_kb,
                             args_summary=args,
                             metrics=metrics,
                         )
                     except Exception as handler_err:
-                        exec_ms = (time.perf_counter() - t0) * 1000.0
+                        exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+                        cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+                        end_mem, peak_mem = tracemalloc.get_traced_memory()
+                        peak_kb = peak_mem / 1024.0
+                        delta_kb = (end_mem - start_mem) / 1024.0
+
                         res = {"status": "error", "message": str(handler_err)}
                         log_mcp_performance(
                             server_name=server_name,
@@ -178,6 +207,9 @@ def run_mcp_server(
                             name=tool_name,
                             execution_ms=exec_ms,
                             status="error",
+                            cpu_ms=cpu_ms,
+                            peak_memory_kb=peak_kb,
+                            memory_delta_kb=delta_kb,
                             args_summary=args,
                             error_message=str(handler_err),
                         )
@@ -191,6 +223,9 @@ def run_mcp_server(
                         status="error",
                         error_message=f"Unknown tool '{tool_name}'",
                     )
+
+                if not was_tracing:
+                    tracemalloc.stop()
 
                 resp = {
                     "jsonrpc": "2.0",
@@ -213,16 +248,31 @@ def run_mcp_server(
                 prompt_name = p.get("name", "")
                 args = p.get("arguments", {})
 
-                t0 = time.perf_counter()
+                was_tracing = tracemalloc.is_tracing()
+                if not was_tracing:
+                    tracemalloc.start()
+                tracemalloc.reset_peak()
+                t0_wall = time.perf_counter()
+                t0_cpu = time.process_time()
+                start_mem, _ = tracemalloc.get_traced_memory()
+
                 if prompt_name in p_handlers:
                     res = p_handlers[prompt_name](args)
-                    exec_ms = (time.perf_counter() - t0) * 1000.0
+                    exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+                    cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+                    end_mem, peak_mem = tracemalloc.get_traced_memory()
+                    peak_kb = peak_mem / 1024.0
+                    delta_kb = (end_mem - start_mem) / 1024.0
+
                     log_mcp_performance(
                         server_name=server_name,
                         method="prompts/get",
                         name=prompt_name,
                         execution_ms=exec_ms,
                         status="success",
+                        cpu_ms=cpu_ms,
+                        peak_memory_kb=peak_kb,
+                        memory_delta_kb=delta_kb,
                         args_summary=args,
                     )
                 else:
@@ -235,6 +285,10 @@ def run_mcp_server(
                         status="error",
                         error_message=f"Unknown prompt '{prompt_name}'",
                     )
+
+                if not was_tracing:
+                    tracemalloc.stop()
+
                 resp = {"jsonrpc": "2.0", "id": req_id, "result": res}
 
             # 3. Resource capabilities
@@ -248,16 +302,31 @@ def run_mcp_server(
                 p = req.get("params", {})
                 uri = p.get("uri", "")
 
-                t0 = time.perf_counter()
+                was_tracing = tracemalloc.is_tracing()
+                if not was_tracing:
+                    tracemalloc.start()
+                tracemalloc.reset_peak()
+                t0_wall = time.perf_counter()
+                t0_cpu = time.process_time()
+                start_mem, _ = tracemalloc.get_traced_memory()
+
                 if uri in r_handlers:
                     res = r_handlers[uri](p)
-                    exec_ms = (time.perf_counter() - t0) * 1000.0
+                    exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+                    cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+                    end_mem, peak_mem = tracemalloc.get_traced_memory()
+                    peak_kb = peak_mem / 1024.0
+                    delta_kb = (end_mem - start_mem) / 1024.0
+
                     log_mcp_performance(
                         server_name=server_name,
                         method="resources/read",
                         name=uri,
                         execution_ms=exec_ms,
                         status="success",
+                        cpu_ms=cpu_ms,
+                        peak_memory_kb=peak_kb,
+                        memory_delta_kb=delta_kb,
                     )
                 else:
                     res = {"error": f"Unknown resource URI '{uri}'"}
@@ -269,6 +338,10 @@ def run_mcp_server(
                         status="error",
                         error_message=f"Unknown resource URI '{uri}'",
                     )
+
+                if not was_tracing:
+                    tracemalloc.stop()
+
                 resp = {"jsonrpc": "2.0", "id": req_id, "result": res}
 
             # 4. Unknown / Notifications

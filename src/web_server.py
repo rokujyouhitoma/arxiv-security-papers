@@ -80,6 +80,10 @@ def log_query(
     intent = profile.get("intent", "general")
     clauses_parsed = profile.get("clauses_parsed", 0)
 
+    cpu_ms = profile.get("cpu_ms", 0.0)
+    peak_memory_kb = profile.get("peak_memory_kb", 0.0)
+    memory_delta_kb = profile.get("memory_delta_kb", 0.0)
+
     # Compute throughput (evaluated docs / sec)
     throughput = (
         round(candidates_eval / (total_ms / 1000.0), 1) if total_ms > 0 else 0.0
@@ -93,6 +97,9 @@ def log_query(
         "result_count": result_count,
         "performance": {
             "total_ms": total_ms,
+            "cpu_ms": cpu_ms,
+            "peak_memory_kb": peak_memory_kb,
+            "memory_delta_kb": memory_delta_kb,
             "tokenize_ms": tokenize_ms,
             "candidate_pruning_ms": pruning_ms,
             "scoring_ms": scoring_ms,
@@ -105,6 +112,9 @@ def log_query(
         },
         # Flat keys for backward compatibility
         "total_ms": total_ms,
+        "cpu_ms": cpu_ms,
+        "peak_memory_kb": peak_memory_kb,
+        "memory_delta_kb": memory_delta_kb,
         "tokenize_ms": tokenize_ms,
         "candidate_pruning_ms": pruning_ms,
         "scoring_ms": scoring_ms,
@@ -117,7 +127,8 @@ def log_query(
 
     # 1. Output formatted performance log to server stdout/stderr for real-time observability
     log_line = (
-        f'[PERF] ⚡ Query: "{query}" | Total: {total_ms:.2f}ms '
+        f'[PERF] ⚡ Query: "{query}" | Total: {total_ms:.2f}ms (CPU: {cpu_ms:.2f}ms) | '
+        f"Peak RAM: {peak_memory_kb:.1f}KB | "
         f"[Tokenize: {tokenize_ms:.2f}ms, Prune: {pruning_ms:.2f}ms, Score: {scoring_ms:.2f}ms] | "
         f"Hits: {result_count}/{top_k} | Eval: {candidates_eval}/{total_docs} docs ({throughput} docs/s) | "
         f"Intent: {intent} | Cached: {cached}"

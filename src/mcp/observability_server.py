@@ -346,19 +346,207 @@ def handle_inspect_bytecode(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def get_workspace_dir() -> str:
+    cur = os.path.abspath(os.path.dirname(__file__))
+    while cur != os.path.dirname(cur):
+        if (
+            os.path.exists(os.path.join(cur, "pyproject.toml"))
+            or os.path.exists(os.path.join(cur, "Makefile"))
+            or os.path.exists(os.path.join(cur, ".agents"))
+        ):
+            return cur
+        cur = os.path.dirname(cur)
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+WORKSPACE_DIR = get_workspace_dir()
+LOGS_DIR = os.path.join(WORKSPACE_DIR, "outputs", "logs")
+
+
+def _read_recent_jsonl_records(log_path: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """Reads the most recent records from a JSONL log file."""
+    if not os.path.exists(log_path):
+        return []
+    records: List[Dict[str, Any]] = []
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        for line in reversed(lines):
+            line = line.strip()
+            if line:
+                try:
+                    records.append(json.loads(line))
+                    if len(records) >= limit:
+                        break
+                except Exception:
+                    continue
+    except Exception as e:
+        sys.stderr.write(f"[Observability] Error reading {log_path}: {e}\n")
+    return records
+
+
 def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Returns system and search engine runtime metrics."""
+    """Returns system, memory allocation, and search engine runtime metrics."""
     from search.server.cache import FilterCache, QueryResultCache
 
     fc = FilterCache()
     qc = QueryResultCache()
 
+    # Memory state
+    is_tracing = tracemalloc.is_tracing()
+    current_ram_kb = 0.0
+    peak_ram_kb = 0.0
+    if is_tracing:
+        cur_bytes, peak_bytes = tracemalloc.get_traced_memory()
+        current_ram_kb = round(cur_bytes / 1024.0, 2)
+        peak_ram_kb = round(peak_bytes / 1024.0, 2)
+
+    # Aggregated log stats
+    mcp_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=50)
+    search_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=50)
+
+    mcp_lats = [r.get("execution_ms", 0.0) for r in mcp_records]
+    search_lats = [r.get("performance", {}).get("total_ms", 0.0) for r in search_records]
+
     return {
         "status": "healthy",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "python_version": sys.version,
+        "memory": {
+            "tracemalloc_active": is_tracing,
+            "current_ram_kb": current_ram_kb,
+            "peak_ram_kb": peak_ram_kb,
+        },
         "filter_cache_stats": fc.stats(),
         "query_cache_stats": qc.stats(),
+        "recent_activity": {
+            "mcp_calls_sampled": len(mcp_records),
+            "mcp_avg_latency_ms": round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0,
+            "search_queries_sampled": len(search_records),
+            "search_avg_latency_ms": round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0,
+        },
+    }
+
+
+def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Retrieves and filters logged performance records from outputs/logs/."""
+    log_type = params.get("log_type", "all").lower()
+    limit = int(params.get("limit", 50))
+    min_latency = float(params.get("min_latency_ms", 0.0))
+
+    files_to_read = []
+    if log_type in ("mcp", "all"):
+        files_to_read.append(("mcp", os.path.join(LOGS_DIR, "mcp_perf_log.jsonl")))
+    if log_type in ("search", "all"):
+        files_to_read.append(("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl")))
+    if log_type in ("query", "all"):
+        files_to_read.append(("query", os.path.join(LOGS_DIR, "query_log.jsonl")))
+
+    all_records: List[Dict[str, Any]] = []
+    for source, path in files_to_read:
+        records = _read_recent_jsonl_records(path, limit=limit)
+        for r in records:
+            r_copy = dict(r)
+            r_copy["log_source"] = source
+            lat = (
+                r_copy.get("execution_ms")
+                or r_copy.get("performance", {}).get("total_ms", 0.0)
+                or r_copy.get("total_ms", 0.0)
+            )
+            if lat >= min_latency:
+                all_records.append(r_copy)
+
+    all_records.sort(key=lambda x: str(x.get("timestamp", "")), reverse=True)
+    all_records = all_records[:limit]
+
+    latencies = [
+        r.get("execution_ms") or r.get("performance", {}).get("total_ms", 0.0) or r.get("total_ms", 0.0)
+        for r in all_records
+    ]
+    peak_mems = [
+        r.get("peak_memory_kb") or r.get("performance", {}).get("peak_memory_kb", 0.0)
+        for r in all_records
+    ]
+
+    return {
+        "status": "success",
+        "log_type": log_type,
+        "record_count": len(all_records),
+        "summary": {
+            "avg_latency_ms": round(sum(latencies) / len(latencies), 3) if latencies else 0.0,
+            "max_latency_ms": round(max(latencies), 3) if latencies else 0.0,
+            "max_peak_memory_kb": round(max(peak_mems), 3) if peak_mems else 0.0,
+        },
+        "records": all_records,
+    }
+
+
+def handle_dump_performance_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Generates a structured observability report across MCP and Search Engine."""
+    fmt = params.get("format", "markdown").lower()
+    mcp_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=100)
+    search_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=100)
+
+    mcp_lats = [r.get("execution_ms", 0.0) for r in mcp_records]
+    mcp_peaks = [r.get("peak_memory_kb", 0.0) for r in mcp_records]
+
+    search_lats = [r.get("performance", {}).get("total_ms", 0.0) for r in search_records]
+    search_peaks = [r.get("performance", {}).get("peak_memory_kb", 0.0) for r in search_records]
+
+    cur_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    mcp_stats: Dict[str, Any] = {
+        "total_calls": len(mcp_records),
+        "avg_execution_ms": round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0,
+        "max_execution_ms": round(max(mcp_lats), 3) if mcp_lats else 0.0,
+        "max_peak_memory_kb": round(max(mcp_peaks), 3) if mcp_peaks else 0.0,
+    }
+    search_stats: Dict[str, Any] = {
+        "total_queries": len(search_records),
+        "avg_latency_ms": round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0,
+        "max_latency_ms": round(max(search_lats), 3) if search_lats else 0.0,
+        "max_peak_memory_kb": round(max(search_peaks), 3) if search_peaks else 0.0,
+    }
+    summary: Dict[str, Any] = {
+        "timestamp": cur_time,
+        "mcp": mcp_stats,
+        "search": search_stats,
+    }
+
+    if fmt == "json":
+        return {"status": "success", "format": "json", "metrics": summary}
+
+    lines = [
+        "# 📊 統合可観測性（Observability）パフォーマンス & メモリレポート",
+        "",
+        f"**生成日時 (UTC)**: `{cur_time}`",
+        "",
+        "## 1. MCP サーバー実行メトリクス (MCP Server Metrics)",
+        "",
+        "| 指標 (Metric) | 測定値 (Measured) | 備考 (Note) |",
+        "| :--- | :---: | :--- |",
+        f"| **総呼び出し回数** | `{mcp_stats['total_calls']}` 件 | 最新 100 件のサンプリング |",
+        f"| **平均実行時間** | `{mcp_stats['avg_execution_ms']} ms` | tools/call, prompts, resources |",
+        f"| **最大実行時間** | `{mcp_stats['max_execution_ms']} ms` | ピーク処理時間 |",
+        f"| **最大ピークメモリ** | `{mcp_stats['max_peak_memory_kb']} KB` | tracemalloc ピーク消費 |",
+        "",
+        "---",
+        "",
+        "## 2. 検索エンジン クエリ実行メトリクス (Search Engine Metrics)",
+        "",
+        "| 指標 (Metric) | 測定値 (Measured) | 備考 (Note) |",
+        "| :--- | :---: | :--- |",
+        f"| **総クエリ実行回数** | `{search_stats['total_queries']}` 件 | 最新 100 件のサンプリング |",
+        f"| **平均クエリ所要時間** | `{search_stats['avg_latency_ms']} ms` | ハイブリッド検索パイプライン |",
+        f"| **最大クエリ所要時間** | `{search_stats['max_latency_ms']} ms` | 最長レイテンシ |",
+        f"| **最大ピークメモリ** | `{search_stats['max_peak_memory_kb']} KB` | クエリ処理時の最大消費 |",
+        "",
+    ]
+
+    return {
+        "status": "success",
+        "format": "markdown",
+        "metrics": summary,
+        "markdown_report": "\n".join(lines),
     }
 
 
@@ -492,9 +680,51 @@ TOOLS_REGISTRY = {
         "handler": handle_inspect_bytecode,
     },
     "get_system_metrics": {
-        "description": "Retrieves live search engine metrics, cache hit ratios, and runtime health stats.",
+        "description": "Retrieves live search engine metrics, cache hit ratios, RAM stats, and latency records.",
         "inputSchema": {"type": "object", "properties": {}},
         "handler": handle_get_system_metrics,
+    },
+    "get_performance_logs": {
+        "description": (
+            "Retrieves and filters dumped performance and memory logs from MCP and Search Engine."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "log_type": {
+                    "type": "string",
+                    "description": "Log type: 'all', 'mcp', 'search', or 'query'",
+                    "default": "all",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of records to return",
+                    "default": 50,
+                },
+                "min_latency_ms": {
+                    "type": "number",
+                    "description": "Optional minimum latency filter in milliseconds",
+                    "default": 0.0,
+                },
+            },
+        },
+        "handler": handle_get_performance_logs,
+    },
+    "dump_performance_metrics": {
+        "description": (
+            "Generates a comprehensive Markdown/JSON performance report across MCP and Search Engine."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "format": {
+                    "type": "string",
+                    "description": "Output format: 'markdown' or 'json'",
+                    "default": "markdown",
+                },
+            },
+        },
+        "handler": handle_dump_performance_metrics,
     },
     "evaluate_search_quality": {
         "description": (
@@ -525,6 +755,11 @@ RESOURCES_REGISTRY = {
         "name": "Profiler Output Schema",
         "description": "JSON schema for structured cProfile and tracemalloc outputs.",
         "mimeType": "application/json",
+    },
+    "observability://metrics/unified_report": {
+        "name": "Unified Observability & Memory Report",
+        "description": "Consolidated Markdown report of MCP and Search Engine performance.",
+        "mimeType": "text/markdown",
     },
 }
 
@@ -656,6 +891,21 @@ def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                             "uri": uri,
                             "mimeType": "application/json",
                             "text": json.dumps(schema_doc, indent=2),
+                        }
+                    ]
+                },
+            }
+        elif uri == "observability://metrics/unified_report":
+            report = handle_dump_performance_metrics({"format": "markdown"})
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "contents": [
+                        {
+                            "uri": uri,
+                            "mimeType": "text/markdown",
+                            "text": report.get("markdown_report", ""),
                         }
                     ]
                 },

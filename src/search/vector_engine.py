@@ -8,9 +8,11 @@ import json
 import math
 import os
 import re
+import sys
 import time
+import tracemalloc
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .ingestion import (
@@ -115,6 +117,9 @@ class VectorEngine:
         self.raptor_tree = RAPTORTreeIndex()
         self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
 
+        self.search_perf_log_path = os.path.join(
+            self.workspace_dir, "outputs", "logs", "search_perf_log.jsonl"
+        )
         os.makedirs(self.vector_db_dir, exist_ok=True)
         self.load_index()
 
@@ -808,13 +813,45 @@ class VectorEngine:
             )
         return results
 
+    def log_search_performance(
+        self,
+        query: str,
+        top_k: int,
+        category: Optional[str],
+        result_count: int,
+        profile: Dict[str, Any],
+    ) -> None:
+        """Appends structured query execution profile to search_perf_log.jsonl."""
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "query": query,
+            "category": category,
+            "top_k": top_k,
+            "result_count": result_count,
+            "performance": profile,
+        }
+        try:
+            os.makedirs(os.path.dirname(self.search_perf_log_path), exist_ok=True)
+            with open(self.search_perf_log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception as e:
+            sys.stderr.write(f"[SearchEngine] Failed to write perf log: {e}\n")
+
     def search_with_profile(
         self, query: str, top_k: int = 5, category: Optional[str] = None
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Enterprise Multi-Field & Multi-Stage Hybrid Search with Query Parser & Dynamic Highlighter.
+        Measures Wall-clock time, CPU time, and Memory consumption (tracemalloc).
         """
-        t0 = time.perf_counter()
+        was_tracing = tracemalloc.is_tracing()
+        if not was_tracing:
+            tracemalloc.start()
+        tracemalloc.reset_peak()
+        t0_wall = time.perf_counter()
+        t0_cpu = time.process_time()
+        start_mem, _ = tracemalloc.get_traced_memory()
+
         q_tokens = self.tokenize(query) if query else []
 
         # Phase 0: Semantic Cache Check
@@ -822,6 +859,8 @@ class VectorEngine:
         if cached_res:
             res, prof = cached_res
             prof["cached"] = True
+            if not was_tracing:
+                tracemalloc.stop()
             return res[:top_k], prof
 
         t_tokenize_start = time.perf_counter()
@@ -847,12 +886,23 @@ class VectorEngine:
         # Step 4: Presentation & Highlight Generation
         results = self.format_presentation(ctx, ranked_items)
         t_total_end = time.perf_counter()
+        t_cpu_end = time.process_time()
+
+        end_mem, peak_mem = tracemalloc.get_traced_memory()
+        peak_kb = peak_mem / 1024.0
+        delta_kb = (end_mem - start_mem) / 1024.0
+
+        if not was_tracing:
+            tracemalloc.stop()
 
         profile = {
             "tokenize_ms": round((t_tokenize_end - t_tokenize_start) * 1000, 3),
             "candidate_pruning_ms": round((t_prune_end - t_prune_start) * 1000, 3),
             "scoring_ms": round((t_scoring_end - t_scoring_start) * 1000, 3),
-            "total_ms": round((t_total_end - t0) * 1000, 3),
+            "total_ms": round((t_total_end - t0_wall) * 1000, 3),
+            "cpu_ms": round((t_cpu_end - t0_cpu) * 1000, 3),
+            "peak_memory_kb": round(peak_kb, 3),
+            "memory_delta_kb": round(delta_kb, 3),
             "candidates_evaluated": len(target_docs),
             "total_documents": len(self.documents),
             "clauses_parsed": len(ctx.clauses),
@@ -862,6 +912,15 @@ class VectorEngine:
 
         # Store into Query Semantic Cache
         self.semantic_cache.set(f"{query}|{category}", q_tokens, results, profile)
+
+        # Dump to search_perf_log.jsonl
+        self.log_search_performance(
+            query=query,
+            top_k=top_k,
+            category=category,
+            result_count=len(results),
+            profile=profile,
+        )
 
         return results, profile
 

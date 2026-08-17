@@ -137,6 +137,8 @@ class SelectHandler:
                 "QTime": metrics.get("wall_time_ms", 0.0),
                 "cpu_time_ms": metrics.get("cpu_time_ms", 0.0),
                 "peak_memory_kb": metrics.get("peak_memory_kb", 0.0),
+                "memory_delta_kb": metrics.get("memory_delta_kb", 0.0),
+                "profile": metrics,
                 "params": {"q": query, "top_k": top_k},
             },
             "response": {
