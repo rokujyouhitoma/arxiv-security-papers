@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当ブランチ / ファイル |
 | :---: | --- | :---: | :---: | :---: | --- |
-| **031** | [`src/fetcher/` の ETL 3層（`ingestion` / `transformer` / `reporter`）アーキテクチャ分離](031-refactor-fetcher-into-etl-pipeline-architecture.md) | Feature / Refactor | High | In Progress | `feat/031-fetcher-etl-pipeline-architecture` |
+
 | **032** | [共通セキュリティ＆コンプライアンス基盤（`src/security/`）の独立集約](032-consolidate-unified-security-guard-and-rbac.md) | Feature / Security | Medium | New | `feat/032-consolidate-unified-security-framework` |
 | **033** | [`src/database/` の内部エンジン進化（B+Tree インデックスおよび Cost-Based Query Planner の分離・実装）](033-enhance-database-with-btree-index-and-cost-based-planner.md) | Feature | Medium | New | `feat/033-database-btree-and-query-planner` |
 | **034** | [Web サーバーの API Gateway 化と UI プレゼンテーション層の完全分離（`src/gateway/` / `src/presentation/`）](034-split-web-server-into-api-gateway-and-ui-presentation.md) | Feature / Arch | Low | New | `feat/034-split-gateway-and-presentation` |
@@ -19,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **031** | [`src/fetcher/` の ETL 3層（`ingestion` / `transformer` / `reporter`）アーキテクチャ分離](closed/031-refactor-fetcher-into-etl-pipeline-architecture.md) | Feature / Refactor | 2026-08-17 | [031-refactor-fetcher-into-etl-pipeline-architecture.md](closed/031-refactor-fetcher-into-etl-pipeline-architecture.md) |
 | **030** | [4層ベクトルDBの重厚な性能・メモリプロファイリング評価およびSQL互換性テスト拡充](closed/030-database-performance-memory-profiling-and-sql-test-expansion.md) | Performance / Test | 2026-08-17 | [030-database-performance-memory-profiling-and-sql-test-expansion.md](closed/030-database-performance-memory-profiling-and-sql-test-expansion.md) |
 | **029** | [`tests/` および `src/` ディレクトリのパッケージ階層（`database/`, `fetcher/`, `mcp/`, `search/`, `web/`）1:1完全対応化](closed/029-reorganize-tests-by-package-hierarchy.md) | Refactor | 2026-08-17 | [029-reorganize-tests-by-package-hierarchy.md](closed/029-reorganize-tests-by-package-hierarchy.md) |
 | **028** | [SQLite型4層アーキテクチャ（VFS / Pager / VDBE / Compiler）に基づくゼロ依存ベクトルDB再設計・実装](closed/028-sqlite-inspired-vdbe-vfs-vector-architecture.md) | Feature | 2026-08-17 | [028-sqlite-inspired-vdbe-vfs-vector-architecture.md](closed/028-sqlite-inspired-vdbe-vfs-vector-architecture.md) |

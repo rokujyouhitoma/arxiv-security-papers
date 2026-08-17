@@ -14,8 +14,26 @@ import urllib.parse
 import urllib.request
 
 try:
-    import defusedxml.ElementTree as ET  # type: ignore
+    import defusedxml.ElementTree as _defused_ET  # type: ignore
+
+    def _safe_fromstring(data: bytes) -> Any:
+        """Parse XML safely using defusedxml to prevent XXE attacks."""
+        return _defused_ET.fromstring(data)  # type: ignore[attr-defined]
+
 except ImportError:
+    import sys as _sys
+    import xml.etree.ElementTree as _stdlib_ET
+
+    _sys.stderr.write(
+        "[WARN] defusedxml not installed. Falling back to stdlib xml.etree — "
+        "ensure input XML is from trusted arXiv sources only.\n"
+    )
+
+    def _safe_fromstring(data: bytes) -> Any:  # type: ignore[misc]
+        """Fallback XML parser (stdlib). XXE risk mitigated by trusted arXiv origin only."""
+        return _stdlib_ET.fromstring(data)
+
+    # Alias for namespace-aware find operations
     import xml.etree.ElementTree as ET
 
 from datetime import datetime, timezone
@@ -134,7 +152,7 @@ def fetch_arxiv_papers(
             try:
                 with urllib.request.urlopen(req, timeout=30) as response:
                     xml_data = response.read()
-                    root = ET.fromstring(xml_data)
+                    root = _safe_fromstring(xml_data)
                     namespaces = {"atom": "http://www.w3.org/2005/Atom"}
                     entries = root.findall("atom:entry", namespaces)
                     if not entries:
@@ -187,7 +205,7 @@ def fetch_arxiv_rss_fallback(max_results: int = 50) -> List[Dict[str, Any]]:
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = resp.read()
-            root = ET.fromstring(data)
+            root = _safe_fromstring(data)
             items = root.findall(".//item")
             papers = []
             for item in items[:max_results]:
