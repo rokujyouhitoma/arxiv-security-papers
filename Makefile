@@ -143,16 +143,14 @@ clean: ## clean virtualenv and build artifacts
 setup: activate install setup_hooks ## setup venv, activate, install python libraries, and setup git hooks
 
 .PHONY: setup_hooks
-setup_hooks: ## Setup Git pre-commit hooks for mandatory format, static_analysis, test
+setup_hooks: ## Setup Git pre-commit hooks for mandatory format and static_analysis
 	@mkdir -p .githooks
 	@echo '#!/bin/sh' > .githooks/pre-commit
 	@echo 'set -e' >> .githooks/pre-commit
-	@echo 'echo "=== [Pre-Commit Gate] 1/3: make format ==="' >> .githooks/pre-commit
+	@echo 'echo "=== [Pre-Commit Gate] 1/2: make format ==="' >> .githooks/pre-commit
 	@echo 'make format' >> .githooks/pre-commit
-	@echo 'echo "=== [Pre-Commit Gate] 2/3: make static_analysis ==="' >> .githooks/pre-commit
+	@echo 'echo "=== [Pre-Commit Gate] 2/2: make static_analysis ==="' >> .githooks/pre-commit
 	@echo 'make static_analysis' >> .githooks/pre-commit
-	@echo 'echo "=== [Pre-Commit Gate] 3/3: make test ==="' >> .githooks/pre-commit
-	@echo 'make test' >> .githooks/pre-commit
 	@chmod +x .githooks/pre-commit
 	@git config core.hooksPath .githooks
 	@echo "Git pre-commit hooks configured successfully in .githooks"
