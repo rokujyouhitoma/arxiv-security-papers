@@ -8,8 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当ブランチ / ファイル |
 | :---: | --- | :---: | :---: | :---: | --- |
-
-| **032** | [共通セキュリティ＆コンプライアンス基盤（`src/security/`）の独立集約](032-consolidate-unified-security-guard-and-rbac.md) | Feature / Security | Medium | New | `feat/032-consolidate-unified-security-framework` |
 | **033** | [`src/database/` の内部エンジン進化（B+Tree インデックスおよび Cost-Based Query Planner の分離・実装）](033-enhance-database-with-btree-index-and-cost-based-planner.md) | Feature | Medium | New | `feat/033-database-btree-and-query-planner` |
 | **034** | [Web サーバーの API Gateway 化と UI プレゼンテーション層の完全分離（`src/gateway/` / `src/presentation/`）](034-split-web-server-into-api-gateway-and-ui-presentation.md) | Feature / Arch | Low | New | `feat/034-split-gateway-and-presentation` |
 
@@ -19,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **032** | [共通セキュリティ＆コンプライアンス基盤（`src/security/`）の独立集約](closed/032-consolidate-unified-security-guard-and-rbac.md) | Feature / Security | 2026-08-19 | [032-consolidate-unified-security-guard-and-rbac.md](closed/032-consolidate-unified-security-guard-and-rbac.md) |
 | **035** | [VectorEngine テスト `test_vector_engine_indexing_and_search` が 312MB index.json の同期ロードによりブロック](closed/035-fix-vector-engine-test-blocking-on-312mb-index-load.md) | Bug | 2026-08-18 | [035-fix-vector-engine-test-blocking-on-312mb-index-load.md](closed/035-fix-vector-engine-test-blocking-on-312mb-index-load.md) |
 | **031** | [`src/fetcher/` の ETL 3層（`ingestion` / `transformer` / `reporter`）アーキテクチャ分離](closed/031-refactor-fetcher-into-etl-pipeline-architecture.md) | Feature / Refactor | 2026-08-17 | [031-refactor-fetcher-into-etl-pipeline-architecture.md](closed/031-refactor-fetcher-into-etl-pipeline-architecture.md) |
 | **030** | [4層ベクトルDBの重厚な性能・メモリプロファイリング評価およびSQL互換性テスト拡充](closed/030-database-performance-memory-profiling-and-sql-test-expansion.md) | Performance / Test | 2026-08-17 | [030-database-performance-memory-profiling-and-sql-test-expansion.md](closed/030-database-performance-memory-profiling-and-sql-test-expansion.md) |

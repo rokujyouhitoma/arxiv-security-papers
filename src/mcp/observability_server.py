@@ -9,7 +9,6 @@ Provides profiling, memory allocation tracking, micro-benchmarking, and bytecode
 - get_system_metrics: Search engine and cache runtime metrics
 """
 
-import ast
 import cProfile
 import dis
 import io
@@ -20,135 +19,17 @@ import sys
 import time
 import timeit
 import tracemalloc
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, cast
+from typing import Any, Callable, Dict, List, Optional, Sequence, cast
 
 if "src" not in sys.path:
     sys.path.insert(
         0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
     )
 
+from security.sandbox import validate_safe_code
+
 SERVER_NAME = "arxiv-security-observability-mcp-server"
 SERVER_VERSION = "1.0.0"
-
-# ---------------------------------------------------------------------------
-# AST Security Validator (Secure Coding Guard)
-# ---------------------------------------------------------------------------
-
-BLOCKED_MODULES: Set[str] = {
-    "subprocess",
-    "socket",
-    "pty",
-    "shutil",
-    "ctypes",
-    "posix",
-    "resource",
-    "signal",
-    "pickle",
-    "shelve",
-    "marshal",
-    "importlib",
-    "_thread",
-}
-
-BLOCKED_CALLS: Set[str] = {
-    "system",
-    "popen",
-    "spawn",
-    "fork",
-    "kill",
-    "remove",
-    "rmdir",
-    "unlink",
-    "truncate",
-    "chmod",
-    "chown",
-}
-
-BLOCKED_BUILTIN_FUNCS: Set[str] = {
-    "eval",
-    "exec",
-    "compile",
-    "__import__",
-    "getattr",
-    "setattr",
-    "delattr",
-    "globals",
-    "locals",
-    "vars",
-}
-
-BLOCKED_DUNDER_NAMES: Set[str] = {
-    "__builtins__",
-    "__dict__",
-    "__class__",
-    "__subclasses__",
-    "__bases__",
-    "__mro__",
-}
-
-
-def validate_safe_code(code_str: str) -> Optional[str]:
-    """
-    Parses Python code into AST and rigorously validates against:
-    1. Prohibited modules (subprocess, socket, ctypes, pickle, etc.)
-    2. System/process manipulation calls (os.system, kill, etc.)
-    3. Dynamic code execution & reflection (eval, exec, compile, getattr, etc.)
-    4. Dunder attribute access (__builtins__, __dict__, etc.)
-    5. Destructive file open modes ('w', 'a', 'x', '+')
-
-    Returns None if safe, or an informative Security Exception message.
-    """
-    try:
-        tree = ast.parse(code_str)
-    except SyntaxError as e:
-        return f"Syntax error: {str(e)}"
-
-    for node in ast.walk(tree):
-        # 1. Block dangerous imports
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                mod_root = alias.name.split(".")[0]
-                if alias.name in BLOCKED_MODULES or mod_root in BLOCKED_MODULES:
-                    return f"Security Exception: Import of module '{alias.name}' is prohibited."
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                mod_root = node.module.split(".")[0]
-                if node.module in BLOCKED_MODULES or mod_root in BLOCKED_MODULES:
-                    return f"Security Exception: Import from module '{node.module}' is prohibited."
-
-        # 2. Block dangerous calls and reflection functions
-        elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Attribute):
-                if (
-                    node.func.attr in BLOCKED_CALLS
-                    or node.func.attr in BLOCKED_BUILTIN_FUNCS
-                ):
-                    return (
-                        f"Security Exception: Call to '{node.func.attr}' is prohibited."
-                    )
-            elif isinstance(node.func, ast.Name):
-                if node.func.id in BLOCKED_BUILTIN_FUNCS:
-                    return f"Security Exception: Dynamic call to '{node.func.id}' is prohibited."
-
-                # 3. Block destructive open() modes
-                if node.func.id == "open" and len(node.args) >= 2:
-                    mode_arg = node.args[1]
-                    if isinstance(mode_arg, ast.Constant) and isinstance(
-                        mode_arg.value, str
-                    ):
-                        mode_str = mode_arg.value
-                        if any(c in mode_str for c in ("w", "a", "x", "+")):
-                            return f"Security Exception: File modification mode '{mode_str}' in open() is prohibited."
-
-        # 4. Block access to dangerous dunder attributes
-        elif isinstance(node, ast.Attribute):
-            if node.attr in BLOCKED_DUNDER_NAMES:
-                return f"Security Exception: Access to attribute '{node.attr}' is prohibited."
-        elif isinstance(node, ast.Name):
-            if node.id in BLOCKED_DUNDER_NAMES:
-                return f"Security Exception: Reference to '{node.id}' is prohibited."
-
-    return None
 
 
 # ---------------------------------------------------------------------------

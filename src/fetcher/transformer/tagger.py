@@ -124,41 +124,10 @@ def extract_mitre_and_stride(
     paper: Dict[str, Any], text: str = ""
 ) -> Dict[str, List[str]]:
     """Extracts MITRE ATT&CK techniques and STRIDE threat categories from text."""
-    combined = f"{paper.get('title', '')} {paper.get('summary', '')} {text}".lower()
+    from security.taxonomy import extract_mitre_techniques, extract_stride_categories
 
-    mitre_map = {
-        "T1059": ["command execution", "code injection", "scripting"],
-        "T1078": ["valid accounts", "credential stuffing", "impersonation"],
-        "T1190": ["exploit public-facing application", "vulnerability"],
-        "T1499": ["denial of service", "flooding", "ddos"],
-        "T1566": ["phishing", "smishing", "social engineering"],
-        "T1574": ["hijacking", "dll sideloading", "backdoor"],
-    }
-
-    stride_map = {
-        "Spoofing": ["impersonation", "spoofing", "identity theft"],
-        "Tampering": ["tampering", "poisoning", "data corruption", "backdoor"],
-        "Repudiation": ["provenance", "repudiation", "audit evasion"],
-        "Information Disclosure": [
-            "privacy leakage",
-            "information leakage",
-            "relational privacy",
-        ],
-        "Denial of Service": ["dos", "ddos", "delay attack", "resource exhaustion"],
-        "Elevation of Privilege": ["privilege escalation", "bypass", "exploit"],
-    }
-
-    found_mitre: List[str] = []
-    for tech_id, kws in mitre_map.items():
-        if any(kw in combined for kw in kws):
-            found_mitre.append(tech_id)
-
-    found_stride: List[str] = []
-    for cat, kws in stride_map.items():
-        if any(kw in combined for kw in kws):
-            found_stride.append(cat)
-
+    combined = f"{paper.get('title', '')} {paper.get('summary', '')} {text}"
     return {
-        "mitre_attack": found_mitre,
-        "stride": found_stride,
+        "mitre_attack": extract_mitre_techniques(combined),
+        "stride": extract_stride_categories(combined),
     }

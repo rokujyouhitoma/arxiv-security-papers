@@ -27,8 +27,8 @@ from mcp.papers_server import (
     handle_get_paper_summary,
     handle_get_prompt,
     handle_read_resource,
-    is_safe_workspace_path,
 )
+from security.validation import is_safe_workspace_path
 from search.vector_engine import VectorEngine
 
 
