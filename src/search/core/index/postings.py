@@ -75,15 +75,25 @@ class MultiFieldPostingsIndex:
         return matched_docs
 
     @staticmethod
-    def _levenshtein(s1: str, s2: str, max_distance: Optional[int] = None) -> int:
+    def _compute_dp_row(
+        c1: str, s2: str, v0: List[int], v1: List[int], row_idx: int
+    ) -> int:
+        v1[0] = row_idx
+        min_val = row_idx
+        for j, c2 in enumerate(s2):
+            cost = 0 if c1 == c2 else 1
+            val = min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost)
+            v1[j + 1] = val
+            if val < min_val:
+                min_val = val
+        return min_val
+
+    @classmethod
+    def _levenshtein(cls, s1: str, s2: str, max_distance: Optional[int] = None) -> int:
         if s1 == s2:
             return 0
-        if not s1:
-            return len(s2)
-        if not s2:
-            return len(s1)
-
-        # Ensure s2 is the shorter string to minimize buffer allocation
+        if not s1 or not s2:
+            return max(len(s1), len(s2))
         if len(s1) < len(s2):
             s1, s2 = s2, s1
 
@@ -95,18 +105,9 @@ class MultiFieldPostingsIndex:
         v1 = [0] * (len_s2 + 1)
 
         for i, c1 in enumerate(s1):
-            v1[0] = i + 1
-            min_val = v1[0]
-            for j, c2 in enumerate(s2):
-                cost = 0 if c1 == c2 else 1
-                val = min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost)
-                v1[j + 1] = val
-                if val < min_val:
-                    min_val = val
-
+            min_val = cls._compute_dp_row(c1, s2, v0, v1, i + 1)
             if max_distance is not None and min_val > max_distance:
                 return max_distance + 1
-
             v0, v1 = v1, v0
 
         return v0[len_s2]

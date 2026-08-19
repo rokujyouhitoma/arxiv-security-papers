@@ -128,6 +128,33 @@ def handle_track_memory_allocations(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _benchmark_candidate(
+    cand: Dict[str, Any], number: int, repeat: int
+) -> Dict[str, Any]:
+    name = cand.get("name", "candidate")
+    code = cand.get("code", "")
+    if not code.strip():
+        return {"name": name, "skipped": True}
+    sec_err = validate_safe_code(code)
+    if sec_err:
+        return {"name": name, "error": sec_err}
+    try:
+        compiled = compile(code, f"<mcp_bench_{name}>", "exec")
+
+        def _runner() -> None:
+            exec(compiled, {}, {})
+
+        timer = timeit.Timer(_runner)
+        times = timer.repeat(repeat=repeat, number=number)
+        return {
+            "name": name,
+            "min_time_ms": round((min(times) / number) * 1000.0, 5),
+            "avg_time_ms": round((sum(times) / len(times) / number) * 1000.0, 5),
+        }
+    except Exception as e:
+        return {"name": name, "error": str(e)}
+
+
 def handle_benchmark_alternatives(params: Dict[str, Any]) -> Dict[str, Any]:
     """Benchmarks multiple alternative code candidates using timeit with AST safety checks."""
     candidates = params.get("candidates", [])
@@ -139,39 +166,7 @@ def handle_benchmark_alternatives(params: Dict[str, Any]) -> Dict[str, Any]:
             "error": "Parameter 'candidates' must be a non-empty list of {name, code}."
         }
 
-    results: List[Dict[str, Any]] = []
-    for cand in candidates:
-        name = cand.get("name", "candidate")
-        code = cand.get("code", "")
-        if not code.strip():
-            continue
-
-        sec_err = validate_safe_code(code)
-        if sec_err:
-            results.append({"name": name, "error": sec_err})
-            continue
-
-        try:
-            compiled = compile(code, f"<mcp_bench_{name}>", "exec")
-
-            def _run_candidate(c: Any = compiled) -> None:
-                exec(c, {}, {})
-
-            timer = timeit.Timer(_run_candidate)
-            times = timer.repeat(repeat=repeat, number=number)
-            min_time_ms = round((min(times) / number) * 1000.0, 5)
-            avg_time_ms = round((sum(times) / len(times) / number) * 1000.0, 5)
-            results.append(
-                {
-                    "name": name,
-                    "min_time_ms": min_time_ms,
-                    "avg_time_ms": avg_time_ms,
-                }
-            )
-        except Exception as e:
-            results.append({"name": name, "error": str(e)})
-
-    # Determine winner
+    results = [_benchmark_candidate(c, number, repeat) for c in candidates]
     valid_results = [r for r in results if "min_time_ms" in r]
     winner = None
     if valid_results:
@@ -179,10 +174,9 @@ def handle_benchmark_alternatives(params: Dict[str, Any]) -> Dict[str, Any]:
         winner = valid_results[0]["name"]
         fastest_time = valid_results[0]["min_time_ms"]
         for r in valid_results:
-            if fastest_time > 0:
-                r["speedup_ratio"] = round(r["min_time_ms"] / fastest_time, 2)
-            else:
-                r["speedup_ratio"] = 1.0
+            r["speedup_ratio"] = (
+                round(r["min_time_ms"] / fastest_time, 2) if fastest_time > 0 else 1.0
+            )
 
     return {
         "iterations_per_run": number,
@@ -319,22 +313,9 @@ def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Retrieves and filters logged performance records from outputs/logs/."""
-    log_type = params.get("log_type", "all").lower()
-    limit = int(params.get("limit", 50))
-    min_latency = float(params.get("min_latency_ms", 0.0))
-
-    files_to_read = []
-    if log_type in ("mcp", "all"):
-        files_to_read.append(("mcp", os.path.join(LOGS_DIR, "mcp_perf_log.jsonl")))
-    if log_type in ("search", "all"):
-        files_to_read.append(
-            ("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl"))
-        )
-    if log_type in ("query", "all"):
-        files_to_read.append(("query", os.path.join(LOGS_DIR, "query_log.jsonl")))
-
+def _filter_and_sort_logs(
+    files_to_read: List[tuple[str, str]], limit: int, min_latency: float
+) -> List[Dict[str, Any]]:
     all_records: List[Dict[str, Any]] = []
     for source, path in files_to_read:
         records = _read_recent_jsonl_records(path, limit=limit)
@@ -348,10 +329,11 @@ def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
             )
             if lat >= min_latency:
                 all_records.append(r_copy)
-
     all_records.sort(key=lambda x: str(x.get("timestamp", "")), reverse=True)
-    all_records = all_records[:limit]
+    return all_records[:limit]
 
+
+def _summarize_perf_records(all_records: List[Dict[str, Any]]) -> Dict[str, float]:
     latencies = [
         r.get("execution_ms")
         or r.get("performance", {}).get("total_ms", 0.0)
@@ -362,68 +344,44 @@ def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
         r.get("peak_memory_kb") or r.get("performance", {}).get("peak_memory_kb", 0.0)
         for r in all_records
     ]
+    return {
+        "avg_latency_ms": (
+            round(sum(latencies) / len(latencies), 3) if latencies else 0.0
+        ),
+        "max_latency_ms": round(max(latencies), 3) if latencies else 0.0,
+        "max_peak_memory_kb": round(max(peak_mems), 3) if peak_mems else 0.0,
+    }
 
+
+def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Retrieves and filters logged performance records from outputs/logs/."""
+    log_type = params.get("log_type", "all").lower()
+    limit = int(params.get("limit", 50))
+    min_latency = float(params.get("min_latency_ms", 0.0))
+
+    files_to_read: List[tuple[str, str]] = []
+    if log_type in ("mcp", "all"):
+        files_to_read.append(("mcp", os.path.join(LOGS_DIR, "mcp_perf_log.jsonl")))
+    if log_type in ("search", "all"):
+        files_to_read.append(
+            ("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl"))
+        )
+    if log_type in ("query", "all"):
+        files_to_read.append(("query", os.path.join(LOGS_DIR, "query_log.jsonl")))
+
+    all_records = _filter_and_sort_logs(files_to_read, limit, min_latency)
     return {
         "status": "success",
         "log_type": log_type,
         "record_count": len(all_records),
-        "summary": {
-            "avg_latency_ms": (
-                round(sum(latencies) / len(latencies), 3) if latencies else 0.0
-            ),
-            "max_latency_ms": round(max(latencies), 3) if latencies else 0.0,
-            "max_peak_memory_kb": round(max(peak_mems), 3) if peak_mems else 0.0,
-        },
+        "summary": _summarize_perf_records(all_records),
         "records": all_records,
     }
 
 
-def handle_dump_performance_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates a structured observability report across MCP and Search Engine."""
-    fmt = params.get("format", "markdown").lower()
-    mcp_records = _read_recent_jsonl_records(
-        os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=100
-    )
-    search_records = _read_recent_jsonl_records(
-        os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=100
-    )
-
-    mcp_lats = [r.get("execution_ms", 0.0) for r in mcp_records]
-    mcp_peaks = [r.get("peak_memory_kb", 0.0) for r in mcp_records]
-
-    search_lats = [
-        r.get("performance", {}).get("total_ms", 0.0) for r in search_records
-    ]
-    search_peaks = [
-        r.get("performance", {}).get("peak_memory_kb", 0.0) for r in search_records
-    ]
-
-    cur_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    mcp_stats: Dict[str, Any] = {
-        "total_calls": len(mcp_records),
-        "avg_execution_ms": (
-            round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0
-        ),
-        "max_execution_ms": round(max(mcp_lats), 3) if mcp_lats else 0.0,
-        "max_peak_memory_kb": round(max(mcp_peaks), 3) if mcp_peaks else 0.0,
-    }
-    search_stats: Dict[str, Any] = {
-        "total_queries": len(search_records),
-        "avg_latency_ms": (
-            round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0
-        ),
-        "max_latency_ms": round(max(search_lats), 3) if search_lats else 0.0,
-        "max_peak_memory_kb": round(max(search_peaks), 3) if search_peaks else 0.0,
-    }
-    summary: Dict[str, Any] = {
-        "timestamp": cur_time,
-        "mcp": mcp_stats,
-        "search": search_stats,
-    }
-
-    if fmt == "json":
-        return {"status": "success", "format": "json", "metrics": summary}
-
+def _format_metrics_markdown(
+    cur_time: str, mcp_stats: Dict[str, Any], search_stats: Dict[str, Any]
+) -> str:
     lines = [
         "# 📊 統合可観測性（Observability）パフォーマンス & メモリレポート",
         "",
@@ -450,12 +408,54 @@ def handle_dump_performance_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
         f"| **最大ピークメモリ** | `{search_stats['max_peak_memory_kb']} KB` | クエリ処理時の最大消費 |",
         "",
     ]
+    return "\n".join(lines)
+
+
+def _compute_search_stats(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    lats = [r.get("performance", {}).get("total_ms", 0.0) for r in records]
+    peaks = [r.get("performance", {}).get("peak_memory_kb", 0.0) for r in records]
+    return {
+        "total_queries": len(records),
+        "avg_latency_ms": round(sum(lats) / len(lats), 3) if lats else 0.0,
+        "max_latency_ms": round(max(lats), 3) if lats else 0.0,
+        "max_peak_memory_kb": round(max(peaks), 3) if peaks else 0.0,
+    }
+
+
+def _compute_mcp_stats(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    lats = [r.get("execution_ms", 0.0) for r in records]
+    peaks = [r.get("peak_memory_kb", 0.0) for r in records]
+    return {
+        "total_calls": len(records),
+        "avg_execution_ms": round(sum(lats) / len(lats), 3) if lats else 0.0,
+        "max_execution_ms": round(max(lats), 3) if lats else 0.0,
+        "max_peak_memory_kb": round(max(peaks), 3) if peaks else 0.0,
+    }
+
+
+def handle_dump_performance_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Generates a structured observability report across MCP and Search Engine."""
+    fmt = params.get("format", "markdown").lower()
+    mcp_records = _read_recent_jsonl_records(
+        os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=100
+    )
+    search_records = _read_recent_jsonl_records(
+        os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=100
+    )
+
+    cur_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    mcp_stats = _compute_mcp_stats(mcp_records)
+    search_stats = _compute_search_stats(search_records)
+    summary = {"timestamp": cur_time, "mcp": mcp_stats, "search": search_stats}
+
+    if fmt == "json":
+        return {"status": "success", "format": "json", "metrics": summary}
 
     return {
         "status": "success",
         "format": "markdown",
         "metrics": summary,
-        "markdown_report": "\n".join(lines),
+        "markdown_report": _format_metrics_markdown(cur_time, mcp_stats, search_stats),
     }
 
 
@@ -698,9 +698,160 @@ PROMPTS_REGISTRY = {
 # ---------------------------------------------------------------------------
 
 
+def _rpc_tools_call(req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    tool_name = params.get("name")
+    tool_args = params.get("arguments", {})
+    if tool_name not in TOOLS_REGISTRY:
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
+        }
+    raw_handler = TOOLS_REGISTRY[tool_name]["handler"]
+    handler = cast(Callable[[Dict[str, Any]], Dict[str, Any]], raw_handler)
+    result = handler(tool_args)
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(result, ensure_ascii=False, indent=2),
+                }
+            ]
+        },
+    }
+
+
+def _rpc_resources_read(req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    uri = params.get("uri")
+    if uri == "observability://metrics/search_engine":
+        metrics = handle_get_system_metrics({})
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "contents": [
+                    {
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": json.dumps(metrics, indent=2),
+                    }
+                ]
+            },
+        }
+    if uri == "observability://schema/profiler":
+        schema_doc = {
+            "type": "object",
+            "properties": {
+                "wall_time_ms": {"type": "number"},
+                "cpu_time_ms": {"type": "number"},
+                "peak_memory_kb": {"type": "number"},
+                "top_bottlenecks": {"type": "string"},
+            },
+        }
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "contents": [
+                    {
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": json.dumps(schema_doc, indent=2),
+                    }
+                ]
+            },
+        }
+    if uri == "observability://metrics/unified_report":
+        report = handle_dump_performance_metrics({"format": "markdown"})
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "contents": [
+                    {
+                        "uri": uri,
+                        "mimeType": "text/markdown",
+                        "text": report.get("markdown_report", ""),
+                    }
+                ]
+            },
+        }
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "error": {"code": -32602, "message": f"Unknown resource URI: {uri}"},
+    }
+
+
+def _rpc_prompts_get(req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    prompt_name = params.get("name")
+    if prompt_name == "optimize_bottleneck_prompt":
+        args = params.get("arguments", {})
+        fn_name = args.get("function_name", "target_function")
+        summary = args.get("profile_summary", "No summary provided")
+        text = (
+            f"あなたは高信頼・高パフォーマンスなPythonコード最適化の専門家です。\n"
+            f"以下の cProfile/pstats ボトルネック解析結果に基づき、`{fn_name}` をリファクタリングしてください。\n\n"
+            f"### プロファイルサマリー:\n```\n{summary}\n```\n\n"
+            f"### 要件:\n"
+            f"1. 最も時間を消費しているホットパスの計算量を削減すること。\n"
+            f"2. 不必要なメモリアロケーション（一時オブジェクト生成）を抑制すること。\n"
+            f"3. 最適化前後の timeit マイクロベンチマークおよび dis 逆アセンブル命令数の変化を提示すること。\n"
+        )
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "description": "Code Optimization Prompt based on Profiler Output",
+                "messages": [
+                    {"role": "user", "content": {"type": "text", "text": text}}
+                ],
+            },
+        }
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "error": {"code": -32601, "message": f"Unknown prompt: {prompt_name}"},
+    }
+
+
+def _dispatch_list_rpc(method: str, req_id: Any) -> Optional[Dict[str, Any]]:
+    if method == "tools/list":
+        tools_list = [
+            {
+                "name": n,
+                "description": d["description"],
+                "inputSchema": d["inputSchema"],
+            }
+            for n, d in TOOLS_REGISTRY.items()
+        ]
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools_list}}
+    if method == "resources/list":
+        res_list = [
+            {
+                "uri": u,
+                "name": d["name"],
+                "description": d["description"],
+                "mimeType": d["mimeType"],
+            }
+            for u, d in RESOURCES_REGISTRY.items()
+        ]
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": res_list}}
+    if method == "prompts/list":
+        prompts_list = [
+            {"name": n, "description": d["description"], "arguments": d["arguments"]}
+            for n, d in PROMPTS_REGISTRY.items()
+        ]
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": prompts_list}}
+    return None
+
+
 def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Dispatches a single JSON-RPC 2.0 request."""
-    method = req.get("method")
+    method = req.get("method", "")
     req_id = req.get("id")
     params = req.get("params", {})
 
@@ -715,161 +866,16 @@ def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             },
         }
 
-    elif method == "tools/list":
-        tools_list = [
-            {
-                "name": name,
-                "description": defs["description"],
-                "inputSchema": defs["inputSchema"],
-            }
-            for name, defs in TOOLS_REGISTRY.items()
-        ]
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools_list}}
+    list_res = _dispatch_list_rpc(method, req_id)
+    if list_res is not None:
+        return list_res
 
-    elif method == "tools/call":
-        tool_name = params.get("name")
-        tool_args = params.get("arguments", {})
-        if tool_name not in TOOLS_REGISTRY:
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
-            }
-
-        raw_handler = TOOLS_REGISTRY[tool_name]["handler"]
-        handler = cast(Callable[[Dict[str, Any]], Dict[str, Any]], raw_handler)
-        result = handler(tool_args)
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": json.dumps(result, ensure_ascii=False, indent=2),
-                    }
-                ]
-            },
-        }
-
-    elif method == "resources/list":
-        res_list = [
-            {
-                "uri": uri,
-                "name": defs["name"],
-                "description": defs["description"],
-                "mimeType": defs["mimeType"],
-            }
-            for uri, defs in RESOURCES_REGISTRY.items()
-        ]
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": res_list}}
-
-    elif method == "resources/read":
-        uri = params.get("uri")
-        if uri == "observability://metrics/search_engine":
-            metrics = handle_get_system_metrics({})
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "result": {
-                    "contents": [
-                        {
-                            "uri": uri,
-                            "mimeType": "application/json",
-                            "text": json.dumps(metrics, indent=2),
-                        }
-                    ]
-                },
-            }
-        elif uri == "observability://schema/profiler":
-            schema_doc = {
-                "type": "object",
-                "properties": {
-                    "wall_time_ms": {"type": "number"},
-                    "cpu_time_ms": {"type": "number"},
-                    "peak_memory_kb": {"type": "number"},
-                    "top_bottlenecks": {"type": "string"},
-                },
-            }
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "result": {
-                    "contents": [
-                        {
-                            "uri": uri,
-                            "mimeType": "application/json",
-                            "text": json.dumps(schema_doc, indent=2),
-                        }
-                    ]
-                },
-            }
-        elif uri == "observability://metrics/unified_report":
-            report = handle_dump_performance_metrics({"format": "markdown"})
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "result": {
-                    "contents": [
-                        {
-                            "uri": uri,
-                            "mimeType": "text/markdown",
-                            "text": report.get("markdown_report", ""),
-                        }
-                    ]
-                },
-            }
-        else:
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "error": {"code": -32602, "message": f"Unknown resource URI: {uri}"},
-            }
-
-    elif method == "prompts/list":
-        prompts_list = [
-            {
-                "name": name,
-                "description": defs["description"],
-                "arguments": defs["arguments"],
-            }
-            for name, defs in PROMPTS_REGISTRY.items()
-        ]
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": prompts_list}}
-
-    elif method == "prompts/get":
-        prompt_name = params.get("name")
-        if prompt_name == "optimize_bottleneck_prompt":
-            args = params.get("arguments", {})
-            fn_name = args.get("function_name", "target_function")
-            summary = args.get("profile_summary", "No summary provided")
-            text = (
-                f"あなたは高信頼・高パフォーマンスなPythonコード最適化の専門家です。\n"
-                f"以下の cProfile/pstats ボトルネック解析結果に基づき、`{fn_name}` をリファクタリングしてください。\n\n"
-                f"### プロファイルサマリー:\n```\n{summary}\n```\n\n"
-                f"### 要件:\n"
-                f"1. 最も時間を消費しているホットパスの計算量を削減すること。\n"
-                f"2. 不必要なメモリアロケーション（一時オブジェクト生成）を抑制すること。\n"
-                f"3. 最適化前後の timeit マイクロベンチマークおよび dis 逆アセンブル命令数の変化を提示すること。\n"
-            )
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "result": {
-                    "description": "Code Optimization Prompt based on Profiler Output",
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": {"type": "text", "text": text},
-                        }
-                    ],
-                },
-            }
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "error": {"code": -32601, "message": f"Unknown prompt: {prompt_name}"},
-        }
+    if method == "tools/call":
+        return _rpc_tools_call(req_id, params)
+    if method == "resources/read":
+        return _rpc_resources_read(req_id, params)
+    if method == "prompts/get":
+        return _rpc_prompts_get(req_id, params)
 
     return {
         "jsonrpc": "2.0",

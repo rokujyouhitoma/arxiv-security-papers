@@ -43,6 +43,11 @@ def test_is_safe_workspace_path():
     assert not is_safe_workspace_path(".env")
     assert not is_safe_workspace_path(".ssh/id_rsa")
 
+    # Exception path
+    assert not is_safe_workspace_path(
+        "Makefile", workspace_dir="/nonexistent/\x00/invalid"
+    )
+
 
 def test_resolve_safe_path():
     ws = get_default_workspace_dir()
@@ -59,6 +64,10 @@ def test_resolve_safe_path():
     # Traversal resolution returns None
     traversal = resolve_safe_path("../../etc/passwd")
     assert traversal is None
+
+    # Safe path when must_exist=False
+    created_path = resolve_safe_path("new_file.txt", must_exist=False)
+    assert created_path is not None
 
 
 def test_input_pattern_detection():

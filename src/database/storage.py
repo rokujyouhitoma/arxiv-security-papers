@@ -63,6 +63,38 @@ class VectorStorage:
         if os.path.exists(self.file_path):
             self._load_existing_file()
 
+    def _validate_and_read_header(self, f: Any, file_size: int) -> Tuple[int, int]:
+        header_bytes = f.read(self.HEADER_SIZE)
+        magic, version, dim, count, meta_offset, _ = struct.unpack(
+            self.HEADER_FORMAT, header_bytes
+        )
+        if magic != self.MAGIC:
+            raise VectorStorageSecurityError(
+                f"Invalid magic bytes: {magic!r}, expected {self.MAGIC!r}"
+            )
+        if version != 1:
+            raise VectorStorageSecurityError(f"Unsupported format version: {version}")
+        if dim != self.dim:
+            self.dim = dim
+        self.count = count
+
+        expected_vec_bytes = self.count * self.dim * 4
+        if meta_offset < self.HEADER_SIZE + expected_vec_bytes:
+            raise VectorStorageSecurityError("Corrupt metadata offset in header")
+        return count, meta_offset
+
+    def _read_metadata_block(self, f: Any, meta_offset: int, file_size: int) -> None:
+        if meta_offset < file_size:
+            f.seek(meta_offset)
+            meta_bytes = f.read()
+            if meta_bytes:
+                try:
+                    self.metadata = json.loads(meta_bytes.decode("utf-8"))
+                except Exception as e:
+                    raise VectorStorageSecurityError(
+                        f"Corrupt metadata JSON: {e}"
+                    ) from e
+
     def _load_existing_file(self) -> None:
         """Reads header, validates format integrity, and maps memory."""
         file_size = os.path.getsize(self.file_path)
@@ -72,40 +104,8 @@ class VectorStorage:
             )
 
         with open(self.file_path, "rb") as f:
-            header_bytes = f.read(self.HEADER_SIZE)
-            magic, version, dim, count, meta_offset, _ = struct.unpack(
-                self.HEADER_FORMAT, header_bytes
-            )
-
-            if magic != self.MAGIC:
-                raise VectorStorageSecurityError(
-                    f"Invalid magic bytes: {magic!r}, expected {self.MAGIC!r}"
-                )
-            if version != 1:
-                raise VectorStorageSecurityError(
-                    f"Unsupported format version: {version}"
-                )
-            if dim != self.dim:
-                self.dim = dim
-
-            self.count = count
-
-            # Validate vector block boundary
-            expected_vec_bytes = self.count * self.dim * 4
-            if meta_offset < self.HEADER_SIZE + expected_vec_bytes:
-                raise VectorStorageSecurityError("Corrupt metadata offset in header")
-
-            # Read metadata JSON
-            if meta_offset < file_size:
-                f.seek(meta_offset)
-                meta_bytes = f.read()
-                if meta_bytes:
-                    try:
-                        self.metadata = json.loads(meta_bytes.decode("utf-8"))
-                    except Exception as e:
-                        raise VectorStorageSecurityError(
-                            f"Corrupt metadata JSON: {e}"
-                        ) from e
+            _, meta_offset = self._validate_and_read_header(f, file_size)
+            self._read_metadata_block(f, meta_offset, file_size)
 
         # Build index mapping
         self.id_to_idx = {
@@ -139,6 +139,12 @@ class VectorStorage:
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def write_all(
         self,

@@ -82,102 +82,96 @@ class EnterpriseQueryParser:
             }
         self.default_field_weights = default_field_weights
 
+    def _parse_plain_term(
+        self, term: str, field: Optional[str], is_required: bool, is_prohibited: bool
+    ) -> Optional[QueryClause]:
+        if not term or term.upper() in ("AND", "OR", "NOT"):
+            return None
+        if term.endswith("*") and len(term) > 1:
+            return QueryClause(
+                field=field,
+                term=term[:-1],
+                is_required=is_required,
+                is_prohibited=is_prohibited,
+                is_prefix=True,
+            )
+        if "~" in term and not term.startswith("~"):
+            parts = term.split("~")
+            dist = min(int(parts[1]), 2) if len(parts) > 1 and parts[1].isdigit() else 1
+            return QueryClause(
+                field=field,
+                term=parts[0],
+                is_required=is_required,
+                is_prohibited=is_prohibited,
+                is_fuzzy=True,
+                fuzzy_distance=dist,
+            )
+        return QueryClause(
+            field=field, term=term, is_required=is_required, is_prohibited=is_prohibited
+        )
+
+    def _resolve_field(self, field_raw: Optional[str]) -> Optional[str]:
+        if not field_raw:
+            return None
+        field_lower = field_raw.lower()
+        field_canon = self.FIELD_ALIAS.get(field_lower, field_lower)
+        if (
+            field_canon in self.ALLOWED_FIELDS
+            or field_canon in self.default_field_weights
+        ):
+            return field_canon
+        return None
+
+    def _parse_match(self, m: Any) -> Optional[QueryClause]:
+        modifier, field_raw, phrase_content, phrase_slop_str, plain_term = m.groups()
+        is_required = modifier == "+"
+        is_prohibited = modifier == "-"
+        field = self._resolve_field(field_raw)
+
+        if phrase_content is not None:
+            slop = int(phrase_slop_str) if phrase_slop_str else 0
+            return QueryClause(
+                field=field,
+                term=phrase_content.strip(),
+                is_required=is_required,
+                is_prohibited=is_prohibited,
+                is_phrase=True,
+                phrase_slop=slop,
+            )
+        if plain_term is not None:
+            return self._parse_plain_term(
+                plain_term.strip(), field, is_required, is_prohibited
+            )
+        return None
+
     def parse(self, raw_query: str) -> List[QueryClause]:
-        """
-        Parses raw query into a list of QueryClause objects.
-        """
+        """Parses raw query into a list of QueryClause objects."""
         if not raw_query or not raw_query.strip():
             return []
 
-        # Tokenize with regex handling quotes, modifiers, and field prefixes
-        # Matches: [+/-]? [field:]? ("phrase"~N | term~N | term* | term)
         pattern = re.compile(
             r"([+\-])?" r"(?:([a-zA-Z_]+):)?" r'(?:"([^"]+)"(?:~(\d+))?|([^\s"]+))'
         )
-
         clauses: List[QueryClause] = []
         for m in pattern.finditer(raw_query):
-            modifier = m.group(1) or ""
-            field_raw = m.group(2)
-            phrase_content = m.group(3)
-            phrase_slop_str = m.group(4)
-            plain_term = m.group(5)
-
-            is_required = modifier == "+"
-            is_prohibited = modifier == "-"
-
-            field: Optional[str] = None
-            if field_raw:
-                field_lower = field_raw.lower()
-                field_canon = self.FIELD_ALIAS.get(field_lower, field_lower)
-                if (
-                    field_canon in self.ALLOWED_FIELDS
-                    or field_canon in self.default_field_weights
-                ):
-                    field = field_canon
-
-            if phrase_content is not None:
-                slop = int(phrase_slop_str) if phrase_slop_str else 0
-                clauses.append(
-                    QueryClause(
-                        field=field,
-                        term=phrase_content.strip(),
-                        is_required=is_required,
-                        is_prohibited=is_prohibited,
-                        is_phrase=True,
-                        phrase_slop=slop,
-                    )
-                )
-            elif plain_term is not None:
-                term = plain_term.strip()
-                if not term:
-                    continue
-
-                # Check for Boolean keywords
-                if term.upper() == "AND" or term.upper() == "OR":
-                    continue
-                if term.upper() == "NOT":
-                    continue
-
-                # Check for Wildcard/Prefix: term*
-                if term.endswith("*") and len(term) > 1:
-                    clauses.append(
-                        QueryClause(
-                            field=field,
-                            term=term[:-1],
-                            is_required=is_required,
-                            is_prohibited=is_prohibited,
-                            is_prefix=True,
-                        )
-                    )
-                # Check for Fuzzy: term~1 or term~
-                elif "~" in term and not term.startswith("~"):
-                    parts = term.split("~")
-                    fuzzy_base = parts[0]
-                    dist = 1
-                    if len(parts) > 1 and parts[1].isdigit():
-                        dist = min(int(parts[1]), 2)
-                    clauses.append(
-                        QueryClause(
-                            field=field,
-                            term=fuzzy_base,
-                            is_required=is_required,
-                            is_prohibited=is_prohibited,
-                            is_fuzzy=True,
-                            fuzzy_distance=dist,
-                        )
-                    )
-                else:
-                    clauses.append(
-                        QueryClause(
-                            field=field,
-                            term=term,
-                            is_required=is_required,
-                            is_prohibited=is_prohibited,
-                        )
-                    )
-
+            clause = self._parse_match(m)
+            if clause:
+                clauses.append(clause)
         return clauses
+
+    @staticmethod
+    def _resolve_intent(
+        target_fields: Set[str], clauses: List[QueryClause], raw_clean: str
+    ) -> str:
+        if target_fields:
+            return "field_specific"
+        if any(c.is_required or c.is_prohibited for c in clauses):
+            return "boolean_filtered"
+        if any(c.is_phrase for c in clauses):
+            return "phrase_match"
+        if len(raw_clean.split()) > 5:
+            return "natural_language_qa"
+        return "general"
 
     def create_context(
         self,
@@ -189,24 +183,12 @@ class EnterpriseQueryParser:
         clauses = self.parse(raw_clean)
         target_fields: Set[str] = {c.field for c in clauses if c.field is not None}
 
-        # Expand synonyms if expander is provided
-        expanded_tokens: List[str] = []
         if expander and hasattr(expander, "expand_query"):
             expanded_tokens = expander.expand_query(raw_clean)
         else:
             expanded_tokens = [c.term.lower() for c in clauses if c.term]
 
-        # Intent classification heuristics
-        intent = "general"
-        if target_fields:
-            intent = "field_specific"
-        elif any(c.is_required or c.is_prohibited for c in clauses):
-            intent = "boolean_filtered"
-        elif any(c.is_phrase for c in clauses):
-            intent = "phrase_match"
-        elif len(raw_clean.split()) > 5:
-            intent = "natural_language_qa"
-
+        intent = self._resolve_intent(target_fields, clauses, raw_clean)
         is_hybrid = not (target_fields and "content" not in target_fields)
 
         return QueryContext(

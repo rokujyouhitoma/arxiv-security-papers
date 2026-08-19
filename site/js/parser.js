@@ -4,6 +4,10 @@
  */
 
 class MarkdownParser {
+  /**
+   * @param {!Array<!Object>} tokens
+   * @return {!Object}
+   */
   parse(tokens) {
     const root = { type: 'DOCUMENT', children: [] };
     for (const token of tokens) {

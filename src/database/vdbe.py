@@ -114,116 +114,124 @@ class VDBE:
         self._work_list.clear()
         self._work_idx = 0
 
+    def _exec_const_op(self, inst: Instruction) -> None:
+        op = inst.op
+        if op == OpCode.INTEGER:
+            self.registers[inst.p2] = int(inst.p1)
+        elif op == OpCode.STRING:
+            self.registers[inst.p2] = str(inst.p4)
+        elif op == OpCode.VECTOR:
+            self.registers[inst.p2] = list(inst.p4)
+        self.pc += 1
+
+    def _exec_open_read(self, inst: Instruction) -> None:
+        table = self.context.get("table")
+        if table:
+            self._work_list = [
+                dict(meta, _idx=idx) for idx, meta in enumerate(table.storage.metadata)
+            ]
+        self._work_idx = 0
+
+    def _exec_vector_knn(self, inst: Instruction) -> None:
+        table = self.context.get("table")
+        query_vec = self.registers.get(inst.p1, [])
+        top_k = inst.p2
+        if table and hasattr(table, "index"):
+            matches = table.index.search(query_vec, top_k=top_k)
+            self._work_list = []
+            for idx, score in matches:
+                if idx < len(table.storage.metadata):
+                    meta = dict(table.storage.get_metadata(idx))
+                    meta["score"] = round(score, 4)
+                    meta["_idx"] = idx
+                    self._work_list.append(meta)
+        self._work_idx = 0
+
+    def _exec_filter_eq(self, inst: Instruction) -> None:
+        col, expected = inst.p4
+        self._work_list = [
+            r for r in self._work_list if str(r.get(col)) == str(expected)
+        ]
+
+    def _exec_insert_row(self, inst: Instruction) -> None:
+        table = self.context.get("table")
+        data = inst.p4
+        if table:
+            vec = data.get("vector") or [0.0] * table.storage.dim
+            idx = table.storage.append(vec, data)
+            table.index.add_item(idx, vec)
+
+    def _exec_tx_op(self, inst: Instruction) -> None:
+        pager = self.context.get("pager")
+        if pager:
+            if inst.op == OpCode.BEGIN_TX:
+                pager.begin()
+            elif inst.op == OpCode.COMMIT_TX:
+                pager.commit()
+            elif inst.op == OpCode.ROLLBACK_TX:
+                pager.rollback()
+
+    def _exec_next_row(self) -> Optional[StepResult]:
+        if self._work_idx < len(self._work_list):
+            current_item = self._work_list[self._work_idx]
+            self._work_idx += 1
+            self.result_dict = current_item
+            self.result_row = list(current_item.values())
+            return StepResult.SQLITE_ROW
+        return None
+
+    def _exec_data_or_cursor_op(self, inst: Instruction) -> Optional[StepResult]:
+        op = inst.op
+        if op == OpCode.OPEN_READ:
+            self._exec_open_read(inst)
+            return None
+        if op == OpCode.VECTOR_KNN:
+            self._exec_vector_knn(inst)
+            return None
+        if op == OpCode.FILTER_EQ:
+            self._exec_filter_eq(inst)
+            return None
+        if op == OpCode.INSERT_ROW:
+            self._exec_insert_row(inst)
+            return None
+        if op == OpCode.NEXT_ROW:
+            return self._exec_next_row()
+        return None
+
+    def _exec_instruction(self, inst: Instruction) -> Optional[StepResult]:
+        op = inst.op
+        if op == OpCode.HALT:
+            self.is_halted = True
+            return StepResult.SQLITE_DONE
+        if op == OpCode.INIT:
+            self.pc += 1
+            return None
+        if op in (OpCode.INTEGER, OpCode.STRING, OpCode.VECTOR):
+            self._exec_const_op(inst)
+            return None
+        if op in (OpCode.BEGIN_TX, OpCode.COMMIT_TX, OpCode.ROLLBACK_TX):
+            self._exec_tx_op(inst)
+            return None
+        if op == OpCode.RESULT_ROW:
+            self.result_row = [self.registers.get(inst.p1 + i) for i in range(inst.p2)]
+            self.pc += 1
+            return StepResult.SQLITE_ROW
+
+        res = self._exec_data_or_cursor_op(inst)
+        if res is not None:
+            return res
+        self.pc += 1
+        return None
+
     def step(self) -> StepResult:
         if self.is_halted:
             return StepResult.SQLITE_DONE
 
         instructions = self.program.instructions
         while self.pc < len(instructions):
-            inst = instructions[self.pc]
-            op = inst.op
-
-            if op == OpCode.INIT:
-                self.pc += 1
-
-            elif op == OpCode.HALT:
-                self.is_halted = True
-                return StepResult.SQLITE_DONE
-
-            elif op == OpCode.INTEGER:
-                self.registers[inst.p2] = int(inst.p1)
-                self.pc += 1
-
-            elif op == OpCode.STRING:
-                self.registers[inst.p2] = str(inst.p4)
-                self.pc += 1
-
-            elif op == OpCode.VECTOR:
-                self.registers[inst.p2] = list(inst.p4)
-                self.pc += 1
-
-            elif op == OpCode.OPEN_READ:
-                # p4: table catalog
-                table = self.context.get("table")
-                if table:
-                    self._work_list = [
-                        dict(meta, _idx=idx)
-                        for idx, meta in enumerate(table.storage.metadata)
-                    ]
-                self._work_idx = 0
-                self.pc += 1
-
-            elif op == OpCode.VECTOR_KNN:
-                # p1: query_vec reg, p2: top_k, p3: out reg, p4: col_name
-                table = self.context.get("table")
-                query_vec = self.registers.get(inst.p1, [])
-                top_k = inst.p2
-                if table and hasattr(table, "index"):
-                    matches = table.index.search(query_vec, top_k=top_k)
-                    self._work_list = []
-                    for idx, score in matches:
-                        if idx < len(table.storage.metadata):
-                            meta = dict(table.storage.get_metadata(idx))
-                            meta["score"] = round(score, 4)
-                            meta["_idx"] = idx
-                            self._work_list.append(meta)
-                self._work_idx = 0
-                self.pc += 1
-
-            elif op == OpCode.FILTER_EQ:
-                # p4: (column_name, expected_val)
-                col, expected = inst.p4
-                self._work_list = [
-                    r for r in self._work_list if str(r.get(col)) == str(expected)
-                ]
-                self.pc += 1
-
-            elif op == OpCode.RESULT_ROW:
-                # p1: start reg, p2: count
-                row = [self.registers.get(inst.p1 + i) for i in range(inst.p2)]
-                self.result_row = row
-                self.pc += 1
-                return StepResult.SQLITE_ROW
-
-            elif op == OpCode.NEXT_ROW:
-                if self._work_idx < len(self._work_list):
-                    current_item = self._work_list[self._work_idx]
-                    self._work_idx += 1
-                    self.result_dict = current_item
-                    self.result_row = list(current_item.values())
-                    return StepResult.SQLITE_ROW
-                else:
-                    self.pc += 1
-
-            elif op == OpCode.INSERT_ROW:
-                table = self.context.get("table")
-                data = inst.p4
-                if table:
-                    vec = data.get("vector") or [0.0] * table.storage.dim
-                    idx = table.storage.append(vec, data)
-                    table.index.add_item(idx, vec)
-                self.pc += 1
-
-            elif op == OpCode.BEGIN_TX:
-                pager = self.context.get("pager")
-                if pager:
-                    pager.begin()
-                self.pc += 1
-
-            elif op == OpCode.COMMIT_TX:
-                pager = self.context.get("pager")
-                if pager:
-                    pager.commit()
-                self.pc += 1
-
-            elif op == OpCode.ROLLBACK_TX:
-                pager = self.context.get("pager")
-                if pager:
-                    pager.rollback()
-                self.pc += 1
-
-            else:
-                self.pc += 1
+            res = self._exec_instruction(instructions[self.pc])
+            if res is not None:
+                return res
 
         self.is_halted = True
         return StepResult.SQLITE_DONE

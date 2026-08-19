@@ -85,6 +85,13 @@ class PosixVFSFile(VFSFile):
             if not self._f.closed:
                 self._f.close()
 
+    def __del__(self) -> None:
+        try:
+            if hasattr(self, "_f") and not self._f.closed:
+                self._f.close()
+        except Exception:
+            pass
+
 
 class MemoryVFSFile(VFSFile):
     """In-memory file handle backed by byte buffers."""

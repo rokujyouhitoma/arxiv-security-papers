@@ -115,6 +115,35 @@ def is_sensitive_path(path: str) -> bool:
     return any(marker in norm for marker in sensitive_markers)
 
 
+def _resolve_raw_links(
+    paper: Dict[str, Any],
+    raw_dir: str,
+    safe_clean_id: str,
+    okf_file_dir: str,
+    rel_raw_meta: str,
+) -> tuple[str, str]:
+    pdf_file_path = os.path.join(raw_dir, f"{safe_clean_id}.pdf")
+    txt_file_path = os.path.join(raw_dir, f"{safe_clean_id}.txt")
+    abs_txt_file_path = os.path.join(raw_dir, f"{safe_clean_id}_raw_abstract.txt")
+
+    if os.path.exists(pdf_file_path):
+        rel_pdf = os.path.relpath(pdf_file_path, okf_file_dir)
+        pdf_link_str = f"[`PDF`]({rel_pdf})"
+    else:
+        pdf_link_str = f"[`PDF (arXiv)`]({paper['pdf_url']})"
+
+    if os.path.exists(txt_file_path):
+        rel_txt = os.path.relpath(txt_file_path, okf_file_dir)
+        txt_link_str = f"[`TXT`]({rel_txt})"
+    elif os.path.exists(abs_txt_file_path):
+        rel_abs = os.path.relpath(abs_txt_file_path, okf_file_dir)
+        txt_link_str = f"[`TXT`]({rel_abs})"
+    else:
+        txt_link_str = f"[`TXT`]({rel_raw_meta})"
+
+    return pdf_link_str, txt_link_str
+
+
 def build_okf_from_raw(
     raw_meta_path: str, workspace_dir: str, config: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -136,34 +165,11 @@ def build_okf_from_raw(
     if is_sensitive_path(okf_file_path):
         raise PermissionError(f"Target path blocked: {okf_file_path}")
 
-    rel_raw_meta_from_okf = os.path.relpath(
-        resolved_meta, os.path.dirname(okf_file_path)
+    okf_file_dir = os.path.dirname(okf_file_path)
+    rel_raw_meta = os.path.relpath(resolved_meta, okf_file_dir)
+    pdf_link_str, txt_link_str = _resolve_raw_links(
+        paper, raw_dir, safe_clean_id, okf_file_dir, rel_raw_meta
     )
-
-    pdf_file_path = os.path.join(raw_dir, f"{safe_clean_id}.pdf")
-    txt_file_path = os.path.join(raw_dir, f"{safe_clean_id}.txt")
-    abs_txt_file_path = os.path.join(raw_dir, f"{safe_clean_id}_raw_abstract.txt")
-
-    if os.path.exists(pdf_file_path):
-        rel_raw_pdf_from_okf = os.path.relpath(
-            pdf_file_path, os.path.dirname(okf_file_path)
-        )
-        pdf_link_str = f"[`PDF`]({rel_raw_pdf_from_okf})"
-    else:
-        pdf_link_str = f"[`PDF (arXiv)`]({paper['pdf_url']})"
-
-    if os.path.exists(txt_file_path):
-        rel_raw_txt_from_okf = os.path.relpath(
-            txt_file_path, os.path.dirname(okf_file_path)
-        )
-        txt_link_str = f"[`TXT`]({rel_raw_txt_from_okf})"
-    elif os.path.exists(abs_txt_file_path):
-        rel_raw_abs_from_okf = os.path.relpath(
-            abs_txt_file_path, os.path.dirname(okf_file_path)
-        )
-        txt_link_str = f"[`TXT`]({rel_raw_abs_from_okf})"
-    else:
-        txt_link_str = f"[`TXT`]({rel_raw_meta_from_okf})"
 
     title_ja = paper.get("title_ja", translate_title_ja(paper["title"]))
     exec_summary = generate_japanese_executive_summary(paper)
@@ -248,7 +254,7 @@ trust:
         resource=paper["abs_url"],
         tags_yaml=tags_yaml,
         timestamp=now_iso,
-        rel_raw_meta_from_okf=rel_raw_meta_from_okf,
+        rel_raw_meta_from_okf=rel_raw_meta,
         published_date=pub_date,
         authors_yaml=authors_yaml,
         arxiv_id=paper["arxiv_id"],

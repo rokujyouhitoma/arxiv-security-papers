@@ -5,6 +5,10 @@
  */
 
 class MarkdownLexer {
+  /**
+   * @param {string} rawMarkdown
+   * @return {!Array<!Object>}
+   */
   tokenize(rawMarkdown) {
     if (!rawMarkdown) return [];
     const lines = rawMarkdown.replace(/\r\n/g, '\n').split('\n');

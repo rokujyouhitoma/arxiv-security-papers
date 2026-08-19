@@ -24,6 +24,34 @@ class FMIndex:
         suffixes = sorted((self.text[i:], i) for i in range(len(self.text)))
         self.suffix_array = [idx for _, idx in suffixes]
 
+    def _find_left_bound(self, q: str, n: int) -> int:
+        low, high = 0, n - 1
+        left = n
+        while low <= high:
+            mid = (low + high) // 2
+            idx = self.suffix_array[mid]
+            if self.text[idx:].startswith(q) or self.text[idx:] >= q:
+                left = mid
+                high = mid - 1
+            else:
+                low = mid + 1
+        return left
+
+    def _find_right_bound(self, q: str, n: int) -> int:
+        low, high = 0, n - 1
+        right = -1
+        while low <= high:
+            mid = (low + high) // 2
+            idx = self.suffix_array[mid]
+            if self.text[idx:].startswith(q):
+                right = mid
+                low = mid + 1
+            elif self.text[idx:] < q:
+                low = mid + 1
+            else:
+                high = mid - 1
+        return right
+
     def count_substring(self, query: str) -> int:
         """Counts exact substring occurrences using binary search on Suffix Array or fast substring search."""
         if not query or not self.text:
@@ -31,32 +59,7 @@ class FMIndex:
         q = query.lower()
         if len(self.text) > 1000 and self.suffix_array:
             n = len(self.suffix_array)
-            low, high = 0, n - 1
-            left = n
-            while low <= high:
-                mid = (low + high) // 2
-                idx = self.suffix_array[mid]
-                if self.text[idx:].startswith(q) or self.text[idx:] >= q:
-                    left = mid
-                    high = mid - 1
-                else:
-                    low = mid + 1
-
-            low, high = 0, n - 1
-            right = -1
-            while low <= high:
-                mid = (low + high) // 2
-                idx = self.suffix_array[mid]
-                if self.text[idx:].startswith(q):
-                    right = mid
-                    low = mid + 1
-                elif self.text[idx:] < q:
-                    low = mid + 1
-                else:
-                    high = mid - 1
-
-            if left <= right:
-                return right - left + 1
-            return 0
-        else:
-            return self.text.count(q)
+            left = self._find_left_bound(q, n)
+            right = self._find_right_bound(q, n)
+            return (right - left + 1) if left <= right else 0
+        return self.text.count(q)

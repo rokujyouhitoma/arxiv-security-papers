@@ -19,56 +19,67 @@ class ProximityGraphIndex:
         self.top_k_neighbors = top_k_neighbors
         self.graph: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
-    def compute_similarity(self, doc_a: Dict[str, Any], doc_b: Dict[str, Any]) -> float:
-        """
-        Computes composite similarity between two papers:
-        S(a, b) = 0.50 * CosineSim(tokens) + 0.35 * Jaccard(keywords) + 0.15 * CategoryMatch
-        """
-        # 1. Token Overlap / Cosine Sim Approximation (using precomputed norm if present)
+    def _compute_token_sim(self, doc_a: Dict[str, Any], doc_b: Dict[str, Any]) -> float:
         counts_a = doc_a.get("token_counts", {})
         counts_b = doc_b.get("token_counts", {})
         shared_tokens = set(counts_a.keys()) & set(counts_b.keys())
         if not shared_tokens:
-            token_sim = 0.0
-        else:
-            dot_product = sum(counts_a[t] * counts_b[t] for t in shared_tokens)
-            norm_a = doc_a.get("_norm") or (
-                sum(v * v for v in counts_a.values()) ** 0.5
-            )
-            norm_b = doc_b.get("_norm") or (
-                sum(v * v for v in counts_b.values()) ** 0.5
-            )
-            token_sim = (
-                (dot_product / (norm_a * norm_b)) if norm_a > 0 and norm_b > 0 else 0.0
-            )
+            return 0.0
+        dot_product = sum(counts_a[t] * counts_b[t] for t in shared_tokens)
+        norm_a = doc_a.get("_norm") or (sum(v * v for v in counts_a.values()) ** 0.5)
+        norm_b = doc_b.get("_norm") or (sum(v * v for v in counts_b.values()) ** 0.5)
+        return (dot_product / (norm_a * norm_b)) if norm_a > 0 and norm_b > 0 else 0.0
 
-        # 2. Security Keywords Jaccard Similarity
+    def compute_similarity(self, doc_a: Dict[str, Any], doc_b: Dict[str, Any]) -> float:
+        """Computes composite similarity between two papers."""
+        token_sim = self._compute_token_sim(doc_a, doc_b)
         kw_a = doc_a.get("_kw_set") or set(doc_a.get("annotated_keywords", []))
         kw_b = doc_b.get("_kw_set") or set(doc_b.get("annotated_keywords", []))
-        shared_kw = kw_a & kw_b
         union_kw = kw_a | kw_b
-        kw_sim = (len(shared_kw) / len(union_kw)) if union_kw else 0.0
+        kw_sim = (len(kw_a & kw_b) / len(union_kw)) if union_kw else 0.0
 
-        # 3. Category & Tag Overlap
         tags_a = doc_a.get("_tags_set") or set(t.lower() for t in doc_a.get("tags", []))
         tags_b = doc_b.get("_tags_set") or set(t.lower() for t in doc_b.get("tags", []))
-        shared_tags = tags_a & tags_b
-        cat_sim = 1.0 if shared_tags else 0.0
+        cat_sim = 1.0 if (tags_a & tags_b) else 0.0
 
         return 0.50 * token_sim + 0.35 * kw_sim + 0.15 * cat_sim
+
+    def _find_scored_neighbors(
+        self,
+        doc: Dict[str, Any],
+        candidate_ids: List[str],
+        doc_map: Dict[str, Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        scored = []
+        for target_id in candidate_ids:
+            if target_id not in doc_map:
+                continue
+            target_doc = doc_map[target_id]
+            sim = self.compute_similarity(doc, target_doc)
+            if sim > 0.05:
+                scored.append(
+                    {
+                        "target_id": target_id,
+                        "title": target_doc.get("title", ""),
+                        "description": target_doc.get("description", ""),
+                        "similarity": round(sim, 4),
+                        "shared_keywords": list(doc["_kw_set"] & target_doc["_kw_set"]),
+                        "path": target_doc.get("path", ""),
+                        "published_date": target_doc.get("published_date", ""),
+                    }
+                )
+        scored.sort(key=lambda x: x["similarity"], reverse=True)
+        return scored[: self.top_k_neighbors]
 
     def build_graph(
         self,
         documents: List[Dict[str, Any]],
         inverted_keywords: Optional[Dict[str, List[str]]] = None,
     ) -> None:
-        """
-        Builds the k-NN proximity graph using inverted keywords and precomputed document vectors.
-        """
+        """Builds the k-NN proximity graph using inverted keywords and precomputed document vectors."""
         self.graph.clear()
         doc_map = {d["id"]: d for d in documents}
 
-        # Precompute norms and sets once per document
         for doc in documents:
             counts = doc.get("token_counts", {})
             doc["_norm"] = sum(v * v for v in counts.values()) ** 0.5 if counts else 1.0
@@ -78,9 +89,8 @@ class ProximityGraphIndex:
         for doc in documents:
             doc_id = doc["id"]
             kw_list = doc.get("annotated_keywords", [])
-
-            # Fast candidate pruning: papers sharing keywords
             candidate_ids: Set[str] = set()
+
             if inverted_keywords:
                 for kw in kw_list:
                     candidate_ids.update(inverted_keywords.get(kw.lower(), []))
@@ -88,38 +98,11 @@ class ProximityGraphIndex:
                 candidate_ids = set(doc_map.keys())
 
             candidate_ids.discard(doc_id)
-            if not candidate_ids:
-                continue
-
-            # Limit evaluation candidates to top 50 for O(N) performance scalability
-            eval_candidates = (
-                list(candidate_ids)[:50]
-                if len(candidate_ids) > 50
-                else list(candidate_ids)
-            )
-
-            scored_neighbors = []
-            for target_id in eval_candidates:
-                if target_id not in doc_map:
-                    continue
-                target_doc = doc_map[target_id]
-                sim = self.compute_similarity(doc, target_doc)
-                if sim > 0.05:
-                    shared_kw = list(doc["_kw_set"] & target_doc["_kw_set"])
-                    scored_neighbors.append(
-                        {
-                            "target_id": target_id,
-                            "title": target_doc.get("title", ""),
-                            "description": target_doc.get("description", ""),
-                            "similarity": round(sim, 4),
-                            "shared_keywords": shared_kw,
-                            "path": target_doc.get("path", ""),
-                            "published_date": target_doc.get("published_date", ""),
-                        }
-                    )
-
-            scored_neighbors.sort(key=lambda x: x["similarity"], reverse=True)
-            self.graph[doc_id] = scored_neighbors[: self.top_k_neighbors]
+            if candidate_ids:
+                eval_cands = list(candidate_ids)[:50]
+                self.graph[doc_id] = self._find_scored_neighbors(
+                    doc, eval_cands, doc_map
+                )
 
     def get_neighbors(self, doc_id: str) -> List[Dict[str, Any]]:
         """Returns precomputed nearest neighbors for a paper."""

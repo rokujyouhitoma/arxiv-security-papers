@@ -9,11 +9,20 @@ class MarkdownEvaluator {
     this.mermaidCount = 0;
   }
 
+  /**
+   * @param {!Object} ast
+   * @return {!Object}
+   */
   evaluate(ast) {
     this.mermaidCount = 0;
     return this._evaluateNode(ast);
   }
 
+  /**
+   * @param {!Object} node
+   * @return {!Object}
+   * @private
+   */
   _evaluateNode(node) {
     if (node.type === 'DOCUMENT') {
       return {
@@ -44,17 +53,18 @@ class MarkdownEvaluator {
       const items = node.payload.items.map(item => this._evaluateInlineText(item));
       return {
         ...node,
-        evaluated: { items }
+        evaluated: { ...node.payload, items }
       };
     }
 
     if (node.type === 'MERMAID') {
       this.mermaidCount++;
+      const diagramId = `mermaid-diagram-${this.mermaidCount}-${Math.random().toString(36).substring(2, 7)}`;
       return {
         ...node,
         evaluated: {
-          code: node.payload.code,
-          elementId: `mermaid-diagram-${this.mermaidCount}-${Date.now()}`
+          id: diagramId,
+          code: node.payload.code
         }
       };
     }
@@ -62,17 +72,22 @@ class MarkdownEvaluator {
     return { ...node, evaluated: node.payload };
   }
 
+  /**
+   * @param {string} text
+   * @return {string}
+   * @private
+   */
   _evaluateInlineText(text) {
     if (!text) return '';
+
     let result = text;
-    // 1. Escape HTML special chars
-    result = result.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // 2. Bold: **text**
-    result = result.replace(/\*\*(.*?)\*\*/g, '<strong class="md-bold">$1</strong>');
-    // 3. Inline Code: `code`
-    result = result.replace(/`(.*?)`/g, '<code class="md-inline-code">$1</code>');
-    // 4. Links: [text](url)
-    result = result.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="md-link" target="_blank" rel="noopener">$1</a>');
+    // Bold: **text**
+    result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Inline code: `code`
+    result = result.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+    // Links: [text](url)
+    result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
     return result;
   }
 }

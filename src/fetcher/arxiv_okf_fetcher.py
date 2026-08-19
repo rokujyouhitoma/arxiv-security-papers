@@ -81,92 +81,68 @@ __all__ = [
 ]
 
 
-def run_pipeline(
-    workspace_dir: str,
-    config: Dict[str, Any],
-    query: str = "cat:cs.CR",
-    max_results: int = 3500,
-    start_dt: Optional[datetime] = None,
-    end_dt: Optional[datetime] = None,
-    force: bool = False,
-    max_workers: int = 15,
-) -> List[Dict[str, Any]]:
-    """Executes the full 3-tier ETL pipeline:
-
-    1. Extract: Fetches papers from arXiv and downloads PDFs.
-    2. Transform: Generates OKF v0.2 markdown files.
-    3. Report: Builds 5-tier summaries and index catalog.
-    """
-    state_path = os.path.join(workspace_dir, config["paths"]["state_file"])
-    processed_state: Dict[str, Any] = {}
+def _load_state(state_path: str) -> Dict[str, Any]:
     if os.path.exists(state_path):
         try:
             with open(state_path, "r", encoding="utf-8") as f:
-                processed_state = json.load(f)
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
         except Exception:
-            processed_state = {}
+            return {}
+    return {}
 
-    print(
-        f"[{datetime.now().isoformat()}] [ETL:Ingestion] "
-        f"Fetching papers from arXiv (query={query}, max_results={max_results})..."
-    )
-    papers = fetch_arxiv_papers(query=query, max_results=max_results)
-    if not papers:
-        papers = fetch_arxiv_rss_fallback(max_results=min(max_results, 50))
 
-    if not papers:
-        print("[ETL:Ingestion] No papers fetched.")
-        return []
+def _is_date_in_range(
+    pub_str: Optional[str], start_dt: Optional[datetime], end_dt: Optional[datetime]
+) -> bool:
+    if pub_str and len(pub_str) >= 10:
+        try:
+            pub_dt = datetime.strptime(pub_str[:10], "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+            if start_dt and pub_dt < start_dt:
+                return False
+            if end_dt and pub_dt > end_dt:
+                return False
+        except Exception:
+            pass
+    return True
 
-    pdf_fetch_tasks = []
 
-    # Step 1: Save metadata JSON and raw abstract TXT
+def _filter_and_stage_papers(
+    papers: List[Dict[str, Any]],
+    workspace_dir: str,
+    config: Dict[str, Any],
+    processed_state: Dict[str, Any],
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    force: bool,
+) -> List[tuple[Dict[str, Any], str, str]]:
+    tasks = []
     for paper in papers:
         arxiv_id = paper["arxiv_id"]
-
-        pub_str = paper.get("published")
-        if pub_str and len(pub_str) >= 10:
-            try:
-                pub_dt = datetime.strptime(pub_str[:10], "%Y-%m-%d").replace(
-                    tzinfo=timezone.utc
-                )
-                if start_dt and pub_dt < start_dt:
-                    continue
-                if end_dt and pub_dt > end_dt:
-                    continue
-            except Exception:
-                pass
-
+        if not _is_date_in_range(paper.get("published"), start_dt, end_dt):
+            continue
         if arxiv_id in processed_state and not force:
             continue
-
         raw_meta_path = save_raw_paper_data(paper, workspace_dir, config)
         date_str = get_paper_pub_date_str(paper)
         raw_dir = os.path.join(workspace_dir, config["paths"]["raw_data_dir"], date_str)
-        pdf_fetch_tasks.append((paper, raw_dir, raw_meta_path))
+        tasks.append((paper, raw_dir, raw_meta_path))
+    return tasks
 
-    # Step 2: Download PDFs & extract TXT in parallel
-    print(
-        f"[{datetime.now().isoformat()}] [ETL:Ingestion] Downloading PDFs & pdftotext "
-        f"for {len(pdf_fetch_tasks)} papers with {max_workers} parallel threads..."
-    )
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(fetch_single_pdf_and_text, p, r_dir)
-            for p, r_dir, _ in pdf_fetch_tasks
-        ]
-        for _ in as_completed(futures):
-            pass
 
-    # Step 3: Transform & Build OKF files
-    print(
-        f"[{datetime.now().isoformat()}] [ETL:Transformer] Serializing Google OKF v0.2 documents..."
-    )
+def _transform_and_save_okf(
+    pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]],
+    workspace_dir: str,
+    config: Dict[str, Any],
+    processed_state: Dict[str, Any],
+    state_path: str,
+) -> List[Dict[str, Any]]:
     processed_items = []
-    for paper, raw_dir, raw_meta_path in pdf_fetch_tasks:
+    for paper, _, raw_meta_path in pdf_fetch_tasks:
         item = build_okf_from_raw(raw_meta_path, workspace_dir, config)
         processed_items.append(item)
-
         processed_state[paper["arxiv_id"]] = {
             "processed_at": datetime.now(timezone.utc).isoformat(),
             "published": paper.get("published"),
@@ -175,15 +151,16 @@ def run_pipeline(
             "raw_meta_path": os.path.relpath(raw_meta_path, workspace_dir),
             "okf_path": item["rel_okf_path"],
         }
-
     with open(state_path, "w", encoding="utf-8") as f:
         json.dump(processed_state, f, ensure_ascii=False, indent=2)
+    return processed_items
 
-    # Step 4: Report & Generate 5-tier summaries
-    print(
-        f"[{datetime.now().isoformat()}] [ETL:Reporter] "
-        f"Generating 5-tier executive summaries and updating index catalog..."
-    )
+
+def _generate_summaries_and_index(
+    workspace_dir: str,
+    config: Dict[str, Any],
+    processed_items: List[Dict[str, Any]],
+) -> None:
     if processed_items:
         per_run_path = generate_per_run_summary(processed_items, workspace_dir, config)
     else:
@@ -214,9 +191,48 @@ def run_pipeline(
         config,
     )
 
-    print(
-        f"[{datetime.now().isoformat()}] [ETL:Pipeline] Complete! Processed {len(processed_items)} papers."
+
+def run_pipeline(
+    workspace_dir: str,
+    config: Dict[str, Any],
+    query: str = "cat:cs.CR",
+    max_results: int = 3500,
+    start_dt: Optional[datetime] = None,
+    end_dt: Optional[datetime] = None,
+    force: bool = False,
+    max_workers: int = 15,
+) -> List[Dict[str, Any]]:
+    """Executes the full 3-tier ETL pipeline."""
+    state_path = os.path.join(workspace_dir, config["paths"]["state_file"])
+    processed_state = _load_state(state_path)
+
+    papers = fetch_arxiv_papers(
+        query=query, max_results=max_results
+    ) or fetch_arxiv_rss_fallback(max_results=min(max_results, 50))
+    if not papers:
+        print("[ETL:Ingestion] No papers fetched.")
+        return []
+
+    pdf_fetch_tasks = _filter_and_stage_papers(
+        papers, workspace_dir, config, processed_state, start_dt, end_dt, force
     )
+
+    now_str = datetime.now().isoformat()
+    print(
+        f"[{now_str}] [ETL:Ingestion] Downloading PDFs & pdftotext for {len(pdf_fetch_tasks)} papers..."
+    )
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(fetch_single_pdf_and_text, p, r_dir)
+            for p, r_dir, _ in pdf_fetch_tasks
+        ]
+        for _ in as_completed(futures):
+            pass
+
+    processed_items = _transform_and_save_okf(
+        pdf_fetch_tasks, workspace_dir, config, processed_state, state_path
+    )
+    _generate_summaries_and_index(workspace_dir, config, processed_items)
     return processed_items
 
 

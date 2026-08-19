@@ -26,6 +26,7 @@ from .ingestion import (
 from .presentation import DynamicHighlighter
 from .query import (
     EnterpriseQueryParser,
+    QueryClause,
     QueryContext,
     QuerySemanticCache,
     SynonymExpander,
@@ -259,6 +260,89 @@ class VectorEngine:
         except Exception:
             return 1.0
 
+    @staticmethod
+    def _extract_field_value(pattern: str, content: str, default: str = "") -> str:
+        m = re.search(pattern, content, re.MULTILINE)
+        return m.group(1).strip() if m else default
+
+    def _extract_okf_meta(
+        self, content: str, date_dir: str, arxiv_id: str
+    ) -> tuple[str, str, List[str], List[str], str]:
+        title = self._extract_field_value(r"^title:\s*[\"']?(.*?)[\"']?$", content)
+        description = self._extract_field_value(
+            r"^description:\s*[\"']?(.*?)[\"']?$", content
+        )
+        published_date = self._extract_field_value(
+            r"^timestamp:\s*[\"']?([0-9]{4}-[0-9]{2}-[0-9]{2})", content
+        )
+
+        raw_tags = self._extract_field_value(r"^tags:\s*\[(.*?)\]", content)
+        tags = [t.strip().strip("'\"") for t in raw_tags.split(",") if t.strip()]
+
+        authors = self._extract_authors_from_meta(date_dir, arxiv_id)
+        if not authors:
+            raw_auth = self._extract_field_value(r"authors:\s*\[(.*?)\]", content)
+            authors = [a.strip().strip("'\"") for a in raw_auth.split(",") if a.strip()]
+
+        return title, description, tags, authors, published_date
+
+    def _index_single_okf_file(
+        self, file_path: str, date_dir: str, file: str, doc_freq: Counter[str]
+    ) -> None:
+        rel_path = os.path.relpath(file_path, self.workspace_dir)
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        arxiv_id = os.path.splitext(file)[0]
+        title, description, tags, authors, published_date = self._extract_okf_meta(
+            content, date_dir, arxiv_id
+        )
+        abstract_text = extract_abstract_from_okf(content)
+        keywords = self.extract_feature_keywords(title, description, content)
+
+        title_tokens = self.tokenize(title)
+        desc_tokens = self.tokenize(description)
+        tags_tokens = self.tokenize(" ".join(tags))
+        authors_tokens = self.tokenize(" ".join(authors))
+        keywords_tokens = self.tokenize(" ".join(keywords))
+        abstract_tokens = self.tokenize(abstract_text)[:120] if abstract_text else []
+
+        doc_tokens = (
+            title_tokens
+            + desc_tokens
+            + tags_tokens
+            + authors_tokens
+            + keywords_tokens
+            + abstract_tokens
+        )
+        token_counts = dict(Counter(doc_tokens))
+        for token in set(doc_tokens):
+            doc_freq[token] += 1
+            self.inverted_index[token].append(arxiv_id)
+
+        for kw in keywords:
+            self.inverted_keyword_index[kw.lower()].append(arxiv_id)
+
+        doc_entry = {
+            "id": arxiv_id,
+            "title": title,
+            "description": description,
+            "authors": authors,
+            "tags": tags,
+            "annotated_keywords": keywords,
+            "published_date": published_date,
+            "path": rel_path,
+            "title_tokens": title_tokens,
+            "desc_tokens": desc_tokens,
+            "tags_tokens": tags_tokens,
+            "authors_tokens": authors_tokens,
+            "keywords_tokens": keywords_tokens,
+            "abstract_tokens": abstract_tokens,
+            "tokens": doc_tokens,
+            "token_counts": token_counts,
+        }
+        self._populate_loaded_doc_indexes(doc_entry, arxiv_id)
+
     def build_index(self) -> int:
         """Scans all OKF files, builds multi-field index and saves index.json."""
         okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
@@ -267,7 +351,6 @@ class VectorEngine:
 
         self.documents = []
         self.documents_by_id = {}
-        all_tokens = []
         doc_freq: Counter[str] = Counter()
         self.inverted_index = defaultdict(list)
         self.inverted_keyword_index = defaultdict(list)
@@ -282,149 +365,8 @@ class VectorEngine:
             for file in files:
                 if file.endswith(".md"):
                     file_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(file_path, self.workspace_dir)
                     try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-
-                        title = ""
-                        description = ""
-                        tags = []
-                        authors: List[str] = []
-                        published_date = ""
-                        arxiv_id = os.path.splitext(file)[0]
-
-                        m_title = re.search(
-                            r"^title:\s*[\"']?(.*?)[\"']?$", content, re.MULTILINE
-                        )
-                        if m_title:
-                            title = m_title.group(1).strip()
-
-                        m_desc = re.search(
-                            r"^description:\s*[\"']?(.*?)[\"']?$",
-                            content,
-                            re.MULTILINE,
-                        )
-                        if m_desc:
-                            description = m_desc.group(1).strip()
-
-                        m_tags = re.search(r"^tags:\s*\[(.*?)\]", content, re.MULTILINE)
-                        if m_tags:
-                            tags = [
-                                t.strip().strip("'\"")
-                                for t in m_tags.group(1).split(",")
-                                if t.strip()
-                            ]
-
-                        m_date = re.search(
-                            r"^timestamp:\s*[\"']?([0-9]{4}-[0-9]{2}-[0-9]{2})",
-                            content,
-                            re.MULTILINE,
-                        )
-                        if m_date:
-                            published_date = m_date.group(1)
-
-                        # Extract authors from meta.json or provenance
-                        authors = self._extract_authors_from_meta(date_dir, arxiv_id)
-                        if not authors:
-                            m_auth = re.search(
-                                r"authors:\s*\[(.*?)\]", content, re.MULTILINE
-                            )
-                            if m_auth:
-                                authors = [
-                                    a.strip().strip("'\"")
-                                    for a in m_auth.group(1).split(",")
-                                    if a.strip()
-                                ]
-
-                        abstract_text = extract_abstract_from_okf(content)
-                        keywords = self.extract_feature_keywords(
-                            title, description, content
-                        )
-
-                        title_tokens = self.tokenize(title)
-                        desc_tokens = self.tokenize(description)
-                        tags_tokens = self.tokenize(" ".join(tags))
-                        authors_tokens = self.tokenize(" ".join(authors))
-                        keywords_tokens = self.tokenize(" ".join(keywords))
-                        abstract_tokens = (
-                            self.tokenize(abstract_text)[:120] if abstract_text else []
-                        )
-
-                        doc_tokens = (
-                            title_tokens
-                            + desc_tokens
-                            + tags_tokens
-                            + authors_tokens
-                            + keywords_tokens
-                            + abstract_tokens
-                        )
-                        token_counts = dict(Counter(doc_tokens))
-                        unique_tokens = set(doc_tokens)
-
-                        for token in unique_tokens:
-                            doc_freq[token] += 1
-                            self.inverted_index[token].append(arxiv_id)
-
-                        for kw in keywords:
-                            self.inverted_keyword_index[kw.lower()].append(arxiv_id)
-
-                        # Multi-Field Postings Indexing
-                        self.multi_field_index.add_field_tokens(
-                            arxiv_id, "title", title_tokens
-                        )
-                        self.multi_field_index.add_field_tokens(
-                            arxiv_id, "author", authors_tokens
-                        )
-                        self.multi_field_index.add_field_tokens(
-                            arxiv_id, "abstract", abstract_tokens
-                        )
-                        self.multi_field_index.add_field_tokens(
-                            arxiv_id, "keywords", keywords_tokens
-                        )
-                        self.multi_field_index.add_field_tokens(
-                            arxiv_id, "tags", tags_tokens
-                        )
-
-                        doc_entry = {
-                            "id": arxiv_id,
-                            "title": title,
-                            "description": description,
-                            "authors": authors,
-                            "tags": tags,
-                            "annotated_keywords": keywords,
-                            "published_date": published_date,
-                            "path": rel_path,
-                            "title_tokens": title_tokens,
-                            "desc_tokens": desc_tokens,
-                            "tags_tokens": tags_tokens,
-                            "authors_tokens": authors_tokens,
-                            "keywords_tokens": keywords_tokens,
-                            "abstract_tokens": abstract_tokens,
-                            "tokens": doc_tokens,
-                            "token_counts": token_counts,
-                        }
-                        self.documents.append(doc_entry)
-                        self.documents_by_id[arxiv_id] = doc_entry
-                        all_tokens.extend(doc_tokens)
-
-                        # Extended Indexes population
-                        self.faceted_index.add_document(
-                            arxiv_id, published_date, tags, keywords
-                        )
-                        for kw in keywords:
-                            self.knowledge_graph.add_entity(
-                                kw, "security_domain", kw, arxiv_id
-                            )
-                        for tag in tags:
-                            self.knowledge_graph.add_entity(
-                                tag, "category_tag", tag, arxiv_id
-                            )
-                        for author in authors:
-                            self.knowledge_graph.add_entity(
-                                author, "author", author, arxiv_id
-                            )
-
+                        self._index_single_okf_file(file_path, date_dir, file, doc_freq)
                     except Exception:
                         continue
 
@@ -485,110 +427,97 @@ class VectorEngine:
         with open(self.index_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
 
+    def _restore_doc_entry(self, d: Dict[str, Any]) -> Dict[str, Any]:
+        if "title_tokens" not in d:
+            d["title_tokens"] = self.tokenize(d.get("title", ""))
+            d["desc_tokens"] = self.tokenize(d.get("description", ""))
+            d["tags_tokens"] = self.tokenize(" ".join(d.get("tags", [])))
+            d["authors_tokens"] = self.tokenize(" ".join(d.get("authors", [])))
+            d["keywords_tokens"] = self.tokenize(
+                " ".join(d.get("annotated_keywords", []))
+            )
+            d["abstract_tokens"] = []
+            d["tokens"] = (
+                d["title_tokens"]
+                + d["desc_tokens"]
+                + d["tags_tokens"]
+                + d["authors_tokens"]
+                + d["keywords_tokens"]
+            )
+            d["token_counts"] = dict(Counter(d["tokens"]))
+        return d
+
+    def _populate_loaded_doc_indexes(self, d: Dict[str, Any], arxiv_id: str) -> None:
+        self.documents.append(d)
+        self.documents_by_id[arxiv_id] = d
+        self.multi_field_index.add_field_tokens(
+            arxiv_id, "title", d.get("title_tokens", [])
+        )
+        self.multi_field_index.add_field_tokens(
+            arxiv_id, "author", d.get("authors_tokens", [])
+        )
+        self.multi_field_index.add_field_tokens(
+            arxiv_id, "abstract", d.get("abstract_tokens", [])
+        )
+        self.multi_field_index.add_field_tokens(
+            arxiv_id, "keywords", d.get("keywords_tokens", [])
+        )
+        self.multi_field_index.add_field_tokens(
+            arxiv_id, "tags", d.get("tags_tokens", [])
+        )
+        self.faceted_index.add_document(
+            arxiv_id,
+            d.get("published_date", ""),
+            d.get("tags", []),
+            d.get("annotated_keywords", []),
+        )
+        for kw in d.get("annotated_keywords", []):
+            self.knowledge_graph.add_entity(kw, "security_domain", kw, arxiv_id)
+        for tag in d.get("tags", []):
+            self.knowledge_graph.add_entity(tag, "category_tag", tag, arxiv_id)
+        for author in d.get("authors", []):
+            self.knowledge_graph.add_entity(author, "author", author, arxiv_id)
+
     def load_index(self, max_docs: Optional[int] = None) -> None:
-        if os.path.exists(self.index_file):
-            try:
-                with open(self.index_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    self.idf = data.get("idf", {})
-                    self.avg_doc_len = data.get("avg_doc_len", 0)
-                    self.inverted_index = defaultdict(
-                        list, data.get("inverted_index", {})
-                    )
-                    self.inverted_keyword_index = defaultdict(
-                        list, data.get("inverted_keywords", {})
-                    )
-                    raw_docs = data.get("documents", [])
-                    if max_docs is not None and max_docs > 0:
-                        raw_docs = raw_docs[:max_docs]
-                    self.documents = []
-                    self.documents_by_id = {}
-                    self.multi_field_index = MultiFieldPostingsIndex()
-                    self.faceted_index = FacetedIndex()
-                    self.knowledge_graph = KnowledgeGraphIndex()
-                    self.citation_network = CitationNetworkIndex()
-                    self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
-                    self.proximity_graph.graph = defaultdict(
-                        list, data.get("proximity_graph", {})
-                    )
+        if not os.path.exists(self.index_file):
+            return
+        try:
+            with open(self.index_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.idf = data.get("idf", {})
+            self.avg_doc_len = data.get("avg_doc_len", 0)
+            self.inverted_index = defaultdict(list, data.get("inverted_index", {}))
+            self.inverted_keyword_index = defaultdict(
+                list, data.get("inverted_keywords", {})
+            )
+            raw_docs = data.get("documents", [])
+            if max_docs is not None and max_docs > 0:
+                raw_docs = raw_docs[:max_docs]
 
-                    for d in raw_docs:
-                        if "title_tokens" not in d:
-                            d["title_tokens"] = self.tokenize(d.get("title", ""))
-                            d["desc_tokens"] = self.tokenize(d.get("description", ""))
-                            d["tags_tokens"] = self.tokenize(
-                                " ".join(d.get("tags", []))
-                            )
-                            d["authors_tokens"] = self.tokenize(
-                                " ".join(d.get("authors", []))
-                            )
-                            d["keywords_tokens"] = self.tokenize(
-                                " ".join(d.get("annotated_keywords", []))
-                            )
-                            d["abstract_tokens"] = []
-                            d["tokens"] = (
-                                d["title_tokens"]
-                                + d["desc_tokens"]
-                                + d["tags_tokens"]
-                                + d["authors_tokens"]
-                                + d["keywords_tokens"]
-                            )
-                            d["token_counts"] = dict(Counter(d["tokens"]))
-                        if "authors_tokens" not in d:
-                            d["authors_tokens"] = self.tokenize(
-                                " ".join(d.get("authors", []))
-                            )
-                        if "abstract_tokens" not in d:
-                            d["abstract_tokens"] = []
+            self.documents = []
+            self.documents_by_id = {}
+            self.multi_field_index = MultiFieldPostingsIndex()
+            self.faceted_index = FacetedIndex()
+            self.knowledge_graph = KnowledgeGraphIndex()
+            self.citation_network = CitationNetworkIndex()
+            self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
+            self.proximity_graph.graph = defaultdict(
+                list, data.get("proximity_graph", {})
+            )
 
-                        self.documents.append(d)
-                        self.documents_by_id[d["id"]] = d
+            for d in raw_docs:
+                d = self._restore_doc_entry(d)
+                arxiv_id = d.get("id", "")
+                self._populate_loaded_doc_indexes(d, arxiv_id)
 
-                        # Populate Multi-Field Index
-                        self.multi_field_index.add_field_tokens(
-                            d["id"], "title", d["title_tokens"]
-                        )
-                        self.multi_field_index.add_field_tokens(
-                            d["id"], "author", d["authors_tokens"]
-                        )
-                        self.multi_field_index.add_field_tokens(
-                            d["id"], "abstract", d["abstract_tokens"]
-                        )
-                        self.multi_field_index.add_field_tokens(
-                            d["id"], "keywords", d["keywords_tokens"]
-                        )
-                        self.multi_field_index.add_field_tokens(
-                            d["id"], "tags", d["tags_tokens"]
-                        )
-
-                        kw_str = " ".join(d.get("annotated_keywords", []))
-                        authors_str = " ".join(d.get("authors", []))
-                        abs_str = " ".join(d.get("abstract_tokens", [])[:50])
-                        self.doc_full_texts[d["id"]] = (
-                            f"{d.get('title', '')} {d.get('description', '')} {authors_str} {kw_str} {abs_str}".lower()
-                        )
-
-                        self.faceted_index.add_document(
-                            d["id"],
-                            d.get("published_date", ""),
-                            d.get("tags", []),
-                            d.get("annotated_keywords", []),
-                        )
-                        for kw in d.get("annotated_keywords", []):
-                            self.knowledge_graph.add_entity(
-                                kw, "security_domain", kw, d["id"]
-                            )
-
-                    self.multi_field_index.compute_field_statistics(len(self.documents))
-                    self.citation_network.compute_pagerank(
-                        [d["id"] for d in self.documents]
-                    )
-                    self.raptor_tree.build_summary_tree(self.documents)
-            except (json.JSONDecodeError, OSError, KeyError, TypeError) as e:
-                logging.warning("Failed to load index from %s: %s", self.index_file, e)
-                self.documents = []
-                self.documents_by_id = {}
-                self.idf = {}
+            self.multi_field_index.compute_field_statistics(len(self.documents))
+            self.citation_network.compute_pagerank([d["id"] for d in self.documents])
+            self.raptor_tree.build_summary_tree(self.documents)
+        except (json.JSONDecodeError, OSError, KeyError, TypeError) as e:
+            logging.warning("Failed to load index from %s: %s", self.index_file, e)
+            self.documents = []
+            self.documents_by_id = {}
+            self.idf = {}
 
     def get_related_papers(self, doc_id: str) -> Dict[str, Any]:
         """Retrieves precomputed nearest neighbors for a paper."""
@@ -651,6 +580,77 @@ class VectorEngine:
         """Module 1: Query Understanding & Context Preparation."""
         return self.query_parser.create_context(query, self.expander)
 
+    def _match_prefix_or_fuzzy(
+        self, clause: QueryClause, fields: List[str]
+    ) -> Set[str]:
+        matches: Set[str] = set()
+        if clause.is_prefix:
+            for fld in fields:
+                matches.update(self.multi_field_index.search_prefix(fld, clause.term))
+        elif clause.is_fuzzy:
+            for fld in fields:
+                matches.update(
+                    self.multi_field_index.search_fuzzy(
+                        fld, clause.term, clause.fuzzy_distance
+                    )
+                )
+        return matches
+
+    def _match_term_or_inverted(
+        self, clause: QueryClause, target_field: Optional[str]
+    ) -> Set[str]:
+        matches: Set[str] = set()
+        if target_field:
+            for tt in self.tokenize(clause.term):
+                for doc_id, _ in self.multi_field_index.get_postings(target_field, tt):
+                    matches.add(doc_id)
+        else:
+            for tt in self.tokenize(clause.term):
+                if tt in self.inverted_index:
+                    matches.update(self.inverted_index[tt])
+        return matches
+
+    def _match_clause_docs(self, clause: QueryClause) -> Set[str]:
+        target_field = clause.field
+        if clause.is_prefix or clause.is_fuzzy:
+            fields = (
+                [target_field]
+                if target_field
+                else ["title", "author", "keywords", "abstract"]
+            )
+            return self._match_prefix_or_fuzzy(clause, fields)
+        return self._match_term_or_inverted(clause, target_field)
+
+    def _fallback_token_candidates(self, expanded_tokens: List[str]) -> Set[str]:
+        inv_candidates: Set[str] = set()
+        for pterm in expanded_tokens:
+            for ptoken in self.tokenize(pterm):
+                if ptoken in self.inverted_index:
+                    inv_candidates.update(self.inverted_index[ptoken])
+                if ptoken in self.inverted_keyword_index:
+                    inv_candidates.update(self.inverted_keyword_index[ptoken])
+        return inv_candidates
+
+    def _filter_clause_candidates(
+        self, clauses: List[QueryClause], candidate_ids: Optional[Set[str]]
+    ) -> Optional[Set[str]]:
+        for clause in clauses:
+            clause_matches = self._match_clause_docs(clause)
+            if (
+                clause.is_required
+                or clause.field
+                or clause.is_prefix
+                or clause.is_fuzzy
+            ):
+                candidate_ids = (
+                    clause_matches
+                    if candidate_ids is None
+                    else (candidate_ids & clause_matches)
+                )
+            elif clause.is_prohibited and candidate_ids is not None:
+                candidate_ids.difference_update(clause_matches)
+        return candidate_ids
+
     def retrieve_candidates(
         self,
         ctx: QueryContext,
@@ -658,76 +658,15 @@ class VectorEngine:
         max_candidates: int = 600,
     ) -> List[Dict[str, Any]]:
         """Module 2: Hybrid Retrieval & Multi-Field Candidate Pruning."""
-        candidate_ids: Optional[Set[str]] = None
-        if category:
-            candidate_ids = self.faceted_index.filter(category=category)
+        candidate_ids = (
+            self.faceted_index.filter(category=category) if category else None
+        )
+        candidate_ids = self._filter_clause_candidates(ctx.clauses, candidate_ids)
 
-        # Evaluate clause constraints
-        for clause in ctx.clauses:
-            clause_matches: Set[str] = set()
-            target_field = clause.field
-
-            if clause.is_prefix:
-                fields_to_check = (
-                    [target_field]
-                    if target_field
-                    else ["title", "author", "keywords", "abstract"]
-                )
-                for fld in fields_to_check:
-                    clause_matches.update(
-                        self.multi_field_index.search_prefix(fld, clause.term)
-                    )
-            elif clause.is_fuzzy:
-                fields_to_check = (
-                    [target_field]
-                    if target_field
-                    else ["title", "author", "keywords", "abstract"]
-                )
-                for fld in fields_to_check:
-                    clause_matches.update(
-                        self.multi_field_index.search_fuzzy(
-                            fld, clause.term, clause.fuzzy_distance
-                        )
-                    )
-            elif target_field:
-                term_tokens = self.tokenize(clause.term)
-                for tt in term_tokens:
-                    postings = self.multi_field_index.get_postings(target_field, tt)
-                    for doc_id, _ in postings:
-                        clause_matches.add(doc_id)
-            else:
-                term_tokens = self.tokenize(clause.term)
-                for tt in term_tokens:
-                    if tt in self.inverted_index:
-                        clause_matches.update(self.inverted_index[tt])
-
-            if clause.is_required:
-                candidate_ids = (
-                    clause_matches
-                    if candidate_ids is None
-                    else (candidate_ids & clause_matches)
-                )
-            elif clause.is_prohibited:
-                if candidate_ids is not None:
-                    candidate_ids.difference_update(clause_matches)
-            elif target_field or clause.is_prefix or clause.is_fuzzy:
-                candidate_ids = (
-                    clause_matches
-                    if candidate_ids is None
-                    else (candidate_ids & clause_matches)
-                )
-
-        # General token candidate pruning fallback
         if candidate_ids is None and ctx.expanded_tokens:
-            inv_candidates = set()
-            for pterm in ctx.expanded_tokens:
-                for ptoken in self.tokenize(pterm):
-                    if ptoken in self.inverted_index:
-                        inv_candidates.update(self.inverted_index[ptoken])
-                    if ptoken in self.inverted_keyword_index:
-                        inv_candidates.update(self.inverted_keyword_index[ptoken])
-            if inv_candidates:
-                candidate_ids = inv_candidates
+            inv_cands = self._fallback_token_candidates(ctx.expanded_tokens)
+            if inv_cands:
+                candidate_ids = inv_cands
 
         if candidate_ids is not None:
             target_docs = [
@@ -735,12 +674,64 @@ class VectorEngine:
                 for did in candidate_ids
                 if did in self.documents_by_id
             ]
-            if len(target_docs) > max_candidates:
-                target_docs = target_docs[:max_candidates]
-        else:
-            target_docs = self.documents[:max_candidates]
+            return target_docs[:max_candidates]
+        return self.documents[:max_candidates]
 
-        return target_docs
+    def _compute_token_field_score(self, qt: str, doc: Dict[str, Any]) -> float:
+        idf_val = self.idf.get(qt, 1.2)
+        field_checks = (
+            ("title", set(doc.get("title_tokens", [])), doc.get("title", "").lower()),
+            (
+                "author",
+                set(doc.get("authors_tokens", [])),
+                " ".join(doc.get("authors", [])).lower(),
+            ),
+            (
+                "keywords",
+                set(doc.get("keywords_tokens", [])),
+                " ".join(doc.get("annotated_keywords", [])).lower(),
+            ),
+            (
+                "tags",
+                set(doc.get("tags_tokens", [])),
+                " ".join(doc.get("tags", [])).lower(),
+            ),
+            (
+                "description",
+                set(doc.get("desc_tokens", [])),
+                doc.get("description", "").lower(),
+            ),
+        )
+        score = sum(
+            self.FIELD_WEIGHTS[f_name] * idf_val
+            for f_name, tok_set, text_val in field_checks
+            if qt in tok_set or qt in text_val
+        )
+        if qt in set(doc.get("abstract_tokens", [])):
+            score += self.FIELD_WEIGHTS["abstract"] * idf_val
+        return score
+
+    def _score_single_doc(
+        self, doc: Dict[str, Any], all_query_tokens: List[str]
+    ) -> float:
+        if not all_query_tokens:
+            return 1.0
+
+        field_score = sum(
+            self._compute_token_field_score(qt, doc) for qt in all_query_tokens
+        )
+        bm25_score = self.calculate_bm25_score(all_query_tokens, doc)
+        fm_score = self.calculate_fm_index_score(all_query_tokens, doc)
+        recency_boost = self.calculate_recency_boost(doc.get("published_date", ""))
+        pagerank_boost = 1.0 + 500.0 * self.citation_network.get_score(
+            doc.get("id", "")
+        )
+
+        return (
+            (field_score * 0.35 + bm25_score * 0.35 + fm_score * 0.30)
+            * recency_boost
+            * pagerank_boost
+        )
 
     def rerank_candidates(
         self,
@@ -750,65 +741,14 @@ class VectorEngine:
     ) -> List[Dict[str, Any]]:
         """Module 3: Multi-Stage Ranking & Multi-Field Scoring."""
         scores: List[Dict[str, Any]] = []
-        all_query_tokens = []
-        for t in ctx.expanded_tokens:
-            all_query_tokens.extend(self.tokenize(t))
+        all_query_tokens = [
+            tok for t in ctx.expanded_tokens for tok in self.tokenize(t)
+        ]
 
         for doc in target_docs:
-            if not all_query_tokens:
-                total_score = 1.0
-            else:
-                field_score = 0.0
-                doc_title = doc.get("title", "").lower()
-                doc_desc = doc.get("description", "").lower()
-                doc_tags = " ".join(doc.get("tags", [])).lower()
-                doc_authors = " ".join(doc.get("authors", [])).lower()
-                doc_keywords = " ".join(doc.get("annotated_keywords", [])).lower()
-
-                title_tokens_set = set(doc.get("title_tokens", []))
-                authors_tokens_set = set(doc.get("authors_tokens", []))
-                keywords_tokens_set = set(doc.get("keywords_tokens", []))
-                tags_tokens_set = set(doc.get("tags_tokens", []))
-                desc_tokens_set = set(doc.get("desc_tokens", []))
-                abstract_tokens_set = set(doc.get("abstract_tokens", []))
-
-                for qt in all_query_tokens:
-                    idf_val = self.idf.get(qt, 1.2)
-                    if qt in title_tokens_set or qt in doc_title:
-                        field_score += self.FIELD_WEIGHTS["title"] * idf_val
-                    if qt in authors_tokens_set or qt in doc_authors:
-                        field_score += self.FIELD_WEIGHTS["author"] * idf_val
-                    if qt in keywords_tokens_set or qt in doc_keywords:
-                        field_score += self.FIELD_WEIGHTS["keywords"] * idf_val
-                    if qt in tags_tokens_set or qt in doc_tags:
-                        field_score += self.FIELD_WEIGHTS["tags"] * idf_val
-                    if qt in desc_tokens_set or qt in doc_desc:
-                        field_score += self.FIELD_WEIGHTS["description"] * idf_val
-                    if qt in abstract_tokens_set:
-                        field_score += self.FIELD_WEIGHTS["abstract"] * idf_val
-
-                bm25_score = self.calculate_bm25_score(all_query_tokens, doc)
-                fm_score = self.calculate_fm_index_score(all_query_tokens, doc)
-                recency_boost = self.calculate_recency_boost(
-                    doc.get("published_date", "")
-                )
-                pagerank_boost = 1.0 + 500.0 * self.citation_network.get_score(
-                    doc.get("id", "")
-                )
-
-                total_score = (
-                    (field_score * 0.35 + bm25_score * 0.35 + fm_score * 0.30)
-                    * recency_boost
-                    * pagerank_boost
-                )
-
+            total_score = self._score_single_doc(doc, all_query_tokens)
             if total_score > 0:
-                scores.append(
-                    {
-                        "doc": doc,
-                        "score": round(total_score, 4),
-                    }
-                )
+                scores.append({"doc": doc, "score": round(total_score, 4)})
 
         scores.sort(key=lambda x: float(x["score"]), reverse=True)
         return scores[:top_k]

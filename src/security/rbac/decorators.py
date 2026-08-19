@@ -10,7 +10,7 @@ from .context import Role, SecurityContext
 from .engine import DCLPermissionDeniedError, get_access_controller
 
 
-def require_role(min_role: Union[str, Role]) -> Callable:
+def require_role(min_role: Union[str, Role]) -> Callable[..., Any]:
     """
     Decorator enforcing that the caller/context has at least the specified role.
     Role hierarchy: admin > analyst > guest
@@ -21,7 +21,7 @@ def require_role(min_role: Union[str, Role]) -> Callable:
     )
     target_level = hierarchy.get(target_role_str, 1)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             # Check context from kwargs or default controller
@@ -44,12 +44,12 @@ def require_role(min_role: Union[str, Role]) -> Callable:
     return decorator
 
 
-def require_permission(resource_name: str, permission: str) -> Callable:
+def require_permission(resource_name: str, permission: str) -> Callable[..., Any]:
     """
     Decorator enforcing that the active role holds permission on resource_name.
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             ctx = kwargs.get("security_context")

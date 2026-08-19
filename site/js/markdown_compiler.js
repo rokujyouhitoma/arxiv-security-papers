@@ -11,6 +11,10 @@ class MarkdownCompilerEngine {
     this.renderer = new MarkdownRenderer();
   }
 
+  /**
+   * @param {string} rawMarkdown
+   * @return {{html: string, mermaidElements: !Array<?>}}
+   */
   compile(rawMarkdown) {
     const tokens = this.lexer.tokenize(rawMarkdown);
     const ast = this.parser.parse(tokens);
@@ -19,6 +23,10 @@ class MarkdownCompilerEngine {
     return result;
   }
 
+  /**
+   * @param {!Element} containerElement
+   * @return {!Promise<void>}
+   */
   async renderMermaid(containerElement) {
     if (typeof mermaid !== 'undefined' && containerElement) {
       try {

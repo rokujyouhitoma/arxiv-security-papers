@@ -1,18 +1,27 @@
 /**
- * Closure Compiler Externs Definition
- * Declares external global symbols to prevent symbol renaming during ADVANCED/SIMPLE Closure compilation.
+ * @fileoverview Closure Compiler Externs Definition
+ * @externs
  */
 
-var mermaid = {
-  initialize: function(config) {},
-  run: function(options) {},
-  render: function(id, text, cb) {}
-};
+/**
+ * @type {{
+ *   initialize: function(!Object): void,
+ *   run: function(!Object): void,
+ *   render: function(string, string, function(string): void): void
+ * }}
+ */
+var mermaid;
 
-var MarkdownCompiler = {
-  compile: function(rawMarkdown) {},
-  renderMermaid: function(containerElement) {}
-};
+/**
+ * @type {{
+ *   compile: function(string): {html: string, mermaidElements: !Array<?>},
+ *   renderMermaid: function(!Element): !Promise<void>
+ * }}
+ */
+var MarkdownCompiler;
 
-var escapeHtml = function(str) {};
-var openPaperModal = function(arxivId) {};
+/** @type {function(string): string} */
+var escapeHtml;
+
+/** @type {function(string): !Promise<void>} */
+var openPaperModal;

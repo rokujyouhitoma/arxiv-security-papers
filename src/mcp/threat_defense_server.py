@@ -219,7 +219,7 @@ def handle_check_threat_coverage(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def main():
+def main() -> None:
     """MCP standard input/output transport loop."""
     for line in sys.stdin:
         line = line.strip()

@@ -249,3 +249,37 @@ def test_wsgi_app_get_okf_md_plain():
         assert "text/plain" in header_dict.get("Content-Type", "")
         md_text = body.decode("utf-8")
         assert 'type: "security-paper"' in md_text or "type: security-paper" in md_text
+
+
+def test_wsgi_app_options_and_error_paths():
+    # OPTIONS request
+    status, headers, body = call_wsgi(application, method="OPTIONS", path="/api/search")
+    assert status.startswith("200")
+
+    # Invalid top_k fallback to default
+    status, headers, body = call_wsgi(
+        application,
+        method="GET",
+        path="/api/search",
+        query_string="q=test&top_k=invalid_int",
+    )
+    assert status.startswith("200")
+
+    # MCP Large Payload (413)
+    huge_body = "x" * (1024 * 1024 + 10)
+    status, headers, body = call_wsgi(
+        application, method="POST", path="/api/mcp", body=huge_body
+    )
+    assert status.startswith("413")
+
+    # MCP Empty body (400)
+    status, headers, body = call_wsgi(
+        application, method="POST", path="/api/mcp", body=""
+    )
+    assert status.startswith("400")
+
+    # MCP Missing name or method (400)
+    status, headers, body = call_wsgi(
+        application, method="POST", path="/api/mcp", body="{}"
+    )
+    assert status.startswith("400")
