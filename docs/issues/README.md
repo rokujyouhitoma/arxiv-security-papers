@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **053** | [Saga パターン（補償トランザクション・オーケストレーション型 Saga）の実装](closed/053-implement-saga-orchestration-and-compensation.md) | Feature | 2026-08-20 | [053-implement-saga-orchestration-and-compensation.md](closed/053-implement-saga-orchestration-and-compensation.md) |
 | **052** | [分散 2相コミット（Distributed 2PC）& 分散デッドロック検知の実装](closed/052-implement-distributed-2pc-and-deadlock-detector.md) | Feature | 2026-08-20 | [052-implement-distributed-2pc-and-deadlock-detector.md](closed/052-implement-distributed-2pc-and-deadlock-detector.md) |
 | **051** | [Raft SMR（ステートマシンレプリケーション）合意アルゴリズムの実装](closed/051-implement-raft-consensus-and-smr.md) | Feature | 2026-08-20 | [051-implement-raft-consensus-and-smr.md](closed/051-implement-raft-consensus-and-smr.md) |
 | **050** | [Merkle Tree（ハッシュツリー差分同期）& CRDT（無衝突レプリケーションデータ型）アンチエントロピー同期の実装](closed/050-implement-merkle-tree-and-crdt-anti-entropy.md) | Feature | 2026-08-20 | [050-implement-merkle-tree-and-crdt-anti-entropy.md](closed/050-implement-merkle-tree-and-crdt-anti-entropy.md) |

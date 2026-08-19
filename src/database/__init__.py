@@ -40,6 +40,9 @@ from .distributed import (
     RaftRole,
     RequestVoteArgs,
     RequestVoteReply,
+    SagaOrchestrator,
+    SagaStatus,
+    SagaStep,
     TwoPCCoordinator,
     TwoPCParticipant,
     TwoPCState,
@@ -47,6 +50,7 @@ from .distributed import (
     VectorClock,
     VersionedValue,
     VoteType,
+    build_paper_pipeline_saga,
     prune_dominated_versions,
     resolve_conflict,
 )
@@ -307,6 +311,11 @@ __all__ = [
     "TwoPCParticipant",
     "TwoPCCoordinator",
     "DistributedDeadlockDetector",
+    # Saga Orchestration & Compensation
+    "SagaStatus",
+    "SagaStep",
+    "SagaOrchestrator",
+    "build_paper_pipeline_saga",
     # VDBE (Core Virtual Machine)
     "VDBE",
     "VDBEProgram",
