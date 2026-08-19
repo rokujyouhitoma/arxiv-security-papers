@@ -1,14 +1,37 @@
 #!/usr/bin/env python3
 """
 Catalog Statistics Engine for Cost-Based Query Optimization.
-Tracks row count, column distinct values (NDV), min/max ranges, and predicate selectivity.
+Tracks row count, column distinct values (NDV via HyperLogLog),
+min/max ranges, and predicate selectivity via Equi-Depth Histograms.
 """
 
 from typing import Any, Dict, List, Optional, Set
 
+from .histogram import EquiDepthHistogram
+from .hll import HyperLogLog
+
+
+def _estimate_op_selectivity(
+    op: str,
+    value: Any,
+    distinct_count: int,
+) -> float:
+    """Estimates fallback selectivity when histogram is absent."""
+    if op in ("=", "=="):
+        return max(0.001, min(1.0, 1.0 / distinct_count)) if distinct_count > 0 else 0.1
+    if op in (">", ">=", "<", "<="):
+        return 0.33
+    if op.upper() in ("LIKE", "CONTAINS"):
+        return 0.20
+    if op.upper() == "IN":
+        if isinstance(value, (list, tuple, set)) and distinct_count > 0:
+            return min(1.0, len(value) / max(1, distinct_count))
+        return 0.25
+    return 0.50
+
 
 class ColumnStats:
-    """Statistics for a single table column."""
+    """Statistics for a single table column with Equi-Depth Histogram and HLL."""
 
     def __init__(self, column_name: str) -> None:
         self.column_name = column_name
@@ -17,15 +40,27 @@ class ColumnStats:
         self.null_count: int = 0
         self.min_value: Optional[Any] = None
         self.max_value: Optional[Any] = None
+        self.histogram: Optional[EquiDepthHistogram] = None
+        self.hll: Optional[HyperLogLog] = None
 
     def update(self, values: List[Any]) -> None:
         """Updates statistics from a list of values."""
         self.total_count = len(values)
         non_nulls = [v for v in values if v is not None]
         self.null_count = self.total_count - len(non_nulls)
-        distinct: Set[Any] = set(non_nulls)
-        self.distinct_count = len(distinct)
 
+        # 1. HyperLogLog estimation
+        self.hll = HyperLogLog(p=8)
+        for v in non_nulls:
+            self.hll.add(v)
+        self.distinct_count = self.hll.estimate_cardinality()
+
+        # Fallback if small
+        distinct: Set[Any] = set(non_nulls)
+        if len(distinct) < 16:
+            self.distinct_count = len(distinct)
+
+        # 2. Min / Max
         if non_nulls:
             try:
                 self.min_value = min(non_nulls)
@@ -34,28 +69,21 @@ class ColumnStats:
                 self.min_value = None
                 self.max_value = None
 
+        # 3. Equi-Depth Histogram
+        if non_nulls:
+            self.histogram = EquiDepthHistogram(num_buckets=10)
+            self.histogram.build(non_nulls)
+
     def estimate_selectivity(self, op: str, value: Any) -> float:
         """Estimates selectivity (fraction of rows matching, 0.0 to 1.0)."""
         if self.total_count == 0:
             return 1.0
 
-        if op in ("=", "=="):
-            if self.distinct_count > 0:
-                return max(0.001, min(1.0, 1.0 / self.distinct_count))
-            return 0.1
+        if self.histogram and len(self.histogram.buckets) > 0:
+            if op in ("=", "==", "<", "<=", ">", ">="):
+                return self.histogram.estimate_selectivity(op, value)
 
-        if op in (">", ">=", "<", "<="):
-            return 0.33
-
-        if op.upper() in ("LIKE", "CONTAINS"):
-            return 0.20
-
-        if op.upper() == "IN":
-            if isinstance(value, (list, tuple, set)) and self.distinct_count > 0:
-                return min(1.0, len(value) / max(1, self.distinct_count))
-            return 0.25
-
-        return 0.50
+        return _estimate_op_selectivity(op, value, self.distinct_count)
 
 
 class TableStats:

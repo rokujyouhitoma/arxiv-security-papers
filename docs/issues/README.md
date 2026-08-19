@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **045** | [CBO 統計ヒストグラム（Equi-Depth / HyperLogLog）& 動的計画法結合順序探索（DP Join Enumeration）の実装](closed/045-implement-cbo-histograms-and-dp-join-enumeration.md) | Feature | 2026-08-20 | [045-implement-cbo-histograms-and-dp-join-enumeration.md](closed/045-implement-cbo-histograms-and-dp-join-enumeration.md) |
 | **044** | [PAX（Partition Attributes Across）ハイブリッド列指向フォーマット & 高速集計スキャナの実装](closed/044-implement-pax-columnar-storage-and-analytics-scanner.md) | Feature | 2026-08-20 | [044-implement-pax-columnar-storage-and-analytics-scanner.md](closed/044-implement-pax-columnar-storage-and-analytics-scanner.md) |
 | **043** | [CoW (Copy-on-Write) B-Tree & mmap ゼロコピーリードエンジンの実装](closed/043-implement-cow-btree-and-mmap-zero-copy.md) | Feature | 2026-08-20 | [043-implement-cow-btree-and-mmap-zero-copy.md](closed/043-implement-cow-btree-and-mmap-zero-copy.md) |
 | **042** | [LSM-Tree ストレージエンジン（MemTable, SSTable, Sparse Index, Bloom Filter）の実装](closed/042-implement-lsm-tree-storage-engine-and-bloom-filter.md) | Feature | 2026-08-20 | [042-implement-lsm-tree-storage-engine-and-bloom-filter.md](closed/042-implement-lsm-tree-storage-engine-and-bloom-filter.md) |
