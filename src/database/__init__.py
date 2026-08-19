@@ -13,6 +13,13 @@ from .client import VectorDBClient
 from .codegen import CodeGenerator
 from .compiler import SQLCompiler
 from .cow import CoWBTree, CoWEngine, CoWNode, CoWReadTx, CoWWriteTx, MetaPage, MMapFile
+from .distributed import (
+    ConflictResolutionStrategy,
+    VectorClock,
+    VersionedValue,
+    prune_dominated_versions,
+    resolve_conflict,
+)
 from .driver import Connection, Cursor, DatabaseError, connect
 from .embedding import DeterministicEmbedding
 from .engine import (
@@ -232,6 +239,12 @@ __all__ = [
     "VectorizedFilter",
     "VectorizedProjection",
     "VectorizedAggregation",
+    # Distributed Coordination and Causality
+    "VectorClock",
+    "VersionedValue",
+    "ConflictResolutionStrategy",
+    "resolve_conflict",
+    "prune_dominated_versions",
     # VDBE (Core Virtual Machine)
     "VDBE",
     "VDBEProgram",
