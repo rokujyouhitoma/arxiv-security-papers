@@ -30,13 +30,13 @@ def test_cwe_recipes_and_definitions():
 
 
 def test_extract_mitre_techniques():
-    sample_text = (
-        "We analyzed remote code execution and exploit public-facing application vulnerabilities in IoT devices."
-    )
+    sample_text = "We analyzed remote code execution and exploit public-facing application vulnerabilities in IoT devices."
     techniques = extract_mitre_techniques(sample_text)
     assert "T1190" in techniques
 
-    phishing_text = "Spearphishing and social engineering attacks targeting enterprise users."
+    phishing_text = (
+        "Spearphishing and social engineering attacks targeting enterprise users."
+    )
     phishing_techs = extract_mitre_techniques(phishing_text)
     assert "T1566" in phishing_techs
 

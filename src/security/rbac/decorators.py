@@ -16,7 +16,9 @@ def require_role(min_role: Union[str, Role]) -> Callable:
     Role hierarchy: admin > analyst > guest
     """
     hierarchy = {"admin": 3, "analyst": 2, "guest": 1}
-    target_role_str = min_role.value if isinstance(min_role, Role) else str(min_role).lower()
+    target_role_str = (
+        min_role.value if isinstance(min_role, Role) else str(min_role).lower()
+    )
     target_level = hierarchy.get(target_role_str, 1)
 
     def decorator(func: Callable) -> Callable:
@@ -52,7 +54,9 @@ def require_permission(resource_name: str, permission: str) -> Callable:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             ctx = kwargs.get("security_context")
             controller = get_access_controller()
-            caller = ctx if isinstance(ctx, SecurityContext) else controller.current_role
+            caller = (
+                ctx if isinstance(ctx, SecurityContext) else controller.current_role
+            )
             controller.enforce_permission(caller, resource_name, permission)
             return func(*args, **kwargs)
 

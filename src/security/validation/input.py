@@ -9,13 +9,22 @@ import re
 from typing import List, Tuple
 
 DANGEROUS_COMMAND_PATTERNS: List[Tuple[str, str]] = [
-    (r"(?i)\b(rm\s+-rf|chmod\s+777|wget\s+http|curl\s+http.*\|\s*sh)\b", "Dangerous Shell Command"),
+    (
+        r"(?i)\b(rm\s+-rf|chmod\s+777|wget\s+http|curl\s+http.*\|\s*sh)\b",
+        "Dangerous Shell Command",
+    ),
     (r"(?i)\b(nc\s+-e|/bin/sh|/bin/bash)\b", "Reverse Shell Pattern"),
-    (r"(?i)\b(eval\(|exec\(|__import__\(|getattr\(.*system)\b", "Dynamic Code Execution"),
+    (
+        r"(?i)\b(eval\(|exec\(|__import__\(|getattr\(.*system)\b",
+        "Dynamic Code Execution",
+    ),
 ]
 
 SQLI_PATTERNS: List[Tuple[str, str]] = [
-    (r"(?i)(\bUNION\b\s+\bSELECT\b|'\s+OR\s+'1'='1|--\s*$|/\*.*\*/)", "SQL Injection Pattern"),
+    (
+        r"(?i)(\bUNION\b\s+\bSELECT\b|'\s+OR\s+'1'='1|--\s*$|/\*.*\*/)",
+        "SQL Injection Pattern",
+    ),
 ]
 
 XSS_PATTERNS: List[Tuple[str, str]] = [

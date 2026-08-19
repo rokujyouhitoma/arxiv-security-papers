@@ -41,7 +41,9 @@ def is_safe_workspace_path(
     try:
         ws = workspace_dir or get_default_workspace_dir()
         ws_real = os.path.realpath(ws)
-        target_path = file_path if os.path.isabs(file_path) else os.path.join(ws_real, file_path)
+        target_path = (
+            file_path if os.path.isabs(file_path) else os.path.join(ws_real, file_path)
+        )
         real_path = os.path.realpath(target_path)
 
         common = os.path.commonpath([ws_real, real_path])

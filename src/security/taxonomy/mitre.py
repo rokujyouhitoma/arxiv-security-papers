@@ -10,22 +10,45 @@ MITRE_TECHNIQUES_MAP: Dict[str, Dict[str, Any]] = {
     "T1059": {
         "name": "Command and Scripting Interpreter",
         "tactic": "Execution",
-        "keywords": ["command execution", "code injection", "scripting", "powershell", "python interpreter"],
+        "keywords": [
+            "command execution",
+            "code injection",
+            "scripting",
+            "powershell",
+            "python interpreter",
+        ],
     },
     "T1078": {
         "name": "Valid Accounts",
         "tactic": "Defense Evasion / Initial Access",
-        "keywords": ["valid accounts", "credential stuffing", "impersonation", "stolen credentials"],
+        "keywords": [
+            "valid accounts",
+            "credential stuffing",
+            "impersonation",
+            "stolen credentials",
+        ],
     },
     "T1190": {
         "name": "Exploit Public-Facing Application",
         "tactic": "Initial Access",
-        "keywords": ["exploit public-facing application", "vulnerability", "remote code execution", "rce", "cve"],
+        "keywords": [
+            "exploit public-facing application",
+            "vulnerability",
+            "remote code execution",
+            "rce",
+            "cve",
+        ],
     },
     "T1499": {
         "name": "Endpoint Denial of Service",
         "tactic": "Impact",
-        "keywords": ["denial of service", "flooding", "ddos", "resource exhaustion", "algorithmic complexity"],
+        "keywords": [
+            "denial of service",
+            "flooding",
+            "ddos",
+            "resource exhaustion",
+            "algorithmic complexity",
+        ],
     },
     "T1566": {
         "name": "Phishing",
@@ -35,7 +58,13 @@ MITRE_TECHNIQUES_MAP: Dict[str, Dict[str, Any]] = {
     "T1574": {
         "name": "Hijack Execution Flow",
         "tactic": "Persistence / Privilege Escalation",
-        "keywords": ["hijacking", "dll sideloading", "backdoor", "path traversal", "library injection"],
+        "keywords": [
+            "hijacking",
+            "dll sideloading",
+            "backdoor",
+            "path traversal",
+            "library injection",
+        ],
     },
     "T1587": {
         "name": "Develop Capabilities",
