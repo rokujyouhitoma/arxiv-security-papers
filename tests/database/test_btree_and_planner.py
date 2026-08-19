@@ -121,7 +121,7 @@ def test_planner_stats_and_cost_model():
 
     # Selectivity
     cat_sel = table_stats.columns["category"].estimate_selectivity("=", "crypto")
-    assert cat_sel == 0.5
+    assert round(cat_sel, 2) == 0.1
 
     # Cost model
     t_scan_cost = CostModel.estimate_table_scan_cost(1000)

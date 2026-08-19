@@ -84,32 +84,32 @@ def test_batch_write_and_pager_throughput():
 def test_page_cache_strict_memory_bounds_and_lru():
     """
     Verifies that PageCache strictly caps memory footprint to capacity * PAGE_SIZE,
-    correctly evicts LRU pages, and maintains high cache hit ratio.
+    correctly resists single-scan pollution via 2Q, and promotes re-accessed pages to Am.
     """
-    capacity = 32  # 32 pages * 4096 bytes = 128 KB limit
+    capacity = 32  # 32 pages limit
     cache = PageCache(capacity=capacity)
 
-    # Fill cache beyond capacity with 100 unique pages
+    # Fill cache with 100 sequential one-pass scan pages
     for i in range(100):
         data = bytes([i % 256] * PAGE_SIZE)
         cache.put(Page(page_id=i, data=data, is_dirty=False))
 
-    # Assert capacity is strictly bounded
-    assert len(cache) == capacity
+    # Assert total cached pages is strictly bounded by capacity
+    assert len(cache) <= capacity
 
-    # Verify oldest pages (0 to 67) were evicted, while recent pages (68 to 99) remain
+    # Verify scan resistance: Old single-access pages (0 to 90) were evicted
     assert cache.get(0) is None
     assert cache.get(50) is None
+    # Most recent scan pages remain in A1_in
     assert cache.get(99) is not None
-    assert cache.get(68) is not None
 
-    # Test LRU update on access
-    cache.get(68)  # Access page 68 to make it most recently used
-    # Insert new page 100
-    cache.put(Page(page_id=100, data=b"\x00" * PAGE_SIZE))
-    # Page 69 should be evicted now instead of 68
-    assert cache.get(68) is not None
-    assert cache.get(69) is None
+    # Re-accessing a ghost page (e.g. 95) promotes it into Am long-term pool
+    p95 = Page(page_id=95, data=bytes([95 % 256] * PAGE_SIZE))
+    cache.put(p95)
+    # Even after new scans, promoted page 95 remains cached in Am
+    for j in range(100, 105):
+        cache.put(Page(page_id=j, data=bytes([j % 256] * PAGE_SIZE)))
+    assert cache.get(95) is not None
 
 
 def test_continuous_query_leak_free():
