@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当ブランチ / ファイル |
 | :---: | --- | :---: | :---: | :---: | --- |
-| **037** | [Makefile およびパイプラインにおける品質・テスト・ビルド基準の極限厳格化](037-enforce-strict-code-quality-and-test-standards.md) | Feature / Quality | High | New | `feat/037-enforce-strict-code-quality-and-test-standards` |
+| **037** | [Makefile およびパイプラインにおける品質・テスト・ビルド基準の極限厳格化](037-enforce-strict-code-quality-and-test-standards.md) | Feature / Quality | High | In Progress | `feat/037-enforce-strict-code-quality-and-test-standards` |
 | **033** | [`src/database/` の内部エンジン進化（B+Tree インデックスおよび Cost-Based Query Planner の分離・実装）](033-enhance-database-with-btree-index-and-cost-based-planner.md) | Feature | Medium | New | `feat/033-database-btree-and-query-planner` |
 | **034** | [Web サーバーの API Gateway 化と UI プレゼンテーション層の完全分離（`src/gateway/` / `src/presentation/`）](034-split-web-server-into-api-gateway-and-ui-presentation.md) | Feature / Arch | Low | New | `feat/034-split-gateway-and-presentation` |
 
