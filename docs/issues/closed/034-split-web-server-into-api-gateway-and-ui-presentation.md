@@ -2,7 +2,7 @@
 ID: 034
 種別: Feature / Architecture
 優先度: Low
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] Web サーバーの API Gateway 化と UI プレゼンテーション層の完全分離（`src/gateway/` / `src/presentation/`） (ID: 034)

@@ -11,14 +11,18 @@ Provides 5 modular packages matching the tests hierarchy:
 
 import database
 import fetcher
+import gateway
 import mcp
+import presentation
 import search
 import web
 
 __all__ = [
     "database",
     "fetcher",
+    "gateway",
     "mcp",
+    "presentation",
     "search",
     "web",
 ]
