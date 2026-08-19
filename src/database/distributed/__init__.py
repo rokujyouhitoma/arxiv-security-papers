@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Distributed Coordination, Consensus, and Anti-Entropy Subsystem.
+Distributed Coordination, Consensus, 2PC, and Anti-Entropy Subsystem.
 Exports VectorClock, VersionedValue, PhiAccrualDetector, GossipNode,
 QuorumCoordinator, HintedHandoffManager, MerkleTree, PNCounter, ORSet,
-AntiEntropySynchronizer, and Raft Consensus (RaftNode, RaftCluster).
+AntiEntropySynchronizer, Raft Consensus, and Distributed 2PC (TwoPCCoordinator,
+TwoPCParticipant, DistributedDeadlockDetector).
 """
 
 from .anti_entropy import AntiEntropySynchronizer
@@ -22,6 +23,15 @@ from .raft import (
     RaftRole,
     RequestVoteArgs,
     RequestVoteReply,
+)
+from .two_pc import (
+    DistributedDeadlockDetector,
+    GlobalDecision,
+    TwoPCCoordinator,
+    TwoPCParticipant,
+    TwoPCState,
+    TxRecord,
+    VoteType,
 )
 from .vector_clock import VectorClock
 from .version_vector import (
@@ -65,4 +75,12 @@ __all__ = [
     "AppendEntriesReply",
     "RaftNode",
     "RaftCluster",
+    # Distributed 2PC & Deadlock Detection
+    "TwoPCState",
+    "VoteType",
+    "GlobalDecision",
+    "TxRecord",
+    "TwoPCParticipant",
+    "TwoPCCoordinator",
+    "DistributedDeadlockDetector",
 ]

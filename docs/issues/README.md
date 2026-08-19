@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **052** | [分散 2相コミット（Distributed 2PC）& 分散デッドロック検知の実装](closed/052-implement-distributed-2pc-and-deadlock-detector.md) | Feature | 2026-08-20 | [052-implement-distributed-2pc-and-deadlock-detector.md](closed/052-implement-distributed-2pc-and-deadlock-detector.md) |
 | **051** | [Raft SMR（ステートマシンレプリケーション）合意アルゴリズムの実装](closed/051-implement-raft-consensus-and-smr.md) | Feature | 2026-08-20 | [051-implement-raft-consensus-and-smr.md](closed/051-implement-raft-consensus-and-smr.md) |
 | **050** | [Merkle Tree（ハッシュツリー差分同期）& CRDT（無衝突レプリケーションデータ型）アンチエントロピー同期の実装](closed/050-implement-merkle-tree-and-crdt-anti-entropy.md) | Feature | 2026-08-20 | [050-implement-merkle-tree-and-crdt-anti-entropy.md](closed/050-implement-merkle-tree-and-crdt-anti-entropy.md) |
 | **049** | [Quorum レプリケーション（$W + R > N$ 強整合性）& Read Repair（読み取り時自動修復）の実装](closed/049-implement-quorum-replication-and-read-repair.md) | Feature | 2026-08-20 | [049-implement-quorum-replication-and-read-repair.md](closed/049-implement-quorum-replication-and-read-repair.md) |
