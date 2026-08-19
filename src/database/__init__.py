@@ -25,6 +25,7 @@ from .planner import (
 )
 from .profiler import DatabaseProfiler, ProfileResult
 from .protocol import VectorDBProtocolError, VectorDBProtocolHandler
+from .recovery import ARIESRecoveryManager
 from .slotted_page import (
     DataType,
     OverflowManager,
@@ -67,6 +68,15 @@ from .vfs import (
     get_vfs,
     register_vfs,
 )
+from .wal import (
+    WAL_HEADER_SIZE,
+    WAL_MAGIC,
+    WAL_VERSION,
+    LogRecord,
+    LogRecordType,
+    WALReader,
+    WALWriter,
+)
 
 __all__ = [
     # Storage & Indexing
@@ -88,6 +98,15 @@ __all__ = [
     "PageCache",
     "Page",
     "PAGE_SIZE",
+    # Write-Ahead Logging & ARIES Recovery
+    "LogRecord",
+    "LogRecordType",
+    "WALWriter",
+    "WALReader",
+    "WAL_MAGIC",
+    "WAL_VERSION",
+    "WAL_HEADER_SIZE",
+    "ARIESRecoveryManager",
     # Slotted Page Binary Storage
     "SlottedPage",
     "TupleSerializer",
