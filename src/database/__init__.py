@@ -25,6 +25,16 @@ from .planner import (
 )
 from .profiler import DatabaseProfiler, ProfileResult
 from .protocol import VectorDBProtocolError, VectorDBProtocolHandler
+from .slotted_page import (
+    DataType,
+    OverflowManager,
+    PageCorruptionError,
+    PageFullError,
+    PageType,
+    SlottedPage,
+    SlottedPageError,
+    TupleSerializer,
+)
 from .sql import (
     AccessController,
     DCLPermissionDeniedError,
@@ -78,6 +88,15 @@ __all__ = [
     "PageCache",
     "Page",
     "PAGE_SIZE",
+    # Slotted Page Binary Storage
+    "SlottedPage",
+    "TupleSerializer",
+    "OverflowManager",
+    "PageType",
+    "DataType",
+    "SlottedPageError",
+    "PageCorruptionError",
+    "PageFullError",
     # B+Tree Engine
     "BPlusTree",
     "BTreeNode",

@@ -7,7 +7,7 @@ and Write-Ahead Logging (WAL) transaction boundaries.
 
 import threading
 from collections import OrderedDict
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from .vfs import get_vfs
 
@@ -27,6 +27,21 @@ class Page:
             else bytearray(PAGE_SIZE)
         )
         self.is_dirty = is_dirty
+
+    def to_slotted_page(self) -> Any:
+        """Converts this page into a structured SlottedPage instance."""
+        from .slotted_page import SlottedPage
+
+        return SlottedPage(raw_data=bytes(self.data))
+
+    @classmethod
+    def from_slotted_page(cls, slotted: Any) -> "Page":
+        """Creates a Page from a SlottedPage instance."""
+        return cls(
+            page_id=slotted.page_id,
+            data=slotted.serialize(),
+            is_dirty=True,
+        )
 
 
 class PageCache:
@@ -140,6 +155,17 @@ class Pager:
             evicted = self.cache.put(page)
             if evicted and evicted.is_dirty:
                 self._flush_page_to_disk(evicted)
+
+    def read_slotted_page(self, page_id: int) -> Any:
+        """Reads and constructs a SlottedPage instance by page_id."""
+        from .slotted_page import SlottedPage
+
+        raw = self.read_page(page_id)
+        return SlottedPage(raw_data=raw)
+
+    def write_slotted_page(self, slotted: Any) -> None:
+        """Serializes and writes a SlottedPage instance to cache and WAL."""
+        self.write_page(slotted.page_id, slotted.serialize())
 
     def begin(self) -> None:
         """Starts a WAL transaction."""
