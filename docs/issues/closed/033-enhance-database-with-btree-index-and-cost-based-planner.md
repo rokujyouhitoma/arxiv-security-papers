@@ -2,7 +2,7 @@
 ID: 033
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] `src/database/` の内部エンジン進化（B+Tree インデックスおよび Cost-Based Query Planner の分離・実装） (ID: 033)

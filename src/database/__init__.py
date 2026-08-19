@@ -7,6 +7,7 @@ deterministic embeddings, SQLite-inspired 4-tier modular architecture
 PEP 249 DB-API 2.0 driver, and 100% compatible Python standard `sqlite3` client interfaces.
 """
 
+from .btree import BPlusTree, BTreeNode, ScalarKey
 from .client import VectorDBClient
 from .codegen import CodeGenerator
 from .compiler import SQLCompiler
@@ -14,6 +15,14 @@ from .driver import Connection, Cursor, DatabaseError, connect
 from .embedding import DeterministicEmbedding
 from .index import HNSWIndex
 from .pager import PAGE_SIZE, Page, PageCache, Pager
+from .planner import (
+    ColumnStats,
+    CostModel,
+    ExecutionPlan,
+    PlanType,
+    QueryPlanner,
+    TableStats,
+)
 from .profiler import DatabaseProfiler, ProfileResult
 from .protocol import VectorDBProtocolError, VectorDBProtocolHandler
 from .sql import (
@@ -69,6 +78,17 @@ __all__ = [
     "PageCache",
     "Page",
     "PAGE_SIZE",
+    # B+Tree Engine
+    "BPlusTree",
+    "BTreeNode",
+    "ScalarKey",
+    # Cost-Based Query Planner
+    "QueryPlanner",
+    "ExecutionPlan",
+    "TableStats",
+    "ColumnStats",
+    "CostModel",
+    "PlanType",
     # VDBE (Core Virtual Machine)
     "VDBE",
     "VDBEProgram",
