@@ -53,13 +53,17 @@ class AccessController:
         self._grants["guest"]["*"].add("SELECT")
         self._grants["guest"]["*"].add("READ")
 
-    def grant(self, permission: str, resource_name: str, role: Union[str, Role]) -> None:
+    def grant(
+        self, permission: str, resource_name: str, role: Union[str, Role]
+    ) -> None:
         """Grants permission on resource_name to role."""
         role_str = role.value if isinstance(role, Role) else role.lower()
         perm = permission.upper()
         self._grants[role_str][resource_name].add(perm)
 
-    def revoke(self, permission: str, resource_name: str, role: Union[str, Role]) -> None:
+    def revoke(
+        self, permission: str, resource_name: str, role: Union[str, Role]
+    ) -> None:
         """Revokes permission on resource_name from role."""
         role_str = role.value if isinstance(role, Role) else role.lower()
         perm = permission.upper()
@@ -79,7 +83,10 @@ class AccessController:
         if isinstance(role_or_context, SecurityContext):
             role_str = role_or_context.role.value
             req = required_permission.upper()
-            if req in role_or_context.extra_permissions or "ALL" in role_or_context.extra_permissions:
+            if (
+                req in role_or_context.extra_permissions
+                or "ALL" in role_or_context.extra_permissions
+            ):
                 return True
         elif isinstance(role_or_context, Role):
             role_str = role_or_context.value
@@ -108,7 +115,9 @@ class AccessController:
         required_permission: str,
     ) -> None:
         """Raises DCLPermissionDeniedError if permission check fails."""
-        if not self.check_permission(role_or_context, resource_name, required_permission):
+        if not self.check_permission(
+            role_or_context, resource_name, required_permission
+        ):
             role_name = (
                 role_or_context.role.value
                 if isinstance(role_or_context, SecurityContext)

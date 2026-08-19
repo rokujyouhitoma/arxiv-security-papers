@@ -72,10 +72,22 @@ class ASTSecurityGuard:
         blocked_builtins: Optional[Set[str]] = None,
         blocked_dunders: Optional[Set[str]] = None,
     ):
-        self.blocked_modules = blocked_modules if blocked_modules is not None else set(BLOCKED_MODULES)
-        self.blocked_calls = blocked_calls if blocked_calls is not None else set(BLOCKED_CALLS)
-        self.blocked_builtins = blocked_builtins if blocked_builtins is not None else set(BLOCKED_BUILTIN_FUNCS)
-        self.blocked_dunders = blocked_dunders if blocked_dunders is not None else set(BLOCKED_DUNDER_NAMES)
+        self.blocked_modules = (
+            blocked_modules if blocked_modules is not None else set(BLOCKED_MODULES)
+        )
+        self.blocked_calls = (
+            blocked_calls if blocked_calls is not None else set(BLOCKED_CALLS)
+        )
+        self.blocked_builtins = (
+            blocked_builtins
+            if blocked_builtins is not None
+            else set(BLOCKED_BUILTIN_FUNCS)
+        )
+        self.blocked_dunders = (
+            blocked_dunders
+            if blocked_dunders is not None
+            else set(BLOCKED_DUNDER_NAMES)
+        )
 
     def validate(self, code_str: str) -> Optional[str]:
         """
@@ -95,12 +107,18 @@ class ASTSecurityGuard:
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     mod_root = alias.name.split(".")[0]
-                    if alias.name in self.blocked_modules or mod_root in self.blocked_modules:
+                    if (
+                        alias.name in self.blocked_modules
+                        or mod_root in self.blocked_modules
+                    ):
                         return f"Security Exception: Import of module '{alias.name}' is prohibited."
             elif isinstance(node, ast.ImportFrom):
                 if node.module:
                     mod_root = node.module.split(".")[0]
-                    if node.module in self.blocked_modules or mod_root in self.blocked_modules:
+                    if (
+                        node.module in self.blocked_modules
+                        or mod_root in self.blocked_modules
+                    ):
                         return f"Security Exception: Import from module '{node.module}' is prohibited."
 
             # 2. Block dangerous calls and reflection functions
@@ -118,12 +136,12 @@ class ASTSecurityGuard:
                     # 3. Block destructive open() modes
                     if node.func.id == "open" and len(node.args) >= 2:
                         mode_arg = node.args[1]
-                        if isinstance(mode_arg, ast.Constant) and isinstance(mode_arg.value, str):
+                        if isinstance(mode_arg, ast.Constant) and isinstance(
+                            mode_arg.value, str
+                        ):
                             mode_str = mode_arg.value
                             if any(c in mode_str for c in ("w", "a", "x", "+")):
-                                return (
-                                    f"Security Exception: File modification mode '{mode_str}' in open() is prohibited."
-                                )
+                                return f"Security Exception: File modification mode '{mode_str}' in open() is prohibited."
 
             # 4. Block access to dangerous dunder attributes
             elif isinstance(node, ast.Attribute):
@@ -131,7 +149,9 @@ class ASTSecurityGuard:
                     return f"Security Exception: Access to attribute '{node.attr}' is prohibited."
             elif isinstance(node, ast.Name):
                 if node.id in self.blocked_dunders:
-                    return f"Security Exception: Reference to '{node.id}' is prohibited."
+                    return (
+                        f"Security Exception: Reference to '{node.id}' is prohibited."
+                    )
 
         return None
 

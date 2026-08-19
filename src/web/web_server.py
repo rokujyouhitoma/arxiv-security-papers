@@ -28,8 +28,8 @@ from mcp.papers_server import (
     handle_get_prompt,
     handle_read_resource,
 )
-from security.validation import is_safe_workspace_path
 from search.vector_engine import VectorEngine
+from security.validation import is_safe_workspace_path
 
 
 def get_workspace_dir() -> str:

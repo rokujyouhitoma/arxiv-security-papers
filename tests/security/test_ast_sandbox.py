@@ -11,10 +11,7 @@ if "src" not in sys.path:
         0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
     )
 
-from security.sandbox import (
-    ASTSecurityGuard,
-    validate_safe_code,
-)
+from security.sandbox import ASTSecurityGuard, validate_safe_code
 
 
 def test_ast_guard_blocks_prohibited_modules():

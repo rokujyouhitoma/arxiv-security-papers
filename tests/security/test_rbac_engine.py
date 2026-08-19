@@ -5,6 +5,7 @@ Unit tests for Unified RBAC Engine and Access Control Decorators.
 
 import os
 import sys
+
 import pytest
 
 if "src" not in sys.path:
@@ -59,7 +60,9 @@ def test_enforce_permission_raises_error():
 
     with pytest.raises(DCLPermissionDeniedError) as exc_info:
         ctrl.enforce_permission("guest", "papers", "DELETE")
-    assert "Permission denied: role 'guest' does not have 'DELETE'" in str(exc_info.value)
+    assert "Permission denied: role 'guest' does not have 'DELETE'" in str(
+        exc_info.value
+    )
 
 
 def test_security_context_evaluation():
