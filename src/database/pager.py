@@ -247,7 +247,14 @@ class Pager:
     def page_count(self) -> int:
         with self._lock:
             total_bytes = self.file.file_size()
-            return (total_bytes + PAGE_SIZE - 1) // PAGE_SIZE
+            disk_pages = (
+                (total_bytes + PAGE_SIZE - 1) // PAGE_SIZE if total_bytes > 0 else 0
+            )
+            cached_pages = 0
+            all_cached = self.cache.get_all_pages()
+            if all_cached:
+                cached_pages = max(p.page_id for p in all_cached) + 1
+            return max(disk_pages, cached_pages)
 
     def read_page(self, page_id: int) -> bytearray:
         """Reads page from LRU Cache or Disk VFS."""

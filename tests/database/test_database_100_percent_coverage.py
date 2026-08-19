@@ -171,12 +171,12 @@ def test_pager_and_page_cache_edge_cases() -> None:
     assert ev3 is not None
     assert ev3.page_id == 1
 
-    # Access page 2 and put page 4 -> should evict page 3
+    # Access page 2 and put page 4 -> should evict page 2 from A1in FIFO
     _ = cache.get(2)
     p4 = Page(4, b"page4")
     ev4 = cache.put(p4)
     assert ev4 is not None
-    assert ev4.page_id == 3
+    assert ev4.page_id == 2
 
     # Test cache remove
     assert cache.remove(4) is not None
