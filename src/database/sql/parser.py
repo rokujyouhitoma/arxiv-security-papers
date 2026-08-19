@@ -38,46 +38,49 @@ class SQLParser:
     Parses SQL string queries into structured SQLStatement AST nodes.
     """
 
-    def parse(self, sql_query: str) -> SQLStatement:
-        sql = sql_query.strip().rstrip(";")
-        if not sql:
-            raise SQLParseError("Empty SQL query")
-
-        upper_sql = sql.upper()
-
-        # TCL
+    def _parse_tcl(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if re.match(r"^BEGIN(\s+TRANSACTION)?$", upper_sql):
             return BeginStatement(command_type=SQLCommandType.BEGIN, raw_sql=sql)
         if re.match(r"^COMMIT$", upper_sql):
             return CommitStatement(command_type=SQLCommandType.COMMIT, raw_sql=sql)
         if re.match(r"^ROLLBACK$", upper_sql):
             return RollbackStatement(command_type=SQLCommandType.ROLLBACK, raw_sql=sql)
+        return None
 
-        # DDL
+    def _parse_ddl_dml(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("CREATE TABLE"):
             return self._parse_create_table(sql)
         if upper_sql.startswith("DROP TABLE"):
             return self._parse_drop_table(sql)
         if upper_sql.startswith("CREATE INDEX"):
             return self._parse_create_index(sql)
-
-        # DQL
         if upper_sql.startswith("SELECT"):
             return self._parse_select(sql)
-
-        # DML
         if upper_sql.startswith("INSERT INTO"):
             return self._parse_insert(sql)
         if upper_sql.startswith("UPDATE"):
             return self._parse_update(sql)
         if upper_sql.startswith("DELETE FROM"):
             return self._parse_delete(sql)
-
-        # DCL
         if upper_sql.startswith("GRANT"):
             return self._parse_grant(sql)
         if upper_sql.startswith("REVOKE"):
             return self._parse_revoke(sql)
+        return None
+
+    def parse(self, sql_query: str) -> SQLStatement:
+        sql = sql_query.strip().rstrip(";")
+        if not sql:
+            raise SQLParseError("Empty SQL query")
+
+        upper_sql = sql.upper()
+        tcl_stmt = self._parse_tcl(upper_sql, sql)
+        if tcl_stmt is not None:
+            return tcl_stmt
+
+        stmt = self._parse_ddl_dml(upper_sql, sql)
+        if stmt is not None:
+            return stmt
 
         raise SQLParseError(f"Unsupported or unrecognized SQL statement: '{sql}'")
 

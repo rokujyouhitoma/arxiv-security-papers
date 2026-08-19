@@ -6,16 +6,10 @@ Extracts domain tags, MITRE ATT&CK technique IDs, and STRIDE categories from pap
 
 from typing import Any, Dict, List
 
-
-def classify_domain(paper: Dict[str, Any]) -> str:
-    """Classifies paper into primary security domain."""
-    text = (
-        f"{paper.get('title', '')} {paper.get('summary', '')} {' '.join(paper.get('categories', []))}"
-    ).lower()
-
-    if any(
-        k in text
-        for k in [
+DOMAIN_KEYWORDS: List[tuple[str, List[str]]] = [
+    (
+        "AI/ML Security",
+        [
             "llm",
             "prompt injection",
             "agent",
@@ -23,12 +17,11 @@ def classify_domain(paper: Dict[str, Any]) -> str:
             "rag",
             "adversarial attack",
             "machine learning",
-        ]
-    ):
-        return "AI/ML Security"
-    if any(
-        k in text
-        for k in [
+        ],
+    ),
+    (
+        "Cryptography",
+        [
             "cryptography",
             "encryption",
             "zero-knowledge",
@@ -36,26 +29,15 @@ def classify_domain(paper: Dict[str, Any]) -> str:
             "signature",
             "rsa",
             "ecc",
-        ]
-    ):
-        return "Cryptography"
-    if any(
-        k in text
-        for k in [
-            "network",
-            "quic",
-            "darknet",
-            "traffic",
-            "routing",
-            "ddos",
-            "dns",
-            "firewall",
-        ]
-    ):
-        return "Network Security"
-    if any(
-        k in text
-        for k in [
+        ],
+    ),
+    (
+        "Network Security",
+        ["network", "quic", "darknet", "traffic", "routing", "ddos", "dns", "firewall"],
+    ),
+    (
+        "Software Security",
+        [
             "malware",
             "fuzzing",
             "vulnerability",
@@ -63,24 +45,22 @@ def classify_domain(paper: Dict[str, Any]) -> str:
             "smart contract",
             "exploit",
             "binary",
-        ]
-    ):
-        return "Software Security"
-    if any(
-        k in text
-        for k in [
+        ],
+    ),
+    (
+        "Privacy & Provenance",
+        [
             "privacy",
             "anonymity",
             "differential privacy",
             "watermark",
             "provenance",
             "leakage",
-        ]
-    ):
-        return "Privacy & Provenance"
-    if any(
-        k in text
-        for k in [
+        ],
+    ),
+    (
+        "IoT & Hardware Security",
+        [
             "iot",
             "vehicle",
             "autonomous",
@@ -88,9 +68,20 @@ def classify_domain(paper: Dict[str, Any]) -> str:
             "embedded",
             "firmware",
             "arm cca",
-        ]
-    ):
-        return "IoT & Hardware Security"
+        ],
+    ),
+]
+
+
+def classify_domain(paper: Dict[str, Any]) -> str:
+    """Classifies paper into primary security domain."""
+    text = (
+        f"{paper.get('title', '')} {paper.get('summary', '')} {' '.join(paper.get('categories', []))}"
+    ).lower()
+
+    for domain, keywords in DOMAIN_KEYWORDS:
+        if any(k in text for k in keywords):
+            return domain
 
     return "General Cyber Security"
 

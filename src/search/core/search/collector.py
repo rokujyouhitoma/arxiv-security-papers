@@ -24,6 +24,10 @@ class TopDocs:
         self.total_hits = total_hits
         self.score_docs = score_docs
 
+    @property
+    def max_score(self) -> float:
+        return self.score_docs[0].score if self.score_docs else 0.0
+
 
 class TopDocsCollector:
     """Collects and ranks top-k scored documents."""

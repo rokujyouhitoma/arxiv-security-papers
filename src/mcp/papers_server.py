@@ -9,7 +9,7 @@ import json
 import os
 import sys
 import time
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from mcp.base import log_mcp_performance
 from security.validation import is_safe_workspace_path
@@ -293,7 +293,7 @@ PROMPTS_MANIFEST = [
 ]
 
 
-def handle_search_security_papers(args):
+def handle_search_security_papers(args: Dict[str, Any]) -> Dict[str, Any]:
     query = args.get("query", "")
     top_k = args.get("top_k", 5)
     category = args.get("category")
@@ -326,7 +326,7 @@ def handle_search_security_papers(args):
     }
 
 
-def handle_search_papers_hybrid(args):
+def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
     query = args.get("query", "")
     top_k = args.get("top_k", 10)
     category = args.get("category")
@@ -355,7 +355,7 @@ def handle_search_papers_hybrid(args):
     }
 
 
-def handle_query_knowledge_graph(args):
+def handle_query_knowledge_graph(args: Dict[str, Any]) -> Dict[str, Any]:
     entity = args.get("entity", "")
     max_depth = args.get("max_depth", 2)
     graph_res = get_vector_engine().knowledge_graph.get_neighbors(
@@ -367,7 +367,7 @@ def handle_query_knowledge_graph(args):
     }
 
 
-def handle_get_paper_summary(args):
+def handle_get_paper_summary(args: Dict[str, Any]) -> Dict[str, Any]:
     arxiv_id = args.get("arxiv_id", "").strip().replace("/", "_").replace("..", "")
     clean_id = arxiv_id
     okf_root = os.path.join(WORKSPACE_DIR, "outputs", "okf_papers")
@@ -397,7 +397,7 @@ def handle_get_paper_summary(args):
     }
 
 
-def handle_get_latest_trends(args):
+def handle_get_latest_trends(args: Dict[str, Any]) -> Dict[str, Any]:
     period = args.get("period", "monthly")
     summary_dir = os.path.join(
         WORKSPACE_DIR,
@@ -441,7 +441,7 @@ def handle_get_latest_trends(args):
     }
 
 
-def handle_query_attack_technique(args):
+def handle_query_attack_technique(args: Dict[str, Any]) -> Dict[str, Any]:
     technique_id = args.get("technique_id", "").lower()
     results = get_vector_engine().search(technique_id, top_k=10)
     return {
@@ -452,7 +452,7 @@ def handle_query_attack_technique(args):
     }
 
 
-def handle_get_related_papers_graph(args):
+def handle_get_related_papers_graph(args: Dict[str, Any]) -> Dict[str, Any]:
     arxiv_id = args.get("arxiv_id", "").strip().replace("/", "_").replace("..", "")
     return get_vector_engine().get_related_papers(arxiv_id)
 
@@ -585,25 +585,12 @@ CWE_MITIGATION_DATABASE = {
 }
 
 
-def handle_verify_code_security(args):
-    code = args.get("code_snippet", "")
-    language = args.get("language", "python").lower()
-
-    if len(code) > 65536:
-        return {
-            "status": "error",
-            "message": "Payload too large: code_snippet exceeds maximum limit of 64KB (CWE-400 mitigation).",
-        }
-
-    warnings = []
-    matched_cwes = []
-    suggested_mitigations = []
-
-    code_lower = code.lower()
+def _match_cwe_warnings(code_lower: str) -> tuple[List[Dict[str, Any]], List[str]]:
+    warnings: List[Dict[str, Any]] = []
+    suggested_mitigations: List[str] = []
     for cwe_id, data in CWE_MITIGATION_DATABASE.items():
         hits = [kw for kw in data["keywords"] if kw in code_lower]
         if hits:
-            matched_cwes.append(cwe_id)
             warnings.append(
                 {
                     "cwe_id": cwe_id,
@@ -614,11 +601,22 @@ def handle_verify_code_security(args):
                 }
             )
             suggested_mitigations.extend(data["secure_patterns"])
+    return warnings, suggested_mitigations
 
-    # Search relevant academic security papers using code keywords
+
+def handle_verify_code_security(args: Dict[str, Any]) -> Dict[str, Any]:
+    code = args.get("code_snippet", "")
+    language = args.get("language", "python").lower()
+
+    if len(code) > 65536:
+        return {
+            "status": "error",
+            "message": "Payload too large: code_snippet exceeds maximum limit of 64KB (CWE-400 mitigation).",
+        }
+
+    warnings, suggested_mitigations = _match_cwe_warnings(code.lower())
     query_terms = " ".join([w["name"] for w in warnings]) if warnings else code[:100]
     relevant_papers = get_vector_engine().search(query_terms, top_k=3)
-
     risk_level = (
         "HIGH"
         if any(w["risk"] == "HIGH" for w in warnings)
@@ -644,7 +642,7 @@ def handle_verify_code_security(args):
     }
 
 
-def handle_get_cwe_mitigation_recipe(args):
+def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
     cwe_id = args.get("cwe_id", "").strip().upper()
     if not cwe_id.startswith("CWE-"):
         cwe_id = f"CWE-{cwe_id}"
@@ -685,7 +683,7 @@ def handle_get_cwe_mitigation_recipe(args):
     }
 
 
-def handle_read_resource(uri):
+def handle_read_resource(uri: str) -> Dict[str, Any]:
     """Handles MCP resources/read for arxiv:// URIs"""
     if uri.startswith("arxiv://paper/"):
         arxiv_id = uri.replace("arxiv://paper/", "").strip()
@@ -716,7 +714,7 @@ def handle_read_resource(uri):
         return {"status": "error", "message": f"Unknown resource URI: '{uri}'"}
 
 
-def handle_get_prompt(name, arguments):
+def handle_get_prompt(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Handles MCP prompts/get"""
     if name == "audit_code_with_papers":
         code = arguments.get("code", "")
@@ -773,7 +771,7 @@ def handle_get_prompt(name, arguments):
         return {"status": "error", "message": f"Unknown prompt: '{name}'"}
 
 
-def dispatch_tool(name, arguments):
+def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     if name == "search_security_papers":
         return handle_search_security_papers(arguments)
     elif name == "search_papers_hybrid":
@@ -796,7 +794,160 @@ def dispatch_tool(name, arguments):
         return {"status": "error", "message": f"Unknown tool: '{name}'"}
 
 
-def run_jsonrpc_server():
+def _dispatch_papers_tool_call(req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    tool_name = params.get("name", "")
+    tool_args = params.get("arguments", {})
+    t0 = time.perf_counter()
+    output = dispatch_tool(tool_name, tool_args)
+    exec_ms = (time.perf_counter() - t0) * 1000.0
+    status = (
+        "error"
+        if isinstance(output, dict) and output.get("status") == "error"
+        else "success"
+    )
+    metrics: Dict[str, Any] = {}
+    if isinstance(output, dict):
+        if "count" in output:
+            metrics["hits"] = output["count"]
+        elif "results" in output and isinstance(output["results"], list):
+            metrics["hits"] = len(output["results"])
+        elif "papers" in output and isinstance(output["papers"], list):
+            metrics["hits"] = len(output["papers"])
+
+    log_mcp_performance(
+        server_name="arxiv-security-papers",
+        method="tools/call",
+        name=tool_name,
+        execution_ms=exec_ms,
+        status=status,
+        args_summary=tool_args,
+        metrics=metrics,
+    )
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(output, ensure_ascii=False, indent=2),
+                }
+            ]
+        },
+    }
+
+
+def _dispatch_papers_resource_read(
+    req_id: Any, params: Dict[str, Any]
+) -> Dict[str, Any]:
+    uri = params.get("uri", "")
+    t0 = time.perf_counter()
+    output = handle_read_resource(uri)
+    exec_ms = (time.perf_counter() - t0) * 1000.0
+
+    if output.get("status") == "error":
+        log_mcp_performance(
+            server_name="arxiv-security-papers",
+            method="resources/read",
+            name=uri,
+            execution_ms=exec_ms,
+            status="error",
+            error_message=output.get("message"),
+        )
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {
+                "code": -32602,
+                "message": output.get("message", "Resource error"),
+            },
+        }
+
+    log_mcp_performance(
+        server_name="arxiv-security-papers",
+        method="resources/read",
+        name=uri,
+        execution_ms=exec_ms,
+        status="success",
+    )
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": {
+            "contents": [
+                {
+                    "uri": output.get("uri"),
+                    "mimeType": output.get("mimeType"),
+                    "text": output.get("text"),
+                }
+            ]
+        },
+    }
+
+
+def _dispatch_papers_prompt_get(req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    prompt_name = params.get("name", "")
+    prompt_args = params.get("arguments", {})
+    t0 = time.perf_counter()
+    output = handle_get_prompt(prompt_name, prompt_args)
+    exec_ms = (time.perf_counter() - t0) * 1000.0
+
+    if output.get("status") == "error":
+        log_mcp_performance(
+            server_name="arxiv-security-papers",
+            method="prompts/get",
+            name=prompt_name,
+            execution_ms=exec_ms,
+            status="error",
+            args_summary=prompt_args,
+            error_message=output.get("message"),
+        )
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {"code": -32602, "message": output.get("message", "Prompt error")},
+        }
+
+    log_mcp_performance(
+        server_name="arxiv-security-papers",
+        method="prompts/get",
+        name=prompt_name,
+        execution_ms=exec_ms,
+        status="success",
+        args_summary=prompt_args,
+    )
+    return {"jsonrpc": "2.0", "id": req_id, "result": output}
+
+
+def _dispatch_papers_rpc(req: Dict[str, Any]) -> Dict[str, Any]:
+    req_id = req.get("id")
+    method = req.get("method")
+    params = req.get("params", {})
+
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}}
+    if method == "tools/call":
+        return _dispatch_papers_tool_call(req_id, params)
+    if method == "resources/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {"resources": RESOURCES_MANIFEST},
+        }
+    if method == "resources/read":
+        return _dispatch_papers_resource_read(req_id, params)
+    if method == "prompts/list":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": PROMPTS_MANIFEST}}
+    if method == "prompts/get":
+        return _dispatch_papers_prompt_get(req_id, params)
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "error": {"code": -32601, "message": f"Method not found: {method}"},
+    }
+
+
+def run_jsonrpc_server() -> None:
     """Runs standard MCP JSON-RPC stdio server with tools, resources, and prompts support"""
     for line in sys.stdin:
         line = line.strip()
@@ -804,169 +955,13 @@ def run_jsonrpc_server():
             continue
         try:
             req = json.loads(line)
-            req_id = req.get("id")
-            method = req.get("method")
-            params = req.get("params", {})
-
-            if method == "tools/list":
-                res = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {"tools": TOOLS_MANIFEST},
-                }
-            elif method == "tools/call":
-                tool_name = params.get("name", "")
-                tool_args = params.get("arguments", {})
-                t0 = time.perf_counter()
-                output = dispatch_tool(tool_name, tool_args)
-                exec_ms = (time.perf_counter() - t0) * 1000.0
-
-                status = (
-                    "error"
-                    if isinstance(output, dict) and output.get("status") == "error"
-                    else "success"
-                )
-                metrics = {}
-                if isinstance(output, dict):
-                    if "count" in output:
-                        metrics["hits"] = output["count"]
-                    elif "results" in output and isinstance(output["results"], list):
-                        metrics["hits"] = len(output["results"])
-                    elif "papers" in output and isinstance(output["papers"], list):
-                        metrics["hits"] = len(output["papers"])
-
-                log_mcp_performance(
-                    server_name="arxiv-security-papers",
-                    method="tools/call",
-                    name=tool_name,
-                    execution_ms=exec_ms,
-                    status=status,
-                    args_summary=tool_args,
-                    metrics=metrics,
-                )
-
-                res = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": json.dumps(
-                                    output, ensure_ascii=False, indent=2
-                                ),
-                            }
-                        ]
-                    },
-                }
-            elif method == "resources/list":
-                res = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {"resources": RESOURCES_MANIFEST},
-                }
-            elif method == "resources/read":
-                uri = params.get("uri", "")
-                t0 = time.perf_counter()
-                output = handle_read_resource(uri)
-                exec_ms = (time.perf_counter() - t0) * 1000.0
-
-                if output.get("status") == "error":
-                    log_mcp_performance(
-                        server_name="arxiv-security-papers",
-                        method="resources/read",
-                        name=uri,
-                        execution_ms=exec_ms,
-                        status="error",
-                        error_message=output.get("message"),
-                    )
-                    res = {
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "error": {
-                            "code": -32602,
-                            "message": output.get("message", "Resource error"),
-                        },
-                    }
-                else:
-                    log_mcp_performance(
-                        server_name="arxiv-security-papers",
-                        method="resources/read",
-                        name=uri,
-                        execution_ms=exec_ms,
-                        status="success",
-                    )
-                    res = {
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "result": {
-                            "contents": [
-                                {
-                                    "uri": output.get("uri"),
-                                    "mimeType": output.get("mimeType"),
-                                    "text": output.get("text"),
-                                }
-                            ]
-                        },
-                    }
-            elif method == "prompts/list":
-                res = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {"prompts": PROMPTS_MANIFEST},
-                }
-            elif method == "prompts/get":
-                prompt_name = params.get("name", "")
-                prompt_args = params.get("arguments", {})
-                t0 = time.perf_counter()
-                output = handle_get_prompt(prompt_name, prompt_args)
-                exec_ms = (time.perf_counter() - t0) * 1000.0
-
-                if output.get("status") == "error":
-                    log_mcp_performance(
-                        server_name="arxiv-security-papers",
-                        method="prompts/get",
-                        name=prompt_name,
-                        execution_ms=exec_ms,
-                        status="error",
-                        args_summary=prompt_args,
-                        error_message=output.get("message"),
-                    )
-                    res = {
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "error": {
-                            "code": -32602,
-                            "message": output.get("message", "Prompt error"),
-                        },
-                    }
-                else:
-                    log_mcp_performance(
-                        server_name="arxiv-security-papers",
-                        method="prompts/get",
-                        name=prompt_name,
-                        execution_ms=exec_ms,
-                        status="success",
-                        args_summary=prompt_args,
-                    )
-                    res = {
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "result": output,
-                    }
-            else:
-                res = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "error": {"code": -32601, "message": f"Method not found: {method}"},
-                }
-
+            res = _dispatch_papers_rpc(req)
             print(json.dumps(res, ensure_ascii=False), flush=True)
         except Exception as e:
             sys.stderr.write(f"Error handling request: {e}\n")
 
 
-def main():
+def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "--manifest":
         print(
             json.dumps(

@@ -118,6 +118,48 @@ class HNSWIndex:
         """Alias for add_item for standard index API consistency."""
         self.add_item(node_id, vector)
 
+    def _traverse_upper_layers(self, vec: Tuple[float, ...], insert_level: int) -> int:
+        curr_obj = self.enter_point
+        if curr_obj is None:
+            return 0
+        curr_dist = self._distance(vec, self.vectors[curr_obj])
+
+        for lc in range(self.max_level, insert_level, -1):
+            changed = True
+            while changed:
+                changed = False
+                for neighbor in self.layers[lc].get(curr_obj, []):
+                    d = self._distance(vec, self.vectors[neighbor])
+                    if d < curr_dist:
+                        curr_dist = d
+                        curr_obj = neighbor
+                        changed = True
+        return curr_obj
+
+    def _insert_lower_layers(
+        self, node_id: int, vec: Tuple[float, ...], curr_obj: int, insert_level: int
+    ) -> None:
+        enter_points = [curr_obj]
+        for lc in range(min(self.max_level, insert_level), -1, -1):
+            w = self._search_layer(vec, enter_points, self.ef_construction, lc)
+            max_conn = self.M0 if lc == 0 else self.M
+            neighbors = self._select_neighbors(vec, w, max_conn)
+
+            self.layers[lc][node_id] = neighbors
+            for n in neighbors:
+                n_neighbors = self.layers[lc].setdefault(n, [])
+                n_neighbors.append(node_id)
+                if len(n_neighbors) > max_conn:
+                    self.layers[lc][n] = self._select_neighbors(
+                        self.vectors[n],
+                        [
+                            (self._distance(self.vectors[n], self.vectors[cand]), cand)
+                            for cand in n_neighbors
+                        ],
+                        max_conn,
+                    )
+            enter_points = [node for _, node in w]
+
     def add_item(self, node_id: int, vector: Sequence[float]) -> None:
         """Inserts a vector into the HNSW index."""
         if len(vector) != self.dim:
@@ -138,40 +180,8 @@ class HNSWIndex:
                 self.layers[lc][node_id] = []
             return
 
-        curr_obj = self.enter_point
-        curr_dist = self._distance(vec_tuple, self.vectors[curr_obj])
-
-        for lc in range(self.max_level, insert_level, -1):
-            changed = True
-            while changed:
-                changed = False
-                for neighbor in self.layers[lc].get(curr_obj, []):
-                    d = self._distance(vec_tuple, self.vectors[neighbor])
-                    if d < curr_dist:
-                        curr_dist = d
-                        curr_obj = neighbor
-                        changed = True
-
-        enter_points = [curr_obj]
-        for lc in range(min(self.max_level, insert_level), -1, -1):
-            w = self._search_layer(vec_tuple, enter_points, self.ef_construction, lc)
-            max_conn = self.M0 if lc == 0 else self.M
-            neighbors = self._select_neighbors(vec_tuple, w, max_conn)
-
-            self.layers[lc][node_id] = neighbors
-            for n in neighbors:
-                n_neighbors = self.layers[lc].setdefault(n, [])
-                n_neighbors.append(node_id)
-                if len(n_neighbors) > max_conn:
-                    candidates = [
-                        (self._distance(self.vectors[n], self.vectors[cand]), cand)
-                        for cand in n_neighbors
-                    ]
-                    self.layers[lc][n] = self._select_neighbors(
-                        self.vectors[n], candidates, max_conn
-                    )
-
-            enter_points = [node for _, node in w]
+        curr_obj = self._traverse_upper_layers(vec_tuple, insert_level)
+        self._insert_lower_layers(node_id, vec_tuple, curr_obj, insert_level)
 
         if insert_level > self.max_level:
             self.max_level = insert_level

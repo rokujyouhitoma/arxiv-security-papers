@@ -13,6 +13,7 @@ import sys
 import threading
 import urllib.parse
 from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from wsgiref.simple_server import make_server
 
 if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
@@ -42,7 +43,7 @@ def get_workspace_dir() -> str:
         ):
             return cur
         cur = os.path.dirname(cur)
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 WORKSPACE_DIR = get_workspace_dir()
@@ -66,7 +67,7 @@ def log_query(
     top_k: int,
     category: str | None,
     result_count: int,
-    profile: dict,
+    profile: Dict[str, Any],
     remote_addr: str = "-",
 ) -> None:
     """Appends one JSONL record to the query log and prints performance metrics to server log. Thread-safe."""
@@ -145,7 +146,7 @@ def log_query(
         sys.stderr.write(f"[QueryLogger] Failed to write log: {e}\n")
 
 
-CORS_HEADERS = [
+CORS_HEADERS: List[Tuple[str, str]] = [
     ("Access-Control-Allow-Origin", "*"),
     ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
     ("Access-Control-Allow-Headers", "Content-Type"),
@@ -159,15 +160,20 @@ class WSGIApplication:
 
     def __init__(
         self,
-        site_dir=SITE_DIR,
-        vector_engine=VECTOR_ENGINE,
-        workspace_dir=WORKSPACE_DIR,
-    ):
+        site_dir: str = SITE_DIR,
+        vector_engine: VectorEngine = VECTOR_ENGINE,
+        workspace_dir: str = WORKSPACE_DIR,
+    ) -> None:
         self.site_dir = site_dir
         self.vector_engine = vector_engine
         self.workspace_dir = workspace_dir
 
-    def _response_json(self, start_response, data, status="200 OK"):
+    def _response_json(
+        self,
+        start_response: Callable[..., Any],
+        data: Any,
+        status: str = "200 OK",
+    ) -> List[bytes]:
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         headers = [
             ("Content-Type", "application/json; charset=utf-8"),
@@ -176,7 +182,12 @@ class WSGIApplication:
         start_response(status, headers)
         return [body]
 
-    def _response_file(self, start_response, file_path, content_type):
+    def _response_file(
+        self,
+        start_response: Callable[..., Any],
+        file_path: str,
+        content_type: str,
+    ) -> List[bytes]:
         try:
             with open(file_path, "rb") as f:
                 body = f.read()
@@ -193,12 +204,17 @@ class WSGIApplication:
                 status="500 Internal Server Error",
             )
 
-    def _handle_options(self, start_response):
+    def _handle_options(self, start_response: Callable[..., Any]) -> List[bytes]:
         headers = [("Content-Length", "0")] + CORS_HEADERS
         start_response("200 OK", headers)
         return [b""]
 
-    def _handle_search(self, start_response, query_params, remote_addr: str = "-"):
+    def _handle_search(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Dict[str, List[str]],
+        remote_addr: str = "-",
+    ) -> List[bytes]:
         q = query_params.get("q", [""])[0]
         top_k_val = query_params.get("top_k", ["10"])[0]
         try:
@@ -229,7 +245,9 @@ class WSGIApplication:
             },
         )
 
-    def _handle_paper(self, start_response, path):
+    def _handle_paper(
+        self, start_response: Callable[..., Any], path: str
+    ) -> List[bytes]:
         sub_path = path.replace("/api/paper/", "").strip()
         if sub_path.endswith("/related"):
             arxiv_id = sub_path.replace("/related", "").strip()
@@ -240,18 +258,22 @@ class WSGIApplication:
         status = "200 OK" if res.get("status") == "success" else "404 Not Found"
         return self._response_json(start_response, res, status=status)
 
-    def _handle_paper_related(self, start_response, arxiv_id):
+    def _handle_paper_related(
+        self, start_response: Callable[..., Any], arxiv_id: str
+    ) -> List[bytes]:
         res = self.vector_engine.get_related_papers(arxiv_id)
         status = "200 OK" if res.get("status") == "success" else "404 Not Found"
         return self._response_json(start_response, res, status=status)
 
-    def _handle_trends(self, start_response, query_params):
+    def _handle_trends(
+        self, start_response: Callable[..., Any], query_params: Dict[str, List[str]]
+    ) -> List[bytes]:
         period = query_params.get("period", ["monthly"])[0]
         res = handle_get_latest_trends({"period": period})
         status = "200 OK" if res.get("status") == "success" else "404 Not Found"
         return self._response_json(start_response, res, status=status)
 
-    def _handle_stats(self, start_response):
+    def _handle_stats(self, start_response: Callable[..., Any]) -> List[bytes]:
         total_papers = len(self.vector_engine.documents)
         return self._response_json(
             start_response,
@@ -265,14 +287,63 @@ class WSGIApplication:
             },
         )
 
-    def _handle_mcp_post(self, environ, start_response):
+    def _dispatch_mcp_rpc(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        method = payload.get("method")
+        req_id = payload.get("id")
+        if not method:
+            return None
+
+        params = payload.get("params", {})
+        if method == "tools/list":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}}
+        if method == "tools/call":
+            output = dispatch_tool(params.get("name", ""), params.get("arguments", {}))
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "content": [
+                        {"type": "text", "text": json.dumps(output, ensure_ascii=False)}
+                    ]
+                },
+            }
+        if method == "resources/list":
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"resources": RESOURCES_MANIFEST},
+            }
+        if method == "resources/read":
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": handle_read_resource(params.get("uri", "")),
+            }
+        if method == "prompts/list":
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"prompts": PROMPTS_MANIFEST},
+            }
+        if method == "prompts/get":
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": handle_get_prompt(
+                    params.get("name", ""), params.get("arguments", {})
+                ),
+            }
+        return None
+
+    def _handle_mcp_post(
+        self, environ: Dict[str, Any], start_response: Callable[..., Any]
+    ) -> List[bytes]:
         try:
             content_length_str = environ.get("CONTENT_LENGTH", "0")
             content_length = int(content_length_str) if content_length_str else 0
         except ValueError:
             content_length = 0
 
-        # Maximum payload limit of 1MB (CWE-400 mitigation)
         if content_length > 1024 * 1024:
             return self._response_json(
                 start_response,
@@ -291,77 +362,11 @@ class WSGIApplication:
         body_data = wsgi_input.read(content_length).decode("utf-8", errors="replace")
         try:
             payload = json.loads(body_data)
-            method = payload.get("method")
-            req_id = payload.get("id")
+            rpc_res = self._dispatch_mcp_rpc(payload)
+            if rpc_res is not None:
+                return self._response_json(start_response, rpc_res)
 
-            # Standard MCP JSON-RPC 2.0 Routing
-            if method:
-                params = payload.get("params", {})
-                if method == "tools/list":
-                    return self._response_json(
-                        start_response,
-                        {
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": {"tools": TOOLS_MANIFEST},
-                        },
-                    )
-                elif method == "tools/call":
-                    t_name = params.get("name")
-                    t_args = params.get("arguments", {})
-                    output = dispatch_tool(t_name, t_args)
-                    return self._response_json(
-                        start_response,
-                        {
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": {
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": json.dumps(output, ensure_ascii=False),
-                                    }
-                                ]
-                            },
-                        },
-                    )
-                elif method == "resources/list":
-                    return self._response_json(
-                        start_response,
-                        {
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": {"resources": RESOURCES_MANIFEST},
-                        },
-                    )
-                elif method == "resources/read":
-                    uri = params.get("uri", "")
-                    output = handle_read_resource(uri)
-                    return self._response_json(
-                        start_response,
-                        {"jsonrpc": "2.0", "id": req_id, "result": output},
-                    )
-                elif method == "prompts/list":
-                    return self._response_json(
-                        start_response,
-                        {
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": {"prompts": PROMPTS_MANIFEST},
-                        },
-                    )
-                elif method == "prompts/get":
-                    p_name = params.get("name")
-                    p_args = params.get("arguments", {})
-                    output = handle_get_prompt(p_name, p_args)
-                    return self._response_json(
-                        start_response,
-                        {"jsonrpc": "2.0", "id": req_id, "result": output},
-                    )
-
-            # Fallback legacy format: {"name": ..., "arguments": ...}
             name = payload.get("name")
-            arguments = payload.get("arguments", {})
             if not name:
                 return self._response_json(
                     start_response,
@@ -371,7 +376,7 @@ class WSGIApplication:
                     },
                     status="400 Bad Request",
                 )
-            result = dispatch_tool(name, arguments)
+            result = dispatch_tool(name, payload.get("arguments", {}))
             return self._response_json(
                 start_response, {"status": "success", "tool": name, "result": result}
             )
@@ -382,32 +387,60 @@ class WSGIApplication:
                 status="400 Bad Request",
             )
 
-    def _handle_static(self, start_response, path):
+    def _resolve_static_path(self, path: str) -> tuple[str, str, bool, bool]:
         raw_data_dir = os.path.realpath(
             os.path.join(self.workspace_dir, "outputs", "raw_data")
         )
         outputs_dir = os.path.realpath(os.path.join(self.workspace_dir, "outputs"))
         abs_site_dir = os.path.realpath(self.site_dir)
+        is_raw = path.startswith("/raw_data/")
+        is_out = path.startswith("/outputs/")
 
-        is_raw_data = path.startswith("/raw_data/")
-        is_outputs = path.startswith("/outputs/")
-
-        if is_raw_data:
+        if is_raw:
             rel = path[len("/raw_data/") :].lstrip("/")
-            target_file = os.path.realpath(os.path.join(raw_data_dir, rel))
-            base_dir = raw_data_dir
-        elif is_outputs:
+            return (
+                os.path.realpath(os.path.join(raw_data_dir, rel)),
+                raw_data_dir,
+                True,
+                False,
+            )
+        if is_out:
             rel = path[len("/outputs/") :].lstrip("/")
-            target_file = os.path.realpath(os.path.join(outputs_dir, rel))
-            base_dir = outputs_dir
-        else:
-            rel_path = path.lstrip("/")
-            if rel_path in ["", "search", "trends", "dashboard"]:
-                rel_path = "index.html"
-            target_file = os.path.realpath(os.path.join(self.site_dir, rel_path))
-            base_dir = abs_site_dir
+            return (
+                os.path.realpath(os.path.join(outputs_dir, rel)),
+                outputs_dir,
+                False,
+                True,
+            )
 
-        # Ensure target_file is strictly within base_dir (CWE-22 path traversal prevention)
+        rel_path = path.lstrip("/")
+        if rel_path in ["", "search", "trends", "dashboard"]:
+            rel_path = "index.html"
+        return (
+            os.path.realpath(os.path.join(self.site_dir, rel_path)),
+            abs_site_dir,
+            False,
+            False,
+        )
+
+    def _determine_mime_type(self, target_file: str) -> str:
+        if target_file.endswith(".md"):
+            return "text/plain; charset=utf-8"
+        mime_type, _ = mimetypes.guess_type(target_file)
+        if mime_type is None:
+            return "application/octet-stream"
+        if mime_type.startswith("text/") or mime_type in [
+            "application/javascript",
+            "application/json",
+        ]:
+            return f"{mime_type}; charset=utf-8"
+        return mime_type
+
+    def _handle_static(
+        self, start_response: Callable[..., Any], path: str
+    ) -> List[bytes]:
+        target_file, base_dir, is_raw, is_out = self._resolve_static_path(path)
+
         try:
             common = os.path.commonpath([base_dir, target_file])
             if common != base_dir or not is_safe_workspace_path(target_file):
@@ -424,9 +457,8 @@ class WSGIApplication:
             )
 
         if not os.path.isfile(target_file):
-            has_extension = bool(os.path.splitext(target_file)[1])
-            # Only fallback to index.html for extension-less SPA navigation routes in site_dir
-            if not is_raw_data and not is_outputs and not has_extension:
+            has_ext = bool(os.path.splitext(target_file)[1])
+            if not is_raw and not is_out and not has_ext:
                 fallback_index = os.path.join(self.site_dir, "index.html")
                 if os.path.isfile(fallback_index):
                     return self._response_file(
@@ -438,20 +470,13 @@ class WSGIApplication:
                 status="404 Not Found",
             )
 
-        mime_type, _ = mimetypes.guess_type(target_file)
-        if target_file.endswith(".md"):
-            mime_type = "text/plain; charset=utf-8"
-        elif mime_type is None:
-            mime_type = "application/octet-stream"
-        elif mime_type.startswith("text/") or mime_type in [
-            "application/javascript",
-            "application/json",
-        ]:
-            mime_type += "; charset=utf-8"
+        return self._response_file(
+            start_response, target_file, self._determine_mime_type(target_file)
+        )
 
-        return self._response_file(start_response, target_file, mime_type)
-
-    def _handle_preview(self, start_response, path):
+    def _handle_preview(
+        self, start_response: Callable[..., Any], path: str
+    ) -> List[bytes]:
         arxiv_id = (
             path.replace("/preview/", "").strip().replace("/", "_").replace("..", "")
         )
@@ -463,24 +488,19 @@ class WSGIApplication:
                 status="404 Not Found",
             )
 
-        content = res.get("content", "")
-        raw_md_path = "/" + res.get("path", "")
+        content = str(res.get("content", ""))
+        raw_md_path = "/" + str(res.get("path", ""))
 
-        # Parse YAML frontmatter metadata
         title_m = re.search(r"^title:\s*[\"']?(.*?)[\"']?$", content, re.MULTILINE)
         title = title_m.group(1) if title_m else arxiv_id
-
         tags_m = re.search(r"^tags:\s*\[(.*?)\]", content, re.MULTILINE)
         tags_str = tags_m.group(1) if tags_m else ""
-
         authors_m = re.search(r"^authors:\s*\[(.*?)\]", content, re.MULTILINE)
         authors_str = authors_m.group(1) if authors_m else ""
-
         date_m = re.search(
             r"^timestamp:\s*[\"']?([0-9]{4}-[0-9]{2}-[0-9]{2})", content, re.MULTILINE
         )
         date_str = date_m.group(1) if date_m else ""
-
         escaped_content = json.dumps(content, ensure_ascii=False)
 
         html_doc = f"""<!DOCTYPE html>
@@ -506,17 +526,12 @@ class WSGIApplication:
           <span class="arxiv-id-tag">arXiv: {html.escape(arxiv_id)}</span>
         </div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <a href="{html.escape(raw_md_path)}" class="btn-link-action" target="_blank" rel="noopener">
-            📝 生の Markdown (.md)
-          </a>
-          <a href="https://arxiv.org/abs/{html.escape(arxiv_id)}"
-             class="btn-link-action" target="_blank" rel="noopener">
-            arXiv 原本 ↗
-          </a>
-          <a href="https://arxiv.org/pdf/{html.escape(arxiv_id)}.pdf"
-             class="btn-link-action" target="_blank" rel="noopener">
-            PDF 📄
-          </a>
+          <a href="{html.escape(raw_md_path)}" class="btn-link-action" target="_blank"
+             rel="noopener">📝 生の Markdown (.md)</a>
+          <a href="https://arxiv.org/abs/{html.escape(arxiv_id)}" class="btn-link-action" target="_blank"
+             rel="noopener">arXiv 原本 ↗</a>
+          <a href="https://arxiv.org/pdf/{html.escape(arxiv_id)}.pdf" class="btn-link-action" target="_blank"
+             rel="noopener">PDF 📄</a>
           <a href="/" class="btn-link-action">🏠 ポータル</a>
         </div>
       </div>
@@ -554,7 +569,37 @@ class WSGIApplication:
         start_response("200 OK", headers)
         return [body]
 
-    def __call__(self, environ, start_response):
+    def _route_get(
+        self,
+        environ: Dict[str, Any],
+        start_response: Callable[..., Any],
+        path: str,
+        query_params: Dict[str, List[str]],
+    ) -> List[bytes]:
+        remote_addr = environ.get("REMOTE_ADDR", "-")
+        if path == "/api/search":
+            return self._handle_search(
+                start_response, query_params, remote_addr=remote_addr
+            )
+        if path.startswith("/api/paper/"):
+            return self._handle_paper(start_response, path)
+        if path == "/api/trends":
+            return self._handle_trends(start_response, query_params)
+        if path == "/api/stats":
+            return self._handle_stats(start_response)
+        if path.startswith("/preview/"):
+            return self._handle_preview(start_response, path)
+        if path.startswith("/api/"):
+            return self._response_json(
+                start_response,
+                {"status": "error", "message": "API endpoint not found"},
+                status="404 Not Found",
+            )
+        return self._handle_static(start_response, path)
+
+    def __call__(
+        self, environ: Dict[str, Any], start_response: Callable[..., Any]
+    ) -> List[bytes]:
         method = environ.get("REQUEST_METHOD", "GET").upper()
         path = environ.get("PATH_INFO", "/")
         query_string = environ.get("QUERY_STRING", "")
@@ -562,34 +607,9 @@ class WSGIApplication:
 
         if method == "OPTIONS":
             return self._handle_options(start_response)
-
         if method in ["GET", "HEAD"]:
-            remote_addr = environ.get("REMOTE_ADDR", "-")
-            if path == "/api/search":
-                res = self._handle_search(
-                    start_response, query_params, remote_addr=remote_addr
-                )
-            elif path.startswith("/api/paper/"):
-                res = self._handle_paper(start_response, path)
-            elif path == "/api/trends":
-                res = self._handle_trends(start_response, query_params)
-            elif path == "/api/stats":
-                res = self._handle_stats(start_response)
-            elif path.startswith("/preview/"):
-                res = self._handle_preview(start_response, path)
-            elif path.startswith("/api/"):
-                res = self._response_json(
-                    start_response,
-                    {"status": "error", "message": "API endpoint not found"},
-                    status="404 Not Found",
-                )
-            else:
-                res = self._handle_static(start_response, path)
-
-            if method == "HEAD":
-                return [b""]
-            return res
-
+            res = self._route_get(environ, start_response, path, query_params)
+            return [b""] if method == "HEAD" else res
         if method == "POST":
             if path == "/api/mcp":
                 return self._handle_mcp_post(environ, start_response)
@@ -611,7 +631,7 @@ application = WSGIApplication()
 app = application
 
 
-def run_web_server(port=8000, host="0.0.0.0"):
+def run_web_server(port: int = 8000, host: str = "0.0.0.0") -> None:
     """Runs standard PEP 3333 WSGI Server"""
     httpd = make_server(host, port, application)
     print(

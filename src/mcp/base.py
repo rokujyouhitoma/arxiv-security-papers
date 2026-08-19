@@ -101,6 +101,239 @@ def log_mcp_performance(
         sys.stderr.write(f"[MCP-PERF] Failed to write log: {e}\n")
 
 
+def _extract_metrics(res: Any) -> Dict[str, Any]:
+    metrics: Dict[str, Any] = {}
+    if isinstance(res, dict):
+        if "count" in res:
+            metrics["count"] = res["count"]
+        elif "results" in res and isinstance(res["results"], list):
+            metrics["count"] = len(res["results"])
+        elif "papers" in res and isinstance(res["papers"], list):
+            metrics["count"] = len(res["papers"])
+    return metrics
+
+
+def _dispatch_tools_call(
+    server_name: str,
+    p: Dict[str, Any],
+    t_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+) -> Dict[str, Any]:
+    tool_name = p.get("name", "")
+    args = p.get("arguments", {})
+    was_tracing = tracemalloc.is_tracing()
+    if not was_tracing:
+        tracemalloc.start()
+    tracemalloc.reset_peak()
+    t0_wall = time.perf_counter()
+    t0_cpu = time.process_time()
+    start_mem, _ = tracemalloc.get_traced_memory()
+
+    if tool_name in t_handlers:
+        try:
+            res = t_handlers[tool_name](args)
+            exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+            cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+            end_mem, peak_mem = tracemalloc.get_traced_memory()
+            peak_kb = peak_mem / 1024.0
+            delta_kb = (end_mem - start_mem) / 1024.0
+            status = (
+                "error"
+                if isinstance(res, dict) and res.get("status") == "error"
+                else "success"
+            )
+            metrics = _extract_metrics(res)
+            log_mcp_performance(
+                server_name=server_name,
+                method="tools/call",
+                name=tool_name,
+                execution_ms=exec_ms,
+                status=status,
+                cpu_ms=cpu_ms,
+                peak_memory_kb=peak_kb,
+                memory_delta_kb=delta_kb,
+                args_summary=args,
+                metrics=metrics,
+            )
+        except Exception as handler_err:
+            exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+            cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+            end_mem, peak_mem = tracemalloc.get_traced_memory()
+            res = {"status": "error", "message": str(handler_err)}
+            log_mcp_performance(
+                server_name=server_name,
+                method="tools/call",
+                name=tool_name,
+                execution_ms=exec_ms,
+                status="error",
+                cpu_ms=cpu_ms,
+                peak_memory_kb=peak_mem / 1024.0,
+                memory_delta_kb=(end_mem - start_mem) / 1024.0,
+                args_summary=args,
+                error_message=str(handler_err),
+            )
+    else:
+        res = {"error": f"Unknown tool '{tool_name}'"}
+        log_mcp_performance(
+            server_name=server_name,
+            method="tools/call",
+            name=tool_name,
+            execution_ms=0.0,
+            status="error",
+            error_message=f"Unknown tool '{tool_name}'",
+        )
+    if not was_tracing:
+        tracemalloc.stop()
+    return {
+        "content": [
+            {"type": "text", "text": json.dumps(res, ensure_ascii=False, indent=2)}
+        ]
+    }
+
+
+def _dispatch_prompts_get(
+    server_name: str,
+    p: Dict[str, Any],
+    p_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+) -> Dict[str, Any]:
+    prompt_name = p.get("name", "")
+    args = p.get("arguments", {})
+    was_tracing = tracemalloc.is_tracing()
+    if not was_tracing:
+        tracemalloc.start()
+    tracemalloc.reset_peak()
+    t0_wall = time.perf_counter()
+    t0_cpu = time.process_time()
+    start_mem, _ = tracemalloc.get_traced_memory()
+
+    if prompt_name in p_handlers:
+        try:
+            res = p_handlers[prompt_name](args)
+            exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+            cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+            end_mem, peak_mem = tracemalloc.get_traced_memory()
+            log_mcp_performance(
+                server_name=server_name,
+                method="prompts/get",
+                name=prompt_name,
+                execution_ms=exec_ms,
+                status="success",
+                cpu_ms=cpu_ms,
+                peak_memory_kb=peak_mem / 1024.0,
+                memory_delta_kb=(end_mem - start_mem) / 1024.0,
+                args_summary=args,
+            )
+        except Exception as e:
+            res = {"error": f"Handler error in prompt '{prompt_name}': {e}"}
+            log_mcp_performance(
+                server_name=server_name,
+                method="prompts/get",
+                name=prompt_name,
+                execution_ms=0.0,
+                status="error",
+                error_message=str(e),
+            )
+    else:
+        res = {"error": f"Unknown prompt '{prompt_name}'"}
+        log_mcp_performance(
+            server_name=server_name,
+            method="prompts/get",
+            name=prompt_name,
+            execution_ms=0.0,
+            status="error",
+            error_message=f"Unknown prompt '{prompt_name}'",
+        )
+    if not was_tracing:
+        tracemalloc.stop()
+    return res
+
+
+def _dispatch_resources_read(
+    server_name: str,
+    p: Dict[str, Any],
+    r_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+) -> Dict[str, Any]:
+    uri = p.get("uri", "")
+    was_tracing = tracemalloc.is_tracing()
+    if not was_tracing:
+        tracemalloc.start()
+    tracemalloc.reset_peak()
+    t0_wall = time.perf_counter()
+    t0_cpu = time.process_time()
+    start_mem, _ = tracemalloc.get_traced_memory()
+
+    if uri in r_handlers:
+        try:
+            res = r_handlers[uri](p)
+            exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+            cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+            end_mem, peak_mem = tracemalloc.get_traced_memory()
+            log_mcp_performance(
+                server_name=server_name,
+                method="resources/read",
+                name=uri,
+                execution_ms=exec_ms,
+                status="success",
+                cpu_ms=cpu_ms,
+                peak_memory_kb=peak_mem / 1024.0,
+                memory_delta_kb=(end_mem - start_mem) / 1024.0,
+            )
+        except Exception as e:
+            res = {"error": f"Handler error in resource '{uri}': {e}"}
+            log_mcp_performance(
+                server_name=server_name,
+                method="resources/read",
+                name=uri,
+                execution_ms=0.0,
+                status="error",
+                error_message=str(e),
+            )
+    else:
+        res = {"error": f"Unknown resource URI '{uri}'"}
+        log_mcp_performance(
+            server_name=server_name,
+            method="resources/read",
+            name=uri,
+            execution_ms=0.0,
+            status="error",
+            error_message=f"Unknown resource URI '{uri}'",
+        )
+    if not was_tracing:
+        tracemalloc.stop()
+    return res
+
+
+def _dispatch_rpc_request(
+    server_name: str,
+    req: Dict[str, Any],
+    tools: List[Dict[str, Any]],
+    t_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+    prompts: List[Dict[str, Any]],
+    p_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+    resources: List[Dict[str, Any]],
+    r_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+) -> Dict[str, Any]:
+    method = req.get("method")
+    req_id = req.get("id")
+    p = req.get("params", {})
+
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools}}
+    if method == "tools/call":
+        result = _dispatch_tools_call(server_name, p, t_handlers)
+        return {"jsonrpc": "2.0", "id": req_id, "result": result}
+    if method == "prompts/list":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": prompts}}
+    if method == "prompts/get":
+        result = _dispatch_prompts_get(server_name, p, p_handlers)
+        return {"jsonrpc": "2.0", "id": req_id, "result": result}
+    if method == "resources/list":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": resources}}
+    if method == "resources/read":
+        result = _dispatch_resources_read(server_name, p, r_handlers)
+        return {"jsonrpc": "2.0", "id": req_id, "result": result}
+    return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
+
 def run_mcp_server(
     server_name: str = "mcp-server",
     tools_manifest: Optional[List[Dict[str, Any]]] = None,
@@ -116,10 +349,7 @@ def run_mcp_server(
         Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]
     ] = None,
 ) -> None:
-    """
-    Standard event loop processing JSON-RPC messages from stdin, dispatching tools/prompts/resources,
-    and recording wall-clock, CPU, and memory performance measurements.
-    """
+    """Standard event loop processing JSON-RPC messages from stdin."""
     tools = tools_manifest or []
     t_handlers = tool_handlers or {}
     prompts = prompts_manifest or []
@@ -133,221 +363,16 @@ def run_mcp_server(
             continue
         try:
             req = json.loads(line)
-            method = req.get("method")
-            req_id = req.get("id")
-
-            # 1. Tool capabilities
-            if method == "tools/list":
-                resp: Dict[str, Any] = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {"tools": tools},
-                }
-            elif method == "tools/call":
-                p = req.get("params", {})
-                tool_name = p.get("name", "")
-                args = p.get("arguments", {})
-
-                was_tracing = tracemalloc.is_tracing()
-                if not was_tracing:
-                    tracemalloc.start()
-                tracemalloc.reset_peak()
-                t0_wall = time.perf_counter()
-                t0_cpu = time.process_time()
-                start_mem, _ = tracemalloc.get_traced_memory()
-
-                if tool_name in t_handlers:
-                    try:
-                        res = t_handlers[tool_name](args)
-                        exec_ms = (time.perf_counter() - t0_wall) * 1000.0
-                        cpu_ms = (time.process_time() - t0_cpu) * 1000.0
-                        end_mem, peak_mem = tracemalloc.get_traced_memory()
-                        peak_kb = peak_mem / 1024.0
-                        delta_kb = (end_mem - start_mem) / 1024.0
-
-                        status = (
-                            "error"
-                            if isinstance(res, dict) and res.get("status") == "error"
-                            else "success"
-                        )
-
-                        # Extract metrics if available
-                        metrics: Dict[str, Any] = {}
-                        if isinstance(res, dict):
-                            if "count" in res:
-                                metrics["count"] = res["count"]
-                            elif "results" in res and isinstance(res["results"], list):
-                                metrics["count"] = len(res["results"])
-                            elif "papers" in res and isinstance(res["papers"], list):
-                                metrics["count"] = len(res["papers"])
-
-                        log_mcp_performance(
-                            server_name=server_name,
-                            method="tools/call",
-                            name=tool_name,
-                            execution_ms=exec_ms,
-                            status=status,
-                            cpu_ms=cpu_ms,
-                            peak_memory_kb=peak_kb,
-                            memory_delta_kb=delta_kb,
-                            args_summary=args,
-                            metrics=metrics,
-                        )
-                    except Exception as handler_err:
-                        exec_ms = (time.perf_counter() - t0_wall) * 1000.0
-                        cpu_ms = (time.process_time() - t0_cpu) * 1000.0
-                        end_mem, peak_mem = tracemalloc.get_traced_memory()
-                        peak_kb = peak_mem / 1024.0
-                        delta_kb = (end_mem - start_mem) / 1024.0
-
-                        res = {"status": "error", "message": str(handler_err)}
-                        log_mcp_performance(
-                            server_name=server_name,
-                            method="tools/call",
-                            name=tool_name,
-                            execution_ms=exec_ms,
-                            status="error",
-                            cpu_ms=cpu_ms,
-                            peak_memory_kb=peak_kb,
-                            memory_delta_kb=delta_kb,
-                            args_summary=args,
-                            error_message=str(handler_err),
-                        )
-                else:
-                    res = {"error": f"Unknown tool '{tool_name}'"}
-                    log_mcp_performance(
-                        server_name=server_name,
-                        method="tools/call",
-                        name=tool_name,
-                        execution_ms=0.0,
-                        status="error",
-                        error_message=f"Unknown tool '{tool_name}'",
-                    )
-
-                if not was_tracing:
-                    tracemalloc.stop()
-
-                resp = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": json.dumps(res, ensure_ascii=False, indent=2),
-                            }
-                        ]
-                    },
-                }
-
-            # 2. Prompt capabilities
-            elif method == "prompts/list":
-                resp = {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": prompts}}
-            elif method == "prompts/get":
-                p = req.get("params", {})
-                prompt_name = p.get("name", "")
-                args = p.get("arguments", {})
-
-                was_tracing = tracemalloc.is_tracing()
-                if not was_tracing:
-                    tracemalloc.start()
-                tracemalloc.reset_peak()
-                t0_wall = time.perf_counter()
-                t0_cpu = time.process_time()
-                start_mem, _ = tracemalloc.get_traced_memory()
-
-                if prompt_name in p_handlers:
-                    res = p_handlers[prompt_name](args)
-                    exec_ms = (time.perf_counter() - t0_wall) * 1000.0
-                    cpu_ms = (time.process_time() - t0_cpu) * 1000.0
-                    end_mem, peak_mem = tracemalloc.get_traced_memory()
-                    peak_kb = peak_mem / 1024.0
-                    delta_kb = (end_mem - start_mem) / 1024.0
-
-                    log_mcp_performance(
-                        server_name=server_name,
-                        method="prompts/get",
-                        name=prompt_name,
-                        execution_ms=exec_ms,
-                        status="success",
-                        cpu_ms=cpu_ms,
-                        peak_memory_kb=peak_kb,
-                        memory_delta_kb=delta_kb,
-                        args_summary=args,
-                    )
-                else:
-                    res = {"error": f"Unknown prompt '{prompt_name}'"}
-                    log_mcp_performance(
-                        server_name=server_name,
-                        method="prompts/get",
-                        name=prompt_name,
-                        execution_ms=0.0,
-                        status="error",
-                        error_message=f"Unknown prompt '{prompt_name}'",
-                    )
-
-                if not was_tracing:
-                    tracemalloc.stop()
-
-                resp = {"jsonrpc": "2.0", "id": req_id, "result": res}
-
-            # 3. Resource capabilities
-            elif method == "resources/list":
-                resp = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {"resources": resources},
-                }
-            elif method == "resources/read":
-                p = req.get("params", {})
-                uri = p.get("uri", "")
-
-                was_tracing = tracemalloc.is_tracing()
-                if not was_tracing:
-                    tracemalloc.start()
-                tracemalloc.reset_peak()
-                t0_wall = time.perf_counter()
-                t0_cpu = time.process_time()
-                start_mem, _ = tracemalloc.get_traced_memory()
-
-                if uri in r_handlers:
-                    res = r_handlers[uri](p)
-                    exec_ms = (time.perf_counter() - t0_wall) * 1000.0
-                    cpu_ms = (time.process_time() - t0_cpu) * 1000.0
-                    end_mem, peak_mem = tracemalloc.get_traced_memory()
-                    peak_kb = peak_mem / 1024.0
-                    delta_kb = (end_mem - start_mem) / 1024.0
-
-                    log_mcp_performance(
-                        server_name=server_name,
-                        method="resources/read",
-                        name=uri,
-                        execution_ms=exec_ms,
-                        status="success",
-                        cpu_ms=cpu_ms,
-                        peak_memory_kb=peak_kb,
-                        memory_delta_kb=delta_kb,
-                    )
-                else:
-                    res = {"error": f"Unknown resource URI '{uri}'"}
-                    log_mcp_performance(
-                        server_name=server_name,
-                        method="resources/read",
-                        name=uri,
-                        execution_ms=0.0,
-                        status="error",
-                        error_message=f"Unknown resource URI '{uri}'",
-                    )
-
-                if not was_tracing:
-                    tracemalloc.stop()
-
-                resp = {"jsonrpc": "2.0", "id": req_id, "result": res}
-
-            # 4. Unknown / Notifications
-            else:
-                resp = {"jsonrpc": "2.0", "id": req_id, "result": {}}
-
+            resp = _dispatch_rpc_request(
+                server_name,
+                req,
+                tools,
+                t_handlers,
+                prompts,
+                p_handlers,
+                resources,
+                r_handlers,
+            )
             sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
             sys.stdout.flush()
         except Exception as e:

@@ -89,6 +89,65 @@ class ASTSecurityGuard:
             else set(BLOCKED_DUNDER_NAMES)
         )
 
+    def _check_import(self, node: ast.AST) -> Optional[str]:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                mod_root = alias.name.split(".")[0]
+                if (
+                    alias.name in self.blocked_modules
+                    or mod_root in self.blocked_modules
+                ):
+                    return f"Security Exception: Import of module '{alias.name}' is prohibited."
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            mod_root = node.module.split(".")[0]
+            if node.module in self.blocked_modules or mod_root in self.blocked_modules:
+                return f"Security Exception: Import from module '{node.module}' is prohibited."
+        return None
+
+    def _check_open_call(self, node: ast.Call) -> Optional[str]:
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "open"
+            and len(node.args) >= 2
+        ):
+            mode_arg = node.args[1]
+            if isinstance(mode_arg, ast.Constant) and isinstance(mode_arg.value, str):
+                mode_str = mode_arg.value
+                if any(c in mode_str for c in ("w", "a", "x", "+")):
+                    return f"Security Exception: File modification mode '{mode_str}' in open() is prohibited."
+        return None
+
+    def _check_call(self, node: ast.Call) -> Optional[str]:
+        if isinstance(node.func, ast.Attribute):
+            if (
+                node.func.attr in self.blocked_calls
+                or node.func.attr in self.blocked_builtins
+            ):
+                return f"Security Exception: Call to '{node.func.attr}' is prohibited."
+        elif isinstance(node.func, ast.Name):
+            if node.func.id in self.blocked_builtins:
+                return f"Security Exception: Dynamic call to '{node.func.id}' is prohibited."
+            return self._check_open_call(node)
+        return None
+
+    def _check_dunder(self, node: ast.AST) -> Optional[str]:
+        if isinstance(node, ast.Attribute) and node.attr in self.blocked_dunders:
+            return (
+                f"Security Exception: Access to attribute '{node.attr}' is prohibited."
+            )
+        if isinstance(node, ast.Name) and node.id in self.blocked_dunders:
+            return f"Security Exception: Reference to '{node.id}' is prohibited."
+        return None
+
+    def _check_node(self, node: ast.AST) -> Optional[str]:
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            return self._check_import(node)
+        if isinstance(node, ast.Call):
+            return self._check_call(node)
+        if isinstance(node, (ast.Attribute, ast.Name)):
+            return self._check_dunder(node)
+        return None
+
     def validate(self, code_str: str) -> Optional[str]:
         """
         Validates Python code string against security policies.
@@ -103,58 +162,9 @@ class ASTSecurityGuard:
             return f"Syntax error: {str(e)}"
 
         for node in ast.walk(tree):
-            # 1. Block dangerous imports
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    mod_root = alias.name.split(".")[0]
-                    if (
-                        alias.name in self.blocked_modules
-                        or mod_root in self.blocked_modules
-                    ):
-                        return f"Security Exception: Import of module '{alias.name}' is prohibited."
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    mod_root = node.module.split(".")[0]
-                    if (
-                        node.module in self.blocked_modules
-                        or mod_root in self.blocked_modules
-                    ):
-                        return f"Security Exception: Import from module '{node.module}' is prohibited."
-
-            # 2. Block dangerous calls and reflection functions
-            elif isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Attribute):
-                    if (
-                        node.func.attr in self.blocked_calls
-                        or node.func.attr in self.blocked_builtins
-                    ):
-                        return f"Security Exception: Call to '{node.func.attr}' is prohibited."
-                elif isinstance(node.func, ast.Name):
-                    if node.func.id in self.blocked_builtins:
-                        return f"Security Exception: Dynamic call to '{node.func.id}' is prohibited."
-
-                    # 3. Block destructive open() modes
-                    if node.func.id == "open" and len(node.args) >= 2:
-                        mode_arg = node.args[1]
-                        if isinstance(mode_arg, ast.Constant) and isinstance(
-                            mode_arg.value, str
-                        ):
-                            mode_str = mode_arg.value
-                            if any(c in mode_str for c in ("w", "a", "x", "+")):
-                                return (
-                                    f"Security Exception: File modification mode '{mode_str}' "
-                                    f"in open() is prohibited."
-                                )
-
-            # 4. Block access to dangerous dunder attributes
-            elif isinstance(node, ast.Attribute):
-                if node.attr in self.blocked_dunders:
-                    return f"Security Exception: Access to attribute '{node.attr}' is prohibited."
-            elif isinstance(node, ast.Name):
-                if node.id in self.blocked_dunders:
-                    return (
-                        f"Security Exception: Reference to '{node.id}' is prohibited."
-                    )
+            err = self._check_node(node)
+            if err is not None:
+                return err
 
         return None
 

@@ -1,124 +1,18 @@
 PACKAGE=arxiv_okf_fetcher
-PYTHON ?= $(shell if [ -x "$$HOME/.local/python-3.14.7/bin/python3" ]; then echo "$$HOME/.local/python-3.14.7/bin/python3"; elif [ -x "/root/.local/python-3.14.7/bin/python3" ]; then echo "/root/.local/python-3.14.7/bin/python3"; elif command -v python3.14 >/dev/null 2>&1; then command -v python3.14; else which python3; fi)
+PYTHON_TARGET_VERSION = 3.12+
+PYTHON ?= $(shell if [ -x "$$HOME/.local/python-3.14.7/bin/python3" ]; then echo "$$HOME/.local/python-3.14.7/bin/python3"; elif [ -x "/root/.local/python-3.14.7/bin/python3" ]; then echo "/root/.local/python-3.14.7/bin/python3"; elif command -v python3.14 >/dev/null 2>&1; then command -v python3.14; elif command -v python3 >/dev/null 2>&1; then command -v python3; else echo ""; fi)
+
+ifeq ($(PYTHON),)
+$(error "Strict Error: Python ($(PYTHON_TARGET_VERSION)) is required but not found in PATH.")
+endif
+
 VENV=.venv
 VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
 
 SRC=src/fetcher/arxiv_okf_fetcher.py
-PYTHON_SRCS = src/__init__.py \
-              src/arxiv_okf_fetcher.py \
-              src/vector_engine.py \
-              src/fetcher/__init__.py \
-              src/fetcher/arxiv_okf_fetcher.py \
-              src/fetcher/ingestion/__init__.py \
-              src/fetcher/ingestion/arxiv_client.py \
-              src/fetcher/ingestion/pdf_extractor.py \
-              src/fetcher/transformer/__init__.py \
-              src/fetcher/transformer/translator.py \
-              src/fetcher/transformer/tagger.py \
-              src/fetcher/transformer/okf_serializer.py \
-              src/fetcher/reporter/__init__.py \
-              src/fetcher/reporter/summary_generator.py \
-              src/fetcher/reporter/diagram_generator.py \
-              src/fetcher/reporter/index_updater.py \
-              src/web/__init__.py \
-              src/web/web_server.py \
-              src/web_server.py \
-              src/mcp/__init__.py \
-              src/mcp/base.py \
-              src/mcp/papers_server.py \
-              src/mcp/observability_server.py \
-              src/mcp/threat_defense_server.py \
-              src/mcp/tech_radar_server.py \
-              src/database/__init__.py \
-              src/database/profiler.py \
-              src/database/storage.py \
-              src/database/embedding.py \
-              src/database/index.py \
-              src/database/protocol.py \
-              src/database/client.py \
-              src/database/driver.py \
-              src/database/sqlite_bridge.py \
-              src/database/sqlite_engine.py \
-              src/database/vfs.py \
-              src/database/pager.py \
-              src/database/vdbe.py \
-              src/database/codegen.py \
-              src/database/compiler.py \
-              src/database/sql/__init__.py \
-              src/database/sql/ast.py \
-              src/database/sql/parser.py \
-              src/database/sql/security.py \
-              src/database/sql/transaction.py \
-              src/database/sql/executor.py \
-              src/search/__init__.py \
-              src/search/utils/__init__.py \
-              src/search/utils/profiler.py \
-              src/search/vector_engine.py \
-              src/search/vector/__init__.py \
-              src/search/vector/hybrid.py \
-              src/search/ingestion/__init__.py \
-              src/search/ingestion/analyzer.py \
-              src/search/ingestion/field_schema.py \
-              src/search/ingestion/fm_index.py \
-              src/search/ingestion/faceted_index.py \
-              src/search/ingestion/raptor_tree.py \
-              src/search/query/__init__.py \
-              src/search/query/query_parser.py \
-              src/search/query/synonym_expander.py \
-              src/search/query/query_cache.py \
-              src/search/ranking/__init__.py \
-              src/search/ranking/knowledge_graph.py \
-              src/search/ranking/proximity_graph.py \
-              src/search/ranking/citation_network.py \
-              src/search/presentation/__init__.py \
-              src/search/presentation/highlighter.py \
-              src/search/core/__init__.py \
-              src/search/core/analysis/__init__.py \
-              src/search/core/analysis/char_filter.py \
-              src/search/core/analysis/tokenizer.py \
-              src/search/core/analysis/token_filter.py \
-              src/search/core/store/__init__.py \
-              src/search/core/store/directory.py \
-              src/search/core/store/segment.py \
-              src/search/core/index/__init__.py \
-              src/search/core/index/postings.py \
-              src/search/core/index/doc_values.py \
-              src/search/core/index/stored_fields.py \
-              src/search/core/search/__init__.py \
-              src/search/core/search/query.py \
-              src/search/core/search/similarity.py \
-              src/search/core/search/collector.py \
-              src/search/server/__init__.py \
-              src/search/server/schema/__init__.py \
-              src/search/server/schema/managed_schema.py \
-              src/search/server/facet/__init__.py \
-              src/search/server/facet/facet_engine.py \
-              src/search/server/highlight/__init__.py \
-              src/search/server/highlight/highlighter.py \
-              src/search/server/cache/__init__.py \
-              src/search/server/cache/solr_cache.py \
-              src/search/server/handler/__init__.py \
-              src/search/server/handler/select_handler.py \
-              src/search/eval/__init__.py \
-              src/search/eval/metrics.py \
-              src/search/eval/dataset.py \
-              src/search/eval/evaluator.py \
-              src/security/__init__.py \
-              src/security/sandbox/__init__.py \
-              src/security/sandbox/ast_guard.py \
-              src/security/rbac/__init__.py \
-              src/security/rbac/context.py \
-              src/security/rbac/engine.py \
-              src/security/rbac/decorators.py \
-              src/security/taxonomy/__init__.py \
-              src/security/taxonomy/cwe.py \
-              src/security/taxonomy/mitre.py \
-              src/security/taxonomy/stride.py \
-              src/security/validation/__init__.py \
-              src/security/validation/path.py \
-              src/security/validation/input.py
-TESTS=tests
+PYTHON_SRCS := $(shell find src -type f -name "*.py" | sort)
+TESTS := $(shell find tests -type f -name "*.py" | sort)
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar
 JS_SRCS = site/js/lexer.js \
@@ -143,12 +37,12 @@ clean: ## clean virtualenv and build artifacts
 setup: activate install setup_hooks ## setup venv, activate, install python libraries, and setup git hooks
 
 .PHONY: setup_hooks
-setup_hooks: ## Setup Git pre-commit hooks for mandatory format and static_analysis
+setup_hooks: ## Setup Git pre-commit hooks for mandatory check_format and static_analysis
 	@mkdir -p .githooks
 	@echo '#!/bin/sh' > .githooks/pre-commit
 	@echo 'set -e' >> .githooks/pre-commit
-	@echo 'echo "=== [Pre-Commit Gate] 1/2: make format ==="' >> .githooks/pre-commit
-	@echo 'make format' >> .githooks/pre-commit
+	@echo 'echo "=== [Pre-Commit Gate] 1/2: make check_format ==="' >> .githooks/pre-commit
+	@echo 'make check_format' >> .githooks/pre-commit
 	@echo 'echo "=== [Pre-Commit Gate] 2/2: make static_analysis ==="' >> .githooks/pre-commit
 	@echo 'make static_analysis' >> .githooks/pre-commit
 	@chmod +x .githooks/pre-commit
@@ -164,6 +58,12 @@ install: activate ## Install python libraries into venv
 	${VENV_BIN}/pip install --upgrade pip
 	${VENV_BIN}/pip install -r requirements.txt
 
+.PHONY: check_format
+check_format: activate ## Check python code formatting and style without modifying files
+	${VENV_BIN}/isort --check-only --diff $(PYTHON_SRCS) $(TESTS)
+	${VENV_BIN}/black --check --diff $(PYTHON_SRCS) $(TESTS)
+	${VENV_BIN}/flake8 $(PYTHON_SRCS) $(TESTS)
+
 .PHONY: format
 format: isort black flake8 ## format python code
 
@@ -177,7 +77,7 @@ py_compile: activate ## py_compile syntax check for all python sources
 	done
 
 .PHONY: build_js
-build_js: activate ## Build minified JS bundle using Google Closure Compiler (yuzora spec)
+build_js: activate ## Build minified JS bundle using Google Closure Compiler with strict checks
 	${VENV_PYTHON} tools/closure-compiler/setup_compiler.py
 	java -jar $(COMPILER) \
 		--compilation_level SIMPLE_OPTIMIZATIONS \
@@ -192,10 +92,10 @@ build_js: activate ## Build minified JS bundle using Google Closure Compiler (yu
 test: pytest ## pytest
 
 .PHONY: check
-check: format static_analysis test ## Run mandatory format, static_analysis, and test quality gates
+check: check_format static_analysis test ## Run mandatory format check, static_analysis, and test quality gates
 
 .PHONY: verify_quality
-verify_quality: format static_analysis test build_js ## Mandatory Quality Verification Gate across Python & JS
+verify_quality: check_format static_analysis test build_js ## Mandatory Strict Quality Verification Gate across Python & JS
 
 .PHONY: build
 build: activate format static_analysis test build_js py_compile ## run mandatory quality gates (format, static_analysis, test) and build JS/Python
@@ -266,12 +166,12 @@ radon-hal: activate ## radon compute their Halstead metrics
 
 .PHONY: xenon
 xenon: activate ## xenon
-	${VENV_BIN}/xenon --max-absolute F --max-modules D --max-average A src
+	${VENV_BIN}/xenon --max-absolute B --max-modules B --max-average A src
 
 .PHONY: mypy
 mypy: activate ## mypy
-	${VENV_BIN}/mypy $(PYTHON_SRCS)
+	${VENV_BIN}/mypy --strict src
 
 .PHONY: pytest
-pytest: activate ## pytest
-	${VENV_BIN}/pytest -v ${TESTS}
+pytest: activate ## pytest with strict markers, warnings as errors, and >=80% coverage
+	${VENV_BIN}/pytest -v --strict-markers -W error --cov=src --cov-fail-under=80 ${TESTS}

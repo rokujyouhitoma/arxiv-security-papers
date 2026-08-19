@@ -26,25 +26,15 @@ class RRFHybridScorer:
         self.bm25_weight = bm25_weight
         self.vector_weight = vector_weight
 
-    def fuse(
+    def _accumulate_bm25(
         self,
         bm25_results: Sequence[Dict[str, Any]],
-        vector_results: Sequence[Dict[str, Any]],
-        top_k: int = 10,
-        id_key: str = "id",
-    ) -> List[Dict[str, Any]]:
-        """
-        Fuses BM25 and Vector search results using RRF.
-        Returns Top-K fused results with rank and score breakdowns.
-        """
-        doc_map: Dict[str, Dict[str, Any]] = {}
-        rrf_scores: Dict[str, float] = {}
-        bm25_ranks: Dict[str, int] = {}
-        vector_ranks: Dict[str, int] = {}
-        bm25_raw_scores: Dict[str, float] = {}
-        vector_raw_scores: Dict[str, float] = {}
-
-        # 1. Process BM25 Rankings
+        id_key: str,
+        doc_map: Dict[str, Dict[str, Any]],
+        rrf_scores: Dict[str, float],
+        bm25_ranks: Dict[str, int],
+        bm25_raw_scores: Dict[str, float],
+    ) -> None:
         for rank, doc in enumerate(bm25_results, start=1):
             did = str(doc.get(id_key) or doc.get("arxiv_id") or "")
             if not did:
@@ -56,7 +46,15 @@ class RRFHybridScorer:
                 self.bm25_weight / (self.k + rank)
             )
 
-        # 2. Process Vector Rankings
+    def _accumulate_vector(
+        self,
+        vector_results: Sequence[Dict[str, Any]],
+        id_key: str,
+        doc_map: Dict[str, Dict[str, Any]],
+        rrf_scores: Dict[str, float],
+        vector_ranks: Dict[str, int],
+        vector_raw_scores: Dict[str, float],
+    ) -> None:
         for rank, doc in enumerate(vector_results, start=1):
             did = str(doc.get(id_key) or doc.get("arxiv_id") or "")
             if not did:
@@ -64,7 +62,6 @@ class RRFHybridScorer:
             if did not in doc_map:
                 doc_map[did] = dict(doc)
             else:
-                # Merge document fields if missing
                 for k_doc, v_doc in doc.items():
                     if k_doc not in doc_map[did]:
                         doc_map[did][k_doc] = v_doc
@@ -76,21 +73,41 @@ class RRFHybridScorer:
                 self.vector_weight / (self.k + rank)
             )
 
-        # 3. Sort by RRF Score descending
-        sorted_ids = sorted(
-            rrf_scores.keys(), key=lambda d: rrf_scores[d], reverse=True
+    def fuse(
+        self,
+        bm25_results: Sequence[Dict[str, Any]],
+        vector_results: Sequence[Dict[str, Any]],
+        top_k: int = 10,
+        id_key: str = "id",
+    ) -> List[Dict[str, Any]]:
+        """Fuses BM25 and Vector search results using RRF."""
+        doc_map: Dict[str, Dict[str, Any]] = {}
+        rrf_scores: Dict[str, float] = {}
+        bm25_ranks: Dict[str, int] = {}
+        vector_ranks: Dict[str, int] = {}
+        bm25_raw_scores: Dict[str, float] = {}
+        vector_raw_scores: Dict[str, float] = {}
+
+        self._accumulate_bm25(
+            bm25_results, id_key, doc_map, rrf_scores, bm25_ranks, bm25_raw_scores
+        )
+        self._accumulate_vector(
+            vector_results, id_key, doc_map, rrf_scores, vector_ranks, vector_raw_scores
         )
 
-        # 4. Construct Final Result Objects
-        fused: List[Dict[str, Any]] = []
-        for did in sorted_ids[:top_k]:
-            res = doc_map[did]
-            res["score"] = round(rrf_scores[did], 6)
-            res["rrf_score"] = round(rrf_scores[did], 6)
-            res["bm25_rank"] = bm25_ranks.get(did)
-            res["bm25_score"] = round(bm25_raw_scores.get(did, 0.0), 4)
-            res["vector_rank"] = vector_ranks.get(did)
-            res["vector_similarity"] = round(vector_raw_scores.get(did, 0.0), 4)
-            fused.append(res)
+        sorted_ids = sorted(
+            rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True
+        )[:top_k]
 
-        return fused
+        fused_results: List[Dict[str, Any]] = []
+        for did in sorted_ids:
+            doc = doc_map[did]
+            fused_doc = dict(doc)
+            fused_doc["rrf_score"] = round(rrf_scores[did], 6)
+            fused_doc["bm25_rank"] = bm25_ranks.get(did)
+            fused_doc["vector_rank"] = vector_ranks.get(did)
+            fused_doc["bm25_raw_score"] = bm25_raw_scores.get(did, 0.0)
+            fused_doc["vector_raw_score"] = vector_raw_scores.get(did, 0.0)
+            fused_results.append(fused_doc)
+
+        return fused_results

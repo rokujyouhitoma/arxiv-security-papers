@@ -44,6 +44,83 @@ class SelectHandler:
         self.filter_cache = FilterCache(max_size=200)
         self.query_cache = QueryResultCache(max_size=500)
 
+    def _apply_filter_queries(
+        self, filter_queries: Optional[Dict[str, str]]
+    ) -> Optional[Set[str]]:
+        if not filter_queries:
+            return None
+        filtered_doc_ids: Optional[Set[str]] = None
+        for field, val in filter_queries.items():
+            cache_key = f"{field}:{val}"
+            cached_ids = self.filter_cache.get_filter_docs(cache_key)
+            if cached_ids is None:
+                matched = self.doc_values.get_doc_ids_matching(field, val)
+                self.filter_cache.put_filter_docs(cache_key, matched)
+                cached_ids = matched
+            filtered_doc_ids = (
+                cached_ids
+                if filtered_doc_ids is None
+                else (filtered_doc_ids & cached_ids)
+            )
+        return filtered_doc_ids
+
+    def _accumulate_term_postings(
+        self,
+        term: str,
+        filtered_doc_ids: Optional[Set[str]],
+        total_docs: int,
+        doc_scores: Dict[str, float],
+    ) -> None:
+        for fname, fdef in self.schema.fields.items():
+            postings = self.postings.get_postings(fname, term)
+            if not postings:
+                continue
+            idf = self.similarity.compute_idf(len(postings), total_docs)
+            boost = fdef.boost
+            for pid, tf in postings:
+                if filtered_doc_ids is not None and pid not in filtered_doc_ids:
+                    continue
+                bm25 = self.similarity.score(tf, 100, 100.0, idf)
+                doc_scores[pid] = doc_scores.get(pid, 0.0) + bm25 * boost
+
+    def _score_candidates(
+        self,
+        q_terms: List[str],
+        filtered_doc_ids: Optional[Set[str]],
+        total_docs: int,
+        all_docs: List[Dict[str, Any]],
+    ) -> Dict[str, float]:
+        doc_scores: Dict[str, float] = {}
+        if not q_terms:
+            for doc in all_docs:
+                did = doc.get("id", "")
+                if filtered_doc_ids is None or did in filtered_doc_ids:
+                    doc_scores[did] = 1.0
+            return doc_scores
+
+        for term in q_terms:
+            self._accumulate_term_postings(
+                term, filtered_doc_ids, total_docs, doc_scores
+            )
+        return doc_scores
+
+    def _build_response_docs(
+        self, score_docs: List[Any], q_terms: List[str]
+    ) -> tuple[List[Dict[str, Any]], List[str]]:
+        results: List[Dict[str, Any]] = []
+        hit_ids: List[str] = []
+        for sdoc in score_docs:
+            hit_ids.append(sdoc.doc_id)
+            doc_payload = self.stored_fields.get_document(sdoc.doc_id) or {}
+            hl_snippets = self.highlighter.highlight_document(doc_payload, q_terms)
+            result_entry = dict(doc_payload)
+            result_entry["score"] = round(sdoc.score, 4)
+            result_entry["highlight"] = hl_snippets.get(
+                "description"
+            ) or hl_snippets.get("title", "")
+            results.append(result_entry)
+        return results, hit_ids
+
     def handle_select(
         self,
         query: str,
@@ -57,49 +134,11 @@ class SelectHandler:
             tokens = self.analyzer.analyze(q_clean)
             q_terms = [t.text.lower() for t in tokens]
 
-            # 1. Apply Filter Queries (using FilterCache)
-            filtered_doc_ids: Optional[Set[str]] = None
-            if filter_queries:
-                for field, val in filter_queries.items():
-                    cache_key = f"{field}:{val}"
-                    cached_ids = self.filter_cache.get_filter_docs(cache_key)
-                    if cached_ids is None:
-                        matched = self.doc_values.get_doc_ids_matching(field, val)
-                        self.filter_cache.put_filter_docs(cache_key, matched)
-                        cached_ids = matched
-
-                    filtered_doc_ids = (
-                        cached_ids
-                        if filtered_doc_ids is None
-                        else (filtered_doc_ids & cached_ids)
-                    )
-
-            # 2. Candidate Retrieval & Scoring (Term-at-a-time Inverted Index Accumulator)
+            filtered_doc_ids = self._apply_filter_queries(filter_queries)
             all_docs = self.stored_fields.all_documents()
-            total_docs = len(all_docs)
-            doc_scores: Dict[str, float] = {}
-
-            if not q_terms:
-                for doc in all_docs:
-                    did = doc.get("id", "")
-                    if filtered_doc_ids is None or did in filtered_doc_ids:
-                        doc_scores[did] = 1.0
-            else:
-                for term in q_terms:
-                    for fname, fdef in self.schema.fields.items():
-                        postings = self.postings.get_postings(fname, term)
-                        if not postings:
-                            continue
-                        idf = self.similarity.compute_idf(len(postings), total_docs)
-                        boost = fdef.boost
-                        for pid, tf in postings:
-                            if (
-                                filtered_doc_ids is not None
-                                and pid not in filtered_doc_ids
-                            ):
-                                continue
-                            bm25 = self.similarity.score(tf, 100, 100.0, idf)
-                            doc_scores[pid] = doc_scores.get(pid, 0.0) + bm25 * boost
+            doc_scores = self._score_candidates(
+                q_terms, filtered_doc_ids, len(all_docs), all_docs
+            )
 
             collector = TopDocsCollector(top_k=top_k)
             for did, score in doc_scores.items():
@@ -107,44 +146,35 @@ class SelectHandler:
                     collector.collect(did, score)
 
             top_docs = collector.get_top_docs()
+            results, hit_ids = self._build_response_docs(top_docs.score_docs, q_terms)
 
-            # 3. Retrieve Stored Fields & Generate Highlights
-            results: List[Dict[str, Any]] = []
-            hit_ids: List[str] = []
-            for sdoc in top_docs.score_docs:
-                hit_ids.append(sdoc.doc_id)
-                doc_payload = self.stored_fields.get_document(sdoc.doc_id) or {}
-                hl_snippets = self.highlighter.highlight_document(doc_payload, q_terms)
-
-                result_entry = dict(doc_payload)
-                result_entry["score"] = round(sdoc.score, 4)
-                result_entry["highlight"] = hl_snippets.get(
-                    "description"
-                ) or hl_snippets.get("title", "")
-                results.append(result_entry)
-
-            # 4. Facet Aggregations
             facets_data: Dict[str, Dict[str, int]] = {}
             if facet_fields:
                 facets_data = self.facet_engine.count_facets(
                     hit_ids or [d.get("id", "") for d in all_docs], facet_fields
                 )
 
-        metrics = prof.metrics.to_dict() if prof.metrics else {}
-        return {
-            "responseHeader": {
-                "status": 0,
-                "QTime": metrics.get("wall_time_ms", 0.0),
-                "cpu_time_ms": metrics.get("cpu_time_ms", 0.0),
-                "peak_memory_kb": metrics.get("peak_memory_kb", 0.0),
-                "memory_delta_kb": metrics.get("memory_delta_kb", 0.0),
-                "profile": metrics,
-                "params": {"q": query, "top_k": top_k},
-            },
-            "response": {
-                "numFound": top_docs.total_hits,
-                "start": 0,
-                "docs": results,
-            },
-            "facet_counts": facets_data,
-        }
+            return {
+                "responseHeader": {
+                    "status": 0,
+                    "QTime": prof.total_ms,
+                    "cpu_time_ms": prof.cpu_ms,
+                    "peak_memory_kb": prof.peak_memory_kb,
+                    "params": {"q": query, "rows": top_k},
+                },
+                "response": {
+                    "numFound": top_docs.total_hits,
+                    "start": 0,
+                    "maxScore": top_docs.max_score,
+                    "docs": results,
+                },
+                "facet_counts": {
+                    "facet_fields": facets_data,
+                    **facets_data,
+                },
+                "performance": {
+                    "total_ms": prof.total_ms,
+                    "cpu_time_ms": prof.cpu_ms,
+                    "peak_memory_kb": prof.peak_memory_kb,
+                },
+            }

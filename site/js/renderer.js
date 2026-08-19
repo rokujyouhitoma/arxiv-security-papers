@@ -5,8 +5,14 @@
  */
 
 class MarkdownRenderer {
+  /**
+   * @param {!Object} evaluatedAst
+   * @return {{html: string, mermaidElements: !Array<?>}}
+   */
   render(evaluatedAst) {
-    if (!evaluatedAst || evaluatedAst.type !== 'DOCUMENT') return '';
+    if (!evaluatedAst || evaluatedAst.type !== 'DOCUMENT') {
+      return { html: '', mermaidElements: [] };
+    }
     const htmlParts = [];
     const mermaidElements = [];
 

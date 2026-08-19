@@ -53,6 +53,106 @@ class VectorDBProtocolHandler:
             embedding=self.embedding,
         )
 
+    def _op_ping(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return {"message": "pong", "timestamp": time.time()}
+
+    def _op_info(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "dimension": self.dim,
+            "count": self.storage.count,
+            "storage_file": self.storage.file_path,
+            "hnsw_max_level": self.index.max_level,
+            "hnsw_nodes": len(self.index.vectors),
+        }
+
+    def _op_insert(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        raw_vector = params.get("vector")
+        metadata = params.get("metadata", {})
+        if not raw_vector:
+            raise VectorDBProtocolError("Missing 'vector' parameter for insert")
+        vector = self.embedding.normalize(raw_vector)
+        idx = self.storage.append(vector, metadata)
+        self.index.add_item(idx, vector)
+        return {"index": idx, "id": metadata.get("id", str(idx))}
+
+    def _op_bulk_write(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        raw_vectors = params.get("vectors", [])
+        metadata = params.get("metadata", [])
+        if len(raw_vectors) != len(metadata):
+            raise VectorDBProtocolError(
+                f"Vectors count ({len(raw_vectors)}) != metadata count ({len(metadata)})"
+            )
+        vectors = [self.embedding.normalize(v) for v in raw_vectors]
+        self.storage.write_all(vectors, metadata)
+        self.index = HNSWIndex(dim=self.dim)
+        self.index.build_from_storage(vectors)
+        return {"count": len(vectors), "status": "indexed"}
+
+    def _op_search_knn(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        vector = params.get("vector")
+        if vector:
+            vector = self.embedding.normalize(vector)
+        elif "text" in params:
+            vector = self.embedding.embed_text(params["text"])
+
+        if not vector:
+            raise VectorDBProtocolError("Missing 'vector' or 'text' query parameter")
+
+        top_k = int(params.get("top_k", 10))
+        ef_search = params.get("ef_search")
+        ef = int(ef_search) if ef_search is not None else None
+
+        matches = self.index.search(vector, top_k=top_k, ef_search=ef)
+        match_results: List[Dict[str, Any]] = []
+
+        for idx, sim in matches:
+            if idx < len(self.storage.metadata):
+                meta = self.storage.get_metadata(idx)
+                match_results.append(
+                    {
+                        "index": idx,
+                        "id": meta.get("id", str(idx)),
+                        "score": round(sim, 4),
+                        "metadata": meta,
+                    }
+                )
+        return {"total_matches": len(match_results), "matches": match_results}
+
+    def _op_get_by_id(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        doc_id = params.get("id")
+        if not doc_id:
+            raise VectorDBProtocolError("Missing 'id' parameter")
+        vec = self.storage.get_vector_by_id(doc_id)
+        meta_idx = self.storage.id_to_idx.get(doc_id)
+        doc_meta: Optional[Dict[str, Any]] = (
+            self.storage.get_metadata(meta_idx) if meta_idx is not None else None
+        )
+        return {
+            "found": vec is not None,
+            "id": doc_id,
+            "vector": list(vec) if vec is not None else None,
+            "metadata": doc_meta,
+        }
+
+    def _op_execute_sql(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        sql = params.get("sql", "")
+        role = params.get("role", "admin")
+        if not sql:
+            raise VectorDBProtocolError("Missing 'sql' parameter")
+        return self.sql_executor.execute(sql, role=role, params=params)
+
+    def _dispatch_operation(self, op: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        dispatchers = {
+            "ping": self._op_ping,
+            "info": self._op_info,
+            "insert": self._op_insert,
+            "bulk_write": self._op_bulk_write,
+            "search_knn": self._op_search_knn,
+            "get_by_id": self._op_get_by_id,
+            "execute_sql": self._op_execute_sql,
+        }
+        return dispatchers[op](params)
+
     def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """
         Executes a single protocol request and returns a structured response frame.
@@ -75,106 +175,7 @@ class VectorDBProtocolHandler:
         t0_cpu = time.process_time()
 
         try:
-            if op == "ping":
-                result = {"message": "pong", "timestamp": time.time()}
-
-            elif op == "info":
-                result = {
-                    "dimension": self.dim,
-                    "count": self.storage.count,
-                    "storage_file": self.storage.file_path,
-                    "hnsw_max_level": self.index.max_level,
-                    "hnsw_nodes": len(self.index.vectors),
-                }
-
-            elif op == "insert":
-                raw_vector = params.get("vector")
-                metadata = params.get("metadata", {})
-                if not raw_vector:
-                    raise VectorDBProtocolError("Missing 'vector' parameter for insert")
-
-                vector = self.embedding.normalize(raw_vector)
-                idx = self.storage.append(vector, metadata)
-                self.index.add_item(idx, vector)
-                result = {"index": idx, "id": metadata.get("id", str(idx))}
-
-            elif op == "bulk_write":
-                raw_vectors = params.get("vectors", [])
-                metadata = params.get("metadata", [])
-                if len(raw_vectors) != len(metadata):
-                    raise VectorDBProtocolError(
-                        f"Vectors count ({len(raw_vectors)}) != metadata count ({len(metadata)})"
-                    )
-
-                vectors = [self.embedding.normalize(v) for v in raw_vectors]
-                self.storage.write_all(vectors, metadata)
-                self.index = HNSWIndex(dim=self.dim)
-                self.index.build_from_storage(vectors)
-                result = {"count": len(vectors), "status": "indexed"}
-
-            elif op == "search_knn":
-                vector = params.get("vector")
-                if vector:
-                    vector = self.embedding.normalize(vector)
-                elif "text" in params:
-                    vector = self.embedding.embed_text(params["text"])
-
-                if not vector:
-                    raise VectorDBProtocolError(
-                        "Missing 'vector' or 'text' query parameter"
-                    )
-
-                top_k = int(params.get("top_k", 10))
-                ef_search = params.get("ef_search")
-                ef = int(ef_search) if ef_search is not None else None
-
-                matches = self.index.search(vector, top_k=top_k, ef_search=ef)
-                match_results: List[Dict[str, Any]] = []
-
-                for idx, sim in matches:
-                    if idx < len(self.storage.metadata):
-                        meta = self.storage.get_metadata(idx)
-                        match_results.append(
-                            {
-                                "index": idx,
-                                "id": meta.get("id", str(idx)),
-                                "score": round(sim, 4),
-                                "metadata": meta,
-                            }
-                        )
-
-                result = {
-                    "total_matches": len(match_results),
-                    "matches": match_results,
-                }
-
-            elif op == "get_by_id":
-                doc_id = params.get("id")
-                if not doc_id:
-                    raise VectorDBProtocolError("Missing 'id' parameter")
-
-                vec = self.storage.get_vector_by_id(doc_id)
-                meta_idx = self.storage.id_to_idx.get(doc_id)
-                doc_meta: Optional[Dict[str, Any]] = (
-                    self.storage.get_metadata(meta_idx)
-                    if meta_idx is not None
-                    else None
-                )
-
-                result = {
-                    "found": vec is not None,
-                    "id": doc_id,
-                    "vector": list(vec) if vec is not None else None,
-                    "metadata": doc_meta,
-                }
-
-            elif op == "execute_sql":
-                sql = params.get("sql", "")
-                role = params.get("role", "admin")
-                if not sql:
-                    raise VectorDBProtocolError("Missing 'sql' parameter")
-                result = self.sql_executor.execute(sql, role=role, params=params)
-
+            result = self._dispatch_operation(op, params)
             wall_ms = (time.perf_counter() - t0_wall) * 1000.0
             cpu_ms = (time.process_time() - t0_cpu) * 1000.0
 

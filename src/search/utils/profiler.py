@@ -110,6 +110,18 @@ class ExecutionProfiler:
             memory_delta_kb=delta_kb,
         )
 
+    @property
+    def total_ms(self) -> float:
+        return self.metrics.wall_time_ms if self.metrics else 0.0
+
+    @property
+    def cpu_ms(self) -> float:
+        return self.metrics.cpu_time_ms if self.metrics else 0.0
+
+    @property
+    def peak_memory_kb(self) -> float:
+        return self.metrics.peak_memory_kb if self.metrics else 0.0
+
 
 def profile_function(
     func: Callable[..., Any],
