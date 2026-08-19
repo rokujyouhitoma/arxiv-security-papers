@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Distributed Coordination, Consensus, 2PC, Saga, and Anti-Entropy Subsystem.
+Distributed Coordination, Consensus, 2PC, Saga, Sharding, and Anti-Entropy Subsystem.
 Exports VectorClock, VersionedValue, PhiAccrualDetector, GossipNode,
 QuorumCoordinator, HintedHandoffManager, MerkleTree, PNCounter, ORSet,
-AntiEntropySynchronizer, Raft Consensus, Distributed 2PC, and Saga Orchestrator.
+AntiEntropySynchronizer, Raft Consensus, Distributed 2PC, Saga Orchestrator,
+and Consistent Hashing Sharding (ConsistentHashRing, ShardManager).
 """
 
 from .anti_entropy import AntiEntropySynchronizer
@@ -24,6 +25,7 @@ from .raft import (
     RequestVoteReply,
 )
 from .saga import SagaOrchestrator, SagaStatus, SagaStep, build_paper_pipeline_saga
+from .sharding import ConsistentHashRing, ShardManager
 from .two_pc import (
     DistributedDeadlockDetector,
     GlobalDecision,
@@ -88,4 +90,7 @@ __all__ = [
     "SagaStep",
     "SagaOrchestrator",
     "build_paper_pipeline_saga",
+    # Consistent Hashing & Sharding
+    "ConsistentHashRing",
+    "ShardManager",
 ]

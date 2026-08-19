@@ -18,6 +18,7 @@ from .distributed import (
     AppendEntriesArgs,
     AppendEntriesReply,
     ConflictResolutionStrategy,
+    ConsistentHashRing,
     DistributedDeadlockDetector,
     GlobalDecision,
     GossipNode,
@@ -43,6 +44,7 @@ from .distributed import (
     SagaOrchestrator,
     SagaStatus,
     SagaStep,
+    ShardManager,
     TwoPCCoordinator,
     TwoPCParticipant,
     TwoPCState,
@@ -316,6 +318,9 @@ __all__ = [
     "SagaStep",
     "SagaOrchestrator",
     "build_paper_pipeline_saga",
+    # Consistent Hashing & Sharding
+    "ConsistentHashRing",
+    "ShardManager",
     # VDBE (Core Virtual Machine)
     "VDBE",
     "VDBEProgram",
