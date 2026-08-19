@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **044** | [PAX（Partition Attributes Across）ハイブリッド列指向フォーマット & 高速集計スキャナの実装](closed/044-implement-pax-columnar-storage-and-analytics-scanner.md) | Feature | 2026-08-20 | [044-implement-pax-columnar-storage-and-analytics-scanner.md](closed/044-implement-pax-columnar-storage-and-analytics-scanner.md) |
 | **043** | [CoW (Copy-on-Write) B-Tree & mmap ゼロコピーリードエンジンの実装](closed/043-implement-cow-btree-and-mmap-zero-copy.md) | Feature | 2026-08-20 | [043-implement-cow-btree-and-mmap-zero-copy.md](closed/043-implement-cow-btree-and-mmap-zero-copy.md) |
 | **042** | [LSM-Tree ストレージエンジン（MemTable, SSTable, Sparse Index, Bloom Filter）の実装](closed/042-implement-lsm-tree-storage-engine-and-bloom-filter.md) | Feature | 2026-08-20 | [042-implement-lsm-tree-storage-engine-and-bloom-filter.md](closed/042-implement-lsm-tree-storage-engine-and-bloom-filter.md) |
 | **041** | [2Q バッファプール（スキャン汚染防止）と Pin/Unpin ページライフサイクル管理の実装](closed/041-implement-2q-buffer-pool-and-page-pinning.md) | Feature | 2026-08-20 | [041-implement-2q-buffer-pool-and-page-pinning.md](closed/041-implement-2q-buffer-pool-and-page-pinning.md) |

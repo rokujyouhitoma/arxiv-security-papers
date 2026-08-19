@@ -34,6 +34,14 @@ from .lsm import (
 )
 from .mvcc import MVCCManager, TransactionSnapshot, VersionedTuple
 from .pager import PAGE_SIZE, Page, PageCache, Pager
+from .pax import (
+    ColumnDecoder,
+    ColumnEncoder,
+    ColumnEncodingType,
+    PAXPage,
+    PAXScanner,
+    PAXTable,
+)
 from .planner import (
     ColumnStats,
     CostModel,
@@ -154,6 +162,13 @@ __all__ = [
     "CoWNode",
     "MetaPage",
     "MMapFile",
+    # PAX Columnar Analytics Storage
+    "PAXTable",
+    "PAXPage",
+    "PAXScanner",
+    "ColumnEncoder",
+    "ColumnDecoder",
+    "ColumnEncodingType",
     # Slotted Page Binary Storage
     "SlottedPage",
     "TupleSerializer",
