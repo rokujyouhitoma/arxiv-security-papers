@@ -12,6 +12,7 @@ from .buffer_pool import BufferFrame, BufferPool2Q, BufferPoolError
 from .client import VectorDBClient
 from .codegen import CodeGenerator
 from .compiler import SQLCompiler
+from .cow import CoWBTree, CoWEngine, CoWNode, CoWReadTx, CoWWriteTx, MetaPage, MMapFile
 from .driver import Connection, Cursor, DatabaseError, connect
 from .embedding import DeterministicEmbedding
 from .index import HNSWIndex
@@ -145,6 +146,14 @@ __all__ = [
     "SSTableReader",
     "SSTableWriter",
     "TOMBSTONE",
+    # CoW B-Tree & MMap Zero-Copy Engine
+    "CoWEngine",
+    "CoWReadTx",
+    "CoWWriteTx",
+    "CoWBTree",
+    "CoWNode",
+    "MetaPage",
+    "MMapFile",
     # Slotted Page Binary Storage
     "SlottedPage",
     "TupleSerializer",
