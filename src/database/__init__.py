@@ -8,6 +8,7 @@ PEP 249 DB-API 2.0 driver, and 100% compatible Python standard `sqlite3` client 
 """
 
 from .btree import BPlusTree, BTreeNode, ScalarKey
+from .buffer_pool import BufferFrame, BufferPool2Q, BufferPoolError
 from .client import VectorDBClient
 from .codegen import CodeGenerator
 from .compiler import SQLCompiler
@@ -107,6 +108,9 @@ __all__ = [
     "PageCache",
     "Page",
     "PAGE_SIZE",
+    "BufferPool2Q",
+    "BufferFrame",
+    "BufferPoolError",
     # Write-Ahead Logging & ARIES Recovery
     "LogRecord",
     "LogRecordType",
