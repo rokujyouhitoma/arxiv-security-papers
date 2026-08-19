@@ -15,6 +15,22 @@ from .compiler import SQLCompiler
 from .cow import CoWBTree, CoWEngine, CoWNode, CoWReadTx, CoWWriteTx, MetaPage, MMapFile
 from .driver import Connection, Cursor, DatabaseError, connect
 from .embedding import DeterministicEmbedding
+from .engine import (
+    BatchIterator,
+    ColumnBatch,
+    FilterIterator,
+    HashJoinIterator,
+    IndexScanIterator,
+    LimitIterator,
+    NestedLoopJoinIterator,
+    ProjectionIterator,
+    SeqScanIterator,
+    VectorizedAggregation,
+    VectorizedFilter,
+    VectorizedProjection,
+    VectorizedScan,
+    VolcanoIterator,
+)
 from .index import HNSWIndex
 from .lock_manager import (
     DeadlockError,
@@ -201,6 +217,21 @@ __all__ = [
     "DPJoinOptimizer",
     "JoinPhysicalOperator",
     "JoinPlanNode",
+    # Volcano Streaming Iterators and Vectorized Execution Engine
+    "VolcanoIterator",
+    "SeqScanIterator",
+    "IndexScanIterator",
+    "FilterIterator",
+    "ProjectionIterator",
+    "NestedLoopJoinIterator",
+    "HashJoinIterator",
+    "LimitIterator",
+    "ColumnBatch",
+    "BatchIterator",
+    "VectorizedScan",
+    "VectorizedFilter",
+    "VectorizedProjection",
+    "VectorizedAggregation",
     # VDBE (Core Virtual Machine)
     "VDBE",
     "VDBEProgram",
