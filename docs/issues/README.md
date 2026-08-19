@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **039** | [追記型永続WALファイルとARIESクラッシュリカバリマネージャの実装](closed/039-implement-disk-persistent-wal-and-aries-recovery.md) | Feature | 2026-08-20 | [039-implement-disk-persistent-wal-and-aries-recovery.md](closed/039-implement-disk-persistent-wal-and-aries-recovery.md) |
 | **038** | [スロット化ページ（Slotted-Page）バイナリストレージエンジンの実装](closed/038-implement-slotted-page-binary-storage-engine.md) | Feature | 2026-08-19 | [038-implement-slotted-page-binary-storage-engine.md](closed/038-implement-slotted-page-binary-storage-engine.md) |
 | **034** | [Web サーバーの API Gateway 化と UI プレゼンテーション層の完全分離（`src/gateway/` / `src/presentation/`）](closed/034-split-web-server-into-api-gateway-and-ui-presentation.md) | Feature / Arch | 2026-08-19 | [034-split-web-server-into-api-gateway-and-ui-presentation.md](closed/034-split-web-server-into-api-gateway-and-ui-presentation.md) |
 | **033** | [`src/database/` の内部エンジン進化（B+Tree インデックスおよび Cost-Based Query Planner の分離・実装）](closed/033-enhance-database-with-btree-index-and-cost-based-planner.md) | Feature | 2026-08-19 | [033-enhance-database-with-btree-index-and-cost-based-planner.md](closed/033-enhance-database-with-btree-index-and-cost-based-planner.md) |

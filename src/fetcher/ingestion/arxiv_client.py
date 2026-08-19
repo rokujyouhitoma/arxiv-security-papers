@@ -12,6 +12,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 try:
     import defusedxml.ElementTree as _defused_ET  # type: ignore
@@ -35,9 +37,6 @@ except ImportError:
 
     # Alias for namespace-aware find operations
     import xml.etree.ElementTree as ET
-
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
 
 
 def load_config() -> Dict[str, Any]:
