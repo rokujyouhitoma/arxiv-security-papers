@@ -42,7 +42,7 @@ Target Branch: `feat/036-enforce-strict-quality-gates`
    - `isort`, `black`, `flake8`, `radon`, `xenon`, `mypy` から `|| true` を削除。
    - メトリクス表示のみを目的とし、異常終了を意図しない radon コマンド等がある場合は適切に判断・設定。
 2. **Git pre-commit フックの同期と厳格化**:
-   - `.githooks/pre-commit` および `make setup_hooks` で生成されるフックが `set -e` で format / static_analysis / test を順次検証し、1件でもエラーがあればコミットを中断する設計を確立。
+   - `.githooks/pre-commit` および `make setup_hooks` で生成されるフックが `set -e` で format / static_analysis を順次検証し、1件でもエラーがあればコミットを中断する設計を確立（※コミット頻度と開発速度維持のため `make test` は実装時・CI 実行に委ねる構成）。
 3. **フォーマット適合**:
    - `make format` を実行し、コードベース全体のフォーマット整合性を完全保証。
 4. **静的解析・型チェック・複雑度エラーの解消**:
