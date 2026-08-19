@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **048** | [$\Phi$ Accrual 障害検知器 & Gossip プロトコル（ハートビート分散伝播）の実装](closed/048-implement-phi-accrual-and-gossip-protocol.md) | Feature | 2026-08-20 | [048-implement-phi-accrual-and-gossip-protocol.md](closed/048-implement-phi-accrual-and-gossip-protocol.md) |
 | **047** | [Vector Clock（論理時計因果追跡）& Version Vector 競合検知エンジンの実装](closed/047-implement-vector-clock-and-version-vector.md) | Feature | 2026-08-20 | [047-implement-vector-clock-and-version-vector.md](closed/047-implement-vector-clock-and-version-vector.md) |
 | **046** | [Volcano 型ストリーミングイテレータ & ベクトル化バッチ実行エンジン（Vectorized Batch Execution）の実装](closed/046-implement-volcano-iterator-and-vectorized-execution.md) | Feature | 2026-08-20 | [046-implement-volcano-iterator-and-vectorized-execution.md](closed/046-implement-volcano-iterator-and-vectorized-execution.md) |
 | **045** | [CBO 統計ヒストグラム（Equi-Depth / HyperLogLog）& 動的計画法結合順序探索（DP Join Enumeration）の実装](closed/045-implement-cbo-histograms-and-dp-join-enumeration.md) | Feature | 2026-08-20 | [045-implement-cbo-histograms-and-dp-join-enumeration.md](closed/045-implement-cbo-histograms-and-dp-join-enumeration.md) |

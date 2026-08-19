@@ -15,6 +15,10 @@ from .compiler import SQLCompiler
 from .cow import CoWBTree, CoWEngine, CoWNode, CoWReadTx, CoWWriteTx, MetaPage, MMapFile
 from .distributed import (
     ConflictResolutionStrategy,
+    GossipNode,
+    NodeState,
+    NodeStatus,
+    PhiAccrualDetector,
     VectorClock,
     VersionedValue,
     prune_dominated_versions,
@@ -239,12 +243,16 @@ __all__ = [
     "VectorizedFilter",
     "VectorizedProjection",
     "VectorizedAggregation",
-    # Distributed Coordination and Causality
+    # Distributed Coordination, Causality, and Gossip
     "VectorClock",
     "VersionedValue",
     "ConflictResolutionStrategy",
     "resolve_conflict",
     "prune_dominated_versions",
+    "PhiAccrualDetector",
+    "NodeStatus",
+    "NodeState",
+    "GossipNode",
     # VDBE (Core Virtual Machine)
     "VDBE",
     "VDBEProgram",
