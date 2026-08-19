@@ -8,14 +8,17 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..btree import BPlusTree
 from ..embedding import DeterministicEmbedding
 from ..index import HNSWIndex
+from ..planner import QueryPlanner, TableStats
 from ..storage import VectorStorage
 from .ast import (
     CreateIndexStatement,
     CreateTableStatement,
     DeleteStatement,
     DropTableStatement,
+    ExplainStatement,
     GrantStatement,
     InsertStatement,
     RevokeStatement,
@@ -49,6 +52,15 @@ class TableCatalog:
         self.storage = storage
         self.index = index or HNSWIndex(dim=storage.dim)
         self.schema = schema or {}
+        self.btree_indexes: Dict[str, BPlusTree] = {}
+        self.btree_index_names: Dict[str, str] = {}
+        self.stats: TableStats = TableStats(name)
+        self.recompute_stats()
+
+    def recompute_stats(self) -> None:
+        """Refreshes catalog statistics from storage metadata."""
+        if self.storage and self.storage.metadata:
+            self.stats.analyze_from_metadata(self.storage.metadata)
 
 
 class SQLExecutor:
@@ -298,6 +310,14 @@ class SQLExecutor:
         del self.tables[stmt.table_name]
         return {"command": "DROP_TABLE", "status": "ok", "dropped": True}
 
+    def _build_btree_index(self, table: TableCatalog, col_name: str) -> BPlusTree:
+        btree = BPlusTree(column_name=col_name)
+        for row_id, meta in enumerate(table.storage.metadata):
+            val = meta.get(col_name)
+            if val is not None and isinstance(val, (int, float, str)):
+                btree.insert(val, row_id)
+        return btree
+
     def _exec_create_index(
         self, stmt: CreateIndexStatement, effective_role: str
     ) -> Dict[str, Any]:
@@ -305,14 +325,49 @@ class SQLExecutor:
             effective_role, stmt.table_name, "ADMIN"
         )
         table = self._get_table(stmt.table_name)
-        table.index = HNSWIndex(dim=table.storage.dim)
-        table.index.build_from_storage(table.storage.get_all_vectors())
+        idx_type = stmt.index_type.upper()
+        if idx_type == "BTREE":
+            btree = self._build_btree_index(table, stmt.column_name)
+            table.btree_indexes[stmt.column_name] = btree
+            table.btree_index_names[stmt.column_name] = stmt.index_name
+        else:
+            table.index = HNSWIndex(dim=table.storage.dim)
+            table.index.build_from_storage(table.storage.get_all_vectors())
         return {
             "command": "CREATE_INDEX",
             "status": "ok",
             "index_name": stmt.index_name,
             "table": stmt.table_name,
-            "type": stmt.index_type,
+            "column": stmt.column_name,
+            "type": idx_type,
+        }
+
+    def _exec_explain(
+        self, stmt: ExplainStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        if not isinstance(stmt.statement, SelectStatement):
+            return {
+                "command": "EXPLAIN",
+                "status": "ok",
+                "rows": [{"id": 1, "detail": "EXPLAIN for non-SELECT statement"}],
+            }
+        sub_stmt = stmt.statement
+        self.access_controller.enforce_permission(
+            effective_role, sub_stmt.table_name, "SELECT"
+        )
+        table = self._get_table(sub_stmt.table_name)
+        table.recompute_stats()
+        avail_indexes = {
+            col: table.btree_index_names.get(col, f"idx_{col}")
+            for col in table.btree_indexes.keys()
+        }
+        explain_rows = QueryPlanner.explain(
+            sub_stmt, table.stats, available_indexes=avail_indexes
+        )
+        return {
+            "command": "EXPLAIN",
+            "status": "ok",
+            "rows": explain_rows,
         }
 
     def _query_knn_or_scan(
@@ -451,6 +506,8 @@ class SQLExecutor:
     def _exec_security_or_schema(
         self, stmt: SQLStatement, role: str
     ) -> Optional[Dict[str, Any]]:
+        if isinstance(stmt, ExplainStatement):
+            return self._exec_explain(stmt, role)
         if isinstance(stmt, GrantStatement):
             return self._exec_grant(stmt, role)
         if isinstance(stmt, RevokeStatement):

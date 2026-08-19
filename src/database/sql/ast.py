@@ -17,6 +17,7 @@ class SQLCommandType(str, Enum):
 
     # DQL
     SELECT = "SELECT"
+    EXPLAIN = "EXPLAIN"
 
     # DML
     INSERT = "INSERT"
@@ -164,3 +165,10 @@ class CommitStatement(SQLStatement):
 @dataclass
 class RollbackStatement(SQLStatement):
     pass
+
+
+# EXPLAIN
+@dataclass
+class ExplainStatement(SQLStatement):
+    statement: Optional[SQLStatement] = None
+    query_plan: bool = True

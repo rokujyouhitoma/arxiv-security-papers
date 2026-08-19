@@ -16,6 +16,7 @@ from .ast import (
     CreateTableStatement,
     DeleteStatement,
     DropTableStatement,
+    ExplainStatement,
     GrantStatement,
     InsertStatement,
     RevokeStatement,
@@ -47,13 +48,16 @@ class SQLParser:
             return RollbackStatement(command_type=SQLCommandType.ROLLBACK, raw_sql=sql)
         return None
 
-    def _parse_ddl_dml(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+    def _parse_ddl(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("CREATE TABLE"):
             return self._parse_create_table(sql)
         if upper_sql.startswith("DROP TABLE"):
             return self._parse_drop_table(sql)
         if upper_sql.startswith("CREATE INDEX"):
             return self._parse_create_index(sql)
+        return None
+
+    def _parse_dml_dql(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("SELECT"):
             return self._parse_select(sql)
         if upper_sql.startswith("INSERT INTO"):
@@ -62,11 +66,23 @@ class SQLParser:
             return self._parse_update(sql)
         if upper_sql.startswith("DELETE FROM"):
             return self._parse_delete(sql)
+        return None
+
+    def _parse_dcl_explain(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        if upper_sql.startswith("EXPLAIN"):
+            return self._parse_explain(sql)
         if upper_sql.startswith("GRANT"):
             return self._parse_grant(sql)
         if upper_sql.startswith("REVOKE"):
             return self._parse_revoke(sql)
         return None
+
+    def _parse_ddl_dml(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        return (
+            self._parse_dcl_explain(upper_sql, sql)
+            or self._parse_ddl(upper_sql, sql)
+            or self._parse_dml_dql(upper_sql, sql)
+        )
 
     def parse(self, sql_query: str) -> SQLStatement:
         sql = sql_query.strip().rstrip(";")
@@ -83,6 +99,22 @@ class SQLParser:
             return stmt
 
         raise SQLParseError(f"Unsupported or unrecognized SQL statement: '{sql}'")
+
+    def _parse_explain(self, sql: str) -> ExplainStatement:
+        m = re.match(
+            r"^EXPLAIN(\s+QUERY\s+PLAN)?\s+(.*)$", sql, re.IGNORECASE | re.DOTALL
+        )
+        if not m:
+            raise SQLParseError(f"Malformed EXPLAIN syntax: {sql}")
+        query_plan = bool(m.group(1))
+        sub_sql = m.group(2).strip()
+        sub_stmt = self.parse(sub_sql)
+        return ExplainStatement(
+            command_type=SQLCommandType.EXPLAIN,
+            raw_sql=sql,
+            statement=sub_stmt,
+            query_plan=query_plan,
+        )
 
     def _parse_create_table(self, sql: str) -> CreateTableStatement:
         m = re.match(

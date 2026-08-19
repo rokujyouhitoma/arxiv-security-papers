@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当ブランチ / ファイル |
 | :---: | --- | :---: | :---: | :---: | --- |
-| **033** | [`src/database/` の内部エンジン進化（B+Tree インデックスおよび Cost-Based Query Planner の分離・実装）](033-enhance-database-with-btree-index-and-cost-based-planner.md) | Feature | Medium | New | `feat/033-database-btree-and-query-planner` |
 | **034** | [Web サーバーの API Gateway 化と UI プレゼンテーション層の完全分離（`src/gateway/` / `src/presentation/`）](034-split-web-server-into-api-gateway-and-ui-presentation.md) | Feature / Arch | Low | New | `feat/034-split-gateway-and-presentation` |
 
 ---
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **033** | [`src/database/` の内部エンジン進化（B+Tree インデックスおよび Cost-Based Query Planner の分離・実装）](closed/033-enhance-database-with-btree-index-and-cost-based-planner.md) | Feature | 2026-08-19 | [033-enhance-database-with-btree-index-and-cost-based-planner.md](closed/033-enhance-database-with-btree-index-and-cost-based-planner.md) |
 | **037** | [Makefile およびパイプラインにおける品質・テスト・ビルド基準の極限厳格化](closed/037-enforce-strict-code-quality-and-test-standards.md) | Feature / Quality | 2026-08-19 | [037-enforce-strict-code-quality-and-test-standards.md](closed/037-enforce-strict-code-quality-and-test-standards.md) |
 | **036** | [Makefile 品質チェックにおけるエラー握りつぶし（`|| true`）の完全撤廃と厳格な品質ゲート適合](closed/036-enforce-strict-quality-gates-and-remove-error-suppression.md) | Feature / Refactor | 2026-08-19 | [036-enforce-strict-quality-gates-and-remove-error-suppression.md](closed/036-enforce-strict-quality-gates-and-remove-error-suppression.md) |
 | **032** | [共通セキュリティ＆コンプライアンス基盤（`src/security/`）の独立集約](closed/032-consolidate-unified-security-guard-and-rbac.md) | Feature / Security | 2026-08-19 | [032-consolidate-unified-security-guard-and-rbac.md](closed/032-consolidate-unified-security-guard-and-rbac.md) |
