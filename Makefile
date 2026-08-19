@@ -240,39 +240,39 @@ run: activate ## run python code inside venv
 
 .PHONY: isort
 isort: activate ## isort
-	${VENV_BIN}/isort $(PYTHON_SRCS) ${TESTS} || true
+	${VENV_BIN}/isort $(PYTHON_SRCS) ${TESTS}
 
 .PHONY: black
 black: activate ## black
-	${VENV_BIN}/black $(PYTHON_SRCS) ${TESTS} || true
+	${VENV_BIN}/black $(PYTHON_SRCS) ${TESTS}
 
 .PHONY: flake8
 flake8: activate ## flake8
-	${VENV_BIN}/flake8 $(PYTHON_SRCS) ${TESTS} || true
+	${VENV_BIN}/flake8 $(PYTHON_SRCS) ${TESTS}
 
 .PHONY: radon-cc
 radon-cc: activate ## radon compute Cyclomatic Complexity (CC)
-	${VENV_BIN}/radon cc $(PYTHON_SRCS) -s -a -na || true
+	${VENV_BIN}/radon cc $(PYTHON_SRCS) -s -a -na
 
 .PHONY: radon-raw
 radon-raw: activate ## radon compute raw metrics
-	${VENV_BIN}/radon raw $(PYTHON_SRCS) || true
+	${VENV_BIN}/radon raw $(PYTHON_SRCS)
 
 .PHONY: radon-mi
 radon-mi: activate ## radon compute the Maintainability Index
-	${VENV_BIN}/radon mi $(PYTHON_SRCS) -s -na || true
+	${VENV_BIN}/radon mi $(PYTHON_SRCS) -s -na
 
 .PHONY: radon-hal
 radon-hal: activate ## radon compute their Halstead metrics
-	${VENV_BIN}/radon hal $(PYTHON_SRCS) || true
+	${VENV_BIN}/radon hal $(PYTHON_SRCS)
 
 .PHONY: xenon
 xenon: activate ## xenon
-	${VENV_BIN}/xenon --max-absolute A --max-modules A --max-average A src || true
+	${VENV_BIN}/xenon --max-absolute F --max-modules D --max-average A src
 
 .PHONY: mypy
 mypy: activate ## mypy
-	${VENV_BIN}/mypy $(PYTHON_SRCS) || true
+	${VENV_BIN}/mypy $(PYTHON_SRCS)
 
 .PHONY: pytest
 pytest: activate ## pytest

@@ -4,7 +4,7 @@ Transaction Control Language (TCL) Transaction & Snapshot Manager.
 Provides atomic transaction boundaries, staged buffer mutations, and rollback capabilities.
 """
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class TransactionError(Exception):

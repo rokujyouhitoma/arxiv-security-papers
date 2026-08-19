@@ -4,40 +4,22 @@ Heavyweight Performance, Memory Profiling & Concurrency Test Suite for
 Pure Python 4-Tier Vector Database (VFS, Pager, VDBE, Compiler, Storage).
 """
 
-import gc
 import os
 import random
 import tempfile
 import time
-import tracemalloc
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Tuple
+from typing import List
 
-import pytest
-
-import database
 from database import (
     PAGE_SIZE,
-    VDBE,
     DatabaseProfiler,
-    DeterministicEmbedding,
     HNSWIndex,
     MemoryVFS,
-    OpCode,
     Page,
     PageCache,
     Pager,
-    PosixVFS,
-    SQLCompiler,
-    SQLExecutor,
-    Statement,
-    TableCatalog,
-    VDBEProgram,
-    VectorDBClient,
-    VectorDBProtocolHandler,
     VectorStorage,
-    connect,
-    get_vfs,
 )
 
 

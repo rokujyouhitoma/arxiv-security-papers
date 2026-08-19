@@ -7,7 +7,7 @@ against underlying storage, HNSW indexes, and pagers.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class OpCode(str, Enum):

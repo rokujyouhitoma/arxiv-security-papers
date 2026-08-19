@@ -4,8 +4,6 @@ VDBE Bytecode Code Generator & Query Planner.
 Transforms SQL AST nodes into optimized VDBEProgram bytecode instruction sequences.
 """
 
-from typing import Any, Dict
-
 from .sql.ast import (
     BeginStatement,
     CommitStatement,
@@ -14,7 +12,7 @@ from .sql.ast import (
     SelectStatement,
     SQLStatement,
 )
-from .vdbe import Instruction, OpCode, VDBEProgram
+from .vdbe import OpCode, VDBEProgram
 
 
 class CodeGenerator:

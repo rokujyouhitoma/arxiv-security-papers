@@ -6,7 +6,7 @@ Supports 5 major SQL categories: DDL, DQL, DML, DCL, TCL.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 
 class SQLCommandType(str, Enum):

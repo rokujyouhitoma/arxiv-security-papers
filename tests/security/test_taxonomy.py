@@ -30,7 +30,10 @@ def test_cwe_recipes_and_definitions():
 
 
 def test_extract_mitre_techniques():
-    sample_text = "We analyzed remote code execution and exploit public-facing application vulnerabilities in IoT devices."
+    sample_text = (
+        "We analyzed remote code execution and exploit "
+        "public-facing application vulnerabilities in IoT devices."
+    )
     techniques = extract_mitre_techniques(sample_text)
     assert "T1190" in techniques
 
@@ -42,7 +45,10 @@ def test_extract_mitre_techniques():
 
 
 def test_extract_stride_categories():
-    sample_text = "The attack causes severe denial of service through resource exhaustion and memory corruption."
+    sample_text = (
+        "The attack causes severe denial of service through "
+        "resource exhaustion and memory corruption."
+    )
     stride = extract_stride_categories(sample_text)
     assert "Denial of Service" in stride
     assert "Tampering" in stride

@@ -107,7 +107,8 @@ def run_pipeline(
             processed_state = {}
 
     print(
-        f"[{datetime.now().isoformat()}] [ETL:Ingestion] Fetching papers from arXiv (query={query}, max_results={max_results})..."
+        f"[{datetime.now().isoformat()}] [ETL:Ingestion] "
+        f"Fetching papers from arXiv (query={query}, max_results={max_results})..."
     )
     papers = fetch_arxiv_papers(query=query, max_results=max_results)
     if not papers:
@@ -180,7 +181,8 @@ def run_pipeline(
 
     # Step 4: Report & Generate 5-tier summaries
     print(
-        f"[{datetime.now().isoformat()}] [ETL:Reporter] Generating 5-tier executive summaries and updating index catalog..."
+        f"[{datetime.now().isoformat()}] [ETL:Reporter] "
+        f"Generating 5-tier executive summaries and updating index catalog..."
     )
     if processed_items:
         per_run_path = generate_per_run_summary(processed_items, workspace_dir, config)
