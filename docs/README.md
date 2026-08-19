@@ -32,6 +32,20 @@
   - F-05 (MCP JSON-RPC 2.0 4大ツール/パス境界セキュリティガード) の個別機能設計。
 - 🎨 **[[DSN-07] Web ポータル ＆ Markdown Compiler 設計](designs/DSN-07-web_portal_and_markdown_compiler.md)**
   - F-06 (Web UI), F-07 (Markdown Compiler Engine), F-08 (Closure Compiler) の個別機能設計。
+- 🔍 **[[DSN-08] Lucene / Solr モジュラー検索アーキテクチャ設計](designs/DSN-08-lucene-solr-modular-architecture.md)**
+  - 分離型トークナイザ/CharFilter、DocValues、PostingsList、ManagedSchema の詳細設計。
+- 📈 **[[DSN-09] 可観測性 ＆ パフォーマンスプロファイリング設計](designs/DSN-09-observability-and-performance-profiling.md)**
+  - リアルタイムクエリプロファイラ、メモリフットプリント追跡、メトリクスエクスポータ設計。
+- 🎯 **[[DSN-10] 検索エンジン評価フレームワーク設計](designs/DSN-10-search-engine-evaluation-framework.md)**
+  - NDCG@K, MRR@K, MAP, Precision/Recall 自動ベンチマークスイート設計。
+- 🛡️ **[[DSN-11] リポジトリセキュリティ ＆ 脅威防御設計](designs/DSN-11-repository-security-and-threat-defense.md)**
+  - AST セキュリティサンドボックス、RBAC エンジン、パス走査検証防御設計。
+- 🌐 **[[DSN-12] MCP 戦略的エコシステム拡張設計](designs/DSN-12-mcp-strategic-ecosystem-expansion.md)**
+  - 観測性・Tech Radar・脅威防御 MCP サーバー群およびセキュリティ堅牢化設計。
+- ⚡ **[[DSN-13] SQLite Vector 互換アーキテクチャ設計](designs/DSN-13-sqlite-vector-architecture.md)**
+  - PEP 249 DB-API 2.0、VFS、Pager、4KB Paged B+Tree、VDBE バイトコードエンジン設計。
+- 🏛️ **[[DSN-14] 次世代データベースエンジン 包括的アーキテクチャ設計](designs/DSN-14-database_engine_architecture.md)**
+  - Slotted Page、ディスク永続 WAL & ARIES リカバリ、MVCC / SS2PL、CoW / LMDB ゼロコピー、LSM-Tree & Bloom フィルタ、分散協調・合意（Raft/Paxos/PBFT）、厳格クォーラム & CRDT、2PC & Saga パターン。
 
 ### 4. AI エージェント & MCP 連携 (AI & MCP Specification)
 - 🔌 **[[MCP-01] MCP サーバ ＆ ベクトル DB 仕様書](mcp/MCP-01-mcp_server_specification.md)**
