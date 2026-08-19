@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **041** | [2Q バッファプール（スキャン汚染防止）と Pin/Unpin ページライフサイクル管理の実装](closed/041-implement-2q-buffer-pool-and-page-pinning.md) | Feature | 2026-08-20 | [041-implement-2q-buffer-pool-and-page-pinning.md](closed/041-implement-2q-buffer-pool-and-page-pinning.md) |
 | **040** | [MVCC（多版同時実行制御）と SS2PL ロックマネージャ・デッドロック検知の実装](closed/040-implement-mvcc-and-ss2pl-transaction-manager.md) | Feature | 2026-08-20 | [040-implement-mvcc-and-ss2pl-transaction-manager.md](closed/040-implement-mvcc-and-ss2pl-transaction-manager.md) |
 | **039** | [追記型永続WALファイルとARIESクラッシュリカバリマネージャの実装](closed/039-implement-disk-persistent-wal-and-aries-recovery.md) | Feature | 2026-08-20 | [039-implement-disk-persistent-wal-and-aries-recovery.md](closed/039-implement-disk-persistent-wal-and-aries-recovery.md) |
 | **038** | [スロット化ページ（Slotted-Page）バイナリストレージエンジンの実装](closed/038-implement-slotted-page-binary-storage-engine.md) | Feature | 2026-08-19 | [038-implement-slotted-page-binary-storage-engine.md](closed/038-implement-slotted-page-binary-storage-engine.md) |

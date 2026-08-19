@@ -8,45 +8,85 @@ and ARIES crash recovery integration.
 
 import struct
 import threading
-from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
+from .buffer_pool import BufferFrame, BufferPool2Q
 from .recovery import ARIESRecoveryManager
 from .vfs import VFS, VFSFile, get_vfs
-from .wal import DEFAULT_PAGE_SIZE, LogRecordType, WALReader, WALWriter
+from .wal import LogRecordType, WALReader, WALWriter
 
-PAGE_SIZE = DEFAULT_PAGE_SIZE
+PAGE_SIZE = 4096
 
 
 class Page:
-    """Represents a single in-memory 4096-byte database page."""
+    """Represents a cached 4KB database page with LSN and pin lifecycle."""
 
     def __init__(
         self,
         page_id: int,
-        data: Union[bytearray, bytes],
+        data: bytearray,
         is_dirty: bool = False,
         page_lsn: int = 0,
     ) -> None:
         self.page_id = page_id
-        self.data = (
-            bytearray(data)
-            if isinstance(data, (bytes, bytearray))
-            else bytearray(PAGE_SIZE)
-        )
+        self.data = data
         self.is_dirty = is_dirty
-        self.page_lsn = page_lsn or self._read_lsn_from_header()
+        self.page_lsn = page_lsn
+        self.pin_count = 0
+        if page_lsn == 0 and len(data) >= 28:
+            self.page_lsn = self._read_lsn_from_header()
+
+    def pin(self) -> int:
+        """Increments pin count, protecting page from eviction."""
+        self.pin_count += 1
+        return self.pin_count
+
+    def unpin(self, is_dirty: bool = False) -> int:
+        """Decrements pin count and optionally marks page dirty."""
+        if self.pin_count > 0:
+            self.pin_count -= 1
+        if is_dirty:
+            self.is_dirty = True
+        return self.pin_count
+
+    def is_pinned(self) -> bool:
+        """Returns True if currently pinned."""
+        return self.pin_count > 0
 
     def _read_lsn_from_header(self) -> int:
         if len(self.data) >= 28:
             try:
-                _, lsn, _, _, _, _, _ = struct.unpack_from("<IQHHHHI", self.data, 0)
-                return int(lsn)
+                page_id, lsn, slot_count, free_lower, free_upper, flags, next_id = (
+                    struct.unpack_from("<IQHHHHI", self.data, 0)
+                )
+                if 28 <= free_lower <= free_upper <= 4096 and flags in (1, 2, 4, 8, 16):
+                    return int(lsn)
             except Exception:
                 return 0
         return 0
 
     def set_lsn(self, lsn: int) -> None:
+        """Updates the page LSN both in memory attribute and header if slotted page."""
+        if len(self.data) >= 28:
+            try:
+                page_id, old_lsn, slot_count, free_lower, free_upper, flags, next_id = (
+                    struct.unpack_from("<IQHHHHI", self.data, 0)
+                )
+                if 28 <= free_lower <= free_upper <= 4096 and flags in (1, 2, 4, 8, 16):
+                    struct.pack_into(
+                        "<IQHHHHI",
+                        self.data,
+                        0,
+                        page_id,
+                        lsn,
+                        slot_count,
+                        free_lower,
+                        free_upper,
+                        flags,
+                        next_id,
+                    )
+            except Exception:
+                pass
         self.page_lsn = lsn
 
     def to_slotted_page(self) -> Any:
@@ -69,47 +109,102 @@ class Page:
 
 
 class PageCache:
-    """LRU page buffer pool cache."""
+    """
+    2Q (Two-Queue) Page Buffer Pool Cache with Scan Resistance.
+    Maintains A1_in (FIFO), A1_out (Ghost FIFO), and Am (LRU) queues.
+    """
 
     def __init__(self, capacity: int = 256) -> None:
         self.capacity = capacity
-        self._cache: OrderedDict[int, Page] = OrderedDict()
+        self._pool = BufferPool2Q(capacity=capacity)
+        # page_id -> Page instance wrapper mapping
+        self._pages: Dict[int, Page] = {}
         self._lock = threading.RLock()
 
     def __len__(self) -> int:
         with self._lock:
-            return len(self._cache)
+            return self._pool.total_cached_pages
 
     def get(self, page_id: int) -> Optional[Page]:
         with self._lock:
-            if page_id not in self._cache:
+            frame = self._pool.get(page_id)
+            if frame is None:
                 return None
-            self._cache.move_to_end(page_id)
-            return self._cache[page_id]
+            if page_id not in self._pages:
+                page = Page(
+                    page_id=frame.page_id,
+                    data=frame.data,
+                    is_dirty=frame.is_dirty,
+                    page_lsn=frame.page_lsn,
+                )
+                page.pin_count = frame.pin_count
+                self._pages[page_id] = page
+            else:
+                page = self._pages[page_id]
+                page.data = frame.data
+                page.is_dirty = frame.is_dirty
+                page.page_lsn = frame.page_lsn
+                page.pin_count = frame.pin_count
+            return page
 
     def put(self, page: Page) -> Optional[Page]:
-        """Puts page into cache, returning evicted page if capacity is reached."""
+        """Puts page into 2Q buffer pool, returning evicted Page if any."""
         with self._lock:
-            evicted: Optional[Page] = None
-            if page.page_id in self._cache:
-                self._cache.move_to_end(page.page_id)
-            elif len(self._cache) >= self.capacity:
-                _, evicted = self._cache.popitem(last=False)
+            frame = BufferFrame(
+                page_id=page.page_id,
+                data=page.data,
+                page_lsn=page.page_lsn,
+                is_dirty=page.is_dirty,
+            )
+            frame.pin_count = page.pin_count
+            self._pages[page.page_id] = page
 
-            self._cache[page.page_id] = page
-            return evicted
+            evicted_frame = self._pool.put(page.page_id, frame)
+            if evicted_frame is not None:
+                evicted_page = self._pages.pop(
+                    evicted_frame.page_id,
+                    Page(
+                        page_id=evicted_frame.page_id,
+                        data=evicted_frame.data,
+                        is_dirty=evicted_frame.is_dirty,
+                        page_lsn=evicted_frame.page_lsn,
+                    ),
+                )
+                evicted_page.is_dirty = evicted_frame.is_dirty
+                return evicted_page
+            return None
+
+    def pin_page(self, page_id: int) -> Page:
+        """Pins a page in 2Q buffer pool."""
+        with self._lock:
+            page = self.get(page_id)
+            if page is None:
+                raise KeyError(f"Page {page_id} is not resident in cache")
+            page.pin()
+            self._pool.pin_page(page_id)
+            return page
+
+    def unpin_page(self, page_id: int, is_dirty: bool = False) -> None:
+        """Unpins a page in 2Q buffer pool."""
+        with self._lock:
+            page = self.get(page_id)
+            if page is not None:
+                page.unpin(is_dirty=is_dirty)
+            self._pool.unpin_page(page_id, is_dirty=is_dirty)
 
     def remove(self, page_id: int) -> Optional[Page]:
         with self._lock:
-            return self._cache.pop(page_id, None)
+            page = self._pages.pop(page_id, None)
+            return page
 
     def get_all_pages(self) -> List[Page]:
         with self._lock:
-            return list(self._cache.values())
+            return [self.get(pid) for pid in list(self._pages.keys()) if self.get(pid) is not None]  # type: ignore
 
     def clear(self) -> None:
         with self._lock:
-            self._cache.clear()
+            self._pool.clear()
+            self._pages.clear()
 
 
 class Pager:
@@ -221,6 +316,18 @@ class Pager:
     def write_slotted_page(self, slotted: Any) -> None:
         """Serializes and writes a SlottedPage instance to cache and WAL."""
         self.write_page(slotted.page_id, slotted.serialize())
+
+    def pin_page(self, page_id: int) -> Page:
+        """Loads and pins a page in the 2Q buffer pool, guaranteeing memory residency."""
+        with self._lock:
+            # Ensure page is resident
+            self.read_page(page_id)
+            return self.cache.pin_page(page_id)
+
+    def unpin_page(self, page_id: int, is_dirty: bool = False) -> None:
+        """Unpins a page, allowing it to be evicted if needed."""
+        with self._lock:
+            self.cache.unpin_page(page_id, is_dirty=is_dirty)
 
     def begin(self, tx_id: Optional[int] = None) -> int:
         """Starts a WAL transaction and appends BEGIN record."""
