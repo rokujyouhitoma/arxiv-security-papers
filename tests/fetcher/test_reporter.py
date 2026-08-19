@@ -6,7 +6,6 @@ import os
 import tempfile
 
 from fetcher.reporter import (
-    build_summary_table_md,
     generate_all_daily_summaries,
     generate_annual_summary,
     generate_mermaid_mindmap,

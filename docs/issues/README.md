@@ -17,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **036** | [Makefile 品質チェックにおけるエラー握りつぶし（`|| true`）の完全撤廃と厳格な品質ゲート適合](closed/036-enforce-strict-quality-gates-and-remove-error-suppression.md) | Feature / Refactor | 2026-08-19 | [036-enforce-strict-quality-gates-and-remove-error-suppression.md](closed/036-enforce-strict-quality-gates-and-remove-error-suppression.md) |
 | **032** | [共通セキュリティ＆コンプライアンス基盤（`src/security/`）の独立集約](closed/032-consolidate-unified-security-guard-and-rbac.md) | Feature / Security | 2026-08-19 | [032-consolidate-unified-security-guard-and-rbac.md](closed/032-consolidate-unified-security-guard-and-rbac.md) |
 | **035** | [VectorEngine テスト `test_vector_engine_indexing_and_search` が 312MB index.json の同期ロードによりブロック](closed/035-fix-vector-engine-test-blocking-on-312mb-index-load.md) | Bug | 2026-08-18 | [035-fix-vector-engine-test-blocking-on-312mb-index-load.md](closed/035-fix-vector-engine-test-blocking-on-312mb-index-load.md) |
 | **031** | [`src/fetcher/` の ETL 3層（`ingestion` / `transformer` / `reporter`）アーキテクチャ分離](closed/031-refactor-fetcher-into-etl-pipeline-architecture.md) | Feature / Refactor | 2026-08-17 | [031-refactor-fetcher-into-etl-pipeline-architecture.md](closed/031-refactor-fetcher-into-etl-pipeline-architecture.md) |

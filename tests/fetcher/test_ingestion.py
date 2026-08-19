@@ -5,12 +5,9 @@ Unit tests for the Ingestion layer (arXiv client, XML parsing, PDF extractor).
 import os
 import tempfile
 import xml.etree.ElementTree as ET
-from unittest.mock import MagicMock, patch
 
 from fetcher.ingestion import (
     clean_text,
-    fetch_arxiv_rss_fallback,
-    fetch_single_pdf_and_text,
     get_paper_pub_date_str,
     load_config,
     parse_arxiv_entry,

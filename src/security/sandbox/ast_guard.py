@@ -141,7 +141,10 @@ class ASTSecurityGuard:
                         ):
                             mode_str = mode_arg.value
                             if any(c in mode_str for c in ("w", "a", "x", "+")):
-                                return f"Security Exception: File modification mode '{mode_str}' in open() is prohibited."
+                                return (
+                                    f"Security Exception: File modification mode '{mode_str}' "
+                                    f"in open() is prohibited."
+                                )
 
             # 4. Block access to dangerous dunder attributes
             elif isinstance(node, ast.Attribute):

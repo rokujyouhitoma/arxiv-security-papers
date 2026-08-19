@@ -11,7 +11,6 @@ from fetcher.transformer import (
     classify_domain,
     determine_security_tags,
     extract_mitre_and_stride,
-    generate_japanese_executive_summary,
     translate_title_ja,
 )
 

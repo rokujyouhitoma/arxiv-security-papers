@@ -10,27 +10,18 @@ Unit tests for SQLite-inspired 4-Tier Modular Vector DB Architecture:
 import os
 import tempfile
 
-import pytest
-
 from database import (
     VDBE,
-    CodeGenerator,
-    DeterministicEmbedding,
     HNSWIndex,
-    Instruction,
     MemoryVFS,
     OpCode,
-    Page,
-    PageCache,
     Pager,
     PosixVFS,
     SQLCompiler,
     Statement,
-    StepResult,
     TableCatalog,
     VDBEProgram,
     VectorStorage,
-    get_vfs,
 )
 
 

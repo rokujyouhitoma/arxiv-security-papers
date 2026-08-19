@@ -47,7 +47,7 @@ class PosixVFSFile(VFSFile):
         self.path = path
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         if not os.path.exists(path):
-            with open(path, "wb") as f:
+            with open(path, "wb"):
                 pass
         self._f = open(path, mode if "b" in mode else mode + "b")
         self._lock = threading.RLock()

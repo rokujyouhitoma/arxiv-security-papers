@@ -8,26 +8,12 @@ import json
 import os
 import sqlite3
 import tempfile
-from typing import List, Tuple
 
 import pytest
 
-import database
 from database import (
-    AccessController,
-    Connection,
-    Cursor,
     DCLPermissionDeniedError,
-    DeterministicEmbedding,
-    HNSWIndex,
-    SQLExecutionError,
     SQLExecutor,
-    SQLParseError,
-    SQLParser,
-    TransactionError,
-    TransactionManager,
-    VectorDBClient,
-    VectorDBProtocolHandler,
     VectorStorage,
     attach_to_sqlite,
     connect,
@@ -42,13 +28,15 @@ def test_ddl_and_dml_and_dql_lifecycle():
 
         # 1. DML: INSERT
         res_ins1 = executor.execute(
-            "INSERT INTO papers (id, title, category, vector) VALUES ('p1', 'Zero Trust Architecture', 'Zero-Trust', [1.0, 0.0, 0.0, 0.0])"
+            "INSERT INTO papers (id, title, category, vector) "
+            "VALUES ('p1', 'Zero Trust Architecture', 'Zero-Trust', [1.0, 0.0, 0.0, 0.0])"
         )
         assert res_ins1["status"] == "ok"
         assert res_ins1["id"] == "p1"
 
         res_ins2 = executor.execute(
-            "INSERT INTO papers (id, title, category, vector) VALUES ('p2', 'Quantum Key Distribution', 'Cryptography', [0.0, 1.0, 0.0, 0.0])"
+            "INSERT INTO papers (id, title, category, vector) "
+            "VALUES ('p2', 'Quantum Key Distribution', 'Cryptography', [0.0, 1.0, 0.0, 0.0])"
         )
         assert res_ins2["status"] == "ok"
 
@@ -163,11 +151,12 @@ def test_tcl_transaction_management():
 
 def test_pep249_db_api_driver_interface():
     """
-    Verifies that standard PEP 249 DB-API 2.0 (connect, cursor, execute, fetchall, params) works seamlessly.
+    Verifies that standard PEP 249 DB-API 2.0
+    (connect, cursor, execute, fetchall, params) works seamlessly.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         vdb_path = os.path.join(tmpdir, "dbapi_test.vdb")
-        conn = database.connect(vdb_path, dim=4)
+        conn = connect(vdb_path, dim=4)
 
         with conn.cursor() as cur:
             # 1. Insert with positional parameter binding (?)
@@ -256,11 +245,7 @@ def test_100_percent_standard_sqlite3_client_compatibility():
     Tests complex standard SQL (DDL, DQL, DML, TCL, aggregations, JOINs, subqueries, EMBED UDF)
     and bidirectional synchronization with binary VectorStorage (.vdb).
     """
-    from database import (
-        get_sqlite_connection,
-        sync_from_vector_storage,
-        sync_to_vector_storage,
-    )
+    from database import get_sqlite_connection, sync_to_vector_storage
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "native_sqlite.db")
@@ -326,7 +311,7 @@ def test_100_percent_standard_sqlite3_client_compatibility():
         # 4. DQL: Complex JOIN, GROUP BY, subquery, and vector scoring
         cur.execute(
             """
-            SELECT 
+            SELECT
                 p.id,
                 p.title,
                 p.category,

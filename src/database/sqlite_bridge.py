@@ -7,9 +7,8 @@ Enables standard `sqlite3.connect()` clients to query vector data and execute
 
 import json
 import sqlite3
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Optional
 
-from .embedding import DeterministicEmbedding
 from .storage import VectorStorage
 
 
@@ -43,8 +42,6 @@ def attach_to_sqlite(
     # 1. Register UDFs in SQLite
     sqlite_conn.create_function("COSINE_SIM", 2, cosine_similarity)
     sqlite_conn.create_function("KNN_SCORE", 2, cosine_similarity)
-
-    embedder = DeterministicEmbedding()
 
     # 2. If storage is provided, mirror records into SQLite table
     if storage:

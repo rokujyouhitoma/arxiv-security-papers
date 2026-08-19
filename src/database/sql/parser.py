@@ -5,9 +5,8 @@ Parses standard SQL statements into typed AST objects without external dependenc
 """
 
 import ast as py_ast
-import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from .ast import (
     BeginStatement,
@@ -143,7 +142,8 @@ class SQLParser:
 
     def _parse_create_index(self, sql: str) -> CreateIndexStatement:
         m = re.match(
-            r"CREATE\s+INDEX\s+([a-zA-Z0-9_]+)\s+ON\s+([a-zA-Z0-9_]+)\s*\(([a-zA-Z0-9_]+)\)(\s+USING\s+([a-zA-Z0-9_]+))?",
+            r"CREATE\s+INDEX\s+([a-zA-Z0-9_]+)\s+ON\s+([a-zA-Z0-9_]+)"
+            r"\s*\(([a-zA-Z0-9_]+)\)(\s+USING\s+([a-zA-Z0-9_]+))?",
             sql,
             re.IGNORECASE,
         )
@@ -167,7 +167,10 @@ class SQLParser:
     def _parse_select(self, sql: str) -> SelectStatement:
         # Pattern matching SELECT <cols> FROM <table> [WHERE ...] [ORDER BY ...] [LIMIT ...]
         m = re.match(
-            r"SELECT\s+(.+?)\s+FROM\s+([a-zA-Z0-9_]+)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+([a-zA-Z0-9_]+)(?:\s+(ASC|DESC))?)?(?:\s+LIMIT\s+([0-9]+))?$",
+            r"SELECT\s+(.+?)\s+FROM\s+([a-zA-Z0-9_]+)"
+            r"(?:\s+WHERE\s+(.+?))?"
+            r"(?:\s+ORDER\s+BY\s+([a-zA-Z0-9_]+)(?:\s+(ASC|DESC))?)?"
+            r"(?:\s+LIMIT\s+([0-9]+))?$",
             sql,
             re.IGNORECASE | re.DOTALL,
         )

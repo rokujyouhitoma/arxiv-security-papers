@@ -9,10 +9,9 @@ with binary VectorStorage (.vdb) and HNSWIndex.
 import json
 import os
 import sqlite3
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .embedding import DeterministicEmbedding
-from .index import HNSWIndex
 from .storage import VectorStorage
 
 
@@ -53,9 +52,10 @@ def get_sqlite_connection(
         import sqlite3
         from database import get_sqlite_connection
 
-        conn = get_sqlite_connection("outputs/database/papers.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, title, COSINE_SIM(vector, ?) AS score FROM papers ORDER BY score DESC LIMIT 5", [query_vec_json])
+        cursor.execute(
+            "SELECT id, title, COSINE_SIM(vector, ?) AS score FROM papers ORDER BY score DESC LIMIT 5",
+            [query_vec_json],
+        )
     """
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     conn = sqlite3.connect(db_path)

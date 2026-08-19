@@ -12,8 +12,6 @@ from ..embedding import DeterministicEmbedding
 from ..index import HNSWIndex
 from ..storage import VectorStorage
 from .ast import (
-    BeginStatement,
-    CommitStatement,
     CreateIndexStatement,
     CreateTableStatement,
     DeleteStatement,
@@ -21,7 +19,6 @@ from .ast import (
     GrantStatement,
     InsertStatement,
     RevokeStatement,
-    RollbackStatement,
     SelectStatement,
     SQLCommandType,
     SQLStatement,

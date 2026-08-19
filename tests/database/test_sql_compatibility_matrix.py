@@ -6,28 +6,21 @@ Pure Python SQL Engine (DDL, DQL, DML, DCL, TCL) & PEP 249 / SQLite3 Bridge.
 
 import os
 import tempfile
-from typing import Any, Dict, List, Tuple
+from typing import Tuple
 
 import pytest
 
-import database
 from database import (
     AccessController,
-    Connection,
-    Cursor,
     DatabaseError,
     DCLPermissionDeniedError,
-    DeterministicEmbedding,
     HNSWIndex,
-    SQLExecutionError,
     SQLExecutor,
     SQLParseError,
     SQLParser,
     TableCatalog,
-    TransactionError,
     TransactionManager,
     VectorStorage,
-    attach_to_sqlite,
     connect,
     get_sqlite_connection,
 )
@@ -178,8 +171,7 @@ def test_dql_aggregations_and_sorting():
     with tempfile.TemporaryDirectory() as tmpdir:
         storage_path = os.path.join(tmpdir, "intel.vdb")
         storage = VectorStorage(storage_path, dim=4)
-        catalog = TableCatalog(name="intel", storage=storage, index=HNSWIndex(dim=4))
-        executor = SQLExecutor(catalog=catalog)
+        _ = TableCatalog(name="intel", storage=storage, index=HNSWIndex(dim=4))
 
         data = [
             {"id": "c1", "risk": 10, "cvss": 4.0},

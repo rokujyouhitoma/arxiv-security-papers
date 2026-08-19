@@ -5,12 +5,11 @@ Implements 4096-byte page cache with LRU eviction, dirty page tracking,
 and Write-Ahead Logging (WAL) transaction boundaries.
 """
 
-import os
 import threading
 from collections import OrderedDict
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
-from .vfs import VFSFile, get_vfs
+from .vfs import get_vfs
 
 PAGE_SIZE = 4096
 

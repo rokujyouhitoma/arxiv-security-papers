@@ -5,11 +5,11 @@ Coordinates tokenizing, parsing, query planning, and VDBE bytecode generation
 in conformity with the `sqlite3_prepare_v2` model.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .codegen import CodeGenerator
 from .sql.parser import SQLParser
-from .vdbe import VDBE, Statement, VDBEProgram
+from .vdbe import VDBE, Statement
 
 
 class SQLCompiler:
