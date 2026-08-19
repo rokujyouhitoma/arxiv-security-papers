@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **050** | [Merkle Tree（ハッシュツリー差分同期）& CRDT（無衝突レプリケーションデータ型）アンチエントロピー同期の実装](closed/050-implement-merkle-tree-and-crdt-anti-entropy.md) | Feature | 2026-08-20 | [050-implement-merkle-tree-and-crdt-anti-entropy.md](closed/050-implement-merkle-tree-and-crdt-anti-entropy.md) |
 | **049** | [Quorum レプリケーション（$W + R > N$ 強整合性）& Read Repair（読み取り時自動修復）の実装](closed/049-implement-quorum-replication-and-read-repair.md) | Feature | 2026-08-20 | [049-implement-quorum-replication-and-read-repair.md](closed/049-implement-quorum-replication-and-read-repair.md) |
 | **048** | [$\Phi$ Accrual 障害検知器 & Gossip プロトコル（ハートビート分散伝播）の実装](closed/048-implement-phi-accrual-and-gossip-protocol.md) | Feature | 2026-08-20 | [048-implement-phi-accrual-and-gossip-protocol.md](closed/048-implement-phi-accrual-and-gossip-protocol.md) |
 | **047** | [Vector Clock（論理時計因果追跡）& Version Vector 競合検知エンジンの実装](closed/047-implement-vector-clock-and-version-vector.md) | Feature | 2026-08-20 | [047-implement-vector-clock-and-version-vector.md](closed/047-implement-vector-clock-and-version-vector.md) |

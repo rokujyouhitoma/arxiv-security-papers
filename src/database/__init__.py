@@ -14,13 +14,18 @@ from .codegen import CodeGenerator
 from .compiler import SQLCompiler
 from .cow import CoWBTree, CoWEngine, CoWNode, CoWReadTx, CoWWriteTx, MetaPage, MMapFile
 from .distributed import (
+    AntiEntropySynchronizer,
     ConflictResolutionStrategy,
     GossipNode,
     Hint,
     HintedHandoffManager,
+    MerkleNode,
+    MerkleTree,
     NodeState,
     NodeStatus,
+    ORSet,
     PhiAccrualDetector,
+    PNCounter,
     QuorumCoordinator,
     QuorumReadError,
     QuorumReplica,
@@ -249,7 +254,7 @@ __all__ = [
     "VectorizedFilter",
     "VectorizedProjection",
     "VectorizedAggregation",
-    # Distributed Coordination, Causality, Gossip, and Quorum Replication
+    # Distributed Coordination, Causality, Gossip, Quorum, and Anti-Entropy
     "VectorClock",
     "VersionedValue",
     "ConflictResolutionStrategy",
@@ -265,6 +270,11 @@ __all__ = [
     "QuorumReadError",
     "Hint",
     "HintedHandoffManager",
+    "MerkleNode",
+    "MerkleTree",
+    "PNCounter",
+    "ORSet",
+    "AntiEntropySynchronizer",
     # VDBE (Core Virtual Machine)
     "VDBE",
     "VDBEProgram",
