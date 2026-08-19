@@ -5,10 +5,11 @@ Selects optimal scan strategies (B+Tree Index Scan vs Table Scan vs Vector Hybri
 based on catalog statistics and estimated execution costs.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from ..sql.ast import SelectStatement
 from .cost import CostModel, PlanType
+from .join_optimizer import DPJoinOptimizer, JoinPlanNode
 from .stats import TableStats
 
 
@@ -189,6 +190,24 @@ class QueryPlanner:
 
         return cls._plan_relational_query(
             table_name, total_rows, best_index, best_col, min_sel
+        )
+
+    @classmethod
+    def plan_join(
+        cls,
+        tables: List[str],
+        join_conditions: List[Dict[str, str]],
+        table_stats: Dict[str, TableStats],
+        available_indexes: Optional[Dict[str, Set[str]]] = None,
+    ) -> JoinPlanNode:
+        """
+        Uses Dynamic Programming (DP) join order optimizer to plan multi-table joins.
+        """
+        return DPJoinOptimizer.optimize_join(
+            tables=tables,
+            join_conditions=join_conditions,
+            table_stats=table_stats,
+            available_indexes=available_indexes,
         )
 
     @classmethod
