@@ -103,7 +103,21 @@ PYTHON_SRCS = src/__init__.py \
               src/search/eval/__init__.py \
               src/search/eval/metrics.py \
               src/search/eval/dataset.py \
-              src/search/eval/evaluator.py
+              src/search/eval/evaluator.py \
+              src/security/__init__.py \
+              src/security/sandbox/__init__.py \
+              src/security/sandbox/ast_guard.py \
+              src/security/rbac/__init__.py \
+              src/security/rbac/context.py \
+              src/security/rbac/engine.py \
+              src/security/rbac/decorators.py \
+              src/security/taxonomy/__init__.py \
+              src/security/taxonomy/cwe.py \
+              src/security/taxonomy/mitre.py \
+              src/security/taxonomy/stride.py \
+              src/security/validation/__init__.py \
+              src/security/validation/path.py \
+              src/security/validation/input.py
 TESTS=tests
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar

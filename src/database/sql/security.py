@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Data Control Language (DCL) Role-Based Access Control (RBAC) & Security Policy.
-Enforces table-level permissions (SELECT, INSERT, UPDATE, DELETE, ALL) for user roles.
+Enforces table-level permissions (SELECT, INSERT, UPDATE, DELETE, ALL) for user roles
+within the self-contained database engine (Zero-dependency).
 """
 
 from collections import defaultdict
@@ -16,7 +17,7 @@ class DCLPermissionDeniedError(Exception):
 
 class AccessController:
     """
-    Role-Based Access Control (RBAC) engine for DCL SQL commands.
+    Self-contained Role-Based Access Control (RBAC) engine for database DCL SQL commands.
     """
 
     def __init__(self) -> None:

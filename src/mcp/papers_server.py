@@ -12,6 +12,7 @@ import time
 from typing import Optional
 
 from mcp.base import log_mcp_performance
+from security.validation import is_safe_workspace_path
 from vector_engine import VectorEngine
 
 
@@ -364,30 +365,6 @@ def handle_query_knowledge_graph(args):
         "status": "success",
         "graph": graph_res,
     }
-
-
-def is_safe_workspace_path(file_path):
-    if not file_path:
-        return False
-    abs_path = os.path.realpath(file_path)
-    abs_workspace = os.path.realpath(WORKSPACE_DIR)
-    try:
-        if os.path.commonpath([abs_workspace, abs_path]) != abs_workspace:
-            return False
-    except ValueError:
-        return False
-
-    sensitive_keywords = [
-        ".ssh",
-        ".aws",
-        ".env",
-        "etc/passwd",
-        "etc/shadow",
-        ".git/config",
-    ]
-    if any(k in abs_path for k in sensitive_keywords):
-        return False
-    return True
 
 
 def handle_get_paper_summary(args):
