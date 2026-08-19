@@ -3,7 +3,7 @@
 Distributed Coordination, Consensus, and Anti-Entropy Subsystem.
 Exports VectorClock, VersionedValue, PhiAccrualDetector, GossipNode,
 QuorumCoordinator, HintedHandoffManager, MerkleTree, PNCounter, ORSet,
-and AntiEntropySynchronizer.
+AntiEntropySynchronizer, and Raft Consensus (RaftNode, RaftCluster).
 """
 
 from .anti_entropy import AntiEntropySynchronizer
@@ -13,6 +13,16 @@ from .hinted_handoff import Hint, HintedHandoffManager
 from .merkle_tree import MerkleNode, MerkleTree
 from .phi_accrual import PhiAccrualDetector
 from .quorum import QuorumCoordinator, QuorumReadError, QuorumReplica, QuorumWriteError
+from .raft import (
+    AppendEntriesArgs,
+    AppendEntriesReply,
+    LogEntry,
+    RaftCluster,
+    RaftNode,
+    RaftRole,
+    RequestVoteArgs,
+    RequestVoteReply,
+)
 from .vector_clock import VectorClock
 from .version_vector import (
     ConflictResolutionStrategy,
@@ -46,4 +56,13 @@ __all__ = [
     "PNCounter",
     "ORSet",
     "AntiEntropySynchronizer",
+    # Raft Consensus & SMR
+    "RaftRole",
+    "LogEntry",
+    "RequestVoteArgs",
+    "RequestVoteReply",
+    "AppendEntriesArgs",
+    "AppendEntriesReply",
+    "RaftNode",
+    "RaftCluster",
 ]
