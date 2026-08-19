@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
 Distributed Coordination and Consensus Subsystem.
-Exports VectorClock, VersionedValue, PhiAccrualDetector, and GossipNode.
+Exports VectorClock, VersionedValue, PhiAccrualDetector, GossipNode,
+QuorumCoordinator, and HintedHandoffManager.
 """
 
 from .gossip import GossipNode, NodeState, NodeStatus
+from .hinted_handoff import Hint, HintedHandoffManager
 from .phi_accrual import PhiAccrualDetector
+from .quorum import QuorumCoordinator, QuorumReadError, QuorumReplica, QuorumWriteError
 from .vector_clock import VectorClock
 from .version_vector import (
     ConflictResolutionStrategy,
@@ -26,4 +29,11 @@ __all__ = [
     "NodeStatus",
     "NodeState",
     "GossipNode",
+    # Quorum Replication & Hinted Handoff
+    "QuorumReplica",
+    "QuorumCoordinator",
+    "QuorumWriteError",
+    "QuorumReadError",
+    "Hint",
+    "HintedHandoffManager",
 ]
