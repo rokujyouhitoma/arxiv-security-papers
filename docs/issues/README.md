@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **040** | [MVCC（多版同時実行制御）と SS2PL ロックマネージャ・デッドロック検知の実装](closed/040-implement-mvcc-and-ss2pl-transaction-manager.md) | Feature | 2026-08-20 | [040-implement-mvcc-and-ss2pl-transaction-manager.md](closed/040-implement-mvcc-and-ss2pl-transaction-manager.md) |
 | **039** | [追記型永続WALファイルとARIESクラッシュリカバリマネージャの実装](closed/039-implement-disk-persistent-wal-and-aries-recovery.md) | Feature | 2026-08-20 | [039-implement-disk-persistent-wal-and-aries-recovery.md](closed/039-implement-disk-persistent-wal-and-aries-recovery.md) |
 | **038** | [スロット化ページ（Slotted-Page）バイナリストレージエンジンの実装](closed/038-implement-slotted-page-binary-storage-engine.md) | Feature | 2026-08-19 | [038-implement-slotted-page-binary-storage-engine.md](closed/038-implement-slotted-page-binary-storage-engine.md) |
 | **034** | [Web サーバーの API Gateway 化と UI プレゼンテーション層の完全分離（`src/gateway/` / `src/presentation/`）](closed/034-split-web-server-into-api-gateway-and-ui-presentation.md) | Feature / Arch | 2026-08-19 | [034-split-web-server-into-api-gateway-and-ui-presentation.md](closed/034-split-web-server-into-api-gateway-and-ui-presentation.md) |

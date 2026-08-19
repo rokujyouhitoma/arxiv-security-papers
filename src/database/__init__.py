@@ -14,6 +14,15 @@ from .compiler import SQLCompiler
 from .driver import Connection, Cursor, DatabaseError, connect
 from .embedding import DeterministicEmbedding
 from .index import HNSWIndex
+from .lock_manager import (
+    DeadlockError,
+    LockGrant,
+    LockManager,
+    LockMode,
+    WaitForGraph,
+    is_compatible,
+)
+from .mvcc import MVCCManager, TransactionSnapshot, VersionedTuple
 from .pager import PAGE_SIZE, Page, PageCache, Pager
 from .planner import (
     ColumnStats,
@@ -107,6 +116,16 @@ __all__ = [
     "WAL_VERSION",
     "WAL_HEADER_SIZE",
     "ARIESRecoveryManager",
+    # MVCC & SS2PL Concurrency Control
+    "MVCCManager",
+    "TransactionSnapshot",
+    "VersionedTuple",
+    "LockManager",
+    "LockMode",
+    "LockGrant",
+    "DeadlockError",
+    "WaitForGraph",
+    "is_compatible",
     # Slotted Page Binary Storage
     "SlottedPage",
     "TupleSerializer",
