@@ -23,6 +23,14 @@ from .lock_manager import (
     WaitForGraph,
     is_compatible,
 )
+from .lsm import (
+    TOMBSTONE,
+    BloomFilter,
+    LSMTreeEngine,
+    MemTable,
+    SSTableReader,
+    SSTableWriter,
+)
 from .mvcc import MVCCManager, TransactionSnapshot, VersionedTuple
 from .pager import PAGE_SIZE, Page, PageCache, Pager
 from .planner import (
@@ -130,6 +138,13 @@ __all__ = [
     "DeadlockError",
     "WaitForGraph",
     "is_compatible",
+    # LSM-Tree Ingestion Engine & Bloom Filters
+    "LSMTreeEngine",
+    "BloomFilter",
+    "MemTable",
+    "SSTableReader",
+    "SSTableWriter",
+    "TOMBSTONE",
     # Slotted Page Binary Storage
     "SlottedPage",
     "TupleSerializer",

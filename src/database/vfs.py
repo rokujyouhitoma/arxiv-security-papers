@@ -168,7 +168,7 @@ class MemoryVFS(VFS):
 
     def open(self, path: str, mode: str = "r+b") -> VFSFile:
         with self._lock:
-            if path not in self._files:
+            if "w" in mode or path not in self._files:
                 self._files[path] = MemoryVFSFile(path)
             return self._files[path]
 
