@@ -4,9 +4,10 @@
 [![Google OKF](https://img.shields.io/badge/Google_OKF-v0.2_Compliant-success.svg)](docs/designs/DSN-01-pipeline-architecture.md)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-JSON--RPC_2.0-purple.svg)](src/mcp/)
 [![Architecture](https://img.shields.io/badge/Search_Engine-Lucene%2FSolr_Paradigm-orange.svg)](src/search/)
+[![Database](https://img.shields.io/badge/Vector_DB-SQLite_Compatible_%26_Distributed-blueviolet.svg)](src/database/)
 [![Quality Gate](https://img.shields.io/badge/Quality_Gate-100%25_PASS-brightgreen.svg)](Makefile)
 
-arXiv のコンピュータサイエンス・暗号・セキュリティ分野（`cs.CR`）の最新論文を自動収集・解析・構造化し、**Google Open Knowledge Format (OKF) v0.2** 準拠のナレッジベース構築、**5階層エグゼクティブサマリー** 生成、**サブ10ms 超高速エンタープライズ検索エンジン**、および **AI コーディングエージェント向け戦略的 MCP サーバー群** を提供する統合セキュリティインテリジェンス基盤です。
+arXiv のコンピュータサイエンス・暗号・セキュリティ分野（`cs.CR`）の最新論文を自動収集・解析・構造化し、**Google Open Knowledge Format (OKF) v0.2** 準拠のナレッジベース構築、**5階層エグゼクティブサマリー** 生成、**サブ10ms 超高速エンタープライズ検索エンジン**、**純粋 Python 製 SQLite 互換 & 分散ベクトルデータベース**、および **AI コーディングエージェント向け戦略的 MCP サーバー群** を提供する統合セキュリティインテリジェンス基盤です。
 
 ---
 
@@ -14,15 +15,16 @@ arXiv のコンピュータサイエンス・暗号・セキュリティ分野�
 
 1. [主要機能 (Key Features)](#-主要機能-key-features)
 2. [システム全体アーキテクチャ (System Architecture)](#-システム全体アーキテクチャ-system-architecture)
-3. [Google OKF v0.2 仕様準拠 (OKF Specification)](#-google-okf-v02-仕様準拠-okf-specification)
-4. [5階層エグゼクティブサマリー (5-Tier Executive Summaries)](#-5階層エグゼクティブサマリー-5-tier-executive-summaries)
-5. [超高速ハイブリッド検索エンジン (Enterprise Search Engine)](#-超高速ハイブリッド検索エンジン-enterprise-search-engine)
-6. [戦略的 MCP サーバーエコシステム (Model Context Protocol)](#-戦略的-mcp-サーバーエコシステム-model-context-protocol)
-7. [可観測性・プロファイリング基盤 (Observability & Profiling)](#-可観測性プロファイリング基盤-observability--profiling)
-8. [クイックスタート (Quick Start)](#-クイックスタート-quick-start)
-9. [Makefile コマンド一覧 (Command Reference)](#-makefile-コマンド一覧-command-reference)
-10. [ディレクトリ構成 (Directory Structure)](#-ディレクトリ構成-directory-structure)
-11. [品質管理とガバナンス (Governance & Quality Gates)](#-品質管理とガバナンス-governance--quality-gates)
+3. [純粋 Python SQLite 互換 & 分散ベクトルデータベース基盤 (Database Engine)](#-純粋-python-sqlite-互換--分散ベクトルデータベース基盤-database-engine)
+4. [Google OKF v0.2 仕様準拠 (OKF Specification)](#-google-okf-v02-仕様準拠-okf-specification)
+5. [5階層エグゼクティブサマリー (5-Tier Executive Summaries)](#-5階層エグゼクティブサマリー-5-tier-executive-summaries)
+6. [超高速ハイブリッド検索エンジン (Enterprise Search Engine)](#-超高速ハイブリッド検索エンジン-enterprise-search-engine)
+7. [戦略的 MCP サーバーエコシステム (Model Context Protocol)](#-戦略的-mcp-サーバーエコシステム-model-context-protocol)
+8. [可観測性・プロファイリング基盤 (Observability & Profiling)](#-可観測性プロファイリング基盤-observability--profiling)
+9. [クイックスタート (Quick Start)](#-クイックスタート-quick-start)
+10. [Makefile コマンド一覧 (Command Reference)](#-makefile-コマンド一覧-command-reference)
+11. [ディレクトリ構成 (Directory Structure)](#-ディレクトリ構成-directory-structure)
+12. [品質管理とガバナンス (Governance & Quality Gates)](#-品質管理とガバナンス-governance--quality-gates)
 
 ---
 
@@ -36,6 +38,8 @@ arXiv のコンピュータサイエンス・暗号・セキュリティ分野�
   - MITRE ATT&CK、STRIDE 脅威モデル、CWE/CVE 分類、暗号技術タグを自動付与。
 - **完全日本語 5階層エグゼクティブサマリー**:
   - `01_per_run`（実行時 1日4回）、`02_daily`（日次）、`03_monthly`（月次）、`04_quarterly`（四半期）、`05_annual`（通期）の順序付きディレクトリ構成。
+- **純粋 Python SQLite 互換 & 分散ベクトルデータベース**:
+  - ゼロ外部依存で実装された 4KB Slotted Page, 2Q Buffer Pool, WAL & ARIES 障害回復, B+Tree, CoW B-Tree, LSM-Tree, PAX 列指向, CBO オプティマイザ, 分散 Raft / Saga / 2PC / Consistent Hashing, PEP 249 DB-API 互換ドライバ。
 - **Apache Lucene / Solr パラダイム検索エンジン**:
   - 転置インデックス（Postings）、DocValues（列指向）、FM-Index、RAPTOR 階層ツリー、ナレッジグラフ、PageRank 引用ネットワーク、近傍グラフによるサブ10ms ハイブリッド検索。
 - **AI コーディングエージェント向け MCP サーバー (JSON-RPC 2.0)**:
@@ -61,7 +65,15 @@ flowchart TB
         OKF --> SUMMARIES["outputs/executive_summaries/<br/>(01_per_run, 02_daily, 03_monthly, 04_quarterly, 05_annual)"]
     end
 
-    subgraph Search_Engine ["3. エンタープライズ検索エンジン (Lucene/Solr)"]
+    subgraph Database_Engine ["3. 純粋 Python データベース基盤 (src/database/)"]
+        OKF_PAPERS --> DB_DRIVER["PEP 249 Driver (database.connect)"]
+        DB_DRIVER --> SQL_VM["SQL Parser / VDBE Bytecode Engine"]
+        SQL_VM --> STORAGE_TIERS["Storage Subsystems<br/>(B+Tree, CoW, LSM, PAX Columnar)"]
+        STORAGE_TIERS --> BUFFER_WAL["2Q Buffer Pool & WAL / ARIES Recovery"]
+        STORAGE_TIERS --> DISTRIB["Distributed Coordination<br/>(Raft, Saga, 2PC, Consistent Hashing)"]
+    end
+
+    subgraph Search_Engine ["4. エンタープライズ検索エンジン (src/search/)"]
         OKF_PAPERS --> INDEXER["VectorEngine Indexer"]
         INDEXER --> POSTINGS["MultiField Postings & DocValues"]
         INDEXER --> FM_INDEX["FM-Index Substring"]
@@ -76,7 +88,7 @@ flowchart TB
         HIGHLIGHT --> SEARCH_RESP["Search Results (Sub-10ms)"]
     end
 
-    subgraph MCP_Ecosystem ["4. 戦略的 MCP エコシステム (JSON-RPC 2.0)"]
+    subgraph MCP_Ecosystem ["5. 戦略的 MCP エコシステム (JSON-RPC 2.0)"]
         MCP_BASE["MCP Common Transport & Performance Logger"]
         MCP_BASE --> MCP_PAPERS["mcp-papers (Search & Graph)"]
         MCP_BASE --> MCP_OBS["mcp-observability (Profile & Logs)"]
@@ -84,10 +96,62 @@ flowchart TB
         MCP_BASE --> MCP_RADAR["mcp-tech-radar (Radar & Trend)"]
     end
 
-    subgraph Presentation ["5. 配信 & UI"]
+    subgraph Presentation ["6. 配信 & UI"]
         WEB["src/web_server.py (WSGI)"] --> UI["Glassmorphic Web Search UI (site/)"]
         WEB --> LOGS["outputs/logs/<br/>(mcp_perf_log, search_perf_log, query_log)"]
     end
+```
+
+---
+
+## 🗄 純粋 Python SQLite 互換 & 分散ベクトルデータベース基盤 (Database Engine)
+
+外部 C ライブラリやサードパーティパッケージに依存せず、純粋 Python のみで構築されたモジュラー型データベースエンジン（`src/database/`）を提供します。
+
+### 主要コンポーネントとアーキテクチャ
+
+| レイヤ / サブパッケージ | 主要クラス / モジュール | 機能・特徴 |
+| :--- | :--- | :--- |
+| **ストレージ & バッファ** | `SlottedPage`, `BufferPool2Q`, `Pager`, `MemoryVFS`, `PosixVFS` | 4KB スロッテッドページ構造、スキャン汚染耐性 2Q キャッシュ、Steal/No-Force バッファポリシー、インメモリ / POSIX 抽象 VFS |
+| **耐久性 & 障害回復** | `WALWriter`, `WALReader`, `ARIESRecoveryManager` | Write-Ahead Logging (WAL)、ARIES 3フェーズ（Analysis, Redo, Undo）クラッシュリカバリ |
+| **主キー & B+Tree** | `BPlusTree`, `BTreeNode` (`src/database/btree/`) | $O(\log N)$ ポイント検索、リーフ双方向リンクによる範囲スキャン（`range_scan`）、ページ分割・マージ |
+| **CoW B-Tree** | `CoWBTreeEngine`, `MetaPage` (`src/database/cow/`) | LMDB スタイルの Copy-on-Write B-Tree、Ping-Pong メタページコミット、SWMR ロックフリー完全スナップショット分離 |
+| **LSM-Tree** | `LSMTreeEngine`, `BloomFilter`, `MemTable`, `SSTable` (`src/database/lsm/`) | 高速書込最適化、MurmurHash3 Bloom Filter、サイズ階層 Compaction |
+| **PAX 列指向ストレージ** | `PAXPage`, `PAXScanner` (`src/database/pax/`) | ページ内列指向配置（Partition Attributes Across）、RLE / Dictionary 圧縮、高速 OLAP ベクトル集計 |
+| **実行エンジン** | `VolcanoIterator`, `VectorizedBatchExecutor` (`src/database/engine/`) | プル型ストリーミングイテレータ（SeqScan, IndexScan, NestedLoop, HashJoin, Filter, Project, Limit）および SIMD ライクなカラムバッチ処理 |
+| **CBO 最適化** | `QueryPlanner`, `DPJoinOptimizer`, `HyperLogLog`, `EquiDepthHistogram` (`src/database/planner/`) | 動的計画法（DP）による多表結合順序最適化、CBO コスト見積もり、HLL 基数推定、等深ヒストグラム選択度計算 |
+| **分散合意 & 整合性** | `RaftCluster`, `SagaOrchestrator`, `TwoPhaseCoordinator`, `ConsistentHashRing` (`src/database/distributed/`) | Raft 分散合意、補償トランザクション Saga、分散 2相コミット (2PC)、仮想ノード付きコンシステントハッシュ、Merkle Tree Anti-Entropy、CRDTs (ORSet, PNCounter)、Vector Clock 因果性管理 |
+| **SQL & VDBE** | `SQLParser`, `SQLCompiler`, `VDBEEngine`, `SQLExecutor` (`src/database/sql/`) | SQL 字句・構文解析、SQLite 風スタックマシンバイトコード仮想マシン（VDBE）、EXPLAIN 逆アセンブル |
+| **トランザクション & セキュリティ** | `TransactionManager`, `LockManager`, `AccessController` | MVCC スナップショット分離、Strict 2PL、Wait-For Graph デッドロック検知、RBAC ロール権限制御 |
+| **PEP 249 ドライバ** | `driver.connect`, `Connection`, `Cursor` | Python 標準 DB-API 2.0 準拠インターフェース、パラメータバインディング（`?`）、トランザクション制御 |
+
+### 使用例 (PEP 249 DB-API 2.0)
+
+```python
+from database import connect
+
+# データベース接続
+conn = connect("outputs/database/papers.vdb", dim=4)
+cur = conn.cursor()
+
+# データ挿入
+cur.execute(
+    "INSERT INTO papers (id, title, category, vector) VALUES (?, ?, ?, ?)",
+    ["p1", "Quantum Cryptography", "Cryptography", [1.0, 0.0, 0.0, 0.0]],
+)
+conn.commit()
+
+# KNN ベクトル検索
+cur.execute(
+    "SELECT id, title, score FROM papers WHERE KNN(vector, ?, 5)",
+    [[1.0, 0.0, 0.0, 0.0]],
+)
+results = cur.fetchall()
+for row in results:
+    print(row)
+
+cur.close()
+conn.close()
 ```
 
 ---
@@ -226,7 +290,7 @@ setup                ## 仮想環境作成、依存関係インストール、Gi
 clean                ## 一時ファイル、キャッシュ、ビルド成果物のクリーンアップ
 format               ## isort, black, flake8 によるコードフォーマット
 static_analysis      ## radon, xenon, mypy, py_compile による静的コード解析
-test                 ## pytest による単体・結合テスト実行
+test                 ## pytest による全単体・結合・互換性テスト実行 (170件 100% PASS)
 check                ## format, static_analysis, test の必須品質ゲート一括実行
 verify_quality       ## Python および JS の総合品質検証
 build_js             ## Google Closure Compiler による JS ミニファイビルド
@@ -262,6 +326,20 @@ eval_search          ## 検索エンジン精度ベンチマーク (Precision, R
 ├── src/
 │   ├── arxiv_okf_fetcher.py    # 論文収集 & OKF 変換メインパイプライン
 │   ├── web_server.py           # WSGI Web サーバー & REST API
+│   ├── database/               # 純粋 Python SQLite 互換 & 分散ベクトル DB
+│   │   ├── btree/              # B+Tree インデックス (node.py, tree.py)
+│   │   ├── cow/                # CoW B-Tree (mmap_file.py, meta_page.py, cow_btree.py, engine.py)
+│   │   ├── distributed/        # 分散合意・整合性 (raft/, saga/, sharding/, two_pc/, crdt, gossip)
+│   │   ├── engine/             # 実行エンジン (volcano.py, vectorized.py)
+│   │   ├── lsm/                # LSM-Tree (memtable.py, sstable.py, bloom_filter.py, engine.py)
+│   │   ├── pax/                # PAX 列指向ストレージ (encoding.py, pax_page.py, scanner.py)
+│   │   ├── planner/            # CBO オプティマイザ (cost.py, histogram.py, hll.py, join_optimizer.py)
+│   │   ├── sql/                # SQL パーサー & 仮想マシン (ast.py, parser.py, compiler.py, executor.py)
+│   │   ├── driver.py           # PEP 249 Python DB-API 2.0 ドライバ (connect, Cursor, Connection)
+│   │   ├── pager.py            # 4KB スロッテッドページ & 2Q バッファプール
+│   │   ├── wal.py              # Write-Ahead Logging
+│   │   ├── recovery.py         # ARIES 3-phase クラッシュリカバリ
+│   │   └── vfs.py              # POSIX & インメモリ仮想ファイルシステム
 │   ├── mcp/                    # 戦略的 MCP サーバーパッケージ群
 │   │   ├── base.py             # 共通 JSON-RPC トランスポート & ログ基盤
 │   │   ├── papers_server.py    # 論文検索・探索 MCP
@@ -274,7 +352,24 @@ eval_search          ## 検索エンジン精度ベンチマーク (Precision, R
 │       ├── query/              # QueryParser, SynonymExpander, QueryCache
 │       ├── ranking/            # KnowledgeGraph, CitationNetwork, ProximityGraph
 │       └── utils/              # ExecutionProfiler, Metrics, Tokenizer
-├── tests/                      # テストスイート (pytest)
+├── tests/                      # テストスイート (pytest / 170件 100% PASS)
+│   ├── database/               # データベーステスト (src/database と同一階層構成)
+│   │   ├── btree/              # B+Tree テスト
+│   │   ├── compatibility/      # SQLite 互換 US-01 〜 US-12 ユーザーストーリー検証
+│   │   ├── cow/                # CoW B-Tree テスト
+│   │   ├── distributed/        # 分散合意・Saga・2PC・Sharding テスト
+│   │   ├── engine/             # Volcano & Vectorized テスト
+│   │   ├── lsm/                # LSM-Tree テスト
+│   │   ├── pax/                # PAX 列指向テスト
+│   │   ├── planner/            # CBO オプティマイザテスト
+│   │   └── sql/                # SQL パーサー・実行エンジンテスト
+│   ├── fetcher/                # フェッチャーテスト
+│   ├── gateway/                # ゲートウェイテスト
+│   ├── mcp/                    # MCP サーバーテスト
+│   ├── presentation/           # プレゼンテーションテスト
+│   ├── search/                 # 検索エンジンテスト
+│   ├── security/               # セキュリティ・サンドボックステスト
+│   └── web/                    # Web サーバーテスト
 ├── Makefile                    # ビルド & 運用自動化ターゲット
 ├── pyproject.toml              # プロジェクトメタデータ & ツール設定
 └── README.md                   # 本ドキュメント
