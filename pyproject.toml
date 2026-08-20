@@ -39,7 +39,10 @@ line-length = 88
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-v --strict-markers -W error"
+addopts = "-v --strict-markers -m 'not slow' -W error"
+markers = [
+    "slow: marks tests as slow-running comprehensive scenarios (deselect with '-m \"not slow\"')",
+]
 
 [tool.mypy]
 mypy_path = "src"
