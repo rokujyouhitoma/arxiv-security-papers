@@ -7,7 +7,16 @@ PEP 249 DB-API 2.0 Driver, and Python standard `sqlite3` Interoperability Bridge
 import json
 import os
 import sqlite3
+import sys
 import tempfile
+
+if "src" not in sys.path:
+    sys.path.insert(
+        0,
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "src")
+        ),
+    )
 
 import pytest
 

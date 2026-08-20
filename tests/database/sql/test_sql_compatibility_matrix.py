@@ -5,8 +5,17 @@ Pure Python SQL Engine (DDL, DQL, DML, DCL, TCL) & PEP 249 / SQLite3 Bridge.
 """
 
 import os
+import sys
 import tempfile
 from typing import Tuple
+
+if "src" not in sys.path:
+    sys.path.insert(
+        0,
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "src")
+        ),
+    )
 
 import pytest
 
