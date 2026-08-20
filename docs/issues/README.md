@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **056** | [SQLite 互換 DB 包括的検証テストスイート（US-01 〜 US-12）の拡充](closed/056-expand-sqlite-compatibility-test-suite.md) | Test | 2026-08-20 | [056-expand-sqlite-compatibility-test-suite.md](closed/056-expand-sqlite-compatibility-test-suite.md) |
 | **055** | [tests/database/ ディレクトリ階層の src/database/ 同一構造化](closed/055-restructure-database-test-directory-hierarchy.md) | Refactor | 2026-08-20 | [055-restructure-database-test-directory-hierarchy.md](closed/055-restructure-database-test-directory-hierarchy.md) |
 | **054** | [コンシステントハッシュ（Consistent Hashing）& 仮想ノード（Virtual Nodes）分散シャーディングの実装](closed/054-implement-consistent-hashing-and-sharding.md) | Feature | 2026-08-20 | [054-implement-consistent-hashing-and-sharding.md](closed/054-implement-consistent-hashing-and-sharding.md) |
 | **053** | [Saga パターン（補償トランザクション・オーケストレーション型 Saga）の実装](closed/053-implement-saga-orchestration-and-compensation.md) | Feature | 2026-08-20 | [053-implement-saga-orchestration-and-compensation.md](closed/053-implement-saga-orchestration-and-compensation.md) |
