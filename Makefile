@@ -173,5 +173,17 @@ mypy: activate ## mypy
 	${VENV_BIN}/mypy --strict src
 
 .PHONY: pytest
-pytest: activate ## pytest with strict markers, warnings as errors, and >=80% coverage
+pytest: activate ## pytest (fast execution excluding @pytest.mark.slow)
+	${VENV_BIN}/pytest -v --strict-markers -m "not slow" -W error --cov=src --cov-fail-under=80 ${TESTS}
+
+.PHONY: test_scenarios
+test_scenarios: activate ## Run DSN-14 Scenarios 1-7 in tests/database/scenarios/
+	${VENV_BIN}/pytest -v --strict-markers -W error tests/database/scenarios/
+
+.PHONY: test_slow
+test_slow: activate ## Run only slow-running comprehensive stress tests (@pytest.mark.slow)
+	${VENV_BIN}/pytest -v --strict-markers -m slow -W error ${TESTS}
+
+.PHONY: test_all
+test_all: activate ## Run all tests including slow comprehensive E2E scenarios
 	${VENV_BIN}/pytest -v --strict-markers -W error --cov=src --cov-fail-under=80 ${TESTS}
