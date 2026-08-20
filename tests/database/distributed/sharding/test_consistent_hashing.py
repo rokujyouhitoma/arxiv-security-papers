@@ -12,7 +12,10 @@ from typing import Dict
 
 if "src" not in sys.path:
     sys.path.insert(
-        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+        0,
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "src")
+        ),
     )
 
 from database.distributed.sharding import ConsistentHashRing, ShardManager

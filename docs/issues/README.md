@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **055** | [tests/database/ ディレクトリ階層の src/database/ 同一構造化](closed/055-restructure-database-test-directory-hierarchy.md) | Refactor | 2026-08-20 | [055-restructure-database-test-directory-hierarchy.md](closed/055-restructure-database-test-directory-hierarchy.md) |
 | **054** | [コンシステントハッシュ（Consistent Hashing）& 仮想ノード（Virtual Nodes）分散シャーディングの実装](closed/054-implement-consistent-hashing-and-sharding.md) | Feature | 2026-08-20 | [054-implement-consistent-hashing-and-sharding.md](closed/054-implement-consistent-hashing-and-sharding.md) |
 | **053** | [Saga パターン（補償トランザクション・オーケストレーション型 Saga）の実装](closed/053-implement-saga-orchestration-and-compensation.md) | Feature | 2026-08-20 | [053-implement-saga-orchestration-and-compensation.md](closed/053-implement-saga-orchestration-and-compensation.md) |
 | **052** | [分散 2相コミット（Distributed 2PC）& 分散デッドロック検知の実装](closed/052-implement-distributed-2pc-and-deadlock-detector.md) | Feature | 2026-08-20 | [052-implement-distributed-2pc-and-deadlock-detector.md](closed/052-implement-distributed-2pc-and-deadlock-detector.md) |
