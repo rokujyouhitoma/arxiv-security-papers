@@ -385,18 +385,18 @@ $$m = -\frac{n \ln P_e}{(\ln 2)^2} \approx 28.7 \cdot n \quad [\text{bits}], \qu
 ```mermaid
 sequenceDiagram
     participant Downloader as AsyncHttpDownloader
-    participant Loop as asyncio EventLoop
+    participant EvLoop as asyncio EventLoop
     participant Socket as OS Non-blocking Socket (TLS)
     participant Server as Target HTTP/1.1 Server
 
-    Downloader->>Loop: asyncio.open_connection(host, 443, ssl=SSLContext)
-    Loop->>Socket: Non-blocking TCP SYN + TLS 1.3 Handshake
-    Socket-->>Loop: Connected (StreamReader, StreamWriter)
-    Loop-->>Downloader: Stream established
+    Downloader->>EvLoop: asyncio.open_connection(host, 443, ssl=SSLContext)
+    EvLoop->>Socket: Non-blocking TCP SYN + TLS 1.3 Handshake
+    Socket-->>EvLoop: Connected (StreamReader, StreamWriter)
+    EvLoop-->>Downloader: Stream established
 
-    Downloader->>Socket: Write HTTP/1.1 GET Request Headers\r\n\r\n
+    Downloader->>Socket: Write HTTP/1.1 GET Request Headers (CRLF)
     Socket->>Server: Transmit Wire Packets
-    Server-->>Socket: HTTP/1.1 200 OK + Headers\r\n\r\n
+    Server-->>Socket: HTTP/1.1 200 OK + Headers (CRLF)
     Downloader->>Socket: Readline() Status & Headers Parser
     
     alt Chunked Transfer Encoding
