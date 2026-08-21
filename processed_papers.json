@@ -113350,5 +113350,1909 @@
     "title_ja": "Everywhere Attack: Attacking Locally and Globally to Boost Targeted Transferability（セキュリティ分析論文）",
     "raw_meta_path": "outputs/raw_data/2025-01-01/2501.00707_meta.json",
     "okf_path": "outputs/okf_papers/2025-01-01/2501.00707.md"
+  },
+  "2608.19191v1": {
+    "processed_at": "2026-08-20T20:42:01.497970+00:00",
+    "published": "2026-08-19T17:57:18Z",
+    "title": "The Structured Totient Preimage Problem: Reconstruction, Collisions, and Cryptographic Implications",
+    "title_ja": "The Structured Totient Preimage Problem: Reconstruction, Collisions, and Cryptographic Implications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.19191_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.19191.md"
+  },
+  "2608.19190v1": {
+    "processed_at": "2026-08-20T20:42:01.498743+00:00",
+    "published": "2026-08-19T17:57:05Z",
+    "title": "SiNMULI: Novel Signed Network Approach for Malicious URL Identification",
+    "title_ja": "SiNMULI: Novel Signed Network Approach for Malicious URL Identification（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.19190_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.19190.md"
+  },
+  "2608.19161v1": {
+    "processed_at": "2026-08-20T20:42:01.499480+00:00",
+    "published": "2026-08-19T17:43:22Z",
+    "title": "Beyond the Transcript: Detecting Covert Co ordination in Latent Multi-Agent Communication",
+    "title_ja": "Beyond the Transcript: Detecting Covert Co ordination in Latent Multi-Agent Communication（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.19161_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.19161.md"
+  },
+  "2608.19155v1": {
+    "processed_at": "2026-08-20T20:42:01.500456+00:00",
+    "published": "2026-08-19T17:40:59Z",
+    "title": "FedGuard-DC: Privacy-Preserving Federated Load Forecasting and Cyber-Attack Detection for Data-Center Loads in Transmission Systems",
+    "title_ja": "FedGuard-DC: Privacy-Preserving Federated Load Forecasting and Cyber-Attack Detection for Data-Center Loads in Transmission Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.19155_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.19155.md"
+  },
+  "2608.19135v1": {
+    "processed_at": "2026-08-20T20:42:01.501177+00:00",
+    "published": "2026-08-19T17:28:32Z",
+    "title": "Autonomous Cyber Defense in Connected Vehicles: A Multi-Agent Approach to V2X Security",
+    "title_ja": "Autonomous Cyber Defense in Connected Vehicles: A Multi-Agent Approach to V2X Security（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.19135_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.19135.md"
+  },
+  "2608.19122v1": {
+    "processed_at": "2026-08-20T20:42:01.501844+00:00",
+    "published": "2026-08-19T17:17:31Z",
+    "title": "Toward Quantum Advantage in Learning Parities with Structured Noise via Lower Bound Optimization of the Condition Number",
+    "title_ja": "Toward Quantum Advantage in Learning Parities with Structured Noise via Lower Bound Optimization of the Condition Number（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.19122_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.19122.md"
+  },
+  "2608.19052v1": {
+    "processed_at": "2026-08-20T20:42:01.502353+00:00",
+    "published": "2026-08-19T15:46:28Z",
+    "title": "Malformer: A Multi-Modal Malware Detector Using Transformers",
+    "title_ja": "Malformer: A Multi-Modal Malware Detector Using Transformers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.19052_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.19052.md"
+  },
+  "2608.19011v1": {
+    "processed_at": "2026-08-20T20:42:01.503383+00:00",
+    "published": "2026-08-19T15:11:43Z",
+    "title": "From Threat Intelligence to Detection: Knowledge-driven Enrichment and Template-based Rule Grounding for Automated Sigma Rule Generation",
+    "title_ja": "From Threat Intelligence to Detection: Knowledge-driven Enrichment and Template-based Rule Grounding for Automated Sigma Rule Generation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.19011_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.19011.md"
+  },
+  "2608.18991v1": {
+    "processed_at": "2026-08-20T20:42:01.504282+00:00",
+    "published": "2026-08-19T14:57:28Z",
+    "title": "A 12-Step Process for Industrial Internet of Things (IIoT) Forensics",
+    "title_ja": "A 12-Step Process for Industrial Internet of Things (IIoT) Forensics（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18991_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18991.md"
+  },
+  "2608.18976v1": {
+    "processed_at": "2026-08-20T20:42:01.509301+00:00",
+    "published": "2026-08-19T14:43:14Z",
+    "title": "Catastrophic Learning: A New Attack Vector on Continual Learning Networks",
+    "title_ja": "Catastrophic Learning: A New Attack Vector on Continual Learning Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18976_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18976.md"
+  },
+  "2608.18965v1": {
+    "processed_at": "2026-08-20T20:42:01.510154+00:00",
+    "published": "2026-08-19T14:30:58Z",
+    "title": "Who Can Make the Action Happen? An Authority-Decomposition Framework for High-Risk Automated Systems",
+    "title_ja": "Who Can Make the Action Happen? An Authority-Decomposition Framework for High-Risk Automated Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18965_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18965.md"
+  },
+  "2608.18876v1": {
+    "processed_at": "2026-08-20T20:42:01.510879+00:00",
+    "published": "2026-08-19T12:56:00Z",
+    "title": "CauSec: Unboxing the Causal Drivers of Static Vulnerability Analysis Performance",
+    "title_ja": "CauSec: Unboxing the Causal Drivers of Static Vulnerability Analysis Performance（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18876_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18876.md"
+  },
+  "2608.18841v1": {
+    "processed_at": "2026-08-20T20:42:01.512256+00:00",
+    "published": "2026-08-19T12:02:38Z",
+    "title": "Copy-Protection with Correlated Challenges: Point Functions and More via Decisional Coset Monogamy",
+    "title_ja": "Copy-Protection with Correlated Challenges: Point Functions and More via Decisional Coset Monogamy（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18841_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18841.md"
+  },
+  "2608.18772v1": {
+    "processed_at": "2026-08-20T20:42:01.517499+00:00",
+    "published": "2026-08-19T10:29:19Z",
+    "title": "Decisive Margins in Differentially Private Voting",
+    "title_ja": "Decisive Margins in Differentially Private Voting（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18772_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18772.md"
+  },
+  "2608.18749v1": {
+    "processed_at": "2026-08-20T20:42:01.518605+00:00",
+    "published": "2026-08-19T09:59:55Z",
+    "title": "Geometric Data Perturbation with Noisy-Anchor Alignment for Privacy-Preserving Collaborative Learning",
+    "title_ja": "Geometric Data Perturbation with Noisy-Anchor Alignment for Privacy-Preserving Collaborative Learning（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18749_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18749.md"
+  },
+  "2608.18736v1": {
+    "processed_at": "2026-08-20T20:42:01.519720+00:00",
+    "published": "2026-08-19T09:43:09Z",
+    "title": "FedLNS: Leverage LayerNorm Signature Modeling to Mitigate Adversarial Manipulation in Federated LLMs",
+    "title_ja": "FedLNS: Leverage LayerNorm Signature Modeling to Mitigate Adversarial Manipulation in Federated LLMs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18736_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18736.md"
+  },
+  "2608.18686v1": {
+    "processed_at": "2026-08-20T20:42:01.524871+00:00",
+    "published": "2026-08-19T08:35:04Z",
+    "title": "Improving LLM-Based SSH Honeypots Through Prompting and Fine-Tuning",
+    "title_ja": "Improving LLM-Based SSH Honeypots Through Prompting and Fine-Tuning（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18686_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18686.md"
+  },
+  "2608.18642v1": {
+    "processed_at": "2026-08-20T20:42:01.525701+00:00",
+    "published": "2026-08-19T07:43:32Z",
+    "title": "IriSig-Spoof: A Real-World Benchmark for Time-Robust Satellite RF Fingerprinting and Spoofing Detection",
+    "title_ja": "IriSig-Spoof: A Real-World Benchmark for Time-Robust Satellite RF Fingerprinting and Spoofing Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18642_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18642.md"
+  },
+  "2608.18613v1": {
+    "processed_at": "2026-08-20T20:42:01.526423+00:00",
+    "published": "2026-08-19T07:00:29Z",
+    "title": "CTIFoundry: An Agent-Native Corpus Scaffold for Cyber Threat Intelligence",
+    "title_ja": "CTIFoundry: An Agent-Native Corpus Scaffold for Cyber Threat Intelligence（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18613_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18613.md"
+  },
+  "2608.18610v1": {
+    "processed_at": "2026-08-20T20:42:01.527101+00:00",
+    "published": "2026-08-19T06:53:35Z",
+    "title": "Denoising-Aware Inversion: Revealing Privacy Risks in Noise-Protected Text Embeddings",
+    "title_ja": "Denoising-Aware Inversion: Revealing Privacy Risks in Noise-Protected Text Embeddings（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18610_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18610.md"
+  },
+  "2608.18605v1": {
+    "processed_at": "2026-08-20T20:42:01.527899+00:00",
+    "published": "2026-08-19T06:49:05Z",
+    "title": "Finality Before Disclosure for Ledger Authenticators in the Quantum Random Oracle Model",
+    "title_ja": "Finality Before Disclosure for Ledger Authenticators in the Quantum Random Oracle Model（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18605_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18605.md"
+  },
+  "2608.18572v1": {
+    "processed_at": "2026-08-20T20:42:01.528517+00:00",
+    "published": "2026-08-19T06:08:41Z",
+    "title": "VQC-ZTI: Variational Quantum Control for Zero Trust Protection of the Tactile Internet",
+    "title_ja": "VQC-ZTI: Variational Quantum Control for Zero Trust Protection of the Tactile Internet（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18572_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18572.md"
+  },
+  "2608.18567v1": {
+    "processed_at": "2026-08-20T20:42:01.533315+00:00",
+    "published": "2026-08-19T05:46:29Z",
+    "title": "Beyond Distortion Robustness: Rethinking Severe Cropping as Erasure-Resilient Message Embedding",
+    "title_ja": "Beyond Distortion Robustness: Rethinking Severe Cropping as Erasure-Resilient Message Embedding（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18567_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18567.md"
+  },
+  "2608.18403v1": {
+    "processed_at": "2026-08-20T20:42:01.533944+00:00",
+    "published": "2026-08-19T00:18:19Z",
+    "title": "AoNT Trap: Borromean-Entangled Mutable Chameleon Trapdoor Hash All-or-Nothing Stream Cipher",
+    "title_ja": "AoNT Trap: Borromean-Entangled Mutable Chameleon Trapdoor Hash All-or-Nothing Stream Cipher（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-19/2608.18403_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-19/2608.18403.md"
+  },
+  "2608.18359v1": {
+    "processed_at": "2026-08-20T20:42:01.534924+00:00",
+    "published": "2026-08-18T22:22:42Z",
+    "title": "0xPass: A Secure Protocol for Universal Cross-Chain Accounts",
+    "title_ja": "0xPass: A Secure Protocol for Universal Cross-Chain Accounts（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.18359_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.18359.md"
+  },
+  "2608.18351v1": {
+    "processed_at": "2026-08-20T20:42:01.535555+00:00",
+    "published": "2026-08-18T22:07:23Z",
+    "title": "Task-Conditioned Least-Privilege Learning for Executable Terminal and MCP Agents",
+    "title_ja": "Task-Conditioned Least-Privilege Learning for Executable Terminal and MCP Agents（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.18351_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.18351.md"
+  },
+  "2608.18349v1": {
+    "processed_at": "2026-08-20T20:42:01.536393+00:00",
+    "published": "2026-08-18T22:05:30Z",
+    "title": "XNET: Intelligent Dynamic Sampling for High-Speed Network Security Monitoring",
+    "title_ja": "XNET: Intelligent Dynamic Sampling for High-Speed Network Security Monitoring（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.18349_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.18349.md"
+  },
+  "2608.18289v1": {
+    "processed_at": "2026-08-20T20:42:01.541747+00:00",
+    "published": "2026-08-18T20:14:47Z",
+    "title": "Evaluating Structured Information Extraction with Open Models in a High Risk Public Sector Application",
+    "title_ja": "Evaluating Structured Information Extraction with Open Models in a High Risk Public Sector Application（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.18289_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.18289.md"
+  },
+  "2608.18274v1": {
+    "processed_at": "2026-08-20T20:42:01.542719+00:00",
+    "published": "2026-08-18T19:48:48Z",
+    "title": "Model Card for OpenAI Privacy Filter",
+    "title_ja": "Model Card for OpenAI Privacy Filter（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.18274_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.18274.md"
+  },
+  "2608.18260v1": {
+    "processed_at": "2026-08-20T20:42:01.543574+00:00",
+    "published": "2026-08-18T19:21:12Z",
+    "title": "Redakto - The Incognito Tab for LLMs",
+    "title_ja": "Redakto - The Incognito Tab for LLMs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.18260_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.18260.md"
+  },
+  "2608.17998v1": {
+    "processed_at": "2026-08-20T20:42:01.549139+00:00",
+    "published": "2026-08-18T16:46:15Z",
+    "title": "Multivalued Consensus: General Adversaries Require More Communication",
+    "title_ja": "Multivalued Consensus: General Adversaries Require More Communication（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17998_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17998.md"
+  },
+  "2608.17960v1": {
+    "processed_at": "2026-08-20T20:42:01.550158+00:00",
+    "published": "2026-08-18T16:14:30Z",
+    "title": "COMA: A Compositional Misleading Attack Class on Security-RAG, and a Causal Counterfactual Defense",
+    "title_ja": "COMA: A Compositional Misleading Attack Class on Security-RAG, and a Causal Counterfactual Defense（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17960_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17960.md"
+  },
+  "2608.17949v1": {
+    "processed_at": "2026-08-20T20:42:01.551185+00:00",
+    "published": "2026-08-18T16:04:54Z",
+    "title": "Tail exponents of conditional guesswork via the method of types",
+    "title_ja": "Tail exponents of conditional guesswork via the method of types（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17949_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17949.md"
+  },
+  "2608.17829v1": {
+    "processed_at": "2026-08-20T20:42:01.552226+00:00",
+    "published": "2026-08-18T14:28:51Z",
+    "title": "The Model's Tell: Measuring Context-Leakage Attack Signals with Behavior Gauges",
+    "title_ja": "The Model's Tell: Measuring Context-Leakage Attack Signals with Behavior Gauges（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17829_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17829.md"
+  },
+  "2608.17796v1": {
+    "processed_at": "2026-08-20T20:42:01.557962+00:00",
+    "published": "2026-08-18T13:56:47Z",
+    "title": "Diff-DDoS: Realistic Cyber-Physical Attack Synthesis and Robust Detection for 5G-Enabled CPS Using Tabular Diffusion Models",
+    "title_ja": "Diff-DDoS: Realistic Cyber-Physical Attack Synthesis and Robust Detection for 5G-Enabled CPS Using Tabular Diffusion Models（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17796_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17796.md"
+  },
+  "2608.17770v1": {
+    "processed_at": "2026-08-20T20:42:01.559155+00:00",
+    "published": "2026-08-18T13:32:33Z",
+    "title": "Efficient Fuzzy PSI under One-Sided Assumptions",
+    "title_ja": "Efficient Fuzzy PSI under One-Sided Assumptions（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17770_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17770.md"
+  },
+  "2608.17758v1": {
+    "processed_at": "2026-08-20T20:42:01.560046+00:00",
+    "published": "2026-08-18T13:21:52Z",
+    "title": "Advancing Inclusivity in Cybersecurity Education: Integrating Intersectionality to Enhance Student Engagement in Australian Higher Education Curriculums Strategies, Barriers, and Future Directions",
+    "title_ja": "Advancing Inclusivity in サイバーセキュリティ Education: Integrating Intersectionality to Enhance Student Engagement in Australian Higher Education Curriculums Strategies, Barriers, and Future Directions",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17758_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17758.md"
+  },
+  "2608.17754v1": {
+    "processed_at": "2026-08-20T20:42:01.560665+00:00",
+    "published": "2026-08-18T13:17:36Z",
+    "title": "Achievement Unlocked: Let's Get Hacked! An Empirical Study of Cybercrime in the Video Gaming Ecosystem",
+    "title_ja": "Achievement Unlocked: Let's Get Hacked! Cybercrime in the Video Gaming Ecosystemの実証研究",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17754_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17754.md"
+  },
+  "2608.17738v1": {
+    "processed_at": "2026-08-20T20:42:01.565560+00:00",
+    "published": "2026-08-18T13:03:22Z",
+    "title": "SpecTrum: Specification-Guided Differential Fuzzing for Ethereum Consensus Clients",
+    "title_ja": "SpecTrum: Specification-Guided Differential Fuzzing for Ethereum Consensus Clients（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17738_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17738.md"
+  },
+  "2608.17729v1": {
+    "processed_at": "2026-08-20T20:42:01.566106+00:00",
+    "published": "2026-08-18T12:53:12Z",
+    "title": "BullsEye: Directed Firmware Fuzzing",
+    "title_ja": "BullsEye: Directed Firmware Fuzzing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17729_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17729.md"
+  },
+  "2608.17722v1": {
+    "processed_at": "2026-08-20T20:42:01.566687+00:00",
+    "published": "2026-08-18T12:46:52Z",
+    "title": "MemCatalyst: Amplifying Data Auditing on Vision-Language Models via Data Poisoning",
+    "title_ja": "MemCatalyst: Amplifying Data Auditing on Vision-Language Models via Data Poisoning（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17722_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17722.md"
+  },
+  "2608.17671v1": {
+    "processed_at": "2026-08-20T20:42:01.567247+00:00",
+    "published": "2026-08-18T11:43:10Z",
+    "title": "Benchmarking Automated Security Patch Backporting: How Far Are We?",
+    "title_ja": "Automated Security Patch Backporting: How Far Are We?のベンチマーク評価",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17671_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17671.md"
+  },
+  "2608.17659v1": {
+    "processed_at": "2026-08-20T20:42:01.567810+00:00",
+    "published": "2026-08-18T11:33:22Z",
+    "title": "MobileWorldSafety: Benchmarking GUI Agent Safety Against Environmental Injection Attacks in Android Apps",
+    "title_ja": "MobileWorldSafety: GUI Agent Safety Against Environmental Injection Attacks in Android Appsのベンチマーク評価",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17659_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17659.md"
+  },
+  "2608.17650v1": {
+    "processed_at": "2026-08-20T20:42:01.568335+00:00",
+    "published": "2026-08-18T11:10:11Z",
+    "title": "An Emulation Anchored Digital Twin Testbed for Cyberattack and Defense Analysis in Hospital IT OT Environments",
+    "title_ja": "An Emulation Anchored Digital Twin Testbed for Cyberattack and Defense Analysis in Hospital IT OT Environments（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17650_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17650.md"
+  },
+  "2608.17629v1": {
+    "processed_at": "2026-08-20T20:42:01.573017+00:00",
+    "published": "2026-08-18T10:46:12Z",
+    "title": "Unclonable encryption from BB84 states: a simultaneous Goldreich-Levin reduction",
+    "title_ja": "Unclonable encryption from BB84 states: a simultaneous Goldreich-Levin reduction（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17629_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17629.md"
+  },
+  "2608.17610v1": {
+    "processed_at": "2026-08-20T20:42:01.574152+00:00",
+    "published": "2026-08-18T10:19:27Z",
+    "title": "Towards the Impossibility of Imperfectly Complete Key Agreement in the QROM",
+    "title_ja": "the Impossibility of Imperfectly Complete Key Agreement in the QROMに向けて",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17610_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17610.md"
+  },
+  "2608.17597v1": {
+    "processed_at": "2026-08-20T20:42:01.574923+00:00",
+    "published": "2026-08-18T10:03:58Z",
+    "title": "HarnessRisk: A Lifecycle-Oriented Benchmark for Agent Harness Safety",
+    "title_ja": "HarnessRisk: A Lifecycle-Oriented Benchmark for Agent Harness Safety（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17597_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17597.md"
+  },
+  "2608.17585v1": {
+    "processed_at": "2026-08-20T20:42:01.575695+00:00",
+    "published": "2026-08-18T09:50:02Z",
+    "title": "The Last Mile of Deepfake Speech Detection: An Industry-Academia Experience Report",
+    "title_ja": "The Last Mile of Deepfake Speech Detection: An Industry-Academia Experience Report（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17585_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17585.md"
+  },
+  "2608.18187v1": {
+    "processed_at": "2026-08-20T20:42:01.576407+00:00",
+    "published": "2026-08-18T09:33:33Z",
+    "title": "AdaRare: Telemetry-Guided Joint Profile Control for Greybox Fuzzing",
+    "title_ja": "AdaRare: Telemetry-Guided Joint Profile Control for Greybox Fuzzing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.18187_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.18187.md"
+  },
+  "2608.17556v1": {
+    "processed_at": "2026-08-20T20:42:01.581360+00:00",
+    "published": "2026-08-18T09:19:22Z",
+    "title": "Reflex-Guard: A Low-Latency Guardrail for LLM Prompt Safety Using Dense Semantic Embeddings",
+    "title_ja": "Reflex-Guard: A Low-Latency Guardrail for LLM Prompt Safety Using Dense Semantic Embeddings（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17556_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17556.md"
+  },
+  "2608.17539v1": {
+    "processed_at": "2026-08-20T20:42:01.581977+00:00",
+    "published": "2026-08-18T09:01:32Z",
+    "title": "Software Defined Networks Key Relay for Large-Scale Quantum Key Distribution Networks",
+    "title_ja": "Software Defined Networks Key Relay for Large-Scale Quantum Key Distribution Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17539_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17539.md"
+  },
+  "2608.17538v1": {
+    "processed_at": "2026-08-20T20:42:01.582520+00:00",
+    "published": "2026-08-18T08:59:03Z",
+    "title": "TENET: Telegram Mini App (in)security",
+    "title_ja": "TENET: Telegram Mini App (in)security（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17538_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17538.md"
+  },
+  "2608.17532v1": {
+    "processed_at": "2026-08-20T20:42:01.583296+00:00",
+    "published": "2026-08-18T08:54:15Z",
+    "title": "SoK: Cross-Chain Transaction Identification and Matching",
+    "title_ja": "SoK: Cross-Chain Transaction Identification and Matching（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17532_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17532.md"
+  },
+  "2608.17529v1": {
+    "processed_at": "2026-08-20T20:42:01.583894+00:00",
+    "published": "2026-08-18T08:50:49Z",
+    "title": "CryptDough: A Unified Analytics Engine for Secure Multiparty Computation",
+    "title_ja": "CryptDough: A Unified Analytics Engine for Secure Multiparty Computation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17529_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17529.md"
+  },
+  "2608.17507v1": {
+    "processed_at": "2026-08-20T20:42:01.584442+00:00",
+    "published": "2026-08-18T08:33:01Z",
+    "title": "Cross-Domain Joint DDoS Detection in Multi-Controller SDN via Confidence-Based Entropy Fusion",
+    "title_ja": "Cross-Domain Joint DDoS Detection in Multi-Controller SDN via Confidence-Based Entropy Fusion（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17507_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17507.md"
+  },
+  "2608.17485v1": {
+    "processed_at": "2026-08-20T20:42:01.589414+00:00",
+    "published": "2026-08-18T08:12:34Z",
+    "title": "KeyPooling: Measuring Where LLM API Relay Paths Collapse Prompt Cache Isolation",
+    "title_ja": "KeyPooling: Measuring Where LLM API Relay Paths Collapse Prompt Cache Isolation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17485_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17485.md"
+  },
+  "2608.17445v1": {
+    "processed_at": "2026-08-20T20:42:01.590501+00:00",
+    "published": "2026-08-18T07:26:30Z",
+    "title": "Decomposition Attacks Across Unlinkable Identities: Limits of Stateful Defenses for LLM Services",
+    "title_ja": "Decomposition Attacks Across Unlinkable Identities: Limits of Stateful Defenses for LLM Services（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17445_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17445.md"
+  },
+  "2608.17442v2": {
+    "processed_at": "2026-08-20T20:42:01.591178+00:00",
+    "published": "2026-08-18T07:20:09Z",
+    "title": "FESC: Remodeling Long-Context Private Inference with Encrypted State-Space Models",
+    "title_ja": "FESC: Remodeling Long-Context Private Inference with Encrypted State-Space Models（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17442_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17442.md"
+  },
+  "2608.17374v1": {
+    "processed_at": "2026-08-20T20:42:01.591860+00:00",
+    "published": "2026-08-18T05:08:44Z",
+    "title": "On the Pseudo-Mixing of Kac's Walk",
+    "title_ja": "On the Pseudo-Mixing of Kac's Walk（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17374_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17374.md"
+  },
+  "2608.17361v1": {
+    "processed_at": "2026-08-20T20:42:01.592665+00:00",
+    "published": "2026-08-18T04:31:34Z",
+    "title": "Trusted Workflow Relays:Cross-Tenant Email Abuse and Composable Red Team Initial-Access Primitives in Multi-Tenant Clouds",
+    "title_ja": "Trusted Workflow Relays:Cross-Tenant Email Abuse and Composable Red Team Initial-Access Primitives in Multi-Tenant Clouds（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17361_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17361.md"
+  },
+  "2608.17360v1": {
+    "processed_at": "2026-08-20T20:42:01.597563+00:00",
+    "published": "2026-08-18T04:26:39Z",
+    "title": "Fair ASR: Re-Evaluating Black-Box Jailbreaks under Shared Target-Call Budgets",
+    "title_ja": "Fair ASR: Re-Evaluating Black-Box Jailbreaks under Shared Target-Call Budgets（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17360_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17360.md"
+  },
+  "2608.17355v1": {
+    "processed_at": "2026-08-20T20:42:01.598290+00:00",
+    "published": "2026-08-18T04:21:19Z",
+    "title": "FlowShield: cryptocurrency anti-money laundering with transaction semantics parsing and fund flow tracking",
+    "title_ja": "FlowShield: cryptocurrency anti-money laundering with transaction semantics parsing and fund flow tracking（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17355_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17355.md"
+  },
+  "2608.17275v1": {
+    "processed_at": "2026-08-20T20:42:01.598815+00:00",
+    "published": "2026-08-18T02:04:58Z",
+    "title": "When Agents Act on Web3: An Attack-Surface Survey of MCP, Skills, and Tool Calling",
+    "title_ja": "When Agents Act on Web3: An Attack-Surface Survey of MCP, Skills, and Tool Calling（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17275_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17275.md"
+  },
+  "2608.17251v1": {
+    "processed_at": "2026-08-20T20:42:01.599371+00:00",
+    "published": "2026-08-18T01:12:17Z",
+    "title": "ADAPTD: Adaptive Detection and Proactive Threat Defense for Autonomous APT attacks",
+    "title_ja": "ADAPTD: Adaptive Detection and Proactive Threat Defense for Autonomous APT attacks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17251_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17251.md"
+  },
+  "2608.17234v1": {
+    "processed_at": "2026-08-20T20:42:01.599911+00:00",
+    "published": "2026-08-18T00:45:29Z",
+    "title": "COMIC: Reference-Aware Safety Gating for Multimodal Large Language Models",
+    "title_ja": "COMIC: Reference-Aware Safety Gating for Multimodal 大規模言語モデル",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17234_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17234.md"
+  },
+  "2608.17220v1": {
+    "processed_at": "2026-08-20T20:42:01.600483+00:00",
+    "published": "2026-08-18T00:22:46Z",
+    "title": "PACE: Policy-Attested Contract Execution for Safe AI Agents in Decentralized Finance",
+    "title_ja": "PACE: Policy-Attested Contract Execution for Safe AI Agents in Decentralized Finance（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-18/2608.17220_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-18/2608.17220.md"
+  },
+  "2608.17202v1": {
+    "processed_at": "2026-08-20T20:42:01.601488+00:00",
+    "published": "2026-08-17T23:26:32Z",
+    "title": "Fool's Gold: Defensive Deception Against Safety-Removal Attacks on Open-Weight Models",
+    "title_ja": "Fool's Gold: Defensive Deception Against Safety-Removal Attacks on Open-Weight Models（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17202_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17202.md"
+  },
+  "2608.17183v1": {
+    "processed_at": "2026-08-20T20:42:01.601998+00:00",
+    "published": "2026-08-17T22:47:14Z",
+    "title": "Benchmarking the Benchmarks: Evaluating Automated Safety Benchmarks for Small Language Models",
+    "title_ja": "the Benchmarks: Evaluating Automated Safety Benchmarks for Small Language Modelsのベンチマーク評価",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17183_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17183.md"
+  },
+  "2608.17176v1": {
+    "processed_at": "2026-08-20T20:42:01.602621+00:00",
+    "published": "2026-08-17T22:35:07Z",
+    "title": "The Acknowledgment Point Is the System: Durable Policy-Decision Receipts for AI Audit Evidence",
+    "title_ja": "The Acknowledgment Point Is the System: Durable Policy-Decision Receipts for AI Audit Evidence（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17176_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17176.md"
+  },
+  "2608.17159v1": {
+    "processed_at": "2026-08-20T20:42:01.603401+00:00",
+    "published": "2026-08-17T21:52:02Z",
+    "title": "A Multi-Surface Consistency Audit of Software Citation Metadata",
+    "title_ja": "A Multi-Surface Consistency Audit of Software Citation Metadata（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17159_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17159.md"
+  },
+  "2608.17154v1": {
+    "processed_at": "2026-08-20T20:42:01.604020+00:00",
+    "published": "2026-08-17T21:37:33Z",
+    "title": "Beyond the Hype: Evaluating LLM Integration and Practical Limitations in Security Operation Centers",
+    "title_ja": "Beyond the Hype: Evaluating LLM Integration and Practical Limitations in Security Operation Centers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17154_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17154.md"
+  },
+  "2608.17148v1": {
+    "processed_at": "2026-08-20T20:42:01.604768+00:00",
+    "published": "2026-08-17T21:31:10Z",
+    "title": "Authorization Before Context: A Model-Neutral Audience Boundary Against Cross-Audience Memory Leakage in Agentic Systems",
+    "title_ja": "Authorization Before Context: A Model-Neutral Audience Boundary Against Cross-Audience Memory Leakage in Agentic Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17148_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17148.md"
+  },
+  "2608.17147v1": {
+    "processed_at": "2026-08-20T20:42:01.605493+00:00",
+    "published": "2026-08-17T21:30:06Z",
+    "title": "Picture the Epsilon: Pursuing Identity-Level Privacy Guarantees for Images",
+    "title_ja": "Picture the Epsilon: Pursuing Identity-Level Privacy Guarantees for Images（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17147_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17147.md"
+  },
+  "2608.17145v1": {
+    "processed_at": "2026-08-20T20:42:01.606120+00:00",
+    "published": "2026-08-17T21:29:22Z",
+    "title": "Protocol-Embedded Compliance for Privacy-Preserving, Non-Custodial Digital Payments",
+    "title_ja": "Protocol-Embedded Compliance for Privacy-Preserving, Non-Custodial Digital Payments（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17145_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17145.md"
+  },
+  "2608.17093v1": {
+    "processed_at": "2026-08-20T20:42:01.606717+00:00",
+    "published": "2026-08-17T20:00:21Z",
+    "title": "Digital Twin-Based Intrusion Detection for Vehicle Powertrain CAN Bus Systems",
+    "title_ja": "Digital Twin-Based Intrusion Detection for Vehicle Powertrain CAN Bus Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17093_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17093.md"
+  },
+  "2608.17092v1": {
+    "processed_at": "2026-08-20T20:42:01.607296+00:00",
+    "published": "2026-08-17T19:59:20Z",
+    "title": "Structured Driving-State Narratives for Small Language Model-Based GNSS Spoofing Detection",
+    "title_ja": "Structured Driving-State Narratives for Small Language Model-Based GNSS Spoofing Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17092_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17092.md"
+  },
+  "2608.17082v1": {
+    "processed_at": "2026-08-20T20:42:01.607969+00:00",
+    "published": "2026-08-17T19:38:51Z",
+    "title": "SentryBus: A Multi-Vantage Observability Model and Validated Instrument for I2C Sensor-Interface Manipulation",
+    "title_ja": "SentryBus: A Multi-Vantage Observability Model and Validated Instrument for I2C Sensor-Interface Manipulation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17082_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17082.md"
+  },
+  "2608.17070v1": {
+    "processed_at": "2026-08-20T20:42:01.608612+00:00",
+    "published": "2026-08-17T19:19:19Z",
+    "title": "Certified but Private: Scalable Zero-Knowledge Proofs for Neural Network Guarantees",
+    "title_ja": "Certified but Private: Scalable Zero-Knowledge Proofs for Neural Network Guarantees（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17070_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17070.md"
+  },
+  "2608.17068v1": {
+    "processed_at": "2026-08-20T20:42:01.609243+00:00",
+    "published": "2026-08-17T19:17:15Z",
+    "title": "CUSTOS: Toward Forensic-Ready Zero Trust at the Capture-Containment Boundary",
+    "title_ja": "CUSTOS: Toward Forensic-Ready Zero Trust at the Capture-Containment Boundary（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17068_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17068.md"
+  },
+  "2608.17043v1": {
+    "processed_at": "2026-08-20T20:42:01.610075+00:00",
+    "published": "2026-08-17T18:41:36Z",
+    "title": "Remote-Timer-as-a-Service: Efficient Microarchitectural Leakage in the Cloud with Remote Timers",
+    "title_ja": "Remote-Timer-as-a-Service: Efficient Microarchitectural Leakage in the Cloud with Remote Timers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.17043_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.17043.md"
+  },
+  "2608.16858v1": {
+    "processed_at": "2026-08-20T20:42:01.610666+00:00",
+    "published": "2026-08-17T17:41:11Z",
+    "title": "ECO-ID: Event-Camera based Optical System for Secure Multi-User Ultra-Low Latency Identification",
+    "title_ja": "ECO-ID: Event-Camera based Optical System for Secure Multi-User Ultra-Low Latency Identification（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16858_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16858.md"
+  },
+  "2608.16824v1": {
+    "processed_at": "2026-08-20T20:42:01.611295+00:00",
+    "published": "2026-08-17T17:12:11Z",
+    "title": "GEO-Flag: Detecting and Measuring GEO-Optimized Web Content",
+    "title_ja": "GEO-Flag: Detecting and Measuring GEO-Optimized Web Content（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16824_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16824.md"
+  },
+  "2608.16791v1": {
+    "processed_at": "2026-08-20T20:42:01.611988+00:00",
+    "published": "2026-08-17T16:47:09Z",
+    "title": "Steering the Flow: Inverting Face Recognition Models via Gradient-Guided Flow Matching",
+    "title_ja": "Steering the Flow: Inverting Face Recognition Models via Gradient-Guided Flow Matching（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16791_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16791.md"
+  },
+  "2608.16775v1": {
+    "processed_at": "2026-08-20T20:42:01.612657+00:00",
+    "published": "2026-08-17T16:21:18Z",
+    "title": "Topological Attribution Distance (TAD): Revealing Segment-Level RAG Influence on LLM Output Geometry for Incident Log Analysis",
+    "title_ja": "Topological Attribution Distance (TAD): Revealing Segment-Level RAG Influence on LLM Output Geometry for Incident Log Analysis（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16775_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16775.md"
+  },
+  "2608.16769v1": {
+    "processed_at": "2026-08-20T20:42:01.613766+00:00",
+    "published": "2026-08-17T16:18:15Z",
+    "title": "A Deployment-Oriented and Resource-Efficient Neuro-Symbolic Framework for Explainable DDoS Detection in Operational Technology Networks",
+    "title_ja": "A Deployment-Oriented and Resource-Efficient Neuro-Symbolic Framework for Explainable DDoS Detection in Operational Technology Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16769_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16769.md"
+  },
+  "2608.16598v1": {
+    "processed_at": "2026-08-20T20:42:01.615009+00:00",
+    "published": "2026-08-17T13:53:36Z",
+    "title": "Rigorous Statements and Proofs of the Lemmas in Simon's Algorithm for the Dihedral Coset Problem and Their Underlying Hypothesis",
+    "title_ja": "Rigorous Statements and Proofs of the Lemmas in Simon's Algorithm for the Dihedral Coset Problem and Their Underlying Hypothesis（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16598_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16598.md"
+  },
+  "2608.16551v1": {
+    "processed_at": "2026-08-20T20:42:01.615986+00:00",
+    "published": "2026-08-17T13:23:39Z",
+    "title": "What to Remember, What to Reveal: Privacy-Aware Memory for Conversational Agents",
+    "title_ja": "What to Remember, What to Reveal: Privacy-Aware Memory for Conversational Agents（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16551_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16551.md"
+  },
+  "2608.16536v1": {
+    "processed_at": "2026-08-20T20:42:01.616970+00:00",
+    "published": "2026-08-17T13:11:51Z",
+    "title": "DSPrompt: Dynamic Soft Prompt Defense Against M-RAG Corruption",
+    "title_ja": "DSPrompt: Dynamic Soft Prompt Defense Against M-RAG Corruption（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16536_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16536.md"
+  },
+  "2608.16508v1": {
+    "processed_at": "2026-08-20T20:42:01.617899+00:00",
+    "published": "2026-08-17T12:47:38Z",
+    "title": "LLMs for Zero-Shot Threat Detection via Structured Risk Indicators",
+    "title_ja": "LLMs for Zero-Shot Threat Detection via Structured Risk Indicators（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16508_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16508.md"
+  },
+  "2608.16504v1": {
+    "processed_at": "2026-08-20T20:42:01.619185+00:00",
+    "published": "2026-08-17T12:42:46Z",
+    "title": "Vantage: Availability-Graded Broadcast for Signature-Free BFT",
+    "title_ja": "Vantage: Availability-Graded Broadcast for Signature-Free BFT（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16504_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16504.md"
+  },
+  "2608.16441v1": {
+    "processed_at": "2026-08-20T20:42:01.620200+00:00",
+    "published": "2026-08-17T11:38:33Z",
+    "title": "Experimental Validation and Mitigation of RRC Storm Attacks in 5G Cellular Networks",
+    "title_ja": "Experimental Validation and Mitigation of RRC Storm Attacks in 5G Cellular Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16441_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16441.md"
+  },
+  "2608.16430v1": {
+    "processed_at": "2026-08-20T20:42:01.621476+00:00",
+    "published": "2026-08-17T11:31:03Z",
+    "title": "DCI: Dependency Confidence Index for Assessing Open-Source Dependency Trustworthiness",
+    "title_ja": "DCI: Dependency Confidence Index for Assessing Open-Source Dependency Trustworthiness（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16430_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16430.md"
+  },
+  "2608.16422v1": {
+    "processed_at": "2026-08-20T20:42:01.622426+00:00",
+    "published": "2026-08-17T11:22:20Z",
+    "title": "Proving the Utility of Large Language Models in Cybersecurity Simulations: A Comprehensive Examination",
+    "title_ja": "Proving the Utility of 大規模言語モデル in Cybersecurity Simulations: A Comprehensive Examination",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16422_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16422.md"
+  },
+  "2608.16403v1": {
+    "processed_at": "2026-08-20T20:42:01.623475+00:00",
+    "published": "2026-08-17T11:00:05Z",
+    "title": "Recovering Process Variables from Industrial Network Traffic via Search-Based Optimization",
+    "title_ja": "Recovering Process Variables from Industrial Network Traffic via Search-Based Optimization（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16403_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16403.md"
+  },
+  "2608.16393v2": {
+    "processed_at": "2026-08-20T20:42:01.624379+00:00",
+    "published": "2026-08-17T10:43:07Z",
+    "title": "Security Assessment of DeepSeek Harness with A.I.G: Evaluating Resistance to Indirect Prompt Injection",
+    "title_ja": "Security Assessment of DeepSeek Harness with A.I.G: Evaluating Resistance to Indirect Prompt Injection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16393_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16393.md"
+  },
+  "2608.16391v1": {
+    "processed_at": "2026-08-20T20:42:01.625245+00:00",
+    "published": "2026-08-17T10:41:18Z",
+    "title": "Ventor-QTest: Threat-Model-Driven Verification of Vendor-Hosted LLM APIs",
+    "title_ja": "Ventor-QTest: Threat-Model-Driven Verification of Vendor-Hosted LLM APIs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16391_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16391.md"
+  },
+  "2608.16970v1": {
+    "processed_at": "2026-08-20T20:42:01.626182+00:00",
+    "published": "2026-08-17T08:52:22Z",
+    "title": "Probing the Prefill: Detecting Code Vulnerabilities via Latent Activations",
+    "title_ja": "Probing the Prefill: Detecting Code Vulnerabilities via Latent Activations（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16970_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16970.md"
+  },
+  "2608.16246v1": {
+    "processed_at": "2026-08-20T20:42:01.627124+00:00",
+    "published": "2026-08-17T08:20:44Z",
+    "title": "CompoSkill: Compositional Skill Chain Attacks from Individually Scanner-Passing LLM Agent Skills",
+    "title_ja": "CompoSkill: Compositional Skill Chain Attacks from Individually Scanner-Passing LLM Agent Skills（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16246_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16246.md"
+  },
+  "2608.16223v1": {
+    "processed_at": "2026-08-20T20:42:01.627958+00:00",
+    "published": "2026-08-17T07:58:46Z",
+    "title": "Trusted Hardware Acceleration for Function Secret Sharing",
+    "title_ja": "Trusted Hardware Acceleration for Function Secret Sharing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16223_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16223.md"
+  },
+  "2608.16190v1": {
+    "processed_at": "2026-08-20T20:42:01.628838+00:00",
+    "published": "2026-08-17T07:10:56Z",
+    "title": "Decorrelation Is Not Complementarity: Skill, Not Lineage, Governs Trusted-Monitor Ensembles",
+    "title_ja": "Decorrelation Is Not Complementarity: Skill, Not Lineage, Governs Trusted-Monitor Ensembles（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16190_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16190.md"
+  },
+  "2608.16187v1": {
+    "processed_at": "2026-08-20T20:42:01.629702+00:00",
+    "published": "2026-08-17T07:09:09Z",
+    "title": "Securing AI-Generated Code: A Just-in-Time Vulnerability Detection and Remediation Pipeline",
+    "title_ja": "AI-Generated Code: A Just-in-Time Vulnerability Detection and Remediation Pipelineのセキュリティ強化",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16187_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16187.md"
+  },
+  "2608.16177v2": {
+    "processed_at": "2026-08-20T20:42:01.630573+00:00",
+    "published": "2026-08-17T06:48:53Z",
+    "title": "Measuring Obedience to Authority Across Large Language Models with the Milgram Paradigm",
+    "title_ja": "Measuring Obedience to Authority Across 大規模言語モデル with the Milgram Paradigm",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16177_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16177.md"
+  },
+  "2608.16160v1": {
+    "processed_at": "2026-08-20T20:42:01.631722+00:00",
+    "published": "2026-08-17T06:25:29Z",
+    "title": "A Calibrated and Explainable Bimodal Machine Learning Framework for Hybrid Intrusion Detection",
+    "title_ja": "A Calibrated and Explainable Bimodal Machine Learning Framework for Hybrid Intrusion Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16160_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16160.md"
+  },
+  "2608.16159v1": {
+    "processed_at": "2026-08-20T20:42:01.632638+00:00",
+    "published": "2026-08-17T06:24:22Z",
+    "title": "Digital Twin Degradation: Detecting Cyber Physical Attacks via Temporal Inconsistencies",
+    "title_ja": "Digital Twin Degradation: Detecting Cyber Physical Attacks via Temporal Inconsistencies（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16159_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16159.md"
+  },
+  "2608.16961v1": {
+    "processed_at": "2026-08-20T20:42:01.633475+00:00",
+    "published": "2026-08-17T04:58:23Z",
+    "title": "Quantum-Safe Web Service Architecture Using Time-Based One-Time Passwords",
+    "title_ja": "Quantum-Safe Web Service Architecture Using Time-Based One-Time Passwords（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16961_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16961.md"
+  },
+  "2608.16044v1": {
+    "processed_at": "2026-08-20T20:42:01.634387+00:00",
+    "published": "2026-08-17T03:18:51Z",
+    "title": "Coverage Is Not Containment: A Fundamental Limit of Admission-Time Defenses Against Coordinated Poisoning of Vector Retrieval",
+    "title_ja": "Coverage Is Not Containment: A Fundamental Limit of Admission-Time Defenses Against Coordinated Poisoning of Vector Retrieval（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16044_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16044.md"
+  },
+  "2608.16032v1": {
+    "processed_at": "2026-08-20T20:42:01.635302+00:00",
+    "published": "2026-08-17T02:54:04Z",
+    "title": "Proof-of-Execution Memory: Defending LLM Agents Against Forged-Reasoning Attacks by Verifying What Actually Happened",
+    "title_ja": "Proof-of-Execution Memory: Defending LLMエージェント Against Forged-Reasoning Attacks by Verifying What Actually Happened",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16032_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16032.md"
+  },
+  "2608.16026v1": {
+    "processed_at": "2026-08-20T20:42:01.636408+00:00",
+    "published": "2026-08-17T02:38:32Z",
+    "title": "SkillWatermark: An Embedded Skill Watermark of Progressive Privacy Inference via Benign Prompts",
+    "title_ja": "SkillWatermark: An Embedded Skill Watermark of Progressive Privacy Inference via Benign Prompts（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-17/2608.16026_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-17/2608.16026.md"
+  },
+  "2608.15913v1": {
+    "processed_at": "2026-08-20T20:42:01.637507+00:00",
+    "published": "2026-08-16T20:02:12Z",
+    "title": "Conjunctive Poisoning in AI Supply-Chain Applications",
+    "title_ja": "Conjunctive Poisoning in AI Supply-Chain Applications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15913_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15913.md"
+  },
+  "2608.15888v1": {
+    "processed_at": "2026-08-20T20:42:01.638159+00:00",
+    "published": "2026-08-16T18:38:00Z",
+    "title": "Bounded Agents: Delegation Security for Multi-Agent AI Systems",
+    "title_ja": "Bounded Agents: Delegation Security for Multi-Agent AI Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15888_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15888.md"
+  },
+  "2608.15814v1": {
+    "processed_at": "2026-08-20T20:42:01.638804+00:00",
+    "published": "2026-08-16T15:43:02Z",
+    "title": "Assessing Attack Surfaces in Generative Search Engines through Publisher Attributes: A Case Study in Political Domains",
+    "title_ja": "Assessing Attack Surfaces in Generative Search Engines through Publisher Attributes: A Case Study in Political Domains（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15814_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15814.md"
+  },
+  "2608.15778v1": {
+    "processed_at": "2026-08-20T20:42:01.639426+00:00",
+    "published": "2026-08-16T14:58:13Z",
+    "title": "Fast Simulation Algorithms for OLH using Binomial Modeling",
+    "title_ja": "Fast Simulation Algorithms for OLH using Binomial Modeling（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15778_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15778.md"
+  },
+  "2608.15761v1": {
+    "processed_at": "2026-08-20T20:42:01.639953+00:00",
+    "published": "2026-08-16T14:30:45Z",
+    "title": "Provenance, Not Behaviour: A Serialisation Artifact in Edge-IIoTset and a Leakage-Free Benchmark for Precision-Agriculture Intrusion Detection",
+    "title_ja": "Provenance, Not Behaviour: A Serialisation Artifact in Edge-IIoTset and a Leakage-Free Benchmark for Precision-Agriculture Intrusion Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15761_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15761.md"
+  },
+  "2608.15642v1": {
+    "processed_at": "2026-08-20T20:42:01.640490+00:00",
+    "published": "2026-08-16T09:17:05Z",
+    "title": "When Time Meets Space: Entropy Integration and Dynamic Threshold for Adaptive DDoS Detection in SDN",
+    "title_ja": "When Time Meets Space: Entropy Integration and Dynamic Threshold for Adaptive DDoS Detection in SDN（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15642_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15642.md"
+  },
+  "2608.15640v1": {
+    "processed_at": "2026-08-20T20:42:01.641040+00:00",
+    "published": "2026-08-16T09:11:09Z",
+    "title": "A contribution to the critique of blockchain censorship",
+    "title_ja": "A contribution to the critique of blockchain censorship（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15640_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15640.md"
+  },
+  "2608.15617v1": {
+    "processed_at": "2026-08-20T20:42:01.641595+00:00",
+    "published": "2026-08-16T08:32:39Z",
+    "title": "Benchmarking Quantum Machine Learning for Power-System Attack Detection: Evaluation Choices Decide the Outcome Before the Models Do",
+    "title_ja": "Quantum Machine Learning for Power-System Attack Detection: Evaluation Choices Decide the Outcome Before the Models Doのベンチマーク評価",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15617_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15617.md"
+  },
+  "2608.15518v1": {
+    "processed_at": "2026-08-20T20:42:01.642166+00:00",
+    "published": "2026-08-16T04:01:42Z",
+    "title": "A Lifecycle-Oriented Detection and Defense Framework for Price Manipulation Attacks in DeFi",
+    "title_ja": "A Lifecycle-Oriented Detection and Defense Framework for Price Manipulation Attacks in DeFi（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15518_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15518.md"
+  },
+  "2608.15486v1": {
+    "processed_at": "2026-08-20T20:42:01.642750+00:00",
+    "published": "2026-08-16T02:29:15Z",
+    "title": "Beyond Single-Vulnerability Evaluation: Closing the Engineering Decision Gap Between C Retrofits and Native Safety",
+    "title_ja": "Beyond Single-Vulnerability Evaluation: Closing the Engineering Decision Gap Between C Retrofits and Native Safety（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15486_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15486.md"
+  },
+  "2608.15475v1": {
+    "processed_at": "2026-08-20T20:42:01.643344+00:00",
+    "published": "2026-08-16T01:44:09Z",
+    "title": "Bit-Flip Attacks on Vision-Language-Action Models: Action-Decoding Architecture Shapes the Vulnerability",
+    "title_ja": "Bit-Flip Attacks on Vision-Language-Action Models: Action-Decoding Architecture Shapes the Vulnerability（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15475_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15475.md"
+  },
+  "2608.15465v1": {
+    "processed_at": "2026-08-20T20:42:01.643920+00:00",
+    "published": "2026-08-16T01:19:00Z",
+    "title": "Maintaining IoT Device Identification under Concept Drift via Budget-Aware Traffic Labeling",
+    "title_ja": "Maintaining IoT Device Identification under Concept Drift via Budget-Aware Traffic Labeling（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-16/2608.15465_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-16/2608.15465.md"
+  },
+  "2608.15407v1": {
+    "processed_at": "2026-08-20T20:42:01.644984+00:00",
+    "published": "2026-08-15T20:30:14Z",
+    "title": "Chameleon: An Adaptive AI-Driven Honeypot Architecture Using Threat-Calibrated Particle Swarm Optimization and Semantic Deception Rapidly-Exploring Random Trees",
+    "title_ja": "Chameleon: An Adaptive AI-Driven Honeypot Architecture Using Threat-Calibrated Particle Swarm Optimization and Semantic Deception Rapidly-Exploring Random Trees（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15407_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15407.md"
+  },
+  "2608.15391v1": {
+    "processed_at": "2026-08-20T20:42:01.645691+00:00",
+    "published": "2026-08-15T19:44:59Z",
+    "title": "TwinGridShield: Consequence-Aware Runtime Authorization for LLM Grid-Agent Actions",
+    "title_ja": "TwinGridShield: Consequence-Aware Runtime Authorization for LLM Grid-Agent Actions（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15391_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15391.md"
+  },
+  "2608.15369v1": {
+    "processed_at": "2026-08-20T20:42:01.646420+00:00",
+    "published": "2026-08-15T18:44:27Z",
+    "title": "AudioTQ: A Data-Oblivious 6-Bit CPU Audio Codec via Randomized Hadamard Rotation and Lloyd-Max Quantization",
+    "title_ja": "AudioTQ: A Data-Oblivious 6-Bit CPU Audio Codec via Randomized Hadamard Rotation and Lloyd-Max Quantization（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15369_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15369.md"
+  },
+  "2608.15310v1": {
+    "processed_at": "2026-08-20T20:42:01.647051+00:00",
+    "published": "2026-08-15T16:28:23Z",
+    "title": "FedADB: Class Anchor-Driven Dual-Branch Federated Learning for Mitigating Forgetting",
+    "title_ja": "FedADB: Class Anchor-Driven Dual-Branch 連合学習 for Mitigating Forgetting",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15310_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15310.md"
+  },
+  "2608.15276v1": {
+    "processed_at": "2026-08-20T20:42:01.647684+00:00",
+    "published": "2026-08-15T15:19:10Z",
+    "title": "Balancing Privacy and Compliance in DeFi: A Zero-Knowledge-Based Auditable Cross-Chain Framework",
+    "title_ja": "Balancing Privacy and Compliance in DeFi: A Zero-Knowledge-Based Auditable Cross-Chain Framework（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15276_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15276.md"
+  },
+  "2608.15274v2": {
+    "processed_at": "2026-08-20T20:42:01.648249+00:00",
+    "published": "2026-08-15T15:16:57Z",
+    "title": "External Sinkhole Attack Detection in Large-Scale WSNs Using Metaheuristic Feature Selection",
+    "title_ja": "External Sinkhole Attack Detection in Large-Scale WSNs Using Metaheuristic Feature Selection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15274_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15274.md"
+  },
+  "2608.18164v1": {
+    "processed_at": "2026-08-20T20:42:01.648969+00:00",
+    "published": "2026-08-15T13:34:05Z",
+    "title": "Are LLMs Safe Beyond Text: Do Emojis Expose Gaps in Safety Evaluation",
+    "title_ja": "Are LLMs Safe Beyond Text: Do Emojis Expose Gaps in Safety Evaluation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.18164_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.18164.md"
+  },
+  "2608.15225v1": {
+    "processed_at": "2026-08-20T20:42:01.649626+00:00",
+    "published": "2026-08-15T13:28:21Z",
+    "title": "Inferring 1-Minimal Trigger Configurations for Assessing Linux Kernel CVE Triggerability",
+    "title_ja": "Inferring 1-Minimal Trigger Configurations for Assessing Linux Kernel CVE Triggerability（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15225_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15225.md"
+  },
+  "2608.15184v1": {
+    "processed_at": "2026-08-20T20:42:01.650256+00:00",
+    "published": "2026-08-15T11:54:45Z",
+    "title": "Pre-Model Representation Failures in GNN-Based Smart Contract Vulnerability Detection",
+    "title_ja": "Pre-Model Representation Failures in GNN-Based Smart Contract 脆弱性検出",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15184_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15184.md"
+  },
+  "2608.15153v1": {
+    "processed_at": "2026-08-20T20:42:01.650963+00:00",
+    "published": "2026-08-15T10:10:34Z",
+    "title": "An Adaptive Gradient Clipping and Noise Injection Mechanism for Differentially Private Federated Learning",
+    "title_ja": "An Adaptive Gradient Clipping and Noise Injection Mechanism for Differentially Private 連合学習",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15153_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15153.md"
+  },
+  "2608.15151v1": {
+    "processed_at": "2026-08-20T20:42:01.651518+00:00",
+    "published": "2026-08-15T10:06:12Z",
+    "title": "SAEFUZZ: Smart Contract Vulnerability Detection through Statically Guided Evolutionary Fuzzing",
+    "title_ja": "SAEFUZZ: Smart Contract 脆弱性検出 through Statically Guided Evolutionary Fuzzing",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15151_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15151.md"
+  },
+  "2608.15108v1": {
+    "processed_at": "2026-08-20T20:42:01.652095+00:00",
+    "published": "2026-08-15T08:16:59Z",
+    "title": "Beyond Direct Access: Resource Hijacking in LLM Agents",
+    "title_ja": "Beyond Direct Access: Resource Hijacking in LLMエージェント",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15108_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15108.md"
+  },
+  "2608.15092v1": {
+    "processed_at": "2026-08-20T20:42:01.652945+00:00",
+    "published": "2026-08-15T07:24:13Z",
+    "title": "WeSCE: A Benchmark for Measuring Security Drift in LLM-Driven Code Editing",
+    "title_ja": "WeSCE: A Benchmark for Measuring Security Drift in LLM-Driven Code Editing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15092_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15092.md"
+  },
+  "2608.15030v1": {
+    "processed_at": "2026-08-20T20:42:01.654317+00:00",
+    "published": "2026-08-15T04:32:02Z",
+    "title": "Tensor--Action Ko--Lee Cryptography: A Framework and Structural Cryptanalysis of Commuting Subgroup Constructions",
+    "title_ja": "Tensor--Action Ko--Lee Cryptography: A Framework and Structural CryptCommuting Subgroup Constructionsの分析",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15030_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15030.md"
+  },
+  "2608.15016v1": {
+    "processed_at": "2026-08-20T20:42:01.655279+00:00",
+    "published": "2026-08-15T04:01:27Z",
+    "title": "Hierarchical Agentic Incident Response with Digital-Twin-Validated Attack Inference",
+    "title_ja": "Hierarchical Agentic Incident Response with Digital-Twin-Validated Attack Inference（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15016_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15016.md"
+  },
+  "2608.15012v1": {
+    "processed_at": "2026-08-20T20:42:01.656079+00:00",
+    "published": "2026-08-15T03:47:32Z",
+    "title": "SysEvolve: An AI-native, safe, autonomous adversarial attack-defense co-evolutionary system",
+    "title_ja": "SysEvolve: An AI-native, safe, autonomous adversarial attack-defense co-evolutionary system（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-15/2608.15012_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-15/2608.15012.md"
+  },
+  "2608.14876v1": {
+    "processed_at": "2026-08-20T20:42:01.657375+00:00",
+    "published": "2026-08-14T20:30:36Z",
+    "title": "Workspace Topology as an Attack Vector in Agentic Coding Assistants",
+    "title_ja": "Workspace Topology as an Attack Vector in Agentic Coding Assistants（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14876_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14876.md"
+  },
+  "2608.14861v1": {
+    "processed_at": "2026-08-20T20:42:01.658318+00:00",
+    "published": "2026-08-14T19:55:24Z",
+    "title": "STAR-FL: Secure Federated Learning with Spatial-Temporal Analysis and Robust Aggregation",
+    "title_ja": "STAR-FL: Secure 連合学習 with Spatial-Temporal Analysis and Robust Aggregation",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14861_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14861.md"
+  },
+  "2608.14826v1": {
+    "processed_at": "2026-08-20T20:42:01.659061+00:00",
+    "published": "2026-08-14T18:59:45Z",
+    "title": "Explainability Boosted Anomaly Detection Framework for O-RAN based NextG Networks",
+    "title_ja": "Explainability Boosted Anomaly Detection Framework for O-RAN based NextG Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14826_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14826.md"
+  },
+  "2608.14800v1": {
+    "processed_at": "2026-08-20T20:42:01.659810+00:00",
+    "published": "2026-08-14T18:12:52Z",
+    "title": "Bit-Level Triangular Content-Aware Permutation for Fragile Image Watermarking: Zero False Positive Rate, Single-Bit Sensitivity, and Arbitrary Dimension Support",
+    "title_ja": "Bit-Level Triangular Content-Aware Permutation for Fragile Image Watermarking: Zero False Positive Rate, Single-Bit Sensitivity, and Arbitrary Dimension Support（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14800_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14800.md"
+  },
+  "2608.14787v1": {
+    "processed_at": "2026-08-20T20:42:01.660841+00:00",
+    "published": "2026-08-14T18:00:08Z",
+    "title": "From Positionwise Confidence to Prefix Scheduling: Verifier Skipping in Speculative Decoding",
+    "title_ja": "From Positionwise Confidence to Prefix Scheduling: Verifier Skipping in Speculative Decoding（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14787_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14787.md"
+  },
+  "2608.14533v1": {
+    "processed_at": "2026-08-20T20:42:01.661639+00:00",
+    "published": "2026-08-14T17:49:19Z",
+    "title": "Finding Vulnerabilities via LLM-Augmented Semantics-Aware Type-Checking",
+    "title_ja": "Finding Vulnerabilities via LLM-Augmented Semantics-Aware Type-Checking（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14533_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14533.md"
+  },
+  "2608.14532v1": {
+    "processed_at": "2026-08-20T20:42:01.662353+00:00",
+    "published": "2026-08-14T17:48:56Z",
+    "title": "Trust Without Boundaries: An Architectural Analysis of Satellite Flight Software",
+    "title_ja": "Trust Without Boundaries: An Architectural Satellite Flight Softwareの分析",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14532_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14532.md"
+  },
+  "2608.14501v1": {
+    "processed_at": "2026-08-20T20:42:01.663238+00:00",
+    "published": "2026-08-14T17:15:54Z",
+    "title": "Lower Bounds on Black-Box Constructions of Pseudorandom Functions",
+    "title_ja": "Lower Bounds on Black-Box Constructions of Pseudorandom Functions（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14501_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14501.md"
+  },
+  "2608.14418v1": {
+    "processed_at": "2026-08-20T20:42:01.663972+00:00",
+    "published": "2026-08-14T15:59:56Z",
+    "title": "STINER: Automated Extraction of Strategic Cyber Threat Intelligence from X",
+    "title_ja": "STINER: Automated Extraction of Strategic Cyber Threat Intelligence from X（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14418_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14418.md"
+  },
+  "2608.14370v1": {
+    "processed_at": "2026-08-20T20:42:01.664583+00:00",
+    "published": "2026-08-14T15:11:10Z",
+    "title": "A Hybrid LLM-Based Framework for Automated Security Annotation Generation in Business Process Models",
+    "title_ja": "A Hybrid LLM-Based Framework for Automated Security Annotation Generation in Business Process Models（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14370_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14370.md"
+  },
+  "2608.14356v1": {
+    "processed_at": "2026-08-20T20:42:01.665344+00:00",
+    "published": "2026-08-14T14:56:51Z",
+    "title": "Designing Inclusive Crypto-Asset Dispute Resolution A Hybrid AI and Smart Contract Online Dispute Resolution Framework for Vulnerable Users",
+    "title_ja": "Designing Inclusive Crypto-Asset Dispute Resolution A Hybrid AI and Smart Contract Online Dispute Resolution Framework for Vulnerable Users（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14356_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14356.md"
+  },
+  "2608.14331v1": {
+    "processed_at": "2026-08-20T20:42:01.665907+00:00",
+    "published": "2026-08-14T14:20:46Z",
+    "title": "Equivalence Between Average-Case Hardness of Learning and Cryptography for Mixed Quantum States",
+    "title_ja": "Equivalence Between Average-Case Hardness of Learning and Cryptography for Mixed Quantum States（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14331_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14331.md"
+  },
+  "2608.14329v1": {
+    "processed_at": "2026-08-20T20:42:01.666530+00:00",
+    "published": "2026-08-14T14:20:38Z",
+    "title": "A Four-Axis Trustworthiness Benchmark for LLM-as-Judge in Principle-Based Regulation",
+    "title_ja": "A Four-Axis Trustworthiness Benchmark for LLM-as-Judge in Principle-Based Regulation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14329_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14329.md"
+  },
+  "2608.14216v1": {
+    "processed_at": "2026-08-20T20:42:01.667135+00:00",
+    "published": "2026-08-14T11:46:15Z",
+    "title": "MazeRunner: Nonlinear Task and Clue Orchestration for LLM-driven Black-Box Automated Penetration Testing",
+    "title_ja": "MazeRunner: Nonlinear Task and Clue Orchestration for LLM-driven Black-Box Automated Penetration Testing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14216_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14216.md"
+  },
+  "2608.14149v1": {
+    "processed_at": "2026-08-20T20:42:01.667663+00:00",
+    "published": "2026-08-14T10:00:36Z",
+    "title": "QuaSAR: Quantization Compensation via Stable Activation-Aware Rank Truncation",
+    "title_ja": "QuaSAR: Quantization Compensation via Stable Activation-Aware Rank Truncation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14149_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14149.md"
+  },
+  "2608.14126v1": {
+    "processed_at": "2026-08-20T20:42:01.668254+00:00",
+    "published": "2026-08-14T09:33:16Z",
+    "title": "BGA: A noise-immune neural distillation framework for malicious signature extraction in high-entropy encrypted flows",
+    "title_ja": "BGA: A noise-immune neural distillation framework for malicious signature extraction in high-entropy encrypted flows（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14126_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14126.md"
+  },
+  "2608.14094v1": {
+    "processed_at": "2026-08-20T20:42:01.668852+00:00",
+    "published": "2026-08-14T08:56:11Z",
+    "title": "P2Skill: Privacy Preserving Skill Distillation for Cloud-Local LLM Inference Systems",
+    "title_ja": "P2Skill: Privacy Preserving Skill Distillation for Cloud-Local LLM Inference Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14094_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14094.md"
+  },
+  "2608.14089v1": {
+    "processed_at": "2026-08-20T20:42:01.669553+00:00",
+    "published": "2026-08-14T08:50:51Z",
+    "title": "Regime-Conditional Verification: Correctness Estimation for Adapting and Monitoring Safety Classifiers",
+    "title_ja": "Regime-Conditional Verification: Correctness Estimation for Adapting and Monitoring Safety Classifiers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14089_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14089.md"
+  },
+  "2608.13981v1": {
+    "processed_at": "2026-08-20T20:42:01.670758+00:00",
+    "published": "2026-08-14T05:44:29Z",
+    "title": "Structural Leakage in Graph Encryption: Attacks and Defenses",
+    "title_ja": "Structural Leakage in Graph Encryption: Attacks and Defenses（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.13981_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.13981.md"
+  },
+  "2608.13948v2": {
+    "processed_at": "2026-08-20T20:42:01.672810+00:00",
+    "published": "2026-08-14T04:39:36Z",
+    "title": "Exposing SIMD Parallelism in SQIsign: An AVX-512 Implementation",
+    "title_ja": "Exposing SIMD Parallelism in SQIsign: An AVX-512 Implementation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.13948_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.13948.md"
+  },
+  "2608.13930v1": {
+    "processed_at": "2026-08-20T20:42:01.673418+00:00",
+    "published": "2026-08-14T04:04:13Z",
+    "title": "Extracting and Verifying Illicit Bitcoin Addresses from Underground Forum Discussions",
+    "title_ja": "Extracting and Verifying Illicit Bitcoin Addresses from Underground Forum Discussions（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.13930_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.13930.md"
+  },
+  "2608.13928v1": {
+    "processed_at": "2026-08-20T20:42:01.673960+00:00",
+    "published": "2026-08-14T03:57:41Z",
+    "title": "CoSA: Context-Aware Severity Assessment via Context Analysis with Large Language Models",
+    "title_ja": "CoSA: Context-Aware Severity Assessment via Context Analysis with 大規模言語モデル",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.13928_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.13928.md"
+  },
+  "2608.13920v1": {
+    "processed_at": "2026-08-20T20:42:01.674573+00:00",
+    "published": "2026-08-14T03:46:54Z",
+    "title": "Characterizing the Variance Envelope: A Multi-Dimensional Analysis of Spectre Telemetry Across Architectures and Workloads",
+    "title_ja": "Characterizing the Variance Envelope: A Multi-Dimensional Spectre Telemetry Across Architectures and Workloadsの分析",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.13920_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.13920.md"
+  },
+  "2608.13905v1": {
+    "processed_at": "2026-08-20T20:42:01.675266+00:00",
+    "published": "2026-08-14T03:17:57Z",
+    "title": "CipherSight: Robust Website Fingerprinting via Record-Resource Semantic Supervision under Distribution Shifts",
+    "title_ja": "CipherSight: Robust Website Fingerprinting via Record-Resource Semantic Supervision under Distribution Shifts（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.13905_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.13905.md"
+  },
+  "2608.14753v1": {
+    "processed_at": "2026-08-20T20:42:01.676165+00:00",
+    "published": "2026-08-14T03:12:17Z",
+    "title": "SynthGuard-ReleaseBench: Locked-Audit Evidence for Synthetic Tabular Data Releases",
+    "title_ja": "SynthGuard-ReleaseBench: Locked-Audit Evidence for Synthetic Tabular Data Releases（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.14753_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.14753.md"
+  },
+  "2608.13846v1": {
+    "processed_at": "2026-08-20T20:42:01.677003+00:00",
+    "published": "2026-08-14T00:40:29Z",
+    "title": "Verified Pythagorean Composition for Adaptive Cryptographic Games: Noise Flooding in Homomorphic Encryption",
+    "title_ja": "Verified Pythagorean Composition for Adaptive Cryptographic Games: Noise Flooding in Homomorphic Encryption（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-14/2608.13846_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-14/2608.13846.md"
+  },
+  "2608.13815v1": {
+    "processed_at": "2026-08-20T20:42:01.677656+00:00",
+    "published": "2026-08-13T23:02:34Z",
+    "title": "TLF: Rapid Characterization of RF Transceiver Parameters in Embedded Systems via Bus-Level Interception",
+    "title_ja": "TLF: Rapid Characterization of RF Transceiver Parameters in Embedded Systems via Bus-Level Interception（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13815_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13815.md"
+  },
+  "2608.13806v1": {
+    "processed_at": "2026-08-20T20:42:01.678242+00:00",
+    "published": "2026-08-13T22:32:49Z",
+    "title": "Vaulted Passkeys: A Device-Bound Proposal for Authenticated Credential Export and Import",
+    "title_ja": "Vaulted Passkeys: A Device-Bound Proposal for Authenticated Credential Export and Import（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13806_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13806.md"
+  },
+  "2608.13803v1": {
+    "processed_at": "2026-08-20T20:42:01.678790+00:00",
+    "published": "2026-08-13T22:19:48Z",
+    "title": "Mobile Apps vs. Web Browsers: A User Perception Study with Android Apps and Google Chrome",
+    "title_ja": "Mobile Apps vs. Web Browsers: A User Perception Study with Android Apps and Google Chrome（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13803_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13803.md"
+  },
+  "2608.13792v1": {
+    "processed_at": "2026-08-20T20:42:01.679975+00:00",
+    "published": "2026-08-13T21:51:15Z",
+    "title": "The ack3 H1 2026 DeFi Incident Dataset: Audit Scope Across 135 Security Incidents",
+    "title_ja": "The ack3 H1 2026 DeFi Incident Dataset: Audit Scope Across 135 Security Incidents（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13792_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13792.md"
+  },
+  "2608.13784v1": {
+    "processed_at": "2026-08-20T20:42:01.680642+00:00",
+    "published": "2026-08-13T21:29:59Z",
+    "title": "A Reproducibility Protocol for Cross-Implementation Evaluation of Post-Quantum ACVP Test Vectors",
+    "title_ja": "A Reproducibility Protocol for Cross-Implementation Evaluation of Post-Quantum ACVP Test Vectors（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13784_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13784.md"
+  },
+  "2608.13685v1": {
+    "processed_at": "2026-08-20T20:42:01.681111+00:00",
+    "published": "2026-08-13T18:28:01Z",
+    "title": "Weird Machines in Transport Layer Security",
+    "title_ja": "Weird Machines in Transport Layer Security（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13685_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13685.md"
+  },
+  "2608.13659v1": {
+    "processed_at": "2026-08-20T20:42:01.681698+00:00",
+    "published": "2026-08-13T18:02:10Z",
+    "title": "\"I Thought You Were The Uncensored Place\": Norms, Rules, and Moderation in AI-Generated Sexual Content Communities",
+    "title_ja": "\"I Thought You Were The Uncensored Place\": Norms, Rules, and Moderation in AI-Generated Sexual Content Communities（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13659_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13659.md"
+  },
+  "2608.13404v2": {
+    "processed_at": "2026-08-20T20:42:01.684920+00:00",
+    "published": "2026-08-13T16:01:32Z",
+    "title": "Does Fixing Break Security? An Empirical Study of Security Degradation in Iterative LLM-Driven Infrastructure-as-Code Repair",
+    "title_ja": "修正はセキュリティを損なうか？LLM駆動Infrastructure-as-Codeの反復修復におけるセキュリティ低下の実証研究",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13404_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13404.md"
+  },
+  "2608.13227v2": {
+    "processed_at": "2026-08-20T20:42:01.685676+00:00",
+    "published": "2026-08-13T13:30:11Z",
+    "title": "Homomorphic Aggregation of Continuous-Variable GKP States",
+    "title_ja": "Homomorphic Aggregation of Continuous-Variable GKP States（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13227_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13227.md"
+  },
+  "2608.13042v2": {
+    "processed_at": "2026-08-20T20:42:01.686705+00:00",
+    "published": "2026-08-13T10:08:41Z",
+    "title": "InSPECtor: Improving SLEIGH Processor Specification Veracity via Proxy",
+    "title_ja": "InSPECtor: Improving SLEIGH Processor Specification Veracity via Proxy（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13042_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13042.md"
+  },
+  "2608.13030v2": {
+    "processed_at": "2026-08-20T20:42:01.687926+00:00",
+    "published": "2026-08-13T10:00:13Z",
+    "title": "InterSAGE: The Secure and Verifiable Interoperability Protocol for An Internet of Agents",
+    "title_ja": "InterSAGE: The Secure and Verifiable Interoperability Protocol for An Internet of Agents（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.13030_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.13030.md"
+  },
+  "2608.14736v1": {
+    "processed_at": "2026-08-20T20:42:01.693318+00:00",
+    "published": "2026-08-13T09:46:39Z",
+    "title": "Not Discrete Enough: On the Inherent Insecurity of dTPMs for Measured Boot",
+    "title_ja": "Not Discrete Enough: On the Inherent Insecurity of dTPMs for Measured Boot（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.14736_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.14736.md"
+  },
+  "2608.14735v1": {
+    "processed_at": "2026-08-20T20:42:01.696886+00:00",
+    "published": "2026-08-13T09:12:30Z",
+    "title": "AccretionLink: On-Device Auditing of Exposure-Control Attacks on Attribute Inference",
+    "title_ja": "AccretionLink: On-Device Auditing of Exposure-Control Attacks on Attribute Inference（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.14735_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.14735.md"
+  },
+  "2608.14730v1": {
+    "processed_at": "2026-08-20T20:42:01.698097+00:00",
+    "published": "2026-08-13T00:26:41Z",
+    "title": "IP Protection in the Era of Visual Generative AI: A Survey",
+    "title_ja": "IP Protection in the Era of Visual Generative AI: A Survey（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-13/2608.14730_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-13/2608.14730.md"
+  },
+  "2608.11492v2": {
+    "processed_at": "2026-08-20T20:42:01.699039+00:00",
+    "published": "2026-08-11T23:05:27Z",
+    "title": "Cross-Corpus Evaluation of Generalizable Vulnerability Detection in IoT Firmware",
+    "title_ja": "Cross-Corpus Evaluation of Generalizable 脆弱性検出 in IoT Firmware",
+    "raw_meta_path": "outputs/raw_data/2026-08-11/2608.11492_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-11/2608.11492.md"
+  },
+  "2608.13608v1": {
+    "processed_at": "2026-08-20T20:42:01.699912+00:00",
+    "published": "2026-08-11T15:51:37Z",
+    "title": "Evaluating Agentic Learning Harness Capabilities Without Labels via the Scaling Hypothesis",
+    "title_ja": "Evaluating Agentic Learning Harness Capabilities Without Labels via the Scaling Hypothesis（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-11/2608.13608_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-11/2608.13608.md"
+  },
+  "2608.09506v2": {
+    "processed_at": "2026-08-20T20:42:01.708954+00:00",
+    "published": "2026-08-10T12:11:04Z",
+    "title": "Sound Enforcement of Dynamic Release Information Flow Policy-Full Version",
+    "title_ja": "Sound Enforcement of Dynamic Release Information Flow Policy-Full Version（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-10/2608.09506_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-10/2608.09506.md"
+  },
+  "2608.09075v2": {
+    "processed_at": "2026-08-20T20:42:01.709765+00:00",
+    "published": "2026-08-10T03:25:16Z",
+    "title": "SLAC: Access-Driven CPU-to-GPU Side-channel Attacks via System-Level Cache on Apple Silicon",
+    "title_ja": "SLAC: Access-Driven CPU-to-GPU Side-channel Attacks via System-Level Cache on Apple Silicon（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-10/2608.09075_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-10/2608.09075.md"
+  },
+  "2608.09025v2": {
+    "processed_at": "2026-08-20T20:42:01.710753+00:00",
+    "published": "2026-08-10T02:26:07Z",
+    "title": "Context Is Not Authority: Structured Runtime Governance for Financial Market Agents",
+    "title_ja": "Context Is Not Authority: Structured Runtime Governance for Financial Market Agents（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-10/2608.09025_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-10/2608.09025.md"
+  },
+  "2608.06641v2": {
+    "processed_at": "2026-08-20T20:42:01.711611+00:00",
+    "published": "2026-08-06T23:15:56Z",
+    "title": "From Documentation to Zero-day Vulnerabilities: LLM-Driven Fuzzing of JavaScript Engines in PDF Readers",
+    "title_ja": "From Documentation to Zero-day Vulnerabilities: LLM-Driven Fuzzing of JavaScript Engines in PDF Readers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-06/2608.06641_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-06/2608.06641.md"
+  },
+  "2608.03165v2": {
+    "processed_at": "2026-08-20T20:42:01.712447+00:00",
+    "published": "2026-08-04T05:52:17Z",
+    "title": "SpreadMark: Robust Image Watermarking via Spread-Spectrum Embedding",
+    "title_ja": "SpreadMark: Robust Image Watermarking via Spread-Spectrum Embedding（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-04/2608.03165_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-04/2608.03165.md"
+  },
+  "2608.02264v2": {
+    "processed_at": "2026-08-20T20:42:01.718201+00:00",
+    "published": "2026-08-03T14:08:04Z",
+    "title": "TurboRetry: Mitigating Large-Scale QUIC Handshake Floods with Off-the-Shelf DPU Offloading",
+    "title_ja": "TurboRetry: Mitigating Large-Scale QUIC Handshake Floods with Off-the-Shelf DPU Offloading（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-03/2608.02264_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-03/2608.02264.md"
+  },
+  "2608.16921v2": {
+    "processed_at": "2026-08-20T20:42:01.719121+00:00",
+    "published": "2026-08-03T04:39:56Z",
+    "title": "MITRE-SAGE: A Multi-Agent Cybersecurity Question-Answering Model",
+    "title_ja": "MITRE-SAGE: A Multi-Agent サイバーセキュリティ Question-Answering Model",
+    "raw_meta_path": "outputs/raw_data/2026-08-03/2608.16921_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-03/2608.16921.md"
+  },
+  "2608.01675v5": {
+    "processed_at": "2026-08-20T20:42:01.724993+00:00",
+    "published": "2026-08-03T04:11:39Z",
+    "title": "A New Characteristic-Uniform Model for Elliptic Curves -- Theory, Arithmetic, and Applications",
+    "title_ja": "A New Characteristic-Uniform Model for Elliptic Curves -- Theory, Arithmetic, and Applications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-03/2608.01675_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-03/2608.01675.md"
+  },
+  "2608.01454v2": {
+    "processed_at": "2026-08-20T20:42:01.726265+00:00",
+    "published": "2026-08-02T19:27:49Z",
+    "title": "How Benchmarks and Evaluation Protocols Shape Conclusions in Provenance-Based Intrusion Detection",
+    "title_ja": "How Benchmarks and Evaluation Protocols Shape Conclusions in Provenance-Based Intrusion Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-02/2608.01454_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-02/2608.01454.md"
+  },
+  "2608.13597v1": {
+    "processed_at": "2026-08-20T20:42:01.727221+00:00",
+    "published": "2026-07-31T14:21:59Z",
+    "title": "Secret-Stego Dissimilarity as a Design Axis: Invertible Coverless Image Steganography with Diffusion Models",
+    "title_ja": "Secret-Stego Dissimilarity as a Design Axis: Invertible Coverless Image Steganography with Diffusion Models（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-31/2608.13597_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-31/2608.13597.md"
+  },
+  "2607.28147v3": {
+    "processed_at": "2026-08-20T20:42:01.728310+00:00",
+    "published": "2026-07-30T12:54:25Z",
+    "title": "Agent Harness Distillation: Inference-Time Harness Extraction and Exploitation in Autonomous Multi-Agent Systems",
+    "title_ja": "Agent Harness Distillation: Inference-Time Harness Extraction and Exploitation in Autonomous Multi-Agent Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-30/2607.28147_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-30/2607.28147.md"
+  },
+  "2607.23952v2": {
+    "processed_at": "2026-08-20T20:42:01.734446+00:00",
+    "published": "2026-07-27T02:56:49Z",
+    "title": "Strategies for quantum-enabled Bitcoin miners",
+    "title_ja": "Strategies for quantum-enabled Bitcoin miners（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-27/2607.23952_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-27/2607.23952.md"
+  },
+  "2607.23787v2": {
+    "processed_at": "2026-08-20T20:42:01.735953+00:00",
+    "published": "2026-07-26T18:04:28Z",
+    "title": "Bitcoin Mempool Linearization",
+    "title_ja": "Bitcoin Mempool Linearization（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-26/2607.23787_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-26/2607.23787.md"
+  },
+  "2607.22140v2": {
+    "processed_at": "2026-08-20T20:42:01.737516+00:00",
+    "published": "2026-07-24T09:37:00Z",
+    "title": "No Edges, No Verdict: A Large-Scale Empirical Study of Declared Dependency Graphs in 78K SBOMs in the Wild",
+    "title_ja": "No Edges, No Verdict: A Large-Scale Empirical Study of Declared Dependency Graphs in 78K SBOMs in the Wild（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-24/2607.22140_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-24/2607.22140.md"
+  },
+  "2607.16660v2": {
+    "processed_at": "2026-08-20T20:42:01.738499+00:00",
+    "published": "2026-07-18T06:30:12Z",
+    "title": "From Adoption to Deployment: A Qualitative Study on AI Integration in Software Development Practice",
+    "title_ja": "From Adoption to Deployment: A Qualitative Study on AI Integration in Software Development Practice（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-18/2607.16660_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-18/2607.16660.md"
+  },
+  "2607.16543v2": {
+    "processed_at": "2026-08-20T20:42:01.739489+00:00",
+    "published": "2026-07-17T22:34:25Z",
+    "title": "A Control-Driven Framework for Secure SaaS Onboarding in Regulated Enterprises",
+    "title_ja": "A Control-Driven Framework for Secure SaaS Onboarding in Regulated Enterprises（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-17/2607.16543_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-17/2607.16543.md"
+  },
+  "2607.14345v4": {
+    "processed_at": "2026-08-20T20:42:01.740749+00:00",
+    "published": "2026-07-15T20:19:17Z",
+    "title": "Value Leakage: An LLM's Answers Are Silently Shaped by Its Own Values",
+    "title_ja": "Value Leakage: An LLM's Answers Are Silently Shaped by Its Own Values（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-15/2607.14345_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-15/2607.14345.md"
+  },
+  "2607.07918v2": {
+    "processed_at": "2026-08-20T20:42:01.741986+00:00",
+    "published": "2026-07-08T21:03:27Z",
+    "title": "Efficient Safety Alignment of Language Models via Latent Personality Traits",
+    "title_ja": "Efficient Safety Alignment of Language Models via Latent Personality Traits（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-08/2607.07918_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-08/2607.07918.md"
+  },
+  "2607.07436v2": {
+    "processed_at": "2026-08-20T20:42:01.743364+00:00",
+    "published": "2026-07-08T14:08:04Z",
+    "title": "The Blind Curator: How a Biased Judge Silently Disables Skill Retirement in Self-Evolving Agents",
+    "title_ja": "The Blind Curator: How a Biased Judge Silently Disables Skill Retirement in Self-Evolving Agents（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-08/2607.07436_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-08/2607.07436.md"
+  },
+  "2607.07075v2": {
+    "processed_at": "2026-08-20T20:42:01.745316+00:00",
+    "published": "2026-07-08T07:07:08Z",
+    "title": "Cyber Dynamics I: Finite Macrostates for Behavioral Anomaly Detection in Network Telemetry",
+    "title_ja": "Cyber Dynamics I: Finite Macrostates for Behavioral Anomaly Detection in Network Telemetry（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-08/2607.07075_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-08/2607.07075.md"
+  },
+  "2607.05516v2": {
+    "processed_at": "2026-08-20T20:42:01.746613+00:00",
+    "published": "2026-07-06T18:00:25Z",
+    "title": "Statistical Adversaries: Natural Backdoor-like Adversarial Features in Clean Vision Datasets",
+    "title_ja": "Statistical Adversaries: Natural Backdoor-like Adversarial Features in Clean Vision Datasets（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-06/2607.05516_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-06/2607.05516.md"
+  },
+  "2607.01854v2": {
+    "processed_at": "2026-08-20T20:42:01.753054+00:00",
+    "published": "2026-07-02T08:15:25Z",
+    "title": "Has This Checkpoint Been Abliterated? A Two-Signal Audit and Its Failure Map",
+    "title_ja": "Has This Checkpoint Been Abliterated? A Two-Signal Audit and Its Failure Map（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-02/2607.01854_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-02/2607.01854.md"
+  },
+  "2607.01209v3": {
+    "processed_at": "2026-08-20T20:42:01.755103+00:00",
+    "published": "2026-07-01T17:46:37Z",
+    "title": "All-out Attack: Optimal Block Withholding Under Pay-Per-Share Scheme",
+    "title_ja": "All-out Attack: Optimal Block Withholding Under Pay-Per-Share Scheme（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-07-01/2607.01209_meta.json",
+    "okf_path": "outputs/okf_papers/2026-07-01/2607.01209.md"
+  },
+  "2608.14592v1": {
+    "processed_at": "2026-08-20T20:42:01.755904+00:00",
+    "published": "2026-06-24T18:35:19Z",
+    "title": "Low-Latency Spatial-Provenance Recovery Methods for Privacy-Constrained Vehicular Networks",
+    "title_ja": "Low-Latency Spatial-Provenance Recovery Methods for Privacy-Constrained Vehicular Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-06-24/2608.14592_meta.json",
+    "okf_path": "outputs/okf_papers/2026-06-24/2608.14592.md"
+  },
+  "2606.24496v2": {
+    "processed_at": "2026-08-20T20:42:01.756562+00:00",
+    "published": "2026-06-23T12:27:58Z",
+    "title": "Red-Teaming the Agentic Red-Team",
+    "title_ja": "Red-Teaming the Agentic Red-Team（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-06-23/2606.24496_meta.json",
+    "okf_path": "outputs/okf_papers/2026-06-23/2606.24496.md"
+  },
+  "2608.14589v1": {
+    "processed_at": "2026-08-20T20:42:01.760858+00:00",
+    "published": "2026-06-22T12:01:57Z",
+    "title": "Comparing UPF Dataplane I/O Modes in a Cloud-Native 5G Core: AF_PACKET, AF_XDP, CNDP, and DPDK on SD-Core BESS-UPF",
+    "title_ja": "Comparing UPF Dataplane I/O Modes in a Cloud-Native 5G Core: AF_PACKET, AF_XDP, CNDP, and DPDK on SD-Core BESS-UPF（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-06-22/2608.14589_meta.json",
+    "okf_path": "outputs/okf_papers/2026-06-22/2608.14589.md"
+  },
+  "2606.21037v2": {
+    "processed_at": "2026-08-20T20:42:01.761835+00:00",
+    "published": "2026-06-19T02:01:50Z",
+    "title": "Honeyquest for LLMs: Rethinking Cyber Deception for AI Attackers",
+    "title_ja": "Honeyquest for LLMs: Rethinking Cyber Deception for AI Attackers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-06-19/2606.21037_meta.json",
+    "okf_path": "outputs/okf_papers/2026-06-19/2606.21037.md"
+  },
+  "2606.17035v2": {
+    "processed_at": "2026-08-20T20:42:01.762971+00:00",
+    "published": "2026-06-15T17:53:12Z",
+    "title": "Your Privacy My Cloak: Backdoor Attacks on Differentially Private Federated Learning",
+    "title_ja": "Your Privacy My Cloak: Backdoor Attacks on Differentially Private 連合学習",
+    "raw_meta_path": "outputs/raw_data/2026-06-15/2606.17035_meta.json",
+    "okf_path": "outputs/okf_papers/2026-06-15/2606.17035.md"
+  },
+  "2608.18093v1": {
+    "processed_at": "2026-08-20T20:42:01.764055+00:00",
+    "published": "2026-06-07T02:50:38Z",
+    "title": "Abliteration Mitigation via Refusal Aliases",
+    "title_ja": "Abliteration Mitigation via Refusal Aliases（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-06-07/2608.18093_meta.json",
+    "okf_path": "outputs/okf_papers/2026-06-07/2608.18093.md"
+  },
+  "2606.07941v2": {
+    "processed_at": "2026-08-20T20:42:01.769497+00:00",
+    "published": "2026-06-06T02:04:03Z",
+    "title": "Collective Hallucination in Multi-Agent LLMs:Modeling and Defense",
+    "title_ja": "Collective Hallucination in Multi-Agent LLMs:Modeling and Defense（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-06-06/2606.07941_meta.json",
+    "okf_path": "outputs/okf_papers/2026-06-06/2606.07941.md"
+  },
+  "2606.03895v3": {
+    "processed_at": "2026-08-20T20:42:01.772018+00:00",
+    "published": "2026-06-02T16:53:24Z",
+    "title": "Agent libOS: A Runtime Substrate for Capability-Controlled Self-Evolving LLM Agents",
+    "title_ja": "Agent libOS: A Runtime Substrate for Capability-Controlled Self-Evolving LLMエージェント",
+    "raw_meta_path": "outputs/raw_data/2026-06-02/2606.03895_meta.json",
+    "okf_path": "outputs/okf_papers/2026-06-02/2606.03895.md"
+  },
+  "2605.29237v2": {
+    "processed_at": "2026-08-20T20:42:01.773018+00:00",
+    "published": "2026-05-28T01:53:14Z",
+    "title": "Evolving Skill-Structured Attack Memory Enhances LLM Jailbreaking",
+    "title_ja": "Evolving Skill-Structured Attack Memory Enhances LLM Jailbreaking（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-05-28/2605.29237_meta.json",
+    "okf_path": "outputs/okf_papers/2026-05-28/2605.29237.md"
+  },
+  "2605.24312v4": {
+    "processed_at": "2026-08-20T20:42:01.776989+00:00",
+    "published": "2026-05-23T00:38:59Z",
+    "title": "Five Queries Are Enough: Query-Efficient and Surrogate-Free Membership Inference Attacks on RAG via Entailment",
+    "title_ja": "Five Queries Are Enough: Query-Efficient and Surrogate-Free Membership Inference Attacks on RAG via Entailment（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-05-23/2605.24312_meta.json",
+    "okf_path": "outputs/okf_papers/2026-05-23/2605.24312.md"
+  },
+  "2608.16891v1": {
+    "processed_at": "2026-08-20T20:42:01.778175+00:00",
+    "published": "2026-05-17T23:44:12Z",
+    "title": "Runtime Governance for Agentic AI: Action-Boundary Control with Trusted Provenance and Fail-Closed Execution",
+    "title_ja": "Runtime Governance for Agentic AI: Action-Boundary Control with Trusted Provenance and Fail-Closed Execution（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-05-17/2608.16891_meta.json",
+    "okf_path": "outputs/okf_papers/2026-05-17/2608.16891.md"
+  },
+  "2605.16812v3": {
+    "processed_at": "2026-08-20T20:42:01.780122+00:00",
+    "published": "2026-05-16T05:01:41Z",
+    "title": "Jacobian-Guided Anisotropic Noise Reshaping for Enhancing Representation Utility under Local Differential Privacy",
+    "title_ja": "Jacobian-Guided Anisotropic Noise Reshaping for Enhancing Representation Utility under Local Differential Privacy（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-05-16/2605.16812_meta.json",
+    "okf_path": "outputs/okf_papers/2026-05-16/2605.16812.md"
+  },
+  "2605.09041v2": {
+    "processed_at": "2026-08-20T20:42:01.786142+00:00",
+    "published": "2026-05-09T16:26:49Z",
+    "title": "BiAxisBias: Evaluating LLM Bias Beyond a Single Prompt and a Single Explanation",
+    "title_ja": "BiAxisBias: Evaluating LLM Bias Beyond a Single Prompt and a Single Explanation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-05-09/2605.09041_meta.json",
+    "okf_path": "outputs/okf_papers/2026-05-09/2605.09041.md"
+  },
+  "2607.16207v2": {
+    "processed_at": "2026-08-20T20:42:01.787216+00:00",
+    "published": "2026-05-09T05:40:00Z",
+    "title": "JUMP: Single-Pass Membership Inference on Fine-Tuned Diffusion Language Models",
+    "title_ja": "JUMP: Single-Pass Membership Inference on Fine-Tuned Diffusion Language Models（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-05-09/2607.16207_meta.json",
+    "okf_path": "outputs/okf_papers/2026-05-09/2607.16207.md"
+  },
+  "2604.18552v3": {
+    "processed_at": "2026-08-20T20:42:01.793638+00:00",
+    "published": "2026-04-20T17:43:25Z",
+    "title": "Do Privacy Policies Match with the Logs? An Empirical Study of Privacy Disclosure in Android Application Logs",
+    "title_ja": "Do Privacy Policies Match with the Logs? Privacy Disclosure in Android Application Logsの実証研究",
+    "raw_meta_path": "outputs/raw_data/2026-04-20/2604.18552_meta.json",
+    "okf_path": "outputs/okf_papers/2026-04-20/2604.18552.md"
+  },
+  "2604.07532v2": {
+    "processed_at": "2026-08-20T20:42:01.795352+00:00",
+    "published": "2026-04-08T19:15:28Z",
+    "title": "IPEK: Intelligent Priority-Aware Event-Based Trust with Asymmetric Knowledge for Resilient Vehicular Ad-Hoc Networks",
+    "title_ja": "IPEK: Intelligent Priority-Aware Event-Based Trust with Asymmetric Knowledge for Resilient Vehicular Ad-Hoc Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-04-08/2604.07532_meta.json",
+    "okf_path": "outputs/okf_papers/2026-04-08/2604.07532.md"
+  },
+  "2604.06092v2": {
+    "processed_at": "2026-08-20T20:42:01.796499+00:00",
+    "published": "2026-04-07T17:06:02Z",
+    "title": "Decentralized Equilibrium for Bitcoin Mining",
+    "title_ja": "Decentralized Equilibrium for Bitcoin Mining（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-04-07/2604.06092_meta.json",
+    "okf_path": "outputs/okf_papers/2026-04-07/2604.06092.md"
+  },
+  "2603.24868v2": {
+    "processed_at": "2026-08-20T20:42:01.802631+00:00",
+    "published": "2026-03-25T23:15:11Z",
+    "title": "Quantum Spectral Authentication: Entity Authentication and Key Derivation from a Hidden Eigenstate of a Public Unitary Challenge",
+    "title_ja": "Quantum Spectral Authentication: Entity Authentication and Key Derivation from a Hidden Eigenstate of a Public Unitary Challenge（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-03-25/2603.24868_meta.json",
+    "okf_path": "outputs/okf_papers/2026-03-25/2603.24868.md"
+  },
+  "2603.18245v2": {
+    "processed_at": "2026-08-20T20:42:01.808976+00:00",
+    "published": "2026-03-18T20:06:47Z",
+    "title": "Who Tests the Testers? Systematic Enumeration and Coverage Audit of LLM Agent Tool Call Safety",
+    "title_ja": "Who Tests the Testers? Systematic Enumeration and Coverage Audit of LLM Agent Tool Call Safety（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-03-18/2603.18245_meta.json",
+    "okf_path": "outputs/okf_papers/2026-03-18/2603.18245.md"
+  },
+  "2603.17883v2": {
+    "processed_at": "2026-08-20T20:42:01.810665+00:00",
+    "published": "2026-03-18T16:05:35Z",
+    "title": "SoK: From Silicon to Netlist and Beyond $-$ Two Decades of Hardware Reverse Engineering Research",
+    "title_ja": "SoK: From Silicon to Netlist and Beyond $-$ Two Decades of Hardware Reverse Engineering Research（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-03-18/2603.17883_meta.json",
+    "okf_path": "outputs/okf_papers/2026-03-18/2603.17883.md"
+  },
+  "2603.11799v2": {
+    "processed_at": "2026-08-20T20:42:01.812184+00:00",
+    "published": "2026-03-12T11:00:19Z",
+    "title": "Exponential-Family Membership Inference: From LiRA and RMIA to BaVarIA",
+    "title_ja": "Exponential-Family Membership Inference: From LiRA and RMIA to BaVarIA（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-03-12/2603.11799_meta.json",
+    "okf_path": "outputs/okf_papers/2026-03-12/2603.11799.md"
+  },
+  "2603.08913v2": {
+    "processed_at": "2026-08-20T20:42:01.813405+00:00",
+    "published": "2026-03-09T20:30:37Z",
+    "title": "Quantifying Memorization and Privacy Risks in Genomic Language Models",
+    "title_ja": "Quantifying Memorization and Privacy Risks in Genomic Language Models（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-03-09/2603.08913_meta.json",
+    "okf_path": "outputs/okf_papers/2026-03-09/2603.08913.md"
+  },
+  "2602.17458v3": {
+    "processed_at": "2026-08-20T20:42:01.817183+00:00",
+    "published": "2026-02-19T15:25:09Z",
+    "title": "The CTI Echo Chamber: Fragmentation, Overlap, and Vendor Specificity in Twenty Years of Cyber Threat Reporting",
+    "title_ja": "The CTI Echo Chamber: Fragmentation, Overlap, and Vendor Specificity in Twenty Years of Cyber Threat Reporting（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-02-19/2602.17458_meta.json",
+    "okf_path": "outputs/okf_papers/2026-02-19/2602.17458.md"
+  },
+  "2602.12250v2": {
+    "processed_at": "2026-08-20T20:42:01.817849+00:00",
+    "published": "2026-02-12T18:36:19Z",
+    "title": "Community Concealment from Graph Neural Networks",
+    "title_ja": "Community Concealment from Graph Neural Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-02-12/2602.12250_meta.json",
+    "okf_path": "outputs/okf_papers/2026-02-12/2602.12250.md"
+  },
+  "2601.17360v3": {
+    "processed_at": "2026-08-20T20:42:01.825563+00:00",
+    "published": "2026-01-24T08:13:08Z",
+    "title": "Robust Privacy: Inference-Stage Privacy through Certified Robustness",
+    "title_ja": "Robust Privacy: Inference-Stage Privacy through Certified Robustness（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-01-24/2601.17360_meta.json",
+    "okf_path": "outputs/okf_papers/2026-01-24/2601.17360.md"
+  },
+  "2601.17178v3": {
+    "processed_at": "2026-08-20T20:42:01.826857+00:00",
+    "published": "2026-01-23T21:11:44Z",
+    "title": "TrojanGYM: A Detector-in-the-Loop LLM for Adaptive RTL Hardware Trojan Insertion",
+    "title_ja": "TrojanGYM: A Detector-in-the-Loop LLM for Adaptive RTL Hardware Trojan Insertion（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-01-23/2601.17178_meta.json",
+    "okf_path": "outputs/okf_papers/2026-01-23/2601.17178.md"
+  },
+  "2601.11629v2": {
+    "processed_at": "2026-08-20T20:42:01.828672+00:00",
+    "published": "2026-01-14T03:00:19Z",
+    "title": "Semantic Differentiation for Tackling Challenges in Watermarking Low-Entropy Constrained Generation Outputs",
+    "title_ja": "Semantic Differentiation for Tackling Challenges in Watermarking Low-Entropy Constrained Generation Outputs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-01-14/2601.11629_meta.json",
+    "okf_path": "outputs/okf_papers/2026-01-14/2601.11629.md"
+  },
+  "2512.10485v3": {
+    "processed_at": "2026-08-20T20:42:01.830457+00:00",
+    "published": "2025-12-11T10:04:54Z",
+    "title": "From Lab to Reality: A Practical Evaluation of Deep Learning Models and LLMs for Vulnerability Detection",
+    "title_ja": "From Lab to Reality: A Practical Evaluation of Deep Learning Models and LLMs for 脆弱性検出",
+    "raw_meta_path": "outputs/raw_data/2025-12-11/2512.10485_meta.json",
+    "okf_path": "outputs/okf_papers/2025-12-11/2512.10485.md"
+  },
+  "2511.23278v2": {
+    "processed_at": "2026-08-20T20:42:01.843086+00:00",
+    "published": "2025-11-28T15:31:25Z",
+    "title": "RetryGuard: Preventing Self-Inflicted and Attack-Driven Retry Storms in Cloud Applications",
+    "title_ja": "RetryGuard: Preventing Self-Inflicted and Attack-Driven Retry Storms in Cloud Applications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2025-11-28/2511.23278_meta.json",
+    "okf_path": "outputs/okf_papers/2025-11-28/2511.23278.md"
+  },
+  "2511.19009v2": {
+    "processed_at": "2026-08-20T20:42:01.844097+00:00",
+    "published": "2025-11-24T11:38:53Z",
+    "title": "Understanding and Mitigating Over-refusal for Large Language Models via Representation Intervention",
+    "title_ja": "Understanding and Representation InterventionによるOver-refusal for Large Language Modelsの軽減",
+    "raw_meta_path": "outputs/raw_data/2025-11-24/2511.19009_meta.json",
+    "okf_path": "outputs/okf_papers/2025-11-24/2511.19009.md"
+  },
+  "2511.16088v3": {
+    "processed_at": "2026-08-20T20:42:01.845388+00:00",
+    "published": "2025-11-20T06:26:01Z",
+    "title": "Future-Back Threat Modeling: A Foresight-Driven Security Framework",
+    "title_ja": "Future-Back Threat Modeling: A Foresight-Driven Security Framework（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2025-11-20/2511.16088_meta.json",
+    "okf_path": "outputs/okf_papers/2025-11-20/2511.16088.md"
+  },
+  "2511.11292v2": {
+    "processed_at": "2026-08-20T20:42:01.845991+00:00",
+    "published": "2025-11-14T13:26:36Z",
+    "title": "KEM-IND-CCA-Preserving Compilation of Jasmin's ML-KEM",
+    "title_ja": "KEM-IND-CCA-Preserving Compilation of Jasmin's ML-KEM（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2025-11-14/2511.11292_meta.json",
+    "okf_path": "outputs/okf_papers/2025-11-14/2511.11292.md"
+  },
+  "2511.04707v2": {
+    "processed_at": "2026-08-20T20:42:01.846952+00:00",
+    "published": "2025-11-05T01:12:50Z",
+    "title": "Jailbreaking in the Haystack",
+    "title_ja": "Jailbreaking in the Haystack（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2025-11-05/2511.04707_meta.json",
+    "okf_path": "outputs/okf_papers/2025-11-05/2511.04707.md"
+  },
+  "2510.15173v3": {
+    "processed_at": "2026-08-20T20:42:01.849308+00:00",
+    "published": "2025-10-16T22:26:18Z",
+    "title": "Beyond the Voice: Inertial Sensing of Mouth Motion for High Security Speech Verification",
+    "title_ja": "Beyond the Voice: Inertial Sensing of Mouth Motion for High Security Speech Verification（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2025-10-16/2510.15173_meta.json",
+    "okf_path": "outputs/okf_papers/2025-10-16/2510.15173.md"
+  },
+  "2510.15133v3": {
+    "processed_at": "2026-08-20T20:42:01.850047+00:00",
+    "published": "2025-10-16T20:48:22Z",
+    "title": "Intermittent File Encryption in Ransomware: Measurement, Modeling, and Detection",
+    "title_ja": "Intermittent File Encryption in Ransomware: Measurement, Modeling, and Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2025-10-16/2510.15133_meta.json",
+    "okf_path": "outputs/okf_papers/2025-10-16/2510.15133.md"
+  },
+  "2509.16625v6": {
+    "processed_at": "2026-08-20T20:42:01.857641+00:00",
+    "published": "2025-09-20T11:02:50Z",
+    "title": "Self-Supervised Learning of Graph Representations for Network Intrusion Detection",
+    "title_ja": "Self-Supervised Learning of Graph Representations for Network Intrusion Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2025-09-20/2509.16625_meta.json",
+    "okf_path": "outputs/okf_papers/2025-09-20/2509.16625.md"
+  },
+  "2509.10691v3": {
+    "processed_at": "2026-08-20T20:42:01.858667+00:00",
+    "published": "2025-09-12T20:52:41Z",
+    "title": "Privacy-Preserving Decentralized Federated Learning via Explainable Adaptive Differential Privacy",
+    "title_ja": "Privacy-Preserving Decentralized 連合学習 via Explainable Adaptive Differential Privacy",
+    "raw_meta_path": "outputs/raw_data/2025-09-12/2509.10691_meta.json",
+    "okf_path": "outputs/okf_papers/2025-09-12/2509.10691.md"
   }
 }
