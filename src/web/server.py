@@ -11,7 +11,7 @@ import sys
 if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from gateway import (
+from .gateway import (
     CORS_HEADERS,
     VECTOR_ENGINE,
     WORKSPACE_DIR,
@@ -22,7 +22,7 @@ from gateway import (
     log_query,
     run_web_server,
 )
-from presentation import extract_paper_preview_metadata, render_okf_preview_html
+from .presentation import extract_paper_preview_metadata, render_okf_preview_html
 
 SITE_DIR = os.path.join(WORKSPACE_DIR, "site")
 

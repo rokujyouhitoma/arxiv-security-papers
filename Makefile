@@ -10,7 +10,7 @@ VENV=.venv
 VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
 
-SRC=src/fetcher/arxiv_okf_fetcher.py
+SRC=src/pipeline/arxiv_okf_fetcher.py
 PYTHON_SRCS := $(shell find src -type f -name "*.py" | sort)
 TESTS := $(shell find tests -type f -name "*.py" | sort)
 

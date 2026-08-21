@@ -2,7 +2,7 @@
 Integration and regression tests for arxiv_okf_fetcher core pipeline.
 """
 
-from fetcher import (
+from pipeline import (
     classify_domain,
     clean_text,
     determine_security_tags,

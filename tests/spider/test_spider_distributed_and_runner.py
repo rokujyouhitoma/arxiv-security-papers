@@ -4,8 +4,8 @@ import os
 import shutil
 import tempfile
 
-from src.fetcher.ingestion.adapters.registry import get_source_registry
-from src.fetcher.ingestion.adapters.spider_adapter import SpiderSourceAdapter
+from src.pipeline.ingestion.adapters.registry import get_source_registry
+from src.pipeline.ingestion.adapters.spider_adapter import SpiderSourceAdapter
 from src.spider.core.downloader import Request
 from src.spider.core.engine import ScrapedItem
 from src.spider.core.scheduler import Scheduler
