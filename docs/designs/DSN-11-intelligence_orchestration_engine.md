@@ -1,9 +1,9 @@
-# [DSN-11] 自律型インテリジェンス・オーケストレーションエンジン包括的アーキテクチャ設計書 (Autonomous Closed-Loop Intelligence Orchestration Engine) — arxiv-security-papers
+# [DSN-11] 普遍的自律型インテリジェンス・ライフサイクル・オーケストレーション包括設計書 (Universal Autonomous Intelligence Lifecycle Orchestration Architecture) — arxiv-security-papers
 
 - **文書番号**: `DSN-11`
 - **文書ステータス**: `APPROVED`
-- **対象サブシステム**: 統合オーケストレーション中枢 (Intelligence Orchestrator)
-- **関連パッケージ**: `src/spider/`, `src/pipeline/`, `src/database/`, `src/search/`, `src/security/`, `src/mcp/`, `src/web/`
+- **対象サブシステム**: 普遍的インテリジェンス統合オーケストレーション中枢 (Universal Intelligence Orchestration Engine)
+- **関連パッケージ**: システム全体 (`src/spider/`, `src/pipeline/`, `src/database/`, `src/search/`, `src/security/`, `src/mcp/`, `src/web/`)
 - **作成日**: 2026-08-22
 - **最終更新日**: 2026-08-22
 - **主幹エージェント**: Project Manager (PM) & Systems Architect
@@ -12,162 +12,261 @@
 
 ## 体系目次
 
-- [1. アーキテクチャ概要・設計思想・スコープ](#1-アーキテクチャ概要設計思想スコープ)
+- [1. インテリジェンスの本質・設計思想・普遍的スコープ](#1-インテリジェンスの本質設計思想普遍的スコープ)
+  - [1.1 DIKW ピラミッドとインテリジェンスの定義](#11-dikw-ピラミッドとインテリジェンスの定義)
+  - [1.2 普遍的インテリジェンス・ライフサイクルの原則](#12-普遍的インテリジェンスライフサイクルの原則)
 - [2. 全13大専門エージェント多角的多面協議議事録](#2-全13大専門エージェント多角的多面協議議事録)
-- [3. インテリジェンス・サイクル 6大フェーズとコンポーネント構造](#3-インテリジェンスサイクル-6大フェーズとコンポーネント構造)
+- [3. 普遍的インテリジェンス・サイクル 6大フェーズとコンポーネント構造](#3-普遍的インテリジェンスサイクル-6大フェーズとコンポーネント構造)
+  - [3.1 C4 コンポーネント構造](#31-c4-コンポーネント構造)
+  - [3.2 6大フェーズの普遍的責務定義](#32-6大フェーズの普遍的責務定義)
 - [4. コアアルゴリズム & 閉ループフィードバック数理モデル](#4-コアアルゴリズム--閉ループフィードバック数理モデル)
+  - [4.1 動的 PIR (Priority Intelligence Requirements) 重みベクトルモデル](#41-動的-pir-priority-intelligence-requirements-重みベクトルモデル)
+  - [4.2 情報ギャップ検出とトピックドリフト追跡数理](#42-情報ギャップ検出とトピックドリフト追跡数理)
+  - [4.3 収集リソース最適配分アルゴリズム (Adaptive OPIC)](#43-収集リソース最適配分アルゴリズム-adaptive-opic)
 - [5. DAG ワークフロー & 状態遷移仕様](#5-dag-ワークフロー--状態遷移仕様)
+  - [5.1 有向非巡回グラフ (DAG) パイプライン](#51-有向非巡回グラフ-dag-パイプライン)
+  - [5.2 イベント駆動型状態遷移ダイアグラム](#52-イベント駆動型状態遷移ダイアグラム)
 - [6. クラス設計・プロトコル定義・公開 API インターフェース](#6-クラス設計プロトコル定義公開-api-インターフェース)
-- [7. セキュリティ堅牢化・脅威防御・耐障害性 (Sagaパターン)](#7-セキュリティ堅牢化脅威防御耐障害性-sagaパターン)
+- [7. ガバナンス・セキュリティ・耐障害性 (Sagaパターン)](#7-ガバナンスセキュリティ耐障害性-sagaパターン)
 - [8. 性能特性・メモリ制約・可観測性 (Observability)](#8-性能特性メモリ制約可観測性-observability)
 - [9. 包括的テスト戦略・E2E シナリオ・検証スイート](#9-包括的テスト戦略e2e-シナリオ検証スイート)
 - [10. 完了定義 (DoD) & 実装・運用ロードマップ](#10-完了定義-dod--実装運用ロードマップ)
 
 ---
 
-# 1. アーキテクチャ概要・設計思想・スコープ
+# 1. インテリジェンスの本質・設計思想・普遍的スコープ
 
-### 1.1 背景とミッション
-セキュリティ脅威インテリジェンス（Cyber Threat Intelligence: CTI）の価値は、単なるデータの収集量ではなく、**「意思決定者の要件（PIR: Priority Intelligence Requirements）に基づき、いかに迅速・正確に分析・生産され、実務オペレーションへ統合され、そのフィードバックから次期サイクルを自律改善できるか」**にかかっている。
+### 1.1 DIKW ピラミッドとインテリジェンスの定義
+インテリジェンス（Intelligence）とは、単なる生データ（Data）や事実の集積である情報（Information）を超え、**「意思決定者が直面する不確実性を低減し、最適な判断と行動（Action）を可能にするために、目的意識を持って収集・構造化・分析・文脈化された高付加価値な知識体系」**である。
 
-本設計書（`DSN-11`）は、古典的なインテリジェンス・サイクル（6大フェーズ）を一気通貫で指揮・統制し、自律的自己適応型閉ループ（Closed-Loop Adaptive Engine）を駆動する **「自律型インテリジェンス・オーケストレーションエンジン」** の包括的アーキテクチャを規定する。
+```
+                    ▲
+                   / \
+                  /   \     [Wisdom / Action]
+                 / 智慧 \   意思決定・戦略実行・オペレーションへの直接反映
+                /-------\
+               / Intelligence \  [Intelligence]
+              /  インテリジェンス \ コンテキスト・相関・示唆・未来予測
+             /-----------------\
+            /   Information     \  [Information]
+           /      情　報         \ 構造化・正規化・カテゴリ化されたデータ
+          /-----------------------\
+         /         Data            \  [Data]
+        /         データ            \ 多元ソースから収集された生のファクト・観測値
+       +-----------------------------+
+```
+
+本システムにおけるインテリジェンス・オーケストレーションは、科学技術研究、サイバー脅威、市場・競合動向、特許・知的財産、政策・地政学リスクなど、あらゆる領域のナレッジドメインに適用可能な**ドメイン非依存（Domain-Agnostic）の汎用自律閉ループ制御基盤**として設計される。
 
 ```
 +---------------------------------------------------------------------------------------------------+
-|                           Autonomous Intelligence Orchestration Engine                            |
+|                        Universal Autonomous Intelligence Orchestrator                             |
 +---------------------------------------------------------------------------------------------------+
 |  [Phase 1: Planning & Direction]                                                                  |
-|   - Dynamic PIR/SIR Registry | OPIC Crawl Policy Distributor | Topic Weight Vector                |
+|   - Dynamic PIR/SIR (Priority/Specific Intelligence Requirements) Registry                        |
+|   - Multi-Domain Collection Policy Distributor | Global Topic Weight Vector                       |
 +---------------------------------------------------------------------------------------------------+
-                                            | (Crawl Instructions & Priorities)
+                                            | (Collection Directives & Dynamic Quotas)
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  [Phase 2: Collection] (src/spider/ & src/pipeline/ingestion/)                                    |
-|   - Distributed Crawler Coordination | AutoThrottle & Rate Limits | Deduplication Bloom Filter    |
+|  [Phase 2: Collection]                                                                            |
+|   - Multi-Source Distributed Harvester (Academic Repositories, RSS/APIs, Web/OSINT, Telemetry)   |
+|   - Rate Limiting (AutoThrottle), Distributed Token Ring & Scalable Deduplication                 |
 +---------------------------------------------------------------------------------------------------+
-                                            | (Raw Records & Papers)
+                                            | (Raw Information Records & Documents)
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  [Phase 3: Processing & Exploitation] (src/pipeline/transformer/)                                 |
-|   - pdftotext Normalization | Google OKF v0.2 Converter | MITRE ATT&CK / CWE / STRIDE Tagger      |
+|  [Phase 3: Processing & Exploitation]                                                             |
+|   - Multi-Modal Text Extraction & Normalization | Universal Knowledge Representation (OKF v0.2)   |
+|   - Domain Ontology Mapping & Multi-Dimensional Metadata Enrichment                               |
 +---------------------------------------------------------------------------------------------------+
-                                            | (Structured Knowledge & Embeddings)
+                                            | (Structured Knowledge Base & Vector Embeddings)
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  [Phase 4: Analysis & Production] (src/database/, src/search/, src/pipeline/reporter/)            |
-|   - 4-Tier SlottedPage/WAL DB | 2-Tier Lucene/Solr & HNSW Vector RAG | 5-Tier Executive Summaries |
+|  [Phase 4: Analysis & Production]                                                                 |
+|   - Atomic Storage (SlottedPage/WAL DB) & Hybrid Information Retrieval (BM25 + HNSW RAG)          |
+|   - Multi-Tier Executive Synthesis (Immediate, Periodic, Strategic & Macro Trend Horizons)       |
 +---------------------------------------------------------------------------------------------------+
-                                            | (Intelligent Products & APIs)
+                                            | (Synthesized Intelligence Products & Live APIs)
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  [Phase 5: Dissemination & Integration] (src/mcp/, src/web/)                                      |
-|   - AI Agent MCP Servers (stdio / HTTP) | PEP 3333 WSGI REST Gateway | Static OKF Markdown Hub    |
+|  [Phase 5: Dissemination & Integration]                                                           |
+|   - AI-Native Context Interfaces (Model Context Protocol / MCP) | RESTful API Gateway             |
+|   - Actionable Knowledge Markdown Publishing | Role-Based Access Control (RBAC)                   |
 +---------------------------------------------------------------------------------------------------+
-                                            | (User/AI Queries & Audit Logs)
+                                            | (Usage Traces, Query Telemetry & Decision Feedback)
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  [Phase 6: Feedback & Evaluation] (src/search/evaluation.py, src/search/utils/profiler.py)       |
-|   - NDCG@K / MAP IR Quality Scoring | Query Gap & Zero-Hit Detector | Topic Drift Analyzer        |
+|  [Phase 6: Feedback & Evaluation]                                                                 |
+|   - Quantitative IR Scoring (NDCG@K, MAP) | Knowledge Gap & Zero-Hit Intelligence Detector        |
+|   - Topic Drift & Emerging Trend Dynamic Recalibrator                                             |
 +---------------------------------------------------------------------------------------------------+
-                                            | (Adaptive PIR Recalibration Feedback)
-                                            +-------------------------------+ (Loop back to Phase 1)
+                                            | (Adaptive Closed-Loop Feedback Loop)
+                                            +-------------------------------+ (Self-Evolution to Phase 1)
 ```
+
+### 1.2 普遍的インテリジェンス・ライフサイクルの原則
+1. **PIR-Driven Precision (要件駆動型適合性)**: 全ての収集・処理・分析は、意思決定者の明示的・暗黙的要件（PIR/SIR）を起点として動的に誘導される。
+2. **Domain-Agnostic Clean Layering (ドメイン非依存クリーン階層)**: 収集手法や特定タクソノミー（分類法）に依存せず、抽象化されたプロトコルによって任意ドメインの情報を同等にオーケストレーション可能。
+3. **Closed-Loop Self-Evolution (閉ループ自己進化)**: 成果物の活用状況や評価（Evaluation）メトリクスが次期の要件（Planning）へ即時フィードバックされ、人手を介さず自律的に精度を向上。
+4. **End-to-End Traceability & Provenance (完全な来歴・根拠追跡)**: 最終生産された示唆（Insight）から、変換前の構造化データ（Information）、収集時の生データ（Raw Data）、および収集元ソース（Source）に至るまで双方向の検証可能性（Provenance）を保証。
 
 ---
 
 # 2. 全13大専門エージェント多角的多面協議議事録
 
-本設計書の策定にあたり、全 13 大専門エージェントによる統合インテリジェンス統制審議会を開催し、各専門視点からの合意を形成した。
+本普遍的アーキテクチャの策定にあたり、全 13 大専門エージェントによる統合インテリジェンス統制審議会を開催し、各専門視点からの合意を形成した。
 
 ```mermaid
 mindmap
-  root((インテリジェンス・オーケストレーション合意))
-    PM["1. Project Manager: 6大フェーズの自律閉ループ統制とSLA管理"]
-    Sec["2. InfoSec: ゼロトラスト防御・MITRE ATT&CK自動マッピング・RBAC"]
-    Arch["3. Systems Architect: DAGベースのワークフロー制御とSaga補償トランザクション"]
-    QA["4. SQA: 各フェーズ間契約(Contract)検証・冪等性テスト・DoD判定"]
-    DB["5. DB Specialist: SlottedPage/WALと2層検索インデックスの原子的一括更新"]
-    Net["6. Network: AutoThrottle・分散トークンリング・RSSフォールバック"]
-    IR["7. IR Specialist: BM25/HNSWハイブリッドRAG・NDCG@Kフィードバック"]
-    Strat["8. IT Strategist: PIR定義・5層サマリー・TechRadar戦略インサイト"]
-    Ops["9. Service Manager: 定期Cron実行・エラー自動隔離・監査ログ同期"]
+  root((普遍的インテリジェンス統合合意))
+    PM["1. Project Manager: 6大フェーズの閉ループ自律駆動とSLA統制"]
+    Sec["2. InfoSec: ゼロトラスト情報管理・機密情報保護・マルチテナントRBAC"]
+    Arch["3. Systems Architect: DAGベースのワークフロー実行とSaga補償トランザクション"]
+    QA["4. SQA: フェーズ間データ契約(Contract)検証・冪等性テスト・DoD判定"]
+    DB["5. DB Specialist: SlottedPage/WAL永続化と検索インデックスの原子的一括同期"]
+    Net["6. Network: 多元ソース接続性・AutoThrottle・分散トークンリング"]
+    IR["7. IR Specialist: BM25/HNSWハイブリッドRAG・NDCG@K評価フィードバック"]
+    Strat["8. IT Strategist: PIR定義・5層エグゼクティブサマリー・戦略レーダー生産"]
+    Ops["9. Service Manager: 定期Cronバッチ・障害自動リカバリ・監査トレース同期"]
     IoT["10. Embedded: 低メモリ消費ストリーミング・2Qバッファプール連携"]
-    Audit["11. Systems Auditor: データ来歴(Provenance)保証・署名検証"]
+    Audit["11. Systems Auditor: データ来歴(Provenance)保証・暗号署名検証"]
     UI["12. UI/UX: API Gateway・Markdownリッチレンダリング・qTime可観測性"]
-    Edu["13. Education: 日本語100%サマリー・用語統一・ナレッジ活用性向上"]
+    Edu["13. Education: 完全日本語サマリー・用語統一・ナレッジ活用性向上"]
 ```
 
 ---
 
-# 3. インテリジェンス・サイクル 6大フェーズとコンポーネント構造
+# 3. 普遍的インテリジェンス・サイクル 6大フェーズとコンポーネント構造
 
-### 3.1 C4 コンポーネントダイアグラム
+### 3.1 C4 コンポーネント構造
 
 ```mermaid
 graph TD
-    subgraph OrchestratorCore["Intelligence Orchestration Core"]
-        PIR["PIR Manager (Phase 1)"]
-        Workflow["DAG Workflow Engine"]
-        Saga["Saga Transaction Coordinator"]
-        Feedback["Feedback & Evaluation Controller (Phase 6)"]
+    subgraph OrchestrationHub["Universal Intelligence Orchestration Hub"]
+        PIRMgr["1. PIR / Requirements Director"]
+        DAGExec["Workflow & DAG Executor"]
+        SagaCoord["Saga Transaction Coordinator"]
+        FeedbackEngine["6. Feedback & Evaluation Engine"]
     end
 
-    subgraph Subsystems["統制対象サブシステム"]
-        Spider["2. Collection: src/spider/"]
-        Pipeline["3. Processing: src/pipeline/"]
-        Storage["4. Analysis: src/database/ & src/search/"]
-        Dissem["5. Dissemination: src/mcp/ & src/web/"]
+    subgraph PhaseEngines["6大フェーズ実行サブシステム群"]
+        Collector["2. Multi-Source Harvester<br/>(src/spider/ & Ingestion)"]
+        Processor["3. Processing & Ontology Engine<br/>(src/pipeline/ & Transformer)"]
+        Analyzer["4. Analysis & Knowledge Base<br/>(src/database/ & src/search/)"]
+        Distributor["5. Dissemination & Action Gateway<br/>(src/mcp/ & src/web/)"]
     end
 
-    PIR --> Workflow
-    Workflow --> Spider
-    Spider --> Pipeline
-    Pipeline --> Storage
-    Storage --> Dissem
-    Dissem -. 利用ログ・クエリ .-> Feedback
-    Feedback -- "適応型フィードバック (PIR重み更新)" --> PIR
-    Saga -. 障害時ロールバック・補償 .-> Subsystems
+    PIRMgr --> DAGExec
+    DAGExec --> Collector
+    Collector --> Processor
+    Processor --> Analyzer
+    Analyzer --> Distributor
+    Distributor -. 利用ログ・クエリテレメトリ .-> FeedbackEngine
+    FeedbackEngine -- "適応型フィードバック (PIR動的再調整)" --> PIRMgr
+    SagaCoord -. 障害時整合性ロールバック .-> PhaseEngines
 ```
+
+### 3.2 6大フェーズの普遍的責務定義
+
+1. **フェーズ 1: 計画・方向付け (Planning & Direction)**
+   - **PIR (Priority Intelligence Requirements)**: 意思決定者にとって最も価値の高い中核的情報要件の定式化。
+   - **SIR (Specific Intelligence Requirements)**: PIR を細分化した具体的・観測可能な質問群・指標の策定。
+   - **コレクションポリシーの配布**: 収集ターゲットごとの優先順位、探索頻度、割当リソース（CPU/帯域）の配分。
+
+2. **フェーズ 2: 収集 (Collection)**
+   - **多元ソースハーベスティング**: 学術論文、技術仕様書、規制動向、市場レポート、オープンデータ（OSINT）、ログ・テレメトリ等からのデータ取得。
+   - **適応型トラフィック制御**: AutoThrottle によるターゲット負荷軽減と、障害時の自動代替ソース切替。
+   - **分散重複排除**: ブルームフィルタによる既取得データの高速重複排除。
+
+3. **フェーズ 3: 処理・変換 (Processing & Exploitation)**
+   - **マルチモーダル抽出・正規化**: PDF、HTML、JSON、XML からのテキスト・メタデータ抽出とノイズ除去。
+   - **標準ナレッジ表現 (OKF v0.2)**: 構造化 YAML フロントマター付きの標準ドキュメントへの統一。
+   - **オントロジーマッピング**: ドメイン固有の概念体系（Taxonomy）に基づくタグ付け・多次元アノテーション。
+
+4. **フェーズ 4: 分析・生産 (Analysis & Production)**
+   - **複合検索・相関分析**: 語彙検索（BM25）と意味検索（HNSW ベクトル）のハイブリッド融合（RRF）による深層相関分析。
+   - **多層インテリジェンスレポート生産**: 即時（Run単位）、日次（Daily）、月次動向（Monthly Mindmap）、四半期戦略（Quarterly）、通期総括（Annual）の 5 階層レポートの自律編成。
+
+5. **フェーズ 5: 配布・統合 (Dissemination & Integration)**
+   - **AI-Native MCP 連携**: Model Context Protocol を介した AI エージェント（Claude / Antigravity 等）へのコンテキスト注入。
+   - **RESTful API Gateway**: 外部システムやダッシュボードに対する高速 JSON インターフェース提供。
+   - **アクションへの統合**: 意思決定支援、運用ルールの自動更新、リスク回避オペレーションへの即時反映。
+
+6. **フェーズ 6: フィードバック・評価 (Feedback & Evaluation)**
+   - **定量的 IR 品質スコアリング**: Precision@K, NDCG@K による提供インテリジェンスの適合率・関連度測定。
+   - **ナレッジギャップ検知**: ユーザーや AI が頻繁に検索するが結果が不足している「未充足トピック」の自動特定。
+   - **閉ループ適応**: 検知されたギャップやトピックドリフトをフェーズ 1 の PIR 重みへ自動反映し、自律的な収集方針の更新を実行。
 
 ---
 
 # 4. コアアルゴリズム & 閉ループフィードバック数理モデル
 
-### 4.1 優先情報要件（PIR）重み付けベクトルと動的更新
-トピック集合 $\mathcal{T} = \{t_1, t_2, \dots, t_m\}$ に対する PIR 重みベクトル $\mathbf{w}_t \in \mathbb{R}^m$：
+### 4.1 動的 PIR (Priority Intelligence Requirements) 重みベクトルモデル
+全トピック空間 $\mathcal{T} = \{t_1, t_2, \dots, t_m\}$ に対する時刻 $k$ の PIR 重みベクトル $\mathbf{w}_k = [w_{k, 1}, w_{k, 2}, \dots, w_{k, m}]^T \in \mathbb{R}^m$：
 
-$$\mathbf{w}_{t+1} = \alpha \cdot \mathbf{w}_t + (1 - \alpha) \cdot \left( \beta \cdot \mathbf{q}_{\text{query}} + \gamma \cdot \mathbf{g}_{\text{gap}} \right)$$
+$$\mathbf{w}_{k+1} = \alpha \cdot \mathbf{w}_k + (1 - \alpha) \cdot \left( \beta \cdot \mathbf{u}_{\text{usage}} + \gamma \cdot \mathbf{g}_{\text{gap}} + \delta \cdot \mathbf{d}_{\text{drift}} \right)$$
 
 ここで：
-- $\alpha \in [0, 1]$: 過去の重みの減衰係数（EMA: Exponential Moving Average）
-- $\mathbf{q}_{\text{query}}$: クライアント/アナリストからの検索頻度正規化ベクトル
-- $\mathbf{g}_{\text{gap}}$: ゼロヒットまたは低 NDCG スコアとなった未充足トピックギャップベクトル
+- $\alpha \in [0, 1]$: 履歴重みの忘却・減衰係数（EMA 平滑化）
+- $\mathbf{u}_{\text{usage}}$: クライアント/アナリストからの利用頻度・参照ログの正規化ベクトル
+- $\mathbf{g}_{\text{gap}}$: ゼロヒットクエリおよび低 NDCG スコアとなった情報不足領域（Knowledge Gap）ベクトル
+- $\mathbf{d}_{\text{drift}}$: 最新文書群における新規出現キーワードの急上昇度（Burstiness / Topic Drift）ベクトル
+- $\beta, \gamma, \delta$: 各要素の調整ハイパーパラメータ（$\beta + \gamma + \delta = 1$）
 
-### 4.2 OPIC クロール優先度への PIR 注入
-各ドメイン・URL $p$ に対するクロール開始時クレジット $C_0(p)$：
+### 4.2 情報ギャップ検出数理
+クエリ $q$ に対する検索結果集合 $R(q)$ の評価スコアが閾値 $\theta_{\text{eval}}$ 未満の場合の情報ギャップ量 $G(t)$：
 
-$$C_0(p) = C_{\text{base}} \cdot \left( 1.0 + \sum_{t_k \in \text{Topic}(p)} w_{t, k} \right)$$
+$$G(t) = \sum_{q \in Q_t} \left( 1.0 - \text{NDCG}@K(q) \right) \cdot \ln(1 + \text{Count}(q))$$
+
+この $G(t)$ が正規化され、PIR ギャップベクトル $\mathbf{g}_{\text{gap}}$ の要素となる。
+
+### 4.3 収集リソース適応配分アルゴリズム (Adaptive OPIC)
+各情報ソース・ドメイン $s$ に対するクロール開始時クレジット $C_0(s)$：
+
+$$C_0(s) = C_{\text{base}} \cdot \left( 1.0 + \sum_{t_i \in \text{DomainTopics}(s)} w_{k, i} \right)$$
+
+これにより、現在最も重要視されている PIR に合致する情報ソースに対して、優先的かつ集中的にクローラーの計算資源と帯域が配分される。
 
 ---
 
 # 5. DAG ワークフロー & 状態遷移仕様
 
-### 5.1 パイプライン状態遷移ダイアグラム
+### 5.1 有向非巡回グラフ (DAG) パイプライン
+各フェーズの内部処理は、障害時の局所リカバリを可能にする独立したタスクノードの DAG としてオーケストレーションされる。
+
+```mermaid
+graph TD
+    T1["PIR Recalibration (Phase 1)"] --> T2["Crawl Quota Dispatch (Phase 1)"]
+    T2 --> T3["Parallel Harvester Tasks (Phase 2)"]
+    T3 --> T4["Text Extraction & Cleaning (Phase 3)"]
+    T4 --> T5["OKF v0.2 Schema Validation (Phase 3)"]
+    T5 --> T6["Ontology / Domain Tagging (Phase 3)"]
+    T6 --> T7["Atomic Database Commit (Phase 4)"]
+    T6 --> T8["Inverted & Vector Index Build (Phase 4)"]
+    T7 & T8 --> T9["5-Tier Executive Synthesis (Phase 4)"]
+    T9 --> T10["MCP / Web Gateway Sync (Phase 5)"]
+    T10 --> T11["Usage Telemetry Aggregation (Phase 6)"]
+    T11 --> T12["IR Quality & Gap Scoring (Phase 6)"]
+    T12 --> T1["PIR Recalibration (Next Loop)"]
+```
+
+### 5.2 イベント駆動型状態遷移ダイアグラム
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Planned: 1. PIR & クロールポリシー策定
-    Planned --> Collecting: 2. 分散クロール & データフェッチ
-    Collecting --> Processing: 3. PDF全文抽出 & OKF変換
-    Processing --> Analyzing: 4. DBコミット & 5層サマリー生産
-    Analyzing --> Disseminating: 5. MCP / Web Gateway 公開
-    Disseminating --> Evaluating: 6. 利用ログ解析 & IR評価
-    Evaluating --> Planned: 閉ループ適応 (PIR再調整)
+    [*] --> Directing: 1. PIR要件策定 & ポリシー配分
+    Directing --> Harvesting: 2. 多元ソース並行収集
+    Harvesting --> Exploiting: 3. 構造化・正規化・オントロジー付与
+    Exploiting --> Producing: 4. DBコミット & 多層サマリー生産
+    Producing --> Disseminating: 5. MCP / REST API 公開
+    Disseminating --> Evaluating: 6. 利用分析 & 品質ギャップ評価
+    Evaluating --> Directing: 閉ループ適応 (PIR更新)
 
-    Collecting --> Compensating: クロール失敗
-    Processing --> Compensating: 抽出・変換失敗
-    Analyzing --> Compensating: DB/検索整合性エラー
-    Compensating --> [*]: Saga補償トランザクション完了 (ロールバック)
+    Harvesting --> Compensating: 収集障害 (過半数失敗)
+    Exploiting --> Compensating: スキーマ・変換致命的エラー
+    Producing --> Compensating: ストレージ・インデックス不整合
+    Compensating --> [*]: Saga補償完了 (ロールバック)
 ```
 
 ---
@@ -178,55 +277,88 @@ stateDiagram-v2
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 @runtime_checkable
-class IntelligencePhaseProtocol(Protocol):
-    """Protocol implemented by each phase executor in the Intelligence Cycle."""
-    def execute_phase(self, context: Dict[str, Any]) -> Dict[str, Any]: ...
-    def rollback_phase(self, context: Dict[str, Any]) -> None: ...
+class IntelligencePhaseExecutor(Protocol):
+    """Protocol for executing individual intelligence cycle phases."""
+    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]: ...
+    def compensate(self, context: Dict[str, Any]) -> None: ...
 
-class IntelligenceOrchestrator:
-    """Central controller executing the closed-loop intelligence cycle."""
+class UniversalIntelligenceOrchestrator:
+    """Central domain-agnostic orchestrator executing the 6-phase intelligence lifecycle."""
+
     def __init__(self, workspace_dir: str) -> None:
         self.workspace_dir = workspace_dir
-        self.pir_manager = PIRManager()
-        self.dag_runner = DAGRunner()
-        self.feedback_controller = FeedbackController()
+        self.pir_manager = PIRRequirementsManager()
+        self.workflow_engine = DAGWorkflowEngine()
+        self.feedback_controller = AdaptiveFeedbackController()
 
-    def run_full_cycle(self) -> Dict[str, Any]:
-        """Executes Phases 1 to 6 in a transactional closed loop."""
+    def step_planning(self) -> Dict[str, Any]:
+        """Phase 1: Planning & Direction (PIR & Resource Quotas)."""
+        ...
+
+    def step_collection(self, directives: Dict[str, Any]) -> Dict[str, Any]:
+        """Phase 2: Collection (Distributed Harvesters)."""
+        ...
+
+    def step_processing(self, raw_batch: Dict[str, Any]) -> Dict[str, Any]:
+        """Phase 3: Processing & Exploitation (OKF v0.2 & Ontology)."""
+        ...
+
+    def step_analysis(self, processed_batch: Dict[str, Any]) -> Dict[str, Any]:
+        """Phase 4: Analysis & Production (Search Index & Multi-Tier Summaries)."""
+        ...
+
+    def step_dissemination(self, products: Dict[str, Any]) -> None:
+        """Phase 5: Dissemination & Integration (MCP & Gateway)."""
+        ...
+
+    def step_evaluation(self) -> Dict[str, Any]:
+        """Phase 6: Feedback & Evaluation (IR Scoring & Gap Detection)."""
+        ...
+
+    def run_closed_loop_cycle(self) -> Dict[str, Any]:
+        """Executes a complete self-adapting intelligence cycle."""
         ...
 ```
 
 ---
 
-# 7. セキュリティ堅牢化・脅威防御・耐障害性 (Sagaパターン)
+# 7. ガバナンス・セキュリティ・耐障害性 (Sagaパターン)
 
-1. **Saga 補償トランザクション**:
-   - パイプライン途中でエラー（例: DB 書き込み失敗、ディスク容量枯渇）が発生した場合、後続フェーズを即座に中断し、`processed_papers.json` や一時ファイルを安全にロールバック。
-2. **AST サンドボックスガード**:
-   - オーケストレータ経由で実行される全 Python タスクに対し、危険なシステムコールを構文木レベルで即時遮断。
-3. **監査トレースログ**:
-   - 各フェーズの実行開始・終了・処理件数・LSN（Log Sequence Number）を `outputs/log.md` に不変記録。
+1. **Saga オーケストレーションによる原子性保証**:
+   - 収集・変換・DB永続化・インデックス構築の各ステップにおいて、致命的障害が発生した場合は補償トランザクションが逆順に起動し、不完全なデータやインデックス状態をクリーンにロールバック。
+2. **ゼロトラスト・ガバナンス**:
+   - 全外部データの取り込み時に AST ガードおよびパストラバーサル検証を強制。悪意あるコードや不正なメタデータ入力を自動検知・隔離。
+3. **データ来歴 (Provenance) と不変証跡**:
+   - 最終生成されたサマリーやインテリジェンスカードから、元の一次情報 JSON・原本ドキュメントへの相対パスリンクを厳格に維持。
 
 ---
 
 # 8. 性能特性・メモリ制約・可観測性 (Observability)
 
-- **サイクル実行時間**: 定常 4 回/日実行において 1 サイクル $\le 60\text{秒}$
-- **メモリ上限**: 2Q バッファプールおよびストリーミング処理により最大 RSS $\le 256\text{MB}$
-- **可観測性メトリクス**: 各フェーズの実行時間（wall_time, cpu_time）、メモリピーク（peak_memory_kb）、および IR 品質スコア（NDCG@K, MAP）を統合ダンプ。
+- **サイクル実行レイテンシ**: 定常バッチ（1日4回実行）において 1 フルサイクル $\le 60\text{秒}$。
+- **メモリ消費上限**: ストリーミング処理と 2Q バッファプールにより、ピークメモリ使用量 $\le 256\text{MB}$ を維持。
+- **総合可観測性 (Full-Stack Observability)**:
+  - サイクル各フェーズの実行時間（wall_time_ms, cpu_time_ms）
+  - メモリプロファイル（tracemalloc peak_memory_kb）
+  - 情報検索適合率（NDCG@K, MAP）
+  - PIR トピック達成率と情報ギャップ指標
 
 ---
 
 # 9. 包括的テスト戦略・E2E シナリオ・検証スイート
 
-- **Scenario 1: 正常系閉ループ実行**: Phase 1 〜 Phase 6 がエラーなく完走し、PIR 重みが正常に更新されることの検証。
-- **Scenario 2: Saga 補償リカバリ**: Phase 4 で意図的なエラーを発生させ、Phase 1〜3 の状態がクリーンにロールバックされることの検証。
-- **Scenario 3: クエリギャップ自動検出**: ゼロヒットクエリが発生した際に、次期フェーズ 1 の PIR に該当トピックが自動登録されることの検証。
+- **E2E シナリオ 1: 自律閉ループ正常系**:
+  - PIR 策定 $\rightarrow$ クロール $\rightarrow$ OKF 構造化 $\rightarrow$ DB/検索インデックス更新 $\rightarrow$ サマリー生成 $\rightarrow$ MCP 公開 $\rightarrow$ IR 評価 $\rightarrow$ 次期 PIR 更新の完全完走を検証。
+- **E2E シナリオ 2: 障害時 Saga 補償リカバリ**:
+  - 分析フェーズでのストレージ容量上限到達時、前段フェーズの生成データが安全にロールバックされ整合性が保たれることを検証。
+- **E2E シナリオ 3: トピックギャップ適応検知**:
+  - 特定キーワードでゼロヒットが頻発した際、次期フェーズ 1 の PIR 重みに当該トピックが自動的に高い優先度で注入されることを検証。
 
 ---
 
 # 10. 完了定義 (DoD) & 実装・運用ロードマップ
 
-- [x] インテリジェンス・サイクル 6 大フェーズの包括的アーキテクチャ策定
-- [x] DAG ワークフロー・Saga 補償トランザクション・PIR 適応数理モデルの仕様化
-- [x] 全 13 大専門エージェントの合意形成と DSN-14 標準形式（10章構成）の完全準拠
+- [x] ドメイン非依存・普遍的自律型インテリジェンス・オーケストレーション包括設計書の策定
+- [x] インテリジェンス・サイクル 6 大フェーズの完全数理モデル化（PIR重み、ギャップ検知、OPIC配分）
+- [x] DAG ワークフローおよび Saga 補償トランザクション仕様の確立
+- [x] 全 13 大専門エージェント協議合意および DSN-14 標準形式（10章構成）の完全準拠

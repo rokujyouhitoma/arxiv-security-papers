@@ -55,9 +55,9 @@
                                             |
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  7. Autonomous Intelligence Orchestration & Closed-Loop Feedback (DSN-11)                         |
+|  7. Universal Autonomous Intelligence Orchestration & Closed-Loop Feedback (DSN-11)               |
 |   - 6-Phase Lifecycle: Planning -> Collection -> Processing -> Analysis -> Disseminate -> Eval  |
-|   - Dynamic PIR/SIR Engine | DAG Workflow | Saga Recovery | Closed-Loop Adaptive Feedback Loop    |
+|   - Universal PIR Engine | DAG Workflow | Saga Recovery | Closed-Loop Adaptive Feedback Loop      |
 +---------------------------------------------------------------------------------------------------+
 ```
 
