@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | --- |
+| **065** | 全体高位アーキテクチャ設計書 (DSN-01) および README.md へのインテリジェンス・オーケストレーション (DSN-11) の完全反映 | Docs / Arch | 2026-08-22 | [065-integrate-dsn-11-into-dsn-01-hld.md](closed/065-integrate-dsn-11-into-dsn-01-hld.md) |
 | **064** | 汎用・ドメイン非依存インテリジェンス・オーケストレーション包括設計書 (DSN-11) への高抽象度化 | Feature / Docs | 2026-08-22 | [064-generalize-intelligence-orchestration-architecture.md](closed/064-generalize-intelligence-orchestration-architecture.md) |
 | **063** | 自律型インテリジェンス・オーケストレーションエンジン設計書 (DSN-11) の策定 | Feature / Docs | 2026-08-22 | [063-design-intelligence-orchestration-engine.md](closed/063-design-intelligence-orchestration-engine.md) |
 | **062** | 設計書体系 (docs/designs/*.md) の包括的リファクタリングと DSN-14 形式統一 (1:1 パッケージ対応) | Docs / Arch | 2026-08-22 | [062-reorganize-and-standardize-design-docs.md](closed/062-reorganize-and-standardize-design-docs.md) |
