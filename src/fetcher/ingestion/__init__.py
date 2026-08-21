@@ -1,7 +1,12 @@
-"""
-Ingestion package for extracting arXiv metadata, PDFs, and full text.
-"""
-
+from .adapters import (
+    ArxivSourceAdapter,
+    BaseSourceAdapter,
+    FeedSourceAdapter,
+    IacrEprintSourceAdapter,
+    RawItem,
+    SourceRegistry,
+    get_source_registry,
+)
 from .arxiv_client import (
     clean_text,
     fetch_arxiv_papers,
@@ -16,6 +21,13 @@ from .pdf_extractor import (
 )
 
 __all__ = [
+    "BaseSourceAdapter",
+    "RawItem",
+    "ArxivSourceAdapter",
+    "IacrEprintSourceAdapter",
+    "FeedSourceAdapter",
+    "SourceRegistry",
+    "get_source_registry",
     "load_config",
     "clean_text",
     "parse_arxiv_entry",
