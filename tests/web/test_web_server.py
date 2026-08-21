@@ -12,7 +12,7 @@ if "src" not in sys.path:
         0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
     )
 
-from web_server import VECTOR_ENGINE, WSGIApplication, application
+from web.server import VECTOR_ENGINE, WSGIApplication, application
 
 
 def call_wsgi(

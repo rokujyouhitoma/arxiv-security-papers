@@ -25,7 +25,7 @@ def test_is_safe_workspace_path():
 
     # Valid in-tree paths
     assert is_safe_workspace_path("Makefile")
-    assert is_safe_workspace_path("src/fetcher/arxiv_okf_fetcher.py")
+    assert is_safe_workspace_path("src/pipeline/arxiv_okf_fetcher.py")
     assert is_safe_workspace_path(os.path.join(ws, "docs", "README.md"))
 
     # Invalid traversal paths

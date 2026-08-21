@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-"""
-Thin compatibility shim forwarding to the pipeline package.
-"""
+"""Legacy compatibility shim for arxiv_okf_fetcher."""
 
 from pipeline.arxiv_okf_fetcher import *  # noqa: F401, F403
 from pipeline.arxiv_okf_fetcher import main

@@ -1,30 +1,33 @@
 #!/usr/bin/env python3
 """
 arXiv Security Papers Core Package.
-Provides 5 modular packages matching the tests hierarchy:
-- database: Zero-dependency SQLite-inspired 4-tier Vector Database
-- fetcher: arXiv API metadata fetcher, PDF extractor & OKF converter
-- mcp: Model Context Protocol JSON-RPC servers (Papers, Threat Defense, Tech Radar, Observability)
-- search: Lucene/Solr-inspired modular search engine & RRF hybrid ranking
-- web: Glassmorphic Web Portal & PEP 3333 WSGI Application
+Provides clean 4-tier domain-driven packages:
+- database: Zero-dependency SQLite-inspired 4-tier Vector Database & Distributed Engine
+- pipeline: Extract-Transform-Load (ETL) Intelligence Pipeline & 5-tier Summaries
+- search: Lucene/Solr-inspired modular search engine & hybrid ranking
+- security: Unified security guards, AST sandbox, RBAC & threat taxonomies
+- spider: Zero-dependency distributed spider & crawler platform
+- web: Unified Web/API Serving Layer (WSGI, Gateway, Presentation)
+- mcp: Model Context Protocol JSON-RPC servers
+- compat: Backward-compatibility shims
 """
 
+import compat
 import database
-import fetcher
-import gateway
 import mcp
-import presentation
+import pipeline
 import search
+import security
 import spider
 import web
 
 __all__ = [
+    "compat",
     "database",
-    "fetcher",
-    "gateway",
     "mcp",
-    "presentation",
+    "pipeline",
     "search",
+    "security",
     "spider",
     "web",
 ]

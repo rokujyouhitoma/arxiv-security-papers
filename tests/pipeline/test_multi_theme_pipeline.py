@@ -9,8 +9,8 @@ import tempfile
 from typing import Any, List, Optional
 from unittest.mock import MagicMock, patch
 
-from fetcher.arxiv_okf_fetcher import run_theme_pipeline
-from fetcher.transformer.theme import ThemeManager
+from pipeline.arxiv_okf_fetcher import run_theme_pipeline
+from pipeline.transformer.theme import ThemeManager
 
 
 def test_theme_manager_builtins_and_registration() -> None:
@@ -65,16 +65,16 @@ def test_theme_manager_custom_json_loading() -> None:
             os.unlink(temp_path)
 
 
-@patch("fetcher.arxiv_okf_fetcher._transform_and_save_okf")
-@patch("fetcher.arxiv_okf_fetcher._generate_summaries_and_index")
+@patch("pipeline.arxiv_okf_fetcher._transform_and_save_okf")
+@patch("pipeline.arxiv_okf_fetcher._generate_summaries_and_index")
 def test_run_theme_pipeline_mock_execution(
     mock_gen_sum: MagicMock, mock_transform: MagicMock
 ) -> None:
     mock_transform.return_value = [{"clean_id": "2608.11111", "title": "Test Paper"}]
 
     with tempfile.TemporaryDirectory() as tmp_workspace:
-        from fetcher.ingestion.adapters.base import BaseSourceAdapter, RawItem
-        from fetcher.ingestion.adapters.registry import get_source_registry
+        from pipeline.ingestion.adapters.base import BaseSourceAdapter, RawItem
+        from pipeline.ingestion.adapters.registry import get_source_registry
 
         class MockArxivAdapter(BaseSourceAdapter):
             @property
