@@ -9,10 +9,8 @@ Provides clean 4-tier domain-driven packages:
 - spider: Zero-dependency distributed spider & crawler platform
 - web: Unified Web/API Serving Layer (WSGI, Gateway, Presentation)
 - mcp: Model Context Protocol JSON-RPC servers
-- compat: Backward-compatibility shims
 """
 
-import compat
 import database
 import mcp
 import pipeline
@@ -22,7 +20,6 @@ import spider
 import web
 
 __all__ = [
-    "compat",
     "database",
     "mcp",
     "pipeline",

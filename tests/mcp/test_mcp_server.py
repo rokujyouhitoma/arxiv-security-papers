@@ -15,7 +15,7 @@ from mcp.papers_server import (
     handle_read_resource,
     set_vector_engine,
 )
-from vector_engine import VectorEngine
+from search.vector_engine import VectorEngine
 
 
 def setup_module():

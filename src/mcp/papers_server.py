@@ -12,8 +12,8 @@ import time
 from typing import Any, Dict, List, Optional
 
 from mcp.base import log_mcp_performance
+from search.vector_engine import VectorEngine
 from security.validation import is_safe_workspace_path
-from vector_engine import VectorEngine
 
 
 def get_workspace_dir() -> str:
@@ -975,7 +975,7 @@ def main() -> None:
             )
         )
     elif len(sys.argv) > 1 and sys.argv[1] == "--http":
-        from web_server import run_web_server
+        from web.server import run_web_server
 
         port = 8000
         if len(sys.argv) > 2 and sys.argv[2].isdigit():

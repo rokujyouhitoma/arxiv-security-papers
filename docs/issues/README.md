@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | --- |
+| **060** | 後方互換性機能・シム・レガシーエイリアスの完全削除 | Refactor | 2026-08-22 | [060-remove-legacy-backward-compatibility.md](closed/060-remove-legacy-backward-compatibility.md) |
 | **059** | クリーンアーキテクチャに基づく src/ および tests/ パッケージ再設計・リファクタリング | Refactor | 2026-08-21 | [059-clean-architecture-package-refactoring.md](closed/059-clean-architecture-package-refactoring.md) |
 | **058** | [ゼロ外部依存・大規模分散Webクローラー・スパイダー基盤（DSN-15 準拠）の実装](closed/058-implement-distributed-spider-and-crawler-platform.md) | Feature | 2026-08-21 | [058-implement-distributed-spider-and-crawler-platform.md](closed/058-implement-distributed-spider-and-crawler-platform.md) |
 | **057** | [マルチソース・マルチテーマ対応インテリジェンスプラットフォーム基盤（Pluggable Source Adapters & Theme-Aware Pipeline）の実装](closed/057-implement-pluggable-source-adapters-and-multi-theme-pipeline.md) | Feature | 2026-08-21 | [057-implement-pluggable-source-adapters-and-multi-theme-pipeline.md](closed/057-implement-pluggable-source-adapters-and-multi-theme-pipeline.md) |
