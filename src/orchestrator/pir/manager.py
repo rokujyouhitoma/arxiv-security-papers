@@ -1,0 +1,156 @@
+"""Dynamic PIR (Priority Intelligence Requirements) Manager for Phase 1.
+
+Implements the dynamic PIR/SIR registry and EMA topic weight vector updating:
+w_{k+1} = alpha * w_k + (1 - alpha) * (beta * u_usage + gamma * g_gap + delta * d_drift)
+"""
+
+import math
+from typing import Dict, List, Optional
+
+from orchestrator.contracts import (
+    IntelligenceDirective,
+    IntelligencePhase,
+    IntelligencePhaseProtocol,
+    PhaseContext,
+    PhaseStatus,
+)
+from orchestrator.pir.models import PIRRequirement, TopicWeightVector
+
+
+class PIRManager(IntelligencePhaseProtocol):
+    """Phase 1: Planning & Direction Engine."""
+
+    def __init__(
+        self,
+        alpha: float = 0.7,
+        beta: float = 0.4,
+        gamma: float = 0.4,
+        delta: float = 0.2,
+    ) -> None:
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.delta = delta
+        self._requirements: Dict[str, PIRRequirement] = {}
+        self._current_weights = TopicWeightVector()
+
+    @property
+    def phase_type(self) -> IntelligencePhase:
+        return IntelligencePhase.PLANNING
+
+    def register_requirement(self, req: PIRRequirement) -> None:
+        """Registers or updates a PIR requirement."""
+        self._requirements[req.req_id] = req
+        for topic in req.target_topics:
+            if topic not in self._current_weights.weights:
+                self._current_weights.weights[topic] = req.priority_score
+            else:
+                self._current_weights.weights[topic] = max(
+                    self._current_weights.weights[topic], req.priority_score
+                )
+        self._current_weights.normalize()
+
+    def get_requirement(self, req_id: str) -> Optional[PIRRequirement]:
+        return self._requirements.get(req_id)
+
+    def list_active_requirements(self) -> List[PIRRequirement]:
+        return [r for r in self._requirements.values() if r.is_active]
+
+    def get_weights(self) -> Dict[str, float]:
+        return dict(self._current_weights.weights)
+
+    def update_weights_from_feedback(
+        self,
+        usage_counts: Dict[str, int],
+        knowledge_gaps: Dict[str, float],
+        topic_drifts: Dict[str, float],
+    ) -> TopicWeightVector:
+        """Applies EMA self-adapting feedback formula to recalculate topic weights."""
+        all_topics = set(self._current_weights.weights.keys())
+        all_topics.update(usage_counts.keys())
+        all_topics.update(knowledge_gaps.keys())
+        all_topics.update(topic_drifts.keys())
+
+        if not all_topics:
+            return self._current_weights
+
+        # 1. Normalize usage vector
+        total_usage = sum(usage_counts.values())
+        u_usage: Dict[str, float] = {}
+        for t in all_topics:
+            u_usage[t] = (
+                usage_counts.get(t, 0) / total_usage if total_usage > 0 else 0.0
+            )
+
+        # 2. Normalize gap vector
+        total_gap = sum(knowledge_gaps.values())
+        g_gap: Dict[str, float] = {}
+        for t in all_topics:
+            g_gap[t] = knowledge_gaps.get(t, 0.0) / total_gap if total_gap > 0 else 0.0
+
+        # 3. Normalize drift vector
+        total_drift = sum(topic_drifts.values())
+        d_drift: Dict[str, float] = {}
+        for t in all_topics:
+            d_drift[t] = (
+                topic_drifts.get(t, 0.0) / total_drift if total_drift > 0 else 0.0
+            )
+
+        # 4. Composite update
+        new_weights: Dict[str, float] = {}
+        for t in all_topics:
+            w_old = self._current_weights.weights.get(
+                t, 1.0 / len(all_topics) if all_topics else 1.0
+            )
+            feedback_term = (
+                self.beta * u_usage.get(t, 0.0)
+                + self.gamma * g_gap.get(t, 0.0)
+                + self.delta * d_drift.get(t, 0.0)
+            )
+            w_new = self.alpha * w_old + (1.0 - self.alpha) * feedback_term
+            new_weights[t] = max(0.001, w_new)
+
+        self._current_weights.weights = new_weights
+        self._current_weights.normalize()
+        return self._current_weights
+
+    def create_directive(
+        self, directive_id: str, base_crawl_quota: int = 50
+    ) -> IntelligenceDirective:
+        """Generates an operational IntelligenceDirective with topic crawl quotas."""
+        active_reqs = self.list_active_requirements()
+        target_topics: List[str] = []
+        for r in active_reqs:
+            target_topics.extend(r.target_topics)
+        target_topics = sorted(list(set(target_topics)))
+
+        if not target_topics and self._current_weights.weights:
+            target_topics = sorted(list(self._current_weights.weights.keys()))
+
+        weights = self.get_weights()
+        quotas: Dict[str, int] = {}
+        for t in target_topics:
+            w = weights.get(t, 1.0 / max(1, len(target_topics)))
+            # Allocate quota proportional to weight: base * (1 + w * 2)
+            quotas[t] = max(5, int(math.ceil(base_crawl_quota * w * 2.0)))
+
+        return IntelligenceDirective(
+            directive_id=directive_id,
+            target_topics=target_topics,
+            topic_weights=weights,
+            crawl_quotas=quotas,
+            priority_level=1,
+            metadata={"active_pir_count": len(active_reqs)},
+        )
+
+    def execute(self, context: PhaseContext) -> PhaseContext:
+        """Executes Phase 1: Formulates intelligence directives."""
+        directive = self.create_directive(directive_id=f"dir_{context.cycle_id}")
+        context.directive = directive
+        context.phase_statuses[IntelligencePhase.PLANNING] = PhaseStatus.COMPLETED
+        return context
+
+    def compensate(self, context: PhaseContext) -> None:
+        """Compensates Phase 1 if downstream fails."""
+        context.directive = None
+        context.phase_statuses[IntelligencePhase.PLANNING] = PhaseStatus.COMPENSATED
