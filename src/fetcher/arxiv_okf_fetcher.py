@@ -14,41 +14,71 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 # 1. Ingestion Layer (Extract)
-from .ingestion import (
-    clean_text,
-    fetch_arxiv_papers,
-    fetch_arxiv_rss_fallback,
-    fetch_single_pdf_and_text,
-    get_paper_pub_date_str,
-    load_config,
-    parse_arxiv_entry,
-    save_raw_paper_data,
-)
-
-# 3. Reporter Layer (Load & Report)
-from .reporter import (
-    PAPER_META_CACHE,
-    build_summary_table_md,
-    generate_all_daily_summaries,
-    generate_annual_summary,
-    generate_mermaid_mindmap,
-    generate_monthly_summary,
-    generate_per_run_summary,
-    generate_quarterly_summary,
-    get_paper_meta_cached,
-    update_index_and_log,
-)
-
-# 2. Transformer Layer (Transform)
-from .transformer import (
-    build_okf_from_raw,
-    classify_domain,
-    determine_security_tags,
-    extract_mitre_and_stride,
-    generate_japanese_executive_summary,
-    load_template,
-    translate_title_ja,
-)
+try:
+    from .ingestion import (
+        clean_text,
+        fetch_arxiv_papers,
+        fetch_arxiv_rss_fallback,
+        fetch_single_pdf_and_text,
+        get_paper_pub_date_str,
+        load_config,
+        parse_arxiv_entry,
+        save_raw_paper_data,
+    )
+    from .reporter import (
+        PAPER_META_CACHE,
+        build_summary_table_md,
+        generate_all_daily_summaries,
+        generate_annual_summary,
+        generate_mermaid_mindmap,
+        generate_monthly_summary,
+        generate_per_run_summary,
+        generate_quarterly_summary,
+        get_paper_meta_cached,
+        update_index_and_log,
+    )
+    from .transformer import (
+        build_okf_from_raw,
+        classify_domain,
+        determine_security_tags,
+        extract_mitre_and_stride,
+        generate_japanese_executive_summary,
+        load_template,
+        translate_title_ja,
+    )
+except ImportError:
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    from fetcher.ingestion import (
+        clean_text,
+        fetch_arxiv_papers,
+        fetch_arxiv_rss_fallback,
+        fetch_single_pdf_and_text,
+        get_paper_pub_date_str,
+        load_config,
+        parse_arxiv_entry,
+        save_raw_paper_data,
+    )
+    from fetcher.reporter import (
+        PAPER_META_CACHE,
+        build_summary_table_md,
+        generate_all_daily_summaries,
+        generate_annual_summary,
+        generate_mermaid_mindmap,
+        generate_monthly_summary,
+        generate_per_run_summary,
+        generate_quarterly_summary,
+        get_paper_meta_cached,
+        update_index_and_log,
+    )
+    from fetcher.transformer import (
+        build_okf_from_raw,
+        classify_domain,
+        determine_security_tags,
+        extract_mitre_and_stride,
+        generate_japanese_executive_summary,
+        load_template,
+        translate_title_ja,
+    )
 
 __all__ = [
     "load_config",

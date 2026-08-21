@@ -102,23 +102,23 @@ build: activate format static_analysis test build_js py_compile ## run mandatory
 
 .PHONY: build_vector_db
 build_vector_db: activate ## Build or rebuild semantic vector index
-	${VENV_PYTHON} src/vector_engine.py --build
+	PYTHONPATH=src ${VENV_PYTHON} src/vector_engine.py --build
 
 .PHONY: run_mcp_server
 run_mcp_server: activate ## Launch standard Model Context Protocol (MCP) server
-	${VENV_PYTHON} src/mcp/papers_server.py
+	PYTHONPATH=src ${VENV_PYTHON} src/mcp/papers_server.py
 
 .PHONY: run_observability_mcp
 run_observability_mcp: activate ## Launch Observability & Profiling MCP server for AI coding agents
-	${VENV_PYTHON} src/mcp/observability_server.py
+	PYTHONPATH=src ${VENV_PYTHON} src/mcp/observability_server.py
 
 .PHONY: run_threat_defense_mcp
 run_threat_defense_mcp: activate ## Launch Threat Defense & Secure Patch MCP server
-	${VENV_PYTHON} src/mcp/threat_defense_server.py
+	PYTHONPATH=src ${VENV_PYTHON} src/mcp/threat_defense_server.py
 
 .PHONY: run_tech_radar_mcp
 run_tech_radar_mcp: activate ## Launch Tech Radar & Threat Intelligence MCP server
-	${VENV_PYTHON} src/mcp/tech_radar_server.py
+	PYTHONPATH=src ${VENV_PYTHON} src/mcp/tech_radar_server.py
 
 .PHONY: eval_search
 eval_search: activate ## Run search engine quality benchmark (Precision@K, Recall@K, MAP, MRR, NDCG)
@@ -126,15 +126,15 @@ eval_search: activate ## Run search engine quality benchmark (Precision@K, Recal
 
 .PHONY: run_web
 run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (http://localhost:8000)
-	${VENV_PYTHON} src/web_server.py --port 8000
+	PYTHONPATH=src ${VENV_PYTHON} src/web_server.py --port 8000
 
 .PHONY: rag_query
 rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q="LLM Jailbreak"
-	${VENV_PYTHON} src/vector_engine.py --query "$(Q)"
+	PYTHONPATH=src ${VENV_PYTHON} src/vector_engine.py --query "$(Q)"
 
 .PHONY: run
 run: activate ## run python code inside venv
-	${VENV_PYTHON} ${SRC}
+	PYTHONPATH=src ${VENV_PYTHON} ${SRC}
 
 .PHONY: isort
 isort: activate ## isort
