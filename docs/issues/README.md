@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | --- |
+| **062** | 設計書体系 (docs/designs/*.md) の包括的リファクタリングと DSN-14 形式統一 (1:1 パッケージ対応) | Docs / Arch | 2026-08-22 | [062-reorganize-and-standardize-design-docs.md](closed/062-reorganize-and-standardize-design-docs.md) |
 | **061** | 2層分離検索アーキテクチャ (Engine & Platform) の実装と機能完備 | Refactor | 2026-08-22 | [061-search-engine-and-platform-modular-architecture.md](closed/061-search-engine-and-platform-modular-architecture.md) |
 | **060** | 後方互換性機能・シム・レガシーエイリアスの完全削除 | Refactor | 2026-08-22 | [060-remove-legacy-backward-compatibility.md](closed/060-remove-legacy-backward-compatibility.md) |
 | **059** | クリーンアーキテクチャに基づく src/ および tests/ パッケージ再設計・リファクタリング | Refactor | 2026-08-21 | [059-clean-architecture-package-refactoring.md](closed/059-clean-architecture-package-refactoring.md) |

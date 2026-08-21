@@ -1,4 +1,8 @@
-# [DSN-15] 大規模分散Webクローラー・スパイダー基盤 包括的アーキテクチャ設計書 (Distributed Spider & Crawler Architecture)
+# [DSN-06] ゼロ外部依存・大規模分散Webクローラー＆スパイダー基盤（`src/spider/`）包括的アーキテクチャ設計書
+
+- **文書番号**: `DSN-06`
+- **文書ステータス**: `APPROVED`
+- **対象サブシステム**: `src/spider/` (Distributed Crawler, Bloom, OPIC, AutoThrottle, SPA Hydration)
 
 **【議長】 Systems Architect (SA)**  
 **【主査・報告】 Network Specialist (Net) / IT Specialist (NLP/IR)**  
