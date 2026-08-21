@@ -218,7 +218,7 @@ def test_tokenizer_and_analysis_coverage():
 
 
 def test_stored_fields_and_translator_edge_cases():
-    from fetcher.transformer.translator import clean_text, translate_title_ja
+    from pipeline.transformer.translator import clean_text, translate_title_ja
     from search.core.index.stored_fields import StoredFields
 
     sf = StoredFields()

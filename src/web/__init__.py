@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-Web portal package for arXiv Security Papers and MCP UI endpoints.
+Web & API Serving Package.
+Combines WSGI web server, API Gateway routing, and UI presentation components.
 """
 
-from .web_server import WSGIApplication, app, application, run_web_server
+from . import gateway, presentation
+from .server import WSGIApplication, app, application, run_web_server
 
 __all__ = [
-    "WSGIApplication",
-    "application",
     "app",
+    "application",
+    "WSGIApplication",
     "run_web_server",
+    "gateway",
+    "presentation",
 ]

@@ -8,7 +8,7 @@ import json
 from typing import Any, Dict, List, Tuple
 from unittest.mock import MagicMock
 
-from gateway import WSGIApplication
+from web.gateway import WSGIApplication
 
 
 def make_test_environ(

@@ -6,7 +6,7 @@ import json
 import os
 import tempfile
 
-from fetcher.transformer import (
+from pipeline.transformer import (
     build_okf_from_raw,
     classify_domain,
     determine_security_tags,
