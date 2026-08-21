@@ -1,20 +1,23 @@
 # [DSN-01] 基本設計書 (High-Level Design - HLD) — arxiv-security-papers
 
-本ドキュメントは、「`arxiv-security-papers`」プロジェクトにおける全体システム構造、統合アーキテクチャ、4大ピラー、データガバナンス、および運用方針を体系化した基本設計書 (High-Level Design) です。
+本ドキュメントは、「`arxiv-security-papers`」プロジェクトにおける全体システム構造、統合アーキテクチャ、7大サブシステム、マルチソース・マルチテーマ拡張、データガバナンス、および運用方針を体系化した基本設計書 (High-Level Design) です。
 
 ---
 
 ## 1. システム目的と主要価値 (System Purpose & Core Value)
 
-本システムは、世界中の研究機関が arXiv に公表するセキュリティ論文（`cs.CR` 分野・14,000 件超）をリアルタイムに自動追跡し、**「知識の標準化」「高度 AI エージェント連携」「即応型インテリジェンス可視化」** を統合実現する自律型サイバーセキュリティ・インテリジェンスプラットフォームです。
+本システムは、世界中の研究機関・オープンソースコミュニティが公表するセキュリティ・AI・計算機科学の学術論文や技術レポートをリアルタイムに自動追跡し、**「知識の標準化 (OKF v0.2)」「自律分散データベース (DSN-14)」「多層ハイブリッド検索 (Lucene/Solr)」「AI エージェント連携 (MCP)」「マルチテーマ動的レポーティング」** を統合実現する自律型インテリジェンスプラットフォームです。
 
 ```mermaid
 flowchart TD
     subgraph CoreValue ["💡 システム主要提供価値"]
-        V1["⚡ リアルタイム脅威インテリジェンス自動収集"]
-        V2["📊 5階層構造化日本語サマリー & Trend"]
-        V3["🧠 専門用語同義語拡張セマンティック RAG 検索"]
-        V4["🔌 AI エージェント用 Standard MCP JSON-RPC インターフェース"]
+        V1["⚡ マルチソース（arXiv / IACR / RSS）自動収集 & 冪等性保証"]
+        V2["🏷️ マルチテーマ（Security / AI Safety / SE）動的タクソノミー"]
+        V3["🗄️ ゼロ依存 4層自律型分散ベクトルDB (src/database)"]
+        V4["📊 5階層構造化日本語サマリー (Per-Run / Daily / Monthly / Q / Annual)"]
+        V5["🧠 専門用語同義語拡張 & 5手法統合ハイブリッド検索 (RRF)"]
+        V6["🔌 AI エージェント用 4大 MCP サーバー (Papers / Threat / Radar / Obs)"]
+        V7["🎨 Glassmorphic Web Portal & クライアント側 Markdown コンパイラ"]
     end
 ```
 
@@ -22,110 +25,198 @@ flowchart TD
 
 ## 2. 全体システムアーキテクチャ (Overall System Architecture)
 
-本システムは、高い堅牢性・耐久性・拡張性を備えた 4 大サブシステム（ピラー）によって構成され、データ収集から成果物配信・AI 連動までを自動化します。
+本システムは、高い疎結合性・堅牢性・拡張性を備えた 7 大サブシステムによって構成され、データ収集から変換・蓄積・検索・AI 連動・可視化までをエンドツーエンドで自動化します。
 
 ```mermaid
 flowchart TD
-    subgraph Layer1 ["1. 🌐 データ収集・標準化層 (Acquisition & OKF Layer)"]
-        S1["arXiv API / RSS / PDF (cs.CR)"] --> P1["データ自動収集 ＆ 重複排除"]
-        P1 --> P2["Google OKF v0.2 構造化ドキュメント変換"]
+    subgraph S1 ["1. 🌐 データ収集・アダプタ層 (src/fetcher/ingestion)"]
+        S_arXiv["arXiv Adapter (cs.CR, cs.AI, cs.SE...)"]
+        S_IACR["IACR ePrint Adapter"]
+        S_RSS["Generic RSS / Atom Adapter"]
+        S_arXiv & S_IACR & S_RSS --> IngestEngine["ETL Ingestion Pipeline & Raw Storage"]
     end
 
-    subgraph Layer2 ["2. 🧠 インテリジェンス検索層 (Vector RAG & Synonym Engine)"]
-        P2 --> S2["日英セキュリティ専門用語シノニム拡張辞書"]
-        S2 --> S3["多重フィールド重み付き VectorDB (v2.0.0)"]
+    subgraph S2 ["2. 🏷️ ナレッジ変換 & テーマ層 (src/fetcher/transformer)"]
+        IngestEngine --> TransEngine["Theme & Taxonomy Engine"]
+        TransEngine --> OKFGen["Google OKF v0.2 Generator"]
+        TransEngine --> SumGen["5-Tier Japanese Executive Summaries"]
     end
 
-    subgraph Layer3 ["3. 🔌 AI 連携・プロトコル層 (Model Context Protocol)"]
-        S3 --> M1["Model Context Protocol (MCP) JSON-RPC Server"]
-        M1 --> M2["4大 MCP ツール (search, summary, trends, attack)"]
+    subgraph S3 ["3. 🗄️ 次世代データベース層 (src/database)"]
+        OKFGen --> DB_Engine["Zero-Dependency Vector Database"]
+        subgraph DB_Details ["DB Subsystems (DSN-14)"]
+            VFS["POSIX VFS & Pager (4KB 2Q)"]
+            Slotted["Slotted Page Storage"]
+            WAL["Disk-Persistent WAL & ARIES Recovery"]
+            MVCC["MVCC & SS2PL Concurrency"]
+            LSM["LSM-Tree & Bloom Filter"]
+            Dist["Raft / Quorum / CRDT / 2PC / Saga"]
+        end
+        DB_Engine --> DB_Details
     end
 
-    subgraph Layer4 ["4. 🎨 視覚化 Web 層 (Web Portal & Compiler)"]
-        P2 & S3 & M1 --> W1["Glassmorphic Web Portal (http://localhost:8000)"]
-        W1 --> W2["Markdown Compiler Engine (Lexer/Parser/AST/Evaluator/Renderer)"]
-        W2 --> W3["Google Closure Compiler 最適化ミニファイ (app-min.js)"]
+    subgraph S4 ["4. 🧠 エンタープライズ検索層 (src/search)"]
+        OKFGen & DB_Engine --> SearchEngine["Lucene/Solr 2-Tier Architecture"]
+        SearchEngine --> Hybrid["HNSW Vector + BM25 + FM-Index + Synonyms"]
     end
+
+    subgraph S5 ["5. 🛡️ セキュリティ＆ガバナンス基盤 (src/security)"]
+        SecGuard["RBAC Engine & AST Sandbox & Path Validator"]
+    end
+
+    subgraph S6 ["6. 🔌 API Gateway & MCP 連携層 (src/gateway / src/mcp)"]
+        SearchEngine & DB_Engine --> Gateway["REST API Gateway (PEP 3333 WSGI)"]
+        SearchEngine & DB_Engine --> MCPServers["4-Tier MCP Servers (JSON-RPC 2.0)"]
+    end
+
+    subgraph S7 ["7. 🎨 UI & プレゼンテーション層 (src/presentation / site)"]
+        Gateway --> WebPortal["Glassmorphic Web Portal (http://localhost:8000)"]
+        WebPortal --> MDCompiler["Pure JS Markdown Compiler Engine"]
+    end
+
+    SecGuard -.-> S1 & S2 & S3 & S4 & S6 & S7
 ```
 
 ---
 
-## 3. コア・アーキテクチャピラー (Core Architecture Pillars)
+## 3. コア・アーキテクチャサブシステム (Core Subsystems)
 
-### 🏛️ ピラー 1: データ収集・OKF ナレッジ標準化基盤
-- **自動化・堅牢性**: 1日4回 (00:00, 06:00, 12:00, 18:00 UTC/JST) のバックグラウンド Cron バッチ (`schedule` ツール) による自律運用。Primary (arXiv API) / Fallback (arXiv RSS) の二重通信冗長化を標準装備。
-- **知識標準化**: **Google Open Knowledge Format (OKF) v0.2** 仕様に準拠した YAML フロントマター付きナレッジ構造化。
+### 🏛️ 1. プラガブル・データ収集・アダプタ基盤 (`src/fetcher/ingestion/`)
+- **Pluggable Source Adapters**: `BaseSourceAdapter` 抽象基底クラスに基づくプラグイン構造。
+  - `ArxivSourceAdapter`: arXiv API（レート制限指数バックオフ）および RSS 自動フォールバックを統合し、`cs.CR`（セキュリティ）、`cs.AI`（人工知能）、`cs.LG`（機械学習）、`cs.SE`（ソフトウェア工学）など複数カテゴリを動的取得。
+  - `IacrEprintSourceAdapter`: IACR ePrint から最新の暗号学プレプリントを自動収集。
+  - `FeedSourceAdapter`: セキュリティベンダーや国際会議の RSS 2.0 / Atom フィードを取得。
+- **原本保存 & 冪等性**: `outputs/raw_data/YYYY-MM-DD/` にメタデータ JSON、原文 Abstract、PDF、および `pdftotext` 全文抽出テキストを完全保存。`processed_papers.json` による重複排除。
 
-### 🧠 ピラー 2: 5 手法統合ハイブリッド検索基盤 (Multi-Engine Search)
-- **5 大インデックス検索エンジンの統合フュージョン**:
-  1. **ベクトル概念 TF-IDF スコア**: Title(3.5), Keywords(4.0), Tags(3.0), Desc(2.5), Content(1.0) の多重フィールド加重概念スコアリング。
-  2. **Okapi BM25 確率ランクスコア**: TF 飽和 ($k_1=1.5$) および文書長正規化 ($b=0.75$) による高確信度スコアリング。
-  3. **転置インデックス (Inverted Index)**: トークン/ドメインキーワードから文書 ID への高速逆引きインデックス。
-  4. **FM-Index (Full-text Substring Index)**: Burrows-Wheeler 変換 (BWT) / Suffix Array による日本語任意部分文字列高速検索。
-  5. **論文最新性ブースト (Recency Decay Factor)**: 経過日数に応じた時間減衰重み付け。
-- **セキュリティ同義語拡張**: 「ペンテスト ⇄ penetration testing」「自動運転 ⇄ autonomous vehicle」「LLM ⇄ 脱獄 ⇄ prompt injection」「マルウェア ⇄ ransomware」等の高度専門用語辞書による再現率（Recall）の飛躍的向上。
+### 🏷️ 2. テーマ・オントロジー＆5階層エグゼクティブサマリー (`src/fetcher/transformer/`, `src/fetcher/reporter/`)
+- **動的テーマ管理 (`ThemeManager`)**:
+  - `security`: MITRE ATT&CK, STRIDE, CWE タクソノミー自動タグ付け。
+  - `ai_safety`: OWASP Top 10 for LLM, MITRE ATLAS 脅威モデル。
+  - `software_engineering`: セキュアプログラミング・品質・静的解析タクソノミー。
+- **Google OKF v0.2 標準化**: YAML フロントマター付き構造化 Markdown（タイトル、日本語要約、タグ、出典、来歴、署名検証）。
+- **5階層エグゼクティブサマリー**:
+  - `01_per_run`: 実行バッチ毎の差分要約
+  - `02_daily`: 日次統合レポート（完全日本語マークダウン表形式）
+  - `03_monthly`: 月次動向・技術トレンドレポート
+  - `04_quarterly`: 四半期戦略サマリー
+  - `05_annual`: 年次総括サマリー
 
-### 🔌 ピラー 3: AI エージェント連動基盤 (Model Context Protocol)
-- **標準オープン規格**: Model Context Protocol (MCP) JSON-RPC 2.0 インターフェースを完全実装。
-- **エコシステム直接接続**: LLM や自律型 Security Agent が直接呼出可能な 4 大ツール（類似論文検索、OKF 構造化要約取得、トレンドレポート取得、MITRE ATT&CK 逆引き）を公開。
+### 🗄️ 3. ゼロ依存・自律分散型データベースエンジン (`src/database/` - DSN-14)
+外部ライブラリに一切依存しない、純 Python 製の本格リレーショナル＋ベクトル統合型データベース。
+- **ストレージ・バッファ**: 4KB 固定長スロット化ページ（`SlottedPage`）、2Q / CLOCK ページ置換バッファプール（`BufferPool2Q`）、CoW / `mmap` ゼロコピーリード。
+- **トランザクション & リカバリ**: 追記型 WAL（`.vdb-wal`）、ARIES アルゴリズム（Analysis / Redo / Undo）、ファジーチェックポイント、MVCC スナップショット分離、SS2PL ロックマネージャ（デッドロック閉路検知）。
+- **分析 & 実行**: PAX ハイブリッド列指向ストレージ、Volcano 型ストリーミングイテレータ、CBO（ヒストグラム / DP 結合順序最適化）、VDBE バイトコード仮想マシン、PEP 249 / SQLite3 互換ドライバ。
+- **分散協調 & 合意**: Raft SMR、Vector Clock、$\Phi$ Accrual 障害検知器、Gossip プロトコル、Strict Quorum レプリケーション、Read Repair、CRDT (OR-Set)、Merkle Tree 差分同期、分散 2PC、オーケストレーション型 Saga、Consistent Hashing シャーディング。
 
-### 🎨 ピラー 4: 視覚化 Web ポータル ＆ コンパイラ基盤
-- **Glassmorphic Web Portal**: 深みのあるダークテーマ (`#0b0f19`) と最新 Web 標準による直感型ダッシュボード。
-- **Markdown Compiler Engine**: Lexer, Parser, AST, Evaluator, Renderer 5 層トランスパイルによる、表形式データおよび Mermaid トレンド図のブラウザ上動的インタラクティブ描画。
-- **Google Closure Compiler**: `yuzora` 仕様に準拠した静的コード最適化・ミニファイ (`site/app-min.js`) によるロード特性の高速化。
+### 🧠 4. エンタープライズ検索エンジン (`src/search/` - DSN-08)
+- **Lucene / Solr 2層分離アーキテクチャ**:
+  - **コア検索層**: 分析器（Tokenizer / CharFilter / TokenFilter）、セグメントストア、転置インデックス（Postings）、DocValues、HNSW 密ベクトルインデックス。
+  - **サーバー層**: Managed Schema、SelectHandler / UpdateHandler、FacetEngine、FastVectorHighlighter、QueryResultCache。
+- **RRF (Reciprocal Rank Fusion) ハイブリッド検索**: ベクトル類似度、BM25 全文検索、FM-Index 部分一致、セキュリティ同義語辞書展開、時間減衰ブーストを統合。
+
+### 🛡️ 5. セキュリティ＆コンプライアンス基盤 (`src/security/` - DSN-11/12)
+- **RBAC エンジン**: ロールベースアクセス制御コンテキストとデコレータ。
+- **AST サンドボックス**: Python AST 解析による危険コード（`eval`, `exec`, `os.system` 等）の事前検証と静的防御。
+- **入力・パス検証**: パストラバーサル（`../`）を完全阻止するホワイトリストベースの正規化バリデータ。
+- **セキュリティ分類体系**: MITRE ATT&CK, STRIDE, CWE-4.14 の標準タクソノミー定義。
+
+### 🔌 6. API Gateway & AI エージェント連動基盤 (`src/gateway/`, `src/mcp/`)
+- **API Gateway**: PEP 3333 WSGI 準拠、CORS / レートリミット / メトリクス計測を備えた RESTful & JSON-RPC エンドポイント。
+- **4大 MCP サーバー**:
+  1. `papers_server`: 論文検索、OKF 取得、5階層サマリー照会、MITRE マッピング。
+  2. `threat_defense_server`: 脅威インテリジェンス、CVE/CWE 逆引き、防御パッチ提案。
+  3. `tech_radar_server`: 技術レーダー、四半期・年次トレンド分析。
+  4. `observability_server`: プロファイリング（cProfile / tracemalloc）、メトリクスダンプ。
+
+### 🎨 7. 視覚化 Web ポータル ＆ Markdown コンパイラ (`src/presentation/`, `site/`)
+- **Glassmorphic Web Portal**: ダークテーマ（`#0b0f19`）とレスポンシブ UI。
+- **クライアントサイド Markdown Compiler**: Lexer, Parser, AST, Evaluator, Renderer によるゼロ依存ブラウザ内トランスパイル。
+- **Google Closure Compiler**: `site/app-min.js` への静的最適化・高圧縮ビルド。
 
 ---
 
-## 4. 全体物理構成方針 (High-Level Physical Layout)
+## 4. ディレクトリ構成体系 (System Directory Layout)
 
 ```
-/workspace/arxiv-security-papers/
+arxiv-security-papers/
 ├── docs/                               # ドキュメント管理体系 (MNG-01 準拠)
-│   ├── processes/                      # 管理プロセス (MNG-01-document_ledger.md)
-│   ├── requirements/                   # 要件定義 spec (REQ-01-system_requirements.md)
-│   ├── designs/                        # HLD/LLD 設計書 (DSN-01, DSN-02)
-│   ├── mcp/                            # MCP 仕様書 (MCP-01-mcp_server_specification.md)
+│   ├── processes/                      # プロセス管理基準書
+│   ├── requirements/                   # 要件定義書 (REQ-01)
+│   ├── designs/                        # アーキテクチャ設計書 (DSN-01 〜 DSN-14)
+│   ├── mcp/                            # MCP サーバー仕様書
 │   └── issues/                         # Issue 管理台帳 (README.md, closed/)
 ├── outputs/                            # ナレッジ・ストレージ
 │   ├── raw_data/                       # 原論文データ (JSON, Abstract, PDF, Full TXT)
-│   ├── okf_papers/                     # OKF v0.2 構造化マークダウン論文
+│   ├── okf_papers/                     # OKF v0.2 構造化マークダウン論文 (YYYY-MM-DD/)
 │   ├── executive_summaries/            # 01_per_run 〜 05_annual 5階層サマリー
 │   └── vector_db/                      # セマンティック VectorDB インデックス
 ├── site/                               # Web Application (Glassmorphic SPA)
-│   ├── js/                             # コンパイラモジュール群 (lexer, parser, evaluator, renderer, compiler)
+│   ├── js/                             # Markdown コンパイラモジュール群
 │   ├── app-min.js                      # Closure Compiler 最適化 JS バンドル
 │   ├── externs.js                      # 外部シンボル保護定義
 │   └── index.html                      # Web Portal メイン画面
 ├── tools/                              # ビルド・最適化ツール
 │   └── closure-compiler/               # Google Closure Compiler ツールチェーン
 ├── src/                                # バックエンドコアエンジン (Python 3.14.7)
-│   ├── arxiv_okf_fetcher.py            # データ自動収集・サマリー生成
-│   ├── mcp_server.py                   # MCP JSON-RPC 2.0 サーバー
-│   ├── web_server.py                   # HTTP API ＆ 静的ポータルサーバー (WSGI)
-│   └── search/                         # 【Lucene/Solr 2層分離検索アーキテクチャ (DSN-08)】
-│       ├── __init__.py                 # 統合ファサード & エクスポート
-│       ├── vector_engine.py            # 検索オーケストレーター
-│       ├── core/                       # 【Lucene層】コア検索ライブラリ (Analysis, Index, Search)
-│       │   ├── analysis/               # CharFilter, Tokenizer, TokenFilter
-│       │   ├── store/                  # Directory, Segment, SegmentMerger
-│       │   ├── index/                  # Postings, DocValues, StoredFields, HNSW
-│       │   └── search/                 # Query, QueryParser, Similarity, Collector
-│       └── server/                     # 【Solr層】エンタープライズ検索サーバー
-│           ├── schema/                 # ManagedIndexSchema
-│           ├── handler/                # SelectHandler, SuggestHandler, UpdateHandler
-│           ├── facet/                  # FacetEngine
-│           ├── highlight/              # FastVectorHighlighter
-│           └── cache/                  # FilterCache, QueryResultCache
+│   ├── database/                       # 【DSN-14 次世代データベースエンジン】
+│   │   ├── btree/                      # B+Tree インデックス
+│   │   ├── cow/                        # Copy-on-Write & mmap ゼロコピー
+│   │   ├── distributed/                # 分散合意 (Raft, Quorum, 2PC, Saga, Sharding)
+│   │   ├── engine/                     # Volcano イテレータ & ベクトル化実行
+│   │   ├── lsm/                        # LSM-Tree (SkipList MemTable, SSTable, Bloom)
+│   │   ├── pax/                        # PAX 列指向ストレージ & OLAP 集計
+│   │   ├── planner/                    # コストベースオプティマイザ (CBO, HLL, Histogram)
+│   │   ├── sql/                        # SQL パーサー, AST, エグゼキュータ
+│   │   ├── slotted_page.py             # 4KB スロット化ページ
+│   │   ├── buffer_pool.py              # 2Q バッファプール
+│   │   ├── wal.py / recovery.py        # 追記型 WAL & ARIES リカバリ
+│   │   ├── mvcc.py / lock_manager.py   # MVCC 多版管理 & SS2PL ロック
+│   │   ├── sqlite_bridge.py / driver.py# SQLite / PEP 249 互換ドライバ
+│   │   └── vfs.py / storage.py         # POSIX VFS & ストレージ
+│   ├── fetcher/                        # 【ETL 3層論文収集・変換パイプライン】
+│   │   ├── ingestion/                  # 【Ingestion層】
+│   │   │   ├── adapters/               # Pluggable Source Adapters (arXiv, IACR, RSS)
+│   │   │   ├── arxiv_client.py         # arXiv API & RSS フォールバック
+│   │   │   └── pdf_extractor.py        # PDF ダウンロード & pdftotext 抽出
+│   │   ├── transformer/                # 【Transformer層】
+│   │   │   ├── theme.py                # テーマ・タクソノミー設定マネージャ
+│   │   │   ├── okf_serializer.py       # Google OKF v0.2 シリアライザ
+│   │   │   ├── tagger.py               # MITRE / STRIDE / CWE 自動タグ付け
+│   │   │   └── translator.py           # 日本語タイトル・要約生成
+│   │   ├── reporter/                   # 【Reporter層】
+│   │   │   ├── summary_generator.py    # 5階層エグゼクティブサマリー生成
+│   │   │   ├── diagram_generator.py    # Mermaid マインドマップ動的生成
+│   │   │   └── index_updater.py        # index.md / log.md 更新
+│   │   └── arxiv_okf_fetcher.py        # パイプラインオーケストレータ CLI
+│   ├── gateway/                        # 【API Gateway 層】WSGI, ルーティング, CORS
+│   ├── mcp/                            # 【MCP サーバー群】Papers, Threat, Radar, Obs
+│   ├── presentation/                   # 【プレゼンテーション層】テンプレートエンジン
+│   ├── search/                         # 【Lucene/Solr 2層分離検索エンジン】
+│   ├── security/                       # 【共通セキュリティ基盤】RBAC, AST Guard, 検証
+│   ├── vector_engine.py                # 検索エンジン後方互換シム
+│   └── web_server.py                   # Web サーバー後方互換シム
+└── tests/                              # 【1:1 完全対応テストスイート】
+    ├── database/                       # DB テスト (BTree, LSM, PAX, ARIES, Raft, E2E等)
+    ├── fetcher/                        # Fetcher / Adapter / Transformer テスト
+    ├── gateway/                        # Gateway API テスト
+    ├── mcp/                            # MCP サーバーテスト
+    ├── presentation/                   # プレゼンテーション層テスト
+    ├── search/                         # 検索エンジンテスト
+    ├── security/                       # セキュリティ・サンドボックステスト
+    └── web/                            # Web サーバーテスト
 ```
 
 ---
 
 ## 5. ガバナンス・品質保証・オブザーバビリティ (Governance & Observability)
 
-1. **パスバウンダリ検証**: すべてのファイル・データアクセスにおいて `os.path.realpath` による境界検証を強制し、機密ファイル (`.env`, `.ssh`) へのアクセスを防止。
-2. **品質管理ゲート (Quality Gates)**: `make py_compile`, `make static_analysis`, `make test` により、Python / JS 構文エラー 0 件、絶対パスリンク 0 件、テスト全件 PASS を遵守。
-3. **連続稼働性と冪等性**: `processed_papers.json` による重複処理防止および障害時リカバリ設計。
-4. **設計原則: 計測可能性・オブザーバビリティ (DSN-09)**: Python 標準ライブラリ (`time.perf_counter`, `time.process_time`, `tracemalloc`, `cProfile`, `pstats`, `timeit`, `dis`) を駆使し、低オーバーヘッドな常時レイテンシ・メモリ計測と決定論的プロファイリングを統合保証。
+1. **多角的エージェント統治 (PM-Led Governance)**: 13大専門エージェント（PM, Sec, SA, QA, DB, Net, IR, Strat, SM, Emb, Aud, UI, Edu）の合意形成に基づく設計・実装。
+2. **三位一体の品質管理ゲート (Quality Gates)**:
+   - `make check_format`: isort, black, flake8 準拠。
+   - `make static_analysis`: radon (循環的複雑度 A/B), xenon (コード品質), mypy --strict (静的型検査), py_compile (構文検証)。
+   - `make test`: pytest による全 250+ テストケースの 100% PASS。
+3. **パスバウンダリ検証 & サンドボックス**: 全ファイルアクセスで `os.path.realpath` 検証を強制。動的コード実行は `ast_guard.py` でホワイトリスト監査。
+4. **標準ライブラリによる可観測性 (Observability)**: `time.perf_counter`, `tracemalloc`, `cProfile` を活用した常時計測・プロファイリング基盤。
 
 ---
 
@@ -133,11 +224,13 @@ flowchart TD
 
 | 要求 ID (REQ-01) | 要求事項 (WHAT / WHY) | HLD 基本設計コンポーネント (HOW) |
 | :---: | --- | --- |
-| **REQ-FR-01** | セキュリティ論文の連続追跡と原本保存 | ピラー 1: `src/arxiv_okf_fetcher.py` (API/RSS Fallback, PDF Fetcher) |
-| **REQ-FR-02** | 構造化ナレッジ標準化 | ピラー 1: Google OKF v0.2 Converter (`outputs/okf_papers/`) |
-| **REQ-FR-03** | 5階層エグゼクティブサマリー生成 | ピラー 1: Summary Generator (`outputs/executive_summaries/01_〜05_`) |
-| **REQ-FR-04** | 高精度セマンティック検索 ＆ 専門用語拡張 | ピラー 2: `src/vector_engine.py` + `src/synonym_expander.py` |
-| **REQ-FR-05** | AI エージェント相互運用プロトコル | ピラー 3: `src/mcp_server.py` (MCP JSON-RPC 2.0 4大ツール) |
-| **REQ-FR-06** | 直感型 Web ポータル ＆ ブックマーク可能 URL | ピラー 4: `src/web_server.py` + `site/index.html` + `app.js` (?q=, ?tag=) |
-| **REQ-FR-07** | リッチドキュメント・動的図表レンダリング | ピラー 4: `site/js/` Markdown Compiler Engine + Mermaid.js |
-| **REQ-NFR-01〜06** | 信頼性・セキュリティ・性能・品質保証 | 各サブシステムガード, Google Closure Compiler (`site/app-min.js`), Quality Gates |
+| **REQ-FR-01** | マルチソース論文・記事の連続追跡と原本保存 | `src/fetcher/ingestion/adapters/` (arXiv, IACR, RSS) + `pdf_extractor.py` |
+| **REQ-FR-02** | 構造化ナレッジ標準化 | `src/fetcher/transformer/okf_serializer.py` (Google OKF v0.2) |
+| **REQ-FR-03** | 5階層エグゼクティブサマリー生成 | `src/fetcher/reporter/summary_generator.py` (`01_` 〜 `05_`) |
+| **REQ-FR-04** | 高精度セマンティック検索 ＆ 専門用語拡張 | `src/search/` (Lucene/Solr 2層, RRF, 専門用語シノニム辞書) |
+| **REQ-FR-05** | 自律型ベクトルデータベース | `src/database/` (4KB Slotted Page, ARIES WAL, MVCC, Raft, Consistent Hash) |
+| **REQ-FR-06** | AI エージェント相互運用プロトコル | `src/mcp/` (Papers, Threat Defense, Tech Radar, Observability サーバー) |
+| **REQ-FR-07** | 直感型 Web ポータル ＆ ブックマーク可能 URL | `src/gateway/` + `src/presentation/` + `site/` (Glassmorphic SPA) |
+| **REQ-FR-08** | リッチドキュメント・動的図表レンダリング | `site/js/` Markdown Compiler Engine + Mermaid.js |
+| **REQ-FR-09** | マルチテーマ・動的タクソノミー分類 | `src/fetcher/transformer/theme.py` (Security, AI Safety, Software Eng) |
+| **REQ-NFR-01〜06** | 信頼性・セキュリティ・性能・品質保証 | `src/security/` (RBAC, AST Guard), Google Closure Compiler, Strict Quality Gates |
