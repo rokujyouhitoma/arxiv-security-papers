@@ -52,6 +52,13 @@
 |   - Model Context Protocol Servers (src/mcp/): Papers, TechRadar, ThreatDefense, Observability    |
 |   - API Gateway & UI Presentation (src/web/): PEP 3333 WSGI, REST API, HTML Markdown Rendering    |
 +---------------------------------------------------------------------------------------------------+
+                                            |
+                                            v
++---------------------------------------------------------------------------------------------------+
+|  7. Autonomous Intelligence Orchestration & Closed-Loop Feedback (DSN-11)                         |
+|   - 6-Phase Lifecycle: Planning -> Collection -> Processing -> Analysis -> Disseminate -> Eval  |
+|   - Dynamic PIR/SIR Engine | DAG Workflow | Saga Recovery | Closed-Loop Adaptive Feedback Loop    |
++---------------------------------------------------------------------------------------------------+
 ```
 
 ### 1.2 4大設計原則
