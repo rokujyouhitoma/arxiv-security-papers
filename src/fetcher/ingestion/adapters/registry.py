@@ -10,6 +10,7 @@ from .arxiv_adapter import ArxivSourceAdapter
 from .base import BaseSourceAdapter
 from .feed_adapter import FeedSourceAdapter
 from .iacr_adapter import IacrEprintSourceAdapter
+from .spider_adapter import SpiderSourceAdapter
 
 
 class SourceRegistry:
@@ -24,6 +25,11 @@ class SourceRegistry:
         self.register(ArxivSourceAdapter())
         self.register(IacrEprintSourceAdapter())
         self.register(FeedSourceAdapter())
+        self.register(SpiderSourceAdapter(name="spider_arxiv", spider_name="arxiv"))
+        self.register(SpiderSourceAdapter(name="spider_iacr", spider_name="iacr"))
+        self.register(
+            SpiderSourceAdapter(name="spider_advisory", spider_name="advisory")
+        )
 
     def register(self, adapter: BaseSourceAdapter) -> None:
         """Registers a source adapter instance."""
