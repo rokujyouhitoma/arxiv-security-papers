@@ -6,7 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在進行中のアクティブ Issue はありません。*
+現在アクティブな Issue はありません。
 
 ---
 
@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | アーカイブリンク |
 | :---: | --- | :---: | :---: | --- |
+| **058** | [ゼロ外部依存・大規模分散Webクローラー・スパイダー基盤（DSN-15 準拠）の実装](closed/058-implement-distributed-spider-and-crawler-platform.md) | Feature | 2026-08-21 | [058-implement-distributed-spider-and-crawler-platform.md](closed/058-implement-distributed-spider-and-crawler-platform.md) |
 | **057** | [マルチソース・マルチテーマ対応インテリジェンスプラットフォーム基盤（Pluggable Source Adapters & Theme-Aware Pipeline）の実装](closed/057-implement-pluggable-source-adapters-and-multi-theme-pipeline.md) | Feature | 2026-08-21 | [057-implement-pluggable-source-adapters-and-multi-theme-pipeline.md](closed/057-implement-pluggable-source-adapters-and-multi-theme-pipeline.md) |
 | **056** | [SQLite 互換 DB 包括的検証テストスイート & 次世代 DB エンジン E2E シナリオ（US-01 〜 US-12 & DSN-14 シナリオ 1〜7）の拡充](closed/056-expand-sqlite-compatibility-test-suite.md) | Test | 2026-08-20 | [056-expand-sqlite-compatibility-test-suite.md](closed/056-expand-sqlite-compatibility-test-suite.md) |
 | **055** | [tests/database/ ディレクトリ階層の src/database/ 同一構造化](closed/055-restructure-database-test-directory-hierarchy.md) | Refactor | 2026-08-20 | [055-restructure-database-test-directory-hierarchy.md](closed/055-restructure-database-test-directory-hierarchy.md) |

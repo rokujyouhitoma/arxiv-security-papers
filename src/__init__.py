@@ -15,6 +15,7 @@ import gateway
 import mcp
 import presentation
 import search
+import spider
 import web
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "mcp",
     "presentation",
     "search",
+    "spider",
     "web",
 ]
