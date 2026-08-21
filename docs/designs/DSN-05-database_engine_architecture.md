@@ -1,6 +1,8 @@
-# [DSN-14] 次世代データベースエンジン（`src/database/`）包括的アーキテクチャ設計書
+# [DSN-05] 次世代データベースエンジン（`src/database/`）包括的アーキテクチャ設計書
 
-**【議長】 Systems Architect (SA)**  
+- **文書番号**: `DSN-05`
+- **文書ステータス**: `APPROVED`
+- **対象サブシステム**: `src/database/` (SlottedPage, WAL/ARIES, BTree, LSM, PAX, MVCC, 2PC, Raft, Saga, Sharding, Vector/HNSW)  
 **【主査・報告】 Database / Data Infrastructure Specialist (DB)**  
 **【参画】 Project Manager (PM), Network Specialist (Net), Information Security Specialist (Sec), Software QA Specialist (QA), IT Specialist (NLP/IR)**
 
