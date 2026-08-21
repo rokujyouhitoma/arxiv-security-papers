@@ -6,7 +6,7 @@ import os
 import sys
 
 from search import SynonymExpander
-from vector_engine import (
+from search.vector_engine import (
     CitationNetworkIndex,
     FacetedIndex,
     FMIndex,

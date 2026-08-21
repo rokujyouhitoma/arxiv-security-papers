@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Backward-compatible Web Server Facade for arXiv Security Papers.
-Delegates HTTP and API Gateway responsibilities to `src/gateway/`
-and UI Presentation rendering to `src/presentation/`.
+Unified PEP 3333 WSGI Web Server for arXiv Security Papers.
+Integrates API Gateway routing, MCP JSON-RPC, and Glassmorphism UI presentation.
 """
 
 import os
