@@ -40,7 +40,13 @@ class GatewayHandlers:
     ) -> None:
         self.workspace_dir = workspace_dir
         self.site_dir = os.path.join(workspace_dir, "site")
-        self.vector_engine = vector_engine or VectorEngine(workspace_dir=workspace_dir)
+        self._vector_engine = vector_engine
+
+    @property
+    def vector_engine(self) -> VectorEngine:
+        if self._vector_engine is None:
+            self._vector_engine = VectorEngine(workspace_dir=self.workspace_dir)
+        return self._vector_engine
 
     def _get_paper(self, clean_id: str) -> Optional[Dict[str, Any]]:
         """Finds paper metadata by clean_id."""

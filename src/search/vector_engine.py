@@ -962,3 +962,22 @@ class VectorEngine:
         )
         vector_results = self.search_vector_ann(query, top_k=top_k * 2)
         return self.rrf_scorer.fuse(bm25_results, vector_results, top_k=top_k)
+
+
+__all__ = [
+    "VectorEngine",
+    "SynonymExpander",
+    "FacetedIndex",
+    "FMIndex",
+    "RAPTORTreeIndex",
+    "SearchAnalyzer",
+    "DynamicHighlighter",
+    "EnterpriseQueryParser",
+    "QueryClause",
+    "QueryContext",
+    "QuerySemanticCache",
+    "CitationNetworkIndex",
+    "KnowledgeGraphIndex",
+    "ProximityGraphIndex",
+    "extract_abstract_from_okf",
+]
