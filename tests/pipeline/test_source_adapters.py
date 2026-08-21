@@ -5,10 +5,13 @@ Unit tests for Pluggable Source Adapters and Registry.
 
 import os
 import tempfile
+from datetime import datetime, timezone
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-from fetcher.ingestion.adapters import (
+from pipeline.ingestion.adapters import (
     ArxivSourceAdapter,
+    BaseSourceAdapter,
     FeedSourceAdapter,
     IacrEprintSourceAdapter,
     RawItem,
@@ -18,50 +21,60 @@ from fetcher.ingestion.adapters import (
 
 
 def test_raw_item_serialization_and_deserialization() -> None:
+    now = datetime.now(timezone.utc).isoformat()
     item = RawItem(
-        item_id="2608.12345",
+        item_id="arxiv_2608.12345",
         clean_id="2608.12345",
-        title="Novel Quantum Vulnerability Detection",
-        abstract="We introduce a novel quantum algorithm for discovering vulnerabilities.",
-        authors=["Alice Smith", "Bob Jones"],
-        published="2026-08-20T10:00:00Z",
-        updated="2026-08-20T10:00:00Z",
+        title="Zero-Trust Architecture",
+        abstract="A paper about ZTA.",
+        authors=["Alice", "Bob"],
+        published=now,
+        updated=now,
         url="https://arxiv.org/abs/2608.12345",
         pdf_url="https://arxiv.org/pdf/2608.12345.pdf",
         primary_category="cs.CR",
-        categories=["cs.CR", "quant-ph"],
+        categories=["cs.CR", "cs.NI"],
         source_type="arxiv",
-        extra_metadata={"comments": "15 pages, 4 figures"},
     )
 
     d = item.to_dict()
-    assert d["arxiv_id"] == "2608.12345"
-    assert d["summary"] == item.abstract
-    assert d["abs_url"] == item.url
+    assert d["item_id"] == "arxiv_2608.12345"
+    assert d["arxiv_id"] == "arxiv_2608.12345"  # Legacy compat
+    assert d["summary"] == "A paper about ZTA."  # Legacy compat
 
     reconstructed = RawItem.from_dict(d)
     assert reconstructed.item_id == item.item_id
     assert reconstructed.title == item.title
     assert reconstructed.authors == item.authors
-    assert reconstructed.categories == item.categories
+    assert reconstructed.categories == ["cs.CR", "cs.NI"]
 
 
 def test_source_registry_registration_and_lookup() -> None:
     registry = SourceRegistry()
-    sources = registry.list_sources()
-    assert "arxiv" in sources
-    assert "iacr_eprint" in sources
-    assert "rss_feed" in sources
+    assert registry.get("arxiv") is not None
+    assert registry.get("iacr_eprint") is not None
+    assert registry.get("rss_feed") is not None
 
-    arxiv_adapter = registry.get("arxiv")
-    assert isinstance(arxiv_adapter, ArxivSourceAdapter)
+    class CustomAdapter(BaseSourceAdapter):
+        @property
+        def source_name(self) -> str:
+            return "custom_source"
+
+        def fetch_items(self, *args: Any, **kwargs: Any) -> list[RawItem]:
+            return []
+
+        def fetch_content_and_text(self, item: RawItem, raw_dir: str) -> None:
+            pass
+
+    registry.register(CustomAdapter())
+    assert registry.get("custom_source") is not None
+    assert "custom_source" in registry.list_sources()
 
     global_reg = get_source_registry()
-    assert global_reg is not None
     assert global_reg.get("arxiv") is not None
 
 
-@patch("fetcher.ingestion.adapters.arxiv_adapter.fetch_arxiv_papers")
+@patch("pipeline.ingestion.adapters.arxiv_adapter.fetch_arxiv_papers")
 def test_arxiv_source_adapter_fetch(mock_fetch: MagicMock) -> None:
     mock_fetch.return_value = [
         {

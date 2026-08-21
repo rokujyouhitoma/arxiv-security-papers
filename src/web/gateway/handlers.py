@@ -20,10 +20,10 @@ from mcp.papers_server import (
     handle_get_prompt,
     handle_read_resource,
 )
-from presentation.template import render_okf_preview_html
 from search.vector_engine import VectorEngine
 from security.validation import is_safe_workspace_path
 
+from ..presentation.template import render_okf_preview_html
 from .logger import log_query
 from .router import response_bytes, response_error, response_html, response_json
 

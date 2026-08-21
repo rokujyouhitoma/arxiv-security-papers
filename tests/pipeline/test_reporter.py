@@ -5,7 +5,7 @@ Unit tests for the Reporter layer (5-tier summaries, Mermaid mindmaps, index & l
 import os
 import tempfile
 
-from fetcher.reporter import (
+from pipeline.reporter import (
     generate_all_daily_summaries,
     generate_annual_summary,
     generate_mermaid_mindmap,

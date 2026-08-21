@@ -6,7 +6,7 @@ import os
 import tempfile
 import xml.etree.ElementTree as ET
 
-from fetcher.ingestion import (
+from pipeline.ingestion import (
     clean_text,
     get_paper_pub_date_str,
     load_config,

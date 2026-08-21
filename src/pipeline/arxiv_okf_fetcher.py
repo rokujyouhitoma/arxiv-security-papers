@@ -59,7 +59,7 @@ try:
     )
 except ImportError:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    from fetcher.ingestion import (
+    from pipeline.ingestion import (
         ArxivSourceAdapter,
         BaseSourceAdapter,
         FeedSourceAdapter,
@@ -76,7 +76,7 @@ except ImportError:
         parse_arxiv_entry,
         save_raw_paper_data,
     )
-    from fetcher.reporter import (
+    from pipeline.reporter import (
         PAPER_META_CACHE,
         build_summary_table_md,
         generate_all_daily_summaries,
@@ -88,7 +88,7 @@ except ImportError:
         get_paper_meta_cached,
         update_index_and_log,
     )
-    from fetcher.transformer import (
+    from pipeline.transformer import (
         SourceConfig,
         ThemeConfig,
         ThemeManager,

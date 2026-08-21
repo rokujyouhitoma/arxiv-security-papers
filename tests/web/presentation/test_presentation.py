@@ -3,7 +3,7 @@
 Unit tests for UI Presentation Layer (template rendering and metadata extraction).
 """
 
-from presentation import extract_paper_preview_metadata, render_okf_preview_html
+from web.presentation import extract_paper_preview_metadata, render_okf_preview_html
 
 SAMPLE_OKF_MARKDOWN = """---
 type: "security-paper"
