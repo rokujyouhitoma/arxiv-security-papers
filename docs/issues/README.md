@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | --- | :---: | --- |
+| **067** | IACR ePrint 空URLハンドリング修正および TLS/SSL 証明書検証フォールバックの実装 | Bugfix | 2026-08-22 | [067-fix-iacr-feed-url-and-tls-cert-verification.md](closed/067-fix-iacr-feed-url-and-tls-cert-verification.md) |
 | **066** | 普遍的自律型インテリジェンス・オーケストレーションエンジン (src/orchestrator/) の完全実装 | Feature | 2026-08-22 | [066-implement-universal-intelligence-orchestrator.md](closed/066-implement-universal-intelligence-orchestrator.md) |
 | **065** | 全体高位アーキテクチャ設計書 (DSN-01) および README.md へのインテリジェンス・オーケストレーション (DSN-11) の完全反映 | Docs / Arch | 2026-08-22 | [065-integrate-dsn-11-into-dsn-01-hld.md](closed/065-integrate-dsn-11-into-dsn-01-hld.md) |
 | **064** | 汎用・ドメイン非依存インテリジェンス・オーケストレーション包括設計書 (DSN-11) への高抽象度化 | Feature / Docs | 2026-08-22 | [064-generalize-intelligence-orchestration-architecture.md](closed/064-generalize-intelligence-orchestration-architecture.md) |

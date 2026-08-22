@@ -126,7 +126,7 @@ eval_search: activate ## Run search engine quality benchmark (Precision@K, Recal
 
 .PHONY: run_web
 run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (http://localhost:8000)
-	PYTHONPATH=src ${VENV_PYTHON} src/web_server.py --port 8000
+	PYTHONPATH=src ${VENV_PYTHON} src/web/server.py --port 8000
 
 .PHONY: rag_query
 rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q="LLM Jailbreak"

@@ -55,6 +55,29 @@ class AsyncHttpDownloader:
             List[Tuple[asyncio.StreamReader, asyncio.StreamWriter]],
         ] = {}
 
+    async def _open_connection(
+        self, host: str, port: int, is_ssl: bool
+    ) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Establishes stream connection with TLS verification fallback."""
+        try:
+            return await asyncio.wait_for(
+                asyncio.open_connection(
+                    host, port, ssl=self._ssl_context if is_ssl else None
+                ),
+                timeout=self.timeout,
+            )
+        except Exception as conn_err:
+            if is_ssl and (
+                "CERTIFICATE_VERIFY_FAILED" in str(conn_err)
+                or isinstance(conn_err, ssl.SSLCertVerificationError)
+            ):
+                unverified_ctx = ssl._create_unverified_context()
+                return await asyncio.wait_for(
+                    asyncio.open_connection(host, port, ssl=unverified_ctx),
+                    timeout=self.timeout,
+                )
+            raise conn_err
+
     async def download(self, request: Request) -> Response:
         start_time = time.perf_counter()
         parsed = urllib.parse.urlsplit(request.url)
@@ -73,12 +96,7 @@ class AsyncHttpDownloader:
         )
         req_bytes = header_str.encode("iso-8859-1") + (request.body or b"")
 
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(
-                host, port, ssl=self._ssl_context if is_ssl else None
-            ),
-            timeout=self.timeout,
-        )
+        reader, writer = await self._open_connection(host, port, is_ssl)
 
         try:
             writer.write(req_bytes)

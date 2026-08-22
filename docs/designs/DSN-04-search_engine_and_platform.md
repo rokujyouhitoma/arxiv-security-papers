@@ -3,6 +3,7 @@
 - **文書番号**: `DSN-04`
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**: `src/search/` (Engine, Platform, Vector Hybrid, Evaluation)
+- **詳細仕様書**: [DSN-04-01: ハイブリッド検索詳細仕様書](DSN-04-01-hybrid_search_specification.md)
 - **関連パッケージ**: `src/database/`, `src/pipeline/`, `src/mcp/`, `src/web/`
 - **作成日**: 2026-08-22
 - **最終更新日**: 2026-08-22

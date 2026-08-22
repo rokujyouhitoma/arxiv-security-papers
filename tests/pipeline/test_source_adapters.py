@@ -168,3 +168,15 @@ def test_feed_source_adapter_rss_and_atom_parsing() -> None:
         adapter.fetch_content_and_text(items[0], tmpdir)
         txt_path = os.path.join(tmpdir, f"{items[0].clean_id}.txt")
         assert os.path.exists(txt_path)
+
+
+def test_iacr_fetch_items_empty_feed_url_handled():
+    adapter = IacrEprintSourceAdapter()
+    # When feed_url="" is explicitly passed, it should not raise ValueError: unknown url type: ''
+    with patch("pipeline.ingestion.adapters.iacr_adapter.safe_urlopen") as mock_open:
+        mock_resp = MagicMock()
+        mock_resp.__enter__.return_value.read.return_value = b"<rss></rss>"
+        mock_open.return_value = mock_resp
+        items = adapter.fetch_items(feed_url="", max_results=5)
+        assert items == []
+        assert mock_open.call_count == 1

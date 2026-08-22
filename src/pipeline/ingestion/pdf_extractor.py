@@ -11,6 +11,8 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from .arxiv_client import safe_urlopen
+
 
 def get_paper_pub_date_str(paper: Dict[str, Any]) -> str:
     """Extracts YYYY-MM-DD publication date string from paper dict."""
@@ -37,7 +39,7 @@ def fetch_single_pdf_and_text(paper: Dict[str, Any], raw_dir: str) -> None:
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"
                 },
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with safe_urlopen(req, timeout=10) as resp:
                 pdf_data = resp.read()
                 with open(pdf_path, "wb") as f:
                     f.write(pdf_data)

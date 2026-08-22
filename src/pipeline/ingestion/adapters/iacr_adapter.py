@@ -11,7 +11,7 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
-from ..arxiv_client import _safe_fromstring
+from ..arxiv_client import _safe_fromstring, safe_urlopen
 from .base import BaseSourceAdapter, RawItem
 
 
@@ -53,16 +53,18 @@ class IacrEprintSourceAdapter(BaseSourceAdapter):
         **kwargs: Any,
     ) -> List[RawItem]:
         """Fetches latest cryptology preprints from IACR ePrint feed."""
-        feed_url = kwargs.get("feed_url", self.IACR_RSS_URL)
-        req = urllib.request.Request(
-            feed_url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"
-            },
-        )
+        feed_url = kwargs.get("feed_url") or self.IACR_RSS_URL
+        if not feed_url:
+            return []
 
         try:
-            with urllib.request.urlopen(req, timeout=15) as response:
+            req = urllib.request.Request(
+                feed_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"
+                },
+            )
+            with safe_urlopen(req, timeout=15) as response:
                 content = response.read()
             return self._parse_feed_xml(content, max_results)
         except Exception:

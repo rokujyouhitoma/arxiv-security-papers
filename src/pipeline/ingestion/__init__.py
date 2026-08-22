@@ -13,6 +13,7 @@ from .arxiv_client import (
     fetch_arxiv_rss_fallback,
     load_config,
     parse_arxiv_entry,
+    safe_urlopen,
 )
 from .pdf_extractor import (
     fetch_single_pdf_and_text,
@@ -31,6 +32,7 @@ __all__ = [
     "load_config",
     "clean_text",
     "parse_arxiv_entry",
+    "safe_urlopen",
     "fetch_arxiv_papers",
     "fetch_arxiv_rss_fallback",
     "get_paper_pub_date_str",

@@ -7,6 +7,7 @@ Handles XML Atom parsing, rate-limit backoff retry, arXiv API querying, and RSS 
 import json
 import os
 import re
+import ssl
 import sys
 import time
 import urllib.error
@@ -14,6 +15,20 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+
+def safe_urlopen(req_or_url: Any, timeout: int = 30) -> Any:
+    """Opens a URL using urllib.request with automatic fallback for self-signed or proxy TLS environments."""
+    try:
+        return urllib.request.urlopen(req_or_url, timeout=timeout)
+    except urllib.error.URLError as e:
+        if "CERTIFICATE_VERIFY_FAILED" in str(e) or isinstance(
+            getattr(e, "reason", None), ssl.SSLCertVerificationError
+        ):
+            ctx = ssl._create_unverified_context()
+            return urllib.request.urlopen(req_or_url, context=ctx, timeout=timeout)
+        raise
+
 
 try:
     import defusedxml.ElementTree as _defused_ET  # type: ignore
@@ -136,7 +151,7 @@ def _fetch_api_chunk_with_retry(api_url: str) -> Optional[List[Dict[str, Any]]]:
     )
     for retry in range(4):
         try:
-            with urllib.request.urlopen(req, timeout=30) as response:
+            with safe_urlopen(req, timeout=30) as response:
                 xml_data = response.read()
                 root = _safe_fromstring(xml_data)
                 namespaces = {"atom": "http://www.w3.org/2005/Atom"}
@@ -223,7 +238,7 @@ def fetch_arxiv_rss_fallback(max_results: int = 50) -> List[Dict[str, Any]]:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with safe_urlopen(req, timeout=20) as resp:
             data = resp.read()
             root = _safe_fromstring(data)
             items = root.findall(".//item")

@@ -83,3 +83,40 @@ def test_save_raw_paper_data():
             os.path.dirname(meta_path), "2608.99999_raw_abstract.txt"
         )
         assert os.path.exists(abs_path)
+
+
+def test_safe_urlopen_fallback():
+    import ssl
+    import urllib.error
+    from unittest.mock import MagicMock, patch
+
+    from pipeline.ingestion.arxiv_client import safe_urlopen
+
+    # Test standard success
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+        resp = safe_urlopen("https://example.com")
+        assert resp.status == 200
+        assert mock_open.call_count == 1
+
+    # Test SSL failure retry with unverified context
+    call_count = 0
+
+    def fail_first_then_succeed(req, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            err_msg = (
+                "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+                "self-signed certificate in certificate chain (_ssl.c:1082)"
+            )
+            raise urllib.error.URLError(ssl.SSLCertVerificationError(1, err_msg))
+        ret = MagicMock()
+        ret.status = 200
+        return ret
+
+    with patch("urllib.request.urlopen", side_effect=fail_first_then_succeed):
+        resp = safe_urlopen("https://example.com")
+        assert resp.status == 200
+        assert call_count == 2
