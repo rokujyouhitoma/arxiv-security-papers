@@ -964,6 +964,47 @@ class VectorEngine:
         return self.rrf_scorer.fuse(bm25_results, vector_results, top_k=top_k)
 
 
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="VectorEngine CLI for arxiv-security-papers"
+    )
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help="Build or rebuild the semantic vector index",
+    )
+    parser.add_argument("--query", "-q", type=str, default="", help="Query to search")
+    parser.add_argument(
+        "--top-k", type=int, default=10, help="Number of results to return"
+    )
+    args = parser.parse_args()
+
+    engine = VectorEngine()
+    if args.build:
+        print("[VectorEngine] Scanning OKF papers and building search index...")
+        count = engine.build_index()
+        print(f"[VectorEngine] Successfully indexed {count} documents.")
+    elif args.query:
+        print(f"[VectorEngine] Querying: {args.query}")
+        results, profile = engine.search_with_profile(args.query, top_k=args.top_k)
+        print(
+            f"[VectorEngine] Found {len(results)} matches (Search time: {profile.get('total_ms', 0):.2f}ms):"
+        )
+        for i, doc in enumerate(results, 1):
+            print(
+                f"  {i}. [{doc.get('id')}] {doc.get('title')} (score: {doc.get('score', 0):.4f})"
+            )
+            print(f"     {doc.get('description', '')[:100]}...")
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
+
+
 __all__ = [
     "VectorEngine",
     "SynonymExpander",

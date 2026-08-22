@@ -102,7 +102,7 @@ build: activate format static_analysis test build_js py_compile ## run mandatory
 
 .PHONY: build_vector_db
 build_vector_db: activate ## Build or rebuild semantic vector index
-	PYTHONPATH=src ${VENV_PYTHON} src/vector_engine.py --build
+	PYTHONPATH=src ${VENV_PYTHON} -m search.vector_engine --build
 
 .PHONY: run_mcp_server
 run_mcp_server: activate ## Launch standard Model Context Protocol (MCP) server
@@ -130,7 +130,7 @@ run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (ht
 
 .PHONY: rag_query
 rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q="LLM Jailbreak"
-	PYTHONPATH=src ${VENV_PYTHON} src/vector_engine.py --query "$(Q)"
+	PYTHONPATH=src ${VENV_PYTHON} -m search.vector_engine --query "$(Q)"
 
 .PHONY: run
 run: activate ## run python code inside venv

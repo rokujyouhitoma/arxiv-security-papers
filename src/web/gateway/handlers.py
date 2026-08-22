@@ -46,6 +46,8 @@ class GatewayHandlers:
     def vector_engine(self) -> VectorEngine:
         if self._vector_engine is None:
             self._vector_engine = VectorEngine(workspace_dir=self.workspace_dir)
+        elif not self._vector_engine.documents:
+            self._vector_engine.load_index()
         return self._vector_engine
 
     def _get_paper(self, clean_id: str) -> Optional[Dict[str, Any]]:
