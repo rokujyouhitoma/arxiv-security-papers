@@ -838,8 +838,8 @@ class VectorEngine:
             return res[:top_k], prof
 
         t_tokenize_start = time.perf_counter()
-        if not self.documents and self.auto_build:
-            self.build_index()
+        # Serving layer strictly does not build index at query time or during web server startup.
+        # Indices must be built in advance via dedicated offline/batch processes (e.g. `make build_vector_db`).
 
         # Step 1: Query Context Preparation
         ctx = self.prepare_query_context(query)

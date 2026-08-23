@@ -1,0 +1,588 @@
+#!/usr/bin/env python3
+"""Universal Intelligence Orchestrator Unified CLI Entry Point.
+
+Serves as the central application entry point for arxiv-security-papers,
+orchestrating the 6-phase intelligence lifecycle while providing subcommands
+for executing individual tools (pipeline, spider, search, web, mcp, status).
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+from datetime import datetime, timezone
+from typing import List, Optional
+
+from orchestrator.contracts import IntelligencePhase, PhaseContext, PhaseStatus
+from orchestrator.engine import UniversalIntelligenceOrchestrator
+
+
+def _print_banner() -> None:
+    banner = """
+================================================================================
+   UNIVERSAL AUTONOMOUS INTELLIGENCE ORCHESTRATOR (arxiv-security-papers)
+   Closed-Loop 6-Phase Intelligence Lifecycle: Planning -> Feedback
+================================================================================
+"""
+    print(banner)
+
+
+def run_cycle_command(args: argparse.Namespace) -> int:
+    """Executes one or more intelligence cycles."""
+    if not args.quiet and not args.json:
+        _print_banner()
+
+    workspace_dir = os.path.abspath(args.workdir)
+    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+
+    # Seed default PIRs if user specified custom topics or none registered
+    if args.topics:
+        custom_topics = [t.strip() for t in args.topics.split(",") if t.strip()]
+        orchestrator.register_pir(
+            req_id=f"pir_cli_{int(time.time())}",
+            title="CLI Requested Priority Requirement",
+            description="Dynamically injected PIR from CLI execution",
+            target_topics=custom_topics,
+            priority_score=1.0,
+        )
+    elif not orchestrator.pir_manager.list_active_requirements():
+        # Register core default intelligence requirements
+        orchestrator.register_pir(
+            req_id="pir_llm_sec",
+            title="LLM & AI Safety Threats",
+            description="Monitor prompt injection, jailbreaking, and foundation model security",
+            target_topics=[
+                "LLM・AIセキュリティ",
+                "脱獄攻撃",
+                "プロンプトインジェクション",
+            ],
+            priority_score=0.9,
+        )
+        orchestrator.register_pir(
+            req_id="pir_vuln_fuzz",
+            title="Vulnerability Research & Penetration Testing",
+            description="Monitor automated fuzzing, exploit payloads, and binary analysis",
+            target_topics=[
+                "ファジング・脆弱性調査",
+                "ペネトレーションテスト・脆弱性検証",
+            ],
+            priority_score=0.85,
+        )
+        orchestrator.register_pir(
+            req_id="pir_crypto_priv",
+            title="Cryptography & Privacy Engineering",
+            description="Monitor post-quantum crypto, zero-knowledge proofs, and side-channel defenses",
+            target_topics=["暗号・プライバシー技術", "耐量子暗号", "ゼロ知識証明"],
+            priority_score=0.8,
+        )
+
+    cycles_to_run = max(1, args.cycles)
+    results_summary: List[dict] = []
+
+    for i in range(cycles_to_run):
+        cycle_prefix = (
+            args.cycle_id
+            if args.cycle_id
+            else f"cycle_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        )
+        cycle_id = f"{cycle_prefix}_{i+1}" if cycles_to_run > 1 else cycle_prefix
+
+        if not args.quiet and not args.json:
+            print(
+                f"[*] Starting Intelligence Cycle [{i+1}/{cycles_to_run}]: {cycle_id}"
+            )
+
+        start_time = time.perf_counter()
+        context: PhaseContext = orchestrator.run_cycle(cycle_id=cycle_id)
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+
+        cycle_result = {
+            "cycle_id": context.cycle_id,
+            "elapsed_ms": round(elapsed_ms, 2),
+            "statuses": {p.value: s.value for p, s in context.phase_statuses.items()},
+            "target_topics": (
+                context.directive.target_topics if context.directive else []
+            ),
+            "raw_records_count": len(context.raw_records),
+            "processed_records_count": len(context.processed_records),
+            "products_count": len(context.products),
+            "errors": context.errors,
+            "topic_weights": orchestrator.get_current_topic_weights(),
+        }
+        results_summary.append(cycle_result)
+
+        if not args.quiet and not args.json:
+            print(f"[+] Cycle {cycle_id} Completed in {elapsed_ms:.2f}ms")
+            print("    Phase Execution Matrix:")
+            for phase in [
+                IntelligencePhase.PLANNING,
+                IntelligencePhase.COLLECTION,
+                IntelligencePhase.PROCESSING,
+                IntelligencePhase.ANALYSIS,
+                IntelligencePhase.DISSEMINATION,
+                IntelligencePhase.EVALUATION,
+            ]:
+                status = context.phase_statuses.get(phase, PhaseStatus.PENDING).value
+                symbol = "✓" if status == "COMPLETED" else "✗"
+                print(f"      [{symbol}] {phase.value:<15} : {status}")
+
+            print(
+                f"    Records Collected: {len(context.raw_records)} | "
+                f"Processed: {len(context.processed_records)} | "
+                f"Products: {len(context.products)}"
+            )
+            if context.products:
+                print("    Published Intelligence Products:")
+                for prod in context.products:
+                    print(
+                        f"      - [{prod.classification.value}] {prod.title} ({prod.format.value})"
+                    )
+
+            if context.errors:
+                print(f"    [!] Warnings/Errors encountered: {len(context.errors)}")
+
+            print("-" * 80)
+
+    if args.json:
+        print(json.dumps(results_summary, indent=2, ensure_ascii=False))
+
+    has_errors = any(len(r["errors"]) > 0 for r in results_summary)
+    return 1 if has_errors else 0
+
+
+def run_daemon_command(args: argparse.Namespace) -> int:
+    """Runs recurring intelligence cycles in daemon mode."""
+    _print_banner()
+    interval = max(5, args.interval)
+    max_cycles = args.max_cycles
+    workspace_dir = os.path.abspath(args.workdir)
+    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+
+    max_cycles_label = "Infinite" if max_cycles == 0 else str(max_cycles)
+    print(
+        f"[*] Starting Autonomous Orchestrator Daemon (Interval: {interval}s, Max Cycles: {max_cycles_label})"
+    )
+
+    cycle_count = 0
+    try:
+        while True:
+            cycle_count += 1
+            print(
+                f"\n[{datetime.now(timezone.utc).isoformat()}] --- Daemon Cycle #{cycle_count} ---"
+            )
+            ctx = orchestrator.run_cycle(
+                cycle_id=f"daemon_{int(time.time())}_{cycle_count}"
+            )
+            print(
+                f"[+] Completed cycle {ctx.cycle_id}: {len(ctx.processed_records)} records, "
+                f"{len(ctx.products)} products"
+            )
+
+            if max_cycles > 0 and cycle_count >= max_cycles:
+                print(f"[*] Reached max cycles ({max_cycles}). Exiting daemon.")
+                break
+
+            print(f"[*] Sleeping for {interval} seconds until next cycle...")
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\n[*] Daemon interrupted by user. Shutting down gracefully.")
+
+    return 0
+
+
+def run_pir_command(args: argparse.Namespace) -> int:
+    """Manages Priority Intelligence Requirements (PIRs)."""
+    orchestrator = UniversalIntelligenceOrchestrator(
+        workspace_dir=os.path.abspath(args.workdir)
+    )
+
+    if args.pir_action == "add":
+        if not args.id or not args.title or not args.topics:
+            print("[ERROR] --id, --title, and --topics are required to add a PIR.")
+            return 1
+        topics = [t.strip() for t in args.topics.split(",") if t.strip()]
+        req = orchestrator.register_pir(
+            req_id=args.id,
+            title=args.title,
+            description=args.description or "",
+            target_topics=topics,
+            priority_score=args.priority,
+        )
+        print(f"[+] Successfully registered PIR: [{req.req_id}] {req.title}")
+        print(f"    Topics: {req.target_topics}")
+        print(f"    Priority Score: {req.priority_score}")
+        return 0
+
+    # Default: list PIRs and topic weights
+    active_reqs = orchestrator.pir_manager.list_active_requirements()
+    weights = orchestrator.get_current_topic_weights()
+
+    print("=================================================================")
+    print("   ACTIVE PRIORITY INTELLIGENCE REQUIREMENTS (PIRs)")
+    print("=================================================================")
+    if not active_reqs:
+        print("  (No custom PIRs currently registered. Built-in defaults active.)")
+    else:
+        for r in active_reqs:
+            print(f"  [{r.req_id}] {r.title} (Priority: {r.priority_score})")
+            print(f"    Topics: {', '.join(r.target_topics)}")
+            if r.description:
+                print(f"    Desc:   {r.description}")
+            print()
+
+    print("--- Current Topic Priority Distribution ---")
+    if not weights:
+        print("  (No topic weights calculated yet)")
+    else:
+        for topic, weight in sorted(weights.items(), key=lambda x: x[1], reverse=True):
+            bar = "#" * int(weight * 30)
+            print(f"  {topic:<25} : {weight:.4f} | {bar}")
+
+    return 0
+
+
+def run_status_command(args: argparse.Namespace) -> int:
+    """Displays comprehensive repository and intelligence status."""
+    workspace_dir = os.path.abspath(args.workdir)
+    print("=================================================================")
+    print("   ARXIV SECURITY PAPERS & INTELLIGENCE PLATFORM STATUS")
+    print("=================================================================")
+    print(f"Workspace Directory : {workspace_dir}")
+
+    # 1. OKF Papers Count
+    okf_dir = os.path.join(workspace_dir, "outputs", "okf_papers")
+    paper_count = 0
+    if os.path.exists(okf_dir):
+        for _, _, files in os.walk(okf_dir):
+            paper_count += sum(1 for f in files if f.endswith(".md"))
+    print(f"OKF Papers Ingested : {paper_count:,} documents")
+
+    # 2. Vector DB Status
+    vector_db_path = os.path.join(workspace_dir, "outputs", "vector_db", "index.json")
+    if os.path.exists(vector_db_path):
+        size_mb = os.path.getsize(vector_db_path) / (1024 * 1024)
+        print(
+            f"Vector Search Index : Active ({size_mb:.1f} MB in outputs/vector_db/index.json)"
+        )
+    else:
+        print("Vector Search Index : Not built (Run 'make build_vector_db')")
+
+    # 3. Executive Summaries Status
+    summaries_dir = os.path.join(workspace_dir, "outputs", "executive_summaries")
+    tiers = ["01_per_run", "02_daily", "03_monthly", "04_quarterly", "05_annual"]
+    print("Executive Summaries :")
+    for tier in tiers:
+        tier_path = os.path.join(summaries_dir, tier)
+        count = (
+            len([f for f in os.listdir(tier_path) if f.endswith(".md")])
+            if os.path.exists(tier_path)
+            else 0
+        )
+        print(f"  - {tier:<15} : {count} summaries")
+
+    # 4. Active PIRs
+    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+    active_pirs = orchestrator.pir_manager.list_active_requirements()
+    print(f"Active PIRs         : {len(active_pirs)} requirements active")
+
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Builds the comprehensive CLI argument parser."""
+    parser = argparse.ArgumentParser(
+        prog="orchestrator",
+        description="Universal Autonomous Intelligence Lifecycle Orchestrator for arxiv-security-papers",
+    )
+    parser.add_argument(
+        "--workdir",
+        "-w",
+        default=".",
+        help="Path to workspace root directory (default: .)",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable detailed verbose diagnostic output",
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
+
+    # Command: cycle (Default Orchestrator cycle)
+    cycle_parser = subparsers.add_parser(
+        "cycle",
+        help="Execute 6-phase closed-loop autonomous intelligence cycle (Default)",
+    )
+    cycle_parser.add_argument(
+        "--cycles",
+        "-c",
+        type=int,
+        default=1,
+        help="Number of intelligence cycles to execute sequentially (default: 1)",
+    )
+    cycle_parser.add_argument(
+        "--cycle-id",
+        type=str,
+        default=None,
+        help="Custom identifier for the intelligence cycle",
+    )
+    cycle_parser.add_argument(
+        "--topics",
+        "-t",
+        type=str,
+        default="",
+        help="Comma-separated target topics to prioritize for collection and synthesis",
+    )
+    cycle_parser.add_argument(
+        "--quota",
+        "-q",
+        type=int,
+        default=20,
+        help="Base collection crawl quota per topic (default: 20)",
+    )
+    cycle_parser.add_argument(
+        "--json", action="store_true", help="Output results formatted as JSON"
+    )
+    cycle_parser.add_argument(
+        "--quiet", action="store_true", help="Suppress visual banners and headers"
+    )
+
+    # Command: daemon
+    daemon_parser = subparsers.add_parser(
+        "daemon", help="Run recurring intelligence cycles in autonomous daemon mode"
+    )
+    daemon_parser.add_argument(
+        "--interval",
+        "-i",
+        type=int,
+        default=3600,
+        help="Cycle interval in seconds (default: 3600)",
+    )
+    daemon_parser.add_argument(
+        "--max-cycles",
+        type=int,
+        default=0,
+        help="Maximum cycles before terminating (0 = infinite, default: 0)",
+    )
+
+    # Command: pir
+    pir_parser = subparsers.add_parser(
+        "pir", help="Inspect and manage Priority Intelligence Requirements (PIRs)"
+    )
+    pir_subparsers = pir_parser.add_subparsers(
+        dest="pir_action", help="PIR action to perform"
+    )
+    pir_subparsers.add_parser(
+        "list", help="List active PIR requirements and topic weights (default)"
+    )
+    add_pir_parser = pir_subparsers.add_parser(
+        "add", help="Register a new Priority Intelligence Requirement"
+    )
+    add_pir_parser.add_argument(
+        "--id", type=str, required=True, help="Unique PIR Requirement ID"
+    )
+    add_pir_parser.add_argument(
+        "--title", type=str, required=True, help="Human-readable title"
+    )
+    add_pir_parser.add_argument(
+        "--description", type=str, default="", help="Detailed description"
+    )
+    add_pir_parser.add_argument(
+        "--topics",
+        type=str,
+        required=True,
+        help="Comma-separated list of target domain topics",
+    )
+    add_pir_parser.add_argument(
+        "--priority",
+        type=float,
+        default=1.0,
+        help="Priority score (0.0 - 1.0, default: 1.0)",
+    )
+
+    # Command: status
+    subparsers.add_parser(
+        "status", help="Show system-wide intelligence and data status"
+    )
+
+    # Command: pipeline (Direct tool runner)
+    pipeline_parser = subparsers.add_parser(
+        "pipeline", help="Run arXiv / multi-theme ETL ingestion pipeline directly"
+    )
+    pipeline_parser.add_argument(
+        "--theme",
+        type=str,
+        default="security",
+        help="Theme ID to run (security, cryptography, ai_safety, all)",
+    )
+    pipeline_parser.add_argument(
+        "--days", type=int, default=1, help="Number of historical days to backfill"
+    )
+    pipeline_parser.add_argument(
+        "--max-results", type=int, default=50, help="Maximum results per query"
+    )
+
+    # Command: spider (Direct tool runner)
+    spider_parser = subparsers.add_parser(
+        "spider", help="Run distributed crawler & spider platform directly"
+    )
+    spider_parser.add_argument(
+        "--spider-name",
+        type=str,
+        default="arxiv",
+        help="Spider to execute (arxiv, iacr, advisory)",
+    )
+    spider_parser.add_argument(
+        "--depth", type=int, default=2, help="Maximum crawl depth"
+    )
+
+    # Command: search (Direct tool runner)
+    search_parser = subparsers.add_parser(
+        "search", help="Execute semantic vector & hybrid search directly"
+    )
+    search_parser.add_argument(
+        "--query", "-q", type=str, default="", help="Search query string"
+    )
+    search_parser.add_argument(
+        "--build", action="store_true", help="Build or rebuild the vector index"
+    )
+    search_parser.add_argument(
+        "--top-k", "-k", type=int, default=10, help="Number of results (default: 10)"
+    )
+
+    # Command: web (Direct tool runner)
+    web_parser = subparsers.add_parser(
+        "web", help="Launch Glassmorphic Web Search UI and API Server"
+    )
+    web_parser.add_argument(
+        "--port", "-p", type=int, default=8000, help="Port to bind (default: 8000)"
+    )
+    web_parser.add_argument(
+        "--host", type=str, default="0.0.0.0", help="Host interface to bind"
+    )
+
+    # Command: mcp (Direct tool runner)
+    mcp_parser = subparsers.add_parser(
+        "mcp", help="Launch Model Context Protocol JSON-RPC servers"
+    )
+    mcp_parser.add_argument(
+        "--server-type",
+        type=str,
+        default="papers",
+        choices=["papers", "observability", "threat_defense", "tech_radar"],
+        help="MCP server type to launch",
+    )
+
+    return parser
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Main entry point dispatching to orchestrator cycle or individual tools."""
+    parser = build_parser()
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        return 1
+
+    if not args.command or args.command == "cycle":
+        # Default behavior: run intelligence cycle
+        if not hasattr(args, "cycles"):
+            args.cycles = 1
+        if not hasattr(args, "cycle_id"):
+            args.cycle_id = None
+        if not hasattr(args, "topics"):
+            args.topics = ""
+        if not hasattr(args, "quota"):
+            args.quota = 20
+        if not hasattr(args, "json"):
+            args.json = False
+        if not hasattr(args, "quiet"):
+            args.quiet = False
+        return run_cycle_command(args)
+
+    if args.command == "daemon":
+        return run_daemon_command(args)
+
+    if args.command == "pir":
+        return run_pir_command(args)
+
+    if args.command == "status":
+        return run_status_command(args)
+
+    if args.command == "pipeline":
+        from pipeline.arxiv_okf_fetcher import run_theme_pipeline
+
+        print(f"[*] Delegating to Pipeline Ingestion Engine (Theme: {args.theme})...")
+        run_theme_pipeline(
+            theme_id=args.theme,
+            workspace_dir=os.path.abspath(args.workdir),
+            max_results_per_chunk=args.max_results,
+            backfill_days=args.days,
+        )
+        return 0
+
+    if args.command == "spider":
+        from spider.runner import SpiderRunner
+
+        print(f"[*] Delegating to Spider Runner ({args.spider_name})...")
+        runner = SpiderRunner(workspace_dir=os.path.abspath(args.workdir))
+        stats = runner.run_spider(args.spider_name, max_depth=args.depth)
+        print(f"[+] Spider execution complete: {stats}")
+        return 0
+
+    if args.command == "search":
+        from search.vector_engine import VectorEngine
+
+        engine = VectorEngine(workspace_dir=os.path.abspath(args.workdir))
+        if args.build:
+            print("[*] Rebuilding Vector Search Index from OKF papers...")
+            count = engine.build_index()
+            print(f"[+] Successfully indexed {count} documents.")
+            return 0
+        if args.query:
+            results, profile = engine.search_with_profile(args.query, top_k=args.top_k)
+            print(
+                f"[+] Found {len(results)} matches for '{args.query}' in {profile.get('total_ms', 0):.2f}ms:"
+            )
+            for i, doc in enumerate(results, 1):
+                print(
+                    f"  {i}. [{doc.get('id')}] {doc.get('title')} (score: {doc.get('score', 0):.4f})"
+                )
+            return 0
+        print("[ERROR] Please specify --query '<query>' or --build.")
+        return 1
+
+    if args.command == "web":
+        from web.server import run_server
+
+        print(f"[*] Launching WSGI Web Server on {args.host}:{args.port}...")
+        run_server(host=args.host, port=args.port)
+        return 0
+
+    if args.command == "mcp":
+        if args.server_type == "observability":
+            import mcp.observability_server as obs_server
+
+            obs_server.main()
+        elif args.server_type == "threat_defense":
+            import mcp.threat_defense_server as td_server
+
+            td_server.main()
+        elif args.server_type == "tech_radar":
+            import mcp.tech_radar_server as tr_server
+
+            tr_server.main()
+        else:
+            import mcp.papers_server as p_server
+
+            p_server.main()
+        return 0
+
+    parser.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

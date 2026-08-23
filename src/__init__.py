@@ -13,6 +13,7 @@ Provides clean 4-tier domain-driven packages:
 
 import database
 import mcp
+import orchestrator
 import pipeline
 import search
 import security
@@ -22,6 +23,7 @@ import web
 __all__ = [
     "database",
     "mcp",
+    "orchestrator",
     "pipeline",
     "search",
     "security",

@@ -44,6 +44,11 @@ class GatewayHandlers:
 
     @property
     def vector_engine(self) -> VectorEngine:
+        """
+        Retrieves the VectorEngine instance for serving queries.
+        Strictly operates in serving (read-only) mode using pre-built indices.
+        Never triggers index building during server startup or request handling.
+        """
         if self._vector_engine is None:
             self._vector_engine = VectorEngine(workspace_dir=self.workspace_dir)
         elif not self._vector_engine.documents:

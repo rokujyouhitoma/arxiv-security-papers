@@ -108,6 +108,30 @@ async def run_all_spiders(
     return results
 
 
+class SpiderRunner:
+    """Synchronous orchestration wrapper for executing spiders."""
+
+    def __init__(self, workspace_dir: Optional[str] = None) -> None:
+        self.workspace_dir = workspace_dir or os.getcwd()
+        self.output_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+
+    def run_spider(
+        self,
+        spider_name: str,
+        max_depth: Optional[int] = None,
+        max_requests: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Runs the spider synchronously and returns stats."""
+        items = asyncio.run(
+            run_spider(
+                spider_name=spider_name,
+                output_dir=self.output_dir,
+                max_requests=max_requests or max_depth,
+            )
+        )
+        return {"spider": spider_name, "crawled": len(items)}
+
+
 def parse_cli_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Large-Scale Distributed Spider & Crawler Runner (DSN-15)"

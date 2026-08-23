@@ -10,7 +10,7 @@ VENV=.venv
 VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
 
-SRC=src/pipeline/arxiv_okf_fetcher.py
+SRC=src/orchestrator/cli.py
 PYTHON_SRCS := $(shell find src -type f -name "*.py" | sort)
 TESTS := $(shell find tests -type f -name "*.py" | sort)
 
@@ -128,13 +128,33 @@ eval_search: activate ## Run search engine quality benchmark (Precision@K, Recal
 run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (http://localhost:8000)
 	PYTHONPATH=src ${VENV_PYTHON} src/web/server.py --port 8000
 
+.PHONY: run_supervisor
+run_supervisor: activate ## Launch Gunicorn-style Pre-Fork Process Supervisor & Arbiter
+	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli start $(ARGS)
+
+.PHONY: status_supervisor
+status_supervisor: activate ## Check live Process Supervisor status via IPC Unix domain socket
+	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli status
+
+.PHONY: orchestrate
+orchestrate: activate ## Run Universal Intelligence Orchestrator 6-phase autonomous cycle
+	PYTHONPATH=src ${VENV_PYTHON} src/orchestrator/cli.py cycle $(ARGS)
+
+.PHONY: orchestrate_daemon
+orchestrate_daemon: activate ## Run Universal Intelligence Orchestrator in continuous daemon mode
+	PYTHONPATH=src ${VENV_PYTHON} src/orchestrator/cli.py daemon $(ARGS)
+
+.PHONY: pipeline
+pipeline: activate ## Run multi-theme arXiv ETL ingestion pipeline directly
+	PYTHONPATH=src ${VENV_PYTHON} src/pipeline/arxiv_okf_fetcher.py
+
 .PHONY: rag_query
 rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q="LLM Jailbreak"
 	PYTHONPATH=src ${VENV_PYTHON} -m search.vector_engine --query "$(Q)"
 
 .PHONY: run
-run: activate ## run python code inside venv
-	PYTHONPATH=src ${VENV_PYTHON} ${SRC}
+run: activate ## Run Universal Autonomous Intelligence Orchestrator (or custom $SRC)
+	PYTHONPATH=src ${VENV_PYTHON} ${SRC} $(ARGS)
 
 .PHONY: isort
 isort: activate ## isort

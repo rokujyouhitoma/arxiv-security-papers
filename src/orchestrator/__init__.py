@@ -5,6 +5,7 @@ Planning, Collection, Processing, Analysis, Dissemination, and Evaluation.
 """
 
 from orchestrator.analysis.synthesizer import AnalysisSynthesizer
+from orchestrator.cli import build_parser, main, run_cycle_command
 from orchestrator.contracts import (
     FeedbackTelemetry,
     IntelligenceDirective,
@@ -43,4 +44,7 @@ __all__ = [
     "FeedbackEvaluator",
     "DAGWorkflowEngine",
     "SagaCoordinator",
+    "main",
+    "build_parser",
+    "run_cycle_command",
 ]

@@ -13,7 +13,8 @@
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
-| :---: | --- | :---: | --- | :---: | --- |
+| :---: | --- | :---: | --- | :---: |
+| **069** | Gunicorn スタイル Pre-fork プロセススーパーバイザー & 調停基盤 (src/supervisor/) の実装 | Feature | 2026-08-23 | [069-implement-gunicorn-style-process-supervisor-and-arbiter.md](closed/069-implement-gunicorn-style-process-supervisor-and-arbiter.md) |
 | **068** | 検索インデックス生成 (14,349件) および VectorEngine CLI・ハンドラ自動ロード改修 | Bugfix / Ops | 2026-08-22 | [068-build-search-vector-index-and-fix-cli-entrypoints.md](closed/068-build-search-vector-index-and-fix-cli-entrypoints.md) |
 | **067** | IACR ePrint 空URLハンドリング修正および TLS/SSL 証明書検証フォールバックの実装 | Bugfix | 2026-08-22 | [067-fix-iacr-feed-url-and-tls-cert-verification.md](closed/067-fix-iacr-feed-url-and-tls-cert-verification.md) |
 | **066** | 普遍的自律型インテリジェンス・オーケストレーションエンジン (src/orchestrator/) の完全実装 | Feature | 2026-08-22 | [066-implement-universal-intelligence-orchestrator.md](closed/066-implement-universal-intelligence-orchestrator.md) |

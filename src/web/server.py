@@ -2,6 +2,11 @@
 """
 Unified PEP 3333 WSGI Web Server for arXiv Security Papers.
 Integrates API Gateway routing, MCP JSON-RPC, and Glassmorphism UI presentation.
+
+Architecture Note:
+Web server startup and serving processes strictly load pre-built indices
+and NEVER perform index building during startup or request handling.
+Index building is an offline batch task executed via `make build_vector_db`.
 """
 
 import os
@@ -25,12 +30,15 @@ from web.presentation import extract_paper_preview_metadata, render_okf_preview_
 
 SITE_DIR = os.path.join(WORKSPACE_DIR, "site")
 
+run_server = run_web_server
+
 __all__ = [
     "WSGIApplication",
     "application",
     "app",
     "VECTOR_ENGINE",
     "run_web_server",
+    "run_server",
     "get_workspace_dir",
     "WORKSPACE_DIR",
     "SITE_DIR",

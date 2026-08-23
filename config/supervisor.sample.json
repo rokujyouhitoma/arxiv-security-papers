@@ -1,0 +1,34 @@
+{
+  "bind_host": "0.0.0.0",
+  "bind_port": 8000,
+  "workers": 4,
+  "worker_class": "sync",
+  "threads": 1,
+  "timeout": 30.0,
+  "graceful_timeout": 30.0,
+  "app_uri": "web.server:app",
+  "manage_database": true,
+  "pools": [
+    {
+      "name": "web",
+      "workers": 4,
+      "worker_class": "sync",
+      "threads": 1,
+      "bind_host": "0.0.0.0",
+      "bind_port": 8000,
+      "backlog": 2048,
+      "target_uri": "web.server:app",
+      "timeout": 30.0,
+      "graceful_timeout": 30.0,
+      "dependencies": ["database"]
+    }
+  ],
+  "services": [
+    {
+      "name": "database",
+      "sync_interval": 2.0,
+      "timeout": 30.0,
+      "dependencies": []
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""
+Worker subsystem package for Process Supervisor.
+Exports BaseWorker, SyncWorker, GthreadWorker, AsyncWorker, ManagedServiceWorker, and DatabaseWorker.
+"""
+
+from .async_worker import AsyncWorker
+from .base import BaseWorker
+from .gthread_worker import GthreadWorker
+from .service_worker import DatabaseWorker, ManagedServiceWorker
+from .sync_worker import SyncWorker
+
+WORKER_CLASSES = {
+    "sync": SyncWorker,
+    "gthread": GthreadWorker,
+    "threaded": GthreadWorker,
+    "async": AsyncWorker,
+}
+
+__all__ = [
+    "BaseWorker",
+    "SyncWorker",
+    "GthreadWorker",
+    "AsyncWorker",
+    "ManagedServiceWorker",
+    "DatabaseWorker",
+    "WORKER_CLASSES",
+]
