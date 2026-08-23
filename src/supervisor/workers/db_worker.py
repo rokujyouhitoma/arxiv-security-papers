@@ -32,7 +32,7 @@ class DatabaseWorker(BaseWorker):
             worker_id=worker_id,
             config=config,
             server_socket=None,
-            wsgi_app=None,
+            app_target=None,
             pulse_callback=pulse_callback,
         )
         self.db_ready = False

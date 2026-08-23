@@ -93,6 +93,71 @@ class SyncWorker(BaseWorker):
 
         return environ
 
+    def _parse_http_payload(
+        self, client_sock: socket.socket, raw: bytes
+    ) -> Optional[Dict[str, Any]]:
+        """Parses HTTP request bytes into WSGI environ dict."""
+        header_part, _, body_part = raw.partition(b"\r\n\r\n")
+        lines = header_part.decode("iso-8859-1").split("\r\n")
+        if not lines:
+            return None
+
+        request_line = lines[0].split(" ")
+        if len(request_line) < 2:
+            return None
+        method, full_path = request_line[0], request_line[1]
+        path, _, query = full_path.partition("?")
+
+        headers: Dict[str, str] = {}
+        for line in lines[1:]:
+            if ":" in line:
+                k, _, v = line.partition(":")
+                headers[k.strip().lower()] = v.strip()
+
+        return self._build_wsgi_environ(
+            client_sock, method, path, query, headers, body_part
+        )
+
+    def _execute_wsgi_request(
+        self, environ: Dict[str, Any]
+    ) -> tuple[str, List[tuple[str, str]], bytes]:
+        """Executes WSGI app callable and returns status, headers, body."""
+        status_holder: List[str] = ["200 OK"]
+        response_headers: List[tuple[str, str]] = []
+
+        def start_response(
+            status: str,
+            resp_headers: List[tuple[str, str]],
+            exc_info: Optional[Any] = None,
+        ) -> Callable[[bytes], None]:
+            status_holder[0] = status
+            response_headers.extend(resp_headers)
+            return lambda data: None
+
+        if self.app_target:
+            resp_iter = self.app_target(environ, start_response)
+            resp_body = b"".join(resp_iter)
+        else:
+            resp_body = b'{"status":"ok","message":"Supervisor Generic Worker"}'
+            response_headers.append(("Content-Type", "application/json"))
+
+        return status_holder[0], response_headers, resp_body
+
+    def _format_http_response(
+        self, status: str, headers: List[tuple[str, str]], body: bytes
+    ) -> bytes:
+        """Formats HTTP 1.1 response string with content-length and headers."""
+        resp_header_str = f"HTTP/1.1 {status}\r\n"
+        has_len = False
+        for hk, hv in headers:
+            if hk.lower() == "content-length":
+                has_len = True
+            resp_header_str += f"{hk}: {hv}\r\n"
+        if not has_len:
+            resp_header_str += f"Content-Length: {len(body)}\r\n"
+        resp_header_str += "Connection: close\r\n\r\n"
+        return resp_header_str.encode("iso-8859-1") + body
+
     def handle_client(self, client_sock: socket.socket) -> None:
         """Processes a single HTTP connection through the target callable application."""
         client_sock.settimeout(self.config.timeout)
@@ -101,57 +166,13 @@ class SyncWorker(BaseWorker):
             if not raw:
                 return
 
-            header_part, _, body_part = raw.partition(b"\r\n\r\n")
-            lines = header_part.decode("iso-8859-1").split("\r\n")
-            if not lines:
+            environ = self._parse_http_payload(client_sock, raw)
+            if not environ:
                 return
 
-            request_line = lines[0].split(" ")
-            if len(request_line) < 2:
-                return
-            method, full_path = request_line[0], request_line[1]
-            path, _, query = full_path.partition("?")
-
-            headers: Dict[str, str] = {}
-            for line in lines[1:]:
-                if ":" in line:
-                    k, _, v = line.partition(":")
-                    headers[k.strip().lower()] = v.strip()
-
-            environ = self._build_wsgi_environ(
-                client_sock, method, path, query, headers, body_part
-            )
-
-            status_holder: List[str] = ["200 OK"]
-            response_headers: List[tuple[str, str]] = []
-
-            def start_response(
-                status: str,
-                resp_headers: List[tuple[str, str]],
-                exc_info: Optional[Any] = None,
-            ) -> Callable[[bytes], None]:
-                status_holder[0] = status
-                response_headers.extend(resp_headers)
-                return lambda data: None
-
-            if self.app_target:
-                resp_iter = self.app_target(environ, start_response)
-                resp_body = b"".join(resp_iter)
-            else:
-                resp_body = b'{"status":"ok","message":"Supervisor Generic Worker"}'
-                response_headers.append(("Content-Type", "application/json"))
-
-            resp_header_str = f"HTTP/1.1 {status_holder[0]}\r\n"
-            has_len = False
-            for hk, hv in response_headers:
-                if hk.lower() == "content-length":
-                    has_len = True
-                resp_header_str += f"{hk}: {hv}\r\n"
-            if not has_len:
-                resp_header_str += f"Content-Length: {len(resp_body)}\r\n"
-            resp_header_str += "Connection: close\r\n\r\n"
-
-            client_sock.sendall(resp_header_str.encode("iso-8859-1") + resp_body)
+            status, headers, body = self._execute_wsgi_request(environ)
+            response_bytes = self._format_http_response(status, headers, body)
+            client_sock.sendall(response_bytes)
             self.requests_handled += 1
         except Exception:
             pass

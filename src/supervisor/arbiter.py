@@ -14,7 +14,7 @@ import signal
 import socket
 import sys
 import time
-from typing import Any, Callable, Dict, List, Optional, Set, Type, cast
+from typing import Any, Callable, Dict, List, Optional, Set, cast
 
 from .config import SupervisorConfig
 from .control import ControlServer
@@ -155,9 +155,7 @@ class Arbiter:
 
     def spawn_worker(self, worker_type: str = "web") -> Optional[int]:
         """Forks a new child worker (Web or Database)."""
-        worker_cls: Type[BaseWorker] = WORKER_CLASSES.get(
-            self.config.worker_class, SyncWorker
-        )
+        worker_cls = WORKER_CLASSES.get(self.config.worker_class, SyncWorker)
         worker_id = f"{worker_type}_{int(time.time() * 1000) % 100000}"
 
         try:
@@ -182,26 +180,26 @@ class Arbiter:
                     worker_id=worker_id,
                     config=self.config,
                     server_socket=self.server_socket,
-                    wsgi_app=app,
+                    app_target=app,
                 )
                 web_worker.run()
             sys.exit(0)
         else:
             # --- PARENT (ARBITER) PROCESS ---
             if worker_type == "db":
-                worker_inst = DatabaseWorker(worker_id=worker_id, config=self.config)
-                worker_inst.pid = pid
-                self.db_workers[pid] = worker_inst
+                db_inst = DatabaseWorker(worker_id=worker_id, config=self.config)
+                db_inst.pid = pid
+                self.db_workers[pid] = db_inst
                 self.watchdog.register_worker(pid, "database")
             else:
-                worker_inst = worker_cls(
+                web_inst = worker_cls(
                     worker_id=worker_id,
                     config=self.config,
                     server_socket=self.server_socket,
-                    wsgi_app=self.wsgi_app,
+                    app_target=self.wsgi_app,
                 )
-                worker_inst.pid = pid
-                self.web_workers[pid] = worker_inst
+                web_inst.pid = pid
+                self.web_workers[pid] = web_inst
                 self.watchdog.register_worker(pid, self.config.worker_class)
 
             return pid
@@ -285,58 +283,29 @@ class Arbiter:
             if self.running:
                 self.spawn_worker("web")
 
-    def shutdown(self) -> None:
-        """
-        Executes strictly ordered graceful shutdown sequence:
-        1. Stop accepting new connections (SIGQUIT to Web Workers).
-        2. Wait for web workers to drain.
-        3. Flush DB buffers and terminate Database Worker (SIGTERM).
-        4. Close listening sockets and clean up control server.
-        """
-        self.running = False
-
-        # Phase 1: Drain Web Workers
-        for pid in list(self.web_workers.keys()):
+    def _drain_and_kill(
+        self, workers: Dict[int, Any], initial_sig: int, timeout: float
+    ) -> None:
+        """Signals workers, waits for them to exit, and kills any remaining."""
+        for pid in list(workers.keys()):
             try:
-                os.kill(pid, signal.SIGQUIT)
+                os.kill(pid, initial_sig)
             except OSError:
                 pass
 
-        drain_start = time.time()
-        while self.web_workers and (
-            time.time() - drain_start < self.config.graceful_timeout
-        ):
+        start_t = time.time()
+        while workers and (time.time() - start_t < timeout):
             self.handle_sigchld()
             time.sleep(0.1)
 
-        # Force kill any stubborn web workers
-        for pid in list(self.web_workers.keys()):
+        for pid in list(workers.keys()):
             try:
                 os.kill(pid, signal.SIGKILL)
             except OSError:
                 pass
 
-        # Phase 2: Terminate Database Workers (Flush & Checkpoint)
-        for pid in list(self.db_workers.keys()):
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except OSError:
-                pass
-
-        db_drain_start = time.time()
-        while self.db_workers and (
-            time.time() - db_drain_start < self.config.db_sync_timeout
-        ):
-            self.handle_sigchld()
-            time.sleep(0.1)
-
-        for pid in list(self.db_workers.keys()):
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except OSError:
-                pass
-
-        # Phase 3: Cleanup Sockets & Files
+    def _cleanup_resources(self) -> None:
+        """Cleans up control server, server socket, and PID file."""
         if self.control_server:
             self.control_server.stop()
         if self.server_socket:
@@ -352,28 +321,70 @@ class Arbiter:
             except OSError:
                 pass
 
+    def shutdown(self) -> None:
+        """
+        Executes strictly ordered graceful shutdown sequence:
+        1. Stop accepting new connections (SIGQUIT to Web Workers).
+        2. Wait for web workers to drain.
+        3. Flush DB buffers and terminate Database Worker (SIGTERM).
+        4. Close listening sockets and clean up control server.
+        """
+        self.running = False
+        self._drain_and_kill(
+            self.web_workers, signal.SIGQUIT, self.config.graceful_timeout
+        )
+        self._drain_and_kill(
+            self.db_workers, signal.SIGTERM, self.config.db_sync_timeout
+        )
+        self._cleanup_resources()
+
+    def _write_pid_file(self) -> None:
+        """Writes PID file if configured."""
+        if not self.config.pid_file:
+            return
+        os.makedirs(
+            os.path.dirname(os.path.abspath(self.config.pid_file)), exist_ok=True
+        )
+        with open(self.config.pid_file, "w", encoding="utf-8") as f:
+            f.write(str(self.pid))
+
+    def _start_control_server(self) -> None:
+        """Starts IPC Control Server if configured."""
+        if not self.config.control_socket:
+            return
+        self.control_server = ControlServer(
+            socket_path=self.config.control_socket,
+            command_handler=self.handle_control_command,
+        )
+        self.control_server.start()
+
+    def _handle_queued_signals(self) -> None:
+        """Processes queued OS signals."""
+        while self._signal_queue:
+            sig = self._signal_queue.pop(0)
+            if sig in (signal.SIGTERM, signal.SIGINT):
+                self.running = False
+                break
+            if sig == signal.SIGHUP:
+                self.reload()
+            elif hasattr(signal, "SIGTTIN") and sig == signal.SIGTTIN:
+                self.config.workers += 1
+                self.adjust_worker_pool()
+            elif hasattr(signal, "SIGTTOU") and sig == signal.SIGTTOU:
+                if self.config.workers > 1:
+                    self.config.workers -= 1
+                    self.adjust_worker_pool()
+            elif sig == signal.SIGCHLD:
+                self.handle_sigchld()
+
     def start(self) -> None:
         """Main lifecycle entrypoint starting the Supervisor cluster."""
         self.running = True
         self.init_signals()
         self.init_server_socket()
         self.load_wsgi_app()
-
-        # Write PID file
-        if self.config.pid_file:
-            os.makedirs(
-                os.path.dirname(os.path.abspath(self.config.pid_file)), exist_ok=True
-            )
-            with open(self.config.pid_file, "w", encoding="utf-8") as f:
-                f.write(str(self.pid))
-
-        # Start IPC Control Server
-        if self.config.control_socket:
-            self.control_server = ControlServer(
-                socket_path=self.config.control_socket,
-                command_handler=self.handle_control_command,
-            )
-            self.control_server.start()
+        self._write_pid_file()
+        self._start_control_server()
 
         # Phase 1: Database Startup (Ordered Lifecycle)
         if self.config.manage_database:
@@ -386,27 +397,9 @@ class Arbiter:
         # Phase 3: Master Event Loop
         try:
             while self.running:
-                # Process signal queue
-                while self._signal_queue:
-                    sig = self._signal_queue.pop(0)
-                    if sig in (signal.SIGTERM, signal.SIGINT):
-                        self.running = False
-                        break
-                    elif sig == signal.SIGHUP:
-                        self.reload()
-                    elif hasattr(signal, "SIGTTIN") and sig == signal.SIGTTIN:
-                        self.config.workers += 1
-                        self.adjust_worker_pool()
-                    elif hasattr(signal, "SIGTTOU") and sig == signal.SIGTTOU:
-                        if self.config.workers > 1:
-                            self.config.workers -= 1
-                            self.adjust_worker_pool()
-                    elif sig == signal.SIGCHLD:
-                        self.handle_sigchld()
-
+                self._handle_queued_signals()
                 if not self.running:
                     break
-
                 self.handle_sigchld()
                 self.check_hung_workers()
                 time.sleep(0.5)

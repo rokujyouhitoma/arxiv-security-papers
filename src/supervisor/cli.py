@@ -137,31 +137,35 @@ def parse_bind(bind_str: str) -> tuple[str, int]:
     return "0.0.0.0", int(bind_str)
 
 
-def _build_start_config(
+def _build_default_config(
     args: argparse.Namespace,
-    config_obj: Optional[SupervisorConfig],
     workspace_dir: str,
     control_sock: str,
 ) -> SupervisorConfig:
-    """Builds and validates SupervisorConfig for start command."""
-    if config_obj is None:
-        host, port = parse_bind(args.bind) if args.bind else ("0.0.0.0", 8000)
-        cfg_dict = {
-            "bind_host": host,
-            "bind_port": port,
-            "worker_class": args.worker_class or "sync",
-            "threads": args.threads or 1,
-            "timeout": args.timeout or 30.0,
-            "app_uri": args.app or "web.server:app",
-            "manage_database": not getattr(args, "no_db", False),
-            "control_socket": control_sock,
-            "workspace_dir": workspace_dir,
-        }
-        if args.workers is not None:
-            cfg_dict["workers"] = args.workers
-        return SupervisorConfig.from_dict(cfg_dict)
+    """Builds default SupervisorConfig from args."""
+    host, port = parse_bind(args.bind) if args.bind else ("0.0.0.0", 8000)
+    cfg_dict = {
+        "bind_host": host,
+        "bind_port": port,
+        "worker_class": args.worker_class or "sync",
+        "threads": args.threads or 1,
+        "timeout": args.timeout or 30.0,
+        "app_uri": args.app or "web.server:app",
+        "manage_database": not getattr(args, "no_db", False),
+        "control_socket": control_sock,
+        "workspace_dir": workspace_dir,
+    }
+    if args.workers is not None:
+        cfg_dict["workers"] = args.workers
+    return SupervisorConfig.from_dict(cfg_dict)
 
-    config = config_obj
+
+def _apply_config_overrides(
+    config: SupervisorConfig,
+    args: argparse.Namespace,
+    control_sock: str,
+) -> SupervisorConfig:
+    """Applies CLI argument overrides to existing SupervisorConfig."""
     if getattr(args, "bind", None) is not None:
         host, port = parse_bind(args.bind)
         config.bind_host = host
@@ -182,6 +186,18 @@ def _build_start_config(
         config.control_socket = control_sock
     config.validate()
     return config
+
+
+def _build_start_config(
+    args: argparse.Namespace,
+    config_obj: Optional[SupervisorConfig],
+    workspace_dir: str,
+    control_sock: str,
+) -> SupervisorConfig:
+    """Builds and validates SupervisorConfig for start command."""
+    if config_obj is None:
+        return _build_default_config(args, workspace_dir, control_sock)
+    return _apply_config_overrides(config_obj, args, control_sock)
 
 
 def _handle_start(
@@ -206,6 +222,47 @@ def _handle_start(
         return 0
 
 
+def _handle_status_cmd(client: ControlClient) -> int:
+    """Handles supervisor status command."""
+    resp = client.get_status()
+    print(json.dumps(resp, indent=2, ensure_ascii=False))
+    return 0 if resp.get("status") == "ok" else 1
+
+
+def _handle_top_cmd(args: argparse.Namespace, client: ControlClient) -> int:
+    """Handles supervisor top monitoring command."""
+    return run_top(
+        client=client,
+        interval=getattr(args, "interval", 1.0),
+        once=getattr(args, "once", False),
+        no_color=getattr(args, "no_color", False),
+    )
+
+
+def _handle_simple_cmd(
+    cmd: str, args: argparse.Namespace, client: ControlClient
+) -> int:
+    """Handles scale, reload, stop, ping control commands."""
+    if cmd == "scale":
+        resp = client.scale_workers(args.workers)
+        print(f"[+] Scaled worker pool: {resp}")
+        return 0 if resp.get("status") == "ok" else 1
+    if cmd == "reload":
+        resp = client.reload()
+        print(f"[+] Reload command: {resp}")
+        return 0 if resp.get("status") == "ok" else 1
+    if cmd == "stop":
+        resp = client.stop()
+        print(f"[+] Stop command: {resp}")
+        return 0 if resp.get("status") == "ok" else 1
+    if cmd == "ping":
+        ok = client.ping()
+        print("PONG" if ok else "FAILED")
+        return 0 if ok else 1
+    print(f"[ERROR] Unknown command: {cmd}")
+    return 1
+
+
 def _handle_control(
     cmd: str,
     args: argparse.Namespace,
@@ -213,40 +270,10 @@ def _handle_control(
 ) -> int:
     """Dispatches IPC control commands."""
     if cmd == "status":
-        resp = client.get_status()
-        print(json.dumps(resp, indent=2, ensure_ascii=False))
-        return 0 if resp.get("status") == "ok" else 1
-
+        return _handle_status_cmd(client)
     if cmd == "top":
-        return run_top(
-            client=client,
-            interval=getattr(args, "interval", 1.0),
-            once=getattr(args, "once", False),
-            no_color=getattr(args, "no_color", False),
-        )
-
-    if cmd == "scale":
-        resp = client.scale_workers(args.workers)
-        print(f"[+] Scaled worker pool: {resp}")
-        return 0 if resp.get("status") == "ok" else 1
-
-    if cmd == "reload":
-        resp = client.reload()
-        print(f"[+] Reload command: {resp}")
-        return 0 if resp.get("status") == "ok" else 1
-
-    if cmd == "stop":
-        resp = client.stop()
-        print(f"[+] Stop command: {resp}")
-        return 0 if resp.get("status") == "ok" else 1
-
-    if cmd == "ping":
-        ok = client.ping()
-        print("PONG" if ok else "FAILED")
-        return 0 if ok else 1
-
-    print(f"[ERROR] Unknown command: {cmd}")
-    return 1
+        return _handle_top_cmd(args, client)
+    return _handle_simple_cmd(cmd, args, client)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
