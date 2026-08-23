@@ -65,17 +65,24 @@ class ControlServer:
     def _handle_client(self, client_sock: socket.socket) -> None:
         client_sock.settimeout(3.0)
         try:
-            raw_data = client_sock.recv(65536)
+            raw_data = b""
+            while True:
+                chunk = client_sock.recv(4096)
+                if not chunk:
+                    break
+                raw_data += chunk
+                if b"\n" in raw_data:
+                    break
             if not raw_data:
                 return
-            req = json.loads(raw_data.decode("utf-8"))
+            req = json.loads(raw_data.decode("utf-8").strip())
             resp = self.command_handler(req)
-            resp_bytes = json.dumps(resp, ensure_ascii=False).encode("utf-8")
+            resp_bytes = (json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8")
             client_sock.sendall(resp_bytes)
         except Exception as e:
             err_resp = {"status": "error", "error": str(e)}
             try:
-                client_sock.sendall(json.dumps(err_resp).encode("utf-8"))
+                client_sock.sendall((json.dumps(err_resp) + "\n").encode("utf-8"))
             except OSError:
                 pass
         finally:
@@ -83,6 +90,16 @@ class ControlServer:
                 client_sock.close()
             except OSError:
                 pass
+
+    def close_in_child(self) -> None:
+        """Closes the server socket in a forked child without unlinking the socket file."""
+        self._running = False
+        if self._server_sock:
+            try:
+                self._server_sock.close()
+            except OSError:
+                pass
+            self._server_sock = None
 
     def stop(self) -> None:
         """Closes server socket and unlinks socket file."""
@@ -123,16 +140,20 @@ class ControlClient:
         sock.settimeout(self.timeout)
         try:
             sock.connect(self.socket_path)
-            payload = json.dumps(cmd_dict).encode("utf-8")
+            payload = (json.dumps(cmd_dict) + "\n").encode("utf-8")
             sock.sendall(payload)
 
-            chunks = []
+            raw_data = b""
             while True:
-                chunk = sock.recv(65536)
+                chunk = sock.recv(4096)
                 if not chunk:
                     break
-                chunks.append(chunk)
-            raw_resp = b"".join(chunks).decode("utf-8")
+                raw_data += chunk
+                if b"\n" in raw_data:
+                    break
+            raw_resp = raw_data.decode("utf-8").strip()
+            if not raw_resp:
+                return {"status": "error", "error": "Empty response from Arbiter"}
             res: Dict[str, Any] = json.loads(raw_resp)
             return res
         except Exception as e:

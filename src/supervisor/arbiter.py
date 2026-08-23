@@ -207,7 +207,7 @@ class Arbiter:
     def init_child_process(self) -> None:
         """Resets signal handlers and closes administrative control socket in child."""
         if self.control_server:
-            self.control_server.stop()
+            self.control_server.close_in_child()
         # Reset signal handlers in child
         signal.signal(signal.SIGCHLD, signal.SIG_DFL)
 
