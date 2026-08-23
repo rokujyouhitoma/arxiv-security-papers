@@ -15,6 +15,7 @@ from typing import List, Optional
 from .arbiter import Arbiter
 from .config import SupervisorConfig
 from .control import ControlClient
+from .top import run_top
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -83,6 +84,29 @@ def build_parser() -> argparse.ArgumentParser:
         "status", help="Query live status of Arbiter and Workers via IPC"
     )
 
+    # Command: top
+    top_parser = subparsers.add_parser(
+        "top", help="Live top-like interactive process & worker monitoring dashboard"
+    )
+    top_parser.add_argument(
+        "--interval",
+        "-i",
+        type=float,
+        default=1.0,
+        help="Refresh interval in seconds (default: 1.0)",
+    )
+    top_parser.add_argument(
+        "--once",
+        "-1",
+        action="store_true",
+        help="Print dashboard once and exit",
+    )
+    top_parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable ANSI color output",
+    )
+
     # Command: scale
     scale_parser = subparsers.add_parser(
         "scale", help="Dynamically resize web worker pool"
@@ -113,6 +137,118 @@ def parse_bind(bind_str: str) -> tuple[str, int]:
     return "0.0.0.0", int(bind_str)
 
 
+def _build_start_config(
+    args: argparse.Namespace,
+    config_obj: Optional[SupervisorConfig],
+    workspace_dir: str,
+    control_sock: str,
+) -> SupervisorConfig:
+    """Builds and validates SupervisorConfig for start command."""
+    if config_obj is None:
+        host, port = parse_bind(args.bind) if args.bind else ("0.0.0.0", 8000)
+        cfg_dict = {
+            "bind_host": host,
+            "bind_port": port,
+            "worker_class": args.worker_class or "sync",
+            "threads": args.threads or 1,
+            "timeout": args.timeout or 30.0,
+            "app_uri": args.app or "web.server:app",
+            "manage_database": not getattr(args, "no_db", False),
+            "control_socket": control_sock,
+            "workspace_dir": workspace_dir,
+        }
+        if args.workers is not None:
+            cfg_dict["workers"] = args.workers
+        return SupervisorConfig.from_dict(cfg_dict)
+
+    config = config_obj
+    if getattr(args, "bind", None) is not None:
+        host, port = parse_bind(args.bind)
+        config.bind_host = host
+        config.bind_port = port
+    if getattr(args, "workers", None) is not None:
+        config.workers = args.workers
+    if getattr(args, "worker_class", None) is not None:
+        config.worker_class = args.worker_class
+    if getattr(args, "threads", None) is not None:
+        config.threads = args.threads
+    if getattr(args, "timeout", None) is not None:
+        config.timeout = args.timeout
+    if getattr(args, "app", None) is not None:
+        config.app_uri = args.app
+    if getattr(args, "no_db", False):
+        config.manage_database = False
+    if control_sock:
+        config.control_socket = control_sock
+    config.validate()
+    return config
+
+
+def _handle_start(
+    args: argparse.Namespace,
+    config_obj: Optional[SupervisorConfig],
+    workspace_dir: str,
+    control_sock: str,
+) -> int:
+    """Handles supervisor arbiter start command."""
+    config = _build_start_config(args, config_obj, workspace_dir, control_sock)
+    print(
+        f"🚀 [Supervisor Arbiter] Booting {config.workers} '{config.worker_class}' workers "
+        f"on {config.bind_host}:{config.bind_port} (App: {config.app_uri})..."
+    )
+    arbiter = Arbiter(config)
+    try:
+        arbiter.start()
+        return 0
+    except KeyboardInterrupt:
+        print("\n[*] Interrupted by user. Shutting down...")
+        arbiter.shutdown()
+        return 0
+
+
+def _handle_control(
+    cmd: str,
+    args: argparse.Namespace,
+    client: ControlClient,
+) -> int:
+    """Dispatches IPC control commands."""
+    if cmd == "status":
+        resp = client.get_status()
+        print(json.dumps(resp, indent=2, ensure_ascii=False))
+        return 0 if resp.get("status") == "ok" else 1
+
+    if cmd == "top":
+        return run_top(
+            client=client,
+            interval=getattr(args, "interval", 1.0),
+            once=getattr(args, "once", False),
+            no_color=getattr(args, "no_color", False),
+        )
+
+    if cmd == "scale":
+        resp = client.scale_workers(args.workers)
+        print(f"[+] Scaled worker pool: {resp}")
+        return 0 if resp.get("status") == "ok" else 1
+
+    if cmd == "reload":
+        resp = client.reload()
+        print(f"[+] Reload command: {resp}")
+        return 0 if resp.get("status") == "ok" else 1
+
+    if cmd == "stop":
+        resp = client.stop()
+        print(f"[+] Stop command: {resp}")
+        return 0 if resp.get("status") == "ok" else 1
+
+    if cmd == "ping":
+        ok = client.ping()
+        print("PONG" if ok else "FAILED")
+        return 0 if ok else 1
+
+    print(f"[ERROR] Unknown command: {cmd}")
+    return 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint dispatching commands."""
     parser = build_parser()
@@ -137,90 +273,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         else os.path.join(workspace_dir, "outputs", "supervisor", "control.sock")
     )
 
-    # Default command is start
     cmd = args.command or "start"
-
     if cmd == "start":
-        if config_obj is None:
-            host, port = parse_bind(args.bind) if args.bind else ("0.0.0.0", 8000)
-            cfg_dict = {
-                "bind_host": host,
-                "bind_port": port,
-                "worker_class": args.worker_class or "sync",
-                "threads": args.threads or 1,
-                "timeout": args.timeout or 30.0,
-                "app_uri": args.app or "web.server:app",
-                "manage_database": not getattr(args, "no_db", False),
-                "control_socket": control_sock,
-                "workspace_dir": workspace_dir,
-            }
-            if args.workers is not None:
-                cfg_dict["workers"] = args.workers
-            config = SupervisorConfig.from_dict(cfg_dict)
-        else:
-            config = config_obj
-            if getattr(args, "bind", None) is not None:
-                host, port = parse_bind(args.bind)
-                config.bind_host = host
-                config.bind_port = port
-            if getattr(args, "workers", None) is not None:
-                config.workers = args.workers
-            if getattr(args, "worker_class", None) is not None:
-                config.worker_class = args.worker_class
-            if getattr(args, "threads", None) is not None:
-                config.threads = args.threads
-            if getattr(args, "timeout", None) is not None:
-                config.timeout = args.timeout
-            if getattr(args, "app", None) is not None:
-                config.app_uri = args.app
-            if getattr(args, "no_db", False):
-                config.manage_database = False
-            if control_sock:
-                config.control_socket = control_sock
-            config.validate()
-
-        print(
-            f"🚀 [Supervisor Arbiter] Booting {config.workers} '{config.worker_class}' workers "
-            f"on {config.bind_host}:{config.bind_port} (App: {config.app_uri})..."
-        )
-        arbiter = Arbiter(config)
-        try:
-            arbiter.start()
-            return 0
-        except KeyboardInterrupt:
-            print("\n[*] Interrupted by user. Shutting down...")
-            arbiter.shutdown()
-            return 0
+        return _handle_start(args, config_obj, workspace_dir, control_sock)
 
     client = ControlClient(control_sock)
-
-    if cmd == "status":
-        resp = client.get_status()
-        print(json.dumps(resp, indent=2, ensure_ascii=False))
-        return 0 if resp.get("status") == "ok" else 1
-
-    if cmd == "scale":
-        resp = client.scale_workers(args.workers)
-        print(f"[+] Scaled worker pool: {resp}")
-        return 0 if resp.get("status") == "ok" else 1
-
-    if cmd == "reload":
-        resp = client.reload()
-        print(f"[+] Reload command: {resp}")
-        return 0 if resp.get("status") == "ok" else 1
-
-    if cmd == "stop":
-        resp = client.stop()
-        print(f"[+] Stop command: {resp}")
-        return 0 if resp.get("status") == "ok" else 1
-
-    if cmd == "ping":
-        ok = client.ping()
-        print("PONG" if ok else "FAILED")
-        return 0 if ok else 1
-
-    print(f"[ERROR] Unknown command: {cmd}")
-    return 1
+    return _handle_control(cmd, args, client)
 
 
 if __name__ == "__main__":

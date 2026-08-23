@@ -14,7 +14,7 @@ import signal
 import socket
 import sys
 import time
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Type, cast
 
 from .config import SupervisorConfig
 from .control import ControlServer
@@ -60,8 +60,8 @@ class Arbiter:
         try:
             mod = importlib.import_module(module_name)
             app_obj = getattr(mod, obj_name)
-            self.wsgi_app = app_obj
-            return app_obj
+            self.wsgi_app = cast(Callable[..., Any], app_obj)
+            return self.wsgi_app
         except Exception:
             # Fallback to minimal WSGI app if import fails
             def fallback_app(
@@ -155,7 +155,9 @@ class Arbiter:
 
     def spawn_worker(self, worker_type: str = "web") -> Optional[int]:
         """Forks a new child worker (Web or Database)."""
-        worker_cls = WORKER_CLASSES.get(self.config.worker_class, SyncWorker)
+        worker_cls: Type[BaseWorker] = WORKER_CLASSES.get(
+            self.config.worker_class, SyncWorker
+        )
         worker_id = f"{worker_type}_{int(time.time() * 1000) % 100000}"
 
         try:

@@ -314,3 +314,148 @@ Arbiter は Unix Domain Socket (`outputs/supervisor/control.sock`) 上で以下�
 ### 5. `stop` (グレースフル停止)
 - Request: `{"cmd": "stop"}`
 - Response: `{"status": "ok", "message": "Shutdown sequence initiated"}`
+
+---
+
+## 9. リアルタイム・プロセスモニタリングダッシュボード (`top`) 仕様
+
+Arbiter および各 Worker のライフサイクル・メモリ使用状況・ヘルス状態を端末上で視覚的に監視するため、対話型 ANSI ターミナルモニタリングサブコマンド `top` を提供します。
+
+### 9.1 コマンド体系 & Makefile 統合
+```bash
+# リアルタイム更新モード (デフォルト: 1.0秒間隔リフレッシュ)
+PYTHONPATH=src .venv/bin/python -m supervisor.cli top
+
+# ワンショット出力モード (CI/スクリプト用)
+PYTHONPATH=src .venv/bin/python -m supervisor.cli top --once
+
+# 更新間隔指定 (例: 0.5秒)
+PYTHONPATH=src .venv/bin/python -m supervisor.cli top --interval 0.5
+
+# Makefile ターゲット
+make top_supervisor
+make top_supervisor ARGS="--once"
+```
+
+### 9.2 ダッシュボード描画レイアウト
+Linux の `/proc/<pid>/status` (VmRSS) から物理メモリ使用量を動的取得し、IPC `status` テレメトリと統合した ANSI 構造化テーブルを出力します。
+
+```text
+⚡ [Supervisor Process Top Monitor]  2026-08-23 14:10:00
+──────────────────────────────────────────────────────────────────────────────
+  Arbiter PID: 10922     Uptime: 01m 45s        Memory: 42.5 MB
+  Binding:     0.0.0.0:8000       Class:  sync       Workers: Web: 9/9, DB: 1
+──────────────────────────────────────────────────────────────────────────────
+  PID            TYPE               STATUS           HEALTH           REQ      IDLE       RSS MEM
+  ──────────────────────────────────────────────────────────────────────────
+  10989          database           ALIVE            HEALTHY          0        0.3s       38.2 MB
+  10990          sync               ALIVE            HEALTHY          142      0.1s       41.0 MB
+  10991          sync               ALIVE            HEALTHY          138      0.2s       40.8 MB
+  10992          sync               ALIVE            HEALTHY          140      0.1s       40.9 MB
+  10993          sync               ALIVE            HEALTHY          135      0.2s       40.7 MB
+──────────────────────────────────────────────────────────────────────────────
+  Press Ctrl+C to exit top monitoring.
+```
+
+### 9.3 設計上の特徴と安全性
+1. **ゼロ外部依存 (Zero Dependencies)**:
+   - `psutil` や `curses` などの外部 C 拡張ライブラリを一切使わず、標準ライブラリ（`os`, `sys`, `time`, `json`）および Linux `/proc` ファイルシステムのみで構成。
+2. **非破壊・低負荷ポーリング**:
+   - Unix Domain Socket 経由でメモリ上の最新スナップショットを取得するため、稼働中ワーカーの HTTP/DB 処理性能に影響を与えません。
+3. **安全なシグナル離脱**:
+   - `KeyboardInterrupt` (Ctrl+C) を安全にトラップし、端末エコーや画面を破損させることなく即座にシェルへ復帰します。
+
+---
+
+## 10. CLI 運用コマンド・リファレンス (CLI Operations & Command Reference)
+
+本システムは、Makefile および Python CLI (`src/supervisor/cli.py`) を通じて、起動・状態照会・リアルタイム監視・動的スケーリング・ローリング再起動・安全停止の全ライフサイクル操作を完全網羅しています。
+
+### 10.1 起動コマンド (Cluster Startup)
+
+#### 1. 標準起動 (フォアグラウンド)
+```bash
+# Makefile 経由での起動 (デフォルト設定: CPUコア数に応じたワーカー数 + DBワーカー)
+make run_supervisor
+
+# Python CLI 直接起動
+PYTHONPATH=src .venv/bin/python -m supervisor.cli start
+```
+
+#### 2. カスタムパラメータ指定起動
+```bash
+# バインドポート・ワーカー数を指定して起動
+PYTHONPATH=src .venv/bin/python -m supervisor.cli start -b 0.0.0.0:8000 -w 4
+
+# マルチスレッドワーカー (gthread) で起動 (1プロセスあたり4スレッド)
+PYTHONPATH=src .venv/bin/python -m supervisor.cli start -b 0.0.0.0:8000 -w 2 -k gthread -t 4
+
+# 非同期ワーカー (asyncio) で起動
+PYTHONPATH=src .venv/bin/python -m supervisor.cli start -b 0.0.0.0:8000 -w 4 -k async
+
+# 設定ファイル (JSON / TOML / Python) を指定して起動
+PYTHONPATH=src .venv/bin/python -m supervisor.cli --config config/supervisor.json start
+```
+
+#### 3. 単一ウィンドウでのバックグラウンド起動＆初期化待機ワンライナー
+起動完了（IPC コントロールソケットの生成）を自動待機し、確実にステータスを取得します。
+
+```bash
+# Makefile 連携ワンライナー
+make run_supervisor & until [ -S outputs/supervisor/control.sock ]; do sleep 0.5; done && make status_supervisor
+
+# Python CLI 直接ワンライナー
+PYTHONPATH=src .venv/bin/python -m supervisor.cli start & until [ -S outputs/supervisor/control.sock ]; do sleep 0.5; done && PYTHONPATH=src .venv/bin/python -m supervisor.cli status
+```
+
+---
+
+### 10.2 稼働状態確認 & モニタリング (Status & Monitoring)
+
+```bash
+# 1. JSON 形式でのクラスター状態照会 (Uptime, 全ワーカーPID, ヘルス状態)
+make status_supervisor
+# または
+PYTHONPATH=src .venv/bin/python -m supervisor.cli status
+
+# 2. リアルタイム TUI / ANSI ダッシュボード (1秒間隔更新, Ctrl+C で離脱)
+make top_supervisor
+# または
+PYTHONPATH=src .venv/bin/python -m supervisor.cli top
+
+# 3. Top ダッシュボードのワンショット出力 (スクリプト / CI 確認用)
+make top_supervisor ARGS="--once"
+# または
+PYTHONPATH=src .venv/bin/python -m supervisor.cli top --once
+
+# 4. Arbiter IPC 疎通確認 (PONG 判定)
+PYTHONPATH=src .venv/bin/python -m supervisor.cli ping
+```
+
+---
+
+### 10.3 動的制御・スケーリング・安全停止 (Dynamic Lifecycle Operations)
+
+同一ターミナルや別セッションから、IPC Unix Domain Socket (`outputs/supervisor/control.sock`) 経由でクラスターをノンブロッキング制御できます。
+
+```bash
+# 1. ワーカー数の動的スケーリング (例: 4プロセスにリサイズ)
+PYTHONPATH=src .venv/bin/python -m supervisor.cli scale -w 4
+
+# 2. ゼロダウンタイム・ローリングリロード (SIGHUP: 新ワーカー先行起動 -> 旧ワーカー安全ドレイン)
+PYTHONPATH=src .venv/bin/python -m supervisor.cli reload
+
+# 3. クラスターのグレースフルシャットダウン (Webワーカー安全ドレイン -> DBバッファフラッシュ -> 終了)
+PYTHONPATH=src .venv/bin/python -m supervisor.cli stop
+```
+
+---
+
+### 10.4 Makefile ターゲット一覧
+
+| ターゲット | 実行内容 | 備考 |
+| :--- | :--- | :--- |
+| `make run_supervisor` | `supervisor.cli start` | Arbiter および Worker プールを起動 |
+| `make status_supervisor` | `supervisor.cli status` | IPC 経由で稼働状態 JSON を取得・表示 |
+| `make top_supervisor` | `supervisor.cli top` | リアルタイム ANSI プロセス監視ダッシュボードを表示 |
+| `make top_supervisor ARGS="--once"` | `supervisor.cli top --once` | プロセス監視ダッシュボードを1回出力して終了 |

@@ -13,6 +13,7 @@ def test_build_parser_structure() -> None:
     choices = subparsers_action.choices
     assert "start" in choices
     assert "status" in choices
+    assert "top" in choices
     assert "scale" in choices
     assert "reload" in choices
     assert "stop" in choices

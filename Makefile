@@ -136,6 +136,10 @@ run_supervisor: activate ## Launch Gunicorn-style Pre-Fork Process Supervisor & 
 status_supervisor: activate ## Check live Process Supervisor status via IPC Unix domain socket
 	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli status
 
+.PHONY: top_supervisor
+top_supervisor: activate ## Live process & worker top monitoring dashboard
+	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli top $(ARGS)
+
 .PHONY: orchestrate
 orchestrate: activate ## Run Universal Intelligence Orchestrator 6-phase autonomous cycle
 	PYTHONPATH=src ${VENV_PYTHON} src/orchestrator/cli.py cycle $(ARGS)

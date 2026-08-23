@@ -40,6 +40,10 @@ class AsyncWorker(BaseWorker):
         )
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
+    @property
+    def wsgi_app(self) -> Optional[Callable[..., Any]]:
+        return self.app_target
+
     async def _handle_stream(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
