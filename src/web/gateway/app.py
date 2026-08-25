@@ -3,11 +3,14 @@
 PEP 3333 WSGI Application and HTTP Server for arXiv Security Papers API Gateway.
 """
 
+from __future__ import annotations
+
 import urllib.parse
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from wsgiref.simple_server import make_server
 
-from search.vector_engine import VectorEngine
+if TYPE_CHECKING:
+    from search.vector_engine import VectorEngine
 
 from .handlers import GatewayHandlers
 from .logger import WORKSPACE_DIR

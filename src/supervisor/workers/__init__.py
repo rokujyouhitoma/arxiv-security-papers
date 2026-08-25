@@ -9,6 +9,7 @@ from typing import Dict, Type, Union
 from .async_worker import AsyncWorker
 from .base import BaseWorker
 from .gthread_worker import GthreadWorker
+from .search_worker import SearchWorker
 from .service_worker import DatabaseWorker, ManagedServiceWorker
 from .sync_worker import SyncWorker
 
@@ -28,5 +29,6 @@ __all__ = [
     "AsyncWorker",
     "ManagedServiceWorker",
     "DatabaseWorker",
+    "SearchWorker",
     "WORKER_CLASSES",
 ]

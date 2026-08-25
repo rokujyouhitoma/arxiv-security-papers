@@ -83,6 +83,10 @@ class SupervisorConfig:
     # Default DB workers: 3 (minimum distributed database quorum/consensus configuration)
     db_worker_count: int = 3
     db_sync_timeout: float = 10.0
+    manage_search: bool = True
+    # Default Search workers: 1 (dedicated single search engine process)
+    search_worker_count: int = 1
+    search_socket: Optional[str] = None
 
     def __post_init__(self) -> None:
         self._ensure_default_pools_and_services()
@@ -91,7 +95,11 @@ class SupervisorConfig:
     def _ensure_default_pools_and_services(self) -> None:
         """Constructs default pools and services from top-level shorthand if none provided."""
         if not self.pools:
-            deps = ["database"] if self.manage_database else []
+            deps = []
+            if self.manage_database:
+                deps.append("database")
+            if self.manage_search:
+                deps.append("search")
             self.pools.append(
                 PoolConfig(
                     name="web",
@@ -108,15 +116,25 @@ class SupervisorConfig:
                 )
             )
 
-        if not self.services and self.manage_database:
-            self.services.append(
-                ServiceConfig(
-                    name="database",
-                    workers=self.db_worker_count,
-                    sync_interval=2.0,
-                    timeout=self.timeout,
+        if not self.services:
+            if self.manage_database:
+                self.services.append(
+                    ServiceConfig(
+                        name="database",
+                        workers=self.db_worker_count,
+                        sync_interval=2.0,
+                        timeout=self.timeout,
+                    )
                 )
-            )
+            if self.manage_search:
+                self.services.append(
+                    ServiceConfig(
+                        name="search",
+                        workers=self.search_worker_count,
+                        sync_interval=5.0,
+                        timeout=self.timeout,
+                    )
+                )
 
     def _validate_pool(self, pool: PoolConfig) -> None:
         """Validates individual pool configuration."""
@@ -142,6 +160,10 @@ class SupervisorConfig:
         if not self.control_socket:
             self.control_socket = os.path.join(
                 self.workspace_dir, "outputs", "supervisor", "control.sock"
+            )
+        if not self.search_socket:
+            self.search_socket = os.path.join(
+                self.workspace_dir, "outputs", "supervisor", "search.sock"
             )
 
         if self.threads < 1:

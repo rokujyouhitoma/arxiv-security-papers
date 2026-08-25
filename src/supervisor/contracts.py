@@ -16,6 +16,7 @@ class WorkerLabel(str, enum.Enum):
 
     WEB = "web"
     DATABASE = "database"
+    SEARCH = "search"
 
 
 class ServiceRole(enum.Enum):

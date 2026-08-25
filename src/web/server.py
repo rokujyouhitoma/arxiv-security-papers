@@ -15,9 +15,10 @@ import sys
 if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from typing import Any
+
 from web.gateway import (
     CORS_HEADERS,
-    VECTOR_ENGINE,
     WORKSPACE_DIR,
     WSGIApplication,
     app,
@@ -32,11 +33,19 @@ SITE_DIR = os.path.join(WORKSPACE_DIR, "site")
 
 run_server = run_web_server
 
+
+def __getattr__(name: str) -> Any:
+    if name == "VECTOR_ENGINE":
+        from web.gateway import application
+
+        return application.handlers.vector_engine
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
 __all__ = [
     "WSGIApplication",
     "application",
     "app",
-    "VECTOR_ENGINE",
     "run_web_server",
     "run_server",
     "get_workspace_dir",

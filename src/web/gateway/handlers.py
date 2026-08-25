@@ -5,10 +5,12 @@ Provides REST endpoints (/api/search, /api/paper, /api/trends, /api/stats, /api/
 static asset streaming, and presentation preview routing.
 """
 
+from __future__ import annotations
+
 import json
 import mimetypes
 import os
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from mcp.papers_server import (
     PROMPTS_MANIFEST,
@@ -20,8 +22,11 @@ from mcp.papers_server import (
     handle_get_prompt,
     handle_read_resource,
 )
-from search.vector_engine import VectorEngine
+from search.client import SearchClient
 from security.validation import is_safe_workspace_path
+
+if TYPE_CHECKING:
+    from search.vector_engine import VectorEngine
 
 from ..presentation.template import render_okf_preview_html
 from .logger import log_query
@@ -36,11 +41,22 @@ class GatewayHandlers:
     """
 
     def __init__(
-        self, workspace_dir: str, vector_engine: Optional[VectorEngine] = None
+        self,
+        workspace_dir: str,
+        vector_engine: Optional[VectorEngine] = None,
+        search_client: Optional[SearchClient] = None,
     ) -> None:
         self.workspace_dir = workspace_dir
         self.site_dir = os.path.join(workspace_dir, "site")
         self._vector_engine = vector_engine
+        self._search_client = search_client
+
+    @property
+    def search_client(self) -> SearchClient:
+        """Retrieves or creates SearchClient instance for IPC search requests."""
+        if self._search_client is None:
+            self._search_client = SearchClient(workspace_dir=self.workspace_dir)
+        return self._search_client
 
     @property
     def vector_engine(self) -> VectorEngine:
@@ -49,20 +65,20 @@ class GatewayHandlers:
         Strictly operates in serving (read-only) mode using pre-built indices.
         Never triggers index building during server startup or request handling.
         """
-        if self._vector_engine is None:
-            self._vector_engine = VectorEngine(workspace_dir=self.workspace_dir)
-        elif not self._vector_engine.documents:
-            self._vector_engine.load_index()
-        return self._vector_engine
+        if self._vector_engine is not None:
+            return self._vector_engine
+        return self.search_client.fallback_engine
 
     def _get_paper(self, clean_id: str) -> Optional[Dict[str, Any]]:
         """Finds paper metadata by clean_id."""
-        if clean_id in self.vector_engine.documents_by_id:
-            return self.vector_engine.documents_by_id[clean_id]
-        for doc in self.vector_engine.documents:
-            if doc.get("id") == clean_id:
-                return doc
-        return None
+        if self._vector_engine is not None:
+            if clean_id in self._vector_engine.documents_by_id:
+                return self._vector_engine.documents_by_id[clean_id]
+            for doc in self._vector_engine.documents:
+                if doc.get("id") == clean_id:
+                    return doc
+            return None
+        return self.search_client.get_paper(clean_id)
 
     def handle_search(
         self,
@@ -70,7 +86,7 @@ class GatewayHandlers:
         query_params: Dict[str, List[str]],
         remote_addr: str = "-",
     ) -> List[bytes]:
-        """Handles /api/search with VectorEngine."""
+        """Handles /api/search with SearchClient or VectorEngine."""
         query = query_params.get("q", [""])[0].strip()
         category = query_params.get("category", [None])[0]
         mode = query_params.get("mode", ["hybrid"])[0]
@@ -85,18 +101,36 @@ class GatewayHandlers:
                 {"status": "success", "query": "", "total": 0, "results": []},
             )
 
-        if mode == "vector":
-            results = self.vector_engine.search_vector_ann(query=query, top_k=top_k)
-            profile: Dict[str, Any] = {"mode": "vector", "total_ms": 1.0}
-        elif mode == "rrf":
-            results = self.vector_engine.search_rrf_hybrid(
-                query=query, top_k=top_k, category=category
-            )
-            profile = {"mode": "rrf", "total_ms": 1.0}
+        if self._vector_engine is not None:
+            if mode == "vector":
+                results = self._vector_engine.search_vector_ann(
+                    query=query, top_k=top_k
+                )
+                profile: Dict[str, Any] = {"mode": "vector", "total_ms": 1.0}
+            elif mode == "rrf":
+                results = self._vector_engine.search_rrf_hybrid(
+                    query=query, top_k=top_k, category=category
+                )
+                profile = {"mode": "rrf", "total_ms": 1.0}
+            else:
+                results, profile = self._vector_engine.search_with_profile(
+                    query=query, top_k=top_k, category=category
+                )
+            resp_dict: Dict[str, Any] = {
+                "status": "success",
+                "query": query,
+                "category": category,
+                "mode": mode,
+                "total": len(results),
+                "profile": profile,
+                "results": results,
+            }
         else:
-            results, profile = self.vector_engine.search_with_profile(
-                query=query, top_k=top_k, category=category
+            resp_dict = self.search_client.search(
+                query=query, top_k=top_k, category=category, mode=mode
             )
+            profile = resp_dict.get("profile", {})
+            results = resp_dict.get("results", [])
 
         log_query(
             query=query,
@@ -107,44 +141,45 @@ class GatewayHandlers:
             remote_addr=remote_addr,
         )
 
-        return response_json(
-            start_response,
-            {
-                "status": "success",
-                "query": query,
-                "category": category,
-                "mode": mode,
-                "total": len(results),
-                "profile": profile,
-                "results": results,
-            },
-        )
+        return response_json(start_response, resp_dict)
 
     def handle_paper_related(
         self, start_response: Callable[..., Any], clean_id: str
     ) -> List[bytes]:
         """Handles /api/paper/<clean_id>/related graph exploration."""
-        paper = self._get_paper(clean_id)
-        if not paper:
-            return response_error(
-                start_response, f"Paper '{clean_id}' not found", status="404 Not Found"
+        if self._vector_engine is not None:
+            paper = self._get_paper(clean_id)
+            if not paper:
+                return response_error(
+                    start_response,
+                    f"Paper '{clean_id}' not found",
+                    status="404 Not Found",
+                )
+
+            related = self._vector_engine.proximity_graph.get_neighbors(clean_id)
+            mermaid = f"graph TD;\n  root[{clean_id}]"
+            for r in related:
+                r_id = r.get("id", "paper")
+                mermaid += f"\n  root --> node_{r_id}[{r_id}]"
+
+            return response_json(
+                start_response,
+                {
+                    "status": "success",
+                    "paper_id": clean_id,
+                    "related_papers": related,
+                    "mermaid_graph": mermaid,
+                },
             )
 
-        related = self.vector_engine.proximity_graph.get_neighbors(clean_id)
-        mermaid = f"graph TD;\n  root[{clean_id}]"
-        for r in related:
-            r_id = r.get("id", "paper")
-            mermaid += f"\n  root --> node_{r_id}[{r_id}]"
-
-        return response_json(
-            start_response,
-            {
-                "status": "success",
-                "paper_id": clean_id,
-                "related_papers": related,
-                "mermaid_graph": mermaid,
-            },
-        )
+        resp = self.search_client.get_related(clean_id)
+        if not resp or resp.get("status") != "success":
+            return response_error(
+                start_response,
+                f"Paper '{clean_id}' not found",
+                status="404 Not Found",
+            )
+        return response_json(start_response, resp)
 
     def handle_paper(
         self, start_response: Callable[..., Any], path: str
@@ -179,28 +214,33 @@ class GatewayHandlers:
 
     def handle_stats(self, start_response: Callable[..., Any]) -> List[bytes]:
         """Handles /api/stats metadata retrieval."""
-        papers = self.vector_engine.documents
-        cats: Dict[str, int] = {}
-        for p in papers:
-            for c in p.get("tags", []):
-                cats[str(c)] = cats.get(str(c), 0) + 1
+        if self._vector_engine is not None:
+            papers = self._vector_engine.documents
+            cats: Dict[str, int] = {}
+            for p in papers:
+                for c in p.get("tags", []):
+                    cats[str(c)] = cats.get(str(c), 0) + 1
 
-        categories_list: List[Dict[str, Any]] = [
-            {"name": k, "count": v} for k, v in cats.items()
-        ]
-        categories_list.sort(key=lambda x: int(x["count"]), reverse=True)
+            categories_list: List[Dict[str, Any]] = [
+                {"name": k, "count": v} for k, v in cats.items()
+            ]
+            categories_list.sort(key=lambda x: int(x["count"]), reverse=True)
 
-        stats = {
-            "status": "success",
-            "server_interface": "PEP 3333 WSGI",
-            "total_papers": len(papers),
-            "vector_index_size": (
-                len(self.vector_engine.vector_storage.metadata)
-                if os.path.exists(self.vector_engine.vector_storage_path)
-                else len(papers)
-            ),
-            "categories": categories_list,
-        }
+            stats = {
+                "status": "success",
+                "server_interface": "PEP 3333 WSGI",
+                "total_papers": len(papers),
+                "vector_index_size": (
+                    len(self._vector_engine.vector_storage.metadata)
+                    if os.path.exists(self._vector_engine.vector_storage_path)
+                    else len(papers)
+                ),
+                "categories": categories_list,
+            }
+            return response_json(start_response, stats)
+
+        stats = self.search_client.get_stats()
+        stats["server_interface"] = "PEP 3333 WSGI"
         return response_json(start_response, stats)
 
     def handle_preview(

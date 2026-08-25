@@ -21,7 +21,13 @@ from typing import Any, Callable, Dict, List, Optional, Set, cast
 from .config import SupervisorConfig
 from .control import ControlServer
 from .heartbeat import HeartbeatWatchdog
-from .workers import WORKER_CLASSES, BaseWorker, DatabaseWorker, SyncWorker
+from .workers import (
+    WORKER_CLASSES,
+    BaseWorker,
+    DatabaseWorker,
+    SearchWorker,
+    SyncWorker,
+)
 
 
 class Arbiter:
@@ -44,6 +50,7 @@ class Arbiter:
         # pid -> worker_instance (or process handle)
         self.web_workers: Dict[int, BaseWorker] = {}
         self.db_workers: Dict[int, DatabaseWorker] = {}
+        self.search_workers: Dict[int, SearchWorker] = {}
         self.reloading_old_pids: Set[int] = set()
 
         self._signal_queue: List[int] = []
@@ -127,6 +134,7 @@ class Arbiter:
             "target_workers": self.config.workers,
             "active_web_workers": len(self.web_workers),
             "active_db_workers": len(self.db_workers),
+            "active_search_workers": len(self.search_workers),
             "workers": self.watchdog.get_all_statuses(),
             "bind": f"{self.config.bind_host}:{self.config.bind_port}",
             "worker_class": self.config.worker_class,
@@ -150,6 +158,7 @@ class Arbiter:
                 "target_workers": self.config.workers,
                 "active_web_workers": len(self.web_workers),
                 "active_db_workers": len(self.db_workers),
+                "active_search_workers": len(self.search_workers),
             }
         if target_label in ("db", "database"):
             self.config.db_worker_count = new_count
@@ -160,6 +169,18 @@ class Arbiter:
                 "target_workers": self.config.db_worker_count,
                 "active_web_workers": len(self.web_workers),
                 "active_db_workers": len(self.db_workers),
+                "active_search_workers": len(self.search_workers),
+            }
+        if target_label in ("search",):
+            self.config.search_worker_count = new_count
+            self.adjust_search_worker_pool()
+            return {
+                "status": "ok",
+                "target_type": "search",
+                "target_workers": self.config.search_worker_count,
+                "active_web_workers": len(self.web_workers),
+                "active_db_workers": len(self.db_workers),
+                "active_search_workers": len(self.search_workers),
             }
         return {
             "status": "error",
@@ -184,7 +205,7 @@ class Arbiter:
         return {"status": "error", "error": f"Unknown command: '{cmd}'"}
 
     def spawn_worker(self, worker_type: str = "web") -> Optional[int]:
-        """Forks a new child worker (Web or Database)."""
+        """Forks a new child worker (Web, Database, or Search)."""
         worker_cls = WORKER_CLASSES.get(self.config.worker_class, SyncWorker)
         worker_id = f"{worker_type}_{int(time.time() * 1000) % 100000}"
 
@@ -197,7 +218,6 @@ class Arbiter:
         if pid == 0:
             # --- CHILD PROCESS ---
             self.init_child_process()
-            app = self.load_wsgi_app()
 
             if worker_type == "db":
                 db_worker = DatabaseWorker(
@@ -205,7 +225,14 @@ class Arbiter:
                     config=self.config,
                 )
                 db_worker.run()
+            elif worker_type == "search":
+                search_worker = SearchWorker(
+                    worker_id=worker_id,
+                    config=self.config,
+                )
+                search_worker.run()
             else:
+                app = self.load_wsgi_app()
                 web_worker = worker_cls(
                     worker_id=worker_id,
                     config=self.config,
@@ -221,6 +248,11 @@ class Arbiter:
                 db_inst.pid = pid
                 self.db_workers[pid] = db_inst
                 self.watchdog.register_worker(pid, "database")
+            elif worker_type == "search":
+                search_inst = SearchWorker(worker_id=worker_id, config=self.config)
+                search_inst.pid = pid
+                self.search_workers[pid] = search_inst
+                self.watchdog.register_worker(pid, "search")
             else:
                 web_inst = worker_cls(
                     worker_id=worker_id,
@@ -281,27 +313,52 @@ class Arbiter:
                 self.db_workers.pop(pid, None)
                 self.watchdog.remove_worker(pid)
 
+    def adjust_search_worker_pool(self) -> None:
+        """Maintains target search worker count (scaling up or down)."""
+        current_active = len(self.search_workers)
+        target = self.config.search_worker_count if self.config.manage_search else 0
+
+        if current_active < target:
+            needed = target - current_active
+            for _ in range(needed):
+                self.spawn_worker("search")
+        elif current_active > target:
+            excess = current_active - target
+            pids = list(self.search_workers.keys())[:excess]
+            for pid in pids:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except OSError:
+                    pass
+                self.search_workers.pop(pid, None)
+                self.watchdog.remove_worker(pid)
+
+    def _handle_child_exit(self, pid: int) -> None:
+        self.watchdog.remove_worker(pid)
+        if pid in self.web_workers:
+            self.web_workers.pop(pid, None)
+            if self.running and pid not in self.reloading_old_pids:
+                self.spawn_worker("web")
+            self.reloading_old_pids.discard(pid)
+        elif pid in self.db_workers:
+            self.db_workers.pop(pid, None)
+            if self.running:
+                self.spawn_worker("db")
+        elif pid in self.search_workers:
+            self.search_workers.pop(pid, None)
+            if self.running:
+                self.spawn_worker("search")
+
     def handle_sigchld(self) -> None:
         """Reaps terminated children and respawns if killed unexpectedly."""
         while True:
             try:
-                pid, status = os.waitpid(-1, os.WNOHANG)
+                pid, _ = os.waitpid(-1, os.WNOHANG)
                 if pid <= 0:
                     break
             except OSError:
                 break
-
-            self.watchdog.remove_worker(pid)
-            if pid in self.web_workers:
-                self.web_workers.pop(pid, None)
-                if self.running and pid not in self.reloading_old_pids:
-                    # Unexpected termination: respawn immediately
-                    self.spawn_worker("web")
-                self.reloading_old_pids.discard(pid)
-            elif pid in self.db_workers:
-                self.db_workers.pop(pid, None)
-                if self.running:
-                    self.spawn_worker("db")
+            self._handle_child_exit(pid)
 
     def reload(self) -> None:
         """Performs zero-downtime rolling restart of all web workers."""
@@ -324,12 +381,13 @@ class Arbiter:
 
         Only workers with ``is_handling_request=True`` are considered hung
         (see HeartbeatWatchdog.get_hung_workers).  After killing a hung worker
-        the correct worker type (web or db) is respawned to maintain pool
+        the correct worker type (web, db, or search) is respawned to maintain pool
         sizes.
         """
         hung_pids = self.watchdog.get_hung_workers(self.config.request_timeout)
         for pid in hung_pids:
             is_db = pid in self.db_workers
+            is_search = pid in self.search_workers
             try:
                 os.kill(pid, signal.SIGKILL)
             except OSError:
@@ -337,9 +395,15 @@ class Arbiter:
             self.watchdog.remove_worker(pid)
             self.web_workers.pop(pid, None)
             self.db_workers.pop(pid, None)
+            self.search_workers.pop(pid, None)
             if self.running:
                 # Respawn the correct worker type so the pool stays balanced.
-                self.spawn_worker("db" if is_db else "web")
+                if is_db:
+                    self.spawn_worker("db")
+                elif is_search:
+                    self.spawn_worker("search")
+                else:
+                    self.spawn_worker("web")
 
     def _drain_and_kill(
         self, workers: Dict[int, Any], initial_sig: int, timeout: float
@@ -384,12 +448,16 @@ class Arbiter:
         Executes strictly ordered graceful shutdown sequence:
         1. Stop accepting new connections (SIGQUIT to Web Workers).
         2. Wait for web workers to drain.
-        3. Flush DB buffers and terminate Database Worker (SIGTERM).
-        4. Close listening sockets and clean up control server.
+        3. Stop Search Service Workers (SIGTERM).
+        4. Flush DB buffers and terminate Database Worker (SIGTERM).
+        5. Close listening sockets and clean up control server.
         """
         self.running = False
         self._drain_and_kill(
             self.web_workers, signal.SIGQUIT, self.config.graceful_timeout
+        )
+        self._drain_and_kill(
+            self.search_workers, signal.SIGTERM, self.config.graceful_timeout
         )
         self._drain_and_kill(
             self.db_workers, signal.SIGTERM, self.config.db_sync_timeout
@@ -440,7 +508,6 @@ class Arbiter:
         self.running = True
         self.init_signals()
         self.init_server_socket()
-        self.load_wsgi_app()
         self._write_pid_file()
         self._start_control_server()
 
@@ -449,10 +516,15 @@ class Arbiter:
             for _ in range(self.config.db_worker_count):
                 self.spawn_worker("db")
 
-        # Phase 2: Web Worker Pre-fork
+        # Phase 2: Search Engine Startup
+        if self.config.manage_search:
+            for _ in range(self.config.search_worker_count):
+                self.spawn_worker("search")
+
+        # Phase 3: Web Worker Pre-fork
         self.adjust_worker_pool()
 
-        # Phase 3: Master Event Loop
+        # Phase 4: Master Event Loop
         try:
             while self.running:
                 self._handle_queued_signals()

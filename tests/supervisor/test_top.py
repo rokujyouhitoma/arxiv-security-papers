@@ -1,5 +1,6 @@
 """Unit tests for Supervisor Top Monitoring Viewer."""
 
+import os
 from unittest.mock import MagicMock, patch
 
 from supervisor.cli import main
@@ -24,6 +25,7 @@ def test_top_render_dashboard() -> None:
         "target_workers": 2,
         "active_web_workers": 2,
         "active_db_workers": 1,
+        "active_search_workers": 1,
         "bind": "0.0.0.0:8000",
         "worker_class": "sync",
         "workers": {
@@ -43,17 +45,41 @@ def test_top_render_dashboard() -> None:
                 "requests_handled": 42,
                 "idle_seconds": 1.2,
             },
+            "12348": {
+                "pid": 12348,
+                "type": "search",
+                "status": "ALIVE",
+                "is_healthy": True,
+                "requests_handled": 100,
+                "idle_seconds": 0.1,
+            },
         },
     }
 
     dashboard = viewer.render_dashboard(data)
     assert "Supervisor Process Top Monitor" in dashboard
     assert "Arbiter PID: 12345" in dashboard
+    assert "Search: 1" in dashboard
     assert "12346" in dashboard
     assert "database" in dashboard
     assert "12347" in dashboard
     assert "sync" in dashboard
+    assert "12348" in dashboard
+    assert "search" in dashboard
     assert "42" in dashboard
+
+
+def test_top_get_process_memory_mb() -> None:
+    rss, pss = SupervisorTopViewer.get_process_memory_mb(os.getpid())
+    assert isinstance(rss, float)
+    assert isinstance(pss, float)
+    assert rss >= 0.0
+    assert pss >= 0.0
+
+    # Test nonexistent PID
+    rss_none, pss_none = SupervisorTopViewer.get_process_memory_mb(9999999)
+    assert rss_none == 0.0
+    assert pss_none == 0.0
 
 
 def test_top_render_dashboard_empty_workers() -> None:

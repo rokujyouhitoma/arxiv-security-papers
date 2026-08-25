@@ -275,6 +275,35 @@ def test_arbiter_scale_db_preserves_web(tmp_path) -> None:
             assert call_args[0][1] == signal.SIGTERM
 
 
+def test_arbiter_scale_search_preserves_others(tmp_path) -> None:
+    """Search ワーカーのスケーリング時に Web / DB ワーカーが維持されることを検証する。"""
+    cfg = SupervisorConfig(
+        workspace_dir=str(tmp_path),
+        workers=2,
+        db_worker_count=3,
+        search_worker_count=1,
+        manage_database=True,
+        manage_search=True,
+    )
+    arbiter = Arbiter(cfg)
+
+    arbiter.web_workers = {1001: MagicMock(), 1002: MagicMock()}
+    arbiter.db_workers = {2001: MagicMock(), 2002: MagicMock(), 2003: MagicMock()}
+    arbiter.search_workers = {3001: MagicMock()}
+
+    with patch.object(arbiter, "spawn_worker") as mock_spawn:
+        res = arbiter.handle_control_command(
+            {"cmd": "scale", "workers": 2, "label": "search"}
+        )
+        assert res["status"] == "ok"
+        assert res["target_type"] == "search"
+        assert res["target_workers"] == 2
+        assert arbiter.config.search_worker_count == 2
+        assert arbiter.config.workers == 2
+        assert arbiter.config.db_worker_count == 3
+        mock_spawn.assert_called_once_with("search")
+
+
 def test_arbiter_scale_unknown_label(tmp_path) -> None:
     """未知のラベルを指定した場合にエラーレスポンスが返されることを検証する。"""
     cfg = SupervisorConfig(workspace_dir=str(tmp_path))

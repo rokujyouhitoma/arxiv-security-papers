@@ -4,6 +4,8 @@ API Gateway and Network Layer for arXiv Security Papers.
 Provides WSGI application router, HTTP handlers, query logging, and CORS middleware.
 """
 
+from typing import Any
+
 from .app import WSGIApplication, app, application, run_web_server
 from .handlers import GatewayHandlers
 from .logger import WORKSPACE_DIR, get_workspace_dir, log_query
@@ -15,13 +17,17 @@ from .router import (
     response_json,
 )
 
-VECTOR_ENGINE = application.handlers.vector_engine
+
+def __getattr__(name: str) -> Any:
+    if name == "VECTOR_ENGINE":
+        return application.handlers.vector_engine
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
 
 __all__ = [
     "WSGIApplication",
     "application",
     "app",
-    "VECTOR_ENGINE",
     "run_web_server",
     "GatewayHandlers",
     "log_query",
