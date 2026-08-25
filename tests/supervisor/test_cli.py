@@ -49,19 +49,27 @@ def test_cli_ipc_commands(tmp_path) -> None:
         assert code_status == 0
         mock_client.get_status.assert_called_once()
 
-        # Scale Web
+        # Scale Default Pool
         mock_client.scale_workers.return_value = {"status": "ok", "target_workers": 6}
         code_scale = main(["--control-socket", sock_path, "scale", "--workers", "6"])
         assert code_scale == 0
-        mock_client.scale_workers.assert_called_with(6, label="web")
+        mock_client.scale_workers.assert_called_with(6, pool="")
 
-        # Scale DB
+        # Scale Named Pool
         mock_client.scale_workers.return_value = {"status": "ok", "target_workers": 3}
-        code_scale_db = main(
-            ["--control-socket", sock_path, "scale", "--workers", "3", "--label", "db"]
+        code_scale_pool = main(
+            [
+                "--control-socket",
+                sock_path,
+                "scale",
+                "--workers",
+                "3",
+                "--pool",
+                "indexer",
+            ]
         )
-        assert code_scale_db == 0
-        mock_client.scale_workers.assert_called_with(3, label="db")
+        assert code_scale_pool == 0
+        mock_client.scale_workers.assert_called_with(3, pool="indexer")
 
         # Reload
         mock_client.reload.return_value = {"status": "ok"}

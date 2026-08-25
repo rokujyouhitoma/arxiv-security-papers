@@ -22,16 +22,14 @@ def test_top_render_dashboard() -> None:
         "status": "ok",
         "arbiter_pid": 12345,
         "uptime": 120.5,
-        "target_workers": 2,
-        "active_web_workers": 2,
-        "active_db_workers": 1,
-        "active_search_workers": 1,
-        "bind": "0.0.0.0:8000",
-        "worker_class": "sync",
+        "pools": {
+            "web_pool": {"active": 2, "target": 2},
+            "indexer": {"active": 1, "target": 1},
+        },
         "workers": {
             "12346": {
                 "pid": 12346,
-                "type": "database",
+                "type": "indexer",
                 "status": "ALIVE",
                 "is_healthy": True,
                 "requests_handled": 10,
@@ -45,27 +43,17 @@ def test_top_render_dashboard() -> None:
                 "requests_handled": 42,
                 "idle_seconds": 1.2,
             },
-            "12348": {
-                "pid": 12348,
-                "type": "search",
-                "status": "ALIVE",
-                "is_healthy": True,
-                "requests_handled": 100,
-                "idle_seconds": 0.1,
-            },
         },
     }
 
     dashboard = viewer.render_dashboard(data)
     assert "Supervisor Process Top Monitor" in dashboard
     assert "Arbiter PID: 12345" in dashboard
-    assert "Search: 1" in dashboard
+    assert "web_pool: 2/2" in dashboard
+    assert "indexer: 1/1" in dashboard
     assert "12346" in dashboard
-    assert "database" in dashboard
     assert "12347" in dashboard
     assert "sync" in dashboard
-    assert "12348" in dashboard
-    assert "search" in dashboard
     assert "HEALTHY" in dashboard
     assert "42" in dashboard
 
@@ -121,11 +109,7 @@ def test_top_render_dashboard_empty_workers() -> None:
         "status": "ok",
         "arbiter_pid": 12345,
         "uptime": 10.0,
-        "target_workers": 0,
-        "active_web_workers": 0,
-        "active_db_workers": 0,
-        "bind": "0.0.0.0:8000",
-        "worker_class": "sync",
+        "pools": {},
         "workers": {},
     }
 

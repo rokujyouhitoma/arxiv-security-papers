@@ -75,9 +75,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="WSGI application URI (module:app)",
     )
-    start_parser.add_argument(
-        "--no-db", action="store_true", help="Disable managed database worker"
-    )
 
     # Command: status
     subparsers.add_parser(
@@ -109,21 +106,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Command: scale
     scale_parser = subparsers.add_parser(
-        "scale", help="Dynamically resize worker pool by label (web/database)"
+        "scale", help="Dynamically resize worker pool by pool name"
     )
     scale_parser.add_argument(
         "--workers", "-w", type=int, required=True, help="New target worker count"
     )
     scale_parser.add_argument(
+        "--pool",
+        "-p",
         "--label",
-        "--type",
-        "-l",
-        "-t",
-        dest="label",
+        dest="pool",
         type=str,
-        default="web",
-        choices=["web", "database", "db"],
-        help="Target worker label/pool to scale (default: web)",
+        default="",
+        help="Target worker pool to scale (default: first pool)",
     )
 
     # Command: reload
@@ -162,7 +157,6 @@ def _build_default_config(
         "threads": args.threads or 1,
         "timeout": args.timeout or 30.0,
         "app_uri": args.app or "web.server:app",
-        "manage_database": not getattr(args, "no_db", False),
         "control_socket": control_sock,
         "workspace_dir": workspace_dir,
     }
@@ -191,8 +185,6 @@ def _apply_config_overrides(
         config.timeout = args.timeout
     if getattr(args, "app", None) is not None:
         config.app_uri = args.app
-    if getattr(args, "no_db", False):
-        config.manage_database = False
     if control_sock:
         config.control_socket = control_sock
     config.validate()
@@ -250,27 +242,43 @@ def _handle_top_cmd(args: argparse.Namespace, client: ControlClient) -> int:
     )
 
 
+def _cmd_scale(args: argparse.Namespace, client: ControlClient) -> int:
+    pool_name = getattr(args, "pool", "") or getattr(args, "label", "")
+    resp = client.scale_workers(args.workers, pool=pool_name)
+    print(f"[+] Scaled worker pool ({pool_name or 'default'}): {resp}")
+    return 0 if resp.get("status") == "ok" else 1
+
+
+def _cmd_reload(client: ControlClient) -> int:
+    resp = client.reload()
+    print(f"[+] Reload command: {resp}")
+    return 0 if resp.get("status") == "ok" else 1
+
+
+def _cmd_stop(client: ControlClient) -> int:
+    resp = client.stop()
+    print(f"[+] Stop command: {resp}")
+    return 0 if resp.get("status") == "ok" else 1
+
+
+def _cmd_ping(client: ControlClient) -> int:
+    ok = client.ping()
+    print("PONG" if ok else "FAILED")
+    return 0 if ok else 1
+
+
 def _handle_simple_cmd(
     cmd: str, args: argparse.Namespace, client: ControlClient
 ) -> int:
     """Handles scale, reload, stop, ping control commands."""
     if cmd == "scale":
-        label = getattr(args, "label", "web")
-        resp = client.scale_workers(args.workers, label=label)
-        print(f"[+] Scaled worker pool ({label}): {resp}")
-        return 0 if resp.get("status") == "ok" else 1
+        return _cmd_scale(args, client)
     if cmd == "reload":
-        resp = client.reload()
-        print(f"[+] Reload command: {resp}")
-        return 0 if resp.get("status") == "ok" else 1
+        return _cmd_reload(client)
     if cmd == "stop":
-        resp = client.stop()
-        print(f"[+] Stop command: {resp}")
-        return 0 if resp.get("status") == "ok" else 1
+        return _cmd_stop(client)
     if cmd == "ping":
-        ok = client.ping()
-        print("PONG" if ok else "FAILED")
-        return 0 if ok else 1
+        return _cmd_ping(client)
     print(f"[ERROR] Unknown command: {cmd}")
     return 1
 

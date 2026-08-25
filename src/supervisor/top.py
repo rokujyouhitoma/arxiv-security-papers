@@ -111,12 +111,6 @@ class SupervisorTopViewer:
         arbiter_pid = data.get("arbiter_pid", "-")
         uptime_sec = data.get("uptime", 0.0)
         uptime_str = self.format_uptime(uptime_sec)
-        bind_addr = data.get("bind", "-")
-        worker_cls = data.get("worker_class", "-")
-        target_w = data.get("target_workers", 0)
-        active_web = data.get("active_web_workers", 0)
-        active_db = data.get("active_db_workers", 0)
-        active_search = data.get("active_search_workers", 0)
 
         arbiter_rss, arbiter_pss = 0.0, 0.0
         if isinstance(arbiter_pid, int):
@@ -127,16 +121,24 @@ class SupervisorTopViewer:
             if arbiter_pss > 0
             else f"{arbiter_rss:.1f} MB"
         )
-        w_summary = (
-            f"Web: {active_web}/{target_w}, DB: {active_db}, Search: {active_search}"
-        )
+
+        pools_meta = data.get("pools", {})
+        parts = []
+        if isinstance(pools_meta, dict):
+            for name, meta in pools_meta.items():
+                if isinstance(meta, dict):
+                    parts.append(
+                        f"{name}: {meta.get('active', 0)}/{meta.get('target', 0)}"
+                    )
+                else:
+                    parts.append(f"{name}: {meta}")
+        w_summary = ", ".join(parts) if parts else "No pools configured"
+
         return [
             f"  {self._c(self.COLOR_BOLD, 'Arbiter PID:')} {self._c(self.COLOR_YELLOW, str(arbiter_pid)):<8} "
             f"  {self._c(self.COLOR_BOLD, 'Uptime:')} {uptime_str:<14} "
             f"  {self._c(self.COLOR_BOLD, 'Memory (PSS):')} {mem_str}",
-            f"  {self._c(self.COLOR_BOLD, 'Binding:')}     {bind_addr:<18} "
-            f"  {self._c(self.COLOR_BOLD, 'Class:')}  {worker_cls:<10} "
-            f"  {self._c(self.COLOR_BOLD, 'Workers:')} {w_summary}",
+            f"  {self._c(self.COLOR_BOLD, 'Pools:')}       {w_summary}",
             self._c(self.COLOR_GRAY, "─" * 78),
         ]
 
@@ -155,13 +157,7 @@ class SupervisorTopViewer:
 
         status_fmt = self._c(status_color, status)
         health_fmt = self._c(health_color, health_str)
-        if w_type == "database":
-            type_color = self.COLOR_MAGENTA
-        elif w_type == "search":
-            type_color = self.COLOR_BLUE
-        else:
-            type_color = self.COLOR_CYAN
-        type_fmt = self._c(type_color, w_type)
+        type_fmt = self._c(self.COLOR_CYAN, w_type)
 
         idle_str = f"{idle_sec:.1f}s"
         mem_display = (

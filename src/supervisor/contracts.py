@@ -8,15 +8,7 @@ from __future__ import annotations
 
 import abc
 import enum
-from typing import Callable, Optional
-
-
-class WorkerLabel(str, enum.Enum):
-    """Standardized worker category labels for pool-isolated scaling and lifecycle management."""
-
-    WEB = "web"
-    DATABASE = "database"
-    SEARCH = "search"
+from typing import Any, Callable, Dict, Optional
 
 
 class ServiceRole(enum.Enum):
@@ -90,3 +82,42 @@ class DefaultLifecycleHook(LifecycleHook):
 
     def teardown(self) -> None:
         self._teardown_fn()
+
+
+class WorkerSpec:
+    """
+    Declarative specification defining an isolated worker process pool or service unit.
+    Decouples Arbiter process orchestration from specific domain workloads.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        target_count: int = 1,
+        worker_class: Optional[str] = "sync",
+        app_target: Optional[Callable[..., Any]] = None,
+        server_socket: Optional[Any] = None,
+        hook: Optional[LifecycleHook] = None,
+        role: ServiceRole = ServiceRole.STATELESS_POOL,
+        sync_interval: float = 2.0,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.name = name
+        self.target_count = max(0, target_count)
+        self.worker_class = worker_class or "sync"
+        self.app_target = app_target
+        self.server_socket = server_socket
+        self.hook = hook
+        self.role = role
+        self.sync_interval = sync_interval
+        self.metadata = metadata or {}
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "target_count": self.target_count,
+            "worker_class": self.worker_class,
+            "role": self.role.value,
+            "sync_interval": self.sync_interval,
+            "metadata": self.metadata,
+        }

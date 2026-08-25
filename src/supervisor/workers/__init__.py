@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Worker subsystem package for Process Supervisor.
-Exports BaseWorker, SyncWorker, GthreadWorker, AsyncWorker, ManagedServiceWorker, and DatabaseWorker.
+Exports BaseWorker, SyncWorker, GthreadWorker, AsyncWorker, and ManagedServiceWorker.
 """
 
 from typing import Dict, Type, Union
@@ -9,8 +9,7 @@ from typing import Dict, Type, Union
 from .async_worker import AsyncWorker
 from .base import BaseWorker
 from .gthread_worker import GthreadWorker
-from .search_worker import SearchWorker
-from .service_worker import DatabaseWorker, ManagedServiceWorker
+from .service_worker import ManagedServiceWorker
 from .sync_worker import SyncWorker
 
 ConcreteWorkerClass = Type[Union[SyncWorker, GthreadWorker, AsyncWorker]]
@@ -28,7 +27,5 @@ __all__ = [
     "GthreadWorker",
     "AsyncWorker",
     "ManagedServiceWorker",
-    "DatabaseWorker",
-    "SearchWorker",
     "WORKER_CLASSES",
 ]

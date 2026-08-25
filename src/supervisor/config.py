@@ -70,39 +70,25 @@ class SupervisorConfig:
     pools: List[PoolConfig] = dataclasses.field(default_factory=list)
     services: List[ServiceConfig] = dataclasses.field(default_factory=list)
 
-    # Top-level Shorthand / Compatibility attributes
+    # Shorthand for default stateless pool
     bind_host: str = "0.0.0.0"
     bind_port: int = 8000
     backlog: int = 2048
-    # Default Web workers: 2 (minimum redundant web pool)
     workers: int = 2
     worker_class: str = "sync"
     threads: int = 1
     app_uri: str = "web.server:app"
-    manage_database: bool = True
-    # Default DB workers: 3 (minimum distributed database quorum/consensus configuration)
-    db_worker_count: int = 3
-    db_sync_timeout: float = 10.0
-    manage_search: bool = True
-    # Default Search workers: 1 (dedicated single search engine process)
-    search_worker_count: int = 1
-    search_socket: Optional[str] = None
 
     def __post_init__(self) -> None:
-        self._ensure_default_pools_and_services()
+        self._ensure_default_pools()
         self.validate()
 
-    def _ensure_default_pools_and_services(self) -> None:
-        """Constructs default pools and services from top-level shorthand if none provided."""
-        if not self.pools:
-            deps = []
-            if self.manage_database:
-                deps.append("database")
-            if self.manage_search:
-                deps.append("search")
+    def _ensure_default_pools(self) -> None:
+        """Constructs default stateless pool if none provided."""
+        if not self.pools and not self.services:
             self.pools.append(
                 PoolConfig(
-                    name="web",
+                    name="default",
                     workers=self.workers,
                     worker_class=self.worker_class,
                     threads=self.threads,
@@ -112,29 +98,36 @@ class SupervisorConfig:
                     target_uri=self.app_uri,
                     timeout=self.timeout,
                     graceful_timeout=self.graceful_timeout,
-                    dependencies=deps,
                 )
             )
 
-        if not self.services:
-            if self.manage_database:
-                self.services.append(
-                    ServiceConfig(
-                        name="database",
-                        workers=self.db_worker_count,
-                        sync_interval=2.0,
-                        timeout=self.timeout,
-                    )
+    def build_worker_specs(self) -> List[Any]:
+        """Constructs declarative WorkerSpec objects for all configured pools and services."""
+        from .contracts import ServiceRole, WorkerSpec
+
+        specs: List[WorkerSpec] = []
+        for pool in self.pools:
+            specs.append(
+                WorkerSpec(
+                    name=pool.name,
+                    target_count=pool.workers,
+                    worker_class=pool.worker_class,
+                    role=ServiceRole.STATELESS_POOL,
+                    metadata={"target_uri": pool.target_uri, "threads": pool.threads},
                 )
-            if self.manage_search:
-                self.services.append(
-                    ServiceConfig(
-                        name="search",
-                        workers=self.search_worker_count,
-                        sync_interval=5.0,
-                        timeout=self.timeout,
-                    )
+            )
+        for svc in self.services:
+            specs.append(
+                WorkerSpec(
+                    name=svc.name,
+                    target_count=svc.workers,
+                    worker_class="service",
+                    role=ServiceRole.STATEFUL_SERVICE,
+                    sync_interval=svc.sync_interval,
+                    metadata={"hook_uri": svc.hook_uri},
                 )
+            )
+        return specs
 
     def _validate_pool(self, pool: PoolConfig) -> None:
         """Validates individual pool configuration."""
@@ -160,10 +153,6 @@ class SupervisorConfig:
         if not self.control_socket:
             self.control_socket = os.path.join(
                 self.workspace_dir, "outputs", "supervisor", "control.sock"
-            )
-        if not self.search_socket:
-            self.search_socket = os.path.join(
-                self.workspace_dir, "outputs", "supervisor", "search.sock"
             )
 
         if self.threads < 1:

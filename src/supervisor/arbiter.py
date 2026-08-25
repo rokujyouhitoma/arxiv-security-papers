@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-Arbiter (Master Process) for Gunicorn-style Process Supervisor.
-Pre-binds listening sockets, orchestrates stateless Web worker pools and stateful
-Database subsystems, traps POSIX signals, enforces heartbeat watchdogs, and hosts
-the Unix domain socket IPC control server.
+Arbiter (Master Process) for Generalized Process Supervisor.
+Pre-binds listening sockets, orchestrates declarative worker pools and managed services,
+traps POSIX signals, enforces heartbeat watchdogs, and hosts the Unix domain socket IPC control server.
 """
 
 from __future__ import annotations
@@ -16,26 +15,35 @@ import socket
 import sys
 import time
 import traceback
-from typing import Any, Callable, Dict, List, Optional, Set, cast
+from typing import Any, Callable, Dict, List, NoReturn, Optional, Set, cast
 
 from .config import SupervisorConfig
+from .contracts import DefaultLifecycleHook, ServiceRole, WorkerSpec
 from .control import ControlServer
 from .heartbeat import HeartbeatWatchdog
-from .workers import (
-    WORKER_CLASSES,
-    BaseWorker,
-    DatabaseWorker,
-    SearchWorker,
-    SyncWorker,
-)
+from .workers import WORKER_CLASSES, BaseWorker, ManagedServiceWorker, SyncWorker
+
+
+class ManagedPool:
+    """Represents an isolated, managed process pool configured via WorkerSpec."""
+
+    def __init__(self, spec: WorkerSpec) -> None:
+        self.spec = spec
+        self.name = spec.name
+        self.workers: Dict[int, BaseWorker] = {}
+        self.target_count = spec.target_count
 
 
 class Arbiter:
     """
-    Master process orchestrator managing worker processes and life cycles.
+    Generic master process orchestrator managing declarative worker pools and life cycles.
     """
 
-    def __init__(self, config: Optional[SupervisorConfig] = None) -> None:
+    def __init__(
+        self,
+        config: Optional[SupervisorConfig] = None,
+        specs: Optional[List[WorkerSpec]] = None,
+    ) -> None:
         self.config = config or SupervisorConfig()
         self.watchdog = HeartbeatWatchdog(timeout=self.config.timeout)
         self.server_socket: Optional[socket.socket] = None
@@ -46,14 +54,25 @@ class Arbiter:
         self.running = False
         self.boot_time = time.time()
 
-        # Worker Tracking
-        # pid -> worker_instance (or process handle)
-        self.web_workers: Dict[int, BaseWorker] = {}
-        self.db_workers: Dict[int, DatabaseWorker] = {}
-        self.search_workers: Dict[int, SearchWorker] = {}
+        # Generic Pool Registry (pool_name -> ManagedPool)
+        self.pools: Dict[str, ManagedPool] = {}
         self.reloading_old_pids: Set[int] = set()
-
         self._signal_queue: List[int] = []
+
+        # Initialize pools from provided specs or config
+        self._init_pools(specs)
+
+    def _init_pools(self, custom_specs: Optional[List[WorkerSpec]] = None) -> None:
+        """Registers managed pools from custom specs or auto-constructed config specs."""
+        specs = custom_specs or self.config.build_worker_specs()
+        for spec in specs:
+            self.register_pool(spec)
+
+    def register_pool(self, spec: WorkerSpec) -> ManagedPool:
+        """Registers a declarative WorkerSpec as an active managed pool."""
+        pool = ManagedPool(spec)
+        self.pools[spec.name] = pool
+        return pool
 
     def load_wsgi_app(self) -> Callable[..., Any]:
         """Dynamically imports and resolves the target WSGI application object."""
@@ -126,65 +145,75 @@ class Arbiter:
         self._signal_queue.append(signum)
 
     def _handle_status_command(self) -> Dict[str, Any]:
-        """Handles status query command."""
+        """Handles status query command with dynamic pool metrics."""
+        pools_meta: Dict[str, Any] = {}
+        for name, pool in self.pools.items():
+            pools_meta[name] = {
+                "target": pool.target_count,
+                "active": len(pool.workers),
+                "pids": list(pool.workers.keys()),
+                "role": (
+                    pool.spec.role.value
+                    if hasattr(pool.spec.role, "value")
+                    else str(pool.spec.role)
+                ),
+            }
+
         return {
             "status": "ok",
             "arbiter_pid": self.pid,
             "uptime": round(time.time() - self.boot_time, 2),
-            "target_workers": self.config.workers,
-            "active_web_workers": len(self.web_workers),
-            "active_db_workers": len(self.db_workers),
-            "active_search_workers": len(self.search_workers),
+            "pools": pools_meta,
             "workers": self.watchdog.get_all_statuses(),
-            "bind": f"{self.config.bind_host}:{self.config.bind_port}",
-            "worker_class": self.config.worker_class,
         }
 
-    def _handle_scale_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
-        """Handles pool-isolated scaling command."""
+    def _resolve_pool_name(self, target_label: str) -> Optional[str]:
+        """Resolves target pool name from registered pools."""
+        lbl = target_label.strip().lower()
+        for name in self.pools:
+            if name.lower() == lbl:
+                return name
+        return None
+
+    def _extract_scale_target(self, req: Dict[str, Any]) -> Optional[str]:
+        """Extracts and validates target pool name from scale request."""
         target_label = str(
-            req.get("label") or req.get("type") or req.get("pool") or "web"
-        ).lower()
-        new_count = int(req.get("workers", self.config.workers))
+            req.get("pool")
+            or req.get("name")
+            or req.get("label")
+            or req.get("type")
+            or ""
+        )
+        if not target_label and self.pools:
+            return next(iter(self.pools))
+        return self._resolve_pool_name(target_label)
+
+    def _handle_scale_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
+        """Handles dynamic pool-isolated scaling command."""
+        pool_name = self._extract_scale_target(req)
+        if not pool_name or pool_name not in self.pools:
+            return {
+                "status": "error",
+                "error": f"Unknown target worker pool: '{req.get('pool', '')}'",
+            }
+
+        raw_count = req.get("workers")
+        if raw_count is None:
+            raw_count = req.get("count")
+        if raw_count is None:
+            new_count = self.pools[pool_name].target_count
+        else:
+            new_count = int(raw_count)
+
         if new_count < 1:
             return {"status": "error", "error": "Worker count must be >= 1"}
 
-        if target_label in ("web", "sync", "gthread", "async"):
-            self.config.workers = new_count
-            self.adjust_worker_pool()
-            return {
-                "status": "ok",
-                "target_type": "web",
-                "target_workers": self.config.workers,
-                "active_web_workers": len(self.web_workers),
-                "active_db_workers": len(self.db_workers),
-                "active_search_workers": len(self.search_workers),
-            }
-        if target_label in ("db", "database"):
-            self.config.db_worker_count = new_count
-            self.adjust_db_worker_pool()
-            return {
-                "status": "ok",
-                "target_type": "database",
-                "target_workers": self.config.db_worker_count,
-                "active_web_workers": len(self.web_workers),
-                "active_db_workers": len(self.db_workers),
-                "active_search_workers": len(self.search_workers),
-            }
-        if target_label in ("search",):
-            self.config.search_worker_count = new_count
-            self.adjust_search_worker_pool()
-            return {
-                "status": "ok",
-                "target_type": "search",
-                "target_workers": self.config.search_worker_count,
-                "active_web_workers": len(self.web_workers),
-                "active_db_workers": len(self.db_workers),
-                "active_search_workers": len(self.search_workers),
-            }
+        self.scale(pool_name, new_count)
         return {
-            "status": "error",
-            "error": f"Unknown target worker label/type: '{target_label}'",
+            "status": "ok",
+            "target_pool": pool_name,
+            "target_workers": self.pools[pool_name].target_count,
+            "active_workers": len(self.pools[pool_name].workers),
         }
 
     def handle_control_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
@@ -204,66 +233,58 @@ class Arbiter:
             return {"status": "ok", "message": "Shutdown sequence initiated"}
         return {"status": "error", "error": f"Unknown command: '{cmd}'"}
 
-    def spawn_worker(self, worker_type: str = "web") -> Optional[int]:
-        """Forks a new child worker (Web, Database, or Search)."""
-        worker_cls = WORKER_CLASSES.get(self.config.worker_class, SyncWorker)
-        worker_id = f"{worker_type}_{int(time.time() * 1000) % 100000}"
+    def _run_child_worker(self, spec: WorkerSpec, worker_id: str) -> NoReturn:
+        """Executes worker lifecycle loop in child process."""
+        self.init_child_process()
+        if spec.worker_class == "service" or spec.role == ServiceRole.STATEFUL_SERVICE:
+            hook = spec.hook or DefaultLifecycleHook()
+            svc_worker = ManagedServiceWorker(
+                worker_id=worker_id,
+                config=self.config,
+                service_name=spec.name,
+                hook=hook,
+                sync_interval=spec.sync_interval,
+            )
+            svc_worker.run()
+        else:
+            worker_cls = WORKER_CLASSES.get(spec.worker_class, SyncWorker)
+            app = spec.app_target or self.load_wsgi_app()
+            sock = spec.server_socket or self.server_socket
+            web_worker = worker_cls(
+                worker_id=worker_id,
+                config=self.config,
+                server_socket=sock,
+                app_target=app,
+            )
+            web_worker.run()
+        sys.exit(0)
+
+    def spawn_worker(self, pool_name: Optional[str] = None) -> Optional[int]:
+        """Forks a new child worker for the designated managed pool."""
+        if not pool_name:
+            if not self.pools:
+                return None
+            pool_name = next(iter(self.pools))
+        else:
+            pool_name = self._resolve_pool_name(pool_name) or pool_name
+
+        pool = self.pools.get(pool_name)
+        if not pool:
+            return None
+
+        spec = pool.spec
+        worker_id = f"{spec.name}_{int(time.time() * 1000) % 100000}"
 
         try:
             pid = os.fork()
         except AttributeError:
-            # Fork not supported (e.g. mock / non-posix environment)
             return None
 
         if pid == 0:
-            # --- CHILD PROCESS ---
-            self.init_child_process()
-
-            if worker_type == "db":
-                db_worker = DatabaseWorker(
-                    worker_id=worker_id,
-                    config=self.config,
-                )
-                db_worker.run()
-            elif worker_type == "search":
-                search_worker = SearchWorker(
-                    worker_id=worker_id,
-                    config=self.config,
-                )
-                search_worker.run()
-            else:
-                app = self.load_wsgi_app()
-                web_worker = worker_cls(
-                    worker_id=worker_id,
-                    config=self.config,
-                    server_socket=self.server_socket,
-                    app_target=app,
-                )
-                web_worker.run()
-            sys.exit(0)
+            self._run_child_worker(spec, worker_id)
         else:
-            # --- PARENT (ARBITER) PROCESS ---
-            if worker_type == "db":
-                db_inst = DatabaseWorker(worker_id=worker_id, config=self.config)
-                db_inst.pid = pid
-                self.db_workers[pid] = db_inst
-                self.watchdog.register_worker(pid, "database")
-            elif worker_type == "search":
-                search_inst = SearchWorker(worker_id=worker_id, config=self.config)
-                search_inst.pid = pid
-                self.search_workers[pid] = search_inst
-                self.watchdog.register_worker(pid, "search")
-            else:
-                web_inst = worker_cls(
-                    worker_id=worker_id,
-                    config=self.config,
-                    server_socket=self.server_socket,
-                    app_target=self.wsgi_app,
-                )
-                web_inst.pid = pid
-                self.web_workers[pid] = web_inst
-                self.watchdog.register_worker(pid, self.config.worker_class)
-
+            pool.workers[pid] = cast(BaseWorker, None)
+            self.watchdog.register_worker(pid, spec.name)
             return pid
 
     def init_child_process(self) -> None:
@@ -273,81 +294,57 @@ class Arbiter:
         # Reset signal handlers in child
         signal.signal(signal.SIGCHLD, signal.SIG_DFL)
 
-    def adjust_worker_pool(self) -> None:
-        """Maintains target web worker count (scaling up or down)."""
-        current_active = len(self.web_workers)
-        target = self.config.workers
+    def adjust_pool(self, pool_name: str, target: Optional[int] = None) -> None:
+        """Maintains target worker count for a specific pool (scaling up or down)."""
+        pool_name = self._resolve_pool_name(pool_name) or pool_name
+        pool = self.pools.get(pool_name)
+        if not pool:
+            return
 
-        if current_active < target:
-            needed = target - current_active
+        if target is not None:
+            pool.target_count = max(0, target)
+
+        current_active = len(pool.workers)
+        target_count = pool.target_count
+
+        if current_active < target_count:
+            needed = target_count - current_active
             for _ in range(needed):
-                self.spawn_worker("web")
-        elif current_active > target:
-            excess = current_active - target
-            pids = list(self.web_workers.keys())[:excess]
-            for pid in pids:
-                try:
-                    os.kill(pid, signal.SIGQUIT)
-                except OSError:
-                    pass
-                self.web_workers.pop(pid, None)
-                self.watchdog.remove_worker(pid)
-
-    def adjust_db_worker_pool(self) -> None:
-        """Maintains target database worker count (scaling up or down)."""
-        current_active = len(self.db_workers)
-        target = self.config.db_worker_count if self.config.manage_database else 0
-
-        if current_active < target:
-            needed = target - current_active
-            for _ in range(needed):
-                self.spawn_worker("db")
-        elif current_active > target:
-            excess = current_active - target
-            pids = list(self.db_workers.keys())[:excess]
+                self.spawn_worker(pool_name)
+        elif current_active > target_count:
+            excess = current_active - target_count
+            pids = list(pool.workers.keys())[:excess]
             for pid in pids:
                 try:
                     os.kill(pid, signal.SIGTERM)
                 except OSError:
                     pass
-                self.db_workers.pop(pid, None)
+                pool.workers.pop(pid, None)
                 self.watchdog.remove_worker(pid)
 
-    def adjust_search_worker_pool(self) -> None:
-        """Maintains target search worker count (scaling up or down)."""
-        current_active = len(self.search_workers)
-        target = self.config.search_worker_count if self.config.manage_search else 0
+    def scale(self, pool_name: str, count: int) -> None:
+        """Sets target pool capacity and adjusts pool size immediately."""
+        pool_name = self._resolve_pool_name(pool_name) or pool_name
+        if pool_name in self.pools:
+            self.pools[pool_name].target_count = count
+            self.adjust_pool(pool_name, count)
 
-        if current_active < target:
-            needed = target - current_active
-            for _ in range(needed):
-                self.spawn_worker("search")
-        elif current_active > target:
-            excess = current_active - target
-            pids = list(self.search_workers.keys())[:excess]
-            for pid in pids:
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                except OSError:
-                    pass
-                self.search_workers.pop(pid, None)
-                self.watchdog.remove_worker(pid)
+    def _find_pool_for_pid(self, pid: int) -> Optional[ManagedPool]:
+        """Locates the ManagedPool containing the given worker PID."""
+        for pool in self.pools.values():
+            if pid in pool.workers:
+                return pool
+        return None
 
     def _handle_child_exit(self, pid: int) -> None:
+        """Cleans up terminated child process and restarts it if unexpected."""
         self.watchdog.remove_worker(pid)
-        if pid in self.web_workers:
-            self.web_workers.pop(pid, None)
+        pool = self._find_pool_for_pid(pid)
+        if pool:
+            pool.workers.pop(pid, None)
             if self.running and pid not in self.reloading_old_pids:
-                self.spawn_worker("web")
+                self.spawn_worker(pool.name)
             self.reloading_old_pids.discard(pid)
-        elif pid in self.db_workers:
-            self.db_workers.pop(pid, None)
-            if self.running:
-                self.spawn_worker("db")
-        elif pid in self.search_workers:
-            self.search_workers.pop(pid, None)
-            if self.running:
-                self.spawn_worker("search")
 
     def handle_sigchld(self) -> None:
         """Reaps terminated children and respawns if killed unexpectedly."""
@@ -356,54 +353,60 @@ class Arbiter:
                 pid, _ = os.waitpid(-1, os.WNOHANG)
                 if pid <= 0:
                     break
-            except OSError:
+            except (OSError, ChildProcessError):
                 break
             self._handle_child_exit(pid)
 
-    def reload(self) -> None:
-        """Performs zero-downtime rolling restart of all web workers."""
-        old_pids = set(self.web_workers.keys())
-        self.reloading_old_pids.update(old_pids)
+    def reload(self, pool_name: Optional[str] = None) -> None:
+        """Performs zero-downtime rolling restart of workers in designated or all stateless pools."""
+        target_pools = (
+            [self.pools[pool_name]]
+            if (pool_name and pool_name in self.pools)
+            else list(self.pools.values())
+        )
 
-        # Spawn new workers
-        for _ in range(self.config.workers):
-            self.spawn_worker("web")
+        for pool in target_pools:
+            if pool.spec.role != ServiceRole.STATELESS_POOL and pool_name is None:
+                # Do not restart stateful background services during default web rolling reload
+                continue
 
-        # Graceful drain old workers
-        for pid in old_pids:
-            try:
-                os.kill(pid, signal.SIGQUIT)
-            except OSError:
-                pass
+            old_pids = set(pool.workers.keys())
+            self.reloading_old_pids.update(old_pids)
+
+            # Spawn replacement workers
+            for _ in range(pool.target_count):
+                self.spawn_worker(pool.name)
+
+            # Graceful drain old workers
+            for pid in old_pids:
+                try:
+                    os.kill(pid, signal.SIGQUIT)
+                except OSError:
+                    pass
 
     def check_hung_workers(self) -> None:
         """Checks for unresponsive workers and kills them with SIGKILL.
 
         Only workers with ``is_handling_request=True`` are considered hung
-        (see HeartbeatWatchdog.get_hung_workers).  After killing a hung worker
-        the correct worker type (web, db, or search) is respawned to maintain pool
-        sizes.
+        (see HeartbeatWatchdog.get_hung_workers). After killing a hung worker,
+        the corresponding pool worker is respawned to maintain pool size.
         """
         hung_pids = self.watchdog.get_hung_workers(self.config.request_timeout)
         for pid in hung_pids:
-            is_db = pid in self.db_workers
-            is_search = pid in self.search_workers
+            pool = self._find_pool_for_pid(pid)
+            if pool:
+                pool_name = "db" if pool.name in ("database", "db") else pool.name
+            else:
+                pool_name = "web"
             try:
                 os.kill(pid, signal.SIGKILL)
             except OSError:
                 pass
             self.watchdog.remove_worker(pid)
-            self.web_workers.pop(pid, None)
-            self.db_workers.pop(pid, None)
-            self.search_workers.pop(pid, None)
+            if pool:
+                pool.workers.pop(pid, None)
             if self.running:
-                # Respawn the correct worker type so the pool stays balanced.
-                if is_db:
-                    self.spawn_worker("db")
-                elif is_search:
-                    self.spawn_worker("search")
-                else:
-                    self.spawn_worker("web")
+                self.spawn_worker(pool_name)
 
     def _drain_and_kill(
         self, workers: Dict[int, Any], initial_sig: int, timeout: float
@@ -446,22 +449,26 @@ class Arbiter:
     def shutdown(self) -> None:
         """
         Executes strictly ordered graceful shutdown sequence:
-        1. Stop accepting new connections (SIGQUIT to Web Workers).
-        2. Wait for web workers to drain.
-        3. Stop Search Service Workers (SIGTERM).
-        4. Flush DB buffers and terminate Database Worker (SIGTERM).
-        5. Close listening sockets and clean up control server.
+        1. Stop accepting new connections for stateless pools (SIGQUIT).
+        2. Drain and terminate stateful managed service pools (SIGTERM).
+        3. Close listening sockets and clean up control server.
         """
         self.running = False
-        self._drain_and_kill(
-            self.web_workers, signal.SIGQUIT, self.config.graceful_timeout
-        )
-        self._drain_and_kill(
-            self.search_workers, signal.SIGTERM, self.config.graceful_timeout
-        )
-        self._drain_and_kill(
-            self.db_workers, signal.SIGTERM, self.config.db_sync_timeout
-        )
+
+        # 1. Stateless pools first (SIGQUIT)
+        for pool in self.pools.values():
+            if pool.spec.role == ServiceRole.STATELESS_POOL:
+                self._drain_and_kill(
+                    pool.workers, signal.SIGQUIT, self.config.graceful_timeout
+                )
+
+        # 2. Stateful services next (SIGTERM)
+        for pool in self.pools.values():
+            if pool.spec.role != ServiceRole.STATELESS_POOL:
+                self._drain_and_kill(
+                    pool.workers, signal.SIGTERM, self.config.graceful_timeout
+                )
+
         self._cleanup_resources()
 
     def _write_pid_file(self) -> None:
@@ -484,24 +491,38 @@ class Arbiter:
         )
         self.control_server.start()
 
+    def _dispatch_single_signal(self, sig: int) -> bool:
+        """Dispatches an individual signal. Returns False if arbiter should stop."""
+        if sig in (signal.SIGTERM, signal.SIGINT):
+            self.running = False
+            return False
+        if sig == signal.SIGHUP:
+            self.reload()
+        elif hasattr(signal, "SIGTTIN") and sig == signal.SIGTTIN:
+            self._handle_sigttin()
+        elif hasattr(signal, "SIGTTOU") and sig == signal.SIGTTOU:
+            self._handle_sigttou()
+        elif sig == signal.SIGCHLD:
+            self.handle_sigchld()
+        return True
+
+    def _handle_sigttin(self) -> None:
+        if self.pools:
+            first_pool = next(iter(self.pools))
+            self.scale(first_pool, self.pools[first_pool].target_count + 1)
+
+    def _handle_sigttou(self) -> None:
+        if self.pools:
+            first_pool = next(iter(self.pools))
+            if self.pools[first_pool].target_count > 1:
+                self.scale(first_pool, self.pools[first_pool].target_count - 1)
+
     def _handle_queued_signals(self) -> None:
         """Processes queued OS signals."""
         while self._signal_queue:
             sig = self._signal_queue.pop(0)
-            if sig in (signal.SIGTERM, signal.SIGINT):
-                self.running = False
+            if not self._dispatch_single_signal(sig):
                 break
-            if sig == signal.SIGHUP:
-                self.reload()
-            elif hasattr(signal, "SIGTTIN") and sig == signal.SIGTTIN:
-                self.config.workers += 1
-                self.adjust_worker_pool()
-            elif hasattr(signal, "SIGTTOU") and sig == signal.SIGTTOU:
-                if self.config.workers > 1:
-                    self.config.workers -= 1
-                    self.adjust_worker_pool()
-            elif sig == signal.SIGCHLD:
-                self.handle_sigchld()
 
     def start(self) -> None:
         """Main lifecycle entrypoint starting the Supervisor cluster."""
@@ -511,20 +532,17 @@ class Arbiter:
         self._write_pid_file()
         self._start_control_server()
 
-        # Phase 1: Database Startup (Ordered Lifecycle)
-        if self.config.manage_database:
-            for _ in range(self.config.db_worker_count):
-                self.spawn_worker("db")
+        # Phase 1: Stateful Services Startup (Ordered Lifecycle)
+        for pool in self.pools.values():
+            if pool.spec.role != ServiceRole.STATELESS_POOL:
+                self.adjust_pool(pool.name)
 
-        # Phase 2: Search Engine Startup
-        if self.config.manage_search:
-            for _ in range(self.config.search_worker_count):
-                self.spawn_worker("search")
+        # Phase 2: Stateless Worker Pre-fork (Web Pools)
+        for pool in self.pools.values():
+            if pool.spec.role == ServiceRole.STATELESS_POOL:
+                self.adjust_pool(pool.name)
 
-        # Phase 3: Web Worker Pre-fork
-        self.adjust_worker_pool()
-
-        # Phase 4: Master Event Loop
+        # Phase 3: Master Event Loop
         try:
             while self.running:
                 self._handle_queued_signals()
@@ -534,9 +552,6 @@ class Arbiter:
                 self.check_hung_workers()
                 time.sleep(0.5)
         except BaseException as exc:  # pragma: no cover
-            # Catch unexpected crashes (e.g. MemoryError, SystemExit from a
-            # buggy signal handler) so the finally block always runs and
-            # cleans up the control socket.
             logging.critical(
                 "[Arbiter] Unexpected crash in main event loop: %s\n%s",
                 exc,

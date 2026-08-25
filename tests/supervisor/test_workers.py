@@ -1,19 +1,20 @@
-"""Unit tests for SyncWorker, GthreadWorker, AsyncWorker, ManagedServiceWorker, and DatabaseWorker."""
+#!/usr/bin/env python3
+"""Unit tests for SyncWorker, GthreadWorker, AsyncWorker, and ManagedServiceWorker."""
 
 import socket
 import threading
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from supervisor.config import SupervisorConfig
 from supervisor.contracts import DefaultLifecycleHook
 from supervisor.workers.async_worker import AsyncWorker
 from supervisor.workers.gthread_worker import GthreadWorker
-from supervisor.workers.service_worker import DatabaseWorker, ManagedServiceWorker
+from supervisor.workers.service_worker import ManagedServiceWorker
 from supervisor.workers.sync_worker import SyncWorker
 
 
-def dummy_wsgi_app(environ: Dict[str, Any], start_response) -> List[bytes]:
+def dummy_wsgi_app(environ: Dict[str, Any], start_response: Any) -> List[bytes]:
     status = "200 OK"
     headers = [("Content-Type", "application/json"), ("X-Test-Header", "Hello")]
     start_response(status, headers)
@@ -67,11 +68,11 @@ def test_gthread_worker_execution() -> None:
         client_s.close()
 
 
-def test_managed_service_worker_lifecycle(tmp_path) -> None:
+def test_managed_service_worker_lifecycle(tmp_path: Any) -> None:
     cfg = SupervisorConfig(workspace_dir=str(tmp_path))
-    pulses = []
-    flushed = []
-    teared_down = []
+    pulses: List[Optional[Dict[str, Any]]] = []
+    flushed: List[bool] = []
+    teared_down: List[bool] = []
 
     hook = DefaultLifecycleHook(
         setup_fn=lambda: True,
@@ -93,37 +94,15 @@ def test_managed_service_worker_lifecycle(tmp_path) -> None:
     t.start()
 
     time.sleep(0.3)
-    assert worker.db_ready is True
     worker.alive = False
     t.join(timeout=2.0)
 
     assert len(pulses) > 0
+    assert pulses[0] is not None
     assert pulses[0]["service"] == "custom_cache"
     assert pulses[0]["is_healthy"] is True
     assert len(flushed) > 0
     assert len(teared_down) > 0
-
-
-def test_database_worker_subclass(tmp_path) -> None:
-    cfg = SupervisorConfig(workspace_dir=str(tmp_path))
-    pulses = []
-
-    worker = DatabaseWorker(
-        worker_id="db_test_01",
-        config=cfg,
-        pulse_callback=lambda pid, meta: pulses.append(meta),
-    )
-
-    t = threading.Thread(target=worker.run, daemon=True)
-    t.start()
-
-    time.sleep(0.2)
-    assert worker.db_ready is True
-    worker.alive = False
-    t.join(timeout=2.0)
-
-    assert len(pulses) > 0
-    assert pulses[0]["service"] == "database"
 
 
 def test_async_worker_execution() -> None:
@@ -139,32 +118,6 @@ def test_async_worker_execution() -> None:
     worker.alive = False
     t.join(timeout=2.0)
     assert worker.requests_handled == 0
-
-
-def test_dedicated_db_worker_module(tmp_path) -> None:
-    from supervisor.workers.db_worker import DatabaseWorker as DedicatedDBWorker
-
-    cfg = SupervisorConfig(workspace_dir=str(tmp_path))
-    pulses = []
-
-    worker = DedicatedDBWorker(
-        worker_id="dedicated_db_01",
-        config=cfg,
-        pulse_callback=lambda pid, meta: pulses.append(meta),
-    )
-    assert worker._verify_storage_health() is True
-    worker._flush_and_checkpoint()
-    assert worker.checkpoints_completed == 1
-
-    t = threading.Thread(target=worker.run, daemon=True)
-    t.start()
-    time.sleep(0.2)
-    assert worker.db_ready is True
-    worker.alive = False
-    t.join(timeout=2.0)
-
-    assert len(pulses) > 0
-    assert pulses[0]["subsystem"] == "database"
 
 
 def test_gthread_worker_run_loop() -> None:

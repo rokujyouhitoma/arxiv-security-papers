@@ -9,7 +9,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **075** | Unix Domain Socket による DB・Web・Search の完全プロセス分離と IPC ラッパー基盤の実装 | Feature / Refactor | High | New | [075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md](075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md) |
-| **076** | Supervisor のドメイン非依存・汎用プロセスエンジン化と宣言的 Worker/Service 抽象化 | Feature / Refactor | High | New | [076-decouple-domain-workers-from-supervisor-generic-engine.md](076-decouple-domain-workers-from-supervisor-generic-engine.md) |
 
 ---
 
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **076** | Supervisor のドメイン非依存・汎用プロセスエンジン化と宣言的 Worker/Service 抽象化 | Feature / Refactor | 2026-08-26 | [076-decouple-domain-workers-from-supervisor-generic-engine.md](closed/076-decouple-domain-workers-from-supervisor-generic-engine.md) |
 | **074** | アイドル状態継続後のワーカー誤判定・ヘルスチェック誤表示およびゾンビプロセス回収不備の根絶 | Bug / Refactor | 2026-08-26 | [074-fix-idle-worker-death-and-zombie-reaping.md](closed/074-fix-idle-worker-death-and-zombie-reaping.md) |
 | **073** | Web と Search Engine のプロセス分離・独立ワーカー化によるメモリ肥大化（15 GB → 1.6 GB）の根絶 | Bug / Refactor | 2026-08-26 | [073-fix-worker-rss-memory-bloat-on-startup.md](closed/073-fix-worker-rss-memory-bloat-on-startup.md) |
 | **072** | `scale` コマンド実行時に DB ワーカーが巻き添えで停止・消滅する問題の修正および Web/DB プール分離管理 | Bug | 2026-08-26 | [072-fix-scale-command-kills-db-worker.md](closed/072-fix-scale-command-kills-db-worker.md) |

@@ -42,13 +42,8 @@ class ManagedServiceWorker(BaseWorker):
         self.hook: LifecycleHook = hook or DefaultLifecycleHook()
         self.sync_interval = sync_interval
         self.state: ServiceState = ServiceState.INITIALIZING
-        self.last_sync = time.time()
+        self.last_sync = 0.0
         self.flushes_completed = 0
-
-    @property
-    def db_ready(self) -> bool:
-        """Compatibility property for legacy health probes."""
-        return self.state in (ServiceState.READY, ServiceState.ACTIVE)
 
     def _init_hook_if_needed(self) -> None:
         if self.hook is None:
@@ -88,7 +83,6 @@ class ManagedServiceWorker(BaseWorker):
                     "is_healthy": healthy,
                     "flushes": self.flushes_completed,
                     "last_sync_epoch": self.last_sync,
-                    "db_ready": self.db_ready,
                 }
             )
 
@@ -101,7 +95,8 @@ class ManagedServiceWorker(BaseWorker):
                     pass
                 self.last_sync = now
 
-            time.sleep(0.5)
+            sleep_step = max(0.05, min(self.sync_interval, 0.5))
+            time.sleep(sleep_step)
 
         # Step 3: Graceful Teardown & Final Flush
         self.state = ServiceState.DRAINING
@@ -113,26 +108,3 @@ class ManagedServiceWorker(BaseWorker):
 
         self.state = ServiceState.STOPPED
         self.close()
-
-
-class DatabaseWorker(ManagedServiceWorker):
-    """
-    Stateful database service worker for backward compatibility and domain integration.
-    """
-
-    def __init__(
-        self,
-        worker_id: str,
-        config: SupervisorConfig,
-        pulse_callback: Optional[
-            Callable[[int, Optional[Dict[str, Any]]], None]
-        ] = None,
-    ) -> None:
-        super().__init__(
-            worker_id=worker_id,
-            config=config,
-            service_name="database",
-            hook=DefaultLifecycleHook(),
-            sync_interval=config.db_sync_timeout / 5.0,
-            pulse_callback=pulse_callback,
-        )
