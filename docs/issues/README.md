@@ -6,7 +6,12 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-現在アクティブな Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **074** | アイドル状態継続後のワーカー全滅・ゾンビプロセス回収不備の修正 | Bug | High | New | [074-fix-idle-worker-death-and-zombie-reaping.md](074-fix-idle-worker-death-and-zombie-reaping.md) |
+| **073** | ワーカープロセスおよび Arbiter の RSS メモリ肥大化（各 ~1.37 GB）修正 | Bug | High | New | [073-fix-worker-rss-memory-bloat-on-startup.md](073-fix-worker-rss-memory-bloat-on-startup.md) |
+| **072** | `scale` コマンド実行時に DB ワーカーが巻き添えで停止・消滅する問題の修正 | Bug | High | New | [072-fix-scale-command-kills-db-worker.md](072-fix-scale-command-kills-db-worker.md) |
+| **071** | Arbiter（親プロセス）の突然死・クラッシュおよび予期しない PID 変化の修正 | Bug | High | New | [071-fix-arbiter-crash-and-unexpected-restart.md](071-fix-arbiter-crash-and-unexpected-restart.md) |
 
 ---
 

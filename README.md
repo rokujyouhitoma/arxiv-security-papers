@@ -6,9 +6,10 @@
 [![Architecture](https://img.shields.io/badge/Search_Engine-2--Tier_Lucene%2FSolr_Paradigm-orange.svg)](src/search/)
 [![Database](https://img.shields.io/badge/Vector_DB-4--Tier_SQLite_Compatible_%26_Distributed-blueviolet.svg)](src/database/)
 [![Orchestration](https://img.shields.io/badge/Orchestrator-Universal_Intelligence_Cycle-green.svg)](docs/designs/DSN-11-intelligence_orchestration_engine.md)
+[![Supervisor](https://img.shields.io/badge/Supervisor-Gunicorn_Style_PreFork-teal.svg)](docs/designs/DSN-12-process_supervisor_and_arbiter.md)
 [![Quality Gate](https://img.shields.io/badge/Quality_Gate-100%25_PASS-brightgreen.svg)](Makefile)
 
-arXiv のコンピュータサイエンス・暗号・セキュリティ分野（`cs.CR`）をはじめとする学術・脅威論文データを完全自動で収集・全文抽出・構造化し、**Google Open Knowledge Format (OKF) v0.2** 準拠のナレッジベース構築、**5階層エグゼクティブサマリー** 自律生産、**2層分離検索エンジン基盤**（Apache Lucene / Solr パラダイム）、**純粋 Python 製 4層ベクトルデータベース**、**AI コーディングエージェント向け戦略的 MCP サーバー群**、および **自律型閉ループ・インテリジェンス・ライフサイクル・オーケストレーター** を提供する統合インテリジェンスプラットフォームです。
+arXiv のコンピュータサイエンス・暗号・セキュリティ分野（`cs.CR`）をはじめとする学術・脅威論文データを完全自動で収集・全文抽出・構造化し、**Google Open Knowledge Format (OKF) v0.2** 準拠のナレッジベース構築、**5階層エグゼクティブサマリー** 自律生産、**2層分離検索エンジン基盤**（Apache Lucene / Solr パラダイム）、**純粋 Python 製 4層ベクトルデータベース**、**AI コーディングエージェント向け戦略的 MCP サーバー群**、**自律型閉ループ・インテリジェンス・ライフサイクル・オーケストレーター**、および **Gunicorn スタイル汎用プロセススーパーバイザー** を提供する統合インテリジェンスプラットフォームです。
 
 ---
 
@@ -17,8 +18,8 @@ arXiv のコンピュータサイエンス・暗号・セキュリティ分野�
 1. [主要機能 (Key Features)](#-主要機能-key-features)
 2. [システム全体アーキテクチャ (System Architecture)](#-システム全体アーキテクチャ-system-architecture)
 3. [普遍的自律型インテリジェンス・ライフサイクル (Intelligence Lifecycle)](#-普遍的自律型インテリジェンスライフサイクル-intelligence-lifecycle)
-4. [7大クリーンサブシステム構造 (Core Subsystems)](#-7大クリーンサブシステム構造-core-subsystems)
-5. [包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-11)](#-包括的設計書体系-design-specifications-dsn-01--dsn-11)
+4. [9大クリーンサブシステム構造 (Core Subsystems)](#-9大クリーンサブシステム構造-core-subsystems)
+5. [包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-12)](#-包括的設計書体系-design-specifications-dsn-01--dsn-12)
 6. [クイックスタート (Quick Start)](#-クイックスタート-quick-start)
 7. [Makefile コマンド一覧 (Command Reference)](#-makefile-コマンド一覧-command-reference)
 8. [ディレクトリ構成 (Directory Structure)](#-ディレクトリ構成-directory-structure)
@@ -30,6 +31,8 @@ arXiv のコンピュータサイエンス・暗号・セキュリティ分野�
 
 - **普遍的自律型インテリジェンス・オーケストレーション (DSN-11)**:
   - 計画（PIR策定）$\rightarrow$ 収集 $\rightarrow$ 処理 $\rightarrow$ 分析・生産 $\rightarrow$ 配布 $\rightarrow$ 評価（NDCG/MAP）の 6 大フェーズを自律閉ループで駆動し、未充足トピックギャップを次期収集へ自己適応。
+- **Gunicorn スタイル汎用プロセススーパーバイザー (`src/supervisor/` / DSN-12)**:
+  - Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー、Systemd 依存関係順序制御、動的スケーリング、POSIX シグナル管理、ハートビート自己回復、および `top` リアルタイムモニタリング CLI。
 - **分散クローラー & スパイダー基盤 (`src/spider/` / DSN-06)**:
   - OPIC クロール順序付け、AutoThrottle レート制限、スケーラブル・ブルームフィルタ、SPA 状態復元。
 - **マルチテーマ ETL パイプライン (`src/pipeline/` / DSN-03)**:
@@ -64,6 +67,12 @@ graph TD
         Feedback["6. フィードバック & IR評価"]
     end
 
+    subgraph SupervisorHub["Process Supervisor & Arbiter (DSN-12)"]
+        Arbiter["Arbiter (Master)"]
+        Workers["Pre-fork Workers"]
+        Heartbeat["Heartbeat & Self-Heal"]
+    end
+
     subgraph CorePlatform["arxiv-security-papers Platform (src/)"]
         Spider["2. 分散クローラー (src/spider/)"]
         Pipeline["3. ETLパイプライン (src/pipeline/)"]
@@ -96,6 +105,9 @@ graph TD
     MCP -. 利用ログ・クエリ .-> Feedback
     Web -. アクセスログ .-> Feedback
     Feedback -- "適応型フィードバック (PIR再調整)" --> PIR
+    Arbiter --> Workers
+    Heartbeat -. 監視・再起動 .-> Workers
+    OrchestratorHub --> SupervisorHub
 ```
 
 ---
@@ -133,7 +145,7 @@ sequenceDiagram
 
 ---
 
-## 📚 包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-11)
+## 📚 包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-12)
 
 | DSN 番号 | 設計書ファイル | 対応パッケージ (`src/`) | 領域 / サブシステム |
 | :---: | :--- | :--- | :--- |
@@ -141,13 +153,15 @@ sequenceDiagram
 | **DSN-02** | [DSN-02-low_level_design.md](docs/designs/DSN-02-low_level_design.md) | システム全体 | 全体低位アーキテクチャ設計書 (LLD / Common Protocols) |
 | **DSN-03** | [DSN-03-pipeline_architecture.md](docs/designs/DSN-03-pipeline_architecture.md) | `src/pipeline/` | ETL データパイプライン設計書 (`ingestion`, `transformer`, `reporter`) |
 | **DSN-04** | [DSN-04-search_engine_and_platform.md](docs/designs/DSN-04-search_engine_and_platform.md) | `src/search/` | 2層検索エンジン & プラットフォーム設計書 (`engine`, `platform`, `vector`) |
+| **DSN-04-01** | [DSN-04-01-hybrid_search_specification.md](docs/designs/DSN-04-01-hybrid_search_specification.md) | `src/search/` | ハイブリッド検索 5手法フュージョン詳細仕様書 |
 | **DSN-05** | [DSN-05-database_engine_architecture.md](docs/designs/DSN-05-database_engine_architecture.md) | `src/database/` | ゼロ依存 4層ベクトルデータベース & 分散合意設計書 |
 | **DSN-06** | [DSN-06-distributed_spider_and_crawler.md](docs/designs/DSN-06-distributed_spider_and_crawler.md) | `src/spider/` | ゼロ外部依存 分散 Web クローラー & スパイダー基盤設計書 |
 | **DSN-07** | [DSN-07-security_guard_and_rbac.md](docs/designs/DSN-07-security_guard_and_rbac.md) | `src/security/` | 共通セキュリティ基盤・AST ガード & RBAC エンジン設計書 |
 | **DSN-08** | [DSN-08-mcp_strategic_ecosystem.md](docs/designs/DSN-08-mcp_strategic_ecosystem.md) | `src/mcp/` | Model Context Protocol (MCP) 戦略的エコシステム設計書 |
 | **DSN-09** | [DSN-09-web_gateway_and_presentation.md](docs/designs/DSN-09-web_gateway_and_presentation.md) | `src/web/` | API Gateway & UI プレゼンテーション設計書 (`gateway`, `presentation`) |
 | **DSN-10** | [DSN-10-observability_and_eval_framework.md](docs/designs/DSN-10-observability_and_eval_framework.md) | 横断的基盤 | 可観測性 (Observability) & 情報検索評価 (IR Eval) 設計書 |
-| **DSN-11** | [DSN-11-intelligence_orchestration_engine.md](docs/designs/DSN-11-intelligence_orchestration_engine.md) | 統合統制中枢 | 普遍的自律型インテリジェンス・ライフサイクル・オーケストレーション包括設計書 |
+| **DSN-11** | [DSN-11-intelligence_orchestration_engine.md](docs/designs/DSN-11-intelligence_orchestration_engine.md) | `src/orchestrator/` | 普遍的自律型インテリジェンス・ライフサイクル・オーケストレーション包括設計書 |
+| **DSN-12** | [DSN-12-process_supervisor_and_arbiter.md](docs/designs/DSN-12-process_supervisor_and_arbiter.md) | `src/supervisor/` | 汎用プロセススーパーバイザー & 調停基盤設計書 |
 
 ---
 
@@ -161,21 +175,49 @@ make setup
 ### 2. インテリジェンスパイプラインの実行 (論文取得・OKF変換・5層サマリー)
 ```bash
 make run
+# 実体: src/orchestrator/cli.py cycle
 ```
 
 ### 3. Web API Gateway & 検索ポータルの起動
 ```bash
 make run_web
-# ブラウザで http://localhost:8080 にアクセス
+# ブラウザで http://localhost:8000 にアクセス
 ```
 
 ### 4. MCP サーバーの起動 (Claude Desktop / AI エージェント連携)
 ```bash
 # 論文インテリジェンス MCP サーバー
-python3 -m src.mcp.papers_server
+make run_mcp_server
 
 # 可観測性・プロファイリング特化 MCP サーバー
-python3 -m src.mcp.observability_server
+make run_observability_mcp
+
+# 技術動向レーダー MCP サーバー
+make run_tech_radar_mcp
+
+# 脅威防御・パッチ MCP サーバー
+make run_threat_defense_mcp
+```
+
+### 5. プロセススーパーバイザーの起動 & 監視
+```bash
+# Gunicorn スタイル Pre-fork プロセス監視起動
+make run_supervisor
+
+# ライブステータス確認 (IPC Unix ドメインソケット)
+make status_supervisor
+
+# top リアルタイムモニタリングダッシュボード
+make top_supervisor
+```
+
+### 6. インテリジェンス・オーケストレーターの直接実行
+```bash
+# 1回限りの 6フェーズ自律サイクル
+make orchestrate
+
+# 継続デーモンモード
+make orchestrate_daemon
 ```
 
 ---
@@ -183,14 +225,41 @@ python3 -m src.mcp.observability_server
 ## 🛠 Makefile コマンド一覧 (Command Reference)
 
 ```bash
+## セットアップ & 品質ゲート
 make setup              ## 仮想環境の構築と依存パッケージのインストール
-make run                ## ETL パイプライン実行 (最新論文フェッチ・OKF変換・サマリー生成)
-make run_web            ## WSGI Web サーバー & REST API 起動
-make format             ## ruff によるコードフォーマット
-make check_format       ## フォーマット検査
+make format             ## ruff / isort / black によるコードフォーマット
+make check_format       ## フォーマット検査 (変更なし)
 make static_analysis    ## radon, xenon, mypy --strict 静的解析
-make test               ## pytest テストスイート実行
+make test               ## pytest テストスイート実行 (fast)
+make test_slow          ## slow マークテスト実行 (E2E シナリオ)
 make check              ## format, static_analysis, test を一括実行 (品質ゲート)
+make verify_quality     ## format, static_analysis, test, build_js を一括実行 (厳格品質ゲート)
+
+## パイプライン & 検索
+make run                ## Universal Intelligence Orchestrator 6フェーズ自律サイクル実行
+make pipeline           ## ETL パイプライン (arXiv 論文取得・OKF変換・サマリー生成) を直接実行
+make build_vector_db    ## セマンティックベクトルインデックス構築 / 再構築
+make rag_query Q="..."  ## セマンティック RAG 検索クエリ実行
+make eval_search        ## 検索品質ベンチマーク (Precision@K, Recall@K, MAP, MRR, NDCG)
+
+## Web & MCP サーバー
+make run_web            ## WSGI Web サーバー & REST API 起動 (http://localhost:8000)
+make run_mcp_server           ## 論文インテリジェンス MCP サーバー起動
+make run_observability_mcp    ## 可観測性プロファイラ MCP サーバー起動
+make run_tech_radar_mcp       ## 技術動向レーダー MCP サーバー起動
+make run_threat_defense_mcp   ## 脅威防御・パッチ MCP サーバー起動
+
+## プロセススーパーバイザー
+make run_supervisor     ## Gunicorn スタイル Pre-fork プロセス監視起動
+make status_supervisor  ## ライブプロセスステータス確認
+make top_supervisor     ## top リアルタイムモニタリングダッシュボード
+
+## オーケストレーター
+make orchestrate        ## 普遍的インテリジェンス・オーケストレーター 6フェーズサイクル実行
+make orchestrate_daemon ## オーケストレーター 継続デーモンモード起動
+
+## ビルド
+make build_js           ## Google Closure Compiler による JS バンドルビルド
 ```
 
 ---
@@ -201,13 +270,20 @@ make check              ## format, static_analysis, test を一括実行 (品質
 .
 ├── .agents/                    # 13エージェント規約 (AGENTS.md) & スキル群
 ├── docs/
-│   ├── designs/                # 11大包括設計書体系 (DSN-01 〜 DSN-11)
-│   └── issues/                 # Issue 台帳 & クローズ済み履歴 (closed/)
+│   ├── designs/                # 12大包括設計書体系 (DSN-01 〜 DSN-12)
+│   ├── issues/                 # Issue 台帳 & クローズ済み履歴 (closed/ — 001〜070)
+│   ├── mcp/                    # MCP サーバ仕様書 (MCP-01)
+│   ├── processes/              # 文書管理台帳 (MNG-01)
+│   └── requirements/           # 要件定義書 (REQ-01〜REQ-02)
 ├── outputs/
 │   ├── raw_data/               # 原本データ (YYYY-MM-DD/<id>.pdf, .txt, _meta.json)
 │   ├── okf_papers/             # Google OKF v0.2 Markdown (YYYY-MM-DD/<id>.md)
 │   ├── executive_summaries/    # 5階層サマリー (01_per_run 〜 05_annual)
 │   ├── vector_db/              # 検索エンジンインデックス (index.json)
+│   ├── database/               # データベースエンジン永続化データ
+│   ├── evaluations/            # IR 評価結果 & ベンチマークレポート
+│   ├── logs/                   # パイプライン実行ログ
+│   ├── supervisor/             # プロセススーパーバイザー状態・ソケット
 │   ├── index.md                # OKF 論文統合インデックス
 │   └── log.md                  # パイプライン実行履歴ログ
 ├── src/
@@ -217,15 +293,38 @@ make check              ## format, static_analysis, test を一括実行 (品質
 │   ├── search/                 # 2層検索基盤 (engine, platform, vector) (DSN-04)
 │   ├── security/               # 共通セキュリティ・AST ガード & RBAC (DSN-07)
 │   ├── mcp/                    # 戦略的 MCP サーバー群 (DSN-08)
-│   └── web/                    # API Gateway & UI プレゼンテーション (DSN-09)
+│   ├── web/                    # API Gateway & UI プレゼンテーション (DSN-09)
+│   ├── orchestrator/           # 普遍的インテリジェンス・オーケストレーター (DSN-11)
+│   │   ├── pir/                # Priority Intelligence Requirements 管理
+│   │   ├── harvest/            # 収集フェーズ制御
+│   │   ├── processing/         # 処理フェーズ制御
+│   │   ├── analysis/           # 分析フェーズ制御
+│   │   ├── dissemination/      # 配布フェーズ制御
+│   │   ├── feedback/           # フィードバック & IR 評価
+│   │   ├── workflow/           # DAG ワークフロー & Saga
+│   │   ├── engine.py           # オーケストレーションエンジン本体
+│   │   └── cli.py              # CLI エントリポイント (cycle / daemon)
+│   └── supervisor/             # 汎用プロセススーパーバイザー & 調停基盤 (DSN-12)
+│       ├── workers/            # ワーカー種別 (Sync / Gthread / Async)
+│       ├── arbiter.py          # マスタープロセス調停器
+│       ├── control.py          # シグナル & IPC 制御
+│       ├── heartbeat.py        # ハートビート & 自己回復
+│       ├── top.py              # リアルタイムモニタリング
+│       └── cli.py              # CLI エントリポイント (start / status / top)
 ├── tests/                      # 包括的テストスイート (1:1 ミラーリング)
 │   ├── spider/                 # クローラーテスト
 │   ├── pipeline/               # パイプラインテスト
-│   ├── database/               # データベーステスト
-│   ├── search/                 # 2層検索エンジンテスト (67件)
+│   ├── database/               # データベーステスト (scenarios/ 含む)
+│   ├── search/                 # 2層検索エンジンテスト
 │   ├── security/               # セキュリティ・AST テスト
 │   ├── mcp/                    # MCP サーバーテスト
-│   └── web/                    # Web Gateway テスト
+│   ├── web/                    # Web Gateway テスト
+│   ├── orchestrator/           # オーケストレーターテスト
+│   └── supervisor/             # スーパーバイザーテスト
+├── config/                     # パイプライン設定ファイル群
+├── templates/                  # サマリーレンダリングテンプレート
+├── site/                       # Web UI 静的ファイル (HTML / CSS / JS)
+├── tools/                      # 開発補助ツール (Closure Compiler 等)
 ├── Makefile                    # ビルド & 運用自動化ターゲット
 ├── pyproject.toml              # プロジェクトメタデータ & ツール設定
 └── README.md                   # 本ドキュメント
@@ -240,7 +339,7 @@ make check              ## format, static_analysis, test を一括実行 (品質
 1. **トリプル品質ゲート (Triple Quality Gates)**:
    - 全コード変更は `make check` (`make format`, `make static_analysis`, `make test`) を 100% 通過する必要があります。
 2. **Issue 駆動開発**:
-   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます。
+   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（Issue 001〜070 全70件完了）。
 3. **相対パス厳守**:
    - リポジトリ内の全 Markdown ドキュメントにおいて実効絶対パスリンクは完全 0 件に保たれ、高い移植性と完全なトレーサビリティが保証されています。
 

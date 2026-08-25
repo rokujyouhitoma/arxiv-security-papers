@@ -18,39 +18,40 @@
   - 全主要機能 (F-01〜F-08) のマスター一覧、設計ページリンク、およびモジュール関係性マップ。
 
 ### 3. 設計仕様 (Architecture & Feature Designs)
-- 🏗️ **[[DSN-01] 基本設計書 (HLD)](designs/DSN-01-high_level_design.md)**
-  - システム全体アーキテクチャ、4大ピラー、および要求事項追跡マトリクス (RTM)。
-- ⚙️ **[[DSN-02] 詳細設計書 (LLD)](designs/DSN-02-low_level_design.md)**
-  - Python/JS モジュール仕様、関数シグネチャ、データ構造、ツール設定。
-- 📦 **[[DSN-03] 論文収集 ＆ OKF v0.2 変換設計](designs/DSN-03-paper_collector_and_okf_converter.md)**
-  - F-01 (arXiv収集/PDF抽出/原本保存) および F-02 (Google OKF v0.2 変換) の個別機能設計。
-- 📊 **[[DSN-04] 5階層エグゼクティブサマリー設計](designs/DSN-04-five_tier_executive_summaries.md)**
-  - F-03 (01_per_run〜05_annual 5階層サマリー/完全日本語化/表形式/Mermaid) の個別機能設計。
-- 🧠 **[[DSN-05] 5手法統合マルチエンジン検索設計](designs/DSN-05-multi_engine_hybrid_search.md)**
-  - F-04 (Vector, BM25, Inverted, FM-Index, Recency 5手法フュージョン検索) の個別機能設計。
-- 🔌 **[[DSN-06] MCP サーバ設計](designs/DSN-06-mcp_server_and_ai_integration.md)**
-  - F-05 (MCP JSON-RPC 2.0 4大ツール/パス境界セキュリティガード) の個別機能設計。
-- 🎨 **[[DSN-07] Web ポータル ＆ Markdown Compiler 設計](designs/DSN-07-web_portal_and_markdown_compiler.md)**
-  - F-06 (Web UI), F-07 (Markdown Compiler Engine), F-08 (Closure Compiler) の個別機能設計。
-- 🔍 **[[DSN-08] Lucene / Solr モジュラー検索アーキテクチャ設計](designs/DSN-08-lucene-solr-modular-architecture.md)**
-  - 分離型トークナイザ/CharFilter、DocValues、PostingsList、ManagedSchema の詳細設計。
-- 📈 **[[DSN-09] 可観測性 ＆ パフォーマンスプロファイリング設計](designs/DSN-09-observability-and-performance-profiling.md)**
-  - リアルタイムクエリプロファイラ、メモリフットプリント追跡、メトリクスエクスポータ設計。
-- 🎯 **[[DSN-10] 検索エンジン評価フレームワーク設計](designs/DSN-10-search-engine-evaluation-framework.md)**
-  - NDCG@K, MRR@K, MAP, Precision/Recall 自動ベンチマークスイート設計。
-- 🛡️ **[[DSN-11] リポジトリセキュリティ ＆ 脅威防御設計](designs/DSN-11-repository-security-and-threat-defense.md)**
-  - AST セキュリティサンドボックス、RBAC エンジン、パス走査検証防御設計。
-- 🌐 **[[DSN-12] MCP 戦略的エコシステム拡張設計](designs/DSN-12-mcp-strategic-ecosystem-expansion.md)**
-  - 観測性・Tech Radar・脅威防御 MCP サーバー群およびセキュリティ堅牢化設計。
-- ⚡ **[[DSN-13] SQLite Vector 互換アーキテクチャ設計](designs/DSN-13-sqlite-vector-architecture.md)**
-  - PEP 249 DB-API 2.0、VFS、Pager、4KB Paged B+Tree、VDBE バイトコードエンジン設計。
-- 🏛️ **[[DSN-14] 次世代データベースエンジン 包括的アーキテクチャ設計](designs/DSN-14-database_engine_architecture.md)**
-  - Slotted Page、ディスク永続 WAL & ARIES リカバリ、MVCC / SS2PL、CoW / LMDB ゼロコピー、LSM-Tree & Bloom フィルタ、分散協調・合意（Raft/Paxos/PBFT）、厳格クォーラム & CRDT、2PC & Saga パターン。
 
-### 4. AI エージェント & MCP 連携 (AI & MCP Specification)
+#### 上位・横断設計
+- 🏗️ **[[DSN-01] 全体高位アーキテクチャ設計書 (HLD)](designs/DSN-01-high_level_design.md)**
+  - システム全体アーキテクチャ、7大サブシステム (spider / pipeline / database / search / security / mcp / web / orchestrator / supervisor)、要求事項追跡マトリクス (RTM)。
+- ⚙️ **[[DSN-02] 全体低位アーキテクチャ設計書 (LLD / Common Protocols)](designs/DSN-02-low_level_design.md)**
+  - Python モジュール仕様、関数シグネチャ、データ構造、共通プロトコル、ツール設定。
+
+#### サブシステム個別設計 (1:1 パッケージ対応)
+- 📦 **[[DSN-03] ETL データパイプライン設計書](designs/DSN-03-pipeline_architecture.md)**
+  - `src/pipeline/` — arXiv / IACR / Advisory アダプター、pdftotext 高品質抽出、原本保存 (raw_data/)、Google OKF v0.2 変換、5階層サマリー自律生産。
+- 📊 **[[DSN-04] 2層検索エンジン ＆ プラットフォーム設計書](designs/DSN-04-search_engine_and_platform.md)**
+  - `src/search/` — Lucene パラダイム BM25 コアエンジン層 (engine/)、Solr パラダイム ManagedSchema プラットフォーム層 (platform/)、HNSW ベクトル RRF 融合 (vector/)。
+  - 補足仕様: **[[DSN-04-01] ハイブリッド検索詳細仕様](designs/DSN-04-01-hybrid_search_specification.md)** — 5手法フュージョン検索アルゴリズム詳細設計。
+- 🧠 **[[DSN-05] ゼロ依存 4層ベクトルデータベース ＆ 分散合意設計書](designs/DSN-05-database_engine_architecture.md)**
+  - `src/database/` — 4KB SlottedPage、2Q Buffer Pool、WAL & ARIES 障害回復、B+Tree、LSM-Tree、PAX 列指向、CBO オプティマイザ、分散 Raft / Saga / 2PC / Consistent Hashing、PEP 249 DB-API 互換ドライバ。
+- 🕷️ **[[DSN-06] ゼロ外部依存 分散 Web クローラー ＆ スパイダー基盤設計書](designs/DSN-06-distributed_spider_and_crawler.md)**
+  - `src/spider/` — OPIC クロール順序付け、AutoThrottle レート制限、スケーラブル・ブルームフィルタ、SPA 状態復元。
+- 🔒 **[[DSN-07] 共通セキュリティ基盤・AST ガード ＆ RBAC エンジン設計書](designs/DSN-07-security_guard_and_rbac.md)**
+  - `src/security/` — ゼロトラスト AST セキュリティサンドボックス、RBAC エンジン、パス走査検証防御。
+- 🔌 **[[DSN-08] MCP 戦略的エコシステム設計書](designs/DSN-08-mcp_strategic_ecosystem.md)**
+  - `src/mcp/` — 論文インテリジェンス (papers_server)、技術動向レーダー (tech_radar_server)、脅威防御・パッチ (threat_defense_server)、可観測性プロファイラ (observability_server) の 4 大 JSON-RPC 2.0 サーバー。
+- 🌐 **[[DSN-09] API Gateway ＆ UI プレゼンテーション設計書](designs/DSN-09-web_gateway_and_presentation.md)**
+  - `src/web/` — PEP 3333 準拠 WSGI Gateway、REST API、Glassmorphism Web 検索 UI、動的 HTML Markdown プレビュー層。
+- 📈 **[[DSN-10] 可観測性 (Observability) ＆ 情報検索評価 (IR Eval) 設計書](designs/DSN-10-observability_and_eval_framework.md)**
+  - 横断的基盤 — リアルタイムクエリプロファイラ、NDCG@K / MRR@K / MAP 自動ベンチマーク、メトリクスエクスポータ。
+- 🎯 **[[DSN-11] 普遍的自律型インテリジェンス・ライフサイクル・オーケストレーション包括設計書](designs/DSN-11-intelligence_orchestration_engine.md)**
+  - `src/orchestrator/` — 計画 (PIR 策定) → 収集 → 処理 → 分析・生産 → 配布 → 評価 (NDCG/MAP) の 6 大フェーズ閉ループ自律駆動、ナレッジギャップ自己適応。
+- ⚙️ **[[DSN-12] 汎用プロセススーパーバイザー ＆ 調停基盤設計書](designs/DSN-12-process_supervisor_and_arbiter.md)**
+  - `src/supervisor/` — Gunicorn スタイル Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー、Systemd 依存関係順序制御、動的スケーリング、自己回復・ハートビート監視。
+
+### 4. AI エージェント ＆ MCP 連携 (AI & MCP Specification)
 - 🔌 **[[MCP-01] MCP サーバ ＆ ベクトル DB 仕様書](mcp/MCP-01-mcp_server_specification.md)**
   - MCP JSON-RPC 2.0 サーバの 4 大ツール仕様、ベクトル DB スキーマ、およびセキュリティサンドボックス検証規則。
 
-### 5. Issue 台帳 & 履歴 (Issues & Task Ledger)
+### 5. Issue 台帳 ＆ 履歴 (Issues & Task Ledger)
 - 🎯 **[[ISS-00] Issue 台帳 (Issue Ledger)](issues/README.md)**
-  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/`)。
+  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — Issue 001〜070 全70件完了)。
