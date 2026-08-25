@@ -9,7 +9,8 @@ def test_supervisor_config_defaults() -> None:
     cfg = SupervisorConfig()
     assert cfg.bind_host == "0.0.0.0"
     assert cfg.bind_port == 8000
-    assert cfg.workers >= 2
+    assert cfg.workers == 2
+    assert cfg.db_worker_count == 3
     assert cfg.worker_class == "sync"
     assert cfg.timeout == 30.0
     assert cfg.manage_database is True

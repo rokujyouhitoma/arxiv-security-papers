@@ -11,6 +11,13 @@ import enum
 from typing import Callable, Optional
 
 
+class WorkerLabel(str, enum.Enum):
+    """Standardized worker category labels for pool-isolated scaling and lifecycle management."""
+
+    WEB = "web"
+    DATABASE = "database"
+
+
 class ServiceRole(enum.Enum):
     """Archetype classifying the operational model of a managed unit."""
 

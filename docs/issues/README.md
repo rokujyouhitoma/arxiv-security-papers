@@ -10,7 +10,6 @@
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **074** | アイドル状態継続後のワーカー全滅・ゾンビプロセス回収不備の修正 | Bug | High | New | [074-fix-idle-worker-death-and-zombie-reaping.md](074-fix-idle-worker-death-and-zombie-reaping.md) |
 | **073** | ワーカープロセスおよび Arbiter の RSS メモリ肥大化（各 ~1.37 GB）修正 | Bug | High | New | [073-fix-worker-rss-memory-bloat-on-startup.md](073-fix-worker-rss-memory-bloat-on-startup.md) |
-| **072** | `scale` コマンド実行時に DB ワーカーが巻き添えで停止・消滅する問題の修正 | Bug | High | New | [072-fix-scale-command-kills-db-worker.md](072-fix-scale-command-kills-db-worker.md) |
 
 ---
 
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **072** | `scale` コマンド実行時に DB ワーカーが巻き添えで停止・消滅する問題の修正および Web/DB プール分離管理 | Bug | 2026-08-26 | [072-fix-scale-command-kills-db-worker.md](closed/072-fix-scale-command-kills-db-worker.md) |
 | **071** | Arbiter（親プロセス）の突然死・クラッシュおよび予期しない PID 変化の修正 | Bug | 2026-08-26 | [071-fix-arbiter-crash-and-unexpected-restart.md](closed/071-fix-arbiter-crash-and-unexpected-restart.md) |
 | **070** | Supervisor CLI top リアルタイムモニタリング機能の実装 | Feature | 2026-08-23 | [070-implement-supervisor-cli-top-monitoring.md](closed/070-implement-supervisor-cli-top-monitoring.md) |
 | **069** | Gunicorn スタイル Pre-fork プロセススーパーバイザー & 調停基盤 (src/supervisor/) の実装 | Feature | 2026-08-23 | [069-implement-gunicorn-style-process-supervisor-and-arbiter.md](closed/069-implement-gunicorn-style-process-supervisor-and-arbiter.md) |

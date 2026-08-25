@@ -139,3 +139,73 @@ def test_async_worker_execution() -> None:
     worker.alive = False
     t.join(timeout=2.0)
     assert worker.requests_handled == 0
+
+
+def test_dedicated_db_worker_module(tmp_path) -> None:
+    from supervisor.workers.db_worker import DatabaseWorker as DedicatedDBWorker
+
+    cfg = SupervisorConfig(workspace_dir=str(tmp_path))
+    pulses = []
+
+    worker = DedicatedDBWorker(
+        worker_id="dedicated_db_01",
+        config=cfg,
+        pulse_callback=lambda pid, meta: pulses.append(meta),
+    )
+    assert worker._verify_storage_health() is True
+    worker._flush_and_checkpoint()
+    assert worker.checkpoints_completed == 1
+
+    t = threading.Thread(target=worker.run, daemon=True)
+    t.start()
+    time.sleep(0.2)
+    assert worker.db_ready is True
+    worker.alive = False
+    t.join(timeout=2.0)
+
+    assert len(pulses) > 0
+    assert pulses[0]["subsystem"] == "database"
+
+
+def test_gthread_worker_run_loop() -> None:
+    cfg = SupervisorConfig(bind_port=9984, threads=2)
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_sock.bind(("127.0.0.1", 0))
+    server_sock.listen(5)
+
+    worker = GthreadWorker(
+        worker_id="gthread_loop_01",
+        config=cfg,
+        server_socket=server_sock,
+        app_target=dummy_wsgi_app,
+    )
+
+    t = threading.Thread(target=worker.run, daemon=True)
+    t.start()
+    time.sleep(0.2)
+    worker.alive = False
+    t.join(timeout=2.0)
+    server_sock.close()
+
+
+def test_sync_worker_run_loop() -> None:
+    cfg = SupervisorConfig(bind_port=9985)
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_sock.bind(("127.0.0.1", 0))
+    server_sock.listen(5)
+
+    worker = SyncWorker(
+        worker_id="sync_loop_01",
+        config=cfg,
+        server_socket=server_sock,
+        app_target=dummy_wsgi_app,
+    )
+
+    t = threading.Thread(target=worker.run, daemon=True)
+    t.start()
+    time.sleep(0.2)
+    worker.alive = False
+    t.join(timeout=2.0)
+    server_sock.close()

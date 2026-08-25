@@ -1,6 +1,7 @@
 """Unit tests for Arbiter process manager and lifecycle orchestration."""
 
 import os
+import signal
 from unittest.mock import MagicMock, patch
 
 from supervisor.arbiter import Arbiter
@@ -215,3 +216,124 @@ def test_arbiter_main_loop_exception_cleanup(tmp_path, caplog) -> None:
         sock_path
     ), "control.sock must be deleted after abnormal loop exit"
     assert "Unexpected crash in main event loop" in caplog.text
+
+
+def test_arbiter_scale_web_preserves_db(tmp_path) -> None:
+    """Web ワーカーのスケーリング時に DB ワーカーが維持されることを検証する。"""
+    cfg = SupervisorConfig(
+        workspace_dir=str(tmp_path),
+        workers=2,
+        db_worker_count=3,
+        manage_database=True,
+    )
+    arbiter = Arbiter(cfg)
+
+    # Populate mock workers
+    arbiter.web_workers = {1001: MagicMock(), 1002: MagicMock()}
+    arbiter.db_workers = {2001: MagicMock(), 2002: MagicMock(), 2003: MagicMock()}
+
+    with patch.object(arbiter, "spawn_worker") as mock_spawn:
+        res = arbiter.handle_control_command(
+            {"cmd": "scale", "workers": 4, "label": "web"}
+        )
+        assert res["status"] == "ok"
+        assert res["target_type"] == "web"
+        assert res["target_workers"] == 4
+        assert arbiter.config.workers == 4
+        assert arbiter.config.db_worker_count == 3
+        # Should spawn 2 new web workers
+        assert mock_spawn.call_count == 2
+        mock_spawn.assert_called_with("web")
+
+
+def test_arbiter_scale_db_preserves_web(tmp_path) -> None:
+    """DB ワーカーのスケーリング時に Web ワーカーが維持されることを検証する。"""
+    cfg = SupervisorConfig(
+        workspace_dir=str(tmp_path),
+        workers=2,
+        db_worker_count=3,
+        manage_database=True,
+    )
+    arbiter = Arbiter(cfg)
+
+    arbiter.web_workers = {1001: MagicMock(), 1002: MagicMock()}
+    arbiter.db_workers = {2001: MagicMock(), 2002: MagicMock(), 2003: MagicMock()}
+
+    with patch("os.kill") as mock_kill:
+        res = arbiter.handle_control_command(
+            {"cmd": "scale", "workers": 1, "label": "db"}
+        )
+        assert res["status"] == "ok"
+        assert res["target_type"] == "database"
+        assert res["target_workers"] == 1
+        assert arbiter.config.db_worker_count == 1
+        assert arbiter.config.workers == 2
+        # Should stop 2 excess DB workers with SIGTERM, Web workers untouched
+        assert mock_kill.call_count == 2
+        for call_args in mock_kill.call_args_list:
+            assert call_args[0][0] in (2001, 2002, 2003)
+            assert call_args[0][1] == signal.SIGTERM
+
+
+def test_arbiter_scale_unknown_label(tmp_path) -> None:
+    """未知のラベルを指定した場合にエラーレスポンスが返されることを検証する。"""
+    cfg = SupervisorConfig(workspace_dir=str(tmp_path))
+    arbiter = Arbiter(cfg)
+    res = arbiter.handle_control_command(
+        {"cmd": "scale", "workers": 2, "label": "invalid_label"}
+    )
+    assert res["status"] == "error"
+    assert "Unknown target worker label" in res["error"]
+
+
+def test_arbiter_load_wsgi_app_fallback(tmp_path) -> None:
+    cfg = SupervisorConfig(
+        workspace_dir=str(tmp_path), app_uri="invalid.module:non_existent"
+    )
+    arbiter = Arbiter(cfg)
+    app = arbiter.load_wsgi_app()
+    assert callable(app)
+
+    # Test fallback invocation
+    status_captured = []
+    headers_captured = []
+
+    def start_response(status, headers):
+        status_captured.append(status)
+        headers_captured.append(headers)
+
+    resp = app({}, start_response)
+    assert status_captured == ["200 OK"]
+    assert b"Supervisor Active" in resp[0]
+
+
+def test_arbiter_signal_handling(tmp_path) -> None:
+    cfg = SupervisorConfig(workspace_dir=str(tmp_path), workers=2)
+    arbiter = Arbiter(cfg)
+    arbiter.init_signals()
+
+    # TTIN increases workers
+    arbiter._signal_queue.append(signal.SIGTTIN)
+    with patch.object(arbiter, "adjust_worker_pool") as mock_adjust:
+        arbiter._handle_queued_signals()
+        assert arbiter.config.workers == 3
+        mock_adjust.assert_called_once()
+
+    # TTOU decreases workers
+    arbiter._signal_queue.append(signal.SIGTTOU)
+    with patch.object(arbiter, "adjust_worker_pool") as mock_adjust:
+        arbiter._handle_queued_signals()
+        assert arbiter.config.workers == 2
+        mock_adjust.assert_called_once()
+
+    # SIGHUP reloads
+    arbiter._signal_queue.append(signal.SIGHUP)
+    with patch.object(arbiter, "reload") as mock_reload:
+        arbiter._handle_queued_signals()
+        mock_reload.assert_called_once()
+
+    # SIGTERM terminates
+    arbiter.running = True
+    arbiter._signal_queue.append(signal.SIGTERM)
+    arbiter._handle_queued_signals()
+    assert arbiter.running is False

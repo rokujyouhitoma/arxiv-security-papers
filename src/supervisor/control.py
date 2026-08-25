@@ -183,9 +183,9 @@ class ControlClient:
         """Retrieves system-wide supervisor status."""
         return self.send_command({"cmd": "status"})
 
-    def scale_workers(self, count: int) -> Dict[str, Any]:
-        """Dynamically scales web workers to target count."""
-        return self.send_command({"cmd": "scale", "workers": count})
+    def scale_workers(self, count: int, label: str = "web") -> Dict[str, Any]:
+        """Dynamically scales workers of target pool/label (web, database) to target count."""
+        return self.send_command({"cmd": "scale", "workers": count, "label": label})
 
     def reload(self) -> Dict[str, Any]:
         """Triggers graceful rolling reload."""

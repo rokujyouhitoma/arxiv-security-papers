@@ -118,41 +118,69 @@ class Arbiter:
         """Pushes received signals onto the internal event queue for deferred loop handling."""
         self._signal_queue.append(signum)
 
+    def _handle_status_command(self) -> Dict[str, Any]:
+        """Handles status query command."""
+        return {
+            "status": "ok",
+            "arbiter_pid": self.pid,
+            "uptime": round(time.time() - self.boot_time, 2),
+            "target_workers": self.config.workers,
+            "active_web_workers": len(self.web_workers),
+            "active_db_workers": len(self.db_workers),
+            "workers": self.watchdog.get_all_statuses(),
+            "bind": f"{self.config.bind_host}:{self.config.bind_port}",
+            "worker_class": self.config.worker_class,
+        }
+
+    def _handle_scale_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
+        """Handles pool-isolated scaling command."""
+        target_label = str(
+            req.get("label") or req.get("type") or req.get("pool") or "web"
+        ).lower()
+        new_count = int(req.get("workers", self.config.workers))
+        if new_count < 1:
+            return {"status": "error", "error": "Worker count must be >= 1"}
+
+        if target_label in ("web", "sync", "gthread", "async"):
+            self.config.workers = new_count
+            self.adjust_worker_pool()
+            return {
+                "status": "ok",
+                "target_type": "web",
+                "target_workers": self.config.workers,
+                "active_web_workers": len(self.web_workers),
+                "active_db_workers": len(self.db_workers),
+            }
+        if target_label in ("db", "database"):
+            self.config.db_worker_count = new_count
+            self.adjust_db_worker_pool()
+            return {
+                "status": "ok",
+                "target_type": "database",
+                "target_workers": self.config.db_worker_count,
+                "active_web_workers": len(self.web_workers),
+                "active_db_workers": len(self.db_workers),
+            }
+        return {
+            "status": "error",
+            "error": f"Unknown target worker label/type: '{target_label}'",
+        }
+
     def handle_control_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatches administrative commands received from the Unix control socket."""
         cmd = req.get("cmd", "")
         if cmd == "ping":
             return {"status": "ok", "message": "pong", "timestamp": time.time()}
-
         if cmd == "status":
-            return {
-                "status": "ok",
-                "arbiter_pid": self.pid,
-                "uptime": round(time.time() - self.boot_time, 2),
-                "target_workers": self.config.workers,
-                "active_web_workers": len(self.web_workers),
-                "active_db_workers": len(self.db_workers),
-                "workers": self.watchdog.get_all_statuses(),
-                "bind": f"{self.config.bind_host}:{self.config.bind_port}",
-                "worker_class": self.config.worker_class,
-            }
-
+            return self._handle_status_command()
         if cmd == "scale":
-            new_count = int(req.get("workers", self.config.workers))
-            if new_count < 1:
-                return {"status": "error", "error": "Worker count must be >= 1"}
-            self.config.workers = new_count
-            self.adjust_worker_pool()
-            return {"status": "ok", "target_workers": self.config.workers}
-
+            return self._handle_scale_command(req)
         if cmd == "reload":
             self.reload()
             return {"status": "ok", "message": "Rolling reload triggered"}
-
         if cmd == "stop":
             self.running = False
             return {"status": "ok", "message": "Shutdown sequence initiated"}
-
         return {"status": "error", "error": f"Unknown command: '{cmd}'"}
 
     def spawn_worker(self, worker_type: str = "web") -> Optional[int]:
@@ -231,6 +259,26 @@ class Arbiter:
                 except OSError:
                     pass
                 self.web_workers.pop(pid, None)
+                self.watchdog.remove_worker(pid)
+
+    def adjust_db_worker_pool(self) -> None:
+        """Maintains target database worker count (scaling up or down)."""
+        current_active = len(self.db_workers)
+        target = self.config.db_worker_count if self.config.manage_database else 0
+
+        if current_active < target:
+            needed = target - current_active
+            for _ in range(needed):
+                self.spawn_worker("db")
+        elif current_active > target:
+            excess = current_active - target
+            pids = list(self.db_workers.keys())[:excess]
+            for pid in pids:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except OSError:
+                    pass
+                self.db_workers.pop(pid, None)
                 self.watchdog.remove_worker(pid)
 
     def handle_sigchld(self) -> None:

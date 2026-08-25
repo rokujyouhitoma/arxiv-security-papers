@@ -33,6 +33,7 @@ class ServiceConfig:
     """Configuration for a named stateful managed service."""
 
     name: str = "default_service"
+    workers: int = 3
     hook_uri: Optional[str] = None
     sync_interval: float = 2.0
     timeout: float = 30.0
@@ -73,14 +74,14 @@ class SupervisorConfig:
     bind_host: str = "0.0.0.0"
     bind_port: int = 8000
     backlog: int = 2048
-    workers: int = dataclasses.field(
-        default_factory=lambda: max(2, (2 * (os.cpu_count() or 1)) + 1)
-    )
+    # Default Web workers: 2 (minimum redundant web pool)
+    workers: int = 2
     worker_class: str = "sync"
     threads: int = 1
     app_uri: str = "web.server:app"
     manage_database: bool = True
-    db_worker_count: int = 1
+    # Default DB workers: 3 (minimum distributed database quorum/consensus configuration)
+    db_worker_count: int = 3
     db_sync_timeout: float = 10.0
 
     def __post_init__(self) -> None:
@@ -111,6 +112,7 @@ class SupervisorConfig:
             self.services.append(
                 ServiceConfig(
                     name="database",
+                    workers=self.db_worker_count,
                     sync_interval=2.0,
                     timeout=self.timeout,
                 )

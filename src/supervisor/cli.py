@@ -109,10 +109,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Command: scale
     scale_parser = subparsers.add_parser(
-        "scale", help="Dynamically resize web worker pool"
+        "scale", help="Dynamically resize worker pool by label (web/database)"
     )
     scale_parser.add_argument(
         "--workers", "-w", type=int, required=True, help="New target worker count"
+    )
+    scale_parser.add_argument(
+        "--label",
+        "--type",
+        "-l",
+        "-t",
+        dest="label",
+        type=str,
+        default="web",
+        choices=["web", "database", "db"],
+        help="Target worker label/pool to scale (default: web)",
     )
 
     # Command: reload
@@ -244,8 +255,9 @@ def _handle_simple_cmd(
 ) -> int:
     """Handles scale, reload, stop, ping control commands."""
     if cmd == "scale":
-        resp = client.scale_workers(args.workers)
-        print(f"[+] Scaled worker pool: {resp}")
+        label = getattr(args, "label", "web")
+        resp = client.scale_workers(args.workers, label=label)
+        print(f"[+] Scaled worker pool ({label}): {resp}")
         return 0 if resp.get("status") == "ok" else 1
     if cmd == "reload":
         resp = client.reload()
