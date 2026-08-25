@@ -142,3 +142,23 @@ def test_search_client_fallback_when_no_service(tmp_path) -> None:
     assert client._fallback_handle_command({"cmd": "unknown"})["status"] == "error"
 
     client.close()
+
+
+def test_search_lifecycle_hook(tmp_path) -> None:
+    sock_path = str(tmp_path / "hook_search.sock")
+    from search.server.service import SearchLifecycleHook
+
+    hook = SearchLifecycleHook(socket_path=sock_path, workspace_dir=str(tmp_path))
+
+    # Setup
+    assert hook.setup() is True
+    assert os.path.exists(sock_path)
+    assert hook.health_check() is True
+
+    # Flush (no-op)
+    hook.on_flush()
+
+    # Teardown
+    hook.teardown()
+    assert not os.path.exists(sock_path)
+    assert hook.health_check() is False

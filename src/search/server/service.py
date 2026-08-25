@@ -15,6 +15,8 @@ import socket
 import threading
 from typing import Any, Dict, List, Optional
 
+from supervisor.contracts import LifecycleHook
+
 from ..vector_engine import VectorEngine
 
 logger = logging.getLogger(__name__)
@@ -273,3 +275,51 @@ class SearchService:
                 pass
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
+
+
+class SearchLifecycleHook(LifecycleHook):
+    """
+    Lifecycle hook for running SearchService within a ManagedServiceWorker.
+    """
+
+    def __init__(
+        self,
+        socket_path: Optional[str] = None,
+        workspace_dir: Optional[str] = None,
+    ) -> None:
+        ws = workspace_dir or os.path.abspath(
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                )
+            )
+        )
+        sock = socket_path or os.path.join(ws, "outputs", "supervisor", "search.sock")
+        self.service = SearchService(socket_path=sock, workspace_dir=ws)
+
+    def setup(self) -> bool:
+        """Initializes and starts search IPC server."""
+        try:
+            self.service.start()
+            return True
+        except Exception as e:
+            logger.error("Failed to start SearchService: %s", e)
+            return False
+
+    def health_check(self) -> bool:
+        """Verifies search engine responsiveness."""
+        if not self.service._running:
+            return False
+        try:
+            resp = self.service.handle_command({"cmd": "ping"})
+            return resp.get("status") == "ok" and resp.get("message") == "pong"
+        except Exception:
+            return False
+
+    def on_flush(self) -> None:
+        """No-op for search engine flush."""
+        pass
+
+    def teardown(self) -> None:
+        """Stops search IPC service and unlinks socket."""
+        self.service.stop()

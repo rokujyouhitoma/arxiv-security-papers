@@ -9,7 +9,7 @@ PEP 249 DB-API 2.0 driver, and 100% compatible Python standard `sqlite3` client 
 
 from .btree import BPlusTree, BTreeNode, ScalarKey
 from .buffer_pool import BufferFrame, BufferPool2Q, BufferPoolError
-from .client import VectorDBClient
+from .client import DatabaseClient, VectorDBClient
 from .codegen import CodeGenerator
 from .compiler import SQLCompiler
 from .cow import CoWBTree, CoWEngine, CoWNode, CoWReadTx, CoWWriteTx, MetaPage, MMapFile
@@ -118,6 +118,7 @@ from .planner import (
 from .profiler import DatabaseProfiler, ProfileResult
 from .protocol import VectorDBProtocolError, VectorDBProtocolHandler
 from .recovery import ARIESRecoveryManager
+from .service import DatabaseLifecycleHook, DatabaseService
 from .slotted_page import (
     DataType,
     OverflowManager,
@@ -331,10 +332,13 @@ __all__ = [
     # Compiler (Frontend)
     "SQLCompiler",
     "CodeGenerator",
-    # Protocol & Client
+    # Protocol & Client & IPC Service
     "VectorDBProtocolHandler",
     "VectorDBProtocolError",
     "VectorDBClient",
+    "DatabaseClient",
+    "DatabaseService",
+    "DatabaseLifecycleHook",
     # SQL AST & Executor
     "SQLCommandType",
     "SQLStatement",

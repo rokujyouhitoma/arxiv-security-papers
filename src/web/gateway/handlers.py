@@ -12,6 +12,7 @@ import mimetypes
 import os
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
+from database.client import DatabaseClient
 from mcp.papers_server import (
     PROMPTS_MANIFEST,
     RESOURCES_MANIFEST,
@@ -45,11 +46,20 @@ class GatewayHandlers:
         workspace_dir: str,
         vector_engine: Optional[VectorEngine] = None,
         search_client: Optional[SearchClient] = None,
+        database_client: Optional[DatabaseClient] = None,
     ) -> None:
         self.workspace_dir = workspace_dir
         self.site_dir = os.path.join(workspace_dir, "site")
         self._vector_engine = vector_engine
         self._search_client = search_client
+        self._database_client = database_client
+
+    @property
+    def database_client(self) -> DatabaseClient:
+        """Retrieves or creates DatabaseClient instance for IPC database requests."""
+        if self._database_client is None:
+            self._database_client = DatabaseClient(workspace_dir=self.workspace_dir)
+        return self._database_client
 
     @property
     def search_client(self) -> SearchClient:
