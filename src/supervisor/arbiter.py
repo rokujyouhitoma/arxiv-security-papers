@@ -18,7 +18,7 @@ import traceback
 from typing import Any, Callable, Dict, List, NoReturn, Optional, Set, cast
 
 from .config import SupervisorConfig
-from .contracts import DefaultLifecycleHook, ServiceRole, WorkerSpec
+from .contracts import DefaultLifecycleHook, LifecycleHook, ServiceRole, WorkerSpec
 from .control import ControlServer
 from .heartbeat import HeartbeatWatchdog
 from .workers import WORKER_CLASSES, BaseWorker, ManagedServiceWorker, SyncWorker
@@ -100,6 +100,24 @@ class Arbiter:
 
             self.wsgi_app = fallback_app
             return fallback_app
+
+    def load_hook(self, hook_uri: Optional[str]) -> LifecycleHook:
+        """Dynamically imports and instantiates a LifecycleHook from URI ('module.path:ClassName')."""
+        if not hook_uri:
+            return DefaultLifecycleHook()
+        if ":" in hook_uri:
+            module_name, obj_name = hook_uri.split(":", 1)
+        else:
+            module_name, obj_name = hook_uri, "LifecycleHook"
+        try:
+            mod = importlib.import_module(module_name)
+            cls_obj = getattr(mod, obj_name)
+            instance = cls_obj()
+            if isinstance(instance, LifecycleHook):
+                return instance
+            return DefaultLifecycleHook()
+        except Exception:
+            return DefaultLifecycleHook()
 
     def init_server_socket(self) -> socket.socket:
         """Pre-binds listening socket to allow child worker inheritance."""
@@ -237,7 +255,8 @@ class Arbiter:
         """Executes worker lifecycle loop in child process."""
         self.init_child_process()
         if spec.worker_class == "service" or spec.role == ServiceRole.STATEFUL_SERVICE:
-            hook = spec.hook or DefaultLifecycleHook()
+            hook_uri = spec.metadata.get("hook_uri") if spec.metadata else None
+            hook = spec.hook or self.load_hook(hook_uri)
             svc_worker = ManagedServiceWorker(
                 worker_id=worker_id,
                 config=self.config,
