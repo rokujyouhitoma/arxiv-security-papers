@@ -62,13 +62,20 @@ class HeartbeatWatchdog:
             self._worker_meta.pop(pid, None)
 
     def is_healthy(self, pid: int, timeout: Optional[float] = None) -> bool:
-        """Checks if a worker has sent a heartbeat within the timeout threshold."""
+        """Checks if a worker is healthy based on its operational state."""
         t_limit = timeout if timeout is not None else self.timeout
         with self._lock:
             last_pulse = self._heartbeats.get(pid)
             if last_pulse is None:
                 return False
-            return (time.monotonic() - last_pulse) <= t_limit
+            meta = self._worker_meta.get(pid, {})
+            if meta.get("status") != "ALIVE":
+                return False
+            if "is_healthy" in meta:
+                return bool(meta["is_healthy"])
+            if meta.get("is_handling_request", False):
+                return (time.monotonic() - last_pulse) <= t_limit
+            return True
 
     def get_hung_workers(self, timeout: Optional[float] = None) -> List[int]:
         """Returns a list of worker PIDs that exceeded the heartbeat timeout.
@@ -92,6 +99,16 @@ class HeartbeatWatchdog:
                     hung.append(pid)
         return hung
 
+    def _compute_worker_health(self, meta: Dict[str, Any], idle_seconds: float) -> bool:
+        """Helper to determine worker health based on type and request state."""
+        if meta.get("status") != "ALIVE":
+            return False
+        if "is_healthy" in meta:
+            return bool(meta["is_healthy"])
+        if meta.get("is_handling_request", False):
+            return idle_seconds <= self.timeout
+        return True
+
     def get_worker_status(self, pid: int) -> Optional[Dict[str, Any]]:
         """Retrieves structured telemetry metadata for a specific worker."""
         with self._lock:
@@ -99,8 +116,9 @@ class HeartbeatWatchdog:
                 return None
             meta = dict(self._worker_meta[pid])
             last_pulse = self._heartbeats.get(pid, 0.0)
-            meta["idle_seconds"] = round(time.monotonic() - last_pulse, 2)
-            meta["is_healthy"] = meta["idle_seconds"] <= self.timeout
+            idle_sec = round(time.monotonic() - last_pulse, 2)
+            meta["idle_seconds"] = idle_sec
+            meta["is_healthy"] = self._compute_worker_health(meta, idle_sec)
             return meta
 
     def get_all_statuses(self) -> Dict[int, Dict[str, Any]]:
@@ -111,7 +129,8 @@ class HeartbeatWatchdog:
             for pid, meta in self._worker_meta.items():
                 m = dict(meta)
                 last_pulse = self._heartbeats.get(pid, 0.0)
-                m["idle_seconds"] = round(now - last_pulse, 2)
-                m["is_healthy"] = m["idle_seconds"] <= self.timeout
+                idle_sec = round(now - last_pulse, 2)
+                m["idle_seconds"] = idle_sec
+                m["is_healthy"] = self._compute_worker_health(m, idle_sec)
                 res[pid] = m
             return res

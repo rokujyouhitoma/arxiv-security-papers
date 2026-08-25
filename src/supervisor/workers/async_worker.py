@@ -39,6 +39,7 @@ class AsyncWorker(BaseWorker):
             pulse_callback=pulse_callback,
         )
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._active_requests = 0
 
     @property
     def wsgi_app(self) -> Optional[Callable[..., Any]]:
@@ -113,6 +114,14 @@ class AsyncWorker(BaseWorker):
     async def _handle_stream(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
+        self._active_requests += 1
+        self.pulse(
+            {
+                "event_loop": "asyncio",
+                "is_handling_request": self._active_requests > 0,
+                "active_requests": self._active_requests,
+            }
+        )
         try:
             raw_data = await asyncio.wait_for(
                 reader.read(65536), timeout=self.config.timeout
@@ -133,6 +142,14 @@ class AsyncWorker(BaseWorker):
         except Exception:
             pass
         finally:
+            self._active_requests = max(0, self._active_requests - 1)
+            self.pulse(
+                {
+                    "event_loop": "asyncio",
+                    "is_handling_request": self._active_requests > 0,
+                    "active_requests": self._active_requests,
+                }
+            )
             try:
                 writer.close()
                 await writer.wait_closed()
@@ -142,7 +159,7 @@ class AsyncWorker(BaseWorker):
     async def _async_main(self) -> None:
         if not self.server_socket:
             while self.alive:
-                self.pulse()
+                self.pulse({"is_handling_request": False})
                 await asyncio.sleep(0.5)
             return
 
@@ -153,7 +170,13 @@ class AsyncWorker(BaseWorker):
 
         async def heartbeat_loop() -> None:
             while self.alive:
-                self.pulse({"event_loop": "asyncio"})
+                self.pulse(
+                    {
+                        "event_loop": "asyncio",
+                        "is_handling_request": self._active_requests > 0,
+                        "active_requests": self._active_requests,
+                    }
+                )
                 await asyncio.sleep(0.5)
 
         hb_task = asyncio.create_task(heartbeat_loop())

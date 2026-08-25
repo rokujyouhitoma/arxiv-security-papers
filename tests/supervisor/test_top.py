@@ -66,7 +66,38 @@ def test_top_render_dashboard() -> None:
     assert "sync" in dashboard
     assert "12348" in dashboard
     assert "search" in dashboard
+    assert "HEALTHY" in dashboard
     assert "42" in dashboard
+
+
+def test_top_render_dashboard_idle_worker_healthy() -> None:
+    """Verifies that workers idle for long durations still display as HEALTHY."""
+    mock_client = MagicMock()
+    viewer = SupervisorTopViewer(mock_client, no_color=True)
+
+    data = {
+        "status": "ok",
+        "arbiter_pid": 12345,
+        "uptime": 3600.0,
+        "target_workers": 1,
+        "active_web_workers": 1,
+        "bind": "0.0.0.0:8000",
+        "worker_class": "sync",
+        "workers": {
+            "12346": {
+                "pid": 12346,
+                "type": "sync",
+                "status": "ALIVE",
+                "is_healthy": True,
+                "requests_handled": 0,
+                "idle_seconds": 600.0,
+            }
+        },
+    }
+
+    dashboard = viewer.render_dashboard(data)
+    assert "HEALTHY" in dashboard
+    assert "600.0s" in dashboard
 
 
 def test_top_get_process_memory_mb() -> None:

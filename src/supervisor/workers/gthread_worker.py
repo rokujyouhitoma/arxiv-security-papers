@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import socket
+import threading
 import time
 from typing import Any, Callable, Dict, Optional
 
@@ -41,6 +42,29 @@ class GthreadWorker(SyncWorker):
         )
         self.num_threads = max(1, config.threads)
         self._executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
+        self._active_requests = 0
+        self._req_lock = threading.Lock()
+
+    def handle_client(self, client_sock: socket.socket) -> None:
+        """Processes client request and updates active request count."""
+        with self._req_lock:
+            self._active_requests += 1
+            is_active = self._active_requests > 0
+        self.pulse(
+            {"is_handling_request": is_active, "active_requests": self._active_requests}
+        )
+        try:
+            super().handle_client(client_sock)
+        finally:
+            with self._req_lock:
+                self._active_requests = max(0, self._active_requests - 1)
+                is_active = self._active_requests > 0
+            self.pulse(
+                {
+                    "is_handling_request": is_active,
+                    "active_requests": self._active_requests,
+                }
+            )
 
     def run(self) -> None:
         """Main execution loop dispatching incoming sockets to thread pool."""
@@ -53,7 +77,15 @@ class GthreadWorker(SyncWorker):
         )
 
         while self.alive:
-            self.pulse({"active_threads": self.num_threads})
+            with self._req_lock:
+                is_active = self._active_requests > 0
+            self.pulse(
+                {
+                    "active_threads": self.num_threads,
+                    "is_handling_request": is_active,
+                    "active_requests": self._active_requests,
+                }
+            )
             if not self.server_socket:
                 time.sleep(0.1)
                 continue

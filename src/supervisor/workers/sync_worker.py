@@ -161,6 +161,12 @@ class SyncWorker(BaseWorker):
     def handle_client(self, client_sock: socket.socket) -> None:
         """Processes a single HTTP connection through the target callable application."""
         client_sock.settimeout(self.config.timeout)
+        self.pulse(
+            {
+                "is_handling_request": True,
+                "request_start": time.monotonic(),
+            }
+        )
         try:
             raw = client_sock.recv(65536)
             if not raw:
@@ -181,6 +187,7 @@ class SyncWorker(BaseWorker):
                 client_sock.close()
             except OSError:
                 pass
+            self.pulse({"is_handling_request": False})
 
     def run(self) -> None:
         """Main execution loop: accept connections, handle request, pulse heartbeat."""
