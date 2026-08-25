@@ -6,7 +6,10 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-現在、未完了のアクティブな Issue はありません（すべての Issue が解決・クローズ済みです）。
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **075** | Unix Domain Socket による DB・Web・Search の完全プロセス分離と IPC ラッパー基盤の実装 | Feature / Refactor | High | New | [075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md](075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md) |
+| **076** | Supervisor のドメイン非依存・汎用プロセスエンジン化と宣言的 Worker/Service 抽象化 | Feature / Refactor | High | New | [076-decouple-domain-workers-from-supervisor-generic-engine.md](076-decouple-domain-workers-from-supervisor-generic-engine.md) |
 
 ---
 
