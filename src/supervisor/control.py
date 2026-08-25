@@ -7,6 +7,7 @@ dynamic worker scaling, rolling configuration reloads, and graceful shutdowns.
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import socket
@@ -44,6 +45,10 @@ class ControlServer:
         self._server_sock.listen(16)
         self._server_sock.settimeout(0.5)
         self._running = True
+
+        # Ensure the socket file is removed even on abnormal process exit
+        # (e.g. SIGKILL reaching the Arbiter or an unhandled BaseException).
+        atexit.register(self._atexit_cleanup)
 
         self._thread = threading.Thread(target=self._listen_loop, daemon=True)
         self._thread.start()
@@ -100,6 +105,14 @@ class ControlServer:
             except OSError:
                 pass
             self._server_sock = None
+
+    def _atexit_cleanup(self) -> None:
+        """Removes the socket file on interpreter exit (covers abnormal exits)."""
+        if os.path.exists(self.socket_path):
+            try:
+                os.unlink(self.socket_path)
+            except OSError:
+                pass
 
     def stop(self) -> None:
         """Closes server socket and unlinks socket file."""

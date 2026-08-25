@@ -55,6 +55,15 @@ class SupervisorConfig:
     control_socket: Optional[str] = None
     timeout: float = 30.0
     graceful_timeout: float = 30.0
+    # request_timeout: applied only to workers actively handling a request.
+    # When a worker's heartbeat has not been refreshed within this window *and*
+    # the worker has ``is_handling_request=True``, it is considered hung and
+    # sent SIGKILL.  Defaults to the same value as ``timeout``.
+    request_timeout: float = 30.0
+    # idle_timeout: maximum seconds a worker may stay idle (no requests) before
+    # being gracefully retired.  0.0 means idle workers are never killed, which
+    # is the correct default for a pre-fork server with variable traffic.
+    idle_timeout: float = 0.0
 
     # Generalized Subsystems
     pools: List[PoolConfig] = dataclasses.field(default_factory=list)

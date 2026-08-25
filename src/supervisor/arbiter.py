@@ -9,11 +9,13 @@ the Unix domain socket IPC control server.
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 import signal
 import socket
 import sys
 import time
+import traceback
 from typing import Any, Callable, Dict, List, Optional, Set, cast
 
 from .config import SupervisorConfig
@@ -270,9 +272,16 @@ class Arbiter:
                 pass
 
     def check_hung_workers(self) -> None:
-        """Checks for unresponsive workers and kills them with SIGKILL."""
-        hung_pids = self.watchdog.get_hung_workers(self.config.timeout)
+        """Checks for unresponsive workers and kills them with SIGKILL.
+
+        Only workers with ``is_handling_request=True`` are considered hung
+        (see HeartbeatWatchdog.get_hung_workers).  After killing a hung worker
+        the correct worker type (web or db) is respawned to maintain pool
+        sizes.
+        """
+        hung_pids = self.watchdog.get_hung_workers(self.config.request_timeout)
         for pid in hung_pids:
+            is_db = pid in self.db_workers
             try:
                 os.kill(pid, signal.SIGKILL)
             except OSError:
@@ -281,7 +290,8 @@ class Arbiter:
             self.web_workers.pop(pid, None)
             self.db_workers.pop(pid, None)
             if self.running:
-                self.spawn_worker("web")
+                # Respawn the correct worker type so the pool stays balanced.
+                self.spawn_worker("db" if is_db else "web")
 
     def _drain_and_kill(
         self, workers: Dict[int, Any], initial_sig: int, timeout: float
@@ -403,6 +413,15 @@ class Arbiter:
                 self.handle_sigchld()
                 self.check_hung_workers()
                 time.sleep(0.5)
+        except BaseException as exc:  # pragma: no cover
+            # Catch unexpected crashes (e.g. MemoryError, SystemExit from a
+            # buggy signal handler) so the finally block always runs and
+            # cleans up the control socket.
+            logging.critical(
+                "[Arbiter] Unexpected crash in main event loop: %s\n%s",
+                exc,
+                traceback.format_exc(),
+            )
         finally:
             self.shutdown()
 

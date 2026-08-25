@@ -71,12 +71,23 @@ class HeartbeatWatchdog:
             return (time.monotonic() - last_pulse) <= t_limit
 
     def get_hung_workers(self, timeout: Optional[float] = None) -> List[int]:
-        """Returns a list of worker PIDs that exceeded the heartbeat timeout."""
+        """Returns a list of worker PIDs that exceeded the heartbeat timeout.
+
+        Only workers actively handling a request (``is_handling_request=True``)
+        are considered hung candidates.  Idle workers that have received no
+        requests simply have no opportunity to refresh their heartbeat, so they
+        must not be killed — killing them would destroy the worker pool even
+        under zero traffic.
+        """
         t_limit = timeout if timeout is not None else self.timeout
         now = time.monotonic()
         hung: List[int] = []
         with self._lock:
             for pid, last_pulse in self._heartbeats.items():
+                meta = self._worker_meta.get(pid, {})
+                # Skip idle workers — they are waiting for requests, not hung.
+                if not meta.get("is_handling_request", False):
+                    continue
                 if (now - last_pulse) > t_limit:
                     hung.append(pid)
         return hung

@@ -31,6 +31,10 @@ def test_heartbeat_hung_detection() -> None:
     watchdog.register_worker(pid1, "sync")
     watchdog.register_worker(pid2, "gthread")
 
+    # Mark pid2 as actively handling a request so it is eligible for hung detection.
+    # (IDLE workers are intentionally excluded from hung detection — see Issue 071.)
+    watchdog._worker_meta[pid2]["is_handling_request"] = True
+
     time.sleep(0.15)
     # Pulse pid1 only
     watchdog.record_heartbeat(pid1)
