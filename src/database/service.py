@@ -105,6 +105,10 @@ class DatabaseService:
             req = json.loads(raw.strip())
             if not isinstance(req, dict):
                 return {"status": "error", "error": "Request must be a JSON object"}
+            if req.get("op") == "execute_sql":
+                sql_text = str(req.get("params", {}).get("sql", "")).strip()
+                logger.info("⚡ [DatabaseService IPC] Received SQL query: %s", sql_text)
+                print(f"⚡ [DatabaseService IPC] Executing SQL: {sql_text}", flush=True)
             return self.handler.handle_request(req)
         except json.JSONDecodeError as err:
             return {"status": "error", "error": f"Invalid JSON: {err}"}
@@ -172,6 +176,10 @@ class DatabaseLifecycleHook(LifecycleHook):
         """Initializes database and starts IPC server."""
         try:
             self.service.start()
+            print(
+                f"⚡ [DatabaseService Worker] Database IPC daemon online on {self.service.socket_path}",
+                flush=True,
+            )
             return True
         except Exception as e:
             logger.error("Failed to start DatabaseService: %s", e)

@@ -77,6 +77,8 @@ class DatabaseClient:
 
     def send_request(self, req: Dict[str, Any]) -> Dict[str, Any]:
         """Sends a JSON request to the DatabaseService over Unix domain socket."""
+        if self._custom_handler is not None:
+            return self._custom_handler.handle_request(req)
         if not os.path.exists(self.socket_path):
             return self.fallback_handler.handle_request(req)
 

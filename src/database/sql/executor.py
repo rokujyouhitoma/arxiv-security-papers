@@ -4,6 +4,7 @@ SQL Execution Engine for Pure Python Vector Database.
 Evaluates DDL, DQL, DML, DCL, and TCL AST nodes against underlying vector storages and schemas.
 """
 
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -30,6 +31,8 @@ from .ast import (
 from .parser import SQLParser
 from .security import AccessController
 from .transaction import TransactionManager
+
+logger = logging.getLogger(__name__)
 
 
 class SQLExecutionError(Exception):
@@ -105,6 +108,8 @@ class SQLExecutor:
         Parses and executes a raw SQL statement with RBAC enforcement and TCL support.
         """
         effective_role = role or self.access_controller.current_role
+        logger.info("⚡ [SQL Exec] [%s] %s", effective_role, sql.strip())
+        print(f"⚡ [SQL Exec] [{effective_role}] {sql.strip()}", flush=True)
         stmt = self.parser.parse(sql)
         return self.execute_statement(stmt, role=effective_role)
 
