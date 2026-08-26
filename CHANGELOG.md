@@ -29,6 +29,30 @@
 
 ## [Unreleased]
 
+### [Added]
+- **ゼロ依存 Pure Python PDF テキスト抽出 & 空間レイアウト再構築エンジン (`src/pdf_engine/`) (DSN-13)**:
+  - **ISO 32000-1:2008 (PDF 1.7) & ISO 32000-2:2020 (PDF 2.0) 完全準拠**: Poppler / `pdftotext` などの外部バイナリに一切依存せず、Python 3.14+ 標準ライブラリのみで動作する PDF テキスト抽出サブシステムを新規実装
+  - **コアモジュール群**:
+    - `parser.py`: ISO 32000-1 Clause 7.2/7.3 準拠のゼロコピー字句解析器（`PdfLexer`）および再帰オブジェクトパーサー（`PdfParser`）
+    - `xref.py`: Clause 7.5 準拠の古典的 `xref` テーブル、PDF 1.5+ 圧縮 `/Type /XRef` ストリーム（可変長バイト幅 `/W`）、および `/Type /ObjStm` オブジェクトストリームのオンデマンド解決
+    - `decompress.py`: Clause 7.4 準拠の `/FlateDecode`（`zlib`）、`/ASCIIHexDecode`、`/ASCII85Decode`、および Table 8 PNG Predictor（None/Sub/Up/Average/Paeth）差分解除
+    - `navigator.py`: Clause 7.7 準拠の `/Catalog` $\to$ `/Pages` ツリー深さ優先走査と `/Resources`（`/Font`）のスコープ継承解決
+    - `font.py`: Clause 9.6-9.10 準拠の `/ToUnicode` CMap パーサー（`bfchar`, `bfrange`）、`/Differences` 配列 + AGL（Adobe Glyph List）解決、数学記号・ギリシャ文字・リガチャ（合字: fi, fl, ff 等）正規化
+    - `interpreter.py`: Clause 8.3 & 9.2-9.4 準拠の Content Stream テキストオペレータ（`BT`, `ET`, `Tf`, `Tm`, `Td`, `TD`, `T*`, `Tj`, `TJ`, `'`, `"`）のステートマシン実行器と変換行列（$T_m, T_{lm}, CTM$）追跡
+    - `layout.py`: 2次元幾何空間配置、arXiv 2段組（Two-Column）ガター境界自動検出、読書順序（ヘッダー $\to$ 左カラム $\to$ 右カラム $\to$ フッター）ソート、行クラスタリング、単語間スペース補正、行末ハイフネーション結合（De-hyphenation）
+    - `extractor.py` & `__main__.py`: 高水準統一インターフェース（ファイルパス、バイナリバイト列、BytesIO 対応）および CLI ランナー
+    - `benchmark.py`: 蓄積済み実 PDF 論文群に対する自動精度評価・回帰ベンチマークツール
+  - `src/pipeline/ingestion/pdf_extractor.py`: `fetch_single_pdf_and_text` 内で `PurePdfTextExtractor` を優先実行し、パース失敗時のみ `pdftotext` CLI にフォールバックする二重防護体制を統合
+  - `docs/designs/DSN-13-pure_python_pdf_text_extractor.md`: DSN-05 形式に準拠した包括的詳細設計書（ISO 32000 仕様分析、数理モデル、14,449件実データ検証計画）の策定
+
+### [Fixed]
+- **Supervisor Arbiter ローリングリロード時の `control.sock` 保護**:
+  - `src/supervisor/control.py`: ローリングリロード（`SIGQUIT`）時に終了する子プロセスが親 Arbiter の UNIX ドメインソケット（`control.sock`）を誤って unlink 削除する問題を修正し、`_creator_pid` チェックおよび atexit unregister を導入
+  - `tests/supervisor/test_control.py`: 子プロセス終了時のソケット保持を検証する単体テストを追加
+- **YAML Frontmatter 内のエスケープ引用符パーサー修正 & サマリー全件再生成**:
+  - `src/pipeline/reporter/summary_generator.py` および `index_updater.py`: YAML Frontmatter 内のエスケープ引用符（`\"`）を正確にアンエスケープする正規表現パーサーを導入し、タイトル途切れ（`[When \]`）を解消
+  - `outputs/executive_summaries/`（02_daily, 03_monthly, 04_quarterly, 05_annual）および `outputs/index.md` の全マークダウンサマリーを再生成
+
 ### [Changed]
 - **Python 3.14.7 ランタイム移行 ＆ .venv 仮想環境の再構築 (Issue 009)**:
   - 開発・実行ランタイムを Python 3.14.7 (`~/.local/python-3.14.7/bin/python3`) へアップグレードし、`.venv` 仮想環境を再作成
