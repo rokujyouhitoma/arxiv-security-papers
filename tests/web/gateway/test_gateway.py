@@ -123,3 +123,23 @@ def test_gateway_mcp_jsonrpc_tool_list():
     assert data["jsonrpc"] == "2.0"
     assert "tools" in data["result"]
     assert data["id"] == 1
+
+
+def test_gateway_static_okf_papers_transparent_resolution(tmp_path: Any) -> None:
+    # Create mock okf_papers in outputs directory
+    outputs_dir = tmp_path / "outputs" / "okf_papers" / "2026-08-17"
+    outputs_dir.mkdir(parents=True)
+    paper_file = outputs_dir / "2608.16551.md"
+    paper_file.write_text("# Test OKF Paper Content", encoding="utf-8")
+
+    app = WSGIApplication(workspace_dir=str(tmp_path))
+    status_captured: List[str] = []
+
+    def start_response(status: str, headers: List[Tuple[str, str]]) -> None:
+        status_captured.append(status)
+
+    env = make_test_environ(method="GET", path="/okf_papers/2026-08-17/2608.16551.md")
+    res = app(env, start_response)
+
+    assert status_captured[0] == "200 OK"
+    assert b"# Test OKF Paper Content" in res[0]

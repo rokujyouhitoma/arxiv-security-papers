@@ -290,28 +290,29 @@ class GatewayHandlers:
         )
         return response_html(start_response, html_doc)
 
+    def _check_safe_file(self, target_path: str) -> Optional[str]:
+        """Checks if a target path is safe, exists, and is a file."""
+        if (
+            is_safe_workspace_path(target_path, self.workspace_dir)
+            and os.path.exists(target_path)
+            and os.path.isfile(target_path)
+        ):
+            return target_path
+        return None
+
     def _resolve_static_file(self, clean_path: str) -> Optional[str]:
-        if clean_path in ["", "index.html"]:
-            clean_path = "index.html"
-        site_path = os.path.join(self.site_dir, clean_path)
+        target = "index.html" if clean_path in ["", "index.html"] else clean_path
+        site_path = os.path.join(self.site_dir, target)
         if os.path.exists(site_path) and os.path.isfile(site_path):
             return site_path
 
-        # Handle raw_data mapping
-        if clean_path.startswith("raw_data/"):
-            raw_data_path = os.path.join(self.workspace_dir, "outputs", clean_path)
-            if os.path.exists(raw_data_path) and os.path.isfile(raw_data_path):
-                return raw_data_path
-            return None
+        # Handle outputs/ alias mapping (raw_data, okf_papers, executive_summaries)
+        if target.startswith(("raw_data/", "okf_papers/", "executive_summaries/")):
+            return self._check_safe_file(
+                os.path.join(self.workspace_dir, "outputs", target)
+            )
 
-        ws_path = os.path.join(self.workspace_dir, clean_path)
-        if (
-            is_safe_workspace_path(ws_path, self.workspace_dir)
-            and os.path.exists(ws_path)
-            and os.path.isfile(ws_path)
-        ):
-            return ws_path
-        return None
+        return self._check_safe_file(os.path.join(self.workspace_dir, target))
 
     @staticmethod
     def _guess_content_type(full_path: str) -> str:
