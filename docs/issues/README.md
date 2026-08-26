@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **077** | Supervisor デーモンモード（`-D` / `--daemon`）およびバックグラウンド実行・ログファイル出力機能の実装 | Feature | High | New | [077-implement-supervisor-daemon-mode-and-background-execution.md](077-implement-supervisor-daemon-mode-and-background-execution.md) |
+| **077** | Supervisor デーモンモード（`-D` / `--daemon`）およびバックグラウンド実行・ログファイル出力機能の実装 | Feature | High | In Progress | [077-implement-supervisor-daemon-mode-and-background-execution.md](077-implement-supervisor-daemon-mode-and-background-execution.md) |
 
 ---
 
