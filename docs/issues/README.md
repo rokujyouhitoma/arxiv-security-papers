@@ -6,7 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在アクティブな Issue はありません。*
+現在進行中のアクティブな Issue はありません。
 
 ---
 
@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **078** | DSN-12 準拠: DAG トポロジカル順序起動、ONESHOT_TASK バッチ管理、および QueueWorker の実装 | Feature | 2026-08-26 | [078-implement-dsn12-dag-boot-oneshot-and-queue-workers.md](closed/078-implement-dsn12-dag-boot-oneshot-and-queue-workers.md) |
 | **077** | Supervisor デーモンモード（`-D` / `--daemon`）およびバックグラウンド実行・ログファイル出力機能の実装 | Feature | 2026-08-26 | [077-implement-supervisor-daemon-mode-and-background-execution.md](closed/077-implement-supervisor-daemon-mode-and-background-execution.md) |
 | **075** | Unix Domain Socket による DB・Web・Search の完全プロセス分離と IPC ラッパー基盤の実装 | Feature / Refactor | 2026-08-26 | [075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md](closed/075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md) |
 | **076** | Supervisor のドメイン非依存・汎用プロセスエンジン化と宣言的 Worker/Service 抽象化 | Feature / Refactor | 2026-08-26 | [076-decouple-domain-workers-from-supervisor-generic-engine.md](closed/076-decouple-domain-workers-from-supervisor-generic-engine.md) |

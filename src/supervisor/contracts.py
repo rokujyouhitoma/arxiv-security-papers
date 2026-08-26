@@ -28,6 +28,7 @@ class ServiceState(enum.Enum):
     DRAINING = "DRAINING"
     STOPPED = "STOPPED"
     FAILED = "FAILED"
+    COMPLETED = "COMPLETED"
 
 
 class LifecycleHook(abc.ABC):
@@ -100,6 +101,8 @@ class WorkerSpec:
         hook: Optional[LifecycleHook] = None,
         role: ServiceRole = ServiceRole.STATELESS_POOL,
         sync_interval: float = 2.0,
+        dependencies: Optional[list[str]] = None,
+        max_retries: int = 0,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.name = name
@@ -110,6 +113,9 @@ class WorkerSpec:
         self.hook = hook
         self.role = role
         self.sync_interval = sync_interval
+        self.dependencies = list(dependencies or [])
+        self.max_retries = max_retries
+        self.retry_count = 0
         self.metadata = metadata or {}
 
     def to_dict(self) -> Dict[str, Any]:
@@ -119,5 +125,7 @@ class WorkerSpec:
             "worker_class": self.worker_class,
             "role": self.role.value,
             "sync_interval": self.sync_interval,
+            "dependencies": self.dependencies,
+            "max_retries": self.max_retries,
             "metadata": self.metadata,
         }

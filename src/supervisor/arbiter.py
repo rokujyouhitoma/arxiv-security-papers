@@ -18,7 +18,13 @@ import traceback
 from typing import Any, Callable, Dict, List, NoReturn, Optional, Set, cast
 
 from .config import SupervisorConfig
-from .contracts import DefaultLifecycleHook, LifecycleHook, ServiceRole, WorkerSpec
+from .contracts import (
+    DefaultLifecycleHook,
+    LifecycleHook,
+    ServiceRole,
+    ServiceState,
+    WorkerSpec,
+)
 from .control import ControlServer
 from .heartbeat import HeartbeatWatchdog
 from .workers import WORKER_CLASSES, BaseWorker, ManagedServiceWorker, SyncWorker
@@ -32,6 +38,7 @@ class ManagedPool:
         self.name = spec.name
         self.workers: Dict[int, BaseWorker] = {}
         self.target_count = spec.target_count
+        self.state: ServiceState = ServiceState.READY
 
 
 class Arbiter:
@@ -355,26 +362,62 @@ class Arbiter:
                 return pool
         return None
 
-    def _handle_child_exit(self, pid: int) -> None:
+    def _handle_child_exit(self, pid: int, status: int = 0) -> None:
         """Cleans up terminated child process and restarts it if unexpected."""
         self.watchdog.remove_worker(pid)
         pool = self._find_pool_for_pid(pid)
-        if pool:
-            pool.workers.pop(pid, None)
-            if self.running and pid not in self.reloading_old_pids:
-                self.spawn_worker(pool.name)
-            self.reloading_old_pids.discard(pid)
+        if not pool:
+            return
+
+        pool.workers.pop(pid, None)
+        exit_code = (
+            os.waitstatus_to_exitcode(status)
+            if hasattr(os, "waitstatus_to_exitcode")
+            else (status >> 8)
+        )
+
+        if pool.spec.role == ServiceRole.ONESHOT_TASK:
+            if exit_code == 0:
+                pool.state = ServiceState.COMPLETED
+                logging.info(
+                    "[Arbiter] ONESHOT task '%s' completed successfully (PID: %d).",
+                    pool.name,
+                    pid,
+                )
+            else:
+                if pool.spec.retry_count < pool.spec.max_retries and self.running:
+                    pool.spec.retry_count += 1
+                    logging.warning(
+                        "[Arbiter] ONESHOT task '%s' failed (Exit code: %d). Retrying (%d/%d)...",
+                        pool.name,
+                        exit_code,
+                        pool.spec.retry_count,
+                        pool.spec.max_retries,
+                    )
+                    self.spawn_worker(pool.name)
+                else:
+                    pool.state = ServiceState.FAILED
+                    logging.error(
+                        "[Arbiter] ONESHOT task '%s' failed permanently (Exit code: %d).",
+                        pool.name,
+                        exit_code,
+                    )
+            return
+
+        if self.running and pid not in self.reloading_old_pids:
+            self.spawn_worker(pool.name)
+        self.reloading_old_pids.discard(pid)
 
     def handle_sigchld(self) -> None:
         """Reaps terminated children and respawns if killed unexpectedly."""
         while True:
             try:
-                pid, _ = os.waitpid(-1, os.WNOHANG)
+                pid, status = os.waitpid(-1, os.WNOHANG)
                 if pid <= 0:
                     break
             except (OSError, ChildProcessError):
                 break
-            self._handle_child_exit(pid)
+            self._handle_child_exit(pid, status)
 
     def reload(self, pool_name: Optional[str] = None) -> None:
         """Performs zero-downtime rolling restart of workers in designated or all stateless pools."""
@@ -465,28 +508,70 @@ class Arbiter:
             except OSError:
                 pass
 
+    def _build_dependency_graph(self) -> tuple[Dict[str, int], Dict[str, list[str]]]:
+        """Builds in-degree mapping and adjacency list for pools."""
+        in_degree: Dict[str, int] = {p: 0 for p in self.pools}
+        adj: Dict[str, list[str]] = {p: [] for p in self.pools}
+
+        for name, pool in self.pools.items():
+            deps = getattr(pool.spec, "dependencies", []) or []
+            for dep in deps:
+                dep_name = self._resolve_pool_name(dep) or dep
+                if dep_name in self.pools:
+                    adj[dep_name].append(name)
+                    in_degree[name] += 1
+        return in_degree, adj
+
+    def resolve_boot_order(self) -> list[str]:
+        """Resolves pool/service boot order using Kahn's topological sort algorithm."""
+        in_degree, adj = self._build_dependency_graph()
+
+        zero_in = [n for n, deg in in_degree.items() if deg == 0]
+        zero_in.sort(
+            key=lambda n: (
+                0 if self.pools[n].spec.role != ServiceRole.STATELESS_POOL else 1
+            )
+        )
+        ordered: list[str] = []
+
+        while zero_in:
+            curr = zero_in.pop(0)
+            ordered.append(curr)
+            for neighbor in adj[curr]:
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    zero_in.append(neighbor)
+
+        if len(ordered) != len(self.pools):
+            unresolved = set(self.pools) - set(ordered)
+            raise ValueError(
+                f"Circular dependency detected in supervisor pools: {unresolved}"
+            )
+
+        return ordered
+
     def shutdown(self) -> None:
         """
         Executes strictly ordered graceful shutdown sequence:
-        1. Stop accepting new connections for stateless pools (SIGQUIT).
-        2. Drain and terminate stateful managed service pools (SIGTERM).
-        3. Close listening sockets and clean up control server.
+        1. Drain pools in reverse topological dependency order.
+        2. Close listening sockets and clean up control server.
         """
         self.running = False
 
-        # 1. Stateless pools first (SIGQUIT)
-        for pool in self.pools.values():
-            if pool.spec.role == ServiceRole.STATELESS_POOL:
-                self._drain_and_kill(
-                    pool.workers, signal.SIGQUIT, self.config.graceful_timeout
-                )
+        try:
+            shutdown_order = list(reversed(self.resolve_boot_order()))
+        except Exception:
+            shutdown_order = list(self.pools.keys())
 
-        # 2. Stateful services next (SIGTERM)
-        for pool in self.pools.values():
-            if pool.spec.role != ServiceRole.STATELESS_POOL:
-                self._drain_and_kill(
-                    pool.workers, signal.SIGTERM, self.config.graceful_timeout
+        for pool_name in shutdown_order:
+            pool = self.pools.get(pool_name)
+            if pool:
+                sig = (
+                    signal.SIGQUIT
+                    if pool.spec.role == ServiceRole.STATELESS_POOL
+                    else signal.SIGTERM
                 )
+                self._drain_and_kill(pool.workers, sig, self.config.graceful_timeout)
 
         self._cleanup_resources()
 
@@ -640,17 +725,12 @@ class Arbiter:
         self._write_pid_file()
         self._start_control_server()
 
-        # Phase 1: Stateful Services Startup (Ordered Lifecycle)
-        for pool in self.pools.values():
-            if pool.spec.role != ServiceRole.STATELESS_POOL:
-                self.adjust_pool(pool.name)
+        # DAG-ordered Pool Boot Sequence
+        boot_order = self.resolve_boot_order()
+        for pool_name in boot_order:
+            self.adjust_pool(pool_name)
 
-        # Phase 2: Stateless Worker Pre-fork (Web Pools)
-        for pool in self.pools.values():
-            if pool.spec.role == ServiceRole.STATELESS_POOL:
-                self.adjust_pool(pool.name)
-
-        # Phase 3: Master Event Loop
+        # Master Event Loop
         try:
             while self.running:
                 self._handle_queued_signals()
