@@ -30,6 +30,22 @@
 ## [Unreleased]
 
 ### [Added]
+- **Graph Engineering Dashboard & Context Mesh 可視化基盤 (`site/dashboard.html` / DSN-14)**:
+  - **ゼロ外部依存 (Zero Dependencies)**: 外部ライブラリ（React/Vue/Tailwind/D3.js/Chart.js）や外部 CDN スクリプトを一切排除し、Pure JavaScript (ES6+), Vanilla CSS3, HTML5 Canvas API のみで完結する単一スタンドアロンダッシュボードを新規実装
+  - **力学モデル (Force-Directed Layout) 物理演算エンジン**: クーロン反発力 ($F_{\text{rep}} = k_r / r^2$)、フックのバネ引力 ($F_{\text{spring}} = k_s \cdot (r - l_0)$)、重心復元力、摩擦減衰 (0.86)、および境界クランプを自律計算する 60 FPS Canvas レンダリングエンジン
+  - **4大クラスタ・データモデル (arxiv-security-papers テーラリング)**: `Sources` (論文・情報源), `Entities` (脅威・暗号要素), `Claims` (脆弱性・証明), `Decisions` (推奨対策・パッチ)
+  - **スイススタイル・レトロデザイン UI**: レトロオフホワイト (`#f4efe6`) 背景、1px シャープボーダー (`#2b2b2b`)、モノスペースタイポグラフィ
+  - **リアルタイムテレメトリ & 5大分析パネル**:
+    - トップ KPI (Resolved Nodes, Edges/Tick, Walks/Min, Latency, Token Savings)
+    - パイプライン進捗ステータスバー (CHUNK $\to$ EXTRACT $\to$ RESOLVE $\to$ LINK $\to$ EMBED $\to$ PRUNE)
+    - Hop Budget ヒストグラム (深度 1〜5)
+    - Edge Ledger リレーショントラフィック横棒バーチャート
+    - Walk vs Flat トークン削減時系列エリアチャート (74.2% 削減)
+    - Traversal Grid 動的ドットマトリクス (100セル)
+    - Dead-End Ledger 失敗原因内訳 & 自己修復率 (100%)
+  - `src/web/gateway/handlers.py`: `/dashboard` および `/dashboard.html` への静的ルーティング統合
+  - `tests/web/test_dashboard_html.py`: 外部 CDN リンク 0 件アサーションおよびルーティング単体テストを追加
+  - `docs/designs/DSN-14-graph_engineering_dashboard.md`: DSN-05 形式に準拠した包括的詳細アーキテクチャ設計書の策定
 - **ゼロ依存 Pure Python PDF テキスト抽出 & 空間レイアウト再構築エンジン (`src/pdf_engine/`) (DSN-13)**:
   - **ISO 32000-1:2008 (PDF 1.7) & ISO 32000-2:2020 (PDF 2.0) 完全準拠**: Poppler / `pdftotext` などの外部バイナリに一切依存せず、Python 3.14+ 標準ライブラリのみで動作する PDF テキスト抽出サブシステムを新規実装
   - **コアモジュール群**:

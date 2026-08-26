@@ -301,7 +301,13 @@ class GatewayHandlers:
         return None
 
     def _resolve_static_file(self, clean_path: str) -> Optional[str]:
-        target = "index.html" if clean_path in ["", "index.html"] else clean_path
+        if clean_path in ["", "index.html"]:
+            target = "index.html"
+        elif clean_path in ["dashboard", "dashboard.html"]:
+            target = "dashboard.html"
+        else:
+            target = clean_path
+
         site_path = os.path.join(self.site_dir, target)
         if os.path.exists(site_path) and os.path.isfile(site_path):
             return site_path

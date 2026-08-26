@@ -50,7 +50,7 @@ arXiv のコンピュータサイエンス・暗号・セキュリティ分野�
 3. [システム全体アーキテクチャ (System Architecture)](#-システム全体アーキテクチャ-system-architecture)
 4. [普遍的自律型インテリジェンス・ライフサイクル (Intelligence Lifecycle)](#-普遍的自律型インテリジェンスライフサイクル-intelligence-lifecycle)
 5. [10大クリーンサブシステム構造 (Core Subsystems)](#-10大クリーンサブシステム構造-core-subsystems)
-6. [包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-13)](#-包括的設計書体系-design-specifications-dsn-01--dsn-13)
+6. [包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-14)](#-包括的設計書体系-design-specifications-dsn-01--dsn-14)
 7. [クイックスタート (Quick Start)](#-クイックスタート-quick-start)
 8. [Makefile コマンド一覧 (Command Reference)](#-makefile-コマンド一覧-command-reference)
 9. [ディレクトリ構成 (Directory Structure)](#-ディレクトリ構成-directory-structure)
@@ -184,9 +184,9 @@ sequenceDiagram
 
 ---
 
-## 📚 包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-13)
+## 📚 包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-14)
 
-| DSN 番号 | 設計書ファイル | 対応パッケージ (`src/`) | 領域 / サブシステム |
+| DSN 番号 | 設計書ファイル | 対応パッケージ (`src/` / `site/`) | 領域 / サブシステム |
 | :---: | :--- | :--- | :--- |
 | **DSN-01** | [DSN-01-high_level_design.md](docs/designs/DSN-01-high_level_design.md) | システム全体 | 全体高位アーキテクチャ設計書 (HLD) |
 | **DSN-02** | [DSN-02-low_level_design.md](docs/designs/DSN-02-low_level_design.md) | システム全体 | 全体低位アーキテクチャ設計書 (LLD / Common Protocols) |
@@ -202,6 +202,7 @@ sequenceDiagram
 | **DSN-11** | [DSN-11-intelligence_orchestration_engine.md](docs/designs/DSN-11-intelligence_orchestration_engine.md) | `src/orchestrator/` | 普遍的自律型インテリジェンス・ライフサイクル・オーケストレーション包括設計書 |
 | **DSN-12** | [DSN-12-process_supervisor_and_arbiter.md](docs/designs/DSN-12-process_supervisor_and_arbiter.md) | `src/supervisor/` | 汎用プロセススーパーバイザー & 調停基盤設計書 |
 | **DSN-13** | [DSN-13-pure_python_pdf_text_extractor.md](docs/designs/DSN-13-pure_python_pdf_text_extractor.md) | `src/pdf_engine/` | ISO 32000 準拠 ゼロ依存 Pure Python PDF テキスト抽出 & 空間レイアウト再構築エンジン包括設計書 |
+| **DSN-14** | [DSN-14-graph_engineering_dashboard.md](docs/designs/DSN-14-graph_engineering_dashboard.md) | `site/dashboard.html` | 知識グラフ探索・ナレッジメッシュ可視化ダッシュボード包括設計書 (Pure JS/CSS/Canvas) |
 
 ---
 

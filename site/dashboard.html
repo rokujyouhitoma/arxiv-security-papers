@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Graph Engineering / Context Mesh - arxiv-security-papers</title>
+  <style>
+    /* ==========================================================================
+       1. Base Design System & Swiss-Style Retro Theme
+       ========================================================================== */
+    :root {
+      --bg-main: #f4efe6;
+      --bg-panel: #ebe5d8;
+      --bg-panel-sub: #dfd8c9;
+      --fg-main: #2b2b2b;
+      --fg-muted: #6b665c;
+      --border-dark: #2b2b2b;
+      --border-light: #dcd6cc;
+      --accent-coral: #e0533c;
+      --accent-green: #3a7d44;
+      --accent-blue: #3d5a80;
+      --accent-amber: #d97706;
+      --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--fg-main);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Sharp 1px Border Utilities */
+    .border-b { border-bottom: 1px solid var(--border-dark); }
+    .border-r { border-right: 1px solid var(--border-dark); }
+    .border-t { border-top: 1px solid var(--border-dark); }
+    .border-l { border-left: 1px solid var(--border-dark); }
+    .border-all { border: 1px solid var(--border-dark); }
+
+    /* ==========================================================================
+       2. Header & Telemetry Layout
+       ========================================================================== */
+    header {
+      background-color: var(--bg-main);
+      border-bottom: 2px solid var(--border-dark);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: stretch;
+      border-bottom: 1px solid var(--border-dark);
+    }
+
+    .brand-section {
+      padding: 12px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 1px solid var(--border-dark);
+      background-color: var(--bg-main);
+      min-width: 280px;
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-title .badge {
+      background-color: var(--accent-coral);
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 6px;
+      font-weight: bold;
+      border-radius: 2px;
+    }
+
+    .brand-sub {
+      color: var(--fg-muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .telemetry-bar {
+      display: flex;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+
+    .telemetry-cell {
+      flex: 1;
+      min-width: 130px;
+      padding: 8px 14px;
+      border-right: 1px solid var(--border-dark);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background-color: var(--bg-main);
+    }
+
+    .telemetry-cell:last-child {
+      border-right: none;
+    }
+
+    .telemetry-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .telemetry-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--fg-main);
+      font-feature-settings: "tnum";
+      font-variant-numeric: tabular-nums;
+      margin-top: 2px;
+    }
+
+    .telemetry-value.coral { color: var(--accent-coral); }
+    .telemetry-value.green { color: var(--accent-green); }
+
+    /* Pipeline Status Bar */
+    .pipeline-bar {
+      display: flex;
+      background-color: var(--bg-panel);
+      padding: 6px 16px;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border: 1px solid transparent;
+      color: var(--fg-muted);
+    }
+
+    .pipeline-step.active {
+      background-color: var(--border-dark);
+      color: var(--bg-main);
+      font-weight: bold;
+      border-color: var(--border-dark);
+    }
+
+    .pipeline-step.completed {
+      color: var(--fg-main);
+      font-weight: 600;
+    }
+
+    .pipeline-arrow {
+      color: var(--border-dark);
+      font-weight: bold;
+    }
+
+    /* ==========================================================================
+       3. Main Layout & Force-Directed Canvas
+       ========================================================================== */
+    .main-workspace {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      height: 480px;
+      background-color: var(--bg-main);
+      border-bottom: 2px solid var(--border-dark);
+      overflow: hidden;
+    }
+
+    #graphCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Cluster Legend Overlay */
+    .cluster-legend {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background-color: rgba(244, 239, 230, 0.92);
+      border: 1px solid var(--border-dark);
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      pointer-events: none;
+      backdrop-filter: blur(4px);
+    }
+
+    .legend-title {
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+      color: var(--fg-main);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid var(--border-dark);
+    }
+
+    /* Node Details Callout */
+    .node-callout {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 320px;
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-dark);
+      box-shadow: 4px 4px 0px rgba(43, 43, 43, 0.15);
+      padding: 12px 14px;
+      display: none;
+      z-index: 10;
+    }
+
+    .callout-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--border-dark);
+      padding-bottom: 6px;
+    }
+
+    .callout-tag {
+      font-size: 9px;
+      font-weight: bold;
+      padding: 2px 6px;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    .callout-title {
+      font-weight: bold;
+      font-size: 12px;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .callout-desc {
+      font-size: 11px;
+      color: var(--fg-muted);
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+
+    .callout-edges {
+      font-size: 10px;
+      border-top: 1px dashed var(--border-dark);
+      padding-top: 6px;
+    }
+
+    /* ==========================================================================
+       4. Bottom Metrics Panel Grid
+       ========================================================================== */
+    .metrics-panel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      background-color: var(--border-dark);
+      gap: 1px;
+      border-bottom: 1px solid var(--border-dark);
+    }
+
+    .metric-card {
+      background-color: var(--bg-panel);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      min-height: 190px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--border-dark);
+      padding-bottom: 4px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .card-tag {
+      font-size: 10px;
+      color: var(--fg-muted);
+    }
+
+    /* Micro Charts & Grids */
+    .bar-chart-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+
+    .bar-label {
+      width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--fg-muted);
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 12px;
+      background-color: var(--bg-panel-sub);
+      border: 1px solid var(--border-dark);
+      margin: 0 8px;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background-color: var(--accent-coral);
+    }
+
+    .bar-value {
+      width: 40px;
+      text-align: right;
+      font-weight: bold;
+    }
+
+    /* Traversal Dot Matrix Grid (10x10) */
+    .traversal-matrix {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px;
+      margin-top: 4px;
+      flex: 1;
+    }
+
+    .traversal-dot {
+      aspect-ratio: 1;
+      border: 1px solid var(--border-dark);
+      background-color: var(--bg-main);
+      transition: background-color 0.2s;
+    }
+
+    .traversal-dot.success { background-color: var(--accent-green); }
+    .traversal-dot.deadend { background-color: var(--accent-coral); }
+    .traversal-dot.active { background-color: var(--fg-main); }
+
+    /* Footer Controls */
+    footer {
+      background-color: var(--bg-main);
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--fg-muted);
+    }
+
+    .footer-links a {
+      color: var(--fg-main);
+      text-decoration: none;
+      font-weight: bold;
+      margin-left: 12px;
+    }
+
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+
+    .btn-action {
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-dark);
+      padding: 3px 8px;
+      font-family: inherit;
+      font-size: 10px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn-action:hover {
+      background-color: var(--border-dark);
+      color: var(--bg-main);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ======================================================================
+       1. Top Header & Real-Time Telemetry
+       ====================================================================== -->
+  <header>
+    <div class="header-top">
+      <div class="brand-section">
+        <div class="brand-title">
+          <span>Graph Engineering</span>
+          <span class="badge">Context Mesh</span>
+        </div>
+        <div class="brand-sub">arxiv-security-papers intelligence &amp; traversal engine</div>
+      </div>
+      <div class="telemetry-bar">
+        <div class="telemetry-cell">
+          <div class="telemetry-label">Resolved Nodes</div>
+          <div class="telemetry-value" id="valResolvedNodes">14,449</div>
+        </div>
+        <div class="telemetry-cell">
+          <div class="telemetry-label">Edges / Tick</div>
+          <div class="telemetry-value coral" id="valEdgesTick">3,820/s</div>
+        </div>
+        <div class="telemetry-cell">
+          <div class="telemetry-label">Walks / Min</div>
+          <div class="telemetry-value" id="valWalksMin">412/m</div>
+        </div>
+        <div class="telemetry-cell">
+          <div class="telemetry-label">Query Latency</div>
+          <div class="telemetry-value green" id="valLatency">1.84 ms</div>
+        </div>
+        <div class="telemetry-cell">
+          <div class="telemetry-label">Token Savings</div>
+          <div class="telemetry-value coral" id="valSavings">74.2%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Step Status Bar -->
+    <div class="pipeline-bar" id="pipelineBar">
+      <div class="pipeline-step completed" data-step="0">[1] CHUNK</div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step completed" data-step="1">[2] EXTRACT</div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step completed" data-step="2">[3] RESOLVE</div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step active" data-step="3">[4] LINK</div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step" data-step="4">[5] EMBED</div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step" data-step="5">[6] PRUNE</div>
+    </div>
+  </header>
+
+  <!-- ======================================================================
+       2. Main Canvas View (Force-Directed Graph)
+       ====================================================================== -->
+  <div class="main-workspace">
+    <div class="canvas-container">
+      <canvas id="graphCanvas"></canvas>
+
+      <!-- Cluster Color Legend -->
+      <div class="cluster-legend">
+        <div class="legend-title">Cluster Classification</div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background-color: var(--accent-coral);"></div>
+          <span>Sources (arXiv/IACR Papers)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background-color: var(--border-dark);"></div>
+          <span>Entities (Attacks &amp; Crypto)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background-color: var(--accent-green);"></div>
+          <span>Claims (Proofs &amp; Breaches)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background-color: var(--accent-blue);"></div>
+          <span>Decisions (Patches &amp; CISO)</span>
+        </div>
+      </div>
+
+      <!-- Node Callout Details Panel -->
+      <div class="node-callout" id="nodeCallout">
+        <div class="callout-header">
+          <span class="callout-tag" id="calloutTag">SOURCES</span>
+          <button class="btn-action" onclick="closeCallout()">✕</button>
+        </div>
+        <div class="callout-title" id="calloutTitle">2608.23763 (TrustShiftProbe)</div>
+        <div class="callout-desc" id="calloutDesc">MCP サーバーに対する段階的信頼攻撃（TrustShift）の検証と SHIELD ランタイム防御。</div>
+        <div class="callout-edges" id="calloutEdges">Connected to 4 nodes via: targets, asserts, mitigates</div>
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         3. Bottom 5-Metric Analytical Panels
+         ====================================================================== -->
+    <div class="metrics-panel-grid">
+      <!-- 1. Hop Budget Histogram -->
+      <div class="metric-card">
+        <div class="card-header">
+          <span class="card-title">Hop Budget Distribution</span>
+          <span class="card-tag">Max Depth = 5</span>
+        </div>
+        <canvas id="hopCanvas" width="260" height="130"></canvas>
+      </div>
+
+      <!-- 2. Edge Ledger -->
+      <div class="metric-card">
+        <div class="card-header">
+          <span class="card-title">Edge Ledger (Traffic)</span>
+          <span class="card-tag">Relation Types</span>
+        </div>
+        <div id="edgeLedgerList">
+          <div class="bar-chart-row">
+            <span class="bar-label">targets</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 82%;"></div></div>
+            <span class="bar-value">1,420</span>
+          </div>
+          <div class="bar-chart-row">
+            <span class="bar-label">asserts</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 68%;"></div></div>
+            <span class="bar-value">980</span>
+          </div>
+          <div class="bar-chart-row">
+            <span class="bar-label">mitigates</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 55%; background-color: var(--accent-green);"></div></div>
+            <span class="bar-value">750</span>
+          </div>
+          <div class="bar-chart-row">
+            <span class="bar-label">requires</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 44%; background-color: var(--accent-blue);"></div></div>
+            <span class="bar-value">620</span>
+          </div>
+          <div class="bar-chart-row">
+            <span class="bar-label">evades</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 32%; background-color: var(--accent-amber);"></div></div>
+            <span class="bar-value">410</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Walk vs Flat Token Savings -->
+      <div class="metric-card">
+        <div class="card-header">
+          <span class="card-title">Walk vs Flat (Token Stream)</span>
+          <span class="card-tag">-74.2% Context</span>
+        </div>
+        <canvas id="walkCanvas" width="260" height="130"></canvas>
+      </div>
+
+      <!-- 4. Traversal Log Grid -->
+      <div class="metric-card">
+        <div class="card-header">
+          <span class="card-title">Traversal Matrix (100 Walks)</span>
+          <span class="card-tag">Success: 89%</span>
+        </div>
+        <div class="traversal-matrix" id="traversalMatrix"></div>
+      </div>
+
+      <!-- 5. Dead-End Ledger -->
+      <div class="metric-card">
+        <div class="card-header">
+          <span class="card-title">Dead-End Ledger</span>
+          <span class="card-tag">11 Failures</span>
+        </div>
+        <div style="font-size: 11px; margin-top: 4px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span>Depth Limit Exceeded</span>
+            <strong style="color: var(--accent-coral);">6 (54%)</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span>Cycle Loop Detected</span>
+            <strong>3 (27%)</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span>Context Budget Clamp</span>
+            <strong>2 (19%)</strong>
+          </div>
+          <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--fg-muted);">PRUNE Self-Heal Rate:</span>
+              <strong style="color: var(--accent-green);">100%</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       4. Footer
+       ====================================================================== -->
+  <footer>
+    <div>
+      <strong>arxiv-security-papers</strong> &copy; 2026 | ISO 32000-1 / Google OKF v0.2 Compliant
+    </div>
+    <div class="footer-links">
+      <button class="btn-action" onclick="resetPhysics()">Reset Physics</button>
+      <button class="btn-action" onclick="randomizeGraph()">Inject Node</button>
+      <a href="/">&larr; Back to Portal</a>
+    </div>
+  </footer>
+
+  <!-- ======================================================================
+       5. Pure JavaScript: Force-Directed Physics & Rendering Engine
+       ====================================================================== -->
+  <script>
+    (function() {
+      // ----------------------------------------------------------------------
+      // 1. Initial Knowledge Mesh Data (Tailored for arxiv-security-papers)
+      // ----------------------------------------------------------------------
+      const CLUSTERS = {
+        source: { color: '#e0533c', label: 'SOURCE' },
+        entity: { color: '#2b2b2b', label: 'ENTITY' },
+        claim:  { color: '#3a7d44', label: 'CLAIM' },
+        decision: { color: '#3d5a80', label: 'DECISION' }
+      };
+
+      const NODES = [
+        // Sources
+        { id: 's1', name: 'arXiv:2608.23763', title: 'TrustShiftProbe (MCP Attacks)', cluster: 'source', desc: 'MCPサーバーによる段階的信頼偽装とSHIELD防御' },
+        { id: 's2', name: 'arXiv:2608.23550', title: 'CLAUDE.md Rules vs Builtin', cluster: 'source', desc: '自然言語セキュリティ指示と物理制御の乖離' },
+        { id: 's3', name: 'arXiv:2608.23471', title: 'InjecMEM (Agent Memory)', cluster: 'source', desc: '1回の対話でエージェント記憶を恒久汚染する攻撃' },
+        { id: 's4', name: 'arXiv:2608.22924', title: 'PQC Migration Roadmap', cluster: 'source', desc: '暗号資産における格子暗号ハードフォーク移行' },
+        { id: 's5', name: 'arXiv:2608.23774', title: 'ROBBIN (Rowhammer AI)', cluster: 'source', desc: '推論時DRAMビット反転によるバックドア注入' },
+
+        // Entities
+        { id: 'e1', name: 'MCP Protocol', title: 'Model Context Protocol', cluster: 'entity', desc: 'LLMと外部ツールをつなぐJSON-RPC規格' },
+        { id: 'e2', name: 'Agent Memory', title: 'Persistent Vector Memory', cluster: 'entity', desc: 'エージェントの永続会話コンテキスト層' },
+        { id: 'e3', name: 'ML-DSA / Falcon', title: 'Lattice Signatures', cluster: 'entity', desc: 'NIST耐量子格子署名標準アルゴリズム' },
+        { id: 'e4', name: 'Rowhammer Flips', title: 'DRAM Row Bitflip', cluster: 'entity', desc: '物理ハードウェアレベルのメモリ改ざん' },
+        { id: 'e5', name: 'CLAUDE.md Rules', title: 'Natural Language Guard', cluster: 'entity', desc: 'リポジトリ直下の自然言語指示ルール' },
+
+        // Claims
+        { id: 'c1', name: 'Trust Defection', title: '69.5% Attack Success', cluster: 'claim', desc: '信頼獲得後に悪意あるペイロードを送信' },
+        { id: 'c2', name: 'Perm Gap 95.6%', title: 'Enforcement Failure', cluster: 'claim', desc: '自然言語指示の95%はOS制御で拒否不能' },
+        { id: 'c3', name: 'Memory Poisoning', title: 'Single-Turn Drift', cluster: 'claim', desc: '単一発話で将来の全回答を誘導可能' },
+        { id: 'c4', name: 'ECDSA Broken', title: 'Quantum Forgery Risk', cluster: 'claim', desc: 'CRQC実用化による暗号資産偽造リスク' },
+
+        // Decisions
+        { id: 'd1', name: 'SHIELD Gateway', title: 'Transport Baseline Audit', cluster: 'decision', desc: 'MCP境界での行動差分監査と遮断' },
+        { id: 'd2', name: 'Built-in Deny', title: 'Container Hardening', cluster: 'decision', desc: 'OSレベルサンドボックスによる物理隔離' },
+        { id: 'd3', name: 'Memory Anchor Filter', title: 'Semantic Ingestion Guard', cluster: 'decision', desc: '長期記憶書き込み時のセマンティック検証' },
+        { id: 'd4', name: 'Dual-Code PQC', title: 'Hardfork Deployment', cluster: 'decision', desc: '耐量子署名への段階的ハードフォーク移行' }
+      ];
+
+      const EDGES = [
+        { source: 's1', target: 'e1', rel: 'targets' },
+        { source: 's1', target: 'c1', rel: 'asserts' },
+        { source: 's2', target: 'e5', rel: 'analyzes' },
+        { source: 's2', target: 'c2', rel: 'asserts' },
+        { source: 's3', target: 'e2', rel: 'targets' },
+        { source: 's3', target: 'c3', rel: 'asserts' },
+        { source: 's4', target: 'e3', rel: 'studies' },
+        { source: 's4', target: 'c4', rel: 'asserts' },
+        { source: 's5', target: 'e4', rel: 'exploits' },
+
+        { source: 'c1', target: 'd1', rel: 'requires' },
+        { source: 'd1', target: 'e1', rel: 'protects' },
+        { source: 'c2', target: 'd2', rel: 'demands' },
+        { source: 'd2', target: 'e5', rel: 'enforces' },
+        { source: 'c3', target: 'd3', rel: 'requires' },
+        { source: 'd3', target: 'e2', rel: 'protects' },
+        { source: 'c4', target: 'd4', rel: 'demands' },
+        { source: 'd4', target: 'e3', rel: 'deploys' }
+      ];
+
+      // ----------------------------------------------------------------------
+      // 2. Physics Simulation State
+      // ----------------------------------------------------------------------
+      const canvas = document.getElementById('graphCanvas');
+      const ctx = canvas.getContext('2d');
+      let width = 0, height = 0;
+
+      const nodeMap = new Map();
+      NODES.forEach((n, idx) => {
+        const angle = (idx / NODES.length) * Math.PI * 2;
+        const radius = 140 + Math.random() * 60;
+        n.x = 0;
+        n.y = 0;
+        n.vx = 0;
+        n.vy = 0;
+        n.radius = n.cluster === 'source' ? 14 : 11;
+        nodeMap.set(n.id, n);
+      });
+
+      let hoveredNode = null;
+      let draggedNode = null;
+      let selectedNode = null;
+
+      function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+        canvas.width = width * window.devicePixelRatio;
+        canvas.height = height * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+        // Center initialization
+        NODES.forEach((n, idx) => {
+          if (n.x === 0 && n.y === 0) {
+            const angle = (idx / NODES.length) * Math.PI * 2;
+            const radius = Math.min(width, height) * 0.32;
+            n.x = width / 2 + Math.cos(angle) * radius;
+            n.y = height / 2 + Math.sin(angle) * radius;
+          }
+        });
+      }
+
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      // ----------------------------------------------------------------------
+      // 3. Force-Directed Layout Physics Loop
+      // ----------------------------------------------------------------------
+      const K_REPULSION = 2200.0;
+      const K_SPRING = 0.045;
+      const L_SPRING = 80.0;
+      const K_CENTER = 0.008;
+      const DAMPING = 0.86;
+
+      function stepPhysics() {
+        // 1. Coulomb Repulsion
+        for (let i = 0; i < NODES.length; i++) {
+          for (let j = i + 1; j < NODES.length; j++) {
+            const u = NODES[i];
+            const v = NODES[j];
+            const dx = v.x - u.x;
+            const dy = v.y - u.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const clampedDist = Math.max(dist, 16.0);
+            const force = K_REPULSION / (clampedDist * clampedDist);
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+
+            u.vx -= fx;
+            u.vy -= fy;
+            v.vx += fx;
+            v.vy += fy;
+          }
+        }
+
+        // 2. Hooke Spring Attraction
+        EDGES.forEach(e => {
+          const u = nodeMap.get(e.source);
+          const v = nodeMap.get(e.target);
+          if (!u || !v) return;
+
+          const dx = v.x - u.x;
+          const dy = v.y - u.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const delta = dist - L_SPRING;
+          const force = K_SPRING * delta;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+
+          u.vx += fx;
+          u.vy += fy;
+          v.vx -= fx;
+          v.vy -= fy;
+        });
+
+        // 3. Center Gravity & Integration
+        const cx = width / 2;
+        const cy = height / 2;
+        NODES.forEach(n => {
+          if (n === draggedNode) return;
+
+          n.vx += (cx - n.x) * K_CENTER;
+          n.vy += (cy - n.y) * K_CENTER;
+
+          n.vx *= DAMPING;
+          n.vy *= DAMPING;
+
+          n.x += n.vx;
+          n.y += n.vy;
+
+          // Boundary Clamping
+          const pad = 24;
+          n.x = Math.max(pad, Math.min(width - pad, n.x));
+          n.y = Math.max(pad, Math.min(height - pad, n.y));
+        });
+      }
+
+      // ----------------------------------------------------------------------
+      // 4. Rendering Pipeline
+      // ----------------------------------------------------------------------
+      function render() {
+        stepPhysics();
+        ctx.clearRect(0, 0, width, height);
+
+        // Draw Background Grid
+        ctx.strokeStyle = '#dcd6cc';
+        ctx.lineWidth = 0.5;
+        const gridSize = 40;
+        for (let x = 0; x < width; x += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let y = 0; y < height; y += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        // Draw Edges
+        EDGES.forEach(e => {
+          const u = nodeMap.get(e.source);
+          const v = nodeMap.get(e.target);
+          if (!u || !v) return;
+
+          const isHighlighted = (hoveredNode && (u === hoveredNode || v === hoveredNode));
+          ctx.beginPath();
+          ctx.moveTo(u.x, u.y);
+          ctx.lineTo(v.x, v.y);
+
+          if (isHighlighted) {
+            ctx.strokeStyle = '#e0533c';
+            ctx.lineWidth = 2.0;
+            ctx.setLineDash([]);
+          } else {
+            ctx.strokeStyle = '#6b665c';
+            ctx.lineWidth = 1.0;
+            if (e.rel === 'requires' || e.rel === 'demands') {
+              ctx.setLineDash([3, 3]);
+            } else {
+              ctx.setLineDash([]);
+            }
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Edge Label on highlight
+          if (isHighlighted) {
+            const mx = (u.x + v.x) / 2;
+            const my = (u.y + v.y) / 2;
+            ctx.fillStyle = '#e0533c';
+            ctx.font = '10px monospace';
+            ctx.fillText(e.rel, mx + 4, my - 4);
+          }
+        });
+
+        // Draw Nodes
+        NODES.forEach(n => {
+          const isHovered = (n === hoveredNode);
+          const isSelected = (n === selectedNode);
+          const clusterCfg = CLUSTERS[n.cluster] || CLUSTERS.entity;
+
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.radius + (isHovered ? 4 : 0), 0, Math.PI * 2);
+          ctx.fillStyle = clusterCfg.color;
+          ctx.fill();
+          ctx.lineWidth = isSelected ? 3.0 : 1.5;
+          ctx.strokeStyle = isSelected ? '#e0533c' : '#2b2b2b';
+          ctx.stroke();
+
+          // Node Label
+          ctx.fillStyle = '#2b2b2b';
+          ctx.font = (isHovered || isSelected ? 'bold 11px' : '10px') + ' monospace';
+          ctx.fillText(n.name, n.x + n.radius + 6, n.y + 4);
+        });
+
+        requestAnimationFrame(render);
+      }
+      requestAnimationFrame(render);
+
+      // ----------------------------------------------------------------------
+      // 5. Mouse Interaction & Callout Details
+      // ----------------------------------------------------------------------
+      function findNodeAt(mx, my) {
+        for (let i = NODES.length - 1; i >= 0; i--) {
+          const n = NODES[i];
+          const dx = mx - n.x;
+          const dy = my - n.y;
+          if (dx * dx + dy * dy <= (n.radius + 6) * (n.radius + 6)) {
+            return n;
+          }
+        }
+        return null;
+      }
+
+      canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        if (draggedNode) {
+          draggedNode.x = mx;
+          draggedNode.y = my;
+          draggedNode.vx = 0;
+          draggedNode.vy = 0;
+          return;
+        }
+
+        hoveredNode = findNodeAt(mx, my);
+        canvas.style.cursor = hoveredNode ? 'pointer' : 'crosshair';
+      });
+
+      canvas.addEventListener('mousedown', e => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const node = findNodeAt(mx, my);
+        if (node) {
+          draggedNode = node;
+          selectNode(node);
+        }
+      });
+
+      window.addEventListener('mouseup', () => {
+        draggedNode = null;
+      });
+
+      function selectNode(node) {
+        selectedNode = node;
+        const callout = document.getElementById('nodeCallout');
+        const tag = document.getElementById('calloutTag');
+        const title = document.getElementById('calloutTitle');
+        const desc = document.getElementById('calloutDesc');
+        const edgesInfo = document.getElementById('calloutEdges');
+
+        const clusterCfg = CLUSTERS[node.cluster] || CLUSTERS.entity;
+        tag.textContent = clusterCfg.label;
+        tag.style.backgroundColor = clusterCfg.color;
+        title.textContent = node.title || node.name;
+        desc.textContent = node.desc || '';
+
+        // Connected Edges
+        const connected = EDGES.filter(e => e.source === node.id || e.target === node.id);
+        const rels = connected.map(e => {
+          const targetId = e.source === node.id ? e.target : e.source;
+          const targetNode = nodeMap.get(targetId);
+          return `${e.rel} &rarr; ${targetNode ? targetNode.name : targetId}`;
+        });
+        edgesInfo.innerHTML = `<strong>Relations (${connected.length}):</strong><br/>` + rels.join('<br/>');
+
+        callout.style.display = 'block';
+      }
+
+      window.closeCallout = function() {
+        selectedNode = null;
+        document.getElementById('nodeCallout').style.display = 'none';
+      };
+
+      window.resetPhysics = function() {
+        NODES.forEach((n, idx) => {
+          const angle = (idx / NODES.length) * Math.PI * 2;
+          const radius = Math.min(width, height) * 0.32;
+          n.x = width / 2 + Math.cos(angle) * radius;
+          n.y = height / 2 + Math.sin(angle) * radius;
+          n.vx = 0;
+          n.vy = 0;
+        });
+      };
+
+      window.randomizeGraph = function() {
+        const id = 'dyn_' + Date.now().toString().slice(-4);
+        const newNode = {
+          id: id,
+          name: 'CVE-2026-' + Math.floor(1000 + Math.random() * 9000),
+          title: 'Emerging Threat Cluster',
+          cluster: 'entity',
+          desc: '自律パイプラインが自動検知した新規エンティティ',
+          x: width / 2 + (Math.random() - 0.5) * 80,
+          y: height / 2 + (Math.random() - 0.5) * 80,
+          vx: 0,
+          vy: 0,
+          radius: 11
+        };
+        NODES.push(newNode);
+        nodeMap.set(newNode.id, newNode);
+
+        // Attach to random existing node
+        const target = NODES[Math.floor(Math.random() * (NODES.length - 1))];
+        EDGES.push({ source: newNode.id, target: target.id, rel: 'attacks' });
+        selectNode(newNode);
+      };
+
+      // ----------------------------------------------------------------------
+      // 6. Micro-Charts & Real-Time Telemetry Simulation
+      // ----------------------------------------------------------------------
+      // A. Hop Budget Histogram Canvas
+      function drawHopHistogram() {
+        const hCanvas = document.getElementById('hopCanvas');
+        if (!hCanvas) return;
+        const hCtx = hCanvas.getContext('2d');
+        const data = [38, 72, 94, 45, 18];
+        const maxVal = 100;
+        const barWidth = 32;
+        const gap = 14;
+
+        hCtx.clearRect(0, 0, hCanvas.width, hCanvas.height);
+        hCtx.strokeStyle = '#2b2b2b';
+        hCtx.lineWidth = 1;
+
+        data.forEach((val, i) => {
+          const h = (val / maxVal) * 90;
+          const x = 20 + i * (barWidth + gap);
+          const y = 110 - h;
+
+          hCtx.fillStyle = (i === 2) ? '#e0533c' : '#ebe5d8';
+          hCtx.fillRect(x, y, barWidth, h);
+          hCtx.strokeRect(x, y, barWidth, h);
+
+          hCtx.fillStyle = '#2b2b2b';
+          hCtx.font = '10px monospace';
+          hCtx.fillText(`H${i+1}`, x + 8, 124);
+          hCtx.fillText(`${val}`, x + 6, y - 4);
+        });
+      }
+      drawHopHistogram();
+
+      // B. Walk vs Flat Token Savings Chart
+      const walkHistory = [80, 78, 75, 76, 73, 74, 72, 75, 74, 74.2];
+      function drawWalkChart() {
+        const wCanvas = document.getElementById('walkCanvas');
+        if (!wCanvas) return;
+        const wCtx = wCanvas.getContext('2d');
+        const w = wCanvas.width;
+        const h = wCanvas.height;
+
+        wCtx.clearRect(0, 0, w, h);
+        wCtx.strokeStyle = '#2b2b2b';
+        wCtx.lineWidth = 1.5;
+
+        wCtx.beginPath();
+        walkHistory.forEach((v, idx) => {
+          const x = 20 + (idx / (walkHistory.length - 1)) * (w - 40);
+          const y = h - 20 - ((v - 65) / 25) * (h - 40);
+          if (idx === 0) wCtx.moveTo(x, y);
+          else wCtx.lineTo(x, y);
+        });
+        wCtx.stroke();
+
+        // Area Fill
+        wCtx.lineTo(w - 20, h - 20);
+        wCtx.lineTo(20, h - 20);
+        wCtx.closePath();
+        wCtx.fillStyle = 'rgba(224, 83, 60, 0.15)';
+        wCtx.fill();
+
+        // Current Value Text
+        wCtx.fillStyle = '#e0533c';
+        wCtx.font = 'bold 12px monospace';
+        wCtx.fillText(`${walkHistory[walkHistory.length - 1].toFixed(1)}% Token Saved`, 25, 20);
+      }
+      drawWalkChart();
+
+      // C. Traversal Dot Matrix Grid (100 cells)
+      const matrixContainer = document.getElementById('traversalMatrix');
+      for (let i = 0; i < 100; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'traversal-dot';
+        const rand = Math.random();
+        if (rand > 0.15) {
+          dot.classList.add('success');
+        } else if (rand > 0.05) {
+          dot.classList.add('deadend');
+        }
+        matrixContainer.appendChild(dot);
+      }
+
+      // D. Real-Time Telemetry Ticks
+      let tick = 0;
+      setInterval(() => {
+        tick++;
+        const resolvedEl = document.getElementById('valResolvedNodes');
+        const edgesEl = document.getElementById('valEdgesTick');
+        const latencyEl = document.getElementById('valLatency');
+
+        // Dynamic slight jitter
+        const resolved = 14449 + Math.floor(tick * 0.4);
+        const edges = 3800 + Math.floor(Math.sin(tick * 0.2) * 200);
+        const latency = (1.80 + Math.random() * 0.15).toFixed(2);
+
+        resolvedEl.textContent = resolved.toLocaleString();
+        edgesEl.textContent = `${edges.toLocaleString()}/s`;
+        latencyEl.textContent = `${latency} ms`;
+
+        // Update Walk History
+        walkHistory.shift();
+        walkHistory.push(74.0 + (Math.random() - 0.5) * 1.5);
+        drawWalkChart();
+
+        // Pipeline Cycle Animation
+        const steps = document.querySelectorAll('.pipeline-step');
+        const activeIdx = tick % steps.length;
+        steps.forEach((s, idx) => {
+          s.className = 'pipeline-step';
+          if (idx === activeIdx) s.classList.add('active');
+          else if (idx < activeIdx) s.classList.add('completed');
+        });
+
+        // Traversal Matrix Live Flash
+        const dots = matrixContainer.children;
+        const targetDot = dots[Math.floor(Math.random() * dots.length)];
+        targetDot.className = 'traversal-dot active';
+        setTimeout(() => {
+          targetDot.className = Math.random() > 0.12 ? 'traversal-dot success' : 'traversal-dot deadend';
+        }, 300);
+      }, 1200);
+
+    })();
+  </script>
+</body>
+</html>
