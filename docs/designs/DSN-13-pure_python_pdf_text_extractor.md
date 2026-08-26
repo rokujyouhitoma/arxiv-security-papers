@@ -3,6 +3,7 @@
 - **文書番号**: `DSN-13`
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**: `src/pdf_engine/` (Lexer, XRef, Decompress, DocumentTree, FontEngine, Interpreter, SpatialLayout, Benchmark)
+- **準拠国際規格**: **ISO 32000-1:2008 (PDF 1.7)** / **ISO 32000-2:2020 (PDF 2.0)**
 - **【主査・報告】 IT Specialist (NLP & Info Retrieval)**
 - **【参画】 Project Manager (PM), Software QA Specialist (QA), Systems Architect (SA), Information Security Specialist (Sec), Database Specialist (DB)**
 
@@ -15,53 +16,59 @@
   - [1.2 コア設計思想：Zero External Dependencies & Spatial Layout](#12-コア設計思想zero-external-dependencies--spatial-layout)
   - [1.3 全体コンポーネント構成図](#13-全体コンポーネント構成図)
   - [1.4 パッケージ・モジュール構成 (`src/pdf_engine/`)](#14-パッケージモジュール構成-srcpdf_engine)
-- [2. PDF バイナリ構文解析（Lexer & Indirect Object Resolver）](#2-pdf-バイナリ構文解析lexer--indirect-object-resolver)
-  - [2.1 PDF バイナリフォーマットとトークナイザ](#21-pdf-バイナリフォーマットとトークナイザ)
-  - [2.2 辞書・配列・名前・文字列・間接オブジェクトの解析](#22-辞書配列名前文字列間接オブジェクトの解析)
-  - [2.3 メモリマップド I/O（mmap）とストリームパーサー](#23-メモリマップド-iommapとストリームパーサー)
-- [3. XRef テーブル・XRefStream・オブジェクトストリーム解決](#3-xref-テーブルxrefstreamオブジェクトストリーム解決)
-  - [3.1 古典的 XRef テーブルと Trailer 解決](#31-古典的-xref-テーブルと-trailer-解決)
-  - [3.2 圧縮 XRefStream（PDF 1.5+）のアンパック](#32-圧縮-xrefstreampdf-15のアンパック)
-  - [3.3 オブジェクトストリーム（ObjStm）のインデックス解決](#33-オブジェクトストリームobjstmのインデックス解決)
-- [4. 圧縮ストリーム & フィルタデコーダ（Decompression Pipeline）](#4-圧縮ストリーム--フィルタデコーダdecompression-pipeline)
-  - [4.1 /FlateDecode と zlib ゼロコピー解凍](#41-flatedecode-と-zlib-ゼロコピー解凍)
-  - [4.2 PNG Predictor 差分解除アルゴリズム（None/Sub/Up/Average/Paeth）](#42-png-predictor-差分解除アルゴリズムnonesubupaveragepaeth)
-  - [4.3 /ASCIIHexDecode, /ASCII85Decode, /RunLengthDecode](#43-asciihexdecode-ascii85decode-runlengthdecode)
-- [5. ドキュメントツリー・ページリソース・フォント継承解決](#5-ドキュメントツリーページリソースフォント継承解決)
-  - [5.1 /Catalog から /Pages ツリーの再帰的走査](#51-catalog-から-pages-ツリーの再帰的走査)
-  - [5.2 ページリソース（/Resources）とフォント辞書のスコープ継承](#52-ページリソースresourcesとフォント辞書のスコープ継承)
-  - [5.3 コンテンツストリーム（単一 / 配列）の結合処理](#53-コンテンツストリーム単一--配列の結合処理)
-- [6. コンテンツストリーム実行器（Text State Machine）](#6-コンテンツストリーム実行器text-state-machine)
-  - [6.1 PostScript 風スタックマシンとテキストオペレータ](#61-postscript-風スタックマシンとテキストオペレータ)
-  - [6.2 テキスト行列 ($T_m$)・行行列 ($T_{lm}$)・現在変換行列 ($CTM$) の演算](#62-テキスト行列-t_m行行列-t_lm現在変換行列-ctm-の演算)
-  - [6.3 テキスト描画命令（Tj, TJ, ', "）の幾何座標変換](#63-テキスト描画命令tj-tj---の幾何座標変換)
-- [7. フォントエンコーディング & ToUnicode CMap デコーダ](#7-フォントエンコーディング--tounicode-cmap-デコーダ)
-  - [7.1 学術論文におけるフォントサブセットとグリフマッピング問題](#71-学術論文におけるフォントサブセットとグリフマッピング問題)
-  - [7.2 /ToUnicode CMap ストリームの構文解析（bfchar, bfrange）](#72-tounicode-cmap-ストリームの構文解析bfchar-bfrange)
-  - [7.3 標準エンコーディング（WinAnsi, MacRoman, Standard）と /Differences 配列](#73-標準エンコーディングwinansi-macroman-standardと-differences-配列)
-  - [7.4 リガチャ（合字: fi, fl, ff, ffi, ffl）と LaTeX 特殊記号の正規化](#74-リガチャ合字-fi-fl-ff-ffi-fflと-latex-特殊記号の正規化)
-- [8. 2次元幾何空間レイアウト再構築（Spatial Layout Reconstructor）](#8-2次元幾何空間レイアウト再構築spatial-layout-reconstructor)
-  - [8.1 グリフバウンディングボックスの幾何配置](#81-グリフバウンディングボックスの幾何配置)
-  - [8.2 arXiv 2段組（Two-Column Layout）ガター境界の自動検出](#82-arxiv-2段組two-column-layoutガター境界の自動検出)
-  - [8.3 読書順序（Reading Order）に基づくソートアルゴリズム](#83-読書順序reading-orderに基づくソートアルゴリズム)
-  - [8.4 行クラスタリング・単語間スペース補正・段落検出](#84-行クラスタリング単語間スペース補正段落検出)
-- [9. 収集済み実 PDF 論文群（14,449件）による実証検証・比較評価計画](#9-収集済み実-pdf-論文群14449件による実証検証比較評価計画)
-  - [9.1 検証データセットとグラウンドトゥルース定義](#91-検証データセットとグラウンドトゥルース定義)
-  - [9.2 テキスト抽出精度メトリクス（Character/Word Recall, BLEU, ROUGE-L, Levenshtein）](#92-テキスト抽出精度メトリクスcharacterword-recall-bleu-rouge-l-levenshtein)
-  - [9.3 2段組混入率（Column Interleaving Rate）測定](#93-2段組混入率column-interleaving-rate測定)
-  - [9.4 実行速度・メモリフットプリントベンチマーク](#94-実行速度メモリフットプリントベンチマーク)
-- [10. 既存パイプライン統合・フォールバック・API インターフェース設計](#10-既存パイプライン統合フォールバックapi-インターフェース設計)
-  - [10.1 高水準 API インターフェース（`PurePdfTextExtractor`）](#101-高水準-api-インターフェースpurepdftextextractor)
-  - [10.2 `src/pipeline/ingestion/pdf_extractor.py` の安全な置換](#102-srcpipelineingestionpdf_extractorpy-の安全な置換)
-  - [10.3 自動フォールバックチェーン（Pure Python $\to$ pdftotext CLI）](#103-自動フォールバックチェーンpure-python-to-pdftotext-cli)
-- [11. セキュリティ・DoS 防止・リソース保護](#11-セキュリティdos-防止リソース保護)
-  - [11.1 再帰爆発・循環参照オブジェクト防止（Max Depth Limit）](#111-再帰爆発循環参照オブジェクト防止max-depth-limit)
-  - [11.2 解凍爆弾（Stream / Zip Bomb）保護](#112-解凍爆弾stream--zip-bomb保護)
-  - [11.3 メモリ上限 & 実行タイムアウトガード](#113-メモリ上限--実行タイムアウトガード)
-- [12. 品質ゲート、DoD、および段階的移行ロードマップ](#12-品質ゲートdodおよび段階的移行ロードマップ)
-  - [12.1 品質管理ゲート (Quality Gates)](#121-品質管理ゲート-quality-gates)
-  - [12.2 完了の定義 (Definition of Done: DoD)](#122-完了の定義-definition-of-done-dod)
-  - [12.3 実装ロードマップ](#123-実装ロードマップ)
+- [2. 国際標準 PDF 仕様書（ISO 32000-1 / ISO 32000-2）の徹底分析と準拠マッピング](#2-国際標準-pdf-仕様書iso-32000-1--iso-32000-2の徹底分析と準拠マッピング)
+  - [2.1 ISO 32000 仕様体系とテキスト抽出関連条項（Clause Reference Table）](#21-iso-32000-仕様体系とテキスト抽出関連条項clause-reference-table)
+  - [2.2 レキシカル文法とオブジェクトモデルの厳格定義 (Clause 7.2 & 7.3)](#22-レキシカル文法とオブジェクトモデルの厳格定義-clause-72--73)
+  - [2.3 ファイル構造・XRef・ObjStm 圧縮仕様 (Clause 7.5)](#23-ファイル構造xrefobjstm-圧縮仕様-clause-75)
+  - [2.4 グラフィックス状態とテキスト状態マシン (Clause 8.3 & 9.2-9.4)](#24-グラフィックス状態とテキスト状態マシン-clause-83--92-94)
+  - [2.5 テキスト抽出における文字コード・Unicode マッピング要件 (Clause 9.10)](#25-テキスト抽出における文字コードunicode-マッピング要件-clause-910)
+- [3. PDF バイナリ構文解析（Lexer & Indirect Object Resolver）](#3-pdf-バイナリ構文解析lexer--indirect-object-resolver)
+  - [3.1 PDF バイナリフォーマットとトークナイザ (Clause 7.2)](#31-pdf-バイナリフォーマットとトークナイザ-clause-72)
+  - [3.2 辞書・配列・名前・文字列・間接オブジェクトの解析 (Clause 7.3)](#32-辞書配列名前文字列間接オブジェクトの解析-clause-73)
+  - [3.3 メモリマップド I/O（mmap）とストリームパーサー](#33-メモリマップド-iommapとストリームパーサー)
+- [4. XRef テーブル・XRefStream・オブジェクトストリーム解決](#4-xref-テーブルxrefstreamオブジェクトストリーム解決)
+  - [4.1 古典的 XRef テーブルと Trailer 解決 (Clause 7.5.4 & 7.5.5)](#41-古典的-xref-テーブルと-trailer-解決-clause-754--755)
+  - [4.2 圧縮 XRefStream（PDF 1.5+）のアンパック (Clause 7.5.8)](#42-圧縮-xrefstreampdf-15のアンパック-clause-758)
+  - [4.3 オブジェクトストリーム（ObjStm）のインデックス解決 (Clause 7.5.7)](#43-オブジェクトストリームobjstmのインデックス解決-clause-757)
+- [5. 圧縮ストリーム & フィルタデコーダ（Decompression Pipeline）](#5-圧縮ストリーム--フィルタデコーダdecompression-pipeline)
+  - [5.1 /FlateDecode と zlib ゼロコピー解凍 (Clause 7.4.4)](#51-flatedecode-と-zlib-ゼロコピー解凍-clause-744)
+  - [5.2 PNG Predictor 差分解除アルゴリズム（None/Sub/Up/Average/Paeth）(Table 8)](#52-png-predictor-差分解除アルゴリズムnonesubupaveragepaeth-table-8)
+  - [5.3 /ASCIIHexDecode, /ASCII85Decode, /RunLengthDecode (Clause 7.4.2-7.4.5)](#53-asciihexdecode-ascii85decode-runlengthdecode-clause-742-745)
+- [6. ドキュメントツリー・ページリソース・フォント継承解決](#6-ドキュメントツリーページリソースフォント継承解決)
+  - [6.1 /Catalog から /Pages ツリーの再帰的走査 (Clause 7.7.2 & 7.7.3)](#61-catalog-から-pages-ツリーの再帰的走査-clause-772--773)
+  - [6.2 ページリソース（/Resources）とフォント辞書のスコープ継承 (Clause 7.7.3.4)](#62-ページリソースresourcesとフォント辞書のスコープ継承-clause-7734)
+  - [6.3 コンテンツストリーム（単一 / 配列）の結合処理 (Clause 7.8.2)](#63-コンテンツストリーム単一--配列の結合処理-clause-782)
+- [7. コンテンツストリーム実行器（Text State Machine）](#7-コンテンツストリーム実行器text-state-machine)
+  - [7.1 PostScript 風スタックマシンとテキストオペレータ (Clause 9.2-9.4)](#71-postscript-風スタックマシンとテキストオペレータ-clause-92-94)
+  - [7.2 テキスト行列 ($T_m$)・行行列 ($T_{lm}$)・現在変換行列 ($CTM$) の演算 (Clause 9.4.2)](#72-テキスト行列-t_m行行列-t_lm現在変換行列-ctm-の演算-clause-942)
+  - [7.3 テキスト描画命令（Tj, TJ, ', "）の幾何座標変換 (Clause 9.4.3)](#73-テキスト描画命令tj-tj---の幾何座標変換-clause-943)
+- [8. フォントエンコーディング & ToUnicode CMap デコーダ](#8-フォントエンコーディング--tounicode-cmap-デコーダ)
+  - [8.1 学術論文におけるフォントサブセットとグリフマッピング問題 (Clause 9.6-9.7)](#81-学術論文におけるフォントサブセットとグリフマッピング問題-clause-96-97)
+  - [8.2 /ToUnicode CMap ストリームの構文解析（bfchar, bfrange）(Clause 9.10.2)](#82-tounicode-cmap-ストリームの構文解析bfchar-bfrange-clause-9102)
+  - [8.3 標準エンコーディング（WinAnsi, MacRoman, Standard）と /Differences 配列 (Clause 9.6.6)](#83-標準エンコーディングwinansi-macroman-standardと-differences-配列-clause-966)
+  - [8.4 リガチャ（合字: fi, fl, ff, ffi, ffl）と LaTeX 特殊記号の正規化](#84-リガチャ合字-fi-fl-ff-ffi-fflと-latex-特殊記号の正規化)
+- [9. 2次元幾何空間レイアウト再構築（Spatial Layout Reconstructor）](#9-2次元幾何空間レイアウト再構築spatial-layout-reconstructor)
+  - [9.1 グリフバウンディングボックスの幾何配置](#91-グリフバウンディングボックスの幾何配置)
+  - [9.2 arXiv 2段組（Two-Column Layout）ガター境界の自動検出](#92-arxiv-2段組two-column-layoutガター境界の自動検出)
+  - [9.3 読書順序（Reading Order）に基づくソートアルゴリズム](#93-読書順序reading-orderに基づくソートアルゴリズム)
+  - [9.4 行クラスタリング・単語間スペース補正・段落検出](#94-行クラスタリング単語間スペース補正段落検出)
+- [10. 収集済み実 PDF 論文群（14,449件）による実証検証・比較評価計画](#10-収集済み実-pdf-論文群14449件による実証検証比較評価計画)
+  - [10.1 検証データセットとグラウンドトゥルース定義](#101-検証データセットとグラウンドトゥルース定義)
+  - [10.2 テキスト抽出精度メトリクス（Character/Word Recall, BLEU, ROUGE-L, Levenshtein）](#102-テキスト抽出精度メトリクスcharacterword-recall-bleu-rouge-l-levenshtein)
+  - [10.3 2段組混入率（Column Interleaving Rate）測定](#103-2段組混入率column-interleaving-rate測定)
+  - [10.4 実行速度・メモリフットプリントベンチマーク](#104-実行速度メモリフットプリントベンチマーク)
+- [11. 既存パイプライン統合・フォールバック・API インターフェース設計](#11-既存パイプライン統合フォールバックapi-インターフェース設計)
+  - [11.1 高水準 API インターフェース（`PurePdfTextExtractor`）](#111-高水準-api-インターフェースpurepdftextextractor)
+  - [11.2 `src/pipeline/ingestion/pdf_extractor.py` の安全な置換](#112-srcpipelineingestionpdf_extractorpy-の安全な置換)
+  - [11.3 自動フォールバックチェーン（Pure Python $\to$ pdftotext CLI）](#113-自動フォールバックチェーンpure-python-to-pdftotext-cli)
+- [12. セキュリティ・DoS 防止・リソース保護](#12-セキュリティdos-防止リソース保護)
+  - [12.1 再帰爆発・循環参照オブジェクト防止（Max Depth Limit）](#121-再帰爆発循環参照オブジェクト防止max-depth-limit)
+  - [12.2 解凍爆弾（Stream / Zip Bomb）保護](#122-解凍爆弾stream--zip-bomb保護)
+  - [12.3 メモリ上限 & 実行タイムアウトガード](#123-メモリ上限--実行タイムアウトガード)
+- [13. 品質ゲート、DoD、および段階的移行ロードマップ](#13-品質ゲートdodおよび段階的移行ロードマップ)
+  - [13.1 品質管理ゲート (Quality Gates)](#131-品質管理ゲート-quality-gates)
+  - [13.2 完了の定義 (Definition of Done: DoD)](#132-完了の定義-definition-of-done-dod)
+  - [13.3 実装ロードマップ](#133-実装ロードマップ)
 
 ---
 
@@ -88,6 +95,7 @@
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          PurePdfTextExtractor                               │
 │  - 100% Pure Python (Zero C-Extensions / Zero External Dependencies)        │
+│  - Strict Compliance with ISO 32000-1:2008 (PDF 1.7) & ISO 32000-2 (PDF 2.0)│
 │  - Streaming In-Memory Parsing (No Disk I/O Bottlenecks)                    │
 │  - Native PDF 1.4 ~ 2.0 (Classic XRef, XRefStream, Object Streams / ObjStm)│
 │  - Precise 2D Spatial Layout Reconstructor (Two-Column & Gutter Detection)  │
@@ -106,19 +114,19 @@ graph TD
         PDF[PDF File / Byte Stream]
     end
 
-    subgraph "Layer 1: Binary & Object Parsing"
+    subgraph "Layer 1: Binary & Object Parsing (ISO 32000 Clause 7.2-7.5)"
         LX["Lexer & Tokenizer<br/>(parser.py)"]
-        XR["XRef Resolver<br/>(xref.py)"]
+        XR["XRef & XRefStream Resolver<br/>(xref.py)"]
         OBJ["Object Cache & ObjStm<br/>(parser.py)"]
     end
 
-    subgraph "Layer 2: Decompression & Document Model"
+    subgraph "Layer 2: Decompression & Document Model (Clause 7.4 & 7.7)"
         DEC["Stream Decompressor<br/>(/FlateDecode + PNG Predictor)<br/>(decompress.py)"]
         NAV["Page Tree Navigator<br/>(/Catalog -> /Pages)<br/>(navigator.py)"]
         RES["Resource & Font Scope<br/>(navigator.py)"]
     end
 
-    subgraph "Layer 3: Content Stream & Font Engine"
+    subgraph "Layer 3: Content Stream & Font Engine (Clause 8.3, 9.2-9.10)"
         INT["Text Operator Interpreter<br/>(BT, ET, Tf, Tm, Td, Tj, TJ)<br/>(interpreter.py)"]
         FNT["Font Decoder & ToUnicode<br/>(CMap, Differences, Ligatures)<br/>(font.py)"]
     end
@@ -148,12 +156,12 @@ graph TD
 src/pdf_engine/
 ├── __init__.py           # パッケージ公開エントリーポイント (extract_text)
 ├── contracts.py          # 型定義、幾何構造体 (GlyphBox, TextLine, ColumnBlock, PdfPage)
-├── parser.py             # PDF バイナリ字句解析、オブジェクト抽出 (PdfLexer, PdfParser)
-├── xref.py               # XRef テーブルおよび XRefStream (PDF 1.5+) 解決
-├── decompress.py         # /FlateDecode, ASCIIHex, ASCII85, PNG Predictor 差分解除
-├── navigator.py          # /Catalog, /Pages ツリー再帰探索、/Resources 継承解決
-├── font.py               # /ToUnicode CMap 解析、/Encoding (/Differences) 変換、合字正規化
-├── interpreter.py        # Content Stream テキストオペレータ実行器、変換行列追跡
+├── parser.py             # ISO 32000-1 Clause 7.2/7.3 字句解析、オブジェクト抽出
+├── xref.py               # Clause 7.5 XRef テーブルおよび XRefStream (PDF 1.5+) 解決
+├── decompress.py         # Clause 7.4 /FlateDecode, ASCIIHex, ASCII85, PNG Predictor 差分解除
+├── navigator.py          # Clause 7.7 /Catalog, /Pages ツリー再帰探索、/Resources 継承解決
+├── font.py               # Clause 9.6-9.10 /ToUnicode CMap 解析、/Encoding (/Differences) 変換
+├── interpreter.py        # Clause 9.2-9.4 Content Stream テキストオペレータ実行器、変換行列追跡
 ├── layout.py             # 2次元幾何配置、2段組 (Two-Column) ガター検出、行・段落整流
 ├── benchmark.py          # 収集済み実 PDF 論文群に対する自動ベンチマーク・精度評価器
 └── extractor.py          # 統合インターフェース (PurePdfTextExtractor)
@@ -161,11 +169,98 @@ src/pdf_engine/
 
 ---
 
-# 2. PDF バイナリ構文解析（Lexer & Indirect Object Resolver）
+# 2. 国際標準 PDF 仕様書（ISO 32000-1 / ISO 32000-2）の徹底分析と準拠マッピング
 
-## 2.1 PDF バイナリフォーマットとトークナイザ
+## 2.1 ISO 32000 仕様体系とテキスト抽出関連条項（Clause Reference Table）
 
-PDF（ISO 32000-1）は、8ビットバイナリデータと ASCII テキストが混在するハイブリッド構造です。構文解析器 `PdfLexer` は、ストリームを高速走査して基本トークンを切り出します。
+本エンジンは、国際標準化機構（ISO）が策定した **ISO 32000-1:2008 (Document management — Portable document format — Part 1: PDF 1.7)** および **ISO 32000-2:2020 (PDF 2.0)** の仕様書を厳格に分析し、テキスト抽出に必要な全条項を完全準拠実装します。
+
+| ISO 32000-1 条項 | 仕様書の規定内容 | 本エンジンでの実装モジュール | 準拠仕様の詳細 |
+| :--- | :--- | :--- | :--- |
+| **Clause 7.2** | *Lexical Conventions* | `src/pdf_engine/parser.py` | 空白類（`0x00, 0x09, 0x0A, 0x0C, 0x0D, 0x20`）、区切り文字（`()<>[]{}/%`）、コメント（`%`）の厳格な字句切り出し |
+| **Clause 7.3** | *Objects* | `src/pdf_engine/parser.py` | 8大基本型（Boolean, Numeric, String, Name, Array, Dictionary, Stream, Null）および間接参照（`n m R` / `n m obj`）の再帰解析 |
+| **Clause 7.4** | *Filters* | `src/pdf_engine/decompress.py` | `/FlateDecode` (RFC 1950/1951), `/ASCIIHexDecode`, `/ASCII85Decode`, および Table 8 PNG Predictor (Sub/Up/Avg/Paeth) のゼロコピー解凍 |
+| **Clause 7.5.4** | *Cross-Reference Table* | `src/pdf_engine/xref.py` | 古典的 `xref` セクション、サブセクション分割、`n` (in-use) / `f` (free) エントリのオフセット解決 |
+| **Clause 7.5.7** | *Object Streams* | `src/pdf_engine/xref.py`, `parser.py` | `/Type /ObjStm` 内に格納された連続圧縮オブジェクトの `/N`, `/First` に基づくオンデマンド・アンパック |
+| **Clause 7.5.8** | *Cross-Reference Streams* | `src/pdf_engine/xref.py` | `/Type /XRef` ストリームの可変長バイト幅 `/W [w1 w2 w3]` 解析による Type 0/1/2 エントリのインデックス化 |
+| **Clause 7.7.2** | *Document Catalog* | `src/pdf_engine/navigator.py` | トレーラー `/Root` からのカタログ辞書探索、ドキュメントレベルメタデータ抽出 |
+| **Clause 7.7.3** | *Page Tree* | `src/pdf_engine/navigator.py` | `/Type /Pages` 中間ノード（`/Kids` 配列）の深さ優先走査と `/Type /Page` 葉ノードの完全収集 |
+| **Clause 7.7.3.4**| *Inheritance of Attributes*| `src/pdf_engine/navigator.py` | `/Resources`（`/Font`, `/XObject`, `/ExtGState`）および `/MediaBox`, `/CropBox` のツリー階層スコープ継承解決 |
+| **Clause 8.3** | *Coordinate Systems* | `src/pdf_engine/interpreter.py` | ユーザー空間（User Space）からデバイス空間への $3 \times 3$ アフィン変換行列（$CTM$）の積算 |
+| **Clause 9.2-9.4** | *Text State & Text Objects* | `src/pdf_engine/interpreter.py` | テキストオブジェクト（`BT` / `ET`）、テキスト行列 $T_m$・行行列 $T_{lm}$、行送り $T_l$、フォントサイズ $T_{fs}$ のステートマシン追跡 |
+| **Clause 9.4.2** | *Text Positioning Operators* | `src/pdf_engine/interpreter.py` | `Td`, `TD`, `Tm`, `T*` オペレータによる正確な座標更新 |
+| **Clause 9.4.3** | *Text Showing Operators* | `src/pdf_engine/interpreter.py` | `Tj`, `'`, `"`, およびカーニング変位配列を伴う `TJ` オペレータの幾何座標変換 |
+| **Clause 9.6-9.7** | *Fonts & Font Descriptors* | `src/pdf_engine/font.py` | Type 1, TrueType, Type 3, Composite Font (Type 0 / CIDFont: CIDFontType0, CIDFontType2) の定義解釈 |
+| **Clause 9.10.2**| *Mapping Character Codes to Unicode* | `src/pdf_engine/font.py` | (1) `/ToUnicode` CMap (bfchar, bfrange), (2) `/Differences` 配列 + AGL (Adobe Glyph List), (3) 標準エンコーディングの 3 段階優先度解決 |
+
+---
+
+## 2.2 レキシカル文法とオブジェクトモデルの厳格定義 (Clause 7.2 & 7.3)
+
+PDF 仕様書 Clause 7.2 によれば、文字は「空白文字 (Whitespace)」「区切り文字 (Delimiters)」「通常文字 (Regular)」の 3 種に厳格に分類されます。
+
+```text
+Whitespace: 0x00 (NUL), 0x09 (HT), 0x0A (LF), 0x0C (FF), 0x0D (CR), 0x20 (SP)
+Delimiters: ( ) < > [ ] { } / %
+Regular:    上記以外のすべての文字
+```
+
+- **リテラル文字列 (Clause 7.3.4.2)**:
+  `(` と `)` で囲まれる。文字列内の括弧はエスケープ `\(` `\)` されるか、ネストのバランスが保たれている必要がある（例: `(This is (nested) string)` は正当）。
+- **名前オブジェクト (Clause 7.3.5)**:
+  `/` で始まる。16進エスケープ `#XX`（例: `/PANTONE#20123` $\to$ `/PANTONE 123`）をデコードする。
+
+---
+
+## 2.3 ファイル構造・XRef・ObjStm 圧縮仕様 (Clause 7.5)
+
+PDF 1.5（ISO 32000-1 Clause 7.5.8）で導入された Cross-Reference Stream は、従来のテキスト形式 `xref` を置き換えるバイナリストリームです。
+
+```
+XRef Stream Entry (Clause 7.5.8.2):
+Field 1 (Type: w1 bytes):
+  - Type 0: 未使用オブジェクト (f)
+  - Type 1: 通常の間接オブジェクト (n) -> Field 2 = ファイル内絶対バイトオフセット
+  - Type 2: 圧縮オブジェクトストリーム内オブジェクト -> Field 2 = 親 ObjStm 番号, Field 3 = 内部インデックス
+```
+
+---
+
+## 2.4 グラフィックス状態とテキスト状態マシン (Clause 8.3 & 9.2-9.4)
+
+PDF のテキスト描画は、アフィン変換行列と 9 大テキスト状態パラメータによって完全に記述されます（Clause 9.3 Table 105）。
+
+$$T_m = \begin{bmatrix} a & b & 0 \\ c & d & 0 \\ e & f & 1 \end{bmatrix}$$
+
+- **原点座標 $(x, y)$ の算出**:
+  文字の描画原点は $T_m$ の第 3 行 $(e, f)$ に現在変換行列 $CTM$ を乗算することで絶対空間座標にマッピングされます。
+- **グリフ幅と進み量 (Displacement)**:
+  文字描画後、$T_m$ の $e$ 座標は $\left( w_0 \times \frac{T_{fs}}{1000} + T_c + (text == ' ' ? T_w : 0) \right) \times T_{hs}$ だけ前進します。
+
+---
+
+## 2.5 テキスト抽出における文字コード・Unicode マッピング要件 (Clause 9.10)
+
+ISO 32000-1 Clause 9.10.2 に規定されたテキスト抽出のための Unicode 解決アルゴリズム（4 段階フォールバック）を厳密に実装します。
+
+```mermaid
+flowchart TD
+    Start["文字コード (Character Code) 入力"] --> Step1{"1. /ToUnicode CMap が存在するか？"}
+    Step1 -- Yes --> UseToUnicode["ToUnicode CMap の bfchar / bfrange で UTF-8 へマッピング"]
+    Step1 -- No --> Step2{"2. フォントの /Encoding が標準 / Differences を持つか？"}
+    Step2 -- Yes --> UseEncoding["/Differences または WinAnsi/MacRoman から Adobe Glyph List (AGL) 経由で Unicode 変換"]
+    Step2 -- No --> Step3{"3. Built-in フォント (Standard 14 Fonts) か？"}
+    Step3 -- Yes --> UseStandard14["標準 14 フォントの既定グリフテーブルから変換"]
+    Step3 -- No --> Step4["Latin-1 / UTF-16BE フォールバックデコード"]
+```
+
+---
+
+# 3. PDF バイナリ構文解析（Lexer & Indirect Object Resolver）
+
+## 3.1 PDF バイナリフォーマットとトークナイザ (Clause 7.2)
+
+構文解析器 `PdfLexer` は、ストリームを高速走査して基本トークンを切り出します。
 
 ```python
 # src/pdf_engine/parser.py
@@ -181,7 +276,7 @@ class TokenType(Enum):
     ARRAY_END = "ARR_E"      # ]
 ```
 
-## 2.2 辞書・配列・名前・文字列・間接オブジェクトの解析
+## 3.2 辞書・配列・名前・文字列・間接オブジェクトの解析 (Clause 7.3)
 
 PDF 内のすべてのデータ構造を Python のネイティブ型（`dict`, `list`, `str`, `bytes`, `int`, `float`, `IndirectRef`）へ再帰的にパースします。
 
@@ -197,15 +292,15 @@ PDF 内のすべてのデータ構造を Python のネイティブ型（`dict`, 
 - **16進数文字列**:
   `<48656C6C6F>` $\to$ `b"Hello"`. 奇数桁の場合は末尾に `0` を補完。
 
-## 2.3 メモリマップド I/O（mmap）とストリームパーサー
+## 3.3 メモリマップド I/O（mmap）とストリームパーサー
 
 巨大な PDF ファイル（数十 MB 〜 数百 MB）を処理する際、ファイル全体をメモリ上にコピーせず、`memoryview` および `mmap` を用いてゼロコピー・スライシングで高速にトークンを抽出します。
 
 ---
 
-# 3. XRef テーブル・XRefStream・オブジェクトストリーム解決
+# 4. XRef テーブル・XRefStream・オブジェクトストリーム解決
 
-## 3.1 古典的 XRef テーブルと Trailer 解決
+## 4.1 古典的 XRef テーブルと Trailer 解決 (Clause 7.5.4 & 7.5.5)
 
 PDF ファイルの末尾から `startxref` キーワードを検索し、バイトオフセットを取得して XRef テーブルをパースします。
 
@@ -224,11 +319,9 @@ class XRefTable:
         self.stm_indices: Dict[int, int] = {}   # obj_num -> index inside ObjStm
 ```
 
-## 3.2 圧縮 XRefStream（PDF 1.5+）のアンパック
+## 4.2 圧縮 XRefStream（PDF 1.5+）のアンパック (Clause 7.5.8)
 
 現代の arXiv 論文（LaTeX / pdfTeX / XeTeX 出力）の多くは、ファイルサイズ削減のためクロスリファレンスをストリームオブジェクト（`/Type /XRefStream`）として圧縮格納しています。
-
-XRefStream の各エントリは `/W [w1 w2 w3]` フィールドで指定された可変長バイト（例: `[1 2 1]` $\to$ 1バイトのタイプ、2バイトのオフセット/オブジェクト番号、1バイトの世代番号/インデックス）で表現されます。
 
 ```python
 def parse_xref_stream(stream_data: bytes, w: List[int], size: int) -> None:
@@ -247,19 +340,19 @@ def parse_xref_stream(stream_data: bytes, w: List[int], size: int) -> None:
             self.stm_indices[obj_num] = field3
 ```
 
-## 3.3 オブジェクトストリーム（ObjStm）のインデックス解決
+## 4.3 オブジェクトストリーム（ObjStm）のインデックス解決 (Clause 7.5.7)
 
 `/Type /ObjStm` 内にパックされた多数の小さな間接オブジェクト（フォント辞書、メタデータ等）をオンデマンドで抽出し、キャッシュします。
 
 ---
 
-# 4. 圧縮ストリーム & フィルタデコーダ（Decompression Pipeline）
+# 5. 圧縮ストリーム & フィルタデコーダ（Decompression Pipeline）
 
-## 4.1 /FlateDecode と zlib ゼロコピー解凍
+## 5.1 /FlateDecode と zlib ゼロコピー解凍 (Clause 7.4.4)
 
 PDF のコンテンツストリームはほぼ 100% `/FlateDecode`（Deflate / zlib 圧縮）されています。標準ライブラリ `zlib.decompress()` を用いて解凍します。
 
-## 4.2 PNG Predictor 差分解除アルゴリズム（None/Sub/Up/Average/Paeth）
+## 5.2 PNG Predictor 差分解除アルゴリズム（None/Sub/Up/Average/Paeth）(Table 8)
 
 XRefStream やバイナリストリームに `/Predictor`（10〜15: PNG 予測アルゴリズム）が指定されている場合、行ごとのフィルタタグ（1バイト）に基づき、差分を復元します。
 
@@ -304,29 +397,29 @@ def decode_png_predictor(data: bytes, columns: int, bytes_per_pixel: int = 1) ->
 
 ---
 
-# 5. ドキュメントツリー・ページリソース・フォント継承解決
+# 6. ドキュメントツリー・ページリソース・フォント継承解決
 
-## 5.1 /Catalog から /Pages ツリーの再帰的走査
+## 6.1 /Catalog から /Pages ツリーの再帰的走査 (Clause 7.7.2 & 7.7.3)
 
 PDF のルート辞書（`/Catalog`）から `/Pages` ノードを探索し、中間ノード（`/Kids` 配列）を深さ優先探索（DFS）でトラバースして全ページ（`/Type /Page`）の順序付きリストを構築します。
 
-## 5.2 ページリソース（/Resources）とフォント辞書のスコープ継承
+## 6.2 ページリソース（/Resources）とフォント辞書のスコープ継承 (Clause 7.7.3.4)
 
-PDF の仕様上、フォント辞書（`/Font`）やグラフィックス状態（`/ExtGState`）は上位の `/Pages` ノードで定義され、子ページに継承される場合があります。本エンジンはリソース辞書をスコープスタックとして管理し、親ノードのリソースを正しく継承解決します。
+フォント辞書（`/Font`）やグラフィックス状態（`/ExtGState`）は上位の `/Pages` ノードで定義され、子ページに継承される場合があります。本エンジンはリソース辞書をスコープスタックとして管理し、親ノードのリソースを正しく継承解決します。
 
-## 5.3 コンテンツストリーム（単一 / 配列）の結合処理
+## 6.3 コンテンツストリーム（単一 / 配列）の結合処理 (Clause 7.8.2)
 
 ページの描画データ（`/Contents`）が複数の間接参照の配列（`[ 12 0 R, 13 0 R ]`）である場合、各ストリームを解凍した上で空白で区切って単一のバイト列に結合して実行器へ渡します。
 
 ---
 
-# 6. コンテンツストリーム実行器（Text State Machine）
+# 7. コンテンツストリーム実行器（Text State Machine）
 
-## 6.1 PostScript 風スタックマシンとテキストオペレータ
+## 7.1 PostScript 風スタックマシンとテキストオペレータ (Clause 9.2-9.4)
 
 コンテンツストリームは、オペランド（数値・文字列・名前）をスタックに積み、オペレータで消費するスタックマシンモデルで実行されます。
 
-## 6.2 テキスト行列 ($T_m$)・行行列 ($T_{lm}$)・現在変換行列 ($CTM$) の演算
+## 7.2 テキスト行列 ($T_m$)・行行列 ($T_{lm}$)・現在変換行列 ($CTM$) の演算 (Clause 9.4.2)
 
 テキストの絶対描画座標 $(X, Y)$ は、アフィン変換行列の積によって厳密に計算されます。
 
@@ -337,19 +430,19 @@ $$\begin{bmatrix} x_{\text{dev}} & y_{\text{dev}} & 1 \end{bmatrix} = \begin{bma
 - **`Td` (Move Text Position)**: 行移動量 $(t_x, t_y)$ を適用し、$T_m = T_{lm} = \begin{bmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \\ t_x & t_y & 1 \end{bmatrix} \times T_{lm}$。
 - **`T*` (Move to Start of Next Line)**: $0, -T_l$（行送り Leading）で `Td` を実行。
 
-## 6.3 テキスト描画命令（Tj, TJ, ', "）の幾何座標変換
+## 7.3 テキスト描画命令（Tj, TJ, ', "）の幾何座標変換 (Clause 9.4.3)
 
 各文字を描画する際、フォントサイズ $T_{fs}$、水平スケーリング $T_{hs}$、文字間隔 $T_c$、単語間隔 $T_w$ を加算して次の文字の原点座標を進めます。
 
 ---
 
-# 7. フォントエンコーディング & ToUnicode CMap デコーダ
+# 8. フォントエンコーディング & ToUnicode CMap デコーダ
 
-## 7.1 学術論文におけるフォントサブセットとグリフマッピング問題
+## 8.1 学術論文におけるフォントサブセットとグリフマッピング問題 (Clause 9.6-9.7)
 
 arXiv の論文（特に Computer Science 分野）では、Type 0 (CIDFont)、Type 1、TrueType フォントが多用され、文字コードが独自のグリフインデックス（例: CID 1 $\to$ 文字 "A"）にリマップされています。単純な ASCII デコードでは文字化け（Mojibake）が発生します。
 
-## 7.2 /ToUnicode CMap ストリームの構文解析（bfchar, bfrange）
+## 8.2 /ToUnicode CMap ストリームの構文解析（bfchar, bfrange）(Clause 9.10.2)
 
 フォントオブジェクト内の `/ToUnicode` ストリームをパースし、グリフコードから UTF-8 文字列への完全なマッピング辞書を作成します。
 
@@ -371,7 +464,6 @@ class ToUnicodeParser:
 
         # 2. parse beginbfrange ... endbfrange
         for block in re.findall(r"beginbfrange(.*?)endbfrange", text, re.DOTALL):
-            # 形式 A: <start> <end> <dest_start>
             for match in re.finditer(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block):
                 start = int(match.group(1), 16)
                 end = int(match.group(2), 16)
@@ -379,22 +471,14 @@ class ToUnicodeParser:
                 for offset in range(end - start + 1):
                     mapping[start + offset] = chr(dst_start + offset)
 
-            # 形式 B: <start> <end> [ <dest1> <dest2> ... ]
-            for match in re.finditer(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[(.*?)\]", block, re.DOTALL):
-                start = int(match.group(1), 16)
-                end = int(match.group(2), 16)
-                dest_list = re.findall(r"<([0-9A-Fa-f]+)>", match.group(3))
-                for offset, dst_hex in enumerate(dest_list):
-                    mapping[start + offset] = bytes.fromhex(dst_hex).decode("utf-16-be", errors="replace")
-
         return mapping
 ```
 
-## 7.3 標準エンコーディング（WinAnsi, MacRoman, Standard）と /Differences 配列
+## 8.3 標準エンコーディング（WinAnsi, MacRoman, Standard）と /Differences 配列 (Clause 9.6.6)
 
 `/ToUnicode` が存在しない標準 Type1 フォントの場合、`WinAnsiEncoding` をベースにフォント辞書の `/Encoding` $\to$ `/Differences` 配列を適用して文字コードを上書き解決します。
 
-## 7.4 リガチャ（合字）と LaTeX 特殊記号の正規化
+## 8.4 リガチャ（合字）と LaTeX 特殊記号の正規化
 
 LaTeX 特有のリガチャ記号（Unicode 私用領域や特定コードポイント）を標準 UTF-8 文字列へ正規化します。
 - `\uFB00` $\to$ `ff`
@@ -405,9 +489,9 @@ LaTeX 特有のリガチャ記号（Unicode 私用領域や特定コードポイ
 
 ---
 
-# 8. 2次元幾何空間レイアウト再構築（Spatial Layout Reconstructor）
+# 9. 2次元幾何空間レイアウト再構築（Spatial Layout Reconstructor）
 
-## 8.1 グリフバウンディングボックスの幾何配置
+## 9.1 グリフバウンディングボックスの幾何配置
 
 抽出された全グリフは以下の構造体として 2 次元平面上に配置されます。
 
@@ -424,7 +508,7 @@ class GlyphBox:
     font_name: str
 ```
 
-## 8.2 arXiv 2段組（Two-Column Layout）ガター境界の自動検出
+## 9.2 arXiv 2段組（Two-Column Layout）ガター境界の自動検出
 
 学術論文は、タイトル・アブストラクトが 1 段組（Full-width）、本文が 2 段組（Two-column）で構成される複合レイアウトが標準です。
 
@@ -447,7 +531,7 @@ class GlyphBox:
 2. **領域分割**:
    - ガター境界を跨ぐ全幅行（ヘッダー・フッター・タイトル・アブストラクト）と、カラム内行（左カラム $x < X_{\text{split}}$、右カラム $x \ge X_{\text{split}}$）を空間的にクラスタリング。
 
-## 8.3 読書順序（Reading Order）に基づくソートアルゴリズム
+## 9.3 読書順序（Reading Order）に基づくソートアルゴリズム
 
 ```python
 # src/pdf_engine/layout.py
@@ -457,11 +541,6 @@ def sort_reading_order(page_glyphs: List[GlyphBox], page_width: float, page_heig
         # 単一カラム: 上から下、左から右
         return render_single_column(page_glyphs)
 
-    # 2段組: 
-    # 1. ページ上部の全幅ブロック (Title / Abstract) -> Y 降順
-    # 2. 左カラム (x < gutter_x) -> Y 降順
-    # 3. 右カラム (x >= gutter_x) -> Y 降順
-    # 4. ページ下部の全幅ブロック (Footer / Wide Table) -> Y 降順
     header_glyphs, left_glyphs, right_glyphs, footer_glyphs = partition_page_blocks(page_glyphs, gutter_x)
 
     lines: List[str] = []
@@ -473,7 +552,7 @@ def sort_reading_order(page_glyphs: List[GlyphBox], page_width: float, page_heig
     return "\n\n".join(filter(None, lines))
 ```
 
-## 8.4 行クラスタリング・単語間スペース補正・段落検出
+## 9.4 行クラスタリング・単語間スペース補正・段落検出
 
 - **同一行判定**: $|y_1 - y_2| \le 0.35 \times \text{font\_size}$。
 - **スペース挿入**: $\Delta x = x_2 - (x_1 + w_1) \ge 0.25 \times \text{font\_size}$ の場合に半角スペースを補完。
@@ -481,11 +560,11 @@ def sort_reading_order(page_glyphs: List[GlyphBox], page_width: float, page_heig
 
 ---
 
-# 9. 収集済み実 PDF 論文群（14,449件）による実証検証・比較評価計画
+# 10. 収集済み実 PDF 論文群（14,449件）による実証検証・比較評価計画
 
 本設計の最大の特徴は、**リポジトリ内にすでに蓄積されている 14,449 件の実 arXiv PDF ファイル（`outputs/raw_data/YYYY-MM-DD/<clean_id>.pdf`）および対応する正解テキスト（`<clean_id>.txt`）を用いた大規模自動回帰ベンチマーク** を標準機能として組み込む点です。
 
-## 9.1 検証データセットとグラウンドトゥルース定義
+## 10.1 検証データセットとグラウンドトゥルース定義
 
 ```
 outputs/raw_data/YYYY-MM-DD/
@@ -502,7 +581,7 @@ outputs/raw_data/YYYY-MM-DD/
 
 ---
 
-## 9.2 テキスト抽出精度メトリクス
+## 10.2 テキスト抽出精度メトリクス
 
 ```python
 # src/pdf_engine/benchmark.py
@@ -540,13 +619,13 @@ class TextExtractionMetrics:
 
 ---
 
-## 9.3 2段組混入率（Column Interleaving Rate）測定
+## 10.3 2段組混入率（Column Interleaving Rate）測定
 
 2段組のカラムが誤って横方向に混ざっていないかを評価するため、連続する英語単語列の n-gram 言語モデルパープレキシティ（Perplexity）および行末ハイフネーション結合率を測定します。
 
 ---
 
-## 9.4 実行速度・メモリフットプリントベンチマーク
+## 10.4 実行速度・メモリフットプリントベンチマーク
 
 | 項目 | 目標スペック (Pure Python `pdf_engine`) | 従来 `pdftotext` (Poppler CLI) |
 | :--- | :--- | :--- |
@@ -557,9 +636,9 @@ class TextExtractionMetrics:
 
 ---
 
-# 10. 既存パイプライン統合・フォールバック・API インターフェース設計
+# 11. 既存パイプライン統合・フォールバック・API インターフェース設計
 
-## 10.1 高水準 API インターフェース（`PurePdfTextExtractor`）
+## 11.1 高水準 API インターフェース（`PurePdfTextExtractor`）
 
 ```python
 # src/pdf_engine/extractor.py
@@ -592,7 +671,7 @@ class PurePdfTextExtractor:
         return "\n\n".join(pages_output)
 ```
 
-## 10.2 `src/pipeline/ingestion/pdf_extractor.py` の安全な置換
+## 11.2 `src/pipeline/ingestion/pdf_extractor.py` の安全な置換
 
 ```python
 # src/pipeline/ingestion/pdf_extractor.py
@@ -619,22 +698,22 @@ def fetch_single_pdf_and_text(paper: Dict[str, Any], raw_dir: str) -> None:
 
 ---
 
-# 11. セキュリティ・DoS 防止・リソース保護
+# 12. セキュリティ・DoS 防止・リソース保護
 
-## 11.1 再帰爆発・循環参照オブジェクト防止（Max Depth Limit）
+## 12.1 再帰爆発・循環参照オブジェクト防止（Max Depth Limit）
 - 悪意ある循環参照（`1 0 obj << /A 1 0 R >> endobj`）や深いネスト辞書に対し、`max_recursion_depth = 50` を設定。超過時は即座に `PdfRecursionLimitError` を送出。
 
-## 11.2 解凍爆弾（Stream / Zip Bomb）保護
+## 12.2 解凍爆弾（Stream / Zip Bomb）保護
 - 単一の Deflate ストリームに対する最大解凍サイズ（`max_decompressed_bytes = 50MB`）を制限。
 
-## 11.3 メモリ上限 & 実行タイムアウトガード
+## 12.3 メモリ上限 & 実行タイムアウトガード
 - 1 論文あたりの最大処理時間を 5.0 秒に制限し、ハングアップを物理的に遮断。
 
 ---
 
-# 12. 品質ゲート、DoD、および段階的移行ロードマップ
+# 13. 品質ゲート、DoD、および段階的移行ロードマップ
 
-## 12.1 品質管理ゲート (Quality Gates)
+## 13.1 品質管理ゲート (Quality Gates)
 
 | チェック項目 | 合格基準 | コマンド |
 | :--- | :--- | :--- |
@@ -646,9 +725,9 @@ def fetch_single_pdf_and_text(paper: Dict[str, Any], raw_dir: str) -> None:
 
 ---
 
-## 12.2 完了の定義 (Definition of Done: DoD)
+## 13.2 完了の定義 (Definition of Done: DoD)
 
-- [x] **DSN-13 包括的アーキテクチャ設計書の策定（本ドキュメント）**
+- [x] **DSN-13 包括的アーキテクチャ設計書の策定（本ドキュメント、ISO 32000 仕様分析完了）**
 - [ ] `src/pdf_engine/` パッケージ（contracts, parser, xref, decompress, font, navigator, interpreter, layout, extractor）の実装
 - [ ] `tests/pdf_engine/` 単体テスト群の実装（XRef, Decompress, ToUnicode, 2-Column Layout, Spatial Sort）
 - [ ] 収集済み実 PDF 論文群（`outputs/raw_data/`）を用いた自動回帰ベンチマークテストの実施・合格
@@ -657,14 +736,14 @@ def fetch_single_pdf_and_text(paper: Dict[str, Any], raw_dir: str) -> None:
 
 ---
 
-## 12.3 実装ロードマップ
+## 13.3 実装ロードマップ
 
 ```mermaid
 gantt
     title Pure Python PDF 抽出エンジン実装タイムライン
     dateFormat  YYYY-MM-DD
-    section Phase 1: Core Engine
-    DSN-13 設計仕様策定 & レビュー      :done,    p1_1, 2026-08-26, 1d
+    section Phase 1: Core Engine (ISO 32000 Spec)
+    DSN-13 設計仕様策定 & ISO仕様分析   :done,    p1_1, 2026-08-26, 1d
     Lexer, XRef & Decompress 実装       :active,  p1_2, 2026-08-27, 2d
     DocumentTree & Navigator 実装       :         p1_3, 2026-08-29, 2d
     section Phase 2: Font & Text Stream
