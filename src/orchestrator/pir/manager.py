@@ -134,9 +134,7 @@ class PIRManager(IntelligencePhaseProtocol):
     def phase_type(self) -> IntelligencePhase:
         return IntelligencePhase.PLANNING
 
-    def register_requirement(
-        self, req: PIRRequirement, save: bool = True
-    ) -> None:
+    def register_requirement(self, req: PIRRequirement, save: bool = True) -> None:
         """Registers or updates a PIR requirement."""
         self._requirements[req.req_id] = req
         for topic in req.target_topics:
