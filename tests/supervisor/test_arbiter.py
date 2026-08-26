@@ -342,3 +342,47 @@ def test_arbiter_custom_worker_specs_and_dynamic_scaling(tmp_path: Any) -> None:
     assert "collector" in status_res["pools"]
     assert "indexer" in status_res["pools"]
     assert "api_gateway" in status_res["pools"]
+
+
+def test_arbiter_daemonize_mocked(tmp_path: Any) -> None:
+    log_file = str(tmp_path / "daemon.log")
+    pid_file = str(tmp_path / "daemon.pid")
+    cfg = SupervisorConfig(
+        workspace_dir=str(tmp_path),
+        daemon=True,
+        log_file=log_file,
+        pid_file=pid_file,
+    )
+    arbiter = Arbiter(cfg)
+
+    with patch("os.fork", side_effect=[0, 0]) as mock_fork, patch(
+        "os.setsid"
+    ) as mock_setsid, patch("os.umask") as mock_umask, patch("os.dup2") as mock_dup2:
+        arbiter.daemonize()
+        assert mock_fork.call_count == 2
+        mock_setsid.assert_called_once()
+        mock_umask.assert_called_once_with(0)
+        assert mock_dup2.call_count >= 2
+
+
+def test_arbiter_existing_pid_check(tmp_path: Any) -> None:
+    import pytest
+
+    pid_file = tmp_path / "running.pid"
+    pid_file.write_text("999999", encoding="utf-8")
+    cfg = SupervisorConfig(
+        workspace_dir=str(tmp_path),
+        pid_file=str(pid_file),
+    )
+    arbiter = Arbiter(cfg)
+
+    # When os.kill(999999, 0) succeeds (process alive)
+    with patch("os.kill") as mock_kill:
+        mock_kill.return_value = None
+        with pytest.raises(RuntimeError, match="already running with PID 999999"):
+            arbiter._check_existing_pid()
+
+    # When os.kill raises ProcessLookupError (process dead / stale PID)
+    with patch("os.kill", side_effect=ProcessLookupError):
+        # Should not raise exception
+        arbiter._check_existing_pid()

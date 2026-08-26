@@ -2,7 +2,7 @@
 ID: 077
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] Implement Supervisor Daemon Mode and Background Process Execution (ID: 077)
@@ -104,9 +104,9 @@ Target Branch: `feat/077-implement-supervisor-daemon-mode-and-background-executi
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `PYTHONPATH=src .venv/bin/python -m supervisor.cli -c config/supervisor.json start -D` を実行すると即座にシェルが返ってくること
-- [ ] デーモン起動後、`PYTHONPATH=src .venv/bin/python -m supervisor.cli status` および `top` で正常稼働が確認できること
-- [ ] `PYTHONPATH=src .venv/bin/python -m supervisor.cli stop` で親・子プロセスがクリーンに停止し、PID ファイル・ソケットが片付けられること
-- [ ] ログが `config.log_file`（`outputs/supervisor.log`）に正常に出力されること
-- [ ] 既存 PID が生存している場合の二重起動防止ガードが機能すること
-- [ ] `make format`, `make check_format`, `make static_analysis` (0 エラー) および `pytest tests/supervisor/` が 100% PASS すること
+- [x] `PYTHONPATH=src .venv/bin/python -m supervisor.cli -c config/supervisor.json start -D` を実行すると即座にシェルが返ってくること
+- [x] デーモン起動後、`PYTHONPATH=src .venv/bin/python -m supervisor.cli status` および `top` で正常稼働が確認できること
+- [x] `PYTHONPATH=src .venv/bin/python -m supervisor.cli stop` で親・子プロセスがクリーンに停止し、PID ファイル・ソケットが片付けられること
+- [x] ログが `config.log_file`（`outputs/supervisor/supervisor.log`）に正常に出力されること
+- [x] 既存 PID が生存している場合の二重起動防止ガードが機能すること
+- [x] `make format`, `make check_format`, `make static_analysis` (0 エラー) および `pytest tests/supervisor/` が 100% PASS すること

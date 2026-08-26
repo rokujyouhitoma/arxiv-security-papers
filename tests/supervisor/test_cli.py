@@ -160,3 +160,27 @@ def test_cli_start_with_config_override(tmp_path) -> None:
         assert config.bind_host == "0.0.0.0"
         assert config.bind_port == 9999
         assert config.worker_class == "sync"
+
+
+def test_cli_start_daemon_mode() -> None:
+    with patch("supervisor.cli.Arbiter") as mock_arbiter_cls:
+        mock_arbiter = MagicMock()
+        mock_arbiter_cls.return_value = mock_arbiter
+
+        code = main(
+            [
+                "start",
+                "-D",
+                "--log-file",
+                "/tmp/test_daemon.log",
+                "--pid",
+                "/tmp/test_daemon.pid",
+            ]
+        )
+        assert code == 0
+        mock_arbiter.daemonize.assert_called_once()
+        mock_arbiter.start.assert_called_once()
+        config = mock_arbiter_cls.call_args[0][0]
+        assert config.daemon is True
+        assert config.log_file == "/tmp/test_daemon.log"
+        assert config.pid_file == "/tmp/test_daemon.pid"

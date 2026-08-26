@@ -1,6 +1,9 @@
 {
   "bind_host": "0.0.0.0",
   "bind_port": 8000,
+  "daemon": false,
+  "log_file": "outputs/supervisor/supervisor.log",
+  "pid_file": "outputs/supervisor/arbiter.pid",
   "timeout": 30.0,
   "graceful_timeout": 30.0,
   "pools": [

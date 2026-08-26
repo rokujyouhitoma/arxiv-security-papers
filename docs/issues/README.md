@@ -6,9 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **077** | Supervisor デーモンモード（`-D` / `--daemon`）およびバックグラウンド実行・ログファイル出力機能の実装 | Feature | High | In Progress | [077-implement-supervisor-daemon-mode-and-background-execution.md](077-implement-supervisor-daemon-mode-and-background-execution.md) |
+*現在アクティブな Issue はありません。*
 
 ---
 
@@ -16,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **077** | Supervisor デーモンモード（`-D` / `--daemon`）およびバックグラウンド実行・ログファイル出力機能の実装 | Feature | 2026-08-26 | [077-implement-supervisor-daemon-mode-and-background-execution.md](closed/077-implement-supervisor-daemon-mode-and-background-execution.md) |
 | **075** | Unix Domain Socket による DB・Web・Search の完全プロセス分離と IPC ラッパー基盤の実装 | Feature / Refactor | 2026-08-26 | [075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md](closed/075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md) |
 | **076** | Supervisor のドメイン非依存・汎用プロセスエンジン化と宣言的 Worker/Service 抽象化 | Feature / Refactor | 2026-08-26 | [076-decouple-domain-workers-from-supervisor-generic-engine.md](closed/076-decouple-domain-workers-from-supervisor-generic-engine.md) |
 | **074** | アイドル状態継続後のワーカー誤判定・ヘルスチェック誤表示およびゾンビプロセス回収不備の根絶 | Bug / Refactor | 2026-08-26 | [074-fix-idle-worker-death-and-zombie-reaping.md](closed/074-fix-idle-worker-death-and-zombie-reaping.md) |

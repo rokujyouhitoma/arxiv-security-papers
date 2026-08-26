@@ -129,8 +129,12 @@ run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (ht
 	PYTHONPATH=src ${VENV_PYTHON} src/web/server.py --port 8000
 
 .PHONY: run_supervisor
-run_supervisor: activate ## Launch Gunicorn-style Pre-Fork Process Supervisor & Arbiter
+run_supervisor: activate ## Launch Gunicorn-style Pre-Fork Process Supervisor & Arbiter (foreground)
 	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli start $(ARGS)
+
+.PHONY: start_supervisor
+start_supervisor: activate ## Launch Process Supervisor in background daemon mode (-D)
+	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli start -D $(ARGS)
 
 .PHONY: status_supervisor
 status_supervisor: activate ## Check live Process Supervisor status via IPC Unix domain socket

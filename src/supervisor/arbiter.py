@@ -490,8 +490,97 @@ class Arbiter:
 
         self._cleanup_resources()
 
+    def _check_existing_pid(self) -> None:
+        """Checks if a valid running instance is already registered in the PID file."""
+        if not self.config.pid_file or not os.path.exists(self.config.pid_file):
+            return
+        existing_pid = None
+        try:
+            with open(self.config.pid_file, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            if content:
+                existing_pid = int(content)
+                if existing_pid != self.pid:
+                    os.kill(existing_pid, 0)
+                    raise RuntimeError(
+                        f"Supervisor arbiter is already running with PID {existing_pid}."
+                    )
+        except (ValueError, ProcessLookupError):
+            pass
+        except PermissionError:
+            raise RuntimeError(
+                f"Supervisor arbiter is running with PID {existing_pid} (Permission Denied)."
+            )
+
+    def daemonize(self) -> None:
+        """Detaches the supervisor from the controlling terminal using POSIX double-forking."""
+        self._check_existing_pid()
+
+        try:
+            pid = os.fork()
+            if pid > 0:
+                sys.exit(0)
+        except OSError as e:
+            raise RuntimeError(f"First fork failed: {e}") from e
+
+        os.setsid()
+        os.umask(0)
+
+        try:
+            pid = os.fork()
+            if pid > 0:
+                sys.exit(0)
+        except OSError as e:
+            raise RuntimeError(f"Second fork failed: {e}") from e
+
+        self.pid = os.getpid()
+        self._redirect_standard_streams()
+
+    @staticmethod
+    def _safe_dup2(src_fd: int, dst_fd: int) -> None:
+        """Safely duplicates src_fd onto dst_fd ignoring OS pseudofile errors."""
+        try:
+            os.dup2(src_fd, dst_fd)
+        except Exception:
+            pass
+
+    def _open_log_fd(self) -> int:
+        """Opens and returns target log file descriptor, or /dev/null if unconfigured."""
+        if self.config.log_file:
+            log_dir = os.path.dirname(os.path.abspath(self.config.log_file))
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
+            return os.open(
+                self.config.log_file,
+                os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+                0o644,
+            )
+        return os.open(os.devnull, os.O_RDWR)
+
+    def _redirect_standard_streams(self) -> None:
+        """Redirects stdin to /dev/null and stdout/stderr to configured log_file."""
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                stream.flush()
+            except Exception:
+                pass
+
+        try:
+            devnull = os.open(os.devnull, os.O_RDWR)
+            self._safe_dup2(devnull, 0)
+            out_fd = self._open_log_fd()
+            self._safe_dup2(out_fd, 1)
+            self._safe_dup2(out_fd, 2)
+            if out_fd > 2:
+                os.close(out_fd)
+            if devnull > 2:
+                os.close(devnull)
+        except Exception as exc:
+            logging.error("[Arbiter] Failed to redirect standard streams: %s", exc)
+
     def _write_pid_file(self) -> None:
         """Writes PID file if configured."""
+        self._check_existing_pid()
         if not self.config.pid_file:
             return
         os.makedirs(

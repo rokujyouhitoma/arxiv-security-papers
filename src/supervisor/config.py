@@ -54,6 +54,8 @@ class SupervisorConfig:
     )
     pid_file: Optional[str] = None
     control_socket: Optional[str] = None
+    daemon: bool = False
+    log_file: Optional[str] = None
     timeout: float = 30.0
     graceful_timeout: float = 30.0
     # request_timeout: applied only to workers actively handling a request.
@@ -153,6 +155,10 @@ class SupervisorConfig:
         if not self.control_socket:
             self.control_socket = os.path.join(
                 self.workspace_dir, "outputs", "supervisor", "control.sock"
+            )
+        if self.daemon and not self.log_file:
+            self.log_file = os.path.join(
+                self.workspace_dir, "outputs", "supervisor", "supervisor.log"
             )
 
         if self.threads < 1:

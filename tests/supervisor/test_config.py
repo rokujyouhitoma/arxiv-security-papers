@@ -139,3 +139,23 @@ def test_supervisor_config_auto_discover(tmp_path) -> None:
     assert cfg is not None
     assert cfg.bind_port == 7777
     assert cfg.workers == 6
+
+
+def test_supervisor_config_daemon_defaults() -> None:
+    cfg = SupervisorConfig(daemon=True)
+    assert cfg.daemon is True
+    assert cfg.log_file is not None
+    assert cfg.log_file.endswith("supervisor.log")
+    assert cfg.pid_file is not None
+    assert cfg.pid_file.endswith("arbiter.pid")
+
+
+def test_supervisor_config_daemon_custom_paths() -> None:
+    cfg = SupervisorConfig(
+        daemon=True,
+        log_file="/tmp/custom_supervisor.log",
+        pid_file="/tmp/custom_supervisor.pid",
+    )
+    assert cfg.daemon is True
+    assert cfg.log_file == "/tmp/custom_supervisor.log"
+    assert cfg.pid_file == "/tmp/custom_supervisor.pid"

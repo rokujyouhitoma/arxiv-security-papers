@@ -10,7 +10,7 @@ import argparse
 import json
 import os
 import sys
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from .arbiter import Arbiter
 from .config import SupervisorConfig
@@ -74,6 +74,27 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="WSGI application URI (module:app)",
+    )
+    start_parser.add_argument(
+        "-D",
+        "--daemon",
+        action="store_true",
+        default=None,
+        help="Daemonize the supervisor process (run in background)",
+    )
+    start_parser.add_argument(
+        "--log-file",
+        type=str,
+        default=None,
+        help="Log file destination when running in daemon mode",
+    )
+    start_parser.add_argument(
+        "--pid",
+        "--pid-file",
+        dest="pid_file",
+        type=str,
+        default=None,
+        help="Path to PID file",
     )
 
     # Command: status
@@ -150,7 +171,7 @@ def _build_default_config(
 ) -> SupervisorConfig:
     """Builds default SupervisorConfig from args."""
     host, port = parse_bind(args.bind) if args.bind else ("0.0.0.0", 8000)
-    cfg_dict = {
+    cfg_dict: Dict[str, Any] = {
         "bind_host": host,
         "bind_port": port,
         "worker_class": args.worker_class or "sync",
@@ -162,6 +183,12 @@ def _build_default_config(
     }
     if args.workers is not None:
         cfg_dict["workers"] = args.workers
+    if getattr(args, "daemon", False):
+        cfg_dict["daemon"] = True
+    if getattr(args, "log_file", None) is not None:
+        cfg_dict["log_file"] = args.log_file
+    if getattr(args, "pid_file", None) is not None:
+        cfg_dict["pid_file"] = args.pid_file
     return SupervisorConfig.from_dict(cfg_dict)
 
 
@@ -172,19 +199,23 @@ def _apply_config_overrides(
 ) -> SupervisorConfig:
     """Applies CLI argument overrides to existing SupervisorConfig."""
     if getattr(args, "bind", None) is not None:
-        host, port = parse_bind(args.bind)
-        config.bind_host = host
-        config.bind_port = port
-    if getattr(args, "workers", None) is not None:
-        config.workers = args.workers
-    if getattr(args, "worker_class", None) is not None:
-        config.worker_class = args.worker_class
-    if getattr(args, "threads", None) is not None:
-        config.threads = args.threads
-    if getattr(args, "timeout", None) is not None:
-        config.timeout = args.timeout
-    if getattr(args, "app", None) is not None:
-        config.app_uri = args.app
+        config.bind_host, config.bind_port = parse_bind(args.bind)
+
+    field_map = [
+        ("workers", "workers"),
+        ("worker_class", "worker_class"),
+        ("threads", "threads"),
+        ("timeout", "timeout"),
+        ("app", "app_uri"),
+        ("daemon", "daemon"),
+        ("log_file", "log_file"),
+        ("pid_file", "pid_file"),
+    ]
+    for arg_name, cfg_name in field_map:
+        val = getattr(args, arg_name, None)
+        if val is not None:
+            setattr(config, cfg_name, val)
+
     if control_sock:
         config.control_socket = control_sock
     config.validate()
@@ -216,6 +247,13 @@ def _handle_start(
         f"on {config.bind_host}:{config.bind_port} (App: {config.app_uri})..."
     )
     arbiter = Arbiter(config)
+    if config.daemon:
+        print(
+            f"🚀 [Supervisor Arbiter] Daemonizing process to background "
+            f"(Log: {config.log_file}, PID file: {config.pid_file})..."
+        )
+        arbiter.daemonize()
+
     try:
         arbiter.start()
         return 0
