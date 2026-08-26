@@ -4,8 +4,10 @@ Implements the dynamic PIR/SIR registry and EMA topic weight vector updating:
 w_{k+1} = alpha * w_k + (1 - alpha) * (beta * u_usage + gamma * g_gap + delta * d_drift)
 """
 
+import json
 import math
-from typing import Dict, List, Optional
+import os
+from typing import Any, Dict, List, Optional
 
 from orchestrator.contracts import (
     IntelligenceDirective,
@@ -26,19 +28,115 @@ class PIRManager(IntelligencePhaseProtocol):
         beta: float = 0.4,
         gamma: float = 0.4,
         delta: float = 0.2,
+        storage_path: Optional[str] = None,
+        auto_seed: bool = False,
     ) -> None:
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
         self.delta = delta
+        self.storage_path = storage_path
         self._requirements: Dict[str, PIRRequirement] = {}
         self._current_weights = TopicWeightVector()
+        self._load_or_seed_defaults(auto_seed=auto_seed)
+
+    def _load_or_seed_defaults(self, auto_seed: bool = False) -> None:
+        """Loads PIR registry from disk if available, otherwise optionally seeds domain defaults."""
+        if self.storage_path and os.path.exists(self.storage_path):
+            try:
+                with open(self.storage_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for item in data.get("requirements", []):
+                        req = PIRRequirement(
+                            req_id=item["req_id"],
+                            title=item["title"],
+                            description=item.get("description", ""),
+                            target_topics=item.get("target_topics", []),
+                            priority_score=item.get("priority_score", 1.0),
+                            is_active=item.get("is_active", True),
+                        )
+                        self._requirements[req.req_id] = req
+                    if "weights" in data:
+                        self._current_weights.weights = data["weights"]
+                        return
+            except Exception:
+                pass
+
+        if auto_seed and not self._requirements:
+            self._seed_default_requirements()
+
+    def _seed_default_requirements(self) -> None:
+        """Seeds standard default security PIRs."""
+        self.register_requirement(
+            PIRRequirement(
+                req_id="pir_llm_sec",
+                title="LLM & AI Safety Threats",
+                description="Monitor prompt injection, jailbreaking, and foundation model security",
+                target_topics=[
+                    "LLM・AIセキュリティ",
+                    "脱獄攻撃",
+                    "プロンプトインジェクション",
+                ],
+                priority_score=0.9,
+            ),
+            save=False,
+        )
+        self.register_requirement(
+            PIRRequirement(
+                req_id="pir_vuln_fuzz",
+                title="Vulnerability Research & Penetration Testing",
+                description="Monitor automated fuzzing, exploit payloads, and binary analysis",
+                target_topics=[
+                    "ファジング・脆弱性調査",
+                    "ペネトレーションテスト・脆弱性検証",
+                ],
+                priority_score=0.85,
+            ),
+            save=False,
+        )
+        self.register_requirement(
+            PIRRequirement(
+                req_id="pir_crypto_priv",
+                title="Cryptography & Privacy Engineering",
+                description="Monitor post-quantum crypto, zero-knowledge proofs, and side-channel defenses",
+                target_topics=["暗号・プライバシー技術", "耐量子暗号", "ゼロ知識証明"],
+                priority_score=0.8,
+            ),
+            save=False,
+        )
+
+    def _save_state(self) -> None:
+        """Persists PIR registry and topic weights to disk if storage_path is configured."""
+        if not self.storage_path:
+            return
+        try:
+            os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
+            payload: Dict[str, Any] = {
+                "requirements": [
+                    {
+                        "req_id": r.req_id,
+                        "title": r.title,
+                        "description": r.description,
+                        "target_topics": r.target_topics,
+                        "priority_score": r.priority_score,
+                        "is_active": r.is_active,
+                    }
+                    for r in self._requirements.values()
+                ],
+                "weights": self._current_weights.weights,
+            }
+            with open(self.storage_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
 
     @property
     def phase_type(self) -> IntelligencePhase:
         return IntelligencePhase.PLANNING
 
-    def register_requirement(self, req: PIRRequirement) -> None:
+    def register_requirement(
+        self, req: PIRRequirement, save: bool = True
+    ) -> None:
         """Registers or updates a PIR requirement."""
         self._requirements[req.req_id] = req
         for topic in req.target_topics:
@@ -49,6 +147,8 @@ class PIRManager(IntelligencePhaseProtocol):
                     self._current_weights.weights[topic], req.priority_score
                 )
         self._current_weights.normalize()
+        if save:
+            self._save_state()
 
     def get_requirement(self, req_id: str) -> Optional[PIRRequirement]:
         return self._requirements.get(req_id)
@@ -112,6 +212,7 @@ class PIRManager(IntelligencePhaseProtocol):
 
         self._current_weights.weights = new_weights
         self._current_weights.normalize()
+        self._save_state()
         return self._current_weights
 
     def create_directive(

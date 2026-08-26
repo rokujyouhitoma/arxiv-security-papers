@@ -4,6 +4,7 @@ Integrates the 6 intelligence phases (Planning, Collection, Processing,
 Analysis, Dissemination, Evaluation) into an autonomous self-adapting closed loop.
 """
 
+import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -23,7 +24,10 @@ class UniversalIntelligenceOrchestrator:
 
     def __init__(self, workspace_dir: str = ".") -> None:
         self.workspace_dir = workspace_dir
-        self.pir_manager = PIRManager()
+        pir_storage = os.path.join(
+            workspace_dir, "outputs", "orchestrator", "pir_registry.json"
+        )
+        self.pir_manager = PIRManager(storage_path=pir_storage, auto_seed=True)
         self.harvest_coordinator = HarvestCoordinator()
         self.processing_coordinator = ProcessingCoordinator()
         self.analysis_synthesizer = AnalysisSynthesizer()
