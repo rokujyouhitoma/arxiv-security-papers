@@ -90,8 +90,9 @@ def _print_cycle_details(
         IntelligencePhase.DISSEMINATION,
         IntelligencePhase.EVALUATION,
     ]:
-        status = context.phase_statuses.get(phase, PhaseStatus.PENDING).value
-        symbol = "✓" if status == "COMPLETED" else "✗"
+        status_enum = context.phase_statuses.get(phase, PhaseStatus.PENDING)
+        status = status_enum.value
+        symbol = "✓" if status_enum == PhaseStatus.COMPLETED else "✗"
         print(f"      [{symbol}] {phase.value:<15} : {status}")
 
     print(
