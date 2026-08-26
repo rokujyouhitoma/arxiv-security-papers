@@ -1,8 +1,14 @@
 """2D Spatial Layout Reconstructor and Two-Column Flow Engine."""
 
+import re
 from typing import List, Optional, Tuple
 
 from .contracts import GlyphBox, TextLine
+
+
+def dehyphenate_text(text: str) -> str:
+    """Merges line-broken hyphenated English words (e.g. cyber-\\nsecurity -> cybersecurity)."""
+    return re.sub(r"([A-Za-z]{2,})-\n([A-Za-z]{2,})", r"\1\2", text)
 
 
 def detect_two_column_gutter(
@@ -19,7 +25,9 @@ def detect_two_column_gutter(
     bin_width = (max_center_x - min_center_x) / num_bins
 
     histogram = _build_gutter_histogram(glyphs, min_center_x, bin_width, num_bins)
-    best_len, best_center = _find_widest_gutter(histogram, min_center_x, bin_width, num_bins)
+    best_len, best_center = _find_widest_gutter(
+        histogram, min_center_x, bin_width, num_bins
+    )
 
     if best_len * bin_width >= 12.0 and best_center is not None:
         if abs(best_center - mid_x) < page_width * 0.12:
@@ -136,9 +144,11 @@ class SpatialLayoutEngine:
 
         gutter_x = detect_two_column_gutter(glyphs, page_width)
         if gutter_x is None:
-            return cls._render_single_column(glyphs)
+            raw_text = cls._render_single_column(glyphs)
+        else:
+            raw_text = cls._render_two_column_flow(glyphs, gutter_x, page_height)
 
-        return cls._render_two_column_flow(glyphs, gutter_x, page_height)
+        return dehyphenate_text(raw_text)
 
     @classmethod
     def _render_single_column(cls, glyphs: List[GlyphBox]) -> str:
@@ -160,7 +170,9 @@ class SpatialLayoutEngine:
         sections: List[str] = []
         for group in (header, left, right, footer):
             if group:
-                rendered = "\n".join(render_line_text(line) for line in group if render_line_text(line))
+                rendered = "\n".join(
+                    render_line_text(line) for line in group if render_line_text(line)
+                )
                 if rendered:
                     sections.append(rendered)
 

@@ -45,6 +45,45 @@ STANDARD_AGL: Dict[str, str] = {
     "quotedblleft": "“",
     "quotedblright": "”",
     "bullet": "•",
+    "dagger": "†",
+    "ddagger": "‡",
+    "section": "§",
+    "paragraph": "¶",
+    "copyright": "©",
+    "registered": "®",
+    "trademark": "™",
+    "plusminus": "±",
+    "degree": "°",
+    "minus": "-",
+    "multiply": "×",
+    "divide": "÷",
+    "approxequal": "≈",
+    "notequal": "≠",
+    "lessequal": "≤",
+    "greaterequal": "≥",
+    "infinity": "∞",
+    "partialdiff": "∂",
+    "summation": "∑",
+    "product": "∏",
+    "integral": "∫",
+    "alpha": "α",
+    "beta": "β",
+    "gamma": "γ",
+    "delta": "δ",
+    "epsilon": "ε",
+    "theta": "θ",
+    "lambda": "λ",
+    "mu": "μ",
+    "pi": "π",
+    "sigma": "σ",
+    "tau": "τ",
+    "phi": "φ",
+    "omega": "ω",
+    "Delta": "Δ",
+    "Gamma": "Γ",
+    "Lambda": "Λ",
+    "Sigma": "Σ",
+    "Omega": "Ω",
     "fi": "fi",
     "fl": "fl",
     "ff": "ff",
@@ -76,10 +115,14 @@ def _parse_bfchar_block(block: str, mapping: Dict[int, str]) -> None:
 
 
 def _parse_bfrange_block(block: str, mapping: Dict[int, str]) -> None:
-    for match in re.finditer(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block):
+    for match in re.finditer(
+        r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block
+    ):
         _decode_single_bfrange(match, mapping)
 
-    for match in re.finditer(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[(.*?)\]", block, re.DOTALL):
+    for match in re.finditer(
+        r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[(.*?)\]", block, re.DOTALL
+    ):
         _decode_array_bfrange(match, mapping)
 
 
@@ -112,7 +155,9 @@ def _decode_array_bfrange(match: re.Match[str], mapping: Dict[int, str]) -> None
     for offset, dst_hex in enumerate(dest_list):
         if start + offset <= end:
             try:
-                mapping[start + offset] = bytes.fromhex(dst_hex).decode("utf-16-be", errors="replace")
+                mapping[start + offset] = bytes.fromhex(dst_hex).decode(
+                    "utf-16-be", errors="replace"
+                )
             except Exception:
                 pass
 
