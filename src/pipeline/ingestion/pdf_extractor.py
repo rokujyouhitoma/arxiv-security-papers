@@ -40,7 +40,9 @@ def _download_pdf_file(paper: Dict[str, Any], pdf_path: str) -> None:
     try:
         req = urllib.request.Request(
             pdf_url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"
+            },
         )
         with safe_urlopen(req, timeout=10) as resp:
             pdf_data = resp.read()

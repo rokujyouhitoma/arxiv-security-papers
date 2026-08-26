@@ -84,14 +84,21 @@ def evaluate_single_paper(pdf_path: str, txt_path: str) -> ExtractionMetrics:
     )
 
 
-def run_benchmark_on_dataset(raw_data_dir: str, sample_size: int = 50) -> Dict[str, Any]:
+def run_benchmark_on_dataset(
+    raw_data_dir: str, sample_size: int = 50
+) -> Dict[str, Any]:
     """Runs automated benchmark across existing collected arXiv PDF files."""
-    pdf_files = sorted(glob.glob(os.path.join(raw_data_dir, "**", "*.pdf"), recursive=True))
+    pdf_files = sorted(
+        glob.glob(os.path.join(raw_data_dir, "**", "*.pdf"), recursive=True)
+    )
     if not pdf_files:
         return {"status": "no_data", "count": 0}
 
     targets = pdf_files[:sample_size]
-    print(f"[*] Running Pure Python PDF Engine benchmark on {len(targets)} real arXiv papers...", flush=True)
+    print(
+        f"[*] Running Pure Python PDF Engine benchmark on {len(targets)} real arXiv papers...",
+        flush=True,
+    )
 
     start_time = time.perf_counter()
     metrics_list = _evaluate_target_list(targets)
@@ -120,11 +127,16 @@ def _evaluate_target_list(targets: List[str]) -> List[ExtractionMetrics]:
             )
             print(msg, flush=True)
         except Exception as exc:
-            print(f"  [{idx:02d}/{len(targets):02d}] [!] Error {p_name}: {exc}", flush=True)
+            print(
+                f"  [{idx:02d}/{len(targets):02d}] [!] Error {p_name}: {exc}",
+                flush=True,
+            )
     return metrics_list
 
 
-def _build_benchmark_summary(metrics_list: List[ExtractionMetrics], elapsed: float) -> Dict[str, Any]:
+def _build_benchmark_summary(
+    metrics_list: List[ExtractionMetrics], elapsed: float
+) -> Dict[str, Any]:
     valid_count = len(metrics_list)
     if valid_count == 0:
         return {"status": "empty", "count": 0}

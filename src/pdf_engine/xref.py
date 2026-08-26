@@ -60,7 +60,11 @@ class XRefResolver:
         while True:
             parser.lexer.skip_whitespace_and_comments()
             first_tok = parser.lexer.next_token()
-            if not first_tok or first_tok[1] == "trailer" or not isinstance(first_tok[1], int):
+            if (
+                not first_tok
+                or first_tok[1] == "trailer"
+                or not isinstance(first_tok[1], int)
+            ):
                 break
 
             start_obj = first_tok[1]
@@ -80,7 +84,9 @@ class XRefResolver:
                 return prev
         return None
 
-    def _read_classic_xref_subsection(self, parser: PdfParser, start_obj: int, count: int) -> None:
+    def _read_classic_xref_subsection(
+        self, parser: PdfParser, start_obj: int, count: int
+    ) -> None:
         for i in range(count):
             parser.lexer.skip_whitespace_and_comments()
             off_tok = parser.lexer.next_token()
@@ -141,10 +147,20 @@ class XRefResolver:
         for s_idx in range(0, len(index_arr), 2):
             start_num = index_arr[s_idx]
             count = index_arr[s_idx + 1]
-            data_pos = self._unpack_section_entries(data, data_pos, stride, w1, w2, w3, start_num, count)
+            data_pos = self._unpack_section_entries(
+                data, data_pos, stride, w1, w2, w3, start_num, count
+            )
 
     def _unpack_section_entries(
-        self, data: bytes, pos: int, stride: int, w1: int, w2: int, w3: int, start_num: int, count: int
+        self,
+        data: bytes,
+        pos: int,
+        stride: int,
+        w1: int,
+        w2: int,
+        w3: int,
+        start_num: int,
+        count: int,
     ) -> int:
         cur_pos = pos
         for i in range(count):

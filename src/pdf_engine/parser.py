@@ -118,7 +118,11 @@ class PdfLexer:
 
     def _decode_octal_escape(self) -> bytes:
         octal_bytes = bytearray()
-        while self.pos < self.length and len(octal_bytes) < 3 and ord("0") <= self.data[self.pos] <= ord("7"):
+        while (
+            self.pos < self.length
+            and len(octal_bytes) < 3
+            and ord("0") <= self.data[self.pos] <= ord("7")
+        ):
             octal_bytes.append(self.data[self.pos])
             self.pos += 1
         return bytes([int(octal_bytes.decode("ascii"), 8)])
