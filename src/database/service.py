@@ -108,7 +108,13 @@ class DatabaseService:
             if req.get("op") == "execute_sql":
                 sql_text = str(req.get("params", {}).get("sql", "")).strip()
                 logger.info("⚡ [DatabaseService IPC] Received SQL query: %s", sql_text)
-                print(f"⚡ [DatabaseService IPC] Executing SQL: {sql_text}", flush=True)
+                try:
+                    print(
+                        f"⚡ [DatabaseService IPC] Executing SQL: {sql_text}",
+                        flush=True,
+                    )
+                except OSError:
+                    pass
             return self.handler.handle_request(req)
         except json.JSONDecodeError as err:
             return {"status": "error", "error": f"Invalid JSON: {err}"}

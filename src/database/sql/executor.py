@@ -109,7 +109,10 @@ class SQLExecutor:
         """
         effective_role = role or self.access_controller.current_role
         logger.info("⚡ [SQL Exec] [%s] %s", effective_role, sql.strip())
-        print(f"⚡ [SQL Exec] [{effective_role}] {sql.strip()}", flush=True)
+        try:
+            print(f"⚡ [SQL Exec] [{effective_role}] {sql.strip()}", flush=True)
+        except OSError:
+            pass
         stmt = self.parser.parse(sql)
         return self.execute_statement(stmt, role=effective_role)
 
