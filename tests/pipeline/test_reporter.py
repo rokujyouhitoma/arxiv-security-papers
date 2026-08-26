@@ -108,3 +108,27 @@ arXiv ID = [`2608.55555v1`]
         log_file = os.path.join(tmpdir, "outputs/log.md")
         assert os.path.exists(index_file)
         assert os.path.exists(log_file)
+
+
+def test_get_paper_meta_cached_with_escaped_quotes(tmp_path):
+    from pipeline.reporter.summary_generator import get_paper_meta_cached
+
+    paper_md = tmp_path / "2608.23550.md"
+    content = (
+        "---\n"
+        'type: "security-paper"\n'
+        'title: "When \\"Do Not\\" Is Not Deny: Security Rules in CLAUDE.md vs Built-In Controls"\n'
+        'title_ja: "When \\"Do Not\\" Is Not Deny: Security Rules in CLAUDE.md vs Built-In Controls（セキュリティ分析論文）"\n'
+        'description: "When \\"Do Not\\" Is Not Deny: Security Rules in CLAUDE.md vs Built-In Controls — 課題分析"\n'
+        'resource: "https://arxiv.org/abs/2608.23550v1"\n'
+        "---\n"
+        '# When \\"Do Not\\" Is Not Deny\n'
+        "arXiv ID = [`2608.23550v1`]\n"
+    )
+    paper_md.write_text(content, encoding="utf-8")
+
+    t_str, t_ja, one_liner, ar_id, p_date = get_paper_meta_cached(str(paper_md))
+    assert 'When "Do Not" Is Not Deny' in t_str
+    assert 'When "Do Not" Is Not Deny: Security Rules in CLAUDE.md' in t_ja
+    assert 'When "Do Not" Is Not Deny' in one_liner
+    assert ar_id == "2608.23550v1"

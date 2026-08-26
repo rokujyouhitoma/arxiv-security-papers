@@ -7,12 +7,25 @@ Generates 5-tier Japanese executive summaries (01_per_run ~ 05_annual) with stru
 import os
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from ..transformer.okf_serializer import load_template
 from ..transformer.translator import translate_title_ja
 
 PAPER_META_CACHE: Dict[str, Any] = {}
+
+
+def _extract_frontmatter_field(text: str, field_name: str) -> Optional[str]:
+    """Safely extracts and unescapes a YAML frontmatter field value."""
+    pattern = rf'^{field_name}:\s*"((?:\\.|[^"\\])*)"'
+    match = re.search(pattern, text, re.MULTILINE)
+    if match:
+        val = match.group(1)
+        return re.sub(r'\\(["\\])', r"\1", val)
+    fallback_match = re.search(rf"^{field_name}:\s*([^\n\r]+)", text, re.MULTILINE)
+    if fallback_match:
+        return fallback_match.group(1).strip().strip("'\"")
+    return None
 
 
 def get_paper_meta_cached(pf: str) -> Tuple[str, str, str, str, str]:
@@ -24,23 +37,23 @@ def get_paper_meta_cached(pf: str) -> Tuple[str, str, str, str, str]:
     with open(pf, "r", encoding="utf-8") as f:
         text = f.read()
 
-    title_match = re.search(r'^title:\s*"([^"]+)"', text, re.MULTILINE)
-    title_ja_match = re.search(r'^title_ja:\s*"([^"]+)"', text, re.MULTILINE)
-    desc_match = re.search(r'^description:\s*"([^"]+)"', text, re.MULTILINE)
+    extracted_title = _extract_frontmatter_field(text, "title")
+    extracted_title_ja = _extract_frontmatter_field(text, "title_ja")
+    extracted_desc = _extract_frontmatter_field(text, "description")
     arxiv_match = re.search(r"arXiv ID = \[`([^`]+)`\]", text)
-    date_match = re.search(r'^published_date:\s*"([^"]+)"', text, re.MULTILINE)
+    extracted_date = _extract_frontmatter_field(text, "published_date")
 
-    t_str = title_match.group(1) if title_match else "unknown"
-    t_ja = title_ja_match.group(1) if title_ja_match else translate_title_ja(t_str)
+    t_str = extracted_title if extracted_title else "unknown"
+    t_ja = extracted_title_ja if extracted_title_ja else translate_title_ja(t_str)
     one_liner = (
-        desc_match.group(1)
-        if desc_match
+        extracted_desc
+        if extracted_desc
         else "最新のセキュリティ研究動向および防御技術モデルを提示。"
     )
     ar_id = (
         arxiv_match.group(1) if arxiv_match else os.path.basename(pf).replace(".md", "")
     )
-    p_date = date_match.group(1) if date_match else "N/A"
+    p_date = extracted_date if extracted_date else "N/A"
 
     res = (t_str, t_ja, one_liner, ar_id, p_date)
     PAPER_META_CACHE[pf] = {"mtime": mtime, "data": res}

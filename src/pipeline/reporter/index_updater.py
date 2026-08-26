@@ -55,10 +55,16 @@ def _format_raw_links(
 def _extract_titles_from_okf(okf_path: str, clean_id: str) -> tuple[str, str]:
     with open(okf_path, "r", encoding="utf-8") as file:
         txt = file.read()
-    title_match = re.search(r'^title:\s*"([^"]+)"', txt, re.MULTILINE)
-    title_ja_match = re.search(r'^title_ja:\s*"([^"]+)"', txt, re.MULTILINE)
-    t_str = title_match.group(1) if title_match else clean_id
-    t_ja = title_ja_match.group(1) if title_ja_match else translate_title_ja(t_str)
+    title_match = re.search(r'^title:\s*"((?:\\.|[^"\\])*)"', txt, re.MULTILINE)
+    title_ja_match = re.search(r'^title_ja:\s*"((?:\\.|[^"\\])*)"', txt, re.MULTILINE)
+    t_str = (
+        re.sub(r'\\(["\\])', r"\1", title_match.group(1)) if title_match else clean_id
+    )
+    t_ja = (
+        re.sub(r'\\(["\\])', r"\1", title_ja_match.group(1))
+        if title_ja_match
+        else translate_title_ja(t_str)
+    )
     return t_str.replace("|", "&#124;"), t_ja.replace("|", "&#124;")
 
 
