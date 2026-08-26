@@ -159,17 +159,17 @@ graph TD
 
 ```mermaid
 graph LR
-    S1["arXiv: 2608.23763"] -->|targets| E1["MCP Protocol"]
-    S1 -->|asserts| C1["69.5% Staged Defection"]
+    S1["arXiv 2608-23763"] -->|targets| E1["MCP Protocol"]
+    S1 -->|asserts| C1["69.5パーセント Staged Defection"]
     C1 -->|requires| D1["SHIELD Gateway Audit"]
     D1 -->|protects| E1
 
-    S2["arXiv: 2608.23550"] -->|analyzes| E3["CLAUDE.md Rules"]
-    S2 -->|asserts| C2["Perm Gap 95.6%"]
+    S2["arXiv 2608-23550"] -->|analyzes| E3["CLAUDE-md Rules"]
+    S2 -->|asserts| C2["Perm Gap 95.6パーセント"]
     C2 -->|demands| D2["Built-in Sandbox Deny"]
     D2 -->|enforces| E3
 
-    S3["arXiv: 2608.23471"] -->|targets| E2["Agent Memory"]
+    S3["arXiv 2608-23471"] -->|targets| E2["Agent Memory"]
     S3 -->|asserts| C3["Single-Turn Drift"]
     C3 -->|requires| D3["Memory Anchor Guard"]
     D3 -->|protects| E2
@@ -286,11 +286,11 @@ sequenceDiagram
     participant Rep as Coulomb Repulsion
     participant Spr as Hooke Springs
     participant Grav as Center Gravity
-    participant Int as Position Integration and Clamp
+    participant Int as Position Integration
 
-    Loop->>Rep: 全ノードペア (O(N^2)) 反発力計算
-    Loop->>Spr: 接続エッジ (O(E)) バネ引力計算
-    Loop->>Grav: 中心復元力 and Damping (0.86)
+    Loop->>Rep: 全ノードペア反発力計算
+    Loop->>Spr: 接続エッジバネ引力計算
+    Loop->>Grav: 中心復元力 and Damping
     Loop->>Int: 位置更新 and 境界クランプ
     Int-->>Loop: 次フレーム描画へ
 ```
@@ -321,7 +321,7 @@ graph TD
     R1 --> E["Entity / Claim (Hop 1)"]
     E --> R2["エッジ評価 (requires / demands)"]
     R2 --> D["Decision ノード (Hop 2: 解決策特定)"]
-    D --> C["最小コンテキスト抽出 (74.2% 削減)"]
+    D --> C["最小コンテキスト抽出 (74.2パーセント削減)"]
 ```
 
 ## 4.2 トークン消費削減モデル（Context Compression Ratio）
