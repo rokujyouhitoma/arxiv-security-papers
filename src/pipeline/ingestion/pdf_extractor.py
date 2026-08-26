@@ -23,30 +23,46 @@ def get_paper_pub_date_str(paper: Dict[str, Any]) -> str:
 
 
 def fetch_single_pdf_and_text(paper: Dict[str, Any], raw_dir: str) -> None:
-    """Downloads PDF and extracts full text via pdftotext."""
+    """Downloads PDF and extracts full text via Pure Python Engine with pdftotext fallback."""
     clean_id = paper["clean_id"]
     pdf_path = os.path.join(raw_dir, f"{clean_id}.pdf")
     txt_path = os.path.join(raw_dir, f"{clean_id}.txt")
 
     if not os.path.exists(pdf_path):
-        pdf_url = (
-            paper.get("pdf_url") or f"https://arxiv.org/pdf/{paper['arxiv_id']}.pdf"
-        )
-        try:
-            req = urllib.request.Request(
-                pdf_url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"
-                },
-            )
-            with safe_urlopen(req, timeout=10) as resp:
-                pdf_data = resp.read()
-                with open(pdf_path, "wb") as f:
-                    f.write(pdf_data)
-        except Exception:
-            pass
+        _download_pdf_file(paper, pdf_path)
 
     if os.path.exists(pdf_path) and not os.path.exists(txt_path):
+        _extract_text_with_fallback(pdf_path, txt_path)
+
+
+def _download_pdf_file(paper: Dict[str, Any], pdf_path: str) -> None:
+    pdf_url = paper.get("pdf_url") or f"https://arxiv.org/pdf/{paper['arxiv_id']}.pdf"
+    try:
+        req = urllib.request.Request(
+            pdf_url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"},
+        )
+        with safe_urlopen(req, timeout=10) as resp:
+            pdf_data = resp.read()
+            with open(pdf_path, "wb") as f:
+                f.write(pdf_data)
+    except Exception:
+        pass
+
+
+def _extract_text_with_fallback(pdf_path: str, txt_path: str) -> None:
+    extracted_text = ""
+    try:
+        from pdf_engine.extractor import PurePdfTextExtractor
+
+        extracted_text = PurePdfTextExtractor.extract_text_from_file(pdf_path)
+        if extracted_text and len(extracted_text.strip()) > 50:
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write(extracted_text)
+    except Exception:
+        extracted_text = ""
+
+    if not os.path.exists(txt_path) or not extracted_text:
         try:
             subprocess.run(
                 ["pdftotext", pdf_path, txt_path],
