@@ -120,6 +120,10 @@ run_threat_defense_mcp: activate ## Launch Threat Defense & Secure Patch MCP ser
 run_tech_radar_mcp: activate ## Launch Tech Radar & Threat Intelligence MCP server
 	PYTHONPATH=src ${VENV_PYTHON} src/mcp/tech_radar_server.py
 
+.PHONY: mcp_stats
+mcp_stats: activate ## Display and export aggregated MCP usage metrics and performance report
+	PYTHONPATH=src ${VENV_PYTHON} -m mcp.analytics --export
+
 .PHONY: eval_search
 eval_search: activate ## Run search engine quality benchmark (Precision@K, Recall@K, MAP, MRR, NDCG)
 	PYTHONPATH=src ${VENV_PYTHON} -c "from search.eval.evaluator import SearchEvaluator; from search.server.handler.select_handler import SelectHandler; h = SelectHandler(); e = SearchEvaluator(); r = e.evaluate(lambda q, k: [d.get('id', '') for d in h.handle_select(query=q, top_k=k).get('response', {}).get('docs', [])]); print(e.generate_markdown_report(r))"
