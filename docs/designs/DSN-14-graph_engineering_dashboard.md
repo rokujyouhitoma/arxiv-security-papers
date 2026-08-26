@@ -70,13 +70,13 @@
 Graph Engineering Dashboard（`site/dashboard.html`）は、`arxiv-security-papers` のナレッジベースから抽出された知識要素（論文、脅威、証明、意思決定）を構造的ネットワークとして可視化し、AI エージェントの探索走査（Graph Walk）を監視・分析するためのグラフィカル・インテリジェンス基盤です。
 
 ```mermaid
-graph TD
-    Sources["1. 知識抽出基盤 (src/pipeline/ および OKF v0.2)"] --> MeshData["2. Context Mesh データモデル (4クラスタ)"]
-    MeshData --> PhysicsEngine["3. 力学モデル物理演算器 (Force-Directed Engine)"]
-    PhysicsEngine --> CanvasRenderer["4. HTML5 Canvas 2D レンダラー (60 FPS)"]
-    CanvasRenderer --> UIInteractions["5. インタラクション制御 (Drag, Hover, Callout)"]
-    MeshData --> TelemetryHub["6. テレメトリ集計エンジン (KPI および Pipeline State)"]
-    TelemetryHub --> MicroCharts["7. 5大分析パネル (Hop, Ledger, Savings, Grid, DeadEnd)"]
+flowchart TD
+    Sources["1. 知識抽出基盤: src.pipeline と OKF v0.2"] --> MeshData["2. Context Mesh データモデル: 4クラスタ"]
+    MeshData --> PhysicsEngine["3. 力学モデル物理演算器: Force-Directed Engine"]
+    PhysicsEngine --> CanvasRenderer["4. HTML5 Canvas 2D レンダラー: 60 FPS"]
+    CanvasRenderer --> UIInteractions["5. インタラクション制御: Drag, Hover, Callout"]
+    MeshData --> TelemetryHub["6. テレメトリ集計エンジン: KPI と Pipeline State"]
+    TelemetryHub --> MicroCharts["7. 5大分析パネル: Hop, Ledger, Savings, Grid, DeadEnd"]
 ```
 
 ### 1.1.1 知識抽出基盤（Pipeline Integration）
@@ -158,26 +158,26 @@ graph TD
 本ダッシュボードは、学術・脅威論文から抽出される情報を 4 つの直交するクラスタ（オントロジー）に分類します。
 
 ```mermaid
-graph LR
-    subgraph S["1. Sources (論文・情報源)"]
-        S1["arXiv: 2608.23763"]
-        S2["arXiv: 2608.23550"]
-        S3["arXiv: 2608.23471"]
+flowchart LR
+    subgraph S [1. Sources 論文と情報源]
+        S1["arXiv 2608.23763"]
+        S2["arXiv 2608.23550"]
+        S3["arXiv 2608.23471"]
     end
 
-    subgraph E["2. Entities (脅威・要素)"]
+    subgraph E [2. Entities 脅威と要素]
         E1["MCP Protocol"]
         E2["Agent Memory"]
         E3["CLAUDE.md Rules"]
     end
 
-    subgraph C["3. Claims (主張・証明)"]
+    subgraph C [3. Claims 主張と証明]
         C1["69.5% Staged Defection"]
         C2["Perm Gap 95.6%"]
         C3["Single-Turn Drift"]
     end
 
-    subgraph D["4. Decisions (対策・判断)"]
+    subgraph D [4. Decisions 対策と判断]
         D1["SHIELD Gateway Audit"]
         D2["Built-in Sandbox Deny"]
         D3["Memory Anchor Guard"]
@@ -339,13 +339,13 @@ sequenceDiagram
 AI エージェントが知識グラフを走査する際、全ノードを盲目的に探索するのではなく、**関連度スコア（PageRank / BM25 重み）に基づく優先度付き幅優先探索（Top-K BFS）** を実行します。
 
 ```mermaid
-graph TD
-    Query["ユーザー質問 / クエリ"] --> S_Root["Source ノード特定 (Hop 0)"]
-    S_Root --> Rel_1["エッジ評価 (targets / asserts)"]
-    Rel_1 --> E_Hop1["Entity / Claim (Hop 1)"]
-    E_Hop1 --> Rel_2["エッジ評価 (requires / demands)"]
-    Rel_2 --> D_Hop2["Decision ノード (Hop 2: 解決策特定)"]
-    D_Hop2 --> CompContext["最小コンテキスト抽出 (74.2% 削減)"]
+flowchart TD
+    Query["ユーザー質問またはクエリ"] --> S_Root["Source ノード特定: Hop 0"]
+    S_Root --> Rel_1["エッジ評価: targets / asserts"]
+    Rel_1 --> E_Hop1["Entity または Claim: Hop 1"]
+    E_Hop1 --> Rel_2["エッジ評価: requires / demands"]
+    Rel_2 --> D_Hop2["Decision ノード: Hop 2 解決策特定"]
+    D_Hop2 --> CompContext["最小コンテキスト抽出: 74.2% 削減"]
 ```
 
 ## 4.2 トークン消費削減モデル（Context Compression Ratio）
@@ -397,11 +397,11 @@ $$\text{Budget}(h) = B_0 \cdot e^{-\lambda h}$$
 `requestAnimationFrame` を利用した高効率 60 FPS 描画パイプラインを実装しています。
 
 ```mermaid
-graph TD
-    RAF["requestAnimationFrame"] --> Clear["1. Canvas クリア and 背景グリッド描画 (40px)"]
-    Clear --> Phys["2. stepPhysics() 物理演算"]
-    Phys --> EdgeDraw["3. エッジ描画 (実線/点線/ハイライト)"]
-    EdgeDraw --> NodeDraw["4. ノード円 and クラスタ色 and ラベル描画"]
+flowchart TD
+    RAF["requestAnimationFrame"] --> Clear["1. Canvas クリア と 背景グリッド描画"]
+    Clear --> Phys["2. stepPhysics 物理演算"]
+    Phys --> EdgeDraw["3. エッジ描画: 実線・点線・ハイライト"]
+    EdgeDraw --> NodeDraw["4. ノード円 と クラスタ色 と ラベル描画"]
     NodeDraw --> RAF
 ```
 
@@ -465,13 +465,13 @@ graph TD
 ## 6.3 5大メトリクスパネル詳細
 
 ```mermaid
-graph TD
-    subgraph Panels["下部 5 大メトリクスパネル (CSS Grid)"]
-        P1["1. Hop Budget (深度 1〜5 ヒストグラム Canvas)"]
-        P2["2. Edge Ledger (リレーショントラフィック横棒バー)"]
-        P3["3. Walk vs Flat (トークン削減時系列エリアチャート)"]
-        P4["4. Traversal Grid (100セル 探索状態ドットマトリクス)"]
-        P5["5. Dead-End Ledger (失敗原因内訳 and 自己修復率 100%)"]
+flowchart TD
+    subgraph Panels [下部 5 大メトリクスパネル]
+        P1["1. Hop Budget: 深度 1〜5 ヒストグラム Canvas"]
+        P2["2. Edge Ledger: リレーショントラフィック横棒バー"]
+        P3["3. Walk vs Flat: トークン削減時系列エリアチャート"]
+        P4["4. Traversal Grid: 100セル 探索状態ドットマトリクス"]
+        P5["5. Dead-End Ledger: 失敗原因内訳 と 自己修復率"]
     end
 ```
 
