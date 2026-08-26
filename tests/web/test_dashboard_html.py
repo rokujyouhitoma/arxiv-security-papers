@@ -129,6 +129,7 @@ def test_gateway_graph_mesh_with_vector_engine() -> None:
     """Verifies graph mesh generation when vector_engine with real documents is attached."""
     import json
     from unittest.mock import MagicMock
+
     workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
     mock_engine = MagicMock()
@@ -144,7 +145,7 @@ def test_gateway_graph_mesh_with_vector_engine() -> None:
             "title": "CLAUDE.md Rules vs Built-in Controls",
             "description": "Permission gap in prompt instructions",
             "tags": ["prompt-injection", "sandbox"],
-        }
+        },
     ]
     app = WSGIApplication(workspace_dir=workspace_dir, vector_engine=mock_engine)
 
@@ -168,4 +169,3 @@ def test_gateway_graph_mesh_with_vector_engine() -> None:
     assert data["status"] == "success"
     assert len(data["mesh"]["nodes"]) == 8
     assert len(data["mesh"]["edges"]) == 8
-

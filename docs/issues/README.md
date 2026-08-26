@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **079** | 論文モーダルプレビューが「読み込み中... OKF ドキュメントを取得中...」のまま停止する不具合の修正 | Bug | 2026-08-27 | [079-fix-paper-modal-preview-loading-stuck.md](closed/079-fix-paper-modal-preview-loading-stuck.md) |
 | **078** | DSN-12 準拠: DAG トポロジカル順序起動、ONESHOT_TASK バッチ管理、および QueueWorker の実装 | Feature | 2026-08-26 | [078-implement-dsn12-dag-boot-oneshot-and-queue-workers.md](closed/078-implement-dsn12-dag-boot-oneshot-and-queue-workers.md) |
 | **077** | Supervisor デーモンモード（`-D` / `--daemon`）およびバックグラウンド実行・ログファイル出力機能の実装 | Feature | 2026-08-26 | [077-implement-supervisor-daemon-mode-and-background-execution.md](closed/077-implement-supervisor-daemon-mode-and-background-execution.md) |
 | **075** | Unix Domain Socket による DB・Web・Search の完全プロセス分離と IPC ラッパー基盤の実装 | Feature / Refactor | 2026-08-26 | [075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md](closed/075-implement-unix-domain-socket-ipc-wrapper-for-db-web-search.md) |

@@ -62,6 +62,10 @@
   - `docs/designs/DSN-13-pure_python_pdf_text_extractor.md`: DSN-05 形式に準拠した包括的詳細設計書（ISO 32000 仕様分析、数理モデル、14,449件実データ検証計画）の策定
 
 ### [Fixed]
+- **論文モーダルプレビューが「読み込み中...」のまま停止する不具合の修正 (Issue 079)**:
+  - `src/web/gateway/handlers.py`: `/api/paper/<clean_id>` エンドポイントにおいて、ディスク上の OKF Markdown 実体（`outputs/okf_papers/...`）を自動探索・オンデマンド読み込みし、API レスポンスに `content` および `path` を付与するように改修
+  - `site/app.js`: `openPaperModal` において `data.content` と `data.paper` の双方からタイトル・概要・本文を即座に安全抽出・HTML 展開し、ロード停止を根絶
+  - `tests/web/gateway/test_gateway.py`: `test_gateway_handle_paper_with_content` 単体テストを追加
 - **Supervisor Arbiter ローリングリロード時の `control.sock` 保護**:
   - `src/supervisor/control.py`: ローリングリロード（`SIGQUIT`）時に終了する子プロセスが親 Arbiter の UNIX ドメインソケット（`control.sock`）を誤って unlink 削除する問題を修正し、`_creator_pid` チェックおよび atexit unregister を導入
   - `tests/supervisor/test_control.py`: 子プロセス終了時のソケット保持を検証する単体テストを追加

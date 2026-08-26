@@ -208,21 +208,39 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}`);
       const data = await res.json();
-      if (data.status === 'success' && data.content) {
-        if (modalOkfLink && data.path) modalOkfLink.href = '/' + encodeURI(data.path);
-        if (modalTxtLink && data.path) {
-          modalTxtLink.href = '/' + encodeURI(data.path.replace('outputs/okf_papers/', 'raw_data/').replace('.md', '.txt'));
+      if (data.status === 'success') {
+        const rawContent = data.content || (data.paper ? `# ${data.paper.title}\n\n## 概要\n${data.paper.description || data.paper.summary || ''}` : '');
+        const paperMeta = data.paper || {};
+        const paperPath = data.path || paperMeta.path || '';
+
+        if (modalOkfLink && paperPath) modalOkfLink.href = '/' + encodeURI(paperPath);
+        if (modalTxtLink && paperPath) {
+          modalTxtLink.href = '/' + encodeURI(paperPath.replace('outputs/okf_papers/', 'raw_data/').replace('.md', '.txt'));
         }
-        modalPaperTitle.textContent = data.content.match(/title:\s*"(.*?)"/)?.[1] || arxivId;
-        modalPaperTitleJa.textContent = data.content.match(/title_ja:\s*"(.*?)"/)?.[1] || '';
+
+        const titleEn = paperMeta.title || rawContent.match(/title:\s*"(.*?)"/)?.[1] || arxivId;
+        const titleJa = paperMeta.title_ja || rawContent.match(/title_ja:\s*"(.*?)"/)?.[1] || '';
+
+        modalPaperTitle.textContent = titleEn;
+        modalPaperTitleJa.textContent = titleJa;
         
-        const compiled = window.MarkdownCompiler.compile(data.content);
-        modalPaperBody.innerHTML = compiled.html;
+        if (rawContent && window.MarkdownCompiler) {
+          const compiled = window.MarkdownCompiler.compile(rawContent);
+          modalPaperBody.innerHTML = compiled.html;
+        } else if (rawContent) {
+          modalPaperBody.innerHTML = `<pre style="white-space:pre-wrap;">${escapeHtml(rawContent)}</pre>`;
+        } else {
+          modalPaperBody.innerHTML = `<p>論文データが見つかりませんでした。</p>`;
+        }
 
         // Fetch & Render Related Papers Proximity Network
         fetchRelatedPapersTopology(arxivId, modalPaperBody);
 
-        window.MarkdownCompiler.renderMermaid(modalPaperBody);
+        if (window.MarkdownCompiler && window.MarkdownCompiler.renderMermaid) {
+          window.MarkdownCompiler.renderMermaid(modalPaperBody);
+        }
+      } else {
+        modalPaperBody.innerHTML = `<p style="color:#ef4444;">エラー: ${escapeHtml(data.message || 'データが見つかりませんでした')}</p>`;
       }
     } catch (err) {
       modalPaperBody.innerHTML = `<p style="color:#ef4444;">取得エラー: ${escapeHtml(err.message)}</p>`;

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from database.client import DatabaseClient
 from mcp.papers_server import (
@@ -191,6 +191,63 @@ class GatewayHandlers:
             )
         return response_json(start_response, resp)
 
+    def _read_file_safe(self, file_path: str) -> Optional[str]:
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception:
+                return None
+        return None
+
+    def _find_okf_paper_file(self, clean_id: str) -> Tuple[str, str]:
+        okf_base = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        if not os.path.exists(okf_base):
+            return "", ""
+        target_name = f"{clean_id}.md"
+        for root, _, files in os.walk(okf_base):
+            if target_name in files:
+                full_path = os.path.join(root, target_name)
+                content = self._read_file_safe(full_path)
+                if content is not None:
+                    return content, os.path.relpath(full_path, self.workspace_dir)
+        return "", ""
+
+    def _generate_fallback_paper_content(
+        self, clean_id: str, paper: Dict[str, Any]
+    ) -> str:
+        title = paper.get("title", f"Paper {clean_id}")
+        desc = paper.get("description") or paper.get("summary", "")
+        tags = paper.get("tags", [])
+        tags_str = "\n".join([f"  - {t}" for t in tags]) if tags else "  - security"
+        return (
+            f"---\n"
+            f'type: "security-paper"\n'
+            f'title: "{title}"\n'
+            f'description: "{desc}"\n'
+            f'resource: "https://arxiv.org/abs/{clean_id}"\n'
+            f"tags:\n{tags_str}\n"
+            f"---\n\n"
+            f"# {title}\n\n"
+            f"## 概要\n{desc}\n"
+        )
+
+    def _resolve_paper_content_and_path(
+        self, clean_id: str, paper: Dict[str, Any]
+    ) -> Tuple[str, str]:
+        rel_path = paper.get("path", "")
+        if rel_path:
+            abs_path = os.path.join(self.workspace_dir, rel_path.lstrip("/"))
+            content = self._read_file_safe(abs_path)
+            if content is not None:
+                return content, rel_path
+
+        content, found_rel_path = self._find_okf_paper_file(clean_id)
+        if content:
+            return content, found_rel_path
+
+        return self._generate_fallback_paper_content(clean_id, paper), rel_path
+
     def handle_paper(
         self, start_response: Callable[..., Any], path: str
     ) -> List[bytes]:
@@ -206,7 +263,15 @@ class GatewayHandlers:
             return response_error(
                 start_response, f"Paper '{clean_id}' not found", status="404 Not Found"
             )
-        return response_json(start_response, {"status": "success", "paper": paper})
+
+        content, rel_path = self._resolve_paper_content_and_path(clean_id, paper)
+        resp_payload: Dict[str, Any] = {
+            "status": "success",
+            "content": content,
+            "path": rel_path,
+            "paper": paper,
+        }
+        return response_json(start_response, resp_payload)
 
     def handle_trends(
         self,

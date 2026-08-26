@@ -143,3 +143,41 @@ def test_gateway_static_okf_papers_transparent_resolution(tmp_path: Any) -> None
 
     assert status_captured[0] == "200 OK"
     assert b"# Test OKF Paper Content" in res[0]
+
+
+def test_gateway_handle_paper_with_content(tmp_path: Any) -> None:
+    # Setup mock OKF paper on disk
+    outputs_dir = tmp_path / "outputs" / "okf_papers" / "2025-02-23"
+    outputs_dir.mkdir(parents=True)
+    paper_file = outputs_dir / "2502.16730.md"
+    paper_file.write_text(
+        '---\ntype: "security-paper"\ntitle: "RapidPen: Penetration Testing"\n---\n\n# RapidPen\n\n## 概要\nTest Content',
+        encoding="utf-8",
+    )
+
+    mock_engine = MagicMock()
+    mock_engine.documents_by_id = {
+        "2502.16730": {
+            "id": "2502.16730",
+            "clean_id": "2502.16730",
+            "title": "RapidPen: Penetration Testing",
+            "path": "outputs/okf_papers/2025-02-23/2502.16730.md",
+        }
+    }
+    mock_engine.documents = list(mock_engine.documents_by_id.values())
+
+    app = WSGIApplication(workspace_dir=str(tmp_path), vector_engine=mock_engine)
+    status_captured: List[str] = []
+
+    def start_response(status: str, headers: List[Tuple[str, str]]) -> None:
+        status_captured.append(status)
+
+    env = make_test_environ(method="GET", path="/api/paper/2502.16730")
+    res = app(env, start_response)
+
+    assert status_captured[0] == "200 OK"
+    data = json.loads(res[0].decode("utf-8"))
+    assert data["status"] == "success"
+    assert "content" in data
+    assert "RapidPen" in data["content"]
+    assert data["path"] == "outputs/okf_papers/2025-02-23/2502.16730.md"
