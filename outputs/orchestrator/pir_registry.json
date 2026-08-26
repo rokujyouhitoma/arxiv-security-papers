@@ -1,0 +1,49 @@
+{
+  "requirements": [
+    {
+      "req_id": "pir_llm_sec",
+      "title": "LLM & AI Safety Threats",
+      "description": "Monitor prompt injection, jailbreaking, and foundation model security",
+      "target_topics": [
+        "LLM・AIセキュリティ",
+        "脱獄攻撃",
+        "プロンプトインジェクション"
+      ],
+      "priority_score": 0.9,
+      "is_active": true
+    },
+    {
+      "req_id": "pir_vuln_fuzz",
+      "title": "Vulnerability Research & Penetration Testing",
+      "description": "Monitor automated fuzzing, exploit payloads, and binary analysis",
+      "target_topics": [
+        "ファジング・脆弱性調査",
+        "ペネトレーションテスト・脆弱性検証"
+      ],
+      "priority_score": 0.85,
+      "is_active": true
+    },
+    {
+      "req_id": "pir_crypto_priv",
+      "title": "Cryptography & Privacy Engineering",
+      "description": "Monitor post-quantum crypto, zero-knowledge proofs, and side-channel defenses",
+      "target_topics": [
+        "暗号・プライバシー技術",
+        "耐量子暗号",
+        "ゼロ知識証明"
+      ],
+      "priority_score": 0.8,
+      "is_active": true
+    }
+  ],
+  "weights": {
+    "ペネトレーションテスト・脆弱性検証": 0.09259259259259259,
+    "暗号・プライバシー技術": 0.23529411764705885,
+    "ファジング・脆弱性調査": 0.09259259259259259,
+    "ゼロ知識証明": 0.23529411764705885,
+    "LLM・AIセキュリティ": 0.03631082062454611,
+    "脱獄攻撃": 0.03631082062454611,
+    "耐量子暗号": 0.23529411764705885,
+    "プロンプトインジェクション": 0.03631082062454611
+  }
+}

@@ -115254,5 +115254,805 @@
     "title_ja": "Privacy-Preserving Decentralized 連合学習 via Explainable Adaptive Differential Privacy",
     "raw_meta_path": "outputs/raw_data/2025-09-12/2509.10691_meta.json",
     "okf_path": "outputs/okf_papers/2025-09-12/2509.10691.md"
+  },
+  "2608.24857v1": {
+    "processed_at": "2026-08-26T13:28:02.147079+00:00",
+    "published": "2026-08-25T17:43:47Z",
+    "title": "Prompt Structure Redistributes, Not Reduces: An Empirical Analysis of Security-Weaknesses in LLM-Generated Python Code",
+    "title_ja": "Prompt Structure Redistributes, Not Reduces: An Empirical Security-Weaknesses in LLM-Generated Python Codeの分析",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24857_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24857.md"
+  },
+  "2608.24850v1": {
+    "processed_at": "2026-08-26T13:28:02.148087+00:00",
+    "published": "2026-08-25T17:38:00Z",
+    "title": "Research Methodologies for Cybersecurity in Enterprise Environments: A Narrative Review, Synthesis and Executable Guide",
+    "title_ja": "Research Methodologies for サイバーセキュリティ in Enterprise Environments: A Narrative Review, Synthesis and Executable Guide",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24850_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24850.md"
+  },
+  "2608.24832v1": {
+    "processed_at": "2026-08-26T13:28:02.148689+00:00",
+    "published": "2026-08-25T17:15:01Z",
+    "title": "Certified Randomness without Structure Against Shallow-Query Adversaries",
+    "title_ja": "Certified Randomness without Structure Against Shallow-Query Adversaries（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24832_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24832.md"
+  },
+  "2608.24799v1": {
+    "processed_at": "2026-08-26T13:28:02.149315+00:00",
+    "published": "2026-08-25T16:43:31Z",
+    "title": "Masked Differential-linear Distinguishers and Quantum Approaches",
+    "title_ja": "Masked Differential-linear Distinguishers and Quantum Approaches（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24799_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24799.md"
+  },
+  "2608.24778v1": {
+    "processed_at": "2026-08-26T13:28:02.149738+00:00",
+    "published": "2026-08-25T16:18:38Z",
+    "title": "Security Education in Higher Education through AI-Powered Gamification",
+    "title_ja": "Security Education in Higher Education through AI-Powered Gamification（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24778_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24778.md"
+  },
+  "2608.24777v1": {
+    "processed_at": "2026-08-26T13:28:02.150122+00:00",
+    "published": "2026-08-25T16:17:27Z",
+    "title": "StepGuard: Learning Step-Level Guardrails with Scalable Supervision and Safety-Utility Balancing",
+    "title_ja": "StepGuard: Learning Step-Level Guardrails with Scalable Supervision and Safety-Utility Balancing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24777_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24777.md"
+  },
+  "2608.24757v1": {
+    "processed_at": "2026-08-26T13:28:02.150491+00:00",
+    "published": "2026-08-25T15:56:31Z",
+    "title": "ICS Cybersecurity Datasets: A Systematic Meta-Review of Coverage, Evaluation Practice, and Structural Gaps",
+    "title_ja": "ICS サイバーセキュリティ Datasets: A Systematic Meta-Review of Coverage, Evaluation Practice, and Structural Gaps",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24757_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24757.md"
+  },
+  "2608.24669v1": {
+    "processed_at": "2026-08-26T13:28:02.150996+00:00",
+    "published": "2026-08-25T15:07:17Z",
+    "title": "Who Falls for SMiSh? Learning Through Survey Data Where to Best Target Awareness Training for Mobile Messaging Attacks",
+    "title_ja": "Who Falls for SMiSh? Learning Through Survey Data Where to Best Target Awareness Training for Mobile Messaging Attacks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24669_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24669.md"
+  },
+  "2608.24636v1": {
+    "processed_at": "2026-08-26T13:28:02.151371+00:00",
+    "published": "2026-08-25T14:48:30Z",
+    "title": "Asynchronous Verifiable Information Dispersal with Low Space and Communication Complexity",
+    "title_ja": "Asynchronous Verifiable Information Dispersal with Low Space and Communication Complexity（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24636_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24636.md"
+  },
+  "2608.24498v1": {
+    "processed_at": "2026-08-26T13:28:02.151697+00:00",
+    "published": "2026-08-25T12:46:34Z",
+    "title": "SeriCrypt: An LLM-Driven Context-Aware Serialization Framework for Cryptographic Protocols",
+    "title_ja": "SeriCrypt: An LLM-Driven Context-Aware Serialization Framework for Cryptographic Protocols（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24498_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24498.md"
+  },
+  "2608.24461v1": {
+    "processed_at": "2026-08-26T13:28:02.152036+00:00",
+    "published": "2026-08-25T12:12:22Z",
+    "title": "Do System Prompts Leave Behavioral Fingerprints? A Large-Scale Empirical Study of Clone Detection via Output Similarity",
+    "title_ja": "Do System Prompts Leave Behavioral Fingerprints? A Large-Scale Empirical Study of Clone Detection via Output Similarity（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24461_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24461.md"
+  },
+  "2608.24454v1": {
+    "processed_at": "2026-08-26T13:28:02.152425+00:00",
+    "published": "2026-08-25T12:06:12Z",
+    "title": "Defending Network Intrusion Detection Systems Based on Graph Neural Networks Against Structural Adversarial Attacks",
+    "title_ja": "Defending Network Intrusion Detection Systems Based on Graph Neural Networks Against Structural Adversarial Attacks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24454_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24454.md"
+  },
+  "2608.24447v1": {
+    "processed_at": "2026-08-26T13:28:02.152809+00:00",
+    "published": "2026-08-25T12:01:47Z",
+    "title": "A Drop-in KEM Replacement for Client Signatures in Post-Quantum SSH",
+    "title_ja": "A Drop-in KEM Replacement for Client Signatures in Post-Quantum SSH（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24447_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24447.md"
+  },
+  "2608.24354v1": {
+    "processed_at": "2026-08-26T13:28:02.153176+00:00",
+    "published": "2026-08-25T10:10:01Z",
+    "title": "Not All Tokens Are Equal: Region-Aware Consistency Repair of Backdoors in MLLMs",
+    "title_ja": "Not All Tokens Are Equal: Region-Aware Consistency Repair of Backdoors in MLLMs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24354_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24354.md"
+  },
+  "2608.24269v1": {
+    "processed_at": "2026-08-26T13:28:02.153522+00:00",
+    "published": "2026-08-25T08:57:13Z",
+    "title": "Towards LLM-Enhanced Android Taint Analysis",
+    "title_ja": "LLM-Enhanced Android Taint Analysisに向けて",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24269_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24269.md"
+  },
+  "2608.24127v1": {
+    "processed_at": "2026-08-26T13:28:02.153893+00:00",
+    "published": "2026-08-25T06:41:12Z",
+    "title": "Anatomy of a Scam Call: What 10,000 real scam and spam calls reveal about how phone scammers operate",
+    "title_ja": "Anatomy of a Scam Call: What 10,000 real scam and spam calls reveal about how phone scammers operate（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24127_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24127.md"
+  },
+  "2608.24022v1": {
+    "processed_at": "2026-08-26T13:28:02.154272+00:00",
+    "published": "2026-08-25T03:24:53Z",
+    "title": "What Guides the Agent? Adjudicating Unauthorized Behavior via Localizing Behavior-Guiding Instructions",
+    "title_ja": "What Guides the Agent? Adjudicating Unauthorized Behavior via Localizing Behavior-Guiding Instructions（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24022_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24022.md"
+  },
+  "2608.24017v1": {
+    "processed_at": "2026-08-26T13:28:02.154656+00:00",
+    "published": "2026-08-25T03:16:45Z",
+    "title": "WebMCP-Phalanx: Enforcing and Characterizing Trust Boundaries for Browser-Integrated LLM Agents",
+    "title_ja": "WebMCP-Phalanx: Enforcing and Characterizing Trust Boundaries for Browser-Integrated LLMエージェント",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.24017_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.24017.md"
+  },
+  "2608.23979v1": {
+    "processed_at": "2026-08-26T13:28:02.155061+00:00",
+    "published": "2026-08-25T02:14:13Z",
+    "title": "Rules Before Oracles: Auditable, User-Configurable Argument Selection for Deliberative Polling",
+    "title_ja": "Rules Before Oracles: Auditable, User-Configurable Argument Selection for Deliberative Polling（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.23979_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.23979.md"
+  },
+  "2608.23965v1": {
+    "processed_at": "2026-08-26T13:28:02.155403+00:00",
+    "published": "2026-08-25T01:44:07Z",
+    "title": "RAGSentinel: Certifiable Geometric Consensus for Robust Retrieval-Augmented Generation",
+    "title_ja": "RAGSentinel: Certifiable Geometric Consensus for Robust Retrieval-Augmented Generation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.23965_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.23965.md"
+  },
+  "2608.23959v1": {
+    "processed_at": "2026-08-26T13:28:02.155771+00:00",
+    "published": "2026-08-25T01:36:54Z",
+    "title": "NeuronGuard: Robust LLM Safety Alignment via Ablation-Aware Safety Signal Redistribution",
+    "title_ja": "NeuronGuard: Robust LLM Safety Alignment via Ablation-Aware Safety Signal Redistribution（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.23959_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.23959.md"
+  },
+  "2608.23952v1": {
+    "processed_at": "2026-08-26T13:28:02.156139+00:00",
+    "published": "2026-08-25T01:24:16Z",
+    "title": "STAIN-FL: Stealthy Targeted Attack Injection with Contextual Triggers in Federated Learning",
+    "title_ja": "STAIN-FL: Stealthy Targeted Attack Injection with Contextual Triggers in 連合学習",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.23952_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.23952.md"
+  },
+  "2608.23933v1": {
+    "processed_at": "2026-08-26T13:28:02.156499+00:00",
+    "published": "2026-08-25T00:45:37Z",
+    "title": "SoK: ARCUS: On the Efficiency and Efficacy of Hardware Fuzzing",
+    "title_ja": "SoK: ARCUS: On the Efficiency and Efficacy of Hardware Fuzzing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-25/2608.23933_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-25/2608.23933.md"
+  },
+  "2608.23873v1": {
+    "processed_at": "2026-08-26T13:28:02.157113+00:00",
+    "published": "2026-08-24T22:26:58Z",
+    "title": "Semantic Overlays: Mitigating Prompt Injection with Annotations Beyond Tokens and Steering Vectors",
+    "title_ja": "Semantic Overlays: Mitigating Prompt Injection with Annotations Beyond Tokens and Steering Vectors（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23873_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23873.md"
+  },
+  "2608.23858v1": {
+    "processed_at": "2026-08-26T13:28:02.157485+00:00",
+    "published": "2026-08-24T22:05:00Z",
+    "title": "Beyond the Mandate: A Systematic Security Analysis of the Agent Payments Protocol (AP2)",
+    "title_ja": "Beyond the Mandate: A Systematic Security the Agent Payments Protocol (AP2)の分析",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23858_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23858.md"
+  },
+  "2608.23785v1": {
+    "processed_at": "2026-08-26T13:28:02.157891+00:00",
+    "published": "2026-08-24T19:31:58Z",
+    "title": "A Scenario-Based Evaluation of CRQC+AI Vulnerability Spectrum for TLS 1.3 Cryptographic Dependencies",
+    "title_ja": "A Scenario-Based Evaluation of CRQC+AI Vulnerability Spectrum for TLS 1.3 Cryptographic Dependencies（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23785_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23785.md"
+  },
+  "2608.23774v1": {
+    "processed_at": "2026-08-26T13:28:02.158355+00:00",
+    "published": "2026-08-24T19:09:03Z",
+    "title": "ROBBIN: Rowhammer-Based Backdoor Injection during Inference",
+    "title_ja": "ROBBIN: Rowhammer-Based Backdoor Injection during Inference（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23774_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23774.md"
+  },
+  "2608.23763v1": {
+    "processed_at": "2026-08-26T13:28:02.158790+00:00",
+    "published": "2026-08-24T18:54:42Z",
+    "title": "TrustShiftProbe: Characterizing, Benchmarking, and Defending Staged Trust Attacks on MCP Servers",
+    "title_ja": "TrustShiftProbe: Characterizing, Benchmarking, and Defending Staged Trust Attacks on MCP Servers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23763_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23763.md"
+  },
+  "2608.23731v1": {
+    "processed_at": "2026-08-26T13:28:02.159237+00:00",
+    "published": "2026-08-24T18:19:52Z",
+    "title": "Effective Pivot Attack Detection via System and Network Information",
+    "title_ja": "Effective Pivot Attack Detection via System and Network Information（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23731_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23731.md"
+  },
+  "2608.23550v1": {
+    "processed_at": "2026-08-26T13:28:02.159661+00:00",
+    "published": "2026-08-24T17:52:57Z",
+    "title": "When \"Do Not\" Is Not Deny: Security Rules in CLAUDE.md vs Built-In Controls",
+    "title_ja": "When \"Do Not\" Is Not Deny: Security Rules in CLAUDE.md vs Built-In Controls（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23550_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23550.md"
+  },
+  "2608.23547v1": {
+    "processed_at": "2026-08-26T13:28:02.160224+00:00",
+    "published": "2026-08-24T17:49:36Z",
+    "title": "Robustness of Anomaly Detection Models for Industrial Control Systems under Training-Time Data Contamination",
+    "title_ja": "Robustness of Anomaly Detection Models for Industrial Control Systems under Training-Time Data Contamination（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23547_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23547.md"
+  },
+  "2608.23536v1": {
+    "processed_at": "2026-08-26T13:28:02.160684+00:00",
+    "published": "2026-08-24T17:41:15Z",
+    "title": "Adapter-Based Few-Shot Continual Learning for Malicious Packet Recognition",
+    "title_ja": "Adapter-Based Few-Shot Continual Learning for Malicious Packet Recognition（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23536_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23536.md"
+  },
+  "2608.23471v1": {
+    "processed_at": "2026-08-26T13:28:02.161100+00:00",
+    "published": "2026-08-24T16:37:50Z",
+    "title": "InjecMEM: Memory Injection Attack on LLM Agent Memory Systems",
+    "title_ja": "InjecMEM: Memory Injection Attack on LLM Agent Memory Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23471_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23471.md"
+  },
+  "2608.23468v1": {
+    "processed_at": "2026-08-26T13:28:02.162888+00:00",
+    "published": "2026-08-24T16:36:17Z",
+    "title": "RAD: Rule-Augmented Relational Anomaly Detection",
+    "title_ja": "RAD: Rule-Augmented Relational Anomaly Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23468_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23468.md"
+  },
+  "2608.23396v1": {
+    "processed_at": "2026-08-26T13:28:02.163544+00:00",
+    "published": "2026-08-24T15:41:18Z",
+    "title": "A Threshold Homomorphic Blockchain Architecture for Secure and Scalable IoT Sensor Data Aggregation",
+    "title_ja": "A Threshold Homomorphic Blockchain Architecture for Secure and Scalable IoT Sensor Data Aggregation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23396_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23396.md"
+  },
+  "2608.23382v2": {
+    "processed_at": "2026-08-26T13:28:02.163993+00:00",
+    "published": "2026-08-24T15:30:31Z",
+    "title": "Spectrum-Aware Bounds on Invertibility for Privacy-Enhancing Instance Encoding",
+    "title_ja": "Spectrum-Aware Bounds on Invertibility for Privacy-Enhancing Instance Encoding（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23382_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23382.md"
+  },
+  "2608.23375v1": {
+    "processed_at": "2026-08-26T13:28:02.165149+00:00",
+    "published": "2026-08-24T15:20:49Z",
+    "title": "Adversarial Entropy Inflation Against Gumbel-Based Inference Verification",
+    "title_ja": "Adversarial Entropy Inflation Against Gumbel-Based Inference Verification（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23375_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23375.md"
+  },
+  "2608.23365v1": {
+    "processed_at": "2026-08-26T13:28:02.165726+00:00",
+    "published": "2026-08-24T15:14:18Z",
+    "title": "SxSSD: A Secure and Extensible Software-defined Solid State Drive",
+    "title_ja": "SxSSD: A Secure and Extensible Software-defined Solid State Drive（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23365_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23365.md"
+  },
+  "2608.23339v1": {
+    "processed_at": "2026-08-26T13:28:02.166148+00:00",
+    "published": "2026-08-24T14:49:34Z",
+    "title": "CERTIoT-6G: Continuous Cybersecurity Certification for IoT Devices in 5G/6G Networks",
+    "title_ja": "CERTIoT-6G: Continuous サイバーセキュリティ Certification for IoT Devices in 5G/6G Networks",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23339_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23339.md"
+  },
+  "2608.23308v1": {
+    "processed_at": "2026-08-26T13:28:02.166572+00:00",
+    "published": "2026-08-24T14:28:07Z",
+    "title": "FIDES: A Concordance Protocol for LLM-Generated Trading Strategies",
+    "title_ja": "FIDES: A Concordance Protocol for LLM-Generated Trading Strategies（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23308_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23308.md"
+  },
+  "2608.23199v1": {
+    "processed_at": "2026-08-26T13:28:02.167042+00:00",
+    "published": "2026-08-24T12:50:12Z",
+    "title": "PhiShark2026: A Multi-Layer Active-Web Raw-Evidence Dataset for Phishing Website Research",
+    "title_ja": "PhiShark2026: A Multi-Layer Active-Web Raw-Evidence Dataset for Phishing Website Research（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23199_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23199.md"
+  },
+  "2608.23185v1": {
+    "processed_at": "2026-08-26T13:28:02.167486+00:00",
+    "published": "2026-08-24T12:33:02Z",
+    "title": "Towards Automated Cyber Threat Intelligence Elicitation in Underground Forums",
+    "title_ja": "Automated Cyber Threat Intelligence Elicitation in Underground Forumsに向けて",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23185_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23185.md"
+  },
+  "2608.23181v2": {
+    "processed_at": "2026-08-26T13:28:02.167895+00:00",
+    "published": "2026-08-24T12:30:10Z",
+    "title": "CyberFactory: Scaling Cyber Security Capabilities with Instances from the Wild",
+    "title_ja": "CyberFactory: Scaling Cyber Security Capabilities with Instances from the Wild（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23181_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23181.md"
+  },
+  "2608.23054v1": {
+    "processed_at": "2026-08-26T13:28:02.168298+00:00",
+    "published": "2026-08-24T09:57:11Z",
+    "title": "Graph Representation Learning of Lightweight IoT Ciphers",
+    "title_ja": "Graph Representation Learning of Lightweight IoT Ciphers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.23054_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.23054.md"
+  },
+  "2608.22987v1": {
+    "processed_at": "2026-08-26T13:28:02.168833+00:00",
+    "published": "2026-08-24T08:50:53Z",
+    "title": "The Anonymity Gap: Understanding Real Privacy in Shielded UTXO-based Protocols for DeFi",
+    "title_ja": "The Anonymity Gap: Understanding Real Privacy in Shielded UTXO-based Protocols for DeFi（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.22987_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.22987.md"
+  },
+  "2608.22954v1": {
+    "processed_at": "2026-08-26T13:28:02.169312+00:00",
+    "published": "2026-08-24T08:19:26Z",
+    "title": "Rational Dolev--Yao Attackers: Decidable Incentive-Aware Verification of Security Protocols in Strategic Logic",
+    "title_ja": "Rational Dolev--Yao Attackers: Decidable Incentive-Aware Verification of Security Protocols in Strategic Logic（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.22954_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.22954.md"
+  },
+  "2608.22941v1": {
+    "processed_at": "2026-08-26T13:28:02.169758+00:00",
+    "published": "2026-08-24T08:13:19Z",
+    "title": "What's Your NIC Whispering? Network Threat Behavior Recognition via NIC Electromagnetic Side-Channel Leakage",
+    "title_ja": "What's Your NIC Whispering? Network Threat Behavior Recognition via NIC Electromagnetic Side-Channel Leakage（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.22941_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.22941.md"
+  },
+  "2608.22928v1": {
+    "processed_at": "2026-08-26T13:28:02.170266+00:00",
+    "published": "2026-08-24T08:03:56Z",
+    "title": "When Can Agents Safely Checkpoint, Fork, Restore, and Merge? Exact Checking for Execution Edits",
+    "title_ja": "When Can Agents Safely Checkpoint, Fork, Restore, and Merge? Exact Checking for Execution Edits（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.22928_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.22928.md"
+  },
+  "2608.22924v1": {
+    "processed_at": "2026-08-26T13:28:02.170679+00:00",
+    "published": "2026-08-24T07:58:29Z",
+    "title": "Cryptocurrencies in the Quantum Age: Migration Paths to PQC",
+    "title_ja": "Cryptocurrencies in the Quantum Age: Migration Paths to PQC（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.22924_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.22924.md"
+  },
+  "2608.22915v1": {
+    "processed_at": "2026-08-26T13:28:02.171265+00:00",
+    "published": "2026-08-24T07:51:26Z",
+    "title": "Safety Hacking in Constrained Best-of-$N$ Inference-time Scaling",
+    "title_ja": "Safety Hacking in Constrained Best-of-$N$ Inference-time Scaling（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-24/2608.22915_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-24/2608.22915.md"
+  },
+  "iacr-2024-1952": {
+    "processed_at": "2026-08-26T13:28:02.171858+00:00",
+    "published": "Mon, 02 Dec 2024 16:45:40 +0000",
+    "title": "Worst-Case Lattice Sampler with Truncated Gadgets and Applications",
+    "title_ja": "Worst-Case Lattice Sampler with Truncated Gadgets and Applications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2024-1952_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2024-1952.md"
+  },
+  "iacr-2026-1773": {
+    "processed_at": "2026-08-26T13:28:02.172336+00:00",
+    "published": "Sat, 22 Aug 2026 07:28:36 +0000",
+    "title": "Enforcing Winner-Only Disclosure: Verifiable Tally Hiding for Weighted DAO Governance",
+    "title_ja": "Enforcing Winner-Only Disclosure: Verifiable Tally Hiding for Weighted DAO Governance（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1773_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1773.md"
+  },
+  "iacr-2025-1176": {
+    "processed_at": "2026-08-26T13:28:02.172875+00:00",
+    "published": "Mon, 23 Jun 2025 01:10:04 +0000",
+    "title": "A Practical Randomized Nearest-Colattice Framework for Arbitrary Norms",
+    "title_ja": "A Practical Randomized Nearest-Colattice Framework for Arbitrary Norms（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-1176_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-1176.md"
+  },
+  "iacr-2026-1091": {
+    "processed_at": "2026-08-26T13:28:02.173418+00:00",
+    "published": "Fri, 29 May 2026 06:34:56 +0000",
+    "title": "Practical Homomorphic LSTM via Programmable Bootstrapping",
+    "title_ja": "Practical Homomorphic LSTM via Programmable Bootstrapping（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1091_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1091.md"
+  },
+  "iacr-2026-1747": {
+    "processed_at": "2026-08-26T13:28:02.173838+00:00",
+    "published": "Thu, 20 Aug 2026 12:11:00 +0000",
+    "title": "Extending Distinguishing to Key Recovery for Subfield Subcodes of GRS codes",
+    "title_ja": "Extending Distinguishing to Key Recovery for Subfield Subcodes of GRS codes（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1747_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1747.md"
+  },
+  "iacr-2024-591": {
+    "processed_at": "2026-08-26T13:28:02.174236+00:00",
+    "published": "Tue, 16 Apr 2024 08:57:07 +0000",
+    "title": "Hash your Keys before Signing: BUFF Security of the Additional NIST PQC Signatures",
+    "title_ja": "Hash your Keys before Signing: BUFF Security of the Additional NIST PQC Signatures（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2024-591_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2024-591.md"
+  },
+  "iacr-2026-1655": {
+    "processed_at": "2026-08-26T13:28:02.174709+00:00",
+    "published": "Tue, 11 Aug 2026 02:36:56 +0000",
+    "title": "Hardness of Euclidean Closest Vector within $n^{1/2-\\epsilon}$ and Binary Nearest Codeword within $n^{1-\\epsilon}$",
+    "title_ja": "Hardness of Euclidean Closest Vector within $n^{1/2-\\epsilon}$ and Binary Nearest Codeword within $n^{1-\\epsilon}$（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1655_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1655.md"
+  },
+  "iacr-2026-130": {
+    "processed_at": "2026-08-26T13:28:02.175107+00:00",
+    "published": "Tue, 27 Jan 2026 08:54:40 +0000",
+    "title": "ARES: Online-Friendly Robust Threshold ECDSA with Amortized Costs",
+    "title_ja": "ARES: Online-Friendly Robust Threshold ECDSA with Amortized Costs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-130_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-130.md"
+  },
+  "iacr-2026-261": {
+    "processed_at": "2026-08-26T13:28:02.175595+00:00",
+    "published": "Sat, 14 Feb 2026 15:35:36 +0000",
+    "title": "Logarithmic-Depth Pseudorandom Functions from Well-Founded Code-Based Assumptions",
+    "title_ja": "Logarithmic-Depth Pseudorandom Functions from Well-Founded Code-Based Assumptions（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-261_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-261.md"
+  },
+  "iacr-2025-2124": {
+    "processed_at": "2026-08-26T13:28:02.176313+00:00",
+    "published": "Thu, 20 Nov 2025 07:59:35 +0000",
+    "title": "SALSAA – Sumcheck-Aided Lattice-based Succinct Arguments and Applications",
+    "title_ja": "SALSAA – Sumcheck-Aided Lattice-based Succinct Arguments and Applications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-2124_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-2124.md"
+  },
+  "iacr-2026-217": {
+    "processed_at": "2026-08-26T13:28:02.176889+00:00",
+    "published": "Tue, 10 Feb 2026 09:13:40 +0000",
+    "title": "Cavefish: Communication-Optimal Light Client Protocol for UTxO Ledgers",
+    "title_ja": "Cavefish: Communication-Optimal Light Client Protocol for UTxO Ledgers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-217_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-217.md"
+  },
+  "iacr-2026-1614": {
+    "processed_at": "2026-08-26T13:28:02.177553+00:00",
+    "published": "Wed, 05 Aug 2026 10:57:00 +0000",
+    "title": "LFSRs and Boolean Masking: An In-depth Security Analysis",
+    "title_ja": "LFSRs and Boolean Masking: An In-depth Security Analysis（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1614_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1614.md"
+  },
+  "iacr-2026-368": {
+    "processed_at": "2026-08-26T13:28:02.178064+00:00",
+    "published": "Mon, 23 Feb 2026 16:11:15 +0000",
+    "title": "Additions, Multiplications, and the Interaction In-Between: Optimizing MPC Protocols via Leveled Linear Secret Sharing (Full Version)",
+    "title_ja": "Additions, Multiplications, and the Interaction In-Between: Optimizing MPC Protocols via Leveled Linear Secret Sharing (Full Version)（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-368_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-368.md"
+  },
+  "iacr-2026-144": {
+    "processed_at": "2026-08-26T13:28:02.178561+00:00",
+    "published": "Thu, 29 Jan 2026 17:30:19 +0000",
+    "title": "Designated-Verifier Dynamic zk-SNARKs with Applications to Dynamic Proofs of Index",
+    "title_ja": "Designated-Verifier Dynamic zk-SNARKs with Applications to Dynamic Proofs of Index（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-144_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-144.md"
+  },
+  "iacr-2025-1225": {
+    "processed_at": "2026-08-26T13:28:02.179160+00:00",
+    "published": "Tue, 01 Jul 2025 13:08:06 +0000",
+    "title": "Lattice EPID with Efficient Revocation",
+    "title_ja": "Lattice EPID with Efficient Revocation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-1225_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-1225.md"
+  },
+  "iacr-2026-1733": {
+    "processed_at": "2026-08-26T13:28:02.179841+00:00",
+    "published": "Wed, 19 Aug 2026 02:06:42 +0000",
+    "title": "TEE-Assisted Authenticated MPC for Resource Constrained Edge_Intelligence",
+    "title_ja": "TEE-Assisted Authenticated MPC for Resource Constrained Edge_Intelligence（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1733_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1733.md"
+  },
+  "iacr-2026-1423": {
+    "processed_at": "2026-08-26T13:28:02.180307+00:00",
+    "published": "Sun, 12 Jul 2026 06:43:24 +0000",
+    "title": "CMALU: Compact Fault-Tolerant Modular Arithmetic Logic Unit for Post-Quantum Cryptography",
+    "title_ja": "CMALU: Compact Fault-Tolerant Modular Arithmetic Logic Unit for Post-Quantum Cryptography（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1423_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1423.md"
+  },
+  "iacr-2026-1548": {
+    "processed_at": "2026-08-26T13:28:02.180685+00:00",
+    "published": "Wed, 29 Jul 2026 04:37:08 +0000",
+    "title": "Revisiting the Wedge Attack on UOV problem",
+    "title_ja": "Revisiting the Wedge Attack on UOV problem（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1548_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1548.md"
+  },
+  "iacr-2026-922": {
+    "processed_at": "2026-08-26T13:28:02.181131+00:00",
+    "published": "Sun, 10 May 2026 23:56:40 +0000",
+    "title": "Generic Construction of CCA-Secure PKE from Key-Insulated and Privacy-Preserving Signatures with Publicly Derived Public Key",
+    "title_ja": "Generic Construction of CCA-Secure PKE from Key-Insulated and Privacy-Preserving Signatures with Publicly Derived Public Key（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-922_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-922.md"
+  },
+  "iacr-2025-858": {
+    "processed_at": "2026-08-26T13:28:02.181645+00:00",
+    "published": "Thu, 15 May 2025 07:26:40 +0000",
+    "title": "Encrypted Matrix-Vector Products from Secret Dual Codes",
+    "title_ja": "Encrypted Matrix-Vector Products from Secret Dual Codes（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-858_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-858.md"
+  },
+  "iacr-2025-1868": {
+    "processed_at": "2026-08-26T13:28:02.182104+00:00",
+    "published": "Wed, 08 Oct 2025 06:44:35 +0000",
+    "title": "Is the Hard-Label Cryptanalytic Model Extraction Really Polynomial?",
+    "title_ja": "Is the Hard-Label Cryptanalytic Model Extraction Really Polynomial?（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-1868_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-1868.md"
+  },
+  "iacr-2025-1988": {
+    "processed_at": "2026-08-26T13:28:02.182559+00:00",
+    "published": "Fri, 24 Oct 2025 02:41:26 +0000",
+    "title": "Almost NTRU: Revisiting Noncommutativity Against Lattice Attacks",
+    "title_ja": "Almost NTRU: Revisiting Noncommutativity Against Lattice Attacks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-1988_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-1988.md"
+  },
+  "iacr-2026-952": {
+    "processed_at": "2026-08-26T13:28:02.183013+00:00",
+    "published": "Wed, 13 May 2026 18:21:25 +0000",
+    "title": "Formalizing PQC Signature Transition: Case of PoW Blockchain Against On-Spend Attack",
+    "title_ja": "Formalizing PQC Signature Transition: Case of PoW Blockchain Against On-Spend Attack（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-952_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-952.md"
+  },
+  "iacr-2026-1783": {
+    "processed_at": "2026-08-26T13:28:02.183461+00:00",
+    "published": "Sun, 23 Aug 2026 18:47:47 +0000",
+    "title": "Compiling Sparse Keys for Bootstrapping FHEs: Algorithms, Hardware Acceleration, and Beyond",
+    "title_ja": "Compiling Sparse Keys for Bootstrapping FHEs: Algorithms, Hardware Acceleration, and Beyond（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1783_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1783.md"
+  },
+  "iacr-2026-1606": {
+    "processed_at": "2026-08-26T13:28:02.183849+00:00",
+    "published": "Tue, 04 Aug 2026 16:20:04 +0000",
+    "title": "Verbeth: Secure Messaging with Metadata Minimization over Public Blockchain Logs",
+    "title_ja": "Verbeth: Secure Messaging with Metadata Minimization over Public Blockchain Logs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1606_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1606.md"
+  },
+  "iacr-2026-1792": {
+    "processed_at": "2026-08-26T13:28:02.185157+00:00",
+    "published": "Mon, 24 Aug 2026 12:57:01 +0000",
+    "title": "Beyond Linear Subspace Trails: Nonlinear Subspaces for Gr\\\"obner Basis Attacks on Poseidon/Poseidon2 and Neptune",
+    "title_ja": "Beyond Linear Subspace Trails: Nonlinear Subspaces for Gr\\\"obner Basis Attacks on Poseidon/Poseidon2 and Neptune（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1792_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1792.md"
+  },
+  "iacr-2026-1791": {
+    "processed_at": "2026-08-26T13:28:02.185704+00:00",
+    "published": "Mon, 24 Aug 2026 11:45:58 +0000",
+    "title": "DIME: Query-Efficient Framework for Membership Inference on Diffusion Models",
+    "title_ja": "DIME: Query-Efficient Framework for Membership Inference on Diffusion Models（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1791_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1791.md"
+  },
+  "iacr-2026-1790": {
+    "processed_at": "2026-08-26T13:28:02.186104+00:00",
+    "published": "Mon, 24 Aug 2026 09:58:08 +0000",
+    "title": "Lithium: Making Iterative Rejection Sampling Practical for Compact Lattice Signatures",
+    "title_ja": "Lithium: Making Iterative Rejection Sampling Practical for Compact Lattice Signatures（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1790_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1790.md"
+  },
+  "iacr-2026-1778": {
+    "processed_at": "2026-08-26T13:28:02.186503+00:00",
+    "published": "Sat, 22 Aug 2026 18:04:05 +0000",
+    "title": "HOVER: Higher-Order Vanishing Endomorphism Recovery",
+    "title_ja": "HOVER: Higher-Order Vanishing Endomorphism Recovery（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1778_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1778.md"
+  },
+  "iacr-2026-1789": {
+    "processed_at": "2026-08-26T13:28:02.186976+00:00",
+    "published": "Mon, 24 Aug 2026 09:17:54 +0000",
+    "title": "HRFPRE: Fast Proxy Re-encryption for Multi-RSU Outsourcing and Hardware-assisted Revocation in the IoV.",
+    "title_ja": "HRFPRE: Fast Proxy Re-encryption for Multi-RSU Outsourcing and Hardware-assisted Revocation in the IoV.（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1789_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1789.md"
+  },
+  "iacr-2026-1786": {
+    "processed_at": "2026-08-26T13:28:02.187394+00:00",
+    "published": "Mon, 24 Aug 2026 00:19:51 +0000",
+    "title": "Bit Operation Cost of ``Holdout'' Key-Recovery Attacks Against Classic McEliece",
+    "title_ja": "Bit Operation Cost of ``Holdout'' Key-Recovery Attacks Against Classic McEliece（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1786_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1786.md"
+  },
+  "iacr-2026-1788": {
+    "processed_at": "2026-08-26T13:28:02.187806+00:00",
+    "published": "Mon, 24 Aug 2026 09:03:44 +0000",
+    "title": "Cryptanalysis of the DIZY Stream Cipher with Provable Security",
+    "title_ja": "Cryptthe DIZY Stream Cipher with Provable Securityの分析",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1788_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1788.md"
+  },
+  "iacr-2026-1787": {
+    "processed_at": "2026-08-26T13:28:02.188296+00:00",
+    "published": "Mon, 24 Aug 2026 04:48:19 +0000",
+    "title": "A Practical Optimization for Wiedemann XL",
+    "title_ja": "A Practical Optimization for Wiedemann XL（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1787_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1787.md"
+  },
+  "iacr-2025-1219": {
+    "processed_at": "2026-08-26T13:28:02.188802+00:00",
+    "published": "Mon, 30 Jun 2025 07:53:19 +0000",
+    "title": "Foundations of Single-Decryptor Encryption",
+    "title_ja": "Foundations of Single-Decryptor Encryption（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-1219_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-1219.md"
+  },
+  "iacr-2026-1785": {
+    "processed_at": "2026-08-26T13:28:02.189279+00:00",
+    "published": "Sun, 23 Aug 2026 20:27:37 +0000",
+    "title": "The Power of Rerandomization in Obfustopia: Collision-Resistant Hash, Somewhere-Extractable BARGs, and More",
+    "title_ja": "The Power of Rerandomization in Obfustopia: Collision-Resistant Hash, Somewhere-Extractable BARGs, and More（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1785_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1785.md"
+  },
+  "iacr-2026-1492": {
+    "processed_at": "2026-08-26T13:28:02.189879+00:00",
+    "published": "Tue, 21 Jul 2026 12:56:34 +0000",
+    "title": "Proof of Demand Is Not Proof of Work: On the Limits of Demand-Weighted Consensus under Free Pseudonyms",
+    "title_ja": "Proof of Demand Is Not Proof of Work: On the Limits of Demand-Weighted Consensus under Free Pseudonyms（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1492_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1492.md"
+  },
+  "iacr-2026-1784": {
+    "processed_at": "2026-08-26T13:28:02.190347+00:00",
+    "published": "Sun, 23 Aug 2026 19:00:18 +0000",
+    "title": "Faster Post-Quantum zkSNARK Provers Using the LCH Polynomial Basis",
+    "title_ja": "Faster Post-Quantum zkSNARK Provers Using the LCH Polynomial Basis（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1784_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1784.md"
+  },
+  "iacr-2026-1782": {
+    "processed_at": "2026-08-26T13:28:02.190799+00:00",
+    "published": "Sun, 23 Aug 2026 16:27:20 +0000",
+    "title": "EA Codes Approaching Singleton Bound (with Application to Field-Agnostic SNARKs)",
+    "title_ja": "EA Codes Approaching Singleton Bound (with Application to Field-Agnostic SNARKs)（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1782_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1782.md"
+  },
+  "iacr-2026-1662": {
+    "processed_at": "2026-08-26T13:28:02.191264+00:00",
+    "published": "Wed, 12 Aug 2026 11:52:32 +0000",
+    "title": "Degree-Sum-Freedom Is Not EA Invariant: Exact Profiles in a 4-Uniform Permutation Family",
+    "title_ja": "Degree-Sum-Freedom Is Not EA Invariant: Exact Profiles in a 4-Uniform Permutation Family（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1662_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1662.md"
+  },
+  "iacr-2026-1654": {
+    "processed_at": "2026-08-26T13:28:02.191838+00:00",
+    "published": "Tue, 11 Aug 2026 01:18:04 +0000",
+    "title": "Verifpal Seven Years Later: Can a Toy Become an Instrument?",
+    "title_ja": "Verifpal Seven Years Later: Can a Toy Become an Instrument?（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1654_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1654.md"
+  },
+  "iacr-2026-1781": {
+    "processed_at": "2026-08-26T13:28:02.192371+00:00",
+    "published": "Sun, 23 Aug 2026 11:10:07 +0000",
+    "title": "Efficient Additive Randomized Encodings for String Oblivious Transfer: A Core Primitive for General Functions",
+    "title_ja": "Efficient Additive Randomized Encodings for String Oblivious Transfer: A Core Primitive for General Functions（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1781_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1781.md"
+  },
+  "iacr-2026-1780": {
+    "processed_at": "2026-08-26T13:28:02.192838+00:00",
+    "published": "Sun, 23 Aug 2026 09:49:47 +0000",
+    "title": "The Limits of $t$-Private Share Conversion",
+    "title_ja": "The Limits of $t$-Private Share Conversion（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1780_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1780.md"
+  },
+  "iacr-2026-1779": {
+    "processed_at": "2026-08-26T13:28:02.193395+00:00",
+    "published": "Sun, 23 Aug 2026 08:53:29 +0000",
+    "title": "Bootstrapping using Ring Switching without Slot Recovery",
+    "title_ja": "Bootstrapping using Ring Switching without Slot Recovery（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1779_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1779.md"
+  },
+  "iacr-2026-464": {
+    "processed_at": "2026-08-26T13:28:02.193846+00:00",
+    "published": "Thu, 05 Mar 2026 16:38:12 +0000",
+    "title": "Model Extraction of Convolutional Neural Networks with Max-Pooling",
+    "title_ja": "Model Extraction of Convolutional Neural Networks with Max-Pooling（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-464_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-464.md"
+  },
+  "iacr-2025-709": {
+    "processed_at": "2026-08-26T13:28:02.194335+00:00",
+    "published": "Sat, 19 Apr 2025 01:09:05 +0000",
+    "title": "Thunderbolt: Fast Asynchronous Off-Chain Bitcoin Transfers",
+    "title_ja": "Thunderbolt: Fast Asynchronous Off-Chain Bitcoin Transfers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-709_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-709.md"
+  },
+  "iacr-2026-1777": {
+    "processed_at": "2026-08-26T13:28:02.194964+00:00",
+    "published": "Sat, 22 Aug 2026 17:22:48 +0000",
+    "title": "Dynamic and Optimal Function Inversion in the Small-Time Regime",
+    "title_ja": "Dynamic and Optimal Function Inversion in the Small-Time Regime（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1777_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1777.md"
+  },
+  "iacr-2025-1807": {
+    "processed_at": "2026-08-26T13:28:02.195435+00:00",
+    "published": "Thu, 02 Oct 2025 18:14:14 +0000",
+    "title": "Traceability for Free: Traceable Ring Signatures Revisited",
+    "title_ja": "Traceability for Free: Traceable Ring Signatures Revisited（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2025-1807_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2025-1807.md"
+  },
+  "iacr-2026-1776": {
+    "processed_at": "2026-08-26T13:28:02.196147+00:00",
+    "published": "Sat, 22 Aug 2026 14:36:54 +0000",
+    "title": "Cofactor-torsion attacks on hinted scalar multiplications in SNARK circuits",
+    "title_ja": "Cofactor-torsion attacks on hinted scalar multiplications in SNARK circuits（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1776_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1776.md"
+  },
+  "iacr-2026-1098": {
+    "processed_at": "2026-08-26T13:28:02.196557+00:00",
+    "published": "Fri, 29 May 2026 13:08:16 +0000",
+    "title": "A gentle introduction to lattice-based cryptography",
+    "title_ja": "A gentle introduction to lattice-based cryptography（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1098_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1098.md"
+  },
+  "iacr-2026-1258": {
+    "processed_at": "2026-08-26T13:28:02.197023+00:00",
+    "published": "Mon, 15 Jun 2026 14:07:49 +0000",
+    "title": "Beyond Anonymity Sets: A Security Model for Distributed Shuffling in Adversarial Environments",
+    "title_ja": "Beyond Anonymity Sets: A Security Model for Distributed Shuffling in Adversarial Environments（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1258_meta.json",
+    "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1258.md"
   }
 }
