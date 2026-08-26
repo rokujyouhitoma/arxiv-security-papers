@@ -115,6 +115,45 @@ class LifecycleHook(abc.ABC):
 
 ---
 
+### 3.5 多段有向グラフ (DAG) トポロジカル順序起動 & 逆順ドレイン停止
+
+サービス・プール間の `dependencies` を元に、Kahn のアルゴリズムを用いた有向グラフのトポロジカルソートを実行し、依存関係を厳格に満たす順序で起動および停止します。
+
+1. **トポロジカル順序解決 (`resolve_boot_order`)**:
+   - `WorkerSpec.dependencies` から入次数（in-degree）マップと隣接リストを生成。
+   - 入次数 0 の独立ノードから順に起動キューへ追加し、依存先がすべて起動完了した後に依存元（Web 等）を起動。
+   - 同一次数ノード間ではステートフルサービス（DB/Search）を優先。
+2. **循環依存の安全な遮断**:
+   - 循環依存（`A -> B -> A` 等）が存在する場合、即座に `ValueError` を送出し、クラスタのデッドロック・起動ハングを未然に防止。
+3. **逆順トポロジカルグレースフル停止**:
+   - シャットダウン時（`shutdown()`）はトポロジカル順序を反転させ、上位の Web ワーカー群を先にドレイン・停止させた後、下位の DB/Search サービスを安全に終了。
+
+---
+
+### 3.6 `ONESHOT_TASK` バッチタスク実行 & 再試行管理
+
+一括インデックス構築やマイグレーションなど、タスク完了後に自動終了するプロセスを管理します。
+
+1. **正常終了時の再起動スキップ**:
+   - ワーカーが終了コード 0（Exit Code 0）で終了した際、Arbiter はクラッシュと判定せず、状態を `ServiceState.COMPLETED` に遷移させて再起動を抑止。
+2. **異常終了時の自動再試行 (`max_retries`)**:
+   - 終了コードが 0 以外の場合、`retry_count < max_retries` であれば自動で再フォークしてタスクを再試行。
+   - リトライ上限到達時は `ServiceState.FAILED` として恒久停止し、ログにエラーを記録。
+
+---
+
+### 3.7 汎用メッセージキュー・コンシューマワーカー (`QueueWorker`)
+
+HTTP リスニングソケットをバインドせず、メモリキュー（`queue.Queue`）やイベントストリームからメッセージを安全にデキューして処理するステートレスワーカーです。
+
+1. **ノンブロッキング・ポーリングループ**:
+   - デキュー関数またはキューからアイテムを取得し、定義されたハンドラを実行。
+   - アイドル時・処理完了時に `pulse(handling=False)`、タスク実行中に `pulse(handling=True)` を送信して Watchdog と連携。
+2. **`SIGQUIT` グレースフルドレイン**:
+   - `SIGQUIT` または `SIGTERM` 受信時、現在処理中のメッセージを最後まで完遂してから安全にプロセスを終了（メッセージの喪失を防止）。
+
+---
+
 ## 4. IPC コントロールプロトコル仕様 (Unix Domain Socket)
 
 Arbiter および各サブシステムは、専用の Unix Domain Socket 上で JSON ベースの高速 IPC プロトコルを提供します。
@@ -220,9 +259,11 @@ PYTHONPATH=src .venv/bin/python -m supervisor.cli -c config/supervisor.json star
 ```bash
 # 1. JSON 形式でのクラスター状態取得
 PYTHONPATH=src .venv/bin/python -m supervisor.cli status
+# または make status_supervisor
 
 # 2. リアルタイム ANSI プロセス監視 TUI
 PYTHONPATH=src .venv/bin/python -m supervisor.cli top
+# または make top_supervisor
 
 # 3. Top ダッシュボードのワンショット表示
 PYTHONPATH=src .venv/bin/python -m supervisor.cli top --once
@@ -238,18 +279,15 @@ PYTHONPATH=src .venv/bin/python -m supervisor.cli scale -p web -w 4
 
 # 2. 設定再読み込みとワーカー再起動 (ゼロダウンタイム)
 PYTHONPATH=src .venv/bin/python -m supervisor.cli reload
+# または make reload_supervisor
 
 # 3. Supervisor 親プロセスおよび全子ワーカーの安全停止
 PYTHONPATH=src .venv/bin/python -m supervisor.cli stop
+# または make stop_supervisor
 ```
 
 ---
 
-## 7. 将来の拡張ロードマップ (Future Enhancements)
+## 7. 結論と品質保証 (Conclusion & Verification)
 
-1. **`ONESHOT_TASK` バッチタスク実行管理**:
-   - 終了コード 0 で正常終了したワーカーを再起動せず「完了」状態として記録するバッチタスク制御。
-2. **多段有向グラフ（DAG）汎用トポロジカル依存関係ソート**:
-   - サービス間の複雑な多段依存関係（`A -> B -> C`）を自動解析し、最適な並行起動・逆順ドレイン停止を行う。
-3. **汎用メッセージキューワーカー (`QueueWorker`)**:
-   - HTTP ソケットを持たず、Redis / Kafka / RabbitMQ 等のメッセージブローカーからイベントをデキューする汎用コンシューマ基盤。
+本調停基盤（`src/supervisor/`）は、DAG トポロジカル順序起動、デーモン化（`-D`）、UDS プロセス分離 IPC、PSS メモリ監視、`ONESHOT_TASK`、および `QueueWorker` の全仕様を完全実装し、厳格な品質ゲート（Xenon 複雑度 A/B、Mypy strict 0エラー、全単体/結合テスト PASS）により堅牢性が保証されています。

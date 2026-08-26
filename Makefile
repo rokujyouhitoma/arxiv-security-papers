@@ -140,6 +140,14 @@ start_supervisor: activate ## Launch Process Supervisor in background daemon mod
 status_supervisor: activate ## Check live Process Supervisor status via IPC Unix domain socket
 	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli status
 
+.PHONY: stop_supervisor
+stop_supervisor: activate ## Gracefully stop Process Supervisor daemon and all workers
+	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli stop
+
+.PHONY: reload_supervisor
+reload_supervisor: activate ## Rolling reload Process Supervisor configuration and workers
+	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli reload
+
 .PHONY: top_supervisor
 top_supervisor: activate ## Live process & worker top monitoring dashboard
 	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli top $(ARGS)
