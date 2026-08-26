@@ -132,6 +132,10 @@ eval_search: activate ## Run search engine quality benchmark (Precision@K, Recal
 run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (http://localhost:8000)
 	PYTHONPATH=src ${VENV_PYTHON} src/web/server.py --port 8000
 
+.PHONY: run_dashboard
+run_dashboard: activate ## Launch Graph Engineering Dashboard & Web Server (http://localhost:8000/dashboard)
+	PYTHONPATH=src ${VENV_PYTHON} src/web/server.py --port 8000
+
 .PHONY: run_supervisor
 run_supervisor: activate ## Launch Gunicorn-style Pre-Fork Process Supervisor & Arbiter (foreground)
 	PYTHONPATH=src ${VENV_PYTHON} -m supervisor.cli start $(ARGS)

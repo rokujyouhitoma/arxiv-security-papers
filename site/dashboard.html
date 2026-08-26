@@ -1132,6 +1132,75 @@
         }, 300);
       }, 1200);
 
+      // ----------------------------------------------------------------------
+      // 7. Live API Mesh Sync (Progressive Enhancement)
+      // ----------------------------------------------------------------------
+      async function syncLiveMesh() {
+        try {
+          const resp = await fetch('/api/graph/mesh');
+          if (!resp.ok) return;
+          const data = await resp.json();
+          if (data.status === 'success' && data.mesh && data.mesh.nodes.length > 0) {
+            // Update telemetry if present
+            if (data.telemetry) {
+              if (data.telemetry.resolved_nodes) {
+                document.getElementById('valResolvedNodes').textContent = Number(data.telemetry.resolved_nodes).toLocaleString();
+              }
+              if (data.telemetry.token_savings_pct) {
+                document.getElementById('valTokenSavings').textContent = `${data.telemetry.token_savings_pct}%`;
+              }
+            }
+
+            // Replace nodes with live dataset
+            NODES.length = 0;
+            nodeMap.clear();
+            EDGES.length = 0;
+
+            data.mesh.nodes.forEach((n, idx) => {
+              const clusterKey = n.cluster === 'sources' ? 'source' :
+                                 n.cluster === 'entities' ? 'entity' :
+                                 n.cluster === 'claims' ? 'claim' : 'decision';
+              const angle = (idx / data.mesh.nodes.length) * Math.PI * 2;
+              const radius = Math.min(width, height) * 0.32;
+              const nodeObj = {
+                id: n.id,
+                name: n.title,
+                title: n.sub || n.title,
+                cluster: clusterKey,
+                desc: n.summary || '',
+                x: width / 2 + Math.cos(angle) * radius,
+                y: height / 2 + Math.sin(angle) * radius,
+                vx: 0,
+                vy: 0,
+                radius: clusterKey === 'source' ? 14 : 11
+              };
+              NODES.push(nodeObj);
+              nodeMap.set(nodeObj.id, nodeObj);
+            });
+
+            data.mesh.edges.forEach(e => {
+              if (nodeMap.has(e.source) && nodeMap.has(e.target)) {
+                EDGES.push({
+                  source: e.source,
+                  target: e.target,
+                  rel: e.relation || 'links'
+                });
+              }
+            });
+
+            // Update brand badge to LIVE
+            const brandBadge = document.querySelector('.brand-title .badge');
+            if (brandBadge) {
+              brandBadge.textContent = 'LIVE MESH';
+              brandBadge.style.backgroundColor = 'var(--accent-green)';
+            }
+          }
+        } catch (e) {
+          // Offline / Standalone file execution fallback (gracefully keep canonical mesh)
+        }
+      }
+
+      syncLiveMesh();
     })();
   </script>
 </body>

@@ -6,9 +6,10 @@ Verifies zero external dependencies, strict self-contained Pure JS/CSS/Canvas, a
 import io
 import os
 import re
-from typing import Any, Dict, List
+from typing import Any, List
 
 import pytest
+
 from web.gateway.app import WSGIApplication
 
 
@@ -25,14 +26,22 @@ def dashboard_html_content() -> str:
 def test_dashboard_zero_external_dependencies(dashboard_html_content: str) -> None:
     """Verifies that dashboard.html does not contain any external script or stylesheet links."""
     # Find all script src tags
-    script_srcs = re.findall(r'<script\s+[^>]*src=["\']([^"\']+)["\']', dashboard_html_content, re.IGNORECASE)
+    script_srcs = re.findall(
+        r'<script\s+[^>]*src=["\']([^"\']+)["\']', dashboard_html_content, re.IGNORECASE
+    )
     for src in script_srcs:
-        assert not src.startswith(("http://", "https://", "//")), f"External script found: {src}"
+        assert not src.startswith(
+            ("http://", "https://", "//")
+        ), f"External script found: {src}"
 
     # Find all link rel="stylesheet" tags
-    css_hrefs = re.findall(r'<link\s+[^>]*href=["\']([^"\']+)["\']', dashboard_html_content, re.IGNORECASE)
+    css_hrefs = re.findall(
+        r'<link\s+[^>]*href=["\']([^"\']+)["\']', dashboard_html_content, re.IGNORECASE
+    )
     for href in css_hrefs:
-        assert not href.startswith(("http://", "https://", "//")), f"External stylesheet found: {href}"
+        assert not href.startswith(
+            ("http://", "https://", "//")
+        ), f"External stylesheet found: {href}"
 
 
 def test_dashboard_mandatory_elements_and_canvas(dashboard_html_content: str) -> None:
@@ -45,8 +54,8 @@ def test_dashboard_mandatory_elements_and_canvas(dashboard_html_content: str) ->
     assert 'id="walkCanvas"' in dashboard_html_content
     assert 'id="traversalMatrix"' in dashboard_html_content
     assert 'id="nodeCallout"' in dashboard_html_content
-    assert 'Graph Engineering' in dashboard_html_content
-    assert 'Context Mesh' in dashboard_html_content
+    assert "Graph Engineering" in dashboard_html_content
+    assert "Context Mesh" in dashboard_html_content
 
 
 def test_gateway_dashboard_routing() -> None:
@@ -80,3 +89,83 @@ def test_gateway_dashboard_routing() -> None:
     raw_alias = b"".join(body_alias).decode("utf-8")
     assert captured_status[0] == "200 OK"
     assert "Graph Engineering" in raw_alias
+
+
+def test_gateway_graph_mesh_api() -> None:
+    """Verifies that the /api/graph/mesh endpoint returns valid 4-cluster mesh graph data."""
+    import json
+
+    workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    app = WSGIApplication(workspace_dir=workspace_dir)
+
+    captured_status = []
+    captured_headers = []
+
+    def start_response(status: str, headers: List[Any], exc_info: Any = None) -> None:
+        captured_status.append(status)
+        captured_headers.append(headers)
+
+    environ = {
+        "REQUEST_METHOD": "GET",
+        "PATH_INFO": "/api/graph/mesh",
+        "QUERY_STRING": "",
+        "wsgi.input": io.BytesIO(b""),
+    }
+    body = app(environ, start_response)
+    raw = b"".join(body).decode("utf-8")
+    assert captured_status[0] == "200 OK"
+    data = json.loads(raw)
+    assert data["status"] == "success"
+    assert "mesh" in data
+    assert "nodes" in data["mesh"]
+    assert "edges" in data["mesh"]
+    assert len(data["mesh"]["nodes"]) > 0
+    assert len(data["mesh"]["edges"]) > 0
+    assert "telemetry" in data
+    assert data["telemetry"]["token_savings_pct"] == 74.2
+
+
+def test_gateway_graph_mesh_with_vector_engine() -> None:
+    """Verifies graph mesh generation when vector_engine with real documents is attached."""
+    import json
+    from unittest.mock import MagicMock
+    workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+    mock_engine = MagicMock()
+    mock_engine.documents = [
+        {
+            "clean_id": "2608.23763",
+            "title": "TrustShiftProbe: Staged Defection in MCP",
+            "description": "MCP server defecting behavior audit",
+            "tags": ["mcp-protocol", "agent-security"],
+        },
+        {
+            "clean_id": "2608.23550",
+            "title": "CLAUDE.md Rules vs Built-in Controls",
+            "description": "Permission gap in prompt instructions",
+            "tags": ["prompt-injection", "sandbox"],
+        }
+    ]
+    app = WSGIApplication(workspace_dir=workspace_dir, vector_engine=mock_engine)
+
+    captured_status = []
+    captured_headers = []
+
+    def start_response(status: str, headers: List[Any], exc_info: Any = None) -> None:
+        captured_status.append(status)
+        captured_headers.append(headers)
+
+    environ = {
+        "REQUEST_METHOD": "GET",
+        "PATH_INFO": "/api/graph/mesh",
+        "QUERY_STRING": "",
+        "wsgi.input": io.BytesIO(b""),
+    }
+    body = app(environ, start_response)
+    raw = b"".join(body).decode("utf-8")
+    assert captured_status[0] == "200 OK"
+    data = json.loads(raw)
+    assert data["status"] == "success"
+    assert len(data["mesh"]["nodes"]) == 8
+    assert len(data["mesh"]["edges"]) == 8
+

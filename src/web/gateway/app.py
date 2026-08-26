@@ -54,6 +54,8 @@ class WSGIApplication:
             return self.handlers.handle_trends(start_response, query_params)
         if path == "/api/stats":
             return self.handlers.handle_stats(start_response)
+        if path == "/api/graph/mesh":
+            return self.handlers.handle_graph_mesh(start_response)
         if path.startswith("/preview/"):
             return self.handlers.handle_preview(start_response, path)
         if path.startswith("/api/"):
@@ -99,6 +101,7 @@ def run_web_server(port: int = 8000, host: str = "0.0.0.0") -> None:
     print(
         f"🚀 arxiv-security-papers PEP 3333 WSGI Web Server running at http://localhost:{port}"
     )
+    print(f"📊 Graph Engineering Dashboard: http://localhost:{port}/dashboard")
     httpd.serve_forever()
 
 
