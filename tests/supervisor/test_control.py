@@ -48,3 +48,23 @@ def test_control_client_socket_not_found(tmp_path) -> None:
     res = client.get_status()
     assert res["status"] == "error"
     assert "not found" in res["error"]
+
+
+def test_control_server_close_in_child_does_not_unlink(tmp_path) -> None:
+    sock_path = str(tmp_path / "test_child_safe.sock")
+    server = ControlServer(
+        socket_path=sock_path, command_handler=lambda req: {"status": "ok"}
+    )
+    server.start()
+
+    try:
+        assert os.path.exists(sock_path)
+        # Simulate fork and child worker cleanup
+        server.close_in_child()
+        # Simulate child calling atexit
+        server._atexit_cleanup()
+        # Socket must STILL exist because creator pid does not match or atexit was unregistered
+        assert os.path.exists(sock_path)
+    finally:
+        server.stop()
+        assert not os.path.exists(sock_path)

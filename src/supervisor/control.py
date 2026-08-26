@@ -30,6 +30,7 @@ class ControlServer:
         self._server_sock: Optional[socket.socket] = None
         self._thread: Optional[threading.Thread] = None
         self._running = False
+        self._creator_pid = os.getpid()
 
     def start(self) -> None:
         """Binds to the Unix socket and starts the listener thread."""
@@ -99,6 +100,8 @@ class ControlServer:
     def close_in_child(self) -> None:
         """Closes the server socket in a forked child without unlinking the socket file."""
         self._running = False
+        self._in_child = True
+        atexit.unregister(self._atexit_cleanup)
         if self._server_sock:
             try:
                 self._server_sock.close()
@@ -108,7 +111,11 @@ class ControlServer:
 
     def _atexit_cleanup(self) -> None:
         """Removes the socket file on interpreter exit (covers abnormal exits)."""
-        if os.path.exists(self.socket_path):
+        if (
+            not getattr(self, "_in_child", False)
+            and os.getpid() == self._creator_pid
+            and os.path.exists(self.socket_path)
+        ):
             try:
                 os.unlink(self.socket_path)
             except OSError:
