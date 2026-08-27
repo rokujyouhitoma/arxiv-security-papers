@@ -196,6 +196,26 @@ def _filter_and_stage_papers(
     return tasks
 
 
+def _atomic_json_dump(data: Any, target_path: str) -> None:
+    """Safely writes JSON data to a target path via temporary file and atomic replace."""
+    tmp_path = f"{target_path}.tmp.{os.getpid()}"
+    target_dir = os.path.dirname(os.path.abspath(target_path))
+    os.makedirs(target_dir, exist_ok=True)
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, target_path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise
+
+
 def _transform_and_save_okf(
     pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]],
     workspace_dir: str,
@@ -215,8 +235,7 @@ def _transform_and_save_okf(
             "raw_meta_path": os.path.relpath(raw_meta_path, workspace_dir),
             "okf_path": item["rel_okf_path"],
         }
-    with open(state_path, "w", encoding="utf-8") as f:
-        json.dump(processed_state, f, ensure_ascii=False, indent=2)
+    _atomic_json_dump(processed_state, state_path)
     return processed_items
 
 
@@ -283,8 +302,10 @@ def run_pipeline(
 
     now_str = datetime.now().isoformat()
     print(
-        f"[{now_str}] [ETL:Ingestion] Downloading PDFs & pdftotext for {len(pdf_fetch_tasks)} papers..."
+        f"[{now_str}] [ETL:Ingestion] Downloading PDFs & extracting full-text "
+        f"via Pure-Python Engine for {len(pdf_fetch_tasks)} papers..."
     )
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [
             executor.submit(fetch_single_pdf_and_text, p, r_dir)

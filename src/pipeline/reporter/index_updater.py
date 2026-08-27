@@ -160,7 +160,18 @@ timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
 |---|---|---|---|---|---|---|
 """
     rows = _build_index_rows(workspace_dir, config, index_dir)
-    with open(index_path, "w", encoding="utf-8") as f:
-        f.write(index_content)
-        for r in rows:
-            f.write(r + "\n")
+    full_text = index_content + "".join(r + "\n" for r in rows)
+    tmp_path = f"{index_path}.tmp.{os.getpid()}"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(full_text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, index_path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise
