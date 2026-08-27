@@ -311,11 +311,34 @@ def _dispatch_rpc_request(
     p_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
     resources: List[Dict[str, Any]],
     r_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
     method = req.get("method")
     req_id = req.get("id")
     p = req.get("params", {})
 
+    # MCP Lifecycle & Core RPC Handlers
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                    "prompts": {"listChanged": False},
+                    "resources": {"subscribe": False, "listChanged": False},
+                },
+                "serverInfo": {
+                    "name": server_name,
+                    "version": "1.0.0",
+                },
+            },
+        }
+    if method == "notifications/initialized":
+        # Notification from client, no response required
+        return None
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools}}
     if method == "tools/call":
@@ -332,6 +355,38 @@ def _dispatch_rpc_request(
         result = _dispatch_resources_read(server_name, p, r_handlers)
         return {"jsonrpc": "2.0", "id": req_id, "result": result}
     return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
+
+def _process_mcp_line(
+    line: str,
+    server_name: str,
+    tools: List[Dict[str, Any]],
+    t_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+    prompts: List[Dict[str, Any]],
+    p_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+    resources: List[Dict[str, Any]],
+    r_handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+) -> None:
+    line_clean = line.strip()
+    if not line_clean:
+        return
+    try:
+        req = json.loads(line_clean)
+        resp = _dispatch_rpc_request(
+            server_name,
+            req,
+            tools,
+            t_handlers,
+            prompts,
+            p_handlers,
+            resources,
+            r_handlers,
+        )
+        if resp is not None:
+            sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
+    except Exception as e:
+        sys.stderr.write(f"Error handling MCP request: {e}\n")
 
 
 def run_mcp_server(
@@ -358,22 +413,13 @@ def run_mcp_server(
     r_handlers = resource_handlers or {}
 
     for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            req = json.loads(line)
-            resp = _dispatch_rpc_request(
-                server_name,
-                req,
-                tools,
-                t_handlers,
-                prompts,
-                p_handlers,
-                resources,
-                r_handlers,
-            )
-            sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
-        except Exception as e:
-            sys.stderr.write(f"Error handling MCP request: {e}\n")
+        _process_mcp_line(
+            line,
+            server_name,
+            tools,
+            t_handlers,
+            prompts,
+            p_handlers,
+            resources,
+            r_handlers,
+        )

@@ -330,28 +330,35 @@ def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
     query = args.get("query", "")
     top_k = args.get("top_k", 10)
     category = args.get("category")
-    compact = args.get("compact", True)
     facets = {"category": category} if category else None
     resp = get_vector_engine().search_hybrid_pipeline(query, facets=facets, top_k=top_k)
 
-    if compact and "results" in resp:
-        compact_docs = []
-        for d in resp.get("results", []):
-            compact_docs.append(
-                {
-                    "id": d.get("id"),
-                    "title": d.get("title"),
-                    "score": round(d.get("score", 0.0), 4),
-                    "summary": d.get("description", d.get("abstract", ""))[:180]
-                    + "...",
-                }
-            )
-        resp["results"] = compact_docs
+    # Sanitize and compact hybrid response to prevent token explosion
+    raw_results = resp.get("results", []) if isinstance(resp, dict) else []
+    compact_docs = []
+    for d in raw_results:
+        compact_docs.append(
+            {
+                "id": d.get("id"),
+                "title": d.get("title"),
+                "title_ja": d.get("title_ja", d.get("title")),
+                "category": d.get("category", ""),
+                "score": round(float(d.get("score", 0.0)), 4),
+                "summary": (d.get("description") or d.get("abstract") or "")[:200]
+                + (
+                    "..."
+                    if len(d.get("description") or d.get("abstract") or "") > 200
+                    else ""
+                ),
+            }
+        )
 
     return {
         "status": "success",
-        "compact": compact,
-        "data": resp,
+        "query": query,
+        "count": len(compact_docs),
+        "results": compact_docs,
+        "data": {"results": compact_docs},
     }
 
 
@@ -397,17 +404,52 @@ def handle_get_paper_summary(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _truncate_trends_content(content: str, max_chars: int) -> tuple[str, bool]:
+    """Helper to truncate massive markdown tables from trend summaries."""
+    split_markers = [
+        "## 4. 論文一覧",
+        "## 論文一覧",
+        "### 4. 論文一覧",
+        "### 全論文一覧",
+        "| arxiv_id |",
+    ]
+    cut_idx = -1
+    for marker in split_markers:
+        idx = content.find(marker)
+        if idx > 0 and (cut_idx == -1 or idx < cut_idx):
+            cut_idx = idx
+
+    if cut_idx > 0:
+        msg = (
+            f"\n\n> [!NOTE]\n> （個別論文表は文字数抑制のため省略されました。"
+            f"全文が必要な場合は full_content=True を指定してください。総文字数: {len(content):,}文字）\n"
+        )
+        return content[:cut_idx].strip() + msg, True
+
+    if len(content) > max_chars:
+        msg = (
+            f"\n\n> [!NOTE]\n> （{max_chars}文字で切り詰められました。"
+            f"全文が必要な場合は full_content=True を指定してください。）\n"
+        )
+        return content[:max_chars].strip() + msg, True
+
+    return content, False
+
+
 def handle_get_latest_trends(args: Dict[str, Any]) -> Dict[str, Any]:
     period = args.get("period", "monthly")
+    full_content = args.get("full_content", False)
+    max_chars = args.get("max_chars", 4000)
+    period_prefix = (
+        "03_monthly"
+        if period == "monthly"
+        else "04_quarterly" if period == "quarterly" else "05_annual"
+    )
     summary_dir = os.path.join(
         WORKSPACE_DIR,
         "outputs",
         "executive_summaries",
-        (
-            f"03_{period}"
-            if period == "monthly"
-            else f"04_{period}" if period == "quarterly" else "05_annual"
-        ),
+        period_prefix,
     )
 
     if not os.path.exists(summary_dir):
@@ -433,10 +475,15 @@ def handle_get_latest_trends(args: Dict[str, Any]) -> Dict[str, Any]:
     with open(target_file, "r", encoding="utf-8") as f:
         content = f.read()
 
+    truncated = False
+    if not full_content and len(content) > max_chars:
+        content, truncated = _truncate_trends_content(content, max_chars)
+
     return {
         "status": "success",
         "period": period,
         "latest_file": os.path.basename(target_file),
+        "truncated": truncated,
         "content": content,
     }
 
@@ -919,11 +966,32 @@ def _dispatch_papers_prompt_get(req_id: Any, params: Dict[str, Any]) -> Dict[str
     return {"jsonrpc": "2.0", "id": req_id, "result": output}
 
 
-def _dispatch_papers_rpc(req: Dict[str, Any]) -> Dict[str, Any]:
+def _dispatch_papers_rpc(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     req_id = req.get("id")
     method = req.get("method")
     params = req.get("params", {})
 
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                    "prompts": {"listChanged": False},
+                    "resources": {"subscribe": False, "listChanged": False},
+                },
+                "serverInfo": {
+                    "name": "arxiv-security-papers",
+                    "version": "1.0.0",
+                },
+            },
+        }
+    if method == "notifications/initialized":
+        return None
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}}
     if method == "tools/call":
@@ -956,7 +1024,8 @@ def run_jsonrpc_server() -> None:
         try:
             req = json.loads(line)
             res = _dispatch_papers_rpc(req)
-            print(json.dumps(res, ensure_ascii=False), flush=True)
+            if res is not None:
+                print(json.dumps(res, ensure_ascii=False), flush=True)
         except Exception as e:
             sys.stderr.write(f"Error handling request: {e}\n")
 

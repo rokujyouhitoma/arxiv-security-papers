@@ -1,13 +1,6 @@
-#!/usr/bin/env python3
-"""
-Model Context Protocol (MCP) Server: Security Tech-Radar & Threat Intelligence Predictor.
-Synthesizes security technology trends, Adopt/Trial/Assess/Hold quadrants,
-and emerging threat forecasts based on arXiv security papers.
-"""
+from typing import Any, Callable, Dict
 
-import json
-import sys
-from typing import Any, Dict
+from mcp.base import run_mcp_server
 
 # ---------------------------------------------------------------------------
 # Tech-Radar & Trend Synthesis Knowledge Engine
@@ -241,54 +234,19 @@ def handle_predict_emerging_threats(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
+    "get_technology_radar": handle_get_technology_radar,
+    "predict_emerging_threats": handle_predict_emerging_threats,
+}
+
+
 def main() -> None:
     """MCP standard input/output transport loop."""
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            req = json.loads(line)
-            method = req.get("method")
-            req_id = req.get("id")
-
-            if method == "tools/list":
-                resp = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {"tools": TOOLS_MANIFEST},
-                }
-            elif method == "tools/call":
-                p = req.get("params", {})
-                tool_name = p.get("name")
-                args = p.get("arguments", {})
-
-                if tool_name == "get_technology_radar":
-                    res = handle_get_technology_radar(args)
-                elif tool_name == "predict_emerging_threats":
-                    res = handle_predict_emerging_threats(args)
-                else:
-                    res = {"error": f"Unknown tool '{tool_name}'"}
-
-                resp = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": json.dumps(res, ensure_ascii=False, indent=2),
-                            }
-                        ]
-                    },
-                }
-            else:
-                resp = {"jsonrpc": "2.0", "id": req_id, "result": {}}
-
-            sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
-        except Exception as e:
-            sys.stderr.write(f"Error handling MCP request: {e}\n")
+    run_mcp_server(
+        server_name="arxiv-security-tech-radar",
+        tools_manifest=TOOLS_MANIFEST,
+        tool_handlers=TOOL_HANDLERS,
+    )
 
 
 if __name__ == "__main__":

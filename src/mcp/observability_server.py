@@ -865,6 +865,10 @@ def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
             },
         }
+    if method == "notifications/initialized":
+        return None
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
 
     list_res = _dispatch_list_rpc(method, req_id)
     if list_res is not None:

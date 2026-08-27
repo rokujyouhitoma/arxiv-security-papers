@@ -1,17 +1,6 @@
-#!/usr/bin/env python3
-"""
-Model Context Protocol (MCP) Server: Threat-to-Defense Patch & Rule Generator.
-Exposes tools to synthesize Semgrep CI rules, generate academic-aligned secure code patches,
-and evaluate MITRE ATT&CK / NIST SP 800 defense coverage.
-"""
+from typing import Any, Callable, Dict
 
-import json
-import sys
-from typing import Any, Dict
-
-# ---------------------------------------------------------------------------
-# Knowledge Base for Automated Defense Synthesis (Imported from security.taxonomy)
-# ---------------------------------------------------------------------------
+from mcp.base import run_mcp_server
 from security.taxonomy import CWE_DEFENSE_MAP
 
 TOOLS_MANIFEST = [
@@ -219,56 +208,20 @@ def handle_check_threat_coverage(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
+    "generate_semgrep_rule": handle_generate_semgrep_rule,
+    "synthesize_secure_patch": handle_synthesize_secure_patch,
+    "check_threat_coverage": handle_check_threat_coverage,
+}
+
+
 def main() -> None:
     """MCP standard input/output transport loop."""
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            req = json.loads(line)
-            method = req.get("method")
-            req_id = req.get("id")
-
-            if method == "tools/list":
-                resp = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {"tools": TOOLS_MANIFEST},
-                }
-            elif method == "tools/call":
-                p = req.get("params", {})
-                tool_name = p.get("name")
-                args = p.get("arguments", {})
-
-                if tool_name == "generate_semgrep_rule":
-                    res = handle_generate_semgrep_rule(args)
-                elif tool_name == "synthesize_secure_patch":
-                    res = handle_synthesize_secure_patch(args)
-                elif tool_name == "check_threat_coverage":
-                    res = handle_check_threat_coverage(args)
-                else:
-                    res = {"error": f"Unknown tool '{tool_name}'"}
-
-                resp = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": json.dumps(res, ensure_ascii=False, indent=2),
-                            }
-                        ]
-                    },
-                }
-            else:
-                resp = {"jsonrpc": "2.0", "id": req_id, "result": {}}
-
-            sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
-        except Exception as e:
-            sys.stderr.write(f"Error handling MCP request: {e}\n")
+    run_mcp_server(
+        server_name="arxiv-security-threat-defense",
+        tools_manifest=TOOLS_MANIFEST,
+        tool_handlers=TOOL_HANDLERS,
+    )
 
 
 if __name__ == "__main__":
