@@ -120,3 +120,22 @@ def test_mcp_resources_and_prompts():
         "recommend_cwe_mitigation", {"cwe_id": "CWE-78", "language": "python"}
     )
     assert "messages" in p_cwe
+
+
+def test_threat_defense_caldera_and_sigma():
+    from mcp.threat_defense_server import TOOL_HANDLERS
+
+    assert "generate_caldera_playbook" in TOOL_HANDLERS
+    assert "generate_sigma_rule" in TOOL_HANDLERS
+
+    # Test Caldera playbook generation
+    res_caldera = TOOL_HANDLERS["generate_caldera_playbook"]({"tech_id": "T1059"})
+    assert res_caldera["status"] == "success"
+    assert "caldera_ability_yaml" in res_caldera
+    assert "T1059" in res_caldera["caldera_ability_yaml"]
+
+    # Test Sigma rule generation
+    res_sigma = TOOL_HANDLERS["generate_sigma_rule"]({"tech_id": "T1190"})
+    assert res_sigma["status"] == "success"
+    assert "sigma_rule_yaml" in res_sigma
+    assert "T1190" in res_sigma["sigma_rule_yaml"]

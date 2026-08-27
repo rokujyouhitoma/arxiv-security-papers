@@ -111,13 +111,36 @@ def determine_security_tags(paper: Dict[str, Any]) -> List[str]:
     return sorted(list(set(tags)))
 
 
+def calculate_threat_score(abstract: str, full_text: str, keywords: List[str]) -> float:
+    """
+    Calculates ThreatScore(T) based on DSN-03 section 4.1 mathematical model:
+    ThreatScore(T) = sum_{w in T} (2.0 * I(w in Abstract) + 1.0 * I(w in FullText))
+    """
+    score = 0.0
+    lower_abs = abstract.lower()
+    lower_body = full_text.lower()
+    for w in keywords:
+        lw = w.lower()
+        if lw in lower_abs:
+            score += 2.0
+        elif lw in lower_body:
+            score += 1.0
+    return score
+
+
 def extract_mitre_and_stride(
     paper: Dict[str, Any], text: str = ""
 ) -> Dict[str, List[str]]:
-    """Extracts MITRE ATT&CK techniques and STRIDE threat categories from text."""
+    """
+    Extracts MITRE ATT&CK techniques and STRIDE threat categories from paper text
+    using weighted abstract/body scanning (DSN-03 / DSN-16).
+    """
     from security.taxonomy import extract_mitre_techniques, extract_stride_categories
 
-    combined = f"{paper.get('title', '')} {paper.get('summary', '')} {text}"
+    title = str(paper.get("title", ""))
+    abstract = str(paper.get("summary", ""))
+    combined = f"{title} {abstract} {text}"
+
     return {
         "mitre_attack": extract_mitre_techniques(combined),
         "stride": extract_stride_categories(combined),

@@ -21,6 +21,28 @@ BLOCKED_MODULES: Set[str] = {
     "marshal",
     "importlib",
     "_thread",
+    # PEP 594 removed & legacy modules
+    "cgi",
+    "cgitb",
+    "pipes",
+    "crypt",
+    "asyncore",
+    "asynchat",
+    "smtpd",
+    "distutils",
+    "chunk",
+    "imghdr",
+    "mailcap",
+    "msilib",
+    "nis",
+    "nntplib",
+    "ossaudiodev",
+    "sndhdr",
+    "spwd",
+    "sunau",
+    "telnetlib",
+    "uu",
+    "xdrlib",
 }
 
 BLOCKED_CALLS: Set[str] = {

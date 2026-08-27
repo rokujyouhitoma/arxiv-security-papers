@@ -4,7 +4,7 @@ MITRE ATT&CK Framework Mapping & Extraction Engine.
 Maps academic security paper keywords and attack techniques to MITRE Enterprise ATT&CK matrix.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 MITRE_TECHNIQUES_MAP: Dict[str, Dict[str, Any]] = {
     "T1059": {
@@ -87,3 +87,65 @@ def extract_mitre_techniques(text: str) -> List[str]:
             found.append(tech_id)
 
     return sorted(list(set(found)))
+
+
+def generate_caldera_ability(tech_id: str, platform: str = "linux") -> str:
+    """
+    Generates an automated Caldera attack emulation ability (YAML format)
+    aligned with MITRE ATT&CK technique ID (DSN-16 / DSN-08).
+    """
+    tech_meta = MITRE_TECHNIQUES_MAP.get(
+        tech_id.upper(),
+        {"name": "Generic Security Technique", "tactic": "Execution"},
+    )
+    name = tech_meta.get("name", "Unknown Technique")
+    tactic = tech_meta.get("tactic", "execution").lower().replace(" ", "-")
+
+    return f"""---
+- id: ability-{tech_id.lower()}-emulation
+  name: "Emulate {name} ({tech_id})"
+  description: "Automated adversary emulation for {name} ({tech_id}) generated from academic security research."
+  tactic: "{tactic}"
+  technique:
+    attack_id: "{tech_id}"
+    name: "{name}"
+  platforms:
+    {platform}:
+      sh:
+        command: "echo '[Caldera Emulation] Simulating {tech_id} ({name})' && exit 0"
+        cleanup: "echo '[Caldera Cleanup] Done' && exit 0"
+"""
+
+
+def generate_sigma_rule(tech_id: str, title: Optional[str] = None) -> str:
+    """
+    Generates a SIEM detection rule draft in Sigma YAML format for a given ATT&CK technique ID (DSN-16).
+    """
+    tech_meta = MITRE_TECHNIQUES_MAP.get(
+        tech_id.upper(),
+        {"name": "Generic Attack Technique", "tactic": "Execution"},
+    )
+    name = tech_meta.get("name", "Unknown Technique")
+    rule_title = title or f"Detection of {name} Activity"
+
+    return f"""title: "{rule_title}"
+id: sigma-{tech_id.lower()}-detection
+status: experimental
+description: "Detects anomalous activities and adversary execution matching MITRE ATT&CK {tech_id} ({name})."
+references:
+  - "https://attack.mitre.org/techniques/{tech_id}/"
+tags:
+  - "attack.{tech_id.lower()}"
+  - "attack.{tech_meta.get('tactic', 'execution').lower().replace(' ', '_')}"
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - "{name.lower()}"
+  condition: selection
+falsepositives:
+  - "Legitimate administrative and maintenance tasks"
+level: medium
+"""

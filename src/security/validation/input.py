@@ -33,12 +33,47 @@ XSS_PATTERNS: List[Tuple[str, str]] = [
     (r"(?i)onload\s*=|onerror\s*=", "Inline Event Handler XSS"),
 ]
 
+PROMPT_INJECTION_PATTERNS: List[Tuple[str, str]] = [
+    (
+        r"(?i)\b(ignore\s+(all\s+)?previous\s+instructions|disregard\s+(all\s+)?prior\s+prompts)\b",
+        "Instruction Override Attack",
+    ),
+    (
+        r"(?i)\b(system\s+prompt\s*:\s*you\s+are|you\s+are\s+now\s+in\s+dan\s+mode)\b",
+        "Persona / Jailbreak Hijacking",
+    ),
+    (
+        r"(?i)\b(reveal\s+(your\s+)?(system\s+prompt|api\s+key|environment\s+variables))\b",
+        "Secret Exfiltration Probe",
+    ),
+]
+
 
 def sanitize_html(text: str) -> str:
     """Escapes HTML special characters to neutralize XSS vectors."""
     if not text or not isinstance(text, str):
         return ""
     return html.escape(text, quote=True)
+
+
+def wrap_untrusted_paper_content(text: str) -> str:
+    """
+    Capsules untrusted academic paper text inside isolated XML boundary tags
+    to prevent indirect prompt injection into LLM orchestration layers (DSN-16 / DSN-07).
+    """
+    if not text or not isinstance(text, str):
+        return "<untrusted_paper_content>\n</untrusted_paper_content>"
+    # Sanitize closing boundary tag within text to prevent tag escape
+    sanitized = text.replace("</untrusted_paper_content>", "[ESCAPED_CLOSING_TAG]")
+    return f"<untrusted_paper_content>\n{sanitized}\n</untrusted_paper_content>"
+
+
+ALL_SECURITY_PATTERN_GROUPS: List[Tuple[str, List[Tuple[str, str]]]] = [
+    ("COMMAND_INJECTION", DANGEROUS_COMMAND_PATTERNS),
+    ("SQLI", SQLI_PATTERNS),
+    ("XSS", XSS_PATTERNS),
+    ("PROMPT_INJECTION", PROMPT_INJECTION_PATTERNS),
+]
 
 
 def detect_dangerous_patterns(text: str) -> List[str]:
@@ -49,16 +84,9 @@ def detect_dangerous_patterns(text: str) -> List[str]:
         return []
 
     warnings: List[str] = []
-    for pattern, label in DANGEROUS_COMMAND_PATTERNS:
-        if re.search(pattern, text):
-            warnings.append(f"COMMAND_INJECTION: {label}")
-
-    for pattern, label in SQLI_PATTERNS:
-        if re.search(pattern, text):
-            warnings.append(f"SQLI: {label}")
-
-    for pattern, label in XSS_PATTERNS:
-        if re.search(pattern, text):
-            warnings.append(f"XSS: {label}")
+    for prefix, group in ALL_SECURITY_PATTERN_GROUPS:
+        for pattern, label in group:
+            if re.search(pattern, text):
+                warnings.append(f"{prefix}: {label}")
 
     return warnings

@@ -69,6 +69,48 @@ TOOLS_MANIFEST = [
             "required": ["declared_defenses"],
         },
     },
+    {
+        "name": "generate_caldera_playbook",
+        "description": (
+            "Generate an automated adversary emulation ability / playbook (YAML) in Caldera format "
+            "from a MITRE ATT&CK technique ID (DSN-16 / DSN-08)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tech_id": {
+                    "type": "string",
+                    "description": "Target MITRE ATT&CK technique ID e.g. 'T1059', 'T1190', 'T1566'",
+                },
+                "platform": {
+                    "type": "string",
+                    "description": "Target OS platform e.g. 'linux', 'darwin', 'windows' (default: 'linux')",
+                },
+            },
+            "required": ["tech_id"],
+        },
+    },
+    {
+        "name": "generate_sigma_rule",
+        "description": (
+            "Generate a SIEM threat detection rule draft in Sigma YAML format "
+            "from a MITRE ATT&CK technique ID (DSN-16)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tech_id": {
+                    "type": "string",
+                    "description": "Target MITRE ATT&CK technique ID e.g. 'T1059', 'T1190', 'T1574'",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional custom detection rule title",
+                },
+            },
+            "required": ["tech_id"],
+        },
+    },
 ]
 
 
@@ -232,10 +274,47 @@ def handle_check_threat_coverage(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def handle_generate_caldera_playbook(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Generates automated Caldera ability YAML for MITRE ATT&CK technique."""
+    tech_id = params.get("tech_id", "").strip().upper()
+    platform = params.get("platform", "linux").strip().lower()
+    if not tech_id:
+        return {"status": "error", "message": "Missing required parameter 'tech_id'"}
+
+    from security.taxonomy import generate_caldera_ability
+
+    yaml_ability = generate_caldera_ability(tech_id=tech_id, platform=platform)
+    return {
+        "status": "success",
+        "tech_id": tech_id,
+        "platform": platform,
+        "caldera_ability_yaml": yaml_ability,
+    }
+
+
+def handle_generate_sigma_rule(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Generates SIEM Sigma detection rule draft for MITRE ATT&CK technique."""
+    tech_id = params.get("tech_id", "").strip().upper()
+    title = params.get("title")
+    if not tech_id:
+        return {"status": "error", "message": "Missing required parameter 'tech_id'"}
+
+    from security.taxonomy import generate_sigma_rule
+
+    sigma_yaml = generate_sigma_rule(tech_id=tech_id, title=title)
+    return {
+        "status": "success",
+        "tech_id": tech_id,
+        "sigma_rule_yaml": sigma_yaml,
+    }
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generate_semgrep_rule": handle_generate_semgrep_rule,
     "synthesize_secure_patch": handle_synthesize_secure_patch,
     "check_threat_coverage": handle_check_threat_coverage,
+    "generate_caldera_playbook": handle_generate_caldera_playbook,
+    "generate_sigma_rule": handle_generate_sigma_rule,
 }
 
 
