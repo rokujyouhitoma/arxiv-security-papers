@@ -83,6 +83,44 @@ def test_cli_pir_list_and_add(tmp_path, capsys) -> None:
     code_list2 = main(["--workdir", str(tmp_path), "pir", "list"])
     assert code_list2 == 0
 
+    # Test add PIR with horizon
+    code_add_horizon = main(
+        [
+            "--workdir",
+            str(tmp_path),
+            "pir",
+            "add",
+            "--id",
+            "pir_strategic_01",
+            "--title",
+            "Post-Quantum Cryptanalysis",
+            "--topics",
+            "pqc,lattice",
+            "--priority",
+            "0.7",
+            "--horizon",
+            "strategic",
+        ]
+    )
+    assert code_add_horizon == 0
+
+    # Test escalate PIR
+    code_esc = main(
+        [
+            "--workdir",
+            str(tmp_path),
+            "pir",
+            "escalate",
+            "--id",
+            "pir_strategic_01",
+            "--reason",
+            "Immediate side-channel exploit published",
+            "--horizon",
+            "tactical",
+        ]
+    )
+    assert code_esc == 0
+
 
 def test_cli_pir_add_missing_args(tmp_path) -> None:
     code = main(["--workdir", str(tmp_path), "pir", "add", "--id", "incomplete"])

@@ -221,24 +221,73 @@ def _add_pir_requirement(
     if not args.id or not args.title or not args.topics:
         print("[ERROR] --id, --title, and --topics are required to add a PIR.")
         return 1
+    from orchestrator.pir.models import PIRHorizon
+
     topics = [t.strip() for t in args.topics.split(",") if t.strip()]
+    raw_horizon = getattr(args, "horizon", "operational").lower()
+    try:
+        horizon_val = PIRHorizon(raw_horizon)
+    except ValueError:
+        horizon_val = PIRHorizon.OPERATIONAL
+
     req = orchestrator.register_pir(
         req_id=args.id,
         title=args.title,
         description=args.description or "",
         target_topics=topics,
         priority_score=args.priority,
+        horizon=horizon_val,
     )
     print(f"[+] Successfully registered PIR: [{req.req_id}] {req.title}")
+    print(f"    Horizon: {req.horizon.value.upper()}")
     print(f"    Topics: {req.target_topics}")
     print(f"    Priority Score: {req.priority_score}")
     return 0
 
 
+def _escalate_pir_requirement(
+    orchestrator: UniversalIntelligenceOrchestrator, args: argparse.Namespace
+) -> int:
+    """Handles dynamically escalating an existing PIR."""
+    if not args.id:
+        print("[ERROR] --id is required to escalate a PIR.")
+        return 1
+    from orchestrator.pir.models import PIRHorizon
+
+    reason = (
+        getattr(args, "reason", "Manual operator escalation")
+        or "Manual operator escalation"
+    )
+    raw_horizon = getattr(args, "horizon", "tactical").lower()
+    try:
+        target_h = PIRHorizon(raw_horizon)
+    except ValueError:
+        target_h = PIRHorizon.TACTICAL
+
+    success = orchestrator.escalate_pir(
+        req_id=args.id, reason=reason, target_horizon=target_h
+    )
+    if success:
+        req = orchestrator.pir_manager.get_requirement(args.id)
+        assert req is not None
+        print(
+            f"[+] Successfully escalated PIR [{req.req_id}] to {req.horizon.value.upper()}"
+        )
+        print(f"    Escalation Level: {req.escalation_level}")
+        print(f"    New Priority Score: {req.priority_score:.2f}")
+        print(f"    Reason: {reason}")
+        return 0
+    else:
+        print(
+            f"[ERROR] Failed to escalate PIR [{args.id}]. Not found or reached max level."
+        )
+        return 1
+
+
 def _list_pir_requirements(
     orchestrator: UniversalIntelligenceOrchestrator,
 ) -> int:
-    """Lists registered PIRs and topic distribution."""
+    """Lists registered PIRs and topic distribution across 3 temporal horizons."""
     active_reqs = orchestrator.pir_manager.list_active_requirements()
     weights = orchestrator.get_current_topic_weights()
 
@@ -249,7 +298,15 @@ def _list_pir_requirements(
         print("  (No custom PIRs currently registered. Built-in defaults active.)")
     else:
         for r in active_reqs:
-            print(f"  [{r.req_id}] {r.title} (Priority: {r.priority_score})")
+            horizon_tag = f"[{r.horizon.value.upper()}]"
+            escalation_tag = (
+                f" (Escalation Lvl: {r.escalation_level})"
+                if r.escalation_level > 0
+                else ""
+            )
+            print(
+                f"  {horizon_tag} [{r.req_id}] {r.title} (Priority: {r.priority_score}){escalation_tag}"
+            )
             print(f"    Topics: {', '.join(r.target_topics)}")
             if r.description:
                 print(f"    Desc:   {r.description}")
@@ -273,6 +330,8 @@ def run_pir_command(args: argparse.Namespace) -> int:
     )
     if args.pir_action == "add":
         return _add_pir_requirement(orchestrator, args)
+    elif args.pir_action == "escalate":
+        return _escalate_pir_requirement(orchestrator, args)
     return _list_pir_requirements(orchestrator)
 
 
@@ -434,6 +493,30 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="Priority score (0.0 - 1.0, default: 1.0)",
+    )
+    add_pir_parser.add_argument(
+        "--horizon",
+        type=str,
+        default="operational",
+        choices=["tactical", "operational", "strategic"],
+        help="Temporal horizon (tactical, operational, strategic, default: operational)",
+    )
+
+    escalate_pir_parser = pir_subparsers.add_parser(
+        "escalate", help="Dynamically escalate a Priority Intelligence Requirement"
+    )
+    escalate_pir_parser.add_argument(
+        "--id", type=str, required=True, help="PIR Requirement ID to escalate"
+    )
+    escalate_pir_parser.add_argument(
+        "--reason", type=str, default="", help="Reason for dynamic escalation"
+    )
+    escalate_pir_parser.add_argument(
+        "--horizon",
+        type=str,
+        default="tactical",
+        choices=["tactical", "operational", "strategic"],
+        help="Target horizon (default: tactical)",
     )
 
     # Command: status

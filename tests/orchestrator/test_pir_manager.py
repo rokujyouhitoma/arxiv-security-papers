@@ -1,5 +1,7 @@
 """Tests for Phase 1 PIRManager and mathematical weight adaptation."""
 
+from typing import Any
+
 import pytest
 
 from orchestrator.contracts import IntelligencePhase, PhaseContext, PhaseStatus
@@ -102,3 +104,68 @@ def test_pir_manager_adapt_queries_from_telemetry() -> None:
     assert any(
         "quantum_zero_trust" in r.target_topics for r in mgr.list_active_requirements()
     )
+
+
+def test_pir_manager_3_horizon_management_and_filtering() -> None:
+    from orchestrator.pir.models import PIRHorizon
+
+    mgr = PIRManager(auto_seed=True)
+    tactical_reqs = mgr.get_requirements_by_horizon(PIRHorizon.TACTICAL)
+    operational_reqs = mgr.get_requirements_by_horizon(PIRHorizon.OPERATIONAL)
+    strategic_reqs = mgr.get_requirements_by_horizon(PIRHorizon.STRATEGIC)
+
+    assert len(tactical_reqs) >= 2  # llm_sec, vuln_fuzz
+    assert len(operational_reqs) >= 1  # supply_chain
+    assert len(strategic_reqs) >= 1  # crypto_priv
+
+    directive = mgr.create_directive(directive_id="dir_horizon_test")
+    assert "horizon_breakdown" in directive.metadata
+    assert directive.metadata["horizon_breakdown"]["tactical"] >= 2
+
+
+def test_pir_manager_dynamic_escalation_triggers(tmp_path: Any) -> None:
+    from orchestrator.contracts import FeedbackTelemetry
+    from orchestrator.pir.models import PIRHorizon
+
+    storage_file = str(tmp_path / "pir_registry.json")
+    mgr = PIRManager(storage_path=storage_file, auto_seed=True)
+
+    # Initial state: crypto_priv is STRATEGIC
+    crypto_req = mgr.get_requirement("pir_crypto_priv")
+    assert crypto_req is not None
+    assert crypto_req.horizon == PIRHorizon.STRATEGIC
+    assert crypto_req.escalation_level == 0
+
+    # Manual escalation
+    escalated = mgr.escalate_requirement(
+        "pir_crypto_priv",
+        reason="Breaking Side-Channel Attack against NIST PQC announced",
+        target_horizon=PIRHorizon.TACTICAL,
+    )
+    assert escalated is True
+    assert crypto_req.horizon == PIRHorizon.TACTICAL
+    assert crypto_req.escalation_level == 1
+    assert crypto_req.escalated_at is not None
+
+    # Verify persistence and reload
+    mgr2 = PIRManager(storage_path=storage_file)
+    reloaded_req = mgr2.get_requirement("pir_crypto_priv")
+    assert reloaded_req is not None
+    assert reloaded_req.horizon == PIRHorizon.TACTICAL
+    assert reloaded_req.escalation_level == 1
+
+    # Telemetry-triggered auto-escalation
+    # supply_chain is OPERATIONAL, inject high knowledge gap
+    telemetry = FeedbackTelemetry(
+        telemetry_id="telem_gap",
+        ndcg_at_k=0.5,
+        mean_average_precision=0.4,
+        frequent_topics={},
+        topic_drift_scores={},
+        knowledge_gaps={"サプライチェーンセキュリティ": 0.9},
+    )
+    mgr2.adapt_queries_from_telemetry(telemetry)
+    supply_req = mgr2.get_requirement("pir_supply_chain")
+    assert supply_req is not None
+    assert supply_req.horizon == PIRHorizon.TACTICAL
+    assert supply_req.escalation_level == 1

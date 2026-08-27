@@ -14,7 +14,7 @@ from orchestrator.dissemination.distributor import DisseminationDistributor
 from orchestrator.feedback.evaluator import FeedbackEvaluator
 from orchestrator.harvest.coordinator import HarvestCoordinator
 from orchestrator.pir.manager import PIRManager
-from orchestrator.pir.models import PIRRequirement
+from orchestrator.pir.models import PIRHorizon, PIRRequirement
 from orchestrator.processing.processor import ProcessingCoordinator
 from orchestrator.workflow.saga import SagaCoordinator
 
@@ -42,6 +42,7 @@ class UniversalIntelligenceOrchestrator:
         description: str,
         target_topics: List[str],
         priority_score: float = 1.0,
+        horizon: PIRHorizon = PIRHorizon.OPERATIONAL,
     ) -> PIRRequirement:
         """Convenience method to register a Priority Intelligence Requirement."""
         req = PIRRequirement(
@@ -50,9 +51,21 @@ class UniversalIntelligenceOrchestrator:
             description=description,
             target_topics=target_topics,
             priority_score=priority_score,
+            horizon=horizon,
         )
         self.pir_manager.register_requirement(req)
         return req
+
+    def escalate_pir(
+        self,
+        req_id: str,
+        reason: str,
+        target_horizon: PIRHorizon = PIRHorizon.TACTICAL,
+    ) -> bool:
+        """Convenience method to escalate a Priority Intelligence Requirement."""
+        return self.pir_manager.escalate_requirement(
+            req_id=req_id, reason=reason, target_horizon=target_horizon
+        )
 
     def record_query_feedback(
         self, query: str, topic: str, ndcg_score: float, hits_count: int

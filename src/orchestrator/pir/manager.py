@@ -7,6 +7,7 @@ w_{k+1} = alpha * w_k + (1 - alpha) * (beta * u_usage + gamma * g_gap + delta * 
 import json
 import math
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from orchestrator.contracts import (
@@ -17,11 +18,11 @@ from orchestrator.contracts import (
     PhaseContext,
     PhaseStatus,
 )
-from orchestrator.pir.models import PIRRequirement, TopicWeightVector
+from orchestrator.pir.models import PIRHorizon, PIRRequirement, TopicWeightVector
 
 
 class PIRManager(IntelligencePhaseProtocol):
-    """Phase 1: Planning & Direction Engine."""
+    """Phase 1: Planning & Direction Engine supporting 3-Horizon PIR Architecture."""
 
     def __init__(
         self,
@@ -48,12 +49,21 @@ class PIRManager(IntelligencePhaseProtocol):
                 with open(self.storage_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     for item in data.get("requirements", []):
+                        raw_horizon = item.get("horizon", "operational")
+                        try:
+                            horizon_val = PIRHorizon(raw_horizon)
+                        except ValueError:
+                            horizon_val = PIRHorizon.OPERATIONAL
+
                         req = PIRRequirement(
                             req_id=item["req_id"],
                             title=item["title"],
                             description=item.get("description", ""),
                             target_topics=item.get("target_topics", []),
                             priority_score=item.get("priority_score", 1.0),
+                            horizon=horizon_val,
+                            escalation_level=item.get("escalation_level", 0),
+                            escalated_at=item.get("escalated_at"),
                             is_active=item.get("is_active", True),
                         )
                         self._requirements[req.req_id] = req
@@ -67,7 +77,7 @@ class PIRManager(IntelligencePhaseProtocol):
             self._seed_default_requirements()
 
     def _seed_default_requirements(self) -> None:
-        """Seeds standard default security PIRs."""
+        """Seeds standard default security PIRs across 3 temporal horizons."""
         self.register_requirement(
             PIRRequirement(
                 req_id="pir_llm_sec",
@@ -79,6 +89,7 @@ class PIRManager(IntelligencePhaseProtocol):
                     "プロンプトインジェクション",
                 ],
                 priority_score=0.9,
+                horizon=PIRHorizon.TACTICAL,
             ),
             save=False,
         )
@@ -92,6 +103,21 @@ class PIRManager(IntelligencePhaseProtocol):
                     "ペネトレーションテスト・脆弱性検証",
                 ],
                 priority_score=0.85,
+                horizon=PIRHorizon.TACTICAL,
+            ),
+            save=False,
+        )
+        self.register_requirement(
+            PIRRequirement(
+                req_id="pir_supply_chain",
+                title="Software Supply Chain & Dependency Integrity",
+                description="Monitor dependency confusion, Slopsquatting, and CI/CD security",
+                target_topics=[
+                    "サプライチェーンセキュリティ",
+                    "依存関係汚染",
+                ],
+                priority_score=0.8,
+                horizon=PIRHorizon.OPERATIONAL,
             ),
             save=False,
         )
@@ -101,7 +127,8 @@ class PIRManager(IntelligencePhaseProtocol):
                 title="Cryptography & Privacy Engineering",
                 description="Monitor post-quantum crypto, zero-knowledge proofs, and side-channel defenses",
                 target_topics=["暗号・プライバシー技術", "耐量子暗号", "ゼロ知識証明"],
-                priority_score=0.8,
+                priority_score=0.75,
+                horizon=PIRHorizon.STRATEGIC,
             ),
             save=False,
         )
@@ -120,6 +147,9 @@ class PIRManager(IntelligencePhaseProtocol):
                         "description": r.description,
                         "target_topics": r.target_topics,
                         "priority_score": r.priority_score,
+                        "horizon": r.horizon.value,
+                        "escalation_level": r.escalation_level,
+                        "escalated_at": r.escalated_at,
                         "is_active": r.is_active,
                     }
                     for r in self._requirements.values()
@@ -154,6 +184,40 @@ class PIRManager(IntelligencePhaseProtocol):
 
     def list_active_requirements(self) -> List[PIRRequirement]:
         return [r for r in self._requirements.values() if r.is_active]
+
+    def get_requirements_by_horizon(self, horizon: PIRHorizon) -> List[PIRRequirement]:
+        """Filters active requirements belonging to a specific temporal horizon."""
+        return [
+            r
+            for r in self._requirements.values()
+            if r.is_active and r.horizon == horizon
+        ]
+
+    def escalate_requirement(
+        self,
+        req_id: str,
+        reason: str,
+        target_horizon: PIRHorizon = PIRHorizon.TACTICAL,
+        max_level: int = 5,
+    ) -> bool:
+        """Dynamically escalates a PIR requirement to a higher-velocity horizon and boosts weight."""
+        req = self.get_requirement(req_id)
+        if not req or req.escalation_level >= max_level:
+            return False
+
+        req.horizon = target_horizon
+        req.escalation_level += 1
+        req.escalated_at = datetime.now(timezone.utc).isoformat()
+        req.priority_score = min(1.0, req.priority_score + 0.15)
+        req.metadata["last_escalation_reason"] = reason
+
+        for topic in req.target_topics:
+            old_w = self._current_weights.weights.get(topic, 0.5)
+            self._current_weights.weights[topic] = min(1.0, old_w * 1.3 + 0.1)
+
+        self._current_weights.normalize()
+        self._save_state()
+        return True
 
     def get_weights(self) -> Dict[str, float]:
         return dict(self._current_weights.weights)
@@ -217,7 +281,7 @@ class PIRManager(IntelligencePhaseProtocol):
     def create_directive(
         self, directive_id: str, base_crawl_quota: int = 50
     ) -> IntelligenceDirective:
-        """Generates an operational IntelligenceDirective with topic crawl quotas."""
+        """Generates an operational IntelligenceDirective with 3-Horizon quota allocation."""
         active_reqs = self.list_active_requirements()
         target_topics: List[str] = []
         for r in active_reqs:
@@ -234,27 +298,46 @@ class PIRManager(IntelligencePhaseProtocol):
             # Allocate quota proportional to weight: base * (1 + w * 2)
             quotas[t] = max(5, int(math.ceil(base_crawl_quota * w * 2.0)))
 
+        horizon_counts: Dict[str, int] = {
+            h.value: len(self.get_requirements_by_horizon(h)) for h in PIRHorizon
+        }
+
         return IntelligenceDirective(
             directive_id=directive_id,
             target_topics=target_topics,
             topic_weights=weights,
             crawl_quotas=quotas,
             priority_level=1,
-            metadata={"active_pir_count": len(active_reqs)},
+            metadata={
+                "active_pir_count": len(active_reqs),
+                "horizon_breakdown": horizon_counts,
+            },
         )
 
     def adapt_queries_from_telemetry(
         self, telemetry: FeedbackTelemetry
     ) -> TopicWeightVector:
-        """Adapts topic weights and injects zero-hit emerging topics into PIR requirements."""
+        """Adapts topic weights, triggers dynamic escalation, and injects zero-hit emerging topics."""
         self.update_weights_from_feedback(
             telemetry.frequent_topics,
             telemetry.knowledge_gaps,
             telemetry.topic_drift_scores,
         )
 
-        # Automatically create or adapt PIR requirements for severe knowledge gaps
+        # 1. Trigger dynamic escalation on high-gap or high-drift topics
+        for req in self._requirements.values():
+            for topic in req.target_topics:
+                gap = telemetry.knowledge_gaps.get(topic, 0.0)
+                drift = telemetry.topic_drift_scores.get(topic, 0.0)
+                if (gap > 0.35 or drift > 0.35) and req.horizon != PIRHorizon.TACTICAL:
+                    self.escalate_requirement(
+                        req.req_id,
+                        reason=f"Severe knowledge gap ({gap:.2f}) or drift ({drift:.2f})",
+                        target_horizon=PIRHorizon.TACTICAL,
+                    )
+                    break
 
+        # 2. Automatically create or adapt PIR requirements for new severe knowledge gaps
         for gap_topic, gap_score in telemetry.knowledge_gaps.items():
             if gap_score > 0.3 and gap_topic not in self._requirements:
                 self.register_requirement(
@@ -264,6 +347,11 @@ class PIRManager(IntelligencePhaseProtocol):
                         description=f"Self-adapted PIR triggered by knowledge gap score {gap_score:.3f}",
                         target_topics=[gap_topic],
                         priority_score=min(1.0, 0.5 + gap_score * 0.5),
+                        horizon=(
+                            PIRHorizon.TACTICAL
+                            if gap_score > 0.5
+                            else PIRHorizon.OPERATIONAL
+                        ),
                     ),
                     save=True,
                 )

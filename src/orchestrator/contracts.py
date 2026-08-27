@@ -71,12 +71,12 @@ class FeedbackTelemetry:
     """Evaluation telemetry collected during Phase 6 (Feedback & Evaluation)."""
 
     telemetry_id: str
-    ndcg_at_k: float
-    mean_average_precision: float
-    zero_hit_queries: List[str]
-    frequent_topics: Dict[str, int]
-    topic_drift_scores: Dict[str, float]
-    knowledge_gaps: Dict[str, float]
+    ndcg_at_k: float = 0.0
+    mean_average_precision: float = 0.0
+    zero_hit_queries: List[str] = field(default_factory=list)
+    frequent_topics: Dict[str, int] = field(default_factory=dict)
+    topic_drift_scores: Dict[str, float] = field(default_factory=dict)
+    knowledge_gaps: Dict[str, float] = field(default_factory=dict)
     recorded_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )

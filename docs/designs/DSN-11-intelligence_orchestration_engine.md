@@ -202,7 +202,16 @@ graph TD
 
 # 4. コアアルゴリズム & 閉ループフィードバック数理モデル
 
-### 4.1 動的 PIR (Priority Intelligence Requirements) 重みベクトルモデル
+### 4.1 3-Horizon 多層 PIR 管理 & 動的重みベクトルモデル
+PIR は時間軸・速度・意思決定レベルに応じて 3 つの階層（3-Horizon）で分離・連携管理される：
+
+1. **Tactical PIR (即時戦術)**: 0-day、PoC 悪用、直近脆弱性（CWE-1357, CWE-693 等） $\rightarrow$ 1日4回取得、即時 Flash Advisory 生成。
+2. **Operational PIR (中期運用)**: サプライチェーン動向、暗号標準移行、プロトコル改定 $\rightarrow$ 日次・月次サマリー連動。
+3. **Strategic PIR (長期戦略)**: 耐量子暗号（PQC）、基盤AIモデル安全規格、国家防衛政策 $\rightarrow$ 四半期・通期技術レーダー連動。
+
+#### 動的エスカレーション・トリガーループ
+収集データまたは検索評価テレメトリから深刻なナレッジギャップ（$g_{\text{gap}} > 0.35$）や急激なトピックドリフト（$d_{\text{drift}} > 0.35$）が検知された場合、該当トピックを含む Operational / Strategic PIR は **Tactical PIR へ自律的にエスカレーション昇格**され、重みと収集クォータが即座にブーストされる。
+
 全トピック空間 $\mathcal{T} = \{t_1, t_2, \dots, t_m\}$ に対する時刻 $k$ の PIR 重みベクトル $\mathbf{w}_k = [w_{k, 1}, w_{k, 2}, \dots, w_{k, m}]^T \in \mathbb{R}^m$：
 
 $$\mathbf{w}_{k+1} = \alpha \cdot \mathbf{w}_k + (1 - \alpha) \cdot \left( \beta \cdot \mathbf{u}_{\text{usage}} + \gamma \cdot \mathbf{g}_{\text{gap}} + \delta \cdot \mathbf{d}_{\text{drift}} \right)$$
