@@ -49,7 +49,9 @@
 | **[DSN-13] SQLite Vector 互換設計** | [designs/DSN-13-sqlite-vector-architecture.md](../designs/DSN-13-sqlite-vector-architecture.md) | PEP 249 DB-API 2.0、VFS、Pager、4KB Paged B+Tree、VDBE バイトコードエンジン設計。 | **Feature HOW** | SA, DB, 開発 | SA, DB | SQLite 互換レイヤ改訂時 |
 | **[DSN-14] 次世代DB包括アーキテクチャ設計** | [designs/DSN-14-database_engine_architecture.md](../designs/DSN-14-database_engine_architecture.md) | Slotted Page、ディスク永続 WAL & ARIES リカバリ、MVCC / SS2PL、CoW / LMDB ゼロコピー、LSM-Tree & Bloom フィルタ、分散協調・合意（Raft/Paxos/PBFT）、厳格クォーラム & CRDT、2PC & Saga パターン。 | **High-Level HOW / Architecture** | SA, DB, 全エージェント | SA, DB | DB エンジン仕様・ロードマップ改訂時 |
 | **[MCP-01] MCP & Vector DB 仕様書** | [mcp/MCP-01-mcp_server_specification.md](../mcp/MCP-01-mcp_server_specification.md) | MCP JSON-RPC サーバ 4大ツールおよびセマンティック Vector DB インデックス仕様。 | 特化仕様 (Specialized HOW) | AI Agent, IR, SC | SA, IR | MCP ツール拡張・アルゴリズム改訂時 |
+| **[USR-01] ユーザーマニュアル** | [manuals/USR-01-user_manual.md](../manuals/USR-01-user_manual.md) | クイックスタート、論文収集・パイプライン運用、4大MCPサーバー連携、トラブルシューティングガイド。 | **User & Agent Guide** | ユーザー, AI Agent, 開発 | PM, SA | パイプライン・MCP仕様変更時 |
 | **[ISS-00] Issue 台帳** | [issues/README.md](../issues/README.md) | プロジェクトの全 Issue (起票・進行中・完了) を一括追跡・管理する中央台帳。 | 作業管理 (Issues) | PM, 開発チーム | PM | Issue 新規作成・ステータス変更時 |
+
 
 ---
 

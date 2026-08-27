@@ -48,10 +48,13 @@
 - ⚙️ **[[DSN-12] 汎用プロセススーパーバイザー ＆ 調停基盤設計書](designs/DSN-12-process_supervisor_and_arbiter.md)**
   - `src/supervisor/` — Gunicorn スタイル Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー、Systemd 依存関係順序制御、動的スケーリング、自己回復・ハートビート監視。
 
-### 4. AI エージェント ＆ MCP 連携 (AI & MCP Specification)
+### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
+- 📖 **[[USR-01] ユーザーマニュアル ＆ AI コーディングエージェント連携ガイド](manuals/USR-01-user_manual.md)**
+  - クイックスタート手順、論文収集コマンド（ETL / バックフィル / 定期自動実行）、4 大 MCP サーバー連携・ツール利用法、Web ポータル起動、トラブルシューティング。
 - 🔌 **[[MCP-01] MCP サーバ ＆ ベクトル DB 仕様書](mcp/MCP-01-mcp_server_specification.md)**
   - MCP JSON-RPC 2.0 サーバの 4 大ツール仕様、ベクトル DB スキーマ、およびセキュリティサンドボックス検証規則。
 
 ### 5. Issue 台帳 ＆ 履歴 (Issues & Task Ledger)
 - 🎯 **[[ISS-00] Issue 台帳 (Issue Ledger)](issues/README.md)**
   - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — Issue 001〜070 全70件完了)。
+
