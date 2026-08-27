@@ -1,48 +1,102 @@
-# [DSN-03] ETL データパイプライン設計書 (Pipeline Architecture: Ingestion, Transformer, Reporter) — arxiv-security-papers
+# [DSN-03] ETL データパイプライン包括設計書 (Pipeline Architecture: Ingestion, Transformer, Reporter) — arxiv-security-papers
 
 - **文書番号**: `DSN-03`
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**: `src/pipeline/` (Ingestion, Transformer, Reporter)
-- **関連パッケージ**: `src/spider/`, `src/database/`, `src/search/`
+- **関連パッケージ**: `src/spider/`, `src/database/`, `src/search/`, `src/pdf_engine/`
 - **作成日**: 2026-08-22
-- **最終更新日**: 2026-08-22
-- **主幹エージェント**: Systems Architect & IT Specialist (NLP & Info Retrieval)
+- **最終更新日**: 2026-08-28
+- **【主査・報告】 Systems Architect (SA) & IT Specialist (NLP/IR)**  
+- **【参画】 Project Manager (PM), Information Security Specialist (Sec), Software QA Specialist (QA), Database Specialist (DB), Network Specialist (Net), IT Strategist (ST)**
 
 ---
 
-## 1. アーキテクチャ概要・設計思想・スコープ
+## 体系目次
 
-### 1.1 パイプラインの責務
-`src/pipeline/` は、マルチソース・マルチテーマ対応のデータ収集 (`ingestion/`)、PDF 全文抽出・Google OKF v0.2 構造化・脅威タグ付け (`transformer/`)、および 5 階層エグゼクティブサマリー自動生成 (`reporter/`) を担当する完全自律型 ETL パイプラインである。
+- [1. ETL パイプラインアーキテクチャとデータフロー](#1-etl-パイプラインアーキテクチャとデータフロー)
+  - [1.1 パイプラインのミッションと3層構造](#11-パイプラインのミッションと3層構造)
+  - [1.2 ゼロ外部依存性と Python 3.14+ 原則](#12-ゼロ外部依存性と-python-314-原則)
+  - [1.3 冪等性（Idempotency）と原本不変性（Immutability）](#13-冪等性idempotencyと原本不変性immutability)
+  - [1.4 全13大専門エージェント合意議事録](#14-全13大専門エージェント合意議事録)
+  - [1.5 第1章の要約](#15-第1章の要約)
+- [2. インジェクション層アーキテクチャ (`src/pipeline/ingestion/`)](#2-インジェクション層アーキテクチャ-srcpipelineingestion)
+  - [2.1 マルチソース・アダプタ設計](#21-マルチソースアダプタ設計)
+  - [2.2 レート制限と指数バックオフリトライ](#22-レート制限と指数バックオフリトライ)
+  - [2.3 原本データ永続化（`outputs/raw_data/`）](#23-原本データ永続化outputsraw_data)
+  - [2.4 重複防止台帳 (`processed_papers.json`)](#24-重複防止台帳-processed_papersjson)
+  - [2.5 第2章の要約](#25-第2章の要約)
+- [3. トランスフォーマー層アーキテクチャ (`src/pipeline/transformer/`)](#3-トランスフォーマー層アーキテクチャ-srcpipelinetransformer)
+  - [3.1 Pure-Python PDF 全文抽出 (`src/pdf_engine/` 連携)](#31-pure-python-pdf-全文抽出-srcpdf_engine-連携)
+  - [3.2 Google OKF v0.2 仕様準拠コンバータ](#32-google-okf-v02-仕様準拠コンバータ)
+  - [3.3 脅威モデリング & タグ付け数理仕様](#33-脅威モデリング--タグ付け数理仕様)
+  - [3.4 完全日本語エグゼクティブサマリー生成](#34-完全日本語エグゼクティブサマリー生成)
+  - [3.5 第3章の要約](#35-第3章の要約)
+- [4. レポーター層 & 5階層エグゼクティブサマリー (`src/pipeline/reporter/`)](#4-レポーター層--5階層エグゼクティブサマリー-srcpipelinereporter)
+  - [4.1 01_per_run (実行バッチサマリー)](#41-01_per_run-実行バッチサマリー)
+  - [4.2 02_daily (日次集約サマリー)](#42-02_daily-日次集約サマリー)
+  - [4.3 03_monthly (月次トレンド & Mermaid Mindmap)](#43-03_monthly-月次トレンド--mermaid-mindmap)
+  - [4.4 04_quarterly (四半期戦略サマリー)](#44-04_quarterly-四半期戦略サマリー)
+  - [4.5 05_annual (通期包括年報)](#45-05_annual-通期包括年報)
+  - [4.6 ルートインデックス・監査ログ同期](#46-ルートインデックス監査ログ同期)
+  - [4.7 第4章の要約](#47-第4章の要約)
+- [5. バックフィル & 過去データ復元パイプライン](#5-バックフィル--過去データ復元パイプライン)
+  - [5.1 160日間過去論文安全フェッチ設計](#51-160日間過去論文安全フェッチ設計)
+  - [5.2 バッチ分割とスロットリング制御](#52-バッチ分割とスロットリング制御)
+  - [5.3 差分更新とデータ修復](#53-差分更新とデータ修復)
+  - [5.4 第5章の要約](#54-第5章の要約)
+- [6. セキュリティ・堅牢性設計](#6-セキュリティ堅牢性設計)
+  - [6.1 入力サニタイズとパストラバーサル防止](#61-入力サニタイズとパストラバーサル防止)
+  - [6.2 SSRF 防御と許可ドメインホワイトリスト](#62-ssrf-防御と許可ドメインホワイトリスト)
+  - [6.3 障害検知と自己修復](#63-障害検知と自己修復)
+  - [6.4 第6章の要約](#64-第6章の要約)
+- [7. 公開インターフェース・データ構造・クラス仕様](#7-公開インターフェースデータ構造クラス仕様)
+  - [7.1 SourceAdapter & ArxivAdapter](#71-sourceadapter--arxivadapter)
+  - [7.2 OKFConverter & ThreatTagger](#72-okfconverter--threattagger)
+  - [7.3 ExecutiveSummaryReporter](#73-executivesummaryreporter)
+- [8. シーケンス & 実行制御フロー](#8-シーケンス--実行制御フロー)
+  - [8.1 4x Daily 定時バッチ実行フロー](#81-4x-daily-定時バッチ実行フロー)
+  - [8.2 5階層サマリー自律生産フロー](#82-5階層サマリー自律生産フロー)
+- [9. 包括的テスト戦略 & 品質検証マトリクス](#9-包括的テスト戦略--品質検証マトリクス)
+- [10. 次世代実装ロードマップ & 完了定義 (DoD)](#10-次世代実装ロードマップ--完了定義-dod)
+
+---
+
+# 1. ETL パイプラインアーキテクチャとデータフロー
+
+## 1.1 パイプラインのミッションと3層構造
+`src/pipeline/` サブシステムは、マルチソース・マルチテーマ対応のデータ収集 (`ingestion/`)、PDF 全文抽出・Google OKF v0.2 構造化・脅威タグ付け (`transformer/`)、および 5 階層エグゼクティブサマリー自動生成 (`reporter/`) を担当する完全自律型 ETL パイプラインです。
 
 ```
 +---------------------------------------------------------------------------------------------------+
 |                                  src/pipeline/ Subsystem Architecture                             |
 +---------------------------------------------------------------------------------------------------+
-|  [Ingestion Layer] (src/pipeline/ingestion/)                                                      |
+|  1. [Ingestion Layer] (src/pipeline/ingestion/)                                                   |
 |   - ArxivAdapter | IACRAdapter | AdvisoryAdapter | RawDataArchiver | ProcessedRegistry            |
 +---------------------------------------------------------------------------------------------------+
                                             | (Raw JSON / PDF / Abstract)
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  [Transformer Layer] (src/pipeline/transformer/)                                                  |
-|   - PDFTextExtractor (pdftotext / fallback) | OKFConverter (YAML Frontmatter)                     |
+|  2. [Transformer Layer] (src/pipeline/transformer/)                                               |
+|   - PDFTextExtractor (src/pdf_engine/) | OKFConverter (YAML Frontmatter)                          |
 |   - ThreatTagger (MITRE ATT&CK / CWE / STRIDE) | JapaneseSummaryGenerator                         |
 +---------------------------------------------------------------------------------------------------+
                                             | (OKF Markdown / outputs/okf_papers/)
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  [Reporter Layer] (src/pipeline/reporter/)                                                        |
+|  3. [Reporter Layer] (src/pipeline/reporter/)                                                     |
 |   - 01_per_run/ (Batch Run Summary) | 02_daily/ (Daily Aggregation) | 03_monthly/ (Trend Mindmap)  |
 |   - 04_quarterly/ (Strategic Outlook) | 05_annual/ (Comprehensive Annual Report)                  |
 |   - Root Index & Log Synchronizer (outputs/index.md, outputs/log.md)                              |
 +---------------------------------------------------------------------------------------------------+
 ```
 
----
+## 1.2 ゼロ外部依存性と Python 3.14+ 原則
+重厚なサードパーティ製 ETL ツールや外部バイナリ（Poppler / pdftotext）を完全に排除し、Python 3.14+ 標準ライブラリおよび内製 Pure-Python PDF エンジン（`src/pdf_engine/`）のみで完結します。
 
-## 2. 全13大専門エージェント多角的多面協議議事録
+## 1.3 冪等性（Idempotency）と原本不変性（Immutability）
+同一の論文 ID に対する再実行は既存データを破壊せずスキップし、一度取得した原本データ（JSON/PDF/TXT）は不変（Immutable）として保管されます。
 
+## 1.4 全13大専門エージェント合意議事録
 ```mermaid
 mindmap
   root((ETLパイプライン設計合意))
@@ -61,125 +115,213 @@ mindmap
     Edu["13. Education: 日本語1文要約の平易性・技術用語統一"]
 ```
 
+## 1.5 第1章の要約
+ETL パイプラインは 3 層の疎結合アーキテクチャにより、高信頼な論文収集、高品質な OKF 変換、および階層型サマリーの完全自律生産を実現します。
+
 ---
 
-## 3. パッケージ構造 & データフロー
+# 2. インジェクション層アーキテクチャ (`src/pipeline/ingestion/`)
 
-```mermaid
-graph LR
-    subgraph Sources["外部ソース"]
-        Arxiv["arXiv cs.CR"]
-        IACR["IACR ePrint"]
-        Adv["Advisories"]
-    end
+## 2.1 マルチソース・アダプタ設計
+- **arXiv Adapter (`arxiv_adapter.py`)**: arXiv API (OAI-PMH / Atom クエリ) を通じて最新論文メタデータを取得。通信障害時は arXiv RSS フィード (`https://rss.arxiv.org/rss/cs.CR`) へ自動フォールバック。
+- **IACR Adapter (`iacr_adapter.py`)**: 暗号学専門リポジトリ IACR ePrint から最新論文を取得。
+- **Advisory Adapter (`advisory_spider.py`)**: NVD / CISA 等のセキュリティアドバイザリを補完収集。
 
-    subgraph Ingestion["1. Ingestion Layer"]
-        Adapter["Source Adapters"]
-        Raw["Raw Data Storage<br/>(outputs/raw_data/)"]
-        Reg["Processed Registry<br/>(processed_papers.json)"]
-    end
+## 2.2 レート制限と指数バックオフリトライ
+arXiv API へのアクセス負荷を軽減するため、リクエスト間に 3 秒の固定待機時間を強制。HTTP 429（Too Many Requests）や 5xx エラー発生時は、最大 5 回の指数バックオフ（$2^n \times \text{base}$ 秒）で安全に再試行。
 
-    subgraph Transformer["2. Transformer Layer"]
-        PDF["PDF Extractor"]
-        Tag["Threat Tagger"]
-        OKF["OKF v0.2 Converter<br/>(outputs/okf_papers/)"]
-    end
+## 2.3 原本データ永続化（`outputs/raw_data/`）
+収集された論文は、発行日ごとにディレクトリ分割され 4 種類のファイルとして保存：
+1. `<clean_id>_meta.json`: arXiv API メタデータ完全 JSON
+2. `<clean_id>_raw_abstract.txt`: 英語原文アブストラクト
+3. `<clean_id>.pdf`: arXiv から直接ダウンロードした PDF 原本
+4. `<clean_id>.txt`: Pure-Python PDF エンジンにより抽出された全文テキスト
 
-    subgraph Reporter["3. Reporter Layer"]
-        S01["01_per_run"]
-        S02["02_daily"]
-        S03["03_monthly"]
-        S04["04_quarterly"]
-        S05["05_annual"]
-        Idx["outputs/index.md"]
-    end
+## 2.4 重複防止台帳 (`processed_papers.json`)
+処理済みの `arxiv_id` をキーとする O(1) ルックアップ台帳を保持し、重複ダウンロードおよび重複要約生成を完全に抑止。
 
-    Sources --> Adapter
-    Adapter --> Raw
-    Adapter --> Reg
-    Raw --> PDF
-    PDF --> Tag
-    Tag --> OKF
-    OKF --> Reporter
-    Reporter --> S01 & S02 & S03 & S04 & S05 & Idx
+## 2.5 第2章の要約
+インジェクション層は、レート制限とフォールバック機構を備え、原本データを損失なく確実に保管・台帳管理します。
+
+---
+
+# 3. トランスフォーマー層アーキテクチャ (`src/pipeline/transformer/`)
+
+## 3.1 Pure-Python PDF 全文抽出 (`src/pdf_engine/` 連携)
+外部コマンド `pdftotext` を呼び出すことなく、内製の Pure-Python PDF パーサーによりフォントデコード、レイアウト解析、テキスト抽出をインメモリで高速実行。
+
+## 3.2 Google OKF v0.2 仕様準拠コンバータ
+原本メタデータと抽出テキストから、Google OKF v0.2 仕様を満たす YAML フロントマター付き Markdown ドキュメントを生成：
+
+```yaml
+---
+type: "security-paper"
+title: "Zero Trust Cloud Security Architecture"
+description: "ゼロトラスト原則に基づくクラウド環境の堅牢化手法に関する研究"
+resource: "https://arxiv.org/abs/2608.12345"
+tags: ["zero-trust", "cloud-security", "access-control"]
+timestamp: "2026-08-28T00:00:00Z"
+provenance:
+  source: "arxiv.org"
+  raw_meta_file: "../../raw_data/2026-08-28/2608.12345_meta.json"
+  published_date: "2026-08-28"
+  authors: ["Alice Smith", "Bob Jones"]
+trust:
+  attestation: "verified-academic-paper"
+---
 ```
 
+## 3.3 脅威モデリング & タグ付け数理仕様
+論文アブストラクト $A$ および抽出本文 $B$ に対する脅威スコア関数：
+
+$$\text{ThreatScore}(T) = \sum_{w \in T} \left( 2.0 \cdot \mathbb{I}(w \in A) + 1.0 \cdot \mathbb{I}(w \in B) \right)$$
+
+スコアが閾値 $\theta = 3.0$ を超えた場合、該当する MITRE ATT&CK Technique ID、CWE ID、STRIDE カテゴリを自動付与。
+
+## 3.4 完全日本語エグゼクティブサマリー生成
+100% 完全日本語準拠の 1 文サマリーおよび構造化技術サマリーを自動生成。
+
+## 3.5 第3章の要約
+トランスフォーマー層は、原本データを Google OKF v0.2 形式に昇華させ、高度な脅威タグと日本語要約を付与します。
+
 ---
 
-## 4. コアアルゴリズム & 脅威モデリング数理仕様
+# 4. レポーター層 & 5階層エグゼクティブサマリー (`src/pipeline/reporter/`)
 
-### 4.1 脅威モデルタグ付け (TF-IDF & キーワードマッチング)
-論文アブストラクト $A$ および抽出本文 $B$ に対する脅威スコア：
+## 4.1 01_per_run (実行バッチサマリー)
+1日4回（00:00 / 06:00 / 12:00 / 18:00）の実行ごとに、新規取得された論文の一覧表を `run_HHMM.md` として即時出力。
 
-$$Score(T) = \sum_{w \in T} \left( 2.0 \cdot \mathbb{I}(w \in A) + 1.0 \cdot \mathbb{I}(w \in B) \right)$$
+## 4.2 02_daily (日次集約サマリー)
+その日に収集された全論文を日次集約し、`YYYY-MM-DD.md` に表形式で出力。
 
-スコアが閾値 $\theta$ を超えた場合、MITRE ATT&CK テクニック ID（例: `T1566`, `T1190`）、CWE 分類（例: `CWE-79`, `CWE-89`）、および STRIDE カテゴリ（`Spoofing`, `Tampering`, 等）を OKF フロントマターに自動タグ付けする。
+## 4.3 03_monthly (月次トレンド & Mermaid Mindmap)
+月間のセキュリティ研究動向、頻出キーワード、および技術クラスタを Mermaid マインドマップ付き動向レポート `monthly_YYYY-MM-DD.md` として生成。
+
+## 4.4 04_quarterly (四半期戦略サマリー)
+四半期ごとの中長期的な脅威傾向と防御技術の進化を `quarterly_YYYY-MM-DD.md` に集約。
+
+## 4.5 05_annual (通期包括年報)
+年間の全セキュリティ論文を総括する包括的年報 `annual_YYYY-MM-DD.md` を生成。
+
+## 4.6 ルートインデックス・監査ログ同期
+各サマリー生成と同時に、ルートポータル `outputs/index.md` および実行証跡 `outputs/log.md` を最新状態へ自動更新。
+
+## 4.7 第4章の要約
+レポーター層は、5 階層のきめ細かなエグゼクティブサマリーを自律生産し、知見を多角的に可視化します。
 
 ---
 
-## 5. 公開インターフェース & クラス定義
+# 5. バックフィル & 過去データ復元パイプライン
+
+## 5.1 160日間過去論文安全フェッチ設計
+過去 160 日間の arXiv 論文を欠損なくさかのぼり取得するバックフィルモードを提供。
+
+## 5.2 バッチ分割とスロットリング制御
+1 日単位でバッチ分割し、各バッチ間にスリープ制御を挿入することで、arXiv サーバーへの過剰負荷を回避。
+
+## 5.3 差分更新とデータ修復
+未取得または不完全なデータのみを差分検出して再取得・再生成する修復機能を完備。
+
+## 5.4 第5章の要約
+バックフィル設計により、過去の学術ナレッジを安全かつ網羅的にアーカイブ・復元可能です。
+
+---
+
+# 6. セキュリティ・堅牢性設計
+
+## 6.1 入力サニタイズとパストラバーサル防止
+外部から入力される論文 ID やパス文字列に対して、`src/security/validation/path.py` による厳格な正規化と Jail 閉じ込め検証を実施。
+
+## 6.2 SSRF 防御と許可ドメインホワイトリスト
+HTTP 通信先を `arxiv.org`, `export.arxiv.org`, `rss.arxiv.org`, `eprint.iacr.org` のホワイトリストドメインに厳格限定。
+
+## 6.3 障害検知と自己修復
+ネットワーク切断や API タイムアウト時には、即座に RSS フォールバックおよびリトライへ遷移し、障害を `outputs/log.md` へ記録。
+
+## 6.4 第6章の要約
+ゼロトラストセキュリティと自動フォールバックにより、無停止かつ安全なパイプライン稼働を保証します。
+
+---
+
+# 7. 公開インターフェース・データ構造・クラス仕様
 
 ```python
+"""src/pipeline/公開インターフェース定義"""
+
+from typing import Dict, Any, List, Optional, Protocol
+
 class SourceAdapter(Protocol):
-    def fetch_papers(self, days: int = 1) -> List[Dict[str, Any]]: ...
+    def fetch_papers(self, days: int = 1) -> List[Dict[str, Any]]:
+        """指定された過去日数分の論文メタデータを取得"""
+        ...
 
 class OKFConverter:
-    def convert(self, raw_meta: Dict[str, Any], full_text: str) -> str: ...
+    def convert_to_okf(self, raw_meta: Dict[str, Any], full_text: str) -> str:
+        """原本データと抽出テキストから Google OKF v0.2 Markdown を生成"""
+        ...
+
+class ThreatTagger:
+    def extract_tags(self, title: str, abstract: str, full_text: str) -> Dict[str, List[str]]:
+        """MITRE ATT&CK, CWE, STRIDE タグを抽出"""
+        ...
 
 class ExecutiveSummaryReporter:
-    def generate_all_tiers(self, date_str: str) -> None: ...
+    def generate_all_tiers(self, target_date: str) -> None:
+        """01_per_run から 05_annual までの 5 階層サマリーを一括生成・更新"""
+        ...
 ```
 
 ---
 
-## 6. シーケンス図: 5階層サマリー生成フロー
+# 8. シーケンス & 実行制御フロー
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Engine as Pipeline Runner
-    participant OKF as OKF Repository
-    participant Rep as Reporter
-    participant Disk as File System
+    actor Cron as 定期実行スケジューラ (00/06/12/18)
+    participant Pipe as Pipeline Runner
+    participant Ingest as Ingestion Adapter
+    participant Arxiv as arXiv API / RSS
+    participant Trans as Transformer (OKF & Tag)
+    participant Rep as 5-Tier Reporter
+    participant Storage as outputs/ FileSystem
 
-    Engine->>OKF: 当日および過去論文データ走査
-    OKF-->>Rep: 構造化論文リスト
-    Rep->>Rep: 01_per_run (バッチ即時サマリー生成)
-    Rep->>Rep: 02_daily (日次集約サマリー生成)
-    Rep->>Rep: 03_monthly (月次トレンド & Mermaid Mindmap)
-    Rep->>Rep: 04_quarterly (四半期ハイライト生成)
-    Rep->>Rep: 05_annual (通期総括レポート生成)
-    Rep->>Disk: outputs/executive_summaries/01_〜05_ に永続化
-    Rep->>Disk: outputs/index.md & log.md の同期更新
+    Cron->>Pipe: make run (定時バッチ起動)
+    Pipe->>Ingest: fetch_latest_papers()
+    alt arXiv API 疎通正常
+        Ingest->>Arxiv: API リクエスト (cs.CR)
+    else API レート制限 / 障害
+        Ingest->>Arxiv: RSS フィードフォールバック取得
+    end
+    Arxiv-->>Ingest: メタデータ & PDF 取得
+    Ingest->>Storage: raw_data/ 保存 & processed_papers.json 記録
+
+    Pipe->>Trans: 全文抽出 & OKF 変換
+    Trans->>Trans: ThreatTagger による ATT&CK/CWE 付与
+    Trans->>Storage: okf_papers/ 保存
+
+    Pipe->>Rep: generate_all_tiers()
+    Rep->>Storage: 01_per_run 〜 05_annual サマリー出力
+    Rep->>Storage: outputs/index.md & log.md 更新
+    Pipe-->>Cron: バッチ正常終了 (Exit 0)
 ```
 
 ---
 
-## 7. セキュリティ・耐障害性 & レート制限設計
+# 9. 包括的テスト戦略 & 品質検証マトリクス
 
-1. **arXiv API レート制限 (HTTP 429 対策)**: リクエスト間隔 3 秒以上の強制ウェイト、指数バックオフリトライ。
-2. **RSS 自動フォールバック**: API 通信障害時に RSS フィードへ自動切り替え。
-3. **パストラバーサル防御**: ファイル書き出し先の絶対パス検証と無害化。
-
----
-
-## 8. 性能特性 & メモリ制約
-
-- **PDF 抽出スループット**: 1 論文あたり $\le 1.2\text{秒}$
-- **サマリー生成時間**: 5 階層全階層生成 $\le 0.8\text{秒}$
+- **`tests/pipeline/test_ingestion.py`**: arXiv API 通信、RSS フォールバック、原本保存の単体テスト
+- **`tests/pipeline/test_source_adapters.py`**: 各種アダプタの取得・パース検証
+- **`tests/pipeline/test_transformer.py`**: OKF v0.2 スキーマ適合、YAML フロントマター検証
+- **`tests/pipeline/test_reporter.py`**: 01〜05 階層サマリーおよび表形式出力検証
+- **`tests/pipeline/test_multi_theme_pipeline.py`**: 複数カテゴリ (cs.CR / cs.LG / cs.AI) 処理検証
 
 ---
 
-## 9. 包括的テスト戦略
+# 10. 次世代実装ロードマップ & 完了定義 (DoD)
 
-- **`tests/pipeline/test_ingestion.py`**: アダプター取得・キャッシュ・差分検知
-- **`tests/pipeline/test_transformer.py`**: OKF v0.2 スキーマバリデーション・脅威タグ付け
-- **`tests/pipeline/test_reporter.py`**: 5 階層マークダウンテーブル・Mermaid 生成検証
-
----
-
-## 10. 完了定義 (DoD)
-
-- [x] Ingestion / Transformer / Reporter の 3 層アーキテクチャ完備
-- [x] 5 階層日本語サマリー (01_per_run 〜 05_annual) の自動生成
-- [x] 100% カバレッジ・型検査通過
+- [x] Ingestion / Transformer / Reporter 3 層疎結合パイプラインの確立
+- [x] 内製 Pure-Python PDF 抽出エンジンとの統合（外部バイナリ完全排除）
+- [x] Google OKF v0.2 準拠 Markdown 生成
+- [x] 01_per_run から 05_annual までの 5 階層完全日本語サマリー生成
+- [x] 100% カバレッジ・型検査 (`mypy --strict`) 完全通過
