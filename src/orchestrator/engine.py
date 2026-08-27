@@ -6,15 +6,17 @@ Analysis, Dissemination, Evaluation) into an autonomous self-adapting closed loo
 
 import os
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from orchestrator.analysis.hypothesis_engine import HypothesisEngine
 from orchestrator.analysis.synthesizer import AnalysisSynthesizer
 from orchestrator.contracts import (
     Hypothesis,
     HypothesisStatus,
+    IntelligencePhase,
     IntelligenceProduct,
     PhaseContext,
+    PhaseStatus,
 )
 from orchestrator.dissemination.distributor import DisseminationDistributor
 from orchestrator.feedback.evaluator import FeedbackEvaluator
@@ -159,6 +161,123 @@ class UniversalIntelligenceOrchestrator:
                 knowledge_gaps=context.telemetry.knowledge_gaps,
                 topic_drifts=context.telemetry.topic_drift_scores,
             )
+            self.pir_manager.adapt_queries_from_telemetry(context.telemetry)
+
+        self.cycle_history.append(context)
+        return context
+
+    def stream_cycle(
+        self,
+        cycle_id: Optional[str] = None,
+        chunk_size: int = 20,
+        max_buffer_size: int = 10,
+    ) -> PhaseContext:
+        """Executes an intelligence cycle via streaming DAG with reactive backpressure."""
+        from orchestrator.workflow.streaming_dag import (
+            BufferPolicy,
+            StreamChunk,
+            StreamingDAG,
+            StreamingTaskNode,
+        )
+
+        if not cycle_id:
+            cycle_id = (
+                f"stream_cycle_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+            )
+
+        context = PhaseContext(cycle_id=cycle_id, workspace_dir=self.workspace_dir)
+
+        # 1. Phase 1: Planning
+        context = self.pir_manager.execute(context)
+        if context.errors:
+            self.cycle_history.append(context)
+            return context
+
+        # 2. Phase 2: Harvest Raw Records
+        context = self.harvest_coordinator.execute(context)
+        if context.errors:
+            self.cycle_history.append(context)
+            return context
+
+        # 3. Build Streaming DAG Pipeline
+        def make_chunks(
+            records: List[Dict[str, Any]],
+        ) -> Iterator[StreamChunk[Dict[str, Any]]]:
+            seq = 0
+            for i in range(0, max(1, len(records)), chunk_size):
+                sub = records[i : i + chunk_size]
+                if sub:
+                    seq += 1
+                    yield StreamChunk(
+                        chunk_id=f"chunk_{seq}",
+                        sequence_no=seq,
+                        items=sub,
+                    )
+
+        def transform_process(
+            chunk: StreamChunk[Dict[str, Any]],
+        ) -> StreamChunk[Dict[str, Any]]:
+            processed_items = [
+                self.processing_coordinator.process_record(r) for r in chunk.items
+            ]
+            return StreamChunk(
+                chunk_id=f"proc_{chunk.chunk_id}",
+                sequence_no=chunk.sequence_no,
+                items=processed_items,
+            )
+
+        dag = StreamingDAG(high_watermark=0.80, low_watermark=0.30)
+        node_entry: StreamingTaskNode[Dict[str, Any], Dict[str, Any]] = (
+            StreamingTaskNode(
+                node_id="ingest_entry",
+                transform_fn=lambda c: c,
+                max_buffer_size=max_buffer_size,
+                policy=BufferPolicy.BLOCK,
+            )
+        )
+        node_proc: StreamingTaskNode[Dict[str, Any], Dict[str, Any]] = (
+            StreamingTaskNode(
+                node_id="process_okf_admiralty",
+                transform_fn=transform_process,
+                max_buffer_size=max_buffer_size,
+                policy=BufferPolicy.BLOCK,
+            )
+        )
+
+        dag.add_node(node_entry)
+        dag.add_node(node_proc)
+        dag.connect("ingest_entry", "process_okf_admiralty")
+
+        # Execute Stream
+        stream_results = dag.run_stream(
+            entry_node_id="ingest_entry",
+            chunk_iterator=make_chunks(context.raw_records),
+        )
+
+        # Aggregate stream output into context
+        all_processed: List[Dict[str, Any]] = []
+        for out_chunk in stream_results.get("output_chunks", []):
+            all_processed.extend(out_chunk.items)
+
+        context.processed_records = all_processed
+        context.phase_statuses[IntelligencePhase.PROCESSING] = PhaseStatus.COMPLETED
+        context.state["streaming_stats"] = stream_results
+
+        # 4. Phase 4: Analysis & Synthesis
+        context = self.analysis_synthesizer.execute(context)
+
+        # 5. Phase 5: Dissemination
+        context = self.dissemination_distributor.execute(context)
+
+        # 6. Phase 6: Feedback & Adaptation
+        context = self.feedback_evaluator.execute(context)
+        if context.telemetry:
+            self.pir_manager.update_weights_from_feedback(
+                usage_counts=context.telemetry.frequent_topics,
+                knowledge_gaps=context.telemetry.knowledge_gaps,
+                topic_drifts=context.telemetry.topic_drift_scores,
+            )
+            self.pir_manager.adapt_queries_from_telemetry(context.telemetry)
 
         self.cycle_history.append(context)
         return context

@@ -298,6 +298,24 @@ stateDiagram-v2
     Evaluating --> Directing: 閉ループ適応 (PIR更新)
 
     Harvesting --> Compensating: 収集障害 (過半数失敗)
+    Compensating --> Directing: クォータ再計算 & 代替ルート選定
+```
+
+### 5.3 ストリーミング型 DAG & 反応型バックプレッシャー制御 (Streaming DAG)
+大量データ（数千〜数万件）のバックフィルやリアルタイム連続処理において、メモリ上限（Bounded Memory）を厳格に遵守するため、チャンク駆動の `StreamingDAG` を配備する。
+
+```mermaid
+graph LR
+    subgraph "Reactive Stream Pipeline"
+        In["Stream Ingestion Chunk[T]"] -->|"Push (Queue: N/10)"| NodeProc["OKF & Admiralty Processor"]
+        NodeProc -->|"Push (Queue: M/10)"| NodeIndex["Vector & DB Commit Node"]
+        NodeIndex -.->|"Pressure > 0.80 (Throttling Signal)"| In
+    end
+```
+
+- **有界バッファ (Bounded Queues)**: 各ノードは最大 $K$ チャンク（デフォルト 10）のキューを保持し、OOM を完全防止。
+- **適応型バックプレッシャー**: 下流ノードのキュー占有率 $P = \frac{|Q|}{K} \ge 0.80$ で上流プロデューサーを自動スロットリング。
+- **バッファポリシー**: `BufferPolicy.BLOCK` (通常閉塞), `BufferPolicy.DROP_OLDEST` (最新優先), `BufferPolicy.DRAIN` (急速排出)。
     Exploiting --> Compensating: スキーマ・変換致命的エラー
     Producing --> Compensating: ストレージ・インデックス不整合
     Compensating --> [*]: Saga補償完了 (ロールバック)

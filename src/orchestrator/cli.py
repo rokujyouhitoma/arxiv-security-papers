@@ -118,7 +118,13 @@ def _run_single_cycle(
 ) -> Dict[str, Any]:
     """Executes a single cycle and returns summary dict."""
     start_time = time.perf_counter()
-    context: PhaseContext = orchestrator.run_cycle(cycle_id=cycle_id)
+    if getattr(args, "streaming", False):
+        chunk_size = getattr(args, "chunk_size", 20)
+        context: PhaseContext = orchestrator.stream_cycle(
+            cycle_id=cycle_id, chunk_size=chunk_size
+        )
+    else:
+        context = orchestrator.run_cycle(cycle_id=cycle_id)
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
     if not args.quiet and not args.json:
@@ -134,6 +140,7 @@ def _run_single_cycle(
         "products_count": len(context.products),
         "errors": context.errors,
         "topic_weights": orchestrator.get_current_topic_weights(),
+        "streaming_stats": context.state.get("streaming_stats"),
     }
 
 
@@ -535,6 +542,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cycle_parser.add_argument(
         "--json", action="store_true", help="Output results formatted as JSON"
+    )
+    cycle_parser.add_argument(
+        "--streaming",
+        action="store_true",
+        help="Execute intelligence pipeline using Streaming DAG with reactive backpressure",
+    )
+    cycle_parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=20,
+        help="Chunk size for streaming execution (default: 20)",
     )
     cycle_parser.add_argument(
         "--quiet", action="store_true", help="Suppress visual banners and headers"
