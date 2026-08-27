@@ -48,7 +48,9 @@
   - [6.2 決定論的汚染判定ゲート（Schema, Path, AST）](#62-決定論的汚染判定ゲートschema-path-ast)
   - [6.3 シークレット隔離と最小特権実行制御](#63-シークレット隔離と最小特権実行制御)
   - [6.4 第6章の要約](#64-第6章の要約)
-- [7. 技術構成・インフラ・運用コスト比較マトリクス](#7-技術構成インフラ運用コスト比較マトリクス)
+- [7. 技術構成・インフラ・モジュール配置マトリクス](#7-技術構成インフラモジュール配置マトリクス)
+  - [7.1 機能モジュールと推奨技術スタック](#71-機能モジュールと推奨技術スタック)
+  - [7.2 6層レイヤードアーキテクチャへの配置マッピング](#72-6層レイヤードアーキテクチャへの配置マッピング)
 - [8. 協調シーケンス & 処理フロー](#8-協調シーケンス--処理フロー)
   - [8.1 多段階要約 & ATT&CK マッピング処理フロー](#81-多段階要約--attck-マッピング処理フロー)
   - [8.2 セキュア CI/CD 二段階コミットフロー](#82-セキュア-cicd-二段階コミットフロー)
@@ -232,8 +234,9 @@ Job 1 から渡された中間成果物が JSON Schema、相対パス検証、�
 
 ---
 
-# 7. 技術構成・インフラ・運用コスト比較マトリクス
+# 7. 技術構成・インフラ・モジュール配置マトリクス
 
+## 7.1 機能モジュールと推奨技術スタック
 | 機能モジュール | 推奨技術スタック | インフラ・運用コスト | セキュリティ保護策 |
 | :--- | :--- | :--- | :--- |
 | **多段階自動要約エンジン** | Python 3.14+, Gemini API, 軽量/高度 LLM | GitHub Actions / サーバーレス（月額 $0 - $5） | 入力長制限、プロンプト境界分離、サニタイズ |
@@ -241,6 +244,16 @@ Job 1 から渡された中間成果物が JSON Schema、相対パス検証、�
 | **MCP サーバー統合** | Python MCP SDK (`src/mcp/`), JSON-RPC 2.0 | ローカル実行 / 既存ストレージ共有（無料） | ゼロトラスト AST サンドボックス、パス検証 |
 | **マルチチャネル配信基盤** | Vanilla Glassmorphism / SvelteKit, Webhooks, RSS | GitHub Pages / Webhooks（完全無料） | Secret 管理、Webhook 送信先ホワイトリスト |
 | **パイプラインセキュリティ** | Guardrails, Regex / AST Cleaner, Docker Sandbox | 検査オーバーヘッド（数%増） | 最小権限原則、CI/CD ジョブ分離、エグレス制限 |
+
+## 7.2 6層レイヤードアーキテクチャへの配置マッピング
+| プラットフォーム層 | 対応パッケージ (`src/`) | 導入・強化される次世代機能 |
+| :--- | :--- | :--- |
+| **1. Presentation & Interface** | `web/`, `mcp/`, `pipeline/reporter/` | 4大 MCP サーバー (Papers, Radar, Threat, Observability), Web Glassmorphism, 5層サマリー |
+| **2. Orchestration & Flow** | `workflow/`, `supervisor/`, `pipeline/` | 二段階 CI/CD 実行制御, Saga トランザクション, ストリーミング DAG |
+| **3. Domain Intelligence** | `intelligence/`, `security/taxonomy/` | Stage 1/2 多段階 LLM 要約, MITRE ATT&CK / TTPs マッピング, Caldera プレイブック |
+| **4. Search & IR** | `search/` | BM25 + HNSW ベクトル + RAPTOR ツリー + FM-Index ハイブリッド検索 |
+| **5. Ingestion & Parsing** | `spider/`, `pdf_engine/`, `pipeline/ingestion/` | arXiv / IACR / Advisory マルチソース収集, Pure-Python PDF 全文抽出 |
+| **6. Core Infrastructure & Security** | `database/`, `security/` | 4層ストレージ (SlottedPage/BTree/LSM/PAX), プロンプト隔離, AST ガード, RBAC |
 
 ---
 

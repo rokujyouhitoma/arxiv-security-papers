@@ -3,10 +3,11 @@
 - **文書番号**: `DSN-01`
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**: システム全体 (Overall System Architecture)
-- **関連パッケージ**: `src/spider/`, `src/pipeline/`, `src/database/`, `src/search/`, `src/security/`, `src/mcp/`, `src/web/`
+- **関連パッケージ**: `src/` 配下全モジュール (`spider`, `pipeline`, `database`, `search`, `security`, `mcp`, `web`, `pdf_engine`, `supervisor`, `intelligence`, `workflow`)
 - **作成日**: 2026-08-22
-- **最終更新日**: 2026-08-22
-- **主幹エージェント**: Project Manager (PM) & Systems Architect
+- **最終更新日**: 2026-08-28
+- **【主査・報告】 Project Manager (PM) & Systems Architect (SA)**  
+- **【参画】 全13大専門エージェント (PM, Sec, SA, QA, DB, Net, IR, ST, SM, IoT, Aud, UI, Edu)**
 
 ---
 
@@ -14,80 +15,82 @@
 
 - [1. アーキテクチャ概要・設計思想・スコープ](#1-アーキテクチャ概要設計思想スコープ)
   - [1.1 背景とシステムミッション](#11-背景とシステムミッション)
-  - [1.2 4大設計原則](#12-4大設計原則)
-  - [1.3 普遍的インテリジェンス・オーケストレーション中枢 (DSN-11)](#13-普遍的インテリジェンスオーケストレーション中枢-dsn-11)
+  - [1.2 全体モジュール分割アーキテクチャ（6層レイヤード＆ドメイン境界）](#12-全体モジュール分割アーキテクチャ6層レイヤードドメイン境界)
+  - [1.3 4大設計原則と Python 3.14+ 原則](#13-4大設計原則と-python-314-原則)
+  - [1.4 普遍的インテリジェンス・オーケストレーション中枢 (DSN-11)](#14-普遍的インテリジェンスオーケストレーション中枢-dsn-11)
 - [2. 全13大専門エージェント多角的多面協議議事録](#2-全13大専門エージェント多角的多面協議議事録)
 - [3. サブシステム間データフロー & C4 アーキテクチャ](#3-サブシステム間データフロー--c4-アーキテクチャ)
   - [3.1 C4 コンテナダイアグラム](#31-c4-コンテナダイアグラム)
-  - [3.2 7大主要サブシステムの責務](#32-7大主要サブシステムの責務)
+  - [3.2 6大レイヤー・主要サブシステムの責務マトリクス](#32-6大レイヤー主要サブシステムの責務マトリクス)
 - [4. コア数理モデル & 共通アルゴリズム基盤](#4-コア数理モデル--共通アルゴリズム基盤)
 - [5. 公開インターフェース & システム共通プロトコル](#5-公開インターフェース--システム共通プロトコル)
 - [6. シーケンス図 & 6大フェーズ自律閉ループ E2E ライフサイクル](#6-シーケンス図--6大フェーズ自律閉ループ-e2e-ライフサイクル)
 - [7. セキュリティ堅牢化・脅威防御・耐障害性設計 (Saga)](#7-セキュリティ堅牢化脅威防御耐障害性設計-saga)
 - [8. 性能特性・メモリ制約・可観測性設計](#8-性能特性メモリ制約可観測性設計)
 - [9. 包括的テスト戦略 & 検証スイート](#9-包括的テスト戦略--検証スイート)
-- [10. 完了定義 (DoD) & 11大包括設計書体系](#10-完了定義-dod--11大包括設計書体系)
+- [10. 完了定義 (DoD) & 包括設計書体系 (DSN-01 〜 DSN-16)](#10-完了定義-dod--包括設計書体系-dsn-01--dsn-16)
 
 ---
 
 # 1. アーキテクチャ概要・設計思想・スコープ
 
 ### 1.1 背景とシステムミッション
-`arxiv-security-papers` は、arXiv (cs.CR / Computer Science - Cryptography and Security) をはじめとする最新のサイバーセキュリティ論文・脅威インテリジェンス・暗号学研究データを完全自動で収集・全文抽出・構造化 (Google OKF v0.2) し、ゼロ外部依存の組込みデータベース・2層分離検索基盤・分散クローラー・共通セキュリティガード・Model Context Protocol (MCP) サーバー・Web ポータルを通じて多角的に提供する統合インテリジェンスプラットフォームである。
+`arxiv-security-papers` は、arXiv (cs.CR / Computer Science - Cryptography and Security, cs.LG, cs.AI) をはじめとする最新のサイバーセキュリティ論文・脅威インテリジェンス・暗号学研究データを完全自動で収集・全文抽出・構造化 (Google OKF v0.2) し、ゼロ外部依存の組込みデータベース・2層分離検索基盤・分散クローラー・共通セキュリティガード・Model Context Protocol (MCP) サーバー・Web ポータルを通じて多角的に提供する次世代統合セキュリティ・ナレッジプラットフォームである。
+
+### 1.2 全体モジュール分割アーキテクチャ（6層レイヤード＆ドメイン境界）
+システム全体は、依存性の単方向流（クリーンアーキテクチャ）と関心の分離（SoC）を徹底した以下の **6層レイヤード構造** にてモジュール分割される：
 
 ```
 +---------------------------------------------------------------------------------------------------+
-|                                  arxiv-security-papers Platform                                   |
+|                        1. [Presentation & Interface Layer] (外部境界・利用インターフェース)         |
+|  - src/web/ (PEP 3333 WSGI / Glassmorphism UI)   - src/mcp/ (4大 MCP サーバー / JSON-RPC 2.0)    |
+|  - src/intelligence/cli.py (CLI 管理コマンド)    - src/pipeline/reporter/ (5層エグゼクティブサマリー) |
 +---------------------------------------------------------------------------------------------------+
-|  [External Intelligence Sources]                                                                  |
-|   arXiv API (cs.CR) | IACR ePrint | JVN/NVD/CISA Advisories | PDF Repositories                    |
-+---------------------------------------------------------------------------------------------------+
-                                            | (HTTP / REST / RSS)
+                                            | 呼出 / ディスパッチ
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  1. Distributed Spider & Crawler Subsystem (src/spider/) - DSN-06                                 |
-|   - OPIC Crawl Ordering | Scalable Bloom Filter | AutoThrottle | SPA State Hydration              |
+|                        2. [Application & Orchestration Layer] (業務フロー制御・協調)                |
+|  - src/workflow/ (DAG / Streaming DAG / Saga / サーキットブレーカー)                              |
+|  - src/supervisor/ (Arbiter / マルチプロセスワーカー管理 / ヘルスチェック)                         |
+|  - src/pipeline/ (ETL オーケストレーション: Ingestion -> Transformer -> Reporter)                  |
 +---------------------------------------------------------------------------------------------------+
-                                            | (Raw Papers & Metadata)
+                                            | 駆動
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  2. Multi-Theme ETL Pipeline Subsystem (src/pipeline/) - DSN-03                                   |
-|   - Ingestion (Adapters) | Transformer (OKF v0.2 & Threat Tagging) | Reporter (5-Tier Summaries)  |
+|                        3. [Domain Intelligence & Analysis Layer] (セキュリティ中核頭脳)            |
+|  - src/intelligence/ (PIR要件管理 / 多段階LLM要約 / 脅威仮説生成 / 信頼度スコアリング)             |
+|  - src/security/taxonomy/ (MITRE ATT&CK / CWE / STRIDE マッピング / Caldera プレイブック生成)     |
 +---------------------------------------------------------------------------------------------------+
-                                            | (OKF Markdown / SQLite / Vector Store)
-                                            v
-+------------------------------------+------------------------------------+-------------------------+
-| 3. Storage & Vector DB Engine      | 4. Two-Tier Search Engine & Server | 5. Common Security      |
-|    (src/database/) - DSN-05        |    (src/search/) - DSN-04          |    (src/security/) - 07 |
-| - SlottedPage & 2Q Buffer Pool     | - Core Engine (Lucene Paradigm):   | - AST Guard & Sandbox   |
-| - Persistent WAL & ARIES Recovery  |   BM25, AST Queries, VByte, DocVal | - Path Traversal Shield |
-| - B+Tree, LSM-Tree, PAX Columnar   | - Search Platform (Solr Paradigm): | - Multi-Tenant RBAC     |
-| - MVCC & SS2PL Lock Manager        |   Schema, Elevation, Facet, Cache  | - MITRE / CWE / STRIDE  |
-| - Distributed 2PC, Raft, Saga, HNSW| - Vector RAG Hybrid (RRF Ranking)  |                         |
-+------------------------------------+------------------------------------+-------------------------+
-                                            |
+                                            | 知識探索 / 検索
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  6. Integration & Interface Subsystems                                                            |
-|   - Model Context Protocol Servers (src/mcp/) - DSN-08: Papers, Radar, Threat, Observability      |
-|   - API Gateway & UI Presentation (src/web/) - DSN-09: PEP 3333 WSGI, REST API, HTML Rendering    |
+|                        4. [Search & Information Retrieval Layer] (検索・インデックス基盤)           |
+|  - src/search/ (ハイブリッド検索: BM25 + HNSW ベクトル + RAPTOR ツリー + FM-Index / RRF 統合)      |
 +---------------------------------------------------------------------------------------------------+
-                                            |
+                                            | 永続化 / データ入出力
                                             v
 +---------------------------------------------------------------------------------------------------+
-|  7. Universal Autonomous Intelligence Orchestration & Closed-Loop Feedback (DSN-11)               |
-|   - 6-Phase Lifecycle: Planning -> Collection -> Processing -> Analysis -> Disseminate -> Eval  |
-|   - Universal PIR/SIR Engine | DAG Workflow | Saga Recovery | Adaptive Feedback Self-Evolution   |
+|                        5. [Data Ingestion & Parsing Layer] (収集・生データ解析)                     |
+|  - src/spider/ (分散 Web クローラー / AutoThrottle / SPA ハンドラー)                              |
+|  - src/pdf_engine/ (内製 Pure-Python PDF 構文解析 / フォントデコード / テキスト抽出)               |
+|  - src/pipeline/ingestion/adapters/ (arXiv API / RSS / IACR / アドバイザリ)                       |
++---------------------------------------------------------------------------------------------------+
+                                            | 低レイヤ永続化
+                                            v
++---------------------------------------------------------------------------------------------------+
+|                        6. [Core Infrastructure & Security Guard Layer] (共通基盤・防御シールド)     |
+|  - src/database/ (4層 Pure-Python DB: SlottedPage / BTree / LSM / PAX / Raft 分散)                 |
+|  - src/security/ (AST ガード / RBAC / パストラバーサル防止 / 入力サニタイザー)                      |
 +---------------------------------------------------------------------------------------------------+
 ```
 
-### 1.2 4大設計原則
-1. **Zero External Dependencies (ゼロ外部依存)**: Python 標準ライブラリのみで完結し、外部バイナリ・クラウドDB・重量級フレームワークに依存せず完全な可搬性を担保。
-2. **Clean Architecture & 1:1 Domain Separation (クリーンアーキテクチャ・1:1 領域分離)**: `src/` の各サブシステムが単一責任原則 (SRP) を遵守し、疎結合かつ高凝集に独立動作。
+### 1.3 4大設計原則と Python 3.14+ 原則
+1. **Zero External Dependencies (ゼロ外部依存 & Python 3.14+)**: Python 3.14+ 標準ライブラリのみで完結し、外部バイナリ（Poppler/pdftotext）やクラウドDB（PostgreSQL/Elasticsearch/Redis）に依存せず完全な可搬性とセキュリティを担保。
+2. **Clean Architecture & 1:1 Domain Separation (クリーンアーキテクチャ・1:1 領域分離)**: `src/` の各モジュールが単一責任原則 (SRP) を遵守し、疎結合かつ高凝集に独立動作。
 3. **Google OKF v0.2 Strict Compliance (OKF 仕様完全準拠)**: 全論文データを YAML フロントマター付きのイミュータブルなナレッジドキュメントとして正規化。
 4. **Extreme Observability & Closed-Loop Quality Governance (極限の可観測性と閉ループ品質統制)**: Radon / Xenon (循環的複雑度 Rank A/B) / Mypy --strict / テストカバレッジ 80% 以上の品質ゲートと、IR 評価（NDCG/MAP）に基づく自律適応。
 
-### 1.3 普遍的インテリジェンス・オーケストレーション中枢 (DSN-11)
+### 1.4 普遍的インテリジェンス・オーケストレーション中枢 (DSN-11)
 プラットフォーム全体は、[DSN-11-intelligence_orchestration_engine.md](DSN-11-intelligence_orchestration_engine.md) で規定される **Universal Autonomous Intelligence Orchestrator** によって統制される。意思決定者の優先情報要件（PIR）を起点とし、収集、構造化、相関分析、多層配布、そして利用評価結果を次期 PIR へ自動フィードバックする自律的閉ループ（Closed-Loop Adaptive Engine）を駆動する。
 
 ---
@@ -97,7 +100,7 @@
 ```mermaid
 mindmap
   root((全体システム設計合意))
-    PM["1. Project Manager: スコープ統制・11大設計書と7大パッケージの1:1整合・自律閉ループ"]
+    PM["1. Project Manager: スコープ統制・全16大設計書とモジュール分割の1:1整合・自律閉ループ"]
     Sec["2. InfoSec: ASTガード・パストラバーサル防御・ゼロトラストRBAC"]
     Arch["3. Systems Architect: クリーンアーキテクチャ・DAGワークフロー・Saga補償トランザクション"]
     QA["4. SQA: Xenon Rank A/B・Mypy Strict・80%カバレッジゲート・契約テスト"]
@@ -126,20 +129,37 @@ graph TD
         CVE["JVN / NVD Feed"]
     end
 
-    subgraph OrchestratorHub["Universal Intelligence Orchestration Hub (DSN-11)"]
-        PIR["PIR / Requirements Director"]
-        DAG["DAG Workflow Runner"]
-        Feedback["Feedback & Evaluation Controller"]
+    subgraph Layer1["1. Presentation & Interface Layer"]
+        MCP["MCPサーバー群 (src/mcp/) - DSN-08"]
+        Web["Web Gateway & UI (src/web/) - DSN-09"]
+        CLI["CLI ツール (src/intelligence/cli.py)"]
+        Rep["5層Reporter (src/pipeline/reporter/) - DSN-03"]
     end
 
-    subgraph CorePlatform["arxiv-security-papers Platform (src/)"]
-        Spider["1. 分散クローラー (src/spider/) - DSN-06"]
-        Pipeline["2. ETLパイプライン (src/pipeline/) - DSN-03"]
-        Database["3. データベースエンジン (src/database/) - DSN-05"]
-        Search["4. 2層検索基盤 (src/search/) - DSN-04"]
-        Security["5. セキュリティガード (src/security/) - DSN-07"]
-        MCP["6. MCPサーバー群 (src/mcp/) - DSN-08"]
-        Web["7. Web Gateway (src/web/) - DSN-09"]
+    subgraph Layer2["2. Application & Orchestration Layer"]
+        Workflow["Workflow & Saga (src/workflow/)"]
+        Supervisor["Supervisor & Arbiter (src/supervisor/) - DSN-12"]
+        Pipeline["ETL Runner (src/pipeline/) - DSN-03"]
+    end
+
+    subgraph Layer3["3. Domain Intelligence Layer"]
+        Intel["Intelligence Engine (src/intelligence/) - DSN-11"]
+        Taxonomy["Threat Taxonomy (src/security/taxonomy/)"]
+    end
+
+    subgraph Layer4["4. Search & IR Layer"]
+        Search["2層検索基盤 & Vector (src/search/) - DSN-04"]
+    end
+
+    subgraph Layer5["5. Data Ingestion & Parsing Layer"]
+        Spider["分散クローラー (src/spider/) - DSN-06"]
+        PDF["Pure-Python PDF Engine (src/pdf_engine/) - DSN-13"]
+        Adapters["Source Adapters (src/pipeline/ingestion/)"]
+    end
+
+    subgraph Layer6["6. Core Infrastructure & Security Layer"]
+        DB["4層ベクトルDB & 分散 (src/database/) - DSN-05"]
+        SecGuard["AST Guard & RBAC (src/security/) - DSN-07"]
     end
 
     subgraph Users["利用者 & クライアント"]
@@ -147,24 +167,34 @@ graph TD
         Browser["Web ブラウザ / アナリスト"]
     end
 
-    PIR --> DAG
-    DAG --> Spider
+    Sources --> Adapters
     Sources --> Spider
-    Spider --> Pipeline
-    Pipeline --> Database
-    Pipeline --> Search
-    Security -. 検証・認可 .-> CorePlatform
-    Database <--> Search
-    Search --> MCP
-    Database --> MCP
-    Search --> Web
-    Database --> Web
+    Spider --> PDF
+    Adapters --> PDF
+    PDF --> Pipeline
+    Pipeline --> Intel
+    Intel --> Taxonomy
+    Taxonomy --> Search
+    Pipeline --> DB
+    Search <--> DB
+    SecGuard -. 全レイヤー保護 .-> Layer1 & Layer2 & Layer3 & Layer4 & Layer5 & Layer6
+    Layer2 --> Layer1
+    Search --> Layer1
+    DB --> Layer1
     MCP <--> AI
     Web <--> Browser
-    MCP -. 利用ログ・クエリ .-> Feedback
-    Web -. アクセスログ .-> Feedback
-    Feedback -- "適応型フィードバック (PIR重み更新)" --> PIR
 ```
+
+### 3.2 6大レイヤー・主要サブシステムの責務マトリクス
+
+| レイヤー | 主要モジュール (`src/`) | 責務と提供機能 | 関連設計書 |
+| :--- | :--- | :--- | :--- |
+| **1. Presentation & Interface** | `web/`, `mcp/`, `pipeline/reporter/` | 人間・AI・外部システム向けインターフェース、WSGI、JSON-RPC、5層サマリー | DSN-03, DSN-08, DSN-09 |
+| **2. Orchestration & Flow** | `workflow/`, `supervisor/`, `pipeline/` | DAG ワークフロー、プロセス監視、Saga 補償トランザクション | DSN-03, DSN-11, DSN-12 |
+| **3. Domain Intelligence** | `intelligence/`, `security/taxonomy/` | PIR 要件管理、多段階要約、ATT&CK / TTPs マッピング、Caldera 生成 | DSN-07, DSN-11, DSN-16 |
+| **4. Search & IR** | `search/` | BM25、HNSW ベクトル、RAPTOR ツリー、FM-Index、RRF 統合検索 | DSN-04 |
+| **5. Ingestion & Parsing** | `spider/`, `pdf_engine/`, `pipeline/ingestion/` | 分散クローリング、Pure-Python PDF 抽出、arXiv API / RSS 収集 | DSN-03, DSN-06, DSN-13 |
+| **6. Core Infrastructure & Security** | `database/`, `security/` | SlottedPage / 4層ストレージ、Raft 合意、AST ガード、RBAC、パス検証 | DSN-05, DSN-07 |
 
 ---
 
@@ -265,9 +295,9 @@ sequenceDiagram
 
 ---
 
-# 10. 完了定義 (DoD) & 11大包括設計書体系
+# 10. 完了定義 (DoD) & 包括設計書体系 (DSN-01 〜 DSN-16)
 
-全サブシステムは、以下の **11 大包括設計書体系 (DSN-01 〜 DSN-11)** に基づき整合・運用される：
+全サブシステムは、以下の **16 大包括設計書体系 (DSN-01 〜 DSN-16)** に基づき整合・運用される：
 
 | DSN 番号 | 設計書ファイル | 対応パッケージ (`src/`) | 領域 / サブシステム |
 | :---: | :--- | :--- | :--- |
@@ -282,3 +312,8 @@ sequenceDiagram
 | **DSN-09** | [DSN-09-web_gateway_and_presentation.md](DSN-09-web_gateway_and_presentation.md) | `src/web/` | API Gateway & UI プレゼンテーション設計書 (`gateway`, `presentation`) |
 | **DSN-10** | [DSN-10-observability_and_eval_framework.md](DSN-10-observability_and_eval_framework.md) | 横断的基盤 | 可観測性 (Observability) & 情報検索評価 (IR Eval) 設計書 |
 | **DSN-11** | [DSN-11-intelligence_orchestration_engine.md](DSN-11-intelligence_orchestration_engine.md) | 統合統制中枢 | 普遍的自律型インテリジェンス・ライフサイクル・オーケストレーション包括設計書 |
+| **DSN-12** | [DSN-12-process_supervisor_and_worker_pool.md](DSN-12-process_supervisor_and_worker_pool.md) | `src/supervisor/` | プロセス監視・ワーカープール管理基盤設計書 |
+| **DSN-13** | [DSN-13-pure_python_pdf_text_extractor.md](DSN-13-pure_python_pdf_text_extractor.md) | `src/pdf_engine/` | Pure-Python PDF 全文抽出エンジン包括設計書 |
+| **DSN-14** | [DSN-14-graph_engineering_dashboard.md](DSN-14-graph_engineering_dashboard.md) | `src/search/ranking/` | 論文・脅威ナレッジグラフ & エンジニアリングダッシュボード設計書 |
+| **DSN-15** | [DSN-15-enterprise_distributed_crawler.md](DSN-15-enterprise_distributed_crawler.md) | `src/spider/distributed/` | 大規模エンタープライズ分散クローラー設計書 |
+| **DSN-16** | [DSN-16-nextgen_security_knowledge_platform_proposal.md](DSN-16-nextgen_security_knowledge_platform_proposal.md) | 次世代統合 | 次世代セキュリティ・ナレッジプラットフォーム包括的設計提言書 |
