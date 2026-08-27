@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from intelligence.contracts import IntelligencePhase, PhaseContext, PhaseStatus
-from intelligence.engine import UniversalIntelligenceOrchestrator
+from intelligence.engine import ClosedLoopIntelligenceEngine
 
 
 def _print_banner() -> None:
@@ -31,7 +31,7 @@ def _print_banner() -> None:
 
 
 def _seed_intelligence_requirements(
-    orchestrator: UniversalIntelligenceOrchestrator, topics: Optional[str]
+    orchestrator: ClosedLoopIntelligenceEngine, topics: Optional[str]
 ) -> None:
     """Seeds default or custom priority intelligence requirements."""
     if topics:
@@ -112,7 +112,7 @@ def _print_cycle_details(
 
 
 def _run_single_cycle(
-    orchestrator: UniversalIntelligenceOrchestrator,
+    orchestrator: ClosedLoopIntelligenceEngine,
     cycle_id: str,
     args: argparse.Namespace,
 ) -> Dict[str, Any]:
@@ -160,7 +160,7 @@ def run_cycle_command(args: argparse.Namespace) -> int:
         _print_banner()
 
     workspace_dir = os.path.abspath(args.workdir)
-    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
     _seed_intelligence_requirements(orchestrator, getattr(args, "topics", None))
 
     cycles_to_run = max(1, getattr(args, "cycles", 1))
@@ -187,7 +187,7 @@ def run_daemon_command(args: argparse.Namespace) -> int:
     interval = max(5, args.interval)
     max_cycles = args.max_cycles
     workspace_dir = os.path.abspath(args.workdir)
-    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
 
     max_cycles_label = "Infinite" if max_cycles == 0 else str(max_cycles)
     print(
@@ -222,7 +222,7 @@ def run_daemon_command(args: argparse.Namespace) -> int:
 
 
 def _add_pir_requirement(
-    orchestrator: UniversalIntelligenceOrchestrator, args: argparse.Namespace
+    orchestrator: ClosedLoopIntelligenceEngine, args: argparse.Namespace
 ) -> int:
     """Handles adding a new PIR."""
     if not args.id or not args.title or not args.topics:
@@ -253,7 +253,7 @@ def _add_pir_requirement(
 
 
 def _escalate_pir_requirement(
-    orchestrator: UniversalIntelligenceOrchestrator, args: argparse.Namespace
+    orchestrator: ClosedLoopIntelligenceEngine, args: argparse.Namespace
 ) -> int:
     """Handles dynamically escalating an existing PIR."""
     if not args.id:
@@ -292,7 +292,7 @@ def _escalate_pir_requirement(
 
 
 def _list_pir_requirements(
-    orchestrator: UniversalIntelligenceOrchestrator,
+    orchestrator: ClosedLoopIntelligenceEngine,
 ) -> int:
     """Lists registered PIRs and topic distribution across 3 temporal horizons."""
     active_reqs = orchestrator.pir_manager.list_active_requirements()
@@ -332,7 +332,7 @@ def _list_pir_requirements(
 
 def run_pir_command(args: argparse.Namespace) -> int:
     """Manages Priority Intelligence Requirements (PIRs)."""
-    orchestrator = UniversalIntelligenceOrchestrator(
+    orchestrator = ClosedLoopIntelligenceEngine(
         workspace_dir=os.path.abspath(args.workdir)
     )
     if args.pir_action == "add":
@@ -343,7 +343,7 @@ def run_pir_command(args: argparse.Namespace) -> int:
 
 
 def _list_hypotheses(
-    orchestrator: UniversalIntelligenceOrchestrator,
+    orchestrator: ClosedLoopIntelligenceEngine,
 ) -> int:
     """Lists tracked intelligence hypotheses and their verification status."""
     hypotheses = orchestrator.list_hypotheses()
@@ -368,7 +368,7 @@ def _list_hypotheses(
 
 
 def _add_hypothesis(
-    orchestrator: UniversalIntelligenceOrchestrator, args: argparse.Namespace
+    orchestrator: ClosedLoopIntelligenceEngine, args: argparse.Namespace
 ) -> int:
     """Registers a manual hypothesis proposition."""
     if not args.id or not args.statement or not args.topics:
@@ -387,7 +387,7 @@ def _add_hypothesis(
 
 
 def _report_hypothesis(
-    orchestrator: UniversalIntelligenceOrchestrator, args: argparse.Namespace
+    orchestrator: ClosedLoopIntelligenceEngine, args: argparse.Namespace
 ) -> int:
     """Displays detailed markdown investigation report for a hypothesis."""
     if not args.id:
@@ -404,7 +404,7 @@ def _report_hypothesis(
 
 def run_hypothesis_command(args: argparse.Namespace) -> int:
     """Manages hypothesis-driven autonomous investigation."""
-    orchestrator = UniversalIntelligenceOrchestrator(
+    orchestrator = ClosedLoopIntelligenceEngine(
         workspace_dir=os.path.abspath(args.workdir)
     )
     if getattr(args, "hypo_action", None) == "add":
@@ -443,7 +443,7 @@ def run_credibility_command(args: argparse.Namespace) -> int:
 def run_recover_command(args: argparse.Namespace) -> int:
     """Manages WAL state replay and cycle crash recovery."""
     workspace_dir = os.path.abspath(args.workdir)
-    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
 
     if getattr(args, "list", False):
         cycles = orchestrator.wal.list_active_cycles()
@@ -482,7 +482,7 @@ def run_recover_command(args: argparse.Namespace) -> int:
 def run_harvest_command(args: argparse.Namespace) -> int:
     """Manages adaptive harvesting routes and circuit breaker tests."""
     workspace_dir = os.path.abspath(args.workdir)
-    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
     coordinator = orchestrator.harvest_coordinator
 
     if getattr(args, "harvest_action", None) == "test":
@@ -546,7 +546,7 @@ def run_status_command(args: argparse.Namespace) -> int:
         print(f"  - {tier:<15} : {count} summaries")
 
     # 4. Active PIRs
-    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
     active_pirs = orchestrator.pir_manager.list_active_requirements()
     print(f"Active PIRs         : {len(active_pirs)} requirements active")
 

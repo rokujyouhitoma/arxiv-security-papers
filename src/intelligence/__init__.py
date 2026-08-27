@@ -19,10 +19,7 @@ from intelligence.contracts import (
     PhaseStatus,
 )
 from intelligence.dissemination.distributor import DisseminationDistributor
-from intelligence.engine import (
-    ClosedLoopIntelligenceEngine,
-    UniversalIntelligenceOrchestrator,
-)
+from intelligence.engine import ClosedLoopIntelligenceEngine
 from intelligence.feedback.evaluator import FeedbackEvaluator
 from intelligence.harvest.coordinator import HarvestCoordinator
 from intelligence.pir.manager import PIRManager
@@ -31,7 +28,6 @@ from intelligence.processing.processor import ProcessingCoordinator
 
 __all__ = [
     "ClosedLoopIntelligenceEngine",
-    "UniversalIntelligenceOrchestrator",
     "IntelligencePhase",
     "PhaseStatus",
     "PhaseContext",

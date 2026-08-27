@@ -10,7 +10,7 @@ VENV=.venv
 VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
 
-SRC=src/orchestrator/cli.py
+SRC=src/intelligence/cli.py
 PYTHON_SRCS := $(shell find src -type f -name "*.py" | sort)
 TESTS := $(shell find tests -type f -name "*.py" | sort)
 
@@ -162,11 +162,11 @@ top_supervisor: activate ## Live process & worker top monitoring dashboard
 
 .PHONY: orchestrate
 orchestrate: activate ## Run Universal Intelligence Orchestrator 6-phase autonomous cycle
-	PYTHONPATH=src ${VENV_PYTHON} src/orchestrator/cli.py cycle $(ARGS)
+	PYTHONPATH=src ${VENV_PYTHON} src/intelligence/cli.py cycle $(ARGS)
 
 .PHONY: orchestrate_daemon
 orchestrate_daemon: activate ## Run Universal Intelligence Orchestrator in continuous daemon mode
-	PYTHONPATH=src ${VENV_PYTHON} src/orchestrator/cli.py daemon $(ARGS)
+	PYTHONPATH=src ${VENV_PYTHON} src/intelligence/cli.py daemon $(ARGS)
 
 .PHONY: pipeline
 pipeline: activate ## Run multi-theme arXiv ETL ingestion pipeline directly

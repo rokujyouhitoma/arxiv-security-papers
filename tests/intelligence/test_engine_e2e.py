@@ -1,13 +1,13 @@
-"""E2E test suite for UniversalIntelligenceOrchestrator closed-loop lifecycle."""
+"""E2E test suite for ClosedLoopIntelligenceEngine closed-loop lifecycle."""
 
 import pytest
 
 from intelligence.contracts import IntelligencePhase, PhaseStatus
-from intelligence.engine import UniversalIntelligenceOrchestrator
+from intelligence.engine import ClosedLoopIntelligenceEngine
 
 
 def test_orchestrator_closed_loop_e2e_lifecycle() -> None:
-    orch = UniversalIntelligenceOrchestrator(workspace_dir="/tmp/test_intelligence")
+    orch = ClosedLoopIntelligenceEngine(workspace_dir="/tmp/test_intelligence")
 
     # Step 1: Register Initial Priority Requirements
     orch.register_pir(
@@ -67,7 +67,7 @@ def test_orchestrator_closed_loop_e2e_lifecycle() -> None:
 
 
 def test_orchestrator_fault_tolerance_with_saga_rollback() -> None:
-    orch = UniversalIntelligenceOrchestrator(workspace_dir="/tmp/test_fault")
+    orch = ClosedLoopIntelligenceEngine(workspace_dir="/tmp/test_fault")
 
     # Inject a failing harvester
     def failing_harvester(topic: str, quota: int) -> list:

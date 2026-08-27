@@ -8,7 +8,7 @@ supporting subcommands for individual tools (pipeline, spider, search, web, mcp)
 
 import sys
 
-from orchestrator.cli import main
+from intelligence.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

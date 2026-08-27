@@ -300,7 +300,3 @@ class ClosedLoopIntelligenceEngine:
 
         self.cycle_history.append(context)
         return context
-
-
-# Alias for backward compatibility
-UniversalIntelligenceOrchestrator = ClosedLoopIntelligenceEngine
