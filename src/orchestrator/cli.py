@@ -623,6 +623,12 @@ def build_parser() -> argparse.ArgumentParser:
     cycle_parser.add_argument(
         "--quiet", action="store_true", help="Suppress visual banners and headers"
     )
+    cycle_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable detailed verbose diagnostic output",
+    )
 
     # Command: daemon
     daemon_parser = subparsers.add_parser(
