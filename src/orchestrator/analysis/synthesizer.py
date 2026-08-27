@@ -5,8 +5,9 @@ multi-tier actionable intelligence products (01_per_run through 05_annual).
 """
 
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+from orchestrator.analysis.hypothesis_engine import HypothesisEngine
 from orchestrator.contracts import (
     IntelligencePhase,
     IntelligencePhaseProtocol,
@@ -17,17 +18,24 @@ from orchestrator.contracts import (
 
 
 class AnalysisSynthesizer(IntelligencePhaseProtocol):
-    """Phase 4: Synthesis and Production Engine."""
+    """Phase 4: Synthesis and Production Engine with Hypothesis-Driven Investigation."""
+
+    def __init__(self, hypothesis_engine: Optional[HypothesisEngine] = None) -> None:
+        self.hypothesis_engine = hypothesis_engine or HypothesisEngine()
 
     @property
     def phase_type(self) -> IntelligencePhase:
         return IntelligencePhase.ANALYSIS
 
     def synthesize_products(
-        self, processed_records: List[Dict[str, Any]], cycle_id: str
+        self,
+        processed_records: List[Dict[str, Any]],
+        cycle_id: str,
+        hypothesis_engine: Optional[HypothesisEngine] = None,
     ) -> List[IntelligenceProduct]:
-        """Synthesizes structured intelligence products across tiers."""
+        """Synthesizes structured intelligence products across tiers including verified hypotheses."""
         products: List[IntelligenceProduct] = []
+        engine = hypothesis_engine or self.hypothesis_engine
 
         # 1. Group records by topic
         topic_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -35,12 +43,22 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
             topic = str(r.get("topic", "general"))
             topic_groups[topic].append(r)
 
-        # 2. Synthesize Per-Run Product (01_per_run)
+        # 2. Evaluate hypotheses
+        evaluated_hypotheses = engine.evaluate_all(processed_records)
+
+        # 3. Synthesize Per-Run Product (01_per_run)
         total_count = len(processed_records)
         summary_lines = [
             f"- Topic '{t}': {len(recs)} records observed."
             for t, recs in topic_groups.items()
         ]
+        if evaluated_hypotheses:
+            summary_lines.append("\n🔬 【自律検証セキュリティ仮説動向】:")
+            for h in evaluated_hypotheses:
+                summary_lines.append(
+                    f"  - [{h.status.value.upper()}] (確信度: {h.confidence_score*100:.1f}%) {h.statement}"
+                )
+
         summary_text = (
             f"Automated intelligence synthesis for cycle {cycle_id}.\n"
             + "\n".join(summary_lines)
@@ -58,7 +76,7 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
         )
         products.append(run_product)
 
-        # 3. Synthesize Topic Strategic Overviews (02_daily tier)
+        # 4. Synthesize Topic Strategic Overviews (02_daily tier)
         for topic, recs in topic_groups.items():
             topic_prod = IntelligenceProduct(
                 product_id=f"prod_topic_{topic}_{cycle_id}",
@@ -75,11 +93,18 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
         return products
 
     def execute(self, context: PhaseContext) -> PhaseContext:
-        """Executes Phase 4: Produces intelligence products."""
+        """Executes Phase 4: Evaluates hypotheses and produces intelligence products."""
         try:
+            # 1. Evaluate hypotheses against ingested records
+            context.hypotheses = self.hypothesis_engine.evaluate_all(
+                context.processed_records
+            )
+
+            # 2. Synthesize products
             products = self.synthesize_products(
                 processed_records=context.processed_records,
                 cycle_id=context.cycle_id,
+                hypothesis_engine=self.hypothesis_engine,
             )
             context.products = products
             context.phase_statuses[IntelligencePhase.ANALYSIS] = PhaseStatus.COMPLETED
@@ -90,6 +115,7 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
         return context
 
     def compensate(self, context: PhaseContext) -> None:
-        """Compensates Phase 4: clears synthesized products."""
+        """Compensates Phase 4: clears synthesized products and hypotheses."""
         context.products = []
+        context.hypotheses = []
         context.phase_statuses[IntelligencePhase.ANALYSIS] = PhaseStatus.COMPENSATED

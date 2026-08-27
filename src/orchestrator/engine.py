@@ -8,8 +8,14 @@ import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
+from orchestrator.analysis.hypothesis_engine import HypothesisEngine
 from orchestrator.analysis.synthesizer import AnalysisSynthesizer
-from orchestrator.contracts import IntelligenceProduct, PhaseContext
+from orchestrator.contracts import (
+    Hypothesis,
+    HypothesisStatus,
+    IntelligenceProduct,
+    PhaseContext,
+)
 from orchestrator.dissemination.distributor import DisseminationDistributor
 from orchestrator.feedback.evaluator import FeedbackEvaluator
 from orchestrator.harvest.coordinator import HarvestCoordinator
@@ -27,13 +33,40 @@ class UniversalIntelligenceOrchestrator:
         pir_storage = os.path.join(
             workspace_dir, "outputs", "orchestrator", "pir_registry.json"
         )
+        hypo_storage = os.path.join(
+            workspace_dir, "outputs", "orchestrator", "hypotheses_registry.json"
+        )
         self.pir_manager = PIRManager(storage_path=pir_storage, auto_seed=True)
+        self.hypothesis_engine = HypothesisEngine(storage_path=hypo_storage)
         self.harvest_coordinator = HarvestCoordinator()
         self.processing_coordinator = ProcessingCoordinator()
-        self.analysis_synthesizer = AnalysisSynthesizer()
+        self.analysis_synthesizer = AnalysisSynthesizer(
+            hypothesis_engine=self.hypothesis_engine
+        )
         self.dissemination_distributor = DisseminationDistributor()
         self.feedback_evaluator = FeedbackEvaluator()
         self.cycle_history: List[PhaseContext] = []
+
+    def register_hypothesis(
+        self,
+        hypo_id: str,
+        statement: str,
+        target_topics: List[str],
+    ) -> Hypothesis:
+        """Registers a manual or operator-defined security hypothesis."""
+        hypo = Hypothesis(
+            hypo_id=hypo_id,
+            statement=statement,
+            target_topics=target_topics,
+            status=HypothesisStatus.FORMULATED,
+        )
+        return self.hypothesis_engine.register_hypothesis(hypo)
+
+    def list_hypotheses(
+        self, status: Optional[HypothesisStatus] = None
+    ) -> List[Hypothesis]:
+        """Lists active hypotheses tracked by the orchestrator."""
+        return self.hypothesis_engine.list_hypotheses(status=status)
 
     def register_pir(
         self,

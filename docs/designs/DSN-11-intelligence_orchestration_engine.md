@@ -237,6 +237,19 @@ $$C_0(s) = C_{\text{base}} \cdot \left( 1.0 + \sum_{t_i \in \text{DomainTopics}(
 
 これにより、現在最も重要視されている PIR に合致する情報ソースに対して、優先的かつ集中的にクローラーの計算資源と帯域が配分される。
 
+### 4.4 仮説駆動型 自律調査・ベイズ確信度更新モデル
+Phase 4 (Analysis) において、収集文献から抽出された支持証拠重み総和 $S = \sum_{e \in E_{\text{supp}}} \text{rel}(e)$ および反証証拠重み総和 $R = \sum_{e \in E_{\text{ref}}} \text{rel}(e)$ に基づき、仮説命題 $H$ の事後確信度 $C(H)$ をベイズ的に更新する：
+
+$$C(H) = \frac{0.5 + S}{1.0 + S + R} \in [0.0, 1.0]$$
+
+#### ライフサイクル状態遷移基準
+- $C(H) \ge 0.70$ かつ証拠件数 $|E| \ge 3$ $\rightarrow$ **SUPPORTED (立証・即時対策推奨)**
+- $C(H) \le 0.30$ かつ証拠件数 $|E| \ge 3$ $\rightarrow$ **REFUTED (反証・リスク低)**
+- 証拠件数 $|E| \ge 3$ だが $0.30 < C(H) < 0.70$ $\rightarrow$ **INCONCLUSIVE (証拠拮抗・結論保留)**
+- $0 < |E| < 3$ $\rightarrow$ **INVESTIGATING (調査継続中)**
+
+INCONCLUSIVE または INVESTIGATING の仮説に対しては、エンジンが自律的に深掘り探索クエリ $Q_{\text{investigate}}(H)$ を生成し、次サイクルの PIR 要件へフィードバック注入する。
+
 ---
 
 # 5. DAG ワークフロー & 状態遷移仕様

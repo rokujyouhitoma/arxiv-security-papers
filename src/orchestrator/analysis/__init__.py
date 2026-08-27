@@ -1,5 +1,4 @@
-"""Analysis (Phase 4 Analysis & Production) package."""
-
+from orchestrator.analysis.hypothesis_engine import HypothesisEngine
 from orchestrator.analysis.synthesizer import AnalysisSynthesizer
 
-__all__ = ["AnalysisSynthesizer"]
+__all__ = ["AnalysisSynthesizer", "HypothesisEngine"]

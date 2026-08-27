@@ -16,6 +16,7 @@ def test_build_parser_structure() -> None:
     assert "cycle" in choices
     assert "daemon" in choices
     assert "pir" in choices
+    assert "hypothesis" in choices
     assert "status" in choices
     assert "pipeline" in choices
     assert "spider" in choices

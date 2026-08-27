@@ -83,6 +83,51 @@ class FeedbackTelemetry:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+class HypothesisStatus(str, Enum):
+    """Lifecycle status of an intelligence hypothesis."""
+
+    FORMULATED = "formulated"  # Newly generated proposition
+    INVESTIGATING = "investigating"  # In-progress deep evidence collection
+    SUPPORTED = "supported"  # Sufficient empirical/academic proof found (>= 0.70)
+    REFUTED = "refuted"  # Proven false or mitigated by strong defenses (<= 0.30)
+    INCONCLUSIVE = "inconclusive"  # Conflicting or insufficient evidence
+
+
+@dataclass
+class HypothesisEvidence:
+    """Empirical or academic evidence item tied to a hypothesis."""
+
+    evidence_id: str
+    paper_id: str
+    excerpt: str
+    polarity: str  # 'support' or 'refute'
+    relevance_score: float = 1.0
+    recorded_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Hypothesis:
+    """Security proposition formulated and verified through evidence collection."""
+
+    hypo_id: str
+    statement: str
+    target_topics: List[str]
+    confidence_score: float = 0.5  # 0.0 (fully refuted) to 1.0 (fully supported)
+    status: HypothesisStatus = HypothesisStatus.FORMULATED
+    supporting_evidence: List[HypothesisEvidence] = field(default_factory=list)
+    refuting_evidence: List[HypothesisEvidence] = field(default_factory=list)
+    formulated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    updated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass
 class PhaseContext:
     """Carrier context flowing across the 6 intelligence phases."""
@@ -94,6 +139,7 @@ class PhaseContext:
     raw_records: List[Dict[str, Any]] = field(default_factory=list)
     processed_records: List[Dict[str, Any]] = field(default_factory=list)
     products: List[IntelligenceProduct] = field(default_factory=list)
+    hypotheses: List[Hypothesis] = field(default_factory=list)
     telemetry: Optional[FeedbackTelemetry] = None
     errors: List[Dict[str, Any]] = field(default_factory=list)
     state: Dict[str, Any] = field(default_factory=dict)

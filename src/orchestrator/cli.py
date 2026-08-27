@@ -335,6 +335,78 @@ def run_pir_command(args: argparse.Namespace) -> int:
     return _list_pir_requirements(orchestrator)
 
 
+def _list_hypotheses(
+    orchestrator: UniversalIntelligenceOrchestrator,
+) -> int:
+    """Lists tracked intelligence hypotheses and their verification status."""
+    hypotheses = orchestrator.list_hypotheses()
+    print("=================================================================")
+    print("   AUTONOMOUS SECURITY HYPOTHESES & VERIFICATION STATUS")
+    print("=================================================================")
+    if not hypotheses:
+        print("  (No hypotheses formulated or evaluated yet.)")
+    else:
+        for h in hypotheses:
+            status_str = h.status.value.upper()
+            supp_n = len(h.supporting_evidence)
+            ref_n = len(h.refuting_evidence)
+            print(
+                f"  [{status_str}] [{h.hypo_id}] (Confidence: {h.confidence_score*100:.1f}%)"
+            )
+            print(f"    Statement: {h.statement}")
+            print(f"    Topics:    {', '.join(h.target_topics)}")
+            print(f"    Evidence:  {supp_n} Supporting | {ref_n} Refuting")
+            print()
+    return 0
+
+
+def _add_hypothesis(
+    orchestrator: UniversalIntelligenceOrchestrator, args: argparse.Namespace
+) -> int:
+    """Registers a manual hypothesis proposition."""
+    if not args.id or not args.statement or not args.topics:
+        print(
+            "[ERROR] --id, --statement, and --topics are required to add a hypothesis."
+        )
+        return 1
+    topics = [t.strip() for t in args.topics.split(",") if t.strip()]
+    hypo = orchestrator.register_hypothesis(
+        hypo_id=args.id, statement=args.statement, target_topics=topics
+    )
+    print(f"[+] Successfully registered hypothesis: [{hypo.hypo_id}]")
+    print(f"    Statement: {hypo.statement}")
+    print(f"    Topics: {hypo.target_topics}")
+    return 0
+
+
+def _report_hypothesis(
+    orchestrator: UniversalIntelligenceOrchestrator, args: argparse.Namespace
+) -> int:
+    """Displays detailed markdown investigation report for a hypothesis."""
+    if not args.id:
+        print("[ERROR] --id is required to view a hypothesis report.")
+        return 1
+    hypo = orchestrator.hypothesis_engine.get_hypothesis(args.id)
+    if not hypo:
+        print(f"[ERROR] Hypothesis [{args.id}] not found.")
+        return 1
+    report = orchestrator.hypothesis_engine.synthesize_hypothesis_report(hypo)
+    print(report)
+    return 0
+
+
+def run_hypothesis_command(args: argparse.Namespace) -> int:
+    """Manages hypothesis-driven autonomous investigation."""
+    orchestrator = UniversalIntelligenceOrchestrator(
+        workspace_dir=os.path.abspath(args.workdir)
+    )
+    if getattr(args, "hypo_action", None) == "add":
+        return _add_hypothesis(orchestrator, args)
+    elif getattr(args, "hypo_action", None) == "report":
+        return _report_hypothesis(orchestrator, args)
+    return _list_hypotheses(orchestrator)
+
+
 def run_status_command(args: argparse.Namespace) -> int:
     """Displays comprehensive repository and intelligence status."""
     workspace_dir = os.path.abspath(args.workdir)
@@ -519,6 +591,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target horizon (default: tactical)",
     )
 
+    # Command: hypothesis
+    hypo_parser = subparsers.add_parser(
+        "hypothesis", help="Inspect and manage autonomous security hypotheses"
+    )
+    hypo_subparsers = hypo_parser.add_subparsers(
+        dest="hypo_action", help="Hypothesis action to perform"
+    )
+    hypo_subparsers.add_parser(
+        "list", help="List tracked hypotheses and verification statuses (default)"
+    )
+    add_hypo_parser = hypo_subparsers.add_parser(
+        "add", help="Register a manual security hypothesis proposition"
+    )
+    add_hypo_parser.add_argument(
+        "--id", type=str, required=True, help="Unique Hypothesis ID"
+    )
+    add_hypo_parser.add_argument(
+        "--statement", type=str, required=True, help="Hypothesis proposition statement"
+    )
+    add_hypo_parser.add_argument(
+        "--topics",
+        type=str,
+        required=True,
+        help="Comma-separated list of target domain topics",
+    )
+
+    report_hypo_parser = hypo_subparsers.add_parser(
+        "report", help="Display detailed markdown investigation report for a hypothesis"
+    )
+    report_hypo_parser.add_argument(
+        "--id", type=str, required=True, help="Hypothesis ID to report"
+    )
+
     # Command: status
     subparsers.add_parser(
         "status", help="Show system-wide intelligence and data status"
@@ -700,6 +805,7 @@ def _dispatch_command(
         "cycle": _handle_cycle_cli,
         "daemon": run_daemon_command,
         "pir": run_pir_command,
+        "hypothesis": run_hypothesis_command,
         "status": run_status_command,
         "pipeline": _handle_pipeline_cli,
         "spider": _handle_spider_cli,
