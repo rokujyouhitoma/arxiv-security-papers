@@ -1,0 +1,3085 @@
+{
+  "cycle_id": "cycle_20260827_144629",
+  "workspace_dir": "/workspace/arxiv-security-papers",
+  "phase_statuses": {
+    "planning": "completed",
+    "collection": "completed",
+    "processing": "completed",
+    "analysis": "completed",
+    "dissemination": "completed",
+    "evaluation": "completed"
+  },
+  "directive": {
+    "directive_id": "dir_cycle_20260827_144629",
+    "target_topics": [
+      "LLM・AIセキュリティ",
+      "MCPセキュリティ",
+      "ゼロ知識証明",
+      "ファジング・脆弱性調査",
+      "プロンプトインジェクション",
+      "ペネトレーションテスト・脆弱性検証",
+      "暗号・プライバシー技術",
+      "権限昇格",
+      "耐量子暗号",
+      "脱獄攻撃"
+    ],
+    "topic_weights": {
+      "暗号・プライバシー技術": 0.02991772625280479,
+      "ファジング・脆弱性調査": 0.01177317931244633,
+      "ゼロ知識証明": 0.02991772625280479,
+      "プロンプトインジェクション": 0.004616933063704442,
+      "脱獄攻撃": 0.004616933063704442,
+      "権限昇格": 0.19390426327599103,
+      "MCPセキュリティ": 0.19390426327599103,
+      "耐量子暗号": 0.5149588631264024,
+      "LLM・AIセキュリティ": 0.004616933063704442,
+      "ペネトレーションテスト・脆弱性検証": 0.01177317931244633
+    },
+    "crawl_quotas": {
+      "LLM・AIセキュリティ": 5,
+      "MCPセキュリティ": 20,
+      "ゼロ知識証明": 5,
+      "ファジング・脆弱性調査": 5,
+      "プロンプトインジェクション": 5,
+      "ペネトレーションテスト・脆弱性検証": 5,
+      "暗号・プライバシー技術": 5,
+      "権限昇格": 20,
+      "耐量子暗号": 52,
+      "脱獄攻撃": 5
+    },
+    "priority_level": 1,
+    "created_at": "2026-08-27T14:46:29.373591+00:00",
+    "metadata": {
+      "active_pir_count": 5,
+      "horizon_breakdown": {
+        "tactical": 1,
+        "operational": 4,
+        "strategic": 0
+      }
+    }
+  },
+  "raw_records": [
+    {
+      "id": "rec_LLM・AIセキュリティ_1",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #1",
+      "topic": "LLM・AIセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning LLM・AIセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_LLM・AIセキュリティ_2",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #2",
+      "topic": "LLM・AIセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning LLM・AIセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_LLM・AIセキュリティ_3",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #3",
+      "topic": "LLM・AIセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning LLM・AIセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_LLM・AIセキュリティ_4",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #4",
+      "topic": "LLM・AIセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning LLM・AIセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_LLM・AIセキュリティ_5",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #5",
+      "topic": "LLM・AIセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning LLM・AIセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_1",
+      "title": "Intelligence Observation on MCPセキュリティ #1",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_2",
+      "title": "Intelligence Observation on MCPセキュリティ #2",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_3",
+      "title": "Intelligence Observation on MCPセキュリティ #3",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_4",
+      "title": "Intelligence Observation on MCPセキュリティ #4",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_5",
+      "title": "Intelligence Observation on MCPセキュリティ #5",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_6",
+      "title": "Intelligence Observation on MCPセキュリティ #6",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_7",
+      "title": "Intelligence Observation on MCPセキュリティ #7",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_8",
+      "title": "Intelligence Observation on MCPセキュリティ #8",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_9",
+      "title": "Intelligence Observation on MCPセキュリティ #9",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_10",
+      "title": "Intelligence Observation on MCPセキュリティ #10",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_11",
+      "title": "Intelligence Observation on MCPセキュリティ #11",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_12",
+      "title": "Intelligence Observation on MCPセキュリティ #12",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_13",
+      "title": "Intelligence Observation on MCPセキュリティ #13",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_14",
+      "title": "Intelligence Observation on MCPセキュリティ #14",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_15",
+      "title": "Intelligence Observation on MCPセキュリティ #15",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_16",
+      "title": "Intelligence Observation on MCPセキュリティ #16",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_17",
+      "title": "Intelligence Observation on MCPセキュリティ #17",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_18",
+      "title": "Intelligence Observation on MCPセキュリティ #18",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_19",
+      "title": "Intelligence Observation on MCPセキュリティ #19",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_MCPセキュリティ_20",
+      "title": "Intelligence Observation on MCPセキュリティ #20",
+      "topic": "MCPセキュリティ",
+      "raw_text": "Detailed raw intelligence data concerning MCPセキュリティ.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ゼロ知識証明_1",
+      "title": "Intelligence Observation on ゼロ知識証明 #1",
+      "topic": "ゼロ知識証明",
+      "raw_text": "Detailed raw intelligence data concerning ゼロ知識証明.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ゼロ知識証明_2",
+      "title": "Intelligence Observation on ゼロ知識証明 #2",
+      "topic": "ゼロ知識証明",
+      "raw_text": "Detailed raw intelligence data concerning ゼロ知識証明.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ゼロ知識証明_3",
+      "title": "Intelligence Observation on ゼロ知識証明 #3",
+      "topic": "ゼロ知識証明",
+      "raw_text": "Detailed raw intelligence data concerning ゼロ知識証明.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ゼロ知識証明_4",
+      "title": "Intelligence Observation on ゼロ知識証明 #4",
+      "topic": "ゼロ知識証明",
+      "raw_text": "Detailed raw intelligence data concerning ゼロ知識証明.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ゼロ知識証明_5",
+      "title": "Intelligence Observation on ゼロ知識証明 #5",
+      "topic": "ゼロ知識証明",
+      "raw_text": "Detailed raw intelligence data concerning ゼロ知識証明.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_1",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #1",
+      "topic": "ファジング・脆弱性調査",
+      "raw_text": "Detailed raw intelligence data concerning ファジング・脆弱性調査.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_2",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #2",
+      "topic": "ファジング・脆弱性調査",
+      "raw_text": "Detailed raw intelligence data concerning ファジング・脆弱性調査.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_3",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #3",
+      "topic": "ファジング・脆弱性調査",
+      "raw_text": "Detailed raw intelligence data concerning ファジング・脆弱性調査.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_4",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #4",
+      "topic": "ファジング・脆弱性調査",
+      "raw_text": "Detailed raw intelligence data concerning ファジング・脆弱性調査.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_5",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #5",
+      "topic": "ファジング・脆弱性調査",
+      "raw_text": "Detailed raw intelligence data concerning ファジング・脆弱性調査.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_1",
+      "title": "Intelligence Observation on プロンプトインジェクション #1",
+      "topic": "プロンプトインジェクション",
+      "raw_text": "Detailed raw intelligence data concerning プロンプトインジェクション.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_2",
+      "title": "Intelligence Observation on プロンプトインジェクション #2",
+      "topic": "プロンプトインジェクション",
+      "raw_text": "Detailed raw intelligence data concerning プロンプトインジェクション.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_3",
+      "title": "Intelligence Observation on プロンプトインジェクション #3",
+      "topic": "プロンプトインジェクション",
+      "raw_text": "Detailed raw intelligence data concerning プロンプトインジェクション.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_4",
+      "title": "Intelligence Observation on プロンプトインジェクション #4",
+      "topic": "プロンプトインジェクション",
+      "raw_text": "Detailed raw intelligence data concerning プロンプトインジェクション.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_5",
+      "title": "Intelligence Observation on プロンプトインジェクション #5",
+      "topic": "プロンプトインジェクション",
+      "raw_text": "Detailed raw intelligence data concerning プロンプトインジェクション.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_1",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #1",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "raw_text": "Detailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_2",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #2",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "raw_text": "Detailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_3",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #3",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "raw_text": "Detailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_4",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #4",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "raw_text": "Detailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_5",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #5",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "raw_text": "Detailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_1",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #1",
+      "topic": "暗号・プライバシー技術",
+      "raw_text": "Detailed raw intelligence data concerning 暗号・プライバシー技術.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_2",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #2",
+      "topic": "暗号・プライバシー技術",
+      "raw_text": "Detailed raw intelligence data concerning 暗号・プライバシー技術.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_3",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #3",
+      "topic": "暗号・プライバシー技術",
+      "raw_text": "Detailed raw intelligence data concerning 暗号・プライバシー技術.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_4",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #4",
+      "topic": "暗号・プライバシー技術",
+      "raw_text": "Detailed raw intelligence data concerning 暗号・プライバシー技術.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_5",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #5",
+      "topic": "暗号・プライバシー技術",
+      "raw_text": "Detailed raw intelligence data concerning 暗号・プライバシー技術.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_1",
+      "title": "Intelligence Observation on 権限昇格 #1",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_2",
+      "title": "Intelligence Observation on 権限昇格 #2",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_3",
+      "title": "Intelligence Observation on 権限昇格 #3",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_4",
+      "title": "Intelligence Observation on 権限昇格 #4",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_5",
+      "title": "Intelligence Observation on 権限昇格 #5",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_6",
+      "title": "Intelligence Observation on 権限昇格 #6",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_7",
+      "title": "Intelligence Observation on 権限昇格 #7",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_8",
+      "title": "Intelligence Observation on 権限昇格 #8",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_9",
+      "title": "Intelligence Observation on 権限昇格 #9",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_10",
+      "title": "Intelligence Observation on 権限昇格 #10",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_11",
+      "title": "Intelligence Observation on 権限昇格 #11",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_12",
+      "title": "Intelligence Observation on 権限昇格 #12",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_13",
+      "title": "Intelligence Observation on 権限昇格 #13",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_14",
+      "title": "Intelligence Observation on 権限昇格 #14",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_15",
+      "title": "Intelligence Observation on 権限昇格 #15",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_16",
+      "title": "Intelligence Observation on 権限昇格 #16",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_17",
+      "title": "Intelligence Observation on 権限昇格 #17",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_18",
+      "title": "Intelligence Observation on 権限昇格 #18",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_19",
+      "title": "Intelligence Observation on 権限昇格 #19",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_権限昇格_20",
+      "title": "Intelligence Observation on 権限昇格 #20",
+      "topic": "権限昇格",
+      "raw_text": "Detailed raw intelligence data concerning 権限昇格.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_1",
+      "title": "Intelligence Observation on 耐量子暗号 #1",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_2",
+      "title": "Intelligence Observation on 耐量子暗号 #2",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_3",
+      "title": "Intelligence Observation on 耐量子暗号 #3",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_4",
+      "title": "Intelligence Observation on 耐量子暗号 #4",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_5",
+      "title": "Intelligence Observation on 耐量子暗号 #5",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_6",
+      "title": "Intelligence Observation on 耐量子暗号 #6",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_7",
+      "title": "Intelligence Observation on 耐量子暗号 #7",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_8",
+      "title": "Intelligence Observation on 耐量子暗号 #8",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_9",
+      "title": "Intelligence Observation on 耐量子暗号 #9",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_10",
+      "title": "Intelligence Observation on 耐量子暗号 #10",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_11",
+      "title": "Intelligence Observation on 耐量子暗号 #11",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_12",
+      "title": "Intelligence Observation on 耐量子暗号 #12",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_13",
+      "title": "Intelligence Observation on 耐量子暗号 #13",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_14",
+      "title": "Intelligence Observation on 耐量子暗号 #14",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_15",
+      "title": "Intelligence Observation on 耐量子暗号 #15",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_16",
+      "title": "Intelligence Observation on 耐量子暗号 #16",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_17",
+      "title": "Intelligence Observation on 耐量子暗号 #17",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_18",
+      "title": "Intelligence Observation on 耐量子暗号 #18",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_19",
+      "title": "Intelligence Observation on 耐量子暗号 #19",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_20",
+      "title": "Intelligence Observation on 耐量子暗号 #20",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_21",
+      "title": "Intelligence Observation on 耐量子暗号 #21",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_22",
+      "title": "Intelligence Observation on 耐量子暗号 #22",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_23",
+      "title": "Intelligence Observation on 耐量子暗号 #23",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_24",
+      "title": "Intelligence Observation on 耐量子暗号 #24",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_25",
+      "title": "Intelligence Observation on 耐量子暗号 #25",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_26",
+      "title": "Intelligence Observation on 耐量子暗号 #26",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_27",
+      "title": "Intelligence Observation on 耐量子暗号 #27",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_28",
+      "title": "Intelligence Observation on 耐量子暗号 #28",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_29",
+      "title": "Intelligence Observation on 耐量子暗号 #29",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_30",
+      "title": "Intelligence Observation on 耐量子暗号 #30",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_31",
+      "title": "Intelligence Observation on 耐量子暗号 #31",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_32",
+      "title": "Intelligence Observation on 耐量子暗号 #32",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_33",
+      "title": "Intelligence Observation on 耐量子暗号 #33",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_34",
+      "title": "Intelligence Observation on 耐量子暗号 #34",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_35",
+      "title": "Intelligence Observation on 耐量子暗号 #35",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_36",
+      "title": "Intelligence Observation on 耐量子暗号 #36",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_37",
+      "title": "Intelligence Observation on 耐量子暗号 #37",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_38",
+      "title": "Intelligence Observation on 耐量子暗号 #38",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_39",
+      "title": "Intelligence Observation on 耐量子暗号 #39",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_40",
+      "title": "Intelligence Observation on 耐量子暗号 #40",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_41",
+      "title": "Intelligence Observation on 耐量子暗号 #41",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_42",
+      "title": "Intelligence Observation on 耐量子暗号 #42",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_43",
+      "title": "Intelligence Observation on 耐量子暗号 #43",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_44",
+      "title": "Intelligence Observation on 耐量子暗号 #44",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_45",
+      "title": "Intelligence Observation on 耐量子暗号 #45",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_46",
+      "title": "Intelligence Observation on 耐量子暗号 #46",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_47",
+      "title": "Intelligence Observation on 耐量子暗号 #47",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_48",
+      "title": "Intelligence Observation on 耐量子暗号 #48",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_49",
+      "title": "Intelligence Observation on 耐量子暗号 #49",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_50",
+      "title": "Intelligence Observation on 耐量子暗号 #50",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_51",
+      "title": "Intelligence Observation on 耐量子暗号 #51",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_耐量子暗号_52",
+      "title": "Intelligence Observation on 耐量子暗号 #52",
+      "topic": "耐量子暗号",
+      "raw_text": "Detailed raw intelligence data concerning 耐量子暗号.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_脱獄攻撃_1",
+      "title": "Intelligence Observation on 脱獄攻撃 #1",
+      "topic": "脱獄攻撃",
+      "raw_text": "Detailed raw intelligence data concerning 脱獄攻撃.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_脱獄攻撃_2",
+      "title": "Intelligence Observation on 脱獄攻撃 #2",
+      "topic": "脱獄攻撃",
+      "raw_text": "Detailed raw intelligence data concerning 脱獄攻撃.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_脱獄攻撃_3",
+      "title": "Intelligence Observation on 脱獄攻撃 #3",
+      "topic": "脱獄攻撃",
+      "raw_text": "Detailed raw intelligence data concerning 脱獄攻撃.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_脱獄攻撃_4",
+      "title": "Intelligence Observation on 脱獄攻撃 #4",
+      "topic": "脱獄攻撃",
+      "raw_text": "Detailed raw intelligence data concerning 脱獄攻撃.",
+      "source": "universal_harvester"
+    },
+    {
+      "id": "rec_脱獄攻撃_5",
+      "title": "Intelligence Observation on 脱獄攻撃 #5",
+      "topic": "脱獄攻撃",
+      "raw_text": "Detailed raw intelligence data concerning 脱獄攻撃.",
+      "source": "universal_harvester"
+    }
+  ],
+  "processed_records": [
+    {
+      "id": "rec_LLM・AIセキュリティ_1",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #1",
+      "topic": "LLM・AIセキュリティ",
+      "tags": [
+        "LLM・AIセキュリティ",
+        "artificial-intelligence"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on LLM・AIセキュリティ #1\"\ndescription: \"Processed intelligence record for LLM・AIセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_LLM・AIセキュリティ_1\"\ntags:\n  - \"LLM・AIセキュリティ\"\n  - \"artificial-intelligence\"\ntimestamp: \"2026-08-27T14:46:29.392685+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_LLM・AIセキュリティ_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on LLM・AIセキュリティ #1\n\nDetailed raw intelligence data concerning LLM・AIセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392704+00:00"
+    },
+    {
+      "id": "rec_LLM・AIセキュリティ_2",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #2",
+      "topic": "LLM・AIセキュリティ",
+      "tags": [
+        "LLM・AIセキュリティ",
+        "artificial-intelligence"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on LLM・AIセキュリティ #2\"\ndescription: \"Processed intelligence record for LLM・AIセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_LLM・AIセキュリティ_2\"\ntags:\n  - \"LLM・AIセキュリティ\"\n  - \"artificial-intelligence\"\ntimestamp: \"2026-08-27T14:46:29.392743+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_LLM・AIセキュリティ_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on LLM・AIセキュリティ #2\n\nDetailed raw intelligence data concerning LLM・AIセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392751+00:00"
+    },
+    {
+      "id": "rec_LLM・AIセキュリティ_3",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #3",
+      "topic": "LLM・AIセキュリティ",
+      "tags": [
+        "LLM・AIセキュリティ",
+        "artificial-intelligence"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on LLM・AIセキュリティ #3\"\ndescription: \"Processed intelligence record for LLM・AIセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_LLM・AIセキュリティ_3\"\ntags:\n  - \"LLM・AIセキュリティ\"\n  - \"artificial-intelligence\"\ntimestamp: \"2026-08-27T14:46:29.392776+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_LLM・AIセキュリティ_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on LLM・AIセキュリティ #3\n\nDetailed raw intelligence data concerning LLM・AIセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392782+00:00"
+    },
+    {
+      "id": "rec_LLM・AIセキュリティ_4",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #4",
+      "topic": "LLM・AIセキュリティ",
+      "tags": [
+        "LLM・AIセキュリティ",
+        "artificial-intelligence"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on LLM・AIセキュリティ #4\"\ndescription: \"Processed intelligence record for LLM・AIセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_LLM・AIセキュリティ_4\"\ntags:\n  - \"LLM・AIセキュリティ\"\n  - \"artificial-intelligence\"\ntimestamp: \"2026-08-27T14:46:29.392803+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_LLM・AIセキュリティ_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on LLM・AIセキュリティ #4\n\nDetailed raw intelligence data concerning LLM・AIセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392807+00:00"
+    },
+    {
+      "id": "rec_LLM・AIセキュリティ_5",
+      "title": "Intelligence Observation on LLM・AIセキュリティ #5",
+      "topic": "LLM・AIセキュリティ",
+      "tags": [
+        "LLM・AIセキュリティ",
+        "artificial-intelligence"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on LLM・AIセキュリティ #5\"\ndescription: \"Processed intelligence record for LLM・AIセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_LLM・AIセキュリティ_5\"\ntags:\n  - \"LLM・AIセキュリティ\"\n  - \"artificial-intelligence\"\ntimestamp: \"2026-08-27T14:46:29.392828+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_LLM・AIセキュリティ_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on LLM・AIセキュリティ #5\n\nDetailed raw intelligence data concerning LLM・AIセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392832+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_1",
+      "title": "Intelligence Observation on MCPセキュリティ #1",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #1\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_1\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.392853+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #1\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392859+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_2",
+      "title": "Intelligence Observation on MCPセキュリティ #2",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #2\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_2\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.392878+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #2\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392882+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_3",
+      "title": "Intelligence Observation on MCPセキュリティ #3",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #3\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_3\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.392900+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #3\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392904+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_4",
+      "title": "Intelligence Observation on MCPセキュリティ #4",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #4\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_4\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.392932+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #4\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392936+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_5",
+      "title": "Intelligence Observation on MCPセキュリティ #5",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #5\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_5\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.392954+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #5\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392958+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_6",
+      "title": "Intelligence Observation on MCPセキュリティ #6",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #6\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_6\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.392976+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_6\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #6\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.392980+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_7",
+      "title": "Intelligence Observation on MCPセキュリティ #7",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #7\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_7\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.392998+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_7\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #7\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393002+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_8",
+      "title": "Intelligence Observation on MCPセキュリティ #8",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #8\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_8\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393019+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_8\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #8\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393023+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_9",
+      "title": "Intelligence Observation on MCPセキュリティ #9",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #9\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_9\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393043+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_9\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #9\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393047+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_10",
+      "title": "Intelligence Observation on MCPセキュリティ #10",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #10\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_10\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393066+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_10\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #10\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393070+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_11",
+      "title": "Intelligence Observation on MCPセキュリティ #11",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #11\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_11\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393088+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_11\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #11\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393092+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_12",
+      "title": "Intelligence Observation on MCPセキュリティ #12",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #12\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_12\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393109+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_12\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #12\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393114+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_13",
+      "title": "Intelligence Observation on MCPセキュリティ #13",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #13\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_13\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393131+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_13\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #13\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393136+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_14",
+      "title": "Intelligence Observation on MCPセキュリティ #14",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #14\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_14\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393153+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_14\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #14\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393157+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_15",
+      "title": "Intelligence Observation on MCPセキュリティ #15",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #15\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_15\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393174+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_15\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #15\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393178+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_16",
+      "title": "Intelligence Observation on MCPセキュリティ #16",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #16\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_16\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393194+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_16\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #16\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393199+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_17",
+      "title": "Intelligence Observation on MCPセキュリティ #17",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #17\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_17\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393215+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_17\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #17\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393219+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_18",
+      "title": "Intelligence Observation on MCPセキュリティ #18",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #18\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_18\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393235+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_18\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #18\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393239+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_19",
+      "title": "Intelligence Observation on MCPセキュリティ #19",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #19\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_19\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393256+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_19\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #19\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393260+00:00"
+    },
+    {
+      "id": "rec_MCPセキュリティ_20",
+      "title": "Intelligence Observation on MCPセキュリティ #20",
+      "topic": "MCPセキュリティ",
+      "tags": [
+        "MCPセキュリティ"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on MCPセキュリティ #20\"\ndescription: \"Processed intelligence record for MCPセキュリティ\"\nresource: \"https://intelligence.internal/records/rec_MCPセキュリティ_20\"\ntags:\n  - \"MCPセキュリティ\"\ntimestamp: \"2026-08-27T14:46:29.393277+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_MCPセキュリティ_20\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on MCPセキュリティ #20\n\nDetailed raw intelligence data concerning MCPセキュリティ.\n",
+      "processed_at": "2026-08-27T14:46:29.393281+00:00"
+    },
+    {
+      "id": "rec_ゼロ知識証明_1",
+      "title": "Intelligence Observation on ゼロ知識証明 #1",
+      "topic": "ゼロ知識証明",
+      "tags": [
+        "ゼロ知識証明"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ゼロ知識証明 #1\"\ndescription: \"Processed intelligence record for ゼロ知識証明\"\nresource: \"https://intelligence.internal/records/rec_ゼロ知識証明_1\"\ntags:\n  - \"ゼロ知識証明\"\ntimestamp: \"2026-08-27T14:46:29.393300+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ゼロ知識証明_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ゼロ知識証明 #1\n\nDetailed raw intelligence data concerning ゼロ知識証明.\n",
+      "processed_at": "2026-08-27T14:46:29.393305+00:00"
+    },
+    {
+      "id": "rec_ゼロ知識証明_2",
+      "title": "Intelligence Observation on ゼロ知識証明 #2",
+      "topic": "ゼロ知識証明",
+      "tags": [
+        "ゼロ知識証明"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ゼロ知識証明 #2\"\ndescription: \"Processed intelligence record for ゼロ知識証明\"\nresource: \"https://intelligence.internal/records/rec_ゼロ知識証明_2\"\ntags:\n  - \"ゼロ知識証明\"\ntimestamp: \"2026-08-27T14:46:29.393323+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ゼロ知識証明_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ゼロ知識証明 #2\n\nDetailed raw intelligence data concerning ゼロ知識証明.\n",
+      "processed_at": "2026-08-27T14:46:29.393327+00:00"
+    },
+    {
+      "id": "rec_ゼロ知識証明_3",
+      "title": "Intelligence Observation on ゼロ知識証明 #3",
+      "topic": "ゼロ知識証明",
+      "tags": [
+        "ゼロ知識証明"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ゼロ知識証明 #3\"\ndescription: \"Processed intelligence record for ゼロ知識証明\"\nresource: \"https://intelligence.internal/records/rec_ゼロ知識証明_3\"\ntags:\n  - \"ゼロ知識証明\"\ntimestamp: \"2026-08-27T14:46:29.393343+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ゼロ知識証明_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ゼロ知識証明 #3\n\nDetailed raw intelligence data concerning ゼロ知識証明.\n",
+      "processed_at": "2026-08-27T14:46:29.393347+00:00"
+    },
+    {
+      "id": "rec_ゼロ知識証明_4",
+      "title": "Intelligence Observation on ゼロ知識証明 #4",
+      "topic": "ゼロ知識証明",
+      "tags": [
+        "ゼロ知識証明"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ゼロ知識証明 #4\"\ndescription: \"Processed intelligence record for ゼロ知識証明\"\nresource: \"https://intelligence.internal/records/rec_ゼロ知識証明_4\"\ntags:\n  - \"ゼロ知識証明\"\ntimestamp: \"2026-08-27T14:46:29.393363+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ゼロ知識証明_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ゼロ知識証明 #4\n\nDetailed raw intelligence data concerning ゼロ知識証明.\n",
+      "processed_at": "2026-08-27T14:46:29.393368+00:00"
+    },
+    {
+      "id": "rec_ゼロ知識証明_5",
+      "title": "Intelligence Observation on ゼロ知識証明 #5",
+      "topic": "ゼロ知識証明",
+      "tags": [
+        "ゼロ知識証明"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ゼロ知識証明 #5\"\ndescription: \"Processed intelligence record for ゼロ知識証明\"\nresource: \"https://intelligence.internal/records/rec_ゼロ知識証明_5\"\ntags:\n  - \"ゼロ知識証明\"\ntimestamp: \"2026-08-27T14:46:29.393384+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ゼロ知識証明_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ゼロ知識証明 #5\n\nDetailed raw intelligence data concerning ゼロ知識証明.\n",
+      "processed_at": "2026-08-27T14:46:29.393388+00:00"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_1",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #1",
+      "topic": "ファジング・脆弱性調査",
+      "tags": [
+        "ファジング・脆弱性調査"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ファジング・脆弱性調査 #1\"\ndescription: \"Processed intelligence record for ファジング・脆弱性調査\"\nresource: \"https://intelligence.internal/records/rec_ファジング・脆弱性調査_1\"\ntags:\n  - \"ファジング・脆弱性調査\"\ntimestamp: \"2026-08-27T14:46:29.393409+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ファジング・脆弱性調査_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ファジング・脆弱性調査 #1\n\nDetailed raw intelligence data concerning ファジング・脆弱性調査.\n",
+      "processed_at": "2026-08-27T14:46:29.393413+00:00"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_2",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #2",
+      "topic": "ファジング・脆弱性調査",
+      "tags": [
+        "ファジング・脆弱性調査"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ファジング・脆弱性調査 #2\"\ndescription: \"Processed intelligence record for ファジング・脆弱性調査\"\nresource: \"https://intelligence.internal/records/rec_ファジング・脆弱性調査_2\"\ntags:\n  - \"ファジング・脆弱性調査\"\ntimestamp: \"2026-08-27T14:46:29.393430+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ファジング・脆弱性調査_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ファジング・脆弱性調査 #2\n\nDetailed raw intelligence data concerning ファジング・脆弱性調査.\n",
+      "processed_at": "2026-08-27T14:46:29.393435+00:00"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_3",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #3",
+      "topic": "ファジング・脆弱性調査",
+      "tags": [
+        "ファジング・脆弱性調査"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ファジング・脆弱性調査 #3\"\ndescription: \"Processed intelligence record for ファジング・脆弱性調査\"\nresource: \"https://intelligence.internal/records/rec_ファジング・脆弱性調査_3\"\ntags:\n  - \"ファジング・脆弱性調査\"\ntimestamp: \"2026-08-27T14:46:29.393453+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ファジング・脆弱性調査_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ファジング・脆弱性調査 #3\n\nDetailed raw intelligence data concerning ファジング・脆弱性調査.\n",
+      "processed_at": "2026-08-27T14:46:29.393459+00:00"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_4",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #4",
+      "topic": "ファジング・脆弱性調査",
+      "tags": [
+        "ファジング・脆弱性調査"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ファジング・脆弱性調査 #4\"\ndescription: \"Processed intelligence record for ファジング・脆弱性調査\"\nresource: \"https://intelligence.internal/records/rec_ファジング・脆弱性調査_4\"\ntags:\n  - \"ファジング・脆弱性調査\"\ntimestamp: \"2026-08-27T14:46:29.393476+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ファジング・脆弱性調査_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ファジング・脆弱性調査 #4\n\nDetailed raw intelligence data concerning ファジング・脆弱性調査.\n",
+      "processed_at": "2026-08-27T14:46:29.393480+00:00"
+    },
+    {
+      "id": "rec_ファジング・脆弱性調査_5",
+      "title": "Intelligence Observation on ファジング・脆弱性調査 #5",
+      "topic": "ファジング・脆弱性調査",
+      "tags": [
+        "ファジング・脆弱性調査"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ファジング・脆弱性調査 #5\"\ndescription: \"Processed intelligence record for ファジング・脆弱性調査\"\nresource: \"https://intelligence.internal/records/rec_ファジング・脆弱性調査_5\"\ntags:\n  - \"ファジング・脆弱性調査\"\ntimestamp: \"2026-08-27T14:46:29.393507+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ファジング・脆弱性調査_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ファジング・脆弱性調査 #5\n\nDetailed raw intelligence data concerning ファジング・脆弱性調査.\n",
+      "processed_at": "2026-08-27T14:46:29.393514+00:00"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_1",
+      "title": "Intelligence Observation on プロンプトインジェクション #1",
+      "topic": "プロンプトインジェクション",
+      "tags": [
+        "プロンプトインジェクション"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on プロンプトインジェクション #1\"\ndescription: \"Processed intelligence record for プロンプトインジェクション\"\nresource: \"https://intelligence.internal/records/rec_プロンプトインジェクション_1\"\ntags:\n  - \"プロンプトインジェクション\"\ntimestamp: \"2026-08-27T14:46:29.393538+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_プロンプトインジェクション_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on プロンプトインジェクション #1\n\nDetailed raw intelligence data concerning プロンプトインジェクション.\n",
+      "processed_at": "2026-08-27T14:46:29.393543+00:00"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_2",
+      "title": "Intelligence Observation on プロンプトインジェクション #2",
+      "topic": "プロンプトインジェクション",
+      "tags": [
+        "プロンプトインジェクション"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on プロンプトインジェクション #2\"\ndescription: \"Processed intelligence record for プロンプトインジェクション\"\nresource: \"https://intelligence.internal/records/rec_プロンプトインジェクション_2\"\ntags:\n  - \"プロンプトインジェクション\"\ntimestamp: \"2026-08-27T14:46:29.393560+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_プロンプトインジェクション_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on プロンプトインジェクション #2\n\nDetailed raw intelligence data concerning プロンプトインジェクション.\n",
+      "processed_at": "2026-08-27T14:46:29.393564+00:00"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_3",
+      "title": "Intelligence Observation on プロンプトインジェクション #3",
+      "topic": "プロンプトインジェクション",
+      "tags": [
+        "プロンプトインジェクション"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on プロンプトインジェクション #3\"\ndescription: \"Processed intelligence record for プロンプトインジェクション\"\nresource: \"https://intelligence.internal/records/rec_プロンプトインジェクション_3\"\ntags:\n  - \"プロンプトインジェクション\"\ntimestamp: \"2026-08-27T14:46:29.393583+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_プロンプトインジェクション_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on プロンプトインジェクション #3\n\nDetailed raw intelligence data concerning プロンプトインジェクション.\n",
+      "processed_at": "2026-08-27T14:46:29.393587+00:00"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_4",
+      "title": "Intelligence Observation on プロンプトインジェクション #4",
+      "topic": "プロンプトインジェクション",
+      "tags": [
+        "プロンプトインジェクション"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on プロンプトインジェクション #4\"\ndescription: \"Processed intelligence record for プロンプトインジェクション\"\nresource: \"https://intelligence.internal/records/rec_プロンプトインジェクション_4\"\ntags:\n  - \"プロンプトインジェクション\"\ntimestamp: \"2026-08-27T14:46:29.393605+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_プロンプトインジェクション_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on プロンプトインジェクション #4\n\nDetailed raw intelligence data concerning プロンプトインジェクション.\n",
+      "processed_at": "2026-08-27T14:46:29.393609+00:00"
+    },
+    {
+      "id": "rec_プロンプトインジェクション_5",
+      "title": "Intelligence Observation on プロンプトインジェクション #5",
+      "topic": "プロンプトインジェクション",
+      "tags": [
+        "プロンプトインジェクション"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on プロンプトインジェクション #5\"\ndescription: \"Processed intelligence record for プロンプトインジェクション\"\nresource: \"https://intelligence.internal/records/rec_プロンプトインジェクション_5\"\ntags:\n  - \"プロンプトインジェクション\"\ntimestamp: \"2026-08-27T14:46:29.393627+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_プロンプトインジェクション_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on プロンプトインジェクション #5\n\nDetailed raw intelligence data concerning プロンプトインジェクション.\n",
+      "processed_at": "2026-08-27T14:46:29.393631+00:00"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_1",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #1",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "tags": [
+        "ペネトレーションテスト・脆弱性検証"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ペネトレーションテスト・脆弱性検証 #1\"\ndescription: \"Processed intelligence record for ペネトレーションテスト・脆弱性検証\"\nresource: \"https://intelligence.internal/records/rec_ペネトレーションテスト・脆弱性検証_1\"\ntags:\n  - \"ペネトレーションテスト・脆弱性検証\"\ntimestamp: \"2026-08-27T14:46:29.393650+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ペネトレーションテスト・脆弱性検証_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ペネトレーションテスト・脆弱性検証 #1\n\nDetailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.\n",
+      "processed_at": "2026-08-27T14:46:29.393655+00:00"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_2",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #2",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "tags": [
+        "ペネトレーションテスト・脆弱性検証"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ペネトレーションテスト・脆弱性検証 #2\"\ndescription: \"Processed intelligence record for ペネトレーションテスト・脆弱性検証\"\nresource: \"https://intelligence.internal/records/rec_ペネトレーションテスト・脆弱性検証_2\"\ntags:\n  - \"ペネトレーションテスト・脆弱性検証\"\ntimestamp: \"2026-08-27T14:46:29.393679+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ペネトレーションテスト・脆弱性検証_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ペネトレーションテスト・脆弱性検証 #2\n\nDetailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.\n",
+      "processed_at": "2026-08-27T14:46:29.393683+00:00"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_3",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #3",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "tags": [
+        "ペネトレーションテスト・脆弱性検証"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ペネトレーションテスト・脆弱性検証 #3\"\ndescription: \"Processed intelligence record for ペネトレーションテスト・脆弱性検証\"\nresource: \"https://intelligence.internal/records/rec_ペネトレーションテスト・脆弱性検証_3\"\ntags:\n  - \"ペネトレーションテスト・脆弱性検証\"\ntimestamp: \"2026-08-27T14:46:29.393699+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ペネトレーションテスト・脆弱性検証_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ペネトレーションテスト・脆弱性検証 #3\n\nDetailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.\n",
+      "processed_at": "2026-08-27T14:46:29.393702+00:00"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_4",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #4",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "tags": [
+        "ペネトレーションテスト・脆弱性検証"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ペネトレーションテスト・脆弱性検証 #4\"\ndescription: \"Processed intelligence record for ペネトレーションテスト・脆弱性検証\"\nresource: \"https://intelligence.internal/records/rec_ペネトレーションテスト・脆弱性検証_4\"\ntags:\n  - \"ペネトレーションテスト・脆弱性検証\"\ntimestamp: \"2026-08-27T14:46:29.393721+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ペネトレーションテスト・脆弱性検証_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ペネトレーションテスト・脆弱性検証 #4\n\nDetailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.\n",
+      "processed_at": "2026-08-27T14:46:29.393725+00:00"
+    },
+    {
+      "id": "rec_ペネトレーションテスト・脆弱性検証_5",
+      "title": "Intelligence Observation on ペネトレーションテスト・脆弱性検証 #5",
+      "topic": "ペネトレーションテスト・脆弱性検証",
+      "tags": [
+        "ペネトレーションテスト・脆弱性検証"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on ペネトレーションテスト・脆弱性検証 #5\"\ndescription: \"Processed intelligence record for ペネトレーションテスト・脆弱性検証\"\nresource: \"https://intelligence.internal/records/rec_ペネトレーションテスト・脆弱性検証_5\"\ntags:\n  - \"ペネトレーションテスト・脆弱性検証\"\ntimestamp: \"2026-08-27T14:46:29.393741+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_ペネトレーションテスト・脆弱性検証_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on ペネトレーションテスト・脆弱性検証 #5\n\nDetailed raw intelligence data concerning ペネトレーションテスト・脆弱性検証.\n",
+      "processed_at": "2026-08-27T14:46:29.393744+00:00"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_1",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #1",
+      "topic": "暗号・プライバシー技術",
+      "tags": [
+        "暗号・プライバシー技術"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 暗号・プライバシー技術 #1\"\ndescription: \"Processed intelligence record for 暗号・プライバシー技術\"\nresource: \"https://intelligence.internal/records/rec_暗号・プライバシー技術_1\"\ntags:\n  - \"暗号・プライバシー技術\"\ntimestamp: \"2026-08-27T14:46:29.393760+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_暗号・プライバシー技術_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 暗号・プライバシー技術 #1\n\nDetailed raw intelligence data concerning 暗号・プライバシー技術.\n",
+      "processed_at": "2026-08-27T14:46:29.393764+00:00"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_2",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #2",
+      "topic": "暗号・プライバシー技術",
+      "tags": [
+        "暗号・プライバシー技術"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 暗号・プライバシー技術 #2\"\ndescription: \"Processed intelligence record for 暗号・プライバシー技術\"\nresource: \"https://intelligence.internal/records/rec_暗号・プライバシー技術_2\"\ntags:\n  - \"暗号・プライバシー技術\"\ntimestamp: \"2026-08-27T14:46:29.393780+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_暗号・プライバシー技術_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 暗号・プライバシー技術 #2\n\nDetailed raw intelligence data concerning 暗号・プライバシー技術.\n",
+      "processed_at": "2026-08-27T14:46:29.393783+00:00"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_3",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #3",
+      "topic": "暗号・プライバシー技術",
+      "tags": [
+        "暗号・プライバシー技術"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 暗号・プライバシー技術 #3\"\ndescription: \"Processed intelligence record for 暗号・プライバシー技術\"\nresource: \"https://intelligence.internal/records/rec_暗号・プライバシー技術_3\"\ntags:\n  - \"暗号・プライバシー技術\"\ntimestamp: \"2026-08-27T14:46:29.393798+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_暗号・プライバシー技術_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 暗号・プライバシー技術 #3\n\nDetailed raw intelligence data concerning 暗号・プライバシー技術.\n",
+      "processed_at": "2026-08-27T14:46:29.393802+00:00"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_4",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #4",
+      "topic": "暗号・プライバシー技術",
+      "tags": [
+        "暗号・プライバシー技術"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 暗号・プライバシー技術 #4\"\ndescription: \"Processed intelligence record for 暗号・プライバシー技術\"\nresource: \"https://intelligence.internal/records/rec_暗号・プライバシー技術_4\"\ntags:\n  - \"暗号・プライバシー技術\"\ntimestamp: \"2026-08-27T14:46:29.393818+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_暗号・プライバシー技術_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 暗号・プライバシー技術 #4\n\nDetailed raw intelligence data concerning 暗号・プライバシー技術.\n",
+      "processed_at": "2026-08-27T14:46:29.393821+00:00"
+    },
+    {
+      "id": "rec_暗号・プライバシー技術_5",
+      "title": "Intelligence Observation on 暗号・プライバシー技術 #5",
+      "topic": "暗号・プライバシー技術",
+      "tags": [
+        "暗号・プライバシー技術"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 暗号・プライバシー技術 #5\"\ndescription: \"Processed intelligence record for 暗号・プライバシー技術\"\nresource: \"https://intelligence.internal/records/rec_暗号・プライバシー技術_5\"\ntags:\n  - \"暗号・プライバシー技術\"\ntimestamp: \"2026-08-27T14:46:29.393837+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_暗号・プライバシー技術_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 暗号・プライバシー技術 #5\n\nDetailed raw intelligence data concerning 暗号・プライバシー技術.\n",
+      "processed_at": "2026-08-27T14:46:29.393840+00:00"
+    },
+    {
+      "id": "rec_権限昇格_1",
+      "title": "Intelligence Observation on 権限昇格 #1",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #1\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_1\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.393857+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #1\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.393861+00:00"
+    },
+    {
+      "id": "rec_権限昇格_2",
+      "title": "Intelligence Observation on 権限昇格 #2",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #2\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_2\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.393878+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #2\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.393882+00:00"
+    },
+    {
+      "id": "rec_権限昇格_3",
+      "title": "Intelligence Observation on 権限昇格 #3",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #3\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_3\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.393899+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #3\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.393903+00:00"
+    },
+    {
+      "id": "rec_権限昇格_4",
+      "title": "Intelligence Observation on 権限昇格 #4",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #4\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_4\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.393918+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #4\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.393922+00:00"
+    },
+    {
+      "id": "rec_権限昇格_5",
+      "title": "Intelligence Observation on 権限昇格 #5",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #5\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_5\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.393936+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #5\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.393940+00:00"
+    },
+    {
+      "id": "rec_権限昇格_6",
+      "title": "Intelligence Observation on 権限昇格 #6",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #6\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_6\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.393955+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_6\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #6\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.393960+00:00"
+    },
+    {
+      "id": "rec_権限昇格_7",
+      "title": "Intelligence Observation on 権限昇格 #7",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #7\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_7\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.393975+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_7\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #7\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.393979+00:00"
+    },
+    {
+      "id": "rec_権限昇格_8",
+      "title": "Intelligence Observation on 権限昇格 #8",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #8\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_8\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.393995+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_8\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #8\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.393999+00:00"
+    },
+    {
+      "id": "rec_権限昇格_9",
+      "title": "Intelligence Observation on 権限昇格 #9",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #9\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_9\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394035+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_9\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #9\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394043+00:00"
+    },
+    {
+      "id": "rec_権限昇格_10",
+      "title": "Intelligence Observation on 権限昇格 #10",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #10\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_10\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394066+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_10\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #10\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394071+00:00"
+    },
+    {
+      "id": "rec_権限昇格_11",
+      "title": "Intelligence Observation on 権限昇格 #11",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #11\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_11\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394088+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_11\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #11\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394092+00:00"
+    },
+    {
+      "id": "rec_権限昇格_12",
+      "title": "Intelligence Observation on 権限昇格 #12",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #12\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_12\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394108+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_12\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #12\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394111+00:00"
+    },
+    {
+      "id": "rec_権限昇格_13",
+      "title": "Intelligence Observation on 権限昇格 #13",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #13\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_13\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394127+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_13\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #13\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394131+00:00"
+    },
+    {
+      "id": "rec_権限昇格_14",
+      "title": "Intelligence Observation on 権限昇格 #14",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #14\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_14\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394146+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_14\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #14\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394150+00:00"
+    },
+    {
+      "id": "rec_権限昇格_15",
+      "title": "Intelligence Observation on 権限昇格 #15",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #15\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_15\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394166+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_15\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #15\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394169+00:00"
+    },
+    {
+      "id": "rec_権限昇格_16",
+      "title": "Intelligence Observation on 権限昇格 #16",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #16\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_16\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394184+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_16\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #16\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394188+00:00"
+    },
+    {
+      "id": "rec_権限昇格_17",
+      "title": "Intelligence Observation on 権限昇格 #17",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #17\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_17\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394203+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_17\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #17\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394207+00:00"
+    },
+    {
+      "id": "rec_権限昇格_18",
+      "title": "Intelligence Observation on 権限昇格 #18",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #18\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_18\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394223+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_18\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #18\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394226+00:00"
+    },
+    {
+      "id": "rec_権限昇格_19",
+      "title": "Intelligence Observation on 権限昇格 #19",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #19\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_19\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394245+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_19\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #19\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394251+00:00"
+    },
+    {
+      "id": "rec_権限昇格_20",
+      "title": "Intelligence Observation on 権限昇格 #20",
+      "topic": "権限昇格",
+      "tags": [
+        "権限昇格"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 権限昇格 #20\"\ndescription: \"Processed intelligence record for 権限昇格\"\nresource: \"https://intelligence.internal/records/rec_権限昇格_20\"\ntags:\n  - \"権限昇格\"\ntimestamp: \"2026-08-27T14:46:29.394273+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_権限昇格_20\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 権限昇格 #20\n\nDetailed raw intelligence data concerning 権限昇格.\n",
+      "processed_at": "2026-08-27T14:46:29.394283+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_1",
+      "title": "Intelligence Observation on 耐量子暗号 #1",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #1\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_1\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394309+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #1\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394318+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_2",
+      "title": "Intelligence Observation on 耐量子暗号 #2",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #2\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_2\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394339+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #2\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394343+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_3",
+      "title": "Intelligence Observation on 耐量子暗号 #3",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #3\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_3\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394363+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #3\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394367+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_4",
+      "title": "Intelligence Observation on 耐量子暗号 #4",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #4\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_4\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394382+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #4\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394386+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_5",
+      "title": "Intelligence Observation on 耐量子暗号 #5",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #5\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_5\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394401+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #5\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394405+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_6",
+      "title": "Intelligence Observation on 耐量子暗号 #6",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #6\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_6\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394421+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_6\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #6\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394425+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_7",
+      "title": "Intelligence Observation on 耐量子暗号 #7",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #7\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_7\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394447+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_7\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #7\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394455+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_8",
+      "title": "Intelligence Observation on 耐量子暗号 #8",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #8\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_8\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394481+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_8\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #8\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394487+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_9",
+      "title": "Intelligence Observation on 耐量子暗号 #9",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #9\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_9\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394512+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_9\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #9\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394518+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_10",
+      "title": "Intelligence Observation on 耐量子暗号 #10",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #10\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_10\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394836+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_10\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #10\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394846+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_11",
+      "title": "Intelligence Observation on 耐量子暗号 #11",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #11\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_11\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394869+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_11\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #11\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394875+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_12",
+      "title": "Intelligence Observation on 耐量子暗号 #12",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #12\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_12\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394894+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_12\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #12\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394899+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_13",
+      "title": "Intelligence Observation on 耐量子暗号 #13",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #13\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_13\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394916+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_13\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #13\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394921+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_14",
+      "title": "Intelligence Observation on 耐量子暗号 #14",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #14\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_14\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394938+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_14\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #14\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394943+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_15",
+      "title": "Intelligence Observation on 耐量子暗号 #15",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #15\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_15\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394960+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_15\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #15\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394965+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_16",
+      "title": "Intelligence Observation on 耐量子暗号 #16",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #16\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_16\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.394983+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_16\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #16\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.394988+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_17",
+      "title": "Intelligence Observation on 耐量子暗号 #17",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #17\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_17\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395005+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_17\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #17\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395010+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_18",
+      "title": "Intelligence Observation on 耐量子暗号 #18",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #18\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_18\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395027+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_18\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #18\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395031+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_19",
+      "title": "Intelligence Observation on 耐量子暗号 #19",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #19\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_19\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395049+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_19\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #19\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395053+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_20",
+      "title": "Intelligence Observation on 耐量子暗号 #20",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #20\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_20\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395070+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_20\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #20\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395074+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_21",
+      "title": "Intelligence Observation on 耐量子暗号 #21",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #21\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_21\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395091+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_21\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #21\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395095+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_22",
+      "title": "Intelligence Observation on 耐量子暗号 #22",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #22\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_22\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395120+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_22\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #22\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395124+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_23",
+      "title": "Intelligence Observation on 耐量子暗号 #23",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #23\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_23\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395141+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_23\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #23\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395147+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_24",
+      "title": "Intelligence Observation on 耐量子暗号 #24",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #24\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_24\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395165+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_24\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #24\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395170+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_25",
+      "title": "Intelligence Observation on 耐量子暗号 #25",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #25\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_25\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395187+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_25\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #25\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395191+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_26",
+      "title": "Intelligence Observation on 耐量子暗号 #26",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #26\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_26\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395209+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_26\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #26\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395213+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_27",
+      "title": "Intelligence Observation on 耐量子暗号 #27",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #27\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_27\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395231+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_27\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #27\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395235+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_28",
+      "title": "Intelligence Observation on 耐量子暗号 #28",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #28\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_28\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395254+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_28\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #28\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395258+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_29",
+      "title": "Intelligence Observation on 耐量子暗号 #29",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #29\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_29\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395276+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_29\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #29\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395281+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_30",
+      "title": "Intelligence Observation on 耐量子暗号 #30",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #30\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_30\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395298+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_30\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #30\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395302+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_31",
+      "title": "Intelligence Observation on 耐量子暗号 #31",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #31\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_31\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395320+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_31\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #31\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395325+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_32",
+      "title": "Intelligence Observation on 耐量子暗号 #32",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #32\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_32\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395342+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_32\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #32\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395346+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_33",
+      "title": "Intelligence Observation on 耐量子暗号 #33",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #33\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_33\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395364+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_33\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #33\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395368+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_34",
+      "title": "Intelligence Observation on 耐量子暗号 #34",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #34\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_34\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395385+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_34\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #34\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395389+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_35",
+      "title": "Intelligence Observation on 耐量子暗号 #35",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #35\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_35\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395406+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_35\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #35\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395410+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_36",
+      "title": "Intelligence Observation on 耐量子暗号 #36",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #36\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_36\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395427+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_36\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #36\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395431+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_37",
+      "title": "Intelligence Observation on 耐量子暗号 #37",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #37\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_37\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395448+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_37\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #37\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395453+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_38",
+      "title": "Intelligence Observation on 耐量子暗号 #38",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #38\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_38\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395469+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_38\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #38\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395474+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_39",
+      "title": "Intelligence Observation on 耐量子暗号 #39",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #39\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_39\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395491+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_39\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #39\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395495+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_40",
+      "title": "Intelligence Observation on 耐量子暗号 #40",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #40\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_40\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395578+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_40\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #40\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395586+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_41",
+      "title": "Intelligence Observation on 耐量子暗号 #41",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #41\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_41\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395611+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_41\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #41\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395615+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_42",
+      "title": "Intelligence Observation on 耐量子暗号 #42",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #42\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_42\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395634+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_42\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #42\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395641+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_43",
+      "title": "Intelligence Observation on 耐量子暗号 #43",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #43\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_43\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395712+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_43\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #43\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395728+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_44",
+      "title": "Intelligence Observation on 耐量子暗号 #44",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #44\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_44\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395762+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_44\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #44\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395768+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_45",
+      "title": "Intelligence Observation on 耐量子暗号 #45",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #45\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_45\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395789+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_45\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #45\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395794+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_46",
+      "title": "Intelligence Observation on 耐量子暗号 #46",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #46\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_46\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395812+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_46\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #46\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395817+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_47",
+      "title": "Intelligence Observation on 耐量子暗号 #47",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #47\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_47\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395845+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_47\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #47\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395854+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_48",
+      "title": "Intelligence Observation on 耐量子暗号 #48",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #48\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_48\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395887+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_48\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #48\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395895+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_49",
+      "title": "Intelligence Observation on 耐量子暗号 #49",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #49\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_49\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395933+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_49\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #49\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395941+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_50",
+      "title": "Intelligence Observation on 耐量子暗号 #50",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #50\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_50\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.395972+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_50\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #50\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.395979+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_51",
+      "title": "Intelligence Observation on 耐量子暗号 #51",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #51\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_51\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.396007+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_51\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #51\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.396015+00:00"
+    },
+    {
+      "id": "rec_耐量子暗号_52",
+      "title": "Intelligence Observation on 耐量子暗号 #52",
+      "topic": "耐量子暗号",
+      "tags": [
+        "耐量子暗号"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 耐量子暗号 #52\"\ndescription: \"Processed intelligence record for 耐量子暗号\"\nresource: \"https://intelligence.internal/records/rec_耐量子暗号_52\"\ntags:\n  - \"耐量子暗号\"\ntimestamp: \"2026-08-27T14:46:29.396058+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_耐量子暗号_52\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 耐量子暗号 #52\n\nDetailed raw intelligence data concerning 耐量子暗号.\n",
+      "processed_at": "2026-08-27T14:46:29.396067+00:00"
+    },
+    {
+      "id": "rec_脱獄攻撃_1",
+      "title": "Intelligence Observation on 脱獄攻撃 #1",
+      "topic": "脱獄攻撃",
+      "tags": [
+        "脱獄攻撃"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 脱獄攻撃 #1\"\ndescription: \"Processed intelligence record for 脱獄攻撃\"\nresource: \"https://intelligence.internal/records/rec_脱獄攻撃_1\"\ntags:\n  - \"脱獄攻撃\"\ntimestamp: \"2026-08-27T14:46:29.396092+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_脱獄攻撃_1\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 脱獄攻撃 #1\n\nDetailed raw intelligence data concerning 脱獄攻撃.\n",
+      "processed_at": "2026-08-27T14:46:29.396097+00:00"
+    },
+    {
+      "id": "rec_脱獄攻撃_2",
+      "title": "Intelligence Observation on 脱獄攻撃 #2",
+      "topic": "脱獄攻撃",
+      "tags": [
+        "脱獄攻撃"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 脱獄攻撃 #2\"\ndescription: \"Processed intelligence record for 脱獄攻撃\"\nresource: \"https://intelligence.internal/records/rec_脱獄攻撃_2\"\ntags:\n  - \"脱獄攻撃\"\ntimestamp: \"2026-08-27T14:46:29.396116+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_脱獄攻撃_2\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 脱獄攻撃 #2\n\nDetailed raw intelligence data concerning 脱獄攻撃.\n",
+      "processed_at": "2026-08-27T14:46:29.396121+00:00"
+    },
+    {
+      "id": "rec_脱獄攻撃_3",
+      "title": "Intelligence Observation on 脱獄攻撃 #3",
+      "topic": "脱獄攻撃",
+      "tags": [
+        "脱獄攻撃"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 脱獄攻撃 #3\"\ndescription: \"Processed intelligence record for 脱獄攻撃\"\nresource: \"https://intelligence.internal/records/rec_脱獄攻撃_3\"\ntags:\n  - \"脱獄攻撃\"\ntimestamp: \"2026-08-27T14:46:29.396139+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_脱獄攻撃_3\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 脱獄攻撃 #3\n\nDetailed raw intelligence data concerning 脱獄攻撃.\n",
+      "processed_at": "2026-08-27T14:46:29.396144+00:00"
+    },
+    {
+      "id": "rec_脱獄攻撃_4",
+      "title": "Intelligence Observation on 脱獄攻撃 #4",
+      "topic": "脱獄攻撃",
+      "tags": [
+        "脱獄攻撃"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 脱獄攻撃 #4\"\ndescription: \"Processed intelligence record for 脱獄攻撃\"\nresource: \"https://intelligence.internal/records/rec_脱獄攻撃_4\"\ntags:\n  - \"脱獄攻撃\"\ntimestamp: \"2026-08-27T14:46:29.396162+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_脱獄攻撃_4\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 脱獄攻撃 #4\n\nDetailed raw intelligence data concerning 脱獄攻撃.\n",
+      "processed_at": "2026-08-27T14:46:29.396166+00:00"
+    },
+    {
+      "id": "rec_脱獄攻撃_5",
+      "title": "Intelligence Observation on 脱獄攻撃 #5",
+      "topic": "脱獄攻撃",
+      "tags": [
+        "脱獄攻撃"
+      ],
+      "admiralty_code": "F6",
+      "admiralty_score": 0.25,
+      "admiralty_justification": "情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)",
+      "okf_content": "---\ntype: \"intelligence-document\"\ntitle: \"Intelligence Observation on 脱獄攻撃 #5\"\ndescription: \"Processed intelligence record for 脱獄攻撃\"\nresource: \"https://intelligence.internal/records/rec_脱獄攻撃_5\"\ntags:\n  - \"脱獄攻撃\"\ntimestamp: \"2026-08-27T14:46:29.396184+00:00\"\nprovenance:\n  origin: \"universal_harvester\"\n  raw_id: \"rec_脱獄攻撃_5\"\ntrust:\n  signature: \"sha256-verified\"\n  admiralty_code: \"F6\"\n  confidence: 0.25\n  admiralty_justification: \"情報源信頼性: [F] (未分類・新規情報ソース) / 情報確実性: [6] (確実性を判断するための技術的証拠が不十分)\"\n---\n\n# Intelligence Observation on 脱獄攻撃 #5\n\nDetailed raw intelligence data concerning 脱獄攻撃.\n",
+      "processed_at": "2026-08-27T14:46:29.396189+00:00"
+    }
+  ],
+  "products": [
+    {
+      "product_id": "prod_run_cycle_20260827_144629",
+      "title": "Cycle cycle_20260827_144629 Intelligence Assessment",
+      "summary": "Automated intelligence synthesis for cycle cycle_20260827_144629.\n- Topic 'LLM・AIセキュリティ': 5 records observed.\n- Topic 'MCPセキュリティ': 20 records observed.\n- Topic 'ゼロ知識証明': 5 records observed.\n- Topic 'ファジング・脆弱性調査': 5 records observed.\n- Topic 'プロンプトインジェクション': 5 records observed.\n- Topic 'ペネトレーションテスト・脆弱性検証': 5 records observed.\n- Topic '暗号・プライバシー技術': 5 records observed.\n- Topic '権限昇格': 20 records observed.\n- Topic '耐量子暗号': 52 records observed.\n- Topic '脱獄攻撃': 5 records observed.\n\n🔬 【自律検証セキュリティ仮説動向】:\n  - [FORMULATED] (確信度: 50.0%) LLM エージェントおよび MCP (Model Context Protocol) 連携における攻撃ベクトルは、プロンプトインジェクションから権限昇格・不正ツール実行へ移行している",
+      "tier": "01_per_run",
+      "topic_tags": [
+        "LLM・AIセキュリティ",
+        "MCPセキュリティ",
+        "ゼロ知識証明",
+        "ファジング・脆弱性調査",
+        "プロンプトインジェクション",
+        "ペネトレーションテスト・脆弱性検証",
+        "暗号・プライバシー技術",
+        "権限昇格",
+        "耐量子暗号",
+        "脱獄攻撃"
+      ],
+      "source_count": 127,
+      "confidence_score": 1.0,
+      "okf_references": [
+        "rec_LLM・AIセキュリティ_1",
+        "rec_LLM・AIセキュリティ_2",
+        "rec_LLM・AIセキュリティ_3",
+        "rec_LLM・AIセキュリティ_4",
+        "rec_LLM・AIセキュリティ_5",
+        "rec_MCPセキュリティ_1",
+        "rec_MCPセキュリティ_2",
+        "rec_MCPセキュリティ_3",
+        "rec_MCPセキュリティ_4",
+        "rec_MCPセキュリティ_5",
+        "rec_MCPセキュリティ_6",
+        "rec_MCPセキュリティ_7",
+        "rec_MCPセキュリティ_8",
+        "rec_MCPセキュリティ_9",
+        "rec_MCPセキュリティ_10",
+        "rec_MCPセキュリティ_11",
+        "rec_MCPセキュリティ_12",
+        "rec_MCPセキュリティ_13",
+        "rec_MCPセキュリティ_14",
+        "rec_MCPセキュリティ_15",
+        "rec_MCPセキュリティ_16",
+        "rec_MCPセキュリティ_17",
+        "rec_MCPセキュリティ_18",
+        "rec_MCPセキュリティ_19",
+        "rec_MCPセキュリティ_20",
+        "rec_ゼロ知識証明_1",
+        "rec_ゼロ知識証明_2",
+        "rec_ゼロ知識証明_3",
+        "rec_ゼロ知識証明_4",
+        "rec_ゼロ知識証明_5",
+        "rec_ファジング・脆弱性調査_1",
+        "rec_ファジング・脆弱性調査_2",
+        "rec_ファジング・脆弱性調査_3",
+        "rec_ファジング・脆弱性調査_4",
+        "rec_ファジング・脆弱性調査_5",
+        "rec_プロンプトインジェクション_1",
+        "rec_プロンプトインジェクション_2",
+        "rec_プロンプトインジェクション_3",
+        "rec_プロンプトインジェクション_4",
+        "rec_プロンプトインジェクション_5",
+        "rec_ペネトレーションテスト・脆弱性検証_1",
+        "rec_ペネトレーションテスト・脆弱性検証_2",
+        "rec_ペネトレーションテスト・脆弱性検証_3",
+        "rec_ペネトレーションテスト・脆弱性検証_4",
+        "rec_ペネトレーションテスト・脆弱性検証_5",
+        "rec_暗号・プライバシー技術_1",
+        "rec_暗号・プライバシー技術_2",
+        "rec_暗号・プライバシー技術_3",
+        "rec_暗号・プライバシー技術_4",
+        "rec_暗号・プライバシー技術_5",
+        "rec_権限昇格_1",
+        "rec_権限昇格_2",
+        "rec_権限昇格_3",
+        "rec_権限昇格_4",
+        "rec_権限昇格_5",
+        "rec_権限昇格_6",
+        "rec_権限昇格_7",
+        "rec_権限昇格_8",
+        "rec_権限昇格_9",
+        "rec_権限昇格_10",
+        "rec_権限昇格_11",
+        "rec_権限昇格_12",
+        "rec_権限昇格_13",
+        "rec_権限昇格_14",
+        "rec_権限昇格_15",
+        "rec_権限昇格_16",
+        "rec_権限昇格_17",
+        "rec_権限昇格_18",
+        "rec_権限昇格_19",
+        "rec_権限昇格_20",
+        "rec_耐量子暗号_1",
+        "rec_耐量子暗号_2",
+        "rec_耐量子暗号_3",
+        "rec_耐量子暗号_4",
+        "rec_耐量子暗号_5",
+        "rec_耐量子暗号_6",
+        "rec_耐量子暗号_7",
+        "rec_耐量子暗号_8",
+        "rec_耐量子暗号_9",
+        "rec_耐量子暗号_10",
+        "rec_耐量子暗号_11",
+        "rec_耐量子暗号_12",
+        "rec_耐量子暗号_13",
+        "rec_耐量子暗号_14",
+        "rec_耐量子暗号_15",
+        "rec_耐量子暗号_16",
+        "rec_耐量子暗号_17",
+        "rec_耐量子暗号_18",
+        "rec_耐量子暗号_19",
+        "rec_耐量子暗号_20",
+        "rec_耐量子暗号_21",
+        "rec_耐量子暗号_22",
+        "rec_耐量子暗号_23",
+        "rec_耐量子暗号_24",
+        "rec_耐量子暗号_25",
+        "rec_耐量子暗号_26",
+        "rec_耐量子暗号_27",
+        "rec_耐量子暗号_28",
+        "rec_耐量子暗号_29",
+        "rec_耐量子暗号_30",
+        "rec_耐量子暗号_31",
+        "rec_耐量子暗号_32",
+        "rec_耐量子暗号_33",
+        "rec_耐量子暗号_34",
+        "rec_耐量子暗号_35",
+        "rec_耐量子暗号_36",
+        "rec_耐量子暗号_37",
+        "rec_耐量子暗号_38",
+        "rec_耐量子暗号_39",
+        "rec_耐量子暗号_40",
+        "rec_耐量子暗号_41",
+        "rec_耐量子暗号_42",
+        "rec_耐量子暗号_43",
+        "rec_耐量子暗号_44",
+        "rec_耐量子暗号_45",
+        "rec_耐量子暗号_46",
+        "rec_耐量子暗号_47",
+        "rec_耐量子暗号_48",
+        "rec_耐量子暗号_49",
+        "rec_耐量子暗号_50",
+        "rec_耐量子暗号_51",
+        "rec_耐量子暗号_52",
+        "rec_脱獄攻撃_1",
+        "rec_脱獄攻撃_2",
+        "rec_脱獄攻撃_3",
+        "rec_脱獄攻撃_4",
+        "rec_脱獄攻撃_5"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411725+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_LLM・AIセキュリティ_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: Llm・aiセキュリティ",
+      "summary": "Consolidated analysis for domain LLM・AIセキュリティ based on 5 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "LLM・AIセキュリティ"
+      ],
+      "source_count": 5,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_LLM・AIセキュリティ_1",
+        "rec_LLM・AIセキュリティ_2",
+        "rec_LLM・AIセキュリティ_3",
+        "rec_LLM・AIセキュリティ_4",
+        "rec_LLM・AIセキュリティ_5"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411743+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_MCPセキュリティ_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: Mcpセキュリティ",
+      "summary": "Consolidated analysis for domain MCPセキュリティ based on 20 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "MCPセキュリティ"
+      ],
+      "source_count": 20,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_MCPセキュリティ_1",
+        "rec_MCPセキュリティ_2",
+        "rec_MCPセキュリティ_3",
+        "rec_MCPセキュリティ_4",
+        "rec_MCPセキュリティ_5",
+        "rec_MCPセキュリティ_6",
+        "rec_MCPセキュリティ_7",
+        "rec_MCPセキュリティ_8",
+        "rec_MCPセキュリティ_9",
+        "rec_MCPセキュリティ_10",
+        "rec_MCPセキュリティ_11",
+        "rec_MCPセキュリティ_12",
+        "rec_MCPセキュリティ_13",
+        "rec_MCPセキュリティ_14",
+        "rec_MCPセキュリティ_15",
+        "rec_MCPセキュリティ_16",
+        "rec_MCPセキュリティ_17",
+        "rec_MCPセキュリティ_18",
+        "rec_MCPセキュリティ_19",
+        "rec_MCPセキュリティ_20"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411750+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_ゼロ知識証明_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: ゼロ知識証明",
+      "summary": "Consolidated analysis for domain ゼロ知識証明 based on 5 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "ゼロ知識証明"
+      ],
+      "source_count": 5,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_ゼロ知識証明_1",
+        "rec_ゼロ知識証明_2",
+        "rec_ゼロ知識証明_3",
+        "rec_ゼロ知識証明_4",
+        "rec_ゼロ知識証明_5"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411755+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_ファジング・脆弱性調査_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: ファジング・脆弱性調査",
+      "summary": "Consolidated analysis for domain ファジング・脆弱性調査 based on 5 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "ファジング・脆弱性調査"
+      ],
+      "source_count": 5,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_ファジング・脆弱性調査_1",
+        "rec_ファジング・脆弱性調査_2",
+        "rec_ファジング・脆弱性調査_3",
+        "rec_ファジング・脆弱性調査_4",
+        "rec_ファジング・脆弱性調査_5"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411759+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_プロンプトインジェクション_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: プロンプトインジェクション",
+      "summary": "Consolidated analysis for domain プロンプトインジェクション based on 5 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "プロンプトインジェクション"
+      ],
+      "source_count": 5,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_プロンプトインジェクション_1",
+        "rec_プロンプトインジェクション_2",
+        "rec_プロンプトインジェクション_3",
+        "rec_プロンプトインジェクション_4",
+        "rec_プロンプトインジェクション_5"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411762+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_ペネトレーションテスト・脆弱性検証_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: ペネトレーションテスト・脆弱性検証",
+      "summary": "Consolidated analysis for domain ペネトレーションテスト・脆弱性検証 based on 5 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "ペネトレーションテスト・脆弱性検証"
+      ],
+      "source_count": 5,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_ペネトレーションテスト・脆弱性検証_1",
+        "rec_ペネトレーションテスト・脆弱性検証_2",
+        "rec_ペネトレーションテスト・脆弱性検証_3",
+        "rec_ペネトレーションテスト・脆弱性検証_4",
+        "rec_ペネトレーションテスト・脆弱性検証_5"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411766+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_暗号・プライバシー技術_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: 暗号・プライバシー技術",
+      "summary": "Consolidated analysis for domain 暗号・プライバシー技術 based on 5 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "暗号・プライバシー技術"
+      ],
+      "source_count": 5,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_暗号・プライバシー技術_1",
+        "rec_暗号・プライバシー技術_2",
+        "rec_暗号・プライバシー技術_3",
+        "rec_暗号・プライバシー技術_4",
+        "rec_暗号・プライバシー技術_5"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411769+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_権限昇格_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: 権限昇格",
+      "summary": "Consolidated analysis for domain 権限昇格 based on 20 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "権限昇格"
+      ],
+      "source_count": 20,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_権限昇格_1",
+        "rec_権限昇格_2",
+        "rec_権限昇格_3",
+        "rec_権限昇格_4",
+        "rec_権限昇格_5",
+        "rec_権限昇格_6",
+        "rec_権限昇格_7",
+        "rec_権限昇格_8",
+        "rec_権限昇格_9",
+        "rec_権限昇格_10",
+        "rec_権限昇格_11",
+        "rec_権限昇格_12",
+        "rec_権限昇格_13",
+        "rec_権限昇格_14",
+        "rec_権限昇格_15",
+        "rec_権限昇格_16",
+        "rec_権限昇格_17",
+        "rec_権限昇格_18",
+        "rec_権限昇格_19",
+        "rec_権限昇格_20"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411773+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_耐量子暗号_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: 耐量子暗号",
+      "summary": "Consolidated analysis for domain 耐量子暗号 based on 52 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "耐量子暗号"
+      ],
+      "source_count": 52,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_耐量子暗号_1",
+        "rec_耐量子暗号_2",
+        "rec_耐量子暗号_3",
+        "rec_耐量子暗号_4",
+        "rec_耐量子暗号_5",
+        "rec_耐量子暗号_6",
+        "rec_耐量子暗号_7",
+        "rec_耐量子暗号_8",
+        "rec_耐量子暗号_9",
+        "rec_耐量子暗号_10",
+        "rec_耐量子暗号_11",
+        "rec_耐量子暗号_12",
+        "rec_耐量子暗号_13",
+        "rec_耐量子暗号_14",
+        "rec_耐量子暗号_15",
+        "rec_耐量子暗号_16",
+        "rec_耐量子暗号_17",
+        "rec_耐量子暗号_18",
+        "rec_耐量子暗号_19",
+        "rec_耐量子暗号_20",
+        "rec_耐量子暗号_21",
+        "rec_耐量子暗号_22",
+        "rec_耐量子暗号_23",
+        "rec_耐量子暗号_24",
+        "rec_耐量子暗号_25",
+        "rec_耐量子暗号_26",
+        "rec_耐量子暗号_27",
+        "rec_耐量子暗号_28",
+        "rec_耐量子暗号_29",
+        "rec_耐量子暗号_30",
+        "rec_耐量子暗号_31",
+        "rec_耐量子暗号_32",
+        "rec_耐量子暗号_33",
+        "rec_耐量子暗号_34",
+        "rec_耐量子暗号_35",
+        "rec_耐量子暗号_36",
+        "rec_耐量子暗号_37",
+        "rec_耐量子暗号_38",
+        "rec_耐量子暗号_39",
+        "rec_耐量子暗号_40",
+        "rec_耐量子暗号_41",
+        "rec_耐量子暗号_42",
+        "rec_耐量子暗号_43",
+        "rec_耐量子暗号_44",
+        "rec_耐量子暗号_45",
+        "rec_耐量子暗号_46",
+        "rec_耐量子暗号_47",
+        "rec_耐量子暗号_48",
+        "rec_耐量子暗号_49",
+        "rec_耐量子暗号_50",
+        "rec_耐量子暗号_51",
+        "rec_耐量子暗号_52"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411780+00:00",
+      "metadata": {}
+    },
+    {
+      "product_id": "prod_topic_脱獄攻撃_cycle_20260827_144629",
+      "title": "Domain Intelligence Deep-Dive: 脱獄攻撃",
+      "summary": "Consolidated analysis for domain 脱獄攻撃 based on 5 primary sources.",
+      "tier": "02_daily",
+      "topic_tags": [
+        "脱獄攻撃"
+      ],
+      "source_count": 5,
+      "confidence_score": 0.9,
+      "okf_references": [
+        "rec_脱獄攻撃_1",
+        "rec_脱獄攻撃_2",
+        "rec_脱獄攻撃_3",
+        "rec_脱獄攻撃_4",
+        "rec_脱獄攻撃_5"
+      ],
+      "content_markdown": "",
+      "created_at": "2026-08-27T14:46:29.411786+00:00",
+      "metadata": {}
+    }
+  ],
+  "hypotheses": [
+    {
+      "hypo_id": "hypo_llm_mcp",
+      "statement": "LLM エージェントおよび MCP (Model Context Protocol) 連携における攻撃ベクトルは、プロンプトインジェクションから権限昇格・不正ツール実行へ移行している",
+      "target_topics": [
+        "LLM・AIセキュリティ",
+        "MCPセキュリティ",
+        "エージェント脆弱性"
+      ],
+      "confidence_score": 0.5,
+      "status": "formulated",
+      "supporting_evidence": [],
+      "refuting_evidence": [],
+      "formulated_at": "2026-08-27T14:38:22.834545+00:00",
+      "updated_at": "2026-08-27T14:46:29.411435+00:00",
+      "metadata": {
+        "trigger_matches": 1
+      }
+    }
+  ],
+  "telemetry": {
+    "telemetry_id": "telem_cycle_20260827_144629",
+    "ndcg_at_k": 0.85,
+    "mean_average_precision": 0.8,
+    "zero_hit_queries": [],
+    "frequent_topics": {},
+    "topic_drift_scores": {},
+    "knowledge_gaps": {},
+    "recorded_at": "2026-08-27T14:46:29.435621+00:00",
+    "metadata": {}
+  },
+  "errors": [],
+  "state": {},
+  "started_at": "2026-08-27T14:46:29.366773+00:00"
+}

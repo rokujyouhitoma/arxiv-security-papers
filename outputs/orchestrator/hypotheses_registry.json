@@ -1,0 +1,22 @@
+{
+  "hypotheses": [
+    {
+      "hypo_id": "hypo_llm_mcp",
+      "statement": "LLM エージェントおよび MCP (Model Context Protocol) 連携における攻撃ベクトルは、プロンプトインジェクションから権限昇格・不正ツール実行へ移行している",
+      "target_topics": [
+        "LLM・AIセキュリティ",
+        "MCPセキュリティ",
+        "エージェント脆弱性"
+      ],
+      "confidence_score": 0.5,
+      "status": "formulated",
+      "supporting_evidence": [],
+      "refuting_evidence": [],
+      "formulated_at": "2026-08-27T14:38:22.834545+00:00",
+      "updated_at": "2026-08-27T14:46:29.411435+00:00",
+      "metadata": {
+        "trigger_matches": 1
+      }
+    }
+  ]
+}

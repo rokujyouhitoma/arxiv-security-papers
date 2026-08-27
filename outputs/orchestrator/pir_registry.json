@@ -10,6 +10,9 @@
         "プロンプトインジェクション"
       ],
       "priority_score": 0.9,
+      "horizon": "operational",
+      "escalation_level": 0,
+      "escalated_at": null,
       "is_active": true
     },
     {
@@ -21,6 +24,9 @@
         "ペネトレーションテスト・脆弱性検証"
       ],
       "priority_score": 0.85,
+      "horizon": "operational",
+      "escalation_level": 0,
+      "escalated_at": null,
       "is_active": true
     },
     {
@@ -33,17 +39,49 @@
         "ゼロ知識証明"
       ],
       "priority_score": 0.8,
+      "horizon": "operational",
+      "escalation_level": 0,
+      "escalated_at": null,
+      "is_active": true
+    },
+    {
+      "req_id": "pir_mcp_vuln",
+      "title": "MCP Tool Vulnerabilities",
+      "description": "Monitor privilege escalation in Model Context Protocol tools",
+      "target_topics": [
+        "MCPセキュリティ",
+        "権限昇格"
+      ],
+      "priority_score": 1.0,
+      "horizon": "tactical",
+      "escalation_level": 1,
+      "escalated_at": "2026-08-27T14:36:02.272560+00:00",
+      "is_active": true
+    },
+    {
+      "req_id": "pir_cli_1787841989",
+      "title": "CLI Requested Priority Requirement",
+      "description": "Dynamically injected PIR from CLI execution",
+      "target_topics": [
+        "耐量子暗号"
+      ],
+      "priority_score": 1.0,
+      "horizon": "operational",
+      "escalation_level": 0,
+      "escalated_at": null,
       "is_active": true
     }
   ],
   "weights": {
-    "ペネトレーションテスト・脆弱性検証": 0.09259259259259259,
-    "暗号・プライバシー技術": 0.23529411764705885,
-    "ファジング・脆弱性調査": 0.09259259259259259,
-    "ゼロ知識証明": 0.23529411764705885,
-    "LLM・AIセキュリティ": 0.03631082062454611,
-    "脱獄攻撃": 0.03631082062454611,
-    "耐量子暗号": 0.23529411764705885,
-    "プロンプトインジェクション": 0.03631082062454611
+    "ゼロ知識証明": 0.02991772625280479,
+    "MCPセキュリティ": 0.19390426327599103,
+    "暗号・プライバシー技術": 0.02991772625280479,
+    "権限昇格": 0.19390426327599103,
+    "耐量子暗号": 0.5149588631264024,
+    "プロンプトインジェクション": 0.004616933063704442,
+    "ペネトレーションテスト・脆弱性検証": 0.01177317931244633,
+    "LLM・AIセキュリティ": 0.004616933063704442,
+    "脱獄攻撃": 0.004616933063704442,
+    "ファジング・脆弱性調査": 0.01177317931244633
   }
 }

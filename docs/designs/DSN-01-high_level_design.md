@@ -143,7 +143,7 @@ graph TD
     end
 
     subgraph Users["利用者 & クライアント"]
-        AI["AI エージェント / Claude Desktop"]
+        AI["自律型 AI エージェント / MCP クライアント"]
         Browser["Web ブラウザ / アナリスト"]
     end
 

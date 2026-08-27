@@ -47,6 +47,8 @@
   - `src/orchestrator/` — 計画 (PIR 策定) → 収集 → 処理 → 分析・生産 → 配布 → 評価 (NDCG/MAP) の 6 大フェーズ閉ループ自律駆動、ナレッジギャップ自己適応。
 - ⚙️ **[[DSN-12] 汎用プロセススーパーバイザー ＆ 調停基盤設計書](designs/DSN-12-process_supervisor_and_arbiter.md)**
   - `src/supervisor/` — Gunicorn スタイル Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー、Systemd 依存関係順序制御、動的スケーリング、自己回復・ハートビート監視。
+- 🚀 **[[DSN-16] 次世代セキュリティ・ナレッジプラットフォーム包括設計提言書](designs/DSN-16-nextgen_security_knowledge_platform_proposal.md)**
+  - 多段階 LLM 要約、MITRE ATT&CK / TTPs マッピング、Caldera プレイブック生成、MCP / マルチチャネル配信、プロンプトインジェクション防護、CI/CD ゼロトラスト分離。
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
 - 📖 **[[USR-01] ユーザーマニュアル ＆ AI コーディングエージェント連携ガイド](manuals/USR-01-user_manual.md)**
