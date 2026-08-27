@@ -92,11 +92,133 @@ make run
 .venv/bin/python src/pipeline/arxiv_okf_fetcher.py --force --max-results 20
 ```
 
-### 3.3 自律知能オーケストレーション実行
-収集からインデックス再構築、技術動向分析レポートまでを 1 サイクルで完遂します。
+### 3.3 自律型閉ループ・インテリジェンス統合システム運用コマンド (Closed-Loop Intelligence & Universal Workflow)
 
+`src/intelligence/` および `src/workflow/` に基づく 6 大フェーズ（PIR計画、自律ハーベスト、Admiralty信憑性評価/OKF構造化、ベイズ仮説検証/5層サマリー合成、配布、フィードバック学習）のライフサイクルを CLI または Python API から実行・制御します。
+
+#### ① 6 フェーズ閉ループ・インテリジェンスサイクルの実行 (`cycle`)
 ```bash
-make orchestrate
+# 通常の 1 サイクル自律実行（詳細ログ表示付き）
+PYTHONPATH=src .venv/bin/python3 src/__main__.py cycle --verbose
+
+# 特定トピックにフォーカスした収集・サマリー合成
+PYTHONPATH=src .venv/bin/python3 src/__main__.py cycle --topics "耐量子暗号,MCPセキュリティ" --quota 10
+
+# リアクティブ・ストリーミング DAG & バックプレッシャー制御による実行
+PYTHONPATH=src .venv/bin/python3 src/__main__.py cycle --streaming --chunk-size 5
+```
+
+#### ② 3-Horizon PIR（優先インテリジェンス要件）の管理 (`pir`)
+```bash
+# 登録済み PIR 一覧 & 正規化トピック重み分布の表示
+PYTHONPATH=src .venv/bin/python3 src/__main__.py pir list
+
+# 新規 PIR（戦術・運用・戦略）の登録
+PYTHONPATH=src .venv/bin/python3 src/__main__.py pir add \
+  --id "pir_mcp_vuln" \
+  --title "MCP Tool Vulnerabilities" \
+  --description "Monitor privilege escalation in Model Context Protocol tools" \
+  --topics "MCPセキュリティ,権限昇格" \
+  --priority 0.95 \
+  --horizon tactical
+
+# 緊急事態発生時の PIR 動的エスカレーション（即時昇格）
+PYTHONPATH=src .venv/bin/python3 src/__main__.py pir escalate \
+  --id "pir_mcp_vuln" \
+  --reason "Active 0-day in wild" \
+  --horizon tactical
+```
+
+#### ③ 自律型自己修復ハーベストルーター & サーキットブレーカー (`harvest`)
+```bash
+# 各収集ルートの回線状態（CLOSED / OPEN / HALF_OPEN）と健全度スコアの確認
+PYTHONPATH=src .venv/bin/python3 src/__main__.py harvest status
+
+# 指定トピックでの通信疎通・動的ルート変異テスト
+PYTHONPATH=src .venv/bin/python3 src/__main__.py harvest test --topic "耐量子暗号" --quota 3
+```
+
+#### ④ NATO STANAG 2022 Admiralty 信憑性評価 (`credibility`)
+```bash
+# Admiralty 信憑性評価マトリクス (A1〜F6) の Markdown 表示
+PYTHONPATH=src .venv/bin/python3 src/__main__.py credibility matrix
+
+# 情報源の信頼度（A〜F）と確憑性（1〜6）による個別スコアリング
+PYTHONPATH=src .venv/bin/python3 src/__main__.py credibility score --source arxiv --credibility 2
+```
+
+#### ⑤ 自律検証セキュリティ仮説の管理 (`hypothesis`)
+```bash
+# 追跡中のセキュリティ仮説一覧・ベイズ確信度スコアの確認
+PYTHONPATH=src .venv/bin/python3 src/__main__.py hypothesis list
+
+# 新規仮説の登録
+PYTHONPATH=src .venv/bin/python3 src/__main__.py hypothesis add \
+  --id "hypo_pqc_sidechannel" \
+  --statement "Kyber/ML-KEM 実装においてキャッシュサイドチャネル攻撃の脆弱性が存在する" \
+  --topics "耐量子暗号,サイドチャネル攻撃"
+```
+
+#### ⑥ Event Sourcing WAL クラッシュリカバリ (`recover`)
+```bash
+# 実行済み・中断中サイクルの WAL 履歴一覧を表示
+PYTHONPATH=src .venv/bin/python3 src/__main__.py recover --list
+
+# 中断された特定のサイクルを最新チェックポイントから自律再開
+PYTHONPATH=src .venv/bin/python3 src/__main__.py recover --cycle-id <cycle_id>
+```
+
+#### ⑦ Python API によるプログラム直接呼び出し
+
+##### A. 閉ループ・インテリジェンスエンジン (`src/intelligence/`)
+```python
+import sys
+sys.path.insert(0, "src")
+
+from intelligence.engine import ClosedLoopIntelligenceEngine
+from intelligence.pir.models import PIRHorizon
+
+engine = ClosedLoopIntelligenceEngine(workspace_dir=".")
+
+# PIR の登録
+engine.register_pir(
+    req_id="pir_pqc_migration",
+    title="Post-Quantum Cryptography Migration",
+    description="NIST PQC 標準化と移行リスクの追跡",
+    target_topics=["耐量子暗号", "暗号・プライバシー技術"],
+    priority_score=0.9,
+    horizon=PIRHorizon.STRATEGIC,
+)
+
+# 1 サイクルの実行 (Saga + WAL + Feedback 自動駆動)
+context = engine.run_cycle()
+print(f"Cycle ID: {context.cycle_id}")
+print(f"Phase Statuses: {context.phase_statuses}")
+print(f"Synthesized Products: {len(context.products)}")
+```
+
+##### B. 汎用ワークフロー基盤 (`src/workflow/`)
+```python
+import sys
+sys.path.insert(0, "src")
+
+from workflow.circuit import CircuitBreaker
+from workflow.dag import DAGWorkflowEngine
+from workflow.saga import SagaCoordinator
+from workflow.streaming_dag import BufferPolicy, StreamChunk, StreamingDAG
+
+# Topological DAG の実行
+dag = DAGWorkflowEngine()
+dag.add_node("step_a", lambda s: {"val_a": 10})
+dag.add_node("step_b", lambda s: {"val_b": s["val_a"] * 2}, dependencies=["step_a"])
+result = dag.execute()
+print("DAG Result:", result)  # {'val_a': 10, 'val_b': 20}
+
+# サーキットブレーカーの状態管理
+cb = CircuitBreaker(failure_threshold=2, cooldown_seconds=10.0)
+cb.record_failure()
+cb.record_failure()
+print("Circuit State:", cb.state)  # CircuitState.OPEN
 ```
 
 ### 3.4 バックグラウンド自動収集デーモン (Supervisor)
