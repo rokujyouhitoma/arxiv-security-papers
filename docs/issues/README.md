@@ -6,9 +6,16 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-現在進行中のアクティブな Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **080** | 4 大 MCP サーバーの動的ページネーション・ストリーミングおよび学術推論プロンプトテンプレートの高度化 | Feature | High | In Progress | [080-mcp-streaming-pagination-and-prompt-templates.md](080-mcp-streaming-pagination-and-prompt-templates.md) |
+| **081** | 内製 Pure-Python PDF エンジンにおける 2 カラム多段組レイアウト自動認識と暗号・数式記号正規化の実装 | Feature | High | In Progress | [081-pure-python-pdf-multicol-and-math-symbols.md](081-pure-python-pdf-multicol-and-math-symbols.md) |
+| **082** | 自律型インテリジェンス・オーケストレーターにおける検索評価 (IR Eval) 駆動型クエリ自己適応ループの実装 | Feature | Medium | In Progress | [082-orchestrator-eval-driven-query-expansion.md](082-orchestrator-eval-driven-query-expansion.md) |
+| **083** | 新興脅威（Slopsquatting, EOP モデル汚染, 多コミット型改ざん）に対応した Semgrep / セキュアパッチ合成エンジンの拡充 | Feature | High | In Progress | [083-threat-defense-slopsquatting-and-eop-expansion.md](083-threat-defense-slopsquatting-and-eop-expansion.md) |
+| **084** | 5 階層エグゼクティブサマリーにおける急上昇キーワード（Surge Keywords）時系列クラスタリンググラフおよび防御コード相互リンクの実装 | Feature | Medium | In Progress | [084-dynamic-surge-keyword-clustering-and-okf-crosslinks.md](084-dynamic-surge-keyword-clustering-and-okf-crosslinks.md) |
 
 ---
+
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
