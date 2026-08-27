@@ -24,6 +24,7 @@ from orchestrator.harvest.coordinator import HarvestCoordinator
 from orchestrator.pir.manager import PIRManager
 from orchestrator.pir.models import PIRHorizon, PIRRequirement
 from orchestrator.processing.processor import ProcessingCoordinator
+from orchestrator.wal import EventType, OrchestratorWAL
 from orchestrator.workflow.saga import SagaCoordinator
 
 
@@ -31,17 +32,20 @@ class UniversalIntelligenceOrchestrator:
     """Central domain-agnostic orchestrator executing the 6-phase intelligence lifecycle."""
 
     def __init__(self, workspace_dir: str = ".") -> None:
-        self.workspace_dir = workspace_dir
+        self.workspace_dir = os.path.abspath(workspace_dir)
+        self.wal = OrchestratorWAL(
+            wal_dir=os.path.join(self.workspace_dir, "outputs", "wal")
+        )
         pir_storage = os.path.join(
-            workspace_dir, "outputs", "orchestrator", "pir_registry.json"
+            self.workspace_dir, "outputs", "orchestrator", "pir_registry.json"
         )
         hypo_storage = os.path.join(
-            workspace_dir, "outputs", "orchestrator", "hypotheses_registry.json"
+            self.workspace_dir, "outputs", "orchestrator", "hypotheses_registry.json"
         )
         self.pir_manager = PIRManager(storage_path=pir_storage, auto_seed=True)
-        self.hypothesis_engine = HypothesisEngine(storage_path=hypo_storage)
         self.harvest_coordinator = HarvestCoordinator()
         self.processing_coordinator = ProcessingCoordinator()
+        self.hypothesis_engine = HypothesisEngine(storage_path=hypo_storage)
         self.analysis_synthesizer = AnalysisSynthesizer(
             hypothesis_engine=self.hypothesis_engine
         )
@@ -110,49 +114,59 @@ class UniversalIntelligenceOrchestrator:
             query=query, topic=topic, ndcg_score=ndcg_score, hits_count=hits_count
         )
 
+    def _execute_phase_with_wal(
+        self,
+        saga: SagaCoordinator,
+        phase_executor: Any,
+        phase_type: IntelligencePhase,
+        context: PhaseContext,
+    ) -> PhaseContext:
+        """Executes a single phase wrapped with WAL event logging and checkpoints."""
+        self.wal.append_event(
+            cycle_id=context.cycle_id,
+            event_type=EventType.PHASE_STARTED,
+            payload={"phase": phase_type.value},
+        )
+        context = saga.execute_phase_safely(phase_executor, context)
+        if context.errors:
+            self.wal.append_event(
+                cycle_id=context.cycle_id,
+                event_type=EventType.CYCLE_FAILED,
+                payload={"failed_phase": phase_type.value, "errors": context.errors},
+            )
+            return context
+
+        self.wal.append_event(
+            cycle_id=context.cycle_id,
+            event_type=EventType.PHASE_COMPLETED,
+            payload={"phase": phase_type.value},
+        )
+        self.wal.create_checkpoint(context)
+        return context
+
     def run_cycle(self, cycle_id: Optional[str] = None) -> PhaseContext:
-        """Executes a single transactional intelligence cycle across all 6 phases."""
+        """Executes a single transactional intelligence cycle across all 6 phases with WAL."""
         if not cycle_id:
             cycle_id = f"cycle_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
         context = PhaseContext(cycle_id=cycle_id, workspace_dir=self.workspace_dir)
+        self.wal.append_event(cycle_id=cycle_id, event_type=EventType.CYCLE_STARTED)
         saga = SagaCoordinator()
 
-        # Step 1: Planning & Direction
-        context = saga.execute_phase_safely(self.pir_manager, context)
-        if context.errors:
-            self.cycle_history.append(context)
-            return context
+        phases = [
+            (self.pir_manager, IntelligencePhase.PLANNING),
+            (self.harvest_coordinator, IntelligencePhase.COLLECTION),
+            (self.processing_coordinator, IntelligencePhase.PROCESSING),
+            (self.analysis_synthesizer, IntelligencePhase.ANALYSIS),
+            (self.dissemination_distributor, IntelligencePhase.DISSEMINATION),
+            (self.feedback_evaluator, IntelligencePhase.EVALUATION),
+        ]
 
-        # Step 2: Collection
-        context = saga.execute_phase_safely(self.harvest_coordinator, context)
-        if context.errors:
-            self.cycle_history.append(context)
-            return context
-
-        # Step 3: Processing & Exploitation
-        context = saga.execute_phase_safely(self.processing_coordinator, context)
-        if context.errors:
-            self.cycle_history.append(context)
-            return context
-
-        # Step 4: Analysis & Production
-        context = saga.execute_phase_safely(self.analysis_synthesizer, context)
-        if context.errors:
-            self.cycle_history.append(context)
-            return context
-
-        # Step 5: Dissemination & Integration
-        context = saga.execute_phase_safely(self.dissemination_distributor, context)
-        if context.errors:
-            self.cycle_history.append(context)
-            return context
-
-        # Step 6: Feedback & Evaluation
-        context = saga.execute_phase_safely(self.feedback_evaluator, context)
-        if context.errors:
-            self.cycle_history.append(context)
-            return context
+        for executor, ptype in phases:
+            context = self._execute_phase_with_wal(saga, executor, ptype, context)
+            if context.errors:
+                self.cycle_history.append(context)
+                return context
 
         # Closed-Loop Self-Adapting Feedback Step (Update PIR weights for next cycle)
         if context.telemetry:
@@ -163,6 +177,44 @@ class UniversalIntelligenceOrchestrator:
             )
             self.pir_manager.adapt_queries_from_telemetry(context.telemetry)
 
+        self.wal.append_event(cycle_id=cycle_id, event_type=EventType.CYCLE_COMPLETED)
+        self.cycle_history.append(context)
+        return context
+
+    def resume_cycle(self, cycle_id: str) -> PhaseContext:
+        """Replays and resumes an uncompleted or crashed cycle from its WAL state."""
+        replayed = self.wal.replay_cycle(cycle_id, self.workspace_dir)
+        context = replayed or PhaseContext(
+            cycle_id=cycle_id, workspace_dir=self.workspace_dir
+        )
+        saga = SagaCoordinator()
+
+        phases = [
+            (self.pir_manager, IntelligencePhase.PLANNING),
+            (self.harvest_coordinator, IntelligencePhase.COLLECTION),
+            (self.processing_coordinator, IntelligencePhase.PROCESSING),
+            (self.analysis_synthesizer, IntelligencePhase.ANALYSIS),
+            (self.dissemination_distributor, IntelligencePhase.DISSEMINATION),
+            (self.feedback_evaluator, IntelligencePhase.EVALUATION),
+        ]
+
+        for executor, ptype in phases:
+            status = context.phase_statuses.get(ptype, PhaseStatus.PENDING)
+            if status != PhaseStatus.COMPLETED:
+                context = self._execute_phase_with_wal(saga, executor, ptype, context)
+                if context.errors:
+                    self.cycle_history.append(context)
+                    return context
+
+        if context.telemetry:
+            self.pir_manager.update_weights_from_feedback(
+                usage_counts=context.telemetry.frequent_topics,
+                knowledge_gaps=context.telemetry.knowledge_gaps,
+                topic_drifts=context.telemetry.topic_drift_scores,
+            )
+            self.pir_manager.adapt_queries_from_telemetry(context.telemetry)
+
+        self.wal.append_event(cycle_id=cycle_id, event_type=EventType.CYCLE_COMPLETED)
         self.cycle_history.append(context)
         return context
 

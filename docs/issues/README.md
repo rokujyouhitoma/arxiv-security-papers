@@ -6,7 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在アクティブな Issue はありません（すべての戦略的イノベーション Issue 080〜088 が完了・クローズされました）。*
+*現在アクティブな Issue はありません（すべての戦略的イノベーション Issue 080〜089 が完了・クローズされました）。*
 
 ---
 
@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **089** | Event Sourcing 型 クラッシュリカバリ WAL (Write-Ahead Log & State Replay Engine) の実装 | Feature | 2026-08-27 | [089-event-sourcing-crash-recovery-wal.md](closed/089-event-sourcing-crash-recovery-wal.md) |
 | **088** | ストリーミング型 DAG & バックプレッシャー制御パイプライン (Streaming DAG & Reactive Backpressure Engine) の実装 | Feature | 2026-08-27 | [088-streaming-dag-and-backpressure-pipeline.md](closed/088-streaming-dag-and-backpressure-pipeline.md) |
 | **087** | 情報源信憑性スコアリング Admiralty Engine (NATO STANAG 2022 規格準拠) の実装 | Feature | 2026-08-27 | [087-admiralty-credibility-scoring-engine.md](closed/087-admiralty-credibility-scoring-engine.md) |
 | **086** | 仮説駆動型 自律調査・検証ループ (Hypothesis-Driven Autonomous Investigation & Verification Engine) の実装 | Feature | 2026-08-27 | [086-hypothesis-driven-autonomous-investigation.md](closed/086-hypothesis-driven-autonomous-investigation.md) |

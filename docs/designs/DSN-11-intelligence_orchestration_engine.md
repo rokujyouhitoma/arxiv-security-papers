@@ -316,10 +316,21 @@ graph LR
 - **有界バッファ (Bounded Queues)**: 各ノードは最大 $K$ チャンク（デフォルト 10）のキューを保持し、OOM を完全防止。
 - **適応型バックプレッシャー**: 下流ノードのキュー占有率 $P = \frac{|Q|}{K} \ge 0.80$ で上流プロデューサーを自動スロットリング。
 - **バッファポリシー**: `BufferPolicy.BLOCK` (通常閉塞), `BufferPolicy.DROP_OLDEST` (最新優先), `BufferPolicy.DRAIN` (急速排出)。
-    Exploiting --> Compensating: スキーマ・変換致命的エラー
-    Producing --> Compensating: ストレージ・インデックス不整合
-    Compensating --> [*]: Saga補償完了 (ロールバック)
+
+### 5.4 Event Sourcing 型 クラッシュリカバリ WAL (Write-Ahead Log)
+パイプライン実行中の不意なプロセス強制終了やネットワーク障害に対し、状態を 100% 復元して未完了フェーズから再開（Resume）可能にする Event Sourcing 基盤を配備する。
+
+```mermaid
+graph TD
+    P["Phase Execution (1〜6)"] -->|"1. Append Event"| WAL["outputs/wal/<cycle_id>.wal.jsonl"]
+    P -->|"2. Snapshot Compaction"| CP["outputs/wal/<cycle_id>.checkpoint.json"]
+    Crash["System Crash / Interruption"] -.->|"3. Replay from Snapshot + Events"| Resume["Orchestrator.resume_cycle()"]
+    Resume -->|"4. Continue Pending Phases"| Complete["Cycle Completed"]
 ```
+
+- **追記専用ログ (Append-Only WAL)**: `outputs/wal/<cycle_id>.wal.jsonl` に各フェーズの遷移（`PHASE_STARTED`, `PHASE_COMPLETED`）および生成物（`RECORD_HARVESTED`, `RECORD_PROCESSED`, `PRODUCT_PUBLISHED`）を即時 `fsync` 永続化。
+- **チェックポイントスナップショット**: 各フェーズ完了時に `PhaseContext` の圧縮スナップショット（`.checkpoint.json`）を作成し、リカバリ時のリプレイ時間を最小化。
+- **自律再開 (Resume Protocol)**: `UniversalIntelligenceOrchestrator.resume_cycle(cycle_id)` により、未完了フェーズを自動検知して閉ループを再開・完遂。
 
 ---
 

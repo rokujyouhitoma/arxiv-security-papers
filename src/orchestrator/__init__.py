@@ -22,6 +22,7 @@ from orchestrator.harvest.coordinator import HarvestCoordinator
 from orchestrator.pir.manager import PIRManager
 from orchestrator.pir.models import PIRRequirement, TopicWeightVector
 from orchestrator.processing.processor import ProcessingCoordinator
+from orchestrator.wal import EventType, OrchestratorEvent, OrchestratorWAL
 from orchestrator.workflow.dag import DAGWorkflowEngine
 from orchestrator.workflow.saga import SagaCoordinator
 
@@ -44,6 +45,9 @@ __all__ = [
     "FeedbackEvaluator",
     "DAGWorkflowEngine",
     "SagaCoordinator",
+    "OrchestratorWAL",
+    "OrchestratorEvent",
+    "EventType",
     "main",
     "build_parser",
     "run_cycle_command",

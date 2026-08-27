@@ -440,6 +440,45 @@ def run_credibility_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_recover_command(args: argparse.Namespace) -> int:
+    """Manages WAL state replay and cycle crash recovery."""
+    workspace_dir = os.path.abspath(args.workdir)
+    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+
+    if getattr(args, "list", False):
+        cycles = orchestrator.wal.list_active_cycles()
+        print("=================================================================")
+        print("   EVENT SOURCING WAL & CRASH RECOVERY CYCLES")
+        print("=================================================================")
+        if not cycles:
+            print("  (No WAL cycles found in outputs/wal/)")
+            return 0
+        for c in cycles:
+            status_icon = (
+                "✓"
+                if c["status"] == "completed"
+                else ("✗" if c["status"] == "failed" else "⏳")
+            )
+            print(
+                f"  [{status_icon}] {c['cycle_id']:<30} | Status: {c['status']:<11} | "
+                f"Events: {c['total_events']:<3} | Started: {c['started_at']}"
+            )
+        return 0
+
+    cycle_id = getattr(args, "cycle_id", None)
+    if not cycle_id:
+        print("[ERROR] Please specify --cycle-id <ID> or use --list.")
+        return 1
+
+    print(f"[*] Replaying and resuming cycle [{cycle_id}] from WAL...")
+    ctx = orchestrator.resume_cycle(cycle_id)
+    print(
+        f"[+] Recovery complete! Processed {len(ctx.processed_records)} records, "
+        f"{len(ctx.products)} products produced."
+    )
+    return 0 if not ctx.errors else 1
+
+
 def run_status_command(args: argparse.Namespace) -> int:
     """Displays comprehensive repository and intelligence status."""
     workspace_dir = os.path.abspath(args.workdir)
@@ -691,6 +730,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Source type / venue (default: arxiv)",
     )
 
+    # Command: recover
+    recover_parser = subparsers.add_parser(
+        "recover", help="Event Sourcing WAL Crash Recovery and Cycle Resume"
+    )
+    recover_parser.add_argument(
+        "--cycle-id", type=str, default=None, help="Target cycle ID to resume"
+    )
+    recover_parser.add_argument(
+        "--list", action="store_true", help="List all recoverable cycles from WAL"
+    )
+
     # Command: status
     subparsers.add_parser(
         "status", help="Show system-wide intelligence and data status"
@@ -874,6 +924,7 @@ def _dispatch_command(
         "pir": run_pir_command,
         "hypothesis": run_hypothesis_command,
         "credibility": run_credibility_command,
+        "recover": run_recover_command,
         "status": run_status_command,
         "pipeline": _handle_pipeline_cli,
         "spider": _handle_spider_cli,
