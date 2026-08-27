@@ -135,10 +135,11 @@ AST に対する深さ優先探索（DFS）走査数理モデル：
 
 $$\forall \text{node} \in \text{AST}(code): \text{node} \notin \mathcal{B}_{\text{prohibited}} \land \text{Depth}(\text{node}) \le D_{\max}$$
 
-### 禁止ノード及びモジュール定義
-- **禁止 AST ノード型**: `ast.Exec`, `ast.Import`, `ast.ImportFrom` (特定許可モジュール以外), `ast.Global`, `ast.Nonlocal`
+### 禁止ノード及びモジュール定義 (Python 3.14+ 準拠)
+- **禁止 AST ノード型**: `ast.Exec`, `ast.Import`, `ast.ImportFrom` (特定許可モジュール以外), `ast.Global`, `ast.Nonlocal`, `ast.TypeAlias` (危険な評価を含むもの)
 - **禁止モジュールブラックリスト $\mathcal{B}_{\text{modules}}$**:
   `{"os", "subprocess", "socket", "pty", "sys", "shutil", "importlib", "ctypes", "pickle", "shelve", "posix"}`
+  ※ Python 3.12〜3.14 で統廃合・廃止されたレガシーモジュール（`cgi`, `pipes`, `crypt`, `asyncore`, `distutils` 等 / PEP 594）への呼出も完全遮断。
 - **禁止組み込み関数 $\mathcal{B}_{\text{builtins}}$**:
   `{"eval", "exec", "__import__", "compile", "open" (書き込み/実行モード), "getattr", "setattr", "delattr", "globals", "locals"}`
 

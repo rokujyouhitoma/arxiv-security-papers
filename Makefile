@@ -1,5 +1,5 @@
 PACKAGE=arxiv_okf_fetcher
-PYTHON_TARGET_VERSION = 3.12+
+PYTHON_TARGET_VERSION = 3.14+
 PYTHON ?= $(shell if [ -x "$$HOME/.local/python-3.14.7/bin/python3" ]; then echo "$$HOME/.local/python-3.14.7/bin/python3"; elif [ -x "/root/.local/python-3.14.7/bin/python3" ]; then echo "/root/.local/python-3.14.7/bin/python3"; elif command -v python3.14 >/dev/null 2>&1; then command -v python3.14; elif command -v python3 >/dev/null 2>&1; then command -v python3; else echo ""; fi)
 
 ifeq ($(PYTHON),)

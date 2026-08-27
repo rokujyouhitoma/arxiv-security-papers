@@ -45,8 +45,9 @@ flowchart TB
 ## 2. クイックスタート (Quickstart)
 
 ### 2.1 前提環境
-- **Python**: 3.12 以上（3.14+ 推奨）
-- **OS**: Linux / macOS
+- **Python**: 3.14 以上（Python 3.14.7 標準）
+- **メモリ**: 2GB 以上の空き RAM（大規模ベクトル検索・SlottedPage DB キャッシュ利用時）
+- **ディスク**: 1GB 以上の空きストレージ（PDF 原本および OKF マークダウン蓄積用）
 - **システムツール**: `git`, `make`（※ PDF テキスト抽出は内製 Pure-Python エンジン `src/pdf_engine/` で動作するため、`poppler-utils` / `pdftotext` のインストールは不要・完全ゼロ依存です）
 
 

@@ -169,7 +169,7 @@ flowchart TD
 
 | 機能モジュール | 推奨技術スタック | インフラ・運用コスト | セキュリティ保護策 |
 | :--- | :--- | :--- | :--- |
-| **多段階自動要約エンジン** | Python 3.11+, Gemini API, 軽量/高度 LLM | GitHub Actions / サーバーレス環境（月額 $0 - $5） | 入力長制限、プロンプト境界分離、サニタイズ |
+| **多段階自動要約エンジン** | Python 3.14+, Gemini API, 軽量/高度 LLM | GitHub Actions / サーバーレス環境（月額 $0 - $5） | 入力長制限、プロンプト境界分離、サニタイズ |
 | **MITRE ATT&CK マッピング** | Sentence-BERT, HNSW Vector DB, 思考プロンプト | 埋め込み計算コスト（小〜中） | JSON Schema 形式検証、TTPs 逆引き妥当性確認 |
 | **MCP サーバー統合** | Python MCP SDK (`src/mcp/`), JSON-RPC 2.0 | ローカル実行 / 既存ストレージ共有（無料） | ゼロトラスト AST サンドボックス、パス検証 |
 | **マルチチャネル配信基盤** | Vanilla Glassmorphism / SvelteKit, Webhooks, RSS | GitHub Pages / Webhooks（完全無料） | Secret 管理、Webhook 送信先ホワイトリスト |
