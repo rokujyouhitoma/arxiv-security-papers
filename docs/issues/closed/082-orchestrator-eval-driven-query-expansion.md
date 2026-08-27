@@ -5,8 +5,9 @@
 | **ID** | 082 |
 | **種別** | Feature |
 | **優先度** | Medium |
-| **ステータス** | Open (In Progress) |
+| **ステータス** | Closed (Resolved) |
 | **起票日** | 2026-08-27 |
+| **完了日** | 2026-08-27 |
 | **担当ロール** | Systems Architect (SA) / SQA Specialist (QA) |
 | **対象ブランチ** | `feat/082-orchestrator-eval-driven-query-expansion` |
 
@@ -46,7 +47,7 @@
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 検索評価のフィードバックが次回サイクルの PIR クエリに自動反映されること。
-- [ ] クエリ拡張ガードが機能し、過度なリクエスト増殖が防止されること。
-- [ ] `tests/orchestrator/` の全テストが PASS すること。
-- [ ] `make check` をクリアすること。
+- [x] 検索評価のフィードバックが次回サイクルの PIR クエリに自動反映されること。
+- [x] クエリ拡張ガードが機能し、過度なリクエスト増殖が防止されること。
+- [x] `tests/orchestrator/` の全テストが PASS すること。
+- [x] `make check` をクリアすること。

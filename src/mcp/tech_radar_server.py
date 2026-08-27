@@ -1,6 +1,6 @@
 from typing import Any, Callable, Dict
 
-from mcp.base import run_mcp_server
+from mcp.base import paginate_results, run_mcp_server
 
 # ---------------------------------------------------------------------------
 # Tech-Radar & Trend Synthesis Knowledge Engine
@@ -218,6 +218,8 @@ def handle_get_technology_radar(params: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_predict_emerging_threats(params: Dict[str, Any]) -> Dict[str, Any]:
     min_sev = params.get("min_severity", "HIGH").upper()
+    offset = int(params.get("offset", 0))
+    limit = int(params.get("limit", 10))
     severity_order = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0}
     min_rank = severity_order.get(min_sev, 2)
 
@@ -227,10 +229,15 @@ def handle_predict_emerging_threats(params: Dict[str, Any]) -> Dict[str, Any]:
         if severity_order.get(t["severity"], 0) >= min_rank
     ]
 
+    paginated_threats, pagination_meta = paginate_results(
+        threats, offset=offset, limit=limit
+    )
+
     return {
         "status": "success",
-        "threat_count": len(threats),
-        "forecasts": threats,
+        "threat_count": len(paginated_threats),
+        "pagination": pagination_meta,
+        "forecasts": paginated_threats,
     }
 
 

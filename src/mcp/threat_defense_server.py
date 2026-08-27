@@ -104,6 +104,45 @@ def handle_generate_semgrep_rule(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _patch_pickle(code: str) -> str:
+    return (
+        code.replace("import pickle", "import json")
+        .replace("pickle.loads(", "json.loads(")
+        .replace("pickle.load(", "json.load(")
+    )
+
+
+def _patch_safetensors(code: str) -> str:
+    return "from safetensors.torch import load_file\n" + code.replace(
+        "torch.load(", "load_file("
+    ).replace("import pickle", "# pickle removed for safety")
+
+
+def _apply_cwe_patch_heuristics(cwe_id: str, code: str) -> str:
+    """Applies heuristic code transformations based on target CWE vulnerability."""
+    if cwe_id == "CWE-502":
+        return _patch_pickle(code) if "pickle." in code else code
+    if cwe_id == "CWE-693":
+        return _patch_safetensors(code)
+    if cwe_id == "CWE-1357":
+        return (
+            "# Enforce verified package imports and pin dependencies with hashes\n"
+            + code
+        )
+    if cwe_id == "CWE-94":
+        if "eval(" in code:
+            return "import ast\n" + code.replace("eval(", "ast.literal_eval(")
+        return code
+    if cwe_id == "CWE-89":
+        if 'f"' in code:
+            return (
+                "# TODO: Ensure parameterized tuples: cursor.execute(query, (params,))\n"
+                + code
+            )
+        return code
+    return code
+
+
 def handle_synthesize_secure_patch(params: Dict[str, Any]) -> Dict[str, Any]:
     code = params.get("code", "")
     cwe_id = params.get("cwe_id", "").strip().upper()
@@ -112,22 +151,7 @@ def handle_synthesize_secure_patch(params: Dict[str, Any]) -> Dict[str, Any]:
     remediation_notes = data.get(
         "patch_strategy", "Apply defensive validation and input sanitization"
     )
-    patched_code = code
-
-    # Basic automated heuristic replacements for common CWEs
-    if cwe_id == "CWE-502" and "pickle." in code:
-        patched_code = (
-            code.replace("import pickle", "import json")
-            .replace("pickle.loads(", "json.loads(")
-            .replace("pickle.load(", "json.load(")
-        )
-    elif cwe_id == "CWE-94" and "eval(" in code:
-        patched_code = "import ast\n" + code.replace("eval(", "ast.literal_eval(")
-    elif cwe_id == "CWE-89" and 'f"' in code:
-        patched_code = (
-            "# TODO: Ensure parameterized tuples: cursor.execute(query, (params,))\n"
-            + code
-        )
+    patched_code = _apply_cwe_patch_heuristics(cwe_id, code)
 
     return {
         "status": "success",

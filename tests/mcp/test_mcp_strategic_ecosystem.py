@@ -126,10 +126,63 @@ def test_phase3_get_technology_radar_filtering():
 
 def test_phase3_predict_emerging_threats():
     """Verify emerging threat prediction output."""
-    res = handle_predict_emerging_threats({"min_severity": "HIGH"})
+    res = handle_predict_emerging_threats(
+        {"min_severity": "HIGH", "offset": 0, "limit": 2}
+    )
     assert res["status"] == "success"
-    assert res["threat_count"] >= 3
+    assert res["threat_count"] <= 2
+    assert "pagination" in res
+    assert res["pagination"]["limit"] == 2
     for threat in res["forecasts"]:
         assert threat["severity"] in ("CRITICAL", "HIGH")
         assert "threat_id" in threat
         assert "mitigation" in threat
+
+
+def test_phase4_emerging_threat_patches():
+    """Verify Slopsquatting (CWE-1357) and EOP (CWE-693) patch generation."""
+    code_slop = "import some_hallucinated_package"
+    res_slop = handle_synthesize_secure_patch({"code": code_slop, "cwe_id": "CWE-1357"})
+    assert res_slop["status"] == "success"
+    assert "pin dependencies with hashes" in res_slop["suggested_patch"]
+
+    code_eop = "import torch\nweights = torch.load('model.pt')"
+    res_eop = handle_synthesize_secure_patch({"code": code_eop, "cwe_id": "CWE-693"})
+    assert res_eop["status"] == "success"
+    assert "safetensors" in res_eop["suggested_patch"]
+
+
+def test_papers_hybrid_search_and_prompt(monkeypatch):
+    """Verify hybrid search pagination and audit prompt generation."""
+    from mcp.papers_server import handle_get_prompt, handle_search_papers_hybrid
+
+    class MockEngine:
+        def search_hybrid_pipeline(self, query, facets=None, top_k=10):
+            return {
+                "results": [
+                    {
+                        "id": f"2608.0000{i}",
+                        "title": f"Paper {i}",
+                        "title_ja": f"論文 {i}",
+                        "category": "cs.CR",
+                        "score": 0.9 - i * 0.05,
+                        "description": "Abstract snippet",
+                    }
+                    for i in range(5)
+                ]
+            }
+
+    monkeypatch.setattr("mcp.papers_server.get_vector_engine", lambda: MockEngine())
+
+    res = handle_search_papers_hybrid({"query": "zero trust", "offset": 1, "limit": 2})
+    assert res["status"] == "success"
+    assert len(res["results"]) == 2
+    assert res["pagination"]["offset"] == 1
+    assert res["pagination"]["limit"] == 2
+    assert res["pagination"]["has_more"] is True
+
+    prompt_res = handle_get_prompt(
+        "audit_code_with_papers", {"code": "eval(user_input)", "language": "python"}
+    )
+    assert "description" in prompt_res
+    assert len(prompt_res["messages"]) == 1

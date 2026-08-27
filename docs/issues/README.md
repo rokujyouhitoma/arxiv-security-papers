@@ -6,13 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **080** | 4 大 MCP サーバーの動的ページネーション・ストリーミングおよび学術推論プロンプトテンプレートの高度化 | Feature | High | In Progress | [080-mcp-streaming-pagination-and-prompt-templates.md](080-mcp-streaming-pagination-and-prompt-templates.md) |
-| **081** | 内製 Pure-Python PDF エンジンにおける 2 カラム多段組レイアウト自動認識と暗号・数式記号正規化の実装 | Feature | High | In Progress | [081-pure-python-pdf-multicol-and-math-symbols.md](081-pure-python-pdf-multicol-and-math-symbols.md) |
-| **082** | 自律型インテリジェンス・オーケストレーターにおける検索評価 (IR Eval) 駆動型クエリ自己適応ループの実装 | Feature | Medium | In Progress | [082-orchestrator-eval-driven-query-expansion.md](082-orchestrator-eval-driven-query-expansion.md) |
-| **083** | 新興脅威（Slopsquatting, EOP モデル汚染, 多コミット型改ざん）に対応した Semgrep / セキュアパッチ合成エンジンの拡充 | Feature | High | In Progress | [083-threat-defense-slopsquatting-and-eop-expansion.md](083-threat-defense-slopsquatting-and-eop-expansion.md) |
-| **084** | 5 階層エグゼクティブサマリーにおける急上昇キーワード（Surge Keywords）時系列クラスタリンググラフおよび防御コード相互リンクの実装 | Feature | Medium | In Progress | [084-dynamic-surge-keyword-clustering-and-okf-crosslinks.md](084-dynamic-surge-keyword-clustering-and-okf-crosslinks.md) |
+*現在アクティブな Issue はありません（すべての戦略的イノベーション Issue 080〜084 が完了・クローズされました）。*
 
 ---
 
@@ -21,6 +15,11 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **084** | 5 階層エグゼクティブサマリーにおける急上昇キーワード（Surge Keywords）時系列クラスタリンググラフおよび防御コード相互リンクの実装 | Feature | 2026-08-27 | [084-dynamic-surge-keyword-clustering-and-okf-crosslinks.md](closed/084-dynamic-surge-keyword-clustering-and-okf-crosslinks.md) |
+| **083** | 新興脅威（Slopsquatting, EOP モデル汚染, 多コミット型改ざん）に対応した Semgrep / セキュアパッチ合成エンジンの拡充 | Feature | 2026-08-27 | [083-threat-defense-slopsquatting-and-eop-expansion.md](closed/083-threat-defense-slopsquatting-and-eop-expansion.md) |
+| **082** | 自律型インテリジェンス・オーケストレーターにおける検索評価 (IR Eval) 駆動型クエリ自己適応ループの実装 | Feature | 2026-08-27 | [082-orchestrator-eval-driven-query-expansion.md](closed/082-orchestrator-eval-driven-query-expansion.md) |
+| **081** | 内製 Pure-Python PDF エンジンにおける 2 カラム多段組レイアウト自動認識と暗号・数式記号正規化の実装 | Feature | 2026-08-27 | [081-pure-python-pdf-multicol-and-math-symbols.md](closed/081-pure-python-pdf-multicol-and-math-symbols.md) |
+| **080** | 4 大 MCP サーバーの動的ページネーション・ストリーミングおよび学術推論プロンプトテンプレートの高度化 | Feature | 2026-08-27 | [080-mcp-streaming-pagination-and-prompt-templates.md](closed/080-mcp-streaming-pagination-and-prompt-templates.md) |
 | **079** | 論文モーダルプレビューが「読み込み中... OKF ドキュメントを取得中...」のまま停止する不具合の修正 | Bug | 2026-08-27 | [079-fix-paper-modal-preview-loading-stuck.md](closed/079-fix-paper-modal-preview-loading-stuck.md) |
 | **078** | DSN-12 準拠: DAG トポロジカル順序起動、ONESHOT_TASK バッチ管理、および QueueWorker の実装 | Feature | 2026-08-26 | [078-implement-dsn12-dag-boot-oneshot-and-queue-workers.md](closed/078-implement-dsn12-dag-boot-oneshot-and-queue-workers.md) |
 | **077** | Supervisor デーモンモード（`-D` / `--daemon`）およびバックグラウンド実行・ログファイル出力機能の実装 | Feature | 2026-08-26 | [077-implement-supervisor-daemon-mode-and-background-execution.md](closed/077-implement-supervisor-daemon-mode-and-background-execution.md) |

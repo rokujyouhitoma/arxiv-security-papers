@@ -5,8 +5,9 @@
 | **ID** | 080 |
 | **種別** | Feature |
 | **優先度** | High |
-| **ステータス** | Open (In Progress) |
+| **ステータス** | Closed (Resolved) |
 | **起票日** | 2026-08-27 |
+| **完了日** | 2026-08-27 |
 | **担当ロール** | Systems Architect (SA) / AI Coding Specialist (AI) |
 | **対象ブランチ** | `feat/080-mcp-streaming-pagination-and-prompt-templates` |
 
@@ -50,7 +51,7 @@ LLM のコンテキストウィンドウ圧迫を防ぎつつ、大量の検索�
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 全 4 大 MCP サーバーで `offset`/`limit` ページネーションが動作し、レスポンス文字数が安全閾値（5,000文字以内）に収まること。
-- [ ] プロンプト `audit_code_with_papers` が関連論文の具体的対策を含む高品質な指示文を生成すること。
-- [ ] `tests/test_all_mcp_servers.py` および `tests/mcp/` が 100% PASS すること。
-- [ ] `make check` (mypy strict 0エラー, xenon Grade A/B) をクリアすること。
+- [x] 全 4 大 MCP サーバーで `offset`/`limit` ページネーションが動作し、レスポンス文字数が安全閾値（5,000文字以内）に収まること。
+- [x] プロンプト `audit_code_with_papers` が関連論文の具体的対策を含む高品質な指示文を生成すること。
+- [x] `tests/test_all_mcp_servers.py` および `tests/mcp/` が 100% PASS すること。
+- [x] `make check` (mypy strict 0エラー, xenon Grade A/B) をクリアすること。

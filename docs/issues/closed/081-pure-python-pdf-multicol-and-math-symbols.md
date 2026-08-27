@@ -5,8 +5,9 @@
 | **ID** | 081 |
 | **種別** | Feature |
 | **優先度** | High |
-| **ステータス** | Open (In Progress) |
+| **ステータス** | Closed (Resolved) |
 | **起票日** | 2026-08-27 |
+| **完了日** | 2026-08-27 |
 | **担当ロール** | NLP & IR Specialist (IR) / Systems Architect (SA) |
 | **対象ブランチ** | `feat/081-pure-python-pdf-multicol-and-math-symbols` |
 
@@ -47,7 +48,7 @@ arXiv の学術セキュリティ論文に特有の「2 カラム（多段組）
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 2 カラム論文のテキスト抽出において、段組み混同（横跨ぎ読み）が発生せず、正しくカラム順でテキストが出力されること。
-- [ ] 暗号記号が文字化けせず UTF-8 で正規化されること。
-- [ ] `tests/pdf_engine/` の全単体テストが 100% PASS すること。
-- [ ] `make check` をパスすること。
+- [x] 2 カラム論文のテキスト抽出において、段組み混同（横跨ぎ読み）が発生せず、正しくカラム順でテキストが出力されること。
+- [x] 暗号記号が文字化けせず UTF-8 で正規化されること。
+- [x] `tests/pdf_engine/` の全単体テストが 100% PASS すること。
+- [x] `make check` をパスすること。

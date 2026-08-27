@@ -10,6 +10,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from orchestrator.contracts import (
+    FeedbackTelemetry,
     IntelligenceDirective,
     IntelligencePhase,
     IntelligencePhaseProtocol,
@@ -242,8 +243,36 @@ class PIRManager(IntelligencePhaseProtocol):
             metadata={"active_pir_count": len(active_reqs)},
         )
 
+    def adapt_queries_from_telemetry(
+        self, telemetry: FeedbackTelemetry
+    ) -> TopicWeightVector:
+        """Adapts topic weights and injects zero-hit emerging topics into PIR requirements."""
+        self.update_weights_from_feedback(
+            telemetry.frequent_topics,
+            telemetry.knowledge_gaps,
+            telemetry.topic_drift_scores,
+        )
+
+        # Automatically create or adapt PIR requirements for severe knowledge gaps
+
+        for gap_topic, gap_score in telemetry.knowledge_gaps.items():
+            if gap_score > 0.3 and gap_topic not in self._requirements:
+                self.register_requirement(
+                    PIRRequirement(
+                        req_id=f"pir_auto_{len(self._requirements) + 1}",
+                        title=f"Auto-Adapted PIR: {gap_topic}",
+                        description=f"Self-adapted PIR triggered by knowledge gap score {gap_score:.3f}",
+                        target_topics=[gap_topic],
+                        priority_score=min(1.0, 0.5 + gap_score * 0.5),
+                    ),
+                    save=True,
+                )
+        return self._current_weights
+
     def execute(self, context: PhaseContext) -> PhaseContext:
         """Executes Phase 1: Formulates intelligence directives."""
+        if context.telemetry:
+            self.adapt_queries_from_telemetry(context.telemetry)
         directive = self.create_directive(directive_id=f"dir_{context.cycle_id}")
         context.directive = directive
         context.phase_statuses[IntelligencePhase.PLANNING] = PhaseStatus.COMPLETED

@@ -29,6 +29,25 @@ def test_generate_mermaid_mindmap():
     assert "cs.AI (1 papers)" in mermaid
 
 
+def test_generate_surge_trend_mermaid():
+    from pipeline.reporter.diagram_generator import generate_surge_trend_mermaid
+
+    papers = [
+        {
+            "title": "Zero Trust in LLM Security",
+            "summary": "Quantum attacks on Zero Trust",
+        },
+        {
+            "title": "Side-Channel in Cryptography",
+            "summary": "Fuzzing LLM implementations",
+        },
+    ]
+    chart = generate_surge_trend_mermaid(papers)
+    assert "```mermaid" in chart
+    assert "急上昇セキュリティ動向" in chart
+    assert "LLM" in chart
+
+
 def test_reporter_5_tier_summaries_and_index():
     with tempfile.TemporaryDirectory() as tmpdir:
         config = {

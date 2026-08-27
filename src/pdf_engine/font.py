@@ -89,7 +89,25 @@ STANDARD_AGL: Dict[str, str] = {
     "ff": "ff",
     "ffi": "ffi",
     "ffl": "ffl",
+    "oplus": "⊕",
+    "otimes": "⊗",
+    "leftarrow": "←",
+    "rightarrow": "→",
+    "subset": "⊂",
+    "subseteq": "⊆",
+    "element": "∈",
+    "notelement": "∉",
+    "forall": "∀",
+    "exists": "∃",
+    "xor": "⊕",
+    "land": "∧",
+    "lor": "∨",
+    "neg": "¬",
+    "perp": "⊥",
+    "cdot": "·",
+    "equiv": "≡",
 }
+
 
 LIGATURE_MAP: Dict[str, str] = {
     "\ufb00": "ff",

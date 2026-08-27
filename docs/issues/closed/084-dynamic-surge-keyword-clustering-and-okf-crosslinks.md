@@ -5,8 +5,9 @@
 | **ID** | 084 |
 | **種別** | Feature |
 | **優先度** | Medium |
-| **ステータス** | Open (In Progress) |
+| **ステータス** | Closed (Resolved) |
 | **起票日** | 2026-08-27 |
+| **完了日** | 2026-08-27 |
 | **担当ロール** | UI/UX Designer (UIUX) / IT Strategist (ST) |
 | **対象ブランチ** | `feat/084-dynamic-surge-keyword-clustering-and-okf-crosslinks` |
 
@@ -47,7 +48,7 @@
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 月次・四半期サマリーに急上昇キーワードの Mermaid チャートおよび解説が自動挿入されること。
-- [ ] 100% 日本語規約および相対パス規約が完全に維持されていること。
-- [ ] `tests/pipeline/` の全テストが PASS すること。
-- [ ] `make check` をクリアすること。
+- [x] 月次・四半期サマリーに急上昇キーワードの Mermaid チャートおよび解説が自動挿入されること。
+- [x] 100% 日本語規約および相対パス規約が完全に維持されていること。
+- [x] `tests/pipeline/` の全テストが PASS すること。
+- [x] `make check` をクリアすること。

@@ -181,3 +181,34 @@ def test_gateway_handle_paper_with_content(tmp_path: Any) -> None:
     assert "content" in data
     assert "RapidPen" in data["content"]
     assert data["path"] == "outputs/okf_papers/2025-02-23/2502.16730.md"
+
+
+def test_gateway_additional_endpoints():
+    mock_engine = MagicMock()
+    mock_engine.documents = [{"id": "doc1", "category": "cs.CR"}]
+    mock_engine.knowledge_graph.get_neighbors.return_value = {"nodes": [], "edges": []}
+    mock_engine.get_facets.return_value = {"categories": {"cs.CR": 10}}
+    app = WSGIApplication(vector_engine=mock_engine)
+
+    # 1. /api/stats
+    status_cap: List[str] = []
+    env_stats = make_test_environ(method="GET", path="/api/stats")
+    res_stats = app(env_stats, lambda s, h: status_cap.append(s))
+    assert status_cap[0] == "200 OK"
+    assert json.loads(res_stats[0].decode("utf-8"))["status"] == "success"
+
+    # 2. /api/trends
+    status_cap.clear()
+    env_trends = make_test_environ(
+        method="GET", path="/api/trends", query_string="period=monthly"
+    )
+    res_trends = app(env_trends, lambda s, h: status_cap.append(s))
+    assert status_cap[0] == "200 OK"
+    assert json.loads(res_trends[0].decode("utf-8"))["status"] == "success"
+
+    # 3. /api/graph/mesh
+    status_cap.clear()
+    env_graph = make_test_environ(method="GET", path="/api/graph/mesh")
+    res_graph = app(env_graph, lambda s, h: status_cap.append(s))
+    assert status_cap[0] == "200 OK"
+    assert json.loads(res_graph[0].decode("utf-8"))["status"] == "success"

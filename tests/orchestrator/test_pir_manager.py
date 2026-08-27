@@ -82,3 +82,23 @@ def test_pir_manager_phase_execution_and_compensation() -> None:
     mgr.compensate(ctx)
     assert ctx.phase_statuses[IntelligencePhase.PLANNING] == PhaseStatus.COMPENSATED
     assert ctx.directive is None
+
+
+def test_pir_manager_adapt_queries_from_telemetry() -> None:
+    from orchestrator.contracts import FeedbackTelemetry
+
+    mgr = PIRManager()
+    telemetry = FeedbackTelemetry(
+        telemetry_id="telem_01",
+        ndcg_at_k=0.60,
+        mean_average_precision=0.55,
+        zero_hit_queries=["zero_trust_quantum"],
+        frequent_topics={"llm_safety": 10},
+        topic_drift_scores={"llm_safety": 0.5},
+        knowledge_gaps={"quantum_zero_trust": 0.8},
+    )
+    vec = mgr.adapt_queries_from_telemetry(telemetry)
+    assert "quantum_zero_trust" in vec.weights
+    assert any(
+        "quantum_zero_trust" in r.target_topics for r in mgr.list_active_requirements()
+    )

@@ -11,7 +11,7 @@ import sys
 import time
 from typing import Any, Dict, List, Optional
 
-from mcp.base import log_mcp_performance
+from mcp.base import log_mcp_performance, paginate_results
 from search.vector_engine import VectorEngine
 from security.validation import is_safe_workspace_path
 
@@ -296,9 +296,13 @@ PROMPTS_MANIFEST = [
 def handle_search_security_papers(args: Dict[str, Any]) -> Dict[str, Any]:
     query = args.get("query", "")
     top_k = args.get("top_k", 5)
+    offset = int(args.get("offset", 0))
+    limit = int(args.get("limit", top_k))
     category = args.get("category")
     compact = args.get("compact", True)
-    results = get_vector_engine().search(query, top_k=top_k, category=category)
+    results = get_vector_engine().search(
+        query, top_k=max(top_k, offset + limit), category=category
+    )
 
     if compact:
         compact_results = []
@@ -317,21 +321,30 @@ def handle_search_security_papers(args: Dict[str, Any]) -> Dict[str, Any]:
             )
         results = compact_results
 
+    paginated_results, pagination_meta = paginate_results(
+        results, offset=offset, limit=limit
+    )
+
     return {
         "status": "success",
         "query": query,
-        "count": len(results),
+        "count": len(paginated_results),
         "compact": compact,
-        "results": results,
+        "pagination": pagination_meta,
+        "results": paginated_results,
     }
 
 
 def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
     query = args.get("query", "")
     top_k = args.get("top_k", 10)
+    offset = int(args.get("offset", 0))
+    limit = int(args.get("limit", top_k))
     category = args.get("category")
     facets = {"category": category} if category else None
-    resp = get_vector_engine().search_hybrid_pipeline(query, facets=facets, top_k=top_k)
+    resp = get_vector_engine().search_hybrid_pipeline(
+        query, facets=facets, top_k=max(top_k, offset + limit)
+    )
 
     # Sanitize and compact hybrid response to prevent token explosion
     raw_results = resp.get("results", []) if isinstance(resp, dict) else []
@@ -353,12 +366,17 @@ def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
 
+    paginated_docs, pagination_meta = paginate_results(
+        compact_docs, offset=offset, limit=limit
+    )
+
     return {
         "status": "success",
         "query": query,
-        "count": len(compact_docs),
-        "results": compact_docs,
-        "data": {"results": compact_docs},
+        "count": len(paginated_docs),
+        "pagination": pagination_meta,
+        "results": paginated_docs,
+        "data": {"results": paginated_docs},
     }
 
 

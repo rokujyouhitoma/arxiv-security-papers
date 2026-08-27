@@ -5,8 +5,9 @@
 | **ID** | 083 |
 | **種別** | Feature |
 | **優先度** | High |
-| **ステータス** | Open (In Progress) |
+| **ステータス** | Closed (Resolved) |
 | **起票日** | 2026-08-27 |
+| **完了日** | 2026-08-27 |
 | **担当ロール** | Information Security Specialist (SC) / Systems Architect (SA) |
 | **対象ブランチ** | `feat/083-threat-defense-slopsquatting-and-eop-expansion` |
 
@@ -49,7 +50,7 @@
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] Slopsquatting および EOP モデル汚染の Semgrep ルールが正常に合成されること。
-- [ ] `check_threat_coverage` で新興脅威への防御スコアが正確に算出されること。
-- [ ] `tests/security/` および `tests/mcp/` が 100% PASS すること。
-- [ ] `make check` をクリアすること。
+- [x] Slopsquatting および EOP モデル汚染の Semgrep ルールが正常に合成されること。
+- [x] `check_threat_coverage` で新興脅威への防御スコアが正確に算出されること。
+- [x] `tests/security/` および `tests/mcp/` が 100% PASS すること。
+- [x] `make check` をクリアすること。

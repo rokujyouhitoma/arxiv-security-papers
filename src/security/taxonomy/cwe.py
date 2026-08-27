@@ -81,6 +81,29 @@ CWE_DEFENSE_MAP: Dict[str, Dict[str, Any]] = {
             "import subprocess\nsubprocess.run(['ls', '-l', safe_target], check=True)",
         ],
     },
+    "CWE-1357": {
+        "name": "Slopsquatting & Dependency Confusion",
+        "description": "Reliance on Uncontrolled Component with LLM Hallucinated Package Names",
+        "semgrep_pattern": "import $HALLUCINATED_PKG | from $HALLUCINATED_PKG import $...X",
+        "secure_alternative": "Private registry pin and zero-dependency verified namespace allow-list",
+        "patch_strategy": "Lock approved dependency hashes and enforce verified registry namespace",
+        "mitre_technique": "T1195.001 (Supply Chain Compromise: Compromise Software Dependencies)",
+        "secure_coding_patterns": [
+            "# Lock approved dependencies in requirements.txt with sha256 hashes",
+            "from security.validation import is_safe_package_name",
+        ],
+    },
+    "CWE-693": {
+        "name": "Exception-Oriented Programming (EOP) Model Poisoning",
+        "description": "Protection Mechanism Failure via Opcode Mismatch and Control Flow Hijacking",
+        "semgrep_pattern": "torch.load($...X) | pickle.load($...X)",
+        "secure_alternative": "safetensors.torch.load_file(path) or onnx.load(path)",
+        "patch_strategy": "Convert model checkpoint serialization to SafeTensors zero-code-execution format",
+        "mitre_technique": "T1587.001 (Develop Capabilities: Malware/Payload)",
+        "secure_coding_patterns": [
+            "from safetensors.torch import load_file\nweights = load_file(model_path)",
+        ],
+    },
 }
 
 

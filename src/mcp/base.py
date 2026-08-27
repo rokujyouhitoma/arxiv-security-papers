@@ -113,6 +113,29 @@ def _extract_metrics(res: Any) -> Dict[str, Any]:
     return metrics
 
 
+def paginate_results(
+    items: List[Any],
+    offset: int = 0,
+    limit: int = 10,
+    max_limit: int = 50,
+) -> tuple[List[Any], Dict[str, Any]]:
+    """Applies safe slicing and returns paginated items with pagination metadata."""
+    safe_offset = max(0, offset)
+    safe_limit = max(1, min(limit, max_limit))
+    total = len(items)
+    paginated = items[safe_offset : safe_offset + safe_limit]
+    has_more = (safe_offset + safe_limit) < total
+    pagination_meta: Dict[str, Any] = {
+        "total": total,
+        "offset": safe_offset,
+        "limit": safe_limit,
+        "has_more": has_more,
+    }
+    if has_more:
+        pagination_meta["next_offset"] = safe_offset + safe_limit
+    return paginated, pagination_meta
+
+
 def _dispatch_tools_call(
     server_name: str,
     p: Dict[str, Any],
