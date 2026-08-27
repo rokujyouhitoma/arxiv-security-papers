@@ -27,7 +27,13 @@ from .contracts import (
 )
 from .control import ControlServer
 from .heartbeat import HeartbeatWatchdog
-from .workers import WORKER_CLASSES, BaseWorker, ManagedServiceWorker, SyncWorker
+from .workers import (
+    WORKER_CLASSES,
+    BaseWorker,
+    ManagedServiceWorker,
+    QueueWorker,
+    SyncWorker,
+)
 
 
 class ManagedPool:
@@ -258,32 +264,74 @@ class Arbiter:
             return {"status": "ok", "message": "Shutdown sequence initiated"}
         return {"status": "error", "error": f"Unknown command: '{cmd}'"}
 
+    def _run_service_worker(self, spec: WorkerSpec, worker_id: str) -> None:
+        """Executes stateful service worker with LifecycleHook."""
+        hook_uri = spec.metadata.get("hook_uri") if spec.metadata else None
+        hook = spec.hook or self.load_hook(hook_uri)
+        svc_worker = ManagedServiceWorker(
+            worker_id=worker_id,
+            config=self.config,
+            service_name=spec.name,
+            hook=hook,
+            sync_interval=spec.sync_interval,
+        )
+        svc_worker.run()
+
+    def _run_oneshot_worker(self, spec: WorkerSpec) -> int:
+        """Executes one-shot batch task."""
+        try:
+            if callable(spec.app_target):
+                spec.app_target()
+            return 0
+        except Exception as exc:
+            logging.error(
+                "[Arbiter] ONESHOT task '%s' raised exception: %s",
+                spec.name,
+                exc,
+            )
+            return 1
+
+    def _run_queue_worker(self, spec: WorkerSpec, worker_id: str) -> None:
+        """Executes message queue consumer worker."""
+        source_q = spec.metadata.get("source_queue") if spec.metadata else None
+        poll_int = (
+            float(spec.metadata.get("poll_interval", 0.1)) if spec.metadata else 0.1
+        )
+        q_worker = QueueWorker(
+            worker_id=worker_id,
+            config=self.config,
+            app_target=spec.app_target,
+            source_queue=source_q,
+            poll_interval=poll_int,
+        )
+        q_worker.run()
+
+    def _run_web_worker(self, spec: WorkerSpec, worker_id: str) -> None:
+        """Executes standard pre-fork web worker."""
+        worker_cls = WORKER_CLASSES.get(spec.worker_class, SyncWorker)
+        app = spec.app_target or self.load_wsgi_app()
+        sock = spec.server_socket or self.server_socket
+        web_worker = worker_cls(
+            worker_id=worker_id,
+            config=self.config,
+            server_socket=sock,
+            app_target=app,
+        )
+        web_worker.run()
+
     def _run_child_worker(self, spec: WorkerSpec, worker_id: str) -> NoReturn:
         """Executes worker lifecycle loop in child process."""
         self.init_child_process()
+        exit_code = 0
         if spec.worker_class == "service" or spec.role == ServiceRole.STATEFUL_SERVICE:
-            hook_uri = spec.metadata.get("hook_uri") if spec.metadata else None
-            hook = spec.hook or self.load_hook(hook_uri)
-            svc_worker = ManagedServiceWorker(
-                worker_id=worker_id,
-                config=self.config,
-                service_name=spec.name,
-                hook=hook,
-                sync_interval=spec.sync_interval,
-            )
-            svc_worker.run()
+            self._run_service_worker(spec, worker_id)
+        elif spec.role == ServiceRole.ONESHOT_TASK:
+            exit_code = self._run_oneshot_worker(spec)
+        elif spec.worker_class == "queue":
+            self._run_queue_worker(spec, worker_id)
         else:
-            worker_cls = WORKER_CLASSES.get(spec.worker_class, SyncWorker)
-            app = spec.app_target or self.load_wsgi_app()
-            sock = spec.server_socket or self.server_socket
-            web_worker = worker_cls(
-                worker_id=worker_id,
-                config=self.config,
-                server_socket=sock,
-                app_target=app,
-            )
-            web_worker.run()
-        sys.exit(0)
+            self._run_web_worker(spec, worker_id)
+        sys.exit(exit_code)
 
     def spawn_worker(self, pool_name: Optional[str] = None) -> Optional[int]:
         """Forks a new child worker for the designated managed pool."""

@@ -15,12 +15,14 @@ from .contracts import (
 )
 from .control import ControlClient, ControlServer
 from .heartbeat import HeartbeatWatchdog
+from .top import SupervisorTopViewer, run_top
 from .workers import (
     WORKER_CLASSES,
     AsyncWorker,
     BaseWorker,
     GthreadWorker,
     ManagedServiceWorker,
+    QueueWorker,
     SyncWorker,
 )
 
@@ -42,11 +44,14 @@ __all__ = [
     "ControlServer",
     "ControlClient",
     "HeartbeatWatchdog",
+    "SupervisorTopViewer",
+    "run_top",
     # Workers
     "BaseWorker",
     "SyncWorker",
     "GthreadWorker",
     "AsyncWorker",
+    "QueueWorker",
     "ManagedServiceWorker",
     "WORKER_CLASSES",
 ]

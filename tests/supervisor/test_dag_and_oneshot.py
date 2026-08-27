@@ -138,3 +138,55 @@ def test_queue_worker_drain_and_processing() -> None:
 
     # Verify empty fetch returns None
     assert worker._fetch_item() is None
+
+
+def test_run_child_worker_oneshot_success() -> None:
+    """Tests _run_child_worker execution path for ONESHOT_TASK success."""
+    config = SupervisorConfig()
+    arbiter = Arbiter(config)
+    task_mock = MagicMock()
+    spec = WorkerSpec(
+        name="oneshot_success",
+        role=ServiceRole.ONESHOT_TASK,
+        app_target=task_mock,
+    )
+    with patch("sys.exit") as mock_exit:
+        arbiter._run_child_worker(spec, "oneshot_1")
+        task_mock.assert_called_once()
+        mock_exit.assert_called_once_with(0)
+
+
+def test_run_child_worker_oneshot_exception() -> None:
+    """Tests _run_child_worker execution path for ONESHOT_TASK failure."""
+    config = SupervisorConfig()
+    arbiter = Arbiter(config)
+
+    def failing_task() -> None:
+        raise RuntimeError("Task boom")
+
+    spec = WorkerSpec(
+        name="oneshot_fail",
+        role=ServiceRole.ONESHOT_TASK,
+        app_target=failing_task,
+    )
+    with patch("sys.exit") as mock_exit:
+        arbiter._run_child_worker(spec, "oneshot_2")
+        mock_exit.assert_called_once_with(1)
+
+
+def test_run_child_worker_queue_dispatch() -> None:
+    """Tests _run_child_worker execution path for queue worker."""
+    config = SupervisorConfig()
+    arbiter = Arbiter(config)
+    q: queue.Queue[str] = queue.Queue()
+    spec = WorkerSpec(
+        name="queue_pool",
+        worker_class="queue",
+        app_target=lambda x: None,
+        metadata={"source_queue": q, "poll_interval": 0.05},
+    )
+    with patch("supervisor.workers.queue_worker.QueueWorker.run") as mock_run:
+        with patch("sys.exit") as mock_exit:
+            arbiter._run_child_worker(spec, "queue_1")
+            mock_run.assert_called_once()
+            mock_exit.assert_called_once_with(0)
