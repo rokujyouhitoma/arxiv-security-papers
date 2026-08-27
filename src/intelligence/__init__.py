@@ -1,6 +1,6 @@
-"""Universal Autonomous Intelligence Lifecycle Orchestration Package.
+"""Closed-Loop Intelligence System Package.
 
-Provides a domain-agnostic closed-loop intelligence engine orchestrating
+Orchestrates the 6-phase intelligence lifecycle:
 Planning, Collection, Processing, Analysis, Dissemination, and Evaluation.
 """
 
@@ -8,6 +8,9 @@ from intelligence.analysis.synthesizer import AnalysisSynthesizer
 from intelligence.cli import build_parser, main, run_cycle_command
 from intelligence.contracts import (
     FeedbackTelemetry,
+    Hypothesis,
+    HypothesisEvidence,
+    HypothesisStatus,
     IntelligenceDirective,
     IntelligencePhase,
     IntelligencePhaseProtocol,
@@ -23,45 +26,31 @@ from intelligence.engine import (
 from intelligence.feedback.evaluator import FeedbackEvaluator
 from intelligence.harvest.coordinator import HarvestCoordinator
 from intelligence.pir.manager import PIRManager
-from intelligence.pir.models import PIRRequirement, TopicWeightVector
+from intelligence.pir.models import PIRHorizon, PIRRequirement, TopicWeightVector
 from intelligence.processing.processor import ProcessingCoordinator
-from workflow.circuit import CircuitBreaker, CircuitState
-from workflow.dag import DAGWorkflowEngine, TaskNode
-from workflow.saga import PhaseProtocol, SagaCoordinator, SagaStep
-from workflow.streaming_dag import BufferPolicy, StreamChunk, StreamingDAG
-from workflow.wal import EventType, OrchestratorEvent, OrchestratorWAL
 
 __all__ = [
-    "UniversalIntelligenceOrchestrator",
     "ClosedLoopIntelligenceEngine",
+    "UniversalIntelligenceOrchestrator",
     "IntelligencePhase",
     "PhaseStatus",
     "PhaseContext",
     "IntelligenceDirective",
     "IntelligenceProduct",
+    "Hypothesis",
+    "HypothesisEvidence",
+    "HypothesisStatus",
     "FeedbackTelemetry",
     "IntelligencePhaseProtocol",
     "PIRManager",
     "PIRRequirement",
+    "PIRHorizon",
     "TopicWeightVector",
     "HarvestCoordinator",
     "ProcessingCoordinator",
     "AnalysisSynthesizer",
     "DisseminationDistributor",
     "FeedbackEvaluator",
-    "DAGWorkflowEngine",
-    "TaskNode",
-    "StreamingDAG",
-    "StreamChunk",
-    "BufferPolicy",
-    "SagaCoordinator",
-    "SagaStep",
-    "PhaseProtocol",
-    "OrchestratorWAL",
-    "OrchestratorEvent",
-    "EventType",
-    "CircuitBreaker",
-    "CircuitState",
     "main",
     "build_parser",
     "run_cycle_command",

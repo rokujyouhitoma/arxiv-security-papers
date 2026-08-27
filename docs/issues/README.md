@@ -6,7 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在アクティブな Issue はありません（すべての戦略的イノベーション Issue 080〜090 が完了・クローズされました）。*
+*現在対応中のアクティブな Issue はありません。*
 
 ---
 
@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **091** | 汎用ワークフロー基盤 (src/workflow) と 閉ループ・インテリジェンス (src/intelligence) の完全分離 | Refactor | 2026-08-27 | [091-separate-workflow-engine-and-closed-loop-intelligence.md](closed/091-separate-workflow-engine-and-closed-loop-intelligence.md) |
 | **090** | 自律型自己修復 & 動的ルート変異ハーベスター (Autonomous Self-Healing & Dynamic Route Mutation Harvester) の実装 | Feature | 2026-08-27 | [090-autonomous-self-healing-harvest-router.md](closed/090-autonomous-self-healing-harvest-router.md) |
 | **089** | Event Sourcing 型 クラッシュリカバリ WAL (Write-Ahead Log & State Replay Engine) の実装 | Feature | 2026-08-27 | [089-event-sourcing-crash-recovery-wal.md](closed/089-event-sourcing-crash-recovery-wal.md) |
 | **088** | ストリーミング型 DAG & バックプレッシャー制御パイプライン (Streaming DAG & Reactive Backpressure Engine) の実装 | Feature | 2026-08-27 | [088-streaming-dag-and-backpressure-pipeline.md](closed/088-streaming-dag-and-backpressure-pipeline.md) |
