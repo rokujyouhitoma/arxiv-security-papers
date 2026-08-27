@@ -19,6 +19,7 @@ def test_build_parser_structure() -> None:
     assert "hypothesis" in choices
     assert "credibility" in choices
     assert "recover" in choices
+    assert "harvest" in choices
     assert "status" in choices
     assert "pipeline" in choices
     assert "spider" in choices

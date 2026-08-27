@@ -12,10 +12,11 @@ from orchestrator.contracts import (
     PhaseContext,
     PhaseStatus,
 )
+from orchestrator.harvest.adaptive_router import AdaptiveHarvestRouter
 
 
 class HarvestCoordinator(IntelligencePhaseProtocol):
-    """Phase 2: Multi-Source Collection Coordinator."""
+    """Phase 2: Multi-Source Collection Coordinator with Adaptive Route Mutation."""
 
     def __init__(
         self,
@@ -23,7 +24,51 @@ class HarvestCoordinator(IntelligencePhaseProtocol):
             Dict[str, Callable[[str, int], List[Dict[str, Any]]]]
         ] = None,
     ) -> None:
-        self._harvesters = custom_harvesters or {}
+        self.router = AdaptiveHarvestRouter()
+        self._setup_initial_routes(custom_harvesters)
+
+    def _setup_initial_routes(
+        self,
+        custom_harvesters: Optional[
+            Dict[str, Callable[[str, int], List[Dict[str, Any]]]]
+        ],
+    ) -> None:
+        """Sets up default or custom harvest routes."""
+        if custom_harvesters:
+            for idx, (name, fn) in enumerate(custom_harvesters.items()):
+                self.router.register_route(
+                    route_id=name,
+                    source_type=name,
+                    priority=idx + 1,
+                    handler_fn=fn,
+                )
+        else:
+            # Default routes: Primary synthetic -> Secondary synthetic fallback
+            self.router.register_route(
+                route_id="primary_arxiv_harvester",
+                source_type="arxiv_api",
+                priority=1,
+                handler_fn=self._default_harvest_fn,
+            )
+            self.router.register_route(
+                route_id="secondary_rss_harvester",
+                source_type="rss_feed",
+                priority=2,
+                handler_fn=self._default_harvest_fn,
+            )
+
+    def _default_harvest_fn(self, topic: str, quota: int) -> List[Dict[str, Any]]:
+        """Default collection generator for standalone operations."""
+        return [
+            {
+                "id": f"rec_{topic}_{i+1}",
+                "title": f"Intelligence Observation on {topic} #{i+1}",
+                "topic": topic,
+                "raw_text": f"Detailed raw intelligence data concerning {topic}.",
+                "source": "universal_harvester",
+            }
+            for i in range(max(1, quota))
+        ]
 
     @property
     def phase_type(self) -> IntelligencePhase:
@@ -33,47 +78,29 @@ class HarvestCoordinator(IntelligencePhaseProtocol):
         self,
         source_name: str,
         harvester_fn: Callable[[str, int], List[Dict[str, Any]]],
+        priority: int = 1,
     ) -> None:
-        """Registers an external harvester/crawler function."""
-        self._harvesters[source_name] = harvester_fn
+        """Registers an external harvester/crawler function into the router with top priority."""
+        # If default synthetic routes are in place, replace primary with this custom route
+        if "primary_arxiv_harvester" in self.router._routes:
+            del self.router._routes["primary_arxiv_harvester"]
+        self.router.register_route(
+            route_id=source_name,
+            source_type=source_name,
+            priority=priority,
+            handler_fn=harvester_fn,
+        )
 
     def harvest(
         self, target_topics: List[str], crawl_quotas: Dict[str, int]
     ) -> List[Dict[str, Any]]:
-        """Collects raw records across registered sources based on topic quotas."""
+        """Collects raw records across registered sources with dynamic route mutation."""
         collected: List[Dict[str, Any]] = []
 
-        if self._harvesters:
-            for source_name, fn in self._harvesters.items():
-                for topic in target_topics:
-                    quota = crawl_quotas.get(topic, 10)
-                    try:
-                        records = fn(topic, quota)
-                        collected.extend(records)
-                    except Exception as e:
-                        # Fault-tolerance: log and continue
-                        collected.append(
-                            {
-                                "id": f"error_{source_name}_{topic}",
-                                "error": str(e),
-                                "source": source_name,
-                                "topic": topic,
-                            }
-                        )
-        else:
-            # Synthetic fallback adapter for standalone orchestrator operation
-            for topic in target_topics:
-                quota = crawl_quotas.get(topic, 5)
-                for i in range(quota):
-                    collected.append(
-                        {
-                            "id": f"rec_{topic}_{i+1}",
-                            "title": f"Intelligence Observation on {topic} #{i+1}",
-                            "topic": topic,
-                            "raw_text": f"Detailed raw intelligence data concerning {topic}.",
-                            "source": "universal_harvester",
-                        }
-                    )
+        for topic in target_topics:
+            quota = crawl_quotas.get(topic, 5)
+            records, used_route, _ = self.router.harvest_topic(topic, quota)
+            collected.extend(records)
 
         return collected
 

@@ -6,7 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在アクティブな Issue はありません（すべての戦略的イノベーション Issue 080〜089 が完了・クローズされました）。*
+*現在アクティブな Issue はありません（すべての戦略的イノベーション Issue 080〜090 が完了・クローズされました）。*
 
 ---
 
@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **090** | 自律型自己修復 & 動的ルート変異ハーベスター (Autonomous Self-Healing & Dynamic Route Mutation Harvester) の実装 | Feature | 2026-08-27 | [090-autonomous-self-healing-harvest-router.md](closed/090-autonomous-self-healing-harvest-router.md) |
 | **089** | Event Sourcing 型 クラッシュリカバリ WAL (Write-Ahead Log & State Replay Engine) の実装 | Feature | 2026-08-27 | [089-event-sourcing-crash-recovery-wal.md](closed/089-event-sourcing-crash-recovery-wal.md) |
 | **088** | ストリーミング型 DAG & バックプレッシャー制御パイプライン (Streaming DAG & Reactive Backpressure Engine) の実装 | Feature | 2026-08-27 | [088-streaming-dag-and-backpressure-pipeline.md](closed/088-streaming-dag-and-backpressure-pipeline.md) |
 | **087** | 情報源信憑性スコアリング Admiralty Engine (NATO STANAG 2022 規格準拠) の実装 | Feature | 2026-08-27 | [087-admiralty-credibility-scoring-engine.md](closed/087-admiralty-credibility-scoring-engine.md) |

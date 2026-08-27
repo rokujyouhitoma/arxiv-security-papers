@@ -479,6 +479,33 @@ def run_recover_command(args: argparse.Namespace) -> int:
     return 0 if not ctx.errors else 1
 
 
+def run_harvest_command(args: argparse.Namespace) -> int:
+    """Manages adaptive harvesting routes and circuit breaker tests."""
+    workspace_dir = os.path.abspath(args.workdir)
+    orchestrator = UniversalIntelligenceOrchestrator(workspace_dir=workspace_dir)
+    coordinator = orchestrator.harvest_coordinator
+
+    if getattr(args, "harvest_action", None) == "test":
+        topic = getattr(args, "topic", "cryptography")
+        quota = getattr(args, "quota", 5)
+        records, used_route, log = coordinator.router.harvest_topic(topic, quota)
+        print("=================================================================")
+        print("   ADAPTIVE HARVEST ROUTE MUTATION TEST")
+        print("=================================================================")
+        print(f"Target Topic     : {topic}")
+        print(f"Requested Quota  : {quota}")
+        print(f"Route Selected   : {used_route}")
+        print(f"Collected Records: {len(records)}")
+        print("\n[Mutation Trace Log]")
+        for entry in log:
+            print(f"  - Route: {entry.get('route_id')}, Action: {entry.get('action')}")
+        return 0
+
+    # Default: status markdown
+    print(coordinator.router.generate_status_markdown())
+    return 0
+
+
 def run_status_command(args: argparse.Namespace) -> int:
     """Displays comprehensive repository and intelligence status."""
     workspace_dir = os.path.abspath(args.workdir)
@@ -741,6 +768,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--list", action="store_true", help="List all recoverable cycles from WAL"
     )
 
+    # Command: harvest
+    harvest_parser = subparsers.add_parser(
+        "harvest", help="Adaptive multi-source harvesting and route circuit status"
+    )
+    harvest_subparsers = harvest_parser.add_subparsers(
+        dest="harvest_action", help="Harvest action to perform"
+    )
+    harvest_subparsers.add_parser(
+        "status", help="Show all harvest routes and circuit breaker health (default)"
+    )
+    test_harvest_parser = harvest_subparsers.add_parser(
+        "test", help="Test adaptive route mutation for a specific topic"
+    )
+    test_harvest_parser.add_argument(
+        "--topic", type=str, default="cryptography", help="Topic to harvest"
+    )
+    test_harvest_parser.add_argument(
+        "--quota", type=int, default=5, help="Number of records to fetch"
+    )
+
     # Command: status
     subparsers.add_parser(
         "status", help="Show system-wide intelligence and data status"
@@ -925,6 +972,7 @@ def _dispatch_command(
         "hypothesis": run_hypothesis_command,
         "credibility": run_credibility_command,
         "recover": run_recover_command,
+        "harvest": run_harvest_command,
         "status": run_status_command,
         "pipeline": _handle_pipeline_cli,
         "spider": _handle_spider_cli,

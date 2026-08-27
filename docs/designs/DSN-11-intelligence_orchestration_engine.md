@@ -332,6 +332,24 @@ graph TD
 - **チェックポイントスナップショット**: 各フェーズ完了時に `PhaseContext` の圧縮スナップショット（`.checkpoint.json`）を作成し、リカバリ時のリプレイ時間を最小化。
 - **自律再開 (Resume Protocol)**: `UniversalIntelligenceOrchestrator.resume_cycle(cycle_id)` により、未完了フェーズを自動検知して閉ループを再開・完遂。
 
+### 5.5 自律型自己修復 & 動的ルート変異ハーベスター (Adaptive Harvest Router)
+外部データソース（arXiv API, RSS, Web Spider, Local Cache）の通信障害やレート制限（HTTP 429）を検知し、サーキットブレーカーと動的ルート変異（Route Mutation）により無停止でデータ収集を継続する。
+
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED: 正常稼働
+    CLOSED --> OPEN: 連続失敗 >= 閾値 (429 / 5xx / Timeout)
+    OPEN --> HALF_OPEN: クールダウン期間 (30s) 経過
+    HALF_OPEN --> CLOSED: 試験プローブ成功 (自己修復完了)
+    HALF_OPEN --> OPEN: 試験プローブ失敗
+```
+
+- **サーキットブレーカー状態**:
+  - `CLOSED`: 優先度 1 のプライマリ情報源（arXiv API）へリクエストを送信。
+  - `OPEN`: 障害検知時、直ちにセカンダリ（RSS Feed / Web Spider / Local Cache）へバイパス。
+  - `HALF_OPEN`: クールダウン後に少量のプローブを送信し、疎通確認後に `CLOSED` へ自動回復。
+- **健全度 EMA スコアリング**: 各ルートの成功率と応答遅延（ms）からヘルススコア（0.0〜1.0）を動的算定。
+
 ---
 
 # 6. クラス設計・プロトコル定義・公開 API インターフェース
