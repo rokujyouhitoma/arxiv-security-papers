@@ -5,7 +5,7 @@ applies domain ontology tags, and prepares knowledge for atomic storage.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from orchestrator.contracts import (
     IntelligencePhase,
@@ -13,22 +13,30 @@ from orchestrator.contracts import (
     PhaseContext,
     PhaseStatus,
 )
+from orchestrator.processing.credibility import AdmiraltyEngine
 
 
 class ProcessingCoordinator(IntelligencePhaseProtocol):
-    """Phase 3: Data Processing & Ontology Enrichment Coordinator."""
+    """Phase 3: Data Processing & Ontology Enrichment Coordinator with Admiralty Credibility Assessment."""
+
+    def __init__(self, credibility_engine: Optional[AdmiraltyEngine] = None) -> None:
+        self.credibility_engine = credibility_engine or AdmiraltyEngine()
 
     @property
     def phase_type(self) -> IntelligencePhase:
         return IntelligencePhase.PROCESSING
 
     def process_record(self, raw: Dict[str, Any]) -> Dict[str, Any]:
-        """Transforms a raw record into structured OKF v0.2 format."""
+        """Transforms a raw record into structured OKF v0.2 format with Admiralty rating."""
         rec_id = str(raw.get("id", "doc_unknown"))
         title = str(raw.get("title", f"Document {rec_id}"))
         topic = str(raw.get("topic", "general"))
-        text = str(raw.get("raw_text", ""))
+        text = str(raw.get("raw_text", raw.get("summary", "")))
 
+        # 1. Admiralty Credibility Rating
+        rating = self.credibility_engine.rate_record(raw)
+
+        # 2. Ontology & Domain Tags
         tags = [topic]
         if "security" in title.lower() or "security" in text.lower():
             tags.append("security")
@@ -51,7 +59,9 @@ class ProcessingCoordinator(IntelligencePhaseProtocol):
             f'  raw_id: "{rec_id}"\n'
             f"trust:\n"
             f'  signature: "sha256-verified"\n'
-            f"  confidence: 0.95\n"
+            f'  admiralty_code: "{rating.code}"\n'
+            f"  confidence: {rating.score}\n"
+            f'  admiralty_justification: "{rating.justification}"\n'
             "---\n\n"
             f"# {title}\n\n"
             f"{text}\n"
@@ -62,6 +72,9 @@ class ProcessingCoordinator(IntelligencePhaseProtocol):
             "title": title,
             "topic": topic,
             "tags": sorted(list(set(tags))),
+            "admiralty_code": rating.code,
+            "admiralty_score": rating.score,
+            "admiralty_justification": rating.justification,
             "okf_content": okf_yaml,
             "processed_at": datetime.now(timezone.utc).isoformat(),
         }

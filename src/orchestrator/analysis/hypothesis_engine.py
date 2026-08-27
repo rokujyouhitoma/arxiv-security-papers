@@ -278,6 +278,8 @@ class HypothesisEngine:
         ).lower()
         delta_s, delta_r = 0.0, 0.0
 
+        relevance = float(record.get("admiralty_score", 1.0))
+
         for pat in support_patterns:
             if re.search(pat, text, re.IGNORECASE) and paper_id not in existing_supp:
                 ev = HypothesisEvidence(
@@ -285,11 +287,11 @@ class HypothesisEngine:
                     paper_id=paper_id,
                     excerpt=record.get("summary", record.get("title", ""))[:200],
                     polarity="support",
-                    relevance_score=1.0,
+                    relevance_score=relevance,
                 )
                 hypothesis.supporting_evidence.append(ev)
                 existing_supp.add(paper_id)
-                delta_s += 1.0
+                delta_s += relevance
                 break
 
         for pat in refute_patterns:
@@ -299,11 +301,11 @@ class HypothesisEngine:
                     paper_id=paper_id,
                     excerpt=record.get("summary", record.get("title", ""))[:200],
                     polarity="refute",
-                    relevance_score=1.0,
+                    relevance_score=relevance,
                 )
                 hypothesis.refuting_evidence.append(ev)
                 existing_ref.add(paper_id)
-                delta_r += 1.0
+                delta_r += relevance
                 break
 
         return delta_s, delta_r

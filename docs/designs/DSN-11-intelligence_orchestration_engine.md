@@ -250,6 +250,18 @@ $$C(H) = \frac{0.5 + S}{1.0 + S + R} \in [0.0, 1.0]$$
 
 INCONCLUSIVE または INVESTIGATING の仮説に対しては、エンジンが自律的に深掘り探索クエリ $Q_{\text{investigate}}(H)$ を生成し、次サイクルの PIR 要件へフィードバック注入する。
 
+### 4.5 NATO STANAG 2022 Admiralty 情報源信憑性スコアリングモデル
+Phase 3 (Processing) において、全収集文献に対し多次元の信憑性格付けを実施する：
+
+1. **Source Reliability (情報源信頼性: A〜F)**:
+   - A: 完全信頼 (1.00) / B: 概ね信頼 (0.85) / C: 一定の信頼 (0.65) / D: 通常は信頼不能 (0.40) / E: 信頼不能 (0.10) / F: 評価不能 (0.50)
+2. **Information Credibility (情報確実性: 1〜6)**:
+   - 1: 独立確認済 (1.00) / 2: おそらく真実 (0.85) / 3: 可能性あり (0.65) / 4: 疑義あり (0.40) / 5: 考えにくい (0.10) / 6: 評価不能 (0.50)
+
+$$\text{AdmiraltyScore}(r) = w_{\text{reliability}}(\text{source}(r)) \times w_{\text{credibility}}(\text{content}(r)) \in [0.01, 1.00]$$
+
+格付け結果（コード `B2`, スコア `0.72` 等）は OKF v0.2 フロントマターの `trust` セクションへ暗号署名とともに記録され、Phase 4 の仮説検証（HypothesisEngine）における証拠重み（$\text{rel}(e)$）として直接連動する。
+
 ---
 
 # 5. DAG ワークフロー & 状態遷移仕様

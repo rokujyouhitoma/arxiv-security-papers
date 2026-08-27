@@ -6,7 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在アクティブな Issue はありません（すべての戦略的イノベーション Issue 080〜086 が完了・クローズされました）。*
+*現在アクティブな Issue はありません（すべての戦略的イノベーション Issue 080〜087 が完了・クローズされました）。*
 
 ---
 
@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **087** | 情報源信憑性スコアリング Admiralty Engine (NATO STANAG 2022 規格準拠) の実装 | Feature | 2026-08-27 | [087-admiralty-credibility-scoring-engine.md](closed/087-admiralty-credibility-scoring-engine.md) |
 | **086** | 仮説駆動型 自律調査・検証ループ (Hypothesis-Driven Autonomous Investigation & Verification Engine) の実装 | Feature | 2026-08-27 | [086-hypothesis-driven-autonomous-investigation.md](closed/086-hypothesis-driven-autonomous-investigation.md) |
 | **085** | 3-Horizon (戦術・運用・戦略) 多層 PIR 管理および動的エスカレーション基盤の実装 | Feature | 2026-08-27 | [085-3horizon-pir-and-dynamic-escalation.md](closed/085-3horizon-pir-and-dynamic-escalation.md) |
 | **084** | 5 階層エグゼクティブサマリーにおける急上昇キーワード（Surge Keywords）時系列クラスタリンググラフおよび防御コード相互リンクの実装 | Feature | 2026-08-27 | [084-dynamic-surge-keyword-clustering-and-okf-crosslinks.md](closed/084-dynamic-surge-keyword-clustering-and-okf-crosslinks.md) |

@@ -407,6 +407,32 @@ def run_hypothesis_command(args: argparse.Namespace) -> int:
     return _list_hypotheses(orchestrator)
 
 
+def run_credibility_command(args: argparse.Namespace) -> int:
+    """Manages NATO STANAG 2022 Admiralty Credibility Scoring."""
+    from orchestrator.processing.credibility import AdmiraltyEngine
+
+    engine = AdmiraltyEngine()
+    if getattr(args, "cred_action", None) == "rate":
+        text = getattr(args, "text", "")
+        source = getattr(args, "source", "unknown")
+        if not text:
+            print("[ERROR] --text is required for credibility assessment.")
+            return 1
+        dummy_rec = {"title": text[:80], "summary": text, "source": source}
+        rating = engine.rate_record(dummy_rec)
+        print("=================================================================")
+        print("   NATO STANAG 2022 ADMIRALTY CREDIBILITY ASSESSMENT")
+        print("=================================================================")
+        print(f"  Source Type       : {source}")
+        print(f"  Admiralty Code    : [{rating.code}]")
+        print(f"  Compound Score    : {rating.score:.3f} / 1.000")
+        print(f"  Assessment Details: {rating.justification}")
+        return 0
+
+    print(engine.generate_matrix_markdown())
+    return 0
+
+
 def run_status_command(args: argparse.Namespace) -> int:
     """Displays comprehensive repository and intelligence status."""
     workspace_dir = os.path.abspath(args.workdir)
@@ -624,6 +650,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--id", type=str, required=True, help="Hypothesis ID to report"
     )
 
+    # Command: credibility
+    cred_parser = subparsers.add_parser(
+        "credibility", help="NATO STANAG 2022 Admiralty Credibility Scoring"
+    )
+    cred_subparsers = cred_parser.add_subparsers(
+        dest="cred_action", help="Credibility action to perform"
+    )
+    cred_subparsers.add_parser(
+        "matrix", help="Display NATO STANAG 2022 Admiralty Matrix table (default)"
+    )
+    rate_cred_parser = cred_subparsers.add_parser(
+        "rate", help="Assess Admiralty credibility rating for given text"
+    )
+    rate_cred_parser.add_argument(
+        "--text", type=str, required=True, help="Content text to evaluate"
+    )
+    rate_cred_parser.add_argument(
+        "--source",
+        type=str,
+        default="arxiv",
+        help="Source type / venue (default: arxiv)",
+    )
+
     # Command: status
     subparsers.add_parser(
         "status", help="Show system-wide intelligence and data status"
@@ -806,6 +855,7 @@ def _dispatch_command(
         "daemon": run_daemon_command,
         "pir": run_pir_command,
         "hypothesis": run_hypothesis_command,
+        "credibility": run_credibility_command,
         "status": run_status_command,
         "pipeline": _handle_pipeline_cli,
         "spider": _handle_spider_cli,
