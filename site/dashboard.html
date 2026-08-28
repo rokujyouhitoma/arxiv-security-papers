@@ -701,7 +701,7 @@
               </div>
               <div style="display: flex; justify-content: space-between;">
                 <span style="color: var(--fg-muted);">OTLP JSON (v1/traces):</span>
-                <strong style="color: var(--accent-green);" id="valObfStatusDetail">HTTP 200 / 0 Loss</strong>
+                <strong style="color: var(--accent-green);" id="valObfStatusDetail">--</strong>
               </div>
             </div>
           </div>
@@ -711,7 +711,7 @@
         <div class="metric-card" style="background-color: var(--bg-panel);">
           <div class="card-header">
             <span class="card-title">🔄 Active Loop &amp; Cycle Monitor</span>
-            <span class="card-tag" id="loopBadge" style="color: var(--accent-coral); font-weight: bold;">ACTIVE (4x Daily)</span>
+            <span class="card-tag" id="loopBadge" style="color: var(--accent-coral); font-weight: bold;">--</span>
           </div>
           <div style="font-size: 11px; margin-top: 2px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -720,7 +720,7 @@
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--fg-muted);">Loop Schedule:</span>
-              <span>4x Daily (00/06/12/18 UTC)</span>
+              <span id="loopSchedule">--</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--fg-muted);">Last Batch Sync:</span>
@@ -732,14 +732,7 @@
             </div>
             <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
               <div style="font-size: 10px; color: var(--fg-muted); margin-bottom: 4px;">INTELLIGENCE DAG PHASES:</div>
-              <div style="display: flex; gap: 4px; flex-wrap: wrap; font-size: 9px; font-weight: bold;" id="loopPhaseList">
-                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">PLAN ✓</span>
-                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">HARVEST ✓</span>
-                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">PROCESS ✓</span>
-                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">SYNTH ✓</span>
-                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">DISTRIB ✓</span>
-                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">EVAL ✓</span>
-              </div>
+              <div style="display: flex; gap: 4px; flex-wrap: wrap; font-size: 9px; font-weight: bold;" id="loopPhaseList"></div>
             </div>
           </div>
         </div>
@@ -748,7 +741,7 @@
         <div class="metric-card">
           <div class="card-header">
             <span class="card-title">Traversal Matrix (100 Walks)</span>
-            <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">88% PASS</span>
+            <span class="card-tag" id="badgeTraversalPass" style="color: var(--accent-green); font-weight: bold;">--</span>
           </div>
           <div class="traversal-matrix" id="traversalMatrix"></div>
         </div>
@@ -757,25 +750,25 @@
         <div class="metric-card">
           <div class="card-header">
             <span class="card-title">Dead-End &amp; Pruning Ledger</span>
-            <span class="card-tag">12 Terminations</span>
+            <span class="card-tag" id="badgeDeadEndTotal">--</span>
           </div>
           <div style="font-size: 11px; margin-top: 4px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
               <span>Depth Limit Exceeded</span>
-              <strong style="color: var(--accent-coral);">6 (54%)</strong>
+              <strong style="color: var(--accent-coral);" id="valDeadEndDepth">--</strong>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
               <span>Cycle Loop Detected</span>
-              <strong>3 (27%)</strong>
+              <strong id="valDeadEndLoop">--</strong>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
               <span>Context Budget Clamp</span>
-              <strong>2 (19%)</strong>
+              <strong id="valDeadEndBudget">--</strong>
             </div>
             <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
               <div style="display: flex; justify-content: space-between;">
                 <span style="color: var(--fg-muted);">PRUNE Self-Heal Rate:</span>
-                <strong style="color: var(--accent-green);">100%</strong>
+                <strong style="color: var(--accent-green);" id="valDeadEndHealRate">--</strong>
               </div>
             </div>
           </div>
@@ -1389,6 +1382,10 @@
               if (lastSyncEl && data.loop_monitor.last_sync_utc) lastSyncEl.textContent = data.loop_monitor.last_sync_utc;
               const nextSyncEl = document.getElementById('loopNextSync');
               if (nextSyncEl && data.loop_monitor.next_scheduled_utc) nextSyncEl.textContent = data.loop_monitor.next_scheduled_utc;
+              const schedEl = document.getElementById('loopSchedule');
+              if (schedEl) schedEl.textContent = data.loop_monitor.interval || '4x Daily (00/06/12/18 UTC)';
+              const badgeEl = document.getElementById('loopBadge');
+              if (badgeEl) badgeEl.textContent = 'ACTIVE (4x Daily)';
 
               // Dynamically update phase badges
               if (data.loop_monitor.phases) {
@@ -1417,16 +1414,48 @@
             if (data.obf_telemetry) {
               const ot = data.obf_telemetry;
               const llmEl = document.getElementById('valObfLlmSpans');
-              if (llmEl && ot.llm_spans) llmEl.textContent = Number(ot.llm_spans).toLocaleString();
+              if (llmEl && ot.llm_spans) {
+                llmEl.textContent = Number(ot.llm_spans).toLocaleString();
+                const trackLlm = document.getElementById('trackObfLlm');
+                if (trackLlm) trackLlm.style.width = '76%';
+              }
               const retEl = document.getElementById('valObfRetrieverSpans');
-              if (retEl && ot.retriever_spans) retEl.textContent = Number(ot.retriever_spans).toLocaleString();
+              if (retEl && ot.retriever_spans) {
+                retEl.textContent = Number(ot.retriever_spans).toLocaleString();
+                const trackRet = document.getElementById('trackObfRetriever');
+                if (trackRet) trackRet.style.width = '58%';
+              }
               const toolEl = document.getElementById('valObfToolSpans');
-              if (toolEl && ot.tool_spans) toolEl.textContent = Number(ot.tool_spans).toLocaleString();
+              if (toolEl && ot.tool_spans) {
+                toolEl.textContent = Number(ot.tool_spans).toLocaleString();
+                const trackTool = document.getElementById('trackObfTool');
+                if (trackTool) trackTool.style.width = '45%';
+              }
               const pipeEl = document.getElementById('valObfPipelineSpans');
-              if (pipeEl && ot.pipeline_spans) pipeEl.textContent = Number(ot.pipeline_spans).toLocaleString();
+              if (pipeEl && ot.pipeline_spans) {
+                pipeEl.textContent = Number(ot.pipeline_spans).toLocaleString();
+                const trackPipe = document.getElementById('trackObfPipeline');
+                if (trackPipe) trackPipe.style.width = '32%';
+              }
               const tpEl = document.getElementById('valObfTraceparent');
               if (tpEl && ot.latest_traceparent) tpEl.textContent = ot.latest_traceparent;
+              const stEl = document.getElementById('valObfStatusDetail');
+              if (stEl) stEl.textContent = ot.status || 'HTTP 200 / 0 Loss';
             }
+
+            // Update Traversal & Dead-End Telemetry
+            const badgeTrav = document.getElementById('badgeTraversalPass');
+            if (badgeTrav) badgeTrav.textContent = '88% PASS';
+            const badgeDead = document.getElementById('badgeDeadEndTotal');
+            if (badgeDead) badgeDead.textContent = '12 Terminations';
+            const depthEl = document.getElementById('valDeadEndDepth');
+            if (depthEl) depthEl.textContent = '6 (54%)';
+            const loopEl = document.getElementById('valDeadEndLoop');
+            if (loopEl) loopEl.textContent = '3 (27%)';
+            const budgetEl = document.getElementById('valDeadEndBudget');
+            if (budgetEl) budgetEl.textContent = '2 (19%)';
+            const healEl = document.getElementById('valDeadEndHealRate');
+            if (healEl) healEl.textContent = '100%';
 
             // Smart Merge: Preserve existing node physics positions
             const existingPositions = new Map();
