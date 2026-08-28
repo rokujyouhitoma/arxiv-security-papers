@@ -60,8 +60,11 @@ def test_dashboard_mandatory_elements_and_canvas(dashboard_html_content: str) ->
     assert "Graph Engineering" in dashboard_html_content
     assert 'id="tabBtnProduct"' in dashboard_html_content
     assert 'id="tabBtnSystem"' in dashboard_html_content
+    assert 'id="tabBtnSupervisor"' in dashboard_html_content
     assert 'id="viewProduct"' in dashboard_html_content
     assert 'id="viewSystem"' in dashboard_html_content
+    assert 'id="viewSupervisor"' in dashboard_html_content
+    assert 'id="supervisorWorkersTableBody"' in dashboard_html_content
     assert "switchDashboardTab" in dashboard_html_content
     assert "Context Mesh" in dashboard_html_content
 

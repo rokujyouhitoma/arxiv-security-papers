@@ -236,18 +236,19 @@ $$\text{Token Savings Ratio} = 1 - \frac{T_{\text{walk}}}{T_{\text{flat}}} \appr
 
 ---
 
-# 6. 2大タブ分割アーキテクチャ & 7大分析パネル仕様
+# 6. 3大タブ分割アーキテクチャ & 分析パネル仕様
 
-## 6.0 2大タブ分割アーキテクチャ（Product Knowledge vs System & Observability）
-ユーザーの関心と運用目的に応じて情報密度を最適化するため、ダッシュボードを **2 つの独立した専用タブビュー** に分割しています：
+## 6.0 3大タブ分割アーキテクチャ（Product vs System vs Supervisor Top）
+ユーザーの関心と運用目的に応じて情報密度を最適化するため、ダッシュボードを **3 つの独立した専用タブビュー** に分割しています：
 
 ```mermaid
 graph TD
     Dashboard["📊 site/dashboard.html"]
-    Dashboard --> Nav["Tab Navigation Bar (Swiss-Style Toggle)"]
+    Dashboard --> Nav["Tab Navigation Bar (Swiss-Style 3-Tab Toggle)"]
     
     Nav --> Tab1["📚 Tab 1: Product & Knowledge Mesh View"]
     Nav --> Tab2["⚙️ Tab 2: System & Observability View"]
+    Nav --> Tab3["🕹️ Tab 3: Supervisor & Process Top View"]
     
     subgraph Tab1Details ["📚 Product & Knowledge Mesh View (プロダクト画面)"]
         Canvas["Force-Directed 2D Canvas (論文・脅威・暗号・対策)"]
@@ -265,11 +266,19 @@ graph TD
         DeadEnd["Dead-End & Pruning Ledger (100% 自己修復率)"]
     end
 
+    subgraph Tab3Details ["🕹️ Supervisor & Process Top View (supervisor top CLI同等画面)"]
+        ArbiterCard["⚡ Arbiter Process Overview (PID, Uptime, Memory RSS/PSS)"]
+        PoolsCard["📦 Worker Pools (web_gateway, fetcher, indexer, evaluator)"]
+        WorkersTable["⚡ Live Workers Top Table (PID, Role, Status, Health, Req, Idle, Mem)"]
+        IPCCard["🔌 IPC Control Socket (outputs/supervisor.sock, Zero-Dep JSON-RPC)"]
+    end
+
     Tab1 --> Tab1Details
     Tab2 --> Tab2Details
+    Tab3 --> Tab3Details
 ```
 
-- **タブ切り替え制御**: `window.switchDashboardTab(tabName)` による DOM クラス切り替えおよび Canvas リサイズ垂直同期。
+- **タブ切り替え制御**: `window.switchDashboardTab('product' | 'system' | 'supervisor')` による DOM クラス切り替えおよび Canvas リサイズ垂直同期。
 
 ## 6.1 トップテレメトリ KPI 指標群
 - **Resolved Nodes**: 解決済みナレッジノード総数（例: `14,449`）。

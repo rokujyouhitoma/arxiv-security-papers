@@ -571,6 +571,9 @@
     <button class="tab-btn" id="tabBtnSystem" onclick="switchDashboardTab('system')">
       ⚙️ System &amp; Observability
     </button>
+    <button class="tab-btn" id="tabBtnSupervisor" onclick="switchDashboardTab('supervisor')">
+      🕹️ Supervisor &amp; Process Top
+    </button>
   </nav>
 
   <!-- ======================================================================
@@ -773,6 +776,85 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       TAB 3: SUPERVISOR & PROCESS TOP VIEW
+       ====================================================================== -->
+  <div id="viewSupervisor" class="tab-view">
+    <div class="system-workspace">
+      <!-- Arbiter Overview KPI Grid -->
+      <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 12px;">
+        <div class="metric-card" style="background-color: var(--bg-panel);">
+          <div class="card-header">
+            <span class="card-title">⚡ Arbiter Process</span>
+            <span class="card-tag" id="badgeArbiterStatus" style="color: var(--accent-green); font-weight: bold;">--</span>
+          </div>
+          <div style="font-size: 11px; margin-top: 4px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: var(--fg-muted);">Arbiter PID:</span>
+              <strong id="valArbiterPid" style="font-family: var(--font-mono); color: var(--accent-blue);">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: var(--fg-muted);">Uptime:</span>
+              <span id="valArbiterUptime" style="font-family: var(--font-mono);">--</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--fg-muted);">Memory (RSS):</span>
+              <strong id="valArbiterMemory" style="color: var(--accent-coral);">--</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card" style="background-color: var(--bg-panel);">
+          <div class="card-header">
+            <span class="card-title">📦 Worker Pools</span>
+            <span class="card-tag" id="badgePoolCount">--</span>
+          </div>
+          <div id="valArbiterPools" style="font-size: 11px; margin-top: 4px; font-family: var(--font-mono);">
+            --
+          </div>
+        </div>
+
+        <div class="metric-card" style="background-color: var(--bg-panel);">
+          <div class="card-header">
+            <span class="card-title">🔌 IPC Control Channel</span>
+            <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">UNIX DOMAIN SOCKET</span>
+          </div>
+          <div style="font-size: 10px; margin-top: 4px; color: var(--fg-muted);">
+            <div><strong>Socket:</strong> <code style="font-size: 9px;">outputs/supervisor.sock</code></div>
+            <div style="margin-top: 3px;"><strong>Protocol:</strong> JSON-RPC 2.0 (Zero-Dependency)</div>
+            <div style="margin-top: 3px;"><strong>Failover:</strong> <span style="color: var(--accent-green); font-weight: bold;">Active Self-Healing</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Supervisor Top Workers Table -->
+      <div class="metric-card" style="padding: 12px; overflow-x: auto;">
+        <div class="card-header" style="margin-bottom: 8px;">
+          <span class="card-title" style="font-size: 13px; font-weight: bold;">⚡ Live Supervisor Workers Top Table (CLI top equivalent)</span>
+          <span class="card-tag" id="badgeTotalWorkers">--</span>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--border-dark); text-align: left; color: var(--fg-muted);">
+              <th style="padding: 6px 8px;">PID</th>
+              <th style="padding: 6px 8px;">TYPE / ROLE</th>
+              <th style="padding: 6px 8px;">STATUS</th>
+              <th style="padding: 6px 8px;">HEALTH</th>
+              <th style="padding: 6px 8px; text-align: right;">REQ</th>
+              <th style="padding: 6px 8px; text-align: right;">IDLE</th>
+              <th style="padding: 6px 8px; text-align: right;">MEM (RSS)</th>
+            </tr>
+          </thead>
+          <tbody id="supervisorWorkersTableBody">
+            <tr>
+              <td colspan="7" style="padding: 16px; text-align: center; color: var(--fg-muted);">Connecting to Supervisor Top telemetry...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -1520,6 +1602,58 @@
             const fSync = document.getElementById('footerSyncTime');
             if (fSync) fSync.textContent = `Last Sync: ${utcFullStr}`;
 
+            // Update Supervisor Top Telemetry if present
+            if (data.supervisor_top) {
+              const sup = data.supervisor_top;
+              const aPid = document.getElementById('valArbiterPid');
+              if (aPid) aPid.textContent = sup.arbiter_pid || '--';
+              const aUptime = document.getElementById('valArbiterUptime');
+              if (aUptime) aUptime.textContent = `${Math.floor((sup.uptime || 0) / 60)}m ${Math.floor((sup.uptime || 0) % 60)}s`;
+              const aMem = document.getElementById('valArbiterMemory');
+              if (aMem) aMem.textContent = `${sup.memory_mb || 0} MB`;
+              const aStat = document.getElementById('badgeArbiterStatus');
+              if (aStat) aStat.textContent = sup.status === 'ok' ? 'ALIVE (Supervised)' : 'STANDALONE';
+
+              // Pools
+              const aPools = document.getElementById('valArbiterPools');
+              if (aPools && sup.pools) {
+                const parts = Object.entries(sup.pools).map(([name, meta]) => {
+                  if (typeof meta === 'object' && meta !== null) {
+                    return `<div><strong>${name}:</strong> ${meta.active}/${meta.target} active</div>`;
+                  }
+                  return `<div><strong>${name}:</strong> ${meta}</div>`;
+                });
+                aPools.innerHTML = parts.join('');
+                const pBadge = document.getElementById('badgePoolCount');
+                if (pBadge) pBadge.textContent = `${Object.keys(sup.pools).length} Pools`;
+              }
+
+              // Workers Table
+              const tbody = document.getElementById('supervisorWorkersTableBody');
+              if (tbody && sup.workers) {
+                const wEntries = Object.entries(sup.workers);
+                const wBadge = document.getElementById('badgeTotalWorkers');
+                if (wBadge) wBadge.textContent = `${wEntries.length} Processes`;
+
+                tbody.innerHTML = wEntries.map(([spid, w]) => {
+                  const statusBg = w.status === 'ALIVE' ? 'var(--accent-green)' : 'var(--accent-coral)';
+                  const healthBg = w.is_healthy ? 'var(--accent-green)' : 'var(--accent-coral)';
+                  const healthText = w.is_healthy ? 'HEALTHY' : 'UNHEALTHY';
+                  return `
+                    <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
+                      <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${w.pid || spid}</td>
+                      <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${w.type || 'worker'}</td>
+                      <td style="padding: 6px 8px;"><span style="background: ${statusBg}; color: #fff; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: bold;">${w.status}</span></td>
+                      <td style="padding: 6px 8px;"><span style="color: ${healthBg}; font-weight: bold;">● ${healthText}</span></td>
+                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${Number(w.requests_handled || 0).toLocaleString()}</td>
+                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${(w.idle_seconds || 0).toFixed(1)}s</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${w.memory_mb || 0} MB</td>
+                    </tr>
+                  `;
+                }).join('');
+              }
+            }
+
             // Recalculate real structural analytics from fresh nodes & edges
             calculateAndDrawHopHistogram();
             updateRealEdgeLedger();
@@ -1536,25 +1670,30 @@
       syncLiveMesh();
       setInterval(syncLiveMesh, 5000);
 
-      // Global Tab Switching
+      // Global Tab Switching (3 Tabs)
       window.switchDashboardTab = function(tabName) {
         const productView = document.getElementById('viewProduct');
         const systemView = document.getElementById('viewSystem');
+        const supervisorView = document.getElementById('viewSupervisor');
         const tabBtnProduct = document.getElementById('tabBtnProduct');
         const tabBtnSystem = document.getElementById('tabBtnSystem');
+        const tabBtnSupervisor = document.getElementById('tabBtnSupervisor');
+
+        // Deactivate all
+        [productView, systemView, supervisorView].forEach(v => v && v.classList.remove('active'));
+        [tabBtnProduct, tabBtnSystem, tabBtnSupervisor].forEach(b => b && b.classList.remove('active'));
 
         if (tabName === 'product') {
           productView.classList.add('active');
-          systemView.classList.remove('active');
           tabBtnProduct.classList.add('active');
-          tabBtnSystem.classList.remove('active');
           // Resize canvas on tab reveal
           setTimeout(resizeCanvas, 50);
-        } else {
-          productView.classList.remove('active');
+        } else if (tabName === 'system') {
           systemView.classList.add('active');
-          tabBtnProduct.classList.remove('active');
           tabBtnSystem.classList.add('active');
+        } else if (tabName === 'supervisor') {
+          if (supervisorView) supervisorView.classList.add('active');
+          if (tabBtnSupervisor) tabBtnSupervisor.classList.add('active');
         }
       };
     })();
