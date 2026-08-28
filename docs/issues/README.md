@@ -6,7 +6,9 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在対応中のアクティブな Issue はありません。*
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
+| :---: | --- | :---: | :---: | :---: | :---: | :---: |
+| **096** | 事前バッチ集計エンジン (Pre-Aggregated Analytics Engine) および高速アナリティクスストレージの実装 | Feature | High | Open (New) | 13エージェント合同 (PM/SA/DB/SM/AU) | [096-implement-pre-aggregated-analytics-engine-and-storage.md](096-implement-pre-aggregated-analytics-engine-and-storage.md) |
 
 ---
 
