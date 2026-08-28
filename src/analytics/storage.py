@@ -5,16 +5,15 @@ Provides atomic file snapshot persistence (latest_metrics.json) and
 SQLite time-series storage with self-applying zero-dependency migrations.
 """
 
-from __future__ import annotations
-
 import contextlib
 import json
 import logging
 import os
-import sqlite3
 import tempfile
 import time
 from typing import Any, Dict, List, Optional, Tuple
+
+from database.sqlite_engine import get_sqlite_connection
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +88,8 @@ class AnalyticsStorage:
 
     @contextlib.contextmanager
     def _get_connection(self) -> Any:
-        """Yields a configured SQLite connection and ensures clean closure."""
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
-        conn.row_factory = sqlite3.Row
+        """Yields a configured SQLite connection from core database engine and ensures clean closure."""
+        conn = get_sqlite_connection(self.db_path)
         try:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
