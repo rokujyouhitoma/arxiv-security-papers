@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from typing import Any, Dict, List, Optional
 
 from .arbiter import Arbiter
@@ -150,6 +151,72 @@ def build_parser() -> argparse.ArgumentParser:
     # Command: stop
     subparsers.add_parser("stop", help="Gracefully stop supervisor and all workers")
 
+    # Command: restart
+    restart_parser = subparsers.add_parser(
+        "restart", help="Gracefully stop running supervisor and start a new one"
+    )
+    for p in [restart_parser]:
+        p.add_argument(
+            "--bind",
+            "-b",
+            type=str,
+            default=None,
+            help="Address to bind (e.g. 0.0.0.0:8000 or 8000)",
+        )
+        p.add_argument(
+            "--workers",
+            "-w",
+            type=int,
+            default=None,
+            help="Number of worker processes",
+        )
+        p.add_argument(
+            "--worker-class",
+            "-k",
+            type=str,
+            default=None,
+            help="Worker class: 'sync', 'thread', or 'service'",
+        )
+        p.add_argument(
+            "--threads",
+            type=int,
+            default=None,
+            help="Number of worker threads per process",
+        )
+        p.add_argument(
+            "--timeout",
+            "-t",
+            type=float,
+            default=None,
+            help="Worker silence timeout in seconds",
+        )
+        p.add_argument(
+            "--app",
+            type=str,
+            default=None,
+            help="Application entrypoint URI (e.g. web.server:app)",
+        )
+        p.add_argument(
+            "--daemon",
+            action="store_true",
+            default=None,
+            help="Daemonize the supervisor process (run in background)",
+        )
+        p.add_argument(
+            "--log-file",
+            type=str,
+            default=None,
+            help="Log file destination when running in daemon mode",
+        )
+        p.add_argument(
+            "--pid",
+            "--pid-file",
+            dest="pid_file",
+            type=str,
+            default=None,
+            help="Path to PID file",
+        )
+
     # Command: ping
     subparsers.add_parser("ping", help="Verify arbiter responsiveness via IPC")
 
@@ -278,6 +345,45 @@ def _handle_start(
         return 1
 
 
+def _handle_restart(
+    args: argparse.Namespace,
+    config_obj: Optional[SupervisorConfig],
+    workspace_dir: str,
+    control_sock: str,
+) -> int:
+    """Handles supervisor restart by stopping running instance first, then starting fresh."""
+    print("🔄 [Supervisor Arbiter] Initiating restart sequence...")
+    # 1. Attempt graceful stop via IPC if control socket exists
+    if os.path.exists(control_sock):
+        try:
+            client = ControlClient(control_sock)
+            resp = client.stop()
+            print(f"[+] Sent stop signal to running Arbiter: {resp.get('status', 'sent')}")
+        except Exception as ex:
+            print(f"[*] Note: IPC stop signal not acknowledged ({ex}), proceeding to startup check...")
+
+    # 2. Wait up to 3 seconds for existing arbiter PID to release
+    config = _build_start_config(args, config_obj, workspace_dir, control_sock)
+    pid_file = config.pid_file
+    if pid_file:
+        for _ in range(30):
+            if not os.path.exists(pid_file):
+                break
+            try:
+                with open(pid_file, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if not content:
+                        break
+                    existing_pid = int(content)
+                    os.kill(existing_pid, 0)
+            except (OSError, ValueError):
+                break
+            time.sleep(0.1)
+
+    # 3. Start fresh instance
+    return _handle_start(args, config_obj, workspace_dir, control_sock)
+
+
 def _handle_status_cmd(client: ControlClient) -> int:
     """Handles supervisor status command."""
     resp = client.get_status()
@@ -376,6 +482,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     cmd = args.command or "start"
     if cmd == "start":
         return _handle_start(args, config_obj, workspace_dir, control_sock)
+    if cmd == "restart":
+        return _handle_restart(args, config_obj, workspace_dir, control_sock)
 
     try:
         client = ControlClient(control_sock)
