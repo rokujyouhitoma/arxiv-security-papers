@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
 Zero-Dependency Analytics Storage Layer.
-Provides atomic file snapshot persistence (latest_metrics.json) and
-SQLite time-series storage with self-applying zero-dependency migrations.
+Provides high-performance SQLite time-series & snapshot storage (analytics.db)
+with self-applying zero-dependency migrations powered by core database engine.
 """
 
 import contextlib
 import json
 import logging
 import os
-import tempfile
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -55,12 +54,23 @@ SCHEMA_MIGRATIONS: List[Tuple[int, str]] = [
         CREATE INDEX IF NOT EXISTS idx_history_epoch ON metrics_history(created_epoch);
         """,
     ),
+    (
+        3,
+        """
+        CREATE TABLE IF NOT EXISTS latest_snapshot (
+            snapshot_key TEXT PRIMARY KEY,
+            snapshot_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_at_epoch REAL NOT NULL
+        );
+        """,
+    ),
 ]
 
 
 class AnalyticsStorage:
     """
-    High-performance storage manager for pre-aggregated analytics and KPIs.
+    Unified single-file storage manager for pre-aggregated analytics and KPIs (analytics.db).
     """
 
     def __init__(
@@ -68,7 +78,6 @@ class AnalyticsStorage:
         workspace_dir: Optional[str] = None,
         analytics_dir: Optional[str] = None,
         db_name: str = "analytics.db",
-        snapshot_name: str = "latest_metrics.json",
     ) -> None:
         self.workspace_dir = workspace_dir or os.path.abspath(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -77,7 +86,6 @@ class AnalyticsStorage:
             self.workspace_dir, "outputs", "analytics"
         )
         self.db_path = os.path.join(self.analytics_dir, db_name)
-        self.snapshot_path = os.path.join(self.analytics_dir, snapshot_name)
         self._ensure_dir()
         self.initialize_db()
 
@@ -121,48 +129,36 @@ class AnalyticsStorage:
 
     def save_snapshot(self, data: Dict[str, Any]) -> str:
         """
-        Atomically saves pre-aggregated metrics snapshot to latest_metrics.json.
-        Guarantees that readers never observe partially written data.
+        Atomically saves pre-aggregated metrics into single analytics.db database.
+        Updates latest_snapshot table as well as historical time-series tables.
         """
         self._ensure_dir()
         data_to_write = dict(data)
+        now_epoch = time.time()
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S JST", time.localtime())
         if "updated_at_epoch" not in data_to_write:
-            data_to_write["updated_at_epoch"] = time.time()
+            data_to_write["updated_at_epoch"] = now_epoch
 
         serialized = json.dumps(data_to_write, indent=2, ensure_ascii=False)
 
-        # Write to temporary file in same directory for atomic replace
-        temp_fd, temp_path = tempfile.mkstemp(
-            dir=self.analytics_dir, prefix="metrics_snapshot_", suffix=".tmp"
-        )
-        try:
-            with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
-                f.write(serialized)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(temp_path, self.snapshot_path)
-            logger.info("Saved analytics snapshot to %s", self.snapshot_path)
-        except Exception as ex:
-            if os.path.exists(temp_path):
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
-            raise RuntimeError(f"Atomic snapshot save failed: {ex}") from ex
-
-        # Also persist to SQLite database tables
-        self._persist_to_db(data_to_write)
-        return self.snapshot_path
-
-    def _persist_to_db(self, data: Dict[str, Any]) -> None:
-        """Records snapshot metrics into SQLite tables."""
         try:
             with self._get_connection() as conn:
                 cur = conn.cursor()
-                now_str = time.strftime("%Y-%m-%d %H:%M:%S JST", time.localtime())
-                now_epoch = time.time()
 
-                # 1. Threat Trends
+                # 1. Update latest_snapshot record
+                cur.execute(
+                    """
+                    INSERT INTO latest_snapshot (snapshot_key, snapshot_json, updated_at, updated_at_epoch)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(snapshot_key) DO UPDATE SET
+                        snapshot_json=excluded.snapshot_json,
+                        updated_at=excluded.updated_at,
+                        updated_at_epoch=excluded.updated_at_epoch
+                    """,
+                    ("latest", serialized, now_str, now_epoch),
+                )
+
+                # 2. Threat Trends
                 top_threats = data.get("top_threat_vectors", [])
                 for t in top_threats:
                     cur.execute(
@@ -189,7 +185,7 @@ class AnalyticsStorage:
                         ),
                     )
 
-                # 2. Strategic KPIs
+                # 3. Strategic KPIs
                 for k, v in data.items():
                     if k == "top_threat_vectors":
                         continue
@@ -212,34 +208,41 @@ class AnalyticsStorage:
                         (k, cat, num_val, text_val, "{}", now_str),
                     )
 
-                # 3. Append to history log
+                # 4. Append to history log
                 cur.execute(
                     """
                     INSERT INTO metrics_history (snapshot_json, collected_at, created_epoch)
                     VALUES (?, ?, ?)
                     """,
-                    (json.dumps(data, ensure_ascii=False), now_str, now_epoch),
+                    (serialized, now_str, now_epoch),
                 )
                 conn.commit()
-        except Exception as e:
-            logger.warning("Failed to persist analytics metrics to SQLite: %s", e)
+                logger.info("Saved analytics snapshot into %s", self.db_path)
+        except Exception as ex:
+            raise RuntimeError(f"Analytics DB save failed: {ex}") from ex
+
+        return self.db_path
 
     def load_latest_metrics(self) -> Optional[Dict[str, Any]]:
         """
-        Loads pre-aggregated metrics in O(1) time.
+        Loads latest pre-aggregated metrics from latest_snapshot table in analytics.db.
         Returns None if no snapshot exists yet.
         """
-        if not os.path.exists(self.snapshot_path):
+        if not os.path.exists(self.db_path):
             return None
         try:
-            with open(self.snapshot_path, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if not content:
-                    return None
-                data = json.loads(content)
-                if isinstance(data, dict):
-                    return data
+            with self._get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT snapshot_json FROM latest_snapshot WHERE snapshot_key = ?",
+                    ("latest",),
+                )
+                row = cur.fetchone()
+                if row and row["snapshot_json"]:
+                    parsed = json.loads(row["snapshot_json"])
+                    if isinstance(parsed, dict):
+                        return parsed
                 return None
         except Exception as ex:
-            logger.warning("Failed to load snapshot %s: %s", self.snapshot_path, ex)
+            logger.warning("Failed to load snapshot from %s: %s", self.db_path, ex)
             return None
