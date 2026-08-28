@@ -170,6 +170,10 @@ class GraphRAGPipeline:
         # Find matching attack or vulnerability nodes
         target_vids: List[str] = []
         for vid, v in g._vertices.items():
+            if v.label not in ("AttackTechnique", "Vulnerability") and not (
+                vid.startswith("AttackTechnique:") or vid.startswith("Vulnerability:")
+            ):
+                continue
             if kw_lower in vid.lower() or kw_lower in v.label.lower():
                 target_vids.append(vid)
             elif v.properties and any(
