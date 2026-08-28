@@ -529,15 +529,15 @@
       <div class="telemetry-bar">
         <div class="telemetry-cell">
           <div class="telemetry-label">Resolved Nodes</div>
-          <div class="telemetry-value" id="valResolvedNodes">14,507</div>
+          <div class="telemetry-value" id="valResolvedNodes">--</div>
         </div>
         <div class="telemetry-cell">
           <div class="telemetry-label">Edges / Tick</div>
-          <div class="telemetry-value coral" id="valEdgesTick">10,260/s</div>
+          <div class="telemetry-value coral" id="valEdgesTick">--</div>
         </div>
         <div class="telemetry-cell">
           <div class="telemetry-label">Walks / Min</div>
-          <div class="telemetry-value" id="valWalksMin">412/m</div>
+          <div class="telemetry-value" id="valWalksMin">--</div>
         </div>
         <div class="telemetry-cell">
           <div class="telemetry-label">OBF Tracing</div>
@@ -547,15 +547,15 @@
         </div>
         <div class="telemetry-cell">
           <div class="telemetry-label">OpenInference</div>
-          <div class="telemetry-value blue" id="valObfSpans">2,840 Spans</div>
+          <div class="telemetry-value blue" id="valObfSpans">--</div>
         </div>
         <div class="telemetry-cell">
           <div class="telemetry-label">Query Latency</div>
-          <div class="telemetry-value green" id="valLatency">1.84 ms</div>
+          <div class="telemetry-value green" id="valLatency">--</div>
         </div>
         <div class="telemetry-cell">
           <div class="telemetry-label">Token Savings</div>
-          <div class="telemetry-value coral" id="valSavings">74.2%</div>
+          <div class="telemetry-value coral" id="valSavings">--</div>
         </div>
       </div>
     </div>
@@ -608,9 +608,9 @@
             <span class="callout-tag" id="calloutTag">SOURCES</span>
             <button class="btn-action" onclick="closeCallout()">✕</button>
           </div>
-          <div class="callout-title" id="calloutTitle">2608.23763 (TrustShiftProbe)</div>
-          <div class="callout-desc" id="calloutDesc">MCP サーバーに対する段階的信頼攻撃（TrustShift）の検証と SHIELD ランタイム防御。</div>
-          <div class="callout-edges" id="calloutEdges">Connected to 4 nodes via: targets, asserts, mitigates</div>
+          <div class="callout-title" id="calloutTitle">--</div>
+          <div class="callout-desc" id="calloutDesc">--</div>
+          <div class="callout-edges" id="calloutEdges">--</div>
         </div>
       </div>
 
@@ -631,40 +631,14 @@
             <span class="card-title">Edge Ledger (Traffic)</span>
             <span class="card-tag">Relation Types</span>
           </div>
-          <div id="edgeLedgerList">
-            <div class="bar-chart-row">
-              <span class="bar-label">targets</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 82%;"></div></div>
-              <span class="bar-value">1,420</span>
-            </div>
-            <div class="bar-chart-row">
-              <span class="bar-label">asserts</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 68%;"></div></div>
-              <span class="bar-value">980</span>
-            </div>
-            <div class="bar-chart-row">
-              <span class="bar-label">mitigates</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 55%; background-color: var(--accent-green);"></div></div>
-              <span class="bar-value">750</span>
-            </div>
-            <div class="bar-chart-row">
-              <span class="bar-label">requires</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 44%; background-color: var(--accent-blue);"></div></div>
-              <span class="bar-value">620</span>
-            </div>
-            <div class="bar-chart-row">
-              <span class="bar-label">evades</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 28%; background-color: var(--border-dark);"></div></div>
-              <span class="bar-value">410</span>
-            </div>
-          </div>
+          <div id="edgeLedgerList"></div>
         </div>
 
         <!-- 3. Token Savings -->
         <div class="metric-card">
           <div class="card-header">
             <span class="card-title">Context Compression (Walk vs Flat)</span>
-            <span class="card-tag" id="badgeTokenSavings" style="color: var(--accent-green); font-weight: bold;">-74.2% TOKENS</span>
+            <span class="card-tag" id="badgeTokenSavings" style="color: var(--accent-green); font-weight: bold;">--</span>
           </div>
           <canvas id="walkVsFlatCanvas" width="260" height="130"></canvas>
         </div>
@@ -702,28 +676,28 @@
           <div style="font-size: 11px; margin-top: 2px;">
             <div class="bar-chart-row">
               <span class="bar-label">LLM Spans</span>
-              <div class="bar-track"><div class="bar-fill" id="trackObfLlm" style="width: 76%; background-color: var(--accent-blue);"></div></div>
-              <span class="bar-value" id="valObfLlmSpans">1,240</span>
+              <div class="bar-track"><div class="bar-fill" id="trackObfLlm" style="width: 0%; background-color: var(--accent-blue);"></div></div>
+              <span class="bar-value" id="valObfLlmSpans">--</span>
             </div>
             <div class="bar-chart-row">
               <span class="bar-label">Retriever</span>
-              <div class="bar-track"><div class="bar-fill" id="trackObfRetriever" style="width: 58%; background-color: var(--accent-green);"></div></div>
-              <span class="bar-value" id="valObfRetrieverSpans">820</span>
+              <div class="bar-track"><div class="bar-fill" id="trackObfRetriever" style="width: 0%; background-color: var(--accent-green);"></div></div>
+              <span class="bar-value" id="valObfRetrieverSpans">--</span>
             </div>
             <div class="bar-chart-row">
               <span class="bar-label">Tool Calls</span>
-              <div class="bar-track"><div class="bar-fill" id="trackObfTool" style="width: 45%; background-color: var(--accent-coral);"></div></div>
-              <span class="bar-value" id="valObfToolSpans">540</span>
+              <div class="bar-track"><div class="bar-fill" id="trackObfTool" style="width: 0%; background-color: var(--accent-coral);"></div></div>
+              <span class="bar-value" id="valObfToolSpans">--</span>
             </div>
             <div class="bar-chart-row">
               <span class="bar-label">Pipeline/WAL</span>
-              <div class="bar-track"><div class="bar-fill" id="trackObfPipeline" style="width: 32%; background-color: var(--border-dark);"></div></div>
-              <span class="bar-value" id="valObfPipelineSpans">240</span>
+              <div class="bar-track"><div class="bar-fill" id="trackObfPipeline" style="width: 0%; background-color: var(--border-dark);"></div></div>
+              <span class="bar-value" id="valObfPipelineSpans">--</span>
             </div>
             <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 6px;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
                 <span style="color: var(--fg-muted);">W3C TRACEPARENT:</span>
-                <code style="font-size: 10px; font-weight: bold;" id="valObfTraceparent">00-8b673ec2d...-d9ac5bbb-01</code>
+                <code style="font-size: 10px; font-weight: bold;" id="valObfTraceparent">--</code>
               </div>
               <div style="display: flex; justify-content: space-between;">
                 <span style="color: var(--fg-muted);">OTLP JSON (v1/traces):</span>
@@ -742,7 +716,7 @@
           <div style="font-size: 11px; margin-top: 2px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--fg-muted);">Active Cycle:</span>
-              <strong id="loopCycleId" style="font-family: var(--font-mono); font-size: 10px;">cycle_20260828_003354</strong>
+              <strong id="loopCycleId" style="font-family: var(--font-mono); font-size: 10px;">--</strong>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--fg-muted);">Loop Schedule:</span>
@@ -750,11 +724,11 @@
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--fg-muted);">Last Batch Sync:</span>
-              <span id="loopLastSync">2026-08-28 00:11:01 UTC</span>
+              <span id="loopLastSync">--</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
               <span style="color: var(--fg-muted);">Next Execution:</span>
-              <strong style="color: var(--accent-blue);" id="loopNextSync">2026-08-28 12:00:00 UTC</strong>
+              <strong style="color: var(--accent-blue);" id="loopNextSync">--</strong>
             </div>
             <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
               <div style="font-size: 10px; color: var(--fg-muted); margin-bottom: 4px;">INTELLIGENCE DAG PHASES:</div>
