@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| - | 現在アクティブな Issue はありません | - | - | - | - | - |
+| **102** | Gateway ハンドラーにおけるハードコード・ダミーフォールバック値の全廃と動的実測化 | Feature | High | Open (New) | PM / QA / Arch | [102-eliminate-dummy-values-in-gateway-handlers.md](102-eliminate-dummy-values-in-gateway-handlers.md) |
 
 ---
 
