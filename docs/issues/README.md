@@ -6,7 +6,9 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-*現在アクティブな Issue はありません（全件完了）。*
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
+| :---: | --- | :---: | :---: | :---: | :---: | :---: |
+| **098** | セキュリティ知識オントロジー (SKO) 定義およびゼロ侵襲型グラフデータベース基盤の実装 | Feature | High | Open (New) | 13エージェント合同 (PM/SEC/SA/NLP/DB/ST) | [098-implement-security-knowledge-ontology-and-graph-database-engine.md](098-implement-security-knowledge-ontology-and-graph-database-engine.md) |
 
 ---
 
