@@ -54,10 +54,15 @@ def test_dashboard_mandatory_elements_and_canvas(dashboard_html_content: str) ->
     assert "OBF Telemetry" in dashboard_html_content
     assert 'id="pipelineBar"' in dashboard_html_content
     assert 'id="hopCanvas"' in dashboard_html_content
-    assert 'id="walkCanvas"' in dashboard_html_content
+    assert 'id="walkVsFlatCanvas"' in dashboard_html_content
     assert 'id="traversalMatrix"' in dashboard_html_content
     assert 'id="nodeCallout"' in dashboard_html_content
     assert "Graph Engineering" in dashboard_html_content
+    assert 'id="tabBtnProduct"' in dashboard_html_content
+    assert 'id="tabBtnSystem"' in dashboard_html_content
+    assert 'id="viewProduct"' in dashboard_html_content
+    assert 'id="viewSystem"' in dashboard_html_content
+    assert "switchDashboardTab" in dashboard_html_content
     assert "Context Mesh" in dashboard_html_content
 
 

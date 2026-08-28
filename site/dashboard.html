@@ -450,6 +450,66 @@
       background-color: var(--border-dark);
       color: var(--bg-main);
     }
+
+    /* Tab Navigation */
+    .tab-navigation {
+      display: flex;
+      border-bottom: 2px solid var(--border-dark);
+      background-color: var(--bg-main);
+      padding: 0 16px;
+      gap: 8px;
+    }
+
+    .tab-btn {
+      background-color: transparent;
+      border: 1px solid var(--border-dark);
+      border-bottom: none;
+      padding: 8px 18px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      color: var(--fg-muted);
+    }
+
+    .tab-btn:hover {
+      background-color: var(--bg-panel);
+      color: var(--fg-main);
+    }
+
+    .tab-btn.active {
+      background-color: var(--border-dark);
+      color: var(--bg-main);
+    }
+
+    .tab-view {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .tab-view.active {
+      display: flex;
+    }
+
+    .system-workspace {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .system-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
   </style>
 </head>
 <body>
@@ -499,192 +559,250 @@
         </div>
       </div>
     </div>
-
-    <!-- Pipeline Step Status Bar -->
-    <div class="pipeline-bar" id="pipelineBar">
-      <div class="pipeline-step completed" data-step="0">[1] CHUNK</div>
-      <div class="pipeline-arrow">&rarr;</div>
-      <div class="pipeline-step completed" data-step="1">[2] EXTRACT</div>
-      <div class="pipeline-arrow">&rarr;</div>
-      <div class="pipeline-step completed" data-step="2">[3] RESOLVE</div>
-      <div class="pipeline-arrow">&rarr;</div>
-      <div class="pipeline-step active" data-step="3">[4] LINK</div>
-      <div class="pipeline-arrow">&rarr;</div>
-      <div class="pipeline-step" data-step="4">[5] EMBED</div>
-      <div class="pipeline-arrow">&rarr;</div>
-      <div class="pipeline-step" data-step="5">[6] PRUNE</div>
-    </div>
   </header>
 
   <!-- ======================================================================
-       2. Main Canvas View (Force-Directed Graph)
+       2. Tab Switching Navigation
        ====================================================================== -->
-  <div class="main-workspace">
-    <div class="canvas-container">
-      <canvas id="graphCanvas"></canvas>
+  <nav class="tab-navigation">
+    <button class="tab-btn active" id="tabBtnProduct" onclick="switchDashboardTab('product')">
+      📚 Product &amp; Knowledge Mesh
+    </button>
+    <button class="tab-btn" id="tabBtnSystem" onclick="switchDashboardTab('system')">
+      ⚙️ System &amp; Observability
+    </button>
+  </nav>
 
-      <!-- Cluster Color Legend -->
-      <div class="cluster-legend">
-        <div class="legend-title">Cluster Classification</div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background-color: var(--accent-coral);"></div>
-          <span>Sources (arXiv/IACR Papers)</span>
+  <!-- ======================================================================
+       TAB 1: PRODUCT & KNOWLEDGE MESH VIEW
+       ====================================================================== -->
+  <div id="viewProduct" class="tab-view active">
+    <div class="main-workspace">
+      <div class="canvas-container">
+        <canvas id="graphCanvas"></canvas>
+
+        <!-- Cluster Color Legend -->
+        <div class="cluster-legend">
+          <div class="legend-title">Cluster Classification</div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background-color: var(--accent-coral);"></div>
+            <span>Sources (arXiv/IACR Papers)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background-color: var(--border-dark);"></div>
+            <span>Entities (Attacks &amp; Crypto)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background-color: var(--accent-green);"></div>
+            <span>Claims (Proofs &amp; Breaches)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background-color: var(--accent-blue);"></div>
+            <span>Decisions (Patches &amp; CISO)</span>
+          </div>
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background-color: var(--border-dark);"></div>
-          <span>Entities (Attacks &amp; Crypto)</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background-color: var(--accent-green);"></div>
-          <span>Claims (Proofs &amp; Breaches)</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background-color: var(--accent-blue);"></div>
-          <span>Decisions (Patches &amp; CISO)</span>
+
+        <!-- Node Callout Details Panel -->
+        <div class="node-callout" id="nodeCallout">
+          <div class="callout-header">
+            <span class="callout-tag" id="calloutTag">SOURCES</span>
+            <button class="btn-action" onclick="closeCallout()">✕</button>
+          </div>
+          <div class="callout-title" id="calloutTitle">2608.23763 (TrustShiftProbe)</div>
+          <div class="callout-desc" id="calloutDesc">MCP サーバーに対する段階的信頼攻撃（TrustShift）の検証と SHIELD ランタイム防御。</div>
+          <div class="callout-edges" id="calloutEdges">Connected to 4 nodes via: targets, asserts, mitigates</div>
         </div>
       </div>
 
-      <!-- Node Callout Details Panel -->
-      <div class="node-callout" id="nodeCallout">
-        <div class="callout-header">
-          <span class="callout-tag" id="calloutTag">SOURCES</span>
-          <button class="btn-action" onclick="closeCallout()">✕</button>
+      <!-- Product Analytics Panels -->
+      <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+        <!-- 1. Hop Budget Histogram -->
+        <div class="metric-card">
+          <div class="card-header">
+            <span class="card-title">Hop Budget Distribution</span>
+            <span class="card-tag">Max Depth = 5</span>
+          </div>
+          <canvas id="hopCanvas" width="260" height="130"></canvas>
         </div>
-        <div class="callout-title" id="calloutTitle">2608.23763 (TrustShiftProbe)</div>
-        <div class="callout-desc" id="calloutDesc">MCP サーバーに対する段階的信頼攻撃（TrustShift）の検証と SHIELD ランタイム防御。</div>
-        <div class="callout-edges" id="calloutEdges">Connected to 4 nodes via: targets, asserts, mitigates</div>
+
+        <!-- 2. Edge Ledger -->
+        <div class="metric-card">
+          <div class="card-header">
+            <span class="card-title">Edge Ledger (Traffic)</span>
+            <span class="card-tag">Relation Types</span>
+          </div>
+          <div id="edgeLedgerList">
+            <div class="bar-chart-row">
+              <span class="bar-label">targets</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 82%;"></div></div>
+              <span class="bar-value">1,420</span>
+            </div>
+            <div class="bar-chart-row">
+              <span class="bar-label">asserts</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 68%;"></div></div>
+              <span class="bar-value">980</span>
+            </div>
+            <div class="bar-chart-row">
+              <span class="bar-label">mitigates</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 55%; background-color: var(--accent-green);"></div></div>
+              <span class="bar-value">750</span>
+            </div>
+            <div class="bar-chart-row">
+              <span class="bar-label">requires</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 44%; background-color: var(--accent-blue);"></div></div>
+              <span class="bar-value">620</span>
+            </div>
+            <div class="bar-chart-row">
+              <span class="bar-label">evades</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 28%; background-color: var(--border-dark);"></div></div>
+              <span class="bar-value">410</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Token Savings -->
+        <div class="metric-card">
+          <div class="card-header">
+            <span class="card-title">Context Compression (Walk vs Flat)</span>
+            <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">-74.2% TOKENS</span>
+          </div>
+          <canvas id="walkVsFlatCanvas" width="260" height="130"></canvas>
+        </div>
       </div>
     </div>
+  </div>
 
-    <!-- ======================================================================
-         3. Bottom 5-Metric Analytical Panels
-         ====================================================================== -->
-    <div class="metrics-panel-grid">
-      <!-- 1. Hop Budget Histogram -->
-      <div class="metric-card">
-        <div class="card-header">
-          <span class="card-title">Hop Budget Distribution</span>
-          <span class="card-tag">Max Depth = 5</span>
-        </div>
-        <canvas id="hopCanvas" width="260" height="130"></canvas>
+  <!-- ======================================================================
+       TAB 2: SYSTEM & OBSERVABILITY VIEW
+       ====================================================================== -->
+  <div id="viewSystem" class="tab-view">
+    <div class="system-workspace">
+      <!-- Pipeline Step Status Bar -->
+      <div class="pipeline-bar" id="pipelineBar">
+        <div class="pipeline-step completed" data-step="0">[1] CHUNK</div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step completed" data-step="1">[2] EXTRACT</div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step completed" data-step="2">[3] RESOLVE</div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step active" data-step="3">[4] LINK</div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" data-step="4">[5] EMBED</div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" data-step="5">[6] PRUNE</div>
       </div>
 
-      <!-- 2. Edge Ledger -->
-      <div class="metric-card">
-        <div class="card-header">
-          <span class="card-title">Edge Ledger (Traffic)</span>
-          <span class="card-tag">Relation Types</span>
-        </div>
-        <div id="edgeLedgerList">
-          <div class="bar-chart-row">
-            <span class="bar-label">targets</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 82%;"></div></div>
-            <span class="bar-value">1,420</span>
+      <div class="system-grid">
+        <!-- 1. OBF Live Distributed Tracing -->
+        <div class="metric-card" style="background-color: var(--bg-panel-sub);">
+          <div class="card-header">
+            <span class="card-title">🛡️ OBF Telemetry (OTel / OpenInference)</span>
+            <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">LIVE ACTIVE</span>
           </div>
-          <div class="bar-chart-row">
-            <span class="bar-label">asserts</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 68%;"></div></div>
-            <span class="bar-value">980</span>
-          </div>
-          <div class="bar-chart-row">
-            <span class="bar-label">mitigates</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 55%; background-color: var(--accent-green);"></div></div>
-            <span class="bar-value">750</span>
-          </div>
-          <div class="bar-chart-row">
-            <span class="bar-label">requires</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 44%; background-color: var(--accent-blue);"></div></div>
-            <span class="bar-value">620</span>
-          </div>
-          <div class="bar-chart-row">
-            <span class="bar-label">evades</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 32%; background-color: var(--accent-amber);"></div></div>
-            <span class="bar-value">410</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 3. Walk vs Flat Token Savings -->
-      <div class="metric-card">
-        <div class="card-header">
-          <span class="card-title">Walk vs Flat (Token Stream)</span>
-          <span class="card-tag">-74.2% Context</span>
-        </div>
-        <canvas id="walkCanvas" width="260" height="130"></canvas>
-      </div>
-
-      <!-- 4. Traversal Log Grid -->
-      <div class="metric-card">
-        <div class="card-header">
-          <span class="card-title">Traversal Matrix (100 Walks)</span>
-          <span class="card-tag">Success: 89%</span>
-        </div>
-        <div class="traversal-matrix" id="traversalMatrix"></div>
-      </div>
-
-      <!-- 5. Dead-End Ledger -->
-      <div class="metric-card">
-        <div class="card-header">
-          <span class="card-title">Dead-End Ledger</span>
-          <span class="card-tag">11 Failures</span>
-        </div>
-        <div style="font-size: 11px; margin-top: 4px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-            <span>Depth Limit Exceeded</span>
-            <strong style="color: var(--accent-coral);">6 (54%)</strong>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-            <span>Cycle Loop Detected</span>
-            <strong>3 (27%)</strong>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <span>Context Budget Clamp</span>
-            <strong>2 (19%)</strong>
-          </div>
-          <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: var(--fg-muted);">PRUNE Self-Heal Rate:</span>
-              <strong style="color: var(--accent-green);">100%</strong>
+          <div style="font-size: 11px; margin-top: 2px;">
+            <div class="bar-chart-row">
+              <span class="bar-label">LLM Spans</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 76%; background-color: var(--accent-blue);"></div></div>
+              <span class="bar-value">1,240</span>
+            </div>
+            <div class="bar-chart-row">
+              <span class="bar-label">Retriever</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 58%; background-color: var(--accent-green);"></div></div>
+              <span class="bar-value">820</span>
+            </div>
+            <div class="bar-chart-row">
+              <span class="bar-label">Tool Calls</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 45%; background-color: var(--accent-coral);"></div></div>
+              <span class="bar-value">540</span>
+            </div>
+            <div class="bar-chart-row">
+              <span class="bar-label">Pipeline/WAL</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 32%; background-color: var(--border-dark);"></div></div>
+              <span class="bar-value">240</span>
+            </div>
+            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 6px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                <span style="color: var(--fg-muted);">W3C TRACEPARENT:</span>
+                <code style="font-size: 10px; font-weight: bold;">00-4bf92f...-01</code>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--fg-muted);">OTLP JSON (v1/traces):</span>
+                <strong style="color: var(--accent-green);">HTTP 200 / 0 Loss</strong>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 6. OBF Live Distributed Tracing & OpenInference Telemetry -->
-      <div class="metric-card" style="background-color: var(--bg-panel-sub);">
-        <div class="card-header">
-          <span class="card-title">🛡️ OBF Telemetry (OTel / OpenInference)</span>
-          <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">LIVE ACTIVE</span>
-        </div>
-        <div style="font-size: 11px; margin-top: 2px;">
-          <div class="bar-chart-row">
-            <span class="bar-label">LLM Spans</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 76%; background-color: var(--accent-blue);"></div></div>
-            <span class="bar-value">1,240</span>
+        <!-- 2. Active Pipeline & Intelligence Loop Monitor -->
+        <div class="metric-card" style="background-color: var(--bg-panel);">
+          <div class="card-header">
+            <span class="card-title">🔄 Active Loop &amp; Cycle Monitor</span>
+            <span class="card-tag" id="loopBadge" style="color: var(--accent-coral); font-weight: bold;">ACTIVE (4x Daily)</span>
           </div>
-          <div class="bar-chart-row">
-            <span class="bar-label">Retriever</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 58%; background-color: var(--accent-green);"></div></div>
-            <span class="bar-value">820</span>
-          </div>
-          <div class="bar-chart-row">
-            <span class="bar-label">Tool Calls</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 45%; background-color: var(--accent-coral);"></div></div>
-            <span class="bar-value">540</span>
-          </div>
-          <div class="bar-chart-row">
-            <span class="bar-label">Pipeline/WAL</span>
-            <div class="bar-track"><div class="bar-fill" style="width: 32%; background-color: var(--border-dark);"></div></div>
-            <span class="bar-value">240</span>
-          </div>
-          <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 6px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
-              <span style="color: var(--fg-muted);">W3C TRACEPARENT:</span>
-              <code style="font-size: 10px; font-weight: bold;">00-4bf92f...-01</code>
+          <div style="font-size: 11px; margin-top: 2px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: var(--fg-muted);">Active Cycle:</span>
+              <strong id="loopCycleId" style="font-family: var(--font-mono); font-size: 10px;">cycle_20260828_001101</strong>
             </div>
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: var(--fg-muted);">OTLP JSON (v1/traces):</span>
-              <strong style="color: var(--accent-green);">HTTP 200 / 0 Loss</strong>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: var(--fg-muted);">Loop Schedule:</span>
+              <span>4x Daily (00/06/12/18 UTC)</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: var(--fg-muted);">Last Batch Sync:</span>
+              <span id="loopLastSync">2026-08-28 00:11:01 UTC</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: var(--fg-muted);">Next Execution:</span>
+              <strong style="color: var(--accent-blue);" id="loopNextSync">2026-08-28 12:00:00 UTC</strong>
+            </div>
+            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
+              <div style="font-size: 10px; color: var(--fg-muted); margin-bottom: 4px;">INTELLIGENCE DAG PHASES:</div>
+              <div style="display: flex; gap: 4px; flex-wrap: wrap; font-size: 9px; font-weight: bold;" id="loopPhaseList">
+                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">PLAN ✓</span>
+                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">HARVEST ✓</span>
+                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">PROCESS ✓</span>
+                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">SYNTH ✓</span>
+                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">DISTRIB ✓</span>
+                <span style="background: var(--accent-coral); color: #fff; padding: 1px 4px; border-radius: 2px;">EVAL ⟳</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Traversal Matrix (100 Walks) -->
+        <div class="metric-card">
+          <div class="card-header">
+            <span class="card-title">Traversal Matrix (100 Walks)</span>
+            <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">88% PASS</span>
+          </div>
+          <div class="traversal-matrix" id="traversalMatrix"></div>
+        </div>
+
+        <!-- 4. Dead-End & Self-Healing Ledger -->
+        <div class="metric-card">
+          <div class="card-header">
+            <span class="card-title">Dead-End &amp; Pruning Ledger</span>
+            <span class="card-tag">12 Terminations</span>
+          </div>
+          <div style="font-size: 11px; margin-top: 4px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span>Depth Limit Exceeded</span>
+              <strong style="color: var(--accent-coral);">6 (54%)</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span>Cycle Loop Detected</span>
+              <strong>3 (27%)</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span>Context Budget Clamp</span>
+              <strong>2 (19%)</strong>
+            </div>
+            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--fg-muted);">PRUNE Self-Heal Rate:</span>
+                <strong style="color: var(--accent-green);">100%</strong>
+              </div>
             </div>
           </div>
         </div>
@@ -1121,7 +1239,7 @@
       // B. Walk vs Flat Token Savings Chart
       const walkHistory = [80, 78, 75, 76, 73, 74, 72, 75, 74, 74.2];
       function drawWalkChart() {
-        const wCanvas = document.getElementById('walkCanvas');
+        const wCanvas = document.getElementById('walkVsFlatCanvas') || document.getElementById('walkCanvas');
         if (!wCanvas) return;
         const wCtx = wCanvas.getContext('2d');
         const w = wCanvas.width;
@@ -1225,6 +1343,20 @@
               if (data.telemetry.token_savings_pct) {
                 document.getElementById('valTokenSavings').textContent = `${data.telemetry.token_savings_pct}%`;
               }
+              if (data.telemetry.obf_spans) {
+                const obfEl = document.getElementById('valObfSpans');
+                if (obfEl) obfEl.textContent = `${Number(data.telemetry.obf_spans).toLocaleString()} Spans`;
+              }
+            }
+
+            // Update Loop Monitor if present
+            if (data.loop_monitor) {
+              const cycleEl = document.getElementById('loopCycleId');
+              if (cycleEl && data.loop_monitor.cycle_id) cycleEl.textContent = data.loop_monitor.cycle_id;
+              const lastSyncEl = document.getElementById('loopLastSync');
+              if (lastSyncEl && data.loop_monitor.last_sync_utc) lastSyncEl.textContent = data.loop_monitor.last_sync_utc;
+              const nextSyncEl = document.getElementById('loopNextSync');
+              if (nextSyncEl && data.loop_monitor.next_scheduled_utc) nextSyncEl.textContent = data.loop_monitor.next_scheduled_utc;
             }
 
             // Smart Merge: Preserve existing node physics positions
@@ -1284,6 +1416,28 @@
       // Initial Sync + Periodic Polling every 5 seconds
       syncLiveMesh();
       setInterval(syncLiveMesh, 5000);
+
+      // Global Tab Switching
+      window.switchDashboardTab = function(tabName) {
+        const productView = document.getElementById('viewProduct');
+        const systemView = document.getElementById('viewSystem');
+        const tabBtnProduct = document.getElementById('tabBtnProduct');
+        const tabBtnSystem = document.getElementById('tabBtnSystem');
+
+        if (tabName === 'product') {
+          productView.classList.add('active');
+          systemView.classList.remove('active');
+          tabBtnProduct.classList.add('active');
+          tabBtnSystem.classList.remove('active');
+          // Resize canvas on tab reveal
+          setTimeout(resizeCanvas, 50);
+        } else {
+          productView.classList.remove('active');
+          systemView.classList.add('active');
+          tabBtnProduct.classList.remove('active');
+          tabBtnSystem.classList.add('active');
+        }
+      };
     })();
   </script>
 </body>
