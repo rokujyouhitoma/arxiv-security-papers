@@ -859,10 +859,10 @@
             <span class="card-title" style="font-size: 13px; font-weight: bold;">Database Tables &amp; Physical Storage Ledger</span>
           </div>
           <div style="display: flex; gap: 12px; font-size: 11px; font-family: var(--font-mono);">
-            <span>Database: <strong id="valDbCurrentDb" style="color: var(--accent-blue);">arxiv_security_db</strong></span>
-            <span>Tables: <strong id="badgeDbTableCount" style="color: var(--accent-blue);">6 Tables</strong></span>
-            <span>Total Rows: <strong id="badgeDbTotalRows" style="color: var(--accent-coral);">59,508 Rows</strong></span>
-            <span>Total Size: <strong id="badgeDbTotalSize" style="color: var(--accent-green);">15.08 MB</strong></span>
+            <span>Database: <strong id="valDbCurrentDb" style="color: var(--accent-blue);">--</strong></span>
+            <span>Tables: <strong id="badgeDbTableCount" style="color: var(--accent-blue);">--</strong></span>
+            <span>Total Rows: <strong id="badgeDbTotalRows" style="color: var(--accent-coral);">--</strong></span>
+            <span>Total Size: <strong id="badgeDbTotalSize" style="color: var(--accent-green);">--</strong></span>
           </div>
         </div>
 
@@ -873,10 +873,10 @@
             <span style="color: var(--accent-green);">● Status: OK (0.001ms)</span>
           </div>
           <div style="color: var(--accent-blue); font-weight: 500;">
-            1. <code style="color: var(--accent-coral);">SHOW DATABASES;</code> &rarr; <span style="color: var(--fg-main);" id="sqlResultDatabases">['arxiv_security_db', 'main']</span>
+            1. <code style="color: var(--accent-coral);">SHOW DATABASES;</code> &rarr; <span style="color: var(--fg-main);" id="sqlResultDatabases">--</span>
           </div>
           <div style="color: var(--accent-blue); font-weight: 500; margin-top: 2px;">
-            2. <code style="color: var(--accent-coral);">SHOW TABLES FROM arxiv_security_db;</code> &rarr; <span style="color: var(--fg-main);" id="sqlResultTablesSummary">6 tables (59,508 total rows across 6 stores)</span>
+            2. <code style="color: var(--accent-coral);">SHOW TABLES FROM arxiv_security_db;</code> &rarr; <span style="color: var(--fg-main);" id="sqlResultTablesSummary">--</span>
           </div>
         </div>
 
@@ -893,53 +893,8 @@
               </tr>
             </thead>
             <tbody id="databaseTablesTableBody">
-              <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">vertices</code></td>
-                <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">Property Graph / Entity Store</td>
-                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">Dual CSR / Pager</span></td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">14,465</td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">3.11 MB</td>
-                <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>id (TEXT)</strong> | Idx: <code>label, properties</code></td>
-              </tr>
-              <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">edges</code></td>
-                <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">Property Graph / Causal Triples</td>
-                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">Dual CSR Adjacency</span></td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">1,402</td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">3.11 MB</td>
-                <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>(src_id, dst_id, label)</strong> | Idx: <code>src_id, dst_id, label</code></td>
-              </tr>
-              <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">paper_metadata</code></td>
-                <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">Master Document Catalog</td>
-                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">JSON Key-Value / Pager</span></td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">14,507</td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">6.78 MB</td>
-                <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>arxiv_id (TEXT)</strong> | Idx: <code>published, title, okf_path</code></td>
-              </tr>
-              <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">papers_vector</code></td>
-                <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">High-Dimensional Vector Store</td>
-                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">HNSW Graph Index (Cosine)</span></td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">14,507</td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">2.10 MB</td>
-                <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>doc_id (TEXT)</strong> | Idx: <code>embedding (384-dim)</code></td>
-              </tr>
-              <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">search_inverted_index</code></td>
-                <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">Full-Text Search Engine</td>
-                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">BM25 Postings List</span></td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">14,507</td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">3.10 MB</td>
-                <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>term_id (TEXT)</strong> | Idx: <code>postings, df, tf_idf</code></td>
-              </tr>
-              <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">analytics_metrics</code></td>
-                <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">Pre-Aggregated Telemetry / SLA</td>
-                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">Binary VDB / Slotted Page</span></td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">120</td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">118 B</td>
-                <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>metric_key (TEXT)</strong> | Idx: <code>timestamp, tier</code></td>
+              <tr>
+                <td colspan="6" style="padding: 16px; text-align: center; color: var(--fg-muted);">Loading database tables telemetry...</td>
               </tr>
             </tbody>
           </table>
@@ -1611,8 +1566,64 @@
       setInterval(updateLivePhysicsMetrics, 1000);
 
       // ----------------------------------------------------------------------
-      // 7. Live API Mesh Sync (Progressive Enhancement)
+      // 7. Dynamic Telemetry & Database Metrics Updaters
       // ----------------------------------------------------------------------
+      function updateDatabaseMetrics(db) {
+        if (!db) return;
+        const kpi = db.performance_kpis || {};
+
+        // Header Badges
+        const elCurrDb = document.getElementById('valDbCurrentDb');
+        if (elCurrDb && db.current_database) elCurrDb.textContent = db.current_database;
+        const bTableCount = document.getElementById('badgeDbTableCount');
+        if (bTableCount) bTableCount.textContent = `${db.table_count} Tables`;
+        const bTotalRows = document.getElementById('badgeDbTotalRows');
+        if (bTotalRows) bTotalRows.textContent = `${Number(db.total_rows || 0).toLocaleString()} Rows`;
+        const bTotalSize = document.getElementById('badgeDbTotalSize');
+        if (bTotalSize) bTotalSize.textContent = db.total_size_human || '--';
+
+        // SQL Query Terminal Snippet
+        if (db.sql_introspection) {
+          const sq = db.sql_introspection;
+          const elDbs = document.getElementById('sqlResultDatabases');
+          if (elDbs && sq.show_databases && sq.show_databases.databases) {
+            elDbs.textContent = JSON.stringify(sq.show_databases.databases);
+          }
+          const elTblSum = document.getElementById('sqlResultTablesSummary');
+          if (elTblSum && sq.show_tables) {
+            elTblSum.textContent = `${sq.show_tables.table_count} tables (${Number(db.total_rows || 0).toLocaleString()} total rows across 6 stores)`;
+          }
+        }
+
+        // Performance KPIs Card
+        const elIops = document.getElementById('valDbIops');
+        if (elIops) elIops.textContent = `${kpi.read_iops || 3420} / ${kpi.write_iops || 485} IOPS (Peak: ${kpi.peak_iops || 8920})`;
+        const elLat = document.getElementById('valDbLatency');
+        if (elLat) elLat.textContent = `${kpi.avg_latency_ms || 0.42} ms / p99: ${kpi.p99_latency_ms || 2.8} ms`;
+        const elCache = document.getElementById('valDbCacheHit');
+        if (elCache) elCache.textContent = `${kpi.buffer_pool_hit_rate || '98.7%'} / ${kpi.vector_cache_hit_rate || '99.2%'}`;
+        const elWal = document.getElementById('valDbWalLag');
+        if (elWal) elWal.textContent = `${kpi.wal_flush_rate_kb_s || 128.4} KB/s (${kpi.wal_sync_lag_ms || 0.18}ms)`;
+
+        // Database Tables Breakdown Table
+        const dbTbody = document.getElementById('databaseTablesTableBody');
+        if (dbTbody && Array.isArray(db.tables)) {
+          dbTbody.innerHTML = db.tables.map(t => {
+            const idxStr = Array.isArray(t.indexed_columns) ? t.indexed_columns.join(', ') : (t.indexed_columns || '-');
+            return `
+              <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
+                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">${t.table_name}</code></td>
+                <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${t.category || '-'}</td>
+                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">${t.storage_engine}</span></td>
+                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">${Number(t.row_count || 0).toLocaleString()}</td>
+                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">${t.size_human}</td>
+                <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>${t.primary_key || '-'}</strong> | Idx: <code>${idxStr}</code></td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+
       async function syncLiveMesh() {
         try {
           const t0 = performance.now();
@@ -1620,116 +1631,16 @@
           if (!resp.ok) return;
           const data = await resp.json();
           lastMeasuredLatency = performance.now() - t0;
-          if (data.status === 'success' && data.mesh && data.mesh.nodes.length > 0) {
-            // Update telemetry if present
-            if (data.telemetry) {
-              if (data.telemetry.resolved_nodes) {
-                currentResolvedNodes = Number(data.telemetry.resolved_nodes);
-                const rEl = document.getElementById('valResolvedNodes');
-                if (rEl) rEl.textContent = currentResolvedNodes.toLocaleString();
-              }
-              if (data.telemetry.token_savings_pct) {
-                const pct = Number(data.telemetry.token_savings_pct);
-                const sEl = document.getElementById('valSavings') || document.getElementById('valTokenSavings');
-                if (sEl) sEl.textContent = `${pct}%`;
-                const bEl = document.getElementById('badgeTokenSavings');
-                if (bEl) bEl.textContent = `-${pct}% TOKENS`;
-                if (walkHistory.length > 0 && Math.abs(walkHistory[walkHistory.length - 1] - pct) > 0.01) {
-                  walkHistory.shift();
-                  walkHistory.push(pct);
-                  drawWalkChart();
-                }
-              }
-              if (data.telemetry.obf_spans) {
-                const obfEl = document.getElementById('valObfSpans');
-                if (obfEl) obfEl.textContent = `${Number(data.telemetry.obf_spans).toLocaleString()} Spans`;
-              }
-            }
+          if (data.status !== 'success') return;
 
-            // Update Loop Monitor if present
-            if (data.loop_monitor) {
-              const cycleEl = document.getElementById('loopCycleId');
-              if (cycleEl && data.loop_monitor.cycle_id) cycleEl.textContent = data.loop_monitor.cycle_id;
-              const lastSyncEl = document.getElementById('loopLastSync');
-              if (lastSyncEl && data.loop_monitor.last_sync_utc) lastSyncEl.textContent = data.loop_monitor.last_sync_utc;
-              const nextSyncEl = document.getElementById('loopNextSync');
-              if (nextSyncEl && data.loop_monitor.next_scheduled_utc) nextSyncEl.textContent = data.loop_monitor.next_scheduled_utc;
-              const schedEl = document.getElementById('loopSchedule');
-              if (schedEl) schedEl.textContent = data.loop_monitor.interval || '4x Daily (00/06/12/18 UTC)';
-              const badgeEl = document.getElementById('loopBadge');
-              if (badgeEl) badgeEl.textContent = 'ACTIVE (4x Daily)';
+          // 1. Always update Database Metrics immediately
+          if (data.database_metrics) {
+            updateDatabaseMetrics(data.database_metrics);
+          }
 
-              // Dynamically update phase badges
-              if (data.loop_monitor.phases) {
-                const phaseListEl = document.getElementById('loopPhaseList');
-                if (phaseListEl) {
-                  const pMap = [
-                    { k: 'PLANNING', label: 'PLAN' },
-                    { k: 'COLLECTION', label: 'HARVEST' },
-                    { k: 'PROCESSING', label: 'PROCESS' },
-                    { k: 'ANALYSIS', label: 'SYNTH' },
-                    { k: 'DISSEMINATION', label: 'DISTRIB' },
-                    { k: 'EVALUATION', label: 'EVAL' }
-                  ];
-                  phaseListEl.innerHTML = pMap.map(p => {
-                    const st = data.loop_monitor.phases[p.k] || 'DONE';
-                    const isDone = st === 'DONE' || st === 'completed';
-                    const bg = isDone ? 'var(--accent-green)' : 'var(--accent-coral)';
-                    const icon = isDone ? '✓' : '⟳';
-                    return `<span style="background: ${bg}; color: #fff; padding: 1px 4px; border-radius: 2px;">${p.label} ${icon}</span>`;
-                  }).join('');
-                }
-              }
-            }
-
-            // Update OBF Telemetry Card if present
-            if (data.obf_telemetry) {
-              const ot = data.obf_telemetry;
-              const llmEl = document.getElementById('valObfLlmSpans');
-              if (llmEl && ot.llm_spans) {
-                llmEl.textContent = Number(ot.llm_spans).toLocaleString();
-                const trackLlm = document.getElementById('trackObfLlm');
-                if (trackLlm) trackLlm.style.width = '76%';
-              }
-              const retEl = document.getElementById('valObfRetrieverSpans');
-              if (retEl && ot.retriever_spans) {
-                retEl.textContent = Number(ot.retriever_spans).toLocaleString();
-                const trackRet = document.getElementById('trackObfRetriever');
-                if (trackRet) trackRet.style.width = '58%';
-              }
-              const toolEl = document.getElementById('valObfToolSpans');
-              if (toolEl && ot.tool_spans) {
-                toolEl.textContent = Number(ot.tool_spans).toLocaleString();
-                const trackTool = document.getElementById('trackObfTool');
-                if (trackTool) trackTool.style.width = '45%';
-              }
-              const pipeEl = document.getElementById('valObfPipelineSpans');
-              if (pipeEl && ot.pipeline_spans) {
-                pipeEl.textContent = Number(ot.pipeline_spans).toLocaleString();
-                const trackPipe = document.getElementById('trackObfPipeline');
-                if (trackPipe) trackPipe.style.width = '32%';
-              }
-              const tpEl = document.getElementById('valObfTraceparent');
-              if (tpEl && ot.latest_traceparent) tpEl.textContent = ot.latest_traceparent;
-              const stEl = document.getElementById('valObfStatusDetail');
-              if (stEl) stEl.textContent = ot.status || 'HTTP 200 / 0 Loss';
-            }
-
-            // Update Traversal & Dead-End Telemetry
-            const badgeTrav = document.getElementById('badgeTraversalPass');
-            if (badgeTrav) badgeTrav.textContent = '88% PASS';
-            const badgeDead = document.getElementById('badgeDeadEndTotal');
-            if (badgeDead) badgeDead.textContent = '12 Terminations';
-            const depthEl = document.getElementById('valDeadEndDepth');
-            if (depthEl) depthEl.textContent = '6 (54%)';
-            const loopEl = document.getElementById('valDeadEndLoop');
-            if (loopEl) loopEl.textContent = '3 (27%)';
-            const budgetEl = document.getElementById('valDeadEndBudget');
-            if (budgetEl) budgetEl.textContent = '2 (19%)';
-            const healEl = document.getElementById('valDeadEndHealRate');
-            if (healEl) healEl.textContent = '100%';
-
-            // Smart Merge: Preserve existing node physics positions
+          // 2. Update Mesh Nodes & Edges if present
+          if (data.mesh && Array.isArray(data.mesh.nodes) && data.mesh.nodes.length > 0) {
+            // Preserve existing physics positions
             const existingPositions = new Map();
             NODES.forEach(n => existingPositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy }));
 
@@ -1770,224 +1681,252 @@
                 });
               }
             });
+            currentResolvedNodes = NODES.length;
+          }
 
-            // Update brand badge to LIVE
-            const brandBadge = document.querySelector('.brand-title .badge');
-            if (brandBadge) {
-              brandBadge.textContent = 'LIVE MESH (5s)';
-              brandBadge.style.backgroundColor = 'var(--accent-green)';
+          // 3. Update telemetry if present
+          if (data.telemetry) {
+            if (data.telemetry.resolved_nodes) {
+              currentResolvedNodes = Number(data.telemetry.resolved_nodes);
+              const rEl = document.getElementById('valResolvedNodes');
+              if (rEl) rEl.textContent = currentResolvedNodes.toLocaleString();
             }
-            const bObf = document.getElementById('badgeObfLive');
-            if (bObf) bObf.textContent = 'LIVE ACTIVE';
-
-            // Update Last Synced Timestamps (JST)
-            const now = new Date();
-            const jstTimeOnly = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now) + ' JST';
-            const jstFullStr = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now).replace(/\//g, '-') + ' JST';
-            const hSync = document.getElementById('headerSyncTime');
-            if (hSync) hSync.textContent = `🕒 Synced: ${jstTimeOnly}`;
-            const fSync = document.getElementById('footerSyncTime');
-            if (fSync) fSync.textContent = `Last Sync: ${jstFullStr}`;
-
-            // Update Supervisor Top Telemetry if present
-            if (data.supervisor_top) {
-              const sup = data.supervisor_top;
-              const aPid = document.getElementById('valArbiterPid');
-              if (aPid) aPid.textContent = sup.arbiter_pid || '--';
-              const aUptime = document.getElementById('valArbiterUptime');
-              if (aUptime) aUptime.textContent = `${Math.floor((sup.uptime || 0) / 60)}m ${Math.floor((sup.uptime || 0) % 60)}s`;
-              const aMem = document.getElementById('valArbiterMemory');
-              if (aMem) aMem.textContent = `${sup.memory_mb || 0} MB`;
-              const aStat = document.getElementById('badgeArbiterStatus');
-              if (aStat) {
-                if (sup.is_supervised) {
-                  aStat.textContent = 'ACTIVE (Supervised)';
-                  aStat.style.color = 'var(--accent-green)';
-                } else {
-                  aStat.textContent = 'OFFLINE (Arbiter Inactive)';
-                  aStat.style.color = 'var(--accent-coral)';
-                }
-              }
-
-              // Pools
-              const aPools = document.getElementById('valArbiterPools');
-              if (aPools && sup.pools) {
-                const parts = Object.entries(sup.pools).map(([name, meta]) => {
-                  if (typeof meta === 'object' && meta !== null) {
-                    return `<div><strong>${name}:</strong> ${meta.active}/${meta.target} active</div>`;
-                  }
-                  return `<div><strong>${name}:</strong> ${meta}</div>`;
-                });
-                aPools.innerHTML = parts.length ? parts.join('') : '<span style="color: var(--fg-muted);">No active pools</span>';
-                const pBadge = document.getElementById('badgePoolCount');
-                if (pBadge) pBadge.textContent = `${Object.keys(sup.pools).length} Pools`;
-              }
-              const bIpc = document.getElementById('badgeIpcStatus');
-              if (bIpc) {
-                bIpc.textContent = sup.is_supervised ? 'CONNECTED' : 'SOCKET NOT FOUND';
-                bIpc.style.color = sup.is_supervised ? 'var(--accent-green)' : 'var(--accent-coral)';
-              }
-
-              // Workers Table
-              const tbody = document.getElementById('supervisorWorkersTableBody');
-              if (tbody) {
-                const wEntries = sup.workers ? Object.entries(sup.workers) : [];
-                const wBadge = document.getElementById('badgeTotalWorkers');
-                if (wBadge) wBadge.textContent = `${wEntries.length} Processes`;
-
-                if (wEntries.length === 0) {
-                  tbody.innerHTML = `
-                    <tr>
-                      <td colspan="7" style="padding: 24px; text-align: center; color: var(--fg-muted);">
-                        <div style="font-weight: bold; color: var(--accent-coral); margin-bottom: 6px;">⚠️ Supervisor Arbiter is currently OFFLINE</div>
-                        <div style="font-size: 11px;">Control Socket (<code>outputs/supervisor/control.sock</code>) was not found.</div>
-                        <div style="font-size: 10px; margin-top: 6px; color: var(--fg-muted);">Start the process supervisor using: <code>python -m supervisor.cli start</code></div>
-                      </td>
-                    </tr>
-                  `;
-                } else {
-                  tbody.innerHTML = wEntries.map(([spid, w]) => {
-                    const statusBg = w.status === 'ALIVE' ? 'var(--accent-green)' : 'var(--accent-coral)';
-                    const healthBg = w.is_healthy ? 'var(--accent-green)' : 'var(--accent-coral)';
-                    const healthText = w.is_healthy ? 'HEALTHY' : 'UNHEALTHY';
-                    return `
-                      <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                        <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${w.pid || spid}</td>
-                        <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${w.type || 'worker'}</td>
-                        <td style="padding: 6px 8px;"><span style="background: ${statusBg}; color: #fff; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: bold;">${w.status}</span></td>
-                        <td style="padding: 6px 8px;"><span style="color: ${healthBg}; font-weight: bold;">● ${healthText}</span></td>
-                        <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${Number(w.requests_handled || 0).toLocaleString()}</td>
-                        <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${(w.idle_seconds || 0).toFixed(1)}s</td>
-                        <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${w.memory_mb || 0} MB</td>
-                      </tr>
-                    `;
-                  }).join('');
-                }
+            if (data.telemetry.token_savings_pct) {
+              const pct = Number(data.telemetry.token_savings_pct);
+              const sEl = document.getElementById('valSavings') || document.getElementById('valTokenSavings');
+              if (sEl) sEl.textContent = `${pct}%`;
+              const bEl = document.getElementById('badgeTokenSavings');
+              if (bEl) bEl.textContent = `-${pct}% TOKENS`;
+              if (walkHistory.length > 0 && Math.abs(walkHistory[walkHistory.length - 1] - pct) > 0.01) {
+                walkHistory.shift();
+                walkHistory.push(pct);
+                drawWalkChart();
               }
             }
+            if (data.telemetry.obf_spans) {
+              const obfEl = document.getElementById('valObfSpans');
+              if (obfEl) obfEl.textContent = `${Number(data.telemetry.obf_spans).toLocaleString()} Spans`;
+            }
+          }
 
-            // Update Strategic Telemetry (ST, SA, SM) if present
-            if (data.strategic_telemetry) {
-              const st = data.strategic_telemetry.st_strategist;
-              const sa = data.strategic_telemetry.sa_architect;
-              const sm = data.strategic_telemetry.sm_service_manager;
+          // 4. Update Loop Monitor if present
+          if (data.loop_monitor) {
+            const cycleEl = document.getElementById('loopCycleId');
+            if (cycleEl && data.loop_monitor.cycle_id) cycleEl.textContent = data.loop_monitor.cycle_id;
+            const lastSyncEl = document.getElementById('loopLastSync');
+            if (lastSyncEl && data.loop_monitor.last_sync_utc) lastSyncEl.textContent = data.loop_monitor.last_sync_utc;
+            const nextSyncEl = document.getElementById('loopNextSync');
+            if (nextSyncEl && data.loop_monitor.next_scheduled_utc) nextSyncEl.textContent = data.loop_monitor.next_scheduled_utc;
+            const schedEl = document.getElementById('loopSchedule');
+            if (schedEl) schedEl.textContent = data.loop_monitor.interval || '4x Daily (00/06/12/18 UTC)';
+            const badgeEl = document.getElementById('loopBadge');
+            if (badgeEl) badgeEl.textContent = 'ACTIVE (4x Daily)';
 
-              // ST: Token ROI & Threats
-              if (st) {
-                const roiEl = document.getElementById('valTokenRoi');
-                if (roiEl) roiEl.textContent = `-$${st.token_cost_savings_usd.toFixed(2)} (-${st.token_savings_pct}%)`;
-                const covEl = document.getElementById('valSummaryCoverage');
-                if (covEl) covEl.textContent = st.executive_tier_coverage;
-                const bThreat = document.getElementById('badgeThreatCoverage');
-                if (bThreat && st.top_threat_vectors) bThreat.textContent = `${st.top_threat_vectors.length} Vectors Active`;
-
-                const threatListEl = document.getElementById('threatVectorsList');
-                if (threatListEl && st.top_threat_vectors) {
-                  threatListEl.innerHTML = st.top_threat_vectors.map(tv => `
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px dashed var(--border-dark);">
-                      <div>
-                        <strong style="color: var(--accent-coral); font-size: 10px;">${tv.name}</strong>
-                        <span style="font-size: 9px; color: var(--fg-muted); margin-left: 4px;">(${tv.category})</span>
-                      </div>
-                      <span style="font-size: 10px; font-weight: bold; color: var(--accent-green);">${tv.growth}</span>
-                    </div>
-                  `).join('');
-                }
+            // Dynamically update phase badges
+            if (data.loop_monitor.phases) {
+              const phaseListEl = document.getElementById('loopPhaseList');
+              if (phaseListEl) {
+                const pMap = [
+                  { k: 'PLANNING', label: 'PLAN' },
+                  { k: 'COLLECTION', label: 'HARVEST' },
+                  { k: 'PROCESSING', label: 'PROCESS' },
+                  { k: 'ANALYSIS', label: 'SYNTH' },
+                  { k: 'DISSEMINATION', label: 'DISTRIB' },
+                  { k: 'EVALUATION', label: 'EVAL' }
+                ];
+                phaseListEl.innerHTML = pMap.map(p => {
+                  const st = data.loop_monitor.phases[p.k] || 'DONE';
+                  const isDone = st === 'DONE' || st === 'completed';
+                  const bg = isDone ? 'var(--accent-green)' : 'var(--accent-coral)';
+                  const icon = isDone ? '✓' : '⟳';
+                  return `<span style="background: ${bg}; color: #fff; padding: 1px 4px; border-radius: 2px;">${p.label} ${icon}</span>`;
+                }).join('');
               }
+            }
+          }
 
-              // SM: Service Operations & SLO
-              if (sm) {
-                const bSlo = document.getElementById('badgeSmSlo');
-                if (bSlo) bSlo.textContent = `${sm.pipeline_slo_pct}% SLO`;
-                const sloEl = document.getElementById('valSmPipelineSlo');
-                if (sloEl) sloEl.textContent = `${sm.pipeline_slo_pct}% (30-Day)`;
-                const resEl = document.getElementById('valSmApiResilience');
-                if (resEl) resEl.textContent = `${sm.http_429_rate_pct}% Rate Limit (100% Pass)`;
-                const lagEl = document.getElementById('valSmWalLag');
-                if (lagEl) lagEl.textContent = `${sm.wal_sync_lag_ms.toFixed(1)} ms / 0 Loss`;
-                const strkEl = document.getElementById('valSmStreak');
-                if (strkEl) strkEl.textContent = `${sm.batch_success_streak} Batches (100% Pass)`;
-              }
+          // 5. Update OBF Telemetry Card if present
+          if (data.obf_telemetry) {
+            const ot = data.obf_telemetry;
+            const llmEl = document.getElementById('valObfLlmSpans');
+            if (llmEl && ot.llm_spans) {
+              llmEl.textContent = Number(ot.llm_spans).toLocaleString();
+              const trackLlm = document.getElementById('trackObfLlm');
+              if (trackLlm) trackLlm.style.width = '76%';
+            }
+            const retEl = document.getElementById('valObfRetrieverSpans');
+            if (retEl && ot.retriever_spans) {
+              retEl.textContent = Number(ot.retriever_spans).toLocaleString();
+              const trackRet = document.getElementById('trackObfRetriever');
+              if (trackRet) trackRet.style.width = '58%';
+            }
+            const toolEl = document.getElementById('valObfToolSpans');
+            if (toolEl && ot.tool_spans) {
+              toolEl.textContent = Number(ot.tool_spans).toLocaleString();
+              const trackTool = document.getElementById('trackObfTool');
+              if (trackTool) trackTool.style.width = '45%';
+            }
+          }
 
-              // SA: Architecture & Latency
-              if (sa) {
-                const bSa = document.getElementById('badgeSaLatency');
-                if (bSa) bSa.textContent = `p95: ${sa.latency_p95_ms}ms`;
-                const tailEl = document.getElementById('valSaTailLatency');
-                if (tailEl) tailEl.textContent = `p95: ${sa.latency_p95_ms} ms / p99: ${sa.latency_p99_ms} ms`;
-                const mttrEl = document.getElementById('valSaMttr');
-                if (mttrEl && sm) mttrEl.textContent = `< ${sm.worker_mttr_sec}s Self-Heal`;
-                const densEl = document.getElementById('valSaDensity');
-                if (densEl) densEl.textContent = `${sa.graph_density} (${sa.isolated_nodes_pct}% Isolated)`;
+          // Update brand badge to LIVE
+          const brandBadge = document.querySelector('.brand-title .badge');
+          if (brandBadge) {
+            brandBadge.textContent = 'LIVE MESH (5s)';
+            brandBadge.style.backgroundColor = 'var(--accent-green)';
+          }
+          const bObf = document.getElementById('badgeObfLive');
+          if (bObf) bObf.textContent = 'LIVE ACTIVE';
+
+          // Update Last Synced Timestamps (JST)
+          const now = new Date();
+          const jstTimeOnly = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now) + ' JST';
+          const jstFullStr = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now).replace(/\//g, '-') + ' JST';
+          const hSync = document.getElementById('headerSyncTime');
+          if (hSync) hSync.textContent = `🕒 Synced: ${jstTimeOnly}`;
+          const fSync = document.getElementById('footerSyncTime');
+          if (fSync) fSync.textContent = `Last Sync: ${jstFullStr}`;
+
+          // Update Supervisor Top Telemetry if present
+          if (data.supervisor_top) {
+            const sup = data.supervisor_top;
+            const aPid = document.getElementById('valArbiterPid');
+            if (aPid) aPid.textContent = sup.arbiter_pid || '--';
+            const aUptime = document.getElementById('valArbiterUptime');
+            if (aUptime) aUptime.textContent = `${Math.floor((sup.uptime || 0) / 60)}m ${Math.floor((sup.uptime || 0) % 60)}s`;
+            const aMem = document.getElementById('valArbiterMemory');
+            if (aMem) aMem.textContent = `${sup.memory_mb || 0} MB`;
+            const aStat = document.getElementById('badgeArbiterStatus');
+            if (aStat) {
+              if (sup.is_supervised) {
+                aStat.textContent = 'ACTIVE (Supervised)';
+                aStat.style.color = 'var(--accent-green)';
+              } else {
+                aStat.textContent = 'OFFLINE (Arbiter Inactive)';
+                aStat.style.color = 'var(--accent-coral)';
               }
             }
 
-            // Update Database & Storage Engine Metrics if present
-            if (data.database_metrics) {
-              const db = data.database_metrics;
-              const kpi = db.performance_kpis || {};
-
-              // Header Badges
-              const elCurrDb = document.getElementById('valDbCurrentDb');
-              if (elCurrDb && db.current_database) elCurrDb.textContent = db.current_database;
-              const bTableCount = document.getElementById('badgeDbTableCount');
-              if (bTableCount) bTableCount.textContent = `${db.table_count} Tables`;
-              const bTotalRows = document.getElementById('badgeDbTotalRows');
-              if (bTotalRows) bTotalRows.textContent = `${Number(db.total_rows || 0).toLocaleString()} Rows`;
-              const bTotalSize = document.getElementById('badgeDbTotalSize');
-              if (bTotalSize) bTotalSize.textContent = db.total_size_human || '--';
-
-              // SQL Query Terminal Snippet
-              if (db.sql_introspection) {
-                const sq = db.sql_introspection;
-                const elDbs = document.getElementById('sqlResultDatabases');
-                if (elDbs && sq.show_databases && sq.show_databases.databases) {
-                  elDbs.textContent = JSON.stringify(sq.show_databases.databases);
+            // Pools
+            const aPools = document.getElementById('valArbiterPools');
+            if (aPools && sup.pools) {
+              const parts = Object.entries(sup.pools).map(([name, meta]) => {
+                if (typeof meta === 'object' && meta !== null) {
+                  return `<div><strong>${name}:</strong> ${meta.active}/${meta.target} active</div>`;
                 }
-                const elTblSum = document.getElementById('sqlResultTablesSummary');
-                if (elTblSum && sq.show_tables) {
-                  elTblSum.textContent = `${sq.show_tables.table_count} tables (${Number(db.total_rows || 0).toLocaleString()} total rows across 6 stores)`;
-                }
-              }
+                return `<div><strong>${name}:</strong> ${meta}</div>`;
+              });
+              aPools.innerHTML = parts.length ? parts.join('') : '<span style="color: var(--fg-muted);">No active pools</span>';
+              const pBadge = document.getElementById('badgePoolCount');
+              if (pBadge) pBadge.textContent = `${Object.keys(sup.pools).length} Pools`;
+            }
+            const bIpc = document.getElementById('badgeIpcStatus');
+            if (bIpc) {
+              bIpc.textContent = sup.is_supervised ? 'CONNECTED' : 'SOCKET NOT FOUND';
+              bIpc.style.color = sup.is_supervised ? 'var(--accent-green)' : 'var(--accent-coral)';
+            }
 
-              // Performance KPIs Card
-              const elIops = document.getElementById('valDbIops');
-              if (elIops) elIops.textContent = `${kpi.read_iops || 3420} / ${kpi.write_iops || 485} IOPS (Peak: ${kpi.peak_iops || 8920})`;
-              const elLat = document.getElementById('valDbLatency');
-              if (elLat) elLat.textContent = `${kpi.avg_latency_ms || 0.42} ms / p99: ${kpi.p99_latency_ms || 2.8} ms`;
-              const elCache = document.getElementById('valDbCacheHit');
-              if (elCache) elCache.textContent = `${kpi.buffer_pool_hit_rate || '98.7%'} / ${kpi.vector_cache_hit_rate || '99.2%'}`;
-              const elWal = document.getElementById('valDbWalLag');
-              if (elWal) elWal.textContent = `${kpi.wal_flush_rate_kb_s || 128.4} KB/s (${kpi.wal_sync_lag_ms || 0.18}ms)`;
+            // Workers Table
+            const tbody = document.getElementById('supervisorWorkersTableBody');
+            if (tbody) {
+              const wEntries = sup.workers ? Object.entries(sup.workers) : [];
+              const wBadge = document.getElementById('badgeTotalWorkers');
+              if (wBadge) wBadge.textContent = `${wEntries.length} Processes`;
 
-              // Database Tables Breakdown Table
-              const dbTbody = document.getElementById('databaseTablesTableBody');
-              if (dbTbody && Array.isArray(db.tables)) {
-                dbTbody.innerHTML = db.tables.map(t => {
-                  const idxStr = Array.isArray(t.indexed_columns) ? t.indexed_columns.join(', ') : (t.indexed_columns || '-');
+              if (wEntries.length === 0) {
+                tbody.innerHTML = `
+                  <tr>
+                    <td colspan="7" style="padding: 24px; text-align: center; color: var(--fg-muted);">
+                      <div style="font-weight: bold; color: var(--accent-coral); margin-bottom: 6px;">⚠️ Supervisor Arbiter is currently OFFLINE</div>
+                      <div style="font-size: 11px;">Control Socket (<code>outputs/supervisor/control.sock</code>) was not found.</div>
+                      <div style="font-size: 10px; margin-top: 6px; color: var(--fg-muted);">Start the process supervisor using: <code>python -m supervisor.cli start</code></div>
+                    </td>
+                  </tr>
+                `;
+              } else {
+                tbody.innerHTML = wEntries.map(([spid, w]) => {
+                  const statusBg = w.status === 'ALIVE' ? 'var(--accent-green)' : 'var(--accent-coral)';
+                  const healthBg = w.is_healthy ? 'var(--accent-green)' : 'var(--accent-coral)';
+                  const healthText = w.is_healthy ? 'HEALTHY' : 'UNHEALTHY';
                   return `
                     <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                      <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">${t.table_name}</code></td>
-                      <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${t.category || '-'}</td>
-                      <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">${t.storage_engine}</span></td>
-                      <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">${Number(t.row_count || 0).toLocaleString()}</td>
-                      <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">${t.size_human}</td>
-                      <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>${t.primary_key || '-'}</strong> | Idx: <code>${idxStr}</code></td>
+                      <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${w.pid || spid}</td>
+                      <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${w.type || 'worker'}</td>
+                      <td style="padding: 6px 8px;"><span style="background: ${statusBg}; color: #fff; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: bold;">${w.status}</span></td>
+                      <td style="padding: 6px 8px;"><span style="color: ${healthBg}; font-weight: bold;">● ${healthText}</span></td>
+                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${Number(w.requests_handled || 0).toLocaleString()}</td>
+                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${(w.idle_seconds || 0).toFixed(1)}s</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${w.memory_mb || 0} MB</td>
                     </tr>
                   `;
                 }).join('');
               }
             }
-
-            // Recalculate real structural analytics from fresh nodes & edges
-            calculateAndDrawHopHistogram();
-            updateRealEdgeLedger();
-            updateLivePhysicsMetrics();
-            drawWalkChart();
-            renderTraversalMatrix();
           }
+
+          // Update Strategic Telemetry (ST, SA, SM) if present
+          if (data.strategic_telemetry) {
+            const st = data.strategic_telemetry.st_strategist;
+            const sa = data.strategic_telemetry.sa_architect;
+            const sm = data.strategic_telemetry.sm_service_manager;
+
+            // ST: Token ROI & Threats
+            if (st) {
+              const roiEl = document.getElementById('valTokenRoi');
+              if (roiEl) roiEl.textContent = `-$${st.token_cost_savings_usd.toFixed(2)} (-${st.token_savings_pct}%)`;
+              const covEl = document.getElementById('valSummaryCoverage');
+              if (covEl) covEl.textContent = st.executive_tier_coverage;
+              const bThreat = document.getElementById('badgeThreatCoverage');
+              if (bThreat && st.top_threat_vectors) bThreat.textContent = `${st.top_threat_vectors.length} Vectors Active`;
+
+              const threatListEl = document.getElementById('threatVectorsList');
+              if (threatListEl && st.top_threat_vectors) {
+                threatListEl.innerHTML = st.top_threat_vectors.map(tv => `
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px dashed var(--border-dark);">
+                    <div>
+                      <strong style="color: var(--accent-coral); font-size: 10px;">${tv.name}</strong>
+                      <span style="font-size: 9px; color: var(--fg-muted); margin-left: 4px;">(${tv.category})</span>
+                    </div>
+                    <span style="font-size: 10px; font-weight: bold; color: var(--accent-green);">${tv.growth}</span>
+                  </div>
+                `).join('');
+              }
+            }
+
+            // SM: Service Operations & SLO
+            if (sm) {
+              const bSlo = document.getElementById('badgeSmSlo');
+              if (bSlo) bSlo.textContent = `${sm.pipeline_slo_pct}% SLO`;
+              const sloEl = document.getElementById('valSmPipelineSlo');
+              if (sloEl) sloEl.textContent = `${sm.pipeline_slo_pct}% (30-Day)`;
+              const resEl = document.getElementById('valSmApiResilience');
+              if (resEl) resEl.textContent = `${sm.http_429_rate_pct}% Rate Limit (100% Pass)`;
+              const lagEl = document.getElementById('valSmWalLag');
+              if (lagEl) lagEl.textContent = `${sm.wal_sync_lag_ms.toFixed(1)} ms / 0 Loss`;
+              const strkEl = document.getElementById('valSmStreak');
+              if (strkEl) strkEl.textContent = `${sm.batch_success_streak} Batches (100% Pass)`;
+            }
+
+            // SA: Architecture & Latency
+            if (sa) {
+              const bSa = document.getElementById('badgeSaLatency');
+              if (bSa) bSa.textContent = `p95: ${sa.latency_p95_ms}ms`;
+              const tailEl = document.getElementById('valSaTailLatency');
+              if (tailEl) tailEl.textContent = `p95: ${sa.latency_p95_ms} ms / p99: ${sa.latency_p99_ms} ms`;
+              const mttrEl = document.getElementById('valSaMttr');
+              if (mttrEl && sm) mttrEl.textContent = `< ${sm.worker_mttr_sec}s Self-Heal`;
+              const densEl = document.getElementById('valSaDensity');
+              if (densEl) densEl.textContent = `${sa.graph_density} (${sa.isolated_nodes_pct}% Isolated)`;
+            }
+          }
+
+          // Recalculate real structural analytics from fresh nodes & edges
+          calculateAndDrawHopHistogram();
+          updateRealEdgeLedger();
+          updateLivePhysicsMetrics();
+          drawWalkChart();
+          renderTraversalMatrix();
         } catch (e) {
-          // Offline / Standalone file execution fallback (gracefully keep canonical mesh)
+          // Gracefully fallback
         }
       }
 
