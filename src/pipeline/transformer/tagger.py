@@ -4,7 +4,7 @@ Security Domain Classifier & Threat Model Tagger Module
 Extracts domain tags, MITRE ATT&CK technique IDs, and STRIDE categories from paper metadata.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 DOMAIN_KEYWORDS: List[tuple[str, List[str]]] = [
     (
@@ -129,17 +129,24 @@ def calculate_threat_score(abstract: str, full_text: str, keywords: List[str]) -
 
 
 def extract_mitre_and_stride(
-    paper: Dict[str, Any], text: str = ""
+    paper: Dict[str, Any],
+    text: str = "",
+    custom_extractor: Optional[Callable[[str], Tuple[List[str], List[str]]]] = None,
 ) -> Dict[str, List[str]]:
     """
     Extracts MITRE ATT&CK techniques and STRIDE threat categories from paper text
     using weighted abstract/body scanning (DSN-03 / DSN-16).
+    Supports optional custom_extractor callback for dependency injection.
     """
-    from security.taxonomy import extract_mitre_techniques, extract_stride_categories
-
     title = str(paper.get("title", ""))
     abstract = str(paper.get("summary", ""))
     combined = f"{title} {abstract} {text}"
+
+    if custom_extractor is not None:
+        mitre_list, stride_list = custom_extractor(combined)
+        return {"mitre_attack": mitre_list, "stride": stride_list}
+
+    from security.taxonomy import extract_mitre_techniques, extract_stride_categories
 
     return {
         "mitre_attack": extract_mitre_techniques(combined),

@@ -63,6 +63,17 @@ def test_extract_mitre_and_stride():
     assert "Denial of Service" in threats["stride"] or "Tampering" in threats["stride"]
 
 
+def test_extract_mitre_and_stride_custom_extractor():
+    paper = {"title": "Generic Test Paper", "summary": "Sample abstract."}
+
+    def dummy_extractor(text: str):
+        return (["T9999_CUSTOM"], ["CustomThreat"])
+
+    custom_res = extract_mitre_and_stride(paper, custom_extractor=dummy_extractor)
+    assert custom_res["mitre_attack"] == ["T9999_CUSTOM"]
+    assert custom_res["stride"] == ["CustomThreat"]
+
+
 def test_build_okf_from_raw():
     with tempfile.TemporaryDirectory() as tmpdir:
         config = {

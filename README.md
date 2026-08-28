@@ -389,7 +389,7 @@ make build_js           ## Google Closure Compiler による JS バンドルビ�
 1. **トリプル品質ゲート (Triple Quality Gates)**:
    - 全コード変更は `make check` (`make check_format`, `make static_analysis`, `make test`) を 100% 通過する必要があります。
 2. **Issue 駆動開発**:
-   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（Issue 001〜092 全92件完了）。
+   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（Issue 001〜093 全93件完了）。
 3. **相対パス厳守**:
    - リポジトリ内の全 Markdown ドキュメントにおいて実効絶対パスリンクは完全 0 件に保たれ、高い移植性と完全なトレーサビリティが保証されています。
 

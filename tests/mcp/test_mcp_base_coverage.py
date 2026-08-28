@@ -15,6 +15,8 @@ from mcp.base import (
     _extract_metrics,
     get_workspace_dir,
     log_mcp_performance,
+    make_error_response,
+    make_tool_response,
     run_mcp_server,
 )
 from mcp.tech_radar_server import TOOLS_MANIFEST as RADAR_TOOLS
@@ -30,6 +32,26 @@ def test_get_workspace_dir():
     ws = get_workspace_dir()
     assert os.path.exists(ws)
     assert os.path.isabs(ws)
+
+
+def test_make_tool_and_error_response():
+    resp = make_tool_response(
+        data={"result": "ok", "items": [1, 2, 3]},
+        meta={"version": "1.0"},
+    )
+    assert resp["status"] == "success"
+    assert resp["result"] == "ok"
+    assert resp["_meta"]["version"] == "1.0"
+
+    err_resp = make_error_response(
+        message="Invalid argument",
+        code="INVALID_ARG",
+        details={"field": "query"},
+    )
+    assert err_resp["status"] == "error"
+    assert err_resp["error_code"] == "INVALID_ARG"
+    assert err_resp["message"] == "Invalid argument"
+    assert err_resp["details"]["field"] == "query"
 
 
 def test_log_mcp_performance_and_metrics():

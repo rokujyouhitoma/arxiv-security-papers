@@ -161,3 +161,49 @@ class IntelligencePhaseProtocol(Protocol):
     def compensate(self, context: PhaseContext) -> None:
         """Compensates/rolls back changes if downstream phases fail."""
         ...
+
+
+@runtime_checkable
+class PIRManagerProtocol(Protocol):
+    """Protocol for 3-Horizon Priority Intelligence Requirements (PIR) managers."""
+
+    def create_directive(self, directive_id: str) -> IntelligenceDirective:
+        """Issues an operational intelligence directive for Phase 1."""
+        ...
+
+    def get_weights(self) -> Dict[str, float]:
+        """Returns the current topic weight vector."""
+        ...
+
+
+
+@runtime_checkable
+class CredibilityEngineProtocol(Protocol):
+    """Protocol for NATO STANAG Admiralty credibility evaluation engines."""
+
+    def evaluate_source(
+        self, source_type: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> tuple[Any, str]:
+        """Evaluates reliability grade of an intelligence source."""
+        ...
+
+    def evaluate_content(
+        self, text: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> tuple[Any, str]:
+        """Calculates information credibility rating."""
+        ...
+
+
+@runtime_checkable
+class SynthesizerProtocol(Protocol):
+    """Protocol for multi-tier intelligence product synthesizers."""
+
+    def synthesize_products(
+        self,
+        processed_records: List[Dict[str, Any]],
+        cycle_id: str,
+        hypothesis_engine: Optional[Any] = None,
+    ) -> List[IntelligenceProduct]:
+        """Synthesizes structured intelligence products from processed records."""
+        ...
+

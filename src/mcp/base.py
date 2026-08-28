@@ -38,6 +38,40 @@ def _ensure_log_dir() -> None:
     os.makedirs(os.path.dirname(_MCP_PERF_LOG_PATH), exist_ok=True)
 
 
+def make_tool_response(
+    data: Optional[Dict[str, Any]] = None,
+    meta: Optional[Dict[str, Any]] = None,
+    status: str = "success",
+) -> Dict[str, Any]:
+    """
+    Constructs a standardized, high-cohesion MCP tool response payload.
+    """
+    res: Dict[str, Any] = {"status": status}
+    if data:
+        res.update(data)
+    if meta:
+        res["_meta"] = meta
+    return res
+
+
+def make_error_response(
+    message: str,
+    code: str = "EXECUTION_ERROR",
+    details: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Constructs a standardized MCP error response payload.
+    """
+    res: Dict[str, Any] = {
+        "status": "error",
+        "error_code": code,
+        "message": message,
+    }
+    if details:
+        res["details"] = details
+    return res
+
+
 def log_mcp_performance(
     server_name: str,
     method: str,

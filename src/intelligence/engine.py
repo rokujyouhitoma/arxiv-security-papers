@@ -27,9 +27,20 @@ from workflow.wal import EventType, OrchestratorWAL
 class ClosedLoopIntelligenceEngine:
     """Central domain engine executing the 6-phase intelligence lifecycle."""
 
-    def __init__(self, workspace_dir: str = ".") -> None:
+    def __init__(
+        self,
+        workspace_dir: str = ".",
+        wal: Optional[OrchestratorWAL] = None,
+        pir_manager: Optional[PIRManager] = None,
+        harvest_coordinator: Optional[HarvestCoordinator] = None,
+        processing_coordinator: Optional[ProcessingCoordinator] = None,
+        hypothesis_engine: Optional[HypothesisEngine] = None,
+        analysis_synthesizer: Optional[AnalysisSynthesizer] = None,
+        dissemination_distributor: Optional[DisseminationDistributor] = None,
+        feedback_evaluator: Optional[FeedbackEvaluator] = None,
+    ) -> None:
         self.workspace_dir = os.path.abspath(workspace_dir)
-        self.wal = OrchestratorWAL(
+        self.wal = wal or OrchestratorWAL(
             wal_dir=os.path.join(self.workspace_dir, "outputs", "wal")
         )
         pir_storage = os.path.join(
@@ -38,15 +49,21 @@ class ClosedLoopIntelligenceEngine:
         hypo_storage = os.path.join(
             self.workspace_dir, "outputs", "orchestrator", "hypotheses_registry.json"
         )
-        self.pir_manager = PIRManager(storage_path=pir_storage, auto_seed=True)
-        self.harvest_coordinator = HarvestCoordinator()
-        self.processing_coordinator = ProcessingCoordinator()
-        self.hypothesis_engine = HypothesisEngine(storage_path=hypo_storage)
-        self.analysis_synthesizer = AnalysisSynthesizer(
+        self.pir_manager = pir_manager or PIRManager(
+            storage_path=pir_storage, auto_seed=True
+        )
+        self.harvest_coordinator = harvest_coordinator or HarvestCoordinator()
+        self.processing_coordinator = processing_coordinator or ProcessingCoordinator()
+        self.hypothesis_engine = hypothesis_engine or HypothesisEngine(
+            storage_path=hypo_storage
+        )
+        self.analysis_synthesizer = analysis_synthesizer or AnalysisSynthesizer(
             hypothesis_engine=self.hypothesis_engine
         )
-        self.dissemination_distributor = DisseminationDistributor()
-        self.feedback_evaluator = FeedbackEvaluator()
+        self.dissemination_distributor = (
+            dissemination_distributor or DisseminationDistributor()
+        )
+        self.feedback_evaluator = feedback_evaluator or FeedbackEvaluator()
         self.cycle_history: List[PhaseContext] = []
 
     def register_hypothesis(

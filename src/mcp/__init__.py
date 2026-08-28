@@ -9,7 +9,12 @@ from mcp.analytics import (
     load_mcp_logs,
     render_mcp_markdown_report,
 )
-from mcp.base import log_mcp_performance, run_mcp_server
+from mcp.base import (
+    log_mcp_performance,
+    make_error_response,
+    make_tool_response,
+    run_mcp_server,
+)
 from mcp.observability_server import main as run_observability_server
 from mcp.papers_server import main as run_papers_server
 from mcp.tech_radar_server import main as run_tech_radar_server
@@ -17,6 +22,8 @@ from mcp.threat_defense_server import main as run_threat_defense_server
 
 __all__ = [
     "log_mcp_performance",
+    "make_tool_response",
+    "make_error_response",
     "run_mcp_server",
     "run_papers_server",
     "run_observability_server",
