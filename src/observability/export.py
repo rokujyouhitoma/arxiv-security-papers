@@ -44,8 +44,7 @@ def span_to_otlp_json_dict(
     Ref: https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding
     """
     attributes = [
-        {"key": k, "value": _convert_attr_value(v)}
-        for k, v in span.attributes.items()
+        {"key": k, "value": _convert_attr_value(v)} for k, v in span.attributes.items()
     ]
     events = [
         {
@@ -96,9 +95,7 @@ def build_otlp_payload(
                         },
                         {
                             "key": "telemetry.sdk.name",
-                            "value": {
-                                "stringValue": "arxiv-security-papers-pure"
-                            },
+                            "value": {"stringValue": "arxiv-security-papers-pure"},
                         },
                     ]
                 },
