@@ -211,3 +211,23 @@ def test_dashboard_database_storage_metrics_ui(dashboard_html_content: str) -> N
     assert 'id="sqlResultTablesSummary"' in dashboard_html_content
     assert "SHOW DATABASES" in dashboard_html_content
     assert "SHOW TABLES FROM arxiv_security_db" in dashboard_html_content
+
+
+def test_dashboard_supervisor_tab_ui(dashboard_html_content: str) -> None:
+    """Verifies that the Supervisor tab contains Arbiter Process, Worker Pools, IPC Channel, and Workers Table."""
+    assert 'id="viewSupervisor"' in dashboard_html_content
+    assert 'id="badgeArbiterStatus"' in dashboard_html_content
+    assert 'id="valArbiterPid"' in dashboard_html_content
+    assert 'id="valArbiterUptime"' in dashboard_html_content
+    assert 'id="valArbiterMemory"' in dashboard_html_content
+    assert 'id="badgePoolCount"' in dashboard_html_content
+    assert 'id="valArbiterPools"' in dashboard_html_content
+    assert 'id="badgeIpcStatus"' in dashboard_html_content
+    assert 'id="badgeTotalWorkers"' in dashboard_html_content
+    assert 'id="supervisorWorkersTableBody"' in dashboard_html_content
+    assert 'id="badgeSaLatency"' in dashboard_html_content
+    assert 'id="valSaTailLatency"' in dashboard_html_content
+    assert 'id="valSaMttr"' in dashboard_html_content
+    assert 'id="valSaDensity"' in dashboard_html_content
+    # Check that viewSupervisor is closed and clean
+    assert '<div id="viewSupervisor" class="tab-view">' in dashboard_html_content

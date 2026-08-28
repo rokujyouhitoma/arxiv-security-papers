@@ -431,6 +431,7 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / 1024:.2f} KB"
     return f"{size_bytes} B"
 
+
 def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
     """
     Introspects live database performance KPIs, real IOPS, query latency,
@@ -464,7 +465,11 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
 
     # graph.db stores both vertices and edges; split size proportionally
     total_entities = max(v_count + e_count, 1)
-    vertex_size = int(graph_size * v_count / total_entities) if total_entities else graph_size // 2
+    vertex_size = (
+        int(graph_size * v_count / total_entities)
+        if total_entities
+        else graph_size // 2
+    )
     edge_size = graph_size - vertex_size
 
     tables.append(
@@ -540,7 +545,9 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
     raw_embedding_bytes = doc_count * 384 * 4  # float32 per dimension
     if combined_index_size > 0:
         # Clamp vector portion between 20–80 % of the combined file
-        vec_ratio = min(0.80, max(0.20, raw_embedding_bytes * 3 / max(combined_index_size, 1)))
+        vec_ratio = min(
+            0.80, max(0.20, raw_embedding_bytes * 3 / max(combined_index_size, 1))
+        )
     else:
         vec_ratio = 0.40
 
@@ -592,7 +599,9 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
             metrics_rows = 1
 
     # Cross-check with the analytics SQLite DB for a more accurate count
-    analytics_db_path = os.path.join(workspace_dir, "outputs", "analytics", "analytics.db")
+    analytics_db_path = os.path.join(
+        workspace_dir, "outputs", "analytics", "analytics.db"
+    )
     if os.path.exists(analytics_db_path):
         try:
             import sqlite3
@@ -633,7 +642,6 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
         }
     )
 
-
     # ── 5. Real Micro-Benchmark for IOPS & Latency ─────────────────────────────
     bench_latencies: List[float] = []
     if ge_instance is not None and ge_instance._vertices:
@@ -651,7 +659,9 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
 
     bench_latencies.sort()
     avg_lat = (
-        round(sum(bench_latencies) / len(bench_latencies), 3) if bench_latencies else 0.25
+        round(sum(bench_latencies) / len(bench_latencies), 3)
+        if bench_latencies
+        else 0.25
     )
     p95_lat = (
         round(bench_latencies[max(0, int(len(bench_latencies) * 0.95) - 1)], 3)
@@ -733,8 +743,6 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
         "sql_introspection": sql_introspection,
         "tables": tables,
     }
-
-
 
 
 class GatewayHandlers:
@@ -1036,7 +1044,6 @@ class GatewayHandlers:
             _introspect_live_loop_and_obf_state(self.workspace_dir)
         )
 
-        import time as _time
         import datetime as _dt
 
         supervisor_data = _introspect_supervisor_state(self.workspace_dir)
@@ -1047,10 +1054,12 @@ class GatewayHandlers:
         _uptime = supervisor_data.get("uptime", 0.0)
         _doc_count = database_data.get("total_rows", 0)
         # Estimated: each paper traversed in avg 3 walks, normalized to /min
-        _walks_per_min = int(_doc_count * 3 / max(_uptime / 60.0, 1.0)) if _uptime > 0 else 412
+        _walks_per_min = (
+            int(_doc_count * 3 / max(_uptime / 60.0, 1.0)) if _uptime > 0 else 412
+        )
 
         # Real loop monitor timestamps from actual log files
-        _now_utc = _dt.datetime.utcnow()
+        _now_utc = _dt.datetime.now(_dt.timezone.utc)
         _last_sync_utc = _now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
         # Compute next 6-hour slot (00/06/12/18)
         _h = _now_utc.hour
@@ -1091,7 +1100,6 @@ class GatewayHandlers:
             },
         }
         return response_json(start_response, res)
-
 
     def handle_preview(
         self, start_response: Callable[..., Any], path: str
