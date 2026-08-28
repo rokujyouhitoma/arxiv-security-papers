@@ -1,6 +1,14 @@
 # Large raw data files & downloaded PDFs
 outputs/raw_data/
 outputs/vector_db/
+outputs/database/
+outputs/analytics/
+outputs/wal/
+
+# Databases & SQLite Runtime Files
+*.db
+*.db-*
+*.vdb
 
 # Virtual Environment
 .venv/
