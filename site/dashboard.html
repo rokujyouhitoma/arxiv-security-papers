@@ -1227,7 +1227,10 @@
               }
             }
 
-            // Replace nodes with live dataset
+            // Smart Merge: Preserve existing node physics positions
+            const existingPositions = new Map();
+            NODES.forEach(n => existingPositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy }));
+
             NODES.length = 0;
             nodeMap.clear();
             EDGES.length = 0;
@@ -1238,16 +1241,18 @@
                                  n.cluster === 'claims' ? 'claim' : 'decision';
               const angle = (idx / data.mesh.nodes.length) * Math.PI * 2;
               const radius = Math.min(width, height) * 0.32;
+              const prev = existingPositions.get(n.id);
+
               const nodeObj = {
                 id: n.id,
                 name: n.title,
                 title: n.sub || n.title,
                 cluster: clusterKey,
                 desc: n.summary || '',
-                x: width / 2 + Math.cos(angle) * radius,
-                y: height / 2 + Math.sin(angle) * radius,
-                vx: 0,
-                vy: 0,
+                x: prev ? prev.x : (width / 2 + Math.cos(angle) * radius),
+                y: prev ? prev.y : (height / 2 + Math.sin(angle) * radius),
+                vx: prev ? prev.vx : 0,
+                vy: prev ? prev.vy : 0,
                 radius: clusterKey === 'source' ? 14 : 11
               };
               NODES.push(nodeObj);
@@ -1267,7 +1272,7 @@
             // Update brand badge to LIVE
             const brandBadge = document.querySelector('.brand-title .badge');
             if (brandBadge) {
-              brandBadge.textContent = 'LIVE MESH';
+              brandBadge.textContent = 'LIVE MESH (5s)';
               brandBadge.style.backgroundColor = 'var(--accent-green)';
             }
           }
@@ -1276,7 +1281,9 @@
         }
       }
 
+      // Initial Sync + Periodic Polling every 5 seconds
       syncLiveMesh();
+      setInterval(syncLiveMesh, 5000);
     })();
   </script>
 </body>
