@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **095** | ST・SA・SM 戦略的テレメトリ統合と UI/UX 3タブレイアウト高度化 | Feature | High | Open (New) | 13エージェント合同 (PM/ST/SA/SM/UIUX) | [095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md](095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md) |
+| **095** | ST・SA・SM 戦略的テレメトリ統合と UI/UX 3タブレイアウト高度化 | Feature | High | In Progress | 13エージェント合同 (PM/ST/SA/SM/UIUX) | [095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md](095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md) |
 
 ---
 
