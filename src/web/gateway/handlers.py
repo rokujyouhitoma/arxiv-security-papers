@@ -276,12 +276,12 @@ def _introspect_live_loop_and_obf_state(
                 pass
 
     proc_papers_path = os.path.join(workspace_dir, "processed_papers.json")
-    proc_count = 14449
+    proc_count = 14507
     if os.path.exists(proc_papers_path):
         try:
             with open(proc_papers_path, "r", encoding="utf-8") as ppf:
                 data_pp = json.load(ppf)
-                if isinstance(data_pp, list):
+                if isinstance(data_pp, dict) or isinstance(data_pp, list):
                     proc_count = len(data_pp)
         except Exception:
             pass
