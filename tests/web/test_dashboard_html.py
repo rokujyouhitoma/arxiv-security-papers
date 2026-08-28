@@ -66,6 +66,8 @@ def test_dashboard_mandatory_elements_and_canvas(dashboard_html_content: str) ->
     assert 'id="viewSupervisor"' in dashboard_html_content
     assert 'id="supervisorWorkersTableBody"' in dashboard_html_content
     assert "switchDashboardTab" in dashboard_html_content
+    assert "initTabFromUrl" in dashboard_html_content
+    assert "URLSearchParams" in dashboard_html_content
     assert "Context Mesh" in dashboard_html_content
 
 

@@ -1683,8 +1683,12 @@
       syncLiveMesh();
       setInterval(syncLiveMesh, 5000);
 
-      // Global Tab Switching (3 Tabs)
-      window.switchDashboardTab = function(tabName) {
+      // Global Tab Switching with GET Parameter & History Support (?tab=product|system|supervisor)
+      window.switchDashboardTab = function(tabName, updateUrl = true) {
+        const normTab = (tabName || 'product').toLowerCase().trim();
+        const activeTab = (normTab === 'system' || normTab === 'observability' || normTab === 'pipeline') ? 'system' :
+                          (normTab === 'supervisor' || normTab === 'top' || normTab === 'process') ? 'supervisor' : 'product';
+
         const productView = document.getElementById('viewProduct');
         const systemView = document.getElementById('viewSystem');
         const supervisorView = document.getElementById('viewSupervisor');
@@ -1696,19 +1700,44 @@
         [productView, systemView, supervisorView].forEach(v => v && v.classList.remove('active'));
         [tabBtnProduct, tabBtnSystem, tabBtnSupervisor].forEach(b => b && b.classList.remove('active'));
 
-        if (tabName === 'product') {
-          productView.classList.add('active');
-          tabBtnProduct.classList.add('active');
+        if (activeTab === 'product') {
+          if (productView) productView.classList.add('active');
+          if (tabBtnProduct) tabBtnProduct.classList.add('active');
           // Resize canvas on tab reveal
           setTimeout(resizeCanvas, 50);
-        } else if (tabName === 'system') {
-          systemView.classList.add('active');
-          tabBtnSystem.classList.add('active');
-        } else if (tabName === 'supervisor') {
+        } else if (activeTab === 'system') {
+          if (systemView) systemView.classList.add('active');
+          if (tabBtnSystem) tabBtnSystem.classList.add('active');
+        } else if (activeTab === 'supervisor') {
           if (supervisorView) supervisorView.classList.add('active');
           if (tabBtnSupervisor) tabBtnSupervisor.classList.add('active');
         }
+
+        // Update URL query parameter seamlessly without page reload
+        if (updateUrl && window.history && window.history.replaceState) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('tab', activeTab);
+          window.history.replaceState({ tab: activeTab }, '', url.toString());
+        }
       };
+
+      // Initialize Active Tab from URL GET parameter (?tab=...) or Hash (#...)
+      function initTabFromUrl() {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const tabParam = params.get('tab') || window.location.hash.replace('#', '');
+          if (tabParam) {
+            window.switchDashboardTab(tabParam, false);
+          }
+        } catch (e) {}
+      }
+
+      initTabFromUrl();
+
+      // Listen for browser back / forward navigation
+      window.addEventListener('popstate', function() {
+        initTabFromUrl();
+      });
     })();
   </script>
 </body>
