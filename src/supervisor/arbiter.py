@@ -347,7 +347,20 @@ class Arbiter:
             return None
 
         spec = pool.spec
-        worker_id = f"{spec.name}_{int(time.time() * 1000) % 100000}"
+        # Find the lowest available numeric slot index (0, 1, 2, ...)
+        used_slots = set()
+        for active_pid in pool.workers.keys():
+            meta = self.watchdog.get_worker_status(active_pid)
+            if meta and "slot_idx" in meta:
+                used_slots.add(int(meta["slot_idx"]))
+            elif meta and "worker_id" in meta and str(meta["worker_id"]).split("_")[-1].isdigit():
+                used_slots.add(int(str(meta["worker_id"]).split("_")[-1]))
+
+        slot_idx = 0
+        while slot_idx in used_slots:
+            slot_idx += 1
+
+        worker_id = f"{spec.name}_{slot_idx}"
 
         try:
             pid = os.fork()
@@ -358,7 +371,9 @@ class Arbiter:
             self._run_child_worker(spec, worker_id)
         else:
             pool.workers[pid] = cast(BaseWorker, None)
-            self.watchdog.register_worker(pid, spec.name)
+            self.watchdog.register_worker(
+                pid, spec.name, metadata={"slot_idx": slot_idx, "worker_id": worker_id}
+            )
             return pid
 
     def init_child_process(self) -> None:
