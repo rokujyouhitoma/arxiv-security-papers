@@ -1593,14 +1593,14 @@
             const bObf = document.getElementById('badgeObfLive');
             if (bObf) bObf.textContent = 'LIVE ACTIVE';
 
-            // Update Last Synced Timestamps
+            // Update Last Synced Timestamps (JST)
             const now = new Date();
-            const utcTimeOnly = now.toISOString().substring(11, 19) + ' UTC';
-            const utcFullStr = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+            const jstTimeOnly = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now) + ' JST';
+            const jstFullStr = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now).replace(/\//g, '-') + ' JST';
             const hSync = document.getElementById('headerSyncTime');
-            if (hSync) hSync.textContent = `🕒 Synced: ${utcTimeOnly}`;
+            if (hSync) hSync.textContent = `🕒 Synced: ${jstTimeOnly}`;
             const fSync = document.getElementById('footerSyncTime');
-            if (fSync) fSync.textContent = `Last Sync: ${utcFullStr}`;
+            if (fSync) fSync.textContent = `Last Sync: ${jstFullStr}`;
 
             // Update Supervisor Top Telemetry if present
             if (data.supervisor_top) {
