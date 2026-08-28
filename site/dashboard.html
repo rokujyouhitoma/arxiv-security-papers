@@ -1643,27 +1643,39 @@
 
               // Workers Table
               const tbody = document.getElementById('supervisorWorkersTableBody');
-              if (tbody && sup.workers) {
-                const wEntries = Object.entries(sup.workers);
+              if (tbody) {
+                const wEntries = sup.workers ? Object.entries(sup.workers) : [];
                 const wBadge = document.getElementById('badgeTotalWorkers');
                 if (wBadge) wBadge.textContent = `${wEntries.length} Processes`;
 
-                tbody.innerHTML = wEntries.map(([spid, w]) => {
-                  const statusBg = w.status === 'ALIVE' ? 'var(--accent-green)' : 'var(--accent-coral)';
-                  const healthBg = w.is_healthy ? 'var(--accent-green)' : 'var(--accent-coral)';
-                  const healthText = w.is_healthy ? 'HEALTHY' : 'UNHEALTHY';
-                  return `
-                    <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                      <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${w.pid || spid}</td>
-                      <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${w.type || 'worker'}</td>
-                      <td style="padding: 6px 8px;"><span style="background: ${statusBg}; color: #fff; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: bold;">${w.status}</span></td>
-                      <td style="padding: 6px 8px;"><span style="color: ${healthBg}; font-weight: bold;">● ${healthText}</span></td>
-                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${Number(w.requests_handled || 0).toLocaleString()}</td>
-                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${(w.idle_seconds || 0).toFixed(1)}s</td>
-                      <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${w.memory_mb || 0} MB</td>
+                if (wEntries.length === 0) {
+                  tbody.innerHTML = `
+                    <tr>
+                      <td colspan="7" style="padding: 24px; text-align: center; color: var(--fg-muted);">
+                        <div style="font-weight: bold; color: var(--accent-coral); margin-bottom: 6px;">⚠️ Supervisor Arbiter is currently OFFLINE</div>
+                        <div style="font-size: 11px;">Control Socket (<code>outputs/supervisor/control.sock</code>) was not found.</div>
+                        <div style="font-size: 10px; margin-top: 6px; color: var(--fg-muted);">Start the process supervisor using: <code>python -m supervisor.cli start</code></div>
+                      </td>
                     </tr>
                   `;
-                }).join('');
+                } else {
+                  tbody.innerHTML = wEntries.map(([spid, w]) => {
+                    const statusBg = w.status === 'ALIVE' ? 'var(--accent-green)' : 'var(--accent-coral)';
+                    const healthBg = w.is_healthy ? 'var(--accent-green)' : 'var(--accent-coral)';
+                    const healthText = w.is_healthy ? 'HEALTHY' : 'UNHEALTHY';
+                    return `
+                      <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
+                        <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${w.pid || spid}</td>
+                        <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${w.type || 'worker'}</td>
+                        <td style="padding: 6px 8px;"><span style="background: ${statusBg}; color: #fff; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: bold;">${w.status}</span></td>
+                        <td style="padding: 6px 8px;"><span style="color: ${healthBg}; font-weight: bold;">● ${healthText}</span></td>
+                        <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${Number(w.requests_handled || 0).toLocaleString()}</td>
+                        <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${(w.idle_seconds || 0).toFixed(1)}s</td>
+                        <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${w.memory_mb || 0} MB</td>
+                      </tr>
+                    `;
+                  }).join('');
+                }
               }
             }
 

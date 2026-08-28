@@ -323,121 +323,55 @@ def _introspect_live_loop_and_obf_state(
 
 
 def _introspect_supervisor_state(workspace_dir: str) -> Dict[str, Any]:
-    """Introspects live Supervisor Arbiter and Workers status purely from real system state."""
+    """Introspects live Supervisor Arbiter status strictly from control socket without synthetic data."""
     sock_path = os.path.join(workspace_dir, "outputs", "supervisor", "control.sock")
-    curr_pid = os.getpid()
 
-    # 1. Try connecting to official Supervisor Arbiter socket if running
+    # 1. Connect to official Supervisor Arbiter socket if running
     if os.path.exists(sock_path):
         try:
             from supervisor.control import ControlClient
+            from supervisor.top import SupervisorTopViewer
 
             client = ControlClient(sock_path, timeout=1.0)
             resp = client.get_status()
             if resp.get("status") == "ok":
                 resp["is_supervised"] = True
                 resp["socket_status"] = "CONNECTED (outputs/supervisor/control.sock)"
+
+                # Enrich worker entries with exact process memory from /proc
+                total_rss = 0.0
+                arbiter_pid = resp.get("arbiter_pid")
+                if isinstance(arbiter_pid, int):
+                    a_rss, _ = SupervisorTopViewer.get_process_memory_mb(arbiter_pid)
+                    total_rss += a_rss
+
+                workers_data = resp.get("workers", {})
+                for spid, w_info in workers_data.items():
+                    if isinstance(w_info, dict):
+                        try:
+                            w_pid = int(w_info.get("pid", spid))
+                            w_rss, _ = SupervisorTopViewer.get_process_memory_mb(w_pid)
+                            w_info["memory_mb"] = w_rss
+                            total_rss += w_rss
+                        except (ValueError, TypeError):
+                            w_info["memory_mb"] = 0.0
+
+                resp["memory_mb"] = round(total_rss, 1)
                 return resp
         except Exception:
             pass
 
-    # 2. Pure Real-time OS Process Introspection from /proc (Zero synthetic data)
-    workers_dict: Dict[str, Any] = {}
-    total_rss_mb = 0.0
-    pools_summary: Dict[str, Any] = {}
-
-    try:
-        import glob
-
-        # System clock ticks per sec
-        clk_tck = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
-        # System uptime
-        sys_uptime = 0.0
-        if os.path.exists("/proc/uptime"):
-            with open("/proc/uptime", "r", encoding="utf-8") as uf:
-                sys_uptime = float(uf.read().split()[0])
-
-        for p_dir in glob.glob("/proc/[0-9]*"):
-            pid_str = os.path.basename(p_dir)
-            try:
-                pid_num = int(pid_str)
-                cmdline_path = os.path.join(p_dir, "cmdline")
-                if not os.path.exists(cmdline_path):
-                    continue
-
-                with open(cmdline_path, "r", encoding="utf-8", errors="ignore") as f:
-                    raw_cmd = f.read().replace("\0", " ").strip()
-
-                if "python" in raw_cmd and ("arxiv-security-papers" in raw_cmd or "src/web" in raw_cmd or pid_num == curr_pid):
-                    # Real RSS / PSS Memory from /proc/[pid]/status or smaps
-                    rss_mb = 0.0
-                    status_file = os.path.join(p_dir, "status")
-                    if os.path.exists(status_file):
-                        with open(status_file, "r", encoding="utf-8") as sf:
-                            for line in sf:
-                                if line.startswith("VmRSS:"):
-                                    parts = line.split()
-                                    if len(parts) >= 2:
-                                        rss_mb = round(float(parts[1]) / 1024.0, 1)
-
-                    # Real Uptime & Idle calculation from /proc/[pid]/stat
-                    uptime_sec = 0.0
-                    stat_file = os.path.join(p_dir, "stat")
-                    if os.path.exists(stat_file):
-                        with open(stat_file, "r", encoding="utf-8") as stf:
-                            stat_parts = stf.read().split()
-                            if len(stat_parts) > 21:
-                                start_time_ticks = float(stat_parts[21])
-                                start_time_sec = start_time_ticks / clk_tck
-                                uptime_sec = max(0.0, sys_uptime - start_time_sec)
-
-                    # Derive exact role from actual command line
-                    role_type = "web_gateway" if "server.py" in raw_cmd or pid_num == curr_pid else \
-                                "vector_indexer" if "vector" in raw_cmd or "index" in raw_cmd else \
-                                "paper_fetcher" if "fetch" in raw_cmd or "arxiv" in raw_cmd else \
-                                "evaluator" if "eval" in raw_cmd else "worker"
-
-                    workers_dict[str(pid_num)] = {
-                        "pid": pid_num,
-                        "type": role_type,
-                        "status": "ALIVE",
-                        "is_healthy": True,
-                        "requests_handled": 1 if pid_num != curr_pid else 128,
-                        "idle_seconds": round(uptime_sec % 10.0, 1),
-                        "memory_mb": rss_mb,
-                        "uptime": round(uptime_sec, 1),
-                    }
-                    total_rss_mb += rss_mb
-                    pools_summary[role_type] = pools_summary.get(role_type, 0) + 1
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    # If no workers scanned, at least include the current executing web server process
-    if not workers_dict:
-        workers_dict[str(curr_pid)] = {
-            "pid": curr_pid,
-            "type": "web_gateway",
-            "status": "ALIVE",
-            "is_healthy": True,
-            "requests_handled": 1,
-            "idle_seconds": 0.1,
-            "memory_mb": 24.5,
-            "uptime": 60.0,
-        }
-        total_rss_mb = 24.5
-        pools_summary["web_gateway"] = 1
-
+    # 2. Strict Offline State (AU Quality Gate: 0 synthetic or guessed worker metrics)
     return {
         "status": "offline",
         "is_supervised": False,
         "socket_status": "OFFLINE (outputs/supervisor/control.sock not found)",
         "arbiter_pid": "-",
         "uptime": 0.0,
-        "memory_mb": round(total_rss_mb, 1),
-        "pools": {k: {"active": v, "target": v} for k, v in pools_summary.items()},
-        "workers": workers_dict,
+        "memory_mb": 0.0,
+        "pools": {},
+        "workers": {},
+        "message": "Supervisor Arbiter is offline. Run 'python -m supervisor.cli start' to activate supervisor arbiter.",
     }
 
 
