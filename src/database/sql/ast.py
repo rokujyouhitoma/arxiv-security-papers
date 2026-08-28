@@ -101,15 +101,51 @@ class CreateIndexStatement(SQLStatement):
     index_type: str = "HNSW"  # HNSW, INVERTED, BTREE
 
 
+class JoinType(str, Enum):
+    INNER = "INNER"
+    LEFT = "LEFT"
+    RIGHT = "RIGHT"
+    CROSS = "CROSS"
+
+
+@dataclass
+class TableRef:
+    name: str
+    alias: Optional[str] = None
+
+    @property
+    def display_name(self) -> str:
+        return self.alias or self.name
+
+
+@dataclass
+class JoinClause:
+    join_type: JoinType
+    table: TableRef
+    on_conditions: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class CTEDefinition:
+    name: str
+    statement: Any  # SelectStatement
+    columns: List[str] = field(default_factory=list)
+    is_recursive: bool = False
+
+
 # DQL
 @dataclass
 class SelectStatement(SQLStatement):
     table_name: str = ""
+    table_ref: Optional[TableRef] = None
     columns: List[str] = field(default_factory=list)
     where_clauses: List[Dict[str, Any]] = field(default_factory=list)
     knn_query: Optional[Dict[str, Any]] = (
         None  # {"column": str, "vector": [...], "top_k": int}
     )
+    joins: List[JoinClause] = field(default_factory=list)
+    ctes: List[CTEDefinition] = field(default_factory=list)
+    union_all: Optional[Any] = None  # SelectStatement
     order_by: Optional[str] = None
     order_desc: bool = False
     limit: Optional[int] = None

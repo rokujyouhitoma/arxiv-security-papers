@@ -4,6 +4,7 @@ SQL Execution Engine for Pure Python Vector Database.
 Evaluates DDL, DQL, DML, DCL, and TCL AST nodes against underlying vector storages and schemas.
 """
 
+import json
 import logging
 import os
 import re
@@ -22,10 +23,12 @@ from .ast import (
     ExplainStatement,
     GrantStatement,
     InsertStatement,
+    JoinType,
     RevokeStatement,
     SelectStatement,
     SQLCommandType,
     SQLStatement,
+    TableRef,
     UpdateStatement,
 )
 from .parser import SQLParser
@@ -70,6 +73,7 @@ class SQLExecutor:
     """
     Coordinates SQL parsing, access control enforcement, transaction staging,
     and storage execution.
+    Supports Advanced SQL: Multi-table JOINs, CTE (WITH RECURSIVE), JSON operators, and Projections.
     """
 
     def __init__(
@@ -115,6 +119,94 @@ class SQLExecutor:
             pass
         stmt = self.parser.parse(sql)
         return self.execute_statement(stmt, role=effective_role)
+
+    def _extract_literal(self, expr: str) -> Optional[Any]:
+        if (expr.startswith("'") and expr.endswith("'")) or (
+            expr.startswith('"') and expr.endswith('"')
+        ):
+            return expr[1:-1]
+        if expr.isdigit():
+            return int(expr)
+        try:
+            val_f = float(expr)
+            if "." in expr:
+                return val_f
+        except ValueError:
+            pass
+        return None
+
+    def _extract_arithmetic(self, record: Dict[str, Any], expr: str) -> Optional[Any]:
+        arith_m = re.match(r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*([\+\-])\s*([0-9]+)$", expr)
+        if not arith_m:
+            return None
+        base_col = arith_m.group(1).strip()
+        op = arith_m.group(2)
+        num = int(arith_m.group(3))
+        base_val = self._extract_field_value(record, base_col)
+        try:
+            base_num = int(base_val) if base_val is not None else 0
+            return base_num + num if op == "+" else base_num - num
+        except (ValueError, TypeError):
+            return base_val
+
+    def _parse_json_field(self, raw_obj: Any) -> Optional[Dict[str, Any]]:
+        if isinstance(raw_obj, str):
+            try:
+                raw_obj = json.loads(raw_obj)
+            except Exception:
+                return None
+        return raw_obj if isinstance(raw_obj, dict) else None
+
+    def _extract_json_op(self, record: Dict[str, Any], expr: str) -> Optional[Any]:
+        json_unquote = "->>" in expr
+        json_extract = "->" in expr
+        if not (json_unquote or json_extract):
+            return None
+        op_delim = "->>" if json_unquote else "->"
+        col_part, path_part = expr.split(op_delim, 1)
+        col_part = col_part.strip()
+        path_key = path_part.strip().strip("'\"")
+
+        raw_obj = record.get(col_part)
+        if raw_obj is None and "." in col_part:
+            _, unqualified = col_part.split(".", 1)
+            raw_obj = record.get(unqualified)
+
+        dict_obj = self._parse_json_field(raw_obj)
+        if dict_obj:
+            val = dict_obj.get(path_key)
+            if val is not None:
+                return str(val) if json_unquote else val
+        return None
+
+    def _extract_field_value(self, record: Dict[str, Any], expr: str) -> Any:
+        """
+        Extracts value from record supporting dot qualification and JSON operators.
+        """
+        if not expr:
+            return None
+        expr = expr.strip()
+
+        lit = self._extract_literal(expr)
+        if lit is not None:
+            return lit
+
+        arith = self._extract_arithmetic(record, expr)
+        if arith is not None:
+            return arith
+
+        if "->" in expr or "->>" in expr:
+            return self._extract_json_op(record, expr)
+
+        if expr in record:
+            return record[expr]
+
+        if "." in expr:
+            _, unqualified = expr.split(".", 1)
+            if unqualified in record:
+                return record[unqualified]
+
+        return None
 
     def _eval_relational(self, op: str, actual: Any, expected: Any) -> bool:
         try:
@@ -171,13 +263,33 @@ class SQLExecutor:
             if all(
                 self._eval_comparison(
                     c.get("op") or c.get("operator") or "=",
-                    record.get(c.get("field") or c.get("column") or ""),
+                    self._extract_field_value(
+                        record, c.get("field") or c.get("column") or ""
+                    ),
                     c.get("value"),
                 )
                 for c in sub_clauses
             ):
                 return True
         return False
+
+    def _evaluate_single_condition(
+        self, record: Dict[str, Any], c: Dict[str, Any]
+    ) -> bool:
+        field = c.get("field") or c.get("column") or ""
+        op = c.get("op") or c.get("operator") or "="
+        expected_val = c.get("value")
+
+        actual = self._extract_field_value(record, field)
+
+        if isinstance(expected_val, str) and (
+            expected_val in record or "." in expected_val or "->" in expected_val
+        ):
+            col_val = self._extract_field_value(record, expected_val)
+            if col_val is not None:
+                expected_val = col_val
+
+        return self._eval_comparison(op, actual, expected_val)
 
     def _matches_where_clause(
         self, record: Dict[str, Any], clauses: List[Dict[str, Any]]
@@ -189,14 +301,7 @@ class SQLExecutor:
         if any(c.get("logic") == "OR_BRANCH" for c in clauses):
             return self._matches_or_branches(record, clauses)
 
-        for c in clauses:
-            field = c.get("field") or c.get("column") or ""
-            op = c.get("op") or c.get("operator") or "="
-            val = c.get("value")
-            actual = record.get(field)
-            if not self._eval_comparison(op, actual, val):
-                return False
-        return True
+        return all(self._evaluate_single_condition(record, c) for c in clauses)
 
     def _restore_rollback_snapshot(self, snapshot: Optional[Dict[str, Any]]) -> None:
         if not snapshot or not isinstance(snapshot, dict):
@@ -260,91 +365,100 @@ class SQLExecutor:
             "message": f"Revoked '{stmt.permission}' on '{stmt.table_name}' from role '{stmt.role}'",
         }
 
-    def _determine_table_dim(self, columns: List[Any]) -> int:
-        for col in columns:
-            if col.data_type.upper().startswith("VECTOR"):
-                m = re.search(r"VECTOR\(([0-9]+)\)", col.data_type.upper())
-                if m:
-                    return int(m.group(1))
-        return 128
-
     def _exec_create_table(
         self, stmt: CreateTableStatement, effective_role: str
     ) -> Dict[str, Any]:
         self.access_controller.enforce_permission(
-            effective_role, stmt.table_name, "ADMIN"
+            effective_role, stmt.table_name, "CREATE_TABLE"
         )
-        if stmt.table_name in self.tables and not stmt.if_not_exists:
-            raise SQLExecutionError(f"Table '{stmt.table_name}' already exists")
+        if stmt.table_name in self.tables:
+            if stmt.if_not_exists:
+                return {
+                    "command": "CREATE_TABLE",
+                    "status": "ok",
+                    "message": f"Table '{stmt.table_name}' already exists (skipped)",
+                }
+            raise SQLExecutionError(f"Table '{stmt.table_name}' already exists.")
 
-        dim = self._determine_table_dim(stmt.columns)
-        base_dir = "outputs/database"
-        if self.tables:
-            first_table = next(iter(self.tables.values()))
-            if first_table.storage and first_table.storage.file_path:
-                base_dir = os.path.dirname(first_table.storage.file_path)
-
-        storage_path = os.path.join(base_dir, f"{stmt.table_name}.vdb")
+        storage_path = os.path.join("outputs", "database", f"{stmt.table_name}.vdb")
+        os.makedirs(os.path.dirname(storage_path), exist_ok=True)
         if os.path.exists(storage_path):
             try:
                 os.remove(storage_path)
-            except Exception:
+            except OSError:
                 pass
-        storage = VectorStorage(storage_path, dim=dim)
-        self.tables[stmt.table_name] = TableCatalog(
+        storage = VectorStorage(file_path=storage_path, dim=self.embedding.dim)
+        catalog = TableCatalog(
             name=stmt.table_name,
             storage=storage,
-            index=HNSWIndex(dim=dim),
-            schema={"columns": [col.name for col in stmt.columns]},
+            schema={col.name: col.data_type for col in stmt.columns},
         )
+        self.tables[stmt.table_name] = catalog
         return {
             "command": "CREATE_TABLE",
             "status": "ok",
             "table": stmt.table_name,
-            "dimension": dim,
+            "columns": len(stmt.columns),
         }
 
     def _exec_drop_table(
         self, stmt: DropTableStatement, effective_role: str
     ) -> Dict[str, Any]:
         self.access_controller.enforce_permission(
-            effective_role, stmt.table_name, "ADMIN"
+            effective_role, stmt.table_name, "DROP_TABLE"
         )
         if stmt.table_name not in self.tables:
-            if not stmt.if_exists:
-                raise SQLExecutionError(f"Table '{stmt.table_name}' not found")
-            return {"command": "DROP_TABLE", "status": "ok", "dropped": False}
+            if stmt.if_exists:
+                return {
+                    "command": "DROP_TABLE",
+                    "status": "ok",
+                    "message": f"Table '{stmt.table_name}' does not exist (skipped)",
+                }
+            raise SQLExecutionError(f"Table '{stmt.table_name}' does not exist.")
 
-        del self.tables[stmt.table_name]
-        return {"command": "DROP_TABLE", "status": "ok", "dropped": True}
-
-    def _build_btree_index(self, table: TableCatalog, col_name: str) -> BPlusTree:
-        btree = BPlusTree(column_name=col_name)
-        for row_id, meta in enumerate(table.storage.metadata):
-            val = meta.get(col_name)
-            if val is not None and isinstance(val, (int, float, str)):
-                btree.insert(val, row_id)
-        return btree
+        tcat = self.tables.pop(stmt.table_name)
+        storage_file = getattr(tcat.storage, "file_path", None) or getattr(
+            tcat.storage, "storage_path", None
+        )
+        if storage_file and os.path.exists(storage_file):
+            try:
+                os.remove(storage_file)
+            except OSError:
+                pass
+        return {
+            "command": "DROP_TABLE",
+            "status": "ok",
+            "table": stmt.table_name,
+            "dropped": True,
+        }
 
     def _exec_create_index(
         self, stmt: CreateIndexStatement, effective_role: str
     ) -> Dict[str, Any]:
         self.access_controller.enforce_permission(
-            effective_role, stmt.table_name, "ADMIN"
+            effective_role, stmt.table_name, "CREATE_INDEX"
         )
         table = self._get_table(stmt.table_name)
         idx_type = stmt.index_type.upper()
-        if idx_type == "BTREE":
-            btree = self._build_btree_index(table, stmt.column_name)
+        if idx_type == "HNSW":
+            vecs = table.storage.get_all_vectors()
+            table.index = HNSWIndex(dim=table.storage.dim)
+            table.index.build_from_storage(vecs)
+        elif idx_type == "BTREE":
+            btree = BPlusTree(column_name=stmt.column_name)
+            for idx, meta in enumerate(table.storage.metadata):
+                val = meta.get(stmt.column_name)
+                if val is not None:
+                    btree.insert(val, idx)
             table.btree_indexes[stmt.column_name] = btree
             table.btree_index_names[stmt.column_name] = stmt.index_name
         else:
-            table.index = HNSWIndex(dim=table.storage.dim)
-            table.index.build_from_storage(table.storage.get_all_vectors())
+            raise SQLExecutionError(f"Unsupported index type: {idx_type}")
+
         return {
             "command": "CREATE_INDEX",
             "status": "ok",
-            "index_name": stmt.index_name,
+            "index": stmt.index_name,
             "table": stmt.table_name,
             "column": stmt.column_name,
             "type": idx_type,
@@ -379,8 +493,15 @@ class SQLExecutor:
         }
 
     def _query_knn_or_scan(
-        self, table: TableCatalog, knn_query: Optional[Dict[str, Any]]
+        self,
+        table_name: str,
+        knn_query: Optional[Dict[str, Any]],
+        temporary_tables: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     ) -> List[Dict[str, Any]]:
+        if temporary_tables and table_name in temporary_tables:
+            return [dict(r) for r in temporary_tables[table_name]]
+
+        table = self._get_table(table_name)
         rows: List[Dict[str, Any]] = []
         if knn_query:
             query_vec = self.embedding.normalize(knn_query["vector"])
@@ -397,32 +518,196 @@ class SQLExecutor:
                 rows.append(item)
         return rows
 
-    def _exec_select(
-        self, stmt: SelectStatement, effective_role: str
+    def _prefix_record(
+        self, record: Dict[str, Any], table_ref: TableRef
     ) -> Dict[str, Any]:
-        self.access_controller.enforce_permission(
-            effective_role, stmt.table_name, "SELECT"
-        )
-        table = self._get_table(stmt.table_name)
-        rows = self._query_knn_or_scan(table, stmt.knn_query)
-        filtered_rows = [
-            r for r in rows if self._matches_where_clause(r, stmt.where_clauses)
-        ]
-        if stmt.order_by:
-            filtered_rows.sort(
-                key=lambda x: x.get(stmt.order_by or "", 0), reverse=stmt.order_desc
-            )
-        if stmt.limit is not None:
-            filtered_rows = filtered_rows[: stmt.limit]
+        """Prefixes record keys with table name and alias for robust multi-table resolution."""
+        prefixed: Dict[str, Any] = dict(record)
+        name = table_ref.name
+        alias = table_ref.alias
 
-        final_rows = [
-            (
-                dict(r)
-                if "*" in stmt.columns
-                else {col: r.get(col) for col in stmt.columns}
+        for k, v in list(record.items()):
+            prefixed[f"{name}.{k}"] = v
+            if alias:
+                prefixed[f"{alias}.{k}"] = v
+        return prefixed
+
+    def _evaluate_recursive_cte(
+        self,
+        cte: Any,
+        effective_role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        anchor_stmt = cte.statement
+        rec_stmt = anchor_stmt.union_all
+        anchor_stmt.union_all = None
+
+        anchor_res = self._exec_select(
+            anchor_stmt, effective_role, temporary_tables=temp_tables
+        )
+        accumulated = list(anchor_res.get("rows", []))
+        work_table = list(anchor_res.get("rows", []))
+
+        for _ in range(50):
+            if not work_table or not rec_stmt:
+                break
+            step_ctx = {**temp_tables, cte.name: work_table}
+            rec_res = self._exec_select(
+                rec_stmt, effective_role, temporary_tables=step_ctx
             )
-            for r in filtered_rows
+            new_rows = rec_res.get("rows", [])
+            if not new_rows:
+                break
+            accumulated.extend(new_rows)
+            work_table = new_rows
+        return accumulated
+
+    def _evaluate_all_ctes(
+        self,
+        ctes: List[Any],
+        effective_role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> None:
+        for cte in ctes:
+            if not cte.is_recursive:
+                res = self._exec_select(
+                    cte.statement, effective_role, temporary_tables=temp_tables
+                )
+                temp_tables[cte.name] = res.get("rows", [])
+            else:
+                temp_tables[cte.name] = self._evaluate_recursive_cte(
+                    cte, effective_role, temp_tables
+                )
+
+    def _join_table_rows(
+        self,
+        current_rows: List[Dict[str, Any]],
+        join: Any,
+        effective_role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        join_tbl_ref = join.table
+        if join_tbl_ref.name not in temp_tables:
+            self.access_controller.enforce_permission(
+                effective_role, join_tbl_ref.name, "SELECT"
+            )
+
+        j_raw_rows = self._query_knn_or_scan(
+            join_tbl_ref.name, None, temporary_tables=temp_tables
+        )
+        j_prefixed_rows = [self._prefix_record(r, join_tbl_ref) for r in j_raw_rows]
+
+        next_rows: List[Dict[str, Any]] = []
+        for left_row in current_rows:
+            matched = False
+            for right_row in j_prefixed_rows:
+                combined = {**left_row, **right_row}
+                if self._matches_where_clause(combined, join.on_conditions):
+                    next_rows.append(combined)
+                    matched = True
+            if not matched and join.join_type == JoinType.LEFT:
+                empty_right = {
+                    k: None
+                    for k in (j_prefixed_rows[0].keys() if j_prefixed_rows else [])
+                }
+                next_rows.append({**left_row, **empty_right})
+        return next_rows
+
+    def _project_row(
+        self, r: Dict[str, Any], columns: List[str], table_name: str
+    ) -> Dict[str, Any]:
+        if "*" in columns and len(columns) == 1:
+            return {
+                k: v
+                for k, v in r.items()
+                if "." not in k or k.startswith(f"{table_name}.")
+            }
+        projected = {}
+        for col_expr in columns:
+            col_expr = col_expr.strip()
+            as_m = re.search(r"\s+AS\s+([a-zA-Z0-9_]+)$", col_expr, re.IGNORECASE)
+            if as_m:
+                out_key = as_m.group(1).strip()
+                raw_col = col_expr[: as_m.start()].strip()
+                projected[out_key] = self._extract_field_value(r, raw_col)
+            else:
+                out_key = col_expr
+                if "." in out_key and "->" not in out_key:
+                    _, out_key = out_key.split(".", 1)
+                projected[out_key] = self._extract_field_value(r, col_expr)
+        return projected
+
+    def _sort_and_paginate(
+        self,
+        rows: List[Dict[str, Any]],
+        order_by: Optional[str],
+        order_desc: bool,
+        limit: Optional[int],
+    ) -> List[Dict[str, Any]]:
+        result = rows
+        if order_by:
+            result.sort(
+                key=lambda x: self._extract_field_value(x, order_by) or 0,
+                reverse=order_desc,
+            )
+        if limit is not None:
+            result = result[:limit]
+        return result
+
+    def _scan_and_join_tables(
+        self,
+        stmt: SelectStatement,
+        effective_role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        table_ref = stmt.table_ref or TableRef(name=stmt.table_name)
+        if table_ref.name not in temp_tables:
+            self.access_controller.enforce_permission(
+                effective_role, table_ref.name, "SELECT"
+            )
+
+        raw_rows = self._query_knn_or_scan(
+            table_ref.name, stmt.knn_query, temporary_tables=temp_tables
+        )
+        current_rows = [self._prefix_record(r, table_ref) for r in raw_rows]
+
+        for join in stmt.joins or []:
+            current_rows = self._join_table_rows(
+                current_rows, join, effective_role, temp_tables
+            )
+        return current_rows
+
+    def _exec_select(
+        self,
+        stmt: SelectStatement,
+        effective_role: str,
+        temporary_tables: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    ) -> Dict[str, Any]:
+        temp_tables = dict(temporary_tables or {})
+        if stmt.ctes:
+            self._evaluate_all_ctes(stmt.ctes, effective_role, temp_tables)
+
+        current_rows = self._scan_and_join_tables(stmt, effective_role, temp_tables)
+
+        filtered_rows = [
+            r for r in current_rows if self._matches_where_clause(r, stmt.where_clauses)
         ]
+
+        paged_rows = self._sort_and_paginate(
+            filtered_rows, stmt.order_by, stmt.order_desc, stmt.limit
+        )
+
+        table_ref = stmt.table_ref or TableRef(name=stmt.table_name)
+        final_rows = [
+            self._project_row(r, stmt.columns, table_ref.name) for r in paged_rows
+        ]
+
+        if stmt.union_all:
+            union_res = self._exec_select(
+                stmt.union_all, effective_role, temporary_tables=temp_tables
+            )
+            final_rows.extend(union_res.get("rows", []))
+
         return {
             "command": "SELECT",
             "status": "ok",

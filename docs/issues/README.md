@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| - | *現在アクティブな Issue はありません* | - | - | - | - | - |
+| - | 現在アクティブな Issue はありません | - | - | - | - | - |
 
 ---
 
@@ -17,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **100** | src/database における高度な SQL 機能 (JOIN, WITH RECURSIVE, JSON 演算子, テーブルエイリアス) のサポート | Feature | 2026-08-28 | [100-support-advanced-sql-joins-ctes-and-json-operators.md](closed/100-support-advanced-sql-joins-ctes-and-json-operators.md) |
 | **099** | Supervisor の多重起動完全防止およびプロセスリーク根絶 | Bug / Feature | 2026-08-28 | [099-prevent-duplicate-supervisor-instances-and-process-leaks.md](closed/099-prevent-duplicate-supervisor-instances-and-process-leaks.md) |
 | **098** | セキュリティ知識オントロジー (SKO) 定義およびゼロ侵襲型グラフデータベース基盤の実装 | Feature | 2026-08-28 | [098-implement-security-knowledge-ontology-and-graph-database-engine.md](closed/098-implement-security-knowledge-ontology-and-graph-database-engine.md) |
 | **096** | 事前バッチ集計エンジン (Pre-Aggregated Analytics Engine) および高速アナリティクスストレージの実装 | Feature | 2026-08-28 | [096-implement-pre-aggregated-analytics-engine-and-storage.md](closed/096-implement-pre-aggregated-analytics-engine-and-storage.md) |

@@ -6,7 +6,7 @@ Parses standard SQL statements into typed AST objects without external dependenc
 
 import ast as py_ast
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .ast import (
     BeginStatement,
@@ -14,16 +14,20 @@ from .ast import (
     CommitStatement,
     CreateIndexStatement,
     CreateTableStatement,
+    CTEDefinition,
     DeleteStatement,
     DropTableStatement,
     ExplainStatement,
     GrantStatement,
     InsertStatement,
+    JoinClause,
+    JoinType,
     RevokeStatement,
     RollbackStatement,
     SelectStatement,
     SQLCommandType,
     SQLStatement,
+    TableRef,
     UpdateStatement,
 )
 
@@ -37,6 +41,7 @@ class SQLParseError(Exception):
 class SQLParser:
     """
     Parses SQL string queries into structured SQLStatement AST nodes.
+    Supports advanced features: CTE (WITH RECURSIVE), JOINs, JSON operators (->, ->>), and Aliases.
     """
 
     def _parse_tcl(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
@@ -58,6 +63,8 @@ class SQLParser:
         return None
 
     def _parse_dml_dql(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        if upper_sql.startswith("WITH"):
+            return self._parse_cte(sql)
         if upper_sql.startswith("SELECT"):
             return self._parse_select(sql)
         if upper_sql.startswith("INSERT INTO"):
@@ -130,7 +137,6 @@ class SQLParser:
         cols_body = m.group(3).strip()
 
         col_defs: List[ColumnDef] = []
-        # Split top-level commas
         for raw_col in cols_body.split(","):
             raw_col = raw_col.strip()
             if not raw_col:
@@ -199,35 +205,167 @@ class SQLParser:
             index_type=idx_type.upper(),
         )
 
-    def _parse_select(self, sql: str) -> SelectStatement:
-        # Pattern matching SELECT <cols> FROM <table> [WHERE ...] [ORDER BY ...] [LIMIT ...]
-        m = re.match(
-            r"SELECT\s+(.+?)\s+FROM\s+([a-zA-Z0-9_]+)"
-            r"(?:\s+WHERE\s+(.+?))?"
-            r"(?:\s+ORDER\s+BY\s+([a-zA-Z0-9_]+)(?:\s+(ASC|DESC))?)?"
-            r"(?:\s+LIMIT\s+([0-9]+))?$",
-            sql,
-            re.IGNORECASE | re.DOTALL,
+    def _find_matching_paren(self, text: str, start_pos: int) -> int:
+        paren_depth = 1
+        idx = start_pos
+        while idx < len(text) and paren_depth > 0:
+            if text[idx] == "(":
+                paren_depth += 1
+            elif text[idx] == ")":
+                paren_depth -= 1
+            idx += 1
+        if paren_depth != 0:
+            raise SQLParseError("Unbalanced parentheses in subquery definition")
+        return idx
+
+    def _extract_single_cte(
+        self, rest: str, is_recursive: bool
+    ) -> Optional[Tuple[CTEDefinition, str]]:
+        cte_head_m = re.match(
+            r"^([a-zA-Z0-9_]+)(?:\s*\((.*?)\))?\s+AS\s*\(", rest, re.IGNORECASE
         )
-        if not m:
+        if not cte_head_m:
+            return None
+
+        cte_name = cte_head_m.group(1)
+        raw_cols = cte_head_m.group(2)
+        cols = [c.strip() for c in raw_cols.split(",")] if raw_cols else []
+
+        start_pos = cte_head_m.end()
+        end_pos = self._find_matching_paren(rest, start_pos)
+        sub_query_sql = rest[start_pos : end_pos - 1].strip()
+        sub_stmt = self._parse_select(sub_query_sql)
+
+        cte_def = CTEDefinition(
+            name=cte_name,
+            statement=sub_stmt,
+            columns=cols,
+            is_recursive=is_recursive,
+        )
+
+        remaining = rest[end_pos:].strip()
+        if remaining.startswith(","):
+            remaining = remaining[1:].strip()
+        return cte_def, remaining
+
+    def _parse_cte(self, sql: str) -> SelectStatement:
+        """
+        Parses WITH [RECURSIVE] name [(cols...)] AS (SELECT ...) [, ...] SELECT ...
+        """
+        is_recursive = bool(re.match(r"^WITH\s+RECURSIVE\s+", sql, re.IGNORECASE))
+        header_match = re.match(r"^WITH(\s+RECURSIVE)?\s+", sql, re.IGNORECASE)
+        if not header_match:
+            raise SQLParseError(f"Malformed WITH syntax: {sql}")
+
+        rest = sql[header_match.end() :].strip()
+        ctes: List[CTEDefinition] = []
+
+        while True:
+            res = self._extract_single_cte(rest, is_recursive)
+            if not res:
+                break
+            cte_def, rest = res
+            ctes.append(cte_def)
+
+        if not rest.upper().startswith("SELECT"):
+            raise SQLParseError(
+                f"Expected SELECT query following CTE definitions, got: {rest}"
+            )
+
+        main_stmt = self._parse_select(rest)
+        main_stmt.ctes = ctes
+        main_stmt.raw_sql = sql
+        return main_stmt
+
+    def _parse_select(self, sql: str) -> SelectStatement:
+        # Check for top-level UNION ALL or UNION (outside parentheses)
+        union_split = self._split_top_level_union(sql)
+        if union_split:
+            left_sql, union_type, right_sql = union_split
+            left_stmt = self._parse_single_select(left_sql)
+            right_stmt = self._parse_select(right_sql)
+            left_stmt.union_all = right_stmt
+            return left_stmt
+
+        return self._parse_single_select(sql)
+
+    def _split_top_level_union(self, sql: str) -> Optional[Tuple[str, str, str]]:
+        paren_depth = 0
+        i = 0
+        while i < len(sql):
+            char = sql[i]
+            if char == "(":
+                paren_depth += 1
+            elif char == ")":
+                paren_depth -= 1
+            elif paren_depth == 0:
+                # Check for UNION ALL
+                union_all_m = re.match(r"^\s+UNION\s+ALL\s+", sql[i:], re.IGNORECASE)
+                if union_all_m:
+                    left_part = sql[:i].strip()
+                    right_part = sql[i + union_all_m.end() :].strip()
+                    return left_part, "UNION ALL", right_part
+
+                # Check for UNION
+                union_m = re.match(r"^\s+UNION\s+", sql[i:], re.IGNORECASE)
+                if union_m:
+                    left_part = sql[:i].strip()
+                    right_part = sql[i + union_m.end() :].strip()
+                    return left_part, "UNION", right_part
+            i += 1
+        return None
+
+    def _parse_single_select(self, sql: str) -> SelectStatement:
+        # Tokenize SELECT: SELECT <cols> FROM <tables/joins> [WHERE] [ORDER BY] [LIMIT]
+        clean_sql = re.sub(r"\s+", " ", sql).strip()
+
+        # Extract LIMIT
+        limit_val = None
+        limit_m = re.search(r"\s+LIMIT\s+([0-9]+)$", clean_sql, re.IGNORECASE)
+        if limit_m:
+            limit_val = int(limit_m.group(1))
+            clean_sql = clean_sql[: limit_m.start()].strip()
+
+        # Extract ORDER BY
+        order_by = None
+        order_desc = False
+        order_m = re.search(
+            r"\s+ORDER\s+BY\s+([a-zA-Z0-9_\.\->>\'\"]+)(?:\s+(ASC|DESC))?$",
+            clean_sql,
+            re.IGNORECASE,
+        )
+        if order_m:
+            order_by = order_m.group(1).strip()
+            order_desc = (order_m.group(2) or "").upper() == "DESC"
+            clean_sql = clean_sql[: order_m.start()].strip()
+
+        # Extract WHERE
+        where_raw = None
+        where_m = re.search(r"\s+WHERE\s+(.+)$", clean_sql, re.IGNORECASE)
+        if where_m:
+            where_raw = where_m.group(1).strip()
+            clean_sql = clean_sql[: where_m.start()].strip()
+
+        # Now clean_sql should be: SELECT <cols> FROM <from_and_joins>
+        select_m = re.match(
+            r"^SELECT\s+(.+?)\s+FROM\s+(.+)$", clean_sql, re.IGNORECASE | re.DOTALL
+        )
+        if not select_m:
             raise SQLParseError(f"Malformed SELECT syntax: {sql}")
 
-        cols_raw = m.group(1).strip()
-        table_name = m.group(2).strip()
-        where_raw = m.group(3)
-        order_by = m.group(4)
-        order_desc = (m.group(5) or "").upper() == "DESC"
-        limit_val = int(m.group(6)) if m.group(6) else None
+        cols_raw = select_m.group(1).strip()
+        from_and_joins_raw = select_m.group(2).strip()
 
-        columns = ["*"] if cols_raw == "*" else [c.strip() for c in cols_raw.split(",")]
+        columns = self._parse_column_list(cols_raw)
+        table_ref, joins = self._parse_from_and_joins(from_and_joins_raw)
 
         where_clauses: List[Dict[str, Any]] = []
         knn_query: Optional[Dict[str, Any]] = None
 
         if where_raw:
-            # Check for KNN function: KNN(vector_col, [...], 10)
+            # KNN function
             knn_m = re.search(
-                r"KNN\s*\(\s*([a-zA-Z0-9_]+)\s*,\s*(\[.*?\])\s*,\s*([0-9]+)\s*\)",
+                r"KNN\s*\(\s*([a-zA-Z0-9_\.]+)\s*,\s*(\[.*?\])\s*,\s*([0-9]+)\s*\)",
                 where_raw,
                 re.IGNORECASE,
             )
@@ -256,14 +394,94 @@ class SQLParser:
         return SelectStatement(
             command_type=SQLCommandType.SELECT,
             raw_sql=sql,
-            table_name=table_name,
+            table_name=table_ref.name,
+            table_ref=table_ref,
             columns=columns,
             where_clauses=where_clauses,
             knn_query=knn_query,
+            joins=joins,
             order_by=order_by,
             order_desc=order_desc,
             limit=limit_val,
         )
+
+    def _parse_column_list(self, cols_raw: str) -> List[str]:
+        """Parses comma-separated column projections including json path expressions."""
+        if cols_raw == "*":
+            return ["*"]
+        cols: List[str] = []
+        # Split by comma but preserve json strings/functions
+        tokens = [c.strip() for c in cols_raw.split(",")]
+        for tok in tokens:
+            if tok:
+                cols.append(tok)
+        return cols
+
+    def _parse_from_and_joins(self, from_raw: str) -> Tuple[TableRef, List[JoinClause]]:
+        """
+        Parses FROM table [AS alias] [JOIN table2 [AS alias2] ON cond1 = cond2 ...]
+        """
+        # Split by JOIN keywords: (INNER JOIN|LEFT JOIN|LEFT OUTER JOIN|RIGHT JOIN|CROSS JOIN|JOIN)
+        join_regex = r"\s+(INNER\s+JOIN|LEFT\s+OUTER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|CROSS\s+JOIN|JOIN)\s+"
+        parts = re.split(join_regex, from_raw, flags=re.IGNORECASE)
+
+        # Primary table
+        primary_part = parts[0].strip()
+        table_ref = self._parse_single_table_ref(primary_part)
+
+        joins: List[JoinClause] = []
+        idx = 1
+        while idx < len(parts):
+            join_kw = parts[idx].strip().upper()
+            join_body = parts[idx + 1].strip()
+            idx += 2
+
+            join_type = JoinType.INNER
+            if "LEFT" in join_kw:
+                join_type = JoinType.LEFT
+            elif "RIGHT" in join_kw:
+                join_type = JoinType.RIGHT
+            elif "CROSS" in join_kw:
+                join_type = JoinType.CROSS
+
+            # Extract ON condition: table_name [AS alias] ON cond...
+            on_m = re.search(r"\s+ON\s+(.+)$", join_body, re.IGNORECASE)
+            if not on_m:
+                target_table_ref = self._parse_single_table_ref(join_body)
+                joins.append(
+                    JoinClause(
+                        join_type=join_type,
+                        table=target_table_ref,
+                        on_conditions=[],
+                    )
+                )
+            else:
+                on_raw = on_m.group(1).strip()
+                tbl_part = join_body[: on_m.start()].strip()
+                target_table_ref = self._parse_single_table_ref(tbl_part)
+                on_conds = self._extract_simple_clauses(on_raw)
+                joins.append(
+                    JoinClause(
+                        join_type=join_type,
+                        table=target_table_ref,
+                        on_conditions=on_conds,
+                    )
+                )
+
+        return table_ref, joins
+
+    def _parse_single_table_ref(self, text: str) -> TableRef:
+        # e.g., "vertices p", "vertices AS p", "vertices"
+        m = re.match(
+            r"^([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$",
+            text.strip(),
+            re.IGNORECASE,
+        )
+        if not m:
+            return TableRef(name=text.strip())
+        name = m.group(1)
+        alias = m.group(2)
+        return TableRef(name=name, alias=alias)
 
     def _extract_where_clauses(self, where_raw: str) -> List[Dict[str, Any]]:
         clauses: List[Dict[str, Any]] = []
@@ -284,46 +502,60 @@ class SQLParser:
         if not text:
             return clauses
 
-        # 1. LIKE: col LIKE '%pattern%'
-        for m in re.finditer(
-            r"([a-zA-Z_][a-zA-Z0-9_]*)\s+LIKE\s+('[^']*'|\"[^\"]*\")",
-            text,
-            re.IGNORECASE,
-        ):
-            col = m.group(1)
-            val = m.group(2).strip("'\"")
-            clauses.append({"column": col, "operator": "LIKE", "value": val})
+        # Split AND clauses
+        and_parts = re.split(r"\s+AND\s+", text, flags=re.IGNORECASE)
+        for part in and_parts:
+            part = part.strip()
+            if not part:
+                continue
 
-        # 2. IN: col IN ('a', 'b') or col IN (1, 2)
-        for m in re.finditer(
-            r"([a-zA-Z_][a-zA-Z0-9_]*)\s+(NOT\s+IN|IN)\s*\((.*?)\)",
-            text,
-            re.IGNORECASE,
-        ):
-            col = m.group(1)
-            op = m.group(2).upper()
-            items_raw = m.group(3)
-            items = [x.strip().strip("'\"") for x in items_raw.split(",")]
-            clauses.append({"column": col, "operator": op, "value": items})
+            # 1. LIKE: col LIKE '%pattern%'
+            like_m = re.match(
+                r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+LIKE\s+('[^']*'|\"[^\"]*\")$",
+                part,
+                re.IGNORECASE,
+            )
+            if like_m:
+                col = like_m.group(1)
+                val = like_m.group(2).strip("'\"")
+                clauses.append({"column": col, "operator": "LIKE", "value": val})
+                continue
 
-        # 3. Standard comparison operators: >=, <=, !=, =, >, <
-        eq_matches = re.finditer(
-            r"([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|<=|!=|=|>|<)\s*('[^']*'|\"[^\"]*\"|[0-9\.]+)",
-            text,
-        )
-        for m in eq_matches:
-            col = m.group(1)
-            op = m.group(2)
-            val = m.group(3)
-            clean_val = val.strip("'\"")
-            if clean_val.isdigit():
-                v: Any = int(clean_val)
-            else:
-                try:
-                    v = float(clean_val)
-                except ValueError:
-                    v = clean_val
-            clauses.append({"column": col, "operator": op, "value": v})
+            # 2. IN: col IN ('a', 'b') or col IN (1, 2)
+            in_m = re.match(
+                r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+IN|IN)\s*\((.*?)\)$",
+                part,
+                re.IGNORECASE,
+            )
+            if in_m:
+                col = in_m.group(1)
+                op = in_m.group(2).upper()
+                items_raw = in_m.group(3)
+                items = [x.strip().strip("'\"") for x in items_raw.split(",")]
+                clauses.append({"column": col, "operator": op, "value": items})
+                continue
+
+            # 3. Standard comparison operators: >=, <=, !=, =, >, <
+            # Supports left column, right column, literals, JSON extraction
+            cmp_pattern = (
+                r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(>=|<=|!=|=|>|<)\s*"
+                r"('[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|[0-9\.]+)$"
+            )
+            eq_m = re.match(cmp_pattern, part)
+            if eq_m:
+                col = eq_m.group(1)
+                op = eq_m.group(2)
+                val = eq_m.group(3)
+                clean_val = val.strip("'\"")
+                if clean_val.isdigit():
+                    v: Any = int(clean_val)
+                else:
+                    try:
+                        v = float(clean_val)
+                    except ValueError:
+                        v = clean_val
+                clauses.append({"column": col, "operator": op, "value": v})
+                continue
 
         return clauses
 
