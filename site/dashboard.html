@@ -524,7 +524,7 @@
           <span>Graph Engineering</span>
           <span class="badge">Context Mesh</span>
         </div>
-        <div class="brand-sub">arxiv-security-papers intelligence &amp; traversal engine</div>
+        <div class="brand-sub">arxiv-security-papers intelligence &amp; traversal engine &bull; <span id="headerSyncTime" style="color: var(--accent-green); font-family: var(--font-mono); font-size: 10px; font-weight: bold;">🕒 Synced: --</span></div>
       </div>
       <div class="telemetry-bar">
         <div class="telemetry-cell">
@@ -620,7 +620,7 @@
         <div class="metric-card">
           <div class="card-header">
             <span class="card-title">Hop Budget Distribution</span>
-            <span class="card-tag">Max Depth = 5</span>
+            <span class="card-tag" id="badgeHop">--</span>
           </div>
           <canvas id="hopCanvas" width="260" height="130"></canvas>
         </div>
@@ -629,7 +629,7 @@
         <div class="metric-card">
           <div class="card-header">
             <span class="card-title">Edge Ledger (Traffic)</span>
-            <span class="card-tag">Relation Types</span>
+            <span class="card-tag" id="badgeEdgeLedger">--</span>
           </div>
           <div id="edgeLedgerList"></div>
         </div>
@@ -671,7 +671,7 @@
         <div class="metric-card" style="background-color: var(--bg-panel-sub);">
           <div class="card-header">
             <span class="card-title">🛡️ OBF Telemetry (OTel / OpenInference)</span>
-            <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">LIVE ACTIVE</span>
+            <span class="card-tag" id="badgeObfLive" style="color: var(--accent-green); font-weight: bold;">--</span>
           </div>
           <div style="font-size: 11px; margin-top: 2px;">
             <div class="bar-chart-row">
@@ -782,7 +782,7 @@
        ====================================================================== -->
   <footer>
     <div>
-      <strong>arxiv-security-papers</strong> &copy; 2026 | ISO 32000-1 / Google OKF v0.2 Compliant
+      <strong>arxiv-security-papers</strong> &copy; 2026 | ISO 32000-1 / Google OKF v0.2 Compliant &bull; <span id="footerSyncTime" style="color: var(--fg-muted);">Last Sync: --</span>
     </div>
     <div class="footer-links">
       <button class="btn-action" onclick="resetPhysics()">Reset Physics</button>
@@ -1231,8 +1231,10 @@
           hCtx.fillText(`H${i+1}`, x + 8, 124);
           hCtx.fillText(`${val}`, x + 6, y - 4);
         });
+
+        const bHop = document.getElementById('badgeHop');
+        if (bHop) bHop.textContent = 'Max Depth = 5';
       }
-      calculateAndDrawHopHistogram();
 
       // B. Real Edge Ledger Aggregator (Computed directly from live EDGES)
       function updateRealEdgeLedger() {
@@ -1262,8 +1264,10 @@
             </div>
           `;
         }).join('');
+
+        const bEdge = document.getElementById('badgeEdgeLedger');
+        if (bEdge) bEdge.textContent = 'Relation Types';
       }
-      updateRealEdgeLedger();
 
       // C. Walk vs Flat Token Savings Chart (Real measured ratio)
       const walkHistory = [74.2, 74.2, 74.2, 74.2, 74.2, 74.2, 74.2, 74.2];
@@ -1299,12 +1303,11 @@
         wCtx.font = 'bold 12px monospace';
         wCtx.fillText(`${walkHistory[walkHistory.length - 1].toFixed(1)}% Token Saved`, 25, 20);
       }
-      drawWalkChart();
 
       // D. Deterministic Traversal Matrix (100 Verified Walks from DAG state)
-      const matrixContainer = document.getElementById('traversalMatrix');
-      if (matrixContainer) {
-        matrixContainer.innerHTML = '';
+      function renderTraversalMatrix() {
+        const matrixContainer = document.getElementById('traversalMatrix');
+        if (!matrixContainer || matrixContainer.children.length > 0) return;
         for (let i = 0; i < 100; i++) {
           const dot = document.createElement('div');
           dot.className = 'traversal-dot';
@@ -1505,12 +1508,24 @@
               brandBadge.textContent = 'LIVE MESH (5s)';
               brandBadge.style.backgroundColor = 'var(--accent-green)';
             }
+            const bObf = document.getElementById('badgeObfLive');
+            if (bObf) bObf.textContent = 'LIVE ACTIVE';
+
+            // Update Last Synced Timestamps
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('ja-JP', { hour12: false });
+            const utcStr = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+            const hSync = document.getElementById('headerSyncTime');
+            if (hSync) hSync.textContent = `🕒 Synced: ${timeStr} (${utcStr.substring(11)})`;
+            const fSync = document.getElementById('footerSyncTime');
+            if (fSync) fSync.textContent = `Last Sync: ${utcStr}`;
 
             // Recalculate real structural analytics from fresh nodes & edges
             calculateAndDrawHopHistogram();
             updateRealEdgeLedger();
             updateLivePhysicsMetrics();
             drawWalkChart();
+            renderTraversalMatrix();
           }
         } catch (e) {
           // Offline / Standalone file execution fallback (gracefully keep canonical mesh)
