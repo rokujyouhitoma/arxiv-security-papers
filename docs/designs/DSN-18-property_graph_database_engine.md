@@ -102,24 +102,69 @@ $$\mathcal{N}_{\text{in}}(v) = \{ u \in V \mid (u, v, p) \in E \}$$
 
 # 3. グラフクエリエンジン & 走査アルゴリズム (Graph Traversal Engine)
 
-## 3.1 流暢なグラフ走査 DSL（Fluent Graph Traversal API）
-Cypher や Gremlin のように直感的なメソッドチェーンでグラフ探索を記述できる Pure Python API：
+## 3.1 Apache TinkerPop Gremlin 互換クエリ体系 (`rokujyouhitoma/gremlin` 準拠)
+本エンジンは、[`rokujyouhitoma/gremlin`](https://github.com/rokujyouhitoma/gremlin) の設計思想および Apache TinkerPop 3.5.0 標準に準拠した、Pure Python 実装による流暢なグラフ走査 DSL（Fluent Graph Traversal API）を提供します。
+
+### ① ナビゲーション・ステップ (Navigation Steps)
+- `g.V(*vertex_ids)`: 全頂点または指定 ID の頂点から探索開始
+- `g.E(*edge_ids)`: 全辺または指定 ID の辺から探索開始
+- `.out(*labels)`: 指定ラベル（述語）を持つ有向出エッジの先にある頂点へ移動
+- `.in_(*labels)`: 指定ラベル（述語）を持つ有向入エッジの元にある頂点へ移動
+- `.both(*labels)`: 双方向隣接頂点へ移動
+- `.outE(*labels)` / `.inE(*labels)` / `.bothE(*labels)`: 接続する辺（Edge）へ移動
+- `.outV()` / `.inV()` / `.bothV()` / `.otherV()`: 辺から頂点（Vertex）へ移動
+
+### ② フィルタ・条件述語ステップ (Filter & Predicate Steps)
+- `.has(key, value)` / `.hasLabel(label)` / `.hasId(*ids)` / `.hasKey(*keys)` / `.hasValue(*values)` / `.hasNot(key)`: 頂点/辺のプロパティ照合
+- `.and_(*traversals)` / `.or_(*traversals)` / `.not_(traversal)` / `.where(traversal)`: 複合論理条件
+- `.filter(predicate_fn_or_traversal)`: カスタム Python ラムダ式またはサブトラバーサルによる絞り込み
+- `.dedup(*labels)`: 重複ノードの排除
+- `.range(start, end)` / `.limit(n)` / `.skip(n)` / `.tail(n)`: ページネーション・件数制御
+- `.coin(probability)`: 確率サンプリング
+- `.simplePath()` / `.cyclicPath()`: 経路上のループ検出・ループ排除
+
+### ③ プロパティ・射影・集約ステップ (Projection & Aggregation Steps)
+- `.values(*keys)`: 指定プロパティ値の抽出
+- `.valueMap(*keys)` / `.elementMap(*keys)` / `.properties(*keys)` / `.propertyMap(*keys)`: 属性辞書マッピング
+- `.id()` / `.label()` / `.key()` / `.value()`: メタデータ属性の抽出
+- `.count()` / `.sum()` / `.max()` / `.min()` / `.mean()`: 統計・集約演算
+- `.group()` / `.groupCount(*keys)`: グルーピングと頻度集計
+- `.fold()` / `.unfold()`: リスト折りたたみと平坦化
+- `.project(*keys).by(traversal)`: 構造化マップ射影
+
+### ④ 高度なグラフ制御 & アルゴリズムステップ (Branch, Repeat, Algorithms)
+- `.repeat(traversal).times(n)` / `.repeat(traversal).until(traversal).emit()`: 再帰的 Multi-Hop 探索
+- `.branch(traversal)` / `.choose(traversal)` / `.coalesce(*traversals)`: 条件分岐
+- `.as_(label)` ... `.select(label)`: 走査履歴ノードのタグ付けと後方参照
+- `.path()`: 走査経路（全ノード・エッジの履歴リスト）の取得
+- `.shortestPath(target_id)`: 重み付き最短経路（Dijkstra）
+- `.pageRank(damping=0.85, iterations=20)`: グラフ中心性・セキュリティ重要度算出
+- `.connectedComponent()`: 連結成分分解
+
+### ⑤ 終端操作 (Terminal Steps)
+- `.toList() -> List[Any]`: 結果リストの取得
+- `.toSet() -> Set[Any]`: 重複なし集合の取得
+- `.next(amount=1) -> Any`: イテレータからの個別要素取得
+- `.iterate() -> GraphTraversal`: 副作用実行（走査の完全消費）
+- `.to_triples() -> List[Dict[str, Any]]`: GraphRAG / RDF 互換トリプル出力
 
 ```python
-# 「Prompt Injection を悪用する論文が提案した防御手法」を探索するクエリ例
-mitigations = (
-    graph.V(type="AttackTechnique", name="Prompt_Injection")
-    .in_("EXPLOITS")       # -> Vulnerability
-    .in_("DISCLOSES")      # -> Paper
-    .out("PROPOSES")       # -> DefenseMechanism
-    .filter(lambda v: v.props.get("category") == "ZKP")
-    .to_list()
+# 「Prompt Injection (T1059) を起点とし、悪用される脆弱性 (CWE) を経由して、
+#   2-Hop 先でそれを緩和 (MITIGATES) する防御手法 (ZKP カテゴリ) の名前一覧を取得する」
+defense_names = (
+    g.V("AttackTechnique:Prompt_Injection")
+    .in_("EXPLOITS")                     # -> Vulnerability
+    .in_("PATCHES", "MITIGATES")        # -> DefenseMechanism
+    .has("category", "ZKP")
+    .values("name")
+    .dedup()
+    .toList()
 )
 ```
 
 ## 3.2 Multi-Hop 探索、最短経路（Dijkstra/BFS）、および PageRank アルゴリズム
-1. **幅優先探索（BFS Multi-Hop Traversal）**: 深さ $K \le 5$ までの関係連鎖を高速探索。
-2. **重み付き最短経路（Dijkstra）**: 信憑性スコアや関連度（Weight）に基づく最適因果パスの計算。
+1. **幅優先探索（BFS Multi-Hop Traversal）**: `.repeat().times(K)` による深さ $K \le 5$ の関係連鎖高速探索。
+2. **重み付き最短経路（Dijkstra）**: 信憑性スコアや関係強度（Weight）に基づく最適因果パスの計算。
 3. **セキュリティ重要度 PageRank**: 最も多くの攻撃から標的にされ、かつ最も多くの防御研究が集中している中核ノードの自動算出。
 
 ---
