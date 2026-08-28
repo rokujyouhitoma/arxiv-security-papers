@@ -111,6 +111,71 @@ TOOLS_MANIFEST = [
             "required": ["tech_id"],
         },
     },
+    {
+        "name": "graphrag_query",
+        "description": (
+            "Perform GraphRAG (Graph-Augmented Retrieval) over Security Knowledge Graph (SKO). "
+            "Combines keyword/vector candidate identification with 2-hop causal subgraph expansion."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "Natural language question or security topic query "
+                        "e.g. 'zero trust mesh side-channel'"
+                    ),
+                },
+                "top_k_papers": {
+                    "type": "integer",
+                    "description": "Number of seed papers to discover (default: 3)",
+                },
+                "max_hops": {
+                    "type": "integer",
+                    "description": "Graph neighborhood expansion radius (default: 2)",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "get_attack_defense_chain",
+        "description": (
+            "Find multi-hop attack-defense causal chains: (Threat) <--[MITIGATES]-- (Defense) <--[PROPOSES]-- (Paper) "
+            "to discover verified academic countermeasures for a given attack technique or CVE."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "Target MITRE technique ID, CVE, or attack name e.g. 'T1059', 'Command Injection'",
+                },
+            },
+            "required": ["keyword"],
+        },
+    },
+    {
+        "name": "get_blast_radius",
+        "description": (
+            "Calculate downstream blast radius and impacted entities/systems from a vulnerable component or attack."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {
+                    "type": "string",
+                    "description": "Target root entity ID e.g. 'CVE-2026-9999', 'TargetAsset:Kubernetes'",
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "Maximum traversal depth (default: 3)",
+                },
+            },
+            "required": ["entity_id"],
+        },
+    },
 ]
 
 
@@ -309,12 +374,66 @@ def handle_generate_sigma_rule(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _get_graphrag_pipeline() -> Any:
+    from graph.engine import PropertyGraphEngine
+    from graph.graphrag import GraphRAGPipeline
+
+    engine = PropertyGraphEngine()
+    return GraphRAGPipeline(engine)
+
+
+def handle_graphrag_query(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handles GraphRAG query execution with causal expansion."""
+    query = params.get("query", "").strip()
+    if not query:
+        return {"status": "error", "message": "Missing required parameter 'query'"}
+    top_k = int(params.get("top_k_papers", 3))
+    max_hops = int(params.get("max_hops", 2))
+
+    pipeline = _get_graphrag_pipeline()
+    res = pipeline.query_graphrag(
+        query_text=query, top_k_papers=top_k, max_hops=max_hops
+    )
+    return {"status": "success", **res}
+
+
+def handle_get_attack_defense_chain(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handles multi-hop attack-defense causal chain discovery."""
+    keyword = params.get("keyword", "").strip()
+    if not keyword:
+        return {"status": "error", "message": "Missing required parameter 'keyword'"}
+
+    pipeline = _get_graphrag_pipeline()
+    chains = pipeline.find_defense_chains(technique_or_vuln_keyword=keyword)
+    return {
+        "status": "success",
+        "keyword": keyword,
+        "chain_count": len(chains),
+        "chains": chains,
+    }
+
+
+def handle_get_blast_radius(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handles blast radius impact analysis from root entity."""
+    entity_id = params.get("entity_id", "").strip()
+    if not entity_id:
+        return {"status": "error", "message": "Missing required parameter 'entity_id'"}
+    max_depth = int(params.get("max_depth", 3))
+
+    pipeline = _get_graphrag_pipeline()
+    res = pipeline.calculate_blast_radius(entity_id=entity_id, max_depth=max_depth)
+    return {"status": "success", **res}
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generate_semgrep_rule": handle_generate_semgrep_rule,
     "synthesize_secure_patch": handle_synthesize_secure_patch,
     "check_threat_coverage": handle_check_threat_coverage,
     "generate_caldera_playbook": handle_generate_caldera_playbook,
     "generate_sigma_rule": handle_generate_sigma_rule,
+    "graphrag_query": handle_graphrag_query,
+    "get_attack_defense_chain": handle_get_attack_defense_chain,
+    "get_blast_radius": handle_get_blast_radius,
 }
 
 

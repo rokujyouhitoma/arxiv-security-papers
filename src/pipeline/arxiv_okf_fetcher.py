@@ -216,6 +216,47 @@ def _atomic_json_dump(data: Any, target_path: str) -> None:
         raise
 
 
+def _ingest_items_into_knowledge_graph(
+    processed_items: List[Dict[str, Any]], workspace_dir: str
+) -> None:
+    """Ingests newly processed OKF papers into PropertyGraphEngine (Dual CSR)."""
+    if not processed_items:
+        return
+    try:
+        from graph.engine import PropertyGraphEngine
+        from ontology.extractor import OntologyExtractor
+
+        graph_engine = PropertyGraphEngine(workspace_dir=workspace_dir)
+        for item in processed_items:
+            abs_okf = os.path.join(workspace_dir, item.get("rel_okf_path", ""))
+            if not os.path.exists(abs_okf):
+                continue
+            with open(abs_okf, "r", encoding="utf-8") as f:
+                content = f.read()
+            clean_id = item.get("arxiv_id", "")
+            entities, triples = OntologyExtractor.extract_from_okf(clean_id, content)
+
+            for ent in entities:
+                graph_engine.add_vertex(
+                    vertex_id=ent.id,
+                    label=ent.entity_type.value,
+                    properties=ent.to_dict(),
+                )
+            for tr in triples:
+                graph_engine.add_edge(
+                    src_id=tr.subject_id,
+                    dst_id=tr.object_id,
+                    label=tr.predicate.value,
+                    weight=tr.weight,
+                )
+        graph_engine.save()
+        print(
+            f"[KnowledgeGraph] Ingested {len(processed_items)} papers into graph database."
+        )
+    except Exception as e:
+        print(f"[WARN] Knowledge graph ingestion error (non-fatal): {e}")
+
+
 def _transform_and_save_okf(
     pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]],
     workspace_dir: str,
@@ -236,6 +277,7 @@ def _transform_and_save_okf(
             "okf_path": item["rel_okf_path"],
         }
     _atomic_json_dump(processed_state, state_path)
+    _ingest_items_into_knowledge_graph(processed_items, workspace_dir)
     return processed_items
 
 

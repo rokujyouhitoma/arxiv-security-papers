@@ -57,10 +57,7 @@ class GraphRAGPipeline:
             for vid in current_level:
                 # Outgoing edges
                 for e in g.get_out_edges(vid):
-                    if (
-                        allowed_predicates
-                        and e.label not in allowed_predicates
-                    ):
+                    if allowed_predicates and e.label not in allowed_predicates:
                         continue
                     matched_edges.append(e.to_dict())
                     matched_triples.append(
@@ -77,10 +74,7 @@ class GraphRAGPipeline:
 
                 # Incoming edges
                 for e in g.get_in_edges(vid):
-                    if (
-                        allowed_predicates
-                        and e.label not in allowed_predicates
-                    ):
+                    if allowed_predicates and e.label not in allowed_predicates:
                         continue
                     matched_edges.append(e.to_dict())
                     matched_triples.append(
@@ -114,9 +108,7 @@ class GraphRAGPipeline:
                 unique_triples.append(t)
 
         # Generate Grounded Causal Reasoning Markdown Text
-        grounding_md = self._format_grounding_markdown(
-            vertices, unique_triples
-        )
+        grounding_md = self._format_grounding_markdown(vertices, unique_triples)
 
         return {
             "seed_count": len(seed_paper_ids),
@@ -163,3 +155,152 @@ class GraphRAGPipeline:
                 lines.append(f"  • `--[{pred}]-->` `{obj}`")
 
         return "\n".join(lines)
+
+    def find_defense_chains(
+        self, technique_or_vuln_keyword: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Finds attack-defense causal chains:
+        (Attack/Vuln) <--[MITIGATES/DEFENDS]-- (Defense) <--[PROPOSES]-- (Paper)
+        """
+        g = self.graph_engine
+        results: List[Dict[str, Any]] = []
+        kw_lower = technique_or_vuln_keyword.lower()
+
+        # Find matching attack or vulnerability nodes
+        target_vids: List[str] = []
+        for vid, v in g._vertices.items():
+            if kw_lower in vid.lower() or kw_lower in v.label.lower():
+                target_vids.append(vid)
+            elif v.properties and any(
+                kw_lower in str(val).lower() for val in v.properties.values()
+            ):
+                target_vids.append(vid)
+
+        for target_vid in target_vids:
+            target_v = g.get_vertex(target_vid)
+            # Incoming edges: Defense -> MITIGATES -> Target
+            in_edges = g.get_in_edges(target_vid)
+            for e in in_edges:
+                if e.label in ("MITIGATES", "DEFENDS"):
+                    defense_vid = e.src_id
+                    defense_v = g.get_vertex(defense_vid)
+                    # Find papers proposing this defense
+                    defense_in_edges = g.get_in_edges(defense_vid)
+                    proposing_papers: List[Dict[str, Any]] = []
+                    for pe in defense_in_edges:
+                        if pe.label in ("PROPOSES", "ANALYZES") or pe.src_id.startswith(
+                            "Paper:"
+                        ):
+                            paper_v = g.get_vertex(pe.src_id)
+                            if paper_v:
+                                proposing_papers.append(paper_v.to_dict())
+
+                    results.append(
+                        {
+                            "target_threat": (
+                                target_v.to_dict() if target_v else {"id": target_vid}
+                            ),
+                            "mitigation_relation": e.label,
+                            "defense_mechanism": (
+                                defense_v.to_dict()
+                                if defense_v
+                                else {"id": defense_vid}
+                            ),
+                            "effective_papers": proposing_papers,
+                        }
+                    )
+        return results
+
+    def calculate_blast_radius(
+        self, entity_id: str, max_depth: int = 3
+    ) -> Dict[str, Any]:
+        """
+        Calculates blast radius from a vulnerable asset or attack technique:
+        Traverses reachable downstream assets, systems, and exploited vectors.
+        """
+        g = self.graph_engine
+        canonical_id = entity_id
+        if not g.get_vertex(canonical_id):
+            for vid in g._vertices.keys():
+                if entity_id.lower() in vid.lower():
+                    canonical_id = vid
+                    break
+
+        root_v = g.get_vertex(canonical_id)
+        if not root_v:
+            return {
+                "root_entity": entity_id,
+                "blast_radius_count": 0,
+                "impacted_entities": [],
+            }
+
+        visited: Dict[str, int] = {canonical_id: 0}
+        queue = [(canonical_id, 0)]
+        impacted_list: List[Dict[str, Any]] = []
+
+        while queue:
+            curr_id, depth = queue.pop(0)
+            if depth >= max_depth:
+                continue
+
+            for e in g.get_out_edges(curr_id):
+                nxt_id = e.dst_id
+                if nxt_id not in visited:
+                    visited[nxt_id] = depth + 1
+                    queue.append((nxt_id, depth + 1))
+                    nxt_v = g.get_vertex(nxt_id)
+                    impacted_list.append(
+                        {
+                            "depth": depth + 1,
+                            "relation": e.label,
+                            "entity": nxt_v.to_dict() if nxt_v else {"id": nxt_id},
+                        }
+                    )
+
+        return {
+            "root_entity": root_v.to_dict(),
+            "blast_radius_count": len(impacted_list),
+            "max_depth_explored": max_depth,
+            "impacted_entities": impacted_list,
+        }
+
+    def query_graphrag(
+        self, query_text: str, top_k_papers: int = 3, max_hops: int = 2
+    ) -> Dict[str, Any]:
+        """
+        End-to-end GraphRAG query execution:
+        Identifies seed papers matching query, expands causal subgraph, and returns grounded context.
+        """
+        g = self.graph_engine
+        q_lower = query_text.lower()
+        matched_seeds: List[str] = []
+
+        # Find paper nodes matching keywords
+        for vid, v in g._vertices.items():
+            if v.label == "Paper" or vid.startswith("Paper:"):
+                title = (v.properties or {}).get("title", "")
+                desc = (v.properties or {}).get("description", "")
+                if (
+                    q_lower in vid.lower()
+                    or q_lower in title.lower()
+                    or q_lower in desc.lower()
+                ):
+                    clean_pid = vid.replace("Paper:", "")
+                    matched_seeds.append(clean_pid)
+                    if len(matched_seeds) >= top_k_papers:
+                        break
+
+        # Fallback: take any available papers if no exact keyword match
+        if not matched_seeds:
+            for vid, v in list(g._vertices.items())[:top_k_papers]:
+                if v.label == "Paper" or vid.startswith("Paper:"):
+                    matched_seeds.append(vid.replace("Paper:", ""))
+
+        expansion = self.expand_context(seed_paper_ids=matched_seeds, max_hops=max_hops)
+
+        defense_chains = self.find_defense_chains(query_text)
+        expansion["query"] = query_text
+        expansion["seed_paper_ids"] = matched_seeds
+        expansion["defense_chains"] = defense_chains
+        return expansion
