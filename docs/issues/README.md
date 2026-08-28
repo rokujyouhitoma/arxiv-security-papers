@@ -8,9 +8,10 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| - | 現在アクティブな Issue はありません | - | - | - | - | - |
+| **103** | src/database 内部パッケージの体系的整理とサブモジュール分類 | Feature | Medium | Open (New) | PM / Arch / DB | [103-refactor-database-package-structure.md](103-refactor-database-package-structure.md) |
 
 ---
+
 
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
