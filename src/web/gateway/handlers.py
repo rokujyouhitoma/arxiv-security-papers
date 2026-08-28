@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import time
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
@@ -415,37 +416,96 @@ def _introspect_strategic_metrics(workspace_dir: str) -> Dict[str, Any]:
     saved_tokens = paper_count * 850 * (token_savings_pct / 100.0)
     token_cost_savings_usd = round((saved_tokens / 1_000_000.0) * 2.50, 2)
 
+    # 1.2 ST: Real Dynamic Threat Vectors & Growth Calculation from OKF Papers
+    threat_patterns = [
+        (
+            "Prompt Injection & LLM Security",
+            "LLM Security",
+            r"(?i)(prompt injection|jailbreak|llm|large language model)",
+        ),
+        (
+            "Side-Channel & Cryptanalysis",
+            "Cryptography",
+            r"(?i)(side-channel|fault attack|lattice|post-quantum)",
+        ),
+        (
+            "Supply Chain & Package Tampering",
+            "AppSec",
+            r"(?i)(supply chain|dependency|typosquatting|malicious package)",
+        ),
+        (
+            "Zero-Trust & Identity IAM",
+            "IAM/Zero-Trust",
+            r"(?i)(zero trust|iam|authentication|oauth|access control)",
+        ),
+        (
+            "Malware Analysis & Evasion",
+            "Endpoint Sec",
+            r"(?i)(malware|ransomware|obfuscation|evasion|botnet)",
+        ),
+        (
+            "Hardware & IoT Firmware",
+            "IoT Security",
+            r"(?i)(hardware|iot|firmware|embedded|fpga)",
+        ),
+        (
+            "Web & Network Defense",
+            "Network Sec",
+            r"(?i)(web security|ddos|bgp|dns|xss|firewall)",
+        ),
+    ]
+
+    okf_dir = os.path.join(workspace_dir, "outputs", "okf_papers")
+    all_okf_files: List[str] = []
+    if os.path.exists(okf_dir):
+        for root, _, files in os.walk(okf_dir):
+            for f in files:
+                if f.endswith(".md"):
+                    all_okf_files.append(os.path.join(root, f))
+
+    all_okf_files.sort()
+    mid = len(all_okf_files) // 2
+    older_sample = all_okf_files[:mid]
+    recent_sample = all_okf_files[mid:]
+
+    top_threat_vectors = []
+    for name, cat, pattern in threat_patterns:
+        compiled_pat = re.compile(pattern)
+        c_old = 0
+        for p in older_sample[:50]:  # fast sample
+            try:
+                with open(p, "r", encoding="utf-8", errors="ignore") as fp:
+                    if compiled_pat.search(fp.read()):
+                        c_old += 1
+            except Exception:
+                pass
+
+        c_new = 0
+        for p in recent_sample[-50:]:  # fast sample
+            try:
+                with open(p, "r", encoding="utf-8", errors="ignore") as fp:
+                    if compiled_pat.search(fp.read()):
+                        c_new += 1
+            except Exception:
+                pass
+
+        total_matches = c_old + c_new
+        growth_pct = ((c_new - c_old) / max(1, c_old)) * 100.0
+        sign = "+" if growth_pct >= 0 else ""
+        top_threat_vectors.append({
+            "name": name,
+            "category": cat,
+            "count": total_matches,
+            "growth": f"{sign}{growth_pct:.1f}%",
+        })
+
+    top_threat_vectors.sort(key=lambda x: x["count"], reverse=True)
+
     st_metrics = {
         "token_cost_savings_usd": token_cost_savings_usd,
         "token_savings_pct": token_savings_pct,
         "executive_tier_coverage": f"{tier_pct}% ({existing_tiers}/{len(tiers)} Tiers, {total_summary_files} docs)",
-        "top_threat_vectors": [
-            {
-                "name": "Prompt Injection & Jailbreak",
-                "category": "LLM Security",
-                "growth": "+42%",
-            },
-            {
-                "name": "Side-Channel Key Recovery",
-                "category": "Cryptography",
-                "growth": "+28%",
-            },
-            {
-                "name": "Supply Chain & Multi-Commit Tampering",
-                "category": "AppSec",
-                "growth": "+35%",
-            },
-            {
-                "name": "Zero-Trust Identity Bypass",
-                "category": "IAM/Zero-Trust",
-                "growth": "+19%",
-            },
-            {
-                "name": "EOP Model Weight Poisoning",
-                "category": "AI Security",
-                "growth": "+54%",
-            },
-        ],
+        "top_threat_vectors": top_threat_vectors[:5],
     }
 
     # 2. SA: Real Traversal Tail Latency from OTLP Traces & Graph Density
