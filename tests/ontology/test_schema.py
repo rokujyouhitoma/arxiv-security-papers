@@ -72,11 +72,17 @@ def test_predicate_inverses_and_validation() -> None:
     # Schema validation
     assert SecurityOntologySchema.validate_triple(EntityType.PAPER, Predicate.DISCLOSES)
     assert SecurityOntologySchema.validate_triple(EntityType.PAPER, Predicate.PROPOSES)
-    assert SecurityOntologySchema.validate_triple(EntityType.ATTACK_TECHNIQUE, Predicate.EXPLOITS)
-    assert SecurityOntologySchema.validate_triple(EntityType.DEFENSE_MECHANISM, Predicate.MITIGATES)
+    assert SecurityOntologySchema.validate_triple(
+        EntityType.ATTACK_TECHNIQUE, Predicate.EXPLOITS
+    )
+    assert SecurityOntologySchema.validate_triple(
+        EntityType.DEFENSE_MECHANISM, Predicate.MITIGATES
+    )
 
     # Invalid relationship check
-    assert not SecurityOntologySchema.validate_triple(EntityType.PAPER, Predicate.EXPLOITS)
+    assert not SecurityOntologySchema.validate_triple(
+        EntityType.PAPER, Predicate.EXPLOITS
+    )
 
 
 def test_taxonomy_registry_normalization() -> None:
@@ -128,7 +134,19 @@ We propose a novel ZKP defense mechanism.
 
     # Check extracted triples
     triple_tuples = {(t.subject_id, t.predicate.value, t.object_id) for t in triples}
-    assert ("Paper:2608.99999", "ANALYZES", "AttackTechnique:Prompt_Injection") in triple_tuples
+    assert (
+        "Paper:2608.99999",
+        "ANALYZES",
+        "AttackTechnique:Prompt_Injection",
+    ) in triple_tuples
     assert ("Paper:2608.99999", "DISCLOSES", "Vulnerability:CWE-79") in triple_tuples
-    assert ("Paper:2608.99999", "PROPOSES", "DefenseMechanism:Zero_Knowledge_Proof") in triple_tuples
-    assert ("DefenseMechanism:Zero_Knowledge_Proof", "MITIGATES", "AttackTechnique:Prompt_Injection") in triple_tuples
+    assert (
+        "Paper:2608.99999",
+        "PROPOSES",
+        "DefenseMechanism:Zero_Knowledge_Proof",
+    ) in triple_tuples
+    assert (
+        "DefenseMechanism:Zero_Knowledge_Proof",
+        "MITIGATES",
+        "AttackTechnique:Prompt_Injection",
+    ) in triple_tuples

@@ -45,7 +45,9 @@ def test_analytics_storage_atomic_snapshot_and_load() -> None:
         assert loaded is not None
         assert loaded["token_cost_savings_usd"] == 101.5
         assert len(loaded["top_threat_vectors"]) == 1
-        assert loaded["top_threat_vectors"][0]["name"] == "Prompt Injection & LLM Security"
+        assert (
+            loaded["top_threat_vectors"][0]["name"] == "Prompt Injection & LLM Security"
+        )
 
 
 def test_analytics_storage_sqlite_migrations_and_history() -> None:
@@ -72,14 +74,20 @@ def test_analytics_storage_sqlite_migrations_and_history() -> None:
         # Query SQLite tables directly
         with storage._get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT * FROM threat_trends WHERE name=?", ("Side-Channel & Cryptanalysis",))
+            cur.execute(
+                "SELECT * FROM threat_trends WHERE name=?",
+                ("Side-Channel & Cryptanalysis",),
+            )
             row = cur.fetchone()
             assert row is not None
             assert row["category"] == "Cryptography"
             assert row["count"] == 783
             assert row["growth_pct"] == 16.9
 
-            cur.execute("SELECT * FROM strategic_kpis WHERE kpi_key=?", ("token_cost_savings_usd",))
+            cur.execute(
+                "SELECT * FROM strategic_kpis WHERE kpi_key=?",
+                ("token_cost_savings_usd",),
+            )
             kpi_row = cur.fetchone()
             assert kpi_row is not None
             assert kpi_row["num_value"] == 22.87
@@ -102,7 +110,9 @@ def test_analytics_aggregator_end_to_end() -> None:
 
         paper2_path = os.path.join(okf_dir, "2608.00002.md")
         with open(paper2_path, "w", encoding="utf-8") as f:
-            f.write("# Paper 2\nSide-channel cryptanalysis and fault attack mitigation.")
+            f.write(
+                "# Paper 2\nSide-channel cryptanalysis and fault attack mitigation."
+            )
 
         aggregator = AnalyticsAggregator(workspace_dir=tmp_dir)
         metrics = aggregator.aggregate_all()

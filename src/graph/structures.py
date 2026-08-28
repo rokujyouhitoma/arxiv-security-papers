@@ -62,8 +62,12 @@ class Edge:
 class Path:
     """Represents an ordered sequence of vertices and edges in a traversal."""
 
-    objects: List[Any] = field(default_factory=list)  # Alternating Vertex, Edge, Vertex...
-    labels: List[List[str]] = field(default_factory=list)  # Step labels associated with each step
+    objects: List[Any] = field(
+        default_factory=list
+    )  # Alternating Vertex, Edge, Vertex...
+    labels: List[List[str]] = field(
+        default_factory=list
+    )  # Step labels associated with each step
 
     def extend(self, obj: Any, step_labels: Optional[List[str]] = None) -> Path:
         """Returns a new Path extended by obj."""

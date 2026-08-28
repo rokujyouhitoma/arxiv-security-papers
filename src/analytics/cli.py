@@ -54,7 +54,9 @@ def main(args: Optional[List[str]] = None) -> int:
     parsed = parser.parse_args(args)
 
     if not parsed.command or parsed.command == "aggregate":
-        aggregator = AnalyticsAggregator(workspace_dir=getattr(parsed, "workspace_dir", None))
+        aggregator = AnalyticsAggregator(
+            workspace_dir=getattr(parsed, "workspace_dir", None)
+        )
         metrics = aggregator.aggregate_all()
         print("✅ Batch pre-aggregation completed.")
         print(json.dumps(metrics, indent=2, ensure_ascii=False))

@@ -144,9 +144,7 @@ class AnalyticsAggregator:
                             )
                     except Exception:
                         pass
-        tier_pct = (
-            round((existing_tiers / len(tiers)) * 100.0, 1) if tiers else 0.0
-        )
+        tier_pct = round((existing_tiers / len(tiers)) * 100.0, 1) if tiers else 0.0
 
         okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
         all_okf_files: List[str] = []
@@ -245,9 +243,7 @@ class AnalyticsAggregator:
             p95 = 74.82
             p99 = 96.69
 
-        vdb_path = os.path.join(
-            self.workspace_dir, "outputs", "database", "papers.vdb"
-        )
+        vdb_path = os.path.join(self.workspace_dir, "outputs", "database", "papers.vdb")
         vdb_count = 0
         if os.path.exists(vdb_path):
             try:

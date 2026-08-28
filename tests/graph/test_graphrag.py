@@ -25,9 +25,17 @@ def test_graphrag_context_expansion() -> None:
         properties={"name": "ZKP Shield"},
     )
 
-    engine.add_edge("Paper:2608.10001", "AttackTechnique:Prompt_Injection", label="ANALYZES")
-    engine.add_edge("AttackTechnique:Prompt_Injection", "Vulnerability:CWE-79", label="EXPLOITS")
-    engine.add_edge("DefenseMechanism:ZKP_Shield", "AttackTechnique:Prompt_Injection", label="MITIGATES")
+    engine.add_edge(
+        "Paper:2608.10001", "AttackTechnique:Prompt_Injection", label="ANALYZES"
+    )
+    engine.add_edge(
+        "AttackTechnique:Prompt_Injection", "Vulnerability:CWE-79", label="EXPLOITS"
+    )
+    engine.add_edge(
+        "DefenseMechanism:ZKP_Shield",
+        "AttackTechnique:Prompt_Injection",
+        label="MITIGATES",
+    )
 
     rag = GraphRAGPipeline(graph_engine=engine)
     res = rag.expand_context(seed_paper_ids=["2608.10001"], max_hops=2)

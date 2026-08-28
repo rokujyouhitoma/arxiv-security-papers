@@ -114,7 +114,13 @@ class OntologyExtractor:
                 )
                 entities.append(vuln)
                 seen_entity_ids.add(vuln_id)
-            triples.append(Triple(subject_id=paper.id, predicate=Predicate.DISCLOSES, object_id=vuln_id))
+            triples.append(
+                Triple(
+                    subject_id=paper.id,
+                    predicate=Predicate.DISCLOSES,
+                    object_id=vuln_id,
+                )
+            )
 
         # Check domain dictionary terms
         for phrase in list(words_and_phrases) + corpus_text.lower().split():
@@ -155,14 +161,32 @@ class OntologyExtractor:
 
             # Generate Paper -> Entity triple
             if ent_type == "AttackTechnique":
-                triples.append(Triple(subject_id=paper.id, predicate=Predicate.ANALYZES, object_id=canonical_id))
+                triples.append(
+                    Triple(
+                        subject_id=paper.id,
+                        predicate=Predicate.ANALYZES,
+                        object_id=canonical_id,
+                    )
+                )
             elif ent_type == "DefenseMechanism":
-                triples.append(Triple(subject_id=paper.id, predicate=Predicate.PROPOSES, object_id=canonical_id))
+                triples.append(
+                    Triple(
+                        subject_id=paper.id,
+                        predicate=Predicate.PROPOSES,
+                        object_id=canonical_id,
+                    )
+                )
             elif ent_type == "TargetAsset":
                 # Link attacks to target assets
                 for e in entities:
                     if isinstance(e, AttackTechniqueEntity):
-                        triples.append(Triple(subject_id=e.id, predicate=Predicate.TARGETS, object_id=canonical_id))
+                        triples.append(
+                            Triple(
+                                subject_id=e.id,
+                                predicate=Predicate.TARGETS,
+                                object_id=canonical_id,
+                            )
+                        )
 
         # Link Defense -> AttackTechnique (MITIGATES) and Defense -> Vulnerability (PATCHES) if both exist
         defenses = [e for e in entities if isinstance(e, DefenseMechanismEntity)]
@@ -171,9 +195,15 @@ class OntologyExtractor:
 
         for d in defenses:
             for a in attacks:
-                triples.append(Triple(subject_id=d.id, predicate=Predicate.MITIGATES, object_id=a.id))
+                triples.append(
+                    Triple(
+                        subject_id=d.id, predicate=Predicate.MITIGATES, object_id=a.id
+                    )
+                )
             for v in vulns:
-                triples.append(Triple(subject_id=d.id, predicate=Predicate.PATCHES, object_id=v.id))
+                triples.append(
+                    Triple(subject_id=d.id, predicate=Predicate.PATCHES, object_id=v.id)
+                )
 
         # Deduplicate triples
         unique_triples: List[Triple] = []

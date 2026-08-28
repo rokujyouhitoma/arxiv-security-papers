@@ -9,17 +9,7 @@ from __future__ import annotations
 
 import heapq
 import random
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from .structures import Edge, Path, Vertex
 
@@ -58,9 +48,11 @@ class GraphTraversal:
         t = GraphTraversal(
             engine=self.engine,
             current_objects=new_objects,
-            paths=new_paths
-            if new_paths is not None
-            else [Path(objects=[obj]) for obj in new_objects],
+            paths=(
+                new_paths
+                if new_paths is not None
+                else [Path(objects=[obj]) for obj in new_objects]
+            ),
         )
         t._side_effects = dict(self._side_effects)
         t._as_labels = {k: list(v) for k, v in self._as_labels.items()}
@@ -105,9 +97,7 @@ class GraphTraversal:
                     dst = self.engine.get_vertex(e.dst_id)
                     if dst is not None:
                         new_objs.append(dst)
-                        curr_path = (
-                            self._paths[i] if i < len(self._paths) else Path()
-                        )
+                        curr_path = self._paths[i] if i < len(self._paths) else Path()
                         new_paths.append(curr_path.extend(dst))
         return self._clone(new_objs, new_paths)
 
@@ -122,9 +112,7 @@ class GraphTraversal:
                     src = self.engine.get_vertex(e.src_id)
                     if src is not None:
                         new_objs.append(src)
-                        curr_path = (
-                            self._paths[i] if i < len(self._paths) else Path()
-                        )
+                        curr_path = self._paths[i] if i < len(self._paths) else Path()
                         new_paths.append(curr_path.extend(src))
         return self._clone(new_objs, new_paths)
 
@@ -192,9 +180,7 @@ class GraphTraversal:
                 src = self.engine.get_vertex(obj.src_id)
                 if src is not None:
                     new_objs.append(src)
-                    curr_path = (
-                        self._paths[i] if i < len(self._paths) else Path()
-                    )
+                    curr_path = self._paths[i] if i < len(self._paths) else Path()
                     new_paths.append(curr_path.extend(src))
         return self._clone(new_objs, new_paths)
 
@@ -207,9 +193,7 @@ class GraphTraversal:
                 dst = self.engine.get_vertex(obj.dst_id)
                 if dst is not None:
                     new_objs.append(dst)
-                    curr_path = (
-                        self._paths[i] if i < len(self._paths) else Path()
-                    )
+                    curr_path = self._paths[i] if i < len(self._paths) else Path()
                     new_paths.append(curr_path.extend(dst))
         return self._clone(new_objs, new_paths)
 
@@ -221,13 +205,9 @@ class GraphTraversal:
             if isinstance(obj, Edge):
                 curr_path = self._paths[i] if i < len(self._paths) else Path()
                 prev_v_id = (
-                    curr_path.objects[-2].id
-                    if len(curr_path.objects) >= 2
-                    else None
+                    curr_path.objects[-2].id if len(curr_path.objects) >= 2 else None
                 )
-                other_id = (
-                    obj.dst_id if obj.src_id == prev_v_id else obj.src_id
-                )
+                other_id = obj.dst_id if obj.src_id == prev_v_id else obj.src_id
                 v = self.engine.get_vertex(other_id)
                 if v is not None:
                     new_objs.append(v)
@@ -262,9 +242,7 @@ class GraphTraversal:
         """Filters vertices/edges by label."""
         target_labels = set(labels)
         new_objs = [
-            obj
-            for obj in self._current
-            if getattr(obj, "label", None) in target_labels
+            obj for obj in self._current if getattr(obj, "label", None) in target_labels
         ]
         new_paths = [
             self._paths[i]
@@ -277,9 +255,7 @@ class GraphTraversal:
         """Filters vertices/edges by ID."""
         target_ids = set(ids)
         new_objs = [
-            obj
-            for obj in self._current
-            if getattr(obj, "id", None) in target_ids
+            obj for obj in self._current if getattr(obj, "id", None) in target_ids
         ]
         new_paths = [
             self._paths[i]
@@ -349,9 +325,7 @@ class GraphTraversal:
 
     def coin(self, probability: float) -> "GraphTraversal":
         """Probabilistically samples elements with probability p (0.0 - 1.0)."""
-        new_objs = [
-            obj for obj in self._current if random.random() <= probability
-        ]
+        new_objs = [obj for obj in self._current if random.random() <= probability]
         return self._clone(new_objs)
 
     def simplePath(self) -> "GraphTraversal":
@@ -360,9 +334,7 @@ class GraphTraversal:
         new_paths: List[Path] = []
         for i, p in enumerate(self._paths):
             v_ids = [
-                getattr(o, "id", str(o))
-                for o in p.objects
-                if isinstance(o, Vertex)
+                getattr(o, "id", str(o)) for o in p.objects if isinstance(o, Vertex)
             ]
             if len(v_ids) == len(set(v_ids)):
                 new_objs.append(self._current[i])
@@ -401,9 +373,7 @@ class GraphTraversal:
 
     def label(self) -> "GraphTraversal":
         """Extracts labels of elements."""
-        return self._clone(
-            [getattr(obj, "label", "Unknown") for obj in self._current]
-        )
+        return self._clone([getattr(obj, "label", "Unknown") for obj in self._current])
 
     def count(self) -> "GraphTraversal":
         """Counts the total number of elements in the traversal."""
@@ -512,9 +482,7 @@ class GraphTraversal:
                 result.append(v_obj)
         return result
 
-    def pageRank(
-        self, damping: float = 0.85, iterations: int = 20
-    ) -> Dict[str, float]:
+    def pageRank(self, damping: float = 0.85, iterations: int = 20) -> Dict[str, float]:
         """Calculates PageRank centrality for all vertices in the graph."""
         vertices = list(self.engine._vertices.keys())
         N = len(vertices)
@@ -523,9 +491,7 @@ class GraphTraversal:
 
         ranks: Dict[str, float] = {v: 1.0 / N for v in vertices}
         for _ in range(iterations):
-            new_ranks: Dict[str, float] = {
-                v: (1.0 - damping) / N for v in vertices
-            }
+            new_ranks: Dict[str, float] = {v: (1.0 - damping) / N for v in vertices}
             for u in vertices:
                 out_edges = self.engine.get_out_edges(u)
                 out_deg = len(out_edges)

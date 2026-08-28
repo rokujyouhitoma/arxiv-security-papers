@@ -4,6 +4,7 @@ Unit tests for PropertyGraphEngine (CRUD, dual CSR adjacency indices, disk persi
 """
 
 import os
+
 from graph.engine import PropertyGraphEngine
 
 
@@ -13,8 +14,12 @@ def test_graph_engine_crud(tmp_path: object) -> None:
 
     # 1. Add Vertices
     engine.add_vertex("Paper:1", label="Paper", properties={"title": "Paper One"})
-    engine.add_vertex("Attack:PromptInjection", label="AttackTechnique", properties={"name": "PI"})
-    engine.add_vertex("Vuln:CWE-79", label="Vulnerability", properties={"severity": "High"})
+    engine.add_vertex(
+        "Attack:PromptInjection", label="AttackTechnique", properties={"name": "PI"}
+    )
+    engine.add_vertex(
+        "Vuln:CWE-79", label="Vulnerability", properties={"severity": "High"}
+    )
 
     assert engine.vertex_count == 3
     assert engine.get_vertex("Paper:1") is not None
@@ -22,7 +27,9 @@ def test_graph_engine_crud(tmp_path: object) -> None:
 
     # 2. Add Edges
     engine.add_edge("Paper:1", "Attack:PromptInjection", label="ANALYZES", weight=1.0)
-    engine.add_edge("Attack:PromptInjection", "Vuln:CWE-79", label="EXPLOITS", weight=2.0)
+    engine.add_edge(
+        "Attack:PromptInjection", "Vuln:CWE-79", label="EXPLOITS", weight=2.0
+    )
 
     assert engine.edge_count == 2
     assert len(engine.get_out_edges("Paper:1")) == 1

@@ -21,47 +21,191 @@ class TaxonomyRegistry:
     SYNONYM_MAPPINGS: Dict[str, Tuple[str, str, str]] = {
         # Format: raw_key -> (Canonical ID, EntityType, DisplayName)
         # --- LLM / AI Security ---
-        "prompt injection": ("AttackTechnique:Prompt_Injection", "AttackTechnique", "Prompt Injection"),
-        "jailbreak": ("AttackTechnique:Prompt_Injection", "AttackTechnique", "Prompt Injection"),
-        "jailbreaking": ("AttackTechnique:Prompt_Injection", "AttackTechnique", "Prompt Injection"),
-        "adversarial prompt": ("AttackTechnique:Prompt_Injection", "AttackTechnique", "Prompt Injection"),
-        "indirect prompt injection": ("AttackTechnique:Prompt_Injection", "AttackTechnique", "Prompt Injection"),
-        "model extraction": ("AttackTechnique:Model_Stealing", "AttackTechnique", "Model Extraction Attack"),
-        "data poisoning": ("AttackTechnique:Data_Poisoning", "AttackTechnique", "Data Poisoning Attack"),
-        "backdoor attack": ("AttackTechnique:Backdoor_Trigger", "AttackTechnique", "Backdoor Attack"),
-        "membership inference": ("AttackTechnique:Membership_Inference", "AttackTechnique", "Membership Inference"),
+        "prompt injection": (
+            "AttackTechnique:Prompt_Injection",
+            "AttackTechnique",
+            "Prompt Injection",
+        ),
+        "jailbreak": (
+            "AttackTechnique:Prompt_Injection",
+            "AttackTechnique",
+            "Prompt Injection",
+        ),
+        "jailbreaking": (
+            "AttackTechnique:Prompt_Injection",
+            "AttackTechnique",
+            "Prompt Injection",
+        ),
+        "adversarial prompt": (
+            "AttackTechnique:Prompt_Injection",
+            "AttackTechnique",
+            "Prompt Injection",
+        ),
+        "indirect prompt injection": (
+            "AttackTechnique:Prompt_Injection",
+            "AttackTechnique",
+            "Prompt Injection",
+        ),
+        "model extraction": (
+            "AttackTechnique:Model_Stealing",
+            "AttackTechnique",
+            "Model Extraction Attack",
+        ),
+        "data poisoning": (
+            "AttackTechnique:Data_Poisoning",
+            "AttackTechnique",
+            "Data Poisoning Attack",
+        ),
+        "backdoor attack": (
+            "AttackTechnique:Backdoor_Trigger",
+            "AttackTechnique",
+            "Backdoor Attack",
+        ),
+        "membership inference": (
+            "AttackTechnique:Membership_Inference",
+            "AttackTechnique",
+            "Membership Inference",
+        ),
         # --- Cryptography & Side-Channels ---
-        "side-channel": ("AttackTechnique:Side_Channel_Analysis", "AttackTechnique", "Side-Channel Analysis"),
-        "side channel": ("AttackTechnique:Side_Channel_Analysis", "AttackTechnique", "Side-Channel Analysis"),
-        "power analysis": ("AttackTechnique:Side_Channel_Analysis", "AttackTechnique", "Side-Channel Analysis"),
-        "fault injection": ("AttackTechnique:Fault_Injection", "AttackTechnique", "Fault Injection Attack"),
-        "spectre": ("AttackTechnique:Transient_Execution", "AttackTechnique", "Spectre Transient Execution"),
-        "meltdown": ("AttackTechnique:Transient_Execution", "AttackTechnique", "Meltdown Transient Execution"),
-        "post-quantum": ("DefenseMechanism:Post_Quantum_Crypto", "DefenseMechanism", "Post-Quantum Cryptography"),
-        "lattice-based": ("DefenseMechanism:Post_Quantum_Crypto", "DefenseMechanism", "Post-Quantum Cryptography"),
-        "zero-knowledge": ("DefenseMechanism:Zero_Knowledge_Proof", "DefenseMechanism", "Zero-Knowledge Proofs"),
-        "zk-snark": ("DefenseMechanism:Zero_Knowledge_Proof", "DefenseMechanism", "Zero-Knowledge Proofs"),
-        "zkp": ("DefenseMechanism:Zero_Knowledge_Proof", "DefenseMechanism", "Zero-Knowledge Proofs"),
+        "side-channel": (
+            "AttackTechnique:Side_Channel_Analysis",
+            "AttackTechnique",
+            "Side-Channel Analysis",
+        ),
+        "side channel": (
+            "AttackTechnique:Side_Channel_Analysis",
+            "AttackTechnique",
+            "Side-Channel Analysis",
+        ),
+        "power analysis": (
+            "AttackTechnique:Side_Channel_Analysis",
+            "AttackTechnique",
+            "Side-Channel Analysis",
+        ),
+        "fault injection": (
+            "AttackTechnique:Fault_Injection",
+            "AttackTechnique",
+            "Fault Injection Attack",
+        ),
+        "spectre": (
+            "AttackTechnique:Transient_Execution",
+            "AttackTechnique",
+            "Spectre Transient Execution",
+        ),
+        "meltdown": (
+            "AttackTechnique:Transient_Execution",
+            "AttackTechnique",
+            "Meltdown Transient Execution",
+        ),
+        "post-quantum": (
+            "DefenseMechanism:Post_Quantum_Crypto",
+            "DefenseMechanism",
+            "Post-Quantum Cryptography",
+        ),
+        "lattice-based": (
+            "DefenseMechanism:Post_Quantum_Crypto",
+            "DefenseMechanism",
+            "Post-Quantum Cryptography",
+        ),
+        "zero-knowledge": (
+            "DefenseMechanism:Zero_Knowledge_Proof",
+            "DefenseMechanism",
+            "Zero-Knowledge Proofs",
+        ),
+        "zk-snark": (
+            "DefenseMechanism:Zero_Knowledge_Proof",
+            "DefenseMechanism",
+            "Zero-Knowledge Proofs",
+        ),
+        "zkp": (
+            "DefenseMechanism:Zero_Knowledge_Proof",
+            "DefenseMechanism",
+            "Zero-Knowledge Proofs",
+        ),
         # --- Supply Chain & Code Security ---
-        "supply chain": ("AttackTechnique:Supply_Chain_Tampering", "AttackTechnique", "Supply Chain Tampering"),
-        "typosquatting": ("AttackTechnique:Supply_Chain_Tampering", "AttackTechnique", "Supply Chain Tampering"),
-        "dependency confusion": ("AttackTechnique:Supply_Chain_Tampering", "AttackTechnique", "Supply Chain Tampering"),
-        "malicious package": ("AttackTechnique:Supply_Chain_Tampering", "AttackTechnique", "Supply Chain Tampering"),
+        "supply chain": (
+            "AttackTechnique:Supply_Chain_Tampering",
+            "AttackTechnique",
+            "Supply Chain Tampering",
+        ),
+        "typosquatting": (
+            "AttackTechnique:Supply_Chain_Tampering",
+            "AttackTechnique",
+            "Supply Chain Tampering",
+        ),
+        "dependency confusion": (
+            "AttackTechnique:Supply_Chain_Tampering",
+            "AttackTechnique",
+            "Supply Chain Tampering",
+        ),
+        "malicious package": (
+            "AttackTechnique:Supply_Chain_Tampering",
+            "AttackTechnique",
+            "Supply Chain Tampering",
+        ),
         # --- Vulnerabilities (CWE) ---
-        "sql injection": ("Vulnerability:CWE-89", "Vulnerability", "CWE-89: SQL Injection"),
+        "sql injection": (
+            "Vulnerability:CWE-89",
+            "Vulnerability",
+            "CWE-89: SQL Injection",
+        ),
         "sqli": ("Vulnerability:CWE-89", "Vulnerability", "CWE-89: SQL Injection"),
-        "xss": ("Vulnerability:CWE-79", "Vulnerability", "CWE-79: Cross-site Scripting"),
-        "cross-site scripting": ("Vulnerability:CWE-79", "Vulnerability", "CWE-79: Cross-site Scripting"),
-        "buffer overflow": ("Vulnerability:CWE-120", "Vulnerability", "CWE-120: Buffer Overflow"),
-        "use after free": ("Vulnerability:CWE-416", "Vulnerability", "CWE-416: Use After Free"),
-        "deserialization": ("Vulnerability:CWE-502", "Vulnerability", "CWE-502: Deserialization of Untrusted Data"),
+        "xss": (
+            "Vulnerability:CWE-79",
+            "Vulnerability",
+            "CWE-79: Cross-site Scripting",
+        ),
+        "cross-site scripting": (
+            "Vulnerability:CWE-79",
+            "Vulnerability",
+            "CWE-79: Cross-site Scripting",
+        ),
+        "buffer overflow": (
+            "Vulnerability:CWE-120",
+            "Vulnerability",
+            "CWE-120: Buffer Overflow",
+        ),
+        "use after free": (
+            "Vulnerability:CWE-416",
+            "Vulnerability",
+            "CWE-416: Use After Free",
+        ),
+        "deserialization": (
+            "Vulnerability:CWE-502",
+            "Vulnerability",
+            "CWE-502: Deserialization of Untrusted Data",
+        ),
         # --- Target Assets ---
-        "llm": ("TargetAsset:Large_Language_Model", "TargetAsset", "Large Language Model (LLM)"),
-        "large language model": ("TargetAsset:Large_Language_Model", "TargetAsset", "Large Language Model (LLM)"),
-        "smart contract": ("TargetAsset:Smart_Contract", "TargetAsset", "Smart Contract / EVM"),
-        "firmware": ("TargetAsset:Embedded_Firmware", "TargetAsset", "Embedded Firmware / IoT"),
-        "iot": ("TargetAsset:IoT_Device", "TargetAsset", "Internet of Things (IoT) Device"),
-        "tpm": ("TargetAsset:Hardware_Security_Module", "TargetAsset", "TPM / Hardware Security Module"),
+        "llm": (
+            "TargetAsset:Large_Language_Model",
+            "TargetAsset",
+            "Large Language Model (LLM)",
+        ),
+        "large language model": (
+            "TargetAsset:Large_Language_Model",
+            "TargetAsset",
+            "Large Language Model (LLM)",
+        ),
+        "smart contract": (
+            "TargetAsset:Smart_Contract",
+            "TargetAsset",
+            "Smart Contract / EVM",
+        ),
+        "firmware": (
+            "TargetAsset:Embedded_Firmware",
+            "TargetAsset",
+            "Embedded Firmware / IoT",
+        ),
+        "iot": (
+            "TargetAsset:IoT_Device",
+            "TargetAsset",
+            "Internet of Things (IoT) Device",
+        ),
+        "tpm": (
+            "TargetAsset:Hardware_Security_Module",
+            "TargetAsset",
+            "TPM / Hardware Security Module",
+        ),
     }
 
     # MITRE ATT&CK ID regex pattern (e.g. T1059, T1059.001)

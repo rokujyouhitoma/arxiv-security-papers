@@ -9,11 +9,25 @@ from graph.engine import PropertyGraphEngine
 def _build_test_security_graph() -> PropertyGraphEngine:
     engine = PropertyGraphEngine(memory_only=True)
     # Vertices
-    engine.add_vertex("Paper:101", label="Paper", properties={"year": 2026, "title": "Paper A"})
-    engine.add_vertex("Paper:102", label="Paper", properties={"year": 2026, "title": "Paper B"})
-    engine.add_vertex("Attack:PI", label="AttackTechnique", properties={"name": "Prompt Injection", "risk": 9.5})
-    engine.add_vertex("Vuln:CWE-79", label="Vulnerability", properties={"severity": "High"})
-    engine.add_vertex("Defense:ZKP", label="DefenseMechanism", properties={"category": "ZKP", "overhead": 12.0})
+    engine.add_vertex(
+        "Paper:101", label="Paper", properties={"year": 2026, "title": "Paper A"}
+    )
+    engine.add_vertex(
+        "Paper:102", label="Paper", properties={"year": 2026, "title": "Paper B"}
+    )
+    engine.add_vertex(
+        "Attack:PI",
+        label="AttackTechnique",
+        properties={"name": "Prompt Injection", "risk": 9.5},
+    )
+    engine.add_vertex(
+        "Vuln:CWE-79", label="Vulnerability", properties={"severity": "High"}
+    )
+    engine.add_vertex(
+        "Defense:ZKP",
+        label="DefenseMechanism",
+        properties={"category": "ZKP", "overhead": 12.0},
+    )
     engine.add_vertex("Asset:LLM", label="TargetAsset", properties={"type": "LLM"})
 
     # Edges

@@ -32,7 +32,9 @@ def build_knowledge_graph(workspace_dir: str, output_path: Optional[str] = None)
 
     okf_pattern = os.path.join(workspace_dir, "outputs", "okf_papers", "*", "*.md")
     files = sorted(glob.glob(okf_pattern))
-    logger.info("Found %d OKF markdown papers to index into Knowledge Graph", len(files))
+    logger.info(
+        "Found %d OKF markdown papers to index into Knowledge Graph", len(files)
+    )
 
     start_time = time.perf_counter()
     extracted_triples_count = 0
@@ -94,10 +96,14 @@ def show_graph_stats(workspace_dir: str, graph_path: Optional[str] = None) -> in
     print(f"  • Total Vertices: {st['vertex_count']}")
     print(f"  • Total Edges:    {st['edge_count']}")
     print("  • Vertex Distribution:")
-    for lbl, cnt in sorted(st["vertex_labels"].items(), key=lambda x: x[1], reverse=True):
+    for lbl, cnt in sorted(
+        st["vertex_labels"].items(), key=lambda x: x[1], reverse=True
+    ):
         print(f"    - {lbl:20s}: {cnt:4d}")
     print("  • Edge Predicates Distribution:")
-    for pred, cnt in sorted(st["edge_predicates"].items(), key=lambda x: x[1], reverse=True):
+    for pred, cnt in sorted(
+        st["edge_predicates"].items(), key=lambda x: x[1], reverse=True
+    ):
         print(f"    - {pred:20s}: {cnt:4d}")
     print()
     return 0
@@ -113,10 +119,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     build_p = subparsers.add_parser(
         "build", help="Extract ontology and build knowledge graph from OKF papers"
     )
-    build_p.add_argument("--output", "-o", type=str, default=None, help="Output graph database path")
+    build_p.add_argument(
+        "--output", "-o", type=str, default=None, help="Output graph database path"
+    )
 
-    show_p = subparsers.add_parser("show", help="Show topological statistics of graph database")
-    show_p.add_argument("--input", "-i", type=str, default=None, help="Input graph database path")
+    show_p = subparsers.add_parser(
+        "show", help="Show topological statistics of graph database"
+    )
+    show_p.add_argument(
+        "--input", "-i", type=str, default=None, help="Input graph database path"
+    )
 
     args = parser.parse_args(argv)
     workspace_dir = os.path.abspath(

@@ -179,7 +179,12 @@ class AnalyticsStorage:
                             t.get("category", "General"),
                             int(t.get("count", 0)),
                             int(t.get("prev_count", 0)),
-                            float(str(t.get("growth", "0")).replace("%", "").replace("+", "") or 0.0),
+                            float(
+                                str(t.get("growth", "0"))
+                                .replace("%", "")
+                                .replace("+", "")
+                                or 0.0
+                            ),
                             json.dumps(t.get("sample_ids", [])),
                             now_str,
                         ),
@@ -189,7 +194,11 @@ class AnalyticsStorage:
                 for k, v in data.items():
                     if k == "top_threat_vectors":
                         continue
-                    cat = "ST" if "token" in k or "tier" in k else ("SA" if "latency" in k or "density" in k else "SM")
+                    cat = (
+                        "ST"
+                        if "token" in k or "tier" in k
+                        else ("SA" if "latency" in k or "density" in k else "SM")
+                    )
                     num_val = None
                     text_val = str(v)
                     if isinstance(v, (int, float)):

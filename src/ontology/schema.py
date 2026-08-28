@@ -230,9 +230,7 @@ class SecurityOntologySchema:
     }
 
     @classmethod
-    def validate_triple(
-        cls, src_type: EntityType, predicate: Predicate
-    ) -> bool:
+    def validate_triple(cls, src_type: EntityType, predicate: Predicate) -> bool:
         """Validates whether a predicate is logically permissible from src_type."""
         allowed = cls.ALLOWED_RELATIONS.get(src_type, set())
         return predicate in allowed
