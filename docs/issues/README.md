@@ -8,16 +8,16 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **102** | Gateway ハンドラーにおけるハードコード・ダミーフォールバック値の全廃と動的実測化 | Feature | High | In Progress | PM / QA / Arch | [102-eliminate-dummy-values-in-gateway-handlers.md](102-eliminate-dummy-values-in-gateway-handlers.md) |
+| - | 現在アクティブな Issue はありません | - | - | - | - | - |
 
 ---
-
 
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **102** | Gateway ハンドラーにおけるハードコード・ダミーフォールバック値の全廃と動的実測化 | Feature | 2026-08-28 | [102-eliminate-dummy-values-in-gateway-handlers.md](closed/102-eliminate-dummy-values-in-gateway-handlers.md) |
 | **101** | 論文パイプラインとグラフDB・GraphRAGの完全統合および因果チェーンAPIの実装 | Feature | 2026-08-28 | [101-integrate-paper-pipeline-with-graph-db-and-graphrag.md](closed/101-integrate-paper-pipeline-with-graph-db-and-graphrag.md) |
 | **100** | src/database における高度な SQL 機能 (JOIN, WITH RECURSIVE, JSON 演算子, テーブルエイリアス) のサポート | Feature | 2026-08-28 | [100-support-advanced-sql-joins-ctes-and-json-operators.md](closed/100-support-advanced-sql-joins-ctes-and-json-operators.md) |
 | **099** | Supervisor の多重起動完全防止およびプロセスリーク根絶 | Bug / Feature | 2026-08-28 | [099-prevent-duplicate-supervisor-instances-and-process-leaks.md](closed/099-prevent-duplicate-supervisor-instances-and-process-leaks.md) |

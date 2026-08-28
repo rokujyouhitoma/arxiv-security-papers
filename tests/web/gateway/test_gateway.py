@@ -211,4 +211,133 @@ def test_gateway_additional_endpoints():
     env_graph = make_test_environ(method="GET", path="/api/graph/mesh")
     res_graph = app(env_graph, lambda s, h: status_cap.append(s))
     assert status_cap[0] == "200 OK"
-    assert json.loads(res_graph[0].decode("utf-8"))["status"] == "success"
+    data_mesh = json.loads(res_graph[0].decode("utf-8"))
+    assert data_mesh["status"] == "success"
+    assert "telemetry" in data_mesh
+    assert isinstance(data_mesh["telemetry"]["latency_ms"], (int, float))
+    assert isinstance(data_mesh["telemetry"]["token_savings_pct"], (int, float))
+
+
+def test_gateway_otlp_trace_dynamic_parsing(tmp_path: Any) -> None:
+    logs_dir = tmp_path / "outputs" / "logs"
+    logs_dir.mkdir(parents=True)
+    traces_file = logs_dir / "otlp_traces.jsonl"
+
+    # Write 3 mock spans (1 LLM, 1 Retriever, 1 Tool)
+    traces = [
+        {
+            "resourceSpans": [
+                {
+                    "scopeSpans": [
+                        {
+                            "spans": [
+                                {
+                                    "traceId": "11112222333344445555666677778888",
+                                    "spanId": "12345678abcdef01",
+                                    "name": "llm.gpt4o.reasoning",
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "resourceSpans": [
+                {
+                    "scopeSpans": [
+                        {
+                            "spans": [
+                                {
+                                    "traceId": "11112222333344445555666677778888",
+                                    "spanId": "12345678abcdef02",
+                                    "name": "retriever.vector.query",
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "resourceSpans": [
+                {
+                    "scopeSpans": [
+                        {
+                            "spans": [
+                                {
+                                    "traceId": "11112222333344445555666677778888",
+                                    "spanId": "12345678abcdef03",
+                                    "name": "tool.mcp.dispatch",
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+    ]
+    with open(traces_file, "w", encoding="utf-8") as f:
+        for t in traces:
+            f.write(json.dumps(t) + "\n")
+
+    app = WSGIApplication(workspace_dir=str(tmp_path))
+    status_cap: List[str] = []
+    env_graph = make_test_environ(method="GET", path="/api/graph/mesh")
+    res_graph = app(env_graph, lambda s, h: status_cap.append(s))
+    assert status_cap[0] == "200 OK"
+
+    data = json.loads(res_graph[0].decode("utf-8"))
+    obf = data.get("obf_telemetry", {})
+    assert obf["llm_spans"] == 1
+    assert obf["retriever_spans"] == 1
+    assert obf["tool_spans"] == 1
+    assert obf["pipeline_spans"] == 0
+    assert data["telemetry"]["obf_spans"] == 3
+    assert "11112222" in obf["latest_traceparent"]
+
+
+def test_gateway_search_latency_real_measurement():
+    mock_engine = MagicMock()
+    mock_engine.search_vector_ann.return_value = [
+        {"id": "2608.12345", "title": "Vector Paper"}
+    ]
+    mock_engine.search_rrf_hybrid.return_value = [
+        {"id": "2608.12345", "title": "RRF Paper"}
+    ]
+
+    app = WSGIApplication(vector_engine=mock_engine)
+
+    # 1. vector mode
+    status_cap: List[str] = []
+    env_vec = make_test_environ(
+        method="GET", path="/api/search", query_string="q=test&mode=vector"
+    )
+    res_vec = app(env_vec, lambda s, h: status_cap.append(s))
+    assert status_cap[0] == "200 OK"
+    data_vec = json.loads(res_vec[0].decode("utf-8"))
+    assert "profile" in data_vec
+    assert "total_ms" in data_vec["profile"]
+    assert isinstance(data_vec["profile"]["total_ms"], (int, float))
+
+    # 2. rrf mode
+    status_cap.clear()
+    env_rrf = make_test_environ(
+        method="GET", path="/api/search", query_string="q=test&mode=rrf"
+    )
+    res_rrf = app(env_rrf, lambda s, h: status_cap.append(s))
+    assert status_cap[0] == "200 OK"
+    data_rrf = json.loads(res_rrf[0].decode("utf-8"))
+    assert "profile" in data_rrf
+    assert "total_ms" in data_rrf["profile"]
+    assert isinstance(data_rrf["profile"]["total_ms"], (int, float))
+
+
+def test_gateway_paper_not_found_returns_404(tmp_path: Any) -> None:
+    app = WSGIApplication(workspace_dir=str(tmp_path))
+    status_cap: List[str] = []
+    env = make_test_environ(method="GET", path="/api/paper/non_existent_paper_999")
+    res = app(env, lambda s, h: status_cap.append(s))
+    assert status_cap[0] == "404 Not Found"
+    data = json.loads(res[0].decode("utf-8"))
+    assert data["status"] == "error"
