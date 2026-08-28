@@ -188,3 +188,22 @@ def test_gateway_graph_mesh_with_vector_engine() -> None:
     assert data["status"] == "success"
     assert len(data["mesh"]["nodes"]) == 8
     assert len(data["mesh"]["edges"]) == 8
+    assert "database_metrics" in data
+    db_m = data["database_metrics"]
+    assert db_m["table_count"] >= 5
+    assert db_m["total_rows"] > 0
+    assert "performance_kpis" in db_m
+    assert db_m["performance_kpis"]["read_iops"] > 0
+
+
+def test_dashboard_database_storage_metrics_ui(dashboard_html_content: str) -> None:
+    """Verifies that the System tab contains the Database Performance, IOPS, and Tables Breakdown elements."""
+    assert 'id="valDbIops"' in dashboard_html_content
+    assert 'id="valDbLatency"' in dashboard_html_content
+    assert 'id="valDbCacheHit"' in dashboard_html_content
+    assert 'id="badgeDbTableCount"' in dashboard_html_content
+    assert 'id="badgeDbTotalRows"' in dashboard_html_content
+    assert 'id="badgeDbTotalSize"' in dashboard_html_content
+    assert 'id="databaseTablesTableBody"' in dashboard_html_content
+    assert "Database Tables &amp; Physical Storage Ledger" in dashboard_html_content
+
