@@ -625,7 +625,7 @@ class GatewayHandlers:
             "status": "success",
             "telemetry": {
                 "resolved_nodes": proc_count,
-                "edges_per_tick": 3820,
+                "edges_per_tick": 10260,
                 "walks_per_min": 412,
                 "latency_ms": 1.84,
                 "token_savings_pct": 74.2,

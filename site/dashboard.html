@@ -533,7 +533,7 @@
         </div>
         <div class="telemetry-cell">
           <div class="telemetry-label">Edges / Tick</div>
-          <div class="telemetry-value coral" id="valEdgesTick">3,820/s</div>
+          <div class="telemetry-value coral" id="valEdgesTick">10,260/s</div>
         </div>
         <div class="telemetry-cell">
           <div class="telemetry-label">Walks / Min</div>
@@ -1390,7 +1390,8 @@
                 if (rEl) rEl.textContent = currentResolvedNodes.toLocaleString();
               }
               if (data.telemetry.token_savings_pct) {
-                document.getElementById('valTokenSavings').textContent = `${data.telemetry.token_savings_pct}%`;
+                const sEl = document.getElementById('valSavings') || document.getElementById('valTokenSavings');
+                if (sEl) sEl.textContent = `${data.telemetry.token_savings_pct}%`;
               }
               if (data.telemetry.obf_spans) {
                 const obfEl = document.getElementById('valObfSpans');
