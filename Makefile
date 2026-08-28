@@ -180,6 +180,10 @@ rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q=
 run: activate ## Run Universal Autonomous Intelligence Orchestrator (or custom $SRC)
 	PYTHONPATH=src ${VENV_PYTHON} ${SRC} $(ARGS)
 
+.PHONY: aggregate_analytics
+aggregate_analytics: activate ## Run batch pre-calculation of strategic KPIs and threat analytics
+	PYTHONPATH=src ${VENV_PYTHON} -m analytics.cli aggregate
+
 .PHONY: isort
 isort: activate ## isort
 	${VENV_BIN}/isort $(PYTHON_SRCS) ${TESTS}

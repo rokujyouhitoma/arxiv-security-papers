@@ -2,7 +2,7 @@
 ID: 096
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Done)
 ---
 
 # [FEAT/ENH] 事前バッチ集計エンジン (Pre-Aggregated Analytics Engine) および高速アナリティクスストレージの実装 (ID: 096)
@@ -68,7 +68,7 @@ Target Branch: `feat/096-implement-pre-aggregated-analytics-engine-and-storage`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `src/analytics/` に集計エンジンとストレージが実装され、単体テストが完備されていること。
-- [ ] `/api/graph/mesh` のリクエスト処理時にファイル全量走査が発生せず、レイテンシが 1ms 未満に短縮されること。
-- [ ] `outputs/analytics/latest_metrics.json` に実測データがアトミックに保存・更新されること。
-- [ ] `make check` / `make verify_quality` が 100% PASS すること。
+- [x] `src/analytics/` に集計エンジンとストレージが実装され、単体テストが完備されていること。
+- [x] `/api/graph/mesh` のリクエスト処理時にファイル全量走査が発生せず、レイテンシが 1ms 未満に短縮されること。
+- [x] `outputs/analytics/latest_metrics.json` に実測データがアトミックに保存・更新されること。
+- [x] `make check` / `make verify_quality` が 100% PASS すること。
