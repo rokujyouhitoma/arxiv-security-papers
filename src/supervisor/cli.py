@@ -261,6 +261,21 @@ def _handle_start(
         print("\n[*] Interrupted by user. Shutting down...")
         arbiter.shutdown()
         return 0
+    except RuntimeError as ex:
+        err_msg = str(ex)
+        if "already running with PID" in err_msg:
+            print(f"\n⚠️  [Supervisor Arbiter Error] {err_msg}")
+            print("\n💡 Available actions:")
+            print("  • View dashboard: python -m supervisor.cli top")
+            print("  • Check status:   python -m supervisor.cli status")
+            print("  • Stop arbiter:   python -m supervisor.cli stop")
+            print("  • Restart:        python -m supervisor.cli restart\n")
+            return 1
+        print(f"\n❌ [Supervisor Arbiter Error] {err_msg}")
+        return 1
+    except Exception as ex:
+        print(f"\n❌ [Supervisor Arbiter Fatal Error] Unexpected failure during startup: {ex}")
+        return 1
 
 
 def _handle_status_cmd(client: ControlClient) -> int:
@@ -362,8 +377,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     if cmd == "start":
         return _handle_start(args, config_obj, workspace_dir, control_sock)
 
-    client = ControlClient(control_sock)
-    return _handle_control(cmd, args, client)
+    try:
+        client = ControlClient(control_sock)
+        return _handle_control(cmd, args, client)
+    except (ConnectionRefusedError, FileNotFoundError, OSError) as ex:
+        print(f"\n❌ [Supervisor Control Error] Unable to connect to Arbiter control socket ({control_sock}): {ex}")
+        print("\n💡 Is Supervisor running?")
+        print("  • Start in background: python -m supervisor.cli start --daemon")
+        print("  • Start in foreground: python -m supervisor.cli start\n")
+        return 1
+    except Exception as ex:
+        print(f"\n❌ [Supervisor Control Error] Command '{cmd}' failed: {ex}")
+        return 1
 
 
 if __name__ == "__main__":
