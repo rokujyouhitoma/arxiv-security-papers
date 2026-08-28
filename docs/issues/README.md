@@ -17,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **099** | Supervisor の多重起動完全防止およびプロセスリーク根絶 | Bug / Feature | 2026-08-28 | [099-prevent-duplicate-supervisor-instances-and-process-leaks.md](closed/099-prevent-duplicate-supervisor-instances-and-process-leaks.md) |
 | **098** | セキュリティ知識オントロジー (SKO) 定義およびゼロ侵襲型グラフデータベース基盤の実装 | Feature | 2026-08-28 | [098-implement-security-knowledge-ontology-and-graph-database-engine.md](closed/098-implement-security-knowledge-ontology-and-graph-database-engine.md) |
 | **096** | 事前バッチ集計エンジン (Pre-Aggregated Analytics Engine) および高速アナリティクスストレージの実装 | Feature | 2026-08-28 | [096-implement-pre-aggregated-analytics-engine-and-storage.md](closed/096-implement-pre-aggregated-analytics-engine-and-storage.md) |
 | **097** | 3ノード分散データベース同期クラスタ基盤の実装および macOS ソケット競合の修正 | Bug / Feature | 2026-08-28 | [097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md](closed/097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md) |

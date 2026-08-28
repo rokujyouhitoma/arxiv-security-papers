@@ -313,15 +313,14 @@ def _handle_start(
         f"🚀 [Supervisor Arbiter] Booting {config.workers} '{config.worker_class}' workers "
         f"on {config.bind_host}:{config.bind_port} (App: {config.app_uri})..."
     )
-    arbiter = Arbiter(config)
-    if config.daemon:
-        print(
-            f"🚀 [Supervisor Arbiter] Daemonizing process to background "
-            f"(Log: {config.log_file}, PID file: {config.pid_file})..."
-        )
-        arbiter.daemonize()
-
     try:
+        arbiter = Arbiter(config)
+        if config.daemon:
+            print(
+                f"🚀 [Supervisor Arbiter] Daemonizing process to background "
+                f"(Log: {config.log_file}, PID file: {config.pid_file})..."
+            )
+            arbiter.daemonize()
         arbiter.start()
         return 0
     except KeyboardInterrupt:
@@ -330,7 +329,7 @@ def _handle_start(
         return 0
     except RuntimeError as ex:
         err_msg = str(ex)
-        if "already running with PID" in err_msg:
+        if "already running" in err_msg:
             print(f"\n⚠️  [Supervisor Arbiter Error] {err_msg}")
             print("\n💡 Available actions:")
             print("  • View dashboard: python -m supervisor.cli top")
@@ -341,8 +340,84 @@ def _handle_start(
         print(f"\n❌ [Supervisor Arbiter Error] {err_msg}")
         return 1
     except Exception as ex:
-        print(f"\n❌ [Supervisor Arbiter Fatal Error] Unexpected failure during startup: {ex}")
+        print(
+            f"\n❌ [Supervisor Arbiter Fatal Error] Unexpected failure during startup: {ex}"
+        )
         return 1
+
+
+def _read_file_pid(path: Optional[str]) -> Optional[int]:
+    """Reads PID from given file path if valid."""
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+            return int(content) if content.isdigit() else None
+    except Exception:
+        return None
+
+
+def _query_ipc_pid(control_sock: str) -> Optional[int]:
+    """Queries running Arbiter PID via IPC control client."""
+    if not os.path.exists(control_sock):
+        return None
+    try:
+        status_resp = ControlClient(control_sock).get_status()
+        return int(status_resp.get("arbiter_pid", 0)) or None
+    except Exception:
+        return None
+
+
+def _resolve_old_pid(
+    pid_file: Optional[str], lock_file: Optional[str], control_sock: str
+) -> Optional[int]:
+    """Resolves running Arbiter PID from pid_file, lock_file, or IPC status."""
+    return (
+        _read_file_pid(pid_file)
+        or _read_file_pid(lock_file)
+        or _query_ipc_pid(control_sock)
+    )
+
+
+def _wait_for_pid_shutdown(old_pid: int) -> None:
+    """Waits up to 5 seconds for old PID shutdown, escalating to SIGKILL if necessary."""
+    import signal
+
+    print(f"[*] Waiting for Arbiter (PID: {old_pid}) to shut down...")
+    terminated = False
+    for step in range(50):
+        try:
+            os.kill(old_pid, 0)
+            if step == 30:
+                try:
+                    os.kill(old_pid, signal.SIGTERM)
+                except OSError:
+                    pass
+            time.sleep(0.1)
+        except OSError:
+            terminated = True
+            break
+
+    if not terminated:
+        print(
+            f"[!] Arbiter (PID: {old_pid}) did not shut down gracefully. Sending SIGKILL..."
+        )
+        try:
+            os.kill(old_pid, signal.SIGKILL)
+        except OSError:
+            pass
+        time.sleep(0.2)
+
+
+def _cleanup_paths(*paths: Optional[str]) -> None:
+    """Safely removes given file paths."""
+    for path in paths:
+        if path and os.path.exists(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
 
 def _handle_restart(
@@ -351,36 +426,22 @@ def _handle_restart(
     workspace_dir: str,
     control_sock: str,
 ) -> int:
-    """
-    Handles supervisor restart by stopping running instance first,
-    waiting for full termination, then starting fresh.
-    """
+    """Handles supervisor restart by stopping running instance and starting fresh."""
     import signal
 
     print("🔄 [Supervisor Arbiter] Initiating restart sequence...")
     config = _build_start_config(args, config_obj, workspace_dir, control_sock)
-    pid_file = config.pid_file
-    old_pid: Optional[int] = None
+    old_pid = _resolve_old_pid(config.pid_file, config.lock_file, control_sock)
 
-    if pid_file and os.path.exists(pid_file):
-        try:
-            with open(pid_file, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if content:
-                    old_pid = int(content)
-        except Exception:
-            pass
-
-    # 1. Attempt graceful stop via IPC if control socket exists
     if os.path.exists(control_sock):
         try:
-            client = ControlClient(control_sock)
-            resp = client.stop()
-            print(f"[+] Sent stop signal to running Arbiter via IPC: {resp.get('status', 'sent')}")
+            resp = ControlClient(control_sock).stop()
+            print(
+                f"[+] Sent stop signal to running Arbiter via IPC: {resp.get('status', 'sent')}"
+            )
         except Exception:
             pass
 
-    # 2. If IPC didn't terminate or wasn't available, send SIGTERM directly to old PID
     if old_pid is not None:
         try:
             os.kill(old_pid, 0)
@@ -388,25 +449,10 @@ def _handle_restart(
         except OSError:
             old_pid = None
 
-    # 3. Wait up to 6 seconds for old Arbiter and worker processes to fully terminate
     if old_pid is not None:
-        print(f"[*] Waiting for Arbiter (PID: {old_pid}) to shut down...")
-        for _ in range(60):
-            try:
-                os.kill(old_pid, 0)
-                time.sleep(0.1)
-            except OSError:
-                old_pid = None
-                break
+        _wait_for_pid_shutdown(old_pid)
 
-    # 4. Clean up any stale sockets or leftover PID file before fresh start
-    if pid_file and os.path.exists(pid_file):
-        try:
-            os.remove(pid_file)
-        except OSError:
-            pass
-
-    # 5. Start fresh instance
+    _cleanup_paths(config.pid_file, config.lock_file, control_sock)
     return _handle_start(args, config_obj, workspace_dir, control_sock)
 
 
@@ -515,7 +561,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         client = ControlClient(control_sock)
         return _handle_control(cmd, args, client)
     except (ConnectionRefusedError, FileNotFoundError, OSError) as ex:
-        print(f"\n❌ [Supervisor Control Error] Unable to connect to Arbiter control socket ({control_sock}): {ex}")
+        print(
+            f"\n❌ [Supervisor Control Error] Unable to connect to Arbiter control socket ({control_sock}): {ex}"
+        )
         print("\n💡 Is Supervisor running?")
         print("  • Start in background: python -m supervisor.cli start --daemon")
         print("  • Start in foreground: python -m supervisor.cli start\n")

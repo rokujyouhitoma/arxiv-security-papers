@@ -7,6 +7,7 @@ traps POSIX signals, enforces heartbeat watchdogs, and hosts the Unix domain soc
 
 from __future__ import annotations
 
+import fcntl
 import importlib
 import logging
 import os
@@ -15,7 +16,7 @@ import socket
 import sys
 import time
 import traceback
-from typing import Any, Callable, Dict, List, NoReturn, Optional, Set, cast
+from typing import Any, Callable, Dict, List, NoReturn, Optional, Set, TextIO, cast
 
 from .config import SupervisorConfig
 from .contracts import (
@@ -62,6 +63,7 @@ class Arbiter:
         self.server_socket: Optional[socket.socket] = None
         self.control_server: Optional[ControlServer] = None
         self.wsgi_app: Optional[Callable[..., Any]] = None
+        self._lock_file_obj: Optional[TextIO] = None
 
         self.pid = os.getpid()
         self.running = False
@@ -353,7 +355,11 @@ class Arbiter:
             meta = self.watchdog.get_worker_status(active_pid)
             if meta and "slot_idx" in meta:
                 used_slots.add(int(meta["slot_idx"]))
-            elif meta and "worker_id" in meta and str(meta["worker_id"]).split("_")[-1].isdigit():
+            elif (
+                meta
+                and "worker_id" in meta
+                and str(meta["worker_id"]).split("_")[-1].isdigit()
+            ):
                 used_slots.add(int(str(meta["worker_id"]).split("_")[-1]))
 
         slot_idx = 0
@@ -377,11 +383,28 @@ class Arbiter:
             return pid
 
     def init_child_process(self) -> None:
-        """Resets signal handlers and closes administrative control socket in child."""
+        """Resets signal handlers, sets death signal on parent exit, and closes control/lock resources."""
+        if self._lock_file_obj:
+            try:
+                self._lock_file_obj.close()
+            except Exception:
+                pass
+            self._lock_file_obj = None
+
         if self.control_server:
             self.control_server.close_in_child()
         # Reset signal handlers in child
         signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+
+        # Ensure child process terminates automatically if parent Arbiter dies (Linux)
+        try:
+            import ctypes
+
+            libc = ctypes.CDLL("libc.so.6")
+            PR_SET_PDEATHSIG = 1
+            libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+        except Exception:
+            pass
 
     def adjust_pool(self, pool_name: str, target: Optional[int] = None) -> None:
         """Maintains target worker count for a specific pool (scaling up or down)."""
@@ -554,23 +577,6 @@ class Arbiter:
             except OSError:
                 pass
 
-    def _cleanup_resources(self) -> None:
-        """Cleans up control server, server socket, and PID file."""
-        if self.control_server:
-            self.control_server.stop()
-        if self.server_socket:
-            try:
-                self.server_socket.close()
-            except OSError:
-                pass
-            self.server_socket = None
-
-        if self.config.pid_file and os.path.exists(self.config.pid_file):
-            try:
-                os.unlink(self.config.pid_file)
-            except OSError:
-                pass
-
     def _build_dependency_graph(self) -> tuple[Dict[str, int], Dict[str, list[str]]]:
         """Builds in-degree mapping and adjacency list for pools."""
         in_degree: Dict[str, int] = {p: 0 for p in self.pools}
@@ -638,6 +644,89 @@ class Arbiter:
 
         self._cleanup_resources()
 
+    def _read_existing_arbiter_pid(self) -> str:
+        """Helper to read PID from pid_file or lock_file for error diagnostics."""
+        for path in (self.config.pid_file, self.config.lock_file):
+            if path and os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        val = f.read().strip()
+                        if val:
+                            return val
+                except Exception:
+                    pass
+        return "unknown"
+
+    def acquire_single_instance_lock(self) -> None:
+        """Acquires a non-blocking exclusive flock on the lock file to prevent duplicate Arbiter instances."""
+        if not self.config.lock_file:
+            return
+        lock_dir = os.path.dirname(os.path.abspath(self.config.lock_file))
+        if lock_dir:
+            os.makedirs(lock_dir, exist_ok=True)
+
+        lock_fd: Optional[TextIO] = None
+        try:
+            lock_fd = open(self.config.lock_file, "a+", encoding="utf-8")
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_fd.seek(0)
+            lock_fd.truncate()
+            lock_fd.write(f"{self.pid}\n")
+            lock_fd.flush()
+            self._lock_file_obj = lock_fd
+        except (BlockingIOError, OSError) as exc:
+            if lock_fd is not None:
+                try:
+                    lock_fd.close()
+                except Exception:
+                    pass
+            existing_pid = self._read_existing_arbiter_pid()
+            raise RuntimeError(
+                f"Supervisor arbiter is already running with PID {existing_pid}."
+            ) from exc
+
+    def release_single_instance_lock(self) -> None:
+        """Releases and unlinks the singleton instance lock file."""
+        if self._lock_file_obj:
+            try:
+                fcntl.flock(self._lock_file_obj.fileno(), fcntl.LOCK_UN)
+                self._lock_file_obj.close()
+            except Exception:
+                pass
+            self._lock_file_obj = None
+
+        if self.config.lock_file and os.path.exists(self.config.lock_file):
+            try:
+                os.unlink(self.config.lock_file)
+            except OSError:
+                pass
+
+    def _cleanup_resources(self) -> None:
+        """Cleans up control server, server socket, PID file, and instance lock."""
+        if self.control_server:
+            self.control_server.stop()
+            self.control_server = None
+        if self.server_socket:
+            try:
+                self.server_socket.close()
+            except OSError:
+                pass
+            self.server_socket = None
+
+        if self.config.control_socket and os.path.exists(self.config.control_socket):
+            try:
+                os.unlink(self.config.control_socket)
+            except OSError:
+                pass
+
+        if self.config.pid_file and os.path.exists(self.config.pid_file):
+            try:
+                os.unlink(self.config.pid_file)
+            except OSError:
+                pass
+
+        self.release_single_instance_lock()
+
     def _check_existing_pid(self) -> None:
         """Checks if a valid running instance is already registered in the PID file."""
         if not self.config.pid_file or not os.path.exists(self.config.pid_file):
@@ -683,6 +772,7 @@ class Arbiter:
 
         self.pid = os.getpid()
         self._redirect_standard_streams()
+        self.acquire_single_instance_lock()
 
     @staticmethod
     def _safe_dup2(src_fd: int, dst_fd: int) -> None:
@@ -782,6 +872,8 @@ class Arbiter:
 
     def start(self) -> None:
         """Main lifecycle entrypoint starting the Supervisor cluster."""
+        if not self._lock_file_obj:
+            self.acquire_single_instance_lock()
         self.running = True
         self.init_signals()
         self.init_server_socket()

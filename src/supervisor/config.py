@@ -53,6 +53,7 @@ class SupervisorConfig:
         )
     )
     pid_file: Optional[str] = None
+    lock_file: Optional[str] = None
     control_socket: Optional[str] = None
     daemon: bool = False
     log_file: Optional[str] = None
@@ -151,6 +152,10 @@ class SupervisorConfig:
         if not self.pid_file:
             self.pid_file = os.path.join(
                 self.workspace_dir, "outputs", "supervisor", "arbiter.pid"
+            )
+        if not self.lock_file:
+            self.lock_file = os.path.join(
+                self.workspace_dir, "outputs", "supervisor", "arbiter.lock"
             )
         if not self.control_socket:
             self.control_socket = os.path.join(

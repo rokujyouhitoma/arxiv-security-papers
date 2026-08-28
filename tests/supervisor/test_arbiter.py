@@ -364,6 +364,8 @@ def test_arbiter_daemonize_mocked(tmp_path: Any) -> None:
         mock_umask.assert_called_once_with(0)
         assert mock_dup2.call_count >= 2
 
+    arbiter.release_single_instance_lock()
+
 
 def test_arbiter_existing_pid_check(tmp_path: Any) -> None:
     import pytest
