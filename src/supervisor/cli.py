@@ -351,36 +351,62 @@ def _handle_restart(
     workspace_dir: str,
     control_sock: str,
 ) -> int:
-    """Handles supervisor restart by stopping running instance first, then starting fresh."""
+    """
+    Handles supervisor restart by stopping running instance first,
+    waiting for full termination, then starting fresh.
+    """
+    import signal
+
     print("🔄 [Supervisor Arbiter] Initiating restart sequence...")
+    config = _build_start_config(args, config_obj, workspace_dir, control_sock)
+    pid_file = config.pid_file
+    old_pid: Optional[int] = None
+
+    if pid_file and os.path.exists(pid_file):
+        try:
+            with open(pid_file, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    old_pid = int(content)
+        except Exception:
+            pass
+
     # 1. Attempt graceful stop via IPC if control socket exists
     if os.path.exists(control_sock):
         try:
             client = ControlClient(control_sock)
             resp = client.stop()
-            print(f"[+] Sent stop signal to running Arbiter: {resp.get('status', 'sent')}")
-        except Exception as ex:
-            print(f"[*] Note: IPC stop signal not acknowledged ({ex}), proceeding to startup check...")
+            print(f"[+] Sent stop signal to running Arbiter via IPC: {resp.get('status', 'sent')}")
+        except Exception:
+            pass
 
-    # 2. Wait up to 3 seconds for existing arbiter PID to release
-    config = _build_start_config(args, config_obj, workspace_dir, control_sock)
-    pid_file = config.pid_file
-    if pid_file:
-        for _ in range(30):
-            if not os.path.exists(pid_file):
-                break
+    # 2. If IPC didn't terminate or wasn't available, send SIGTERM directly to old PID
+    if old_pid is not None:
+        try:
+            os.kill(old_pid, 0)
+            os.kill(old_pid, signal.SIGTERM)
+        except OSError:
+            old_pid = None
+
+    # 3. Wait up to 6 seconds for old Arbiter and worker processes to fully terminate
+    if old_pid is not None:
+        print(f"[*] Waiting for Arbiter (PID: {old_pid}) to shut down...")
+        for _ in range(60):
             try:
-                with open(pid_file, "r", encoding="utf-8") as f:
-                    content = f.read().strip()
-                    if not content:
-                        break
-                    existing_pid = int(content)
-                    os.kill(existing_pid, 0)
-            except (OSError, ValueError):
+                os.kill(old_pid, 0)
+                time.sleep(0.1)
+            except OSError:
+                old_pid = None
                 break
-            time.sleep(0.1)
 
-    # 3. Start fresh instance
+    # 4. Clean up any stale sockets or leftover PID file before fresh start
+    if pid_file and os.path.exists(pid_file):
+        try:
+            os.remove(pid_file)
+        except OSError:
+            pass
+
+    # 5. Start fresh instance
     return _handle_start(args, config_obj, workspace_dir, control_sock)
 
 
