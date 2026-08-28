@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 class DatabaseService:
     """
     Standalone Database IPC Daemon listening on a Unix Domain Socket.
+    Supports single-node and multi-node clustered execution.
     """
 
     def __init__(
@@ -33,13 +34,22 @@ class DatabaseService:
         workspace_dir: Optional[str] = None,
         storage_path: Optional[str] = None,
         dim: int = 128,
+        node_id: int = 0,
+        cluster_size: int = 3,
     ) -> None:
         self.workspace_dir = workspace_dir or os.path.abspath(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         )
-        self.socket_path = socket_path or os.path.join(
-            self.workspace_dir, "outputs", "supervisor", "db.sock"
-        )
+        self.node_id = int(node_id)
+        self.cluster_size = int(cluster_size)
+
+        if socket_path:
+            self.socket_path = socket_path
+        else:
+            self.socket_path = os.path.join(
+                self.workspace_dir, "outputs", "supervisor", f"db_{self.node_id}.sock"
+            )
+
         self.storage_path = storage_path or os.path.join(
             self.workspace_dir, "outputs", "database", "papers.vdb"
         )
@@ -50,7 +60,7 @@ class DatabaseService:
         self._thread: Optional[threading.Thread] = None
 
     def _setup_socket(self) -> socket.socket:
-        """Prepares and binds the Unix domain socket."""
+        """Prepares and binds the Unix domain socket safely."""
         sock_dir = os.path.dirname(self.socket_path)
         if sock_dir and not os.path.exists(sock_dir):
             os.makedirs(sock_dir, exist_ok=True)
@@ -64,6 +74,18 @@ class DatabaseService:
         sock.bind(self.socket_path)
         sock.listen(64)
         sock.settimeout(1.0)
+
+        # If node_id == 0, ensure canonical db.sock symlink/alias exists for backward compatibility
+        if self.node_id == 0:
+            canonical_sock = os.path.join(sock_dir, "db.sock")
+            if canonical_sock != self.socket_path:
+                try:
+                    if os.path.exists(canonical_sock):
+                        os.unlink(canonical_sock)
+                    os.symlink(os.path.basename(self.socket_path), canonical_sock)
+                except OSError:
+                    pass
+
         return sock
 
     def start(self) -> None:
@@ -73,10 +95,17 @@ class DatabaseService:
         self.running = True
         self._server_sock = self._setup_socket()
         self._thread = threading.Thread(
-            target=self._listen_loop, name="DatabaseIPCService", daemon=True
+            target=self._listen_loop,
+            name=f"DatabaseIPCService-Node{self.node_id}",
+            daemon=True,
         )
         self._thread.start()
-        logger.info("DatabaseService started on %s", self.socket_path)
+        logger.info(
+            "DatabaseService (Node %d/%d) started on %s",
+            self.node_id,
+            self.cluster_size,
+            self.socket_path,
+        )
 
     def stop(self) -> None:
         """Stops the IPC server daemon and cleans up the socket."""
@@ -97,7 +126,16 @@ class DatabaseService:
                 os.unlink(self.socket_path)
             except OSError:
                 pass
-        logger.info("DatabaseService stopped.")
+
+        if self.node_id == 0:
+            canonical_sock = os.path.join(os.path.dirname(self.socket_path), "db.sock")
+            if os.path.islink(canonical_sock):
+                try:
+                    os.unlink(canonical_sock)
+                except OSError:
+                    pass
+
+        logger.info("DatabaseService (Node %d) stopped.", self.node_id)
 
     def _process_request_payload(self, raw: str) -> Dict[str, Any]:
         """Parses and executes request through protocol handler."""
@@ -107,10 +145,14 @@ class DatabaseService:
                 return {"status": "error", "error": "Request must be a JSON object"}
             if req.get("op") == "execute_sql":
                 sql_text = str(req.get("params", {}).get("sql", "")).strip()
-                logger.info("⚡ [DatabaseService IPC] Received SQL query: %s", sql_text)
+                logger.info(
+                    "⚡ [DatabaseService Node %d IPC] Received SQL query: %s",
+                    self.node_id,
+                    sql_text,
+                )
                 try:
                     print(
-                        f"⚡ [DatabaseService IPC] Executing SQL: {sql_text}",
+                        f"⚡ [DatabaseService Node {self.node_id} IPC] Executing SQL: {sql_text}",
                         flush=True,
                     )
                 except OSError:
@@ -122,25 +164,24 @@ class DatabaseService:
             return {"status": "error", "error": str(ex)}
 
     def _handle_client_connection(self, conn: socket.socket) -> None:
-        """Handles single client connection until closed."""
-        conn.settimeout(5.0)
-        buf = b""
+        """Handles a single client IPC conversation."""
         try:
+            conn.settimeout(10.0)
+            buffer = ""
             while self.running:
                 chunk = conn.recv(65536)
                 if not chunk:
                     break
-                buf += chunk
-                while b"\n" in buf:
-                    line, buf = buf.split(b"\n", 1)
-                    raw_str = line.decode("utf-8", errors="replace")
-                    resp = self._process_request_payload(raw_str)
-                    out_bytes = (json.dumps(resp, ensure_ascii=False) + "\n").encode(
-                        "utf-8"
-                    )
-                    conn.sendall(out_bytes)
-        except Exception:
-            pass
+                buffer += chunk.decode("utf-8", errors="replace")
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if not line.strip():
+                        continue
+                    resp_dict = self._process_request_payload(line)
+                    resp_bytes = (json.dumps(resp_dict) + "\n").encode("utf-8")
+                    conn.sendall(resp_bytes)
+        except (socket.timeout, OSError) as e:
+            logger.debug("Database IPC client connection closed: %s", e)
         finally:
             try:
                 conn.close()
@@ -167,33 +208,58 @@ class DatabaseService:
 class DatabaseLifecycleHook(LifecycleHook):
     """
     Lifecycle hook for running DatabaseService within a ManagedServiceWorker.
+    Supports multi-node cluster binding via worker_id introspection.
     """
 
     def __init__(
         self,
         socket_path: Optional[str] = None,
         workspace_dir: Optional[str] = None,
+        node_id: int = 0,
+        cluster_size: int = 3,
     ) -> None:
-        self.service = DatabaseService(
-            socket_path=socket_path, workspace_dir=workspace_dir
-        )
+        self.socket_path = socket_path
+        self.workspace_dir = workspace_dir
+        self.node_id = node_id
+        self.cluster_size = cluster_size
+        self.service: Optional[DatabaseService] = None
+
+    def bind_worker(self, worker_id: str) -> None:
+        """Extracts node_id from worker_id (e.g. 'database_0', 'database_1', 'database_2')."""
+        import re
+
+        match = re.search(r"(\d+)$", str(worker_id))
+        if match:
+            self.node_id = int(match.group(1)) % max(1, self.cluster_size)
+        else:
+            self.node_id = 0
 
     def setup(self) -> bool:
-        """Initializes database and starts IPC server."""
+        """Initializes database and starts IPC server on node-specific socket."""
         try:
+            if self.service is None:
+                self.service = DatabaseService(
+                    socket_path=self.socket_path,
+                    workspace_dir=self.workspace_dir,
+                    node_id=self.node_id,
+                    cluster_size=self.cluster_size,
+                )
             self.service.start()
             print(
-                f"⚡ [DatabaseService Worker] Database IPC daemon online on {self.service.socket_path}",
+                f"⚡ [DatabaseService Worker Node {self.node_id}] "
+                f"Database IPC daemon online on {self.service.socket_path}",
                 flush=True,
             )
             return True
         except Exception as e:
-            logger.error("Failed to start DatabaseService: %s", e)
+            logger.error(
+                "Failed to start DatabaseService (Node %d): %s", self.node_id, e
+            )
             return False
 
     def health_check(self) -> bool:
         """Verifies database engine responsiveness."""
-        if not self.service.running:
+        if not self.service or not self.service.running:
             return False
         try:
             resp = self.service.handler.handle_request({"op": "ping", "params": {}})
@@ -204,11 +270,12 @@ class DatabaseLifecycleHook(LifecycleHook):
     def on_flush(self) -> None:
         """Periodically syncs database buffer to disk if needed."""
         try:
-            if hasattr(self.service.storage, "sync"):
+            if self.service and hasattr(self.service.storage, "sync"):
                 self.service.storage.sync()
         except Exception:
             pass
 
     def teardown(self) -> None:
         """Stops database IPC service and releases locks."""
-        self.service.stop()
+        if self.service:
+            self.service.stop()

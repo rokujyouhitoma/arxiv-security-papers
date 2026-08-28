@@ -37,6 +37,10 @@ class LifecycleHook(abc.ABC):
     health evaluation, background flushing, and graceful teardown actions.
     """
 
+    def bind_worker(self, worker_id: str) -> None:
+        """Notifies hook of the assigned unique worker identifier."""
+        pass
+
     @abc.abstractmethod
     def setup(self) -> bool:
         """Executes one-time initialization. Returns True if successful."""

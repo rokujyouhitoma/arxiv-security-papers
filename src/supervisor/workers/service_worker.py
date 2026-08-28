@@ -56,6 +56,7 @@ class ManagedServiceWorker(BaseWorker):
 
         # Step 1: Setup
         try:
+            self.hook.bind_worker(self.worker_id)
             ok = self.hook.setup()
             self.state = ServiceState.READY if ok else ServiceState.FAILED
         except Exception:

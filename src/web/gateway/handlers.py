@@ -458,17 +458,17 @@ def _introspect_strategic_metrics(workspace_dir: str) -> Dict[str, Any]:
     okf_dir = os.path.join(workspace_dir, "outputs", "okf_papers")
     all_okf_files: List[str] = []
     if os.path.exists(okf_dir):
-        for root, _, files in os.walk(okf_dir):
-            for f in files:
-                if f.endswith(".md"):
-                    all_okf_files.append(os.path.join(root, f))
+        for root, _, walk_files in os.walk(okf_dir):
+            for file_name in walk_files:
+                if file_name.endswith(".md"):
+                    all_okf_files.append(os.path.join(root, file_name))
 
     all_okf_files.sort()
     mid = len(all_okf_files) // 2
     older_sample = all_okf_files[:mid]
     recent_sample = all_okf_files[mid:]
 
-    top_threat_vectors = []
+    top_threat_vectors: List[Dict[str, Any]] = []
     for name, cat, pattern in threat_patterns:
         compiled_pat = re.compile(pattern)
         c_old = 0
@@ -492,14 +492,16 @@ def _introspect_strategic_metrics(workspace_dir: str) -> Dict[str, Any]:
         total_matches = c_old + c_new
         growth_pct = ((c_new - c_old) / max(1, c_old)) * 100.0
         sign = "+" if growth_pct >= 0 else ""
-        top_threat_vectors.append({
-            "name": name,
-            "category": cat,
-            "count": total_matches,
-            "growth": f"{sign}{growth_pct:.1f}%",
-        })
+        top_threat_vectors.append(
+            {
+                "name": name,
+                "category": cat,
+                "count": total_matches,
+                "growth": f"{sign}{growth_pct:.1f}%",
+            }
+        )
 
-    top_threat_vectors.sort(key=lambda x: x["count"], reverse=True)
+    top_threat_vectors.sort(key=lambda x: int(x.get("count", 0)), reverse=True)
 
     st_metrics = {
         "token_cost_savings_usd": token_cost_savings_usd,

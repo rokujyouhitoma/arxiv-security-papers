@@ -66,9 +66,23 @@ class DatabaseClient:
             self._fallback_handler.storage.close()
         self._fallback_handler = None
 
+    def _get_candidate_sockets(self) -> List[str]:
+        """Returns candidate socket paths in priority order (specified socket, canonical db.sock, then node sockets)."""
+        candidates = [self.socket_path]
+        sock_dir = os.path.dirname(self.socket_path)
+        canonical = os.path.join(sock_dir, "db.sock")
+        if canonical not in candidates:
+            candidates.append(canonical)
+        for i in range(3):
+            node_sock = os.path.join(sock_dir, f"db_{i}.sock")
+            if node_sock not in candidates:
+                candidates.append(node_sock)
+        return [s for s in candidates if os.path.exists(s)]
+
     def is_socket_available(self) -> bool:
-        """Checks if the database daemon Unix socket exists and is responsive."""
-        if not os.path.exists(self.socket_path):
+        """Checks if any database cluster socket exists and is responsive."""
+        candidates = self._get_candidate_sockets()
+        if not candidates:
             return False
         try:
             return self.ping()
@@ -76,40 +90,52 @@ class DatabaseClient:
             return False
 
     def send_request(self, req: Dict[str, Any]) -> Dict[str, Any]:
-        """Sends a JSON request to the DatabaseService over Unix domain socket."""
+        """Sends a JSON request to the DatabaseService over Unix domain socket with cluster failover."""
         if self._custom_handler is not None:
             return self._custom_handler.handle_request(req)
-        if not os.path.exists(self.socket_path):
+
+        candidate_sockets = self._get_candidate_sockets()
+        if not candidate_sockets:
             return self.fallback_handler.handle_request(req)
 
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(self.timeout)
-        try:
-            sock.connect(self.socket_path)
-            payload = (json.dumps(req, ensure_ascii=False) + "\n").encode("utf-8")
-            sock.sendall(payload)
-
-            raw_data = b""
-            while True:
-                chunk = sock.recv(65536)
-                if not chunk:
-                    break
-                raw_data += chunk
-                if b"\n" in raw_data:
-                    break
-            if not raw_data:
-                return self.fallback_handler.handle_request(req)
-
-            res: Dict[str, Any] = json.loads(raw_data.decode("utf-8").strip())
-            return res
-        except Exception as e:
-            logger.warning("DB IPC failed (%s), falling back to in-process handler", e)
-            return self.fallback_handler.handle_request(req)
-        finally:
+        last_err: Optional[Exception] = None
+        for target_sock in candidate_sockets:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(self.timeout)
             try:
-                sock.close()
-            except OSError:
-                pass
+                sock.connect(target_sock)
+                payload = (json.dumps(req, ensure_ascii=False) + "\n").encode("utf-8")
+                sock.sendall(payload)
+
+                raw_data = b""
+                while True:
+                    chunk = sock.recv(65536)
+                    if not chunk:
+                        break
+                    raw_data += chunk
+                    if b"\n" in raw_data:
+                        break
+                if not raw_data:
+                    raise VectorDBProtocolError("Empty response from database daemon")
+                parsed = json.loads(raw_data.decode("utf-8"))
+                if isinstance(parsed, dict):
+                    return parsed
+                return {"status": "error", "error": "Invalid response format"}
+            except (socket.timeout, OSError, json.JSONDecodeError) as ex:
+                last_err = ex
+                continue
+            finally:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+
+        logger.warning(
+            "All candidate database sockets %s failed (%s). Falling back to in-process.",
+            candidate_sockets,
+            last_err,
+        )
+        return self.fallback_handler.handle_request(req)
 
     def ping(self) -> bool:
         """Sends ping request to verify DB engine responsiveness."""

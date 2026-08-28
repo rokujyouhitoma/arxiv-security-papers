@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **097** | 3ノード分散データベース同期クラスタ基盤の実装および macOS ソケット競合の修正 | Bug / Feature | High | In Progress | 13エージェント合同 (PM/SA/DB/SEC/AU) | [097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md](097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md) |
 | **096** | 事前バッチ集計エンジン (Pre-Aggregated Analytics Engine) および高速アナリティクスストレージの実装 | Feature | High | Open (New) | 13エージェント合同 (PM/SA/DB/SM/AU) | [096-implement-pre-aggregated-analytics-engine-and-storage.md](096-implement-pre-aggregated-analytics-engine-and-storage.md) |
 
 ---
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **097** | 3ノード分散データベース同期クラスタ基盤の実装および macOS ソケット競合の修正 | Bug / Feature | 2026-08-28 | [097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md](closed/097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md) |
 | **095** | ST・SA・SM 戦略的テレメトリ統合と UI/UX 3タブレイアウト高度化 | Feature | 2026-08-28 | [095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md](closed/095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md) |
 | **094** | ゼロ外部依存 (Pure Python) エンドツーエンド OpenTelemetry & OpenInference 分散オブザーバビリティ基盤の実装 | Feature | 2026-08-28 | [094-pure-python-opentelemetry-and-openinference-observability.md](closed/094-pure-python-opentelemetry-and-openinference-observability.md) |
 | **093** | システム全体の凝集度・モジュール強度向上および結合度低減に向けたリファクタリング | Refactor | 2026-08-28 | [093-improve-cohesion-and-decouple-architecture.md](closed/093-improve-cohesion-and-decouple-architecture.md) |
