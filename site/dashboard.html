@@ -1513,12 +1513,12 @@
 
             // Update Last Synced Timestamps
             const now = new Date();
-            const timeStr = now.toLocaleTimeString('ja-JP', { hour12: false });
-            const utcStr = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+            const utcTimeOnly = now.toISOString().substring(11, 19) + ' UTC';
+            const utcFullStr = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
             const hSync = document.getElementById('headerSyncTime');
-            if (hSync) hSync.textContent = `🕒 Synced: ${timeStr} (${utcStr.substring(11)})`;
+            if (hSync) hSync.textContent = `🕒 Synced: ${utcTimeOnly}`;
             const fSync = document.getElementById('footerSyncTime');
-            if (fSync) fSync.textContent = `Last Sync: ${utcStr}`;
+            if (fSync) fSync.textContent = `Last Sync: ${utcFullStr}`;
 
             // Recalculate real structural analytics from fresh nodes & edges
             calculateAndDrawHopHistogram();
