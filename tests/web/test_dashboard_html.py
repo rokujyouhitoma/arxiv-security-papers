@@ -45,10 +45,13 @@ def test_dashboard_zero_external_dependencies(dashboard_html_content: str) -> No
 
 
 def test_dashboard_mandatory_elements_and_canvas(dashboard_html_content: str) -> None:
-    """Verifies all mandatory UI telemetry, force-directed canvas, and micro-charts exist."""
+    """Verifies all mandatory UI telemetry, force-directed canvas, OBF status, and micro-charts exist."""
     assert '<canvas id="graphCanvas"' in dashboard_html_content
     assert 'id="valResolvedNodes"' in dashboard_html_content
     assert 'id="valEdgesTick"' in dashboard_html_content
+    assert 'id="valObfStatus"' in dashboard_html_content
+    assert 'id="valObfSpans"' in dashboard_html_content
+    assert "OBF Telemetry" in dashboard_html_content
     assert 'id="pipelineBar"' in dashboard_html_content
     assert 'id="hopCanvas"' in dashboard_html_content
     assert 'id="walkCanvas"' in dashboard_html_content

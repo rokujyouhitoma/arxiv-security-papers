@@ -141,6 +141,32 @@
 
     .telemetry-value.coral { color: var(--accent-coral); }
     .telemetry-value.green { color: var(--accent-green); }
+    .telemetry-value.blue { color: var(--accent-blue); }
+
+    /* OBF Observability Badge */
+    .obf-badge {
+      background-color: var(--accent-green);
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 6px;
+      font-weight: bold;
+      border-radius: 2px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .obf-pulse {
+      width: 6px;
+      height: 6px;
+      background-color: #fff;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.3; }
+      50% { opacity: 1; }
+      100% { opacity: 0.3; }
+    }
 
     /* Pipeline Status Bar */
     .pipeline-bar {
@@ -454,6 +480,16 @@
           <div class="telemetry-value" id="valWalksMin">412/m</div>
         </div>
         <div class="telemetry-cell">
+          <div class="telemetry-label">OBF Tracing</div>
+          <div class="telemetry-value green" id="valObfStatus">
+            <span class="obf-badge"><span class="obf-pulse"></span>ACTIVE (W3C/OTLP)</span>
+          </div>
+        </div>
+        <div class="telemetry-cell">
+          <div class="telemetry-label">OpenInference</div>
+          <div class="telemetry-value blue" id="valObfSpans">2,840 Spans</div>
+        </div>
+        <div class="telemetry-cell">
           <div class="telemetry-label">Query Latency</div>
           <div class="telemetry-value green" id="valLatency">1.84 ms</div>
         </div>
@@ -609,6 +645,46 @@
             <div style="display: flex; justify-content: space-between;">
               <span style="color: var(--fg-muted);">PRUNE Self-Heal Rate:</span>
               <strong style="color: var(--accent-green);">100%</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. OBF Live Distributed Tracing & OpenInference Telemetry -->
+      <div class="metric-card" style="background-color: var(--bg-panel-sub);">
+        <div class="card-header">
+          <span class="card-title">🛡️ OBF Telemetry (OTel / OpenInference)</span>
+          <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">LIVE ACTIVE</span>
+        </div>
+        <div style="font-size: 11px; margin-top: 2px;">
+          <div class="bar-chart-row">
+            <span class="bar-label">LLM Spans</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 76%; background-color: var(--accent-blue);"></div></div>
+            <span class="bar-value">1,240</span>
+          </div>
+          <div class="bar-chart-row">
+            <span class="bar-label">Retriever</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 58%; background-color: var(--accent-green);"></div></div>
+            <span class="bar-value">820</span>
+          </div>
+          <div class="bar-chart-row">
+            <span class="bar-label">Tool Calls</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 45%; background-color: var(--accent-coral);"></div></div>
+            <span class="bar-value">540</span>
+          </div>
+          <div class="bar-chart-row">
+            <span class="bar-label">Pipeline/WAL</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 32%; background-color: var(--border-dark);"></div></div>
+            <span class="bar-value">240</span>
+          </div>
+          <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 6px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+              <span style="color: var(--fg-muted);">W3C TRACEPARENT:</span>
+              <code style="font-size: 10px; font-weight: bold;">00-4bf92f...-01</code>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--fg-muted);">OTLP JSON (v1/traces):</span>
+              <strong style="color: var(--accent-green);">HTTP 200 / 0 Loss</strong>
             </div>
           </div>
         </div>
