@@ -664,7 +664,7 @@
         <div class="metric-card">
           <div class="card-header">
             <span class="card-title">Context Compression (Walk vs Flat)</span>
-            <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">-74.2% TOKENS</span>
+            <span class="card-tag" id="badgeTokenSavings" style="color: var(--accent-green); font-weight: bold;">-74.2% TOKENS</span>
           </div>
           <canvas id="walkVsFlatCanvas" width="260" height="130"></canvas>
         </div>
@@ -742,7 +742,7 @@
           <div style="font-size: 11px; margin-top: 2px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--fg-muted);">Active Cycle:</span>
-              <strong id="loopCycleId" style="font-family: var(--font-mono); font-size: 10px;">cycle_20260828_001101</strong>
+              <strong id="loopCycleId" style="font-family: var(--font-mono); font-size: 10px;">cycle_20260828_003354</strong>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--fg-muted);">Loop Schedule:</span>
@@ -1390,8 +1390,16 @@
                 if (rEl) rEl.textContent = currentResolvedNodes.toLocaleString();
               }
               if (data.telemetry.token_savings_pct) {
+                const pct = Number(data.telemetry.token_savings_pct);
                 const sEl = document.getElementById('valSavings') || document.getElementById('valTokenSavings');
-                if (sEl) sEl.textContent = `${data.telemetry.token_savings_pct}%`;
+                if (sEl) sEl.textContent = `${pct}%`;
+                const bEl = document.getElementById('badgeTokenSavings');
+                if (bEl) bEl.textContent = `-${pct}% TOKENS`;
+                if (walkHistory.length > 0 && Math.abs(walkHistory[walkHistory.length - 1] - pct) > 0.01) {
+                  walkHistory.shift();
+                  walkHistory.push(pct);
+                  drawWalkChart();
+                }
               }
               if (data.telemetry.obf_spans) {
                 const obfEl = document.getElementById('valObfSpans');
