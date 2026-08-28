@@ -8,7 +8,8 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **103** | src/database 内部パッケージの体系的整理とサブモジュール分類 | Feature | Medium | In Progress | PM / Arch / DB | [103-refactor-database-package-structure.md](103-refactor-database-package-structure.md) |
+| **104** | Xenon 循環的複雑度（CC）判定基準の厳格化（全基準 Grade A への昇格） | Feature | High | New | QA / PM | [104-strict-xenon-grade-a.md](104-strict-xenon-grade-a.md) |
+| **105** | ドメイン層（セキュリティ論文等）と再利用可能基盤層（DB・Crawler・Search・Graph等）の明確なレイヤー・パッケージ分離 | Feature | High | New | PM / Arch | [105-decouple-domain-and-infrastructure-layers.md](105-decouple-domain-and-infrastructure-layers.md) |
 
 ---
 
@@ -19,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **103** | src/database 内部パッケージの体系的整理とサブモジュール分類 | Feature | 2026-08-29 | [103-refactor-database-package-structure.md](closed/103-refactor-database-package-structure.md) |
 | **102** | Gateway ハンドラーにおけるハードコード・ダミーフォールバック値の全廃と動的実測化 | Feature | 2026-08-28 | [102-eliminate-dummy-values-in-gateway-handlers.md](closed/102-eliminate-dummy-values-in-gateway-handlers.md) |
 | **101** | 論文パイプラインとグラフDB・GraphRAGの完全統合および因果チェーンAPIの実装 | Feature | 2026-08-28 | [101-integrate-paper-pipeline-with-graph-db-and-graphrag.md](closed/101-integrate-paper-pipeline-with-graph-db-and-graphrag.md) |
 | **100** | src/database における高度な SQL 機能 (JOIN, WITH RECURSIVE, JSON 演算子, テーブルエイリアス) のサポート | Feature | 2026-08-28 | [100-support-advanced-sql-joins-ctes-and-json-operators.md](closed/100-support-advanced-sql-joins-ctes-and-json-operators.md) |
