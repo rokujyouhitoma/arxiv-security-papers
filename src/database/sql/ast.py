@@ -33,6 +33,9 @@ class SQLCommandType(str, Enum):
     COMMIT = "COMMIT"
     ROLLBACK = "ROLLBACK"
 
+    # Metadata & Inspection
+    SHOW = "SHOW"
+
     @property
     def category(self) -> str:
         """Returns the high-level SQL category (DDL, DQL, DML, DCL, TCL)."""
@@ -42,7 +45,7 @@ class SQLCommandType(str, Enum):
             SQLCommandType.CREATE_INDEX,
         ):
             return "DDL"
-        if self == SQLCommandType.SELECT:
+        if self in (SQLCommandType.SELECT, SQLCommandType.SHOW):
             return "DQL"
         if self in (
             SQLCommandType.INSERT,
@@ -58,6 +61,7 @@ class SQLCommandType(str, Enum):
             SQLCommandType.ROLLBACK,
         ):
             return "TCL"
+        return "OTHER"
         return "SQL"
 
 
@@ -208,3 +212,11 @@ class RollbackStatement(SQLStatement):
 class ExplainStatement(SQLStatement):
     statement: Optional[SQLStatement] = None
     query_plan: bool = True
+
+
+# SHOW (SHOW DATABASES, SHOW TABLES, SHOW TABLE STATUS)
+@dataclass
+class ShowStatement(SQLStatement):
+    target: str = "TABLES"  # DATABASES, TABLES, SCHEMAS, TABLE_STATUS
+    from_database: Optional[str] = None
+    like_pattern: Optional[str] = None

@@ -170,3 +170,27 @@ def test_recursive_cte_graph_traversal(advanced_sql_executor: SQLExecutor) -> No
     assert rows[1]["depth"] == 1
     assert rows[2]["id"] == "mitre_1"
     assert rows[2]["depth"] == 2
+
+
+def test_show_databases_and_tables(advanced_sql_executor: SQLExecutor) -> None:
+    # 1. SHOW DATABASES
+    res_db = advanced_sql_executor.execute("SHOW DATABASES")
+    assert res_db["status"] == "ok"
+    assert res_db["target"] == "DATABASES"
+    db_names = [r["Database"] for r in res_db["rows"]]
+    assert "arxiv_security_db" in db_names
+
+    # 2. SHOW TABLES
+    res_tbl = advanced_sql_executor.execute("SHOW TABLES")
+    assert res_tbl["status"] == "ok"
+    assert res_tbl["target"] == "TABLES"
+    assert res_tbl["count"] >= 2
+    tbl_names = [r["Table"] for r in res_tbl["rows"]]
+    assert "vertices" in tbl_names
+    assert "edges" in tbl_names
+
+    # 3. SHOW TABLE STATUS
+    res_st = advanced_sql_executor.execute("SHOW TABLE STATUS")
+    assert res_st["status"] == "ok"
+    assert res_st["target"] == "TABLE_STATUS"
+    assert len(res_st["rows"]) >= 2

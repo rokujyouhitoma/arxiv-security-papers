@@ -25,6 +25,7 @@ from .ast import (
     RevokeStatement,
     RollbackStatement,
     SelectStatement,
+    ShowStatement,
     SQLCommandType,
     SQLStatement,
     TableRef,
@@ -82,7 +83,40 @@ class SQLParser:
             return self._parse_grant(sql)
         if upper_sql.startswith("REVOKE"):
             return self._parse_revoke(sql)
+        if upper_sql.startswith("SHOW"):
+            return self._parse_show(sql)
         return None
+
+    def _parse_show(self, sql: str) -> SQLStatement:
+        upper_sql = sql.upper().strip()
+        target = "TABLES"
+        from_db = None
+        like_pat = None
+
+        if "SHOW DATABASES" in upper_sql or "SHOW SCHEMAS" in upper_sql:
+            target = "DATABASES"
+        elif "SHOW TABLE STATUS" in upper_sql:
+            target = "TABLE_STATUS"
+        elif "SHOW TABLES" in upper_sql:
+            target = "TABLES"
+        else:
+            raise SQLParseError(f"Unsupported SHOW query: {sql}")
+
+        from_m = re.search(r"FROM\s+([a-zA-Z0-9_]+)", sql, re.IGNORECASE)
+        if from_m:
+            from_db = from_m.group(1)
+
+        like_m = re.search(r"LIKE\s+['\"](.*?)['\"]", sql, re.IGNORECASE)
+        if like_m:
+            like_pat = like_m.group(1)
+
+        return ShowStatement(
+            command_type=SQLCommandType.SHOW,
+            raw_sql=sql,
+            target=target,
+            from_database=from_db,
+            like_pattern=like_pat,
+        )
 
     def _parse_ddl_dml(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         return (

@@ -206,4 +206,8 @@ def test_dashboard_database_storage_metrics_ui(dashboard_html_content: str) -> N
     assert 'id="badgeDbTotalSize"' in dashboard_html_content
     assert 'id="databaseTablesTableBody"' in dashboard_html_content
     assert "Database Tables &amp; Physical Storage Ledger" in dashboard_html_content
-
+    assert 'id="valDbCurrentDb"' in dashboard_html_content
+    assert 'id="sqlResultDatabases"' in dashboard_html_content
+    assert 'id="sqlResultTablesSummary"' in dashboard_html_content
+    assert "SHOW DATABASES" in dashboard_html_content
+    assert "SHOW TABLES FROM arxiv_security_db" in dashboard_html_content

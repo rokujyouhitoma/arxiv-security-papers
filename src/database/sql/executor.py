@@ -26,6 +26,7 @@ from .ast import (
     JoinType,
     RevokeStatement,
     SelectStatement,
+    ShowStatement,
     SQLCommandType,
     SQLStatement,
     TableRef,
@@ -811,7 +812,58 @@ class SQLExecutor:
             return self._exec_drop_table(stmt, role)
         if isinstance(stmt, CreateIndexStatement):
             return self._exec_create_index(stmt, role)
+        if isinstance(stmt, ShowStatement):
+            return self._exec_show(stmt, role)
         return None
+
+    def _exec_show(self, stmt: ShowStatement, effective_role: str) -> Dict[str, Any]:
+        target = stmt.target.upper()
+        if target in ("DATABASES", "SCHEMAS"):
+            db_rows = [{"Database": "arxiv_security_db"}, {"Database": "main"}]
+            return {
+                "command": "SHOW",
+                "status": "ok",
+                "target": "DATABASES",
+                "count": len(db_rows),
+                "rows": db_rows,
+            }
+
+        table_rows = []
+        for tname, tbl in sorted(self.tables.items()):
+            if stmt.like_pattern and stmt.like_pattern not in tname:
+                continue
+            r_count = len(tbl.storage.metadata)
+            f_size = (
+                os.path.getsize(tbl.storage.file_path)
+                if os.path.exists(tbl.storage.file_path)
+                else 0
+            )
+            if target == "TABLE_STATUS":
+                table_rows.append(
+                    {
+                        "Name": tname,
+                        "Engine": "Pure Python Pager",
+                        "Rows": r_count,
+                        "Data_length": f_size,
+                        "Create_time": "2026-08-28 00:00:00",
+                    }
+                )
+            else:
+                table_rows.append(
+                    {
+                        "Table": tname,
+                        "Rows": r_count,
+                        "Size_bytes": f_size,
+                    }
+                )
+
+        return {
+            "command": "SHOW",
+            "status": "ok",
+            "target": target,
+            "count": len(table_rows),
+            "rows": table_rows,
+        }
 
     def execute_statement(
         self, stmt: SQLStatement, role: Optional[str] = None
