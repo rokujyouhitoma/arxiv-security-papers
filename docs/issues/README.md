@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **098** | セキュリティ知識オントロジー (SKO) 定義およびゼロ侵襲型グラフデータベース基盤の実装 | Feature | High | In Progress | 13エージェント合同 (PM/SEC/SA/NLP/DB/ST) | [098-implement-security-knowledge-ontology-and-graph-database-engine.md](098-implement-security-knowledge-ontology-and-graph-database-engine.md) |
+| - | *現在アクティブな Issue はありません* | - | - | - | - | - |
 
 ---
 
@@ -17,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **098** | セキュリティ知識オントロジー (SKO) 定義およびゼロ侵襲型グラフデータベース基盤の実装 | Feature | 2026-08-28 | [098-implement-security-knowledge-ontology-and-graph-database-engine.md](closed/098-implement-security-knowledge-ontology-and-graph-database-engine.md) |
 | **096** | 事前バッチ集計エンジン (Pre-Aggregated Analytics Engine) および高速アナリティクスストレージの実装 | Feature | 2026-08-28 | [096-implement-pre-aggregated-analytics-engine-and-storage.md](closed/096-implement-pre-aggregated-analytics-engine-and-storage.md) |
 | **097** | 3ノード分散データベース同期クラスタ基盤の実装および macOS ソケット競合の修正 | Bug / Feature | 2026-08-28 | [097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md](closed/097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md) |
 | **095** | ST・SA・SM 戦略的テレメトリ統合と UI/UX 3タブレイアウト高度化 | Feature | 2026-08-28 | [095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md](closed/095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md) |

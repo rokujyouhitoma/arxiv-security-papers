@@ -176,6 +176,14 @@ pipeline: activate ## Run multi-theme arXiv ETL ingestion pipeline directly
 rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q="LLM Jailbreak"
 	PYTHONPATH=src ${VENV_PYTHON} -m search.vector_engine --query "$(Q)"
 
+.PHONY: build_knowledge_graph
+build_knowledge_graph: activate ## Extract ontology and construct persistent Security Knowledge Graph
+	PYTHONPATH=src ${VENV_PYTHON} -m graph.cli build
+
+.PHONY: graph_stats
+graph_stats: activate ## Display topological statistics of Security Knowledge Graph
+	PYTHONPATH=src ${VENV_PYTHON} -m graph.cli show
+
 .PHONY: run
 run: activate ## Run Universal Autonomous Intelligence Orchestrator (or custom $SRC)
 	PYTHONPATH=src ${VENV_PYTHON} ${SRC} $(ARGS)

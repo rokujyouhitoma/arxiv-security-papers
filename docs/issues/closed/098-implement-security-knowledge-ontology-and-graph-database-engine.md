@@ -2,7 +2,7 @@
 ID: 098
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Done)
 ---
 
 # [FEAT/ENH] セキュリティ知識オントロジー (SKO) 定義およびゼロ侵襲型グラフデータベース基盤の実装 (ID: 098)
