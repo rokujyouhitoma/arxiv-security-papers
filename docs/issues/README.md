@@ -8,9 +8,10 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **103** | src/database 内部パッケージの体系的整理とサブモジュール分類 | Feature | Medium | Open (New) | PM / Arch / DB | [103-refactor-database-package-structure.md](103-refactor-database-package-structure.md) |
+| **103** | src/database 内部パッケージの体系的整理とサブモジュール分類 | Feature | Medium | In Progress | PM / Arch / DB | [103-refactor-database-package-structure.md](103-refactor-database-package-structure.md) |
 
 ---
+
 
 
 
