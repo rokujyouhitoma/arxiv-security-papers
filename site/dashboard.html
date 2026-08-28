@@ -1691,6 +1691,16 @@
               const rEl = document.getElementById('valResolvedNodes');
               if (rEl) rEl.textContent = currentResolvedNodes.toLocaleString();
             }
+            // Walks / Min
+            if (data.telemetry.walks_per_min != null) {
+              const wEl = document.getElementById('valWalksMin');
+              if (wEl) wEl.textContent = Number(data.telemetry.walks_per_min).toLocaleString();
+            }
+            // Edges / Tick override from API
+            if (data.telemetry.edges_per_tick != null) {
+              const etEl = document.getElementById('valEdgesTick');
+              if (etEl) etEl.textContent = `${Number(data.telemetry.edges_per_tick).toLocaleString()}/s`;
+            }
             if (data.telemetry.token_savings_pct) {
               const pct = Number(data.telemetry.token_savings_pct);
               const sEl = document.getElementById('valSavings') || document.getElementById('valTokenSavings');
@@ -1708,6 +1718,7 @@
               if (obfEl) obfEl.textContent = `${Number(data.telemetry.obf_spans).toLocaleString()} Spans`;
             }
           }
+
 
           // 4. Update Loop Monitor if present
           if (data.loop_monitor) {
