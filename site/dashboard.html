@@ -1612,7 +1612,15 @@
               const aMem = document.getElementById('valArbiterMemory');
               if (aMem) aMem.textContent = `${sup.memory_mb || 0} MB`;
               const aStat = document.getElementById('badgeArbiterStatus');
-              if (aStat) aStat.textContent = sup.status === 'ok' ? 'ALIVE (Supervised)' : 'STANDALONE';
+              if (aStat) {
+                if (sup.is_supervised) {
+                  aStat.textContent = 'ACTIVE (Supervised)';
+                  aStat.style.color = 'var(--accent-green)';
+                } else {
+                  aStat.textContent = 'OFFLINE (Arbiter Inactive)';
+                  aStat.style.color = 'var(--accent-coral)';
+                }
+              }
 
               // Pools
               const aPools = document.getElementById('valArbiterPools');
@@ -1628,7 +1636,10 @@
                 if (pBadge) pBadge.textContent = `${Object.keys(sup.pools).length} Pools`;
               }
               const bIpc = document.getElementById('badgeIpcStatus');
-              if (bIpc) bIpc.textContent = 'UNIX DOMAIN SOCKET';
+              if (bIpc) {
+                bIpc.textContent = sup.is_supervised ? 'CONNECTED' : 'SOCKET NOT FOUND';
+                bIpc.style.color = sup.is_supervised ? 'var(--accent-green)' : 'var(--accent-coral)';
+              }
 
               // Workers Table
               const tbody = document.getElementById('supervisorWorkersTableBody');

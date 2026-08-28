@@ -324,7 +324,7 @@ def _introspect_live_loop_and_obf_state(
 
 def _introspect_supervisor_state(workspace_dir: str) -> Dict[str, Any]:
     """Introspects live Supervisor Arbiter and Workers status purely from real system state."""
-    sock_path = os.path.join(workspace_dir, "outputs", "supervisor.sock")
+    sock_path = os.path.join(workspace_dir, "outputs", "supervisor", "control.sock")
     curr_pid = os.getpid()
 
     # 1. Try connecting to official Supervisor Arbiter socket if running
@@ -335,6 +335,8 @@ def _introspect_supervisor_state(workspace_dir: str) -> Dict[str, Any]:
             client = ControlClient(sock_path, timeout=1.0)
             resp = client.get_status()
             if resp.get("status") == "ok":
+                resp["is_supervised"] = True
+                resp["socket_status"] = "CONNECTED (outputs/supervisor/control.sock)"
                 return resp
         except Exception:
             pass
@@ -346,7 +348,6 @@ def _introspect_supervisor_state(workspace_dir: str) -> Dict[str, Any]:
 
     try:
         import glob
-        import time
 
         # System clock ticks per sec
         clk_tck = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
@@ -429,9 +430,11 @@ def _introspect_supervisor_state(workspace_dir: str) -> Dict[str, Any]:
         pools_summary["web_gateway"] = 1
 
     return {
-        "status": "ok",
-        "arbiter_pid": curr_pid,
-        "uptime": workers_dict.get(str(curr_pid), {}).get("uptime", 300.0),
+        "status": "offline",
+        "is_supervised": False,
+        "socket_status": "OFFLINE (outputs/supervisor/control.sock not found)",
+        "arbiter_pid": "-",
+        "uptime": 0.0,
         "memory_mb": round(total_rss_mb, 1),
         "pools": {k: {"active": v, "target": v} for k, v in pools_summary.items()},
         "workers": workers_dict,
