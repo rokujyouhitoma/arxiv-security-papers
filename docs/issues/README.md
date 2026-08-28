@@ -8,6 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
+| **097** | 3ノード分散データベース同期クラスタ基盤の実装および macOS ソケット競合の修正 | Bug / Feature | High | Open (New) | 13エージェント合同 (PM/SA/DB/SEC/AU) | [097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md](097-implement-3-node-distributed-database-cluster-and-fix-mac-socket-conflict.md) |
 | **096** | 事前バッチ集計エンジン (Pre-Aggregated Analytics Engine) および高速アナリティクスストレージの実装 | Feature | High | Open (New) | 13エージェント合同 (PM/SA/DB/SM/AU) | [096-implement-pre-aggregated-analytics-engine-and-storage.md](096-implement-pre-aggregated-analytics-engine-and-storage.md) |
 
 ---
