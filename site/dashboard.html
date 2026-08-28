@@ -702,32 +702,32 @@
           <div style="font-size: 11px; margin-top: 2px;">
             <div class="bar-chart-row">
               <span class="bar-label">LLM Spans</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 76%; background-color: var(--accent-blue);"></div></div>
-              <span class="bar-value">1,240</span>
+              <div class="bar-track"><div class="bar-fill" id="trackObfLlm" style="width: 76%; background-color: var(--accent-blue);"></div></div>
+              <span class="bar-value" id="valObfLlmSpans">1,240</span>
             </div>
             <div class="bar-chart-row">
               <span class="bar-label">Retriever</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 58%; background-color: var(--accent-green);"></div></div>
-              <span class="bar-value">820</span>
+              <div class="bar-track"><div class="bar-fill" id="trackObfRetriever" style="width: 58%; background-color: var(--accent-green);"></div></div>
+              <span class="bar-value" id="valObfRetrieverSpans">820</span>
             </div>
             <div class="bar-chart-row">
               <span class="bar-label">Tool Calls</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 45%; background-color: var(--accent-coral);"></div></div>
-              <span class="bar-value">540</span>
+              <div class="bar-track"><div class="bar-fill" id="trackObfTool" style="width: 45%; background-color: var(--accent-coral);"></div></div>
+              <span class="bar-value" id="valObfToolSpans">540</span>
             </div>
             <div class="bar-chart-row">
               <span class="bar-label">Pipeline/WAL</span>
-              <div class="bar-track"><div class="bar-fill" style="width: 32%; background-color: var(--border-dark);"></div></div>
-              <span class="bar-value">240</span>
+              <div class="bar-track"><div class="bar-fill" id="trackObfPipeline" style="width: 32%; background-color: var(--border-dark);"></div></div>
+              <span class="bar-value" id="valObfPipelineSpans">240</span>
             </div>
             <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 6px;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
                 <span style="color: var(--fg-muted);">W3C TRACEPARENT:</span>
-                <code style="font-size: 10px; font-weight: bold;">00-4bf92f...-01</code>
+                <code style="font-size: 10px; font-weight: bold;" id="valObfTraceparent">00-8b673ec2d...-d9ac5bbb-01</code>
               </div>
               <div style="display: flex; justify-content: space-between;">
                 <span style="color: var(--fg-muted);">OTLP JSON (v1/traces):</span>
-                <strong style="color: var(--accent-green);">HTTP 200 / 0 Loss</strong>
+                <strong style="color: var(--accent-green);" id="valObfStatusDetail">HTTP 200 / 0 Loss</strong>
               </div>
             </div>
           </div>
@@ -1379,6 +1379,21 @@
                   }).join('');
                 }
               }
+            }
+
+            // Update OBF Telemetry Card if present
+            if (data.obf_telemetry) {
+              const ot = data.obf_telemetry;
+              const llmEl = document.getElementById('valObfLlmSpans');
+              if (llmEl && ot.llm_spans) llmEl.textContent = Number(ot.llm_spans).toLocaleString();
+              const retEl = document.getElementById('valObfRetrieverSpans');
+              if (retEl && ot.retriever_spans) retEl.textContent = Number(ot.retriever_spans).toLocaleString();
+              const toolEl = document.getElementById('valObfToolSpans');
+              if (toolEl && ot.tool_spans) toolEl.textContent = Number(ot.tool_spans).toLocaleString();
+              const pipeEl = document.getElementById('valObfPipelineSpans');
+              if (pipeEl && ot.pipeline_spans) pipeEl.textContent = Number(ot.pipeline_spans).toLocaleString();
+              const tpEl = document.getElementById('valObfTraceparent');
+              if (tpEl && ot.latest_traceparent) tpEl.textContent = ot.latest_traceparent;
             }
 
             // Smart Merge: Preserve existing node physics positions
