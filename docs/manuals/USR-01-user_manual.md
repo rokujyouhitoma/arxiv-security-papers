@@ -33,7 +33,7 @@ flowchart TB
     end
 
     subgraph AIAgents ["5. AI コーディングエージェント"]
-        MCP1 <--> Agents["Claude Desktop / Antigravity / Cursor / Cline / VS Code"]
+        MCP1 <--> Agents["Antigravity / Cursor / Cline / VS Code / 自律型エージェント"]
         MCP2 <--> Agents
         MCP3 <--> Agents
         MCP4 <--> Agents
