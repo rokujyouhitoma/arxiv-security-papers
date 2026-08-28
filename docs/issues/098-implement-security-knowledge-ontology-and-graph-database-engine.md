@@ -2,7 +2,7 @@
 ID: 098
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Open (In Progress)
 ---
 
 # [FEAT/ENH] セキュリティ知識オントロジー (SKO) 定義およびゼロ侵襲型グラフデータベース基盤の実装 (ID: 098)
@@ -45,17 +45,40 @@ ID: 098
 ## 4. 実装方針 / Implementation Plan
 Target Branch: `feat/098-implement-security-knowledge-ontology-and-graph-database-engine`
 
-1. **オントロジー定義層 (`src/ontology/`) の構築**:
-   - 7大エンティティと 12 大関係述語を Pure Python Typed Dataclass / Enum として定義。
-   - MITRE ATT&CK / CWE / STRIDE / NIST SP 800-53 の同義語正規化マッピングテーブルを配備。
-2. **ゼロ侵襲型 Property Graph Engine (`src/database/graph/`) の構築**:
-   - 既存 DB コードには一切手を加えず、専用のバイナリ隣接インデックス（CSR / Double Adjacency List）ストレージアダプタを実装。
-   - メモリ内 L1 キャッシュとディスク永続化（`outputs/database/graph.db`）をシームレスに統合。
-3. **Fluent Traversal API & GraphRAG 基盤の実装**:
-   - 直感的なメソッドチェーンによる Multi-Hop グラフ探索 DSL を実装。
-   - ベクトル検索で取得した Top-K 論文を起点とする K-Hop グラフ展開と事実トリプル生成。
-4. **テスト & 品質ゲート検証**:
-   - `pytest tests/ontology/ tests/database/graph/`, `make format`, `make static_analysis` (flake8/mypy) 100% PASS。
+### Step 1: オントロジー定義層 (`src/ontology/`) の実装
+1. `src/ontology/schema.py`:
+   - エンティティ基底クラス `Entity` と 7大具象クラス（`PaperEntity`, `ThreatActorEntity`, `AttackTechniqueEntity`, `VulnerabilityEntity`, `TargetAssetEntity`, `DefenseMechanismEntity`, `BenchmarkMetricEntity`）。
+   - 12大関係述語 Enum `Predicate`（`DISCLOSES`, `EXPLOITS`, `ANALYZES`, `TARGETS`, `PROPOSES`, `MITIGATES`, `PATCHES`, `EVALUATES`, `ATTRIBUTED_TO`, `SUBCLASS_OF`, `PART_OF`, `CITES`）。
+   - 事実トリプル dataclass `Triple(subject_id, predicate, object_id, weight, properties)`。
+2. `src/ontology/taxonomy.py`:
+   - `TaxonomyRegistry`: 同義語辞書（`SYNONYM_MAPPINGS`）と正規化メソッド `normalize_term(term)`。
+3. `src/ontology/extractor.py`:
+   - `OntologyExtractor`: OKF Markdown フロントマターおよび Abstract/本文から 7大エンティティおよびトリプルを自動抽出。
+
+### Step 2: ゼロ侵襲型 Property Graph Engine (`src/database/graph/`) の実装
+1. `src/database/graph/engine.py`:
+   - `PropertyGraphEngine`:
+     - 既存 DB コードには一切手を加えず、`outputs/database/graph.db`（またはメモリ内）に永続化。
+     - 頂点テーブル `_vertices: Dict[str, Vertex]` と双方向隣接リスト（Forward CSR: `_out_edges: Dict[str, List[Edge]]`, Reverse CSR: `_in_edges: Dict[str, List[Edge]]`）。
+     - `add_vertex(vertex_id, vertex_type, properties) -> Vertex`
+     - `add_edge(src_id, dst_id, predicate, weight, properties) -> Edge`
+     - `get_vertex(vertex_id) -> Optional[Vertex]`
+     - `V(vertex_type, **filters) -> GraphTraversal`
+2. `src/database/graph/traversal.py`:
+   - `GraphTraversal`:
+     - メソッドチェーン（Fluent API）: `.out(*predicates)`, `.in_(*predicates)`, `.both(*predicates)`, `.filter(fn)`
+     - 探索アルゴリズム: `shortest_path(target_id)`, `k_hop_neighborhood(k)`, `pagerank(damping, iterations)`
+     - 出力変換: `.to_list()`, `.to_triples()`, `.to_subgraph_json()`
+
+### Step 3: GraphRAG & 多段階因果推論 (`src/database/graph/graphrag.py`) の実装
+1. `GraphRAGPipeline`:
+   - HNSW ベクトル検索で取得した Top-K 論文頂点を起点として、K-Hop グラフ展開を実行。
+   - LLM プロンプト用の構造化グラウンディング事実トリプル（Grounding Triples）を生成し、ハルシネーションを排除。
+
+### Step 4: 単体テスト & 品質ゲート検証
+1. `tests/ontology/test_schema.py`: エンティティ作成、シリアライズ、タクソノミー同義語解決のテスト。
+2. `tests/database/graph/test_graph_engine.py`: 頂点・辺の CRUD、双方向隣接走査、Fluent Traversal、Multi-Hop 探索、PageRank のテスト。
+3. `make format`, `make static_analysis` (flake8 / mypy --strict), `pytest` 全件パス。
 
 ---
 
