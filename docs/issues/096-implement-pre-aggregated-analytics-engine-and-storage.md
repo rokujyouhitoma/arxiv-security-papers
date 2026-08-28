@@ -2,13 +2,13 @@
 ID: 096
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Open (In Progress)
 ---
 
 # [FEAT/ENH] 事前バッチ集計エンジン (Pre-Aggregated Analytics Engine) および高速アナリティクスストレージの実装 (ID: 096)
 
 ## 1. 概要 / Summary
-Web ゲートウェイ（`src/web/gateway/handlers.py`）におけるオンデマンド・ファイル走査（オンザフライ正規表現集計）の構造的ボトルネックを解消するため、4x Daily 定期バッチおよび Supervisor バックグラウンドサービスと連携する「**事前バッチ集計エンジン（Pre-Aggregated Analytics Engine）**」と「**高速アナリティクス永続ストレージ（専用 DB / Snapshot Storage）**」を実装する。
+Web ゲートウェイ（`src/web/gateway/handlers.py`）におけるオンデマンド・ファイル走査（オンザフライ正規表現集計）の構造的ボトルネックを解消するため、4x Daily 定期バッチおよび Supervisor バックグラウンドサービスと連携する「**事前バッチ集計エンジン（Pre-Aggregated Analytics Engine）**」と「**ゼロ外部依存型 高速アナリティクス永続ストレージ（`outputs/analytics/` & 専用 DB）**」を実装する。
 
 これにより、論文数が十万件規模にスケールした場合でも、Web API（`/api/graph/mesh` 等）はディスク上の事前集計済みデータを $O(1)$ で高速読み出し、**1ms 未満の超低遅延応答（Zero-Scan Serving）** を恒久的に保証する。
 
@@ -19,6 +19,7 @@ Web ゲートウェイ（`src/web/gateway/handlers.py`）におけるオンデ�
   - [docs/designs/DSN-14-graph_engineering_dashboard.md](../designs/DSN-14-graph_engineering_dashboard.md)
   - [docs/designs/DSN-12-process_supervisor_and_arbiter.md](../designs/DSN-12-process_supervisor_and_arbiter.md)
   - [docs/designs/DSN-10-observability_and_eval_framework.md](../designs/DSN-10-observability_and_eval_framework.md)
+  - [docs/designs/DSN-17-security_knowledge_ontology_and_graph_database_engine.md](../designs/DSN-17-security_knowledge_ontology_and_graph_database_engine.md)
 - **脅威モデル & セキュリティ要件 (Sec / AU 監査)**:
   - **T1: アトミック更新による不整合防止**: 集計データの書き込み時（アトミックな一時ファイル rename や WAL チェックポイント連携）に、読み取りプロセスが中途半端なデータを読み込まないよう保護。
   - **T2: パストラバーサル・任意ファイル書き込み排除**: アナリティクス保存先ディレクトリ（`outputs/analytics/`）を workspace ルート内に厳密に限定。
@@ -28,9 +29,9 @@ Web ゲートウェイ（`src/web/gateway/handlers.py`）におけるオンデ�
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 - [ ] [src/analytics/aggregator.py](../../src/analytics/aggregator.py) [NEW]: 事前バッチ集計エンジン（脅威動向・時系列増減率・ROI・グラフ指標）
-- [ ] [src/analytics/storage.py](../../src/analytics/storage.py) [NEW]: 高速アナリティクスストレージ（JSON Snapshot / 専用 DB インターフェース）
+- [ ] [src/analytics/storage.py](../../src/analytics/storage.py) [NEW]: 高速アナリティクスストレージ（JSON Snapshot / 専用 SQLite 自己完結マイグレーション付き DB インターフェース）
+- [ ] [src/analytics/cli.py](../../src/analytics/cli.py) [NEW]: バッチ集計 CLI コマンド (`python -m analytics.cli aggregate`)
 - [ ] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py): 事前集計ストレージからの $O(1)$ 高速リードへの切り替え
-- [ ] [src/supervisor/contracts.py](../../src/supervisor/contracts.py) / [src/supervisor/config.py](../../src/supervisor/config.py): アナリティクス定期集計ワーカーの定義
 - [ ] [tests/analytics/test_aggregator.py](../../tests/analytics/test_aggregator.py) [NEW]: 集計エンジンとストレージの単体テスト
 - [ ] [tests/web/test_dashboard_html.py](../../tests/web/test_dashboard_html.py): API レイテンシとレスポンス整合性検証
 
@@ -39,17 +40,30 @@ Web ゲートウェイ（`src/web/gateway/handlers.py`）におけるオンデ�
 ## 4. 実装方針 / Implementation Plan
 Target Branch: `feat/096-implement-pre-aggregated-analytics-engine-and-storage`
 
-1. **アナリティクスモジュール (`src/analytics/`) の新設**:
-   - `AnalyticsAggregator`: 全 OKF 論文、5階層サマリー、OTLP トレースログ、WAL を一括バッチ走査し、最新の統計・脅威トレンド（増減率含む）を事前算出。
-   - `AnalyticsStorage`: `outputs/analytics/latest_metrics.json`（および永続 DB テーブル）へアトミック書き込み・高速読み出し。
-2. **Web ゲートウェイ (`src/web/gateway/handlers.py`) の $O(1)$ 化**:
-   - リクエストハンドラ内の重いファイル走査・Regex 処理を全廃。
-   - `AnalyticsStorage.load_latest_metrics()` による $O(1)$ メモリマップ / 高速パースへ移行。
-3. **定期実行 & CLI 連携**:
-   - `python -m analytics.cli aggregate` または `make aggregate_analytics` コマンドの新設。
-   - 4x Daily パイプラインおよび Supervisor のバックグラウンドワーカーで自動定期更新。
-4. **テスト・品質ゲート検証**:
-   - `pytest tests/analytics/`, `pytest tests/web/`, `make format`, `make static_analysis` の全パス。
+### Step 1: アナリティクスストレージ (`src/analytics/storage.py`) の実装
+1. `AnalyticsStorage` クラスの作成:
+   - `outputs/analytics/latest_metrics.json` へのアトミック書き込み（`tempfile` 書き込み $\rightarrow$ `os.replace`）および $O(1)$ 高速リード。
+   - `outputs/analytics/analytics.db`（SQLite）への時系列履歴記録と、Pure Python 自己完結型自動マイグレーション機構（`PRAGMA user_version` / `CREATE TABLE IF NOT EXISTS`）。
+
+### Step 2: 事前バッチ集計エンジン (`src/analytics/aggregator.py`) の実装
+1. `AnalyticsAggregator` クラスの作成:
+   - 全 OKF 論文メタデータ、5階層サマリー（01〜05）、OTLP トレースログ、WAL 状態を一括スキャン。
+   - 脅威ベクトル Top 5（実出現数および前後半タイムライン比較による実測増減率 %）、トークン削減 ROI、Tail Latency、パイプライン SLO を事前計算。
+   - 計算結果を `AnalyticsStorage` に永続化。
+
+### Step 3: Web ゲートウェイ (`src/web/gateway/handlers.py`) の $O(1)$ 最適化
+1. `_introspect_strategic_metrics()` をリファクタリング:
+   - リクエスト時のオンザフライ全ファイル走査・正規表現マッチングを全廃。
+   - `AnalyticsStorage.load_latest_metrics()` を呼び出し、$1\text{ms}$ 未満で即時応答。
+   - ストレージが存在しない場合の安全なフォールバックを維持。
+
+### Step 4: CLI 連携 & 4x Daily バッチ統合
+1. `src/analytics/cli.py` に `aggregate` サブコマンドを追加。
+2. `make aggregate_analytics` ターゲットを Makefile に追加。
+
+### Step 5: テスト & 品質ゲート検証
+1. `tests/analytics/test_aggregator.py` で集計結果の正確性、アトミック性、マイグレーション動作を検証。
+2. `make format`, `make static_analysis` (flake8/mypy), `pytest tests/analytics/ tests/web/` を全パス。
 
 ---
 
