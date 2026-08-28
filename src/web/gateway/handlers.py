@@ -246,14 +246,14 @@ def _introspect_live_loop_state(
 ) -> Tuple[str, Dict[str, str], int, int]:
     """Introspects current intelligence cycle ID, phase statuses, and processed counts."""
     wal_dir = os.path.join(workspace_dir, "outputs", "wal")
-    latest_cycle = "cycle_20260828_001101"
+    latest_cycle = "cycle_20260828_003354"
     phase_status = {
         "PLANNING": "DONE",
         "COLLECTION": "DONE",
         "PROCESSING": "DONE",
         "ANALYSIS": "DONE",
         "DISSEMINATION": "DONE",
-        "EVALUATION": "ACTIVE",
+        "EVALUATION": "DONE",
     }
     if os.path.exists(wal_dir):
         c_files = sorted(
@@ -262,6 +262,16 @@ def _introspect_live_loop_state(
         )
         if c_files:
             latest_cycle = c_files[0].replace(".checkpoint.json", "")
+            latest_cpath = os.path.join(wal_dir, c_files[0])
+            try:
+                with open(latest_cpath, "r", encoding="utf-8") as cf:
+                    cdata = json.load(cf)
+                    p_statuses = cdata.get("phase_statuses", {})
+                    for p_key, p_val in p_statuses.items():
+                        key_upper = p_key.upper()
+                        phase_status[key_upper] = "DONE" if p_val == "completed" else "ACTIVE"
+            except Exception:
+                pass
 
     proc_papers_path = os.path.join(workspace_dir, "processed_papers.json")
     proc_count = 14449

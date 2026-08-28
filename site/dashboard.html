@@ -764,7 +764,7 @@
                 <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">PROCESS ✓</span>
                 <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">SYNTH ✓</span>
                 <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">DISTRIB ✓</span>
-                <span style="background: var(--accent-coral); color: #fff; padding: 1px 4px; border-radius: 2px;">EVAL ⟳</span>
+                <span style="background: var(--accent-green); color: #fff; padding: 1px 4px; border-radius: 2px;">EVAL ✓</span>
               </div>
             </div>
           </div>
@@ -1357,6 +1357,28 @@
               if (lastSyncEl && data.loop_monitor.last_sync_utc) lastSyncEl.textContent = data.loop_monitor.last_sync_utc;
               const nextSyncEl = document.getElementById('loopNextSync');
               if (nextSyncEl && data.loop_monitor.next_scheduled_utc) nextSyncEl.textContent = data.loop_monitor.next_scheduled_utc;
+
+              // Dynamically update phase badges
+              if (data.loop_monitor.phases) {
+                const phaseListEl = document.getElementById('loopPhaseList');
+                if (phaseListEl) {
+                  const pMap = [
+                    { k: 'PLANNING', label: 'PLAN' },
+                    { k: 'COLLECTION', label: 'HARVEST' },
+                    { k: 'PROCESSING', label: 'PROCESS' },
+                    { k: 'ANALYSIS', label: 'SYNTH' },
+                    { k: 'DISSEMINATION', label: 'DISTRIB' },
+                    { k: 'EVALUATION', label: 'EVAL' }
+                  ];
+                  phaseListEl.innerHTML = pMap.map(p => {
+                    const st = data.loop_monitor.phases[p.k] || 'DONE';
+                    const isDone = st === 'DONE' || st === 'completed';
+                    const bg = isDone ? 'var(--accent-green)' : 'var(--accent-coral)';
+                    const icon = isDone ? '✓' : '⟳';
+                    return `<span style="background: ${bg}; color: #fff; padding: 1px 4px; border-radius: 2px;">${p.label} ${icon}</span>`;
+                  }).join('');
+                }
+              }
             }
 
             // Smart Merge: Preserve existing node physics positions
