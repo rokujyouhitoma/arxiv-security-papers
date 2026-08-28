@@ -56,6 +56,12 @@
   - [8.2 IR ベンチマーク実行シーケンス](#82-ir-ベンチマーク実行シーケンス)
 - [9. 包括的テスト戦略 & 品質検証マトリクス](#9-包括的テスト戦略--品質検証マトリクス)
 - [10. 次世代実装ロードマップ & 完了定義 (DoD)](#10-次世代実装ロードマップ--完了定義-dod)
+- [11. ゼロ外部依存 W3C TraceContext & OpenTelemetry OTLP / OpenInference 分散トレーシング](#11-ゼロ外部依存-w3c-tracecontext--opentelemetry-otlp--openinference-分散トレーシング)
+  - [11.1 W3C Trace Context (traceparent) 相互運用仕様](#111-w3c-trace-context-traceparent-相互運用仕様)
+  - [11.2 Pure-Python OTLP JSON (v1/traces) シリアライザ & HTTP エクスポータ](#112-pure-python-otlp-json-v1traces-シリアライザ--http-エクスポータ)
+  - [11.3 OpenInference GenAI / LLM セマンティックコンベンション](#113-openinference-genai--llm-セマンティックコンベンション)
+  - [11.4 短命 (Ephemeral) プロセス向け atexit/signal 確定フラッシュアーキテクチャ](#114-短命-ephemeral-プロセス向け-atexitsignal-確定フラッシュアーキテクチャ)
+
 
 ---
 
@@ -317,4 +323,50 @@ sequenceDiagram
 - [x] ExecutionProfiler (time, tracemalloc, cProfile, dis) の完備
 - [x] 全 6 大 IR 評価指標 (P@K, R@K, F1, MAP, MRR, NDCG@K) の実装
 - [x] 構造化メトリクスエクスポータとベンチマークハーネスの配備
+- [x] ゼロ外部依存 W3C TraceContext & OTLP / OpenInference 分散トレーシング基盤の配備
+
+---
+
+# 11. ゼロ外部依存 W3C TraceContext & OpenTelemetry OTLP / OpenInference 分散トレーシング
+
+## 11.1 W3C Trace Context (traceparent) 相互運用仕様
+CI/CD（GitHub Actions）や外部オーケストレーターから伝播される `TRACEPARENT` 環境変数を抽出し、プロセス境界を越えて単一の `trace_id` を維持する。
+
+フォーマット: `00-{trace_id:32hex}-{span_id:16hex}-{trace_flags:2hex}`
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CI as GitHub Actions (CI/CD)
+    participant Env as TRACEPARENT (Env Var)
+    participant App as Python Pipeline (src/observability)
+    participant LLM as LLM / Summarizer
+    participant OTLP as OTLP Endpoint (HTTP/JSON)
+
+    CI->>Env: TRACEPARENT="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+    Env->>App: extract_w3c_traceparent()
+    Note over App: 親スパンID (00f067aa0ba902b7) を継承してルートスパン生成
+    App->>App: start_as_current_span("ingest_arxiv_papers")
+    App->>LLM: start_as_current_span("llm_summarize", kind=OpenInferenceSpanKind.LLM)
+    LLM-->>App: 完成 (トークン数, レスポンス)
+    Note over App: atexit / SIGTERM フックによる強制同期フラッシュ
+    App->>OTLP: export_spans_otlp_json(v1/traces)
+```
+
+## 11.2 Pure-Python OTLP JSON (v1/traces) シリアライザ & HTTP エクスポータ
+外部 OTel SDK を一切使用せず、標準ライブラリ `urllib.request` および `json` のみで OpenTelemetry Protocol (OTLP/HTTP v1/traces) 規格に完全準拠した JSON ペイロードをシリアライズして送信する。
+
+## 11.3 OpenInference GenAI / LLM セマンティックコンベンション
+AI層の観測性向上に向け、OpenInference 規格（Arize AI / CNCF GenAI 互換）に準拠したスパン属性を標準ライブラリで付与する。
+- `openinference.span.kind`: `LLM`, `EMBEDDING`, `RETRIEVER`, `TOOL`, `CHAIN`, `AGENT`
+- `llm.model_name`: モデル識別子 (例: `gpt-4o-mini`, `local-pipeline`)
+- `llm.token_count.prompt`, `llm.token_count.completion`, `llm.token_count.total`
+- `llm.input_messages`, `llm.output_messages`
+- `retrieval.documents`: 検索適合文書リストと類似度スコア
+
+## 11.4 短命 (Ephemeral) プロセス向け atexit/signal 確定フラッシュアーキテクチャ
+GitHub Actions や CLI バッチ処理の終了時におけるテレメトリ消失（Telemetry Loss）を防ぐため、以下の 2 重セーフティネットを標準装備する：
+1. **`atexit.register(shutdown_and_flush)`**: 通常終了時のブロッキング確定同期フラッシュ。
+2. **`signal.signal(SIGTERM / SIGINT, handler)`**: CI/CD タイムアウトやキャンセル時のシグナル捕捉と即時強制フラッシュ。
+
 - [x] 100% カバレッジ・型検査 (`mypy --strict`) 完全通過

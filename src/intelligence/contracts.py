@@ -176,7 +176,6 @@ class PIRManagerProtocol(Protocol):
         ...
 
 
-
 @runtime_checkable
 class CredibilityEngineProtocol(Protocol):
     """Protocol for NATO STANAG Admiralty credibility evaluation engines."""
@@ -206,4 +205,3 @@ class SynthesizerProtocol(Protocol):
     ) -> List[IntelligenceProduct]:
         """Synthesizes structured intelligence products from processed records."""
         ...
-

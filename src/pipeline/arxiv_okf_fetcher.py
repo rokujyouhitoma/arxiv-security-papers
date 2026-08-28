@@ -390,41 +390,60 @@ def run_theme_pipeline(
         return []
 
     print(f"=== [Theme Pipeline] Running theme '{theme.name}' ({theme.theme_id}) ===")
-    all_raw_items = _fetch_theme_raw_items(theme, max_results, start_dt, end_dt)
-    print(
-        f"[Theme: {theme_id}] Fetched {len(all_raw_items)} items from {len(theme.sources)} sources."
-    )
+    from observability import get_tracer, init_observability
 
-    papers_data = [item.to_dict() for item in all_raw_items]
-    state_filename = (
-        "processed_papers.json"
-        if theme_id == "security"
-        else f"processed_papers_{theme_id}.json"
-    )
-    state_path = os.path.join(workspace_dir, state_filename)
-    processed_state = _load_state(state_path)
+    init_observability(service_name="arxiv-security-papers-pipeline")
+    tracer = get_tracer("arxiv-security-papers.pipeline")
 
-    pdf_fetch_tasks = _filter_and_stage_papers(
-        papers_data, workspace_dir, cfg, processed_state, start_dt, end_dt, force
-    )
+    with tracer.start_as_current_span(f"pipeline.theme.{theme_id}") as root_span:
+        root_span.set_attribute("theme.id", theme_id)
+        root_span.set_attribute("theme.name", theme.name)
 
-    if not pdf_fetch_tasks:
-        print(f"[Theme: {theme_id}] No new papers to stage.")
-        return []
+        with tracer.start_as_current_span("pipeline.ingest") as fetch_span:
+            all_raw_items = _fetch_theme_raw_items(theme, max_results, start_dt, end_dt)
+            fetch_span.set_attribute("pipeline.raw_count", len(all_raw_items))
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(fetch_single_pdf_and_text, p, r_dir)
-            for p, r_dir, _ in pdf_fetch_tasks
-        ]
-        for _ in as_completed(futures):
-            pass
+        print(
+            f"[Theme: {theme_id}] Fetched {len(all_raw_items)} items from {len(theme.sources)} sources."
+        )
 
-    processed_items = _transform_and_save_okf(
-        pdf_fetch_tasks, workspace_dir, cfg, processed_state, state_path
-    )
-    _generate_summaries_and_index(workspace_dir, cfg, processed_items)
-    return processed_items
+        papers_data = [item.to_dict() for item in all_raw_items]
+        state_filename = (
+            "processed_papers.json"
+            if theme_id == "security"
+            else f"processed_papers_{theme_id}.json"
+        )
+        state_path = os.path.join(workspace_dir, state_filename)
+        processed_state = _load_state(state_path)
+
+        pdf_fetch_tasks = _filter_and_stage_papers(
+            papers_data, workspace_dir, cfg, processed_state, start_dt, end_dt, force
+        )
+
+        if not pdf_fetch_tasks:
+            print(f"[Theme: {theme_id}] No new papers to stage.")
+            return []
+
+        with tracer.start_as_current_span("pipeline.fetch_pdf_and_text") as pdf_span:
+            pdf_span.set_attribute("pipeline.pdf_task_count", len(pdf_fetch_tasks))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [
+                    executor.submit(fetch_single_pdf_and_text, p, r_dir)
+                    for p, r_dir, _ in pdf_fetch_tasks
+                ]
+                for _ in as_completed(futures):
+                    pass
+
+        with tracer.start_as_current_span("pipeline.transform_okf") as okf_span:
+            processed_items = _transform_and_save_okf(
+                pdf_fetch_tasks, workspace_dir, cfg, processed_state, state_path
+            )
+            okf_span.set_attribute("pipeline.processed_count", len(processed_items))
+
+        with tracer.start_as_current_span("pipeline.summaries_and_index"):
+            _generate_summaries_and_index(workspace_dir, cfg, processed_items)
+
+        return processed_items
 
 
 def _parse_cli_date_range(

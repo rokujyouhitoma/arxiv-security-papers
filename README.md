@@ -358,7 +358,8 @@ make build_js           ## Google Closure Compiler による JS バンドルビ�
 │   ├── web/                    # API Gateway & UI プレゼンテーション (DSN-09)
 │   ├── intelligence/           # 閉ループ・ドメインインテリジェンス (DSN-11)
 │   ├── workflow/               # Streaming DAG & クラッシュリカバリ WAL (DSN-11)
-│   └── supervisor/             # 汎用プロセススーパーバイザー & 調停基盤 (DSN-12)
+│   ├── supervisor/             # 汎用プロセススーパーバイザー & 調停基盤 (DSN-12)
+│   └── observability/          # Pure-Python W3C OTel & OpenInference 分散トレーシング (DSN-10)
 ├── tests/                      # 包括的テストスイート (1:1 ミラーリング)
 │   ├── pdf_engine/             # PDF エンジン単体・実証ベンチマークテスト
 │   ├── spider/                 # クローラーテスト
@@ -370,7 +371,8 @@ make build_js           ## Google Closure Compiler による JS バンドルビ�
 │   ├── web/                    # Web Gateway テスト
 │   ├── intelligence/           # インテリジェンスエンジンテスト
 │   ├── workflow/               # ワークフロー基盤テスト
-│   └── supervisor/             # スーパーバイザーテスト
+│   ├── supervisor/             # スーパーバイザーテスト
+│   └── observability/          # OTel & OpenInference トレーシングテスト
 ├── config/                     # パイプライン設定ファイル群
 ├── templates/                  # サマリーレンダリングテンプレート
 ├── site/                       # Web UI 静的ファイル (HTML / CSS / JS / Dashboard)
@@ -389,7 +391,7 @@ make build_js           ## Google Closure Compiler による JS バンドルビ�
 1. **トリプル品質ゲート (Triple Quality Gates)**:
    - 全コード変更は `make check` (`make check_format`, `make static_analysis`, `make test`) を 100% 通過する必要があります。
 2. **Issue 駆動開発**:
-   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（Issue 001〜093 全93件完了）。
+   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（Issue 001〜094 全94件完了）。
 3. **相対パス厳守**:
    - リポジトリ内の全 Markdown ドキュメントにおいて実効絶対パスリンクは完全 0 件に保たれ、高い移植性と完全なトレーサビリティが保証されています。
 

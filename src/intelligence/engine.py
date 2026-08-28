@@ -142,65 +142,101 @@ class ClosedLoopIntelligenceEngine:
         phase_type: IntelligencePhase,
         context: PhaseContext,
     ) -> PhaseContext:
-        """Executes a single phase wrapped with WAL event logging and checkpoints."""
-        self.wal.append_event(
-            cycle_id=context.cycle_id,
-            event_type=EventType.PHASE_STARTED,
-            payload={"phase": phase_type.value},
-        )
-        context = saga.execute_phase_safely(phase_executor, context)
-        if context.errors:
+        """Executes a single phase wrapped with WAL event logging, checkpoints, and OTel spans."""
+        from observability import get_tracer
+
+        tracer = get_tracer("arxiv-security-papers.intelligence")
+
+        with tracer.start_as_current_span(
+            f"intelligence.phase.{phase_type.value}"
+        ) as phase_span:
+            phase_span.set_attribute("intelligence.cycle_id", context.cycle_id)
+            phase_span.set_attribute("intelligence.phase", phase_type.value)
+
             self.wal.append_event(
                 cycle_id=context.cycle_id,
-                event_type=EventType.CYCLE_FAILED,
-                payload={"failed_phase": phase_type.value, "errors": context.errors},
+                event_type=EventType.PHASE_STARTED,
+                payload={"phase": phase_type.value},
             )
+            context = saga.execute_phase_safely(phase_executor, context)
+            if context.errors:
+                phase_span.set_attribute("error", True)
+                self.wal.append_event(
+                    cycle_id=context.cycle_id,
+                    event_type=EventType.CYCLE_FAILED,
+                    payload={
+                        "failed_phase": phase_type.value,
+                        "errors": context.errors,
+                    },
+                )
+                return context
+
+            self.wal.append_event(
+                cycle_id=context.cycle_id,
+                event_type=EventType.PHASE_COMPLETED,
+                payload={"phase": phase_type.value},
+            )
+            self.wal.create_checkpoint(context)
             return context
 
-        self.wal.append_event(
-            cycle_id=context.cycle_id,
-            event_type=EventType.PHASE_COMPLETED,
-            payload={"phase": phase_type.value},
-        )
-        self.wal.create_checkpoint(context)
-        return context
-
     def run_cycle(self, cycle_id: Optional[str] = None) -> PhaseContext:
-        """Executes a single transactional intelligence cycle across all 6 phases with WAL."""
+        """Executes a single transactional intelligence cycle across all 6 phases with WAL and tracing."""
+        from observability import get_tracer, init_observability
+
+        init_observability(service_name="arxiv-security-papers-intelligence")
+        tracer = get_tracer("arxiv-security-papers.intelligence")
+
         if not cycle_id:
             cycle_id = f"cycle_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
-        context = PhaseContext(cycle_id=cycle_id, workspace_dir=self.workspace_dir)
-        self.wal.append_event(cycle_id=cycle_id, event_type=EventType.CYCLE_STARTED)
-        saga = SagaCoordinator()
+        with tracer.start_as_current_span(
+            f"intelligence.cycle.{cycle_id}"
+        ) as cycle_span:
+            cycle_span.set_attribute("intelligence.cycle_id", cycle_id)
+            context = PhaseContext(cycle_id=cycle_id, workspace_dir=self.workspace_dir)
+            self.wal.append_event(cycle_id=cycle_id, event_type=EventType.CYCLE_STARTED)
+            saga = SagaCoordinator()
 
-        phases = [
-            (self.pir_manager, IntelligencePhase.PLANNING),
-            (self.harvest_coordinator, IntelligencePhase.COLLECTION),
-            (self.processing_coordinator, IntelligencePhase.PROCESSING),
-            (self.analysis_synthesizer, IntelligencePhase.ANALYSIS),
-            (self.dissemination_distributor, IntelligencePhase.DISSEMINATION),
-            (self.feedback_evaluator, IntelligencePhase.EVALUATION),
-        ]
+            phases = [
+                (self.pir_manager, IntelligencePhase.PLANNING),
+                (self.harvest_coordinator, IntelligencePhase.COLLECTION),
+                (self.processing_coordinator, IntelligencePhase.PROCESSING),
+                (self.analysis_synthesizer, IntelligencePhase.ANALYSIS),
+                (self.dissemination_distributor, IntelligencePhase.DISSEMINATION),
+                (self.feedback_evaluator, IntelligencePhase.EVALUATION),
+            ]
 
-        for executor, ptype in phases:
-            context = self._execute_phase_with_wal(saga, executor, ptype, context)
-            if context.errors:
-                self.cycle_history.append(context)
-                return context
+            for executor, ptype in phases:
+                context = self._execute_phase_with_wal(saga, executor, ptype, context)
+                if context.errors:
+                    cycle_span.set_attribute("error", True)
+                    self.cycle_history.append(context)
+                    return context
 
-        # Closed-Loop Self-Adapting Feedback Step (Update PIR weights for next cycle)
-        if context.telemetry:
-            self.pir_manager.update_weights_from_feedback(
-                usage_counts=context.telemetry.frequent_topics,
-                knowledge_gaps=context.telemetry.knowledge_gaps,
-                topic_drifts=context.telemetry.topic_drift_scores,
+            # Closed-Loop Self-Adapting Feedback Step (Update PIR weights for next cycle)
+            if context.telemetry:
+                self.pir_manager.update_weights_from_feedback(
+                    usage_counts=context.telemetry.frequent_topics,
+                    knowledge_gaps=context.telemetry.knowledge_gaps,
+                    topic_drifts=context.telemetry.topic_drift_scores,
+                )
+                self.pir_manager.adapt_queries_from_telemetry(context.telemetry)
+
+            cycle_span.set_attribute(
+                "intelligence.records_collected", len(context.raw_records)
             )
-            self.pir_manager.adapt_queries_from_telemetry(context.telemetry)
+            cycle_span.set_attribute(
+                "intelligence.records_processed", len(context.processed_records)
+            )
+            cycle_span.set_attribute(
+                "intelligence.products_synthesized", len(context.products)
+            )
 
-        self.wal.append_event(cycle_id=cycle_id, event_type=EventType.CYCLE_COMPLETED)
-        self.cycle_history.append(context)
-        return context
+            self.wal.append_event(
+                cycle_id=cycle_id, event_type=EventType.CYCLE_COMPLETED
+            )
+            self.cycle_history.append(context)
+            return context
 
     def resume_cycle(self, cycle_id: str) -> PhaseContext:
         """Replays and resumes an uncompleted or crashed cycle from its WAL state."""

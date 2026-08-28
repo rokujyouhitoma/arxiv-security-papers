@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **094** | ゼロ外部依存 (Pure Python) エンドツーエンド OpenTelemetry & OpenInference 分散オブザーバビリティ基盤の実装 | Feature | 2026-08-28 | [094-pure-python-opentelemetry-and-openinference-observability.md](closed/094-pure-python-opentelemetry-and-openinference-observability.md) |
 | **093** | システム全体の凝集度・モジュール強度向上および結合度低減に向けたリファクタリング | Refactor | 2026-08-28 | [093-improve-cohesion-and-decouple-architecture.md](closed/093-improve-cohesion-and-decouple-architecture.md) |
 | **092** | DSN 包括的設計仕様に基づくシステム実装の見直しと機能強化 | Feature | 2026-08-28 | [092-align-implementation-with-dsn-specifications.md](closed/092-align-implementation-with-dsn-specifications.md) |
 | **091** | 汎用ワークフロー基盤 (src/workflow) と 閉ループ・インテリジェンス (src/intelligence) の完全分離 | Refactor | 2026-08-27 | [091-separate-workflow-engine-and-closed-loop-intelligence.md](closed/091-separate-workflow-engine-and-closed-loop-intelligence.md) |
