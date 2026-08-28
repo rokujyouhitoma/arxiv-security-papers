@@ -297,7 +297,7 @@ sequenceDiagram
 
 # 10. 完了定義 (DoD) & 包括設計書体系 (DSN-01 〜 DSN-16)
 
-全サブシステムは、以下の **16 大包括設計書体系 (DSN-01 〜 DSN-16)** に基づき整合・運用される：
+全サブシステムは、以下の **18 大包括設計書体系 (DSN-01 〜 DSN-18)** に基づき整合・運用される：
 
 | DSN 番号 | 設計書ファイル | 対応パッケージ (`src/`) | 領域 / サブシステム |
 | :---: | :--- | :--- | :--- |
@@ -311,9 +311,11 @@ sequenceDiagram
 | **DSN-08** | [DSN-08-mcp_strategic_ecosystem.md](DSN-08-mcp_strategic_ecosystem.md) | `src/mcp/` | Model Context Protocol (MCP) 戦略的エコシステム設計書 |
 | **DSN-09** | [DSN-09-web_gateway_and_presentation.md](DSN-09-web_gateway_and_presentation.md) | `src/web/` | API Gateway & UI プレゼンテーション設計書 (`gateway`, `presentation`) |
 | **DSN-10** | [DSN-10-observability_and_eval_framework.md](DSN-10-observability_and_eval_framework.md) | 横断的基盤 | 可観測性 (Observability) & 情報検索評価 (IR Eval) 設計書 |
-| **DSN-11** | [DSN-11-intelligence_orchestration_engine.md](DSN-11-intelligence_orchestration_engine.md) | 統合統制中枢 | 普遍的自律型インテリジェンス・ライフサイクル・オーケストレーション包括設計書 |
-| **DSN-12** | [DSN-12-process_supervisor_and_worker_pool.md](DSN-12-process_supervisor_and_worker_pool.md) | `src/supervisor/` | プロセス監視・ワーカープール管理基盤設計書 |
+| **DSN-11** | [DSN-11-universal_workflow_engine.md](DSN-11-universal_workflow_engine.md) | `src/workflow/` | 汎用ワークフロー基盤・DAG & Saga 補償トランザクション包括設計書 |
+| **DSN-12** | [DSN-12-process_supervisor_and_arbiter.md](DSN-12-process_supervisor_and_arbiter.md) | `src/supervisor/` | 汎用プロセススーパーバイザー & 調停基盤包括設計書 |
 | **DSN-13** | [DSN-13-pure_python_pdf_text_extractor.md](DSN-13-pure_python_pdf_text_extractor.md) | `src/pdf_engine/` | Pure-Python PDF 全文抽出エンジン包括設計書 |
-| **DSN-14** | [DSN-14-graph_engineering_dashboard.md](DSN-14-graph_engineering_dashboard.md) | `src/search/ranking/` | 論文・脅威ナレッジグラフ & エンジニアリングダッシュボード設計書 |
-| **DSN-15** | [DSN-15-enterprise_distributed_crawler.md](DSN-15-enterprise_distributed_crawler.md) | `src/spider/distributed/` | 大規模エンタープライズ分散クローラー設計書 |
+| **DSN-14** | [DSN-14-graph_engineering_dashboard.md](DSN-14-graph_engineering_dashboard.md) | `src/web/presentation/` | 論文・脅威ナレッジグラフ & エンジニアリングダッシュボード設計書 |
+| **DSN-15** | [DSN-15-closed_loop_intelligence_system.md](DSN-15-closed_loop_intelligence_system.md) | `src/intelligence/` | 閉ループ・自律型インテリジェンス・オーケストレーション設計書 |
 | **DSN-16** | [DSN-16-nextgen_security_knowledge_platform_proposal.md](DSN-16-nextgen_security_knowledge_platform_proposal.md) | 次世代統合 | 次世代セキュリティ・ナレッジプラットフォーム包括的設計提言書 |
+| **DSN-17** | [DSN-17-security_knowledge_ontology.md](DSN-17-security_knowledge_ontology.md) | `src/ontology/` | セキュリティ知識オントロジー (SKO) 規格設計書 |
+| **DSN-18** | [DSN-18-property_graph_database_engine.md](DSN-18-property_graph_database_engine.md) | `src/graph/` | ゼロ侵襲型プロパティグラフデータベース基盤設計書 |

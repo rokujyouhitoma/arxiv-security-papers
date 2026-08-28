@@ -185,14 +185,15 @@ sequenceDiagram
   - バックプレッシャー制御ストリーミング DAG、Circuit Breaker、Saga 補償トランザクション、Event Sourcing 型 クラッシュリカバリ WAL。
 - **Gunicorn スタイル汎用プロセススーパーバイザー (`src/supervisor/` / [DSN-12](docs/designs/DSN-12-process_supervisor_and_arbiter.md))**:
   - Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー、POSIX シグナル調停、Unix ドメインソケット IPC、ハートビート自己回復、`top` リアルタイムモニタリング CLI。
-- **分散クローラー & スパイダー基盤 (`src/spider/` / [DSN-06](docs/designs/DSN-06-distributed_spider_and_crawler.md), [DSN-15](docs/designs/DSN-15-distributed_spider_crawler_engine.md))**:
+  - **二重起動完全防止 & プロセスリーク根絶**: `fcntl.flock` ノンブロッキング排他ロック（Singleton Instance Lock）、Linux `PR_SET_PDEATHSIG` による Worker 孤児化防止、および `restart` 実行時の旧世代完全消滅待機 & SIGKILL 強制回収。
+- **分散クローラー & スパイダー基盤 (`src/spider/` / [DSN-06](docs/designs/DSN-06-distributed_spider_and_crawler.md), [DSN-15](docs/designs/DSN-15-closed_loop_intelligence_system.md))**:
   - OPIC クロール順序付け、AutoThrottle レート制限、スケーラブル・ブルームフィルタ、SPA 状態復元。
 - **Google OKF v0.2 準拠ナレッジ化 & 5階層サマリー (`src/pipeline/` / [DSN-03](docs/designs/DSN-03-pipeline_architecture.md))**:
   - YAML フロントマター付き OKF ドキュメント（`outputs/okf_papers/`）および数理モデル $\text{ThreatScore}(T)$ に基づく MITRE ATT&CK / CWE / STRIDE 脅威タグ自動付与。
   - 完全日本語 5 階層サマリー（`01_per_run` 実行時、`02_daily` 日次、`03_monthly` 月次、`04_quarterly` 四半期、`05_annual` 通期）。
 - **ゼロ依存 4層ベクトルデータベース (`src/database/` / [DSN-05](docs/designs/DSN-05-database_engine_architecture.md))**:
   - 4KB SlottedPage, 2Q Buffer Pool, WAL & ARIES 障害回復, B+Tree, LSM-Tree, PAX 列指向, CBO オプティマイザ, 分散 Raft / Saga / 2PC / Consistent Hashing, PEP 249 DB-API 互換ドライバ。
-- **2層分離エンタープライズ検索基盤 (`src/search/` / [DSN-04](docs/designs/DSN-04-search_engine_and_platform.md), [DSN-04-01](docs/designs/DSN-04-01-hybrid_search_specification.md))**:
+- **2層分離エンタープライズ検索基盤 (`src/search/` / [DSN-04](docs/designs/DSN-04-search_engine_and_platform.md))**:
   - コアエンジン層（Lucene パラダイム: BM25, AST クエリ, VByte 圧縮）とプラットフォーム層（Solr パラダイム: ManagedSchema, Elevation, Facet, LRU Cache, Highlighter）の完全分離、および HNSW ベクトル RRF 融合。
 - **AI エージェント向け戦略的 MCP サーバー群 (`src/mcp/` / [DSN-08](docs/designs/DSN-08-mcp_strategic_ecosystem.md))**:
   - 論文インテリジェンス（`papers_server`）、技術動向レーダー（`tech_radar_server`）、脅威防御・パッチ & Caldera/Sigma 合成（`threat_defense_server`）、可観測性プロファイラ（`observability_server`）の 4 大 JSON-RPC 2.0 サーバー。
@@ -201,27 +202,28 @@ sequenceDiagram
 
 ---
 
-## 📚 5. 包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-16)
+## 📚 5. 包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-18)
 
 | DSN 番号 | 設計書ファイル | 対応パッケージ (`src/` / `site/`) | 領域 / サブシステム |
 | :---: | :--- | :--- | :--- |
 | **DSN-01** | [DSN-01-high_level_design.md](docs/designs/DSN-01-high_level_design.md) | システム全体 | 全体高位アーキテクチャ設計書 (HLD & 6層モジュール構造) |
 | **DSN-02** | [DSN-02-low_level_design.md](docs/designs/DSN-02-low_level_design.md) | システム全体 | 全体低位アーキテクチャ設計書 (LLD & 共通規約) |
 | **DSN-03** | [DSN-03-pipeline_architecture.md](docs/designs/DSN-03-pipeline_architecture.md) | `src/pipeline/` | ETL データパイプライン包括設計書 (`ingestion`, `transformer`, `reporter`) |
-| **DSN-04** | [DSN-04-search_engine_and_platform.md](docs/designs/DSN-04-search_engine_and_platform.md) | `src/search/` | 2層検索エンジン & プラットフォーム設計書 (`core`, `platform`, `vector`) |
-| **DSN-04-01** | [DSN-04-01-hybrid_search_specification.md](docs/designs/DSN-04-01-hybrid_search_specification.md) | `src/search/` | ハイブリッド検索 5手法フュージョン詳細仕様書 |
+| **DSN-04** | [DSN-04-search_engine_and_platform.md](docs/designs/DSN-04-search_engine_and_platform.md) | `src/search/` | 2層検索エンジン & プラットフォーム設計書 (`engine`, `platform`, `vector`) |
 | **DSN-05** | [DSN-05-database_engine_architecture.md](docs/designs/DSN-05-database_engine_architecture.md) | `src/database/` | ゼロ依存 4層ベクトルデータベース & 分散合意設計書 |
 | **DSN-06** | [DSN-06-distributed_spider_and_crawler.md](docs/designs/DSN-06-distributed_spider_and_crawler.md) | `src/spider/` | 分散 Web クローラー & スパイダー基盤アーキテクチャ設計書 |
 | **DSN-07** | [DSN-07-security_guard_and_rbac.md](docs/designs/DSN-07-security_guard_and_rbac.md) | `src/security/` | 共通セキュリティ基盤・AST ガード & RBAC エンジン設計書 |
 | **DSN-08** | [DSN-08-mcp_strategic_ecosystem.md](docs/designs/DSN-08-mcp_strategic_ecosystem.md) | `src/mcp/` | Model Context Protocol (MCP) 戦略的エコシステム設計書 |
 | **DSN-09** | [DSN-09-web_gateway_and_presentation.md](docs/designs/DSN-09-web_gateway_and_presentation.md) | `src/web/` | API Gateway & UI プレゼンテーション設計書 (`gateway`, `presentation`) |
 | **DSN-10** | [DSN-10-observability_and_eval_framework.md](docs/designs/DSN-10-observability_and_eval_framework.md) | 横断的基盤 | 可観測性 (Observability) & 情報検索評価 (IR Eval) 設計書 |
-| **DSN-11** | [DSN-11-intelligence_orchestration_engine.md](docs/designs/DSN-11-intelligence_orchestration_engine.md) | `src/intelligence/`, `src/workflow/` | 閉ループ・ドメインインテリジェンス & 汎用ワークフロー包括設計書 |
+| **DSN-11** | [DSN-11-universal_workflow_engine.md](docs/designs/DSN-11-universal_workflow_engine.md) | `src/workflow/` | 汎用ワークフロー基盤・DAG & Saga 補償トランザクション包括設計書 |
 | **DSN-12** | [DSN-12-process_supervisor_and_arbiter.md](docs/designs/DSN-12-process_supervisor_and_arbiter.md) | `src/supervisor/` | 汎用プロセススーパーバイザー & 調停基盤設計書 |
 | **DSN-13** | [DSN-13-pure_python_pdf_text_extractor.md](docs/designs/DSN-13-pure_python_pdf_text_extractor.md) | `src/pdf_engine/` | ISO 32000 準拠 Pure Python PDF 抽出 & 空間レイアウト再構築エンジン設計書 |
-| **DSN-14** | [DSN-14-graph_engineering_dashboard.md](docs/designs/DSN-14-graph_engineering_dashboard.md) | `site/dashboard.html` | 知識グラフ探索・ナレッジメッシュ可視化ダッシュボード包括設計書 (Pure JS/Canvas) |
-| **DSN-15** | [DSN-15-distributed_spider_crawler_engine.md](docs/designs/DSN-15-distributed_spider_crawler_engine.md) | `src/spider/` | ゼロ外部依存 分散スパイダー・クローラー詳細仕様書 |
+| **DSN-14** | [DSN-14-graph_engineering_dashboard.md](docs/designs/DSN-14-graph_engineering_dashboard.md) | `src/web/presentation/` | 論文・脅威ナレッジグラフ & エンジニアリングダッシュボード設計書 |
+| **DSN-15** | [DSN-15-closed_loop_intelligence_system.md](docs/designs/DSN-15-closed_loop_intelligence_system.md) | `src/intelligence/` | 閉ループ・自律型インテリジェンス・オーケストレーション設計書 |
 | **DSN-16** | [DSN-16-nextgen_security_knowledge_platform_proposal.md](docs/designs/DSN-16-nextgen_security_knowledge_platform_proposal.md) | プラットフォーム全体 | 次世代セキュリティ・ナレッジプラットフォーム包括的設計提言書 |
+| **DSN-17** | [DSN-17-security_knowledge_ontology.md](docs/designs/DSN-17-security_knowledge_ontology.md) | `src/ontology/` | セキュリティ知識オントロジー (SKO) 規格設計書 |
+| **DSN-18** | [DSN-18-property_graph_database_engine.md](docs/designs/DSN-18-property_graph_database_engine.md) | `src/graph/` | ゼロ侵襲型プロパティグラフデータベース基盤設計書 |
 
 ---
 

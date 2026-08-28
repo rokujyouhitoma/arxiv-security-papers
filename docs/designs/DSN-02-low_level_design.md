@@ -125,7 +125,24 @@ sequenceDiagram
 
 ---
 
-## 7. セキュリティ堅牢化 & 共通防御ルール
+## 7. プロセス管理・排他制御プロトコル (Process Lifecycle & Concurrency)
+
+### 7.1 Singleton Instance Lock プロトコル
+Arbiter プロセスの重複起動を OS カーネルレベルで遮断するファイル排他ロック規約：
+- ロックファイルパス: `outputs/supervisor/arbiter.lock`
+- 排他ロック方式: POSIX `fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)`
+- ライフサイクル管理:
+  - 起動直後にロックを取得し自 PID を記録。
+  - プロセス正常終了時に `fcntl.LOCK_UN` を発行しファイルをアンリンク。
+  - 異常終了時は OS カーネルによる FD 自動回収でデッドロックを防止。
+
+### 7.2 Worker 孤児化防止プロトコル (PR_SET_PDEATHSIG)
+- 子プロセス生成時に Linux `prctl(PR_SET_PDEATHSIG, signal.SIGKILL)` を設定。
+- 親 Arbiter 死亡時に全子プロセスを自動連動終了させ、プロセスリーク・ゾンビ化を根絶。
+
+---
+
+## 8. セキュリティ堅牢化 & 共通防御ルール
 
 - **パス検証**: すべてのファイル入出力は `security.validation.is_safe_workspace_path` を通過。
 - **入力サニタイズ**: 外部入力文字列に対する HTML エスケープと SQL パラメータバインディング。
@@ -133,7 +150,7 @@ sequenceDiagram
 
 ---
 
-## 8. 性能特性 & メモリフットプリント
+## 9. 性能特性 & メモリフットプリント
 
 - **ドキュメントシリアライズ速度**: 1 ドキュメントあたり $\le 0.5\text{ms}$
 - **メモリオーバーヘッド**: 文字列インターン化と軽量データクラスによるメモリ最適化。

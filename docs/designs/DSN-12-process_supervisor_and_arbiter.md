@@ -19,9 +19,11 @@
 - [2. POSIX デーモン化・セッション管理と二重起動制御](#2-posix-デーモン化セッション管理と二重起動制御)
   - [2.1 POSIX Double-Fork デーモン化メカニズム](#21-posix-double-fork-デーモン化メカニズム)
   - [2.2 標準ストリームの安全なリダイレクト](#22-標準ストリームの安全なリダイレクト)
-  - [2.3 PID ファイルガードと生存確認](#23-pid-ファイルガードと生存確認)
-  - [2.4 クリーンアップ保証と異常終了耐性](#24-クリーンアップ保証と異常終了耐性)
-  - [2.5 デーモン化基盤の要約](#25-デーモン化基盤の要約)
+  - [2.3 排他ファイルロック（fcntl.flock）による二重起動完全防止 (Singleton Instance Lock)](#23-排他ファイルロックfcntlflockによる二重起動完全防止-singleton-instance-lock)
+  - [2.4 PID ファイルガードと生存確認](#24-pid-ファイルガードと生存確認)
+  - [2.5 Linux PR_SET_PDEATHSIG による Worker 孤児化・プロセスリーク防止](#25-linux-pr_set_pdeathsig-による-worker-孤児化プロセスリーク防止)
+  - [2.6 クリーンアップ保証と異常終了耐性](#26-クリーンアップ保証と異常終了耐性)
+  - [2.7 デーモン化基盤の要約](#27-デーモン化基盤の要約)
 - [3. Pre-fork 共有ソケットとネットワーク分散モデル](#3-pre-fork-共有ソケットとネットワーク分散モデル)
   - [3.1 親プロセス事前バインドと FD 継承](#31-親プロセス事前バインドと-fd-継承)
   - [3.2 カーネル空間負荷分散と Thundering Herd 対策](#32-カーネル空間負荷分散と-thundering-herd-対策)
@@ -258,15 +260,31 @@ def _redirect_standard_streams(self) -> None:
 - **`_safe_dup2()`**: OS 仮想擬似ファイルシステムやコンテナ環境における例外を安全に吸収。
 - **ログアペンド**: `os.O_WRONLY | os.O_CREAT | os.O_APPEND` フラグ（パーミッション `0o644`）により、複数プロセスのログ追記競合を防止。
 
----
+## 2.3 排他ファイルロック（fcntl.flock）による二重起動完全防止 (Singleton Instance Lock)
 
-## 2.3 PID ファイルガードと生存確認
-
-二重起動によるポート競合やデータ破壊を未然に防止するため、Arbiter は起動前に `outputs/supervisor/arbiter.pid` を検証します（`_check_existing_pid()`）。
+二重起動によるポート競合、ソケット上書き、およびプロセス増殖を OS カーネルレベルで 100% 確実に防止するため、Arbiter は起動時に `outputs/supervisor/arbiter.lock` に対する**ノンブロッキング排他ロック（`fcntl.LOCK_EX | fcntl.LOCK_NB`）** を取得します（`src/supervisor/arbiter.py:acquire_single_instance_lock()`）。
 
 ```mermaid
 graph TD
-    Start["起動要求 (start)"] --> CheckFile{"PID ファイル存在?"}
+    Start["Arbiter 起動要求 (start / daemonize)"] --> OpenLock["outputs/supervisor/arbiter.lock オープン"]
+    OpenLock --> FlockTry{"fcntl.flock(LOCK_EX | LOCK_NB) 試行"}
+    FlockTry -- "取得成功 (独占)" --> WriteLockPID["自 PID 書き込み & 起動シーケンス継続"]
+    FlockTry -- "BlockingIOError (別プロセス保持)" --> ReadOldPID["ロック/PIDファイルから稼働中 PID 取得"]
+    ReadOldPID --> BlockErr["RuntimeError: Supervisor arbiter is already running with PID X"]
+```
+
+- **カーネル排他制御**: プロセスが異常終了した場合でも、ファイルディスクリプタのクローズに伴い OS カーネルが自動的にロックを解放するため、デッドロックに陥る危険がありません。
+- **即時ブロック & エラー通知**: 別インスタンスが起動を試みた場合、ブロックすることなくミリ秒単位で即座に例外を発生させ、運用者に適切な CLI コマンド（`status` / `restart` / `stop`）を案内します。
+
+---
+
+## 2.4 PID ファイルガードと生存確認
+
+排他ロックに加え、運用スクリプトや外部ツールとの親和性を担保するため、Arbiter は起動前に `outputs/supervisor/arbiter.pid` を検証します（`_check_existing_pid()`）。
+
+```mermaid
+graph TD
+    Start["起動要求"] --> CheckFile{"PID ファイル存在?"}
     CheckFile -- No --> WritePID["自 PID 書き込み & 起動継続"]
     CheckFile -- Yes --> ReadPID["既存 PID 読み出し"]
     ReadPID --> Kill0{"os.kill(PID, 0) 実行"}
@@ -280,17 +298,53 @@ graph TD
 
 ---
 
-## 2.4 クリーンアップ保証と異常終了耐性
+## 2.5 Linux PR_SET_PDEATHSIG による Worker 孤児化・プロセスリーク防止
 
-- **`atexit` 登録**: Python インタプリタ終了時にソケットファイル（`control.sock`）と PID ファイル（`arbiter.pid`）を自動アンリンク。
+親プロセス（Arbiter）が SIGKILL や不意のセグメンテーション違反などで突然死した場合、フォークされた子プロセス（Worker 群）が `init`（PID 1）や systemd の配下にぶら下がり、ゾンビ・孤児プロセスとしてバックグラウンドに残留・増殖するリスクが存在します。
+
+Arbiter は子プロセス生成直後の初期化ルーチン（`src/supervisor/arbiter.py:init_child_process()`）において、Linux カーネルの `prctl` システムコールを介して **`PR_SET_PDEATHSIG`** を設定します。
+
+```python
+def init_child_process(self) -> None:
+    """子プロセス初期化: シグナルハンドラリセット、UDS 閉塞、および親死亡時連動終了を設定"""
+    if self._lock_file_obj:
+        try:
+            self._lock_file_obj.close()
+        except Exception:
+            pass
+        self._lock_file_obj = None
+
+    if self.control_server:
+        self.control_server.close_in_child()
+    signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+
+    # 親 Arbiter が死亡した瞬間に子 Worker を自動連動終了 (Linux PR_SET_PDEATHSIG)
+    try:
+        import ctypes
+        libc = ctypes.CDLL("libc.so.6")
+        PR_SET_PDEATHSIG = 1
+        libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+    except Exception:
+        pass
+```
+
+- **完全な道連れ終了の保証**: 親 Arbiter の終了シグナル受信やクラッシュ時に、全 Worker がカーネルレベルで即座に `SIGKILL` を受けて終了するため、プロセスリークが構造的に発生しません。
+
+---
+
+## 2.6 クリーンアップ保証と異常終了耐性
+
+- **`_cleanup_resources()` & `release_single_instance_lock()`**: Arbiter の正常終了時、ロック解放・ファイル削除（`arbiter.lock`）、PID ファイル（`arbiter.pid`）、および IPC ソケット（`control.sock`）を確実にアンリンク。
+- **`atexit` 登録**: Python インタプリタの予期せぬ終了時にも `_atexit_cleanup` が発動し、残存ソケットを自動クリーンアップ。
 - **子プロセスガード**: `fork()` 直後の子プロセスにおいて `control_server.close_in_child()` を呼び出し、子プロセスの終了時に親の UDS ソケットが誤ってアンリンクされる事態を防止。
 
 ---
 
-## 2.5 デーモン化基盤の要約
+## 2.7 デーモン化基盤の要約
 
 - POSIX Double-Fork と `setsid()` により、制御 TTY から 100% デタッチされた安全なバックグラウンド常駐を実現。
-- `os.kill(pid, 0)` を用いた厳格な PID ガードにより、二重起動とリソース競合を完全に阻止。
+- `fcntl.flock` によるノンブロッキング排他ロックと `os.kill(pid, 0)` により、二重起動とリソース競合を完全に阻止。
+- Linux `PR_SET_PDEATHSIG` により、Arbiter 死亡時の子ワーカー孤児化・プロセスリークを根絶。
 
 ---
 
