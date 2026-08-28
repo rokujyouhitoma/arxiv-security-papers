@@ -821,7 +821,7 @@
         <div class="metric-card" style="background-color: var(--bg-panel);">
           <div class="card-header">
             <span class="card-title">🔌 IPC Control Channel</span>
-            <span class="card-tag" style="color: var(--accent-green); font-weight: bold;">UNIX DOMAIN SOCKET</span>
+            <span class="card-tag" id="badgeIpcStatus" style="color: var(--accent-green); font-weight: bold;">--</span>
           </div>
           <div style="font-size: 10px; margin-top: 4px; color: var(--fg-muted);">
             <div><strong>Socket:</strong> <code style="font-size: 9px;">outputs/supervisor.sock</code></div>
@@ -1627,6 +1627,8 @@
                 const pBadge = document.getElementById('badgePoolCount');
                 if (pBadge) pBadge.textContent = `${Object.keys(sup.pools).length} Pools`;
               }
+              const bIpc = document.getElementById('badgeIpcStatus');
+              if (bIpc) bIpc.textContent = 'UNIX DOMAIN SOCKET';
 
               // Workers Table
               const tbody = document.getElementById('supervisorWorkersTableBody');
