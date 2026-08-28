@@ -6,9 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
-| :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **095** | ST・SA・SM 戦略的テレメトリ統合と UI/UX 3タブレイアウト高度化 | Feature | High | In Progress | 13エージェント合同 (PM/ST/SA/SM/UIUX) | [095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md](095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md) |
+*現在対応中のアクティブな Issue はありません。*
 
 ---
 
@@ -17,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **095** | ST・SA・SM 戦略的テレメトリ統合と UI/UX 3タブレイアウト高度化 | Feature | 2026-08-28 | [095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md](closed/095-integrate-st-sa-sm-strategic-telemetry-and-uiux-layout.md) |
 | **094** | ゼロ外部依存 (Pure Python) エンドツーエンド OpenTelemetry & OpenInference 分散オブザーバビリティ基盤の実装 | Feature | 2026-08-28 | [094-pure-python-opentelemetry-and-openinference-observability.md](closed/094-pure-python-opentelemetry-and-openinference-observability.md) |
 | **093** | システム全体の凝集度・モジュール強度向上および結合度低減に向けたリファクタリング | Refactor | 2026-08-28 | [093-improve-cohesion-and-decouple-architecture.md](closed/093-improve-cohesion-and-decouple-architecture.md) |
 | **092** | DSN 包括的設計仕様に基づくシステム実装の見直しと機能強化 | Feature | 2026-08-28 | [092-align-implementation-with-dsn-specifications.md](closed/092-align-implementation-with-dsn-specifications.md) |

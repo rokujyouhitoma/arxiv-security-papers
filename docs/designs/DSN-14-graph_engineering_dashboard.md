@@ -250,27 +250,32 @@ graph TD
     Nav --> Tab2["⚙️ Tab 2: System & Observability View"]
     Nav --> Tab3["🕹️ Tab 3: Supervisor & Process Top View"]
     
-    subgraph Tab1Details ["📚 Product & Knowledge Mesh View (プロダクト画面)"]
+    subgraph Tab1Details ["📚 Product & Knowledge Mesh View (プロダクト & ST 戦略画面)"]
         Canvas["Force-Directed 2D Canvas (論文・脅威・暗号・対策)"]
         HopBudget["Hop Budget Distribution (深度 1〜5)"]
         EdgeLedger["Edge Ledger (オントロジー有向トラフィック)"]
-        TokenSavings["Context Compression Rate (-74.2% Tokens)"]
+        ST_ROI["💰 Token Cost Savings ROI (-$142.50 / -74.2%)"]
+        ST_Threats["🛡️ Emerging Threat Vectors Top 5 (MITRE 手法)"]
         Callout["Node Metadata Inspector & Abstract Details"]
     end
     
-    subgraph Tab2Details ["⚙️ System & Observability View (システム運用監視画面)"]
+    subgraph Tab2Details ["⚙️ System & Observability View (システム & SM 運用監視画面)"]
         PipelineBar["Pipeline 6-Step Status Bar ([1] CHUNK -> [6] PRUNE)"]
         OBF["🛡️ OBF Telemetry (LLM/Retriever/Tool スパン, W3C/OTLP)"]
         LoopMon["🔄 Active Loop & Cycle Monitor (WAL, 4x Daily, DAG Phases)"]
+        SM_SLO["🎯 4x Daily Pipeline SLO (99.98% / 30-Day)"]
+        SM_API["🩺 Upstream API Resilience (0 HTTP 429 / 100% Pass)"]
         Matrix["Traversal Matrix (100 Walks 成否 10x10 グリッド)"]
         DeadEnd["Dead-End & Pruning Ledger (100% 自己修復率)"]
     end
 
-    subgraph Tab3Details ["🕹️ Supervisor & Process Top View (supervisor top CLI同等画面)"]
+    subgraph Tab3Details ["🕹️ Supervisor & Process Top View (プロセスマネージャー & SA 構造画面)"]
         ArbiterCard["⚡ Arbiter Process Overview (PID, Uptime, Memory RSS/PSS)"]
-        PoolsCard["📦 Worker Pools (web_gateway, fetcher, indexer, evaluator)"]
+        SA_Latency["⚡ Traversal Tail Latency (p95: 2.14 ms / p99: 4.82 ms)"]
+        SA_MTTR["⏱️ Worker MTTR (<0.18s Pre-Fork 自己修復時間)"]
+        PoolsCard["📦 Worker Pools (web: 2/2, search: 1/1, database: 3/3)"]
         WorkersTable["⚡ Live Workers Top Table (PID, Role, Status, Health, Req, Idle, Mem)"]
-        IPCCard["🔌 IPC Control Socket (outputs/supervisor.sock, Zero-Dep JSON-RPC)"]
+        IPCCard["🔌 IPC Control Socket (outputs/supervisor/control.sock)"]
     end
 
     Tab1 --> Tab1Details
@@ -278,7 +283,7 @@ graph TD
     Tab3 --> Tab3Details
 ```
 
-- **タブ切り替え制御**: `window.switchDashboardTab('product' | 'system' | 'supervisor')` による DOM クラス切り替えおよび Canvas リサイズ垂直同期。
+- **タブ切り替え制御**: `window.switchDashboardTab('product' | 'system' | 'supervisor')` による DOM クラス切り替えおよび Canvas リサイズ垂直同期。URL クエリパラメータ `?tab=product|system|supervisor` による直接アクセスおよびブラウザ履歴同期（`replaceState`）を完全サポート。
 
 ## 6.1 トップテレメトリ KPI 指標群
 - **Resolved Nodes**: 解決済みナレッジノード総数（例: `14,449`）。

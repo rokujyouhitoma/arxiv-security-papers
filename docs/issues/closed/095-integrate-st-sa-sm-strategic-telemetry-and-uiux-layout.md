@@ -2,7 +2,7 @@
 ID: 095
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Done)
 ---
 
 # [FEAT/ENH] ST・SA・SM 戦略的テレメトリ統合と UI/UX 3タブレイアウト高度化 (ID: 095)

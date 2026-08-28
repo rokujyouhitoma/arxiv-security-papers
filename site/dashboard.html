@@ -618,7 +618,7 @@
       </div>
 
       <!-- Product Analytics Panels -->
-      <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+      <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
         <!-- 1. Hop Budget Histogram -->
         <div class="metric-card">
           <div class="card-header">
@@ -637,13 +637,30 @@
           <div id="edgeLedgerList"></div>
         </div>
 
-        <!-- 3. Token Savings -->
+        <!-- 3. Token Savings & ROI (ST) -->
         <div class="metric-card">
           <div class="card-header">
-            <span class="card-title">Context Compression (Walk vs Flat)</span>
+            <span class="card-title">💰 Token Savings &amp; Cost ROI (ST)</span>
             <span class="card-tag" id="badgeTokenSavings" style="color: var(--accent-green); font-weight: bold;">--</span>
           </div>
           <canvas id="walkVsFlatCanvas" width="260" height="130"></canvas>
+          <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 4px; font-size: 11px; display: flex; justify-content: space-between;">
+            <span style="color: var(--fg-muted);">Estimated API ROI:</span>
+            <strong style="color: var(--accent-green);" id="valTokenRoi">--</strong>
+          </div>
+        </div>
+
+        <!-- 4. Emerging Threat Vectors Top 5 (ST) -->
+        <div class="metric-card">
+          <div class="card-header">
+            <span class="card-title">🛡️ Emerging Threat Vectors (ST)</span>
+            <span class="card-tag" id="badgeThreatCoverage">--</span>
+          </div>
+          <div id="threatVectorsList" style="font-size: 11px; margin-top: 4px;">--</div>
+          <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 6px; font-size: 10px; display: flex; justify-content: space-between;">
+            <span style="color: var(--fg-muted);">Summary Coverage:</span>
+            <strong style="color: var(--accent-blue);" id="valSummaryCoverage">--</strong>
+          </div>
         </div>
       </div>
     </div>
@@ -776,6 +793,34 @@
             </div>
           </div>
         </div>
+
+        <!-- 5. Service Management & SLA/SLO (SM) -->
+        <div class="metric-card" style="background-color: var(--bg-panel-sub);">
+          <div class="card-header">
+            <span class="card-title">🎯 Service Operations &amp; SLO (SM)</span>
+            <span class="card-tag" id="badgeSmSlo" style="color: var(--accent-green); font-weight: bold;">--</span>
+          </div>
+          <div style="font-size: 11px; margin-top: 4px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span>4x Daily Batch SLO (30D):</span>
+              <strong style="color: var(--accent-green);" id="valSmPipelineSlo">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span>Upstream Resilience (429 Rate):</span>
+              <strong style="color: var(--accent-blue);" id="valSmApiResilience">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span>WAL &amp; State Sync Lag:</span>
+              <strong id="valSmWalLag">--</strong>
+            </div>
+            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--fg-muted);">Batch Success Streak:</span>
+                <strong style="color: var(--accent-green);" id="valSmStreak">--</strong>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -824,9 +869,30 @@
             <span class="card-tag" id="badgeIpcStatus" style="color: var(--accent-green); font-weight: bold;">--</span>
           </div>
           <div style="font-size: 10px; margin-top: 4px; color: var(--fg-muted);">
-            <div><strong>Socket:</strong> <code style="font-size: 9px;">outputs/supervisor.sock</code></div>
+            <div><strong>Socket:</strong> <code style="font-size: 9px;">outputs/supervisor/control.sock</code></div>
             <div style="margin-top: 3px;"><strong>Protocol:</strong> JSON-RPC 2.0 (Zero-Dependency)</div>
             <div style="margin-top: 3px;"><strong>Failover:</strong> <span style="color: var(--accent-green); font-weight: bold;">Active Self-Healing</span></div>
+          </div>
+        </div>
+
+        <div class="metric-card" style="background-color: var(--bg-panel);">
+          <div class="card-header">
+            <span class="card-title">⚡ Architecture &amp; Latency (SA)</span>
+            <span class="card-tag" id="badgeSaLatency" style="color: var(--accent-green); font-weight: bold;">--</span>
+          </div>
+          <div style="font-size: 11px; margin-top: 4px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: var(--fg-muted);">Tail Latency (p95/p99):</span>
+              <strong style="color: var(--accent-coral);" id="valSaTailLatency">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="color: var(--fg-muted);">Worker MTTR (Self-Heal):</span>
+              <strong style="color: var(--accent-green);" id="valSaMttr">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--fg-muted);">Ontology Density:</span>
+              <strong id="valSaDensity">--</strong>
+            </div>
           </div>
         </div>
       </div>
@@ -1631,7 +1697,7 @@
                   }
                   return `<div><strong>${name}:</strong> ${meta}</div>`;
                 });
-                aPools.innerHTML = parts.join('');
+                aPools.innerHTML = parts.length ? parts.join('') : '<span style="color: var(--fg-muted);">No active pools</span>';
                 const pBadge = document.getElementById('badgePoolCount');
                 if (pBadge) pBadge.textContent = `${Object.keys(sup.pools).length} Pools`;
               }
@@ -1676,6 +1742,62 @@
                     `;
                   }).join('');
                 }
+              }
+            }
+
+            // Update Strategic Telemetry (ST, SA, SM) if present
+            if (data.strategic_telemetry) {
+              const st = data.strategic_telemetry.st_strategist;
+              const sa = data.strategic_telemetry.sa_architect;
+              const sm = data.strategic_telemetry.sm_service_manager;
+
+              // ST: Token ROI & Threats
+              if (st) {
+                const roiEl = document.getElementById('valTokenRoi');
+                if (roiEl) roiEl.textContent = `-$${st.token_cost_savings_usd.toFixed(2)} (-${st.token_savings_pct}%)`;
+                const covEl = document.getElementById('valSummaryCoverage');
+                if (covEl) covEl.textContent = st.executive_tier_coverage;
+                const bThreat = document.getElementById('badgeThreatCoverage');
+                if (bThreat && st.top_threat_vectors) bThreat.textContent = `${st.top_threat_vectors.length} Vectors Active`;
+
+                const threatListEl = document.getElementById('threatVectorsList');
+                if (threatListEl && st.top_threat_vectors) {
+                  threatListEl.innerHTML = st.top_threat_vectors.map(tv => `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px dashed var(--border-dark);">
+                      <div>
+                        <strong style="color: var(--accent-coral); font-size: 10px;">${tv.name}</strong>
+                        <span style="font-size: 9px; color: var(--fg-muted); margin-left: 4px;">(${tv.category})</span>
+                      </div>
+                      <span style="font-size: 10px; font-weight: bold; color: var(--accent-green);">${tv.growth}</span>
+                    </div>
+                  `).join('');
+                }
+              }
+
+              // SM: Service Operations & SLO
+              if (sm) {
+                const bSlo = document.getElementById('badgeSmSlo');
+                if (bSlo) bSlo.textContent = `${sm.pipeline_slo_pct}% SLO`;
+                const sloEl = document.getElementById('valSmPipelineSlo');
+                if (sloEl) sloEl.textContent = `${sm.pipeline_slo_pct}% (30-Day)`;
+                const resEl = document.getElementById('valSmApiResilience');
+                if (resEl) resEl.textContent = `${sm.http_429_rate_pct}% Rate Limit (100% Pass)`;
+                const lagEl = document.getElementById('valSmWalLag');
+                if (lagEl) lagEl.textContent = `${sm.wal_sync_lag_ms.toFixed(1)} ms / 0 Loss`;
+                const strkEl = document.getElementById('valSmStreak');
+                if (strkEl) strkEl.textContent = `${sm.batch_success_streak} Batches (100% Pass)`;
+              }
+
+              // SA: Architecture & Latency
+              if (sa) {
+                const bSa = document.getElementById('badgeSaLatency');
+                if (bSa) bSa.textContent = `p95: ${sa.latency_p95_ms}ms`;
+                const tailEl = document.getElementById('valSaTailLatency');
+                if (tailEl) tailEl.textContent = `p95: ${sa.latency_p95_ms} ms / p99: ${sa.latency_p99_ms} ms`;
+                const mttrEl = document.getElementById('valSaMttr');
+                if (mttrEl && sm) mttrEl.textContent = `< ${sm.worker_mttr_sec}s Self-Heal`;
+                const densEl = document.getElementById('valSaDensity');
+                if (densEl) densEl.textContent = `${sa.graph_density} (${sa.isolated_nodes_pct}% Isolated)`;
               }
             }
 

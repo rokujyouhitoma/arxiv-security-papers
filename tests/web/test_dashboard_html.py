@@ -65,6 +65,12 @@ def test_dashboard_mandatory_elements_and_canvas(dashboard_html_content: str) ->
     assert 'id="viewSystem"' in dashboard_html_content
     assert 'id="viewSupervisor"' in dashboard_html_content
     assert 'id="supervisorWorkersTableBody"' in dashboard_html_content
+    assert 'id="valTokenRoi"' in dashboard_html_content
+    assert 'id="threatVectorsList"' in dashboard_html_content
+    assert 'id="valSmPipelineSlo"' in dashboard_html_content
+    assert 'id="valSmApiResilience"' in dashboard_html_content
+    assert 'id="valSaTailLatency"' in dashboard_html_content
+    assert 'id="valSaMttr"' in dashboard_html_content
     assert "switchDashboardTab" in dashboard_html_content
     assert "initTabFromUrl" in dashboard_html_content
     assert "URLSearchParams" in dashboard_html_content
