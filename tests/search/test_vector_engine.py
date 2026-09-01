@@ -560,3 +560,58 @@ def test_observability_and_profiling_framework():
     assert dis_res["function_name"] == "sample_func"
     assert dis_res["total_instructions"] > 0
     assert any(i["opname"] == "RETURN_VALUE" for i in dis_res["instructions"])
+
+
+def test_vector_engine_pagination_and_total_hits():
+    """Validates VectorEngine pagination offset, top_k slicing, and total_hits accuracy."""
+    engine = VectorEngine()
+    engine.documents = [
+        {
+            "id": f"paper_{i}",
+            "title": f"Penetration testing study paper {i}",
+            "title_tokens": ["penetration", "testing", "study", "paper", str(i)],
+            "description": f"Automated pentest exploit validation methodology {i}",
+            "authors": ["Tester"],
+            "authors_tokens": ["tester"],
+            "tags": ["pentest", "exploit"],
+            "tags_tokens": ["pentest", "exploit"],
+            "annotated_keywords": ["penetration testing"],
+            "keywords_tokens": ["penetration", "testing"],
+            "published_date": "2026-09-01",
+        }
+        for i in range(25)
+    ]
+    engine.documents_by_id = {d["id"]: d for d in engine.documents}
+    engine.idf = {"penetration": 1.5, "testing": 1.5, "pentest": 2.0}
+
+    # First page (top_k=10, offset=0)
+    res_page1, prof1 = engine.search_with_profile(
+        "penetration testing", top_k=10, offset=0
+    )
+    assert len(res_page1) == 10
+    assert prof1["total_hits"] == 25
+    assert prof1["offset"] == 0
+    assert prof1["limit"] == 10
+    assert prof1["has_more"] is True
+
+    # Second page (top_k=10, offset=10)
+    res_page2, prof2 = engine.search_with_profile(
+        "penetration testing", top_k=10, offset=10
+    )
+    assert len(res_page2) == 10
+    assert prof2["total_hits"] == 25
+    assert prof2["offset"] == 10
+    assert prof2["has_more"] is True
+    # Ensure disjoint IDs between page 1 and page 2
+    ids_p1 = {r["id"] for r in res_page1}
+    ids_p2 = {r["id"] for r in res_page2}
+    assert len(ids_p1 & ids_p2) == 0
+
+    # Final page (top_k=10, offset=20) -> should return remaining 5 items
+    res_page3, prof3 = engine.search_with_profile(
+        "penetration testing", top_k=10, offset=20
+    )
+    assert len(res_page3) == 5
+    assert prof3["total_hits"] == 25
+    assert prof3["offset"] == 20
+    assert prof3["has_more"] is False

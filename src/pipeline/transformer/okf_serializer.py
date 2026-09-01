@@ -8,7 +8,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, cast
 
 from .keyword_extractor import extract_keyphrases
 from .structured_summarizer import generate_structured_summary

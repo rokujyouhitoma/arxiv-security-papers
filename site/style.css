@@ -258,17 +258,73 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.results-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .results-header h2 {
   font-family: var(--font-heading);
   font-size: 1.3rem;
+  margin: 0;
+}
+
+.page-size-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-size-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.page-size-select {
+  background: rgba(21, 28, 46, 0.7);
+  border: 1px solid var(--panel-border);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.page-size-select:hover, .page-size-select:focus {
+  border-color: var(--accent-primary);
 }
 
 .results-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 1.5rem;
+}
+
+.load-more-container {
+  margin-top: 2rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.load-more-btn {
+  padding: 0.85rem 2.5rem;
+  font-size: 1rem;
+  box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.25);
+  cursor: pointer;
+}
+
+.all-loaded-msg {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 0.5rem;
 }
 
 .paper-card {

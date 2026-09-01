@@ -105,23 +105,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  let currentOffset = 0;
+  let currentLimit = 12;
+  let currentTotalHits = 0;
+  let currentLoadedCount = 0;
+
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  const loadMoreContainer = document.getElementById('loadMoreContainer');
+  const loadMoreBtn = document.getElementById('loadMoreBtn');
+  const allLoadedMsg = document.getElementById('allLoadedMsg');
+
+  if (pageSizeSelect) {
+    pageSizeSelect.addEventListener('change', () => {
+      currentLimit = parseInt(pageSizeSelect.value, 10) || 12;
+      performSearch(searchInput.value, true, 0, false);
+    });
+  }
+
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', () => {
+      const nextOffset = currentOffset + currentLimit;
+      performSearch(searchInput.value, false, nextOffset, true);
+    });
+  }
+
   // Perform RAG Search & Update URL
-  async function performSearch(query, updateUrl = true) {
+  async function performSearch(query, updateUrl = true, offset = 0, append = false) {
     const cleanQuery = (query === null || query === undefined) ? '' : String(query).trim();
+    currentOffset = offset;
 
     if (updateUrl) {
       const params = new URLSearchParams();
       if (cleanQuery) params.set('q', cleanQuery);
       if (activeTag) params.set('tag', activeTag);
+      if (currentLimit !== 12) params.set('limit', String(currentLimit));
       const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-      history.pushState({ q: cleanQuery, tag: activeTag }, '', newUrl);
+      history.pushState({ q: cleanQuery, tag: activeTag, limit: currentLimit }, '', newUrl);
     }
 
     const startTime = performance.now();
-    resultsGrid.innerHTML = '<p style="color: var(--text-muted);">検索中...</p>';
+    if (!append) {
+      resultsGrid.innerHTML = '<p style="color: var(--text-muted);">検索中...</p>';
+      if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+      currentLoadedCount = 0;
+    } else if (loadMoreBtn) {
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.innerHTML = '<span>⏳ 読み込み中...</span>';
+    }
     
     try {
-      let url = `/api/search?q=${encodeURIComponent(cleanQuery)}&top_k=12`;
+      let url = `/api/search?q=${encodeURIComponent(cleanQuery)}&top_k=${currentLimit}&offset=${offset}`;
       if (activeTag) url += `&category=${encodeURIComponent(activeTag)}`;
 
       const res = await fetch(url);
@@ -140,25 +173,45 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (data.status === 'success' && data.results) {
-        renderResults(data.results);
+        currentTotalHits = Number(data.total_hits !== undefined ? data.total_hits : data.results.length);
+        renderResults(data.results, append, data.has_more);
       } else {
-        resultsGrid.innerHTML = '<p class="loading-text">該当する論文は見つかりませんでした。</p>';
-        resultsCount.textContent = '検索結果 (0件)';
+        if (!append) {
+          resultsGrid.innerHTML = '<p class="loading-text">該当する論文は見つかりませんでした。</p>';
+          resultsCount.textContent = '検索結果 (0件)';
+          if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+        }
       }
     } catch (err) {
-      resultsGrid.innerHTML = `<p style="color: #ef4444;">検索エラーが発生しました: ${escapeHtml(err.message)}</p>`;
+      if (!append) {
+        resultsGrid.innerHTML = `<p style="color: #ef4444;">検索エラーが発生しました: ${escapeHtml(err.message)}</p>`;
+      }
+    } finally {
+      if (loadMoreBtn) {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.innerHTML = `<span>⬇️ さらに読み込む (次の${currentLimit}件)</span>`;
+      }
     }
   }
 
   // Render Paper Cards
-  function renderResults(results) {
-    resultsCount.textContent = `検索結果 (${results.length}件)`;
-    if (results.length === 0) {
+  function renderResults(results, append = false, hasMore = false) {
+    if (!append) {
+      currentLoadedCount = results.length;
+    } else {
+      currentLoadedCount += results.length;
+    }
+
+    if (currentLoadedCount === 0) {
+      resultsCount.textContent = '検索結果 (0件)';
       resultsGrid.innerHTML = '<p class="loading-text">該当する論文は見つかりませんでした。</p>';
+      if (loadMoreContainer) loadMoreContainer.style.display = 'none';
       return;
     }
 
-    resultsGrid.innerHTML = results.map(paper => {
+    resultsCount.textContent = `検索結果: 全 ${currentTotalHits.toLocaleString()} 件中 1〜${currentLoadedCount.toLocaleString()} 件を表示`;
+
+    const cardsHtml = results.map(paper => {
       const authors = (paper['authors'] || []).slice(0, 3).join(', ');
       const authorsBadge = authors ? `<div class="card-authors">👥 著者: ${escapeHtml(authors)}</div>` : '';
       const highlightHtml = paper['highlight'] ? `<div class="card-snippet">${paper['highlight']}</div>` : `<p class="card-desc">${escapeHtml(paper.description || '要約情報なし')}</p>`;
@@ -191,6 +244,27 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       `;
     }).join('');
+
+    if (append) {
+      resultsGrid.insertAdjacentHTML('beforeend', cardsHtml);
+    } else {
+      resultsGrid.innerHTML = cardsHtml;
+    }
+
+    // Manage Load More & All Loaded visibility
+    if (loadMoreContainer) {
+      loadMoreContainer.style.display = 'block';
+      if (hasMore) {
+        if (loadMoreBtn) loadMoreBtn.style.display = 'inline-flex';
+        if (allLoadedMsg) allLoadedMsg.style.display = 'none';
+      } else {
+        if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+        if (allLoadedMsg) {
+          allLoadedMsg.style.display = 'block';
+          allLoadedMsg.textContent = `🎉 すべての検索結果（全 ${currentTotalHits.toLocaleString()} 件）を表示しました`;
+        }
+      }
+    }
   }
 
   // Modal Dialog handling (Fullscreen Viewer with Topology Network)

@@ -283,3 +283,36 @@ def test_wsgi_app_options_and_error_paths():
         application, method="POST", path="/api/mcp", body="{}"
     )
     assert status.startswith("400")
+
+
+def test_wsgi_app_search_pagination_and_total_hits():
+    """Validates /api/search response schema for total_hits, offset, limit, and has_more fields."""
+    status, headers, body = call_wsgi(
+        application,
+        method="GET",
+        path="/api/search",
+        query_string="q=malware&top_k=2&offset=0",
+    )
+    assert status.startswith("200")
+    data = json.loads(body.decode("utf-8"))
+    assert data["status"] == "success"
+    assert "total" in data
+    assert "total_hits" in data
+    assert "offset" in data
+    assert data["offset"] == 0
+    assert "limit" in data
+    assert data["limit"] == 2
+    assert "has_more" in data
+    assert isinstance(data["has_more"], bool)
+
+    # Offset query
+    status2, headers2, body2 = call_wsgi(
+        application,
+        method="GET",
+        path="/api/search",
+        query_string="q=malware&limit=24&offset=24",
+    )
+    assert status2.startswith("200")
+    data2 = json.loads(body2.decode("utf-8"))
+    assert data2["offset"] == 24
+    assert data2["limit"] == 24

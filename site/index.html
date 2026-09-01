@@ -62,12 +62,30 @@
 
       <!-- Search Results Area -->
       <div class="results-header">
-        <h2 id="resultsCount">検索結果 (0件)</h2>
-        <span class="search-time" id="searchTime"></span>
+        <div class="results-title-group">
+          <h2 id="resultsCount">検索結果 (0件)</h2>
+          <span class="search-time" id="searchTime"></span>
+        </div>
+        <div class="page-size-wrapper">
+          <label for="pageSizeSelect" class="page-size-label">表示件数:</label>
+          <select id="pageSizeSelect" class="page-size-select">
+            <option value="12" selected>12 件</option>
+            <option value="24">24 件</option>
+            <option value="48">48 件</option>
+            <option value="96">96 件</option>
+          </select>
+        </div>
       </div>
 
       <div id="resultsGrid" class="results-grid">
         <!-- Paper Cards will be dynamically inserted here -->
+      </div>
+
+      <div id="loadMoreContainer" class="load-more-container" style="display: none;">
+        <button id="loadMoreBtn" class="btn btn-secondary load-more-btn">
+          <span>⬇️ さらに読み込む</span>
+        </button>
+        <p id="allLoadedMsg" class="all-loaded-msg" style="display: none;">🎉 すべての検索結果を表示しました</p>
       </div>
     </section>
 

@@ -888,28 +888,52 @@ class GatewayHandlers:
         return self.search_client.get_paper(clean_id)
 
     def _execute_vector_search(
-        self, query: str, top_k: int, category: Optional[str], mode: str
+        self,
+        query: str,
+        top_k: int,
+        category: Optional[str],
+        mode: str,
+        offset: int = 0,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         import time
 
         t_start = time.perf_counter()
         if mode == "vector":
-            results = self.vector_engine.search_vector_ann(query=query, top_k=top_k)
-            profile: Dict[str, Any] = {"mode": "vector"}
+            results = self.vector_engine.search_vector_ann(
+                query=query, top_k=top_k + offset
+            )
+            results = results[offset : offset + top_k]
+            profile: Dict[str, Any] = {
+                "mode": "vector",
+                "total_hits": len(results) + offset,
+                "offset": offset,
+                "has_more": False,
+            }
         elif mode == "rrf":
             results = self.vector_engine.search_rrf_hybrid(
-                query=query, top_k=top_k, category=category
+                query=query, top_k=top_k + offset, category=category
             )
-            profile = {"mode": "rrf"}
+            results = results[offset : offset + top_k]
+            profile = {
+                "mode": "rrf",
+                "total_hits": len(results) + offset,
+                "offset": offset,
+                "has_more": False,
+            }
         else:
             results, profile = self.vector_engine.search_with_profile(
-                query=query, top_k=top_k, category=category
+                query=query, top_k=top_k, category=category, offset=offset
             )
         profile["total_ms"] = round((time.perf_counter() - t_start) * 1000.0, 3)
         return results, profile
 
     def _execute_client_search(
-        self, query: str, top_k: int, category: Optional[str], mode: str
+        self,
+        query: str,
+        top_k: int,
+        category: Optional[str],
+        mode: str,
+        offset: int = 0,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         import time
 
@@ -922,6 +946,22 @@ class GatewayHandlers:
         results = resp_dict.get("results", [])
         return results, profile
 
+    def _parse_pagination_params(
+        self, query_params: Dict[str, List[str]]
+    ) -> Tuple[int, int]:
+        try:
+            top_k = int(query_params.get("top_k", query_params.get("limit", ["12"]))[0])
+            top_k = max(1, min(top_k, 100))
+        except (ValueError, IndexError):
+            top_k = 12
+
+        try:
+            offset = int(query_params.get("offset", ["0"])[0])
+            offset = max(0, offset)
+        except (ValueError, IndexError):
+            offset = 0
+        return top_k, offset
+
     def handle_search(
         self,
         start_response: Callable[..., Any],
@@ -932,21 +972,34 @@ class GatewayHandlers:
         query = query_params.get("q", [""])[0].strip()
         category = query_params.get("category", [None])[0]
         mode = query_params.get("mode", ["hybrid"])[0]
-        try:
-            top_k = int(query_params.get("top_k", ["20"])[0])
-        except ValueError:
-            top_k = 20
+        top_k, offset = self._parse_pagination_params(query_params)
 
         if not query:
             return response_json(
                 start_response,
-                {"status": "success", "query": "", "total": 0, "results": []},
+                {
+                    "status": "success",
+                    "query": "",
+                    "total": 0,
+                    "total_hits": 0,
+                    "offset": 0,
+                    "limit": top_k,
+                    "has_more": False,
+                    "results": [],
+                },
             )
 
         if self._vector_engine is not None:
-            results, profile = self._execute_vector_search(query, top_k, category, mode)
+            results, profile = self._execute_vector_search(
+                query, top_k, category, mode, offset=offset
+            )
         else:
-            results, profile = self._execute_client_search(query, top_k, category, mode)
+            results, profile = self._execute_client_search(
+                query, top_k, category, mode, offset=offset
+            )
+
+        total_hits = int(profile.get("total_hits", len(results)))
+        has_more = bool(profile.get("has_more", (offset + len(results) < total_hits)))
 
         log_query(
             query=query,
@@ -963,6 +1016,10 @@ class GatewayHandlers:
             "category": category,
             "mode": mode,
             "total": len(results),
+            "total_hits": total_hits,
+            "offset": offset,
+            "limit": top_k,
+            "has_more": has_more,
             "profile": profile,
             "results": results,
         }

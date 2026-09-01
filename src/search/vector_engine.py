@@ -812,9 +812,10 @@ class VectorEngine:
         self,
         ctx: QueryContext,
         candidates: List[Dict[str, Any]],
-        top_k: int = 5,
-    ) -> List[Dict[str, Any]]:
-        """Module 3: Multi-Stage Scoring & Fusion Ranking."""
+        top_k: int = 20,
+        offset: int = 0,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """Module 3: Advanced Graph-Augmented Relevance Reranking with pagination."""
         graph_boosts = self.knowledge_graph.get_entity_boosts(ctx.original_tokens)
         vector_sims = self._compute_vector_similarities(ctx.original_query, candidates)
 
@@ -823,12 +824,15 @@ class VectorEngine:
             final_score = self._score_single_candidate(
                 doc, ctx, graph_boosts, vector_sims
             )
-            doc_copy = dict(doc)
-            doc_copy["score"] = round(final_score, 4)
-            ranked.append(doc_copy)
+            if final_score > 0.0:
+                doc_copy = dict(doc)
+                doc_copy["score"] = round(final_score, 4)
+                ranked.append(doc_copy)
 
         ranked.sort(key=lambda x: x["score"], reverse=True)
-        return ranked[:top_k]
+        total_hits = len(ranked)
+        paged = ranked[offset : offset + top_k]
+        return paged, total_hits
 
     def format_presentation(
         self, ctx: QueryContext, ranked_items: List[Dict[str, Any]]
@@ -891,7 +895,12 @@ class VectorEngine:
             sys.stderr.write(f"[SearchEngine] Failed to write perf log: {e}\n")
 
     def _execute_search_pipeline(
-        self, query: str, top_k: int, category: Optional[str], q_tokens: List[str]
+        self,
+        query: str,
+        top_k: int,
+        category: Optional[str],
+        q_tokens: List[str],
+        offset: int = 0,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         t0_wall = time.perf_counter()
         t0_cpu = time.process_time()
@@ -908,7 +917,9 @@ class VectorEngine:
         t_prune_end = time.perf_counter()
 
         t_scoring_start = time.perf_counter()
-        ranked_items = self.rerank_candidates(ctx, target_docs, top_k=top_k)
+        ranked_items, total_hits = self.rerank_candidates(
+            ctx, target_docs, top_k=top_k, offset=offset
+        )
         t_scoring_end = time.perf_counter()
 
         results = self.format_presentation(ctx, ranked_items)
@@ -926,18 +937,29 @@ class VectorEngine:
             "memory_delta_kb": round((end_mem - start_mem) / 1024.0, 3),
             "candidates_evaluated": len(target_docs),
             "total_documents": len(self.documents),
+            "total_hits": total_hits,
+            "offset": offset,
+            "limit": top_k,
+            "has_more": (offset + len(results) < total_hits),
             "clauses_parsed": len(ctx.clauses),
             "intent": ctx.intent,
             "cached": False,
         }
-        self.semantic_cache.set(f"{query}|{category}", q_tokens, results, profile)
+        self.semantic_cache.set(
+            f"{query}|{category}|{offset}", q_tokens, results, profile
+        )
         self.log_search_performance(query, top_k, category, len(results), profile)
         return results, profile
 
     def _check_semantic_cache(
-        self, query: str, category: Optional[str], q_tokens: List[str], top_k: int
+        self,
+        query: str,
+        category: Optional[str],
+        q_tokens: List[str],
+        top_k: int,
+        offset: int = 0,
     ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
-        cached_res = self.semantic_cache.get(f"{query}|{category}", q_tokens)
+        cached_res = self.semantic_cache.get(f"{query}|{category}|{offset}", q_tokens)
         if not cached_res:
             return None
         res, prof = cached_res
@@ -956,14 +978,20 @@ class VectorEngine:
         return was_tracing
 
     def search_with_profile(
-        self, query: str, top_k: int = 5, category: Optional[str] = None
+        self,
+        query: str,
+        top_k: int = 5,
+        category: Optional[str] = None,
+        offset: int = 0,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Enterprise Multi-Field & Multi-Stage Hybrid Search with Query Parser & Dynamic Highlighter.
         """
         was_tracing = self._start_tracing_if_needed()
         q_tokens = self.tokenize(query) if query else []
-        cached = self._check_semantic_cache(query, category, q_tokens, top_k)
+        cached = self._check_semantic_cache(
+            query, category, q_tokens, top_k, offset=offset
+        )
         if cached is not None:
             self._stop_tracing_if_needed(was_tracing)
             return cached
