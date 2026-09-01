@@ -578,15 +578,15 @@ def _parse_cli_date_range(
     return start_dt, end_dt
 
 
+def _is_workspace_root(dir_path: str) -> bool:
+    markers = ("config.json", "pyproject.toml", "Makefile", ".agents")
+    return any(os.path.exists(os.path.join(dir_path, m)) for m in markers)
+
+
 def detect_workspace_dir() -> str:
     cur = os.path.abspath(os.path.dirname(__file__))
     while cur != os.path.dirname(cur):
-        if (
-            os.path.exists(os.path.join(cur, "config.json"))
-            or os.path.exists(os.path.join(cur, "pyproject.toml"))
-            or os.path.exists(os.path.join(cur, "Makefile"))
-            or os.path.exists(os.path.join(cur, ".agents"))
-        ):
+        if _is_workspace_root(cur):
             return cur
         cur = os.path.dirname(cur)
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))

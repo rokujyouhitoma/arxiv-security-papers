@@ -8,18 +8,15 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **105** | ドメイン層（セキュリティ論文等）と再利用可能基盤層（DB・Crawler・Search・Graph等）の明確なレイヤー・パッケージ分離 | Feature | High | In Progress | PM / Arch | [105-decouple-domain-and-infrastructure-layers.md](105-decouple-domain-and-infrastructure-layers.md) |
-
+| - | *(現在進行中のアクティブ Issue はありません)* | - | - | - | - | - |
 
 ---
-
-
-
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **105** | ドメイン層（セキュリティ論文等）と再利用可能基盤層（DB・Crawler・Search・Graph等）の明確なレイヤー・パッケージ分離 | Feature | 2026-09-02 | [105-decouple-domain-and-infrastructure-layers.md](closed/105-decouple-domain-and-infrastructure-layers.md) |
 | **108** | arXiv API レート制限バックオフ時間の拡張 (8s/16s/32s/64s) および RSS フォールバック遷移ログの明示化 | Improvement | 2026-09-02 | [108-expand-arxiv-rate-limit-backoff-and-rss-fallback-log.md](closed/108-expand-arxiv-rate-limit-backoff-and-rss-fallback-log.md) |
 | **107** | arXiv API タイムアウト時の一時エラーリトライ強化およびパイプライン進捗ログ詳細化 | Feature / Bug | 2026-09-02 | [107-enhance-arxiv-timeout-retry-and-pipeline-progress-logging.md](closed/107-enhance-arxiv-timeout-retry-and-pipeline-progress-logging.md) |
 | **106** | パイプライン実行時の workspace_dir 誤判定および Raw メタデータパス解決不具合の修正 | Bug | 2026-09-02 | [106-fix-pipeline-workspace-dir-and-raw-metadata-path.md](closed/106-fix-pipeline-workspace-dir-and-raw-metadata-path.md) |

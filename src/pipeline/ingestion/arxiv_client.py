@@ -211,6 +211,21 @@ def _handle_api_network_error(err: Exception, retry: int) -> bool:
     return False
 
 
+def _try_execute_single_request(
+    req: urllib.request.Request, retry: int
+) -> tuple[bool, Optional[List[Dict[str, Any]]]]:
+    """Executes single API request attempt. Returns (should_continue, result)."""
+    try:
+        res = _execute_api_request(req)
+        return False, res
+    except urllib.error.HTTPError as he:
+        can_retry = _handle_api_http_error(he, retry)
+        return can_retry, None
+    except Exception as e:
+        can_retry = _handle_api_network_error(e, retry)
+        return can_retry, None
+
+
 def _fetch_api_chunk_with_retry(api_url: str) -> Optional[List[Dict[str, Any]]]:
     req = urllib.request.Request(
         api_url,
@@ -219,14 +234,9 @@ def _fetch_api_chunk_with_retry(api_url: str) -> Optional[List[Dict[str, Any]]]:
         },
     )
     for retry in range(5):
-        try:
-            return _execute_api_request(req)
-        except urllib.error.HTTPError as he:
-            if not _handle_api_http_error(he, retry):
-                return None
-        except Exception as e:
-            if not _handle_api_network_error(e, retry):
-                return None
+        should_continue, result = _try_execute_single_request(req, retry)
+        if not should_continue:
+            return result
     return None
 
 

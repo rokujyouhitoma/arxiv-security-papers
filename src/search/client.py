@@ -195,8 +195,10 @@ class SearchClient:
 
     def _fallback_handle_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
         """Executes the command locally using the fallback VectorEngine."""
+        from typing import Callable
+
         cmd = req.get("cmd", "")
-        handlers = {
+        handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
             "ping": lambda _: {"status": "ok", "message": "pong"},
             "search": self._fallback_search,
             "get_paper": self._fallback_get_paper,
@@ -231,21 +233,29 @@ class SearchClient:
             }
         )
 
-    def get_paper(self, clean_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieves paper metadata by clean_id."""
-        resp = self.send_command({"cmd": "get_paper", "id": clean_id})
+    def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Generic document retrieval by ID."""
+        resp = self.send_command({"cmd": "get_paper", "id": doc_id})
         if resp.get("status") == "success":
-            paper = resp.get("paper")
-            if isinstance(paper, dict):
-                return paper
+            doc = resp.get("paper")
+            if isinstance(doc, dict):
+                return doc
         return None
 
-    def get_related(self, clean_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieves related paper graph."""
-        resp = self.send_command({"cmd": "get_related", "id": clean_id})
+    def get_paper(self, clean_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves paper metadata by clean_id (Backward-compatible alias)."""
+        return self.get_document(clean_id)
+
+    def get_related_documents(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Generic related document retrieval by ID."""
+        resp = self.send_command({"cmd": "get_related", "id": doc_id})
         if resp.get("status") == "success":
             return resp
         return None
+
+    def get_related(self, clean_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves related paper graph (Backward-compatible alias)."""
+        return self.get_related_documents(clean_id)
 
     def get_stats(self) -> Dict[str, Any]:
         """Retrieves index and category statistics."""

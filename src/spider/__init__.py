@@ -17,6 +17,7 @@ from .pipeline.okf_pipeline import OkfItemPipeline
 from .policies.autothrottle import AutoThrottlePolicy
 from .policies.normalizer import TrapDetector, UrlNormalizer
 from .policies.opic import OpicCalculator, TopicRelevanceScorer
+from .registry import SpiderRegistry, get_spider_registry
 from .spiders.advisory_spider import AdvisorySpider
 from .spiders.arxiv_spider import ArxivSpider
 from .spiders.base import BaseSpider
@@ -43,6 +44,8 @@ __all__ = [
     "TrapDetector",
     "OpicCalculator",
     "TopicRelevanceScorer",
+    "SpiderRegistry",
+    "get_spider_registry",
     "BaseSpider",
     "ArxivSpider",
     "IacrSpider",
