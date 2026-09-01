@@ -22,46 +22,50 @@ def get_default_workspace_dir() -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
+def _is_invalid_path_str(file_path: Optional[str]) -> bool:
+    """Checks for null or invalid path string types."""
+    return not file_path or not isinstance(file_path, str) or "\x00" in file_path
+
+
+def _is_sensitive_path(real_path: str) -> bool:
+    """Checks for restricted sensitive file patterns."""
+    sensitive_keywords = [
+        ".ssh",
+        ".aws",
+        ".env",
+        "etc/passwd",
+        "etc/shadow",
+        ".git/config",
+    ]
+    return any(k in real_path for k in sensitive_keywords)
+
+
+def _get_target_real_path(file_path: str, ws_real: str) -> str:
+    """Computes canonical real path within or outside workspace."""
+    target_path = (
+        file_path if os.path.isabs(file_path) else os.path.join(ws_real, file_path)
+    )
+    return os.path.realpath(target_path)
+
+
 def is_safe_workspace_path(
     file_path: Optional[str], workspace_dir: Optional[str] = None
 ) -> bool:
     """
     Validates if a file path is securely confined within the workspace directory.
-    Rejects:
-    - None or empty string
-    - Null-bytes (\x00)
-    - Directory traversal sequences (../, ../../, symlink escapes)
-    - Out-of-bounds absolute paths
+    Rejects nulls, directory traversal, and sensitive file targets.
     """
-    if not file_path or not isinstance(file_path, str):
-        return False
-    if "\x00" in file_path:
+    if _is_invalid_path_str(file_path):
         return False
 
     try:
         ws = workspace_dir or get_default_workspace_dir()
         ws_real = os.path.realpath(ws)
-        target_path = (
-            file_path if os.path.isabs(file_path) else os.path.join(ws_real, file_path)
-        )
-        real_path = os.path.realpath(target_path)
+        real_path = _get_target_real_path(str(file_path), ws_real)
 
-        common = os.path.commonpath([ws_real, real_path])
-        if common != ws_real:
+        if os.path.commonpath([ws_real, real_path]) != ws_real:
             return False
-
-        sensitive_keywords = [
-            ".ssh",
-            ".aws",
-            ".env",
-            "etc/passwd",
-            "etc/shadow",
-            ".git/config",
-        ]
-        if any(k in real_path for k in sensitive_keywords):
-            return False
-
-        return True
+        return not _is_sensitive_path(real_path)
     except Exception:
         return False
 
@@ -77,14 +81,8 @@ def resolve_safe_path(
     if not is_safe_workspace_path(relative_or_abs_path, workspace_dir=workspace_dir):
         return None
 
-    ws = workspace_dir or get_default_workspace_dir()
-    ws_real = os.path.realpath(ws)
-    target_path = (
-        relative_or_abs_path
-        if os.path.isabs(relative_or_abs_path)
-        else os.path.join(ws_real, relative_or_abs_path)
-    )
-    real_path = os.path.realpath(target_path)
+    ws_real = os.path.realpath(workspace_dir or get_default_workspace_dir())
+    real_path = _get_target_real_path(relative_or_abs_path, ws_real)
 
     if must_exist and not os.path.exists(real_path):
         return None

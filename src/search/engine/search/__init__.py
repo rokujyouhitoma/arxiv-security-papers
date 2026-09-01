@@ -141,6 +141,54 @@ class PhraseQuery(Query):
             )
         return self._match_multi_terms(segment, similarity)
 
+    def _intersect_common_docs(self, term_postings: List[Dict[int, PostingEntry]]) -> Set[int]:
+        common_docs = set(term_postings[0].keys())
+        for tp in term_postings[1:]:
+            common_docs.intersection_update(tp.keys())
+        return common_docs
+
+    def _score_single_phrase_doc(
+        self,
+        doc_id: int,
+        term_postings: List[Dict[int, PostingEntry]],
+        segment: Segment,
+        similarity: Similarity,
+        f_lens: Dict[int, int],
+        avg_doc_len: float,
+        num_common_docs: int,
+        total_docs: int,
+    ) -> Optional[float]:
+        if segment.is_deleted(doc_id):
+            return None
+        pos_lists = [tp[doc_id].positions for tp in term_postings]
+        phrase_tf = self._count_phrase_matches(pos_lists, self.slop)
+        if phrase_tf <= 0:
+            return None
+        doc_len = f_lens.get(doc_id, 1)
+        raw_score = similarity.score(
+            phrase_tf * 2, doc_len, avg_doc_len, num_common_docs, total_docs
+        )
+        return raw_score * self.boost
+
+    def _score_all_phrase_docs(
+        self,
+        common_docs: Set[int],
+        term_postings: List[Dict[int, PostingEntry]],
+        segment: Segment,
+        similarity: Similarity,
+        f_lens: Dict[int, int],
+        avg_doc_len: float,
+        total_docs: int,
+    ) -> Dict[int, float]:
+        scores: Dict[int, float] = {}
+        for doc_id in common_docs:
+            doc_score = self._score_single_phrase_doc(
+                doc_id, term_postings, segment, similarity, f_lens, avg_doc_len, len(common_docs), total_docs
+            )
+            if doc_score is not None:
+                scores[doc_id] = doc_score
+        return scores
+
     def _match_multi_terms(
         self, segment: Segment, similarity: Similarity
     ) -> Dict[int, float]:
@@ -148,10 +196,7 @@ class PhraseQuery(Query):
         if len(term_postings) != len(self.terms):
             return {}
 
-        common_docs = set(term_postings[0].keys())
-        for tp in term_postings[1:]:
-            common_docs.intersection_update(tp.keys())
-
+        common_docs = self._intersect_common_docs(term_postings)
         if not common_docs:
             return {}
 
@@ -159,19 +204,9 @@ class PhraseQuery(Query):
         f_lens = segment.field_lengths.get(self.field, {})
         avg_doc_len = sum(f_lens.values()) / max(len(f_lens), 1) if f_lens else 1.0
 
-        scores: Dict[int, float] = {}
-        for doc_id in common_docs:
-            if segment.is_deleted(doc_id):
-                continue
-            pos_lists = [tp[doc_id].positions for tp in term_postings]
-            phrase_tf = self._count_phrase_matches(pos_lists, self.slop)
-            if phrase_tf > 0:
-                doc_len = f_lens.get(doc_id, 1)
-                raw_score = similarity.score(
-                    phrase_tf * 2, doc_len, avg_doc_len, len(common_docs), total_docs
-                )
-                scores[doc_id] = raw_score * self.boost
-        return scores
+        return self._score_all_phrase_docs(
+            common_docs, term_postings, segment, similarity, f_lens, avg_doc_len, total_docs
+        )
 
     def _get_term_postings(self, segment: Segment) -> List[Dict[int, PostingEntry]]:
         postings_list: List[Dict[int, PostingEntry]] = []
@@ -183,21 +218,21 @@ class PhraseQuery(Query):
             postings_list.append(plist.postings)
         return postings_list
 
+    def _check_match_from_pos(self, start_pos: int, pos_lists: List[List[int]], slop: int) -> bool:
+        cur_pos = start_pos
+        for i in range(1, len(pos_lists)):
+            valid = [p for p in pos_lists[i] if 0 < (p - cur_pos) <= (1 + slop)]
+            if not valid:
+                return False
+            cur_pos = min(valid)
+        return True
+
     def _count_phrase_matches(self, pos_lists: List[List[int]], slop: int) -> int:
         if not all(pos_lists):
             return 0
         matches = 0
         for start_pos in pos_lists[0]:
-            cur_pos = start_pos
-            matched = True
-            for i in range(1, len(pos_lists)):
-                target_positions = pos_lists[i]
-                valid = [p for p in target_positions if 0 < (p - cur_pos) <= (1 + slop)]
-                if not valid:
-                    matched = False
-                    break
-                cur_pos = min(valid)
-            if matched:
+            if self._check_match_from_pos(start_pos, pos_lists, slop):
                 matches += 1
         return matches
 
@@ -212,13 +247,16 @@ class WildcardQuery(Query):
         self.field = field
         self.pattern = pattern.lower()
 
-    def match(self, segment: Segment, similarity: Similarity) -> Dict[int, float]:
-        prefix = f"{self.field}:"
-        matching_keys = [
+    def _find_matching_keys(self, segment: Segment, prefix: str) -> List[str]:
+        return [
             k
             for k in segment.postings.keys()
             if k.startswith(prefix) and fnmatch.fnmatch(k[len(prefix) :], self.pattern)
         ]
+
+    def match(self, segment: Segment, similarity: Similarity) -> Dict[int, float]:
+        prefix = f"{self.field}:"
+        matching_keys = self._find_matching_keys(segment, prefix)
         if not matching_keys:
             return {}
 
@@ -231,6 +269,52 @@ class WildcardQuery(Query):
             for doc_id, score in sub_scores.items():
                 combined_scores[doc_id] = combined_scores.get(doc_id, 0.0) + score
         return combined_scores
+
+
+def _step_levenshtein_row(
+    c1: str, s2: str, previous_row: List[int], i: int, max_distance: Optional[int]
+) -> Optional[List[int]]:
+    current_row = [i + 1]
+    for j, c2 in enumerate(s2):
+        val = min(
+            previous_row[j + 1] + 1,
+            current_row[j] + 1,
+            previous_row[j] + (c1 != c2),
+        )
+        current_row.append(val)
+    if max_distance is not None and min(current_row) > max_distance:
+        return None
+    return current_row
+
+
+def _compute_levenshtein_dp(s1: str, s2: str, max_distance: Optional[int]) -> int:
+    previous_row = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        next_row = _step_levenshtein_row(c1, s2, previous_row, i, max_distance)
+        if next_row is None:
+            return (max_distance + 1) if max_distance is not None else 999
+        previous_row = next_row
+    return previous_row[-1]
+
+
+def _check_len_diff(s1: str, s2: str, max_distance: Optional[int]) -> Optional[int]:
+    len_diff = abs(len(s1) - len(s2))
+    threshold = max_distance if max_distance is not None else 999
+    if len_diff > threshold:
+        return (max_distance + 1) if max_distance is not None else len_diff
+    return None
+
+
+def compute_levenshtein(s1: str, s2: str, max_distance: Optional[int] = None) -> int:
+    """Computes Levenshtein distance with early exit threshold."""
+    diff = _check_len_diff(s1, s2, max_distance)
+    if diff is not None:
+        return diff
+    if len(s1) < len(s2):
+        return compute_levenshtein(s2, s1, max_distance)
+    if not s2:
+        return len(s1)
+    return _compute_levenshtein_dp(s1, s2, max_distance)
 
 
 class FuzzyQuery(Query):
@@ -247,51 +331,30 @@ class FuzzyQuery(Query):
         self.max_edits = max_edits
 
     def _levenshtein(self, s1: str, s2: str, max_distance: Optional[int] = None) -> int:
-        if abs(len(s1) - len(s2)) > (max_distance if max_distance is not None else 999):
-            return (
-                (max_distance + 1)
-                if max_distance is not None
-                else abs(len(s1) - len(s2))
-            )
-        if len(s1) < len(s2):
-            return self._levenshtein(s2, s1, max_distance)
-        if len(s2) == 0:
-            return len(s1)
-        previous_row = list(range(len(s2) + 1))
-        for i, c1 in enumerate(s1):
-            current_row = [i + 1]
-            min_row_val = current_row[0]
-            for j, c2 in enumerate(s2):
-                insertions = previous_row[j + 1] + 1
-                deletions = current_row[j] + 1
-                substitutions = previous_row[j] + (c1 != c2)
-                val = min(insertions, deletions, substitutions)
-                current_row.append(val)
-                min_row_val = min(min_row_val, val)
-            if max_distance is not None and min_row_val > max_distance:
-                return max_distance + 1
-            previous_row = current_row
-        return previous_row[-1]
+        return compute_levenshtein(s1, s2, max_distance)
+
+    def _score_fuzzy_term(
+        self, term: str, segment: Segment, similarity: Similarity, combined_scores: Dict[int, float]
+    ) -> None:
+        if abs(len(term) - len(self.term)) > self.max_edits:
+            return
+        dist = compute_levenshtein(self.term, term, self.max_edits)
+        if dist <= self.max_edits:
+            decay = 1.0 - (dist / (self.max_edits + 1))
+            sub_scores = TermQuery(
+                self.field, term, boost=self.boost * decay
+            ).match(segment, similarity)
+            for doc_id, score in sub_scores.items():
+                combined_scores[doc_id] = max(
+                    combined_scores.get(doc_id, 0.0), score
+                )
 
     def match(self, segment: Segment, similarity: Similarity) -> Dict[int, float]:
         prefix = f"{self.field}:"
         combined_scores: Dict[int, float] = {}
         for k in segment.postings.keys():
-            if not k.startswith(prefix):
-                continue
-            term = k[len(prefix) :]
-            if abs(len(term) - len(self.term)) > self.max_edits:
-                continue
-            dist = self._levenshtein(self.term, term)
-            if dist <= self.max_edits:
-                decay = 1.0 - (dist / (self.max_edits + 1))
-                sub_scores = TermQuery(
-                    self.field, term, boost=self.boost * decay
-                ).match(segment, similarity)
-                for doc_id, score in sub_scores.items():
-                    combined_scores[doc_id] = max(
-                        combined_scores.get(doc_id, 0.0), score
-                    )
+            if k.startswith(prefix):
+                self._score_fuzzy_term(k[len(prefix) :], segment, similarity, combined_scores)
         return combined_scores
 
 
@@ -316,31 +379,35 @@ class BooleanQuery(Query):
         self.clauses.append(BooleanClause(query, occur))
         return self
 
+    def _get_clauses_for(self, occur: Occur) -> List[BooleanClause]:
+        return [c for c in self.clauses if c.occur == occur]
+
+    def _collect_clauses_by_occur(
+        self,
+    ) -> Tuple[List[BooleanClause], List[BooleanClause], List[BooleanClause]]:
+        return (
+            self._get_clauses_for(Occur.MUST),
+            self._get_clauses_for(Occur.SHOULD),
+            self._get_clauses_for(Occur.MUST_NOT),
+        )
+
     def match(self, segment: Segment, similarity: Similarity) -> Dict[int, float]:
         if not self.clauses:
             return {}
 
-        must_clauses = [c for c in self.clauses if c.occur == Occur.MUST]
-        should_clauses = [c for c in self.clauses if c.occur == Occur.SHOULD]
-        must_not_clauses = [c for c in self.clauses if c.occur == Occur.MUST_NOT]
-
-        if must_clauses:
-            scores = self._match_must_clauses(
-                must_clauses, should_clauses, segment, similarity
-            )
-        else:
-            scores = self._match_should_clauses(should_clauses, segment, similarity)
+        must_clauses, should_clauses, must_not_clauses = self._collect_clauses_by_occur()
+        scores = (
+            self._match_must_clauses(must_clauses, should_clauses, segment, similarity)
+            if must_clauses
+            else self._match_should_clauses(should_clauses, segment, similarity)
+        )
 
         self._exclude_must_not(scores, must_not_clauses, segment, similarity)
         return {d: s * self.boost for d, s in scores.items()}
 
-    def _match_must_clauses(
-        self,
-        must_clauses: List[BooleanClause],
-        should_clauses: List[BooleanClause],
-        segment: Segment,
-        similarity: Similarity,
-    ) -> Dict[int, float]:
+    def _intersect_must_scores(
+        self, must_clauses: List[BooleanClause], segment: Segment, similarity: Similarity
+    ) -> Tuple[Set[int], List[Dict[int, float]]]:
         first_scores = must_clauses[0].query.match(segment, similarity)
         matching_docs = set(first_scores.keys())
         all_must_scores = [first_scores]
@@ -349,19 +416,32 @@ class BooleanQuery(Query):
             sub_scores = c.query.match(segment, similarity)
             matching_docs.intersection_update(sub_scores.keys())
             all_must_scores.append(sub_scores)
+        return matching_docs, all_must_scores
 
-        candidate_scores: Dict[int, float] = {}
-        for doc_id in matching_docs:
-            candidate_scores[doc_id] = sum(
-                sc.get(doc_id, 0.0) for sc in all_must_scores
-            )
-
+    def _add_should_scores_to_must(
+        self, candidate_scores: Dict[int, float], should_clauses: List[BooleanClause], segment: Segment, similarity: Similarity
+    ) -> None:
         for c in should_clauses:
             sub_scores = c.query.match(segment, similarity)
             for doc_id in candidate_scores:
                 if doc_id in sub_scores:
                     candidate_scores[doc_id] += sub_scores[doc_id]
 
+    def _match_must_clauses(
+        self,
+        must_clauses: List[BooleanClause],
+        should_clauses: List[BooleanClause],
+        segment: Segment,
+        similarity: Similarity,
+    ) -> Dict[int, float]:
+        matching_docs, all_must_scores = self._intersect_must_scores(
+            must_clauses, segment, similarity
+        )
+        candidate_scores: Dict[int, float] = {
+            doc_id: sum(sc.get(doc_id, 0.0) for sc in all_must_scores)
+            for doc_id in matching_docs
+        }
+        self._add_should_scores_to_must(candidate_scores, should_clauses, segment, similarity)
         return candidate_scores
 
     def _match_should_clauses(
@@ -399,26 +479,28 @@ class SpellChecker:
         self.field = field
 
     def _levenshtein(self, s1: str, s2: str, max_distance: Optional[int] = None) -> int:
-        return FuzzyQuery(self.field, s1)._levenshtein(s1, s2, max_distance)
+        return compute_levenshtein(s1, s2, max_distance)
+
+    def _collect_suggestion_candidate(
+        self, term: str, w: str, max_edits: int, plist: Any, candidates: List[Tuple[str, int, int]]
+    ) -> None:
+        if abs(len(term) - len(w)) > max_edits:
+            return
+        dist = compute_levenshtein(w, term, max_edits)
+        if 0 < dist <= max_edits:
+            candidates.append((term, dist, plist.doc_freq()))
 
     def suggest(
         self, word: str, max_suggestions: int = 3, max_edits: int = 2
     ) -> List[str]:
         w = word.lower()
         prefix = f"{self.field}:"
-        candidates: List[Tuple[str, int, int]] = []  # (term, distance, doc_freq)
+        candidates: List[Tuple[str, int, int]] = []
 
         for k, plist in self.segment.postings.items():
-            if not k.startswith(prefix):
-                continue
-            term = k[len(prefix) :]
-            if abs(len(term) - len(w)) > max_edits:
-                continue
-            dist = FuzzyQuery(self.field, w, max_edits)._levenshtein(w, term)
-            if 0 < dist <= max_edits:
-                candidates.append((term, dist, plist.doc_freq()))
+            if k.startswith(prefix):
+                self._collect_suggestion_candidate(k[len(prefix) :], w, max_edits, plist, candidates)
 
-        # Sort primarily by lowest edit distance, secondarily by highest document frequency
         candidates.sort(key=lambda x: (x[1], -x[2]))
         return [c[0] for c in candidates[:max_suggestions]]
 

@@ -9,7 +9,7 @@ import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from ..arxiv_client import _safe_fromstring, safe_urlopen
 from .base import BaseSourceAdapter, RawItem
@@ -71,13 +71,8 @@ class IacrEprintSourceAdapter(BaseSourceAdapter):
             # Fallback or empty if feed unreachable
             return []
 
-    def _parse_feed_xml(self, xml_bytes: bytes, max_results: int) -> List[RawItem]:
-        """Parses RSS/Atom XML from IACR ePrint into RawItems."""
-        try:
-            root = _safe_fromstring(xml_bytes)
-        except Exception:
-            return []
-
+    def _find_item_nodes(self, root: Any) -> List[Any]:
+        """Finds RSS item or Atom entry nodes in IACR XML root."""
         channel = root.find("channel")
         item_nodes = (
             channel.findall("item") if channel is not None else root.findall("item")
@@ -85,7 +80,16 @@ class IacrEprintSourceAdapter(BaseSourceAdapter):
         if not item_nodes:
             ns = {"atom": "http://www.w3.org/2005/Atom"}
             item_nodes = root.findall("atom:entry", ns)
+        return item_nodes
 
+    def _parse_feed_xml(self, xml_bytes: bytes, max_results: int) -> List[RawItem]:
+        """Parses RSS/Atom XML from IACR ePrint into RawItems."""
+        try:
+            root = _safe_fromstring(xml_bytes)
+        except Exception:
+            return []
+
+        item_nodes = self._find_item_nodes(root)
         items: List[RawItem] = []
         for elem in item_nodes[:max_results]:
             item = self._parse_iacr_elem(elem)
@@ -93,7 +97,18 @@ class IacrEprintSourceAdapter(BaseSourceAdapter):
                 items.append(item)
         return items
 
-    def _parse_iacr_elem(self, elem: Any) -> Optional[RawItem]:
+    def _resolve_iacr_item_id(self, link: str, title: str) -> str:
+        """Resolves canonical IACR ePrint item identifier."""
+        match = re.search(r"(\d{4})/(\d+)", link) or re.search(r"(\d{4})/(\d+)", title)
+        if match:
+            return f"iacr-{match.group(1)}-{match.group(2)}"
+        clean_link = re.sub(r"[^\w-]", "_", link)
+        if clean_link:
+            return f"iacr-{clean_link[-16:]}"
+        return f"iacr-{hash(title) & 0xFFFFFF}"
+
+    def _extract_iacr_fields(self, elem: Any) -> Tuple[str, str, str, List[str], str]:
+        """Extracts title, link, abstract, authors, and published fields from IACR element."""
         title = (
             _get_node_text(elem, ["title", "{http://www.w3.org/2005/Atom}title"])
             or "Untitled IACR Paper"
@@ -110,18 +125,11 @@ class IacrEprintSourceAdapter(BaseSourceAdapter):
             _get_node_text(elem, ["pubDate", "{http://www.w3.org/2005/Atom}published"])
             or datetime.now(timezone.utc).isoformat()
         )
+        return title, link, abstract, authors, published
 
-        match = re.search(r"(\d{4})/(\d+)", link) or re.search(r"(\d{4})/(\d+)", title)
-        if match:
-            item_id = f"iacr-{match.group(1)}-{match.group(2)}"
-        else:
-            clean_link = re.sub(r"[^\w-]", "_", link)
-            item_id = (
-                f"iacr-{clean_link[-16:]}"
-                if clean_link
-                else f"iacr-{hash(title) & 0xFFFFFF}"
-            )
-
+    def _parse_iacr_elem(self, elem: Any) -> Optional[RawItem]:
+        title, link, abstract, authors, published = self._extract_iacr_fields(elem)
+        item_id = self._resolve_iacr_item_id(link, title)
         pdf_url = f"{link}.pdf" if link and not link.endswith(".pdf") else link
 
         return RawItem(

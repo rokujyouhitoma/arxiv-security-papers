@@ -52,14 +52,17 @@ class FMIndex:
                 high = mid - 1
         return right
 
+    def _count_suffix_array(self, q: str) -> int:
+        n = len(self.suffix_array)
+        left = self._find_left_bound(q, n)
+        right = self._find_right_bound(q, n)
+        return (right - left + 1) if left <= right else 0
+
     def count_substring(self, query: str) -> int:
         """Counts exact substring occurrences using binary search on Suffix Array or fast substring search."""
         if not query or not self.text:
             return 0
         q = query.lower()
         if len(self.text) > 1000 and self.suffix_array:
-            n = len(self.suffix_array)
-            left = self._find_left_bound(q, n)
-            right = self._find_right_bound(q, n)
-            return (right - left + 1) if left <= right else 0
+            return self._count_suffix_array(q)
         return self.text.count(q)

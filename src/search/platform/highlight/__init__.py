@@ -24,36 +24,37 @@ class DynamicHighlighter:
         self.max_fragments = max_fragments
         self.fragment_size = fragment_size
 
-    def highlight(self, text: str, query_terms: List[str]) -> str:
-        if not text or not query_terms:
-            return html.escape(text[: self.fragment_size])
-
-        safe_terms = [re.escape(t.strip()) for t in query_terms if t.strip()]
-        if not safe_terms:
-            return html.escape(text[: self.fragment_size])
-
-        pattern = re.compile(r"(" + "|".join(safe_terms) + r")", re.IGNORECASE)
-
-        # Find first match position
-        match = pattern.search(text)
-        if not match:
-            return html.escape(text[: self.fragment_size])
-
-        start_pos = max(0, match.start() - self.fragment_size // 2)
+    def _extract_snippet_range(self, text: str, match_start: int) -> str:
+        start_pos = max(0, match_start - self.fragment_size // 2)
         end_pos = min(len(text), start_pos + self.fragment_size)
-
         snippet = text[start_pos:end_pos]
         if start_pos > 0:
             snippet = "..." + snippet
         if end_pos < len(text):
             snippet = snippet + "..."
+        return snippet
 
-        # Escape HTML before inserting highlight tags
+    def _build_pattern(self, query_terms: List[str]) -> Optional[re.Pattern[str]]:
+        safe_terms = [re.escape(t.strip()) for t in query_terms if t.strip()]
+        if not safe_terms:
+            return None
+        return re.compile(r"(" + "|".join(safe_terms) + r")", re.IGNORECASE)
+
+    def highlight(self, text: str, query_terms: List[str]) -> str:
+        if not text or not query_terms:
+            return html.escape(text[: self.fragment_size])
+
+        pattern = self._build_pattern(query_terms)
+        if not pattern:
+            return html.escape(text[: self.fragment_size])
+
+        match = pattern.search(text)
+        if not match:
+            return html.escape(text[: self.fragment_size])
+
+        snippet = self._extract_snippet_range(text, match.start())
         escaped_snippet = html.escape(snippet)
-
-        # Highlight matches
-        highlighted = pattern.sub(f"{self.pre_tag}\\1{self.post_tag}", escaped_snippet)
-        return highlighted
+        return pattern.sub(f"{self.pre_tag}\\1{self.post_tag}", escaped_snippet)
 
 
 class FastVectorHighlighter:

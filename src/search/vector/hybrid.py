@@ -46,6 +46,16 @@ class RRFHybridScorer:
                 self.bm25_weight / (self.k + rank)
             )
 
+    def _merge_doc_fields(
+        self, did: str, doc: Dict[str, Any], doc_map: Dict[str, Dict[str, Any]]
+    ) -> None:
+        if did not in doc_map:
+            doc_map[did] = dict(doc)
+        else:
+            for k_doc, v_doc in doc.items():
+                if k_doc not in doc_map[did]:
+                    doc_map[did][k_doc] = v_doc
+
     def _accumulate_vector(
         self,
         vector_results: Sequence[Dict[str, Any]],
@@ -59,12 +69,7 @@ class RRFHybridScorer:
             did = str(doc.get(id_key) or doc.get("arxiv_id") or "")
             if not did:
                 continue
-            if did not in doc_map:
-                doc_map[did] = dict(doc)
-            else:
-                for k_doc, v_doc in doc.items():
-                    if k_doc not in doc_map[did]:
-                        doc_map[did][k_doc] = v_doc
+            self._merge_doc_fields(did, doc, doc_map)
             vector_ranks[did] = rank
             vector_raw_scores[did] = float(
                 doc.get("vector_similarity", doc.get("score", 0.0))

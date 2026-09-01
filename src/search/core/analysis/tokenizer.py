@@ -38,27 +38,24 @@ class StandardTokenizer(Tokenizer):
     WORD_PATTERN = re.compile(r"[a-zA-Z0-9_\-]+", re.UNICODE)
     CJK_PATTERN = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+", re.UNICODE)
 
+    def _extract_cjk_bigrams(self, cjk_text: str, cjk_start: int, tokens: List[Token]) -> None:
+        tokens.append(Token(cjk_text, cjk_start, cjk_start + len(cjk_text), 1))
+        if len(cjk_text) > 1:
+            for i in range(len(cjk_text) - 1):
+                bg = cjk_text[i : i + 2]
+                tokens.append(Token(bg, cjk_start + i, cjk_start + i + 2, 0))
+
     def tokenize(self, text: str) -> List[Token]:
         if not text:
             return []
 
-        tokens: List[Token] = []
-        # Match western words with character offsets
-        for m in self.WORD_PATTERN.finditer(text):
-            tok_text = m.group(0)
-            if len(tok_text) > 0:
-                tokens.append(Token(tok_text, m.start(), m.end(), 1))
+        tokens: List[Token] = [
+            Token(m.group(0), m.start(), m.end(), 1)
+            for m in self.WORD_PATTERN.finditer(text)
+            if len(m.group(0)) > 0
+        ]
 
-        # Match Japanese/CJK phrases and generate character bigrams
         for m in self.CJK_PATTERN.finditer(text):
-            cjk_text = m.group(0)
-            cjk_start = m.start()
-            # Whole word token
-            tokens.append(Token(cjk_text, cjk_start, m.end(), 1))
-            # Bigrams
-            if len(cjk_text) > 1:
-                for i in range(len(cjk_text) - 1):
-                    bg = cjk_text[i : i + 2]
-                    tokens.append(Token(bg, cjk_start + i, cjk_start + i + 2, 0))
+            self._extract_cjk_bigrams(m.group(0), m.start(), tokens)
 
         return tokens

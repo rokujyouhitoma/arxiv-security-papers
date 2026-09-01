@@ -33,16 +33,17 @@ class RAPTORTreeIndex:
                 }
             )
 
+    def _score_cluster(self, cluster: Dict[str, Any], query_tokens: List[str]) -> int:
+        dom_lower = cluster["domain"].lower()
+        sum_lower = cluster["summary"].lower()
+        return sum(1 for qt in query_tokens if qt in dom_lower or qt in sum_lower)
+
     def search_clusters(
         self, query_tokens: List[str], top_k: int = 3
     ) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
         for cluster in self.clusters:
-            match_count = sum(
-                1
-                for qt in query_tokens
-                if qt in cluster["domain"].lower() or qt in cluster["summary"].lower()
-            )
+            match_count = self._score_cluster(cluster, query_tokens)
             if match_count > 0:
                 results.append({"cluster": cluster, "score": int(match_count)})
 

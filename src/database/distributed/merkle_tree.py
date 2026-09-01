@@ -109,6 +109,19 @@ class MerkleTree:
         self._diff_recursive(self.root, other.root, diffs)
         return sorted(diffs)
 
+    def _handle_null_nodes(
+        self, n1: Optional[MerkleNode], n2: Optional[MerkleNode], diffs: Set[str]
+    ) -> bool:
+        if n1 is None and n2 is None:
+            return True
+        if n1 is None:
+            diffs.update(n2.keys_in_subtree)  # type: ignore[union-attr]
+            return True
+        if n2 is None:
+            diffs.update(n1.keys_in_subtree)
+            return True
+        return False
+
     def _diff_recursive(
         self,
         n1: Optional[MerkleNode],
@@ -116,22 +129,12 @@ class MerkleTree:
         diffs: Set[str],
     ) -> None:
         """Recursively traverses mismatching branches."""
-        if n1 is None and n2 is None:
+        if self._handle_null_nodes(n1, n2, diffs):
             return
-
-        if n1 is None or n2 is None:
-            node = n1 if n1 is not None else n2
-            assert node is not None
-            diffs.update(node.keys_in_subtree)
+        if n1.hash_val == n2.hash_val:  # type: ignore[union-attr]
             return
-
-        if n1.hash_val == n2.hash_val:
+        if n1.is_leaf or n2.is_leaf:  # type: ignore[union-attr]
+            diffs.update(n1.keys_in_subtree | n2.keys_in_subtree)  # type: ignore[union-attr]
             return
-
-        if n1.is_leaf or n2.is_leaf:
-            diffs.update(n1.keys_in_subtree)
-            diffs.update(n2.keys_in_subtree)
-            return
-
-        self._diff_recursive(n1.left, n2.left, diffs)
-        self._diff_recursive(n1.right, n2.right, diffs)
+        self._diff_recursive(n1.left, n2.left, diffs)  # type: ignore[union-attr]
+        self._diff_recursive(n1.right, n2.right, diffs)  # type: ignore[union-attr]

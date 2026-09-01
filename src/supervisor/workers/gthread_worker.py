@@ -66,6 +66,35 @@ class GthreadWorker(SyncWorker):
                 }
             )
 
+    def _accept_gthread_client(self) -> Optional[socket.socket]:
+        try:
+            client_sock, _ = self.server_socket.accept()
+            return client_sock
+        except (socket.timeout, BlockingIOError):
+            return None
+        except OSError:
+            return None
+
+    def _pulse_active_state(self) -> None:
+        with self._req_lock:
+            is_active = self._active_requests > 0
+        self.pulse({
+            "active_threads": self.num_threads,
+            "is_handling_request": is_active,
+            "active_requests": self._active_requests,
+        })
+
+    def _dispatch_one(self) -> bool:
+        """Accept one connection and submit to thread pool. Returns False to break."""
+        if not self.server_socket:
+            time.sleep(0.1)
+            return True
+        client_sock = self._accept_gthread_client()
+        if client_sock is None:
+            return self.alive
+        self._executor.submit(self.handle_client, client_sock)
+        return True
+
     def run(self) -> None:
         """Main execution loop dispatching incoming sockets to thread pool."""
         self.init_signals()
@@ -77,29 +106,9 @@ class GthreadWorker(SyncWorker):
         )
 
         while self.alive:
-            with self._req_lock:
-                is_active = self._active_requests > 0
-            self.pulse(
-                {
-                    "active_threads": self.num_threads,
-                    "is_handling_request": is_active,
-                    "active_requests": self._active_requests,
-                }
-            )
-            if not self.server_socket:
-                time.sleep(0.1)
-                continue
-
-            try:
-                client_sock, _ = self.server_socket.accept()
-            except (socket.timeout, BlockingIOError):
-                continue
-            except OSError:
-                if not self.alive:
-                    break
-                continue
-
-            self._executor.submit(self.handle_client, client_sock)
+            self._pulse_active_state()
+            if not self._dispatch_one():
+                break
 
         if self._executor:
             self._executor.shutdown(wait=True, cancel_futures=False)

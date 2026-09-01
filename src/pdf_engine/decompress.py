@@ -43,6 +43,18 @@ def _apply_paeth_filter(row: bytearray, prev_row: bytearray, bpp: int) -> None:
         row[i] = (row[i] + paeth_predictor(left, up, up_left)) & 0xFF
 
 
+def _apply_row_filter(filter_type: int, cur_row: bytearray, prev_row: bytearray, bpp: int) -> None:
+    filter_map: Dict[int, Callable[[], None]] = {
+        1: lambda: _apply_sub_filter(cur_row, bpp),
+        2: lambda: _apply_up_filter(cur_row, prev_row),
+        3: lambda: _apply_avg_filter(cur_row, prev_row, bpp),
+        4: lambda: _apply_paeth_filter(cur_row, prev_row, bpp),
+    }
+    action = filter_map.get(filter_type)
+    if action:
+        action()
+
+
 def decode_png_predictor(data: bytes, columns: int, bpp: int = 1) -> bytes:
     """Reconstructs unfiltered data from PNG predictor stream (Predictor >= 10)."""
     stride = columns * bpp + 1
@@ -55,18 +67,8 @@ def decode_png_predictor(data: bytes, columns: int, bpp: int = 1) -> bytes:
 
     for r in range(num_rows):
         row_raw = data[r * stride : (r + 1) * stride]
-        filter_type = row_raw[0]
         cur_row = bytearray(row_raw[1:])
-
-        if filter_type == 1:
-            _apply_sub_filter(cur_row, bpp)
-        elif filter_type == 2:
-            _apply_up_filter(cur_row, prev_row)
-        elif filter_type == 3:
-            _apply_avg_filter(cur_row, prev_row, bpp)
-        elif filter_type == 4:
-            _apply_paeth_filter(cur_row, prev_row, bpp)
-
+        _apply_row_filter(row_raw[0], cur_row, prev_row, bpp)
         out[r * len(cur_row) : (r + 1) * len(cur_row)] = cur_row
         prev_row = cur_row
 
@@ -96,36 +98,55 @@ def decode_ascii_hex(data: bytes) -> bytes:
     return bytes.fromhex(cleaned)
 
 
-def decode_ascii85(data: bytes) -> bytes:
-    """Decodes /ASCII85Decode stream (ISO 32000-1 Clause 7.4.3)."""
-    clean_data = data.split(b"~>")[0]
-    clean_data = re.sub(rb"\s+", b"", clean_data)
-    out = bytearray()
-    acc = 0
-    cnt = 0
+def _process_ascii85_byte(b: int, acc: int, cnt: int, out: bytearray) -> tuple[int, int]:
+    if b == ord("z") and cnt == 0:
+        out.extend(b"\x00\x00\x00\x00")
+        return 0, 0
+    if 33 <= b <= 117:
+        acc = acc * 85 + (b - 33)
+        cnt += 1
+        if cnt == 5:
+            out.extend(acc.to_bytes(4, "big"))
+            return 0, 0
+    return acc, cnt
 
-    for b in clean_data:
-        if b == ord("z") and cnt == 0:
-            out.extend(b"\x00\x00\x00\x00")
-            continue
-        if 33 <= b <= 117:
-            acc = acc * 85 + (b - 33)
-            cnt += 1
-            if cnt == 5:
-                out.extend(acc.to_bytes(4, "big"))
-                acc = 0
-                cnt = 0
 
+def _finalize_ascii85(acc: int, cnt: int, out: bytearray) -> None:
     if cnt > 1:
         for _ in range(5 - cnt):
             acc = acc * 85 + 84
         out.extend(acc.to_bytes(4, "big")[: cnt - 1])
 
+
+def decode_ascii85(data: bytes) -> bytes:
+    """Decodes /ASCII85Decode stream (ISO 32000-1 Clause 7.4.3)."""
+    clean_data = re.sub(rb"\s+", b"", data.split(b"~>")[0])
+    out = bytearray()
+    acc = 0
+    cnt = 0
+
+    for b in clean_data:
+        acc, cnt = _process_ascii85_byte(b, acc, cnt, out)
+
+    _finalize_ascii85(acc, cnt, out)
     return bytes(out)
 
 
 class StreamDecompressor:
     """Unified PDF Stream Decompression and Filter Engine."""
+
+    @classmethod
+    def _apply_single_filter(
+        cls, filt: Any, data: bytes, decode_parms: Optional[Dict[str, Any]]
+    ) -> bytes:
+        fname = filt.strip("/") if isinstance(filt, str) else ""
+        if fname in ("FlateDecode", "Fl"):
+            return cls._decompress_flate(data, decode_parms)
+        if fname in ("ASCIIHexDecode", "AHx"):
+            return decode_ascii_hex(data)
+        if fname in ("ASCII85Decode", "A85"):
+            return decode_ascii85(data)
+        return data
 
     @classmethod
     def decompress(
@@ -140,49 +161,43 @@ class StreamDecompressor:
 
         filters = filter_name if isinstance(filter_name, list) else [filter_name]
         data = raw_bytes
-
         for filt in filters:
-            fname = filt.strip("/") if isinstance(filt, str) else ""
-            if fname in ("FlateDecode", "Fl"):
-                data = cls._decompress_flate(data, decode_parms)
-            elif fname in ("ASCIIHexDecode", "AHx"):
-                data = decode_ascii_hex(data)
-            elif fname in ("ASCII85Decode", "A85"):
-                data = decode_ascii85(data)
-
+            data = cls._apply_single_filter(filt, data, decode_parms)
         return data
 
     @classmethod
-    def _decompress_flate(
-        cls, data: bytes, decode_parms: Optional[Dict[str, Any]]
-    ) -> bytes:
+    def _safe_zlib_inflate(cls, data: bytes) -> Optional[bytes]:
         try:
-            decompressed = zlib.decompress(data)
+            return zlib.decompress(data)
         except zlib.error:
-            # Fallback for streams with raw deflate (no zlib wrapper)
             try:
-                decompressed = zlib.decompress(data, -zlib.MAX_WBITS)
+                return zlib.decompress(data, -zlib.MAX_WBITS)
             except zlib.error:
-                return data
+                return None
 
-        if not decode_parms:
-            return decompressed
-
-        predictor = int(
-            decode_parms.get("/Predictor", decode_parms.get("Predictor", 1))
-        )
-        columns = int(decode_parms.get("/Columns", decode_parms.get("Columns", 1)))
-        colors = int(decode_parms.get("/Colors", decode_parms.get("Colors", 1)))
-        bpc = int(
-            decode_parms.get(
-                "/BitsPerComponent", decode_parms.get("BitsPerComponent", 8)
-            )
-        )
+    @classmethod
+    def _apply_predictor_params(cls, decompressed: bytes, parms: Dict[str, Any]) -> bytes:
+        predictor = int(parms.get("/Predictor", parms.get("Predictor", 1)))
+        columns = int(parms.get("/Columns", parms.get("Columns", 1)))
+        colors = int(parms.get("/Colors", parms.get("Colors", 1)))
+        bpc = int(parms.get("/BitsPerComponent", parms.get("BitsPerComponent", 8)))
         bpp = max(1, (colors * bpc + 7) // 8)
 
         if predictor >= 10:
             return decode_png_predictor(decompressed, columns, bpp)
         if predictor == 2:
             return decode_tiff_predictor(decompressed, columns, bpp)
-
         return decompressed
+
+    @classmethod
+    def _decompress_flate(
+        cls, data: bytes, decode_parms: Optional[Dict[str, Any]]
+    ) -> bytes:
+        decompressed = cls._safe_zlib_inflate(data)
+        if decompressed is None:
+            return data
+
+        if not decode_parms:
+            return decompressed
+
+        return cls._apply_predictor_params(decompressed, decode_parms)

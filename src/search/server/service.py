@@ -93,17 +93,21 @@ class SearchService:
             "results": results,
         }
 
+    def _find_paper_in_engine(self, clean_id: str) -> Optional[Dict[str, Any]]:
+        doc = self.vector_engine.documents_by_id.get(clean_id)
+        if doc:
+            return doc
+        for d in self.vector_engine.documents:
+            if d.get("id") == clean_id:
+                return d
+        return None
+
     def _handle_get_paper(self, req: Dict[str, Any]) -> Dict[str, Any]:
         clean_id = str(req.get("id", "")).strip()
         if not clean_id:
             return {"status": "error", "error": "Missing paper id"}
 
-        doc = self.vector_engine.documents_by_id.get(clean_id)
-        if not doc:
-            for d in self.vector_engine.documents:
-                if d.get("id") == clean_id:
-                    doc = d
-                    break
+        doc = self._find_paper_in_engine(clean_id)
         if not doc:
             return {
                 "status": "error",
@@ -162,16 +166,16 @@ class SearchService:
     def handle_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatches JSON IPC commands to the underlying VectorEngine."""
         cmd = req.get("cmd", "")
-        if cmd == "ping":
-            return {"status": "ok", "message": "pong"}
-        if cmd == "search":
-            return self._handle_search(req)
-        if cmd == "get_paper":
-            return self._handle_get_paper(req)
-        if cmd == "get_related":
-            return self._handle_get_related(req)
-        if cmd == "get_stats":
-            return self._handle_get_stats()
+        handlers = {
+            "ping": lambda _: {"status": "ok", "message": "pong"},
+            "search": self._handle_search,
+            "get_paper": self._handle_get_paper,
+            "get_related": self._handle_get_related,
+            "get_stats": lambda _: self._handle_get_stats(),
+        }
+        handler = handlers.get(cmd)
+        if handler:
+            return handler(req)
         return {"status": "error", "error": f"Unknown command: '{cmd}'"}
 
     def start(self) -> None:
@@ -212,21 +216,26 @@ class SearchService:
             )
             client_thread.start()
 
+    def _read_client_request(self, client_sock: socket.socket) -> Optional[Dict[str, Any]]:
+        raw_data = b""
+        while True:
+            chunk = client_sock.recv(65536)
+            if not chunk:
+                break
+            raw_data += chunk
+            if b"\n" in raw_data:
+                break
+        if not raw_data:
+            return None
+        res: Dict[str, Any] = json.loads(raw_data.decode("utf-8").strip())
+        return res
+
     def _handle_client(self, client_sock: socket.socket) -> None:
         client_sock.settimeout(5.0)
         try:
-            raw_data = b""
-            while True:
-                chunk = client_sock.recv(65536)
-                if not chunk:
-                    break
-                raw_data += chunk
-                if b"\n" in raw_data:
-                    break
-            if not raw_data:
+            req = self._read_client_request(client_sock)
+            if req is None:
                 return
-
-            req = json.loads(raw_data.decode("utf-8").strip())
             resp = self.handle_command(req)
             resp_bytes = (json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8")
             client_sock.sendall(resp_bytes)
@@ -259,20 +268,19 @@ class SearchService:
             except OSError:
                 pass
 
-    def stop(self) -> None:
-        """Stops the listener thread and removes the socket file."""
-        self._running = False
+    def _cleanup_server_sock(self) -> None:
         if self._server_sock:
             try:
                 self._server_sock.close()
             except OSError:
                 pass
             self._server_sock = None
-        if os.path.exists(self.socket_path):
-            try:
-                os.unlink(self.socket_path)
-            except OSError:
-                pass
+
+    def stop(self) -> None:
+        """Stops the listener thread and removes the socket file."""
+        self._running = False
+        self._cleanup_server_sock()
+        self._atexit_cleanup()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
 

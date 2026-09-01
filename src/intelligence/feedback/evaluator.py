@@ -40,10 +40,37 @@ class FeedbackEvaluator(IntelligencePhaseProtocol):
             }
         )
 
+    def _aggregate_query_stats(
+        self,
+    ) -> tuple[List[str], Dict[str, int], Dict[str, float]]:
+        zero_hits: List[str] = []
+        topic_counts: Dict[str, int] = {}
+        topic_ndcg_sum: Dict[str, float] = {}
+        for q in self._query_logs:
+            t = q["topic"]
+            topic_counts[t] = topic_counts.get(t, 0) + 1
+            topic_ndcg_sum[t] = topic_ndcg_sum.get(t, 0.0) + q["ndcg"]
+            if q["hits"] == 0:
+                zero_hits.append(q["query"])
+        return zero_hits, topic_counts, topic_ndcg_sum
+
+    def _compute_gaps_and_drifts(
+        self,
+        topic_counts: Dict[str, int],
+        topic_ndcg_sum: Dict[str, float],
+    ) -> tuple[Dict[str, float], Dict[str, float]]:
+        n = len(self._query_logs)
+        gaps: Dict[str, float] = {}
+        drifts: Dict[str, float] = {}
+        for t, count in topic_counts.items():
+            mean_t_ndcg = topic_ndcg_sum[t] / count
+            gaps[t] = max(0.0, (1.0 - mean_t_ndcg) * math.log(1.0 + count))
+            drifts[t] = count / n
+        return gaps, drifts
+
     def evaluate_telemetry(self, telemetry_id: str) -> FeedbackTelemetry:
         """Computes composite evaluation metrics, knowledge gaps, and topic drift."""
         if not self._query_logs:
-            # Baseline default telemetry
             return FeedbackTelemetry(
                 telemetry_id=telemetry_id,
                 ndcg_at_k=0.85,
@@ -54,37 +81,15 @@ class FeedbackEvaluator(IntelligencePhaseProtocol):
                 knowledge_gaps={},
             )
 
-        total_ndcg = sum(q["ndcg"] for q in self._query_logs)
-        avg_ndcg = total_ndcg / len(self._query_logs)
-
-        zero_hits: List[str] = []
-        topic_counts: Dict[str, int] = {}
-        topic_ndcg_sum: Dict[str, float] = {}
-
-        for q in self._query_logs:
-            t = q["topic"]
-            topic_counts[t] = topic_counts.get(t, 0) + 1
-            topic_ndcg_sum[t] = topic_ndcg_sum.get(t, 0.0) + q["ndcg"]
-            if q["hits"] == 0:
-                zero_hits.append(q["query"])
-
-        # Knowledge Gap calculation: G(t) = sum (1 - NDCG) * ln(1 + count)
-        knowledge_gaps: Dict[str, float] = {}
-        for t, count in topic_counts.items():
-            mean_t_ndcg = topic_ndcg_sum[t] / count
-            gap = (1.0 - mean_t_ndcg) * math.log(1.0 + count)
-            knowledge_gaps[t] = max(0.0, gap)
-
-        # Topic Drift (burstiness score)
-        topic_drifts: Dict[str, float] = {}
-        for t, count in topic_counts.items():
-            topic_drifts[t] = count / len(self._query_logs)
+        avg_ndcg = sum(q["ndcg"] for q in self._query_logs) / len(self._query_logs)
+        zero_hits, topic_counts, topic_ndcg_sum = self._aggregate_query_stats()
+        knowledge_gaps, topic_drifts = self._compute_gaps_and_drifts(topic_counts, topic_ndcg_sum)
 
         return FeedbackTelemetry(
             telemetry_id=telemetry_id,
             ndcg_at_k=avg_ndcg,
             mean_average_precision=avg_ndcg * 0.95,
-            zero_hit_queries=sorted(list(set(zero_hits))),
+            zero_hit_queries=sorted(set(zero_hits)),
             frequent_topics=topic_counts,
             topic_drift_scores=topic_drifts,
             knowledge_gaps=knowledge_gaps,

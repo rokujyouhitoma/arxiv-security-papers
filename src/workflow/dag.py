@@ -32,36 +32,41 @@ class DAGWorkflowEngine:
             task_id=task_id, handler=handler, dependencies=deps
         )
 
+    def _add_node_edges(
+        self, node_id: str, node: TaskNode, adj_list: Dict[str, List[str]], in_degree: Dict[str, int]
+    ) -> None:
+        for dep in node.dependencies:
+            if dep not in self.nodes:
+                raise ValueError(f"Task '{node_id}' depends on undefined task '{dep}'")
+            adj_list[dep].append(node_id)
+            in_degree[node_id] += 1
+
     def _build_adj_and_in_degree(self) -> tuple[Dict[str, List[str]], Dict[str, int]]:
         """Builds adjacency list and in-degree mapping for DAG."""
         in_degree = {n_id: 0 for n_id in self.nodes}
         adj_list: Dict[str, List[str]] = {n_id: [] for n_id in self.nodes}
-
         for node_id, node in self.nodes.items():
-            for dep in node.dependencies:
-                if dep not in self.nodes:
-                    raise ValueError(
-                        f"Task '{node_id}' depends on undefined task '{dep}'"
-                    )
-                adj_list[dep].append(node_id)
-                in_degree[node_id] += 1
+            self._add_node_edges(node_id, node, adj_list, in_degree)
         return adj_list, in_degree
+
+    def _process_queue_node(
+        self, curr: str, adj_list: Dict[str, List[str]], in_degree: Dict[str, int], queue: deque[str]
+    ) -> None:
+        for neighbor in adj_list[curr]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
 
     def _topological_sort(self) -> List[str]:
         """Calculates topological execution order using Kahn's algorithm."""
         adj_list, in_degree = self._build_adj_and_in_degree()
-        queue: deque[str] = deque(
-            [node_id for node_id, deg in in_degree.items() if deg == 0]
-        )
+        queue: deque[str] = deque([node_id for node_id, deg in in_degree.items() if deg == 0])
         ordered: List[str] = []
 
         while queue:
             curr = queue.popleft()
             ordered.append(curr)
-            for neighbor in adj_list[curr]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
+            self._process_queue_node(curr, adj_list, in_degree, queue)
 
         if len(ordered) != len(self.nodes):
             raise ValueError("Cycle detected in DAG workflow definition")

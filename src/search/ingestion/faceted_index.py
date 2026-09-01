@@ -18,6 +18,13 @@ class FacetedIndex:
         self.tags: Dict[str, Set[str]] = defaultdict(set)
         self.domains: Dict[str, Set[str]] = defaultdict(set)
 
+    def _add_single_tag(self, tag: str, doc_id: str) -> None:
+        t_clean = tag.strip().lower()
+        if t_clean.startswith("cs."):
+            self.categories[t_clean].add(doc_id)
+        else:
+            self.tags[t_clean].add(doc_id)
+
     def add_document(
         self,
         doc_id: str,
@@ -26,18 +33,29 @@ class FacetedIndex:
         annotated_keywords: List[str],
     ) -> None:
         if published_date and len(published_date) >= 4:
-            year = published_date[:4]
-            self.years[year].add(doc_id)
+            self.years[published_date[:4]].add(doc_id)
 
         for t in tags:
-            t_clean = t.strip().lower()
-            if t_clean.startswith("cs."):
-                self.categories[t_clean].add(doc_id)
-            else:
-                self.tags[t_clean].add(doc_id)
+            self._add_single_tag(t, doc_id)
 
         for kw in annotated_keywords:
             self.domains[kw.strip().lower()].add(doc_id)
+
+    def _intersect_candidates(
+        self, candidates: Optional[Set[str]], target_docs: Set[str]
+    ) -> Set[str]:
+        if candidates is None:
+            return target_docs
+        return candidates & target_docs
+
+    def _filter_facet(
+        self, val: Optional[str], mapping: Dict[str, Set[str]], candidates: Optional[Set[str]]
+    ) -> Optional[Set[str]]:
+        if not val:
+            return candidates
+        clean_val = val.strip().lower()
+        target_docs = mapping.get(clean_val, set())
+        return self._intersect_candidates(candidates, target_docs)
 
     def filter(
         self,
@@ -47,23 +65,11 @@ class FacetedIndex:
         domain: Optional[str] = None,
     ) -> Optional[Set[str]]:
         candidates: Optional[Set[str]] = None
-
         if year and year in self.years:
             candidates = set(self.years[year])
 
-        if category:
-            cat_clean = category.strip().lower()
-            cat_docs = self.categories.get(cat_clean, set())
-            candidates = cat_docs if candidates is None else (candidates & cat_docs)
-
-        if tag:
-            tag_clean = tag.strip().lower()
-            tag_docs = self.tags.get(tag_clean, set())
-            candidates = tag_docs if candidates is None else (candidates & tag_docs)
-
-        if domain:
-            dom_clean = domain.strip().lower()
-            dom_docs = self.domains.get(dom_clean, set())
-            candidates = dom_docs if candidates is None else (candidates & dom_docs)
+        candidates = self._filter_facet(category, self.categories, candidates)
+        candidates = self._filter_facet(tag, self.tags, candidates)
+        candidates = self._filter_facet(domain, self.domains, candidates)
 
         return candidates

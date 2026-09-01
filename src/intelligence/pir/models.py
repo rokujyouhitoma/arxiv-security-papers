@@ -43,13 +43,19 @@ class TopicWeightVector:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
 
+    def _normalize_weighted(self, total: float) -> None:
+        for k in list(self.weights.keys()):
+            self.weights[k] = max(0.0, self.weights[k]) / total
+
+    def _normalize_equal(self) -> None:
+        equal_val = 1.0 / len(self.weights)
+        for k in list(self.weights.keys()):
+            self.weights[k] = equal_val
+
     def normalize(self) -> None:
         """Normalizes all positive weights to sum to 1.0."""
         total = sum(max(0.0, w) for w in self.weights.values())
         if total > 0.0:
-            for k in list(self.weights.keys()):
-                self.weights[k] = max(0.0, self.weights[k]) / total
+            self._normalize_weighted(total)
         elif self.weights:
-            equal_val = 1.0 / len(self.weights)
-            for k in list(self.weights.keys()):
-                self.weights[k] = equal_val
+            self._normalize_equal()

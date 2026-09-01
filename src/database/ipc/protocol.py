@@ -6,7 +6,8 @@ for vector storage, ANN search, and lifecycle management.
 """
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
 
 from ..index.embedding import DeterministicEmbedding
 from ..index.index import HNSWIndex
@@ -88,23 +89,18 @@ class VectorDBProtocolHandler:
         self.index.build_from_storage(vectors)
         return {"count": len(vectors), "status": "indexed"}
 
-    def _op_search_knn(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _resolve_query_vector(self, params: Dict[str, Any]) -> Sequence[float]:
         vector = params.get("vector")
         if vector:
-            vector = self.embedding.normalize(vector)
-        elif "text" in params:
-            vector = self.embedding.embed_text(params["text"])
+            return self.embedding.normalize(vector)
+        if "text" in params:
+            return self.embedding.embed_text(params["text"])
+        raise VectorDBProtocolError("Missing 'vector' or 'text' query parameter")
 
-        if not vector:
-            raise VectorDBProtocolError("Missing 'vector' or 'text' query parameter")
-
-        top_k = int(params.get("top_k", 10))
-        ef_search = params.get("ef_search")
-        ef = int(ef_search) if ef_search is not None else None
-
-        matches = self.index.search(vector, top_k=top_k, ef_search=ef)
+    def _format_knn_matches(
+        self, matches: List[Tuple[int, float]]
+    ) -> List[Dict[str, Any]]:
         match_results: List[Dict[str, Any]] = []
-
         for idx, sim in matches:
             if idx < len(self.storage.metadata):
                 meta = self.storage.get_metadata(idx)
@@ -116,6 +112,15 @@ class VectorDBProtocolHandler:
                         "metadata": meta,
                     }
                 )
+        return match_results
+
+    def _op_search_knn(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        vector = self._resolve_query_vector(params)
+        top_k = int(params.get("top_k", 10))
+        ef_search = params.get("ef_search")
+        ef = int(ef_search) if ef_search is not None else None
+        matches = self.index.search(vector, top_k=top_k, ef_search=ef)
+        match_results = self._format_knn_matches(matches)
         return {"total_matches": len(match_results), "matches": match_results}
 
     def _op_get_by_id(self, params: Dict[str, Any]) -> Dict[str, Any]:

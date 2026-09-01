@@ -53,20 +53,32 @@ class QueryPlanner:
     """
 
     @classmethod
+    def _get_clause_col_op_val(cls, clause: Dict[str, Any]) -> tuple:
+        col = str(clause.get("field") or clause.get("column") or "")
+        op = str(clause.get("op") or clause.get("operator") or "=")
+        val = clause.get("value")
+        return col, op, val
+
+    @classmethod
     def _eval_clause_selectivity(
         cls,
         clause: Dict[str, Any],
         stats: TableStats,
         available_indexes: Dict[str, str],
-    ) -> tuple[Optional[str], Optional[str], Optional[float]]:
-        col = str(clause.get("field") or clause.get("column") or "")
-        op = str(clause.get("op") or clause.get("operator") or "=")
-        val = clause.get("value")
-
+    ) -> tuple:
+        col, op, val = cls._get_clause_col_op_val(clause)
         if col in available_indexes and col in stats.columns:
             sel = stats.columns[col].estimate_selectivity(op, val)
             return available_indexes[col], col, sel
         return None, None, None
+
+    @classmethod
+    def _is_better_selectivity(
+        cls, sel: Optional[float], min_selectivity: float
+    ) -> bool:
+        if sel is None:
+            return False
+        return sel < min_selectivity
 
     @classmethod
     def _find_best_indexed_column(
@@ -74,20 +86,21 @@ class QueryPlanner:
         where_clauses: List[Dict[str, Any]],
         stats: Optional[TableStats],
         available_indexes: Dict[str, str],
-    ) -> tuple[Optional[str], Optional[str], float]:
+    ) -> tuple:
         best_index: Optional[str] = None
         best_col: Optional[str] = None
         min_selectivity = 1.0
-
-        if not stats or not where_clauses:
+        if not stats:
+            return None, None, min_selectivity
+        if not where_clauses:
             return None, None, min_selectivity
 
         for clause in where_clauses:
             idx_name, col_name, sel = cls._eval_clause_selectivity(
                 clause, stats, available_indexes
             )
-            if sel is not None and sel < min_selectivity:
-                min_selectivity = sel
+            if cls._is_better_selectivity(sel, min_selectivity):
+                min_selectivity = sel  # type: ignore[assignment]
                 best_col = col_name
                 best_index = idx_name
 

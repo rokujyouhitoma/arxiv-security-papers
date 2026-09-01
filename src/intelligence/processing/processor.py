@@ -26,33 +26,31 @@ class ProcessingCoordinator(IntelligencePhaseProtocol):
     def phase_type(self) -> IntelligencePhase:
         return IntelligencePhase.PROCESSING
 
-    def process_record(self, raw: Dict[str, Any]) -> Dict[str, Any]:
-        """Transforms a raw record into structured OKF v0.2 format with Admiralty rating."""
-        rec_id = str(raw.get("id", "doc_unknown"))
-        title = str(raw.get("title", f"Document {rec_id}"))
-        topic = str(raw.get("topic", "general"))
-        text = str(raw.get("raw_text", raw.get("summary", "")))
+    @staticmethod
+    def _has_keyword(text: str, lower: str, keyword: str) -> bool:
+        return keyword in text.lower() or keyword in lower
 
-        # 1. Admiralty Credibility Rating
-        rating = self.credibility_engine.rate_record(raw)
-
-        # 2. Ontology & Domain Tags
+    def _build_tags(self, title: str, text: str, topic: str) -> List[str]:
+        title_l = title.lower()
+        text_l = text.lower()
         tags = [topic]
-        if "security" in title.lower() or "security" in text.lower():
+        if self._has_keyword(title_l, text_l, "security"):
             tags.append("security")
-        if "zero trust" in title.lower() or "zero trust" in text.lower():
+        if self._has_keyword(title_l, text_l, "zero trust"):
             tags.append("zero-trust")
-        if "ai" in title.lower() or "model" in text.lower():
+        if "ai" in title_l or "model" in text_l:
             tags.append("artificial-intelligence")
+        return sorted(set(tags))
 
-        okf_yaml = (
+    def _build_okf_yaml(self, rec_id: str, title: str, topic: str, text: str, raw: Dict[str, Any], rating: Any, tags: List[str]) -> str:
+        return (
             "---\n"
             f'type: "intelligence-document"\n'
             f'title: "{title}"\n'
             f'description: "Processed intelligence record for {topic}"\n'
             f'resource: "https://intelligence.internal/records/{rec_id}"\n'
             f"tags:\n"
-            + "".join([f'  - "{t}"\n' for t in sorted(list(set(tags)))])
+            + "".join([f'  - "{t}"\n' for t in tags])
             + f'timestamp: "{datetime.now(timezone.utc).isoformat()}"\n'
             f"provenance:\n"
             f'  origin: "{raw.get("source", "orchestrator")}"\n'
@@ -67,11 +65,22 @@ class ProcessingCoordinator(IntelligencePhaseProtocol):
             f"{text}\n"
         )
 
+    def process_record(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Transforms a raw record into structured OKF v0.2 format with Admiralty rating."""
+        rec_id = str(raw.get("id", "doc_unknown"))
+        title = str(raw.get("title", f"Document {rec_id}"))
+        topic = str(raw.get("topic", "general"))
+        text = str(raw.get("raw_text", raw.get("summary", "")))
+
+        rating = self.credibility_engine.rate_record(raw)
+        tags = self._build_tags(title, text, topic)
+        okf_yaml = self._build_okf_yaml(rec_id, title, topic, text, raw, rating, tags)
+
         return {
             "id": rec_id,
             "title": title,
             "topic": topic,
-            "tags": sorted(list(set(tags))),
+            "tags": tags,
             "admiralty_code": rating.code,
             "admiralty_score": rating.score,
             "admiralty_justification": rating.justification,

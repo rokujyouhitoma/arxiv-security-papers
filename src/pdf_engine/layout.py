@@ -11,6 +11,14 @@ def dehyphenate_text(text: str) -> str:
     return re.sub(r"([A-Za-z]{2,})-\n([A-Za-z]{2,})", r"\1\2", text)
 
 
+def _is_valid_gutter(
+    best_len: int, best_center: Optional[float], bin_width: float, mid_x: float, page_width: float
+) -> bool:
+    if best_len * bin_width < 12.0 or best_center is None:
+        return False
+    return abs(best_center - mid_x) < page_width * 0.12
+
+
 def detect_two_column_gutter(
     glyphs: List[GlyphBox], page_width: float
 ) -> Optional[float]:
@@ -29,9 +37,8 @@ def detect_two_column_gutter(
         histogram, min_center_x, bin_width, num_bins
     )
 
-    if best_len * bin_width >= 12.0 and best_center is not None:
-        if abs(best_center - mid_x) < page_width * 0.12:
-            return best_center
+    if _is_valid_gutter(best_len, best_center, bin_width, mid_x, page_width):
+        return best_center
     return None
 
 
@@ -109,6 +116,12 @@ def _finalize_line(line: TextLine) -> None:
     line.bbox = (min_x, min_y, max_x, max_y)
 
 
+def _should_insert_space(prev_g: GlyphBox, cur_g: GlyphBox) -> bool:
+    gap = cur_g.x - (prev_g.x + prev_g.width)
+    space_threshold = max(prev_g.font_size, cur_g.font_size) * 0.2
+    return gap >= space_threshold and not prev_g.text.endswith(" ") and not cur_g.text.startswith(" ")
+
+
 def render_line_text(line: TextLine) -> str:
     """Renders text line adding spaces between separated glyph clusters."""
     if not line.glyphs:
@@ -118,14 +131,7 @@ def render_line_text(line: TextLine) -> str:
     for i in range(1, len(line.glyphs)):
         prev_g = line.glyphs[i - 1]
         cur_g = line.glyphs[i]
-        gap = cur_g.x - (prev_g.x + prev_g.width)
-
-        space_threshold = max(prev_g.font_size, cur_g.font_size) * 0.2
-        if (
-            gap >= space_threshold
-            and not prev_g.text.endswith(" ")
-            and not cur_g.text.startswith(" ")
-        ):
+        if _should_insert_space(prev_g, cur_g):
             tokens.append(" ")
         tokens.append(cur_g.text)
 
@@ -153,12 +159,15 @@ class SpatialLayoutEngine:
     @classmethod
     def _render_single_column(cls, glyphs: List[GlyphBox]) -> str:
         lines = cluster_into_lines(glyphs)
-        out: List[str] = []
-        for line in lines:
-            t = render_line_text(line)
-            if t:
-                out.append(t)
+        out = [t for line in lines if (t := render_line_text(line))]
         return "\n".join(out)
+
+    @classmethod
+    def _render_group_text(cls, group: List[TextLine]) -> Optional[str]:
+        if not group:
+            return None
+        rendered = "\n".join(t for line in group if (t := render_line_text(line)))
+        return rendered if rendered else None
 
     @classmethod
     def _render_two_column_flow(
@@ -169,18 +178,30 @@ class SpatialLayoutEngine:
 
         sections: List[str] = []
         for group in (header, left, right, footer):
-            if group:
-                rendered = "\n".join(
-                    render_line_text(line) for line in group if render_line_text(line)
-                )
-                if rendered:
-                    sections.append(rendered)
+            res = cls._render_group_text(group)
+            if res:
+                sections.append(res)
 
         return "\n\n".join(sections)
 
     @staticmethod
+    def _classify_line_column(
+        line: TextLine, gutter_x: float, page_height: float,
+        header: List[TextLine], left: List[TextLine], right: List[TextLine], footer: List[TextLine]
+    ) -> None:
+        if line.min_x < gutter_x - 30 and line.max_x > gutter_x + 30:
+            if line.min_y > page_height * 0.5:
+                header.append(line)
+            else:
+                footer.append(line)
+        elif line.max_x <= gutter_x + 10:
+            left.append(line)
+        else:
+            right.append(line)
+
+    @classmethod
     def _partition_lines(
-        lines: List[TextLine], gutter_x: float, page_height: float
+        cls, lines: List[TextLine], gutter_x: float, page_height: float
     ) -> Tuple[List[TextLine], List[TextLine], List[TextLine], List[TextLine]]:
         header_lines: List[TextLine] = []
         left_lines: List[TextLine] = []
@@ -188,14 +209,8 @@ class SpatialLayoutEngine:
         footer_lines: List[TextLine] = []
 
         for line in lines:
-            if line.min_x < gutter_x - 30 and line.max_x > gutter_x + 30:
-                if line.min_y > page_height * 0.5:
-                    header_lines.append(line)
-                else:
-                    footer_lines.append(line)
-            elif line.max_x <= gutter_x + 10:
-                left_lines.append(line)
-            else:
-                right_lines.append(line)
+            cls._classify_line_column(
+                line, gutter_x, page_height, header_lines, left_lines, right_lines, footer_lines
+            )
 
         return header_lines, left_lines, right_lines, footer_lines

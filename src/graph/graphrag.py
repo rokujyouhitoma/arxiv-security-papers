@@ -8,7 +8,7 @@ to produce grounded semantic contexts with zero hallucination.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .engine import PropertyGraphEngine
 from .structures import Vertex
@@ -26,79 +26,68 @@ class GraphRAGPipeline:
     def __init__(self, graph_engine: PropertyGraphEngine) -> None:
         self.graph_engine = graph_engine
 
-    def expand_context(
-        self,
-        seed_paper_ids: List[str],
-        max_hops: int = 2,
-        allowed_predicates: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Expands subgraph around seed papers up to max_hops.
-        Returns matched vertices, edges, semantic triples, and formatted markdown grounding context.
-        """
-        g = self.graph_engine
-        visited_v_ids: Set[str] = set()
-        frontier_ids: Set[str] = set()
-
+    def _init_frontier(self, seed_paper_ids: List[str]) -> Tuple[Set[str], Set[str]]:
+        """Initializes visited and frontier vertex IDs from seed paper IDs."""
+        visited: Set[str] = set()
+        frontier: Set[str] = set()
         for pid in seed_paper_ids:
-            canonical_pid = pid if pid.startswith("Paper:") else f"Paper:{pid}"
-            if g.get_vertex(canonical_pid) is not None:
-                frontier_ids.add(canonical_pid)
-                visited_v_ids.add(canonical_pid)
+            canonical = pid if pid.startswith("Paper:") else f"Paper:{pid}"
+            if self.graph_engine.get_vertex(canonical) is not None:
+                frontier.add(canonical)
+                visited.add(canonical)
+        return visited, frontier
 
-        matched_triples: List[Dict[str, Any]] = []
-        matched_edges: List[Dict[str, Any]] = []
+    def _process_single_edge(
+        self,
+        e: Any,
+        is_out: bool,
+        allowed_predicates: Optional[List[str]],
+        visited_v_ids: Set[str],
+        matched_edges: List[Dict[str, Any]],
+        matched_triples: List[Dict[str, Any]],
+        next_level: Set[str],
+    ) -> None:
+        """Processes a single edge for subgraph level traversal."""
+        if allowed_predicates and e.label not in allowed_predicates:
+            return
+        matched_edges.append(e.to_dict())
+        matched_triples.append(
+            {
+                "subject": e.src_id,
+                "predicate": e.label,
+                "object": e.dst_id,
+                "weight": e.weight,
+            }
+        )
+        target_vid = e.dst_id if is_out else e.src_id
+        if target_vid not in visited_v_ids:
+            visited_v_ids.add(target_vid)
+            next_level.add(target_vid)
 
-        current_level = set(frontier_ids)
-        for _ in range(max_hops):
-            if not current_level:
-                break
-            next_level: Set[str] = set()
-            for vid in current_level:
-                # Outgoing edges
-                for e in g.get_out_edges(vid):
-                    if allowed_predicates and e.label not in allowed_predicates:
-                        continue
-                    matched_edges.append(e.to_dict())
-                    matched_triples.append(
-                        {
-                            "subject": e.src_id,
-                            "predicate": e.label,
-                            "object": e.dst_id,
-                            "weight": e.weight,
-                        }
-                    )
-                    if e.dst_id not in visited_v_ids:
-                        visited_v_ids.add(e.dst_id)
-                        next_level.add(e.dst_id)
+    def _traverse_level_edges(
+        self,
+        current_level: Set[str],
+        allowed_predicates: Optional[List[str]],
+        visited_v_ids: Set[str],
+        matched_edges: List[Dict[str, Any]],
+        matched_triples: List[Dict[str, Any]],
+    ) -> Set[str]:
+        """Traverses outgoing and incoming edges for the current level."""
+        g = self.graph_engine
+        next_level: Set[str] = set()
+        for vid in current_level:
+            for e in g.get_out_edges(vid):
+                self._process_single_edge(
+                    e, True, allowed_predicates, visited_v_ids, matched_edges, matched_triples, next_level
+                )
+            for e in g.get_in_edges(vid):
+                self._process_single_edge(
+                    e, False, allowed_predicates, visited_v_ids, matched_edges, matched_triples, next_level
+                )
+        return next_level
 
-                # Incoming edges
-                for e in g.get_in_edges(vid):
-                    if allowed_predicates and e.label not in allowed_predicates:
-                        continue
-                    matched_edges.append(e.to_dict())
-                    matched_triples.append(
-                        {
-                            "subject": e.src_id,
-                            "predicate": e.label,
-                            "object": e.dst_id,
-                            "weight": e.weight,
-                        }
-                    )
-                    if e.src_id not in visited_v_ids:
-                        visited_v_ids.add(e.src_id)
-                        next_level.add(e.src_id)
-
-            current_level = next_level
-
-        # Collect Vertices
-        vertices: List[Vertex] = []
-        for vid in visited_v_ids:
-            v = g.get_vertex(vid)
-            if v is not None:
-                vertices.append(v)
-
-        # Deduplicate triples
+    def _deduplicate_triples(self, matched_triples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Deduplicates matched graph triples."""
         unique_triples: List[Dict[str, Any]] = []
         seen_t: Set[str] = set()
         for t in matched_triples:
@@ -106,18 +95,69 @@ class GraphRAGPipeline:
             if key not in seen_t:
                 seen_t.add(key)
                 unique_triples.append(t)
+        return unique_triples
 
-        # Generate Grounded Causal Reasoning Markdown Text
-        grounding_md = self._format_grounding_markdown(vertices, unique_triples)
+    def _run_expansion_hops(
+        self,
+        max_hops: int,
+        current_level: Set[str],
+        allowed_predicates: Optional[List[str]],
+        visited_v_ids: Set[str],
+        matched_edges: List[Dict[str, Any]],
+        matched_triples: List[Dict[str, Any]],
+    ) -> None:
+        """Iteratively traverses expansion hops up to max_hops."""
+        for _ in range(max_hops):
+            if not current_level:
+                break
+            current_level = self._traverse_level_edges(
+                current_level,
+                allowed_predicates,
+                visited_v_ids,
+                matched_edges,
+                matched_triples,
+            )
+
+    def expand_context(
+        self,
+        seed_paper_ids: List[str],
+        max_hops: int = 2,
+        allowed_predicates: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Expands subgraph around seed papers up to max_hops."""
+        visited_v_ids, current_level = self._init_frontier(seed_paper_ids)
+        matched_triples: List[Dict[str, Any]] = []
+        matched_edges: List[Dict[str, Any]] = []
+
+        self._run_expansion_hops(
+            max_hops, current_level, allowed_predicates, visited_v_ids, matched_edges, matched_triples
+        )
+
+        valid_vertices = [
+            v for v in (self.graph_engine.get_vertex(vid) for vid in visited_v_ids) if v is not None
+        ]
+        unique_triples = self._deduplicate_triples(matched_triples)
 
         return {
             "seed_count": len(seed_paper_ids),
-            "expanded_vertex_count": len(vertices),
+            "expanded_vertex_count": len(valid_vertices),
             "expanded_triple_count": len(unique_triples),
-            "vertices": [v.to_dict() for v in vertices],
+            "vertices": [v.to_dict() for v in valid_vertices],
             "triples": unique_triples,
-            "grounding_context_markdown": grounding_md,
+            "grounding_context_markdown": self._format_grounding_markdown(
+                valid_vertices, unique_triples
+            ),
         }
+
+    def _format_subject_label(self, subj: str) -> str:
+        """Formats subject prefix with icon."""
+        label = (
+            subj.replace("Paper:", "📄 Paper [")
+            .replace("AttackTechnique:", "⚔️ Attack [")
+            .replace("DefenseMechanism:", "🛡️ Defense [")
+            .replace("Vulnerability:", "⚠️ Vuln [")
+        )
+        return f"{label}{subj}]" if label.endswith("[") else f"{label}]"
 
     def _format_grounding_markdown(
         self, vertices: List[Vertex], triples: List[Dict[str, Any]]
@@ -126,112 +166,138 @@ class GraphRAGPipeline:
         if not triples:
             return "No verified causal security relationships found in knowledge graph."
 
-        lines = ["### 🛡️ Verified Security Knowledge Graph Grounding Context"]
-        lines.append(
-            f"*Discovered {len(vertices)} entities and {len(triples)} verified factual relationships:*\n"
-        )
-
-        # Group relationships by subject
+        lines = [
+            "### 🛡️ Verified Security Knowledge Graph Grounding Context",
+            f"*Discovered {len(vertices)} entities and {len(triples)} verified factual relationships:*\n",
+        ]
         grouped: Dict[str, List[Dict[str, Any]]] = {}
         for t in triples:
             grouped.setdefault(t["subject"], []).append(t)
 
         for subj, t_list in sorted(grouped.items()):
-            subj_clean = (
-                subj.replace("Paper:", "📄 Paper [")
-                .replace("AttackTechnique:", "⚔️ Attack [")
-                .replace("DefenseMechanism:", "🛡️ Defense [")
-                .replace("Vulnerability:", "⚠️ Vuln [")
-            )
-            if subj_clean.endswith("["):
-                subj_clean += subj + "]"
-            else:
-                subj_clean += "]"
-
-            lines.append(f"- **{subj_clean}**:")
+            lines.append(f"- **{self._format_subject_label(subj)}**:")
             for t in t_list:
-                pred = t["predicate"]
-                obj = t["object"]
-                lines.append(f"  • `--[{pred}]-->` `{obj}`")
+                lines.append(f"  • `--[{t['predicate']}]-->` `{t['object']}`")
 
         return "\n".join(lines)
+
+    def _props_contain(self, props: Optional[Dict[str, Any]], kw: str) -> bool:
+        """Helper to check if properties contain keyword."""
+        return bool(props and any(kw in str(val).lower() for val in props.values()))
+
+    def _is_threat_match(self, vid: str, v: Vertex, kw_lower: str) -> bool:
+        """Checks if a threat vertex matches search keyword."""
+        is_threat = v.label in ("AttackTechnique", "Vulnerability") or vid.startswith(("AttackTechnique:", "Vulnerability:"))
+        if not is_threat:
+            return False
+        return kw_lower in vid.lower() or kw_lower in v.label.lower() or self._props_contain(v.properties, kw_lower)
+
+    def _find_matching_threat_vids(self, kw_lower: str) -> List[str]:
+        """Finds attack or vulnerability vertex IDs matching keyword."""
+        return [
+            vid
+            for vid, v in self.graph_engine._vertices.items()
+            if self._is_threat_match(vid, v, kw_lower)
+        ]
+
+    def _collect_proposing_papers(self, defense_vid: str) -> List[Dict[str, Any]]:
+        """Collects papers that propose a given defense mechanism."""
+        papers: List[Dict[str, Any]] = []
+        for pe in self.graph_engine.get_in_edges(defense_vid):
+            if pe.label in ("PROPOSES", "ANALYZES") or pe.src_id.startswith("Paper:"):
+                paper_v = self.graph_engine.get_vertex(pe.src_id)
+                if paper_v:
+                    papers.append(paper_v.to_dict())
+        return papers
+
+    def _build_threat_defense_chain(self, target_vid: str) -> List[Dict[str, Any]]:
+        """Builds defense chains for a specific target threat vertex."""
+        g = self.graph_engine
+        results: List[Dict[str, Any]] = []
+        target_v = g.get_vertex(target_vid)
+        for e in g.get_in_edges(target_vid):
+            if e.label not in ("MITIGATES", "DEFENDS"):
+                continue
+            defense_v = g.get_vertex(e.src_id)
+            papers = self._collect_proposing_papers(e.src_id)
+            results.append(
+                {
+                    "target_threat": (
+                        target_v.to_dict() if target_v else {"id": target_vid}
+                    ),
+                    "mitigation_relation": e.label,
+                    "defense_mechanism": (
+                        defense_v.to_dict() if defense_v else {"id": e.src_id}
+                    ),
+                    "effective_papers": papers,
+                }
+            )
+        return results
 
     def find_defense_chains(
         self, technique_or_vuln_keyword: str
     ) -> List[Dict[str, Any]]:
-        """
-        Finds attack-defense causal chains:
-        (Attack/Vuln) <--[MITIGATES/DEFENDS]-- (Defense) <--[PROPOSES]-- (Paper)
-        """
-        g = self.graph_engine
+        """Finds attack-defense causal chains."""
         results: List[Dict[str, Any]] = []
-        kw_lower = technique_or_vuln_keyword.lower()
-
-        # Find matching attack or vulnerability nodes
-        target_vids: List[str] = []
-        for vid, v in g._vertices.items():
-            if v.label not in ("AttackTechnique", "Vulnerability") and not (
-                vid.startswith("AttackTechnique:") or vid.startswith("Vulnerability:")
-            ):
-                continue
-            if kw_lower in vid.lower() or kw_lower in v.label.lower():
-                target_vids.append(vid)
-            elif v.properties and any(
-                kw_lower in str(val).lower() for val in v.properties.values()
-            ):
-                target_vids.append(vid)
-
-        for target_vid in target_vids:
-            target_v = g.get_vertex(target_vid)
-            # Incoming edges: Defense -> MITIGATES -> Target
-            in_edges = g.get_in_edges(target_vid)
-            for e in in_edges:
-                if e.label in ("MITIGATES", "DEFENDS"):
-                    defense_vid = e.src_id
-                    defense_v = g.get_vertex(defense_vid)
-                    # Find papers proposing this defense
-                    defense_in_edges = g.get_in_edges(defense_vid)
-                    proposing_papers: List[Dict[str, Any]] = []
-                    for pe in defense_in_edges:
-                        if pe.label in ("PROPOSES", "ANALYZES") or pe.src_id.startswith(
-                            "Paper:"
-                        ):
-                            paper_v = g.get_vertex(pe.src_id)
-                            if paper_v:
-                                proposing_papers.append(paper_v.to_dict())
-
-                    results.append(
-                        {
-                            "target_threat": (
-                                target_v.to_dict() if target_v else {"id": target_vid}
-                            ),
-                            "mitigation_relation": e.label,
-                            "defense_mechanism": (
-                                defense_v.to_dict()
-                                if defense_v
-                                else {"id": defense_vid}
-                            ),
-                            "effective_papers": proposing_papers,
-                        }
-                    )
+        for target_vid in self._find_matching_threat_vids(technique_or_vuln_keyword.lower()):
+            results.extend(self._build_threat_defense_chain(target_vid))
         return results
+
+    def _resolve_root_vertex(self, entity_id: str) -> Optional[Vertex]:
+        """Resolves root vertex by exact or substring match."""
+        g = self.graph_engine
+        v = g.get_vertex(entity_id)
+        if v:
+            return v
+        for vid in g._vertices.keys():
+            if entity_id.lower() in vid.lower():
+                return g.get_vertex(vid)
+        return None
+
+    def _explore_out_edge(
+        self,
+        e: Any,
+        depth: int,
+        visited: Dict[str, int],
+        queue: List[Tuple[str, int]],
+        impacted: List[Dict[str, Any]],
+    ) -> None:
+        """Explores a single out edge in blast radius BFS."""
+        if e.dst_id in visited:
+            return
+        visited[e.dst_id] = depth + 1
+        queue.append((e.dst_id, depth + 1))
+        nxt_v = self.graph_engine.get_vertex(e.dst_id)
+        impacted.append(
+            {
+                "depth": depth + 1,
+                "relation": e.label,
+                "entity": nxt_v.to_dict() if nxt_v else {"id": e.dst_id},
+            }
+        )
+
+    def _explore_blast_queue(
+        self, root_v: Vertex, max_depth: int
+    ) -> List[Dict[str, Any]]:
+        """BFS exploration of blast radius graph."""
+        visited: Dict[str, int] = {root_v.id: 0}
+        queue = [(root_v.id, 0)]
+        impacted: List[Dict[str, Any]] = []
+
+        while queue:
+            curr_id, depth = queue.pop(0)
+            if depth >= max_depth:
+                continue
+
+            for e in self.graph_engine.get_out_edges(curr_id):
+                self._explore_out_edge(e, depth, visited, queue, impacted)
+        return impacted
 
     def calculate_blast_radius(
         self, entity_id: str, max_depth: int = 3
     ) -> Dict[str, Any]:
-        """
-        Calculates blast radius from a vulnerable asset or attack technique:
-        Traverses reachable downstream assets, systems, and exploited vectors.
-        """
-        g = self.graph_engine
-        canonical_id = entity_id
-        if not g.get_vertex(canonical_id):
-            for vid in g._vertices.keys():
-                if entity_id.lower() in vid.lower():
-                    canonical_id = vid
-                    break
-
-        root_v = g.get_vertex(canonical_id)
+        """Calculates blast radius from a vulnerable asset or attack technique."""
+        root_v = self._resolve_root_vertex(entity_id)
         if not root_v:
             return {
                 "root_entity": entity_id,
@@ -239,72 +305,53 @@ class GraphRAGPipeline:
                 "impacted_entities": [],
             }
 
-        visited: Dict[str, int] = {canonical_id: 0}
-        queue = [(canonical_id, 0)]
-        impacted_list: List[Dict[str, Any]] = []
-
-        while queue:
-            curr_id, depth = queue.pop(0)
-            if depth >= max_depth:
-                continue
-
-            for e in g.get_out_edges(curr_id):
-                nxt_id = e.dst_id
-                if nxt_id not in visited:
-                    visited[nxt_id] = depth + 1
-                    queue.append((nxt_id, depth + 1))
-                    nxt_v = g.get_vertex(nxt_id)
-                    impacted_list.append(
-                        {
-                            "depth": depth + 1,
-                            "relation": e.label,
-                            "entity": nxt_v.to_dict() if nxt_v else {"id": nxt_id},
-                        }
-                    )
-
+        impacted = self._explore_blast_queue(root_v, max_depth)
         return {
             "root_entity": root_v.to_dict(),
-            "blast_radius_count": len(impacted_list),
+            "blast_radius_count": len(impacted),
             "max_depth_explored": max_depth,
-            "impacted_entities": impacted_list,
+            "impacted_entities": impacted,
         }
+
+    def _is_paper_match(self, vid: str, v: Vertex, q: str) -> bool:
+        """Checks if paper vertex matches query text."""
+        title = (v.properties or {}).get("title", "")
+        desc = (v.properties or {}).get("description", "")
+        return q in vid.lower() or q in str(title).lower() or q in str(desc).lower()
+
+    def _collect_all_paper_ids(self, top_k: int) -> List[str]:
+        """Fallback collection of first top_k paper IDs."""
+        matched: List[str] = []
+        for vid, v in list(self.graph_engine._vertices.items())[:top_k]:
+            if v.label == "Paper" or vid.startswith("Paper:"):
+                matched.append(vid.replace("Paper:", ""))
+        return matched
+
+    def _is_query_matched_paper(self, vid: str, v: Vertex, q: str) -> bool:
+        """Checks if vertex is a paper matching query string."""
+        if v.label != "Paper" and not vid.startswith("Paper:"):
+            return False
+        return self._is_paper_match(vid, v, q)
+
+    def _find_seed_papers(self, query_text: str, top_k: int) -> List[str]:
+        """Finds seed paper IDs for query."""
+        q = query_text.lower()
+        matched = [
+            vid.replace("Paper:", "")
+            for vid, v in self.graph_engine._vertices.items()
+            if self._is_query_matched_paper(vid, v, q)
+        ]
+        if len(matched) >= top_k:
+            return matched[:top_k]
+        return matched or self._collect_all_paper_ids(top_k)
 
     def query_graphrag(
         self, query_text: str, top_k_papers: int = 3, max_hops: int = 2
     ) -> Dict[str, Any]:
-        """
-        End-to-end GraphRAG query execution:
-        Identifies seed papers matching query, expands causal subgraph, and returns grounded context.
-        """
-        g = self.graph_engine
-        q_lower = query_text.lower()
-        matched_seeds: List[str] = []
-
-        # Find paper nodes matching keywords
-        for vid, v in g._vertices.items():
-            if v.label == "Paper" or vid.startswith("Paper:"):
-                title = (v.properties or {}).get("title", "")
-                desc = (v.properties or {}).get("description", "")
-                if (
-                    q_lower in vid.lower()
-                    or q_lower in title.lower()
-                    or q_lower in desc.lower()
-                ):
-                    clean_pid = vid.replace("Paper:", "")
-                    matched_seeds.append(clean_pid)
-                    if len(matched_seeds) >= top_k_papers:
-                        break
-
-        # Fallback: take any available papers if no exact keyword match
-        if not matched_seeds:
-            for vid, v in list(g._vertices.items())[:top_k_papers]:
-                if v.label == "Paper" or vid.startswith("Paper:"):
-                    matched_seeds.append(vid.replace("Paper:", ""))
-
+        """End-to-end GraphRAG query execution."""
+        matched_seeds = self._find_seed_papers(query_text, top_k_papers)
         expansion = self.expand_context(seed_paper_ids=matched_seeds, max_hops=max_hops)
-
-        defense_chains = self.find_defense_chains(query_text)
         expansion["query"] = query_text
         expansion["seed_paper_ids"] = matched_seeds
-        expansion["defense_chains"] = defense_chains
+        expansion["defense_chains"] = self.find_defense_chains(query_text)
         return expansion

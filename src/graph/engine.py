@@ -73,6 +73,18 @@ class PropertyGraphEngine:
         self._in_edges.setdefault(vertex_id, [])
         return v
 
+    def _update_edge_indices(self, edge: Edge) -> None:
+        """Updates forward and reverse edge index maps."""
+        out_list = self._out_edges.setdefault(edge.src_id, [])
+        out_list = [e for e in out_list if e.id != edge.id]
+        out_list.append(edge)
+        self._out_edges[edge.src_id] = out_list
+
+        in_list = self._in_edges.setdefault(edge.dst_id, [])
+        in_list = [e for e in in_list if e.id != edge.id]
+        in_list.append(edge)
+        self._in_edges[edge.dst_id] = in_list
+
     def add_edge(
         self,
         src_id: str,
@@ -94,22 +106,8 @@ class PropertyGraphEngine:
             weight=weight,
             properties=properties or {},
         )
-
-        edge_id = edge.id
-        self._edges[edge_id] = edge
-
-        # Update Forward Index
-        out_list = self._out_edges.setdefault(src_id, [])
-        out_list = [e for e in out_list if e.id != edge_id]
-        out_list.append(edge)
-        self._out_edges[src_id] = out_list
-
-        # Update Reverse Index
-        in_list = self._in_edges.setdefault(dst_id, [])
-        in_list = [e for e in in_list if e.id != edge_id]
-        in_list.append(edge)
-        self._in_edges[dst_id] = in_list
-
+        self._edges[edge.id] = edge
+        self._update_edge_indices(edge)
         return edge
 
     def get_vertex(self, vertex_id: str) -> Optional[Vertex]:
@@ -142,29 +140,33 @@ class PropertyGraphEngine:
             vertex_id, *labels
         )
 
-    def remove_vertex(self, vertex_id: str) -> bool:
-        """Removes a vertex and all incident edges."""
-        if vertex_id not in self._vertices:
-            return False
-
-        # Remove out edges
+    def _purge_out_edges(self, vertex_id: str) -> None:
+        """Purges outgoing edges connected to vertex_id."""
         for edge in list(self._out_edges.get(vertex_id, [])):
             self._edges.pop(edge.id, None)
             if edge.dst_id in self._in_edges:
                 self._in_edges[edge.dst_id] = [
                     e for e in self._in_edges[edge.dst_id] if e.id != edge.id
                 ]
+        self._out_edges.pop(vertex_id, None)
 
-        # Remove in edges
+    def _purge_in_edges(self, vertex_id: str) -> None:
+        """Purges incoming edges connected to vertex_id."""
         for edge in list(self._in_edges.get(vertex_id, [])):
             self._edges.pop(edge.id, None)
             if edge.src_id in self._out_edges:
                 self._out_edges[edge.src_id] = [
                     e for e in self._out_edges[edge.src_id] if e.id != edge.id
                 ]
-
-        self._out_edges.pop(vertex_id, None)
         self._in_edges.pop(vertex_id, None)
+
+    def remove_vertex(self, vertex_id: str) -> bool:
+        """Removes a vertex and all incident edges."""
+        if vertex_id not in self._vertices:
+            return False
+
+        self._purge_out_edges(vertex_id)
+        self._purge_in_edges(vertex_id)
         self._vertices.pop(vertex_id, None)
         return True
 
@@ -229,6 +231,30 @@ class PropertyGraphEngine:
             target_path,
         )
 
+    def _load_data(self, data: Dict[str, Any]) -> None:
+        """Populates graph from parsed dictionary payload."""
+        for vd in data.get("vertices", []):
+            v = Vertex(
+                id=vd["id"],
+                label=vd.get("label", "Vertex"),
+                properties=vd.get("properties", {}),
+            )
+            self._vertices[v.id] = v
+            self._out_edges[v.id] = []
+            self._in_edges[v.id] = []
+
+        for ed in data.get("edges", []):
+            edge = Edge(
+                src_id=ed["src_id"],
+                dst_id=ed["dst_id"],
+                label=ed.get("label", "RELATED"),
+                weight=float(ed.get("weight", 1.0)),
+                properties=ed.get("properties", {}),
+            )
+            self._edges[edge.id] = edge
+            self._out_edges.setdefault(edge.src_id, []).append(edge)
+            self._in_edges.setdefault(edge.dst_id, []).append(edge)
+
     def load(self, filepath: Optional[str] = None) -> None:
         """Loads graph from persistent disk storage."""
         target_path = filepath or self.storage_path
@@ -238,32 +264,8 @@ class PropertyGraphEngine:
         try:
             with open(target_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            self._vertices.clear()
-            self._edges.clear()
-            self._out_edges.clear()
-            self._in_edges.clear()
-
-            for vd in data.get("vertices", []):
-                v = Vertex(
-                    id=vd["id"],
-                    label=vd.get("label", "Vertex"),
-                    properties=vd.get("properties", {}),
-                )
-                self._vertices[v.id] = v
-                self._out_edges[v.id] = []
-                self._in_edges[v.id] = []
-
-            for ed in data.get("edges", []):
-                edge = Edge(
-                    src_id=ed["src_id"],
-                    dst_id=ed["dst_id"],
-                    label=ed.get("label", "RELATED"),
-                    weight=float(ed.get("weight", 1.0)),
-                    properties=ed.get("properties", {}),
-                )
-                self._edges[edge.id] = edge
-                self._out_edges.setdefault(edge.src_id, []).append(edge)
-                self._in_edges.setdefault(edge.dst_id, []).append(edge)
+            self.clear()
+            self._load_data(data)
 
             logger.info(
                 "Loaded PropertyGraphEngine (%d vertices, %d edges) from %s",

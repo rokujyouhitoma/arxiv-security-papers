@@ -28,6 +28,49 @@ class SearchEvaluator:
         self.queries = queries or DEFAULT_SECURITY_GOLD_STANDARD
         self.top_k = top_k
 
+    def _eval_single_query(
+        self, eq: EvaluationQuery, search_fn: Callable[[str, int], Sequence[str]]
+    ) -> Dict[str, Any]:
+        retrieved_ids = list(search_fn(eq.query_text, self.top_k))
+        p_at_k = compute_precision_at_k(retrieved_ids, eq.relevant_doc_ids, k=self.top_k)
+        r_at_k = compute_recall_at_k(retrieved_ids, eq.relevant_doc_ids, k=self.top_k)
+        f1 = compute_f1_score(p_at_k, r_at_k)
+        ap = compute_average_precision(retrieved_ids, eq.relevant_doc_ids)
+        rr = compute_reciprocal_rank(retrieved_ids, eq.relevant_doc_ids)
+        ndcg = compute_ndcg_at_k(retrieved_ids, eq.graded_relevance, k=self.top_k)
+        return {
+            "query_id": eq.query_id,
+            "query_text": eq.query_text,
+            "category": eq.category,
+            "retrieved_ids": retrieved_ids,
+            "relevant_ids": eq.relevant_doc_ids,
+            "precision_at_k": round(p_at_k, 4),
+            "recall_at_k": round(r_at_k, 4),
+            "f1_score": round(f1, 4),
+            "average_precision": round(ap, 4),
+            "reciprocal_rank": round(rr, 4),
+            "ndcg_at_k": round(ndcg, 4),
+        }
+
+    def _avg_metric(self, query_results: List[Dict[str, Any]], metric_key: str, n: int) -> float:
+        total = sum(float(q[metric_key]) for q in query_results)
+        return round(total / n, 4)
+
+    def _summarize_metrics(self, query_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        n = len(query_results)
+        if n == 0:
+            return {"num_queries": 0, "top_k": self.top_k}
+        return {
+            "num_queries": n,
+            "top_k": self.top_k,
+            "mean_precision_at_k": self._avg_metric(query_results, "precision_at_k", n),
+            "mean_recall_at_k": self._avg_metric(query_results, "recall_at_k", n),
+            "mean_f1_score": self._avg_metric(query_results, "f1_score", n),
+            "MAP": self._avg_metric(query_results, "average_precision", n),
+            "MRR": self._avg_metric(query_results, "reciprocal_rank", n),
+            "mean_NDCG_at_k": self._avg_metric(query_results, "ndcg_at_k", n),
+        }
+
     def evaluate(
         self,
         search_fn: Callable[[str, int], Sequence[str]],
@@ -36,63 +79,8 @@ class SearchEvaluator:
         Executes all evaluation queries using `search_fn(query_text, top_k) -> List[doc_id]`
         and returns aggregated IR metrics.
         """
-        query_results: List[Dict[str, Any]] = []
-        total_ap = 0.0
-        total_rr = 0.0
-        total_ndcg = 0.0
-        total_p = 0.0
-        total_r = 0.0
-        total_f1 = 0.0
-
-        for eq in self.queries:
-            retrieved_ids = list(search_fn(eq.query_text, self.top_k))
-
-            p_at_k = compute_precision_at_k(
-                retrieved_ids, eq.relevant_doc_ids, k=self.top_k
-            )
-            r_at_k = compute_recall_at_k(
-                retrieved_ids, eq.relevant_doc_ids, k=self.top_k
-            )
-            f1 = compute_f1_score(p_at_k, r_at_k)
-            ap = compute_average_precision(retrieved_ids, eq.relevant_doc_ids)
-            rr = compute_reciprocal_rank(retrieved_ids, eq.relevant_doc_ids)
-            ndcg = compute_ndcg_at_k(retrieved_ids, eq.graded_relevance, k=self.top_k)
-
-            total_p += p_at_k
-            total_r += r_at_k
-            total_f1 += f1
-            total_ap += ap
-            total_rr += rr
-            total_ndcg += ndcg
-
-            query_results.append(
-                {
-                    "query_id": eq.query_id,
-                    "query_text": eq.query_text,
-                    "category": eq.category,
-                    "retrieved_ids": retrieved_ids,
-                    "relevant_ids": eq.relevant_doc_ids,
-                    "precision_at_k": round(p_at_k, 4),
-                    "recall_at_k": round(r_at_k, 4),
-                    "f1_score": round(f1, 4),
-                    "average_precision": round(ap, 4),
-                    "reciprocal_rank": round(rr, 4),
-                    "ndcg_at_k": round(ndcg, 4),
-                }
-            )
-
-        n = len(self.queries)
-        summary = {
-            "num_queries": n,
-            "top_k": self.top_k,
-            "mean_precision_at_k": round(total_p / n, 4) if n > 0 else 0.0,
-            "mean_recall_at_k": round(total_r / n, 4) if n > 0 else 0.0,
-            "mean_f1_score": round(total_f1 / n, 4) if n > 0 else 0.0,
-            "MAP": round(total_ap / n, 4) if n > 0 else 0.0,
-            "MRR": round(total_rr / n, 4) if n > 0 else 0.0,
-            "mean_NDCG_at_k": round(total_ndcg / n, 4) if n > 0 else 0.0,
-        }
-
+        query_results = [self._eval_single_query(eq, search_fn) for eq in self.queries]
+        summary = self._summarize_metrics(query_results)
         return {
             "summary": summary,
             "query_details": query_results,

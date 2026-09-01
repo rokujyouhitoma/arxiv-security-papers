@@ -33,24 +33,22 @@ class QuerySemanticCache:
         union = len(set_a | set_b)
         return float(intersection) / float(union) if union > 0 else 0.0
 
-    def get(
-        self, query: str, query_tokens: List[str]
+    def _get_exact_match(
+        self, q_clean: str, now: float
     ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
-        now = time.time()
-        q_clean = query.strip().lower()
+        if q_clean not in self.cache:
+            return None
+        entry = self.cache[q_clean]
+        if now < entry["expires_at"]:
+            self.hits += 1
+            entry["hit_count"] += 1
+            return entry["results"], entry["profile"]
+        del self.cache[q_clean]
+        return None
 
-        # 1. Exact string match
-        if q_clean in self.cache:
-            entry = self.cache[q_clean]
-            if now < entry["expires_at"]:
-                self.hits += 1
-                entry["hit_count"] += 1
-                return entry["results"], entry["profile"]
-            else:
-                del self.cache[q_clean]
-
-        # 2. Semantic Token Overlap Match (Threshold >= similarity_threshold)
-        q_tokens_set = set(query_tokens)
+    def _get_semantic_match(
+        self, q_tokens_set: Set[str], now: float
+    ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
         for key, entry in list(self.cache.items()):
             if now >= entry["expires_at"]:
                 del self.cache[key]
@@ -60,6 +58,21 @@ class QuerySemanticCache:
                 self.hits += 1
                 entry["hit_count"] += 1
                 return entry["results"], entry["profile"]
+        return None
+
+    def get(
+        self, query: str, query_tokens: List[str]
+    ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
+        now = time.time()
+        q_clean = query.strip().lower()
+
+        exact_res = self._get_exact_match(q_clean, now)
+        if exact_res is not None:
+            return exact_res
+
+        semantic_res = self._get_semantic_match(set(query_tokens), now)
+        if semantic_res is not None:
+            return semantic_res
 
         self.misses += 1
         return None

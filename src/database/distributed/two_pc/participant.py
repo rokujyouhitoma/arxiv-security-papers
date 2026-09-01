@@ -27,6 +27,11 @@ class TwoPCParticipant:
         """Returns the state of the transaction on this participant."""
         return self.tx_states.get(tx_id, TwoPCState.INITIAL)
 
+    def _has_resource_conflict(self, tx_id: str, resources: List[str]) -> bool:
+        return any(
+            self.resource_owners.get(res) not in (None, tx_id) for res in resources
+        )
+
     def prepare(
         self,
         tx_id: str,
@@ -39,20 +44,13 @@ class TwoPCParticipant:
         if not self.is_online or not can_commit:
             self.tx_states[tx_id] = TwoPCState.ABORTED
             return VoteType.VOTE_ABORT
-
-        # Check for resource lock conflicts
-        for res in resources:
-            owner = self.resource_owners.get(res)
-            if owner is not None and owner != tx_id:
-                self.tx_states[tx_id] = TwoPCState.ABORTED
-                return VoteType.VOTE_ABORT
-
-        # Acquire locks
+        if self._has_resource_conflict(tx_id, resources):
+            self.tx_states[tx_id] = TwoPCState.ABORTED
+            return VoteType.VOTE_ABORT
         acquired: Set[str] = set()
         for res in resources:
             self.resource_owners[res] = tx_id
             acquired.add(res)
-
         self.tx_locks[tx_id] = acquired
         self.tx_states[tx_id] = TwoPCState.PREPARED
         return VoteType.VOTE_COMMIT

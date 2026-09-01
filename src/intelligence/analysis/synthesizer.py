@@ -27,6 +27,31 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
     def phase_type(self) -> IntelligencePhase:
         return IntelligencePhase.ANALYSIS
 
+    def _build_summary_lines(
+        self, topic_groups: Dict[str, List[Dict[str, Any]]], evaluated_hypotheses: List[Any]
+    ) -> List[str]:
+        lines = [f"- Topic '{t}': {len(recs)} records observed." for t, recs in topic_groups.items()]
+        if evaluated_hypotheses:
+            lines.append("\n🔬 【自律検証セキュリティ仮説動向】:")
+            for h in evaluated_hypotheses:
+                lines.append(f"  - [{h.status.value.upper()}] (確信度: {h.confidence_score*100:.1f}%) {h.statement}")
+        return lines
+
+    def _build_run_product(
+        self, cycle_id: str, topic_groups: Dict[str, List[Dict[str, Any]]], processed_records: List[Dict[str, Any]], summary_lines: List[str]
+    ) -> IntelligenceProduct:
+        summary_text = f"Automated intelligence synthesis for cycle {cycle_id}.\n" + "\n".join(summary_lines)
+        return IntelligenceProduct(
+            product_id=f"prod_run_{cycle_id}",
+            title=f"Cycle {cycle_id} Intelligence Assessment",
+            summary=summary_text,
+            tier="01_per_run",
+            topic_tags=sorted(topic_groups.keys()),
+            source_count=len(processed_records),
+            confidence_score=min(1.0, 0.7 + 0.05 * len(processed_records)),
+            okf_references=[str(r.get("id")) for r in processed_records],
+        )
+
     def synthesize_products(
         self,
         processed_records: List[Dict[str, Any]],
@@ -37,48 +62,16 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
         products: List[IntelligenceProduct] = []
         engine = hypothesis_engine or self.hypothesis_engine
 
-        # 1. Group records by topic
         topic_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for r in processed_records:
-            topic = str(r.get("topic", "general"))
-            topic_groups[topic].append(r)
+            topic_groups[str(r.get("topic", "general"))].append(r)
 
-        # 2. Evaluate hypotheses
         evaluated_hypotheses = engine.evaluate_all(processed_records)
+        summary_lines = self._build_summary_lines(topic_groups, evaluated_hypotheses)
+        products.append(self._build_run_product(cycle_id, topic_groups, processed_records, summary_lines))
 
-        # 3. Synthesize Per-Run Product (01_per_run)
-        total_count = len(processed_records)
-        summary_lines = [
-            f"- Topic '{t}': {len(recs)} records observed."
-            for t, recs in topic_groups.items()
-        ]
-        if evaluated_hypotheses:
-            summary_lines.append("\n🔬 【自律検証セキュリティ仮説動向】:")
-            for h in evaluated_hypotheses:
-                summary_lines.append(
-                    f"  - [{h.status.value.upper()}] (確信度: {h.confidence_score*100:.1f}%) {h.statement}"
-                )
-
-        summary_text = (
-            f"Automated intelligence synthesis for cycle {cycle_id}.\n"
-            + "\n".join(summary_lines)
-        )
-
-        run_product = IntelligenceProduct(
-            product_id=f"prod_run_{cycle_id}",
-            title=f"Cycle {cycle_id} Intelligence Assessment",
-            summary=summary_text,
-            tier="01_per_run",
-            topic_tags=sorted(list(topic_groups.keys())),
-            source_count=total_count,
-            confidence_score=min(1.0, 0.7 + 0.05 * total_count),
-            okf_references=[str(r.get("id")) for r in processed_records],
-        )
-        products.append(run_product)
-
-        # 4. Synthesize Topic Strategic Overviews (02_daily tier)
         for topic, recs in topic_groups.items():
-            topic_prod = IntelligenceProduct(
+            products.append(IntelligenceProduct(
                 product_id=f"prod_topic_{topic}_{cycle_id}",
                 title=f"Domain Intelligence Deep-Dive: {topic.capitalize()}",
                 summary=f"Consolidated analysis for domain {topic} based on {len(recs)} primary sources.",
@@ -87,8 +80,7 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
                 source_count=len(recs),
                 confidence_score=0.9,
                 okf_references=[str(r.get("id")) for r in recs],
-            )
-            products.append(topic_prod)
+            ))
 
         return products
 

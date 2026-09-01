@@ -191,6 +191,23 @@ class SlottedPage:
             SLOT_FORMAT, offset, length
         )
 
+    def _find_recycled_slot(self) -> Optional[int]:
+        """Returns the first tombstone slot ID, or None if none available."""
+        for s_id in range(self.slot_count):
+            off, _ = self.get_slot(s_id)
+            if off == 0:
+                return s_id
+        return None
+
+    def _ensure_free_space(self, needed_space: int) -> None:
+        """Compacts page if needed; raises PageFullError if still insufficient."""
+        if self.free_space < needed_space:
+            self.compact()
+        if self.free_space < needed_space:
+            raise PageFullError(
+                f"Insufficient page space: needed {needed_space}, available {self.free_space}"
+            )
+
     def insert_tuple(self, tuple_bytes: bytes) -> int:
         """
         Inserts raw tuple bytes into the page, allocating a slot.
@@ -202,29 +219,12 @@ class SlottedPage:
             raise PageFullError(
                 f"Tuple size {tuple_len} exceeds max page capacity {self.MAX_USABLE_SPACE}"
             )
-
-        # Check for recyclable tombstone slot (offset == 0)
-        target_slot_id: Optional[int] = None
-        for s_id in range(self.slot_count):
-            off, _ = self.get_slot(s_id)
-            if off == 0:
-                target_slot_id = s_id
-                break
-
+        target_slot_id = self._find_recycled_slot()
         needed_space = tuple_len + (0 if target_slot_id is not None else SLOT_SIZE)
-        if self.free_space < needed_space:
-            # Attempt in-page compaction before failing
-            self.compact()
-            if self.free_space < needed_space:
-                raise PageFullError(
-                    f"Insufficient page space: needed {needed_space}, available {self.free_space}"
-                )
-
-        # Allocate from top of page downwards
+        self._ensure_free_space(needed_space)
         new_upper = self.free_upper - tuple_len
         self.data[new_upper : self.free_upper] = tuple_bytes
         self.free_upper = new_upper
-
         if target_slot_id is not None:
             self._set_slot(target_slot_id, new_upper, tuple_len)
             slot_id = target_slot_id
@@ -233,7 +233,6 @@ class SlottedPage:
             self._set_slot(slot_id, new_upper, tuple_len)
             self.slot_count += 1
             self.free_lower += SLOT_SIZE
-
         self._sync_header()
         return slot_id
 
@@ -390,92 +389,132 @@ class TupleSerializer:
         return bytes(null_bitmap) + bytes(offset_table) + bytes(payload)
 
     @staticmethod
+    @staticmethod
+    def _parse_tuple_layout(
+        raw_bytes: bytes, num_cols: int
+    ) -> Tuple[bytes, List[int], bytes]:
+        null_bytes_len = math.ceil(num_cols / 8)
+        offset_table_len = num_cols * 2
+        header_len = null_bytes_len + offset_table_len
+        if len(raw_bytes) < header_len:
+            raise ValueError("Corrupt tuple binary: header truncated")
+        null_bitmap = raw_bytes[:null_bytes_len]
+        offset_table_bytes = raw_bytes[null_bytes_len:header_len]
+        payload = raw_bytes[header_len:]
+        offsets = [
+            struct.unpack("<H", offset_table_bytes[i * 2 : (i + 1) * 2])[0]
+            for i in range(num_cols)
+        ]
+        return null_bitmap, offsets, payload
+
+    @staticmethod
+    def _deserialize_field(
+        i: int,
+        col_type: DataType,
+        null_bitmap: bytes,
+        offsets: List[int],
+        payload: bytes,
+        num_cols: int,
+    ) -> Any:
+        if (null_bitmap[i // 8] & (1 << (i % 8))) != 0:
+            return None
+        start_off = offsets[i]
+        end_off = offsets[i + 1] if i + 1 < num_cols else len(payload)
+        return TupleSerializer._decode_value(col_type, payload[start_off:end_off])
+
+    @staticmethod
     def deserialize(
         schema: Sequence[Tuple[str, DataType]], raw_bytes: bytes
     ) -> Dict[str, Any]:
         """Deserializes binary bytes into a structured row dictionary."""
         num_cols = len(schema)
-        null_bytes_len = math.ceil(num_cols / 8)
-        offset_table_len = num_cols * 2
+        null_bitmap, offsets, payload = TupleSerializer._parse_tuple_layout(
+            raw_bytes, num_cols
+        )
+        return {
+            col_name: TupleSerializer._deserialize_field(
+                i, col_type, null_bitmap, offsets, payload, num_cols
+            )
+            for i, (col_name, col_type) in enumerate(schema)
+        }
 
-        if len(raw_bytes) < null_bytes_len + offset_table_len:
-            raise ValueError("Corrupt tuple binary: header truncated")
+    @staticmethod
+    def _encode_str_type(val: Any) -> bytes:
+        b = str(val).encode("utf-8")
+        return struct.pack("<H", len(b)) + b
 
-        null_bitmap = raw_bytes[:null_bytes_len]
-        offset_table_bytes = raw_bytes[
-            null_bytes_len : null_bytes_len + offset_table_len
-        ]
-        payload_start = null_bytes_len + offset_table_len
-        payload = raw_bytes[payload_start:]
+    @staticmethod
+    def _encode_bytes_type(val: Any) -> bytes:
+        raw = (
+            bytes(val)
+            if isinstance(val, (bytes, bytearray))
+            else bytes(str(val), "utf-8")
+        )
+        return struct.pack("<I", len(raw)) + raw
 
-        offsets: List[int] = []
-        for i in range(num_cols):
-            off = struct.unpack("<H", offset_table_bytes[i * 2 : (i + 1) * 2])[0]
-            offsets.append(off)
+    @staticmethod
+    def _encode_vector_type(val: Any) -> bytes:
+        vec = list(val)
+        dim = len(vec)
+        return struct.pack("<H", dim) + struct.pack(
+            f"<{dim}f", *[float(x) for x in vec]
+        )
 
-        row: Dict[str, Any] = {}
-        for i, (col_name, col_type) in enumerate(schema):
-            byte_idx = i // 8
-            bit_idx = i % 8
-            is_null = (null_bitmap[byte_idx] & (1 << bit_idx)) != 0
-
-            if is_null:
-                row[col_name] = None
-            else:
-                start_off = offsets[i]
-                end_off = offsets[i + 1] if i + 1 < num_cols else len(payload)
-                col_bytes = payload[start_off:end_off]
-                row[col_name] = TupleSerializer._decode_value(col_type, col_bytes)
-
-        return row
+    _ENCODE_DISPATCH: "Dict[DataType, Any]"
 
     @staticmethod
     def _encode_value(col_type: DataType, val: Any) -> bytes:
-        if col_type == DataType.INT:
-            return struct.pack("<q", int(val))
-        elif col_type == DataType.FLOAT:
-            return struct.pack("<d", float(val))
-        elif col_type == DataType.BOOL:
-            return struct.pack("<?", bool(val))
-        elif col_type in (DataType.VARCHAR, DataType.TEXT):
-            s = str(val)
-            b = s.encode("utf-8")
-            return struct.pack("<H", len(b)) + b
-        elif col_type == DataType.BYTES:
-            raw = (
-                bytes(val)
-                if isinstance(val, (bytes, bytearray))
-                else bytes(str(val), "utf-8")
-            )
-            return struct.pack("<I", len(raw)) + raw
-        elif col_type == DataType.VECTOR:
-            vec = list(val)
-            dim = len(vec)
-            vec_bytes = struct.pack(f"<{dim}f", *[float(x) for x in vec])
-            return struct.pack("<H", dim) + vec_bytes
-        else:
+        _dispatch = TupleSerializer._get_encode_dispatch()
+        fn = _dispatch.get(col_type)
+        if fn is None:
             raise ValueError(f"Unsupported data type: {col_type}")
+        return fn(val)
+
+    @staticmethod
+    def _get_encode_dispatch() -> dict:
+        return {
+            DataType.INT: lambda v: struct.pack("<q", int(v)),
+            DataType.FLOAT: lambda v: struct.pack("<d", float(v)),
+            DataType.BOOL: lambda v: struct.pack("<?", bool(v)),
+            DataType.VARCHAR: TupleSerializer._encode_str_type,
+            DataType.TEXT: TupleSerializer._encode_str_type,
+            DataType.BYTES: TupleSerializer._encode_bytes_type,
+            DataType.VECTOR: TupleSerializer._encode_vector_type,
+        }
+
+    @staticmethod
+    def _decode_str_type(raw: bytes) -> str:
+        length = struct.unpack("<H", raw[:2])[0]
+        return raw[2 : 2 + length].decode("utf-8")
+
+    @staticmethod
+    def _decode_bytes_type(raw: bytes) -> bytes:
+        length = struct.unpack("<I", raw[:4])[0]
+        return raw[4 : 4 + length]
+
+    @staticmethod
+    def _decode_vector_type(raw: bytes) -> list:
+        dim = struct.unpack("<H", raw[:2])[0]
+        return list(struct.unpack(f"<{dim}f", raw[2 : 2 + dim * 4]))
+
+    @staticmethod
+    def _get_decode_dispatch() -> dict:
+        return {
+            DataType.INT: lambda r: struct.unpack("<q", r)[0],
+            DataType.FLOAT: lambda r: struct.unpack("<d", r)[0],
+            DataType.BOOL: lambda r: struct.unpack("<?", r)[0],
+            DataType.VARCHAR: TupleSerializer._decode_str_type,
+            DataType.TEXT: TupleSerializer._decode_str_type,
+            DataType.BYTES: TupleSerializer._decode_bytes_type,
+            DataType.VECTOR: TupleSerializer._decode_vector_type,
+        }
 
     @staticmethod
     def _decode_value(col_type: DataType, raw: bytes) -> Any:
-        if col_type == DataType.INT:
-            return struct.unpack("<q", raw)[0]
-        elif col_type == DataType.FLOAT:
-            return struct.unpack("<d", raw)[0]
-        elif col_type == DataType.BOOL:
-            return struct.unpack("<?", raw)[0]
-        elif col_type in (DataType.VARCHAR, DataType.TEXT):
-            length = struct.unpack("<H", raw[:2])[0]
-            return raw[2 : 2 + length].decode("utf-8")
-        elif col_type == DataType.BYTES:
-            length = struct.unpack("<I", raw[:4])[0]
-            return raw[4 : 4 + length]
-        elif col_type == DataType.VECTOR:
-            dim = struct.unpack("<H", raw[:2])[0]
-            floats = struct.unpack(f"<{dim}f", raw[2 : 2 + dim * 4])
-            return list(floats)
-        else:
+        fn = TupleSerializer._get_decode_dispatch().get(col_type)
+        if fn is None:
             raise ValueError(f"Unsupported data type: {col_type}")
+        return fn(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +531,14 @@ class OverflowManager:
     CHUNK_SIZE = PAGE_SIZE - OVERFLOW_HEADER_SIZE
 
     @staticmethod
+    def _get_page_id(page_allocator: Any, start_page_id: int, i: int) -> int:
+        if i == 0:
+            return start_page_id
+        if hasattr(page_allocator, "allocate_page_id"):
+            return page_allocator.allocate_page_id()
+        return start_page_id + i
+
+    @staticmethod
     def write_overflow(
         start_page_id: int,
         large_data: bytes,
@@ -502,37 +549,24 @@ class OverflowManager:
         Returns the list of populated SlottedPage instances.
         """
         pages: List[SlottedPage] = []
-        total_len = len(large_data)
-        num_pages = math.ceil(total_len / OverflowManager.CHUNK_SIZE)
-
+        num_pages = math.ceil(len(large_data) / OverflowManager.CHUNK_SIZE)
         prev_page: Optional[SlottedPage] = None
         for i in range(num_pages):
             chunk = large_data[
                 i * OverflowManager.CHUNK_SIZE : (i + 1) * OverflowManager.CHUNK_SIZE
             ]
-            if i == 0:
-                current_pid = start_page_id
-            else:
-                current_pid = (
-                    page_allocator.allocate_page_id()
-                    if hasattr(page_allocator, "allocate_page_id")
-                    else start_page_id + i
-                )
+            current_pid = OverflowManager._get_page_id(page_allocator, start_page_id, i)
             page = SlottedPage(page_id=current_pid, page_type=PageType.OVERFLOW)
             page.data[page.HEADER_SIZE : page.HEADER_SIZE + len(chunk)] = chunk
             page.free_upper = page.HEADER_SIZE + len(chunk)
-
             if prev_page is not None:
                 prev_page.next_page_id = current_pid
                 prev_page.serialize()
-
             pages.append(page)
             prev_page = page
-
         if prev_page is not None:
             prev_page.next_page_id = 0
             prev_page.serialize()
-
         return pages
 
     @staticmethod

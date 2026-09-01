@@ -110,6 +110,18 @@ class WaitForGraph:
                         return cycle
             return None
 
+    def _build_cycle_path(
+        self, node: int, neighbor: int, parent_map: Dict[int, int]
+    ) -> List[int]:
+        path = [neighbor]
+        curr = node
+        while curr != neighbor:
+            path.append(curr)
+            curr = parent_map.get(curr, neighbor)
+        path.append(neighbor)
+        path.reverse()
+        return path
+
     def _dfs_cycle(
         self,
         node: int,
@@ -119,7 +131,6 @@ class WaitForGraph:
     ) -> Optional[List[int]]:
         visited.add(node)
         rec_stack.add(node)
-
         for neighbor in self._edges.get(node, set()):
             if neighbor not in visited:
                 parent_map[neighbor] = node
@@ -127,16 +138,7 @@ class WaitForGraph:
                 if cycle:
                     return cycle
             elif neighbor in rec_stack:
-                # Cycle found! Reconstruct path from neighbor back to node
-                path = [neighbor]
-                curr = node
-                while curr != neighbor:
-                    path.append(curr)
-                    curr = parent_map.get(curr, neighbor)
-                path.append(neighbor)
-                path.reverse()
-                return path
-
+                return self._build_cycle_path(node, neighbor, parent_map)
         rec_stack.remove(node)
         return None
 
@@ -167,6 +169,30 @@ class LockManager:
         self._tx_locks: Dict[int, Set[Tuple[str, LockMode]]] = {}
         self.wait_for_graph = WaitForGraph()
 
+    def _get_conflicts(self, tx_id: int, resource_id: str, mode: LockMode) -> list:
+        return [
+            g
+            for g in self._grants.get(resource_id, [])
+            if not is_compatible(g.mode, mode) and g.tx_id != tx_id
+        ]
+
+    def _check_deadlock_and_wait(
+        self, tx_id: int, conflicts: list, start_time: float, timeout: float
+    ) -> bool:
+        """Records WFG edges, checks deadlock, waits. Returns False on timeout."""
+        for holder in conflicts:
+            self.wait_for_graph.add_edge(tx_id, holder.tx_id)
+        cycle = self.wait_for_graph.detect_cycle()
+        if cycle:
+            self.wait_for_graph.remove_tx(tx_id)
+            raise DeadlockError(cycle=cycle, victim_tx=tx_id)
+        remaining = timeout - (time.time() - start_time)
+        if remaining <= 0:
+            self.wait_for_graph.remove_tx(tx_id)
+            return False
+        self._cond.wait(timeout=min(remaining, 0.1))
+        return True
+
     def acquire_lock(
         self,
         tx_id: int,
@@ -180,43 +206,18 @@ class LockManager:
         """
         start_time = time.time()
         with self._lock:
-            # Check if this transaction already holds an equal or stronger lock
             if self._has_sufficient_lock(tx_id, resource_id, mode):
                 return True
-
             while True:
-                grants = self._grants.get(resource_id, [])
-                conflicts = [
-                    g
-                    for g in grants
-                    if not is_compatible(g.mode, mode) and g.tx_id != tx_id
-                ]
-
+                conflicts = self._get_conflicts(tx_id, resource_id, mode)
                 if not conflicts:
-                    # Grant lock immediately
                     self._grant_lock(tx_id, resource_id, mode)
                     self.wait_for_graph.remove_tx(tx_id)
                     return True
-
-                # Record wait dependencies in WFG
-                for holder in conflicts:
-                    self.wait_for_graph.add_edge(tx_id, holder.tx_id)
-
-                # Check for deadlocks
-                cycle = self.wait_for_graph.detect_cycle()
-                if cycle:
-                    # Deadlock detected! Abort current transaction as victim
-                    self.wait_for_graph.remove_tx(tx_id)
-                    raise DeadlockError(cycle=cycle, victim_tx=tx_id)
-
-                # Wait for lock release or timeout
-                elapsed = time.time() - start_time
-                remaining = timeout - elapsed
-                if remaining <= 0:
-                    self.wait_for_graph.remove_tx(tx_id)
+                if not self._check_deadlock_and_wait(
+                    tx_id, conflicts, start_time, timeout
+                ):
                     return False
-
-                self._cond.wait(timeout=min(remaining, 0.1))
 
     def _has_sufficient_lock(
         self, tx_id: int, resource_id: str, mode: LockMode
@@ -240,6 +241,15 @@ class LockManager:
             self._tx_locks[tx_id] = set()
         self._tx_locks[tx_id].add((resource_id, mode))
 
+    def _remove_resource_grant(self, resource_id: str, tx_id: int) -> None:
+        if resource_id not in self._grants:
+            return
+        self._grants[resource_id] = [
+            g for g in self._grants[resource_id] if g.tx_id != tx_id
+        ]
+        if not self._grants[resource_id]:
+            del self._grants[resource_id]
+
     def release_all_locks(self, tx_id: int) -> int:
         """
         Releases all locks held by a transaction (SS2PL commit/rollback phase).
@@ -247,19 +257,11 @@ class LockManager:
         """
         with self._lock:
             locks = self._tx_locks.pop(tx_id, set())
-            released_count = len(locks)
-
             for resource_id, _ in locks:
-                if resource_id in self._grants:
-                    self._grants[resource_id] = [
-                        g for g in self._grants[resource_id] if g.tx_id != tx_id
-                    ]
-                    if not self._grants[resource_id]:
-                        del self._grants[resource_id]
-
+                self._remove_resource_grant(resource_id, tx_id)
             self.wait_for_graph.remove_tx(tx_id)
             self._cond.notify_all()
-            return released_count
+            return len(locks)
 
     def is_locked(self, resource_id: str) -> bool:
         """Returns True if any transaction currently holds a lock on resource."""

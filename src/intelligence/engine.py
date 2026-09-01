@@ -27,6 +27,76 @@ from workflow.wal import EventType, OrchestratorWAL
 class ClosedLoopIntelligenceEngine:
     """Central domain engine executing the 6-phase intelligence lifecycle."""
 
+    def _build_storage_paths(self) -> Dict[str, str]:
+        orch = os.path.join(self.workspace_dir, "outputs", "orchestrator")
+        return {
+            "pir": os.path.join(orch, "pir_registry.json"),
+            "hypo": os.path.join(orch, "hypotheses_registry.json"),
+        }
+
+    def _init_core_components(
+        self,
+        wal: Optional[OrchestratorWAL],
+        pir_manager: Optional[PIRManager],
+    ) -> None:
+        paths = self._build_storage_paths()
+        self.wal = wal or OrchestratorWAL(
+            wal_dir=os.path.join(self.workspace_dir, "outputs", "wal")
+        )
+        self.pir_manager = pir_manager or PIRManager(storage_path=paths["pir"], auto_seed=True)
+
+    def _init_harvest_processing(
+        self,
+        harvest_coordinator: Optional[HarvestCoordinator],
+        processing_coordinator: Optional[ProcessingCoordinator],
+        hypothesis_engine: Optional[HypothesisEngine],
+    ) -> None:
+        paths = self._build_storage_paths()
+        self.harvest_coordinator = harvest_coordinator or HarvestCoordinator()
+        self.processing_coordinator = processing_coordinator or ProcessingCoordinator()
+        self.hypothesis_engine = hypothesis_engine or HypothesisEngine(storage_path=paths["hypo"])
+
+    def _init_analysis_dissemination(
+        self,
+        analysis_synthesizer: Optional[AnalysisSynthesizer],
+        dissemination_distributor: Optional[DisseminationDistributor],
+        feedback_evaluator: Optional[FeedbackEvaluator],
+    ) -> None:
+        self.analysis_synthesizer = analysis_synthesizer or AnalysisSynthesizer(
+            hypothesis_engine=self.hypothesis_engine
+        )
+        self.dissemination_distributor = dissemination_distributor or DisseminationDistributor()
+        self.feedback_evaluator = feedback_evaluator or FeedbackEvaluator()
+
+    def _init_pipeline_components(
+        self,
+        harvest_coordinator: Optional[HarvestCoordinator],
+        processing_coordinator: Optional[ProcessingCoordinator],
+        hypothesis_engine: Optional[HypothesisEngine],
+        analysis_synthesizer: Optional[AnalysisSynthesizer],
+        dissemination_distributor: Optional[DisseminationDistributor],
+        feedback_evaluator: Optional[FeedbackEvaluator],
+    ) -> None:
+        self._init_harvest_processing(harvest_coordinator, processing_coordinator, hypothesis_engine)
+        self._init_analysis_dissemination(analysis_synthesizer, dissemination_distributor, feedback_evaluator)
+
+    def _init_components(
+        self,
+        wal: Optional[OrchestratorWAL],
+        pir_manager: Optional[PIRManager],
+        harvest_coordinator: Optional[HarvestCoordinator],
+        processing_coordinator: Optional[ProcessingCoordinator],
+        hypothesis_engine: Optional[HypothesisEngine],
+        analysis_synthesizer: Optional[AnalysisSynthesizer],
+        dissemination_distributor: Optional[DisseminationDistributor],
+        feedback_evaluator: Optional[FeedbackEvaluator],
+    ) -> None:
+        self._init_core_components(wal, pir_manager)
+        self._init_pipeline_components(
+            harvest_coordinator, processing_coordinator, hypothesis_engine,
+            analysis_synthesizer, dissemination_distributor, feedback_evaluator,
+        )
+
     def __init__(
         self,
         workspace_dir: str = ".",
@@ -40,30 +110,10 @@ class ClosedLoopIntelligenceEngine:
         feedback_evaluator: Optional[FeedbackEvaluator] = None,
     ) -> None:
         self.workspace_dir = os.path.abspath(workspace_dir)
-        self.wal = wal or OrchestratorWAL(
-            wal_dir=os.path.join(self.workspace_dir, "outputs", "wal")
+        self._init_components(
+            wal, pir_manager, harvest_coordinator, processing_coordinator,
+            hypothesis_engine, analysis_synthesizer, dissemination_distributor, feedback_evaluator,
         )
-        pir_storage = os.path.join(
-            self.workspace_dir, "outputs", "orchestrator", "pir_registry.json"
-        )
-        hypo_storage = os.path.join(
-            self.workspace_dir, "outputs", "orchestrator", "hypotheses_registry.json"
-        )
-        self.pir_manager = pir_manager or PIRManager(
-            storage_path=pir_storage, auto_seed=True
-        )
-        self.harvest_coordinator = harvest_coordinator or HarvestCoordinator()
-        self.processing_coordinator = processing_coordinator or ProcessingCoordinator()
-        self.hypothesis_engine = hypothesis_engine or HypothesisEngine(
-            storage_path=hypo_storage
-        )
-        self.analysis_synthesizer = analysis_synthesizer or AnalysisSynthesizer(
-            hypothesis_engine=self.hypothesis_engine
-        )
-        self.dissemination_distributor = (
-            dissemination_distributor or DisseminationDistributor()
-        )
-        self.feedback_evaluator = feedback_evaluator or FeedbackEvaluator()
         self.cycle_history: List[PhaseContext] = []
 
     def register_hypothesis(
@@ -238,33 +288,7 @@ class ClosedLoopIntelligenceEngine:
             self.cycle_history.append(context)
             return context
 
-    def resume_cycle(self, cycle_id: str) -> PhaseContext:
-        """Replays and resumes an uncompleted or crashed cycle from its WAL state."""
-        replayed = self.wal.replay_cycle(cycle_id, self.workspace_dir)
-        context = (
-            replayed
-            if isinstance(replayed, PhaseContext)
-            else PhaseContext(cycle_id=cycle_id, workspace_dir=self.workspace_dir)
-        )
-        saga = SagaCoordinator()
-
-        phases = [
-            (self.pir_manager, IntelligencePhase.PLANNING),
-            (self.harvest_coordinator, IntelligencePhase.COLLECTION),
-            (self.processing_coordinator, IntelligencePhase.PROCESSING),
-            (self.analysis_synthesizer, IntelligencePhase.ANALYSIS),
-            (self.dissemination_distributor, IntelligencePhase.DISSEMINATION),
-            (self.feedback_evaluator, IntelligencePhase.EVALUATION),
-        ]
-
-        for executor, ptype in phases:
-            status = context.phase_statuses.get(ptype, PhaseStatus.PENDING)
-            if status != PhaseStatus.COMPLETED:
-                context = self._execute_phase_with_wal(saga, executor, ptype, context)
-                if context.errors:
-                    self.cycle_history.append(context)
-                    return context
-
+    def _update_pir_from_telemetry(self, context: PhaseContext) -> None:
         if context.telemetry:
             self.pir_manager.update_weights_from_feedback(
                 usage_counts=context.telemetry.frequent_topics,
@@ -273,6 +297,35 @@ class ClosedLoopIntelligenceEngine:
             )
             self.pir_manager.adapt_queries_from_telemetry(context.telemetry)
 
+    def _run_pending_phases(
+        self, saga: SagaCoordinator, context: PhaseContext
+    ) -> PhaseContext:
+        phases = [
+            (self.pir_manager, IntelligencePhase.PLANNING),
+            (self.harvest_coordinator, IntelligencePhase.COLLECTION),
+            (self.processing_coordinator, IntelligencePhase.PROCESSING),
+            (self.analysis_synthesizer, IntelligencePhase.ANALYSIS),
+            (self.dissemination_distributor, IntelligencePhase.DISSEMINATION),
+            (self.feedback_evaluator, IntelligencePhase.EVALUATION),
+        ]
+        for executor, ptype in phases:
+            status = context.phase_statuses.get(ptype, PhaseStatus.PENDING)
+            if status != PhaseStatus.COMPLETED:
+                context = self._execute_phase_with_wal(saga, executor, ptype, context)
+                if context.errors:
+                    return context
+        return context
+
+    def resume_cycle(self, cycle_id: str) -> PhaseContext:
+        """Replays and resumes an uncompleted or crashed cycle from its WAL state."""
+        replayed = self.wal.replay_cycle(cycle_id, self.workspace_dir)
+        context = (
+            replayed
+            if isinstance(replayed, PhaseContext)
+            else PhaseContext(cycle_id=cycle_id, workspace_dir=self.workspace_dir)
+        )
+        context = self._run_pending_phases(SagaCoordinator(), context)
+        self._update_pir_from_telemetry(context)
         self.wal.append_event(cycle_id=cycle_id, event_type=EventType.CYCLE_COMPLETED)
         self.cycle_history.append(context)
         return context

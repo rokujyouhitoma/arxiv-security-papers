@@ -38,64 +38,52 @@ class TextInterpreter:
             self._execute_stream(content_stream)
         return self.glyphs
 
+    def _parse_next_stream_token(self, parser: PdfParser, stack: List[Any]) -> bool:
+        parser.lexer.skip_whitespace_and_comments()
+        if parser.lexer.pos >= parser.lexer.length:
+            return False
+
+        obj = parser.parse_object()
+        if obj is None:
+            return False
+
+        if isinstance(obj, str) and not obj.startswith("/"):
+            self._dispatch_operator(obj, stack)
+            stack.clear()
+        else:
+            stack.append(obj)
+        return True
+
     def _execute_stream(self, data: bytes) -> None:
         parser = PdfParser(data)
         stack: List[Any] = []
-
-        while True:
-            parser.lexer.skip_whitespace_and_comments()
-            if parser.lexer.pos >= parser.lexer.length:
-                break
-
-            obj = parser.parse_object()
-            if obj is None:
-                break
-
-            if isinstance(obj, str) and not obj.startswith("/"):
-                # Keyword / Operator execution
-                self._dispatch_operator(obj, stack)
-                stack.clear()
-            else:
-                stack.append(obj)
+        while self._parse_next_stream_token(parser, stack):
+            pass
 
     def _dispatch_operator(self, op: str, stack: List[Any]) -> None:
-        if op == "BT":
-            self._handle_bt()
-        elif op == "Tf":
-            self._handle_tf(stack)
-        elif op == "Tm":
-            self._handle_tm(stack)
-        elif op in ("Td", "TD"):
-            self._handle_td(stack, set_leading=(op == "TD"))
-        elif op in ("T*", "'"):
-            self._handle_tstar()
-            if op == "'":
-                self._handle_tj(stack)
-        elif op in ("TL", "Tc", "Tw", "Tz"):
-            self._handle_state_params(op, stack)
-        elif op in ("Tj", "TJ"):
-            self._handle_showing(op, stack)
-        elif op == '"':
-            self._handle_double_quote(stack)
+        dispatch_table: Dict[str, Callable[[], None]] = {
+            "BT": self._handle_bt,
+            "Tf": lambda: self._handle_tf(stack),
+            "Tm": lambda: self._handle_tm(stack),
+            "Td": lambda: self._handle_td(stack, set_leading=False),
+            "TD": lambda: self._handle_td(stack, set_leading=True),
+            "T*": self._handle_tstar,
+            "'": lambda: (self._handle_tstar(), self._handle_tj(stack)),
+            "TL": lambda: self._set_state_param("leading", stack),
+            "Tc": lambda: self._set_state_param("char_spacing", stack),
+            "Tw": lambda: self._set_state_param("word_spacing", stack),
+            "Tz": lambda: self._set_state_param("horiz_scale", stack),
+            "Tj": lambda: self._handle_tj(stack),
+            "TJ": lambda: self._handle_tj_array(stack),
+            '"': lambda: self._handle_double_quote(stack),
+        }
+        handler = dispatch_table.get(op)
+        if handler:
+            handler()
 
-    def _handle_state_params(self, op: str, stack: List[Any]) -> None:
-        if not stack or not isinstance(stack[0], (int, float)):
-            return
-        val = float(stack[0])
-        if op == "TL":
-            self.leading = val
-        elif op == "Tc":
-            self.char_spacing = val
-        elif op == "Tw":
-            self.word_spacing = val
-        elif op == "Tz":
-            self.horiz_scale = val
-
-    def _handle_showing(self, op: str, stack: List[Any]) -> None:
-        if op == "Tj":
-            self._handle_tj(stack)
-        elif op == "TJ":
-            self._handle_tj_array(stack)
+    def _set_state_param(self, attr_name: str, stack: List[Any]) -> None:
+        if stack and isinstance(stack[0], (int, float)):
+            setattr(self, attr_name, float(stack[0]))
 
     def _handle_double_quote(self, stack: List[Any]) -> None:
         if len(stack) >= 3:
@@ -152,19 +140,18 @@ class TextInterpreter:
         if isinstance(raw_str, bytes):
             self._render_text_bytes(raw_str)
 
+    def _process_tj_elem(self, elem: Any) -> None:
+        if isinstance(elem, bytes):
+            self._render_text_bytes(elem)
+        elif isinstance(elem, (int, float)):
+            displacement = -float(elem) / 1000.0 * self.font_size * (self.horiz_scale / 100.0)
+            self.tm[4] += displacement * self.tm[0]
+
     def _handle_tj_array(self, stack: List[Any]) -> None:
         if not stack or not isinstance(stack[0], list):
             return
-        array = stack[0]
-        for elem in array:
-            if isinstance(elem, bytes):
-                self._render_text_bytes(elem)
-            elif isinstance(elem, (int, float)):
-                # Kerning / displacement: -elem / 1000 * font_size
-                displacement = (
-                    -float(elem) / 1000.0 * self.font_size * (self.horiz_scale / 100.0)
-                )
-                self.tm[4] += displacement * self.tm[0]
+        for elem in stack[0]:
+            self._process_tj_elem(elem)
 
     def _render_text_bytes(self, raw_bytes: bytes) -> None:
         decoder = self.font_decoders.get(self.active_font)

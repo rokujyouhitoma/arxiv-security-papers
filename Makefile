@@ -221,8 +221,8 @@ radon-hal: activate ## radon compute their Halstead metrics
 	${VENV_BIN}/radon hal $(PYTHON_SRCS)
 
 .PHONY: xenon
-xenon: activate ## xenon
-	${VENV_BIN}/xenon --max-absolute B --max-modules B --max-average A src
+xenon: activate ## xenon strict cyclomatic complexity enforcement (Grade A avg/modules/absolute)
+	${VENV_BIN}/xenon --max-absolute A --max-modules A --max-average A src
 
 .PHONY: mypy
 mypy: activate ## mypy

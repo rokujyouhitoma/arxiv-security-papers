@@ -178,14 +178,28 @@ class SynonymExpander:
             return set(self.lookup[token_lower])
         return {token_lower}
 
+    def _matches_substring(self, term: str, token_lower: str) -> bool:
+        if len(term) < 2:
+            return False
+        if term == token_lower:
+            return True
+        return bool(len(token_lower) >= 3 and term in token_lower)
+
     def _find_substring_synonyms(self, token_lower: str) -> Set[str]:
         matched: Set[str] = set()
         for term, syns in self.lookup.items():
-            if len(term) >= 2 and (
-                term == token_lower or (len(token_lower) >= 3 and term in token_lower)
-            ):
+            if self._matches_substring(term, token_lower):
                 matched.update(syns)
         return matched
+
+    def _expand_single_token(self, token: str, expanded: Set[str]) -> None:
+        if not token or len(token) < 2:
+            return
+        token_lower = token.lower()
+        if token_lower in self.lookup:
+            expanded.update(self.lookup[token_lower])
+        else:
+            expanded.update(self._find_substring_synonyms(token_lower))
 
     def expand_query(self, query: str) -> List[str]:
         """Expands a query string into a targeted set of synonym tokens in sub-1ms time."""
@@ -200,12 +214,6 @@ class SynonymExpander:
         expanded = set(all_raw)
 
         for token in all_raw:
-            if not token or len(token) < 2:
-                continue
-            token_lower = token.lower()
-            if token_lower in self.lookup:
-                expanded.update(self.lookup[token_lower])
-            else:
-                expanded.update(self._find_substring_synonyms(token_lower))
+            self._expand_single_token(token, expanded)
 
         return list(expanded)

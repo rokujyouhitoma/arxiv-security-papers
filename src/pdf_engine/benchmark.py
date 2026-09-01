@@ -134,6 +134,20 @@ def _evaluate_target_list(targets: List[str]) -> List[ExtractionMetrics]:
     return metrics_list
 
 
+def _calc_metrics_averages(metrics_list: List[ExtractionMetrics], count: int) -> tuple[float, float, float, float]:
+    tot_rec = 0.0
+    tot_f1 = 0.0
+    tot_sim = 0.0
+    tot_abs = 0
+    for m in metrics_list:
+        tot_rec += m.char_recall
+        tot_f1 += m.word_f1
+        tot_sim += m.similarity
+        if m.abstract_captured:
+            tot_abs += 1
+    return tot_rec / count, tot_f1 / count, tot_sim / count, tot_abs / count
+
+
 def _build_benchmark_summary(
     metrics_list: List[ExtractionMetrics], elapsed: float
 ) -> Dict[str, Any]:
@@ -141,19 +155,16 @@ def _build_benchmark_summary(
     if valid_count == 0:
         return {"status": "empty", "count": 0}
 
-    avg_char_recall = sum(m.char_recall for m in metrics_list) / valid_count
-    avg_word_f1 = sum(m.word_f1 for m in metrics_list) / valid_count
-    avg_sim = sum(m.similarity for m in metrics_list) / valid_count
-    abs_rate = sum(1 for m in metrics_list if m.abstract_captured) / valid_count
+    rec, f1, sim, abs_r = _calc_metrics_averages(metrics_list, valid_count)
 
     return {
         "evaluated_papers": valid_count,
         "elapsed_sec": round(elapsed, 3),
         "ms_per_paper": round((elapsed / valid_count) * 1000, 2),
-        "avg_char_recall": round(avg_char_recall * 100, 2),
-        "avg_word_f1": round(avg_word_f1 * 100, 2),
-        "avg_similarity": round(avg_sim * 100, 2),
-        "abstract_capture_rate": round(abs_rate * 100, 2),
+        "avg_char_recall": round(rec * 100, 2),
+        "avg_word_f1": round(f1 * 100, 2),
+        "avg_similarity": round(sim * 100, 2),
+        "abstract_capture_rate": round(abs_r * 100, 2),
     }
 
 

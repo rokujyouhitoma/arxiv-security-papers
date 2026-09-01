@@ -17,6 +17,10 @@ class PdfLexer:
         self.length = len(data)
         self.pos = 0
 
+    def _skip_comment_line(self) -> None:
+        while self.pos < self.length and self.data[self.pos] not in (10, 13):
+            self.pos += 1
+
     def skip_whitespace_and_comments(self) -> None:
         """Skips ASCII whitespaces and comments (% ... line end)."""
         while self.pos < self.length:
@@ -24,11 +28,36 @@ class PdfLexer:
             if b in WHITESPACE:
                 self.pos += 1
             elif b == ord("%"):
-                # Skip until end of line (\r or \n)
-                while self.pos < self.length and self.data[self.pos] not in (10, 13):
-                    self.pos += 1
+                self._skip_comment_line()
             else:
                 break
+
+    def _match_dict_delimiter(self) -> Optional[Tuple[TokenType, str]]:
+        if self.data.startswith(b"<<", self.pos):
+            self.pos += 2
+            return (TokenType.DICT_START, "<<")
+        if self.data.startswith(b">>", self.pos):
+            self.pos += 2
+            return (TokenType.DICT_END, ">>")
+        return None
+
+    def _match_array_delimiter(self, b: int) -> Optional[Tuple[TokenType, str]]:
+        if b == ord("["):
+            self.pos += 1
+            return (TokenType.ARRAY_START, "[")
+        if b == ord("]"):
+            self.pos += 1
+            return (TokenType.ARRAY_END, "]")
+        return None
+
+    def _match_complex_token(self, b: int) -> Optional[Tuple[TokenType, Any]]:
+        if b == ord("("):
+            return self._scan_literal_string()
+        if b == ord("<"):
+            return self._scan_hex_string()
+        if b == ord("/"):
+            return self._scan_name()
+        return None
 
     def next_token(self) -> Optional[Tuple[TokenType, Any]]:
         """Extracts the next lexical token from the stream."""
@@ -36,38 +65,39 @@ class PdfLexer:
         if self.pos >= self.length:
             return None
 
+        d_tok = self._match_dict_delimiter()
+        if d_tok:
+            return d_tok
+
         b = self.data[self.pos]
+        a_tok = self._match_array_delimiter(b)
+        if a_tok:
+            return a_tok
 
-        # 1. Dictionaries << >>
-        if self.data.startswith(b"<<", self.pos):
-            self.pos += 2
-            return (TokenType.DICT_START, "<<")
-        if self.data.startswith(b">>", self.pos):
-            self.pos += 2
-            return (TokenType.DICT_END, ">>")
+        c_tok = self._match_complex_token(b)
+        return c_tok if c_tok else self._scan_keyword_or_number()
 
-        # 2. Arrays [ ]
-        if b == ord("["):
-            self.pos += 1
-            return (TokenType.ARRAY_START, "[")
-        if b == ord("]"):
-            self.pos += 1
-            return (TokenType.ARRAY_END, "]")
+    def _handle_literal_escape(self, out: bytearray) -> None:
+        self.pos += 1
+        if self.pos < self.length:
+            out.extend(self._decode_escape_seq())
 
-        # 3. Literal Strings (...)
+    def _process_literal_char(self, b: int, depth: int, out: bytearray) -> int:
+        if b == ord("\\"):
+            self._handle_literal_escape(out)
+            return depth
         if b == ord("("):
-            return self._scan_literal_string()
-
-        # 4. Hexadecimal Strings <...>
-        if b == ord("<"):
-            return self._scan_hex_string()
-
-        # 5. Names /Name
-        if b == ord("/"):
-            return self._scan_name()
-
-        # 6. Numbers or Keywords
-        return self._scan_keyword_or_number()
+            self.pos += 1
+            out.append(b)
+            return depth + 1
+        if b == ord(")"):
+            self.pos += 1
+            if depth > 1:
+                out.append(b)
+            return depth - 1
+        self.pos += 1
+        out.append(b)
+        return depth
 
     def _scan_literal_string(self) -> Tuple[TokenType, bytes]:
         self.pos += 1  # Skip opening '('
@@ -75,23 +105,7 @@ class PdfLexer:
         depth = 1
         while self.pos < self.length and depth > 0:
             b = self.data[self.pos]
-            if b == ord("\\"):
-                self.pos += 1
-                if self.pos < self.length:
-                    escaped_byte = self._decode_escape_seq()
-                    out.extend(escaped_byte)
-            elif b == ord("("):
-                depth += 1
-                out.append(b)
-                self.pos += 1
-            elif b == ord(")"):
-                depth -= 1
-                if depth > 0:
-                    out.append(b)
-                self.pos += 1
-            else:
-                out.append(b)
-                self.pos += 1
+            depth = self._process_literal_char(b, depth, out)
         return (TokenType.STRING_LITERAL, bytes(out))
 
     def _decode_escape_seq(self) -> bytes:
@@ -164,6 +178,16 @@ class PdfLexer:
         )
         return (TokenType.NAME, "/" + decoded_name)
 
+    def _parse_word_val(self, word: str) -> Tuple[TokenType, Any]:
+        keyword_map = {"true": True, "false": False, "null": None}
+        if word in keyword_map:
+            return (TokenType.KEYWORD, keyword_map[word])
+        try:
+            val = float(word) if "." in word else int(word)
+            return (TokenType.NUMBER, val)
+        except ValueError:
+            return (TokenType.KEYWORD, word)
+
     def _scan_keyword_or_number(self) -> Tuple[TokenType, Any]:
         start = self.pos
         while (
@@ -173,20 +197,7 @@ class PdfLexer:
         ):
             self.pos += 1
         word = self.data[start : self.pos].decode("latin1", errors="replace")
-
-        if word == "true":
-            return (TokenType.KEYWORD, True)
-        if word == "false":
-            return (TokenType.KEYWORD, False)
-        if word == "null":
-            return (TokenType.KEYWORD, None)
-
-        try:
-            if "." in word:
-                return (TokenType.NUMBER, float(word))
-            return (TokenType.NUMBER, int(word))
-        except ValueError:
-            return (TokenType.KEYWORD, word)
+        return self._parse_word_val(word)
 
 
 class PdfParser:
@@ -208,13 +219,18 @@ class PdfParser:
             return self._parse_dictionary()
         if ttype == TokenType.ARRAY_START:
             return self._parse_array()
-        if ttype in (
-            TokenType.STRING_LITERAL,
-            TokenType.STRING_HEX,
-            TokenType.NAME,
-            TokenType.KEYWORD,
-        ):
-            return val
+        return val
+
+    def _is_valid_gen_tok(self, tok: Optional[Tuple[TokenType, Any]]) -> bool:
+        return bool(tok and tok[0] == TokenType.NUMBER and isinstance(tok[1], int))
+
+    def _check_indirect_sequence(self, first_num: int) -> Optional[IndirectRef]:
+        tok2 = self.lexer.next_token()
+        if not self._is_valid_gen_tok(tok2):
+            return None
+        tok3 = self.lexer.next_token()
+        if tok3 == (TokenType.KEYWORD, "R"):
+            return IndirectRef(obj_num=first_num, gen_num=tok2[1])  # type: ignore[index]
         return None
 
     def _resolve_potential_indirect_ref(self, first_num: Union[int, float]) -> Any:
@@ -223,30 +239,30 @@ class PdfParser:
             return first_num
 
         saved_pos = self.lexer.pos
-        tok2 = self.lexer.next_token()
-        if tok2 and tok2[0] == TokenType.NUMBER and isinstance(tok2[1], int):
-            tok3 = self.lexer.next_token()
-            if tok3 and tok3[0] == TokenType.KEYWORD and tok3[1] == "R":
-                return IndirectRef(obj_num=first_num, gen_num=tok2[1])
+        ref = self._check_indirect_sequence(first_num)
+        if ref is not None:
+            return ref
 
         self.lexer.pos = saved_pos
         return first_num
 
+    def _parse_dict_entry(self, result: Dict[str, Any]) -> bool:
+        self.lexer.skip_whitespace_and_comments()
+        if self.lexer.data.startswith(b">>", self.lexer.pos):
+            self.lexer.pos += 2
+            return False
+        tok = self.lexer.next_token()
+        if tok is None or tok[0] == TokenType.DICT_END:
+            return False
+        if tok[0] == TokenType.NAME:
+            key = str(tok[1])
+            result[key] = self.parse_object()
+        return True
+
     def _parse_dictionary(self) -> Dict[str, Any]:
         result: Dict[str, Any] = {}
-        while True:
-            self.lexer.skip_whitespace_and_comments()
-            if self.lexer.data.startswith(b">>", self.lexer.pos):
-                self.lexer.pos += 2
-                break
-            tok = self.lexer.next_token()
-            if tok is None or tok[0] == TokenType.DICT_END:
-                break
-            if tok[0] != TokenType.NAME:
-                continue
-            key = str(tok[1])
-            val = self.parse_object()
-            result[key] = val
+        while self._parse_dict_entry(result):
+            pass
         return result
 
     def _parse_array(self) -> List[Any]:

@@ -159,36 +159,28 @@ class VectorEngine:
         """Tokenizes text using multi-stage analyzer."""
         return self.analyzer.tokenize(text)
 
+    def _extract_en_ja_keywords(self, combined_text: str, extracted: Set[str]) -> None:
+        ja_terms = re.findall(
+            r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]{3,}", combined_text
+        )
+        en_terms = re.findall(r"[a-zA-Z]{4,}", combined_text.lower())
+        stop_words = {"this", "that", "with", "from", "paper", "security", "using", "proposed"}
+        for term, freq in Counter(ja_terms + en_terms).most_common(5):
+            if freq >= 2 and term.lower() not in stop_words:
+                extracted.add(term)
+
     def extract_feature_keywords(
         self, title: str, desc: str, content: str = ""
     ) -> List[str]:
         """Extracts pre-annotation feature keywords."""
         combined_text = f"{title} {desc} {content}"
-        extracted = set()
+        extracted: Set[str] = set()
 
         for pattern, label in self.SECURITY_PATTERNS:
             if re.search(pattern, combined_text):
                 extracted.add(label)
 
-        ja_terms = re.findall(
-            r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]{3,}", combined_text
-        )
-        en_terms = re.findall(r"[a-zA-Z]{4,}", combined_text.lower())
-
-        counts = Counter(ja_terms + en_terms)
-        for term, freq in counts.most_common(5):
-            if freq >= 2 and term.lower() not in {
-                "this",
-                "that",
-                "with",
-                "from",
-                "paper",
-                "security",
-                "using",
-                "proposed",
-            }:
-                extracted.add(term)
-
+        self._extract_en_ja_keywords(combined_text, extracted)
         return list(extracted)
 
     def _extract_authors_from_meta(self, date_dir: str, clean_id: str) -> List[str]:
@@ -205,30 +197,34 @@ class VectorEngine:
                 pass
         return []
 
+    def _bm25_term_score(self, qt: str, tf: int, doc_len: int) -> float:
+        idf_val = self.idf.get(qt, 1.0)
+        numerator = tf * (self.BM25_K1 + 1)
+        denominator = tf + self.BM25_K1 * (
+            1 - self.BM25_B + self.BM25_B * (doc_len / self.avg_doc_len)
+        )
+        return idf_val * (numerator / denominator)
+
+    def _get_doc_tf(self, doc: Dict[str, Any]) -> Dict[str, int]:
+        tf = doc.get("token_counts")
+        if tf:
+            return tf
+        return Counter(doc.get("tokens", []))
+
     def calculate_bm25_score(
         self, query_tokens: List[str], doc: Dict[str, Any]
     ) -> float:
         """Computes Okapi BM25 probabilistic score."""
-        score = 0.0
         doc_len = len(doc.get("tokens", []))
         if doc_len == 0 or self.avg_doc_len == 0:
             return 0.0
 
-        doc_tf = doc.get("token_counts", {})
-        if not doc_tf:
-            doc_tf = Counter(doc.get("tokens", []))
-
+        doc_tf = self._get_doc_tf(doc)
+        total = 0.0
         for qt in query_tokens:
             if qt in doc_tf:
-                tf = doc_tf[qt]
-                idf_val = self.idf.get(qt, 1.0)
-                numerator = tf * (self.BM25_K1 + 1)
-                denominator = tf + self.BM25_K1 * (
-                    1 - self.BM25_B + self.BM25_B * (doc_len / self.avg_doc_len)
-                )
-                score += idf_val * (numerator / denominator)
-
-        return score
+                total += self._bm25_term_score(qt, doc_tf[qt], doc_len)
+        return total
 
     def calculate_fm_index_score(
         self, query_tokens: List[str], doc: Dict[str, Any]
@@ -265,6 +261,13 @@ class VectorEngine:
         m = re.search(pattern, content, re.MULTILINE)
         return m.group(1).strip() if m else default
 
+    def _extract_authors(self, content: str, date_dir: str, arxiv_id: str) -> List[str]:
+        authors = self._extract_authors_from_meta(date_dir, arxiv_id)
+        if not authors:
+            raw_auth = self._extract_field_value(r"authors:\s*\[(.*?)\]", content)
+            authors = [a.strip().strip("'\"") for a in raw_auth.split(",") if a.strip()]
+        return authors
+
     def _extract_okf_meta(
         self, content: str, date_dir: str, arxiv_id: str
     ) -> tuple[str, str, List[str], List[str], str]:
@@ -275,15 +278,9 @@ class VectorEngine:
         published_date = self._extract_field_value(
             r"^timestamp:\s*[\"']?([0-9]{4}-[0-9]{2}-[0-9]{2})", content
         )
-
         raw_tags = self._extract_field_value(r"^tags:\s*\[(.*?)\]", content)
         tags = [t.strip().strip("'\"") for t in raw_tags.split(",") if t.strip()]
-
-        authors = self._extract_authors_from_meta(date_dir, arxiv_id)
-        if not authors:
-            raw_auth = self._extract_field_value(r"authors:\s*\[(.*?)\]", content)
-            authors = [a.strip().strip("'\"") for a in raw_auth.split(",") if a.strip()]
-
+        authors = self._extract_authors(content, date_dir, arxiv_id)
         return title, description, tags, authors, published_date
 
     def _index_single_okf_file(
@@ -318,10 +315,6 @@ class VectorEngine:
         token_counts = dict(Counter(doc_tokens))
         for token in set(doc_tokens):
             doc_freq[token] += 1
-            self.inverted_index[token].append(arxiv_id)
-
-        for kw in keywords:
-            self.inverted_keyword_index[kw.lower()].append(arxiv_id)
 
         doc_entry = {
             "id": arxiv_id,
@@ -343,15 +336,9 @@ class VectorEngine:
         }
         self._populate_loaded_doc_indexes(doc_entry, arxiv_id)
 
-    def build_index(self) -> int:
-        """Scans all OKF files, builds multi-field index and saves index.json."""
-        okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
-        if not os.path.exists(okf_dir):
-            return 0
-
+    def _init_index_structures(self) -> None:
         self.documents = []
         self.documents_by_id = {}
-        doc_freq: Counter[str] = Counter()
         self.inverted_index = defaultdict(list)
         self.inverted_keyword_index = defaultdict(list)
         self.multi_field_index = MultiFieldPostingsIndex()
@@ -359,31 +346,53 @@ class VectorEngine:
         self.knowledge_graph = KnowledgeGraphIndex()
         self.citation_network = CitationNetworkIndex()
         self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
+        self.raptor_tree = RAPTORTreeIndex()
+
+    def _post_index_build_steps(self, num_docs: int) -> None:
+        if hasattr(self.multi_field_index, "compute_field_statistics"):
+            self.multi_field_index.compute_field_statistics(num_docs)
+        self.citation_network.compute_pagerank([d["id"] for d in self.documents])
+        self.raptor_tree.build_summary_tree(self.documents)
+
+    def _compute_idf_map(self, doc_freq: Counter[str], num_docs: int) -> Dict[str, float]:
+        return {
+            token: round(math.log((num_docs - freq + 0.5) / (freq + 0.5) + 1), 4)
+            for token, freq in doc_freq.items()
+        }
+
+    def _finalize_index_stats(self, doc_freq: Counter[str]) -> None:
+        num_docs = len(self.documents)
+        if num_docs == 0:
+            return
+        self.avg_doc_len = sum(len(d["tokens"]) for d in self.documents) / num_docs
+        self.idf = self._compute_idf_map(doc_freq, num_docs)
+        self._post_index_build_steps(num_docs)
+        self.proximity_graph.build_graph(
+            self.documents, dict(self.inverted_keyword_index)
+        )
+
+    def _index_files_in_dir(self, root: str, files: List[str], doc_freq: Counter[str]) -> None:
+        date_dir = os.path.basename(root)
+        for file in files:
+            if file.endswith(".md"):
+                try:
+                    self._index_single_okf_file(os.path.join(root, file), date_dir, file, doc_freq)
+                except Exception:
+                    continue
+
+    def build_index(self) -> int:
+        """Scans all OKF files, builds multi-field index and saves index.json."""
+        okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        if not os.path.exists(okf_dir):
+            return 0
+
+        self._init_index_structures()
+        doc_freq: Counter[str] = Counter()
 
         for root, _, files in os.walk(okf_dir):
-            date_dir = os.path.basename(root)
-            for file in files:
-                if file.endswith(".md"):
-                    file_path = os.path.join(root, file)
-                    try:
-                        self._index_single_okf_file(file_path, date_dir, file, doc_freq)
-                    except Exception:
-                        continue
+            self._index_files_in_dir(root, files, doc_freq)
 
-        num_docs = len(self.documents)
-        if num_docs > 0:
-            self.avg_doc_len = sum(len(d["tokens"]) for d in self.documents) / num_docs
-            self.idf = {
-                token: round(math.log((num_docs - freq + 0.5) / (freq + 0.5) + 1), 4)
-                for token, freq in doc_freq.items()
-            }
-            self.multi_field_index.compute_field_statistics(num_docs)
-            self.citation_network.compute_pagerank([d["id"] for d in self.documents])
-            self.raptor_tree.build_summary_tree(self.documents)
-            self.proximity_graph.build_graph(
-                self.documents, dict(self.inverted_keyword_index)
-            )
-
+        self._finalize_index_stats(doc_freq)
         self.save_index()
         return len(self.documents)
 
@@ -478,46 +487,72 @@ class VectorEngine:
         for author in d.get("authors", []):
             self.knowledge_graph.add_entity(author, "author", author, arxiv_id)
 
+    def _populate_index_from_dict(self, data: Dict[str, Any], max_docs: Optional[int]) -> None:
+        self.idf = data.get("idf", {})
+        self.avg_doc_len = data.get("avg_doc_len", 0)
+        self.inverted_index = defaultdict(list, data.get("inverted_index", {}))
+        self.inverted_keyword_index = defaultdict(list, data.get("inverted_keywords", {}))
+        raw_docs = data.get("documents", [])
+        if max_docs:
+            raw_docs = raw_docs[:max_docs]
+
+        self._init_index_structures()
+        self.proximity_graph.graph = defaultdict(list, data.get("proximity_graph", {}))
+
+        for d in raw_docs:
+            d_res = self._restore_doc_entry(d)
+            self._populate_loaded_doc_indexes(d_res, d_res.get("id", ""))
+
+        self._post_index_build_steps(len(self.documents))
+
     def load_index(self, max_docs: Optional[int] = None) -> None:
         if not os.path.exists(self.index_file):
             return
         try:
             with open(self.index_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            self.idf = data.get("idf", {})
-            self.avg_doc_len = data.get("avg_doc_len", 0)
-            self.inverted_index = defaultdict(list, data.get("inverted_index", {}))
-            self.inverted_keyword_index = defaultdict(
-                list, data.get("inverted_keywords", {})
-            )
-            raw_docs = data.get("documents", [])
-            if max_docs is not None and max_docs > 0:
-                raw_docs = raw_docs[:max_docs]
-
-            self.documents = []
-            self.documents_by_id = {}
-            self.multi_field_index = MultiFieldPostingsIndex()
-            self.faceted_index = FacetedIndex()
-            self.knowledge_graph = KnowledgeGraphIndex()
-            self.citation_network = CitationNetworkIndex()
-            self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
-            self.proximity_graph.graph = defaultdict(
-                list, data.get("proximity_graph", {})
-            )
-
-            for d in raw_docs:
-                d = self._restore_doc_entry(d)
-                arxiv_id = d.get("id", "")
-                self._populate_loaded_doc_indexes(d, arxiv_id)
-
-            self.multi_field_index.compute_field_statistics(len(self.documents))
-            self.citation_network.compute_pagerank([d["id"] for d in self.documents])
-            self.raptor_tree.build_summary_tree(self.documents)
+            self._populate_index_from_dict(data, max_docs)
         except (json.JSONDecodeError, OSError, KeyError, TypeError) as e:
             logging.warning("Failed to load index from %s: %s", self.index_file, e)
-            self.documents = []
-            self.documents_by_id = {}
+            self._init_index_structures()
             self.idf = {}
+
+    def _score_neighbor_candidate(self, doc: Dict[str, Any], tid: str) -> Optional[Dict[str, Any]]:
+        if tid not in self.documents_by_id:
+            return None
+        tdoc = self.documents_by_id[tid]
+        sim = self.proximity_graph.compute_similarity(doc, tdoc)
+        if sim <= 0.05:
+            return None
+        shared_kw = list(
+            set(doc.get("annotated_keywords", []))
+            & set(tdoc.get("annotated_keywords", []))
+        )
+        return {
+            "target_id": tid,
+            "title": tdoc.get("title", ""),
+            "description": tdoc.get("description", ""),
+            "similarity": round(sim, 4),
+            "shared_keywords": shared_kw,
+            "path": tdoc.get("path", ""),
+            "published_date": tdoc.get("published_date", ""),
+        }
+
+    def _compute_fallback_neighbors(self, doc: Dict[str, Any], doc_id: str) -> List[Dict[str, Any]]:
+        candidate_ids = set()
+        for kw in doc.get("annotated_keywords", []):
+            candidate_ids.update(self.inverted_keyword_index.get(kw.lower(), []))
+        candidate_ids.discard(doc_id)
+
+        scored = [
+            cand
+            for tid in list(candidate_ids)[:40]
+            if (cand := self._score_neighbor_candidate(doc, tid)) is not None
+        ]
+        scored.sort(key=lambda x: x["similarity"], reverse=True)
+        neighbors = scored[:6]
+        self.proximity_graph.graph[doc_id] = neighbors
+        return neighbors
 
     def get_related_papers(self, doc_id: str) -> Dict[str, Any]:
         """Retrieves precomputed nearest neighbors for a paper."""
@@ -527,36 +562,7 @@ class VectorEngine:
 
         neighbors = self.proximity_graph.get_neighbors(doc_id)
         if not neighbors:
-            # Fallback on-demand calculation
-            kw_list = doc.get("annotated_keywords", [])
-            candidate_ids = set()
-            for kw in kw_list:
-                candidate_ids.update(self.inverted_keyword_index.get(kw.lower(), []))
-            candidate_ids.discard(doc_id)
-            scored = []
-            for tid in list(candidate_ids)[:40]:
-                if tid in self.documents_by_id:
-                    tdoc = self.documents_by_id[tid]
-                    sim = self.proximity_graph.compute_similarity(doc, tdoc)
-                    if sim > 0.05:
-                        shared_kw = list(
-                            set(doc.get("annotated_keywords", []))
-                            & set(tdoc.get("annotated_keywords", []))
-                        )
-                        scored.append(
-                            {
-                                "target_id": tid,
-                                "title": tdoc.get("title", ""),
-                                "description": tdoc.get("description", ""),
-                                "similarity": round(sim, 4),
-                                "shared_keywords": shared_kw,
-                                "path": tdoc.get("path", ""),
-                                "published_date": tdoc.get("published_date", ""),
-                            }
-                        )
-            scored.sort(key=lambda x: x["similarity"], reverse=True)
-            neighbors = scored[:6]
-            self.proximity_graph.graph[doc_id] = neighbors
+            neighbors = self._compute_fallback_neighbors(doc, doc_id)
 
         mermaid_str = self.proximity_graph.generate_mermaid_graph(
             doc_id, doc.get("title", "")
@@ -596,19 +602,26 @@ class VectorEngine:
                 )
         return matches
 
+    def _match_field_postings(self, clause: QueryClause, target_field: str) -> Set[str]:
+        matches: Set[str] = set()
+        for tt in self.tokenize(clause.term):
+            for doc_id, _ in self.multi_field_index.get_postings(target_field, tt):
+                matches.add(doc_id)
+        return matches
+
+    def _match_inverted_tokens(self, clause: QueryClause) -> Set[str]:
+        matches: Set[str] = set()
+        for tt in self.tokenize(clause.term):
+            if tt in self.inverted_index:
+                matches.update(self.inverted_index[tt])
+        return matches
+
     def _match_term_or_inverted(
         self, clause: QueryClause, target_field: Optional[str]
     ) -> Set[str]:
-        matches: Set[str] = set()
         if target_field:
-            for tt in self.tokenize(clause.term):
-                for doc_id, _ in self.multi_field_index.get_postings(target_field, tt):
-                    matches.add(doc_id)
-        else:
-            for tt in self.tokenize(clause.term):
-                if tt in self.inverted_index:
-                    matches.update(self.inverted_index[tt])
-        return matches
+            return self._match_field_postings(clause, target_field)
+        return self._match_inverted_tokens(clause)
 
     def _match_clause_docs(self, clause: QueryClause) -> Set[str]:
         target_field = clause.field
@@ -631,24 +644,37 @@ class VectorEngine:
                     inv_candidates.update(self.inverted_keyword_index[ptoken])
         return inv_candidates
 
+    def _is_restrictive_clause(self, clause: QueryClause) -> bool:
+        return bool(clause.is_required or clause.field or clause.is_prefix or clause.is_fuzzy)
+
+    def _apply_single_clause_filter(
+        self, clause: QueryClause, candidate_ids: Optional[Set[str]]
+    ) -> Optional[Set[str]]:
+        clause_matches = self._match_clause_docs(clause)
+        if self._is_restrictive_clause(clause):
+            return clause_matches if candidate_ids is None else (candidate_ids & clause_matches)
+        if clause.is_prohibited and candidate_ids is not None:
+            candidate_ids.difference_update(clause_matches)
+        return candidate_ids
+
     def _filter_clause_candidates(
         self, clauses: List[QueryClause], candidate_ids: Optional[Set[str]]
     ) -> Optional[Set[str]]:
         for clause in clauses:
-            clause_matches = self._match_clause_docs(clause)
-            if (
-                clause.is_required
-                or clause.field
-                or clause.is_prefix
-                or clause.is_fuzzy
-            ):
-                candidate_ids = (
-                    clause_matches
-                    if candidate_ids is None
-                    else (candidate_ids & clause_matches)
-                )
-            elif clause.is_prohibited and candidate_ids is not None:
-                candidate_ids.difference_update(clause_matches)
+            candidate_ids = self._apply_single_clause_filter(clause, candidate_ids)
+        return candidate_ids
+
+    def _resolve_candidate_ids(
+        self, ctx: QueryContext, category: Optional[str]
+    ) -> Optional[Set[str]]:
+        candidate_ids = (
+            self.faceted_index.filter(category=category) if category else None
+        )
+        candidate_ids = self._filter_clause_candidates(ctx.clauses, candidate_ids)
+        if candidate_ids is None and ctx.expanded_tokens:
+            inv_cands = self._fallback_token_candidates(ctx.expanded_tokens)
+            if inv_cands:
+                candidate_ids = inv_cands
         return candidate_ids
 
     def retrieve_candidates(
@@ -658,16 +684,7 @@ class VectorEngine:
         max_candidates: int = 600,
     ) -> List[Dict[str, Any]]:
         """Module 2: Hybrid Retrieval & Multi-Field Candidate Pruning."""
-        candidate_ids = (
-            self.faceted_index.filter(category=category) if category else None
-        )
-        candidate_ids = self._filter_clause_candidates(ctx.clauses, candidate_ids)
-
-        if candidate_ids is None and ctx.expanded_tokens:
-            inv_cands = self._fallback_token_candidates(ctx.expanded_tokens)
-            if inv_cands:
-                candidate_ids = inv_cands
-
+        candidate_ids = self._resolve_candidate_ids(ctx, category)
         if candidate_ids is not None:
             target_docs = [
                 self.documents_by_id[did]
@@ -701,90 +718,126 @@ class VectorEngine:
                 set(doc.get("desc_tokens", [])),
                 doc.get("description", "").lower(),
             ),
+            (
+                "abstract",
+                set(doc.get("abstract_tokens", [])),
+                " ".join(doc.get("abstract_tokens", [])).lower(),
+            ),
         )
-        score = sum(
-            self.FIELD_WEIGHTS[f_name] * idf_val
-            for f_name, tok_set, text_val in field_checks
-            if qt in tok_set or qt in text_val
-        )
-        if qt in set(doc.get("abstract_tokens", [])):
-            score += self.FIELD_WEIGHTS["abstract"] * idf_val
-        return score
+        token_score = 0.0
+        for fld, tokens_set, raw_text in field_checks:
+            if qt in tokens_set:
+                token_score += self.FIELD_WEIGHTS.get(fld, 1.0) * idf_val
+            elif len(qt) >= 2 and qt in raw_text:
+                token_score += (self.FIELD_WEIGHTS.get(fld, 1.0) * 0.5) * idf_val
+        return token_score
 
-    def _score_single_doc(
-        self, doc: Dict[str, Any], all_query_tokens: List[str]
+    def calculate_multi_field_bm25_score(
+        self, query_tokens: List[str], doc: Dict[str, Any]
     ) -> float:
-        if not all_query_tokens:
-            return 1.0
+        total_score = 0.0
+        for qt in query_tokens:
+            total_score += self._compute_token_field_score(qt, doc)
+        return total_score
 
-        field_score = sum(
-            self._compute_token_field_score(qt, doc) for qt in all_query_tokens
-        )
-        bm25_score = self.calculate_bm25_score(all_query_tokens, doc)
-        fm_score = self.calculate_fm_index_score(all_query_tokens, doc)
-        recency_boost = self.calculate_recency_boost(doc.get("published_date", ""))
-        pagerank_boost = 1.0 + 500.0 * self.citation_network.get_score(
-            doc.get("id", "")
-        )
+    def _score_single_candidate(
+        self,
+        doc: Dict[str, Any],
+        ctx: QueryContext,
+        graph_boosts: Dict[str, float],
+        vector_sims: Dict[str, float],
+    ) -> float:
+        doc_id = doc.get("id", "")
+        bm25_score = self.calculate_multi_field_bm25_score(
+            ctx.original_tokens, doc
+        ) + 0.5 * self.calculate_multi_field_bm25_score(ctx.expanded_tokens, doc)
+        fm_score = self.calculate_fm_index_score(ctx.original_tokens, doc)
+        pagerank_score = self.citation_network.get_score(doc_id)
+        graph_boost = graph_boosts.get(doc_id, 0.0)
+        recency = self.calculate_recency_boost(doc.get("published_date", ""))
+        vector_sim = vector_sims.get(doc_id, 0.0)
 
         return (
-            (field_score * 0.35 + bm25_score * 0.35 + fm_score * 0.30)
-            * recency_boost
-            * pagerank_boost
-        )
+            (bm25_score * 0.40)
+            + (fm_score * 0.15)
+            + (pagerank_score * 0.10)
+            + (graph_boost * 0.15)
+            + (vector_sim * 0.20)
+        ) * recency
+
+    def _compute_vector_similarities(
+        self, query: str, candidates: List[Dict[str, Any]]
+    ) -> Dict[str, float]:
+        q_vec = self.embedding.embed_text(query)
+        sims: Dict[str, float] = {}
+        for doc in candidates:
+            did = doc.get("id", "")
+            title = doc.get("title", "")
+            desc = doc.get("description", "") or doc.get("abstract", "")
+            doc_text = f"{title} {desc}"
+            d_vec = self.embedding.embed_text(doc_text)
+            sim = sum(a * b for a, b in zip(q_vec, d_vec))
+            sims[did] = max(0.0, float(sim))
+        return sims
 
     def rerank_candidates(
         self,
         ctx: QueryContext,
-        target_docs: List[Dict[str, Any]],
+        candidates: List[Dict[str, Any]],
         top_k: int = 5,
     ) -> List[Dict[str, Any]]:
-        """Module 3: Multi-Stage Ranking & Multi-Field Scoring."""
-        scores: List[Dict[str, Any]] = []
-        all_query_tokens = [
-            tok for t in ctx.expanded_tokens for tok in self.tokenize(t)
-        ]
+        """Module 3: Multi-Stage Scoring & Fusion Ranking."""
+        graph_boosts = self.knowledge_graph.get_entity_boosts(ctx.original_tokens)
+        vector_sims = self._compute_vector_similarities(
+            ctx.original_query, candidates
+        )
 
-        for doc in target_docs:
-            total_score = self._score_single_doc(doc, all_query_tokens)
-            if total_score > 0:
-                scores.append({"doc": doc, "score": round(total_score, 4)})
+        ranked = []
+        for doc in candidates:
+            final_score = self._score_single_candidate(
+                doc, ctx, graph_boosts, vector_sims
+            )
+            doc_copy = dict(doc)
+            doc_copy["score"] = round(final_score, 4)
+            ranked.append(doc_copy)
 
-        scores.sort(key=lambda x: float(x["score"]), reverse=True)
-        return scores[:top_k]
+        ranked.sort(key=lambda x: x["score"], reverse=True)
+        return ranked[:top_k]
 
     def format_presentation(
-        self,
-        ctx: QueryContext,
-        ranked_items: List[Dict[str, Any]],
+        self, ctx: QueryContext, ranked_items: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Module 4: Presentation, Snippet & Dynamic Highlighting."""
-        highlight_terms = [c.term for c in ctx.clauses]
-        if not highlight_terms and ctx.normalized_query:
-            highlight_terms = self.tokenize(ctx.normalized_query)
-
+        """Module 4: Presentation Engine & Dynamic Snippet Generation."""
         results = []
         for item in ranked_items:
-            doc = item["doc"]
-            full_context = f"{doc.get('description', '')} {doc.get('title', '')} {' '.join(doc.get('authors', []))}"
-            highlight_snippet = self.highlighter.highlight(
-                full_context, highlight_terms
+            hl_title = self.highlighter.highlight_text(
+                item.get("title", ""), ctx.original_tokens
+            )
+            hl_desc = self.highlighter.highlight_text(
+                item.get("description", ""), ctx.original_tokens
+            )
+            snippets = self.highlighter.generate_snippets(
+                item.get("description", ""), ctx.original_tokens
             )
 
-            results.append(
-                {
-                    "id": doc.get("id"),
-                    "title": doc.get("title"),
-                    "description": doc.get("description"),
-                    "authors": doc.get("authors", []),
-                    "tags": doc.get("tags", []),
-                    "annotated_keywords": doc.get("annotated_keywords", []),
-                    "published_date": doc.get("published_date", ""),
-                    "path": doc.get("path"),
-                    "highlight": highlight_snippet,
-                    "score": item["score"],
-                }
-            )
+            res_entry = {
+                "id": item.get("id"),
+                "title": item.get("title"),
+                "highlighted_title": hl_title,
+                "description": item.get("description"),
+                "highlighted_description": hl_desc,
+                "snippets": snippets,
+                "authors": item.get("authors", []),
+                "tags": item.get("tags", []),
+                "annotated_keywords": item.get("annotated_keywords", []),
+                "published_date": item.get("published_date"),
+                "path": item.get("path"),
+                "score": item.get("score", 0.0),
+                "pagerank": round(
+                    self.citation_network.get_score(item.get("id", "")), 4
+                ),
+            }
+            results.append(res_entry)
         return results
 
     def log_search_performance(
@@ -795,7 +848,7 @@ class VectorEngine:
         result_count: int,
         profile: Dict[str, Any],
     ) -> None:
-        """Appends structured query execution profile to search_perf_log.jsonl."""
+        """Module 5: Diagnostic Performance Audit Logging."""
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "query": query,
@@ -811,92 +864,94 @@ class VectorEngine:
         except Exception as e:
             sys.stderr.write(f"[SearchEngine] Failed to write perf log: {e}\n")
 
-    def search_with_profile(
-        self, query: str, top_k: int = 5, category: Optional[str] = None
+    def _execute_search_pipeline(
+        self, query: str, top_k: int, category: Optional[str], q_tokens: List[str]
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-        """
-        Enterprise Multi-Field & Multi-Stage Hybrid Search with Query Parser & Dynamic Highlighter.
-        Measures Wall-clock time, CPU time, and Memory consumption (tracemalloc).
-        """
-        was_tracing = tracemalloc.is_tracing()
-        if not was_tracing:
-            tracemalloc.start()
-        tracemalloc.reset_peak()
         t0_wall = time.perf_counter()
         t0_cpu = time.process_time()
         start_mem, _ = tracemalloc.get_traced_memory()
 
-        q_tokens = self.tokenize(query) if query else []
-
-        # Phase 0: Semantic Cache Check
-        cached_res = self.semantic_cache.get(f"{query}|{category}", q_tokens)
-        if cached_res:
-            res, prof = cached_res
-            prof["cached"] = True
-            if not was_tracing:
-                tracemalloc.stop()
-            return res[:top_k], prof
-
         t_tokenize_start = time.perf_counter()
-        # Serving layer strictly does not build index at query time or during web server startup.
-        # Indices must be built in advance via dedicated offline/batch processes (e.g. `make build_vector_db`).
-
-        # Step 1: Query Context Preparation
         ctx = self.prepare_query_context(query)
         t_tokenize_end = time.perf_counter()
 
-        # Step 2: Multi-Field Candidate Retrieval
         t_prune_start = time.perf_counter()
-        target_docs = self.retrieve_candidates(
-            ctx, category=category, max_candidates=600
-        )
+        target_docs = self.retrieve_candidates(ctx, category=category, max_candidates=600)
         t_prune_end = time.perf_counter()
 
-        # Step 3: Multi-Stage Scoring & Reranking
         t_scoring_start = time.perf_counter()
         ranked_items = self.rerank_candidates(ctx, target_docs, top_k=top_k)
         t_scoring_end = time.perf_counter()
 
-        # Step 4: Presentation & Highlight Generation
         results = self.format_presentation(ctx, ranked_items)
         t_total_end = time.perf_counter()
         t_cpu_end = time.process_time()
 
         end_mem, peak_mem = tracemalloc.get_traced_memory()
-        peak_kb = peak_mem / 1024.0
-        delta_kb = (end_mem - start_mem) / 1024.0
-
-        if not was_tracing:
-            tracemalloc.stop()
-
         profile = {
             "tokenize_ms": round((t_tokenize_end - t_tokenize_start) * 1000, 3),
             "candidate_pruning_ms": round((t_prune_end - t_prune_start) * 1000, 3),
             "scoring_ms": round((t_scoring_end - t_scoring_start) * 1000, 3),
             "total_ms": round((t_total_end - t0_wall) * 1000, 3),
             "cpu_ms": round((t_cpu_end - t0_cpu) * 1000, 3),
-            "peak_memory_kb": round(peak_kb, 3),
-            "memory_delta_kb": round(delta_kb, 3),
+            "peak_memory_kb": round(peak_mem / 1024.0, 3),
+            "memory_delta_kb": round((end_mem - start_mem) / 1024.0, 3),
             "candidates_evaluated": len(target_docs),
             "total_documents": len(self.documents),
             "clauses_parsed": len(ctx.clauses),
             "intent": ctx.intent,
             "cached": False,
         }
-
-        # Store into Query Semantic Cache
         self.semantic_cache.set(f"{query}|{category}", q_tokens, results, profile)
-
-        # Dump to search_perf_log.jsonl
-        self.log_search_performance(
-            query=query,
-            top_k=top_k,
-            category=category,
-            result_count=len(results),
-            profile=profile,
-        )
-
+        self.log_search_performance(query, top_k, category, len(results), profile)
         return results, profile
+
+    def _check_semantic_cache(
+        self, query: str, category: Optional[str], q_tokens: List[str], top_k: int
+    ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
+        cached_res = self.semantic_cache.get(f"{query}|{category}", q_tokens)
+        if not cached_res:
+            return None
+        res, prof = cached_res
+        prof["cached"] = True
+        return res[:top_k], prof
+
+    def _stop_tracing_if_needed(self, was_tracing: bool) -> None:
+        if not was_tracing:
+            tracemalloc.stop()
+
+    def _start_tracing_if_needed(self) -> bool:
+        was_tracing = tracemalloc.is_tracing()
+        if not was_tracing:
+            tracemalloc.start()
+        tracemalloc.reset_peak()
+        return was_tracing
+
+    def search_with_profile(
+        self, query: str, top_k: int = 5, category: Optional[str] = None
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        Enterprise Multi-Field & Multi-Stage Hybrid Search with Query Parser & Dynamic Highlighter.
+        """
+        was_tracing = self._start_tracing_if_needed()
+        q_tokens = self.tokenize(query) if query else []
+        cached = self._check_semantic_cache(query, category, q_tokens, top_k)
+        if cached is not None:
+            self._stop_tracing_if_needed(was_tracing)
+            return cached
+
+        results, profile = self._execute_search_pipeline(query, top_k, category, q_tokens)
+        self._stop_tracing_if_needed(was_tracing)
+        return results, profile
+
+    def _extract_hybrid_graph_context(self, query_tokens: List[str]) -> List[Any]:
+        graph_context = []
+        for kw in query_tokens:
+            if kw in self.knowledge_graph.nodes:
+                graph_context.append(
+                    self.knowledge_graph.get_neighbors(kw, max_depth=1)
+                )
+        return graph_context
 
     def search_hybrid_pipeline(
         self,
@@ -909,21 +964,10 @@ class VectorEngine:
         """
         cat = facets.get("category") if facets else None
         results, profile = self.search_with_profile(query, top_k=top_k, category=cat)
-
         query_tokens = self.tokenize(query) if query else []
         raptor_summaries = self.raptor_tree.search_clusters(query_tokens, top_k=2)
-
-        graph_context = []
-        for kw in query_tokens:
-            if kw in self.knowledge_graph.nodes:
-                graph_context.append(
-                    self.knowledge_graph.get_neighbors(kw, max_depth=1)
-                )
-
-        top_related = []
-        if results:
-            top_id = results[0]["id"]
-            top_related = self.proximity_graph.get_neighbors(top_id)
+        graph_context = self._extract_hybrid_graph_context(query_tokens)
+        top_related = self.proximity_graph.get_neighbors(results[0]["id"]) if results else []
 
         return {
             "query": query,

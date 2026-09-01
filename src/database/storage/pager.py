@@ -278,40 +278,50 @@ class Pager:
 
             return bytearray(data)
 
+    @staticmethod
+    def _normalize_page_data(data: bytes) -> bytearray:
+        page_data = bytearray(data)
+        if len(page_data) < PAGE_SIZE:
+            page_data.extend(b"\x00" * (PAGE_SIZE - len(page_data)))
+        elif len(page_data) > PAGE_SIZE:
+            page_data = page_data[:PAGE_SIZE]
+        return page_data
+
+    def _append_wal_update(
+        self, page_id: int, old_data: bytearray, page_data: bytearray
+    ) -> int:
+        prev_lsn = self.tx_prev_lsn.get(self.current_tx_id, 0)
+        record = self.wal.append_record(
+            tx_id=self.current_tx_id,
+            record_type=LogRecordType.UPDATE,
+            prev_lsn=prev_lsn,
+            page_id=page_id,
+            offset=0,
+            undo_data=bytes(old_data),
+            redo_data=bytes(page_data),
+        )
+        self.tx_prev_lsn[self.current_tx_id] = record.lsn
+        return record.lsn
+
+    def _create_and_cache_page(
+        self, page_id: int, page_data: bytearray, assigned_lsn: int
+    ) -> None:
+        page = Page(page_id, page_data, is_dirty=True, page_lsn=assigned_lsn)
+        if assigned_lsn > 0:
+            page.set_lsn(assigned_lsn)
+        evicted = self.cache.put(page)
+        if evicted and evicted.is_dirty:
+            self._flush_page_to_disk(evicted)
+
     def write_page(self, page_id: int, data: bytes) -> None:
         """Writes page into cache, logging WAL update if transaction is active."""
         with self._lock:
-            page_data = bytearray(data)
-            if len(page_data) < PAGE_SIZE:
-                page_data.extend(b"\x00" * (PAGE_SIZE - len(page_data)))
-            elif len(page_data) > PAGE_SIZE:
-                page_data = page_data[:PAGE_SIZE]
-
-            # Fetch existing page to compute undo payload if in WAL transaction
+            page_data = self._normalize_page_data(data)
             old_data = self.read_page(page_id)
-
             assigned_lsn = 0
             if self.is_in_transaction and self.wal:
-                prev_lsn = self.tx_prev_lsn.get(self.current_tx_id, 0)
-                record = self.wal.append_record(
-                    tx_id=self.current_tx_id,
-                    record_type=LogRecordType.UPDATE,
-                    prev_lsn=prev_lsn,
-                    page_id=page_id,
-                    offset=0,
-                    undo_data=bytes(old_data),
-                    redo_data=bytes(page_data),
-                )
-                assigned_lsn = record.lsn
-                self.tx_prev_lsn[self.current_tx_id] = assigned_lsn
-
-            page = Page(page_id, page_data, is_dirty=True, page_lsn=assigned_lsn)
-            if assigned_lsn > 0:
-                page.set_lsn(assigned_lsn)
-
-            evicted = self.cache.put(page)
-            if evicted and evicted.is_dirty:
-                self._flush_page_to_disk(evicted)
+                assigned_lsn = self._append_wal_update(page_id, old_data, page_data)
+            self._create_and_cache_page(page_id, page_data, assigned_lsn)
 
     def read_slotted_page(self, page_id: int) -> Any:
         """Reads and constructs a SlottedPage instance by page_id."""
@@ -375,62 +385,53 @@ class Pager:
 
             self.is_in_transaction = False
 
+    def _undo_update_record(self, rec: Any) -> None:
+        """Undoes a single WAL UPDATE record."""
+        page_data = self.read_page(rec.page_id)
+        offset = rec.offset
+        undo = rec.undo_data
+        page_data[offset : offset + len(undo)] = undo
+        clr_rec = self.wal.append_record(
+            tx_id=self.current_tx_id,
+            record_type=LogRecordType.CLR,
+            prev_lsn=self.wal.next_lsn - 1,
+            page_id=rec.page_id,
+            offset=offset,
+            redo_data=undo,
+            undo_next_lsn=rec.prev_lsn,
+        )
+        page = Page(rec.page_id, page_data, is_dirty=True, page_lsn=clr_rec.lsn)
+        page.set_lsn(clr_rec.lsn)
+        self.cache.put(page)
+
+    def _apply_undo_if_update(self, rec: Any) -> None:
+        if rec.record_type == LogRecordType.UPDATE and rec.page_id != 0xFFFFFFFF:
+            self._undo_update_record(rec)
+
+    def _undo_records_chain(self, last_lsn: int) -> None:
+        reader = WALReader(self.wal_path, vfs=self.vfs)
+        records = {r.lsn: r for r in reader.read_all_records()}
+        curr: Optional[int] = last_lsn
+        while curr and curr in records:
+            rec = records[curr]
+            self._apply_undo_if_update(rec)
+            curr = rec.prev_lsn
+
     def rollback(self) -> None:
         """Rolls back active transaction changes using ARIES Undo logic."""
         with self._lock:
             if not self.is_in_transaction or not self.wal:
                 self.is_in_transaction = False
                 return
-
             last_lsn = self.tx_prev_lsn.get(self.current_tx_id, 0)
             if last_lsn > 0:
-                # Read WAL records for this transaction and perform Undo
-                reader = WALReader(self.wal_path, vfs=self.vfs)
-                records = {r.lsn: r for r in reader.read_all_records()}
-
-                curr = last_lsn
-                while curr > 0 and curr in records:
-                    rec = records[curr]
-                    if (
-                        rec.record_type == LogRecordType.UPDATE
-                        and rec.page_id != 0xFFFFFFFF
-                    ):
-                        # Revert page data
-                        page_data = self.read_page(rec.page_id)
-                        offset = rec.offset
-                        undo = rec.undo_data
-                        page_data[offset : offset + len(undo)] = undo
-
-                        # Log CLR
-                        clr_rec = self.wal.append_record(
-                            tx_id=self.current_tx_id,
-                            record_type=LogRecordType.CLR,
-                            prev_lsn=self.wal.next_lsn - 1,
-                            page_id=rec.page_id,
-                            offset=offset,
-                            redo_data=undo,
-                            undo_next_lsn=rec.prev_lsn,
-                        )
-
-                        page = Page(
-                            rec.page_id,
-                            page_data,
-                            is_dirty=True,
-                            page_lsn=clr_rec.lsn,
-                        )
-                        page.set_lsn(clr_rec.lsn)
-                        self.cache.put(page)
-
-                    curr = rec.prev_lsn
-
-                # Append ABORT record
+                self._undo_records_chain(last_lsn)
                 self.wal.append_record(
                     tx_id=self.current_tx_id,
                     record_type=LogRecordType.ABORT,
                     prev_lsn=self.wal.next_lsn - 1,
                     force_sync=True,
                 )
-
             self.tx_prev_lsn.pop(self.current_tx_id, None)
             self.is_in_transaction = False
 

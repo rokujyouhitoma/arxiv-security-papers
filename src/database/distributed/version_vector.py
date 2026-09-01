@@ -57,6 +57,16 @@ class VersionedValue:
         return f"VersionedValue(value={self.value!r}, clock={self.clock!r}, ts={self.timestamp})"
 
 
+def _is_dominated(v1: VersionedValue, versions: List[VersionedValue], idx: int) -> bool:
+    return any(
+        i != idx and v1.clock.happens_before(v.clock) for i, v in enumerate(versions)
+    )
+
+
+def _in_frontier(v1: VersionedValue, frontier: List[VersionedValue]) -> bool:
+    return any(v1.clock.equals(e.clock) and v1.value == e.value for e in frontier)
+
+
 def prune_dominated_versions(versions: List[VersionedValue]) -> List[VersionedValue]:
     """
     Removes versions that are causally preceded (happens_before) by any other version.
@@ -64,22 +74,34 @@ def prune_dominated_versions(versions: List[VersionedValue]) -> List[VersionedVa
     """
     if len(versions) <= 1:
         return list(versions)
-
     frontier: List[VersionedValue] = []
     for i, v1 in enumerate(versions):
-        dominated = False
-        for j, v2 in enumerate(versions):
-            if i != j and v1.clock.happens_before(v2.clock):
-                dominated = True
-                break
-        if not dominated:
-            # Check for duplicate clocks
-            if not any(
-                v1.clock.equals(existing.clock) and v1.value == existing.value
-                for existing in frontier
-            ):
-                frontier.append(v1)
+        if not _is_dominated(v1, versions, i) and not _in_frontier(v1, frontier):
+            frontier.append(v1)
+    return frontier
 
+
+def _resolve_lww(frontier: List[VersionedValue]) -> List[VersionedValue]:
+    lww_winner = max(frontier, key=lambda v: v.timestamp)
+    merged_clock = frontier[0].clock
+    for v in frontier[1:]:
+        merged_clock = merged_clock.merge(v.clock)
+    return [
+        VersionedValue(
+            value=lww_winner.value, clock=merged_clock, timestamp=lww_winner.timestamp
+        )
+    ]
+
+
+def _apply_resolution_strategy(
+    frontier: List[VersionedValue],
+    strategy: ConflictResolutionStrategy,
+    custom_merger: Optional[Callable[[List[VersionedValue]], VersionedValue]],
+) -> List[VersionedValue]:
+    if strategy == ConflictResolutionStrategy.LWW:
+        return _resolve_lww(frontier)
+    if strategy == ConflictResolutionStrategy.CUSTOM and custom_merger:
+        return [custom_merger(frontier)]
     return frontier
 
 
@@ -93,33 +115,7 @@ def resolve_conflict(
     """
     if not versions:
         return []
-
-    # Step 1: Filter out superseded/dominated versions
     frontier = prune_dominated_versions(versions)
     if len(frontier) <= 1:
         return frontier
-
-    # Step 2: Handle concurrent siblings
-    if strategy == ConflictResolutionStrategy.SIBLINGS:
-        return frontier
-
-    if strategy == ConflictResolutionStrategy.LWW:
-        # Pick version with highest physical timestamp
-        lww_winner = max(frontier, key=lambda v: v.timestamp)
-        # Merge all clocks so future writes causally succeed all conflict branches
-        merged_clock = frontier[0].clock
-        for v in frontier[1:]:
-            merged_clock = merged_clock.merge(v.clock)
-        return [
-            VersionedValue(
-                value=lww_winner.value,
-                clock=merged_clock,
-                timestamp=lww_winner.timestamp,
-            )
-        ]
-
-    if strategy == ConflictResolutionStrategy.CUSTOM and custom_merger is not None:
-        merged_val = custom_merger(frontier)
-        return [merged_val]
-
-    return frontier
+    return _apply_resolution_strategy(frontier, strategy, custom_merger)

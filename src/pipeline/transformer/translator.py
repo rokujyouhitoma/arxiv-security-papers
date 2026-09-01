@@ -15,17 +15,11 @@ def clean_text(text: Optional[str]) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def translate_title_ja(title: str) -> str:
-    """Translates paper title to fluent Japanese security terminology."""
-    t = clean_text(title)
-    if not t:
-        return ""
-
-    translations = [
-        (
-            "Concept Drift Detection and Adaptive Retraining of Malware Classification Models",
-            "マルウェア分類モデルにおけるコンセプトドリフト検出と適応的再学習",
-        ),
+TITLE_TRANSLATIONS = [
+    (
+        "Concept Drift Detection and Adaptive Retraining of Malware Classification Models",
+        "マルウェア分類モデルにおけるコンセプトドリフト検出と適応的再学習",
+    ),
         (
             "LLM-Assisted Dynamic Threat Analysis for Attacker-Reachable Software Weaknesses in Autonomous Vehicles",
             "自動運転車両における攻撃者到達可能なソフトウェア脆弱性のLLM支援動的脅威分析",
@@ -215,46 +209,56 @@ def translate_title_ja(title: str) -> str:
             "SkillSentry: エージェントスキルの動的安全テストのための適応型ハニーワールド",
         ),
         (
-            "AgentAntibody: An Adaptive Immune System for Defending LLM Agents against Prompt Injection",
-            "AgentAntibody: プロンプトインジェクションからLLMエージェントを防御する適応型免疫システム",
-        ),
-        (
             "MutMem: Cryptographically Authorized Mutation in Persistent Agent Memory",
             "MutMem: 持続的エージェントメモリにおける暗号認証付きデータ変容プロトコル",
         ),
     ]
 
-    for en, ja in translations:
-        if en.lower() in t.lower() or t.lower() in en.lower():
+TITLE_REPLACEMENTS = [
+    (r"An Empirical Study of (.*)", r"\1の実証研究"),
+    (r"Towards (.*)", r"\1に向けて"),
+    (r"Detection of (.*)", r"\1の検出"),
+    (r"Mitigating (.*) via (.*)", r"\2による\1の軽減"),
+    (r"Securing (.*)", r"\1のセキュリティ強化"),
+    (r"Analysis of (.*)", r"\1の分析"),
+    (r"Benchmarking (.*)", r"\1のベンチマーク評価"),
+    (r"Adversarial Attacks on (.*)", r"\1に対する敵対的攻撃"),
+    (r"Vulnerability Detection", "脆弱性検出"),
+    (r"Malware Detection", "マルウェア検出"),
+    (r"Privacy Policy", "プライバシーポリシー"),
+    (r"Autonomous Vehicles", "自動運転車両"),
+    (r"Infrastructure-as-Code", "Infrastructure-as-Code"),
+    (r"Large Language Models", "大規模言語モデル"),
+    (r"LLM Agents", "LLMエージェント"),
+    (r"Cybersecurity", "サイバーセキュリティ"),
+    (r"Federated Learning", "連合学習"),
+]
+
+
+def _lookup_exact_translation(title_lower: str) -> Optional[str]:
+    """Finds exact or substring matched translation from translation table."""
+    for en, ja in TITLE_TRANSLATIONS:
+        if en.lower() in title_lower or title_lower in en.lower():
             return ja
+    return None
 
-    ja_title = t
-    replacements = [
-        (r"An Empirical Study of (.*)", r"\1の実証研究"),
-        (r"Towards (.*)", r"\1に向けて"),
-        (r"Detection of (.*)", r"\1の検出"),
-        (r"Mitigating (.*) via (.*)", r"\2による\1の軽減"),
-        (r"Securing (.*)", r"\1のセキュリティ強化"),
-        (r"Analysis of (.*)", r"\1の分析"),
-        (r"Benchmarking (.*)", r"\1のベンチマーク評価"),
-        (r"Adversarial Attacks on (.*)", r"\1に対する敵対的攻撃"),
-        (r"Vulnerability Detection", "脆弱性検出"),
-        (r"Malware Detection", "マルウェア検出"),
-        (r"Privacy Policy", "プライバシーポリシー"),
-        (r"Autonomous Vehicles", "自動運転車両"),
-        (r"Infrastructure-as-Code", "Infrastructure-as-Code"),
-        (r"Large Language Models", "大規模言語モデル"),
-        (r"LLM Agents", "LLMエージェント"),
-        (r"Cybersecurity", "サイバーセキュリティ"),
-        (r"Federated Learning", "連合学習"),
-    ]
 
-    for pattern, repl in replacements:
-        if re.search(pattern, ja_title, re.IGNORECASE):
-            ja_title = re.sub(pattern, repl, ja_title, flags=re.IGNORECASE)
-            break
+def _apply_pattern_translation(title: str) -> str:
+    """Applies regex pattern replacements for common academic security title structures."""
+    for pattern, repl in TITLE_REPLACEMENTS:
+        if re.search(pattern, title, re.IGNORECASE):
+            return re.sub(pattern, repl, title, flags=re.IGNORECASE)
+    return f"{title}（セキュリティ分析論文）"
 
-    if ja_title == t:
-        ja_title = f"{t}（セキュリティ分析論文）"
 
-    return ja_title
+def translate_title_ja(title: str) -> str:
+    """Translates paper title to fluent Japanese security terminology."""
+    t = clean_text(title)
+    if not t:
+        return ""
+
+    exact_ja = _lookup_exact_translation(t.lower())
+    if exact_ja:
+        return exact_ja
+
+    return _apply_pattern_translation(t)

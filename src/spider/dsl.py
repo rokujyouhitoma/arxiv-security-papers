@@ -31,18 +31,27 @@ class FunctionalSpider(BaseSpider):
         self.parse_fn = parse_fn
         self.allowed_domains = allowed_domains or set()
 
+    async def _yield_async_result(self, result: Any, url: str) -> AsyncIterator[Union[Request, ScrapedItem]]:
+        async for item in result:
+            yield _coerce_to_item_or_request(item, url)
+
+    async def _yield_sync_result(self, result: Any, url: str) -> AsyncIterator[Union[Request, ScrapedItem]]:
+        if isinstance(result, (list, tuple, set)):
+            for item in result:
+                yield _coerce_to_item_or_request(item, url)
+        elif result is not None:
+            yield _coerce_to_item_or_request(result, url)
+
     async def parse(
         self, response: Response
     ) -> AsyncIterator[Union[Request, ScrapedItem]]:
         result = self.parse_fn(response)
         if asyncio.iscoroutine(result) or hasattr(result, "__anext__"):
-            async for item in result:
-                yield _coerce_to_item_or_request(item, response.url)
-        elif isinstance(result, (list, tuple, set)):
-            for item in result:
-                yield _coerce_to_item_or_request(item, response.url)
-        elif result is not None:
-            yield _coerce_to_item_or_request(result, response.url)
+            async for item in self._yield_async_result(result, response.url):
+                yield item
+        else:
+            async for item in self._yield_sync_result(result, response.url):
+                yield item
 
 
 def _coerce_to_item_or_request(

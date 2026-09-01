@@ -96,23 +96,27 @@ class Analyzer:
         self.tokenizer = tokenizer
         self.token_filters = token_filters or []
 
+    def _apply_char_filters(self, text: str) -> str:
+        processed = text
+        for cf in self.char_filters:
+            if hasattr(cf, "filter"):
+                processed = cf.filter(processed)
+        return processed
+
+    def _get_tokenizer(self) -> Any:
+        if self.tokenizer is not None:
+            return self.tokenizer
+        from .tokenizer import StandardTokenizer
+
+        return StandardTokenizer()
+
     def analyze(self, text: str) -> List[Token]:
         """Runs full analysis chain on input text."""
         if not text:
             return []
 
-        processed = text
-        for cf in self.char_filters:
-            if hasattr(cf, "filter"):
-                processed = cf.filter(processed)
-
-        if self.tokenizer is None:
-            from .tokenizer import StandardTokenizer
-
-            tokenizer = StandardTokenizer()
-        else:
-            tokenizer = self.tokenizer
-
+        processed = self._apply_char_filters(text)
+        tokenizer = self._get_tokenizer()
         tokens = tokenizer.tokenize(processed)
 
         for tf in self.token_filters:

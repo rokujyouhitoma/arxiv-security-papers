@@ -36,6 +36,40 @@ from .router import response_bytes, response_error, response_html, response_json
 MAX_MCP_PAYLOAD_BYTES = 1024 * 1024  # 1MB
 
 
+def _extract_paper_frontmatter_metadata(content: str, cid: str) -> Dict[str, Any]:
+    title = cid
+    desc = ""
+    for line in content.splitlines():
+        if line.startswith("title:"):
+            title = line.replace("title:", "").strip().strip('"')
+        elif line.startswith("description:"):
+            desc = line.replace("description:", "").strip().strip('"')
+    return {
+        "clean_id": cid,
+        "title": title,
+        "description": desc,
+        "tags": ["security"],
+    }
+
+
+def _read_single_okf_paper(fpath: str, fname: str) -> Optional[Dict[str, Any]]:
+    try:
+        with open(fpath, "r", encoding="utf-8") as pf:
+            content = pf.read()
+            return _extract_paper_frontmatter_metadata(content, fname.replace(".md", ""))
+    except Exception:
+        return None
+
+
+def _collect_papers_from_dir(root: str, files: List[str], max_count: int, papers: List[Dict[str, Any]]) -> bool:
+    for f in sorted(files, reverse=True):
+        if f.endswith(".md") and (p := _read_single_okf_paper(os.path.join(root, f), f)) is not None:
+            papers.append(p)
+            if len(papers) >= max_count:
+                return True
+    return False
+
+
 def _scan_real_okf_papers(
     workspace_dir: str, max_count: int = 15
 ) -> List[Dict[str, Any]]:
@@ -46,35 +80,8 @@ def _scan_real_okf_papers(
         return papers
 
     for root, _, files in os.walk(okf_base):
-        for f in sorted(files, reverse=True):
-            if f.endswith(".md"):
-                fpath = os.path.join(root, f)
-                try:
-                    with open(fpath, "r", encoding="utf-8") as pf:
-                        content = pf.read()
-                        cid = f.replace(".md", "")
-                        title = cid
-                        desc = ""
-                        tags = ["security"]
-                        for line in content.splitlines():
-                            if line.startswith("title:"):
-                                title = line.replace("title:", "").strip().strip('"')
-                            elif line.startswith("description:"):
-                                desc = (
-                                    line.replace("description:", "").strip().strip('"')
-                                )
-                        papers.append(
-                            {
-                                "clean_id": cid,
-                                "title": title,
-                                "description": desc,
-                                "tags": tags,
-                            }
-                        )
-                        if len(papers) >= max_count:
-                            return papers
-                except Exception:
-                    pass
+        if _collect_papers_from_dir(root, files, max_count, papers):
+            break
     return papers
 
 
@@ -154,18 +161,25 @@ def _build_fallback_mesh_from_workspace(
     return [], []
 
 
+def _is_match(s_name: str, keys: tuple[str, ...]) -> bool:
+    for k in keys:
+        if k in s_name:
+            return True
+    return False
+
+
 def _classify_otlp_span_kind(s_name: str) -> str:
     """Classifies span name into llm, retriever, tool, or pipeline kind."""
-    if any(k in s_name for k in ("llm", "analysis", "hypothes", "model")):
+    if _is_match(s_name, ("llm", "analysis", "hypothes", "model")):
         return "llm"
-    if any(k in s_name for k in ("retriev", "search", "harvest", "vector", "crawl")):
+    if _is_match(s_name, ("retriev", "search", "harvest", "vector", "crawl")):
         return "retriever"
-    if any(k in s_name for k in ("tool", "mcp", "extractor", "parser")):
-        return "tool"
-    return "pipeline"
+    return "tool" if _is_match(s_name, ("tool", "mcp", "extractor", "parser")) else "pipeline"
 
 
-def _iter_otlp_spans(tdata: Dict[str, Any]):
+def _iter_otlp_spans(
+    tdata: Dict[str, Any],
+) -> Generator[Tuple[str, str, str], None, None]:
     """Yields (span_name, trace_id, span_id) tuples from OTLP payload."""
     for rspan in tdata.get("resourceSpans", []):
         for sspan in rspan.get("scopeSpans", []):
@@ -177,6 +191,39 @@ def _iter_otlp_spans(tdata: Dict[str, Any]):
                 )
 
 
+def _process_trace_line(
+    line: str, counts: Dict[str, int]
+) -> Tuple[int, Optional[str]]:
+    total_spans = 0
+    traceparent = None
+    try:
+        tdata = json.loads(line.strip())
+        for s_name, tid, sid in _iter_otlp_spans(tdata):
+            total_spans += 1
+            if tid and sid:
+                traceparent = f"00-{tid[:16]}...-{sid[:8]}-01"
+            counts[_classify_otlp_span_kind(s_name)] += 1
+    except Exception:
+        pass
+    return total_spans, traceparent
+
+
+def _read_trace_file_spans(traces_path: str, counts: Dict[str, int]) -> Tuple[int, str]:
+    total_spans = 0
+    latest_traceparent = "--"
+    try:
+        with open(traces_path, "r", encoding="utf-8") as tf:
+            for line in tf:
+                if line.strip():
+                    spans_in_line, tp = _process_trace_line(line, counts)
+                    total_spans += spans_in_line
+                    if tp:
+                        latest_traceparent = tp
+    except Exception:
+        pass
+    return total_spans, latest_traceparent
+
+
 def _parse_otlp_traces_metrics(
     traces_path: str,
 ) -> Tuple[int, Dict[str, Any]]:
@@ -185,9 +232,6 @@ def _parse_otlp_traces_metrics(
     Zero synthetic or hardcoded fallback values.
     """
     counts = {"llm": 0, "retriever": 0, "tool": 0, "pipeline": 0}
-    total_spans = 0
-    latest_traceparent = "--"
-
     if not os.path.exists(traces_path):
         return 0, {
             "llm_spans": 0,
@@ -198,26 +242,7 @@ def _parse_otlp_traces_metrics(
             "status": "IDLE (No Traces Recorded)",
         }
 
-    try:
-        with open(traces_path, "r", encoding="utf-8") as tf:
-            for line in tf:
-                line_str = line.strip()
-                if not line_str:
-                    continue
-                try:
-                    tdata = json.loads(line_str)
-                except Exception:
-                    continue
-
-                for s_name, tid, sid in _iter_otlp_spans(tdata):
-                    total_spans += 1
-                    if tid and sid:
-                        latest_traceparent = f"00-{tid[:16]}...-{sid[:8]}-01"
-                    kind = _classify_otlp_span_kind(s_name)
-                    counts[kind] += 1
-    except Exception:
-        pass
-
+    total_spans, latest_tp = _read_trace_file_spans(traces_path, counts)
     obf_status = (
         f"HTTP 200 / 0 Loss ({total_spans} Spans)" if total_spans > 0 else "IDLE"
     )
@@ -226,14 +251,25 @@ def _parse_otlp_traces_metrics(
         "retriever_spans": counts["retriever"],
         "tool_spans": counts["tool"],
         "pipeline_spans": counts["pipeline"],
-        "latest_traceparent": latest_traceparent,
+        "latest_traceparent": latest_tp,
         "status": obf_status,
     }
 
 
+def _populate_wal_phase_dict(cpath: str, phase_status: Dict[str, str]) -> None:
+    try:
+        with open(cpath, "r", encoding="utf-8") as cf:
+            cdata = json.load(cf)
+            for p_key, p_val in cdata.get("phase_statuses", {}).items():
+                phase_status[p_key.upper()] = (
+                    "DONE" if p_val == "completed" else "ACTIVE"
+                )
+    except Exception:
+        pass
+
+
 def _read_wal_phase_statuses(wal_dir: str) -> Tuple[str, Dict[str, str]]:
     """Reads latest WAL cycle ID and phase statuses."""
-    latest_cycle = "cycle_initial"
     phase_status = {
         "PLANNING": "IDLE",
         "COLLECTION": "IDLE",
@@ -243,26 +279,17 @@ def _read_wal_phase_statuses(wal_dir: str) -> Tuple[str, Dict[str, str]]:
         "EVALUATION": "IDLE",
     }
     if not os.path.exists(wal_dir):
-        return latest_cycle, phase_status
+        return "cycle_initial", phase_status
 
     c_files = sorted(
         [f for f in os.listdir(wal_dir) if f.endswith(".checkpoint.json")],
         reverse=True,
     )
     if not c_files:
-        return latest_cycle, phase_status
+        return "cycle_initial", phase_status
 
     latest_cycle = c_files[0].replace(".checkpoint.json", "")
-    latest_cpath = os.path.join(wal_dir, c_files[0])
-    try:
-        with open(latest_cpath, "r", encoding="utf-8") as cf:
-            cdata = json.load(cf)
-            for p_key, p_val in cdata.get("phase_statuses", {}).items():
-                phase_status[p_key.upper()] = (
-                    "DONE" if p_val == "completed" else "ACTIVE"
-                )
-    except Exception:
-        pass
+    _populate_wal_phase_dict(os.path.join(wal_dir, c_files[0]), phase_status)
     return latest_cycle, phase_status
 
 
@@ -290,46 +317,54 @@ def _introspect_live_loop_and_obf_state(
     return latest_cycle, phase_status, proc_count, spans_count, obf_data
 
 
+def _enrich_supervisor_workers_memory(resp: Dict[str, Any], top_viewer_cls: Any) -> None:
+    total_rss = 0.0
+    arbiter_pid = resp.get("arbiter_pid")
+    if isinstance(arbiter_pid, int):
+        a_rss, _ = top_viewer_cls.get_process_memory_mb(arbiter_pid)
+        total_rss += a_rss
+
+    workers_data = resp.get("workers", {})
+    for spid, w_info in workers_data.items():
+        if isinstance(w_info, dict):
+            try:
+                w_pid = int(w_info.get("pid", spid))
+                w_rss, _ = top_viewer_cls.get_process_memory_mb(w_pid)
+                w_info["memory_mb"] = w_rss
+                total_rss += w_rss
+            except (ValueError, TypeError):
+                w_info["memory_mb"] = 0.0
+
+    resp["memory_mb"] = round(total_rss, 1)
+
+
+def _connect_and_read_supervisor_socket(sock_path: str) -> Optional[Dict[str, Any]]:
+    if not os.path.exists(sock_path):
+        return None
+    try:
+        from supervisor.control import ControlClient
+        from supervisor.top import SupervisorTopViewer
+
+        client = ControlClient(sock_path, timeout=1.0)
+        resp = client.get_status()
+        if resp.get("status") == "ok":
+            resp["is_supervised"] = True
+            resp["socket_status"] = "CONNECTED (outputs/supervisor/control.sock)"
+            _enrich_supervisor_workers_memory(resp, SupervisorTopViewer)
+            return resp
+    except Exception:
+        pass
+    return None
+
+
 def _introspect_supervisor_state(workspace_dir: str) -> Dict[str, Any]:
     """Introspects live Supervisor Arbiter status strictly from control socket without synthetic data."""
     sock_path = os.path.join(workspace_dir, "outputs", "supervisor", "control.sock")
+    res = _connect_and_read_supervisor_socket(sock_path)
+    if res is not None:
+        return res
 
-    # 1. Connect to official Supervisor Arbiter socket if running
-    if os.path.exists(sock_path):
-        try:
-            from supervisor.control import ControlClient
-            from supervisor.top import SupervisorTopViewer
-
-            client = ControlClient(sock_path, timeout=1.0)
-            resp = client.get_status()
-            if resp.get("status") == "ok":
-                resp["is_supervised"] = True
-                resp["socket_status"] = "CONNECTED (outputs/supervisor/control.sock)"
-
-                # Enrich worker entries with exact process memory from /proc
-                total_rss = 0.0
-                arbiter_pid = resp.get("arbiter_pid")
-                if isinstance(arbiter_pid, int):
-                    a_rss, _ = SupervisorTopViewer.get_process_memory_mb(arbiter_pid)
-                    total_rss += a_rss
-
-                workers_data = resp.get("workers", {})
-                for spid, w_info in workers_data.items():
-                    if isinstance(w_info, dict):
-                        try:
-                            w_pid = int(w_info.get("pid", spid))
-                            w_rss, _ = SupervisorTopViewer.get_process_memory_mb(w_pid)
-                            w_info["memory_mb"] = w_rss
-                            total_rss += w_rss
-                        except (ValueError, TypeError):
-                            w_info["memory_mb"] = 0.0
-
-                resp["memory_mb"] = round(total_rss, 1)
-                return resp
-        except Exception:
-            pass
-
-    # 2. Strict Offline State (AU Quality Gate: 0 synthetic or guessed worker metrics)
+    # Strict Offline State (AU Quality Gate: 0 synthetic or guessed worker metrics)
     return {
         "status": "offline",
         "is_supervised": False,
@@ -529,48 +564,59 @@ def _introspect_vector_and_search_metrics(
     return tables, doc_count * 2, combined_index_size
 
 
+def _query_table_count(conn: Any, tname: str) -> int:
+    try:
+        cnt_cur = conn.execute(f"SELECT COUNT(*) FROM {tname}")  # noqa: S608
+        return cnt_cur.fetchone()[0]
+    except Exception:
+        return 0
+
+
+def _sum_sqlite_tables_rows(conn: Any) -> Optional[int]:
+    tbl_cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [t[0] for t in tbl_cur.fetchall()]
+    total = sum(_query_table_count(conn, t) for t in tables)
+    return total if total > 0 else None
+
+
+def _count_analytics_sqlite_rows(analytics_db_path: str) -> Optional[int]:
+    if not os.path.exists(analytics_db_path):
+        return None
+    try:
+        import sqlite3
+        conn = sqlite3.connect(f"file:{analytics_db_path}?mode=ro", uri=True)
+        try:
+            return _sum_sqlite_tables_rows(conn)
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def _count_vdb_lines(metrics_path: str, metrics_size: int) -> int:
+    if os.path.exists(metrics_path) and metrics_size > 0:
+        try:
+            with open(metrics_path, "rb") as f:
+                return max(1, f.read().count(b"\n") + 1)
+        except Exception:
+            return 1
+    return 0
+
+
 def _introspect_analytics_metrics(
     workspace_dir: str,
 ) -> Tuple[Dict[str, Any], int, int]:
     """Introspects analytics_metrics from metrics.vdb and analytics.db."""
     metrics_path = os.path.join(workspace_dir, "outputs", "database", "metrics.vdb")
     metrics_size = os.path.getsize(metrics_path) if os.path.exists(metrics_path) else 0
-    metrics_rows = 0
-
-    if os.path.exists(metrics_path) and metrics_size > 0:
-        try:
-            with open(metrics_path, "rb") as f:
-                metrics_rows = max(1, f.read().count(b"\n") + 1)
-        except Exception:
-            metrics_rows = 1
+    metrics_rows = _count_vdb_lines(metrics_path, metrics_size)
 
     analytics_db_path = os.path.join(
         workspace_dir, "outputs", "analytics", "analytics.db"
     )
-    if os.path.exists(analytics_db_path):
-        try:
-            import sqlite3
-
-            conn = sqlite3.connect(f"file:{analytics_db_path}?mode=ro", uri=True)
-            try:
-                tbl_cur = conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                )
-                total_analytics_rows = 0
-                for (tname,) in tbl_cur.fetchall():
-                    try:
-                        cnt_cur = conn.execute(
-                            f"SELECT COUNT(*) FROM {tname}"
-                        )  # noqa: S608
-                        total_analytics_rows += cnt_cur.fetchone()[0]
-                    except Exception:
-                        pass
-                if total_analytics_rows > 0:
-                    metrics_rows = total_analytics_rows
-            finally:
-                conn.close()
-        except Exception:
-            pass
+    sqlite_rows = _count_analytics_sqlite_rows(analytics_db_path)
+    if sqlite_rows is not None:
+        metrics_rows = sqlite_rows
 
     table = {
         "table_name": "analytics_metrics",
@@ -585,10 +631,18 @@ def _introspect_analytics_metrics(
     return table, metrics_rows, metrics_size
 
 
+def _compute_wal_rate_and_lag(wal_files: List[str]) -> Tuple[float, float]:
+    import time
+    wal_total_bytes = sum(os.path.getsize(f) for f in wal_files)
+    mtimes = [os.path.getmtime(f) for f in wal_files]
+    time_span = max(1.0, max(mtimes) - min(mtimes)) if len(mtimes) > 1 else 1.0
+    wal_rate = round((wal_total_bytes / 1024.0) / time_span, 2)
+    wal_lag = round(max(0.0, time.time() - max(mtimes)), 2)
+    return wal_rate, wal_lag
+
+
 def _calc_wal_metrics(workspace_dir: str) -> Tuple[float, float]:
     """Calculates real WAL flush rate in KB/s and sync lag in ms."""
-    import time
-
     wal_dir = os.path.join(workspace_dir, "outputs", "wal")
     if not os.path.exists(wal_dir):
         return 0.0, 0.0
@@ -601,45 +655,44 @@ def _calc_wal_metrics(workspace_dir: str) -> Tuple[float, float]:
     if not wal_files:
         return 0.0, 0.0
 
-    wal_total_bytes = sum(os.path.getsize(f) for f in wal_files)
-    mtimes = [os.path.getmtime(f) for f in wal_files]
-    time_span = max(1.0, max(mtimes) - min(mtimes)) if len(mtimes) > 1 else 1.0
-    wal_rate = round((wal_total_bytes / 1024.0) / time_span, 2)
-    wal_lag = round(max(0.0, time.time() - max(mtimes)), 2)
-    return wal_rate, wal_lag
+    return _compute_wal_rate_and_lag(wal_files)
+
+
+def _sample_graph_latencies(ge_instance: Any) -> Tuple[List[float], int]:
+    import time
+    latencies: List[float] = []
+    sample_keys = list(ge_instance._vertices.keys())[:20]
+    if not sample_keys:
+        return latencies, 0
+    t_start = time.perf_counter()
+    for k in sample_keys:
+        t0 = time.perf_counter()
+        _ = ge_instance.get_out_edges(k)
+        latencies.append((time.perf_counter() - t0) * 1000.0)
+    t_total = time.perf_counter() - t_start
+    iops = int(len(sample_keys) / max(t_total, 1e-6))
+    return latencies, iops
 
 
 def _run_db_micro_benchmarks(
     ge_instance: Any,
 ) -> Tuple[int, float, float, float]:
     """Runs micro-benchmark on property graph engine to determine real IOPS and latencies."""
-    import time
+    if ge_instance is None or not getattr(ge_instance, "_vertices", None):
+        return 0, 0.0, 0.0, 0.0
 
-    bench_latencies: List[float] = []
-    read_iops = 0
-    if ge_instance is not None and getattr(ge_instance, "_vertices", None):
-        sample_keys = list(ge_instance._vertices.keys())[:20]
-        if sample_keys:
-            t_start = time.perf_counter()
-            for k in sample_keys:
-                t0 = time.perf_counter()
-                _ = ge_instance.get_out_edges(k)
-                bench_latencies.append((time.perf_counter() - t0) * 1000.0)
-            t_total = time.perf_counter() - t_start
-            read_iops = int(len(sample_keys) / max(t_total, 1e-6))
+    bench_latencies, read_iops = _sample_graph_latencies(ge_instance)
+    if not bench_latencies:
+        return 0, 0.0, 0.0, 0.0
 
     bench_latencies.sort()
-    avg_lat = (
-        round(sum(bench_latencies) / len(bench_latencies), 3)
-        if bench_latencies
-        else 0.0
-    )
+    avg_lat = round(sum(bench_latencies) / len(bench_latencies), 3)
     p95_lat = (
         round(bench_latencies[max(0, int(len(bench_latencies) * 0.95) - 1)], 3)
         if len(bench_latencies) > 1
         else avg_lat
     )
-    p99_lat = round(bench_latencies[-1], 3) if bench_latencies else avg_lat
+    p99_lat = round(bench_latencies[-1], 3)
     return read_iops, avg_lat, p95_lat, p99_lat
 
 
@@ -657,10 +710,9 @@ def _run_sql_introspection(
         from database.sql.parser import SQLParser
 
         parser = SQLParser()
-        executor = SQLExecutor(workspace_dir=workspace_dir)
+        executor = SQLExecutor()
         t_sql0 = time.perf_counter()
-        stmt_db = parser.parse("SHOW DATABASES;")
-        result_db = executor.execute(stmt_db)
+        result_db = executor.execute("SHOW DATABASES;")
         sql_latency_ms = round((time.perf_counter() - t_sql0) * 1000.0, 3)
         sql_databases = result_db.get("databases", ["arxiv_security_db", "main"])
         sql_exec_ok = True
@@ -694,58 +746,42 @@ def _run_sql_introspection(
     }
 
 
-def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
-    """
-    Introspects live database performance KPIs, real IOPS, query latency,
-    and physical storage breakdown across all tables and engines.
-    All values are derived from real files and live data structures;
-    no hardcoded dummy values are used.
-    """
+def _collect_database_tables(
+    workspace_dir: str,
+) -> Tuple[List[Dict[str, Any]], int, int, Any, int]:
     tables: List[Dict[str, Any]] = []
-    total_size = 0
-    total_rows = 0
-
-    # 1. Graph Tables
-    g_tables, g_rows, g_size, ge_instance = _introspect_graph_table_metrics(
-        workspace_dir
-    )
+    g_tables, g_rows, g_size, ge_instance = _introspect_graph_table_metrics(workspace_dir)
     tables.extend(g_tables)
-    total_rows += g_rows
-    total_size += g_size
-
-    # 2. Paper Metadata
     p_table, p_rows, p_size = _introspect_paper_table_metrics(workspace_dir)
     tables.append(p_table)
-    total_rows += p_rows
-    total_size += p_size
-
-    # 3. Vector and Full-Text Search
-    v_tables, v_rows, v_size = _introspect_vector_and_search_metrics(
-        workspace_dir, p_rows
-    )
+    v_tables, v_rows, v_size = _introspect_vector_and_search_metrics(workspace_dir, p_rows)
     tables.extend(v_tables)
-    total_rows += v_rows
-    total_size += v_size
-
-    # 4. Analytics
     a_table, a_rows, a_size = _introspect_analytics_metrics(workspace_dir)
     tables.append(a_table)
-    total_rows += a_rows
-    total_size += a_size
+    total_rows = g_rows + p_rows + v_rows + a_rows
+    total_size = g_size + p_size + v_size + a_size
+    return tables, total_rows, total_size, ge_instance, p_rows
 
-    # 5. Benchmarks and WAL
+
+def _resolve_hit_rate(p_rows: int) -> str:
+    return "100.0%" if p_rows > 0 else "0.0%"
+
+
+def _build_database_kpis(
+    ge_instance: Any, workspace_dir: str, p_rows: int
+) -> Dict[str, Any]:
     read_iops, avg_lat, p95_lat, p99_lat = _run_db_micro_benchmarks(ge_instance)
     wal_rate, wal_lag = _calc_wal_metrics(workspace_dir)
-
-    db_kpis = {
+    hit_rate = _resolve_hit_rate(p_rows)
+    return {
         "read_iops": read_iops,
         "write_iops": int(read_iops * 0.15) if read_iops > 0 else 0,
         "peak_iops": int(read_iops * 2.0) if read_iops > 0 else 0,
         "avg_latency_ms": avg_lat,
         "p95_latency_ms": p95_lat,
         "p99_latency_ms": p99_lat,
-        "buffer_pool_hit_rate": "100.0%" if p_rows > 0 else "0.0%",
-        "vector_cache_hit_rate": "100.0%" if p_rows > 0 else "0.0%",
+        "buffer_pool_hit_rate": hit_rate,
+        "vector_cache_hit_rate": hit_rate,
         "wal_flush_rate_kb_s": wal_rate,
         "wal_sync_lag_ms": wal_lag,
         "active_transactions": 0,
@@ -754,7 +790,16 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
         "durability_level": "WAL Flush Synchronous",
     }
 
-    # 6. SQL Introspection Queries
+
+def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
+    """
+    Introspects live database performance KPIs, real IOPS, query latency,
+    and physical storage breakdown across all tables and engines.
+    All values are derived from real files and live data structures;
+    no hardcoded dummy values are used.
+    """
+    tables, total_rows, total_size, ge_instance, p_rows = _collect_database_tables(workspace_dir)
+    db_kpis = _build_database_kpis(ge_instance, workspace_dir, p_rows)
     sql_introspection = _run_sql_introspection(workspace_dir, tables)
 
     return {
@@ -824,6 +869,35 @@ class GatewayHandlers:
             return None
         return self.search_client.get_paper(clean_id)
 
+    def _execute_vector_search(
+        self, query: str, top_k: int, category: Optional[str], mode: str
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        import time
+        t_start = time.perf_counter()
+        if mode == "vector":
+            results = self.vector_engine.search_vector_ann(query=query, top_k=top_k)
+            profile: Dict[str, Any] = {"mode": "vector"}
+        elif mode == "rrf":
+            results = self.vector_engine.search_rrf_hybrid(query=query, top_k=top_k, category=category)
+            profile = {"mode": "rrf"}
+        else:
+            results, profile = self.vector_engine.search_with_profile(query=query, top_k=top_k, category=category)
+        profile["total_ms"] = round((time.perf_counter() - t_start) * 1000.0, 3)
+        return results, profile
+
+    def _execute_client_search(
+        self, query: str, top_k: int, category: Optional[str], mode: str
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        import time
+        t_start = time.perf_counter()
+        resp_dict = self.search_client.search(
+            query=query, top_k=top_k, category=category, mode=mode
+        )
+        profile = resp_dict.get("profile", {})
+        profile["total_ms"] = round((time.perf_counter() - t_start) * 1000.0, 3)
+        results = resp_dict.get("results", [])
+        return results, profile
+
     def handle_search(
         self,
         start_response: Callable[..., Any],
@@ -831,8 +905,6 @@ class GatewayHandlers:
         remote_addr: str = "-",
     ) -> List[bytes]:
         """Handles /api/search with SearchClient or VectorEngine."""
-        import time
-
         query = query_params.get("q", [""])[0].strip()
         category = query_params.get("category", [None])[0]
         mode = query_params.get("mode", ["hybrid"])[0]
@@ -847,49 +919,10 @@ class GatewayHandlers:
                 {"status": "success", "query": "", "total": 0, "results": []},
             )
 
-        t_search_start = time.perf_counter()
         if self._vector_engine is not None:
-            if mode == "vector":
-                results = self._vector_engine.search_vector_ann(
-                    query=query, top_k=top_k
-                )
-                search_lat_ms = round(
-                    (time.perf_counter() - t_search_start) * 1000.0, 3
-                )
-                profile: Dict[str, Any] = {"mode": "vector", "total_ms": search_lat_ms}
-            elif mode == "rrf":
-                results = self._vector_engine.search_rrf_hybrid(
-                    query=query, top_k=top_k, category=category
-                )
-                search_lat_ms = round(
-                    (time.perf_counter() - t_search_start) * 1000.0, 3
-                )
-                profile = {"mode": "rrf", "total_ms": search_lat_ms}
-            else:
-                results, profile = self._vector_engine.search_with_profile(
-                    query=query, top_k=top_k, category=category
-                )
-                search_lat_ms = round(
-                    (time.perf_counter() - t_search_start) * 1000.0, 3
-                )
-                profile["total_ms"] = search_lat_ms
-            resp_dict: Dict[str, Any] = {
-                "status": "success",
-                "query": query,
-                "category": category,
-                "mode": mode,
-                "total": len(results),
-                "profile": profile,
-                "results": results,
-            }
+            results, profile = self._execute_vector_search(query, top_k, category, mode)
         else:
-            resp_dict = self.search_client.search(
-                query=query, top_k=top_k, category=category, mode=mode
-            )
-            search_lat_ms = round((time.perf_counter() - t_search_start) * 1000.0, 3)
-            profile = resp_dict.get("profile", {})
-            profile["total_ms"] = search_lat_ms
-            results = resp_dict.get("results", [])
+            results, profile = self._execute_client_search(query, top_k, category, mode)
 
         log_query(
             query=query,
@@ -900,36 +933,50 @@ class GatewayHandlers:
             remote_addr=remote_addr,
         )
 
+        resp_dict = {
+            "status": "success",
+            "query": query,
+            "category": category,
+            "mode": mode,
+            "total": len(results),
+            "profile": profile,
+            "results": results,
+        }
         return response_json(start_response, resp_dict)
+
+    def _render_paper_related_vector(
+        self, start_response: Callable[..., Any], clean_id: str
+    ) -> List[bytes]:
+        paper = self._get_paper(clean_id)
+        if not paper:
+            return response_error(
+                start_response,
+                f"Paper '{clean_id}' not found",
+                status="404 Not Found",
+            )
+
+        related = self.vector_engine.proximity_graph.get_neighbors(clean_id)
+        mermaid = f"graph TD;\n  root[{clean_id}]"
+        for r in related:
+            r_id = r.get("id", "paper")
+            mermaid += f"\n  root --> node_{r_id}[{r_id}]"
+
+        return response_json(
+            start_response,
+            {
+                "status": "success",
+                "paper_id": clean_id,
+                "related_papers": related,
+                "mermaid_graph": mermaid,
+            },
+        )
 
     def handle_paper_related(
         self, start_response: Callable[..., Any], clean_id: str
     ) -> List[bytes]:
         """Handles /api/paper/<clean_id>/related graph exploration."""
         if self._vector_engine is not None:
-            paper = self._get_paper(clean_id)
-            if not paper:
-                return response_error(
-                    start_response,
-                    f"Paper '{clean_id}' not found",
-                    status="404 Not Found",
-                )
-
-            related = self._vector_engine.proximity_graph.get_neighbors(clean_id)
-            mermaid = f"graph TD;\n  root[{clean_id}]"
-            for r in related:
-                r_id = r.get("id", "paper")
-                mermaid += f"\n  root --> node_{r_id}[{r_id}]"
-
-            return response_json(
-                start_response,
-                {
-                    "status": "success",
-                    "paper_id": clean_id,
-                    "related_papers": related,
-                    "mermaid_graph": mermaid,
-                },
-            )
+            return self._render_paper_related_vector(start_response, clean_id)
 
         resp = self.search_client.get_related(clean_id)
         if not resp or resp.get("status") != "success":
@@ -1024,35 +1071,35 @@ class GatewayHandlers:
         trends_res = handle_get_latest_trends({"limit": limit})
         return response_json(start_response, trends_res)
 
+    def _build_vector_engine_stats(self) -> Dict[str, Any]:
+        papers = self.vector_engine.documents
+        cats: Dict[str, int] = {}
+        for p in papers:
+            for c in p.get("tags", []):
+                cats[str(c)] = cats.get(str(c), 0) + 1
+
+        categories_list = [{"name": k, "count": v} for k, v in cats.items()]
+        categories_list.sort(key=lambda x: int(x["count"]), reverse=True)
+
+        return {
+            "status": "success",
+            "server_interface": "PEP 3333 WSGI",
+            "total_papers": len(papers),
+            "vector_index_size": (
+                len(self.vector_engine.vector_storage.metadata)
+                if os.path.exists(self.vector_engine.vector_storage_path)
+                else len(papers)
+            ),
+            "categories": categories_list,
+        }
+
     def handle_stats(self, start_response: Callable[..., Any]) -> List[bytes]:
         """Handles /api/stats metadata retrieval."""
         if self._vector_engine is not None:
-            papers = self._vector_engine.documents
-            cats: Dict[str, int] = {}
-            for p in papers:
-                for c in p.get("tags", []):
-                    cats[str(c)] = cats.get(str(c), 0) + 1
-
-            categories_list: List[Dict[str, Any]] = [
-                {"name": k, "count": v} for k, v in cats.items()
-            ]
-            categories_list.sort(key=lambda x: int(x["count"]), reverse=True)
-
-            stats = {
-                "status": "success",
-                "server_interface": "PEP 3333 WSGI",
-                "total_papers": len(papers),
-                "vector_index_size": (
-                    len(self._vector_engine.vector_storage.metadata)
-                    if os.path.exists(self._vector_engine.vector_storage_path)
-                    else len(papers)
-                ),
-                "categories": categories_list,
-            }
-            return response_json(start_response, stats)
-
-        stats = self.search_client.get_stats()
-        stats["server_interface"] = "PEP 3333 WSGI"
+            stats = self._build_vector_engine_stats()
+        else:
+            stats = self.search_client.get_stats()
+            stats["server_interface"] = "PEP 3333 WSGI"
         return response_json(start_response, stats)
 
     def _resolve_mesh_papers(
@@ -1206,14 +1253,15 @@ class GatewayHandlers:
             return target_path
         return None
 
-    def _resolve_static_file(self, clean_path: str) -> Optional[str]:
-        if clean_path in ["", "index.html"]:
-            target = "index.html"
-        elif clean_path in ["dashboard", "dashboard.html"]:
-            target = "dashboard.html"
-        else:
-            target = clean_path
+    def _resolve_target_alias(self, clean_path: str) -> str:
+        if clean_path in ("", "index.html"):
+            return "index.html"
+        if clean_path in ("dashboard", "dashboard.html"):
+            return "dashboard.html"
+        return clean_path
 
+    def _resolve_static_file(self, clean_path: str) -> Optional[str]:
+        target = self._resolve_target_alias(clean_path)
         site_path = os.path.join(self.site_dir, target)
         if os.path.exists(site_path) and os.path.isfile(site_path):
             return site_path
@@ -1228,14 +1276,17 @@ class GatewayHandlers:
 
     @staticmethod
     def _guess_content_type(full_path: str) -> str:
-        if full_path.endswith((".js", ".mjs")):
-            return "application/javascript; charset=utf-8"
-        if full_path.endswith(".css"):
-            return "text/css; charset=utf-8"
-        if full_path.endswith(".html"):
-            return "text/html; charset=utf-8"
-        if full_path.endswith((".md", ".txt")):
-            return "text/plain; charset=utf-8"
+        ext_map = {
+            ".js": "application/javascript; charset=utf-8",
+            ".mjs": "application/javascript; charset=utf-8",
+            ".css": "text/css; charset=utf-8",
+            ".html": "text/html; charset=utf-8",
+            ".md": "text/plain; charset=utf-8",
+            ".txt": "text/plain; charset=utf-8",
+        }
+        for ext, mime in ext_map.items():
+            if full_path.endswith(ext):
+                return mime
         mime_type, _ = mimetypes.guess_type(full_path)
         return mime_type or "application/octet-stream"
 
@@ -1329,40 +1380,45 @@ class GatewayHandlers:
             },
         )
 
-    def handle_mcp_post(
-        self, environ: Dict[str, Any], start_response: Callable[..., Any]
-    ) -> List[bytes]:
-        """Handles MCP JSON-RPC and legacy tool execution over HTTP POST."""
+    def _parse_mcp_body(self, environ: Dict[str, Any], length: int) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        try:
+            body_bytes = environ["wsgi.input"].read(length)
+            req = json.loads(body_bytes.decode("utf-8"))
+            if not isinstance(req, dict) or not req:
+                return None, "Request body must be non-empty JSON object"
+            return req, None
+        except Exception as e:
+            return None, f"Invalid JSON payload: {e}"
+
+    def _validate_mcp_length(self, environ: Dict[str, Any]) -> Tuple[int, Optional[str]]:
         try:
             length = int(environ.get("CONTENT_LENGTH", "0"))
         except ValueError:
             length = 0
 
         if length <= 0:
-            return response_error(
-                start_response, "Empty request body", status="400 Bad Request"
-            )
-
+            return 0, "Empty request body"
         if length > MAX_MCP_PAYLOAD_BYTES:
-            return response_error(
-                start_response,
-                "Payload exceeds maximum allowed size (1MB)",
-                status="413 Payload Too Large",
-            )
+            return length, "Payload exceeds maximum allowed size (1MB)"
+        return length, None
 
-        try:
-            body_bytes = environ["wsgi.input"].read(length)
-            req = json.loads(body_bytes.decode("utf-8"))
-            if not isinstance(req, dict) or not req:
-                return response_error(
-                    start_response,
-                    "Request body must be non-empty JSON object",
-                    status="400 Bad Request",
-                )
-        except Exception as e:
+    def _handle_mcp_length_error(self, start_response: Callable[..., Any], err: str) -> List[bytes]:
+        status = "413 Payload Too Large" if "exceeds" in err else "400 Bad Request"
+        return response_error(start_response, err, status=status)
+
+    def handle_mcp_post(
+        self, environ: Dict[str, Any], start_response: Callable[..., Any]
+    ) -> List[bytes]:
+        """Handles MCP JSON-RPC and legacy tool execution over HTTP POST."""
+        length, err = self._validate_mcp_length(environ)
+        if err:
+            return self._handle_mcp_length_error(start_response, err)
+
+        req, parse_err = self._parse_mcp_body(environ, length)
+        if parse_err or req is None:
             return response_error(
                 start_response,
-                f"Invalid JSON payload: {e}",
+                parse_err or "Invalid JSON payload",
                 status="400 Bad Request",
             )
 

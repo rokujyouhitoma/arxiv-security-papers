@@ -32,17 +32,31 @@ class SelectHandler:
         doc_values: Optional[DocValues] = None,
         stored_fields: Optional[StoredFields] = None,
     ) -> None:
-        self.schema = schema or ManagedIndexSchema()
-        self.analyzer = analyzer or Analyzer()
-        self.postings = postings_index or MultiFieldPostingsIndex()
-        self.doc_values = doc_values or DocValues()
-        self.stored_fields = stored_fields or StoredFields()
-
+        self._init_schema_analyzer(schema, analyzer)
+        self._init_storage_components(postings_index, doc_values, stored_fields)
         self.similarity = BM25Similarity()
         self.facet_engine = FacetEngine(self.doc_values)
         self.highlighter = FastVectorHighlighter()
         self.filter_cache = FilterCache(max_size=200)
         self.query_cache = QueryResultCache(max_size=500)
+
+    def _init_schema_analyzer(
+        self,
+        schema: Optional[ManagedIndexSchema],
+        analyzer: Optional[Analyzer],
+    ) -> None:
+        self.schema = schema or ManagedIndexSchema()
+        self.analyzer = analyzer or Analyzer()
+
+    def _init_storage_components(
+        self,
+        postings_index: Optional[MultiFieldPostingsIndex],
+        doc_values: Optional[DocValues],
+        stored_fields: Optional[StoredFields],
+    ) -> None:
+        self.postings = postings_index or MultiFieldPostingsIndex()
+        self.doc_values = doc_values or DocValues()
+        self.stored_fields = stored_fields or StoredFields()
 
     def _apply_filter_queries(
         self, filter_queries: Optional[Dict[str, str]]
@@ -64,6 +78,20 @@ class SelectHandler:
             )
         return filtered_doc_ids
 
+    def _score_postings_for_field(
+        self,
+        postings: List[tuple[str, int]],
+        boost: float,
+        filtered_doc_ids: Optional[Set[str]],
+        total_docs: int,
+        doc_scores: Dict[str, float],
+    ) -> None:
+        idf = self.similarity.compute_idf(len(postings), total_docs)
+        for pid, tf in postings:
+            if filtered_doc_ids is None or pid in filtered_doc_ids:
+                bm25 = self.similarity.score(tf, 100, 100.0, idf)
+                doc_scores[pid] = doc_scores.get(pid, 0.0) + bm25 * boost
+
     def _accumulate_term_postings(
         self,
         term: str,
@@ -73,15 +101,18 @@ class SelectHandler:
     ) -> None:
         for fname, fdef in self.schema.fields.items():
             postings = self.postings.get_postings(fname, term)
-            if not postings:
-                continue
-            idf = self.similarity.compute_idf(len(postings), total_docs)
-            boost = fdef.boost
-            for pid, tf in postings:
-                if filtered_doc_ids is not None and pid not in filtered_doc_ids:
-                    continue
-                bm25 = self.similarity.score(tf, 100, 100.0, idf)
-                doc_scores[pid] = doc_scores.get(pid, 0.0) + bm25 * boost
+            if postings:
+                self._score_postings_for_field(postings, fdef.boost, filtered_doc_ids, total_docs, doc_scores)
+
+    def _score_all_docs_fallback(
+        self, all_docs: List[Dict[str, Any]], filtered_doc_ids: Optional[Set[str]]
+    ) -> Dict[str, float]:
+        doc_scores: Dict[str, float] = {}
+        for doc in all_docs:
+            did = doc.get("id", "")
+            if filtered_doc_ids is None or did in filtered_doc_ids:
+                doc_scores[did] = 1.0
+        return doc_scores
 
     def _score_candidates(
         self,
@@ -90,14 +121,10 @@ class SelectHandler:
         total_docs: int,
         all_docs: List[Dict[str, Any]],
     ) -> Dict[str, float]:
-        doc_scores: Dict[str, float] = {}
         if not q_terms:
-            for doc in all_docs:
-                did = doc.get("id", "")
-                if filtered_doc_ids is None or did in filtered_doc_ids:
-                    doc_scores[did] = 1.0
-            return doc_scores
+            return self._score_all_docs_fallback(all_docs, filtered_doc_ids)
 
+        doc_scores: Dict[str, float] = {}
         for term in q_terms:
             self._accumulate_term_postings(
                 term, filtered_doc_ids, total_docs, doc_scores
@@ -121,6 +148,56 @@ class SelectHandler:
             results.append(result_entry)
         return results, hit_ids
 
+    def _collect_top_docs(self, doc_scores: Dict[str, float], top_k: int) -> Any:
+        collector = TopDocsCollector(top_k=top_k)
+        for did, score in doc_scores.items():
+            if score > 0:
+                collector.collect(did, score)
+        return collector.get_top_docs()
+
+    def _compute_facet_counts(
+        self, facet_fields: Optional[List[str]], hit_ids: List[str], all_docs: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, int]]:
+        if not facet_fields:
+            return {}
+        return self.facet_engine.count_facets(
+            hit_ids or [d.get("id", "") for d in all_docs], facet_fields
+        )
+
+    def _format_select_response(
+        self,
+        prof: ExecutionProfiler,
+        query: str,
+        top_k: int,
+        top_docs: Any,
+        results: List[Dict[str, Any]],
+        facets_data: Dict[str, Dict[str, int]],
+    ) -> Dict[str, Any]:
+        return {
+            "responseHeader": {
+                "status": 0,
+                "QTime": prof.total_ms,
+                "cpu_time_ms": prof.cpu_ms,
+                "peak_memory_kb": prof.peak_memory_kb,
+                "params": {"q": query, "rows": top_k},
+            },
+            "response": {
+                "numFound": top_docs.total_hits,
+                "start": 0,
+                "maxScore": top_docs.max_score,
+                "docs": results,
+            },
+            "facet_counts": {
+                "facet_fields": facets_data,
+                **facets_data,
+            },
+            "performance": {
+                "total_ms": prof.total_ms,
+                "cpu_time_ms": prof.cpu_ms,
+                "peak_memory_kb": prof.peak_memory_kb,
+            },
+        }
+
     def handle_select(
         self,
         query: str,
@@ -140,41 +217,10 @@ class SelectHandler:
                 q_terms, filtered_doc_ids, len(all_docs), all_docs
             )
 
-            collector = TopDocsCollector(top_k=top_k)
-            for did, score in doc_scores.items():
-                if score > 0:
-                    collector.collect(did, score)
-
-            top_docs = collector.get_top_docs()
+            top_docs = self._collect_top_docs(doc_scores, top_k)
             results, hit_ids = self._build_response_docs(top_docs.score_docs, q_terms)
+            facets_data = self._compute_facet_counts(facet_fields, hit_ids, all_docs)
 
-            facets_data: Dict[str, Dict[str, int]] = {}
-            if facet_fields:
-                facets_data = self.facet_engine.count_facets(
-                    hit_ids or [d.get("id", "") for d in all_docs], facet_fields
-                )
-
-            return {
-                "responseHeader": {
-                    "status": 0,
-                    "QTime": prof.total_ms,
-                    "cpu_time_ms": prof.cpu_ms,
-                    "peak_memory_kb": prof.peak_memory_kb,
-                    "params": {"q": query, "rows": top_k},
-                },
-                "response": {
-                    "numFound": top_docs.total_hits,
-                    "start": 0,
-                    "maxScore": top_docs.max_score,
-                    "docs": results,
-                },
-                "facet_counts": {
-                    "facet_fields": facets_data,
-                    **facets_data,
-                },
-                "performance": {
-                    "total_ms": prof.total_ms,
-                    "cpu_time_ms": prof.cpu_ms,
-                    "peak_memory_kb": prof.peak_memory_kb,
-                },
-            }
+            return self._format_select_response(
+                prof, query, top_k, top_docs, results, facets_data
+            )

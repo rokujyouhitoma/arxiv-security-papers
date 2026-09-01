@@ -39,30 +39,30 @@ class SQLCommandType(str, Enum):
     @property
     def category(self) -> str:
         """Returns the high-level SQL category (DDL, DQL, DML, DCL, TCL)."""
-        if self in (
-            SQLCommandType.CREATE_TABLE,
-            SQLCommandType.DROP_TABLE,
-            SQLCommandType.CREATE_INDEX,
-        ):
-            return "DDL"
-        if self in (SQLCommandType.SELECT, SQLCommandType.SHOW):
-            return "DQL"
-        if self in (
-            SQLCommandType.INSERT,
-            SQLCommandType.UPDATE,
-            SQLCommandType.DELETE,
-        ):
-            return "DML"
-        if self in (SQLCommandType.GRANT, SQLCommandType.REVOKE):
-            return "DCL"
-        if self in (
-            SQLCommandType.BEGIN,
-            SQLCommandType.COMMIT,
-            SQLCommandType.ROLLBACK,
-        ):
-            return "TCL"
-        return "OTHER"
-        return "SQL"
+        return _resolve_cmd_category(self)
+
+
+_CMD_CATEGORY_MAP: Dict[SQLCommandType, str] = {
+    SQLCommandType.CREATE_TABLE: "DDL",
+    SQLCommandType.DROP_TABLE: "DDL",
+    SQLCommandType.CREATE_INDEX: "DDL",
+    SQLCommandType.SELECT: "DQL",
+    SQLCommandType.SHOW: "DQL",
+    SQLCommandType.EXPLAIN: "DQL",
+    SQLCommandType.INSERT: "DML",
+    SQLCommandType.UPDATE: "DML",
+    SQLCommandType.DELETE: "DML",
+    SQLCommandType.GRANT: "DCL",
+    SQLCommandType.REVOKE: "DCL",
+    SQLCommandType.BEGIN: "TCL",
+    SQLCommandType.COMMIT: "TCL",
+    SQLCommandType.ROLLBACK: "TCL",
+}
+
+
+def _resolve_cmd_category(cmd: SQLCommandType) -> str:
+    """Returns SQL category string for a command."""
+    return _CMD_CATEGORY_MAP.get(cmd, "OTHER")
 
 
 @dataclass

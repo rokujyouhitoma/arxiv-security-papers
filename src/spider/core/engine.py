@@ -44,6 +44,27 @@ class Engine:
             "bytes_downloaded": 0,
         }
 
+    async def _step_crawl(
+        self,
+        spider: Any,
+        mid_list: List[Any],
+        pipe_list: List[Any],
+        scraped_items: List[ScrapedItem],
+    ) -> bool:
+        request = self.scheduler.next_request()
+        if request is None:
+            await asyncio.sleep(0.05)
+            return False
+
+        return await self._process_single_request(
+            request, spider, mid_list, pipe_list, scraped_items
+        )
+
+    def _should_continue_crawling(self, max_requests: Optional[int], count: int) -> bool:
+        if not (self.running and self.scheduler.has_pending_requests()):
+            return False
+        return not bool(max_requests and count >= max_requests)
+
     async def crawl(
         self,
         spider: Any,
@@ -60,19 +81,8 @@ class Engine:
         _enqueue_start_urls(spider, self.scheduler, self._stats)
 
         processed_count = 0
-        while self.running and self.scheduler.has_pending_requests():
-            if max_requests and processed_count >= max_requests:
-                break
-
-            request = self.scheduler.next_request()
-            if request is None:
-                await asyncio.sleep(0.05)
-                continue
-
-            success = await self._process_single_request(
-                request, spider, mid_list, pipe_list, scraped_items
-            )
-            if success:
+        while self._should_continue_crawling(max_requests, processed_count):
+            if await self._step_crawl(spider, mid_list, pipe_list, scraped_items):
                 processed_count += 1
 
         self.running = False
@@ -133,6 +143,30 @@ async def _fetch_response(
     return response
 
 
+async def _handle_results_async(
+    results: Any,
+    scheduler: Scheduler,
+    pipe_list: List[Any],
+    spider: Any,
+    scraped_items: List[ScrapedItem],
+    stats: Dict[str, Union[int, float]],
+) -> None:
+    async for res in results:
+        await _handle_result(res, scheduler, pipe_list, spider, scraped_items, stats)
+
+
+async def _handle_results_sync(
+    results: Any,
+    scheduler: Scheduler,
+    pipe_list: List[Any],
+    spider: Any,
+    scraped_items: List[ScrapedItem],
+    stats: Dict[str, Union[int, float]],
+) -> None:
+    for res in results:
+        await _handle_result(res, scheduler, pipe_list, spider, scraped_items, stats)
+
+
 async def _dispatch_spider_callback(
     request: Request,
     response: Response,
@@ -148,15 +182,9 @@ async def _dispatch_spider_callback(
 
     results = callback_fn(response)
     if asyncio.iscoroutine(results) or hasattr(results, "__anext__"):
-        async for res in results:
-            await _handle_result(
-                res, scheduler, pipe_list, spider, scraped_items, stats
-            )
+        await _handle_results_async(results, scheduler, pipe_list, spider, scraped_items, stats)
     else:
-        for res in results:
-            await _handle_result(
-                res, scheduler, pipe_list, spider, scraped_items, stats
-            )
+        await _handle_results_sync(results, scheduler, pipe_list, spider, scraped_items, stats)
 
 
 async def _execute_middlewares_req(
@@ -180,6 +208,14 @@ async def _execute_middlewares_resp(
     return current_resp
 
 
+async def _process_item_pipelines(item: ScrapedItem, pipelines: List[Any], spider: Any) -> ScrapedItem:
+    current_item = item
+    for pipe in pipelines:
+        if hasattr(pipe, "process_item"):
+            current_item = await pipe.process_item(current_item, spider)
+    return current_item
+
+
 async def _handle_result(
     res: Any,
     scheduler: Scheduler,
@@ -192,9 +228,6 @@ async def _handle_result(
         if scheduler.enqueue(res):
             stats["requests_scheduled"] = int(stats["requests_scheduled"]) + 1
     elif isinstance(res, ScrapedItem):
-        item = res
-        for pipe in pipelines:
-            if hasattr(pipe, "process_item"):
-                item = await pipe.process_item(item, spider)
+        item = await _process_item_pipelines(res, pipelines, spider)
         scraped_items.append(item)
         stats["items_scraped"] = int(stats["items_scraped"]) + 1

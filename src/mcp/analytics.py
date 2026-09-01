@@ -16,32 +16,51 @@ from typing import Any, Dict, List, Optional
 from mcp.base import _MCP_PERF_LOG_PATH, WORKSPACE_DIR
 
 
+def _record_matches_filters(
+    rec: Dict[str, Any], server_filter: Optional[str], since_iso: Optional[str]
+) -> bool:
+    if server_filter and rec.get("server") != server_filter:
+        return False
+    if since_iso and rec.get("timestamp", "") < since_iso:
+        return False
+    return True
+
+
+def _parse_log_line(
+    line: str, server_filter: Optional[str], since_iso: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    try:
+        rec = json.loads(line)
+        return rec if _record_matches_filters(rec, server_filter, since_iso) else None
+    except Exception:
+        return None
+
+
+def _read_lines_from_log(target_path: str) -> List[str]:
+    with open(target_path, "r", encoding="utf-8") as f:
+        return [ln.strip() for ln in f if ln.strip()]
+
+
+def _filter_parsed_records(lines: List[str], server_filter: Optional[str], since_iso: Optional[str]) -> List[Dict[str, Any]]:
+    records = []
+    for ln in lines:
+        rec = _parse_log_line(ln, server_filter, since_iso)
+        if rec is not None:
+            records.append(rec)
+    return records
+
+
 def load_mcp_logs(
     log_path: Optional[str] = None,
     server_filter: Optional[str] = None,
     since_iso: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Loads and filters raw MCP log entries from JSONL."""
-    target_path = log_path or _MCP_PERF_LOG_PATH
+    target_path = log_path if log_path else _MCP_PERF_LOG_PATH
     if not os.path.exists(target_path):
         return []
-
-    records: List[Dict[str, Any]] = []
-    with open(target_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-                if server_filter and rec.get("server") != server_filter:
-                    continue
-                if since_iso and rec.get("timestamp", "") < since_iso:
-                    continue
-                records.append(rec)
-            except Exception:
-                continue
-    return records
+    lines = _read_lines_from_log(target_path)
+    return _filter_parsed_records(lines, server_filter, since_iso)
 
 
 def _init_stats() -> Dict[str, Any]:
@@ -116,29 +135,30 @@ def _process_single_record(rec: Dict[str, Any], stats: Dict[str, Any]) -> None:
         stats["hourly_distribution"][hour_key] += 1
 
 
+def _calc_tool_entry(data: Dict[str, Any]) -> Dict[str, Any]:
+    calls = data["calls"]
+    avg_ms = data["total_ms"] / calls if calls > 0 else 0.0
+    avg_mem = data["total_mem_kb"] / calls if calls > 0 else 0.0
+    min_ms = data["min_ms"] if data["min_ms"] != float("inf") else 0.0
+    success_rate = (data["success"] / calls * 100.0) if calls > 0 else 0.0
+
+    return {
+        "calls": calls,
+        "success": data["success"],
+        "error": data["error"],
+        "success_rate": round(success_rate, 2),
+        "avg_ms": round(avg_ms, 2),
+        "min_ms": round(min_ms, 2),
+        "max_ms": round(data["max_ms"], 2),
+        "avg_mem_kb": round(avg_mem, 2),
+        "max_mem_kb": round(data["max_mem_kb"], 2),
+    }
+
+
 def _finalize_tool_metrics(
     raw_tool_stats: Dict[str, Dict[str, Any]],
 ) -> Dict[str, Dict[str, Any]]:
-    finalized: Dict[str, Dict[str, Any]] = {}
-    for name, data in raw_tool_stats.items():
-        calls = data["calls"]
-        avg_ms = data["total_ms"] / calls if calls > 0 else 0.0
-        avg_mem = data["total_mem_kb"] / calls if calls > 0 else 0.0
-        min_ms = data["min_ms"] if data["min_ms"] != float("inf") else 0.0
-        success_rate = (data["success"] / calls * 100.0) if calls > 0 else 0.0
-
-        finalized[name] = {
-            "calls": calls,
-            "success": data["success"],
-            "error": data["error"],
-            "success_rate": round(success_rate, 2),
-            "avg_ms": round(avg_ms, 2),
-            "min_ms": round(min_ms, 2),
-            "max_ms": round(data["max_ms"], 2),
-            "avg_mem_kb": round(avg_mem, 2),
-            "max_mem_kb": round(data["max_mem_kb"], 2),
-        }
-    return finalized
+    return {name: _calc_tool_entry(data) for name, data in raw_tool_stats.items()}
 
 
 def compute_mcp_metrics(records: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -167,6 +187,54 @@ def compute_mcp_metrics(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _render_server_table(lines: List[str], metrics: Dict[str, Any], total: int) -> None:
+    lines.extend([
+        "",
+        "## 📈 1. サーバー別・メソッド別サマリー",
+        "",
+        "| サーバー名 | リクエスト数 | 構成比 |",
+        "| :--- | :---: | :---: |",
+    ])
+    servers = metrics.get("servers", {})
+    for s_name, count in sorted(servers.items(), key=lambda x: x[1], reverse=True):
+        pct = round(count / total * 100.0, 1) if total > 0 else 0.0
+        lines.append(f"| `{s_name}` | {count:,} | {pct}% |")
+
+
+def _render_tools_table(lines: List[str], metrics: Dict[str, Any]) -> None:
+    lines.extend([
+        "",
+        "## 🛠️ 2. Tool / リソース別 呼び出しランキング & パフォーマンス",
+        "",
+        "| Tool / リソース名 | 呼出数 | 成功率 | 平均応答 (ms) | 最大応答 (ms) | 平均RAM (KB) |",
+        "| :--- | :---: | :---: | :---: | :---: | :---: |",
+    ])
+    tools = metrics.get("tools", {})
+    for t_name, data in sorted(tools.items(), key=lambda x: x[1]["calls"], reverse=True):
+        lines.append(
+            f"| `{t_name}` | {data['calls']:,} | {data['success_rate']}% | {data['avg_ms']} ms | "
+            f"{data['max_ms']} ms | {data['avg_mem_kb']} KB |"
+        )
+
+
+def _render_errors_table(lines: List[str], errors: List[Dict[str, Any]]) -> None:
+    if not errors:
+        return
+    lines.extend([
+        "",
+        "## ⚠️ 3. 直近のエラーログ一覧 (最新 20 件)",
+        "",
+        "| 発生日時 (UTC) | サーバー | 対象 | エラー内容 |",
+        "| :--- | :--- | :--- | :--- |",
+    ])
+    for err in errors:
+        ts = err.get("timestamp", "")
+        srv = err.get("server", "")
+        nm = err.get("name", "")
+        msg = err.get("error", "").replace("\n", " ")[:80]
+        lines.append(f"| `{ts}` | `{srv}` | `{nm}` | `{msg}` |")
+
+
 def render_mcp_markdown_report(metrics: Dict[str, Any]) -> str:
     """Renders comprehensive, executive-ready Markdown summary of MCP metrics."""
     now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -181,57 +249,11 @@ def render_mcp_markdown_report(metrics: Dict[str, Any]) -> str:
         f"> **総リクエスト数**: {total:,} 件 | **成功率**: {succ_pct}% | **平均応答時間**: {avg_lat} ms",
         "",
         "---",
-        "",
-        "## 📈 1. サーバー別・メソッド別サマリー",
-        "",
-        "| サーバー名 | リクエスト数 | 構成比 |",
-        "| :--- | :---: | :---: |",
     ]
 
-    servers = metrics.get("servers", {})
-    for s_name, count in sorted(servers.items(), key=lambda x: x[1], reverse=True):
-        pct = round(count / total * 100.0, 1) if total > 0 else 0.0
-        lines.append(f"| `{s_name}` | {count:,} | {pct}% |")
-
-    lines.extend(
-        [
-            "",
-            "## 🛠️ 2. Tool / リソース別 呼び出しランキング & パフォーマンス",
-            "",
-            "| Tool / リソース名 | 呼出数 | 成功率 | 平均応答 (ms) | 最大応答 (ms) | 平均RAM (KB) |",
-            "| :--- | :---: | :---: | :---: | :---: | :---: |",
-        ]
-    )
-
-    tools = metrics.get("tools", {})
-    sorted_tools = sorted(tools.items(), key=lambda x: x[1]["calls"], reverse=True)
-    for t_name, data in sorted_tools:
-        calls = data["calls"]
-        s_rate = data["success_rate"]
-        avg_ms = data["avg_ms"]
-        max_ms = data["max_ms"]
-        avg_ram = data["avg_mem_kb"]
-        lines.append(
-            f"| `{t_name}` | {calls:,} | {s_rate}% | {avg_ms} ms | {max_ms} ms | {avg_ram} KB |"
-        )
-
-    errors = metrics.get("recent_errors", [])
-    if errors:
-        lines.extend(
-            [
-                "",
-                "## ⚠️ 3. 直近のエラーログ一覧 (最新 20 件)",
-                "",
-                "| 発生日時 (UTC) | サーバー | 対象 | エラー内容 |",
-                "| :--- | :--- | :--- | :--- |",
-            ]
-        )
-        for err in errors:
-            ts = err.get("timestamp", "")
-            srv = err.get("server", "")
-            nm = err.get("name", "")
-            msg = err.get("error", "").replace("\n", " ")[:80]
-            lines.append(f"| `{ts}` | `{srv}` | `{nm}` | `{msg}` |")
+    _render_server_table(lines, metrics, total)
+    _render_tools_table(lines, metrics)
+    _render_errors_table(lines, metrics.get("recent_errors", []))
 
     lines.append("")
     return "\n".join(lines)

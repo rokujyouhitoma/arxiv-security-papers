@@ -118,6 +118,15 @@ def compute_dcg_at_k(
     return dcg
 
 
+def _compute_ideal_dcg(graded_relevance: Dict[str, float], k: int) -> float:
+    ideal_scores = sorted(graded_relevance.values(), reverse=True)[:k]
+    ideal_dcg = 0.0
+    for i, rel in enumerate(ideal_scores, start=1):
+        if rel > 0.0:
+            ideal_dcg += (math.pow(2.0, rel) - 1.0) / math.log2(i + 1.0)
+    return ideal_dcg
+
+
 def compute_ndcg_at_k(
     retrieved_ids: Sequence[str],
     graded_relevance: Dict[str, float],
@@ -131,14 +140,7 @@ def compute_ndcg_at_k(
         return 0.0
 
     actual_dcg = compute_dcg_at_k(retrieved_ids, graded_relevance, k=k)
-
-    # Ideal DCG: Sort all relevant documents by score descending
-    ideal_scores = sorted(graded_relevance.values(), reverse=True)[:k]
-    ideal_dcg = 0.0
-    for i, rel in enumerate(ideal_scores, start=1):
-        if rel > 0.0:
-            ideal_dcg += (math.pow(2.0, rel) - 1.0) / math.log2(i + 1.0)
-
+    ideal_dcg = _compute_ideal_dcg(graded_relevance, k)
     if ideal_dcg <= 0.0:
         return 0.0
 

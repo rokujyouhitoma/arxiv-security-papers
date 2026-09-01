@@ -12,7 +12,8 @@ import json
 import logging
 import os
 import socket
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Set
+
 
 from .protocol import VectorDBProtocolError, VectorDBProtocolHandler
 
@@ -68,16 +69,19 @@ class DatabaseClient:
 
     def _get_candidate_sockets(self) -> List[str]:
         """Returns candidate socket paths in priority order (specified socket, canonical db.sock, then node sockets)."""
-        candidates = [self.socket_path]
         sock_dir = os.path.dirname(self.socket_path)
-        canonical = os.path.join(sock_dir, "db.sock")
-        if canonical not in candidates:
-            candidates.append(canonical)
-        for i in range(3):
-            node_sock = os.path.join(sock_dir, f"db_{i}.sock")
-            if node_sock not in candidates:
-                candidates.append(node_sock)
-        return [s for s in candidates if os.path.exists(s)]
+        all_candidates = [
+            self.socket_path,
+            os.path.join(sock_dir, "db.sock"),
+            *(os.path.join(sock_dir, f"db_{i}.sock") for i in range(3)),
+        ]
+        seen: Set[str] = set()
+        candidates: List[str] = []
+        for s in all_candidates:
+            if s not in seen and os.path.exists(s):
+                seen.add(s)
+                candidates.append(s)
+        return candidates
 
     def is_socket_available(self) -> bool:
         """Checks if any database cluster socket exists and is responsive."""
@@ -89,6 +93,19 @@ class DatabaseClient:
         except Exception:
             return False
 
+    def _recv_response_line(self, sock: socket.socket) -> bytes:
+        raw_data = b""
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            raw_data += chunk
+            if b"\n" in raw_data:
+                break
+        if not raw_data:
+            raise VectorDBProtocolError("Empty response from database daemon")
+        return raw_data
+
     def _send_socket_request(
         self, target_sock: str, req: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -99,17 +116,7 @@ class DatabaseClient:
             sock.connect(target_sock)
             payload = (json.dumps(req, ensure_ascii=False) + "\n").encode("utf-8")
             sock.sendall(payload)
-
-            raw_data = b""
-            while True:
-                chunk = sock.recv(65536)
-                if not chunk:
-                    break
-                raw_data += chunk
-                if b"\n" in raw_data:
-                    break
-            if not raw_data:
-                raise VectorDBProtocolError("Empty response from database daemon")
+            raw_data = self._recv_response_line(sock)
             parsed = json.loads(raw_data.decode("utf-8"))
             if isinstance(parsed, dict):
                 return parsed

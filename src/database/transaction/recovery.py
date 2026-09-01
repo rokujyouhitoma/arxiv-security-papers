@@ -90,23 +90,44 @@ class ARIESRecoveryManager:
         return att, dpt, chk_lsn
 
     @staticmethod
+    def _update_att_for_write(
+        record: LogRecord, att: Dict[int, int], dpt: Dict[int, int]
+    ) -> None:
+        att[record.tx_id] = record.lsn
+        if record.record_type in (LogRecordType.UPDATE, LogRecordType.CLR):
+            if record.page_id != 0xFFFFFFFF and record.page_id not in dpt:
+                dpt[record.page_id] = record.lsn
+
+    @staticmethod
     def _update_tables_for_record(
         record: LogRecord, att: Dict[int, int], dpt: Dict[int, int]
     ) -> None:
         """Updates Active Transaction Table and Dirty Page Table for a single record."""
         rec_type = record.record_type
-        tx_id = record.tx_id
-
         if rec_type in (LogRecordType.BEGIN, LogRecordType.UPDATE, LogRecordType.CLR):
-            att[tx_id] = record.lsn
-            if (
-                rec_type in (LogRecordType.UPDATE, LogRecordType.CLR)
-                and record.page_id != 0xFFFFFFFF
-                and record.page_id not in dpt
-            ):
-                dpt[record.page_id] = record.lsn
+            ARIESRecoveryManager._update_att_for_write(record, att, dpt)
         elif rec_type in (LogRecordType.COMMIT, LogRecordType.ABORT):
-            att.pop(tx_id, None)
+            att.pop(record.tx_id, None)
+
+    def _open_db_file(self) -> "Optional[VFSFile]":
+        if self.vfs.exists(self.db_file_path):
+            return self.vfs.open(self.db_file_path, mode="r+b")
+        return None
+
+    def _redo_all_records(
+        self,
+        all_records: "List[LogRecord]",
+        min_rec_lsn: int,
+        dpt: Dict[int, int],
+        pager: "Optional[Pager]",
+        db_file: "Optional[VFSFile]",
+    ) -> int:
+        count = 0
+        for record in all_records:
+            if self._can_redo_record(record, min_rec_lsn, dpt):
+                if self._apply_redo(record, pager, db_file):
+                    count += 1
+        return count
 
     def _run_redo_phase(
         self,
@@ -120,25 +141,17 @@ class ARIESRecoveryManager:
         """
         if not dpt:
             return 0
-
         min_rec_lsn = min(dpt.values())
-        redo_count = 0
-
-        db_file: Optional[VFSFile] = None
-        if pager is None and self.vfs.exists(self.db_file_path):
-            db_file = self.vfs.open(self.db_file_path, mode="r+b")
-
+        db_file = None if pager else self._open_db_file()
         try:
-            for record in all_records:
-                if self._can_redo_record(record, min_rec_lsn, dpt):
-                    if self._apply_redo(record, pager, db_file):
-                        redo_count += 1
+            redo_count = self._redo_all_records(
+                all_records, min_rec_lsn, dpt, pager, db_file
+            )
             if db_file:
                 db_file.sync()
         finally:
             if db_file:
                 db_file.close()
-
         return redo_count
 
     @staticmethod
@@ -180,6 +193,41 @@ class ARIESRecoveryManager:
         self._write_page_raw(page_id, new_page_data, pager, db_file)
         return True
 
+    def _undo_loop(
+        self,
+        record_map: Dict[int, "LogRecord"],
+        to_undo: Set[int],
+        wal_writer: "WALWriter",
+        pager: "Optional[Pager]",
+        db_file: "Optional[VFSFile]",
+    ) -> int:
+        undo_count = 0
+        while to_undo:
+            max_lsn = max(to_undo)
+            to_undo.remove(max_lsn)
+            if max_lsn not in record_map:
+                continue
+            rec = record_map[max_lsn]
+            if self._process_undo_step(
+                rec, wal_writer, pager, db_file, record_map, to_undo
+            ):
+                undo_count += 1
+        return undo_count
+
+    @staticmethod
+    def _finalize_undo(wal_writer: WALWriter, db_file: Optional[VFSFile]) -> None:
+        wal_writer.flush()
+        if db_file:
+            db_file.sync()
+
+    @staticmethod
+    def _close_undo_resources(
+        wal_writer: WALWriter, db_file: Optional[VFSFile]
+    ) -> None:
+        wal_writer.close()
+        if db_file:
+            db_file.close()
+
     def _run_undo_phase(
         self,
         all_records: List[LogRecord],
@@ -192,43 +240,20 @@ class ARIESRecoveryManager:
         """
         if not att:
             return 0
-
         wal_writer = WALWriter(
-            self.wal_file_path,
-            vfs=self.vfs,
-            page_size=self.page_size,
+            self.wal_file_path, vfs=self.vfs, page_size=self.page_size
         )
         record_map: Dict[int, LogRecord] = {r.lsn: r for r in all_records}
         to_undo: Set[int] = set(att.values())
-        undo_count = 0
-
-        db_file: Optional[VFSFile] = None
-        if pager is None and self.vfs.exists(self.db_file_path):
-            db_file = self.vfs.open(self.db_file_path, mode="r+b")
-
+        db_file = None if pager else self._open_db_file()
         try:
-            while to_undo:
-                max_lsn = max(to_undo)
-                to_undo.remove(max_lsn)
-                if max_lsn not in record_map:
-                    continue
-
-                rec = record_map[max_lsn]
-                undone = self._process_undo_step(
-                    rec, wal_writer, pager, db_file, record_map, to_undo
-                )
-                if undone:
-                    undo_count += 1
-
-            wal_writer.flush()
-            if db_file:
-                db_file.sync()
+            undo_count = self._undo_loop(
+                record_map, to_undo, wal_writer, pager, db_file
+            )
+            self._finalize_undo(wal_writer, db_file)
+            return undo_count
         finally:
-            wal_writer.close()
-            if db_file:
-                db_file.close()
-
-        return undo_count
+            self._close_undo_resources(wal_writer, db_file)
 
     def _process_undo_step(
         self,

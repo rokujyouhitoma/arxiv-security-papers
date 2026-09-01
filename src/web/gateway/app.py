@@ -36,13 +36,24 @@ class WSGIApplication:
         start_response("200 OK", CORS_HEADERS)
         return [b""]
 
-    def _route_get(
+    def _route_simple_api(
+        self, start_response: Callable[..., Any], path: str, query_params: Dict[str, List[str]]
+    ) -> Optional[List[bytes]]:
+        if path == "/api/trends":
+            return self.handlers.handle_trends(start_response, query_params)
+        if path == "/api/stats":
+            return self.handlers.handle_stats(start_response)
+        if path == "/api/graph/mesh":
+            return self.handlers.handle_graph_mesh(start_response)
+        return None
+
+    def _route_api_get(
         self,
         environ: Dict[str, Any],
         start_response: Callable[..., Any],
         path: str,
         query_params: Dict[str, List[str]],
-    ) -> List[bytes]:
+    ) -> Optional[List[bytes]]:
         remote_addr = environ.get("REMOTE_ADDR", "-")
         if path == "/api/search":
             return self.handlers.handle_search(
@@ -50,12 +61,18 @@ class WSGIApplication:
             )
         if path.startswith("/api/paper/"):
             return self.handlers.handle_paper(start_response, path)
-        if path == "/api/trends":
-            return self.handlers.handle_trends(start_response, query_params)
-        if path == "/api/stats":
-            return self.handlers.handle_stats(start_response)
-        if path == "/api/graph/mesh":
-            return self.handlers.handle_graph_mesh(start_response)
+        return self._route_simple_api(start_response, path, query_params)
+
+    def _route_get(
+        self,
+        environ: Dict[str, Any],
+        start_response: Callable[..., Any],
+        path: str,
+        query_params: Dict[str, List[str]],
+    ) -> List[bytes]:
+        api_res = self._route_api_get(environ, start_response, path, query_params)
+        if api_res is not None:
+            return api_res
         if path.startswith("/preview/"):
             return self.handlers.handle_preview(start_response, path)
         if path.startswith("/api/"):
@@ -63,6 +80,15 @@ class WSGIApplication:
                 start_response, "API endpoint not found", status="404 Not Found"
             )
         return self.handlers.handle_static(start_response, path)
+
+    def _handle_post(
+        self, environ: Dict[str, Any], start_response: Callable[..., Any], path: str
+    ) -> List[bytes]:
+        if path == "/api/mcp":
+            return self.handlers.handle_mcp_post(environ, start_response)
+        return response_error(
+            start_response, "Endpoint not found", status="404 Not Found"
+        )
 
     def __call__(
         self, environ: Dict[str, Any], start_response: Callable[..., Any]
@@ -74,15 +100,11 @@ class WSGIApplication:
 
         if method == "OPTIONS":
             return self._handle_options(start_response)
-        if method in ["GET", "HEAD"]:
+        if method in ("GET", "HEAD"):
             res = self._route_get(environ, start_response, path, query_params)
             return [b""] if method == "HEAD" else res
         if method == "POST":
-            if path == "/api/mcp":
-                return self.handlers.handle_mcp_post(environ, start_response)
-            return response_error(
-                start_response, "Endpoint not found", status="404 Not Found"
-            )
+            return self._handle_post(environ, start_response, path)
 
         return response_error(
             start_response,

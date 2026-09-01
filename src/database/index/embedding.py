@@ -28,6 +28,21 @@ class DeterministicEmbedding:
         norm = math.sqrt(norm_sq)
         return tuple(x / norm for x in vector)
 
+    def _accumulate_token_features(self, tokens: List[str], vec: List[float]) -> None:
+        for token in tokens:
+            h = int(hashlib.sha256(token.encode("utf-8")).hexdigest()[:16], 16)
+            idx = h % self.dim
+            sign = 1.0 if ((h >> 8) & 1) == 0 else -1.0
+            vec[idx] += sign * (1.0 + math.log(1.0 + len(token)))
+
+    def _accumulate_trigram_features(self, clean: str, vec: List[float]) -> None:
+        for i in range(len(clean) - 2):
+            trigram = clean[i : i + 3]
+            h = int(hashlib.sha256(trigram.encode("utf-8")).hexdigest()[:8], 16)
+            idx = h % self.dim
+            sign = 1.0 if ((h >> 4) & 1) == 0 else -1.0
+            vec[idx] += sign * 0.5
+
     def embed_text(self, text: str) -> Tuple[float, ...]:
         """
         Embeds a text string into a normalized D-dimensional float vector.
@@ -39,20 +54,8 @@ class DeterministicEmbedding:
         vec = [0.0] * self.dim
         clean = text.lower().strip()
         tokens = re.findall(r"[a-z0-9_\-\.\u3040-\u30ff\u4e00-\u9faf]+", clean)
-
-        for token in tokens:
-            h = int(hashlib.sha256(token.encode("utf-8")).hexdigest()[:16], 16)
-            idx = h % self.dim
-            sign = 1.0 if ((h >> 8) & 1) == 0 else -1.0
-            vec[idx] += sign * (1.0 + math.log(1.0 + len(token)))
-
-        for i in range(len(clean) - 2):
-            trigram = clean[i : i + 3]
-            h = int(hashlib.sha256(trigram.encode("utf-8")).hexdigest()[:8], 16)
-            idx = h % self.dim
-            sign = 1.0 if ((h >> 4) & 1) == 0 else -1.0
-            vec[idx] += sign * 0.5
-
+        self._accumulate_token_features(tokens, vec)
+        self._accumulate_trigram_features(clean, vec)
         return self.normalize(vec)
 
     def batch_embed(self, texts: Sequence[str]) -> List[Tuple[float, ...]]:

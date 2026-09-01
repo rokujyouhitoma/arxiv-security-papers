@@ -16,6 +16,18 @@ class BloomFilter:
     Bit-array based probabilistic data structure with multiple hash functions.
     """
 
+    def _init_from_params(self, expected_items: int, fp_rate: float) -> None:
+        if expected_items < 1:
+            expected_items = 1
+        if fp_rate <= 0 or fp_rate >= 1:
+            fp_rate = 0.01
+        m = int(-1 * (expected_items * math.log(fp_rate)) / (math.log(2) ** 2))
+        self.num_bits = max(64, m)
+        k = int((self.num_bits / expected_items) * math.log(2))
+        self.num_hashes = max(1, min(k, 16))
+        byte_len = (self.num_bits + 7) // 8
+        self.bit_array = bytearray(byte_len)
+
     def __init__(
         self,
         expected_items: int = 1000,
@@ -29,20 +41,7 @@ class BloomFilter:
             self.num_hashes = num_hashes
             self.bit_array = raw_bits
         else:
-            if expected_items < 1:
-                expected_items = 1
-            if fp_rate <= 0 or fp_rate >= 1:
-                fp_rate = 0.01
-
-            # Optimal bit count m = - (n * ln(p)) / (ln(2)^2)
-            m = int(-1 * (expected_items * math.log(fp_rate)) / (math.log(2) ** 2))
-            self.num_bits = max(64, m)
-            # Optimal hash count k = (m / n) * ln(2)
-            k = int((self.num_bits / expected_items) * math.log(2))
-            self.num_hashes = max(1, min(k, 16))
-
-            byte_len = (self.num_bits + 7) // 8
-            self.bit_array = bytearray(byte_len)
+            self._init_from_params(expected_items, fp_rate)
 
     def _get_hashes(self, key: str) -> List[int]:
         """

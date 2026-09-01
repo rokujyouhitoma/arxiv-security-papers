@@ -120,30 +120,42 @@ class ManagedSchema:
         # Default fallback
         return FieldDefinition(name=name, field_type=FieldType.TEXT, doc_values=True)
 
+    def _extract_field_val(self, src_val: Any, copied: List[str]) -> None:
+        if not src_val:
+            return
+        if isinstance(src_val, list):
+            copied.extend(str(v) for v in src_val)
+        else:
+            copied.append(str(src_val))
+
+    def _collect_copied_values(
+        self, cf: CopyField, raw_doc: Dict[str, Any]
+    ) -> List[str]:
+        copied: List[str] = []
+        for src_name, src_val in raw_doc.items():
+            if cf.matches(src_name):
+                self._extract_field_val(src_val, copied)
+        return copied
+
+    def _apply_copied_to_field(
+        self, dst_field: str, copied_values: List[str], processed: Dict[str, Any]
+    ) -> None:
+        if not copied_values:
+            return
+        existing = processed.get(dst_field)
+        if not existing:
+            processed[dst_field] = " ".join(copied_values)
+        elif isinstance(existing, list):
+            existing.extend(copied_values)
+        else:
+            processed[dst_field] = [str(existing)] + copied_values
+
     def process_document(self, raw_doc: Dict[str, Any]) -> Dict[str, Any]:
         """Applies default values and copyField transformations to incoming document."""
         processed = dict(raw_doc)
 
-        # 1. Apply copy fields
         for cf in self.copy_fields:
-            copied_values: List[str] = []
-            for src_name, src_val in raw_doc.items():
-                if cf.matches(src_name) and src_val:
-                    if isinstance(src_val, list):
-                        copied_values.extend(str(v) for v in src_val)
-                    else:
-                        copied_values.append(str(src_val))
-
-            if copied_values:
-                existing = processed.get(cf.destination_field)
-                if existing:
-                    if isinstance(existing, list):
-                        existing.extend(copied_values)
-                    else:
-                        processed[cf.destination_field] = [
-                            str(existing)
-                        ] + copied_values
-                else:
-                    processed[cf.destination_field] = " ".join(copied_values)
+            copied_values = self._collect_copied_values(cf, raw_doc)
+            self._apply_copied_to_field(cf.destination_field, copied_values, processed)
 
         return processed

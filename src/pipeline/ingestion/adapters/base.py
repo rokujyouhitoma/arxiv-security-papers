@@ -8,7 +8,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -42,10 +42,16 @@ class RawItem:
         return data
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "RawItem":
-        """Constructs a RawItem from a dictionary."""
+    def _extract_ids(cls, d: Dict[str, Any]) -> Tuple[str, str]:
+        """Resolves item_id and clean_id from dictionary."""
         item_id = d.get("item_id") or d.get("arxiv_id") or ""
         clean_id = d.get("clean_id") or re.sub(r"v\d+$", "", item_id)
+        return item_id, clean_id
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "RawItem":
+        """Constructs a RawItem from a dictionary."""
+        item_id, clean_id = cls._extract_ids(d)
         return cls(
             item_id=item_id,
             clean_id=clean_id,

@@ -6,7 +6,8 @@ selective column decoding, high compression ratios, and cache locality.
 """
 
 import struct
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Tuple
+
 
 from .encoding import ColumnDecoder, ColumnEncoder, ColumnEncodingType
 
@@ -65,6 +66,34 @@ def _decode_mini_page_data(
     return ColumnDecoder.decode_plain(data, row_count, val_type)
 
 
+def _calc_col_offsets(mini_pages: List[bytes], header_size: int) -> List[int]:
+    offsets: List[int] = []
+    curr = header_size
+    for mp in mini_pages:
+        offsets.append(curr)
+        curr += len(mp)
+    return offsets
+
+
+def _assemble_pax_payload(
+    row_count: int,
+    col_count: int,
+    col_offsets: List[int],
+    enc_types: List[int],
+    mini_pages: List[bytes],
+) -> bytes:
+    buf = bytearray(struct.pack("<8sHH", PAX_MAGIC, row_count, col_count))
+    for off in col_offsets:
+        buf.extend(struct.pack("<H", off))
+    for enc in enc_types:
+        buf.extend(struct.pack("<B", enc))
+    for mp in mini_pages:
+        buf.extend(mp)
+    if len(buf) < PAGE_SIZE:
+        buf.extend(b"\x00" * (PAGE_SIZE - len(buf)))
+    return bytes(buf)
+
+
 def _build_page_header(
     row_count: int,
     col_count: int,
@@ -73,36 +102,28 @@ def _build_page_header(
 ) -> bytes:
     """Constructs the PAX 4KB page binary payload."""
     header_size = 12 + 3 * col_count
-    col_offsets: List[int] = []
-    curr_offset = header_size
-
-    for mp in mini_pages:
-        col_offsets.append(curr_offset)
-        curr_offset += len(mp)
-
-    if curr_offset > PAGE_SIZE:
+    col_offsets = _calc_col_offsets(mini_pages, header_size)
+    total_size = col_offsets[-1] + len(mini_pages[-1]) if mini_pages else header_size
+    if total_size > PAGE_SIZE:
         raise ValueError(
-            f"PAX page content size {curr_offset} exceeds 4096 bytes (rows: {row_count})"
+            f"PAX page content size {total_size} exceeds 4096 bytes (rows: {row_count})"
         )
-
-    buf = bytearray(struct.pack("<8sHH", PAX_MAGIC, row_count, col_count))
-    for off in col_offsets:
-        buf.extend(struct.pack("<H", off))
-    for enc in enc_types:
-        buf.extend(struct.pack("<B", enc))
-    for mp in mini_pages:
-        buf.extend(mp)
-
-    if len(buf) < PAGE_SIZE:
-        buf.extend(b"\x00" * (PAGE_SIZE - len(buf)))
-
-    return bytes(buf)
+    return _assemble_pax_payload(
+        row_count, col_count, col_offsets, enc_types, mini_pages
+    )
 
 
 class PAXPage:
     """
     PAX 4KB hybrid columnar page serializer and selective column reader.
     """
+
+    @classmethod
+    def _extract_columns(cls, rows: List[List[Any]], col_count: int) -> List[List[Any]]:
+        return [
+            [row[c_idx] if c_idx < len(row) else None for row in rows]
+            for c_idx in range(col_count)
+        ]
 
     @classmethod
     def create_page(
@@ -116,12 +137,7 @@ class PAXPage:
 
         row_count = len(rows)
         col_count = len(schema)
-
-        columns: List[List[Any]] = [
-            [row[c_idx] if c_idx < len(row) else None for row in rows]
-            for c_idx in range(col_count)
-        ]
-
+        columns = cls._extract_columns(rows, col_count)
         mini_pages: List[bytes] = []
         enc_types: List[int] = []
         for c_idx, (_, val_type) in enumerate(schema):
@@ -132,6 +148,29 @@ class PAXPage:
         return _build_page_header(row_count, col_count, mini_pages, enc_types)
 
     @classmethod
+    def _parse_page_header(cls, page_data: memoryview) -> "Optional[tuple]":
+        """Returns (row_count, col_count) or None if invalid page."""
+        if len(page_data) < 12:
+            return None
+        magic, row_count, col_count = struct.unpack_from("<8sHH", page_data, 0)
+        if magic != PAX_MAGIC or row_count == 0:
+            return None
+        return row_count, col_count
+
+    @classmethod
+    def _read_col_offsets_and_encs(
+        cls, page_data: memoryview, col_count: int
+    ) -> "tuple[list, list]":
+        col_offsets = [
+            struct.unpack_from("<H", page_data, 12 + i * 2)[0] for i in range(col_count)
+        ]
+        enc_types = [
+            struct.unpack_from("<B", page_data, 12 + 2 * col_count + i)[0]
+            for i in range(col_count)
+        ]
+        return col_offsets, enc_types
+
+    @classmethod
     def read_column(
         cls,
         page_data: memoryview,
@@ -139,37 +178,23 @@ class PAXPage:
         schema: List[Tuple[str, str]],
     ) -> List[Any]:
         """Selectively decodes ONLY the requested column's Mini-Page."""
-        if len(page_data) < 12:
+        header = cls._parse_page_header(page_data)
+        if header is None:
             return []
-
-        magic, row_count, col_count = struct.unpack_from("<8sHH", page_data, 0)
-        if magic != PAX_MAGIC or row_count == 0:
-            return []
+        row_count, col_count = header
         if col_idx < 0 or col_idx >= col_count:
             raise IndexError(
                 f"Column index {col_idx} out of range (total cols: {col_count})"
             )
-
-        off_pos = 12
-        col_offsets = [
-            struct.unpack_from("<H", page_data, off_pos + i * 2)[0]
-            for i in range(col_count)
-        ]
-        enc_pos = 12 + 2 * col_count
-        enc_types = [
-            struct.unpack_from("<B", page_data, enc_pos + i)[0]
-            for i in range(col_count)
-        ]
-
+        col_offsets, enc_types = cls._read_col_offsets_and_encs(page_data, col_count)
         start_off = col_offsets[col_idx]
         end_off = (
             col_offsets[col_idx + 1] if col_idx + 1 < col_count else len(page_data)
         )
-        mini_page_data = bytes(page_data[start_off:end_off])
         enc_type = ColumnEncodingType(enc_types[col_idx])
-        val_type = schema[col_idx][1]
-
-        return _decode_mini_page_data(mini_page_data, enc_type, val_type, row_count)
+        return _decode_mini_page_data(
+            bytes(page_data[start_off:end_off]), enc_type, schema[col_idx][1], row_count
+        )
 
     @classmethod
     def read_rows(
@@ -178,17 +203,11 @@ class PAXPage:
         schema: List[Tuple[str, str]],
     ) -> List[List[Any]]:
         """Reconstructs all rows from the PAX page."""
-        if len(page_data) < 12:
+        header = cls._parse_page_header(page_data)
+        if header is None:
             return []
-
-        magic, row_count, col_count = struct.unpack_from("<8sHH", page_data, 0)
-        if magic != PAX_MAGIC or row_count == 0:
-            return []
-
+        row_count, col_count = header
         columns = [
             cls.read_column(page_data, c_idx, schema) for c_idx in range(col_count)
         ]
-        return [
-            [columns[c_idx][r_idx] for c_idx in range(col_count)]
-            for r_idx in range(row_count)
-        ]
+        return [[columns[c][r] for c in range(col_count)] for r in range(row_count)]

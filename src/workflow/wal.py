@@ -171,20 +171,21 @@ class OrchestratorWAL:
             return {k: self._serialize_value(v) for k, v in context.__dict__.items()}
         return {"cycle_id": getattr(context, "cycle_id", "unknown")}
 
+    def _load_initial_data(self, cycle_id: str) -> Optional[Dict[str, Any]]:
+        cp_path = self._get_checkpoint_path(cycle_id)
+        if not os.path.isfile(cp_path):
+            return None
+        try:
+            with open(cp_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+
     def replay_cycle(self, cycle_id: str, workspace_dir: str = ".") -> Optional[Any]:
         """Reconstructs context by loading latest snapshot and replaying remaining events."""
         events = self.read_events(cycle_id)
         if not events:
             return None
-
-        cp_path = self._get_checkpoint_path(cycle_id)
-        initial_data: Optional[Dict[str, Any]] = None
-        if os.path.isfile(cp_path):
-            try:
-                with open(cp_path, "r", encoding="utf-8") as f:
-                    initial_data = json.load(f)
-            except Exception:
-                initial_data = None
 
         from intelligence.contracts import (
             Hypothesis,
@@ -195,7 +196,7 @@ class OrchestratorWAL:
         )
 
         ctx = PhaseContext(cycle_id=cycle_id, workspace_dir=workspace_dir)
-
+        initial_data = self._load_initial_data(cycle_id)
         if initial_data:
             self._apply_dict_to_context(ctx, initial_data)
 
@@ -239,13 +240,22 @@ class OrchestratorWAL:
             except Exception:
                 continue
 
+    def _restore_directive_and_telemetry(self, ctx: Any, data: Dict[str, Any]) -> None:
+        from intelligence.contracts import FeedbackTelemetry, IntelligenceDirective
+        if data.get("directive"):
+            try:
+                ctx.directive = IntelligenceDirective(**data["directive"])
+            except Exception:
+                pass
+        if data.get("telemetry"):
+            try:
+                ctx.telemetry = FeedbackTelemetry(**data["telemetry"])
+            except Exception:
+                pass
+
     def _apply_dict_to_context(self, ctx: Any, data: Dict[str, Any]) -> None:
         """Restores context attributes from serialized dictionary."""
-        from intelligence.contracts import (
-            FeedbackTelemetry,
-            IntelligenceDirective,
-            IntelligenceProduct,
-        )
+        from intelligence.contracts import IntelligenceProduct
 
         ctx.raw_records = data.get("raw_records", [])
         ctx.processed_records = data.get("processed_records", [])
@@ -261,18 +271,20 @@ class OrchestratorWAL:
                 continue
 
         self._restore_hypotheses_list(ctx, data.get("hypotheses", []))
+        self._restore_directive_and_telemetry(ctx, data)
 
-        if "directive" in data and data["directive"]:
-            try:
-                ctx.directive = IntelligenceDirective(**data["directive"])
-            except Exception:
-                pass
-
-        if "telemetry" in data and data["telemetry"]:
-            try:
-                ctx.telemetry = FeedbackTelemetry(**data["telemetry"])
-            except Exception:
-                pass
+    def _apply_phase_event(self, ctx: Any, t: EventType, p: Dict[str, Any], IntelligencePhase: Any, PhaseStatus: Any) -> None:
+        phase_val = p.get("phase") or p.get("failed_phase")
+        if not phase_val:
+            return
+        status_map = {
+            EventType.PHASE_STARTED: PhaseStatus.RUNNING,
+            EventType.PHASE_COMPLETED: PhaseStatus.COMPLETED,
+            EventType.CYCLE_FAILED: PhaseStatus.FAILED,
+        }
+        status = status_map.get(t)
+        if status:
+            ctx.phase_statuses[IntelligencePhase(phase_val)] = status
 
     def _apply_event_to_context(
         self,
@@ -287,57 +299,44 @@ class OrchestratorWAL:
         t = ev.event_type
         p = ev.payload
 
-        if t == EventType.PHASE_STARTED:
-            phase_val = p.get("phase")
-            if phase_val:
-                ctx.phase_statuses[IntelligencePhase(phase_val)] = PhaseStatus.RUNNING
-        elif t == EventType.PHASE_COMPLETED:
-            phase_val = p.get("phase")
-            if phase_val:
-                ctx.phase_statuses[IntelligencePhase(phase_val)] = PhaseStatus.COMPLETED
-        elif t == EventType.CYCLE_FAILED:
-            failed_phase = p.get("failed_phase")
-            if failed_phase:
-                ctx.phase_statuses[IntelligencePhase(failed_phase)] = PhaseStatus.FAILED
+        if t in (EventType.PHASE_STARTED, EventType.PHASE_COMPLETED, EventType.CYCLE_FAILED):
+            self._apply_phase_event(ctx, t, p, IntelligencePhase, PhaseStatus)
         elif t == EventType.RECORD_HARVESTED:
-            records = p.get("records", [])
-            ctx.raw_records.extend(records)
+            ctx.raw_records.extend(p.get("records", []))
         elif t == EventType.RECORD_PROCESSED:
-            records = p.get("records", [])
-            ctx.processed_records.extend(records)
+            ctx.processed_records.extend(p.get("records", []))
+
+    def _calculate_cycle_status(self, events: List[OrchestratorEvent]) -> str:
+        if any(e.event_type == EventType.CYCLE_COMPLETED for e in events):
+            return "completed"
+        if any(e.event_type == EventType.CYCLE_FAILED for e in events):
+            return "failed"
+        return "in_progress"
+
+    def _build_cycle_meta(self, cid: str) -> Optional[Dict[str, Any]]:
+        events = self.read_events(cid)
+        if not events:
+            return None
+        return {
+            "cycle_id": cid,
+            "status": self._calculate_cycle_status(events),
+            "total_events": len(events),
+            "started_at": events[0].timestamp,
+            "last_updated": events[-1].timestamp,
+        }
 
     def list_active_cycles(self) -> List[Dict[str, Any]]:
         """Lists metadata of all tracked WAL cycles in the wal directory."""
-        cycles: List[Dict[str, Any]] = []
         if not os.path.exists(self.wal_dir):
-            return cycles
+            return []
 
+        cycles: List[Dict[str, Any]] = []
         for f in os.listdir(self.wal_dir):
             if f.endswith(".wal.jsonl"):
-                cid = f[:-10]
-                events = self.read_events(cid)
-                if not events:
-                    continue
-                start_ev = events[0]
-                end_ev = events[-1]
-                status = (
-                    "completed"
-                    if any(e.event_type == EventType.CYCLE_COMPLETED for e in events)
-                    else (
-                        "failed"
-                        if any(e.event_type == EventType.CYCLE_FAILED for e in events)
-                        else "in_progress"
-                    )
-                )
-                cycles.append(
-                    {
-                        "cycle_id": cid,
-                        "status": status,
-                        "total_events": len(events),
-                        "started_at": start_ev.timestamp,
-                        "last_updated": end_ev.timestamp,
-                    }
-                )
+                meta = self._build_cycle_meta(f[:-10])
+                if meta:
+                    cycles.append(meta)
+
         return sorted(cycles, key=lambda x: str(x["started_at"]), reverse=True)
 
     def purge_cycle_wal(self, cycle_id: str) -> None:

@@ -46,23 +46,27 @@ class QueueWorker(BaseWorker):
         self.poll_interval = max(0.01, poll_interval)
         self.is_processing = False
 
+    def _fetch_from_queue(self) -> Optional[Any]:
+        try:
+            return self.source_queue.get(timeout=self.poll_interval)
+        except (queue.Empty, Exception):
+            return None
+
+    def _fetch_from_callable(self) -> Optional[Any]:
+        try:
+            return self.source_queue()
+        except Exception as exc:
+            logger.error("[QueueWorker %s] Error polling source: %s", self.worker_id, exc)
+            return None
+
     def _fetch_item(self) -> Optional[Any]:
         """Safely fetches next item from source queue or callable."""
         if self.source_queue is None:
             return None
         if hasattr(self.source_queue, "get"):
-            try:
-                return self.source_queue.get(timeout=self.poll_interval)
-            except (queue.Empty, Exception):
-                return None
+            return self._fetch_from_queue()
         if callable(self.source_queue):
-            try:
-                return self.source_queue()
-            except Exception as exc:
-                logger.error(
-                    "[QueueWorker %s] Error polling source: %s", self.worker_id, exc
-                )
-                return None
+            return self._fetch_from_callable()
         return None
 
     def _process_item(self, item: Any) -> None:

@@ -25,6 +25,42 @@ class TwoPCCoordinator:
         rec = self.transactions.get(tx_id)
         return rec.state if rec is not None else TwoPCState.INITIAL
 
+    def _phase1_prepare(
+        self,
+        tx_id: str,
+        participants: Dict[str, "TwoPCParticipant"],
+        res_map: Dict[str, List[str]],
+        force_abort_on: Optional[str],
+    ) -> bool:
+        for p_id, participant in participants.items():
+            if not participant.is_online:
+                return False
+            vote = participant.prepare(
+                tx_id=tx_id,
+                resources=res_map.get(p_id, []),
+                can_commit=(p_id != force_abort_on),
+            )
+            if vote != VoteType.VOTE_COMMIT:
+                return False
+        return True
+
+    def _broadcast_decision(
+        self,
+        tx_id: str,
+        participants: Dict[str, TwoPCParticipant],
+        record: TxRecord,
+        commit: bool,
+    ) -> GlobalDecision:
+        if commit:
+            record.state = TwoPCState.COMMITTED
+            for p in participants.values():
+                p.commit(tx_id)
+            return GlobalDecision.GLOBAL_COMMIT
+        record.state = TwoPCState.ABORTED
+        for p in participants.values():
+            p.abort(tx_id)
+        return GlobalDecision.GLOBAL_ABORT
+
     def execute_transaction(
         self,
         tx_id: str,
@@ -39,41 +75,8 @@ class TwoPCCoordinator:
         """
         if not self.is_online:
             return GlobalDecision.GLOBAL_ABORT
-
         res_map = resources_map or {}
-        participant_ids = list(participants.keys())
-        record = TxRecord(tx_id=tx_id, participants=participant_ids)
+        record = TxRecord(tx_id=tx_id, participants=list(participants.keys()))
         self.transactions[tx_id] = record
-
-        # --- Phase 1: Prepare ---
-        all_voted_commit = True
-
-        for p_id, participant in participants.items():
-            if not participant.is_online:
-                all_voted_commit = False
-                break
-
-            target_resources = res_map.get(p_id, [])
-            can_commit = p_id != force_abort_on
-
-            vote = participant.prepare(
-                tx_id=tx_id,
-                resources=target_resources,
-                can_commit=can_commit,
-            )
-
-            if vote != VoteType.VOTE_COMMIT:
-                all_voted_commit = False
-                break
-
-        # --- Phase 2: Commit or Abort ---
-        if all_voted_commit:
-            record.state = TwoPCState.COMMITTED
-            for participant in participants.values():
-                participant.commit(tx_id)
-            return GlobalDecision.GLOBAL_COMMIT
-
-        record.state = TwoPCState.ABORTED
-        for participant in participants.values():
-            participant.abort(tx_id)
-        return GlobalDecision.GLOBAL_ABORT
+        can_commit = self._phase1_prepare(tx_id, participants, res_map, force_abort_on)
+        return self._broadcast_decision(tx_id, participants, record, can_commit)

@@ -179,25 +179,19 @@ TOOLS_MANIFEST = [
 ]
 
 
-def handle_get_technology_radar(params: Dict[str, Any]) -> Dict[str, Any]:
-    ring_filter = params.get("ring", "").lower().strip()
-    category_filter = params.get("category", "").lower().strip()
+def _item_matches_category(item: Dict[str, Any], category_filter: str) -> bool:
+    return not category_filter or category_filter in item["category"]
 
-    filtered_radar = {}
-    total_items = 0
 
-    for ring, items in SECURITY_TECH_RADAR.items():
-        if ring_filter and ring != ring_filter:
-            continue
-        filtered_items = []
-        for item in items:
-            if category_filter and category_filter not in item["category"]:
-                continue
-            filtered_items.append(item)
-        filtered_radar[ring] = filtered_items
-        total_items += len(filtered_items)
+def _filter_radar_ring(
+    ring: str, items: List[Dict[str, Any]], ring_filter: str, category_filter: str
+) -> Optional[List[Dict[str, Any]]]:
+    if ring_filter and ring != ring_filter:
+        return None
+    return [item for item in items if _item_matches_category(item, category_filter)]
 
-    # Generate Markdown Summary
+
+def _render_radar_markdown(filtered_radar: Dict[str, List[Dict[str, Any]]]) -> str:
     md_lines = ["# 🛡️ Security Technology Radar (Executive Summary)\n"]
     for ring, items in filtered_radar.items():
         if not items:
@@ -207,12 +201,27 @@ def handle_get_technology_radar(params: Dict[str, Any]) -> Dict[str, Any]:
             md_lines.append(f"- **{item['name']}** [{item['category']}]")
             md_lines.append(f"  *根拠/論文知見*: {item['evidence']}")
         md_lines.append("")
+    return "\n".join(md_lines)
+
+
+def handle_get_technology_radar(params: Dict[str, Any]) -> Dict[str, Any]:
+    ring_filter = params.get("ring", "").lower().strip()
+    category_filter = params.get("category", "").lower().strip()
+
+    filtered_radar = {}
+    total_items = 0
+
+    for ring, items in SECURITY_TECH_RADAR.items():
+        res = _filter_radar_ring(ring, items, ring_filter, category_filter)
+        if res is not None:
+            filtered_radar[ring] = res
+            total_items += len(res)
 
     return {
         "status": "success",
         "total_items": total_items,
         "radar": filtered_radar,
-        "markdown_report": "\n".join(md_lines),
+        "markdown_report": _render_radar_markdown(filtered_radar),
     }
 
 

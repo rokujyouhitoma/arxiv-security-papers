@@ -61,29 +61,28 @@ class ConsistentHashRing:
         token = self.sorted_tokens[idx]
         return self.ring[token]
 
-    def get_preference_list(self, key: str, n: int) -> List[str]:
-        """
-        Returns a list of up to N distinct physical nodes responsible for replicating the key.
-        """
-        if not self.sorted_tokens or n <= 0:
-            return []
-
-        target_count = min(n, len(self.nodes))
+    def _collect_distinct_nodes(self, start_idx: int, target_count: int) -> List[str]:
         preference_nodes: List[str] = []
         seen_nodes: Set[str] = set()
-
-        h = _hash_key(key)
-        start_idx = bisect.bisect_right(self.sorted_tokens, h)
         total_tokens = len(self.sorted_tokens)
-
         for offset in range(total_tokens):
             idx = (start_idx + offset) % total_tokens
-            token = self.sorted_tokens[idx]
-            node_id = self.ring[token]
+            node_id = self.ring[self.sorted_tokens[idx]]
             if node_id not in seen_nodes:
                 seen_nodes.add(node_id)
                 preference_nodes.append(node_id)
                 if len(preference_nodes) == target_count:
                     break
-
         return preference_nodes
+
+    def get_preference_list(self, key: str, n: int) -> List[str]:
+        """
+        Returns a list of up to N distinct physical nodes responsible for replicating the key.
+        """
+        if not self.sorted_tokens:
+            return []
+        if n <= 0:
+            return []
+        target_count = min(n, len(self.nodes))
+        start_idx = bisect.bisect_right(self.sorted_tokens, _hash_key(key))
+        return self._collect_distinct_nodes(start_idx, target_count)

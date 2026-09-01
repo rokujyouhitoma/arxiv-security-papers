@@ -36,6 +36,85 @@ class SSTableWriter:
         self.vfs: VFS = vfs if vfs is not None else get_vfs()
         self.block_size = block_size
 
+    def _encode_record(self, key: str, val: bytes) -> bytes:
+        k_bytes = key.encode("utf-8")
+        return struct.pack("<HH", len(k_bytes), len(val)) + k_bytes + val
+
+    def _flush_block(
+        self,
+        curr_block: bytearray,
+        curr_first_key: Optional[str],
+        sparse_index: List[Tuple[str, int, int]],
+        data_blocks_bytes: bytearray,
+    ) -> int:
+        if curr_first_key is not None:
+            sparse_index.append(
+                (curr_first_key, len(data_blocks_bytes), len(curr_block))
+            )
+        data_blocks_bytes.extend(curr_block)
+        return len(data_blocks_bytes)
+
+    def _build_index_bytes(self, sparse_index: List[Tuple[str, int, int]]) -> bytearray:
+        index_bytes = bytearray(struct.pack("<I", len(sparse_index)))
+        for first_key, offset, length in sparse_index:
+            fk_bytes = first_key.encode("utf-8")
+            index_bytes.extend(
+                struct.pack("<HII", len(fk_bytes), offset, length) + fk_bytes
+            )
+        return index_bytes
+
+    def _should_flush_block(self, curr_block: bytearray, rec_len: int) -> bool:
+        if not curr_block:
+            return False
+        return len(curr_block) + rec_len > self.block_size
+
+    def _build_data_blocks(
+        self, sorted_entries: List[Tuple[str, bytes]], bloom: BloomFilter
+    ) -> Tuple[bytearray, List[Tuple[str, int, int]]]:
+        data_blocks_bytes: bytearray = bytearray()
+        sparse_index: List[Tuple[str, int, int]] = []
+        curr_block: bytearray = bytearray()
+        curr_first_key: Optional[str] = None
+        for key, val in sorted_entries:
+            bloom.add(key)
+            rec_bytes = self._encode_record(key, val)
+            if self._should_flush_block(curr_block, len(rec_bytes)):
+                self._flush_block(
+                    curr_block, curr_first_key, sparse_index, data_blocks_bytes
+                )
+                curr_block = bytearray()
+                curr_first_key = None
+            if curr_first_key is None:
+                curr_first_key = key
+            curr_block.extend(rec_bytes)
+        if curr_block:
+            self._flush_block(
+                curr_block, curr_first_key, sparse_index, data_blocks_bytes
+            )
+        return data_blocks_bytes, sparse_index
+
+    @staticmethod
+    def _assemble_sstable_payload(
+        data_blocks_bytes: bytearray, index_bytes: bytearray, bloom_bytes: bytes
+    ) -> bytes:
+        index_offset = len(data_blocks_bytes)
+        bloom_offset = index_offset + len(index_bytes)
+        footer_payload = struct.pack(
+            "<IIII8s",
+            index_offset,
+            len(index_bytes),
+            bloom_offset,
+            len(bloom_bytes),
+            SSTABLE_MAGIC,
+        )
+        footer_bytes = footer_payload + struct.pack("<I", zlib.crc32(footer_payload))
+        return (
+            bytes(data_blocks_bytes)
+            + bytes(index_bytes)
+            + bytes(bloom_bytes)
+            + bytes(footer_bytes)
+        )
+
     def write(self, entries: List[Tuple[str, bytes]]) -> int:
         """
         Serializes sorted entries into Data Blocks, builds Sparse Index and Bloom Filter,
@@ -43,91 +122,19 @@ class SSTableWriter:
         """
         if not entries:
             return 0
-
-        # Sort entries ascending by key
         sorted_entries = sorted(entries, key=lambda x: x[0])
         bloom = BloomFilter(expected_items=max(len(sorted_entries), 100), fp_rate=0.01)
-
-        data_blocks_bytes = bytearray()
-        sparse_index: List[Tuple[str, int, int]] = []  # (first_key, offset, length)
-
-        curr_block = bytearray()
-        curr_first_key: Optional[str] = None
-        block_start_offset = 0
-
-        for key, val in sorted_entries:
-            bloom.add(key)
-            k_bytes = key.encode("utf-8")
-            v_bytes = val
-
-            rec_bytes = (
-                struct.pack("<HH", len(k_bytes), len(v_bytes)) + k_bytes + v_bytes
-            )
-
-            if len(curr_block) + len(rec_bytes) > self.block_size and curr_block:
-                # Flush current block
-                if curr_first_key is not None:
-                    sparse_index.append(
-                        (curr_first_key, block_start_offset, len(curr_block))
-                    )
-                data_blocks_bytes.extend(curr_block)
-                block_start_offset = len(data_blocks_bytes)
-                curr_block = bytearray()
-                curr_first_key = None
-
-            if curr_first_key is None:
-                curr_first_key = key
-            curr_block.extend(rec_bytes)
-
-        if curr_block:
-            if curr_first_key is not None:
-                sparse_index.append(
-                    (curr_first_key, block_start_offset, len(curr_block))
-                )
-            data_blocks_bytes.extend(curr_block)
-
-        # Build Sparse Index binary
-        index_bytes = bytearray(struct.pack("<I", len(sparse_index)))
-        for first_key, offset, length in sparse_index:
-            fk_bytes = first_key.encode("utf-8")
-            index_bytes.extend(
-                struct.pack("<HII", len(fk_bytes), offset, length) + fk_bytes
-            )
-
-        # Build Bloom Filter binary
-        bloom_bytes = bloom.to_bytes()
-
-        index_offset = len(data_blocks_bytes)
-        index_len = len(index_bytes)
-        bloom_offset = index_offset + index_len
-        bloom_len = len(bloom_bytes)
-
-        # Build Footer
-        footer_payload = struct.pack(
-            "<IIII8s",
-            index_offset,
-            index_len,
-            bloom_offset,
-            bloom_len,
-            SSTABLE_MAGIC,
+        data_blocks_bytes, sparse_index = self._build_data_blocks(sorted_entries, bloom)
+        index_bytes = self._build_index_bytes(sparse_index)
+        full_payload = self._assemble_sstable_payload(
+            data_blocks_bytes, index_bytes, bloom.to_bytes()
         )
-        footer_crc = zlib.crc32(footer_payload)
-        footer_bytes = footer_payload + struct.pack("<I", footer_crc)
-
-        full_payload = (
-            bytes(data_blocks_bytes)
-            + bytes(index_bytes)
-            + bytes(bloom_bytes)
-            + bytes(footer_bytes)
-        )
-
         f: VFSFile = self.vfs.open(self.file_path, mode="w+b")
         try:
             f.write(0, full_payload)
             f.sync()
         finally:
             f.close()
-
         return len(full_payload)
 
 
@@ -188,27 +195,40 @@ class SSTableReader:
             except Exception:
                 return raw_val
 
+    @staticmethod
+    def _read_block_entry(block_raw: bytes, pos: int) -> "Optional[tuple]":
+        """Returns (curr_key, curr_val, next_pos) or None if end of block."""
+        if pos + 4 > len(block_raw):
+            return None
+        k_len, v_len = struct.unpack_from("<HH", block_raw, pos)
+        pos += 4
+        if k_len == 0 or pos + k_len + v_len > len(block_raw):
+            return None
+        curr_key = block_raw[pos : pos + k_len].decode("utf-8")
+        pos += k_len
+        curr_val = block_raw[pos : pos + v_len]
+        pos += v_len
+        return curr_key, curr_val, pos
+
     def _scan_block_for_key(
         self, block_raw: bytes, target_key: str
     ) -> Tuple[bool, Optional[Any]]:
         pos = 0
         while pos < len(block_raw):
-            if pos + 4 > len(block_raw):
+            entry = self._read_block_entry(block_raw, pos)
+            if entry is None:
                 break
-            k_len, v_len = struct.unpack_from("<HH", block_raw, pos)
-            pos += 4
-            if k_len == 0 or pos + k_len + v_len > len(block_raw):
-                break
-            curr_key = block_raw[pos : pos + k_len].decode("utf-8")
-            pos += k_len
-            curr_val = block_raw[pos : pos + v_len]
-            pos += v_len
-
+            curr_key, curr_val, pos = entry
             if curr_key == target_key:
                 return True, self._decode_val(curr_val)
             if curr_key > target_key:
                 break
         return False, None
+
+    def _find_block_idx(self, key: str) -> int:
+        keys_only = [item[0] for item in self.sparse_index]
+        idx = bisect.bisect_right(keys_only, key) - 1
+        return max(idx, 0)
 
     def get(self, key: str) -> Tuple[bool, Optional[Any]]:
         """
@@ -220,18 +240,10 @@ class SSTableReader:
         """
         if self.bloom is not None and not self.bloom.contains(key):
             return False, None
-
         if not self.sparse_index:
             return False, None
-
-        keys_only = [item[0] for item in self.sparse_index]
-        idx = bisect.bisect_right(keys_only, key) - 1
-        if idx < 0:
-            idx = 0
-
-        first_key, block_off, block_len = self.sparse_index[idx]
-        block_raw = self.file.read(block_off, block_len)
-        return self._scan_block_for_key(block_raw, key)
+        _, block_off, block_len = self.sparse_index[self._find_block_idx(key)]
+        return self._scan_block_for_key(self.file.read(block_off, block_len), key)
 
     def scan_all(self) -> List[Tuple[str, bytes]]:
         """Reads all entries from the SSTable in sorted key order."""
@@ -240,16 +252,10 @@ class SSTableReader:
             block_raw = self.file.read(block_off, block_len)
             pos = 0
             while pos < len(block_raw):
-                if pos + 4 > len(block_raw):
+                entry = self._read_block_entry(block_raw, pos)
+                if entry is None:
                     break
-                k_len, v_len = struct.unpack_from("<HH", block_raw, pos)
-                pos += 4
-                if k_len == 0 or pos + k_len + v_len > len(block_raw):
-                    break
-                curr_key = block_raw[pos : pos + k_len].decode("utf-8")
-                pos += k_len
-                curr_val = block_raw[pos : pos + v_len]
-                pos += v_len
+                curr_key, curr_val, pos = entry
                 results.append((curr_key, curr_val))
         return results
 

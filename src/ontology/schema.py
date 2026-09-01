@@ -87,12 +87,20 @@ class PaperEntity(BaseEntity):
     published_at: str = ""
     credibility_score: float = 1.0
 
+    def _resolve_name(self) -> str:
+        """Determines display name for paper entity."""
+        if self.title_ja:
+            return self.title_ja
+        if self.title_en:
+            return self.title_en
+        return self.arxiv_id
+
     def __post_init__(self) -> None:
         self.entity_type = EntityType.PAPER
         if not self.id:
             self.id = f"Paper:{self.arxiv_id}"
         if not self.name:
-            self.name = self.title_ja or self.title_en or self.arxiv_id
+            self.name = self._resolve_name()
 
 
 @dataclass

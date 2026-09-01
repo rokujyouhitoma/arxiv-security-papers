@@ -68,16 +68,19 @@ class MMapFile:
                 raise IndexError(f"Page ID {page_id} out of bounds (offset {offset})")
             return memoryview(self._mmap)[offset : offset + PAGE_SIZE]
 
+    @staticmethod
+    def _pad_page_data(data: bytes) -> bytes:
+        if len(data) > PAGE_SIZE:
+            raise ValueError(f"Page data size {len(data)} exceeds 4096 bytes")
+        if len(data) == PAGE_SIZE:
+            return data
+        return data + b"\x00" * (PAGE_SIZE - len(data))
+
     def write_page(self, page_id: int, data: bytes) -> None:
         """
         Writes a 4KB page into the memory mapped buffer.
         """
-        if len(data) > PAGE_SIZE:
-            raise ValueError(f"Page data size {len(data)} exceeds 4096 bytes")
-        padded = (
-            data if len(data) == PAGE_SIZE else data + b"\x00" * (PAGE_SIZE - len(data))
-        )
-
+        padded = self._pad_page_data(data)
         with self._lock:
             if self._mmap is None:
                 raise RuntimeError("MMapFile is closed")

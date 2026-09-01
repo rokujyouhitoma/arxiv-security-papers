@@ -19,21 +19,23 @@ class DOMNode:
         self.children: List[DOMNode] = []
         self.text_content: str = ""
 
+    def _filter_candidates(
+        self, current_matches: List[DOMNode], combinator: str, token: str
+    ) -> List[DOMNode]:
+        next_matches: List[DOMNode] = []
+        for node in current_matches:
+            candidates = node.children if combinator == ">" else node._descendants()
+            for cand in candidates:
+                if _match_node(cand, token):
+                    next_matches.append(cand)
+        return next_matches
+
     def css(self, selector: str) -> List[DOMNode]:
         """Evaluates basic CSS selector expressions (e.g. 'div.content > p.title', 'a#main-link')."""
         current_matches: List[DOMNode] = [self]
         tokens = self._tokenize_selector(selector)
         for combinator, token in tokens:
-            next_matches: List[DOMNode] = []
-            for node in current_matches:
-                if combinator == ">":
-                    candidates = node.children
-                else:
-                    candidates = node._descendants()
-                for cand in candidates:
-                    if _match_node(cand, token):
-                        next_matches.append(cand)
-            current_matches = next_matches
+            current_matches = self._filter_candidates(current_matches, combinator, token)
         return current_matches
 
     def _descendants(self) -> List[DOMNode]:

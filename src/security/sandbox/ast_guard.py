@@ -5,7 +5,7 @@ Strictly blocks prohibited modules, system calls, dynamic reflection, and destru
 """
 
 import ast
-from typing import Optional, Set
+from typing import Optional, Set, cast
 
 BLOCKED_MODULES: Set[str] = {
     "subprocess",
@@ -111,45 +111,63 @@ class ASTSecurityGuard:
             else set(BLOCKED_DUNDER_NAMES)
         )
 
-    def _check_import(self, node: ast.AST) -> Optional[str]:
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                mod_root = alias.name.split(".")[0]
-                if (
-                    alias.name in self.blocked_modules
-                    or mod_root in self.blocked_modules
-                ):
-                    return f"Security Exception: Import of module '{alias.name}' is prohibited."
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            mod_root = node.module.split(".")[0]
-            if node.module in self.blocked_modules or mod_root in self.blocked_modules:
-                return f"Security Exception: Import from module '{node.module}' is prohibited."
+    def _is_blocked_module(self, name: str) -> bool:
+        """Checks if a module name or root is blocked."""
+        mod_root = name.split(".")[0]
+        return name in self.blocked_modules or mod_root in self.blocked_modules
+
+    def _check_import_names(self, node: ast.Import) -> Optional[str]:
+        """Checks plain import statement names."""
+        for alias in node.names:
+            if self._is_blocked_module(alias.name):
+                return f"Security Exception: Import of module '{alias.name}' is prohibited."
         return None
 
-    def _check_open_call(self, node: ast.Call) -> Optional[str]:
-        if (
-            isinstance(node.func, ast.Name)
-            and node.func.id == "open"
-            and len(node.args) >= 2
-        ):
-            mode_arg = node.args[1]
-            if isinstance(mode_arg, ast.Constant) and isinstance(mode_arg.value, str):
-                mode_str = mode_arg.value
-                if any(c in mode_str for c in ("w", "a", "x", "+")):
-                    return f"Security Exception: File modification mode '{mode_str}' in open() is prohibited."
+    def _check_import_from(self, node: ast.ImportFrom) -> Optional[str]:
+        """Checks from-import statement module."""
+        if node.module and self._is_blocked_module(node.module):
+            return f"Security Exception: Import from module '{node.module}' is prohibited."
         return None
+
+    def _check_import(self, node: ast.AST) -> Optional[str]:
+        if isinstance(node, ast.Import):
+            return self._check_import_names(node)
+        if isinstance(node, ast.ImportFrom):
+            return self._check_import_from(node)
+        return None
+
+    def _is_destructive_mode(self, mode_arg: ast.AST) -> bool:
+        """Checks if open mode contains write or destructive flags."""
+        if isinstance(mode_arg, ast.Constant) and isinstance(mode_arg.value, str):
+            return any(c in mode_arg.value for c in ("w", "a", "x", "+"))
+        return False
+
+    def _check_open_call(self, node: ast.Call) -> Optional[str]:
+        if not (isinstance(node.func, ast.Name) and node.func.id == "open"):
+            return None
+        if len(node.args) >= 2 and self._is_destructive_mode(node.args[1]):
+            mode_val = cast(ast.Constant, node.args[1]).value
+            return f"Security Exception: File modification mode '{mode_val}' in open() is prohibited."
+        return None
+
+    def _check_attribute_call(self, node: ast.Attribute) -> Optional[str]:
+        """Checks attribute method call against blocked calls and builtins."""
+        attr = node.attr
+        if attr in self.blocked_calls or attr in self.blocked_builtins:
+            return f"Security Exception: Call to '{attr}' is prohibited."
+        return None
+
+    def _check_name_call(self, node: ast.Call, func: ast.Name) -> Optional[str]:
+        """Checks direct name function call."""
+        if func.id in self.blocked_builtins:
+            return f"Security Exception: Dynamic call to '{func.id}' is prohibited."
+        return self._check_open_call(node)
 
     def _check_call(self, node: ast.Call) -> Optional[str]:
         if isinstance(node.func, ast.Attribute):
-            if (
-                node.func.attr in self.blocked_calls
-                or node.func.attr in self.blocked_builtins
-            ):
-                return f"Security Exception: Call to '{node.func.attr}' is prohibited."
-        elif isinstance(node.func, ast.Name):
-            if node.func.id in self.blocked_builtins:
-                return f"Security Exception: Dynamic call to '{node.func.id}' is prohibited."
-            return self._check_open_call(node)
+            return self._check_attribute_call(node.func)
+        if isinstance(node.func, ast.Name):
+            return self._check_name_call(node, node.func)
         return None
 
     def _check_dunder(self, node: ast.AST) -> Optional[str]:
@@ -170,6 +188,14 @@ class ASTSecurityGuard:
             return self._check_dunder(node)
         return None
 
+    def _scan_ast_nodes(self, tree: ast.AST) -> Optional[str]:
+        """Walks AST and returns first security error."""
+        for node in ast.walk(tree):
+            err = self._check_node(node)
+            if err is not None:
+                return err
+        return None
+
     def validate(self, code_str: str) -> Optional[str]:
         """
         Validates Python code string against security policies.
@@ -183,12 +209,7 @@ class ASTSecurityGuard:
         except SyntaxError as e:
             return f"Syntax error: {str(e)}"
 
-        for node in ast.walk(tree):
-            err = self._check_node(node)
-            if err is not None:
-                return err
-
-        return None
+        return self._scan_ast_nodes(tree)
 
 
 # Default shared guard instance

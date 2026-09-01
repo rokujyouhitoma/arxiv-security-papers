@@ -72,6 +72,37 @@ def make_error_response(
     return res
 
 
+def _build_log_strings(
+    server_name: str,
+    method: str,
+    name: str,
+    execution_ms: float,
+    status: str,
+    cpu_ms: float,
+    peak_memory_kb: float,
+    metrics_data: Dict[str, Any],
+    error_message: Optional[str],
+) -> str:
+    metrics_str = ", ".join(f"{k}: {v}" for k, v in metrics_data.items()) if metrics_data else ""
+    metrics_part = f" | {metrics_str}" if metrics_str else ""
+    err_part = f" | Error: {error_message}" if error_message else ""
+    return (
+        f"[MCP-PERF] ⚡ [{server_name}] {method} '{name}' | "
+        f"Time: {execution_ms:.2f}ms (CPU: {cpu_ms:.2f}ms) | Peak RAM: {peak_memory_kb:.1f}KB | "
+        f"Status: {status}{metrics_part}{err_part}"
+    )
+
+
+def _write_perf_record(record: Dict[str, Any]) -> None:
+    try:
+        _ensure_log_dir()
+        with _LOG_LOCK:
+            with open(_MCP_PERF_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        sys.stderr.write(f"[MCP-PERF] Failed to write log: {e}\n")
+
+
 def log_mcp_performance(
     server_name: str,
     method: str,
@@ -88,7 +119,6 @@ def log_mcp_performance(
     """
     Logs MCP server execution performance (time, CPU, and memory) to both stderr (console)
     and outputs/logs/mcp_perf_log.jsonl.
-    Uses stderr to preserve stdout for JSON-RPC communication without protocol interference.
     """
     metrics_data = metrics or {}
     args_data = args_summary or {}
@@ -109,42 +139,24 @@ def log_mcp_performance(
     if error_message:
         record["error"] = error_message
 
-    # Format metrics for console log line
-    metrics_str = (
-        ", ".join(f"{k}: {v}" for k, v in metrics_data.items()) if metrics_data else ""
-    )
-    metrics_part = f" | {metrics_str}" if metrics_str else ""
-    err_part = f" | Error: {error_message}" if error_message else ""
-
-    # 1. Output formatted real-time performance line to stderr
-    log_line = (
-        f"[MCP-PERF] ⚡ [{server_name}] {method} '{name}' | "
-        f"Time: {execution_ms:.2f}ms (CPU: {cpu_ms:.2f}ms) | Peak RAM: {peak_memory_kb:.1f}KB | "
-        f"Status: {status}{metrics_part}{err_part}"
+    log_line = _build_log_strings(
+        server_name, method, name, execution_ms, status, cpu_ms, peak_memory_kb, metrics_data, error_message
     )
     sys.stderr.write(log_line + "\n")
     sys.stderr.flush()
-
-    # 2. Append structured record to mcp_perf_log.jsonl
-    try:
-        _ensure_log_dir()
-        with _LOG_LOCK:
-            with open(_MCP_PERF_LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception as e:
-        sys.stderr.write(f"[MCP-PERF] Failed to write log: {e}\n")
+    _write_perf_record(record)
 
 
 def _extract_metrics(res: Any) -> Dict[str, Any]:
-    metrics: Dict[str, Any] = {}
-    if isinstance(res, dict):
-        if "count" in res:
-            metrics["count"] = res["count"]
-        elif "results" in res and isinstance(res["results"], list):
-            metrics["count"] = len(res["results"])
-        elif "papers" in res and isinstance(res["papers"], list):
-            metrics["count"] = len(res["papers"])
-    return metrics
+    if not isinstance(res, dict):
+        return {}
+    if "count" in res:
+        return {"count": res["count"]}
+    for key in ("results", "papers"):
+        val = res.get(key)
+        if isinstance(val, list):
+            return {"count": len(val)}
+    return {}
 
 
 def paginate_results(
@@ -170,6 +182,60 @@ def paginate_results(
     return paginated, pagination_meta
 
 
+def _handle_tool_call_success(
+    server_name: str,
+    tool_name: str,
+    args: Dict[str, Any],
+    res: Any,
+    t0_wall: float,
+    t0_cpu: float,
+    start_mem: int,
+) -> None:
+    exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+    cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+    end_mem, peak_mem = tracemalloc.get_traced_memory()
+    status = "error" if isinstance(res, dict) and res.get("status") == "error" else "success"
+    log_mcp_performance(
+        server_name=server_name,
+        method="tools/call",
+        name=tool_name,
+        execution_ms=exec_ms,
+        status=status,
+        cpu_ms=cpu_ms,
+        peak_memory_kb=peak_mem / 1024.0,
+        memory_delta_kb=(end_mem - start_mem) / 1024.0,
+        args_summary=args,
+        metrics=_extract_metrics(res),
+    )
+
+
+def _handle_tool_call_error(
+    server_name: str,
+    tool_name: str,
+    args: Dict[str, Any],
+    err: Exception,
+    t0_wall: float,
+    t0_cpu: float,
+    start_mem: int,
+) -> Dict[str, Any]:
+    exec_ms = (time.perf_counter() - t0_wall) * 1000.0
+    cpu_ms = (time.process_time() - t0_cpu) * 1000.0
+    end_mem, peak_mem = tracemalloc.get_traced_memory()
+    log_mcp_performance(
+        server_name=server_name,
+        method="tools/call",
+        name=tool_name,
+        execution_ms=exec_ms,
+        status="error",
+        cpu_ms=cpu_ms,
+        peak_memory_kb=peak_mem / 1024.0,
+        memory_delta_kb=(end_mem - start_mem) / 1024.0,
+        args_summary=args,
+        error_message=str(err),
+    )
+    return {"status": "error", "message": str(err)}
+
+
 def _dispatch_tools_call(
     server_name: str,
     p: Dict[str, Any],
@@ -181,53 +247,15 @@ def _dispatch_tools_call(
     if not was_tracing:
         tracemalloc.start()
     tracemalloc.reset_peak()
-    t0_wall = time.perf_counter()
-    t0_cpu = time.process_time()
+    t0_wall, t0_cpu = time.perf_counter(), time.process_time()
     start_mem, _ = tracemalloc.get_traced_memory()
 
     if tool_name in t_handlers:
         try:
             res = t_handlers[tool_name](args)
-            exec_ms = (time.perf_counter() - t0_wall) * 1000.0
-            cpu_ms = (time.process_time() - t0_cpu) * 1000.0
-            end_mem, peak_mem = tracemalloc.get_traced_memory()
-            peak_kb = peak_mem / 1024.0
-            delta_kb = (end_mem - start_mem) / 1024.0
-            status = (
-                "error"
-                if isinstance(res, dict) and res.get("status") == "error"
-                else "success"
-            )
-            metrics = _extract_metrics(res)
-            log_mcp_performance(
-                server_name=server_name,
-                method="tools/call",
-                name=tool_name,
-                execution_ms=exec_ms,
-                status=status,
-                cpu_ms=cpu_ms,
-                peak_memory_kb=peak_kb,
-                memory_delta_kb=delta_kb,
-                args_summary=args,
-                metrics=metrics,
-            )
+            _handle_tool_call_success(server_name, tool_name, args, res, t0_wall, t0_cpu, start_mem)
         except Exception as handler_err:
-            exec_ms = (time.perf_counter() - t0_wall) * 1000.0
-            cpu_ms = (time.process_time() - t0_cpu) * 1000.0
-            end_mem, peak_mem = tracemalloc.get_traced_memory()
-            res = {"status": "error", "message": str(handler_err)}
-            log_mcp_performance(
-                server_name=server_name,
-                method="tools/call",
-                name=tool_name,
-                execution_ms=exec_ms,
-                status="error",
-                cpu_ms=cpu_ms,
-                peak_memory_kb=peak_mem / 1024.0,
-                memory_delta_kb=(end_mem - start_mem) / 1024.0,
-                args_summary=args,
-                error_message=str(handler_err),
-            )
+            res = _handle_tool_call_error(server_name, tool_name, args, handler_err, t0_wall, t0_cpu, start_mem)
     else:
         res = {"error": f"Unknown tool '{tool_name}'"}
         log_mcp_performance(
@@ -359,6 +387,25 @@ def _dispatch_resources_read(
     return res
 
 
+def _handle_initialize(server_name: str, req_id: Any, p: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "prompts": {"listChanged": False},
+                "resources": {"subscribe": False, "listChanged": False},
+            },
+            "serverInfo": {
+                "name": server_name,
+                "version": "1.0.0",
+            },
+        },
+    }
+
+
 def _dispatch_rpc_request(
     server_name: str,
     req: Dict[str, Any],
@@ -373,44 +420,24 @@ def _dispatch_rpc_request(
     req_id = req.get("id")
     p = req.get("params", {})
 
-    # MCP Lifecycle & Core RPC Handlers
     if method == "initialize":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": {"listChanged": False},
-                    "prompts": {"listChanged": False},
-                    "resources": {"subscribe": False, "listChanged": False},
-                },
-                "serverInfo": {
-                    "name": server_name,
-                    "version": "1.0.0",
-                },
-            },
-        }
+        return _handle_initialize(server_name, req_id, p)
     if method == "notifications/initialized":
-        # Notification from client, no response required
         return None
     if method == "ping":
         return {"jsonrpc": "2.0", "id": req_id, "result": {}}
-    if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools}}
-    if method == "tools/call":
-        result = _dispatch_tools_call(server_name, p, t_handlers)
-        return {"jsonrpc": "2.0", "id": req_id, "result": result}
-    if method == "prompts/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": prompts}}
-    if method == "prompts/get":
-        result = _dispatch_prompts_get(server_name, p, p_handlers)
-        return {"jsonrpc": "2.0", "id": req_id, "result": result}
-    if method == "resources/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": resources}}
-    if method == "resources/read":
-        result = _dispatch_resources_read(server_name, p, r_handlers)
-        return {"jsonrpc": "2.0", "id": req_id, "result": result}
+
+    res_map = {
+        "tools/list": lambda: {"tools": tools},
+        "tools/call": lambda: _dispatch_tools_call(server_name, p, t_handlers),
+        "prompts/list": lambda: {"prompts": prompts},
+        "prompts/get": lambda: _dispatch_prompts_get(server_name, p, p_handlers),
+        "resources/list": lambda: {"resources": resources},
+        "resources/read": lambda: _dispatch_resources_read(server_name, p, r_handlers),
+    }
+
+    if method in res_map:
+        return {"jsonrpc": "2.0", "id": req_id, "result": res_map[method]()}
     return {"jsonrpc": "2.0", "id": req_id, "result": {}}
 
 
@@ -446,28 +473,45 @@ def _process_mcp_line(
         sys.stderr.write(f"Error handling MCP request: {e}\n")
 
 
+def _init_tool_registries(
+    tools_manifest: Optional[List[Dict[str, Any]]],
+    tool_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]],
+) -> tuple[List[Dict[str, Any]], Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]]:
+    return (tools_manifest if tools_manifest is not None else []), (tool_handlers if tool_handlers is not None else {})
+
+
+def _init_prompt_resource_registries(
+    prompts_manifest: Optional[List[Dict[str, Any]]],
+    prompt_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]],
+    resources_manifest: Optional[List[Dict[str, Any]]],
+    resource_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]],
+) -> tuple[
+    List[Dict[str, Any]],
+    Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+    List[Dict[str, Any]],
+    Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]],
+]:
+    p = prompts_manifest if prompts_manifest is not None else []
+    ph = prompt_handlers if prompt_handlers is not None else {}
+    r = resources_manifest if resources_manifest is not None else []
+    rh = resource_handlers if resource_handlers is not None else {}
+    return p, ph, r, rh
+
+
 def run_mcp_server(
     server_name: str = "mcp-server",
     tools_manifest: Optional[List[Dict[str, Any]]] = None,
-    tool_handlers: Optional[
-        Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]
-    ] = None,
+    tool_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
     prompts_manifest: Optional[List[Dict[str, Any]]] = None,
-    prompt_handlers: Optional[
-        Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]
-    ] = None,
+    prompt_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
     resources_manifest: Optional[List[Dict[str, Any]]] = None,
-    resource_handlers: Optional[
-        Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]
-    ] = None,
+    resource_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
 ) -> None:
     """Standard event loop processing JSON-RPC messages from stdin."""
-    tools = tools_manifest or []
-    t_handlers = tool_handlers or {}
-    prompts = prompts_manifest or []
-    p_handlers = prompt_handlers or {}
-    resources = resources_manifest or []
-    r_handlers = resource_handlers or {}
+    tools, t_handlers = _init_tool_registries(tools_manifest, tool_handlers)
+    prompts, p_handlers, resources, r_handlers = _init_prompt_resource_registries(
+        prompts_manifest, prompt_handlers, resources_manifest, resource_handlers
+    )
 
     for line in sys.stdin:
         _process_mcp_line(

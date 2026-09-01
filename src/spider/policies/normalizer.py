@@ -70,29 +70,22 @@ class TrapDetector:
         self.max_depth: int = max_depth
         self.max_params: int = max_params
 
+    def _exceeds_path_limits(self, segments: List[str]) -> bool:
+        return len(segments) > self.max_depth or _has_repeating_segments(segments)
+
+    def _exceeds_query_limit(self, query: str) -> bool:
+        return len(urllib.parse.parse_qsl(query)) > self.max_params
+
     def is_trap(self, url: str) -> bool:
         """Returns True if the URL is identified as a crawler trap."""
         parsed = urllib.parse.urlsplit(url)
         segments = [s for s in parsed.path.split("/") if s]
 
-        # 1. Depth check
-        if len(segments) > self.max_depth:
+        if self._exceeds_path_limits(segments):
             return True
-
-        # 2. Cycle detection (repeating directory segments e.g. /a/b/a/b/)
-        if _has_repeating_segments(segments):
+        if self._exceeds_query_limit(parsed.query):
             return True
-
-        # 3. Query explosion check
-        params = urllib.parse.parse_qsl(parsed.query)
-        if len(params) > self.max_params:
-            return True
-
-        # 4. Sensitive auth/admin path check
-        if _is_sensitive_path(parsed.path):
-            return True
-
-        return False
+        return _is_sensitive_path(parsed.path)
 
 
 def _has_repeating_segments(segments: List[str]) -> bool:

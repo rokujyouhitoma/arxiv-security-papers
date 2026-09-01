@@ -86,34 +86,42 @@ class GraphTraversal:
             edges = list(self.engine._edges.values())
         return self._clone(edges)
 
+    def _step_out(self, obj: Any, curr_path: Path, labels: Tuple[str, ...], new_objs: List[Vertex], new_paths: List[Path]) -> None:
+        """Helper to advance a single vertex along outgoing edges."""
+        if not isinstance(obj, Vertex):
+            return
+        for e in self.engine.get_out_edges(obj.id, *labels):
+            dst = self.engine.get_vertex(e.dst_id)
+            if dst is not None:
+                new_objs.append(dst)
+                new_paths.append(curr_path.extend(dst))
+
     def out(self, *labels: str) -> "GraphTraversal":
         """Moves to the outgoing adjacent vertices."""
         new_objs: List[Vertex] = []
         new_paths: List[Path] = []
         for i, obj in enumerate(self._current):
-            if isinstance(obj, Vertex):
-                edges = self.engine.get_out_edges(obj.id, *labels)
-                for e in edges:
-                    dst = self.engine.get_vertex(e.dst_id)
-                    if dst is not None:
-                        new_objs.append(dst)
-                        curr_path = self._paths[i] if i < len(self._paths) else Path()
-                        new_paths.append(curr_path.extend(dst))
+            curr_path = self._paths[i] if i < len(self._paths) else Path()
+            self._step_out(obj, curr_path, labels, new_objs, new_paths)
         return self._clone(new_objs, new_paths)
+
+    def _step_in(self, obj: Any, curr_path: Path, labels: Tuple[str, ...], new_objs: List[Vertex], new_paths: List[Path]) -> None:
+        """Helper to advance a single vertex along incoming edges."""
+        if not isinstance(obj, Vertex):
+            return
+        for e in self.engine.get_in_edges(obj.id, *labels):
+            src = self.engine.get_vertex(e.src_id)
+            if src is not None:
+                new_objs.append(src)
+                new_paths.append(curr_path.extend(src))
 
     def in_(self, *labels: str) -> "GraphTraversal":
         """Moves to the incoming adjacent vertices."""
         new_objs: List[Vertex] = []
         new_paths: List[Path] = []
         for i, obj in enumerate(self._current):
-            if isinstance(obj, Vertex):
-                edges = self.engine.get_in_edges(obj.id, *labels)
-                for e in edges:
-                    src = self.engine.get_vertex(e.src_id)
-                    if src is not None:
-                        new_objs.append(src)
-                        curr_path = self._paths[i] if i < len(self._paths) else Path()
-                        new_paths.append(curr_path.extend(src))
+            curr_path = self._paths[i] if i < len(self._paths) else Path()
+            self._step_in(obj, curr_path, labels, new_objs, new_paths)
         return self._clone(new_objs, new_paths)
 
     def both(self, *labels: str) -> "GraphTraversal":
@@ -121,18 +129,9 @@ class GraphTraversal:
         new_objs: List[Vertex] = []
         new_paths: List[Path] = []
         for i, obj in enumerate(self._current):
-            if isinstance(obj, Vertex):
-                curr_path = self._paths[i] if i < len(self._paths) else Path()
-                for e in self.engine.get_out_edges(obj.id, *labels):
-                    dst = self.engine.get_vertex(e.dst_id)
-                    if dst is not None:
-                        new_objs.append(dst)
-                        new_paths.append(curr_path.extend(dst))
-                for e in self.engine.get_in_edges(obj.id, *labels):
-                    src = self.engine.get_vertex(e.src_id)
-                    if src is not None:
-                        new_objs.append(src)
-                        new_paths.append(curr_path.extend(src))
+            curr_path = self._paths[i] if i < len(self._paths) else Path()
+            self._step_out(obj, curr_path, labels, new_objs, new_paths)
+            self._step_in(obj, curr_path, labels, new_objs, new_paths)
         return self._clone(new_objs, new_paths)
 
     def outE(self, *labels: str) -> "GraphTraversal":
@@ -197,6 +196,12 @@ class GraphTraversal:
                     new_paths.append(curr_path.extend(dst))
         return self._clone(new_objs, new_paths)
 
+    def _resolve_other_vertex(self, obj: Edge, curr_path: Path) -> Optional[Vertex]:
+        """Resolves the opposite vertex of an edge relative to traversal history."""
+        prev_v_id = curr_path.objects[-2].id if len(curr_path.objects) >= 2 else None
+        other_id = obj.dst_id if obj.src_id == prev_v_id else obj.src_id
+        return self.engine.get_vertex(other_id)
+
     def otherV(self) -> "GraphTraversal":
         """Moves from edges to the other vertex in the traversal history."""
         new_objs: List[Vertex] = []
@@ -204,11 +209,7 @@ class GraphTraversal:
         for i, obj in enumerate(self._current):
             if isinstance(obj, Edge):
                 curr_path = self._paths[i] if i < len(self._paths) else Path()
-                prev_v_id = (
-                    curr_path.objects[-2].id if len(curr_path.objects) >= 2 else None
-                )
-                other_id = obj.dst_id if obj.src_id == prev_v_id else obj.src_id
-                v = self.engine.get_vertex(other_id)
+                v = self._resolve_other_vertex(obj, curr_path)
                 if v is not None:
                     new_objs.append(v)
                     new_paths.append(curr_path.extend(v))
@@ -218,24 +219,27 @@ class GraphTraversal:
     # 2. Filter & Predicate Steps (has, hasLabel, hasId, filter, and_, or_...)
     # -------------------------------------------------------------------------
 
+    def _match_has_value(self, obj: Any, props: Dict[str, Any], key: str, value: Any) -> bool:
+        """Helper to match non-None property value."""
+        if props.get(key) == value or getattr(obj, key, None) == value:
+            return True
+        return key == "id" and getattr(obj, "id", None) == value
+
+    def _match_has(self, obj: Any, key: str, value: Any) -> bool:
+        """Checks if object satisfies has condition."""
+        props = getattr(obj, "properties", {})
+        if value is None:
+            return key in props or getattr(obj, key, None) is not None
+        return self._match_has_value(obj, props, key, value)
+
     def has(self, key: str, value: Any = None) -> "GraphTraversal":
         """Filters objects by property key/value or existence."""
         new_objs: List[Any] = []
         new_paths: List[Path] = []
         for i, obj in enumerate(self._current):
-            props = getattr(obj, "properties", {})
-            if value is None:
-                if key in props or getattr(obj, key, None) is not None:
-                    new_objs.append(obj)
-                    new_paths.append(self._paths[i])
-            else:
-                if (
-                    props.get(key) == value
-                    or getattr(obj, key, None) == value
-                    or (key == "id" and getattr(obj, "id", None) == value)
-                ):
-                    new_objs.append(obj)
-                    new_paths.append(self._paths[i])
+            if self._match_has(obj, key, value):
+                new_objs.append(obj)
+                new_paths.append(self._paths[i])
         return self._clone(new_objs, new_paths)
 
     def hasLabel(self, *labels: str) -> "GraphTraversal":
@@ -264,21 +268,28 @@ class GraphTraversal:
         ]
         return self._clone(new_objs, new_paths)
 
+    def _match_has_not(self, obj: Any, key: str) -> bool:
+        """Checks if object lacks the specified property key."""
+        return key not in getattr(obj, "properties", {}) and getattr(obj, key, None) is None
+
     def hasNot(self, key: str) -> "GraphTraversal":
         """Filters out objects that have the specified property key."""
-        new_objs = [
-            obj
-            for obj in self._current
-            if key not in getattr(obj, "properties", {})
-            and getattr(obj, key, None) is None
-        ]
+        new_objs = [obj for obj in self._current if self._match_has_not(obj, key)]
         new_paths = [
             self._paths[i]
             for i, obj in enumerate(self._current)
-            if key not in getattr(obj, "properties", {})
-            and getattr(obj, key, None) is None
+            if self._match_has_not(obj, key)
         ]
         return self._clone(new_objs, new_paths)
+
+    def _eval_predicate(self, obj: Any, predicate_fn: Union[Callable[[Any], bool], "GraphTraversal"]) -> bool:
+        """Evaluates predicate function or sub-traversal on an object."""
+        if callable(predicate_fn):
+            return bool(predicate_fn(obj))
+        if isinstance(predicate_fn, GraphTraversal):
+            sub = self.engine.V(getattr(obj, "id", ""))._clone([obj])
+            return len(sub._current) > 0
+        return False
 
     def filter(
         self, predicate_fn: Union[Callable[[Any], bool], "GraphTraversal"]
@@ -287,15 +298,9 @@ class GraphTraversal:
         new_objs: List[Any] = []
         new_paths: List[Path] = []
         for i, obj in enumerate(self._current):
-            if callable(predicate_fn):
-                if predicate_fn(obj):
-                    new_objs.append(obj)
-                    new_paths.append(self._paths[i])
-            elif isinstance(predicate_fn, GraphTraversal):
-                sub = self.engine.V(getattr(obj, "id", ""))._clone([obj])
-                if len(sub._current) > 0:
-                    new_objs.append(obj)
-                    new_paths.append(self._paths[i])
+            if self._eval_predicate(obj, predicate_fn):
+                new_objs.append(obj)
+                new_paths.append(self._paths[i])
         return self._clone(new_objs, new_paths)
 
     def dedup(self) -> "GraphTraversal":
@@ -435,17 +440,29 @@ class GraphTraversal:
         """Applies a repeated sub-traversal step."""
         return _RepeatHelper(parent=self, step_fn=traversal_step_fn)
 
-    def shortestPath(self, target_id: str) -> List[Vertex]:
-        """Calculates shortest weighted path (Dijkstra) from current vertex to target_id."""
-        if not self._current or not isinstance(self._current[0], Vertex):
-            return []
-        start_v = self._current[0]
-        if start_v.id == target_id:
-            return [start_v]
+    def _relax_edge(
+        self,
+        edge: Edge,
+        d: float,
+        dist: Dict[str, float],
+        prev: Dict[str, Optional[str]],
+        pq: List[Tuple[float, str]],
+    ) -> None:
+        """Relaxes a single directed edge in Dijkstra search."""
+        v = edge.dst_id
+        weight = max(0.01, float(edge.weight))
+        if dist.get(v, float("inf")) > d + weight:
+            dist[v] = d + weight
+            prev[v] = edge.src_id
+            heapq.heappush(pq, (dist[v], v))
 
-        dist: Dict[str, float] = {start_v.id: 0.0}
-        prev: Dict[str, Optional[str]] = {start_v.id: None}
-        pq: List[Tuple[float, str]] = [(0.0, start_v.id)]
+    def _dijkstra_search(
+        self, start_id: str, target_id: str
+    ) -> Tuple[Dict[str, float], Dict[str, Optional[str]]]:
+        """Runs Dijkstra shortest path algorithm on graph."""
+        dist: Dict[str, float] = {start_id: 0.0}
+        prev: Dict[str, Optional[str]] = {start_id: None}
+        pq: List[Tuple[float, str]] = [(0.0, start_id)]
         visited: Set[str] = set()
 
         while pq:
@@ -457,17 +474,13 @@ class GraphTraversal:
                 break
 
             for edge in self.engine.get_out_edges(u):
-                v = edge.dst_id
-                weight = max(0.01, float(edge.weight))
-                if dist.get(v, float("inf")) > d + weight:
-                    dist[v] = d + weight
-                    prev[v] = u
-                    heapq.heappush(pq, (dist[v], v))
+                self._relax_edge(edge, d, dist, prev, pq)
+        return dist, prev
 
-        if target_id not in dist:
-            return []
-
-        # Reconstruct path
+    def _reconstruct_path(
+        self, target_id: str, prev: Dict[str, Optional[str]]
+    ) -> List[Vertex]:
+        """Reconstructs vertex path from predecessor map."""
         path_ids: List[str] = []
         curr: Optional[str] = target_id
         while curr is not None:
@@ -482,6 +495,43 @@ class GraphTraversal:
                 result.append(v_obj)
         return result
 
+    def shortestPath(self, target_id: str) -> List[Vertex]:
+        """Calculates shortest weighted path (Dijkstra) from current vertex to target_id."""
+        if not self._current or not isinstance(self._current[0], Vertex):
+            return []
+        start_v = self._current[0]
+        if start_v.id == target_id:
+            return [start_v]
+
+        dist, prev = self._dijkstra_search(start_v.id, target_id)
+        if target_id not in dist:
+            return []
+        return self._reconstruct_path(target_id, prev)
+
+    def _distribute_rank_share(
+        self, u: str, damping: float, rank_u: float, new_ranks: Dict[str, float], vertices: List[str], N: int
+    ) -> None:
+        """Distributes PageRank score of a single vertex."""
+        out_edges = self.engine.get_out_edges(u)
+        out_deg = len(out_edges)
+        if out_deg > 0:
+            share = (damping * rank_u) / out_deg
+            for e in out_edges:
+                new_ranks[e.dst_id] = new_ranks.get(e.dst_id, 0.0) + share
+        else:
+            share = (damping * rank_u) / N
+            for v in vertices:
+                new_ranks[v] += share
+
+    def _pagerank_step(
+        self, damping: float, ranks: Dict[str, float], vertices: List[str], N: int
+    ) -> Dict[str, float]:
+        """Performs a single power iteration step of PageRank."""
+        new_ranks: Dict[str, float] = {v: (1.0 - damping) / N for v in vertices}
+        for u in vertices:
+            self._distribute_rank_share(u, damping, ranks[u], new_ranks, vertices, N)
+        return new_ranks
+
     def pageRank(self, damping: float = 0.85, iterations: int = 20) -> Dict[str, float]:
         """Calculates PageRank centrality for all vertices in the graph."""
         vertices = list(self.engine._vertices.keys())
@@ -491,20 +541,7 @@ class GraphTraversal:
 
         ranks: Dict[str, float] = {v: 1.0 / N for v in vertices}
         for _ in range(iterations):
-            new_ranks: Dict[str, float] = {v: (1.0 - damping) / N for v in vertices}
-            for u in vertices:
-                out_edges = self.engine.get_out_edges(u)
-                out_deg = len(out_edges)
-                if out_deg > 0:
-                    share = (damping * ranks[u]) / out_deg
-                    for e in out_edges:
-                        new_ranks[e.dst_id] = new_ranks.get(e.dst_id, 0.0) + share
-                else:
-                    share = (damping * ranks[u]) / N
-                    for v in vertices:
-                        new_ranks[v] += share
-            ranks = new_ranks
-
+            ranks = self._pagerank_step(damping, ranks, vertices, N)
         return ranks
 
     # -------------------------------------------------------------------------
@@ -529,26 +566,27 @@ class GraphTraversal:
         """Executes all traversal side effects and returns self."""
         return self
 
+    def _extract_step_triple(self, src: Any, dst: Any) -> List[Dict[str, Any]]:
+        """Extracts triple between two adjacent path step vertices."""
+        if not (isinstance(src, Vertex) and isinstance(dst, Vertex)):
+            return []
+        return [
+            {
+                "subject": src.id,
+                "predicate": e.label,
+                "object": dst.id,
+                "weight": e.weight,
+            }
+            for e in self.engine.get_out_edges(src.id)
+            if e.dst_id == dst.id
+        ]
+
     def to_triples(self) -> List[Dict[str, Any]]:
         """Converts matched paths into semantic triples for GraphRAG."""
         triples: List[Dict[str, Any]] = []
         for p in self._paths:
             for i in range(len(p.objects) - 1):
-                src = p.objects[i]
-                dst = p.objects[i + 1]
-                if isinstance(src, Vertex) and isinstance(dst, Vertex):
-                    # Find connecting edge
-                    edges = self.engine.get_out_edges(src.id)
-                    for e in edges:
-                        if e.dst_id == dst.id:
-                            triples.append(
-                                {
-                                    "subject": src.id,
-                                    "predicate": e.label,
-                                    "object": dst.id,
-                                    "weight": e.weight,
-                                }
-                            )
+                triples.extend(self._extract_step_triple(p.objects[i], p.objects[i + 1]))
         return triples
 
 

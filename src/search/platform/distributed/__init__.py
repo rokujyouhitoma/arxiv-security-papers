@@ -54,6 +54,23 @@ class DistributedSearcher:
     def __init__(self, shard_handler: Optional[ShardHandler] = None) -> None:
         self.shard_handler = shard_handler or ShardHandler()
 
+    def _accumulate_shard_response(
+        self,
+        resp: ShardResponse,
+        all_score_docs: List[ScoreDoc],
+        merged_facets: Dict[str, Counter[str]],
+    ) -> int:
+        for sdoc in resp.top_docs.score_docs:
+            sdoc.fields["_shard_"] = resp.shard_id
+            all_score_docs.append(sdoc)
+
+        for facet_name, counts in resp.facets.items():
+            if facet_name not in merged_facets:
+                merged_facets[facet_name] = Counter()
+            merged_facets[facet_name].update(counts)
+
+        return resp.top_docs.total_hits
+
     def merge_results(
         self, responses: List[ShardResponse], top_k: int = 10
     ) -> Tuple[TopDocs, Dict[str, Dict[str, int]]]:
@@ -62,19 +79,8 @@ class DistributedSearcher:
         merged_facets: Dict[str, Counter[str]] = {}
 
         for resp in responses:
-            total_hits += resp.top_docs.total_hits
-            for sdoc in resp.top_docs.score_docs:
-                # Attach shard_id metadata
-                sdoc.fields["_shard_"] = resp.shard_id
-                all_score_docs.append(sdoc)
+            total_hits += self._accumulate_shard_response(resp, all_score_docs, merged_facets)
 
-            # Merge facets
-            for facet_name, counts in resp.facets.items():
-                if facet_name not in merged_facets:
-                    merged_facets[facet_name] = Counter()
-                merged_facets[facet_name].update(counts)
-
-        # Global Sort by Score descending
         all_score_docs.sort(key=lambda d: d.score, reverse=True)
         top_slice = all_score_docs[:top_k]
 

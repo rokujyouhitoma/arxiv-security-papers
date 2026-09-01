@@ -9,7 +9,7 @@ import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from ..arxiv_client import _safe_fromstring, safe_urlopen
 from .base import BaseSourceAdapter, RawItem
@@ -72,6 +72,17 @@ class FeedSourceAdapter(BaseSourceAdapter):
         except Exception:
             return []
 
+    def _find_item_nodes(self, root: Any) -> List[Any]:
+        """Finds RSS item or Atom entry nodes from XML root."""
+        channel = root.find("channel")
+        item_nodes = (
+            channel.findall("item") if channel is not None else root.findall("item")
+        )
+        if not item_nodes:
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            item_nodes = root.findall("atom:entry", ns)
+        return item_nodes
+
     def _parse_feed(
         self, xml_bytes: bytes, max_results: int, feed_url: str
     ) -> List[RawItem]:
@@ -81,14 +92,7 @@ class FeedSourceAdapter(BaseSourceAdapter):
         except Exception:
             return []
 
-        channel = root.find("channel")
-        item_nodes = (
-            channel.findall("item") if channel is not None else root.findall("item")
-        )
-        if not item_nodes:
-            ns = {"atom": "http://www.w3.org/2005/Atom"}
-            item_nodes = root.findall("atom:entry", ns)
-
+        item_nodes = self._find_item_nodes(root)
         domain_tag = re.sub(r"https?://([^/]+).*", r"\1", feed_url).replace(".", "_")
 
         items: List[RawItem] = []
@@ -98,9 +102,8 @@ class FeedSourceAdapter(BaseSourceAdapter):
                 items.append(item)
         return items
 
-    def _parse_feed_elem(
-        self, elem: Any, domain_tag: str, idx: int, feed_url: str
-    ) -> Optional[RawItem]:
+    def _extract_elem_fields(self, elem: Any, domain_tag: str, idx: int) -> Tuple[str, str, str, List[str], str]:
+        """Extracts title, link, abstract, authors, and published fields from XML element."""
         title = (
             _get_node_text(elem, ["title", "{http://www.w3.org/2005/Atom}title"])
             or f"Feed Item {idx+1}"
@@ -129,7 +132,12 @@ class FeedSourceAdapter(BaseSourceAdapter):
             )
             or datetime.now(timezone.utc).isoformat()
         )
+        return title, link, abstract, authors, published
 
+    def _parse_feed_elem(
+        self, elem: Any, domain_tag: str, idx: int, feed_url: str
+    ) -> Optional[RawItem]:
+        title, link, abstract, authors, published = self._extract_elem_fields(elem, domain_tag, idx)
         item_id = f"feed-{domain_tag[:12]}-{hash(link or title) & 0xFFFFFF:06x}"
 
         return RawItem(

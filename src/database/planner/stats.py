@@ -11,6 +11,16 @@ from .histogram import EquiDepthHistogram
 from .hll import HyperLogLog
 
 
+def _estimate_eq_sel(distinct_count: int) -> float:
+    return max(0.001, min(1.0, 1.0 / distinct_count)) if distinct_count > 0 else 0.1
+
+
+def _estimate_in_sel(value: Any, distinct_count: int) -> float:
+    if isinstance(value, (list, tuple, set)) and distinct_count > 0:
+        return min(1.0, len(value) / max(1, distinct_count))
+    return 0.25
+
+
 def _estimate_op_selectivity(
     op: str,
     value: Any,
@@ -18,15 +28,13 @@ def _estimate_op_selectivity(
 ) -> float:
     """Estimates fallback selectivity when histogram is absent."""
     if op in ("=", "=="):
-        return max(0.001, min(1.0, 1.0 / distinct_count)) if distinct_count > 0 else 0.1
+        return _estimate_eq_sel(distinct_count)
     if op in (">", ">=", "<", "<="):
         return 0.33
     if op.upper() in ("LIKE", "CONTAINS"):
         return 0.20
     if op.upper() == "IN":
-        if isinstance(value, (list, tuple, set)) and distinct_count > 0:
-            return min(1.0, len(value) / max(1, distinct_count))
-        return 0.25
+        return _estimate_in_sel(value, distinct_count)
     return 0.50
 
 
@@ -43,34 +51,31 @@ class ColumnStats:
         self.histogram: Optional[EquiDepthHistogram] = None
         self.hll: Optional[HyperLogLog] = None
 
+    def _update_hll_distinct(self, non_nulls: List[Any]) -> None:
+        self.hll = HyperLogLog(p=8)
+        for v in non_nulls:
+            self.hll.add(v)
+        self.distinct_count = self.hll.estimate_cardinality()
+        distinct: Set[Any] = set(non_nulls)
+        if len(distinct) < 16:
+            self.distinct_count = len(distinct)
+
+    def _update_min_max(self, non_nulls: List[Any]) -> None:
+        try:
+            self.min_value = min(non_nulls)
+            self.max_value = max(non_nulls)
+        except TypeError:
+            self.min_value = None
+            self.max_value = None
+
     def update(self, values: List[Any]) -> None:
         """Updates statistics from a list of values."""
         self.total_count = len(values)
         non_nulls = [v for v in values if v is not None]
         self.null_count = self.total_count - len(non_nulls)
-
-        # 1. HyperLogLog estimation
-        self.hll = HyperLogLog(p=8)
-        for v in non_nulls:
-            self.hll.add(v)
-        self.distinct_count = self.hll.estimate_cardinality()
-
-        # Fallback if small
-        distinct: Set[Any] = set(non_nulls)
-        if len(distinct) < 16:
-            self.distinct_count = len(distinct)
-
-        # 2. Min / Max
+        self._update_hll_distinct(non_nulls)
         if non_nulls:
-            try:
-                self.min_value = min(non_nulls)
-                self.max_value = max(non_nulls)
-            except TypeError:
-                self.min_value = None
-                self.max_value = None
-
-        # 3. Equi-Depth Histogram
-        if non_nulls:
+            self._update_min_max(non_nulls)
             self.histogram = EquiDepthHistogram(num_buckets=10)
             self.histogram.build(non_nulls)
 

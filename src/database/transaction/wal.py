@@ -104,14 +104,42 @@ class LogRecord:
         return header_bytes + payload + trailer_bytes
 
     @classmethod
+    def _parse_header(cls, data: bytes, offset: int) -> tuple:
+        if len(data) < offset + RECORD_HEADER_SIZE + RECORD_TRAILER_SIZE:
+            raise ValueError("Insufficient data for log record header/trailer")
+        return struct.unpack_from(RECORD_HEADER_FORMAT, data, offset)
+
+    @classmethod
+    def _verify_payload(
+        cls,
+        data: bytes,
+        offset: int,
+        trailer_offset: int,
+        payload_len: int,
+    ) -> "tuple[int, int]":
+        if len(data) < trailer_offset + RECORD_TRAILER_SIZE:
+            raise ValueError("Insufficient data for complete log record payload")
+        expected_checksum, total_len = struct.unpack_from(
+            RECORD_TRAILER_FORMAT, data, trailer_offset
+        )
+        actual_len = RECORD_HEADER_SIZE + payload_len + RECORD_TRAILER_SIZE
+        if total_len != actual_len:
+            raise ValueError(
+                f"Record length mismatch: expected {total_len}, got {actual_len}"
+            )
+        actual_checksum = zlib.crc32(data[offset:trailer_offset]) & 0xFFFFFFFF
+        if expected_checksum != actual_checksum:
+            raise ValueError(
+                f"CRC32 checksum mismatch: expected {expected_checksum:#x}, got {actual_checksum:#x}"
+            )
+        return expected_checksum, total_len
+
+    @classmethod
     def deserialize(cls, data: bytes, offset: int = 0) -> Tuple["LogRecord", int]:
         """
         Deserializes a log record starting from offset in data buffer.
         Returns (LogRecord, next_offset).
         """
-        if len(data) < offset + RECORD_HEADER_SIZE + RECORD_TRAILER_SIZE:
-            raise ValueError("Insufficient data for log record header/trailer")
-
         (
             lsn,
             prev_lsn,
@@ -123,42 +151,19 @@ class LogRecord:
             redo_len,
             undo_next_lsn,
             extra_len,
-        ) = struct.unpack_from(RECORD_HEADER_FORMAT, data, offset)
-
+        ) = cls._parse_header(data, offset)
         payload_offset = offset + RECORD_HEADER_SIZE
         payload_len = undo_len + redo_len + extra_len
         trailer_offset = payload_offset + payload_len
-
-        if len(data) < trailer_offset + RECORD_TRAILER_SIZE:
-            raise ValueError("Insufficient data for complete log record payload")
-
-        expected_checksum, total_len = struct.unpack_from(
-            RECORD_TRAILER_FORMAT, data, trailer_offset
-        )
-
-        actual_len = RECORD_HEADER_SIZE + payload_len + RECORD_TRAILER_SIZE
-        if total_len != actual_len:
-            raise ValueError(
-                f"Record length mismatch: expected {total_len}, got {actual_len}"
-            )
-
-        content_to_hash = data[offset:trailer_offset]
-        actual_checksum = zlib.crc32(content_to_hash) & 0xFFFFFFFF
-        if expected_checksum != actual_checksum:
-            raise ValueError(
-                f"CRC32 checksum mismatch: expected {expected_checksum:#x}, got {actual_checksum:#x}"
-            )
-
+        cls._verify_payload(data, offset, trailer_offset, payload_len)
         undo_data = data[payload_offset : payload_offset + undo_len]
         redo_offset = payload_offset + undo_len
         redo_data = data[redo_offset : redo_offset + redo_len]
         extra_offset = redo_offset + redo_len
         extra_bytes = data[extra_offset : extra_offset + extra_len]
-
-        extra_info: Dict[str, Any] = {}
-        if extra_bytes:
-            extra_info = json.loads(extra_bytes.decode("utf-8"))
-
+        extra_info: Dict[str, Any] = (
+            json.loads(extra_bytes.decode("utf-8")) if extra_bytes else {}
+        )
         record = cls(
             lsn=lsn,
             prev_lsn=prev_lsn,

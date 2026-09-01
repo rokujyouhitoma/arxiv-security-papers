@@ -144,6 +144,19 @@ def _parse_bfrange_block(block: str, mapping: Dict[int, str]) -> None:
         _decode_array_bfrange(match, mapping)
 
 
+def _map_bfrange_char(cur_val: int, hex_len: int) -> str:
+    if cur_val < 0x110000 and hex_len <= 4:
+        try:
+            return chr(cur_val)
+        except ValueError:
+            return ""
+    try:
+        raw_b = cur_val.to_bytes((hex_len + 1) // 2, "big")
+        return raw_b.decode("utf-16-be", errors="replace")
+    except Exception:
+        return ""
+
+
 def _decode_single_bfrange(match: re.Match[str], mapping: Dict[int, str]) -> None:
     start = int(match.group(1), 16)
     end = int(match.group(2), 16)
@@ -152,18 +165,9 @@ def _decode_single_bfrange(match: re.Match[str], mapping: Dict[int, str]) -> Non
     hex_len = len(dst_hex_str)
 
     for offset in range(end - start + 1):
-        cur_val = dst_base_int + offset
-        if cur_val < 0x110000 and hex_len <= 4:
-            try:
-                mapping[start + offset] = chr(cur_val)
-            except ValueError:
-                pass
-        else:
-            try:
-                raw_b = cur_val.to_bytes((hex_len + 1) // 2, "big")
-                mapping[start + offset] = raw_b.decode("utf-16-be", errors="replace")
-            except Exception:
-                pass
+        res = _map_bfrange_char(dst_base_int + offset, hex_len)
+        if res:
+            mapping[start + offset] = res
 
 
 def _decode_array_bfrange(match: re.Match[str], mapping: Dict[int, str]) -> None:
@@ -212,31 +216,34 @@ class FontDecoder:
         encoding = self.font_dict.get("/Encoding")
         if not isinstance(encoding, dict):
             return
-
         diffs = encoding.get("/Differences")
         if not isinstance(diffs, list):
             return
 
         cur_code = 0
         for item in diffs:
-            if isinstance(item, int):
-                cur_code = item
-            elif isinstance(item, str):
-                glyph_name = item.lstrip("/")
-                char_val = STANDARD_AGL.get(glyph_name, glyph_name)
-                self.differences_map[cur_code] = char_val
-                cur_code += 1
+            cur_code = self._process_diff_item(item, cur_code)
+
+    def _process_diff_item(self, item: Any, cur_code: int) -> int:
+        if isinstance(item, int):
+            return item
+        if isinstance(item, str):
+            glyph_name = item.lstrip("/")
+            self.differences_map[cur_code] = STANDARD_AGL.get(glyph_name, glyph_name)
+            return cur_code + 1
+        return cur_code
+
+    def _is_2byte_cid(self, raw_bytes: bytes) -> bool:
+        return any(k > 255 for k in self.to_unicode_map) and len(raw_bytes) % 2 == 0
 
     def decode_bytes(self, raw_bytes: bytes) -> str:
         """Decodes raw character byte sequences using ToUnicode -> Differences -> Latin1 hierarchy."""
         if not raw_bytes:
             return ""
 
-        # 1. 2-byte CID lookup if ToUnicode map contains multi-byte keys
-        if any(k > 255 for k in self.to_unicode_map) and len(raw_bytes) % 2 == 0:
+        if self._is_2byte_cid(raw_bytes):
             return self._decode_2byte_cid(raw_bytes)
 
-        # 2. 1-byte character code lookup
         chars = [self._decode_single_byte(b) for b in raw_bytes]
         return self._normalize_text("".join(chars))
 

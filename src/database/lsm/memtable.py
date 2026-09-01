@@ -92,6 +92,18 @@ class MemTable:
         with self._lock:
             return sorted(self._entries.items(), key=lambda x: x[0])
 
+    @staticmethod
+    def _is_before_start(k: str, start_key: Optional[str]) -> bool:
+        if start_key is None:
+            return False
+        return k < start_key
+
+    @staticmethod
+    def _is_past_end(k: str, end_key: Optional[str]) -> bool:
+        if end_key is None:
+            return False
+        return k >= end_key
+
     def scan(
         self,
         start_key: Optional[str] = None,
@@ -101,9 +113,9 @@ class MemTable:
         with self._lock:
             result: List[Tuple[str, bytes]] = []
             for k, v in sorted(self._entries.items(), key=lambda x: x[0]):
-                if start_key is not None and k < start_key:
+                if self._is_before_start(k, start_key):
                     continue
-                if end_key is not None and k >= end_key:
+                if self._is_past_end(k, end_key):
                     break
                 result.append((k, v))
             return result

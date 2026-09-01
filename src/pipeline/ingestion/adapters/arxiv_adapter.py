@@ -5,7 +5,7 @@ Wraps arXiv Atom API, rate-limiting, and RSS fallback for multiple categories.
 """
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..arxiv_client import fetch_arxiv_papers, fetch_arxiv_rss_fallback
 from ..pdf_extractor import fetch_single_pdf_and_text
@@ -22,6 +22,21 @@ class ArxivSourceAdapter(BaseSourceAdapter):
     def source_name(self) -> str:
         return "arxiv"
 
+    def _resolve_target_query(self, query: str, kwargs: Any) -> str:
+        """Resolves target query with category fallback."""
+        if query:
+            return query
+        if "category" in kwargs:
+            return f"cat:{kwargs['category']}"
+        return f"cat:{self._default_category}"
+
+    def _fetch_raw_paper_dicts(self, target_query: str, max_results: int) -> List[Dict[str, Any]]:
+        """Fetches paper dicts from API with RSS fallback."""
+        raw_dicts = fetch_arxiv_papers(query=target_query, max_results=max_results)
+        if not raw_dicts:
+            raw_dicts = fetch_arxiv_rss_fallback(max_results=min(max_results, 50))
+        return raw_dicts or []
+
     def fetch_items(
         self,
         query: str = "",
@@ -31,22 +46,11 @@ class ArxivSourceAdapter(BaseSourceAdapter):
         **kwargs: Any,
     ) -> List[RawItem]:
         """Fetches items from arXiv API with fallback to RSS."""
-        target_query = query or f"cat:{self._default_category}"
-        if "category" in kwargs and not query:
-            target_query = f"cat:{kwargs['category']}"
-
-        raw_dicts = fetch_arxiv_papers(
-            query=target_query,
-            max_results=max_results,
-        )
-
-        if not raw_dicts:
-            raw_dicts = fetch_arxiv_rss_fallback(
-                max_results=min(max_results, 50),
-            )
+        target_query = self._resolve_target_query(query, kwargs)
+        raw_dicts = self._fetch_raw_paper_dicts(target_query, max_results)
 
         items: List[RawItem] = []
-        for d in raw_dicts or []:
+        for d in raw_dicts:
             item = RawItem.from_dict(d)
             item.source_type = "arxiv"
             items.append(item)

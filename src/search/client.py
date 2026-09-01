@@ -64,41 +64,47 @@ class SearchClient:
         except Exception:
             return False
 
-    def send_command(self, cmd_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """Sends a JSON command to the SearchService over Unix domain socket."""
-        if not os.path.exists(self.socket_path):
-            return self._fallback_handle_command(cmd_dict)
+    def _read_socket_response(self, sock: socket.socket) -> Optional[Dict[str, Any]]:
+        raw_data = b""
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            raw_data += chunk
+            if b"\n" in raw_data:
+                break
+        if not raw_data:
+            return None
+        res: Dict[str, Any] = json.loads(raw_data.decode("utf-8").strip())
+        return res
 
+    def _send_socket_payload(self, cmd_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self.timeout)
         try:
             sock.connect(self.socket_path)
             payload = (json.dumps(cmd_dict, ensure_ascii=False) + "\n").encode("utf-8")
             sock.sendall(payload)
-
-            raw_data = b""
-            while True:
-                chunk = sock.recv(65536)
-                if not chunk:
-                    break
-                raw_data += chunk
-                if b"\n" in raw_data:
-                    break
-            if not raw_data:
-                return self._fallback_handle_command(cmd_dict)
-
-            res: Dict[str, Any] = json.loads(raw_data.decode("utf-8").strip())
-            return res
-        except Exception as e:
-            logger.warning(
-                "Search IPC failed (%s), falling back to in-process engine", e
-            )
-            return self._fallback_handle_command(cmd_dict)
+            return self._read_socket_response(sock)
         finally:
             try:
                 sock.close()
             except OSError:
                 pass
+
+    def send_command(self, cmd_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Sends a JSON command to the SearchService over Unix domain socket."""
+        if not os.path.exists(self.socket_path):
+            return self._fallback_handle_command(cmd_dict)
+
+        try:
+            res = self._send_socket_payload(cmd_dict)
+            return res if res is not None else self._fallback_handle_command(cmd_dict)
+        except Exception as e:
+            logger.warning(
+                "Search IPC failed (%s), falling back to in-process engine", e
+            )
+            return self._fallback_handle_command(cmd_dict)
 
     def _fallback_search(self, req: Dict[str, Any]) -> Dict[str, Any]:
         engine = self.fallback_engine
@@ -188,16 +194,16 @@ class SearchClient:
     def _fallback_handle_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
         """Executes the command locally using the fallback VectorEngine."""
         cmd = req.get("cmd", "")
-        if cmd == "ping":
-            return {"status": "ok", "message": "pong"}
-        if cmd == "search":
-            return self._fallback_search(req)
-        if cmd == "get_paper":
-            return self._fallback_get_paper(req)
-        if cmd == "get_related":
-            return self._fallback_get_related(req)
-        if cmd == "get_stats":
-            return self._fallback_get_stats()
+        handlers = {
+            "ping": lambda _: {"status": "ok", "message": "pong"},
+            "search": self._fallback_search,
+            "get_paper": self._fallback_get_paper,
+            "get_related": self._fallback_get_related,
+            "get_stats": lambda _: self._fallback_get_stats(),
+        }
+        handler = handlers.get(cmd)
+        if handler:
+            return handler(req)
         return {"status": "error", "error": f"Unknown command: '{cmd}'"}
 
     def ping(self) -> bool:

@@ -10,12 +10,19 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 ScalarKey = Union[int, float, str]
 
 
+def _cmp_values(v1: Any, v2: Any) -> int:
+    if v1 > v2:
+        return 1
+    if v1 < v2:
+        return -1
+    return 0
+
+
 def compare_keys(k1: ScalarKey, k2: ScalarKey) -> int:
     """Safely compares two scalar keys of potentially different types (-1, 0, 1)."""
     if isinstance(k1, (int, float)) and isinstance(k2, (int, float)):
-        return 1 if k1 > k2 else (-1 if k1 < k2 else 0)
-    str_k1, str_k2 = str(k1), str(k2)
-    return 1 if str_k1 > str_k2 else (-1 if str_k1 < str_k2 else 0)
+        return _cmp_values(k1, k2)
+    return _cmp_values(str(k1), str(k2))
 
 
 class BTreeNode:

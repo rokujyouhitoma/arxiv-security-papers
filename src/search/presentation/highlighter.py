@@ -51,30 +51,45 @@ class DynamicHighlighter:
         safe = html.escape(text[: self.snippet_length])
         return safe + ("..." if len(text) > self.snippet_length else "")
 
-    def highlight(self, text: str, query_terms: List[str]) -> str:
-        """Extracts the most relevant snippet from text and applies highlight tags."""
-        if not text or not query_terms:
-            return self._safe_fallback(text)
-
+    def _find_first_match(self, text: str, query_terms: List[str]) -> Optional[re.Match[str]]:
         terms = [
             re.escape(t.lower().strip()) for t in query_terms if len(t.strip()) >= 2
         ]
         if not terms:
-            return self._safe_fallback(text)
+            return None
+        return re.search(r"(" + "|".join(terms) + r")", text, re.IGNORECASE)
 
-        first_match = re.search(r"(" + "|".join(terms) + r")", text, re.IGNORECASE)
-        if not first_match:
-            return self._safe_fallback(text)
-
+    def _format_matched_snippet(
+        self, text: str, query_terms: List[str], first_match: re.Match[str]
+    ) -> str:
         snippet_start, snippet_end = self._calculate_window(
             len(text), first_match.start()
         )
         escaped_snippet = html.escape(text[snippet_start:snippet_end])
         highlighted = self._apply_highlight_tags(escaped_snippet, query_terms)
-
         prefix = "..." if snippet_start > 0 else ""
         suffix = "..." if snippet_end < len(text) else ""
         return f"{prefix}{highlighted}{suffix}"
+
+    def highlight(self, text: str, query_terms: List[str]) -> str:
+        """Extracts the most relevant snippet from text and applies highlight tags."""
+        if not text or not query_terms:
+            return self._safe_fallback(text)
+
+        first_match = self._find_first_match(text, query_terms)
+        if not first_match:
+            return self._safe_fallback(text)
+
+        return self._format_matched_snippet(text, query_terms, first_match)
+
+    def highlight_text(self, text: str, query_terms: List[str]) -> str:
+        """Alias for highlight method."""
+        return self.highlight(text, query_terms)
+
+    def generate_snippets(self, text: str, query_terms: List[str]) -> List[str]:
+        """Generates a list of highlighted context snippets."""
+        hl = self.highlight(text, query_terms)
+        return [hl] if hl else []
 
     def highlight_document(
         self,

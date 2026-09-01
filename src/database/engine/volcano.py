@@ -161,6 +161,17 @@ class NestedLoopJoinIterator(VolcanoIterator):
         else:
             self._current_right_iter = None
 
+    def _advance_left(self) -> None:
+        """Advances left row and opens a new right iterator."""
+        if self._current_right_iter is not None:
+            self._current_right_iter.close()
+        self._current_left = self.left_child.next()
+        if self._current_left is not None:
+            self._current_right_iter = self.right_child_factory()
+            self._current_right_iter.open()
+        else:
+            self._current_right_iter = None
+
     def next(self) -> Optional[Dict[str, Any]]:
         while self._current_left is not None and self._current_right_iter is not None:
             right_row = self._current_right_iter.next()
@@ -170,13 +181,7 @@ class NestedLoopJoinIterator(VolcanoIterator):
                     merged.update(right_row)
                     return merged
             else:
-                self._current_right_iter.close()
-                self._current_left = self.left_child.next()
-                if self._current_left is not None:
-                    self._current_right_iter = self.right_child_factory()
-                    self._current_right_iter.open()
-                else:
-                    self._current_right_iter = None
+                self._advance_left()
         return None
 
     def close(self) -> None:
@@ -230,27 +235,32 @@ class HashJoinIterator(VolcanoIterator):
         self._match_buffer = []
         self._match_idx = 0
 
+    def _get_next_match(self) -> Optional[Dict[str, Any]]:
+        """Returns next match from buffer if available."""
+        if (
+            self._match_idx < len(self._match_buffer)
+            and self._current_probe_row is not None
+        ):
+            matched_build_row = self._match_buffer[self._match_idx]
+            self._match_idx += 1
+            res = dict(self._current_probe_row)
+            res.update(matched_build_row)
+            return res
+        return None
+
     def next(self) -> Optional[Dict[str, Any]]:
         while True:
-            if self._match_idx < len(self._match_buffer):
-                matched_build_row = self._match_buffer[self._match_idx]
-                self._match_idx += 1
-                if self._current_probe_row is not None:
-                    res = dict(self._current_probe_row)
-                    res.update(matched_build_row)
-                    return res
-
+            match = self._get_next_match()
+            if match is not None:
+                return match
             self._current_probe_row = self.probe_child.next()
             if self._current_probe_row is None:
                 return None
-
             probe_k = self._current_probe_row.get(self.probe_key)
-            if probe_k in self._hash_table:
-                self._match_buffer = self._hash_table[probe_k]
-                self._match_idx = 0
-            else:
-                self._match_buffer = []
-                self._match_idx = 0
+            self._match_buffer = (
+                self._hash_table.get(probe_k, []) if probe_k is not None else []
+            )
+            self._match_idx = 0
 
     def close(self) -> None:
         self.probe_child.close()

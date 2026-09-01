@@ -61,6 +61,16 @@ class HeartbeatWatchdog:
             self._heartbeats.pop(pid, None)
             self._worker_meta.pop(pid, None)
 
+    @staticmethod
+    def _check_meta_health(meta: dict, last_pulse: float, t_limit: float) -> bool:
+        if meta.get("status") != "ALIVE":
+            return False
+        if "is_healthy" in meta:
+            return bool(meta["is_healthy"])
+        if meta.get("is_handling_request", False):
+            return (time.monotonic() - last_pulse) <= t_limit
+        return True
+
     def is_healthy(self, pid: int, timeout: Optional[float] = None) -> bool:
         """Checks if a worker is healthy based on its operational state."""
         t_limit = timeout if timeout is not None else self.timeout
@@ -69,13 +79,7 @@ class HeartbeatWatchdog:
             if last_pulse is None:
                 return False
             meta = self._worker_meta.get(pid, {})
-            if meta.get("status") != "ALIVE":
-                return False
-            if "is_healthy" in meta:
-                return bool(meta["is_healthy"])
-            if meta.get("is_handling_request", False):
-                return (time.monotonic() - last_pulse) <= t_limit
-            return True
+            return self._check_meta_health(meta, last_pulse, t_limit)
 
     def get_hung_workers(self, timeout: Optional[float] = None) -> List[int]:
         """Returns a list of worker PIDs that exceeded the heartbeat timeout.

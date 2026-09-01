@@ -82,6 +82,30 @@ class AdmiraltyEngine:
         ]
         return any(v in venue for v in top_venues)
 
+    def _is_advisory_source(self, st: str) -> bool:
+        return any(k in st for k in ["advisory", "cve", "cert", "nvd"])
+
+    def _check_official_source(
+        self, st: str, venue: str
+    ) -> Optional[tuple[AdmiraltyReliability, str]]:
+        if self._is_top_venue(venue) or self._is_advisory_source(st):
+            return (
+                AdmiraltyReliability.A,
+                "公的セキュリティ機関・公式アドバイザリまたは査読トップ会議",
+            )
+        return None
+
+    def _lookup_source_map(self, st: str) -> Optional[tuple[AdmiraltyReliability, str]]:
+        source_map = [
+            (["arxiv", "iacr", "eprint"], AdmiraltyReliability.B, "arXiv / IACR \u5b66\u8853\u30d7\u30ec\u30d7\u30ea\u30f3\u30c8\u30ea\u30dd\u30b8\u30c8\u30ea"),
+            (["github", "gitlab", "poc"], AdmiraltyReliability.C, "\u30b3\u30df\u30e5\u30cb\u30c6\u30a3\u516c\u958b\u30ea\u30dd\u30b8\u30c8\u30ea\u30fbPoC\u30b3\u30fc\u30c9"),
+            (["blog", "medium", "twitter", "x.com"], AdmiraltyReliability.D, "\u672a\u691c\u8a3c\u30d6\u30ed\u30b0\u30fb\u30bd\u30fc\u30b7\u30e3\u30eb\u30e1\u30c7\u30a3\u30a2"),
+        ]
+        for keywords, rel, reason in source_map:
+            if any(k in st for k in keywords):
+                return rel, reason
+        return None
+
     def evaluate_source(
         self, source_type: str, metadata: Optional[Dict[str, Any]] = None
     ) -> tuple[AdmiraltyReliability, str]:
@@ -90,62 +114,48 @@ class AdmiraltyEngine:
         st = str(source_type).lower()
         venue = str(meta.get("venue", meta.get("journal", ""))).lower()
 
-        if self._is_top_venue(venue) or any(
-            k in st for k in ["advisory", "cve", "cert", "nvd"]
-        ):
-            return (
-                AdmiraltyReliability.A,
-                "公的セキュリティ機関・公式アドバイザリまたは査読トップ会議",
-            )
+        official = self._check_official_source(st, venue)
+        if official:
+            return official
 
-        source_map = [
-            (
-                ["arxiv", "iacr", "eprint"],
-                AdmiraltyReliability.B,
-                "arXiv / IACR 学術プレプリントリポジトリ",
-            ),
-            (
-                ["github", "gitlab", "poc"],
-                AdmiraltyReliability.C,
-                "コミュニティ公開リポジトリ・PoCコード",
-            ),
-            (
-                ["blog", "medium", "twitter", "x.com"],
-                AdmiraltyReliability.D,
-                "未検証ブログ・ソーシャルメディア",
-            ),
-        ]
-        for keywords, rel, reason in source_map:
-            if any(k in st for k in keywords):
-                return rel, reason
+        mapped = self._lookup_source_map(st)
+        if mapped:
+            return mapped
 
-        return AdmiraltyReliability.F, "未分類・新規情報ソース"
+        return AdmiraltyReliability.F, "\u672a\u5206\u985e\u30fb\u65b0\u898f\u60c5\u5831\u30bd\u30fc\u30b9"
+
+    def _check_cve_confirmed(
+        self, t: str, meta: Dict[str, Any]
+    ) -> Optional[tuple[AdmiraltyCredibility, str]]:
+        is_cve = bool(re.search(r"cve-\d{4}-\d{4,7}", t))
+        has_cwe = bool(re.search(r"cwe-\d{1,5}", t))
+        if is_cve and (has_cwe or meta.get("verified_by_other_sources")):
+            return AdmiraltyCredibility.ONE, "CVE/CWE 公式識別子および独立検証所見の一致を確認"
+        return None
+
+    def _check_proven_evidence(
+        self, t: str
+    ) -> Optional[tuple[AdmiraltyCredibility, str]]:
+        has_proof = bool(re.search(r"theorem|proof|formal\s+verification|reduction\s+to", t))
+        has_bench = bool(re.search(r"benchmark|empirical|evaluation|dataset|precision|f1-score", t))
+        if has_proof or (has_bench and "methodology" in t):
+            return AdmiraltyCredibility.TWO, "数理的・形式的証明または厳密な評価メトリクスに基づく検証"
+        return None
 
     def _check_confirmed_or_proven(
         self, t: str, meta: Dict[str, Any]
     ) -> Optional[tuple[AdmiraltyCredibility, str]]:
         """Checks for Level 1 (Confirmed) and Level 2 (Proven) credibility."""
-        if bool(re.search(r"cve-\d{4}-\d{4,7}", t)) and (
-            bool(re.search(r"cwe-\d{1,5}", t)) or meta.get("verified_by_other_sources")
-        ):
-            return (
-                AdmiraltyCredibility.ONE,
-                "CVE/CWE 公式識別子および独立検証所見の一致を確認",
-            )
+        return self._check_cve_confirmed(t, meta) or self._check_proven_evidence(t)
 
-        has_proof = bool(
-            re.search(r"theorem|proof|formal\s+verification|reduction\s+to", t)
-        )
-        has_bench = bool(
-            re.search(r"benchmark|empirical|evaluation|dataset|precision|f1-score", t)
-        )
-        if has_proof or (has_bench and "methodology" in t):
-            return (
-                AdmiraltyCredibility.TWO,
-                "数理的・形式的証明または厳密な評価メトリクスに基づく検証",
-            )
-
+    def _check_experimental_content(self, t: str) -> Optional[tuple[AdmiraltyCredibility, str]]:
+        has_bench = bool(re.search(r"benchmark|empirical|evaluation|dataset|precision|f1-score", t))
+        if has_bench or "experiment" in t or "attack demonstration" in t:
+            return AdmiraltyCredibility.THREE, "実証実験データまたは攻撃デモ観測所見あり"
         return None
+
+    def _is_speculative(self, t: str) -> bool:
+        return "speculative" in t or "untested" in t or "potential" in t
 
     def evaluate_content(
         self, text: str, metadata: Optional[Dict[str, Any]] = None
@@ -158,15 +168,11 @@ class AdmiraltyEngine:
         if top_tier:
             return top_tier
 
-        has_bench = bool(
-            re.search(r"benchmark|empirical|evaluation|dataset|precision|f1-score", t)
-        )
-        if has_bench or "experiment" in t or "attack demonstration" in t:
-            return (
-                AdmiraltyCredibility.THREE,
-                "実証実験データまたは攻撃デモ観測所見あり",
-            )
-        if "speculative" in t or "untested" in t or "potential" in t:
+        experimental = self._check_experimental_content(t)
+        if experimental:
+            return experimental
+
+        if self._is_speculative(t):
             return AdmiraltyCredibility.FOUR, "推測的記述または実証データ不足"
 
         return AdmiraltyCredibility.SIX, "確実性を判断するための技術的証拠が不十分"

@@ -40,35 +40,42 @@ class SupervisorTopViewer:
         return f"{color_code}{text}{self.COLOR_RESET}"
 
     @staticmethod
+    def _parse_proc_line_kb(line: str) -> float:
+        parts = line.split()
+        return float(parts[1]) if len(parts) >= 2 else 0.0
+
+    @staticmethod
+    def _parse_smaps_line(line: str, rss_mb: float, pss_mb: float) -> tuple[float, float]:
+        if line.startswith("Rss:"):
+            return round(SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1), pss_mb
+        if line.startswith("Pss:"):
+            return rss_mb, round(SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1)
+        return rss_mb, pss_mb
+
+    @staticmethod
     def _read_smaps_memory(pid: int) -> tuple[float, float]:
         rss_mb, pss_mb = 0.0, 0.0
+        smaps_file = f"/proc/{pid}/smaps_rollup"
+        if not os.path.exists(smaps_file):
+            return 0.0, 0.0
         try:
-            smaps_file = f"/proc/{pid}/smaps_rollup"
-            if not os.path.exists(smaps_file):
-                return 0.0, 0.0
             with open(smaps_file, "r", encoding="utf-8") as f:
                 for line in f:
-                    parts = line.split()
-                    if line.startswith("Rss:") and len(parts) >= 2:
-                        rss_mb = round(float(parts[1]) / 1024.0, 1)
-                    elif line.startswith("Pss:") and len(parts) >= 2:
-                        pss_mb = round(float(parts[1]) / 1024.0, 1)
+                    rss_mb, pss_mb = SupervisorTopViewer._parse_smaps_line(line, rss_mb, pss_mb)
         except Exception:
             return 0.0, 0.0
         return rss_mb, pss_mb
 
     @staticmethod
     def _read_status_rss(pid: int) -> float:
+        status_file = f"/proc/{pid}/status"
+        if not os.path.exists(status_file):
+            return 0.0
         try:
-            status_file = f"/proc/{pid}/status"
-            if not os.path.exists(status_file):
-                return 0.0
             with open(status_file, "r", encoding="utf-8") as f:
                 for line in f:
                     if line.startswith("VmRSS:"):
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            return round(float(parts[1]) / 1024.0, 1)
+                        return round(SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1)
         except Exception:
             return 0.0
         return 0.0
@@ -107,33 +114,24 @@ class SupervisorTopViewer:
             return f"{hours:02d}h {minutes:02d}m {remaining_sec:02d}s"
         return f"{minutes:02d}m {remaining_sec:02d}s"
 
-    def _render_arbiter_panel(self, data: Dict[str, Any]) -> List[str]:
-        arbiter_pid = data.get("arbiter_pid", "-")
-        uptime_sec = data.get("uptime", 0.0)
-        uptime_str = self.format_uptime(uptime_sec)
-
-        arbiter_rss, arbiter_pss = 0.0, 0.0
-        if isinstance(arbiter_pid, int):
-            arbiter_rss, arbiter_pss = self.get_process_memory_mb(arbiter_pid)
-
-        mem_str = (
-            f"{arbiter_rss:.1f} ({arbiter_pss:.1f}) MB"
-            if arbiter_pss > 0
-            else f"{arbiter_rss:.1f} MB"
-        )
-
-        pools_meta = data.get("pools", {})
+    def _build_pools_summary(self, pools_meta: Any) -> str:
         parts = []
         if isinstance(pools_meta, dict):
             for name, meta in pools_meta.items():
                 if isinstance(meta, dict):
-                    parts.append(
-                        f"{name}: {meta.get('active', 0)}/{meta.get('target', 0)}"
-                    )
+                    parts.append(f"{name}: {meta.get('active', 0)}/{meta.get('target', 0)}")
                 else:
                     parts.append(f"{name}: {meta}")
-        w_summary = ", ".join(parts) if parts else "No pools configured"
+        return ", ".join(parts) if parts else "No pools configured"
 
+    def _render_arbiter_panel(self, data: Dict[str, Any]) -> List[str]:
+        arbiter_pid = data.get("arbiter_pid", "-")
+        uptime_str = self.format_uptime(data.get("uptime", 0.0))
+        arbiter_rss, arbiter_pss = 0.0, 0.0
+        if isinstance(arbiter_pid, int):
+            arbiter_rss, arbiter_pss = self.get_process_memory_mb(arbiter_pid)
+        mem_str = f"{arbiter_rss:.1f} ({arbiter_pss:.1f}) MB" if arbiter_pss > 0 else f"{arbiter_rss:.1f} MB"
+        w_summary = self._build_pools_summary(data.get("pools", {}))
         return [
             f"  {self._c(self.COLOR_BOLD, 'Arbiter PID:')} {self._c(self.COLOR_YELLOW, str(arbiter_pid)):<8} "
             f"  {self._c(self.COLOR_BOLD, 'Uptime:')} {uptime_str:<14} "
@@ -219,36 +217,37 @@ class SupervisorTopViewer:
         )
         return "\n".join(lines)
 
+    def _run_once(self) -> int:
+        resp = self.client.get_status()
+        if resp.get("status") != "ok":
+            err_msg = resp.get("error", "Unknown error connecting to Arbiter.")
+            print(f"{self._c(self.COLOR_RED, '[ERROR]')} Failed to retrieve status: {err_msg}", file=sys.stderr)
+            return 1
+        print(self.render_dashboard(resp))
+        return 0
+
+    def _run_streaming(self, interval: float) -> int:
+        while True:
+            resp = self.client.get_status()
+            if resp.get("status") != "ok":
+                err_msg = resp.get("error", "Unknown error connecting to Arbiter.")
+                print(f"{self._c(self.COLOR_RED, '[ERROR]')} Failed to retrieve status: {err_msg}", file=sys.stderr)
+                return 1
+            sys.stdout.write("\033[2J\033[H")
+            sys.stdout.write(self.render_dashboard(resp) + "\n")
+            sys.stdout.flush()
+            time.sleep(interval)
+
     def run_loop(self, interval: float = 1.0, once: bool = False) -> int:
         """
         Executes the monitoring loop.
         """
         if interval <= 0:
             interval = 1.0
-
         try:
-            while True:
-                resp = self.client.get_status()
-                if resp.get("status") != "ok":
-                    err_msg = resp.get("error", "Unknown error connecting to Arbiter.")
-                    print(
-                        f"{self._c(self.COLOR_RED, '[ERROR]')} Failed to retrieve status: {err_msg}",
-                        file=sys.stderr,
-                    )
-                    return 1
-
-                dashboard = self.render_dashboard(resp)
-
-                if once:
-                    print(dashboard)
-                    return 0
-
-                # Clear screen & reset cursor
-                sys.stdout.write("\033[2J\033[H")
-                sys.stdout.write(dashboard + "\n")
-                sys.stdout.flush()
-
-                time.sleep(interval)
+            if once:
+                return self._run_once()
+            return self._run_streaming(interval)
         except KeyboardInterrupt:
             print(f"\n{self._c(self.COLOR_GRAY, '[*] Top monitor stopped.')}")
             return 0

@@ -49,63 +49,59 @@ class ManagedServiceWorker(BaseWorker):
         if self.hook is None:
             self.hook = DefaultLifecycleHook()
 
-    def run(self) -> None:
-        """Main service lifecycle execution loop."""
-        self.init_signals()
-        self._init_hook_if_needed()
-
-        # Step 1: Setup
+    def _setup_service(self) -> bool:
         try:
             self.hook.bind_worker(self.worker_id)
             ok = self.hook.setup()
             self.state = ServiceState.READY if ok else ServiceState.FAILED
         except Exception:
             self.state = ServiceState.FAILED
+        return self.state != ServiceState.FAILED
 
-        if self.state == ServiceState.FAILED:
+    def _check_service_health(self) -> bool:
+        try:
+            return self.hook.health_check()
+        except Exception:
+            return False
+
+    def _flush_if_due(self) -> None:
+        now = time.time()
+        if now - self.last_sync >= self.sync_interval:
+            try:
+                self.hook.on_flush()
+                self.flushes_completed += 1
+            except Exception:
+                pass
+            self.last_sync = now
+
+    def run(self) -> None:
+        """Main service lifecycle execution loop."""
+        self.init_signals()
+        self._init_hook_if_needed()
+
+        if not self._setup_service():
             self.pulse({"service": self.service_name, "state": self.state.value})
             self.close()
             return
 
         self.state = ServiceState.ACTIVE
-
-        # Step 2: Main Active Loop
         while self.alive:
-            healthy = False
-            try:
-                healthy = self.hook.health_check()
-            except Exception:
-                healthy = False
+            healthy = self._check_service_health()
+            self.pulse({
+                "service": self.service_name,
+                "state": self.state.value,
+                "is_healthy": healthy,
+                "flushes": self.flushes_completed,
+                "last_sync_epoch": self.last_sync,
+            })
+            self._flush_if_due()
+            time.sleep(max(0.05, min(self.sync_interval, 0.5)))
 
-            self.pulse(
-                {
-                    "service": self.service_name,
-                    "state": self.state.value,
-                    "is_healthy": healthy,
-                    "flushes": self.flushes_completed,
-                    "last_sync_epoch": self.last_sync,
-                }
-            )
-
-            now = time.time()
-            if now - self.last_sync >= self.sync_interval:
-                try:
-                    self.hook.on_flush()
-                    self.flushes_completed += 1
-                except Exception:
-                    pass
-                self.last_sync = now
-
-            sleep_step = max(0.05, min(self.sync_interval, 0.5))
-            time.sleep(sleep_step)
-
-        # Step 3: Graceful Teardown & Final Flush
         self.state = ServiceState.DRAINING
         try:
             self.hook.on_flush()
             self.hook.teardown()
         except Exception:
             pass
-
         self.state = ServiceState.STOPPED
         self.close()

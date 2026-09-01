@@ -16,7 +16,18 @@ import socket
 import sys
 import time
 import traceback
-from typing import Any, Callable, Dict, List, NoReturn, Optional, Set, TextIO, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    NoReturn,
+    Optional,
+    Set,
+    TextIO,
+    Tuple,
+    cast,
+)
 
 from .config import SupervisorConfig
 from .contracts import (
@@ -46,6 +57,15 @@ class ManagedPool:
         self.workers: Dict[int, BaseWorker] = {}
         self.target_count = spec.target_count
         self.state: ServiceState = ServiceState.READY
+
+
+def _safe_unlink(path: Optional[str]) -> None:
+    """Safely unlinks a file path if it exists."""
+    if path and os.path.exists(path):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
 
 class Arbiter:
@@ -89,48 +109,42 @@ class Arbiter:
         self.pools[spec.name] = pool
         return pool
 
+    def _create_fallback_wsgi_app(self) -> Callable[..., Any]:
+        def fallback_app(
+            environ: Dict[str, Any], start_response: Callable[..., Any]
+        ) -> List[bytes]:
+            start_response("200 OK", [("Content-Type", "application/json")])
+            return [b'{"status":"ok","message":"Supervisor Active"}']
+        return fallback_app
+
     def load_wsgi_app(self) -> Callable[..., Any]:
         """Dynamically imports and resolves the target WSGI application object."""
         if self.wsgi_app:
             return self.wsgi_app
 
         app_uri = self.config.app_uri
-        if ":" in app_uri:
-            module_name, obj_name = app_uri.split(":", 1)
-        else:
-            module_name, obj_name = app_uri, "application"
-
+        module_name, obj_name = (
+            app_uri.split(":", 1) if ":" in app_uri else (app_uri, "application")
+        )
         try:
             mod = importlib.import_module(module_name)
-            app_obj = getattr(mod, obj_name)
-            self.wsgi_app = cast(Callable[..., Any], app_obj)
+            self.wsgi_app = cast(Callable[..., Any], getattr(mod, obj_name))
             return self.wsgi_app
         except Exception:
-            # Fallback to minimal WSGI app if import fails
-            def fallback_app(
-                environ: Dict[str, Any], start_response: Callable[..., Any]
-            ) -> List[bytes]:
-                start_response("200 OK", [("Content-Type", "application/json")])
-                return [b'{"status":"ok","message":"Supervisor Active"}']
-
-            self.wsgi_app = fallback_app
-            return fallback_app
+            self.wsgi_app = self._create_fallback_wsgi_app()
+            return self.wsgi_app
 
     def load_hook(self, hook_uri: Optional[str]) -> LifecycleHook:
         """Dynamically imports and instantiates a LifecycleHook from URI ('module.path:ClassName')."""
         if not hook_uri:
             return DefaultLifecycleHook()
-        if ":" in hook_uri:
-            module_name, obj_name = hook_uri.split(":", 1)
-        else:
-            module_name, obj_name = hook_uri, "LifecycleHook"
+        module_name, obj_name = (
+            hook_uri.split(":", 1) if ":" in hook_uri else (hook_uri, "LifecycleHook")
+        )
         try:
             mod = importlib.import_module(module_name)
-            cls_obj = getattr(mod, obj_name)
-            instance = cls_obj()
-            if isinstance(instance, LifecycleHook):
-                return instance
-            return DefaultLifecycleHook()
+            instance = getattr(mod, obj_name)()
+            return instance if isinstance(instance, LifecycleHook) else DefaultLifecycleHook()
         except Exception:
             return DefaultLifecycleHook()
 
@@ -210,34 +224,28 @@ class Arbiter:
 
     def _extract_scale_target(self, req: Dict[str, Any]) -> Optional[str]:
         """Extracts and validates target pool name from scale request."""
-        target_label = str(
-            req.get("pool")
-            or req.get("name")
-            or req.get("label")
-            or req.get("type")
-            or ""
-        )
+        target_label = ""
+        for k in ("pool", "name", "label", "type"):
+            if k in req:
+                target_label = str(req[k])
+                break
         if not target_label and self.pools:
             return next(iter(self.pools))
         return self._resolve_pool_name(target_label)
+
+    def _resolve_scale_count(self, req: Dict[str, Any], pool_name: str) -> int:
+        raw_count = req.get("workers", req.get("count"))
+        if raw_count is None:
+            return self.pools[pool_name].target_count
+        return int(raw_count)
 
     def _handle_scale_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
         """Handles dynamic pool-isolated scaling command."""
         pool_name = self._extract_scale_target(req)
         if not pool_name or pool_name not in self.pools:
-            return {
-                "status": "error",
-                "error": f"Unknown target worker pool: '{req.get('pool', '')}'",
-            }
+            return {"status": "error", "error": f"Unknown target worker pool: '{req.get('pool', '')}'"}
 
-        raw_count = req.get("workers")
-        if raw_count is None:
-            raw_count = req.get("count")
-        if raw_count is None:
-            new_count = self.pools[pool_name].target_count
-        else:
-            new_count = int(raw_count)
-
+        new_count = self._resolve_scale_count(req, pool_name)
         if new_count < 1:
             return {"status": "error", "error": "Worker count must be >= 1"}
 
@@ -249,21 +257,33 @@ class Arbiter:
             "active_workers": len(self.pools[pool_name].workers),
         }
 
-    def handle_control_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
-        """Dispatches administrative commands received from the Unix control socket."""
-        cmd = req.get("cmd", "")
+    def _handle_reload_cmd(self) -> Dict[str, Any]:
+        self.reload()
+        return {"status": "ok", "message": "Rolling reload triggered"}
+
+    def _handle_stop_cmd(self) -> Dict[str, Any]:
+        self.running = False
+        return {"status": "ok", "message": "Shutdown sequence initiated"}
+
+    def _dispatch_control_cmd(self, cmd: str, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if cmd == "ping":
             return {"status": "ok", "message": "pong", "timestamp": time.time()}
         if cmd == "status":
             return self._handle_status_command()
         if cmd == "scale":
             return self._handle_scale_command(req)
+        return None
+
+    def handle_control_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
+        """Dispatches administrative commands received from the Unix control socket."""
+        cmd = req.get("cmd", "")
+        res = self._dispatch_control_cmd(cmd, req)
+        if res is not None:
+            return res
         if cmd == "reload":
-            self.reload()
-            return {"status": "ok", "message": "Rolling reload triggered"}
+            return self._handle_reload_cmd()
         if cmd == "stop":
-            self.running = False
-            return {"status": "ok", "message": "Shutdown sequence initiated"}
+            return self._handle_stop_cmd()
         return {"status": "error", "error": f"Unknown command: '{cmd}'"}
 
     def _run_service_worker(self, spec: WorkerSpec, worker_id: str) -> None:
@@ -286,19 +306,13 @@ class Arbiter:
                 spec.app_target()
             return 0
         except Exception as exc:
-            logging.error(
-                "[Arbiter] ONESHOT task '%s' raised exception: %s",
-                spec.name,
-                exc,
-            )
+            logging.error("[Arbiter] ONESHOT task '%s' raised exception: %s", spec.name, exc)
             return 1
 
     def _run_queue_worker(self, spec: WorkerSpec, worker_id: str) -> None:
         """Executes message queue consumer worker."""
         source_q = spec.metadata.get("source_queue") if spec.metadata else None
-        poll_int = (
-            float(spec.metadata.get("poll_interval", 0.1)) if spec.metadata else 0.1
-        )
+        poll_int = float(spec.metadata.get("poll_interval", 0.1)) if spec.metadata else 0.1
         q_worker = QueueWorker(
             worker_id=worker_id,
             config=self.config,
@@ -335,38 +349,52 @@ class Arbiter:
             self._run_web_worker(spec, worker_id)
         sys.exit(exit_code)
 
-    def spawn_worker(self, pool_name: Optional[str] = None) -> Optional[int]:
-        """Forks a new child worker for the designated managed pool."""
-        if not pool_name:
-            if not self.pools:
-                return None
-            pool_name = next(iter(self.pools))
-        else:
-            pool_name = self._resolve_pool_name(pool_name) or pool_name
-
-        pool = self.pools.get(pool_name)
-        if not pool:
+    def _extract_slot_from_meta(self, meta: Optional[Dict[str, Any]]) -> Optional[int]:
+        if not meta:
             return None
+        if "slot_idx" in meta:
+            return int(meta["slot_idx"])
+        if "worker_id" in meta:
+            w_id = str(meta["worker_id"])
+            if w_id.split("_")[-1].isdigit():
+                return int(w_id.split("_")[-1])
+        return None
 
-        spec = pool.spec
-        # Find the lowest available numeric slot index (0, 1, 2, ...)
-        used_slots = set()
-        for active_pid in pool.workers.keys():
-            meta = self.watchdog.get_worker_status(active_pid)
-            if meta and "slot_idx" in meta:
-                used_slots.add(int(meta["slot_idx"]))
-            elif (
-                meta
-                and "worker_id" in meta
-                and str(meta["worker_id"]).split("_")[-1].isdigit()
-            ):
-                used_slots.add(int(str(meta["worker_id"]).split("_")[-1]))
-
+    def _find_available_slot(self, pool: ManagedPool) -> int:
+        """Finds the lowest available numeric slot index (0, 1, 2, ...)."""
+        used_slots = {
+            slot
+            for active_pid in pool.workers.keys()
+            if (slot := self._extract_slot_from_meta(self.watchdog.get_worker_status(active_pid))) is not None
+        }
         slot_idx = 0
         while slot_idx in used_slots:
             slot_idx += 1
+        return slot_idx
 
-        worker_id = f"{spec.name}_{slot_idx}"
+    def _find_spawn_candidate_name(self, pool_name: Optional[str]) -> Optional[str]:
+        if pool_name:
+            return self._resolve_pool_name(pool_name) or pool_name
+        return next(iter(self.pools)) if self.pools else None
+
+    def _resolve_spawn_pool(
+        self, pool_name: Optional[str]
+    ) -> Optional[Tuple[str, ManagedPool]]:
+        """Resolves target pool name and ManagedPool instance for spawning."""
+        target = self._find_spawn_candidate_name(pool_name)
+        if target and target in self.pools:
+            return target, self.pools[target]
+        return None
+
+    def spawn_worker(self, pool_name: Optional[str] = None) -> Optional[int]:
+        """Forks a new child worker for the designated managed pool."""
+        target = self._resolve_spawn_pool(pool_name)
+        if not target:
+            return None
+        name, pool = target
+
+        slot_idx = self._find_available_slot(pool)
+        worker_id = f"{pool.spec.name}_{slot_idx}"
 
         try:
             pid = os.fork()
@@ -374,11 +402,13 @@ class Arbiter:
             return None
 
         if pid == 0:
-            self._run_child_worker(spec, worker_id)
+            self._run_child_worker(pool.spec, worker_id)
         else:
             pool.workers[pid] = cast(BaseWorker, None)
             self.watchdog.register_worker(
-                pid, spec.name, metadata={"slot_idx": slot_idx, "worker_id": worker_id}
+                pid,
+                pool.spec.name,
+                metadata={"slot_idx": slot_idx, "worker_id": worker_id},
             )
             return pid
 
@@ -393,46 +423,47 @@ class Arbiter:
 
         if self.control_server:
             self.control_server.close_in_child()
-        # Reset signal handlers in child
         signal.signal(signal.SIGCHLD, signal.SIG_DFL)
 
-        # Ensure child process terminates automatically if parent Arbiter dies (Linux)
         try:
             import ctypes
-
             libc = ctypes.CDLL("libc.so.6")
-            PR_SET_PDEATHSIG = 1
-            libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+            libc.prctl(1, signal.SIGKILL)  # PR_SET_PDEATHSIG = 1
         except Exception:
             pass
 
+    def _scale_down_pool(self, pool: ManagedPool, excess: int) -> None:
+        pids = list(pool.workers.keys())[:excess]
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+            pool.workers.pop(pid, None)
+            self.watchdog.remove_worker(pid)
+
+    def _scale_up_pool(self, pool_name: str, needed: int) -> None:
+        for _ in range(needed):
+            self.spawn_worker(pool_name)
+
+    def _adjust_pool_size(self, pool: ManagedPool, pool_name: str) -> None:
+        current_active = len(pool.workers)
+        if current_active < pool.target_count:
+            self._scale_up_pool(pool_name, pool.target_count - current_active)
+        elif current_active > pool.target_count:
+            self._scale_down_pool(pool, current_active - pool.target_count)
+
     def adjust_pool(self, pool_name: str, target: Optional[int] = None) -> None:
         """Maintains target worker count for a specific pool (scaling up or down)."""
-        pool_name = self._resolve_pool_name(pool_name) or pool_name
-        pool = self.pools.get(pool_name)
+        resolved_name = self._resolve_pool_name(pool_name) or pool_name
+        pool = self.pools.get(resolved_name)
         if not pool:
             return
 
         if target is not None:
             pool.target_count = max(0, target)
 
-        current_active = len(pool.workers)
-        target_count = pool.target_count
-
-        if current_active < target_count:
-            needed = target_count - current_active
-            for _ in range(needed):
-                self.spawn_worker(pool_name)
-        elif current_active > target_count:
-            excess = current_active - target_count
-            pids = list(pool.workers.keys())[:excess]
-            for pid in pids:
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                except OSError:
-                    pass
-                pool.workers.pop(pid, None)
-                self.watchdog.remove_worker(pid)
+        self._adjust_pool_size(pool, resolved_name)
 
     def scale(self, pool_name: str, count: int) -> None:
         """Sets target pool capacity and adjusts pool size immediately."""
@@ -448,6 +479,28 @@ class Arbiter:
                 return pool
         return None
 
+    def _handle_oneshot_exit(self, pool: ManagedPool, pid: int, exit_code: int) -> None:
+        if exit_code == 0:
+            pool.state = ServiceState.COMPLETED
+            logging.info("[Arbiter] ONESHOT task '%s' completed successfully (PID: %d).", pool.name, pid)
+            return
+
+        if pool.spec.retry_count < pool.spec.max_retries and self.running:
+            pool.spec.retry_count += 1
+            logging.warning(
+                "[Arbiter] ONESHOT task '%s' failed (Exit code: %d). Retrying (%d/%d)...",
+                pool.name, exit_code, pool.spec.retry_count, pool.spec.max_retries,
+            )
+            self.spawn_worker(pool.name)
+        else:
+            pool.state = ServiceState.FAILED
+            logging.error("[Arbiter] ONESHOT task '%s' failed permanently (Exit code: %d).", pool.name, exit_code)
+
+    def _resolve_child_exit_code(self, status: int) -> int:
+        if hasattr(os, "waitstatus_to_exitcode"):
+            return os.waitstatus_to_exitcode(status)
+        return status >> 8
+
     def _handle_child_exit(self, pid: int, status: int = 0) -> None:
         """Cleans up terminated child process and restarts it if unexpected."""
         self.watchdog.remove_worker(pid)
@@ -456,38 +509,10 @@ class Arbiter:
             return
 
         pool.workers.pop(pid, None)
-        exit_code = (
-            os.waitstatus_to_exitcode(status)
-            if hasattr(os, "waitstatus_to_exitcode")
-            else (status >> 8)
-        )
+        exit_code = self._resolve_child_exit_code(status)
 
         if pool.spec.role == ServiceRole.ONESHOT_TASK:
-            if exit_code == 0:
-                pool.state = ServiceState.COMPLETED
-                logging.info(
-                    "[Arbiter] ONESHOT task '%s' completed successfully (PID: %d).",
-                    pool.name,
-                    pid,
-                )
-            else:
-                if pool.spec.retry_count < pool.spec.max_retries and self.running:
-                    pool.spec.retry_count += 1
-                    logging.warning(
-                        "[Arbiter] ONESHOT task '%s' failed (Exit code: %d). Retrying (%d/%d)...",
-                        pool.name,
-                        exit_code,
-                        pool.spec.retry_count,
-                        pool.spec.max_retries,
-                    )
-                    self.spawn_worker(pool.name)
-                else:
-                    pool.state = ServiceState.FAILED
-                    logging.error(
-                        "[Arbiter] ONESHOT task '%s' failed permanently (Exit code: %d).",
-                        pool.name,
-                        exit_code,
-                    )
+            self._handle_oneshot_exit(pool, pid, exit_code)
             return
 
         if self.running and pid not in self.reloading_old_pids:
@@ -505,77 +530,89 @@ class Arbiter:
                 break
             self._handle_child_exit(pid, status)
 
-    def reload(self, pool_name: Optional[str] = None) -> None:
-        """Performs zero-downtime rolling restart of workers in designated or all stateless pools."""
-        target_pools = (
-            [self.pools[pool_name]]
-            if (pool_name and pool_name in self.pools)
-            else list(self.pools.values())
-        )
-
-        for pool in target_pools:
-            if pool.spec.role != ServiceRole.STATELESS_POOL and pool_name is None:
-                # Do not restart stateful background services during default web rolling reload
-                continue
-
-            old_pids = set(pool.workers.keys())
-            self.reloading_old_pids.update(old_pids)
-
-            # Spawn replacement workers
-            for _ in range(pool.target_count):
-                self.spawn_worker(pool.name)
-
-            # Graceful drain old workers
-            for pid in old_pids:
-                try:
-                    os.kill(pid, signal.SIGQUIT)
-                except OSError:
-                    pass
-
-    def check_hung_workers(self) -> None:
-        """Checks for unresponsive workers and kills them with SIGKILL.
-
-        Only workers with ``is_handling_request=True`` are considered hung
-        (see HeartbeatWatchdog.get_hung_workers). After killing a hung worker,
-        the corresponding pool worker is respawned to maintain pool size.
-        """
-        hung_pids = self.watchdog.get_hung_workers(self.config.request_timeout)
-        for pid in hung_pids:
-            pool = self._find_pool_for_pid(pid)
-            if pool:
-                pool_name = "db" if pool.name in ("database", "db") else pool.name
-            else:
-                pool_name = "web"
+    def _reload_single_pool(self, pool: ManagedPool) -> None:
+        old_pids = set(pool.workers.keys())
+        self.reloading_old_pids.update(old_pids)
+        for _ in range(pool.target_count):
+            self.spawn_worker(pool.name)
+        for pid in old_pids:
             try:
-                os.kill(pid, signal.SIGKILL)
+                os.kill(pid, signal.SIGQUIT)
             except OSError:
                 pass
-            self.watchdog.remove_worker(pid)
-            if pool:
-                pool.workers.pop(pid, None)
-            if self.running:
-                self.spawn_worker(pool_name)
+
+    def _is_pool_eligible_for_reload(self, pool: ManagedPool, pool_name: Optional[str]) -> bool:
+        if pool_name is not None:
+            return True
+        return pool.spec.role == ServiceRole.STATELESS_POOL
+
+    def _get_reload_targets(self, pool_name: Optional[str]) -> List[ManagedPool]:
+        if pool_name and pool_name in self.pools:
+            return [self.pools[pool_name]]
+        return [p for p in self.pools.values() if self._is_pool_eligible_for_reload(p, pool_name)]
+
+    def reload(self, pool_name: Optional[str] = None) -> None:
+        """Performs zero-downtime rolling restart of workers in designated or all stateless pools."""
+        for pool in self._get_reload_targets(pool_name):
+            self._reload_single_pool(pool)
+
+    def _resolve_hung_pool_name(self, pool: Optional[ManagedPool]) -> str:
+        if not pool:
+            return "web"
+        return "db" if pool.name in ("database", "db") else pool.name
+
+    def _kill_hung_worker(self, pid: int) -> None:
+        pool = self._find_pool_for_pid(pid)
+        pool_name = self._resolve_hung_pool_name(pool)
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+        self.watchdog.remove_worker(pid)
+        if pool:
+            pool.workers.pop(pid, None)
+        if self.running:
+            self.spawn_worker(pool_name)
+
+    def check_hung_workers(self) -> None:
+        """Checks for unresponsive workers and kills them with SIGKILL."""
+        hung_pids = self.watchdog.get_hung_workers(self.config.request_timeout)
+        for pid in hung_pids:
+            self._kill_hung_worker(pid)
+
+    def _signal_all_workers(self, workers: Dict[int, Any], sig: int) -> None:
+        for pid in list(workers.keys()):
+            try:
+                os.kill(pid, sig)
+            except OSError:
+                pass
 
     def _drain_and_kill(
         self, workers: Dict[int, Any], initial_sig: int, timeout: float
     ) -> None:
         """Signals workers, waits for them to exit, and kills any remaining."""
-        for pid in list(workers.keys()):
-            try:
-                os.kill(pid, initial_sig)
-            except OSError:
-                pass
+        self._signal_all_workers(workers, initial_sig)
 
         start_t = time.time()
         while workers and (time.time() - start_t < timeout):
             self.handle_sigchld()
             time.sleep(0.1)
 
-        for pid in list(workers.keys()):
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except OSError:
-                pass
+        self._signal_all_workers(workers, signal.SIGKILL)
+
+    def _link_pool_dependency(
+        self, name: str, dep: str, in_degree: Dict[str, int], adj: Dict[str, list[str]]
+    ) -> None:
+        dep_name = self._resolve_pool_name(dep) or dep
+        if dep_name in self.pools:
+            adj[dep_name].append(name)
+            in_degree[name] += 1
+
+    def _populate_pool_deps(
+        self, name: str, pool: ManagedPool, in_degree: Dict[str, int], adj: Dict[str, list[str]]
+    ) -> None:
+        for dep in getattr(pool.spec, "dependencies", []) or []:
+            self._link_pool_dependency(name, dep, in_degree, adj)
 
     def _build_dependency_graph(self) -> tuple[Dict[str, int], Dict[str, list[str]]]:
         """Builds in-degree mapping and adjacency list for pools."""
@@ -583,24 +620,22 @@ class Arbiter:
         adj: Dict[str, list[str]] = {p: [] for p in self.pools}
 
         for name, pool in self.pools.items():
-            deps = getattr(pool.spec, "dependencies", []) or []
-            for dep in deps:
-                dep_name = self._resolve_pool_name(dep) or dep
-                if dep_name in self.pools:
-                    adj[dep_name].append(name)
-                    in_degree[name] += 1
+            self._populate_pool_deps(name, pool, in_degree, adj)
         return in_degree, adj
 
-    def resolve_boot_order(self) -> list[str]:
-        """Resolves pool/service boot order using Kahn's topological sort algorithm."""
-        in_degree, adj = self._build_dependency_graph()
-
+    def _get_zero_in_degree_nodes(self, in_degree: Dict[str, int]) -> list[str]:
         zero_in = [n for n, deg in in_degree.items() if deg == 0]
         zero_in.sort(
             key=lambda n: (
                 0 if self.pools[n].spec.role != ServiceRole.STATELESS_POOL else 1
             )
         )
+        return zero_in
+
+    def resolve_boot_order(self) -> list[str]:
+        """Resolves pool/service boot order using Kahn's topological sort algorithm."""
+        in_degree, adj = self._build_dependency_graph()
+        zero_in = self._get_zero_in_degree_nodes(in_degree)
         ordered: list[str] = []
 
         while zero_in:
@@ -613,77 +648,74 @@ class Arbiter:
 
         if len(ordered) != len(self.pools):
             unresolved = set(self.pools) - set(ordered)
-            raise ValueError(
-                f"Circular dependency detected in supervisor pools: {unresolved}"
-            )
+            raise ValueError(f"Circular dependency detected in supervisor pools: {unresolved}")
 
         return ordered
 
-    def shutdown(self) -> None:
-        """
-        Executes strictly ordered graceful shutdown sequence:
-        1. Drain pools in reverse topological dependency order.
-        2. Close listening sockets and clean up control server.
-        """
-        self.running = False
+    def _shutdown_pool(self, pool_name: str) -> None:
+        pool = self.pools.get(pool_name)
+        if pool:
+            sig = signal.SIGQUIT if pool.spec.role == ServiceRole.STATELESS_POOL else signal.SIGTERM
+            self._drain_and_kill(pool.workers, sig, self.config.graceful_timeout)
 
+    def shutdown(self) -> None:
+        """Executes strictly ordered graceful shutdown sequence."""
+        self.running = False
         try:
             shutdown_order = list(reversed(self.resolve_boot_order()))
         except Exception:
             shutdown_order = list(self.pools.keys())
 
         for pool_name in shutdown_order:
-            pool = self.pools.get(pool_name)
-            if pool:
-                sig = (
-                    signal.SIGQUIT
-                    if pool.spec.role == ServiceRole.STATELESS_POOL
-                    else signal.SIGTERM
-                )
-                self._drain_and_kill(pool.workers, sig, self.config.graceful_timeout)
+            self._shutdown_pool(pool_name)
 
         self._cleanup_resources()
 
+    def _read_file_pid(self, path: Optional[str]) -> Optional[str]:
+        if path and os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    val = f.read().strip()
+                    if val:
+                        return val
+            except Exception:
+                pass
+        return None
+
     def _read_existing_arbiter_pid(self) -> str:
         """Helper to read PID from pid_file or lock_file for error diagnostics."""
-        for path in (self.config.pid_file, self.config.lock_file):
-            if path and os.path.exists(path):
-                try:
-                    with open(path, "r", encoding="utf-8") as f:
-                        val = f.read().strip()
-                        if val:
-                            return val
-                except Exception:
-                    pass
-        return "unknown"
+        return (
+            self._read_file_pid(self.config.pid_file)
+            or self._read_file_pid(self.config.lock_file)
+            or "unknown"
+        )
+
+    def _try_open_and_lock(self) -> TextIO:
+        lock_fd = open(self.config.lock_file, "a+", encoding="utf-8")
+        try:
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_fd.seek(0)
+            lock_fd.truncate()
+            lock_fd.write(f"{self.pid}\n")
+            lock_fd.flush()
+            return lock_fd
+        except Exception:
+            lock_fd.close()
+            raise
 
     def acquire_single_instance_lock(self) -> None:
-        """Acquires a non-blocking exclusive flock on the lock file to prevent duplicate Arbiter instances."""
+        """Acquires a non-blocking exclusive flock on the lock file."""
         if not self.config.lock_file:
             return
         lock_dir = os.path.dirname(os.path.abspath(self.config.lock_file))
         if lock_dir:
             os.makedirs(lock_dir, exist_ok=True)
 
-        lock_fd: Optional[TextIO] = None
         try:
-            lock_fd = open(self.config.lock_file, "a+", encoding="utf-8")
-            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            lock_fd.seek(0)
-            lock_fd.truncate()
-            lock_fd.write(f"{self.pid}\n")
-            lock_fd.flush()
-            self._lock_file_obj = lock_fd
+            self._lock_file_obj = self._try_open_and_lock()
         except (BlockingIOError, OSError) as exc:
-            if lock_fd is not None:
-                try:
-                    lock_fd.close()
-                except Exception:
-                    pass
             existing_pid = self._read_existing_arbiter_pid()
-            raise RuntimeError(
-                f"Supervisor arbiter is already running with PID {existing_pid}."
-            ) from exc
+            raise RuntimeError(f"Supervisor arbiter is already running with PID {existing_pid}.") from exc
 
     def release_single_instance_lock(self) -> None:
         """Releases and unlinks the singleton instance lock file."""
@@ -695,11 +727,7 @@ class Arbiter:
                 pass
             self._lock_file_obj = None
 
-        if self.config.lock_file and os.path.exists(self.config.lock_file):
-            try:
-                os.unlink(self.config.lock_file)
-            except OSError:
-                pass
+        _safe_unlink(self.config.lock_file)
 
     def _cleanup_resources(self) -> None:
         """Cleans up control server, server socket, PID file, and instance lock."""
@@ -713,49 +741,33 @@ class Arbiter:
                 pass
             self.server_socket = None
 
-        if self.config.control_socket and os.path.exists(self.config.control_socket):
-            try:
-                os.unlink(self.config.control_socket)
-            except OSError:
-                pass
-
-        if self.config.pid_file and os.path.exists(self.config.pid_file):
-            try:
-                os.unlink(self.config.pid_file)
-            except OSError:
-                pass
-
+        _safe_unlink(self.config.control_socket)
+        _safe_unlink(self.config.pid_file)
         self.release_single_instance_lock()
+
+    def _verify_pid_not_running(self, existing_pid: int) -> None:
+        if existing_pid == self.pid:
+            return
+        try:
+            os.kill(existing_pid, 0)
+            raise RuntimeError(f"Supervisor arbiter is already running with PID {existing_pid}.")
+        except (ProcessLookupError, ValueError):
+            pass
+        except PermissionError:
+            raise RuntimeError(f"Supervisor arbiter is running with PID {existing_pid} (Permission Denied).")
 
     def _check_existing_pid(self) -> None:
         """Checks if a valid running instance is already registered in the PID file."""
-        if not self.config.pid_file or not os.path.exists(self.config.pid_file):
-            return
-        existing_pid = None
-        try:
-            with open(self.config.pid_file, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-            if content:
-                existing_pid = int(content)
-                if existing_pid != self.pid:
-                    os.kill(existing_pid, 0)
-                    raise RuntimeError(
-                        f"Supervisor arbiter is already running with PID {existing_pid}."
-                    )
-        except (ValueError, ProcessLookupError):
-            pass
-        except PermissionError:
-            raise RuntimeError(
-                f"Supervisor arbiter is running with PID {existing_pid} (Permission Denied)."
-            )
+        pid_str = self._read_file_pid(self.config.pid_file)
+        if pid_str and pid_str.isdigit():
+            self._verify_pid_not_running(int(pid_str))
 
     def daemonize(self) -> None:
         """Detaches the supervisor from the controlling terminal using POSIX double-forking."""
         self._check_existing_pid()
 
         try:
-            pid = os.fork()
-            if pid > 0:
+            if os.fork() > 0:
                 sys.exit(0)
         except OSError as e:
             raise RuntimeError(f"First fork failed: {e}") from e
@@ -764,8 +776,7 @@ class Arbiter:
         os.umask(0)
 
         try:
-            pid = os.fork()
-            if pid > 0:
+            if os.fork() > 0:
                 sys.exit(0)
         except OSError as e:
             raise RuntimeError(f"Second fork failed: {e}") from e
@@ -795,6 +806,17 @@ class Arbiter:
             )
         return os.open(os.devnull, os.O_RDWR)
 
+    def _do_redirect_streams(self) -> None:
+        devnull = os.open(os.devnull, os.O_RDWR)
+        self._safe_dup2(devnull, 0)
+        out_fd = self._open_log_fd()
+        self._safe_dup2(out_fd, 1)
+        self._safe_dup2(out_fd, 2)
+        if out_fd > 2:
+            os.close(out_fd)
+        if devnull > 2:
+            os.close(devnull)
+
     def _redirect_standard_streams(self) -> None:
         """Redirects stdin to /dev/null and stdout/stderr to configured log_file."""
         for stream in (sys.stdout, sys.stderr):
@@ -804,15 +826,7 @@ class Arbiter:
                 pass
 
         try:
-            devnull = os.open(os.devnull, os.O_RDWR)
-            self._safe_dup2(devnull, 0)
-            out_fd = self._open_log_fd()
-            self._safe_dup2(out_fd, 1)
-            self._safe_dup2(out_fd, 2)
-            if out_fd > 2:
-                os.close(out_fd)
-            if devnull > 2:
-                os.close(devnull)
+            self._do_redirect_streams()
         except Exception as exc:
             logging.error("[Arbiter] Failed to redirect standard streams: %s", exc)
 
@@ -837,6 +851,12 @@ class Arbiter:
         )
         self.control_server.start()
 
+    def _dispatch_scale_signals(self, sig: int) -> None:
+        if hasattr(signal, "SIGTTIN") and sig == signal.SIGTTIN:
+            self._handle_sigttin()
+        elif hasattr(signal, "SIGTTOU") and sig == signal.SIGTTOU:
+            self._handle_sigttou()
+
     def _dispatch_single_signal(self, sig: int) -> bool:
         """Dispatches an individual signal. Returns False if arbiter should stop."""
         if sig in (signal.SIGTERM, signal.SIGINT):
@@ -844,12 +864,10 @@ class Arbiter:
             return False
         if sig == signal.SIGHUP:
             self.reload()
-        elif hasattr(signal, "SIGTTIN") and sig == signal.SIGTTIN:
-            self._handle_sigttin()
-        elif hasattr(signal, "SIGTTOU") and sig == signal.SIGTTOU:
-            self._handle_sigttou()
         elif sig == signal.SIGCHLD:
             self.handle_sigchld()
+        else:
+            self._dispatch_scale_signals(sig)
         return True
 
     def _handle_sigttin(self) -> None:
@@ -870,6 +888,15 @@ class Arbiter:
             if not self._dispatch_single_signal(sig):
                 break
 
+    def _run_event_loop(self) -> None:
+        while self.running:
+            self._handle_queued_signals()
+            if not self.running:
+                break
+            self.handle_sigchld()
+            self.check_hung_workers()
+            time.sleep(0.5)
+
     def start(self) -> None:
         """Main lifecycle entrypoint starting the Supervisor cluster."""
         if not self._lock_file_obj:
@@ -880,20 +907,11 @@ class Arbiter:
         self._write_pid_file()
         self._start_control_server()
 
-        # DAG-ordered Pool Boot Sequence
-        boot_order = self.resolve_boot_order()
-        for pool_name in boot_order:
+        for pool_name in self.resolve_boot_order():
             self.adjust_pool(pool_name)
 
-        # Master Event Loop
         try:
-            while self.running:
-                self._handle_queued_signals()
-                if not self.running:
-                    break
-                self.handle_sigchld()
-                self.check_hung_workers()
-                time.sleep(0.5)
+            self._run_event_loop()
         except BaseException as exc:  # pragma: no cover
             logging.critical(
                 "[Arbiter] Unexpected crash in main event loop: %s\n%s",

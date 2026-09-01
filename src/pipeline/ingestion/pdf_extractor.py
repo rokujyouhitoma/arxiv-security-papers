@@ -52,8 +52,8 @@ def _download_pdf_file(paper: Dict[str, Any], pdf_path: str) -> None:
         pass
 
 
-def _extract_text_with_fallback(pdf_path: str, txt_path: str) -> None:
-    extracted_text = ""
+def _try_pure_python_extract(pdf_path: str, txt_path: str) -> bool:
+    """Attempts PDF text extraction using Pure Python Engine."""
     try:
         from pdf_engine.extractor import PurePdfTextExtractor
 
@@ -61,20 +61,30 @@ def _extract_text_with_fallback(pdf_path: str, txt_path: str) -> None:
         if extracted_text and len(extracted_text.strip()) > 50:
             with open(txt_path, "w", encoding="utf-8") as f:
                 f.write(extracted_text)
+            return True
     except Exception:
-        extracted_text = ""
+        pass
+    return False
 
-    if not os.path.exists(txt_path) or not extracted_text:
-        try:
-            subprocess.run(
-                ["pdftotext", pdf_path, txt_path],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=10,
-            )
-        except Exception:
-            pass
+
+def _try_pdftotext_extract(pdf_path: str, txt_path: str) -> None:
+    """Fallback text extraction using pdftotext CLI."""
+    try:
+        subprocess.run(
+            ["pdftotext", pdf_path, txt_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
+def _extract_text_with_fallback(pdf_path: str, txt_path: str) -> None:
+    if _try_pure_python_extract(pdf_path, txt_path):
+        return
+    _try_pdftotext_extract(pdf_path, txt_path)
 
 
 def save_raw_paper_data(

@@ -11,6 +11,10 @@ from typing import Any, Dict, List, Optional
 from observability.trace import Span, StatusCode, TracerProvider, get_tracer_provider
 
 
+def _convert_seq_value(val: Union[list, tuple]) -> Dict[str, Any]:
+    return {"arrayValue": {"values": [_convert_attr_value(v) for v in val]}}
+
+
 def _convert_attr_value(val: Any) -> Dict[str, Any]:
     """Converts a Python value into OTLP AnyValue JSON schema."""
     if isinstance(val, bool):
@@ -20,7 +24,7 @@ def _convert_attr_value(val: Any) -> Dict[str, Any]:
     if isinstance(val, float):
         return {"doubleValue": val}
     if isinstance(val, (list, tuple)):
-        return {"arrayValue": {"values": [_convert_attr_value(v) for v in val]}}
+        return _convert_seq_value(val)
     return {"stringValue": str(val)}
 
 
@@ -36,17 +40,8 @@ def _build_status_dict(span: Span) -> Dict[str, Any]:
     return {"code": 0}
 
 
-def span_to_otlp_json_dict(
-    span: Span, service_name: str = "arxiv-security-papers"
-) -> Dict[str, Any]:
-    """
-    Serializes a single Span into OpenTelemetry Protocol (OTLP) HTTP JSON v1/traces format.
-    Ref: https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding
-    """
-    attributes = [
-        {"key": k, "value": _convert_attr_value(v)} for k, v in span.attributes.items()
-    ]
-    events = [
+def _format_span_events(events: List[Any]) -> List[Dict[str, Any]]:
+    return [
         {
             "timeUnixNano": str(ev.timestamp_ns),
             "name": ev.name,
@@ -55,9 +50,21 @@ def span_to_otlp_json_dict(
                 for k, v in ev.attributes.items()
             ],
         }
-        for ev in span.events
+        for ev in events
     ]
 
+
+def _format_span_attributes(attributes: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [{"key": k, "value": _convert_attr_value(v)} for k, v in attributes.items()]
+
+
+def span_to_otlp_json_dict(
+    span: Span, service_name: str = "arxiv-security-papers"
+) -> Dict[str, Any]:
+    """
+    Serializes a single Span into OpenTelemetry Protocol (OTLP) HTTP JSON v1/traces format.
+    Ref: https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding
+    """
     span_dict: Dict[str, Any] = {
         "traceId": span.context.trace_id,
         "spanId": span.context.span_id,
@@ -65,12 +72,13 @@ def span_to_otlp_json_dict(
         "kind": 1 if span.kind == "INTERNAL" else 2,
         "startTimeUnixNano": str(span.start_time_ns),
         "endTimeUnixNano": str(span.end_time_ns or span.start_time_ns),
-        "attributes": attributes,
-        "events": events,
+        "attributes": _format_span_attributes(span.attributes),
+        "events": _format_span_events(span.events),
         "status": _build_status_dict(span),
     }
-    if span.parent_context and span.parent_context.span_id:
-        span_dict["parentSpanId"] = span.parent_context.span_id
+    parent_id = getattr(span.parent_context, "span_id", None)
+    if parent_id:
+        span_dict["parentSpanId"] = parent_id
 
     return span_dict
 
@@ -110,15 +118,17 @@ def build_otlp_payload(
     }
 
 
+def _get_raw_otlp_endpoint(endpoint: Optional[str]) -> str:
+    if endpoint:
+        return endpoint
+    return os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") or os.environ.get(
+        "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces"
+    )
+
+
 def _resolve_otlp_endpoint(endpoint: Optional[str]) -> str:
     """Resolves and normalizes the OTLP traces HTTP endpoint."""
-    resolved = (
-        endpoint
-        or os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-        or os.environ.get(
-            "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces"
-        )
-    )
+    resolved = _get_raw_otlp_endpoint(endpoint)
     if not resolved.endswith("/v1/traces") and not resolved.endswith(":4318"):
         sep = "" if resolved.endswith("/") else "/"
         return f"{resolved}{sep}v1/traces"
@@ -258,6 +268,14 @@ class FlushManager:
     _lock = threading.Lock()
 
     @classmethod
+    def _bind_signals(cls, handler: Any) -> None:
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                signal.signal(sig, handler)
+            except (ValueError, AttributeError):
+                pass
+
+    @classmethod
     def register_lifecycle(cls, provider: Optional[TracerProvider] = None) -> None:
         """Hooks atexit and POSIX signal handlers to guarantee zero telemetry loss in CI/CD."""
         with cls._lock:
@@ -277,8 +295,4 @@ class FlushManager:
                 _shutdown_hook()
                 sys.exit(128 + signum)
 
-            for sig in (signal.SIGTERM, signal.SIGINT):
-                try:
-                    signal.signal(sig, _signal_handler)
-                except (ValueError, AttributeError):
-                    pass
+            cls._bind_signals(_signal_handler)

@@ -31,29 +31,26 @@ class SagaCoordinator:
     def __init__(self) -> None:
         self.executed_steps: List[SagaStep] = []
 
+    def _get_step_name(self, phase_executor: PhaseProtocol) -> str:
+        step_name = getattr(phase_executor, "phase_type", phase_executor.__class__.__name__)
+        return str(step_name.value) if hasattr(step_name, "value") else str(step_name)
+
+    def _record_execution_error(self, context: Any, step_name: str, exc: Exception) -> None:
+        if hasattr(context, "errors") and isinstance(context.errors, list):
+            context.errors.append({"step": step_name, "error": str(exc)})
+        self.compensate_all(context)
+
     def execute_phase_safely(self, phase_executor: PhaseProtocol, context: Any) -> Any:
         """Executes a single phase, recording it for compensation if failures occur."""
-        step_name = getattr(
-            phase_executor, "phase_type", phase_executor.__class__.__name__
-        )
-        if hasattr(step_name, "value"):
-            step_name = str(step_name.value)
-        else:
-            step_name = str(step_name)
-
+        step_name = self._get_step_name(phase_executor)
         try:
             context = phase_executor.execute(context)
-            self.executed_steps.append(
-                SagaStep(step_name=step_name, phase_executor=phase_executor)
-            )
-            # Check if execution yielded errors
+            self.executed_steps.append(SagaStep(step_name=step_name, phase_executor=phase_executor))
             if getattr(context, "errors", None):
                 self.compensate_all(context)
             return context
         except Exception as e:
-            if hasattr(context, "errors") and isinstance(context.errors, list):
-                context.errors.append({"step": step_name, "error": str(e)})
-            self.compensate_all(context)
+            self._record_execution_error(context, step_name, e)
             return context
 
     def compensate_all(self, context: Any) -> None:

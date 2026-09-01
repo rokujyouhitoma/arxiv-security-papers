@@ -39,6 +39,17 @@ class PageTreeNavigator:
         self._traverse_pages_node(pages_obj, {}, (0.0, 0.0, 612.0, 792.0), pages)
         return pages
 
+    def _traverse_page_kids(
+        self, kids: Any, cur_resources: Dict[str, Any], cur_media_box: Tuple[float, float, float, float],
+        pages_out: List[PdfPage], depth: int
+    ) -> None:
+        if not isinstance(kids, list):
+            return
+        for kid_ref in kids:
+            kid_obj = self.xref.resolve_object(kid_ref)
+            if isinstance(kid_obj, dict):
+                self._traverse_pages_node(kid_obj, cur_resources, cur_media_box, pages_out, depth + 1)
+
     def _traverse_pages_node(
         self,
         node_dict: Dict[str, Any],
@@ -65,14 +76,17 @@ class PageTreeNavigator:
             pages_out.append(page)
             return
 
-        kids = node_dict.get("/Kids", [])
-        if isinstance(kids, list):
-            for kid_ref in kids:
-                kid_obj = self.xref.resolve_object(kid_ref)
-                if isinstance(kid_obj, dict):
-                    self._traverse_pages_node(
-                        kid_obj, cur_resources, cur_media_box, pages_out, depth + 1
-                    )
+        self._traverse_page_kids(node_dict.get("/Kids"), cur_resources, cur_media_box, pages_out, depth)
+
+    def _merge_single_resource_entry(
+        self, k: str, resolved_v: Any, merged: Dict[str, Any]
+    ) -> None:
+        if k in merged and isinstance(merged[k], dict) and isinstance(resolved_v, dict):
+            sub_dict = dict(merged[k])
+            sub_dict.update(resolved_v)
+            merged[k] = sub_dict
+        else:
+            merged[k] = resolved_v
 
     def _merge_resources(
         self, parent_res: Dict[str, Any], node_res_ref: Optional[Any]
@@ -87,16 +101,7 @@ class PageTreeNavigator:
 
         for k, v in node_res.items():
             resolved_v = self.xref.resolve_object(v)
-            if (
-                k in merged
-                and isinstance(merged[k], dict)
-                and isinstance(resolved_v, dict)
-            ):
-                sub_dict = dict(merged[k])
-                sub_dict.update(resolved_v)
-                merged[k] = sub_dict
-            else:
-                merged[k] = resolved_v
+            self._merge_single_resource_entry(k, resolved_v, merged)
         return merged
 
     def _extract_media_box(
@@ -159,6 +164,25 @@ class PageTreeNavigator:
             )
             out_list.append(decompressed)
 
+    def _build_single_font_decoder(self, f_ref: Any) -> Optional[FontDecoder]:
+        f_obj = self.xref.resolve_object(f_ref)
+        if not isinstance(f_obj, dict):
+            return None
+
+        to_unicode_map: Dict[int, str] = {}
+        tu_ref = f_obj.get("/ToUnicode")
+        if tu_ref:
+            tu_obj = self.xref.resolve_object(tu_ref)
+            if isinstance(tu_obj, PdfStream):
+                tu_bytes = StreamDecompressor.decompress(
+                    tu_obj.data,
+                    tu_obj.dictionary.get("/Filter"),
+                    tu_obj.dictionary.get("/DecodeParms"),
+                )
+                to_unicode_map = ToUnicodeParser.parse(tu_bytes)
+
+        return FontDecoder(f_obj, to_unicode_map)
+
     def _build_font_decoders(self, resources: Dict[str, Any]) -> Dict[str, FontDecoder]:
         font_dict = resources.get("/Font", {})
         if not isinstance(font_dict, dict):
@@ -166,21 +190,7 @@ class PageTreeNavigator:
 
         decoders: Dict[str, FontDecoder] = {}
         for font_alias, f_ref in font_dict.items():
-            f_obj = self.xref.resolve_object(f_ref)
-            if not isinstance(f_obj, dict):
-                continue
-
-            to_unicode_map: Dict[int, str] = {}
-            tu_ref = f_obj.get("/ToUnicode")
-            if tu_ref:
-                tu_obj = self.xref.resolve_object(tu_ref)
-                if isinstance(tu_obj, PdfStream):
-                    tu_bytes = StreamDecompressor.decompress(
-                        tu_obj.data,
-                        tu_obj.dictionary.get("/Filter"),
-                        tu_obj.dictionary.get("/DecodeParms"),
-                    )
-                    to_unicode_map = ToUnicodeParser.parse(tu_bytes)
-
-            decoders[font_alias] = FontDecoder(f_obj, to_unicode_map)
+            dec = self._build_single_font_decoder(f_ref)
+            if dec:
+                decoders[font_alias] = dec
         return decoders

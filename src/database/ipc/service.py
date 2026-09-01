@@ -59,8 +59,18 @@ class DatabaseService:
         self._server_sock: Optional[socket.socket] = None
         self._thread: Optional[threading.Thread] = None
 
-    def _setup_socket(self) -> socket.socket:
-        """Prepares and binds the Unix domain socket safely."""
+    def _setup_canonical_sock(self, sock_dir: str) -> None:
+        canonical_sock = os.path.join(sock_dir, "db.sock")
+        if canonical_sock == self.socket_path:
+            return
+        try:
+            if os.path.exists(canonical_sock):
+                os.unlink(canonical_sock)
+            os.symlink(os.path.basename(self.socket_path), canonical_sock)
+        except OSError:
+            pass
+
+    def _clean_existing_socket(self) -> None:
         sock_dir = os.path.dirname(self.socket_path)
         if sock_dir and not os.path.exists(sock_dir):
             os.makedirs(sock_dir, exist_ok=True)
@@ -70,22 +80,15 @@ class DatabaseService:
             except OSError:
                 pass
 
+    def _setup_socket(self) -> socket.socket:
+        """Prepares and binds the Unix domain socket safely."""
+        self._clean_existing_socket()
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.bind(self.socket_path)
         sock.listen(64)
         sock.settimeout(1.0)
-
-        # If node_id == 0, ensure canonical db.sock symlink/alias exists for backward compatibility
         if self.node_id == 0:
-            canonical_sock = os.path.join(sock_dir, "db.sock")
-            if canonical_sock != self.socket_path:
-                try:
-                    if os.path.exists(canonical_sock):
-                        os.unlink(canonical_sock)
-                    os.symlink(os.path.basename(self.socket_path), canonical_sock)
-                except OSError:
-                    pass
-
+            self._setup_canonical_sock(os.path.dirname(self.socket_path))
         return sock
 
     def start(self) -> None:
@@ -107,13 +110,7 @@ class DatabaseService:
             self.socket_path,
         )
 
-    def stop(self) -> None:
-        """Stops the IPC server daemon and cleans up the socket."""
-        self.running = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=2.0)
-        self._thread = None
-
+    def _close_server_sock(self) -> None:
         if self._server_sock:
             try:
                 self._server_sock.close()
@@ -121,21 +118,41 @@ class DatabaseService:
                 pass
             self._server_sock = None
 
+    def _teardown_canonical_sock(self) -> None:
+        canonical_sock = os.path.join(os.path.dirname(self.socket_path), "db.sock")
+        if os.path.islink(canonical_sock):
+            try:
+                os.unlink(canonical_sock)
+            except OSError:
+                pass
+
+    def _unlink_sock_file(self) -> None:
         if os.path.exists(self.socket_path):
             try:
                 os.unlink(self.socket_path)
             except OSError:
                 pass
 
+    def stop(self) -> None:
+        """Stops the IPC server daemon and cleans up the socket."""
+        self.running = False
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+        self._thread = None
+        self._close_server_sock()
+        self._unlink_sock_file()
         if self.node_id == 0:
-            canonical_sock = os.path.join(os.path.dirname(self.socket_path), "db.sock")
-            if os.path.islink(canonical_sock):
-                try:
-                    os.unlink(canonical_sock)
-                except OSError:
-                    pass
-
+            self._teardown_canonical_sock()
         logger.info("DatabaseService (Node %d) stopped.", self.node_id)
+
+    def _log_sql_request(self, req: Dict[str, Any]) -> None:
+        if req.get("op") == "execute_sql":
+            sql_text = str(req.get("params", {}).get("sql", "")).strip()
+            logger.info(
+                "⚡ [DatabaseService Node %d IPC] Received SQL query: %s",
+                self.node_id,
+                sql_text,
+            )
 
     def _process_request_payload(self, raw: str) -> Dict[str, Any]:
         """Parses and executes request through protocol handler."""
@@ -143,25 +160,23 @@ class DatabaseService:
             req = json.loads(raw.strip())
             if not isinstance(req, dict):
                 return {"status": "error", "error": "Request must be a JSON object"}
-            if req.get("op") == "execute_sql":
-                sql_text = str(req.get("params", {}).get("sql", "")).strip()
-                logger.info(
-                    "⚡ [DatabaseService Node %d IPC] Received SQL query: %s",
-                    self.node_id,
-                    sql_text,
-                )
-                try:
-                    print(
-                        f"⚡ [DatabaseService Node {self.node_id} IPC] Executing SQL: {sql_text}",
-                        flush=True,
-                    )
-                except OSError:
-                    pass
+            self._log_sql_request(req)
             return self.handler.handle_request(req)
         except json.JSONDecodeError as err:
             return {"status": "error", "error": f"Invalid JSON: {err}"}
         except Exception as ex:
             return {"status": "error", "error": str(ex)}
+
+    def _handle_line(self, conn: socket.socket, line: str) -> None:
+        resp_dict = self._process_request_payload(line)
+        conn.sendall((json.dumps(resp_dict) + "\n").encode("utf-8"))
+
+    def _process_buffered_lines(self, conn: socket.socket, buffer: str) -> str:
+        while "\n" in buffer:
+            line, buffer = buffer.split("\n", 1)
+            if line.strip():
+                self._handle_line(conn, line)
+        return buffer
 
     def _handle_client_connection(self, conn: socket.socket) -> None:
         """Handles a single client IPC conversation."""
@@ -173,13 +188,7 @@ class DatabaseService:
                 if not chunk:
                     break
                 buffer += chunk.decode("utf-8", errors="replace")
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    if not line.strip():
-                        continue
-                    resp_dict = self._process_request_payload(line)
-                    resp_bytes = (json.dumps(resp_dict) + "\n").encode("utf-8")
-                    conn.sendall(resp_bytes)
+                buffer = self._process_buffered_lines(conn, buffer)
         except (socket.timeout, OSError) as e:
             logger.debug("Database IPC client connection closed: %s", e)
         finally:

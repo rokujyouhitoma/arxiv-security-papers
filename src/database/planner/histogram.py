@@ -24,6 +24,10 @@ class EquiDepthBucket:
         self.distinct_count = max(1, distinct_count)
 
 
+def _lt_fraction_at_max(b: EquiDepthBucket) -> float:
+    return (b.distinct_count - 1.0) / b.distinct_count if b.distinct_count > 1 else 0.0
+
+
 def _calc_bucket_lt_fraction(
     b: EquiDepthBucket,
     val: Any,
@@ -33,8 +37,8 @@ def _calc_bucket_lt_fraction(
     span = b.max_val - b.min_val
     if span == 0:
         return 1.0 if inclusive else 0.0
-    if not inclusive and val == b.max_val and b.distinct_count > 1:
-        return (b.distinct_count - 1.0) / b.distinct_count
+    if not inclusive and val == b.max_val:
+        return _lt_fraction_at_max(b)
     return float((val - b.min_val) / span)
 
 
@@ -48,28 +52,10 @@ class EquiDepthHistogram:
         self.buckets: List[EquiDepthBucket] = []
         self.total_count: int = 0
 
-    def build(self, values: List[Any]) -> None:
-        """Constructs equi-depth buckets from a collection of values."""
-        clean = [v for v in values if v is not None]
-        self.total_count = len(clean)
-        self.buckets.clear()
-
-        if not clean:
-            return
-
-        try:
-            sorted_vals = sorted(clean)
-        except TypeError:
-            return
-
+    def _build_buckets(self, sorted_vals: List[Any], k: int) -> None:
         n = len(sorted_vals)
-        k = min(self.num_buckets, n)
-        if k == 0:
-            return
-
         bucket_size = n // k
         remainder = n % k
-
         start = 0
         for i in range(k):
             size = bucket_size + (1 if i < remainder else 0)
@@ -77,14 +63,68 @@ class EquiDepthHistogram:
                 continue
             slice_vals = sorted_vals[start : start + size]
             start += size
-
-            bucket = EquiDepthBucket(
-                min_val=slice_vals[0],
-                max_val=slice_vals[-1],
-                count=len(slice_vals),
-                distinct_count=len(set(slice_vals)),
+            self.buckets.append(
+                EquiDepthBucket(
+                    min_val=slice_vals[0],
+                    max_val=slice_vals[-1],
+                    count=len(slice_vals),
+                    distinct_count=len(set(slice_vals)),
+                )
             )
-            self.buckets.append(bucket)
+
+    @staticmethod
+    def _try_sort_values(clean: List[Any]) -> Optional[List[Any]]:
+        try:
+            return sorted(clean)
+        except TypeError:
+            return None
+
+    def _populate_sorted_buckets(self, sorted_vals: List[Any]) -> None:
+        k = min(self.num_buckets, len(sorted_vals))
+        if k > 0:
+            self._build_buckets(sorted_vals, k)
+
+    def build(self, values: List[Any]) -> None:
+        """Constructs equi-depth buckets from a collection of values."""
+        clean = [v for v in values if v is not None]
+        self.total_count = len(clean)
+        self.buckets.clear()
+        if clean:
+            sorted_vals = self._try_sort_values(clean)
+            if sorted_vals:
+                self._populate_sorted_buckets(sorted_vals)
+
+    def _select_gt_estimate(self, op: str, val1: Any) -> float:
+        return max(0.0, min(1.0, 1.0 - self._estimate_lt(val1, inclusive=(op == ">"))))
+
+    def _select_between_estimate(self, val1: Any, val2: Any) -> float:
+        return max(
+            0.001,
+            min(
+                1.0,
+                self._estimate_lt(val2, inclusive=True)
+                - self._estimate_lt(val1, inclusive=False),
+            ),
+        )
+
+    def _select_range_estimate(
+        self, op: str, val1: Any, val2: Optional[Any]
+    ) -> Optional[float]:
+        if op in (">", ">="):
+            return self._select_gt_estimate(op, val1)
+        if op.upper() == "BETWEEN" and val2 is not None:
+            return self._select_between_estimate(val1, val2)
+        return None
+
+    def _select_op_estimate(
+        self, op: str, val1: Any, val2: Optional[Any]
+    ) -> Optional[float]:
+        """Dispatches to appropriate estimate method based on op; returns None if unknown."""
+        if op in ("=", "=="):
+            return self._estimate_eq(val1)
+        if op in ("<", "<="):
+            return self._estimate_lt(val1, inclusive=(op == "<="))
+        return self._select_range_estimate(op, val1, val2)
 
     def estimate_selectivity(
         self,
@@ -97,20 +137,8 @@ class EquiDepthHistogram:
         """
         if not self.buckets or self.total_count == 0:
             return 0.50
-
-        if op in ("=", "=="):
-            return self._estimate_eq(val1)
-        if op in ("<", "<="):
-            return self._estimate_lt(val1, inclusive=(op == "<="))
-        if op in (">", ">="):
-            lt_sel = self._estimate_lt(val1, inclusive=(op == ">"))
-            return max(0.0, min(1.0, 1.0 - lt_sel))
-        if op.upper() == "BETWEEN" and val2 is not None:
-            sel_high = self._estimate_lt(val2, inclusive=True)
-            sel_low = self._estimate_lt(val1, inclusive=False)
-            return max(0.001, min(1.0, sel_high - sel_low))
-
-        return 0.33
+        result = self._select_op_estimate(op, val1, val2)
+        return result if result is not None else 0.33
 
     def _estimate_eq(self, val: Any) -> float:
         """Estimates equality selectivity across all matching buckets."""
@@ -124,21 +152,32 @@ class EquiDepthHistogram:
                 continue
         return max(0.001, min(1.0, total_sel)) if total_sel > 0 else 0.001
 
+    @staticmethod
+    def _is_above_bucket_max(b: EquiDepthBucket, val: Any, inclusive: bool) -> bool:
+        if val > b.max_val:
+            return True
+        return inclusive and val == b.max_val
+
+    def _process_lt_bucket(
+        self, b: EquiDepthBucket, val: Any, inclusive: bool
+    ) -> "tuple[float, bool]":
+        """Returns (matched_count_contribution, stop) for this bucket."""
+        try:
+            if val < b.min_val:
+                return 0.0, True
+            if self._is_above_bucket_max(b, val, inclusive):
+                return float(b.count), False
+            fraction = _calc_bucket_lt_fraction(b, val, inclusive)
+            return b.count * max(0.0, min(1.0, fraction)), True
+        except TypeError:
+            return 0.0, False
+
     def _estimate_lt(self, val: Any, inclusive: bool = False) -> float:
         """Estimates less-than selectivity."""
         matched_count = 0.0
-
         for b in self.buckets:
-            try:
-                if val < b.min_val:
-                    break
-                if val > b.max_val or (inclusive and val == b.max_val):
-                    matched_count += b.count
-                else:
-                    fraction = _calc_bucket_lt_fraction(b, val, inclusive)
-                    matched_count += b.count * max(0.0, min(1.0, fraction))
-                    break
-            except TypeError:
-                continue
-
+            contrib, stop = self._process_lt_bucket(b, val, inclusive)
+            matched_count += contrib
+            if stop:
+                break
         return max(0.001, min(1.0, matched_count / self.total_count))

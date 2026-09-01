@@ -76,11 +76,7 @@ def _seed_intelligence_requirements(
         )
 
 
-def _print_cycle_details(
-    context: PhaseContext, cycle_id: str, elapsed_ms: float
-) -> None:
-    """Prints verbose execution summary for an intelligence cycle."""
-    print(f"[+] Cycle {cycle_id} Completed in {elapsed_ms:.2f}ms")
+def _print_phase_matrix(context: PhaseContext) -> None:
     print("    Phase Execution Matrix:")
     for phase in [
         IntelligencePhase.PLANNING,
@@ -91,9 +87,16 @@ def _print_cycle_details(
         IntelligencePhase.EVALUATION,
     ]:
         status_enum = context.phase_statuses.get(phase, PhaseStatus.PENDING)
-        status = status_enum.value
         symbol = "✓" if status_enum == PhaseStatus.COMPLETED else "✗"
-        print(f"      [{symbol}] {phase.value:<15} : {status}")
+        print(f"      [{symbol}] {phase.value:<15} : {status_enum.value}")
+
+
+def _print_cycle_details(
+    context: PhaseContext, cycle_id: str, elapsed_ms: float
+) -> None:
+    """Prints verbose execution summary for an intelligence cycle."""
+    print(f"[+] Cycle {cycle_id} Completed in {elapsed_ms:.2f}ms")
+    _print_phase_matrix(context)
 
     print(
         f"    Records Collected: {len(context.raw_records)} | "
@@ -111,6 +114,17 @@ def _print_cycle_details(
     print("-" * 80)
 
 
+def _exec_orchestrator_cycle(
+    orchestrator: ClosedLoopIntelligenceEngine,
+    cycle_id: str,
+    args: argparse.Namespace,
+) -> PhaseContext:
+    if getattr(args, "streaming", False):
+        chunk_size = getattr(args, "chunk_size", 20)
+        return orchestrator.stream_cycle(cycle_id=cycle_id, chunk_size=chunk_size)
+    return orchestrator.run_cycle(cycle_id=cycle_id)
+
+
 def _run_single_cycle(
     orchestrator: ClosedLoopIntelligenceEngine,
     cycle_id: str,
@@ -118,13 +132,7 @@ def _run_single_cycle(
 ) -> Dict[str, Any]:
     """Executes a single cycle and returns summary dict."""
     start_time = time.perf_counter()
-    if getattr(args, "streaming", False):
-        chunk_size = getattr(args, "chunk_size", 20)
-        context: PhaseContext = orchestrator.stream_cycle(
-            cycle_id=cycle_id, chunk_size=chunk_size
-        )
-    else:
-        context = orchestrator.run_cycle(cycle_id=cycle_id)
+    context = _exec_orchestrator_cycle(orchestrator, cycle_id, args)
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
     if not args.quiet and not args.json:
@@ -154,31 +162,62 @@ def _format_cycle_id(cycle_id_arg: Optional[str], index: int, total_cycles: int)
     return f"{cycle_prefix}_{index+1}" if total_cycles > 1 else cycle_prefix
 
 
-def run_cycle_command(args: argparse.Namespace) -> int:
-    """Executes one or more intelligence cycles."""
-    if not args.quiet and not args.json:
-        _print_banner()
-
-    workspace_dir = os.path.abspath(args.workdir)
-    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
-    _seed_intelligence_requirements(orchestrator, getattr(args, "topics", None))
-
-    cycles_to_run = max(1, getattr(args, "cycles", 1))
+def _run_all_cycles(
+    orchestrator: ClosedLoopIntelligenceEngine, args: argparse.Namespace, cycles_to_run: int
+) -> List[Dict[str, Any]]:
     results_summary: List[Dict[str, Any]] = []
-
     for i in range(cycles_to_run):
         cycle_id = _format_cycle_id(getattr(args, "cycle_id", None), i, cycles_to_run)
         if not args.quiet and not args.json:
-            print(
-                f"[*] Starting Intelligence Cycle [{i+1}/{cycles_to_run}]: {cycle_id}"
-            )
+            print(f"[*] Starting Intelligence Cycle [{i+1}/{cycles_to_run}]: {cycle_id}")
         cycle_result = _run_single_cycle(orchestrator, cycle_id, args)
         results_summary.append(cycle_result)
+    return results_summary
 
-    if getattr(args, "json", False):
+
+def _init_cycle_orchestrator(args: argparse.Namespace) -> ClosedLoopIntelligenceEngine:
+    if not (args.quiet or args.json):
+        _print_banner()
+    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=os.path.abspath(args.workdir))
+    _seed_intelligence_requirements(orchestrator, getattr(args, "topics", None))
+    return orchestrator
+
+
+def _output_cycle_summary(results_summary: List[Dict[str, Any]], as_json: bool) -> int:
+    if as_json:
         print(json.dumps(results_summary, indent=2, ensure_ascii=False))
-
     return 1 if any(len(r["errors"]) > 0 for r in results_summary) else 0
+
+
+def run_cycle_command(args: argparse.Namespace) -> int:
+    """Executes one or more intelligence cycles."""
+    orchestrator = _init_cycle_orchestrator(args)
+    cycles_to_run = max(1, getattr(args, "cycles", 1))
+    results_summary = _run_all_cycles(orchestrator, args, cycles_to_run)
+    return _output_cycle_summary(results_summary, getattr(args, "json", False))
+
+
+def _run_daemon_step(orchestrator: ClosedLoopIntelligenceEngine, cycle_count: int) -> None:
+    print(f"\n[{datetime.now(timezone.utc).isoformat()}] --- Daemon Cycle #{cycle_count} ---")
+    ctx = orchestrator.run_cycle(cycle_id=f"daemon_{int(time.time())}_{cycle_count}")
+    print(
+        f"[+] Completed cycle {ctx.cycle_id}: {len(ctx.processed_records)} records, "
+        f"{len(ctx.products)} products"
+    )
+
+
+def _daemon_loop(
+    orchestrator: ClosedLoopIntelligenceEngine, interval: int, max_cycles: int
+) -> None:
+    cycle_count = 0
+    while True:
+        cycle_count += 1
+        _run_daemon_step(orchestrator, cycle_count)
+        if max_cycles > 0 and cycle_count >= max_cycles:
+            print(f"[*] Reached max cycles ({max_cycles}). Exiting daemon.")
+            break
+        print(f"[*] Sleeping for {interval} seconds until next cycle...")
+        time.sleep(interval)
 
 
 def run_daemon_command(args: argparse.Namespace) -> int:
@@ -186,56 +225,40 @@ def run_daemon_command(args: argparse.Namespace) -> int:
     _print_banner()
     interval = max(5, args.interval)
     max_cycles = args.max_cycles
-    workspace_dir = os.path.abspath(args.workdir)
-    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
+    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=os.path.abspath(args.workdir))
 
     max_cycles_label = "Infinite" if max_cycles == 0 else str(max_cycles)
-    print(
-        f"[*] Starting Autonomous Orchestrator Daemon (Interval: {interval}s, Max Cycles: {max_cycles_label})"
-    )
+    print(f"[*] Starting Autonomous Orchestrator Daemon (Interval: {interval}s, Max Cycles: {max_cycles_label})")
 
-    cycle_count = 0
     try:
-        while True:
-            cycle_count += 1
-            print(
-                f"\n[{datetime.now(timezone.utc).isoformat()}] --- Daemon Cycle #{cycle_count} ---"
-            )
-            ctx = orchestrator.run_cycle(
-                cycle_id=f"daemon_{int(time.time())}_{cycle_count}"
-            )
-            print(
-                f"[+] Completed cycle {ctx.cycle_id}: {len(ctx.processed_records)} records, "
-                f"{len(ctx.products)} products"
-            )
-
-            if max_cycles > 0 and cycle_count >= max_cycles:
-                print(f"[*] Reached max cycles ({max_cycles}). Exiting daemon.")
-                break
-
-            print(f"[*] Sleeping for {interval} seconds until next cycle...")
-            time.sleep(interval)
+        _daemon_loop(orchestrator, interval, max_cycles)
     except KeyboardInterrupt:
         print("\n[*] Daemon interrupted by user. Shutting down gracefully.")
-
     return 0
+
+
+def _parse_pir_horizon(raw_horizon: str) -> Any:
+    from intelligence.pir.models import PIRHorizon
+    try:
+        return PIRHorizon(raw_horizon.lower())
+    except ValueError:
+        return PIRHorizon.OPERATIONAL
+
+
+def _validate_pir_args(args: argparse.Namespace) -> bool:
+    return bool(args.id and args.title and args.topics)
 
 
 def _add_pir_requirement(
     orchestrator: ClosedLoopIntelligenceEngine, args: argparse.Namespace
 ) -> int:
     """Handles adding a new PIR."""
-    if not args.id or not args.title or not args.topics:
+    if not _validate_pir_args(args):
         print("[ERROR] --id, --title, and --topics are required to add a PIR.")
         return 1
-    from intelligence.pir.models import PIRHorizon
 
     topics = [t.strip() for t in args.topics.split(",") if t.strip()]
-    raw_horizon = getattr(args, "horizon", "operational").lower()
-    try:
-        horizon_val = PIRHorizon(raw_horizon)
-    except ValueError:
-        horizon_val = PIRHorizon.OPERATIONAL
+    horizon_val = _parse_pir_horizon(getattr(args, "horizon", "operational"))
 
     req = orchestrator.register_pir(
         req_id=args.id,
@@ -259,36 +282,44 @@ def _escalate_pir_requirement(
     if not args.id:
         print("[ERROR] --id is required to escalate a PIR.")
         return 1
-    from intelligence.pir.models import PIRHorizon
 
-    reason = (
-        getattr(args, "reason", "Manual operator escalation")
-        or "Manual operator escalation"
-    )
-    raw_horizon = getattr(args, "horizon", "tactical").lower()
-    try:
-        target_h = PIRHorizon(raw_horizon)
-    except ValueError:
-        target_h = PIRHorizon.TACTICAL
+    reason = getattr(args, "reason", "Manual operator escalation") or "Manual operator escalation"
+    target_h = _parse_pir_horizon(getattr(args, "horizon", "tactical"))
 
     success = orchestrator.escalate_pir(
         req_id=args.id, reason=reason, target_horizon=target_h
     )
-    if success:
-        req = orchestrator.pir_manager.get_requirement(args.id)
-        assert req is not None
-        print(
-            f"[+] Successfully escalated PIR [{req.req_id}] to {req.horizon.value.upper()}"
-        )
-        print(f"    Escalation Level: {req.escalation_level}")
-        print(f"    New Priority Score: {req.priority_score:.2f}")
-        print(f"    Reason: {reason}")
-        return 0
-    else:
-        print(
-            f"[ERROR] Failed to escalate PIR [{args.id}]. Not found or reached max level."
-        )
+    if not success:
+        print(f"[ERROR] Failed to escalate PIR [{args.id}]. Not found or reached max level.")
         return 1
+
+    req = orchestrator.pir_manager.get_requirement(args.id)
+    assert req is not None
+    print(f"[+] Successfully escalated PIR [{req.req_id}] to {req.horizon.value.upper()}")
+    print(f"    Escalation Level: {req.escalation_level}")
+    print(f"    New Priority Score: {req.priority_score:.2f}")
+    print(f"    Reason: {reason}")
+    return 0
+
+
+def _print_active_pir(r: Any) -> None:
+    horizon_tag = f"[{r.horizon.value.upper()}]"
+    escalation_tag = f" (Escalation Lvl: {r.escalation_level})" if r.escalation_level > 0 else ""
+    print(f"  {horizon_tag} [{r.req_id}] {r.title} (Priority: {r.priority_score}){escalation_tag}")
+    print(f"    Topics: {', '.join(r.target_topics)}")
+    if r.description:
+        print(f"    Desc:   {r.description}")
+    print()
+
+
+def _print_topic_weights(weights: Dict[str, float]) -> None:
+    print("--- Current Topic Priority Distribution ---")
+    if not weights:
+        print("  (No topic weights calculated yet)")
+        return
+    for topic, weight in sorted(weights.items(), key=lambda x: x[1], reverse=True):
+        bar = "#" * int(weight * 30)
+        print(f"  {topic:<25} : {weight:.4f} | {bar}")
 
 
 def _list_pir_requirements(
@@ -305,28 +336,9 @@ def _list_pir_requirements(
         print("  (No custom PIRs currently registered. Built-in defaults active.)")
     else:
         for r in active_reqs:
-            horizon_tag = f"[{r.horizon.value.upper()}]"
-            escalation_tag = (
-                f" (Escalation Lvl: {r.escalation_level})"
-                if r.escalation_level > 0
-                else ""
-            )
-            print(
-                f"  {horizon_tag} [{r.req_id}] {r.title} (Priority: {r.priority_score}){escalation_tag}"
-            )
-            print(f"    Topics: {', '.join(r.target_topics)}")
-            if r.description:
-                print(f"    Desc:   {r.description}")
-            print()
+            _print_active_pir(r)
 
-    print("--- Current Topic Priority Distribution ---")
-    if not weights:
-        print("  (No topic weights calculated yet)")
-    else:
-        for topic, weight in sorted(weights.items(), key=lambda x: x[1], reverse=True):
-            bar = "#" * int(weight * 30)
-            print(f"  {topic:<25} : {weight:.4f} | {bar}")
-
+    _print_topic_weights(weights)
     return 0
 
 
@@ -367,14 +379,16 @@ def _list_hypotheses(
     return 0
 
 
+def _validate_hypothesis_args(args: argparse.Namespace) -> bool:
+    return bool(args.id and args.statement and args.topics)
+
+
 def _add_hypothesis(
     orchestrator: ClosedLoopIntelligenceEngine, args: argparse.Namespace
 ) -> int:
     """Registers a manual hypothesis proposition."""
-    if not args.id or not args.statement or not args.topics:
-        print(
-            "[ERROR] --id, --statement, and --topics are required to add a hypothesis."
-        )
+    if not _validate_hypothesis_args(args):
+        print("[ERROR] --id, --statement, and --topics are required to add a hypothesis.")
         return 1
     topics = [t.strip() for t in args.topics.split(",") if t.strip()]
     hypo = orchestrator.register_hypothesis(
@@ -421,7 +435,7 @@ def run_credibility_command(args: argparse.Namespace) -> int:
     engine = AdmiraltyEngine()
     if getattr(args, "cred_action", None) == "rate":
         text = getattr(args, "text", "")
-        source = getattr(args, "source", "unknown")
+        source = getattr(args, "source", "arxiv")
         if not text:
             print("[ERROR] --text is required for credibility assessment.")
             return 1
@@ -440,30 +454,34 @@ def run_credibility_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _list_recoverable_cycles(orchestrator: ClosedLoopIntelligenceEngine) -> int:
+    cycles = orchestrator.wal.list_active_cycles()
+    print("=================================================================")
+    print("   EVENT SOURCING WAL & CRASH RECOVERY CYCLES")
+    print("=================================================================")
+    if not cycles:
+        print("  (No WAL cycles found in outputs/wal/)")
+        return 0
+    for c in cycles:
+        status_icon = (
+            "✓"
+            if c["status"] == "completed"
+            else ("✗" if c["status"] == "failed" else "⏳")
+        )
+        print(
+            f"  [{status_icon}] {c['cycle_id']:<30} | Status: {c['status']:<11} | "
+            f"Events: {c['total_events']:<3} | Started: {c['started_at']}"
+        )
+    return 0
+
+
 def run_recover_command(args: argparse.Namespace) -> int:
     """Manages WAL state replay and cycle crash recovery."""
     workspace_dir = os.path.abspath(args.workdir)
     orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
 
     if getattr(args, "list", False):
-        cycles = orchestrator.wal.list_active_cycles()
-        print("=================================================================")
-        print("   EVENT SOURCING WAL & CRASH RECOVERY CYCLES")
-        print("=================================================================")
-        if not cycles:
-            print("  (No WAL cycles found in outputs/wal/)")
-            return 0
-        for c in cycles:
-            status_icon = (
-                "✓"
-                if c["status"] == "completed"
-                else ("✗" if c["status"] == "failed" else "⏳")
-            )
-            print(
-                f"  [{status_icon}] {c['cycle_id']:<30} | Status: {c['status']:<11} | "
-                f"Events: {c['total_events']:<3} | Started: {c['started_at']}"
-            )
-        return 0
+        return _list_recoverable_cycles(orchestrator)
 
     cycle_id = getattr(args, "cycle_id", None)
     if not cycle_id:
@@ -506,33 +524,17 @@ def run_harvest_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def run_status_command(args: argparse.Namespace) -> int:
-    """Displays comprehensive repository and intelligence status."""
-    workspace_dir = os.path.abspath(args.workdir)
-    print("=================================================================")
-    print("   ARXIV SECURITY PAPERS & INTELLIGENCE PLATFORM STATUS")
-    print("=================================================================")
-    print(f"Workspace Directory : {workspace_dir}")
-
-    # 1. OKF Papers Count
+def _count_okf_papers(workspace_dir: str) -> int:
     okf_dir = os.path.join(workspace_dir, "outputs", "okf_papers")
-    paper_count = 0
-    if os.path.exists(okf_dir):
-        for _, _, files in os.walk(okf_dir):
-            paper_count += sum(1 for f in files if f.endswith(".md"))
-    print(f"OKF Papers Ingested : {paper_count:,} documents")
+    if not os.path.exists(okf_dir):
+        return 0
+    return sum(
+        sum(1 for f in files if f.endswith(".md"))
+        for _, _, files in os.walk(okf_dir)
+    )
 
-    # 2. Vector DB Status
-    vector_db_path = os.path.join(workspace_dir, "outputs", "vector_db", "index.json")
-    if os.path.exists(vector_db_path):
-        size_mb = os.path.getsize(vector_db_path) / (1024 * 1024)
-        print(
-            f"Vector Search Index : Active ({size_mb:.1f} MB in outputs/vector_db/index.json)"
-        )
-    else:
-        print("Vector Search Index : Not built (Run 'make build_vector_db')")
 
-    # 3. Executive Summaries Status
+def _print_summary_status(workspace_dir: str) -> None:
     summaries_dir = os.path.join(workspace_dir, "outputs", "executive_summaries")
     tiers = ["01_per_run", "02_daily", "03_monthly", "04_quarterly", "05_annual"]
     print("Executive Summaries :")
@@ -545,11 +547,28 @@ def run_status_command(args: argparse.Namespace) -> int:
         )
         print(f"  - {tier:<15} : {count} summaries")
 
-    # 4. Active PIRs
+
+def run_status_command(args: argparse.Namespace) -> int:
+    """Displays comprehensive repository and intelligence status."""
+    workspace_dir = os.path.abspath(args.workdir)
+    print("=================================================================")
+    print("   ARXIV SECURITY PAPERS & INTELLIGENCE PLATFORM STATUS")
+    print("=================================================================")
+    print(f"Workspace Directory : {workspace_dir}")
+    print(f"OKF Papers Ingested : {_count_okf_papers(workspace_dir):,} documents")
+
+    vector_db_path = os.path.join(workspace_dir, "outputs", "vector_db", "index.json")
+    if os.path.exists(vector_db_path):
+        size_mb = os.path.getsize(vector_db_path) / (1024 * 1024)
+        print(f"Vector Search Index : Active ({size_mb:.1f} MB in outputs/vector_db/index.json)")
+    else:
+        print("Vector Search Index : Not built (Run 'make build_vector_db')")
+
+    _print_summary_status(workspace_dir)
+
     orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=workspace_dir)
     active_pirs = orchestrator.pir_manager.list_active_requirements()
     print(f"Active PIRs         : {len(active_pirs)} requirements active")
-
     return 0
 
 
@@ -870,20 +889,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _ensure_cycle_defaults(args: argparse.Namespace) -> None:
+    defaults = {
+        "cycles": 1,
+        "cycle_id": None,
+        "topics": "",
+        "quota": 20,
+        "json": False,
+        "quiet": False,
+    }
+    for k, v in defaults.items():
+        if not hasattr(args, k):
+            setattr(args, k, v)
+
+
 def _handle_cycle_cli(args: argparse.Namespace) -> int:
     """Dispatches to cycle command with default attributes."""
-    if not hasattr(args, "cycles"):
-        args.cycles = 1
-    if not hasattr(args, "cycle_id"):
-        args.cycle_id = None
-    if not hasattr(args, "topics"):
-        args.topics = ""
-    if not hasattr(args, "quota"):
-        args.quota = 20
-    if not hasattr(args, "json"):
-        args.json = False
-    if not hasattr(args, "quiet"):
-        args.quiet = False
+    _ensure_cycle_defaults(args)
     return run_cycle_command(args)
 
 

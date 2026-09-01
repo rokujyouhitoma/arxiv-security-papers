@@ -132,6 +132,18 @@ class QuorumCoordinator:
             if val is None or val.clock.happens_before(latest_version.clock):
                 replica.put(key, latest_version)
 
+    def _resolve_valid_versions(
+        self,
+        responses: List[tuple["QuorumReplica", "Optional[VersionedValue]"]],
+    ) -> Optional["VersionedValue"]:
+        valid_versions = [v for _, v in responses if v is not None]
+        if not valid_versions:
+            return None
+        resolved = resolve_conflict(
+            valid_versions, strategy=ConflictResolutionStrategy.LWW
+        )
+        return resolved[0] if resolved else None
+
     def read(
         self,
         key: str,
@@ -141,19 +153,9 @@ class QuorumCoordinator:
         Executes a distributed read with read quorum R and performs Read Repair.
         """
         responses = self._collect_responses(key)
-
-        valid_versions = [v for _, v in responses if v is not None]
-        if not valid_versions:
+        latest_version = self._resolve_valid_versions(responses)
+        if latest_version is None:
             return None
-
-        resolved = resolve_conflict(
-            valid_versions, strategy=ConflictResolutionStrategy.LWW
-        )
-        if not resolved:
-            return None
-
-        latest_version = resolved[0]
         if enable_read_repair:
             self._apply_read_repair(key, latest_version, responses)
-
         return latest_version

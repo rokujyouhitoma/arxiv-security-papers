@@ -39,32 +39,30 @@ class Cursor:
         ] = None
         self.rowcount: int = -1
 
-    def execute(self, sql: str, params: Optional[Sequence[Any]] = None) -> "Cursor":
-        """Executes a SQL query with optional positional parameter bindings."""
+    @staticmethod
+    def _format_param_val(p: Any) -> str:
+        if isinstance(p, (list, tuple)):
+            return str(list(p))
+        if isinstance(p, (int, float)):
+            return str(p)
+        return f"'{p}'"
+
+    @staticmethod
+    def _bind_params(sql: str, params: Optional[Sequence[Any]]) -> str:
+        if not params:
+            return sql
         query = sql
-        if params:
-            # Replace '?' with string/numeric/list representations
-            for p in params:
-                if isinstance(p, (list, tuple)):
-                    rep = str(list(p))
-                elif isinstance(p, (int, float)):
-                    rep = str(p)
-                else:
-                    rep = f"'{p}'"
-                query = query.replace("?", rep, 1)
+        for p in params:
+            query = query.replace("?", Cursor._format_param_val(p), 1)
+        return query
 
-        resp = self._connection._client.execute_sql(query, role=self._connection.role)
-        if resp.get("status") != "ok":
-            raise ProgrammingError(resp.get("error", "SQL Execution failed"))
-
-        result = resp.get("result", {})
+    def _update_cursor_metadata(self, result: Dict[str, Any]) -> None:
         self._rows = result.get("rows", [])
         self._pos = 0
         self.rowcount = result.get(
             "updated_count",
             result.get("deleted_count", result.get("inserted_count", len(self._rows))),
         )
-
         if self._rows:
             sample = self._rows[0]
             self.description = [
@@ -73,6 +71,13 @@ class Cursor:
         else:
             self.description = None
 
+    def execute(self, sql: str, params: Optional[Sequence[Any]] = None) -> "Cursor":
+        """Executes a SQL query with optional positional parameter bindings."""
+        query = self._bind_params(sql, params)
+        resp = self._connection._client.execute_sql(query, role=self._connection.role)
+        if resp.get("status") != "ok":
+            raise ProgrammingError(resp.get("error", "SQL Execution failed"))
+        self._update_cursor_metadata(resp.get("result", {}))
         return self
 
     def fetchone(self) -> Optional[Tuple[Any, ...]]:

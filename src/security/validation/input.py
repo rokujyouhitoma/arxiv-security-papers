@@ -76,6 +76,15 @@ ALL_SECURITY_PATTERN_GROUPS: List[Tuple[str, List[Tuple[str, str]]]] = [
 ]
 
 
+def _check_pattern_group(
+    prefix: str, group: List[Tuple[str, str]], text: str, warnings: List[str]
+) -> None:
+    """Appends matching patterns from a group to warnings list."""
+    for pattern, label in group:
+        if re.search(pattern, text):
+            warnings.append(f"{prefix}: {label}")
+
+
 def detect_dangerous_patterns(text: str) -> List[str]:
     """
     Scans input string against security patterns and returns a list of detected threats.
@@ -85,8 +94,5 @@ def detect_dangerous_patterns(text: str) -> List[str]:
 
     warnings: List[str] = []
     for prefix, group in ALL_SECURITY_PATTERN_GROUPS:
-        for pattern, label in group:
-            if re.search(pattern, text):
-                warnings.append(f"{prefix}: {label}")
-
+        _check_pattern_group(prefix, group, text, warnings)
     return warnings

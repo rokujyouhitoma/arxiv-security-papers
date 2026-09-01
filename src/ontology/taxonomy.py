@@ -218,20 +218,8 @@ class TaxonomyRegistry:
     NIST_PATTERN = re.compile(r"\b([A-Z]{2}-\d+(?:\(\d+\))?)\b")
 
     @classmethod
-    def normalize_term(cls, raw_term: str) -> Optional[Tuple[str, str, str]]:
-        """
-        Normalizes a raw keyword or phrase into (Canonical ID, EntityType, DisplayName).
-        Returns None if no standard mapping is found.
-        """
-        if not raw_term:
-            return None
-        cleaned = raw_term.strip().lower()
-
-        # 1. Direct dictionary match
-        if cleaned in cls.SYNONYM_MAPPINGS:
-            return cls.SYNONYM_MAPPINGS[cleaned]
-
-        # 2. Check Standard IDs (CWE, CVE, MITRE ATT&CK)
+    def _match_pattern_id(cls, raw_term: str) -> Optional[Tuple[str, str, str]]:
+        """Matches CWE, CVE, or MITRE ATT&CK patterns."""
         cwe_match = cls.CWE_PATTERN.search(raw_term)
         if cwe_match:
             cwe_id = cwe_match.group(1).upper()
@@ -246,10 +234,34 @@ class TaxonomyRegistry:
         if mitre_match:
             t_id = mitre_match.group(1).upper()
             return f"AttackTechnique:{t_id}", "AttackTechnique", f"MITRE {t_id}"
+        return None
 
-        # 3. Partial substring matching against known keys
+    @classmethod
+    def _match_substring_synonym(cls, cleaned: str) -> Optional[Tuple[str, str, str]]:
+        """Finds partial substring match in known synonym keys."""
         for key, val in cls.SYNONYM_MAPPINGS.items():
             if key in cleaned:
                 return val
-
         return None
+
+    @classmethod
+    def normalize_term(cls, raw_term: str) -> Optional[Tuple[str, str, str]]:
+        """
+        Normalizes a raw keyword or phrase into (Canonical ID, EntityType, DisplayName).
+        Returns None if no standard mapping is found.
+        """
+        if not raw_term:
+            return None
+        cleaned = raw_term.strip().lower()
+
+        # 1. Direct dictionary match
+        if cleaned in cls.SYNONYM_MAPPINGS:
+            return cls.SYNONYM_MAPPINGS[cleaned]
+
+        # 2. Pattern matches (CWE, CVE, MITRE)
+        pattern_res = cls._match_pattern_id(raw_term)
+        if pattern_res is not None:
+            return pattern_res
+
+        # 3. Partial substring matching
+        return cls._match_substring_synonym(cleaned)

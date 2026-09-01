@@ -54,46 +54,36 @@ class TransactionSnapshot:
         self.active_tx_ids = set(active_tx_ids)
         self.committed_tx_ids = set(committed_tx_ids)
 
+    def _check_xmin_visibility(self, version: "VersionedTuple") -> "Optional[bool]":
+        """Returns True/False if xmin determines visibility, else None to continue."""
+        if version.xmin == self.snapshot_tx_id:
+            return version.xmax != self.snapshot_tx_id
+        if version.xmin in self.active_tx_ids:
+            return False
+        if version.xmin not in self.committed_tx_ids:
+            return False
+        return None  # xmin OK, check xmax
+
+    def _check_xmax_visibility(self, version: "VersionedTuple") -> bool:
+        """Returns visibility based on xmax after xmin has been verified."""
+        if version.xmax == 0:
+            return True
+        if version.xmax == self.snapshot_tx_id:
+            return False
+        if version.xmax in self.active_tx_ids:
+            return True
+        if version.xmax in self.committed_tx_ids:
+            return False
+        return True
+
     def is_visible(self, version: VersionedTuple) -> bool:
         """
         Determines if a versioned tuple is visible under this snapshot.
-        Rules:
-        1. Created by this transaction: visible unless deleted by this transaction.
-        2. Created by an active/uncommitted transaction at snapshot time: invisible.
-        3. Created by a transaction committed before snapshot: visible, unless
-           deleted by a transaction committed before snapshot or by this transaction.
         """
-        # Rule 1: Check creation (xmin)
-        if version.xmin == self.snapshot_tx_id:
-            # Created by self: visible unless deleted by self
-            return version.xmax != self.snapshot_tx_id
-
-        if version.xmin in self.active_tx_ids:
-            # Creator was still in flight at snapshot time
-            return False
-
-        if version.xmin not in self.committed_tx_ids:
-            # Creator has not committed
-            return False
-
-        # Rule 2: Check deletion (xmax)
-        if version.xmax == 0:
-            return True
-
-        if version.xmax == self.snapshot_tx_id:
-            # Deleted by self
-            return False
-
-        if version.xmax in self.active_tx_ids:
-            # Deleter was still in flight at snapshot time, so delete not yet effective
-            return True
-
-        if version.xmax in self.committed_tx_ids:
-            # Deleter was already committed at snapshot time, tuple is dead
-            return False
-
-        # Deleter uncommitted
-        return True
+        xmin_result = self._check_xmin_visibility(version)
+        if xmin_result is not None:
+            return xmin_result
+        return self._check_xmax_visibility(version)
 
 
 class MVCCManager:
@@ -155,33 +145,30 @@ class MVCCManager:
             self._versions[tuple_id].append(version)
             return version
 
+    def _check_write_conflict(self, ver: "VersionedTuple", tx_id: int) -> None:
+        if ver.xmax != 0 and ver.xmax != tx_id and ver.xmax in self._active_txs:
+            raise ValueError(
+                f"Write-write conflict on tuple {ver.tuple_id!r} by concurrent Tx {ver.xmax}"
+            )
+
+    def _find_visible_version(
+        self, snapshot: TransactionSnapshot, tuple_id: str
+    ) -> "Optional[VersionedTuple]":
+        for ver in reversed(self._versions.get(tuple_id, [])):
+            if snapshot.is_visible(ver):
+                return ver
+        return None
+
     def update(self, tx_id: int, tuple_id: str, new_data: Any) -> VersionedTuple:
         """Updates a tuple by marking the visible version's xmax and adding a new version."""
         with self._lock:
             snapshot = self.get_snapshot(tx_id)
-            existing_versions = self._versions.get(tuple_id, [])
-            target_version: Optional[VersionedTuple] = None
-
-            for ver in reversed(existing_versions):
-                if snapshot.is_visible(ver):
-                    target_version = ver
-                    break
-
+            target_version = self._find_visible_version(snapshot, tuple_id)
             if target_version is None:
                 raise KeyError(
                     f"Tuple {tuple_id!r} not found or not visible to Tx {tx_id}"
                 )
-
-            # Check if already modified by another concurrent transaction
-            if (
-                target_version.xmax != 0
-                and target_version.xmax != tx_id
-                and target_version.xmax in self._active_txs
-            ):
-                raise ValueError(
-                    f"Write-write conflict on tuple {tuple_id!r} by concurrent Tx {target_version.xmax}"
-                )
-
+            self._check_write_conflict(target_version, tx_id)
             target_version.xmax = tx_id
             new_version = VersionedTuple(tuple_id=tuple_id, data=new_data, xmin=tx_id)
             self._versions[tuple_id].append(new_version)
@@ -191,20 +178,12 @@ class MVCCManager:
         """Deletes a tuple by setting xmax on the visible version."""
         with self._lock:
             snapshot = self.get_snapshot(tx_id)
-            existing_versions = self._versions.get(tuple_id, [])
-            for ver in reversed(existing_versions):
-                if snapshot.is_visible(ver):
-                    if (
-                        ver.xmax != 0
-                        and ver.xmax != tx_id
-                        and ver.xmax in self._active_txs
-                    ):
-                        raise ValueError(
-                            f"Write-write conflict on tuple {tuple_id!r} by concurrent Tx {ver.xmax}"
-                        )
-                    ver.xmax = tx_id
-                    return True
-            return False
+            ver = self._find_visible_version(snapshot, tuple_id)
+            if ver is None:
+                return False
+            self._check_write_conflict(ver, tx_id)
+            ver.xmax = tx_id
+            return True
 
     def get(self, tx_id: int, tuple_id: str) -> Optional[Any]:
         """Gets visible tuple data for transaction under Snapshot Isolation."""
@@ -234,59 +213,63 @@ class MVCCManager:
             self._committed_txs.add(tx_id)
             self._snapshots.pop(tx_id, None)
 
+    def _clean_aborted_versions(
+        self, tx_id: int, version_list: "List[VersionedTuple]"
+    ) -> "List[VersionedTuple]":
+        cleaned: List[VersionedTuple] = []
+        for ver in version_list:
+            if ver.xmin == tx_id:
+                continue
+            if ver.xmax == tx_id:
+                ver.xmax = 0
+            cleaned.append(ver)
+        return cleaned
+
     def abort_transaction(self, tx_id: int) -> None:
         """Rolls back transaction, discarding its versions and resetting xmax."""
         with self._lock:
             self._active_txs.discard(tx_id)
             self._aborted_txs.add(tx_id)
             self._snapshots.pop(tx_id, None)
-
-            # Cleanup versions created or modified by tx_id
             for tuple_id, version_list in list(self._versions.items()):
-                cleaned: List[VersionedTuple] = []
-                for ver in version_list:
-                    if ver.xmin == tx_id:
-                        # Version was created by aborted tx; discard it
-                        continue
-                    if ver.xmax == tx_id:
-                        # Version was deleted by aborted tx; revert deletion
-                        ver.xmax = 0
-                    cleaned.append(ver)
-
+                cleaned = self._clean_aborted_versions(tx_id, version_list)
                 if cleaned:
                     self._versions[tuple_id] = cleaned
                 else:
                     self._versions.pop(tuple_id, None)
 
+    def _is_vacuum_purgeable(self, ver: "VersionedTuple", min_active_tx: int) -> bool:
+        return (
+            ver.xmax != 0
+            and ver.xmax in self._committed_txs
+            and ver.xmax < min_active_tx
+        )
+
+    def _vacuum_tuple(
+        self, tuple_id: int, version_list: List[VersionedTuple], min_active_tx: int
+    ) -> int:
+
+        retained = [
+            v for v in version_list if not self._is_vacuum_purgeable(v, min_active_tx)
+        ]
+        purged = len(version_list) - len(retained)
+        if retained:
+            self._versions[tuple_id] = retained
+        else:
+            self._versions.pop(tuple_id, None)
+            purged += 1
+        return purged
+
     def vacuum(self) -> int:
         """
-        Garbage-collects old tuple versions that are no longer visible to any active snapshot.
+        Garbage-collects old tuple versions no longer visible to any active snapshot.
         Returns count of purged versions.
         """
         with self._lock:
-            if not self._active_txs:
-                min_active_tx = self._tx_counter + 1
-            else:
-                min_active_tx = min(self._active_txs)
-
-            purged_count = 0
-            for tuple_id, version_list in list(self._versions.items()):
-                retained: List[VersionedTuple] = []
-                for ver in version_list:
-                    # If tuple was deleted and commited before min_active_tx, it can never be seen
-                    if (
-                        ver.xmax != 0
-                        and ver.xmax in self._committed_txs
-                        and ver.xmax < min_active_tx
-                    ):
-                        purged_count += 1
-                        continue
-                    retained.append(ver)
-
-                if retained:
-                    self._versions[tuple_id] = retained
-                else:
-                    self._versions.pop(tuple_id, None)
-                    purged_count += 1
-
-            return purged_count
+            min_active_tx = (
+                min(self._active_txs) if self._active_txs else self._tx_counter + 1
+            )
+            return sum(
+                self._vacuum_tuple(tuple_id, version_list, min_active_tx)
+                for tuple_id, version_list in list(self._versions.items())
+            )

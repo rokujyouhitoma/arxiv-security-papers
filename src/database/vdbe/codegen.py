@@ -20,21 +20,27 @@ class CodeGenerator:
     Emits register-based VDBE bytecodes for SQL statements.
     """
 
+    def _compile_tx(self, stmt: SQLStatement, program: VDBEProgram) -> bool:
+        if isinstance(stmt, BeginStatement):
+            program.add(OpCode.BEGIN_TX)
+            return True
+        if isinstance(stmt, CommitStatement):
+            program.add(OpCode.COMMIT_TX)
+            return True
+        if isinstance(stmt, RollbackStatement):
+            program.add(OpCode.ROLLBACK_TX)
+            return True
+        return False
+
     def generate(self, stmt: SQLStatement) -> VDBEProgram:
         program = VDBEProgram()
         program.add(OpCode.INIT, comment="Initialize VM")
-
         if isinstance(stmt, SelectStatement):
             self._compile_select(stmt, program)
         elif isinstance(stmt, InsertStatement):
             self._compile_insert(stmt, program)
-        elif isinstance(stmt, BeginStatement):
-            program.add(OpCode.BEGIN_TX)
-        elif isinstance(stmt, CommitStatement):
-            program.add(OpCode.COMMIT_TX)
-        elif isinstance(stmt, RollbackStatement):
-            program.add(OpCode.ROLLBACK_TX)
-
+        else:
+            self._compile_tx(stmt, program)
         program.add(OpCode.HALT, comment="Halt VM")
         return program
 

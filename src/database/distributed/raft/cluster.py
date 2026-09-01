@@ -37,18 +37,25 @@ class RaftCluster:
                 return node
         return None
 
-    def elect_leader(self, candidate_id: Optional[str] = None) -> Optional[RaftNode]:
-        """Triggers leader election on the specified candidate or first online node."""
-        if candidate_id and candidate_id in self.nodes:
-            candidate = self.nodes[candidate_id]
-            if candidate.start_election():
-                return candidate
+    def _elect_specific(self, candidate_id: str) -> Optional[RaftNode]:
+        candidate = self.nodes.get(candidate_id)
+        if candidate and candidate.start_election():
+            return candidate
+        return None
 
+    def _elect_any(self) -> Optional[RaftNode]:
         for node in self.nodes.values():
             if node.is_online and node.start_election():
                 return node
-
         return None
+
+    def elect_leader(self, candidate_id: Optional[str] = None) -> Optional[RaftNode]:
+        """Triggers leader election on the specified candidate or first online node."""
+        if candidate_id:
+            res = self._elect_specific(candidate_id)
+            if res is not None:
+                return res
+        return self._elect_any()
 
     def execute(self, command: Any) -> bool:
         """

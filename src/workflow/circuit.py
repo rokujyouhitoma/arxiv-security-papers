@@ -27,18 +27,19 @@ class CircuitBreaker:
         self.consecutive_failures: int = 0
         self.last_failure_time: float = 0.0
 
+    def _check_open_state(self, now: float) -> bool:
+        if now - self.last_failure_time >= self.cooldown_seconds:
+            self.state = CircuitState.HALF_OPEN
+            return True
+        return False
+
     def can_execute(self, current_time: Optional[float] = None) -> bool:
         """Determines if the route can accept execution attempts."""
         now = current_time if current_time is not None else time.time()
-        if self.state == CircuitState.CLOSED:
+        if self.state == CircuitState.CLOSED or self.state == CircuitState.HALF_OPEN:
             return True
-        elif self.state == CircuitState.OPEN:
-            if now - self.last_failure_time >= self.cooldown_seconds:
-                self.state = CircuitState.HALF_OPEN
-                return True
-            return False
-        elif self.state == CircuitState.HALF_OPEN:
-            return True
+        if self.state == CircuitState.OPEN:
+            return self._check_open_state(now)
         return False
 
     def record_success(self) -> None:

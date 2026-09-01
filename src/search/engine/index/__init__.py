@@ -203,29 +203,32 @@ class Segment:
     def __repr__(self) -> str:
         return f"Segment(id='{self.segment_id}', docs={self.doc_count}, live={self.live_docs_count()})"
 
-    def add_document(
-        self, doc_id: int, fields: Dict[str, Any], analyzed_fields: Dict[str, List[str]]
-    ) -> None:
-        self.stored_fields.put(doc_id, fields)
-        self.doc_count = max(self.doc_count, doc_id + 1)
-
-        # Store DocValues for sorting and faceting
+    def _store_doc_values(self, doc_id: int, fields: Dict[str, Any]) -> None:
         for fname, val in fields.items():
             if fname not in self.doc_values:
                 self.doc_values[fname] = DocValues(fname)
             self.doc_values[fname].set(doc_id, val)
 
-        # Store Postings and Field Lengths
-        for fname, tokens in analyzed_fields.items():
-            if fname not in self.field_lengths:
-                self.field_lengths[fname] = {}
-            self.field_lengths[fname][doc_id] = len(tokens)
+    def _store_postings_field(self, doc_id: int, fname: str, tokens: List[str]) -> None:
+        if fname not in self.field_lengths:
+            self.field_lengths[fname] = {}
+        self.field_lengths[fname][doc_id] = len(tokens)
 
-            for pos, token in enumerate(tokens):
-                key = f"{fname}:{token}"
-                if key not in self.postings:
-                    self.postings[key] = PostingsList(key)
-                self.postings[key].add(doc_id, position=pos)
+        for pos, token in enumerate(tokens):
+            key = f"{fname}:{token}"
+            if key not in self.postings:
+                self.postings[key] = PostingsList(key)
+            self.postings[key].add(doc_id, position=pos)
+
+    def add_document(
+        self, doc_id: int, fields: Dict[str, Any], analyzed_fields: Dict[str, List[str]]
+    ) -> None:
+        self.stored_fields.put(doc_id, fields)
+        self.doc_count = max(self.doc_count, doc_id + 1)
+        self._store_doc_values(doc_id, fields)
+
+        for fname, tokens in analyzed_fields.items():
+            self._store_postings_field(doc_id, fname, tokens)
 
     def is_deleted(self, doc_id: int) -> bool:
         return self.deleted_docs.is_deleted(doc_id)
@@ -286,16 +289,21 @@ class TieredMergePolicy:
                     dst.doc_values[dv_name] = DocValues(dv_name)
                 dst.doc_values[dv_name].set(new_id, val)
 
+    def _append_posting_entry(
+        self, dst: Segment, pkey: str, new_id: int, entry: PostingEntry
+    ) -> None:
+        if pkey not in dst.postings:
+            dst.postings[pkey] = PostingsList(pkey)
+        for pos in entry.positions:
+            dst.postings[pkey].add(new_id, position=pos)
+        if not entry.positions:
+            for _ in range(entry.tf):
+                dst.postings[pkey].add(new_id, position=None)
+
     def _merge_postings(
         self, src: Segment, dst: Segment, old_id: int, new_id: int
     ) -> None:
         for pkey, plist in src.postings.items():
             entry = plist.postings.get(old_id)
             if entry:
-                if pkey not in dst.postings:
-                    dst.postings[pkey] = PostingsList(pkey)
-                for pos in entry.positions:
-                    dst.postings[pkey].add(new_id, position=pos)
-                if not entry.positions:
-                    for _ in range(entry.tf):
-                        dst.postings[pkey].add(new_id, position=None)
+                self._append_posting_entry(dst, pkey, new_id, entry)

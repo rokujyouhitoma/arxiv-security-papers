@@ -18,6 +18,20 @@ class FieldFacet:
         self.limit = limit
         self.min_count = min_count
 
+    def _count_doc_value(self, val: Any, counter: Counter[str]) -> None:
+        if val is None:
+            return
+        if isinstance(val, list):
+            for v in val:
+                counter[str(v)] += 1
+        else:
+            counter[str(val)] += 1
+
+    def _filter_and_sort(self, counter: Counter[str]) -> Dict[str, int]:
+        filtered = {k: v for k, v in counter.items() if v >= self.min_count}
+        sorted_items = sorted(filtered.items(), key=lambda x: (-x[1], x[0]))[: self.limit]
+        return dict(sorted_items)
+
     def compute(self, segment: Segment, doc_ids: List[int]) -> Dict[str, int]:
         dv = segment.doc_values.get(self.field)
         if not dv:
@@ -25,21 +39,10 @@ class FieldFacet:
 
         counter: Counter[str] = Counter()
         for doc_id in doc_ids:
-            if segment.is_deleted(doc_id):
-                continue
-            val = dv.get(doc_id)
-            if val is not None:
-                if isinstance(val, list):
-                    for v in val:
-                        counter[str(v)] += 1
-                else:
-                    counter[str(val)] += 1
+            if not segment.is_deleted(doc_id):
+                self._count_doc_value(dv.get(doc_id), counter)
 
-        filtered = {k: v for k, v in counter.items() if v >= self.min_count}
-        sorted_items = sorted(filtered.items(), key=lambda x: (-x[1], x[0]))[
-            : self.limit
-        ]
-        return dict(sorted_items)
+        return self._filter_and_sort(counter)
 
 
 class RangeFacet:
@@ -62,8 +65,7 @@ class RangeFacet:
         for doc_id in doc_ids:
             if not segment.is_deleted(doc_id):
                 val = dv.get(doc_id)
-                if val is not None:
-                    self._increment_bucket(val, buckets, bucket_keys)
+                self._increment_bucket(val, buckets, bucket_keys)
 
         return buckets
 

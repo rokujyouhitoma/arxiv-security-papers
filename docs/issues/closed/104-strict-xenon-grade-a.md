@@ -2,7 +2,7 @@
 ID: 104
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] Xenon 循環的複雑度（CC）判定基準の厳格化（全基準 Grade A への昇格） (ID: 104)
@@ -21,8 +21,8 @@ ID: 104
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [Makefile](../../Makefile)
-- [ ] `src/` 配下の各 Python モジュール（複雑度が B 判定となっている箇所の確認およびリファクタリング）
+- [x] [Makefile](../../Makefile)
+- [x] `src/` 配下の各 Python モジュール（複雑度が B 判定となっている箇所の確認およびリファクタリング）
 
 ---
 
@@ -37,6 +37,7 @@ Target Branch: `feat/104-strict-xenon-grade-a`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `Makefile` の `xenon` ターゲットが `--max-absolute A --max-modules A --max-average A src` に更新されていること。
-- [ ] `src/` 配下の全モジュールにおいて `make xenon` がエラーなく 0 終了（Grade A 適合）すること。
-- [ ] `make check_format` および `make static_analysis` が正常に PASS すること。
+- [x] `Makefile` の `xenon` ターゲットが `--max-absolute A --max-modules A --max-average A src` に更新されていること。
+- [x] `src/` 配下の全モジュールにおいて `make xenon` がエラーなく 0 終了（Grade A 適合）すること。
+- [x] `make check_format` および `make static_analysis` が正常に PASS すること。
+

@@ -42,6 +42,37 @@ class QueryElevationComponent:
         self._rules[rule.query_phrase] = rule
         return self
 
+    def _partition_docs(
+        self,
+        score_docs: List[ScoreDoc],
+        id_field: str,
+        excluded_set: Set[str],
+        elevated_list: List[str],
+    ) -> tuple[Dict[str, ScoreDoc], List[ScoreDoc]]:
+        existing_elevated: Dict[str, ScoreDoc] = {}
+        filtered_docs: List[ScoreDoc] = []
+        for sdoc in score_docs:
+            doc_id_val = str(sdoc.fields.get(id_field, sdoc.doc_id))
+            if doc_id_val in excluded_set:
+                continue
+            if doc_id_val in elevated_list:
+                existing_elevated[doc_id_val] = sdoc
+            else:
+                filtered_docs.append(sdoc)
+        return existing_elevated, filtered_docs
+
+    def _build_promoted_doc(
+        self, idx: int, promoted_id: str, existing_elevated: Dict[str, ScoreDoc], get_doc_by_id_fn: Optional[Any]
+    ) -> Optional[ScoreDoc]:
+        if promoted_id in existing_elevated:
+            sdoc = existing_elevated[promoted_id]
+            return ScoreDoc(doc_id=sdoc.doc_id, score=1000.0 - idx, fields=sdoc.fields)
+        if get_doc_by_id_fn:
+            doc_fields = get_doc_by_id_fn(promoted_id)
+            if doc_fields:
+                return ScoreDoc(doc_id=-1, score=1000.0 - idx, fields=doc_fields)
+        return None
+
     def elevate(
         self,
         query_str: str,
@@ -55,38 +86,15 @@ class QueryElevationComponent:
         if not rule:
             return top_docs
 
-        excluded_set: Set[str] = set(rule.excluded_ids)
-        elevated_list: List[str] = rule.elevated_ids
+        existing_elevated, filtered_docs = self._partition_docs(
+            top_docs.score_docs, id_field, set(rule.excluded_ids), rule.elevated_ids
+        )
 
-        # 1. Filter out excluded documents and separate elevated documents
-        existing_elevated: Dict[str, ScoreDoc] = {}
-        filtered_docs: List[ScoreDoc] = []
+        promoted_docs = [
+            pdoc
+            for idx, pid in enumerate(rule.elevated_ids)
+            if (pdoc := self._build_promoted_doc(idx, pid, existing_elevated, get_doc_by_id_fn)) is not None
+        ]
 
-        for sdoc in top_docs.score_docs:
-            doc_id_val = str(sdoc.fields.get(id_field, sdoc.doc_id))
-            if doc_id_val in excluded_set:
-                continue
-            if doc_id_val in elevated_list:
-                existing_elevated[doc_id_val] = sdoc
-            else:
-                filtered_docs.append(sdoc)
-
-        # 2. Build elevated score docs list in specified rule order
-        promoted_docs: List[ScoreDoc] = []
-        for idx, promoted_id in enumerate(elevated_list):
-            if promoted_id in existing_elevated:
-                sdoc = existing_elevated[promoted_id]
-                # Elevate score higher than normal max score
-                promoted_docs.append(
-                    ScoreDoc(doc_id=sdoc.doc_id, score=1000.0 - idx, fields=sdoc.fields)
-                )
-            elif get_doc_by_id_fn:
-                doc_fields = get_doc_by_id_fn(promoted_id)
-                if doc_fields:
-                    promoted_docs.append(
-                        ScoreDoc(doc_id=-1, score=1000.0 - idx, fields=doc_fields)
-                    )
-
-        # 3. Concatenate promoted docs at the top
         final_score_docs = promoted_docs + filtered_docs
         return TopDocs(total_hits=len(final_score_docs), score_docs=final_score_docs)

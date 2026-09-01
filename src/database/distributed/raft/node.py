@@ -70,148 +70,145 @@ class RaftNode:
             self.role = RaftRole.FOLLOWER
             self.voted_for = None
 
-    def handle_request_vote(self, args: RequestVoteArgs) -> RequestVoteReply:
-        """Handles incoming RequestVote RPC from a Candidate."""
-        if not self.is_online:
-            return RequestVoteReply(term=self.current_term, vote_granted=False)
-
-        self._step_down_if_newer_term(args.term)
-
-        if args.term < self.current_term:
-            return RequestVoteReply(term=self.current_term, vote_granted=False)
-
-        can_vote = self.voted_for is None or self.voted_for == args.candidate_id
-
-        # Log completeness check (Raft 5.4.1)
-        log_is_up_to_date = args.last_log_term > self.last_log_term or (
+    def _log_is_up_to_date(self, args: "RequestVoteArgs") -> bool:
+        return args.last_log_term > self.last_log_term or (
             args.last_log_term == self.last_log_term
             and args.last_log_index >= self.last_log_index
         )
 
-        if can_vote and log_is_up_to_date:
+    def _can_vote_for(self, candidate_id: str) -> bool:
+        if self.voted_for is None:
+            return True
+        return self.voted_for == candidate_id
+
+    def handle_request_vote(self, args: "RequestVoteArgs") -> "RequestVoteReply":
+        """Handles incoming RequestVote RPC from a Candidate."""
+        if not self.is_online:
+            return RequestVoteReply(term=self.current_term, vote_granted=False)
+        self._step_down_if_newer_term(args.term)
+        if args.term < self.current_term:
+            return RequestVoteReply(term=self.current_term, vote_granted=False)
+        if self._can_vote_for(args.candidate_id) and self._log_is_up_to_date(args):
             self.voted_for = args.candidate_id
             return RequestVoteReply(term=self.current_term, vote_granted=True)
-
         return RequestVoteReply(term=self.current_term, vote_granted=False)
 
-    def handle_append_entries(self, args: AppendEntriesArgs) -> AppendEntriesReply:
+    def _check_log_consistency(
+        self, args: "AppendEntriesArgs"
+    ) -> "Optional[AppendEntriesReply]":
+        if args.prev_log_index >= len(self.log):
+            return AppendEntriesReply(
+                term=self.current_term, success=False, match_index=self.last_log_index
+            )
+        if self.log[args.prev_log_index].term != args.prev_log_term:
+            self.log = self.log[: args.prev_log_index]
+            return AppendEntriesReply(
+                term=self.current_term, success=False, match_index=self.last_log_index
+            )
+        return None
+
+    def _apply_commit_index(self, leader_commit: int) -> None:
+        if leader_commit > self.commit_index:
+            self.commit_index = min(leader_commit, self.last_log_index)
+            self.apply_entries()
+
+    def handle_append_entries(self, args: "AppendEntriesArgs") -> "AppendEntriesReply":
         """Handles incoming AppendEntries (Heartbeat / Replication) RPC."""
         if not self.is_online:
             return AppendEntriesReply(
                 term=self.current_term, success=False, match_index=0
             )
-
         self._step_down_if_newer_term(args.term)
-
         if args.term < self.current_term:
             return AppendEntriesReply(
                 term=self.current_term, success=False, match_index=0
             )
-
-        # Valid leader recognized
         self.role = RaftRole.FOLLOWER
-
-        # Log consistency check (Raft 5.3)
-        if args.prev_log_index >= len(self.log):
-            return AppendEntriesReply(
-                term=self.current_term, success=False, match_index=self.last_log_index
-            )
-
-        if self.log[args.prev_log_index].term != args.prev_log_term:
-            # Delete conflicting entries
-            self.log = self.log[: args.prev_log_index]
-            return AppendEntriesReply(
-                term=self.current_term, success=False, match_index=self.last_log_index
-            )
-
-        # Append new entries
+        err_reply = self._check_log_consistency(args)
+        if err_reply is not None:
+            return err_reply
         if args.entries:
             self.log = self.log[: args.prev_log_index + 1] + args.entries
-
-        # Update commit index
-        if args.leader_commit > self.commit_index:
-            self.commit_index = min(args.leader_commit, self.last_log_index)
-            self.apply_entries()
-
+        self._apply_commit_index(args.leader_commit)
         return AppendEntriesReply(
-            term=self.current_term,
-            success=True,
-            match_index=self.last_log_index,
+            term=self.current_term, success=True, match_index=self.last_log_index
         )
+
+    def _tally_peer_votes(self, args: "RequestVoteArgs") -> int:
+        """Sends RequestVote to all online peers, returns votes gained (0 if stepped down)."""
+        votes = 0
+        for peer in self.peers.values():
+            if not peer.is_online:
+                continue
+            reply = peer.handle_request_vote(args)
+            if reply.vote_granted:
+                votes += 1
+            elif reply.term > self.current_term:
+                self._step_down_if_newer_term(reply.term)
+                return -1
+        return votes
 
     def start_election(self) -> bool:
         """Starts an election to become cluster Leader."""
         if not self.is_online:
             return False
-
         self.role = RaftRole.CANDIDATE
         self.current_term += 1
         self.voted_for = self.node_id
-        votes_granted = 1  # Vote for self
-
         args = RequestVoteArgs(
             term=self.current_term,
             candidate_id=self.node_id,
             last_log_index=self.last_log_index,
             last_log_term=self.last_log_term,
         )
-
-        for peer in self.peers.values():
-            if peer.is_online:
-                reply = peer.handle_request_vote(args)
-                if reply.vote_granted:
-                    votes_granted += 1
-                elif reply.term > self.current_term:
-                    self._step_down_if_newer_term(reply.term)
-                    return False
-
-        if votes_granted >= self.majority:
+        extra_votes = self._tally_peer_votes(args)
+        if extra_votes < 0:
+            return False
+        if 1 + extra_votes >= self.majority:
             self.role = RaftRole.LEADER
-            # Initialize leader state
             for peer_id in self.peers:
                 self.next_index[peer_id] = self.last_log_index + 1
                 self.match_index[peer_id] = 0
             return True
-
         return False
+
+    def _build_append_args(self, peer_id: str) -> "AppendEntriesArgs":
+        prev_idx = self.next_index.get(peer_id, self.last_log_index) - 1
+        prev_idx = max(0, min(prev_idx, len(self.log) - 1))
+        return AppendEntriesArgs(
+            term=self.current_term,
+            leader_id=self.node_id,
+            prev_log_index=prev_idx,
+            prev_log_term=self.log[prev_idx].term,
+            entries=self.log[prev_idx + 1 :],
+            leader_commit=self.commit_index,
+        )
+
+    def _replicate_to_peer(self, peer_id: str, peer: "RaftNode") -> Optional[int]:
+        """Returns 1 if acked, 0 if failure, None if stepped down."""
+        reply = peer.handle_append_entries(self._build_append_args(peer_id))
+        if reply.success:
+            self.match_index[peer_id] = reply.match_index
+            self.next_index[peer_id] = reply.match_index + 1
+            return 1
+        if reply.term > self.current_term:
+            self._step_down_if_newer_term(reply.term)
+            return None
+        self.next_index[peer_id] = max(1, self.next_index.get(peer_id, 1) - 1)
+        return 0
 
     def replicate_log(self) -> int:
         """Replicates pending log entries to all online followers."""
         if self.role != RaftRole.LEADER:
             return 0
-
-        acked_count = 1  # Self
-
+        acked_count = 1
         for peer_id, peer in self.peers.items():
             if not peer.is_online:
                 continue
-
-            prev_idx = self.next_index.get(peer_id, self.last_log_index) - 1
-            prev_idx = max(0, min(prev_idx, len(self.log) - 1))
-            prev_term = self.log[prev_idx].term
-            entries = self.log[prev_idx + 1 :]
-
-            args = AppendEntriesArgs(
-                term=self.current_term,
-                leader_id=self.node_id,
-                prev_log_index=prev_idx,
-                prev_log_term=prev_term,
-                entries=entries,
-                leader_commit=self.commit_index,
-            )
-
-            reply = peer.handle_append_entries(args)
-            if reply.success:
-                self.match_index[peer_id] = reply.match_index
-                self.next_index[peer_id] = reply.match_index + 1
-                acked_count += 1
-            elif reply.term > self.current_term:
-                self._step_down_if_newer_term(reply.term)
+            res = self._replicate_to_peer(peer_id, peer)
+            if res is None:
                 return 0
-            else:
-                # Decrement next_index on retry
-                self.next_index[peer_id] = max(1, self.next_index.get(peer_id, 1) - 1)
-
+            acked_count += res
         return acked_count
 
     def propose(self, command: Any) -> bool:

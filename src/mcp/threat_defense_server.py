@@ -225,29 +225,27 @@ def _patch_safetensors(code: str) -> str:
     ).replace("import pickle", "# pickle removed for safety")
 
 
+def _patch_eval(code: str) -> str:
+    return "import ast\n" + code.replace("eval(", "ast.literal_eval(") if "eval(" in code else code
+
+
+def _patch_sql(code: str) -> str:
+    if 'f"' in code:
+        return "# TODO: Ensure parameterized tuples: cursor.execute(query, (params,))\n" + code
+    return code
+
+
 def _apply_cwe_patch_heuristics(cwe_id: str, code: str) -> str:
     """Applies heuristic code transformations based on target CWE vulnerability."""
-    if cwe_id == "CWE-502":
-        return _patch_pickle(code) if "pickle." in code else code
-    if cwe_id == "CWE-693":
-        return _patch_safetensors(code)
-    if cwe_id == "CWE-1357":
-        return (
-            "# Enforce verified package imports and pin dependencies with hashes\n"
-            + code
-        )
-    if cwe_id == "CWE-94":
-        if "eval(" in code:
-            return "import ast\n" + code.replace("eval(", "ast.literal_eval(")
-        return code
-    if cwe_id == "CWE-89":
-        if 'f"' in code:
-            return (
-                "# TODO: Ensure parameterized tuples: cursor.execute(query, (params,))\n"
-                + code
-            )
-        return code
-    return code
+    patch_map: Dict[str, Callable[[str], str]] = {
+        "CWE-502": lambda c: _patch_pickle(c) if "pickle." in c else c,
+        "CWE-693": _patch_safetensors,
+        "CWE-1357": lambda c: "# Enforce verified package imports and pin dependencies with hashes\n" + c,
+        "CWE-94": _patch_eval,
+        "CWE-89": _patch_sql,
+    }
+    patcher = patch_map.get(cwe_id)
+    return patcher(code) if patcher else code
 
 
 def handle_synthesize_secure_patch(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -271,6 +269,28 @@ def handle_synthesize_secure_patch(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _get_coverage_rating(score: float) -> str:
+    if score >= 0.8:
+        return "A+ (Excellent)"
+    if score >= 0.5:
+        return "B (Moderate)"
+    return "C (Needs Attention)"
+
+
+def _check_defense_item(
+    key: str, cwe_desc: str, mitre: str, nist: str, defenses: List[str]
+) -> tuple[Dict[str, Any], int]:
+    active = any(key in d for d in defenses)
+    item = {
+        "defense_key": key,
+        "protects_against": cwe_desc,
+        "mitre_technique": mitre,
+        "nist_control": nist,
+        "status": "ENFORCED" if active else "MISSING",
+    }
+    return item, 1 if active else 0
+
+
 def handle_check_threat_coverage(params: Dict[str, Any]) -> Dict[str, Any]:
     defenses = [d.lower() for d in params.get("declared_defenses", [])]
     total_key_defenses = 5
@@ -278,51 +298,17 @@ def handle_check_threat_coverage(params: Dict[str, Any]) -> Dict[str, Any]:
     breakdown = []
 
     checklist = [
-        (
-            "pickle-free",
-            "CWE-502 (Deserialization / Model Poisoning)",
-            "T1587.001",
-            "SI-10 (Information Input Validation)",
-        ),
-        (
-            "ast-guard",
-            "CWE-94 (Dynamic Code Injection)",
-            "T1059.006",
-            "SI-3 (Malicious Code Protection)",
-        ),
-        (
-            "zero-dependency",
-            "Supply-Chain Malware & Slopsquatting",
-            "T1195.001",
-            "SR-3 (Supply Chain Controls)",
-        ),
-        (
-            "commonpath-traversal-guard",
-            "CWE-22 (Path Traversal)",
-            "T1083",
-            "AC-3 (Access Enforcement)",
-        ),
-        (
-            "parameterized-queries",
-            "CWE-89 (SQL Injection)",
-            "T1190",
-            "SI-10 (Information Input Validation)",
-        ),
+        ("pickle-free", "CWE-502 (Deserialization / Model Poisoning)", "T1587.001", "SI-10 (Information Input Validation)"),
+        ("ast-guard", "CWE-94 (Dynamic Code Injection)", "T1059.006", "SI-3 (Malicious Code Protection)"),
+        ("zero-dependency", "Supply-Chain Malware & Slopsquatting", "T1195.001", "SR-3 (Supply Chain Controls)"),
+        ("commonpath-traversal-guard", "CWE-22 (Path Traversal)", "T1083", "AC-3 (Access Enforcement)"),
+        ("parameterized-queries", "CWE-89 (SQL Injection)", "T1190", "SI-10 (Information Input Validation)"),
     ]
 
     for key, cwe_desc, mitre, nist in checklist:
-        active = any(key in d for d in defenses)
-        if active:
-            matched += 1
-        breakdown.append(
-            {
-                "defense_key": key,
-                "protects_against": cwe_desc,
-                "mitre_technique": mitre,
-                "nist_control": nist,
-                "status": "ENFORCED" if active else "MISSING",
-            }
-        )
+        item, add_val = _check_defense_item(key, cwe_desc, mitre, nist, defenses)
+        matched += add_val
+        breakdown.append(item)
 
     coverage_score = round(matched / total_key_defenses, 4)
 
@@ -330,11 +316,7 @@ def handle_check_threat_coverage(params: Dict[str, Any]) -> Dict[str, Any]:
         "status": "success",
         "coverage_score": coverage_score,
         "coverage_percentage": f"{int(coverage_score * 100)}%",
-        "rating": (
-            "A+ (Excellent)"
-            if coverage_score >= 0.8
-            else "B (Moderate)" if coverage_score >= 0.5 else "C (Needs Attention)"
-        ),
+        "rating": _get_coverage_rating(coverage_score),
         "breakdown": breakdown,
     }
 

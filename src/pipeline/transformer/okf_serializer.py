@@ -144,16 +144,93 @@ def _resolve_raw_links(
     return pdf_link_str, txt_link_str
 
 
+def _load_raw_paper_meta(raw_meta_path: str) -> Dict[str, Any]:
+    """Loads and validates raw paper JSON metadata."""
+    resolved_meta = os.path.realpath(os.path.abspath(raw_meta_path))
+    if is_sensitive_path(resolved_meta):
+        raise PermissionError(f"Access to sensitive path blocked: {resolved_meta}")
+    with open(resolved_meta, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _render_okf_markdown(
+    raw_template: str,
+    paper: Dict[str, Any],
+    title_ja: str,
+    exec_summary: Dict[str, Any],
+    tags_yaml: str,
+    authors_yaml: str,
+    now_iso: str,
+    pub_date: str,
+    rel_raw_meta: str,
+    raw_meta_path: str,
+    pdf_link_str: str,
+    txt_link_str: str,
+    rec_list: str,
+) -> str:
+    """Renders formatted OKF markdown content string."""
+    return raw_template.format(
+        title=paper["title"].replace('"', '\\"'),
+        title_ja=title_ja.replace('"', '\\"'),
+        description=exec_summary["one_liner"].replace('"', '\\"'),
+        resource=paper["abs_url"],
+        tags_yaml=tags_yaml,
+        timestamp=now_iso,
+        rel_raw_meta_from_okf=rel_raw_meta,
+        published_date=pub_date,
+        authors_yaml=authors_yaml,
+        arxiv_id=paper["arxiv_id"],
+        raw_meta_basename=os.path.basename(raw_meta_path),
+        overview=exec_summary["overview"],
+        background=exec_summary["background"],
+        technical_approach=exec_summary["technical_approach"],
+        results_impact=exec_summary["results_impact"],
+        rec_list=rec_list,
+        pdf_url=paper["pdf_url"],
+        authors_str=", ".join(paper.get("authors", [])),
+        categories_str=", ".join(paper.get("categories", [])),
+        pdf_link_str=pdf_link_str,
+        txt_link_str=txt_link_str,
+        summary=paper.get("summary", ""),
+    )
+
+
+def _build_okf_template_vars(
+    paper: Dict[str, Any], config: Dict[str, Any]
+) -> Tuple[str, Dict[str, Any], str, str, str, str, str]:
+    """Prepares structured metadata variables for OKF template injection."""
+    title_ja = paper.get("title_ja", translate_title_ja(paper["title"]))
+    exec_summary = generate_japanese_executive_summary(paper)
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    pub_date = paper.get("published") if paper.get("published") else now_iso
+
+    authors_yaml = "\n".join([f'    - "{a}"' for a in paper.get("authors", [])])
+    default_tags = config.get("okf", {}).get("default_tags", ["cs.CR", "security"])
+    tags = list(set(default_tags + determine_security_tags(paper)))
+    tags_yaml = "\n".join([f'  - "{t}"' for t in sorted(tags)])
+    rec_list = "\n".join([f"- {r}" for r in exec_summary["executive_recommendations"]])
+    return title_ja, exec_summary, now_iso, pub_date, authors_yaml, tags_yaml, rec_list
+
+
+def _write_validated_okf_file(okf_file_path: str, workspace_dir: str, content: str) -> str:
+    """Validates path boundary within workspace and writes OKF content."""
+    resolved_ws = os.path.realpath(os.path.abspath(workspace_dir))
+    resolved_target = os.path.realpath(os.path.abspath(okf_file_path))
+    if not resolved_target.startswith(resolved_ws):
+        raise ValueError(
+            f"Security: Target OKF path {resolved_target} is outside workspace {resolved_ws}"
+        )
+    with open(resolved_target, "w", encoding="utf-8") as f:
+        f.write(content)
+    return os.path.relpath(resolved_target, resolved_ws)
+
+
 def build_okf_from_raw(
     raw_meta_path: str, workspace_dir: str, config: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Builds and serializes a Google OKF v0.2 Markdown document from raw metadata JSON."""
+    paper = _load_raw_paper_meta(raw_meta_path)
     resolved_meta = os.path.realpath(os.path.abspath(raw_meta_path))
-    if is_sensitive_path(resolved_meta):
-        raise PermissionError(f"Access to sensitive path blocked: {resolved_meta}")
-
-    with open(resolved_meta, "r", encoding="utf-8") as f:
-        paper = json.load(f)
 
     date_str = get_paper_pub_date_str(paper)
     safe_clean_id = re.sub(r"[^a-zA-Z0-9._-]", "", paper.get("clean_id", "unknown"))
@@ -171,16 +248,10 @@ def build_okf_from_raw(
         paper, raw_dir, safe_clean_id, okf_file_dir, rel_raw_meta
     )
 
-    title_ja = paper.get("title_ja", translate_title_ja(paper["title"]))
-    exec_summary = generate_japanese_executive_summary(paper)
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    pub_date = paper.get("published") or now_iso
-
-    authors_yaml = "\n".join([f'    - "{a}"' for a in paper.get("authors", [])])
-    default_tags = config.get("okf", {}).get("default_tags", ["cs.CR", "security"])
-    tags = list(set(default_tags + determine_security_tags(paper)))
-    tags_yaml = "\n".join([f'  - "{t}"' for t in sorted(tags)])
-    rec_list = "\n".join([f"- {r}" for r in exec_summary["executive_recommendations"]])
+    (
+        title_ja, exec_summary, now_iso, pub_date,
+        authors_yaml, tags_yaml, rec_list
+    ) = _build_okf_template_vars(paper, config)
 
     raw_template = load_template(
         "okf_paper.md.template",
@@ -247,41 +318,13 @@ trust:
         config,
     )
 
-    okf_content = raw_template.format(
-        title=paper["title"].replace('"', '\\"'),
-        title_ja=title_ja.replace('"', '\\"'),
-        description=exec_summary["one_liner"].replace('"', '\\"'),
-        resource=paper["abs_url"],
-        tags_yaml=tags_yaml,
-        timestamp=now_iso,
-        rel_raw_meta_from_okf=rel_raw_meta,
-        published_date=pub_date,
-        authors_yaml=authors_yaml,
-        arxiv_id=paper["arxiv_id"],
-        raw_meta_basename=os.path.basename(raw_meta_path),
-        overview=exec_summary["overview"],
-        background=exec_summary["background"],
-        technical_approach=exec_summary["technical_approach"],
-        results_impact=exec_summary["results_impact"],
-        rec_list=rec_list,
-        pdf_url=paper["pdf_url"],
-        authors_str=", ".join(paper.get("authors", [])),
-        categories_str=", ".join(paper.get("categories", [])),
-        pdf_link_str=pdf_link_str,
-        txt_link_str=txt_link_str,
-        summary=paper.get("summary", ""),
+    okf_content = _render_okf_markdown(
+        raw_template, paper, title_ja, exec_summary, tags_yaml, authors_yaml,
+        now_iso, pub_date, rel_raw_meta, raw_meta_path, pdf_link_str, txt_link_str, rec_list
     )
 
-    resolved_ws = os.path.realpath(os.path.abspath(workspace_dir))
+    rel_okf_path = _write_validated_okf_file(okf_file_path, workspace_dir, okf_content)
     resolved_target = os.path.realpath(os.path.abspath(okf_file_path))
-    if not resolved_target.startswith(resolved_ws):
-        raise ValueError(
-            f"Security: Target OKF path {resolved_target} is outside workspace {resolved_ws}"
-        )
-
-    rel_okf_path = os.path.relpath(resolved_target, resolved_ws)
-    with open(resolved_target, "w", encoding="utf-8") as f:
-        f.write(okf_content)
 
     return {
         "paper": paper,

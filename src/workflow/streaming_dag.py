@@ -110,6 +110,23 @@ class StreamingDAG(Generic[T]):
             raise ValueError("Both nodes must be registered before adding an edge")
         self.edges[from_node].append(to_node)
 
+    def _feed_initial_chunks(self, first_node: StreamingNode[Any, Any], chunks: List[StreamChunk[T]]) -> None:
+        for chunk in chunks:
+            while not first_node.enqueue(chunk):
+                first_node.process_next()
+
+    def _drain_node_chunks(
+        self, curr_node: StreamingNode[Any, Any], next_node: Optional[StreamingNode[Any, Any]]
+    ) -> List[StreamChunk[T]]:
+        next_chunks: List[StreamChunk[T]] = []
+        while curr_node.queue:
+            out_chunk = curr_node.process_next()
+            if out_chunk:
+                next_chunks.append(out_chunk)
+                if next_node:
+                    next_node.enqueue(out_chunk)
+        return next_chunks
+
     def execute_pipeline(
         self, initial_chunks: List[StreamChunk[T]]
     ) -> List[StreamChunk[T]]:
@@ -118,26 +135,12 @@ class StreamingDAG(Generic[T]):
             return initial_chunks
 
         node_keys = list(self.nodes.keys())
-        first_node = self.nodes[node_keys[0]]
+        self._feed_initial_chunks(self.nodes[node_keys[0]], initial_chunks)
 
-        # Feed initial chunks into first node
-        for chunk in initial_chunks:
-            while not first_node.enqueue(chunk):
-                # Backpressure throttle: simulate drain
-                first_node.process_next()
-
-        # Drive through sequential pipeline
         current_chunks = initial_chunks
         for i, n_id in enumerate(node_keys):
             curr_node = self.nodes[n_id]
-            next_chunks: List[StreamChunk[T]] = []
-            while curr_node.queue:
-                out_chunk = curr_node.process_next()
-                if out_chunk:
-                    next_chunks.append(out_chunk)
-                    if i + 1 < len(node_keys):
-                        nxt_node = self.nodes[node_keys[i + 1]]
-                        nxt_node.enqueue(out_chunk)
-            current_chunks = next_chunks
+            nxt_node = self.nodes[node_keys[i + 1]] if i + 1 < len(node_keys) else None
+            current_chunks = self._drain_node_chunks(curr_node, nxt_node)
 
         return current_chunks

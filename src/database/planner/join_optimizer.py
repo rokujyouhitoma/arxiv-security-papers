@@ -92,6 +92,41 @@ def _eval_split_plan(
     )
 
 
+def _has_index(
+    table: Optional[str], col: Optional[str], indexes: Dict[str, Set[str]]
+) -> bool:
+    return bool(table in indexes and col in (indexes[table] if col else set()))
+
+
+def _match_link(
+    t_src: Optional[str],
+    t_dst: Optional[str],
+    c_src: Optional[str],
+    c_dst: Optional[str],
+    subset: List[str],
+    other: List[str],
+    indexes: Dict[str, Set[str]],
+) -> Tuple[Optional[str], bool]:
+    if t_src in subset and t_dst in other:
+        return f"{t_src}.{c_src} = {t_dst}.{c_dst}", _has_index(t_dst, c_dst, indexes)
+    return None, False
+
+
+def _check_single_cond_link(
+    cond: Dict[str, str],
+    s1: List[str],
+    s2: List[str],
+    indexes: Dict[str, Set[str]],
+) -> Tuple[Optional[str], bool]:
+    """Returns (condition_str, has_index) if cond links s1 and s2, else (None, False)."""
+    t1, t2 = cond.get("left_table"), cond.get("right_table")
+    col1, col2 = cond.get("left_column"), cond.get("right_column")
+    cond_str, has_idx = _match_link(t1, t2, col1, col2, s1, s2, indexes)
+    if cond_str:
+        return cond_str, has_idx
+    return _match_link(t2, t1, col2, col1, s2, s1, indexes)
+
+
 def _check_join_link(
     s1: List[str],
     s2: List[str],
@@ -100,19 +135,9 @@ def _check_join_link(
 ) -> Tuple[Optional[str], bool]:
     """Checks if a join condition connects subset 1 and subset 2."""
     for cond in conditions:
-        t1 = cond.get("left_table")
-        t2 = cond.get("right_table")
-        col2 = cond.get("right_column")
-        col1 = cond.get("left_column")
-
-        if t1 in s1 and t2 in s2:
-            cond_repr = f"{t1}.{col1} = {t2}.{col2}"
-            has_idx = (t2 in indexes) and (col2 in indexes[t2] if col2 else False)
-            return cond_repr, has_idx
-        if t2 in s1 and t1 in s2:
-            cond_repr = f"{t2}.{col2} = {t1}.{col1}"
-            has_idx = (t1 in indexes) and (col1 in indexes[t1] if col1 else False)
-            return cond_repr, has_idx
+        cond_str, has_idx = _check_single_cond_link(cond, s1, s2, indexes)
+        if cond_str:
+            return cond_str, has_idx
     return None, False
 
 
@@ -140,6 +165,17 @@ def _estimate_join_cost(
     return JoinPhysicalOperator.NESTED_LOOP_JOIN, nlj_cost
 
 
+def _gen_partitions(subset: List[str]) -> List[Tuple[List[str], List[str]]]:
+    """Generates all (s1, s2) partitions for a given subset."""
+    partitions = []
+    for r in range(1, len(subset)):
+        for c in itertools.combinations(subset, r):
+            s1 = list(c)
+            s2 = [t for t in subset if t not in s1]
+            partitions.append((s1, s2))
+    return partitions
+
+
 def _find_best_plan_for_subset(
     subset: List[str],
     dp_table: Dict[frozenset[str], JoinPlanNode],
@@ -148,13 +184,7 @@ def _find_best_plan_for_subset(
 ) -> Optional[JoinPlanNode]:
     """Finds best join plan partition for a given table subset."""
     best_plan: Optional[JoinPlanNode] = None
-    subsets: List[List[str]] = []
-    for r in range(1, len(subset)):
-        for c in itertools.combinations(subset, r):
-            subsets.append(list(c))
-
-    for s1 in subsets:
-        s2 = [t for t in subset if t not in s1]
+    for s1, s2 in _gen_partitions(subset):
         plan = _eval_split_plan(s1, s2, dp_table, join_conditions, indexes)
         if plan and (best_plan is None or plan.cost < best_plan.cost):
             best_plan = plan
@@ -196,6 +226,17 @@ def _run_dp_enumeration(
                 dp_table[frozenset(subset)] = best_plan
 
 
+def _single_table_plan(t: str, table_stats: Dict[str, TableStats]) -> JoinPlanNode:
+    rows = table_stats[t].total_rows if t in table_stats else 100
+    return JoinPlanNode(
+        left=t,
+        right="",
+        operator=JoinPhysicalOperator.HASH_JOIN,
+        cost=float(rows),
+        estimated_rows=rows,
+    )
+
+
 class DPJoinOptimizer:
     """
     Bottom-Up Dynamic Programming Join Order Optimizer.
@@ -213,15 +254,7 @@ class DPJoinOptimizer:
         if not tables:
             raise ValueError("Tables list cannot be empty")
         if len(tables) == 1:
-            t = tables[0]
-            rows = table_stats[t].total_rows if t in table_stats else 100
-            return JoinPlanNode(
-                left=t,
-                right="",
-                operator=JoinPhysicalOperator.HASH_JOIN,
-                cost=float(rows),
-                estimated_rows=rows,
-            )
+            return _single_table_plan(tables[0], table_stats)
 
         indexes = available_indexes or {}
         dp_table = _init_dp_table(tables, table_stats)

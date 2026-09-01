@@ -181,42 +181,44 @@ class VDBE:
         return None
 
     def _exec_data_or_cursor_op(self, inst: Instruction) -> Optional[StepResult]:
-        op = inst.op
-        if op == OpCode.OPEN_READ:
-            self._exec_open_read(inst)
-            return None
-        if op == OpCode.VECTOR_KNN:
-            self._exec_vector_knn(inst)
-            return None
-        if op == OpCode.FILTER_EQ:
-            self._exec_filter_eq(inst)
-            return None
-        if op == OpCode.INSERT_ROW:
-            self._exec_insert_row(inst)
-            return None
-        if op == OpCode.NEXT_ROW:
+        if inst.op == OpCode.NEXT_ROW:
             return self._exec_next_row()
+        dispatch = {
+            OpCode.OPEN_READ: self._exec_open_read,
+            OpCode.VECTOR_KNN: self._exec_vector_knn,
+            OpCode.FILTER_EQ: self._exec_filter_eq,
+            OpCode.INSERT_ROW: self._exec_insert_row,
+        }
+        handler = dispatch.get(inst.op)
+        if handler:
+            handler(inst)
         return None
 
+    def _exec_meta_or_tx(self, inst: Instruction) -> bool:
+        if inst.op == OpCode.INIT:
+            self.pc += 1
+            return True
+        if inst.op in (OpCode.INTEGER, OpCode.STRING, OpCode.VECTOR):
+            self._exec_const_op(inst)
+            return True
+        if inst.op in (OpCode.BEGIN_TX, OpCode.COMMIT_TX, OpCode.ROLLBACK_TX):
+            self._exec_tx_op(inst)
+            return True
+        return False
+
+    def _exec_result_row(self, inst: Instruction) -> StepResult:
+        self.result_row = [self.registers.get(inst.p1 + i) for i in range(inst.p2)]
+        self.pc += 1
+        return StepResult.SQLITE_ROW
+
     def _exec_instruction(self, inst: Instruction) -> Optional[StepResult]:
-        op = inst.op
-        if op == OpCode.HALT:
+        if inst.op == OpCode.HALT:
             self.is_halted = True
             return StepResult.SQLITE_DONE
-        if op == OpCode.INIT:
-            self.pc += 1
+        if self._exec_meta_or_tx(inst):
             return None
-        if op in (OpCode.INTEGER, OpCode.STRING, OpCode.VECTOR):
-            self._exec_const_op(inst)
-            return None
-        if op in (OpCode.BEGIN_TX, OpCode.COMMIT_TX, OpCode.ROLLBACK_TX):
-            self._exec_tx_op(inst)
-            return None
-        if op == OpCode.RESULT_ROW:
-            self.result_row = [self.registers.get(inst.p1 + i) for i in range(inst.p2)]
-            self.pc += 1
-            return StepResult.SQLITE_ROW
-
+        if inst.op == OpCode.RESULT_ROW:
+            return self._exec_result_row(inst)
         res = self._exec_data_or_cursor_op(inst)
         if res is not None:
             return res

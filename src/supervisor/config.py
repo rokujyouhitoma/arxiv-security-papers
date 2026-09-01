@@ -147,71 +147,85 @@ class SupervisorConfig:
                 f"Invalid bind_port {pool.bind_port} in pool '{pool.name}'."
             )
 
-    def validate(self) -> None:
-        """Validates configuration sanity."""
-        if not self.pid_file:
-            self.pid_file = os.path.join(
-                self.workspace_dir, "outputs", "supervisor", "arbiter.pid"
-            )
-        if not self.lock_file:
-            self.lock_file = os.path.join(
-                self.workspace_dir, "outputs", "supervisor", "arbiter.lock"
-            )
-        if not self.control_socket:
-            self.control_socket = os.path.join(
-                self.workspace_dir, "outputs", "supervisor", "control.sock"
-            )
+    def _fill_log_if_daemon(self, base: str) -> None:
         if self.daemon and not self.log_file:
-            self.log_file = os.path.join(
-                self.workspace_dir, "outputs", "supervisor", "supervisor.log"
-            )
+            self.log_file = os.path.join(base, "supervisor.log")
 
+    def _fill_default_paths(self) -> None:
+        base = os.path.join(self.workspace_dir, "outputs", "supervisor")
+        self.pid_file = self.pid_file or os.path.join(base, "arbiter.pid")
+        self.lock_file = self.lock_file or os.path.join(base, "arbiter.lock")
+        self.control_socket = self.control_socket or os.path.join(base, "control.sock")
+        self._fill_log_if_daemon(base)
+
+    def _validate_numeric(self) -> None:
         if self.threads < 1:
             raise ValueError(f"Thread count must be at least 1, got {self.threads}.")
         if self.timeout <= 0:
             raise ValueError(f"Timeout must be positive, got {self.timeout}.")
         if self.graceful_timeout <= 0:
-            raise ValueError(
-                f"Graceful timeout must be positive, got {self.graceful_timeout}."
-            )
+            raise ValueError(f"Graceful timeout must be positive, got {self.graceful_timeout}.")
 
+    def validate(self) -> None:
+        """Validates configuration sanity."""
+        self._fill_default_paths()
+        self._validate_numeric()
         for pool in self.pools:
             self._validate_pool(pool)
 
     @classmethod
+    def _parse_bind_str(cls, bind_val: str, d: Dict[str, Any]) -> None:
+        if ":" in bind_val:
+            host, port_str = bind_val.split(":", 1)
+            d["bind_host"] = host
+            d["bind_port"] = int(port_str)
+        else:
+            d["bind_port"] = int(bind_val)
+
+    @classmethod
+    def _resolve_bind_type(cls, bind_val: Any, d: Dict[str, Any]) -> None:
+        if isinstance(bind_val, str):
+            cls._parse_bind_str(bind_val, d)
+        elif isinstance(bind_val, int):
+            d["bind_port"] = bind_val
+
+    @classmethod
     def _normalize_bind_alias(cls, d: Dict[str, Any]) -> None:
         """Extracts bind_host and bind_port from 'bind' alias if present."""
-        if "bind" in d and "bind_host" not in d and "bind_port" not in d:
-            bind_val = d.pop("bind")
-            if isinstance(bind_val, str) and ":" in bind_val:
-                host, port_str = bind_val.split(":", 1)
-                d["bind_host"] = host
-                d["bind_port"] = int(port_str)
-            elif isinstance(bind_val, (int, str)):
-                d["bind_port"] = int(bind_val)
+        bind_val = d.pop("bind", None)
+        if bind_val is None:
+            return
+        if "bind_host" not in d and "bind_port" not in d:
+            cls._resolve_bind_type(bind_val, d)
+
+    @staticmethod
+    def _coerce_pool(p: Any) -> PoolConfig:
+        return PoolConfig(**p) if isinstance(p, dict) else p
+
+    @staticmethod
+    def _coerce_service(s: Any) -> "ServiceConfig":
+        return ServiceConfig(**s) if isinstance(s, dict) else s
+
+    @classmethod
+    def _parse_pools_and_services(
+        cls, instance: "SupervisorConfig", pools_raw: Any, services_raw: Any
+    ) -> None:
+        if pools_raw is not None:
+            instance.pools = [cls._coerce_pool(p) for p in pools_raw]
+        if services_raw is not None:
+            instance.services = [cls._coerce_service(s) for s in services_raw]
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SupervisorConfig":
         """Constructs a validated SupervisorConfig from dictionary."""
         d = dict(data)
         cls._normalize_bind_alias(d)
-
         pools_raw = d.pop("pools", None)
         services_raw = d.pop("services", None)
-
         valid_fields = {f.name for f in dataclasses.fields(cls)}
         filtered = {k: v for k, v in d.items() if k in valid_fields}
         instance = cls(**filtered)
-
-        if pools_raw is not None:
-            instance.pools = [
-                PoolConfig(**p) if isinstance(p, dict) else p for p in pools_raw
-            ]
-        if services_raw is not None:
-            instance.services = [
-                ServiceConfig(**s) if isinstance(s, dict) else s for s in services_raw
-            ]
-
+        cls._parse_pools_and_services(instance, pools_raw, services_raw)
         instance.validate()
         return instance
 
@@ -236,6 +250,19 @@ class SupervisorConfig:
         return {k.lower(): getattr(mod, k) for k in dir(mod) if not k.startswith("_")}
 
     @classmethod
+    def _load_config_file(cls, path: str) -> "SupervisorConfig":
+        ext = os.path.splitext(path)[1].lower()
+        if ext == ".toml":
+            import tomllib
+            with open(path, "rb") as f:
+                return cls.from_dict(tomllib.load(f))
+        if ext == ".py":
+            return cls.from_dict(cls._load_python_file(path))
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            return cls.from_dict(json.load(f))
+
+    @classmethod
     def from_file(cls, path: str) -> "SupervisorConfig":
         """
         Loads SupervisorConfig from a JSON (.json), TOML (.toml), or Python (.py) config file,
@@ -243,27 +270,11 @@ class SupervisorConfig:
         """
         if path.startswith("file://"):
             path = path[7:]
-
         if path.startswith("python:"):
             return cls.from_dict(cls._load_python_module(path.split(":", 1)[1]))
-
         if not os.path.exists(path):
             raise FileNotFoundError(f"Configuration file not found: {path}")
-
-        ext = os.path.splitext(path)[1].lower()
-        if ext == ".toml":
-            import tomllib
-
-            with open(path, "rb") as f:
-                return cls.from_dict(tomllib.load(f))
-        if ext == ".py":
-            return cls.from_dict(cls._load_python_file(path))
-
-        # Default / JSON parser
-        import json
-
-        with open(path, "r", encoding="utf-8") as f:
-            return cls.from_dict(json.load(f))
+        return cls._load_config_file(path)
 
     @classmethod
     def auto_discover(

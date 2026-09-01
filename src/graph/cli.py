@@ -23,6 +23,36 @@ logging.basicConfig(
 logger = logging.getLogger("graph.cli")
 
 
+def _index_single_paper(fpath: str, engine: PropertyGraphEngine) -> int:
+    """Indexes entities and triples from a single OKF paper file into the graph engine."""
+    fname = os.path.basename(fpath)
+    clean_id = fname.replace(".md", "")
+    try:
+        with open(fpath, "r", encoding="utf-8") as pf:
+            content = pf.read()
+        entities, triples = OntologyExtractor.extract_from_okf(clean_id, content)
+
+        for ent in entities:
+            engine.add_vertex(
+                vertex_id=ent.id,
+                label=ent.entity_type.value,
+                properties=ent.properties or {"name": ent.name},
+            )
+
+        for t in triples:
+            engine.add_edge(
+                src_id=t.subject_id,
+                dst_id=t.object_id,
+                label=t.predicate.value,
+                weight=t.weight,
+                properties=t.properties,
+            )
+        return len(triples)
+    except Exception as ex:
+        logger.warning("Failed to extract ontology from %s: %s", fpath, ex)
+        return 0
+
+
 def build_knowledge_graph(workspace_dir: str, output_path: Optional[str] = None) -> int:
     """Scans all OKF markdown files and constructs the persistent Security Knowledge Graph."""
     graph_path = output_path or os.path.join(
@@ -37,34 +67,7 @@ def build_knowledge_graph(workspace_dir: str, output_path: Optional[str] = None)
     )
 
     start_time = time.perf_counter()
-    extracted_triples_count = 0
-
-    for fpath in files:
-        fname = os.path.basename(fpath)
-        clean_id = fname.replace(".md", "")
-        try:
-            with open(fpath, "r", encoding="utf-8") as pf:
-                content = pf.read()
-            entities, triples = OntologyExtractor.extract_from_okf(clean_id, content)
-
-            for ent in entities:
-                engine.add_vertex(
-                    vertex_id=ent.id,
-                    label=ent.entity_type.value,
-                    properties=ent.properties or {"name": ent.name},
-                )
-
-            for t in triples:
-                engine.add_edge(
-                    src_id=t.subject_id,
-                    dst_id=t.object_id,
-                    label=t.predicate.value,
-                    weight=t.weight,
-                    properties=t.properties,
-                )
-                extracted_triples_count += 1
-        except Exception as ex:
-            logger.warning("Failed to extract ontology from %s: %s", fpath, ex)
+    extracted_triples_count = sum(_index_single_paper(fpath, engine) for fpath in files)
 
     engine.save()
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0

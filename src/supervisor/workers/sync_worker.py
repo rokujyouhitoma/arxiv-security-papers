@@ -45,6 +45,26 @@ class SyncWorker(BaseWorker):
     def wsgi_app(self) -> Optional[Callable[..., Any]]:
         return self.app_target
 
+    @staticmethod
+    def _get_remote_addr(client_sock: socket.socket) -> str:
+        try:
+            peer = client_sock.getpeername()
+            if isinstance(peer, tuple):
+                return str(peer[0])
+        except OSError:
+            pass
+        return "-"
+
+    @staticmethod
+    def _map_header(environ: Dict[str, Any], k: str, v: str) -> None:
+        h_key = "HTTP_" + k.upper().replace("-", "_")
+        if h_key == "HTTP_CONTENT_TYPE":
+            environ["CONTENT_TYPE"] = v
+        elif h_key == "HTTP_CONTENT_LENGTH":
+            environ["CONTENT_LENGTH"] = v
+        else:
+            environ[h_key] = v
+
     def _build_wsgi_environ(
         self,
         client_sock: socket.socket,
@@ -55,14 +75,7 @@ class SyncWorker(BaseWorker):
         body_bytes: bytes,
     ) -> Dict[str, Any]:
         """Constructs PEP 3333 WSGI environment dictionary."""
-        remote_addr = "-"
-        try:
-            peer = client_sock.getpeername()
-            if isinstance(peer, tuple):
-                remote_addr = str(peer[0])
-        except OSError:
-            pass
-
+        remote_addr = self._get_remote_addr(client_sock)
         environ: Dict[str, Any] = {
             "REQUEST_METHOD": method,
             "SCRIPT_NAME": "",
@@ -81,16 +94,8 @@ class SyncWorker(BaseWorker):
             "REMOTE_ADDR": remote_addr,
             "CONTENT_LENGTH": str(len(body_bytes)),
         }
-
         for k, v in headers.items():
-            h_key = "HTTP_" + k.upper().replace("-", "_")
-            if h_key == "HTTP_CONTENT_TYPE":
-                environ["CONTENT_TYPE"] = v
-            elif h_key == "HTTP_CONTENT_LENGTH":
-                environ["CONTENT_LENGTH"] = v
-            else:
-                environ[h_key] = v
-
+            self._map_header(environ, k, v)
         return environ
 
     def _parse_http_payload(
@@ -189,6 +194,26 @@ class SyncWorker(BaseWorker):
                 pass
             self.pulse({"is_handling_request": False})
 
+    def _accept_client(self) -> Optional[socket.socket]:
+        try:
+            client_sock, _ = self.server_socket.accept()
+            return client_sock
+        except (socket.timeout, BlockingIOError):
+            return None
+        except OSError:
+            return None
+
+    def _process_one_connection(self) -> bool:
+        """Try to accept and handle a client. Returns False if loop should break."""
+        if not self.server_socket:
+            time.sleep(0.1)
+            return True
+        client_sock = self._accept_client()
+        if client_sock is None:
+            return self.alive
+        self.handle_client(client_sock)
+        return True
+
     def run(self) -> None:
         """Main execution loop: accept connections, handle request, pulse heartbeat."""
         self.init_signals()
@@ -197,19 +222,7 @@ class SyncWorker(BaseWorker):
 
         while self.alive:
             self.pulse()
-            if not self.server_socket:
-                time.sleep(0.1)
-                continue
-
-            try:
-                client_sock, _ = self.server_socket.accept()
-            except (socket.timeout, BlockingIOError):
-                continue
-            except OSError:
-                if not self.alive:
-                    break
-                continue
-
-            self.handle_client(client_sock)
+            if not self._process_one_connection():
+                break
 
         self.close()

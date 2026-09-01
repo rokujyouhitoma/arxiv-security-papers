@@ -82,30 +82,49 @@ class EnterpriseQueryParser:
             }
         self.default_field_weights = default_field_weights
 
+    def _parse_fuzzy_plain_term(
+        self, term: str, field: Optional[str], is_required: bool, is_prohibited: bool
+    ) -> QueryClause:
+        parts = term.split("~")
+        dist = min(int(parts[1]), 2) if len(parts) > 1 and parts[1].isdigit() else 1
+        return QueryClause(
+            field=field,
+            term=parts[0],
+            is_required=is_required,
+            is_prohibited=is_prohibited,
+            is_fuzzy=True,
+            fuzzy_distance=dist,
+        )
+
+    def _is_reserved_op(self, term: str) -> bool:
+        return bool(not term or term.upper() in ("AND", "OR", "NOT"))
+
+    def _parse_prefix_plain_term(
+        self, term: str, field: Optional[str], is_required: bool, is_prohibited: bool
+    ) -> QueryClause:
+        return QueryClause(
+            field=field,
+            term=term[:-1],
+            is_required=is_required,
+            is_prohibited=is_prohibited,
+            is_prefix=True,
+        )
+
+    def _is_prefix_term(self, term: str) -> bool:
+        return bool(term.endswith("*") and len(term) > 1)
+
+    def _is_fuzzy_term(self, term: str) -> bool:
+        return bool("~" in term and not term.startswith("~"))
+
     def _parse_plain_term(
         self, term: str, field: Optional[str], is_required: bool, is_prohibited: bool
     ) -> Optional[QueryClause]:
-        if not term or term.upper() in ("AND", "OR", "NOT"):
+        if self._is_reserved_op(term):
             return None
-        if term.endswith("*") and len(term) > 1:
-            return QueryClause(
-                field=field,
-                term=term[:-1],
-                is_required=is_required,
-                is_prohibited=is_prohibited,
-                is_prefix=True,
-            )
-        if "~" in term and not term.startswith("~"):
-            parts = term.split("~")
-            dist = min(int(parts[1]), 2) if len(parts) > 1 and parts[1].isdigit() else 1
-            return QueryClause(
-                field=field,
-                term=parts[0],
-                is_required=is_required,
-                is_prohibited=is_prohibited,
-                is_fuzzy=True,
-                fuzzy_distance=dist,
-            )
+        if self._is_prefix_term(term):
+            return self._parse_prefix_plain_term(term, field, is_required, is_prohibited)
+        if self._is_fuzzy_term(term):
+            return self._parse_fuzzy_plain_term(term, field, is_required, is_prohibited)
         return QueryClause(
             field=field, term=term, is_required=is_required, is_prohibited=is_prohibited
         )
@@ -160,18 +179,40 @@ class EnterpriseQueryParser:
         return clauses
 
     @staticmethod
+    def _is_bool_filtered(clauses: List[QueryClause]) -> bool:
+        for c in clauses:
+            if c.is_required or c.is_prohibited:
+                return True
+        return False
+
+    @staticmethod
+    def _resolve_clause_intent(clauses: List[QueryClause]) -> Optional[str]:
+        if EnterpriseQueryParser._is_bool_filtered(clauses):
+            return "boolean_filtered"
+        for c in clauses:
+            if c.is_phrase:
+                return "phrase_match"
+        return None
+
+    @staticmethod
     def _resolve_intent(
         target_fields: Set[str], clauses: List[QueryClause], raw_clean: str
     ) -> str:
         if target_fields:
             return "field_specific"
-        if any(c.is_required or c.is_prohibited for c in clauses):
-            return "boolean_filtered"
-        if any(c.is_phrase for c in clauses):
-            return "phrase_match"
+        clause_intent = EnterpriseQueryParser._resolve_clause_intent(clauses)
+        if clause_intent:
+            return clause_intent
         if len(raw_clean.split()) > 5:
             return "natural_language_qa"
         return "general"
+
+    def _get_expanded_tokens(
+        self, raw_clean: str, clauses: List[QueryClause], expander: Optional[Any]
+    ) -> List[str]:
+        if expander and hasattr(expander, "expand_query"):
+            return list(expander.expand_query(raw_clean))
+        return [c.term.lower() for c in clauses if c.term]
 
     def create_context(
         self,
@@ -182,12 +223,7 @@ class EnterpriseQueryParser:
         raw_clean = (raw_query or "").strip()
         clauses = self.parse(raw_clean)
         target_fields: Set[str] = {c.field for c in clauses if c.field is not None}
-
-        if expander and hasattr(expander, "expand_query"):
-            expanded_tokens = expander.expand_query(raw_clean)
-        else:
-            expanded_tokens = [c.term.lower() for c in clauses if c.term]
-
+        expanded_tokens = self._get_expanded_tokens(raw_clean, clauses, expander)
         intent = self._resolve_intent(target_fields, clauses, raw_clean)
         is_hybrid = not (target_fields and "content" not in target_fields)
 
@@ -222,6 +258,14 @@ class QueryContext:
         self.target_fields = target_fields
         self.intent = intent
         self.is_hybrid_eligible = is_hybrid_eligible
+
+    @property
+    def original_query(self) -> str:
+        return self.raw_query
+
+    @property
+    def original_tokens(self) -> List[str]:
+        return self.expanded_tokens
 
     @property
     def has_field_constraints(self) -> bool:

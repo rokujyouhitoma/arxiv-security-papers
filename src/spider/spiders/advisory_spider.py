@@ -33,14 +33,15 @@ class AdvisorySpider(BaseSpider):
             pass
 
 
-def _map_advisory_item(item: ET.Element, fallback_url: str) -> Optional[ScrapedItem]:
-    title_elem = item.find("title")
-    desc_elem = item.find("description")
-    link_elem = item.find("link")
+def _get_elem_text(item: ET.Element, tag: str, default: str = "") -> str:
+    elem = item.find(tag)
+    return (elem.text or "").strip() if elem is not None else default
 
-    title = (title_elem.text or "").strip() if title_elem is not None else "Advisory"
-    desc = (desc_elem.text or "").strip() if desc_elem is not None else ""
-    link = (link_elem.text or "").strip() if link_elem is not None else fallback_url
+
+def _map_advisory_item(item: ET.Element, fallback_url: str) -> Optional[ScrapedItem]:
+    title = _get_elem_text(item, "title", "Advisory")
+    desc = _get_elem_text(item, "description", "")
+    link = _get_elem_text(item, "link", fallback_url)
 
     cve_match = re.search(r"(CVE-\d{4}-\d{4,7})", f"{title} {desc}")
     clean_id = cve_match.group(1) if cve_match else "ADV-UNKNOWN"

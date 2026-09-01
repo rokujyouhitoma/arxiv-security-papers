@@ -80,41 +80,52 @@ class BPlusTree:
             self._write_node(new_root)
             self.root_page_id = new_root_id
 
-    def _insert_internal(
+    def _split_and_write(self, node: BTreeNode) -> Tuple[ScalarKey, int]:
+        new_page_id = self._allocate_page_id()
+        promoted_key, sibling = node.split(new_page_id)
+        self._write_node(node)
+        self._write_node(sibling)
+        return promoted_key, sibling.page_id
+
+    def _insert_into_leaf(
         self, node: BTreeNode, key: ScalarKey, row_id: int
     ) -> Optional[Tuple[ScalarKey, int]]:
-        if node.is_leaf:
-            node.insert_leaf_entry(key, row_id)
-            if node.is_full():
-                new_page_id = self._allocate_page_id()
-                promoted_key, sibling = node.split(new_page_id)
-                self._write_node(node)
-                self._write_node(sibling)
-                return promoted_key, sibling.page_id
-            self._write_node(node)
-            return None
+        node.insert_leaf_entry(key, row_id)
+        if node.is_full():
+            return self._split_and_write(node)
+        self._write_node(node)
+        return None
 
-        # Interior node: route to child
+    def _find_child_idx(self, node: BTreeNode, key: ScalarKey) -> int:
         child_idx = 0
         for idx, k in enumerate(node.keys):
             if compare_keys(key, k) < 0:
                 break
             child_idx = idx + 1
+        return child_idx
 
+    def _insert_into_interior(
+        self, node: BTreeNode, key: ScalarKey, row_id: int
+    ) -> Optional[Tuple[ScalarKey, int]]:
+        child_idx = self._find_child_idx(node, key)
         child = self._read_node(node.children[child_idx])
         split_res = self._insert_internal(child, key, row_id)
-        if split_res is not None:
-            promoted_key, sibling_id = split_res
-            node.keys.insert(child_idx, promoted_key)
-            node.children.insert(child_idx + 1, sibling_id)
-            if node.is_full():
-                new_page_id = self._allocate_page_id()
-                p_key, sibling = node.split(new_page_id)
-                self._write_node(node)
-                self._write_node(sibling)
-                return p_key, sibling.page_id
-            self._write_node(node)
+        if split_res is None:
+            return None
+        promoted_key, sibling_id = split_res
+        node.keys.insert(child_idx, promoted_key)
+        node.children.insert(child_idx + 1, sibling_id)
+        if node.is_full():
+            return self._split_and_write(node)
+        self._write_node(node)
         return None
+
+    def _insert_internal(
+        self, node: BTreeNode, key: ScalarKey, row_id: int
+    ) -> Optional[Tuple[ScalarKey, int]]:
+        if node.is_leaf:
+            return self._insert_into_leaf(node, key, row_id)
+        return self._insert_into_interior(node, key, row_id)
 
     def search(self, key: ScalarKey) -> List[int]:
         """Returns matching row_ids for an exact key match in O(log N)."""
@@ -155,6 +166,31 @@ class BPlusTree:
             return False, False
         return True, False
 
+    def _scan_leaf_keys(
+        self,
+        current: BTreeNode,
+        min_key: Optional[ScalarKey],
+        max_key: Optional[ScalarKey],
+        include_min: bool,
+        include_max: bool,
+        results: List[int],
+    ) -> bool:
+        """Scans keys in current leaf; returns True if scanning should stop."""
+        for idx, k in enumerate(current.keys):
+            in_bounds, should_stop = self._key_in_bounds(
+                k, min_key, max_key, include_min, include_max
+            )
+            if should_stop:
+                return True
+            if in_bounds:
+                results.extend(current.values[idx])
+        return False
+
+    def _get_next_leaf(self, current: BTreeNode) -> Optional[BTreeNode]:
+        if current.next_leaf is None:
+            return None
+        return self._read_node(current.next_leaf)
+
     def range_scan(
         self,
         min_key: Optional[ScalarKey] = None,
@@ -169,22 +205,13 @@ class BPlusTree:
         current: Optional[BTreeNode] = (
             self._find_leaf(min_key) if min_key is not None else self._find_first_leaf()
         )
-
         while current is not None:
-            for idx, k in enumerate(current.keys):
-                in_bounds, should_stop = self._key_in_bounds(
-                    k, min_key, max_key, include_min, include_max
-                )
-                if should_stop:
-                    return results
-                if in_bounds:
-                    results.extend(current.values[idx])
-
-            if current.next_leaf is not None:
-                current = self._read_node(current.next_leaf)
-            else:
+            should_stop = self._scan_leaf_keys(
+                current, min_key, max_key, include_min, include_max, results
+            )
+            if should_stop:
                 break
-
+            current = self._get_next_leaf(current)
         return results
 
     def _find_first_leaf(self) -> BTreeNode:

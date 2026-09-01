@@ -71,6 +71,21 @@ class AccessController:
         if "ALL" in self._grants[role_str][resource_name] and perm != "ALL":
             self._grants[role_str][resource_name].discard("ALL")
 
+    def _has_perm_or_all(self, perms: Set[str], req: str) -> bool:
+        """Checks if required permission or wildcard ALL is in permission set."""
+        return "ALL" in perms or req in perms
+
+    def _resolve_context_role(
+        self, role_or_context: Union[str, Role, SecurityContext], req: str
+    ) -> Tuple[str, bool]:
+        """Resolves role string and checks extra permissions on SecurityContext."""
+        if isinstance(role_or_context, SecurityContext):
+            has_extra = self._has_perm_or_all(role_or_context.extra_permissions, req)
+            return role_or_context.role.value, has_extra
+        if isinstance(role_or_context, Role):
+            return role_or_context.value, False
+        return str(role_or_context).lower(), False
+
     def check_permission(
         self,
         role_or_context: Union[str, Role, SecurityContext],
@@ -80,33 +95,18 @@ class AccessController:
         """
         Validates if role or SecurityContext holds required_permission (or ALL) on resource_name (or '*').
         """
-        if isinstance(role_or_context, SecurityContext):
-            role_str = role_or_context.role.value
-            req = required_permission.upper()
-            if (
-                req in role_or_context.extra_permissions
-                or "ALL" in role_or_context.extra_permissions
-            ):
-                return True
-        elif isinstance(role_or_context, Role):
-            role_str = role_or_context.value
-        else:
-            role_str = str(role_or_context).lower()
-
         req = required_permission.upper()
+        role_str, has_extra = self._resolve_context_role(role_or_context, req)
+        if has_extra:
+            return True
+
         role_perms = self._grants.get(role_str, {})
-
-        # 1. Check direct resource permissions
         res_perms = role_perms.get(resource_name, set())
-        if "ALL" in res_perms or req in res_perms:
+        if self._has_perm_or_all(res_perms, req):
             return True
 
-        # 2. Check wildcard '*' permissions
         wildcard_perms = role_perms.get("*", set())
-        if "ALL" in wildcard_perms or req in wildcard_perms:
-            return True
-
-        return False
+        return self._has_perm_or_all(wildcard_perms, req)
 
     def enforce_permission(
         self,

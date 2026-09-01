@@ -68,17 +68,22 @@ class ControlServer:
             )
             client_thread.start()
 
+    @staticmethod
+    def _recv_line(sock: socket.socket) -> bytes:
+        raw_data = b""
+        while True:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            raw_data += chunk
+            if b"\n" in raw_data:
+                break
+        return raw_data
+
     def _handle_client(self, client_sock: socket.socket) -> None:
         client_sock.settimeout(3.0)
         try:
-            raw_data = b""
-            while True:
-                chunk = client_sock.recv(4096)
-                if not chunk:
-                    break
-                raw_data += chunk
-                if b"\n" in raw_data:
-                    break
+            raw_data = self._recv_line(client_sock)
             if not raw_data:
                 return
             req = json.loads(raw_data.decode("utf-8").strip())
@@ -86,14 +91,31 @@ class ControlServer:
             resp_bytes = (json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8")
             client_sock.sendall(resp_bytes)
         except Exception as e:
-            err_resp = {"status": "error", "error": str(e)}
+            self._send_error_response(client_sock, str(e))
+        finally:
+            self._safe_close_socket(client_sock)
+
+    @staticmethod
+    def _send_error_response(sock: socket.socket, err_msg: str) -> None:
+        try:
+            err_resp = {"status": "error", "error": err_msg}
+            sock.sendall((json.dumps(err_resp) + "\n").encode("utf-8"))
+        except OSError:
+            pass
+
+    @staticmethod
+    def _safe_close_socket(sock: Optional[socket.socket]) -> None:
+        if sock:
             try:
-                client_sock.sendall((json.dumps(err_resp) + "\n").encode("utf-8"))
+                sock.close()
             except OSError:
                 pass
-        finally:
+
+    @staticmethod
+    def _safe_unlink(path: str) -> None:
+        if os.path.exists(path):
             try:
-                client_sock.close()
+                os.unlink(path)
             except OSError:
                 pass
 
@@ -103,10 +125,7 @@ class ControlServer:
         self._in_child = True
         atexit.unregister(self._atexit_cleanup)
         if self._server_sock:
-            try:
-                self._server_sock.close()
-            except OSError:
-                pass
+            self._safe_close_socket(self._server_sock)
             self._server_sock = None
 
     def _atexit_cleanup(self) -> None:
@@ -114,27 +133,15 @@ class ControlServer:
         if (
             not getattr(self, "_in_child", False)
             and os.getpid() == self._creator_pid
-            and os.path.exists(self.socket_path)
         ):
-            try:
-                os.unlink(self.socket_path)
-            except OSError:
-                pass
+            self._safe_unlink(self.socket_path)
 
     def stop(self) -> None:
         """Closes server socket and unlinks socket file."""
         self._running = False
-        if self._server_sock:
-            try:
-                self._server_sock.close()
-            except OSError:
-                pass
-            self._server_sock = None
-        if os.path.exists(self.socket_path):
-            try:
-                os.unlink(self.socket_path)
-            except OSError:
-                pass
+        self._safe_close_socket(self._server_sock)
+        self._server_sock = None
+        self._safe_unlink(self.socket_path)
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
 
@@ -148,6 +155,16 @@ class ControlClient:
         self.socket_path = socket_path
         self.timeout = timeout
 
+    def _exchange_payload(self, sock: socket.socket, cmd_dict: Dict[str, Any]) -> Dict[str, Any]:
+        payload = (json.dumps(cmd_dict) + "\n").encode("utf-8")
+        sock.sendall(payload)
+        raw_data = ControlServer._recv_line(sock)
+        raw_resp = raw_data.decode("utf-8").strip()
+        if not raw_resp:
+            return {"status": "error", "error": "Empty response from Arbiter"}
+        res: Dict[str, Any] = json.loads(raw_resp)
+        return res
+
     def send_command(self, cmd_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Sends a JSON command to the supervisor arbiter and waits for response."""
         if not os.path.exists(self.socket_path):
@@ -160,26 +177,11 @@ class ControlClient:
         sock.settimeout(self.timeout)
         try:
             sock.connect(self.socket_path)
-            payload = (json.dumps(cmd_dict) + "\n").encode("utf-8")
-            sock.sendall(payload)
-
-            raw_data = b""
-            while True:
-                chunk = sock.recv(4096)
-                if not chunk:
-                    break
-                raw_data += chunk
-                if b"\n" in raw_data:
-                    break
-            raw_resp = raw_data.decode("utf-8").strip()
-            if not raw_resp:
-                return {"status": "error", "error": "Empty response from Arbiter"}
-            res: Dict[str, Any] = json.loads(raw_resp)
-            return res
+            return self._exchange_payload(sock, cmd_dict)
         except Exception as e:
             return {"status": "error", "error": f"IPC communication error: {e}"}
         finally:
-            sock.close()
+            ControlServer._safe_close_socket(sock)
 
     def ping(self) -> bool:
         """Verifies if the arbiter is responsive."""

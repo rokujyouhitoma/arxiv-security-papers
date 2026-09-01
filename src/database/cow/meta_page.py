@@ -72,32 +72,33 @@ class MetaPage:
         )
 
     @classmethod
+    def _select_latest_meta(
+        cls,
+        meta_0: Optional["MetaPage"],
+        meta_1: Optional["MetaPage"],
+        page_count: int,
+    ) -> "MetaPage":
+        if meta_0 is None and meta_1 is None:
+            return cls(
+                tx_id=0,
+                root_page_id=0,
+                page_count=page_count,
+                free_list_head=0,
+                slot=0,
+            )
+        valid = [m for m in (meta_0, meta_1) if m is not None]
+        return max(valid, key=lambda m: m.tx_id)
+
+    @classmethod
     def load_latest(cls, mmap_file: MMapFile) -> "MetaPage":
         """
         Reads Page 0 and Page 1, validates CRC32, and returns the MetaPage with highest tx_id.
         """
         view_0 = mmap_file.read_page_view(0)
         view_1 = mmap_file.read_page_view(1)
-
         meta_0 = cls.deserialize(view_0, slot=0)
         meta_1 = cls.deserialize(view_1, slot=1)
-
-        if meta_0 is None and meta_1 is None:
-            # Uninitialized DB: return initial meta
-            return cls(
-                tx_id=0,
-                root_page_id=0,
-                page_count=mmap_file.page_count,
-                free_list_head=0,
-                slot=0,
-            )
-        if meta_0 is not None and meta_1 is None:
-            return meta_0
-        if meta_0 is None and meta_1 is not None:
-            return meta_1
-
-        assert meta_0 is not None and meta_1 is not None
-        return meta_0 if meta_0.tx_id >= meta_1.tx_id else meta_1
+        return cls._select_latest_meta(meta_0, meta_1, mmap_file.page_count)
 
     @classmethod
     def commit_next(

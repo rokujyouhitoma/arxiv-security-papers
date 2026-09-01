@@ -146,6 +146,47 @@ class VectorStorage:
         except Exception:
             pass
 
+    def _prepare_metadata(
+        self,
+        count: int,
+        metadata: Optional[List[Dict[str, Any]]] = None,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        meta_list = metadata or [{"id": str(offset + i)} for i in range(count)]
+        if count != len(meta_list):
+            raise ValueError(
+                f"Vectors count ({count}) != metadata count ({len(meta_list)})"
+            )
+        return meta_list
+
+    def _write_tmp_file(
+        self,
+        tmp_path: str,
+        vectors: Sequence[Sequence[float]],
+        meta_list: List[Dict[str, Any]],
+        count: int,
+    ) -> None:
+        meta_json_bytes = json.dumps(meta_list, ensure_ascii=False).encode("utf-8")
+        meta_offset = self.HEADER_SIZE + (count * self.dim * 4)
+        header_bytes = struct.pack(
+            self.HEADER_FORMAT,
+            self.MAGIC,
+            1,  # Version
+            self.dim,
+            count,
+            meta_offset,
+            0,  # Reserved
+        )
+        with open(tmp_path, "wb") as f:
+            f.write(header_bytes)
+            for vec in vectors:
+                if len(vec) != self.dim:
+                    raise ValueError(
+                        f"Vector dimension {len(vec)} != expected {self.dim}"
+                    )
+                f.write(struct.pack(f"<{self.dim}f", *vec))
+            f.write(meta_json_bytes)
+
     def write_all(
         self,
         vectors: Sequence[Sequence[float]],
@@ -157,37 +198,9 @@ class VectorStorage:
         self.close()
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
         count = len(vectors)
-        meta_list = metadata or [{"id": str(i)} for i in range(count)]
-
-        if count != len(meta_list):
-            raise ValueError(
-                f"Vectors count ({count}) != metadata count ({len(meta_list)})"
-            )
-
-        meta_json_bytes = json.dumps(meta_list, ensure_ascii=False).encode("utf-8")
-        meta_offset = self.HEADER_SIZE + (count * self.dim * 4)
-
-        header_bytes = struct.pack(
-            self.HEADER_FORMAT,
-            self.MAGIC,
-            1,  # Version
-            self.dim,
-            count,
-            meta_offset,
-            0,  # Reserved
-        )
-
+        meta_list = self._prepare_metadata(count, metadata, 0)
         tmp_path = self.file_path + ".tmp"
-        with open(tmp_path, "wb") as f:
-            f.write(header_bytes)
-            for vec in vectors:
-                if len(vec) != self.dim:
-                    raise ValueError(
-                        f"Vector dimension {len(vec)} != expected {self.dim}"
-                    )
-                f.write(struct.pack(f"<{self.dim}f", *vec))
-            f.write(meta_json_bytes)
-
+        self._write_tmp_file(tmp_path, vectors, meta_list, count)
         os.replace(tmp_path, self.file_path)
 
         self.count = count
@@ -198,6 +211,16 @@ class VectorStorage:
             if isinstance(m, dict) and "id" in m
         }
         self.open_mmap()
+
+    def _validate_vectors(
+        self, vectors: Sequence[Sequence[float]]
+    ) -> List[Tuple[float, ...]]:
+        res: List[Tuple[float, ...]] = []
+        for v in vectors:
+            if len(v) != self.dim:
+                raise ValueError(f"Vector dimension {len(v)} != expected {self.dim}")
+            res.append(tuple(v))
+        return res
 
     def append_batch(
         self,
@@ -210,20 +233,10 @@ class VectorStorage:
         if not vectors:
             return []
         count = len(vectors)
-        meta_list = metadata or [{"id": str(self.count + i)} for i in range(count)]
-        if count != len(meta_list):
-            raise ValueError(
-                f"Vectors count ({count}) != metadata count ({len(meta_list)})"
-            )
-
+        meta_list = self._prepare_metadata(count, metadata, self.count)
         all_vecs = self.get_all_vectors()
-        for v in vectors:
-            if len(v) != self.dim:
-                raise ValueError(f"Vector dimension {len(v)} != expected {self.dim}")
-            all_vecs.append(tuple(v))
-
-        new_meta = list(self.metadata)
-        new_meta.extend(meta_list)
+        all_vecs.extend(self._validate_vectors(vectors))
+        new_meta = list(self.metadata) + meta_list
         start_idx = len(all_vecs) - count
         self.write_all(all_vecs, new_meta)
         return list(range(start_idx, len(all_vecs)))

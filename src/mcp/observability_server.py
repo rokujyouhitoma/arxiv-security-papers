@@ -78,48 +78,59 @@ def handle_profile_code_performance(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _extract_top_allocations(snapshot: tracemalloc.Snapshot, top_lines: int) -> List[Dict[str, Any]]:
+    top_stats = snapshot.statistics("lineno")
+    return [
+        {
+            "traceback": str(stat.traceback),
+            "size_kb": round(stat.size / 1024.0, 3),
+            "count": stat.count,
+        }
+        for stat in top_stats[:top_lines]
+    ]
+
+
+def _exec_memory_tracking(code_str: str) -> tuple[Optional[tuple[int, int, tracemalloc.Snapshot]], Optional[str]]:
+    was_tracing = tracemalloc.is_tracing()
+    if not was_tracing:
+        tracemalloc.start()
+    tracemalloc.reset_peak()
+    try:
+        compiled = compile(code_str, "<mcp_mem_track>", "exec")
+        exec(compiled, {}, {})
+        cur, peak = tracemalloc.get_traced_memory()
+        snapshot = tracemalloc.take_snapshot()
+        return (cur, peak, snapshot), None
+    except Exception as e:
+        return None, f"Execution error during memory tracking: {str(e)}"
+    finally:
+        if not was_tracing:
+            tracemalloc.stop()
+
+
+def _validate_track_mem_input(code_str: str) -> Optional[str]:
+    if not code_str.strip():
+        return "Parameter 'code' is required."
+    return validate_safe_code(code_str)
+
+
 def handle_track_memory_allocations(params: Dict[str, Any]) -> Dict[str, Any]:
     """Tracks peak memory and line-by-line allocations using tracemalloc with AST safety checks."""
     code_str = params.get("code", "")
     top_lines = params.get("top_lines", 5)
 
-    if not code_str.strip():
-        return {"error": "Parameter 'code' is required."}
+    err = _validate_track_mem_input(code_str)
+    if err:
+        return {"error": err}
 
-    sec_err = validate_safe_code(code_str)
-    if sec_err:
-        return {"error": sec_err}
+    mem_result, track_err = _exec_memory_tracking(code_str)
+    if track_err:
+        return {"error": track_err}
+    if mem_result is None:
+        return {"error": "Tracking failed"}
 
-    was_tracing = tracemalloc.is_tracing()
-    if not was_tracing:
-        tracemalloc.start()
-    tracemalloc.reset_peak()
-
-    local_scope: Dict[str, Any] = {}
-    try:
-        compiled = compile(code_str, "<mcp_mem_track>", "exec")
-        exec(compiled, {}, local_scope)
-        cur, peak = tracemalloc.get_traced_memory()
-        snapshot = tracemalloc.take_snapshot()
-    except Exception as e:
-        if not was_tracing:
-            tracemalloc.stop()
-        return {"error": f"Execution error during memory tracking: {str(e)}"}
-
-    if not was_tracing:
-        tracemalloc.stop()
-
-    top_stats = snapshot.statistics("lineno")
-    allocations: List[Dict[str, Any]] = []
-    for stat in top_stats[:top_lines]:
-        allocations.append(
-            {
-                "traceback": str(stat.traceback),
-                "size_kb": round(stat.size / 1024.0, 3),
-                "count": stat.count,
-            }
-        )
-
+    cur, peak, snapshot = mem_result
+    allocations = _extract_top_allocations(snapshot, top_lines)
     return {
         "current_memory_kb": round(cur / 1024.0, 3),
         "peak_memory_kb": round(peak / 1024.0, 3),
@@ -155,28 +166,32 @@ def _benchmark_candidate(
         return {"name": name, "error": str(e)}
 
 
+def _calculate_speedups(valid_results: List[Dict[str, Any]]) -> Optional[str]:
+    if not valid_results:
+        return None
+    valid_results.sort(key=lambda x: x["min_time_ms"])
+    fastest_time = valid_results[0]["min_time_ms"]
+    for r in valid_results:
+        r["speedup_ratio"] = round(r["min_time_ms"] / fastest_time, 2) if fastest_time > 0 else 1.0
+    return valid_results[0]["name"]
+
+
+def _validate_bench_candidates(candidates: Any) -> bool:
+    return bool(candidates and isinstance(candidates, list))
+
+
 def handle_benchmark_alternatives(params: Dict[str, Any]) -> Dict[str, Any]:
     """Benchmarks multiple alternative code candidates using timeit with AST safety checks."""
     candidates = params.get("candidates", [])
     number = params.get("number", 100)
     repeat = params.get("repeat", 3)
 
-    if not candidates or not isinstance(candidates, list):
-        return {
-            "error": "Parameter 'candidates' must be a non-empty list of {name, code}."
-        }
+    if not _validate_bench_candidates(candidates):
+        return {"error": "Parameter 'candidates' must be a non-empty list of {name, code}."}
 
     results = [_benchmark_candidate(c, number, repeat) for c in candidates]
     valid_results = [r for r in results if "min_time_ms" in r]
-    winner = None
-    if valid_results:
-        valid_results.sort(key=lambda x: x["min_time_ms"])
-        winner = valid_results[0]["name"]
-        fastest_time = valid_results[0]["min_time_ms"]
-        for r in valid_results:
-            r["speedup_ratio"] = (
-                round(r["min_time_ms"] / fastest_time, 2) if fastest_time > 0 else 1.0
-            )
+    winner = _calculate_speedups(valid_results)
 
     return {
         "iterations_per_run": number,
@@ -238,26 +253,58 @@ WORKSPACE_DIR = get_workspace_dir()
 LOGS_DIR = os.path.join(WORKSPACE_DIR, "outputs", "logs")
 
 
+def _collect_valid_jsonl(lines: List[str], limit: int) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for line in reversed(lines):
+        line_str = line.strip()
+        if not line_str:
+            continue
+        try:
+            records.append(json.loads(line_str))
+            if len(records) >= limit:
+                break
+        except Exception:
+            continue
+    return records
+
+
 def _read_recent_jsonl_records(log_path: str, limit: int = 100) -> List[Dict[str, Any]]:
     """Reads the most recent records from a JSONL log file."""
     if not os.path.exists(log_path):
         return []
-    records: List[Dict[str, Any]] = []
     try:
         with open(log_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        for line in reversed(lines):
-            line = line.strip()
-            if line:
-                try:
-                    records.append(json.loads(line))
-                    if len(records) >= limit:
-                        break
-                except Exception:
-                    continue
+        return _collect_valid_jsonl(lines, limit)
     except Exception as e:
         sys.stderr.write(f"[Observability] Error reading {log_path}: {e}\n")
-    return records
+        return []
+
+
+def _get_memory_status() -> Dict[str, Any]:
+    is_tracing = tracemalloc.is_tracing()
+    current_ram_kb = 0.0
+    peak_ram_kb = 0.0
+    if is_tracing:
+        cur_bytes, peak_bytes = tracemalloc.get_traced_memory()
+        current_ram_kb = round(cur_bytes / 1024.0, 2)
+        peak_ram_kb = round(peak_bytes / 1024.0, 2)
+    return {
+        "tracemalloc_active": is_tracing,
+        "current_ram_kb": current_ram_kb,
+        "peak_ram_kb": peak_ram_kb,
+    }
+
+
+def _get_activity_stats(mcp_records: List[Dict[str, Any]], search_records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    mcp_lats = [r.get("execution_ms", 0.0) for r in mcp_records]
+    search_lats = [r.get("performance", {}).get("total_ms", 0.0) for r in search_records]
+    return {
+        "mcp_calls_sampled": len(mcp_records),
+        "mcp_avg_latency_ms": round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0,
+        "search_queries_sampled": len(search_records),
+        "search_avg_latency_ms": round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0,
+    }
 
 
 def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -266,51 +313,43 @@ def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
 
     fc = FilterCache()
     qc = QueryResultCache()
-
-    # Memory state
-    is_tracing = tracemalloc.is_tracing()
-    current_ram_kb = 0.0
-    peak_ram_kb = 0.0
-    if is_tracing:
-        cur_bytes, peak_bytes = tracemalloc.get_traced_memory()
-        current_ram_kb = round(cur_bytes / 1024.0, 2)
-        peak_ram_kb = round(peak_bytes / 1024.0, 2)
-
-    # Aggregated log stats
-    mcp_records = _read_recent_jsonl_records(
-        os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=50
-    )
-    search_records = _read_recent_jsonl_records(
-        os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=50
-    )
-
-    mcp_lats = [r.get("execution_ms", 0.0) for r in mcp_records]
-    search_lats = [
-        r.get("performance", {}).get("total_ms", 0.0) for r in search_records
-    ]
+    mcp_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=50)
+    search_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=50)
 
     return {
         "status": "healthy",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "python_version": sys.version,
-        "memory": {
-            "tracemalloc_active": is_tracing,
-            "current_ram_kb": current_ram_kb,
-            "peak_ram_kb": peak_ram_kb,
-        },
+        "memory": _get_memory_status(),
         "filter_cache_stats": fc.stats(),
         "query_cache_stats": qc.stats(),
-        "recent_activity": {
-            "mcp_calls_sampled": len(mcp_records),
-            "mcp_avg_latency_ms": (
-                round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0
-            ),
-            "search_queries_sampled": len(search_records),
-            "search_avg_latency_ms": (
-                round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0
-            ),
-        },
+        "recent_activity": _get_activity_stats(mcp_records, search_records),
     }
+
+
+def _extract_log_latency(r: Dict[str, Any]) -> float:
+    return float(
+        r.get("execution_ms")
+        or r.get("performance", {}).get("total_ms", 0.0)
+        or r.get("total_ms", 0.0)
+    )
+
+
+def _extract_log_peak_mem(r: Dict[str, Any]) -> float:
+    return float(
+        r.get("peak_memory_kb") or r.get("performance", {}).get("peak_memory_kb", 0.0)
+    )
+
+
+def _collect_file_logs(source: str, path: str, limit: int, min_latency: float) -> List[Dict[str, Any]]:
+    records = _read_recent_jsonl_records(path, limit=limit)
+    filtered = []
+    for r in records:
+        r_copy = dict(r)
+        r_copy["log_source"] = source
+        if _extract_log_latency(r_copy) >= min_latency:
+            filtered.append(r_copy)
+    return filtered
 
 
 def _filter_and_sort_logs(
@@ -318,38 +357,26 @@ def _filter_and_sort_logs(
 ) -> List[Dict[str, Any]]:
     all_records: List[Dict[str, Any]] = []
     for source, path in files_to_read:
-        records = _read_recent_jsonl_records(path, limit=limit)
-        for r in records:
-            r_copy = dict(r)
-            r_copy["log_source"] = source
-            lat = (
-                r_copy.get("execution_ms")
-                or r_copy.get("performance", {}).get("total_ms", 0.0)
-                or r_copy.get("total_ms", 0.0)
-            )
-            if lat >= min_latency:
-                all_records.append(r_copy)
+        all_records.extend(_collect_file_logs(source, path, limit, min_latency))
     all_records.sort(key=lambda x: str(x.get("timestamp", "")), reverse=True)
     return all_records[:limit]
 
 
+def _calc_metric_aggregates(values: List[float]) -> tuple[float, float]:
+    avg_val = round(sum(values) / len(values), 3) if values else 0.0
+    max_val = round(max(values), 3) if values else 0.0
+    return avg_val, max_val
+
+
 def _summarize_perf_records(all_records: List[Dict[str, Any]]) -> Dict[str, float]:
-    latencies = [
-        r.get("execution_ms")
-        or r.get("performance", {}).get("total_ms", 0.0)
-        or r.get("total_ms", 0.0)
-        for r in all_records
-    ]
-    peak_mems = [
-        r.get("peak_memory_kb") or r.get("performance", {}).get("peak_memory_kb", 0.0)
-        for r in all_records
-    ]
+    latencies = [_extract_log_latency(r) for r in all_records]
+    peak_mems = [_extract_log_peak_mem(r) for r in all_records]
+    avg_lat, max_lat = _calc_metric_aggregates(latencies)
+    _, max_mem = _calc_metric_aggregates(peak_mems)
     return {
-        "avg_latency_ms": (
-            round(sum(latencies) / len(latencies), 3) if latencies else 0.0
-        ),
-        "max_latency_ms": round(max(latencies), 3) if latencies else 0.0,
-        "max_peak_memory_kb": round(max(peak_mems), 3) if peak_mems else 0.0,
+        "avg_latency_ms": avg_lat,
+        "max_latency_ms": max_lat,
+        "max_peak_memory_kb": max_mem,
     }
 
 
@@ -363,9 +390,7 @@ def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
     if log_type in ("mcp", "all"):
         files_to_read.append(("mcp", os.path.join(LOGS_DIR, "mcp_perf_log.jsonl")))
     if log_type in ("search", "all"):
-        files_to_read.append(
-            ("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl"))
-        )
+        files_to_read.append(("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl")))
     if log_type in ("query", "all"):
         files_to_read.append(("query", os.path.join(LOGS_DIR, "query_log.jsonl")))
 
@@ -412,24 +437,28 @@ def _format_metrics_markdown(
 
 
 def _compute_search_stats(records: List[Dict[str, Any]]) -> Dict[str, Any]:
-    lats = [r.get("performance", {}).get("total_ms", 0.0) for r in records]
-    peaks = [r.get("performance", {}).get("peak_memory_kb", 0.0) for r in records]
+    lats = [_extract_log_latency(r) for r in records]
+    peaks = [_extract_log_peak_mem(r) for r in records]
+    avg_lat, max_lat = _calc_metric_aggregates(lats)
+    _, max_mem = _calc_metric_aggregates(peaks)
     return {
         "total_queries": len(records),
-        "avg_latency_ms": round(sum(lats) / len(lats), 3) if lats else 0.0,
-        "max_latency_ms": round(max(lats), 3) if lats else 0.0,
-        "max_peak_memory_kb": round(max(peaks), 3) if peaks else 0.0,
+        "avg_latency_ms": avg_lat,
+        "max_latency_ms": max_lat,
+        "max_peak_memory_kb": max_mem,
     }
 
 
 def _compute_mcp_stats(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     lats = [r.get("execution_ms", 0.0) for r in records]
     peaks = [r.get("peak_memory_kb", 0.0) for r in records]
+    avg_lat, max_lat = _calc_metric_aggregates(lats)
+    _, max_mem = _calc_metric_aggregates(peaks)
     return {
         "total_calls": len(records),
-        "avg_execution_ms": round(sum(lats) / len(lats), 3) if lats else 0.0,
-        "max_execution_ms": round(max(lats), 3) if lats else 0.0,
-        "max_peak_memory_kb": round(max(peaks), 3) if peaks else 0.0,
+        "avg_execution_ms": avg_lat,
+        "max_execution_ms": max_lat,
+        "max_peak_memory_kb": max_mem,
     }
 
 
@@ -818,34 +847,66 @@ def _rpc_prompts_get(req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _get_tools_list() -> List[Dict[str, Any]]:
+    return [
+        {
+            "name": n,
+            "description": d["description"],
+            "inputSchema": d["inputSchema"],
+        }
+        for n, d in TOOLS_REGISTRY.items()
+    ]
+
+
+def _get_resources_list() -> List[Dict[str, Any]]:
+    return [
+        {
+            "uri": u,
+            "name": d["name"],
+            "description": d["description"],
+            "mimeType": d["mimeType"],
+        }
+        for u, d in RESOURCES_REGISTRY.items()
+    ]
+
+
+def _get_prompts_list() -> List[Dict[str, Any]]:
+    return [
+        {"name": n, "description": d["description"], "arguments": d["arguments"]}
+        for n, d in PROMPTS_REGISTRY.items()
+    ]
+
+
 def _dispatch_list_rpc(method: str, req_id: Any) -> Optional[Dict[str, Any]]:
-    if method == "tools/list":
-        tools_list = [
-            {
-                "name": n,
-                "description": d["description"],
-                "inputSchema": d["inputSchema"],
-            }
-            for n, d in TOOLS_REGISTRY.items()
-        ]
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools_list}}
-    if method == "resources/list":
-        res_list = [
-            {
-                "uri": u,
-                "name": d["name"],
-                "description": d["description"],
-                "mimeType": d["mimeType"],
-            }
-            for u, d in RESOURCES_REGISTRY.items()
-        ]
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": res_list}}
-    if method == "prompts/list":
-        prompts_list = [
-            {"name": n, "description": d["description"], "arguments": d["arguments"]}
-            for n, d in PROMPTS_REGISTRY.items()
-        ]
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": prompts_list}}
+    list_map = {
+        "tools/list": lambda: {"tools": _get_tools_list()},
+        "resources/list": lambda: {"resources": _get_resources_list()},
+        "prompts/list": lambda: {"prompts": _get_prompts_list()},
+    }
+    if method in list_map:
+        return {"jsonrpc": "2.0", "id": req_id, "result": list_map[method]()}
+    return None
+
+
+def _handle_observability_init(req_id: Any) -> Dict[str, Any]:
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {"tools": {}, "resources": {}, "prompts": {}},
+            "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
+        },
+    }
+
+
+def _handle_system_rpc(method: str, req_id: Any) -> Optional[Dict[str, Any]]:
+    if method == "initialize":
+        return _handle_observability_init(req_id)
+    if method == "notifications/initialized":
+        return None
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
     return None
 
 
@@ -855,31 +916,20 @@ def dispatch_rpc_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     req_id = req.get("id")
     params = req.get("params", {})
 
-    if method == "initialize":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}, "resources": {}, "prompts": {}},
-                "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
-            },
-        }
-    if method == "notifications/initialized":
-        return None
-    if method == "ping":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+    if method in ("initialize", "notifications/initialized", "ping"):
+        return _handle_system_rpc(method, req_id)
 
     list_res = _dispatch_list_rpc(method, req_id)
     if list_res is not None:
         return list_res
 
-    if method == "tools/call":
-        return _rpc_tools_call(req_id, params)
-    if method == "resources/read":
-        return _rpc_resources_read(req_id, params)
-    if method == "prompts/get":
-        return _rpc_prompts_get(req_id, params)
+    action_map = {
+        "tools/call": lambda: _rpc_tools_call(req_id, params),
+        "resources/read": lambda: _rpc_resources_read(req_id, params),
+        "prompts/get": lambda: _rpc_prompts_get(req_id, params),
+    }
+    if method in action_map:
+        return action_map[method]()
 
     return {
         "jsonrpc": "2.0",

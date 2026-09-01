@@ -11,7 +11,7 @@ import json
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .arbiter import Arbiter
 from .config import SupervisorConfig
@@ -231,23 +231,7 @@ def parse_bind(bind_str: str) -> tuple[str, int]:
     return "0.0.0.0", int(bind_str)
 
 
-def _build_default_config(
-    args: argparse.Namespace,
-    workspace_dir: str,
-    control_sock: str,
-) -> SupervisorConfig:
-    """Builds default SupervisorConfig from args."""
-    host, port = parse_bind(args.bind) if args.bind else ("0.0.0.0", 8000)
-    cfg_dict: Dict[str, Any] = {
-        "bind_host": host,
-        "bind_port": port,
-        "worker_class": args.worker_class or "sync",
-        "threads": args.threads or 1,
-        "timeout": args.timeout or 30.0,
-        "app_uri": args.app or "web.server:app",
-        "control_socket": control_sock,
-        "workspace_dir": workspace_dir,
-    }
+def _apply_optional_args(cfg_dict: Dict[str, Any], args: argparse.Namespace) -> None:
     if args.workers is not None:
         cfg_dict["workers"] = args.workers
     if getattr(args, "daemon", False):
@@ -256,6 +240,39 @@ def _build_default_config(
         cfg_dict["log_file"] = args.log_file
     if getattr(args, "pid_file", None) is not None:
         cfg_dict["pid_file"] = args.pid_file
+
+
+def _resolve_arg(args: argparse.Namespace, name: str, default: Any) -> Any:
+    val = getattr(args, name, None)
+    return val if val is not None else default
+
+
+def _build_base_cfg_dict(
+    args: argparse.Namespace,
+    workspace_dir: str,
+    control_sock: str,
+) -> Dict[str, Any]:
+    host, port = parse_bind(args.bind) if args.bind else ("0.0.0.0", 8000)
+    return {
+        "bind_host": host,
+        "bind_port": port,
+        "worker_class": _resolve_arg(args, "worker_class", "sync"),
+        "threads": _resolve_arg(args, "threads", 1),
+        "timeout": _resolve_arg(args, "timeout", 30.0),
+        "app_uri": _resolve_arg(args, "app", "web.server:app"),
+        "control_socket": control_sock,
+        "workspace_dir": workspace_dir,
+    }
+
+
+def _build_default_config(
+    args: argparse.Namespace,
+    workspace_dir: str,
+    control_sock: str,
+) -> SupervisorConfig:
+    """Builds default SupervisorConfig from args."""
+    cfg_dict = _build_base_cfg_dict(args, workspace_dir, control_sock)
+    _apply_optional_args(cfg_dict, args)
     return SupervisorConfig.from_dict(cfg_dict)
 
 
@@ -301,6 +318,49 @@ def _build_start_config(
     return _apply_config_overrides(config_obj, args, control_sock)
 
 
+def _handle_already_running(err_msg: str) -> int:
+    print(f"\n⚠️  [Supervisor Arbiter Error] {err_msg}")
+    print("\n💡 Available actions:")
+    print("  • View dashboard: python -m supervisor.cli top")
+    print("  • Check status:   python -m supervisor.cli status")
+    print("  • Stop arbiter:   python -m supervisor.cli stop")
+    print("  • Restart:        python -m supervisor.cli restart\n")
+    return 1
+
+
+def _handle_runtime_error(ex: RuntimeError) -> int:
+    err_msg = str(ex)
+    if "already running" in err_msg:
+        return _handle_already_running(err_msg)
+    print(f"\n\u274c [Supervisor Arbiter Error] {err_msg}")
+    return 1
+
+
+def _maybe_daemonize(arbiter: Any, config: SupervisorConfig) -> None:
+    if config.daemon:
+        print(f"\U0001f680 [Supervisor Arbiter] Daemonizing (Log: {config.log_file}, PID: {config.pid_file})...")
+        arbiter.daemonize()
+
+
+def _run_arbiter(config: SupervisorConfig) -> int:
+    arbiter = None
+    try:
+        arbiter = Arbiter(config)
+        _maybe_daemonize(arbiter, config)
+        arbiter.start()
+        return 0
+    except KeyboardInterrupt:
+        print("\n[*] Interrupted by user. Shutting down...")
+        if arbiter:
+            arbiter.shutdown()
+        return 0
+    except RuntimeError as ex:
+        return _handle_runtime_error(ex)
+    except Exception as ex:
+        print(f"\n\u274c [Supervisor Arbiter Fatal Error] Unexpected failure during startup: {ex}")
+        return 1
+
+
 def _handle_start(
     args: argparse.Namespace,
     config_obj: Optional[SupervisorConfig],
@@ -313,37 +373,7 @@ def _handle_start(
         f"🚀 [Supervisor Arbiter] Booting {config.workers} '{config.worker_class}' workers "
         f"on {config.bind_host}:{config.bind_port} (App: {config.app_uri})..."
     )
-    try:
-        arbiter = Arbiter(config)
-        if config.daemon:
-            print(
-                f"🚀 [Supervisor Arbiter] Daemonizing process to background "
-                f"(Log: {config.log_file}, PID file: {config.pid_file})..."
-            )
-            arbiter.daemonize()
-        arbiter.start()
-        return 0
-    except KeyboardInterrupt:
-        print("\n[*] Interrupted by user. Shutting down...")
-        arbiter.shutdown()
-        return 0
-    except RuntimeError as ex:
-        err_msg = str(ex)
-        if "already running" in err_msg:
-            print(f"\n⚠️  [Supervisor Arbiter Error] {err_msg}")
-            print("\n💡 Available actions:")
-            print("  • View dashboard: python -m supervisor.cli top")
-            print("  • Check status:   python -m supervisor.cli status")
-            print("  • Stop arbiter:   python -m supervisor.cli stop")
-            print("  • Restart:        python -m supervisor.cli restart\n")
-            return 1
-        print(f"\n❌ [Supervisor Arbiter Error] {err_msg}")
-        return 1
-    except Exception as ex:
-        print(
-            f"\n❌ [Supervisor Arbiter Fatal Error] Unexpected failure during startup: {ex}"
-        )
-        return 1
+    return _run_arbiter(config)
 
 
 def _read_file_pid(path: Optional[str]) -> Optional[int]:
@@ -380,12 +410,17 @@ def _resolve_old_pid(
     )
 
 
-def _wait_for_pid_shutdown(old_pid: int) -> None:
-    """Waits up to 5 seconds for old PID shutdown, escalating to SIGKILL if necessary."""
+def _escalate_to_sigkill(old_pid: int) -> None:
     import signal
+    try:
+        os.kill(old_pid, signal.SIGKILL)
+    except OSError:
+        pass
+    time.sleep(0.2)
 
-    print(f"[*] Waiting for Arbiter (PID: {old_pid}) to shut down...")
-    terminated = False
+
+def _poll_pid_termination(old_pid: int) -> bool:
+    import signal
     for step in range(50):
         try:
             os.kill(old_pid, 0)
@@ -396,18 +431,17 @@ def _wait_for_pid_shutdown(old_pid: int) -> None:
                     pass
             time.sleep(0.1)
         except OSError:
-            terminated = True
-            break
+            return True
+    return False
 
+
+def _wait_for_pid_shutdown(old_pid: int) -> None:
+    """Waits up to 5 seconds for old PID shutdown, escalating to SIGKILL if necessary."""
+    print(f"[*] Waiting for Arbiter (PID: {old_pid}) to shut down...")
+    terminated = _poll_pid_termination(old_pid)
     if not terminated:
-        print(
-            f"[!] Arbiter (PID: {old_pid}) did not shut down gracefully. Sending SIGKILL..."
-        )
-        try:
-            os.kill(old_pid, signal.SIGKILL)
-        except OSError:
-            pass
-        time.sleep(0.2)
+        print(f"[!] Arbiter (PID: {old_pid}) did not shut down gracefully. Sending SIGKILL...")
+        _escalate_to_sigkill(old_pid)
 
 
 def _cleanup_paths(*paths: Optional[str]) -> None:
@@ -420,6 +454,23 @@ def _cleanup_paths(*paths: Optional[str]) -> None:
                 pass
 
 
+def _stop_running_arbiter(control_sock: str, old_pid: Optional[int]) -> Optional[int]:
+    import signal
+    if os.path.exists(control_sock):
+        try:
+            resp = ControlClient(control_sock).stop()
+            print(f"[+] Sent stop signal to running Arbiter via IPC: {resp.get('status', 'sent')}")
+        except Exception:
+            pass
+    if old_pid is not None:
+        try:
+            os.kill(old_pid, 0)
+            os.kill(old_pid, signal.SIGTERM)
+        except OSError:
+            old_pid = None
+    return old_pid
+
+
 def _handle_restart(
     args: argparse.Namespace,
     config_obj: Optional[SupervisorConfig],
@@ -427,31 +478,12 @@ def _handle_restart(
     control_sock: str,
 ) -> int:
     """Handles supervisor restart by stopping running instance and starting fresh."""
-    import signal
-
     print("🔄 [Supervisor Arbiter] Initiating restart sequence...")
     config = _build_start_config(args, config_obj, workspace_dir, control_sock)
     old_pid = _resolve_old_pid(config.pid_file, config.lock_file, control_sock)
-
-    if os.path.exists(control_sock):
-        try:
-            resp = ControlClient(control_sock).stop()
-            print(
-                f"[+] Sent stop signal to running Arbiter via IPC: {resp.get('status', 'sent')}"
-            )
-        except Exception:
-            pass
-
-    if old_pid is not None:
-        try:
-            os.kill(old_pid, 0)
-            os.kill(old_pid, signal.SIGTERM)
-        except OSError:
-            old_pid = None
-
+    old_pid = _stop_running_arbiter(control_sock, old_pid)
     if old_pid is not None:
         _wait_for_pid_shutdown(old_pid)
-
     _cleanup_paths(config.pid_file, config.lock_file, control_sock)
     return _handle_start(args, config_obj, workspace_dir, control_sock)
 
@@ -527,18 +559,13 @@ def _handle_control(
     return _handle_simple_cmd(cmd, args, client)
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    """Main CLI entrypoint dispatching commands."""
-    parser = build_parser()
-    try:
-        args = parser.parse_args(argv)
-    except SystemExit:
-        return 1
-
+def _resolve_cli_context(
+    args: argparse.Namespace,
+) -> Tuple[str, Optional[SupervisorConfig], str]:
+    """Resolves workspace dir, supervisor config, and control socket path."""
     workspace_dir = os.path.abspath(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     )
-
     config_obj: Optional[SupervisorConfig] = None
     if args.config:
         config_obj = SupervisorConfig.from_file(args.config)
@@ -550,13 +577,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         if config_obj and config_obj.control_socket
         else os.path.join(workspace_dir, "outputs", "supervisor", "control.sock")
     )
+    return workspace_dir, config_obj, control_sock
 
-    cmd = args.command or "start"
-    if cmd == "start":
-        return _handle_start(args, config_obj, workspace_dir, control_sock)
-    if cmd == "restart":
-        return _handle_restart(args, config_obj, workspace_dir, control_sock)
 
+def _dispatch_control_client(
+    cmd: str, args: argparse.Namespace, control_sock: str
+) -> int:
+    """Dispatches command to control client with graceful error messages."""
     try:
         client = ControlClient(control_sock)
         return _handle_control(cmd, args, client)
@@ -571,6 +598,24 @@ def main(argv: Optional[List[str]] = None) -> int:
     except Exception as ex:
         print(f"\n❌ [Supervisor Control Error] Command '{cmd}' failed: {ex}")
         return 1
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Main CLI entrypoint dispatching commands."""
+    parser = build_parser()
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        return 1
+
+    workspace_dir, config_obj, control_sock = _resolve_cli_context(args)
+    cmd = args.command or "start"
+    if cmd == "start":
+        return _handle_start(args, config_obj, workspace_dir, control_sock)
+    if cmd == "restart":
+        return _handle_restart(args, config_obj, workspace_dir, control_sock)
+
+    return _dispatch_control_client(cmd, args, control_sock)
 
 
 if __name__ == "__main__":

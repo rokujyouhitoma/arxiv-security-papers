@@ -42,36 +42,44 @@ class PIRManager(IntelligencePhaseProtocol):
         self._current_weights = TopicWeightVector()
         self._load_or_seed_defaults(auto_seed=auto_seed)
 
+    def _parse_pir_horizon(self, raw: str) -> PIRHorizon:
+        try:
+            return PIRHorizon(raw)
+        except ValueError:
+            return PIRHorizon.OPERATIONAL
+
+    def _load_pir_item(self, item: Dict[str, Any]) -> PIRRequirement:
+        horizon_val = self._parse_pir_horizon(item.get("horizon", "operational"))
+        return PIRRequirement(
+            req_id=item["req_id"],
+            title=item["title"],
+            description=item.get("description", ""),
+            target_topics=item.get("target_topics", []),
+            priority_score=item.get("priority_score", 1.0),
+            horizon=horizon_val,
+            escalation_level=item.get("escalation_level", 0),
+            escalated_at=item.get("escalated_at"),
+            is_active=item.get("is_active", True),
+        )
+
+    def _load_registry_from_disk(self) -> bool:
+        try:
+            with open(self.storage_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                for item in data.get("requirements", []):
+                    req = self._load_pir_item(item)
+                    self._requirements[req.req_id] = req
+                if "weights" in data:
+                    self._current_weights.weights = data["weights"]
+                    return True
+        except Exception:
+            pass
+        return False
+
     def _load_or_seed_defaults(self, auto_seed: bool = False) -> None:
         """Loads PIR registry from disk if available, otherwise optionally seeds domain defaults."""
         if self.storage_path and os.path.exists(self.storage_path):
-            try:
-                with open(self.storage_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for item in data.get("requirements", []):
-                        raw_horizon = item.get("horizon", "operational")
-                        try:
-                            horizon_val = PIRHorizon(raw_horizon)
-                        except ValueError:
-                            horizon_val = PIRHorizon.OPERATIONAL
-
-                        req = PIRRequirement(
-                            req_id=item["req_id"],
-                            title=item["title"],
-                            description=item.get("description", ""),
-                            target_topics=item.get("target_topics", []),
-                            priority_score=item.get("priority_score", 1.0),
-                            horizon=horizon_val,
-                            escalation_level=item.get("escalation_level", 0),
-                            escalated_at=item.get("escalated_at"),
-                            is_active=item.get("is_active", True),
-                        )
-                        self._requirements[req.req_id] = req
-                    if "weights" in data:
-                        self._current_weights.weights = data["weights"]
-                        return
-            except Exception:
-                pass
+            self._load_registry_from_disk()
 
         if auto_seed and not self._requirements:
             self._seed_default_requirements()
@@ -222,6 +230,32 @@ class PIRManager(IntelligencePhaseProtocol):
     def get_weights(self) -> Dict[str, float]:
         return dict(self._current_weights.weights)
 
+    def _normalize_vector(
+        self, topics: set, source: Dict[str, Any], total: float
+    ) -> Dict[str, float]:
+        return {t: source.get(t, 0.0) / total if total > 0 else 0.0 for t in topics}
+
+    def _calc_new_weights(
+        self,
+        all_topics: set,
+        u_usage: Dict[str, float],
+        g_gap: Dict[str, float],
+        d_drift: Dict[str, float],
+    ) -> Dict[str, float]:
+        new_weights: Dict[str, float] = {}
+        for t in all_topics:
+            w_old = self._current_weights.weights.get(
+                t, 1.0 / len(all_topics) if all_topics else 1.0
+            )
+            feedback_term = (
+                self.beta * u_usage.get(t, 0.0)
+                + self.gamma * g_gap.get(t, 0.0)
+                + self.delta * d_drift.get(t, 0.0)
+            )
+            w_new = self.alpha * w_old + (1.0 - self.alpha) * feedback_term
+            new_weights[t] = max(0.001, w_new)
+        return new_weights
+
     def update_weights_from_feedback(
         self,
         usage_counts: Dict[str, int],
@@ -237,65 +271,35 @@ class PIRManager(IntelligencePhaseProtocol):
         if not all_topics:
             return self._current_weights
 
-        # 1. Normalize usage vector
-        total_usage = sum(usage_counts.values())
-        u_usage: Dict[str, float] = {}
-        for t in all_topics:
-            u_usage[t] = (
-                usage_counts.get(t, 0) / total_usage if total_usage > 0 else 0.0
-            )
+        u_usage = self._normalize_vector(all_topics, usage_counts, sum(usage_counts.values()))
+        g_gap = self._normalize_vector(all_topics, knowledge_gaps, sum(knowledge_gaps.values()))
+        d_drift = self._normalize_vector(all_topics, topic_drifts, sum(topic_drifts.values()))
 
-        # 2. Normalize gap vector
-        total_gap = sum(knowledge_gaps.values())
-        g_gap: Dict[str, float] = {}
-        for t in all_topics:
-            g_gap[t] = knowledge_gaps.get(t, 0.0) / total_gap if total_gap > 0 else 0.0
-
-        # 3. Normalize drift vector
-        total_drift = sum(topic_drifts.values())
-        d_drift: Dict[str, float] = {}
-        for t in all_topics:
-            d_drift[t] = (
-                topic_drifts.get(t, 0.0) / total_drift if total_drift > 0 else 0.0
-            )
-
-        # 4. Composite update
-        new_weights: Dict[str, float] = {}
-        for t in all_topics:
-            w_old = self._current_weights.weights.get(
-                t, 1.0 / len(all_topics) if all_topics else 1.0
-            )
-            feedback_term = (
-                self.beta * u_usage.get(t, 0.0)
-                + self.gamma * g_gap.get(t, 0.0)
-                + self.delta * d_drift.get(t, 0.0)
-            )
-            w_new = self.alpha * w_old + (1.0 - self.alpha) * feedback_term
-            new_weights[t] = max(0.001, w_new)
-
-        self._current_weights.weights = new_weights
+        self._current_weights.weights = self._calc_new_weights(all_topics, u_usage, g_gap, d_drift)
         self._current_weights.normalize()
         self._save_state()
         return self._current_weights
+
+    def _collect_target_topics(self, active_reqs: List[PIRRequirement]) -> List[str]:
+        target_topics: List[str] = []
+        for r in active_reqs:
+            target_topics.extend(r.target_topics)
+        target_topics = sorted(set(target_topics))
+        if not target_topics and self._current_weights.weights:
+            target_topics = sorted(self._current_weights.weights.keys())
+        return target_topics
 
     def create_directive(
         self, directive_id: str, base_crawl_quota: int = 50
     ) -> IntelligenceDirective:
         """Generates an operational IntelligenceDirective with 3-Horizon quota allocation."""
         active_reqs = self.list_active_requirements()
-        target_topics: List[str] = []
-        for r in active_reqs:
-            target_topics.extend(r.target_topics)
-        target_topics = sorted(list(set(target_topics)))
-
-        if not target_topics and self._current_weights.weights:
-            target_topics = sorted(list(self._current_weights.weights.keys()))
+        target_topics = self._collect_target_topics(active_reqs)
 
         weights = self.get_weights()
         quotas: Dict[str, int] = {}
         for t in target_topics:
             w = weights.get(t, 1.0 / max(1, len(target_topics)))
-            # Allocate quota proportional to weight: base * (1 + w * 2)
             quotas[t] = max(5, int(math.ceil(base_crawl_quota * w * 2.0)))
 
         horizon_counts: Dict[str, int] = {
@@ -314,6 +318,45 @@ class PIRManager(IntelligencePhaseProtocol):
             },
         )
 
+    def _should_escalate_topic(self, topic: str, telemetry: FeedbackTelemetry, req: Any) -> bool:
+        gap = telemetry.knowledge_gaps.get(topic, 0.0)
+        drift = telemetry.topic_drift_scores.get(topic, 0.0)
+        return (gap > 0.35 or drift > 0.35) and req.horizon != PIRHorizon.TACTICAL
+
+    def _escalate_req_if_needed(self, req: Any, telemetry: FeedbackTelemetry) -> None:
+        for topic in req.target_topics:
+            if self._should_escalate_topic(topic, telemetry, req):
+                gap = telemetry.knowledge_gaps.get(topic, 0.0)
+                drift = telemetry.topic_drift_scores.get(topic, 0.0)
+                self.escalate_requirement(
+                    req.req_id,
+                    reason=f"Severe knowledge gap ({gap:.2f}) or drift ({drift:.2f})",
+                    target_horizon=PIRHorizon.TACTICAL,
+                )
+                break
+
+    def _escalate_requirements_from_gaps(
+        self, telemetry: FeedbackTelemetry
+    ) -> None:
+        for req in self._requirements.values():
+            self._escalate_req_if_needed(req, telemetry)
+
+    def _auto_create_pir_for_gaps(self, telemetry: FeedbackTelemetry) -> None:
+        for gap_topic, gap_score in telemetry.knowledge_gaps.items():
+            if gap_score > 0.3 and gap_topic not in self._requirements:
+                horizon = PIRHorizon.TACTICAL if gap_score > 0.5 else PIRHorizon.OPERATIONAL
+                self.register_requirement(
+                    PIRRequirement(
+                        req_id=f"pir_auto_{len(self._requirements) + 1}",
+                        title=f"Auto-Adapted PIR: {gap_topic}",
+                        description=f"Self-adapted PIR triggered by knowledge gap score {gap_score:.3f}",
+                        target_topics=[gap_topic],
+                        priority_score=min(1.0, 0.5 + gap_score * 0.5),
+                        horizon=horizon,
+                    ),
+                    save=True,
+                )
+
     def adapt_queries_from_telemetry(
         self, telemetry: FeedbackTelemetry
     ) -> TopicWeightVector:
@@ -323,38 +366,8 @@ class PIRManager(IntelligencePhaseProtocol):
             telemetry.knowledge_gaps,
             telemetry.topic_drift_scores,
         )
-
-        # 1. Trigger dynamic escalation on high-gap or high-drift topics
-        for req in self._requirements.values():
-            for topic in req.target_topics:
-                gap = telemetry.knowledge_gaps.get(topic, 0.0)
-                drift = telemetry.topic_drift_scores.get(topic, 0.0)
-                if (gap > 0.35 or drift > 0.35) and req.horizon != PIRHorizon.TACTICAL:
-                    self.escalate_requirement(
-                        req.req_id,
-                        reason=f"Severe knowledge gap ({gap:.2f}) or drift ({drift:.2f})",
-                        target_horizon=PIRHorizon.TACTICAL,
-                    )
-                    break
-
-        # 2. Automatically create or adapt PIR requirements for new severe knowledge gaps
-        for gap_topic, gap_score in telemetry.knowledge_gaps.items():
-            if gap_score > 0.3 and gap_topic not in self._requirements:
-                self.register_requirement(
-                    PIRRequirement(
-                        req_id=f"pir_auto_{len(self._requirements) + 1}",
-                        title=f"Auto-Adapted PIR: {gap_topic}",
-                        description=f"Self-adapted PIR triggered by knowledge gap score {gap_score:.3f}",
-                        target_topics=[gap_topic],
-                        priority_score=min(1.0, 0.5 + gap_score * 0.5),
-                        horizon=(
-                            PIRHorizon.TACTICAL
-                            if gap_score > 0.5
-                            else PIRHorizon.OPERATIONAL
-                        ),
-                    ),
-                    save=True,
-                )
+        self._escalate_requirements_from_gaps(telemetry)
+        self._auto_create_pir_for_gaps(telemetry)
         return self._current_weights
 
     def execute(self, context: PhaseContext) -> PhaseContext:

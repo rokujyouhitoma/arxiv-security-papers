@@ -121,20 +121,26 @@ class VectorizedScan(BatchIterator):
         self._cursor = 0
         self._is_open = True
 
-    def next_batch(self) -> Optional[ColumnBatch]:
-        if not self._is_open or self._cursor >= len(self.rows):
-            return None
+    @staticmethod
+    def _collect_keys(rows: List[Dict[str, Any]]) -> Set[str]:
+        keys: Set[str] = set()
+        for r in rows:
+            keys.update(r.keys())
+        return keys
 
+    def _is_exhausted(self) -> bool:
+        if not self._is_open:
+            return True
+        return self._cursor >= len(self.rows)
+
+    def next_batch(self) -> Optional[ColumnBatch]:
+        if self._is_exhausted():
+            return None
         slice_rows = self.rows[self._cursor : self._cursor + self.batch_size]
         self._cursor += len(slice_rows)
-
         if not slice_rows:
             return None
-
-        all_keys: Set[str] = set()
-        for r in slice_rows:
-            all_keys.update(r.keys())
-
+        all_keys = self._collect_keys(slice_rows)
         columns: Dict[str, List[Any]] = {
             k: [r.get(k) for r in slice_rows] for k in all_keys
         }
@@ -197,6 +203,31 @@ class VectorizedProjection(BatchIterator):
         self.child.close()
 
 
+def _update_min(v: Any, min_val: Optional[Any]) -> Any:
+    if min_val is None:
+        return v
+    return v if v < min_val else min_val
+
+
+def _update_max(v: Any, max_val: Optional[Any]) -> Any:
+    if max_val is None:
+        return v
+    return v if v > max_val else max_val
+
+
+def _process_batch_value(
+    v: Any,
+    count: int,
+    total_sum: float,
+    min_val: Optional[Any],
+    max_val: Optional[Any],
+) -> Tuple[int, float, Optional[Any], Optional[Any]]:
+    count += 1
+    if isinstance(v, (int, float)):
+        total_sum += float(v)
+    return count, total_sum, _update_min(v, min_val), _update_max(v, max_val)
+
+
 def _collect_column_stats(
     iterator: BatchIterator,
     column_name: str,
@@ -206,7 +237,6 @@ def _collect_column_stats(
     total_sum = 0.0
     min_val: Optional[Any] = None
     max_val: Optional[Any] = None
-
     iterator.open()
     try:
         while True:
@@ -214,18 +244,12 @@ def _collect_column_stats(
             if batch is None:
                 break
             for v in batch.get_column(column_name):
-                if v is None:
-                    continue
-                count += 1
-                if isinstance(v, (int, float)):
-                    total_sum += float(v)
-                if min_val is None or v < min_val:
-                    min_val = v
-                if max_val is None or v > max_val:
-                    max_val = v
+                if v is not None:
+                    count, total_sum, min_val, max_val = _process_batch_value(
+                        v, count, total_sum, min_val, max_val
+                    )
     finally:
         iterator.close()
-
     return count, total_sum, min_val, max_val
 
 
@@ -241,15 +265,16 @@ def _format_aggregate_result(
         return count
     if count == 0:
         return None
-    if agg == "SUM":
-        return total_sum
-    if agg == "AVG":
-        return total_sum / count
-    if agg == "MIN":
-        return min_val
-    if agg == "MAX":
-        return max_val
-    raise ValueError(f"Unsupported aggregate function: {agg}")
+    dispatch = {
+        "SUM": lambda: total_sum,
+        "AVG": lambda: total_sum / count,
+        "MIN": lambda: min_val,
+        "MAX": lambda: max_val,
+    }
+    fn = dispatch.get(agg)
+    if fn is None:
+        raise ValueError(f"Unsupported aggregate function: {agg}")
+    return fn()
 
 
 class VectorizedAggregation:

@@ -15,12 +15,20 @@ from ..index.embedding import DeterministicEmbedding
 from ..storage.storage import VectorStorage
 
 
+def _parse_vec(v_raw: Any) -> list:
+    return json.loads(v_raw) if isinstance(v_raw, str) else list(v_raw)
+
+
+def _valid_vecs(v1: list, v2: list) -> bool:
+    return bool(v1) and bool(v2) and len(v1) == len(v2)
+
+
 def cosine_sim_udf(v1_raw: Any, v2_raw: Any) -> float:
     """SQLite UDF: Computes cosine similarity between two vectors."""
     try:
-        v1 = json.loads(v1_raw) if isinstance(v1_raw, str) else list(v1_raw)
-        v2 = json.loads(v2_raw) if isinstance(v2_raw, str) else list(v2_raw)
-        if not v1 or not v2 or len(v1) != len(v2):
+        v1 = _parse_vec(v1_raw)
+        v2 = _parse_vec(v2_raw)
+        if not _valid_vecs(v1, v2):
             return 0.0
         dot = sum(a * b for a, b in zip(v1, v2))
         return float(max(0.0, min(1.0, dot)))

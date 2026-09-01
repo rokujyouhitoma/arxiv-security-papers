@@ -5,11 +5,11 @@ Utilizes Merkle Tree difference detection to perform minimal-bandwidth
 bidirectional data reconciliation across distributed replicas.
 """
 
-from typing import Dict
+from typing import Dict, Optional
 
 from .merkle_tree import MerkleTree
 from .quorum import QuorumReplica
-from .version_vector import ConflictResolutionStrategy, resolve_conflict
+from .version_vector import ConflictResolutionStrategy, VersionedValue, resolve_conflict
 
 
 class AntiEntropySynchronizer:
@@ -25,6 +25,26 @@ class AntiEntropySynchronizer:
             data_map[key] = f"{versioned_val.value}:{versioned_val.clock.to_json()}"
         return MerkleTree(data_map)
 
+    @staticmethod
+    def _needs_update(
+        val: "Optional[VersionedValue]", latest: "VersionedValue"
+    ) -> bool:
+        if val is None:
+            return True
+        return val.clock.happens_before(latest.clock)
+
+    def _update_replica_if_needed(
+        self,
+        replica: QuorumReplica,
+        key: str,
+        val: Optional[VersionedValue],
+        latest: VersionedValue,
+    ) -> int:
+        if self._needs_update(val, latest):
+            replica.put(key, latest)
+            return 1
+        return 0
+
     def _sync_key(
         self,
         key: str,
@@ -34,27 +54,16 @@ class AntiEntropySynchronizer:
         """Synchronizes a single key across two replicas."""
         val_a = replica_a.get(key)
         val_b = replica_b.get(key)
-
         versions = [v for v in (val_a, val_b) if v is not None]
         if not versions:
             return 0
-
         resolved = resolve_conflict(versions, strategy=ConflictResolutionStrategy.LWW)
         if not resolved:
             return 0
-
-        latest_version = resolved[0]
-        reconciled = 0
-
-        if val_a is None or val_a.clock.happens_before(latest_version.clock):
-            replica_a.put(key, latest_version)
-            reconciled += 1
-
-        if val_b is None or val_b.clock.happens_before(latest_version.clock):
-            replica_b.put(key, latest_version)
-            reconciled += 1
-
-        return reconciled
+        latest = resolved[0]
+        cnt_a = self._update_replica_if_needed(replica_a, key, val_a, latest)
+        cnt_b = self._update_replica_if_needed(replica_b, key, val_b, latest)
+        return cnt_a + cnt_b
 
     def synchronize(
         self,

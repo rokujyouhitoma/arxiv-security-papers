@@ -156,21 +156,25 @@ def _load_state(state_path: str) -> Dict[str, Any]:
     return {}
 
 
+def _parse_pub_date_utc(pub_str: Optional[str]) -> Optional[datetime]:
+    """Parses publication date string to UTC datetime."""
+    if not pub_str or len(pub_str) < 10:
+        return None
+    try:
+        return datetime.strptime(pub_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
 def _is_date_in_range(
     pub_str: Optional[str], start_dt: Optional[datetime], end_dt: Optional[datetime]
 ) -> bool:
-    if pub_str and len(pub_str) >= 10:
-        try:
-            pub_dt = datetime.strptime(pub_str[:10], "%Y-%m-%d").replace(
-                tzinfo=timezone.utc
-            )
-            if start_dt and pub_dt < start_dt:
-                return False
-            if end_dt and pub_dt > end_dt:
-                return False
-        except Exception:
-            pass
-    return True
+    pub_dt = _parse_pub_date_utc(pub_str)
+    if pub_dt is None:
+        return True
+    after_start = start_dt is None or pub_dt >= start_dt
+    before_end = end_dt is None or pub_dt <= end_dt
+    return after_start and before_end
 
 
 def _filter_and_stage_papers(
@@ -216,6 +220,31 @@ def _atomic_json_dump(data: Any, target_path: str) -> None:
         raise
 
 
+def _ingest_single_paper_into_graph(item: Dict[str, Any], workspace_dir: str, graph_engine: Any, extractor: Any) -> None:
+    """Extracts entities and triples from OKF file and inserts into property graph."""
+    abs_okf = os.path.join(workspace_dir, item.get("rel_okf_path", ""))
+    if not os.path.exists(abs_okf):
+        return
+    with open(abs_okf, "r", encoding="utf-8") as f:
+        content = f.read()
+    clean_id = item.get("arxiv_id", "")
+    entities, triples = extractor.extract_from_okf(clean_id, content)
+
+    for ent in entities:
+        graph_engine.add_vertex(
+            vertex_id=ent.id,
+            label=ent.entity_type.value,
+            properties=ent.to_dict(),
+        )
+    for tr in triples:
+        graph_engine.add_edge(
+            src_id=tr.subject_id,
+            dst_id=tr.object_id,
+            label=tr.predicate.value,
+            weight=tr.weight,
+        )
+
+
 def _ingest_items_into_knowledge_graph(
     processed_items: List[Dict[str, Any]], workspace_dir: str
 ) -> None:
@@ -228,27 +257,7 @@ def _ingest_items_into_knowledge_graph(
 
         graph_engine = PropertyGraphEngine(workspace_dir=workspace_dir)
         for item in processed_items:
-            abs_okf = os.path.join(workspace_dir, item.get("rel_okf_path", ""))
-            if not os.path.exists(abs_okf):
-                continue
-            with open(abs_okf, "r", encoding="utf-8") as f:
-                content = f.read()
-            clean_id = item.get("arxiv_id", "")
-            entities, triples = OntologyExtractor.extract_from_okf(clean_id, content)
-
-            for ent in entities:
-                graph_engine.add_vertex(
-                    vertex_id=ent.id,
-                    label=ent.entity_type.value,
-                    properties=ent.to_dict(),
-                )
-            for tr in triples:
-                graph_engine.add_edge(
-                    src_id=tr.subject_id,
-                    dst_id=tr.object_id,
-                    label=tr.predicate.value,
-                    weight=tr.weight,
-                )
+            _ingest_single_paper_into_graph(item, workspace_dir, graph_engine, OntologyExtractor)
         graph_engine.save()
         print(
             f"[KnowledgeGraph] Ingested {len(processed_items)} papers into graph database."
@@ -406,6 +415,42 @@ def _ensure_config_paths(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return cfg
 
 
+def _stage_theme_papers(
+    theme_id: str,
+    all_raw_items: List[RawItem],
+    workspace_dir: str,
+    cfg: Dict[str, Any],
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    force: bool,
+) -> tuple[List[tuple[Dict[str, Any], str, str]], Dict[str, Any], str]:
+    """Stages theme papers for download and returns tasks, state, and state_path."""
+    papers_data = [item.to_dict() for item in all_raw_items]
+    state_filename = (
+        "processed_papers.json"
+        if theme_id == "security"
+        else f"processed_papers_{theme_id}.json"
+    )
+    state_path = os.path.join(workspace_dir, state_filename)
+    processed_state = _load_state(state_path)
+
+    pdf_fetch_tasks = _filter_and_stage_papers(
+        papers_data, workspace_dir, cfg, processed_state, start_dt, end_dt, force
+    )
+    return pdf_fetch_tasks, processed_state, state_path
+
+
+def _download_theme_pdfs(pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]], max_workers: int) -> None:
+    """Downloads PDFs for tasks in parallel."""
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(fetch_single_pdf_and_text, p, r_dir)
+            for p, r_dir, _ in pdf_fetch_tasks
+        ]
+        for _ in as_completed(futures):
+            pass
+
+
 def run_theme_pipeline(
     theme_id: str = "security",
     workspace_dir: str = "",
@@ -417,18 +462,15 @@ def run_theme_pipeline(
     max_workers: int = 8,
 ) -> List[Dict[str, Any]]:
     """Executes ingestion and reporting for a specific intelligence theme."""
-    if not workspace_dir:
-        workspace_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..")
-        )
+    target_workspace = workspace_dir or os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..")
+    )
     cfg = _ensure_config_paths(config)
 
     theme_mgr = get_theme_manager()
     theme = theme_mgr.get(theme_id)
     if not theme:
-        print(
-            f"[ERROR] Unknown theme ID: {theme_id}. Available themes: {theme_mgr.list_theme_ids()}"
-        )
+        print(f"[ERROR] Unknown theme ID: {theme_id}.")
         return []
 
     print(f"=== [Theme Pipeline] Running theme '{theme.name}' ({theme.theme_id}) ===")
@@ -441,50 +483,19 @@ def run_theme_pipeline(
         root_span.set_attribute("theme.id", theme_id)
         root_span.set_attribute("theme.name", theme.name)
 
-        with tracer.start_as_current_span("pipeline.ingest") as fetch_span:
-            all_raw_items = _fetch_theme_raw_items(theme, max_results, start_dt, end_dt)
-            fetch_span.set_attribute("pipeline.raw_count", len(all_raw_items))
-
-        print(
-            f"[Theme: {theme_id}] Fetched {len(all_raw_items)} items from {len(theme.sources)} sources."
+        all_raw_items = _fetch_theme_raw_items(theme, max_results, start_dt, end_dt)
+        pdf_fetch_tasks, processed_state, state_path = _stage_theme_papers(
+            theme_id, all_raw_items, target_workspace, cfg, start_dt, end_dt, force
         )
-
-        papers_data = [item.to_dict() for item in all_raw_items]
-        state_filename = (
-            "processed_papers.json"
-            if theme_id == "security"
-            else f"processed_papers_{theme_id}.json"
-        )
-        state_path = os.path.join(workspace_dir, state_filename)
-        processed_state = _load_state(state_path)
-
-        pdf_fetch_tasks = _filter_and_stage_papers(
-            papers_data, workspace_dir, cfg, processed_state, start_dt, end_dt, force
-        )
-
         if not pdf_fetch_tasks:
             print(f"[Theme: {theme_id}] No new papers to stage.")
             return []
 
-        with tracer.start_as_current_span("pipeline.fetch_pdf_and_text") as pdf_span:
-            pdf_span.set_attribute("pipeline.pdf_task_count", len(pdf_fetch_tasks))
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(fetch_single_pdf_and_text, p, r_dir)
-                    for p, r_dir, _ in pdf_fetch_tasks
-                ]
-                for _ in as_completed(futures):
-                    pass
-
-        with tracer.start_as_current_span("pipeline.transform_okf") as okf_span:
-            processed_items = _transform_and_save_okf(
-                pdf_fetch_tasks, workspace_dir, cfg, processed_state, state_path
-            )
-            okf_span.set_attribute("pipeline.processed_count", len(processed_items))
-
-        with tracer.start_as_current_span("pipeline.summaries_and_index"):
-            _generate_summaries_and_index(workspace_dir, cfg, processed_items)
-
+        _download_theme_pdfs(pdf_fetch_tasks, max_workers)
+        processed_items = _transform_and_save_okf(
+            pdf_fetch_tasks, target_workspace, cfg, processed_state, state_path
+        )
+        _generate_summaries_and_index(target_workspace, cfg, processed_items)
         return processed_items
 
 
@@ -534,6 +545,36 @@ def _execute_dry_run_validation(workspace_dir: str, config: Dict[str, Any]) -> N
     print("[DRY-RUN] Dry run validation completed successfully.")
 
 
+def _load_custom_theme_if_given(args: argparse.Namespace, theme_mgr: Any) -> None:
+    """Loads custom theme from file if passed via CLI."""
+    if args.custom_theme_file:
+        custom_theme = theme_mgr.load_from_json_file(args.custom_theme_file)
+        if custom_theme:
+            print(
+                f"[Theme] Loaded custom theme: {custom_theme.name} ({custom_theme.theme_id})"
+            )
+
+
+def _execute_cli_pipeline(
+    args: argparse.Namespace, workspace_dir: str, config: Dict[str, Any], theme_mgr: Any
+) -> None:
+    """Executes target themes from CLI arguments."""
+    start_dt, end_dt = _parse_cli_date_range(args)
+    force = bool(args.force or "--force" in sys.argv)
+    theme_ids = theme_mgr.list_theme_ids() if args.all_themes else [args.theme]
+
+    for tid in theme_ids:
+        run_theme_pipeline(
+            theme_id=tid,
+            workspace_dir=workspace_dir,
+            config=config,
+            max_results=args.max_results,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            force=force,
+        )
+
+
 def main() -> None:
     """CLI Entrypoint for Multi-Theme Papers ETL Pipeline."""
     parser = argparse.ArgumentParser(
@@ -561,31 +602,13 @@ def main() -> None:
     config = load_config()
     theme_mgr = get_theme_manager()
 
-    if args.custom_theme_file:
-        custom_theme = theme_mgr.load_from_json_file(args.custom_theme_file)
-        if custom_theme:
-            print(
-                f"[Theme] Loaded custom theme: {custom_theme.name} ({custom_theme.theme_id})"
-            )
+    _load_custom_theme_if_given(args, theme_mgr)
 
     if args.dry_run:
         _execute_dry_run_validation(workspace_dir, config)
         return
 
-    start_dt, end_dt = _parse_cli_date_range(args)
-    force = args.force or "--force" in sys.argv
-
-    theme_ids = theme_mgr.list_theme_ids() if args.all_themes else [args.theme]
-    for tid in theme_ids:
-        run_theme_pipeline(
-            theme_id=tid,
-            workspace_dir=workspace_dir,
-            config=config,
-            max_results=args.max_results,
-            start_dt=start_dt,
-            end_dt=end_dt,
-            force=force,
-        )
+    _execute_cli_pipeline(args, workspace_dir, config, theme_mgr)
 
 
 if __name__ == "__main__":

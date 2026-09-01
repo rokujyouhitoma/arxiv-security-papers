@@ -62,6 +62,18 @@ class HintedHandoffManager:
             return len(self._hints.get(target_node_id, []))
         return sum(len(hints) for hints in self._hints.values())
 
+    def _apply_hints(
+        self, target_replica: "QuorumReplica", hints: "List[Hint]"
+    ) -> "tuple[int, List[Hint]]":
+        applied = 0
+        remaining: List[Hint] = []
+        for hint in hints:
+            if target_replica.put(hint.key, hint.version):
+                applied += 1
+            else:
+                remaining.append(hint)
+        return applied, remaining
+
     def flush_hints_for_node(self, target_replica: QuorumReplica) -> int:
         """
         Delivers all stored hints to the target replica if online and clears them.
@@ -69,24 +81,13 @@ class HintedHandoffManager:
         """
         if not target_replica.is_online:
             return 0
-
         target_id = target_replica.node_id
         hints = self._hints.get(target_id, [])
         if not hints:
             return 0
-
-        applied_count = 0
-        remaining_hints: List[Hint] = []
-
-        for hint in hints:
-            if target_replica.put(hint.key, hint.version):
-                applied_count += 1
-            else:
-                remaining_hints.append(hint)
-
-        if remaining_hints:
-            self._hints[target_id] = remaining_hints
+        applied_count, remaining = self._apply_hints(target_replica, hints)
+        if remaining:
+            self._hints[target_id] = remaining
         else:
             self._hints.pop(target_id, None)
-
         return applied_count

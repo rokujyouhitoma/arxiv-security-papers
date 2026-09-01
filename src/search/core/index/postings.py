@@ -57,6 +57,11 @@ class MultiFieldPostingsIndex:
                         matched_docs.add(doc_id)
         return matched_docs
 
+    def _check_fuzzy_match(self, t: str, term_lower: str, max_dist: int) -> bool:
+        if abs(len(t) - len(term_lower)) > max_dist:
+            return False
+        return self._levenshtein(t, term_lower, max_distance=max_dist) <= max_dist
+
     def search_fuzzy(self, field: str, term: str, max_distance: int = 1) -> Set[str]:
         matched_docs: Set[str] = set()
         term_lower = term.lower()
@@ -64,12 +69,7 @@ class MultiFieldPostingsIndex:
             return matched_docs
 
         for t, plist in self.field_indexes[field].items():
-            if abs(len(t) - len(term_lower)) > max_distance:
-                continue
-            if (
-                self._levenshtein(t, term_lower, max_distance=max_distance)
-                <= max_distance
-            ):
+            if self._check_fuzzy_match(t, term_lower, max_distance):
                 for doc_id, _ in plist.get_docs():
                     matched_docs.add(doc_id)
         return matched_docs
@@ -89,11 +89,31 @@ class MultiFieldPostingsIndex:
         return min_val
 
     @classmethod
-    def _levenshtein(cls, s1: str, s2: str, max_distance: Optional[int] = None) -> int:
+    def _run_levenshtein_dp(
+        cls, s1: str, s2: str, len_s2: int, max_distance: Optional[int]
+    ) -> int:
+        v0 = list(range(len_s2 + 1))
+        v1 = [0] * (len_s2 + 1)
+        for i, c1 in enumerate(s1):
+            min_val = cls._compute_dp_row(c1, s2, v0, v1, i + 1)
+            if max_distance is not None and min_val > max_distance:
+                return max_distance + 1
+            v0, v1 = v1, v0
+        return v0[len_s2]
+
+    @classmethod
+    def _check_trivial_levenshtein(cls, s1: str, s2: str) -> Optional[int]:
         if s1 == s2:
             return 0
         if not s1 or not s2:
             return max(len(s1), len(s2))
+        return None
+
+    @classmethod
+    def _levenshtein(cls, s1: str, s2: str, max_distance: Optional[int] = None) -> int:
+        trivial = cls._check_trivial_levenshtein(s1, s2)
+        if trivial is not None:
+            return trivial
         if len(s1) < len(s2):
             s1, s2 = s2, s1
 
@@ -101,13 +121,4 @@ class MultiFieldPostingsIndex:
         if max_distance is not None and (len_s1 - len_s2) > max_distance:
             return max_distance + 1
 
-        v0 = list(range(len_s2 + 1))
-        v1 = [0] * (len_s2 + 1)
-
-        for i, c1 in enumerate(s1):
-            min_val = cls._compute_dp_row(c1, s2, v0, v1, i + 1)
-            if max_distance is not None and min_val > max_distance:
-                return max_distance + 1
-            v0, v1 = v1, v0
-
-        return v0[len_s2]
+        return cls._run_levenshtein_dp(s1, s2, len_s2, max_distance)

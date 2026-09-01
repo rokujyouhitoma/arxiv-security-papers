@@ -7,7 +7,8 @@ with integrated Phi Accrual failure detection.
 
 import enum
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+
 
 from .phi_accrual import PhiAccrualDetector
 
@@ -106,6 +107,33 @@ class GossipNode:
             "members": [m.to_dict() for m in self.members.values()],
         }
 
+    def _merge_new_peer(
+        self, peer_id: str, in_gen: int, in_seq: int, in_meta: dict, now: float
+    ) -> None:
+        new_state = NodeState(
+            node_id=peer_id,
+            generation=in_gen,
+            heartbeat_seq=in_seq,
+            status=NodeStatus.ALIVE,
+            metadata=in_meta,
+        )
+        new_state.detector.heartbeat(now)
+        self.members[peer_id] = new_state
+
+    def _update_existing_peer(
+        self, peer_id: str, in_gen: int, in_seq: int, in_meta: dict, now: float
+    ) -> None:
+        existing = self.members[peer_id]
+        newer = in_gen > existing.generation or (
+            in_gen == existing.generation and in_seq > existing.heartbeat_seq
+        )
+        if newer:
+            existing.generation = in_gen
+            existing.heartbeat_seq = in_seq
+            existing.metadata.update(in_meta)
+            existing.status = NodeStatus.ALIVE
+            existing.detector.heartbeat(now)
+
     def process_gossip_message(
         self,
         payload: Dict[str, Any],
@@ -116,39 +144,25 @@ class GossipNode:
         Updates PhiAccrual detector on receiving newer heartbeats.
         """
         now = timestamp if timestamp is not None else time.time()
-        incoming_members: List[Dict[str, Any]] = payload.get("members", [])
-
-        for item in incoming_members:
+        for item in payload.get("members", []):
             peer_id = item.get("node_id")
             if not peer_id:
                 continue
-
             in_gen = int(item.get("generation", 1))
             in_seq = int(item.get("heartbeat_seq", 0))
             in_meta = item.get("metadata", {})
-
             if peer_id not in self.members:
-                # Discovered new peer
-                new_state = NodeState(
-                    node_id=peer_id,
-                    generation=in_gen,
-                    heartbeat_seq=in_seq,
-                    status=NodeStatus.ALIVE,
-                    metadata=in_meta,
-                )
-                new_state.detector.heartbeat(now)
-                self.members[peer_id] = new_state
+                self._merge_new_peer(peer_id, in_gen, in_seq, in_meta, now)
             else:
-                existing = self.members[peer_id]
-                # Compare generation and sequence
-                if (in_gen > existing.generation) or (
-                    in_gen == existing.generation and in_seq > existing.heartbeat_seq
-                ):
-                    existing.generation = in_gen
-                    existing.heartbeat_seq = in_seq
-                    existing.metadata.update(in_meta)
-                    existing.status = NodeStatus.ALIVE
-                    existing.detector.heartbeat(now)
+                self._update_existing_peer(peer_id, in_gen, in_seq, in_meta, now)
+
+    @staticmethod
+    def _phi_to_status(phi_val: float) -> "NodeStatus":
+        if phi_val >= 12.0:
+            return NodeStatus.DEAD
+        if phi_val >= 8.0:
+            return NodeStatus.SUSPECT
+        return NodeStatus.ALIVE
 
     def check_failure_states(
         self,
@@ -160,20 +174,10 @@ class GossipNode:
         """
         now = current_time if current_time is not None else time.time()
         states_summary: Dict[str, NodeStatus] = {}
-
         for peer_id, state in self.members.items():
             if peer_id == self.node_id:
                 states_summary[peer_id] = NodeStatus.ALIVE
                 continue
-
-            phi_val = state.detector.phi(now)
-            if phi_val >= 12.0:
-                state.status = NodeStatus.DEAD
-            elif phi_val >= 8.0:
-                state.status = NodeStatus.SUSPECT
-            else:
-                state.status = NodeStatus.ALIVE
-
+            state.status = self._phi_to_status(state.detector.phi(now))
             states_summary[peer_id] = state.status
-
         return states_summary

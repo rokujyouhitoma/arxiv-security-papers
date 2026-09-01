@@ -335,6 +335,19 @@ def handle_search_security_papers(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _compact_doc_item(d: Dict[str, Any]) -> Dict[str, Any]:
+    raw_desc = d.get("description") or d.get("abstract") or ""
+    summary = raw_desc[:200] + ("..." if len(raw_desc) > 200 else "")
+    return {
+        "id": d.get("id"),
+        "title": d.get("title"),
+        "title_ja": d.get("title_ja", d.get("title")),
+        "category": d.get("category", ""),
+        "score": round(float(d.get("score", 0.0)), 4),
+        "summary": summary,
+    }
+
+
 def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
     query = args.get("query", "")
     top_k = args.get("top_k", 10)
@@ -346,26 +359,8 @@ def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
         query, facets=facets, top_k=max(top_k, offset + limit)
     )
 
-    # Sanitize and compact hybrid response to prevent token explosion
     raw_results = resp.get("results", []) if isinstance(resp, dict) else []
-    compact_docs = []
-    for d in raw_results:
-        compact_docs.append(
-            {
-                "id": d.get("id"),
-                "title": d.get("title"),
-                "title_ja": d.get("title_ja", d.get("title")),
-                "category": d.get("category", ""),
-                "score": round(float(d.get("score", 0.0)), 4),
-                "summary": (d.get("description") or d.get("abstract") or "")[:200]
-                + (
-                    "..."
-                    if len(d.get("description") or d.get("abstract") or "") > 200
-                    else ""
-                ),
-            }
-        )
-
+    compact_docs = [_compact_doc_item(d) for d in raw_results]
     paginated_docs, pagination_meta = paginate_results(
         compact_docs, offset=offset, limit=limit
     )
@@ -422,8 +417,7 @@ def handle_get_paper_summary(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _truncate_trends_content(content: str, max_chars: int) -> tuple[str, bool]:
-    """Helper to truncate massive markdown tables from trend summaries."""
+def _find_table_cut_index(content: str) -> int:
     split_markers = [
         "## 4. 論文一覧",
         "## 論文一覧",
@@ -431,12 +425,13 @@ def _truncate_trends_content(content: str, max_chars: int) -> tuple[str, bool]:
         "### 全論文一覧",
         "| arxiv_id |",
     ]
-    cut_idx = -1
-    for marker in split_markers:
-        idx = content.find(marker)
-        if idx > 0 and (cut_idx == -1 or idx < cut_idx):
-            cut_idx = idx
+    indices = [content.find(m) for m in split_markers if content.find(m) > 0]
+    return min(indices) if indices else -1
 
+
+def _truncate_trends_content(content: str, max_chars: int) -> tuple[str, bool]:
+    """Helper to truncate massive markdown tables from trend summaries."""
+    cut_idx = _find_table_cut_index(content)
     if cut_idx > 0:
         msg = (
             f"\n\n> [!NOTE]\n> （個別論文表は文字数抑制のため省略されました。"
@@ -454,54 +449,46 @@ def _truncate_trends_content(content: str, max_chars: int) -> tuple[str, bool]:
     return content, False
 
 
+def _get_trend_summary_files(period: str) -> tuple[Optional[str], List[str]]:
+    period_prefix_map = {
+        "monthly": "03_monthly",
+        "quarterly": "04_quarterly",
+        "annual": "05_annual",
+    }
+    prefix = period_prefix_map.get(period, "03_monthly")
+    summary_dir = os.path.join(WORKSPACE_DIR, "outputs", "executive_summaries", prefix)
+    if not os.path.exists(summary_dir):
+        return f"Summary directory for period '{period}' not found.", []
+    files = sorted(glob.glob(os.path.join(summary_dir, "*.md")), reverse=True)
+    if not files:
+        return f"No trend summary found for period '{period}'.", []
+    return None, files
+
+
 def handle_get_latest_trends(args: Dict[str, Any]) -> Dict[str, Any]:
     period = args.get("period", "monthly")
     full_content = args.get("full_content", False)
     max_chars = args.get("max_chars", 4000)
-    period_prefix = (
-        "03_monthly"
-        if period == "monthly"
-        else "04_quarterly" if period == "quarterly" else "05_annual"
-    )
-    summary_dir = os.path.join(
-        WORKSPACE_DIR,
-        "outputs",
-        "executive_summaries",
-        period_prefix,
-    )
 
-    if not os.path.exists(summary_dir):
-        return {
-            "status": "error",
-            "message": f"Summary directory for period '{period}' not found.",
-        }
+    err, summary_files = _get_trend_summary_files(period)
+    if err:
+        return {"status": "error", "message": err}
 
-    summary_files = sorted(glob.glob(os.path.join(summary_dir, "*.md")), reverse=True)
-    if not summary_files:
-        return {
-            "status": "error",
-            "message": f"No summary files found for period '{period}'.",
-        }
-
-    target_file = os.path.realpath(summary_files[0])
-    if not is_safe_workspace_path(target_file):
-        return {
-            "status": "error",
-            "message": "Access denied: file path outside workspace or sensitive.",
-        }
-
+    target_file = summary_files[0]
     with open(target_file, "r", encoding="utf-8") as f:
         content = f.read()
 
     truncated = False
-    if not full_content and len(content) > max_chars:
+    if not full_content:
         content, truncated = _truncate_trends_content(content, max_chars)
 
     return {
         "status": "success",
         "period": period,
-        "latest_file": os.path.basename(target_file),
-        "truncated": truncated,
+        "file": os.path.basename(target_file),
+        "path": os.path.relpath(target_file, WORKSPACE_DIR),
+        "total_chars": len(content),
+        "is_truncated": truncated,
         "content": content,
     }
 
@@ -669,6 +656,12 @@ def _match_cwe_warnings(code_lower: str) -> tuple[List[Dict[str, Any]], List[str
     return warnings, suggested_mitigations
 
 
+def _assess_code_risk(warnings: List[Dict[str, Any]]) -> str:
+    if any(w["risk"] == "HIGH" for w in warnings):
+        return "HIGH"
+    return "MEDIUM" if warnings else "LOW"
+
+
 def handle_verify_code_security(args: Dict[str, Any]) -> Dict[str, Any]:
     code = args.get("code_snippet", "")
     language = args.get("language", "python").lower()
@@ -682,11 +675,7 @@ def handle_verify_code_security(args: Dict[str, Any]) -> Dict[str, Any]:
     warnings, suggested_mitigations = _match_cwe_warnings(code.lower())
     query_terms = " ".join([w["name"] for w in warnings]) if warnings else code[:100]
     relevant_papers = get_vector_engine().search(query_terms, top_k=3)
-    risk_level = (
-        "HIGH"
-        if any(w["risk"] == "HIGH" for w in warnings)
-        else ("MEDIUM" if warnings else "LOW")
-    )
+    risk_level = _assess_code_risk(warnings)
 
     return {
         "status": "success",
@@ -714,7 +703,6 @@ def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
 
     data = CWE_MITIGATION_DATABASE.get(cwe_id)
     if not data:
-        # Fallback search in VectorEngine
         results = get_vector_engine().search(cwe_id, top_k=5)
         return {
             "status": "success",
@@ -722,9 +710,7 @@ def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
             "name": f"Academic references for {cwe_id}",
             "risk": "MEDIUM",
             "description": f"Custom weakness exploration for {cwe_id}",
-            "secure_patterns": [
-                "Review academic reference papers for state-of-the-art defense mitigations."
-            ],
+            "secure_patterns": ["Review academic reference papers for state-of-the-art defense mitigations."],
             "academic_papers": results,
         }
 
@@ -748,35 +734,34 @@ def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _read_paper_resource(uri: str) -> Dict[str, Any]:
+    arxiv_id = uri.replace("arxiv://paper/", "").strip()
+    res = handle_get_paper_summary({"arxiv_id": arxiv_id})
+    if res.get("status") != "success":
+        return {"status": "error", "message": f"Resource '{uri}' not found."}
+    return {"uri": uri, "mimeType": "text/markdown", "text": res.get("content", "")}
+
+
+def _read_trends_resource(uri: str) -> Dict[str, Any]:
+    res = handle_get_latest_trends({"period": "monthly"})
+    if res.get("status") != "success":
+        return {"status": "error", "message": "Trend resource not found."}
+    return {"uri": uri, "mimeType": "text/markdown", "text": res.get("content", "")}
+
+
 def handle_read_resource(uri: str) -> Dict[str, Any]:
     """Handles MCP resources/read for arxiv:// URIs"""
     if uri.startswith("arxiv://paper/"):
-        arxiv_id = uri.replace("arxiv://paper/", "").strip()
-        res = handle_get_paper_summary({"arxiv_id": arxiv_id})
-        if res.get("status") != "success":
-            return {"status": "error", "message": f"Resource '{uri}' not found."}
-        return {
-            "uri": uri,
-            "mimeType": "text/markdown",
-            "text": res.get("content", ""),
-        }
-    elif uri == "arxiv://trends/latest":
-        res = handle_get_latest_trends({"period": "monthly"})
-        if res.get("status") != "success":
-            return {"status": "error", "message": "Trend resource not found."}
-        return {
-            "uri": uri,
-            "mimeType": "text/markdown",
-            "text": res.get("content", ""),
-        }
-    elif uri == "arxiv://cwe-taxonomy":
+        return _read_paper_resource(uri)
+    if uri == "arxiv://trends/latest":
+        return _read_trends_resource(uri)
+    if uri == "arxiv://cwe-taxonomy":
         return {
             "uri": uri,
             "mimeType": "application/json",
             "text": json.dumps(CWE_MITIGATION_DATABASE, ensure_ascii=False, indent=2),
         }
-    else:
-        return {"status": "error", "message": f"Unknown resource URI: '{uri}'"}
+    return {"status": "error", "message": f"Unknown resource URI: '{uri}'"}
 
 
 def handle_get_prompt(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -792,11 +777,9 @@ def handle_get_prompt(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         )
         return {
             "description": f"Security audit prompt for {lang} code",
-            "messages": [
-                {"role": "user", "content": {"type": "text", "text": prompt_text}}
-            ],
+            "messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}],
         }
-    elif name == "generate_exploit_poc_tests":
+    if name == "generate_exploit_poc_tests":
         arxiv_id = arguments.get("arxiv_id", "")
         framework = arguments.get("target_framework", "pytest")
         summary_res = handle_get_paper_summary({"arxiv_id": arxiv_id})
@@ -809,54 +792,59 @@ def handle_get_prompt(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         )
         return {
             "description": f"PoC regression test generator for arXiv:{arxiv_id}",
-            "messages": [
-                {"role": "user", "content": {"type": "text", "text": prompt_text}}
-            ],
+            "messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}],
         }
-    elif name == "recommend_cwe_mitigation":
+    if name == "recommend_cwe_mitigation":
         cwe_id = arguments.get("cwe_id", "CWE-89")
         lang = arguments.get("language", "python")
         recipe = handle_get_cwe_mitigation_recipe({"cwe_id": cwe_id})
         cwe_name = recipe.get("name", "")
-        patterns = "\n".join(
-            [f"- {p}" for p in recipe.get("secure_coding_patterns", [])]
-        )
+        patterns = "\n".join([f"- {p}" for p in recipe.get("secure_coding_patterns", [])])
         prompt_text = (
-            f"Generate an enterprise-grade secure implementation in {lang} preventing {cwe_id} ({cwe_name}).\n\n"
-            f"Security Requirements:\n{patterns}\n\n"
-            "Provide production-ready code with comprehensive edge-case handling."
+            f"Recommend remediation patterns for weakness {cwe_id} ({cwe_name}) in {lang}.\n\n"
+            f"### Verified Secure Coding Patterns:\n{patterns}\n\n"
+            "Generate production-grade, hardened code avoiding this weakness."
         )
         return {
-            "description": f"Mitigation code generation prompt for {cwe_id}",
-            "messages": [
-                {"role": "user", "content": {"type": "text", "text": prompt_text}}
-            ],
+            "description": f"Remediation pattern prompt for {cwe_id}",
+            "messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}],
         }
-    else:
-        return {"status": "error", "message": f"Unknown prompt: '{name}'"}
+    return {"status": "error", "message": f"Unknown prompt: '{name}'"}
 
 
 def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-    if name == "search_security_papers":
-        return handle_search_security_papers(arguments)
-    elif name == "search_papers_hybrid":
-        return handle_search_papers_hybrid(arguments)
-    elif name == "query_knowledge_graph":
-        return handle_query_knowledge_graph(arguments)
-    elif name == "get_paper_summary":
-        return handle_get_paper_summary(arguments)
-    elif name == "get_latest_trends":
-        return handle_get_latest_trends(arguments)
-    elif name == "query_attack_technique":
-        return handle_query_attack_technique(arguments)
-    elif name == "get_related_papers_graph":
-        return handle_get_related_papers_graph(arguments)
-    elif name == "verify_code_security":
-        return handle_verify_code_security(arguments)
-    elif name == "get_cwe_mitigation_recipe":
-        return handle_get_cwe_mitigation_recipe(arguments)
-    else:
-        return {"status": "error", "message": f"Unknown tool: '{name}'"}
+    tool_map: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
+        "search_security_papers": handle_search_security_papers,
+        "search_papers_hybrid": handle_search_papers_hybrid,
+        "query_knowledge_graph": handle_query_knowledge_graph,
+        "get_paper_summary": handle_get_paper_summary,
+        "get_latest_trends": handle_get_latest_trends,
+        "query_attack_technique": handle_query_attack_technique,
+        "get_related_papers_graph": handle_get_related_papers_graph,
+        "verify_code_security": handle_verify_code_security,
+        "get_cwe_mitigation_recipe": handle_get_cwe_mitigation_recipe,
+    }
+    handler = tool_map.get(name)
+    if handler:
+        return handler(arguments)
+    return {"status": "error", "message": f"Unknown tool: '{name}'"}
+
+
+def _count_output_items(output: Dict[str, Any]) -> Optional[int]:
+    if "count" in output:
+        return output["count"]
+    for key in ("results", "papers"):
+        val = output.get(key)
+        if isinstance(val, list):
+            return len(val)
+    return None
+
+
+def _extract_papers_metrics(output: Any) -> Dict[str, Any]:
+    if not isinstance(output, dict):
+        return {}
+    c = _count_output_items(output)
+    return {"hits": c} if c is not None else {}
 
 
 def _dispatch_papers_tool_call(req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -865,19 +853,8 @@ def _dispatch_papers_tool_call(req_id: Any, params: Dict[str, Any]) -> Dict[str,
     t0 = time.perf_counter()
     output = dispatch_tool(tool_name, tool_args)
     exec_ms = (time.perf_counter() - t0) * 1000.0
-    status = (
-        "error"
-        if isinstance(output, dict) and output.get("status") == "error"
-        else "success"
-    )
-    metrics: Dict[str, Any] = {}
-    if isinstance(output, dict):
-        if "count" in output:
-            metrics["hits"] = output["count"]
-        elif "results" in output and isinstance(output["results"], list):
-            metrics["hits"] = len(output["results"])
-        elif "papers" in output and isinstance(output["papers"], list):
-            metrics["hits"] = len(output["papers"])
+    status = "error" if isinstance(output, dict) and output.get("status") == "error" else "success"
+    metrics = _extract_papers_metrics(output)
 
     log_mcp_performance(
         server_name="arxiv-security-papers",
@@ -892,12 +869,7 @@ def _dispatch_papers_tool_call(req_id: Any, params: Dict[str, Any]) -> Dict[str,
         "jsonrpc": "2.0",
         "id": req_id,
         "result": {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps(output, ensure_ascii=False, indent=2),
-                }
-            ]
+            "content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False, indent=2)}]
         },
     }
 
@@ -984,48 +956,45 @@ def _dispatch_papers_prompt_get(req_id: Any, params: Dict[str, Any]) -> Dict[str
     return {"jsonrpc": "2.0", "id": req_id, "result": output}
 
 
+def _handle_papers_init(req_id: Any) -> Dict[str, Any]:
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "prompts": {"listChanged": False},
+                "resources": {"subscribe": False, "listChanged": False},
+            },
+            "serverInfo": {"name": "arxiv-security-papers", "version": "1.0.0"},
+        },
+    }
+
+
 def _dispatch_papers_rpc(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     req_id = req.get("id")
     method = req.get("method")
     params = req.get("params", {})
 
     if method == "initialize":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": {"listChanged": False},
-                    "prompts": {"listChanged": False},
-                    "resources": {"subscribe": False, "listChanged": False},
-                },
-                "serverInfo": {
-                    "name": "arxiv-security-papers",
-                    "version": "1.0.0",
-                },
-            },
-        }
+        return _handle_papers_init(req_id)
     if method == "notifications/initialized":
         return None
     if method == "ping":
         return {"jsonrpc": "2.0", "id": req_id, "result": {}}
-    if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}}
-    if method == "tools/call":
-        return _dispatch_papers_tool_call(req_id, params)
-    if method == "resources/list":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {"resources": RESOURCES_MANIFEST},
-        }
-    if method == "resources/read":
-        return _dispatch_papers_resource_read(req_id, params)
-    if method == "prompts/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": PROMPTS_MANIFEST}}
-    if method == "prompts/get":
-        return _dispatch_papers_prompt_get(req_id, params)
+
+    dispatch_map = {
+        "tools/list": lambda: {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}},
+        "tools/call": lambda: _dispatch_papers_tool_call(req_id, params),
+        "resources/list": lambda: {"jsonrpc": "2.0", "id": req_id, "result": {"resources": RESOURCES_MANIFEST}},
+        "resources/read": lambda: _dispatch_papers_resource_read(req_id, params),
+        "prompts/list": lambda: {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": PROMPTS_MANIFEST}},
+        "prompts/get": lambda: _dispatch_papers_prompt_get(req_id, params),
+    }
+    if method in dispatch_map:
+        return dispatch_map[method]()
+
     return {
         "jsonrpc": "2.0",
         "id": req_id,
@@ -1048,26 +1017,24 @@ def run_jsonrpc_server() -> None:
             sys.stderr.write(f"Error handling request: {e}\n")
 
 
-def main() -> None:
-    if len(sys.argv) > 1 and sys.argv[1] == "--manifest":
-        print(
-            json.dumps(
-                {
-                    "tools": TOOLS_MANIFEST,
-                    "resources": RESOURCES_MANIFEST,
-                    "prompts": PROMPTS_MANIFEST,
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-    elif len(sys.argv) > 1 and sys.argv[1] == "--http":
+def _run_cli_mode() -> None:
+    if sys.argv[1] == "--manifest":
+        manifest_data = {
+            "tools": TOOLS_MANIFEST,
+            "resources": RESOURCES_MANIFEST,
+            "prompts": PROMPTS_MANIFEST,
+        }
+        print(json.dumps(manifest_data, ensure_ascii=False, indent=2))
+    elif sys.argv[1] == "--http":
         from web.server import run_web_server
 
-        port = 8000
-        if len(sys.argv) > 2 and sys.argv[2].isdigit():
-            port = int(sys.argv[2])
+        port = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 8000
         run_web_server(port=port)
+
+
+def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in ("--manifest", "--http"):
+        _run_cli_mode()
     else:
         run_jsonrpc_server()
 

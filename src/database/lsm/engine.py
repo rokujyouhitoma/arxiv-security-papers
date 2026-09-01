@@ -53,29 +53,37 @@ class LSMTreeEngine:
             if self.active_memtable.is_full():
                 self.flush_memtable()
 
+    def _search_immutables(self, key: str) -> Tuple[bool, Any]:
+        for imm in reversed(self.immutable_memtables):
+            found, val = imm.get(key)
+            if found:
+                return True, val
+        return False, None
+
+    def _search_sstables(self, key: str) -> Tuple[bool, Any]:
+        for sstable in self.sstables:
+            found, val = sstable.get(key)
+            if found:
+                return True, val
+        return False, None
+
+    def _search_in_sources(self, key: str) -> Tuple[bool, Any]:
+        """Searches active memtable, immutable memtables, then SSTables."""
+        found, val = self.active_memtable.get(key)
+        if found:
+            return True, val
+        found_imm, val_imm = self._search_immutables(key)
+        if found_imm:
+            return True, val_imm
+        return self._search_sstables(key)
+
     def get(self, key: str) -> Optional[Any]:
         """
         Looks up a key across MemTable, Immutable MemTables, and SSTables (newest to oldest).
         """
         with self._lock:
-            # 1. Search Active MemTable
-            found, val = self.active_memtable.get(key)
-            if found:
-                return val
-
-            # 2. Search Immutable MemTables
-            for imm in reversed(self.immutable_memtables):
-                found, val = imm.get(key)
-                if found:
-                    return val
-
-            # 3. Search SSTables from newest to oldest
-            for sstable in self.sstables:
-                found, val = sstable.get(key)
-                if found:
-                    return val
-
-            return None
+            found, val = self._search_in_sources(key)
+            return val if found else None
 
     def flush_memtable(self) -> Optional[str]:
         """
@@ -100,6 +108,22 @@ class LSMTreeEngine:
             self.active_memtable.clear()
             return sstable_path
 
+    def _merge_sstables(self) -> Dict[str, bytes]:
+        merged: Dict[str, bytes] = {}
+        for sstable in reversed(self.sstables):
+            for k, v in sstable.scan_all():
+                merged[k] = v
+        return merged
+
+    def _close_old_sstables(self) -> None:
+        for old in self.sstables:
+            old.close()
+            try:
+                self.vfs.delete(old.file_path)
+            except Exception:
+                pass
+        self.sstables = []
+
     def compact(self) -> Optional[str]:
         """
         Merges all current SSTables into a single compacted SSTable,
@@ -108,18 +132,10 @@ class LSMTreeEngine:
         with self._lock:
             if not self.sstables:
                 return None
-
-            # Merge all SSTables (oldest to newest so newer overwrites older)
-            merged_dict: Dict[str, bytes] = {}
-            for sstable in reversed(self.sstables):
-                for k, v in sstable.scan_all():
-                    merged_dict[k] = v
-
-            # Purge tombstones
+            merged_dict = self._merge_sstables()
             compacted_entries = [
                 (k, v) for k, v in merged_dict.items() if v != TOMBSTONE
             ]
-
             self._sstable_seq += 1
             compacted_filename = (
                 f"compacted_{int(time.time() * 1000)}_{self._sstable_seq:04d}.sst"
@@ -127,23 +143,37 @@ class LSMTreeEngine:
             compacted_path = os.path.join(self.data_dir, compacted_filename).replace(
                 "\\", "/"
             )
-
-            writer = SSTableWriter(file_path=compacted_path, vfs=self.vfs)
-            writer.write(compacted_entries)
-
-            # Close and delete old SSTables
-            old_readers = list(self.sstables)
-            self.sstables = []
-            for old in old_readers:
-                old.close()
-                try:
-                    self.vfs.delete(old.file_path)
-                except Exception:
-                    pass
-
-            new_reader = SSTableReader(file_path=compacted_path, vfs=self.vfs)
-            self.sstables = [new_reader]
+            SSTableWriter(file_path=compacted_path, vfs=self.vfs).write(
+                compacted_entries
+            )
+            self._close_old_sstables()
+            self.sstables = [SSTableReader(file_path=compacted_path, vfs=self.vfs)]
             return compacted_path
+
+    @staticmethod
+    def _decode_value(raw: bytes) -> Any:
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except Exception:
+            try:
+                return raw.decode("utf-8")
+            except Exception:
+                return raw
+
+    def _collect_memtables_into(self, latest: Dict[str, bytes]) -> None:
+        for imm in self.immutable_memtables:
+            for k, v in imm.items():
+                latest[k] = v
+        for k, v in self.active_memtable.items():
+            latest[k] = v
+
+    def _collect_latest(self) -> Dict[str, bytes]:
+        latest: Dict[str, bytes] = {}
+        for sstable in reversed(self.sstables):
+            for k, v in sstable.scan_all():
+                latest[k] = v
+        self._collect_memtables_into(latest)
+        return latest
 
     def scan_all(self) -> List[Tuple[str, Any]]:
         """
@@ -151,37 +181,12 @@ class LSMTreeEngine:
         reflecting the latest state across MemTable and SSTables.
         """
         with self._lock:
-            latest: Dict[str, bytes] = {}
-
-            # Read SSTables (oldest to newest)
-            for sstable in reversed(self.sstables):
-                for k, v in sstable.scan_all():
-                    latest[k] = v
-
-            # Read Immutable MemTables
-            for imm in self.immutable_memtables:
-                for k, v in imm.items():
-                    latest[k] = v
-
-            # Read Active MemTable
-            for k, v in self.active_memtable.items():
-                latest[k] = v
-
-            results: List[Tuple[str, Any]] = []
-            for k in sorted(latest.keys()):
-                raw = latest[k]
-                if raw == TOMBSTONE:
-                    continue
-                try:
-                    decoded = json.loads(raw.decode("utf-8"))
-                    results.append((k, decoded))
-                except Exception:
-                    try:
-                        results.append((k, raw.decode("utf-8")))
-                    except Exception:
-                        results.append((k, raw))
-
-            return results
+            latest = self._collect_latest()
+            return [
+                (k, self._decode_value(latest[k]))
+                for k in sorted(latest)
+                if latest[k] != TOMBSTONE
+            ]
 
     def close(self) -> None:
         """Closes all open SSTable reader file handles."""

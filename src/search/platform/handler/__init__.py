@@ -45,13 +45,28 @@ class SelectHandler:
         cache: Optional[SolrCache] = None,
         elevation: Optional[QueryElevationComponent] = None,
     ) -> None:
+        self._init_schema_similarity(schema, analyzer, similarity)
+        self._init_cache_elevation(cache, elevation)
+        self.highlighter = DynamicHighlighter()
+        self.facet_engine = FacetEngine()
+
+    def _init_schema_similarity(
+        self,
+        schema: Optional[ManagedSchema],
+        analyzer: Optional[Analyzer],
+        similarity: Optional[Similarity],
+    ) -> None:
         self.schema = schema or ManagedSchema()
         self.analyzer = analyzer or CJKAnalyzer()
         self.similarity = similarity or BM25Similarity()
+
+    def _init_cache_elevation(
+        self,
+        cache: Optional[SolrCache],
+        elevation: Optional[QueryElevationComponent],
+    ) -> None:
         self.cache = cache or SolrCache()
         self.elevation = elevation or QueryElevationComponent()
-        self.highlighter = DynamicHighlighter()
-        self.facet_engine = FacetEngine()
 
     def parse_query(self, query_str: str, default_field: str = "title") -> Query:
         """Parses user query string supporting boolean syntax, wildcards (*), phrases, and field:term."""
@@ -63,11 +78,12 @@ class SelectHandler:
             return self.parse_query(parts[1].strip(), default_field=parts[0].strip())
         return self._dispatch_query_type(q, default_field)
 
+    def _is_phrase_query(self, q: str) -> bool:
+        return bool(q.startswith('"') and q.endswith('"') and len(q) > 2)
+
     def _dispatch_query_type(self, q: str, default_field: str) -> Query:
-        if q.startswith('"') and q.endswith('"') and len(q) > 2:
-            return PhraseQuery(
-                default_field, self.analyzer.analyze(q[1:-1].strip()), slop=1
-            )
+        if self._is_phrase_query(q):
+            return PhraseQuery(default_field, self.analyzer.analyze(q[1:-1].strip()), slop=1)
         if "*" in q or "?" in q:
             return WildcardQuery(default_field, q)
         if "~" in q:
@@ -92,6 +108,16 @@ class SelectHandler:
                 b_query.add(TermQuery("_text_", token, boost=0.8), Occur.SHOULD)
         return b_query
 
+    def _get_doc_by_id_fn(self, segment: Segment) -> Any:
+        def get_doc_by_id(doc_id_val: str) -> Optional[Dict[str, Any]]:
+            for d_id in range(segment.doc_count):
+                if not segment.is_deleted(d_id):
+                    doc_data = segment.stored_fields.get(d_id)
+                    if doc_data and str(doc_data.get("id", d_id)) == str(doc_id_val):
+                        return doc_data
+            return None
+        return get_doc_by_id
+
     def handle_request(
         self, segment: Segment, params: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -108,33 +134,32 @@ class SelectHandler:
         collector = TopDocsCollector(top_k=start + rows, sorter=sorter)
         top_docs = collector.collect(segment, doc_scores)
 
-        def get_doc_by_id(doc_id_val: str) -> Optional[Dict[str, Any]]:
-            for d_id in range(segment.doc_count):
-                if not segment.is_deleted(d_id):
-                    doc_data = segment.stored_fields.get(d_id)
-                    if doc_data and str(doc_data.get("id", d_id)) == str(doc_id_val):
-                        return doc_data
-            return None
-
         top_docs = self.elevation.elevate(
-            query_str, top_docs, id_field="id", get_doc_by_id_fn=get_doc_by_id
+            query_str, top_docs, id_field="id", get_doc_by_id_fn=self._get_doc_by_id_fn(segment)
         )
         return self._build_response(
             segment, top_docs, doc_scores, query_str, start, rows, params
         )
+
+    def _resolve_single_fq(self, segment: Segment, fq_str: str) -> Set[int]:
+        cached_doc_ids = self.cache.filter_cache.get(fq_str)
+        if cached_doc_ids is None:
+            cached_doc_ids = self._resolve_filter_ids(segment, fq_str)
+            self.cache.filter_cache.put(fq_str, cached_doc_ids)
+        return cached_doc_ids
+
+    def _apply_single_filter(self, segment: Segment, doc_scores: Dict[int, float], fq_str: str) -> Dict[int, float]:
+        if not fq_str:
+            return doc_scores
+        cached_ids = self._resolve_single_fq(segment, fq_str)
+        return {d: s for d, s in doc_scores.items() if d in cached_ids}
 
     def _apply_filter_queries(
         self, segment: Segment, doc_scores: Dict[int, float], fq_list: Any
     ) -> Dict[int, float]:
         fqs = [fq_list] if isinstance(fq_list, str) else (fq_list or [])
         for fq_str in fqs:
-            if not fq_str:
-                continue
-            cached_doc_ids = self.cache.filter_cache.get(fq_str)
-            if cached_doc_ids is None:
-                cached_doc_ids = self._resolve_filter_ids(segment, fq_str)
-                self.cache.filter_cache.put(fq_str, cached_doc_ids)
-            doc_scores = {d: s for d, s in doc_scores.items() if d in cached_doc_ids}
+            doc_scores = self._apply_single_filter(segment, doc_scores, fq_str)
         return doc_scores
 
     def _resolve_filter_ids(self, segment: Segment, fq_str: str) -> Set[int]:
@@ -150,21 +175,43 @@ class SelectHandler:
         )
         return set(fq_scores.keys())
 
+    def _check_doc_value_match(self, d_val: Any, val: str) -> bool:
+        if d_val is None:
+            return False
+        if isinstance(d_val, list):
+            return any(str(v).lower() == val.lower() for v in d_val)
+        return str(d_val).lower() == val.lower()
+
     def _match_doc_values(self, segment: Segment, field: str, val: str) -> Set[int]:
         dv = segment.doc_values.get(field)
         if not dv:
             return set()
         matched: Set[int] = set()
         for d_id in range(segment.doc_count):
-            if not segment.is_deleted(d_id):
-                d_val = dv.get(d_id)
-                if d_val is not None:
-                    if isinstance(d_val, list):
-                        if any(str(v).lower() == val.lower() for v in d_val):
-                            matched.add(d_id)
-                    elif str(d_val).lower() == val.lower():
-                        matched.add(d_id)
+            if not segment.is_deleted(d_id) and self._check_doc_value_match(dv.get(d_id), val):
+                matched.add(d_id)
         return matched
+
+    def _append_spellcheck(self, response: Dict[str, Any], segment: Segment, top_docs: Any, query_str: str) -> None:
+        if top_docs.total_hits == 0 and query_str and query_str != "*:*":
+            response["spellcheck"] = {
+                "suggestions": SpellChecker(segment, field="title").suggest(query_str)
+            }
+
+    def _append_facets_and_highlights(
+        self, response: Dict[str, Any], segment: Segment, top_docs: Any, doc_scores: Dict[int, float], query_str: str, start: int, rows: int, params: Dict[str, Any]
+    ) -> None:
+        if params.get("facet"):
+            response["facet_counts"] = {
+                "facet_fields": self.facet_engine.compute_facets(
+                    segment, list(doc_scores.keys())
+                )
+            }
+        if params.get("hl"):
+            response["highlighting"] = self._compute_highlights(
+                top_docs, query_str, start, rows
+            )
+        self._append_spellcheck(response, segment, top_docs, query_str)
 
     def _build_response(
         self,
@@ -188,20 +235,7 @@ class SelectHandler:
                 "docs": paginated_docs,
             },
         }
-        if params.get("facet"):
-            response["facet_counts"] = {
-                "facet_fields": self.facet_engine.compute_facets(
-                    segment, list(doc_scores.keys())
-                )
-            }
-        if params.get("hl"):
-            response["highlighting"] = self._compute_highlights(
-                top_docs, query_str, start, rows
-            )
-        if top_docs.total_hits == 0 and query_str and query_str != "*:*":
-            response["spellcheck"] = {
-                "suggestions": SpellChecker(segment, field="title").suggest(query_str)
-            }
+        self._append_facets_and_highlights(response, segment, top_docs, doc_scores, query_str, start, rows, params)
         return response
 
     def _compute_highlights(
@@ -219,24 +253,25 @@ class SelectHandler:
             highlight_res[doc_key] = hl_fields
         return highlight_res
 
+    def _parse_sort_field(self, part: str) -> Optional[SortField]:
+        tokens = part.strip().split()
+        if not tokens:
+            return None
+        fname = tokens[0]
+        order = (
+            SortOrder.DESC
+            if len(tokens) > 1 and tokens[1].lower() == "desc"
+            else SortOrder.ASC
+        )
+        is_score = fname in ["_score", "score"]
+        field_name = "_score" if is_score else fname
+        return SortField(field=field_name, order=order, is_score=is_score)
+
     def _build_sorter(self, sort_param: str) -> Sorter:
-        sort_fields: List[SortField] = []
-        for part in sort_param.split(","):
-            tokens = part.strip().split()
-            if not tokens:
-                continue
-            fname = tokens[0]
-            order = (
-                SortOrder.DESC
-                if len(tokens) > 1 and tokens[1].lower() == "desc"
-                else SortOrder.ASC
-            )
-            if fname in ["_score", "score"]:
-                sort_fields.append(
-                    SortField(field="_score", order=order, is_score=True)
-                )
-            else:
-                sort_fields.append(SortField(field=fname, order=order, is_score=False))
+        sort_fields = [
+            sf for part in sort_param.split(",")
+            if (sf := self._parse_sort_field(part)) is not None
+        ]
         return Sorter(sort_fields)
 
 
@@ -251,6 +286,13 @@ class UpdateHandler:
         self.schema = schema or ManagedSchema()
         self.analyzer = analyzer or CJKAnalyzer()
 
+    def _analyze_field_val(self, val: Any) -> List[str]:
+        if isinstance(val, str):
+            return self.analyzer.analyze(val)
+        if isinstance(val, list):
+            return self.analyzer.analyze(" ".join(str(v) for v in val))
+        return []
+
     def add_document(self, segment: Segment, raw_doc: Dict[str, Any]) -> int:
         """Processes document through Schema (copyFields/dynamicFields) and indexes it into segment."""
         processed_doc = self.schema.process_document(raw_doc)
@@ -260,12 +302,9 @@ class UpdateHandler:
         for fname, val in processed_doc.items():
             fdef = self.schema.get_field_definition(fname)
             if fdef.indexed and val:
-                if isinstance(val, str):
-                    analyzed_fields[fname] = self.analyzer.analyze(val)
-                elif isinstance(val, list):
-                    analyzed_fields[fname] = self.analyzer.analyze(
-                        " ".join(str(v) for v in val)
-                    )
+                analyzed = self._analyze_field_val(val)
+                if analyzed:
+                    analyzed_fields[fname] = analyzed
 
         segment.add_document(
             doc_id, fields=processed_doc, analyzed_fields=analyzed_fields

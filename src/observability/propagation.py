@@ -48,42 +48,48 @@ def generate_span_id() -> str:
     return secrets.token_hex(8)
 
 
+def _find_traceparent_header(carrier: Dict[str, Any]) -> Optional[str]:
+    for k, v in carrier.items():
+        if k.lower() in ("traceparent", "http_traceparent"):
+            return str(v).strip()
+    return None
+
+
+def _is_valid_traceparent_parts(version: str, trace_id: str, parent_id: str) -> bool:
+    return version != "ff" and trace_id != "0" * 32 and parent_id != "0" * 16
+
+
 class TraceContextPropagator:
     """Propagates W3C Trace Context across process and network boundaries."""
 
     @staticmethod
-    def extract(carrier: Optional[Dict[str, Any]] = None) -> Optional[SpanContext]:
-        """
-        Extracts SpanContext from carrier dictionary or TRACEPARENT environment variable.
-        """
-        traceparent_val = None
-        if carrier:
-            # Case-insensitive lookup in headers
-            for k, v in carrier.items():
-                if k.lower() in ("traceparent", "http_traceparent"):
-                    traceparent_val = str(v).strip()
-                    break
-
-        if not traceparent_val:
-            traceparent_val = os.environ.get("TRACEPARENT", "").strip()
-
-        if not traceparent_val:
-            return None
-
+    def _parse_traceparent(traceparent_val: str) -> Optional[SpanContext]:
         match = TRACEPARENT_REGEX.match(traceparent_val)
         if not match:
             return None
-
         version, trace_id, parent_id, flags = match.groups()
-        if version == "ff" or trace_id == "0" * 32 or parent_id == "0" * 16:
+        if not _is_valid_traceparent_parts(version, trace_id, parent_id):
             return None
-
         return SpanContext(
             trace_id=trace_id,
             span_id=parent_id,
             trace_flags=flags,
             is_remote=True,
         )
+
+    @classmethod
+    def extract(cls, carrier: Optional[Dict[str, Any]] = None) -> Optional[SpanContext]:
+        """
+        Extracts SpanContext from carrier dictionary or TRACEPARENT environment variable.
+        """
+        traceparent_val = _find_traceparent_header(carrier) if carrier else None
+        if not traceparent_val:
+            traceparent_val = os.environ.get("TRACEPARENT", "").strip()
+
+        if not traceparent_val:
+            return None
+
+        return cls._parse_traceparent(traceparent_val)
 
     @staticmethod
     def inject(carrier: Dict[str, Any], context: SpanContext) -> None:
