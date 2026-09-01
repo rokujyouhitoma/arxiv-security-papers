@@ -39,8 +39,10 @@ build/
 # Logs & Temporary Files
 *.log
 fetch.log
+*.sock
 outputs/logs/
 outputs/supervisor/
+src/outputs/
 
 # Operating System & IDE Files
 .DS_Store
