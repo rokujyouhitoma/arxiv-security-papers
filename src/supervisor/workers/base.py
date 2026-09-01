@@ -63,21 +63,50 @@ class BaseWorker(abc.ABC):
         """Handles immediate graceful termination."""
         self.alive = False
 
+    def _get_heartbeat_file_path(self) -> str:
+        state_dir = os.path.join(self.config.workspace_dir, "outputs", "supervisor")
+        os.makedirs(state_dir, exist_ok=True)
+        return os.path.join(state_dir, f"heartbeat_{self.pid}.json")
+
+    def _write_heartbeat_file(self, meta: Dict[str, Any]) -> None:
+        try:
+            import json
+
+            path = self._get_heartbeat_file_path()
+            tmp_path = f"{path}.tmp.{self.pid}"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(meta, f)
+            os.replace(tmp_path, path)
+        except Exception:
+            pass
+
+    def _cleanup_heartbeat_file(self) -> None:
+        try:
+            path = self._get_heartbeat_file_path()
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            pass
+
     def pulse(self, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Emits a liveness pulse with metrics to the Arbiter."""
+        self.pid = os.getpid()
         meta = {
+            "pid": self.pid,
             "worker_id": self.worker_id,
             "requests_handled": self.requests_handled,
             "uptime": round(time.time() - self.boot_time, 2),
+            "last_seen_epoch": time.time(),
         }
         if metadata:
             meta.update(metadata)
 
         if self.pulse_callback:
             try:
-                self.pulse_callback(os.getpid(), meta)
+                self.pulse_callback(self.pid, meta)
             except Exception:
                 pass
+        self._write_heartbeat_file(meta)
 
     @abc.abstractmethod
     def run(self) -> None:
@@ -87,6 +116,7 @@ class BaseWorker(abc.ABC):
     def close(self) -> None:
         """Cleans up resources upon worker exit."""
         self.alive = False
+        self._cleanup_heartbeat_file()
         if self.server_socket:
             try:
                 self.server_socket.close()

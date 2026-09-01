@@ -7,6 +7,7 @@ and provides telemetry metadata.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -17,8 +18,9 @@ class HeartbeatWatchdog:
     Thread-safe watchdog maintaining liveness and health states of all managed child workers.
     """
 
-    def __init__(self, timeout: float = 30.0) -> None:
+    def __init__(self, timeout: float = 30.0, base_dir: Optional[str] = None) -> None:
         self.timeout = timeout
+        self.base_dir = base_dir
         self._lock = threading.Lock()
         self._heartbeats: Dict[int, float] = {}
         self._worker_meta: Dict[int, Dict[str, Any]] = {}
@@ -36,6 +38,35 @@ class HeartbeatWatchdog:
                 self._worker_meta[pid].update(metadata)
                 self._worker_meta[pid]["last_seen_monotonic"] = now
                 self._worker_meta[pid]["last_seen_epoch"] = time.time()
+
+    def _sync_single_worker_file(self, pid: int, target_dir: str) -> None:
+        path = os.path.join(target_dir, f"heartbeat_{pid}.json")
+        if not os.path.exists(path):
+            return
+        try:
+            import json
+
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                now = time.monotonic()
+                self._heartbeats[pid] = now
+                if pid not in self._worker_meta:
+                    self._worker_meta[pid] = {}
+                self._worker_meta[pid].update(data)
+                self._worker_meta[pid]["last_seen_monotonic"] = now
+        except Exception:
+            pass
+
+    def sync_from_disk(self, base_dir: Optional[str] = None) -> None:
+        """Reads worker heartbeat state files from disk and synchronizes in-memory tables."""
+        target_dir = base_dir or self.base_dir
+        if not target_dir or not os.path.isdir(target_dir):
+            return
+        with self._lock:
+            tracked_pids = list(self._worker_meta.keys())
+            for pid in tracked_pids:
+                self._sync_single_worker_file(pid, target_dir)
 
     def register_worker(
         self, pid: int, worker_type: str, metadata: Optional[Dict[str, Any]] = None
@@ -56,10 +87,18 @@ class HeartbeatWatchdog:
             self._worker_meta[pid] = meta
 
     def remove_worker(self, pid: int) -> None:
-        """Removes a terminated worker from tracking tables."""
+        """Removes a terminated worker from tracking tables and cleans up disk files."""
         with self._lock:
             self._heartbeats.pop(pid, None)
             self._worker_meta.pop(pid, None)
+        target_dir = self.base_dir
+        if target_dir and os.path.isdir(target_dir):
+            try:
+                path = os.path.join(target_dir, f"heartbeat_{pid}.json")
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
 
     @staticmethod
     def _check_meta_health(meta: dict, last_pulse: float, t_limit: float) -> bool:
@@ -115,6 +154,7 @@ class HeartbeatWatchdog:
 
     def get_worker_status(self, pid: int) -> Optional[Dict[str, Any]]:
         """Retrieves structured telemetry metadata for a specific worker."""
+        self.sync_from_disk()
         with self._lock:
             if pid not in self._worker_meta:
                 return None
@@ -127,6 +167,7 @@ class HeartbeatWatchdog:
 
     def get_all_statuses(self) -> Dict[int, Dict[str, Any]]:
         """Returns snapshot dictionary of all currently tracked workers."""
+        self.sync_from_disk()
         with self._lock:
             res: Dict[int, Dict[str, Any]] = {}
             now = time.monotonic()

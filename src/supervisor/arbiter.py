@@ -79,7 +79,10 @@ class Arbiter:
         specs: Optional[List[WorkerSpec]] = None,
     ) -> None:
         self.config = config or SupervisorConfig()
-        self.watchdog = HeartbeatWatchdog(timeout=self.config.timeout)
+        state_dir = os.path.join(self.config.workspace_dir, "outputs", "supervisor")
+        self.watchdog = HeartbeatWatchdog(
+            timeout=self.config.timeout, base_dir=state_dir
+        )
         self.server_socket: Optional[socket.socket] = None
         self.control_server: Optional[ControlServer] = None
         self.wsgi_app: Optional[Callable[..., Any]] = None

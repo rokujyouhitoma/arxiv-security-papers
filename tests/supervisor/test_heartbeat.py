@@ -91,3 +91,45 @@ def test_idle_worker_stays_healthy_over_timeout() -> None:
     watchdog.record_heartbeat(pid, {"is_handling_request": False})
     assert watchdog.is_healthy(pid) is True
     assert watchdog.get_hung_workers(timeout=0.05) == []
+
+
+def test_heartbeat_sync_from_disk(tmp_path) -> None:
+    """Verifies that HeartbeatWatchdog accurately loads worker state from disk files."""
+    import json
+
+    state_dir = str(tmp_path / "supervisor")
+    import os
+
+    os.makedirs(state_dir, exist_ok=True)
+
+    watchdog = HeartbeatWatchdog(timeout=5.0, base_dir=state_dir)
+    pid = 77777
+    watchdog.register_worker(pid, "web")
+
+    # Initially requests_handled is 0
+    st_init = watchdog.get_worker_status(pid)
+    assert st_init is not None
+    assert st_init["requests_handled"] == 0
+
+    # Worker writes heartbeat file
+    heartbeat_file = os.path.join(state_dir, f"heartbeat_{pid}.json")
+    with open(heartbeat_file, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "pid": pid,
+                "requests_handled": 42,
+                "is_handling_request": False,
+                "uptime": 12.3,
+            },
+            f,
+        )
+
+    # get_worker_status automatically syncs from disk
+    st_synced = watchdog.get_worker_status(pid)
+    assert st_synced is not None
+    assert st_synced["requests_handled"] == 42
+    assert st_synced["uptime"] == 12.3
+
+    # Cleanup upon worker removal
+    watchdog.remove_worker(pid)
+    assert not os.path.exists(heartbeat_file)
