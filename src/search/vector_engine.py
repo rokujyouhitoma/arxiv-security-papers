@@ -164,7 +164,16 @@ class VectorEngine:
             r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]{3,}", combined_text
         )
         en_terms = re.findall(r"[a-zA-Z]{4,}", combined_text.lower())
-        stop_words = {"this", "that", "with", "from", "paper", "security", "using", "proposed"}
+        stop_words = {
+            "this",
+            "that",
+            "with",
+            "from",
+            "paper",
+            "security",
+            "using",
+            "proposed",
+        }
         for term, freq in Counter(ja_terms + en_terms).most_common(5):
             if freq >= 2 and term.lower() not in stop_words:
                 extracted.add(term)
@@ -354,7 +363,9 @@ class VectorEngine:
         self.citation_network.compute_pagerank([d["id"] for d in self.documents])
         self.raptor_tree.build_summary_tree(self.documents)
 
-    def _compute_idf_map(self, doc_freq: Counter[str], num_docs: int) -> Dict[str, float]:
+    def _compute_idf_map(
+        self, doc_freq: Counter[str], num_docs: int
+    ) -> Dict[str, float]:
         return {
             token: round(math.log((num_docs - freq + 0.5) / (freq + 0.5) + 1), 4)
             for token, freq in doc_freq.items()
@@ -371,12 +382,16 @@ class VectorEngine:
             self.documents, dict(self.inverted_keyword_index)
         )
 
-    def _index_files_in_dir(self, root: str, files: List[str], doc_freq: Counter[str]) -> None:
+    def _index_files_in_dir(
+        self, root: str, files: List[str], doc_freq: Counter[str]
+    ) -> None:
         date_dir = os.path.basename(root)
         for file in files:
             if file.endswith(".md"):
                 try:
-                    self._index_single_okf_file(os.path.join(root, file), date_dir, file, doc_freq)
+                    self._index_single_okf_file(
+                        os.path.join(root, file), date_dir, file, doc_freq
+                    )
                 except Exception:
                     continue
 
@@ -487,11 +502,15 @@ class VectorEngine:
         for author in d.get("authors", []):
             self.knowledge_graph.add_entity(author, "author", author, arxiv_id)
 
-    def _populate_index_from_dict(self, data: Dict[str, Any], max_docs: Optional[int]) -> None:
+    def _populate_index_from_dict(
+        self, data: Dict[str, Any], max_docs: Optional[int]
+    ) -> None:
         self.idf = data.get("idf", {})
         self.avg_doc_len = data.get("avg_doc_len", 0)
         self.inverted_index = defaultdict(list, data.get("inverted_index", {}))
-        self.inverted_keyword_index = defaultdict(list, data.get("inverted_keywords", {}))
+        self.inverted_keyword_index = defaultdict(
+            list, data.get("inverted_keywords", {})
+        )
         raw_docs = data.get("documents", [])
         if max_docs:
             raw_docs = raw_docs[:max_docs]
@@ -517,7 +536,9 @@ class VectorEngine:
             self._init_index_structures()
             self.idf = {}
 
-    def _score_neighbor_candidate(self, doc: Dict[str, Any], tid: str) -> Optional[Dict[str, Any]]:
+    def _score_neighbor_candidate(
+        self, doc: Dict[str, Any], tid: str
+    ) -> Optional[Dict[str, Any]]:
         if tid not in self.documents_by_id:
             return None
         tdoc = self.documents_by_id[tid]
@@ -538,7 +559,9 @@ class VectorEngine:
             "published_date": tdoc.get("published_date", ""),
         }
 
-    def _compute_fallback_neighbors(self, doc: Dict[str, Any], doc_id: str) -> List[Dict[str, Any]]:
+    def _compute_fallback_neighbors(
+        self, doc: Dict[str, Any], doc_id: str
+    ) -> List[Dict[str, Any]]:
         candidate_ids = set()
         for kw in doc.get("annotated_keywords", []):
             candidate_ids.update(self.inverted_keyword_index.get(kw.lower(), []))
@@ -645,14 +668,20 @@ class VectorEngine:
         return inv_candidates
 
     def _is_restrictive_clause(self, clause: QueryClause) -> bool:
-        return bool(clause.is_required or clause.field or clause.is_prefix or clause.is_fuzzy)
+        return bool(
+            clause.is_required or clause.field or clause.is_prefix or clause.is_fuzzy
+        )
 
     def _apply_single_clause_filter(
         self, clause: QueryClause, candidate_ids: Optional[Set[str]]
     ) -> Optional[Set[str]]:
         clause_matches = self._match_clause_docs(clause)
         if self._is_restrictive_clause(clause):
-            return clause_matches if candidate_ids is None else (candidate_ids & clause_matches)
+            return (
+                clause_matches
+                if candidate_ids is None
+                else (candidate_ids & clause_matches)
+            )
         if clause.is_prohibited and candidate_ids is not None:
             candidate_ids.difference_update(clause_matches)
         return candidate_ids
@@ -788,9 +817,7 @@ class VectorEngine:
     ) -> List[Dict[str, Any]]:
         """Module 3: Multi-Stage Scoring & Fusion Ranking."""
         graph_boosts = self.knowledge_graph.get_entity_boosts(ctx.original_tokens)
-        vector_sims = self._compute_vector_similarities(
-            ctx.original_query, candidates
-        )
+        vector_sims = self._compute_vector_similarities(ctx.original_query, candidates)
 
         ranked = []
         for doc in candidates:
@@ -876,7 +903,9 @@ class VectorEngine:
         t_tokenize_end = time.perf_counter()
 
         t_prune_start = time.perf_counter()
-        target_docs = self.retrieve_candidates(ctx, category=category, max_candidates=600)
+        target_docs = self.retrieve_candidates(
+            ctx, category=category, max_candidates=600
+        )
         t_prune_end = time.perf_counter()
 
         t_scoring_start = time.perf_counter()
@@ -940,7 +969,9 @@ class VectorEngine:
             self._stop_tracing_if_needed(was_tracing)
             return cached
 
-        results, profile = self._execute_search_pipeline(query, top_k, category, q_tokens)
+        results, profile = self._execute_search_pipeline(
+            query, top_k, category, q_tokens
+        )
         self._stop_tracing_if_needed(was_tracing)
         return results, profile
 
@@ -967,7 +998,9 @@ class VectorEngine:
         query_tokens = self.tokenize(query) if query else []
         raptor_summaries = self.raptor_tree.search_clusters(query_tokens, top_k=2)
         graph_context = self._extract_hybrid_graph_context(query_tokens)
-        top_related = self.proximity_graph.get_neighbors(results[0]["id"]) if results else []
+        top_related = (
+            self.proximity_graph.get_neighbors(results[0]["id"]) if results else []
+        )
 
         return {
             "query": query,

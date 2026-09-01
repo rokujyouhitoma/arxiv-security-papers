@@ -107,7 +107,9 @@ def _extract_categories(
     return primary, categories
 
 
-def _extract_entry_ids(entry: ET.Element, namespaces: Dict[str, str]) -> tuple[str, str]:
+def _extract_entry_ids(
+    entry: ET.Element, namespaces: Dict[str, str]
+) -> tuple[str, str]:
     """Extracts raw arxiv_id and clean_id from Atom entry."""
     raw_id_elem = entry.find("atom:id", namespaces)
     raw_id = raw_id_elem.text if raw_id_elem is not None and raw_id_elem.text else ""
@@ -125,7 +127,9 @@ def _get_element_text(entry: ET.Element, tag: str, namespaces: Dict[str, str]) -
     return ""
 
 
-def _extract_entry_strings(entry: ET.Element, namespaces: Dict[str, str]) -> tuple[str, str, str, str]:
+def _extract_entry_strings(
+    entry: ET.Element, namespaces: Dict[str, str]
+) -> tuple[str, str, str, str]:
     """Extracts title, summary, published, updated text from Atom entry."""
     title = clean_text(_get_element_text(entry, "atom:title", namespaces))
     summary = clean_text(_get_element_text(entry, "atom:summary", namespaces))

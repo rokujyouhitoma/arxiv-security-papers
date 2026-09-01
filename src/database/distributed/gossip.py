@@ -9,7 +9,6 @@ import enum
 import time
 from typing import Any, Dict, Optional
 
-
 from .phi_accrual import PhiAccrualDetector
 
 

@@ -45,11 +45,18 @@ class SupervisorTopViewer:
         return float(parts[1]) if len(parts) >= 2 else 0.0
 
     @staticmethod
-    def _parse_smaps_line(line: str, rss_mb: float, pss_mb: float) -> tuple[float, float]:
+    def _parse_smaps_line(
+        line: str, rss_mb: float, pss_mb: float
+    ) -> tuple[float, float]:
         if line.startswith("Rss:"):
-            return round(SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1), pss_mb
+            return (
+                round(SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1),
+                pss_mb,
+            )
         if line.startswith("Pss:"):
-            return rss_mb, round(SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1)
+            return rss_mb, round(
+                SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1
+            )
         return rss_mb, pss_mb
 
     @staticmethod
@@ -61,7 +68,9 @@ class SupervisorTopViewer:
         try:
             with open(smaps_file, "r", encoding="utf-8") as f:
                 for line in f:
-                    rss_mb, pss_mb = SupervisorTopViewer._parse_smaps_line(line, rss_mb, pss_mb)
+                    rss_mb, pss_mb = SupervisorTopViewer._parse_smaps_line(
+                        line, rss_mb, pss_mb
+                    )
         except Exception:
             return 0.0, 0.0
         return rss_mb, pss_mb
@@ -75,7 +84,9 @@ class SupervisorTopViewer:
             with open(status_file, "r", encoding="utf-8") as f:
                 for line in f:
                     if line.startswith("VmRSS:"):
-                        return round(SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1)
+                        return round(
+                            SupervisorTopViewer._parse_proc_line_kb(line) / 1024.0, 1
+                        )
         except Exception:
             return 0.0
         return 0.0
@@ -119,7 +130,9 @@ class SupervisorTopViewer:
         if isinstance(pools_meta, dict):
             for name, meta in pools_meta.items():
                 if isinstance(meta, dict):
-                    parts.append(f"{name}: {meta.get('active', 0)}/{meta.get('target', 0)}")
+                    parts.append(
+                        f"{name}: {meta.get('active', 0)}/{meta.get('target', 0)}"
+                    )
                 else:
                     parts.append(f"{name}: {meta}")
         return ", ".join(parts) if parts else "No pools configured"
@@ -130,7 +143,11 @@ class SupervisorTopViewer:
         arbiter_rss, arbiter_pss = 0.0, 0.0
         if isinstance(arbiter_pid, int):
             arbiter_rss, arbiter_pss = self.get_process_memory_mb(arbiter_pid)
-        mem_str = f"{arbiter_rss:.1f} ({arbiter_pss:.1f}) MB" if arbiter_pss > 0 else f"{arbiter_rss:.1f} MB"
+        mem_str = (
+            f"{arbiter_rss:.1f} ({arbiter_pss:.1f}) MB"
+            if arbiter_pss > 0
+            else f"{arbiter_rss:.1f} MB"
+        )
         w_summary = self._build_pools_summary(data.get("pools", {}))
         return [
             f"  {self._c(self.COLOR_BOLD, 'Arbiter PID:')} {self._c(self.COLOR_YELLOW, str(arbiter_pid)):<8} "
@@ -221,7 +238,10 @@ class SupervisorTopViewer:
         resp = self.client.get_status()
         if resp.get("status") != "ok":
             err_msg = resp.get("error", "Unknown error connecting to Arbiter.")
-            print(f"{self._c(self.COLOR_RED, '[ERROR]')} Failed to retrieve status: {err_msg}", file=sys.stderr)
+            print(
+                f"{self._c(self.COLOR_RED, '[ERROR]')} Failed to retrieve status: {err_msg}",
+                file=sys.stderr,
+            )
             return 1
         print(self.render_dashboard(resp))
         return 0
@@ -231,7 +251,10 @@ class SupervisorTopViewer:
             resp = self.client.get_status()
             if resp.get("status") != "ok":
                 err_msg = resp.get("error", "Unknown error connecting to Arbiter.")
-                print(f"{self._c(self.COLOR_RED, '[ERROR]')} Failed to retrieve status: {err_msg}", file=sys.stderr)
+                print(
+                    f"{self._c(self.COLOR_RED, '[ERROR]')} Failed to retrieve status: {err_msg}",
+                    file=sys.stderr,
+                )
                 return 1
             sys.stdout.write("\033[2J\033[H")
             sys.stdout.write(self.render_dashboard(resp) + "\n")

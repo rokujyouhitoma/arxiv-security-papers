@@ -2,7 +2,7 @@
 
 import re
 import zlib
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 
 def paeth_predictor(a: int, b: int, c: int) -> int:
@@ -43,7 +43,9 @@ def _apply_paeth_filter(row: bytearray, prev_row: bytearray, bpp: int) -> None:
         row[i] = (row[i] + paeth_predictor(left, up, up_left)) & 0xFF
 
 
-def _apply_row_filter(filter_type: int, cur_row: bytearray, prev_row: bytearray, bpp: int) -> None:
+def _apply_row_filter(
+    filter_type: int, cur_row: bytearray, prev_row: bytearray, bpp: int
+) -> None:
     filter_map: Dict[int, Callable[[], None]] = {
         1: lambda: _apply_sub_filter(cur_row, bpp),
         2: lambda: _apply_up_filter(cur_row, prev_row),
@@ -98,7 +100,9 @@ def decode_ascii_hex(data: bytes) -> bytes:
     return bytes.fromhex(cleaned)
 
 
-def _process_ascii85_byte(b: int, acc: int, cnt: int, out: bytearray) -> tuple[int, int]:
+def _process_ascii85_byte(
+    b: int, acc: int, cnt: int, out: bytearray
+) -> tuple[int, int]:
     if b == ord("z") and cnt == 0:
         out.extend(b"\x00\x00\x00\x00")
         return 0, 0
@@ -176,7 +180,9 @@ class StreamDecompressor:
                 return None
 
     @classmethod
-    def _apply_predictor_params(cls, decompressed: bytes, parms: Dict[str, Any]) -> bytes:
+    def _apply_predictor_params(
+        cls, decompressed: bytes, parms: Dict[str, Any]
+    ) -> bytes:
         predictor = int(parms.get("/Predictor", parms.get("Predictor", 1)))
         columns = int(parms.get("/Columns", parms.get("Columns", 1)))
         colors = int(parms.get("/Colors", parms.get("Colors", 1)))

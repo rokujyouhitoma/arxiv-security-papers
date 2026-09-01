@@ -43,7 +43,9 @@ class ClosedLoopIntelligenceEngine:
         self.wal = wal or OrchestratorWAL(
             wal_dir=os.path.join(self.workspace_dir, "outputs", "wal")
         )
-        self.pir_manager = pir_manager or PIRManager(storage_path=paths["pir"], auto_seed=True)
+        self.pir_manager = pir_manager or PIRManager(
+            storage_path=paths["pir"], auto_seed=True
+        )
 
     def _init_harvest_processing(
         self,
@@ -54,7 +56,9 @@ class ClosedLoopIntelligenceEngine:
         paths = self._build_storage_paths()
         self.harvest_coordinator = harvest_coordinator or HarvestCoordinator()
         self.processing_coordinator = processing_coordinator or ProcessingCoordinator()
-        self.hypothesis_engine = hypothesis_engine or HypothesisEngine(storage_path=paths["hypo"])
+        self.hypothesis_engine = hypothesis_engine or HypothesisEngine(
+            storage_path=paths["hypo"]
+        )
 
     def _init_analysis_dissemination(
         self,
@@ -65,7 +69,9 @@ class ClosedLoopIntelligenceEngine:
         self.analysis_synthesizer = analysis_synthesizer or AnalysisSynthesizer(
             hypothesis_engine=self.hypothesis_engine
         )
-        self.dissemination_distributor = dissemination_distributor or DisseminationDistributor()
+        self.dissemination_distributor = (
+            dissemination_distributor or DisseminationDistributor()
+        )
         self.feedback_evaluator = feedback_evaluator or FeedbackEvaluator()
 
     def _init_pipeline_components(
@@ -77,8 +83,12 @@ class ClosedLoopIntelligenceEngine:
         dissemination_distributor: Optional[DisseminationDistributor],
         feedback_evaluator: Optional[FeedbackEvaluator],
     ) -> None:
-        self._init_harvest_processing(harvest_coordinator, processing_coordinator, hypothesis_engine)
-        self._init_analysis_dissemination(analysis_synthesizer, dissemination_distributor, feedback_evaluator)
+        self._init_harvest_processing(
+            harvest_coordinator, processing_coordinator, hypothesis_engine
+        )
+        self._init_analysis_dissemination(
+            analysis_synthesizer, dissemination_distributor, feedback_evaluator
+        )
 
     def _init_components(
         self,
@@ -93,8 +103,12 @@ class ClosedLoopIntelligenceEngine:
     ) -> None:
         self._init_core_components(wal, pir_manager)
         self._init_pipeline_components(
-            harvest_coordinator, processing_coordinator, hypothesis_engine,
-            analysis_synthesizer, dissemination_distributor, feedback_evaluator,
+            harvest_coordinator,
+            processing_coordinator,
+            hypothesis_engine,
+            analysis_synthesizer,
+            dissemination_distributor,
+            feedback_evaluator,
         )
 
     def __init__(
@@ -111,8 +125,14 @@ class ClosedLoopIntelligenceEngine:
     ) -> None:
         self.workspace_dir = os.path.abspath(workspace_dir)
         self._init_components(
-            wal, pir_manager, harvest_coordinator, processing_coordinator,
-            hypothesis_engine, analysis_synthesizer, dissemination_distributor, feedback_evaluator,
+            wal,
+            pir_manager,
+            harvest_coordinator,
+            processing_coordinator,
+            hypothesis_engine,
+            analysis_synthesizer,
+            dissemination_distributor,
+            feedback_evaluator,
         )
         self.cycle_history: List[PhaseContext] = []
 

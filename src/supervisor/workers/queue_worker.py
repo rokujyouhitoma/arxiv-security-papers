@@ -56,7 +56,9 @@ class QueueWorker(BaseWorker):
         try:
             return self.source_queue()
         except Exception as exc:
-            logger.error("[QueueWorker %s] Error polling source: %s", self.worker_id, exc)
+            logger.error(
+                "[QueueWorker %s] Error polling source: %s", self.worker_id, exc
+            )
             return None
 
     def _fetch_item(self) -> Optional[Any]:

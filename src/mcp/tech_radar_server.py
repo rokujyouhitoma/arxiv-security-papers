@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List, Optional
 
 from mcp.base import paginate_results, run_mcp_server
 

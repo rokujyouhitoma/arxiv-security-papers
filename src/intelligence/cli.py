@@ -163,13 +163,17 @@ def _format_cycle_id(cycle_id_arg: Optional[str], index: int, total_cycles: int)
 
 
 def _run_all_cycles(
-    orchestrator: ClosedLoopIntelligenceEngine, args: argparse.Namespace, cycles_to_run: int
+    orchestrator: ClosedLoopIntelligenceEngine,
+    args: argparse.Namespace,
+    cycles_to_run: int,
 ) -> List[Dict[str, Any]]:
     results_summary: List[Dict[str, Any]] = []
     for i in range(cycles_to_run):
         cycle_id = _format_cycle_id(getattr(args, "cycle_id", None), i, cycles_to_run)
         if not args.quiet and not args.json:
-            print(f"[*] Starting Intelligence Cycle [{i+1}/{cycles_to_run}]: {cycle_id}")
+            print(
+                f"[*] Starting Intelligence Cycle [{i+1}/{cycles_to_run}]: {cycle_id}"
+            )
         cycle_result = _run_single_cycle(orchestrator, cycle_id, args)
         results_summary.append(cycle_result)
     return results_summary
@@ -178,7 +182,9 @@ def _run_all_cycles(
 def _init_cycle_orchestrator(args: argparse.Namespace) -> ClosedLoopIntelligenceEngine:
     if not (args.quiet or args.json):
         _print_banner()
-    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=os.path.abspath(args.workdir))
+    orchestrator = ClosedLoopIntelligenceEngine(
+        workspace_dir=os.path.abspath(args.workdir)
+    )
     _seed_intelligence_requirements(orchestrator, getattr(args, "topics", None))
     return orchestrator
 
@@ -197,8 +203,12 @@ def run_cycle_command(args: argparse.Namespace) -> int:
     return _output_cycle_summary(results_summary, getattr(args, "json", False))
 
 
-def _run_daemon_step(orchestrator: ClosedLoopIntelligenceEngine, cycle_count: int) -> None:
-    print(f"\n[{datetime.now(timezone.utc).isoformat()}] --- Daemon Cycle #{cycle_count} ---")
+def _run_daemon_step(
+    orchestrator: ClosedLoopIntelligenceEngine, cycle_count: int
+) -> None:
+    print(
+        f"\n[{datetime.now(timezone.utc).isoformat()}] --- Daemon Cycle #{cycle_count} ---"
+    )
     ctx = orchestrator.run_cycle(cycle_id=f"daemon_{int(time.time())}_{cycle_count}")
     print(
         f"[+] Completed cycle {ctx.cycle_id}: {len(ctx.processed_records)} records, "
@@ -225,10 +235,14 @@ def run_daemon_command(args: argparse.Namespace) -> int:
     _print_banner()
     interval = max(5, args.interval)
     max_cycles = args.max_cycles
-    orchestrator = ClosedLoopIntelligenceEngine(workspace_dir=os.path.abspath(args.workdir))
+    orchestrator = ClosedLoopIntelligenceEngine(
+        workspace_dir=os.path.abspath(args.workdir)
+    )
 
     max_cycles_label = "Infinite" if max_cycles == 0 else str(max_cycles)
-    print(f"[*] Starting Autonomous Orchestrator Daemon (Interval: {interval}s, Max Cycles: {max_cycles_label})")
+    print(
+        f"[*] Starting Autonomous Orchestrator Daemon (Interval: {interval}s, Max Cycles: {max_cycles_label})"
+    )
 
     try:
         _daemon_loop(orchestrator, interval, max_cycles)
@@ -239,6 +253,7 @@ def run_daemon_command(args: argparse.Namespace) -> int:
 
 def _parse_pir_horizon(raw_horizon: str) -> Any:
     from intelligence.pir.models import PIRHorizon
+
     try:
         return PIRHorizon(raw_horizon.lower())
     except ValueError:
@@ -283,19 +298,26 @@ def _escalate_pir_requirement(
         print("[ERROR] --id is required to escalate a PIR.")
         return 1
 
-    reason = getattr(args, "reason", "Manual operator escalation") or "Manual operator escalation"
+    reason = (
+        getattr(args, "reason", "Manual operator escalation")
+        or "Manual operator escalation"
+    )
     target_h = _parse_pir_horizon(getattr(args, "horizon", "tactical"))
 
     success = orchestrator.escalate_pir(
         req_id=args.id, reason=reason, target_horizon=target_h
     )
     if not success:
-        print(f"[ERROR] Failed to escalate PIR [{args.id}]. Not found or reached max level.")
+        print(
+            f"[ERROR] Failed to escalate PIR [{args.id}]. Not found or reached max level."
+        )
         return 1
 
     req = orchestrator.pir_manager.get_requirement(args.id)
     assert req is not None
-    print(f"[+] Successfully escalated PIR [{req.req_id}] to {req.horizon.value.upper()}")
+    print(
+        f"[+] Successfully escalated PIR [{req.req_id}] to {req.horizon.value.upper()}"
+    )
     print(f"    Escalation Level: {req.escalation_level}")
     print(f"    New Priority Score: {req.priority_score:.2f}")
     print(f"    Reason: {reason}")
@@ -304,8 +326,12 @@ def _escalate_pir_requirement(
 
 def _print_active_pir(r: Any) -> None:
     horizon_tag = f"[{r.horizon.value.upper()}]"
-    escalation_tag = f" (Escalation Lvl: {r.escalation_level})" if r.escalation_level > 0 else ""
-    print(f"  {horizon_tag} [{r.req_id}] {r.title} (Priority: {r.priority_score}){escalation_tag}")
+    escalation_tag = (
+        f" (Escalation Lvl: {r.escalation_level})" if r.escalation_level > 0 else ""
+    )
+    print(
+        f"  {horizon_tag} [{r.req_id}] {r.title} (Priority: {r.priority_score}){escalation_tag}"
+    )
     print(f"    Topics: {', '.join(r.target_topics)}")
     if r.description:
         print(f"    Desc:   {r.description}")
@@ -388,7 +414,9 @@ def _add_hypothesis(
 ) -> int:
     """Registers a manual hypothesis proposition."""
     if not _validate_hypothesis_args(args):
-        print("[ERROR] --id, --statement, and --topics are required to add a hypothesis.")
+        print(
+            "[ERROR] --id, --statement, and --topics are required to add a hypothesis."
+        )
         return 1
     topics = [t.strip() for t in args.topics.split(",") if t.strip()]
     hypo = orchestrator.register_hypothesis(
@@ -529,8 +557,7 @@ def _count_okf_papers(workspace_dir: str) -> int:
     if not os.path.exists(okf_dir):
         return 0
     return sum(
-        sum(1 for f in files if f.endswith(".md"))
-        for _, _, files in os.walk(okf_dir)
+        sum(1 for f in files if f.endswith(".md")) for _, _, files in os.walk(okf_dir)
     )
 
 
@@ -560,7 +587,9 @@ def run_status_command(args: argparse.Namespace) -> int:
     vector_db_path = os.path.join(workspace_dir, "outputs", "vector_db", "index.json")
     if os.path.exists(vector_db_path):
         size_mb = os.path.getsize(vector_db_path) / (1024 * 1024)
-        print(f"Vector Search Index : Active ({size_mb:.1f} MB in outputs/vector_db/index.json)")
+        print(
+            f"Vector Search Index : Active ({size_mb:.1f} MB in outputs/vector_db/index.json)"
+        )
     else:
         print("Vector Search Index : Not built (Run 'make build_vector_db')")
 

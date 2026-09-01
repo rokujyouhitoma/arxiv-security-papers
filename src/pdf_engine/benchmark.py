@@ -134,7 +134,9 @@ def _evaluate_target_list(targets: List[str]) -> List[ExtractionMetrics]:
     return metrics_list
 
 
-def _calc_metrics_averages(metrics_list: List[ExtractionMetrics], count: int) -> tuple[float, float, float, float]:
+def _calc_metrics_averages(
+    metrics_list: List[ExtractionMetrics], count: int
+) -> tuple[float, float, float, float]:
     tot_rec = 0.0
     tot_f1 = 0.0
     tot_sim = 0.0

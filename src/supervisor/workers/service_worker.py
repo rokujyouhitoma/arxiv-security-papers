@@ -87,13 +87,15 @@ class ManagedServiceWorker(BaseWorker):
         self.state = ServiceState.ACTIVE
         while self.alive:
             healthy = self._check_service_health()
-            self.pulse({
-                "service": self.service_name,
-                "state": self.state.value,
-                "is_healthy": healthy,
-                "flushes": self.flushes_completed,
-                "last_sync_epoch": self.last_sync,
-            })
+            self.pulse(
+                {
+                    "service": self.service_name,
+                    "state": self.state.value,
+                    "is_healthy": healthy,
+                    "flushes": self.flushes_completed,
+                    "last_sync_epoch": self.last_sync,
+                }
+            )
             self._flush_if_due()
             time.sleep(max(0.05, min(self.sync_interval, 0.5)))
 

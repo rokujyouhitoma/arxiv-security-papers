@@ -5,7 +5,7 @@ applies domain ontology tags, and prepares knowledge for atomic storage.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from intelligence.contracts import (
     IntelligencePhase,
@@ -42,7 +42,16 @@ class ProcessingCoordinator(IntelligencePhaseProtocol):
             tags.append("artificial-intelligence")
         return sorted(set(tags))
 
-    def _build_okf_yaml(self, rec_id: str, title: str, topic: str, text: str, raw: Dict[str, Any], rating: Any, tags: List[str]) -> str:
+    def _build_okf_yaml(
+        self,
+        rec_id: str,
+        title: str,
+        topic: str,
+        text: str,
+        raw: Dict[str, Any],
+        rating: Any,
+        tags: List[str],
+    ) -> str:
         return (
             "---\n"
             f'type: "intelligence-document"\n'

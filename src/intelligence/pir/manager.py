@@ -271,11 +271,19 @@ class PIRManager(IntelligencePhaseProtocol):
         if not all_topics:
             return self._current_weights
 
-        u_usage = self._normalize_vector(all_topics, usage_counts, sum(usage_counts.values()))
-        g_gap = self._normalize_vector(all_topics, knowledge_gaps, sum(knowledge_gaps.values()))
-        d_drift = self._normalize_vector(all_topics, topic_drifts, sum(topic_drifts.values()))
+        u_usage = self._normalize_vector(
+            all_topics, usage_counts, sum(usage_counts.values())
+        )
+        g_gap = self._normalize_vector(
+            all_topics, knowledge_gaps, sum(knowledge_gaps.values())
+        )
+        d_drift = self._normalize_vector(
+            all_topics, topic_drifts, sum(topic_drifts.values())
+        )
 
-        self._current_weights.weights = self._calc_new_weights(all_topics, u_usage, g_gap, d_drift)
+        self._current_weights.weights = self._calc_new_weights(
+            all_topics, u_usage, g_gap, d_drift
+        )
         self._current_weights.normalize()
         self._save_state()
         return self._current_weights
@@ -318,7 +326,9 @@ class PIRManager(IntelligencePhaseProtocol):
             },
         )
 
-    def _should_escalate_topic(self, topic: str, telemetry: FeedbackTelemetry, req: Any) -> bool:
+    def _should_escalate_topic(
+        self, topic: str, telemetry: FeedbackTelemetry, req: Any
+    ) -> bool:
         gap = telemetry.knowledge_gaps.get(topic, 0.0)
         drift = telemetry.topic_drift_scores.get(topic, 0.0)
         return (gap > 0.35 or drift > 0.35) and req.horizon != PIRHorizon.TACTICAL
@@ -335,16 +345,16 @@ class PIRManager(IntelligencePhaseProtocol):
                 )
                 break
 
-    def _escalate_requirements_from_gaps(
-        self, telemetry: FeedbackTelemetry
-    ) -> None:
+    def _escalate_requirements_from_gaps(self, telemetry: FeedbackTelemetry) -> None:
         for req in self._requirements.values():
             self._escalate_req_if_needed(req, telemetry)
 
     def _auto_create_pir_for_gaps(self, telemetry: FeedbackTelemetry) -> None:
         for gap_topic, gap_score in telemetry.knowledge_gaps.items():
             if gap_score > 0.3 and gap_topic not in self._requirements:
-                horizon = PIRHorizon.TACTICAL if gap_score > 0.5 else PIRHorizon.OPERATIONAL
+                horizon = (
+                    PIRHorizon.TACTICAL if gap_score > 0.5 else PIRHorizon.OPERATIONAL
+                )
                 self.register_requirement(
                     PIRRequirement(
                         req_id=f"pir_auto_{len(self._requirements) + 1}",

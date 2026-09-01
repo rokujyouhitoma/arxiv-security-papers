@@ -12,7 +12,11 @@ def dehyphenate_text(text: str) -> str:
 
 
 def _is_valid_gutter(
-    best_len: int, best_center: Optional[float], bin_width: float, mid_x: float, page_width: float
+    best_len: int,
+    best_center: Optional[float],
+    bin_width: float,
+    mid_x: float,
+    page_width: float,
 ) -> bool:
     if best_len * bin_width < 12.0 or best_center is None:
         return False
@@ -119,7 +123,11 @@ def _finalize_line(line: TextLine) -> None:
 def _should_insert_space(prev_g: GlyphBox, cur_g: GlyphBox) -> bool:
     gap = cur_g.x - (prev_g.x + prev_g.width)
     space_threshold = max(prev_g.font_size, cur_g.font_size) * 0.2
-    return gap >= space_threshold and not prev_g.text.endswith(" ") and not cur_g.text.startswith(" ")
+    return (
+        gap >= space_threshold
+        and not prev_g.text.endswith(" ")
+        and not cur_g.text.startswith(" ")
+    )
 
 
 def render_line_text(line: TextLine) -> str:
@@ -186,8 +194,13 @@ class SpatialLayoutEngine:
 
     @staticmethod
     def _classify_line_column(
-        line: TextLine, gutter_x: float, page_height: float,
-        header: List[TextLine], left: List[TextLine], right: List[TextLine], footer: List[TextLine]
+        line: TextLine,
+        gutter_x: float,
+        page_height: float,
+        header: List[TextLine],
+        left: List[TextLine],
+        right: List[TextLine],
+        footer: List[TextLine],
     ) -> None:
         if line.min_x < gutter_x - 30 and line.max_x > gutter_x + 30:
             if line.min_y > page_height * 0.5:
@@ -210,7 +223,13 @@ class SpatialLayoutEngine:
 
         for line in lines:
             cls._classify_line_column(
-                line, gutter_x, page_height, header_lines, left_lines, right_lines, footer_lines
+                line,
+                gutter_x,
+                page_height,
+                header_lines,
+                left_lines,
+                right_lines,
+                footer_lines,
             )
 
         return header_lines, left_lines, right_lines, footer_lines

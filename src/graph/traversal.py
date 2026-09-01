@@ -86,7 +86,14 @@ class GraphTraversal:
             edges = list(self.engine._edges.values())
         return self._clone(edges)
 
-    def _step_out(self, obj: Any, curr_path: Path, labels: Tuple[str, ...], new_objs: List[Vertex], new_paths: List[Path]) -> None:
+    def _step_out(
+        self,
+        obj: Any,
+        curr_path: Path,
+        labels: Tuple[str, ...],
+        new_objs: List[Vertex],
+        new_paths: List[Path],
+    ) -> None:
         """Helper to advance a single vertex along outgoing edges."""
         if not isinstance(obj, Vertex):
             return
@@ -105,7 +112,14 @@ class GraphTraversal:
             self._step_out(obj, curr_path, labels, new_objs, new_paths)
         return self._clone(new_objs, new_paths)
 
-    def _step_in(self, obj: Any, curr_path: Path, labels: Tuple[str, ...], new_objs: List[Vertex], new_paths: List[Path]) -> None:
+    def _step_in(
+        self,
+        obj: Any,
+        curr_path: Path,
+        labels: Tuple[str, ...],
+        new_objs: List[Vertex],
+        new_paths: List[Path],
+    ) -> None:
         """Helper to advance a single vertex along incoming edges."""
         if not isinstance(obj, Vertex):
             return
@@ -219,7 +233,9 @@ class GraphTraversal:
     # 2. Filter & Predicate Steps (has, hasLabel, hasId, filter, and_, or_...)
     # -------------------------------------------------------------------------
 
-    def _match_has_value(self, obj: Any, props: Dict[str, Any], key: str, value: Any) -> bool:
+    def _match_has_value(
+        self, obj: Any, props: Dict[str, Any], key: str, value: Any
+    ) -> bool:
         """Helper to match non-None property value."""
         if props.get(key) == value or getattr(obj, key, None) == value:
             return True
@@ -270,7 +286,10 @@ class GraphTraversal:
 
     def _match_has_not(self, obj: Any, key: str) -> bool:
         """Checks if object lacks the specified property key."""
-        return key not in getattr(obj, "properties", {}) and getattr(obj, key, None) is None
+        return (
+            key not in getattr(obj, "properties", {})
+            and getattr(obj, key, None) is None
+        )
 
     def hasNot(self, key: str) -> "GraphTraversal":
         """Filters out objects that have the specified property key."""
@@ -282,7 +301,9 @@ class GraphTraversal:
         ]
         return self._clone(new_objs, new_paths)
 
-    def _eval_predicate(self, obj: Any, predicate_fn: Union[Callable[[Any], bool], "GraphTraversal"]) -> bool:
+    def _eval_predicate(
+        self, obj: Any, predicate_fn: Union[Callable[[Any], bool], "GraphTraversal"]
+    ) -> bool:
         """Evaluates predicate function or sub-traversal on an object."""
         if callable(predicate_fn):
             return bool(predicate_fn(obj))
@@ -509,7 +530,13 @@ class GraphTraversal:
         return self._reconstruct_path(target_id, prev)
 
     def _distribute_rank_share(
-        self, u: str, damping: float, rank_u: float, new_ranks: Dict[str, float], vertices: List[str], N: int
+        self,
+        u: str,
+        damping: float,
+        rank_u: float,
+        new_ranks: Dict[str, float],
+        vertices: List[str],
+        N: int,
     ) -> None:
         """Distributes PageRank score of a single vertex."""
         out_edges = self.engine.get_out_edges(u)
@@ -586,7 +613,9 @@ class GraphTraversal:
         triples: List[Dict[str, Any]] = []
         for p in self._paths:
             for i in range(len(p.objects) - 1):
-                triples.extend(self._extract_step_triple(p.objects[i], p.objects[i + 1]))
+                triples.extend(
+                    self._extract_step_triple(p.objects[i], p.objects[i + 1])
+                )
         return triples
 
 

@@ -120,7 +120,9 @@ class AnalyticsAggregator:
 
     def _calculate_tier_coverage(self) -> Tuple[float, int, int, int]:
         """Calculates summary tier coverage metrics."""
-        summaries_dir = os.path.join(self.workspace_dir, "outputs", "executive_summaries")
+        summaries_dir = os.path.join(
+            self.workspace_dir, "outputs", "executive_summaries"
+        )
         tiers = ["01_per_run", "02_daily", "03_monthly", "04_quarterly", "05_annual"]
         existing = 0
         total_files = 0
@@ -215,7 +217,9 @@ class AnalyticsAggregator:
 
     def _read_trace_latencies(self) -> List[float]:
         """Reads latency records from trace logs."""
-        traces_path = os.path.join(self.workspace_dir, "outputs", "logs", "otlp_traces.jsonl")
+        traces_path = os.path.join(
+            self.workspace_dir, "outputs", "logs", "otlp_traces.jsonl"
+        )
         if not os.path.exists(traces_path):
             return []
         latencies: List[float] = []
@@ -275,7 +279,9 @@ class AnalyticsAggregator:
     def _aggregate_service_slo_and_wal(self) -> Dict[str, Any]:
         """Calculates Pipeline SLO, Upstream Rate Limits, and WAL Sync Lag."""
         wal_dir = os.path.join(self.workspace_dir, "outputs", "wal")
-        wal_sync_lag_ms = self._calc_wal_sync_lag(wal_dir) if os.path.exists(wal_dir) else 0.0
+        wal_sync_lag_ms = (
+            self._calc_wal_sync_lag(wal_dir) if os.path.exists(wal_dir) else 0.0
+        )
         return {
             "pipeline_slo_pct": 99.98,
             "rate_limit_429_errors": 0,

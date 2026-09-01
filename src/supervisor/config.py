@@ -164,7 +164,9 @@ class SupervisorConfig:
         if self.timeout <= 0:
             raise ValueError(f"Timeout must be positive, got {self.timeout}.")
         if self.graceful_timeout <= 0:
-            raise ValueError(f"Graceful timeout must be positive, got {self.graceful_timeout}.")
+            raise ValueError(
+                f"Graceful timeout must be positive, got {self.graceful_timeout}."
+            )
 
     def validate(self) -> None:
         """Validates configuration sanity."""
@@ -254,11 +256,13 @@ class SupervisorConfig:
         ext = os.path.splitext(path)[1].lower()
         if ext == ".toml":
             import tomllib
+
             with open(path, "rb") as f:
                 return cls.from_dict(tomllib.load(f))
         if ext == ".py":
             return cls.from_dict(cls._load_python_file(path))
         import json
+
         with open(path, "r", encoding="utf-8") as f:
             return cls.from_dict(json.load(f))
 

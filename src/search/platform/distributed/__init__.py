@@ -79,7 +79,9 @@ class DistributedSearcher:
         merged_facets: Dict[str, Counter[str]] = {}
 
         for resp in responses:
-            total_hits += self._accumulate_shard_response(resp, all_score_docs, merged_facets)
+            total_hits += self._accumulate_shard_response(
+                resp, all_score_docs, merged_facets
+            )
 
         all_score_docs.sort(key=lambda d: d.score, reverse=True)
         top_slice = all_score_docs[:top_k]

@@ -13,6 +13,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+_SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
 # 1. Ingestion Layer (Extract)
 try:
     from .ingestion import (
@@ -220,7 +224,9 @@ def _atomic_json_dump(data: Any, target_path: str) -> None:
         raise
 
 
-def _ingest_single_paper_into_graph(item: Dict[str, Any], workspace_dir: str, graph_engine: Any, extractor: Any) -> None:
+def _ingest_single_paper_into_graph(
+    item: Dict[str, Any], workspace_dir: str, graph_engine: Any, extractor: Any
+) -> None:
     """Extracts entities and triples from OKF file and inserts into property graph."""
     abs_okf = os.path.join(workspace_dir, item.get("rel_okf_path", ""))
     if not os.path.exists(abs_okf):
@@ -257,7 +263,9 @@ def _ingest_items_into_knowledge_graph(
 
         graph_engine = PropertyGraphEngine(workspace_dir=workspace_dir)
         for item in processed_items:
-            _ingest_single_paper_into_graph(item, workspace_dir, graph_engine, OntologyExtractor)
+            _ingest_single_paper_into_graph(
+                item, workspace_dir, graph_engine, OntologyExtractor
+            )
         graph_engine.save()
         print(
             f"[KnowledgeGraph] Ingested {len(processed_items)} papers into graph database."
@@ -440,7 +448,9 @@ def _stage_theme_papers(
     return pdf_fetch_tasks, processed_state, state_path
 
 
-def _download_theme_pdfs(pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]], max_workers: int) -> None:
+def _download_theme_pdfs(
+    pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]], max_workers: int
+) -> None:
     """Downloads PDFs for tasks in parallel."""
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [

@@ -38,7 +38,9 @@ class StandardTokenizer(Tokenizer):
     WORD_PATTERN = re.compile(r"[a-zA-Z0-9_\-]+", re.UNICODE)
     CJK_PATTERN = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+", re.UNICODE)
 
-    def _extract_cjk_bigrams(self, cjk_text: str, cjk_start: int, tokens: List[Token]) -> None:
+    def _extract_cjk_bigrams(
+        self, cjk_text: str, cjk_start: int, tokens: List[Token]
+    ) -> None:
         tokens.append(Token(cjk_text, cjk_start, cjk_start + len(cjk_text), 1))
         if len(cjk_text) > 1:
             for i in range(len(cjk_text) - 1):

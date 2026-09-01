@@ -1,6 +1,6 @@
 """Content Stream text operator interpreter conforming to ISO 32000-1 Clause 8.3 & 9.2-9.4."""
 
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from .contracts import GlyphBox, PdfPage
 from .font import FontDecoder
@@ -144,7 +144,9 @@ class TextInterpreter:
         if isinstance(elem, bytes):
             self._render_text_bytes(elem)
         elif isinstance(elem, (int, float)):
-            displacement = -float(elem) / 1000.0 * self.font_size * (self.horiz_scale / 100.0)
+            displacement = (
+                -float(elem) / 1000.0 * self.font_size * (self.horiz_scale / 100.0)
+            )
             self.tm[4] += displacement * self.tm[0]
 
     def _handle_tj_array(self, stack: List[Any]) -> None:

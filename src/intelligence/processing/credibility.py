@@ -97,9 +97,22 @@ class AdmiraltyEngine:
 
     def _lookup_source_map(self, st: str) -> Optional[tuple[AdmiraltyReliability, str]]:
         source_map = [
-            (["arxiv", "iacr", "eprint"], AdmiraltyReliability.B, "arXiv / IACR \u5b66\u8853\u30d7\u30ec\u30d7\u30ea\u30f3\u30c8\u30ea\u30dd\u30b8\u30c8\u30ea"),
-            (["github", "gitlab", "poc"], AdmiraltyReliability.C, "\u30b3\u30df\u30e5\u30cb\u30c6\u30a3\u516c\u958b\u30ea\u30dd\u30b8\u30c8\u30ea\u30fbPoC\u30b3\u30fc\u30c9"),
-            (["blog", "medium", "twitter", "x.com"], AdmiraltyReliability.D, "\u672a\u691c\u8a3c\u30d6\u30ed\u30b0\u30fb\u30bd\u30fc\u30b7\u30e3\u30eb\u30e1\u30c7\u30a3\u30a2"),
+            (
+                ["arxiv", "iacr", "eprint"],
+                AdmiraltyReliability.B,
+                "arXiv / IACR \u5b66\u8853\u30d7\u30ec\u30d7\u30ea\u30f3\u30c8\u30ea\u30dd\u30b8\u30c8\u30ea",
+            ),
+            (
+                ["github", "gitlab", "poc"],
+                AdmiraltyReliability.C,
+                "\u30b3\u30df\u30e5\u30cb\u30c6\u30a3\u516c\u958b"
+                "\u30ea\u30dd\u30b8\u30c8\u30ea\u30fbPoC\u30b3\u30fc\u30c9",
+            ),
+            (
+                ["blog", "medium", "twitter", "x.com"],
+                AdmiraltyReliability.D,
+                "\u672a\u691c\u8a3c\u30d6\u30ed\u30b0\u30fb\u30bd\u30fc\u30b7\u30e3\u30eb\u30e1\u30c7\u30a3\u30a2",
+            ),
         ]
         for keywords, rel, reason in source_map:
             if any(k in st for k in keywords):
@@ -122,7 +135,10 @@ class AdmiraltyEngine:
         if mapped:
             return mapped
 
-        return AdmiraltyReliability.F, "\u672a\u5206\u985e\u30fb\u65b0\u898f\u60c5\u5831\u30bd\u30fc\u30b9"
+        return (
+            AdmiraltyReliability.F,
+            "\u672a\u5206\u985e\u30fb\u65b0\u898f\u60c5\u5831\u30bd\u30fc\u30b9",
+        )
 
     def _check_cve_confirmed(
         self, t: str, meta: Dict[str, Any]
@@ -130,16 +146,26 @@ class AdmiraltyEngine:
         is_cve = bool(re.search(r"cve-\d{4}-\d{4,7}", t))
         has_cwe = bool(re.search(r"cwe-\d{1,5}", t))
         if is_cve and (has_cwe or meta.get("verified_by_other_sources")):
-            return AdmiraltyCredibility.ONE, "CVE/CWE 公式識別子および独立検証所見の一致を確認"
+            return (
+                AdmiraltyCredibility.ONE,
+                "CVE/CWE 公式識別子および独立検証所見の一致を確認",
+            )
         return None
 
     def _check_proven_evidence(
         self, t: str
     ) -> Optional[tuple[AdmiraltyCredibility, str]]:
-        has_proof = bool(re.search(r"theorem|proof|formal\s+verification|reduction\s+to", t))
-        has_bench = bool(re.search(r"benchmark|empirical|evaluation|dataset|precision|f1-score", t))
+        has_proof = bool(
+            re.search(r"theorem|proof|formal\s+verification|reduction\s+to", t)
+        )
+        has_bench = bool(
+            re.search(r"benchmark|empirical|evaluation|dataset|precision|f1-score", t)
+        )
         if has_proof or (has_bench and "methodology" in t):
-            return AdmiraltyCredibility.TWO, "数理的・形式的証明または厳密な評価メトリクスに基づく検証"
+            return (
+                AdmiraltyCredibility.TWO,
+                "数理的・形式的証明または厳密な評価メトリクスに基づく検証",
+            )
         return None
 
     def _check_confirmed_or_proven(
@@ -148,10 +174,17 @@ class AdmiraltyEngine:
         """Checks for Level 1 (Confirmed) and Level 2 (Proven) credibility."""
         return self._check_cve_confirmed(t, meta) or self._check_proven_evidence(t)
 
-    def _check_experimental_content(self, t: str) -> Optional[tuple[AdmiraltyCredibility, str]]:
-        has_bench = bool(re.search(r"benchmark|empirical|evaluation|dataset|precision|f1-score", t))
+    def _check_experimental_content(
+        self, t: str
+    ) -> Optional[tuple[AdmiraltyCredibility, str]]:
+        has_bench = bool(
+            re.search(r"benchmark|empirical|evaluation|dataset|precision|f1-score", t)
+        )
         if has_bench or "experiment" in t or "attack demonstration" in t:
-            return AdmiraltyCredibility.THREE, "実証実験データまたは攻撃デモ観測所見あり"
+            return (
+                AdmiraltyCredibility.THREE,
+                "実証実験データまたは攻撃デモ観測所見あり",
+            )
         return None
 
     def _is_speculative(self, t: str) -> bool:

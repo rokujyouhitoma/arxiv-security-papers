@@ -35,7 +35,9 @@ class DOMNode:
         current_matches: List[DOMNode] = [self]
         tokens = self._tokenize_selector(selector)
         for combinator, token in tokens:
-            current_matches = self._filter_candidates(current_matches, combinator, token)
+            current_matches = self._filter_candidates(
+                current_matches, combinator, token
+            )
         return current_matches
 
     def _descendants(self) -> List[DOMNode]:

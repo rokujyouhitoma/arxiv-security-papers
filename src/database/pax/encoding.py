@@ -10,7 +10,6 @@ from typing import Any, List, Optional, Tuple
 
 
 class ColumnEncodingType(enum.IntEnum):
-
     """Encoding algorithms for PAX Mini-Pages."""
 
     PLAIN = 0

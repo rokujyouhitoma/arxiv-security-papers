@@ -122,7 +122,9 @@ class EnterpriseQueryParser:
         if self._is_reserved_op(term):
             return None
         if self._is_prefix_term(term):
-            return self._parse_prefix_plain_term(term, field, is_required, is_prohibited)
+            return self._parse_prefix_plain_term(
+                term, field, is_required, is_prohibited
+            )
         if self._is_fuzzy_term(term):
             return self._parse_fuzzy_plain_term(term, field, is_required, is_prohibited)
         return QueryClause(

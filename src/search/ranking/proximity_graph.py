@@ -94,7 +94,8 @@ class ProximityGraphIndex:
         scored = [
             cand
             for target_id in candidate_ids
-            if (cand := self._score_single_neighbor(doc, target_id, doc_map)) is not None
+            if (cand := self._score_single_neighbor(doc, target_id, doc_map))
+            is not None
         ]
         scored.sort(key=lambda x: x["similarity"], reverse=True)
         return scored[: self.top_k_neighbors]
@@ -107,7 +108,10 @@ class ProximityGraphIndex:
             doc["_tags_set"] = set(t.lower() for t in doc.get("tags", []))
 
     def _collect_candidate_ids(
-        self, doc: Dict[str, Any], inverted_keywords: Optional[Dict[str, List[str]]], doc_map: Dict[str, Dict[str, Any]]
+        self,
+        doc: Dict[str, Any],
+        inverted_keywords: Optional[Dict[str, List[str]]],
+        doc_map: Dict[str, Dict[str, Any]],
     ) -> Set[str]:
         if not inverted_keywords:
             return set(doc_map.keys())
@@ -151,7 +155,9 @@ class ProximityGraphIndex:
         node_var = f"N{idx}"
         kw_str = ", ".join(n.get("shared_keywords", [])[:2]) or "類似アプローチ"
         sim_pct = int(n.get("similarity", 0) * 100)
-        node_line = f'    {node_var}["📄 {n_id}<br/>{n_title}<br/><b>類似度 {sim_pct}%</b>"]'
+        node_line = (
+            f'    {node_var}["📄 {n_id}<br/>{n_title}<br/><b>類似度 {sim_pct}%</b>"]'
+        )
         edge_line = f'    Current ===|"{kw_str} ({sim_pct}%)"| {node_var}'
         return node_line, edge_line
 

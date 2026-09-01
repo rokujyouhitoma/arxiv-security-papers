@@ -110,13 +110,17 @@ class StreamingDAG(Generic[T]):
             raise ValueError("Both nodes must be registered before adding an edge")
         self.edges[from_node].append(to_node)
 
-    def _feed_initial_chunks(self, first_node: StreamingNode[Any, Any], chunks: List[StreamChunk[T]]) -> None:
+    def _feed_initial_chunks(
+        self, first_node: StreamingTaskNode[Any], chunks: List[StreamChunk[T]]
+    ) -> None:
         for chunk in chunks:
             while not first_node.enqueue(chunk):
                 first_node.process_next()
 
     def _drain_node_chunks(
-        self, curr_node: StreamingNode[Any, Any], next_node: Optional[StreamingNode[Any, Any]]
+        self,
+        curr_node: StreamingTaskNode[Any],
+        next_node: Optional[StreamingTaskNode[Any]],
     ) -> List[StreamChunk[T]]:
         next_chunks: List[StreamChunk[T]] = []
         while curr_node.queue:

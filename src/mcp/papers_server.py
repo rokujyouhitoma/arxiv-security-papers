@@ -9,7 +9,7 @@ import json
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from mcp.base import log_mcp_performance, paginate_results
 from search.vector_engine import VectorEngine
@@ -710,7 +710,9 @@ def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
             "name": f"Academic references for {cwe_id}",
             "risk": "MEDIUM",
             "description": f"Custom weakness exploration for {cwe_id}",
-            "secure_patterns": ["Review academic reference papers for state-of-the-art defense mitigations."],
+            "secure_patterns": [
+                "Review academic reference papers for state-of-the-art defense mitigations."
+            ],
             "academic_papers": results,
         }
 
@@ -777,7 +779,9 @@ def handle_get_prompt(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         )
         return {
             "description": f"Security audit prompt for {lang} code",
-            "messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}],
+            "messages": [
+                {"role": "user", "content": {"type": "text", "text": prompt_text}}
+            ],
         }
     if name == "generate_exploit_poc_tests":
         arxiv_id = arguments.get("arxiv_id", "")
@@ -792,14 +796,18 @@ def handle_get_prompt(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         )
         return {
             "description": f"PoC regression test generator for arXiv:{arxiv_id}",
-            "messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}],
+            "messages": [
+                {"role": "user", "content": {"type": "text", "text": prompt_text}}
+            ],
         }
     if name == "recommend_cwe_mitigation":
         cwe_id = arguments.get("cwe_id", "CWE-89")
         lang = arguments.get("language", "python")
         recipe = handle_get_cwe_mitigation_recipe({"cwe_id": cwe_id})
         cwe_name = recipe.get("name", "")
-        patterns = "\n".join([f"- {p}" for p in recipe.get("secure_coding_patterns", [])])
+        patterns = "\n".join(
+            [f"- {p}" for p in recipe.get("secure_coding_patterns", [])]
+        )
         prompt_text = (
             f"Recommend remediation patterns for weakness {cwe_id} ({cwe_name}) in {lang}.\n\n"
             f"### Verified Secure Coding Patterns:\n{patterns}\n\n"
@@ -807,7 +815,9 @@ def handle_get_prompt(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         )
         return {
             "description": f"Remediation pattern prompt for {cwe_id}",
-            "messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}],
+            "messages": [
+                {"role": "user", "content": {"type": "text", "text": prompt_text}}
+            ],
         }
     return {"status": "error", "message": f"Unknown prompt: '{name}'"}
 
@@ -853,7 +863,11 @@ def _dispatch_papers_tool_call(req_id: Any, params: Dict[str, Any]) -> Dict[str,
     t0 = time.perf_counter()
     output = dispatch_tool(tool_name, tool_args)
     exec_ms = (time.perf_counter() - t0) * 1000.0
-    status = "error" if isinstance(output, dict) and output.get("status") == "error" else "success"
+    status = (
+        "error"
+        if isinstance(output, dict) and output.get("status") == "error"
+        else "success"
+    )
     metrics = _extract_papers_metrics(output)
 
     log_mcp_performance(
@@ -869,7 +883,12 @@ def _dispatch_papers_tool_call(req_id: Any, params: Dict[str, Any]) -> Dict[str,
         "jsonrpc": "2.0",
         "id": req_id,
         "result": {
-            "content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False, indent=2)}]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(output, ensure_ascii=False, indent=2),
+                }
+            ]
         },
     }
 
@@ -985,11 +1004,23 @@ def _dispatch_papers_rpc(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return {"jsonrpc": "2.0", "id": req_id, "result": {}}
 
     dispatch_map = {
-        "tools/list": lambda: {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS_MANIFEST}},
+        "tools/list": lambda: {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {"tools": TOOLS_MANIFEST},
+        },
         "tools/call": lambda: _dispatch_papers_tool_call(req_id, params),
-        "resources/list": lambda: {"jsonrpc": "2.0", "id": req_id, "result": {"resources": RESOURCES_MANIFEST}},
+        "resources/list": lambda: {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {"resources": RESOURCES_MANIFEST},
+        },
         "resources/read": lambda: _dispatch_papers_resource_read(req_id, params),
-        "prompts/list": lambda: {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": PROMPTS_MANIFEST}},
+        "prompts/list": lambda: {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {"prompts": PROMPTS_MANIFEST},
+        },
         "prompts/get": lambda: _dispatch_papers_prompt_get(req_id, params),
     }
     if method in dispatch_map:

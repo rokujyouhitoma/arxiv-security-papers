@@ -8,7 +8,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from .tagger import determine_security_tags
 from .translator import translate_title_ja
@@ -212,7 +212,9 @@ def _build_okf_template_vars(
     return title_ja, exec_summary, now_iso, pub_date, authors_yaml, tags_yaml, rec_list
 
 
-def _write_validated_okf_file(okf_file_path: str, workspace_dir: str, content: str) -> str:
+def _write_validated_okf_file(
+    okf_file_path: str, workspace_dir: str, content: str
+) -> str:
     """Validates path boundary within workspace and writes OKF content."""
     resolved_ws = os.path.realpath(os.path.abspath(workspace_dir))
     resolved_target = os.path.realpath(os.path.abspath(okf_file_path))
@@ -248,10 +250,9 @@ def build_okf_from_raw(
         paper, raw_dir, safe_clean_id, okf_file_dir, rel_raw_meta
     )
 
-    (
-        title_ja, exec_summary, now_iso, pub_date,
-        authors_yaml, tags_yaml, rec_list
-    ) = _build_okf_template_vars(paper, config)
+    title_ja, exec_summary, now_iso, pub_date, authors_yaml, tags_yaml, rec_list = (
+        _build_okf_template_vars(paper, config)
+    )
 
     raw_template = load_template(
         "okf_paper.md.template",
@@ -319,8 +320,19 @@ trust:
     )
 
     okf_content = _render_okf_markdown(
-        raw_template, paper, title_ja, exec_summary, tags_yaml, authors_yaml,
-        now_iso, pub_date, rel_raw_meta, raw_meta_path, pdf_link_str, txt_link_str, rec_list
+        raw_template,
+        paper,
+        title_ja,
+        exec_summary,
+        tags_yaml,
+        authors_yaml,
+        now_iso,
+        pub_date,
+        rel_raw_meta,
+        raw_meta_path,
+        pdf_link_str,
+        txt_link_str,
+        rec_list,
     )
 
     rel_okf_path = _write_validated_okf_file(okf_file_path, workspace_dir, okf_content)

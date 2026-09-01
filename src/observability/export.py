@@ -6,7 +6,7 @@ import sys
 import threading
 import urllib.error
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from observability.trace import Span, StatusCode, TracerProvider, get_tracer_provider
 

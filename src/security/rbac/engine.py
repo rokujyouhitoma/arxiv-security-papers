@@ -5,7 +5,7 @@ Enforces resource-level and table-level permissions across Database SQL, Web API
 """
 
 from collections import defaultdict
-from typing import Dict, Set, Union
+from typing import Dict, Set, Tuple, Union
 
 from .context import Role, SecurityContext
 

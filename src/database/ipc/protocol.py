@@ -8,7 +8,6 @@ for vector storage, ANN search, and lifecycle management.
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-
 from ..index.embedding import DeterministicEmbedding
 from ..index.index import HNSWIndex
 from ..sql import SQLExecutor

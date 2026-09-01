@@ -51,7 +51,9 @@ class DynamicHighlighter:
         safe = html.escape(text[: self.snippet_length])
         return safe + ("..." if len(text) > self.snippet_length else "")
 
-    def _find_first_match(self, text: str, query_terms: List[str]) -> Optional[re.Match[str]]:
+    def _find_first_match(
+        self, text: str, query_terms: List[str]
+    ) -> Optional[re.Match[str]]:
         terms = [
             re.escape(t.lower().strip()) for t in query_terms if len(t.strip()) >= 2
         ]

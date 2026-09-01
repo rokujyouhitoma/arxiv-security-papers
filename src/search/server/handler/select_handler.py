@@ -102,7 +102,9 @@ class SelectHandler:
         for fname, fdef in self.schema.fields.items():
             postings = self.postings.get_postings(fname, term)
             if postings:
-                self._score_postings_for_field(postings, fdef.boost, filtered_doc_ids, total_docs, doc_scores)
+                self._score_postings_for_field(
+                    postings, fdef.boost, filtered_doc_ids, total_docs, doc_scores
+                )
 
     def _score_all_docs_fallback(
         self, all_docs: List[Dict[str, Any]], filtered_doc_ids: Optional[Set[str]]
@@ -156,7 +158,10 @@ class SelectHandler:
         return collector.get_top_docs()
 
     def _compute_facet_counts(
-        self, facet_fields: Optional[List[str]], hit_ids: List[str], all_docs: List[Dict[str, Any]]
+        self,
+        facet_fields: Optional[List[str]],
+        hit_ids: List[str],
+        all_docs: List[Dict[str, Any]],
     ) -> Dict[str, Dict[str, int]]:
         if not facet_fields:
             return {}

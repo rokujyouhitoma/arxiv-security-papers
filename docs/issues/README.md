@@ -8,7 +8,8 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **105** | ドメイン層（セキュリティ論文等）と再利用可能基盤層（DB・Crawler・Search・Graph等）の明確なレイヤー・パッケージ分離 | Feature | High | New | PM / Arch | [105-decouple-domain-and-infrastructure-layers.md](105-decouple-domain-and-infrastructure-layers.md) |
+| **105** | ドメイン層（セキュリティ論文等）と再利用可能基盤層（DB・Crawler・Search・Graph等）の明確なレイヤー・パッケージ分離 | Feature | High | In Progress | PM / Arch | [105-decouple-domain-and-infrastructure-layers.md](105-decouple-domain-and-infrastructure-layers.md) |
+
 
 ---
 

@@ -37,7 +37,10 @@ class WSGIApplication:
         return [b""]
 
     def _route_simple_api(
-        self, start_response: Callable[..., Any], path: str, query_params: Dict[str, List[str]]
+        self,
+        start_response: Callable[..., Any],
+        path: str,
+        query_params: Dict[str, List[str]],
     ) -> Optional[List[bytes]]:
         if path == "/api/trends":
             return self.handlers.handle_trends(start_response, query_params)

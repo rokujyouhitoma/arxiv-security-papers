@@ -161,7 +161,9 @@ class AnalyticsStorage:
             return "SA"
         return "SM"
 
-    def _upsert_single_kpi(self, cur: sqlite3.Cursor, k: str, v: Any, now_str: str) -> None:
+    def _upsert_single_kpi(
+        self, cur: sqlite3.Cursor, k: str, v: Any, now_str: str
+    ) -> None:
         cat = self._get_kpi_category(k)
         num_val = float(v) if isinstance(v, (int, float)) else None
         cur.execute(

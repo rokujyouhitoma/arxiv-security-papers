@@ -32,7 +32,9 @@ class SearchEvaluator:
         self, eq: EvaluationQuery, search_fn: Callable[[str, int], Sequence[str]]
     ) -> Dict[str, Any]:
         retrieved_ids = list(search_fn(eq.query_text, self.top_k))
-        p_at_k = compute_precision_at_k(retrieved_ids, eq.relevant_doc_ids, k=self.top_k)
+        p_at_k = compute_precision_at_k(
+            retrieved_ids, eq.relevant_doc_ids, k=self.top_k
+        )
         r_at_k = compute_recall_at_k(retrieved_ids, eq.relevant_doc_ids, k=self.top_k)
         f1 = compute_f1_score(p_at_k, r_at_k)
         ap = compute_average_precision(retrieved_ids, eq.relevant_doc_ids)
@@ -52,7 +54,9 @@ class SearchEvaluator:
             "ndcg_at_k": round(ndcg, 4),
         }
 
-    def _avg_metric(self, query_results: List[Dict[str, Any]], metric_key: str, n: int) -> float:
+    def _avg_metric(
+        self, query_results: List[Dict[str, Any]], metric_key: str, n: int
+    ) -> float:
         total = sum(float(q[metric_key]) for q in query_results)
         return round(total / n, 4)
 

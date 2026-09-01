@@ -30,7 +30,9 @@ class ArxivSourceAdapter(BaseSourceAdapter):
             return f"cat:{kwargs['category']}"
         return f"cat:{self._default_category}"
 
-    def _fetch_raw_paper_dicts(self, target_query: str, max_results: int) -> List[Dict[str, Any]]:
+    def _fetch_raw_paper_dicts(
+        self, target_query: str, max_results: int
+    ) -> List[Dict[str, Any]]:
         """Fetches paper dicts from API with RSS fallback."""
         raw_dicts = fetch_arxiv_papers(query=target_query, max_results=max_results)
         if not raw_dicts:

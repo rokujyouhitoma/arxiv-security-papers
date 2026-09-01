@@ -242,6 +242,7 @@ class OrchestratorWAL:
 
     def _restore_directive_and_telemetry(self, ctx: Any, data: Dict[str, Any]) -> None:
         from intelligence.contracts import FeedbackTelemetry, IntelligenceDirective
+
         if data.get("directive"):
             try:
                 ctx.directive = IntelligenceDirective(**data["directive"])
@@ -273,7 +274,14 @@ class OrchestratorWAL:
         self._restore_hypotheses_list(ctx, data.get("hypotheses", []))
         self._restore_directive_and_telemetry(ctx, data)
 
-    def _apply_phase_event(self, ctx: Any, t: EventType, p: Dict[str, Any], IntelligencePhase: Any, PhaseStatus: Any) -> None:
+    def _apply_phase_event(
+        self,
+        ctx: Any,
+        t: EventType,
+        p: Dict[str, Any],
+        IntelligencePhase: Any,
+        PhaseStatus: Any,
+    ) -> None:
         phase_val = p.get("phase") or p.get("failed_phase")
         if not phase_val:
             return
@@ -299,7 +307,11 @@ class OrchestratorWAL:
         t = ev.event_type
         p = ev.payload
 
-        if t in (EventType.PHASE_STARTED, EventType.PHASE_COMPLETED, EventType.CYCLE_FAILED):
+        if t in (
+            EventType.PHASE_STARTED,
+            EventType.PHASE_COMPLETED,
+            EventType.CYCLE_FAILED,
+        ):
             self._apply_phase_event(ctx, t, p, IntelligencePhase, PhaseStatus)
         elif t == EventType.RECORD_HARVESTED:
             ctx.raw_records.extend(p.get("records", []))

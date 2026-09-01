@@ -30,7 +30,9 @@ SPIDER_REGISTRY: Dict[str, type[BaseSpider]] = {
 }
 
 
-def _init_scheduler_state(scheduler: Scheduler, state_file: Optional[str], resume: bool) -> None:
+def _init_scheduler_state(
+    scheduler: Scheduler, state_file: Optional[str], resume: bool
+) -> None:
     if resume and state_file and os.path.exists(state_file):
         restored = StateStorage.restore_state(scheduler, state_file)
         print(f"[*] Resumed {restored} requests from state: {state_file}")
@@ -70,9 +72,13 @@ async def run_spider(
     downloader = AsyncHttpDownloader()
     engine = Engine(downloader=downloader, scheduler=scheduler)
     middlewares = _build_spider_middlewares(default_delay, enable_cache)
-    pipelines = [OkfItemPipeline(output_dir=output_dir, enable_db_persistence=persist_db)]
+    pipelines = [
+        OkfItemPipeline(output_dir=output_dir, enable_db_persistence=persist_db)
+    ]
 
-    print(f"[*] Starting Spider: '{spider_name}' (start_urls: {len(spider_instance.start_urls)})")
+    print(
+        f"[*] Starting Spider: '{spider_name}' (start_urls: {len(spider_instance.start_urls)})"
+    )
     items = await engine.crawl(
         spider=spider_instance,
         pipelines=pipelines,
@@ -84,7 +90,9 @@ async def run_spider(
         StateStorage.save_state(scheduler, state_file)
         print(f"[*] Saved scheduler state to: {state_file}")
 
-    print(f"[+] Spider '{spider_name}' completed. Scraped {len(items)} items. Stats: {engine.get_stats()}")
+    print(
+        f"[+] Spider '{spider_name}' completed. Scraped {len(items)} items. Stats: {engine.get_stats()}"
+    )
     return items
 
 

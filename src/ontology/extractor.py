@@ -32,7 +32,11 @@ class OntologyExtractor:
 
     @classmethod
     def _parse_list_item(
-        cls, stripped: str, current_list_key: str, current_list: List[str], meta: Dict[str, Any]
+        cls,
+        stripped: str,
+        current_list_key: str,
+        current_list: List[str],
+        meta: Dict[str, Any],
     ) -> Tuple[str, List[str]]:
         """Parses a bulleted YAML list item."""
         current_list.append(stripped[2:].strip().strip("\"'"))
@@ -54,7 +58,11 @@ class OntologyExtractor:
 
     @classmethod
     def _handle_frontmatter_content(
-        cls, stripped: str, current_list_key: str, current_list: List[str], meta: Dict[str, Any]
+        cls,
+        stripped: str,
+        current_list_key: str,
+        current_list: List[str],
+        meta: Dict[str, Any],
     ) -> Tuple[str, List[str]]:
         """Dispatches non-comment frontmatter line to list or kv parser."""
         if stripped.startswith("- ") and current_list_key:
@@ -75,7 +83,9 @@ class OntologyExtractor:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             return current_list_key, current_list
-        return cls._handle_frontmatter_content(stripped, current_list_key, current_list, meta)
+        return cls._handle_frontmatter_content(
+            stripped, current_list_key, current_list, meta
+        )
 
     @classmethod
     def parse_okf_frontmatter(cls, markdown_text: str) -> Dict[str, Any]:
@@ -235,7 +245,11 @@ class OntologyExtractor:
 
     @classmethod
     def _link_single_defense(
-        cls, d_id: str, attacks: List[BaseEntity], vulns: List[BaseEntity], triples: List[Triple]
+        cls,
+        d_id: str,
+        attacks: List[BaseEntity],
+        vulns: List[BaseEntity],
+        triples: List[Triple],
     ) -> None:
         """Links one defense mechanism to all attacks and vulnerabilities."""
         for a in attacks:

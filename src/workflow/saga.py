@@ -32,10 +32,14 @@ class SagaCoordinator:
         self.executed_steps: List[SagaStep] = []
 
     def _get_step_name(self, phase_executor: PhaseProtocol) -> str:
-        step_name = getattr(phase_executor, "phase_type", phase_executor.__class__.__name__)
+        step_name = getattr(
+            phase_executor, "phase_type", phase_executor.__class__.__name__
+        )
         return str(step_name.value) if hasattr(step_name, "value") else str(step_name)
 
-    def _record_execution_error(self, context: Any, step_name: str, exc: Exception) -> None:
+    def _record_execution_error(
+        self, context: Any, step_name: str, exc: Exception
+    ) -> None:
         if hasattr(context, "errors") and isinstance(context.errors, list):
             context.errors.append({"step": step_name, "error": str(exc)})
         self.compensate_all(context)
@@ -45,7 +49,9 @@ class SagaCoordinator:
         step_name = self._get_step_name(phase_executor)
         try:
             context = phase_executor.execute(context)
-            self.executed_steps.append(SagaStep(step_name=step_name, phase_executor=phase_executor))
+            self.executed_steps.append(
+                SagaStep(step_name=step_name, phase_executor=phase_executor)
+            )
             if getattr(context, "errors", None):
                 self.compensate_all(context)
             return context

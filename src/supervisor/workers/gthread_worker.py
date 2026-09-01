@@ -78,11 +78,13 @@ class GthreadWorker(SyncWorker):
     def _pulse_active_state(self) -> None:
         with self._req_lock:
             is_active = self._active_requests > 0
-        self.pulse({
-            "active_threads": self.num_threads,
-            "is_handling_request": is_active,
-            "active_requests": self._active_requests,
-        })
+        self.pulse(
+            {
+                "active_threads": self.num_threads,
+                "is_handling_request": is_active,
+                "active_requests": self._active_requests,
+            }
+        )
 
     def _dispatch_one(self) -> bool:
         """Accept one connection and submit to thread pool. Returns False to break."""

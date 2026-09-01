@@ -28,19 +28,33 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
         return IntelligencePhase.ANALYSIS
 
     def _build_summary_lines(
-        self, topic_groups: Dict[str, List[Dict[str, Any]]], evaluated_hypotheses: List[Any]
+        self,
+        topic_groups: Dict[str, List[Dict[str, Any]]],
+        evaluated_hypotheses: List[Any],
     ) -> List[str]:
-        lines = [f"- Topic '{t}': {len(recs)} records observed." for t, recs in topic_groups.items()]
+        lines = [
+            f"- Topic '{t}': {len(recs)} records observed."
+            for t, recs in topic_groups.items()
+        ]
         if evaluated_hypotheses:
             lines.append("\n🔬 【自律検証セキュリティ仮説動向】:")
             for h in evaluated_hypotheses:
-                lines.append(f"  - [{h.status.value.upper()}] (確信度: {h.confidence_score*100:.1f}%) {h.statement}")
+                lines.append(
+                    f"  - [{h.status.value.upper()}] (確信度: {h.confidence_score*100:.1f}%) {h.statement}"
+                )
         return lines
 
     def _build_run_product(
-        self, cycle_id: str, topic_groups: Dict[str, List[Dict[str, Any]]], processed_records: List[Dict[str, Any]], summary_lines: List[str]
+        self,
+        cycle_id: str,
+        topic_groups: Dict[str, List[Dict[str, Any]]],
+        processed_records: List[Dict[str, Any]],
+        summary_lines: List[str],
     ) -> IntelligenceProduct:
-        summary_text = f"Automated intelligence synthesis for cycle {cycle_id}.\n" + "\n".join(summary_lines)
+        summary_text = (
+            f"Automated intelligence synthesis for cycle {cycle_id}.\n"
+            + "\n".join(summary_lines)
+        )
         return IntelligenceProduct(
             product_id=f"prod_run_{cycle_id}",
             title=f"Cycle {cycle_id} Intelligence Assessment",
@@ -68,19 +82,25 @@ class AnalysisSynthesizer(IntelligencePhaseProtocol):
 
         evaluated_hypotheses = engine.evaluate_all(processed_records)
         summary_lines = self._build_summary_lines(topic_groups, evaluated_hypotheses)
-        products.append(self._build_run_product(cycle_id, topic_groups, processed_records, summary_lines))
+        products.append(
+            self._build_run_product(
+                cycle_id, topic_groups, processed_records, summary_lines
+            )
+        )
 
         for topic, recs in topic_groups.items():
-            products.append(IntelligenceProduct(
-                product_id=f"prod_topic_{topic}_{cycle_id}",
-                title=f"Domain Intelligence Deep-Dive: {topic.capitalize()}",
-                summary=f"Consolidated analysis for domain {topic} based on {len(recs)} primary sources.",
-                tier="02_daily",
-                topic_tags=[topic],
-                source_count=len(recs),
-                confidence_score=0.9,
-                okf_references=[str(r.get("id")) for r in recs],
-            ))
+            products.append(
+                IntelligenceProduct(
+                    product_id=f"prod_topic_{topic}_{cycle_id}",
+                    title=f"Domain Intelligence Deep-Dive: {topic.capitalize()}",
+                    summary=f"Consolidated analysis for domain {topic} based on {len(recs)} primary sources.",
+                    tier="02_daily",
+                    topic_tags=[topic],
+                    source_count=len(recs),
+                    confidence_score=0.9,
+                    okf_references=[str(r.get("id")) for r in recs],
+                )
+            )
 
         return products
 

@@ -29,7 +29,9 @@ class FieldFacet:
 
     def _filter_and_sort(self, counter: Counter[str]) -> Dict[str, int]:
         filtered = {k: v for k, v in counter.items() if v >= self.min_count}
-        sorted_items = sorted(filtered.items(), key=lambda x: (-x[1], x[0]))[: self.limit]
+        sorted_items = sorted(filtered.items(), key=lambda x: (-x[1], x[0]))[
+            : self.limit
+        ]
         return dict(sorted_items)
 
     def compute(self, segment: Segment, doc_ids: List[int]) -> Dict[str, int]:

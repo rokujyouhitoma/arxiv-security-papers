@@ -83,7 +83,9 @@ def _build_log_strings(
     metrics_data: Dict[str, Any],
     error_message: Optional[str],
 ) -> str:
-    metrics_str = ", ".join(f"{k}: {v}" for k, v in metrics_data.items()) if metrics_data else ""
+    metrics_str = (
+        ", ".join(f"{k}: {v}" for k, v in metrics_data.items()) if metrics_data else ""
+    )
     metrics_part = f" | {metrics_str}" if metrics_str else ""
     err_part = f" | Error: {error_message}" if error_message else ""
     return (
@@ -140,7 +142,15 @@ def log_mcp_performance(
         record["error"] = error_message
 
     log_line = _build_log_strings(
-        server_name, method, name, execution_ms, status, cpu_ms, peak_memory_kb, metrics_data, error_message
+        server_name,
+        method,
+        name,
+        execution_ms,
+        status,
+        cpu_ms,
+        peak_memory_kb,
+        metrics_data,
+        error_message,
     )
     sys.stderr.write(log_line + "\n")
     sys.stderr.flush()
@@ -194,7 +204,9 @@ def _handle_tool_call_success(
     exec_ms = (time.perf_counter() - t0_wall) * 1000.0
     cpu_ms = (time.process_time() - t0_cpu) * 1000.0
     end_mem, peak_mem = tracemalloc.get_traced_memory()
-    status = "error" if isinstance(res, dict) and res.get("status") == "error" else "success"
+    status = (
+        "error" if isinstance(res, dict) and res.get("status") == "error" else "success"
+    )
     log_mcp_performance(
         server_name=server_name,
         method="tools/call",
@@ -253,9 +265,13 @@ def _dispatch_tools_call(
     if tool_name in t_handlers:
         try:
             res = t_handlers[tool_name](args)
-            _handle_tool_call_success(server_name, tool_name, args, res, t0_wall, t0_cpu, start_mem)
+            _handle_tool_call_success(
+                server_name, tool_name, args, res, t0_wall, t0_cpu, start_mem
+            )
         except Exception as handler_err:
-            res = _handle_tool_call_error(server_name, tool_name, args, handler_err, t0_wall, t0_cpu, start_mem)
+            res = _handle_tool_call_error(
+                server_name, tool_name, args, handler_err, t0_wall, t0_cpu, start_mem
+            )
     else:
         res = {"error": f"Unknown tool '{tool_name}'"}
         log_mcp_performance(
@@ -387,7 +403,9 @@ def _dispatch_resources_read(
     return res
 
 
-def _handle_initialize(server_name: str, req_id: Any, p: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_initialize(
+    server_name: str, req_id: Any, p: Dict[str, Any]
+) -> Dict[str, Any]:
     return {
         "jsonrpc": "2.0",
         "id": req_id,
@@ -477,7 +495,9 @@ def _init_tool_registries(
     tools_manifest: Optional[List[Dict[str, Any]]],
     tool_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]],
 ) -> tuple[List[Dict[str, Any]], Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]]:
-    return (tools_manifest if tools_manifest is not None else []), (tool_handlers if tool_handlers is not None else {})
+    return (tools_manifest if tools_manifest is not None else []), (
+        tool_handlers if tool_handlers is not None else {}
+    )
 
 
 def _init_prompt_resource_registries(
@@ -501,11 +521,17 @@ def _init_prompt_resource_registries(
 def run_mcp_server(
     server_name: str = "mcp-server",
     tools_manifest: Optional[List[Dict[str, Any]]] = None,
-    tool_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
+    tool_handlers: Optional[
+        Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]
+    ] = None,
     prompts_manifest: Optional[List[Dict[str, Any]]] = None,
-    prompt_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
+    prompt_handlers: Optional[
+        Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]
+    ] = None,
     resources_manifest: Optional[List[Dict[str, Any]]] = None,
-    resource_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
+    resource_handlers: Optional[
+        Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]
+    ] = None,
 ) -> None:
     """Standard event loop processing JSON-RPC messages from stdin."""
     tools, t_handlers = _init_tool_registries(tools_manifest, tool_handlers)

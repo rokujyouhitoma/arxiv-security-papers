@@ -33,7 +33,11 @@ class DAGWorkflowEngine:
         )
 
     def _add_node_edges(
-        self, node_id: str, node: TaskNode, adj_list: Dict[str, List[str]], in_degree: Dict[str, int]
+        self,
+        node_id: str,
+        node: TaskNode,
+        adj_list: Dict[str, List[str]],
+        in_degree: Dict[str, int],
     ) -> None:
         for dep in node.dependencies:
             if dep not in self.nodes:
@@ -50,7 +54,11 @@ class DAGWorkflowEngine:
         return adj_list, in_degree
 
     def _process_queue_node(
-        self, curr: str, adj_list: Dict[str, List[str]], in_degree: Dict[str, int], queue: deque[str]
+        self,
+        curr: str,
+        adj_list: Dict[str, List[str]],
+        in_degree: Dict[str, int],
+        queue: deque[str],
     ) -> None:
         for neighbor in adj_list[curr]:
             in_degree[neighbor] -= 1
@@ -60,7 +68,9 @@ class DAGWorkflowEngine:
     def _topological_sort(self) -> List[str]:
         """Calculates topological execution order using Kahn's algorithm."""
         adj_list, in_degree = self._build_adj_and_in_degree()
-        queue: deque[str] = deque([node_id for node_id, deg in in_degree.items() if deg == 0])
+        queue: deque[str] = deque(
+            [node_id for node_id, deg in in_degree.items() if deg == 0]
+        )
         ordered: List[str] = []
 
         while queue:

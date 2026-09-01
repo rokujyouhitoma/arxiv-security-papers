@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List
 
 from mcp.base import run_mcp_server
 from security.taxonomy import CWE_DEFENSE_MAP
@@ -226,12 +226,19 @@ def _patch_safetensors(code: str) -> str:
 
 
 def _patch_eval(code: str) -> str:
-    return "import ast\n" + code.replace("eval(", "ast.literal_eval(") if "eval(" in code else code
+    return (
+        "import ast\n" + code.replace("eval(", "ast.literal_eval(")
+        if "eval(" in code
+        else code
+    )
 
 
 def _patch_sql(code: str) -> str:
     if 'f"' in code:
-        return "# TODO: Ensure parameterized tuples: cursor.execute(query, (params,))\n" + code
+        return (
+            "# TODO: Ensure parameterized tuples: cursor.execute(query, (params,))\n"
+            + code
+        )
     return code
 
 
@@ -240,7 +247,8 @@ def _apply_cwe_patch_heuristics(cwe_id: str, code: str) -> str:
     patch_map: Dict[str, Callable[[str], str]] = {
         "CWE-502": lambda c: _patch_pickle(c) if "pickle." in c else c,
         "CWE-693": _patch_safetensors,
-        "CWE-1357": lambda c: "# Enforce verified package imports and pin dependencies with hashes\n" + c,
+        "CWE-1357": lambda c: "# Enforce verified package imports and pin dependencies with hashes\n"
+        + c,
         "CWE-94": _patch_eval,
         "CWE-89": _patch_sql,
     }
@@ -298,11 +306,36 @@ def handle_check_threat_coverage(params: Dict[str, Any]) -> Dict[str, Any]:
     breakdown = []
 
     checklist = [
-        ("pickle-free", "CWE-502 (Deserialization / Model Poisoning)", "T1587.001", "SI-10 (Information Input Validation)"),
-        ("ast-guard", "CWE-94 (Dynamic Code Injection)", "T1059.006", "SI-3 (Malicious Code Protection)"),
-        ("zero-dependency", "Supply-Chain Malware & Slopsquatting", "T1195.001", "SR-3 (Supply Chain Controls)"),
-        ("commonpath-traversal-guard", "CWE-22 (Path Traversal)", "T1083", "AC-3 (Access Enforcement)"),
-        ("parameterized-queries", "CWE-89 (SQL Injection)", "T1190", "SI-10 (Information Input Validation)"),
+        (
+            "pickle-free",
+            "CWE-502 (Deserialization / Model Poisoning)",
+            "T1587.001",
+            "SI-10 (Information Input Validation)",
+        ),
+        (
+            "ast-guard",
+            "CWE-94 (Dynamic Code Injection)",
+            "T1059.006",
+            "SI-3 (Malicious Code Protection)",
+        ),
+        (
+            "zero-dependency",
+            "Supply-Chain Malware & Slopsquatting",
+            "T1195.001",
+            "SR-3 (Supply Chain Controls)",
+        ),
+        (
+            "commonpath-traversal-guard",
+            "CWE-22 (Path Traversal)",
+            "T1083",
+            "AC-3 (Access Enforcement)",
+        ),
+        (
+            "parameterized-queries",
+            "CWE-89 (SQL Injection)",
+            "T1190",
+            "SI-10 (Information Input Validation)",
+        ),
     ]
 
     for key, cwe_desc, mitre, nist in checklist:

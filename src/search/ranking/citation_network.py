@@ -4,7 +4,7 @@ Citation Network & Authority Index using Power Iteration PageRank.
 """
 
 from collections import defaultdict
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 
 class CitationNetworkIndex:
@@ -25,8 +25,7 @@ class CitationNetworkIndex:
         self, doc_id: str, ranks: Dict[str, float], initial_score: float
     ) -> float:
         return sum(
-            ranks.get(src, initial_score)
-            / max(len(self.citations.get(src, set())), 1)
+            ranks.get(src, initial_score) / max(len(self.citations.get(src, set())), 1)
             for src in self.inbound.get(doc_id, set())
         )
 
@@ -69,7 +68,9 @@ class CitationNetworkIndex:
 
         ranks = {doc_id: initial_score for doc_id in all_doc_ids}
         for _ in range(max_iter):
-            ranks = self._pagerank_iteration(all_doc_ids, ranks, initial_score, damping, N)
+            ranks = self._pagerank_iteration(
+                all_doc_ids, ranks, initial_score, damping, N
+            )
 
         self.pagerank = ranks
         return self.pagerank

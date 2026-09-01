@@ -78,7 +78,9 @@ class SearchClient:
         res: Dict[str, Any] = json.loads(raw_data.decode("utf-8").strip())
         return res
 
-    def _send_socket_payload(self, cmd_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _send_socket_payload(
+        self, cmd_dict: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self.timeout)
         try:

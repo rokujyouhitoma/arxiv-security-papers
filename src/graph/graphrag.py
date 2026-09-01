@@ -78,15 +78,29 @@ class GraphRAGPipeline:
         for vid in current_level:
             for e in g.get_out_edges(vid):
                 self._process_single_edge(
-                    e, True, allowed_predicates, visited_v_ids, matched_edges, matched_triples, next_level
+                    e,
+                    True,
+                    allowed_predicates,
+                    visited_v_ids,
+                    matched_edges,
+                    matched_triples,
+                    next_level,
                 )
             for e in g.get_in_edges(vid):
                 self._process_single_edge(
-                    e, False, allowed_predicates, visited_v_ids, matched_edges, matched_triples, next_level
+                    e,
+                    False,
+                    allowed_predicates,
+                    visited_v_ids,
+                    matched_edges,
+                    matched_triples,
+                    next_level,
                 )
         return next_level
 
-    def _deduplicate_triples(self, matched_triples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _deduplicate_triples(
+        self, matched_triples: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Deduplicates matched graph triples."""
         unique_triples: List[Dict[str, Any]] = []
         seen_t: Set[str] = set()
@@ -130,11 +144,18 @@ class GraphRAGPipeline:
         matched_edges: List[Dict[str, Any]] = []
 
         self._run_expansion_hops(
-            max_hops, current_level, allowed_predicates, visited_v_ids, matched_edges, matched_triples
+            max_hops,
+            current_level,
+            allowed_predicates,
+            visited_v_ids,
+            matched_edges,
+            matched_triples,
         )
 
         valid_vertices = [
-            v for v in (self.graph_engine.get_vertex(vid) for vid in visited_v_ids) if v is not None
+            v
+            for v in (self.graph_engine.get_vertex(vid) for vid in visited_v_ids)
+            if v is not None
         ]
         unique_triples = self._deduplicate_triples(matched_triples)
 
@@ -187,10 +208,16 @@ class GraphRAGPipeline:
 
     def _is_threat_match(self, vid: str, v: Vertex, kw_lower: str) -> bool:
         """Checks if a threat vertex matches search keyword."""
-        is_threat = v.label in ("AttackTechnique", "Vulnerability") or vid.startswith(("AttackTechnique:", "Vulnerability:"))
+        is_threat = v.label in ("AttackTechnique", "Vulnerability") or vid.startswith(
+            ("AttackTechnique:", "Vulnerability:")
+        )
         if not is_threat:
             return False
-        return kw_lower in vid.lower() or kw_lower in v.label.lower() or self._props_contain(v.properties, kw_lower)
+        return (
+            kw_lower in vid.lower()
+            or kw_lower in v.label.lower()
+            or self._props_contain(v.properties, kw_lower)
+        )
 
     def _find_matching_threat_vids(self, kw_lower: str) -> List[str]:
         """Finds attack or vulnerability vertex IDs matching keyword."""
@@ -239,7 +266,9 @@ class GraphRAGPipeline:
     ) -> List[Dict[str, Any]]:
         """Finds attack-defense causal chains."""
         results: List[Dict[str, Any]] = []
-        for target_vid in self._find_matching_threat_vids(technique_or_vuln_keyword.lower()):
+        for target_vid in self._find_matching_threat_vids(
+            technique_or_vuln_keyword.lower()
+        ):
             results.extend(self._build_threat_defense_chain(target_vid))
         return results
 

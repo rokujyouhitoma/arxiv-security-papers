@@ -130,10 +130,7 @@ class ControlServer:
 
     def _atexit_cleanup(self) -> None:
         """Removes the socket file on interpreter exit (covers abnormal exits)."""
-        if (
-            not getattr(self, "_in_child", False)
-            and os.getpid() == self._creator_pid
-        ):
+        if not getattr(self, "_in_child", False) and os.getpid() == self._creator_pid:
             self._safe_unlink(self.socket_path)
 
     def stop(self) -> None:
@@ -155,7 +152,9 @@ class ControlClient:
         self.socket_path = socket_path
         self.timeout = timeout
 
-    def _exchange_payload(self, sock: socket.socket, cmd_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def _exchange_payload(
+        self, sock: socket.socket, cmd_dict: Dict[str, Any]
+    ) -> Dict[str, Any]:
         payload = (json.dumps(cmd_dict) + "\n").encode("utf-8")
         sock.sendall(payload)
         raw_data = ControlServer._recv_line(sock)

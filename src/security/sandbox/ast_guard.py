@@ -126,7 +126,9 @@ class ASTSecurityGuard:
     def _check_import_from(self, node: ast.ImportFrom) -> Optional[str]:
         """Checks from-import statement module."""
         if node.module and self._is_blocked_module(node.module):
-            return f"Security Exception: Import from module '{node.module}' is prohibited."
+            return (
+                f"Security Exception: Import from module '{node.module}' is prohibited."
+            )
         return None
 
     def _check_import(self, node: ast.AST) -> Optional[str]:

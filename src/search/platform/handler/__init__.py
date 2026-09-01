@@ -83,7 +83,9 @@ class SelectHandler:
 
     def _dispatch_query_type(self, q: str, default_field: str) -> Query:
         if self._is_phrase_query(q):
-            return PhraseQuery(default_field, self.analyzer.analyze(q[1:-1].strip()), slop=1)
+            return PhraseQuery(
+                default_field, self.analyzer.analyze(q[1:-1].strip()), slop=1
+            )
         if "*" in q or "?" in q:
             return WildcardQuery(default_field, q)
         if "~" in q:
@@ -116,6 +118,7 @@ class SelectHandler:
                     if doc_data and str(doc_data.get("id", d_id)) == str(doc_id_val):
                         return doc_data
             return None
+
         return get_doc_by_id
 
     def handle_request(
@@ -135,7 +138,10 @@ class SelectHandler:
         top_docs = collector.collect(segment, doc_scores)
 
         top_docs = self.elevation.elevate(
-            query_str, top_docs, id_field="id", get_doc_by_id_fn=self._get_doc_by_id_fn(segment)
+            query_str,
+            top_docs,
+            id_field="id",
+            get_doc_by_id_fn=self._get_doc_by_id_fn(segment),
         )
         return self._build_response(
             segment, top_docs, doc_scores, query_str, start, rows, params
@@ -148,7 +154,9 @@ class SelectHandler:
             self.cache.filter_cache.put(fq_str, cached_doc_ids)
         return cached_doc_ids
 
-    def _apply_single_filter(self, segment: Segment, doc_scores: Dict[int, float], fq_str: str) -> Dict[int, float]:
+    def _apply_single_filter(
+        self, segment: Segment, doc_scores: Dict[int, float], fq_str: str
+    ) -> Dict[int, float]:
         if not fq_str:
             return doc_scores
         cached_ids = self._resolve_single_fq(segment, fq_str)
@@ -188,18 +196,30 @@ class SelectHandler:
             return set()
         matched: Set[int] = set()
         for d_id in range(segment.doc_count):
-            if not segment.is_deleted(d_id) and self._check_doc_value_match(dv.get(d_id), val):
+            if not segment.is_deleted(d_id) and self._check_doc_value_match(
+                dv.get(d_id), val
+            ):
                 matched.add(d_id)
         return matched
 
-    def _append_spellcheck(self, response: Dict[str, Any], segment: Segment, top_docs: Any, query_str: str) -> None:
+    def _append_spellcheck(
+        self, response: Dict[str, Any], segment: Segment, top_docs: Any, query_str: str
+    ) -> None:
         if top_docs.total_hits == 0 and query_str and query_str != "*:*":
             response["spellcheck"] = {
                 "suggestions": SpellChecker(segment, field="title").suggest(query_str)
             }
 
     def _append_facets_and_highlights(
-        self, response: Dict[str, Any], segment: Segment, top_docs: Any, doc_scores: Dict[int, float], query_str: str, start: int, rows: int, params: Dict[str, Any]
+        self,
+        response: Dict[str, Any],
+        segment: Segment,
+        top_docs: Any,
+        doc_scores: Dict[int, float],
+        query_str: str,
+        start: int,
+        rows: int,
+        params: Dict[str, Any],
     ) -> None:
         if params.get("facet"):
             response["facet_counts"] = {
@@ -235,7 +255,9 @@ class SelectHandler:
                 "docs": paginated_docs,
             },
         }
-        self._append_facets_and_highlights(response, segment, top_docs, doc_scores, query_str, start, rows, params)
+        self._append_facets_and_highlights(
+            response, segment, top_docs, doc_scores, query_str, start, rows, params
+        )
         return response
 
     def _compute_highlights(
@@ -269,7 +291,8 @@ class SelectHandler:
 
     def _build_sorter(self, sort_param: str) -> Sorter:
         sort_fields = [
-            sf for part in sort_param.split(",")
+            sf
+            for part in sort_param.split(",")
             if (sf := self._parse_sort_field(part)) is not None
         ]
         return Sorter(sort_fields)

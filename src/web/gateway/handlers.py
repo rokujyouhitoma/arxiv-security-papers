@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, List, Optional, Tuple
 
 from database.client import DatabaseClient
 from mcp.papers_server import (
@@ -56,14 +56,21 @@ def _read_single_okf_paper(fpath: str, fname: str) -> Optional[Dict[str, Any]]:
     try:
         with open(fpath, "r", encoding="utf-8") as pf:
             content = pf.read()
-            return _extract_paper_frontmatter_metadata(content, fname.replace(".md", ""))
+            return _extract_paper_frontmatter_metadata(
+                content, fname.replace(".md", "")
+            )
     except Exception:
         return None
 
 
-def _collect_papers_from_dir(root: str, files: List[str], max_count: int, papers: List[Dict[str, Any]]) -> bool:
+def _collect_papers_from_dir(
+    root: str, files: List[str], max_count: int, papers: List[Dict[str, Any]]
+) -> bool:
     for f in sorted(files, reverse=True):
-        if f.endswith(".md") and (p := _read_single_okf_paper(os.path.join(root, f), f)) is not None:
+        if (
+            f.endswith(".md")
+            and (p := _read_single_okf_paper(os.path.join(root, f), f)) is not None
+        ):
             papers.append(p)
             if len(papers) >= max_count:
                 return True
@@ -174,7 +181,11 @@ def _classify_otlp_span_kind(s_name: str) -> str:
         return "llm"
     if _is_match(s_name, ("retriev", "search", "harvest", "vector", "crawl")):
         return "retriever"
-    return "tool" if _is_match(s_name, ("tool", "mcp", "extractor", "parser")) else "pipeline"
+    return (
+        "tool"
+        if _is_match(s_name, ("tool", "mcp", "extractor", "parser"))
+        else "pipeline"
+    )
 
 
 def _iter_otlp_spans(
@@ -191,9 +202,7 @@ def _iter_otlp_spans(
                 )
 
 
-def _process_trace_line(
-    line: str, counts: Dict[str, int]
-) -> Tuple[int, Optional[str]]:
+def _process_trace_line(line: str, counts: Dict[str, int]) -> Tuple[int, Optional[str]]:
     total_spans = 0
     traceparent = None
     try:
@@ -317,7 +326,9 @@ def _introspect_live_loop_and_obf_state(
     return latest_cycle, phase_status, proc_count, spans_count, obf_data
 
 
-def _enrich_supervisor_workers_memory(resp: Dict[str, Any], top_viewer_cls: Any) -> None:
+def _enrich_supervisor_workers_memory(
+    resp: Dict[str, Any], top_viewer_cls: Any
+) -> None:
     total_rss = 0.0
     arbiter_pid = resp.get("arbiter_pid")
     if isinstance(arbiter_pid, int):
@@ -584,6 +595,7 @@ def _count_analytics_sqlite_rows(analytics_db_path: str) -> Optional[int]:
         return None
     try:
         import sqlite3
+
         conn = sqlite3.connect(f"file:{analytics_db_path}?mode=ro", uri=True)
         try:
             return _sum_sqlite_tables_rows(conn)
@@ -633,6 +645,7 @@ def _introspect_analytics_metrics(
 
 def _compute_wal_rate_and_lag(wal_files: List[str]) -> Tuple[float, float]:
     import time
+
     wal_total_bytes = sum(os.path.getsize(f) for f in wal_files)
     mtimes = [os.path.getmtime(f) for f in wal_files]
     time_span = max(1.0, max(mtimes) - min(mtimes)) if len(mtimes) > 1 else 1.0
@@ -660,6 +673,7 @@ def _calc_wal_metrics(workspace_dir: str) -> Tuple[float, float]:
 
 def _sample_graph_latencies(ge_instance: Any) -> Tuple[List[float], int]:
     import time
+
     latencies: List[float] = []
     sample_keys = list(ge_instance._vertices.keys())[:20]
     if not sample_keys:
@@ -707,9 +721,7 @@ def _run_sql_introspection(
     sql_databases: List[str] = []
     try:
         from database.sql.executor import SQLExecutor
-        from database.sql.parser import SQLParser
 
-        parser = SQLParser()
         executor = SQLExecutor()
         t_sql0 = time.perf_counter()
         result_db = executor.execute("SHOW DATABASES;")
@@ -750,11 +762,15 @@ def _collect_database_tables(
     workspace_dir: str,
 ) -> Tuple[List[Dict[str, Any]], int, int, Any, int]:
     tables: List[Dict[str, Any]] = []
-    g_tables, g_rows, g_size, ge_instance = _introspect_graph_table_metrics(workspace_dir)
+    g_tables, g_rows, g_size, ge_instance = _introspect_graph_table_metrics(
+        workspace_dir
+    )
     tables.extend(g_tables)
     p_table, p_rows, p_size = _introspect_paper_table_metrics(workspace_dir)
     tables.append(p_table)
-    v_tables, v_rows, v_size = _introspect_vector_and_search_metrics(workspace_dir, p_rows)
+    v_tables, v_rows, v_size = _introspect_vector_and_search_metrics(
+        workspace_dir, p_rows
+    )
     tables.extend(v_tables)
     a_table, a_rows, a_size = _introspect_analytics_metrics(workspace_dir)
     tables.append(a_table)
@@ -798,7 +814,9 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
     All values are derived from real files and live data structures;
     no hardcoded dummy values are used.
     """
-    tables, total_rows, total_size, ge_instance, p_rows = _collect_database_tables(workspace_dir)
+    tables, total_rows, total_size, ge_instance, p_rows = _collect_database_tables(
+        workspace_dir
+    )
     db_kpis = _build_database_kpis(ge_instance, workspace_dir, p_rows)
     sql_introspection = _run_sql_introspection(workspace_dir, tables)
 
@@ -873,15 +891,20 @@ class GatewayHandlers:
         self, query: str, top_k: int, category: Optional[str], mode: str
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         import time
+
         t_start = time.perf_counter()
         if mode == "vector":
             results = self.vector_engine.search_vector_ann(query=query, top_k=top_k)
             profile: Dict[str, Any] = {"mode": "vector"}
         elif mode == "rrf":
-            results = self.vector_engine.search_rrf_hybrid(query=query, top_k=top_k, category=category)
+            results = self.vector_engine.search_rrf_hybrid(
+                query=query, top_k=top_k, category=category
+            )
             profile = {"mode": "rrf"}
         else:
-            results, profile = self.vector_engine.search_with_profile(query=query, top_k=top_k, category=category)
+            results, profile = self.vector_engine.search_with_profile(
+                query=query, top_k=top_k, category=category
+            )
         profile["total_ms"] = round((time.perf_counter() - t_start) * 1000.0, 3)
         return results, profile
 
@@ -889,6 +912,7 @@ class GatewayHandlers:
         self, query: str, top_k: int, category: Optional[str], mode: str
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         import time
+
         t_start = time.perf_counter()
         resp_dict = self.search_client.search(
             query=query, top_k=top_k, category=category, mode=mode
@@ -1380,7 +1404,9 @@ class GatewayHandlers:
             },
         )
 
-    def _parse_mcp_body(self, environ: Dict[str, Any], length: int) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    def _parse_mcp_body(
+        self, environ: Dict[str, Any], length: int
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         try:
             body_bytes = environ["wsgi.input"].read(length)
             req = json.loads(body_bytes.decode("utf-8"))
@@ -1390,7 +1416,9 @@ class GatewayHandlers:
         except Exception as e:
             return None, f"Invalid JSON payload: {e}"
 
-    def _validate_mcp_length(self, environ: Dict[str, Any]) -> Tuple[int, Optional[str]]:
+    def _validate_mcp_length(
+        self, environ: Dict[str, Any]
+    ) -> Tuple[int, Optional[str]]:
         try:
             length = int(environ.get("CONTENT_LENGTH", "0"))
         except ValueError:
@@ -1402,7 +1430,9 @@ class GatewayHandlers:
             return length, "Payload exceeds maximum allowed size (1MB)"
         return length, None
 
-    def _handle_mcp_length_error(self, start_response: Callable[..., Any], err: str) -> List[bytes]:
+    def _handle_mcp_length_error(
+        self, start_response: Callable[..., Any], err: str
+    ) -> List[bytes]:
         status = "413 Payload Too Large" if "exceeds" in err else "400 Bad Request"
         return response_error(start_response, err, status=status)
 

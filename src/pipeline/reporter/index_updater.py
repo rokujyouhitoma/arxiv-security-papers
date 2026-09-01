@@ -123,7 +123,9 @@ def _build_index_rows(
     for day in sorted(os.listdir(okf_root), reverse=True):
         day_dir = os.path.join(okf_root, day)
         if os.path.isdir(day_dir):
-            rows.extend(_scan_day_index_rows(day, day_dir, workspace_dir, config, index_dir))
+            rows.extend(
+                _scan_day_index_rows(day, day_dir, workspace_dir, config, index_dir)
+            )
     return rows
 
 
@@ -228,7 +230,13 @@ def update_index_and_log(
 
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     index_content = _render_index_header(
-        date_str, per_run_path, daily_path, monthly_path, quarterly_path, annual_path, index_dir
+        date_str,
+        per_run_path,
+        daily_path,
+        monthly_path,
+        quarterly_path,
+        annual_path,
+        index_dir,
     )
     rows = _build_index_rows(workspace_dir, config, index_dir)
     full_text = index_content + "".join(r + "\n" for r in rows)

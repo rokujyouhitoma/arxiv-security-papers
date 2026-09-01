@@ -49,7 +49,10 @@ class FacetedIndex:
         return candidates & target_docs
 
     def _filter_facet(
-        self, val: Optional[str], mapping: Dict[str, Set[str]], candidates: Optional[Set[str]]
+        self,
+        val: Optional[str],
+        mapping: Dict[str, Set[str]],
+        candidates: Optional[Set[str]],
     ) -> Optional[Set[str]]:
         if not val:
             return candidates

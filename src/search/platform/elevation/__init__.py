@@ -62,7 +62,11 @@ class QueryElevationComponent:
         return existing_elevated, filtered_docs
 
     def _build_promoted_doc(
-        self, idx: int, promoted_id: str, existing_elevated: Dict[str, ScoreDoc], get_doc_by_id_fn: Optional[Any]
+        self,
+        idx: int,
+        promoted_id: str,
+        existing_elevated: Dict[str, ScoreDoc],
+        get_doc_by_id_fn: Optional[Any],
     ) -> Optional[ScoreDoc]:
         if promoted_id in existing_elevated:
             sdoc = existing_elevated[promoted_id]
@@ -93,7 +97,12 @@ class QueryElevationComponent:
         promoted_docs = [
             pdoc
             for idx, pid in enumerate(rule.elevated_ids)
-            if (pdoc := self._build_promoted_doc(idx, pid, existing_elevated, get_doc_by_id_fn)) is not None
+            if (
+                pdoc := self._build_promoted_doc(
+                    idx, pid, existing_elevated, get_doc_by_id_fn
+                )
+            )
+            is not None
         ]
 
         final_score_docs = promoted_docs + filtered_docs

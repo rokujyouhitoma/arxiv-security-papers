@@ -74,7 +74,9 @@ class AsyncHttpDownloader:
     async def _open_unverified_connection(
         self, host: str, port: int, conn_err: Exception
     ) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        if "CERTIFICATE_VERIFY_FAILED" in str(conn_err) or isinstance(conn_err, ssl.SSLCertVerificationError):
+        if "CERTIFICATE_VERIFY_FAILED" in str(conn_err) or isinstance(
+            conn_err, ssl.SSLCertVerificationError
+        ):
             unverified_ctx = ssl._create_unverified_context()
             return await asyncio.wait_for(
                 asyncio.open_connection(host, port, ssl=unverified_ctx),
@@ -94,7 +96,10 @@ class AsyncHttpDownloader:
         return header_str.encode("iso-8859-1") + (request.body or b"")
 
     async def _execute_http_transaction(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, req_bytes: bytes
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        req_bytes: bytes,
     ) -> Tuple[int, Dict[str, str], bytes]:
         try:
             writer.write(req_bytes)
@@ -129,7 +134,9 @@ class AsyncHttpDownloader:
 
         req_bytes = self._format_http_request(request, host, path)
         reader, writer = await self._open_connection(host, port, is_ssl)
-        status_code, resp_headers, body = await self._execute_http_transaction(reader, writer, req_bytes)
+        status_code, resp_headers, body = await self._execute_http_transaction(
+            reader, writer, req_bytes
+        )
 
         return Response(
             url=request.url,

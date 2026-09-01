@@ -20,7 +20,9 @@ def _extract_single_pattern(pattern: str, html: str) -> Optional[Any]:
 
 
 def _extract_jsonld_list(html: str) -> List[Any]:
-    matches = re.findall(r'<script type="application/ld\+json"[^>]*>(.*?)</script>', html, re.DOTALL)
+    matches = re.findall(
+        r'<script type="application/ld\+json"[^>]*>(.*?)</script>', html, re.DOTALL
+    )
     items = [_safe_json_loads(ld) for ld in matches]
     return [item for item in items if item is not None]
 

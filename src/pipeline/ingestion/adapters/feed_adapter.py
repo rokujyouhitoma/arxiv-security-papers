@@ -102,7 +102,9 @@ class FeedSourceAdapter(BaseSourceAdapter):
                 items.append(item)
         return items
 
-    def _extract_elem_fields(self, elem: Any, domain_tag: str, idx: int) -> Tuple[str, str, str, List[str], str]:
+    def _extract_elem_fields(
+        self, elem: Any, domain_tag: str, idx: int
+    ) -> Tuple[str, str, str, List[str], str]:
         """Extracts title, link, abstract, authors, and published fields from XML element."""
         title = (
             _get_node_text(elem, ["title", "{http://www.w3.org/2005/Atom}title"])
@@ -137,7 +139,9 @@ class FeedSourceAdapter(BaseSourceAdapter):
     def _parse_feed_elem(
         self, elem: Any, domain_tag: str, idx: int, feed_url: str
     ) -> Optional[RawItem]:
-        title, link, abstract, authors, published = self._extract_elem_fields(elem, domain_tag, idx)
+        title, link, abstract, authors, published = self._extract_elem_fields(
+            elem, domain_tag, idx
+        )
         item_id = f"feed-{domain_tag[:12]}-{hash(link or title) & 0xFFFFFF:06x}"
 
         return RawItem(

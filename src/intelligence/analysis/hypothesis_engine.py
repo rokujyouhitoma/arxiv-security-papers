@@ -105,7 +105,9 @@ class HypothesisEngine:
 
     def _load_hypo_item(self, item: Dict[str, Any]) -> Hypothesis:
         status_val = self._parse_hypo_status(item.get("status", "formulated"))
-        supp_ev = [HypothesisEvidence(**ev) for ev in item.get("supporting_evidence", [])]
+        supp_ev = [
+            HypothesisEvidence(**ev) for ev in item.get("supporting_evidence", [])
+        ]
         ref_ev = [HypothesisEvidence(**ev) for ev in item.get("refuting_evidence", [])]
         return Hypothesis(
             hypo_id=item["hypo_id"],
@@ -153,8 +155,12 @@ class HypothesisEngine:
             "target_topics": h.target_topics,
             "confidence_score": h.confidence_score,
             "status": h.status.value,
-            "supporting_evidence": [self._evidence_to_dict(ev) for ev in h.supporting_evidence],
-            "refuting_evidence": [self._evidence_to_dict(ev) for ev in h.refuting_evidence],
+            "supporting_evidence": [
+                self._evidence_to_dict(ev) for ev in h.supporting_evidence
+            ],
+            "refuting_evidence": [
+                self._evidence_to_dict(ev) for ev in h.refuting_evidence
+            ],
             "formulated_at": h.formulated_at,
             "updated_at": h.updated_at,
             "metadata": h.metadata,
@@ -166,7 +172,11 @@ class HypothesisEngine:
             return
         try:
             os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
-            payload = {"hypotheses": [self._serialize_hypothesis(h) for h in self._hypotheses.values()]}
+            payload = {
+                "hypotheses": [
+                    self._serialize_hypothesis(h) for h in self._hypotheses.values()
+                ]
+            }
             with open(self.storage_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2, ensure_ascii=False)
         except Exception:
@@ -207,7 +217,9 @@ class HypothesisEngine:
     def _formulate_from_template(
         self, template: Dict[str, Any], corpus_text: str
     ) -> Optional[Hypothesis]:
-        matches = sum(1 for kw in template["trigger_keywords"] if kw.lower() in corpus_text)
+        matches = sum(
+            1 for kw in template["trigger_keywords"] if kw.lower() in corpus_text
+        )
         if matches < 1 or template["id_prefix"] in self._hypotheses:
             return None
         return Hypothesis(
@@ -249,8 +261,12 @@ class HypothesisEngine:
         ]
 
     def _add_support_evidence(
-        self, hypothesis: Hypothesis, paper_id: str, record: Dict[str, Any],
-        existing_supp: set, relevance: float
+        self,
+        hypothesis: Hypothesis,
+        paper_id: str,
+        record: Dict[str, Any],
+        existing_supp: set,
+        relevance: float,
     ) -> float:
         ev = HypothesisEvidence(
             evidence_id=f"ev_supp_{paper_id}_{len(hypothesis.supporting_evidence)+1}",
@@ -264,8 +280,12 @@ class HypothesisEngine:
         return relevance
 
     def _add_refute_evidence(
-        self, hypothesis: Hypothesis, paper_id: str, record: Dict[str, Any],
-        existing_ref: set, relevance: float
+        self,
+        hypothesis: Hypothesis,
+        paper_id: str,
+        record: Dict[str, Any],
+        existing_ref: set,
+        relevance: float,
     ) -> float:
         ev = HypothesisEvidence(
             evidence_id=f"ev_ref_{paper_id}_{len(hypothesis.refuting_evidence)+1}",
@@ -296,15 +316,25 @@ class HypothesisEngine:
     ) -> tuple[float, float]:
         """Extracts support or refute evidence from a single paper record."""
         paper_id = str(record.get("id", ""))
-        text = (record.get("title", "") + " " + record.get("summary", "") + " " + record.get("abstract", "")).lower()
+        text = (
+            record.get("title", "")
+            + " "
+            + record.get("summary", "")
+            + " "
+            + record.get("abstract", "")
+        ).lower()
         relevance = float(record.get("admiralty_score", 1.0))
         delta_s, delta_r = 0.0, 0.0
 
         if self._match_patterns(text, support_patterns, paper_id, existing_supp):
-            delta_s += self._add_support_evidence(hypothesis, paper_id, record, existing_supp, relevance)
+            delta_s += self._add_support_evidence(
+                hypothesis, paper_id, record, existing_supp, relevance
+            )
 
         if self._match_patterns(text, refute_patterns, paper_id, existing_ref):
-            delta_r += self._add_refute_evidence(hypothesis, paper_id, record, existing_ref, relevance)
+            delta_r += self._add_refute_evidence(
+                hypothesis, paper_id, record, existing_ref, relevance
+            )
 
         return delta_s, delta_r
 
@@ -341,7 +371,9 @@ class HypothesisEngine:
     ) -> tuple[float, float]:
         s, r = 0.0, 0.0
         for rec in records:
-            ds, dr = self._extract_evidence_for_paper(hypothesis, rec, supp_pats, ref_pats, existing_supp, existing_ref)
+            ds, dr = self._extract_evidence_for_paper(
+                hypothesis, rec, supp_pats, ref_pats, existing_supp, existing_ref
+            )
             s += ds
             r += dr
         return s, r
@@ -353,15 +385,21 @@ class HypothesisEngine:
         existing_supp = {ev.paper_id for ev in hypothesis.supporting_evidence}
         existing_ref = {ev.paper_id for ev in hypothesis.refuting_evidence}
         sw, rw = self._initial_weights(hypothesis)
-        ds, dr = self._process_records_for_evidence(hypothesis, records, supp_pats, ref_pats, existing_supp, existing_ref)
+        ds, dr = self._process_records_for_evidence(
+            hypothesis, records, supp_pats, ref_pats, existing_supp, existing_ref
+        )
         return sw + ds, rw + dr
 
     def evaluate_hypothesis(
         self, hypothesis: Hypothesis, records: List[Dict[str, Any]]
     ) -> Hypothesis:
         """Evaluates a hypothesis against newly collected records and updates Bayesian confidence."""
-        support_weight, refute_weight = self._accumulate_evidence_weights(hypothesis, records)
-        hypothesis.confidence_score = self._calc_confidence(support_weight, refute_weight)
+        support_weight, refute_weight = self._accumulate_evidence_weights(
+            hypothesis, records
+        )
+        hypothesis.confidence_score = self._calc_confidence(
+            support_weight, refute_weight
+        )
         hypothesis.updated_at = datetime.now(timezone.utc).isoformat()
         self._update_lifecycle_status(hypothesis)
         self._save_state()
@@ -387,7 +425,9 @@ class HypothesisEngine:
             lines.append(f"| {col1} | 抜粋 / 観測所見 | 関連度 |")
             lines.append("| :---: | :--- | :---: |")
             for ev in evidence:
-                lines.append(f"| `{ev.paper_id}` | {ev.excerpt} | {ev.relevance_score:.1f} |")
+                lines.append(
+                    f"| `{ev.paper_id}` | {ev.excerpt} | {ev.relevance_score:.1f} |"
+                )
         return lines
 
     def _format_implication(self, hypothesis: Hypothesis) -> str:
@@ -423,20 +463,26 @@ class HypothesisEngine:
             f"| **最終評価日時** | {hypothesis.updated_at} |",
             "",
         ]
-        lines.extend(self._format_evidence_section(
-            "1. 支持証拠 (Supporting Evidence)",
-            hypothesis.supporting_evidence,
-            "現時点で直接的な支持証拠となる論文は観測されていません。",
-            "論文 ID",
-        ))
+        lines.extend(
+            self._format_evidence_section(
+                "1. 支持証拠 (Supporting Evidence)",
+                hypothesis.supporting_evidence,
+                "現時点で直接的な支持証拠となる論文は観測されていません。",
+                "論文 ID",
+            )
+        )
         lines.extend([""])
-        lines.extend(self._format_evidence_section(
-            "2. 反証証拠・防御策 (Refuting Evidence & Defenses)",
-            hypothesis.refuting_evidence,
-            "現時点で反証または完全無力化を示す論文は観測されていません。",
-            "論文 ID",
-        ))
-        lines.extend(["", "## 3. セキュリティ組織・CISOへの示唆 (Strategic Implications)"])
+        lines.extend(
+            self._format_evidence_section(
+                "2. 反証証拠・防御策 (Refuting Evidence & Defenses)",
+                hypothesis.refuting_evidence,
+                "現時点で反証または完全無力化を示す論文は観測されていません。",
+                "論文 ID",
+            )
+        )
+        lines.extend(
+            ["", "## 3. セキュリティ組織・CISOへの示唆 (Strategic Implications)"]
+        )
         lines.append(self._format_implication(hypothesis))
 
         return "\n".join(lines)

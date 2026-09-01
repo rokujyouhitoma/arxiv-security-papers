@@ -5,7 +5,7 @@ Leverages Columnar DocValues to compute fast facet counts and field histograms.
 """
 
 from collections import Counter
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ...core.index.doc_values import DocValues
 
@@ -41,6 +41,5 @@ class FacetEngine:
     ) -> Dict[str, Dict[str, int]]:
         """Calculates value frequencies for requested facet fields across doc_ids."""
         return {
-            field: self._count_single_field(field, doc_ids)
-            for field in facet_fields
+            field: self._count_single_field(field, doc_ids) for field in facet_fields
         }

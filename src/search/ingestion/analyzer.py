@@ -58,7 +58,9 @@ class SearchAnalyzer:
 
         return tokens
 
-    def _extract_ja_offsets(self, m: re.Match[str], token_offsets: List[TokenOffset]) -> None:
+    def _extract_ja_offsets(
+        self, m: re.Match[str], token_offsets: List[TokenOffset]
+    ) -> None:
         ja_str = m.group(0)
         base_start = m.start()
         token_offsets.append(TokenOffset(ja_str.lower(), base_start, m.end()))

@@ -40,15 +40,21 @@ class PageTreeNavigator:
         return pages
 
     def _traverse_page_kids(
-        self, kids: Any, cur_resources: Dict[str, Any], cur_media_box: Tuple[float, float, float, float],
-        pages_out: List[PdfPage], depth: int
+        self,
+        kids: Any,
+        cur_resources: Dict[str, Any],
+        cur_media_box: Tuple[float, float, float, float],
+        pages_out: List[PdfPage],
+        depth: int,
     ) -> None:
         if not isinstance(kids, list):
             return
         for kid_ref in kids:
             kid_obj = self.xref.resolve_object(kid_ref)
             if isinstance(kid_obj, dict):
-                self._traverse_pages_node(kid_obj, cur_resources, cur_media_box, pages_out, depth + 1)
+                self._traverse_pages_node(
+                    kid_obj, cur_resources, cur_media_box, pages_out, depth + 1
+                )
 
     def _traverse_pages_node(
         self,
@@ -76,7 +82,9 @@ class PageTreeNavigator:
             pages_out.append(page)
             return
 
-        self._traverse_page_kids(node_dict.get("/Kids"), cur_resources, cur_media_box, pages_out, depth)
+        self._traverse_page_kids(
+            node_dict.get("/Kids"), cur_resources, cur_media_box, pages_out, depth
+        )
 
     def _merge_single_resource_entry(
         self, k: str, resolved_v: Any, merged: Dict[str, Any]

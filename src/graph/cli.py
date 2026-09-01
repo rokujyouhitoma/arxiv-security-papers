@@ -74,7 +74,11 @@ def build_knowledge_graph(workspace_dir: str, output_path: Optional[str] = None)
     st = engine.stats()
 
     logger.info("=" * 60)
-    logger.info("✨ Knowledge Graph Build Complete in %.2f ms", elapsed_ms)
+    logger.info(
+        "✨ Knowledge Graph Build Complete in %.2f ms (Indexed Triples: %d)",
+        elapsed_ms,
+        extracted_triples_count,
+    )
     logger.info("  • Total Vertices: %d", st["vertex_count"])
     logger.info("  • Total Edges:    %d", st["edge_count"])
     logger.info("  • Vertex Types:   %s", st["vertex_labels"])

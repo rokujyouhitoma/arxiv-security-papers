@@ -3,7 +3,7 @@
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from .contracts import IndirectRef, PdfStream
+from .contracts import IndirectRef, PdfStream, TokenType
 from .decompress import StreamDecompressor
 from .parser import PdfParser
 
@@ -109,7 +109,9 @@ class XRefResolver:
         for i in range(count):
             self._read_classic_entry(parser, start_obj + i)
 
-    def _parse_stream_dict_payload(self, parser: PdfParser, offset: int, stream_dict: Dict[str, Any]) -> Optional[int]:
+    def _parse_stream_dict_payload(
+        self, parser: PdfParser, offset: int, stream_dict: Dict[str, Any]
+    ) -> Optional[int]:
         for k, v in stream_dict.items():
             if k not in self.trailer:
                 self.trailer[k] = v
@@ -232,7 +234,9 @@ class XRefResolver:
 
         return self._extract_until_endstream(pos)
 
-    def _parse_direct_stream_obj(self, offset: int, parsed_obj: Any, parser: PdfParser) -> Any:
+    def _parse_direct_stream_obj(
+        self, offset: int, parsed_obj: Any, parser: PdfParser
+    ) -> Any:
         parser.lexer.skip_whitespace_and_comments()
         if (
             isinstance(parsed_obj, dict)
@@ -277,7 +281,9 @@ class XRefResolver:
 
         return self._resolve_direct_offset(ref)
 
-    def _parse_objstm_entries(self, parser: PdfParser, n_count: int) -> List[Tuple[int, int]]:
+    def _parse_objstm_entries(
+        self, parser: PdfParser, n_count: int
+    ) -> List[Tuple[int, int]]:
         entries: List[Tuple[int, int]] = []
         for _ in range(n_count):
             onum = parser.parse_object()

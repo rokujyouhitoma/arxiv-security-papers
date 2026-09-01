@@ -31,11 +31,15 @@ class FunctionalSpider(BaseSpider):
         self.parse_fn = parse_fn
         self.allowed_domains = allowed_domains or set()
 
-    async def _yield_async_result(self, result: Any, url: str) -> AsyncIterator[Union[Request, ScrapedItem]]:
+    async def _yield_async_result(
+        self, result: Any, url: str
+    ) -> AsyncIterator[Union[Request, ScrapedItem]]:
         async for item in result:
             yield _coerce_to_item_or_request(item, url)
 
-    async def _yield_sync_result(self, result: Any, url: str) -> AsyncIterator[Union[Request, ScrapedItem]]:
+    async def _yield_sync_result(
+        self, result: Any, url: str
+    ) -> AsyncIterator[Union[Request, ScrapedItem]]:
         if isinstance(result, (list, tuple, set)):
             for item in result:
                 yield _coerce_to_item_or_request(item, url)

@@ -8,7 +8,6 @@ selective column decoding, high compression ratios, and cache locality.
 import struct
 from typing import Any, List, Optional, Tuple
 
-
 from .encoding import ColumnDecoder, ColumnEncoder, ColumnEncodingType
 
 PAX_MAGIC: bytes = b"VDBPAX01"

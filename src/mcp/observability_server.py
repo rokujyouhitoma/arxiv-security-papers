@@ -78,7 +78,9 @@ def handle_profile_code_performance(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _extract_top_allocations(snapshot: tracemalloc.Snapshot, top_lines: int) -> List[Dict[str, Any]]:
+def _extract_top_allocations(
+    snapshot: tracemalloc.Snapshot, top_lines: int
+) -> List[Dict[str, Any]]:
     top_stats = snapshot.statistics("lineno")
     return [
         {
@@ -90,7 +92,9 @@ def _extract_top_allocations(snapshot: tracemalloc.Snapshot, top_lines: int) -> 
     ]
 
 
-def _exec_memory_tracking(code_str: str) -> tuple[Optional[tuple[int, int, tracemalloc.Snapshot]], Optional[str]]:
+def _exec_memory_tracking(
+    code_str: str,
+) -> tuple[Optional[tuple[int, int, tracemalloc.Snapshot]], Optional[str]]:
     was_tracing = tracemalloc.is_tracing()
     if not was_tracing:
         tracemalloc.start()
@@ -172,7 +176,9 @@ def _calculate_speedups(valid_results: List[Dict[str, Any]]) -> Optional[str]:
     valid_results.sort(key=lambda x: x["min_time_ms"])
     fastest_time = valid_results[0]["min_time_ms"]
     for r in valid_results:
-        r["speedup_ratio"] = round(r["min_time_ms"] / fastest_time, 2) if fastest_time > 0 else 1.0
+        r["speedup_ratio"] = (
+            round(r["min_time_ms"] / fastest_time, 2) if fastest_time > 0 else 1.0
+        )
     return valid_results[0]["name"]
 
 
@@ -187,7 +193,9 @@ def handle_benchmark_alternatives(params: Dict[str, Any]) -> Dict[str, Any]:
     repeat = params.get("repeat", 3)
 
     if not _validate_bench_candidates(candidates):
-        return {"error": "Parameter 'candidates' must be a non-empty list of {name, code}."}
+        return {
+            "error": "Parameter 'candidates' must be a non-empty list of {name, code}."
+        }
 
     results = [_benchmark_candidate(c, number, repeat) for c in candidates]
     valid_results = [r for r in results if "min_time_ms" in r]
@@ -296,14 +304,22 @@ def _get_memory_status() -> Dict[str, Any]:
     }
 
 
-def _get_activity_stats(mcp_records: List[Dict[str, Any]], search_records: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _get_activity_stats(
+    mcp_records: List[Dict[str, Any]], search_records: List[Dict[str, Any]]
+) -> Dict[str, Any]:
     mcp_lats = [r.get("execution_ms", 0.0) for r in mcp_records]
-    search_lats = [r.get("performance", {}).get("total_ms", 0.0) for r in search_records]
+    search_lats = [
+        r.get("performance", {}).get("total_ms", 0.0) for r in search_records
+    ]
     return {
         "mcp_calls_sampled": len(mcp_records),
-        "mcp_avg_latency_ms": round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0,
+        "mcp_avg_latency_ms": (
+            round(sum(mcp_lats) / len(mcp_lats), 3) if mcp_lats else 0.0
+        ),
         "search_queries_sampled": len(search_records),
-        "search_avg_latency_ms": round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0,
+        "search_avg_latency_ms": (
+            round(sum(search_lats) / len(search_lats), 3) if search_lats else 0.0
+        ),
     }
 
 
@@ -313,8 +329,12 @@ def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
 
     fc = FilterCache()
     qc = QueryResultCache()
-    mcp_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=50)
-    search_records = _read_recent_jsonl_records(os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=50)
+    mcp_records = _read_recent_jsonl_records(
+        os.path.join(LOGS_DIR, "mcp_perf_log.jsonl"), limit=50
+    )
+    search_records = _read_recent_jsonl_records(
+        os.path.join(LOGS_DIR, "search_perf_log.jsonl"), limit=50
+    )
 
     return {
         "status": "healthy",
@@ -341,7 +361,9 @@ def _extract_log_peak_mem(r: Dict[str, Any]) -> float:
     )
 
 
-def _collect_file_logs(source: str, path: str, limit: int, min_latency: float) -> List[Dict[str, Any]]:
+def _collect_file_logs(
+    source: str, path: str, limit: int, min_latency: float
+) -> List[Dict[str, Any]]:
     records = _read_recent_jsonl_records(path, limit=limit)
     filtered = []
     for r in records:
@@ -390,7 +412,9 @@ def handle_get_performance_logs(params: Dict[str, Any]) -> Dict[str, Any]:
     if log_type in ("mcp", "all"):
         files_to_read.append(("mcp", os.path.join(LOGS_DIR, "mcp_perf_log.jsonl")))
     if log_type in ("search", "all"):
-        files_to_read.append(("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl")))
+        files_to_read.append(
+            ("search", os.path.join(LOGS_DIR, "search_perf_log.jsonl"))
+        )
     if log_type in ("query", "all"):
         files_to_read.append(("query", os.path.join(LOGS_DIR, "query_log.jsonl")))
 

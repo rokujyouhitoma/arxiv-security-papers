@@ -14,7 +14,6 @@ import os
 import socket
 from typing import Any, Dict, List, Optional, Sequence, Set
 
-
 from .protocol import VectorDBProtocolError, VectorDBProtocolHandler
 
 logger = logging.getLogger(__name__)

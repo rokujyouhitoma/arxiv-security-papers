@@ -60,7 +60,9 @@ class Engine:
             request, spider, mid_list, pipe_list, scraped_items
         )
 
-    def _should_continue_crawling(self, max_requests: Optional[int], count: int) -> bool:
+    def _should_continue_crawling(
+        self, max_requests: Optional[int], count: int
+    ) -> bool:
         if not (self.running and self.scheduler.has_pending_requests()):
             return False
         return not bool(max_requests and count >= max_requests)
@@ -182,9 +184,13 @@ async def _dispatch_spider_callback(
 
     results = callback_fn(response)
     if asyncio.iscoroutine(results) or hasattr(results, "__anext__"):
-        await _handle_results_async(results, scheduler, pipe_list, spider, scraped_items, stats)
+        await _handle_results_async(
+            results, scheduler, pipe_list, spider, scraped_items, stats
+        )
     else:
-        await _handle_results_sync(results, scheduler, pipe_list, spider, scraped_items, stats)
+        await _handle_results_sync(
+            results, scheduler, pipe_list, spider, scraped_items, stats
+        )
 
 
 async def _execute_middlewares_req(
@@ -208,7 +214,9 @@ async def _execute_middlewares_resp(
     return current_resp
 
 
-async def _process_item_pipelines(item: ScrapedItem, pipelines: List[Any], spider: Any) -> ScrapedItem:
+async def _process_item_pipelines(
+    item: ScrapedItem, pipelines: List[Any], spider: Any
+) -> ScrapedItem:
     current_item = item
     for pipe in pipelines:
         if hasattr(pipe, "process_item"):

@@ -216,7 +216,9 @@ class SearchService:
             )
             client_thread.start()
 
-    def _read_client_request(self, client_sock: socket.socket) -> Optional[Dict[str, Any]]:
+    def _read_client_request(
+        self, client_sock: socket.socket
+    ) -> Optional[Dict[str, Any]]:
         raw_data = b""
         while True:
             chunk = client_sock.recv(65536)

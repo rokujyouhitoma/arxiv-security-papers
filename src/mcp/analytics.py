@@ -41,7 +41,9 @@ def _read_lines_from_log(target_path: str) -> List[str]:
         return [ln.strip() for ln in f if ln.strip()]
 
 
-def _filter_parsed_records(lines: List[str], server_filter: Optional[str], since_iso: Optional[str]) -> List[Dict[str, Any]]:
+def _filter_parsed_records(
+    lines: List[str], server_filter: Optional[str], since_iso: Optional[str]
+) -> List[Dict[str, Any]]:
     records = []
     for ln in lines:
         rec = _parse_log_line(ln, server_filter, since_iso)
@@ -188,13 +190,15 @@ def compute_mcp_metrics(records: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _render_server_table(lines: List[str], metrics: Dict[str, Any], total: int) -> None:
-    lines.extend([
-        "",
-        "## 📈 1. サーバー別・メソッド別サマリー",
-        "",
-        "| サーバー名 | リクエスト数 | 構成比 |",
-        "| :--- | :---: | :---: |",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 📈 1. サーバー別・メソッド別サマリー",
+            "",
+            "| サーバー名 | リクエスト数 | 構成比 |",
+            "| :--- | :---: | :---: |",
+        ]
+    )
     servers = metrics.get("servers", {})
     for s_name, count in sorted(servers.items(), key=lambda x: x[1], reverse=True):
         pct = round(count / total * 100.0, 1) if total > 0 else 0.0
@@ -202,15 +206,19 @@ def _render_server_table(lines: List[str], metrics: Dict[str, Any], total: int) 
 
 
 def _render_tools_table(lines: List[str], metrics: Dict[str, Any]) -> None:
-    lines.extend([
-        "",
-        "## 🛠️ 2. Tool / リソース別 呼び出しランキング & パフォーマンス",
-        "",
-        "| Tool / リソース名 | 呼出数 | 成功率 | 平均応答 (ms) | 最大応答 (ms) | 平均RAM (KB) |",
-        "| :--- | :---: | :---: | :---: | :---: | :---: |",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 🛠️ 2. Tool / リソース別 呼び出しランキング & パフォーマンス",
+            "",
+            "| Tool / リソース名 | 呼出数 | 成功率 | 平均応答 (ms) | 最大応答 (ms) | 平均RAM (KB) |",
+            "| :--- | :---: | :---: | :---: | :---: | :---: |",
+        ]
+    )
     tools = metrics.get("tools", {})
-    for t_name, data in sorted(tools.items(), key=lambda x: x[1]["calls"], reverse=True):
+    for t_name, data in sorted(
+        tools.items(), key=lambda x: x[1]["calls"], reverse=True
+    ):
         lines.append(
             f"| `{t_name}` | {data['calls']:,} | {data['success_rate']}% | {data['avg_ms']} ms | "
             f"{data['max_ms']} ms | {data['avg_mem_kb']} KB |"
@@ -220,13 +228,15 @@ def _render_tools_table(lines: List[str], metrics: Dict[str, Any]) -> None:
 def _render_errors_table(lines: List[str], errors: List[Dict[str, Any]]) -> None:
     if not errors:
         return
-    lines.extend([
-        "",
-        "## ⚠️ 3. 直近のエラーログ一覧 (最新 20 件)",
-        "",
-        "| 発生日時 (UTC) | サーバー | 対象 | エラー内容 |",
-        "| :--- | :--- | :--- | :--- |",
-    ])
+    lines.extend(
+        [
+            "",
+            "## ⚠️ 3. 直近のエラーログ一覧 (最新 20 件)",
+            "",
+            "| 発生日時 (UTC) | サーバー | 対象 | エラー内容 |",
+            "| :--- | :--- | :--- | :--- |",
+        ]
+    )
     for err in errors:
         ts = err.get("timestamp", "")
         srv = err.get("server", "")

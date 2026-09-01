@@ -338,7 +338,9 @@ def _handle_runtime_error(ex: RuntimeError) -> int:
 
 def _maybe_daemonize(arbiter: Any, config: SupervisorConfig) -> None:
     if config.daemon:
-        print(f"\U0001f680 [Supervisor Arbiter] Daemonizing (Log: {config.log_file}, PID: {config.pid_file})...")
+        print(
+            f"\U0001f680 [Supervisor Arbiter] Daemonizing (Log: {config.log_file}, PID: {config.pid_file})..."
+        )
         arbiter.daemonize()
 
 
@@ -357,7 +359,9 @@ def _run_arbiter(config: SupervisorConfig) -> int:
     except RuntimeError as ex:
         return _handle_runtime_error(ex)
     except Exception as ex:
-        print(f"\n\u274c [Supervisor Arbiter Fatal Error] Unexpected failure during startup: {ex}")
+        print(
+            f"\n\u274c [Supervisor Arbiter Fatal Error] Unexpected failure during startup: {ex}"
+        )
         return 1
 
 
@@ -412,6 +416,7 @@ def _resolve_old_pid(
 
 def _escalate_to_sigkill(old_pid: int) -> None:
     import signal
+
     try:
         os.kill(old_pid, signal.SIGKILL)
     except OSError:
@@ -421,6 +426,7 @@ def _escalate_to_sigkill(old_pid: int) -> None:
 
 def _poll_pid_termination(old_pid: int) -> bool:
     import signal
+
     for step in range(50):
         try:
             os.kill(old_pid, 0)
@@ -440,7 +446,9 @@ def _wait_for_pid_shutdown(old_pid: int) -> None:
     print(f"[*] Waiting for Arbiter (PID: {old_pid}) to shut down...")
     terminated = _poll_pid_termination(old_pid)
     if not terminated:
-        print(f"[!] Arbiter (PID: {old_pid}) did not shut down gracefully. Sending SIGKILL...")
+        print(
+            f"[!] Arbiter (PID: {old_pid}) did not shut down gracefully. Sending SIGKILL..."
+        )
         _escalate_to_sigkill(old_pid)
 
 
@@ -456,10 +464,13 @@ def _cleanup_paths(*paths: Optional[str]) -> None:
 
 def _stop_running_arbiter(control_sock: str, old_pid: Optional[int]) -> Optional[int]:
     import signal
+
     if os.path.exists(control_sock):
         try:
             resp = ControlClient(control_sock).stop()
-            print(f"[+] Sent stop signal to running Arbiter via IPC: {resp.get('status', 'sent')}")
+            print(
+                f"[+] Sent stop signal to running Arbiter via IPC: {resp.get('status', 'sent')}"
+            )
         except Exception:
             pass
     if old_pid is not None:

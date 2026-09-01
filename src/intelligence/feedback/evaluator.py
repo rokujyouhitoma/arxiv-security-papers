@@ -83,7 +83,9 @@ class FeedbackEvaluator(IntelligencePhaseProtocol):
 
         avg_ndcg = sum(q["ndcg"] for q in self._query_logs) / len(self._query_logs)
         zero_hits, topic_counts, topic_ndcg_sum = self._aggregate_query_stats()
-        knowledge_gaps, topic_drifts = self._compute_gaps_and_drifts(topic_counts, topic_ndcg_sum)
+        knowledge_gaps, topic_drifts = self._compute_gaps_and_drifts(
+            topic_counts, topic_ndcg_sum
+        )
 
         return FeedbackTelemetry(
             telemetry_id=telemetry_id,
