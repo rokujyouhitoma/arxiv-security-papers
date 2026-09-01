@@ -166,9 +166,11 @@ def parse_arxiv_entry(entry: ET.Element) -> Dict[str, Any]:
     }
 
 
-def _execute_api_request(req: urllib.request.Request) -> Optional[List[Dict[str, Any]]]:
+def _execute_api_request(
+    req: urllib.request.Request, timeout: int = 45
+) -> Optional[List[Dict[str, Any]]]:
     """Executes single HTTP request and parses Atom entries."""
-    with safe_urlopen(req, timeout=30) as response:
+    with safe_urlopen(req, timeout=timeout) as response:
         xml_data = response.read()
         root = _safe_fromstring(xml_data)
         namespaces = {"atom": "http://www.w3.org/2005/Atom"}
@@ -183,12 +185,29 @@ def _handle_api_http_error(he: urllib.error.HTTPError, retry: int) -> bool:
     if he.code in (429, 503) and retry < 3:
         wait_time = (2**retry) * 4
         print(
-            f"[INFO] arXiv API returned HTTP {he.code}. Retrying in {wait_time}s...",
+            f"[INFO] arXiv API returned HTTP {he.code}. Retrying attempt {retry + 1}/4 in {wait_time}s...",
             file=sys.stderr,
         )
         time.sleep(wait_time)
         return True
-    print(f"[WARN] API fetch failed ({he})", file=sys.stderr)
+    print(f"[WARN] arXiv API HTTP error: {he}", file=sys.stderr)
+    return False
+
+
+def _handle_api_network_error(err: Exception, retry: int) -> bool:
+    """Handles network/timeout errors with backoff retry."""
+    if retry < 3:
+        wait_time = (2**retry) * 3
+        print(
+            f"[INFO] arXiv API request error ({err}). Retrying attempt {retry + 1}/4 in {wait_time}s...",
+            file=sys.stderr,
+        )
+        time.sleep(wait_time)
+        return True
+    print(
+        f"[WARN] arXiv API fetch failed after {retry + 1} attempts ({err})",
+        file=sys.stderr,
+    )
     return False
 
 
@@ -206,8 +225,8 @@ def _fetch_api_chunk_with_retry(api_url: str) -> Optional[List[Dict[str, Any]]]:
             if not _handle_api_http_error(he, retry):
                 return None
         except Exception as e:
-            print(f"[WARN] API fetch failed ({e})", file=sys.stderr)
-            return None
+            if not _handle_api_network_error(e, retry):
+                return None
     return None
 
 
@@ -219,6 +238,9 @@ def fetch_arxiv_papers(
     chunk_size = 500
     start = 0
 
+    print(
+        f"[Ingestion:arXiv] Starting API fetch (query='{query}', max_results={max_results})..."
+    )
     while start < max_results:
         fetch_count = min(chunk_size, max_results - start)
         encoded_query = urllib.parse.quote(query)
@@ -226,14 +248,26 @@ def fetch_arxiv_papers(
             f"https://export.arxiv.org/api/query?search_query={encoded_query}"
             f"&sortBy=submittedDate&sortOrder=descending&start={start}&max_results={fetch_count}"
         )
+        print(
+            f"[Ingestion:arXiv] Fetching chunk [offset={start}, limit={fetch_count}]..."
+        )
         chunk_papers = _fetch_api_chunk_with_retry(api_url)
         if chunk_papers is None or not chunk_papers:
+            print(
+                f"[Ingestion:arXiv] No more chunk items returned (total fetched: {len(all_papers)})."
+            )
             break
         all_papers.extend(chunk_papers)
+        print(
+            f"[Ingestion:arXiv] Chunk received: {len(chunk_papers)} papers (cumulative: {len(all_papers)})."
+        )
         start += len(chunk_papers)
         if len(chunk_papers) < fetch_count:
             break
 
+    print(
+        f"[Ingestion:arXiv] Finished API fetch. Total papers retrieved: {len(all_papers)}."
+    )
     return all_papers
 
 

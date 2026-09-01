@@ -192,16 +192,28 @@ def _filter_and_stage_papers(
     force: bool,
 ) -> List[tuple[Dict[str, Any], str, str]]:
     tasks = []
+    out_of_range = 0
+    already_processed = 0
+
     for paper in papers:
         arxiv_id = paper["arxiv_id"]
         if not _is_date_in_range(paper.get("published"), start_dt, end_dt):
+            out_of_range += 1
             continue
         if arxiv_id in processed_state and not force:
+            already_processed += 1
             continue
         raw_meta_path = save_raw_paper_data(paper, workspace_dir, config)
         date_str = get_paper_pub_date_str(paper)
         raw_dir = os.path.join(workspace_dir, config["paths"]["raw_data_dir"], date_str)
         tasks.append((paper, raw_dir, raw_meta_path))
+
+    print(
+        f"[Pipeline:Filter] Total items received: {len(papers)} | "
+        f"Out of date range: {out_of_range} | "
+        f"Already processed: {already_processed} | "
+        f"New papers to process: {len(tasks)}"
+    )
     return tasks
 
 
@@ -262,14 +274,19 @@ def _ingest_items_into_knowledge_graph(
         from graph.engine import PropertyGraphEngine
         from ontology.extractor import OntologyExtractor
 
+        print(
+            f"[KnowledgeGraph] Ingesting {len(processed_items)} papers into Security Knowledge Graph..."
+        )
         graph_engine = PropertyGraphEngine(workspace_dir=workspace_dir)
         for item in processed_items:
             _ingest_single_paper_into_graph(
                 item, workspace_dir, graph_engine, OntologyExtractor
             )
         graph_engine.save()
+        st = graph_engine.stats()
         print(
-            f"[KnowledgeGraph] Ingested {len(processed_items)} papers into graph database."
+            f"[KnowledgeGraph] Successfully ingested {len(processed_items)} papers. "
+            f"(Total Vertices: {st['vertex_count']}, Total Edges: {st['edge_count']})"
         )
     except Exception as e:
         print(f"[WARN] Knowledge graph ingestion error (non-fatal): {e}")
@@ -283,9 +300,18 @@ def _transform_and_save_okf(
     state_path: str,
 ) -> List[Dict[str, Any]]:
     processed_items = []
-    for paper, _, raw_meta_path in pdf_fetch_tasks:
+    total = len(pdf_fetch_tasks)
+    print(
+        f"[OKF:Transformer] Converting {total} raw papers into Google OKF v0.2 Markdown..."
+    )
+
+    for idx, (paper, _, raw_meta_path) in enumerate(pdf_fetch_tasks, start=1):
         item = build_okf_from_raw(raw_meta_path, workspace_dir, config)
         processed_items.append(item)
+        arxiv_id = paper.get("arxiv_id", "unknown")
+        print(
+            f"[OKF:Transformer] [{idx}/{total}] Generated OKF document: {item['rel_okf_path']} (ID: {arxiv_id})"
+        )
         processed_state[paper["arxiv_id"]] = {
             "processed_at": datetime.now(timezone.utc).isoformat(),
             "published": paper.get("published"),
@@ -294,7 +320,11 @@ def _transform_and_save_okf(
             "raw_meta_path": os.path.relpath(raw_meta_path, workspace_dir),
             "okf_path": item["rel_okf_path"],
         }
+
     _atomic_json_dump(processed_state, state_path)
+    print(
+        f"[State] Updated state tracking file ({state_path}) with {len(processed_items)} new entries."
+    )
     _ingest_items_into_knowledge_graph(processed_items, workspace_dir)
     return processed_items
 
@@ -304,8 +334,14 @@ def _generate_summaries_and_index(
     config: Dict[str, Any],
     processed_items: List[Dict[str, Any]],
 ) -> None:
+    print(
+        f"[Reporter] Generating 5-tier Japanese executive summaries for {len(processed_items)} processed papers..."
+    )
     if processed_items:
         per_run_path = generate_per_run_summary(processed_items, workspace_dir, config)
+        print(
+            f"[Reporter:01_per_run] Generated per-run summary: {os.path.relpath(per_run_path, workspace_dir)}"
+        )
     else:
         now_dt = datetime.now(timezone.utc)
         date_str = now_dt.strftime("%Y-%m-%d")
@@ -317,11 +353,26 @@ def _generate_summaries_and_index(
             f.write(
                 f"# Run Summary ({date_str} {time_str} UTC)\nNo new papers processed in this run.\n"
             )
+        print(
+            f"[Reporter:01_per_run] Generated zero-paper run summary: {os.path.relpath(per_run_path, workspace_dir)}"
+        )
 
     daily_path = generate_all_daily_summaries(workspace_dir, config)
+    print(
+        f"[Reporter:02_daily] Generated daily summaries: {os.path.relpath(daily_path, workspace_dir)}"
+    )
     monthly_path = generate_monthly_summary(workspace_dir, config)
+    print(
+        f"[Reporter:03_monthly] Generated monthly trend summary: {os.path.relpath(monthly_path, workspace_dir)}"
+    )
     quarterly_path = generate_quarterly_summary(workspace_dir, config)
+    print(
+        f"[Reporter:04_quarterly] Generated quarterly summary: {os.path.relpath(quarterly_path, workspace_dir)}"
+    )
     annual_path = generate_annual_summary(workspace_dir, config)
+    print(
+        f"[Reporter:05_annual] Generated annual summary: {os.path.relpath(annual_path, workspace_dir)}"
+    )
 
     update_index_and_log(
         workspace_dir,
@@ -333,6 +384,7 @@ def _generate_summaries_and_index(
         annual_path,
         config,
     )
+    print("[Reporter:Index] Synchronized outputs/index.md and outputs/log.md.")
 
 
 def run_pipeline(

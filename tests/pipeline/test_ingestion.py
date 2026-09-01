@@ -5,6 +5,7 @@ Unit tests for the Ingestion layer (arXiv client, XML parsing, PDF extractor).
 import os
 import tempfile
 import xml.etree.ElementTree as ET
+from typing import Any
 
 from pipeline.ingestion import (
     clean_text,
@@ -120,3 +121,42 @@ def test_safe_urlopen_fallback():
         resp = safe_urlopen("https://example.com")
         assert resp.status == 200
         assert call_count == 2
+
+
+def test_api_timeout_and_network_retry() -> None:
+    import urllib.error
+    from unittest.mock import MagicMock, patch
+
+    from pipeline.ingestion.arxiv_client import _fetch_api_chunk_with_retry
+
+    call_count = 0
+
+    def fail_twice_then_succeed(req: Any, **kwargs: Any) -> Any:
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise urllib.error.URLError("The read operation timed out")
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"""<feed xmlns="http://www.w3.org/2005/Atom">
+            <entry>
+                <id>http://arxiv.org/abs/2608.11111v1</id>
+                <title>Test Retry Title</title>
+                <summary>Test Summary</summary>
+                <published>2026-08-30T10:00:00Z</published>
+            </entry>
+        </feed>"""
+        mock_resp.__enter__.return_value = mock_resp
+        return mock_resp
+
+    with patch(
+        "pipeline.ingestion.arxiv_client.safe_urlopen",
+        side_effect=fail_twice_then_succeed,
+    ):
+        with patch("time.sleep", return_value=None):
+            result = _fetch_api_chunk_with_retry(
+                "https://export.arxiv.org/api/query?search_query=test"
+            )
+            assert result is not None
+            assert len(result) == 1
+            assert result[0]["arxiv_id"] == "2608.11111v1"
+            assert call_count == 3
