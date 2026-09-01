@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Enterprise Multi-Field Hybrid & Multi-Stage RAG Search Engine for arXiv Security Papers.
-Sub-10ms High-Performance Search Engine with Multi-Field Postings, Query Parser, and Highlighter.
+Enterprise Multi-Field Hybrid & Multi-Stage RAG Search Engine Platform (DSN-14).
 """
 
 import json

@@ -36,9 +36,9 @@ class SecurityPapersDomainPlugin(BaseDomainPlugin):
         return ["cs.CR", "cs.SE", "cs.NI", "cs.AI", "cs.CY"]
 
     def get_spiders(self) -> Dict[str, Any]:
-        from spider.spiders.advisory_spider import AdvisorySpider
-        from spider.spiders.arxiv_spider import ArxivSpider
-        from spider.spiders.iacr_spider import IacrSpider
+        from domain.security.spiders.advisory_spider import AdvisorySpider
+        from domain.security.spiders.arxiv_spider import ArxivSpider
+        from domain.security.spiders.iacr_spider import IacrSpider
 
         return {
             "arxiv_spider": ArxivSpider,

@@ -14,7 +14,7 @@ class UserAgentMiddleware:
 
     def __init__(
         self,
-        user_agent: str = "ArXivSecuritySpider/1.0 (+https://github.com/rokujyouhitoma/arxiv-security-papers)",
+        user_agent: str = "GenericSpiderBot/1.0",
     ) -> None:
         self.user_agent: str = user_agent
 
@@ -44,7 +44,7 @@ class RobotsTxtMiddleware:
         domain = _get_domain(request.url)
         parser = self._parsers.get(domain)
         if parser is not None:
-            ua = request.headers.get("User-Agent", "ArXivSecuritySpider")
+            ua = request.headers.get("User-Agent", "GenericSpiderBot")
             if not parser.can_fetch(ua, request.url):
                 # Dropped by robots.txt
                 return Response(

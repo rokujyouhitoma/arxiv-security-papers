@@ -4,12 +4,12 @@ import os
 import shutil
 import tempfile
 
-from src.spider.core.downloader import Request, Response
-from src.spider.core.engine import ScrapedItem
-from src.spider.pipeline.okf_pipeline import OkfItemPipeline
-from src.spider.spiders.advisory_spider import AdvisorySpider
-from src.spider.spiders.arxiv_spider import ArxivSpider
-from src.spider.spiders.iacr_spider import IacrSpider
+from spider.core.downloader import Request, Response
+from spider.core.engine import ScrapedItem
+from spider.pipeline.okf_pipeline import OkfItemPipeline
+from spider.spiders.advisory_spider import AdvisorySpider
+from spider.spiders.arxiv_spider import ArxivSpider
+from spider.spiders.iacr_spider import IacrSpider
 
 
 def test_arxiv_spider_atom_parsing() -> None:

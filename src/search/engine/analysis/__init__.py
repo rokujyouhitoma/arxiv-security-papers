@@ -250,7 +250,7 @@ class StandardAnalyzer(Analyzer):
 
 
 class CJKAnalyzer(Analyzer):
-    """Bilingual Analyzer with CJK Bigram and Synonym Expansion for Security Papers."""
+    """Bilingual Analyzer with CJK Bigram and Synonym Expansion."""
 
     def __init__(self) -> None:
         super().__init__(

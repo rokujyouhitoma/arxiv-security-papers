@@ -45,7 +45,7 @@ class AsyncHttpDownloader:
     """Zero-external-dependency non-blocking HTTP/1.1 client using asyncio streams."""
 
     def __init__(
-        self, timeout: float = 20.0, user_agent: str = "ArXivSecuritySpider/1.0"
+        self, timeout: float = 20.0, user_agent: str = "GenericSpiderBot/1.0"
     ) -> None:
         self.timeout: float = timeout
         self.user_agent: str = user_agent

@@ -18,16 +18,23 @@ from .downloader.middleware import (
 )
 from .pipeline.okf_pipeline import OkfItemPipeline
 from .policies.autothrottle import AutoThrottlePolicy
-from .spiders.advisory_spider import AdvisorySpider
-from .spiders.arxiv_spider import ArxivSpider
+from .registry import get_spider_registry
 from .spiders.base import BaseSpider
-from .spiders.iacr_spider import IacrSpider
 
-SPIDER_REGISTRY: Dict[str, type[BaseSpider]] = {
-    "arxiv": ArxivSpider,
-    "iacr": IacrSpider,
-    "advisory": AdvisorySpider,
-}
+
+def get_available_spiders() -> Dict[str, type[BaseSpider]]:
+    """Retrieves all registered spiders dynamically via SpiderRegistry."""
+    registry = get_spider_registry()
+    spiders: Dict[str, type[BaseSpider]] = {}
+    for name in registry.list_spiders():
+        cls = registry.get(name)
+        if cls is not None:
+            spiders[name] = cls
+            # Register short aliases without _spider suffix
+            if name.endswith("_spider"):
+                short_name = name[: -len("_spider")]
+                spiders[short_name] = cls
+    return spiders
 
 
 def _init_scheduler_state(
@@ -60,12 +67,13 @@ async def run_spider(
     resume_from_state: bool = False,
 ) -> List[ScrapedItem]:
     """Runs a specific spider with full middleware and pipeline stack."""
-    if spider_name not in SPIDER_REGISTRY:
+    avail = get_available_spiders()
+    if spider_name not in avail:
         raise ValueError(
-            f"Unknown spider: {spider_name}. Available: {list(SPIDER_REGISTRY.keys())}"
+            f"Unknown spider: {spider_name}. Available: {list(avail.keys())}"
         )
 
-    spider_instance = SPIDER_REGISTRY[spider_name]()
+    spider_instance = avail[spider_name]()
     scheduler = Scheduler(default_delay=default_delay)
     _init_scheduler_state(scheduler, state_file, resume_from_state)
 
@@ -103,7 +111,8 @@ async def run_all_spiders(
 ) -> Dict[str, List[ScrapedItem]]:
     """Runs all registered spiders sequentially."""
     results: Dict[str, List[ScrapedItem]] = {}
-    for name in SPIDER_REGISTRY:
+    avail = get_available_spiders()
+    for name in avail:
         items = await run_spider(
             spider_name=name,
             output_dir=output_dir,
@@ -142,10 +151,15 @@ def parse_cli_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Large-Scale Distributed Spider & Crawler Runner (DSN-15)"
     )
+    avail_names = list(get_available_spiders().keys())
     parser.add_argument(
         "--spider",
-        choices=list(SPIDER_REGISTRY.keys()) + ["all"],
-        default="arxiv",
+        choices=avail_names + ["all"] if avail_names else None,
+        default=(
+            "arxiv"
+            if "arxiv" in avail_names
+            else (avail_names[0] if avail_names else None)
+        ),
         help="Target spider to run",
     )
     parser.add_argument(

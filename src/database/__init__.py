@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database Package for arXiv Security Papers.
+Pure-Python Hybrid Relational, Columnar, Vector, and Distributed Database Engine (DSN-14).
 Provides zero-dependency binary vector storage, pure Python HNSW graph indexing,
 deterministic embeddings, SQLite-inspired 4-tier modular architecture
 (VFS, Pager/PageCache, VDBE Bytecode VM, SQL Compiler/CodeGen),

@@ -59,7 +59,7 @@ def _format_span_attributes(attributes: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def span_to_otlp_json_dict(
-    span: Span, service_name: str = "arxiv-security-papers"
+    span: Span, service_name: str = "app-service"
 ) -> Dict[str, Any]:
     """
     Serializes a single Span into OpenTelemetry Protocol (OTLP) HTTP JSON v1/traces format.
@@ -84,7 +84,7 @@ def span_to_otlp_json_dict(
 
 
 def build_otlp_payload(
-    spans: List[Span], service_name: str = "arxiv-security-papers"
+    spans: List[Span], service_name: str = "app-service"
 ) -> Dict[str, Any]:
     """Wraps spans into standard ResourceSpans / ScopeSpans envelope."""
     span_dicts = [span_to_otlp_json_dict(s, service_name) for s in spans]
@@ -103,13 +103,13 @@ def build_otlp_payload(
                         },
                         {
                             "key": "telemetry.sdk.name",
-                            "value": {"stringValue": "arxiv-security-papers-pure"},
+                            "value": {"stringValue": "pure-opentelemetry"},
                         },
                     ]
                 },
                 "scopeSpans": [
                     {
-                        "scope": {"name": "arxiv-security-papers-tracer"},
+                        "scope": {"name": "pure-tracer"},
                         "spans": span_dicts,
                     }
                 ],
@@ -156,12 +156,12 @@ class OTLPJsonSpanExporter:
         self,
         endpoint: Optional[str] = None,
         headers: Optional[Dict[str, str]] = None,
-        service_name: str = "arxiv-security-papers",
+        service_name: str = "app-service",
         timeout: int = 10,
     ) -> None:
         self.endpoint = _resolve_otlp_endpoint(endpoint)
         self.service_name = service_name or os.environ.get(
-            "OTEL_SERVICE_NAME", "arxiv-security-papers"
+            "OTEL_SERVICE_NAME", "app-service"
         )
         self.headers = _resolve_otlp_headers(headers)
         self.timeout = timeout

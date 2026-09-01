@@ -1,5 +1,6 @@
 """
-Information Retrieval (IR) Evaluation Package for arXiv Security Papers.
+Information Retrieval (IR) Evaluation Package (DSN-14).
+Provides Gold Standard Ground Truth datasets and TREC-style evaluation metrics
 """
 
 from .dataset import DEFAULT_SECURITY_GOLD_STANDARD, EvaluationQuery

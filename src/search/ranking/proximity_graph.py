@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Paper Proximity Graph & Topology Engine for arXiv Security Papers.
-Precomputes multi-dimensional paper-to-paper distances (TF-IDF Cosine, Security Feature Jaccard, Citation Co-occurrence)
-and maintains a k-NN topological network for instant recommendations and Connected Papers style visualizations.
+Document Proximity Graph & Topology Engine.
+Precomputes multi-dimensional document-to-document distances (TF-IDF Cosine, Feature Jaccard, Co-occurrence)
+and maintains a k-NN topological network for instant recommendations and Graph visualizations.
 """
 
 import re

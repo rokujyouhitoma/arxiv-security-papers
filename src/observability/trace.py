@@ -239,7 +239,7 @@ class TracerProvider:
         with self._lock:
             self._processors.append(processor)
 
-    def get_tracer(self, instrumentation_name: str = "arxiv-security-papers") -> Tracer:
+    def get_tracer(self, instrumentation_name: str = "pure-python-tracer") -> Tracer:
         """Gets or creates a named Tracer instance."""
         with self._lock:
             if instrumentation_name not in self._tracers:
@@ -290,7 +290,7 @@ def set_tracer_provider(provider: TracerProvider) -> None:
 
 
 def get_tracer(
-    instrumentation_name: str = "arxiv-security-papers",
+    instrumentation_name: str = "pure-python-tracer",
 ) -> Tracer:
     """Convenience accessor to get a tracer from global provider."""
     return get_tracer_provider().get_tracer(instrumentation_name)

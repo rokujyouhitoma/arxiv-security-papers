@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Search Subsystem for arXiv Security Papers.
+Pure-Python Hybrid, Faceted, and Vector Search Engine Platform (DSN-14).
 Architected into 2 decoupled paradigms:
 - engine: Embedded Core Search Engine (Analysis, Inverted Index, VByte, BM25, Queries, Sorter, SpellCheck)
 - platform: Enterprise Search Platform (ManagedSchema, Handlers, Elevation, Facets, Caches, Distributed)

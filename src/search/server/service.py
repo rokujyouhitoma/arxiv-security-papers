@@ -93,58 +93,66 @@ class SearchService:
             "results": results,
         }
 
-    def _find_paper_in_engine(self, clean_id: str) -> Optional[Dict[str, Any]]:
-        doc = self.vector_engine.documents_by_id.get(clean_id)
+    def _find_document_in_engine(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        doc = self.vector_engine.documents_by_id.get(doc_id)
         if doc:
             return doc
         for d in self.vector_engine.documents:
-            if d.get("id") == clean_id:
+            if d.get("id") == doc_id:
                 return d
         return None
 
-    def _handle_get_paper(self, req: Dict[str, Any]) -> Dict[str, Any]:
-        clean_id = str(req.get("id", "")).strip()
-        if not clean_id:
-            return {"status": "error", "error": "Missing paper id"}
+    def _find_paper_in_engine(self, clean_id: str) -> Optional[Dict[str, Any]]:
+        return self._find_document_in_engine(clean_id)
 
-        doc = self._find_paper_in_engine(clean_id)
+    def _handle_get_document(self, req: Dict[str, Any]) -> Dict[str, Any]:
+        doc_id = str(req.get("id", "")).strip()
+        if not doc_id:
+            return {"status": "error", "error": "Missing document id"}
+
+        doc = self._find_document_in_engine(doc_id)
         if not doc:
             return {
                 "status": "error",
-                "error": f"Paper '{clean_id}' not found",
+                "error": f"Document '{doc_id}' not found",
             }
-        return {"status": "success", "paper": doc}
+        return {"status": "success", "document": doc, "paper": doc}
+
+    def _handle_get_paper(self, req: Dict[str, Any]) -> Dict[str, Any]:
+        return self._handle_get_document(req)
 
     def _handle_get_related(self, req: Dict[str, Any]) -> Dict[str, Any]:
-        clean_id = str(req.get("id", "")).strip()
-        if not clean_id:
-            return {"status": "error", "error": "Missing paper id"}
+        doc_id = str(req.get("id", "")).strip()
+        if not doc_id:
+            return {"status": "error", "error": "Missing document id"}
 
-        doc = self.vector_engine.documents_by_id.get(clean_id)
+        doc = self.vector_engine.documents_by_id.get(doc_id)
         if not doc:
             return {
                 "status": "error",
-                "error": f"Paper '{clean_id}' not found",
+                "error": f"Document '{doc_id}' not found",
             }
 
-        related = self.vector_engine.proximity_graph.get_neighbors(clean_id)
-        mermaid = f"graph TD;\n  root[{clean_id}]"
+        related = self.vector_engine.proximity_graph.get_neighbors(doc_id)
+        mermaid = f"graph TD;\n  root[{doc_id}]"
         for r in related:
-            r_id = r.get("id", "paper")
+            r_id = r.get("id", "entity")
             mermaid += f"\n  root --> node_{r_id}[{r_id}]"
 
         return {
             "status": "success",
-            "paper_id": clean_id,
+            "document_id": doc_id,
+            "paper_id": doc_id,
+            "related_documents": related,
             "related_papers": related,
             "mermaid_graph": mermaid,
         }
 
     def _handle_get_stats(self) -> Dict[str, Any]:
-        papers = self.vector_engine.documents
+        docs = self.vector_engine.documents
         cats: Dict[str, int] = {}
-        for p in papers:
-            for c in p.get("tags", []):
+        for d in docs:
+            for c in d.get("tags", []):
                 cats[str(c)] = cats.get(str(c), 0) + 1
 
         categories_list: List[Dict[str, Any]] = [
@@ -154,21 +162,25 @@ class SearchService:
 
         return {
             "status": "success",
-            "total_papers": len(papers),
+            "total_documents": len(docs),
+            "total_papers": len(docs),
             "vector_index_size": (
                 len(self.vector_engine.vector_storage.metadata)
                 if os.path.exists(self.vector_engine.vector_storage_path)
-                else len(papers)
+                else len(docs)
             ),
             "categories": categories_list,
         }
 
     def handle_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatches JSON IPC commands to the underlying VectorEngine."""
+        from typing import Callable
+
         cmd = req.get("cmd", "")
-        handlers = {
+        handlers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
             "ping": lambda _: {"status": "ok", "message": "pong"},
             "search": self._handle_search,
+            "get_document": self._handle_get_document,
             "get_paper": self._handle_get_paper,
             "get_related": self._handle_get_related,
             "get_stats": lambda _: self._handle_get_stats(),

@@ -153,7 +153,7 @@ class SpiderBuilder:
         engine = Engine(scheduler=scheduler)
 
         middlewares = [
-            UserAgentMiddleware("ArxivSecurityResearchBot/1.0"),
+            UserAgentMiddleware("GenericResearchBot/1.0"),
             RobotsTxtMiddleware(),
         ]
         if self._enable_cache:
@@ -178,12 +178,12 @@ def spider(
     Decorator that transforms a standard parse function into a runnable SpiderBuilder.
 
     Example:
-        @spider("https://arxiv.org/list/cs.CR/recent", allowed_domains=["arxiv.org"])
-        def parse_security_papers(response):
+        @spider("https://example.com/items", allowed_domains=["example.com"])
+        def parse_items(response):
             for link in response.css("h1.title"):
                 yield {"title": link.text, "url": response.url}
 
-        items = parse_security_papers.run()
+        items = parse_items.run()
     """
 
     def decorator(fn: Callable[..., Any]) -> SpiderBuilder:

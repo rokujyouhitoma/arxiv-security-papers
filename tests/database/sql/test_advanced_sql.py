@@ -178,7 +178,7 @@ def test_show_databases_and_tables(advanced_sql_executor: SQLExecutor) -> None:
     assert res_db["status"] == "ok"
     assert res_db["target"] == "DATABASES"
     db_names = [r["Database"] for r in res_db["rows"]]
-    assert "arxiv_security_db" in db_names
+    assert "default_db" in db_names
 
     # 2. SHOW TABLES
     res_tbl = advanced_sql_executor.execute("SHOW TABLES")

@@ -44,7 +44,7 @@ from observability.trace import (
 
 
 def init_observability(
-    service_name: str = "arxiv-security-papers",
+    service_name: str = "app-service",
     otlp_endpoint: Optional[str] = None,
     enable_file_export: bool = True,
     enable_lifecycle_flush: bool = True,

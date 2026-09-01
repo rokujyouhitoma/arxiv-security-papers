@@ -925,7 +925,7 @@ class SQLExecutor:
     def _exec_show(self, stmt: ShowStatement, effective_role: str) -> Dict[str, Any]:
         target = stmt.target.upper()
         if target in ("DATABASES", "SCHEMAS"):
-            db_rows = [{"Database": "arxiv_security_db"}, {"Database": "main"}]
+            db_rows = [{"Database": "default_db"}, {"Database": "main"}]
             return {
                 "command": "SHOW",
                 "status": "ok",
