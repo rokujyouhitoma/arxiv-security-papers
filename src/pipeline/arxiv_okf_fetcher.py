@@ -143,6 +143,7 @@ __all__ = [
     "get_source_registry",
     "SourceConfig",
     "ThemeConfig",
+    "detect_workspace_dir",
     "ThemeManager",
     "get_theme_manager",
     "main",
@@ -472,9 +473,7 @@ def run_theme_pipeline(
     max_workers: int = 8,
 ) -> List[Dict[str, Any]]:
     """Executes ingestion and reporting for a specific intelligence theme."""
-    target_workspace = workspace_dir or os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..")
-    )
+    target_workspace = workspace_dir or _detect_workspace_dir()
     cfg = _ensure_config_paths(config)
 
     theme_mgr = get_theme_manager()
@@ -527,13 +526,21 @@ def _parse_cli_date_range(
     return start_dt, end_dt
 
 
-def _detect_workspace_dir() -> str:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    for rel_path in ["..", "..", "."]:
-        cand = os.path.abspath(os.path.join(current_dir, rel_path))
-        if os.path.exists(os.path.join(cand, "config.json")):
-            return cand
-    return current_dir
+def detect_workspace_dir() -> str:
+    cur = os.path.abspath(os.path.dirname(__file__))
+    while cur != os.path.dirname(cur):
+        if (
+            os.path.exists(os.path.join(cur, "config.json"))
+            or os.path.exists(os.path.join(cur, "pyproject.toml"))
+            or os.path.exists(os.path.join(cur, "Makefile"))
+            or os.path.exists(os.path.join(cur, ".agents"))
+        ):
+            return cur
+        cur = os.path.dirname(cur)
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+_detect_workspace_dir = detect_workspace_dir
 
 
 def _execute_dry_run_validation(workspace_dir: str, config: Dict[str, Any]) -> None:

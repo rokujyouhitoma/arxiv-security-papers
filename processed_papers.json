@@ -116054,5 +116054,125 @@
     "title_ja": "Beyond Anonymity Sets: A Security Model for Distributed Shuffling in Adversarial Environments（セキュリティ分析論文）",
     "raw_meta_path": "outputs/raw_data/2026-08-26/iacr-2026-1258_meta.json",
     "okf_path": "outputs/okf_papers/2026-08-26/iacr-2026-1258.md"
+  },
+  "iacr-2026-352": {
+    "processed_at": "2026-09-02T02:36:12.751285+00:00",
+    "published": "Sat, 21 Feb 2026 21:58:03 +0000",
+    "title": "Post-Quantum Migration for Bitcoin and Ethereum: Hidden-Key Proofs, Finalization, and Enforcement",
+    "title_ja": "Post-Quantum Migration for Bitcoin and Ethereum: Hidden-Key Proofs, Finalization, and Enforcement（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-352_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-352.md"
+  },
+  "iacr-2026-1650": {
+    "processed_at": "2026-09-02T02:36:12.751744+00:00",
+    "published": "Mon, 10 Aug 2026 16:15:46 +0000",
+    "title": "D-James: Ultra Short Multivariate Signatures",
+    "title_ja": "D-James: Ultra Short Multivariate Signatures（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-1650_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-1650.md"
+  },
+  "iacr-2026-001": {
+    "processed_at": "2026-09-02T02:36:12.752130+00:00",
+    "published": "Thu, 01 Jan 2026 00:01:03 +0000",
+    "title": "The Cokernel Pairing",
+    "title_ja": "The Cokernel Pairing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-001_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-001.md"
+  },
+  "iacr-2026-1533": {
+    "processed_at": "2026-09-02T02:36:12.752537+00:00",
+    "published": "Mon, 27 Jul 2026 08:05:35 +0000",
+    "title": "Correcting the modulus switch error in TFHE bootstrapping for real-valued computation",
+    "title_ja": "Correcting the modulus switch error in TFHE bootstrapping for real-valued computation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-1533_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-1533.md"
+  },
+  "iacr-2014-243": {
+    "processed_at": "2026-09-02T02:36:12.752969+00:00",
+    "published": "Fri, 18 Apr 2014 04:48:57 +0000",
+    "title": "Reusable Fuzzy Extractors for Low-Entropy Distributions",
+    "title_ja": "Reusable Fuzzy Extractors for Low-Entropy Distributions（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2014-243_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2014-243.md"
+  },
+  "iacr-2026-386": {
+    "processed_at": "2026-09-02T02:36:12.753456+00:00",
+    "published": "Wed, 25 Feb 2026 06:13:02 +0000",
+    "title": "Determining those Boolean functions whose restrictions to affine spaces are plateaued",
+    "title_ja": "Determining those Boolean functions whose restrictions to affine spaces are plateaued（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-386_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-386.md"
+  },
+  "iacr-2026-1086": {
+    "processed_at": "2026-09-02T02:36:12.753922+00:00",
+    "published": "Thu, 28 May 2026 18:27:44 +0000",
+    "title": "A Machine-Checked EUF-CMA Proof for the Hybrid Fiat-Shamir Signature Scheme",
+    "title_ja": "A Machine-Checked EUF-CMA Proof for the Hybrid Fiat-Shamir Signature Scheme（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-1086_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-1086.md"
+  },
+  "iacr-2026-1693": {
+    "processed_at": "2026-09-02T02:36:12.754407+00:00",
+    "published": "Sat, 15 Aug 2026 03:46:13 +0000",
+    "title": "The ePrint:2026/1591 Quantum Algorithm Does Not Solve DCP",
+    "title_ja": "The ePrint:2026/1591 Quantum Algorithm Does Not Solve DCP（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-1693_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-1693.md"
+  },
+  "iacr-2026-980": {
+    "processed_at": "2026-09-02T02:36:12.754943+00:00",
+    "published": "Mon, 18 May 2026 07:05:36 +0000",
+    "title": "Key-Independent Secret-Key Distinguisher for 7-Round AES based on the Joint Generalized Zero-Difference Property",
+    "title_ja": "Key-Independent Secret-Key Distinguisher for 7-Round AES based on the Joint Generalized Zero-Difference Property（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-980_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-980.md"
+  },
+  "iacr-2025-407": {
+    "processed_at": "2026-09-02T02:36:12.755421+00:00",
+    "published": "Mon, 03 Mar 2025 23:59:10 +0000",
+    "title": "Adaptively Secure Hierarchical Attribute-Based Encryption from Witness Encryption",
+    "title_ja": "Adaptively Secure Hierarchical Attribute-Based Encryption from Witness Encryption（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2025-407_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2025-407.md"
+  },
+  "iacr-2026-872": {
+    "processed_at": "2026-09-02T02:36:12.755828+00:00",
+    "published": "Tue, 05 May 2026 06:02:58 +0000",
+    "title": "Privacy Coins Under Viewing Key Compromise",
+    "title_ja": "Privacy Coins Under Viewing Key Compromise（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-872_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-872.md"
+  },
+  "iacr-2026-1846": {
+    "processed_at": "2026-09-02T02:36:12.756319+00:00",
+    "published": "Mon, 31 Aug 2026 16:36:43 +0000",
+    "title": "Covert Federated Learning under Regulation based on Threshold Anamorphic Encryption",
+    "title_ja": "Covert 連合学習 under Regulation based on Threshold Anamorphic Encryption",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-1846_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-1846.md"
+  },
+  "iacr-2026-1845": {
+    "processed_at": "2026-09-02T02:36:12.756747+00:00",
+    "published": "Mon, 31 Aug 2026 16:35:17 +0000",
+    "title": "Lattice-based NIKE with optimal tightness",
+    "title_ja": "Lattice-based NIKE with optimal tightness（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-1845_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-1845.md"
+  },
+  "iacr-2026-1587": {
+    "processed_at": "2026-09-02T02:36:12.757250+00:00",
+    "published": "Mon, 03 Aug 2026 09:43:36 +0000",
+    "title": "Solving the Shortest Vector Problem in $2^{0.7314n+o(n)}$ Time via Discrete Gaussian Sampling on Superlattices",
+    "title_ja": "Solving the Shortest Vector Problem in $2^{0.7314n+o(n)}$ Time via Discrete Gaussian Sampling on Superlattices（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-1587_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-1587.md"
+  },
+  "iacr-2026-1844": {
+    "processed_at": "2026-09-02T02:36:12.757718+00:00",
+    "published": "Mon, 31 Aug 2026 16:22:17 +0000",
+    "title": "Discrete Gaussian Sampling Meets BDGL Decoding: Solving the Shortest Vector Problem in $2^{0.5596n+o(n)}$ Time",
+    "title_ja": "Discrete Gaussian Sampling Meets BDGL Decoding: Solving the Shortest Vector Problem in $2^{0.5596n+o(n)}$ Time（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/iacr-2026-1844_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/iacr-2026-1844.md"
   }
 }

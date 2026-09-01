@@ -20,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **106** | パイプライン実行時の workspace_dir 誤判定および Raw メタデータパス解決不具合の修正 | Bug | 2026-09-02 | [106-fix-pipeline-workspace-dir-and-raw-metadata-path.md](closed/106-fix-pipeline-workspace-dir-and-raw-metadata-path.md) |
 | **104** | Xenon 循環的複雑度（CC）判定基準の厳格化（全基準 Grade A への昇格） | Feature | 2026-09-01 | [104-strict-xenon-grade-a.md](closed/104-strict-xenon-grade-a.md) |
 | **103** | src/database 内部パッケージの体系的整理とサブモジュール分類 | Feature | 2026-08-29 | [103-refactor-database-package-structure.md](closed/103-refactor-database-package-structure.md) |
 
