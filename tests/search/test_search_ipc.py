@@ -101,7 +101,11 @@ def test_search_service_and_client_roundtrip(tmp_path) -> None:
 
 def test_search_client_fallback_when_no_service(tmp_path) -> None:
     sock_path = str(tmp_path / "non_existent.sock")
-    client = SearchClient(socket_path=sock_path, workspace_dir=str(tmp_path))
+    client = SearchClient(
+        socket_path=sock_path,
+        workspace_dir=str(tmp_path),
+        allow_inprocess_fallback=True,
+    )
 
     # Mock fallback engine
     mock_engine = MagicMock()
@@ -162,3 +166,45 @@ def test_search_lifecycle_hook(tmp_path) -> None:
     hook.teardown()
     assert not os.path.exists(sock_path)
     assert hook.health_check() is False
+
+
+def test_search_ipc_pagination_and_total_hits(tmp_path) -> None:
+    """Validates pagination offset, limit, and total_hits propagation over Unix domain socket IPC."""
+    sock_path = str(tmp_path / "search_pagination.sock")
+    mock_engine = MagicMock()
+    mock_engine.search_with_profile.return_value = (
+        [{"id": f"paper_{i}", "score": 0.9 - i * 0.01} for i in range(5)],
+        {
+            "mode": "hybrid",
+            "total_hits": 42,
+            "offset": 10,
+            "limit": 5,
+            "has_more": True,
+        },
+    )
+
+    service = SearchService(
+        socket_path=sock_path,
+        workspace_dir=str(tmp_path),
+        vector_engine=mock_engine,
+    )
+    service.start()
+
+    try:
+        client = SearchClient(socket_path=sock_path, workspace_dir=str(tmp_path))
+        res = client.search(query="pentest", top_k=5, offset=10)
+        assert res["status"] == "success"
+        assert res["total"] == 5
+        assert res["total_hits"] == 42
+        assert res["offset"] == 10
+        assert res["limit"] == 5
+        assert res["has_more"] is True
+        assert len(res["results"]) == 5
+
+        # Verify mock received offset argument
+        mock_engine.search_with_profile.assert_called_with(
+            query="pentest", top_k=5, category=None, offset=10
+        )
+    finally:
+        client.close()
+        service.stop()

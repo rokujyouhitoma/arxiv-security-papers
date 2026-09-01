@@ -36,6 +36,7 @@ run_server = run_web_server
 
 def __getattr__(name: str) -> Any:
     if name == "VECTOR_ENGINE":
+        os.environ["SEARCH_ALLOW_FALLBACK"] = "1"
         from web.gateway import application
 
         return application.handlers.vector_engine

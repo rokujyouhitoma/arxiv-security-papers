@@ -14,6 +14,8 @@ if "src" not in sys.path:
 
 from web.server import VECTOR_ENGINE, WSGIApplication, application
 
+os.environ["SEARCH_ALLOW_FALLBACK"] = "1"
+
 
 def call_wsgi(
     app, method="GET", path="/", query_string="", body=None, headers_dict=None

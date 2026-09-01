@@ -959,7 +959,10 @@ class VectorEngine:
         top_k: int,
         offset: int = 0,
     ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
-        cached_res = self.semantic_cache.get(f"{query}|{category}|{offset}", q_tokens)
+        exact_only = offset > 0
+        cached_res = self.semantic_cache.get(
+            f"{query}|{category}|{offset}", q_tokens, exact_only=exact_only
+        )
         if not cached_res:
             return None
         res, prof = cached_res
@@ -997,7 +1000,7 @@ class VectorEngine:
             return cached
 
         results, profile = self._execute_search_pipeline(
-            query, top_k, category, q_tokens
+            query, top_k, category, q_tokens, offset=offset
         )
         self._stop_tracing_if_needed(was_tracing)
         return results, profile

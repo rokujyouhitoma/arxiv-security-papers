@@ -939,10 +939,14 @@ class GatewayHandlers:
 
         t_start = time.perf_counter()
         resp_dict = self.search_client.search(
-            query=query, top_k=top_k, category=category, mode=mode
+            query=query, top_k=top_k, category=category, mode=mode, offset=offset
         )
         profile = resp_dict.get("profile", {})
         profile["total_ms"] = round((time.perf_counter() - t_start) * 1000.0, 3)
+        if "total_hits" in resp_dict:
+            profile["total_hits"] = resp_dict["total_hits"]
+        if "has_more" in resp_dict:
+            profile["has_more"] = resp_dict["has_more"]
         results = resp_dict.get("results", [])
         return results, profile
 

@@ -28,7 +28,8 @@ class SearchClient:
         self,
         socket_path: Optional[str] = None,
         workspace_dir: Optional[str] = None,
-        timeout: float = 5.0,
+        timeout: float = 15.0,
+        allow_inprocess_fallback: Optional[bool] = None,
     ) -> None:
         self.workspace_dir = workspace_dir or os.path.abspath(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,11 +38,28 @@ class SearchClient:
             self.workspace_dir, "outputs", "supervisor", "search.sock"
         )
         self.timeout = timeout
+        if allow_inprocess_fallback is None:
+            # Default to False under supervisor or production, True only if explicitly requested
+            self.allow_inprocess_fallback = (
+                os.environ.get("SEARCH_ALLOW_FALLBACK", "0") == "1"
+            )
+        else:
+            self.allow_inprocess_fallback = allow_inprocess_fallback
         self._fallback_engine: Optional[VectorEngine] = None
+
+    def _is_fallback_allowed(self) -> bool:
+        return self.allow_inprocess_fallback or (
+            os.environ.get("SEARCH_ALLOW_FALLBACK", "0") == "1"
+        )
 
     @property
     def fallback_engine(self) -> VectorEngine:
-        """Lazily creates an in-process VectorEngine if IPC is unavailable."""
+        """Lazily creates an in-process VectorEngine if explicitly permitted."""
+        if not self._is_fallback_allowed():
+            raise RuntimeError(
+                "In-process VectorEngine fallback is disabled to prevent worker memory bloat. "
+                f"Ensure SearchService is running on {self.socket_path}."
+            )
         if self._fallback_engine is None:
             logger.info("Initializing fallback in-process VectorEngine")
             from .vector_engine import VectorEngine
@@ -94,24 +112,42 @@ class SearchClient:
             except OSError:
                 pass
 
+    def _handle_socket_error(
+        self, error_msg: str, cmd_dict: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if self._is_fallback_allowed():
+            return self._fallback_handle_command(cmd_dict)
+        return {
+            "status": "error",
+            "error": error_msg,
+            "results": [],
+        }
+
+    def _execute_socket_query(self, cmd_dict: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            res = self._send_socket_payload(cmd_dict)
+            if res is not None:
+                return res
+            return self._handle_socket_error(
+                "Empty response from Search IPC daemon", cmd_dict
+            )
+        except Exception as e:
+            logger.warning("Search IPC failed (%s)", e)
+            return self._handle_socket_error(f"Search IPC error: {e}", cmd_dict)
+
     def send_command(self, cmd_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Sends a JSON command to the SearchService over Unix domain socket."""
         if not os.path.exists(self.socket_path):
-            return self._fallback_handle_command(cmd_dict)
-
-        try:
-            res = self._send_socket_payload(cmd_dict)
-            return res if res is not None else self._fallback_handle_command(cmd_dict)
-        except Exception as e:
-            logger.warning(
-                "Search IPC failed (%s), falling back to in-process engine", e
+            return self._handle_socket_error(
+                f"Search IPC socket not found at {self.socket_path}", cmd_dict
             )
-            return self._fallback_handle_command(cmd_dict)
+        return self._execute_socket_query(cmd_dict)
 
     def _fallback_search(self, req: Dict[str, Any]) -> Dict[str, Any]:
         engine = self.fallback_engine
         query = req.get("query", "").strip()
         top_k = int(req.get("top_k", 20))
+        offset = int(req.get("offset", 0))
         category = req.get("category")
         mode = req.get("mode", "hybrid")
 
@@ -120,22 +156,45 @@ class SearchClient:
                 "status": "success",
                 "query": "",
                 "total": 0,
+                "total_hits": 0,
+                "offset": offset,
+                "limit": top_k,
+                "has_more": False,
                 "results": [],
                 "profile": {},
             }
 
         if mode == "vector":
-            results = engine.search_vector_ann(query=query, top_k=top_k)
-            profile: Dict[str, Any] = {"mode": "vector", "total_ms": 1.0}
+            all_vec = engine.search_vector_ann(query=query, top_k=top_k + offset)
+            results = all_vec[offset : offset + top_k]
+            total_hits = len(all_vec)
+            profile: Dict[str, Any] = {
+                "mode": "vector",
+                "total_hits": total_hits,
+                "offset": offset,
+                "limit": top_k,
+                "has_more": (offset + len(results) < total_hits),
+                "total_ms": 1.0,
+            }
         elif mode == "rrf":
-            results = engine.search_rrf_hybrid(
-                query=query, top_k=top_k, category=category
+            all_rrf = engine.search_rrf_hybrid(
+                query=query, top_k=top_k + offset, category=category
             )
-            profile = {"mode": "rrf", "total_ms": 1.0}
+            results = all_rrf[offset : offset + top_k]
+            total_hits = len(all_rrf)
+            profile = {
+                "mode": "rrf",
+                "total_hits": total_hits,
+                "offset": offset,
+                "limit": top_k,
+                "has_more": (offset + len(results) < total_hits),
+                "total_ms": 1.0,
+            }
         else:
             results, profile = engine.search_with_profile(
-                query=query, top_k=top_k, category=category
+                query=query, top_k=top_k, category=category, offset=offset
             )
+            total_hits = int(profile.get("total_hits", len(results)))
 
         return {
             "status": "success",
@@ -143,6 +202,12 @@ class SearchClient:
             "category": category,
             "mode": mode,
             "total": len(results),
+            "total_hits": total_hits,
+            "offset": offset,
+            "limit": top_k,
+            "has_more": bool(
+                profile.get("has_more", (offset + len(results) < total_hits))
+            ),
             "profile": profile,
             "results": results,
         }
@@ -221,13 +286,15 @@ class SearchClient:
         top_k: int = 20,
         category: Optional[str] = None,
         mode: str = "hybrid",
+        offset: int = 0,
     ) -> Dict[str, Any]:
-        """Executes hybrid search query."""
+        """Executes hybrid search query with pagination offset."""
         return self.send_command(
             {
                 "cmd": "search",
                 "query": query,
                 "top_k": top_k,
+                "offset": offset,
                 "category": category,
                 "mode": mode,
             }

@@ -58,6 +58,7 @@ class SearchService:
     def _handle_search(self, req: Dict[str, Any]) -> Dict[str, Any]:
         query = req.get("query", "").strip()
         top_k = int(req.get("top_k", 20))
+        offset = int(req.get("offset", 0))
         category = req.get("category")
         mode = req.get("mode", "hybrid")
 
@@ -66,22 +67,47 @@ class SearchService:
                 "status": "success",
                 "query": "",
                 "total": 0,
+                "total_hits": 0,
+                "offset": offset,
+                "limit": top_k,
+                "has_more": False,
                 "results": [],
                 "profile": {},
             }
 
         if mode == "vector":
-            results = self.vector_engine.search_vector_ann(query=query, top_k=top_k)
-            profile: Dict[str, Any] = {"mode": "vector", "total_ms": 1.0}
-        elif mode == "rrf":
-            results = self.vector_engine.search_rrf_hybrid(
-                query=query, top_k=top_k, category=category
+            all_vec = self.vector_engine.search_vector_ann(
+                query=query, top_k=top_k + offset
             )
-            profile = {"mode": "rrf", "total_ms": 1.0}
+            results = all_vec[offset : offset + top_k]
+            total_hits = len(all_vec)
+            profile: Dict[str, Any] = {
+                "mode": "vector",
+                "total_hits": total_hits,
+                "offset": offset,
+                "limit": top_k,
+                "has_more": (offset + len(results) < total_hits),
+                "total_ms": 1.0,
+            }
+        elif mode == "rrf":
+            all_rrf = self.vector_engine.search_rrf_hybrid(
+                query=query, top_k=top_k + offset, category=category
+            )
+            results = all_rrf[offset : offset + top_k]
+            total_hits = len(all_rrf)
+            profile = {
+                "mode": "rrf",
+                "total_hits": total_hits,
+                "offset": offset,
+                "limit": top_k,
+                "has_more": (offset + len(results) < total_hits),
+                "total_ms": 1.0,
+            }
         else:
             results, profile = self.vector_engine.search_with_profile(
-                query=query, top_k=top_k, category=category
+                query=query, top_k=top_k, category=category, offset=offset
             )
+            total_hits = int(profile.get("total_hits", len(results)))
 
         return {
             "status": "success",
@@ -89,6 +115,12 @@ class SearchService:
             "category": category,
             "mode": mode,
             "total": len(results),
+            "total_hits": total_hits,
+            "offset": offset,
+            "limit": top_k,
+            "has_more": bool(
+                profile.get("has_more", (offset + len(results) < total_hits))
+            ),
             "profile": profile,
             "results": results,
         }

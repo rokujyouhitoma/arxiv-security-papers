@@ -61,7 +61,7 @@ class QuerySemanticCache:
         return None
 
     def get(
-        self, query: str, query_tokens: List[str]
+        self, query: str, query_tokens: List[str], exact_only: bool = False
     ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
         now = time.time()
         q_clean = query.strip().lower()
@@ -70,9 +70,10 @@ class QuerySemanticCache:
         if exact_res is not None:
             return exact_res
 
-        semantic_res = self._get_semantic_match(set(query_tokens), now)
-        if semantic_res is not None:
-            return semantic_res
+        if not exact_only:
+            semantic_res = self._get_semantic_match(set(query_tokens), now)
+            if semantic_res is not None:
+                return semantic_res
 
         self.misses += 1
         return None

@@ -343,8 +343,9 @@ def test_modular_search_pipeline():
     assert isinstance(candidates, list)
 
     # Step 3: Reranking
-    ranked = engine.rerank_candidates(ctx, candidates, top_k=3)
+    ranked, total_hits = engine.rerank_candidates(ctx, candidates, top_k=3)
     assert isinstance(ranked, list)
+    assert total_hits >= len(ranked)
 
     # Step 4: Formatting
     presentation = engine.format_presentation(ctx, ranked)

@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **111** | Webワーカーのオンメモリ検索インデックス展開廃止とSearchワーカーIPC問い合わせへの完全移行 | Improvement | 2026-09-02 | [111-decouple-web-worker-from-in-memory-vector-index.md](closed/111-decouple-web-worker-from-in-memory-vector-index.md) |
 | **110** | 検索結果の総ヒット件数（Total Hits）返却・動的ページネーションおよび表示件数切替機能の実装 | Improvement | 2026-09-02 | [110-enhance-search-pagination-and-total-hit-count-display.md](closed/110-enhance-search-pagination-and-total-hit-count-display.md) |
 | **109** | エグゼクティブサマリーの高度化（NLP重要キーワード抽出・3点構造化要約・横断的動向シンセシス） | Feature | 2026-09-02 | [109-enhance-executive-summaries-with-nlp-keyphrase-extraction-and-structured-synthesis.md](closed/109-enhance-executive-summaries-with-nlp-keyphrase-extraction-and-structured-synthesis.md) |
 | **105** | ドメイン層（セキュリティ論文等）と再利用可能基盤層（DB・Crawler・Search・Graph等）の明確なレイヤー・パッケージ分離 | Feature | 2026-09-02 | [105-decouple-domain-and-infrastructure-layers.md](closed/105-decouple-domain-and-infrastructure-layers.md) |
