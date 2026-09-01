@@ -319,3 +319,4 @@ sequenceDiagram
 | **DSN-16** | [DSN-16-nextgen_security_knowledge_platform_proposal.md](DSN-16-nextgen_security_knowledge_platform_proposal.md) | 次世代統合 | 次世代セキュリティ・ナレッジプラットフォーム包括的設計提言書 |
 | **DSN-17** | [DSN-17-security_knowledge_ontology.md](DSN-17-security_knowledge_ontology.md) | `src/ontology/` | セキュリティ知識オントロジー (SKO) 規格設計書 |
 | **DSN-18** | [DSN-18-property_graph_database_engine.md](DSN-18-property_graph_database_engine.md) | `src/graph/` | ゼロ侵襲型プロパティグラフデータベース基盤設計書 |
+| **DSN-19** | [DSN-19-nlp_keyphrase_extraction_and_structured_synthesis.md](DSN-19-nlp_keyphrase_extraction_and_structured_synthesis.md) | `src/pipeline/transformer/` (`src/nlp/`) | 自然言語処理（NLP）重要キーワード抽出・3点構造化要約・動向シンセシス包括的アーキテクチャ設計書 |

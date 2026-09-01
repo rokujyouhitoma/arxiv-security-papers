@@ -10,7 +10,7 @@ ID: 097
 ## 1. 概要 / Summary
 `config/supervisor.json` で `database.workers: 3` を指定して起動した際、3つのワーカープロセスが単一の固定ソケットパス（`outputs/supervisor/db.sock`）に同時に `bind()` を試みることで、macOS（BSD ソケット）環境において **`Failed to start DatabaseService: [Errno 17] File exists`** が発生し、ワーカーが `sys.exit(0)` で即時終了する不具合を修正した。
 
-あわせて、単なるソケット分離にとどまらず、3つのワーカープロセスが **[src/database/distributed/](file:///workspace/arxiv-security-papers/src/database/distributed/)（Raft, Quorum レプリケーション $N=3$, Gossip 障害検知, ベクトルクロック）** に基づき、相互にリアルタイム同期を取りながら稼働する **3ノード分散データベースクラスタ（Distributed Database Cluster）** を構築・統合した。
+あわせて、単なるソケット分離にとどまらず、3つのワーカープロセスが **[`src/database/distributed/`](../../src/database/distributed/)（Raft, Quorum レプリケーション $N=3$, Gossip 障害検知, ベクトルクロック）** に基づき、相互にリアルタイム同期を取りながら稼働する **3ノード分散データベースクラスタ（Distributed Database Cluster）** を構築・統合した。
 
 ---
 

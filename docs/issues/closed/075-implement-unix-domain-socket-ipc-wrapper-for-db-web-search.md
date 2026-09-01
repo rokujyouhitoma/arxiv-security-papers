@@ -44,13 +44,13 @@ Web ゲートウェイ、Database（LSM/BTree/SQL エンジン）、Search（Vec
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`src/database/client.py`](file:///workspace/arxiv-security-papers/src/database/client.py) — `DatabaseClient` IPC クライアントおよびインプロセスフォールバックの実装
-- [ ] [`src/database/service.py`](file:///workspace/arxiv-security-papers/src/database/service.py) — `DatabaseService` IPC サーバーデーモンおよびライフサイクルフックの実装
-- [ ] [`src/search/client.py`](file:///workspace/arxiv-security-papers/src/search/client.py) — `SearchClient` の堅牢化・共通プロトコル対応・インプロセスフォールバック
-- [ ] [`src/search/server/service.py`](file:///workspace/arxiv-security-papers/src/search/server/service.py) — `SearchService` の堅牢化およびライフサイクルフックの実装
-- [ ] [`src/web/gateway/handlers.py`](file:///workspace/arxiv-security-papers/src/web/gateway/handlers.py) — `DatabaseClient` / `SearchClient` を介した統合ルーティング
-- [ ] [`tests/database/test_db_ipc.py`](file:///workspace/arxiv-security-papers/tests/database/test_db_ipc.py) — DB IPC 通信および埋め込みフォールバックの単体テスト
-- [ ] [`tests/search/test_search_ipc.py`](file:///workspace/arxiv-security-papers/tests/search/test_search_ipc.py) — Search IPC 通信および埋め込みフォールバックの単体テスト
+- [ ] [`src/database/client.py`](../../src/database/client.py) — `DatabaseClient` IPC クライアントおよびインプロセスフォールバックの実装
+- [ ] [`src/database/service.py`](../../src/database/service.py) — `DatabaseService` IPC サーバーデーモンおよびライフサイクルフックの実装
+- [ ] [`src/search/client.py`](../../src/search/client.py) — `SearchClient` の堅牢化・共通プロトコル対応・インプロセスフォールバック
+- [ ] [`src/search/server/service.py`](../../src/search/server/service.py) — `SearchService` の堅牢化およびライフサイクルフックの実装
+- [ ] [`src/web/gateway/handlers.py`](../../src/web/gateway/handlers.py) — `DatabaseClient` / `SearchClient` を介した統合ルーティング
+- [ ] [`tests/database/test_db_ipc.py`](../../tests/database/test_db_ipc.py) — DB IPC 通信および埋め込みフォールバックの単体テスト
+- [ ] [`tests/search/test_search_ipc.py`](../../tests/search/test_search_ipc.py) — Search IPC 通信および埋め込みフォールバックの単体テスト
 
 ---
 

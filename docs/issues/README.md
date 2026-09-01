@@ -6,9 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 / 依存 | リンク |
-| :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| - | *(現在進行中のアクティブ Issue はありません)* | - | - | - | - | - |
+現在アクティブな Issue はありません。
 
 ---
 
@@ -16,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **109** | エグゼクティブサマリーの高度化（NLP重要キーワード抽出・3点構造化要約・横断的動向シンセシス） | Feature | 2026-09-02 | [109-enhance-executive-summaries-with-nlp-keyphrase-extraction-and-structured-synthesis.md](closed/109-enhance-executive-summaries-with-nlp-keyphrase-extraction-and-structured-synthesis.md) |
 | **105** | ドメイン層（セキュリティ論文等）と再利用可能基盤層（DB・Crawler・Search・Graph等）の明確なレイヤー・パッケージ分離 | Feature | 2026-09-02 | [105-decouple-domain-and-infrastructure-layers.md](closed/105-decouple-domain-and-infrastructure-layers.md) |
 | **108** | arXiv API レート制限バックオフ時間の拡張 (8s/16s/32s/64s) および RSS フォールバック遷移ログの明示化 | Improvement | 2026-09-02 | [108-expand-arxiv-rate-limit-backoff-and-rss-fallback-log.md](closed/108-expand-arxiv-rate-limit-backoff-and-rss-fallback-log.md) |
 | **107** | arXiv API タイムアウト時の一時エラーリトライ強化およびパイプライン進捗ログ詳細化 | Feature / Bug | 2026-09-02 | [107-enhance-arxiv-timeout-retry-and-pipeline-progress-logging.md](closed/107-enhance-arxiv-timeout-retry-and-pipeline-progress-logging.md) |

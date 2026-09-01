@@ -10,61 +10,57 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
+from .keyword_extractor import extract_keyphrases
+from .structured_summarizer import generate_structured_summary
 from .tagger import determine_security_tags
 from .translator import translate_title_ja
 
 
 def generate_japanese_executive_summary(paper: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates structured 1-sentence Japanese executive summary and section blocks."""
+    """Generates structured 3-point Japanese executive summary and section blocks."""
     title = paper["title"]
     title_ja = paper.get("title_ja", translate_title_ja(title))
     abstract = paper.get("summary", "")
-    arxiv_id = paper["arxiv_id"]
+    arxiv_id = paper.get("arxiv_id", "")
+    clean_id = paper.get("clean_id", arxiv_id)
+
+    # 1. 3-Point Structured Summary & Cohesive One-Liner
+    sum_data = generate_structured_summary(
+        title=title,
+        abstract=abstract,
+        clean_id=clean_id,
+        japanese_title=title_ja,
+    )
+
+    # 2. Keyphrase Extraction
+    full_text = f"{title} {abstract}"
+    keyphrases = extract_keyphrases(full_text, top_k=4)
+    keyphrases_str = (
+        ", ".join(keyphrases) if keyphrases else "セキュリティ分析, 脆弱性検証"
+    )
 
     overview_desc = (
         f"本論文「{title_ja}」（原題: {title} / arXiv: {arxiv_id}）は、"
         f"{paper.get('primary_category', 'cs.CR')} 分野における最新セキュリティ研究成果を取り扱っています。"
     )
 
-    problem_keywords = [
-        "attack",
-        "vulnerability",
-        "threat",
-        "risk",
-        "exploit",
-        "leak",
-        "privacy",
-        "malware",
-        "flaw",
-        "security",
-        "iac",
-        "llm",
-        "drift",
-        "crypto",
-        "auth",
-        "zero-day",
-    ]
-    found_problems = [kw for kw in problem_keywords if kw in abstract.lower()]
-
-    one_liner = f"{title_ja} — 課題分析と防御モデルの検証"
-    detected_items = (
-        ", ".join(found_problems[:3])
-        if found_problems
-        else "セキュリティ検証, 脆弱性監査"
-    )
     background_text = (
-        f"本研究はサイバー脅威環境におけるセキュリティ構造・脆弱性の検証を目的としています。"
-        f"(主要検出項目: {detected_items})"
+        f"【課題・脅威】{sum_data['threat']}\n" f"(主要キーワード: {keyphrases_str})"
     )
-    tech_text = "理論的解析および実証実験データセットに基づく検出・評価メカニズムを新規構築しています。"
-    impact_text = "実験結果より、脆弱性検出精度の向上、誤検知率の低減、あるいは理論的安全性の証明が確認されました。"
+    tech_text = f"【提案技術】{sum_data['proposal']}"
+    impact_text = f"【実証・影響】{sum_data['impact']}"
 
     return {
-        "one_liner": one_liner,
-        "overview": f"{overview_desc}\n\n**概要**: {background_text}",
+        "one_liner": sum_data["executive_summary"],
+        "overview": f"{overview_desc}\n\n**概要**: {sum_data['executive_summary']}",
         "background": background_text,
         "technical_approach": tech_text,
         "results_impact": impact_text,
+        "keyphrases": keyphrases,
+        "keyphrases_str": keyphrases_str,
+        "threat": sum_data["threat"],
+        "proposal": sum_data["proposal"],
+        "impact": sum_data["impact"],
         "executive_recommendations": [
             "組織のセキュリティ設計およびリスク評価基準への影響確認",
             "技術チームによる検証実験および対策パッチ/設定の展開検討",
@@ -150,7 +146,7 @@ def _load_raw_paper_meta(raw_meta_path: str) -> Dict[str, Any]:
     if is_sensitive_path(resolved_meta):
         raise PermissionError(f"Access to sensitive path blocked: {resolved_meta}")
     with open(resolved_meta, "r", encoding="utf-8") as f:
-        return json.load(f)
+        return cast(Dict[str, Any], json.load(f))
 
 
 def _render_okf_markdown(
@@ -202,7 +198,7 @@ def _build_okf_template_vars(
     title_ja = paper.get("title_ja", translate_title_ja(paper["title"]))
     exec_summary = generate_japanese_executive_summary(paper)
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    pub_date = paper.get("published") if paper.get("published") else now_iso
+    pub_date = str(paper.get("published") or now_iso)
 
     authors_yaml = "\n".join([f'    - "{a}"' for a in paper.get("authors", [])])
     default_tags = config.get("okf", {}).get("default_tags", ["cs.CR", "security"])
