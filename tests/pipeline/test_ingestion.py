@@ -160,3 +160,32 @@ def test_api_timeout_and_network_retry() -> None:
             assert len(result) == 1
             assert result[0]["arxiv_id"] == "2608.11111v1"
             assert call_count == 3
+
+
+def test_api_429_backoff_delays() -> None:
+    import io
+    import urllib.error
+    from unittest.mock import patch
+
+    from pipeline.ingestion.arxiv_client import _handle_api_http_error
+
+    sleep_times = []
+
+    def mock_sleep(seconds: float) -> None:
+        sleep_times.append(seconds)
+
+    fp = io.BytesIO(b"")
+    he_429 = urllib.error.HTTPError("url", 429, "Too Many Requests", {}, fp)  # type: ignore[arg-type]
+    try:
+        with patch("time.sleep", side_effect=mock_sleep):
+            for retry_idx in range(4):
+                can_retry = _handle_api_http_error(he_429, retry_idx)
+                assert can_retry is True
+
+            # Retry index 4 exceeds max retries (0..3)
+            can_retry_exceeded = _handle_api_http_error(he_429, 4)
+            assert can_retry_exceeded is False
+
+        assert sleep_times == [8, 16, 32, 64]
+    finally:
+        he_429.close()

@@ -20,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **108** | arXiv API レート制限バックオフ時間の拡張 (8s/16s/32s/64s) および RSS フォールバック遷移ログの明示化 | Improvement | 2026-09-02 | [108-expand-arxiv-rate-limit-backoff-and-rss-fallback-log.md](closed/108-expand-arxiv-rate-limit-backoff-and-rss-fallback-log.md) |
 | **107** | arXiv API タイムアウト時の一時エラーリトライ強化およびパイプライン進捗ログ詳細化 | Feature / Bug | 2026-09-02 | [107-enhance-arxiv-timeout-retry-and-pipeline-progress-logging.md](closed/107-enhance-arxiv-timeout-retry-and-pipeline-progress-logging.md) |
 | **106** | パイプライン実行時の workspace_dir 誤判定および Raw メタデータパス解決不具合の修正 | Bug | 2026-09-02 | [106-fix-pipeline-workspace-dir-and-raw-metadata-path.md](closed/106-fix-pipeline-workspace-dir-and-raw-metadata-path.md) |
 | **104** | Xenon 循環的複雑度（CC）判定基準の厳格化（全基準 Grade A への昇格） | Feature | 2026-09-01 | [104-strict-xenon-grade-a.md](closed/104-strict-xenon-grade-a.md) |

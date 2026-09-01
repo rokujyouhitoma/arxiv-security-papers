@@ -36,6 +36,10 @@ class ArxivSourceAdapter(BaseSourceAdapter):
         """Fetches paper dicts from API with RSS fallback."""
         raw_dicts = fetch_arxiv_papers(query=target_query, max_results=max_results)
         if not raw_dicts:
+            print(
+                f"[Ingestion:arXiv] API fetch returned 0 papers or rate-limited for '{target_query}'. "
+                "Triggering automatic fallback to arXiv RSS feed..."
+            )
             raw_dicts = fetch_arxiv_rss_fallback(max_results=min(max_results, 50))
         return raw_dicts or []
 

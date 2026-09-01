@@ -182,8 +182,8 @@ def _execute_api_request(
 
 def _handle_api_http_error(he: urllib.error.HTTPError, retry: int) -> bool:
     """Handles rate-limiting / retry backoff for HTTP 429/503. Returns True if retryable."""
-    if he.code in (429, 503) and retry < 3:
-        wait_time = (2**retry) * 4
+    if he.code in (429, 503) and retry < 4:
+        wait_time = 8 * (2**retry)  # 8s, 16s, 32s, 64s
         print(
             f"[INFO] arXiv API returned HTTP {he.code}. Retrying attempt {retry + 1}/4 in {wait_time}s...",
             file=sys.stderr,
@@ -196,8 +196,8 @@ def _handle_api_http_error(he: urllib.error.HTTPError, retry: int) -> bool:
 
 def _handle_api_network_error(err: Exception, retry: int) -> bool:
     """Handles network/timeout errors with backoff retry."""
-    if retry < 3:
-        wait_time = (2**retry) * 3
+    if retry < 4:
+        wait_time = 4 * (2**retry)  # 4s, 8s, 16s, 32s
         print(
             f"[INFO] arXiv API request error ({err}). Retrying attempt {retry + 1}/4 in {wait_time}s...",
             file=sys.stderr,
@@ -218,7 +218,7 @@ def _fetch_api_chunk_with_retry(api_url: str) -> Optional[List[Dict[str, Any]]]:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArXivSecurityOKFBot/1.0"
         },
     )
-    for retry in range(4):
+    for retry in range(5):
         try:
             return _execute_api_request(req)
         except urllib.error.HTTPError as he:
@@ -319,6 +319,9 @@ def _parse_rss_item(item: ET.Element) -> Dict[str, Any]:
 def fetch_arxiv_rss_fallback(max_results: int = 50) -> List[Dict[str, Any]]:
     """Fallback fetcher using arXiv RSS feed."""
     rss_url = "https://rss.arxiv.org/rss/cs.CR"
+    print(
+        f"[Ingestion:arXiv:RSS] Fetching latest papers via RSS fallback feed ({rss_url})..."
+    )
     req = urllib.request.Request(
         rss_url,
         headers={
@@ -330,7 +333,11 @@ def fetch_arxiv_rss_fallback(max_results: int = 50) -> List[Dict[str, Any]]:
             data = resp.read()
             root = _safe_fromstring(data)
             items = root.findall(".//item")
-            return [_parse_rss_item(item) for item in items[:max_results]]
+            parsed = [_parse_rss_item(item) for item in items[:max_results]]
+            print(
+                f"[Ingestion:arXiv:RSS] Successfully retrieved {len(parsed)} papers via RSS feed."
+            )
+            return parsed
     except Exception as e:
         print(f"[WARN] RSS Fallback failed: {e}", file=sys.stderr)
         return []
