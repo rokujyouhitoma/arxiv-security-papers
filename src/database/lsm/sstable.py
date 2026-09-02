@@ -196,7 +196,9 @@ class SSTableReader:
                 return raw_val
 
     @staticmethod
-    def _read_block_entry(block_raw: bytes, pos: int) -> "Optional[tuple]":
+    def _read_block_entry(
+        block_raw: bytes, pos: int
+    ) -> Optional[Tuple[str, bytes, int]]:
         """Returns (curr_key, curr_val, next_pos) or None if end of block."""
         if pos + 4 > len(block_raw):
             return None

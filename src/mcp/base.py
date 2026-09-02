@@ -445,7 +445,7 @@ def _dispatch_rpc_request(
     if method == "ping":
         return {"jsonrpc": "2.0", "id": req_id, "result": {}}
 
-    res_map = {
+    res_map: Dict[str, Callable[[], Any]] = {
         "tools/list": lambda: {"tools": tools},
         "tools/call": lambda: _dispatch_tools_call(server_name, p, t_handlers),
         "prompts/list": lambda: {"prompts": prompts},

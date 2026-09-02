@@ -147,24 +147,25 @@ class PAXPage:
         return _build_page_header(row_count, col_count, mini_pages, enc_types)
 
     @classmethod
-    def _parse_page_header(cls, page_data: memoryview) -> "Optional[tuple]":
+    def _parse_page_header(cls, page_data: memoryview) -> Optional[Tuple[int, int]]:
         """Returns (row_count, col_count) or None if invalid page."""
         if len(page_data) < 12:
             return None
         magic, row_count, col_count = struct.unpack_from("<8sHH", page_data, 0)
         if magic != PAX_MAGIC or row_count == 0:
             return None
-        return row_count, col_count
+        return int(row_count), int(col_count)
 
     @classmethod
     def _read_col_offsets_and_encs(
         cls, page_data: memoryview, col_count: int
-    ) -> "tuple[list, list]":
+    ) -> Tuple[List[int], List[int]]:
         col_offsets = [
-            struct.unpack_from("<H", page_data, 12 + i * 2)[0] for i in range(col_count)
+            int(struct.unpack_from("<H", page_data, 12 + i * 2)[0])
+            for i in range(col_count)
         ]
         enc_types = [
-            struct.unpack_from("<B", page_data, 12 + 2 * col_count + i)[0]
+            int(struct.unpack_from("<B", page_data, 12 + 2 * col_count + i)[0])
             for i in range(col_count)
         ]
         return col_offsets, enc_types

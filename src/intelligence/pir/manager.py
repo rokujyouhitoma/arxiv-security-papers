@@ -8,7 +8,7 @@ import json
 import math
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from intelligence.contracts import (
     FeedbackTelemetry,
@@ -63,6 +63,8 @@ class PIRManager(IntelligencePhaseProtocol):
         )
 
     def _load_registry_from_disk(self) -> bool:
+        if not self.storage_path:
+            return False
         try:
             with open(self.storage_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -231,13 +233,13 @@ class PIRManager(IntelligencePhaseProtocol):
         return dict(self._current_weights.weights)
 
     def _normalize_vector(
-        self, topics: set, source: Dict[str, Any], total: float
+        self, topics: Set[str], source: Dict[str, Any], total: float
     ) -> Dict[str, float]:
         return {t: source.get(t, 0.0) / total if total > 0 else 0.0 for t in topics}
 
     def _calc_new_weights(
         self,
-        all_topics: set,
+        all_topics: Set[str],
         u_usage: Dict[str, float],
         g_gap: Dict[str, float],
         d_drift: Dict[str, float],

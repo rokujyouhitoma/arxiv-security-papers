@@ -290,6 +290,8 @@ class Pager:
     def _append_wal_update(
         self, page_id: int, old_data: bytearray, page_data: bytearray
     ) -> int:
+        if self.wal is None:
+            return 0
         prev_lsn = self.tx_prev_lsn.get(self.current_tx_id, 0)
         record = self.wal.append_record(
             tx_id=self.current_tx_id,
@@ -387,6 +389,8 @@ class Pager:
 
     def _undo_update_record(self, rec: Any) -> None:
         """Undoes a single WAL UPDATE record."""
+        if self.wal is None:
+            return
         page_data = self.read_page(rec.page_id)
         offset = rec.offset
         undo = rec.undo_data

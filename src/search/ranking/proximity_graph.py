@@ -7,7 +7,7 @@ and maintains a k-NN topological network for instant recommendations and Graph v
 
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, cast
 
 
 class ProximityGraphIndex:
@@ -38,15 +38,15 @@ class ProximityGraphIndex:
 
     def _get_tags_set(self, doc: Dict[str, Any]) -> Set[str]:
         tags = doc.get("_tags_set")
-        if tags is not None:
-            return tags
+        if isinstance(tags, set):
+            return cast(Set[str], tags)
         return {str(t).lower() for t in doc.get("tags", [])}
 
     def _get_kw_set(self, doc: Dict[str, Any]) -> Set[str]:
         kw = doc.get("_kw_set")
-        if kw is not None:
-            return kw
-        return set(doc.get("annotated_keywords", []))
+        if isinstance(kw, set):
+            return cast(Set[str], kw)
+        return {str(k) for k in doc.get("annotated_keywords", [])}
 
     def _calc_kw_sim(self, doc_a: Dict[str, Any], doc_b: Dict[str, Any]) -> float:
         kw_a = self._get_kw_set(doc_a)

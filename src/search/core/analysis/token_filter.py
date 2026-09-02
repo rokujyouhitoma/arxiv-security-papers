@@ -117,7 +117,7 @@ class Analyzer:
 
         processed = self._apply_char_filters(text)
         tokenizer = self._get_tokenizer()
-        tokens = tokenizer.tokenize(processed)
+        tokens: List[Token] = tokenizer.tokenize(processed)
 
         for tf in self.token_filters:
             tokens = tf.filter_tokens(tokens)

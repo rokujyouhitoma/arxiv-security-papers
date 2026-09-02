@@ -13,7 +13,7 @@ import time
 import tracemalloc
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, cast
 
 from .ingestion import (
     FacetedIndex,
@@ -215,9 +215,9 @@ class VectorEngine:
 
     def _get_doc_tf(self, doc: Dict[str, Any]) -> Dict[str, int]:
         tf = doc.get("token_counts")
-        if tf:
-            return tf
-        return Counter(doc.get("tokens", []))
+        if isinstance(tf, dict):
+            return cast(Dict[str, int], tf)
+        return dict(Counter(doc.get("tokens", [])))
 
     def calculate_bm25_score(
         self, query_tokens: List[str], doc: Dict[str, Any]

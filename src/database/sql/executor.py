@@ -792,7 +792,7 @@ class SQLExecutor:
             raw_vec = self.embedding.embed_text(str(col_val_map["text"]))
         elif not raw_vec:
             raw_vec = [0.0] * dim
-        return self.embedding.normalize(raw_vec)
+        return list(self.embedding.normalize(raw_vec))
 
     def _exec_insert(
         self, stmt: InsertStatement, effective_role: str

@@ -68,7 +68,7 @@ class TextInterpreter:
             "Td": lambda: self._handle_td(stack, set_leading=False),
             "TD": lambda: self._handle_td(stack, set_leading=True),
             "T*": self._handle_tstar,
-            "'": lambda: (self._handle_tstar(), self._handle_tj(stack)),
+            "'": lambda: self._handle_single_quote(stack),
             "TL": lambda: self._set_state_param("leading", stack),
             "Tc": lambda: self._set_state_param("char_spacing", stack),
             "Tw": lambda: self._set_state_param("word_spacing", stack),
@@ -80,6 +80,10 @@ class TextInterpreter:
         handler = dispatch_table.get(op)
         if handler:
             handler()
+
+    def _handle_single_quote(self, stack: List[Any]) -> None:
+        self._handle_tstar()
+        self._handle_tj(stack)
 
     def _set_state_param(self, attr_name: str, stack: List[Any]) -> None:
         if stack and isinstance(stack[0], (int, float)):

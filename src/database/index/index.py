@@ -62,7 +62,9 @@ class HNSWIndex:
         unif = max(1e-9, self.rng.random())
         return int(-math.log(unif) * self.mL)
 
-    def _should_add_to_results(self, n_dist: float, w_results: list, ef: int) -> bool:
+    def _should_add_to_results(
+        self, n_dist: float, w_results: List[Tuple[float, int]], ef: int
+    ) -> bool:
         return n_dist < -w_results[0][0] or len(w_results) < ef
 
     def _init_search_queues(
@@ -133,7 +135,7 @@ class HNSWIndex:
         self.add_item(node_id, vector)
 
     def _greedy_traverse_level(
-        self, vec: Tuple[float, ...], curr_obj: int, curr_dist: float, lc: int
+        self, vec: Sequence[float], curr_obj: int, curr_dist: float, lc: int
     ) -> Tuple[int, float]:
         """Traverses one level greedily, returning new (curr_obj, curr_dist)."""
         changed = True
@@ -147,7 +149,7 @@ class HNSWIndex:
                     changed = True
         return curr_obj, curr_dist
 
-    def _traverse_upper_layers(self, vec: Tuple[float, ...], insert_level: int) -> int:
+    def _traverse_upper_layers(self, vec: Sequence[float], insert_level: int) -> int:
         curr_obj = self.enter_point
         if curr_obj is None:
             return 0
@@ -267,7 +269,7 @@ class HNSWIndex:
             json.dump(data, f, ensure_ascii=False)
 
     @classmethod
-    def _load_layers(cls, data: Dict[str, Any]) -> list:
+    def _load_layers(cls, data: Dict[str, Any]) -> List[Dict[int, List[int]]]:
         return [
             {int(k): [int(x) for x in v] for k, v in layer.items()}
             for layer in data["layers"]

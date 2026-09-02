@@ -246,7 +246,7 @@ class MVCCManager:
         )
 
     def _vacuum_tuple(
-        self, tuple_id: int, version_list: List[VersionedTuple], min_active_tx: int
+        self, tuple_id: str, version_list: List[VersionedTuple], min_active_tx: int
     ) -> int:
 
         retained = [

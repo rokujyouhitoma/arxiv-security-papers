@@ -104,7 +104,7 @@ class LogRecord:
         return header_bytes + payload + trailer_bytes
 
     @classmethod
-    def _parse_header(cls, data: bytes, offset: int) -> tuple:
+    def _parse_header(cls, data: bytes, offset: int) -> Tuple[Any, ...]:
         if len(data) < offset + RECORD_HEADER_SIZE + RECORD_TRAILER_SIZE:
             raise ValueError("Insufficient data for log record header/trailer")
         return struct.unpack_from(RECORD_HEADER_FORMAT, data, offset)
@@ -116,7 +116,7 @@ class LogRecord:
         offset: int,
         trailer_offset: int,
         payload_len: int,
-    ) -> "tuple[int, int]":
+    ) -> Tuple[int, int]:
         if len(data) < trailer_offset + RECORD_TRAILER_SIZE:
             raise ValueError("Insufficient data for complete log record payload")
         expected_checksum, total_len = struct.unpack_from(

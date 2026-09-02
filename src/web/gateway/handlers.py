@@ -10,7 +10,17 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
-from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Tuple,
+    cast,
+)
 
 from database.client import DatabaseClient
 from mcp.papers_server import (
@@ -578,7 +588,8 @@ def _introspect_vector_and_search_metrics(
 def _query_table_count(conn: Any, tname: str) -> int:
     try:
         cnt_cur = conn.execute(f"SELECT COUNT(*) FROM {tname}")  # noqa: S608
-        return cnt_cur.fetchone()[0]
+        row = cnt_cur.fetchone()
+        return int(row[0]) if row else 0
     except Exception:
         return 0
 
@@ -1164,7 +1175,7 @@ class GatewayHandlers:
                 cats[str(c)] = cats.get(str(c), 0) + 1
 
         categories_list = [{"name": k, "count": v} for k, v in cats.items()]
-        categories_list.sort(key=lambda x: int(x["count"]), reverse=True)
+        categories_list.sort(key=lambda x: int(cast(int, x["count"])), reverse=True)
 
         return {
             "status": "success",

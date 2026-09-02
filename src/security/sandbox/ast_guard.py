@@ -148,7 +148,7 @@ class ASTSecurityGuard:
         if not (isinstance(node.func, ast.Name) and node.func.id == "open"):
             return None
         if len(node.args) >= 2 and self._is_destructive_mode(node.args[1]):
-            mode_val = cast(ast.Constant, node.args[1]).value
+            mode_val = str(cast(ast.Constant, node.args[1]).value)
             return f"Security Exception: File modification mode '{mode_val}' in open() is prohibited."
         return None
 

@@ -24,7 +24,7 @@ def _reduce_group_agg(vals: List[Any], fn: str) -> Any:
     """Applies aggregation function to group values."""
     if not vals:
         return 0 if fn == "COUNT" else None
-    dispatch = {
+    dispatch: Dict[str, Callable[[List[Any]], Any]] = {
         "COUNT": len,
         "SUM": _agg_sum,
         "AVG": _agg_avg,
@@ -132,7 +132,7 @@ class PAXScanner:
     def _is_better_minmax(v: Any, result: Optional[Any], is_max: bool) -> bool:
         if result is None:
             return True
-        return v > result if is_max else v < result
+        return bool(v > result if is_max else v < result)
 
     def _scan_column_minmax(self, col_name: str, is_max: bool) -> Optional[Any]:
         col_idx = self._get_col_idx(col_name)

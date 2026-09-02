@@ -15,8 +15,8 @@ from ..storage.storage import VectorStorage
 def _parse_vector_arg(v_raw: Any) -> List[float]:
     """Parses JSON string or sequence into float list."""
     if isinstance(v_raw, str):
-        return json.loads(v_raw)
-    return list(v_raw)
+        return [float(x) for x in json.loads(v_raw)]
+    return [float(x) for x in v_raw]
 
 
 def cosine_similarity(v1_raw: Any, v2_raw: Any) -> float:

@@ -9,7 +9,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from intelligence.contracts import Hypothesis, HypothesisEvidence, HypothesisStatus
 
@@ -123,6 +123,8 @@ class HypothesisEngine:
         )
 
     def _load_state_from_disk(self) -> None:
+        if not self.storage_path:
+            return
         try:
             with open(self.storage_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -265,7 +267,7 @@ class HypothesisEngine:
         hypothesis: Hypothesis,
         paper_id: str,
         record: Dict[str, Any],
-        existing_supp: set,
+        existing_supp: Set[str],
         relevance: float,
     ) -> float:
         ev = HypothesisEvidence(
@@ -284,7 +286,7 @@ class HypothesisEngine:
         hypothesis: Hypothesis,
         paper_id: str,
         record: Dict[str, Any],
-        existing_ref: set,
+        existing_ref: Set[str],
         relevance: float,
     ) -> float:
         ev = HypothesisEvidence(
@@ -299,7 +301,7 @@ class HypothesisEngine:
         return relevance
 
     def _match_patterns(
-        self, text: str, patterns: List[str], paper_id: str, existing: set
+        self, text: str, patterns: List[str], paper_id: str, existing: Set[str]
     ) -> bool:
         return paper_id not in existing and any(
             re.search(pat, text, re.IGNORECASE) for pat in patterns
@@ -366,9 +368,9 @@ class HypothesisEngine:
         records: List[Dict[str, Any]],
         supp_pats: List[str],
         ref_pats: List[str],
-        existing_supp: set,
-        existing_ref: set,
-    ) -> tuple[float, float]:
+        existing_supp: Set[str],
+        existing_ref: Set[str],
+    ) -> Tuple[float, float]:
         s, r = 0.0, 0.0
         for rec in records:
             ds, dr = self._extract_evidence_for_paper(

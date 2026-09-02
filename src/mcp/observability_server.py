@@ -179,7 +179,7 @@ def _calculate_speedups(valid_results: List[Dict[str, Any]]) -> Optional[str]:
         r["speedup_ratio"] = (
             round(r["min_time_ms"] / fastest_time, 2) if fastest_time > 0 else 1.0
         )
-    return valid_results[0]["name"]
+    return str(valid_results[0]["name"])
 
 
 def _validate_bench_candidates(candidates: Any) -> bool:

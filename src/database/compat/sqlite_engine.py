@@ -15,11 +15,13 @@ from ..index.embedding import DeterministicEmbedding
 from ..storage.storage import VectorStorage
 
 
-def _parse_vec(v_raw: Any) -> list:
-    return json.loads(v_raw) if isinstance(v_raw, str) else list(v_raw)
+def _parse_vec(v_raw: Any) -> List[float]:
+    if isinstance(v_raw, str):
+        return [float(x) for x in json.loads(v_raw)]
+    return [float(x) for x in v_raw]
 
 
-def _valid_vecs(v1: list, v2: list) -> bool:
+def _valid_vecs(v1: List[float], v2: List[float]) -> bool:
     return bool(v1) and bool(v2) and len(v1) == len(v2)
 
 

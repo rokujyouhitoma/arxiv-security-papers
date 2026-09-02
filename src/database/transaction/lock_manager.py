@@ -169,7 +169,9 @@ class LockManager:
         self._tx_locks: Dict[int, Set[Tuple[str, LockMode]]] = {}
         self.wait_for_graph = WaitForGraph()
 
-    def _get_conflicts(self, tx_id: int, resource_id: str, mode: LockMode) -> list:
+    def _get_conflicts(
+        self, tx_id: int, resource_id: str, mode: LockMode
+    ) -> List[LockGrant]:
         return [
             g
             for g in self._grants.get(resource_id, [])
@@ -177,7 +179,7 @@ class LockManager:
         ]
 
     def _check_deadlock_and_wait(
-        self, tx_id: int, conflicts: list, start_time: float, timeout: float
+        self, tx_id: int, conflicts: List[LockGrant], start_time: float, timeout: float
     ) -> bool:
         """Records WFG edges, checks deadlock, waits. Returns False on timeout."""
         for holder in conflicts:

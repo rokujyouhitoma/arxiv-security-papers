@@ -15,7 +15,7 @@ import enum
 import math
 import struct
 import zlib
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 PAGE_SIZE = 4096
 # Header: PageID(4B), LSN(8B), SlotCount(2B), FreeLower(2B), FreeUpper(2B), Flags(2B), NextPageID(4B) = 24B
@@ -471,7 +471,7 @@ class TupleSerializer:
         return fn(val)
 
     @staticmethod
-    def _get_encode_dispatch() -> dict:
+    def _get_encode_dispatch() -> Dict[DataType, Callable[[Any], bytes]]:
         return {
             DataType.INT: lambda v: struct.pack("<q", int(v)),
             DataType.FLOAT: lambda v: struct.pack("<d", float(v)),
@@ -493,12 +493,12 @@ class TupleSerializer:
         return raw[4 : 4 + length]
 
     @staticmethod
-    def _decode_vector_type(raw: bytes) -> list:
+    def _decode_vector_type(raw: bytes) -> List[float]:
         dim = struct.unpack("<H", raw[:2])[0]
         return list(struct.unpack(f"<{dim}f", raw[2 : 2 + dim * 4]))
 
     @staticmethod
-    def _get_decode_dispatch() -> dict:
+    def _get_decode_dispatch() -> Dict[DataType, Callable[[bytes], Any]]:
         return {
             DataType.INT: lambda r: struct.unpack("<q", r)[0],
             DataType.FLOAT: lambda r: struct.unpack("<d", r)[0],
@@ -535,7 +535,7 @@ class OverflowManager:
         if i == 0:
             return start_page_id
         if hasattr(page_allocator, "allocate_page_id"):
-            return page_allocator.allocate_page_id()
+            return int(page_allocator.allocate_page_id())
         return start_page_id + i
 
     @staticmethod

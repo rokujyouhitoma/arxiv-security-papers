@@ -177,7 +177,8 @@ class OrchestratorWAL:
             return None
         try:
             with open(cp_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                return data if isinstance(data, dict) else None
         except Exception:
             return None
 

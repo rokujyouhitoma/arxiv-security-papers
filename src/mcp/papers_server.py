@@ -841,8 +841,8 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _count_output_items(output: Dict[str, Any]) -> Optional[int]:
-    if "count" in output:
-        return output["count"]
+    if "count" in output and isinstance(output["count"], (int, float)):
+        return int(output["count"])
     for key in ("results", "papers"):
         val = output.get(key)
         if isinstance(val, list):
@@ -1003,7 +1003,7 @@ def _dispatch_papers_rpc(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if method == "ping":
         return {"jsonrpc": "2.0", "id": req_id, "result": {}}
 
-    dispatch_map = {
+    dispatch_map: Dict[str, Callable[[], Dict[str, Any]]] = {
         "tools/list": lambda: {
             "jsonrpc": "2.0",
             "id": req_id,

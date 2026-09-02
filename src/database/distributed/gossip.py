@@ -107,7 +107,12 @@ class GossipNode:
         }
 
     def _merge_new_peer(
-        self, peer_id: str, in_gen: int, in_seq: int, in_meta: dict, now: float
+        self,
+        peer_id: str,
+        in_gen: int,
+        in_seq: int,
+        in_meta: Dict[str, Any],
+        now: float,
     ) -> None:
         new_state = NodeState(
             node_id=peer_id,
@@ -120,7 +125,12 @@ class GossipNode:
         self.members[peer_id] = new_state
 
     def _update_existing_peer(
-        self, peer_id: str, in_gen: int, in_seq: int, in_meta: dict, now: float
+        self,
+        peer_id: str,
+        in_gen: int,
+        in_seq: int,
+        in_meta: Dict[str, Any],
+        now: float,
     ) -> None:
         existing = self.members[peer_id]
         newer = in_gen > existing.generation or (

@@ -265,7 +265,7 @@ def _format_aggregate_result(
         return count
     if count == 0:
         return None
-    dispatch = {
+    dispatch: Dict[str, Callable[[], Any]] = {
         "SUM": lambda: total_sum,
         "AVG": lambda: total_sum / count,
         "MIN": lambda: min_val,
