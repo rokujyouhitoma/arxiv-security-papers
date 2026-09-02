@@ -31,6 +31,10 @@ class GthreadWorker(SyncWorker):
         pulse_callback: Optional[
             Callable[[int, Optional[Dict[str, Any]]], None]
         ] = None,
+        max_requests: int = 0,
+        max_requests_jitter: int = 0,
+        max_worker_lifetime: float = 0.0,
+        max_worker_lifetime_jitter: float = 0.0,
     ) -> None:
         target = app_target if app_target is not None else wsgi_app
         super().__init__(
@@ -39,6 +43,10 @@ class GthreadWorker(SyncWorker):
             server_socket=server_socket,
             app_target=target,
             pulse_callback=pulse_callback,
+            max_requests=max_requests,
+            max_requests_jitter=max_requests_jitter,
+            max_worker_lifetime=max_worker_lifetime,
+            max_worker_lifetime_jitter=max_worker_lifetime_jitter,
         )
         self.num_threads = max(1, config.threads)
         self._executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
@@ -67,6 +75,8 @@ class GthreadWorker(SyncWorker):
             )
 
     def _accept_gthread_client(self) -> Optional[socket.socket]:
+        if not self.server_socket:
+            return None
         try:
             client_sock, _ = self.server_socket.accept()
             return client_sock
@@ -88,7 +98,7 @@ class GthreadWorker(SyncWorker):
 
     def _dispatch_one(self) -> bool:
         """Accept one connection and submit to thread pool. Returns False to break."""
-        if not self.server_socket:
+        if not self.server_socket or self._executor is None:
             time.sleep(0.1)
             return True
         client_sock = self._accept_gthread_client()
@@ -97,6 +107,15 @@ class GthreadWorker(SyncWorker):
         self._executor.submit(self.handle_client, client_sock)
         return True
 
+    def _run_gthread_loop(self) -> None:
+        while self.alive:
+            self._pulse_active_state()
+            if not self._dispatch_one():
+                break
+            if self._should_retire():
+                self.alive = False
+                break
+
     def run(self) -> None:
         """Main execution loop dispatching incoming sockets to thread pool."""
         self.init_signals()
@@ -104,14 +123,10 @@ class GthreadWorker(SyncWorker):
             self.server_socket.settimeout(1.0)
 
         self._executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.num_threads, thread_name_prefix=f"gthread-{self.worker_id}"
+            max_workers=self.num_threads,
+            thread_name_prefix=f"gthread-{self.worker_id}",
         )
-
-        while self.alive:
-            self._pulse_active_state()
-            if not self._dispatch_one():
-                break
-
+        self._run_gthread_loop()
         if self._executor:
             self._executor.shutdown(wait=True, cancel_futures=False)
         self.close()

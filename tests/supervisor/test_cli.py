@@ -184,3 +184,26 @@ def test_cli_start_daemon_mode() -> None:
         assert config.daemon is True
         assert config.log_file == "/tmp/test_daemon.log"
         assert config.pid_file == "/tmp/test_daemon.pid"
+
+
+def test_cli_restart_ipc_command(tmp_path) -> None:
+    sock_path = str(tmp_path / "control.sock")
+
+    with patch("supervisor.cli.ControlClient") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        mock_client_cls.return_value = mock_client
+
+        # 1. Restart specific service
+        mock_client.restart.return_value = {"status": "ok"}
+        code_restart_svc = main(["--control-socket", sock_path, "restart", "search"])
+        assert code_restart_svc == 0
+        mock_client.restart.assert_called_with(target="search", all=False, mode="")
+
+        # 2. Restart all with rolling flag
+        mock_client.restart.return_value = {"status": "ok"}
+        code_restart_all = main(
+            ["--control-socket", sock_path, "restart", "--all", "--rolling"]
+        )
+        assert code_restart_all == 0
+        mock_client.restart.assert_called_with(target="", all=True, mode="rolling")

@@ -159,3 +159,45 @@ def test_supervisor_config_daemon_custom_paths() -> None:
     assert cfg.daemon is True
     assert cfg.log_file == "/tmp/custom_supervisor.log"
     assert cfg.pid_file == "/tmp/custom_supervisor.pid"
+
+
+def test_supervisor_config_rotation_and_specs() -> None:
+    cfg = SupervisorConfig(
+        max_requests=1000,
+        max_requests_jitter=50,
+        max_worker_lifetime=3600.0,
+        max_worker_lifetime_jitter=120.0,
+    )
+    assert cfg.max_requests == 1000
+    assert cfg.max_requests_jitter == 50
+    assert cfg.max_worker_lifetime == 3600.0
+    assert cfg.max_worker_lifetime_jitter == 120.0
+
+    specs = cfg.build_worker_specs()
+    assert len(specs) == 1
+    assert specs[0].max_requests == 1000
+    assert specs[0].max_requests_jitter == 50
+    assert specs[0].max_worker_lifetime == 3600.0
+    assert specs[0].max_worker_lifetime_jitter == 120.0
+
+
+def test_supervisor_config_rotation_validation_errors() -> None:
+    with pytest.raises(
+        ValueError, match="Max requests and jitter must be non-negative"
+    ):
+        SupervisorConfig(max_requests=-1)
+
+    with pytest.raises(
+        ValueError, match="Max requests and jitter must be non-negative"
+    ):
+        SupervisorConfig(max_requests_jitter=-10)
+
+    with pytest.raises(
+        ValueError, match="Max worker lifetime and jitter must be non-negative"
+    ):
+        SupervisorConfig(max_worker_lifetime=-5.0)
+
+    with pytest.raises(
+        ValueError, match="Max worker lifetime and jitter must be non-negative"
+    ):
+        SupervisorConfig(max_worker_lifetime_jitter=-2.0)

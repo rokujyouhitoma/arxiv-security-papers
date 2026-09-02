@@ -31,6 +31,10 @@ class SyncWorker(BaseWorker):
         pulse_callback: Optional[
             Callable[[int, Optional[Dict[str, Any]]], None]
         ] = None,
+        max_requests: int = 0,
+        max_requests_jitter: int = 0,
+        max_worker_lifetime: float = 0.0,
+        max_worker_lifetime_jitter: float = 0.0,
     ) -> None:
         target = app_target if app_target is not None else wsgi_app
         super().__init__(
@@ -39,6 +43,10 @@ class SyncWorker(BaseWorker):
             server_socket=server_socket,
             app_target=target,
             pulse_callback=pulse_callback,
+            max_requests=max_requests,
+            max_requests_jitter=max_requests_jitter,
+            max_worker_lifetime=max_worker_lifetime,
+            max_worker_lifetime_jitter=max_worker_lifetime_jitter,
         )
 
     @property
@@ -163,30 +171,28 @@ class SyncWorker(BaseWorker):
         resp_header_str += "Connection: close\r\n\r\n"
         return resp_header_str.encode("iso-8859-1") + body
 
+    def _dispatch_client_payload(self, client_sock: socket.socket) -> None:
+        raw = client_sock.recv(65536)
+        if not raw:
+            return
+        environ = self._parse_http_payload(client_sock, raw)
+        if not environ:
+            return
+        status, headers, body = self._execute_wsgi_request(environ)
+        response_bytes = self._format_http_response(status, headers, body)
+        client_sock.sendall(response_bytes)
+        self.requests_handled += 1
+        self.last_active_epoch = time.time()
+        if self._should_retire():
+            self.alive = False
+
     def handle_client(self, client_sock: socket.socket) -> None:
         """Processes a single HTTP connection through the target callable application."""
         client_sock.settimeout(self.config.timeout)
         self.last_active_epoch = time.time()
-        self.pulse(
-            {
-                "is_handling_request": True,
-                "request_start": time.monotonic(),
-            }
-        )
+        self.pulse({"is_handling_request": True, "request_start": time.monotonic()})
         try:
-            raw = client_sock.recv(65536)
-            if not raw:
-                return
-
-            environ = self._parse_http_payload(client_sock, raw)
-            if not environ:
-                return
-
-            status, headers, body = self._execute_wsgi_request(environ)
-            response_bytes = self._format_http_response(status, headers, body)
-            client_sock.sendall(response_bytes)
-            self.requests_handled += 1
-            self.last_active_epoch = time.time()
+            self._dispatch_client_payload(client_sock)
         except Exception:
             pass
         finally:
@@ -197,6 +203,8 @@ class SyncWorker(BaseWorker):
             self.pulse({"is_handling_request": False})
 
     def _accept_client(self) -> Optional[socket.socket]:
+        if not self.server_socket:
+            return None
         try:
             client_sock, _ = self.server_socket.accept()
             return client_sock
@@ -225,6 +233,9 @@ class SyncWorker(BaseWorker):
         while self.alive:
             self.pulse()
             if not self._process_one_connection():
+                break
+            if self._should_retire():
+                self.alive = False
                 break
 
         self.close()

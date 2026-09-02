@@ -26,6 +26,10 @@ class PoolConfig:
     timeout: float = 30.0
     graceful_timeout: float = 30.0
     dependencies: List[str] = dataclasses.field(default_factory=list)
+    max_requests: int = 0
+    max_requests_jitter: int = 0
+    max_worker_lifetime: float = 0.0
+    max_worker_lifetime_jitter: float = 0.0
 
 
 @dataclasses.dataclass
@@ -37,7 +41,12 @@ class ServiceConfig:
     hook_uri: Optional[str] = None
     sync_interval: float = 2.0
     timeout: float = 30.0
+    graceful_timeout: float = 30.0
     dependencies: List[str] = dataclasses.field(default_factory=list)
+    max_requests: int = 0
+    max_requests_jitter: int = 0
+    max_worker_lifetime: float = 0.0
+    max_worker_lifetime_jitter: float = 0.0
 
 
 @dataclasses.dataclass
@@ -82,6 +91,12 @@ class SupervisorConfig:
     threads: int = 1
     app_uri: str = "web.server:app"
 
+    # Global Worker Lifetime and Request Limits
+    max_requests: int = 0
+    max_requests_jitter: int = 0
+    max_worker_lifetime: float = 0.0
+    max_worker_lifetime_jitter: float = 0.0
+
     def __post_init__(self) -> None:
         self._ensure_default_pools()
         self.validate()
@@ -101,35 +116,68 @@ class SupervisorConfig:
                     target_uri=self.app_uri,
                     timeout=self.timeout,
                     graceful_timeout=self.graceful_timeout,
+                    max_requests=self.max_requests,
+                    max_requests_jitter=self.max_requests_jitter,
+                    max_worker_lifetime=self.max_worker_lifetime,
+                    max_worker_lifetime_jitter=self.max_worker_lifetime_jitter,
                 )
             )
+
+    def _resolve_limit(self, pool_val: Any, global_val: Any) -> Any:
+        return pool_val if pool_val else global_val
+
+    def _build_pool_spec(self, pool: PoolConfig) -> Any:
+        from .contracts import ServiceRole, WorkerSpec
+
+        return WorkerSpec(
+            name=pool.name,
+            target_count=pool.workers,
+            worker_class=pool.worker_class,
+            role=ServiceRole.STATELESS_POOL,
+            max_requests=self._resolve_limit(pool.max_requests, self.max_requests),
+            max_requests_jitter=self._resolve_limit(
+                pool.max_requests_jitter, self.max_requests_jitter
+            ),
+            max_worker_lifetime=self._resolve_limit(
+                pool.max_worker_lifetime, self.max_worker_lifetime
+            ),
+            max_worker_lifetime_jitter=self._resolve_limit(
+                pool.max_worker_lifetime_jitter, self.max_worker_lifetime_jitter
+            ),
+            graceful_timeout=pool.graceful_timeout or self.graceful_timeout,
+            metadata={"target_uri": pool.target_uri, "threads": pool.threads},
+        )
+
+    def _build_service_spec(self, svc: ServiceConfig) -> Any:
+        from .contracts import ServiceRole, WorkerSpec
+
+        return WorkerSpec(
+            name=svc.name,
+            target_count=svc.workers,
+            worker_class="service",
+            role=ServiceRole.STATEFUL_SERVICE,
+            sync_interval=svc.sync_interval,
+            max_requests=self._resolve_limit(svc.max_requests, self.max_requests),
+            max_requests_jitter=self._resolve_limit(
+                svc.max_requests_jitter, self.max_requests_jitter
+            ),
+            max_worker_lifetime=self._resolve_limit(
+                svc.max_worker_lifetime, self.max_worker_lifetime
+            ),
+            max_worker_lifetime_jitter=self._resolve_limit(
+                svc.max_worker_lifetime_jitter, self.max_worker_lifetime_jitter
+            ),
+            graceful_timeout=svc.graceful_timeout or self.graceful_timeout,
+            metadata={"hook_uri": svc.hook_uri},
+        )
 
     def build_worker_specs(self) -> List[Any]:
         """Constructs declarative WorkerSpec objects for all configured pools and services."""
-        from .contracts import ServiceRole, WorkerSpec
-
-        specs: List[WorkerSpec] = []
+        specs: List[Any] = []
         for pool in self.pools:
-            specs.append(
-                WorkerSpec(
-                    name=pool.name,
-                    target_count=pool.workers,
-                    worker_class=pool.worker_class,
-                    role=ServiceRole.STATELESS_POOL,
-                    metadata={"target_uri": pool.target_uri, "threads": pool.threads},
-                )
-            )
+            specs.append(self._build_pool_spec(pool))
         for svc in self.services:
-            specs.append(
-                WorkerSpec(
-                    name=svc.name,
-                    target_count=svc.workers,
-                    worker_class="service",
-                    role=ServiceRole.STATEFUL_SERVICE,
-                    sync_interval=svc.sync_interval,
-                    metadata={"hook_uri": svc.hook_uri},
-                )
-            )
+            specs.append(self._build_service_spec(svc))
         return specs
 
     def _validate_pool(self, pool: PoolConfig) -> None:
@@ -158,7 +206,7 @@ class SupervisorConfig:
         self.control_socket = self.control_socket or os.path.join(base, "control.sock")
         self._fill_log_if_daemon(base)
 
-    def _validate_numeric(self) -> None:
+    def _validate_timeouts(self) -> None:
         if self.threads < 1:
             raise ValueError(f"Thread count must be at least 1, got {self.threads}.")
         if self.timeout <= 0:
@@ -167,6 +215,16 @@ class SupervisorConfig:
             raise ValueError(
                 f"Graceful timeout must be positive, got {self.graceful_timeout}."
             )
+
+    def _validate_rotation(self) -> None:
+        if self.max_requests < 0 or self.max_requests_jitter < 0:
+            raise ValueError("Max requests and jitter must be non-negative.")
+        if self.max_worker_lifetime < 0.0 or self.max_worker_lifetime_jitter < 0.0:
+            raise ValueError("Max worker lifetime and jitter must be non-negative.")
+
+    def _validate_numeric(self) -> None:
+        self._validate_timeouts()
+        self._validate_rotation()
 
     def validate(self) -> None:
         """Validates configuration sanity."""

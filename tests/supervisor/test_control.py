@@ -17,6 +17,8 @@ def test_control_server_client_roundtrip(tmp_path) -> None:
             return {"status": "ok", "workers": 4}
         if cmd == "scale":
             return {"status": "ok", "scaled": req.get("workers")}
+        if cmd == "restart":
+            return {"status": "ok", "restarted": req.get("target", "all")}
         return {"status": "error", "error": "unknown"}
 
     server = ControlServer(socket_path=sock_path, command_handler=mock_handler)
@@ -33,6 +35,10 @@ def test_control_server_client_roundtrip(tmp_path) -> None:
         scale_res = client.scale_workers(8)
         assert scale_res["status"] == "ok"
         assert scale_res["scaled"] == 8
+
+        restart_res = client.restart(target="search")
+        assert restart_res["status"] == "ok"
+        assert restart_res["restarted"] == "search"
 
         reload_res = client.reload()
         assert reload_res["status"] == "error"

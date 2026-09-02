@@ -388,3 +388,67 @@ def test_arbiter_existing_pid_check(tmp_path: Any) -> None:
     with patch("os.kill", side_effect=ProcessLookupError):
         # Should not raise exception
         arbiter._check_existing_pid()
+
+
+def test_arbiter_service_level_restart(tmp_path: Any) -> None:
+    specs = [
+        WorkerSpec(name="web", target_count=2, role=ServiceRole.STATELESS_POOL),
+        WorkerSpec(name="search", target_count=1, role=ServiceRole.STATEFUL_SERVICE),
+    ]
+    cfg = SupervisorConfig(workspace_dir=str(tmp_path))
+    arbiter = Arbiter(config=cfg, specs=specs)
+
+    # Mock workers
+    arbiter.pools["web"].workers[101] = MagicMock()
+    arbiter.pools["web"].workers[102] = MagicMock()
+    arbiter.pools["search"].workers[201] = MagicMock()
+
+    with patch("os.kill") as mock_kill, patch.object(
+        arbiter, "spawn_worker"
+    ) as mock_spawn:
+        # 1. Restart stateless pool (web) -> rolling reload
+        res_web = arbiter.restart(target="web")
+        assert res_web["status"] == "ok"
+        assert res_web["mode"] == "rolling"
+        assert mock_spawn.call_count == 2
+        assert mock_kill.call_count == 2
+        mock_kill.assert_any_call(101, signal.SIGQUIT)
+        mock_kill.assert_any_call(102, signal.SIGQUIT)
+
+    with patch("os.kill") as mock_kill:
+        # 2. Restart stateful service (search) -> SIGTERM graceful teardown
+        res_search = arbiter.restart(target="search")
+        assert res_search["status"] == "ok"
+        assert res_search["mode"] == "graceful_teardown"
+        mock_kill.assert_called_once_with(201, signal.SIGTERM)
+
+    # 3. Restart nonexistent target
+    res_err = arbiter.restart(target="nonexistent")
+    assert res_err["status"] == "error"
+    assert "not found" in res_err["error"]
+
+    with patch.object(arbiter, "_restart_pool_by_role") as mock_restart_role:
+        # 4. Restart all
+        res_all = arbiter.restart(restart_all=True)
+        assert res_all["status"] == "ok"
+        assert len(res_all["restarted_pools"]) == 2
+        assert mock_restart_role.call_count == 2
+
+
+def test_arbiter_restart_control_command(tmp_path: Any) -> None:
+    specs = [
+        WorkerSpec(name="web", target_count=2, role=ServiceRole.STATELESS_POOL),
+    ]
+    cfg = SupervisorConfig(workspace_dir=str(tmp_path))
+    arbiter = Arbiter(config=cfg, specs=specs)
+
+    with patch.object(
+        arbiter, "restart", return_value={"status": "ok", "message": "restarted"}
+    ) as mock_restart:
+        resp = arbiter.handle_control_command(
+            {"cmd": "restart", "target": "web", "mode": "rolling"}
+        )
+        assert resp["status"] == "ok"
+        mock_restart.assert_called_once_with(
+            target="web", mode="rolling", restart_all=False
+        )

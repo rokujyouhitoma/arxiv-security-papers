@@ -153,7 +153,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Command: restart
     restart_parser = subparsers.add_parser(
-        "restart", help="Gracefully stop running supervisor and start a new one"
+        "restart", help="Gracefully restart running supervisor or target service"
+    )
+    restart_parser.add_argument(
+        "target",
+        nargs="?",
+        default="",
+        help="Target pool or service name to restart (e.g. search, web, database)",
+    )
+    restart_parser.add_argument(
+        "--all",
+        action="store_true",
+        default=False,
+        help="Restart all managed pools and services in topological order",
+    )
+    restart_parser.add_argument(
+        "--rolling",
+        action="store_true",
+        default=False,
+        help="Force zero-downtime rolling restart mode",
     )
     for p in [restart_parser]:
         p.add_argument(
@@ -482,13 +500,41 @@ def _stop_running_arbiter(control_sock: str, old_pid: Optional[int]) -> Optional
     return old_pid
 
 
+def _cmd_restart(args: argparse.Namespace, client: ControlClient) -> int:
+    target = getattr(args, "target", "") or ""
+    if not isinstance(target, str):
+        target = ""
+    restart_all = getattr(args, "all", False) is True
+    mode = "rolling" if getattr(args, "rolling", False) is True else ""
+    resp = client.restart(target=target, all=restart_all, mode=mode)
+    print(f"[+] Restart command: {resp}")
+    return 0 if resp.get("status") == "ok" else 1
+
+
+def _is_ipc_target_requested(args: argparse.Namespace) -> bool:
+    target = getattr(args, "target", None)
+    has_target = isinstance(target, str) and len(target.strip()) > 0
+    is_all = getattr(args, "all", False) is True
+    is_rolling = getattr(args, "rolling", False) is True
+    return bool(has_target or is_all or is_rolling)
+
+
 def _handle_restart(
     args: argparse.Namespace,
     config_obj: Optional[SupervisorConfig],
     workspace_dir: str,
     control_sock: str,
 ) -> int:
-    """Handles supervisor restart by stopping running instance and starting fresh."""
+    """Handles supervisor restart by sending IPC command or cycling master process."""
+    client = ControlClient(control_sock)
+    if _is_ipc_target_requested(args):
+        if not client.ping():
+            print(
+                f"[ERROR] Supervisor is not running on control socket '{control_sock}'"
+            )
+            return 1
+        return _cmd_restart(args, client)
+
     print("🔄 [Supervisor Arbiter] Initiating restart sequence...")
     config = _build_start_config(args, config_obj, workspace_dir, control_sock)
     old_pid = _resolve_old_pid(config.pid_file, config.lock_file, control_sock)
@@ -544,15 +590,17 @@ def _cmd_ping(client: ControlClient) -> int:
 def _handle_simple_cmd(
     cmd: str, args: argparse.Namespace, client: ControlClient
 ) -> int:
-    """Handles scale, reload, stop, ping control commands."""
-    if cmd == "scale":
-        return _cmd_scale(args, client)
-    if cmd == "reload":
-        return _cmd_reload(client)
-    if cmd == "stop":
-        return _cmd_stop(client)
-    if cmd == "ping":
-        return _cmd_ping(client)
+    """Handles scale, reload, restart, stop, ping control commands."""
+    dispatch_map = {
+        "scale": lambda: _cmd_scale(args, client),
+        "reload": lambda: _cmd_reload(client),
+        "restart": lambda: _cmd_restart(args, client),
+        "stop": lambda: _cmd_stop(client),
+        "ping": lambda: _cmd_ping(client),
+    }
+    handler = dispatch_map.get(cmd)
+    if handler:
+        return handler()
     print(f"[ERROR] Unknown command: {cmd}")
     return 1
 

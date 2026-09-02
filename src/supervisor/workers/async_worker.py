@@ -29,6 +29,10 @@ class AsyncWorker(BaseWorker):
         pulse_callback: Optional[
             Callable[[int, Optional[Dict[str, Any]]], None]
         ] = None,
+        max_requests: int = 0,
+        max_requests_jitter: int = 0,
+        max_worker_lifetime: float = 0.0,
+        max_worker_lifetime_jitter: float = 0.0,
     ) -> None:
         target = app_target if app_target is not None else wsgi_app
         super().__init__(
@@ -37,6 +41,10 @@ class AsyncWorker(BaseWorker):
             server_socket=server_socket,
             app_target=target,
             pulse_callback=pulse_callback,
+            max_requests=max_requests,
+            max_requests_jitter=max_requests_jitter,
+            max_worker_lifetime=max_worker_lifetime,
+            max_worker_lifetime_jitter=max_worker_lifetime_jitter,
         )
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._active_requests = 0
@@ -111,6 +119,26 @@ class AsyncWorker(BaseWorker):
 
         return resp_header_str.encode("iso-8859-1") + resp_body
 
+    async def _process_stream_payload(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        raw_data = await asyncio.wait_for(
+            reader.read(65536), timeout=self.config.timeout
+        )
+        if not raw_data:
+            writer.close()
+            return
+        environ = self._parse_request_payload(raw_data)
+        if not environ:
+            writer.close()
+            return
+        response_bytes = self._execute_app(environ)
+        writer.write(response_bytes)
+        await writer.drain()
+        self.requests_handled += 1
+        if self._should_retire():
+            self.alive = False
+
     async def _handle_stream(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
@@ -123,22 +151,7 @@ class AsyncWorker(BaseWorker):
             }
         )
         try:
-            raw_data = await asyncio.wait_for(
-                reader.read(65536), timeout=self.config.timeout
-            )
-            if not raw_data:
-                writer.close()
-                return
-
-            environ = self._parse_request_payload(raw_data)
-            if not environ:
-                writer.close()
-                return
-
-            response_bytes = self._execute_app(environ)
-            writer.write(response_bytes)
-            await writer.drain()
-            self.requests_handled += 1
+            await self._process_stream_payload(reader, writer)
         except Exception:
             pass
         finally:
@@ -156,18 +169,15 @@ class AsyncWorker(BaseWorker):
             except Exception:
                 pass
 
-    async def _async_main(self) -> None:
-        if not self.server_socket:
-            while self.alive:
-                self.pulse({"is_handling_request": False})
-                await asyncio.sleep(0.5)
-            return
+    async def _async_idle_loop(self) -> None:
+        while self.alive:
+            self.pulse({"is_handling_request": False})
+            if self._should_retire():
+                self.alive = False
+                break
+            await asyncio.sleep(0.5)
 
-        self.server_socket.setblocking(False)
-        server = await asyncio.start_server(
-            self._handle_stream, sock=self.server_socket
-        )
-
+    async def _async_server_loop(self, server: asyncio.Server) -> None:
         async def heartbeat_loop() -> None:
             while self.alive:
                 self.pulse(
@@ -181,11 +191,25 @@ class AsyncWorker(BaseWorker):
 
         hb_task = asyncio.create_task(heartbeat_loop())
         while self.alive:
+            if self._should_retire():
+                self.alive = False
+                break
             await asyncio.sleep(0.2)
 
         hb_task.cancel()
         server.close()
         await server.wait_closed()
+
+    async def _async_main(self) -> None:
+        if not self.server_socket:
+            await self._async_idle_loop()
+            return
+
+        self.server_socket.setblocking(False)
+        server = await asyncio.start_server(
+            self._handle_stream, sock=self.server_socket
+        )
+        await self._async_server_loop(server)
 
     def run(self) -> None:
         """Main execution loop initializing and running asyncio event loop."""

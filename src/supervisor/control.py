@@ -205,6 +205,19 @@ class ControlClient:
         """Triggers graceful rolling reload."""
         return self.send_command({"cmd": "reload"})
 
+    def restart(
+        self, target: str = "", all: bool = False, mode: str = ""
+    ) -> Dict[str, Any]:
+        """Triggers service-level or rolling restart."""
+        cmd: Dict[str, Any] = {"cmd": "restart"}
+        if target:
+            cmd["target"] = target
+        if all:
+            cmd["all"] = True
+        if mode:
+            cmd["mode"] = mode
+        return self.send_command(cmd)
+
     def stop(self) -> Dict[str, Any]:
         """Triggers graceful supervisor shutdown."""
         return self.send_command({"cmd": "stop"})

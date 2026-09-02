@@ -162,3 +162,65 @@ def test_sync_worker_run_loop() -> None:
     worker.alive = False
     t.join(timeout=2.0)
     server_sock.close()
+
+
+def test_sync_worker_max_requests_retirement() -> None:
+    cfg = SupervisorConfig(bind_port=9986)
+    worker = SyncWorker(
+        worker_id="sync_retire_req",
+        config=cfg,
+        app_target=dummy_wsgi_app,
+        max_requests=2,
+        max_requests_jitter=0,
+    )
+    assert worker.effective_max_requests == 2
+    assert worker._should_retire() is False
+
+    client_s1, server_s1 = socket.socketpair()
+    try:
+        client_s1.sendall(b"GET /req1 HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        worker.handle_client(server_s1)
+        assert worker.requests_handled == 1
+        assert worker.alive is True
+        assert worker._should_retire() is False
+    finally:
+        client_s1.close()
+
+    client_s2, server_s2 = socket.socketpair()
+    try:
+        client_s2.sendall(b"GET /req2 HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        worker.handle_client(server_s2)
+        assert worker.requests_handled == 2
+        assert worker.alive is False
+        assert worker._should_retire() is True
+    finally:
+        client_s2.close()
+
+
+def test_worker_lifetime_retirement() -> None:
+    cfg = SupervisorConfig()
+    worker = SyncWorker(
+        worker_id="sync_retire_ttl",
+        config=cfg,
+        max_worker_lifetime=0.1,
+        max_worker_lifetime_jitter=0.0,
+    )
+    assert worker.effective_max_lifetime == 0.1
+    assert worker._should_retire() is False
+
+    time.sleep(0.15)
+    assert worker._should_retire() is True
+
+
+def test_worker_jitter_bounds() -> None:
+    cfg = SupervisorConfig()
+    worker = SyncWorker(
+        worker_id="sync_jitter",
+        config=cfg,
+        max_requests=100,
+        max_requests_jitter=10,
+        max_worker_lifetime=60.0,
+        max_worker_lifetime_jitter=5.0,
+    )
+    assert 90 <= worker.effective_max_requests <= 110
+    assert 55.0 <= worker.effective_max_lifetime <= 65.0

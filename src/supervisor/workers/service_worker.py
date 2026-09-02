@@ -30,6 +30,10 @@ class ManagedServiceWorker(BaseWorker):
         pulse_callback: Optional[
             Callable[[int, Optional[Dict[str, Any]]], None]
         ] = None,
+        max_requests: int = 0,
+        max_requests_jitter: int = 0,
+        max_worker_lifetime: float = 0.0,
+        max_worker_lifetime_jitter: float = 0.0,
     ) -> None:
         super().__init__(
             worker_id=worker_id,
@@ -37,6 +41,10 @@ class ManagedServiceWorker(BaseWorker):
             server_socket=None,
             app_target=hook,
             pulse_callback=pulse_callback,
+            max_requests=max_requests,
+            max_requests_jitter=max_requests_jitter,
+            max_worker_lifetime=max_worker_lifetime,
+            max_worker_lifetime_jitter=max_worker_lifetime_jitter,
         )
         self.service_name = service_name
         self.hook: LifecycleHook = hook or DefaultLifecycleHook()
@@ -98,6 +106,9 @@ class ManagedServiceWorker(BaseWorker):
         self.state = ServiceState.ACTIVE
         while self.alive:
             self._sync_hook_metrics()
+            if self._should_retire():
+                self.alive = False
+                break
             healthy = self._check_service_health()
             self.pulse(
                 {

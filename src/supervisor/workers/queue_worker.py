@@ -34,6 +34,10 @@ class QueueWorker(BaseWorker):
         pulse_callback: Optional[
             Callable[[int, Optional[Dict[str, Any]]], None]
         ] = None,
+        max_requests: int = 0,
+        max_requests_jitter: int = 0,
+        max_worker_lifetime: float = 0.0,
+        max_worker_lifetime_jitter: float = 0.0,
     ) -> None:
         super().__init__(
             worker_id=worker_id,
@@ -41,18 +45,26 @@ class QueueWorker(BaseWorker):
             server_socket=server_socket,
             app_target=app_target,
             pulse_callback=pulse_callback,
+            max_requests=max_requests,
+            max_requests_jitter=max_requests_jitter,
+            max_worker_lifetime=max_worker_lifetime,
+            max_worker_lifetime_jitter=max_worker_lifetime_jitter,
         )
         self.source_queue = source_queue
         self.poll_interval = max(0.01, poll_interval)
         self.is_processing = False
 
     def _fetch_from_queue(self) -> Optional[Any]:
+        if self.source_queue is None:
+            return None
         try:
             return self.source_queue.get(timeout=self.poll_interval)
         except (queue.Empty, Exception):
             return None
 
     def _fetch_from_callable(self) -> Optional[Any]:
+        if not callable(self.source_queue):
+            return None
         try:
             return self.source_queue()
         except Exception as exc:
@@ -79,6 +91,8 @@ class QueueWorker(BaseWorker):
             if callable(self.app_target):
                 self.app_target(item)
             self.requests_handled += 1
+            if self._should_retire():
+                self.alive = False
         except Exception as exc:
             logger.error(
                 "[QueueWorker %s] Error processing queue item: %s",
@@ -105,6 +119,9 @@ class QueueWorker(BaseWorker):
             else:
                 self.pulse({"handling": False, "messages": self.requests_handled})
                 time.sleep(self.poll_interval)
+            if self._should_retire():
+                self.alive = False
+                break
 
         logger.info(
             "[QueueWorker %s] Draining completed. Exiting worker process.",

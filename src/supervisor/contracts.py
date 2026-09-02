@@ -77,6 +77,10 @@ def _default_dict() -> Dict[str, Any]:
     return {}
 
 
+def _resolve_fn(fn: Any, default: Any) -> Any:
+    return default if fn is None else fn
+
+
 class DefaultLifecycleHook(LifecycleHook):
     """Generic fallback lifecycle hook suitable for arbitrary background services."""
 
@@ -88,11 +92,11 @@ class DefaultLifecycleHook(LifecycleHook):
         teardown_fn: Optional[Callable[[], None]] = None,
         metrics_fn: Optional[Callable[[], Dict[str, Any]]] = None,
     ) -> None:
-        self._setup_fn = setup_fn if setup_fn is not None else _default_true
-        self._health_fn = health_fn if health_fn is not None else _default_true
-        self._flush_fn = flush_fn if flush_fn is not None else _default_none
-        self._teardown_fn = teardown_fn if teardown_fn is not None else _default_none
-        self._metrics_fn = metrics_fn if metrics_fn is not None else _default_dict
+        self._setup_fn = _resolve_fn(setup_fn, _default_true)
+        self._health_fn = _resolve_fn(health_fn, _default_true)
+        self._flush_fn = _resolve_fn(flush_fn, _default_none)
+        self._teardown_fn = _resolve_fn(teardown_fn, _default_none)
+        self._metrics_fn = _resolve_fn(metrics_fn, _default_dict)
 
     def setup(self) -> bool:
         return bool(self._setup_fn())
@@ -128,6 +132,11 @@ class WorkerSpec:
         sync_interval: float = 2.0,
         dependencies: Optional[list[str]] = None,
         max_retries: int = 0,
+        max_requests: int = 0,
+        max_requests_jitter: int = 0,
+        max_worker_lifetime: float = 0.0,
+        max_worker_lifetime_jitter: float = 0.0,
+        graceful_timeout: float = 30.0,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.name = name
@@ -141,6 +150,11 @@ class WorkerSpec:
         self.dependencies = list(dependencies or [])
         self.max_retries = max_retries
         self.retry_count = 0
+        self.max_requests = max_requests
+        self.max_requests_jitter = max_requests_jitter
+        self.max_worker_lifetime = max_worker_lifetime
+        self.max_worker_lifetime_jitter = max_worker_lifetime_jitter
+        self.graceful_timeout = graceful_timeout
         self.metadata = metadata or {}
 
     def to_dict(self) -> Dict[str, Any]:
@@ -152,5 +166,10 @@ class WorkerSpec:
             "sync_interval": self.sync_interval,
             "dependencies": self.dependencies,
             "max_retries": self.max_retries,
+            "max_requests": self.max_requests,
+            "max_requests_jitter": self.max_requests_jitter,
+            "max_worker_lifetime": self.max_worker_lifetime,
+            "max_worker_lifetime_jitter": self.max_worker_lifetime_jitter,
+            "graceful_timeout": self.graceful_timeout,
             "metadata": self.metadata,
         }

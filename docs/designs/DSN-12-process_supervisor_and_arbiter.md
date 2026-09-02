@@ -840,6 +840,8 @@ sequenceDiagram
 
 ---
 
+---
+
 ## 8.3 ステートフルサービス保護と選択的リロード
 
 - デフォルトのローリングリロード（`reload()`）では、**`STATELESS_POOL`（Web 等）のみを対象として再起動** を実行。
@@ -847,9 +849,66 @@ sequenceDiagram
 
 ---
 
-## 8.4 ローリングリスタートの要約
+## 8.4 サービス単位の個別 Graceful Restart 機構
 
-- 先行フォーク ＋ `SIGQUIT` ドレイン ＋ ステートフルサービス保護により、ダウンタイムおよびリクエストエラー 0 件の無停止デプロイを実現。
+特定のステートフルサービスや個別プールのみを選択して安全に再起動する **サービス単位 Graceful Restart（`restart <target>`）** を提供します。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as Operator / API
+    participant Arbiter as Process Arbiter
+    participant SearchW as SearchService Worker (Stateful)
+    participant Hook as LifecycleHook (Search)
+
+    Admin->>Arbiter: supervisor restart search (IPC: {"cmd": "restart", "target": "search"})
+    Note over Arbiter: 1. 対象サービス (search) のロールを識別: STATEFUL_SERVICE
+    Arbiter->>SearchW: 2. SIGTERM / on_flush() トリガー送信
+    SearchW->>Hook: 3. hook.on_flush() & hook.teardown()
+    Note over Hook: インデックス・WAL の永続化 & UDS ソケット安全クローズ
+    SearchW-->>Arbiter: 4. 旧プロセス正常終了 (exit 0)
+    Arbiter->>SearchW: 5. 新プロセスを即座にフォーク & 初期化 (hook.setup)
+    Note over Arbiter: サービス単位の再起動完了
+```
+
+1. **ステートレスプール (`STATELESS_POOL`) の再起動**:
+   - 先行フォーク ＋ 旧ワーカー `SIGQUIT` による完全ゼロダウンタイム置換。
+2. **ステートフルサービス (`STATEFUL_SERVICE`) の再起動**:
+   - `hook.on_flush()` $\rightarrow$ `hook.teardown()` によるクリーンアップ後、単一インスタンスの確実なプロセス再起動。
+3. **全サービス依存順再起動 (`restart --all`)**:
+   - Kahn のトポロジカル逆順で停止 $\rightarrow$ トポロジカル正順で起動。
+
+---
+
+## 8.5 ワーカー自律的 Graceful ローテーション (`max_requests` & `max_worker_lifetime`)
+
+長期間稼働するワーカーにおけるメモリフラグメンテーション、C 拡張ライブラリ（PDF 抽出、機械学習モデル、形態素解析）のメモリリーク、およびファイルディスクリプタ蓄積を完全に防止するため、各ワーカーが自律的に退役・再生成する機構を導入します。
+
+```mermaid
+graph TD
+    A[リクエスト処理完了 / ループ周回] --> B{閾値判定}
+    B -->|requests_handled >= max_requests + jitter| C[Graceful Drain 開始]
+    B -->|uptime >= max_worker_lifetime + jitter| C
+    B -->|閾値未達| D[次リクエスト待機]
+    C --> E[self.alive = False 設定]
+    E --> F[既存接続クローズ & リソース解放]
+    F --> G[exit 0 で正常終了]
+    G --> H[Arbiter が SIGCHLD 受信]
+    H --> I[新品ワーカーを即時自動フォーク]
+```
+
+### Jitter（ゆらぎ）によるサンダリングハード（一斉再起動）防止
+- **`max_requests` Jitter**:
+  $$\text{effective\_max\_requests} = \text{max\_requests} + \text{randint}(-\text{jitter}, +\text{jitter})$$
+- **`max_worker_lifetime` Jitter**:
+  $$\text{effective\_lifetime} = \text{max\_worker\_lifetime} + \text{uniform}(-\text{jitter}, +\text{jitter})$$
+- 複数ワーカーが同時に上限へ達してクラスタ全体のキャパシティが低下することを数学的に防止。
+
+---
+
+## 8.6 ローリングリスタートとライフタイム制御の要約
+
+- 先行フォーク ＋ `SIGQUIT` ドレイン ＋ サービス単位個別再起動 ＋ ワーカー自律的 TTL/リクエスト上限ローテーションにより、運用保守性と長期連続稼働の超高信頼性を両立。
 
 ---
 

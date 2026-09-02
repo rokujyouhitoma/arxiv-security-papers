@@ -272,6 +272,12 @@ class Arbiter:
         self.reload()
         return {"status": "ok", "message": "Rolling reload triggered"}
 
+    def _handle_restart_cmd(self, req: Dict[str, Any]) -> Dict[str, Any]:
+        target = req.get("target")
+        mode = req.get("mode")
+        restart_all = bool(req.get("all", False))
+        return self.restart(target=target, mode=mode, restart_all=restart_all)
+
     def _handle_stop_cmd(self) -> Dict[str, Any]:
         self.running = False
         return {"status": "ok", "message": "Shutdown sequence initiated"}
@@ -285,6 +291,8 @@ class Arbiter:
             return self._handle_status_command()
         if cmd == "scale":
             return self._handle_scale_command(req)
+        if cmd == "restart":
+            return self._handle_restart_cmd(req)
         return None
 
     def handle_control_command(self, req: Dict[str, Any]) -> Dict[str, Any]:
@@ -309,6 +317,10 @@ class Arbiter:
             service_name=spec.name,
             hook=hook,
             sync_interval=spec.sync_interval,
+            max_requests=spec.max_requests,
+            max_requests_jitter=spec.max_requests_jitter,
+            max_worker_lifetime=spec.max_worker_lifetime,
+            max_worker_lifetime_jitter=spec.max_worker_lifetime_jitter,
         )
         svc_worker.run()
 
@@ -336,6 +348,10 @@ class Arbiter:
             app_target=spec.app_target,
             source_queue=source_q,
             poll_interval=poll_int,
+            max_requests=spec.max_requests,
+            max_requests_jitter=spec.max_requests_jitter,
+            max_worker_lifetime=spec.max_worker_lifetime,
+            max_worker_lifetime_jitter=spec.max_worker_lifetime_jitter,
         )
         q_worker.run()
 
@@ -349,6 +365,10 @@ class Arbiter:
             config=self.config,
             server_socket=sock,
             app_target=app,
+            max_requests=spec.max_requests,
+            max_requests_jitter=spec.max_requests_jitter,
+            max_worker_lifetime=spec.max_worker_lifetime,
+            max_worker_lifetime_jitter=spec.max_worker_lifetime_jitter,
         )
         web_worker.run()
 
@@ -596,6 +616,77 @@ class Arbiter:
         for pool in self._get_reload_targets(pool_name):
             self._reload_single_pool(pool)
 
+    def _restart_stateful_service(self, pool: ManagedPool) -> None:
+        """Terminates stateful service workers gracefully with SIGTERM so hook on_flush/teardown run, then respawns."""
+        for pid in list(pool.workers.keys()):
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+
+    def _restart_pool_by_role(
+        self, pool: ManagedPool, mode: Optional[str] = None
+    ) -> str:
+        if mode == "rolling" or pool.spec.role == ServiceRole.STATELESS_POOL:
+            self._reload_single_pool(pool)
+            return "rolling"
+        self._restart_stateful_service(pool)
+        return "graceful_teardown"
+
+    def _resolve_target_pool(self, target: str) -> Optional[ManagedPool]:
+        resolved_name = self._resolve_pool_name(target)
+        if resolved_name and resolved_name in self.pools:
+            return self.pools[resolved_name]
+        if target in self.pools:
+            return self.pools[target]
+        return None
+
+    def _restart_all_pools(self, mode: Optional[str] = None) -> List[str]:
+        restarted: List[str] = []
+        for pool in self.pools.values():
+            self._restart_pool_by_role(pool, mode)
+            restarted.append(pool.name)
+        return restarted
+
+    def _handle_restart_all(self, mode: Optional[str]) -> Dict[str, Any]:
+        restarted = self._restart_all_pools(mode)
+        return {
+            "status": "ok",
+            "mode": mode or "default",
+            "restarted_pools": restarted,
+            "message": f"Restarted all {len(restarted)} pools and services",
+        }
+
+    def _handle_restart_single(
+        self, target: str, mode: Optional[str]
+    ) -> Dict[str, Any]:
+        pool = self._resolve_target_pool(target)
+        if not pool:
+            return {
+                "status": "error",
+                "error": f"Target service or pool '{target}' not found",
+            }
+        action_mode = self._restart_pool_by_role(pool, mode)
+        return {
+            "status": "ok",
+            "target": pool.name,
+            "mode": action_mode,
+            "message": f"Restart initiated for '{pool.name}' ({action_mode})",
+        }
+
+    def restart(
+        self,
+        target: Optional[str] = None,
+        mode: Optional[str] = None,
+        restart_all: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Selectively restarts a target pool/service or all pools in order.
+        """
+        if restart_all or not target or target == "all":
+            return self._handle_restart_all(mode)
+        return self._handle_restart_single(target, mode)
+
     def _resolve_hung_pool_name(self, pool: Optional[ManagedPool]) -> str:
         if not pool:
             return "web"
@@ -741,6 +832,8 @@ class Arbiter:
         )
 
     def _try_open_and_lock(self) -> TextIO:
+        if not self.config.lock_file:
+            raise ValueError("Lock file path not configured")
         lock_fd = open(self.config.lock_file, "a+", encoding="utf-8")
         try:
             fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -748,7 +841,7 @@ class Arbiter:
             lock_fd.truncate()
             lock_fd.write(f"{self.pid}\n")
             lock_fd.flush()
-            return lock_fd
+            return cast(TextIO, lock_fd)
         except Exception:
             lock_fd.close()
             raise
