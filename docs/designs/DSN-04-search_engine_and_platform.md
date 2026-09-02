@@ -293,8 +293,15 @@ $$\text{MAP} = \frac{1}{|Q|} \sum_{j=1}^{|Q|} \text{AP}(Q_j), \quad \text{MRR} =
 
 $$\text{DCG}@K = \sum_{i=1}^{K} \frac{2^{\text{rel}_i} - 1}{\log_2(i + 1)}, \quad \text{NDCG}@K = \frac{\text{DCG}@K}{\text{IDCG}@K}$$
 
-## 5.4 検索テレメトリ・ナレッジギャップ（Knowledge Gap）自動検出
-ヒット件数が 0 件の未充足クエリ群を自動抽出し、クラスタリングによって現在のインデックスに不足している技術領域（Knowledge Gaps）を特定してインテリジェンス収集層（PIR）へ自動フィードバックします。
+## 5.4 検索テレメトリ・構造化クエリログ & ナレッジギャップ自動検出
+1. **構造化クエリ・パフォーマンスログ (`outputs/logs/query_log.jsonl`)**:
+   - `DSN-10` 準拠の 1 行完結 JSON Lines 形式で出力。
+   - `trace_id`, `timestamp` (ISO 8601 UTC), `query`, `result_count`, `intent`, `total_ms`, `cpu_ms`, `tokenize_ms`, `candidate_pruning_ms`, `scoring_ms`, `peak_memory_kb`, `remote_addr`, `cached` を記録。
+   - 検索ワーカーは IPC メッセージから `trace_id` を復元し、Web Gateway のリクエストと完全に紐付けて出力。
+2. **ナレッジギャップ（Knowledge Gap）自動検出**:
+   - ヒット件数が 0 件の未充足クエリ群を自動抽出し、クラスタリングによって現在のインデックスに不足している技術領域（Knowledge Gaps）を特定してインテリジェンス収集層（PIR）へ自動フィードバックします。
+3. **機密・PII サニタイズ**:
+   - クエリ文字列およびメタデータ内の機密情報を `SensitiveMaskingFilter` で自動マスク。
 
 ---
 

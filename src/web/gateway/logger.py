@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Thread-safe Query Logging for API Gateway.
-Appends analytics logs to outputs/logs/query_log.jsonl.
+Thread-safe Structured Query & Access Logging for API Gateway.
+Appends analytics logs to outputs/logs/query_log.jsonl and outputs/logs/web_access.jsonl.
+Zero external dependencies (pure standard library).
 """
 
 import json
@@ -9,6 +10,9 @@ import os
 import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
+from observability.masking import mask_text
+from observability.propagation import get_current_trace_id
 
 _LOG_LOCK = threading.Lock()
 
@@ -27,11 +31,79 @@ def get_workspace_dir() -> str:
 
 
 WORKSPACE_DIR = get_workspace_dir()
-_QUERY_LOG_PATH = os.path.join(WORKSPACE_DIR, "outputs", "logs", "query_log.jsonl")
+_LOGS_DIR = os.path.join(WORKSPACE_DIR, "outputs", "logs")
+_QUERY_LOG_PATH = os.path.join(_LOGS_DIR, "query_log.jsonl")
+_ACCESS_LOG_PATH = os.path.join(_LOGS_DIR, "web_access.jsonl")
 
 
 def _ensure_log_dir() -> None:
-    os.makedirs(os.path.dirname(_QUERY_LOG_PATH), exist_ok=True)
+    os.makedirs(_LOGS_DIR, exist_ok=True)
+
+
+def _write_jsonl(path: str, record: Dict[str, Any]) -> None:
+    _ensure_log_dir()
+    with _LOG_LOCK:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def log_http_access(
+    method: str,
+    path: str,
+    status_code: int,
+    latency_ms: float,
+    client_ip: str = "-",
+    user_agent: str = "-",
+) -> None:
+    """Records one structured HTTP access log entry."""
+    tid = get_current_trace_id()
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "level": "INFO",
+        "service": "web_gateway",
+        "trace_id": tid,
+        "event": {
+            "category": "http",
+            "action": "request",
+            "outcome": "success" if status_code < 400 else "failure",
+        },
+        "http": {
+            "method": method,
+            "path": path,
+            "status_code": status_code,
+            "latency_ms": round(latency_ms, 2),
+            "client_ip": client_ip,
+            "user_agent": user_agent,
+        },
+        "message": f"{method} {path} {status_code} ({latency_ms:.2f}ms)",
+    }
+    try:
+        _write_jsonl(_ACCESS_LOG_PATH, record)
+    except Exception:
+        pass
+
+
+def _build_query_performance_dict(
+    profile: Dict[str, Any], total_ms: float, candidates_eval: int
+) -> Dict[str, Any]:
+    throughput = (
+        round(candidates_eval / (total_ms / 1000.0), 1) if total_ms > 0 else 0.0
+    )
+    return {
+        "total_ms": total_ms,
+        "tokenize_ms": profile.get("tokenize_ms", 0.0),
+        "candidate_pruning_ms": profile.get("candidate_pruning_ms", 0.0),
+        "scoring_ms": profile.get("scoring_ms", 0.0),
+        "candidates_evaluated": candidates_eval,
+        "total_documents": profile.get("total_documents", 0),
+        "throughput_docs_per_sec": throughput,
+        "cached": profile.get("cached", False),
+        "intent": profile.get("intent", "general"),
+        "clauses_parsed": profile.get("clauses_parsed", 0),
+        "cpu_ms": profile.get("cpu_ms", 0.0),
+        "peak_memory_kb": profile.get("peak_memory_kb", 0.0),
+        "memory_delta_kb": profile.get("memory_delta_kb", 0.0),
+    }
 
 
 def log_query(
@@ -42,61 +114,37 @@ def log_query(
     profile: Dict[str, Any],
     remote_addr: str = "-",
 ) -> None:
-    """Appends one JSONL record to the query log and prints performance metrics. Thread-safe."""
+    """Appends one structured JSONL record to the query log and outputs metrics."""
+    masked_query = mask_text(query)
     total_ms = profile.get("total_ms", 0.0)
-    tokenize_ms = profile.get("tokenize_ms", 0.0)
-    pruning_ms = profile.get("candidate_pruning_ms", 0.0)
-    scoring_ms = profile.get("scoring_ms", 0.0)
     candidates_eval = profile.get("candidates_evaluated", 0)
-    total_docs = profile.get("total_documents", 0)
-    cached = profile.get("cached", False)
-    intent = profile.get("intent", "general")
-    clauses_parsed = profile.get("clauses_parsed", 0)
-
-    cpu_ms = profile.get("cpu_ms", 0.0)
-    peak_memory_kb = profile.get("peak_memory_kb", 0.0)
-    memory_delta_kb = profile.get("memory_delta_kb", 0.0)
-
-    throughput = (
-        round(candidates_eval / (total_ms / 1000.0), 1) if total_ms > 0 else 0.0
-    )
+    perf_dict = _build_query_performance_dict(profile, total_ms, candidates_eval)
+    tid = get_current_trace_id()
 
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "query": query,
+        "level": "INFO",
+        "service": "search.engine",
+        "trace_id": tid,
+        "event": {"category": "search", "action": "query", "outcome": "success"},
+        "query": masked_query,
         "top_k": top_k,
         "category": category,
         "result_count": result_count,
-        "performance": {
-            "total_ms": total_ms,
-            "tokenize_ms": tokenize_ms,
-            "candidate_pruning_ms": pruning_ms,
-            "scoring_ms": scoring_ms,
-            "candidates_evaluated": candidates_eval,
-            "total_documents": total_docs,
-            "throughput_docs_per_sec": throughput,
-            "cached": cached,
-            "intent": intent,
-            "clauses_parsed": clauses_parsed,
-            "cpu_ms": cpu_ms,
-            "peak_memory_kb": peak_memory_kb,
-            "memory_delta_kb": memory_delta_kb,
-        },
+        "performance": perf_dict,
         "remote_addr": remote_addr,
+        "message": f"Query {masked_query!r} completed with {result_count} hits in {total_ms:.2f}ms",
     }
 
     try:
-        _ensure_log_dir()
-        with _LOG_LOCK:
-            with open(_QUERY_LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception as e:
-        print(f"[QueryLogger] Warning: failed to write query log: {e}")
+        _write_jsonl(_QUERY_LOG_PATH, record)
+    except Exception:
+        pass
 
-    cache_flag = " [CACHE HIT]" if cached else ""
-    print(
-        f"[QueryLogger]{cache_flag} query={query!r} intent={intent} clauses={clauses_parsed} "
-        f"results={result_count}/{total_docs} time={total_ms:.2f}ms "
-        f"(cpu={cpu_ms:.2f}ms, mem_peak={peak_memory_kb:.1f}KB, delta={memory_delta_kb:.1f}KB) "
-        f"throughput={throughput} docs/s ip={remote_addr}"
-    )
+
+__all__ = [
+    "get_workspace_dir",
+    "WORKSPACE_DIR",
+    "log_query",
+    "log_http_access",
+]

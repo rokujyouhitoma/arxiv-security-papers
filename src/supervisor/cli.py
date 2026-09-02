@@ -235,6 +235,39 @@ def build_parser() -> argparse.ArgumentParser:
             help="Path to PID file",
         )
 
+    # Command: logs
+    logs_parser = subparsers.add_parser(
+        "logs",
+        help="Query and inspect structured JSON logs across supervisor and services",
+    )
+    logs_parser.add_argument(
+        "--trace-id", "-t", type=str, default=None, help="Filter by W3C Trace ID"
+    )
+    logs_parser.add_argument(
+        "--service", type=str, default=None, help="Filter by service name"
+    )
+    logs_parser.add_argument(
+        "--level", "-l", type=str, default=None, help="Filter by minimum log level"
+    )
+    logs_parser.add_argument(
+        "--tail",
+        "-n",
+        type=int,
+        default=50,
+        help="Number of recent log lines (default: 50)",
+    )
+    logs_parser.add_argument(
+        "--compact", action="store_true", help="Print compact 1-line summary format"
+    )
+    logs_parser.add_argument(
+        "--file",
+        "-f",
+        dest="log_file",
+        type=str,
+        default=None,
+        help="Specific log file path",
+    )
+
     # Command: ping
     subparsers.add_parser("ping", help="Verify arbiter responsiveness via IPC")
 
@@ -659,6 +692,140 @@ def _dispatch_control_client(
         return 1
 
 
+def _collect_log_files(log_arg: Optional[str], workspace_dir: str) -> List[str]:
+    if log_arg:
+        return [log_arg] if os.path.isfile(log_arg) else []
+    logs_dir = os.path.join(workspace_dir, "outputs", "logs")
+    sup_log = os.path.join(workspace_dir, "outputs", "supervisor", "supervisor.log")
+    candidates = [
+        sup_log,
+        os.path.join(logs_dir, "web_access.jsonl"),
+        os.path.join(logs_dir, "query_log.jsonl"),
+        os.path.join(logs_dir, "database.jsonl"),
+    ]
+    return [p for p in candidates if os.path.exists(p)]
+
+
+_LEVEL_ORDER = ["DEBUG", "INFO", "WARNING", "WARN", "ERROR", "CRITICAL", "FATAL"]
+
+
+def _is_level_sufficient(rec_lvl: str, min_lvl: str) -> bool:
+    r_up = rec_lvl.upper()
+    m_up = min_lvl.upper()
+    if m_up in _LEVEL_ORDER and r_up in _LEVEL_ORDER:
+        return _LEVEL_ORDER.index(r_up) >= _LEVEL_ORDER.index(m_up)
+    return True
+
+
+def _matches_field(rec_val: Any, target_val: Optional[str]) -> bool:
+    return target_val is None or rec_val == target_val
+
+
+def _matches_log_filters(
+    rec: Dict[str, Any],
+    trace_id: Optional[str],
+    service: Optional[str],
+    min_level: Optional[str],
+) -> bool:
+    if not _matches_field(rec.get("trace_id"), trace_id):
+        return False
+    if not _matches_field(rec.get("service"), service):
+        return False
+    if min_level:
+        return _is_level_sufficient(str(rec.get("level", "INFO")), min_level)
+    return True
+
+
+def _parse_filter_line(
+    line: str,
+    trace_id: Optional[str],
+    service: Optional[str],
+    min_level: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    if not line.startswith("{"):
+        return None
+    try:
+        rec = json.loads(line)
+        if isinstance(rec, dict) and _matches_log_filters(
+            rec, trace_id, service, min_level
+        ):
+            return rec
+    except Exception:
+        pass
+    return None
+
+
+def _read_and_filter_records(
+    file_path: str,
+    trace_id: Optional[str],
+    service: Optional[str],
+    min_level: Optional[str],
+) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                rec = _parse_filter_line(line.strip(), trace_id, service, min_level)
+                if rec:
+                    records.append(rec)
+    except Exception:
+        pass
+    return records
+
+
+def _print_log_record(rec: Dict[str, Any], compact: bool) -> None:
+    if compact:
+        ts = rec.get("timestamp", "-")
+        lvl = rec.get("level", "INFO")
+        srv = rec.get("service", "-")
+        tid = rec.get("trace_id", "-")
+        msg = rec.get("message", "")
+        print(f"[{ts}] [{lvl:<5}] [{srv}] (trace:{tid}) {msg}")
+    else:
+        print(json.dumps(rec, ensure_ascii=False, indent=2))
+
+
+def _handle_logs(args: argparse.Namespace, workspace_dir: str) -> int:
+    files = _collect_log_files(getattr(args, "log_file", None), workspace_dir)
+    if not files:
+        print("[!] No log files found in outputs/logs/ or outputs/supervisor/")
+        return 0
+
+    all_records: List[Dict[str, Any]] = []
+    for fp in files:
+        all_records.extend(
+            _read_and_filter_records(fp, args.trace_id, args.service, args.level)
+        )
+
+    all_records.sort(key=lambda r: str(r.get("timestamp", "")))
+    tail_n = getattr(args, "tail", 50)
+    display_records = all_records[-tail_n:] if tail_n > 0 else all_records
+
+    for rec in display_records:
+        _print_log_record(rec, args.compact)
+
+    print(
+        f"\n[+] Displayed {len(display_records)} matching records across {len(files)} log files."
+    )
+    return 0
+
+
+def _dispatch_main_command(
+    cmd: str,
+    args: argparse.Namespace,
+    config_obj: Optional[SupervisorConfig],
+    workspace_dir: str,
+    control_sock: str,
+) -> int:
+    if cmd == "start":
+        return _handle_start(args, config_obj, workspace_dir, control_sock)
+    if cmd == "restart":
+        return _handle_restart(args, config_obj, workspace_dir, control_sock)
+    if cmd == "logs":
+        return _handle_logs(args, workspace_dir)
+    return _dispatch_control_client(cmd, args, control_sock)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint dispatching commands."""
     parser = build_parser()
@@ -669,12 +836,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     workspace_dir, config_obj, control_sock = _resolve_cli_context(args)
     cmd = args.command or "start"
-    if cmd == "start":
-        return _handle_start(args, config_obj, workspace_dir, control_sock)
-    if cmd == "restart":
-        return _handle_restart(args, config_obj, workspace_dir, control_sock)
-
-    return _dispatch_control_client(cmd, args, control_sock)
+    return _dispatch_main_command(cmd, args, config_obj, workspace_dir, control_sock)
 
 
 if __name__ == "__main__":

@@ -90,6 +90,10 @@
   - [14.4 ビザンチン障害と PBFT（3f + 1 ノード数理と暗号署名）](#144-ビザンチン障害と-pbft3f--1-ノード数理と暗号署名)
   - [14.5 分散合意の要約](#145-分散合意の要約)
 - [15. 次世代実装ロードマップ](#15-次世代実装ロードマップ)
+- [16. 構造化データベースログ & トランザクション・WAL テレメトリ基盤](#16-構造化データベースログ--トランザクションwal-テレメトリ基盤)
+  - [16.1 プレーンテキスト廃止と JSON Lines (.jsonl) 統合仕様](#161-プレーンテキスト廃止と-json-lines-jsonl-統合仕様)
+  - [16.2 W3C TraceContext / Trace ID 連動と SQL 監査ログ](#162-w3c-tracecontext--trace-id-連動と-sql-監査ログ)
+  - [16.3 機密データ・SQL パラメータマスキング (CWE-532 準拠)](#163-機密データsql-パラメータマスキング-cwe-532-準拠)
 
 ---
 
@@ -1811,4 +1815,29 @@ mindmap
     - Consistent Hashing によるパーティショニング、グローバルメタデータカタログ。
 
 ---
+
+# 16. 構造化データベースログ & トランザクション・WAL テレメトリ基盤
+
+## 16.1 プレーンテキスト廃止と JSON Lines (.jsonl) 統合仕様
+従来の `print()` による標準出力（`⚡ [DatabaseService IPC] Executing SQL: ...`）を廃止し、Database サービスワーカーの全トランザクション・SQL 実行・WAL フラッシュイベントを `DSN-10` 準拠の 1 行完結 JSON Lines (`outputs/logs/database.jsonl`) へ移行する。
+
+- **フォーマット**: 1 行 1 レコードの完全な JSON (`.jsonl`)
+- **共通キー**:
+  - `timestamp`: ISO 8601 UTC（`2026-09-02T21:45:00.123Z`）
+  - `level`: `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+  - `service`: `"database.service"`
+  - `trace_id`: IPC ヘッダーから抽出した分散トレース ID
+  - `event.action`: `SQL_EXECUTION`, `WAL_FLUSH`, `CHECKPOINT`, `TRANSACTION_COMMIT`, `TRANSACTION_ROLLBACK`
+  - `db`: `{sql_statement, duration_ms, rows_affected, wal_lsn, node_id}`
+
+## 16.2 W3C TraceContext / Trace ID 連動と SQL 監査ログ
+- Web Gateway $\rightarrow$ Database IPC メッセージ経由で伝播された `trace_id` を ContextVars から取得。
+- SQL 実行ログおよびスロークエリログに `trace_id` を付加し、Web の HTTP リクエストから Search / DB ワーカーのデータ読み書きまで同一の Trace ID で一気通貫に監査可能にする。
+
+## 16.3 機密データ・SQL パラメータマスキング (CWE-532 準拠)
+- SQL ステートメント内のリテラル文字列（パスワード、API キー、個人情報など）を `SensitiveMaskingFilter` により `***MASKED***` へ自動置換。
+- バインドパラメータ（Prepared Statements）の値をログ出力する際も、事前定義ルールに基づいて自動サニタイズを実施する。
+
+---
 *審議終了: Systems Architect, Database Specialist 合意承認済*
+

@@ -84,6 +84,11 @@
 - [13. 次世代実装ロードマップと品質保証](#13-次世代実装ロードマップと品質保証)
   - [13.1 品質ゲート基準と検証結果](#131-品質ゲート基準と検証結果)
   - [13.2 今後の進化計画](#132-今後の進化計画)
+- [14. 構造化JSONログ & 自律監視・AI障害解析アーキテクチャ](#14-構造化jsonログ--自律監視ai障害解析アーキテクチャ)
+  - [14.1 プレーンテキスト廃止と JSON Lines (.jsonl) 統合仕様](#141-プレーンテキスト廃止と-json-lines-jsonl-統合仕様)
+  - [14.2 子プロセスの完全分離終了 (os._exit) とクラッシュ波及防止](#142-子プロセスの完全分離終了-os_exit-とクラッシュ波及防止)
+  - [14.3 Trace ID (Correlation ID) 分散追跡連携](#143-trace-id-correlation-id-分散追跡連携)
+  - [14.4 AI / 運用者向けログ抽出 CLI (supervisor logs)](#144-ai--運用者向けログ抽出-cli-supervisor-logs)
 
 ---
 
@@ -1228,3 +1233,51 @@ graph TD
    - 高負荷 HTTP 転送におけるカーネル・ユーザー空間コンテキストスイッチの完全排除。
 3. **分散 Arbiter クラスタリング**:
    - `DSN-05` の Raft 合意エンジンと連携した、複数マシンを跨ぐ分散プロセススーパーバイザーへの拡張。
+
+---
+
+# 14. 構造化JSONログ & 自律監視・AI障害解析アーキテクチャ
+
+## 14.1 プレーンテキスト廃止と JSON Lines (.jsonl) 統合仕様
+従来の `print()` による非構造化標準出力・標準エラー出力混在を廃止し、Arbiter および全ワーカーのイベントログを `outputs/supervisor/supervisor.log`（JSON Lines 形式）へ完全移行する。
+
+- **フォーマット**: 1 行 1 レコードの完全な JSON (`.jsonl`)
+- **共通キー**:
+  - `timestamp`: ISO 8601 UTC（`2026-09-02T21:45:00.123Z`）
+  - `level`: `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+  - `service`: `"supervisor.arbiter"` または `"supervisor.worker.<pool>"`
+  - `pid`: 実行プロセス ID
+  - `event.action`: `WORKER_SPAWNED`, `WORKER_EXITED`, `SIGNAL_RECEIVED`, `HUNG_WORKER_KILLED`, `RELOAD_START` 等
+  - `diagnostic`: クラッシュ時や異常検知時の原因分類コードと自動修復ヒント
+
+## 14.2 子プロセスの完全分離終了 (os._exit) とクラッシュ波及防止
+Pre-fork された子ワーカープロセスが終了する際、Python の `sys.exit()` は `SystemExit` 例外を送出し、親プロセス（Arbiter）から継承された `try...finally` スタック（`Arbiter.start()` 内の `finally: self.shutdown()`）をアンワインドして誤って親の `control.sock` を削除する重大なリスクがある。
+
+本アーキテクチャでは、子プロセスのライフサイクル完了時に必ず **`os._exit(exit_code)`** を実行し、親プロセスのスタックフレームや例外ハンドラに一切干渉することなく OS レベルで即時終了する完全分離モデルを採用する。
+
+```python
+def _run_child_worker(self, spec: WorkerSpec, worker_id: str) -> NoReturn:
+    self.init_child_process()
+    exit_code = 0
+    try:
+        exit_code = self._execute_child_spec(spec, worker_id)
+    except Exception:
+        exit_code = 1
+    os._exit(exit_code)  # 親の try/finally に波及させず即時終了
+```
+
+## 14.3 Trace ID (Correlation ID) 分散追跡連携
+- Web Gateway $\rightarrow$ サービスワーカー（Search / Database）間の IPC リクエストに `trace_id` を付与。
+- Arbiter のヘルスチェックやワーカー再起動イベントにも、障害のトリガーとなった `trace_id` を関連付けることで、E2E の障害因果関係追跡を可能にする。
+
+## 14.4 AI / 運用者向けログ抽出 CLI (supervisor logs)
+AI エージェントやシステム管理者が、トークン消費を最小限に抑えつつ特定リクエストの障害ログを瞬時に取得できる専用 CLI を提供する。
+
+```bash
+# 特定の Trace ID に関連する全プロセスログを時系列抽出
+python -m supervisor.cli logs --trace-id c4b8e8f289a14e76b99d3f0e8a719c2a
+
+# 直近のエラーログのみを AI 要約用 JSON で取得
+python -m supervisor.cli logs --level ERROR --tail 50 --compact
+```
+

@@ -109,6 +109,13 @@ class DatabaseClient:
         self, target_sock: str, req: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Sends request to a specific Unix socket and returns parsed response."""
+        from observability.propagation import get_current_trace_id
+
+        if "trace_id" not in req:
+            tid = get_current_trace_id()
+            if tid:
+                req["trace_id"] = tid
+
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self.timeout)
         try:

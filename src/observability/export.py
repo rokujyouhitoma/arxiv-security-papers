@@ -6,12 +6,12 @@ import sys
 import threading
 import urllib.error
 import urllib.request
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from observability.trace import Span, StatusCode, TracerProvider, get_tracer_provider
 
 
-def _convert_seq_value(val: Union[list, tuple]) -> Dict[str, Any]:
+def _convert_seq_value(val: Union[List[Any], Tuple[Any, ...]]) -> Dict[str, Any]:
     return {"arrayValue": {"values": [_convert_attr_value(v) for v in val]}}
 
 

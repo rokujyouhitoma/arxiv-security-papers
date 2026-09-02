@@ -373,10 +373,7 @@ class Arbiter:
         web_worker.run()
 
     def _execute_child_spec(self, spec: WorkerSpec, worker_id: str) -> int:
-        if (
-            spec.worker_class == "service"
-            or spec.role == ServiceRole.STATEFUL_SERVICE
-        ):
+        if spec.worker_class == "service" or spec.role == ServiceRole.STATEFUL_SERVICE:
             self._run_service_worker(spec, worker_id)
             return 0
         if spec.role == ServiceRole.ONESHOT_TASK:

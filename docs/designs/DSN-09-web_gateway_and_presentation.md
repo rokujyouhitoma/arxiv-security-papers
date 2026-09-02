@@ -125,11 +125,20 @@ Web サブシステムは、軽量・高速な WSGI Gateway とリッチな UI �
 - `Access-Control-Allow-Headers: Content-Type, Authorization`
 - `OPTIONS` プリフライトリクエストに対する即時 204 No Content レスポンス。
 
-## 2.4 クエリログ & 監査ロギング
-全アクセスについて、タイムスタンプ、HTTP メソッド、パス、ステータスコード、処理時間（ms）、リクエスト元 IP を構造化ログとして記録。
+## 2.4 構造化アクセスログ & W3C TraceContext 分散追跡
+全 HTTP リクエストについて、レガシーな Apache 形式テキストログを廃止し、`DSN-10` 準拠の 1 行完結 JSON Lines (`outputs/logs/web_access.jsonl`) として出力します。
+
+1. **W3C TraceContext / Trace ID 管理**:
+   - リクエスト受信時に `traceparent` または `X-Trace-ID` ヘッダーを抽出。存在しない場合は UUID v4 / 32hex の `trace_id` を新規発行。
+   - `contextvars` に `trace_id` を設定し、全バックエンド IPC（Search / Database）呼び出しへ透過的に伝播。
+   - レスポンスヘッダーに `X-Trace-ID: <trace_id>` を付加し、クライアント・AI エージェントがログと直接照合可能にする。
+2. **アクセスログ出力スキーマ**:
+   - `timestamp` (ISO 8601 UTC), `level: "INFO"`, `trace_id`, `service: "web_gateway"`, `http: {method, path, status_code, latency_ms, client_ip, user_agent}`。
+3. **セキュリティ & 機密マスキング (CWE-532 準拠)**:
+   - `Authorization` ヘッダー、クエリパラメータ内のパスワード・トークン、PII をログ出力前に `***MASKED***` へ自動サニタイズ。
 
 ## 2.5 第2章の要約
-API ゲートウェイ層は、REST API の要求を解析・検証し、適切なバックエンド処理へルーティングします。
+API ゲートウェイ層は、REST API の要求を解析・検証し、W3C TraceContext に基づく分散トレース識別子を付与した上で適切なバックエンド処理へルーティングします。
 
 ---
 

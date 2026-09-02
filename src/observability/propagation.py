@@ -96,3 +96,38 @@ class TraceContextPropagator:
         """Injects W3C traceparent into carrier dictionary."""
         if context and context.is_valid:
             carrier["traceparent"] = context.to_traceparent()
+
+
+import contextvars  # noqa: E402
+
+_current_trace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "current_trace_id", default=""
+)
+_current_span_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "current_span_id", default=""
+)
+
+
+def get_current_trace_id() -> str:
+    """Returns the current trace ID from contextvars, or generates a new one if unset."""
+    tid = _current_trace_id_var.get()
+    return tid if tid else ""
+
+
+def get_current_span_id() -> str:
+    """Returns the current span ID from contextvars."""
+    return _current_span_id_var.get()
+
+
+def set_current_trace_context(trace_id: str, span_id: Optional[str] = None) -> None:
+    """Sets the active trace ID and optional span ID in thread/task-local contextvars."""
+    if trace_id:
+        _current_trace_id_var.set(trace_id)
+    if span_id:
+        _current_span_id_var.set(span_id)
+
+
+def clear_current_trace_context() -> None:
+    """Resets the active trace context."""
+    _current_trace_id_var.set("")
+    _current_span_id_var.set("")

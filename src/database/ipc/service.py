@@ -146,14 +146,39 @@ class DatabaseService:
             self._teardown_canonical_sock()
         logger.info("DatabaseService (Node %d) stopped.", self.node_id)
 
-    def _log_sql_request(self, req: Dict[str, Any]) -> None:
+    def _write_database_log(self, record: Dict[str, Any]) -> None:
+        log_dir = os.path.join(self.workspace_dir, "outputs", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "database.jsonl")
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
+    def _log_sql_request(self, req: Dict[str, Any], tid: str) -> None:
+        from datetime import datetime, timezone
+
+        from observability.masking import mask_text
+
         if req.get("op") == "execute_sql":
-            sql_text = str(req.get("params", {}).get("sql", "")).strip()
-            logger.info(
-                "⚡ [DatabaseService Node %d IPC] Received SQL query: %s",
-                self.node_id,
-                sql_text,
-            )
+            raw_sql = str(req.get("params", {}).get("sql", "")).strip()
+            masked_sql = mask_text(raw_sql)
+            record = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "level": "INFO",
+                "service": "database.service",
+                "trace_id": tid,
+                "node_id": self.node_id,
+                "event": {
+                    "category": "database",
+                    "action": "execute_sql",
+                    "outcome": "success",
+                },
+                "db": {"sql": masked_sql, "node_id": self.node_id},
+                "message": f"Executing SQL on Node {self.node_id}: {masked_sql}",
+            }
+            self._write_database_log(record)
 
     def _process_request_payload(self, raw: str) -> Dict[str, Any]:
         """Parses and executes request through protocol handler."""
@@ -161,7 +186,8 @@ class DatabaseService:
             req = json.loads(raw.strip())
             if not isinstance(req, dict):
                 return {"status": "error", "error": "Request must be a JSON object"}
-            self._log_sql_request(req)
+            tid = req.get("trace_id", "")
+            self._log_sql_request(req, tid)
             return self.handler.handle_request(req)
         except json.JSONDecodeError as err:
             return {"status": "error", "error": f"Invalid JSON: {err}"}
@@ -169,9 +195,24 @@ class DatabaseService:
             return {"status": "error", "error": str(ex)}
 
     def _handle_line(self, conn: socket.socket, line: str) -> None:
-        resp_dict = self._process_request_payload(line)
-        self.requests_handled += 1
-        conn.sendall((json.dumps(resp_dict) + "\n").encode("utf-8"))
+        from observability.propagation import (
+            clear_current_trace_context,
+            set_current_trace_context,
+        )
+
+        try:
+            req_data = json.loads(line.strip())
+            if isinstance(req_data, dict) and req_data.get("trace_id"):
+                set_current_trace_context(req_data["trace_id"], req_data.get("span_id"))
+        except Exception:
+            pass
+
+        try:
+            resp_dict = self._process_request_payload(line)
+            self.requests_handled += 1
+            conn.sendall((json.dumps(resp_dict) + "\n").encode("utf-8"))
+        finally:
+            clear_current_trace_context()
 
     def _process_buffered_lines(self, conn: socket.socket, buffer: str) -> str:
         while "\n" in buffer:

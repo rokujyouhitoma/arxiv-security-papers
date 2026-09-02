@@ -61,6 +61,12 @@
   - [11.2 Pure-Python OTLP JSON (v1/traces) シリアライザ & HTTP エクスポータ](#112-pure-python-otlp-json-v1traces-シリアライザ--http-エクスポータ)
   - [11.3 OpenInference GenAI / LLM セマンティックコンベンション](#113-openinference-genai--llm-セマンティックコンベンション)
   - [11.4 短命 (Ephemeral) プロセス向け atexit/signal 確定フラッシュアーキテクチャ](#114-短命-ephemeral-プロセス向け-atexitsignal-確定フラッシュアーキテクチャ)
+- [12. AIフレンドリー統一構造化JSONログ基盤 & 機密情報マスキング設計](#12-aiフレンドリー統一構造化jsonログ基盤--機密情報マスキング設計)
+  - [12.1 ログ設計の基本原則と分類体系](#121-ログ設計の基本原則と分類体系)
+  - [12.2 AIフレンドリー & 高分析性 JSON Lines スキーマ仕様](#122-aiフレンドリー--高分析性-json-lines-スキーマ仕様)
+  - [12.3 W3C TraceContext / Trace ID 分散伝播と相関追跡](#123-w3c-tracecontext--trace-id-分散伝播と相関追跡)
+  - [12.4 機密情報・PII 自動マスキングフィルター (CWE-532 準拠)](#124-機密情報pii-自動マスキングフィルター-cwe-532-準拠)
+  - [12.5 横断的サブシステム（Web, Search, DB, Supervisor）統一連携](#125-横断的サブシステムweb-search-db-supervisor統一連携)
 
 
 ---
@@ -370,3 +376,94 @@ GitHub Actions や CLI バッチ処理の終了時におけるテレメトリ消
 2. **`signal.signal(SIGTERM / SIGINT, handler)`**: CI/CD タイムアウトやキャンセル時のシグナル捕捉と即時強制フラッシュ。
 
 - [x] 100% カバレッジ・型検査 (`mypy --strict`) 完全通過
+
+---
+
+# 12. AIフレンドリー統一構造化JSONログ基盤 & 機密情報マスキング設計
+
+## 12.1 ログ設計の基本原則と分類体系
+本システムにおける全ログは、人間による監視のみならず、**AI エージェント（LLM）による自律的障害分析（Root Cause Analysis: RCA）および機械可読性** を最重要要件として設計される。
+
+1. **すべてのログに共通して含めるべき 5 大必須項目**:
+   - **When (日時)**: ISO 8601 UTC 表記（ミリ秒・マイクロ秒精度 `YYYY-MM-DDTHH:MM:SS.ffffffZ`）。
+   - **Severity (重要度)**: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` に厳格統一。
+   - **Tracking (トレース識別子)**: W3C 準拠の `trace_id`（32 hex）および `span_id`（16 hex）。
+   - **Where (発生源)**: `service`, `logger`, `module`, `func`, `line`, `pid`。
+   - **What (イベント内容)**: 機械パースおよび LLM 要約に適した具体的かつ簡潔なメッセージ。
+
+2. **コンテキストに応じた拡張項目**:
+   - **Who (主体)**: `client_ip` (`remote_addr`), `user_agent`, `tenant_id`。
+   - **How (詳細コンテキスト)**: HTTP メソッド、URI パス、ステータスコード、処理レイテンシ（ms）、CPU 時間。
+   - **Error (例外情報)**: `error.class`, `error.message`, `error.stacktrace`（配列形式）。
+
+3. **CWE-532 準拠のマスキング対象**:
+   - 認証・認可情報: パスワード、API キー、JWT、Bearer トークン、Basic 認証。
+   - 個人特定情報 (PII): メールアドレス、クレジットカード番号（PAN）、マイナンバー等。
+
+## 12.2 AIフレンドリー & 高分析性 JSON Lines スキーマ仕様
+全ログは 1 行 1 レコードの決定論的 JSON Lines (`.jsonl`) 形式で出力され、AI エージェントがトークンを浪費することなく原因を特定できるように `diagnostic` ブロックを標準装備する。
+
+```json
+{
+  "timestamp": "2026-09-02T21:45:00.123456Z",
+  "level": "ERROR",
+  "trace_id": "c4b8e8f289a14e76b99d3f0e8a719c2a",
+  "span_id": "9a14e76b99d3f0e8",
+  "service": "search",
+  "logger": "search.engine.vector",
+  "module": "vector_index",
+  "func": "search_knn",
+  "line": 142,
+  "pid": 11625,
+  "event": {
+    "category": "search",
+    "action": "query_execution",
+    "outcome": "failure"
+  },
+  "message": "Vector index search failed due to dimension mismatch",
+  "http": {
+    "method": "POST",
+    "path": "/api/search",
+    "status_code": 500,
+    "latency_ms": 42.15,
+    "client_ip": "127.0.0.1"
+  },
+  "error": {
+    "class": "ValueError",
+    "message": "Expected vector dimension 768, got 512",
+    "stacktrace": [
+      "File \"src/search/engine.py\", line 142, in search_knn",
+      "File \"src/search/vector.py\", line 88, in compute_cosine"
+    ]
+  },
+  "diagnostic": {
+    "cause": "DIMENSION_MISMATCH",
+    "affected_subsystem": "vector_engine",
+    "remediation_hint": "Check model embedding configuration in config/search.toml",
+    "is_transient": false
+  }
+}
+```
+
+## 12.3 W3C TraceContext / Trace ID 分散伝播と相関追跡
+- Web Gateway 受信時に `TraceContextPropagator.extract(environ)` により `trace_id` を確定（未指定時は `generate_trace_id()` で新規生成）。
+- Python 標準 `contextvars.ContextVar` を用いて、スレッド・非同期タスクセーフにカレント `trace_id` / `span_id` を保持。
+- Unix Domain Socket を介した IPC 通信（Search / Database サービスワーカー宛）において、JSON ペイロードヘッダーへ `trace_id` を注入・伝播。
+- レスポンスヘッダーに `X-Trace-ID` を返却し、フロントエンドや AI エージェントがログとレスポンスを直接紐付け可能にする。
+
+## 12.4 機密情報・PII 自動マスキングフィルター (CWE-532 準拠)
+ログ出力直前の `logging.Filter` または `logging.Formatter` 層において、コンパイル済み正規表現により機密パターンを高速検知し `***MASKED***` へ置換する。
+
+| 対象種別 | 検出正規表現パターン (抜粋) | 置換形式 |
+| :--- | :--- | :--- |
+| **Bearer / JWT** | `(?i)(bearer|token|authorization)\s*[:=]\s*['"]?([a-zA-Z0-9_\-\.]{8,})['"]?` | `$1: ***MASKED***` |
+| **パスワード / APIキー** | `(?i)(password|secret|api[_-]?key|passwd)\s*[:=]\s*['"]?([^'",\s]+)['"]?` | `$1: ***MASKED***` |
+| **メールアドレス (PII)** | `\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b` | `***MASKED_EMAIL***` |
+| **クレジットカード (PAN)** | `\b(?:\d{4}[- ]?){3}\d{4}\b` | `***MASKED_CARD***` |
+
+## 12.5 横断的サブシステム（Web, Search, DB, Supervisor）統一連携
+- **Web Gateway (`src/web/`)**: HTTP アクセスログ（`web_server.log` $\rightarrow$ `outputs/logs/web_access.jsonl`）の JSON 化、Trace ID 付与。
+- **Search Engine (`src/search/`)**: `query_log.jsonl` / `search_perf_log.jsonl` のスキーマ統合。
+- **Database Engine (`src/database/`)**: SQL 実行ログ、WAL フラッシュメトリクスを `outputs/logs/database.jsonl` へ記録。
+- **Supervisor Arbiter (`src/supervisor/`)**: `print()` 出力を廃止し、ワーカー起動・停止・シグナル・ヘルスチェックイベントを `outputs/supervisor/supervisor.log`（JSONL）へ構造化記録。
+

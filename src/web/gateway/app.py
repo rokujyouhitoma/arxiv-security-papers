@@ -5,15 +5,24 @@ PEP 3333 WSGI Application and HTTP Server for arXiv Security Papers API Gateway.
 
 from __future__ import annotations
 
+import time
 import urllib.parse
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 from wsgiref.simple_server import make_server
 
 if TYPE_CHECKING:
     from search.vector_engine import VectorEngine
 
+from observability.propagation import (
+    TraceContextPropagator,
+    clear_current_trace_context,
+    generate_span_id,
+    generate_trace_id,
+    set_current_trace_context,
+)
+
 from .handlers import GatewayHandlers
-from .logger import WORKSPACE_DIR
+from .logger import WORKSPACE_DIR, log_http_access
 from .router import CORS_HEADERS, response_error
 
 
@@ -93,8 +102,39 @@ class WSGIApplication:
             start_response, "Endpoint not found", status="404 Not Found"
         )
 
-    def __call__(
-        self, environ: Dict[str, Any], start_response: Callable[..., Any]
+    def _init_trace_context(self, environ: Dict[str, Any]) -> Tuple[str, str]:
+        ctx = TraceContextPropagator.extract(environ)
+        if ctx and ctx.is_valid:
+            tid, sid = ctx.trace_id, ctx.span_id
+        else:
+            tid = generate_trace_id()
+            sid = generate_span_id()
+        set_current_trace_context(tid, sid)
+        return tid, sid
+
+    def _wrap_response_headers(
+        self,
+        start_response: Callable[..., Any],
+        tid: str,
+        sid: str,
+        status_holder: List[str],
+    ) -> Callable[..., Any]:
+        def wrapped_start_response(
+            status: str, headers: List[Tuple[str, str]], exc_info: Any = None
+        ) -> Any:
+            status_holder.append(status)
+            headers.append(("X-Trace-ID", tid))
+            headers.append(("traceparent", f"00-{tid}-{sid}-01"))
+            if exc_info is not None:
+                return start_response(status, headers, exc_info)
+            return start_response(status, headers)
+
+        return wrapped_start_response
+
+    def _dispatch_request(
+        self,
+        environ: Dict[str, Any],
+        start_response: Callable[..., Any],
     ) -> List[bytes]:
         method = environ.get("REQUEST_METHOD", "GET").upper()
         path = environ.get("PATH_INFO", "/")
@@ -108,12 +148,36 @@ class WSGIApplication:
             return [b""] if method == "HEAD" else res
         if method == "POST":
             return self._handle_post(environ, start_response, path)
-
         return response_error(
             start_response,
             f"Method {method} Not Allowed",
             status="405 Method Not Allowed",
         )
+
+    def __call__(
+        self, environ: Dict[str, Any], start_response: Callable[..., Any]
+    ) -> List[bytes]:
+        t0 = time.perf_counter()
+        tid, sid = self._init_trace_context(environ)
+        status_holder: List[str] = []
+        wrapped_sr = self._wrap_response_headers(
+            start_response, tid, sid, status_holder
+        )
+
+        try:
+            return self._dispatch_request(environ, wrapped_sr)
+        finally:
+            dt_ms = (time.perf_counter() - t0) * 1000.0
+            st_code = int(status_holder[0].split()[0]) if status_holder else 500
+            log_http_access(
+                method=environ.get("REQUEST_METHOD", "GET").upper(),
+                path=environ.get("PATH_INFO", "/"),
+                status_code=st_code,
+                latency_ms=dt_ms,
+                client_ip=environ.get("REMOTE_ADDR", "-"),
+                user_agent=environ.get("HTTP_USER_AGENT", "-"),
+            )
+            clear_current_trace_context()
 
 
 application = WSGIApplication()

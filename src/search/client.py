@@ -99,6 +99,13 @@ class SearchClient:
     def _send_socket_payload(
         self, cmd_dict: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
+        from observability.propagation import get_current_trace_id
+
+        if "trace_id" not in cmd_dict:
+            tid = get_current_trace_id()
+            if tid:
+                cmd_dict["trace_id"] = tid
+
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self.timeout)
         try:

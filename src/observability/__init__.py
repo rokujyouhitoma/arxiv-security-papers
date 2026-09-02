@@ -15,6 +15,13 @@ from observability.export import (
     build_otlp_payload,
     span_to_otlp_json_dict,
 )
+from observability.logging import (
+    SensitiveMaskingFilter,
+    StructuredJsonFormatter,
+    TraceContextFilter,
+    configure_logging,
+)
+from observability.masking import mask_dict, mask_text
 from observability.openinference import (
     OpenInferenceConventions,
     OpenInferenceSpanKind,
@@ -26,8 +33,12 @@ from observability.openinference import (
 from observability.propagation import (
     SpanContext,
     TraceContextPropagator,
+    clear_current_trace_context,
     generate_span_id,
     generate_trace_id,
+    get_current_span_id,
+    get_current_trace_id,
+    set_current_trace_context,
 )
 from observability.trace import (
     Span,
@@ -105,4 +116,14 @@ __all__ = [
     "record_retriever_span",
     "record_tool_span",
     "init_observability",
+    "StructuredJsonFormatter",
+    "TraceContextFilter",
+    "SensitiveMaskingFilter",
+    "configure_logging",
+    "mask_text",
+    "mask_dict",
+    "get_current_trace_id",
+    "get_current_span_id",
+    "set_current_trace_context",
+    "clear_current_trace_context",
 ]

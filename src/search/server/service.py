@@ -277,23 +277,39 @@ class SearchService:
         res: Dict[str, Any] = json.loads(raw_data.decode("utf-8").strip())
         return res
 
+    def _send_client_response(
+        self, client_sock: socket.socket, resp: Dict[str, Any]
+    ) -> None:
+        self.requests_handled += 1
+        resp_bytes = (json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8")
+        client_sock.sendall(resp_bytes)
+
+    def _send_client_error(self, client_sock: socket.socket, exc: Exception) -> None:
+        err_resp = {"status": "error", "error": str(exc)}
+        try:
+            client_sock.sendall((json.dumps(err_resp) + "\n").encode("utf-8"))
+        except OSError:
+            pass
+
     def _handle_client(self, client_sock: socket.socket) -> None:
+        from observability.propagation import (
+            clear_current_trace_context,
+            set_current_trace_context,
+        )
+
         client_sock.settimeout(5.0)
         try:
             req = self._read_client_request(client_sock)
-            if req is None:
-                return
-            resp = self.handle_command(req)
-            self.requests_handled += 1
-            resp_bytes = (json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8")
-            client_sock.sendall(resp_bytes)
+            if req is not None:
+                set_current_trace_context(
+                    req.get("trace_id", ""), req.get("span_id", "")
+                )
+                resp = self.handle_command(req)
+                self._send_client_response(client_sock, resp)
         except Exception as e:
-            err_resp = {"status": "error", "error": str(e)}
-            try:
-                client_sock.sendall((json.dumps(err_resp) + "\n").encode("utf-8"))
-            except OSError:
-                pass
+            self._send_client_error(client_sock, e)
         finally:
+            clear_current_trace_context()
             try:
                 client_sock.close()
             except OSError:
