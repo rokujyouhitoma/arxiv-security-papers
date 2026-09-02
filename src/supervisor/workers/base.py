@@ -161,6 +161,7 @@ class BaseWorker(abc.ABC):
             "uptime": round(time.time() - self.boot_time, 2),
             "last_seen_epoch": time.time(),
             "last_active_epoch": self.last_active_epoch,
+            "is_handling_request": False,
         }
         if metadata:
             meta.update(metadata)
