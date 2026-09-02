@@ -372,19 +372,30 @@ class Arbiter:
         )
         web_worker.run()
 
+    def _execute_child_spec(self, spec: WorkerSpec, worker_id: str) -> int:
+        if (
+            spec.worker_class == "service"
+            or spec.role == ServiceRole.STATEFUL_SERVICE
+        ):
+            self._run_service_worker(spec, worker_id)
+            return 0
+        if spec.role == ServiceRole.ONESHOT_TASK:
+            return self._run_oneshot_worker(spec)
+        if spec.worker_class == "queue":
+            self._run_queue_worker(spec, worker_id)
+            return 0
+        self._run_web_worker(spec, worker_id)
+        return 0
+
     def _run_child_worker(self, spec: WorkerSpec, worker_id: str) -> NoReturn:
         """Executes worker lifecycle loop in child process."""
         self.init_child_process()
         exit_code = 0
-        if spec.worker_class == "service" or spec.role == ServiceRole.STATEFUL_SERVICE:
-            self._run_service_worker(spec, worker_id)
-        elif spec.role == ServiceRole.ONESHOT_TASK:
-            exit_code = self._run_oneshot_worker(spec)
-        elif spec.worker_class == "queue":
-            self._run_queue_worker(spec, worker_id)
-        else:
-            self._run_web_worker(spec, worker_id)
-        sys.exit(exit_code)
+        try:
+            exit_code = self._execute_child_spec(spec, worker_id)
+        except Exception:
+            exit_code = 1
+        os._exit(exit_code)
 
     def _extract_slot_from_meta(self, meta: Optional[Dict[str, Any]]) -> Optional[int]:
         if not meta:

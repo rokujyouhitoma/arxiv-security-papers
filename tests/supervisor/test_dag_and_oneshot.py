@@ -150,7 +150,7 @@ def test_run_child_worker_oneshot_success() -> None:
         role=ServiceRole.ONESHOT_TASK,
         app_target=task_mock,
     )
-    with patch("sys.exit") as mock_exit:
+    with patch("os._exit") as mock_exit:
         arbiter._run_child_worker(spec, "oneshot_1")
         task_mock.assert_called_once()
         mock_exit.assert_called_once_with(0)
@@ -169,7 +169,7 @@ def test_run_child_worker_oneshot_exception() -> None:
         role=ServiceRole.ONESHOT_TASK,
         app_target=failing_task,
     )
-    with patch("sys.exit") as mock_exit:
+    with patch("os._exit") as mock_exit:
         arbiter._run_child_worker(spec, "oneshot_2")
         mock_exit.assert_called_once_with(1)
 
@@ -186,7 +186,7 @@ def test_run_child_worker_queue_dispatch() -> None:
         metadata={"source_queue": q, "poll_interval": 0.05},
     )
     with patch("supervisor.workers.queue_worker.QueueWorker.run") as mock_run:
-        with patch("sys.exit") as mock_exit:
+        with patch("os._exit") as mock_exit:
             arbiter._run_child_worker(spec, "queue_1")
             mock_run.assert_called_once()
             mock_exit.assert_called_once_with(0)
