@@ -136,6 +136,7 @@ class WorkerSpec:
         max_requests_jitter: int = 0,
         max_worker_lifetime: float = 0.0,
         max_worker_lifetime_jitter: float = 0.0,
+        max_worker_memory_mb: float = 0.0,
         graceful_timeout: float = 30.0,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -154,6 +155,7 @@ class WorkerSpec:
         self.max_requests_jitter = max_requests_jitter
         self.max_worker_lifetime = max_worker_lifetime
         self.max_worker_lifetime_jitter = max_worker_lifetime_jitter
+        self.max_worker_memory_mb = max(0.0, float(max_worker_memory_mb))
         self.graceful_timeout = graceful_timeout
         self.metadata = metadata or {}
 
@@ -170,6 +172,7 @@ class WorkerSpec:
             "max_requests_jitter": self.max_requests_jitter,
             "max_worker_lifetime": self.max_worker_lifetime,
             "max_worker_lifetime_jitter": self.max_worker_lifetime_jitter,
+            "max_worker_memory_mb": self.max_worker_memory_mb,
             "graceful_timeout": self.graceful_timeout,
             "metadata": self.metadata,
         }

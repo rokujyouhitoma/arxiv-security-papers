@@ -719,6 +719,36 @@ class Arbiter:
         for pid in hung_pids:
             self._kill_hung_worker(pid)
 
+    def _rotate_bloated_worker(self, pid: int) -> None:
+        pool = self._find_pool_for_pid(pid)
+        if not pool:
+            return
+        logging.warning(
+            "[Arbiter] Worker PID %d exceeded memory limit in pool '%s'. Initiating graceful rotation.",
+            pid,
+            pool.name,
+        )
+        self.reloading_old_pids.add(pid)
+        if self.running:
+            self.spawn_worker(pool.name)
+        try:
+            sig = (
+                signal.SIGQUIT
+                if getattr(pool.spec, "role", None) == ServiceRole.STATELESS_POOL
+                else signal.SIGTERM
+            )
+            os.kill(pid, sig)
+        except OSError:
+            pass
+
+    def check_memory_limits(self) -> None:
+        """Evaluates worker memory footprints and triggers rolling rotation for bloated processes."""
+        spec_map = {pool.name: pool.spec for pool in self.pools.values()}
+        exceeded_pids = self.watchdog.get_memory_exceeded_workers(spec_map)
+        for pid in exceeded_pids:
+            if pid not in self.reloading_old_pids:
+                self._rotate_bloated_worker(pid)
+
     def _signal_all_workers(self, workers: Dict[int, Any], sig: int) -> None:
         for pid in list(workers.keys()):
             try:
@@ -1052,6 +1082,7 @@ class Arbiter:
                 break
             self.handle_sigchld()
             self.check_hung_workers()
+            self.check_memory_limits()
             time.sleep(0.5)
 
     def start(self) -> None:

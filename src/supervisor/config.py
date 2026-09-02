@@ -30,6 +30,7 @@ class PoolConfig:
     max_requests_jitter: int = 0
     max_worker_lifetime: float = 0.0
     max_worker_lifetime_jitter: float = 0.0
+    max_worker_memory_mb: float = 0.0
 
 
 @dataclasses.dataclass
@@ -47,6 +48,7 @@ class ServiceConfig:
     max_requests_jitter: int = 0
     max_worker_lifetime: float = 0.0
     max_worker_lifetime_jitter: float = 0.0
+    max_worker_memory_mb: float = 0.0
 
 
 @dataclasses.dataclass
@@ -91,37 +93,46 @@ class SupervisorConfig:
     threads: int = 1
     app_uri: str = "web.server:app"
 
-    # Global Worker Lifetime and Request Limits
+    # Global Worker Lifetime, Request Limits, and Memory Watchdog
     max_requests: int = 0
     max_requests_jitter: int = 0
     max_worker_lifetime: float = 0.0
     max_worker_lifetime_jitter: float = 0.0
+    max_worker_memory_mb: float = 0.0
 
     def __post_init__(self) -> None:
         self._ensure_default_pools()
         self.validate()
 
+    @staticmethod
+    def _fallback_val(val: float, fallback: float) -> float:
+        return val if val > 0 else fallback
+
+    def _create_default_pool(self) -> PoolConfig:
+        return PoolConfig(
+            name="default",
+            workers=self.workers,
+            worker_class=self.worker_class,
+            threads=self.threads,
+            bind_host=self.bind_host,
+            bind_port=self.bind_port,
+            backlog=self.backlog,
+            target_uri=self.app_uri,
+            timeout=self.timeout,
+            graceful_timeout=self.graceful_timeout,
+            max_requests=int(self._fallback_val(self.max_requests, 2000)),
+            max_requests_jitter=int(self._fallback_val(self.max_requests_jitter, 200)),
+            max_worker_lifetime=self._fallback_val(self.max_worker_lifetime, 3600.0),
+            max_worker_lifetime_jitter=self._fallback_val(
+                self.max_worker_lifetime_jitter, 300.0
+            ),
+            max_worker_memory_mb=self._fallback_val(self.max_worker_memory_mb, 250.0),
+        )
+
     def _ensure_default_pools(self) -> None:
         """Constructs default stateless pool if none provided."""
         if not self.pools and not self.services:
-            self.pools.append(
-                PoolConfig(
-                    name="default",
-                    workers=self.workers,
-                    worker_class=self.worker_class,
-                    threads=self.threads,
-                    bind_host=self.bind_host,
-                    bind_port=self.bind_port,
-                    backlog=self.backlog,
-                    target_uri=self.app_uri,
-                    timeout=self.timeout,
-                    graceful_timeout=self.graceful_timeout,
-                    max_requests=self.max_requests,
-                    max_requests_jitter=self.max_requests_jitter,
-                    max_worker_lifetime=self.max_worker_lifetime,
-                    max_worker_lifetime_jitter=self.max_worker_lifetime_jitter,
-                )
-            )
+            self.pools.append(self._create_default_pool())
 
     def _resolve_limit(self, pool_val: Any, global_val: Any) -> Any:
         return pool_val if pool_val else global_val
@@ -143,6 +154,9 @@ class SupervisorConfig:
             ),
             max_worker_lifetime_jitter=self._resolve_limit(
                 pool.max_worker_lifetime_jitter, self.max_worker_lifetime_jitter
+            ),
+            max_worker_memory_mb=self._resolve_limit(
+                pool.max_worker_memory_mb, self.max_worker_memory_mb
             ),
             graceful_timeout=pool.graceful_timeout or self.graceful_timeout,
             metadata={"target_uri": pool.target_uri, "threads": pool.threads},
@@ -166,6 +180,9 @@ class SupervisorConfig:
             ),
             max_worker_lifetime_jitter=self._resolve_limit(
                 svc.max_worker_lifetime_jitter, self.max_worker_lifetime_jitter
+            ),
+            max_worker_memory_mb=self._resolve_limit(
+                svc.max_worker_memory_mb, self.max_worker_memory_mb
             ),
             graceful_timeout=svc.graceful_timeout or self.graceful_timeout,
             metadata={"hook_uri": svc.hook_uri},
@@ -217,10 +234,12 @@ class SupervisorConfig:
             )
 
     def _validate_rotation(self) -> None:
-        if self.max_requests < 0 or self.max_requests_jitter < 0:
+        if min(self.max_requests, self.max_requests_jitter) < 0:
             raise ValueError("Max requests and jitter must be non-negative.")
-        if self.max_worker_lifetime < 0.0 or self.max_worker_lifetime_jitter < 0.0:
+        if min(self.max_worker_lifetime, self.max_worker_lifetime_jitter) < 0.0:
             raise ValueError("Max worker lifetime and jitter must be non-negative.")
+        if self.max_worker_memory_mb < 0.0:
+            raise ValueError("Max worker memory must be non-negative.")
 
     def _validate_numeric(self) -> None:
         self._validate_timeouts()

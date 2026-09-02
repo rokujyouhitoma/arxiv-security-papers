@@ -217,3 +217,37 @@ class HeartbeatWatchdog:
                 m["is_healthy"] = self._compute_worker_health(m, last_pulse, now_m)
                 res[pid] = m
             return res
+
+    @staticmethod
+    def get_worker_memory_mb(pid: int) -> float:
+        """
+        Reads memory usage in Megabytes for a given PID.
+        Prefers PSS (proportional set size), falling back to RSS.
+        """
+        from .top import SupervisorTopViewer
+
+        rss_mb, pss_mb = SupervisorTopViewer.get_process_memory_mb(pid)
+        return pss_mb if pss_mb > 0.0 else rss_mb
+
+    def _is_worker_memory_exceeded(
+        self, pid: int, meta: Dict[str, Any], spec_map: Dict[str, Any]
+    ) -> bool:
+        pool_name = str(meta.get("type", "default"))
+        spec = spec_map.get(pool_name)
+        if not spec:
+            return False
+        max_mem = float(getattr(spec, "max_worker_memory_mb", 0.0))
+        if max_mem <= 0.0:
+            return False
+        return self.get_worker_memory_mb(pid) > max_mem
+
+    def get_memory_exceeded_workers(self, spec_map: Dict[str, Any]) -> List[int]:
+        """
+        Scans all tracked workers and returns PIDs of workers exceeding their memory limit.
+        """
+        exceeded: List[int] = []
+        with self._lock:
+            for pid, meta in self._worker_meta.items():
+                if self._is_worker_memory_exceeded(pid, meta, spec_map):
+                    exceeded.append(pid)
+        return exceeded

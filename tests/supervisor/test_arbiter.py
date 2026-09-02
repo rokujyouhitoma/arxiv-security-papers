@@ -452,3 +452,58 @@ def test_arbiter_restart_control_command(tmp_path: Any) -> None:
         mock_restart.assert_called_once_with(
             target="web", mode="rolling", restart_all=False
         )
+
+
+def test_arbiter_check_memory_limits_rotation(tmp_path: Any) -> None:
+    """Verifies that Arbiter pre-spawns replacements and signals SIGQUIT/SIGTERM when memory limit is exceeded."""
+    specs = [
+        WorkerSpec(
+            name="web",
+            target_count=2,
+            role=ServiceRole.STATELESS_POOL,
+            max_worker_memory_mb=150.0,
+        ),
+        WorkerSpec(
+            name="search",
+            target_count=1,
+            role=ServiceRole.STATEFUL_SERVICE,
+            max_worker_memory_mb=300.0,
+        ),
+    ]
+    cfg = SupervisorConfig(workspace_dir=str(tmp_path))
+    arbiter = Arbiter(config=cfg, specs=specs)
+    arbiter.running = True
+
+    # Mock workers in pools
+    arbiter.pools["web"].workers[101] = MagicMock()
+    arbiter.pools["web"].workers[102] = MagicMock()
+    arbiter.pools["search"].workers[201] = MagicMock()
+
+    # Case 1: web worker 102 exceeded memory limit
+    with patch.object(
+        arbiter.watchdog, "get_memory_exceeded_workers", return_value=[102]
+    ), patch("os.kill") as mock_kill, patch.object(
+        arbiter, "spawn_worker"
+    ) as mock_spawn:
+        arbiter.check_memory_limits()
+        assert 102 in arbiter.reloading_old_pids
+        mock_spawn.assert_called_once_with("web")
+        mock_kill.assert_called_once_with(102, signal.SIGQUIT)
+
+        # Calling again does not re-signal while in reloading_old_pids
+        mock_kill.reset_mock()
+        mock_spawn.reset_mock()
+        arbiter.check_memory_limits()
+        mock_kill.assert_not_called()
+        mock_spawn.assert_not_called()
+
+    # Case 2: search service worker 201 exceeded memory limit
+    with patch.object(
+        arbiter.watchdog, "get_memory_exceeded_workers", return_value=[201]
+    ), patch("os.kill") as mock_kill, patch.object(
+        arbiter, "spawn_worker"
+    ) as mock_spawn:
+        arbiter.check_memory_limits()
+        assert 201 in arbiter.reloading_old_pids
+        mock_spawn.assert_called_once_with("search")
+        mock_kill.assert_called_once_with(201, signal.SIGTERM)

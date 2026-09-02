@@ -2,7 +2,7 @@
 ID: 122
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/OPS] Supervisorにおけるワーカー自動ローテーションTTLデフォルト設定とメモリ上限監視（Memory Watchdog）の実装 (ID: 122)
@@ -46,14 +46,14 @@ Supervisor 上で Web ワーカープロセスが一定時間ごと、あるい�
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/supervisor/config.py](../../src/supervisor/config.py)
-- [ ] [src/supervisor/contracts.py](../../src/supervisor/contracts.py)
-- [ ] [src/supervisor/heartbeat.py](../../src/supervisor/heartbeat.py)
-- [ ] [src/supervisor/arbiter.py](../../src/supervisor/arbiter.py)
-- [ ] [src/supervisor/workers/base.py](../../src/supervisor/workers/base.py)
-- [ ] [tests/supervisor/test_config.py](../../tests/supervisor/test_config.py)
-- [ ] [tests/supervisor/test_heartbeat.py](../../tests/supervisor/test_heartbeat.py)
-- [ ] [tests/supervisor/test_arbiter.py](../../tests/supervisor/test_arbiter.py)
+- [x] [src/supervisor/config.py](../../src/supervisor/config.py)
+- [x] [src/supervisor/contracts.py](../../src/supervisor/contracts.py)
+- [x] [src/supervisor/heartbeat.py](../../src/supervisor/heartbeat.py)
+- [x] [src/supervisor/arbiter.py](../../src/supervisor/arbiter.py)
+- [x] [src/supervisor/workers/base.py](../../src/supervisor/workers/base.py)
+- [x] [tests/supervisor/test_config.py](../../tests/supervisor/test_config.py)
+- [x] [tests/supervisor/test_heartbeat.py](../../tests/supervisor/test_heartbeat.py)
+- [x] [tests/supervisor/test_arbiter.py](../../tests/supervisor/test_arbiter.py)
 
 ---
 
@@ -90,8 +90,9 @@ Target Branch: `feat/122-implement-supervisor-worker-memory-watchdog-and-default
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
-- [ ] Web プール等のステートレスワーカーがデフォルトで 1 時間周期 (+ Jitter) および 2000 req (+ Jitter) で自律的・順次ローテーション再生成されること
-- [ ] ワーカーのメモリ使用量が `max_worker_memory_mb` (250MB) を超えた際に、Arbiter が検知してゼロダウンタイム（先行補充 + SIGQUIT）で新規ワーカーへ交代させること
-- [ ] `tests/supervisor/` にメモリ監視・自動ローテーションのユニットおよび統合テストが追加され、全テストが 100% PASS すること
-- [ ] 品質ゲート（`make format`, `make static_analysis` / Xenon Rank A, Mypy Strict）が 100% PASS すること
+- [x] Web プール等のステートレスワーカーがデフォルトで 1 時間周期 (+ Jitter) および 2000 req (+ Jitter) で自律的・順次ローテーション再生成されること
+- [x] ワーカーのメモリ使用量が `max_worker_memory_mb` (250MB) を超えた際に、Arbiter が検知してゼロダウンタイム（先行補充 + SIGQUIT）で新規ワーカーへ交代させること
+- [x] `tests/supervisor/` にメモリ監視・自動ローテーションのユニットおよび統合テストが追加され、全テストが 100% PASS すること
+- [x] 品質ゲート（`make format`, `make static_analysis` / Xenon Rank A, Mypy Strict）が 100% PASS すること
+
 

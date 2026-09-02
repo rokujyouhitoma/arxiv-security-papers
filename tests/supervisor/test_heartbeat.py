@@ -165,3 +165,35 @@ def test_idle_seconds_tracking_and_reset() -> None:
     st4 = watchdog.get_worker_status(pid)
     assert st4 is not None
     assert st4["idle_seconds"] >= 0.1
+
+
+def test_heartbeat_memory_watchdog() -> None:
+    """Verifies memory extraction and threshold exceeded detection."""
+    from unittest.mock import patch
+
+    from supervisor.contracts import WorkerSpec
+
+    watchdog = HeartbeatWatchdog(timeout=5.0)
+    pid_normal = 10001
+    pid_bloated = 10002
+    pid_unlimited = 10003
+
+    watchdog.register_worker(pid_normal, "web")
+    watchdog.register_worker(pid_bloated, "web")
+    watchdog.register_worker(pid_unlimited, "db")
+
+    spec_map = {
+        "web": WorkerSpec(name="web", max_worker_memory_mb=100.0),
+        "db": WorkerSpec(name="db", max_worker_memory_mb=0.0),
+    }
+
+    def mock_get_mem(p: int) -> float:
+        if p == pid_normal:
+            return 45.0
+        if p == pid_bloated:
+            return 150.0
+        return 500.0
+
+    with patch.object(watchdog, "get_worker_memory_mb", side_effect=mock_get_mem):
+        exceeded = watchdog.get_memory_exceeded_workers(spec_map)
+        assert exceeded == [pid_bloated]

@@ -167,11 +167,13 @@ def test_supervisor_config_rotation_and_specs() -> None:
         max_requests_jitter=50,
         max_worker_lifetime=3600.0,
         max_worker_lifetime_jitter=120.0,
+        max_worker_memory_mb=300.0,
     )
     assert cfg.max_requests == 1000
     assert cfg.max_requests_jitter == 50
     assert cfg.max_worker_lifetime == 3600.0
     assert cfg.max_worker_lifetime_jitter == 120.0
+    assert cfg.max_worker_memory_mb == 300.0
 
     specs = cfg.build_worker_specs()
     assert len(specs) == 1
@@ -179,6 +181,18 @@ def test_supervisor_config_rotation_and_specs() -> None:
     assert specs[0].max_requests_jitter == 50
     assert specs[0].max_worker_lifetime == 3600.0
     assert specs[0].max_worker_lifetime_jitter == 120.0
+    assert specs[0].max_worker_memory_mb == 300.0
+
+
+def test_supervisor_config_default_pool_rotation_defaults() -> None:
+    cfg = SupervisorConfig()
+    specs = cfg.build_worker_specs()
+    assert len(specs) == 1
+    assert specs[0].max_requests == 2000
+    assert specs[0].max_requests_jitter == 200
+    assert specs[0].max_worker_lifetime == 3600.0
+    assert specs[0].max_worker_lifetime_jitter == 300.0
+    assert specs[0].max_worker_memory_mb == 250.0
 
 
 def test_supervisor_config_rotation_validation_errors() -> None:
@@ -201,3 +215,6 @@ def test_supervisor_config_rotation_validation_errors() -> None:
         ValueError, match="Max worker lifetime and jitter must be non-negative"
     ):
         SupervisorConfig(max_worker_lifetime_jitter=-2.0)
+
+    with pytest.raises(ValueError, match="Max worker memory must be non-negative"):
+        SupervisorConfig(max_worker_memory_mb=-10.0)
