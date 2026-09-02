@@ -343,3 +343,49 @@ def test_index_html_mcp_sandbox_default_json_validity():
     assert "query" in parsed
     assert "top_k" in parsed
     assert parsed["top_k"] == 5
+
+
+def test_wsgi_app_post_mcp_ipc_isolation():
+    """Verifies that POST /api/mcp executes via SearchClient IPC without loading VectorEngine in Web process."""
+    from unittest.mock import MagicMock
+
+    workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    app = WSGIApplication(workspace_dir=workspace_dir, vector_engine=None)
+    assert app.handlers._vector_engine is None
+
+    mock_client = MagicMock()
+    mock_client.search.return_value = {
+        "status": "success",
+        "results": [
+            {
+                "id": "2502.12345",
+                "title": "Zero Bloat Security",
+                "score": 0.99,
+                "category": "cs.CR",
+                "tags": ["zero-bloat", "ipc"],
+                "description": "Abstract testing zero memory footprint",
+            }
+        ],
+    }
+    mock_client.get_related.return_value = {
+        "status": "success",
+        "paper_id": "2502.12345",
+        "related_papers": [],
+        "mermaid_graph": "graph TD; root[2502.12345]",
+    }
+    app.handlers._search_client = mock_client
+
+    payload = {
+        "name": "search_security_papers",
+        "arguments": {"query": "zero bloat", "top_k": 1},
+    }
+    status, headers, body = call_wsgi(
+        app, method="POST", path="/api/mcp", body=json.dumps(payload)
+    )
+    assert status.startswith("200")
+    data = json.loads(body.decode("utf-8"))
+    assert data["status"] == "success"
+    assert len(data["result"]["results"]) == 1
+    assert data["result"]["results"][0]["id"] == "2502.12345"
+    assert app.handlers._vector_engine is None
+    assert mock_client.search.called

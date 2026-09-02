@@ -139,3 +139,46 @@ def test_threat_defense_caldera_and_sigma():
     assert res_sigma["status"] == "success"
     assert "sigma_rule_yaml" in res_sigma
     assert "T1190" in res_sigma["sigma_rule_yaml"]
+
+
+def test_mcp_dispatch_tool_with_search_client_ipc():
+    """Verifies that MCP tools operate seamlessly over SearchClient IPC without VectorEngine."""
+    from unittest.mock import MagicMock
+
+    from mcp.papers_server import set_search_client, set_vector_engine
+
+    # Clear direct vector engine
+    set_vector_engine(None)
+
+    mock_client = MagicMock()
+    mock_client.search.return_value = {
+        "status": "success",
+        "results": [
+            {
+                "id": "2502.99999",
+                "title": "IPC Test Paper",
+                "score": 0.95,
+                "category": "cs.CR",
+                "tags": ["ipc", "test"],
+                "description": "Abstract of IPC test paper",
+            }
+        ],
+    }
+    mock_client.get_related.return_value = {
+        "status": "success",
+        "paper_id": "2502.99999",
+        "related_papers": [{"id": "2502.88888", "score": 0.88}],
+        "mermaid_graph": "graph TD; root[2502.99999] --> node_2502.88888",
+    }
+    set_search_client(mock_client)
+
+    res = dispatch_tool("search_security_papers", {"query": "ipc test", "top_k": 1})
+    assert res["status"] == "success"
+    assert len(res["results"]) == 1
+    assert res["results"][0]["id"] == "2502.99999"
+    assert mock_client.search.called
+
+    res_rel = dispatch_tool("get_related_papers_graph", {"arxiv_id": "2502.99999"})
+    assert res_rel["status"] == "success"
+    assert res_rel["paper_id"] == "2502.99999"
+    assert mock_client.get_related.called

@@ -33,6 +33,8 @@ from mcp.papers_server import (
     handle_get_prompt,
     handle_read_resource,
 )
+from mcp.papers_server import set_search_client as set_mcp_search_client
+from mcp.papers_server import set_vector_engine as set_mcp_vector_engine
 from search.client import SearchClient
 from security.validation import is_safe_workspace_path
 
@@ -1419,6 +1421,11 @@ class GatewayHandlers:
     def _execute_mcp_legacy_or_rpc(
         self, req: Dict[str, Any], start_response: Callable[..., Any]
     ) -> List[bytes]:
+        if self._vector_engine is not None:
+            set_mcp_vector_engine(self._vector_engine)
+        else:
+            set_mcp_search_client(self.search_client)
+
         # Legacy format: {"name": "search_security_papers", "arguments": ...}
         if "name" in req:
             tool_name = req["name"]

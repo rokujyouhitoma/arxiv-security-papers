@@ -12,6 +12,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from mcp.base import log_mcp_performance, paginate_results
+from search.client import SearchClient
 from search.vector_engine import VectorEngine
 from security.validation import is_safe_workspace_path
 
@@ -30,19 +31,66 @@ def get_workspace_dir() -> str:
 
 
 WORKSPACE_DIR = get_workspace_dir()
-_VECTOR_ENGINE = None
+_VECTOR_ENGINE: Optional[VectorEngine] = None
+_SEARCH_CLIENT: Optional[SearchClient] = None
+
+
+def get_search_client() -> SearchClient:
+    global _SEARCH_CLIENT
+    if _SEARCH_CLIENT is None:
+        _SEARCH_CLIENT = SearchClient(workspace_dir=WORKSPACE_DIR)
+    return _SEARCH_CLIENT
+
+
+def set_search_client(client: Optional[SearchClient] = None) -> None:
+    global _SEARCH_CLIENT
+    _SEARCH_CLIENT = client
 
 
 def get_vector_engine() -> VectorEngine:
-    global _VECTOR_ENGINE
-    if _VECTOR_ENGINE is None:
-        _VECTOR_ENGINE = VectorEngine(workspace_dir=WORKSPACE_DIR)
-    return _VECTOR_ENGINE
+    if _VECTOR_ENGINE is not None:
+        return _VECTOR_ENGINE
+    return get_search_client().fallback_engine
+
+
+_default_get_vector_engine = get_vector_engine
 
 
 def set_vector_engine(engine: Optional[VectorEngine] = None) -> None:
     global _VECTOR_ENGINE
     _VECTOR_ENGINE = engine
+
+
+def _execute_mcp_search(
+    query: str,
+    top_k: int = 5,
+    category: Optional[str] = None,
+    mode: str = "hybrid",
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    if _VECTOR_ENGINE is not None:
+        return _VECTOR_ENGINE.search(
+            query, top_k=max(top_k, offset + top_k), category=category
+        )
+    if get_vector_engine is not _default_get_vector_engine:
+        try:
+            return get_vector_engine().search(
+                query, top_k=max(top_k, offset + top_k), category=category
+            )
+        except Exception:
+            pass
+
+    resp = get_search_client().search(
+        query=query,
+        top_k=max(top_k, offset + top_k),
+        category=category,
+        mode=mode,
+        offset=0,
+    )
+    results = resp.get("results", [])
+    if isinstance(results, list):
+        return results
+    return []
 
 
 TOOLS_MANIFEST = [
@@ -300,7 +348,7 @@ def handle_search_security_papers(args: Dict[str, Any]) -> Dict[str, Any]:
     limit = int(args.get("limit", top_k))
     category = args.get("category")
     compact = args.get("compact", True)
-    results = get_vector_engine().search(
+    results = _execute_mcp_search(
         query, top_k=max(top_k, offset + limit), category=category
     )
 
@@ -314,8 +362,8 @@ def handle_search_security_papers(args: Dict[str, Any]) -> Dict[str, Any]:
                     "title_ja": r.get("title_ja", r.get("title")),
                     "category": r.get("category"),
                     "tags": r.get("tags", [])[:5],
-                    "score": round(r.get("score", 0.0), 4),
-                    "summary": r.get("description", r.get("abstract", ""))[:180]
+                    "score": round(float(r.get("score", 0.0)), 4),
+                    "summary": str(r.get("description", r.get("abstract", "")))[:180]
                     + "...",
                 }
             )
@@ -348,6 +396,57 @@ def _compact_doc_item(d: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _extract_hybrid_results(resp: Any) -> List[Dict[str, Any]]:
+    if isinstance(resp, dict):
+        res = resp.get("results", [])
+        return res if isinstance(res, list) else []
+    return []
+
+
+def _fetch_from_mock_engine(
+    query: str, facets: Optional[Dict[str, Any]], top_k: int
+) -> Optional[List[Dict[str, Any]]]:
+    if get_vector_engine is _default_get_vector_engine:
+        return None
+    try:
+        resp = get_vector_engine().search_hybrid_pipeline(
+            query, facets=facets, top_k=top_k
+        )
+        return _extract_hybrid_results(resp)
+    except Exception:
+        return None
+
+
+def _fetch_hybrid_papers_raw(
+    query: str,
+    facets: Optional[Dict[str, Any]],
+    top_k: int,
+    category: Optional[str],
+) -> List[Dict[str, Any]]:
+    if _VECTOR_ENGINE is not None:
+        return _extract_hybrid_results(
+            _VECTOR_ENGINE.search_hybrid_pipeline(query, facets=facets, top_k=top_k)
+        )
+    mock_res = _fetch_from_mock_engine(query, facets, top_k)
+    if mock_res is not None:
+        return mock_res
+    return _execute_mcp_search(query, top_k=top_k, category=category, mode="hybrid")
+
+
+def _fetch_knowledge_graph_neighbors(entity: str, max_depth: int) -> Any:
+    if _VECTOR_ENGINE is not None:
+        return _VECTOR_ENGINE.knowledge_graph.get_neighbors(entity, max_depth=max_depth)
+    if get_vector_engine is not _default_get_vector_engine:
+        try:
+            return get_vector_engine().knowledge_graph.get_neighbors(
+                entity, max_depth=max_depth
+            )
+        except Exception:
+            pass
+    rel_resp = get_search_client().get_related(entity)
+    return rel_resp.get("related_papers", []) if isinstance(rel_resp, dict) else []
+
+
 def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
     query = args.get("query", "")
     top_k = args.get("top_k", 10)
@@ -355,11 +454,10 @@ def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
     limit = int(args.get("limit", top_k))
     category = args.get("category")
     facets = {"category": category} if category else None
-    resp = get_vector_engine().search_hybrid_pipeline(
-        query, facets=facets, top_k=max(top_k, offset + limit)
-    )
 
-    raw_results = resp.get("results", []) if isinstance(resp, dict) else []
+    raw_results = _fetch_hybrid_papers_raw(
+        query, facets, max(top_k, offset + limit), category
+    )
     compact_docs = [_compact_doc_item(d) for d in raw_results]
     paginated_docs, pagination_meta = paginate_results(
         compact_docs, offset=offset, limit=limit
@@ -378,9 +476,7 @@ def handle_search_papers_hybrid(args: Dict[str, Any]) -> Dict[str, Any]:
 def handle_query_knowledge_graph(args: Dict[str, Any]) -> Dict[str, Any]:
     entity = args.get("entity", "")
     max_depth = args.get("max_depth", 2)
-    graph_res = get_vector_engine().knowledge_graph.get_neighbors(
-        entity, max_depth=max_depth
-    )
+    graph_res = _fetch_knowledge_graph_neighbors(entity, max_depth)
     return {
         "status": "success",
         "graph": graph_res,
@@ -495,7 +591,7 @@ def handle_get_latest_trends(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_query_attack_technique(args: Dict[str, Any]) -> Dict[str, Any]:
     technique_id = args.get("technique_id", "").lower()
-    results = get_vector_engine().search(technique_id, top_k=10)
+    results = _execute_mcp_search(technique_id, top_k=10)
     return {
         "status": "success",
         "technique_id": technique_id,
@@ -504,9 +600,34 @@ def handle_query_attack_technique(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _fetch_related_from_mock(arxiv_id: str) -> Optional[Dict[str, Any]]:
+    if get_vector_engine is _default_get_vector_engine:
+        return None
+    try:
+        return get_vector_engine().get_related_papers(arxiv_id)
+    except Exception:
+        return None
+
+
+def _fetch_related_papers_data(arxiv_id: str) -> Dict[str, Any]:
+    if _VECTOR_ENGINE is not None:
+        return _VECTOR_ENGINE.get_related_papers(arxiv_id)
+    mock_res = _fetch_related_from_mock(arxiv_id)
+    if mock_res is not None:
+        return mock_res
+    resp = get_search_client().get_related(arxiv_id)
+    if resp and resp.get("status") == "success":
+        return resp
+    return {
+        "status": "error",
+        "error": f"Paper '{arxiv_id}' not found",
+        "paper_id": arxiv_id,
+    }
+
+
 def handle_get_related_papers_graph(args: Dict[str, Any]) -> Dict[str, Any]:
     arxiv_id = args.get("arxiv_id", "").strip().replace("/", "_").replace("..", "")
-    return get_vector_engine().get_related_papers(arxiv_id)
+    return _fetch_related_papers_data(arxiv_id)
 
 
 CWE_MITIGATION_DATABASE = {
@@ -674,7 +795,7 @@ def handle_verify_code_security(args: Dict[str, Any]) -> Dict[str, Any]:
 
     warnings, suggested_mitigations = _match_cwe_warnings(code.lower())
     query_terms = " ".join([w["name"] for w in warnings]) if warnings else code[:100]
-    relevant_papers = get_vector_engine().search(query_terms, top_k=3)
+    relevant_papers = _execute_mcp_search(query_terms, top_k=3)
     risk_level = _assess_code_risk(warnings)
 
     return {
@@ -686,10 +807,10 @@ def handle_verify_code_security(args: Dict[str, Any]) -> Dict[str, Any]:
         "suggested_mitigations": suggested_mitigations[:5],
         "matched_academic_papers": [
             {
-                "id": p["id"],
-                "title": p["title"],
-                "score": p["score"],
-                "url": f"https://arxiv.org/abs/{p['id']}",
+                "id": p.get("id"),
+                "title": p.get("title"),
+                "score": p.get("score"),
+                "url": f"https://arxiv.org/abs/{p.get('id')}",
             }
             for p in relevant_papers
         ],
@@ -703,7 +824,7 @@ def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
 
     data = CWE_MITIGATION_DATABASE.get(cwe_id)
     if not data:
-        results = get_vector_engine().search(cwe_id, top_k=5)
+        results = _execute_mcp_search(cwe_id, top_k=5)
         return {
             "status": "success",
             "cwe_id": cwe_id,
@@ -716,7 +837,7 @@ def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
             "academic_papers": results,
         }
 
-    relevant_papers = get_vector_engine().search(f"{cwe_id} {data['name']}", top_k=5)
+    relevant_papers = _execute_mcp_search(f"{cwe_id} {data['name']}", top_k=5)
     return {
         "status": "success",
         "cwe_id": cwe_id,
@@ -726,10 +847,10 @@ def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
         "secure_coding_patterns": data["secure_patterns"],
         "academic_reference_papers": [
             {
-                "id": p["id"],
-                "title": p["title"],
-                "score": p["score"],
-                "url": f"https://arxiv.org/abs/{p['id']}",
+                "id": p.get("id"),
+                "title": p.get("title"),
+                "score": p.get("score"),
+                "url": f"https://arxiv.org/abs/{p.get('id')}",
             }
             for p in relevant_papers
         ],
