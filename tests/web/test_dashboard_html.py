@@ -233,3 +233,11 @@ def test_dashboard_supervisor_tab_ui(dashboard_html_content: str) -> None:
     assert 'id="valSaDensity"' in dashboard_html_content
     # Check that viewSupervisor is closed and clean
     assert '<div id="viewSupervisor" class="tab-view">' in dashboard_html_content
+
+
+def test_dashboard_sse_event_source_ui(dashboard_html_content: str) -> None:
+    """Verifies that the Dashboard integrates EventSource for real-time SSE streaming."""
+    assert "EventSource" in dashboard_html_content
+    assert "/api/stream/top" in dashboard_html_content
+    assert "initSseLiveStream" in dashboard_html_content
+    assert "updateSupervisorFromStream" in dashboard_html_content

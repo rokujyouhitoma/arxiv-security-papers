@@ -51,14 +51,14 @@ Web Gateway (`src/web/gateway/`) において、従来の定周期短インタ�
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/web/gateway/streaming.py](../../src/web/gateway/streaming.py)
-- [ ] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py)
-- [ ] [src/web/gateway/router.py](../../src/web/gateway/router.py)
-- [ ] [src/web/gateway/app.py](../../src/web/gateway/app.py)
-- [ ] [site/dashboard.html](../../site/dashboard.html)
-- [ ] [tests/web/gateway/test_gateway.py](../../tests/web/gateway/test_gateway.py)
-- [ ] [tests/web/test_dashboard_html.py](../../tests/web/test_dashboard_html.py)
-- [ ] [tests/web/test_web_server.py](../../tests/web/test_web_server.py)
+- [x] [src/web/gateway/streaming.py](../../src/web/gateway/streaming.py)
+- [x] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py)
+- [x] [src/web/gateway/router.py](../../src/web/gateway/router.py)
+- [x] [src/web/gateway/app.py](../../src/web/gateway/app.py)
+- [x] [site/dashboard.html](../../site/dashboard.html)
+- [x] [tests/web/gateway/test_gateway.py](../../tests/web/gateway/test_gateway.py)
+- [x] [tests/web/test_dashboard_html.py](../../tests/web/test_dashboard_html.py)
+- [x] [tests/web/test_web_server.py](../../tests/web/test_web_server.py)
 
 ---
 
@@ -84,8 +84,9 @@ Target Branch: `feat/118-implement-web-gateway-sse-realtime-streaming`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `GET /api/stream/top`, `GET /api/stream/logs`, `GET /api/stream/events` が `text/event-stream` で正常にストリーミングレスポンスを返却すること
-- [ ] 15 秒間隔のキープアライブ Ping (`event: ping`) が送信され、プロキシやブラウザのタイムアウトが防止されること
-- [ ] クライアント切断時にジェネレータが安全に終了し、メモリ・FD リークが発生しないこと
-- [ ] `site/dashboard.html` において Live Stream モードでリアルタイムにメトリクスが更新されること
-- [ ] 全ユニットテスト・統合テストおよび品質ゲート（`make format`, `make static_analysis` / Xenon Rank A, Mypy Strict）が 100% PASS すること
+- [x] `GET /api/stream/top`, `GET /api/stream/logs`, `GET /api/stream/events` が `text/event-stream` で正常にストリーミングレスポンスを返却すること
+- [x] 15 秒間隔のキープアライブ Ping (`event: ping`) が送信され、プロキシやブラウザのタイムアウトが防止されること
+- [x] クライアント切断時にジェネレータが安全に終了し、メモリ・FD リークが発生しないこと
+- [x] `site/dashboard.html` において Live Stream モードでリアルタイムにメトリクスが更新されること
+- [x] 全ユニットテスト・統合テストおよび品質ゲート（`make format`, `make static_analysis` / Xenon Rank A, Mypy Strict）が 100% PASS すること
+

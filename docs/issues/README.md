@@ -9,7 +9,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **117** | 内製Pure-Python埋め込みエンジンの意味的セマンティック類似度向上（サブワード・N-gram重み付け＆超軽量埋め込み） | Feature | Medium | Open (New) | [117-enhance-pure-python-semantic-embeddings.md](117-enhance-pure-python-semantic-embeddings.md) |
-| **118** | Web GatewayにおけるSSE (Server-Sent Events) リアルタイム・プッシュストリーミング API & UI ダッシュボード連携 | Feature | Medium | Open (In Progress) | [118-implement-web-gateway-sse-realtime-streaming.md](118-implement-web-gateway-sse-realtime-streaming.md) |
 
 ---
 
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **118** | Web GatewayにおけるSSE (Server-Sent Events) リアルタイム・プッシュストリーミング API & UI ダッシュボード連携 | Feature | 2026-09-03 | [118-implement-web-gateway-sse-realtime-streaming.md](closed/118-implement-web-gateway-sse-realtime-streaming.md) |
 | **122** | Supervisorにおけるワーカー自動ローテーションTTLデフォルト設定とメモリ上限監視（Memory Watchdog）の実装 | Feature | 2026-09-03 | [122-implement-supervisor-worker-memory-watchdog-and-default-rotation-ttl.md](closed/122-implement-supervisor-worker-memory-watchdog-and-default-rotation-ttl.md) |
 | **121** | WebワーカーにおけるVectorEngineオンメモリ展開の完全排除とSearchClient IPC移行 | Bug | 2026-09-03 | [121-eliminate-web-worker-in-memory-vector-engine-bloat-via-search-client-ipc.md](closed/121-eliminate-web-worker-in-memory-vector-engine-bloat-via-search-client-ipc.md) |
 | **120** | MCP ツールサンドボックスの初期引数 JSON 構文エラー修正 | Bug | 2026-09-02 | [120-fix-mcp-sandbox-default-arguments-json-syntax-error.md](closed/120-fix-mcp-sandbox-default-arguments-json-syntax-error.md) |

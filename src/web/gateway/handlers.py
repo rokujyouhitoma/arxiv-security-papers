@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import time
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -43,7 +44,14 @@ if TYPE_CHECKING:
 
 from ..presentation.template import render_okf_preview_html
 from .logger import log_query
-from .router import response_bytes, response_error, response_html, response_json
+from .router import (
+    response_bytes,
+    response_error,
+    response_html,
+    response_json,
+    response_sse,
+)
+from .streaming import stream_log_tail, stream_system_events, stream_top_metrics
 
 MAX_MCP_PAYLOAD_BYTES = 1024 * 1024  # 1MB
 
@@ -1532,3 +1540,57 @@ class GatewayHandlers:
             )
 
         return self._execute_mcp_legacy_or_rpc(req, start_response)
+
+    @staticmethod
+    def _parse_stream_interval(
+        query_params: Dict[str, List[str]], default: float = 1.0
+    ) -> float:
+        raw = query_params.get("interval", [str(default)])[0]
+        try:
+            val = float(raw)
+            return max(0.2, min(val, 60.0))
+        except (ValueError, TypeError):
+            return default
+
+    def handle_stream_top(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Dict[str, List[str]],
+    ) -> Any:
+        """Streams live supervisor metrics over Server-Sent Events (SSE)."""
+        interval = self._parse_stream_interval(query_params, default=1.0)
+        gen = stream_top_metrics(
+            lambda: _introspect_supervisor_state(self.workspace_dir),
+            interval=interval,
+        )
+        return response_sse(start_response, gen)
+
+    def handle_stream_logs(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Dict[str, List[str]],
+    ) -> Any:
+        """Streams real-time structured logs over Server-Sent Events (SSE)."""
+        interval = self._parse_stream_interval(query_params, default=1.0)
+        log_file = os.path.join(self.workspace_dir, "outputs", "logs", "events.jsonl")
+        if not os.path.exists(log_file):
+            alt_log = os.path.join(
+                self.workspace_dir, "outputs", "supervisor", "supervisor.log"
+            )
+            if os.path.exists(alt_log):
+                log_file = alt_log
+        gen = stream_log_tail(log_file, interval=interval)
+        return response_sse(start_response, gen)
+
+    def handle_stream_events(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Dict[str, List[str]],
+    ) -> Any:
+        """Streams general system event notifications over Server-Sent Events (SSE)."""
+        interval = self._parse_stream_interval(query_params, default=2.0)
+        gen = stream_system_events(
+            lambda: {"type": "heartbeat", "time": time.time(), "status": "online"},
+            interval=interval,
+        )
+        return response_sse(start_response, gen)

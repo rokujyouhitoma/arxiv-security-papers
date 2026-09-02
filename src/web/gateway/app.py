@@ -7,7 +7,17 @@ from __future__ import annotations
 
 import time
 import urllib.parse
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    cast,
+)
 from wsgiref.simple_server import make_server
 
 if TYPE_CHECKING:
@@ -50,7 +60,7 @@ class WSGIApplication:
         start_response: Callable[..., Any],
         path: str,
         query_params: Dict[str, List[str]],
-    ) -> Optional[List[bytes]]:
+    ) -> Optional[Any]:
         if path == "/api/trends":
             return self.handlers.handle_trends(start_response, query_params)
         if path == "/api/stats":
@@ -59,13 +69,29 @@ class WSGIApplication:
             return self.handlers.handle_graph_mesh(start_response)
         return None
 
+    def _route_stream_api(
+        self,
+        start_response: Callable[..., Any],
+        path: str,
+        query_params: Dict[str, List[str]],
+    ) -> Optional[Any]:
+        if path == "/api/stream/top":
+            return self.handlers.handle_stream_top(start_response, query_params)
+        if path == "/api/stream/logs":
+            return self.handlers.handle_stream_logs(start_response, query_params)
+        if path == "/api/stream/events":
+            return self.handlers.handle_stream_events(start_response, query_params)
+        return None
+
     def _route_api_get(
         self,
         environ: Dict[str, Any],
         start_response: Callable[..., Any],
         path: str,
         query_params: Dict[str, List[str]],
-    ) -> Optional[List[bytes]]:
+    ) -> Optional[Any]:
+        if path.startswith("/api/stream/"):
+            return self._route_stream_api(start_response, path, query_params)
         remote_addr = environ.get("REMOTE_ADDR", "-")
         if path == "/api/search":
             return self.handlers.handle_search(
@@ -81,7 +107,7 @@ class WSGIApplication:
         start_response: Callable[..., Any],
         path: str,
         query_params: Dict[str, List[str]],
-    ) -> List[bytes]:
+    ) -> Any:
         api_res = self._route_api_get(environ, start_response, path, query_params)
         if api_res is not None:
             return api_res
@@ -135,7 +161,7 @@ class WSGIApplication:
         self,
         environ: Dict[str, Any],
         start_response: Callable[..., Any],
-    ) -> List[bytes]:
+    ) -> Any:
         method = environ.get("REQUEST_METHOD", "GET").upper()
         path = environ.get("PATH_INFO", "/")
         query_string = environ.get("QUERY_STRING", "")
@@ -156,7 +182,7 @@ class WSGIApplication:
 
     def __call__(
         self, environ: Dict[str, Any], start_response: Callable[..., Any]
-    ) -> List[bytes]:
+    ) -> Iterable[bytes]:
         t0 = time.perf_counter()
         tid, sid = self._init_trace_context(environ)
         status_holder: List[str] = []
@@ -165,7 +191,7 @@ class WSGIApplication:
         )
 
         try:
-            return self._dispatch_request(environ, wrapped_sr)
+            return cast(Iterable[bytes], self._dispatch_request(environ, wrapped_sr))
         finally:
             dt_ms = (time.perf_counter() - t0) * 1000.0
             st_code = int(status_holder[0].split()[0]) if status_holder else 500

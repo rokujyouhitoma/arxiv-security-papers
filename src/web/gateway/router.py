@@ -59,6 +59,24 @@ def response_bytes(
     return [body]
 
 
+SSE_HEADERS: List[Tuple[str, str]] = [
+    ("Content-Type", "text/event-stream; charset=utf-8"),
+    ("Cache-Control", "no-cache, no-transform"),
+    ("Connection", "keep-alive"),
+    ("X-Accel-Buffering", "no"),
+] + CORS_HEADERS
+
+
+def response_sse(
+    start_response: Callable[..., Any],
+    stream_generator: Any,
+    status: str = "200 OK",
+) -> Any:
+    """Generates SSE (Server-Sent Events) streaming response for WSGI callable."""
+    start_response(status, list(SSE_HEADERS))
+    return stream_generator
+
+
 def response_error(
     start_response: Callable[..., Any],
     message: str,

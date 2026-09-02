@@ -341,3 +341,75 @@ def test_gateway_paper_not_found_returns_404(tmp_path: Any) -> None:
     assert status_cap[0] == "404 Not Found"
     data = json.loads(res[0].decode("utf-8"))
     assert data["status"] == "error"
+
+
+def test_format_sse_event():
+    from web.gateway.streaming import format_sse_event
+
+    # 1. Simple dict
+    b1 = format_sse_event({"message": "hello"}, event="greeting", event_id="101")
+    s1 = b1.decode("utf-8")
+    assert "id: 101\n" in s1
+    assert "event: greeting\n" in s1
+    assert 'data: {"message": "hello"}\n\n' in s1
+
+    # 2. String data with retry
+    b2 = format_sse_event("multi\nline\ndata", retry_ms=5000)
+    s2 = b2.decode("utf-8")
+    assert "retry: 5000\n" in s2
+    assert "data: multi\ndata: line\ndata: data\n\n" in s2
+
+
+def test_gateway_stream_top_endpoint(tmp_path: Any) -> None:
+    app = WSGIApplication(workspace_dir=str(tmp_path))
+    status_cap: List[str] = []
+    headers_cap: List[List[Tuple[str, str]]] = []
+
+    def start_response(status: str, headers: List[Tuple[str, str]]) -> None:
+        status_cap.append(status)
+        headers_cap.append(headers)
+
+    env = make_test_environ(
+        method="GET", path="/api/stream/top", query_string="interval=0.5"
+    )
+    stream_iter = app(env, start_response)
+
+    assert status_cap[0] == "200 OK"
+    headers_dict = dict(headers_cap[0])
+    assert "text/event-stream" in headers_dict.get("Content-Type", "")
+    assert "no-cache" in headers_dict.get("Cache-Control", "")
+    assert headers_dict.get("X-Accel-Buffering") == "no"
+
+    # Read first chunk
+    first_chunk = next(iter(stream_iter))
+    first_str = first_chunk.decode("utf-8")
+    assert "event: connected" in first_str
+    assert "top_metrics" in first_str
+
+
+def test_gateway_stream_logs_and_events_endpoints(tmp_path: Any) -> None:
+    app = WSGIApplication(workspace_dir=str(tmp_path))
+
+    # 1. logs
+    status_cap: List[str] = []
+    headers_cap: List[List[Tuple[str, str]]] = []
+    env_logs = make_test_environ(method="GET", path="/api/stream/logs")
+    logs_iter = app(
+        env_logs, lambda s, h: (status_cap.append(s), headers_cap.append(h))
+    )
+    assert status_cap[0] == "200 OK"
+    assert "text/event-stream" in dict(headers_cap[0]).get("Content-Type", "")
+    first_log_chunk = next(iter(logs_iter))
+    assert "event: connected" in first_log_chunk.decode("utf-8")
+
+    # 2. events
+    status_cap.clear()
+    headers_cap.clear()
+    env_events = make_test_environ(method="GET", path="/api/stream/events")
+    events_iter = app(
+        env_events, lambda s, h: (status_cap.append(s), headers_cap.append(h))
+    )
+    assert status_cap[0] == "200 OK"
+    assert "text/event-stream" in dict(headers_cap[0]).get("Content-Type", "")
+    first_evt_chunk = next(iter(events_iter))
+    assert "event: connected" in first_evt_chunk.decode("utf-8")
