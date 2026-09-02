@@ -225,6 +225,8 @@ def test_dashboard_supervisor_tab_ui(dashboard_html_content: str) -> None:
     assert 'id="badgeIpcStatus"' in dashboard_html_content
     assert 'id="badgeTotalWorkers"' in dashboard_html_content
     assert 'id="supervisorWorkersTableBody"' in dashboard_html_content
+    assert "RPS" in dashboard_html_content
+    assert "supervisorWorkerSnapshots" in dashboard_html_content
     assert 'id="badgeSaLatency"' in dashboard_html_content
     assert 'id="valSaTailLatency"' in dashboard_html_content
     assert 'id="valSaMttr"' in dashboard_html_content

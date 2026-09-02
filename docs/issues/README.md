@@ -6,7 +6,7 @@
 
 ## 1. アクティブ Issue 一覧 (Active Issues)
 
-現在アクティブな Issue はありません。
+*現在アクティブな Issue はありません。*
 
 ---
 
@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **113** | サービスワーカー(Search/Database)のIPCリクエスト計測連携およびTopモニタ/ダッシュボードへのRPS表示機能の実装 | Improvement | 2026-09-02 | [113-implement-service-worker-ipc-request-metrics-and-top-rps-throughput-monitor.md](closed/113-implement-service-worker-ipc-request-metrics-and-top-rps-throughput-monitor.md) |
 | **112** | Supervisorワーカーのプロセス間メトリクス同期機構の実装とTopモニタREQ(リクエスト件数)リアルタイム表示の修正 | Improvement | 2026-09-02 | [112-implement-worker-metrics-ipc-sync-for-supervisor-top-req-counter.md](closed/112-implement-worker-metrics-ipc-sync-for-supervisor-top-req-counter.md) |
 | **111** | Webワーカーのオンメモリ検索インデックス展開廃止とSearchワーカーIPC問い合わせへの完全移行 | Improvement | 2026-09-02 | [111-decouple-web-worker-from-in-memory-vector-index.md](closed/111-decouple-web-worker-from-in-memory-vector-index.md) |
 | **110** | 検索結果の総ヒット件数（Total Hits）返却・動的ページネーションおよび表示件数切替機能の実装 | Improvement | 2026-09-02 | [110-enhance-search-pagination-and-total-hit-count-display.md](closed/110-enhance-search-pagination-and-total-hit-count-display.md) |

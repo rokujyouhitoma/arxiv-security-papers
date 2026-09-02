@@ -42,6 +42,7 @@ class BaseWorker(abc.ABC):
         self.alive = True
         self.requests_handled = 0
         self.boot_time = time.time()
+        self.last_active_epoch = self.boot_time
 
     def init_signals(self) -> None:
         """Sets up worker-specific signal traps safely."""
@@ -97,6 +98,7 @@ class BaseWorker(abc.ABC):
             "requests_handled": self.requests_handled,
             "uptime": round(time.time() - self.boot_time, 2),
             "last_seen_epoch": time.time(),
+            "last_active_epoch": self.last_active_epoch,
         }
         if metadata:
             meta.update(metadata)

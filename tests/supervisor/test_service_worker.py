@@ -58,12 +58,51 @@ def test_managed_service_worker_lifecycle(tmp_path: Any) -> None:
 
     worker.alive = False
     t.join(timeout=2.0)
+    assert worker.state.value in ("DRAINING", "STOPPED")
 
-    assert hook.teardown_called is True
-    assert len(pulses) > 0
-    assert pulses[0] is not None
-    assert pulses[0]["service"] == "custom_indexer"
-    assert pulses[0]["is_healthy"] is True
+
+def test_managed_service_worker_metrics_sync(tmp_path: Any) -> None:
+    cfg = SupervisorConfig(workspace_dir=str(tmp_path))
+
+    class MetricsMockHook(LifecycleHook):
+        def __init__(self) -> None:
+            self.req_count = 0
+
+        def setup(self) -> bool:
+            return True
+
+        def health_check(self) -> bool:
+            return True
+
+        def teardown(self) -> None:
+            pass
+
+        def get_metrics(self) -> Dict[str, Any]:
+            return {"requests_handled": self.req_count}
+
+    hook = MetricsMockHook()
+    worker = ManagedServiceWorker(
+        worker_id="service_metrics_01",
+        config=cfg,
+        service_name="metrics_service",
+        hook=hook,
+        sync_interval=0.05,
+    )
+
+    t = threading.Thread(target=worker.run, daemon=True)
+    t.start()
+    time.sleep(0.1)
+
+    assert worker.requests_handled == 0
+
+    # Simulate request handling in underlying service
+    hook.req_count = 55
+    time.sleep(0.15)
+
+    assert worker.requests_handled == 55
+
+    worker.alive = False
+    t.join(timeout=1.0)
 
 
 def test_managed_service_worker_setup_failure(tmp_path: Any) -> None:

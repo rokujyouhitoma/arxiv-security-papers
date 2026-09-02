@@ -166,6 +166,7 @@ class SyncWorker(BaseWorker):
     def handle_client(self, client_sock: socket.socket) -> None:
         """Processes a single HTTP connection through the target callable application."""
         client_sock.settimeout(self.config.timeout)
+        self.last_active_epoch = time.time()
         self.pulse(
             {
                 "is_handling_request": True,
@@ -185,6 +186,7 @@ class SyncWorker(BaseWorker):
             response_bytes = self._format_http_response(status, headers, body)
             client_sock.sendall(response_bytes)
             self.requests_handled += 1
+            self.last_active_epoch = time.time()
         except Exception:
             pass
         finally:

@@ -56,6 +56,7 @@ class DatabaseService:
         self.storage = VectorStorage(self.storage_path, dim=dim)
         self.handler = VectorDBProtocolHandler(storage=self.storage)
         self.running = False
+        self.requests_handled = 0
         self._server_sock: Optional[socket.socket] = None
         self._thread: Optional[threading.Thread] = None
 
@@ -169,6 +170,7 @@ class DatabaseService:
 
     def _handle_line(self, conn: socket.socket, line: str) -> None:
         resp_dict = self._process_request_payload(line)
+        self.requests_handled += 1
         conn.sendall((json.dumps(resp_dict) + "\n").encode("utf-8"))
 
     def _process_buffered_lines(self, conn: socket.socket, buffer: str) -> str:
@@ -288,3 +290,8 @@ class DatabaseLifecycleHook(LifecycleHook):
         """Stops database IPC service and releases locks."""
         if self.service:
             self.service.stop()
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Returns runtime performance metrics from DatabaseService."""
+        reqs = getattr(self.service, "requests_handled", 0) if self.service else 0
+        return {"requests_handled": reqs}

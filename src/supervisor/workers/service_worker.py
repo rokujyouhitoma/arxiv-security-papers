@@ -74,6 +74,17 @@ class ManagedServiceWorker(BaseWorker):
                 pass
             self.last_sync = now
 
+    def _sync_hook_metrics(self) -> None:
+        try:
+            metrics = self.hook.get_metrics()
+            if isinstance(metrics, dict) and "requests_handled" in metrics:
+                new_req = int(metrics["requests_handled"])
+                if new_req > self.requests_handled:
+                    self.last_active_epoch = time.time()
+                self.requests_handled = new_req
+        except Exception:
+            pass
+
     def run(self) -> None:
         """Main service lifecycle execution loop."""
         self.init_signals()
@@ -86,6 +97,7 @@ class ManagedServiceWorker(BaseWorker):
 
         self.state = ServiceState.ACTIVE
         while self.alive:
+            self._sync_hook_metrics()
             healthy = self._check_service_health()
             self.pulse(
                 {

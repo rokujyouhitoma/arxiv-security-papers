@@ -23,7 +23,20 @@ class HeartbeatWatchdog:
         self.base_dir = base_dir
         self._lock = threading.Lock()
         self._heartbeats: Dict[int, float] = {}
+        self._last_active: Dict[int, float] = {}
+        self._last_requests_handled: Dict[int, int] = {}
         self._worker_meta: Dict[int, Dict[str, Any]] = {}
+
+    def _update_activity_state(
+        self, pid: int, data: Dict[str, Any], now: float
+    ) -> None:
+        prev_req = self._last_requests_handled.get(pid, 0)
+        curr_req = int(data.get("requests_handled", prev_req))
+        if curr_req > prev_req or data.get("is_handling_request", False):
+            self._last_active[pid] = now
+            self._last_requests_handled[pid] = curr_req
+        elif pid not in self._last_active:
+            self._last_active[pid] = now
 
     def record_heartbeat(
         self, pid: int, metadata: Optional[Dict[str, Any]] = None
@@ -35,6 +48,7 @@ class HeartbeatWatchdog:
             if metadata:
                 if pid not in self._worker_meta:
                     self._worker_meta[pid] = {}
+                self._update_activity_state(pid, metadata, now)
                 self._worker_meta[pid].update(metadata)
                 self._worker_meta[pid]["last_seen_monotonic"] = now
                 self._worker_meta[pid]["last_seen_epoch"] = time.time()
@@ -53,6 +67,7 @@ class HeartbeatWatchdog:
                 self._heartbeats[pid] = now
                 if pid not in self._worker_meta:
                     self._worker_meta[pid] = {}
+                self._update_activity_state(pid, data, now)
                 self._worker_meta[pid].update(data)
                 self._worker_meta[pid]["last_seen_monotonic"] = now
         except Exception:
@@ -75,6 +90,8 @@ class HeartbeatWatchdog:
         with self._lock:
             now = time.monotonic()
             self._heartbeats[pid] = now
+            self._last_active[pid] = now
+            self._last_requests_handled[pid] = 0
             meta = {
                 "pid": pid,
                 "type": worker_type,
@@ -84,12 +101,15 @@ class HeartbeatWatchdog:
             }
             if metadata:
                 meta.update(metadata)
+                self._update_activity_state(pid, metadata, now)
             self._worker_meta[pid] = meta
 
     def remove_worker(self, pid: int) -> None:
         """Removes a terminated worker from tracking tables and cleans up disk files."""
         with self._lock:
             self._heartbeats.pop(pid, None)
+            self._last_active.pop(pid, None)
+            self._last_requests_handled.pop(pid, None)
             self._worker_meta.pop(pid, None)
         target_dir = self.base_dir
         if target_dir and os.path.isdir(target_dir):
@@ -101,7 +121,9 @@ class HeartbeatWatchdog:
                 pass
 
     @staticmethod
-    def _check_meta_health(meta: dict, last_pulse: float, t_limit: float) -> bool:
+    def _check_meta_health(
+        meta: Dict[str, Any], last_pulse: float, t_limit: float
+    ) -> bool:
         if meta.get("status") != "ALIVE":
             return False
         if "is_healthy" in meta:
@@ -142,14 +164,29 @@ class HeartbeatWatchdog:
                     hung.append(pid)
         return hung
 
-    def _compute_worker_health(self, meta: Dict[str, Any], idle_seconds: float) -> bool:
+    def _compute_idle_seconds(
+        self, pid: int, meta: Dict[str, Any], now_monotonic: float, now_epoch: float
+    ) -> float:
+        if meta.get("is_handling_request", False):
+            return 0.0
+        if "last_active_epoch" in meta:
+            try:
+                return max(0.0, round(now_epoch - float(meta["last_active_epoch"]), 1))
+            except (ValueError, TypeError):
+                pass
+        last_act = self._last_active.get(pid, now_monotonic)
+        return max(0.0, round(now_monotonic - last_act, 1))
+
+    def _compute_worker_health(
+        self, meta: Dict[str, Any], last_pulse: float, now: float
+    ) -> bool:
         """Helper to determine worker health based on type and request state."""
         if meta.get("status") != "ALIVE":
             return False
         if "is_healthy" in meta:
             return bool(meta["is_healthy"])
         if meta.get("is_handling_request", False):
-            return idle_seconds <= self.timeout
+            return (now - last_pulse) <= self.timeout
         return True
 
     def get_worker_status(self, pid: int) -> Optional[Dict[str, Any]]:
@@ -159,10 +196,11 @@ class HeartbeatWatchdog:
             if pid not in self._worker_meta:
                 return None
             meta = dict(self._worker_meta[pid])
+            now_m = time.monotonic()
+            now_e = time.time()
             last_pulse = self._heartbeats.get(pid, 0.0)
-            idle_sec = round(time.monotonic() - last_pulse, 2)
-            meta["idle_seconds"] = idle_sec
-            meta["is_healthy"] = self._compute_worker_health(meta, idle_sec)
+            meta["idle_seconds"] = self._compute_idle_seconds(pid, meta, now_m, now_e)
+            meta["is_healthy"] = self._compute_worker_health(meta, last_pulse, now_m)
             return meta
 
     def get_all_statuses(self) -> Dict[int, Dict[str, Any]]:
@@ -170,12 +208,12 @@ class HeartbeatWatchdog:
         self.sync_from_disk()
         with self._lock:
             res: Dict[int, Dict[str, Any]] = {}
-            now = time.monotonic()
+            now_m = time.monotonic()
+            now_e = time.time()
             for pid, meta in self._worker_meta.items():
                 m = dict(meta)
                 last_pulse = self._heartbeats.get(pid, 0.0)
-                idle_sec = round(now - last_pulse, 2)
-                m["idle_seconds"] = idle_sec
-                m["is_healthy"] = self._compute_worker_health(m, idle_sec)
+                m["idle_seconds"] = self._compute_idle_seconds(pid, m, now_m, now_e)
+                m["is_healthy"] = self._compute_worker_health(m, last_pulse, now_m)
                 res[pid] = m
             return res

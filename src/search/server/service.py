@@ -45,6 +45,7 @@ class SearchService:
         self._server_sock: Optional[socket.socket] = None
         self._thread: Optional[threading.Thread] = None
         self._running = False
+        self.requests_handled = 0
 
     @property
     def vector_engine(self) -> VectorEngine:
@@ -283,6 +284,7 @@ class SearchService:
             if req is None:
                 return
             resp = self.handle_command(req)
+            self.requests_handled += 1
             resp_bytes = (json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8")
             client_sock.sendall(resp_bytes)
         except Exception as e:
@@ -377,3 +379,9 @@ class SearchLifecycleHook(LifecycleHook):
     def teardown(self) -> None:
         """Stops search IPC service and unlinks socket."""
         self.service.stop()
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Returns runtime performance metrics from SearchService."""
+        return {
+            "requests_handled": getattr(self.service, "requests_handled", 0),
+        }

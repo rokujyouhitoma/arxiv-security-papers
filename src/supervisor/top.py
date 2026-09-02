@@ -32,6 +32,19 @@ class SupervisorTopViewer:
     def __init__(self, client: ControlClient, no_color: bool = False) -> None:
         self.client = client
         self.no_color = no_color
+        self._prev_snapshots: Dict[int, tuple[int, float]] = {}
+
+    def _compute_worker_rps(self, pid: int, req_count: int, now: float) -> float:
+        if pid not in self._prev_snapshots:
+            self._prev_snapshots[pid] = (req_count, now)
+            return 0.0
+        prev_req, prev_time = self._prev_snapshots[pid]
+        self._prev_snapshots[pid] = (req_count, now)
+        elapsed = now - prev_time
+        if elapsed <= 0.05:
+            return 0.0
+        delta_req = max(0, req_count - prev_req)
+        return round(delta_req / elapsed, 1)
 
     def _c(self, color_code: str, text: str) -> str:
         """Applies ANSI color if colors are enabled."""
@@ -157,39 +170,44 @@ class SupervisorTopViewer:
             self._c(self.COLOR_GRAY, "─" * 78),
         ]
 
-    def _render_worker_row(self, w_info: Dict[str, Any], spid: str) -> str:
-        pid = w_info.get("pid", spid)
+    def _render_worker_row(self, w_info: Dict[str, Any], spid: str, now: float) -> str:
+        pid = int(w_info.get("pid", spid))
         w_type = w_info.get("type", "worker")
         status = w_info.get("status", "UNKNOWN")
         healthy = w_info.get("is_healthy", False)
-        req_count = w_info.get("requests_handled", 0)
-        idle_sec = w_info.get("idle_seconds", 0.0)
+        req_count = int(w_info.get("requests_handled", 0))
+        idle_sec = float(w_info.get("idle_seconds", 0.0))
 
-        rss_mb, pss_mb = self.get_process_memory_mb(int(pid))
+        rps = self._compute_worker_rps(pid, req_count, now)
+        rss_mb, pss_mb = self.get_process_memory_mb(pid)
+
         status_color = self.COLOR_GREEN if status == "ALIVE" else self.COLOR_RED
         health_color = self.COLOR_GREEN if healthy else self.COLOR_YELLOW
         health_str = "HEALTHY" if healthy else "UNHEALTHY"
 
-        status_fmt = self._c(status_color, status)
-        health_fmt = self._c(health_color, health_str)
-        type_fmt = self._c(self.COLOR_CYAN, w_type)
+        status_fmt = self._c(status_color, f"{status:<8}")
+        health_fmt = self._c(health_color, f"{health_str:<10}")
+        type_fmt = self._c(self.COLOR_CYAN, f"{w_type:<10}")
 
+        rps_str = f"{rps:.1f}/s"
         idle_str = f"{idle_sec:.1f}s"
         mem_display = (
             f"{rss_mb:.1f} ({pss_mb:.1f}) MB" if pss_mb > 0 else f"{rss_mb:.1f} MB"
         )
         return (
-            f"  {str(pid):<6} "
-            f"{type_fmt:<18} "
-            f"{status_fmt:<16} "
-            f"{health_fmt:<16} "
-            f"{req_count:<8} "
-            f"{idle_str:<10} "
+            f"  {str(pid):<8} "
+            f"{type_fmt} "
+            f"{status_fmt} "
+            f"{health_fmt} "
+            f"{str(req_count):<8} "
+            f"{rps_str:<8} "
+            f"{idle_str:<8} "
             f"{mem_display}"
         )
 
     def render_dashboard(self, data: Dict[str, Any]) -> str:
         """Constructs the full formatted string for the top dashboard."""
+        now_ts = time.time()
         now_str = time.strftime("%Y-%m-%d %H:%M:%S")
         title = self._c(
             self.COLOR_BOLD + self.COLOR_CYAN,
@@ -203,12 +221,13 @@ class SupervisorTopViewer:
 
         # Workers Table Header
         header = (
-            f"  {self._c(self.COLOR_BOLD, 'PID'):<14} "
-            f"{self._c(self.COLOR_BOLD, 'TYPE'):<18} "
-            f"{self._c(self.COLOR_BOLD, 'STATUS'):<16} "
-            f"{self._c(self.COLOR_BOLD, 'HEALTH'):<16} "
-            f"{self._c(self.COLOR_BOLD, 'REQ'):<8} "
-            f"{self._c(self.COLOR_BOLD, 'IDLE'):<10} "
+            f"  {self._c(self.COLOR_BOLD, f'{'PID':<8}')} "
+            f"{self._c(self.COLOR_BOLD, f'{'TYPE':<10}')} "
+            f"{self._c(self.COLOR_BOLD, f'{'STATUS':<8}')} "
+            f"{self._c(self.COLOR_BOLD, f'{'HEALTH':<10}')} "
+            f"{self._c(self.COLOR_BOLD, f'{'REQ':<8}')} "
+            f"{self._c(self.COLOR_BOLD, f'{'RPS':<8}')} "
+            f"{self._c(self.COLOR_BOLD, f'{'IDLE':<8}')} "
             f"{self._c(self.COLOR_BOLD, 'MEM (PSS)')}"
         )
         lines.append(header)
@@ -223,7 +242,7 @@ class SupervisorTopViewer:
         else:
             sorted_pids = sorted(workers_map.keys(), key=lambda x: int(x))
             for spid in sorted_pids:
-                lines.append(self._render_worker_row(workers_map[spid], spid))
+                lines.append(self._render_worker_row(workers_map[spid], spid, now_ts))
 
         lines.append(self._c(self.COLOR_GRAY, "─" * 78))
         lines.append(

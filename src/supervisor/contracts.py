@@ -60,6 +60,22 @@ class LifecycleHook(abc.ABC):
         """Executes clean shutdown and resource release."""
         raise NotImplementedError
 
+    def get_metrics(self) -> Dict[str, Any]:
+        """Returns structured runtime metrics (e.g. requests_handled) for worker telemetry."""
+        return {}
+
+
+def _default_true() -> bool:
+    return True
+
+
+def _default_none() -> None:
+    pass
+
+
+def _default_dict() -> Dict[str, Any]:
+    return {}
+
 
 class DefaultLifecycleHook(LifecycleHook):
     """Generic fallback lifecycle hook suitable for arbitrary background services."""
@@ -70,11 +86,13 @@ class DefaultLifecycleHook(LifecycleHook):
         health_fn: Optional[Callable[[], bool]] = None,
         flush_fn: Optional[Callable[[], None]] = None,
         teardown_fn: Optional[Callable[[], None]] = None,
+        metrics_fn: Optional[Callable[[], Dict[str, Any]]] = None,
     ) -> None:
-        self._setup_fn = setup_fn or (lambda: True)
-        self._health_fn = health_fn or (lambda: True)
-        self._flush_fn = flush_fn or (lambda: None)
-        self._teardown_fn = teardown_fn or (lambda: None)
+        self._setup_fn = setup_fn if setup_fn is not None else _default_true
+        self._health_fn = health_fn if health_fn is not None else _default_true
+        self._flush_fn = flush_fn if flush_fn is not None else _default_none
+        self._teardown_fn = teardown_fn if teardown_fn is not None else _default_none
+        self._metrics_fn = metrics_fn if metrics_fn is not None else _default_dict
 
     def setup(self) -> bool:
         return bool(self._setup_fn())
@@ -87,6 +105,9 @@ class DefaultLifecycleHook(LifecycleHook):
 
     def teardown(self) -> None:
         self._teardown_fn()
+
+    def get_metrics(self) -> Dict[str, Any]:
+        return dict(self._metrics_fn())
 
 
 class WorkerSpec:

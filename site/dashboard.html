@@ -989,13 +989,14 @@
               <th style="padding: 6px 8px;">STATUS</th>
               <th style="padding: 6px 8px;">HEALTH</th>
               <th style="padding: 6px 8px; text-align: right;">REQ</th>
+              <th style="padding: 6px 8px; text-align: right;">RPS</th>
               <th style="padding: 6px 8px; text-align: right;">IDLE</th>
-              <th style="padding: 6px 8px; text-align: right;">MEM (RSS)</th>
+              <th style="padding: 6px 8px; text-align: right;">MEM (PSS)</th>
             </tr>
           </thead>
           <tbody id="supervisorWorkersTableBody">
             <tr>
-              <td colspan="7" style="padding: 16px; text-align: center; color: var(--fg-muted);">Connecting to Supervisor Top telemetry...</td>
+              <td colspan="8" style="padding: 16px; text-align: center; color: var(--fg-muted);">Connecting to Supervisor Top telemetry...</td>
             </tr>
           </tbody>
         </table>
@@ -1103,6 +1104,7 @@
       let hoveredNode = null;
       let draggedNode = null;
       let selectedNode = null;
+      const supervisorWorkerSnapshots = new Map();
 
       function resizeCanvas() {
         const rect = canvas.parentElement.getBoundingClientRect();
@@ -1890,7 +1892,7 @@
               if (wEntries.length === 0) {
                 tbody.innerHTML = `
                   <tr>
-                    <td colspan="7" style="padding: 24px; text-align: center; color: var(--fg-muted);">
+                    <td colspan="8" style="padding: 24px; text-align: center; color: var(--fg-muted);">
                       <div style="font-weight: bold; color: var(--accent-coral); margin-bottom: 6px;">⚠️ Supervisor Arbiter is currently OFFLINE</div>
                       <div style="font-size: 11px;">Control Socket (<code>outputs/supervisor/control.sock</code>) was not found.</div>
                       <div style="font-size: 10px; margin-top: 6px; color: var(--fg-muted);">Start the process supervisor using: <code>python -m supervisor.cli start</code></div>
@@ -1898,17 +1900,35 @@
                   </tr>
                 `;
               } else {
+                const nowTs = performance.now() / 1000.0;
                 tbody.innerHTML = wEntries.map(([spid, w]) => {
+                  const pid = Number(w.pid || spid);
+                  const reqCount = Number(w.requests_handled || 0);
+
+                  let rps = 0.0;
+                  if (supervisorWorkerSnapshots.has(pid)) {
+                    const prev = supervisorWorkerSnapshots.get(pid);
+                    const elapsed = nowTs - prev.time;
+                    if (elapsed > 0.05) {
+                      const deltaReq = Math.max(0, reqCount - prev.req);
+                      rps = deltaReq / elapsed;
+                    }
+                  }
+                  supervisorWorkerSnapshots.set(pid, { req: reqCount, time: nowTs });
+
                   const statusBg = w.status === 'ALIVE' ? 'var(--accent-green)' : 'var(--accent-coral)';
                   const healthBg = w.is_healthy ? 'var(--accent-green)' : 'var(--accent-coral)';
                   const healthText = w.is_healthy ? 'HEALTHY' : 'UNHEALTHY';
+                  const rpsColor = rps > 0 ? 'var(--accent-coral)' : 'var(--fg-muted)';
+                  const rpsDisplay = `${rps.toFixed(1)}/s`;
                   return `
                     <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                      <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${w.pid || spid}</td>
+                      <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${pid}</td>
                       <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${w.type || 'worker'}</td>
                       <td style="padding: 6px 8px;"><span style="background: ${statusBg}; color: #fff; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: bold;">${w.status}</span></td>
                       <td style="padding: 6px 8px;"><span style="color: ${healthBg}; font-weight: bold;">● ${healthText}</span></td>
-                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${Number(w.requests_handled || 0).toLocaleString()}</td>
+                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-main); font-weight: 600;">${reqCount.toLocaleString()}</td>
+                      <td style="padding: 6px 8px; text-align: right; color: ${rpsColor}; font-weight: bold;">${rpsDisplay}</td>
                       <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${(w.idle_seconds || 0).toFixed(1)}s</td>
                       <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${w.memory_mb || 0} MB</td>
                     </tr>

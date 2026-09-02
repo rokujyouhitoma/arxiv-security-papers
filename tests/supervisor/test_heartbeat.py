@@ -133,3 +133,35 @@ def test_heartbeat_sync_from_disk(tmp_path) -> None:
     # Cleanup upon worker removal
     watchdog.remove_worker(pid)
     assert not os.path.exists(heartbeat_file)
+
+
+def test_idle_seconds_tracking_and_reset() -> None:
+    """Verifies that idle_seconds increases while idle and resets when requests are processed."""
+    watchdog = HeartbeatWatchdog(timeout=5.0)
+    pid = 88888
+    watchdog.register_worker(pid, "search")
+
+    time.sleep(0.12)
+    st1 = watchdog.get_worker_status(pid)
+    assert st1 is not None
+    assert st1["idle_seconds"] >= 0.1
+
+    # While handling request, idle_seconds drops to 0.0
+    watchdog.record_heartbeat(pid, {"is_handling_request": True})
+    st2 = watchdog.get_worker_status(pid)
+    assert st2 is not None
+    assert st2["idle_seconds"] == 0.0
+
+    # When request completes (requests_handled increments), idle_seconds resets
+    watchdog.record_heartbeat(
+        pid, {"is_handling_request": False, "requests_handled": 1}
+    )
+    st3 = watchdog.get_worker_status(pid)
+    assert st3 is not None
+    assert st3["idle_seconds"] < 0.1
+
+    # Over time without requests, idle_seconds grows again
+    time.sleep(0.12)
+    st4 = watchdog.get_worker_status(pid)
+    assert st4 is not None
+    assert st4["idle_seconds"] >= 0.1
