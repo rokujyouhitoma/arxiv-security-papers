@@ -15,6 +15,7 @@ from .arxiv_client import (
     parse_arxiv_entry,
     safe_urlopen,
 )
+from .backfill import AdaptiveRateLimiter, BackfillStateManager
 from .pdf_extractor import (
     fetch_single_pdf_and_text,
     get_paper_pub_date_str,
@@ -38,4 +39,6 @@ __all__ = [
     "get_paper_pub_date_str",
     "fetch_single_pdf_and_text",
     "save_raw_paper_data",
+    "AdaptiveRateLimiter",
+    "BackfillStateManager",
 ]

@@ -74,12 +74,14 @@ class IacrEprintSourceAdapter(BaseSourceAdapter):
     def _find_item_nodes(self, root: Any) -> List[Any]:
         """Finds RSS item or Atom entry nodes in IACR XML root."""
         channel = root.find("channel")
-        item_nodes = (
-            channel.findall("item") if channel is not None else root.findall("item")
+        item_nodes: List[Any] = (
+            list(channel.findall("item"))
+            if channel is not None
+            else list(root.findall("item"))
         )
         if not item_nodes:
             ns = {"atom": "http://www.w3.org/2005/Atom"}
-            item_nodes = root.findall("atom:entry", ns)
+            item_nodes = list(root.findall("atom:entry", ns))
         return item_nodes
 
     def _parse_feed_xml(self, xml_bytes: bytes, max_results: int) -> List[RawItem]:

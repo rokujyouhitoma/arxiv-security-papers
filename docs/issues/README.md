@@ -6,7 +6,11 @@
 
 ## 1. 進行中・未完了 Issue 一覧 (Active Issues)
 
-現在進行中の Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **117** | 内製Pure-Python埋め込みエンジンの意味的セマンティック類似度向上（サブワード・N-gram重み付け＆超軽量埋め込み） | Feature | Medium | Open (New) | [117-enhance-pure-python-semantic-embeddings.md](117-enhance-pure-python-semantic-embeddings.md) |
+| **118** | Web GatewayにおけるSSE (Server-Sent Events) リアルタイム・プッシュストリーミング API & UI ダッシュボード連携 | Feature | Medium | Open (New) | [118-implement-web-gateway-sse-realtime-streaming.md](118-implement-web-gateway-sse-realtime-streaming.md) |
+| **119** | リポジトリ全体の完全型安全性確立（全340モジュールの mypy --strict 適合化と型アノテーション補完） | Refactor | High | Open (New) | [119-enforce-repository-wide-mypy-strict-type-safety.md](119-enforce-repository-wide-mypy-strict-type-safety.md) |
 
 ---
 
@@ -14,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **116** | 過去160日間大規模バックフィル実行の自律レジューム＆安全なレートリミット制御バッチ機構の確立 | Feature | 2026-09-02 | [116-implement-autonomous-160d-backfill-resumption-and-rate-limiting.md](closed/116-implement-autonomous-160d-backfill-resumption-and-rate-limiting.md) |
 | **115** | AIフレンドリー統一構造化JSONログ基盤(Unified JSON Logger)・Trace ID分散追跡・機密情報マスキングフィルターの実装 | Feature | 2026-09-02 | [115-implement-unified-structured-json-logging-and-trace-id-tracking.md](closed/115-implement-unified-structured-json-logging-and-trace-id-tracking.md) |
 | **114** | Supervisorのサービス単位Graceful Restart・稼働時間(TTL)制限・リクエスト数制限による自律ローテーション機能の実装 | Feature / Improvement | 2026-09-02 | [114-implement-supervisor-graceful-restart-worker-lifetime-and-service-granularity.md](closed/114-implement-supervisor-graceful-restart-worker-lifetime-and-service-granularity.md) |
 | **113** | サービスワーカー(Search/Database)のIPCリクエスト計測連携およびTopモニタ/ダッシュボードへのRPS表示機能の実装 | Improvement | 2026-09-02 | [113-implement-service-worker-ipc-request-metrics-and-top-rps-throughput-monitor.md](closed/113-implement-service-worker-ipc-request-metrics-and-top-rps-throughput-monitor.md) |

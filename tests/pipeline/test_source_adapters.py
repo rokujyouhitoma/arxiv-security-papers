@@ -102,6 +102,23 @@ def test_arxiv_source_adapter_fetch(mock_fetch: MagicMock) -> None:
     assert items[0].primary_category == "cs.AI"
 
 
+@patch("pipeline.ingestion.adapters.arxiv_adapter.fetch_arxiv_papers")
+def test_arxiv_source_adapter_fetch_with_rate_limiter(mock_fetch: MagicMock) -> None:
+    mock_fetch.return_value = []
+    mock_limiter = MagicMock()
+
+    adapter = ArxivSourceAdapter()
+    with patch(
+        "pipeline.ingestion.adapters.arxiv_adapter.fetch_arxiv_rss_fallback",
+        return_value=[],
+    ):
+        adapter.fetch_items(query="cat:cs.CR", max_results=5, rate_limiter=mock_limiter)
+
+    mock_fetch.assert_called_once_with(
+        query="cat:cs.CR", max_results=5, rate_limiter=mock_limiter
+    )
+
+
 def test_iacr_eprint_xml_parsing() -> None:
     sample_rss = b"""<?xml version="1.0" encoding="utf-8"?>
     <rss version="2.0">

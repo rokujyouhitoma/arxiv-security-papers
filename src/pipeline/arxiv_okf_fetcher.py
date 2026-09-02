@@ -20,7 +20,9 @@ if _SRC_DIR not in sys.path:
 # 1. Ingestion Layer (Extract)
 try:
     from .ingestion import (
+        AdaptiveRateLimiter,
         ArxivSourceAdapter,
+        BackfillStateManager,
         BaseSourceAdapter,
         FeedSourceAdapter,
         IacrEprintSourceAdapter,
@@ -64,7 +66,9 @@ try:
 except ImportError:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     from pipeline.ingestion import (
+        AdaptiveRateLimiter,
         ArxivSourceAdapter,
+        BackfillStateManager,
         BaseSourceAdapter,
         FeedSourceAdapter,
         IacrEprintSourceAdapter,
@@ -624,10 +628,124 @@ def _load_custom_theme_if_given(args: argparse.Namespace, theme_mgr: Any) -> Non
             )
 
 
+def _resolve_checkpoint_path(workspace_dir: str, file_path: str) -> str:
+    """Resolves checkpoint path against workspace root if relative."""
+    if os.path.isabs(file_path):
+        return file_path
+    return os.path.join(workspace_dir, file_path)
+
+
+def _process_backfill_single_date(
+    date_str: str,
+    theme_id: str,
+    workspace_dir: str,
+    config: Dict[str, Any],
+    state_mgr: BackfillStateManager,
+    rate_limiter: Optional[AdaptiveRateLimiter] = None,
+) -> int:
+    """Processes a single date range in backfill mode and marks it completed."""
+    state_mgr.current_target_date = date_str
+    state_mgr.status = "running"
+    state_mgr.save()
+
+    if rate_limiter is not None:
+        rate_limiter.wait()
+
+    dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    start_dt = dt.replace(hour=0, minute=0, second=0)
+    end_dt = dt.replace(hour=23, minute=59, second=59)
+
+    print(f"[Backfill] Fetching papers for date: {date_str}...")
+    processed = run_theme_pipeline(
+        theme_id=theme_id,
+        workspace_dir=workspace_dir,
+        config=config,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        force=False,
+    )
+    count = len(processed) if processed else 0
+    state_mgr.mark_date_completed(date_str, papers_count=count)
+    if rate_limiter is not None:
+        rate_limiter.handle_success()
+    print(
+        f"[Backfill] Completed {date_str} (new: {count}, cumulative: {state_mgr.total_papers_fetched})"
+    )
+    return count
+
+
+def run_backfill_pipeline(
+    days: int = 160,
+    workspace_dir: str = "",
+    config: Optional[Dict[str, Any]] = None,
+    checkpoint_file: str = "outputs/backfill_state.json",
+    resume: bool = False,
+    theme_id: str = "security",
+) -> int:
+    """Runs autonomous multi-day backfill with state checkpoint resumption."""
+    target_workspace = workspace_dir or _detect_workspace_dir()
+    cfg = _ensure_config_paths(config)
+    state_path = _resolve_checkpoint_path(target_workspace, checkpoint_file)
+
+    state_mgr = BackfillStateManager(state_file=state_path)
+    if not resume and not os.path.exists(state_path):
+        state_mgr.target_days = days
+        state_mgr.save()
+
+    rate_limiter = AdaptiveRateLimiter(min_interval_sec=3.0)
+    pending_dates = state_mgr.get_pending_dates(days)
+    print(
+        f"=== [Backfill Pipeline] Total pending dates: {len(pending_dates)}/{days} ==="
+    )
+
+    total_new_papers = 0
+    for date_str in pending_dates:
+        count = _process_backfill_single_date(
+            date_str,
+            theme_id,
+            target_workspace,
+            cfg,
+            state_mgr,
+            rate_limiter=rate_limiter,
+        )
+        total_new_papers += count
+
+    state_mgr.status = "completed"
+    state_mgr.current_target_date = None
+    state_mgr.save()
+
+    print(
+        f"=== [Backfill Pipeline] Finished {days} days! Total papers: {total_new_papers} ==="
+    )
+    return total_new_papers
+
+
+def _handle_backfill_cli(
+    args: argparse.Namespace, workspace_dir: str, config: Dict[str, Any]
+) -> bool:
+    """Executes backfill if --backfill or --resume argument is provided."""
+    if args.backfill is not None or args.resume:
+        days = args.backfill if args.backfill is not None else 160
+        checkpoint = args.checkpoint_file or "outputs/backfill_state.json"
+        run_backfill_pipeline(
+            days=days,
+            workspace_dir=workspace_dir,
+            config=config,
+            checkpoint_file=checkpoint,
+            resume=bool(args.resume),
+            theme_id=args.theme,
+        )
+        return True
+    return False
+
+
 def _execute_cli_pipeline(
     args: argparse.Namespace, workspace_dir: str, config: Dict[str, Any], theme_mgr: Any
 ) -> None:
     """Executes target themes from CLI arguments."""
+    if _handle_backfill_cli(args, workspace_dir, config):
+        return
+
     start_dt, end_dt = _parse_cli_date_range(args)
     force = bool(args.force or "--force" in sys.argv)
     theme_ids = theme_mgr.list_theme_ids() if args.all_themes else [args.theme]
@@ -664,6 +782,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--custom-theme-file", type=str, help="Path to custom theme JSON file"
+    )
+    parser.add_argument(
+        "--backfill", type=int, help="Run backfill for N days (e.g. 160)"
+    )
+    parser.add_argument(
+        "--resume", action="store_true", help="Resume backfill from checkpoint"
+    )
+    parser.add_argument(
+        "--checkpoint-file", type=str, help="Custom backfill state checkpoint path"
     )
     args, _ = parser.parse_known_args()
 

@@ -31,10 +31,15 @@ class ArxivSourceAdapter(BaseSourceAdapter):
         return f"cat:{self._default_category}"
 
     def _fetch_raw_paper_dicts(
-        self, target_query: str, max_results: int
+        self,
+        target_query: str,
+        max_results: int,
+        rate_limiter: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
         """Fetches paper dicts from API with RSS fallback."""
-        raw_dicts = fetch_arxiv_papers(query=target_query, max_results=max_results)
+        raw_dicts = fetch_arxiv_papers(
+            query=target_query, max_results=max_results, rate_limiter=rate_limiter
+        )
         if not raw_dicts:
             print(
                 f"[Ingestion:arXiv] API fetch returned 0 papers or rate-limited for '{target_query}'. "
@@ -53,7 +58,10 @@ class ArxivSourceAdapter(BaseSourceAdapter):
     ) -> List[RawItem]:
         """Fetches items from arXiv API with fallback to RSS."""
         target_query = self._resolve_target_query(query, kwargs)
-        raw_dicts = self._fetch_raw_paper_dicts(target_query, max_results)
+        rate_limiter = kwargs.get("rate_limiter")
+        raw_dicts = self._fetch_raw_paper_dicts(
+            target_query, max_results, rate_limiter=rate_limiter
+        )
 
         items: List[RawItem] = []
         for d in raw_dicts:

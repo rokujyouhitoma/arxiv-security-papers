@@ -172,6 +172,14 @@ orchestrate_daemon: activate ## Run Universal Intelligence Orchestrator in conti
 pipeline: activate ## Run multi-theme arXiv ETL ingestion pipeline directly
 	PYTHONPATH=src ${VENV_PYTHON} src/pipeline/arxiv_okf_fetcher.py
 
+.PHONY: backfill_160d
+backfill_160d: activate ## Run autonomous 160-day historical arXiv backfill batch
+	PYTHONPATH=src ${VENV_PYTHON} src/pipeline/arxiv_okf_fetcher.py --backfill 160 $(ARGS)
+
+.PHONY: backfill_resume
+backfill_resume: activate ## Resume interrupted historical arXiv backfill from checkpoint
+	PYTHONPATH=src ${VENV_PYTHON} src/pipeline/arxiv_okf_fetcher.py --resume $(ARGS)
+
 .PHONY: rag_query
 rag_query: activate ## Perform semantic vector RAG search e.g. make rag_query Q="LLM Jailbreak"
 	PYTHONPATH=src ${VENV_PYTHON} -m search.vector_engine --query "$(Q)"

@@ -226,7 +226,33 @@ def _try_execute_single_request(
         return can_retry, None
 
 
-def _fetch_api_chunk_with_retry(api_url: str) -> Optional[List[Dict[str, Any]]]:
+def _sync_rate_limiter_after_request(
+    should_continue: bool,
+    result: Optional[List[Dict[str, Any]]],
+    rate_limiter: Optional[Any],
+) -> None:
+    if rate_limiter is None:
+        return
+    if result is not None:
+        rate_limiter.handle_success()
+    elif should_continue:
+        rate_limiter.handle_rate_limit()
+
+
+def _attempt_chunk_request(
+    req: urllib.request.Request, retry: int, rate_limiter: Optional[Any]
+) -> tuple[bool, Optional[List[Dict[str, Any]]]]:
+    """Executes a single chunk fetch attempt with rate limiter lifecycle integration."""
+    if rate_limiter is not None:
+        rate_limiter.wait()
+    should_continue, result = _try_execute_single_request(req, retry)
+    _sync_rate_limiter_after_request(should_continue, result, rate_limiter)
+    return should_continue, result
+
+
+def _fetch_api_chunk_with_retry(
+    api_url: str, rate_limiter: Optional[Any] = None
+) -> Optional[List[Dict[str, Any]]]:
     req = urllib.request.Request(
         api_url,
         headers={
@@ -234,25 +260,28 @@ def _fetch_api_chunk_with_retry(api_url: str) -> Optional[List[Dict[str, Any]]]:
         },
     )
     for retry in range(5):
-        should_continue, result = _try_execute_single_request(req, retry)
+        should_continue, result = _attempt_chunk_request(req, retry, rate_limiter)
         if not should_continue:
             return result
     return None
 
 
 def fetch_arxiv_papers(
-    query: str = "cat:cs.CR", max_results: int = 3500
+    query: str = "cat:cs.CR",
+    max_results: int = 3500,
+    start_offset: int = 0,
+    rate_limiter: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Fetches papers from arXiv API with exponential backoff retry and chunking."""
     all_papers: List[Dict[str, Any]] = []
     chunk_size = 500
-    start = 0
+    start = start_offset
 
     print(
-        f"[Ingestion:arXiv] Starting API fetch (query='{query}', max_results={max_results})..."
+        f"[Ingestion:arXiv] Starting API fetch (query='{query}', max_results={max_results}, start={start})..."
     )
-    while start < max_results:
-        fetch_count = min(chunk_size, max_results - start)
+    while start < start_offset + max_results:
+        fetch_count = min(chunk_size, (start_offset + max_results) - start)
         encoded_query = urllib.parse.quote(query)
         api_url = (
             f"https://export.arxiv.org/api/query?search_query={encoded_query}"
@@ -261,7 +290,7 @@ def fetch_arxiv_papers(
         print(
             f"[Ingestion:arXiv] Fetching chunk [offset={start}, limit={fetch_count}]..."
         )
-        chunk_papers = _fetch_api_chunk_with_retry(api_url)
+        chunk_papers = _fetch_api_chunk_with_retry(api_url, rate_limiter=rate_limiter)
         if chunk_papers is None or not chunk_papers:
             print(
                 f"[Ingestion:arXiv] No more chunk items returned (total fetched: {len(all_papers)})."
