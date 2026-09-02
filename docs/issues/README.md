@@ -9,7 +9,7 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **117** | 内製Pure-Python埋め込みエンジンの意味的セマンティック類似度向上（サブワード・N-gram重み付け＆超軽量埋め込み） | Feature | Medium | Open (New) | [117-enhance-pure-python-semantic-embeddings.md](117-enhance-pure-python-semantic-embeddings.md) |
-| **118** | Web GatewayにおけるSSE (Server-Sent Events) リアルタイム・プッシュストリーミング API & UI ダッシュボード連携 | Feature | Medium | Open (New) | [118-implement-web-gateway-sse-realtime-streaming.md](118-implement-web-gateway-sse-realtime-streaming.md) |
+| **118** | Web GatewayにおけるSSE (Server-Sent Events) リアルタイム・プッシュストリーミング API & UI ダッシュボード連携 | Feature | Medium | Open (In Progress) | [118-implement-web-gateway-sse-realtime-streaming.md](118-implement-web-gateway-sse-realtime-streaming.md) |
 
 ---
 
