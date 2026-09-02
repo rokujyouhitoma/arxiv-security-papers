@@ -318,3 +318,28 @@ def test_wsgi_app_search_pagination_and_total_hits():
     data2 = json.loads(body2.decode("utf-8"))
     assert data2["offset"] == 24
     assert data2["limit"] == 24
+
+
+def test_index_html_mcp_sandbox_default_json_validity():
+    """Verifies that the static textarea in index.html contains valid JSON with query and top_k."""
+    import re
+
+    index_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
+    )
+    assert os.path.exists(index_path), f"index.html not found at {index_path}"
+    with open(index_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    match = re.search(
+        r'<textarea\s+id="mcpArgsInput"[^>]*>(.*?)</textarea>',
+        html_content,
+        re.DOTALL | re.IGNORECASE,
+    )
+    assert match is not None, "mcpArgsInput textarea not found in index.html"
+    raw_json_str = match.group(1).strip()
+    parsed = json.loads(raw_json_str)
+    assert isinstance(parsed, dict)
+    assert "query" in parsed
+    assert "top_k" in parsed
+    assert parsed["top_k"] == 5

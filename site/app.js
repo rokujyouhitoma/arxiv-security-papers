@@ -429,10 +429,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   runMcpBtn.addEventListener('click', async () => {
     mcpOutput.textContent = '⚡ MCP JSON-RPC 呼び出し中...';
+    let args;
+    try {
+      args = JSON.parse(mcpArgsInput.value);
+    } catch (err) {
+      mcpOutput.textContent = `引数 (JSON) パースエラー: ${err.message}\n正しい JSON 形式（キーをダブルクォートで囲む等）で入力してください。`;
+      return;
+    }
+
     try {
       const name = mcpToolSelect.value;
-      const args = JSON.parse(mcpArgsInput.value);
-
       const res = await fetch('/api/mcp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -441,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       mcpOutput.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
-      mcpOutput.textContent = `エラー: ${err.message}`;
+      mcpOutput.textContent = `API 呼び出しエラー: ${err.message}`;
     }
   });
 

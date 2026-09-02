@@ -17,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **120** | MCP ツールサンドボックスの初期引数 JSON 構文エラー修正 | Bug | 2026-09-02 | [120-fix-mcp-sandbox-default-arguments-json-syntax-error.md](closed/120-fix-mcp-sandbox-default-arguments-json-syntax-error.md) |
 | **119** | リポジトリ全体の完全型安全性確立（全341モジュールの mypy --strict 適合化と型アノテーション補完） | Refactor | 2026-09-02 | [119-enforce-repository-wide-mypy-strict-type-safety.md](closed/119-enforce-repository-wide-mypy-strict-type-safety.md) |
 | **116** | 過去160日間大規模バックフィル実行の自律レジューム＆安全なレートリミット制御バッチ機構の確立 | Feature | 2026-09-02 | [116-implement-autonomous-160d-backfill-resumption-and-rate-limiting.md](closed/116-implement-autonomous-160d-backfill-resumption-and-rate-limiting.md) |
 | **115** | AIフレンドリー統一構造化JSONログ基盤(Unified JSON Logger)・Trace ID分散追跡・機密情報マスキングフィルターの実装 | Feature | 2026-09-02 | [115-implement-unified-structured-json-logging-and-trace-id-tracking.md](closed/115-implement-unified-structured-json-logging-and-trace-id-tracking.md) |
