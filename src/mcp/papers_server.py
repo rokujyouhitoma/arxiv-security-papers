@@ -38,7 +38,9 @@ _SEARCH_CLIENT: Optional[SearchClient] = None
 def get_search_client() -> SearchClient:
     global _SEARCH_CLIENT
     if _SEARCH_CLIENT is None:
-        _SEARCH_CLIENT = SearchClient(workspace_dir=WORKSPACE_DIR)
+        _SEARCH_CLIENT = SearchClient(
+            workspace_dir=WORKSPACE_DIR, allow_inprocess_fallback=True
+        )
     return _SEARCH_CLIENT
 
 

@@ -13,7 +13,7 @@ import time
 import tracemalloc
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple, cast
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, cast
 
 from .ingestion import (
     FacetedIndex,
@@ -394,6 +394,42 @@ class VectorEngine:
                 except Exception:
                     continue
 
+    def _wire_vector_protocol(self) -> None:
+        self.vector_protocol_handler = VectorDBProtocolHandler(
+            storage=self.vector_storage,
+            index=self.hnsw_index,
+            embedding=self.embedding,
+        )
+        self.vector_client = VectorDBClient(handler=self.vector_protocol_handler)
+
+    def _create_single_doc_vector(self, doc: Dict[str, Any]) -> Tuple[float, ...]:
+        title = doc.get("title", "")
+        desc = doc.get("description", "")
+        return self.embedding.embed_text(f"{title} {desc}".strip())
+
+    def build_vector_storage(self) -> int:
+        """
+        Builds binary vector storage (vectors.vdb) and HNSW ANN index (hnsw_index.json)
+        from loaded documents using DeterministicEmbedding.
+        """
+        if not self.documents:
+            return 0
+        os.makedirs(self.vector_db_dir, exist_ok=True)
+        vectors: List[Tuple[float, ...]] = []
+        metadata: List[Dict[str, Any]] = []
+
+        for i, doc in enumerate(self.documents):
+            vec = self._create_single_doc_vector(doc)
+            vectors.append(vec)
+            metadata.append({"id": doc.get("id", str(i)), "index": i})
+
+        self.vector_storage.write_all(vectors, metadata)
+        self.hnsw_index = HNSWIndex(dim=128)
+        self.hnsw_index.build_from_storage(vectors)
+        self.hnsw_index.save(self.hnsw_index_path)
+        self._wire_vector_protocol()
+        return len(vectors)
+
     def build_index(self) -> int:
         """Scans all OKF files, builds multi-field index and saves index.json."""
         okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
@@ -408,6 +444,7 @@ class VectorEngine:
 
         self._finalize_index_stats(doc_freq)
         self.save_index()
+        self.build_vector_storage()
         return len(self.documents)
 
     def save_index(self) -> None:
@@ -523,6 +560,31 @@ class VectorEngine:
 
         self._post_index_build_steps(len(self.documents))
 
+    def _load_vector_storage_if_present(self) -> None:
+        if not os.path.exists(self.vector_storage_path):
+            return
+        try:
+            self.vector_storage = VectorStorage(self.vector_storage_path, dim=128)
+            vectors_dict: Dict[int, Tuple[float, ...]] = {}
+            for i in range(self.vector_storage.count):
+                vectors_dict[i] = self.vector_storage.get_vector(i)
+
+            if os.path.exists(self.hnsw_index_path):
+                self.hnsw_index = HNSWIndex.load(
+                    self.hnsw_index_path, vectors=vectors_dict
+                )
+            else:
+                self.hnsw_index = HNSWIndex(dim=128)
+                self.hnsw_index.build_from_storage(list(vectors_dict.values()))
+
+            self._wire_vector_protocol()
+        except Exception as e:
+            logging.warning(
+                "Failed to load vector storage from %s: %s",
+                self.vector_storage_path,
+                e,
+            )
+
     def load_index(self, max_docs: Optional[int] = None) -> None:
         if not os.path.exists(self.index_file):
             return
@@ -530,6 +592,7 @@ class VectorEngine:
             with open(self.index_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self._populate_index_from_dict(data, max_docs)
+            self._load_vector_storage_if_present()
         except (json.JSONDecodeError, OSError, KeyError, TypeError) as e:
             logging.warning("Failed to load index from %s: %s", self.index_file, e)
             self._init_index_structures()
@@ -705,6 +768,34 @@ class VectorEngine:
                 candidate_ids = inv_cands
         return candidate_ids
 
+    def _collect_vector_candidate_ids(self, query: str, top_k: int = 60) -> Set[str]:
+        try:
+            vec_matches = self.search_vector_ann(query, top_k=top_k)
+            return {m["id"] for m in vec_matches if "id" in m}
+        except Exception:
+            return set()
+
+    def _merge_candidate_ids(
+        self, candidate_ids: Optional[Set[str]], extra_ids: Set[str]
+    ) -> Optional[Set[str]]:
+        if not extra_ids:
+            return candidate_ids
+        if candidate_ids is None:
+            return set(extra_ids)
+        candidate_ids.update(extra_ids)
+        return candidate_ids
+
+    def _fetch_target_docs(
+        self, candidate_ids: Optional[Set[str]], max_candidates: int
+    ) -> List[Dict[str, Any]]:
+        if candidate_ids is None:
+            return self.documents[:max_candidates]
+        return [
+            self.documents_by_id[did]
+            for did in candidate_ids
+            if did in self.documents_by_id
+        ][:max_candidates]
+
     def retrieve_candidates(
         self,
         ctx: QueryContext,
@@ -713,14 +804,10 @@ class VectorEngine:
     ) -> List[Dict[str, Any]]:
         """Module 2: Hybrid Retrieval & Multi-Field Candidate Pruning."""
         candidate_ids = self._resolve_candidate_ids(ctx, category)
-        if candidate_ids is not None:
-            target_docs = [
-                self.documents_by_id[did]
-                for did in candidate_ids
-                if did in self.documents_by_id
-            ]
-            return target_docs[:max_candidates]
-        return self.documents[:max_candidates]
+        if ctx.original_query:
+            vec_ids = self._collect_vector_candidate_ids(ctx.original_query, top_k=60)
+            candidate_ids = self._merge_candidate_ids(candidate_ids, vec_ids)
+        return self._fetch_target_docs(candidate_ids, max_candidates)
 
     def _compute_token_field_score(self, qt: str, doc: Dict[str, Any]) -> float:
         idf_val = self.idf.get(qt, 1.2)
@@ -790,22 +877,31 @@ class VectorEngine:
             + (fm_score * 0.15)
             + (pagerank_score * 0.10)
             + (graph_boost * 0.15)
-            + (vector_sim * 0.20)
+            + (vector_sim * 25.0 * 0.20)
         ) * recency
+
+    def _compute_single_doc_sim(
+        self, q_vec: Sequence[float], doc: Dict[str, Any], has_storage: bool
+    ) -> float:
+        did = doc.get("id", "")
+        d_vec = None
+        if has_storage:
+            d_vec = self.vector_storage.get_vector_by_id(did)
+        if d_vec is None:
+            title = doc.get("title", "")
+            desc = doc.get("description", "") or doc.get("abstract", "")
+            d_vec = self.embedding.embed_text(f"{title} {desc}")
+        return max(0.0, float(sum(a * b for a, b in zip(q_vec, d_vec))))
 
     def _compute_vector_similarities(
         self, query: str, candidates: List[Dict[str, Any]]
     ) -> Dict[str, float]:
         q_vec = self.embedding.embed_text(query)
         sims: Dict[str, float] = {}
+        has_storage = self.vector_storage.count > 0
         for doc in candidates:
             did = doc.get("id", "")
-            title = doc.get("title", "")
-            desc = doc.get("description", "") or doc.get("abstract", "")
-            doc_text = f"{title} {desc}"
-            d_vec = self.embedding.embed_text(doc_text)
-            sim = sum(a * b for a, b in zip(q_vec, d_vec))
-            sims[did] = max(0.0, float(sim))
+            sims[did] = self._compute_single_doc_sim(q_vec, doc, has_storage)
         return sims
 
     def rerank_candidates(
@@ -961,13 +1057,20 @@ class VectorEngine:
     ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
         exact_only = offset > 0
         cached_res = self.semantic_cache.get(
-            f"{query}|{category}|{offset}", q_tokens, exact_only=exact_only
+            f"{query}|{category}|{offset}",
+            q_tokens,
+            exact_only=exact_only,
+            min_results=top_k,
         )
         if not cached_res:
             return None
         res, prof = cached_res
-        prof["cached"] = True
-        return res[:top_k], prof
+        if len(res) < top_k and prof.get("has_more", False):
+            return None
+        prof_copy = dict(prof)
+        prof_copy["cached"] = True
+        prof_copy["limit"] = top_k
+        return res[:top_k], prof_copy
 
     def _stop_tracing_if_needed(self, was_tracing: bool) -> None:
         if not was_tracing:
@@ -1092,7 +1195,11 @@ def main() -> None:
     if args.build:
         print("[VectorEngine] Scanning OKF papers and building search index...")
         count = engine.build_index()
-        print(f"[VectorEngine] Successfully indexed {count} documents.")
+        vec_count = engine.build_vector_storage()
+        print(
+            f"[VectorEngine] Successfully indexed {count} documents "
+            f"and built {vec_count} dense vectors (vectors.vdb & hnsw_index.json)."
+        )
     elif args.query:
         print(f"[VectorEngine] Querying: {args.query}")
         results, profile = engine.search_with_profile(args.query, top_k=args.top_k)

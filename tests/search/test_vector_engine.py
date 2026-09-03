@@ -616,3 +616,110 @@ def test_vector_engine_pagination_and_total_hits():
     assert prof3["total_hits"] == 25
     assert prof3["offset"] == 20
     assert prof3["has_more"] is False
+
+
+def test_vector_storage_build_and_ann_search(tmp_path):
+    engine = VectorEngine(workspace_dir=str(tmp_path), lazy=True)
+    engine.documents = [
+        {
+            "id": f"paper_{i}",
+            "title": f"Security Analysis of Zero Trust Architecture Part {i}",
+            "description": "Zero trust identity access management and network segmentation.",
+            "authors": ["Alice", "Bob"],
+            "tags": ["zero-trust", "network-security"],
+            "annotated_keywords": ["zero trust", "iam"],
+            "published_date": "2026-09-01",
+            "title_tokens": ["security", "zero", "trust"],
+            "desc_tokens": ["zero", "trust", "iam"],
+            "tokens": ["security", "zero", "trust", "iam"],
+        }
+        for i in range(10)
+    ]
+    engine.documents_by_id = {d["id"]: d for d in engine.documents}
+    count = engine.build_vector_storage()
+    assert count == 10
+    assert os.path.exists(engine.vector_storage_path)
+    assert os.path.exists(engine.hnsw_index_path)
+
+    ann_results = engine.search_vector_ann("zero trust", top_k=3)
+    assert len(ann_results) == 3
+    for res in ann_results:
+        assert res["score"] > 0.0
+        assert "paper_" in res["id"]
+
+    # Test reloading from disk
+    engine.save_index()
+    loaded_engine = VectorEngine(workspace_dir=str(tmp_path), lazy=False)
+    assert loaded_engine.vector_storage.count == 10
+    loaded_ann = loaded_engine.search_vector_ann("zero trust", top_k=3)
+    assert len(loaded_ann) == 3
+
+
+def test_cache_truncation_prevention(tmp_path):
+    engine = VectorEngine(workspace_dir=str(tmp_path), lazy=True)
+    engine.documents = [
+        {
+            "id": f"paper_{i}",
+            "title": f"Adversarial prompt injection against large language models {i}",
+            "description": "Security evaluation of LLM prompt injection defences.",
+            "authors": ["Carol"],
+            "tags": ["prompt-injection", "llm-security"],
+            "annotated_keywords": ["prompt injection"],
+            "published_date": "2026-09-01",
+            "title_tokens": ["adversarial", "prompt", "injection"],
+            "desc_tokens": ["prompt", "injection"],
+            "tokens": ["adversarial", "prompt", "injection"],
+        }
+        for i in range(8)
+    ]
+    engine.documents_by_id = {d["id"]: d for d in engine.documents}
+    engine.idf = {"adversarial": 1.5, "prompt": 1.5, "injection": 1.5}
+    engine.build_vector_storage()
+
+    # Query with top_k=2
+    res1, prof1 = engine.search_with_profile("adversarial prompt injection", top_k=2)
+    assert len(res1) == 2
+    assert prof1.get("has_more") is True
+
+    # Query with top_k=5 -> cache must not truncate to 2
+    res2, prof2 = engine.search_with_profile("adversarial prompt injection", top_k=5)
+    assert len(res2) == 5
+
+
+def test_rrf_hybrid_fusion(tmp_path):
+    engine = VectorEngine(workspace_dir=str(tmp_path), lazy=True)
+    engine.documents = [
+        {
+            "id": "p_lexical",
+            "title": "Quantum Cryptography and Post-Quantum Lattice Schemes",
+            "description": "Mathematical lattice proofs for key exchange.",
+            "authors": ["David"],
+            "tags": ["cryptography"],
+            "annotated_keywords": ["lattice", "quantum"],
+            "published_date": "2026-09-01",
+            "title_tokens": ["quantum", "cryptography"],
+            "desc_tokens": ["lattice"],
+            "tokens": ["quantum", "cryptography", "lattice"],
+        },
+        {
+            "id": "p_semantic",
+            "title": "Post Quantum Cryptosystem Security Analysis",
+            "description": "Cryptographic assessment of next-gen post-quantum encryption.",
+            "authors": ["Eve"],
+            "tags": ["cryptography"],
+            "annotated_keywords": ["encryption"],
+            "published_date": "2026-09-01",
+            "title_tokens": ["post", "quantum"],
+            "desc_tokens": ["encryption"],
+            "tokens": ["post", "quantum", "encryption"],
+        },
+    ]
+    engine.documents_by_id = {d["id"]: d for d in engine.documents}
+    engine.idf = {"quantum": 1.5, "cryptography": 1.8}
+    engine.build_vector_storage()
+
+    rrf_hits = engine.search_rrf_hybrid("quantum cryptography", top_k=2)
+    assert len(rrf_hits) == 2
+    hit_ids = [h["id"] for h in rrf_hits]
+    assert "p_lexical" in hit_ids
+    assert "p_semantic" in hit_ids

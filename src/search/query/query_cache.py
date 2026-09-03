@@ -60,20 +60,43 @@ class QuerySemanticCache:
                 return entry["results"], entry["profile"]
         return None
 
+    @staticmethod
+    def _is_cache_sufficient(
+        res: Tuple[List[Dict[str, Any]], Dict[str, Any]], min_results: int
+    ) -> bool:
+        results, profile = res
+        if len(results) >= min_results:
+            return True
+        return not bool(profile.get("has_more", False))
+
+    def _find_semantic_res(
+        self, query_tokens: List[str], now: float, min_results: int
+    ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
+        semantic_res = self._get_semantic_match(set(query_tokens), now)
+        if semantic_res is not None and self._is_cache_sufficient(
+            semantic_res, min_results
+        ):
+            return semantic_res
+        return None
+
     def get(
-        self, query: str, query_tokens: List[str], exact_only: bool = False
+        self,
+        query: str,
+        query_tokens: List[str],
+        exact_only: bool = False,
+        min_results: int = 1,
     ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
         now = time.time()
         q_clean = query.strip().lower()
 
         exact_res = self._get_exact_match(q_clean, now)
-        if exact_res is not None:
+        if exact_res is not None and self._is_cache_sufficient(exact_res, min_results):
             return exact_res
 
         if not exact_only:
-            semantic_res = self._get_semantic_match(set(query_tokens), now)
-            if semantic_res is not None:
-                return semantic_res
+            sem_res = self._find_semantic_res(query_tokens, now, min_results)
+            if sem_res is not None:
+                return sem_res
 
         self.misses += 1
         return None

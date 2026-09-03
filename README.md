@@ -239,7 +239,14 @@ make run
 # 実体: PYTHONPATH=src .venv/bin/python src/intelligence/cli.py
 ```
 
-### 3. PDF テキスト抽出エンジンの直接実行 (CLI / ベンチマーク)
+### 3. セマンティックベクトルデータベース & 検索インデックスのビルド
+```bash
+# 全論文のセマンティック埋め込みベクトル (vectors.vdb) および HNSW 近傍探索インデックス (hnsw_index.json) の構築
+make build_vector_db
+# 実体: PYTHONPATH=src .venv/bin/python -m search.vector_engine --build
+```
+
+### 4. PDF テキスト抽出エンジンの直接実行 (CLI / ベンチマーク)
 ```bash
 # 任意の PDF ファイルからテキスト抽出
 PYTHONPATH=src .venv/bin/python -m pdf_engine outputs/raw_data/2025-09-02/2509.05350.pdf --head 300
@@ -248,13 +255,13 @@ PYTHONPATH=src .venv/bin/python -m pdf_engine outputs/raw_data/2025-09-02/2509.0
 PYTHONPATH=src .venv/bin/python -m pdf_engine.benchmark --sample 15
 ```
 
-### 4. Web API Gateway & 検索ポータルの起動
+### 5. Web API Gateway & 検索ポータルの起動
 ```bash
 make run_web
 # ブラウザで http://localhost:8000 にアクセス
 ```
 
-### 5. MCP サーバーの起動 (自律型 AI エージェント連携)
+### 6. MCP サーバーの起動 (自律型 AI エージェント連携)
 ```bash
 # 論文インテリジェンス MCP サーバー
 make run_mcp_server
@@ -269,7 +276,7 @@ make run_tech_radar_mcp
 make run_threat_defense_mcp
 ```
 
-### 6. プロセススーパーバイザーの起動 & 監視
+### 7. プロセススーパーバイザーの起動 & 監視
 ```bash
 # Gunicorn スタイル Pre-fork プロセス監視起動
 make run_supervisor

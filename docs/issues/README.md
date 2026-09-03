@@ -9,7 +9,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **123** | mmap・struct駆動 Pure-Python IVF-PQ（転置インデックス積量子化）高密度ベクトルANN探索エンジンの実装 | Feature | Medium | Open (New) | [123-implement-pure-python-ivf-pq-dense-vector-ann-engine.md](123-implement-pure-python-ivf-pq-dense-vector-ann-engine.md) |
-| **124** | BM25語彙検索とDense ANN意味検索を統合するRRF（相互順位融合）ハイブリッドスコアラーの実装 | Feature | High | Open (New) | [124-implement-bm25-dense-ann-reciprocal-rank-fusion-scorer.md](124-implement-bm25-dense-ann-reciprocal-rank-fusion-scorer.md) |
 | **125** | Late-Interaction（MaxSim）演算機構およびセキュリティ専門語彙拡張（SPLADE風疎表現）リランカーの実装 | Feature | Medium | Open (New) | [125-implement-late-interaction-maxsim-and-splade-term-expansion.md](125-implement-late-interaction-maxsim-and-splade-term-expansion.md) |
 | **126** | 固定長4KBバイナリスロットページ構造とLSM-Tree（MemTable/WAL/SSTable/Bloom Filter）ストレージエンジンの実装 | Feature | Medium | Open (New) | [126-implement-4kb-slotted-page-and-lsm-tree-sstable-storage.md](126-implement-4kb-slotted-page-and-lsm-tree-sstable-storage.md) |
 | **127** | OASIS STIX 2.1仕様準拠 SDO/SRO 脅威インテリジェンス・ナレッジグラフ自動構築パイプラインの実装 | Feature | High | Open (New) | [127-implement-stix-21-sdo-sro-threat-knowledge-graph-generation.md](127-implement-stix-21-sdo-sro-threat-knowledge-graph-generation.md) |
@@ -27,6 +26,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **124** | BM25語彙検索とDense ANN意味検索を統合するRRF（相互順位融合）ハイブリッドスコアラーおよびベクトルストレージ・ビルドパイプラインの実装 | Feature | 2026-09-03 | [124-implement-bm25-dense-ann-reciprocal-rank-fusion-scorer.md](closed/124-implement-bm25-dense-ann-reciprocal-rank-fusion-scorer.md) |
 | **117** | 内製Pure-Python埋め込みエンジンの意味的セマンティック類似度向上（サブワード・N-gram重み付け＆超軽量埋め込み） | Feature | 2026-09-03 | [117-enhance-pure-python-semantic-embeddings.md](closed/117-enhance-pure-python-semantic-embeddings.md) |
 | **118** | Web GatewayにおけるSSE (Server-Sent Events) リアルタイム・プッシュストリーミング API & UI ダッシュボード連携 | Feature | 2026-09-03 | [118-implement-web-gateway-sse-realtime-streaming.md](closed/118-implement-web-gateway-sse-realtime-streaming.md) |
 | **122** | Supervisorにおけるワーカー自動ローテーションTTLデフォルト設定とメモリ上限監視（Memory Watchdog）の実装 | Feature | 2026-09-03 | [122-implement-supervisor-worker-memory-watchdog-and-default-rotation-ttl.md](closed/122-implement-supervisor-worker-memory-watchdog-and-default-rotation-ttl.md) |
