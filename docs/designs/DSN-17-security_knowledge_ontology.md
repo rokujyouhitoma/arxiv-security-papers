@@ -265,3 +265,55 @@ class TaxonomyRegistry:
 3. **CTI-ATE (Attack Technique Extraction)**: 攻撃プロセス記述から攻撃者の TTPs を分解し、Enterprise ATT&CK 戦術配下の正規化された技術 ID へマッピング。
 4. **来歴階層化 (Provenance-tiered Validation)**: 推論モデルの確証度に応じ、人手検証に匹敵する「ゴールドラベル」と自動推定による「シルバーラベル」を分離保持し、誤検知・展開ノイズを排除。
 
+---
+
+# 10. arXiv 論文・MITRE ATT&CK・CWE 3軸ナレッジグラフデータモデルおよびハイブリッド抽出パイプライン仕様
+
+## 10.1 3軸グラフデータモデル定義
+論文、攻撃技術、脆弱性クラスを強固に接続する 3 軸プロパティグラフモデルを定義する：
+
+```mermaid
+graph LR
+    Paper[":Paper (arXiv)"]
+    ATTACK[":AttackTechnique (Txxxx)"]
+    CWE[":CWE (CWE-xxx)"]
+    CWE_Parent[":CWE (Parent/Class)"]
+
+    Paper -->|EXPLOITS| ATTACK
+    Paper -->|MITIGATES| ATTACK
+    Paper -->|DISCLOSES| CWE
+    ATTACK -->|EXPLOITS| CWE
+    CWE -->|SUBCLASS_OF| CWE_Parent
+```
+
+### ノード属性仕様
+1. **`:Paper` (`EntityType.PAPER`)**:
+   - `id`: arXiv クリーン ID（例: `"2401_12345"`）
+   - `title`: 論文タイトル
+   - `abstract`: 論文要約（英文原本）
+   - `published_at`: 公開日（ISO 8601）
+   - `url`: `https://arxiv.org/abs/...`
+2. **`:AttackTechnique` (`EntityType.ATTACK_TECHNIQUE`)**:
+   - `id`: ATT&CK ID（例: `"T1059"`, `"T1055.001"`）
+   - `name`: 攻撃技術名
+   - `tactics`: 所属戦術リスト（例: `["Execution", "Persistence"]`）
+   - `url`: `https://attack.mitre.org/techniques/...`
+3. **`:CWE` (`EntityType.VULNERABILITY`)**:
+   - `id`: CWE 識別子（例: `"CWE-78"`, `"CWE-119"`）
+   - `name`: 脆弱性クラス名
+   - `abstraction`: 抽象度レベル（`Pillar`, `Class`, `Base`, `Variant`）
+   - `url`: `https://cwe.mitre.org/data/definitions/...`
+
+## 10.2 ハイブリッド抽出パイプライン（ゼロ外部依存）
+1. **ルールベース・正規表現マッチング**:
+   - `r"\bCWE-\d+\b"`, `r"\bT\d{4}(?:\.\d{3})?\b"` による完全一致抽出。
+   - セキュリティ専門同義語辞書（`TaxonomyRegistry`）による即時マッピング。
+2. **Pure-Python セマンティック類似度 / PRIMUS 推論**:
+   - 論文アブストラクトをサブワード分解し、内製 `DeterministicEmbedding` および IVF-PQ/ANN 探索により CWE/ATT&CK 定義テキストとの意味類似度を算出。
+   - 閾値判定により、明示的記述がない暗黙的 TTPs / 脆弱性タイプを補完。
+3. **来歴階層化（Provenance Tiering）**:
+   - `Gold`: 正規表現完全一致または公式メタデータ照合（確証度 $\ge 0.90$）
+   - `Silver`: セマンティック類似度上位一致（確証度 $0.70 \le c < 0.90$）
+   - `Bronze`: キーワード共起・トピック関連（確証度 $< 0.70$）
+
+

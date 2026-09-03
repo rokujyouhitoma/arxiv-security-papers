@@ -241,3 +241,27 @@ class GraphTraversal:
    - 双方向隣接リスト走査および Multi-Hop クエリの正確性。
 2. **品質ゲート基準**:
    - `make format`, `make static_analysis` (flake8/mypy --strict) 100% PASS。
+
+---
+
+# 8. MITRE ATT&CK / CWE マスターデータシードと波及・ギャップ探索クエリ仕様
+
+## 8.1 マスターデータシードパイプライン (`scripts/seed_ontologies.py`)
+外部ネットワーク依存を排除し、プロジェクト標準ライブラリ方針に準拠したシードスクリプトを配備：
+1. **シード元データ**:
+   - `src/ontology/taxonomy.py` の静的辞書およびローカル定義（CWE Top 25, MITRE ATT&CK Enterprise 核心テクニック）。
+2. **頂点投入**:
+   - `:AttackTechnique` ノード（`Txxxx`）の生成。
+   - `:CWE` ノード（`CWE-xxx`）の生成。
+3. **初期エッジ確立**:
+   - `(:AttackTechnique)-[:EXPLOITS]->(:CWE)`（CAPEC/CWE 照合）。
+   - `(:CWE)-[:SUBCLASS_OF]->(:CWE)`（Pillar/Class/Base 階層関係）。
+
+## 8.2 特化クエリ・ユーティリティ仕様
+1. **脆弱性から攻撃への多段波及探索 (CWE-to-ATT&CK Impact Query)**:
+   - 指定した CWE ID（例: `CWE-78`）を起点とし、それを悪用する ATT&CK 手法と、それらを実証した論文群を 1〜2 ホップ走査で高速抽出。
+2. **研究ギャップ抽出 (Research Gap Finder)**:
+   - グラフ全体を走査し、`in_e("EXPLOITS")` または `in_e("DISCLOSES")` で接続される `:Paper` ノード次数が 0 である ATT&CK / CWE 頂点集合を特定。
+3. **GraphRAG サブグラフ整形 (Subgraph Serializer)**:
+   - 任意のノードから深さ 2 以内のサブグラフを抽出し、LLM プロンプト向け Markdown / JSON コンテキストとして出力。
+

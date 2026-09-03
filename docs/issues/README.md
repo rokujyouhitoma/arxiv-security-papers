@@ -18,6 +18,7 @@
 | **132** | MCP通信におけるテイント解析・プロンプトインジェクション防御ゲートウェイおよび厳格JSONバリデータの実装 | Feature | High | Open (New) | [132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md](132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md) |
 | **133** | IR評価メトリクス（NDCG@10, MRR, MAP）に基づくCI継続的インテグレーション検索品質回帰防止ゲートの実装 | Feature | Medium | Open (New) | [133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md](133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md) |
 | **134** | Merkle Tree（暗号論的ハッシュ木）駆動の原本・メタデータ改ざん検知（FIM: File Integrity Monitoring）基盤の実装 | Feature | Medium | Open (New) | [134-implement-merkle-tree-file-integrity-monitoring.md](134-implement-merkle-tree-file-integrity-monitoring.md) |
+| **135** | arXivセキュリティ論文・MITRE ATT&CK・CWEナレッジグラフデータ基盤および /dashboard インタラクティブグラフ可視化の実装 | Feature | High | Open (New) | [135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md](135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md) |
 
 ---
 

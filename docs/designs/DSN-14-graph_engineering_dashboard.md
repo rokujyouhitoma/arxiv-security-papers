@@ -380,3 +380,74 @@ Canvas による深度 1〜5 の到達度ヒストグラム。
 - [x] 5秒定期自動同期（Auto-Sync）とノード位置保持スマートマージ
 - [x] `outputs/okf_papers/` および WAL 状態の動的バックエンド実データスキャン
 - [x] ゼロ外部依存アサーションおよび 100% テスト通過
+
+---
+
+# 11. arXiv セキュリティ論文・MITRE ATT&CK・CWE ナレッジグラフの `/dashboard` インタラクティブ可視化仕様
+
+## 11.1 目的と可視化アーキテクチャ
+`src/graph/`（`PropertyGraphEngine`）によって構築・蓄積された「論文（`:Paper`）」「攻撃手法（`:AttackTechnique`）」「脆弱性（`:CWE`）」の 3 大エンティティとそれらを結ぶ因果関係リレーションを、`/dashboard`（`site/dashboard.html`）の HTML5 2D Canvas 力学モデル上にリアルタイム描画し、研究者・セキュリティエンジニアが直感的に脅威ランドスケープを探索・分析できるようにする。
+
+```
++-----------------------------------------------------------------------------------+
+|                        /dashboard (HTML5 Canvas 2D)                               |
+|                                                                                   |
+|  [🔵 :Paper (arXiv)] =======[:EXPLOITS]======> [🔴 :AttackTechnique (ATT&CK)]     |
+|          \                                              /                         |
+|           \                                            /                          |
+|       [:DISCLOSES]                               [:EXPLOITS]                      |
+|             \                                        /                            |
+|              v                                      v                             |
+|          [🟠 :CWE (Vulnerability)] <====[:SUBCLASS_OF]=== [🟠 :CWE (Child)]      |
++-----------------------------------------------------------------------------------+
+```
+
+## 11.2 ノード種別ごとの配色トークンと視覚表現
+外部 CSS/ライブラリを一切排除し、Canvas 描画コンテキストで直接以下の配色トークンを適用する：
+
+| ノード種別 | ラベル | カラーコード | 枠線 / 発光色 | 半径 (r) | 表現対象 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **論文** | `:Paper` | `#3B82F6` (Blue) | `#1D4ED8` | 7px | arXiv セキュリティ論文 (クリーン ID / タイトル) |
+| **攻撃手法** | `:AttackTechnique` | `#EF4444` (Crimson) | `#B91C1C` | 9px | MITRE ATT&CK テクニック (Txxxx / 名称) |
+| **脆弱性** | `:CWE` | `#F59E0B` (Amber) | `#B45309` | 8px | CWE 脆弱性クラス (CWE-xxx / 名称) |
+| **防御機構** | `:DefenseMechanism` | `#10B981` (Emerald) | `#047857` | 8px | 検知ルール、パッチ、形式検証 |
+
+## 11.3 エッジ（リレーション）の線種と矢印表現
+- `EXPLOITS` (実証・悪用): 赤色実線 (`rgba(239, 68, 68, 0.6)`), 幅 1.5px
+- `MITIGATES` (検知・緩和): 緑色破線 (`rgba(16, 185, 129, 0.7)`), 幅 1.5px
+- `DISCLOSES` (脆弱性対象): 橙色実線 (`rgba(245, 158, 11, 0.6)`), 幅 1.2px
+- `SUBCLASS_OF` (階層関係): 灰色点線 (`rgba(156, 163, 175, 0.5)`), 幅 1.0px
+
+## 11.4 インタラクティブ操作・探索機能仕様
+1. **ノード種別フィルタリングトグル**:
+   - `[All]`, `[Papers]`, `[ATT&CK]`, `[CWE]` のボタントグルで表示ノードを絞り込み。
+2. **多段ホップ近傍展開（2-Hop Expansion）**:
+   - キャンバス上の任意のノード（例: `CWE-78`）をクリックすると、接続されている ATT&CK テクニックおよび論文ノードを強調表示（Highlight）し、無関係なノードをディミング（減衰）。
+3. **ノード詳細フローティングカード**:
+   - ノードホバーまたは選択時に、ID、名称、概要、戦術、および原論文 URL（`https://arxiv.org/abs/...`）をスイススタイルカードで即時表示。
+4. **研究ギャップハイライトモード**:
+   - 次数 0（接続されている Paper が存在しない）の孤立 ATT&CK / CWE ノードを黄色枠で点滅表示し、研究未開拓領域を一目で識別可能にする。
+
+## 11.5 Web ゲートウェイ & API 連携仕様
+- `src/web/gateway/handlers.py` にエンドポイント `/api/graph/cti-mesh` を追加。
+- `PropertyGraphEngine` から最新の `:Paper`, `:AttackTechnique`, `:CWE` サブグラフを抽出し、以下の JSON スキーマで返却：
+  ```json
+  {
+    "nodes": [
+      {"id": "2401.12345", "label": "Paper", "name": "...", "category": "cs.CR"},
+      {"id": "T1059", "label": "AttackTechnique", "name": "Command and Scripting Interpreter"},
+      {"id": "CWE-78", "label": "CWE", "name": "OS Command Injection"}
+    ],
+    "edges": [
+      {"source": "2401.12345", "target": "T1059", "label": "EXPLOITS", "confidence": 0.92},
+      {"source": "2401.12345", "target": "CWE-78", "label": "DISCLOSES", "confidence": 0.88}
+    ],
+    "stats": {
+      "total_papers": 14449,
+      "total_techniques": 128,
+      "total_cwes": 94,
+      "research_gap_count": 18
+    }
+  }
+  ```
+
