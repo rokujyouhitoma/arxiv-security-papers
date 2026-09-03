@@ -14,6 +14,8 @@ from database import (
 )
 
 from .hybrid import RRFHybridScorer
+from .ivf_pq import IVFPQIndex
+from .quantization import ProductQuantizer
 
 __all__ = [
     "VectorStorage",
@@ -24,4 +26,6 @@ __all__ = [
     "VectorDBProtocolHandler",
     "VectorDBProtocolError",
     "VectorDBClient",
+    "ProductQuantizer",
+    "IVFPQIndex",
 ]
