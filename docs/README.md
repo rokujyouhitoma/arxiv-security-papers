@@ -16,6 +16,8 @@
   - システムの背景・事業目的 (WHY) および達成すべき機能・非機能要求事項 (WHAT)。
 - 📋 **[[REQ-02] 主要機能一覧 (Master Feature List)](requirements/REQ-02-feature_list.md)**
   - 全主要機能 (F-01〜F-08) のマスター一覧、設計ページリンク、およびモジュール関係性マップ。
+- 🎯 **[[REQ-03] プロジェクトユースケース台帳 (Project Use Case Ledger)](requirements/REQ-03-use_case_ledger.md)**
+  - 6大ペルソナ（経営層/研究者/PSIRT/AIエージェント/DevSecOps/LLMセーフティ）の業務課題と全20ユースケース・価値創出フローを体系化。
 
 ### 3. 設計仕様 (Architecture & Feature Designs)
 
