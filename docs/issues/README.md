@@ -18,7 +18,6 @@
 | **132** | MCP通信におけるテイント解析・プロンプトインジェクション防御ゲートウェイおよび厳格JSONバリデータの実装 | Feature | High | Open (New) | [132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md](132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md) |
 | **133** | IR評価メトリクス（NDCG@10, MRR, MAP）に基づくCI継続的インテグレーション検索品質回帰防止ゲートの実装 | Feature | Medium | Open (New) | [133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md](133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md) |
 | **134** | Merkle Tree（暗号論的ハッシュ木）駆動の原本・メタデータ改ざん検知（FIM: File Integrity Monitoring）基盤の実装 | Feature | Medium | Open (New) | [134-implement-merkle-tree-file-integrity-monitoring.md](134-implement-merkle-tree-file-integrity-monitoring.md) |
-| **135** | arXivセキュリティ論文・MITRE ATT&CK・CWEナレッジグラフデータ基盤および /dashboard インタラクティブグラフ可視化の実装 | Feature | High | Open (New) | [135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md](135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md) |
 
 ---
 
@@ -26,6 +25,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **135** | arXivセキュリティ論文・MITRE ATT&CK・CWEナレッジグラフデータ基盤および /dashboard インタラクティブグラフ可視化の実装 | Feature | 2026-09-03 | [135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md](closed/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md) |
 | **123** | mmap・struct駆動 Pure-Python IVF-PQ（転置インデックス積量子化）高密度ベクトルANN探索エンジンの実装 | Feature | 2026-09-03 | [123-implement-pure-python-ivf-pq-dense-vector-ann-engine.md](closed/123-implement-pure-python-ivf-pq-dense-vector-ann-engine.md) |
 | **124** | BM25語彙検索とDense ANN意味検索を統合するRRF（相互順位融合）ハイブリッドスコアラーおよびベクトルストレージ・ビルドパイプラインの実装 | Feature | 2026-09-03 | [124-implement-bm25-dense-ann-reciprocal-rank-fusion-scorer.md](closed/124-implement-bm25-dense-ann-reciprocal-rank-fusion-scorer.md) |
 | **117** | 内製Pure-Python埋め込みエンジンの意味的セマンティック類似度向上（サブワード・N-gram重み付け＆超軽量埋め込み） | Feature | 2026-09-03 | [117-enhance-pure-python-semantic-embeddings.md](closed/117-enhance-pure-python-semantic-embeddings.md) |

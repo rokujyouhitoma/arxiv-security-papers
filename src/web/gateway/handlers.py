@@ -1312,6 +1312,58 @@ class GatewayHandlers:
         }
         return response_json(start_response, res)
 
+    def _parse_limit_param(self, raw_val: Optional[str], default: int = 150) -> int:
+        """Parses and clamps graph query limit parameter."""
+        if not raw_val:
+            return default
+        try:
+            return max(10, min(500, int(raw_val)))
+        except ValueError:
+            return default
+
+    def handle_cti_graph_mesh(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Optional[Dict[str, List[str]]] = None,
+    ) -> List[bytes]:
+        """Handles /api/graph/cti-mesh retrieval for Paper-ATT&CK-CWE Knowledge Graph."""
+        params = query_params or {}
+        limit_param = params.get("limit", [None])[0]
+        limit_val = self._parse_limit_param(limit_param)
+        focus_node = params.get("focus_node", [None])[0]
+        gap_param = params.get("include_gaps", ["true"])[0].lower()
+        include_gaps = gap_param in ("true", "1", "yes")
+
+        from graph.engine import PropertyGraphEngine
+
+        db_path = os.path.join(self.workspace_dir, "outputs", "database", "graph.db")
+        engine = PropertyGraphEngine(
+            storage_path=db_path, workspace_dir=self.workspace_dir
+        )
+
+        if engine.vertex_count == 0:
+            from ontology.seeder import seed_ontology_graph
+
+            seed_ontology_graph(engine)
+            engine.save()
+
+        subgraph_data = engine.export_cti_subgraph(
+            limit=limit_val,
+            focus_node=focus_node,
+            include_gaps=include_gaps,
+        )
+
+        res = {
+            "status": "success",
+            "mesh": {
+                "nodes": subgraph_data["nodes"],
+                "edges": subgraph_data["edges"],
+            },
+            "stats": subgraph_data["stats"],
+            "research_gaps": subgraph_data.get("research_gaps", []),
+        }
+        return response_json(start_response, res)
+
     def handle_preview(
         self, start_response: Callable[..., Any], path: str
     ) -> List[bytes]:

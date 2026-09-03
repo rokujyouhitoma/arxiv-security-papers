@@ -67,6 +67,8 @@ class WSGIApplication:
             return self.handlers.handle_stats(start_response)
         if path == "/api/graph/mesh":
             return self.handlers.handle_graph_mesh(start_response)
+        if path == "/api/graph/cti-mesh":
+            return self.handlers.handle_cti_graph_mesh(start_response, query_params)
         return None
 
     def _route_stream_api(

@@ -7,7 +7,11 @@ Extracts canonical entities and relationship triples from Google OKF v0.2 Markdo
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+
+if TYPE_CHECKING:
+    from graph.engine import PropertyGraphEngine
 
 from .schema import (
     AttackTechniqueEntity,
@@ -345,3 +349,37 @@ class OntologyExtractor:
         cls._link_defense_mitigations(entities, triples)
 
         return entities, cls._deduplicate_triples(triples)
+
+    @classmethod
+    def ingest_paper_to_graph(
+        cls,
+        clean_id: str,
+        markdown_content: str,
+        engine: PropertyGraphEngine,
+        confidence: float = 1.0,
+        tier: str = "gold",
+    ) -> Tuple[int, int]:
+        """Extracts entities and triples from OKF and merges them into PropertyGraphEngine."""
+        entities, triples = cls.extract_from_okf(clean_id, markdown_content)
+        for ent in entities:
+            props = asdict(ent)
+            props["tier"] = tier
+            engine.add_vertex(
+                vertex_id=ent.id,
+                label=ent.entity_type.value,
+                properties=props,
+            )
+        for trip in triples:
+            edge_props = {
+                "confidence": confidence,
+                "tier": tier,
+                "provenance": f"okf:{clean_id}",
+            }
+            engine.add_edge(
+                src_id=trip.subject_id,
+                dst_id=trip.object_id,
+                label=trip.predicate.value,
+                weight=trip.weight,
+                properties=edge_props,
+            )
+        return len(entities), len(triples)

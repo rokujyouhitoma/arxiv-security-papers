@@ -132,7 +132,7 @@ graph TD
 
 ## 6. `/dashboard` グラフ可視化での表現仕様
 
-本台帳で定義されたノードとエッジは、`/dashboard`（[site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html)）の 2D Canvas 力学モデル上で以下の視覚スタイルで統一されます：
+本台帳で定義されたノードとエッジは、`/dashboard`（[site/dashboard.html](../../site/dashboard.html)）の 2D Canvas 力学モデル上で以下の視覚スタイルで統一されます：
 
 - **`:Paper` (arXiv 論文)**: 青色丸ノード (`#3B82F6`)。ホバーでタイトル・著者・URL 表示。
 - **`:AttackTechnique` (ATT&CK)**: 赤色丸ノード (`#EF4444`)。Txxxx 識別子と名称を表示。
