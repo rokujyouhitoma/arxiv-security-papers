@@ -100,82 +100,254 @@ def _collect_papers_from_dir(
 def _scan_real_okf_papers(
     workspace_dir: str, max_count: int = 15
 ) -> List[Dict[str, Any]]:
-    """Scans outputs/okf_papers for actual security papers metadata."""
+    """Scans outputs/okf_papers for actual security papers metadata in sorted order."""
     papers: List[Dict[str, Any]] = []
     okf_base = os.path.join(workspace_dir, "outputs", "okf_papers")
     if not os.path.exists(okf_base):
         return papers
 
-    for root, _, files in os.walk(okf_base):
-        if _collect_papers_from_dir(root, files, max_count, papers):
+    for entry in sorted(os.listdir(okf_base), reverse=True):
+        sub = os.path.join(okf_base, entry)
+        if not os.path.isdir(sub):
+            continue
+        if _collect_papers_from_dir(sub, os.listdir(sub), max_count, papers):
             break
     return papers
+
+
+MESH_DOMAIN_DEFINITIONS: List[Dict[str, Any]] = [
+    {
+        "ent_id": "ent_llm_aiml",
+        "ent_title": "AI & Neural Subsystems",
+        "keywords": (
+            "ai",
+            "model",
+            "llm",
+            "neural",
+            "prompt",
+            "jailbreak",
+            "adversarial",
+            "inference",
+            "learning",
+            "cognitive",
+        ),
+        "clm_id": "clm_adversarial_input",
+        "clm_title": "Adversarial Input & Prompt Manipulation",
+        "dec_id": "dec_guardrail_isolation",
+        "dec_title": "Model Guardrails & Boundary Verification",
+        "dec_summary": "Enforce strict schema validation and token-level output filtering.",
+    },
+    {
+        "ent_id": "ent_crypto_protocols",
+        "ent_title": "Cryptographic Protocols & PKI",
+        "keywords": (
+            "crypto",
+            "encryption",
+            "cipher",
+            "privacy",
+            "signature",
+            "key",
+            "pqc",
+            "verifiable",
+            "datenschutz",
+        ),
+        "clm_id": "clm_crypto_weakness",
+        "clm_title": "Cryptographic Primitive & Privacy Leakage",
+        "dec_id": "dec_pqc_hardening",
+        "dec_title": "Post-Quantum Cryptography & Key Agility",
+        "dec_summary": "Migrate to NIST-standardized PQC algorithms with agile key encapsulation.",
+    },
+    {
+        "ent_id": "ent_zero_trust_iam",
+        "ent_title": "Zero-Trust Identity & Access (IAM)",
+        "keywords": (
+            "zero trust",
+            "identity",
+            "authentication",
+            "authorization",
+            "rbac",
+            "credential",
+            "access",
+            "friction",
+        ),
+        "clm_id": "clm_privilege_escalation",
+        "clm_title": "Credential Abuse & Identity Friction",
+        "dec_id": "dec_continuous_auth",
+        "dec_title": "Continuous Adaptive Verification & Microsegmentation",
+        "dec_summary": "Apply zero-trust least-privilege verification and risk-based auth.",
+    },
+    {
+        "ent_id": "ent_os_hardware",
+        "ent_title": "OS Kernel & Memory Subsystems",
+        "keywords": (
+            "kernel",
+            "hardware",
+            "memory",
+            "bypass",
+            "firmware",
+            "cpu",
+            "side-channel",
+            "driver",
+            "i/o",
+        ),
+        "clm_id": "clm_memory_side_channel",
+        "clm_title": "Memory Corruption & Microarchitectural Leak",
+        "dec_id": "dec_sandboxing_aslr",
+        "dec_title": "Hardware Enclave & Kernel Boundary Isolation",
+        "dec_summary": "Enforce compiler-enforced memory safety and hardware sandboxing.",
+    },
+    {
+        "ent_id": "ent_software_pipeline",
+        "ent_title": "Software Supply Chain & Registries",
+        "keywords": (
+            "software",
+            "code",
+            "dependency",
+            "package",
+            "review",
+            "vulnerability",
+            "pipeline",
+            "injection",
+        ),
+        "clm_id": "clm_software_flaw",
+        "clm_title": "Software Vulnerability & Dependency Exposure",
+        "dec_id": "dec_provenance_audit",
+        "dec_title": "Automated Static Analysis & SBOM Attestation",
+        "dec_summary": "Mandate cryptographic provenance attestation and automated auditing.",
+    },
+    {
+        "ent_id": "ent_network_protocol",
+        "ent_title": "Network & Protocol Infrastructure",
+        "keywords": (
+            "network",
+            "protocol",
+            "spoofing",
+            "gps",
+            "frequency",
+            "traffic",
+            "routing",
+            "wireless",
+            "distributed",
+        ),
+        "clm_id": "clm_protocol_forgery",
+        "clm_title": "Signal Forgery & Protocol Manipulation",
+        "dec_id": "dec_authenticated_transport",
+        "dec_title": "Cryptographic Transport & Signal Integrity Check",
+        "dec_summary": "Enforce end-to-end authenticated encryption and route validation.",
+    },
+]
+
+
+def _match_paper_domains(text: str) -> List[Dict[str, Any]]:
+    """Matches paper text against canonical domain specs."""
+    matched = [
+        d for d in MESH_DOMAIN_DEFINITIONS if any(kw in text for kw in d["keywords"])
+    ]
+    return matched[:2] if matched else [MESH_DOMAIN_DEFINITIONS[0]]
+
+
+def _upsert_domain_node(
+    node_id: str,
+    cluster: str,
+    title: str,
+    sub: str,
+    summary: str,
+    base_weight: float,
+    node_dict: Dict[str, Dict[str, Any]],
+) -> None:
+    """Upserts and deduplicates a domain node, boosting weight on co-reference."""
+    if node_id not in node_dict:
+        node_dict[node_id] = {
+            "id": node_id,
+            "cluster": cluster,
+            "title": title,
+            "sub": sub,
+            "summary": summary,
+            "weight": base_weight,
+        }
+    else:
+        node_dict[node_id]["weight"] = min(2.0, node_dict[node_id]["weight"] + 0.15)
+
+
+def _connect_paper_domain(
+    s_id: str,
+    dom: Dict[str, Any],
+    edge_set: set[str],
+    edges: List[Dict[str, Any]],
+) -> None:
+    """Adds directed relational edges between paper and deduplicated domain nodes."""
+    e_id = dom["ent_id"]
+    c_id = dom["clm_id"]
+    d_id = dom["dec_id"]
+    triples = [
+        (s_id, e_id, "targets", 1.0),
+        (s_id, c_id, "asserts", 0.9),
+        (c_id, d_id, "requires", 0.8),
+        (d_id, e_id, "protects", 0.85),
+    ]
+    for src, dst, rel, w in triples:
+        k = f"{src}->{dst}"
+        if k not in edge_set:
+            edge_set.add(k)
+            edges.append({"source": src, "target": dst, "relation": rel, "weight": w})
 
 
 def _build_dynamic_paper_mesh(
     papers: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Builds node-edge graph mesh from real paper objects."""
-    nodes: List[Dict[str, Any]] = []
+    """Builds node-edge graph mesh with deduplicated entities, claims, and decisions."""
+    node_dict: Dict[str, Dict[str, Any]] = {}
     edges: List[Dict[str, Any]] = []
-    for idx, p in enumerate(papers[:8]):
+    edge_set: set[str] = set()
+
+    for idx, p in enumerate(papers[:12]):
         clean_id = p.get("clean_id") or p.get("arxiv_id", f"paper_{idx}")
         title = p.get("title", f"Paper {clean_id}")
         summary = p.get("description") or p.get("summary", "")
-        tags = p.get("tags", ["cryptography", "zero-trust"])
-        s_id, e_id, c_id, d_id = f"src_{idx}", f"ent_{idx}", f"clm_{idx}", f"dec_{idx}"
-        ent_tag = tags[0] if tags else "Security Architecture"
+        s_id = f"src_{clean_id}"
 
-        nodes.extend(
-            [
-                {
-                    "id": s_id,
-                    "cluster": "sources",
-                    "title": f"arXiv: {clean_id}",
-                    "sub": title[:36],
-                    "summary": summary[:120],
-                    "weight": 1.0,
-                },
-                {
-                    "id": e_id,
-                    "cluster": "entities",
-                    "title": ent_tag.replace("-", " ").title(),
-                    "sub": f"Target Subsystem ({clean_id})",
-                    "summary": f"Core entity targeted in {clean_id}",
-                    "weight": 0.85,
-                },
-                {
-                    "id": c_id,
-                    "cluster": "claims",
-                    "title": f"Vulnerability Asserted ({clean_id})",
-                    "sub": "Security Claim",
-                    "summary": summary[:90],
-                    "weight": 0.75,
-                },
-                {
-                    "id": d_id,
-                    "cluster": "decisions",
-                    "title": f"Mitigation Policy {idx + 1}",
-                    "sub": "Decision Action",
-                    "summary": f"Enforce defensive control for {ent_tag}.",
-                    "weight": 0.9,
-                },
-            ]
-        )
-        edges.extend(
-            [
-                {"source": s_id, "target": e_id, "relation": "targets", "weight": 1.0},
-                {"source": s_id, "target": c_id, "relation": "asserts", "weight": 0.9},
-                {"source": c_id, "target": d_id, "relation": "requires", "weight": 0.8},
-                {
-                    "source": d_id,
-                    "target": e_id,
-                    "relation": "protects",
-                    "weight": 0.85,
-                },
-            ]
-        )
-    return nodes, edges
+        node_dict[s_id] = {
+            "id": s_id,
+            "cluster": "sources",
+            "title": f"arXiv: {clean_id}",
+            "sub": title[:36],
+            "summary": summary[:120],
+            "weight": 1.0,
+        }
+
+        text = f"{title} {summary} {' '.join(p.get('tags', []))}".lower()
+        matched = _match_paper_domains(text)
+        for dom in matched:
+            _upsert_domain_node(
+                dom["ent_id"],
+                "entities",
+                dom["ent_title"],
+                "Target Subsystem",
+                f"Core subsystem protected in {dom['ent_title']}",
+                1.0,
+                node_dict,
+            )
+            _upsert_domain_node(
+                dom["clm_id"],
+                "claims",
+                dom["clm_title"],
+                "Security Claim",
+                f"Vulnerability asserted: {dom['clm_title']}",
+                0.8,
+                node_dict,
+            )
+            _upsert_domain_node(
+                dom["dec_id"],
+                "decisions",
+                dom["dec_title"],
+                "Mitigation Policy",
+                dom["dec_summary"],
+                0.9,
+                node_dict,
+            )
+            _connect_paper_domain(s_id, dom, edge_set, edges)
+
+    return list(node_dict.values()), edges
 
 
 def _build_fallback_mesh_from_workspace(

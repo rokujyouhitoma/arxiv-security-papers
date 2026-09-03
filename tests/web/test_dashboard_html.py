@@ -186,14 +186,91 @@ def test_gateway_graph_mesh_with_vector_engine() -> None:
     assert captured_status[0] == "200 OK"
     data = json.loads(raw)
     assert data["status"] == "success"
-    assert len(data["mesh"]["nodes"]) == 8
-    assert len(data["mesh"]["edges"]) == 8
+    assert len(data["mesh"]["nodes"]) > 0
+    assert len(data["mesh"]["edges"]) > 0
+    clusters = {n["cluster"] for n in data["mesh"]["nodes"]}
+    assert "sources" in clusters
+    assert "entities" in clusters
+    assert "claims" in clusters
+    assert "decisions" in clusters
     assert "database_metrics" in data
     db_m = data["database_metrics"]
     assert db_m["table_count"] >= 5
     assert db_m["total_rows"] > 0
     assert "performance_kpis" in db_m
     assert db_m["performance_kpis"]["read_iops"] > 0
+
+
+def test_context_mesh_entity_resolution_and_deduplication() -> None:
+    """Verifies that papers sharing domains or topics share ENTITY, CLAIM, and DECISION nodes."""
+    import json
+    from unittest.mock import MagicMock
+
+    workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+    mock_engine = MagicMock()
+    mock_engine.documents = [
+        {
+            "clean_id": "2601.10001",
+            "title": "Adversarial Prompt Injection in Autonomous LLMs",
+            "description": "Exploits prompt manipulation in multi-agent models",
+            "tags": ["prompt-injection", "ai-security"],
+        },
+        {
+            "clean_id": "2601.10002",
+            "title": "Jailbreak and Neural Model Poisoning",
+            "description": "Security audit of AI model prompt boundaries",
+            "tags": ["jailbreak", "llm-security"],
+        },
+        {
+            "clean_id": "2601.10003",
+            "title": "Zero-Trust Identity Authentication Gateway",
+            "description": "Adaptive authorization in distributed networks",
+            "tags": ["zero-trust", "iam"],
+        },
+    ]
+    app = WSGIApplication(workspace_dir=workspace_dir, vector_engine=mock_engine)
+
+    captured_status = []
+    captured_headers = []
+
+    def start_response(status: str, headers: List[Any], exc_info: Any = None) -> None:
+        captured_status.append(status)
+        captured_headers.append(headers)
+
+    environ = {
+        "REQUEST_METHOD": "GET",
+        "PATH_INFO": "/api/graph/mesh",
+        "QUERY_STRING": "",
+        "wsgi.input": io.BytesIO(b""),
+    }
+    body = app(environ, start_response)
+    raw = b"".join(body).decode("utf-8")
+    assert captured_status[0] == "200 OK"
+    data = json.loads(raw)
+    nodes = data["mesh"]["nodes"]
+    edges = data["mesh"]["edges"]
+
+    # Check deduplication:
+    # 2601.10001 and 2601.10002 both match ent_llm_aiml, so ent_llm_aiml exists ONCE
+    ent_nodes = [n for n in nodes if n["cluster"] == "entities"]
+    ent_ids = [e["id"] for e in ent_nodes]
+    assert ent_ids.count("ent_llm_aiml") == 1
+
+    # Check cross-paper connection:
+    # Both papers 10001 and 10002 connect to the SAME ent_llm_aiml node
+    sources_to_aiml = [
+        e["source"]
+        for e in edges
+        if e["target"] == "ent_llm_aiml" and e["source"].startswith("src_")
+    ]
+    assert "src_2601.10001" in sources_to_aiml
+    assert "src_2601.10002" in sources_to_aiml
+    assert len(sources_to_aiml) >= 2
+
+    # Verify that entity node weight was increased due to multi-paper reference
+    aiml_node = next(n for n in ent_nodes if n["id"] == "ent_llm_aiml")
+    assert aiml_node["weight"] > 1.0
 
 
 def test_dashboard_database_storage_metrics_ui(dashboard_html_content: str) -> None:
