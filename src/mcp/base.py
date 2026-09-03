@@ -13,6 +13,8 @@ import tracemalloc
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from mcp.security import TaintGuard, cleanse_floats, sanitize_payload
+
 
 def get_workspace_dir() -> str:
     cur = os.path.abspath(os.path.dirname(__file__))
@@ -45,13 +47,20 @@ def make_tool_response(
 ) -> Dict[str, Any]:
     """
     Constructs a standardized, high-cohesion MCP tool response payload.
+    Automatically applies Unicode/control character sanitization, float cleansing,
+    and prompt injection taint inspection.
     """
     res: Dict[str, Any] = {"status": status}
     if data:
-        res.update(data)
+        cleaned_data = sanitize_payload(cleanse_floats(data))
+        if isinstance(cleaned_data, dict):
+            res.update(cleaned_data)
     if meta:
-        res["_meta"] = meta
-    return res
+        cleaned_meta = sanitize_payload(cleanse_floats(meta))
+        if isinstance(cleaned_meta, dict):
+            res["_meta"] = cleaned_meta
+    guarded = TaintGuard.guard_payload(res)
+    return guarded
 
 
 def make_error_response(

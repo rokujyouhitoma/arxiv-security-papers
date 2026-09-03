@@ -384,3 +384,169 @@ class GraphRAGPipeline:
         expansion["seed_paper_ids"] = matched_seeds
         expansion["defense_chains"] = self.find_defense_chains(query_text)
         return expansion
+
+    def _record_paper(
+        self,
+        vid: str,
+        props: Dict[str, Any],
+        d: int,
+        pr: float,
+        papers: List[Dict[str, Any]],
+    ) -> None:
+        papers.append(
+            {
+                "paper_id": vid.replace("Paper:", ""),
+                "title": props.get("title", vid),
+                "pagerank": round(pr, 6),
+                "depth": d,
+            }
+        )
+
+    def _record_defense(
+        self,
+        vid: str,
+        props: Dict[str, Any],
+        d: int,
+        mitigations: List[Dict[str, Any]],
+    ) -> None:
+        mitigations.append(
+            {
+                "defense_id": vid,
+                "name": props.get("name", vid),
+                "depth": d,
+            }
+        )
+
+    def _dispatch_evolution_record(
+        self,
+        vid: str,
+        label: str,
+        props: Dict[str, Any],
+        d: int,
+        pr_score: float,
+        papers: List[Dict[str, Any]],
+        mitigations: List[Dict[str, Any]],
+    ) -> None:
+        if label == "Paper" or vid.startswith("Paper:"):
+            self._record_paper(vid, props, d, pr_score, papers)
+        elif label == "DefenseMechanism" or vid.startswith("DefenseMechanism:"):
+            self._record_defense(vid, props, d, mitigations)
+
+    def _record_evolution_vertex(
+        self,
+        other_vid: str,
+        d: int,
+        pr_score: float,
+        papers: List[Dict[str, Any]],
+        mitigations: List[Dict[str, Any]],
+    ) -> None:
+        v = self.graph_engine.get_vertex(other_vid)
+        if v:
+            self._dispatch_evolution_record(
+                other_vid, v.label, v.properties or {}, d, pr_score, papers, mitigations
+            )
+
+    def _step_evolution_edge(
+        self,
+        e: Any,
+        vid: str,
+        traversed_triples: List[Dict[str, Any]],
+        visited_nodes: Set[str],
+        next_frontier: Set[str],
+        max_nodes: int,
+        d: int,
+        pr_scores: Dict[str, float],
+        papers: List[Dict[str, Any]],
+        mitigations: List[Dict[str, Any]],
+    ) -> None:
+        other_vid = e.dst_id if e.src_id == vid else e.src_id
+        triple = {
+            "subject": e.src_id,
+            "predicate": e.label,
+            "object": e.dst_id,
+            "weight": e.weight,
+        }
+        if triple not in traversed_triples:
+            traversed_triples.append(triple)
+
+        if other_vid not in visited_nodes and len(visited_nodes) < max_nodes:
+            visited_nodes.add(other_vid)
+            next_frontier.add(other_vid)
+            self._record_evolution_vertex(
+                other_vid, d, pr_scores.get(other_vid, 0.0), papers, mitigations
+            )
+
+    def _expand_evolution_depth(
+        self,
+        frontier: Set[str],
+        visited_nodes: Set[str],
+        max_nodes: int,
+        d: int,
+        pr_scores: Dict[str, float],
+        traversed_triples: List[Dict[str, Any]],
+        papers: List[Dict[str, Any]],
+        mitigations: List[Dict[str, Any]],
+    ) -> Set[str]:
+        next_frontier: Set[str] = set()
+        for vid in frontier:
+            edges = list(self.graph_engine.get_outgoing_edges(vid)) + list(
+                self.graph_engine.get_incoming_edges(vid)
+            )
+            for e in edges:
+                self._step_evolution_edge(
+                    e,
+                    vid,
+                    traversed_triples,
+                    visited_nodes,
+                    next_frontier,
+                    max_nodes,
+                    d,
+                    pr_scores,
+                    papers,
+                    mitigations,
+                )
+        return next_frontier
+
+    def query_attack_evolution(
+        self, technique_id: str, max_depth: int = 3, max_nodes: int = 200
+    ) -> Dict[str, Any]:
+        """
+        Multihop exploration tracing an attack technique across papers, citations,
+        and defense countermeasures, prioritizing nodes by PageRank centrality.
+        """
+        from .traversal import compute_pagerank
+
+        canonical_tech = (
+            technique_id
+            if technique_id.startswith("AttackTechnique:")
+            else f"AttackTechnique:{technique_id}"
+        )
+        pr_scores = compute_pagerank(self.graph_engine)
+        visited_nodes: Set[str] = {canonical_tech}
+        papers: List[Dict[str, Any]] = []
+        mitigations: List[Dict[str, Any]] = []
+        traversed_triples: List[Dict[str, Any]] = []
+
+        frontier = {canonical_tech}
+        for d in range(1, max_depth + 1):
+            frontier = self._expand_evolution_depth(
+                frontier,
+                visited_nodes,
+                max_nodes,
+                d,
+                pr_scores,
+                traversed_triples,
+                papers,
+                mitigations,
+            )
+            if not frontier or len(visited_nodes) >= max_nodes:
+                break
+
+        papers.sort(key=lambda x: float(x.get("pagerank", 0.0)), reverse=True)
+        return {
+            "technique_id": technique_id,
+            "total_nodes_visited": len(visited_nodes),
+            "evolution_papers": papers,
+            "mitigations": mitigations,
+            "traversed_triples": traversed_triples,
+        }

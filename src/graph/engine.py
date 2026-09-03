@@ -126,6 +126,10 @@ class PropertyGraphEngine:
         target_labels = set(labels)
         return [e for e in edges if e.label in target_labels]
 
+    def get_outgoing_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
+        """Alias for get_out_edges."""
+        return self.get_out_edges(vertex_id, *labels)
+
     def get_in_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
         """Retrieves incoming edges to vertex_id, optionally filtered by edge labels."""
         edges = self._in_edges.get(vertex_id, [])
@@ -134,11 +138,19 @@ class PropertyGraphEngine:
         target_labels = set(labels)
         return [e for e in edges if e.label in target_labels]
 
+    def get_incoming_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
+        """Alias for get_in_edges."""
+        return self.get_in_edges(vertex_id, *labels)
+
     def get_both_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
         """Retrieves all edges (in + out) connected to vertex_id."""
         return self.get_out_edges(vertex_id, *labels) + self.get_in_edges(
             vertex_id, *labels
         )
+
+    def get_all_vertices(self) -> List[Vertex]:
+        """Returns all vertices currently registered in the graph engine."""
+        return list(self._vertices.values())
 
     def _purge_out_edges(self, vertex_id: str) -> None:
         """Purges outgoing edges connected to vertex_id."""

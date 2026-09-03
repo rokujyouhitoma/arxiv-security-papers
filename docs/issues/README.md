@@ -6,18 +6,7 @@
 
 ## 1. 進行中・未完了 Issue 一覧 (Active Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **125** | Late-Interaction（MaxSim）演算機構およびセキュリティ専門語彙拡張（SPLADE風疎表現）リランカーの実装 | Feature | Medium | Open (New) | [125-implement-late-interaction-maxsim-and-splade-term-expansion.md](125-implement-late-interaction-maxsim-and-splade-term-expansion.md) |
-| **126** | 固定長4KBバイナリスロットページ構造とLSM-Tree（MemTable/WAL/SSTable/Bloom Filter）ストレージエンジンの実装 | Feature | Medium | Open (New) | [126-implement-4kb-slotted-page-and-lsm-tree-sstable-storage.md](126-implement-4kb-slotted-page-and-lsm-tree-sstable-storage.md) |
-| **127** | OASIS STIX 2.1仕様準拠 SDO/SRO 脅威インテリジェンス・ナレッジグラフ自動構築パイプラインの実装 | Feature | High | Open (New) | [127-implement-stix-21-sdo-sro-threat-knowledge-graph-generation.md](127-implement-stix-21-sdo-sro-threat-knowledge-graph-generation.md) |
-| **128** | PRIMUS知見に基づくCWE/CVSS/ATT&CK精密マッピングエンジン（CTI-RCM, CTI-VSP, CTI-ATE）と来歴階層化の実装 | Feature | High | Open (New) | [128-implement-primus-cti-rcm-vsp-ate-precision-mapping-engine.md](128-implement-primus-cti-rcm-vsp-ate-precision-mapping-engine.md) |
-| **129** | 論文引用ネットワークとCTIナレッジグラフを統合したマルチホップGraphRAGパイプラインの実装 | Feature | Medium | Open (New) | [129-implement-citation-network-cti-graphrag-pipeline.md](129-implement-citation-network-cti-graphrag-pipeline.md) |
-| **130** | IaC・OpenAPIスキーマ解析と論文知見照合によるSTRIDE脅威モデリング自動化MCPツール（mcp-threat-modeler）の実装 | Feature | High | Open (New) | [130-implement-mcp-threat-modeler-stride-analysis-tool.md](130-implement-mcp-threat-modeler-stride-analysis-tool.md) |
-| **131** | 学術知見からの動的防御シグネチャ（Semgrep / Sigma / YARA）自動生成とインメモリAST構文テスターの実装 | Feature | Medium | Open (New) | [131-implement-dynamic-semgrep-sigma-rule-generator-and-ast-validator.md](131-implement-dynamic-semgrep-sigma-rule-generator-and-ast-validator.md) |
-| **132** | MCP通信におけるテイント解析・プロンプトインジェクション防御ゲートウェイおよび厳格JSONバリデータの実装 | Feature | High | Open (New) | [132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md](132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md) |
-| **133** | IR評価メトリクス（NDCG@10, MRR, MAP）に基づくCI継続的インテグレーション検索品質回帰防止ゲートの実装 | Feature | Medium | Open (New) | [133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md](133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md) |
-| **134** | Merkle Tree（暗号論的ハッシュ木）駆動の原本・メタデータ改ざん検知（FIM: File Integrity Monitoring）基盤の実装 | Feature | Medium | Open (New) | [134-implement-merkle-tree-file-integrity-monitoring.md](134-implement-merkle-tree-file-integrity-monitoring.md) |
+現在、進行中のオープンな Issue はありません。（すべての計画された Issue は完了しました）
 
 ---
 
@@ -25,6 +14,16 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **134** | Merkle Tree（暗号論的ハッシュ木）駆動の原本・メタデータ改ざん検知（FIM: File Integrity Monitoring）基盤の実装 | Feature | 2026-09-04 | [134-implement-merkle-tree-file-integrity-monitoring.md](closed/134-implement-merkle-tree-file-integrity-monitoring.md) |
+| **133** | IR評価メトリクス（NDCG@10, MRR, MAP）に基づくCI継続的インテグレーション検索品質回帰防止ゲートの実装 | Feature | 2026-09-04 | [133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md](closed/133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md) |
+| **132** | MCP通信におけるテイント解析・プロンプトインジェクション防御ゲートウェイおよび厳格JSONバリデータの実装 | Feature | 2026-09-04 | [132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md](closed/132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md) |
+| **131** | 学術知見からの動的防御シグネチャ（Semgrep / Sigma / YARA）自動生成とインメモリAST構文テスターの実装 | Feature | 2026-09-04 | [131-implement-dynamic-semgrep-sigma-rule-generator-and-ast-validator.md](closed/131-implement-dynamic-semgrep-sigma-rule-generator-and-ast-validator.md) |
+| **130** | IaC・OpenAPIスキーマ解析と論文知見照合によるSTRIDE脅威モデリング自動化MCPツール（mcp-threat-modeler）の実装 | Feature | 2026-09-04 | [130-implement-mcp-threat-modeler-stride-analysis-tool.md](closed/130-implement-mcp-threat-modeler-stride-analysis-tool.md) |
+| **129** | 論文引用ネットワークとCTIナレッジグラフを統合したマルチホップGraphRAGパイプラインの実装 | Feature | 2026-09-04 | [129-implement-citation-network-cti-graphrag-pipeline.md](closed/129-implement-citation-network-cti-graphrag-pipeline.md) |
+| **128** | PRIMUS知見に基づくCWE/CVSS/ATT&CK精密マッピングエンジン（CTI-RCM, CTI-VSP, CTI-ATE）と来歴階層化の実装 | Feature | 2026-09-04 | [128-implement-primus-cti-rcm-vsp-ate-precision-mapping-engine.md](closed/128-implement-primus-cti-rcm-vsp-ate-precision-mapping-engine.md) |
+| **127** | OASIS STIX 2.1仕様準拠 SDO/SRO 脅威インテリジェンス・ナレッジグラフ自動構築パイプラインの実装 | Feature | 2026-09-04 | [127-implement-stix-21-sdo-sro-threat-knowledge-graph-generation.md](closed/127-implement-stix-21-sdo-sro-threat-knowledge-graph-generation.md) |
+| **126** | 固定長4KBバイナリスロットページ構造とLSM-Tree（MemTable/WAL/SSTable/Bloom Filter）ストレージエンジンの実装 | Feature | 2026-09-04 | [126-implement-4kb-slotted-page-and-lsm-tree-sstable-storage.md](closed/126-implement-4kb-slotted-page-and-lsm-tree-sstable-storage.md) |
+| **125** | Late-Interaction（MaxSim）演算機構およびセキュリティ専門語彙拡張（SPLADE風疎表現）リランカーの実装 | Feature | 2026-09-04 | [125-implement-late-interaction-maxsim-and-splade-term-expansion.md](closed/125-implement-late-interaction-maxsim-and-splade-term-expansion.md) |
 | **137** | /dashboard Product タブにおける CTI グラフクエリ・コンソールおよびサブグラフ抽出・ハイライト機能の実装 | Feature | 2026-09-04 | [137-implement-graph-query-console-and-subgraph-extraction-in-dashboard.md](closed/137-implement-graph-query-console-and-subgraph-extraction-in-dashboard.md) |
 | **136** | Context Meshにおけるエンティティ名寄せ（Entity Resolution）・重複排除（Deduplication）と論文横断グラフ結合の実装 | Improvement | 2026-09-03 | [136-implement-context-mesh-entity-resolution-and-deduplication.md](closed/136-implement-context-mesh-entity-resolution-and-deduplication.md) |
 | **135** | arXivセキュリティ論文・MITRE ATT&CK・CWEナレッジグラフデータ基盤および /dashboard インタラクティブグラフ可視化の実装 | Feature | 2026-09-03 | [135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md](closed/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md) |

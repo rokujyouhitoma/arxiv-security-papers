@@ -30,7 +30,13 @@ from .query import (
     QuerySemanticCache,
     SynonymExpander,
 )
-from .ranking import CitationNetworkIndex, KnowledgeGraphIndex, ProximityGraphIndex
+from .ranking import (
+    CitationNetworkIndex,
+    KnowledgeGraphIndex,
+    LateInteractionReranker,
+    ProximityGraphIndex,
+    SpladeTermExpander,
+)
 from .utils import extract_abstract_from_okf
 from .vector import (
     DeterministicEmbedding,
@@ -132,6 +138,8 @@ class VectorEngine:
         self.citation_network = CitationNetworkIndex()
         self.raptor_tree = RAPTORTreeIndex()
         self.proximity_graph = ProximityGraphIndex(top_k_neighbors=6)
+        self.late_interaction_reranker = LateInteractionReranker(embedding_dim=128)
+        self.splade_expander = SpladeTermExpander()
 
         # Binary Vector Storage and HNSW Index (Protocol-driven)
         self.embedding = DeterministicEmbedding(dim=128)
@@ -1172,6 +1180,58 @@ class VectorEngine:
         )
         vector_results = self.search_vector_ann(query, top_k=top_k * 2)
         return self.rrf_scorer.fuse(bm25_results, vector_results, top_k=top_k)
+
+    def _get_rrf_candidates(
+        self, query: str, expanded_query: str, candidate_k: int, category: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Retrieves candidates using expanded query with fallback to raw query."""
+        candidates = self.search_rrf_hybrid(
+            expanded_query, top_k=candidate_k, category=category
+        )
+        if candidates:
+            return candidates
+        return self.search_rrf_hybrid(query, top_k=candidate_k, category=category)
+
+    def _score_single_doc_maxsim(
+        self, doc: Dict[str, Any], q_embeddings: Sequence[Sequence[float]]
+    ) -> Dict[str, Any]:
+        """Calculates MaxSim score and blends it with hybrid score."""
+        doc_text = f"{doc.get('title', '')} {doc.get('description', '')}"
+        d_tokens = self.tokenize(doc_text)
+        d_embeddings = [self.embedding.embed_text(tok) for tok in d_tokens]
+        maxsim_score = self.late_interaction_reranker.score(q_embeddings, d_embeddings)
+        doc_copy = dict(doc)
+        doc_copy["maxsim_score"] = round(maxsim_score, 4)
+        doc_copy["score"] = round(doc.get("score", 0.0) * 0.3 + maxsim_score * 0.7, 4)
+        return doc_copy
+
+    def search_late_interaction(
+        self,
+        query: str,
+        top_k: int = 10,
+        candidate_k: int = 50,
+        category: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Executes Late-Interaction (MaxSim) multi-vector re-ranking with SPLADE term expansion.
+        Stage 1: Retrieve candidate_k documents via search_rrf_hybrid.
+        Stage 2: Expand query with SPLADE, compute token-level representations, and re-rank with MaxSim.
+        """
+        expanded_query, _ = self.splade_expander.expand(query)
+        candidates = self._get_rrf_candidates(
+            query, expanded_query, candidate_k, category
+        )
+        if not candidates:
+            return []
+
+        q_tokens = self.tokenize(expanded_query) or self.tokenize(query)
+        q_embeddings = [self.embedding.embed_text(token) for token in q_tokens]
+
+        scored = [
+            self._score_single_doc_maxsim(doc, q_embeddings) for doc in candidates
+        ]
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:top_k]
 
 
 def main() -> None:

@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, cast
 
 from mcp.base import run_mcp_server
 from security.taxonomy import CWE_DEFENSE_MAP
@@ -174,6 +174,65 @@ TOOLS_MANIFEST = [
                 },
             },
             "required": ["entity_id"],
+        },
+    },
+    {
+        "name": "model_stride_threats",
+        "description": (
+            "Analyze IaC (Terraform, CloudFormation) or OpenAPI/Swagger schemas for STRIDE security threats "
+            "and correlate with academic mitigations and CWE taxonomy."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "schema_type": {
+                    "type": "string",
+                    "description": "Schema format e.g. 'openapi', 'terraform', 'cloudformation'",
+                },
+                "schema_content": {
+                    "type": "string",
+                    "description": "Raw JSON, YAML, or HCL configuration text to model",
+                },
+            },
+            "required": ["schema_type", "schema_content"],
+        },
+    },
+    {
+        "name": "synthesize_detection_signature",
+        "description": (
+            "Synthesize verified detection signatures (Semgrep YAML, Sigma SIEM, YARA) from academic threat patterns "
+            "with in-memory AST syntax validation and ReDoS static checking."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "rule_type": {
+                    "type": "string",
+                    "description": "Target rule format: 'semgrep', 'sigma', or 'yara'",
+                },
+                "rule_name": {
+                    "type": "string",
+                    "description": "Rule identifier or name",
+                },
+                "target_vulnerability": {
+                    "type": "string",
+                    "description": "Target CWE or vulnerability identifier e.g. 'CWE-89'",
+                },
+                "pattern_or_code": {
+                    "type": "string",
+                    "description": "Detection pattern, code snippet, or match string",
+                },
+                "log_source": {
+                    "type": "string",
+                    "description": "Optional log source for Sigma rules (default: 'process_creation')",
+                },
+            },
+            "required": [
+                "rule_type",
+                "rule_name",
+                "target_vulnerability",
+                "pattern_or_code",
+            ],
         },
     },
 ]
@@ -440,6 +499,80 @@ def handle_get_blast_radius(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"status": "success", **res}
 
 
+def handle_model_stride_threats(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handles automated STRIDE threat modeling against IaC and OpenAPI schemas."""
+    schema_type = params.get("schema_type", "").strip()
+    schema_content = params.get("schema_content", "").strip()
+    if not schema_type or not schema_content:
+        return {
+            "status": "error",
+            "message": "Missing required parameters 'schema_type' or 'schema_content'",
+        }
+
+    from .tools.threat_modeler import ThreatModeler
+
+    modeler = ThreatModeler()
+    return modeler.analyze(schema_type, schema_content)
+
+
+def _dispatch_signature_gen(
+    gen: Any,
+    rule_type: str,
+    rule_name: str,
+    cwe_id: str,
+    pattern: str,
+    log_source: str,
+) -> Dict[str, Any]:
+    """Dispatches signature generation based on rule_type."""
+    if rule_type == "semgrep":
+        return cast(
+            Dict[str, Any],
+            gen.generate_semgrep(rule_id=rule_name, cwe_id=cwe_id, pattern=pattern),
+        )
+    if rule_type == "sigma":
+        return cast(
+            Dict[str, Any],
+            gen.generate_sigma(
+                title=rule_name,
+                log_source=log_source,
+                detection_fields={"CommandLine|contains": pattern},
+            ),
+        )
+    if rule_type == "yara":
+        return cast(
+            Dict[str, Any],
+            gen.generate_yara(
+                rule_name=rule_name, strings_dict={"target_str": pattern}
+            ),
+        )
+    return {
+        "status": "error",
+        "message": f"Unsupported rule_type '{rule_type}' (must be 'semgrep', 'sigma', or 'yara')",
+    }
+
+
+def handle_synthesize_detection_signature(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handles dynamic detection signature synthesis across Semgrep, Sigma, and YARA."""
+    rule_type = params.get("rule_type", "").strip().lower()
+    rule_name = params.get("rule_name", "").strip()
+    cwe_id = params.get("target_vulnerability", "").strip()
+    pattern = params.get("pattern_or_code", "").strip()
+    log_source = params.get("log_source", "process_creation").strip()
+
+    if not (rule_type and rule_name and pattern):
+        return {
+            "status": "error",
+            "message": "Missing required parameters for signature synthesis",
+        }
+
+    from .tools.signature_generator import SignatureGenerator
+
+    gen = SignatureGenerator()
+    return _dispatch_signature_gen(
+        gen, rule_type, rule_name, cwe_id, pattern, log_source
+    )
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generate_semgrep_rule": handle_generate_semgrep_rule,
     "synthesize_secure_patch": handle_synthesize_secure_patch,
@@ -449,6 +582,8 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "graphrag_query": handle_graphrag_query,
     "get_attack_defense_chain": handle_get_attack_defense_chain,
     "get_blast_radius": handle_get_blast_radius,
+    "model_stride_threats": handle_model_stride_threats,
+    "synthesize_detection_signature": handle_synthesize_detection_signature,
 }
 
 

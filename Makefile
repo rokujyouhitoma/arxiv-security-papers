@@ -251,3 +251,12 @@ test_slow: activate ## Run only slow-running comprehensive stress tests (@pytest
 .PHONY: test_all
 test_all: activate ## Run all tests including slow comprehensive E2E scenarios
 	${VENV_BIN}/pytest -v --strict-markers -W error --cov=src --cov-fail-under=80 ${TESTS}
+
+.PHONY: ir_eval
+ir_eval: activate ## Evaluate IR ranking accuracy metrics (NDCG@10, MRR, MAP)
+	PYTHONPATH=src ${VENV_PYTHON} -m search.eval.ci_gate --update-baseline
+
+.PHONY: check_ir_regression
+check_ir_regression: activate ## Enforce CI quality gate against IR metrics regression (threshold <= 3%)
+	PYTHONPATH=src ${VENV_PYTHON} -m search.eval.ci_gate --threshold 0.03
+

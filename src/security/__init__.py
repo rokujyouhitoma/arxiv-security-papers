@@ -4,6 +4,8 @@ Unified Security & Compliance Framework for arXiv Security Papers.
 Provides a Single Source of Truth (SSOT) across Sandboxing, RBAC, Validation, and Threat Taxonomy.
 """
 
+from .fim import FileIntegrityMonitor, compute_file_sha256
+from .merkle_tree import MerkleTree, hash_children, hash_leaf
 from .rbac import (
     AccessController,
     DCLPermissionDeniedError,
@@ -40,6 +42,12 @@ from .validation import (
 )
 
 __all__ = [
+    # FIM & Merkle Tree
+    "FileIntegrityMonitor",
+    "MerkleTree",
+    "compute_file_sha256",
+    "hash_children",
+    "hash_leaf",
     # Sandbox
     "ASTSecurityGuard",
     "BLOCKED_BUILTIN_FUNCS",

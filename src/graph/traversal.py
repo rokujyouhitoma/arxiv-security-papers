@@ -656,3 +656,92 @@ class _RepeatHelper:
             emitted_objs.extend(curr._current)
             return curr._clone(emitted_objs)
         return curr
+
+
+def _init_pagerank_graph(
+    engine: "PropertyGraphEngine", v_ids: List[str]
+) -> Tuple[Dict[str, int], Dict[str, List[str]]]:
+    out_degrees: Dict[str, int] = {}
+    in_neighbors: Dict[str, List[str]] = {vid: [] for vid in v_ids}
+    for vid in v_ids:
+        out_e = engine.get_outgoing_edges(vid)
+        out_degrees[vid] = len(out_e)
+        for e in out_e:
+            if e.dst_id in in_neighbors:
+                in_neighbors[e.dst_id].append(vid)
+    return out_degrees, in_neighbors
+
+
+def _pagerank_step(
+    v_ids: List[str],
+    scores: Dict[str, float],
+    out_degrees: Dict[str, int],
+    in_neighbors: Dict[str, List[str]],
+    base_teleport: float,
+    damping: float,
+    n: int,
+) -> Tuple[Dict[str, float], float]:
+    dangling_sum = sum(scores[vid] for vid in v_ids if out_degrees[vid] == 0)
+    dangling_share = (damping * dangling_sum) / n
+    new_scores: Dict[str, float] = {}
+    diff = 0.0
+
+    for vid in v_ids:
+        rank_sum = sum(scores[u] / out_degrees[u] for u in in_neighbors[vid])
+        val = base_teleport + dangling_share + (damping * rank_sum)
+        new_scores[vid] = val
+        diff += abs(val - scores[vid])
+
+    return new_scores, diff
+
+
+def _iterate_pagerank(
+    v_ids: List[str],
+    scores: Dict[str, float],
+    out_degrees: Dict[str, int],
+    in_neighbors: Dict[str, List[str]],
+    base_teleport: float,
+    damping: float,
+    n: int,
+    max_iter: int,
+    tol: float,
+) -> Dict[str, float]:
+    for _ in range(max_iter):
+        scores, diff = _pagerank_step(
+            v_ids, scores, out_degrees, in_neighbors, base_teleport, damping, n
+        )
+        if diff < tol:
+            break
+    return scores
+
+
+def compute_pagerank(
+    engine: "PropertyGraphEngine",
+    damping: float = 0.85,
+    max_iter: int = 50,
+    tol: float = 1e-6,
+) -> Dict[str, float]:
+    """
+    Computes PageRank centrality scores for all vertices in the graph engine.
+    Pure Python power iteration with dangling node mass redistribution.
+    """
+    vertices = list(engine.get_all_vertices())
+    n = len(vertices)
+    if n == 0:
+        return {}
+
+    v_ids = [v.id for v in vertices]
+    scores: Dict[str, float] = {vid: 1.0 / n for vid in v_ids}
+    out_degrees, in_neighbors = _init_pagerank_graph(engine, v_ids)
+    base_teleport = (1.0 - damping) / n
+    return _iterate_pagerank(
+        v_ids,
+        scores,
+        out_degrees,
+        in_neighbors,
+        base_teleport,
+        damping,
+        n,
+        max_iter,
+        tol,
+    )

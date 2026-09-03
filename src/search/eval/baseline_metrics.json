@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-09-03T23:35:08.972892+00:00",
+  "commit_hash": "HEAD",
+  "top_k": 10,
+  "metrics": {
+    "num_queries": 5,
+    "top_k": 10,
+    "mean_precision_at_k": 0.24,
+    "mean_recall_at_k": 0.8,
+    "mean_f1_score": 0.3692,
+    "MAP": 0.64,
+    "MRR": 0.9,
+    "mean_NDCG_at_k": 0.7405
+  },
+  "sha256": "1853ebc8c2bd33bae0a129ff302bf6f382d097a9461334272049d604602ad34f"
+}
