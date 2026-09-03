@@ -357,8 +357,17 @@ class HybridSearchPipeline:
 
 class VectorSearchEngine:
     def __init__(self, index_path: str) -> None: ...
-    def query(self, vector: List[float], top_k: int = 10) -> List[Tuple[str, float]]: ...
-```
+### 4.6 Pure Python IVF-PQ（転置インデックス積量子化）高密度ベクトル探索器
+大規模多次元ベクトル（128〜384次元）を省メモリかつ低遅延にインメモリ保持・探索するため、標準ライブラリ（`struct` による固定長バイナリパッキング、`mmap` によるゼロコピーメモリマップ）のみで動作する IVF-PQ（Inverted File with Product Quantization）近似最近傍探索（ANN）エンジンを配備する。
+1. **空間粗探索（Inverted File: IVF）**: 重心クラスタ（Centroids）をインメモリで探索し、対象ボロノイセルを絞り込み。
+2. **サブスペース積量子化（Product Quantization: PQ）**: 高次元ベクトルを $M$ 個の低次元サブベクトル（各 $d^* = D/M$ 次元）に分割し、256 個の量子化コードブック（1バイトコード）で表現。
+3. **非対称距離計算（Asymmetric Distance Computation: ADC）**: クエリの生ベクトルとコードブック中心間のルックアップテーブル（LUT）を事前計算し、バイト加算のみでサブミリ秒探索を達成。
+
+### 4.7 Late-Interaction（MaxSim）と専門語彙拡張（SPLADE風疎表現）リランカー
+セキュリティ文献の頭字語（PQC, PEP/PDP, ATT&CK T1059）や専門用語の揺らぎを吸収するため、ColBERT 型の Late-Interaction 演算（MaxSim）および疎表現拡張を導入する。
+1. **MaxSim 演算**: クエリトークン集合 $Q$ とドキュメントトークン集合 $D$ の間で、各クエリトークンがドキュメント側で得る最大コサイン類似度の総和を標準 `math` 内積ループのみで高速計算:
+   $$S(Q, D) = \sum_{q \in Q} \max_{d \in D} \left( \frac{\mathbf{e}_q \cdot \mathbf{e}_d}{\|\mathbf{e}_q\| \|\mathbf{e}_d\|} \right)$$
+2. **専門語彙拡張（SPLADE 風）**: インデクシング時にセキュリティドメインシノニム辞書を参照し、関連概念トークンの仮想的な重み付きエントリを転置インデックスへ付与。
 
 ---
 

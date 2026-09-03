@@ -1839,5 +1839,25 @@ mindmap
 - バインドパラメータ（Prepared Statements）の値をログ出力する際も、事前定義ルールに基づいて自動サニタイズを実施する。
 
 ---
+
+# 17. 4KB スロットページ & LSM-Tree 構造によるストレージ最適化と原本 FIM (File Integrity Monitoring)
+
+## 17.1 固定長 4KB バイナリスロットページ構造 (Slotted-Page Architecture)
+文献の定常的な収集、追記、再要約処理に伴うストレージ断片化とランダム I/O オーバーヘッドを抑制するため、固定長 4KB ページを基本単位とするバイナリスロットページ構造を配備する。
+- **ページヘッダ (Page Header)**: Page ID, LSN (Log Sequence Number), 空き領域オフセットポインタ, スロット配列数。
+- **スロット配列 (Slot Array)**: ページ先頭から下向きにタプルへのオフセットと長さを記録。
+- **タプル格納領域 (Tuple Payload)**: ページ末尾から上向きに可変長タプル（論文メタデータ、JSON ペイロード）を記録し、中央の空き領域で断片化をゼロ化。
+
+## 17.2 LSM-Tree (Log-Structured Merge-tree) 書き込みパス & SSTable
+- **MemTable & WAL**: トランザクションを逐次追記型ログ（WAL）へコミットしつつ、インメモリのソート済みデータ構造（MemTable）へ挿入。
+- **SSTable フラッシュ**: MemTable が容量上限（例: 4MB）に達した段階で、不変の SSTable（Sorted String Table）としてディスクへシーケンシャル書き込み。
+- **Bloom フィルタ**: SSTable ヘッダに標準ビット配列演算による Bloom フィルタを埋め込み、存在しないキーに対する無駄なディスクシークを $O(1)$ で遮断。
+
+## 17.3 Merkle Tree 駆動原本・メタデータ改ざん検知 (FIM: File Integrity Monitoring)
+原本 PDF、中間テキスト、Google OKF 要約 Markdown、および STIX 2.1 知識グラフ JSON に対し、ストレージ障害や不正改ざんを検知する FIM 機構を `hashlib` のみで実装する。
+- **Merkle Tree 構築**: 各ファイルの SHA-256 ダイジェストをリーフノードとし、親ノードを $H(L + R)$ で階層計算して Merkle Root を算出。
+- **バッチ検証**: 日次バッチ（`outputs/raw_data/YYYY-MM-DD/manifest.json`）に Merkle Root を記録し、$O(\log N)$ の計算オーダーで完全性監査を実施。
+
+---
 *審議終了: Systems Architect, Database Specialist 合意承認済*
 

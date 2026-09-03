@@ -239,3 +239,29 @@ class TaxonomyRegistry:
    - 同義語正規化辞書（`TaxonomyRegistry`）の網羅率テスト。
 2. **静的解析**:
    - `make flake8` & `make mypy --strict` 100% PASS。
+
+---
+
+# 8. STIX 2.1 スキーマ準拠の知識グラフ自動構築 (SDO/SRO)
+
+論文から抽出された脅威情報エンティティおよび関係性を OASIS 標準 STIX 2.1（Structured Threat Information Expression）仕様に準拠した JSON 構造体として形式化する。
+- **STIX ドメインオブジェクト (SDO)**:
+  - `attack-pattern`: 論文が実証した新規攻撃手法。
+  - `vulnerability`: 対象アーキテクチャの欠陥や弱点。
+  - `course-of-action`: 提案された対抗策、パッチ、形式検証手法。
+  - `threat-actor` / `identity`: 想定攻撃主体・標的組織。
+- **STIX リレーションシップオブジェクト (SRO)**:
+  - `mitigates`: 防御策が無力化する攻撃手法。
+  - `targets`: 攻撃が標的とする環境やコンポーネント。
+  - `indicates`: 攻撃の観測指標や IoC。
+
+---
+
+# 9. PRIMUS 知見に基づく CWE / CVSS / ATT&CK 精密マッピングと来歴階層化
+
+自然言語アブストラクトや本文から標準識別子を割り出す処理に、サイバーセキュリティ専門評価体系（PRIMUS / CTI-Bench）の知見を組み込む。
+1. **CTI-RCM (Root Cause Mapping)**: 脆弱性の機序解説からメモリ破壊、競合状態、認可不備などの根本原因を推論し、900 以上の CWE 分類から最適なカテゴリへ割り当て。
+2. **CTI-VSP (Vulnerability Severity Prediction)**: 攻撃前提条件・影響評価から攻撃元区分（AV）、特権要求（PR）、影響範囲（Scope）を論理的に判定し、CVSS v3.1 / v4.0 ベクトル文字列を予測。
+3. **CTI-ATE (Attack Technique Extraction)**: 攻撃プロセス記述から攻撃者の TTPs を分解し、Enterprise ATT&CK 戦術配下の正規化された技術 ID へマッピング。
+4. **来歴階層化 (Provenance-tiered Validation)**: 推論モデルの確証度に応じ、人手検証に匹敵する「ゴールドラベル」と自動推定による「シルバーラベル」を分離保持し、誤検知・展開ノイズを排除。
+
