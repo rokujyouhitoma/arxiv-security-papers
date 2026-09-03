@@ -17,7 +17,7 @@
 - 📋 **[[REQ-02] 主要機能一覧 (Master Feature List)](requirements/REQ-02-feature_list.md)**
   - 全主要機能 (F-01〜F-08) のマスター一覧、設計ページリンク、およびモジュール関係性マップ。
 - 🎯 **[[REQ-03] プロジェクトユースケース台帳 (Project Use Case Ledger)](requirements/REQ-03-use_case_ledger.md)**
-  - 6大ペルソナ（経営層/研究者/PSIRT/AIエージェント/DevSecOps/LLMセーフティ）の業務課題と全20ユースケース・価値創出フローを体系化。
+  - 6大ペルソナおよび国家サイバー統括室「サイバーセキュリティ人材フレームワーク2026」13役割に対応する全33ユースケース・業務価値創出フローを体系化。
 
 ### 3. 設計仕様 (Architecture & Feature Designs)
 

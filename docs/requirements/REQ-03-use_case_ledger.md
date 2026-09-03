@@ -1,5 +1,5 @@
 # [REQ-03] プロジェクトユースケース台帳 (Project Use Case Ledger)
-## 〜 6大ペルソナ・全20ユースケース・業務価値創出マトリクス 〜
+## 〜 6大ペルソナ ＆ 国家サイバー統括室 13役割対応・全33ユースケース・業務価値創出マトリクス 〜
 
 - **文書番号**: `REQ-03`
 - **文書ステータス**: `APPROVED`
@@ -26,8 +26,10 @@
   - [3.4 自律AIエージェント・GraphRAG連携ドメイン (UC-AGT)](#34-自律aiエージェントgraphrag連携ドメイン-uc-agt)
   - [3.5 開発・アーキテクチャ・脅威モデリングドメイン (UC-DEV)](#35-開発アーキテクチャ脅威モデリングドメイン-uc-dev)
   - [3.6 AI/LLM セーフティ・レッドチーミングドメイン (UC-LLM)](#36-aillm-セーフティレッドチーミングドメイン-uc-llm)
-- [4. 主要ユースケース詳細仕様カード (Use Case Specification Cards)](#4-主要ユースケース詳細仕様カード-use-case-specification-cards)
-- [5. ユースケース ↔ 要求・設計・Issue トレーサビリティマトリクス](#5-ユースケース--要求設計issue-トレーサビリティマトリクス)
+- [4. 国家サイバー統括室「サイバーセキュリティ人材フレームワーク2026」13役割別ユースケース台帳 (NCO 13-Role Catalog)](#4-国家サイバー統括室サイバーセキュリティ人材フレームワーク202613役割別ユースケース台帳-nco-13-role-catalog)
+- [5. 主要ユースケース詳細仕様カード (Use Case Specification Cards)](#5-主要ユースケース詳細仕様カード-use-case-specification-cards)
+- [6. ユースケース ↔ 要求・設計・Issue トレーサビリティマトリクス](#6-ユースケース--要求設計issue-トレーサビリティマトリクス)
+
 
 ---
 
@@ -127,11 +129,35 @@ flowchart TD
 
 ---
 
-## 4. 主要ユースケース詳細仕様カード (Use Case Specification Cards)
+## 4. 国家サイバー統括室「サイバーセキュリティ人材フレームワーク2026」13役割別ユースケース台帳 (NCO 13-Role Catalog)
+
+内閣官房 国家サイバー統括室（NCO: National Cyber Strategy Office）が 2026 年 4 月に策定・公表した**「サイバーセキュリティ人材フレームワーク2026」**で規定された **13 の役割** に対し、本基盤（`arxiv-security-papers`）がどのように各専門人材の業務課題を解決し、実務価値（Deliverables）を創出するかを網羅的に定義します。
+
+本フレームワークが規定する「マネジメント系（統括・経営・プロジェクト推進）」、「エキスパート系（高度分析・技術追究）」、および本来業務にセキュリティ知識を付加する「プラス・セキュリティ人材」の全複線的キャリアパスを強力に支援します。
+
+| 役割 ID | NCO 定義役割名称 (日/英) | 対応ユースケース ID | ユースケース名 (実務シナリオ) | 役割における主課題・タスク | 本システム活用アプローチ (How to Use) | 創出成果・業務価値 (Deliverables) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **NCO-R01** | **意思決定・戦略策定**<br>(Decision Making & Strategy) | **UC-NCO-01** | **学術インテリジェンスに基づく全社サイバー防衛戦略・投資方針の策定** | 経営リスクに直結するサイバー脅威動向の把握、限られたセキュリティ投資の最適配分、取締役会への説明責任。 | 03_monthly, 04_quarterly, 05_annual の 5 層サマリーおよび Mermaid 動向図からマクロ脅威トレンドを抽出し、自社投資優先度を策定。 | 全社中長期セキュリティ戦略書、経営層向け脅威情勢ブリーフィング、投資対効果評価書 |
+| **NCO-R02** | **戦略推進・プロジェクト管理**<br>(Strategy Implementation & PM) | **UC-NCO-02** | **PQC移行・ゼロトラスト等全社セキュリティプロジェクトの学術検証型推進** | 最新技術導入（耐量子暗号、AIセーフティ）の技術的実現可能性評価、ベンダー提案の学術的妥当性検証。 | `src/search/` ハイブリッド検索（BM25+Dense ANN）により特定技術の学術論文群をサーベイし、PoC・実装上の落とし穴を先行特定。 | 技術導入ロードマップ、PoC 評価基準書、ベンダー選定技術要件 |
+| **NCO-R03** | **監視**<br>(Monitoring / SOC) | **UC-NCO-03** | **学術論文からの動的防御シグネチャによる SOC 監視ルール拡充とアラート相関分析** | 未知攻撃（Zero-day、最新防護回避手法）の早期見逃し防止、膨大なアラートのトリアージ効率化。 | 論文から自動抽出・生成された Semgrep / Sigma / YARA ルール（`Issue 131`）を SIEM/SOC 監視基盤に投入し、リアルタイム検知ルールを拡充。 | 実配備 Sigma/YARA シグネチャ、相関分析検知ロジック、検知率向上 |
+| **NCO-R04** | **対処**<br>(Incident Handling / CSIRT) | **UC-NCO-04** | **発生インシデント類似攻撃手法のナレッジグラフ逆引きと暫定緩和策の即時適用** | インシデント発生時の攻撃手法同定、被害極小化、公式パッチ提供前のワークアラウンド早期策定。 | 侵害兆候（TTPs/CWE）をキーに、`PropertyGraphEngine` を 2-Hop 走査し、類似攻撃手法と論文に記載された緩和策（Mitigation）を即時逆引き。 | インシデント封じ込め手順書、緊急暫定緩和策、フォールバック構成 |
+| **NCO-R05** | **情報収集・分析・共有**<br>(Threat Intelligence / CTI) | **UC-NCO-05** | **arXiv 論文からの構造化 CTI フィード自動生成と ISAC / 組織内共有** | 学術文献に埋もれた実践的脅威インテリジェンスの体系化、MITRE ATT&CK / CWE への構造化、標準形式での迅速共有。 | `src/ontology/extractor.py` による自動ハイブリッド抽出と OKF v0.2 Markdown 生成を活用し、最新攻撃手法を構造化 CTI フィードとして即時展開。 | 構造化 CTI レポート、STIX/TAXII 互換フィード、ISAC 共有資料 |
+| **NCO-R06** | **脆弱性評価**<br>(Vulnerability Assessment) | **UC-NCO-06** | **論文記載のエクスプロイト機序に基づく実効的ペネトレーションテスト設計** | 既存スキャナで検知不能な論理的欠陥・最新攻撃手法の網羅的検証、実効的なペネトレーションテスト計画。 | 論文から CWE-89/78/502/120 等の具体的な攻撃成立条件・PoC 構造を分析し、現実の攻撃者に近い脅威シミュレーション（Red Teaming）を設計。 | ペネトレーションテスト計画書、攻撃再現 PoC スクリプト、脆弱性是正指示書 |
+| **NCO-R07** | **フォレンジック**<br>(Digital Forensics & Analysis) | **UC-NCO-07** | **最新防護回避・低レイヤメモリ破壊手法に対するフォレンジック痕跡の同定** | 高度メモリ難読化、ファームウェア改変、サイドチャネル攻撃等の揮発性痕跡の特定困難性。 | メモリ安全性（CWE-416, CWE-787）やマイクロアーキテクチャ（CWE-1255）の最新論文を検索し、ログやダンプメモリに残存する微小アーティファクトを同定。 | フォレンジック調査報告書、揮発性アーティファクト解析手順書 |
+| **NCO-R08** | **運用管理**<br>(Operations Management) | **UC-NCO-08** | **データパイプライン自律運用と Merkle Tree による論文原本改ざん耐性統制** | 収集データの信頼性担保、改ざん検知、自律収集バッチ（cron/supervisor）の 24/365 連続安定稼働。 | `src/supervisor/`（Erlang/OTP 型スーパーバイザ）および Merkle Tree 改ざん検知（`Issue 134`）により、パイプラインの完全自律運用とデータの真正性を常時担保。 | システム稼働報告書、FIM (ファイル改ざん検知) 整合性証明、SLA 達成記録 |
+| **NCO-R09** | **教育・訓練**<br>(Education & Training) | **UC-NCO-09** | **完全日本語サマリーとナレッジグラフを活用したサイバー人材育成プログラム** | 専門的英語論文へのアクセス障壁、初学者・プラス・セキュリティ人材向け教材の不足。 | 100% 日本語化された 5 層エグゼクティブサマリーおよび `/dashboard` の 2D Canvas グラフを教材とし、最新脅威（Prompt Injection 等）を視覚的に解説。 | 社内セキュリティ研修カリキュラム、プラス・セキュリティ育成テキスト |
+| **NCO-R10** | **法務**<br>(Legal Affairs & Compliance) | **UC-NCO-10** | **AI セキュリティ・プライバシー（メンバーシップ推論・著作権）の法令遵守レビュー** | AI 規制法（EU AI Act, 日本 AI 安全性ガイドライン）への適合性検証、データ学習・プライバシーリスク評価。 | モデル反転（AML.T0024）、メンバーシップ推論（AML.T0025）、差分プライバシー最新研究を追跡し、自社 AI サービスの法的妥当性と説明責任を評価。 | AI 法的リスク評価意見書、プライバシー影響評価書 (PIA) |
+| **NCO-R11** | **監査**<br>(Security Auditing & Assurance) | **UC-NCO-11** | **Google OKF v0.2 プロバナンスとデジタル署名に基づく客観的セキュリティ監査証跡提示** | セキュリティ対策の客観的有効性検証、外部監査へのエビデンス提示、データ真正性証明。 | Google OKF v0.2 の完全な来歴メタデータ（発行元、取得日時、ハッシュ）および Merkle 証明を活用し、インテリジェンス基盤の客観的監査証跡（Audit Trail）を提供。 | セキュリティ統制監査調書、データ真正性検証レポート |
+| **NCO-R12** | **設計開発**<br>(Design & Development) | **UC-NCO-12** | **IDE / CI/CD 連携による IaC / OpenAPI 設計段階でのシフトレフト脅威モデリング** | 設計段階での脅威見落とし、既知の脆弱性・アンチパターンの混入防止（シフトレフト）。 | `src/mcp/` 経由で開発環境と連携し、IaC / OpenAPI スキーマを解析して論文に報告された攻撃手法に対する防御策を設計段階で自動推奨（`Issue 130`）。 | セキュア設計レビュー結果、自動生成 STRIDE 脅威モデル、修正パッチ |
+| **NCO-R13** | **研究**<br>(Research & Exploration) | **UC-NCO-13** | **研究ギャップ（未開拓セキュリティ領域）の自動検出と先端研究テーマ創出** | 世界最先端の研究動向把握、未知の研究ギャップ（学術的空白地帯）の特定困難性。 | `PropertyGraphEngine` の研究ギャップ検出（接続論文 0 件の ATT&CK/CWE ノード特定）およびセマンティック近傍探索により、国際学会水準の新規研究テーマを発掘。 | 新規研究テーマ提案書、研究ギャップ分析マップ、学術論文ドラフト |
+
+---
+
+## 5. 主要ユースケース詳細仕様カード (Use Case Specification Cards)
 
 代表的な 3 つの中核ユースケースについて、入出力・実行フロー・例外処理を詳細規定します。
 
-### 4.1 [UC-RES-01] 語彙・意味ハイブリッド検索による先行研究調査
+### 5.1 [UC-RES-01] 語彙・意味ハイブリッド検索による先行研究調査
 
 ```
 【ユースケースID】: UC-RES-01
@@ -151,7 +177,7 @@ flowchart TD
   - 該当論文が 0 件の場合: 緩和した同義語候補（Query Suggestion）および関連カテゴリを提示する。
 ```
 
-### 4.2 [UC-OPS-01] 脆弱性 (CWE) 起点の攻撃手法 (ATT&CK) 波及探索
+### 5.2 [UC-OPS-01] 脆弱性 (CWE) 起点の攻撃手法 (ATT&CK) 波及探索
 
 ```
 【ユースケースID】: UC-OPS-01
@@ -169,7 +195,7 @@ flowchart TD
 【事後条件】: 脆弱性の影響範囲および悪用可能な具体的エクスプロイト手法が網羅的に特定されること。
 ```
 
-### 4.3 [UC-DEV-02] `/dashboard` 2D Canvas による脅威メッシュの視覚的探索
+### 5.3 [UC-DEV-02] `/dashboard` 2D Canvas による脅威メッシュの視覚的探索
 
 ```
 【ユースケースID】: UC-DEV-02
@@ -189,7 +215,7 @@ flowchart TD
 
 ---
 
-## 5. ユースケース ↔ 要求・設計・Issue トレーサビリティマトリクス
+## 6. ユースケース ↔ 要求・設計・Issue トレーサビリティマトリクス
 
 | ユースケース ID | 対応要求事項 (REQ-01) | 対応主要機能 (REQ-02) | 対応設計書 (DSN) | 対応 Issue | 主な実装モジュール |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -212,3 +238,17 @@ flowchart TD
 | **UC-LLM-01** | REQ-FR-03, FR-04 | F-03, F-04 | DSN-17 | Issue 128, 135 | `src/ontology/taxonomy.py`, `src/search/` |
 | **UC-LLM-02** | REQ-FR-04 | F-04 | DSN-16, DSN-17 | Issue 128 | `src/search/vector/`, `src/ontology/` |
 | **UC-LLM-03** | REQ-FR-04 | F-04 | DSN-16, DSN-17 | Issue 128 | `src/ontology/schema.py`, `src/search/` |
+| **UC-NCO-01** (意思決定・戦略策定) | REQ-FR-03 | F-03 | DSN-04, DSN-16 | Issue 116 | `src/arxiv_okf_fetcher.py` |
+| **UC-NCO-02** (戦略推進・PM) | REQ-FR-04 | F-04 | DSN-04, DSN-16 | Issue 123, 124 | `src/search/vector_engine.py` |
+| **UC-NCO-03** (監視) | REQ-FR-05 | F-05 | DSN-08 | Issue 131 | `src/mcp/threat_defense_server.py` |
+| **UC-NCO-04** (対処) | REQ-FR-04 | F-04 | DSN-17, DSN-18 | Issue 135 | `src/graph/engine.py`, `src/graph/traversal.py` |
+| **UC-NCO-05** (情報収集・分析・共有) | REQ-FR-01, FR-02 | F-01, F-02 | DSN-03, DSN-17 | Issue 128, 135 | `src/ontology/extractor.py` |
+| **UC-NCO-06** (脆弱性評価) | REQ-FR-04 | F-04 | DSN-17, DSN-18 | Issue 135 | `src/ontology/taxonomy.py`, `src/graph/` |
+| **UC-NCO-07** (フォレンジック) | REQ-FR-04 | F-04 | DSN-04, DSN-17 | Issue 123 | `src/search/`, `src/ontology/` |
+| **UC-NCO-08** (運用管理) | REQ-NFR-01, NFR-02 | F-01, F-02 | DSN-05, DSN-12 | Issue 134 | `src/supervisor/`, `src/database/` |
+| **UC-NCO-09** (教育・訓練) | REQ-FR-03, FR-07 | F-03, F-07 | DSN-04, DSN-14 | Issue 135 | `site/dashboard.html`, `outputs/executive_summaries/` |
+| **UC-NCO-10** (法務) | REQ-FR-04 | F-04 | DSN-16, DSN-17 | Issue 128 | `src/ontology/schema.py` |
+| **UC-NCO-11** (監査) | REQ-FR-02, NFR-02 | F-02 | DSN-03, DSN-05 | Issue 134 | `outputs/okf_papers/`, `src/database/` |
+| **UC-NCO-12** (設計開発) | REQ-FR-05 | F-05 | DSN-08, DSN-17 | Issue 130 | `src/mcp/`, `src/ontology/` |
+| **UC-NCO-13** (研究) | REQ-FR-04 | F-04 | DSN-14, DSN-18 | Issue 135 | `src/graph/engine.py`, `site/dashboard.html` |
+
