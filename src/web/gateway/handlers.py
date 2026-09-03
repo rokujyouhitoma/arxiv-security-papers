@@ -1536,6 +1536,42 @@ class GatewayHandlers:
         }
         return response_json(start_response, res)
 
+    def handle_graph_query(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Optional[Dict[str, List[str]]] = None,
+    ) -> List[bytes]:
+        """Handles /api/graph/query for interactive CTI subgraph exploration."""
+        params = query_params or {}
+        q = params.get("q", [""])[0].strip()
+        limit_param = params.get("limit", ["50"])[0]
+        limit_val = self._parse_limit_param(limit_param)
+
+        from graph.engine import PropertyGraphEngine
+
+        db_path = os.path.join(self.workspace_dir, "outputs", "database", "graph.db")
+        engine = PropertyGraphEngine(
+            storage_path=db_path, workspace_dir=self.workspace_dir
+        )
+        if engine.vertex_count == 0:
+            from ontology.seeder import seed_ontology_graph
+
+            seed_ontology_graph(engine)
+            engine.save()
+
+        query_result = engine.execute_graph_query(q, limit=limit_val)
+        res = {
+            "status": "success",
+            "query": q,
+            "mesh": {
+                "nodes": query_result["nodes"],
+                "edges": query_result["edges"],
+            },
+            "stats": query_result.get("stats", {}),
+            "match_count": query_result.get("match_count", 0),
+        }
+        return response_json(start_response, res)
+
     def handle_preview(
         self, start_response: Callable[..., Any], path: str
     ) -> List[bytes]:

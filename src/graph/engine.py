@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from .structures import Edge, Vertex
 
@@ -555,4 +555,211 @@ class PropertyGraphEngine:
             "edges": edges,
             "stats": self._compute_cti_counts(len(gap_id_set)),
             "research_gaps": gaps,
+        }
+
+    def _collect_vertices(self, node_ids: Iterable[str]) -> List[Vertex]:
+        """Collects existing vertices for given IDs."""
+        nodes: List[Vertex] = []
+        for nid in node_ids:
+            v = self.get_vertex(nid)
+            if v is not None:
+                nodes.append(v)
+        return nodes
+
+    def _collect_induced_edges(
+        self, node_ids: set[str], limit: int = 100
+    ) -> List[Edge]:
+        """Collects edges with both endpoints within the node set."""
+        edges: List[Edge] = []
+        for e in self._edges.values():
+            if e.src_id in node_ids and e.dst_id in node_ids:
+                edges.append(e)
+                if len(edges) >= limit:
+                    break
+        return edges
+
+    def _collect_incident_edges(
+        self, node_ids: set[str], limit: int = 100
+    ) -> List[Edge]:
+        """Collects edges touching at least one node in the node set."""
+        edges: List[Edge] = []
+        for e in self._edges.values():
+            if e.src_id in node_ids or e.dst_id in node_ids:
+                edges.append(e)
+                if len(edges) >= limit:
+                    break
+        return edges
+
+    def _query_gaps(self, limit: int) -> Tuple[List[Vertex], List[Edge]]:
+        """Extracts research gap techniques/CWEs with their direct edges."""
+        gaps = self.get_research_gaps()
+        gap_ids = {g["id"] for g in gaps[:limit]}
+        return self._collect_vertices(gap_ids), self._collect_incident_edges(
+            gap_ids, limit * 2
+        )
+
+    def _collect_cwe_impact_node_ids(self, impact: Dict[str, Any]) -> set[str]:
+        cwe_dict = impact.get("cwe")
+        if not cwe_dict:
+            return set()
+        node_ids = {cwe_dict["id"]}
+        for t in impact.get("techniques", []):
+            node_ids.add(t["id"])
+        for p in impact.get("papers", []):
+            node_ids.add(p["id"])
+        return node_ids
+
+    def _query_cwe(self, raw_cwe: str, limit: int) -> Tuple[List[Vertex], List[Edge]]:
+        """Extracts multi-hop impact subgraph for specified CWE."""
+        norm_cwe = raw_cwe.strip().upper()
+        cwe_id = norm_cwe if norm_cwe.startswith("CWE-") else f"CWE-{norm_cwe}"
+        impact = self.get_cwe_impact(cwe_id)
+        node_ids = self._collect_cwe_impact_node_ids(impact)
+        return self._collect_vertices(node_ids), self._collect_induced_edges(
+            node_ids, limit * 2
+        )
+
+    def _resolve_ego_node_id(self, target: str) -> Optional[str]:
+        """Resolves raw target name or ID to canonical vertex ID."""
+        if target in self._vertices:
+            return target
+        t_low = target.lower()
+        for vid in self._vertices:
+            if t_low in vid.lower():
+                return vid
+        return None
+
+    def _parse_ego_target_and_hops(self, raw_arg: str) -> Tuple[str, int]:
+        parts = raw_arg.strip().split()
+        target = parts[0] if parts else ""
+        hops = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 2
+        return target, min(hops, 3)
+
+    def _query_ego(self, raw_arg: str, limit: int) -> Tuple[List[Vertex], List[Edge]]:
+        """Extracts ego-network neighborhood around target vertex."""
+        target, hops = self._parse_ego_target_and_hops(raw_arg)
+        resolved_id = self._resolve_ego_node_id(target)
+        if not resolved_id:
+            return [], []
+        sub = self.get_neighborhood(resolved_id, max_hops=hops)
+        node_ids = {n["id"] for n in sub.get("nodes", [])[:limit]}
+        return self._collect_vertices(node_ids), self._collect_induced_edges(
+            node_ids, limit * 2
+        )
+
+    def _is_vertex_match(self, v: Vertex, term_low: str) -> bool:
+        if term_low in v.id.lower():
+            return True
+        name = str(v.properties.get("name", "")).lower()
+        if term_low in name:
+            return True
+        title = str(v.properties.get("title", "")).lower()
+        return term_low in title
+
+    def _query_match(self, term: str, limit: int) -> Tuple[List[Vertex], List[Edge]]:
+        """Matches vertices by ID, label, name, or title keyword."""
+        term_low = term.strip().lower()
+        if not term_low:
+            return [], []
+        matched_ids: set[str] = set()
+        for v in self._vertices.values():
+            if self._is_vertex_match(v, term_low):
+                matched_ids.add(v.id)
+                if len(matched_ids) >= limit:
+                    break
+        return self._collect_vertices(matched_ids), self._collect_induced_edges(
+            matched_ids
+        )
+
+    def _step_bfs_path(
+        self,
+        curr: str,
+        path: List[str],
+        dst: str,
+        visited: Set[str],
+        queue: List[Tuple[str, List[str]]],
+    ) -> Optional[List[str]]:
+        for edge in self.get_both_edges(curr):
+            neighbor = edge.dst_id if edge.src_id == curr else edge.src_id
+            if neighbor == dst:
+                return path + [neighbor]
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append((neighbor, path + [neighbor]))
+        return None
+
+    def _find_bfs_path(self, src: str, dst: str, max_hops: int = 4) -> List[str]:
+        """Finds shortest path of node IDs from src to dst via BFS."""
+        if src == dst:
+            return [src]
+        queue: List[Tuple[str, List[str]]] = [(src, [src])]
+        visited: Set[str] = {src}
+        while queue:
+            curr, path = queue.pop(0)
+            if len(path) > max_hops:
+                break
+            found = self._step_bfs_path(curr, path, dst, visited, queue)
+            if found is not None:
+                return found
+        return []
+
+    def _query_path(self, raw_path: str) -> Tuple[List[Vertex], List[Edge]]:
+        """Finds shortest reaching path between two node expressions via BFS."""
+        if "->" not in raw_path:
+            return [], []
+        parts = raw_path.split("->", 1)
+        src = self._resolve_ego_node_id(parts[0].strip())
+        dst = self._resolve_ego_node_id(parts[1].strip())
+        if not src or not dst:
+            return [], []
+        path = self._find_bfs_path(src, dst)
+        path_set = set(path) if path else {src, dst}
+        return self._collect_vertices(path_set), self._collect_induced_edges(path_set)
+
+    def _dispatch_structured_query(
+        self, q_clean: str, q_low: str, limit: int
+    ) -> Optional[Tuple[List[Vertex], List[Edge]]]:
+        if q_low.startswith("gap"):
+            return self._query_gaps(limit)
+        if q_low.startswith("cwe:"):
+            return self._query_cwe(q_clean[4:], limit)
+        if q_low.startswith("ego:"):
+            return self._query_ego(q_clean[4:], limit)
+        return None
+
+    def _dispatch_graph_query(
+        self, q: str, limit: int
+    ) -> Tuple[List[Vertex], List[Edge]]:
+        """Dispatches query string to appropriate search strategy."""
+        q_clean = q.strip()
+        q_low = q_clean.lower()
+        res = self._dispatch_structured_query(q_clean, q_low, limit)
+        if res is not None:
+            return res
+        if "->" in q_clean:
+            return self._query_path(q_clean.replace("path:", ""))
+        return self._query_match(q_clean.replace("match:", ""), limit)
+
+    def execute_graph_query(self, query: str, limit: int = 50) -> Dict[str, Any]:
+        """Executes domain graph query and exports formatted subgraph for Canvas."""
+        nodes_raw, edges_raw = self._dispatch_graph_query(query, limit)
+        gaps = self.get_research_gaps()
+        gap_id_set = {g["id"] for g in gaps}
+
+        return {
+            "query": query,
+            "match_count": len(nodes_raw),
+            "nodes": [self._format_cti_node(v, gap_id_set) for v in nodes_raw[:limit]],
+            "edges": [
+                {
+                    "source": e.src_id,
+                    "target": e.dst_id,
+                    "label": e.label,
+                    "weight": e.weight,
+                    "confidence": e.properties.get("confidence", 1.0),
+                    "tier": e.properties.get("tier", "gold"),
+                }
+                for e in edges_raw
+            ],
+            "stats": self._compute_cti_counts(len(gap_id_set)),
         }

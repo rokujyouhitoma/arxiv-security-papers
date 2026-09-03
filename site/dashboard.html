@@ -489,6 +489,113 @@
       color: var(--bg-main);
     }
 
+    /* Graph Query Console */
+    .graph-query-console {
+      position: absolute;
+      top: 52px;
+      left: 12px;
+      right: 12px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: rgba(235, 229, 216, 0.94);
+      padding: 8px 12px;
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(4px);
+    }
+
+    .query-input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .query-input-field {
+      flex: 1;
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      border: 1px solid var(--border-dark);
+      border-radius: 2px;
+      background-color: var(--bg-main);
+      color: var(--fg-main);
+      outline: none;
+    }
+    .query-input-field:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .btn-query-run {
+      background-color: var(--accent-blue);
+      color: #fff;
+      border: 1px solid var(--accent-blue);
+      padding: 6px 14px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all 0.15s ease;
+    }
+    .btn-query-run:hover {
+      opacity: 0.9;
+    }
+
+    .btn-query-clear {
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-dark);
+      padding: 6px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .btn-query-clear:hover {
+      background-color: var(--bg-panel-sub);
+    }
+
+    .query-preset-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .preset-label {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-preset {
+      background: rgba(0, 0, 0, 0.04);
+      border: 1px solid var(--border-dark);
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 2px;
+      color: var(--fg-main);
+      transition: background 0.15s;
+    }
+    .btn-preset:hover {
+      background: rgba(0, 0, 0, 0.09);
+    }
+
+    .query-badge {
+      font-size: 10px;
+      font-weight: bold;
+      padding: 2px 8px;
+      border-radius: 2px;
+      background: var(--bg-panel-sub);
+      color: var(--fg-muted);
+      border: 1px solid var(--border-dark);
+      margin-left: auto;
+    }
+
     /* Tab Navigation */
     .tab-navigation {
       display: flex;
@@ -634,6 +741,24 @@
             <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')">🔴 ATT&CK</button>
             <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')">🟠 CWE</button>
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
+          </div>
+        </div>
+
+        <!-- Graph Query Console & Scenario Presets -->
+        <div class="graph-query-console" id="graphQueryConsole">
+          <div class="query-input-row">
+            <input id="graphQueryInput" class="query-input-field" type="text" placeholder="CTI Graph Query (e.g. 'gaps', 'cwe: CWE-20', 'ego: AML.T0054 2', 'match: quantum', 'path: AML.T0054->CWE-20')..." onkeydown="if(event.key==='Enter') executeGraphQuery()" />
+            <button id="btnRunGraphQuery" class="btn-query-run" onclick="executeGraphQuery()">🔍 探索 (Execute)</button>
+            <button id="btnClearGraphQuery" class="btn-query-clear" onclick="clearGraphQuery()">✕ リセット</button>
+          </div>
+          <div class="query-preset-row">
+            <span class="preset-label">シナリオ:</span>
+            <button class="btn-preset" onclick="runPresetQuery('gaps')">🚨 Research Gaps</button>
+            <button class="btn-preset" onclick="runPresetQuery('cwe: CWE-20')">🛡️ CWE-20 Multi-hop</button>
+            <button class="btn-preset" onclick="runPresetQuery('ego: AttackTechnique:AML.T0054 2')">🤖 Prompt Injection Ego</button>
+            <button class="btn-preset" onclick="runPresetQuery('match: quantum')">🔐 Post-Quantum Crypto</button>
+            <button class="btn-preset" onclick="runPresetQuery('match: side-channel')">⚡ Side-Channel Leakage</button>
+            <span id="graphQueryResultBadge" class="query-badge">全データ待機中</span>
           </div>
         </div>
 
@@ -1356,6 +1481,74 @@
             btn.style.backgroundColor = '';
             btn.style.color = '';
           }
+        }
+      };
+
+      window.executeGraphQuery = async function(customQuery) {
+        const input = document.getElementById('graphQueryInput');
+        const query = (customQuery !== undefined ? customQuery : (input ? input.value : '')).trim();
+        const badge = document.getElementById('graphQueryResultBadge');
+
+        if (!query) {
+          window.clearGraphQuery();
+          return;
+        }
+
+        if (input && customQuery !== undefined) {
+          input.value = query;
+        }
+
+        if (currentGraphMode !== 'cti') {
+          await window.setGraphMode('cti');
+        }
+
+        if (badge) {
+          badge.textContent = '⚡ 探索中...';
+          badge.style.color = 'var(--accent-blue)';
+        }
+
+        try {
+          const res = await fetch('/api/graph/query?q=' + encodeURIComponent(query) + '&limit=100');
+          if (!res.ok) throw new Error('Query request failed');
+          const data = await res.json();
+          if (data.status === 'success' && data.mesh) {
+            ctiRawNodes = data.mesh.nodes || [];
+            ctiRawEdges = data.mesh.edges || [];
+            activeTwoHopNodes = null;
+            renderCtiNodesAndEdges();
+
+            if (badge) {
+              const count = data.match_count !== undefined ? data.match_count : ctiRawNodes.length;
+              badge.textContent = `✅ ${count} 件一致 (${ctiRawEdges.length} リンク)`;
+              badge.style.color = 'var(--accent-green)';
+            }
+          }
+        } catch (err) {
+          if (badge) {
+            badge.textContent = '❌ エラー';
+            badge.style.color = 'var(--accent-coral)';
+          }
+        }
+      };
+
+      window.runPresetQuery = function(preset) {
+        const input = document.getElementById('graphQueryInput');
+        if (input) input.value = preset;
+        window.executeGraphQuery(preset);
+      };
+
+      window.clearGraphQuery = function() {
+        const input = document.getElementById('graphQueryInput');
+        if (input) input.value = '';
+        const badge = document.getElementById('graphQueryResultBadge');
+        if (badge) {
+          badge.textContent = '全データ表示中';
+          badge.style.color = 'var(--fg-muted)';
+        }
+        if (currentGraphMode === 'cti') {
+          fetchCtiMesh();
+        } else {
+          window.setGraphMode('context');
         }
       };
 

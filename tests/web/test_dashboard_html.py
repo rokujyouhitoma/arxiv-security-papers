@@ -318,3 +318,16 @@ def test_dashboard_sse_event_source_ui(dashboard_html_content: str) -> None:
     assert "/api/stream/top" in dashboard_html_content
     assert "initSseLiveStream" in dashboard_html_content
     assert "updateSupervisorFromStream" in dashboard_html_content
+
+
+def test_dashboard_graph_query_console_ui(dashboard_html_content: str) -> None:
+    """Verifies that the Product tab contains the Graph Query Console and controls."""
+    assert 'id="graphQueryConsole"' in dashboard_html_content
+    assert 'id="graphQueryInput"' in dashboard_html_content
+    assert 'id="btnRunGraphQuery"' in dashboard_html_content
+    assert 'id="btnClearGraphQuery"' in dashboard_html_content
+    assert 'id="graphQueryResultBadge"' in dashboard_html_content
+    assert "executeGraphQuery" in dashboard_html_content
+    assert "runPresetQuery" in dashboard_html_content
+    assert "clearGraphQuery" in dashboard_html_content
+    assert "/api/graph/query" in dashboard_html_content

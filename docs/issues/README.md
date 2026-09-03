@@ -25,6 +25,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **137** | /dashboard Product タブにおける CTI グラフクエリ・コンソールおよびサブグラフ抽出・ハイライト機能の実装 | Feature | 2026-09-04 | [137-implement-graph-query-console-and-subgraph-extraction-in-dashboard.md](closed/137-implement-graph-query-console-and-subgraph-extraction-in-dashboard.md) |
 | **136** | Context Meshにおけるエンティティ名寄せ（Entity Resolution）・重複排除（Deduplication）と論文横断グラフ結合の実装 | Improvement | 2026-09-03 | [136-implement-context-mesh-entity-resolution-and-deduplication.md](closed/136-implement-context-mesh-entity-resolution-and-deduplication.md) |
 | **135** | arXivセキュリティ論文・MITRE ATT&CK・CWEナレッジグラフデータ基盤および /dashboard インタラクティブグラフ可視化の実装 | Feature | 2026-09-03 | [135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md](closed/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md) |
 | **123** | mmap・struct駆動 Pure-Python IVF-PQ（転置インデックス積量子化）高密度ベクトルANN探索エンジンの実装 | Feature | 2026-09-03 | [123-implement-pure-python-ivf-pq-dense-vector-ann-engine.md](closed/123-implement-pure-python-ivf-pq-dense-vector-ann-engine.md) |

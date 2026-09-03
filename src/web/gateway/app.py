@@ -55,20 +55,32 @@ class WSGIApplication:
         start_response("200 OK", CORS_HEADERS)
         return [b""]
 
+    def _route_graph_api(
+        self,
+        start_response: Callable[..., Any],
+        path: str,
+        query_params: Dict[str, List[str]],
+    ) -> Optional[Any]:
+        if path == "/api/graph/mesh":
+            return self.handlers.handle_graph_mesh(start_response)
+        if path == "/api/graph/cti-mesh":
+            return self.handlers.handle_cti_graph_mesh(start_response, query_params)
+        if path == "/api/graph/query":
+            return self.handlers.handle_graph_query(start_response, query_params)
+        return None
+
     def _route_simple_api(
         self,
         start_response: Callable[..., Any],
         path: str,
         query_params: Dict[str, List[str]],
     ) -> Optional[Any]:
+        if path.startswith("/api/graph/"):
+            return self._route_graph_api(start_response, path, query_params)
         if path == "/api/trends":
             return self.handlers.handle_trends(start_response, query_params)
         if path == "/api/stats":
             return self.handlers.handle_stats(start_response)
-        if path == "/api/graph/mesh":
-            return self.handlers.handle_graph_mesh(start_response)
-        if path == "/api/graph/cti-mesh":
-            return self.handlers.handle_cti_graph_mesh(start_response, query_params)
         return None
 
     def _route_stream_api(
