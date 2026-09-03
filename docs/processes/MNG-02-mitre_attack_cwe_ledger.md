@@ -1,9 +1,15 @@
-# 🛡️ MITRE ATT&CK & CWE 統合ナレッジグラフ対応台帳
+# [MNG-02] MITRE ATT&CK & CWE 統合ナレッジグラフ対応台帳 (MITRE ATT&CK & CWE Knowledge Graph Ledger)
 ## 〜 arXiv セキュリティ論文（cs.CR）向け オントロジー・マッピング台帳 (Issue #135 準拠) 〜
 
-- **文書バージョン**: `1.0.0`
-- **対象 Issue**: [Issue 135: arXivセキュリティ論文・MITRE ATT&CK・CWEナレッジグラフデータ基盤および /dashboard インタラクティブグラフ可視化の実装](issues/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md)
-- **トレーサビリティ**: [DSN-14: Graph Engineering Dashboard](designs/DSN-14-graph_engineering_dashboard.md) / [DSN-17: セキュリティ知識オントロジー](designs/DSN-17-security_knowledge_ontology.md) / [DSN-18: Property Graph Database Engine](designs/DSN-18-property_graph_database_engine.md)
+- **文書番号**: `MNG-02`
+- **文書ステータス**: `APPROVED`
+- **対象サブシステム**: `src/ontology/` / `src/graph/` / `site/dashboard.html` / `outputs/database/graph.db` (ナレッジグラフオントロジー, ATT&CK/CWEマッピング, /dashboard 2D Canvas 可視化)
+- **作成日**: 2026-09-03
+- **最終更新日**: 2026-09-03
+- **【主査・報告】 Information Security Specialist (SEC) / Database Infrastructure Specialist (DB)**
+- **【参画】 Project Manager (PM), Systems Architect (SA), UI/UX Designer (UI), IT Specialist (NLP)**
+- **対象 Issue**: [Issue 135: arXivセキュリティ論文・MITRE ATT&CK・CWEナレッジグラフデータ基盤および /dashboard インタラクティブグラフ可視化の実装](../issues/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md)
+- **トレーサビリティ**: [MNG-01: 文書管理台帳](MNG-01-document_ledger.md) / [DSN-14: Graph Engineering Dashboard](../designs/DSN-14-graph_engineering_dashboard.md) / [DSN-17: セキュリティ知識オントロジー](../designs/DSN-17-security_knowledge_ontology.md) / [DSN-18: Property Graph Database Engine](../designs/DSN-18-property_graph_database_engine.md)
 - **管理基準**: ゼロ外部依存（Standard Library Only）・100% 日本語ドキュメント統治
 
 ---
@@ -136,8 +142,8 @@ graph TD
 ---
 
 ## 7. 関連ファイルリンク
-- [docs/issues/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md](issues/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md)
-- [src/ontology/taxonomy.py](../src/ontology/taxonomy.py)
-- [src/ontology/schema.py](../src/ontology/schema.py)
-- [src/graph/engine.py](../src/graph/engine.py)
-- [site/dashboard.html](../site/dashboard.html)
+- [docs/issues/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md](../issues/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md)
+- [src/ontology/taxonomy.py](../../src/ontology/taxonomy.py)
+- [src/ontology/schema.py](../../src/ontology/schema.py)
+- [src/graph/engine.py](../../src/graph/engine.py)
+- [site/dashboard.html](../../site/dashboard.html)

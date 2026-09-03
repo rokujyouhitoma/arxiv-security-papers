@@ -14,7 +14,7 @@ ID: 135
 ---
 
 ## 2. トレーサビリティ / Traceability
-- [MITRE ATT&CK & CWE 統合ナレッジグラフ対応台帳](../mitre_attack_cwe_ledger.md)
+- [[MNG-02] MITRE ATT&CK & CWE 統合ナレッジグラフ対応台帳](../processes/MNG-02-mitre_attack_cwe_ledger.md)
 - [DSN-14: Graph Engineering Dashboard (Section 11)](../../docs/designs/DSN-14-graph_engineering_dashboard.md)
 - [DSN-17: セキュリティ知識オントロジー (Section 10)](../../docs/designs/DSN-17-security_knowledge_ontology.md)
 - [DSN-18: ゼロ侵襲型 Property Graph Database Engine (Section 8)](../../docs/designs/DSN-18-property_graph_database_engine.md)

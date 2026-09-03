@@ -61,6 +61,6 @@
   - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — Issue 001〜124 完了)。
 
 ### 6. オントロジー ＆ セキュリティ標準台帳 (Ontology & Security Standards)
-- 🛡️ **[MITRE ATT&CK & CWE 統合ナレッジグラフ対応台帳](mitre_attack_cwe_ledger.md)**
+- 🛡️ **[[MNG-02] MITRE ATT&CK & CWE 統合ナレッジグラフ対応台帳](processes/MNG-02-mitre_attack_cwe_ledger.md)**
   - arXiv セキュリティ論文から抽出・マッピングする MITRE ATT&CK / ATLAS 攻撃手法、CWE 脆弱性クラス、および因果関係クロス照合マトリクス (Issue #135 準拠)。
 

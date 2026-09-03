@@ -32,6 +32,7 @@
 | 管理番号 / ドキュメント名 | 相対ファイルパス | 目的・概要 | 役割規定 (WHAT / WHY / HOW) | 主な参照者 | 承認者 | 更新タイミング |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **[MNG-01] 文書管理台帳** | [processes/MNG-01-document_ledger.md](MNG-01-document_ledger.md) | 全ドキュメントの一覧管理、命名・採番規則、REQ/DSN 分掌方針を定義する中央台帳。 | 管理基準 (Governance) | PM, SA, 全エージェント | PM | ドキュメント追加・分掌変更時 |
+| **[MNG-02] ATT&CK/CWE対応台帳** | [processes/MNG-02-mitre_attack_cwe_ledger.md](MNG-02-mitre_attack_cwe_ledger.md) | 論文から抽出・マッピングする MITRE ATT&CK / ATLAS 攻撃手法、CWE 脆弱性クラス、および因果関係クロス照合マトリクス (Issue #135 準拠)。 | **オントロジー台帳 (Ontology Ledger)** | SEC, IR, AI, 全エージェント | SEC | オントロジー拡張・Issue 135実装時 |
 | **[REQ-01] 要求事項定義書** | [requirements/REQ-01-system_requirements.md](../requirements/REQ-01-system_requirements.md) | システムの背景・事業目的 (WHY) および達成すべき機能・非機能要求事項 (WHAT) を定義。 | **WHAT / WHY** | ST, SA, PM, QA, AU | ST | 背景・事業目標・要求変更時 |
 | **[REQ-02] 主要機能一覧** | [requirements/REQ-02-feature_list.md](../requirements/REQ-02-feature_list.md) | 主要機能 (F-01〜F-08) の全マスター一覧、設計ページリンク、およびモジュール関係性マップ。 | **Feature Master** | PM, SA, 全エージェント | PM | 機能追加・更新時 |
 | **[DSN-01] 基本設計書 (HLD)** | [designs/DSN-01-high_level_design.md](../designs/DSN-01-high_level_design.md) | システム全体の論理アーキテクチャ、4大ピラー、要求追跡マトリクス (HLD HOW) を定義。 | **High-Level HOW** | SA, ST, PM, 開発 | SA | アーキテクチャ・構造変更時 |
