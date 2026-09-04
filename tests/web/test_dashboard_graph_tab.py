@@ -114,3 +114,32 @@ def test_gateway_serves_dashboard_graph_tab() -> None:
     assert "tabBtnGraph" in raw
     assert "dashboardHeader" in raw
     assert "btnToggleHeader" in raw
+
+
+def test_dashboard_graph_layout_redesign_and_legend_toggle(dashboard_html: str) -> None:
+    """Verifies that the graph tab layout has zero overlapping elements:
+    - Dedicated top docked control deck (.graph-control-deck) containing toolbar & query console
+    - Bottom-left positioned cluster & CTI legends with collapsible toggle buttons
+    - Right-side full-height slide-in node inspector drawer (.node-callout)
+    """
+    # 1. Docked Control Deck
+    assert 'class="graph-control-deck"' in dashboard_html
+    assert (
+        "position: relative;" in dashboard_html
+        or ".graph-control-deck" in dashboard_html
+    )
+
+    # 2. Bottom-left positioned collapsible legend
+    assert "bottom: 14px;" in dashboard_html
+    assert "left: 14px;" in dashboard_html
+    assert "btnToggleLegendContext" in dashboard_html
+    assert "btnToggleLegendCti" in dashboard_html
+    assert "btn-legend-toggle" in dashboard_html
+    assert "window.toggleLegend" in dashboard_html
+
+    # 3. Right-side full-height slide-in node inspector
+    assert "width: 340px;" in dashboard_html
+    assert "top: 0;" in dashboard_html
+    assert "bottom: 0;" in dashboard_html
+    assert "right: 0;" in dashboard_html
+    assert "z-index: 30;" in dashboard_html

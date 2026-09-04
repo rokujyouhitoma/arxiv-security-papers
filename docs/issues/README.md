@@ -6,7 +6,7 @@
 
 ## 1. 進行中・未完了 Issue 一覧 (Active Issues)
 
-現在、進行中のオープンな Issue はありません。（すべての計画された Issue は完了しました）
+現在進行中のアクティブな Issue はありません。（全タスク完了）
 
 ---
 
@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **139** | /dashboard tab=graph 画面における表示要素の重なり解消およびレイアウト再設計 | Feature | 2026-09-04 | [139-redesign-graph-tab-layout-and-fix-element-overlapping.md](closed/139-redesign-graph-tab-layout-and-fix-element-overlapping.md) |
 | **138** | /dashboard における専用 Knowledge & CTI Graph 画面（tab=graph）の独立実装およびヘッダー折りたたみ機能 | Feature | 2026-09-04 | [138-create-dedicated-graph-tab-in-dashboard.md](closed/138-create-dedicated-graph-tab-in-dashboard.md) |
 | **134** | Merkle Tree（暗号論的ハッシュ木）駆動の原本・メタデータ改ざん検知（FIM: File Integrity Monitoring）基盤の実装 | Feature | 2026-09-04 | [134-implement-merkle-tree-file-integrity-monitoring.md](closed/134-implement-merkle-tree-file-integrity-monitoring.md) |
 | **133** | IR評価メトリクス（NDCG@10, MRR, MAP）に基づくCI継続的インテグレーション検索品質回帰防止ゲートの実装 | Feature | 2026-09-04 | [133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md](closed/133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md) |

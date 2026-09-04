@@ -295,6 +295,10 @@ graph TD
 - **タブ切り替え制御**: `window.switchDashboardTab('graph' | 'product' | 'system' | 'supervisor')` による DOM クラス切り替えおよび Canvas リサイズ垂直同期。URL クエリパラメータ `?tab=graph|product|system|supervisor`（エイリアス `cti`, `mesh`, `knowledge` 含む）による直接アクセスおよびブラウザ履歴同期（`replaceState`）、`popstate` ナビゲーションを完全サポート。
 - **ヘッダー折りたたみ（Immersive Full-Height Mode）**: `window.toggleDashboardHeader()` による `#dashboardHeader` の非表示（`display: none !important;`）と、Canvas 領域の動的拡張（`calc(100vh - 42px)`）。ナビゲーションバーの「▲ ヘッダー隠す / ▼ ヘッダー表示」ボタンおよびショートカットキー `H` により瞬時に切り替え可能。ユーザー設定は `localStorage` に保存される。
 - **クロスディープリンク**: Product タブ内の「グラフ画面を開く」「Gaps 探索」ボタンから `window.openGraphWithQuery(query)` を呼び出すことで、特定シナリオを実行した状態で直接グラフ画面へと遷移可能。
+- **要素重複ゼロのレイアウト再設計（Layout Redesign & Zero Overlap）**:
+  - **上部ドッキング・コントロールデッキ (`.graph-control-deck`)**: `mesh-toolbar`（モード切替・クラスタフィルタ）と `graph-query-console`（Cypher様クエリ・プリセット実行）を上部専用コンテナ内に独立ドッキング（`position: relative`）。キャンバス上部への被りを完全解消。
+  - **左下配置の折りたたみ式凡例 (`.cluster-legend` / `window.toggleLegend`)**: コンテキスト凡例および CTI 凡例を画面左下（`bottom: 14px; left: 14px;`）へ配置し、各凡例ヘッダーに折りたたみトグルボタン（`▲ 展開` / `▼ 格納`）を実装。探索中のキャンバス視野角を最大化。
+  - **右側全高スライドイン・インスペクタードロワー (`.node-callout`)**: 選択したノードの詳細情報を表示するインスペクターを、右端固定のフルハイトドロワー（`width: 340px; top: 0; bottom: 0; right: 0; z-index: 30;`）へ再設計。クエリ操作やヘッダー開閉ボタンとの衝突をゼロ化し、縦スクロールによる快適なメタデータ閲覧を実現。
 
 ## 6.1 トップテレメトリ KPI 指標群
 - **Resolved Nodes**: 解決済みナレッジノード総数（例: `14,449`）。

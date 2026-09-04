@@ -231,27 +231,56 @@
       cursor: crosshair;
     }
 
-    /* Cluster Legend Overlay */
+    /* Cluster Legend Overlay (Bottom-Left Collapsible) */
     .cluster-legend {
       position: absolute;
-      top: 14px;
+      bottom: 14px;
       left: 14px;
-      background-color: rgba(244, 239, 230, 0.92);
+      background-color: rgba(244, 239, 230, 0.94);
       border: 1px solid var(--border-dark);
       padding: 8px 12px;
       display: flex;
       flex-direction: column;
       gap: 5px;
-      pointer-events: none;
+      z-index: 10;
       backdrop-filter: blur(4px);
+      box-shadow: 2px 2px 0px var(--border-dark);
+      max-width: 260px;
+      pointer-events: auto;
+      transition: all 0.2s ease;
+    }
+
+    .legend-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
     }
 
     .legend-title {
       font-size: 10px;
-      font-weight: bold;
+      font-weight: 800;
       text-transform: uppercase;
-      margin-bottom: 2px;
       color: var(--fg-main);
+      letter-spacing: 0.2px;
+    }
+
+    .btn-legend-toggle {
+      background: transparent;
+      border: none;
+      font-size: 10px;
+      font-weight: bold;
+      color: var(--fg-muted);
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .btn-legend-toggle:hover {
+      color: var(--fg-main);
+    }
+
+    .cluster-legend.collapsed .legend-item,
+    .cluster-legend.collapsed .legend-divider {
+      display: none !important;
     }
 
     .legend-item {
@@ -268,18 +297,26 @@
       border: 1px solid var(--border-dark);
     }
 
-    /* Node Details Callout */
+    /* Node Details Callout (Side Inspector Drawer) */
     .node-callout {
       position: absolute;
-      top: 14px;
-      right: 14px;
-      width: 320px;
-      background-color: var(--bg-panel);
-      border: 1px solid var(--border-dark);
-      box-shadow: 4px 4px 0px rgba(43, 43, 43, 0.15);
-      padding: 12px 14px;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 340px;
+      max-width: 85vw;
+      background-color: rgba(244, 239, 230, 0.98);
+      border-left: 2px solid var(--border-dark);
+      border-top: none;
+      border-right: none;
+      border-bottom: none;
+      box-shadow: -4px 0px 16px rgba(43, 43, 43, 0.15);
+      padding: 16px;
       display: none;
-      z-index: 10;
+      flex-direction: column;
+      z-index: 30;
+      overflow-y: auto;
+      backdrop-filter: blur(6px);
     }
 
     .callout-header {
@@ -451,22 +488,23 @@
       color: var(--bg-main);
     }
 
+    /* Unified Graph Control Deck */
+    .graph-control-deck {
+      background-color: var(--bg-panel);
+      border-bottom: 2px solid var(--border-dark);
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 15;
+    }
+
     /* CTI Mesh Toolbar & Buttons */
     .mesh-toolbar {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      z-index: 20;
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
-      background: rgba(235, 229, 216, 0.94);
-      padding: 6px 12px;
-      border: 1px solid var(--border-dark);
-      border-radius: 4px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-      backdrop-filter: blur(4px);
     }
 
     .btn-tool {
@@ -491,20 +529,14 @@
 
     /* Graph Query Console */
     .graph-query-console {
-      position: absolute;
-      top: 52px;
-      left: 12px;
-      right: 12px;
-      z-index: 20;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      background: rgba(235, 229, 216, 0.94);
+      background: rgba(235, 229, 216, 0.65);
       padding: 8px 12px;
       border: 1px solid var(--border-dark);
       border-radius: 4px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-      backdrop-filter: blur(4px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
     }
 
     .query-input-row {
@@ -862,8 +894,9 @@
        ====================================================================== -->
   <div id="viewGraph" class="tab-view active">
     <div class="graph-workspace">
-      <div class="canvas-container">
-        <!-- CTI / Context Mesh Mode & Filter Toolbar -->
+      <!-- 🎛️ Unified Graph Control Deck (Docked Top Section) -->
+      <div class="graph-control-deck">
+        <!-- Row 1: CTI / Context Mesh Mode & Filter Toolbar -->
         <div class="mesh-toolbar">
           <div style="display: flex; align-items: center; gap: 6px; border-right: 1px solid var(--border-dark); padding-right: 10px;">
             <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">GRAPH MODE:</span>
@@ -883,7 +916,7 @@
           </div>
         </div>
 
-        <!-- Graph Query Console & Scenario Presets -->
+        <!-- Row 2: Graph Query Console & Scenario Presets -->
         <div class="graph-query-console" id="graphQueryConsole">
           <div class="query-input-row">
             <input id="graphQueryInput" class="query-input-field" type="text" placeholder="CTI Graph Query (e.g. 'gaps', 'cwe: CWE-20', 'ego: AML.T0054 2', 'match: quantum', 'path: AML.T0054->CWE-20')..." onkeydown="if(event.key==='Enter') executeGraphQuery()" />
@@ -900,12 +933,18 @@
             <span id="graphQueryResultBadge" class="query-badge">全データ待機中</span>
           </div>
         </div>
+      </div>
 
+      <!-- 🕸️ Canvas Container (Unobstructed Canvas + Overlays) -->
+      <div class="canvas-container">
         <canvas id="graphCanvas"></canvas>
 
-        <!-- Cluster Color Legend (Context Mesh) -->
+        <!-- Cluster Color Legend (Context Mesh - Bottom-Left) -->
         <div class="cluster-legend" id="contextLegend">
-          <div class="legend-title">Cluster Classification</div>
+          <div class="legend-header">
+            <span class="legend-title">Cluster Classification</span>
+            <button id="btnToggleLegendContext" class="btn-legend-toggle" onclick="toggleLegend()" title="凡例の表示/非表示">▼ 隠す</button>
+          </div>
           <div class="legend-item">
             <div class="legend-dot" style="background-color: var(--accent-coral);"></div>
             <span>Sources (arXiv/IACR Papers)</span>
@@ -924,9 +963,12 @@
           </div>
         </div>
 
-        <!-- CTI Color Legend (CTI Mesh) -->
+        <!-- CTI Color Legend (CTI Mesh - Bottom-Left) -->
         <div class="cluster-legend" id="ctiLegend" style="display: none;">
-          <div class="legend-title">CTI Entity &amp; Relation Legend</div>
+          <div class="legend-header">
+            <span class="legend-title">CTI Entity &amp; Relation</span>
+            <button id="btnToggleLegendCti" class="btn-legend-toggle" onclick="toggleLegend()" title="凡例の表示/非表示">▼ 隠す</button>
+          </div>
           <div class="legend-item">
             <div class="legend-dot" style="background-color: #3B82F6;"></div>
             <span>🔵 :Paper (arXiv Security)</span>
@@ -943,7 +985,7 @@
             <div class="legend-dot" style="background-color: #10B981;"></div>
             <span>🟢 :DefenseMechanism (Mitigations)</span>
           </div>
-          <div style="border-top: 1px dashed var(--border-dark); margin: 6px 0; padding-top: 4px;"></div>
+          <div class="legend-divider" style="border-top: 1px dashed var(--border-dark); margin: 6px 0; padding-top: 4px;"></div>
           <div class="legend-item">
             <span style="color: #EF4444; font-weight: bold;">&mdash;&mdash;</span>
             <span style="font-size: 10px;">EXPLOITS (Solid)</span>
@@ -962,11 +1004,11 @@
           </div>
         </div>
 
-        <!-- Node Callout Details Panel -->
+        <!-- Node Details Callout (Side Inspector Drawer) -->
         <div class="node-callout" id="nodeCallout">
           <div class="callout-header">
             <span class="callout-tag" id="calloutTag">SOURCES</span>
-            <button class="btn-action" onclick="closeCallout()">✕</button>
+            <button class="btn-action" onclick="closeCallout()">✕ 閉じる</button>
           </div>
           <div class="callout-title" id="calloutTitle">--</div>
           <div class="callout-desc" id="calloutDesc">--</div>
@@ -1594,13 +1636,13 @@
           if (btnCti) btnCti.classList.add('active');
           if (ctiFiltersEl) ctiFiltersEl.style.display = 'flex';
           if (contextLegend) contextLegend.style.display = 'none';
-          if (ctiLegend) ctiLegend.style.display = 'block';
+          if (ctiLegend) ctiLegend.style.display = 'flex';
           await fetchCtiMesh();
         } else {
           if (btnMesh) btnMesh.classList.add('active');
           if (btnCti) btnCti.classList.remove('active');
           if (ctiFiltersEl) ctiFiltersEl.style.display = 'none';
-          if (contextLegend) contextLegend.style.display = 'block';
+          if (contextLegend) contextLegend.style.display = 'flex';
           if (ctiLegend) ctiLegend.style.display = 'none';
           activeTwoHopNodes = null;
 
@@ -2066,13 +2108,25 @@
         });
         edgesInfo.innerHTML = `<strong>Relations (${connected.length}):</strong><br/>` + (rels.length ? rels.join('<br/>') : '<em>Isolated Node</em>');
 
-        callout.style.display = 'block';
+        callout.style.display = 'flex';
       }
 
       window.closeCallout = function() {
         selectedNode = null;
         activeTwoHopNodes = null;
         document.getElementById('nodeCallout').style.display = 'none';
+      };
+
+      // Toggle Cluster / CTI Legends collapsed state
+      window.toggleLegend = function() {
+        const isCti = currentGraphMode === 'cti';
+        const legend = isCti ? document.getElementById('ctiLegend') : document.getElementById('contextLegend');
+        const btn = isCti ? document.getElementById('btnToggleLegendCti') : document.getElementById('btnToggleLegendContext');
+        if (legend) {
+          legend.classList.toggle('collapsed');
+          const isCollapsed = legend.classList.contains('collapsed');
+          if (btn) btn.textContent = isCollapsed ? '▲ 展開' : '▼ 隠す';
+        }
       };
 
       window.resetPhysics = function() {
