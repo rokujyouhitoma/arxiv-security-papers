@@ -2,7 +2,7 @@
 ID: 146
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Open (In Progress)
 ---
 
 # [FEAT] /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 (ID: 146)
@@ -14,34 +14,78 @@ ID: 146
 ---
 
 ## 2. トレーサビリティ / Traceability
-- 関連仕様: `docs/designs/DSN-14-graph_engineering_dashboard.md` (Section 11: Dedicated Graph Workspace)
+- 関連仕様: [docs/designs/DSN-14-graph_engineering_dashboard.md](../designs/DSN-14-graph_engineering_dashboard.md) (Section 11: Dedicated Graph Workspace)
 - 関連Issue:
-  - Issue 135: CTI ナレッジグラフデータ基盤およびインタラクティブ可視化の実装
-  - Issue 138: 専用 Graph タブの実装
+  - [Issue 135: CTI ナレッジグラフデータ基盤およびインタラクティブ可視化の実装](closed/135-implement-paper-attck-cwe-knowledge-graph-and-dashboard-visualization.md)
+  - [Issue 138: 専用 Graph タブの実装](closed/138-create-dedicated-graph-tab-in-dashboard.md)
+  - [Issue 140: ノード半径の面積比例スケーリング](closed/140-scale-vertex-size-by-edge-degree.md)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html)
-- [ ] [tests/web/test_dashboard_graph_tab.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_graph_tab.py)
+- [site/dashboard.html](../../site/dashboard.html)
+- [tests/web/test_dashboard_graph_tab.py](../../tests/web/test_dashboard_graph_tab.py)
+- [docs/designs/DSN-14-graph_engineering_dashboard.md](../designs/DSN-14-graph_engineering_dashboard.md)
 
 ---
 
-## 4. 実装方針 / Implementation Plan
+## 4. セキュリティ考慮事項 / Security Analysis
+- **プロトタイプ汚染防止 (Prototype Pollution Guard)**: リレーションキーのオン/オフ更新において、`Object.prototype` や組み込みキーの汚染を防ぐため、許可されたホワイトリスト（`ALLOWED_RELATIONS = ['EXPLOITS', 'MITIGATES', 'DISCLOSES', 'SUBCLASS_OF']`）による厳格なバリデーションを実施する。
+- **レンダリング整合性**: エッジ種別が無効化された場合でも、エッジ配列のインデックス参照や物理シミュレーション（Link distance / Spring force）が破綻しないよう、クリーンな配列再構築を担保する。
+
+---
+
+## 5. 実装方針 / Implementation Plan
 Target Branch: `feat/146-implement-edge-relation-type-filter-in-graph-tab`
 
-1. **凡例 / ツールバー連携 UI の拡張**:
-   - `ctiLegend`（または `mesh-toolbar`）内の各関係性（`EXPLOITS`, `MITIGATES`, `DISCLOSES`, `SUBCLASS_OF`）をクリック可能なトグルチップ化。
-   - チップをクリックすると、そのエッジ種別の表示（有効/無効）が切り替わる。
-2. **エッジフィルタリングロジック**:
-   - 状態オブジェクト `let activeEdgeRelations = { EXPLOITS: true, MITIGATES: true, DISCLOSES: true, SUBCLASS_OF: true };` を管理。
-   - `EDGES` 構築時およびレンダリング時に、`activeEdgeRelations[e.rel] !== false` のエッジのみを描画・物理計算に組み込む。
-3. **自動テストの追加**:
-   - 関係性トグル要素およびエッジ除外ロジックの存在・動作確認。
+1. **凡例 / ツールバー連携 UI の拡張 (`site/dashboard.html`)**:
+   - `ctiLegend`（左下の CTI 凡例）内に、クリック可能なエッジ関係性トグルチップを配置:
+     ```html
+     <div class="legend-relations-row" style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;">
+       <button id="btnRelExploits" class="btn-rel-chip active" onclick="toggleEdgeRelation('EXPLOITS')">🔴 EXPLOITS</button>
+       <button id="btnRelMitigates" class="btn-rel-chip active" onclick="toggleEdgeRelation('MITIGATES')">🟢 MITIGATES</button>
+       <button id="btnRelDiscloses" class="btn-rel-chip active" onclick="toggleEdgeRelation('DISCLOSES')">🟠 DISCLOSES</button>
+       <button id="btnRelSubclass" class="btn-rel-chip active" onclick="toggleEdgeRelation('SUBCLASS_OF')">⚪ SUBCLASS</button>
+     </div>
+     ```
+   - トグル状態に応じて `.active` クラスおよびボタンスタイル（透過度）を更新。
+
+2. **状態管理とエッジフィルタリングロジック (`site/dashboard.html`)**:
+   - 状態オブジェクト:
+     ```javascript
+     const ALLOWED_RELATIONS = ['EXPLOITS', 'MITIGATES', 'DISCLOSES', 'SUBCLASS_OF'];
+     const activeEdgeRelations = {
+       EXPLOITS: true,
+       MITIGATES: true,
+       DISCLOSES: true,
+       SUBCLASS_OF: true
+     };
+     ```
+   - `window.toggleEdgeRelation(relType)` 関数:
+     - ホワイトリスト検証を行い、`activeEdgeRelations[relType] = !activeEdgeRelations[relType]` をトグル。
+     - チップ要素の `.active` クラスを更新。
+     - `applyCtiFilter()` を再実行。
+   - `applyCtiFilter()`:
+     - `ctiRawEdges` から、`activeEdgeRelations[e.label || e.rel] !== false` を満たすエッジのみを抽出。
+     - 抽出された `filteredEdges` をもとに、ノードの接続状態や次数を再計算。
+     - `updateNodeRadii(NODES, EDGES)` を呼び出し、残存エッジ関係性に応じた頂点サイズを動的に再計算。
+
+3. **設計書更新 (`docs/designs/DSN-14-graph_engineering_dashboard.md`)**:
+   - Section 11 に「11.10 エッジ関係性（Relation Type）個別フィルタ機能」を追記。
+
+4. **自動テストの追加 (`tests/web/test_dashboard_graph_tab.py`)**:
+   - `test_dashboard_edge_relation_type_filter`:
+     - `id="btnRelExploits"`, `id="btnRelMitigates"`, `id="btnRelDiscloses"`, `id="btnRelSubclass"` の存在確認。
+     - `toggleEdgeRelation` 関数および `activeEdgeRelations` オブジェクトの定義確認。
+     - `applyCtiFilter` 内におけるリレーション別エッジ除外処理の検証。
 
 ---
 
-## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 凡例またはツールバーに各エッジ種別（EXPLOITS, MITIGATES, DISCLOSES, SUBCLASS_OF）のトグルチップが配置されていること。
-- [ ] 特定の関係性をオフにすると、該当するエッジが即座に非表示になること。
-- [ ] 全テスト・品質ゲートに合格すること。
+## 6. 完了条件 / Success Criteria (DoD)
+- [ ] CTI 凡例またはツールバーに各エッジ種別（EXPLOITS, MITIGATES, DISCLOSES, SUBCLASS_OF）のトグルチップが配置されていること。
+- [ ] 特定の関係性をオフにすると、該当する種類のエッジが即座に非表示になり、物理シミュレーションからも安全に除外されること。
+- [ ] 再度オンにするとエッジが復元されること。
+- [ ] 孤立ノード非表示トグル (`hideIsolatedNodes`) や次数フィルタ (`minDegreeThreshold`) と完全に協調動作すること。
+- [ ] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
+- [ ] 設計書 `DSN-14` に仕様が完全同期されていること。
+
