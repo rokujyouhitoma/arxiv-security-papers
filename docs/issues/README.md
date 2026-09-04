@@ -6,7 +6,14 @@
 
 ## 1. 進行中・未完了 Issue 一覧 (Active Issues)
 
-現在進行中のアクティブな Issue はありません。（全タスク完了）
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **143** | /dashboard tab=graph における孤立ノード（EdgeなしVertex）非表示トグル機能の実装 | Feature | Medium | In Progress | [143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md](143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md) |
+| **144** | /dashboard tab=graph における最小次数フィルタ（Min-Degree / Hub Filter）の実装 | Feature | Medium | New | [144-implement-min-degree-hub-filter-in-graph-tab.md](144-implement-min-degree-hub-filter-in-graph-tab.md) |
+| **145** | /dashboard tab=graph における特定ノードのフォーカス・エゴネットワーク抽出機能の実装 | Feature | Medium | New | [145-implement-focus-ego-subgraph-mode-in-graph-tab.md](145-implement-focus-ego-subgraph-mode-in-graph-tab.md) |
+| **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | New | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
+| **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | New | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
+| **148** | /dashboard tab=graph における未研究・未対策脅威（Research Gaps Only）専用絞り込みフィルタの実装 | Feature | Medium | New | [148-implement-research-gaps-only-filter-in-graph-tab.md](148-implement-research-gaps-only-filter-in-graph-tab.md) |
 
 ---
 
