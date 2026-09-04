@@ -2865,6 +2865,24 @@
         setInterval(syncLiveMesh, 5000);
       }
 
+      // Explicitly close SSE EventSource upon page reload or navigation to release server resources immediately
+      window.addEventListener('beforeunload', () => {
+        if (sseEventSource) {
+          try {
+            sseEventSource.close();
+            sseEventSource = null;
+          } catch (_) {}
+        }
+      });
+      window.addEventListener('pagehide', () => {
+        if (sseEventSource) {
+          try {
+            sseEventSource.close();
+            sseEventSource = null;
+          } catch (_) {}
+        }
+      });
+
       function updateSupervisorFromStream(sup) {
         const aPid = document.getElementById('valArbiterPid');
         if (aPid) aPid.textContent = sup.arbiter_pid || '--';

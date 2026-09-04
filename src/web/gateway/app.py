@@ -5,8 +5,12 @@ PEP 3333 WSGI Application and HTTP Server for arXiv Security Papers API Gateway.
 
 from __future__ import annotations
 
+import sys
+import threading
 import time
 import urllib.parse
+from datetime import datetime, timezone
+from socketserver import ThreadingMixIn
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -18,7 +22,7 @@ from typing import (
     Tuple,
     cast,
 )
-from wsgiref.simple_server import make_server
+from wsgiref.simple_server import WSGIServer, make_server
 
 if TYPE_CHECKING:
     from search.vector_engine import VectorEngine
@@ -163,11 +167,24 @@ class WSGIApplication:
             status: str, headers: List[Tuple[str, str]], exc_info: Any = None
         ) -> Any:
             status_holder.append(status)
-            headers.append(("X-Trace-ID", tid))
-            headers.append(("traceparent", f"00-{tid}-{sid}-01"))
+            clean_headers = [
+                h
+                for h in headers
+                if h[0].lower()
+                not in {
+                    "connection",
+                    "keep-alive",
+                    "transfer-encoding",
+                    "te",
+                    "trailers",
+                    "upgrade",
+                }
+            ]
+            clean_headers.append(("X-Trace-ID", tid))
+            clean_headers.append(("traceparent", f"00-{tid}-{sid}-01"))
             if exc_info is not None:
-                return start_response(status, headers, exc_info)
-            return start_response(status, headers)
+                return start_response(status, clean_headers, exc_info)
+            return start_response(status, clean_headers)
 
         return wrapped_start_response
 
@@ -204,14 +221,32 @@ class WSGIApplication:
             start_response, tid, sid, status_holder
         )
 
+        thread_name = threading.current_thread().name
+        method = environ.get("REQUEST_METHOD", "GET").upper()
+        path = environ.get("PATH_INFO", "/")
+        query = environ.get("QUERY_STRING", "")
+        full_path = f"{path}?{query}" if query else path
+        now_str = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+        print(
+            f"[{now_str}] [GATEWAY-REQ-START] thread={thread_name} {method} {full_path}",
+            file=sys.stderr,
+            flush=True,
+        )
+
         try:
             return cast(Iterable[bytes], self._dispatch_request(environ, wrapped_sr))
         finally:
             dt_ms = (time.perf_counter() - t0) * 1000.0
             st_code = int(status_holder[0].split()[0]) if status_holder else 500
+            done_str = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+            done_msg = (
+                f"[{done_str}] [GATEWAY-REQ-DONE] thread={thread_name} "
+                f"{method} {full_path} -> {st_code} ({dt_ms:.2f}ms)"
+            )
+            print(done_msg, file=sys.stderr, flush=True)
             log_http_access(
-                method=environ.get("REQUEST_METHOD", "GET").upper(),
-                path=environ.get("PATH_INFO", "/"),
+                method=method,
+                path=path,
                 status_code=st_code,
                 latency_ms=dt_ms,
                 client_ip=environ.get("REMOTE_ADDR", "-"),
@@ -220,17 +255,27 @@ class WSGIApplication:
             clear_current_trace_context()
 
 
+class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
+    """Multi-threaded WSGI Server allowing concurrent handling of SSE streams and HTTP requests."""
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 application = WSGIApplication()
 app = application
 
 
 def run_web_server(port: int = 8000, host: str = "0.0.0.0") -> None:
-    """Runs standard PEP 3333 WSGI Server."""
-    httpd = make_server(host, port, application)
+    """Runs standard PEP 3333 multi-threaded WSGI Server."""
+    httpd = make_server(host, port, application, server_class=ThreadingWSGIServer)
     print(
-        f"🚀 arxiv-security-papers PEP 3333 WSGI Web Server running at http://localhost:{port}"
+        f"🚀 arxiv-security-papers multi-threaded WSGI Web Server running at http://localhost:{port}",
+        flush=True,
     )
-    print(f"📊 Graph Engineering Dashboard: http://localhost:{port}/dashboard")
+    print(
+        f"📊 Graph Engineering Dashboard: http://localhost:{port}/dashboard", flush=True
+    )
     httpd.serve_forever()
 
 

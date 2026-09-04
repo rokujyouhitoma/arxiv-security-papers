@@ -473,3 +473,17 @@ Canvas による深度 1〜5 の到達度ヒストグラム。
   }
   ```
 
+## 11.6 Web Gateway マルチスレッド耐障害性・SSE ライフサイクル管理およびリアルタイム診断仕様
+連続リロード（F5連打）や多数のクライアント同時接続時におけるサーバーブロッキング・ハングアップを完全に防止するため、以下の耐障害性アーキテクチャを標準装備する：
+
+1. **マルチスレッド WSGI サーバー (`ThreadingWSGIServer`)**:
+   - `socketserver.ThreadingMixIn` と `wsgiref.simple_server.WSGIServer` を統合し、リクエストごとに独立したデーモンスレッド（`daemon_threads = True`）を割り当て。
+   - 長時間ストリーミング（`/api/stream/top` などの SSE）が別スレッドで継続実行されていても、新規の `/dashboard` GET リクエストや REST API 呼び出しがミリ秒単位で並列処理される。
+2. **PEP 3333 準拠 Hop-by-Hop ヘッダー保護**:
+   - WSGI レベルで禁止されている Hop-by-hop ヘッダー（`Connection: keep-alive` 等）を `router.py` および `app.py`（`_wrap_response_headers`）にて厳格に排除し、WSGI レイヤーでの 500 エラー再接続ストームを根絶。
+3. **SSE 接続切断検知とライフサイクル管理**:
+   - `stream_top_metrics`, `stream_log_tail`, `stream_system_events` において `GeneratorExit`, `BrokenPipeError`, `ConnectionResetError` を正確に捕捉し、`[SSE-CLOSE]` 診断ログを出力してループを即座に破棄。
+   - フロントエンド（`site/dashboard.html`）の `beforeunload` および `pagehide` イベントハンドラーにて `sseEventSource.close()` を明示実行し、ブラウザリロード時に古いソケットを即時切断。
+4. **リアルタイム・リクエスト診断ログ**:
+   - `[GATEWAY-REQ-START]`（スレッド名、メソッド、パス、タイムスタンプ）および `[GATEWAY-REQ-DONE]`（ステータスコード、ミリ秒レイテンシ）を即時標準出力に出力し、処理滞留やリソース消費をリアルタイム監視可能。
+

@@ -8,8 +8,31 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import threading
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional
+
+
+def _log_stream_open(stream_name: str) -> None:
+    th = threading.current_thread().name
+    ts = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+    print(
+        f"[{ts}] [SSE-OPEN] thread={th} stream={stream_name}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
+def _log_stream_close(stream_name: str, reason: str) -> None:
+    th = threading.current_thread().name
+    ts = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+    print(
+        f"[{ts}] [SSE-CLOSE] thread={th} stream={stream_name} reason={reason}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def _serialize_sse_payload(data: Any) -> str:
@@ -65,6 +88,7 @@ def stream_top_metrics(
     last_ping = start_time
     seq = 0
 
+    _log_stream_open("top_metrics")
     # Emit initial connection event
     yield format_sse_event(
         {"status": "connected", "stream": "top_metrics"},
@@ -89,8 +113,10 @@ def stream_top_metrics(
                 last_ping = now
 
             time.sleep(interval)
-    except (GeneratorExit, ConnectionResetError, BrokenPipeError):
-        pass
+    except (GeneratorExit, ConnectionResetError, BrokenPipeError) as exc:
+        _log_stream_close("top_metrics", type(exc).__name__)
+    finally:
+        _log_stream_close("top_metrics", "stream_ended")
 
 
 def _parse_single_log_line(line_str: str) -> Dict[str, Any]:
@@ -150,6 +176,7 @@ def stream_log_tail(
     last_pos = _init_log_tail_pos(log_file_path)
     seq = 0
 
+    _log_stream_open("log_tail")
     yield format_sse_event(
         {"status": "connected", "file": os.path.basename(log_file_path)},
         event="connected",
@@ -169,8 +196,10 @@ def stream_log_tail(
                 last_ping = now
 
             time.sleep(interval)
-    except (GeneratorExit, ConnectionResetError, BrokenPipeError):
-        pass
+    except (GeneratorExit, ConnectionResetError, BrokenPipeError) as exc:
+        _log_stream_close("log_tail", type(exc).__name__)
+    finally:
+        _log_stream_close("log_tail", "stream_ended")
 
 
 def stream_system_events(
@@ -185,6 +214,7 @@ def stream_system_events(
     last_ping = start_time
     seq = 0
 
+    _log_stream_open("system_events")
     yield format_sse_event(
         {"status": "connected", "stream": "system_events"},
         event="connected",
@@ -204,5 +234,7 @@ def stream_system_events(
                 last_ping = now
 
             time.sleep(interval)
-    except (GeneratorExit, ConnectionResetError, BrokenPipeError):
-        pass
+    except (GeneratorExit, ConnectionResetError, BrokenPipeError) as exc:
+        _log_stream_close("system_events", type(exc).__name__)
+    finally:
+        _log_stream_close("system_events", "stream_ended")
