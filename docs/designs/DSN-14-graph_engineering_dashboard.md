@@ -236,27 +236,35 @@ $$\text{Token Savings Ratio} = 1 - \frac{T_{\text{walk}}}{T_{\text{flat}}} \appr
 
 ---
 
-# 6. 3大タブ分割アーキテクチャ & 分析パネル仕様
+# 6. 4大タブ分割アーキテクチャ & 分析パネル仕様
 
-## 6.0 3大タブ分割アーキテクチャ（Product vs System vs Supervisor Top）
-ユーザーの関心と運用目的に応じて情報密度を最適化するため、ダッシュボードを **3 つの独立した専用タブビュー** に分割しています：
+## 6.0 4大タブ分割アーキテクチャ（Knowledge Graph vs Product vs System vs Supervisor Top）およびヘッダー折りたたみ機能
+ユーザーの関心と運用目的に応じて情報密度を最適化し、大画面での快適なナレッジグラフ探索を実現するため、ダッシュボードを **4 つの独立した専用タブビュー** に分割し、垂直表示領域を最大化するヘッダー折りたたみ機構を配備しています：
 
 ```mermaid
 graph TD
     Dashboard["📊 site/dashboard.html"]
-    Dashboard --> Nav["Tab Navigation Bar (Swiss-Style 3-Tab Toggle)"]
+    Dashboard --> Nav["Tab Navigation Bar (Swiss-Style 4-Tab Toggle + Header Collapse)"]
     
-    Nav --> Tab1["📚 Tab 1: Product & Knowledge Mesh View"]
-    Nav --> Tab2["⚙️ Tab 2: System & Observability View"]
-    Nav --> Tab3["🕹️ Tab 3: Supervisor & Process Top View"]
+    Nav --> Tab0["🕸️ Tab 0: Knowledge & CTI Graph View (?tab=graph)"]
+    Nav --> Tab1["📚 Tab 1: Product & Analytics View (?tab=product)"]
+    Nav --> Tab2["⚙️ Tab 2: System & Observability View (?tab=system)"]
+    Nav --> Tab3["🕹️ Tab 3: Supervisor & Process Top View (?tab=supervisor)"]
     
-    subgraph Tab1Details ["📚 Product & Knowledge Mesh View (プロダクト & ST 戦略画面)"]
-        Canvas["Force-Directed 2D Canvas (論文・脅威・暗号・対策)"]
+    subgraph Tab0Details ["🕸️ Knowledge & CTI Graph View (ナレッジグラフ & CTI 探索専用画面)"]
+        Canvas["Force-Directed 2D Wide Canvas (全画面 `calc(100vh - 42px)` / `calc(100vh - 122px)`)"]
+        Console["Graph Query Console (gaps, cwe:, ego:, match:, path:)"]
+        Modes["Mesh Toolbar (Context Mesh / CTI ATT&CK-CWE / Filter)"]
+        Legends["Cluster & CTI Entity/Relation Legends Overlay"]
+        Callout["Node Metadata Inspector & Details Modal"]
+    end
+
+    subgraph Tab1Details ["📚 Product & Analytics View (プロダクト知見 & ST 戦略画面)"]
+        CTABanner["🕸️ Graph Workspace CTA Banner (ディープリンクジャンプ)"]
         HopBudget["Hop Budget Distribution (深度 1〜5)"]
         EdgeLedger["Edge Ledger (オントロジー有向トラフィック)"]
         ST_ROI["💰 Token Cost Savings ROI (-$142.50 / -74.2%)"]
         ST_Threats["🛡️ Emerging Threat Vectors Top 5 (MITRE 手法)"]
-        Callout["Node Metadata Inspector & Abstract Details"]
     end
     
     subgraph Tab2Details ["⚙️ System & Observability View (システム & SM 運用監視画面)"]
@@ -278,12 +286,15 @@ graph TD
         IPCCard["🔌 IPC Control Socket (outputs/supervisor/control.sock)"]
     end
 
+    Tab0 --> Tab0Details
     Tab1 --> Tab1Details
     Tab2 --> Tab2Details
     Tab3 --> Tab3Details
 ```
 
-- **タブ切り替え制御**: `window.switchDashboardTab('product' | 'system' | 'supervisor')` による DOM クラス切り替えおよび Canvas リサイズ垂直同期。URL クエリパラメータ `?tab=product|system|supervisor` による直接アクセスおよびブラウザ履歴同期（`replaceState`）を完全サポート。
+- **タブ切り替え制御**: `window.switchDashboardTab('graph' | 'product' | 'system' | 'supervisor')` による DOM クラス切り替えおよび Canvas リサイズ垂直同期。URL クエリパラメータ `?tab=graph|product|system|supervisor`（エイリアス `cti`, `mesh`, `knowledge` 含む）による直接アクセスおよびブラウザ履歴同期（`replaceState`）、`popstate` ナビゲーションを完全サポート。
+- **ヘッダー折りたたみ（Immersive Full-Height Mode）**: `window.toggleDashboardHeader()` による `#dashboardHeader` の非表示（`display: none !important;`）と、Canvas 領域の動的拡張（`calc(100vh - 42px)`）。ナビゲーションバーの「▲ ヘッダー隠す / ▼ ヘッダー表示」ボタンおよびショートカットキー `H` により瞬時に切り替え可能。ユーザー設定は `localStorage` に保存される。
+- **クロスディープリンク**: Product タブ内の「グラフ画面を開く」「Gaps 探索」ボタンから `window.openGraphWithQuery(query)` を呼び出すことで、特定シナリオを実行した状態で直接グラフ画面へと遷移可能。
 
 ## 6.1 トップテレメトリ KPI 指標群
 - **Resolved Nodes**: 解決済みナレッジノード総数（例: `14,449`）。

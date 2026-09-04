@@ -596,20 +596,65 @@
       margin-left: auto;
     }
 
+    /* Header Collapse Styles */
+    header {
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    header.header-hidden {
+      display: none !important;
+    }
+
     /* Tab Navigation */
     .tab-navigation {
       display: flex;
+      justify-content: space-between;
+      align-items: center;
       border-bottom: 2px solid var(--border-dark);
       background-color: var(--bg-main);
       padding: 0 16px;
       gap: 8px;
     }
 
+    .tab-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .tab-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-tool-header {
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-dark);
+      border-radius: 2px;
+      padding: 5px 12px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--fg-main);
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 1px 1px 0px var(--border-dark);
+    }
+
+    .btn-tool-header:hover {
+      background-color: var(--border-dark);
+      color: var(--bg-main);
+    }
+
     .tab-btn {
       background-color: transparent;
       border: 1px solid var(--border-dark);
       border-bottom: none;
-      padding: 8px 18px;
+      padding: 8px 16px;
       font-family: inherit;
       font-size: 12px;
       font-weight: bold;
@@ -641,6 +686,87 @@
       display: flex;
     }
 
+    /* Dedicated Graph Workspace */
+    .graph-workspace {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      height: calc(100vh - 122px);
+      min-height: 520px;
+      position: relative;
+    }
+
+    /* Full-height expansion when header is hidden */
+    header.header-hidden ~ #viewGraph .graph-workspace {
+      height: calc(100vh - 42px);
+    }
+
+    .graph-workspace .canvas-container {
+      flex: 1;
+      height: 100%;
+      border-bottom: none;
+    }
+
+    /* Product Workspace & CTA Banner */
+    .product-workspace {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .graph-cta-banner {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(16, 185, 129, 0.06));
+      border: 2px solid var(--border-dark);
+      padding: 16px 20px;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 2px 2px 0px var(--border-dark);
+    }
+
+    .graph-cta-info h3 {
+      margin: 0 0 6px 0;
+      font-size: 14px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .graph-cta-info p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--fg-muted);
+      line-height: 1.4;
+    }
+
+    .btn-cta-graph {
+      background-color: var(--border-dark);
+      color: var(--bg-main);
+      border: 1px solid var(--border-dark);
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      box-shadow: 1px 1px 0px var(--border-dark);
+    }
+
+    .btn-cta-graph:hover {
+      background-color: var(--accent-blue);
+      color: #fff;
+    }
+
     .system-workspace {
       padding: 16px;
       display: flex;
@@ -662,7 +788,7 @@
   <!-- ======================================================================
        1. Top Header & Real-Time Telemetry
        ====================================================================== -->
-  <header>
+  <header id="dashboardHeader">
     <div class="header-top">
       <div class="brand-section">
         <div class="brand-title">
@@ -710,22 +836,32 @@
        2. Tab Switching Navigation
        ====================================================================== -->
   <nav class="tab-navigation">
-    <button class="tab-btn active" id="tabBtnProduct" onclick="switchDashboardTab('product')">
-      📚 Product &amp; Knowledge Mesh
-    </button>
-    <button class="tab-btn" id="tabBtnSystem" onclick="switchDashboardTab('system')">
-      ⚙️ System &amp; Observability
-    </button>
-    <button class="tab-btn" id="tabBtnSupervisor" onclick="switchDashboardTab('supervisor')">
-      🕹️ Supervisor &amp; Process Top
-    </button>
+    <div class="tab-group">
+      <button class="tab-btn active" id="tabBtnGraph" onclick="switchDashboardTab('graph')">
+        🕸️ Knowledge &amp; CTI Graph
+      </button>
+      <button class="tab-btn" id="tabBtnProduct" onclick="switchDashboardTab('product')">
+        📚 Product &amp; Analytics
+      </button>
+      <button class="tab-btn" id="tabBtnSystem" onclick="switchDashboardTab('system')">
+        ⚙️ System &amp; Observability
+      </button>
+      <button class="tab-btn" id="tabBtnSupervisor" onclick="switchDashboardTab('supervisor')">
+        🕹️ Supervisor &amp; Process Top
+      </button>
+    </div>
+    <div class="tab-actions">
+      <button class="btn-tool-header" id="btnToggleHeader" onclick="toggleDashboardHeader()" title="ヘッダーを折りたたむ / 表示する (Shortcut: H)">
+        ▲ ヘッダー隠す
+      </button>
+    </div>
   </nav>
 
   <!-- ======================================================================
-       TAB 1: PRODUCT & KNOWLEDGE MESH VIEW
+       TAB 0: DEDICATED KNOWLEDGE & CTI GRAPH VIEW
        ====================================================================== -->
-  <div id="viewProduct" class="tab-view active">
-    <div class="main-workspace">
+  <div id="viewGraph" class="tab-view active">
+    <div class="graph-workspace">
       <div class="canvas-container">
         <!-- CTI / Context Mesh Mode & Filter Toolbar -->
         <div class="mesh-toolbar">
@@ -741,6 +877,9 @@
             <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')">🔴 ATT&CK</button>
             <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')">🟠 CWE</button>
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
+          </div>
+          <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            <button id="btnToggleHeaderQuick" class="btn-tool" onclick="toggleDashboardHeader()" title="ヘッダー折りたたみ切替 (Shortcut: H)">⛶ 全画面 / ヘッダー切替</button>
           </div>
         </div>
 
@@ -832,6 +971,29 @@
           <div class="callout-title" id="calloutTitle">--</div>
           <div class="callout-desc" id="calloutDesc">--</div>
           <div class="callout-edges" id="calloutEdges">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       TAB 1: PRODUCT & ANALYTICS VIEW
+       ====================================================================== -->
+  <div id="viewProduct" class="tab-view">
+    <div class="product-workspace">
+      <!-- Graph CTA Banner -->
+      <div class="graph-cta-banner">
+        <div class="graph-cta-info">
+          <h3>🕸️ Knowledge &amp; CTI Graph 探索ワークスペース</h3>
+          <p>ATT&amp;CK・CWE・arXiv論文の完全接続ナレッジグラフおよび Research Gaps、因果チェーンを専用キャンバスで快適に探索・分析できます。</p>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn-cta-graph" onclick="openGraphWithQuery('')">
+            🔍 グラフ画面を開く
+          </button>
+          <button class="btn-cta-graph" style="background-color: var(--bg-panel); color: var(--fg-main);" onclick="openGraphWithQuery('gaps')">
+            🚨 Gaps 探索
+          </button>
         </div>
       </div>
 
@@ -1580,7 +1742,9 @@
 
 
       function resizeCanvas() {
+        if (!canvas || !canvas.parentElement) return;
         const rect = canvas.parentElement.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
         width = rect.width;
         height = rect.height;
         canvas.width = width * window.devicePixelRatio;
@@ -2645,28 +2809,75 @@
 
       initSseLiveStream();
 
-      // Global Tab Switching with GET Parameter & History Support (?tab=product|system|supervisor)
-      window.switchDashboardTab = function(tabName, updateUrl = true) {
-        const normTab = (tabName || 'product').toLowerCase().trim();
-        const activeTab = (normTab === 'system' || normTab === 'observability' || normTab === 'pipeline') ? 'system' :
-                          (normTab === 'supervisor' || normTab === 'top' || normTab === 'process') ? 'supervisor' : 'product';
+      // Header Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
+      window.toggleDashboardHeader = function(forceState) {
+        const header = document.getElementById('dashboardHeader');
+        const btn = document.getElementById('btnToggleHeader');
+        if (!header) return;
+        const isHidden = (typeof forceState === 'boolean') ? forceState : !header.classList.contains('header-hidden');
+        header.classList.toggle('header-hidden', isHidden);
+        if (btn) {
+          btn.innerHTML = isHidden ? '▼ ヘッダー表示' : '▲ ヘッダー隠す';
+          btn.title = isHidden ? 'ヘッダーを表示する (Shortcut: H)' : 'ヘッダーを隠す (Shortcut: H)';
+        }
+        try {
+          localStorage.setItem('dashboard_header_hidden', isHidden ? '1' : '0');
+        } catch (e) {}
+        setTimeout(resizeCanvas, 40);
+      };
 
+      // Keyboard Shortcut 'H' / 'h' for Header Toggle
+      window.addEventListener('keydown', function(e) {
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+          return;
+        }
+        if (e.key === 'h' || e.key === 'H') {
+          toggleDashboardHeader();
+        }
+      });
+
+      // Cross-tab Deep Linking Helper: Switch to Graph and prefill/execute query
+      window.openGraphWithQuery = function(query) {
+        switchDashboardTab('graph');
+        if (query) {
+          const input = document.getElementById('graphQueryInput');
+          if (input) {
+            input.value = query;
+            if (typeof executeGraphQuery === 'function') {
+              executeGraphQuery();
+            }
+          }
+        }
+      };
+
+      // Global Tab Switching with GET Parameter & History Support (?tab=graph|product|system|supervisor)
+      window.switchDashboardTab = function(tabName, updateUrl = true) {
+        const normTab = (tabName || 'graph').toLowerCase().trim();
+        const activeTab = (normTab === 'product' || normTab === 'analytics') ? 'product' :
+                          (normTab === 'system' || normTab === 'observability' || normTab === 'pipeline') ? 'system' :
+                          (normTab === 'supervisor' || normTab === 'top' || normTab === 'process') ? 'supervisor' : 'graph';
+
+        const graphView = document.getElementById('viewGraph');
         const productView = document.getElementById('viewProduct');
         const systemView = document.getElementById('viewSystem');
         const supervisorView = document.getElementById('viewSupervisor');
+        const tabBtnGraph = document.getElementById('tabBtnGraph');
         const tabBtnProduct = document.getElementById('tabBtnProduct');
         const tabBtnSystem = document.getElementById('tabBtnSystem');
         const tabBtnSupervisor = document.getElementById('tabBtnSupervisor');
 
         // Deactivate all
-        [productView, systemView, supervisorView].forEach(v => v && v.classList.remove('active'));
-        [tabBtnProduct, tabBtnSystem, tabBtnSupervisor].forEach(b => b && b.classList.remove('active'));
+        [graphView, productView, systemView, supervisorView].forEach(v => v && v.classList.remove('active'));
+        [tabBtnGraph, tabBtnProduct, tabBtnSystem, tabBtnSupervisor].forEach(b => b && b.classList.remove('active'));
 
-        if (activeTab === 'product') {
-          if (productView) productView.classList.add('active');
-          if (tabBtnProduct) tabBtnProduct.classList.add('active');
+        if (activeTab === 'graph') {
+          if (graphView) graphView.classList.add('active');
+          if (tabBtnGraph) tabBtnGraph.classList.add('active');
           // Resize canvas on tab reveal
           setTimeout(resizeCanvas, 50);
+        } else if (activeTab === 'product') {
+          if (productView) productView.classList.add('active');
+          if (tabBtnProduct) tabBtnProduct.classList.add('active');
         } else if (activeTab === 'system') {
           if (systemView) systemView.classList.add('active');
           if (tabBtnSystem) tabBtnSystem.classList.add('active');
@@ -2695,6 +2906,13 @@
       }
 
       initTabFromUrl();
+
+      // Restore Header Hidden state from localStorage
+      try {
+        if (localStorage.getItem('dashboard_header_hidden') === '1') {
+          toggleDashboardHeader(true);
+        }
+      } catch (e) {}
 
       // Listen for browser back / forward navigation
       window.addEventListener('popstate', function() {

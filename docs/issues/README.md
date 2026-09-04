@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **138** | /dashboard における専用 Knowledge & CTI Graph 画面（tab=graph）の独立実装およびヘッダー折りたたみ機能 | Feature | 2026-09-04 | [138-create-dedicated-graph-tab-in-dashboard.md](closed/138-create-dedicated-graph-tab-in-dashboard.md) |
 | **134** | Merkle Tree（暗号論的ハッシュ木）駆動の原本・メタデータ改ざん検知（FIM: File Integrity Monitoring）基盤の実装 | Feature | 2026-09-04 | [134-implement-merkle-tree-file-integrity-monitoring.md](closed/134-implement-merkle-tree-file-integrity-monitoring.md) |
 | **133** | IR評価メトリクス（NDCG@10, MRR, MAP）に基づくCI継続的インテグレーション検索品質回帰防止ゲートの実装 | Feature | 2026-09-04 | [133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md](closed/133-implement-ir-metrics-ndcg-mrr-ci-regression-quality-gate.md) |
 | **132** | MCP通信におけるテイント解析・プロンプトインジェクション防御ゲートウェイおよび厳格JSONバリデータの実装 | Feature | 2026-09-04 | [132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md](closed/132-implement-mcp-taint-analysis-and-prompt-injection-defense-gateway.md) |
