@@ -1553,6 +1553,7 @@
       let selectedNode = null;
       let activeTwoHopNodes = null;
       let currentGraphMode = 'context'; // 'context' | 'cti'
+      let activeGraphQuery = null; // Currently active CTI query (null = full mesh)
       let ctiFilter = 'all'; // 'all' | 'Paper' | 'AttackTechnique' | 'Vulnerability'
       let highlightGaps = false;
       let ctiRawNodes = [];
@@ -1665,7 +1666,11 @@
           if (ctiFiltersEl) ctiFiltersEl.style.display = 'flex';
           if (contextLegend) contextLegend.style.display = 'none';
           if (ctiLegend) ctiLegend.style.display = 'flex';
-          await fetchCtiMesh();
+          if (activeGraphQuery) {
+            await window.executeGraphQuery(activeGraphQuery);
+          } else {
+            await fetchCtiMesh(true);
+          }
         } else {
           if (btnMesh) btnMesh.classList.add('active');
           if (btnCti) btnCti.classList.remove('active');
@@ -1733,6 +1738,9 @@
           input.value = query;
         }
 
+        // Lock active query state immediately to prevent background sync race
+        activeGraphQuery = query;
+
         if (currentGraphMode !== 'cti') {
           await window.setGraphMode('cti');
         }
@@ -1746,6 +1754,10 @@
           const res = await fetch('/api/graph/query?q=' + encodeURIComponent(query) + '&limit=100');
           if (!res.ok) throw new Error('Query request failed');
           const data = await res.json();
+
+          // Guard against stale response if user switched queries in flight
+          if (activeGraphQuery !== query) return;
+
           if (data.status === 'success' && data.mesh) {
             ctiRawNodes = data.mesh.nodes || [];
             ctiRawEdges = data.mesh.edges || [];
@@ -1759,7 +1771,7 @@
             }
           }
         } catch (err) {
-          if (badge) {
+          if (activeGraphQuery === query && badge) {
             badge.textContent = '❌ エラー';
             badge.style.color = 'var(--accent-coral)';
           }
@@ -1773,6 +1785,7 @@
       };
 
       window.clearGraphQuery = function() {
+        activeGraphQuery = null;
         const input = document.getElementById('graphQueryInput');
         if (input) input.value = '';
         const badge = document.getElementById('graphQueryResultBadge');
@@ -1781,18 +1794,26 @@
           badge.style.color = 'var(--fg-muted)';
         }
         if (currentGraphMode === 'cti') {
-          fetchCtiMesh();
+          fetchCtiMesh(true);
         } else {
           window.setGraphMode('context');
         }
       };
 
-      async function fetchCtiMesh() {
+      async function fetchCtiMesh(force = false) {
+        // When active graph query is running, do not overwrite subgraph with full mesh
+        if (activeGraphQuery && !force) {
+          return;
+        }
+
         try {
           const resp = await fetch('/api/graph/cti-mesh?limit=150');
           if (!resp.ok) return;
           const data = await resp.json();
           if (data.status !== 'success') return;
+
+          // Double check query state before replacing nodes/edges
+          if (activeGraphQuery && !force) return;
 
           ctiRawNodes = data.mesh.nodes || [];
           ctiRawEdges = data.mesh.edges || [];
@@ -2438,7 +2459,7 @@
       }
 
       async function syncLiveMesh() {
-        if (currentGraphMode === 'cti') {
+        if (currentGraphMode === 'cti' && !activeGraphQuery) {
           await fetchCtiMesh();
         }
         try {

@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **142** | グラフクエリ探索結果が5秒ごとのLive Mesh同期でリセット・分裂する不具合の修正 | Bug | 2026-09-04 | [142-fix-graph-query-subgraph-reset-by-background-sync.md](closed/142-fix-graph-query-subgraph-reset-by-background-sync.md) |
 | **141** | /dashboard 連打リロード時におけるサーバーブロッキング・ハングアップのログ計測・原因特定および耐障害性強化 | Bug | 2026-09-04 | [141-diagnose-server-blocking-on-dashboard-rapid-reload.md](closed/141-diagnose-server-blocking-on-dashboard-rapid-reload.md) |
 | **140** | /dashboard tab=graph におけるエッジ接続数に応じたノード半径（Vertex Size）の面積比例スケーリング（R ∝ √(1+k)）の実装 | Feature | 2026-09-04 | [140-scale-vertex-size-by-edge-degree.md](closed/140-scale-vertex-size-by-edge-degree.md) |
 | **139** | /dashboard tab=graph 画面における表示要素の重なり解消およびレイアウト再設計 | Feature | 2026-09-04 | [139-redesign-graph-tab-layout-and-fix-element-overlapping.md](closed/139-redesign-graph-tab-layout-and-fix-element-overlapping.md) |

@@ -181,3 +181,33 @@ def test_dashboard_vertex_size_scaling_by_edge_degree(dashboard_html: str) -> No
     # k=3 (quadruple area): R(3) = 5.5 * sqrt(4) = 11.0 (2x radius = 4x area)
     r_k3 = round(r0_standard * math.sqrt(1 + 3), 1)
     assert r_k3 == 11.0
+
+
+def test_dashboard_graph_query_subgraph_preservation_against_background_sync(
+    dashboard_html: str,
+) -> None:
+    """Verifies that active graph query subgraph is preserved against 5s periodic background sync:
+    - activeGraphQuery state variable defined
+    - executeGraphQuery sets activeGraphQuery immediately
+    - clearGraphQuery resets activeGraphQuery to null
+    - fetchCtiMesh(force = false) guards against overwriting ctiRawNodes during active queries
+    - syncLiveMesh checks !activeGraphQuery before invoking fetchCtiMesh
+    """
+    # 1. State variable definition
+    assert "let activeGraphQuery = null;" in dashboard_html
+
+    # 2. executeGraphQuery locking
+    assert "activeGraphQuery = query;" in dashboard_html
+    assert "if (activeGraphQuery !== query) return;" in dashboard_html
+
+    # 3. clearGraphQuery resetting
+    assert "window.clearGraphQuery = function()" in dashboard_html
+    assert "activeGraphQuery = null;" in dashboard_html
+    assert "fetchCtiMesh(true);" in dashboard_html
+
+    # 4. fetchCtiMesh guard against full mesh overwrite
+    assert "async function fetchCtiMesh(force = false)" in dashboard_html
+    assert "if (activeGraphQuery && !force)" in dashboard_html
+
+    # 5. syncLiveMesh 5s periodic loop guard
+    assert "currentGraphMode === 'cti' && !activeGraphQuery" in dashboard_html
