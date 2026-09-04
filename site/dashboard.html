@@ -912,6 +912,7 @@
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
           </div>
           <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            <button id="btnToggleIsolated" class="btn-tool" onclick="toggleIsolatedNodes()" title="エッジを持たない孤立頂点 (degree = 0) を非表示にします">🔗 孤立ノード除外</button>
             <button id="btnToggleHeaderQuick" class="btn-tool" onclick="toggleDashboardHeader()" title="ヘッダー折りたたみ切替 (Shortcut: H)">⛶ 全画面 / ヘッダー切替</button>
           </div>
         </div>
@@ -1554,11 +1555,14 @@
       let activeTwoHopNodes = null;
       let currentGraphMode = 'context'; // 'context' | 'cti'
       let activeGraphQuery = null; // Currently active CTI query (null = full mesh)
+      let hideIsolatedNodes = false;
       let ctiFilter = 'all'; // 'all' | 'Paper' | 'AttackTechnique' | 'Vulnerability'
       let highlightGaps = false;
       let ctiRawNodes = [];
       let ctiRawEdges = [];
       let ctiRawGaps = [];
+      let contextRawNodes = [];
+      let contextRawEdges = [];
       const contextBackupNodes = JSON.parse(JSON.stringify(NODES));
       const contextBackupEdges = JSON.parse(JSON.stringify(EDGES));
       const supervisorWorkerSnapshots = new Map();
@@ -1604,6 +1608,26 @@
         const activeNodeIds = new Set(filteredNodes.map(n => n.id));
         const filteredEdges = ctiRawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
 
+        if (hideIsolatedNodes) {
+          const connectedIds = new Set();
+          filteredEdges.forEach(e => {
+            connectedIds.add(e.source);
+            connectedIds.add(e.target);
+          });
+          const beforeCount = filteredNodes.length;
+          filteredNodes = filteredNodes.filter(n => connectedIds.has(n.id));
+          const isolatedCount = beforeCount - filteredNodes.length;
+          const badge = document.getElementById('graphQueryResultBadge');
+          if (badge && activeGraphQuery) {
+            badge.textContent = `✅ ${filteredNodes.length} 件一致 (${filteredEdges.length} リンク, 孤立 ${isolatedCount} 件除外)`;
+          }
+        } else {
+          const badge = document.getElementById('graphQueryResultBadge');
+          if (badge && activeGraphQuery) {
+            badge.textContent = `✅ ${filteredNodes.length} 件一致 (${filteredEdges.length} リンク)`;
+          }
+        }
+
         const existingPos = new Map();
         NODES.forEach(n => existingPos.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy }));
 
@@ -1613,7 +1637,7 @@
 
         filteredNodes.forEach((n, idx) => {
           const prev = existingPos.get(n.id);
-          const angle = (idx / filteredNodes.length) * Math.PI * 2;
+          const angle = (idx / Math.max(1, filteredNodes.length)) * Math.PI * 2;
           const radius = Math.min(width, height) * 0.35;
           const nodeObj = {
             id: n.id,
@@ -1652,6 +1676,88 @@
         updateNodeRadii(NODES, EDGES);
       }
 
+      function applyContextMesh() {
+        if (currentGraphMode !== 'context') return;
+        const rawNodes = (contextRawNodes && contextRawNodes.length > 0) ? contextRawNodes : contextBackupNodes;
+        const rawEdges = (contextRawEdges && contextRawEdges.length > 0) ? contextRawEdges : contextBackupEdges;
+
+        const activeNodeIds = new Set(rawNodes.map(n => n.id));
+        const filteredEdges = rawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
+
+        let filteredNodes = rawNodes;
+        if (hideIsolatedNodes) {
+          const connectedIds = new Set();
+          filteredEdges.forEach(e => {
+            connectedIds.add(e.source);
+            connectedIds.add(e.target);
+          });
+          filteredNodes = filteredNodes.filter(n => connectedIds.has(n.id));
+        }
+
+        const existingPositions = new Map();
+        NODES.forEach(n => existingPositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy }));
+
+        NODES.length = 0;
+        nodeMap.clear();
+        EDGES.length = 0;
+
+        filteredNodes.forEach((n, idx) => {
+          const clusterKey = n.cluster === 'sources' ? 'source' :
+                             n.cluster === 'entities' ? 'entity' :
+                             n.cluster === 'claims' ? 'claim' :
+                             (n.cluster || 'decision');
+          const angle = (idx / Math.max(1, filteredNodes.length)) * Math.PI * 2;
+          const radius = Math.min(width, height) * 0.32;
+          const prev = existingPositions.get(n.id);
+
+          const nodeObj = {
+            id: n.id,
+            name: n.title || n.name || n.id,
+            title: n.sub || n.title || n.name || n.id,
+            cluster: clusterKey,
+            desc: n.summary || n.desc || '',
+            x: prev ? prev.x : (width / 2 + Math.cos(angle) * radius),
+            y: prev ? prev.y : (height / 2 + Math.sin(angle) * radius),
+            vx: prev ? prev.vx : 0,
+            vy: prev ? prev.vy : 0,
+            radius: clusterKey === 'source' ? 14 : 11
+          };
+          NODES.push(nodeObj);
+          nodeMap.set(nodeObj.id, nodeObj);
+        });
+
+        filteredEdges.forEach(e => {
+          if (nodeMap.has(e.source) && nodeMap.has(e.target)) {
+            EDGES.push({
+              source: e.source,
+              target: e.target,
+              rel: e.relation || e.rel || 'links'
+            });
+          }
+        });
+        currentResolvedNodes = NODES.length;
+        updateNodeRadii(NODES, EDGES);
+      }
+
+      window.toggleIsolatedNodes = function() {
+        hideIsolatedNodes = !hideIsolatedNodes;
+        const btn = document.getElementById('btnToggleIsolated');
+        if (btn) {
+          if (hideIsolatedNodes) {
+            btn.classList.add('active');
+            btn.textContent = '🔗 孤立ノード除外 (ON)';
+          } else {
+            btn.classList.remove('active');
+            btn.textContent = '🔗 孤立ノード除外';
+          }
+        }
+        if (currentGraphMode === 'cti') {
+          applyCtiFilter();
+        } else if (currentGraphMode === 'context') {
+          applyContextMesh();
+        }
+      };
+
       window.setGraphMode = async function(mode) {
         currentGraphMode = mode;
         const btnMesh = document.getElementById('btnModeMesh');
@@ -1678,19 +1784,7 @@
           if (contextLegend) contextLegend.style.display = 'flex';
           if (ctiLegend) ctiLegend.style.display = 'none';
           activeTwoHopNodes = null;
-
-          NODES.length = 0;
-          nodeMap.clear();
-          EDGES.length = 0;
-          contextBackupNodes.forEach(n => {
-            const copy = { ...n };
-            NODES.push(copy);
-            nodeMap.set(copy.id, copy);
-          });
-          contextBackupEdges.forEach(e => EDGES.push({ ...e }));
-
-          // Recompute degree and node radii for context graph
-          updateNodeRadii(NODES, EDGES);
+          applyContextMesh();
         }
       };
 
@@ -2476,49 +2570,12 @@
           }
 
           // 2. Update Mesh Nodes & Edges if present and in context mode
-          if (currentGraphMode === 'context' && data.mesh && Array.isArray(data.mesh.nodes) && data.mesh.nodes.length > 0) {
-            // Preserve existing physics positions
-            const existingPositions = new Map();
-            NODES.forEach(n => existingPositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy }));
-
-            NODES.length = 0;
-            nodeMap.clear();
-            EDGES.length = 0;
-
-            data.mesh.nodes.forEach((n, idx) => {
-              const clusterKey = n.cluster === 'sources' ? 'source' :
-                                 n.cluster === 'entities' ? 'entity' :
-                                 n.cluster === 'claims' ? 'claim' : 'decision';
-              const angle = (idx / data.mesh.nodes.length) * Math.PI * 2;
-              const radius = Math.min(width, height) * 0.32;
-              const prev = existingPositions.get(n.id);
-
-              const nodeObj = {
-                id: n.id,
-                name: n.title,
-                title: n.sub || n.title,
-                cluster: clusterKey,
-                desc: n.summary || '',
-                x: prev ? prev.x : (width / 2 + Math.cos(angle) * radius),
-                y: prev ? prev.y : (height / 2 + Math.sin(angle) * radius),
-                vx: prev ? prev.vx : 0,
-                vy: prev ? prev.vy : 0,
-                radius: clusterKey === 'source' ? 14 : 11
-              };
-              NODES.push(nodeObj);
-              nodeMap.set(nodeObj.id, nodeObj);
-            });
-
-            data.mesh.edges.forEach(e => {
-              if (nodeMap.has(e.source) && nodeMap.has(e.target)) {
-                EDGES.push({
-                  source: e.source,
-                  target: e.target,
-                  rel: e.relation || 'links'
-                });
-              }
-            });
-            currentResolvedNodes = NODES.length;
+          if (data.mesh && Array.isArray(data.mesh.nodes) && data.mesh.nodes.length > 0) {
+            contextRawNodes = data.mesh.nodes;
+            contextRawEdges = data.mesh.edges || [];
+            if (currentGraphMode === 'context') {
+              applyContextMesh();
+            }
           }
 
           // 3. Update telemetry if present

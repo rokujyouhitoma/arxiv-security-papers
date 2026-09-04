@@ -8,12 +8,11 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **143** | /dashboard tab=graph における孤立ノード（EdgeなしVertex）非表示トグル機能の実装 | Feature | Medium | In Progress | [143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md](143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md) |
-| **144** | /dashboard tab=graph における最小次数フィルタ（Min-Degree / Hub Filter）の実装 | Feature | Medium | New | [144-implement-min-degree-hub-filter-in-graph-tab.md](144-implement-min-degree-hub-filter-in-graph-tab.md) |
-| **145** | /dashboard tab=graph における特定ノードのフォーカス・エゴネットワーク抽出機能の実装 | Feature | Medium | New | [145-implement-focus-ego-subgraph-mode-in-graph-tab.md](145-implement-focus-ego-subgraph-mode-in-graph-tab.md) |
-| **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | New | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
-| **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | New | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
-| **148** | /dashboard tab=graph における未研究・未対策脅威（Research Gaps Only）専用絞り込みフィルタの実装 | Feature | Medium | New | [148-implement-research-gaps-only-filter-in-graph-tab.md](148-implement-research-gaps-only-filter-in-graph-tab.md) |
+| **144** | /dashboard tab=graph における最小次数フィルタ（Min-Degree / Hub Filter）の実装 | Feature | Medium | In Progress | [144-implement-min-degree-hub-filter-in-graph-tab.md](144-implement-min-degree-hub-filter-in-graph-tab.md) |
+| **145** | /dashboard tab=graph における特定ノードのフォーカス・エゴネットワーク抽出機能の実装 | Feature | Medium | In Progress | [145-implement-focus-ego-subgraph-mode-in-graph-tab.md](145-implement-focus-ego-subgraph-mode-in-graph-tab.md) |
+| **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
+| **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
+| **148** | /dashboard tab=graph における未研究・未対策脅威（Research Gaps Only）専用絞り込みフィルタの実装 | Feature | Medium | In Progress | [148-implement-research-gaps-only-filter-in-graph-tab.md](148-implement-research-gaps-only-filter-in-graph-tab.md) |
 
 ---
 
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **143** | /dashboard tab=graph における孤立ノード（EdgeなしVertex）非表示トグル機能の実装 | Feature | 2026-09-04 | [143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md](closed/143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md) |
 | **142** | グラフクエリ探索結果が5秒ごとのLive Mesh同期でリセット・分裂する不具合の修正 | Bug | 2026-09-04 | [142-fix-graph-query-subgraph-reset-by-background-sync.md](closed/142-fix-graph-query-subgraph-reset-by-background-sync.md) |
 | **141** | /dashboard 連打リロード時におけるサーバーブロッキング・ハングアップのログ計測・原因特定および耐障害性強化 | Bug | 2026-09-04 | [141-diagnose-server-blocking-on-dashboard-rapid-reload.md](closed/141-diagnose-server-blocking-on-dashboard-rapid-reload.md) |
 | **140** | /dashboard tab=graph におけるエッジ接続数に応じたノード半径（Vertex Size）の面積比例スケーリング（R ∝ √(1+k)）の実装 | Feature | 2026-09-04 | [140-scale-vertex-size-by-edge-degree.md](closed/140-scale-vertex-size-by-edge-degree.md) |

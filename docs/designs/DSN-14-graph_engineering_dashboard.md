@@ -487,3 +487,19 @@ Canvas による深度 1〜5 の到達度ヒストグラム。
 4. **リアルタイム・リクエスト診断ログ**:
    - `[GATEWAY-REQ-START]`（スレッド名、メソッド、パス、タイムスタンプ）および `[GATEWAY-REQ-DONE]`（ステータスコード、ミリ秒レイテンシ）を即時標準出力に出力し、処理滞留やリソース消費をリアルタイム監視可能。
 
+## 11.7 孤立ノード（degree = 0）非表示トグル機能
+グラフ探索およびクラスタリング時における視覚的ノイズを低減し、因果関係ネットワークの分析に集中するため、エッジを持たない孤立ノード（degree = 0）を動的に除外するトグル機能を備える。
+
+1. **UI コントロール仕様**:
+   - `mesh-toolbar` 右側のボタングループに「🔗 孤立ノード除外」（`id="btnToggleIsolated"`）ボタンを配置。
+   - クリックによりトグル動作し、有効時は `.active` クラスを付与してボタンテキストを `🔗 孤立ノード除外 (ON)` に切り替え。
+2. **フィルタリングと整合性アルゴリズム**:
+   - 状態変数 `hideIsolatedNodes`（真偽値）を管理。
+   - `applyCtiFilter()`:
+     - 有効時、フィルタ後エッジ（`filteredEdges`）の `source` または `target` に存在するノード ID 集合（`connectedIds`）を作成。
+     - `filteredNodes = filteredNodes.filter(n => connectedIds.has(n.id))` を適用して孤立頂点を除外。
+     - `graphQueryResultBadge` に除外された孤立ノード件数をリアルタイム反映。
+   - `applyContextMesh()`:
+     - Context Mesh 表示時も同様に `hideIsolatedNodes` に連動して孤立頂点を除外。
+   - 頂点半径再計算（`updateNodeRadii(NODES, EDGES)`）との連動により、残存接続ノードのみで正確な次数ベースのスケーリングを維持。
+

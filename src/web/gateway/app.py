@@ -260,6 +260,7 @@ class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
 
     daemon_threads = True
     allow_reuse_address = True
+    block_on_close = False
 
 
 application = WSGIApplication()

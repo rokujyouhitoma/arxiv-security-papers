@@ -72,19 +72,28 @@ def test_concurrent_sse_and_rapid_dashboard_reload(
     stop_event = threading.Event()
     sse_connected = threading.Event()
 
+    sse_resp = None
+
     def sse_client() -> None:
+        nonlocal sse_resp
         url = f"{base_url}/api/stream/top?interval=0.2"
         try:
             req = urllib.request.Request(url, headers={"Accept": "text/event-stream"})
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
-                sse_connected.set()
-                # Read chunks until stopped
-                while not stop_event.is_set():
-                    line = resp.readline()
-                    if not line:
-                        break
+            sse_resp = urllib.request.urlopen(req, timeout=5.0)
+            sse_connected.set()
+            # Read chunks until stopped
+            while not stop_event.is_set():
+                line = sse_resp.readline()
+                if not line:
+                    break
         except Exception:
             pass
+        finally:
+            if sse_resp:
+                try:
+                    sse_resp.close()
+                except Exception:
+                    pass
 
     # 1. Start persistent SSE client in a background thread
     t_sse = threading.Thread(target=sse_client, daemon=True)
@@ -112,6 +121,11 @@ def test_concurrent_sse_and_rapid_dashboard_reload(
 
     # 3. Clean up SSE stream
     stop_event.set()
+    if sse_resp:
+        try:
+            sse_resp.close()
+        except Exception:
+            pass
     t_sse.join(timeout=1.0)
 
 

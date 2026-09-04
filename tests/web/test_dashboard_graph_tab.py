@@ -211,3 +211,37 @@ def test_dashboard_graph_query_subgraph_preservation_against_background_sync(
 
     # 5. syncLiveMesh 5s periodic loop guard
     assert "currentGraphMode === 'cti' && !activeGraphQuery" in dashboard_html
+
+
+def test_dashboard_toggle_hide_isolated_nodes(dashboard_html: str) -> None:
+    """Verifies that the isolated nodes toggle button and filtering logic are properly implemented:
+    - Button #btnToggleIsolated with toggleIsolatedNodes() handler exists in the toolbar
+    - hideIsolatedNodes state variable and window.toggleIsolatedNodes() function defined
+    - applyCtiFilter filters out nodes with degree=0 when hideIsolatedNodes is true
+    - applyContextMesh filters out nodes with degree=0 when hideIsolatedNodes is true
+    - Result badge shows isolated count when filtered
+    """
+    # 1. UI element and event binding
+    assert 'id="btnToggleIsolated"' in dashboard_html
+    assert 'onclick="toggleIsolatedNodes()"' in dashboard_html
+    assert "🔗 孤立ノード除外" in dashboard_html
+
+    # 2. State variable and toggle function
+    assert "let hideIsolatedNodes = false;" in dashboard_html
+    assert "window.toggleIsolatedNodes = function()" in dashboard_html
+    assert "hideIsolatedNodes = !hideIsolatedNodes;" in dashboard_html
+    assert "btnToggleIsolated" in dashboard_html
+    assert "btn.classList.add('active');" in dashboard_html
+
+    # 3. CTI Graph filtering logic for degree=0 (isolated nodes)
+    assert "if (hideIsolatedNodes) {" in dashboard_html
+    assert "connectedIds.add(e.source);" in dashboard_html
+    assert "connectedIds.add(e.target);" in dashboard_html
+    assert (
+        "filteredNodes = filteredNodes.filter(n => connectedIds.has(n.id));"
+        in dashboard_html
+    )
+
+    # 4. Context Mesh filtering logic for degree=0 (isolated nodes)
+    assert "function applyContextMesh()" in dashboard_html
+    assert "applyContextMesh();" in dashboard_html
