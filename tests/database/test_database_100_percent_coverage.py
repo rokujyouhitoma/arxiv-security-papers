@@ -45,7 +45,16 @@ from src.database.sql import (
 )
 from src.database.sql.ast import SelectStatement
 from src.database.sqlite_bridge import attach_to_sqlite
-from src.database.sqlite_engine import get_sqlite_connection, sync_to_vector_storage
+from src.database.sqlite_engine import (
+    SQLiteConnection,
+    SQLiteCursor,
+    SQLiteRow,
+    count_sqlite_table_rows,
+    get_sqlite_connection,
+    get_sqlite_table_names,
+    sum_sqlite_table_rows,
+    sync_to_vector_storage,
+)
 from src.database.storage import VectorStorage
 from src.database.vdbe import VDBE, OpCode, Statement, StepResult, VDBEProgram
 from src.database.vfs import MemoryVFS, PosixVFS
@@ -483,6 +492,51 @@ def test_sqlite_engine_sync_lifecycle() -> None:
 
         conn.close()
         storage.close()
+
+
+def test_sqlite_engine_extended_options_and_utilities() -> None:
+    """Tests get_sqlite_connection with init_schema=False, read_only=True, enable_wal=True, and utilities."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        custom_db = os.path.join(tmpdir, "custom_analytics.db")
+
+        # 1. Open with init_schema=False and enable_wal=True
+        conn = get_sqlite_connection(
+            db_path=custom_db, init_schema=False, enable_wal=True
+        )
+        assert isinstance(conn, SQLiteConnection)
+        cur = conn.cursor()
+        assert isinstance(cur, SQLiteCursor)
+
+        # Create custom table
+        cur.execute("CREATE TABLE metrics (key TEXT PRIMARY KEY, val INTEGER)")
+        cur.execute("INSERT INTO metrics VALUES ('m1', 42)")
+        cur.execute("INSERT INTO metrics VALUES ('m2', 100)")
+        conn.commit()
+
+        # Check table names and row counts
+        tables = get_sqlite_table_names(conn)
+        assert "papers" not in tables
+        assert "metrics" in tables
+
+        total_rows = sum_sqlite_table_rows(conn)
+        assert total_rows == 2
+        conn.close()
+
+        # 2. Open read_only
+        ro_conn = get_sqlite_connection(
+            db_path=custom_db, init_schema=False, read_only=True
+        )
+        ro_cur = ro_conn.cursor()
+        ro_cur.execute("SELECT val FROM metrics WHERE key='m1'")
+        row = ro_cur.fetchone()
+        assert isinstance(row, SQLiteRow)
+        assert row["val"] == 42
+        assert row[0] == 42
+        ro_conn.close()
+
+        # 3. Test count_sqlite_table_rows utility
+        assert count_sqlite_table_rows(custom_db) == 2
+        assert count_sqlite_table_rows(os.path.join(tmpdir, "nonexistent.db")) is None
 
 
 def test_database_profiler() -> None:

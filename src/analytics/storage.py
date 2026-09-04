@@ -9,11 +9,10 @@ import contextlib
 import json
 import logging
 import os
-import sqlite3
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from database.sqlite_engine import get_sqlite_connection
+from database import SQLiteCursor, get_sqlite_connection
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +65,12 @@ SCHEMA_MIGRATIONS: List[Tuple[int, str]] = [
         );
         """,
     ),
+    (
+        4,
+        """
+        DROP TABLE IF EXISTS papers;
+        """,
+    ),
 ]
 
 
@@ -98,10 +103,8 @@ class AnalyticsStorage:
     @contextlib.contextmanager
     def _get_connection(self) -> Any:
         """Yields a configured SQLite connection from core database engine and ensures clean closure."""
-        conn = get_sqlite_connection(self.db_path)
+        conn = get_sqlite_connection(self.db_path, init_schema=False, enable_wal=True)
         try:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA synchronous=NORMAL;")
             yield conn
         finally:
             conn.close()
@@ -129,7 +132,7 @@ class AnalyticsStorage:
             logger.error("Failed to initialize Analytics DB: %s", e)
 
     def _upsert_threat_trends(
-        self, cur: sqlite3.Cursor, top_threats: List[Dict[str, Any]], now_str: str
+        self, cur: SQLiteCursor, top_threats: List[Dict[str, Any]], now_str: str
     ) -> None:
         """Inserts or updates threat trends records."""
         for t in top_threats:
@@ -162,7 +165,7 @@ class AnalyticsStorage:
         return "SM"
 
     def _upsert_single_kpi(
-        self, cur: sqlite3.Cursor, k: str, v: Any, now_str: str
+        self, cur: SQLiteCursor, k: str, v: Any, now_str: str
     ) -> None:
         cat = self._get_kpi_category(k)
         num_val = float(v) if isinstance(v, (int, float)) else None
@@ -177,7 +180,7 @@ class AnalyticsStorage:
         )
 
     def _upsert_strategic_kpis(
-        self, cur: sqlite3.Cursor, data: Dict[str, Any], now_str: str
+        self, cur: SQLiteCursor, data: Dict[str, Any], now_str: str
     ) -> None:
         """Inserts or updates individual strategic KPI metrics."""
         for k, v in data.items():

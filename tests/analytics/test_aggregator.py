@@ -96,6 +96,20 @@ def test_analytics_storage_sqlite_migrations_and_history() -> None:
             h_count = cur.fetchone()[0]
             assert h_count >= 1
 
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [r[0] for r in cur.fetchall()]
+            assert "papers" not in tables
+            assert "threat_trends" in tables
+            assert "strategic_kpis" in tables
+            assert "metrics_history" in tables
+            assert "latest_snapshot" in tables
+
+        from database import count_sqlite_table_rows
+
+        total_rows = count_sqlite_table_rows(storage.db_path)
+        assert total_rows is not None
+        assert total_rows >= 3
+
 
 def test_analytics_aggregator_end_to_end() -> None:
     """Verifies that AnalyticsAggregator aggregates metrics from repository state."""

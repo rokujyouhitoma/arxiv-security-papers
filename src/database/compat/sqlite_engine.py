@@ -52,27 +52,24 @@ def register_vector_functions(conn: sqlite3.Connection) -> None:
     conn.create_function("EMBED", 1, embed_text_udf)
 
 
-def get_sqlite_connection(
-    db_path: str = "outputs/database/papers.db",
-    storage: Optional[VectorStorage] = None,
+SQLiteConnection = sqlite3.Connection
+SQLiteCursor = sqlite3.Cursor
+SQLiteRow = sqlite3.Row
+
+
+def _open_raw_sqlite_connection(
+    db_path: str, read_only: bool, timeout: float
 ) -> sqlite3.Connection:
-    """
-    Returns standard `sqlite3.Connection` with full SQLite SQL support and vector UDFs.
-    Usage:
-        import sqlite3
-        from database import get_sqlite_connection
+    abs_path = os.path.abspath(db_path)
+    if read_only:
+        return sqlite3.connect(f"file:{abs_path}?mode=ro", uri=True, timeout=timeout)
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    return sqlite3.connect(abs_path, timeout=timeout)
 
-        cursor.execute(
-            "SELECT id, title, COSINE_SIM(vector, ?) AS score FROM papers ORDER BY score DESC LIMIT 5",
-            [query_vec_json],
-        )
-    """
-    os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    register_vector_functions(conn)
 
-    # Initialize standard schema if not exists
+def _init_papers_schema(
+    conn: sqlite3.Connection, storage: Optional[VectorStorage]
+) -> None:
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS papers (
@@ -86,11 +83,76 @@ def get_sqlite_connection(
         )
         """)
     conn.commit()
-
     if storage and storage.count > 0:
         sync_from_vector_storage(conn, storage)
 
+
+def get_sqlite_connection(
+    db_path: str = "outputs/database/papers.db",
+    storage: Optional[VectorStorage] = None,
+    init_schema: bool = True,
+    read_only: bool = False,
+    enable_wal: bool = False,
+    timeout: float = 5.0,
+) -> sqlite3.Connection:
+    """
+    Returns standard `sqlite3.Connection` with full SQLite SQL support and vector UDFs.
+    Usage:
+        from database import get_sqlite_connection
+
+        conn = get_sqlite_connection("outputs/analytics/analytics.db", init_schema=False, enable_wal=True)
+        cursor = conn.cursor()
+    """
+    conn = _open_raw_sqlite_connection(db_path, read_only, timeout)
+    conn.row_factory = sqlite3.Row
+    register_vector_functions(conn)
+
+    if enable_wal and not read_only:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+
+    if init_schema and not read_only:
+        _init_papers_schema(conn, storage)
+
     return conn
+
+
+def get_sqlite_table_names(conn: sqlite3.Connection) -> List[str]:
+    """Returns a list of all user table names in the SQLite database."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    )
+    return [str(row[0]) for row in cur.fetchall()]
+
+
+def _count_table_rows(cur: sqlite3.Cursor, tbl: str) -> int:
+    if not tbl.isidentifier():
+        return 0
+    cur.execute(f"SELECT COUNT(*) FROM {tbl}")
+    r = cur.fetchone()
+    return int(r[0]) if r else 0
+
+
+def sum_sqlite_table_rows(conn: sqlite3.Connection) -> Optional[int]:
+    """Calculates the sum of row counts across all user tables in the database."""
+    cur = conn.cursor()
+    total = sum(_count_table_rows(cur, tbl) for tbl in get_sqlite_table_names(conn))
+    return total if total > 0 else None
+
+
+def count_sqlite_table_rows(db_path: str) -> Optional[int]:
+    """Safely opens an SQLite database in read-only mode and returns the total row count."""
+    if not os.path.exists(db_path):
+        return None
+    try:
+        conn = get_sqlite_connection(db_path, init_schema=False, read_only=True)
+        try:
+            return sum_sqlite_table_rows(conn)
+        finally:
+            conn.close()
+    except Exception:
+        return None
 
 
 def sync_from_vector_storage(

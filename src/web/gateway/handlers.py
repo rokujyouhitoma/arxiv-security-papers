@@ -777,25 +777,15 @@ def _query_table_count(conn: Any, tname: str) -> int:
 
 
 def _sum_sqlite_tables_rows(conn: Any) -> Optional[int]:
-    tbl_cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    tables = [t[0] for t in tbl_cur.fetchall()]
-    total = sum(_query_table_count(conn, t) for t in tables)
-    return total if total > 0 else None
+    from database import sum_sqlite_table_rows
+
+    return sum_sqlite_table_rows(conn)
 
 
 def _count_analytics_sqlite_rows(analytics_db_path: str) -> Optional[int]:
-    if not os.path.exists(analytics_db_path):
-        return None
-    try:
-        import sqlite3
+    from database import count_sqlite_table_rows
 
-        conn = sqlite3.connect(f"file:{analytics_db_path}?mode=ro", uri=True)
-        try:
-            return _sum_sqlite_tables_rows(conn)
-        finally:
-            conn.close()
-    except Exception:
-        return None
+    return count_sqlite_table_rows(analytics_db_path)
 
 
 def _count_vdb_lines(metrics_path: str, metrics_size: int) -> int:

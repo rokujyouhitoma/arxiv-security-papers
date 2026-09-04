@@ -20,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **149** | sqlite利用箇所（analytics.db等）のsrc/database統合と統一データベース基盤化 | Refactor / Architecture | 2026-09-04 | [149-integrate-src-database-engine-for-analytics-storage.md](closed/149-integrate-src-database-engine-for-analytics-storage.md) |
 | **143** | /dashboard tab=graph における孤立ノード（EdgeなしVertex）非表示トグル機能の実装 | Feature | 2026-09-04 | [143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md](closed/143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md) |
 | **142** | グラフクエリ探索結果が5秒ごとのLive Mesh同期でリセット・分裂する不具合の修正 | Bug | 2026-09-04 | [142-fix-graph-query-subgraph-reset-by-background-sync.md](closed/142-fix-graph-query-subgraph-reset-by-background-sync.md) |
 | **141** | /dashboard 連打リロード時におけるサーバーブロッキング・ハングアップのログ計測・原因特定および耐障害性強化 | Bug | 2026-09-04 | [141-diagnose-server-blocking-on-dashboard-rapid-reload.md](closed/141-diagnose-server-blocking-on-dashboard-rapid-reload.md) |

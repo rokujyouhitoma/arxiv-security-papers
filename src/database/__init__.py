@@ -144,8 +144,14 @@ from .sql import (
 )
 from .sqlite_bridge import attach_to_sqlite
 from .sqlite_engine import (
+    SQLiteConnection,
+    SQLiteCursor,
+    SQLiteRow,
+    count_sqlite_table_rows,
     get_sqlite_connection,
+    get_sqlite_table_names,
     register_vector_functions,
+    sum_sqlite_table_rows,
     sync_from_vector_storage,
     sync_to_vector_storage,
 )
@@ -361,6 +367,12 @@ __all__ = [
     "register_vector_functions",
     "sync_from_vector_storage",
     "sync_to_vector_storage",
+    "SQLiteConnection",
+    "SQLiteCursor",
+    "SQLiteRow",
+    "count_sqlite_table_rows",
+    "get_sqlite_table_names",
+    "sum_sqlite_table_rows",
     # Profiler & Metrics
     "DatabaseProfiler",
     "ProfileResult",
