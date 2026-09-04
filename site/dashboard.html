@@ -1007,7 +1007,10 @@
         <!-- Node Details Callout (Side Inspector Drawer) -->
         <div class="node-callout" id="nodeCallout">
           <div class="callout-header">
-            <span class="callout-tag" id="calloutTag">SOURCES</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="callout-tag" id="calloutTag">SOURCES</span>
+              <span class="callout-degree" id="calloutDegree" style="font-size: 10px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-dark); border-radius: 3px; padding: 2px 6px;">Edge: 0</span>
+            </div>
             <button class="btn-action" onclick="closeCallout()">✕ 閉じる</button>
           </div>
           <div class="callout-title" id="calloutTitle">--</div>
@@ -1519,9 +1522,31 @@
         n.y = 0;
         n.vx = 0;
         n.vy = 0;
-        n.radius = n.cluster === 'source' ? 14 : 11;
         nodeMap.set(n.id, n);
       });
+
+      // ----------------------------------------------------------------------
+      // Area-Proportional Node Degree & Radius Scaling: R(k) = R_0 * sqrt(1 + k)
+      // Base Radius: source=7.0px, standard=5.5px. Clamped: [5.5px, 28.0px]
+      // ----------------------------------------------------------------------
+      function updateNodeRadii(nodes, edges) {
+        const degreeMap = new Map();
+        nodes.forEach(n => degreeMap.set(n.id, 0));
+        edges.forEach(e => {
+          if (degreeMap.has(e.source)) degreeMap.set(e.source, degreeMap.get(e.source) + 1);
+          if (degreeMap.has(e.target)) degreeMap.set(e.target, degreeMap.get(e.target) + 1);
+        });
+
+        nodes.forEach(n => {
+          const k = degreeMap.get(n.id) || 0;
+          n.degree = k;
+          const r0 = (n.cluster === 'source') ? 7.0 : 5.5;
+          const rawRadius = r0 * Math.sqrt(1 + k);
+          n.radius = Math.min(28.0, Math.max(5.5, Math.round(rawRadius * 10) / 10));
+        });
+      }
+
+      updateNodeRadii(NODES, EDGES);
 
       let hoveredNode = null;
       let draggedNode = null;
@@ -1621,6 +1646,9 @@
             });
           }
         });
+
+        // Recompute degree and node radii for filtered CTI graph
+        updateNodeRadii(NODES, EDGES);
       }
 
       window.setGraphMode = async function(mode) {
@@ -1655,6 +1683,9 @@
             nodeMap.set(copy.id, copy);
           });
           contextBackupEdges.forEach(e => EDGES.push({ ...e }));
+
+          // Recompute degree and node radii for context graph
+          updateNodeRadii(NODES, EDGES);
         }
       };
 
@@ -1719,7 +1750,7 @@
             ctiRawNodes = data.mesh.nodes || [];
             ctiRawEdges = data.mesh.edges || [];
             activeTwoHopNodes = null;
-            renderCtiNodesAndEdges();
+            applyCtiFilter();
 
             if (badge) {
               const count = data.match_count !== undefined ? data.match_count : ctiRawNodes.length;
@@ -2066,9 +2097,16 @@
 
         const callout = document.getElementById('nodeCallout');
         const tag = document.getElementById('calloutTag');
+        const degEl = document.getElementById('calloutDegree');
         const title = document.getElementById('calloutTitle');
         const desc = document.getElementById('calloutDesc');
         const edgesInfo = document.getElementById('calloutEdges');
+
+        if (degEl) {
+          const k = node.degree !== undefined ? node.degree : 0;
+          const r = node.radius !== undefined ? node.radius : 5.5;
+          degEl.textContent = `Edges: ${k} (R=${r}px)`;
+        }
 
         if (currentGraphMode === 'cti') {
           tag.textContent = escapeHtml(node.label || 'CTI NODE');

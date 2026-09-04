@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **140** | /dashboard tab=graph におけるエッジ接続数に応じたノード半径（Vertex Size）の面積比例スケーリング（R ∝ √(1+k)）の実装 | Feature | 2026-09-04 | [140-scale-vertex-size-by-edge-degree.md](closed/140-scale-vertex-size-by-edge-degree.md) |
 | **139** | /dashboard tab=graph 画面における表示要素の重なり解消およびレイアウト再設計 | Feature | 2026-09-04 | [139-redesign-graph-tab-layout-and-fix-element-overlapping.md](closed/139-redesign-graph-tab-layout-and-fix-element-overlapping.md) |
 | **138** | /dashboard における専用 Knowledge & CTI Graph 画面（tab=graph）の独立実装およびヘッダー折りたたみ機能 | Feature | 2026-09-04 | [138-create-dedicated-graph-tab-in-dashboard.md](closed/138-create-dedicated-graph-tab-in-dashboard.md) |
 | **134** | Merkle Tree（暗号論的ハッシュ木）駆動の原本・メタデータ改ざん検知（FIM: File Integrity Monitoring）基盤の実装 | Feature | 2026-09-04 | [134-implement-merkle-tree-file-integrity-monitoring.md](closed/134-implement-merkle-tree-file-integrity-monitoring.md) |

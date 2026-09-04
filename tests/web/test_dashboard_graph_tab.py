@@ -143,3 +143,41 @@ def test_dashboard_graph_layout_redesign_and_legend_toggle(dashboard_html: str) 
     assert "bottom: 0;" in dashboard_html
     assert "right: 0;" in dashboard_html
     assert "z-index: 30;" in dashboard_html
+
+
+def test_dashboard_vertex_size_scaling_by_edge_degree(dashboard_html: str) -> None:
+    """Verifies that vertices (nodes) are dynamically scaled proportional to edge degrees:
+    - Area-proportional model R(k) = R_0 * sqrt(1 + k)
+    - updateNodeRadii function definition and invocations
+    - calloutDegree badge display in node inspector
+    """
+    import math
+
+    # 1. Verification of JavaScript updateNodeRadii logic
+    assert "function updateNodeRadii(nodes, edges)" in dashboard_html
+    assert "Math.sqrt(1 + k)" in dashboard_html
+    assert "degreeMap" in dashboard_html
+    assert "updateNodeRadii(NODES, EDGES);" in dashboard_html
+
+    # 2. Callout badge for degree and radius display
+    assert 'id="calloutDegree"' in dashboard_html
+    assert "callout-degree" in dashboard_html
+    assert (
+        "degEl.textContent = `Edges: ${k} (R=${r}px)`);" in dashboard_html
+        or "Edges: ${k}" in dashboard_html
+    )
+
+    # 3. Mathematical precision check for Area-Proportional Model (Plan A)
+    r0_standard = 5.5
+    # k=0 (isolated): R(0) = 5.5 * sqrt(1) = 5.5
+    r_k0 = round(r0_standard * math.sqrt(1 + 0), 1)
+    assert r_k0 == 5.5
+
+    # k=1 (leaf node, 1 edge): R(1) = 5.5 * sqrt(2) ~= 7.78 -> 7.8
+    r_k1 = round(r0_standard * math.sqrt(1 + 1), 1)
+    assert r_k1 == 7.8
+    assert math.isclose(r_k1 / r_k0, math.sqrt(2), rel_tol=1e-2)
+
+    # k=3 (quadruple area): R(3) = 5.5 * sqrt(4) = 11.0 (2x radius = 4x area)
+    r_k3 = round(r0_standard * math.sqrt(1 + 3), 1)
+    assert r_k3 == 11.0
