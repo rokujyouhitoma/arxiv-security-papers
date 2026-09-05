@@ -428,3 +428,13 @@ def test_dashboard_glassmorphic_tooltips_and_help_drawer(
 
     # 5. Canvas node hover guidance
     assert "💡 クリックで詳細 / Wクリックでエゴ抽出" in dashboard_html
+
+    # 6. Viewport edge cut-off prevention (Issue 166)
+    assert '[data-tooltip-align="left"]' in dashboard_html
+    assert '[data-tooltip-align="right"]' in dashboard_html
+    assert 'data-tooltip-align="left"' in dashboard_html
+    assert 'data-tooltip-align="right"' in dashboard_html
+    assert "function adjustTooltipViewportAlignment(el)" in dashboard_html
+    assert "centerX < 160" in dashboard_html
+    assert "window.innerWidth - centerX < 160" in dashboard_html
+    assert "adjustTooltipViewportAlignment(el);" in dashboard_html
