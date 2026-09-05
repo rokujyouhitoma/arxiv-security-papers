@@ -1,9 +1,9 @@
 # [DSN-07] 共通セキュリティ基盤・ASTガード＆RBACエンジン設計書 (Repository Security, AST Guard & Threat Defense) — arxiv-security-papers
 
 - **文書番号**: `DSN-07`
-- **文書ステータス**: `APPROVED (Rev 2.1 - Clean Security Infrastructure Separation)`
+- **文書ステータス**: `APPROVED (Rev 2.2 - Pluggable Security Middleware & Interceptor Architecture)`
 - **対象サブシステム**: `src/security/` (Security Infrastructure & System Enforcement Framework)
-- **関連パッケージ**: `src/domain/security/` (CTI & Taxonomy Domain Models), `src/mcp/`, `src/web/`, `src/pipeline/`
+- **関連パッケージ**: `src/domain/security/` (CTI & Taxonomy Domain Models), `src/mcp/`, `src/web/`, `src/pipeline/`, `src/spider/`
 - **作成日**: 2026-08-22
 - **最終更新日**: 2026-09-05
 - **【主査・報告】 Information Security Specialist (Sec) & Systems Auditor (Aud)**  
@@ -52,6 +52,10 @@
 - [9. シーケンス & 多層防御実行制御フロー](#9-シーケンス--多層防御実行制御フロー)
 - [10. 包括的テスト戦略 & 品質検証マトリクス](#10-包括的テスト戦略--品質検証マトリクス)
 - [11. 次世代実装ロードマップ & 完了定義 (DoD)](#11-次世代実装ロードマップ--完了定義-dod)
+- [12. 統一ミドルウェア／インターセプター・アーキテクチャ（Security Middleware & Interceptor Framework）](#12-統一ミドルウェアインターセプターアーキテクチャsecurity-middleware--interceptor-framework)
+  - [12.1 課題背景：個別コード埋め込みの限界とミドルウェア化の必然性](#121-課題背景個別コード埋め込みの限界とミドルウェア化の必然性)
+  - [12.2 レイヤー別インターセプター設計（Web / Transport / Agent）](#122-レイヤー別インターセプター設計web--transport--agent)
+  - [12.3 段階的適用アプローチ（ロードマップ）](#123-段階的適用アプローチロードマップ)
 
 ---
 
@@ -510,10 +514,108 @@ sequenceDiagram
 - [x] CTI & Taxonomy のドメイン層（`src/domain/security/`）への完全分離
 - [x] 100% カバレッジ・型検査 (`mypy --strict`) 完全通過
 
-### Phase 2: 次世代セキュリティ基盤の拡張（ロードマップ）
-- [ ] **監査ログ・不変証跡モジュール**: 前方安全（Forward-secure）ハッシュ連鎖ログ (`security/audit/chained_log.py`) および構造化 CEF/JSON イベントロガーの実装
-- [ ] **シークレット管理モジュール**: `SecretStr` 型自動マスキングおよび定数時間比較トークン検証 (`security/secrets/`) の実装
-- [ ] **レート制限・リソース枯渇保護**: トークンバケットリミッターおよび外部 API サーキットブレーカー (`security/ratelimit/`) の実装
-- [ ] **インジェスト・パーサー強化**: Magic Bytes 厳格検証、Zip/PDF Bomb 制限、および XXE 外部実体参照禁止パーサー (`security/validation/mime.py`, `file_scanner.py`) の実装
-- [ ] **LLM/Agent 出力ガードレール**: DLP 機密情報流出検知および MCP ツール呼び出し前セカンドバリデーター (`security/guardrails/`) の実装
-- [ ] **SSRF 防御ラッパー**: プライベート/ループバック IP 遮断および DNS リバインディング防止セキュア Fetch (`security/validation/network.py`) の実装
+### Phase 2: 次世代セキュリティ基盤の拡張（完了済 - Issues 154〜159）
+- [x] **SSRF 防御ラッパー (Issue 154)**: プライベート/ループバック IP 遮断および DNS リバインディング防止セキュア Fetch (`security/validation/network.py`) の実装
+- [x] **インジェスト・パーサー強化 (Issue 155)**: Magic Bytes 厳格検証、Zip/PDF Bomb 制限、および XXE 外部実体参照禁止パーサー (`security/validation/mime.py`, `file_scanner.py`) の実装
+- [x] **シークレット管理モジュール (Issue 156)**: `SecretStr` 自動マスキング、定数時間比較トークン検証、エントロピー検知 (`security/secrets/`) の実装
+- [x] **レート制限・リソース枯渇保護 (Issue 157)**: トークンバケットリミッターおよび 3 状態サーキットブレーカー (`security/ratelimit/`) の実装
+- [x] **監査ログ・不変証跡モジュール (Issue 158)**: 前方安全（Forward-secure）HMAC-SHA256 連鎖ログ (`security/audit/chained_log.py`) および構造化イベントロガーの実装
+- [x] **LLM/Agent 出力ガードレール (Issue 159)**: DLP 機密情報流出検知および MCP ツール呼び出し前ポリシーバリデーター (`security/guardrails/`) の実装
+
+### Phase 3: 統一ミドルウェア／インターセプター・アーキテクチャと各パッケージ適用（進行中）
+- [ ] **共通ミドルウェア基盤 & Web Gateway パイロット適用 (Issue 161)**: `SecurityWSGIMiddleware` の実装と `src/web/gateway/app.py` への透過的適用
+- [ ] **外部通信クライアントの統合 (Issue 162)**: `SecureHttpClient` の実装と `src/pipeline/` / `src/spider/` への適用
+- [ ] **エージェント・MCPインターセプターの統合 (Issue 163)**: `MCPToolSecurityInterceptor` の実装と `src/mcp/` への適用
+
+---
+
+# 12. 統一ミドルウェア／インターセプター・アーキテクチャ（Security Middleware & Interceptor Framework）
+
+## 12.1 課題背景：個別コード埋め込みの限界とミドルウェア化の必然性
+`src/security` の強力な防御機能（SSRF・レートリミット・MIME検査・シークレットマスキング・監査ログ）を、業務パッケージ（`src/web`, `src/pipeline`, `src/mcp`, `src/spider`, `src/database`）へ組み込むにあたり、**「各関数の内部で個別に呼び出すアプローチ」**は以下の深刻な問題を引き起こす：
+1. **コードの散乱と肥大化（Boilerplate Pollution）**: 各エンドポイントやフェッチャーに関数が重複して呼び出され、業務ロジックの可読性が著しく低下する。
+2. **セキュリティ適用の抜け漏れ（Enforcement Gaps）**: 新規エンドポイントや新機能追加時に、チェックの呼び出し忘れが容易に発生する（Fail-Openのリスク）。
+3. **横断的関心事（Cross-Cutting Concerns）の密結合**: 認可・監査・レート制限が業務処理と直結し、単体テスト時のモック化や振る舞い検証が困難になる。
+
+この課題を解決するため、**「適用する側が1〜2行でラップ・適用でき、配下の全処理に漏れなく透過的に強制適用されるインターセプター／ミドルウェア方式」**へと設計を進化させる。
+
+## 12.2 レイヤー別インターセプター設計（Web / Transport / Agent）
+
+```mermaid
+flowchart TD
+    subgraph Web_Layer["1. Web Gateway層 (PEP 3333 WSGI Middleware)"]
+        Req[Inbound HTTP] --> WMid["SecurityWSGIMiddleware"]
+        WMid --> Rate["TokenBucket / SlidingWindow Limiter"]
+        WMid --> Sanitize["Path/Query Sanitizer (Traversal & NullByte)"]
+        WMid --> Headers["Security Headers (CSP/HSTS/Nosniff/Frame-Deny)"]
+        WMid --> AuditW["SecurityAuditLogger (Structured Access Log)"]
+        WMid --> App["WSGIApplication (Handlers)"]
+    end
+
+    subgraph Transport_Layer["2. 外部通信・収集層 (Secure HttpClient)"]
+        Pipe["Pipeline / Spider Fetch"] --> Client["SecureHttpClient / SafeFetchAdapter"]
+        Client --> SSRF["SSRF & DNS Rebinding Guard"]
+        Client --> MIME["Magic Byte & Bomb Scanner"]
+        Client --> Circuit["CircuitBreaker"]
+    end
+
+    subgraph Agent_Layer["3. エージェント・MCP層 (Tool Guard Interceptor)"]
+        Agent["LLM / Tool Invocation"] --> MCPMid["MCPToolSecurityInterceptor"]
+        MCPMid --> ToolG["ToolCallGuard (Shell Meta & Path Traversal)"]
+        MCPMid --> OutG["OutputGuard (DLP PII/Secret Masking)"]
+    end
+```
+
+### (A) Web Gateway 層: `SecurityWSGIMiddleware` (PEP 3333 準拠)
+`src/web/gateway/app.py` の `WSGIApplication` をラップするだけで、全 HTTP 通信に以下のポリシーを無条件に適用する：
+- **適用インターフェース**:
+  ```python
+  app = SecurityWSGIMiddleware(
+      app=WSGIApplication(),
+      rate_limiter=TokenBucketRateLimiter(rate=50, capacity=100),
+      audit_logger=audit_logger,
+  )
+  ```
+- **自動提供機能**:
+  1. **セキュリティレスポンスヘッダーの自動注入**:
+     - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+     - `X-Content-Type-Options: nosniff`
+     - `X-Frame-Options: DENY`
+     - `Content-Security-Policy: default-src 'self'`
+  2. **クライアント IP 単位の自動レート制限**: 閾値超過時に即時 429 Too Many Requests を返却。
+  3. **パス & クエリの危険構文遮断**: `../`、Null バイト、制御文字を含むリクエストを 400 Bad Request で遮断。
+  4. **全アクセスの構造化監査ログ記録**: `SecurityAuditEvent` への自動出力。
+
+### (B) 外部通信・インジェスト層: `SecureHttpClient` / `SafeFetchAdapter`
+`src/pipeline` や `src/spider` の通信をラップし、低レイヤーで強制介入：
+- **適用インターフェース**:
+  ```python
+  client = SecureHttpClient(circuit_breaker=CircuitBreaker(...))
+  resp = client.get("https://arxiv.org/pdf/2401.00001.pdf", expected_mime="application/pdf")
+  ```
+- **自動提供機能**:
+  1. **透過的 SSRF / DNS リバインディング防御**: プライベート IP / AWS・GCP メタデータ IP への接続を自動解決・遮断。
+  2. **Magic Bytes 検証**: Content-Type ヘッダーの偽装をマジックバイト解析で検知。
+  3. **解凍爆弾防止**: 最大サイズ・展開比率の自動クォータ制限。
+  4. **サーキットブレーカー連携**: 外部 API 障害時のフェイルファストと自動フォールバック。
+
+### (C) エージェント・MCP 層: `MCPToolSecurityInterceptor`
+`src/mcp` の JSON-RPC ツール実行パイプラインの直前で介入：
+- **適用インターフェース**:
+  ```python
+  @guard_tool(allowed_tools={"search_papers", "view_file"}, read_only=True)
+  def handle_call_tool(tool_name: str, arguments: dict) -> dict: ...
+  ```
+- **自動提供機能**:
+  1. **引数の自動検査**: シェルメタ文字（`;`, `&&`, `|`）、パストラバーサル（`../`）を自動検知・拒否。
+  2. **Read-Only モード強制**: 書き込み・破壊的ツールの自動遮断。
+  3. **レスポンスの自動 DLP マスキング**: 返却テキスト内の PII（メール/電話/カード）および API キーを自動置換。
+
+## 12.3 段階的適用アプローチ（ロードマップ）
+「個別コードの修正」による混乱とデグレを防ぐため、以下の 3 段階で安全に展開する：
+1. **① 共通ミドルウェア基盤の構築 (`src/security/middleware/`)**:
+   - `src/security/` 配下に `SecurityWSGIMiddleware` を実装。既存コードに一切影響を与えずに単体テストで完璧に品質保証。
+2. **② Web 層への先行適用（パイロット: Issue 161）**:
+   - `src/web/gateway/app.py` に `SecurityWSGIMiddleware` を接続し、`/dashboard`, `/search`, `/api` の全 HTTP トラフィックに一括防御を有効化。
+3. **③ 外部通信・エージェント層への段階展開（Issue 162 & 163）**:
+   - `SecureHttpClient` および `MCPToolSecurityInterceptor` を順次接続し、全システムのセキュリティ適応を完遂する。

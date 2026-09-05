@@ -8,6 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **160** | Pure-Python STIX 2.1 CTI 推論 & ATT&CK Navigator レイヤー自動生成基盤の実装 | Feature | High | Open (New) | [160-implement-pure-python-stix-cti-inference-and-navigator-layer.md](160-implement-pure-python-stix-cti-inference-and-navigator-layer.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
