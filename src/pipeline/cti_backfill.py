@@ -11,8 +11,10 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import logging
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from domain.security.cti.graph_bridge import sync_cti_inferences_to_graph
@@ -25,6 +27,8 @@ from domain.security.cti.registry import MITRECTIRegistry
 from graph.engine import PropertyGraphEngine
 from ontology.rule_registry import EdgeInferenceRuleRegistry
 from security.validation.path import get_default_workspace_dir, is_safe_workspace_path
+
+logger = logging.getLogger("pipeline.cti_backfill")
 
 
 class CTIBackfillEnricher:
@@ -451,6 +455,28 @@ class CTIBackfillEnricher:
         with open(report_file, "w", encoding="utf-8") as f:
             json.dump(stats, f, indent=2, ensure_ascii=False)
 
+    def _record_updated_file(
+        self,
+        fpath: str,
+        res: Dict[str, Any],
+        stats: Dict[str, Any],
+        tech_counter: Dict[str, int],
+    ) -> None:
+        """Updates accumulator stats and debug logs for an enriched paper."""
+        stats["updated_count"] += 1
+        stats["total_techniques_mapped"] += res.get("technique_count", 0)
+        stats["total_mitigations_mapped"] += res.get("mitigation_count", 0)
+        stats["total_edges_synced"] += res.get("edges_synced", 0)
+        inferences: List[InferredTechnique] = res.get("inferences", [])
+        self._tally_tiers(inferences, stats["tier_breakdown"], tech_counter)
+        if inferences:
+            logger.debug(
+                "Enriched %s: %d techniques, %d mitigations",
+                os.path.basename(fpath),
+                len(inferences),
+                res.get("mitigation_count", 0),
+            )
+
     def _process_file_backfill(
         self,
         fpath: str,
@@ -463,17 +489,47 @@ class CTIBackfillEnricher:
         res = self.enrich_file(fpath, dry_run=dry_run, force=force)
         if res.get("error"):
             stats["error_count"] += 1
+            logger.warning(
+                "Error processing %s: %s", os.path.basename(fpath), res.get("error")
+            )
             return
         if res.get("skipped"):
             stats["skipped_count"] += 1
             return
         if res.get("updated"):
-            stats["updated_count"] += 1
-            stats["total_techniques_mapped"] += res.get("technique_count", 0)
-            stats["total_mitigations_mapped"] += res.get("mitigation_count", 0)
-            stats["total_edges_synced"] += res.get("edges_synced", 0)
-            inferences: List[InferredTechnique] = res.get("inferences", [])
-            self._tally_tiers(inferences, stats["tier_breakdown"], tech_counter)
+            self._record_updated_file(fpath, res, stats, tech_counter)
+
+    @staticmethod
+    def _calculate_log_interval(total: int) -> int:
+        """Determines progress logging frequency based on total items."""
+        if total <= 20:
+            return 5
+        if total <= 200:
+            return 20
+        if total <= 2000:
+            return 100
+        return 500
+
+    @staticmethod
+    def _log_periodic_progress(
+        current: int,
+        total: int,
+        stats: Dict[str, Any],
+        interval: int,
+    ) -> None:
+        """Emits periodic progress log messages."""
+        if current == total or current % interval == 0:
+            pct = (current / total) * 100.0 if total > 0 else 100.0
+            logger.info(
+                "Progress: [%d/%d] (%.1f%%) | Updated: %d | Skipped: %d | Errors: %d | Edges: %d",
+                current,
+                total,
+                pct,
+                stats["updated_count"],
+                stats["skipped_count"],
+                stats["error_count"],
+                stats["total_edges_synced"],
+            )
 
     @staticmethod
     def _limit_files(all_files: List[str], max_papers: Optional[int]) -> List[str]:
@@ -505,6 +561,26 @@ class CTIBackfillEnricher:
             return
         self._graph_engine.save()
 
+    @staticmethod
+    def _log_completion(stats: Dict[str, Any], elapsed: float) -> None:
+        """Logs summary completion metrics."""
+        tiers = stats.get("tier_breakdown", {})
+        logger.info(
+            "CTI backfill completed in %.2fs: total=%d, updated=%d, skipped=%d, errors=%d, edges=%d",
+            elapsed,
+            stats["total_scanned"],
+            stats["updated_count"],
+            stats["skipped_count"],
+            stats["error_count"],
+            stats["total_edges_synced"],
+        )
+        logger.info(
+            "Tier summary: HIGH=%d, MEDIUM=%d, LOW=%d",
+            tiers.get("HIGH", 0),
+            tiers.get("MEDIUM", 0),
+            tiers.get("LOW", 0),
+        )
+
     def run_backfill(
         self,
         dry_run: bool = False,
@@ -514,15 +590,27 @@ class CTIBackfillEnricher:
     ) -> Dict[str, Any]:
         """Executes full backfill scan across OKF papers with audit summary."""
         all_files = self._limit_files(self.find_all_okf_files(), max_papers)
-        stats = self._init_backfill_stats(len(all_files), dry_run, force)
+        total = len(all_files)
+        logger.info(
+            "Starting CTI backfill: total=%d files (dry_run=%s, force=%s, sync_graph=%s)",
+            total,
+            dry_run,
+            force,
+            self.sync_graph,
+        )
+        stats = self._init_backfill_stats(total, dry_run, force)
         tech_counter: Dict[str, int] = {}
+        interval = self._calculate_log_interval(total)
+        start_time = time.time()
 
-        for fpath in all_files:
+        for idx, fpath in enumerate(all_files, start=1):
             self._process_file_backfill(fpath, dry_run, force, stats, tech_counter)
+            self._log_periodic_progress(idx, total, stats, interval)
 
         self._save_graph_if_active(dry_run)
         stats["top_techniques"] = self._compile_top_techniques(tech_counter)
         self._write_report_if_needed(stats, report_file)
+        self._log_completion(stats, time.time() - start_time)
         return stats
 
 
@@ -562,7 +650,19 @@ def main() -> None:
         default=None,
         help="Path to save execution summary report as JSON",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose debug logging",
+    )
     args = parser.parse_args()
+
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
 
     enricher = CTIBackfillEnricher(
         graph_db_path=args.db_path,
