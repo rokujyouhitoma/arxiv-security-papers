@@ -2,7 +2,7 @@
 ID: 162
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] グラフ Edge への判断ルール・推論機構・確信度・エビデンス属性の統合付与と高精度グラフ探索基盤の実装 (ID: 162)
@@ -118,12 +118,12 @@ Target Branch: `feat/162-edge-inference-mechanism-confidence`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `TechniqueInferenceEngine` が推論時に `applied_rules`, `primary_rule_id`, `inference_mechanism`, `evidences`, `confidence_tier`, `source_text_hash`, `evidence_quote` を正しく生成すること
-- [ ] `graph_bridge.py` が生成された推論メタデータを `PropertyGraphEngine` の Edge properties に完全格納・永続化できること
-- [ ] `Edge` クラスのヘルパーメソッド（`get_confidence`, `get_confidence_tier`, `is_high_confidence`, `has_rule` 等）が期待通り動作すること
-- [ ] `PropertyGraphEngine.get_out_edges` / `get_in_edges` で `min_confidence`, `min_tier`, `allowed_rules`, `allowed_mechanisms` を指定した絞り込み走査が正常に機能すること
-- [ ] 確信度区分（`HIGH`, `MEDIUM`, `LOW`）によるフィルタリングが正しく動作すること
-- [ ] 単体テスト `tests/domain/test_edge_confidence.py` を作成し、100% PASS すること
-- [ ] 既存の全単体テスト（`tests/domain/test_stix_navigator.py` 等）が互換性を保ち 100% PASS すること
-- [ ] `make check_format` および `make static_analysis` (radon, xenon Rank A, flake8, mypy --strict) が 100% PASS すること
+- [x] `TechniqueInferenceEngine` が推論時に `applied_rules`, `primary_rule_id`, `inference_mechanism`, `evidences`, `confidence_tier`, `source_text_hash`, `evidence_quote` を正しく生成すること
+- [x] `graph_bridge.py` が生成された推論メタデータを `PropertyGraphEngine` の Edge properties に完全格納・永続化できること
+- [x] `Edge` クラスのヘルパーメソッド（`get_confidence`, `get_confidence_tier`, `is_high_confidence`, `has_rule` 等）が期待通り動作すること
+- [x] `PropertyGraphEngine.get_out_edges` / `get_in_edges` で `min_confidence`, `min_tier`, `allowed_rules`, `allowed_mechanisms` を指定した絞り込み走査が正常に機能すること
+- [x] 確信度区分（`HIGH`, `MEDIUM`, `LOW`）によるフィルタリングが正しく動作すること
+- [x] 単体テスト `tests/domain/test_edge_confidence.py` を作成し、100% PASS すること
+- [x] 既存の全単体テスト（`tests/domain/test_stix_navigator.py` 等）が互換性を保ち 100% PASS すること
+- [x] `make check_format` および `make static_analysis` (radon, xenon Rank A, flake8, mypy --strict) が 100% PASS すること
 

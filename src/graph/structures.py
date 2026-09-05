@@ -57,6 +57,47 @@ class Edge:
             "properties": self.properties,
         }
 
+    def get_confidence(self) -> float:
+        """Retrieves numerical confidence score from properties or weight."""
+        val = self.properties.get("confidence", self.weight)
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    def get_confidence_tier(self) -> str:
+        """Determines confidence tier (HIGH, MEDIUM, LOW)."""
+        tier = self.properties.get("confidence_tier")
+        if tier:
+            return str(tier).upper()
+        conf = self.get_confidence()
+        if conf >= 0.8:
+            return "HIGH"
+        if conf >= 0.5:
+            return "MEDIUM"
+        return "LOW"
+
+    def is_high_confidence(self, threshold: float = 0.8) -> bool:
+        """Checks if confidence meets high threshold."""
+        return self.get_confidence() >= threshold
+
+    def has_rule(self, rule_id: str) -> bool:
+        """Checks if a rule ID was applied to this edge."""
+        if self.properties.get("primary_rule_id") == rule_id:
+            return True
+        applied = self.properties.get("applied_rules", [])
+        return isinstance(applied, list) and rule_id in applied
+
+    def get_primary_rule(self) -> Optional[str]:
+        """Returns primary inference rule ID if present."""
+        rule = self.properties.get("primary_rule_id")
+        return str(rule) if rule else None
+
+    def get_evidences(self) -> List[Dict[str, Any]]:
+        """Returns structured inference evidences."""
+        ev = self.properties.get("evidences", [])
+        return list(ev) if isinstance(ev, list) else []
+
 
 @dataclass
 class Path:

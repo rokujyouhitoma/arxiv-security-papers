@@ -14,7 +14,7 @@ from .graph_bridge import (
     find_techniques_for_paper,
     sync_cti_inferences_to_graph,
 )
-from .inference import InferredTechnique, TechniqueInferenceEngine
+from .inference import InferenceEvidence, InferredTechnique, TechniqueInferenceEngine
 from .navigator import (
     NavigatorLayerConfig,
     export_navigator_file,
@@ -37,6 +37,7 @@ __all__ = [
     "CourseOfAction",
     "CTICatalogStorage",
     "CTISyncManager",
+    "InferenceEvidence",
     "InferredTechnique",
     "MITRECTIRegistry",
     "NavigatorLayerConfig",

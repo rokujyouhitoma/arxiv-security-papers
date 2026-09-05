@@ -35,6 +35,80 @@ def _determine_graph_storage_path(
     return default_path
 
 
+TIER_SEVERITY: Dict[str, int] = {
+    "LOW": 1,
+    "MEDIUM": 2,
+    "HIGH": 3,
+}
+
+
+def _matches_confidence(
+    edge: Edge,
+    min_conf: Optional[float],
+    min_tier: Optional[str],
+) -> bool:
+    """Evaluates edge confidence score and tier constraints."""
+    if min_conf is not None and edge.get_confidence() < min_conf:
+        return False
+    if min_tier is not None:
+        req = TIER_SEVERITY.get(min_tier.upper(), 1)
+        actual = TIER_SEVERITY.get(edge.get_confidence_tier().upper(), 1)
+        if actual < req:
+            return False
+    return True
+
+
+def _matches_allowed_rules(edge: Edge, allowed_rules: Optional[List[str]]) -> bool:
+    """Evaluates rule ID constraints."""
+    if allowed_rules is None:
+        return True
+    return any(edge.has_rule(r) for r in allowed_rules)
+
+
+def _matches_allowed_mechanisms(
+    edge: Edge, allowed_mechanisms: Optional[List[str]]
+) -> bool:
+    """Evaluates mechanism constraints."""
+    if allowed_mechanisms is None:
+        return True
+    mech = str(edge.properties.get("inference_mechanism", ""))
+    return mech in allowed_mechanisms
+
+
+def _matches_target_label(edge: Edge, target_labels: Optional[Set[str]]) -> bool:
+    """Checks if edge label matches target labels."""
+    if not target_labels:
+        return True
+    return edge.label in target_labels
+
+
+def _matches_rules_and_mechanisms(
+    edge: Edge,
+    allowed_rules: Optional[List[str]],
+    allowed_mechanisms: Optional[List[str]],
+) -> bool:
+    """Combines rule ID and mechanism checks."""
+    if not _matches_allowed_rules(edge, allowed_rules):
+        return False
+    return _matches_allowed_mechanisms(edge, allowed_mechanisms)
+
+
+def _filter_edge(
+    edge: Edge,
+    target_labels: Optional[Set[str]],
+    min_conf: Optional[float],
+    min_tier: Optional[str],
+    allowed_rules: Optional[List[str]],
+    allowed_mechanisms: Optional[List[str]],
+) -> bool:
+    """Checks all edge criteria including labels, confidence, and rule metadata."""
+    if not _matches_target_label(edge, target_labels):
+        return False
+    if not _matches_confidence(edge, min_conf, min_tier):
+        return False
+    return _matches_rules_and_mechanisms(edge, allowed_rules, allowed_mechanisms)
+
+
 class PropertyGraphEngine:
     """
     High-performance pure Python Property Graph Database Engine.
@@ -132,35 +206,121 @@ class PropertyGraphEngine:
         """Retrieves edge by ID in O(1) time."""
         return self._edges.get(edge_id)
 
-    def get_out_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
-        """Retrieves outgoing edges from vertex_id, optionally filtered by edge labels."""
+    def get_out_edges(
+        self,
+        vertex_id: str,
+        *labels: str,
+        min_confidence: Optional[float] = None,
+        min_tier: Optional[str] = None,
+        allowed_rules: Optional[List[str]] = None,
+        allowed_mechanisms: Optional[List[str]] = None,
+    ) -> List[Edge]:
+        """Retrieves outgoing edges from vertex_id with optional label, confidence, and rule filtering."""
         edges = self._out_edges.get(vertex_id, [])
-        if not labels:
-            return list(edges)
-        target_labels = set(labels)
-        return [e for e in edges if e.label in target_labels]
+        target_labels = set(labels) if labels else None
+        return [
+            e
+            for e in edges
+            if _filter_edge(
+                e,
+                target_labels,
+                min_confidence,
+                min_tier,
+                allowed_rules,
+                allowed_mechanisms,
+            )
+        ]
 
-    def get_outgoing_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
+    def get_outgoing_edges(
+        self,
+        vertex_id: str,
+        *labels: str,
+        min_confidence: Optional[float] = None,
+        min_tier: Optional[str] = None,
+        allowed_rules: Optional[List[str]] = None,
+        allowed_mechanisms: Optional[List[str]] = None,
+    ) -> List[Edge]:
         """Alias for get_out_edges."""
-        return self.get_out_edges(vertex_id, *labels)
-
-    def get_in_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
-        """Retrieves incoming edges to vertex_id, optionally filtered by edge labels."""
-        edges = self._in_edges.get(vertex_id, [])
-        if not labels:
-            return list(edges)
-        target_labels = set(labels)
-        return [e for e in edges if e.label in target_labels]
-
-    def get_incoming_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
-        """Alias for get_in_edges."""
-        return self.get_in_edges(vertex_id, *labels)
-
-    def get_both_edges(self, vertex_id: str, *labels: str) -> List[Edge]:
-        """Retrieves all edges (in + out) connected to vertex_id."""
-        return self.get_out_edges(vertex_id, *labels) + self.get_in_edges(
-            vertex_id, *labels
+        return self.get_out_edges(
+            vertex_id,
+            *labels,
+            min_confidence=min_confidence,
+            min_tier=min_tier,
+            allowed_rules=allowed_rules,
+            allowed_mechanisms=allowed_mechanisms,
         )
+
+    def get_in_edges(
+        self,
+        vertex_id: str,
+        *labels: str,
+        min_confidence: Optional[float] = None,
+        min_tier: Optional[str] = None,
+        allowed_rules: Optional[List[str]] = None,
+        allowed_mechanisms: Optional[List[str]] = None,
+    ) -> List[Edge]:
+        """Retrieves incoming edges to vertex_id with optional label, confidence, and rule filtering."""
+        edges = self._in_edges.get(vertex_id, [])
+        target_labels = set(labels) if labels else None
+        return [
+            e
+            for e in edges
+            if _filter_edge(
+                e,
+                target_labels,
+                min_confidence,
+                min_tier,
+                allowed_rules,
+                allowed_mechanisms,
+            )
+        ]
+
+    def get_incoming_edges(
+        self,
+        vertex_id: str,
+        *labels: str,
+        min_confidence: Optional[float] = None,
+        min_tier: Optional[str] = None,
+        allowed_rules: Optional[List[str]] = None,
+        allowed_mechanisms: Optional[List[str]] = None,
+    ) -> List[Edge]:
+        """Alias for get_in_edges."""
+        return self.get_in_edges(
+            vertex_id,
+            *labels,
+            min_confidence=min_confidence,
+            min_tier=min_tier,
+            allowed_rules=allowed_rules,
+            allowed_mechanisms=allowed_mechanisms,
+        )
+
+    def get_both_edges(
+        self,
+        vertex_id: str,
+        *labels: str,
+        min_confidence: Optional[float] = None,
+        min_tier: Optional[str] = None,
+        allowed_rules: Optional[List[str]] = None,
+        allowed_mechanisms: Optional[List[str]] = None,
+    ) -> List[Edge]:
+        """Retrieves all edges (in + out) connected to vertex_id with optional filtering."""
+        out_e = self.get_out_edges(
+            vertex_id,
+            *labels,
+            min_confidence=min_confidence,
+            min_tier=min_tier,
+            allowed_rules=allowed_rules,
+            allowed_mechanisms=allowed_mechanisms,
+        )
+        in_e = self.get_in_edges(
+            vertex_id,
+            *labels,
+            min_confidence=min_confidence,
+            min_tier=min_tier,
+            allowed_rules=allowed_rules,
+            allowed_mechanisms=allowed_mechanisms,
+        )
+        return out_e + in_e
 
     def get_all_vertices(self) -> List[Vertex]:
         """Returns all vertices currently registered in the graph engine."""
