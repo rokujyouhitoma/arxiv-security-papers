@@ -1,0 +1,268 @@
+{
+  "version": "2026.09.1",
+  "ruleset_name": "Edge Inference Rule Ontology Master (EIROM)",
+  "description": "Standard ontological axioms and heuristic rules for vertex linking in Property Graph",
+  "rules": [
+    {
+      "rule_id": "RULE-EDGE-PAPER-TECH-REGEX-01",
+      "name": "Direct Technique ID Match",
+      "description": "Matches explicit MITRE ATT&CK technique IDs (e.g. T1190) in paper title, abstract, or text.",
+      "source_label": "Paper",
+      "target_label": "AttackTechnique",
+      "edge_label": "TARGETS",
+      "condition_type": "regex",
+      "condition_spec": {
+        "pattern": "\\b(T\\d{4}(?:\\.\\d{3})?)\\b"
+      },
+      "base_confidence": 1.0,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "combined",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-TECH-TITLE-02",
+      "name": "Title Technique Name Affinity",
+      "description": "Matches technique name directly inside paper title indicating strong topical affinity.",
+      "source_label": "Paper",
+      "target_label": "AttackTechnique",
+      "edge_label": "TARGETS",
+      "condition_type": "lexical",
+      "condition_spec": {
+        "target_field": "title",
+        "min_matches": 1
+      },
+      "base_confidence": 0.8,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "title",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-TECH-KEYWORD-03",
+      "name": "Title Important Keyphrase Match",
+      "description": "Matches technique-specific keywords or keyphrases in the paper title.",
+      "source_label": "Paper",
+      "target_label": "AttackTechnique",
+      "edge_label": "TARGETS",
+      "condition_type": "lexical",
+      "condition_spec": {
+        "target_field": "title",
+        "weight_per_keyword": 0.5
+      },
+      "base_confidence": 0.5,
+      "confidence_tier": "MEDIUM",
+      "evidence_spec": {
+        "target_field": "title",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-TECH-ABSTRACT-04",
+      "name": "Abstract Lexical Scoring",
+      "description": "Scores technique keywords and names found in abstract or full text context.",
+      "source_label": "Paper",
+      "target_label": "AttackTechnique",
+      "edge_label": "TARGETS",
+      "condition_type": "semantic_threshold",
+      "condition_spec": {
+        "min_threshold": 0.4,
+        "abstract_weight": 0.25
+      },
+      "base_confidence": 0.5,
+      "confidence_tier": "MEDIUM",
+      "evidence_spec": {
+        "target_field": "abstract",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-CWE-REGEX-01",
+      "name": "Direct CWE Weakness Identification",
+      "description": "Matches explicit Common Weakness Enumeration IDs (e.g. CWE-79) in paper text.",
+      "source_label": "Paper",
+      "target_label": "CWE",
+      "edge_label": "EXPLOITS_VULNERABILITY",
+      "condition_type": "regex",
+      "condition_spec": {
+        "pattern": "\\bCWE-\\d{1,5}\\b"
+      },
+      "base_confidence": 1.0,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "combined",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-TECH-STACK-01",
+      "name": "Target Technology Stack Identification",
+      "description": "Identifies target technology, platform, or architecture analyzed by the paper.",
+      "source_label": "Paper",
+      "target_label": "Technology",
+      "edge_label": "TARGETS_ASSET",
+      "condition_type": "lexical",
+      "condition_spec": {
+        "target_field": "combined",
+        "categories": ["os", "cloud", "firmware", "protocol"]
+      },
+      "base_confidence": 0.7,
+      "confidence_tier": "MEDIUM",
+      "evidence_spec": {
+        "target_field": "combined",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-DEFENSE-01",
+      "name": "Proposed Defense Method Identification",
+      "description": "Detects novel algorithmic or architectural security defense proposals.",
+      "source_label": "Paper",
+      "target_label": "DefenseMethod",
+      "edge_label": "PROPOSES_DEFENSE",
+      "condition_type": "lexical",
+      "condition_spec": {
+        "target_field": "title",
+        "focus": "defensive"
+      },
+      "base_confidence": 0.8,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "title",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-TECH-MITIGATE-AXIOM-01",
+      "name": "ATT&CK Mitigation Axiom",
+      "description": "Axiomatic relation linking MITRE Course of Action (Mitigation) to AttackTechnique.",
+      "source_label": "Mitigation",
+      "target_label": "AttackTechnique",
+      "edge_label": "MITIGATES",
+      "condition_type": "catalog_axiom",
+      "condition_spec": {
+        "catalog": "mitre-attack",
+        "relation": "mitigates"
+      },
+      "base_confidence": 1.0,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "catalog",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-TECH-CWE-AXIOM-02",
+      "name": "CAPEC/CWE Exploitation Axiom",
+      "description": "Axiomatic relation linking AttackTechnique to underlying software weakness (CWE).",
+      "source_label": "AttackTechnique",
+      "target_label": "CWE",
+      "edge_label": "EXPLOITS_VULNERABILITY",
+      "condition_type": "catalog_axiom",
+      "condition_spec": {
+        "catalog": "capec-cwe-mapping",
+        "relation": "exploits"
+      },
+      "base_confidence": 0.9,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "catalog",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-MITIGATION-CONTROL-01",
+      "name": "Mitigation to NIST/CIS Control Mapping",
+      "description": "Maps mitigation concepts to enterprise compliance security controls.",
+      "source_label": "Mitigation",
+      "target_label": "Control",
+      "edge_label": "IMPLEMENTS_CONTROL",
+      "condition_type": "catalog_axiom",
+      "condition_spec": {
+        "frameworks": ["NIST_SP_800_53", "CIS_Controls"]
+      },
+      "base_confidence": 0.85,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "catalog",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-FOCUS-OFFENSIVE-01",
+      "name": "Offensive Context Modifier",
+      "description": "Applies offensive context modifier when paper explores offensive attack exploitation.",
+      "source_label": "Paper",
+      "target_label": "AttackTechnique",
+      "edge_label": "TARGETS",
+      "condition_type": "context_ratio",
+      "condition_spec": {
+        "focus_direction": "offensive",
+        "dominant_factor": 2
+      },
+      "base_confidence": 0.75,
+      "confidence_tier": "MEDIUM",
+      "evidence_spec": {
+        "target_field": "combined",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-FOCUS-DEFENSIVE-02",
+      "name": "Defensive Context Modifier",
+      "description": "Applies defensive context modifier when paper proposes mitigation and countermeasures.",
+      "source_label": "Paper",
+      "target_label": "DefenseMethod",
+      "edge_label": "PROPOSES_DEFENSE",
+      "condition_type": "context_ratio",
+      "condition_spec": {
+        "focus_direction": "defensive",
+        "dominant_factor": 2
+      },
+      "base_confidence": 0.75,
+      "confidence_tier": "MEDIUM",
+      "evidence_spec": {
+        "target_field": "combined",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    }
+  ]
+}

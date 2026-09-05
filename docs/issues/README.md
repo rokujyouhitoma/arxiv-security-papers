@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **163** | Vertex紐付け推論判定ルール（Edge Inference Rule Ontology Master）のマスターデータ化およびオントロジー推論基盤の実装 | Feature | High | In Progress | [163-implement-edge-inference-rule-ontology-master.md](163-implement-edge-inference-rule-ontology-master.md) |
 | **162** | グラフ Edge への判断ルール・推論機構・確信度・エビデンス属性の統合付与と高精度グラフ探索基盤の実装 | Feature | High | In Progress | [162-enhance-graph-edge-inference-mechanism-and-confidence-attributes.md](162-enhance-graph-edge-inference-mechanism-and-confidence-attributes.md) |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **163** | Vertex紐付け推論判定ルール（Edge Inference Rule Ontology Master）のマスターデータ化およびオントロジー推論基盤の実装 | Feature | 2026-09-05 | [163-implement-edge-inference-rule-ontology-master.md](closed/163-implement-edge-inference-rule-ontology-master.md) |
 | **160** | Pure-Python STIX 2.1 CTI 推論 & ATT&CK Navigator レイヤー自動生成およびグラフDB永続化基盤の実装 | Feature | 2026-09-05 | [160-implement-pure-python-stix-cti-inference-and-navigator-layer.md](closed/160-implement-pure-python-stix-cti-inference-and-navigator-layer.md) |
 | **159** | Agent & LLM 出力ガードレール＆ツール呼出ガード（Output Guardrails & Tool Call Guard）の実装 | Feature / Security | 2026-09-05 | [159-implement-agentic-output-guardrails-and-tool-call-guard.md](closed/159-implement-agentic-output-guardrails-and-tool-call-guard.md) |
 | **158** | 構造化監査ログ & 前方安全ハッシュ連鎖ログ（Structured Audit & Chained Log）の実装 | Feature / Security | 2026-09-05 | [158-implement-structured-audit-and-chained-log.md](closed/158-implement-structured-audit-and-chained-log.md) |
