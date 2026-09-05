@@ -1,0 +1,58 @@
+{
+  "name": "arXiv Security Papers - Initial Layer",
+  "versions": {
+    "attack": "14",
+    "navigator": "4.5",
+    "layer": "4.5"
+  },
+  "domain": "enterprise-attack",
+  "description": "Auto-generated ATT&CK coverage layer from arXiv research papers",
+  "gradient": {
+    "colors": [
+      "#ffffff",
+      "#ffd966",
+      "#f6b26b",
+      "#e06666"
+    ],
+    "minValue": 0.0,
+    "maxValue": 10.0
+  },
+  "techniques": [
+    {
+      "techniqueID": "T1190",
+      "score": 1,
+      "color": "#ffd966",
+      "comment": "Papers (1): 2401.00001",
+      "enabled": true,
+      "metadata": [
+        {
+          "name": "paper_count",
+          "value": "1"
+        },
+        {
+          "name": "max_confidence",
+          "value": "1.0"
+        }
+      ],
+      "tactic": "initial-access"
+    },
+    {
+      "techniqueID": "T1566",
+      "score": 1,
+      "color": "#ffd966",
+      "comment": "Papers (1): 2401.00002",
+      "enabled": true,
+      "metadata": [
+        {
+          "name": "paper_count",
+          "value": "1"
+        },
+        {
+          "name": "max_confidence",
+          "value": "1.0"
+        }
+      ],
+      "tactic": "initial-access"
+    }
+  ]
+}

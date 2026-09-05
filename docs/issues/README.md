@@ -9,7 +9,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
-| **160** | Pure-Python STIX 2.1 CTI 推論 & ATT&CK Navigator レイヤー自動生成基盤の実装 | Feature | High | In Progress | [160-implement-pure-python-stix-cti-inference-and-navigator-layer.md](160-implement-pure-python-stix-cti-inference-and-navigator-layer.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
 | **148** | /dashboard tab=graph における未研究・未対策脅威（Research Gaps Only）専用絞り込みフィルタの実装 | Feature | Medium | In Progress | [148-implement-research-gaps-only-filter-in-graph-tab.md](148-implement-research-gaps-only-filter-in-graph-tab.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **160** | Pure-Python STIX 2.1 CTI 推論 & ATT&CK Navigator レイヤー自動生成およびグラフDB永続化基盤の実装 | Feature | 2026-09-05 | [160-implement-pure-python-stix-cti-inference-and-navigator-layer.md](closed/160-implement-pure-python-stix-cti-inference-and-navigator-layer.md) |
 | **159** | Agent & LLM 出力ガードレール＆ツール呼出ガード（Output Guardrails & Tool Call Guard）の実装 | Feature / Security | 2026-09-05 | [159-implement-agentic-output-guardrails-and-tool-call-guard.md](closed/159-implement-agentic-output-guardrails-and-tool-call-guard.md) |
 | **158** | 構造化監査ログ & 前方安全ハッシュ連鎖ログ（Structured Audit & Chained Log）の実装 | Feature / Security | 2026-09-05 | [158-implement-structured-audit-and-chained-log.md](closed/158-implement-structured-audit-and-chained-log.md) |
 | **157** | レートリミット＆リソース消費 DoS 防御（Rate Limiting & Circuit Breaker）の実装 | Feature / Security | 2026-09-05 | [157-implement-rate-limiting-and-dos-protection.md](closed/157-implement-rate-limiting-and-dos-protection.md) |
