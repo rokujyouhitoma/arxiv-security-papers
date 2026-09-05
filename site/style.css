@@ -54,6 +54,17 @@
   --accent-blue: var(--console-accent-navy);
   --font-heading: var(--console-font-display);
   --font-body: var(--console-font-sans);
+
+  /* Dashboard Port Compatibility */
+  --bg-main: var(--console-bg-canvas);
+  --bg-panel: var(--console-bg-panel);
+  --bg-panel-sub: var(--console-bg-subpanel);
+  --bg-card: var(--console-bg-card);
+  --border-dark: var(--console-border-dark);
+  --fg-main: var(--console-fg-primary);
+  --fg-muted: var(--console-fg-muted);
+  --accent-coral: var(--console-accent-coral);
+  --font-mono: var(--console-font-mono);
 }
 
 /* Base Reset */
@@ -1319,3 +1330,245 @@ mark.highlight {
   font-size: 12px;
   padding: 12px 0;
 }
+
+/* ==========================================================================
+   DSN-21 / Issue 169: Ported Product, System & Supervisor Components
+   ========================================================================== */
+
+/* Workspaces */
+.product-workspace,
+.system-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+/* Graph CTA Banner */
+.graph-cta-banner {
+  background: linear-gradient(135deg, rgba(61, 90, 128, 0.08), rgba(58, 125, 68, 0.06));
+  border: 1px solid var(--console-border-dark);
+  padding: 16px 20px;
+  border-radius: var(--console-radius-sm);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 2px 2px 0px var(--console-border-dark);
+}
+
+.graph-cta-info h3 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--console-fg-primary);
+}
+
+.graph-cta-info p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--console-fg-muted);
+  line-height: 1.4;
+}
+
+.btn-cta-graph {
+  background-color: var(--console-border-dark);
+  color: var(--console-bg-canvas);
+  border: 1px solid var(--console-border-dark);
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  border-radius: var(--console-radius-sm);
+  transition: all 0.15s ease;
+  box-shadow: 1px 1px 0px var(--console-border-dark);
+}
+
+.btn-cta-graph:hover {
+  background-color: var(--console-accent-navy);
+  color: #ffffff;
+}
+
+/* Metrics Panel Grid & Metric Cards */
+.metrics-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  background-color: var(--console-border-subtle);
+  gap: 1px;
+  border: 1px solid var(--console-border-dark);
+  border-radius: var(--console-radius-sm);
+  overflow: hidden;
+}
+
+.metric-card {
+  background-color: var(--console-bg-panel);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 190px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--console-border-subtle);
+  padding-bottom: 6px;
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--console-fg-primary);
+}
+
+.card-tag {
+  font-size: 10px;
+  color: var(--console-fg-muted);
+}
+
+/* Micro Bar Charts */
+.bar-chart-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.bar-label {
+  width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--console-fg-muted);
+}
+
+.bar-track {
+  flex: 1;
+  height: 12px;
+  background-color: var(--console-bg-subpanel);
+  border: 1px solid var(--console-border-subtle);
+  margin: 0 8px;
+  position: relative;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background-color: var(--console-accent-coral);
+  transition: width 0.3s ease;
+}
+
+.bar-value {
+  width: 40px;
+  text-align: right;
+  font-weight: bold;
+  color: var(--console-fg-primary);
+}
+
+/* Traversal Dot Matrix Grid (10x10) */
+.traversal-matrix {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+  flex: 1;
+}
+
+.traversal-dot {
+  aspect-ratio: 1;
+  border: 1px solid var(--console-border-subtle);
+  background-color: var(--console-bg-canvas);
+  border-radius: 2px;
+  transition: background-color 0.2s;
+}
+
+.traversal-dot.success { background-color: var(--console-accent-green); }
+.traversal-dot.deadend { background-color: var(--console-accent-coral); }
+.traversal-dot.active { background-color: var(--console-fg-primary); }
+
+/* Pipeline Status Bar */
+.pipeline-bar {
+  display: flex;
+  background-color: var(--console-bg-panel);
+  border: 1px solid var(--console-border-dark);
+  border-radius: var(--console-radius-sm);
+  padding: 8px 16px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--console-radius-sm);
+  border: 1px solid transparent;
+  color: var(--console-fg-muted);
+  font-family: var(--console-font-mono);
+}
+
+.pipeline-step.active {
+  background-color: var(--console-border-dark);
+  color: var(--console-bg-canvas);
+  font-weight: bold;
+  border-color: var(--console-border-dark);
+}
+
+.pipeline-step.completed {
+  color: var(--console-fg-primary);
+  font-weight: 600;
+}
+
+.pipeline-arrow {
+  color: var(--console-border-dark);
+  font-weight: bold;
+}
+
+/* System Workspace Grid */
+.system-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+/* Enterprise Console Tables */
+.console-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.console-table th {
+  border-bottom: 2px solid var(--console-border-dark);
+  background-color: var(--console-bg-panel);
+  color: var(--console-fg-primary);
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.console-table td {
+  border-bottom: 1px solid var(--console-border-subtle);
+  padding: 6px 10px;
+}
+
+.console-table tr:hover td {
+  background-color: rgba(61, 90, 128, 0.04);
+}
+

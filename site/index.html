@@ -72,6 +72,10 @@
                 <span class="nav-item-icon">📊</span>
                 <span class="nav-item-text">トレンド & サマリー</span>
               </a>
+              <a href="#/product" class="nav-item nav-tab-btn" data-tab="productTab" id="navProduct">
+                <span class="nav-item-icon">💡</span>
+                <span class="nav-item-text">プロダクト分析 & ROI</span>
+              </a>
               <a href="/dashboard.html?tab=graph" class="nav-item" id="navGraph">
                 <span class="nav-item-icon">🕸️</span>
                 <span class="nav-item-text">CTI ナレッジグラフ ↗</span>
@@ -108,13 +112,21 @@
               <span class="nav-group-arrow">▼</span>
             </button>
             <div class="nav-sub-items">
-              <a href="/dashboard.html?tab=telemetry" class="nav-item" id="navTelemetry">
+              <a href="#/system" class="nav-item nav-tab-btn" data-tab="systemTab" id="navSystem">
                 <span class="nav-item-icon">📈</span>
-                <span class="nav-item-text">プロセス監視 & テレメトリ ↗</span>
+                <span class="nav-item-text">システム観測 & パイプライン</span>
+              </a>
+              <a href="#/supervisor" class="nav-item nav-tab-btn" data-tab="supervisorTab" id="navSupervisor">
+                <span class="nav-item-icon">⚡</span>
+                <span class="nav-item-text">プロセス監視 (Supervisor Top)</span>
               </a>
               <a href="#/mcp" class="nav-item nav-tab-btn" data-tab="mcpTab" id="navMcp">
                 <span class="nav-item-icon">🔌</span>
                 <span class="nav-item-text">MCP ツールサンドボックス</span>
+              </a>
+              <a href="/dashboard.html?tab=telemetry" class="nav-item" id="navTelemetry">
+                <span class="nav-item-icon">📊</span>
+                <span class="nav-item-text">レガシーテレメトリ ↗</span>
               </a>
               <a href="/dashboard.html?tab=supervisor" class="nav-item" id="navLogs">
                 <span class="nav-item-icon">📑</span>
@@ -303,6 +315,408 @@
             <div class="mcp-output-wrapper" style="margin-top: 20px;">
               <h3 style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">JSON-RPC レスポンス:</h3>
               <pre id="mcpOutput" class="code-block">{ "status": "idle" }</pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 4: PRODUCT & ROI (DSN-21 / Issue 169) -->
+        <section id="productTab" class="tab-content">
+          <div class="product-workspace">
+            <!-- Graph CTA Banner -->
+            <div class="graph-cta-banner">
+              <div class="graph-cta-info">
+                <h3>🕸️ Knowledge &amp; CTI Graph 探索ワークスペース</h3>
+                <p>ATT&amp;CK・CWE・arXiv論文の完全接続ナレッジグラフおよび Research Gaps、因果チェーンを専用キャンバスで快適に探索・分析できます。</p>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <a href="/dashboard.html?tab=graph" class="btn-cta-graph">
+                  🔍 グラフ画面を開く
+                </a>
+                <a href="/dashboard.html?tab=graph&view=gaps" class="btn-cta-graph" style="background-color: var(--console-bg-panel); color: var(--console-fg-primary);">
+                  🚨 Gaps 探索
+                </a>
+              </div>
+            </div>
+
+            <!-- Product Analytics Panels -->
+            <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+              <!-- 1. Hop Budget Histogram -->
+              <div class="metric-card">
+                <div class="card-header">
+                  <span class="card-title">Hop Budget Distribution</span>
+                  <span class="card-tag" id="badgeHop">--</span>
+                </div>
+                <canvas id="hopCanvas" width="260" height="130"></canvas>
+              </div>
+
+              <!-- 2. Edge Ledger -->
+              <div class="metric-card">
+                <div class="card-header">
+                  <span class="card-title">Edge Ledger (Traffic)</span>
+                  <span class="card-tag" id="badgeEdgeLedger">--</span>
+                </div>
+                <div id="edgeLedgerList"></div>
+              </div>
+
+              <!-- 3. Token Savings & ROI (ST) -->
+              <div class="metric-card">
+                <div class="card-header">
+                  <span class="card-title">💰 Token Savings &amp; Cost ROI (ST)</span>
+                  <span class="card-tag" id="badgeTokenSavings" style="color: var(--console-accent-green); font-weight: bold;">--</span>
+                </div>
+                <canvas id="walkVsFlatCanvas" width="260" height="130"></canvas>
+                <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px; margin-top: 4px; font-size: 11px; display: flex; justify-content: space-between;">
+                  <span style="color: var(--console-fg-muted);">Estimated API ROI:</span>
+                  <strong style="color: var(--console-accent-green);" id="valTokenRoi">--</strong>
+                </div>
+              </div>
+
+              <!-- 4. Emerging Threat Vectors Top 5 (ST) -->
+              <div class="metric-card">
+                <div class="card-header">
+                  <span class="card-title">🛡️ Emerging Threat Vectors (ST)</span>
+                  <span class="card-tag" id="badgeThreatCoverage">--</span>
+                </div>
+                <div id="threatVectorsList" style="font-size: 11px; margin-top: 4px;">--</div>
+                <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px; margin-top: 6px; font-size: 10px; display: flex; justify-content: space-between;">
+                  <span style="color: var(--console-fg-muted);">Summary Coverage:</span>
+                  <strong style="color: var(--console-accent-navy);" id="valSummaryCoverage">--</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 5: SYSTEM & OBSERVABILITY (DSN-21 / Issue 169) -->
+        <section id="systemTab" class="tab-content">
+          <div class="system-workspace">
+            <!-- Pipeline Step Status Bar -->
+            <div class="pipeline-bar" id="pipelineBar">
+              <div class="pipeline-step completed" data-step="0">[1] CHUNK</div>
+              <div class="pipeline-arrow">&rarr;</div>
+              <div class="pipeline-step completed" data-step="1">[2] EXTRACT</div>
+              <div class="pipeline-arrow">&rarr;</div>
+              <div class="pipeline-step completed" data-step="2">[3] RESOLVE</div>
+              <div class="pipeline-arrow">&rarr;</div>
+              <div class="pipeline-step active" data-step="3">[4] LINK</div>
+              <div class="pipeline-arrow">&rarr;</div>
+              <div class="pipeline-step" data-step="4">[5] EMBED</div>
+              <div class="pipeline-arrow">&rarr;</div>
+              <div class="pipeline-step" data-step="5">[6] PRUNE</div>
+            </div>
+
+            <div class="system-grid">
+              <!-- 1. OBF Live Distributed Tracing -->
+              <div class="metric-card" style="background-color: var(--console-bg-subpanel);">
+                <div class="card-header">
+                  <span class="card-title">🛡️ OBF Telemetry (OTel / OpenInference)</span>
+                  <span class="card-tag" id="badgeObfLive" style="color: var(--console-accent-green); font-weight: bold;">--</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 2px;">
+                  <div class="bar-chart-row">
+                    <span class="bar-label">LLM Spans</span>
+                    <div class="bar-track"><div class="bar-fill" id="trackObfLlm" style="width: 0%; background-color: var(--console-accent-navy);"></div></div>
+                    <span class="bar-value" id="valObfLlmSpans">--</span>
+                  </div>
+                  <div class="bar-chart-row">
+                    <span class="bar-label">Retriever</span>
+                    <div class="bar-track"><div class="bar-fill" id="trackObfRetriever" style="width: 0%; background-color: var(--console-accent-green);"></div></div>
+                    <span class="bar-value" id="valObfRetrieverSpans">--</span>
+                  </div>
+                  <div class="bar-chart-row">
+                    <span class="bar-label">Tool Calls</span>
+                    <div class="bar-track"><div class="bar-fill" id="trackObfTool" style="width: 0%; background-color: var(--console-accent-coral);"></div></div>
+                    <span class="bar-value" id="valObfToolSpans">--</span>
+                  </div>
+                  <div class="bar-chart-row">
+                    <span class="bar-label">Pipeline/WAL</span>
+                    <div class="bar-track"><div class="bar-fill" id="trackObfPipeline" style="width: 0%; background-color: var(--console-border-dark);"></div></div>
+                    <span class="bar-value" id="valObfPipelineSpans">--</span>
+                  </div>
+                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px; margin-top: 6px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                      <span style="color: var(--console-fg-muted);">W3C TRACEPARENT:</span>
+                      <code style="font-size: 10px; font-weight: bold;" id="valObfTraceparent">--</code>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                      <span style="color: var(--console-fg-muted);">OTLP JSON (v1/traces):</span>
+                      <strong style="color: var(--console-accent-green);" id="valObfStatusDetail">--</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Active Pipeline & Intelligence Loop Monitor -->
+              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">🔄 Active Loop &amp; Cycle Monitor</span>
+                  <span class="card-tag" id="loopBadge" style="color: var(--console-accent-coral); font-weight: bold;">--</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 2px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Active Cycle:</span>
+                    <strong id="loopCycleId" style="font-family: var(--console-font-mono); font-size: 10px;">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Loop Schedule:</span>
+                    <span id="loopSchedule">--</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Last Batch Sync:</span>
+                    <span id="loopLastSync">--</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="color: var(--console-fg-muted);">Next Execution:</span>
+                    <strong style="color: var(--console-accent-navy);" id="loopNextSync">--</strong>
+                  </div>
+                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
+                    <div style="font-size: 10px; color: var(--console-fg-muted); margin-bottom: 4px;">INTELLIGENCE DAG PHASES:</div>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap; font-size: 9px; font-weight: bold;" id="loopPhaseList"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3. Traversal Matrix (100 Walks) -->
+              <div class="metric-card">
+                <div class="card-header">
+                  <span class="card-title">Traversal Matrix (100 Walks)</span>
+                  <span class="card-tag" id="badgeTraversalPass" style="color: var(--console-accent-green); font-weight: bold;">--</span>
+                </div>
+                <div class="traversal-matrix" id="traversalMatrix"></div>
+              </div>
+
+              <!-- 4. Dead-End & Self-Healing Ledger -->
+              <div class="metric-card">
+                <div class="card-header">
+                  <span class="card-title">Dead-End &amp; Pruning Ledger</span>
+                  <span class="card-tag" id="badgeDeadEndTotal">--</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span>Depth Limit Exceeded</span>
+                    <strong style="color: var(--console-accent-coral);" id="valDeadEndDepth">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span>Cycle Loop Detected</span>
+                    <strong id="valDeadEndLoop">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Context Budget Clamp</span>
+                    <strong id="valDeadEndBudget">--</strong>
+                  </div>
+                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
+                    <div style="display: flex; justify-content: space-between;">
+                      <span style="color: var(--console-fg-muted);">PRUNE Self-Heal Rate:</span>
+                      <strong style="color: var(--console-accent-green);" id="valDeadEndHealRate">--</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 5. Service Management & SLA/SLO (SM) -->
+              <div class="metric-card" style="background-color: var(--console-bg-subpanel);">
+                <div class="card-header">
+                  <span class="card-title">🎯 Service Operations &amp; SLO (SM)</span>
+                  <span class="card-tag" id="badgeSmSlo" style="color: var(--console-accent-green); font-weight: bold;">--</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span>4x Daily Batch SLO (30D):</span>
+                    <strong style="color: var(--console-accent-green);" id="valSmPipelineSlo">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span>Upstream Resilience (429 Rate):</span>
+                    <strong style="color: var(--console-accent-navy);" id="valSmApiResilience">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>WAL &amp; State Sync Lag:</span>
+                    <strong id="valSmWalLag">--</strong>
+                  </div>
+                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
+                    <div style="display: flex; justify-content: space-between;">
+                      <span style="color: var(--console-fg-muted);">Batch Success Streak:</span>
+                      <strong style="color: var(--console-accent-green);" id="valSmStreak">--</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 6. Database & Storage Engine Performance & IOPS -->
+              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">🗄️ Database Performance &amp; IOPS</span>
+                  <span class="card-tag" id="badgeDbEngine" style="color: var(--console-accent-navy); font-weight: bold;">MVCC + Dual CSR</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span>Read / Write IOPS:</span>
+                    <strong style="color: var(--console-accent-green);" id="valDbIops">-- / -- IOPS</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span>Avg / p99 Latency:</span>
+                    <strong style="color: var(--console-accent-navy);" id="valDbLatency">-- / -- ms</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Buffer Pool / Vector Cache Hit:</span>
+                    <strong style="color: var(--console-accent-green);" id="valDbCacheHit">-- / --</strong>
+                  </div>
+                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
+                    <div style="display: flex; justify-content: space-between;">
+                      <span style="color: var(--console-fg-muted);">WAL Throughput / Sync Lag:</span>
+                      <strong style="color: var(--console-fg-primary);" id="valDbWalLag">-- KB/s (0.18ms)</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Database Tables & Storage Breakdown Table -->
+            <div class="metric-card" style="margin-top: 14px; background-color: var(--console-bg-subpanel);">
+              <div class="card-header" style="border-bottom: 2px solid var(--console-border-dark); padding-bottom: 8px; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 14px;">🗃️</span>
+                  <span class="card-title" style="font-size: 13px; font-weight: bold;">Database Tables &amp; Physical Storage Ledger</span>
+                </div>
+                <div style="display: flex; gap: 12px; font-size: 11px; font-family: var(--console-font-mono);">
+                  <span>Database: <strong id="valDbCurrentDb" style="color: var(--console-accent-navy);">--</strong></span>
+                  <span>Tables: <strong id="badgeDbTableCount" style="color: var(--console-accent-navy);">--</strong></span>
+                  <span>Total Rows: <strong id="badgeDbTotalRows" style="color: var(--console-accent-coral);">--</strong></span>
+                  <span>Total Size: <strong id="badgeDbTotalSize" style="color: var(--console-accent-green);">--</strong></span>
+                </div>
+              </div>
+
+              <!-- SQL Query Terminal Snippet -->
+              <div style="background-color: var(--console-bg-canvas); border: 1px solid var(--console-border-dark); border-radius: 4px; padding: 8px 12px; margin-bottom: 10px; font-family: var(--console-font-mono); font-size: 11px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--console-fg-muted);">
+                  <span>⚡ Executed SQL Introspection Queries:</span>
+                  <span style="color: var(--console-accent-green);">● Status: OK (0.001ms)</span>
+                </div>
+                <div style="color: var(--console-accent-navy); font-weight: 500;">
+                  1. <code style="color: var(--console-accent-coral);">SHOW DATABASES;</code> &rarr; <span style="color: var(--console-fg-primary);" id="sqlResultDatabases">--</span>
+                </div>
+                <div style="color: var(--console-accent-navy); font-weight: 500; margin-top: 2px;">
+                  2. <code style="color: var(--console-accent-coral);">SHOW TABLES FROM arxiv_security_db;</code> &rarr; <span style="color: var(--console-fg-primary);" id="sqlResultTablesSummary">--</span>
+                </div>
+              </div>
+
+              <div style="overflow-x: auto;">
+                <table class="console-table" style="width: 100%; border-collapse: collapse; font-family: var(--console-font-mono); font-size: 11px; text-align: left;">
+                  <thead>
+                    <tr style="border-bottom: 2px solid var(--console-border-dark); background-color: var(--console-bg-panel);">
+                      <th style="padding: 6px 8px;">Table / Store</th>
+                      <th style="padding: 6px 8px;">Category</th>
+                      <th style="padding: 6px 8px;">Storage Engine / Format</th>
+                      <th style="padding: 6px 8px; text-align: right;">Row Count</th>
+                      <th style="padding: 6px 8px; text-align: right;">Data Size</th>
+                      <th style="padding: 6px 8px;">Primary Key / Indexing</th>
+                    </tr>
+                  </thead>
+                  <tbody id="databaseTablesTableBody">
+                    <tr>
+                      <td colspan="6" style="padding: 16px; text-align: center; color: var(--console-fg-muted);">Loading database tables telemetry...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 6: SUPERVISOR & PROCESS TOP (DSN-21 / Issue 169) -->
+        <section id="supervisorTab" class="tab-content">
+          <div class="system-workspace">
+            <!-- Arbiter Overview KPI Grid -->
+            <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 12px;">
+              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">⚡ Arbiter Process</span>
+                  <span class="card-tag" id="badgeArbiterStatus" style="color: var(--console-accent-green); font-weight: bold;">--</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Arbiter PID:</span>
+                    <strong id="valArbiterPid" style="font-family: var(--console-font-mono); color: var(--console-accent-navy);">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Uptime:</span>
+                    <span id="valArbiterUptime" style="font-family: var(--console-font-mono);">--</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--console-fg-muted);">Memory (RSS):</span>
+                    <strong id="valArbiterMemory" style="color: var(--console-accent-coral);">--</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">📦 Worker Pools</span>
+                  <span class="card-tag" id="badgePoolCount">--</span>
+                </div>
+                <div id="valArbiterPools" style="font-size: 11px; margin-top: 4px; font-family: var(--console-font-mono);">
+                  --
+                </div>
+              </div>
+
+              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">🔌 IPC Control Channel</span>
+                  <span class="card-tag" id="badgeIpcStatus" style="color: var(--console-accent-green); font-weight: bold;">--</span>
+                </div>
+                <div style="font-size: 10px; margin-top: 4px; color: var(--console-fg-muted);">
+                  <div><strong>Socket:</strong> <code style="font-size: 9px;">outputs/supervisor/control.sock</code></div>
+                  <div style="margin-top: 3px;"><strong>Protocol:</strong> JSON-RPC 2.0 (Zero-Dependency)</div>
+                  <div style="margin-top: 3px;"><strong>Failover:</strong> <span style="color: var(--console-accent-green); font-weight: bold;">Active Self-Healing</span></div>
+                </div>
+              </div>
+
+              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">⚡ Architecture &amp; Latency (SA)</span>
+                  <span class="card-tag" id="badgeSaLatency" style="color: var(--console-accent-green); font-weight: bold;">--</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Tail Latency (p95/p99):</span>
+                    <strong style="color: var(--console-accent-coral);" id="valSaTailLatency">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Worker MTTR (Self-Heal):</span>
+                    <strong style="color: var(--console-accent-green);" id="valSaMttr">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--console-fg-muted);">Ontology Density:</span>
+                    <strong id="valSaDensity">--</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Supervisor Top Workers Table -->
+            <div class="metric-card" style="padding: 12px; overflow-x: auto;">
+              <div class="card-header" style="margin-bottom: 8px;">
+                <span class="card-title" style="font-size: 13px; font-weight: bold;">⚡ Live Supervisor Workers Top Table (CLI top equivalent)</span>
+                <span class="card-tag" id="badgeTotalWorkers">--</span>
+              </div>
+              <table class="console-table" style="width: 100%; border-collapse: collapse; font-family: var(--console-font-mono); font-size: 11px;">
+                <thead>
+                  <tr style="border-bottom: 2px solid var(--console-border-dark); text-align: left; color: var(--console-fg-muted);">
+                    <th style="padding: 6px 8px;">PID</th>
+                    <th style="padding: 6px 8px;">TYPE / ROLE</th>
+                    <th style="padding: 6px 8px;">STATUS</th>
+                    <th style="padding: 6px 8px;">HEALTH</th>
+                    <th style="padding: 6px 8px; text-align: right;">REQ</th>
+                    <th style="padding: 6px 8px; text-align: right;">RPS</th>
+                    <th style="padding: 6px 8px; text-align: right;">IDLE</th>
+                    <th style="padding: 6px 8px; text-align: right;">MEM (PSS)</th>
+                  </tr>
+                </thead>
+                <tbody id="supervisorWorkersTableBody">
+                  <tr>
+                    <td colspan="8" style="padding: 16px; text-align: center; color: var(--console-fg-muted);">Connecting to Supervisor Top telemetry...</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

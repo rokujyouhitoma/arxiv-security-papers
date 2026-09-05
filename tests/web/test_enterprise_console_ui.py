@@ -137,5 +137,57 @@ def test_enterprise_console_interaction_scripts() -> None:
 
     # Hash routing
     assert "hashchange" in js_text, "Hash routing event listener required"
-    assert "#/trends" in js_text, "Trends hash route supported"
-    assert "#/mcp" in js_text, "MCP hash route supported"
+    assert "popstate" in js_text, "Popstate history event listener required"
+    assert "productTab" in js_text, "Product tab routing supported"
+    assert "systemTab" in js_text, "System tab routing supported"
+    assert "supervisorTab" in js_text, "Supervisor tab routing supported"
+
+
+def test_ported_product_system_supervisor_views() -> None:
+    """Verify ported tabs, canvas charts, and telemetry tables exist in index.html (Issue 169)."""
+    content = Path("site/index.html").read_text(encoding="utf-8")
+
+    # 1. Navigation items
+    assert 'id="navProduct"' in content, "navProduct nav item required"
+    assert 'id="navSystem"' in content, "navSystem nav item required"
+    assert 'id="navSupervisor"' in content, "navSupervisor nav item required"
+
+    # 2. Main content sections
+    assert 'id="productTab"' in content, "productTab section required"
+    assert 'id="systemTab"' in content, "systemTab section required"
+    assert 'id="supervisorTab"' in content, "supervisorTab section required"
+
+    # 3. Canvas and visual elements
+    assert 'id="hopCanvas"' in content, "Hop budget canvas required"
+    assert 'id="walkVsFlatCanvas"' in content, "Walk vs Flat canvas required"
+    assert 'id="traversalMatrix"' in content, "Traversal matrix container required"
+    assert 'id="pipelineBar"' in content, "Pipeline status bar required"
+
+    # 4. Storage ledger and supervisor top tables
+    assert 'id="databaseTablesTableBody"' in content, "Database tables body required"
+    assert (
+        'id="supervisorWorkersTableBody"' in content
+    ), "Supervisor workers body required"
+
+
+def test_ported_telemetry_script_handlers() -> None:
+    """Verify site/app.js contains calculation, rendering, and SSE routines (Issue 169)."""
+    js_text = Path("site/app.js").read_text(encoding="utf-8")
+
+    # Routing and tab config
+    assert "TAB_CONFIG" in js_text, "TAB_CONFIG object required"
+    assert "productTab" in js_text, "productTab in TAB_CONFIG required"
+    assert "systemTab" in js_text, "systemTab in TAB_CONFIG required"
+    assert "supervisorTab" in js_text, "supervisorTab in TAB_CONFIG required"
+
+    # Analytics routines
+    assert "calculateAndDrawHopHistogram" in js_text, "Hop histogram routine required"
+    assert "updateRealEdgeLedger" in js_text, "Edge ledger routine required"
+    assert "drawWalkChart" in js_text, "Walk chart routine required"
+    assert "renderTraversalMatrix" in js_text, "Traversal matrix routine required"
+
+    # Telemetry and SSE streaming
+    assert "updateDatabaseMetrics" in js_text, "Database metrics updater required"
+    assert "updateSupervisorFromStream" in js_text, "Supervisor updater required"
+    assert "syncConsoleTelemetry" in js_text, "Console telemetry sync required"
+    assert "initSseLiveStream" in js_text, "SSE live stream initializer required"
