@@ -74,8 +74,24 @@
       min-height: 48px;
       max-height: 48px;
       box-sizing: border-box;
-      font-family: var(--console-font-sans);
+      background-color: var(--console-bg-panel, #ebe5d8);
+      border-bottom: 2px solid var(--console-border-dark, #2b2b2b);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 100;
+      flex-shrink: 0;
+      font-family: var(--console-font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--console-fg-primary, #2b2b2b);
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    header.console-header,
+    header.console-header * {
+      box-sizing: border-box;
     }
 
     header.console-header.header-hidden,
