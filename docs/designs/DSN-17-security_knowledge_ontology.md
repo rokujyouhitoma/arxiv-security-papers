@@ -28,6 +28,15 @@
   - [5.2 確信度スコアリング（Confidence Weighting）](#52-確信度スコアリングconfidence-weighting)
 - [6. クラス設計・型アノテーション仕様 (`src/ontology/`)](#6-クラス設計型アノテーション仕様-srcontology)
 - [7. 品質ゲート・テスト・検証計画](#7-品質ゲートテスト検証計画)
+- [8. （予約）](#8-予約)
+- [9. （予約）](#9-予約)
+- [10. arXiv 論文・MITRE ATT&CK・CWE 3軸ナレッジグラフデータモデルおよびハイブリッド抽出パイプライン仕様](#10-arxiv-論文mitre-attckcwe-3軸ナレッジグラフデータモデルおよびハイブリッド抽出パイプライン仕様)
+- [11. Vertex間エッジ紐付け判定ルールマスター（EIROM: Edge Inference Rule Ontology Master）仕様](#11-vertex間エッジ紐付け判定ルールマスターeirom-edge-inference-rule-ontology-master仕様)
+  - [11.1 ルールマスター管理のアーキテクチャ意義](#111-ルールマスター管理のアーキテクチャ意義)
+  - [11.2 ルールマスターメタスキーマ仕様](#112-ルールマスターメタスキーマ仕様)
+  - [11.3 標準オントロジー推論ルールカタログ](#113-標準オントロジー推論ルールカタログ)
+  - [11.4 競合調停・マルチルール合成公理](#114-競合調停マルチルール合成公理)
+  - [11.5 監査証跡・エビデンスおよび再評価ライフサイクル公理](#115-監査証跡エビデンスおよび再評価ライフサイクル公理)
 
 ---
 
@@ -315,5 +324,89 @@ graph LR
    - `Gold`: 正規表現完全一致または公式メタデータ照合（確証度 $\ge 0.90$）
    - `Silver`: セマンティック類似度上位一致（確証度 $0.70 \le c < 0.90$）
    - `Bronze`: キーワード共起・トピック関連（確証度 $< 0.70$）
+
+---
+
+# 11. Vertex間エッジ紐付け判定ルールマスター（EIROM: Edge Inference Rule Ontology Master）仕様
+
+## 11.1 ルールマスター管理のアーキテクチャ意義
+セキュリティナレッジグラフにおいて、ノード（エンティティ定義）が明確であっても、ノード間を結ぶエッジの導出基準（推論判定ロジック）がアプリケーションコード内の `if` 文や個別関数にハードコードされている場合、以下の重大な課題が生じる：
+1. **説明可能性・監査性の欠如**: なぜこの論文と攻撃手法が紐づいたのか、外部監査・ユーザーが判定根拠・適用規則を客観的に追跡できない。
+2. **モデル改訂時の非対称性**: 推論ルールを変更・改善した際、過去に生成されたエッジとのバージョン差分や影響範囲の特定が不可能となる。
+3. **推論ライフサイクルの硬直化**: 論文テキスト更新時にどのエッジを再評価・再推論すべきか（Invalidation Lifecycle）が判定できない。
+
+本オントロジーでは、**「どのエンティティとどのエンティティを、どのような根拠・条件・重みで結ぶか」を推論公理（TBox Inference Axiom）として独立したマスターデータ（EIROM）として一元管理**する。
+
+```mermaid
+flowchart LR
+    subgraph Master ["📜 Edge Inference Rule Master (master_rules.json)"]
+        R1["RULE-EDGE-PAPER-TECH-001<br>(Regex Direct ID Match)"]
+        R2["RULE-EDGE-PAPER-TECH-002<br>(Title Exact Keyphrase)"]
+        R3["RULE-EDGE-TECH-MITIGATE-001<br>(ATT&CK Mitigation Matrix)"]
+    end
+
+    subgraph Engine ["⚙️ Rule-Driven Inference Engine"]
+        Registry["RuleRegistry (Schema Validator & Indexer)"]
+        Infer["TechniqueInferenceEngine / GraphBridge"]
+    end
+
+    subgraph Graph ["🕸️ PropertyGraphEngine"]
+        V1[":Paper"] -->|Edge Properties:<br>rule_id, confidence,<br>evidence, snippet, hash| V2[":AttackTechnique"]
+    end
+
+    Master --> Registry --> Infer --> Graph
+```
+
+## 11.2 ルールマスターメタスキーマ仕様
+
+ルールマスターデータは、以下の JSON / Typed Dataclass スキーマに従い、厳格にバリデーションされる：
+
+```python
+@dataclass(frozen=True)
+class EdgeInferenceRule:
+    rule_id: str                   # 一意識別子 (例: RULE-EDGE-PAPER-ATTACK-001)
+    name: str                      # ルール表示名
+    description: str               # 推論根拠の説明
+    source_label: str              # 始点ノード種別 (Paper, AttackTechnique, etc.)
+    target_label: str              # 終点ノード種別 (AttackTechnique, Vulnerability, etc.)
+    edge_label: str                # 導出されるエッジ関係述語 (TARGETS, PROPOSES_DEFENSE, MITIGATES, etc.)
+    condition_type: str            # 条件型 (regex, lexical, semantic_threshold, catalog_axiom)
+    condition_spec: Dict[str, Any] # パラメータ (パターン、キーワードリスト、閾値、対象フィールド)
+    base_confidence: float         # 基本確信度スコア (0.0 〜 1.0)
+    confidence_tier: str           # 確信度階層 (HIGH, MEDIUM, LOW)
+    evidence_spec: Dict[str, Any]  # エビデンス抽出仕様 (スニペット長、抽出フィールド)
+    version: str                   # ルール改訂版 (例: 2026.09.1)
+    is_active: bool = True         # 有効/無効フラグ
+```
+
+## 11.3 標準オントロジー推論ルールカタログ
+
+| Rule ID | ルール名 | 始点 → 終点 | エッジ述語 | 判定条件型 / 概要 | 基本確信度 / Tier |
+| :--- | :--- | :---: | :---: | :--- | :---: |
+| `RULE-EDGE-PAPER-TECH-REGEX-01` | Direct Technique ID Match | `Paper` → `AttackTechnique` | `TARGETS` / `PROPOSES_DEFENSE` / `DISCUSSES` | `r"\b(T\d{4}(?:\.\d{3})?)\b"` 正規表現検知 | `1.0` / `HIGH` |
+| `RULE-EDGE-PAPER-TECH-TITLE-02` | Title Keyphrase Affinity | `Paper` → `AttackTechnique` | `TARGETS` / `PROPOSES_DEFENSE` / `DISCUSSES` | タイトルにおける手法正式名称・同義語完全一致 | `0.8` / `HIGH` |
+| `RULE-EDGE-PAPER-TECH-ABSTRACT-03` | Abstract Lexical Scoring | `Paper` → `AttackTechnique` | `TARGETS` / `PROPOSES_DEFENSE` / `DISCUSSES` | アブストラクト本文のセキュリティ専門語彙頻度重み付け | `0.4〜0.7` / `MEDIUM` |
+| `RULE-EDGE-PAPER-CWE-REGEX-01` | Direct CWE Identification | `Paper` → `CWE` | `DISCLOSES` | `r"\b(CWE-\d+)\b"` 正規表現検知 | `1.0` / `HIGH` |
+| `RULE-EDGE-TECH-MITIGATE-AXIOM-01` | ATT&CK Mitigation Axiom | `DefenseMitigation` → `AttackTechnique` | `MITIGATES` | MITRE ATT&CK Enterprise Matrix 緩和公理照合 | `1.0` / `HIGH` |
+| `RULE-EDGE-TECH-CWE-AXIOM-02` | CAPEC/CWE Exploitation Axiom | `AttackTechnique` → `CWE` | `EXPLOITS_VULNERABILITY` | CAPEC 関連脆弱性マッピング公理照合 | `0.9` / `HIGH` |
+| `RULE-EDGE-FOCUS-OFFENSIVE-01` | Offensive Research Context | `Paper` → `AttackTechnique` | `TARGETS` | 攻撃系語彙（exploit, attack, poc, bypass等）優勢 | `Context Modifier` |
+| `RULE-EDGE-FOCUS-DEFENSIVE-02` | Defensive Research Context | `Paper` → `AttackTechnique` | `PROPOSES_DEFENSE` | 防御系語彙（defense, mitigate, countermeasure等）優勢 | `Context Modifier` |
+
+## 11.4 競合調停・マルチルール合成公理
+同一の `(Source, Target)` ペアに対して複数の推論ルールが同時に成立した場合、以下の公理に従ってエッジの最終確信度と属性を合成する：
+
+1. **Max-Score 採択原則**:
+   $$\text{Final Confidence} = \max_{r \in R_{\text{applied}}} (\text{Confidence}(r))$$
+   最も確信度の高いルールを `primary_rule_id` として採用する。
+2. **エビデンス集約原則**:
+   成立した全ルールの識別子を `applied_rules: List[str]` に保持し、各ルールが抽出した証拠スニペットを `evidences: List[Dict]` に完全集約する。
+3. **攻防コンテキスト調停**:
+   攻撃系キーワード数 $N_{\text{off}}$ と防御系キーワード数 $N_{\text{def}}$ を比較し、有意差（$N \ge 2$ かつ大なり）がある側を関係述語（`TARGETS` vs `PROPOSES_DEFENSE`）に昇格させる。同等または僅差の場合は中立の `DISCUSSES` を割り当てる。
+
+## 11.5 監査証跡・エビデンスおよび再評価ライフサイクル公理
+1. **データ整合性フィンガープリント (`source_text_hash`)**:
+   エッジ作成時、判定対象となった論文テキスト（タイトル + 要約）の SHA-256 ハッシュ（先頭 16 桁）をエッジプロパティに刻印する。
+2. **ルールバージョンと無効化公理**:
+   ルールマスターファイル（`master_rules.json`）の `version` が更新された場合、または論文原本のハッシュが変化した場合、システムは当該エッジを `validation_status = "stale"` としてマークし、自律的に差分再推論を実行する。
 
 
