@@ -6,6 +6,13 @@ and fact triple extraction.
 """
 
 from .extractor import OntologyExtractor
+from .rule_registry import EdgeInferenceRuleRegistry
+from .rule_schema import (
+    ConfidenceTier,
+    EdgeInferenceRule,
+    EvidenceExtractionSpec,
+    RuleConditionType,
+)
 from .schema import (
     AttackTechniqueEntity,
     BaseEntity,
@@ -37,4 +44,9 @@ __all__ = [
     "SecurityOntologySchema",
     "TaxonomyRegistry",
     "OntologyExtractor",
+    "RuleConditionType",
+    "ConfidenceTier",
+    "EvidenceExtractionSpec",
+    "EdgeInferenceRule",
+    "EdgeInferenceRuleRegistry",
 ]

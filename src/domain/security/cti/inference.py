@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from ontology.rule_registry import EdgeInferenceRuleRegistry
+
 # Regex pattern for direct ATT&CK Technique ID detection
 TECHNIQUE_ID_REGEX = re.compile(r"\b(T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
 
@@ -209,6 +211,31 @@ BUILTIN_TECHNIQUE_CATALOG: Dict[str, Dict[str, Any]] = {
 }
 
 
+@dataclass
+class _TechCandidate:
+    """Internal candidate representation with matched keywords and applied rules."""
+
+    score: float
+    matched_keywords: List[str] = field(default_factory=list)
+    applied_rules: List[str] = field(default_factory=list)
+    primary_rule_id: Optional[str] = None
+
+
+def _select_primary_rule(applied_rules: List[str]) -> Optional[str]:
+    """Selects primary rule by predefined priority hierarchy."""
+    priority_order = [
+        "RULE-EDGE-PAPER-TECH-REGEX-01",
+        "RULE-EDGE-PAPER-TECH-TITLE-02",
+        "RULE-EDGE-PAPER-TECH-KEYWORD-03",
+        "RULE-EDGE-PAPER-TECH-ABSTRACT-04",
+        "RULE-EDGE-FOCUS-OFFENSIVE-01",
+    ]
+    for rule_id in priority_order:
+        if rule_id in applied_rules:
+            return rule_id
+    return applied_rules[0] if applied_rules else None
+
+
 @dataclass(frozen=True)
 class InferredTechnique:
     """Represents a technique inferred from text context."""
@@ -219,6 +246,8 @@ class InferredTechnique:
     confidence: float
     matched_keywords: List[str] = field(default_factory=list)
     research_focus: str = "analysis"  # offensive, defensive, analysis
+    applied_rules: List[str] = field(default_factory=list)
+    primary_rule_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serializes inference result to dict."""
@@ -229,6 +258,8 @@ class InferredTechnique:
             "confidence": round(self.confidence, 4),
             "matched_keywords": self.matched_keywords,
             "research_focus": self.research_focus,
+            "applied_rules": self.applied_rules,
+            "primary_rule_id": self.primary_rule_id,
         }
 
 
@@ -239,11 +270,13 @@ class TechniqueInferenceEngine:
         self,
         custom_catalog: Optional[Dict[str, Dict[str, Any]]] = None,
         min_confidence: float = 0.4,
+        rule_registry: Optional[EdgeInferenceRuleRegistry] = None,
     ) -> None:
         self.catalog = dict(BUILTIN_TECHNIQUE_CATALOG)
         if custom_catalog:
             self.catalog.update(custom_catalog)
         self.min_confidence = min_confidence
+        self.rule_registry = rule_registry or EdgeInferenceRuleRegistry()
 
     def infer(
         self,
@@ -262,15 +295,15 @@ class TechniqueInferenceEngine:
         # 1. Direct Regex ID detection
         direct_matches = self._find_direct_technique_ids(title, text)
 
-        # 2. Vocabulary & keyword score map: tech_id -> (score, matched_kws)
-        score_map = self._evaluate_catalog_scores(title_lower, combined_text)
+        # 2. Vocabulary & keyword score map
+        candidate_map = self._evaluate_catalog_scores(title_lower, combined_text)
 
         # Merge direct matches into score map with max confidence
         for tech_id in direct_matches:
-            self._apply_direct_match(score_map, tech_id)
+            self._apply_direct_match(candidate_map, tech_id)
 
         # Build InferredTechnique results
-        results = self._build_inferred_results(score_map, research_focus)
+        results = self._build_inferred_results(candidate_map, research_focus)
         return sorted(results, key=lambda x: x.confidence, reverse=True)
 
     @staticmethod
@@ -310,49 +343,62 @@ class TechniqueInferenceEngine:
         self,
         title_lower: str,
         combined_text: str,
-    ) -> Dict[str, Tuple[float, List[str]]]:
+    ) -> Dict[str, _TechCandidate]:
         """Computes keyword scores for each technique in the catalog."""
-        scores: Dict[str, Tuple[float, List[str]]] = {}
+        candidates: Dict[str, _TechCandidate] = {}
         for tech_id, meta in self.catalog.items():
-            score, kws = self._score_single_technique(title_lower, combined_text, meta)
-            if score > 0.0:
-                scores[tech_id] = (score, kws)
-        return scores
+            cand = self._score_single_technique(title_lower, combined_text, meta)
+            if cand is not None:
+                candidates[tech_id] = cand
+        return candidates
 
     @staticmethod
     def _score_name(
         name: str,
         title_lower: str,
         combined_text: str,
-    ) -> Tuple[float, List[str]]:
+    ) -> Tuple[float, List[str], List[str]]:
         """Scores technique name against text."""
         name_lower = name.lower()
         if not name_lower:
-            return 0.0, []
+            return 0.0, [], []
         if name_lower in title_lower:
-            return 0.8, [name_lower]
+            return 0.8, [name_lower], ["RULE-EDGE-PAPER-TECH-TITLE-02"]
         if name_lower in combined_text:
-            return 0.4, [name_lower]
-        return 0.0, []
+            return 0.4, [name_lower], ["RULE-EDGE-PAPER-TECH-ABSTRACT-04"]
+        return 0.0, [], []
 
     @staticmethod
+    def _score_single_keyword(
+        kw: str,
+        title_lower: str,
+        combined_text: str,
+    ) -> Tuple[float, List[str], List[str]]:
+        """Scores a single keyword against title and combined text."""
+        kw_lower = kw.lower()
+        if kw_lower in title_lower:
+            return 0.5, [kw], ["RULE-EDGE-PAPER-TECH-KEYWORD-03"]
+        if kw_lower in combined_text:
+            return 0.25, [kw], ["RULE-EDGE-PAPER-TECH-ABSTRACT-04"]
+        return 0.0, [], []
+
+    @classmethod
     def _score_keywords(
+        cls,
         keywords: List[str],
         title_lower: str,
         combined_text: str,
-    ) -> Tuple[float, List[str]]:
+    ) -> Tuple[float, List[str], List[str]]:
         """Scores technique keywords against text."""
         score = 0.0
         matched: List[str] = []
+        rules: List[str] = []
         for kw in keywords:
-            kw_lower = kw.lower()
-            if kw_lower in title_lower:
-                score += 0.5
-                matched.append(kw)
-            elif kw_lower in combined_text:
-                score += 0.25
-                matched.append(kw)
-        return score, matched
+            s, k, r = cls._score_single_keyword(kw, title_lower, combined_text)
+            score += s
+            matched.extend(k)
+            rules.extend(r)
+        return score, matched, rules
 
     @classmethod
     def _score_single_technique(
@@ -360,46 +406,88 @@ class TechniqueInferenceEngine:
         title_lower: str,
         combined_text: str,
         meta: Dict[str, Any],
-    ) -> Tuple[float, List[str]]:
+    ) -> Optional[_TechCandidate]:
         """Scores a single technique against title and combined text."""
         name = str(meta.get("name", ""))
         keywords = list(meta.get("keywords", []))
 
-        name_score, name_kws = cls._score_name(name, title_lower, combined_text)
-        kw_score, kw_kws = cls._score_keywords(keywords, title_lower, combined_text)
+        name_score, name_kws, name_rules = cls._score_name(
+            name, title_lower, combined_text
+        )
+        kw_score, kw_kws, kw_rules = cls._score_keywords(
+            keywords, title_lower, combined_text
+        )
 
         total_score = min(name_score + kw_score, 1.0)
+        if total_score <= 0.0:
+            return None
+
         all_matched = list(dict.fromkeys(name_kws + kw_kws))
-        return total_score, all_matched
+        all_rules = list(dict.fromkeys(name_rules + kw_rules))
+        primary = _select_primary_rule(all_rules)
+        return _TechCandidate(
+            score=total_score,
+            matched_keywords=all_matched,
+            applied_rules=all_rules,
+            primary_rule_id=primary,
+        )
 
     @staticmethod
     def _apply_direct_match(
-        score_map: Dict[str, Tuple[float, List[str]]],
+        candidate_map: Dict[str, _TechCandidate],
         tech_id: str,
     ) -> None:
         """Applies maximum confidence for directly mentioned technique ID."""
-        _, existing_kws = score_map.get(tech_id, (0.0, []))
-        score_map[tech_id] = (1.0, existing_kws + [tech_id])
+        direct_rule = "RULE-EDGE-PAPER-TECH-REGEX-01"
+        cand = candidate_map.get(tech_id)
+        if cand is None:
+            candidate_map[tech_id] = _TechCandidate(
+                score=1.0,
+                matched_keywords=[tech_id],
+                applied_rules=[direct_rule],
+                primary_rule_id=direct_rule,
+            )
+            return
+        cand.score = 1.0
+        if tech_id not in cand.matched_keywords:
+            cand.matched_keywords.append(tech_id)
+        if direct_rule not in cand.applied_rules:
+            cand.applied_rules.append(direct_rule)
+        cand.primary_rule_id = direct_rule
+
+    def _create_inferred_technique(
+        self,
+        tech_id: str,
+        cand: _TechCandidate,
+        research_focus: str,
+    ) -> InferredTechnique:
+        """Constructs a single InferredTechnique instance."""
+        meta = self.catalog.get(tech_id, {})
+        rules = list(dict.fromkeys(cand.applied_rules))
+        if research_focus == "offensive" and cand.score >= self.min_confidence:
+            rules.append("RULE-EDGE-FOCUS-OFFENSIVE-01")
+        primary = cand.primary_rule_id or _select_primary_rule(rules)
+        return InferredTechnique(
+            technique_id=tech_id,
+            technique_name=str(meta.get("name", f"Technique {tech_id}")),
+            tactic=str(meta.get("tactic", "unknown")),
+            confidence=cand.score,
+            matched_keywords=cand.matched_keywords,
+            research_focus=research_focus,
+            applied_rules=rules,
+            primary_rule_id=primary,
+        )
 
     def _build_inferred_results(
         self,
-        score_map: Dict[str, Tuple[float, List[str]]],
+        candidate_map: Dict[str, _TechCandidate],
         research_focus: str,
     ) -> List[InferredTechnique]:
         """Builds InferredTechnique objects filtered by min_confidence."""
         results: List[InferredTechnique] = []
-        for tech_id, (score, kws) in score_map.items():
-            if score < self.min_confidence:
+        for tech_id, cand in candidate_map.items():
+            if cand.score < self.min_confidence:
                 continue
-            meta = self.catalog.get(tech_id, {})
-            results.append(
-                InferredTechnique(
-                    technique_id=tech_id,
-                    technique_name=str(meta.get("name", f"Technique {tech_id}")),
-                    tactic=str(meta.get("tactic", "unknown")),
-                    confidence=score,
-                    matched_keywords=kws,
-                    research_focus=research_focus,
-                )
-            )
+            item = self._create_inferred_technique(tech_id, cand, research_focus)
+            results.append(item)
         return results

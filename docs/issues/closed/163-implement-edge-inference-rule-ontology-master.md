@@ -2,7 +2,7 @@
 ID: 163
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] Vertex紐付け推論判定ルール（Edge Inference Rule Ontology Master: EIROM）のマスターデータ化およびオントロジー推論基盤の実装 (ID: 163)
@@ -37,13 +37,12 @@ ID: 163
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `src/ontology/rule_schema.py`: 推論ルールマスターのデータ構造・型定義・バリデータ（`EdgeInferenceRule`, `RuleConditionType`, `ConfidenceTier`, `EvidenceExtractionSpec`）
-- [ ] `src/ontology/rules/master_rules.json`: 標準オントロジー推論ルールマスターデータ定義ファイル（12大標準ルール）
-- [ ] `src/ontology/rule_registry.py`: ルールマスターのローダー、スキーマ検証器、クエリ・適用エンジン（`EdgeInferenceRuleRegistry`）
-- [ ] `src/domain/security/cti/inference.py`: ハードコード辞書から `EdgeInferenceRuleRegistry` 駆動型推論へのリファクタリング
-- [ ] `src/domain/security/cti/graph_bridge.py`: ルールマスターのメタデータと整合したエッジ属性生成
-- [ ] `src/ontology/__init__.py`: 新規モジュールのエクスポート追加
-- [ ] `tests/ontology/test_rule_ontology_master.py`: ルールマスター検証・ロード・推論適用の包括的単体テスト
+- [x] `src/ontology/rule_schema.py`: 推論ルールマスターのデータ構造・型定義・バリデータ（`EdgeInferenceRule`, `RuleConditionType`, `ConfidenceTier`, `EvidenceExtractionSpec`）
+- [x] `src/ontology/rules/master_rules.json`: 標準オントロジー推論ルールマスターデータ定義ファイル（12大標準ルール）
+- [x] `src/ontology/rule_registry.py`: ルールマスターのローダー、スキーマ検証器、クエリ・適用エンジン（`EdgeInferenceRuleRegistry`）
+- [x] `src/domain/security/cti/inference.py`: ハードコード辞書から `EdgeInferenceRuleRegistry` 駆動型推論へのリファクタリング
+- [x] `src/ontology/__init__.py`: 新規モジュールのエクスポート追加
+- [x] `tests/ontology/test_rule_ontology_master.py`: ルールマスター検証・ロード・推論適用の包括的単体テスト
 
 ---
 
@@ -111,10 +110,10 @@ Target Branch: `feat/163-edge-inference-rule-ontology-master`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `src/ontology/rule_schema.py` に `EdgeInferenceRule` および関連型が完全実装されていること
-- [ ] `src/ontology/rules/master_rules.json` に標準 12 推論ルールが定義され、構文・型妥当性が 100% PASS すること
-- [ ] `EdgeInferenceRuleRegistry` がルールマスターをロードし、始点/終点ペア別の高速逆引きが正常動作すること
-- [ ] `TechniqueInferenceEngine` がルールマスター駆動型にリファクタリングされ、適用ルールIDが出力されること
-- [ ] 単体テスト `tests/ontology/test_rule_ontology_master.py` が新規作成され 100% PASS すること
-- [ ] 既存の全単体テスト（`tests/domain/test_stix_navigator.py` 等）が互換性を保ち 100% PASS すること
-- [ ] `make check_format` および `make static_analysis` (radon, xenon Rank A, flake8, mypy --strict) が 100% PASS すること
+- [x] `src/ontology/rule_schema.py` に `EdgeInferenceRule` および関連型が完全実装されていること
+- [x] `src/ontology/rules/master_rules.json` に標準 12 推論ルールが定義され、構文・型妥当性が 100% PASS すること
+- [x] `EdgeInferenceRuleRegistry` がルールマスターをロードし、始点/終点ペア別の高速逆引きが正常動作すること
+- [x] `TechniqueInferenceEngine` がルールマスター駆動型にリファクタリングされ、適用ルールIDが出力されること
+- [x] 単体テスト `tests/ontology/test_rule_ontology_master.py` が新規作成され 100% PASS すること
+- [x] 既存の全単体テスト（`tests/domain/test_stix_navigator.py` 等）が互換性を保ち 100% PASS すること
+- [x] `make check_format` および `make static_analysis` (radon, xenon Rank A, flake8, mypy --strict) が 100% PASS すること
