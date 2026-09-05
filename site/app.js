@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
   handleRoute();
 
   // ========================================================================
-  // 2. Global Search & Keyboard Shortcuts (Ctrl+K, /)
+  // 2. Global Search & Keyboard Shortcuts (Ctrl+K, /, ?, Escape)
   // ========================================================================
   window.addEventListener('keydown', (e) => {
     // Ctrl+K or Cmd+K
@@ -196,13 +196,39 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.focus();
         searchInput.select();
       }
+      return;
     }
+
+    // Escape closes Help Drawer
+    if (e.key === 'Escape') {
+      if (typeof window.closeConsoleHelpDrawer === 'function') {
+        window.closeConsoleHelpDrawer();
+      }
+      return;
+    }
+
+    // Skip single key shortcuts when typing in inputs
+    const activeTag = document.activeElement ? document.activeElement.tagName : '';
+    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') {
+      return;
+    }
+
     // Slash shortcut outside input
-    if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+    if (e.key === '/') {
       e.preventDefault();
       if (globalSearchInput) {
         globalSearchInput.focus();
       }
+      return;
+    }
+
+    // Question mark shortcut for Help Drawer
+    if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+      e.preventDefault();
+      if (typeof window.toggleConsoleHelpDrawer === 'function') {
+        window.toggleConsoleHelpDrawer();
+      }
+      return;
     }
   });
 
@@ -263,12 +289,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function showHelpModal() {
-    alert("【arXiv Security Intelligence - 操作ガイド】\n\n1. グローバル検索 (Ctrl+K):\n   画面上部から論文ID、攻撃手法名、脆弱性番号を横断検索可能。\n\n2. セマンティック RAG 検索:\n   ペンテスト自動化、LLM 脆弱性などの日本語自然言語クエリから類似論文を即時抽出。\n\n3. CTI ナレッジグラフ:\n   左サイドバーから ATT&CK マトリクスや推論ルール (EIROM) グラフへ直接遷移可能。\n\n4. MCP JSON-RPC サンドボックス:\n   外部 AI エージェント用の各種 MCP ツールを Web 上で直接検証。");
-  }
+  // ========================================================================
+  // 3. Help & Guide Drawer Toggle (Issue 171)
+  // ========================================================================
+  const consoleHelpDrawer = document.getElementById('consoleHelpDrawer');
+  const consoleHelpOverlay = document.getElementById('consoleHelpOverlay');
 
-  if (guideHelpBtn) guideHelpBtn.addEventListener('click', showHelpModal);
-  if (helpModalBtn) helpModalBtn.addEventListener('click', showHelpModal);
+  window.toggleConsoleHelpDrawer = function() {
+    if (!consoleHelpDrawer) return;
+    const isActive = consoleHelpDrawer.classList.contains('active');
+    if (isActive) {
+      consoleHelpDrawer.classList.remove('active');
+      if (consoleHelpOverlay) consoleHelpOverlay.classList.remove('active');
+    } else {
+      consoleHelpDrawer.classList.add('active');
+      if (consoleHelpOverlay) consoleHelpOverlay.classList.add('active');
+    }
+  };
+
+  window.closeConsoleHelpDrawer = function() {
+    if (consoleHelpDrawer) consoleHelpDrawer.classList.remove('active');
+    if (consoleHelpOverlay) consoleHelpOverlay.classList.remove('active');
+  };
+
+  if (guideHelpBtn) guideHelpBtn.addEventListener('click', window.toggleConsoleHelpDrawer);
+  if (helpModalBtn) helpModalBtn.addEventListener('click', window.toggleConsoleHelpDrawer);
   if (notifBtn) {
     notifBtn.addEventListener('click', () => {
       alert("🔔【通知センター】\n・2026-09-05 06:00 定期バッチ完了 (新着 24 件)\n・EIROM 推論エンジン: 84.2% HIGH 確信度維持\n・未研究リサーチギャップ: 12 件検出中");

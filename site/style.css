@@ -102,6 +102,8 @@ html, body {
    ========================================================================== */
 .console-header {
   height: 48px;
+  width: 100%;
+  box-sizing: border-box;
   background-color: var(--console-bg-panel);
   border-bottom: 2px solid var(--console-border-dark);
   display: flex;
@@ -110,6 +112,17 @@ html, body {
   padding: 0 16px;
   z-index: 100;
   flex-shrink: 0;
+  font-family: var(--console-font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--console-fg-primary);
+}
+
+.console-header,
+.console-header *,
+.console-header *::before,
+.console-header *::after {
+  box-sizing: border-box;
 }
 
 .header-brand {
@@ -134,6 +147,8 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .brand-title .separator {
@@ -143,6 +158,7 @@ html, body {
 }
 
 .brand-title .tenant-name {
+  font-family: var(--console-font-sans);
   font-size: 12px;
   font-weight: 600;
   color: var(--console-accent-navy);
@@ -150,6 +166,7 @@ html, body {
   padding: 2px 6px;
   border-radius: var(--console-radius-sm);
   border: 1px solid rgba(61, 90, 128, 0.2);
+  white-space: nowrap;
 }
 
 /* Global Wide Search Bar */
@@ -205,6 +222,7 @@ html, body {
   border: 1px solid var(--console-border-subtle);
   border-radius: 3px;
   padding: 1px 5px;
+  white-space: nowrap;
 }
 
 /* Header Utilities */
@@ -224,8 +242,11 @@ html, body {
   display: flex;
   align-items: center;
   gap: 5px;
+  font-family: var(--console-font-sans);
   font-size: 12px;
   font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
   transition: all 0.15s ease;
 }
 
@@ -243,8 +264,11 @@ html, body {
   color: var(--console-accent-green);
   padding: 3px 8px;
   border-radius: var(--console-radius-sm);
+  font-family: var(--console-font-sans);
   font-size: 11px;
   font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .status-indicator-dot {
@@ -253,6 +277,7 @@ html, body {
   background-color: var(--console-accent-green);
   border-radius: 50%;
   box-shadow: 0 0 6px var(--console-accent-green);
+  flex-shrink: 0;
 }
 
 /* ==========================================================================
@@ -1570,5 +1595,173 @@ mark.highlight {
 
 .console-table tr:hover td {
   background-color: rgba(61, 90, 128, 0.04);
+}
+
+/* ==========================================================================
+   Help & Guide Drawer (Slide-in Glassmorphic Drawer, unified with dashboard.html)
+   ========================================================================== */
+.help-overlay,
+.graph-help-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10001;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.help-overlay.active,
+.graph-help-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.help-drawer,
+.graph-help-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 480px;
+  max-width: 90vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.6);
+  z-index: 10002;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  color: #F8FAFC;
+  font-family: var(--console-font-sans);
+  box-sizing: border-box;
+}
+
+.help-drawer *,
+.graph-help-drawer * {
+  box-sizing: border-box;
+}
+
+.help-drawer.active,
+.graph-help-drawer.active {
+  transform: translateX(0);
+}
+
+.help-drawer .drawer-header,
+.graph-help-drawer .drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(30, 41, 59, 0.6);
+  flex-shrink: 0;
+}
+
+.help-drawer .drawer-header h3,
+.graph-help-drawer .drawer-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #FFFFFF;
+}
+
+.help-drawer .btn-drawer-close,
+.graph-help-drawer .btn-drawer-close {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #CBD5E1;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+
+.help-drawer .btn-drawer-close:hover,
+.graph-help-drawer .btn-drawer-close:hover {
+  background: rgba(239, 68, 68, 0.8);
+  color: #FFFFFF;
+  border-color: rgba(239, 68, 68, 0.9);
+}
+
+.help-drawer .drawer-content,
+.graph-help-drawer .drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.help-drawer .guide-section,
+.graph-help-drawer .guide-section {
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.help-drawer .guide-section h4,
+.graph-help-drawer .guide-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #60A5FA;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+
+.help-drawer .guide-table,
+.graph-help-drawer .guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.help-drawer .guide-table th,
+.help-drawer .guide-table td,
+.graph-help-drawer .guide-table th,
+.graph-help-drawer .guide-table td {
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.help-drawer .guide-table th,
+.graph-help-drawer .guide-table th {
+  color: #94A3B8;
+  font-weight: 600;
+}
+
+.help-drawer .guide-table td code,
+.graph-help-drawer .guide-table td code {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: #38BDF8;
+  font-family: var(--console-font-mono);
 }
 

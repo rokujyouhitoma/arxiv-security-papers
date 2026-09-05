@@ -39,7 +39,7 @@
       <div class="header-utilities">
         <button class="utility-btn" id="notifBtn" title="通知センター">🔔 通知</button>
         <button class="utility-btn" id="portalSwitchBtn" title="CTI ナレッジグラフ専用画面へ移動" onclick="window.location.href='/dashboard.html'">🕸️ ナレッジグラフ ↗</button>
-        <button class="utility-btn" id="helpModalBtn" title="ヘルプ & 操作ガイド">❓ ガイド</button>
+        <button class="utility-btn" id="helpModalBtn" title="ヘルプ & 操作ガイド" onclick="toggleConsoleHelpDrawer()">❓ ガイド</button>
         <div class="status-badge-live" id="systemStatusBadge" title="Supervisor & Pipeline 健全稼働中">
           <span class="status-indicator-dot"></span>
           <span>正常稼働中</span>
@@ -721,6 +721,97 @@
           </div>
         </section>
       </main>
+    </div>
+  </div>
+
+  <!-- ❓ Enterprise Console Help & Guide Drawer (Issue 171) -->
+  <div class="help-overlay" id="consoleHelpOverlay" onclick="toggleConsoleHelpDrawer()"></div>
+  <div class="help-drawer" id="consoleHelpDrawer">
+    <div class="drawer-header">
+      <h3><span>📖</span> エンタープライズコンソール 操作ガイド &amp; 機能解説</h3>
+      <button class="btn-drawer-close" onclick="toggleConsoleHelpDrawer()" title="閉じる (Esc)">✕</button>
+    </div>
+    <div class="drawer-content">
+      <div class="guide-section">
+        <h4><span>🎮</span> 基本マウス &amp; キーボードショートカット</h4>
+        <table class="guide-table">
+          <tr>
+            <th>ショートカット</th>
+            <th>動作説明</th>
+          </tr>
+          <tr>
+            <td><code>Ctrl + K</code> / <code>Cmd + K</code></td>
+            <td>グローバルコマンド検索バーへの即座フォーカス</td>
+          </tr>
+          <tr>
+            <td><code>?</code> キー (Shift + /)</td>
+            <td>この操作ガイドドロワーの開閉トグル</td>
+          </tr>
+          <tr>
+            <td><code>Esc</code> キー</td>
+            <td>このガイドドロワーまたは論文詳細モーダルを閉じる</td>
+          </tr>
+          <tr>
+            <td><code>1</code> 〜 <code>5</code> キー</td>
+            <td>ワークスペース（検索 / トレンド / 分析 / システム / プロセス）の切替</td>
+          </tr>
+          <tr>
+            <td><code>論文カードクリック</code></td>
+            <td>Google OKF v0.2 全文プレビューモーダルの表示</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="guide-section">
+        <h4><span>🏢</span> 統合コンソールの主要ワークスペース</h4>
+        <p style="margin: 0 0 6px 0; color: #E2E8F0;">
+          <strong>1. 🔍 セマンティック RAG 検索:</strong> DuckDB &amp; Pure-Python BM25/ベクトルハイブリッド検索エンジンにより、14,169件のセキュリティ論文を高速探索します。
+        </p>
+        <p style="margin: 0 0 6px 0; color: #E2E8F0;">
+          <strong>2. 📊 トレンド &amp; エグゼクティブサマリー:</strong> 階層別動向レポート（月次・四半期・通期）と Mermaid 動的マインドマップを閲覧可能です。
+        </p>
+        <p style="margin: 0 0 6px 0; color: #E2E8F0;">
+          <strong>3. 💡 プロダクト分析 &amp; ROI (ST/SA):</strong> Graph-RAG トークン削減効果、ホップ数分布、最新脅威動向をグラフィカルに可視化します。
+        </p>
+        <p style="margin: 0 0 6px 0; color: #E2E8F0;">
+          <strong>4. 📈 システム観測 &amp; 運用:</strong> パイプライン実行ステータス、ETL処理健全性、分散DBメトリクスをリアルタイム監視します。
+        </p>
+        <p style="margin: 0; color: #E2E8F0;">
+          <strong>5. 🕹️ Supervisor プロセストップ:</strong> Gunicorn スタイルの自律ワーカープロセス（Arbiter, Sync, Service, Async）の状態とメモリを動的監視します。
+        </p>
+      </div>
+
+      <div class="guide-section">
+        <h4><span>🕸️</span> CTI ナレッジグラフとの連携</h4>
+        <p style="margin: 0 0 6px 0; color: #E2E8F0;">
+          ヘッダー右側の「<code>🕸️ ナレッジグラフ ↗</code>」ボタンをクリックすると、専用のインタラクティブ・トポロジー空間へシームレスに遷移します。
+        </p>
+        <table class="guide-table">
+          <tr>
+            <th>連携機能</th>
+            <th>特徴</th>
+          </tr>
+          <tr>
+            <td><code>Context Mesh</code></td>
+            <td>論文間の意味的類似度クラスタを全域可視化</td>
+          </tr>
+          <tr>
+            <td><code>CTI Graph</code></td>
+            <td>STIX 2.1 準拠の MITRE ATT&amp;CK 手法・CWE 脆弱性弱点網</td>
+          </tr>
+          <tr>
+            <td><code>EIROM 推論</code></td>
+            <td>HIGH / MEDIUM / LOW の確信度ティア付き自動リンク判定</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="guide-section">
+        <h4><span>🛡️</span> データ保全 &amp; Google OKF v0.2 仕様</h4>
+        <p style="margin: 0; color: #E2E8F0;">
+          全論文データは原本メタデータ JSON、PDF 原本、<code>pdftotext</code> 抽出テキスト、および Google OKF v0.2 準拠の YAML フロントマター付き Markdown として完全なトレーサビリティを保持して永続化されています。
+        </p>
+      </div>
     </div>
   </div>
 

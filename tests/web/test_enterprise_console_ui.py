@@ -191,3 +191,52 @@ def test_ported_telemetry_script_handlers() -> None:
     assert "updateSupervisorFromStream" in js_text, "Supervisor updater required"
     assert "syncConsoleTelemetry" in js_text, "Console telemetry sync required"
     assert "initSseLiveStream" in js_text, "SSE live stream initializer required"
+
+
+def test_enterprise_console_help_drawer() -> None:
+    """Verify Help & Guide Drawer implementation matching dashboard.html design and interactions (Issue 171)."""
+    index_html = Path("site/index.html").read_text(encoding="utf-8")
+    style_css = Path("site/style.css").read_text(encoding="utf-8")
+    app_js = Path("site/app.js").read_text(encoding="utf-8")
+
+    # 1. HTML elements & structure in index.html
+    assert 'id="consoleHelpOverlay"' in index_html, "Help overlay required"
+    assert 'class="help-overlay"' in index_html, "Help overlay class required"
+    assert 'id="consoleHelpDrawer"' in index_html, "Help drawer required"
+    assert 'class="help-drawer"' in index_html, "Help drawer class required"
+    assert "drawer-header" in index_html, "Drawer header required"
+    assert "btn-drawer-close" in index_html, "Drawer close button required"
+    assert "drawer-content" in index_html, "Drawer content container required"
+    assert "guide-section" in index_html, "Guide section container required"
+    assert "guide-table" in index_html, "Guide table required"
+
+    # Guide Content Sections
+    assert "基本マウス &amp; キーボードショートカット" in index_html
+    assert "統合コンソールの主要ワークスペース" in index_html
+    assert "CTI ナレッジグラフとの連携" in index_html
+    assert "データ保全 &amp; Google OKF v0.2 仕様" in index_html
+
+    # Header help button trigger
+    assert (
+        'onclick="toggleConsoleHelpDrawer()"' in index_html
+        or "toggleConsoleHelpDrawer" in app_js
+    )
+
+    # 2. CSS Rules in style.css (Dark Glassmorphic Drawer)
+    assert ".help-overlay" in style_css
+    assert ".help-drawer" in style_css
+    assert "backdrop-filter: blur(24px)" in style_css
+    assert "box-shadow: -12px 0 40px" in style_css
+    assert "transform: translateX(100%)" in style_css
+    assert ".help-drawer.active" in style_css
+    assert "transform: translateX(0)" in style_css
+
+    # 3. JavaScript interaction in app.js
+    assert "window.toggleConsoleHelpDrawer" in app_js
+    assert "window.closeConsoleHelpDrawer" in app_js
+    assert (
+        "consoleHelpDrawer.classList.toggle" in app_js
+        or "classList.add('active')" in app_js
+    )
+    assert "e.key === 'Escape'" in app_js
+    assert "e.key === '?'" in app_js

@@ -19,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **171** | index.html におけるヘルプ・操作ガイドドロワーの dashboard.html 準拠デザイン・出し方統一実装 | Feature | 2026-09-05 | [171-unify-index-help-guide-drawer-design-with-dashboard.md](closed/171-unify-index-help-guide-drawer-design-with-dashboard.md) |
 | **170** | dashboard.html からの 3 画面削除（Graph 単一画面化）および index.html との統一ヘッダー・相互リンク実装 | Feature | 2026-09-05 | [170-unify-dashboard-header-with-index-and-retain-graph-only.md](closed/170-unify-dashboard-header-with-index-and-retain-graph-only.md) |
 | **169** | dashboard.html の 3 画面 (Product / System / Supervisor) の index.html への移植統合および Graph 画面の独立維持 | Feature | 2026-09-05 | [169-port-product-system-supervisor-views-to-index-console.md](closed/169-port-product-system-supervisor-views-to-index-console.md) |
 | **168** | Supervisor/WSGI ワーカーにおける SSE ストリーミングによるサーバーブロッキング解消および高精度可観測性（Logging）の強化 | Bug | 2026-09-05 | [168-fix-server-blocking-on-sse-streaming-and-enhance-observability.md](closed/168-fix-server-blocking-on-sse-streaming-and-enhance-observability.md) |

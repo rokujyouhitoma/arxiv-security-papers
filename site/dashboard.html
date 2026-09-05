@@ -66,140 +66,21 @@
     }
 
     /* ==========================================================================
-       2. Header & Telemetry Layout
+       2. Global Header Collapse Support (Unified console-header)
        ========================================================================== */
-    header {
-      background-color: var(--bg-main);
-      border-bottom: 2px solid var(--border-dark);
-      display: flex;
-      flex-direction: column;
+    header.console-header {
+      width: 100%;
+      height: 48px;
+      min-height: 48px;
+      max-height: 48px;
+      box-sizing: border-box;
+      font-family: var(--console-font-sans);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .header-top {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: stretch;
-      border-bottom: 1px solid var(--border-dark);
-    }
-
-    .brand-section {
-      padding: 12px 18px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      border-right: 1px solid var(--border-dark);
-      background-color: var(--bg-main);
-      min-width: 280px;
-    }
-
-    .brand-title {
-      font-size: 16px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      text-transform: uppercase;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .brand-title .badge {
-      background-color: var(--accent-coral);
-      color: #fff;
-      font-size: 10px;
-      padding: 2px 6px;
-      font-weight: bold;
-      border-radius: 2px;
-    }
-
-    .brand-sub {
-      color: var(--fg-muted);
-      font-size: 11px;
-      margin-top: 2px;
-    }
-
-    .telemetry-bar {
-      display: flex;
-      flex: 1;
-      flex-wrap: wrap;
-    }
-
-    .telemetry-cell {
-      flex: 1;
-      min-width: 130px;
-      padding: 8px 14px;
-      border-right: 1px solid var(--border-dark);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      background-color: var(--bg-main);
-    }
-
-    .telemetry-cell:last-child {
-      border-right: none;
-    }
-
-    .telemetry-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      color: var(--fg-muted);
-      letter-spacing: 0.5px;
-    }
-
-    .telemetry-value {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--fg-main);
-      font-feature-settings: "tnum";
-      font-variant-numeric: tabular-nums;
-      margin-top: 2px;
-    }
-
-    .telemetry-value.coral {
-      color: var(--accent-coral);
-    }
-
-    .telemetry-value.green {
-      color: var(--accent-green);
-    }
-
-    .telemetry-value.blue {
-      color: var(--accent-blue);
-    }
-
-    /* OBF Observability Badge */
-    .obf-badge {
-      background-color: var(--accent-green);
-      color: #fff;
-      font-size: 10px;
-      padding: 2px 6px;
-      font-weight: bold;
-      border-radius: 2px;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .obf-pulse {
-      width: 6px;
-      height: 6px;
-      background-color: #fff;
-      border-radius: 50%;
-      animation: pulse 1.5s infinite;
-    }
-
-    @keyframes pulse {
-      0% {
-        opacity: 0.3;
-      }
-
-      50% {
-        opacity: 1;
-      }
-
-      100% {
-        opacity: 0.3;
-      }
+    header.console-header.header-hidden,
+    header.header-hidden {
+      display: none !important;
     }
 
     /* Pipeline Status Bar */
@@ -1086,77 +967,6 @@
 
     header.header-hidden {
       display: none !important;
-    }
-
-    /* Tab Navigation */
-    .tab-navigation {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 2px solid var(--border-dark);
-      background-color: var(--bg-main);
-      padding: 0 16px;
-      gap: 8px;
-    }
-
-    .tab-group {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .tab-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .btn-tool-header {
-      background-color: var(--bg-panel);
-      border: 1px solid var(--border-dark);
-      border-radius: 2px;
-      padding: 5px 12px;
-      font-family: inherit;
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      color: var(--fg-main);
-      transition: all 0.15s ease;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      box-shadow: 1px 1px 0px var(--border-dark);
-    }
-
-    .btn-tool-header:hover {
-      background-color: var(--border-dark);
-      color: var(--bg-main);
-    }
-
-    .tab-btn {
-      background-color: transparent;
-      border: 1px solid var(--border-dark);
-      border-bottom: none;
-      padding: 8px 16px;
-      font-family: inherit;
-      font-size: 12px;
-      font-weight: bold;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.15s ease;
-      color: var(--fg-muted);
-    }
-
-    .tab-btn:hover {
-      background-color: var(--bg-panel);
-      color: var(--fg-main);
-    }
-
-    .tab-btn.active {
-      background-color: var(--border-dark);
-      color: var(--bg-main);
     }
 
     .tab-view {
