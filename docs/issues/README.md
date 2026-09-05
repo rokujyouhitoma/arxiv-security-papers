@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **163** | Vertex紐付け推論判定ルール（Edge Inference Rule Ontology Master）のマスターデータ化およびオントロジー推論基盤の実装 | Feature | High | Open (New) | [163-implement-edge-inference-rule-ontology-master.md](163-implement-edge-inference-rule-ontology-master.md) |
+| **163** | Vertex紐付け推論判定ルール（Edge Inference Rule Ontology Master）のマスターデータ化およびオントロジー推論基盤の実装 | Feature | High | In Progress | [163-implement-edge-inference-rule-ontology-master.md](163-implement-edge-inference-rule-ontology-master.md) |
 | **162** | グラフ Edge への判断ルール・推論機構・確信度・エビデンス属性の統合付与と高精度グラフ探索基盤の実装 | Feature | High | In Progress | [162-enhance-graph-edge-inference-mechanism-and-confidence-attributes.md](162-enhance-graph-edge-inference-mechanism-and-confidence-attributes.md) |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
