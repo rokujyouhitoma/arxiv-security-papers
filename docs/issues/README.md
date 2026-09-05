@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **158** | 構造化監査ログ & 前方安全ハッシュ連鎖ログ（Structured Audit & Chained Log）の実装 | Feature / Security | 2026-09-05 | [158-implement-structured-audit-and-chained-log.md](closed/158-implement-structured-audit-and-chained-log.md) |
 | **157** | レートリミット＆リソース消費 DoS 防御（Rate Limiting & Circuit Breaker）の実装 | Feature / Security | 2026-09-05 | [157-implement-rate-limiting-and-dos-protection.md](closed/157-implement-rate-limiting-and-dos-protection.md) |
 | **156** | シークレット＆トークン管理（Ephemeral Secret Store & Leakage Guard）の実装 | Feature / Security | 2026-09-05 | [156-implement-secrets-and-token-management-guard.md](closed/156-implement-secrets-and-token-management-guard.md) |
 | **155** | 外部データインジェスト・パーサー防護（Magic Bytes & Anti-Bomb Parser Hardening）の実装 | Feature / Security | 2026-09-05 | [155-implement-secure-ingest-mime-and-parser-hardening.md](closed/155-implement-secure-ingest-mime-and-parser-hardening.md) |
