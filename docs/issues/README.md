@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **155** | 外部データインジェスト・パーサー防護（Magic Bytes & Anti-Bomb Parser Hardening）の実装 | Feature / Security | 2026-09-05 | [155-implement-secure-ingest-mime-and-parser-hardening.md](closed/155-implement-secure-ingest-mime-and-parser-hardening.md) |
 | **154** | SSRF 防御 & ネットワーク隔離ラッパー（Network Isolation & SSRF Guard）の実装 | Feature / Security | 2026-09-05 | [154-implement-ssrf-protection-and-network-isolation.md](closed/154-implement-ssrf-protection-and-network-isolation.md) |
 | **145** | /dashboard tab=graph における特定ノードのフォーカス・エゴネットワーク抽出機能の実装 | Feature | 2026-09-05 | [145-implement-focus-ego-subgraph-mode-in-graph-tab.md](closed/145-implement-focus-ego-subgraph-mode-in-graph-tab.md) |
 | **153** | Supervisor 4x daily 自律バッチ運用と過去OKF論文アーカイブの全量CTI再アノテーション・エンリッチメント | Feature / Ops | 2026-09-05 | [153-implement-supervisor-4xdaily-cron-and-cti-backfill-reannotation.md](closed/153-implement-supervisor-4xdaily-cron-and-cti-backfill-reannotation.md) |
