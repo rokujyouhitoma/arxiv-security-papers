@@ -307,8 +307,8 @@ def _build_base_cfg_dict(
     return {
         "bind_host": host,
         "bind_port": port,
-        "worker_class": _resolve_arg(args, "worker_class", "sync"),
-        "threads": _resolve_arg(args, "threads", 1),
+        "worker_class": _resolve_arg(args, "worker_class", "gthread"),
+        "threads": _resolve_arg(args, "threads", 4),
         "timeout": _resolve_arg(args, "timeout", 30.0),
         "app_uri": _resolve_arg(args, "app", "web.server:app"),
         "control_socket": control_sock,
@@ -327,15 +327,16 @@ def _build_default_config(
     return SupervisorConfig.from_dict(cfg_dict)
 
 
-def _apply_config_overrides(
-    config: SupervisorConfig,
-    args: argparse.Namespace,
-    control_sock: str,
-) -> SupervisorConfig:
-    """Applies CLI argument overrides to existing SupervisorConfig."""
-    if getattr(args, "bind", None) is not None:
-        config.bind_host, config.bind_port = parse_bind(args.bind)
+def _override_pool_args(pool: Any, args: argparse.Namespace) -> None:
+    if pool.name not in ("web", "default", "default_pool"):
+        return
+    for attr in ("workers", "worker_class", "threads"):
+        val = getattr(args, attr, None)
+        if val is not None:
+            setattr(pool, attr, val)
 
+
+def _apply_field_overrides(config: SupervisorConfig, args: argparse.Namespace) -> None:
     field_map = [
         ("workers", "workers"),
         ("worker_class", "worker_class"),
@@ -350,6 +351,21 @@ def _apply_config_overrides(
         val = getattr(args, arg_name, None)
         if val is not None:
             setattr(config, cfg_name, val)
+
+
+def _apply_config_overrides(
+    config: SupervisorConfig,
+    args: argparse.Namespace,
+    control_sock: str,
+) -> SupervisorConfig:
+    """Applies CLI argument overrides to existing SupervisorConfig."""
+    if getattr(args, "bind", None) is not None:
+        config.bind_host, config.bind_port = parse_bind(args.bind)
+
+    _apply_field_overrides(config, args)
+
+    for pool in config.pools:
+        _override_pool_args(pool, args)
 
     if control_sock:
         config.control_socket = control_sock
@@ -424,8 +440,10 @@ def _handle_start(
 ) -> int:
     """Handles supervisor arbiter start command."""
     config = _build_start_config(args, config_obj, workspace_dir, control_sock)
+    w_class = config.pools[0].worker_class if config.pools else config.worker_class
+    w_count = config.pools[0].workers if config.pools else config.workers
     print(
-        f"🚀 [Supervisor Arbiter] Booting {config.workers} '{config.worker_class}' workers "
+        f"🚀 [Supervisor Arbiter] Booting {w_count} '{w_class}' workers "
         f"on {config.bind_host}:{config.bind_port} (App: {config.app_uri})..."
     )
     return _run_arbiter(config)

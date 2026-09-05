@@ -130,13 +130,24 @@ def test_concurrent_sse_and_rapid_dashboard_reload(
 
 
 def test_dashboard_html_contains_unload_cleanup() -> None:
-    """Verifies that site/dashboard.html contains beforeunload/pagehide event handlers to close EventSource."""
-    path = os.path.abspath(
+    """Verifies that site/dashboard.html has eliminated SSE, and site/app.js contains unload cleanup."""
+    dashboard_path = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "..", "site", "dashboard.html")
     )
-    with open(path, "r", encoding="utf-8") as f:
-        content = f.read()
+    with open(dashboard_path, "r", encoding="utf-8") as f:
+        d_content = f.read()
 
-    assert "beforeunload" in content
-    assert "pagehide" in content
-    assert "sseEventSource.close()" in content
+    # dashboard.html must not establish SSE connections
+    assert "/api/stream/top" not in d_content
+    assert "EventSource" not in d_content
+
+    # app.js must contain cleanup handlers
+    app_js_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
+    )
+    with open(app_js_path, "r", encoding="utf-8") as f:
+        app_content = f.read()
+
+    assert "beforeunload" in app_content
+    assert "pagehide" in app_content
+    assert "closeSseStream" in app_content

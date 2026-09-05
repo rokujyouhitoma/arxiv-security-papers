@@ -224,3 +224,37 @@ def test_worker_jitter_bounds() -> None:
     )
     assert 90 <= worker.effective_max_requests <= 110
     assert 55.0 <= worker.effective_max_lifetime <= 65.0
+
+
+def test_gthread_worker_custom_threads() -> None:
+    """Verifies that GthreadWorker honors explicit threads argument over config."""
+    cfg = SupervisorConfig(threads=2)
+    worker = GthreadWorker(
+        worker_id="gthread_custom_threads",
+        config=cfg,
+        threads=6,
+    )
+    assert worker.num_threads == 6
+
+
+def test_sync_worker_stream_chunks_loop_alive_check() -> None:
+    """Verifies that SyncWorker._stream_chunks_loop exits immediately when self.alive is False."""
+    cfg = SupervisorConfig()
+    worker = SyncWorker(worker_id="sync_stream_alive_check", config=cfg)
+
+    client_s, server_s = socket.socketpair()
+
+    def infinite_chunks() -> Any:
+        yield b"chunk1"
+        worker.alive = False
+        yield b"chunk2"
+        yield b"chunk3"
+
+    try:
+        count = worker._stream_chunks_loop(server_s, infinite_chunks())
+        assert count == 1
+        data = client_s.recv(4096)
+        assert data == b"chunk1"
+    finally:
+        client_s.close()
+        server_s.close()

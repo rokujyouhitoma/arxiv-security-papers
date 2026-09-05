@@ -17,8 +17,8 @@ class PoolConfig:
 
     name: str = "default_pool"
     workers: int = 2
-    worker_class: str = "sync"  # 'sync', 'threaded'/'gthread', 'async'
-    threads: int = 1
+    worker_class: str = "gthread"  # 'sync', 'threaded'/'gthread', 'async'
+    threads: int = 4
     bind_host: Optional[str] = "0.0.0.0"
     bind_port: Optional[int] = 8000
     backlog: int = 2048

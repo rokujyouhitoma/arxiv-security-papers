@@ -36,6 +36,7 @@ class GthreadWorker(SyncWorker):
         max_requests_jitter: int = 0,
         max_worker_lifetime: float = 0.0,
         max_worker_lifetime_jitter: float = 0.0,
+        threads: Optional[int] = None,
     ) -> None:
         target = app_target if app_target is not None else wsgi_app
         super().__init__(
@@ -49,7 +50,8 @@ class GthreadWorker(SyncWorker):
             max_worker_lifetime=max_worker_lifetime,
             max_worker_lifetime_jitter=max_worker_lifetime_jitter,
         )
-        self.num_threads = max(1, config.threads)
+        cfg_threads = getattr(config, "threads", 4) if config else 4
+        self.num_threads = max(1, threads if threads is not None else cfg_threads)
         self._executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
         self._active_requests = 0
         self._req_lock = threading.Lock()
