@@ -2,7 +2,7 @@
 ID: 160
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] Pure-Python STIX 2.1 CTI 推論 & ATT&CK Navigator レイヤー自動生成基盤の実装 (ID: 160)
@@ -115,11 +115,11 @@ Target Branch: `feat/160-pure-python-stix-navigator`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `stix_model.py` が `python-stix2` なしで STIX 2.1 準拠の SDO/SRO/Bundle JSON を決定論的 ID で生成できること
-- [ ] `inference.py` が論文タイトルおよびアブストラクトから ATT&CK Technique を推論し、確信度・マッチ語彙を返却できること
-- [ ] `navigator.py` が ATT&CK Navigator Spec v4.5 準拠のレイヤー JSON を正しく出力し、ヒートマップ色とコメントが正しく構成されること
-- [ ] `graph_bridge.py` が推論された Technique / Mitigation を `PropertyGraphEngine` の Vertex および Edge として正しく登録・永続化できること
-- [ ] `Paper` と `AttackTechnique` / `DefenseMitigation` 間が `TARGETS`, `PROPOSES_DEFENSE`, `DISCUSSES` 等の有向 Edge で双方向走査・近傍探索可能であること
-- [ ] `outputs/navigator/` ディレクトリにレイヤーファイルが書き出し可能であること
-- [ ] 単体テスト `tests/domain/test_stix_navigator.py` が 100% PASS すること
-- [ ] `make check_format` および `make static_analysis` (radon, xenon Rank A, flake8, mypy --strict) が 100% PASS すること
+- [x] `stix_model.py` が `python-stix2` なしで STIX 2.1 準拠の SDO/SRO/Bundle JSON を決定論的 ID で生成できること
+- [x] `inference.py` が論文タイトルおよびアブストラクトから ATT&CK Technique を推論し、確信度・マッチ語彙を返却できること
+- [x] `navigator.py` が ATT&CK Navigator Spec v4.5 準拠のレイヤー JSON を正しく出力し、ヒートマップ色とコメントが正しく構成されること
+- [x] `graph_bridge.py` が推論された Technique / Mitigation を `PropertyGraphEngine` の Vertex および Edge として正しく登録・永続化できること
+- [x] `Paper` と `AttackTechnique` / `DefenseMitigation` 間が `TARGETS`, `PROPOSES_DEFENSE`, `DISCUSSES` 等の有向 Edge で双方向走査・近傍探索可能であること
+- [x] `outputs/navigator/` ディレクトリにレイヤーファイルが書き出し可能であること
+- [x] 単体テスト `tests/domain/test_stix_navigator.py` が 100% PASS すること
+- [x] `make check_format` および `make static_analysis` (radon, xenon Rank A, flake8, mypy --strict) が 100% PASS すること
