@@ -22,9 +22,7 @@ import tracemalloc
 from typing import Any, Callable, Dict, List, Optional, Sequence, cast
 
 if "src" not in sys.path:
-    sys.path.insert(
-        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    )
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from security.sandbox import validate_safe_code
 

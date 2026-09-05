@@ -88,9 +88,18 @@ class AnalyticsStorage:
         self.workspace_dir = workspace_dir or os.path.abspath(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         )
-        self.analytics_dir = analytics_dir or os.path.join(
-            self.workspace_dir, "outputs", "analytics"
+        default_analytics_dir = os.path.join(
+            self.workspace_dir, "outputs", "database", "analytics"
         )
+        legacy_analytics_dir = os.path.join(self.workspace_dir, "outputs", "analytics")
+        if analytics_dir:
+            self.analytics_dir = analytics_dir
+        elif os.path.exists(
+            os.path.join(legacy_analytics_dir, db_name)
+        ) and not os.path.exists(os.path.join(default_analytics_dir, db_name)):
+            self.analytics_dir = legacy_analytics_dir
+        else:
+            self.analytics_dir = default_analytics_dir
         self.db_path = os.path.join(self.analytics_dir, db_name)
         self._ensure_dir()
         self.initialize_db()

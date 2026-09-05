@@ -55,6 +55,8 @@ def register_vector_functions(conn: sqlite3.Connection) -> None:
 SQLiteConnection = sqlite3.Connection
 SQLiteCursor = sqlite3.Cursor
 SQLiteRow = sqlite3.Row
+SQLiteError = sqlite3.Error
+SQLiteOperationalError = sqlite3.OperationalError
 
 
 def _open_raw_sqlite_connection(
@@ -100,7 +102,11 @@ def get_sqlite_connection(
     Usage:
         from database import get_sqlite_connection
 
-        conn = get_sqlite_connection("outputs/analytics/analytics.db", init_schema=False, enable_wal=True)
+        conn = get_sqlite_connection(
+            "outputs/database/analytics/analytics.db",
+            init_schema=False,
+            enable_wal=True,
+        )
         cursor = conn.cursor()
     """
     conn = _open_raw_sqlite_connection(db_path, read_only, timeout)

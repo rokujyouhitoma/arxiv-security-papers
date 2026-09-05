@@ -260,3 +260,8 @@ ir_eval: activate ## Evaluate IR ranking accuracy metrics (NDCG@10, MRR, MAP)
 check_ir_regression: activate ## Enforce CI quality gate against IR metrics regression (threshold <= 3%)
 	PYTHONPATH=src ${VENV_PYTHON} -m search.eval.ci_gate --threshold 0.03
 
+.PHONY: sync_cti
+sync_cti: activate ## Sync MITRE ATT&CK CTI definitions into local SQLite catalog
+	PYTHONPATH=src ${VENV_PYTHON} -c "from security.cti import CTISyncManager; summary = CTISyncManager().sync_from_url(); print(f'[CTI Sync] Ingested: {summary}')"
+
+

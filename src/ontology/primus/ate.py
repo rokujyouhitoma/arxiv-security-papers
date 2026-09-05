@@ -8,7 +8,7 @@ attack descriptions, PoC methods, and explicit identifiers.
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .provenance import ProvenanceRecord, assign_provenance
 
@@ -179,6 +179,66 @@ class AttackTechniqueExtractor:
                     results.append(rec)
 
     @classmethod
+    def _find_keyword_in_meta(
+        cls, meta: Dict[str, Any], lower_text: str
+    ) -> Optional[Tuple[str, int]]:
+        for kw in meta.get("keywords", []):
+            if kw and kw in lower_text:
+                return kw, lower_text.find(kw)
+        return None
+
+    @classmethod
+    def _create_cti_provenance(
+        cls, text: str, tech_id: str, kw: str, pos: int
+    ) -> Optional[ProvenanceRecord]:
+        snippet = text[max(0, pos - 30) : min(len(text), pos + len(kw) + 30)]
+        return assign_provenance(
+            mapped_id=tech_id,
+            category="ATT&CK",
+            confidence=0.82,
+            evidence_snippet=snippet,
+            is_explicit=False,
+            source_rule="CTI-ATE-CatalogKeyword",
+        )
+
+    @classmethod
+    def _match_cti_tech(
+        cls,
+        text: str,
+        lower_text: str,
+        tech_id: str,
+        meta: Dict[str, Any],
+        seen: Dict[str, float],
+        results: List[ProvenanceRecord],
+    ) -> None:
+        if tech_id in seen:
+            return
+        match = cls._find_keyword_in_meta(meta, lower_text)
+        if not match:
+            return
+        rec = cls._create_cti_provenance(text, tech_id, match[0], match[1])
+        if rec:
+            seen[tech_id] = rec.confidence
+            results.append(rec)
+
+    @classmethod
+    def _infer_cti_registry_techniques(
+        cls,
+        text: str,
+        seen: Dict[str, float],
+        results: List[ProvenanceRecord],
+    ) -> None:
+        try:
+            from security.cti.registry import MITRECTIRegistry
+
+            registry = MITRECTIRegistry.get_instance()
+            lower_text = text.lower()
+            for tech_id, meta in registry.get_all_techniques().items():
+                cls._match_cti_tech(text, lower_text, tech_id, meta, seen, results)
+        except Exception:
+            pass
+
+    @classmethod
     def extract_techniques(cls, text: str) -> List[ProvenanceRecord]:
         """Extracts MITRE ATT&CK and ATLAS technique IDs with Gold/Silver provenance."""
         results: List[ProvenanceRecord] = []
@@ -191,4 +251,5 @@ class AttackTechniqueExtractor:
             text, EXPLICIT_ATLAS_RE, "ATLAS", "CTI-ATE-Explicit-ATLAS", seen, results
         )
         cls._infer_pattern_techniques(text, seen, results)
+        cls._infer_cti_registry_techniques(text, seen, results)
         return results

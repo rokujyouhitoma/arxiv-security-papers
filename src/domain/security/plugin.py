@@ -54,6 +54,12 @@ class SecurityPapersDomainPlugin(BaseDomainPlugin):
         except Exception:
             return None
 
+    def get_cti_registry(self) -> Any:
+        """Returns MITRE ATT&CK CTI Registry instance for this domain."""
+        from domain.security.cti.registry import MITRECTIRegistry
+
+        return MITRECTIRegistry.get_instance()
+
     def initialize(self, workspace_dir: str) -> None:
         """Registers domain spiders into the global SpiderRegistry."""
         spider_reg = get_spider_registry()

@@ -1,6 +1,7 @@
 from typing import Any, Callable, Dict, List, cast
 
 from mcp.base import run_mcp_server
+from security.cti.registry import MITRECTIRegistry
 from security.taxonomy import CWE_DEFENSE_MAP
 
 TOOLS_MANIFEST = [
@@ -233,6 +234,27 @@ TOOLS_MANIFEST = [
                 "target_vulnerability",
                 "pattern_or_code",
             ],
+        },
+    },
+    {
+        "name": "search_mitre_cti",
+        "description": (
+            "Search and inspect MITRE ATT&CK techniques, tactics, and mitigations "
+            "from the ingested STIX CTI catalog or builtin matrix."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search keyword or technique ID (e.g. 'T1059', 'powershell', 'phishing')",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of matched techniques to return (default: 10)",
+                },
+            },
+            "required": ["query"],
         },
     },
 ]
@@ -573,6 +595,23 @@ def handle_synthesize_detection_signature(params: Dict[str, Any]) -> Dict[str, A
     )
 
 
+def handle_search_mitre_cti(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Searches MITRE ATT&CK techniques via CTI Registry."""
+    query = str(params.get("query", "")).strip()
+    limit = int(params.get("limit", 10))
+    if not query:
+        return {"status": "error", "message": "Missing required parameter 'query'"}
+
+    registry = MITRECTIRegistry.get_instance()
+    results = registry.search(query, limit=limit)
+    return {
+        "status": "success",
+        "query": query,
+        "count": len(results),
+        "results": results,
+    }
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generate_semgrep_rule": handle_generate_semgrep_rule,
     "synthesize_secure_patch": handle_synthesize_secure_patch,
@@ -584,6 +623,7 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "get_blast_radius": handle_get_blast_radius,
     "model_stride_threats": handle_model_stride_threats,
     "synthesize_detection_signature": handle_synthesize_detection_signature,
+    "search_mitre_cti": handle_search_mitre_cti,
 }
 
 

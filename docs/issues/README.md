@@ -20,6 +20,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **151** | ドメイン層（src/domain/security/）へのCTI・Taxonomy知識体系の再配置とセキュリティ基盤（src/security/）の責務分離 | Refactor / Architecture | 2026-09-05 | [151-reorganize-domain-security-cti-taxonomy-boundaries.md](closed/151-reorganize-domain-security-cti-taxonomy-boundaries.md) |
+| **150** | MITRE ATT&CK CTI (STIX 2.0/2.1) 定義取り込み・SQLiteカタログ基盤および抽出・オントロジー連携の実装 | Feature / Architecture | 2026-09-05 | [150-implement-mitre-cti-stix-ingestion-and-catalog-pipeline.md](closed/150-implement-mitre-cti-stix-ingestion-and-catalog-pipeline.md) |
 | **149** | sqlite利用箇所（analytics.db等）のsrc/database統合と統一データベース基盤化 | Refactor / Architecture | 2026-09-04 | [149-integrate-src-database-engine-for-analytics-storage.md](closed/149-integrate-src-database-engine-for-analytics-storage.md) |
 | **143** | /dashboard tab=graph における孤立ノード（EdgeなしVertex）非表示トグル機能の実装 | Feature | 2026-09-04 | [143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md](closed/143-implement-toggle-to-hide-isolated-nodes-in-graph-tab.md) |
 | **142** | グラフクエリ探索結果が5秒ごとのLive Mesh同期でリセット・分裂する不具合の修正 | Bug | 2026-09-04 | [142-fix-graph-query-subgraph-reset-by-background-sync.md](closed/142-fix-graph-query-subgraph-reset-by-background-sync.md) |

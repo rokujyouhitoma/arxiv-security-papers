@@ -53,11 +53,19 @@ def _index_single_paper(fpath: str, engine: PropertyGraphEngine) -> int:
         return 0
 
 
+def _resolve_graph_path(workspace_dir: str, explicit_path: Optional[str] = None) -> str:
+    if explicit_path:
+        return explicit_path
+    new_path = os.path.join(workspace_dir, "outputs", "database", "graph", "graph.db")
+    legacy_path = os.path.join(workspace_dir, "outputs", "database", "graph.db")
+    if os.path.exists(legacy_path) and not os.path.exists(new_path):
+        return legacy_path
+    return new_path
+
+
 def build_knowledge_graph(workspace_dir: str, output_path: Optional[str] = None) -> int:
     """Scans all OKF markdown files and constructs the persistent Security Knowledge Graph."""
-    graph_path = output_path or os.path.join(
-        workspace_dir, "outputs", "database", "graph.db"
-    )
+    graph_path = _resolve_graph_path(workspace_dir, output_path)
     engine = PropertyGraphEngine(storage_path=graph_path)
 
     okf_pattern = os.path.join(workspace_dir, "outputs", "okf_papers", "*", "*.md")
@@ -90,9 +98,7 @@ def build_knowledge_graph(workspace_dir: str, output_path: Optional[str] = None)
 
 def show_graph_stats(workspace_dir: str, graph_path: Optional[str] = None) -> int:
     """Displays topological statistics of the Security Knowledge Graph."""
-    target_path = graph_path or os.path.join(
-        workspace_dir, "outputs", "database", "graph.db"
-    )
+    target_path = _resolve_graph_path(workspace_dir, graph_path)
     if not os.path.exists(target_path):
         print(f"[!] Graph database not found at {target_path}. Run build first.")
         return 1

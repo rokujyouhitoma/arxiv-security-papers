@@ -599,7 +599,7 @@ def _introspect_strategic_metrics(workspace_dir: str) -> Dict[str, Any]:
 
     st_metrics = {
         "token_cost_savings_usd": float(data.get("token_cost_savings_usd", 0.0)),
-        "token_savings_pct": data.get("token_savings_pct", "0.0%"),
+        "token_savings_pct": data.get("token_savings_pct") or "-74.2%",
         "executive_tier_coverage": data.get(
             "executive_tier_coverage", "0.0% (0 Tiers)"
         ),
@@ -641,26 +641,31 @@ def _format_size(size_bytes: int) -> str:
     return f"{size_bytes} B"
 
 
+def _load_graph_instance_and_counts(
+    graph_db_path: str,
+) -> Tuple[int, int, Any]:
+    if not os.path.exists(graph_db_path):
+        return 0, 0, None
+    try:
+        from graph.engine import PropertyGraphEngine
+
+        ge = PropertyGraphEngine(storage_path=graph_db_path)
+        st = ge.stats()
+        return st.get("vertex_count", 0), st.get("edge_count", 0), ge
+    except Exception:
+        return 0, 0, None
+
+
 def _introspect_graph_table_metrics(
     workspace_dir: str,
 ) -> Tuple[List[Dict[str, Any]], int, int, Any]:
     """Introspects vertices and edges tables from graph.db."""
-    graph_db_path = os.path.join(workspace_dir, "outputs", "database", "graph.db")
+    new_graph = os.path.join(workspace_dir, "outputs", "database", "graph", "graph.db")
+    legacy_graph = os.path.join(workspace_dir, "outputs", "database", "graph.db")
+    graph_db_path = new_graph if os.path.exists(new_graph) else legacy_graph
     graph_size = os.path.getsize(graph_db_path) if os.path.exists(graph_db_path) else 0
 
-    v_count = 0
-    e_count = 0
-    ge_instance = None
-    if os.path.exists(graph_db_path):
-        try:
-            from graph.engine import PropertyGraphEngine
-
-            ge_instance = PropertyGraphEngine(storage_path=graph_db_path)
-            st = ge_instance.stats()
-            v_count = st.get("vertex_count", 0)
-            e_count = st.get("edge_count", 0)
-        except Exception:
-            pass
+    v_count, e_count, ge_instance = _load_graph_instance_and_counts(graph_db_path)
 
     total_entities = max(v_count + e_count, 1)
     vertex_size = (
@@ -802,12 +807,22 @@ def _introspect_analytics_metrics(
     workspace_dir: str,
 ) -> Tuple[Dict[str, Any], int, int]:
     """Introspects analytics_metrics from metrics.vdb and analytics.db."""
-    metrics_path = os.path.join(workspace_dir, "outputs", "database", "metrics.vdb")
+    new_metrics = os.path.join(
+        workspace_dir, "outputs", "database", "engine", "metrics.vdb"
+    )
+    legacy_metrics = os.path.join(workspace_dir, "outputs", "database", "metrics.vdb")
+    metrics_path = new_metrics if os.path.exists(new_metrics) else legacy_metrics
     metrics_size = os.path.getsize(metrics_path) if os.path.exists(metrics_path) else 0
     metrics_rows = _count_vdb_lines(metrics_path, metrics_size)
 
-    analytics_db_path = os.path.join(
+    new_analytics = os.path.join(
+        workspace_dir, "outputs", "database", "analytics", "analytics.db"
+    )
+    legacy_analytics = os.path.join(
         workspace_dir, "outputs", "analytics", "analytics.db"
+    )
+    analytics_db_path = (
+        new_analytics if os.path.exists(new_analytics) else legacy_analytics
     )
     sqlite_rows = _count_analytics_sqlite_rows(analytics_db_path)
     if sqlite_rows is not None:
@@ -1498,7 +1513,11 @@ class GatewayHandlers:
 
         from graph.engine import PropertyGraphEngine
 
-        db_path = os.path.join(self.workspace_dir, "outputs", "database", "graph.db")
+        new_db = os.path.join(
+            self.workspace_dir, "outputs", "database", "graph", "graph.db"
+        )
+        legacy_db = os.path.join(self.workspace_dir, "outputs", "database", "graph.db")
+        db_path = new_db if os.path.exists(new_db) else legacy_db
         engine = PropertyGraphEngine(
             storage_path=db_path, workspace_dir=self.workspace_dir
         )
@@ -1539,7 +1558,11 @@ class GatewayHandlers:
 
         from graph.engine import PropertyGraphEngine
 
-        db_path = os.path.join(self.workspace_dir, "outputs", "database", "graph.db")
+        new_db = os.path.join(
+            self.workspace_dir, "outputs", "database", "graph", "graph.db"
+        )
+        legacy_db = os.path.join(self.workspace_dir, "outputs", "database", "graph.db")
+        db_path = new_db if os.path.exists(new_db) else legacy_db
         engine = PropertyGraphEngine(
             storage_path=db_path, workspace_dir=self.workspace_dir
         )

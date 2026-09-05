@@ -4,6 +4,8 @@
 from .compat.sqlite_engine import (
     SQLiteConnection,
     SQLiteCursor,
+    SQLiteError,
+    SQLiteOperationalError,
     SQLiteRow,
     count_sqlite_table_rows,
     get_sqlite_connection,
@@ -18,6 +20,8 @@ __all__ = [
     "SQLiteConnection",
     "SQLiteCursor",
     "SQLiteRow",
+    "SQLiteError",
+    "SQLiteOperationalError",
     "count_sqlite_table_rows",
     "get_sqlite_connection",
     "get_sqlite_table_names",

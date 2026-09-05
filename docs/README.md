@@ -51,6 +51,15 @@
   - `src/supervisor/` — Gunicorn スタイル Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー、Systemd 依存関係順序制御、動的スケーリング、自己回復・ハートビート監視。
 - 🚀 **[[DSN-16] 次世代セキュリティ・ナレッジプラットフォーム包括設計提言書](designs/DSN-16-nextgen_security_knowledge_platform_proposal.md)**
   - 多段階 LLM 要約、MITRE ATT&CK / TTPs マッピング、Caldera プレイブック生成、MCP / マルチチャネル配信、プロンプトインジェクション防護、CI/CD ゼロトラスト分離。
+- 🧠 **[[DSN-17] セキュリティ知識オントロジー (SKO) 設計仕様書](designs/DSN-17-security_knowledge_ontology.md)**
+  - `src/ontology/` — 7大コアエンティティ、12大関係述語、国際標準タクソノミー正規化、OKF v0.2 事実トリプル抽出。
+- 🕸️ **[[DSN-18] プロパティグラフ・データベースエンジン設計仕様書](designs/DSN-18-property_graph_database_engine.md)**
+  - `src/graph/` — ノード・エッジ隣接リスト構造、Cypherライクなグラフ探索エンジン、部分グラフ抽出。
+- 📝 **[[DSN-19] NLP重要キーワード抽出・構造化要約エンジン設計仕様書](designs/DSN-19-nlp_keyphrase_extraction_and_structured_synthesis.md)**
+  - `src/pipeline/` — Pure-Python TF-IDF/TextRank キーフレーズ抽出、3点エグゼクティブサマリー合成。
+- 🛡️ **[[DSN-20] 外部セキュリティ知識データセット（MITRE ATT&CK / CWE / CVE 等）統合インジェスト・ローカルカタログ管理基盤設計仕様書](designs/DSN-20-external_security_knowledge_ingestion_and_catalog_architecture.md)**
+  - `src/security/cti/` — Zero External Dependencies、プラグイン型ストリーミング同期、統一SQLite WAL + FTS5 全文検索カタログ、ATT&CK/CWE/CVEマルチデータセット対応、PropertyGraph & MCP 統合。
+
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
 - 📖 **[[USR-01] ユーザーマニュアル ＆ AI コーディングエージェント連携ガイド](manuals/USR-01-user_manual.md)**

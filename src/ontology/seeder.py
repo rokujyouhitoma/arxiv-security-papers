@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
+from security.cti.registry import MITRECTIRegistry
+
 if TYPE_CHECKING:
     from graph.engine import PropertyGraphEngine
 
@@ -639,3 +641,90 @@ def ingest_okf_papers(
         return 0, 0
     files = _scan_okf_files(base_dir)
     return _process_file_batch(files, engine, limit)
+
+
+def _seed_cti_techniques(
+    engine: PropertyGraphEngine, registry: MITRECTIRegistry, limit: int
+) -> Tuple[int, int]:
+    """Seeds CTI attack techniques into graph."""
+    added_v = 0
+    added_e = 0
+    techs = registry.get_all_techniques()
+    count = 0
+    for tech_id, meta in sorted(techs.items()):
+        if count >= limit:
+            break
+        v_id = f"AttackTechnique:{tech_id}"
+        props = {
+            "name": meta.get("name", tech_id),
+            "framework": "MITRE Enterprise",
+            "url": meta.get(
+                "external_url", f"https://attack.mitre.org/techniques/{tech_id}"
+            ),
+            "description": meta.get("description", ""),
+        }
+        engine.add_vertex(v_id, "AttackTechnique", props)
+        added_v += 1
+        count += 1
+
+        # Link to parent technique if subtechnique
+        parent_id = meta.get("parent_technique_id")
+        if parent_id and parent_id != tech_id:
+            parent_v = f"AttackTechnique:{parent_id}"
+            engine.add_vertex(parent_v, "AttackTechnique", {"name": parent_id})
+            engine.add_edge(v_id, parent_v, "SUBTECHNIQUE_OF")
+            added_e += 1
+
+    return added_v, added_e
+
+
+def _seed_single_mitigation(
+    engine: PropertyGraphEngine, m: Dict[str, Any], tech_v: str
+) -> Tuple[int, int]:
+    m_id = m.get("mitigation_id", "")
+    if not m_id:
+        return 0, 0
+    m_v = f"Mitigation:{m_id}"
+    engine.add_vertex(
+        m_v,
+        "Mitigation",
+        {
+            "name": m.get("name", m_id),
+            "description": m.get("description", ""),
+            "url": m.get("external_url", ""),
+        },
+    )
+    engine.add_edge(m_v, tech_v, "MITIGATES")
+    return 1, 1
+
+
+def _seed_cti_mitigations(
+    engine: PropertyGraphEngine, registry: MITRECTIRegistry, limit: int
+) -> Tuple[int, int]:
+    """Seeds CTI mitigations and links them to techniques."""
+    added_v, added_e, count = 0, 0, 0
+    for tech_id in sorted(registry.get_all_techniques().keys()):
+        if count >= limit:
+            break
+        mitigations = registry.get_mitigations_for_technique(tech_id)
+        tech_v = f"AttackTechnique:{tech_id}"
+        for m in mitigations:
+            v_inc, e_inc = _seed_single_mitigation(engine, m, tech_v)
+            added_v += v_inc
+            added_e += e_inc
+        if mitigations:
+            count += 1
+    return added_v, added_e
+
+
+def seed_ontology_from_cti(
+    engine: PropertyGraphEngine, limit: int = 500
+) -> Tuple[int, int]:
+    """
+    Seeds MITRE ATT&CK CTI techniques, subtechniques, and defensive mitigations
+    into PropertyGraphEngine from local SQLite catalog or fallback definitions.
+    """
+    registry = MITRECTIRegistry.get_instance()
+    tv, te = _seed_cti_techniques(engine, registry, limit)
+    mv, me = _seed_cti_mitigations(engine, registry, limit)
+    return tv + mv, te + me

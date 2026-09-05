@@ -21,6 +21,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _determine_graph_storage_path(
+    workspace_dir: str, explicit_path: Optional[str]
+) -> str:
+    if explicit_path:
+        return explicit_path
+    default_path = os.path.join(
+        workspace_dir, "outputs", "database", "graph", "graph.db"
+    )
+    legacy_path = os.path.join(workspace_dir, "outputs", "database", "graph.db")
+    if os.path.exists(legacy_path) and not os.path.exists(default_path):
+        return legacy_path
+    return default_path
+
+
 class PropertyGraphEngine:
     """
     High-performance pure Python Property Graph Database Engine.
@@ -36,8 +50,8 @@ class PropertyGraphEngine:
         self.workspace_dir = workspace_dir or os.path.abspath(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         )
-        self.storage_path = storage_path or os.path.join(
-            self.workspace_dir, "outputs", "database", "graph.db"
+        self.storage_path = _determine_graph_storage_path(
+            self.workspace_dir, storage_path
         )
         self.memory_only = memory_only
 
