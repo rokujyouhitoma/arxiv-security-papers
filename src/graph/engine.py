@@ -786,13 +786,84 @@ class PropertyGraphEngine:
                     break
         return edges
 
-    def _query_gaps(self, limit: int) -> Tuple[List[Vertex], List[Edge]]:
+    def _record_incident_edge(
+        self,
+        edge: Edge,
+        seed_id: str,
+        seen_keys: set[Tuple[str, str, str]],
+        collected_edges: List[Edge],
+        neighbor_ids: set[str],
+    ) -> bool:
+        key = (edge.src_id, edge.dst_id, edge.label)
+        if key in seen_keys:
+            return False
+        seen_keys.add(key)
+        collected_edges.append(edge)
+        neighbor_id = edge.dst_id if edge.src_id == seed_id else edge.src_id
+        neighbor_ids.add(neighbor_id)
+        return True
+
+    def _collect_seed_incident_edges(
+        self,
+        seed_id: str,
+        seen_keys: set[Tuple[str, str, str]],
+        collected_edges: List[Edge],
+        neighbor_ids: set[str],
+        max_neighbors: int,
+        max_edges: int,
+    ) -> bool:
+        """Collects bounded incident edges for a single seed vertex. Returns True if max_edges reached."""
+        count = 0
+        for edge in self.get_both_edges(seed_id):
+            if len(collected_edges) >= max_edges:
+                return True
+            if count >= max_neighbors:
+                break
+            if self._record_incident_edge(
+                edge, seed_id, seen_keys, collected_edges, neighbor_ids
+            ):
+                count += 1
+        return False
+
+    @staticmethod
+    def _filter_edges_by_nodes(edges: List[Edge], node_ids: set[str]) -> List[Edge]:
+        return [e for e in edges if e.src_id in node_ids and e.dst_id in node_ids]
+
+    def _expand_1hop_incident_subgraph(
+        self,
+        seed_ids: set[str],
+        max_edges: int = 150,
+        max_neighbors_per_seed: int = 20,
+    ) -> Tuple[List[Vertex], List[Edge]]:
+        """Expands 1-hop incident edges and neighbor vertices from seed vertices."""
+        seen_keys: set[Tuple[str, str, str]] = set()
+        collected_edges: List[Edge] = []
+        neighbor_ids: set[str] = set()
+
+        for sid in seed_ids:
+            if self._collect_seed_incident_edges(
+                sid,
+                seen_keys,
+                collected_edges,
+                neighbor_ids,
+                max_neighbors_per_seed,
+                max_edges,
+            ):
+                break
+
+        nodes = self._collect_vertices(seed_ids | neighbor_ids)
+        node_id_set = {v.id for v in nodes}
+        valid_edges = self._filter_edges_by_nodes(collected_edges, node_id_set)
+        return nodes, valid_edges
+
+    def _query_gaps(self, limit: int) -> Tuple[List[Vertex], List[Edge], int]:
         """Extracts research gap techniques/CWEs with their direct edges."""
         gaps = self.get_research_gaps()
         gap_ids = {g["id"] for g in gaps[:limit]}
-        return self._collect_vertices(gap_ids), self._collect_incident_edges(
-            gap_ids, limit * 2
+        nodes, edges = self._expand_1hop_incident_subgraph(
+            gap_ids, max_edges=min(limit * 3, 200), max_neighbors_per_seed=10
         )
+        return nodes, edges, len(gap_ids)
 
     def _collect_cwe_impact_node_ids(self, impact: Dict[str, Any]) -> set[str]:
         cwe_dict = impact.get("cwe")
@@ -805,15 +876,17 @@ class PropertyGraphEngine:
             node_ids.add(p["id"])
         return node_ids
 
-    def _query_cwe(self, raw_cwe: str, limit: int) -> Tuple[List[Vertex], List[Edge]]:
+    def _query_cwe(
+        self, raw_cwe: str, limit: int
+    ) -> Tuple[List[Vertex], List[Edge], int]:
         """Extracts multi-hop impact subgraph for specified CWE."""
         norm_cwe = raw_cwe.strip().upper()
         cwe_id = norm_cwe if norm_cwe.startswith("CWE-") else f"CWE-{norm_cwe}"
         impact = self.get_cwe_impact(cwe_id)
         node_ids = self._collect_cwe_impact_node_ids(impact)
-        return self._collect_vertices(node_ids), self._collect_induced_edges(
-            node_ids, limit * 2
-        )
+        nodes = self._collect_vertices(node_ids)
+        edges = self._collect_induced_edges(node_ids, limit * 2)
+        return nodes, edges, len(nodes)
 
     def _resolve_ego_node_id(self, target: str) -> Optional[str]:
         """Resolves raw target name or ID to canonical vertex ID."""
@@ -831,20 +904,22 @@ class PropertyGraphEngine:
         hops = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 2
         return target, min(hops, 3)
 
-    def _query_ego(self, raw_arg: str, limit: int) -> Tuple[List[Vertex], List[Edge]]:
+    def _query_ego(
+        self, raw_arg: str, limit: int
+    ) -> Tuple[List[Vertex], List[Edge], int]:
         """Extracts ego-network neighborhood around target vertex."""
         target, hops = self._parse_ego_target_and_hops(raw_arg)
         resolved_id = self._resolve_ego_node_id(target)
         if not resolved_id:
-            return [], []
+            return [], [], 0
         sub = self.get_neighborhood(resolved_id, max_hops=hops)
         node_ids = {n["id"] for n in sub.get("nodes", [])[:limit]}
-        return self._collect_vertices(node_ids), self._collect_induced_edges(
-            node_ids, limit * 2
-        )
+        nodes = self._collect_vertices(node_ids)
+        edges = self._collect_induced_edges(node_ids, limit * 2)
+        return nodes, edges, 1
 
     def _is_vertex_match(self, v: Vertex, term_low: str) -> bool:
-        if term_low in v.id.lower():
+        if term_low in v.id.lower() or term_low in v.label.lower():
             return True
         name = str(v.properties.get("name", "")).lower()
         if term_low in name:
@@ -852,20 +927,30 @@ class PropertyGraphEngine:
         title = str(v.properties.get("title", "")).lower()
         return term_low in title
 
-    def _query_match(self, term: str, limit: int) -> Tuple[List[Vertex], List[Edge]]:
-        """Matches vertices by ID, label, name, or title keyword."""
-        term_low = term.strip().lower()
-        if not term_low:
-            return [], []
+    def _find_matching_vertex_ids(self, term_low: str, seed_limit: int) -> set[str]:
         matched_ids: set[str] = set()
         for v in self._vertices.values():
             if self._is_vertex_match(v, term_low):
                 matched_ids.add(v.id)
-                if len(matched_ids) >= limit:
+                if len(matched_ids) >= seed_limit:
                     break
-        return self._collect_vertices(matched_ids), self._collect_induced_edges(
-            matched_ids
+        return matched_ids
+
+    def _query_match(
+        self, term: str, limit: int
+    ) -> Tuple[List[Vertex], List[Edge], int]:
+        """Matches vertices by ID, label, name, or title keyword and expands 1-hop incident edges."""
+        term_low = term.strip().lower()
+        if not term_low:
+            return [], [], 0
+        seed_limit = max(1, int(limit * 0.6))
+        matched_ids = self._find_matching_vertex_ids(term_low, seed_limit)
+        if not matched_ids:
+            return [], [], 0
+        nodes, edges = self._expand_1hop_incident_subgraph(
+            matched_ids, max_edges=min(limit * 3, 200), max_neighbors_per_seed=20
         )
+        return nodes, edges, len(matched_ids)
 
     def _step_bfs_path(
         self,
@@ -899,22 +984,24 @@ class PropertyGraphEngine:
                 return found
         return []
 
-    def _query_path(self, raw_path: str) -> Tuple[List[Vertex], List[Edge]]:
+    def _query_path(self, raw_path: str) -> Tuple[List[Vertex], List[Edge], int]:
         """Finds shortest reaching path between two node expressions via BFS."""
         if "->" not in raw_path:
-            return [], []
+            return [], [], 0
         parts = raw_path.split("->", 1)
         src = self._resolve_ego_node_id(parts[0].strip())
         dst = self._resolve_ego_node_id(parts[1].strip())
         if not src or not dst:
-            return [], []
+            return [], [], 0
         path = self._find_bfs_path(src, dst)
         path_set = set(path) if path else {src, dst}
-        return self._collect_vertices(path_set), self._collect_induced_edges(path_set)
+        nodes = self._collect_vertices(path_set)
+        edges = self._collect_induced_edges(path_set)
+        return nodes, edges, len(nodes)
 
     def _dispatch_structured_query(
         self, q_clean: str, q_low: str, limit: int
-    ) -> Optional[Tuple[List[Vertex], List[Edge]]]:
+    ) -> Optional[Tuple[List[Vertex], List[Edge], int]]:
         if q_low.startswith("gap"):
             return self._query_gaps(limit)
         if q_low.startswith("cwe:"):
@@ -925,7 +1012,7 @@ class PropertyGraphEngine:
 
     def _dispatch_graph_query(
         self, q: str, limit: int
-    ) -> Tuple[List[Vertex], List[Edge]]:
+    ) -> Tuple[List[Vertex], List[Edge], int]:
         """Dispatches query string to appropriate search strategy."""
         q_clean = q.strip()
         q_low = q_clean.lower()
@@ -936,16 +1023,27 @@ class PropertyGraphEngine:
             return self._query_path(q_clean.replace("path:", ""))
         return self._query_match(q_clean.replace("match:", ""), limit)
 
+    def _cap_subgraph_nodes_and_edges(
+        self, nodes_raw: List[Vertex], edges_raw: List[Edge], limit: int
+    ) -> Tuple[List[Vertex], List[Edge]]:
+        nodes_capped = nodes_raw[:limit]
+        node_id_set = {v.id for v in nodes_capped}
+        edges_capped = self._filter_edges_by_nodes(edges_raw, node_id_set)
+        return nodes_capped, edges_capped
+
     def execute_graph_query(self, query: str, limit: int = 50) -> Dict[str, Any]:
         """Executes domain graph query and exports formatted subgraph for Canvas."""
-        nodes_raw, edges_raw = self._dispatch_graph_query(query, limit)
+        nodes_raw, edges_raw, match_count = self._dispatch_graph_query(query, limit)
+        nodes_capped, edges_capped = self._cap_subgraph_nodes_and_edges(
+            nodes_raw, edges_raw, limit
+        )
         gaps = self.get_research_gaps()
         gap_id_set = {g["id"] for g in gaps}
 
         return {
             "query": query,
-            "match_count": len(nodes_raw),
-            "nodes": [self._format_cti_node(v, gap_id_set) for v in nodes_raw[:limit]],
-            "edges": [self._format_cti_edge(e) for e in edges_raw],
+            "match_count": match_count,
+            "nodes": [self._format_cti_node(v, gap_id_set) for v in nodes_capped],
+            "edges": [self._format_cti_edge(e) for e in edges_capped],
             "stats": self._compute_cti_counts(len(gap_id_set)),
         }

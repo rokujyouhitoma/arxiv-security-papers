@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **173** | CTI グラフクエリにおける 1-Hop 隣接エンティティおよびインシデントエッジの自動展開（Paper 単体検索時のエッジ消失バグ解消） | Bug | High | In Progress | [173-expand-1hop-incident-edges-in-graph-query.md](173-expand-1hop-incident-edges-in-graph-query.md) |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **173** | CTI グラフクエリにおける 1-Hop 隣接エンティティおよびインシデントエッジの自動展開（Paper 単体検索時のエッジ消失バグ解消） | Bug | 2026-09-06 | [173-expand-1hop-incident-edges-in-graph-query.md](closed/173-expand-1hop-incident-edges-in-graph-query.md) |
 | **172** | SSE 接続による Web ワーカー枯渇・ブロッキング障害の解消および dashboard.html 内の不要 SSE 撤廃 | Bug / Security | 2026-09-05 | [172-fix-sse-saturation-blocking-web-workers.md](closed/172-fix-sse-saturation-blocking-web-workers.md) |
 | **171** | index.html におけるヘルプ・操作ガイドドロワーの dashboard.html 準拠デザイン・出し方統一実装 | Feature | 2026-09-05 | [171-unify-index-help-guide-drawer-design-with-dashboard.md](closed/171-unify-index-help-guide-drawer-design-with-dashboard.md) |
 | **170** | dashboard.html からの 3 画面削除（Graph 単一画面化）および index.html との統一ヘッダー・相互リンク実装 | Feature | 2026-09-05 | [170-unify-dashboard-header-with-index-and-retain-graph-only.md](closed/170-unify-dashboard-header-with-index-and-retain-graph-only.md) |

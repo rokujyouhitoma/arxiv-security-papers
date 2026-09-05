@@ -2,7 +2,7 @@
 ID: 173
 種別: Bug
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [BUG] CTI グラフクエリにおける 1-Hop 隣接エンティティおよびインシデントエッジの自動展開（Paper 単体検索時のエッジ消失バグ解消） (ID: 173)
@@ -21,7 +21,7 @@ DSN-17（Security Knowledge Ontology）および DSN-07 の設計において、
 
 ### 再現環境 / Environment
 - OS / Env: Linux / Web Browser (Chrome, Firefox, Safari)
-- File: [src/graph/engine.py](file:///workspace/arxiv-security-papers/src/graph/engine.py), [src/web/gateway/handlers.py](file:///workspace/arxiv-security-papers/src/web/gateway/handlers.py), [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html)
+- File: `src/graph/engine.py`, `src/web/gateway/handlers.py`, `site/dashboard.html`
 
 ---
 
@@ -54,22 +54,22 @@ DSN-17（Security Knowledge Ontology）および DSN-07 の設計において、
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/graph/engine.py](file:///workspace/arxiv-security-papers/src/graph/engine.py)
+- [x] `src/graph/engine.py`
   - `_is_vertex_match`: `v.label` のマッチング判定を追加。
   - `_collect_incident_edges` / `_expand_1hop_incident_subgraph`: シード集合から 1-Hop 先の隣接頂点とエッジを有界収集するヘルパーの新設または拡張。
   - `_query_match`: 単純な `_collect_induced_edges` 呼び出しから 1-Hop 有界展開サブグラフ収集への刷新。
   - `_query_gaps`: インシデントエッジの接続先頂点（neighbor）が `nodes` に含まれずダングリングとなる不整合の解消。
   - `execute_graph_query`: `nodes_raw[:limit]` による不用意な隣接ノード切り捨て（ダングリングエッジ生成）の防止と、シード一致件数（`match_count`）の正確な返却。
-- [ ] [src/web/gateway/handlers.py](file:///workspace/arxiv-security-papers/src/web/gateway/handlers.py)
+- [x] `src/web/gateway/handlers.py`
   - `/api/graph/query` における `limit` のパースと、レスポンス JSON スキーマ（`mesh.nodes`, `mesh.edges`, `match_count`）の整合性確認。
-- [ ] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html)
+- [x] `site/dashboard.html`
   - `graphQueryResultBadge` の表示確認（シード一致数とエッジ数の明瞭な表示）。
   - ノード・エッジ受信時のフィルタ（`applyCtiFilter`）におけるダングリングエッジ除外ガードの動作確認。
-- [ ] [tests/graph/test_graph_query.py](file:///workspace/arxiv-security-papers/tests/graph/test_graph_query.py)
+- [x] `tests/graph/test_graph_query.py`
   - `match: Paper:`, `match: injection`, `gaps` 等における 1-Hop 隣接ノード展開およびエッジ保持の単体テスト追加。
-- [ ] [tests/web/test_dashboard_graph_query.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_graph_query.py)
+- [x] `tests/web/test_dashboard_graph_query.py`
   - REST API 経由での Paper 検索時にエッジおよび接続先エンティティ（AttackTechnique, CWE 等）が正しく返却される結合テスト追加。
-- [ ] [tests/web/test_dashboard_graph_tab.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_graph_tab.py)
+- [x] `tests/web/test_dashboard_graph_tab.py`
   - UI 側の描画整合性・バッジ表示仕様の回帰テスト。
 
 ---
@@ -139,11 +139,12 @@ Target Branch: `fix/173-expand-1hop-incident-edges-in-graph-query`
 ---
 
 ## 8. 完了条件 / Success Criteria (DoD)
-- [ ] `match: Paper:` や `Paper:` などの Paper 検索クエリにおいて、接続する 1-Hop 隣接エンティティ（AttackTechnique, CWE 等）およびインシデントエッジが自動展開されて返却されること
-- [ ] 返却されるすべてのエッジの `source` および `target` が `res["nodes"]` 内に必ず存在し、ダングリングエッジが 0 件であること
-- [ ] `dashboard.html` の Canvas 上で Paper 検索時にエッジが正しく描画され、孤立ノード化しないこと
-- [ ] `gaps` クエリにおいてもエッジ対向頂点がノード一覧に含まれ、フロントエンドでエッジが除外されないこと
-- [ ] `_is_vertex_match` が `v.label` による部分一致判定を正しく行うこと
-- [ ] ハブノード展開時にも上限クランプ（シードあたり20件、全体150〜200エッジ）が機能し、DoS耐性が保たれること
-- [ ] 新規単体テスト・結合テストが追加され、100% PASS すること
-- [ ] `make verify_quality`（フォーマット、静的解析 Xenon Rank A、Mypy、全テスト）が 100% PASS すること
+- [x] `match: Paper:` や `Paper:` などの Paper 検索クエリにおいて、接続する 1-Hop 隣接エンティティ（AttackTechnique, CWE 等）およびインシデントエッジが自動展開されて返却されること
+- [x] 返却されるすべてのエッジの `source` および `target` が `res["nodes"]` 内に必ず存在し、ダングリングエッジが 0 件であること
+- [x] `dashboard.html` の Canvas 上で Paper 検索時にエッジが正しく描画され、孤立ノード化しないこと
+- [x] `gaps` クエリにおいてもエッジ対向頂点がノード一覧に含まれ、フロントエンドでエッジが除外されないこと
+- [x] `_is_vertex_match` が `v.label` による部分一致判定を正しく行うこと
+- [x] ハブノード展開時にも上限クランプ（シードあたり20件、全体150〜200エッジ）が機能し、DoS耐性が保たれること
+- [x] 新規単体テスト・結合テストが追加され、100% PASS すること
+- [x] `make verify_quality`（フォーマット、静的解析 Xenon Rank A、Mypy、全テスト）が 100% PASS すること
+

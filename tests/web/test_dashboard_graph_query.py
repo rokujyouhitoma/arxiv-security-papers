@@ -68,3 +68,18 @@ def test_api_graph_query_limit_clamping() -> None:
     res = _call_wsgi(app, "/api/graph/query", "q=match:+security&limit=99999")
     assert res["status"] == "success"
     assert len(res["mesh"]["nodes"]) <= 500
+
+
+def test_api_graph_query_paper_match_with_edges() -> None:
+    workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    app = WSGIApplication(workspace_dir=workspace_dir)
+
+    res = _call_wsgi(app, "/api/graph/query", "q=match:Paper:&limit=20")
+    assert res["status"] == "success"
+    assert "mesh" in res
+    assert "nodes" in res["mesh"]
+    assert "edges" in res["mesh"]
+    node_ids = {n["id"] for n in res["mesh"]["nodes"]}
+    for e in res["mesh"]["edges"]:
+        assert e["source"] in node_ids, f"Dangling edge: {e}"
+        assert e["target"] in node_ids, f"Dangling edge: {e}"

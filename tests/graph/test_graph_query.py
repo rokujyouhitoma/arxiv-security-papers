@@ -76,3 +76,64 @@ def test_query_empty_or_non_matching() -> None:
     assert res["match_count"] == 0
     assert len(res["nodes"]) == 0
     assert len(res["edges"]) == 0
+
+
+def test_query_match_paper_expands_1hop_edges() -> None:
+    engine = _build_test_graph()
+    res = engine.execute_graph_query("match: Paper:", limit=20)
+    assert res["match_count"] == 1
+    node_ids = {n["id"] for n in res["nodes"]}
+    assert "Paper:2501.00001" in node_ids
+    assert "AttackTechnique:AML.T0054" in node_ids
+    assert len(res["edges"]) >= 1
+    edge = res["edges"][0]
+    assert edge["source"] == "Paper:2501.00001"
+    assert edge["target"] == "AttackTechnique:AML.T0054"
+    assert edge["label"] == "ANALYZES"
+    for e in res["edges"]:
+        assert e["source"] in node_ids
+        assert e["target"] in node_ids
+
+
+def test_query_match_by_label() -> None:
+    engine = _build_test_graph()
+    res = engine.execute_graph_query("match: Paper", limit=20)
+    assert res["match_count"] >= 1
+    node_ids = {n["id"] for n in res["nodes"]}
+    assert "Paper:2501.00001" in node_ids
+
+    res_tech = engine.execute_graph_query("match: AttackTechnique", limit=20)
+    assert res_tech["match_count"] >= 1
+    tech_ids = {n["id"] for n in res_tech["nodes"]}
+    assert any(tid.startswith("AttackTechnique:") for tid in tech_ids)
+
+
+def test_query_gaps_zero_dangling_edges() -> None:
+    engine = _build_test_graph()
+    res = engine.execute_graph_query("gaps", limit=20)
+    node_ids = {n["id"] for n in res["nodes"]}
+    for e in res["edges"]:
+        assert e["source"] in node_ids, f"Dangling edge source: {e['source']}"
+        assert e["target"] in node_ids, f"Dangling edge target: {e['target']}"
+
+
+def test_query_1hop_expansion_bounds() -> None:
+    engine = PropertyGraphEngine(memory_only=True)
+    engine.add_vertex(
+        "Paper:Hub", label="Paper", properties={"title": "Super Hub Paper"}
+    )
+    for i in range(35):
+        t_id = f"AttackTechnique:T{i:04d}"
+        engine.add_vertex(
+            t_id, label="AttackTechnique", properties={"name": f"Tech {i}"}
+        )
+        engine.add_edge("Paper:Hub", t_id, label="STUDIES")
+
+    res = engine.execute_graph_query("match: Hub", limit=10)
+    assert res["match_count"] == 1
+    assert len(res["edges"]) <= 20
+    assert len(res["nodes"]) <= 21
+    node_ids = {n["id"] for n in res["nodes"]}
+    for e in res["edges"]:
+        assert e["source"] in node_ids
+        assert e["target"] in node_ids
