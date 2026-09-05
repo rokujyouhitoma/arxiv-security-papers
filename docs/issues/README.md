@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **144** | /dashboard tab=graph における最小次数フィルタ（Min-Degree / Hub Filter）の実装 | Feature | Medium | In Progress | [144-implement-min-degree-hub-filter-in-graph-tab.md](144-implement-min-degree-hub-filter-in-graph-tab.md) |
 | **145** | /dashboard tab=graph における特定ノードのフォーカス・エゴネットワーク抽出機能の実装 | Feature | Medium | In Progress | [145-implement-focus-ego-subgraph-mode-in-graph-tab.md](145-implement-focus-ego-subgraph-mode-in-graph-tab.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
@@ -20,6 +19,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **153** | Supervisor 4x daily 自律バッチ運用と過去OKF論文アーカイブの全量CTI再アノテーション・エンリッチメント | Feature / Ops | 2026-09-05 | [153-implement-supervisor-4xdaily-cron-and-cti-backfill-reannotation.md](closed/153-implement-supervisor-4xdaily-cron-and-cti-backfill-reannotation.md) |
+| **152** | MITRE ATT&CK 緩和策（Mitigations）自動マッピングと動的防衛シグネチャ生成（Semgrep/Sigma/YARA）連携強化 | Feature | 2026-09-05 | [152-integrate-cti-mitigations-with-defense-signatures.md](closed/152-integrate-cti-mitigations-with-defense-signatures.md) |
+| **144** | /dashboard tab=graph における最小次数フィルタ（Min-Degree / Hub Filter）の実装 | Feature | 2026-09-05 | [144-implement-min-degree-hub-filter-in-graph-tab.md](closed/144-implement-min-degree-hub-filter-in-graph-tab.md) |
 | **151** | ドメイン層（src/domain/security/）へのCTI・Taxonomy知識体系の再配置とセキュリティ基盤（src/security/）の責務分離 | Refactor / Architecture | 2026-09-05 | [151-reorganize-domain-security-cti-taxonomy-boundaries.md](closed/151-reorganize-domain-security-cti-taxonomy-boundaries.md) |
 | **150** | MITRE ATT&CK CTI (STIX 2.0/2.1) 定義取り込み・SQLiteカタログ基盤および抽出・オントロジー連携の実装 | Feature / Architecture | 2026-09-05 | [150-implement-mitre-cti-stix-ingestion-and-catalog-pipeline.md](closed/150-implement-mitre-cti-stix-ingestion-and-catalog-pipeline.md) |
 | **149** | sqlite利用箇所（analytics.db等）のsrc/database統合と統一データベース基盤化 | Refactor / Architecture | 2026-09-04 | [149-integrate-src-database-engine-for-analytics-storage.md](closed/149-integrate-src-database-engine-for-analytics-storage.md) |

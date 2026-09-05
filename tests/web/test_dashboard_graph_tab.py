@@ -245,3 +245,38 @@ def test_dashboard_toggle_hide_isolated_nodes(dashboard_html: str) -> None:
     # 4. Context Mesh filtering logic for degree=0 (isolated nodes)
     assert "function applyContextMesh()" in dashboard_html
     assert "applyContextMesh();" in dashboard_html
+
+
+def test_dashboard_min_degree_hub_filter(dashboard_html: str) -> None:
+    """Verifies that the Min-Degree Hub Filter (All, >=1, >=2, >=3) is properly implemented:
+    - Button elements #btnDegAll, #btnDeg1, #btnDeg2, #btnDeg3 exist in the toolbar
+    - State variable minDegreeThreshold and window.setMinDegree() function defined
+    - applyCtiFilter filters out nodes with degree < minDegreeThreshold
+    - applyContextMesh filters out nodes with degree < minDegreeThreshold
+    - Result badge reflects minDegreeThreshold
+    """
+    # 1. UI elements
+    assert 'id="btnDegAll"' in dashboard_html
+    assert 'id="btnDeg1"' in dashboard_html
+    assert 'id="btnDeg2"' in dashboard_html
+    assert 'id="btnDeg3"' in dashboard_html
+    assert "MIN DEGREE:" in dashboard_html
+
+    # 2. State variable and setMinDegree function
+    assert "let minDegreeThreshold = 0;" in dashboard_html
+    assert "window.setMinDegree = function(deg)" in dashboard_html
+    assert "minDegreeThreshold = Math.max(0, parseInt(deg, 10) || 0);" in dashboard_html
+    assert (
+        "btnAll.classList.toggle('active', minDegreeThreshold === 0);" in dashboard_html
+    )
+
+    # 3. Degree calculation and filtering in applyCtiFilter
+    assert "degrees.set(e.source, (degrees.get(e.source) || 0) + 1);" in dashboard_html
+    assert "degrees.set(e.target, (degrees.get(e.target) || 0) + 1);" in dashboard_html
+    assert (
+        "filteredNodes = filteredNodes.filter(n => (degrees.get(n.id) || 0) >= minDegreeThreshold);"
+        in dashboard_html
+    )
+
+    # 4. Result badge status formatting
+    assert "最小次数 ≥" in dashboard_html

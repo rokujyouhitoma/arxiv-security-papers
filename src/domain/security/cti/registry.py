@@ -95,6 +95,50 @@ BUILTIN_FALLBACK_TECHNIQUES: Dict[str, Dict[str, Any]] = {
     },
 }
 
+BUILTIN_FALLBACK_MITIGATIONS: Dict[str, List[Dict[str, Any]]] = {
+    "T1059": [
+        {
+            "mitigation_id": "M1038",
+            "name": "Execution Prevention",
+            "description": "Block execution of untrusted scripts and binaries.",
+            "external_url": "https://attack.mitre.org/mitigations/M1038/",
+            "stix_id": "course-of-action--m1038",
+        },
+        {
+            "mitigation_id": "M1049",
+            "name": "Antivirus/Antimalware",
+            "description": "Use signatures to detect malicious scripts.",
+            "external_url": "https://attack.mitre.org/mitigations/M1049/",
+            "stix_id": "course-of-action--m1049",
+        },
+    ],
+    "T1190": [
+        {
+            "mitigation_id": "M1050",
+            "name": "Exploit Protection",
+            "description": "Use exploit mitigation features to protect public-facing applications.",
+            "external_url": "https://attack.mitre.org/mitigations/M1050/",
+            "stix_id": "course-of-action--m1050",
+        },
+        {
+            "mitigation_id": "M1041",
+            "name": "Network Segmentation",
+            "description": "Segment public-facing systems from critical networks.",
+            "external_url": "https://attack.mitre.org/mitigations/M1041/",
+            "stix_id": "course-of-action--m1041",
+        },
+    ],
+    "T1078": [
+        {
+            "mitigation_id": "M1032",
+            "name": "Multi-factor Authentication",
+            "description": "Require MFA for accounts with access to sensitive resources.",
+            "external_url": "https://attack.mitre.org/mitigations/M1032/",
+            "stix_id": "course-of-action--m1032",
+        },
+    ],
+}
+
 
 class MITRECTIRegistry:
     """Unified Registry for MITRE ATT&CK with persistent SQLite backend and offline fallback."""
@@ -192,9 +236,13 @@ class MITRECTIRegistry:
 
     def get_mitigations_for_technique(self, technique_id: str) -> List[Dict[str, Any]]:
         """Finds defensive mitigations for a given technique ID."""
+        key = technique_id.upper()
         if self.is_populated():
-            return self.storage.get_mitigations_for_technique(technique_id)
-        return []
+            mits = self.storage.get_mitigations_for_technique(key)
+            if mits:
+                return mits
+        parent_key = key.split(".")[0] if "." in key else key
+        return BUILTIN_FALLBACK_MITIGATIONS.get(parent_key, [])
 
     def get_tactics(self) -> List[Dict[str, Any]]:
         """Returns all tactics."""

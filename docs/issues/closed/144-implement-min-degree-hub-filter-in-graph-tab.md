@@ -2,7 +2,7 @@
 ID: 144
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] /dashboard tab=graph における最小次数フィルタ（Min-Degree / Hub Filter）の実装 (ID: 144)
@@ -77,10 +77,9 @@ Target Branch: `feat/144-implement-min-degree-hub-filter-in-graph-tab`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `site/dashboard.html` のツールバーに最小次数セレクター（All / ≥1 / ≥2 / ≥3）が配置されていること。
-- [ ] 選択した閾値未満のノードと孤立したエッジが即座に非表示になり、ハブ構造のみが可視化されること。
-- [ ] All（閾値 0）を選択すると元の全ノードが再描画されること。
-- [ ] クエリ探索および各種フィルタ（Papers / ATT&CK / CWE）と相互に干渉せず連動すること。
-- [ ] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
-- [ ] 設計書 `DSN-14` に仕様が完全同期されていること。
-
+- [x] `site/dashboard.html` のツールバーに最小次数セレクター（All / ≥1 / ≥2 / ≥3）が配置されていること。
+- [x] 選択した閾値未満のノードと孤立したエッジが即座に非表示になり、ハブ構造のみが可視化されること。
+- [x] All（閾値 0）を選択すると元の全ノードが再描画されること。
+- [x] クエリ探索および各種フィルタ（Papers / ATT&CK / CWE）と相互に干渉せず連動すること。
+- [x] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
+- [x] 設計書 `DSN-14` に仕様が完全同期されていること。

@@ -912,6 +912,13 @@
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
           </div>
           <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 4px; border-right: 1px solid var(--border-dark); padding-right: 8px; margin-right: 2px;">
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">MIN DEGREE:</span>
+              <button id="btnDegAll" class="btn-tool active" onclick="setMinDegree(0)" title="すべての次数を表示">All</button>
+              <button id="btnDeg1" class="btn-tool" onclick="setMinDegree(1)" title="次数1以上 (孤立除外)">≥1</button>
+              <button id="btnDeg2" class="btn-tool" onclick="setMinDegree(2)" title="次数2以上 (コア接続)">≥2</button>
+              <button id="btnDeg3" class="btn-tool" onclick="setMinDegree(3)" title="次数3以上 (ハブノード)">≥3</button>
+            </div>
             <button id="btnToggleIsolated" class="btn-tool" onclick="toggleIsolatedNodes()" title="エッジを持たない孤立頂点 (degree = 0) を非表示にします">🔗 孤立ノード除外</button>
             <button id="btnToggleHeaderQuick" class="btn-tool" onclick="toggleDashboardHeader()" title="ヘッダー折りたたみ切替 (Shortcut: H)">⛶ 全画面 / ヘッダー切替</button>
           </div>
@@ -1556,6 +1563,7 @@
       let currentGraphMode = 'context'; // 'context' | 'cti'
       let activeGraphQuery = null; // Currently active CTI query (null = full mesh)
       let hideIsolatedNodes = false;
+      let minDegreeThreshold = 0;
       let ctiFilter = 'all'; // 'all' | 'Paper' | 'AttackTechnique' | 'Vulnerability'
       let highlightGaps = false;
       let ctiRawNodes = [];
@@ -1606,26 +1614,38 @@
           });
         }
         const activeNodeIds = new Set(filteredNodes.map(n => n.id));
-        const filteredEdges = ctiRawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
+        const candidateEdges = ctiRawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
 
+        const degrees = new Map();
+        const connectedIds = new Set();
+        candidateEdges.forEach(e => {
+          connectedIds.add(e.source);
+          connectedIds.add(e.target);
+          degrees.set(e.source, (degrees.get(e.source) || 0) + 1);
+          degrees.set(e.target, (degrees.get(e.target) || 0) + 1);
+        });
+
+        const beforeFilterCount = filteredNodes.length;
         if (hideIsolatedNodes) {
-          const connectedIds = new Set();
-          filteredEdges.forEach(e => {
-            connectedIds.add(e.source);
-            connectedIds.add(e.target);
-          });
-          const beforeCount = filteredNodes.length;
           filteredNodes = filteredNodes.filter(n => connectedIds.has(n.id));
-          const isolatedCount = beforeCount - filteredNodes.length;
-          const badge = document.getElementById('graphQueryResultBadge');
-          if (badge && activeGraphQuery) {
-            badge.textContent = `✅ ${filteredNodes.length} 件一致 (${filteredEdges.length} リンク, 孤立 ${isolatedCount} 件除外)`;
+        }
+        if (minDegreeThreshold > 0) {
+          filteredNodes = filteredNodes.filter(n => (degrees.get(n.id) || 0) >= minDegreeThreshold);
+        }
+        const remainingNodeIds = new Set(filteredNodes.map(n => n.id));
+        const filteredEdges = candidateEdges.filter(e => remainingNodeIds.has(e.source) && remainingNodeIds.has(e.target));
+
+        const badge = document.getElementById('graphQueryResultBadge');
+        if (badge && activeGraphQuery) {
+          let badgeText = `✅ ${filteredNodes.length} 件一致 (${filteredEdges.length} リンク`;
+          if (minDegreeThreshold > 0) {
+            badgeText += `, 最小次数 ≥${minDegreeThreshold}`;
+          } else if (hideIsolatedNodes) {
+            const isolatedCount = beforeFilterCount - filteredNodes.length;
+            badgeText += `, 孤立 ${isolatedCount} 件除外`;
           }
-        } else {
-          const badge = document.getElementById('graphQueryResultBadge');
-          if (badge && activeGraphQuery) {
-            badge.textContent = `✅ ${filteredNodes.length} 件一致 (${filteredEdges.length} リンク)`;
-          }
+          badgeText += `)`;
+          badge.textContent = badgeText;
         }
 
         const existingPos = new Map();
@@ -1682,17 +1702,26 @@
         const rawEdges = (contextRawEdges && contextRawEdges.length > 0) ? contextRawEdges : contextBackupEdges;
 
         const activeNodeIds = new Set(rawNodes.map(n => n.id));
-        const filteredEdges = rawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
+        const candidateEdges = rawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
+
+        const degrees = new Map();
+        const connectedIds = new Set();
+        candidateEdges.forEach(e => {
+          connectedIds.add(e.source);
+          connectedIds.add(e.target);
+          degrees.set(e.source, (degrees.get(e.source) || 0) + 1);
+          degrees.set(e.target, (degrees.get(e.target) || 0) + 1);
+        });
 
         let filteredNodes = rawNodes;
         if (hideIsolatedNodes) {
-          const connectedIds = new Set();
-          filteredEdges.forEach(e => {
-            connectedIds.add(e.source);
-            connectedIds.add(e.target);
-          });
           filteredNodes = filteredNodes.filter(n => connectedIds.has(n.id));
         }
+        if (minDegreeThreshold > 0) {
+          filteredNodes = filteredNodes.filter(n => (degrees.get(n.id) || 0) >= minDegreeThreshold);
+        }
+        const remainingNodeIds = new Set(filteredNodes.map(n => n.id));
+        const filteredEdges = candidateEdges.filter(e => remainingNodeIds.has(e.source) && remainingNodeIds.has(e.target));
 
         const existingPositions = new Map();
         NODES.forEach(n => existingPositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy }));
@@ -1751,6 +1780,24 @@
             btn.textContent = '🔗 孤立ノード除外';
           }
         }
+        if (currentGraphMode === 'cti') {
+          applyCtiFilter();
+        } else if (currentGraphMode === 'context') {
+          applyContextMesh();
+        }
+      };
+
+      window.setMinDegree = function(deg) {
+        minDegreeThreshold = Math.max(0, parseInt(deg, 10) || 0);
+        const btnAll = document.getElementById('btnDegAll');
+        const btn1 = document.getElementById('btnDeg1');
+        const btn2 = document.getElementById('btnDeg2');
+        const btn3 = document.getElementById('btnDeg3');
+        if (btnAll) btnAll.classList.toggle('active', minDegreeThreshold === 0);
+        if (btn1) btn1.classList.toggle('active', minDegreeThreshold === 1);
+        if (btn2) btn2.classList.toggle('active', minDegreeThreshold === 2);
+        if (btn3) btn3.classList.toggle('active', minDegreeThreshold === 3);
+
         if (currentGraphMode === 'cti') {
           applyCtiFilter();
         } else if (currentGraphMode === 'context') {

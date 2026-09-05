@@ -257,6 +257,23 @@ TOOLS_MANIFEST = [
             "required": ["query"],
         },
     },
+    {
+        "name": "get_mitigations_for_threat",
+        "description": (
+            "Retrieve recommended MITRE ATT&CK mitigations (Course of Action) "
+            "mapped to an attack technique or threat pattern from the CTI catalog."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "technique_id": {
+                    "type": "string",
+                    "description": "Target MITRE ATT&CK technique ID (e.g. 'T1059', 'T1190', 'T1078')",
+                },
+            },
+            "required": ["technique_id"],
+        },
+    },
 ]
 
 
@@ -463,10 +480,13 @@ def handle_generate_sigma_rule(params: Dict[str, Any]) -> Dict[str, Any]:
     from security.taxonomy import generate_sigma_rule
 
     sigma_yaml = generate_sigma_rule(tech_id=tech_id, title=title)
+    registry = MITRECTIRegistry.get_instance()
+    mitigations = registry.get_mitigations_for_technique(tech_id)
     return {
         "status": "success",
         "tech_id": tech_id,
         "sigma_rule_yaml": sigma_yaml,
+        "mitigations": mitigations,
     }
 
 
@@ -612,6 +632,28 @@ def handle_search_mitre_cti(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def handle_get_mitigations_for_threat(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Retrieves MITRE ATT&CK mitigations for a given technique ID."""
+    tech_id = str(params.get("technique_id", "")).strip().upper()
+    if not tech_id:
+        return {
+            "status": "error",
+            "message": "Missing required parameter 'technique_id'",
+        }
+
+    registry = MITRECTIRegistry.get_instance()
+    mitigations = registry.get_mitigations_for_technique(tech_id)
+    tech_meta = registry.get_technique(tech_id) or {}
+
+    return {
+        "status": "success",
+        "technique_id": tech_id,
+        "technique_name": tech_meta.get("name", "Unknown"),
+        "mitigation_count": len(mitigations),
+        "mitigations": mitigations,
+    }
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generate_semgrep_rule": handle_generate_semgrep_rule,
     "synthesize_secure_patch": handle_synthesize_secure_patch,
@@ -624,6 +666,7 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "model_stride_threats": handle_model_stride_threats,
     "synthesize_detection_signature": handle_synthesize_detection_signature,
     "search_mitre_cti": handle_search_mitre_cti,
+    "get_mitigations_for_threat": handle_get_mitigations_for_threat,
 }
 
 

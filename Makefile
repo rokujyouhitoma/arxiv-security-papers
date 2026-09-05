@@ -264,4 +264,9 @@ check_ir_regression: activate ## Enforce CI quality gate against IR metrics regr
 sync_cti: activate ## Sync MITRE ATT&CK CTI definitions into local SQLite catalog
 	PYTHONPATH=src ${VENV_PYTHON} -c "from security.cti import CTISyncManager; summary = CTISyncManager().sync_from_url(); print(f'[CTI Sync] Ingested: {summary}')"
 
+.PHONY: reannotate_cti
+reannotate_cti: activate ## Re-annotate all historical OKF papers with CTI techniques and mitigations
+	PYTHONPATH=src ${VENV_PYTHON} src/pipeline/cti_backfill.py
+
+
 

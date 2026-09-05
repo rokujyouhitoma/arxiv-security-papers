@@ -503,3 +503,21 @@ Canvas による深度 1〜5 の到達度ヒストグラム。
      - Context Mesh 表示時も同様に `hideIsolatedNodes` に連動して孤立頂点を除外。
    - 頂点半径再計算（`updateNodeRadii(NODES, EDGES)`）との連動により、残存接続ノードのみで正確な次数ベースのスケーリングを維持。
 
+## 11.8 最小次数フィルタ（Min-Degree Hub Filter）
+エッジ数が少ない末端リーフノードを段階的に非表示にし、多数の論文や脆弱性・攻撃手法を結びつける**ハブノード（コアネットワーク骨格）**を瞬時に抽出・分析するため、頂点のエッジ接続数（次数 $k$: degree）に応じた最小次数セレクターを備える。
+
+1. **UI コントロール仕様**:
+   - `mesh-toolbar` 右側のボタングループ（孤立ノード除外ボタンの左隣）に `MIN DEGREE: All / ≥1 / ≥2 / ≥3` セレクター（`btnDegAll`, `btnDeg1`, `btnDeg2`, `btnDeg3`）を配置。
+   - クリックされた閾値ボタンに `.active` クラスを相互付与。
+2. **フィルタリングと計算アルゴリズム**:
+   - 状態変数 `minDegreeThreshold`（整数値: 0, 1, 2, 3）を管理。
+   - `window.setMinDegree(deg)`:
+     - `minDegreeThreshold = Math.max(0, parseInt(deg, 10) || 0)` にて安全にクランプ。
+     - 現在のグラフモード（`currentGraphMode`）に応じて `applyCtiFilter()` または `applyContextMesh()` をトリガー。
+   - `applyCtiFilter()` & `applyContextMesh()`:
+     - 候補エッジ群から各頂点の接続次数 Map（`degrees`）を $O(E)$ で算出。
+     - `if (minDegreeThreshold > 0)` の場合、`degrees.get(n.id) >= minDegreeThreshold` を満たす頂点のみを抽出。
+     - 残存頂点間のエッジのみを抽出し、クエリ結果バッジに `(最小次数 ≥N)` のステータスを即座に反映。
+     - 頂点半径スケーリング（`updateNodeRadii`）を連動させ、フィルタ後の次数構造で視覚的面積比例関係を維持。
+
+

@@ -252,14 +252,17 @@ class CTICatalogStorage:
 
     def get_mitigations_for_technique(self, technique_id: str) -> List[Dict[str, Any]]:
         """Finds all mitigations (Course of Action) mapped to a specific technique."""
+        tid = technique_id.upper()
+        parent_id = tid.split(".")[0] if "." in tid else tid
         with self._connection() as conn:
             query = """
-                SELECT m.* FROM cti_mitigations m
+                SELECT DISTINCT m.mitigation_id, m.name, m.description, m.external_url, m.stix_id
+                FROM cti_mitigations m
                 JOIN cti_relationships r ON m.mitigation_id = r.source_id
-                WHERE r.target_id = ? AND r.rel_type = 'mitigates'
+                WHERE (r.target_id = ? OR r.target_id = ?) AND r.rel_type = 'mitigates'
                 ORDER BY m.mitigation_id ASC
             """
-            cursor = conn.execute(query, (technique_id.upper(),))
+            cursor = conn.execute(query, (tid, parent_id))
             return [
                 {
                     "mitigation_id": row["mitigation_id"],
