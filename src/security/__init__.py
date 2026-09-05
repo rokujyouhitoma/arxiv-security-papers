@@ -25,6 +25,16 @@ from .sandbox import (
     ASTSecurityGuard,
     validate_safe_code,
 )
+from .secrets import (
+    EphemeralSecretStore,
+    SecretFinding,
+    constant_time_compare,
+    detect_exposed_secrets,
+    generate_csrf_token,
+    generate_secure_token,
+    mask_secret,
+    verify_csrf_token,
+)
 from .taxonomy import (
     CWE_DEFENSE_MAP,
     MITRE_TECHNIQUES_MAP,
@@ -84,6 +94,15 @@ __all__ = [
     "get_access_controller",
     "require_permission",
     "require_role",
+    # Secrets & Cryptographic Utilities
+    "EphemeralSecretStore",
+    "SecretFinding",
+    "constant_time_compare",
+    "detect_exposed_secrets",
+    "generate_csrf_token",
+    "generate_secure_token",
+    "mask_secret",
+    "verify_csrf_token",
     # Taxonomy
     "CWE_DEFENSE_MAP",
     "MITRE_TECHNIQUES_MAP",

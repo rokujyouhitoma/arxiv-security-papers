@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **156** | シークレット＆トークン管理（Ephemeral Secret Store & Leakage Guard）の実装 | Feature / Security | 2026-09-05 | [156-implement-secrets-and-token-management-guard.md](closed/156-implement-secrets-and-token-management-guard.md) |
 | **155** | 外部データインジェスト・パーサー防護（Magic Bytes & Anti-Bomb Parser Hardening）の実装 | Feature / Security | 2026-09-05 | [155-implement-secure-ingest-mime-and-parser-hardening.md](closed/155-implement-secure-ingest-mime-and-parser-hardening.md) |
 | **154** | SSRF 防御 & ネットワーク隔離ラッパー（Network Isolation & SSRF Guard）の実装 | Feature / Security | 2026-09-05 | [154-implement-ssrf-protection-and-network-isolation.md](closed/154-implement-ssrf-protection-and-network-isolation.md) |
 | **145** | /dashboard tab=graph における特定ノードのフォーカス・エゴネットワーク抽出機能の実装 | Feature | 2026-09-05 | [145-implement-focus-ego-subgraph-mode-in-graph-tab.md](closed/145-implement-focus-ego-subgraph-mode-in-graph-tab.md) |
