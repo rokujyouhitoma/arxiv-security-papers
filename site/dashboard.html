@@ -910,6 +910,22 @@
             <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')">🔴 ATT&CK</button>
             <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')">🟠 CWE</button>
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
+            <div style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">CONFIDENCE:</span>
+              <button id="btnConfAll" class="btn-tool active" onclick="setEdgeConfidenceFilter('all')" title="すべての確信度エッジを表示">All</button>
+              <button id="btnConfMed" class="btn-tool" onclick="setEdgeConfidenceFilter('MEDIUM')" title="確信度 MEDIUM 以上 (≥ 0.5)">Med+</button>
+              <button id="btnConfHigh" class="btn-tool" onclick="setEdgeConfidenceFilter('HIGH')" title="確信度 HIGH のみ (≥ 0.8, 厳格判定)">High Only</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">RULE:</span>
+              <select id="selectEdgeRule" class="btn-tool" style="padding: 2px 4px; font-size: 10px;" onchange="setEdgeRuleFilter(this.value)">
+                <option value="all">All Rules</option>
+                <option value="RULE-EDGE-PAPER-TECH-REGEX-01">Direct Regex (Conf=1.0)</option>
+                <option value="RULE-EDGE-PAPER-TECH-TITLE-02">Title Name (Conf=0.8)</option>
+                <option value="RULE-EDGE-PAPER-TECH-KEYWORD-03">Title Keyphrase (Conf=0.5)</option>
+                <option value="RULE-EDGE-PAPER-TECH-ABSTRACT-04">Abstract Semantic (Conf=0.4)</option>
+              </select>
+            </div>
           </div>
           <div id="focusBanner" style="display: none; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.15); border: 1px solid #3B82F6; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
             <span>🎯 フォーカス中: <strong id="focusTargetLabel">-</strong></span>
@@ -1574,6 +1590,8 @@
       let focusedNodeId = null;
       let focusedHopNodeIds = null;
       let ctiFilter = 'all'; // 'all' | 'Paper' | 'AttackTechnique' | 'Vulnerability'
+      let edgeConfidenceFilter = 'all'; // 'all' | 'MEDIUM' | 'HIGH'
+      let edgeRuleFilter = 'all'; // 'all' | <rule_id>
       let highlightGaps = false;
       let ctiRawNodes = [];
       let ctiRawEdges = [];
@@ -1689,7 +1707,19 @@
           });
         }
         const activeNodeIds = new Set(filteredNodes.map(n => n.id));
-        const candidateEdges = ctiRawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
+        let candidateEdges = ctiRawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
+
+        // Confidence Tier filter (HIGH, MEDIUM, ALL)
+        if (edgeConfidenceFilter === 'HIGH') {
+          candidateEdges = candidateEdges.filter(e => (e.confidence_tier || 'LOW') === 'HIGH');
+        } else if (edgeConfidenceFilter === 'MEDIUM') {
+          candidateEdges = candidateEdges.filter(e => (e.confidence_tier === 'HIGH' || e.confidence_tier === 'MEDIUM'));
+        }
+
+        // Primary Rule ID filter
+        if (edgeRuleFilter && edgeRuleFilter !== 'all') {
+          candidateEdges = candidateEdges.filter(e => e.primary_rule_id === edgeRuleFilter || (e.applied_rules && e.applied_rules.includes(edgeRuleFilter)));
+        }
 
         const degrees = new Map();
         const connectedIds = new Set();
@@ -1713,6 +1743,12 @@
         const badge = document.getElementById('graphQueryResultBadge');
         if (badge && activeGraphQuery) {
           let badgeText = `✅ ${filteredNodes.length} 件一致 (${filteredEdges.length} リンク`;
+          if (edgeConfidenceFilter !== 'all') {
+            badgeText += `, 確信度: ${edgeConfidenceFilter}`;
+          }
+          if (edgeRuleFilter && edgeRuleFilter !== 'all') {
+            badgeText += `, ルール絞込`;
+          }
           if (minDegreeThreshold > 0) {
             badgeText += `, 最小次数 ≥${minDegreeThreshold}`;
           } else if (hideIsolatedNodes) {
@@ -1761,7 +1797,13 @@
               source: e.source,
               target: e.target,
               rel: e.label || 'RELATED',
-              confidence: e.confidence || 1.0,
+              confidence: e.confidence !== undefined ? e.confidence : 1.0,
+              confidence_tier: e.confidence_tier || 'LOW',
+              primary_rule_id: e.primary_rule_id || '',
+              applied_rules: e.applied_rules || [],
+              inference_mechanism: e.inference_mechanism || '',
+              evidences: e.evidences || [],
+              evidence_quote: e.evidence_quote || '',
               tier: e.tier || 'gold'
             });
           }
@@ -1921,6 +1963,24 @@
                           filter === 'AttackTechnique' ? 'filterAttack' : 'filterCwe';
         const ab = document.getElementById(activeBtn);
         if (ab) ab.classList.add('active');
+        applyCtiFilter();
+      };
+
+      window.setEdgeConfidenceFilter = function(tier) {
+        edgeConfidenceFilter = tier;
+        ['btnConfAll', 'btnConfMed', 'btnConfHigh'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.remove('active');
+        });
+        const activeId = tier === 'HIGH' ? 'btnConfHigh' :
+                         tier === 'MEDIUM' ? 'btnConfMed' : 'btnConfAll';
+        const activeEl = document.getElementById(activeId);
+        if (activeEl) activeEl.classList.add('active');
+        applyCtiFilter();
+      };
+
+      window.setEdgeRuleFilter = function(ruleId) {
+        edgeRuleFilter = ruleId || 'all';
         applyCtiFilter();
       };
 
@@ -2218,6 +2278,12 @@
               ctx.lineWidth = 1.0;
               ctx.setLineDash([]);
             }
+            if (e.confidence_tier === 'HIGH') {
+              ctx.lineWidth = Math.max(ctx.lineWidth, 1.8);
+            } else if (e.confidence_tier === 'LOW') {
+              ctx.lineWidth = 0.9;
+              ctx.setLineDash([3, 3]);
+            }
           } else {
             ctx.strokeStyle = '#6b665c';
             ctx.lineWidth = 1.0;
@@ -2236,7 +2302,8 @@
             const my = (u.y + v.y) / 2;
             ctx.fillStyle = '#e0533c';
             ctx.font = '10px monospace';
-            ctx.fillText(e.rel, mx + 4, my - 4);
+            const labelText = e.rel + (e.confidence_tier ? ` [${e.confidence_tier}]` : '');
+            ctx.fillText(labelText, mx + 4, my - 4);
           }
           ctx.restore();
         });
@@ -2410,9 +2477,22 @@
           const targetNode = nodeMap.get(targetId);
           const tName = targetNode ? (targetNode.name || targetNode.id) : targetId;
           const arrow = e.source === node.id ? '&rarr;' : '&larr;';
-          return `${escapeHtml(e.rel)} ${arrow} <strong>${escapeHtml(tName)}</strong>`;
+          let badge = '';
+          if (e.confidence_tier) {
+            const tierColor = e.confidence_tier === 'HIGH' ? '#10B981' : (e.confidence_tier === 'MEDIUM' ? '#F59E0B' : '#EF4444');
+            const pct = Math.round((Number(e.confidence) || 0) * 100);
+            badge = ` <span style="font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: ${tierColor}; color: #fff; vertical-align: middle;">${escapeHtml(e.confidence_tier)} ${pct}%</span>`;
+          }
+          let metaHtml = '';
+          if (e.primary_rule_id) {
+            metaHtml += `<div style="font-size: 9px; color: var(--fg-muted); margin-top: 1px; padding-left: 10px;">🏷️ Rule: <code>${escapeHtml(e.primary_rule_id)}</code></div>`;
+          }
+          if (e.evidence_quote) {
+            metaHtml += `<div style="font-size: 9px; color: var(--fg-muted); font-style: italic; margin-top: 1px; padding-left: 10px;">&ldquo;${escapeHtml(e.evidence_quote)}&rdquo;</div>`;
+          }
+          return `<div style="margin-bottom: 6px;">${escapeHtml(e.rel)} ${arrow} <strong>${escapeHtml(tName)}</strong>${badge}${metaHtml}</div>`;
         });
-        edgesInfo.innerHTML = `<strong>Relations (${connected.length}):</strong><br/>` + (rels.length ? rels.join('<br/>') : '<em>Isolated Node</em>');
+        edgesInfo.innerHTML = `<strong>Relations (${connected.length}):</strong><br/>` + (rels.length ? rels.join('') : '<em>Isolated Node</em>');
 
         callout.style.display = 'flex';
       }

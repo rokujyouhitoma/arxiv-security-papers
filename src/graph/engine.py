@@ -666,6 +666,26 @@ class PropertyGraphEngine:
             "properties": v.properties,
         }
 
+    @staticmethod
+    def _format_cti_edge(e: Edge) -> Dict[str, Any]:
+        """Formats edge into a standard CTI edge dictionary with inference and confidence metadata."""
+        return {
+            "source": e.src_id,
+            "target": e.dst_id,
+            "label": e.label,
+            "weight": e.weight,
+            "confidence": e.get_confidence(default=1.0),
+            "confidence_tier": e.get_confidence_tier(),
+            "primary_rule_id": e.get_primary_rule() or "",
+            "applied_rules": list(e.properties.get("applied_rules", [])),
+            "inference_mechanism": str(
+                e.properties.get("inference_mechanism", "lexical")
+            ),
+            "evidences": e.get_evidences(),
+            "evidence_quote": str(e.properties.get("evidence_quote", "")),
+            "tier": e.properties.get("tier", "gold"),
+        }
+
     def _resolve_focused_subgraph(
         self, focus_node: str, limit: int
     ) -> Tuple[List[Vertex], List[Edge]]:
@@ -724,17 +744,7 @@ class PropertyGraphEngine:
         gap_id_set = {g["id"] for g in gaps}
 
         nodes = [self._format_cti_node(v, gap_id_set) for v in nodes_raw]
-        edges = [
-            {
-                "source": e.src_id,
-                "target": e.dst_id,
-                "label": e.label,
-                "weight": e.weight,
-                "confidence": e.properties.get("confidence", 1.0),
-                "tier": e.properties.get("tier", "gold"),
-            }
-            for e in edges_raw
-        ]
+        edges = [self._format_cti_edge(e) for e in edges_raw]
 
         return {
             "nodes": nodes,
@@ -936,16 +946,6 @@ class PropertyGraphEngine:
             "query": query,
             "match_count": len(nodes_raw),
             "nodes": [self._format_cti_node(v, gap_id_set) for v in nodes_raw[:limit]],
-            "edges": [
-                {
-                    "source": e.src_id,
-                    "target": e.dst_id,
-                    "label": e.label,
-                    "weight": e.weight,
-                    "confidence": e.properties.get("confidence", 1.0),
-                    "tier": e.properties.get("tier", "gold"),
-                }
-                for e in edges_raw
-            ],
+            "edges": [self._format_cti_edge(e) for e in edges_raw],
             "stats": self._compute_cti_counts(len(gap_id_set)),
         }

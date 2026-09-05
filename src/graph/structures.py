@@ -57,9 +57,10 @@ class Edge:
             "properties": self.properties,
         }
 
-    def get_confidence(self) -> float:
+    def get_confidence(self, default: Optional[float] = None) -> float:
         """Retrieves numerical confidence score from properties or weight."""
-        val = self.properties.get("confidence", self.weight)
+        fallback = default if default is not None else self.weight
+        val = self.properties.get("confidence", fallback)
         try:
             return float(val)
         except (ValueError, TypeError):

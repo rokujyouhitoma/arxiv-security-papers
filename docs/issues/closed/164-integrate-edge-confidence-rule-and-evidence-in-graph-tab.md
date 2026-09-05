@@ -2,7 +2,7 @@
 ID: 164
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] /dashboard tab=graph におけるエッジ確信度（Confidence Tier）＆推論ルール絞り込みフィルタとエビデンス（スニペット）表示の実装 (ID: 164)
@@ -112,10 +112,10 @@ Target Branch: `feat/164-dashboard-graph-edge-confidence-ui`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `/api/graph/cti-mesh` および `/api/graph/query` のエッジデータに `confidence`, `confidence_tier`, `primary_rule_id`, `evidence_quote` が含まれていること
-- [ ] `/dashboard?tab=graph` 画面上に確信度ボタングループ（`All`, `Med+`, `High Only`）およびルール選択 UI が表示されること
-- [ ] 確信度ボタン切替時にエッジが即座に絞り込まれ、ノード次数および探索結果バッジがリアルタイムに再計算されること
-- [ ] Canvas 描画上で HIGH / MEDIUM / LOW の線種・スタイルが差別化されていること
-- [ ] ノード選択時の Relations リストに確信度バッジとエビデンス引用スニペットが XSS 安全（`escapeHtml`）に表示されること
-- [ ] 単体テスト（`tests/web/test_dashboard_graph_tab.py`, `tests/web/test_dashboard_cti_graph.py`）を作成・更新し、100% PASS すること
-- [ ] `make check_format` および `make static_analysis` (radon, xenon Rank A, flake8, mypy --strict) が 100% PASS すること
+- [x] `/api/graph/cti-mesh` および `/api/graph/query` のエッジデータに `confidence`, `confidence_tier`, `primary_rule_id`, `evidence_quote` が含まれていること
+- [x] `/dashboard?tab=graph` 画面上に確信度ボタングループ（`All`, `Med+`, `High Only`）およびルール選択 UI が表示されること
+- [x] 確信度ボタン切替時にエッジが即座に絞り込まれ、ノード次数および探索結果バッジがリアルタイムに再計算されること
+- [x] Canvas 描画上で HIGH / MEDIUM / LOW の線種・スタイルが差別化されていること
+- [x] ノード選択時の Relations リストに確信度バッジとエビデンス引用スニペットが XSS 安全（`escapeHtml`）に表示されること
+- [x] 単体テスト（`tests/web/test_dashboard_graph_tab.py`, `tests/web/test_dashboard_cti_graph.py`）を作成・更新し、100% PASS すること
+- [x] `make check_format` および `make static_analysis` (radon, xenon Rank A, flake8, mypy --strict) が 100% PASS すること

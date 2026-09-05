@@ -61,6 +61,15 @@ def test_api_graph_cti_mesh_endpoint() -> None:
         assert "color" in n
         assert "radius" in n
 
+    # Check edge attributes for confidence and inference metadata
+    if payload["mesh"]["edges"]:
+        e = payload["mesh"]["edges"][0]
+        assert "confidence" in e
+        assert "confidence_tier" in e
+        assert "primary_rule_id" in e
+        assert "inference_mechanism" in e
+        assert "evidence_quote" in e
+
 
 def test_dashboard_cti_mode_elements() -> None:
     """Verifies that site/dashboard.html includes all required CTI controls and legends."""
@@ -76,6 +85,12 @@ def test_dashboard_cti_mode_elements() -> None:
     assert 'id="ctiFilters"' in content
     assert 'id="valGapCount"' in content
     assert 'id="btnToggleGaps"' in content
+
+    # Verify Confidence & Rule filters
+    assert 'id="btnConfAll"' in content
+    assert 'id="btnConfMed"' in content
+    assert 'id="btnConfHigh"' in content
+    assert 'id="selectEdgeRule"' in content
 
     # Verify CTI legend elements
     assert 'id="ctiLegend"' in content

@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **164** | /dashboard tab=graph におけるエッジ確信度（Confidence Tier）＆推論ルール絞り込みフィルタとエビデンス（スニペット）表示の実装 | Feature | High | In Progress | [164-integrate-edge-confidence-rule-and-evidence-in-graph-tab.md](164-integrate-edge-confidence-rule-and-evidence-in-graph-tab.md) |
 | **165** | 全量 OKF 論文アーカイブへの推論ルール（EIROM）適用と確信度・エビデンス付きグラフ再構築バッチの実装 | Feature / Ops | Medium | Open (New) | [165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md](165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md) |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **164** | /dashboard tab=graph におけるエッジ確信度（Confidence Tier）＆推論ルール絞り込みフィルタとエビデンス（スニペット）表示の実装 | Feature | 2026-09-05 | [164-integrate-edge-confidence-rule-and-evidence-in-graph-tab.md](closed/164-integrate-edge-confidence-rule-and-evidence-in-graph-tab.md) |
 | **162** | グラフ Edge への判断ルール・推論機構・確信度・エビデンス属性の統合付与と高精度グラフ探索基盤の実装 | Feature | 2026-09-05 | [162-enhance-graph-edge-inference-mechanism-and-confidence-attributes.md](closed/162-enhance-graph-edge-inference-mechanism-and-confidence-attributes.md) |
 | **163** | Vertex紐付け推論判定ルール（Edge Inference Rule Ontology Master）のマスターデータ化およびオントロジー推論基盤の実装 | Feature | 2026-09-05 | [163-implement-edge-inference-rule-ontology-master.md](closed/163-implement-edge-inference-rule-ontology-master.md) |
 | **160** | Pure-Python STIX 2.1 CTI 推論 & ATT&CK Navigator レイヤー自動生成およびグラフDB永続化基盤の実装 | Feature | 2026-09-05 | [160-implement-pure-python-stix-cti-inference-and-navigator-layer.md](closed/160-implement-pure-python-stix-cti-inference-and-navigator-layer.md) |

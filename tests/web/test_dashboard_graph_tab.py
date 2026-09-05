@@ -336,3 +336,36 @@ def test_dashboard_focus_ego_subgraph_mode(dashboard_html: str) -> None:
         "const egoPulseR = nodeRadius + 5 + Math.sin(Date.now() / 250) * 3;"
         in dashboard_html
     )
+
+
+def test_dashboard_edge_confidence_and_rule_filter(dashboard_html: str) -> None:
+    """Verifies that tab=graph supports confidence and rule filtering and evidence quotes."""
+    # 1. Toolbar UI buttons
+    assert 'id="btnConfAll"' in dashboard_html
+    assert 'id="btnConfMed"' in dashboard_html
+    assert 'id="btnConfHigh"' in dashboard_html
+    assert 'id="selectEdgeRule"' in dashboard_html
+    assert "RULE-EDGE-PAPER-TECH-REGEX-01" in dashboard_html
+    assert "RULE-EDGE-PAPER-TECH-TITLE-02" in dashboard_html
+
+    # 2. State variables and functions
+    assert "let edgeConfidenceFilter = 'all';" in dashboard_html
+    assert "let edgeRuleFilter = 'all';" in dashboard_html
+    assert "window.setEdgeConfidenceFilter = function(tier)" in dashboard_html
+    assert "window.setEdgeRuleFilter = function(ruleId)" in dashboard_html
+
+    # 3. Filtering logic in applyCtiFilter
+    assert "if (edgeConfidenceFilter === 'HIGH')" in dashboard_html
+    assert "if (edgeConfidenceFilter === 'MEDIUM')" in dashboard_html
+    assert "if (edgeRuleFilter && edgeRuleFilter !== 'all')" in dashboard_html
+
+    # 4. Canvas rendering style differentiation
+    assert "if (e.confidence_tier === 'HIGH')" in dashboard_html
+    assert "ctx.lineWidth = Math.max(ctx.lineWidth, 1.8);" in dashboard_html
+    assert "else if (e.confidence_tier === 'LOW')" in dashboard_html
+    assert "ctx.setLineDash([3, 3]);" in dashboard_html
+
+    # 5. Callout relations with confidence badge and evidence quotes
+    assert "e.confidence_tier === 'HIGH' ? '#10B981'" in dashboard_html
+    assert "🏷️ Rule: <code>${escapeHtml(e.primary_rule_id)}</code>" in dashboard_html
+    assert "&ldquo;${escapeHtml(e.evidence_quote)}&rdquo;" in dashboard_html
