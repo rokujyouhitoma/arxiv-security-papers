@@ -5,6 +5,10 @@ PEP 3333 WSGI Application and HTTP Server for arXiv Security Papers API Gateway.
 
 from __future__ import annotations
 
+import argparse
+import errno
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -267,22 +271,151 @@ application = WSGIApplication()
 app = application
 
 
-def run_web_server(port: int = 8000, host: str = "0.0.0.0") -> None:
-    """Runs standard PEP 3333 multi-threaded WSGI Server."""
-    httpd = make_server(host, port, application, server_class=ThreadingWSGIServer)
-    print(
-        f"🚀 arxiv-security-papers multi-threaded WSGI Web Server running at http://localhost:{port}",
-        flush=True,
+def _find_pid_via_lsof(port: int) -> Optional[int]:
+    lsof = shutil.which("lsof")
+    if not lsof:
+        return None
+    try:
+        out = subprocess.check_output(
+            [lsof, "-ti", f":{port}"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=1.0,
+        ).strip()
+        lines = out.splitlines()
+        return int(lines[0]) if lines else None
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return None
+
+
+def _find_pid_via_fuser(port: int) -> Optional[int]:
+    fuser = shutil.which("fuser")
+    if not fuser:
+        return None
+    try:
+        out = subprocess.check_output(
+            [fuser, f"{port}/tcp"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=1.0,
+        ).strip()
+        parts = out.split()
+        return int(parts[0]) if parts else None
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return None
+
+
+def _find_pid_using_port(port: int) -> Optional[int]:
+    """Attempts to identify the PID currently listening on the target TCP port."""
+    return _find_pid_via_lsof(port) or _find_pid_via_fuser(port)
+
+
+def _is_address_in_use_error(err: OSError) -> bool:
+    """Returns True if the OSError corresponds to EADDRINUSE."""
+    conflict_errnos = {errno.EADDRINUSE, 98, 48, 10048}
+    if err.errno in conflict_errnos:
+        return True
+    return "address already in use" in str(err).lower()
+
+
+def _format_port_conflict_message(
+    host: str, port: int, pid: Optional[int] = None
+) -> str:
+    """Formats actionable diagnostic instructions when a port collision occurs."""
+    lines = [
+        f"❌ [エラー] ポート {port} ({host}) は既に使用されています (Address already in use)。",
+    ]
+    if pid is not None:
+        lines.append(f"   現在ポートを占有しているプロセスPID: {pid}")
+        lines.append(f"   解決策 1: 既存プロセスを停止する -> `kill {pid}`")
+    else:
+        lines.append(
+            "   解決策 1: 既存プロセスを停止する -> `pkill -f 'src/web/server.py'` または `make stop_supervisor`"
+        )
+    lines.append(
+        f'   解決策 2: 別のポートを指定して起動する -> `make run_dashboard ARGS="--port {port + 1}"`'
     )
-    print(
-        f"📊 Graph Engineering Dashboard: http://localhost:{port}/dashboard", flush=True
+    lines.append(
+        '   解決策 3: 空きポートを自動探索して起動する -> `make run_dashboard ARGS="--auto-port"`'
     )
-    httpd.serve_forever()
+    return "\n".join(lines)
+
+
+def _try_bind_single_port(
+    host: str, port: int
+) -> Tuple[Optional[ThreadingWSGIServer], Optional[OSError]]:
+    """Attempts to bind ThreadingWSGIServer on a single port."""
+    try:
+        server = make_server(host, port, application, server_class=ThreadingWSGIServer)
+        return server, None
+    except OSError as err:
+        return None, err
+
+
+def _check_bind_error(err: Optional[OSError]) -> None:
+    if err is None or not _is_address_in_use_error(err):
+        if err:
+            raise err
+        raise RuntimeError("Failed to bind server")
+
+
+def _scan_and_bind(
+    host: str, start_port: int, max_trials: int
+) -> Tuple[Optional[ThreadingWSGIServer], int]:
+    for offset in range(max_trials):
+        current_port = start_port + offset
+        server, err = _try_bind_single_port(host, current_port)
+        if server is not None:
+            return server, current_port
+        _check_bind_error(err)
+    return None, start_port
+
+
+def _bind_server_safe(
+    host: str, port: int, auto_port: bool = False, max_attempts: int = 10
+) -> Tuple[Optional[ThreadingWSGIServer], int]:
+    """Binds WSGI server safely, supporting auto_port fallback if enabled."""
+    trials = max_attempts if auto_port else 1
+    server, bound_port = _scan_and_bind(host, port, trials)
+    if server is not None:
+        return server, bound_port
+
+    pid = _find_pid_using_port(port)
+    msg = _format_port_conflict_message(host, port, pid)
+    print(msg, file=sys.stderr, flush=True)
+    return None, port
+
+
+def run_web_server(
+    port: int = 8000,
+    host: str = "0.0.0.0",
+    auto_port: bool = False,
+    max_attempts: int = 10,
+) -> None:
+    """Runs standard PEP 3333 multi-threaded WSGI Server with graceful error handling."""
+    httpd, bound_port = _bind_server_safe(
+        host=host, port=port, auto_port=auto_port, max_attempts=max_attempts
+    )
+    if httpd is None:
+        sys.exit(1)
+
+    try:
+        print(
+            f"🚀 arxiv-security-papers multi-threaded WSGI Web Server running at http://localhost:{bound_port}",
+            flush=True,
+        )
+        print(
+            f"📊 Graph Engineering Dashboard: http://localhost:{bound_port}/dashboard",
+            flush=True,
+        )
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\n🛑 Web server stopped gracefully by user.", flush=True)
+    finally:
+        httpd.server_close()
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(
         description="PEP 3333 WSGI Web Server for arxiv-security-papers"
     )
@@ -292,5 +425,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--host", type=str, default="0.0.0.0", help="Host address to bind to"
     )
+    parser.add_argument(
+        "--auto-port",
+        action="store_true",
+        help="Automatically bind to the next available port if conflict occurs",
+    )
     args = parser.parse_args()
-    run_web_server(port=args.port, host=args.host)
+    run_web_server(port=args.port, host=args.host, auto_port=args.auto_port)

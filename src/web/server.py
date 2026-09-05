@@ -70,5 +70,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--host", type=str, default="0.0.0.0", help="Host address to bind to"
     )
+    parser.add_argument(
+        "--auto-port",
+        action="store_true",
+        help="Automatically bind to the next available port if conflict occurs",
+    )
     args = parser.parse_args()
-    run_web_server(port=args.port, host=args.host)
+    run_web_server(port=args.port, host=args.host, auto_port=args.auto_port)

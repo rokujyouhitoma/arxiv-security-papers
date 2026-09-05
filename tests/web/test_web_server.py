@@ -389,3 +389,116 @@ def test_wsgi_app_post_mcp_ipc_isolation():
     assert data["result"]["results"][0]["id"] == "2502.12345"
     assert app.handlers._vector_engine is None
     assert mock_client.search.called
+
+
+def test_is_address_in_use_error():
+    import errno
+
+    from web.gateway.app import _is_address_in_use_error
+
+    err_eaddrinuse = OSError(errno.EADDRINUSE, "Address already in use")
+    assert _is_address_in_use_error(err_eaddrinuse) is True
+
+    err_98 = OSError(98, "Address already in use")
+    assert _is_address_in_use_error(err_98) is True
+
+    err_text = OSError(1, "Address already in use on custom socket")
+    assert _is_address_in_use_error(err_text) is True
+
+    err_other = OSError(errno.ENOENT, "No such file or directory")
+    assert _is_address_in_use_error(err_other) is False
+
+
+def test_format_port_conflict_message():
+    from web.gateway.app import _format_port_conflict_message
+
+    msg_with_pid = _format_port_conflict_message("0.0.0.0", 8000, pid=12345)
+    assert "8000" in msg_with_pid
+    assert "12345" in msg_with_pid
+    assert "kill 12345" in msg_with_pid
+    assert "--auto-port" in msg_with_pid
+
+    msg_without_pid = _format_port_conflict_message("127.0.0.1", 9000, pid=None)
+    assert "9000" in msg_without_pid
+    assert "make stop_supervisor" in msg_without_pid
+    assert "--port 9001" in msg_without_pid
+
+
+def test_bind_server_safe_single_port_conflict(monkeypatch):
+    import errno
+    import sys
+
+    from web.gateway.app import _bind_server_safe
+
+    app_mod = sys.modules["web.gateway.app"]
+
+    def mock_try_bind(host, port):
+        return None, OSError(errno.EADDRINUSE, "Address already in use")
+
+    monkeypatch.setattr(app_mod, "_try_bind_single_port", mock_try_bind)
+    monkeypatch.setattr(app_mod, "_find_pid_using_port", lambda p: 54321)
+
+    server, port = _bind_server_safe("0.0.0.0", 8000, auto_port=False)
+    assert server is None
+    assert port == 8000
+
+
+def test_bind_server_safe_auto_port(monkeypatch):
+    import errno
+    import sys
+    from unittest.mock import MagicMock
+
+    from web.gateway.app import _bind_server_safe
+
+    app_mod = sys.modules["web.gateway.app"]
+    mock_server = MagicMock()
+
+    def mock_try_bind(host, port):
+        if port == 8000:
+            return None, OSError(errno.EADDRINUSE, "Address already in use")
+        return mock_server, None
+
+    monkeypatch.setattr(app_mod, "_try_bind_single_port", mock_try_bind)
+
+    server, port = _bind_server_safe("0.0.0.0", 8000, auto_port=True, max_attempts=5)
+    assert server == mock_server
+    assert port == 8001
+
+
+def test_run_web_server_port_conflict_exits(monkeypatch):
+    import sys
+
+    import pytest
+
+    from web.gateway.app import run_web_server
+
+    app_mod = sys.modules["web.gateway.app"]
+    monkeypatch.setattr(
+        app_mod,
+        "_bind_server_safe",
+        lambda host, port, auto_port, max_attempts: (None, port),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        run_web_server(port=8000, host="0.0.0.0")
+    assert exc_info.value.code == 1
+
+
+def test_run_web_server_keyboard_interrupt_graceful(monkeypatch):
+    import sys
+    from unittest.mock import MagicMock
+
+    from web.gateway.app import run_web_server
+
+    app_mod = sys.modules["web.gateway.app"]
+    mock_server = MagicMock()
+    mock_server.serve_forever.side_effect = KeyboardInterrupt
+
+    monkeypatch.setattr(
+        app_mod,
+        "_bind_server_safe",
+        lambda host, port, auto_port, max_attempts: (mock_server, 8000),
+    )
+
+    run_web_server(port=8000, host="0.0.0.0")
+    assert mock_server.server_close.called
