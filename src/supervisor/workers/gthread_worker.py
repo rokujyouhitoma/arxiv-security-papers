@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import socket
+import sys
 import threading
 import time
 from typing import Any, Callable, Dict, Optional
@@ -57,20 +58,27 @@ class GthreadWorker(SyncWorker):
         """Processes client request and updates active request count."""
         with self._req_lock:
             self._active_requests += 1
-            is_active = self._active_requests > 0
-        self.pulse(
-            {"is_handling_request": is_active, "active_requests": self._active_requests}
+            cur_req = self._active_requests
+            is_active = cur_req > 0
+        self.pulse({"is_handling_request": is_active, "active_requests": cur_req})
+        th_name = threading.current_thread().name
+        print(
+            f"[GTHREAD-DISPATCH] worker={self.worker_id} thread={th_name} "
+            f"active={cur_req}/{self.num_threads}",
+            file=sys.stderr,
+            flush=True,
         )
         try:
             super().handle_client(client_sock)
         finally:
             with self._req_lock:
                 self._active_requests = max(0, self._active_requests - 1)
-                is_active = self._active_requests > 0
+                cur_req = self._active_requests
+                is_active = cur_req > 0
             self.pulse(
                 {
                     "is_handling_request": is_active,
-                    "active_requests": self._active_requests,
+                    "active_requests": cur_req,
                 }
             )
 
