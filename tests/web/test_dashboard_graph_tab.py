@@ -33,9 +33,10 @@ def test_dashboard_mandatory_graph_tab_elements(dashboard_html: str) -> None:
     # Unified Header and Toggle controls
     assert 'id="dashboardHeader"' in dashboard_html
     assert 'class="console-header"' in dashboard_html
-    assert 'id="btnToggleHeader"' in dashboard_html
-    assert 'id="btnToggleHeaderQuick"' in dashboard_html
+    assert 'id="globalSearchInput"' in dashboard_html
     assert 'id="portalSwitchBtn"' in dashboard_html
+    assert 'id="systemStatusBadge"' in dashboard_html
+    assert 'id="btnToggleHeaderQuick"' in dashboard_html
 
     # Graph Canvas inside viewGraph
     assert '<canvas id="graphCanvas"' in dashboard_html
@@ -63,7 +64,7 @@ def test_dashboard_header_toggle_and_css(dashboard_html: str) -> None:
     # JavaScript function definitions
     assert "window.toggleDashboardHeader" in dashboard_html
     assert "dashboard_header_hidden" in dashboard_html
-    assert "btnToggleHeader" in dashboard_html
+    assert "btnToggleHeaderQuick" in dashboard_html
     assert "openGraphWithQuery" in dashboard_html
 
     # Keyboard shortcut 'h' / 'H'
@@ -110,7 +111,7 @@ def test_gateway_serves_dashboard_graph_tab() -> None:
     assert status_code.startswith("200")
     assert "viewGraph" in raw
     assert "dashboardHeader" in raw
-    assert "btnToggleHeader" in raw
+    assert "portalSwitchBtn" in raw
 
 
 def test_dashboard_graph_layout_redesign_and_legend_toggle(dashboard_html: str) -> None:

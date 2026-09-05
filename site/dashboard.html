@@ -1275,11 +1275,11 @@
   <header class="console-header" id="dashboardHeader">
     <!-- Left: Brand & Scope -->
     <div class="header-brand">
-      <span class="brand-icon">🕸️</span>
+      <span class="brand-icon">🛡️</span>
       <div class="brand-title">
         <span>arXiv Security Intelligence</span>
         <span class="separator">|</span>
-        <span class="tenant-name">Knowledge &amp; CTI Graph Engine</span>
+        <span class="tenant-name">Enterprise Portal (cs.CR)</span>
       </div>
     </div>
 
@@ -1287,22 +1287,17 @@
     <div class="header-center-search">
       <div class="global-search-wrapper">
         <span class="global-search-icon">🔍</span>
-        <input type="text" id="globalSearchInput" class="global-search-input"
-          placeholder="ナレッジグラフ探索 (例: gaps, cwe: CWE-20, match: quantum)..."
-          onkeydown="if(event.key==='Enter') executeGraphHeaderSearch(this.value)">
-        <span class="search-shortcut-badge">Enter</span>
+        <input type="text" id="globalSearchInput" class="global-search-input" placeholder="論文ID、攻撃手法、脆弱性、キーワードをグローバル検索 (Ctrl+K)..." onkeydown="if(event.key==='Enter') executeGraphHeaderSearch(this.value)">
+        <span class="search-shortcut-badge">Ctrl + K</span>
       </div>
     </div>
 
-    <!-- Right: Utility Icons & Mutual Links -->
+    <!-- Right: Utility Icons & Status -->
     <div class="header-utilities">
-      <button class="utility-btn" id="portalSwitchBtn" title="エンタープライズクラウドコンソール (index.html) へ戻る"
-        onclick="window.location.href='/index.html'">🏠 クラウドコンソールへ ↗</button>
-      <button class="utility-btn" id="btnToggleHeader" title="ヘッダー折りたたみ / 表示切替 (Shortcut: H)"
-        onclick="toggleDashboardHeader()">▲ ヘッダー隠す</button>
-      <button class="utility-btn" id="btnOpenGraphHelpHeader" title="操作ガイド &amp; クエリ構文チートシート"
-        onclick="toggleGraphHelpDrawer()">❓ ガイド</button>
-      <div class="status-badge-live" id="systemStatusBadge" title="Graph Traversal &amp; CTI Engine 正常稼働中">
+      <button class="utility-btn" id="notifBtn" title="通知センター">🔔 通知</button>
+      <button class="utility-btn" id="portalSwitchBtn" title="エンタープライズクラウドコンソールへ移動" onclick="window.location.href='/index.html'">🏠 クラウドコンソール ↗</button>
+      <button class="utility-btn" id="helpModalBtn" title="ヘルプ &amp; 操作ガイド" onclick="toggleGraphHelpDrawer()">❓ ガイド</button>
+      <div class="status-badge-live" id="systemStatusBadge" title="Supervisor &amp; Pipeline 健全稼働中">
         <span class="status-indicator-dot"></span>
         <span>正常稼働中</span>
       </div>
@@ -1857,13 +1852,13 @@
         }
       }
 
-      window.focusCurrentSelectedEgo = function () {
+      window.focusCurrentSelectedEgo = function() {
         if (selectedNode) {
           focusEgoNetwork(selectedNode.id, 2);
         }
       };
 
-      window.clearNodeFocus = function () {
+      window.clearNodeFocus = function() {
         focusedNodeId = null;
         focusedHopNodeIds = null;
         const banner = document.getElementById('focusBanner');
@@ -2069,7 +2064,7 @@
         updateNodeRadii(NODES, EDGES);
       }
 
-      window.toggleIsolatedNodes = function () {
+      window.toggleIsolatedNodes = function() {
         hideIsolatedNodes = !hideIsolatedNodes;
         const btn = document.getElementById('btnToggleIsolated');
         if (btn) {
@@ -2088,7 +2083,7 @@
         }
       };
 
-      window.setMinDegree = function (deg) {
+      window.setMinDegree = function(deg) {
         minDegreeThreshold = Math.max(0, parseInt(deg, 10) || 0);
         const btnAll = document.getElementById('btnDegAll');
         const btn1 = document.getElementById('btnDeg1');
@@ -2136,7 +2131,7 @@
         }
       };
 
-      window.setCtiFilter = function (filter) {
+      window.setCtiFilter = function(filter) {
         ctiFilter = filter;
         ['filterAll', 'filterPaper', 'filterAttack', 'filterCwe'].forEach(id => {
           const el = document.getElementById(id);
@@ -2150,7 +2145,7 @@
         applyCtiFilter();
       };
 
-      window.setEdgeConfidenceFilter = function (tier) {
+      window.setEdgeConfidenceFilter = function(tier) {
         edgeConfidenceFilter = tier;
         ['btnConfAll', 'btnConfMed', 'btnConfHigh'].forEach(id => {
           const el = document.getElementById(id);
@@ -2163,12 +2158,12 @@
         applyCtiFilter();
       };
 
-      window.setEdgeRuleFilter = function (ruleId) {
+      window.setEdgeRuleFilter = function(ruleId) {
         edgeRuleFilter = ruleId || 'all';
         applyCtiFilter();
       };
 
-      window.toggleResearchGaps = function () {
+      window.toggleResearchGaps = function() {
         highlightGaps = !highlightGaps;
         const btn = document.getElementById('btnToggleGaps');
         if (btn) {
@@ -2238,13 +2233,13 @@
         }
       };
 
-      window.runPresetQuery = function (preset) {
+      window.runPresetQuery = function(preset) {
         const input = document.getElementById('graphQueryInput');
         if (input) input.value = preset;
         window.executeGraphQuery(preset);
       };
 
-      window.clearGraphQuery = function () {
+      window.clearGraphQuery = function() {
         activeGraphQuery = null;
         const input = document.getElementById('graphQueryInput');
         if (input) input.value = '';
@@ -2686,14 +2681,14 @@
         callout.style.display = 'flex';
       }
 
-      window.closeCallout = function () {
+      window.closeCallout = function() {
         selectedNode = null;
         activeTwoHopNodes = null;
         document.getElementById('nodeCallout').style.display = 'none';
       };
 
       // Graph Help Drawer Toggle Functions (Issue 166)
-      window.toggleGraphHelpDrawer = function () {
+      window.toggleGraphHelpDrawer = function() {
         const drawer = document.getElementById('graphHelpDrawer');
         const overlay = document.getElementById('graphHelpOverlay');
         if (!drawer) return;
@@ -2707,7 +2702,7 @@
         }
       };
 
-      window.closeGraphHelpDrawer = function () {
+      window.closeGraphHelpDrawer = function() {
         const drawer = document.getElementById('graphHelpDrawer');
         const overlay = document.getElementById('graphHelpOverlay');
         if (drawer) drawer.classList.remove('active');
@@ -2715,7 +2710,7 @@
       };
 
       // Toggle Cluster / CTI Legends collapsed state
-      window.toggleLegend = function () {
+      window.toggleLegend = function() {
         const isCti = currentGraphMode === 'cti';
         const legend = isCti ? document.getElementById('ctiLegend') : document.getElementById('contextLegend');
         const btn = isCti ? document.getElementById('btnToggleLegendCti') : document.getElementById('btnToggleLegendContext');
@@ -2726,7 +2721,7 @@
         }
       };
 
-      window.resetPhysics = function () {
+      window.resetPhysics = function() {
         NODES.forEach((n, idx) => {
           const angle = (idx / NODES.length) * Math.PI * 2;
           const radius = Math.min(width, height) * 0.32;
@@ -2737,7 +2732,7 @@
         });
       };
 
-      window.randomizeGraph = function () {
+      window.randomizeGraph = function() {
         const id = 'dyn_' + Date.now().toString().slice(-4);
         const newNode = {
           id: id,
@@ -3442,15 +3437,20 @@
       initSseLiveStream();
 
       // Header Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
-      window.toggleDashboardHeader = function (forceState) {
+      window.toggleDashboardHeader = function(forceState) {
         const header = document.getElementById('dashboardHeader');
         const btn = document.getElementById('btnToggleHeader');
+        const btnQuick = document.getElementById('btnToggleHeaderQuick');
         if (!header) return;
         const isHidden = (typeof forceState === 'boolean') ? forceState : !header.classList.contains('header-hidden');
         header.classList.toggle('header-hidden', isHidden);
         if (btn) {
           btn.innerHTML = isHidden ? '▼ ヘッダー表示' : '▲ ヘッダー隠す';
           btn.title = isHidden ? 'ヘッダーを表示する (Shortcut: H)' : 'ヘッダーを隠す (Shortcut: H)';
+        }
+        if (btnQuick) {
+          btnQuick.innerHTML = isHidden ? '▼ ヘッダー表示' : '▲ ヘッダー格納';
+          btnQuick.title = isHidden ? 'ヘッダーを表示する (Shortcut: H)' : 'ヘッダーを格納して最大化 (Shortcut: H)';
         }
         try {
           localStorage.setItem('dashboard_header_hidden', isHidden ? '1' : '0');
@@ -3469,6 +3469,15 @@
           }
           if (typeof closeCallout === 'function' && selectedNode) {
             closeCallout();
+          }
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+          e.preventDefault();
+          const searchInput = document.getElementById('globalSearchInput');
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
           }
           return;
         }
@@ -3510,7 +3519,7 @@
       });
 
       // Global Header Search: forward query to Graph Query Console
-      window.executeGraphHeaderSearch = function (query) {
+      window.executeGraphHeaderSearch = function(query) {
         const q = (query || '').trim();
         const input = document.getElementById('graphQueryInput');
         if (input) {
@@ -3522,7 +3531,7 @@
       };
 
       // Cross-tab Deep Linking Helper: Switch to Graph and prefill/execute query
-      window.openGraphWithQuery = function (query) {
+      window.openGraphWithQuery = function(query) {
         switchDashboardTab('graph');
         if (query) {
           const input = document.getElementById('graphQueryInput');
@@ -3537,7 +3546,7 @@
 
       // Global Tab Handling: Knowledge & CTI Graph Dedicated View
       // Seamlessly forwards ported tabs (product, system, supervisor) to Enterprise Console (index.html)
-      window.switchDashboardTab = function (tabName, updateUrl = true) {
+      window.switchDashboardTab = function(tabName, updateUrl = true) {
         const normTab = (tabName || 'graph').toLowerCase().trim();
         if (normTab === 'product' || normTab === 'analytics' ||
           normTab === 'system' || normTab === 'observability' || normTab === 'pipeline' ||
