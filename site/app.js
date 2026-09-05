@@ -1,14 +1,31 @@
 document.addEventListener('DOMContentLoaded', () => {
   let activeTag = '';
   let activePeriod = 'monthly';
+  let currentSearchResults = [];
 
   // DOM Elements
   const searchInput = document.getElementById('searchInput');
   const searchBtn = document.getElementById('searchBtn');
+  const globalSearchInput = document.getElementById('globalSearchInput');
+  const clearFiltersBtn = document.getElementById('clearFiltersBtn');
   const resultsGrid = document.getElementById('resultsGrid');
   const resultsCount = document.getElementById('resultsCount');
   const searchTime = document.getElementById('searchTime');
   const totalPapersCount = document.getElementById('totalPapersCount');
+  const sidebarPapersCount = document.getElementById('sidebarPapersCount');
+  const mainPageTitle = document.getElementById('mainPageTitle');
+  const mainPageSubtitle = document.getElementById('mainPageSubtitle');
+  
+  const consoleSidebar = document.getElementById('consoleSidebar');
+  const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+  const systemInfoBanner = document.getElementById('systemInfoBanner');
+  const closeBannerBtn = document.getElementById('closeBannerBtn');
+
+  const refreshDataBtn = document.getElementById('refreshDataBtn');
+  const exportDataBtn = document.getElementById('exportDataBtn');
+  const guideHelpBtn = document.getElementById('guideHelpBtn');
+  const helpModalBtn = document.getElementById('helpModalBtn');
+  const notifBtn = document.getElementById('notifBtn');
   
   const paperModal = document.getElementById('paperModal');
   const closeModalBtn = document.getElementById('closeModalBtn');
@@ -27,45 +44,204 @@ document.addEventListener('DOMContentLoaded', () => {
   const runMcpBtn = document.getElementById('runMcpBtn');
   const mcpOutput = document.getElementById('mcpOutput');
 
-  // Parse URL GET Parameters (Google-style ?q=クエリ&tag=カテゴリ)
+  // ========================================================================
+  // 1. Sidebar Navigation, Accordions, & Collapsible Toggle
+  // ========================================================================
+  if (sidebarToggleBtn && consoleSidebar) {
+    sidebarToggleBtn.addEventListener('click', () => {
+      consoleSidebar.classList.toggle('collapsed');
+      const isCollapsed = consoleSidebar.classList.contains('collapsed');
+      sidebarToggleBtn.textContent = isCollapsed ? '▶' : '◀';
+      sidebarToggleBtn.title = isCollapsed ? 'サイドバー展開' : 'サイドバー折りたたみ';
+    });
+  }
+
+  // Accordion Expand/Collapse
+  document.querySelectorAll('.nav-group-header').forEach(header => {
+    header.addEventListener('click', (e) => {
+      e.preventDefault();
+      const parentGroup = header.closest('.nav-group');
+      if (parentGroup) {
+        parentGroup.classList.toggle('collapsed');
+      }
+    });
+  });
+
+  // Tab switching via Nav Items
+  const navTabBtns = document.querySelectorAll('.nav-tab-btn');
+  navTabBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const tabId = btn.getAttribute('data-tab');
+      if (tabId) {
+        e.preventDefault();
+        switchToTab(tabId);
+        const hash = btn.getAttribute('href');
+        if (hash && hash.startsWith('#/')) {
+          history.pushState(null, '', hash);
+        }
+      }
+    });
+  });
+
+  function switchToTab(tabId) {
+    // Update sidebar active indicators
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    const targetNav = document.querySelector(`.nav-tab-btn[data-tab="${tabId}"]`);
+    if (targetNav) targetNav.classList.add('active');
+
+    // Update main container tabs
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    const targetTab = document.getElementById(tabId);
+    if (targetTab) targetTab.classList.add('active');
+
+    // Update Header Titles
+    if (tabId === 'searchTab') {
+      if (mainPageTitle) mainPageTitle.textContent = '🔍 セマンティック RAG 論文検索 & 脅威インテリジェンス';
+      if (mainPageSubtitle) mainPageSubtitle.textContent = 'Google OKF v0.2 準拠の 14,169 件のセキュリティ学術論文および ATT&CK 推論メタデータを横断探索';
+    } else if (tabId === 'trendsTab') {
+      if (mainPageTitle) mainPageTitle.textContent = '📊 階層別エグゼクティブサマリー & トレンド分析';
+      if (mainPageSubtitle) mainPageSubtitle.textContent = '月次・四半期・通期セキュリティ研究動向と ATT&CK 手法・脅威動向のクラスタリング';
+      fetchTrends(activePeriod);
+    } else if (tabId === 'mcpTab') {
+      if (mainPageTitle) mainPageTitle.textContent = '🔌 Model Context Protocol (MCP) JSON-RPC サンドボックス';
+      if (mainPageSubtitle) mainPageSubtitle.textContent = 'AI エージェント・外部システム向け標準ツール呼び出しインターフェースの即時テスト環境';
+    }
+  }
+
+  // Hash-based Routing
+  function handleHashRoute() {
+    const hash = window.location.hash;
+    if (hash === '#/trends') {
+      switchToTab('trendsTab');
+    } else if (hash === '#/mcp') {
+      switchToTab('mcpTab');
+    } else {
+      switchToTab('searchTab');
+    }
+  }
+
+  window.addEventListener('hashchange', handleHashRoute);
+  if (window.location.hash) {
+    handleHashRoute();
+  }
+
+  // ========================================================================
+  // 2. Global Search & Keyboard Shortcuts (Ctrl+K, /)
+  // ========================================================================
+  window.addEventListener('keydown', (e) => {
+    // Ctrl+K or Cmd+K
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (globalSearchInput) {
+        globalSearchInput.focus();
+        globalSearchInput.select();
+      } else if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
+    // Slash shortcut outside input
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      if (globalSearchInput) {
+        globalSearchInput.focus();
+      }
+    }
+  });
+
+  if (globalSearchInput) {
+    globalSearchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const query = globalSearchInput.value.trim();
+        if (searchInput) searchInput.value = query;
+        switchToTab('searchTab');
+        performSearch(query, true);
+      }
+    });
+  }
+
+  // ========================================================================
+  // 3. Banner & Utility Buttons
+  // ========================================================================
+  if (closeBannerBtn && systemInfoBanner) {
+    closeBannerBtn.addEventListener('click', () => {
+      systemInfoBanner.style.display = 'none';
+    });
+  }
+
+  if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener('click', () => {
+      activeTag = '';
+      if (searchInput) searchInput.value = '';
+      if (globalSearchInput) globalSearchInput.value = '';
+      document.querySelectorAll('.filter-pill').forEach(c => {
+        if (c.getAttribute('data-tag') === '') c.classList.add('active');
+        else c.classList.remove('active');
+      });
+      performSearch('', true);
+    });
+  }
+
+  if (refreshDataBtn) {
+    refreshDataBtn.addEventListener('click', () => {
+      fetchStats();
+      performSearch(searchInput ? searchInput.value : '', false);
+    });
+  }
+
+  if (exportDataBtn) {
+    exportDataBtn.addEventListener('click', () => {
+      if (!currentSearchResults || currentSearchResults.length === 0) {
+        alert('エクスポート対象の検索結果がありません。');
+        return;
+      }
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(currentSearchResults, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', `arxiv_security_papers_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    });
+  }
+
+  function showHelpModal() {
+    alert("【arXiv Security Intelligence - 操作ガイド】\n\n1. グローバル検索 (Ctrl+K):\n   画面上部から論文ID、攻撃手法名、脆弱性番号を横断検索可能。\n\n2. セマンティック RAG 検索:\n   ペンテスト自動化、LLM 脆弱性などの日本語自然言語クエリから類似論文を即時抽出。\n\n3. CTI ナレッジグラフ:\n   左サイドバーから ATT&CK マトリクスや推論ルール (EIROM) グラフへ直接遷移可能。\n\n4. MCP JSON-RPC サンドボックス:\n   外部 AI エージェント用の各種 MCP ツールを Web 上で直接検証。");
+  }
+
+  if (guideHelpBtn) guideHelpBtn.addEventListener('click', showHelpModal);
+  if (helpModalBtn) helpModalBtn.addEventListener('click', showHelpModal);
+  if (notifBtn) {
+    notifBtn.addEventListener('click', () => {
+      alert("🔔【通知センター】\n・2026-09-05 06:00 定期バッチ完了 (新着 24 件)\n・EIROM 推論エンジン: 84.2% HIGH 確信度維持\n・未研究リサーチギャップ: 12 件検出中");
+    });
+  }
+
+  // ========================================================================
+  // 4. Search Initialization & Execution
+  // ========================================================================
   const urlParams = new URLSearchParams(window.location.search);
   const initialQuery = urlParams.get('q') || urlParams.get('query');
   const initialTag = urlParams.get('tag') || urlParams.get('category');
 
   if (initialTag) {
     activeTag = initialTag;
-    document.querySelectorAll('.filter-chip').forEach(c => {
+    document.querySelectorAll('.filter-pill').forEach(c => {
       if (c.getAttribute('data-tag') === initialTag) c.classList.add('active');
       else c.classList.remove('active');
     });
   }
 
-  // Initialize Stats & Search
   fetchStats();
   const queryToRun = initialQuery !== null ? initialQuery : "ペンテスト";
-  searchInput.value = queryToRun;
+  if (searchInput) searchInput.value = queryToRun;
+  if (globalSearchInput) globalSearchInput.value = queryToRun;
   performSearch(queryToRun, false);
 
-  // Tab Switching
-  document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-
-      btn.classList.add('active');
-      const tabId = btn.getAttribute('data-tab');
-      document.getElementById(tabId).classList.add('active');
-
-      if (tabId === 'trendsTab') {
-        fetchTrends(activePeriod);
-      }
-    });
-  });
-
-  // Tag Filters
-  document.querySelectorAll('.filter-chip').forEach(chip => {
+  // Filter Pills
+  document.querySelectorAll('.filter-pill').forEach(chip => {
     chip.addEventListener('click', () => {
-      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.filter-pill').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       activeTag = chip.getAttribute('data-tag');
       performSearch(searchInput.value, true);
@@ -73,10 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Search Events
-  searchBtn.addEventListener('click', () => performSearch(searchInput.value, true));
-  searchInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') performSearch(searchInput.value, true);
-  });
+  if (searchBtn && searchInput) {
+    searchBtn.addEventListener('click', () => performSearch(searchInput.value, true));
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') performSearch(searchInput.value, true);
+    });
+  }
 
   // Browser Navigation History (Popstate)
   window.addEventListener('popstate', () => {
@@ -84,11 +262,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const q = params.get('q') || '';
     const tag = params.get('tag') || '';
     activeTag = tag;
-    document.querySelectorAll('.filter-chip').forEach(c => {
+    document.querySelectorAll('.filter-pill').forEach(c => {
       if (c.getAttribute('data-tag') === tag) c.classList.add('active');
       else c.classList.remove('active');
     });
-    searchInput.value = q;
+    if (searchInput) searchInput.value = q;
+    if (globalSearchInput) globalSearchInput.value = q;
     performSearch(q, false);
   });
 
@@ -98,7 +277,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/stats');
       const data = await res.json();
       if (data.total_papers) {
-        totalPapersCount.textContent = Number(data.total_papers).toLocaleString();
+        const formatted = Number(data.total_papers).toLocaleString();
+        if (totalPapersCount) totalPapersCount.textContent = formatted;
+        if (sidebarPapersCount) sidebarPapersCount.textContent = formatted;
       }
     } catch (err) {
       console.warn("Stats fetch failed", err);
@@ -139,15 +320,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (cleanQuery) params.set('q', cleanQuery);
       if (activeTag) params.set('tag', activeTag);
       if (currentLimit !== 12) params.set('limit', String(currentLimit));
-      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + (window.location.hash || '');
       history.pushState({ q: cleanQuery, tag: activeTag, limit: currentLimit }, '', newUrl);
     }
 
     const startTime = performance.now();
     if (!append) {
-      resultsGrid.innerHTML = '<p style="color: var(--text-muted);">検索中...</p>';
+      resultsGrid.innerHTML = '<p style="color: var(--console-fg-muted); padding: 16px;">検索中...</p>';
       if (loadMoreContainer) loadMoreContainer.style.display = 'none';
       currentLoadedCount = 0;
+      currentSearchResults = [];
     } else if (loadMoreBtn) {
       loadMoreBtn.disabled = true;
       loadMoreBtn.innerHTML = '<span>⏳ 読み込み中...</span>';
@@ -173,18 +355,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (data.status === 'success' && data.results) {
-        currentTotalHits = Number(data.total_hits !== undefined ? data.total_hits : data.results.length);
-        renderResults(data.results, append, data.has_more);
+        currentTotalHits = Number(data['total_hits'] !== undefined ? data['total_hits'] : data.results.length);
+        if (append) {
+          currentSearchResults = currentSearchResults.concat(data.results);
+        } else {
+          currentSearchResults = data.results;
+        }
+        renderResults(data.results, append, data['has_more']);
       } else {
         if (!append) {
-          resultsGrid.innerHTML = '<p class="loading-text">該当する論文は見つかりませんでした。</p>';
+          resultsGrid.innerHTML = '<p class="loading-text" style="padding: 16px;">該当する論文は見つかりませんでした。</p>';
           resultsCount.textContent = '検索結果 (0件)';
           if (loadMoreContainer) loadMoreContainer.style.display = 'none';
         }
       }
     } catch (err) {
       if (!append) {
-        resultsGrid.innerHTML = `<p style="color: #ef4444;">検索エラーが発生しました: ${escapeHtml(err.message)}</p>`;
+        resultsGrid.innerHTML = `<p style="color: #ef4444; padding: 16px;">検索エラーが発生しました: ${escapeHtml(err.message)}</p>`;
       }
     } finally {
       if (loadMoreBtn) {
@@ -194,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Render Paper Cards
+  // Render Paper Cards (Enterprise Resource Presentation)
   function renderResults(results, append = false, hasMore = false) {
     if (!append) {
       currentLoadedCount = results.length;
@@ -204,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (currentLoadedCount === 0) {
       resultsCount.textContent = '検索結果 (0件)';
-      resultsGrid.innerHTML = '<p class="loading-text">該当する論文は見つかりませんでした。</p>';
+      resultsGrid.innerHTML = '<p class="loading-text" style="padding: 16px;">該当する論文は見つかりませんでした。</p>';
       if (loadMoreContainer) loadMoreContainer.style.display = 'none';
       return;
     }
@@ -220,7 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const previewUrl = `/preview/${encodeURIComponent(paper.id)}`;
 
       return `
-      <div class="glass-panel paper-card">
+      <div class="paper-card">
         <div style="cursor: pointer;" onclick="openPaperModal('${escapeHtml(paper.id)}')">
           <div class="card-top">
             <span class="arxiv-id-tag">arXiv: ${escapeHtml(paper.id)}</span>
@@ -239,6 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <a href="${okfPath}" target="_blank" rel="noopener" class="card-action-link" title="生の OKF Markdown をプレーンテキストで表示 (.md)" onclick="event.stopPropagation()">📝 .md</a>
             <a href="${previewUrl}" target="_blank" rel="noopener" class="card-action-link" title="スタンドアロン HTML プレビュー" onclick="event.stopPropagation()">👁️ プレビュー ↗</a>
             <button class="card-action-btn" onclick="openPaperModal('${escapeHtml(paper.id)}')">詳細 &rarr;</button>
+            <button class="action-dots-btn" title="詳細アクション" onclick="event.stopPropagation(); openPaperModal('${escapeHtml(paper.id)}')">⋮</button>
           </div>
         </div>
       </div>
@@ -267,7 +455,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Modal Dialog handling (Fullscreen Viewer with Topology Network)
+  // ========================================================================
+  // 5. Fullscreen Modal Viewer
+  // ========================================================================
   window.openPaperModal = async function(arxivId) {
     paperModal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -307,7 +497,6 @@ document.addEventListener('DOMContentLoaded', () => {
           modalPaperBody.innerHTML = `<p>論文データが見つかりませんでした。</p>`;
         }
 
-        // Fetch & Render Related Papers Proximity Network
         fetchRelatedPapersTopology(arxivId, modalPaperBody);
 
         if (window.MarkdownCompiler && window.MarkdownCompiler.renderMermaid) {
@@ -360,7 +549,9 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         container.appendChild(section);
-        window.MarkdownCompiler.renderMermaid(section);
+        if (window.MarkdownCompiler && window.MarkdownCompiler.renderMermaid) {
+          window.MarkdownCompiler.renderMermaid(section);
+        }
       }
     } catch (e) {
       console.warn('Could not load related papers:', e);
@@ -372,14 +563,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.style.overflow = '';
   }
 
-  closeModalBtn.addEventListener('click', closeFullscreenModal);
+  if (closeModalBtn) closeModalBtn.addEventListener('click', closeFullscreenModal);
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !paperModal.classList.contains('hidden')) {
       closeFullscreenModal();
     }
   });
 
-  // Trends Tab
+  // ========================================================================
+  // 6. Trends Tab Logic
+  // ========================================================================
   document.querySelectorAll('.period-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
@@ -390,6 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   async function fetchTrends(period) {
+    if (!trendContent) return;
     trendContent.innerHTML = '<p class="loading-text">トレンドデータを取得中...</p>';
     try {
       const res = await fetch(`/api/trends?period=${encodeURIComponent(period)}`);
@@ -397,59 +591,67 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data.status === 'success' && data.content) {
         const compiled = window.MarkdownCompiler.compile(data.content);
         trendContent.innerHTML = compiled.html;
-        window.MarkdownCompiler.renderMermaid(trendContent);
+        if (window.MarkdownCompiler && window.MarkdownCompiler.renderMermaid) {
+          window.MarkdownCompiler.renderMermaid(trendContent);
+        }
       }
     } catch (err) {
       trendContent.innerHTML = `<p style="color:#ef4444;">トレンド取得エラー: ${escapeHtml(err.message)}</p>`;
     }
   }
 
-  // MCP Sandbox
-  mcpToolSelect.addEventListener('change', () => {
-    const selected = mcpToolSelect.value;
-    if (selected === 'search_security_papers') {
-      mcpArgsInput.value = JSON.stringify({ query: "ペンテスト自動化", top_k: 5 }, null, 2);
-    } else if (selected === 'verify_code_security') {
-      mcpArgsInput.value = JSON.stringify({
-        code_snippet: "def login(user, pwd):\n    query = f\"SELECT * FROM users WHERE u='{user}' AND p='{pwd}'\"\n    cursor.execute(query)",
-        language: "python"
-      }, null, 2);
-    } else if (selected === 'get_cwe_mitigation_recipe') {
-      mcpArgsInput.value = JSON.stringify({ cwe_id: "CWE-89" }, null, 2);
-    } else if (selected === 'get_related_papers_graph') {
-      mcpArgsInput.value = JSON.stringify({ arxiv_id: "2502.16730" }, null, 2);
-    } else if (selected === 'get_paper_summary') {
-      mcpArgsInput.value = JSON.stringify({ arxiv_id: "2502.16730" }, null, 2);
-    } else if (selected === 'get_latest_trends') {
-      mcpArgsInput.value = JSON.stringify({ period: "monthly" }, null, 2);
-    } else if (selected === 'query_attack_technique') {
-      mcpArgsInput.value = JSON.stringify({ technique_id: "T1059" }, null, 2);
-    }
-  });
+  // ========================================================================
+  // 7. MCP Sandbox Logic
+  // ========================================================================
+  if (mcpToolSelect && mcpArgsInput) {
+    mcpToolSelect.addEventListener('change', () => {
+      const selected = mcpToolSelect.value;
+      if (selected === 'search_security_papers') {
+        mcpArgsInput.value = JSON.stringify({ query: "ペンテスト自動化", top_k: 5 }, null, 2);
+      } else if (selected === 'verify_code_security') {
+        mcpArgsInput.value = JSON.stringify({
+          code_snippet: "def login(user, pwd):\n    query = f\"SELECT * FROM users WHERE u='{user}' AND p='{pwd}'\"\n    cursor.execute(query)",
+          language: "python"
+        }, null, 2);
+      } else if (selected === 'get_cwe_mitigation_recipe') {
+        mcpArgsInput.value = JSON.stringify({ cwe_id: "CWE-89" }, null, 2);
+      } else if (selected === 'get_related_papers_graph') {
+        mcpArgsInput.value = JSON.stringify({ arxiv_id: "2502.16730" }, null, 2);
+      } else if (selected === 'get_paper_summary') {
+        mcpArgsInput.value = JSON.stringify({ arxiv_id: "2502.16730" }, null, 2);
+      } else if (selected === 'get_latest_trends') {
+        mcpArgsInput.value = JSON.stringify({ period: "monthly" }, null, 2);
+      } else if (selected === 'query_attack_technique') {
+        mcpArgsInput.value = JSON.stringify({ technique_id: "T1059" }, null, 2);
+      }
+    });
+  }
 
-  runMcpBtn.addEventListener('click', async () => {
-    mcpOutput.textContent = '⚡ MCP JSON-RPC 呼び出し中...';
-    let args;
-    try {
-      args = JSON.parse(mcpArgsInput.value);
-    } catch (err) {
-      mcpOutput.textContent = `引数 (JSON) パースエラー: ${err.message}\n正しい JSON 形式（キーをダブルクォートで囲む等）で入力してください。`;
-      return;
-    }
+  if (runMcpBtn && mcpOutput && mcpToolSelect && mcpArgsInput) {
+    runMcpBtn.addEventListener('click', async () => {
+      mcpOutput.textContent = '⚡ MCP JSON-RPC 呼び出し中...';
+      let args;
+      try {
+        args = JSON.parse(mcpArgsInput.value);
+      } catch (err) {
+        mcpOutput.textContent = `引数 (JSON) パースエラー: ${err.message}\n正しい JSON 形式（キーをダブルクォートで囲む等）で入力してください。`;
+        return;
+      }
 
-    try {
-      const name = mcpToolSelect.value;
-      const res = await fetch('/api/mcp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, arguments: args })
-      });
-      const data = await res.json();
-      mcpOutput.textContent = JSON.stringify(data, null, 2);
-    } catch (err) {
-      mcpOutput.textContent = `API 呼び出しエラー: ${err.message}`;
-    }
-  });
+      try {
+        const name = mcpToolSelect.value;
+        const res = await fetch('/api/mcp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, arguments: args })
+        });
+        const data = await res.json();
+        mcpOutput.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        mcpOutput.textContent = `API 呼び出しエラー: ${err.message}`;
+      }
+    });
+  }
 
   function escapeHtml(str) {
     if (!str) return '';

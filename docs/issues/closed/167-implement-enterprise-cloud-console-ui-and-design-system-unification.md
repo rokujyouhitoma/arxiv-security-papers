@@ -2,7 +2,7 @@
 ID: 167
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Resolved)
 ---
 
 # [FEAT/UIUX] エンタープライズSaaS型統合クラウドコンソール UI およびデザインシステムの統一実装 (ID: 167)
@@ -70,13 +70,13 @@ ID: 167
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
 - [x] [docs/designs/DSN-21-enterprise_design_system_and_unified_console.md](../designs/DSN-21-enterprise_design_system_and_unified_console.md):
   - クラウドコンソール仕様・デザインシステム包括設計書（策定完了）
-- [ ] [site/index.html](file:///workspace/arxiv-security-papers/site/index.html):
+- [x] [site/index.html](file:///workspace/arxiv-security-papers/site/index.html):
   - エンタープライズ SaaS クラウドコンソールレイアウトへの再構築（固定ヘッダー、左サイドバー、メインコンテンツ 5大コンポーネント）
-- [ ] [site/style.css](file:///workspace/arxiv-security-papers/site/style.css):
+- [x] [site/style.css](file:///workspace/arxiv-security-papers/site/style.css):
   - Swiss / Warm Enterprise Palette のトークン定義、2ペインレイアウト、5大コンポーネント用スタイルの統合
-- [ ] [site/app.js](file:///workspace/arxiv-security-papers/site/app.js):
+- [x] [site/app.js](file:///workspace/arxiv-security-papers/site/app.js):
   - アコーディオン開閉、サイドバー折りたたみ、ハッシュルーティング、グローバル検索連動
-- [ ] [tests/web/test_dashboard_html.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_html.py) / [tests/web/test_web_server.py](file:///workspace/arxiv-security-papers/tests/web/test_web_server.py):
+- [x] [tests/web/test_enterprise_console_ui.py](file:///workspace/arxiv-security-papers/tests/web/test_enterprise_console_ui.py):
   - コンソールシェル構造、グローバルヘッダー、サイドバー、5大コンポーネントのテスト追加
 
 ---
@@ -100,10 +100,10 @@ Target Branch: `feat/167-enterprise-cloud-console-ui`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] 固定グローバルヘッダー（プロダクト/テナント名、幅広検索バー、ユーティリティアイコン）が実装されていること。
-- [ ] 左サイドバー（幅 240〜280px）にアコーディオン階層メニューと選択中アクティブ縦棒インジケーターが配置されていること。
-- [ ] メインエリアに標準 5 大コンポーネント（H1ヘッダー、インフォバナー、カラーバー付きKPIカード、インラインフィルタバー、リソースリストテーブル）が配置されていること。
-- [ ] 色合いが `dashboard.html` 側の落ち着いたスイス調アースカラー（`#f4efe6`, `#ebe5d8`, `#2b2b2b`, `#3d5a80` 等）で美しくテーラリングされていること。
-- [ ] 外部ライブラリ（Tailwind, React等）を追加せず、Vanilla CSS と Pure JavaScript のみで高速・セキュア（Zero-XSS）に構築されていること。
-- [ ] `tests/web/` に統合コンソールの DOM 構造・レイアウト検証テストが追加されパスすること。
-- [ ] `make check_format`, `make static_analysis`, `make test` の全品質ゲートを 100% PASS すること。
+- [x] 固定グローバルヘッダー（プロダクト/テナント名、幅広検索バー、ユーティリティアイコン）が実装されていること。
+- [x] 左サイドバー（幅 240〜280px）にアコーディオン階層メニューと選択中アクティブ縦棒インジケーターが配置されていること。
+- [x] メインエリアに標準 5 大コンポーネント（H1ヘッダー、インフォバナー、カラーバー付きKPIカード、インラインフィルタバー、リソースリストテーブル）が配置されていること。
+- [x] 色合いが `dashboard.html` 側の落ち着いたスイス調アースカラー（`#f4efe6`, `#ebe5d8`, `#2b2b2b`, `#3d5a80` 等）で美しくテーラリングされていること。
+- [x] 外部ライブラリ（Tailwind, React等）を追加せず、Vanilla CSS と Pure JavaScript のみで高速・セキュア（Zero-XSS）に構築されていること。
+- [x] `tests/web/` に統合コンソールの DOM 構造・レイアウト検証テストが追加されパスすること。
+- [x] `make check_format`, `make static_analysis`, `make test` の全品質ゲートを 100% PASS すること。

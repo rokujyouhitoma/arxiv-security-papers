@@ -3,146 +3,312 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>arXiv Security Papers — AI ナレッジ & MCP 検索ポータル</title>
+  <title>arXiv Security Intelligence — Enterprise Cloud Console (cs.CR)</title>
   <!-- Google Fonts: Outfit & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   <!-- Mermaid.js for Trend Diagrams -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Header -->
-  <header class="app-header">
-    <div class="header-container">
-      <div class="logo">
-        <span class="logo-icon">🛡️</span>
-        <div class="logo-text">
-          <h1>arXiv Security <span>Portal</span></h1>
-          <p>Google OKF v0.2 | MCP JSON-RPC Server | Hybrid Vector Search</p>
-        </div>
-      </div>
-      <div class="stats-badge" id="statsBadge">
-        <span class="badge-dot"></span>
-        <span id="totalPapersCount">14,169</span> 論文インデックス済み
-      </div>
-    </div>
-  </header>
-
-  <!-- Navigation Tabs -->
-  <nav class="app-nav">
-    <div class="nav-container">
-      <button class="nav-btn active" data-tab="searchTab">🔍 セマンティック RAG 検索</button>
-      <button class="nav-btn" data-tab="trendsTab">📊 トレンド & Mermaid マップ</button>
-      <button class="nav-btn" data-tab="mcpTab">🔌 MCP ツールサンドボックス</button>
-    </div>
-  </nav>
-
-  <!-- Main Content Container -->
-  <main class="main-container">
-    <!-- TAB 1: SEARCH -->
-    <section id="searchTab" class="tab-content active">
-      <div class="search-box-card glass-panel">
-        <div class="search-input-wrapper">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="searchInput" placeholder="検索クエリを入力（例: ペンテスト自動化, 自動運転 脆弱性, LLM jailbreak）..." autofocus>
-          <button id="searchBtn" class="btn btn-primary">検索実行</button>
-        </div>
-        <div class="tag-filters" id="tagFilters">
-          <span class="filter-label">推奨カテゴリ:</span>
-          <button class="filter-chip active" data-tag="">すべて</button>
-          <button class="filter-chip" data-tag="cs.CR">cs.CR (暗号・セキュリティ)</button>
-          <button class="filter-chip" data-tag="malware">マルウェア検出</button>
-          <button class="filter-chip" data-tag="autonomous">自動運転</button>
-          <button class="filter-chip" data-tag="llm">LLM / AI セキュリティ</button>
-          <button class="filter-chip" data-tag="pentest">ペンテスト</button>
+  <div class="console-app">
+    <!-- 1. Fixed Global Header (48px) -->
+    <header class="console-header">
+      <!-- Left: Brand & Scope -->
+      <div class="header-brand">
+        <span class="brand-icon">🛡️</span>
+        <div class="brand-title">
+          <span>arXiv Security Intelligence</span>
+          <span class="separator">|</span>
+          <span class="tenant-name">Enterprise Portal (cs.CR)</span>
         </div>
       </div>
 
-      <!-- Search Results Area -->
-      <div class="results-header">
-        <div class="results-title-group">
-          <h2 id="resultsCount">検索結果 (0件)</h2>
-          <span class="search-time" id="searchTime"></span>
-        </div>
-        <div class="page-size-wrapper">
-          <label for="pageSizeSelect" class="page-size-label">表示件数:</label>
-          <select id="pageSizeSelect" class="page-size-select">
-            <option value="12" selected>12 件</option>
-            <option value="24">24 件</option>
-            <option value="48">48 件</option>
-            <option value="96">96 件</option>
-          </select>
+      <!-- Center: Wide Global Command / Search Bar -->
+      <div class="header-center-search">
+        <div class="global-search-wrapper">
+          <span class="global-search-icon">🔍</span>
+          <input type="text" id="globalSearchInput" class="global-search-input" placeholder="論文ID、攻撃手法、脆弱性、キーワードをグローバル検索 (Ctrl+K)...">
+          <span class="search-shortcut-badge">Ctrl + K</span>
         </div>
       </div>
 
-      <div id="resultsGrid" class="results-grid">
-        <!-- Paper Cards will be dynamically inserted here -->
-      </div>
-
-      <div id="loadMoreContainer" class="load-more-container" style="display: none;">
-        <button id="loadMoreBtn" class="btn btn-secondary load-more-btn">
-          <span>⬇️ さらに読み込む</span>
-        </button>
-        <p id="allLoadedMsg" class="all-loaded-msg" style="display: none;">🎉 すべての検索結果を表示しました</p>
-      </div>
-    </section>
-
-    <!-- TAB 2: TRENDS -->
-    <section id="trendsTab" class="tab-content">
-      <div class="glass-panel trend-control-panel">
-        <h2>📊 階層別エグゼクティブサマリー & トレンド</h2>
-        <div class="period-selector">
-          <button class="period-btn active" data-period="monthly">一か月分 (03_monthly)</button>
-          <button class="period-btn" data-period="quarterly">四半期 (04_quarterly)</button>
-          <button class="period-btn" data-period="annual">通期総括 (05_annual)</button>
+      <!-- Right: Utility Icons & Status -->
+      <div class="header-utilities">
+        <button class="utility-btn" id="notifBtn" title="通知センター">🔔 通知</button>
+        <button class="utility-btn" id="portalSwitchBtn" title="運用ダッシュボード切替" onclick="window.location.href='/dashboard.html'">📊 ダッシュボード</button>
+        <button class="utility-btn" id="helpModalBtn" title="ヘルプ & 操作ガイド">❓ ガイド</button>
+        <div class="status-badge-live" id="systemStatusBadge" title="Supervisor & Pipeline 健全稼働中">
+          <span class="status-indicator-dot"></span>
+          <span>正常稼働中</span>
         </div>
       </div>
-      <div id="trendContent" class="glass-panel trend-content">
-        <!-- Trend markdown / mermaid output -->
-        <p class="loading-text">トレンドデータを読み込み中...</p>
-      </div>
-    </section>
+    </header>
 
-    <!-- TAB 3: MCP SANDBOX -->
-    <section id="mcpTab" class="tab-content">
-      <div class="glass-panel mcp-sandbox-panel">
-        <h2>🔌 Model Context Protocol (MCP) JSON-RPC サンドボックス</h2>
-        <p class="section-desc">AI エージェントや外部クライアントが呼出す MCP ツールをブラウザ上からテスト実行できます。</p>
-        
-        <div class="mcp-form">
-          <div class="form-group">
-            <label for="mcpToolSelect">実行する MCP ツール名:</label>
-            <select id="mcpToolSelect">
-              <option value="search_security_papers">search_security_papers (類似論文検索)</option>
-              <option value="verify_code_security">verify_code_security (コード脆弱性学術監査)</option>
-              <option value="get_cwe_mitigation_recipe">get_cwe_mitigation_recipe (CWE学術防御レシピ)</option>
-              <option value="get_related_papers_graph">get_related_papers_graph (Graph-RAG 近傍グラフ)</option>
-              <option value="get_paper_summary">get_paper_summary (OKF 構造化要約取得)</option>
-              <option value="get_latest_trends">get_latest_trends (トレンドレポート取得)</option>
-              <option value="query_attack_technique">query_attack_technique (MITRE ATT&CK 逆引き)</option>
-            </select>
+    <!-- 2-Pane Console Body -->
+    <div class="console-body">
+      <!-- 2. Left Sidebar (Fixed 260px, Collapsible) -->
+      <aside class="console-sidebar" id="consoleSidebar">
+        <div class="sidebar-header-bar">
+          <span class="sidebar-heading">ナビゲーション</span>
+          <button class="sidebar-collapse-toggle" id="sidebarToggleBtn" title="サイドバー折りたたみ">◀</button>
+        </div>
+
+        <nav class="nav-accordion">
+          <!-- Accordion Group 1: 探索・分析 (Analytics) -->
+          <div class="nav-group">
+            <button class="nav-group-header" data-toggle="group">
+              <span>探索・分析 (Analytics)</span>
+              <span class="nav-group-arrow">▼</span>
+            </button>
+            <div class="nav-sub-items">
+              <a href="#/search" class="nav-item active nav-tab-btn" data-tab="searchTab" id="navSearch">
+                <span class="nav-item-icon">🔍</span>
+                <span class="nav-item-text">セマンティック RAG 検索</span>
+              </a>
+              <a href="#/trends" class="nav-item nav-tab-btn" data-tab="trendsTab" id="navTrends">
+                <span class="nav-item-icon">📊</span>
+                <span class="nav-item-text">トレンド & サマリー</span>
+              </a>
+              <a href="/dashboard.html?tab=graph" class="nav-item" id="navGraph">
+                <span class="nav-item-icon">🕸️</span>
+                <span class="nav-item-text">CTI ナレッジグラフ ↗</span>
+              </a>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="mcpArgsInput">引数 (JSON 形式):</label>
-            <textarea id="mcpArgsInput" rows="4">{
+          <!-- Accordion Group 2: 脅威インテリジェンス (Intelligence) -->
+          <div class="nav-group">
+            <button class="nav-group-header" data-toggle="group">
+              <span>脅威インテリジェンス</span>
+              <span class="nav-group-arrow">▼</span>
+            </button>
+            <div class="nav-sub-items">
+              <a href="/dashboard.html?tab=graph&view=matrix" class="nav-item" id="navMatrix">
+                <span class="nav-item-icon">🛡️</span>
+                <span class="nav-item-text">ATT&CK / CWE マトリクス ↗</span>
+              </a>
+              <a href="/dashboard.html?tab=graph&view=gaps" class="nav-item" id="navGaps">
+                <span class="nav-item-icon">⚡</span>
+                <span class="nav-item-text">リサーチギャップ分析 ↗</span>
+              </a>
+              <a href="/dashboard.html?tab=graph&view=rules" class="nav-item" id="navRules">
+                <span class="nav-item-icon">📜</span>
+                <span class="nav-item-text">推論ルール (EIROM) ↗</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Accordion Group 3: システム運用 & 監査 (Operations) -->
+          <div class="nav-group">
+            <button class="nav-group-header" data-toggle="group">
+              <span>システム運用 & 監査</span>
+              <span class="nav-group-arrow">▼</span>
+            </button>
+            <div class="nav-sub-items">
+              <a href="/dashboard.html?tab=telemetry" class="nav-item" id="navTelemetry">
+                <span class="nav-item-icon">📈</span>
+                <span class="nav-item-text">プロセス監視 & テレメトリ ↗</span>
+              </a>
+              <a href="#/mcp" class="nav-item nav-tab-btn" data-tab="mcpTab" id="navMcp">
+                <span class="nav-item-icon">🔌</span>
+                <span class="nav-item-text">MCP ツールサンドボックス</span>
+              </a>
+              <a href="/dashboard.html?tab=supervisor" class="nav-item" id="navLogs">
+                <span class="nav-item-icon">📑</span>
+                <span class="nav-item-text">システム監査ログ ↗</span>
+              </a>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Sidebar Footer Status -->
+        <div class="sidebar-footer-stats">
+          <div class="stats-title">OKF ナレッジベース</div>
+          <div class="stats-value"><span id="sidebarPapersCount">14,169</span> 論文インデックス</div>
+        </div>
+      </aside>
+
+      <!-- 3. Main Content Area (Scrollable 2-Pane Stage) -->
+      <main class="console-main">
+        <!-- Component 1: Page Header -->
+        <header class="console-page-header">
+          <div class="page-title-group">
+            <h1 id="mainPageTitle">🔍 セマンティック RAG 論文検索 & 脅威インテリジェンス</h1>
+            <p class="page-subtitle" id="mainPageSubtitle">Google OKF v0.2 準拠の 14,169 件のセキュリティ学術論文および ATT&CK 推論メタデータを横断探索</p>
+          </div>
+          <div class="page-actions-group">
+            <button class="btn-console" id="refreshDataBtn" title="最新データに更新">🔄 更新</button>
+            <button class="btn-console" id="exportDataBtn" title="CSV/JSON エクスポート">⬇️ エクスポート</button>
+            <button class="btn-console btn-console-primary" id="guideHelpBtn" title="操作ガイドを表示">❓ 操作ガイド</button>
+          </div>
+        </header>
+
+        <!-- Component 2: Information Banner -->
+        <section class="console-info-banner" id="systemInfoBanner">
+          <div class="banner-content">
+            <span class="banner-icon">ℹ️</span>
+            <span>2026-09-05 06:00 の定期パイプライン実行が正常完了しました。新着論文 24 件および EIROM 確信度エッジが更新されています。<a href="/dashboard.html?tab=supervisor" class="banner-link">更新ログを確認 ↗</a></span>
+          </div>
+          <button class="banner-close-btn" id="closeBannerBtn" title="閉じる">✕</button>
+        </section>
+
+        <!-- Component 3: KPI Summary Cards with Left Color Bars -->
+        <section class="kpi-card-grid">
+          <!-- Card 1: Total Papers -->
+          <div class="kpi-card kpi-card-navy">
+            <div class="kpi-header">
+              <span class="kpi-label">インデックス論文総数</span>
+              <span class="kpi-badge">cs.CR</span>
+            </div>
+            <div class="kpi-value" id="totalPapersCount">14,169</div>
+            <div class="kpi-subtext">前週比 +128 件 (自動同期中)</div>
+          </div>
+
+          <!-- Card 2: Inference Confidence -->
+          <div class="kpi-card kpi-card-green">
+            <div class="kpi-header">
+              <span class="kpi-label">推論確信度 (HIGH)</span>
+              <span class="kpi-badge">84.2%</span>
+            </div>
+            <div class="kpi-value">84.2%</div>
+            <div class="kpi-subtext">EIROM 信頼性スコア &ge; 0.85</div>
+          </div>
+
+          <!-- Card 3: CWE Weakness Coverage -->
+          <div class="kpi-card kpi-card-amber">
+            <div class="kpi-header">
+              <span class="kpi-label">カバー済み CWE 弱点</span>
+              <span class="kpi-badge">Alert</span>
+            </div>
+            <div class="kpi-value">68 件</div>
+            <div class="kpi-subtext">主要: CWE-79, CWE-89, CWE-502</div>
+          </div>
+
+          <!-- Card 4: Research Gaps -->
+          <div class="kpi-card kpi-card-coral">
+            <div class="kpi-header">
+              <span class="kpi-label">未研究リサーチギャップ</span>
+              <span class="kpi-badge">Gap</span>
+            </div>
+            <div class="kpi-value">12 件</div>
+            <div class="kpi-subtext">学術論文未対策の ATT&CK 手法</div>
+          </div>
+        </section>
+
+        <!-- TAB 1: SEARCH CONTENT -->
+        <section id="searchTab" class="tab-content active">
+          <!-- Component 4: Inline Search & Filter Deck -->
+          <div class="console-filter-deck">
+            <div class="filter-row-top">
+              <div class="inline-search-box">
+                <span>🔍</span>
+                <input type="text" id="searchInput" placeholder="検索クエリを入力（例: ペンテスト自動化, 自動運転 脆弱性, LLM jailbreak）..." autofocus>
+              </div>
+              <button id="searchBtn" class="btn-console btn-console-primary">検索実行</button>
+              <button id="clearFiltersBtn" class="btn-console" title="フィルターをリセット">リセット</button>
+            </div>
+
+            <div class="filter-row-bottom">
+              <div class="filter-pills-group" id="tagFilters">
+                <span class="filter-pill-label">推奨カテゴリ:</span>
+                <button class="filter-pill active" data-tag="">すべて</button>
+                <button class="filter-pill" data-tag="cs.CR">cs.CR (暗号・セキュリティ)</button>
+                <button class="filter-pill" data-tag="malware">マルウェア検出</button>
+                <button class="filter-pill" data-tag="autonomous">自動運転</button>
+                <button class="filter-pill" data-tag="llm">LLM / AI セキュリティ</button>
+                <button class="filter-pill" data-tag="pentest">ペンテスト</button>
+              </div>
+
+              <div class="page-size-wrapper">
+                <label for="pageSizeSelect" class="filter-pill-label">表示件数:</label>
+                <select id="pageSizeSelect" class="filter-select">
+                  <option value="12" selected>12 件</option>
+                  <option value="24">24 件</option>
+                  <option value="48">48 件</option>
+                  <option value="96">96 件</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Component 5: Enterprise Resource List & Results Table -->
+          <div class="results-meta-toolbar">
+            <div class="results-count-title">
+              <span id="resultsCount">検索結果 (0件)</span>
+            </div>
+            <span class="results-elapsed-tag" id="searchTime"></span>
+          </div>
+
+          <div id="resultsGrid" class="results-grid">
+            <!-- Paper Cards will be dynamically inserted here -->
+          </div>
+
+          <div id="loadMoreContainer" class="load-more-container" style="display: none;">
+            <button id="loadMoreBtn" class="btn-console load-more-btn">
+              <span>⬇️ さらに読み込む</span>
+            </button>
+            <p id="allLoadedMsg" class="all-loaded-msg" style="display: none;">🎉 すべての検索結果を表示しました</p>
+          </div>
+        </section>
+
+        <!-- TAB 2: TRENDS -->
+        <section id="trendsTab" class="tab-content">
+          <div class="trend-control-panel">
+            <h2>📊 階層別エグゼクティブサマリー & トレンド</h2>
+            <div class="period-selector">
+              <button class="period-btn active" data-period="monthly">一か月分 (03_monthly)</button>
+              <button class="period-btn" data-period="quarterly">四半期 (04_quarterly)</button>
+              <button class="period-btn" data-period="annual">通期総括 (05_annual)</button>
+            </div>
+          </div>
+          <div id="trendContent" class="trend-content">
+            <p class="loading-text">トレンドデータを読み込み中...</p>
+          </div>
+        </section>
+
+        <!-- TAB 3: MCP SANDBOX -->
+        <section id="mcpTab" class="tab-content">
+          <div class="mcp-sandbox-panel">
+            <h2>🔌 Model Context Protocol (MCP) JSON-RPC サンドボックス</h2>
+            <p class="section-desc">AI エージェントや外部クライアントが呼出す MCP ツールをブラウザ上からテスト実行できます。</p>
+            
+            <div class="mcp-form">
+              <div class="form-group">
+                <label for="mcpToolSelect">実行する MCP ツール名:</label>
+                <select id="mcpToolSelect">
+                  <option value="search_security_papers">search_security_papers (類似論文検索)</option>
+                  <option value="verify_code_security">verify_code_security (コード脆弱性学術監査)</option>
+                  <option value="get_cwe_mitigation_recipe">get_cwe_mitigation_recipe (CWE学術防御レシピ)</option>
+                  <option value="get_related_papers_graph">get_related_papers_graph (Graph-RAG 近傍グラフ)</option>
+                  <option value="get_paper_summary">get_paper_summary (OKF 構造化要約取得)</option>
+                  <option value="get_latest_trends">get_latest_trends (トレンドレポート取得)</option>
+                  <option value="query_attack_technique">query_attack_technique (MITRE ATT&CK 逆引き)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="mcpArgsInput">引数 (JSON 形式):</label>
+                <textarea id="mcpArgsInput" rows="4">{
   "query": "ペンテスト自動化",
   "top_k": 5
 }</textarea>
+              </div>
+
+              <button id="runMcpBtn" class="btn-console btn-console-primary">⚡ MCP ツール呼び出し実行</button>
+            </div>
+
+            <div class="mcp-output-wrapper" style="margin-top: 20px;">
+              <h3 style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">JSON-RPC レスポンス:</h3>
+              <pre id="mcpOutput" class="code-block">{ "status": "idle" }</pre>
+            </div>
           </div>
-
-          <button id="runMcpBtn" class="btn btn-secondary">⚡ MCP ツール呼び出し実行</button>
-        </div>
-
-        <div class="mcp-output-wrapper">
-          <h3>JSON-RPC レスポンス:</h3>
-          <pre id="mcpOutput" class="code-block">{ "status": "idle" }</pre>
-        </div>
-      </div>
-    </section>
-  </main>
+        </section>
+      </main>
+    </div>
+  </div>
 
   <!-- Fullscreen Paper OKF Viewer -->
   <div id="paperModal" class="modal-backdrop hidden">
@@ -170,10 +336,6 @@
       </div>
     </div>
   </div>
-
-  <footer class="app-footer">
-    <p>© 2026 arxiv-security-papers | Built with Google OKF v0.2 & Model Context Protocol</p>
-  </footer>
 
   <script src="js/lexer.js"></script>
   <script src="js/parser.js"></script>

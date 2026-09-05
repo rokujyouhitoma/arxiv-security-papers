@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **167** | エンタープライズSaaS型統合クラウドコンソール UI およびデザインシステムの統一実装 | Feature | High | In Progress | [167-implement-enterprise-cloud-console-ui-and-design-system-unification.md](167-implement-enterprise-cloud-console-ui-and-design-system-unification.md) |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **167** | エンタープライズSaaS型統合クラウドコンソール UI およびデザインシステムの統一実装 | Feature | 2026-09-05 | [167-implement-enterprise-cloud-console-ui-and-design-system-unification.md](closed/167-implement-enterprise-cloud-console-ui-and-design-system-unification.md) |
 | **166** | /dashboard tab=graph における Glassmorphic ツールチップ・操作ガイド基盤および UI/UX 認知的負荷軽減の実装 | Feature | 2026-09-05 | [166-implement-glassmorphic-tooltips-and-graph-uiux-guide.md](closed/166-implement-glassmorphic-tooltips-and-graph-uiux-guide.md) |
 | **165** | 全量 OKF 論文アーカイブへの推論ルール（EIROM）適用と確信度・エビデンス付きグラフ再構築バッチの実装 | Feature / Ops | 2026-09-05 | [165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md](closed/165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md) |
 | **164** | /dashboard tab=graph におけるエッジ確信度（Confidence Tier）＆推論ルール絞り込みフィルタとエビデンス（スニペット）表示の実装 | Feature | 2026-09-05 | [164-integrate-edge-confidence-rule-and-evidence-in-graph-tab.md](closed/164-integrate-edge-confidence-rule-and-evidence-in-graph-tab.md) |
