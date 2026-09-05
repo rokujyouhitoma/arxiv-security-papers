@@ -14,6 +14,13 @@ from .audit import (
     verify_chain_integrity,
 )
 from .fim import FileIntegrityMonitor, compute_file_sha256
+from .guardrails import (
+    DEFAULT_MAX_OUTPUT_CHARS,
+    ToolCallGuard,
+    detect_prompt_injection,
+    mask_pii_and_secrets,
+    validate_output_safety,
+)
 from .merkle_tree import MerkleTree, hash_children, hash_leaf
 from .ratelimit import (
     CircuitBreaker,
@@ -102,6 +109,12 @@ __all__ = [
     "compute_file_sha256",
     "hash_children",
     "hash_leaf",
+    # Guardrails & Tool Call Guard
+    "DEFAULT_MAX_OUTPUT_CHARS",
+    "ToolCallGuard",
+    "detect_prompt_injection",
+    "mask_pii_and_secrets",
+    "validate_output_safety",
     # Sandbox
     "ASTSecurityGuard",
     "BLOCKED_BUILTIN_FUNCS",
