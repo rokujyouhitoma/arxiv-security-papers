@@ -628,6 +628,378 @@
       margin-left: auto;
     }
 
+    /* ======================================================================
+       Glassmorphic Rich Tooltip & Help UI System (Issue 166)
+       ====================================================================== */
+    [data-tooltip] {
+      position: relative;
+    }
+
+    [data-tooltip]::before {
+      content: "";
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      border-width: 5px;
+      border-style: solid;
+      border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 10000;
+    }
+
+    [data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 14px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      color: #F8FAFC;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11px;
+      line-height: 1.4;
+      font-weight: 500;
+      text-align: left;
+      white-space: normal;
+      width: max-content;
+      max-width: 260px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 10000;
+    }
+
+    /* Tooltip position: bottom */
+    [data-tooltip-pos="bottom"]::before {
+      bottom: auto;
+      top: calc(100% + 4px);
+      border-color: transparent transparent rgba(15, 23, 42, 0.95) transparent;
+      transform: translateX(-50%) translateY(-4px);
+    }
+    [data-tooltip-pos="bottom"]::after {
+      bottom: auto;
+      top: calc(100% + 14px);
+      transform: translateX(-50%) translateY(-4px);
+    }
+
+    /* Tooltip position: top */
+    [data-tooltip-pos="top"]::before {
+      bottom: calc(100% + 4px);
+      top: auto;
+      border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
+      transform: translateX(-50%) translateY(4px);
+    }
+    [data-tooltip-pos="top"]::after {
+      bottom: calc(100% + 14px);
+      top: auto;
+      transform: translateX(-50%) translateY(4px);
+    }
+
+    /* Tooltip position: left */
+    [data-tooltip-pos="left"]::before {
+      bottom: auto;
+      top: 50%;
+      left: auto;
+      right: calc(100% + 4px);
+      transform: translateY(-50%) translateX(4px);
+      border-color: transparent transparent transparent rgba(15, 23, 42, 0.95);
+    }
+    [data-tooltip-pos="left"]::after {
+      bottom: auto;
+      top: 50%;
+      left: auto;
+      right: calc(100% + 14px);
+      transform: translateY(-50%) translateX(4px);
+    }
+
+    [data-tooltip]:hover::before,
+    [data-tooltip]:hover::after,
+    [data-tooltip]:focus-visible::before,
+    [data-tooltip]:focus-visible::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    [data-tooltip-pos="bottom"]:hover::before,
+    [data-tooltip-pos="bottom"]:hover::after,
+    [data-tooltip-pos="bottom"]:focus-visible::before,
+    [data-tooltip-pos="bottom"]:focus-visible::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    [data-tooltip-pos="top"]:hover::before,
+    [data-tooltip-pos="top"]:hover::after,
+    [data-tooltip-pos="top"]:focus-visible::before,
+    [data-tooltip-pos="top"]:focus-visible::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Tooltip horizontal alignment variants for preventing edge cut-off (Issue 166) */
+    [data-tooltip-align="left"]::before {
+      left: min(50%, 16px);
+      transform: translateX(-50%) translateY(4px);
+    }
+    [data-tooltip-align="left"]::after {
+      left: 0;
+      transform: translateY(4px);
+    }
+    [data-tooltip-align="left"][data-tooltip-pos="bottom"]::before {
+      left: min(50%, 16px);
+      transform: translateX(-50%) translateY(-4px);
+    }
+    [data-tooltip-align="left"][data-tooltip-pos="bottom"]::after {
+      left: 0;
+      transform: translateY(-4px);
+    }
+    [data-tooltip-align="left"][data-tooltip-pos="top"]::before {
+      left: min(50%, 16px);
+      transform: translateX(-50%) translateY(4px);
+    }
+    [data-tooltip-align="left"][data-tooltip-pos="top"]::after {
+      left: 0;
+      transform: translateY(4px);
+    }
+    [data-tooltip-align="left"]:hover::before,
+    [data-tooltip-align="left"]:focus-visible::before,
+    [data-tooltip-align="left"][data-tooltip-pos="bottom"]:hover::before,
+    [data-tooltip-align="left"][data-tooltip-pos="bottom"]:focus-visible::before,
+    [data-tooltip-align="left"][data-tooltip-pos="top"]:hover::before,
+    [data-tooltip-align="left"][data-tooltip-pos="top"]:focus-visible::before {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    [data-tooltip-align="left"]:hover::after,
+    [data-tooltip-align="left"]:focus-visible::after,
+    [data-tooltip-align="left"][data-tooltip-pos="bottom"]:hover::after,
+    [data-tooltip-align="left"][data-tooltip-pos="bottom"]:focus-visible::after,
+    [data-tooltip-align="left"][data-tooltip-pos="top"]:hover::after,
+    [data-tooltip-align="left"][data-tooltip-pos="top"]:focus-visible::after {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    [data-tooltip-align="right"]::before {
+      left: auto;
+      right: min(50%, 16px);
+      transform: translateX(50%) translateY(4px);
+    }
+    [data-tooltip-align="right"]::after {
+      left: auto;
+      right: 0;
+      transform: translateY(4px);
+    }
+    [data-tooltip-align="right"][data-tooltip-pos="bottom"]::before {
+      left: auto;
+      right: min(50%, 16px);
+      transform: translateX(50%) translateY(-4px);
+    }
+    [data-tooltip-align="right"][data-tooltip-pos="bottom"]::after {
+      left: auto;
+      right: 0;
+      transform: translateY(-4px);
+    }
+    [data-tooltip-align="right"][data-tooltip-pos="top"]::before {
+      left: auto;
+      right: min(50%, 16px);
+      transform: translateX(50%) translateY(4px);
+    }
+    [data-tooltip-align="right"][data-tooltip-pos="top"]::after {
+      left: auto;
+      right: 0;
+      transform: translateY(4px);
+    }
+    [data-tooltip-align="right"]:hover::before,
+    [data-tooltip-align="right"]:focus-visible::before,
+    [data-tooltip-align="right"][data-tooltip-pos="bottom"]:hover::before,
+    [data-tooltip-align="right"][data-tooltip-pos="bottom"]:focus-visible::before,
+    [data-tooltip-align="right"][data-tooltip-pos="top"]:hover::before,
+    [data-tooltip-align="right"][data-tooltip-pos="top"]:focus-visible::before {
+      opacity: 1;
+      transform: translateX(50%) translateY(0);
+    }
+    [data-tooltip-align="right"]:hover::after,
+    [data-tooltip-align="right"]:focus-visible::after,
+    [data-tooltip-align="right"][data-tooltip-pos="bottom"]:hover::after,
+    [data-tooltip-align="right"][data-tooltip-pos="bottom"]:focus-visible::after,
+    [data-tooltip-align="right"][data-tooltip-pos="top"]:hover::after,
+    [data-tooltip-align="right"][data-tooltip-pos="top"]:focus-visible::after {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    [data-tooltip-pos="left"]:hover::before,
+    [data-tooltip-pos="left"]:hover::after,
+    [data-tooltip-pos="left"]:focus-visible::before,
+    [data-tooltip-pos="left"]:focus-visible::after {
+      opacity: 1;
+      transform: translateY(-50%) translateX(0);
+    }
+
+    /* Inline Information Badges (ⓘ) */
+    .info-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.09);
+      color: var(--fg-muted);
+      font-size: 9px;
+      font-weight: bold;
+      cursor: help;
+      margin-left: 3px;
+      vertical-align: middle;
+      transition: all 0.15s ease;
+      line-height: 1;
+    }
+    .info-badge:hover {
+      background: var(--accent-blue);
+      color: #fff;
+    }
+
+    /* Graph Help Drawer & Overlay */
+    .graph-help-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 10001;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .graph-help-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .graph-help-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 460px;
+      max-width: 90vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-left: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: -12px 0 40px rgba(0, 0, 0, 0.6);
+      z-index: 10002;
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      color: #F8FAFC;
+      font-family: inherit;
+    }
+    .graph-help-drawer.active {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(30, 41, 59, 0.6);
+    }
+    .drawer-header h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #FFFFFF;
+    }
+    .btn-drawer-close {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #CBD5E1;
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+    .btn-drawer-close:hover {
+      background: rgba(239, 68, 68, 0.8);
+      color: #FFFFFF;
+      border-color: rgba(239, 68, 68, 0.9);
+    }
+
+    .drawer-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .guide-section {
+      background: rgba(30, 41, 59, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .guide-section h4 {
+      margin: 0 0 10px 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: #60A5FA;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 6px;
+    }
+    .guide-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      font-size: 11px;
+    }
+    .guide-table th, .guide-table td {
+      padding: 5px 8px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .guide-table th {
+      color: #94A3B8;
+      font-weight: 600;
+    }
+    .guide-table td code {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px 5px;
+      border-radius: 3px;
+      color: #38BDF8;
+      font-family: monospace;
+    }
+
     /* Header Collapse Styles */
     header {
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -899,26 +1271,26 @@
         <!-- Row 1: CTI / Context Mesh Mode & Filter Toolbar -->
         <div class="mesh-toolbar">
           <div style="display: flex; align-items: center; gap: 6px; border-right: 1px solid var(--border-dark); padding-right: 10px;">
-            <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">GRAPH MODE:</span>
-            <button id="btnModeMesh" class="btn-tool active" onclick="setGraphMode('context')">Context Mesh</button>
-            <button id="btnModeCti" class="btn-tool" onclick="setGraphMode('cti')">🛡️ CTI Graph (ATT&CK / CWE)</button>
+            <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">GRAPH MODE:<span class="info-badge" data-tooltip="グラフの表示体系（論文間クラスタ網 または 脅威インテリジェンス網）を切り替えます" data-tooltip-pos="bottom" data-tooltip-align="left">ⓘ</span></span>
+            <button id="btnModeMesh" class="btn-tool active" onclick="setGraphMode('context')" data-tooltip="論文間の意味的類似度・クラスタリングに基づく Context Mesh グラフを表示" data-tooltip-pos="bottom" data-tooltip-align="left">Context Mesh</button>
+            <button id="btnModeCti" class="btn-tool" onclick="setGraphMode('cti')" data-tooltip="MITRE ATT&CK 攻撃手法、CWE 脆弱性、論文を結ぶ脅威インテリジェンスグラフを表示" data-tooltip-pos="bottom" data-tooltip-align="left">🛡️ CTI Graph (ATT&CK / CWE)</button>
           </div>
           <div id="ctiFilters" style="display: none; align-items: center; gap: 6px;">
-            <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">FILTER:</span>
-            <button id="filterAll" class="btn-tool active" onclick="setCtiFilter('all')">All</button>
-            <button id="filterPaper" class="btn-tool" onclick="setCtiFilter('Paper')">🔵 Papers</button>
-            <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')">🔴 ATT&CK</button>
-            <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')">🟠 CWE</button>
-            <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
+            <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">FILTER:<span class="info-badge" data-tooltip="特定のノード種別（論文・手法・脆弱性）に絞り込んで表示します" data-tooltip-pos="bottom" data-tooltip-align="left">ⓘ</span></span>
+            <button id="filterAll" class="btn-tool active" onclick="setCtiFilter('all')" data-tooltip="すべての種類のノード（論文・ATT&CK・CWE）を表示します" data-tooltip-pos="bottom" data-tooltip-align="left">All</button>
+            <button id="filterPaper" class="btn-tool" onclick="setCtiFilter('Paper')" data-tooltip="論文ノード（青）のみを表示します" data-tooltip-pos="bottom">🔵 Papers</button>
+            <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')" data-tooltip="ATT&CK 攻撃テクニックノード（赤）のみを表示します" data-tooltip-pos="bottom">🔴 ATT&CK</button>
+            <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')" data-tooltip="CWE 脆弱性弱点ノード（橙）のみを表示します" data-tooltip-pos="bottom">🟠 CWE</button>
+            <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()" data-tooltip="論文による研究・対策が未カバーの攻撃テクニック（リサーチギャップ）を点滅強調します" data-tooltip-pos="bottom">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
             <div style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
-              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">CONFIDENCE:</span>
-              <button id="btnConfAll" class="btn-tool active" onclick="setEdgeConfidenceFilter('all')" title="すべての確信度エッジを表示">All</button>
-              <button id="btnConfMed" class="btn-tool" onclick="setEdgeConfidenceFilter('MEDIUM')" title="確信度 MEDIUM 以上 (≥ 0.5)">Med+</button>
-              <button id="btnConfHigh" class="btn-tool" onclick="setEdgeConfidenceFilter('HIGH')" title="確信度 HIGH のみ (≥ 0.8, 厳格判定)">High Only</button>
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">CONFIDENCE:<span class="info-badge" data-tooltip="推論ルールによるエッジ結合の確信度（HIGH: 厳格合致、MED: キーフレーズ、LOW: 語彙）で絞り込みます" data-tooltip-pos="bottom">ⓘ</span></span>
+              <button id="btnConfAll" class="btn-tool active" onclick="setEdgeConfidenceFilter('all')" data-tooltip="推論確信度に関係なく、すべてのエッジを表示します" data-tooltip-pos="bottom">All</button>
+              <button id="btnConfMed" class="btn-tool" onclick="setEdgeConfidenceFilter('MEDIUM')" data-tooltip="確信度 MEDIUM 以上 (スコア ≥ 0.5) の信頼できるエッジのみ表示します" data-tooltip-pos="bottom">Med+</button>
+              <button id="btnConfHigh" class="btn-tool" onclick="setEdgeConfidenceFilter('HIGH')" data-tooltip="確信度 HIGH のみ (スコア ≥ 0.8: 直接正規表現やタイトル名合致) の厳格エッジを表示します" data-tooltip-pos="bottom">High Only</button>
             </div>
             <div style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
-              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">RULE:</span>
-              <select id="selectEdgeRule" class="btn-tool" style="padding: 2px 4px; font-size: 10px;" onchange="setEdgeRuleFilter(this.value)">
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">RULE:<span class="info-badge" data-tooltip="エッジ結合を導出した推論ルール（EIROM: Edge Inference Rule Ontology Master）種別で絞り込みます" data-tooltip-pos="bottom">ⓘ</span></span>
+              <select id="selectEdgeRule" class="btn-tool" style="padding: 2px 4px; font-size: 10px;" onchange="setEdgeRuleFilter(this.value)" data-tooltip="推論ルール種別を選択してフィルタリングします" data-tooltip-pos="bottom">
                 <option value="all">All Rules</option>
                 <option value="RULE-EDGE-PAPER-TECH-REGEX-01">Direct Regex (Conf=1.0)</option>
                 <option value="RULE-EDGE-PAPER-TECH-TITLE-02">Title Name (Conf=0.8)</option>
@@ -929,35 +1301,36 @@
           </div>
           <div id="focusBanner" style="display: none; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.15); border: 1px solid #3B82F6; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
             <span>🎯 フォーカス中: <strong id="focusTargetLabel">-</strong></span>
-            <button id="btnClearFocus" class="btn-tool" onclick="clearNodeFocus()" title="フォーカスを解除して全域表示に戻す">✕ 解除</button>
+            <button id="btnClearFocus" class="btn-tool" onclick="clearNodeFocus()" data-tooltip="フォーカスを解除して全域グラフ表示に戻します" data-tooltip-pos="bottom">✕ 解除</button>
           </div>
           <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
             <div style="display: flex; align-items: center; gap: 4px; border-right: 1px solid var(--border-dark); padding-right: 8px; margin-right: 2px;">
-              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">MIN DEGREE:</span>
-              <button id="btnDegAll" class="btn-tool active" onclick="setMinDegree(0)" title="すべての次数を表示">All</button>
-              <button id="btnDeg1" class="btn-tool" onclick="setMinDegree(1)" title="次数1以上 (孤立除外)">≥1</button>
-              <button id="btnDeg2" class="btn-tool" onclick="setMinDegree(2)" title="次数2以上 (コア接続)">≥2</button>
-              <button id="btnDeg3" class="btn-tool" onclick="setMinDegree(3)" title="次数3以上 (ハブノード)">≥3</button>
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">MIN DEGREE:<span class="info-badge" data-tooltip="接続エッジ数（次数）に基づき、ハブとなる主要ノードのみを抽出します" data-tooltip-pos="bottom">ⓘ</span></span>
+              <button id="btnDegAll" class="btn-tool active" onclick="setMinDegree(0)" data-tooltip="全次数（すべてのノード）を表示します" data-tooltip-pos="bottom">All</button>
+              <button id="btnDeg1" class="btn-tool" onclick="setMinDegree(1)" data-tooltip="次数1以上（エッジを持つ非孤立ノード）を表示します" data-tooltip-pos="bottom">≥1</button>
+              <button id="btnDeg2" class="btn-tool" onclick="setMinDegree(2)" data-tooltip="次数2以上（複数接続を持つコアノード）を表示します" data-tooltip-pos="bottom">≥2</button>
+              <button id="btnDeg3" class="btn-tool" onclick="setMinDegree(3)" data-tooltip="次数3以上（多くのエッジが集まる重要ハブノード）を表示します" data-tooltip-pos="bottom">≥3</button>
             </div>
-            <button id="btnToggleIsolated" class="btn-tool" onclick="toggleIsolatedNodes()" title="エッジを持たない孤立頂点 (degree = 0) を非表示にします">🔗 孤立ノード除外</button>
-            <button id="btnToggleHeaderQuick" class="btn-tool" onclick="toggleDashboardHeader()" title="ヘッダー折りたたみ切替 (Shortcut: H)">⛶ 全画面 / ヘッダー切替</button>
+            <button id="btnToggleIsolated" class="btn-tool" onclick="toggleIsolatedNodes()" data-tooltip="エッジ接続を持たない孤立頂点 (degree = 0) を一括非表示にします" data-tooltip-pos="bottom">🔗 孤立ノード除外</button>
+            <button id="btnToggleHeaderQuick" class="btn-tool" onclick="toggleDashboardHeader()" data-tooltip="上部ヘッダーを折りたたみ、グラフ作業領域を最大化します (キー: H)" data-tooltip-pos="bottom" data-tooltip-align="right">⛶ 全画面 / ヘッダー切替</button>
+            <button id="btnOpenGraphHelp" class="btn-tool" onclick="toggleGraphHelpDrawer()" data-tooltip="操作ガイド・用語解説・クエリ構文チートシートを開きます (Escまたは?で開閉)" data-tooltip-pos="bottom" data-tooltip-align="right" style="background: rgba(59, 130, 246, 0.12); border-color: #3B82F6; color: #1D4ED8; font-weight: bold;">❓ ガイド (Help)</button>
           </div>
         </div>
 
         <!-- Row 2: Graph Query Console & Scenario Presets -->
         <div class="graph-query-console" id="graphQueryConsole">
           <div class="query-input-row">
-            <input id="graphQueryInput" class="query-input-field" type="text" placeholder="CTI Graph Query (e.g. 'gaps', 'cwe: CWE-20', 'ego: AML.T0054 2', 'match: quantum', 'path: AML.T0054->CWE-20')..." onkeydown="if(event.key==='Enter') executeGraphQuery()" />
-            <button id="btnRunGraphQuery" class="btn-query-run" onclick="executeGraphQuery()">🔍 探索 (Execute)</button>
-            <button id="btnClearGraphQuery" class="btn-query-clear" onclick="clearGraphQuery()">✕ リセット</button>
+            <input id="graphQueryInput" class="query-input-field" type="text" placeholder="CTI Graph Query (e.g. 'gaps', 'cwe: CWE-20', 'ego: AML.T0054 2', 'match: quantum', 'path: AML.T0054->CWE-20')..." onkeydown="if(event.key==='Enter') executeGraphQuery()" data-tooltip="CTI グラフ探索クエリを入力（例: gaps, cwe: CWE-20, ego: AML.T0054 2, match: quantum）" data-tooltip-pos="bottom" data-tooltip-align="left" />
+            <button id="btnRunGraphQuery" class="btn-query-run" onclick="executeGraphQuery()" data-tooltip="入力したクエリを実行し、該当するサブグラフを抽出・ハイライトします" data-tooltip-pos="bottom">🔍 探索 (Execute)</button>
+            <button id="btnClearGraphQuery" class="btn-query-clear" onclick="clearGraphQuery()" data-tooltip="クエリ条件をクリアし、全域グラフ表示に戻します" data-tooltip-pos="bottom">✕ リセット</button>
           </div>
           <div class="query-preset-row">
             <span class="preset-label">シナリオ:</span>
-            <button class="btn-preset" onclick="runPresetQuery('gaps')">🚨 Research Gaps</button>
-            <button class="btn-preset" onclick="runPresetQuery('cwe: CWE-20')">🛡️ CWE-20 Multi-hop</button>
-            <button class="btn-preset" onclick="runPresetQuery('ego: AttackTechnique:AML.T0054 2')">🤖 Prompt Injection Ego</button>
-            <button class="btn-preset" onclick="runPresetQuery('match: quantum')">🔐 Post-Quantum Crypto</button>
-            <button class="btn-preset" onclick="runPresetQuery('match: side-channel')">⚡ Side-Channel Leakage</button>
+            <button class="btn-preset" onclick="runPresetQuery('gaps')" data-tooltip="論文対策がまだ存在しない未研究の攻撃手法（ギャップ）を即座に抽出します" data-tooltip-pos="top" data-tooltip-align="left">🚨 Research Gaps</button>
+            <button class="btn-preset" onclick="runPresetQuery('cwe: CWE-20')" data-tooltip="CWE-20（不適切な入力確認）に関連する論文および攻撃手法のサブグラフを抽出します" data-tooltip-pos="top" data-tooltip-align="left">🛡️ CWE-20 Multi-hop</button>
+            <button class="btn-preset" onclick="runPresetQuery('ego: AttackTechnique:AML.T0054 2')" data-tooltip="AML.T0054（プロンプトインジェクション）を中心とした2ホップ範囲の攻撃・論文網を抽出します" data-tooltip-pos="top">🤖 Prompt Injection Ego</button>
+            <button class="btn-preset" onclick="runPresetQuery('match: quantum')" data-tooltip="耐量子計算機暗号（PQC / Quantum）に関連する論文・脅威ノードを抽出します" data-tooltip-pos="top">🔐 Post-Quantum Crypto</button>
+            <button class="btn-preset" onclick="runPresetQuery('match: side-channel')" data-tooltip="サイドチャネル攻撃（キャッシュ・電力解析等）に関連する脅威サブグラフを抽出します" data-tooltip-pos="top">⚡ Side-Channel Leakage</button>
             <span id="graphQueryResultBadge" class="query-badge">全データ待機中</span>
           </div>
         </div>
@@ -1045,7 +1418,65 @@
           <div class="callout-desc" id="calloutDesc">--</div>
           <div class="callout-edges" id="calloutEdges">--</div>
           <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-dark);">
-            <button id="btnFocusEgo" class="btn-tool" style="width: 100%; justify-content: center; background: rgba(59, 130, 246, 0.18); border: 1px solid #3B82F6; font-weight: bold; color: var(--fg-main);" onclick="focusCurrentSelectedEgo()">🎯 このノードにフォーカス (2-Hop)</button>
+            <button id="btnFocusEgo" class="btn-tool" style="width: 100%; justify-content: center; background: rgba(59, 130, 246, 0.18); border: 1px solid #3B82F6; font-weight: bold; color: var(--fg-main);" onclick="focusCurrentSelectedEgo()" data-tooltip="このノードと2ホップ以内の近傍ノードのみに絞り込んでハイライト表示します" data-tooltip-pos="top">🎯 このノードにフォーカス (2-Hop)</button>
+            <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px; text-align: center;">💡 背景クリックまたは Esc でフォーカス解除</div>
+          </div>
+        </div>
+
+        <!-- ❓ Graph Help & Cheat Sheet Drawer (Issue 166) -->
+        <div class="graph-help-overlay" id="graphHelpOverlay" onclick="toggleGraphHelpDrawer()"></div>
+        <div class="graph-help-drawer" id="graphHelpDrawer">
+          <div class="drawer-header">
+            <h3><span>🕸️</span> Graph 操作ガイド &amp; 用語解説</h3>
+            <button class="btn-drawer-close" onclick="toggleGraphHelpDrawer()" title="閉じる (Esc)">✕</button>
+          </div>
+          <div class="drawer-content">
+            <div class="guide-section">
+              <h4><span>🎮</span> 基本マウス &amp; キーボード操作</h4>
+              <table class="guide-table">
+                <tr><th>操作</th><th>動作説明</th></tr>
+                <tr><td><code>ドラッグ</code></td><td>ノードの移動、またはグラフ全体のパン（視点移動）</td></tr>
+                <tr><td><code>ホイールスクロール</code></td><td>グラフのズームイン / ズームアウト</td></tr>
+                <tr><td><code>ノードクリック</code></td><td>ノード詳細パネル（Inspector）の表示</td></tr>
+                <tr><td><code>ノードWクリック</code></td><td>そのノード中心の2ホップ・エゴネットワークに即座フォーカス</td></tr>
+                <tr><td><code>背景クリック</code></td><td>フォーカス解除・全域表示へ復帰</td></tr>
+                <tr><td><code>H キー</code></td><td>ヘッダー折りたたみ / 全画面ワークスペース切替</td></tr>
+                <tr><td><code>? キー</code></td><td>このガイドドロワーの開閉</td></tr>
+                <tr><td><code>Esc キー</code></td><td>このガイドドロワーまたはフォーカスを閉じる</td></tr>
+              </table>
+            </div>
+
+            <div class="guide-section">
+              <h4><span>🌐</span> 2つのグラフモード</h4>
+              <p style="margin: 0 0 6px 0; color: #E2E8F0;">
+                <strong>1. Context Mesh:</strong> 論文間の意味的類似度（コサイン類似度・埋め込みベクトル）に基づき、同じ研究分野・トピックのクラスタを網羅可視化するモードです。
+              </p>
+              <p style="margin: 0; color: #E2E8F0;">
+                <strong>2. 🛡️ CTI Graph (ATT&CK / CWE):</strong> OASIS STIX 2.1 準拠のサイバー脅威インテリジェンス網です。論文（Paper）、MITRE ATT&CK 攻撃テクニック、CWE 脆弱性弱点の三者関係を可視化します。
+              </p>
+            </div>
+
+            <div class="guide-section">
+              <h4><span>⚖️</span> 確信度ティア (Confidence Tier) と推論ルール</h4>
+              <table class="guide-table">
+                <tr><th>ティア</th><th>スコア</th><th>推論ルール判定基準 (EIROM)</th></tr>
+                <tr><td><span style="color: #10B981; font-weight: bold;">HIGH</span></td><td>≥ 0.8</td><td>正規表現による手法ID完全一致 (Conf=1.0) または タイトル手法名合致 (Conf=0.8)</td></tr>
+                <tr><td><span style="color: #F59E0B; font-weight: bold;">MEDIUM</span></td><td>≥ 0.5</td><td>タイトル内の攻撃キーフレーズ合致 (Conf=0.5)</td></tr>
+                <tr><td><span style="color: #EF4444; font-weight: bold;">LOW</span></td><td>&lt; 0.5</td><td>アブストラクト内の意味語彙・共起単語スコアによる統計的推定 (Conf=0.4)</td></tr>
+              </table>
+            </div>
+
+            <div class="guide-section">
+              <h4><span>🔍</span> CTI クエリ構文チートシート</h4>
+              <table class="guide-table">
+                <tr><th>クエリ構文</th><th>実行例</th><th>抽出内容</th></tr>
+                <tr><td><code>gaps</code></td><td><code>gaps</code></td><td>論文が未カバーの攻撃テクニック（研究空白領域）を抽出</td></tr>
+                <tr><td><code>cwe: &lt;ID&gt;</code></td><td><code>cwe: CWE-20</code></td><td>特定CWEとそれを攻撃/対策するノード群をマルチホップ抽出</td></tr>
+                <tr><td><code>ego: &lt;ID&gt; &lt;hops&gt;</code></td><td><code>ego: AML.T0054 2</code></td><td>指定ノードから N ホップ以内の局所サブグラフを抽出</td></tr>
+                <tr><td><code>match: &lt;term&gt;</code></td><td><code>match: quantum</code></td><td>キーワードに一致するタイトル・手法名ノードをハイライト</td></tr>
+                <tr><td><code>path: A-&gt;B</code></td><td><code>path: AML.T0054-&gt;CWE-20</code></td><td>2頂点間の最短経路・関連エッジを抽出</td></tr>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -2358,6 +2789,11 @@
           ctx.fillStyle = '#2b2b2b';
           ctx.font = (isHovered || isSelected ? 'bold 11px' : '10px') + ' monospace';
           ctx.fillText(n.name, n.x + nodeRadius + 6, n.y + 4);
+          if (isHovered && !selectedNode) {
+            ctx.fillStyle = '#3B82F6';
+            ctx.font = '9px sans-serif';
+            ctx.fillText('💡 クリックで詳細 / Wクリックでエゴ抽出', n.x + nodeRadius + 6, n.y + 16);
+          }
           ctx.restore();
         });
 
@@ -2501,6 +2937,28 @@
         selectedNode = null;
         activeTwoHopNodes = null;
         document.getElementById('nodeCallout').style.display = 'none';
+      };
+
+      // Graph Help Drawer Toggle Functions (Issue 166)
+      window.toggleGraphHelpDrawer = function() {
+        const drawer = document.getElementById('graphHelpDrawer');
+        const overlay = document.getElementById('graphHelpOverlay');
+        if (!drawer) return;
+        const isActive = drawer.classList.contains('active');
+        if (isActive) {
+          drawer.classList.remove('active');
+          if (overlay) overlay.classList.remove('active');
+        } else {
+          drawer.classList.add('active');
+          if (overlay) overlay.classList.add('active');
+        }
+      };
+
+      window.closeGraphHelpDrawer = function() {
+        const drawer = document.getElementById('graphHelpDrawer');
+        const overlay = document.getElementById('graphHelpOverlay');
+        if (drawer) drawer.classList.remove('active');
+        if (overlay) overlay.classList.remove('active');
       };
 
       // Toggle Cluster / CTI Legends collapsed state
@@ -3247,14 +3705,55 @@
         setTimeout(resizeCanvas, 40);
       };
 
-      // Keyboard Shortcut 'H' / 'h' for Header Toggle
+      // Keyboard Shortcuts: 'H' (Header), '?' (Help Drawer), 'Escape' (Close Drawer / Callout / Focus)
       window.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          if (typeof closeGraphHelpDrawer === 'function') {
+            closeGraphHelpDrawer();
+          }
+          if (typeof clearNodeFocus === 'function' && focusedNodeId) {
+            clearNodeFocus();
+          }
+          if (typeof closeCallout === 'function' && selectedNode) {
+            closeCallout();
+          }
+          return;
+        }
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
           return;
         }
         if (e.key === 'h' || e.key === 'H') {
           toggleDashboardHeader();
         }
+        if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+          if (typeof toggleGraphHelpDrawer === 'function') {
+            toggleGraphHelpDrawer();
+          }
+        }
+      });
+
+      // Automatic Dynamic Edge Detection for Tooltips (Issue 166: prevent viewport cut-off)
+      function adjustTooltipViewportAlignment(el) {
+        if (!el || typeof el.getBoundingClientRect !== 'function') return;
+        const rect = el.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        if (centerX < 160) {
+          el.setAttribute('data-tooltip-align', 'left');
+        } else if (window.innerWidth - centerX < 160) {
+          el.setAttribute('data-tooltip-align', 'right');
+        }
+      }
+      document.addEventListener('mouseover', function(e) {
+        const target = e.target;
+        if (!target || typeof target.closest !== 'function') return;
+        const el = target.closest('[data-tooltip]');
+        if (el) adjustTooltipViewportAlignment(el);
+      });
+      document.addEventListener('focusin', function(e) {
+        const target = e.target;
+        if (!target || typeof target.closest !== 'function') return;
+        const el = target.closest('[data-tooltip]');
+        if (el) adjustTooltipViewportAlignment(el);
       });
 
       // Cross-tab Deep Linking Helper: Switch to Graph and prefill/execute query

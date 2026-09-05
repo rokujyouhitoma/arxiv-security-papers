@@ -369,3 +369,72 @@ def test_dashboard_edge_confidence_and_rule_filter(dashboard_html: str) -> None:
     assert "e.confidence_tier === 'HIGH' ? '#10B981'" in dashboard_html
     assert "🏷️ Rule: <code>${escapeHtml(e.primary_rule_id)}</code>" in dashboard_html
     assert "&ldquo;${escapeHtml(e.evidence_quote)}&rdquo;" in dashboard_html
+
+
+def test_dashboard_glassmorphic_tooltips_and_help_drawer(
+    dashboard_html: str,
+) -> None:
+    """Verifies Glassmorphic tooltips, info badges, and Quick Guide Drawer (Issue 166)."""
+    # 1. Tooltip & Drawer CSS styling
+    assert "[data-tooltip]" in dashboard_html
+    assert '[data-tooltip-pos="bottom"]' in dashboard_html
+    assert ".info-badge" in dashboard_html
+    assert ".graph-help-drawer" in dashboard_html
+    assert ".graph-help-overlay" in dashboard_html
+
+    # 2. Interactive toolbar and query controls with data-tooltip
+    required_tooltip_elements = [
+        'id="btnModeMesh"',
+        'id="btnModeCti"',
+        'id="filterAll"',
+        'id="filterPaper"',
+        'id="filterAttack"',
+        'id="filterCwe"',
+        'id="btnToggleGaps"',
+        'id="btnConfAll"',
+        'id="btnConfMed"',
+        'id="btnConfHigh"',
+        'id="selectEdgeRule"',
+        'id="btnDegAll"',
+        'id="btnDeg1"',
+        'id="btnDeg2"',
+        'id="btnDeg3"',
+        'id="btnToggleIsolated"',
+        'id="btnToggleHeaderQuick"',
+        'id="btnOpenGraphHelp"',
+        'id="graphQueryInput"',
+        'id="btnRunGraphQuery"',
+        'id="btnClearGraphQuery"',
+    ]
+    for el in required_tooltip_elements:
+        assert el in dashboard_html, f"Missing element {el}"
+
+    assert dashboard_html.count('class="info-badge"') >= 4
+
+    # 3. Help Drawer DOM Structure & Guides
+    assert 'id="graphHelpDrawer"' in dashboard_html
+    assert 'id="graphHelpOverlay"' in dashboard_html
+    assert "基本マウス &amp; キーボード操作" in dashboard_html
+    assert "2つのグラフモード" in dashboard_html
+    assert "確信度ティア (Confidence Tier)" in dashboard_html
+    assert "CTI クエリ構文チートシート" in dashboard_html
+
+    # 4. JS Toggle Functions & Keyboard Listeners
+    assert "window.toggleGraphHelpDrawer = function()" in dashboard_html
+    assert "window.closeGraphHelpDrawer = function()" in dashboard_html
+    assert "if (e.key === 'Escape')" in dashboard_html
+    assert "closeGraphHelpDrawer();" in dashboard_html
+    assert "toggleGraphHelpDrawer();" in dashboard_html
+
+    # 5. Canvas node hover guidance
+    assert "💡 クリックで詳細 / Wクリックでエゴ抽出" in dashboard_html
+
+    # 6. Viewport edge cut-off prevention (Issue 166)
+    assert '[data-tooltip-align="left"]' in dashboard_html
+    assert '[data-tooltip-align="right"]' in dashboard_html
+    assert 'data-tooltip-align="left"' in dashboard_html
+    assert 'data-tooltip-align="right"' in dashboard_html
+    assert "function adjustTooltipViewportAlignment(el)" in dashboard_html
+    assert "centerX < 160" in dashboard_html
+    assert "window.innerWidth - centerX < 160" in dashboard_html
+    assert "adjustTooltipViewportAlignment(el);" in dashboard_html

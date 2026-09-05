@@ -2,7 +2,7 @@
 ID: 166
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/UIUX] /dashboard tab=graph における Glassmorphic ツールチップ・操作ガイド基盤および UI/UX 認知的負荷軽減の実装 (ID: 166)
@@ -15,18 +15,21 @@ ID: 166
 本 Issue では、**UI/UX & Documentation Designer** エージェント主導のもと、以下の機能群を導入し、直感的で迷わない Graph UX を実現する：
 1. **Glassmorphic リッチツールチップ基盤（`data-tooltip` / CSS & JS ポジショニング）の実装**:
    - 各ボタン、セレクトボックス、入力フィールド、バッジ、トグルスイッチに対し、ホバー・フォーカス時に即時表示される統一デザインの洗練されたツールチップ（機能概要、操作時の効果、入力例・ショートカット）を配備。
-2. **コントロールデッキ用インライン情報バッジ（`ⓘ` アイコン）**:
+2. **画面端での見切れ防止（Viewport Edge Overflow Prevention）**:
+   - 左端・右端のコントロールにおいて、ツールチップが画面外にはみ出して見切れないよう、`data-tooltip-align="left"` / `"right"` スタイルおよび動的境界検知スクリプト（`adjustTooltipViewportAlignment`）を配備。
+3. **コントロールデッキ用インライン情報バッジ（`ⓘ` アイコン）**:
    - 複雑な概念（`CONFIDENCE`, `RULE`, `MIN DEGREE`, `GRAPH MODE`）のラベル脇に `ⓘ` 情報アイコンを配置し、ホバー・タップで詳細解説ポップオーバーを展開。
-3. **Graph 操作ガイド & 用語チートシートドロワー（Quick Guide Drawer）**:
+4. **Graph 操作ガイド & 用語チートシートドロワー（Quick Guide Drawer）**:
    - ツールバー右端に `❓ ガイド (Help)` ボタンを新設。クリックで右側からスライドインするグラスモルフィックな「Graph 機能 & クエリ操作ガイド」ドロワーを展開。
    - モード別特徴、確信度ティアの判定根拠、クエリ構文のチートシート、マウス・キーボード操作（パン、ズーム、クリックフォーカス、`H` キー等）を完全日本語で一覧化。
-4. **Canvas 内ホバーカードの視認性・説明力向上**:
-   - ノードホバー時およびエッジホバー時の情報カードに、「クリックすると何が起こるか（例: 💡 クリックでこのノード中心のエゴネットワークを表示）」などのマイクロガイダンスを付与。
+5. **Canvas 内ホバーカードの視認性・説明力向上**:
+   - ノードホバー時およびエッジホバー時の情報カードに、「クリックすると何が起こるか（例: 💡 クリックで詳細 / Wクリックでエゴ抽出）」などのマイクロガイダンスを付与。
 
 ---
 
 ## 2. トレーサビリティ / Traceability
 - **ユーザー要求**: 「UIUXが主導でツールチップの実装を検討してほしい。特に http://localhost:8000/dashboard.html?tab=graph において、機能が複雑なので、もはや私でも機能がどういうものなのかわからなくなり始めている。」
+- **追加要求**: 「画面の左端で、ツールチップを表示すると画面外に見切れてしまうことがある。見きれないようにしてほしい。」
 - **関連 Issue**:
   - Issue 138: `/dashboard` 専用 Knowledge & CTI Graph 画面（`tab=graph`）の独立実装
   - Issue 139: レイアウト再設計と要素重なり解消
@@ -42,15 +45,14 @@ ID: 166
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html):
-  - コントロールデッキ全要素（18箇所以上）への `data-tooltip` 属性およびインライン `ⓘ` ヘルプバッジの付与
-  - Glassmorphic ツールチップスタイル定義（`.glass-tooltip`, `[data-tooltip]`）
+- [x] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html):
+  - コントロールデッキ全要素（21箇所以上）への `data-tooltip` 属性およびインライン `ⓘ` ヘルプバッジの付与
+  - Glassmorphic ツールチップスタイル定義（`[data-tooltip]`, `[data-tooltip-align="left"|"right"]`）
+  - 画面端見切れ防止（`adjustTooltipViewportAlignment` による動的・静的位置制御）
   - クイック操作ガイドドロワー（`#graphHelpDrawer`）の HTML 構造およびトグル JS スクリプト
   - Canvas ノードホバーカード（`#nodeCallout`）およびエッジツールチップへのガイダンス追記
-- [ ] [site/style.css](file:///workspace/arxiv-security-papers/site/style.css):
-  - グラスモルフィックツールチップの共通変数、アニメーション、ドロワー用スタイル
-- [ ] [tests/web/test_dashboard_graph_tab.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_graph_tab.py):
-  - `data-tooltip` 属性、ヘルプドロワー要素、インライン情報バッジの DOM 構造検証テストの追加
+- [x] [tests/web/test_dashboard_graph_tab.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_graph_tab.py):
+  - `data-tooltip` 属性、見切れ防止 CSS/JS、ヘルプドロワー要素、インライン情報バッジの DOM 構造検証テストの追加
 
 ---
 
@@ -65,15 +67,16 @@ Target Branch: `feat/166-graph-tooltips-and-quick-guide`
 
 ### 4.2 デザインシステム・CSS 仕様設計（UI/UX & Documentation Designer）
 - **Glassmorphism トークン**:
-  - 背景: `rgba(15, 23, 42, 0.92)`
+  - 背景: `rgba(15, 23, 42, 0.94)`
   - ぼかし: `backdrop-filter: blur(16px)`
-  - 境界線: `border: 1px solid rgba(255, 255, 255, 0.15)`
-  - シャドウ: `box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
-  - フォント: `font-size: 11px`, `line-height: 1.45`, `color: #F1F5F9`
+  - 境界線: `border: 1px solid rgba(255, 255, 255, 0.18)`
+  - シャドウ: `box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3)`
+  - フォント: `font-size: 11px`, `line-height: 1.4`, `color: #F8FAFC`
   - 微細アニメーション: `transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)`
 - **`[data-tooltip]` CSS 実装**:
-  - ホバー時およびキーボードフォーカス（`:focus-visible`）時に微小な上方向スライドとともにフェードイン。
+  - ホバー時およびキーボードフォーカス（`:focus-visible`）時に微小なスライドとともにフェードイン。
   - `white-space: normal`, `max-width: 260px` で長文の日本語説明も読みやすく折り返し表示。
+  - `[data-tooltip-align="left"]` / `[data-tooltip-align="right"]` により、左端・右端での画面外見切れを完全防止。
 
 ### 4.3 コントロールデッキ全要素へのツールチップ付与設計
 1. **モード切替**:
@@ -128,7 +131,7 @@ Target Branch: `feat/166-graph-tooltips-and-quick-guide`
 
 ### 4.5 Canvas ノード・エッジホバーカードのマイクロガイダンス追記
 - ノードホバー時（`#nodeCallout`）:
-  - カード下部に「💡 クリックでこのノード中心のエゴネットワークを表示」の案内テキストを追加。
+  - カード下部に「💡 クリックで詳細 / Wクリックでエゴ抽出」の案内テキストを追加。
 - エッジホバー時:
   - 「確信度: HIGH (0.80) | ルール: RULE-EDGE-PAPER-TECH-TITLE-02 | タイトル手法名合致」のフォーマットに加え、スニペットの引用元を明瞭に表示。
 
@@ -136,15 +139,17 @@ Target Branch: `feat/166-graph-tooltips-and-quick-guide`
 - `tests/web/test_dashboard_graph_tab.py`:
   - 全対象コントロール（`btnModeMesh`, `btnModeCti`, `filterAll`, `btnConfAll`, `btnDegAll`, `btnToggleIsolated`, `btnOpenGraphHelp` 等）に `data-tooltip` が設定されていることのテスト。
   - `#graphHelpDrawer` が存在し、必要なヘルプセクション（操作、モード、確信度、クエリ構文）を含んでいることのテスト。
+  - `data-tooltip-align` および画面端見切れ防止機構のテスト。
 - `make check_format`, `make static_analysis`, `make test` の完全合格。
 
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `site/dashboard.html` 内の Graph コントロールデッキ上の全ボタン、入力欄、セレクト、トグルに分かりやすい日本語の `data-tooltip` が付与されていること。
-- [ ] 複雑な概念（`CONFIDENCE`, `RULE`, `MIN DEGREE` 等）に情報アイコン（`ⓘ`）が配置され、機能解説が表示されること。
-- [ ] ツールバーに `❓ ガイド (Help)` ボタンが配置され、クリックで「Graph 操作ガイド & 用語チートシート」ドロワーが開閉できること（`Esc` キーでの終了にも対応）。
-- [ ] ドロワー内にマウス・キーボード操作、2つのグラフモードの違い、確信度ティア、およびクエリ構文例が整理されていること。
-- [ ] Canvas 内ノードホバー時に操作誘導ヒント（「クリックでフォーカス」）が表示されること。
-- [ ] `tests/web/test_dashboard_graph_tab.py` にツールチップおよびヘルプドロワーの構造検証テストが追加されパスすること。
-- [ ] `# noqa: E402` を一切使用せず、Xenon Rank A、Mypy `--strict`、Flake8 / Black フォーマットチェックがすべて 100% PASS すること。
+- [x] `site/dashboard.html` 内の Graph コントロールデッキ上の全ボタン、入力欄、セレクト、トグルに分かりやすい日本語の `data-tooltip` が付与されていること。
+- [x] 画面の左端および右端でツールチップが表示された際、画面外に見切れることなく安全に表示領域内に収まること（`data-tooltip-align`）。
+- [x] 複雑な概念（`CONFIDENCE`, `RULE`, `MIN DEGREE` 等）に情報アイコン（`ⓘ`）が配置され、機能解説が表示されること。
+- [x] ツールバーに `❓ ガイド (Help)` ボタンが配置され、クリックで「Graph 操作ガイド & 用語チートシート」ドロワーが開閉できること（`Esc` キーでの終了にも対応）。
+- [x] ドロワー内にマウス・キーボード操作、2つのグラフモードの違い、確信度ティア、およびクエリ構文例が整理されていること。
+- [x] Canvas 内ノードホバー時に操作誘導ヒント（「クリックでフォーカス」）が表示されること。
+- [x] `tests/web/test_dashboard_graph_tab.py` にツールチップ、見切れ防止、およびヘルプドロワーの構造検証テストが追加されパスすること。
+- [x] `# noqa: E402` を一切使用せず、Xenon Rank A、Mypy `--strict`、Flake8 / Black フォーマットチェックがすべて 100% PASS すること。
