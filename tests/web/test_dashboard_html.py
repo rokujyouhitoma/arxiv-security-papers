@@ -45,36 +45,34 @@ def test_dashboard_zero_external_dependencies(dashboard_html_content: str) -> No
 
 
 def test_dashboard_mandatory_elements_and_canvas(dashboard_html_content: str) -> None:
-    """Verifies all mandatory UI telemetry, force-directed canvas, OBF status, and micro-charts exist."""
+    """Verifies that dashboard.html has been purified to Knowledge & CTI Graph only with unified console-header."""
+    # Mandatory Graph UI elements
     assert '<canvas id="graphCanvas"' in dashboard_html_content
-    assert 'id="valResolvedNodes"' in dashboard_html_content
-    assert 'id="valEdgesTick"' in dashboard_html_content
-    assert 'id="valObfStatus"' in dashboard_html_content
-    assert 'id="valObfSpans"' in dashboard_html_content
-    assert "OBF Telemetry" in dashboard_html_content
-    assert 'id="pipelineBar"' in dashboard_html_content
-    assert 'id="hopCanvas"' in dashboard_html_content
-    assert 'id="walkVsFlatCanvas"' in dashboard_html_content
-    assert 'id="traversalMatrix"' in dashboard_html_content
     assert 'id="nodeCallout"' in dashboard_html_content
-    assert "Graph Engineering" in dashboard_html_content
-    assert 'id="tabBtnProduct"' in dashboard_html_content
-    assert 'id="tabBtnSystem"' in dashboard_html_content
-    assert 'id="tabBtnSupervisor"' in dashboard_html_content
-    assert 'id="viewProduct"' in dashboard_html_content
-    assert 'id="viewSystem"' in dashboard_html_content
-    assert 'id="viewSupervisor"' in dashboard_html_content
-    assert 'id="supervisorWorkersTableBody"' in dashboard_html_content
-    assert 'id="valTokenRoi"' in dashboard_html_content
-    assert 'id="threatVectorsList"' in dashboard_html_content
-    assert 'id="valSmPipelineSlo"' in dashboard_html_content
-    assert 'id="valSmApiResilience"' in dashboard_html_content
-    assert 'id="valSaTailLatency"' in dashboard_html_content
-    assert 'id="valSaMttr"' in dashboard_html_content
+    assert 'id="viewGraph"' in dashboard_html_content
+    assert "Context Mesh" in dashboard_html_content
     assert "switchDashboardTab" in dashboard_html_content
     assert "initTabFromUrl" in dashboard_html_content
     assert "URLSearchParams" in dashboard_html_content
-    assert "Context Mesh" in dashboard_html_content
+
+    # Unified Console Header (Matching index.html)
+    assert 'class="console-header"' in dashboard_html_content
+    assert 'id="dashboardHeader"' in dashboard_html_content
+    assert 'id="globalSearchInput"' in dashboard_html_content
+    assert 'id="portalSwitchBtn"' in dashboard_html_content
+    assert 'id="systemStatusBadge"' in dashboard_html_content
+    assert "arXiv Security Intelligence" in dashboard_html_content
+
+    # Removed Views and Navigation Tabs (Must NOT exist in dashboard.html)
+    assert 'id="tabBtnProduct"' not in dashboard_html_content
+    assert 'id="tabBtnSystem"' not in dashboard_html_content
+    assert 'id="tabBtnSupervisor"' not in dashboard_html_content
+    assert 'id="viewProduct"' not in dashboard_html_content
+    assert 'id="viewSystem"' not in dashboard_html_content
+    assert 'id="viewSupervisor"' not in dashboard_html_content
+    assert 'id="supervisorWorkersTableBody"' not in dashboard_html_content
+    assert 'id="threatVectorsList"' not in dashboard_html_content
+    assert 'id="pipelineBar"' not in dashboard_html_content
 
 
 def test_gateway_dashboard_routing() -> None:
@@ -99,7 +97,7 @@ def test_gateway_dashboard_routing() -> None:
     body = app(environ, start_response)
     raw = b"".join(body).decode("utf-8")
     assert captured_status[0] == "200 OK"
-    assert "Graph Engineering" in raw
+    assert "Knowledge &amp; CTI Graph" in raw or "Knowledge & CTI Graph" in raw
 
     # 2. Test /dashboard alias
     captured_status.clear()
@@ -107,7 +105,9 @@ def test_gateway_dashboard_routing() -> None:
     body_alias = app(environ, start_response)
     raw_alias = b"".join(body_alias).decode("utf-8")
     assert captured_status[0] == "200 OK"
-    assert "Graph Engineering" in raw_alias
+    assert (
+        "Knowledge &amp; CTI Graph" in raw_alias or "Knowledge & CTI Graph" in raw_alias
+    )
 
 
 def test_gateway_graph_mesh_api() -> None:
@@ -274,42 +274,17 @@ def test_context_mesh_entity_resolution_and_deduplication() -> None:
 
 
 def test_dashboard_database_storage_metrics_ui(dashboard_html_content: str) -> None:
-    """Verifies that the System tab contains the Database Performance, IOPS, and Tables Breakdown elements."""
-    assert 'id="valDbIops"' in dashboard_html_content
-    assert 'id="valDbLatency"' in dashboard_html_content
-    assert 'id="valDbCacheHit"' in dashboard_html_content
-    assert 'id="badgeDbTableCount"' in dashboard_html_content
-    assert 'id="badgeDbTotalRows"' in dashboard_html_content
-    assert 'id="badgeDbTotalSize"' in dashboard_html_content
-    assert 'id="databaseTablesTableBody"' in dashboard_html_content
-    assert "Database Tables &amp; Physical Storage Ledger" in dashboard_html_content
-    assert 'id="valDbCurrentDb"' in dashboard_html_content
-    assert 'id="sqlResultDatabases"' in dashboard_html_content
-    assert 'id="sqlResultTablesSummary"' in dashboard_html_content
-    assert "SHOW DATABASES" in dashboard_html_content
-    assert "SHOW TABLES FROM arxiv_security_db" in dashboard_html_content
+    """Verifies that the Database Breakdown elements have been removed from dashboard.html (ported to index.html)."""
+    assert 'id="databaseTablesTableBody"' not in dashboard_html_content
+    assert 'id="viewSystem"' not in dashboard_html_content
+    assert "Database Tables &amp; Physical Storage Ledger" not in dashboard_html_content
 
 
 def test_dashboard_supervisor_tab_ui(dashboard_html_content: str) -> None:
-    """Verifies that the Supervisor tab contains Arbiter Process, Worker Pools, IPC Channel, and Workers Table."""
-    assert 'id="viewSupervisor"' in dashboard_html_content
-    assert 'id="badgeArbiterStatus"' in dashboard_html_content
-    assert 'id="valArbiterPid"' in dashboard_html_content
-    assert 'id="valArbiterUptime"' in dashboard_html_content
-    assert 'id="valArbiterMemory"' in dashboard_html_content
-    assert 'id="badgePoolCount"' in dashboard_html_content
-    assert 'id="valArbiterPools"' in dashboard_html_content
-    assert 'id="badgeIpcStatus"' in dashboard_html_content
-    assert 'id="badgeTotalWorkers"' in dashboard_html_content
-    assert 'id="supervisorWorkersTableBody"' in dashboard_html_content
-    assert "RPS" in dashboard_html_content
-    assert "supervisorWorkerSnapshots" in dashboard_html_content
-    assert 'id="badgeSaLatency"' in dashboard_html_content
-    assert 'id="valSaTailLatency"' in dashboard_html_content
-    assert 'id="valSaMttr"' in dashboard_html_content
-    assert 'id="valSaDensity"' in dashboard_html_content
-    # Check that viewSupervisor is closed and clean
-    assert '<div id="viewSupervisor" class="tab-view">' in dashboard_html_content
+    """Verifies that the Supervisor tab has been removed from dashboard.html (ported to index.html)."""
+    assert 'id="viewSupervisor"' not in dashboard_html_content
+    assert 'id="supervisorWorkersTableBody"' not in dashboard_html_content
+    assert 'id="valArbiterPid"' not in dashboard_html_content
 
 
 def test_dashboard_sse_event_source_ui(dashboard_html_content: str) -> None:

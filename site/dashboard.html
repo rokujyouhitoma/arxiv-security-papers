@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Graph Engineering / Context Mesh - arxiv-security-papers</title>
+  <title>Knowledge &amp; CTI Graph Engine — arxiv-security-papers</title>
+  <link rel="stylesheet" href="style.css">
   <style>
     /* ==========================================================================
        1. Base Design System & Swiss-Style Retro Theme
@@ -43,11 +45,25 @@
     }
 
     /* Sharp 1px Border Utilities */
-    .border-b { border-bottom: 1px solid var(--border-dark); }
-    .border-r { border-right: 1px solid var(--border-dark); }
-    .border-t { border-top: 1px solid var(--border-dark); }
-    .border-l { border-left: 1px solid var(--border-dark); }
-    .border-all { border: 1px solid var(--border-dark); }
+    .border-b {
+      border-bottom: 1px solid var(--border-dark);
+    }
+
+    .border-r {
+      border-right: 1px solid var(--border-dark);
+    }
+
+    .border-t {
+      border-top: 1px solid var(--border-dark);
+    }
+
+    .border-l {
+      border-left: 1px solid var(--border-dark);
+    }
+
+    .border-all {
+      border: 1px solid var(--border-dark);
+    }
 
     /* ==========================================================================
        2. Header & Telemetry Layout
@@ -139,9 +155,17 @@
       margin-top: 2px;
     }
 
-    .telemetry-value.coral { color: var(--accent-coral); }
-    .telemetry-value.green { color: var(--accent-green); }
-    .telemetry-value.blue { color: var(--accent-blue); }
+    .telemetry-value.coral {
+      color: var(--accent-coral);
+    }
+
+    .telemetry-value.green {
+      color: var(--accent-green);
+    }
+
+    .telemetry-value.blue {
+      color: var(--accent-blue);
+    }
 
     /* OBF Observability Badge */
     .obf-badge {
@@ -155,6 +179,7 @@
       align-items: center;
       gap: 4px;
     }
+
     .obf-pulse {
       width: 6px;
       height: 6px;
@@ -162,10 +187,19 @@
       border-radius: 50%;
       animation: pulse 1.5s infinite;
     }
+
     @keyframes pulse {
-      0% { opacity: 0.3; }
-      50% { opacity: 1; }
-      100% { opacity: 0.3; }
+      0% {
+        opacity: 0.3;
+      }
+
+      50% {
+        opacity: 1;
+      }
+
+      100% {
+        opacity: 0.3;
+      }
     }
 
     /* Pipeline Status Bar */
@@ -274,6 +308,7 @@
       cursor: pointer;
       padding: 0 4px;
     }
+
     .btn-legend-toggle:hover {
       color: var(--fg-main);
     }
@@ -448,9 +483,17 @@
       transition: background-color 0.2s;
     }
 
-    .traversal-dot.success { background-color: var(--accent-green); }
-    .traversal-dot.deadend { background-color: var(--accent-coral); }
-    .traversal-dot.active { background-color: var(--fg-main); }
+    .traversal-dot.success {
+      background-color: var(--accent-green);
+    }
+
+    .traversal-dot.deadend {
+      background-color: var(--accent-coral);
+    }
+
+    .traversal-dot.active {
+      background-color: var(--fg-main);
+    }
 
     /* Footer Controls */
     footer {
@@ -483,6 +526,7 @@
       cursor: pointer;
       font-weight: bold;
     }
+
     .btn-action:hover {
       background-color: var(--border-dark);
       color: var(--bg-main);
@@ -519,9 +563,11 @@
       transition: all 0.15s ease;
       color: var(--fg-main);
     }
+
     .btn-tool:hover {
       background-color: var(--bg-panel-sub);
     }
+
     .btn-tool.active {
       background-color: var(--border-dark);
       color: var(--bg-main);
@@ -556,6 +602,7 @@
       color: var(--fg-main);
       outline: none;
     }
+
     .query-input-field:focus {
       border-color: var(--accent-blue);
     }
@@ -571,6 +618,7 @@
       border-radius: 2px;
       transition: all 0.15s ease;
     }
+
     .btn-query-run:hover {
       opacity: 0.9;
     }
@@ -583,6 +631,7 @@
       cursor: pointer;
       border-radius: 2px;
     }
+
     .btn-query-clear:hover {
       background-color: var(--bg-panel-sub);
     }
@@ -613,6 +662,7 @@
       color: var(--fg-main);
       transition: background 0.15s;
     }
+
     .btn-preset:hover {
       background: rgba(0, 0, 0, 0.09);
     }
@@ -684,6 +734,7 @@
       border-color: transparent transparent rgba(15, 23, 42, 0.95) transparent;
       transform: translateX(-50%) translateY(-4px);
     }
+
     [data-tooltip-pos="bottom"]::after {
       bottom: auto;
       top: calc(100% + 14px);
@@ -697,6 +748,7 @@
       border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
       transform: translateX(-50%) translateY(4px);
     }
+
     [data-tooltip-pos="top"]::after {
       bottom: calc(100% + 14px);
       top: auto;
@@ -712,6 +764,7 @@
       transform: translateY(-50%) translateX(4px);
       border-color: transparent transparent transparent rgba(15, 23, 42, 0.95);
     }
+
     [data-tooltip-pos="left"]::after {
       bottom: auto;
       top: 50%;
@@ -749,26 +802,32 @@
       left: min(50%, 16px);
       transform: translateX(-50%) translateY(4px);
     }
+
     [data-tooltip-align="left"]::after {
       left: 0;
       transform: translateY(4px);
     }
+
     [data-tooltip-align="left"][data-tooltip-pos="bottom"]::before {
       left: min(50%, 16px);
       transform: translateX(-50%) translateY(-4px);
     }
+
     [data-tooltip-align="left"][data-tooltip-pos="bottom"]::after {
       left: 0;
       transform: translateY(-4px);
     }
+
     [data-tooltip-align="left"][data-tooltip-pos="top"]::before {
       left: min(50%, 16px);
       transform: translateX(-50%) translateY(4px);
     }
+
     [data-tooltip-align="left"][data-tooltip-pos="top"]::after {
       left: 0;
       transform: translateY(4px);
     }
+
     [data-tooltip-align="left"]:hover::before,
     [data-tooltip-align="left"]:focus-visible::before,
     [data-tooltip-align="left"][data-tooltip-pos="bottom"]:hover::before,
@@ -778,6 +837,7 @@
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
+
     [data-tooltip-align="left"]:hover::after,
     [data-tooltip-align="left"]:focus-visible::after,
     [data-tooltip-align="left"][data-tooltip-pos="bottom"]:hover::after,
@@ -793,31 +853,37 @@
       right: min(50%, 16px);
       transform: translateX(50%) translateY(4px);
     }
+
     [data-tooltip-align="right"]::after {
       left: auto;
       right: 0;
       transform: translateY(4px);
     }
+
     [data-tooltip-align="right"][data-tooltip-pos="bottom"]::before {
       left: auto;
       right: min(50%, 16px);
       transform: translateX(50%) translateY(-4px);
     }
+
     [data-tooltip-align="right"][data-tooltip-pos="bottom"]::after {
       left: auto;
       right: 0;
       transform: translateY(-4px);
     }
+
     [data-tooltip-align="right"][data-tooltip-pos="top"]::before {
       left: auto;
       right: min(50%, 16px);
       transform: translateX(50%) translateY(4px);
     }
+
     [data-tooltip-align="right"][data-tooltip-pos="top"]::after {
       left: auto;
       right: 0;
       transform: translateY(4px);
     }
+
     [data-tooltip-align="right"]:hover::before,
     [data-tooltip-align="right"]:focus-visible::before,
     [data-tooltip-align="right"][data-tooltip-pos="bottom"]:hover::before,
@@ -827,6 +893,7 @@
       opacity: 1;
       transform: translateX(50%) translateY(0);
     }
+
     [data-tooltip-align="right"]:hover::after,
     [data-tooltip-align="right"]:focus-visible::after,
     [data-tooltip-align="right"][data-tooltip-pos="bottom"]:hover::after,
@@ -863,6 +930,7 @@
       transition: all 0.15s ease;
       line-height: 1;
     }
+
     .info-badge:hover {
       background: var(--accent-blue);
       color: #fff;
@@ -883,6 +951,7 @@
       pointer-events: none;
       transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
+
     .graph-help-overlay.active {
       opacity: 1;
       pointer-events: auto;
@@ -908,6 +977,7 @@
       color: #F8FAFC;
       font-family: inherit;
     }
+
     .graph-help-drawer.active {
       transform: translateX(0);
     }
@@ -920,6 +990,7 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       background: rgba(30, 41, 59, 0.6);
     }
+
     .drawer-header h3 {
       margin: 0;
       font-size: 15px;
@@ -929,6 +1000,7 @@
       gap: 8px;
       color: #FFFFFF;
     }
+
     .btn-drawer-close {
       background: rgba(255, 255, 255, 0.1);
       border: 1px solid rgba(255, 255, 255, 0.15);
@@ -943,6 +1015,7 @@
       font-size: 14px;
       transition: all 0.15s ease;
     }
+
     .btn-drawer-close:hover {
       background: rgba(239, 68, 68, 0.8);
       color: #FFFFFF;
@@ -966,6 +1039,7 @@
       border-radius: 8px;
       padding: 14px 16px;
     }
+
     .guide-section h4 {
       margin: 0 0 10px 0;
       font-size: 13px;
@@ -977,21 +1051,26 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       padding-bottom: 6px;
     }
+
     .guide-table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 6px;
       font-size: 11px;
     }
-    .guide-table th, .guide-table td {
+
+    .guide-table th,
+    .guide-table td {
       padding: 5px 8px;
       text-align: left;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
+
     .guide-table th {
       color: #94A3B8;
       font-weight: 600;
     }
+
     .guide-table td code {
       background: rgba(0, 0, 0, 0.4);
       padding: 2px 5px;
@@ -1095,14 +1174,14 @@
       display: flex;
       flex-direction: column;
       flex: 1;
-      height: calc(100vh - 122px);
+      height: calc(100vh - 48px - 36px);
       min-height: 520px;
       position: relative;
     }
 
     /* Full-height expansion when header is hidden */
-    header.header-hidden ~ #viewGraph .graph-workspace {
-      height: calc(100vh - 42px);
+    header.header-hidden~#viewGraph .graph-workspace {
+      height: calc(100vh - 36px);
     }
 
     .graph-workspace .canvas-container {
@@ -1187,82 +1266,48 @@
     }
   </style>
 </head>
+
 <body>
 
   <!-- ======================================================================
-       1. Top Header & Real-Time Telemetry
+       1. Global Enterprise Header (Unified with index.html, 48px Fixed)
        ====================================================================== -->
-  <header id="dashboardHeader">
-    <div class="header-top">
-      <div class="brand-section">
-        <div class="brand-title">
-          <span>Graph Engineering</span>
-          <span class="badge">Context Mesh</span>
-        </div>
-        <div class="brand-sub">arxiv-security-papers intelligence &amp; traversal engine &bull; <span id="headerSyncTime" style="color: var(--accent-green); font-family: var(--font-mono); font-size: 10px; font-weight: bold;">🕒 Synced: --</span></div>
+  <header class="console-header" id="dashboardHeader">
+    <!-- Left: Brand & Scope -->
+    <div class="header-brand">
+      <span class="brand-icon">🕸️</span>
+      <div class="brand-title">
+        <span>arXiv Security Intelligence</span>
+        <span class="separator">|</span>
+        <span class="tenant-name">Knowledge &amp; CTI Graph Engine</span>
       </div>
-      <div class="telemetry-bar">
-        <div class="telemetry-cell">
-          <div class="telemetry-label">Resolved Nodes</div>
-          <div class="telemetry-value" id="valResolvedNodes">--</div>
-        </div>
-        <div class="telemetry-cell">
-          <div class="telemetry-label">Edges / Tick</div>
-          <div class="telemetry-value coral" id="valEdgesTick">--</div>
-        </div>
-        <div class="telemetry-cell">
-          <div class="telemetry-label">Walks / Min</div>
-          <div class="telemetry-value" id="valWalksMin">--</div>
-        </div>
-        <div class="telemetry-cell">
-          <div class="telemetry-label">OBF Tracing</div>
-          <div class="telemetry-value green" id="valObfStatus">
-            <span class="obf-badge"><span class="obf-pulse"></span>ACTIVE (W3C/OTLP)</span>
-          </div>
-        </div>
-        <div class="telemetry-cell">
-          <div class="telemetry-label">OpenInference</div>
-          <div class="telemetry-value blue" id="valObfSpans">--</div>
-        </div>
-        <div class="telemetry-cell">
-          <div class="telemetry-label">Query Latency</div>
-          <div class="telemetry-value green" id="valLatency">--</div>
-        </div>
-        <div class="telemetry-cell">
-          <div class="telemetry-label">Token Savings</div>
-          <div class="telemetry-value coral" id="valSavings">--</div>
-        </div>
+    </div>
+
+    <!-- Center: Wide Global Command / Search Bar -->
+    <div class="header-center-search">
+      <div class="global-search-wrapper">
+        <span class="global-search-icon">🔍</span>
+        <input type="text" id="globalSearchInput" class="global-search-input"
+          placeholder="ナレッジグラフ探索 (例: gaps, cwe: CWE-20, match: quantum)..."
+          onkeydown="if(event.key==='Enter') executeGraphHeaderSearch(this.value)">
+        <span class="search-shortcut-badge">Enter</span>
+      </div>
+    </div>
+
+    <!-- Right: Utility Icons & Mutual Links -->
+    <div class="header-utilities">
+      <button class="utility-btn" id="portalSwitchBtn" title="エンタープライズクラウドコンソール (index.html) へ戻る"
+        onclick="window.location.href='/index.html'">🏠 クラウドコンソールへ ↗</button>
+      <button class="utility-btn" id="btnToggleHeader" title="ヘッダー折りたたみ / 表示切替 (Shortcut: H)"
+        onclick="toggleDashboardHeader()">▲ ヘッダー隠す</button>
+      <button class="utility-btn" id="btnOpenGraphHelpHeader" title="操作ガイド &amp; クエリ構文チートシート"
+        onclick="toggleGraphHelpDrawer()">❓ ガイド</button>
+      <div class="status-badge-live" id="systemStatusBadge" title="Graph Traversal &amp; CTI Engine 正常稼働中">
+        <span class="status-indicator-dot"></span>
+        <span>正常稼働中</span>
       </div>
     </div>
   </header>
-
-  <!-- ======================================================================
-       2. Tab Switching Navigation
-       ====================================================================== -->
-  <nav class="tab-navigation">
-    <div class="tab-group">
-      <button class="tab-btn active" id="tabBtnGraph" onclick="switchDashboardTab('graph')">
-        🕸️ Knowledge &amp; CTI Graph
-      </button>
-      <button class="tab-btn" id="tabBtnProduct" onclick="switchDashboardTab('product')">
-        📚 Product &amp; Analytics
-      </button>
-      <button class="tab-btn" id="tabBtnSystem" onclick="switchDashboardTab('system')">
-        ⚙️ System &amp; Observability
-      </button>
-      <button class="tab-btn" id="tabBtnSupervisor" onclick="switchDashboardTab('supervisor')">
-        🕹️ Supervisor &amp; Process Top
-      </button>
-    </div>
-    <div class="tab-actions">
-      <a href="/index.html" class="btn-tool-header" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 4px;" title="Enterprise Cloud Console (index.html) へ移動">
-        🏠 クラウドコンソールへ ↗
-      </a>
-      <button class="btn-tool-header" id="btnToggleHeader" onclick="toggleDashboardHeader()" title="ヘッダーを折りたたむ / 表示する (Shortcut: H)">
-        ▲ ヘッダー隠す
-      </button>
-    </div>
-  </nav>
 
   <!-- ======================================================================
        TAB 0: DEDICATED KNOWLEDGE & CTI GRAPH VIEW
@@ -1273,27 +1318,55 @@
       <div class="graph-control-deck">
         <!-- Row 1: CTI / Context Mesh Mode & Filter Toolbar -->
         <div class="mesh-toolbar">
-          <div style="display: flex; align-items: center; gap: 6px; border-right: 1px solid var(--border-dark); padding-right: 10px;">
-            <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">GRAPH MODE:<span class="info-badge" data-tooltip="グラフの表示体系（論文間クラスタ網 または 脅威インテリジェンス網）を切り替えます" data-tooltip-pos="bottom" data-tooltip-align="left">ⓘ</span></span>
-            <button id="btnModeMesh" class="btn-tool active" onclick="setGraphMode('context')" data-tooltip="論文間の意味的類似度・クラスタリングに基づく Context Mesh グラフを表示" data-tooltip-pos="bottom" data-tooltip-align="left">Context Mesh</button>
-            <button id="btnModeCti" class="btn-tool" onclick="setGraphMode('cti')" data-tooltip="MITRE ATT&CK 攻撃手法、CWE 脆弱性、論文を結ぶ脅威インテリジェンスグラフを表示" data-tooltip-pos="bottom" data-tooltip-align="left">🛡️ CTI Graph (ATT&CK / CWE)</button>
+          <div
+            style="display: flex; align-items: center; gap: 6px; border-right: 1px solid var(--border-dark); padding-right: 10px;">
+            <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">GRAPH MODE:<span class="info-badge"
+                data-tooltip="グラフの表示体系（論文間クラスタ網 または 脅威インテリジェンス網）を切り替えます" data-tooltip-pos="bottom"
+                data-tooltip-align="left">ⓘ</span></span>
+            <button id="btnModeMesh" class="btn-tool active" onclick="setGraphMode('context')"
+              data-tooltip="論文間の意味的類似度・クラスタリングに基づく Context Mesh グラフを表示" data-tooltip-pos="bottom"
+              data-tooltip-align="left">Context Mesh</button>
+            <button id="btnModeCti" class="btn-tool" onclick="setGraphMode('cti')"
+              data-tooltip="MITRE ATT&CK 攻撃手法、CWE 脆弱性、論文を結ぶ脅威インテリジェンスグラフを表示" data-tooltip-pos="bottom"
+              data-tooltip-align="left">🛡️ CTI Graph (ATT&CK / CWE)</button>
           </div>
           <div id="ctiFilters" style="display: none; align-items: center; gap: 6px;">
-            <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">FILTER:<span class="info-badge" data-tooltip="特定のノード種別（論文・手法・脆弱性）に絞り込んで表示します" data-tooltip-pos="bottom" data-tooltip-align="left">ⓘ</span></span>
-            <button id="filterAll" class="btn-tool active" onclick="setCtiFilter('all')" data-tooltip="すべての種類のノード（論文・ATT&CK・CWE）を表示します" data-tooltip-pos="bottom" data-tooltip-align="left">All</button>
-            <button id="filterPaper" class="btn-tool" onclick="setCtiFilter('Paper')" data-tooltip="論文ノード（青）のみを表示します" data-tooltip-pos="bottom">🔵 Papers</button>
-            <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')" data-tooltip="ATT&CK 攻撃テクニックノード（赤）のみを表示します" data-tooltip-pos="bottom">🔴 ATT&CK</button>
-            <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')" data-tooltip="CWE 脆弱性弱点ノード（橙）のみを表示します" data-tooltip-pos="bottom">🟠 CWE</button>
-            <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()" data-tooltip="論文による研究・対策が未カバーの攻撃テクニック（リサーチギャップ）を点滅強調します" data-tooltip-pos="bottom">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
-            <div style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
-              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">CONFIDENCE:<span class="info-badge" data-tooltip="推論ルールによるエッジ結合の確信度（HIGH: 厳格合致、MED: キーフレーズ、LOW: 語彙）で絞り込みます" data-tooltip-pos="bottom">ⓘ</span></span>
-              <button id="btnConfAll" class="btn-tool active" onclick="setEdgeConfidenceFilter('all')" data-tooltip="推論確信度に関係なく、すべてのエッジを表示します" data-tooltip-pos="bottom">All</button>
-              <button id="btnConfMed" class="btn-tool" onclick="setEdgeConfidenceFilter('MEDIUM')" data-tooltip="確信度 MEDIUM 以上 (スコア ≥ 0.5) の信頼できるエッジのみ表示します" data-tooltip-pos="bottom">Med+</button>
-              <button id="btnConfHigh" class="btn-tool" onclick="setEdgeConfidenceFilter('HIGH')" data-tooltip="確信度 HIGH のみ (スコア ≥ 0.8: 直接正規表現やタイトル名合致) の厳格エッジを表示します" data-tooltip-pos="bottom">High Only</button>
+            <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">FILTER:<span class="info-badge"
+                data-tooltip="特定のノード種別（論文・手法・脆弱性）に絞り込んで表示します" data-tooltip-pos="bottom"
+                data-tooltip-align="left">ⓘ</span></span>
+            <button id="filterAll" class="btn-tool active" onclick="setCtiFilter('all')"
+              data-tooltip="すべての種類のノード（論文・ATT&CK・CWE）を表示します" data-tooltip-pos="bottom"
+              data-tooltip-align="left">All</button>
+            <button id="filterPaper" class="btn-tool" onclick="setCtiFilter('Paper')" data-tooltip="論文ノード（青）のみを表示します"
+              data-tooltip-pos="bottom">🔵 Papers</button>
+            <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')"
+              data-tooltip="ATT&CK 攻撃テクニックノード（赤）のみを表示します" data-tooltip-pos="bottom">🔴 ATT&CK</button>
+            <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')"
+              data-tooltip="CWE 脆弱性弱点ノード（橙）のみを表示します" data-tooltip-pos="bottom">🟠 CWE</button>
+            <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()"
+              data-tooltip="論文による研究・対策が未カバーの攻撃テクニック（リサーチギャップ）を点滅強調します" data-tooltip-pos="bottom">⚡ Highlight Gaps (<span
+                id="valGapCount">0</span>)</button>
+            <div
+              style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">CONFIDENCE:<span
+                  class="info-badge" data-tooltip="推論ルールによるエッジ結合の確信度（HIGH: 厳格合致、MED: キーフレーズ、LOW: 語彙）で絞り込みます"
+                  data-tooltip-pos="bottom">ⓘ</span></span>
+              <button id="btnConfAll" class="btn-tool active" onclick="setEdgeConfidenceFilter('all')"
+                data-tooltip="推論確信度に関係なく、すべてのエッジを表示します" data-tooltip-pos="bottom">All</button>
+              <button id="btnConfMed" class="btn-tool" onclick="setEdgeConfidenceFilter('MEDIUM')"
+                data-tooltip="確信度 MEDIUM 以上 (スコア ≥ 0.5) の信頼できるエッジのみ表示します" data-tooltip-pos="bottom">Med+</button>
+              <button id="btnConfHigh" class="btn-tool" onclick="setEdgeConfidenceFilter('HIGH')"
+                data-tooltip="確信度 HIGH のみ (スコア ≥ 0.8: 直接正規表現やタイトル名合致) の厳格エッジを表示します" data-tooltip-pos="bottom">High
+                Only</button>
             </div>
-            <div style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
-              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">RULE:<span class="info-badge" data-tooltip="エッジ結合を導出した推論ルール（EIROM: Edge Inference Rule Ontology Master）種別で絞り込みます" data-tooltip-pos="bottom">ⓘ</span></span>
-              <select id="selectEdgeRule" class="btn-tool" style="padding: 2px 4px; font-size: 10px;" onchange="setEdgeRuleFilter(this.value)" data-tooltip="推論ルール種別を選択してフィルタリングします" data-tooltip-pos="bottom">
+            <div
+              style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">RULE:<span class="info-badge"
+                  data-tooltip="エッジ結合を導出した推論ルール（EIROM: Edge Inference Rule Ontology Master）種別で絞り込みます"
+                  data-tooltip-pos="bottom">ⓘ</span></span>
+              <select id="selectEdgeRule" class="btn-tool" style="padding: 2px 4px; font-size: 10px;"
+                onchange="setEdgeRuleFilter(this.value)" data-tooltip="推論ルール種別を選択してフィルタリングします"
+                data-tooltip-pos="bottom">
                 <option value="all">All Rules</option>
                 <option value="RULE-EDGE-PAPER-TECH-REGEX-01">Direct Regex (Conf=1.0)</option>
                 <option value="RULE-EDGE-PAPER-TECH-TITLE-02">Title Name (Conf=0.8)</option>
@@ -1302,38 +1375,70 @@
               </select>
             </div>
           </div>
-          <div id="focusBanner" style="display: none; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.15); border: 1px solid #3B82F6; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+          <div id="focusBanner"
+            style="display: none; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.15); border: 1px solid #3B82F6; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
             <span>🎯 フォーカス中: <strong id="focusTargetLabel">-</strong></span>
-            <button id="btnClearFocus" class="btn-tool" onclick="clearNodeFocus()" data-tooltip="フォーカスを解除して全域グラフ表示に戻します" data-tooltip-pos="bottom">✕ 解除</button>
+            <button id="btnClearFocus" class="btn-tool" onclick="clearNodeFocus()" data-tooltip="フォーカスを解除して全域グラフ表示に戻します"
+              data-tooltip-pos="bottom">✕ 解除</button>
           </div>
           <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
-            <div style="display: flex; align-items: center; gap: 4px; border-right: 1px solid var(--border-dark); padding-right: 8px; margin-right: 2px;">
-              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">MIN DEGREE:<span class="info-badge" data-tooltip="接続エッジ数（次数）に基づき、ハブとなる主要ノードのみを抽出します" data-tooltip-pos="bottom">ⓘ</span></span>
-              <button id="btnDegAll" class="btn-tool active" onclick="setMinDegree(0)" data-tooltip="全次数（すべてのノード）を表示します" data-tooltip-pos="bottom">All</button>
-              <button id="btnDeg1" class="btn-tool" onclick="setMinDegree(1)" data-tooltip="次数1以上（エッジを持つ非孤立ノード）を表示します" data-tooltip-pos="bottom">≥1</button>
-              <button id="btnDeg2" class="btn-tool" onclick="setMinDegree(2)" data-tooltip="次数2以上（複数接続を持つコアノード）を表示します" data-tooltip-pos="bottom">≥2</button>
-              <button id="btnDeg3" class="btn-tool" onclick="setMinDegree(3)" data-tooltip="次数3以上（多くのエッジが集まる重要ハブノード）を表示します" data-tooltip-pos="bottom">≥3</button>
+            <div
+              style="display: flex; align-items: center; gap: 4px; border-right: 1px solid var(--border-dark); padding-right: 8px; margin-right: 2px;">
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">MIN DEGREE:<span
+                  class="info-badge" data-tooltip="接続エッジ数（次数）に基づき、ハブとなる主要ノードのみを抽出します"
+                  data-tooltip-pos="bottom">ⓘ</span></span>
+              <button id="btnDegAll" class="btn-tool active" onclick="setMinDegree(0)" data-tooltip="全次数（すべてのノード）を表示します"
+                data-tooltip-pos="bottom">All</button>
+              <button id="btnDeg1" class="btn-tool" onclick="setMinDegree(1)" data-tooltip="次数1以上（エッジを持つ非孤立ノード）を表示します"
+                data-tooltip-pos="bottom">≥1</button>
+              <button id="btnDeg2" class="btn-tool" onclick="setMinDegree(2)" data-tooltip="次数2以上（複数接続を持つコアノード）を表示します"
+                data-tooltip-pos="bottom">≥2</button>
+              <button id="btnDeg3" class="btn-tool" onclick="setMinDegree(3)"
+                data-tooltip="次数3以上（多くのエッジが集まる重要ハブノード）を表示します" data-tooltip-pos="bottom">≥3</button>
             </div>
-            <button id="btnToggleIsolated" class="btn-tool" onclick="toggleIsolatedNodes()" data-tooltip="エッジ接続を持たない孤立頂点 (degree = 0) を一括非表示にします" data-tooltip-pos="bottom">🔗 孤立ノード除外</button>
-            <button id="btnToggleHeaderQuick" class="btn-tool" onclick="toggleDashboardHeader()" data-tooltip="上部ヘッダーを折りたたみ、グラフ作業領域を最大化します (キー: H)" data-tooltip-pos="bottom" data-tooltip-align="right">⛶ 全画面 / ヘッダー切替</button>
-            <button id="btnOpenGraphHelp" class="btn-tool" onclick="toggleGraphHelpDrawer()" data-tooltip="操作ガイド・用語解説・クエリ構文チートシートを開きます (Escまたは?で開閉)" data-tooltip-pos="bottom" data-tooltip-align="right" style="background: rgba(59, 130, 246, 0.12); border-color: #3B82F6; color: #1D4ED8; font-weight: bold;">❓ ガイド (Help)</button>
+            <button id="btnToggleIsolated" class="btn-tool" onclick="toggleIsolatedNodes()"
+              data-tooltip="エッジ接続を持たない孤立頂点 (degree = 0) を一括非表示にします" data-tooltip-pos="bottom">🔗 孤立ノード除外</button>
+            <button id="btnToggleHeaderQuick" class="btn-tool" onclick="toggleDashboardHeader()"
+              data-tooltip="上部ヘッダーを折りたたみ、グラフ作業領域を最大化します (キー: H)" data-tooltip-pos="bottom" data-tooltip-align="right">⛶
+              全画面 / ヘッダー切替</button>
+            <button id="btnOpenGraphHelp" class="btn-tool" onclick="toggleGraphHelpDrawer()"
+              data-tooltip="操作ガイド・用語解説・クエリ構文チートシートを開きます (Escまたは?で開閉)" data-tooltip-pos="bottom"
+              data-tooltip-align="right"
+              style="background: rgba(59, 130, 246, 0.12); border-color: #3B82F6; color: #1D4ED8; font-weight: bold;">❓
+              ガイド (Help)</button>
           </div>
         </div>
 
         <!-- Row 2: Graph Query Console & Scenario Presets -->
         <div class="graph-query-console" id="graphQueryConsole">
           <div class="query-input-row">
-            <input id="graphQueryInput" class="query-input-field" type="text" placeholder="CTI Graph Query (e.g. 'gaps', 'cwe: CWE-20', 'ego: AML.T0054 2', 'match: quantum', 'path: AML.T0054->CWE-20')..." onkeydown="if(event.key==='Enter') executeGraphQuery()" data-tooltip="CTI グラフ探索クエリを入力（例: gaps, cwe: CWE-20, ego: AML.T0054 2, match: quantum）" data-tooltip-pos="bottom" data-tooltip-align="left" />
-            <button id="btnRunGraphQuery" class="btn-query-run" onclick="executeGraphQuery()" data-tooltip="入力したクエリを実行し、該当するサブグラフを抽出・ハイライトします" data-tooltip-pos="bottom">🔍 探索 (Execute)</button>
-            <button id="btnClearGraphQuery" class="btn-query-clear" onclick="clearGraphQuery()" data-tooltip="クエリ条件をクリアし、全域グラフ表示に戻します" data-tooltip-pos="bottom">✕ リセット</button>
+            <input id="graphQueryInput" class="query-input-field" type="text"
+              placeholder="CTI Graph Query (e.g. 'gaps', 'cwe: CWE-20', 'ego: AML.T0054 2', 'match: quantum', 'path: AML.T0054->CWE-20')..."
+              onkeydown="if(event.key==='Enter') executeGraphQuery()"
+              data-tooltip="CTI グラフ探索クエリを入力（例: gaps, cwe: CWE-20, ego: AML.T0054 2, match: quantum）"
+              data-tooltip-pos="bottom" data-tooltip-align="left" />
+            <button id="btnRunGraphQuery" class="btn-query-run" onclick="executeGraphQuery()"
+              data-tooltip="入力したクエリを実行し、該当するサブグラフを抽出・ハイライトします" data-tooltip-pos="bottom">🔍 探索 (Execute)</button>
+            <button id="btnClearGraphQuery" class="btn-query-clear" onclick="clearGraphQuery()"
+              data-tooltip="クエリ条件をクリアし、全域グラフ表示に戻します" data-tooltip-pos="bottom">✕ リセット</button>
           </div>
           <div class="query-preset-row">
             <span class="preset-label">シナリオ:</span>
-            <button class="btn-preset" onclick="runPresetQuery('gaps')" data-tooltip="論文対策がまだ存在しない未研究の攻撃手法（ギャップ）を即座に抽出します" data-tooltip-pos="top" data-tooltip-align="left">🚨 Research Gaps</button>
-            <button class="btn-preset" onclick="runPresetQuery('cwe: CWE-20')" data-tooltip="CWE-20（不適切な入力確認）に関連する論文および攻撃手法のサブグラフを抽出します" data-tooltip-pos="top" data-tooltip-align="left">🛡️ CWE-20 Multi-hop</button>
-            <button class="btn-preset" onclick="runPresetQuery('ego: AttackTechnique:AML.T0054 2')" data-tooltip="AML.T0054（プロンプトインジェクション）を中心とした2ホップ範囲の攻撃・論文網を抽出します" data-tooltip-pos="top">🤖 Prompt Injection Ego</button>
-            <button class="btn-preset" onclick="runPresetQuery('match: quantum')" data-tooltip="耐量子計算機暗号（PQC / Quantum）に関連する論文・脅威ノードを抽出します" data-tooltip-pos="top">🔐 Post-Quantum Crypto</button>
-            <button class="btn-preset" onclick="runPresetQuery('match: side-channel')" data-tooltip="サイドチャネル攻撃（キャッシュ・電力解析等）に関連する脅威サブグラフを抽出します" data-tooltip-pos="top">⚡ Side-Channel Leakage</button>
+            <button class="btn-preset" onclick="runPresetQuery('gaps')"
+              data-tooltip="論文対策がまだ存在しない未研究の攻撃手法（ギャップ）を即座に抽出します" data-tooltip-pos="top" data-tooltip-align="left">🚨
+              Research Gaps</button>
+            <button class="btn-preset" onclick="runPresetQuery('cwe: CWE-20')"
+              data-tooltip="CWE-20（不適切な入力確認）に関連する論文および攻撃手法のサブグラフを抽出します" data-tooltip-pos="top"
+              data-tooltip-align="left">🛡️ CWE-20 Multi-hop</button>
+            <button class="btn-preset" onclick="runPresetQuery('ego: AttackTechnique:AML.T0054 2')"
+              data-tooltip="AML.T0054（プロンプトインジェクション）を中心とした2ホップ範囲の攻撃・論文網を抽出します" data-tooltip-pos="top">🤖 Prompt
+              Injection Ego</button>
+            <button class="btn-preset" onclick="runPresetQuery('match: quantum')"
+              data-tooltip="耐量子計算機暗号（PQC / Quantum）に関連する論文・脅威ノードを抽出します" data-tooltip-pos="top">🔐 Post-Quantum
+              Crypto</button>
+            <button class="btn-preset" onclick="runPresetQuery('match: side-channel')"
+              data-tooltip="サイドチャネル攻撃（キャッシュ・電力解析等）に関連する脅威サブグラフを抽出します" data-tooltip-pos="top">⚡ Side-Channel
+              Leakage</button>
             <span id="graphQueryResultBadge" class="query-badge">全データ待機中</span>
           </div>
         </div>
@@ -1347,7 +1452,8 @@
         <div class="cluster-legend" id="contextLegend">
           <div class="legend-header">
             <span class="legend-title">Cluster Classification</span>
-            <button id="btnToggleLegendContext" class="btn-legend-toggle" onclick="toggleLegend()" title="凡例の表示/非表示">▼ 隠す</button>
+            <button id="btnToggleLegendContext" class="btn-legend-toggle" onclick="toggleLegend()" title="凡例の表示/非表示">▼
+              隠す</button>
           </div>
           <div class="legend-item">
             <div class="legend-dot" style="background-color: var(--accent-coral);"></div>
@@ -1371,7 +1477,8 @@
         <div class="cluster-legend" id="ctiLegend" style="display: none;">
           <div class="legend-header">
             <span class="legend-title">CTI Entity &amp; Relation</span>
-            <button id="btnToggleLegendCti" class="btn-legend-toggle" onclick="toggleLegend()" title="凡例の表示/非表示">▼ 隠す</button>
+            <button id="btnToggleLegendCti" class="btn-legend-toggle" onclick="toggleLegend()" title="凡例の表示/非表示">▼
+              隠す</button>
           </div>
           <div class="legend-item">
             <div class="legend-dot" style="background-color: #3B82F6;"></div>
@@ -1389,7 +1496,8 @@
             <div class="legend-dot" style="background-color: #10B981;"></div>
             <span>🟢 :DefenseMechanism (Mitigations)</span>
           </div>
-          <div class="legend-divider" style="border-top: 1px dashed var(--border-dark); margin: 6px 0; padding-top: 4px;"></div>
+          <div class="legend-divider"
+            style="border-top: 1px dashed var(--border-dark); margin: 6px 0; padding-top: 4px;"></div>
           <div class="legend-item">
             <span style="color: #EF4444; font-weight: bold;">&mdash;&mdash;</span>
             <span style="font-size: 10px;">EXPLOITS (Solid)</span>
@@ -1413,7 +1521,9 @@
           <div class="callout-header">
             <div style="display: flex; align-items: center; gap: 6px;">
               <span class="callout-tag" id="calloutTag">SOURCES</span>
-              <span class="callout-degree" id="calloutDegree" style="font-size: 10px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-dark); border-radius: 3px; padding: 2px 6px;">Edge: 0</span>
+              <span class="callout-degree" id="calloutDegree"
+                style="font-size: 10px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-dark); border-radius: 3px; padding: 2px 6px;">Edge:
+                0</span>
             </div>
             <button class="btn-action" onclick="closeCallout()">✕ 閉じる</button>
           </div>
@@ -1421,8 +1531,12 @@
           <div class="callout-desc" id="calloutDesc">--</div>
           <div class="callout-edges" id="calloutEdges">--</div>
           <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-dark);">
-            <button id="btnFocusEgo" class="btn-tool" style="width: 100%; justify-content: center; background: rgba(59, 130, 246, 0.18); border: 1px solid #3B82F6; font-weight: bold; color: var(--fg-main);" onclick="focusCurrentSelectedEgo()" data-tooltip="このノードと2ホップ以内の近傍ノードのみに絞り込んでハイライト表示します" data-tooltip-pos="top">🎯 このノードにフォーカス (2-Hop)</button>
-            <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px; text-align: center;">💡 背景クリックまたは Esc でフォーカス解除</div>
+            <button id="btnFocusEgo" class="btn-tool"
+              style="width: 100%; justify-content: center; background: rgba(59, 130, 246, 0.18); border: 1px solid #3B82F6; font-weight: bold; color: var(--fg-main);"
+              onclick="focusCurrentSelectedEgo()" data-tooltip="このノードと2ホップ以内の近傍ノードのみに絞り込んでハイライト表示します"
+              data-tooltip-pos="top">🎯 このノードにフォーカス (2-Hop)</button>
+            <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px; text-align: center;">💡 背景クリックまたは Esc
+              でフォーカス解除</div>
           </div>
         </div>
 
@@ -1437,15 +1551,42 @@
             <div class="guide-section">
               <h4><span>🎮</span> 基本マウス &amp; キーボード操作</h4>
               <table class="guide-table">
-                <tr><th>操作</th><th>動作説明</th></tr>
-                <tr><td><code>ドラッグ</code></td><td>ノードの移動、またはグラフ全体のパン（視点移動）</td></tr>
-                <tr><td><code>ホイールスクロール</code></td><td>グラフのズームイン / ズームアウト</td></tr>
-                <tr><td><code>ノードクリック</code></td><td>ノード詳細パネル（Inspector）の表示</td></tr>
-                <tr><td><code>ノードWクリック</code></td><td>そのノード中心の2ホップ・エゴネットワークに即座フォーカス</td></tr>
-                <tr><td><code>背景クリック</code></td><td>フォーカス解除・全域表示へ復帰</td></tr>
-                <tr><td><code>H キー</code></td><td>ヘッダー折りたたみ / 全画面ワークスペース切替</td></tr>
-                <tr><td><code>? キー</code></td><td>このガイドドロワーの開閉</td></tr>
-                <tr><td><code>Esc キー</code></td><td>このガイドドロワーまたはフォーカスを閉じる</td></tr>
+                <tr>
+                  <th>操作</th>
+                  <th>動作説明</th>
+                </tr>
+                <tr>
+                  <td><code>ドラッグ</code></td>
+                  <td>ノードの移動、またはグラフ全体のパン（視点移動）</td>
+                </tr>
+                <tr>
+                  <td><code>ホイールスクロール</code></td>
+                  <td>グラフのズームイン / ズームアウト</td>
+                </tr>
+                <tr>
+                  <td><code>ノードクリック</code></td>
+                  <td>ノード詳細パネル（Inspector）の表示</td>
+                </tr>
+                <tr>
+                  <td><code>ノードWクリック</code></td>
+                  <td>そのノード中心の2ホップ・エゴネットワークに即座フォーカス</td>
+                </tr>
+                <tr>
+                  <td><code>背景クリック</code></td>
+                  <td>フォーカス解除・全域表示へ復帰</td>
+                </tr>
+                <tr>
+                  <td><code>H キー</code></td>
+                  <td>ヘッダー折りたたみ / 全画面ワークスペース切替</td>
+                </tr>
+                <tr>
+                  <td><code>? キー</code></td>
+                  <td>このガイドドロワーの開閉</td>
+                </tr>
+                <tr>
+                  <td><code>Esc キー</code></td>
+                  <td>このガイドドロワーまたはフォーカスを閉じる</td>
+                </tr>
               </table>
             </div>
 
@@ -1455,29 +1596,70 @@
                 <strong>1. Context Mesh:</strong> 論文間の意味的類似度（コサイン類似度・埋め込みベクトル）に基づき、同じ研究分野・トピックのクラスタを網羅可視化するモードです。
               </p>
               <p style="margin: 0; color: #E2E8F0;">
-                <strong>2. 🛡️ CTI Graph (ATT&CK / CWE):</strong> OASIS STIX 2.1 準拠のサイバー脅威インテリジェンス網です。論文（Paper）、MITRE ATT&CK 攻撃テクニック、CWE 脆弱性弱点の三者関係を可視化します。
+                <strong>2. 🛡️ CTI Graph (ATT&CK / CWE):</strong> OASIS STIX 2.1 準拠のサイバー脅威インテリジェンス網です。論文（Paper）、MITRE
+                ATT&CK 攻撃テクニック、CWE 脆弱性弱点の三者関係を可視化します。
               </p>
             </div>
 
             <div class="guide-section">
               <h4><span>⚖️</span> 確信度ティア (Confidence Tier) と推論ルール</h4>
               <table class="guide-table">
-                <tr><th>ティア</th><th>スコア</th><th>推論ルール判定基準 (EIROM)</th></tr>
-                <tr><td><span style="color: #10B981; font-weight: bold;">HIGH</span></td><td>≥ 0.8</td><td>正規表現による手法ID完全一致 (Conf=1.0) または タイトル手法名合致 (Conf=0.8)</td></tr>
-                <tr><td><span style="color: #F59E0B; font-weight: bold;">MEDIUM</span></td><td>≥ 0.5</td><td>タイトル内の攻撃キーフレーズ合致 (Conf=0.5)</td></tr>
-                <tr><td><span style="color: #EF4444; font-weight: bold;">LOW</span></td><td>&lt; 0.5</td><td>アブストラクト内の意味語彙・共起単語スコアによる統計的推定 (Conf=0.4)</td></tr>
+                <tr>
+                  <th>ティア</th>
+                  <th>スコア</th>
+                  <th>推論ルール判定基準 (EIROM)</th>
+                </tr>
+                <tr>
+                  <td><span style="color: #10B981; font-weight: bold;">HIGH</span></td>
+                  <td>≥ 0.8</td>
+                  <td>正規表現による手法ID完全一致 (Conf=1.0) または タイトル手法名合致 (Conf=0.8)</td>
+                </tr>
+                <tr>
+                  <td><span style="color: #F59E0B; font-weight: bold;">MEDIUM</span></td>
+                  <td>≥ 0.5</td>
+                  <td>タイトル内の攻撃キーフレーズ合致 (Conf=0.5)</td>
+                </tr>
+                <tr>
+                  <td><span style="color: #EF4444; font-weight: bold;">LOW</span></td>
+                  <td>&lt; 0.5</td>
+                  <td>アブストラクト内の意味語彙・共起単語スコアによる統計的推定 (Conf=0.4)</td>
+                </tr>
               </table>
             </div>
 
             <div class="guide-section">
               <h4><span>🔍</span> CTI クエリ構文チートシート</h4>
               <table class="guide-table">
-                <tr><th>クエリ構文</th><th>実行例</th><th>抽出内容</th></tr>
-                <tr><td><code>gaps</code></td><td><code>gaps</code></td><td>論文が未カバーの攻撃テクニック（研究空白領域）を抽出</td></tr>
-                <tr><td><code>cwe: &lt;ID&gt;</code></td><td><code>cwe: CWE-20</code></td><td>特定CWEとそれを攻撃/対策するノード群をマルチホップ抽出</td></tr>
-                <tr><td><code>ego: &lt;ID&gt; &lt;hops&gt;</code></td><td><code>ego: AML.T0054 2</code></td><td>指定ノードから N ホップ以内の局所サブグラフを抽出</td></tr>
-                <tr><td><code>match: &lt;term&gt;</code></td><td><code>match: quantum</code></td><td>キーワードに一致するタイトル・手法名ノードをハイライト</td></tr>
-                <tr><td><code>path: A-&gt;B</code></td><td><code>path: AML.T0054-&gt;CWE-20</code></td><td>2頂点間の最短経路・関連エッジを抽出</td></tr>
+                <tr>
+                  <th>クエリ構文</th>
+                  <th>実行例</th>
+                  <th>抽出内容</th>
+                </tr>
+                <tr>
+                  <td><code>gaps</code></td>
+                  <td><code>gaps</code></td>
+                  <td>論文が未カバーの攻撃テクニック（研究空白領域）を抽出</td>
+                </tr>
+                <tr>
+                  <td><code>cwe: &lt;ID&gt;</code></td>
+                  <td><code>cwe: CWE-20</code></td>
+                  <td>特定CWEとそれを攻撃/対策するノード群をマルチホップ抽出</td>
+                </tr>
+                <tr>
+                  <td><code>ego: &lt;ID&gt; &lt;hops&gt;</code></td>
+                  <td><code>ego: AML.T0054 2</code></td>
+                  <td>指定ノードから N ホップ以内の局所サブグラフを抽出</td>
+                </tr>
+                <tr>
+                  <td><code>match: &lt;term&gt;</code></td>
+                  <td><code>match: quantum</code></td>
+                  <td>キーワードに一致するタイトル・手法名ノードをハイライト</td>
+                </tr>
+                <tr>
+                  <td><code>path: A-&gt;B</code></td>
+                  <td><code>path: AML.T0054-&gt;CWE-20</code></td>
+                  <td>2頂点間の最短経路・関連エッジを抽出</td>
+                </tr>
               </table>
             </div>
           </div>
@@ -1487,468 +1669,36 @@
   </div>
 
   <!-- ======================================================================
-       TAB 1: PRODUCT & ANALYTICS VIEW
-       ====================================================================== -->
-  <div id="viewProduct" class="tab-view">
-    <div class="product-workspace">
-      <!-- Graph CTA Banner -->
-      <div class="graph-cta-banner">
-        <div class="graph-cta-info">
-          <h3>🕸️ Knowledge &amp; CTI Graph 探索ワークスペース</h3>
-          <p>ATT&amp;CK・CWE・arXiv論文の完全接続ナレッジグラフおよび Research Gaps、因果チェーンを専用キャンバスで快適に探索・分析できます。</p>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="btn-cta-graph" onclick="openGraphWithQuery('')">
-            🔍 グラフ画面を開く
-          </button>
-          <button class="btn-cta-graph" style="background-color: var(--bg-panel); color: var(--fg-main);" onclick="openGraphWithQuery('gaps')">
-            🚨 Gaps 探索
-          </button>
-        </div>
-      </div>
-
-      <!-- Product Analytics Panels -->
-      <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
-        <!-- 1. Hop Budget Histogram -->
-        <div class="metric-card">
-          <div class="card-header">
-            <span class="card-title">Hop Budget Distribution</span>
-            <span class="card-tag" id="badgeHop">--</span>
-          </div>
-          <canvas id="hopCanvas" width="260" height="130"></canvas>
-        </div>
-
-        <!-- 2. Edge Ledger -->
-        <div class="metric-card">
-          <div class="card-header">
-            <span class="card-title">Edge Ledger (Traffic)</span>
-            <span class="card-tag" id="badgeEdgeLedger">--</span>
-          </div>
-          <div id="edgeLedgerList"></div>
-        </div>
-
-        <!-- 3. Token Savings & ROI (ST) -->
-        <div class="metric-card">
-          <div class="card-header">
-            <span class="card-title">💰 Token Savings &amp; Cost ROI (ST)</span>
-            <span class="card-tag" id="badgeTokenSavings" style="color: var(--accent-green); font-weight: bold;">--</span>
-          </div>
-          <canvas id="walkVsFlatCanvas" width="260" height="130"></canvas>
-          <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 4px; font-size: 11px; display: flex; justify-content: space-between;">
-            <span style="color: var(--fg-muted);">Estimated API ROI:</span>
-            <strong style="color: var(--accent-green);" id="valTokenRoi">--</strong>
-          </div>
-        </div>
-
-        <!-- 4. Emerging Threat Vectors Top 5 (ST) -->
-        <div class="metric-card">
-          <div class="card-header">
-            <span class="card-title">🛡️ Emerging Threat Vectors (ST)</span>
-            <span class="card-tag" id="badgeThreatCoverage">--</span>
-          </div>
-          <div id="threatVectorsList" style="font-size: 11px; margin-top: 4px;">--</div>
-          <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 6px; font-size: 10px; display: flex; justify-content: space-between;">
-            <span style="color: var(--fg-muted);">Summary Coverage:</span>
-            <strong style="color: var(--accent-blue);" id="valSummaryCoverage">--</strong>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ======================================================================
-       TAB 2: SYSTEM & OBSERVABILITY VIEW
-       ====================================================================== -->
-  <div id="viewSystem" class="tab-view">
-    <div class="system-workspace">
-      <!-- Pipeline Step Status Bar -->
-      <div class="pipeline-bar" id="pipelineBar">
-        <div class="pipeline-step completed" data-step="0">[1] CHUNK</div>
-        <div class="pipeline-arrow">&rarr;</div>
-        <div class="pipeline-step completed" data-step="1">[2] EXTRACT</div>
-        <div class="pipeline-arrow">&rarr;</div>
-        <div class="pipeline-step completed" data-step="2">[3] RESOLVE</div>
-        <div class="pipeline-arrow">&rarr;</div>
-        <div class="pipeline-step active" data-step="3">[4] LINK</div>
-        <div class="pipeline-arrow">&rarr;</div>
-        <div class="pipeline-step" data-step="4">[5] EMBED</div>
-        <div class="pipeline-arrow">&rarr;</div>
-        <div class="pipeline-step" data-step="5">[6] PRUNE</div>
-      </div>
-
-      <div class="system-grid">
-        <!-- 1. OBF Live Distributed Tracing -->
-        <div class="metric-card" style="background-color: var(--bg-panel-sub);">
-          <div class="card-header">
-            <span class="card-title">🛡️ OBF Telemetry (OTel / OpenInference)</span>
-            <span class="card-tag" id="badgeObfLive" style="color: var(--accent-green); font-weight: bold;">--</span>
-          </div>
-          <div style="font-size: 11px; margin-top: 2px;">
-            <div class="bar-chart-row">
-              <span class="bar-label">LLM Spans</span>
-              <div class="bar-track"><div class="bar-fill" id="trackObfLlm" style="width: 0%; background-color: var(--accent-blue);"></div></div>
-              <span class="bar-value" id="valObfLlmSpans">--</span>
-            </div>
-            <div class="bar-chart-row">
-              <span class="bar-label">Retriever</span>
-              <div class="bar-track"><div class="bar-fill" id="trackObfRetriever" style="width: 0%; background-color: var(--accent-green);"></div></div>
-              <span class="bar-value" id="valObfRetrieverSpans">--</span>
-            </div>
-            <div class="bar-chart-row">
-              <span class="bar-label">Tool Calls</span>
-              <div class="bar-track"><div class="bar-fill" id="trackObfTool" style="width: 0%; background-color: var(--accent-coral);"></div></div>
-              <span class="bar-value" id="valObfToolSpans">--</span>
-            </div>
-            <div class="bar-chart-row">
-              <span class="bar-label">Pipeline/WAL</span>
-              <div class="bar-track"><div class="bar-fill" id="trackObfPipeline" style="width: 0%; background-color: var(--border-dark);"></div></div>
-              <span class="bar-value" id="valObfPipelineSpans">--</span>
-            </div>
-            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px; margin-top: 6px;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
-                <span style="color: var(--fg-muted);">W3C TRACEPARENT:</span>
-                <code style="font-size: 10px; font-weight: bold;" id="valObfTraceparent">--</code>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: var(--fg-muted);">OTLP JSON (v1/traces):</span>
-                <strong style="color: var(--accent-green);" id="valObfStatusDetail">--</strong>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. Active Pipeline & Intelligence Loop Monitor -->
-        <div class="metric-card" style="background-color: var(--bg-panel);">
-          <div class="card-header">
-            <span class="card-title">🔄 Active Loop &amp; Cycle Monitor</span>
-            <span class="card-tag" id="loopBadge" style="color: var(--accent-coral); font-weight: bold;">--</span>
-          </div>
-          <div style="font-size: 11px; margin-top: 2px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--fg-muted);">Active Cycle:</span>
-              <strong id="loopCycleId" style="font-family: var(--font-mono); font-size: 10px;">--</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--fg-muted);">Loop Schedule:</span>
-              <span id="loopSchedule">--</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--fg-muted);">Last Batch Sync:</span>
-              <span id="loopLastSync">--</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span style="color: var(--fg-muted);">Next Execution:</span>
-              <strong style="color: var(--accent-blue);" id="loopNextSync">--</strong>
-            </div>
-            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
-              <div style="font-size: 10px; color: var(--fg-muted); margin-bottom: 4px;">INTELLIGENCE DAG PHASES:</div>
-              <div style="display: flex; gap: 4px; flex-wrap: wrap; font-size: 9px; font-weight: bold;" id="loopPhaseList"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3. Traversal Matrix (100 Walks) -->
-        <div class="metric-card">
-          <div class="card-header">
-            <span class="card-title">Traversal Matrix (100 Walks)</span>
-            <span class="card-tag" id="badgeTraversalPass" style="color: var(--accent-green); font-weight: bold;">--</span>
-          </div>
-          <div class="traversal-matrix" id="traversalMatrix"></div>
-        </div>
-
-        <!-- 4. Dead-End & Self-Healing Ledger -->
-        <div class="metric-card">
-          <div class="card-header">
-            <span class="card-title">Dead-End &amp; Pruning Ledger</span>
-            <span class="card-tag" id="badgeDeadEndTotal">--</span>
-          </div>
-          <div style="font-size: 11px; margin-top: 4px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span>Depth Limit Exceeded</span>
-              <strong style="color: var(--accent-coral);" id="valDeadEndDepth">--</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span>Cycle Loop Detected</span>
-              <strong id="valDeadEndLoop">--</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span>Context Budget Clamp</span>
-              <strong id="valDeadEndBudget">--</strong>
-            </div>
-            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: var(--fg-muted);">PRUNE Self-Heal Rate:</span>
-                <strong style="color: var(--accent-green);" id="valDeadEndHealRate">--</strong>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 5. Service Management & SLA/SLO (SM) -->
-        <div class="metric-card" style="background-color: var(--bg-panel-sub);">
-          <div class="card-header">
-            <span class="card-title">🎯 Service Operations &amp; SLO (SM)</span>
-            <span class="card-tag" id="badgeSmSlo" style="color: var(--accent-green); font-weight: bold;">--</span>
-          </div>
-          <div style="font-size: 11px; margin-top: 4px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span>4x Daily Batch SLO (30D):</span>
-              <strong style="color: var(--accent-green);" id="valSmPipelineSlo">--</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span>Upstream Resilience (429 Rate):</span>
-              <strong style="color: var(--accent-blue);" id="valSmApiResilience">--</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span>WAL &amp; State Sync Lag:</span>
-              <strong id="valSmWalLag">--</strong>
-            </div>
-            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: var(--fg-muted);">Batch Success Streak:</span>
-                <strong style="color: var(--accent-green);" id="valSmStreak">--</strong>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 6. Database & Storage Engine Performance & IOPS (NEW) -->
-        <div class="metric-card" style="background-color: var(--bg-panel);">
-          <div class="card-header">
-            <span class="card-title">🗄️ Database Performance &amp; IOPS</span>
-            <span class="card-tag" id="badgeDbEngine" style="color: var(--accent-blue); font-weight: bold;">MVCC + Dual CSR</span>
-          </div>
-          <div style="font-size: 11px; margin-top: 4px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span>Read / Write IOPS:</span>
-              <strong style="color: var(--accent-green);" id="valDbIops">-- / -- IOPS</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span>Avg / p99 Latency:</span>
-              <strong style="color: var(--accent-blue);" id="valDbLatency">-- / -- ms</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span>Buffer Pool / Vector Cache Hit:</span>
-              <strong style="color: var(--accent-green);" id="valDbCacheHit">-- / --</strong>
-            </div>
-            <div style="border-top: 1px dashed var(--border-dark); padding-top: 6px;">
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: var(--fg-muted);">WAL Throughput / Sync Lag:</span>
-                <strong style="color: var(--fg-main);" id="valDbWalLag">-- KB/s (0.18ms)</strong>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Live Database Tables & Storage Breakdown Table (NEW) -->
-      <div class="metric-card" style="margin-top: 14px; background-color: var(--bg-panel-sub);">
-        <div class="card-header" style="border-bottom: 2px solid var(--border-dark); padding-bottom: 8px; margin-bottom: 10px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 14px;">🗃️</span>
-            <span class="card-title" style="font-size: 13px; font-weight: bold;">Database Tables &amp; Physical Storage Ledger</span>
-          </div>
-          <div style="display: flex; gap: 12px; font-size: 11px; font-family: var(--font-mono);">
-            <span>Database: <strong id="valDbCurrentDb" style="color: var(--accent-blue);">--</strong></span>
-            <span>Tables: <strong id="badgeDbTableCount" style="color: var(--accent-blue);">--</strong></span>
-            <span>Total Rows: <strong id="badgeDbTotalRows" style="color: var(--accent-coral);">--</strong></span>
-            <span>Total Size: <strong id="badgeDbTotalSize" style="color: var(--accent-green);">--</strong></span>
-          </div>
-        </div>
-
-        <!-- SQL Query Terminal Snippet -->
-        <div style="background-color: var(--bg-main); border: 1px solid var(--border-dark); border-radius: 4px; padding: 8px 12px; margin-bottom: 10px; font-family: var(--font-mono); font-size: 11px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--fg-muted);">
-            <span>⚡ Executed SQL Introspection Queries:</span>
-            <span style="color: var(--accent-green);">● Status: OK (0.001ms)</span>
-          </div>
-          <div style="color: var(--accent-blue); font-weight: 500;">
-            1. <code style="color: var(--accent-coral);">SHOW DATABASES;</code> &rarr; <span style="color: var(--fg-main);" id="sqlResultDatabases">--</span>
-          </div>
-          <div style="color: var(--accent-blue); font-weight: 500; margin-top: 2px;">
-            2. <code style="color: var(--accent-coral);">SHOW TABLES FROM arxiv_security_db;</code> &rarr; <span style="color: var(--fg-main);" id="sqlResultTablesSummary">--</span>
-          </div>
-        </div>
-
-        <div style="overflow-x: auto;">
-          <table style="width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; text-align: left;">
-            <thead>
-              <tr style="border-bottom: 2px solid var(--border-dark); background-color: var(--bg-panel);">
-                <th style="padding: 6px 8px;">Table / Store</th>
-                <th style="padding: 6px 8px;">Category</th>
-                <th style="padding: 6px 8px;">Storage Engine / Format</th>
-                <th style="padding: 6px 8px; text-align: right;">Row Count</th>
-                <th style="padding: 6px 8px; text-align: right;">Data Size</th>
-                <th style="padding: 6px 8px;">Primary Key / Indexing</th>
-              </tr>
-            </thead>
-            <tbody id="databaseTablesTableBody">
-              <tr>
-                <td colspan="6" style="padding: 16px; text-align: center; color: var(--fg-muted);">Loading database tables telemetry...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ======================================================================
-       TAB 3: SUPERVISOR & PROCESS TOP VIEW
-       ====================================================================== -->
-  <div id="viewSupervisor" class="tab-view">
-    <div class="system-workspace">
-      <!-- Arbiter Overview KPI Grid -->
-      <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 12px;">
-        <div class="metric-card" style="background-color: var(--bg-panel);">
-          <div class="card-header">
-            <span class="card-title">⚡ Arbiter Process</span>
-            <span class="card-tag" id="badgeArbiterStatus" style="color: var(--accent-green); font-weight: bold;">--</span>
-          </div>
-          <div style="font-size: 11px; margin-top: 4px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--fg-muted);">Arbiter PID:</span>
-              <strong id="valArbiterPid" style="font-family: var(--font-mono); color: var(--accent-blue);">--</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--fg-muted);">Uptime:</span>
-              <span id="valArbiterUptime" style="font-family: var(--font-mono);">--</span>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: var(--fg-muted);">Memory (RSS):</span>
-              <strong id="valArbiterMemory" style="color: var(--accent-coral);">--</strong>
-            </div>
-          </div>
-        </div>
-
-        <div class="metric-card" style="background-color: var(--bg-panel);">
-          <div class="card-header">
-            <span class="card-title">📦 Worker Pools</span>
-            <span class="card-tag" id="badgePoolCount">--</span>
-          </div>
-          <div id="valArbiterPools" style="font-size: 11px; margin-top: 4px; font-family: var(--font-mono);">
-            --
-          </div>
-        </div>
-
-        <div class="metric-card" style="background-color: var(--bg-panel);">
-          <div class="card-header">
-            <span class="card-title">🔌 IPC Control Channel</span>
-            <span class="card-tag" id="badgeIpcStatus" style="color: var(--accent-green); font-weight: bold;">--</span>
-          </div>
-          <div style="font-size: 10px; margin-top: 4px; color: var(--fg-muted);">
-            <div><strong>Socket:</strong> <code style="font-size: 9px;">outputs/supervisor/control.sock</code></div>
-            <div style="margin-top: 3px;"><strong>Protocol:</strong> JSON-RPC 2.0 (Zero-Dependency)</div>
-            <div style="margin-top: 3px;"><strong>Failover:</strong> <span style="color: var(--accent-green); font-weight: bold;">Active Self-Healing</span></div>
-          </div>
-        </div>
-
-        <div class="metric-card" style="background-color: var(--bg-panel);">
-          <div class="card-header">
-            <span class="card-title">⚡ Architecture &amp; Latency (SA)</span>
-            <span class="card-tag" id="badgeSaLatency" style="color: var(--accent-green); font-weight: bold;">--</span>
-          </div>
-          <div style="font-size: 11px; margin-top: 4px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--fg-muted);">Tail Latency (p95/p99):</span>
-              <strong style="color: var(--accent-coral);" id="valSaTailLatency">--</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--fg-muted);">Worker MTTR (Self-Heal):</span>
-              <strong style="color: var(--accent-green);" id="valSaMttr">--</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: var(--fg-muted);">Ontology Density:</span>
-              <strong id="valSaDensity">--</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Live Supervisor Top Workers Table -->
-      <div class="metric-card" style="padding: 12px; overflow-x: auto;">
-        <div class="card-header" style="margin-bottom: 8px;">
-          <span class="card-title" style="font-size: 13px; font-weight: bold;">⚡ Live Supervisor Workers Top Table (CLI top equivalent)</span>
-          <span class="card-tag" id="badgeTotalWorkers">--</span>
-        </div>
-        <table style="width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px;">
-          <thead>
-            <tr style="border-bottom: 2px solid var(--border-dark); text-align: left; color: var(--fg-muted);">
-              <th style="padding: 6px 8px;">PID</th>
-              <th style="padding: 6px 8px;">TYPE / ROLE</th>
-              <th style="padding: 6px 8px;">STATUS</th>
-              <th style="padding: 6px 8px;">HEALTH</th>
-              <th style="padding: 6px 8px; text-align: right;">REQ</th>
-              <th style="padding: 6px 8px; text-align: right;">RPS</th>
-              <th style="padding: 6px 8px; text-align: right;">IDLE</th>
-              <th style="padding: 6px 8px; text-align: right;">MEM (PSS)</th>
-            </tr>
-          </thead>
-          <tbody id="supervisorWorkersTableBody">
-            <tr>
-              <td colspan="8" style="padding: 16px; text-align: center; color: var(--fg-muted);">Connecting to Supervisor Top telemetry...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ======================================================================
-       4. Footer
+       2. Footer
        ====================================================================== -->
   <footer>
     <div>
-      <strong>arxiv-security-papers</strong> &copy; 2026 | ISO 32000-1 / Google OKF v0.2 Compliant &bull; <span id="footerSyncTime" style="color: var(--fg-muted);">Last Sync: --</span>
+      <strong>arxiv-security-papers</strong> &copy; 2026 | ISO 32000-1 / Google OKF v0.2 Compliant &bull; <span
+        id="footerSyncTime" style="color: var(--fg-muted);">Last Sync: --</span>
     </div>
     <div class="footer-links">
       <button class="btn-action" onclick="resetPhysics()">Reset Physics</button>
       <button class="btn-action" onclick="randomizeGraph()">Inject Node</button>
-      <a href="/">&larr; Back to Portal</a>
+      <a href="/index.html">&larr; Back to Console</a>
     </div>
   </footer>
 
   <!-- ======================================================================
-       5. Pure JavaScript: Force-Directed Physics & Rendering Engine
+       3. Pure JavaScript: Force-Directed Physics & Rendering Engine
        ====================================================================== -->
   <script>
-    (function() {
+    (function () {
       // ----------------------------------------------------------------------
       // 1. Initial Knowledge Mesh Data (Tailored for arxiv-security-papers)
       // ----------------------------------------------------------------------
       const CLUSTERS = {
         source: { color: '#e0533c', label: 'SOURCE' },
         entity: { color: '#2b2b2b', label: 'ENTITY' },
-        claim:  { color: '#3a7d44', label: 'CLAIM' },
+        claim: { color: '#3a7d44', label: 'CLAIM' },
         decision: { color: '#3d5a80', label: 'DECISION' }
       };
 
       const NODES = [
-        // Sources
-        { id: 's1', name: 'arXiv:2608.23763', title: 'TrustShiftProbe (MCP Attacks)', cluster: 'source', desc: 'MCPサーバーによる段階的信頼偽装とSHIELD防御' },
-        { id: 's2', name: 'arXiv:2608.23550', title: 'CLAUDE.md Rules vs Builtin', cluster: 'source', desc: '自然言語セキュリティ指示と物理制御の乖離' },
-        { id: 's3', name: 'arXiv:2608.23471', title: 'InjecMEM (Agent Memory)', cluster: 'source', desc: '1回の対話でエージェント記憶を恒久汚染する攻撃' },
-        { id: 's4', name: 'arXiv:2608.22924', title: 'PQC Migration Roadmap', cluster: 'source', desc: '暗号資産における格子暗号ハードフォーク移行' },
-        { id: 's5', name: 'arXiv:2608.23774', title: 'ROBBIN (Rowhammer AI)', cluster: 'source', desc: '推論時DRAMビット反転によるバックドア注入' },
-
-        // Entities
-        { id: 'e1', name: 'MCP Protocol', title: 'Model Context Protocol', cluster: 'entity', desc: 'LLMと外部ツールをつなぐJSON-RPC規格' },
-        { id: 'e2', name: 'Agent Memory', title: 'Persistent Vector Memory', cluster: 'entity', desc: 'エージェントの永続会話コンテキスト層' },
-        { id: 'e3', name: 'ML-DSA / Falcon', title: 'Lattice Signatures', cluster: 'entity', desc: 'NIST耐量子格子署名標準アルゴリズム' },
-        { id: 'e4', name: 'Rowhammer Flips', title: 'DRAM Row Bitflip', cluster: 'entity', desc: '物理ハードウェアレベルのメモリ改ざん' },
-        { id: 'e5', name: 'CLAUDE.md Rules', title: 'Natural Language Guard', cluster: 'entity', desc: 'リポジトリ直下の自然言語指示ルール' },
-
-        // Claims
-        { id: 'c1', name: 'Trust Defection', title: '69.5% Attack Success', cluster: 'claim', desc: '信頼獲得後に悪意あるペイロードを送信' },
-        { id: 'c2', name: 'Perm Gap 95.6%', title: 'Enforcement Failure', cluster: 'claim', desc: '自然言語指示の95%はOS制御で拒否不能' },
-        { id: 'c3', name: 'Memory Poisoning', title: 'Single-Turn Drift', cluster: 'claim', desc: '単一発話で将来の全回答を誘導可能' },
-        { id: 'c4', name: 'ECDSA Broken', title: 'Quantum Forgery Risk', cluster: 'claim', desc: 'CRQC実用化による暗号資産偽造リスク' },
-
-        // Decisions
-        { id: 'd1', name: 'SHIELD Gateway', title: 'Transport Baseline Audit', cluster: 'decision', desc: 'MCP境界での行動差分監査と遮断' },
-        { id: 'd2', name: 'Built-in Deny', title: 'Container Hardening', cluster: 'decision', desc: 'OSレベルサンドボックスによる物理隔離' },
-        { id: 'd3', name: 'Memory Anchor Filter', title: 'Semantic Ingestion Guard', cluster: 'decision', desc: '長期記憶書き込み時のセマンティック検証' },
-        { id: 'd4', name: 'Dual-Code PQC', title: 'Hardfork Deployment', cluster: 'decision', desc: '耐量子署名への段階的ハードフォーク移行' }
       ];
 
       const EDGES = [
@@ -2107,13 +1857,13 @@
         }
       }
 
-      window.focusCurrentSelectedEgo = function() {
+      window.focusCurrentSelectedEgo = function () {
         if (selectedNode) {
           focusEgoNetwork(selectedNode.id, 2);
         }
       };
 
-      window.clearNodeFocus = function() {
+      window.clearNodeFocus = function () {
         focusedNodeId = null;
         focusedHopNodeIds = null;
         const banner = document.getElementById('focusBanner');
@@ -2283,9 +2033,9 @@
 
         filteredNodes.forEach((n, idx) => {
           const clusterKey = n.cluster === 'sources' ? 'source' :
-                             n.cluster === 'entities' ? 'entity' :
-                             n.cluster === 'claims' ? 'claim' :
-                             (n.cluster || 'decision');
+            n.cluster === 'entities' ? 'entity' :
+              n.cluster === 'claims' ? 'claim' :
+                (n.cluster || 'decision');
           const angle = (idx / Math.max(1, filteredNodes.length)) * Math.PI * 2;
           const radius = Math.min(width, height) * 0.32;
           const prev = existingPositions.get(n.id);
@@ -2319,7 +2069,7 @@
         updateNodeRadii(NODES, EDGES);
       }
 
-      window.toggleIsolatedNodes = function() {
+      window.toggleIsolatedNodes = function () {
         hideIsolatedNodes = !hideIsolatedNodes;
         const btn = document.getElementById('btnToggleIsolated');
         if (btn) {
@@ -2338,7 +2088,7 @@
         }
       };
 
-      window.setMinDegree = function(deg) {
+      window.setMinDegree = function (deg) {
         minDegreeThreshold = Math.max(0, parseInt(deg, 10) || 0);
         const btnAll = document.getElementById('btnDegAll');
         const btn1 = document.getElementById('btnDeg1');
@@ -2356,7 +2106,7 @@
         }
       };
 
-      window.setGraphMode = async function(mode) {
+      window.setGraphMode = async function (mode) {
         currentGraphMode = mode;
         const btnMesh = document.getElementById('btnModeMesh');
         const btnCti = document.getElementById('btnModeCti');
@@ -2386,39 +2136,39 @@
         }
       };
 
-      window.setCtiFilter = function(filter) {
+      window.setCtiFilter = function (filter) {
         ctiFilter = filter;
         ['filterAll', 'filterPaper', 'filterAttack', 'filterCwe'].forEach(id => {
           const el = document.getElementById(id);
           if (el) el.classList.remove('active');
         });
         const activeBtn = filter === 'all' ? 'filterAll' :
-                          filter === 'Paper' ? 'filterPaper' :
-                          filter === 'AttackTechnique' ? 'filterAttack' : 'filterCwe';
+          filter === 'Paper' ? 'filterPaper' :
+            filter === 'AttackTechnique' ? 'filterAttack' : 'filterCwe';
         const ab = document.getElementById(activeBtn);
         if (ab) ab.classList.add('active');
         applyCtiFilter();
       };
 
-      window.setEdgeConfidenceFilter = function(tier) {
+      window.setEdgeConfidenceFilter = function (tier) {
         edgeConfidenceFilter = tier;
         ['btnConfAll', 'btnConfMed', 'btnConfHigh'].forEach(id => {
           const el = document.getElementById(id);
           if (el) el.classList.remove('active');
         });
         const activeId = tier === 'HIGH' ? 'btnConfHigh' :
-                         tier === 'MEDIUM' ? 'btnConfMed' : 'btnConfAll';
+          tier === 'MEDIUM' ? 'btnConfMed' : 'btnConfAll';
         const activeEl = document.getElementById(activeId);
         if (activeEl) activeEl.classList.add('active');
         applyCtiFilter();
       };
 
-      window.setEdgeRuleFilter = function(ruleId) {
+      window.setEdgeRuleFilter = function (ruleId) {
         edgeRuleFilter = ruleId || 'all';
         applyCtiFilter();
       };
 
-      window.toggleResearchGaps = function() {
+      window.toggleResearchGaps = function () {
         highlightGaps = !highlightGaps;
         const btn = document.getElementById('btnToggleGaps');
         if (btn) {
@@ -2434,7 +2184,7 @@
         }
       };
 
-      window.executeGraphQuery = async function(customQuery) {
+      window.executeGraphQuery = async function (customQuery) {
         const input = document.getElementById('graphQueryInput');
         const query = (customQuery !== undefined ? customQuery : (input ? input.value : '')).trim();
         const badge = document.getElementById('graphQueryResultBadge');
@@ -2488,13 +2238,13 @@
         }
       };
 
-      window.runPresetQuery = function(preset) {
+      window.runPresetQuery = function (preset) {
         const input = document.getElementById('graphQueryInput');
         if (input) input.value = preset;
         window.executeGraphQuery(preset);
       };
 
-      window.clearGraphQuery = function() {
+      window.clearGraphQuery = function () {
         activeGraphQuery = null;
         const input = document.getElementById('graphQueryInput');
         if (input) input.value = '';
@@ -2936,14 +2686,14 @@
         callout.style.display = 'flex';
       }
 
-      window.closeCallout = function() {
+      window.closeCallout = function () {
         selectedNode = null;
         activeTwoHopNodes = null;
         document.getElementById('nodeCallout').style.display = 'none';
       };
 
       // Graph Help Drawer Toggle Functions (Issue 166)
-      window.toggleGraphHelpDrawer = function() {
+      window.toggleGraphHelpDrawer = function () {
         const drawer = document.getElementById('graphHelpDrawer');
         const overlay = document.getElementById('graphHelpOverlay');
         if (!drawer) return;
@@ -2957,7 +2707,7 @@
         }
       };
 
-      window.closeGraphHelpDrawer = function() {
+      window.closeGraphHelpDrawer = function () {
         const drawer = document.getElementById('graphHelpDrawer');
         const overlay = document.getElementById('graphHelpOverlay');
         if (drawer) drawer.classList.remove('active');
@@ -2965,7 +2715,7 @@
       };
 
       // Toggle Cluster / CTI Legends collapsed state
-      window.toggleLegend = function() {
+      window.toggleLegend = function () {
         const isCti = currentGraphMode === 'cti';
         const legend = isCti ? document.getElementById('ctiLegend') : document.getElementById('contextLegend');
         const btn = isCti ? document.getElementById('btnToggleLegendCti') : document.getElementById('btnToggleLegendContext');
@@ -2976,7 +2726,7 @@
         }
       };
 
-      window.resetPhysics = function() {
+      window.resetPhysics = function () {
         NODES.forEach((n, idx) => {
           const angle = (idx / NODES.length) * Math.PI * 2;
           const radius = Math.min(width, height) * 0.32;
@@ -2987,7 +2737,7 @@
         });
       };
 
-      window.randomizeGraph = function() {
+      window.randomizeGraph = function () {
         const id = 'dyn_' + Date.now().toString().slice(-4);
         const newNode = {
           id: id,
@@ -3069,7 +2819,7 @@
 
           hCtx.fillStyle = '#2b2b2b';
           hCtx.font = '10px monospace';
-          hCtx.fillText(`H${i+1}`, x + 8, 124);
+          hCtx.fillText(`H${i + 1}`, x + 8, 124);
           hCtx.fillText(`${val}`, x + 6, y - 4);
         });
 
@@ -3095,8 +2845,8 @@
           const c = counts[r];
           const pct = Math.max(15, Math.round((c / maxCount) * 100));
           const color = r === 'mitigates' ? 'var(--accent-green)' :
-                        r === 'requires' ? 'var(--accent-blue)' :
-                        r === 'targets' ? 'var(--accent-coral)' : 'var(--border-dark)';
+            r === 'requires' ? 'var(--accent-blue)' :
+              r === 'targets' ? 'var(--accent-coral)' : 'var(--border-dark)';
           return `
             <div class="bar-chart-row">
               <span class="bar-label">${r}</span>
@@ -3388,7 +3138,7 @@
             if (vPipeSpans) vPipeSpans.textContent = Number(totalSpans).toLocaleString();
             const vTrace = document.getElementById('valObfTraceparent');
             if (vTrace && ot.traceparent) vTrace.textContent = ot.traceparent;
-            else if (vTrace) vTrace.textContent = `00-${Date.now().toString(16).padStart(32,'0')}-${Math.floor(Math.random()*1e16).toString(16).padStart(16,'0')}-01`;
+            else if (vTrace) vTrace.textContent = `00-${Date.now().toString(16).padStart(32, '0')}-${Math.floor(Math.random() * 1e16).toString(16).padStart(16, '0')}-01`;
             const vObfDetail = document.getElementById('valObfStatusDetail');
             if (vObfDetail) vObfDetail.textContent = `${Number(totalSpans).toLocaleString()} Total Spans (OTLP Export OK)`;
           }
@@ -3599,7 +3349,7 @@
         try {
           sseEventSource = new EventSource('/api/stream/top?interval=1.0');
 
-          sseEventSource.addEventListener('connected', function(e) {
+          sseEventSource.addEventListener('connected', function (e) {
             const brandBadge = document.querySelector('.brand-title .badge');
             if (brandBadge) {
               brandBadge.textContent = '⚡ SSE LIVE (1s)';
@@ -3607,7 +3357,7 @@
             }
           });
 
-          sseEventSource.addEventListener('top_update', function(e) {
+          sseEventSource.addEventListener('top_update', function (e) {
             try {
               const data = JSON.parse(e.data);
               if (data) {
@@ -3618,10 +3368,10 @@
                   updateSupervisorFromStream(data);
                 }
               }
-            } catch (err) {}
+            } catch (err) { }
           });
 
-          sseEventSource.onerror = function() {
+          sseEventSource.onerror = function () {
             const brandBadge = document.querySelector('.brand-title .badge');
             if (brandBadge) {
               brandBadge.textContent = 'POLLING (5s)';
@@ -3643,7 +3393,7 @@
           try {
             sseEventSource.close();
             sseEventSource = null;
-          } catch (_) {}
+          } catch (_) { }
         }
       });
       window.addEventListener('pagehide', () => {
@@ -3651,7 +3401,7 @@
           try {
             sseEventSource.close();
             sseEventSource = null;
-          } catch (_) {}
+          } catch (_) { }
         }
       });
 
@@ -3692,7 +3442,7 @@
       initSseLiveStream();
 
       // Header Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
-      window.toggleDashboardHeader = function(forceState) {
+      window.toggleDashboardHeader = function (forceState) {
         const header = document.getElementById('dashboardHeader');
         const btn = document.getElementById('btnToggleHeader');
         if (!header) return;
@@ -3704,12 +3454,12 @@
         }
         try {
           localStorage.setItem('dashboard_header_hidden', isHidden ? '1' : '0');
-        } catch (e) {}
+        } catch (e) { }
         setTimeout(resizeCanvas, 40);
       };
 
       // Keyboard Shortcuts: 'H' (Header), '?' (Help Drawer), 'Escape' (Close Drawer / Callout / Focus)
-      window.addEventListener('keydown', function(e) {
+      window.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
           if (typeof closeGraphHelpDrawer === 'function') {
             closeGraphHelpDrawer();
@@ -3746,21 +3496,33 @@
           el.setAttribute('data-tooltip-align', 'right');
         }
       }
-      document.addEventListener('mouseover', function(e) {
+      document.addEventListener('mouseover', function (e) {
         const target = e.target;
         if (!target || typeof target.closest !== 'function') return;
         const el = target.closest('[data-tooltip]');
         if (el) adjustTooltipViewportAlignment(el);
       });
-      document.addEventListener('focusin', function(e) {
+      document.addEventListener('focusin', function (e) {
         const target = e.target;
         if (!target || typeof target.closest !== 'function') return;
         const el = target.closest('[data-tooltip]');
         if (el) adjustTooltipViewportAlignment(el);
       });
 
+      // Global Header Search: forward query to Graph Query Console
+      window.executeGraphHeaderSearch = function (query) {
+        const q = (query || '').trim();
+        const input = document.getElementById('graphQueryInput');
+        if (input) {
+          input.value = q;
+          if (typeof executeGraphQuery === 'function') {
+            executeGraphQuery();
+          }
+        }
+      };
+
       // Cross-tab Deep Linking Helper: Switch to Graph and prefill/execute query
-      window.openGraphWithQuery = function(query) {
+      window.openGraphWithQuery = function (query) {
         switchDashboardTab('graph');
         if (query) {
           const input = document.getElementById('graphQueryInput');
@@ -3773,47 +3535,30 @@
         }
       };
 
-      // Global Tab Switching with GET Parameter & History Support (?tab=graph|product|system|supervisor)
-      window.switchDashboardTab = function(tabName, updateUrl = true) {
+      // Global Tab Handling: Knowledge & CTI Graph Dedicated View
+      // Seamlessly forwards ported tabs (product, system, supervisor) to Enterprise Console (index.html)
+      window.switchDashboardTab = function (tabName, updateUrl = true) {
         const normTab = (tabName || 'graph').toLowerCase().trim();
-        const activeTab = (normTab === 'product' || normTab === 'analytics') ? 'product' :
-                          (normTab === 'system' || normTab === 'observability' || normTab === 'pipeline') ? 'system' :
-                          (normTab === 'supervisor' || normTab === 'top' || normTab === 'process') ? 'supervisor' : 'graph';
-
-        const graphView = document.getElementById('viewGraph');
-        const productView = document.getElementById('viewProduct');
-        const systemView = document.getElementById('viewSystem');
-        const supervisorView = document.getElementById('viewSupervisor');
-        const tabBtnGraph = document.getElementById('tabBtnGraph');
-        const tabBtnProduct = document.getElementById('tabBtnProduct');
-        const tabBtnSystem = document.getElementById('tabBtnSystem');
-        const tabBtnSupervisor = document.getElementById('tabBtnSupervisor');
-
-        // Deactivate all
-        [graphView, productView, systemView, supervisorView].forEach(v => v && v.classList.remove('active'));
-        [tabBtnGraph, tabBtnProduct, tabBtnSystem, tabBtnSupervisor].forEach(b => b && b.classList.remove('active'));
-
-        if (activeTab === 'graph') {
-          if (graphView) graphView.classList.add('active');
-          if (tabBtnGraph) tabBtnGraph.classList.add('active');
-          // Resize canvas on tab reveal
-          setTimeout(resizeCanvas, 50);
-        } else if (activeTab === 'product') {
-          if (productView) productView.classList.add('active');
-          if (tabBtnProduct) tabBtnProduct.classList.add('active');
-        } else if (activeTab === 'system') {
-          if (systemView) systemView.classList.add('active');
-          if (tabBtnSystem) tabBtnSystem.classList.add('active');
-        } else if (activeTab === 'supervisor') {
-          if (supervisorView) supervisorView.classList.add('active');
-          if (tabBtnSupervisor) tabBtnSupervisor.classList.add('active');
+        if (normTab === 'product' || normTab === 'analytics' ||
+          normTab === 'system' || normTab === 'observability' || normTab === 'pipeline' ||
+          normTab === 'supervisor' || normTab === 'top' || normTab === 'process') {
+          // Ported tab: redirect to unified enterprise console
+          const targetHash = normTab === 'supervisor' || normTab === 'top' || normTab === 'process' ? '#/supervisor' :
+            normTab === 'system' || normTab === 'observability' || normTab === 'pipeline' ? '#/system' : '#/product';
+          window.location.href = '/index.html' + targetHash;
+          return;
         }
 
-        // Update URL query parameter seamlessly without page reload
+        const graphView = document.getElementById('viewGraph');
+        if (graphView) {
+          graphView.classList.add('active');
+        }
+        setTimeout(resizeCanvas, 50);
+
         if (updateUrl && window.history && window.history.replaceState) {
           const url = new URL(window.location.href);
-          url.searchParams.set('tab', activeTab);
-          window.history.replaceState({ tab: activeTab }, '', url.toString());
+          url.searchParams.set('tab', 'graph');
+          window.history.replaceState({ tab: 'graph' }, '', url.toString());
         }
       };
 
@@ -3822,10 +3567,10 @@
         try {
           const params = new URLSearchParams(window.location.search);
           const tabParam = params.get('tab') || window.location.hash.replace('#', '');
-          if (tabParam) {
+          if (tabParam && tabParam !== 'graph') {
             window.switchDashboardTab(tabParam, false);
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       initTabFromUrl();
@@ -3835,13 +3580,14 @@
         if (localStorage.getItem('dashboard_header_hidden') === '1') {
           toggleDashboardHeader(true);
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // Listen for browser back / forward navigation
-      window.addEventListener('popstate', function() {
+      window.addEventListener('popstate', function () {
         initTabFromUrl();
       });
     })();
   </script>
 </body>
+
 </html>
