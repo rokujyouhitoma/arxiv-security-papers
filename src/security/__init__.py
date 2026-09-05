@@ -34,10 +34,17 @@ from .taxonomy import (
     get_cwe_recipe,
 )
 from .validation import (
+    DEFAULT_ALLOWED_SCHEMES,
+    METADATA_IPS,
+    SSRFSecurityError,
+    create_safe_socket,
     detect_dangerous_patterns,
     get_default_workspace_dir,
+    is_safe_remote_url,
     is_safe_workspace_path,
+    resolve_and_validate_ip,
     resolve_safe_path,
+    safe_http_fetch,
     sanitize_html,
 )
 
@@ -72,10 +79,17 @@ __all__ = [
     "extract_mitre_techniques",
     "extract_stride_categories",
     "get_cwe_recipe",
-    # Validation
+    # Validation & Network
+    "DEFAULT_ALLOWED_SCHEMES",
+    "METADATA_IPS",
+    "SSRFSecurityError",
+    "create_safe_socket",
     "detect_dangerous_patterns",
     "get_default_workspace_dir",
+    "is_safe_remote_url",
     "is_safe_workspace_path",
+    "resolve_and_validate_ip",
     "resolve_safe_path",
+    "safe_http_fetch",
     "sanitize_html",
 ]

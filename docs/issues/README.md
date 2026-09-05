@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **154** | SSRF 防御 & ネットワーク隔離ラッパー（Network Isolation & SSRF Guard）の実装 | Feature / Security | 2026-09-05 | [154-implement-ssrf-protection-and-network-isolation.md](closed/154-implement-ssrf-protection-and-network-isolation.md) |
 | **145** | /dashboard tab=graph における特定ノードのフォーカス・エゴネットワーク抽出機能の実装 | Feature | 2026-09-05 | [145-implement-focus-ego-subgraph-mode-in-graph-tab.md](closed/145-implement-focus-ego-subgraph-mode-in-graph-tab.md) |
 | **153** | Supervisor 4x daily 自律バッチ運用と過去OKF論文アーカイブの全量CTI再アノテーション・エンリッチメント | Feature / Ops | 2026-09-05 | [153-implement-supervisor-4xdaily-cron-and-cti-backfill-reannotation.md](closed/153-implement-supervisor-4xdaily-cron-and-cti-backfill-reannotation.md) |
 | **152** | MITRE ATT&CK 緩和策（Mitigations）自動マッピングと動的防衛シグネチャ生成（Semgrep/Sigma/YARA）連携強化 | Feature | 2026-09-05 | [152-integrate-cti-mitigations-with-defense-signatures.md](closed/152-integrate-cti-mitigations-with-defense-signatures.md) |
