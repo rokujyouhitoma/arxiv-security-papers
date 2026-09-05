@@ -19,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **168** | Supervisor/WSGI ワーカーにおける SSE ストリーミングによるサーバーブロッキング解消および高精度可観測性（Logging）の強化 | Bug | 2026-09-05 | [168-fix-server-blocking-on-sse-streaming-and-enhance-observability.md](closed/168-fix-server-blocking-on-sse-streaming-and-enhance-observability.md) |
 | **167** | エンタープライズSaaS型統合クラウドコンソール UI およびデザインシステムの統一実装 | Feature | 2026-09-05 | [167-implement-enterprise-cloud-console-ui-and-design-system-unification.md](closed/167-implement-enterprise-cloud-console-ui-and-design-system-unification.md) |
 | **166** | /dashboard tab=graph における Glassmorphic ツールチップ・操作ガイド基盤および UI/UX 認知的負荷軽減の実装 | Feature | 2026-09-05 | [166-implement-glassmorphic-tooltips-and-graph-uiux-guide.md](closed/166-implement-glassmorphic-tooltips-and-graph-uiux-guide.md) |
 | **165** | 全量 OKF 論文アーカイブへの推論ルール（EIROM）適用と確信度・エビデンス付きグラフ再構築バッチの実装 | Feature / Ops | 2026-09-05 | [165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md](closed/165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md) |

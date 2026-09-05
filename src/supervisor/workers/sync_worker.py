@@ -10,6 +10,7 @@ import io
 import socket
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from ..config import SupervisorConfig
@@ -131,10 +132,105 @@ class SyncWorker(BaseWorker):
             client_sock, method, path, query, headers, body_part
         )
 
+    @staticmethod
+    def _safe_close_iter(resp_iter: Any) -> None:
+        """Safely closes a WSGI iterator if it implements the close() protocol."""
+        if hasattr(resp_iter, "close"):
+            try:
+                resp_iter.close()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _is_streaming_response(headers: List[tuple[str, str]]) -> bool:
+        """Determines whether the response should be streamed without full buffering."""
+        headers_blob = " ".join(f"{k}:{v}" for k, v in headers).lower()
+        return "text/event-stream" in headers_blob or "chunked" in headers_blob
+
+    def _stream_chunks_loop(self, client_sock: socket.socket, resp_iter: Any) -> int:
+        """Iterates over WSGI iterator chunks and pushes them immediately to client socket."""
+        chunk_count = 0
+        for chunk in resp_iter:
+            if not chunk:
+                continue
+            client_sock.sendall(chunk)
+            chunk_count += 1
+            self.last_active_epoch = time.time()
+            self.pulse(
+                {
+                    "is_handling_request": True,
+                    "streaming": True,
+                    "chunks": chunk_count,
+                }
+            )
+        return chunk_count
+
+    @staticmethod
+    def _send_stream_headers(
+        client_sock: socket.socket, status: str, headers: List[tuple[str, str]]
+    ) -> None:
+        """Sends HTTP status line and headers for a streaming connection."""
+        header_str = f"HTTP/1.1 {status}\r\n"
+        for hk, hv in headers:
+            header_str += f"{hk}: {hv}\r\n"
+        header_str += "\r\n"
+        client_sock.sendall(header_str.encode("iso-8859-1"))
+
+    def _log_stream_start(self, method: str, full_url: str, status: str) -> None:
+        now_str = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+        print(
+            f"[{now_str}] [WORKER-STREAM-START] worker={self.worker_id} {method} {full_url} -> {status}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def _log_stream_disconnect(self, exc: Exception, chunk_count: int) -> None:
+        dis_str = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+        print(
+            f"[{dis_str}] [WORKER-STREAM-DISCONNECT] worker={self.worker_id} "
+            f"client disconnected ({type(exc).__name__}) after {chunk_count} chunks",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def _stream_wsgi_iterator(
+        self,
+        client_sock: socket.socket,
+        status: str,
+        headers: List[tuple[str, str]],
+        resp_iter: Any,
+        method: str,
+        full_url: str,
+    ) -> None:
+        """Streams chunks from WSGI iterator directly to client socket without blocking."""
+        self._log_stream_start(method, full_url, status)
+        chunk_count = 0
+        try:
+            self._send_stream_headers(client_sock, status, headers)
+            chunk_count = self._stream_chunks_loop(client_sock, resp_iter)
+        except (BrokenPipeError, ConnectionResetError, socket.error) as exc:
+            self._log_stream_disconnect(exc, chunk_count)
+        finally:
+            self._safe_close_iter(resp_iter)
+
+    def _send_buffered_response(
+        self,
+        client_sock: socket.socket,
+        status: str,
+        headers: List[tuple[str, str]],
+        resp_iter: Any,
+    ) -> None:
+        try:
+            resp_body = b"".join(resp_iter)
+        finally:
+            self._safe_close_iter(resp_iter)
+        response_bytes = self._format_http_response(status, headers, resp_body)
+        client_sock.sendall(response_bytes)
+
     def _execute_wsgi_request(
         self, environ: Dict[str, Any]
     ) -> tuple[str, List[tuple[str, str]], bytes]:
-        """Executes WSGI app callable and returns status, headers, body."""
+        """Legacy helper: executes WSGI app callable and returns status, headers, body."""
         status_holder: List[str] = ["200 OK"]
         response_headers: List[tuple[str, str]] = []
 
@@ -149,7 +245,10 @@ class SyncWorker(BaseWorker):
 
         if self.app_target:
             resp_iter = self.app_target(environ, start_response)
-            resp_body = b"".join(resp_iter)
+            try:
+                resp_body = b"".join(resp_iter)
+            finally:
+                self._safe_close_iter(resp_iter)
         else:
             resp_body = b'{"status":"ok","message":"Supervisor Generic Worker"}'
             response_headers.append(("Content-Type", "application/json"))
@@ -171,6 +270,73 @@ class SyncWorker(BaseWorker):
         resp_header_str += "Connection: close\r\n\r\n"
         return resp_header_str.encode("iso-8859-1") + body
 
+    def _invoke_app(
+        self, environ: Dict[str, Any]
+    ) -> tuple[str, List[tuple[str, str]], Any]:
+        """Invokes the WSGI app and yields status, response headers, and iterator."""
+        status_holder: List[str] = ["200 OK"]
+        response_headers: List[tuple[str, str]] = []
+
+        def start_response(
+            status: str,
+            resp_headers: List[tuple[str, str]],
+            exc_info: Optional[Any] = None,
+        ) -> Callable[[bytes], None]:
+            status_holder[0] = status
+            response_headers.extend(resp_headers)
+            return lambda data: None
+
+        if self.app_target:
+            resp_iter = self.app_target(environ, start_response)
+        else:
+            resp_iter = [b'{"status":"ok","message":"Supervisor Generic Worker"}']
+            response_headers.append(("Content-Type", "application/json"))
+
+        return status_holder[0], response_headers, resp_iter
+
+    def _send_app_response(
+        self,
+        client_sock: socket.socket,
+        status: str,
+        headers: List[tuple[str, str]],
+        resp_iter: Any,
+        method: str,
+        full_url: str,
+    ) -> None:
+        """Dispatches response to streaming or buffered writer depending on content type."""
+        if self._is_streaming_response(headers):
+            self._stream_wsgi_iterator(
+                client_sock, status, headers, resp_iter, method, full_url
+            )
+        else:
+            self._send_buffered_response(client_sock, status, headers, resp_iter)
+
+    def _post_request_cleanup(self) -> None:
+        """Updates request count, last active timestamp, and evaluates worker retirement."""
+        self.requests_handled += 1
+        self.last_active_epoch = time.time()
+        if self._should_retire():
+            self.alive = False
+
+    def _log_req_start(self, method: str, full_url: str) -> None:
+        now_str = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+        print(
+            f"[{now_str}] [WORKER-REQ-START] worker={self.worker_id} {method} {full_url}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def _log_req_done(
+        self, method: str, full_url: str, status: str, elapsed_ms: float
+    ) -> None:
+        done_str = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+        print(
+            f"[{done_str}] [WORKER-REQ-DONE] worker={self.worker_id} "
+            f"{method} {full_url} -> {status} ({elapsed_ms:.2f}ms)",
+            file=sys.stderr,
+            flush=True,
+        )
+
     def _dispatch_client_payload(self, client_sock: socket.socket) -> None:
         raw = client_sock.recv(65536)
         if not raw:
@@ -178,23 +344,45 @@ class SyncWorker(BaseWorker):
         environ = self._parse_http_payload(client_sock, raw)
         if not environ:
             return
-        status, headers, body = self._execute_wsgi_request(environ)
-        response_bytes = self._format_http_response(status, headers, body)
-        client_sock.sendall(response_bytes)
-        self.requests_handled += 1
-        self.last_active_epoch = time.time()
-        if self._should_retire():
-            self.alive = False
+
+        method = environ.get("REQUEST_METHOD", "GET")
+        path = environ.get("PATH_INFO", "/")
+        query = environ.get("QUERY_STRING", "")
+        full_url = f"{path}?{query}" if query else path
+
+        t0 = time.perf_counter()
+        self._log_req_start(method, full_url)
+
+        status, response_headers, resp_iter = self._invoke_app(environ)
+        self._send_app_response(
+            client_sock, status, response_headers, resp_iter, method, full_url
+        )
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        self._log_req_done(method, full_url, status, elapsed_ms)
+        self._post_request_cleanup()
 
     def handle_client(self, client_sock: socket.socket) -> None:
         """Processes a single HTTP connection through the target callable application."""
         client_sock.settimeout(self.config.timeout)
         self.last_active_epoch = time.time()
         self.pulse({"is_handling_request": True, "request_start": time.monotonic()})
+        remote_addr = self._get_remote_addr(client_sock)
+        now_str = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+        print(
+            f"[{now_str}] [WORKER-ACCEPT] worker={self.worker_id} fd={client_sock.fileno()} client={remote_addr}",
+            file=sys.stderr,
+            flush=True,
+        )
         try:
             self._dispatch_client_payload(client_sock)
-        except Exception:
-            pass
+        except Exception as err:
+            err_str = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+            print(
+                f"[{err_str}] [WORKER-ERROR] worker={self.worker_id} error={type(err).__name__}: {err}",
+                file=sys.stderr,
+                flush=True,
+            )
         finally:
             try:
                 client_sock.close()
