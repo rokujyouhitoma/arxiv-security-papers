@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **165** | 全量 OKF 論文アーカイブへの推論ルール（EIROM）適用と確信度・エビデンス付きグラフ再構築バッチの実装 | Feature / Ops | Medium | In Progress | [165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md](165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md) |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **165** | 全量 OKF 論文アーカイブへの推論ルール（EIROM）適用と確信度・エビデンス付きグラフ再構築バッチの実装 | Feature / Ops | 2026-09-05 | [165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md](closed/165-backfill-and-enrich-okf-papers-with-eirom-and-edge-confidence.md) |
 | **164** | /dashboard tab=graph におけるエッジ確信度（Confidence Tier）＆推論ルール絞り込みフィルタとエビデンス（スニペット）表示の実装 | Feature | 2026-09-05 | [164-integrate-edge-confidence-rule-and-evidence-in-graph-tab.md](closed/164-integrate-edge-confidence-rule-and-evidence-in-graph-tab.md) |
 | **162** | グラフ Edge への判断ルール・推論機構・確信度・エビデンス属性の統合付与と高精度グラフ探索基盤の実装 | Feature | 2026-09-05 | [162-enhance-graph-edge-inference-mechanism-and-confidence-attributes.md](closed/162-enhance-graph-edge-inference-mechanism-and-confidence-attributes.md) |
 | **163** | Vertex紐付け推論判定ルール（Edge Inference Rule Ontology Master）のマスターデータ化およびオントロジー推論基盤の実装 | Feature | 2026-09-05 | [163-implement-edge-inference-rule-ontology-master.md](closed/163-implement-edge-inference-rule-ontology-master.md) |

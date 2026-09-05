@@ -2,20 +2,20 @@
 ID: 165
 種別: Feature / Ops
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/OPS] 全量 OKF 論文アーカイブへの推論ルール（EIROM）適用と確信度・エビデンス付きグラフ再構築バッチの実装 (ID: 165)
 
 ## 1. 概要 / Summary
-Issue 163（Edge Inference Rule Ontology Master: EIROM）および Issue 162（Edge 推論機構・確信度・エビデンス属性刻印）の完了に伴い、過去に収集・変換された既存の OKF 論文群（`outputs/okf_papers/`）および永続化グラフデータベース（`outputs/database/graph/graph.db` / `outputs/cti_graph.json`）に対し、最新の推論ルール公理と説明責任属性（確信度スコア、ティア、判定ルール ID、引用エビデンス）を全量再アノテーション・バックフィルするバッチパイプライン（`src/pipeline/cti_backfill.py`）を拡充・実装する。
+Issue 163（Edge Inference Rule Ontology Master: EIROM）および Issue 162（Edge 推論機構・確信度・エビデンス属性刻印）の完了に伴い、過去に収集・変換された既存の OKF 論文群（`outputs/okf_papers/`）および永続化グラフデータベース（`outputs/database/graph/graph.db` / `outputs/cti_graph.json`）に対し、最新の推論ルール公理と説明責任属性（確信度スコア、ティア、判定ルール ID、引用エビデンス）を全量再アノテーション・バックフィルするバッチパイプライン（`src/pipeline/cti_backfill.py`）を拡充・実装した。
 
 本バッチの機能要件：
 1. **最新推論エンジン（`TechniqueInferenceEngine`）および EIROM ルールオントロジーの統合**:
    - レガシーな単純文字列一致から、EIROM（`EdgeInferenceRuleRegistry`）に基づく多層判定（直接正規表現、タイトル名親和性、アブストラクト意味語彙スコアリング）へ全面刷新。
    - 論文タイトルおよび本文から脅威テクニック（`AttackTechnique`）、戦術（Tactic）、研究フォーカス（Offensive / Defensive / Analysis）を抽出。
 2. **OKF YAML フロントマターの高度化と説明責任刻印**:
-   - `inferred_techniques`（または拡充された `cti_techniques`）として、各テクニックの `technique_id`, `name`, `confidence`, `confidence_tier` (HIGH/MEDIUM/LOW), `primary_rule_id`, `applied_rules`, `inference_mechanism`, `evidence_quote`, `research_focus` を構造化保存。
+   - `inferred_techniques`（および後方互換用 `cti_techniques`）として、各テクニックの `technique_id`, `name`, `confidence`, `confidence_tier` (HIGH/MEDIUM/LOW), `primary_rule_id`, `applied_rules`, `inference_mechanism`, `evidence_quote`, `research_focus` を構造化保存。
    - 抽出テクニックに対応する MITRE ATT&CK 緩和策（`mitigations`）の自動マップ・付与。
 3. **コンテンツハッシュ（SHA-256）に基づく高速差分・冪等実行**:
    - 論文のタイトル・本文から `source_text_hash` を算出してフロントマターに記録。
@@ -61,14 +61,14 @@ Issue 163（Edge Inference Rule Ontology Master: EIROM）および Issue 162（E
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `src/pipeline/cti_backfill.py`:
+- [x] `src/pipeline/cti_backfill.py`:
   - `TechniqueInferenceEngine` および `EdgeInferenceRuleRegistry` を使用するバックフィル処理へ改修。
   - フロントマターへの `inferred_techniques`、`mitigations`、`source_text_hash` の書き込み・更新。
   - `source_text_hash` によるスキップ・差分判定。
   - アトミック書き込み処理の実装。
   - `PropertyGraphEngine` へのバッチ同期機能の統合。
   - CLI 引数（`--dry-run`, `--force`, `--max-papers`, `--sync-graph`, `--db-path`, `--report-file`）のサポート。
-- [ ] `tests/pipeline/test_cti_backfill.py`:
+- [x] `tests/pipeline/test_cti_backfill.py`:
   - 最新 EIROM 推論結果を用いた OKF フロントマター生成・更新テスト。
   - `source_text_hash` に基づく冪等性・スキップテスト。
   - `--force` オプション時の再処理テスト。
@@ -126,12 +126,12 @@ Target Branch: `feat/165-backfill-okf-papers-eirom-confidence`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `CTIBackfillEnricher` が `TechniqueInferenceEngine` を介して OKF 論文から確信度・ルール・エビデンス付き推論を実行できること
-- [ ] OKF フロントマターに `inferred_techniques`（または確信度付き `cti_techniques`）、`mitigations`、`source_text_hash` が安全に刻印されること
-- [ ] `source_text_hash` が一致する場合に不要な書き込みがスキップされ、`--force` 指定時には再推論・再書き込みが行われること（完全な冪等性）
-- [ ] グラフ同期オプション（`--sync-graph`）実行時、`PropertyGraphEngine` 内のエッジに `confidence_tier`, `primary_rule_id`, `applied_rules`, `evidences`, `evidence_quote` が正しく永続化されること
-- [ ] ファイル書き込みがアトミック書き込みで行われ、パーサーエラーや破損が発生しないこと
-- [ ] `--dry-run`, `--max-papers`, `--force`, `--report-file` 等の CLI オプションが正常動作すること
-- [ ] `tests/pipeline/test_cti_backfill.py` の単体テスト・結合テストが 100% PASS すること
-- [ ] Xenon 循環的複雑度 Rank A ($\le 5$)、Mypy `--strict` 適合
-- [ ] `make check_format` および `make static_analysis` が 100% PASS すること
+- [x] `CTIBackfillEnricher` が `TechniqueInferenceEngine` を介して OKF 論文から確信度・ルール・エビデンス付き推論を実行できること
+- [x] OKF フロントマターに `inferred_techniques`（または確信度付き `cti_techniques`）、`mitigations`、`source_text_hash` が安全に刻印されること
+- [x] `source_text_hash` が一致する場合に不要な書き込みがスキップされ、`--force` 指定時には再推論・再書き込みが行われること（完全な冪等性）
+- [x] グラフ同期オプション（`--sync-graph`）実行時、`PropertyGraphEngine` 内のエッジに `confidence_tier`, `primary_rule_id`, `applied_rules`, `evidences`, `evidence_quote` が正しく永続化されること
+- [x] ファイル書き込みがアトミック書き込みで行われ、パーサーエラーや破損が発生しないこと
+- [x] `--dry-run`, `--max-papers`, `--force`, `--report-file` 等の CLI オプションが正常動作すること
+- [x] `tests/pipeline/test_cti_backfill.py` の単体テスト・結合テストが 100% PASS すること
+- [x] Xenon 循環的複雑度 Rank A ($\le 5$)、Mypy `--strict` 適合
+- [x] `make check_format` および `make static_analysis` が 100% PASS すること
