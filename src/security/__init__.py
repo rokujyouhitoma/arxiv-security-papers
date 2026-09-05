@@ -6,6 +6,14 @@ Provides a Single Source of Truth (SSOT) across Sandboxing, RBAC, Validation, an
 
 from .fim import FileIntegrityMonitor, compute_file_sha256
 from .merkle_tree import MerkleTree, hash_children, hash_leaf
+from .ratelimit import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    CircuitState,
+    RateLimitExceededError,
+    SlidingWindowRateLimiter,
+    TokenBucketRateLimiter,
+)
 from .rbac import (
     AccessController,
     DCLPermissionDeniedError,
@@ -84,6 +92,13 @@ __all__ = [
     "BLOCKED_DUNDER_NAMES",
     "BLOCKED_MODULES",
     "validate_safe_code",
+    # Rate Limiting & Circuit Breaker
+    "CircuitBreaker",
+    "CircuitBreakerOpenError",
+    "CircuitState",
+    "RateLimitExceededError",
+    "SlidingWindowRateLimiter",
+    "TokenBucketRateLimiter",
     # RBAC
     "AccessController",
     "DCLPermissionDeniedError",
