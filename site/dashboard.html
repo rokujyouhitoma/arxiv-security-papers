@@ -911,6 +911,10 @@
             <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')">🟠 CWE</button>
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()">⚡ Highlight Gaps (<span id="valGapCount">0</span>)</button>
           </div>
+          <div id="focusBanner" style="display: none; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.15); border: 1px solid #3B82F6; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+            <span>🎯 フォーカス中: <strong id="focusTargetLabel">-</strong></span>
+            <button id="btnClearFocus" class="btn-tool" onclick="clearNodeFocus()" title="フォーカスを解除して全域表示に戻す">✕ 解除</button>
+          </div>
           <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
             <div style="display: flex; align-items: center; gap: 4px; border-right: 1px solid var(--border-dark); padding-right: 8px; margin-right: 2px;">
               <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">MIN DEGREE:</span>
@@ -1024,6 +1028,9 @@
           <div class="callout-title" id="calloutTitle">--</div>
           <div class="callout-desc" id="calloutDesc">--</div>
           <div class="callout-edges" id="calloutEdges">--</div>
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-dark);">
+            <button id="btnFocusEgo" class="btn-tool" style="width: 100%; justify-content: center; background: rgba(59, 130, 246, 0.18); border: 1px solid #3B82F6; font-weight: bold; color: var(--fg-main);" onclick="focusCurrentSelectedEgo()">🎯 このノードにフォーカス (2-Hop)</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1564,6 +1571,8 @@
       let activeGraphQuery = null; // Currently active CTI query (null = full mesh)
       let hideIsolatedNodes = false;
       let minDegreeThreshold = 0;
+      let focusedNodeId = null;
+      let focusedHopNodeIds = null;
       let ctiFilter = 'all'; // 'all' | 'Paper' | 'AttackTechnique' | 'Vulnerability'
       let highlightGaps = false;
       let ctiRawNodes = [];
@@ -1601,6 +1610,72 @@
         });
         return new Set([...hop1, ...hop2]);
       }
+
+      function getEgoNeighborhood(centerId, depth = 2) {
+        const d = Math.min(Math.max(1, parseInt(depth, 10) || 2), 3);
+        const visited = new Set([centerId]);
+        let currentFrontier = new Set([centerId]);
+
+        for (let hop = 0; hop < d; hop++) {
+          const nextFrontier = new Set();
+          currentFrontier.forEach(uId => {
+            EDGES.forEach(e => {
+              const neighbor = (e.source === uId) ? e.target : (e.target === uId ? e.source : null);
+              if (neighbor && !visited.has(neighbor)) {
+                visited.add(neighbor);
+                nextFrontier.add(neighbor);
+              }
+            });
+          });
+          currentFrontier = nextFrontier;
+          if (currentFrontier.size === 0) break;
+        }
+        return visited;
+      }
+
+      function focusEgoNetwork(nodeId, depth = 2) {
+        if (!nodeId) return;
+        const targetNode = nodeMap.get(nodeId) || NODES.find(n => n.id === nodeId);
+        if (!targetNode) return;
+
+        focusedNodeId = nodeId;
+        focusedHopNodeIds = getEgoNeighborhood(nodeId, depth);
+        selectNode(targetNode);
+
+        const banner = document.getElementById('focusBanner');
+        const targetLabel = document.getElementById('focusTargetLabel');
+        if (banner && targetLabel) {
+          targetLabel.textContent = targetNode.title || targetNode.name || targetNode.id;
+          banner.style.display = 'inline-flex';
+        }
+
+        const badge = document.getElementById('graphQueryResultBadge');
+        if (badge) {
+          badge.textContent = `🎯 エゴフォーカス: ${targetNode.name || targetNode.id} (${focusedHopNodeIds.size} ノード)`;
+        }
+      }
+
+      window.focusCurrentSelectedEgo = function() {
+        if (selectedNode) {
+          focusEgoNetwork(selectedNode.id, 2);
+        }
+      };
+
+      window.clearNodeFocus = function() {
+        focusedNodeId = null;
+        focusedHopNodeIds = null;
+        const banner = document.getElementById('focusBanner');
+        if (banner) {
+          banner.style.display = 'none';
+        }
+        const badge = document.getElementById('graphQueryResultBadge');
+        if (badge && badge.textContent.includes('エゴフォーカス')) {
+          badge.textContent = `全域表示復帰 (${NODES.length} ノード)`;
+        }
+      };
+
+      window.focusEgoNetwork = focusEgoNetwork;
+      window.getEgoNeighborhood = getEgoNeighborhood;
 
       function applyCtiFilter() {
         if (currentGraphMode !== 'cti') return;
@@ -2104,9 +2179,12 @@
 
           const isHighlighted = (hoveredNode && (u === hoveredNode || v === hoveredNode));
           const isTwoHopDimmed = (activeTwoHopNodes && (!activeTwoHopNodes.has(u.id) || !activeTwoHopNodes.has(v.id)));
+          const isEgoDimmed = (focusedHopNodeIds && (!focusedHopNodeIds.has(u.id) || !focusedHopNodeIds.has(v.id)));
 
           ctx.save();
-          if (isTwoHopDimmed) {
+          if (isEgoDimmed) {
+            ctx.globalAlpha = 0.05;
+          } else if (isTwoHopDimmed) {
             ctx.globalAlpha = 0.12;
           }
 
@@ -2168,13 +2246,27 @@
           const isHovered = (n === hoveredNode);
           const isSelected = (n === selectedNode);
           const isTwoHopDimmed = (activeTwoHopNodes && !activeTwoHopNodes.has(n.id));
+          const isEgoDimmed = (focusedHopNodeIds && !focusedHopNodeIds.has(n.id));
+          const isEgoCenter = (focusedNodeId && n.id === focusedNodeId);
           const clusterCfg = CLUSTERS[n.cluster] || CLUSTERS.entity;
           const nodeColor = currentGraphMode === 'cti' ? (n.color || '#9CA3AF') : clusterCfg.color;
           const nodeRadius = n.radius || (n.cluster === 'source' ? 14 : 11);
 
           ctx.save();
-          if (isTwoHopDimmed) {
+          if (isEgoDimmed) {
+            ctx.globalAlpha = 0.08;
+          } else if (isTwoHopDimmed) {
             ctx.globalAlpha = 0.15;
+          }
+
+          // Ego Center Pulsing Blue Ring
+          if (isEgoCenter) {
+            const egoPulseR = nodeRadius + 5 + Math.sin(Date.now() / 250) * 3;
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, egoPulseR, 0, Math.PI * 2);
+            ctx.strokeStyle = '#3B82F6';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
           }
 
           // Research Gap Pulsing Gold Ring
@@ -2246,6 +2338,20 @@
         if (node) {
           draggedNode = node;
           selectNode(node);
+        } else {
+          if (focusedNodeId) {
+            clearNodeFocus();
+          }
+        }
+      });
+
+      canvas.addEventListener('dblclick', e => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const node = findNodeAt(mx, my);
+        if (node) {
+          focusEgoNetwork(node.id, 2);
         }
       });
 

@@ -280,3 +280,59 @@ def test_dashboard_min_degree_hub_filter(dashboard_html: str) -> None:
 
     # 4. Result badge status formatting
     assert "最小次数 ≥" in dashboard_html
+
+
+def test_dashboard_focus_ego_subgraph_mode(dashboard_html: str) -> None:
+    """Verifies that the Focus Ego Subgraph Mode is properly implemented:
+    - Button #btnFocusEgo exists in #nodeCallout
+    - Toolbar elements #focusBanner, #focusTargetLabel, #btnClearFocus exist
+    - State variables focusedNodeId, focusedHopNodeIds defined
+    - Functions getEgoNeighborhood, focusEgoNetwork, clearNodeFocus, focusCurrentSelectedEgo defined
+    - Canvas dblclick listener and mousedown background deselect listener implemented
+    - Dimming logic (0.08 / 0.05) and center node pulse ring implemented in render loop
+    """
+    # 1. UI Elements in DOM
+    assert 'id="btnFocusEgo"' in dashboard_html
+    assert 'onclick="focusCurrentSelectedEgo()"' in dashboard_html
+    assert 'id="focusBanner"' in dashboard_html
+    assert 'id="focusTargetLabel"' in dashboard_html
+    assert 'id="btnClearFocus"' in dashboard_html
+    assert 'onclick="clearNodeFocus()"' in dashboard_html
+
+    # 2. State variables and functions
+    assert "let focusedNodeId = null;" in dashboard_html
+    assert "let focusedHopNodeIds = null;" in dashboard_html
+    assert "function getEgoNeighborhood(centerId, depth = 2)" in dashboard_html
+    assert "function focusEgoNetwork(nodeId, depth = 2)" in dashboard_html
+    assert "window.focusCurrentSelectedEgo = function()" in dashboard_html
+    assert "window.clearNodeFocus = function()" in dashboard_html
+
+    # 3. BFS cycle guard and depth clamping
+    assert "Math.min(Math.max(1, parseInt(depth, 10) || 2), 3)" in dashboard_html
+    assert "const visited = new Set([centerId]);" in dashboard_html
+    assert "if (neighbor && !visited.has(neighbor))" in dashboard_html
+
+    # 4. Canvas event listeners
+    assert "canvas.addEventListener('dblclick'" in dashboard_html
+    assert "focusEgoNetwork(node.id, 2);" in dashboard_html
+    assert "if (focusedNodeId) {\n            clearNodeFocus();" in dashboard_html
+
+    # 5. Rendering dimming and pulse ring
+    assert (
+        "const isEgoDimmed = (focusedHopNodeIds && (!focusedHopNodeIds.has(u.id) || !focusedHopNodeIds.has(v.id)));"
+        in dashboard_html
+    )
+    assert "ctx.globalAlpha = 0.05;" in dashboard_html
+    assert (
+        "const isEgoDimmed = (focusedHopNodeIds && !focusedHopNodeIds.has(n.id));"
+        in dashboard_html
+    )
+    assert (
+        "const isEgoCenter = (focusedNodeId && n.id === focusedNodeId);"
+        in dashboard_html
+    )
+    assert "ctx.globalAlpha = 0.08;" in dashboard_html
+    assert (
+        "const egoPulseR = nodeRadius + 5 + Math.sin(Date.now() / 250) * 3;"
+        in dashboard_html
+    )
