@@ -2,7 +2,7 @@
 ID: 167
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Open (In Progress)
 ---
 
 # [FEAT/UIUX] エンタープライズSaaS型統合クラウドコンソール UI およびデザインシステムの統一実装 (ID: 167)
@@ -68,8 +68,8 @@ ID: 167
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [docs/designs/DSN-21-enterprise_design_system_and_unified_console.md](../designs/DSN-21-enterprise_design_system_and_unified_console.md):
-  - クラウドコンソール仕様・デザインシステム包括設計書（作成済み）
+- [x] [docs/designs/DSN-21-enterprise_design_system_and_unified_console.md](../designs/DSN-21-enterprise_design_system_and_unified_console.md):
+  - クラウドコンソール仕様・デザインシステム包括設計書（策定完了）
 - [ ] [site/index.html](file:///workspace/arxiv-security-papers/site/index.html):
   - エンタープライズ SaaS クラウドコンソールレイアウトへの再構築（固定ヘッダー、左サイドバー、メインコンテンツ 5大コンポーネント）
 - [ ] [site/style.css](file:///workspace/arxiv-security-papers/site/style.css):

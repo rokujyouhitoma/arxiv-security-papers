@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **167** | エンタープライズSaaS型統合クラウドコンソール UI およびデザインシステムの統一実装 | Feature | High | Open (New) | [167-implement-enterprise-cloud-console-ui-and-design-system-unification.md](167-implement-enterprise-cloud-console-ui-and-design-system-unification.md) |
+| **167** | エンタープライズSaaS型統合クラウドコンソール UI およびデザインシステムの統一実装 | Feature | High | In Progress | [167-implement-enterprise-cloud-console-ui-and-design-system-unification.md](167-implement-enterprise-cloud-console-ui-and-design-system-unification.md) |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
