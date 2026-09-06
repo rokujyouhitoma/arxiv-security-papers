@@ -1249,12 +1249,32 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // H. SSE Real-time Stream Client (/api/stream/top)
-  function initSseLiveStream() {
-    if (!window.EventSource) {
+  let telemetryIntervalId = null;
+
+  function ensureTelemetryPolling() {
+    if (!telemetryIntervalId) {
       syncConsoleTelemetry();
-      setInterval(syncConsoleTelemetry, 5000);
+      telemetryIntervalId = setInterval(syncConsoleTelemetry, 5000);
+    }
+  }
+
+  function closeSseStream() {
+    if (sseEventSource) {
+      try {
+        sseEventSource.close();
+      } catch (_) {}
+      sseEventSource = null;
+    }
+  }
+
+  function initSseLiveStream() {
+    ensureTelemetryPolling();
+
+    if (!window.EventSource) {
       return;
     }
+
+    closeSseStream();
 
     try {
       sseEventSource = new EventSource('/api/stream/top?interval=1.0');
@@ -1268,22 +1288,23 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       sseEventSource.onerror = () => {
-        // Fallback handled via syncConsoleTelemetry polling
+        // Explicitly close EventSource on error to release worker slot immediately
+        closeSseStream();
       };
     } catch (_) {}
-
-    syncConsoleTelemetry();
-    setInterval(syncConsoleTelemetry, 5000);
   }
 
   window.addEventListener('beforeunload', () => {
-    if (sseEventSource) {
-      try { sseEventSource.close(); sseEventSource = null; } catch (_) {}
-    }
+    closeSseStream();
   });
   window.addEventListener('pagehide', () => {
-    if (sseEventSource) {
-      try { sseEventSource.close(); sseEventSource = null; } catch (_) {}
+    closeSseStream();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      closeSseStream();
+    } else if (document.visibilityState === 'visible' && !sseEventSource) {
+      initSseLiveStream();
     }
   });
 

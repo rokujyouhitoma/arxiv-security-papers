@@ -12,8 +12,8 @@ pools = [
     {
         "name": "web",
         "workers": 2,
-        "worker_class": "sync",
-        "threads": 1,
+        "worker_class": "gthread",
+        "threads": 4,
         "bind_host": "0.0.0.0",
         "bind_port": 8000,
         "backlog": 2048,

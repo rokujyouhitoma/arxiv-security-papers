@@ -288,11 +288,28 @@ def test_dashboard_supervisor_tab_ui(dashboard_html_content: str) -> None:
 
 
 def test_dashboard_sse_event_source_ui(dashboard_html_content: str) -> None:
-    """Verifies that the Dashboard integrates EventSource for real-time SSE streaming."""
-    assert "EventSource" in dashboard_html_content
-    assert "/api/stream/top" in dashboard_html_content
-    assert "initSseLiveStream" in dashboard_html_content
-    assert "updateSupervisorFromStream" in dashboard_html_content
+    """Verifies that unused SSE streaming is completely eliminated from dashboard.html (Issue 172)."""
+    assert "EventSource" not in dashboard_html_content
+    assert "/api/stream/top" not in dashboard_html_content
+    assert "initSseLiveStream" not in dashboard_html_content
+    assert "updateSupervisorFromStream" not in dashboard_html_content
+
+
+def test_app_js_sse_event_source_lifecycle() -> None:
+    """Verifies that site/app.js manages EventSource for supervisor streaming with lifecycle guards."""
+    app_js_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
+    )
+    with open(app_js_path, "r", encoding="utf-8") as f:
+        app_js = f.read()
+
+    assert "EventSource" in app_js
+    assert "/api/stream/top" in app_js
+    assert "initSseLiveStream" in app_js
+    assert "closeSseStream" in app_js
+    assert "beforeunload" in app_js
+    assert "pagehide" in app_js
+    assert "visibilitychange" in app_js
 
 
 def test_dashboard_graph_query_console_ui(dashboard_html_content: str) -> None:

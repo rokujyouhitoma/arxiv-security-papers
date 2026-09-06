@@ -355,21 +355,31 @@ class Arbiter:
         )
         q_worker.run()
 
+    @staticmethod
+    def _extract_spec_threads(spec: WorkerSpec) -> Optional[int]:
+        if spec.worker_class not in ("gthread", "threaded"):
+            return None
+        return (spec.metadata or {}).get("threads")
+
     def _run_web_worker(self, spec: WorkerSpec, worker_id: str) -> None:
         """Executes standard pre-fork web worker."""
         worker_cls = WORKER_CLASSES.get(spec.worker_class, SyncWorker)
         app = spec.app_target or self.load_wsgi_app()
         sock = spec.server_socket or self.server_socket
-        web_worker = worker_cls(
-            worker_id=worker_id,
-            config=self.config,
-            server_socket=sock,
-            app_target=app,
-            max_requests=spec.max_requests,
-            max_requests_jitter=spec.max_requests_jitter,
-            max_worker_lifetime=spec.max_worker_lifetime,
-            max_worker_lifetime_jitter=spec.max_worker_lifetime_jitter,
-        )
+        worker_kwargs: Dict[str, Any] = {
+            "worker_id": worker_id,
+            "config": self.config,
+            "server_socket": sock,
+            "app_target": app,
+            "max_requests": spec.max_requests,
+            "max_requests_jitter": spec.max_requests_jitter,
+            "max_worker_lifetime": spec.max_worker_lifetime,
+            "max_worker_lifetime_jitter": spec.max_worker_lifetime_jitter,
+        }
+        threads = self._extract_spec_threads(spec)
+        if threads is not None:
+            worker_kwargs["threads"] = threads
+        web_worker = worker_cls(**worker_kwargs)
         web_worker.run()
 
     def _execute_child_spec(self, spec: WorkerSpec, worker_id: str) -> int:

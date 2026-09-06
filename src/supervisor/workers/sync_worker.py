@@ -151,6 +151,8 @@ class SyncWorker(BaseWorker):
         """Iterates over WSGI iterator chunks and pushes them immediately to client socket."""
         chunk_count = 0
         for chunk in resp_iter:
+            if not self.alive:
+                break
             if not chunk:
                 continue
             client_sock.sendall(chunk)
