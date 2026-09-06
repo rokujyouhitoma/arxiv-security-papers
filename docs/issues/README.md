@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **197** | 外部脅威インテリジェンス (CISA KEV / NVD CVE) リアルタイム動的突合およびグラフ因果リンク拡張の実装 | Feature | High | Open (New) | [197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md](197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md) |
+| **197** | 外部脅威インテリジェンス (CISA KEV / NVD CVE) リアルタイム動的突合およびグラフ因果リンク拡張の実装 | Feature | High | In Progress | [197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md](197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 | **201** | 直近最新セキュリティ論文（2026-09-02〜2026-09-06）の定期フェッチ・PDF抽出・OKF生成および5階層サマリー・グラフDB最新化 | Ops | High | Open (New) | [201-fetch-recent-security-papers-and-update-summaries.md](201-fetch-recent-security-papers-and-update-summaries.md) |
 
