@@ -226,3 +226,44 @@ Presented at IEEE S&P 2026.
         # 3. Verify datatype properties
         assert "sec:strideCategory rdf:type owl:DatatypeProperty" in ttl
         assert "sec:impactSeverity rdf:type owl:DatatypeProperty" in ttl
+
+    def test_claim_evidence_reification_and_datatypes(self) -> None:
+        """Verifies Issue #186: Claim, EvaluationResult, reified properties, and regex datatypes."""
+        doc = build_full_spectrum_security_ontology()
+        ttl = doc.serialize()
+
+        # 1. Verify reification classes
+        assert "sec:Claim rdf:type owl:Class" in ttl
+        assert "sec:EvaluationResult rdf:type owl:Class" in ttl
+
+        # 2. Verify reification object properties & inverseOf
+        assert "sec:assertsClaim rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:claimAssertedBy" in ttl
+        assert "sec:claimAssertedBy rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:assertsClaim" in ttl
+
+        assert "sec:evaluatesClaim rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:claimEvaluatedIn" in ttl
+        assert "sec:claimEvaluatedIn rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:evaluatesClaim" in ttl
+
+        assert "sec:evaluatesTechnique rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:techniqueEvaluatedIn" in ttl
+        assert "sec:techniqueEvaluatedIn rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:evaluatesTechnique" in ttl
+
+        # 3. Verify reification edge attributes
+        assert "sec:successRate rdf:type owl:DatatypeProperty" in ttl
+        assert "sec:targetEnvironment rdf:type owl:DatatypeProperty" in ttl
+        assert "sec:empiricalEvidenceLevel rdf:type owl:DatatypeProperty" in ttl
+
+        # 4. Verify custom Datatype definitions with regex restrictions
+        assert "sec:CVEIdentifier rdf:type rdfs:Datatype" in ttl
+        assert "owl:onDatatype xsd:string" in ttl
+        assert 'xsd:pattern "[cC][vV][eE]-[0-9]{4}-[0-9]{4,}"' in ttl
+
+        assert "sec:CWEIdentifier rdf:type rdfs:Datatype" in ttl
+        assert 'xsd:pattern "[cC][wW][eE]-[0-9]+"' in ttl
+
+        assert "sec:AttackTechniqueIdentifier rdf:type rdfs:Datatype" in ttl
+        assert 'xsd:pattern "T[0-9]{4}(\\.[0-9]{3})?"' in ttl

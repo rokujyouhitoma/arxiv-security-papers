@@ -334,6 +334,41 @@ class DatatypeProperty:
         return "\n".join(lines)
 
 
+@dataclass
+class DatatypeDefinition:
+    """Represents an rdfs:Datatype definition with owl:withRestrictions pattern constraint."""
+
+    uri: str
+    base_datatype: str = "xsd:string"
+    pattern: Optional[str] = None
+    label: Optional[str] = None
+    label_lang: Optional[str] = "ja"
+    comment: Optional[str] = None
+    comment_lang: Optional[str] = "ja"
+    section_comment: Optional[str] = None
+
+    def to_turtle(self) -> str:
+        lines: List[str] = []
+        if self.section_comment:
+            lines.append(f"# {self.section_comment}")
+
+        subj = URI(self.uri).to_turtle()
+        pred_objs = [f"{subj} rdf:type rdfs:Datatype"]
+        if self.base_datatype:
+            pred_objs.append(
+                f"    owl:onDatatype {URI(self.base_datatype).to_turtle()}"
+            )
+        if self.pattern:
+            pred_objs.append(
+                f'    owl:withRestrictions (\n        [ xsd:pattern "{self.pattern}" ]\n    )'
+            )
+        _append_annotations(
+            pred_objs, self.label, self.label_lang, self.comment, self.comment_lang
+        )
+        lines.append(" ;\n".join(pred_objs) + " .")
+        return "\n".join(lines)
+
+
 def _format_property_line(pred: str, obj: Union[RDFTerm, Any]) -> str:
     """Formats single predicate-object line."""
     p_term = URI(pred).to_turtle()
@@ -431,6 +466,7 @@ class TurtleDocumentBuilder:
         self.classes: List[OntologyClass] = []
         self.object_properties: List[ObjectProperty] = []
         self.datatype_properties: List[DatatypeProperty] = []
+        self.datatypes: List[DatatypeDefinition] = []
         self.instances: List[OntologyInstance] = []
         self.standalone_triples: List[RawTriple] = []
 
@@ -551,6 +587,32 @@ class TurtleDocumentBuilder:
         )
         return self
 
+    def add_datatype(
+        self,
+        uri: str,
+        base_datatype: str = "xsd:string",
+        pattern: Optional[str] = None,
+        label: Optional[str] = None,
+        label_lang: Optional[str] = "ja",
+        comment: Optional[str] = None,
+        comment_lang: Optional[str] = "ja",
+        section_comment: Optional[str] = None,
+    ) -> "TurtleDocumentBuilder":
+        """Adds an rdfs:Datatype definition with pattern constraint."""
+        self.datatypes.append(
+            DatatypeDefinition(
+                uri=uri,
+                base_datatype=base_datatype,
+                pattern=pattern,
+                label=label,
+                label_lang=label_lang,
+                comment=comment,
+                comment_lang=comment_lang,
+                section_comment=section_comment,
+            )
+        )
+        return self
+
     def add_instance(
         self,
         uri: str,
@@ -635,6 +697,17 @@ class TurtleDocumentBuilder:
             + "\n\n".join(dp.to_turtle() for dp in self.datatype_properties)
         )
 
+    def _render_datatypes(self) -> Optional[str]:
+        """Renders rdfs:Datatype definitions with pattern constraints."""
+        if not self.datatypes:
+            return None
+        return (
+            "### --------------------------------------------------\n"
+            "### 4. データ型（正規表現・制約定義）\n"
+            "### --------------------------------------------------\n"
+            + "\n\n".join(dt.to_turtle() for dt in self.datatypes)
+        )
+
     def _render_abox(self) -> Optional[str]:
         """Renders ABox instances and standalone triples."""
         if not self.instances and not self.standalone_triples:
@@ -643,7 +716,7 @@ class TurtleDocumentBuilder:
         items.extend(tr.to_turtle() for tr in self.standalone_triples)
         return (
             "### --------------------------------------------------\n"
-            "### 4. インスタンス例（ABox: 実データ）\n"
+            "### 5. インスタンス例（ABox: 実データ）\n"
             "### --------------------------------------------------\n"
             + "\n\n".join(items)
         )
@@ -657,6 +730,7 @@ class TurtleDocumentBuilder:
             self._render_classes(),
             self._render_object_properties(),
             self._render_datatype_properties(),
+            self._render_datatypes(),
             self._render_abox(),
         ):
             if section:
@@ -1538,16 +1612,141 @@ def _add_extended_datatype_properties(builder: TurtleDocumentBuilder) -> None:
     )
 
 
+def _add_reification_and_data_constraints(builder: TurtleDocumentBuilder) -> None:
+    """Adds Claim-Evidence reification model and regex-constrained datatypes (Issue #186)."""
+    # 1. 主張・実証評価クラス (Reification Classes)
+    builder.add_class(
+        uri="sec:Claim",
+        label="学術的主張・命題",
+        label_lang="ja",
+        comment="論文著者が提唱・主張する防御性能や緩和効果の命題",
+        section_comment="学術的主張（著者主張）",
+    )
+    builder.add_class(
+        uri="sec:EvaluationResult",
+        label="実証評価イベント・検証事実",
+        label_lang="ja",
+        comment="独立した第三者や実験環境における客観的ベンチマーク・再現性評価イベント（関係性の具現化ノード）",
+        section_comment="実証事実・エッジ属性保持実体",
+    )
+
+    # 2. 具現化オブジェクトプロパティ (Reification Object Properties)
+    builder.add_object_property(
+        uri="sec:assertsClaim",
+        inverse_of="sec:claimAssertedBy",
+        label="命題を主張する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:Claim",
+        section_comment="論文と主張の関係",
+    )
+    builder.add_object_property(
+        uri="sec:claimAssertedBy",
+        inverse_of="sec:assertsClaim",
+        label="命題を主張した論文",
+        label_lang="ja",
+        domain="sec:Claim",
+        range_="sec:Paper",
+    )
+    builder.add_object_property(
+        uri="sec:evaluatesClaim",
+        inverse_of="sec:claimEvaluatedIn",
+        label="主張を実証・評価する",
+        label_lang="ja",
+        domain="sec:EvaluationResult",
+        range_="sec:Claim",
+        section_comment="評価イベントと主張の関係",
+    )
+    builder.add_object_property(
+        uri="sec:claimEvaluatedIn",
+        inverse_of="sec:evaluatesClaim",
+        label="主張の実証評価イベント",
+        label_lang="ja",
+        domain="sec:Claim",
+        range_="sec:EvaluationResult",
+    )
+    builder.add_object_property(
+        uri="sec:evaluatesTechnique",
+        inverse_of="sec:techniqueEvaluatedIn",
+        label="評価対象の攻撃手法",
+        label_lang="ja",
+        domain="sec:EvaluationResult",
+        range_="sec:AttackTechnique",
+        section_comment="評価イベントと攻撃手法の関係",
+    )
+    builder.add_object_property(
+        uri="sec:techniqueEvaluatedIn",
+        inverse_of="sec:evaluatesTechnique",
+        label="攻撃手法が検証された評価イベント",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:EvaluationResult",
+    )
+
+    # 3. エッジ属性データプロパティ (Reification Datatype Properties)
+    builder.add_datatype_property(
+        uri="sec:successRate",
+        label="実測成功率・緩和率",
+        label_lang="ja",
+        domain="sec:EvaluationResult",
+        range_="xsd:decimal",
+        section_comment="実証エッジ属性",
+    )
+    builder.add_datatype_property(
+        uri="sec:targetEnvironment",
+        label="検証対象環境・OS",
+        label_lang="ja",
+        domain="sec:EvaluationResult",
+        range_="xsd:string",
+    )
+    builder.add_datatype_property(
+        uri="sec:empiricalEvidenceLevel",
+        label="実証エビデンス信頼水準",
+        label_lang="ja",
+        domain="sec:EvaluationResult",
+        range_="xsd:string",
+    )
+
+    # 4. 正規表現パターン付きカスタムDatatype (rdfs:Datatype with owl:withRestrictions)
+    builder.add_datatype(
+        uri="sec:CVEIdentifier",
+        base_datatype="xsd:string",
+        pattern=r"[cC][vV][eE]-[0-9]{4}-[0-9]{4,}",
+        label="CVE番号識別子",
+        label_lang="ja",
+        comment="正規表現に準拠するCVE番号フォーマット制約 (CVE-YYYY-NNNN+)",
+        section_comment="識別子正規表現制約",
+    )
+    builder.add_datatype(
+        uri="sec:CWEIdentifier",
+        base_datatype="xsd:string",
+        pattern=r"[cC][wW][eE]-[0-9]+",
+        label="CWE番号識別子",
+        label_lang="ja",
+        comment="正規表現に準拠するCWE番号フォーマット制約 (CWE-NNN+)",
+    )
+    builder.add_datatype(
+        uri="sec:AttackTechniqueIdentifier",
+        base_datatype="xsd:string",
+        pattern=r"T[0-9]{4}(\.[0-9]{3})?",
+        label="ATT&CKテクニックID識別子",
+        label_lang="ja",
+        comment="正規表現に準拠するMITRE ATT&CKテクニックIDフォーマット制約 (TNNNNまたはTNNNN.NNN)",
+    )
+
+
 def build_full_spectrum_security_ontology() -> TurtleDocumentBuilder:
-    """Builds the Full-Spectrum Security Knowledge Ontology (Issue #179).
+    """Builds the Full-Spectrum Security Knowledge Ontology (Issue #179, #184, #185, #186).
 
     Integrates:
     1. Core Entities & Predicates (Paper, ThreatActor, AttackTechnique, Vulnerability, etc.)
-    2. Real-world Threat Entities (Incident, verifiesCVE)
+    2. Real-world Threat Entities (Incident, verifiesCVE, Incident coupling)
     3. Actionable Defense Artifacts (DetectionRule: Semgrep/Sigma, PoCArtifact, blocks)
     4. Preconditions & Threat Models (Precondition, accessLevel, requiresPrecondition)
     5. Research Gaps & Residual Risks (ResearchGap, ResidualRisk, leavesUnaddressed)
     6. Provenance & Trust Tiers (PublicationVenue, reproducibilityTier, presentedAt)
+    7. Threat Model Causality & Impact (Impact, hasImpact, neutralizesPrecondition, strideCategory)
+    8. Claim-Evidence Reification & Data Constraints (Claim, EvaluationResult, CVE/ATT&CK Datatypes)
     """
     builder = build_security_cti_ontology()
     _add_extended_classes_part1(builder)
@@ -1555,4 +1754,5 @@ def build_full_spectrum_security_ontology() -> TurtleDocumentBuilder:
     _add_extended_object_properties_part1(builder)
     _add_extended_object_properties_part2(builder)
     _add_extended_datatype_properties(builder)
+    _add_reification_and_data_constraints(builder)
     return builder

@@ -87,6 +87,16 @@ sec:PublicationVenue rdf:type owl:Class ;
     rdfs:label "採択会議・出版媒体"@ja ;
     rdfs:comment "IEEE S&P, USENIX, CCS, NDSS などの学術トップカンファレンス"@ja .
 
+# 学術的主張（著者主張）
+sec:Claim rdf:type owl:Class ;
+    rdfs:label "学術的主張・命題"@ja ;
+    rdfs:comment "論文著者が提唱・主張する防御性能や緩和効果の命題"@ja .
+
+# 実証事実・エッジ属性保持実体
+sec:EvaluationResult rdf:type owl:Class ;
+    rdfs:label "実証評価イベント・検証事実"@ja ;
+    rdfs:comment "独立した第三者や実験環境における客観的ベンチマーク・再現性評価イベント（関係性の具現化ノード）"@ja .
+
 ### --------------------------------------------------
 ### 2. オブジェクトプロパティ（エンティティ間の関係）
 ### --------------------------------------------------
@@ -396,6 +406,45 @@ sec:pocOfPaper rdf:type owl:ObjectProperty ;
     rdfs:domain sec:PoCArtifact ;
     rdfs:range sec:Paper .
 
+# 論文と主張の関係
+sec:assertsClaim rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:claimAssertedBy ;
+    rdfs:label "命題を主張する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:Claim .
+
+sec:claimAssertedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:assertsClaim ;
+    rdfs:label "命題を主張した論文"@ja ;
+    rdfs:domain sec:Claim ;
+    rdfs:range sec:Paper .
+
+# 評価イベントと主張の関係
+sec:evaluatesClaim rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:claimEvaluatedIn ;
+    rdfs:label "主張を実証・評価する"@ja ;
+    rdfs:domain sec:EvaluationResult ;
+    rdfs:range sec:Claim .
+
+sec:claimEvaluatedIn rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:evaluatesClaim ;
+    rdfs:label "主張の実証評価イベント"@ja ;
+    rdfs:domain sec:Claim ;
+    rdfs:range sec:EvaluationResult .
+
+# 評価イベントと攻撃手法の関係
+sec:evaluatesTechnique rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:techniqueEvaluatedIn ;
+    rdfs:label "評価対象の攻撃手法"@ja ;
+    rdfs:domain sec:EvaluationResult ;
+    rdfs:range sec:AttackTechnique .
+
+sec:techniqueEvaluatedIn rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:evaluatesTechnique ;
+    rdfs:label "攻撃手法が検証された評価イベント"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:EvaluationResult .
+
 ### --------------------------------------------------
 ### 3. データプロパティ（属性値・リテラル）
 ### --------------------------------------------------
@@ -474,3 +523,47 @@ sec:impactSeverity rdf:type owl:DatatypeProperty ;
     rdfs:label "影響深刻度"@ja ;
     rdfs:domain sec:Impact ;
     rdfs:range xsd:string .
+
+# 実証エッジ属性
+sec:successRate rdf:type owl:DatatypeProperty ;
+    rdfs:label "実測成功率・緩和率"@ja ;
+    rdfs:domain sec:EvaluationResult ;
+    rdfs:range xsd:decimal .
+
+sec:targetEnvironment rdf:type owl:DatatypeProperty ;
+    rdfs:label "検証対象環境・OS"@ja ;
+    rdfs:domain sec:EvaluationResult ;
+    rdfs:range xsd:string .
+
+sec:empiricalEvidenceLevel rdf:type owl:DatatypeProperty ;
+    rdfs:label "実証エビデンス信頼水準"@ja ;
+    rdfs:domain sec:EvaluationResult ;
+    rdfs:range xsd:string .
+
+### --------------------------------------------------
+### 4. データ型（正規表現・制約定義）
+### --------------------------------------------------
+# 識別子正規表現制約
+sec:CVEIdentifier rdf:type rdfs:Datatype ;
+    owl:onDatatype xsd:string ;
+    owl:withRestrictions (
+        [ xsd:pattern "[cC][vV][eE]-[0-9]{4}-[0-9]{4,}" ]
+    ) ;
+    rdfs:label "CVE番号識別子"@ja ;
+    rdfs:comment "正規表現に準拠するCVE番号フォーマット制約 (CVE-YYYY-NNNN+)"@ja .
+
+sec:CWEIdentifier rdf:type rdfs:Datatype ;
+    owl:onDatatype xsd:string ;
+    owl:withRestrictions (
+        [ xsd:pattern "[cC][wW][eE]-[0-9]+" ]
+    ) ;
+    rdfs:label "CWE番号識別子"@ja ;
+    rdfs:comment "正規表現に準拠するCWE番号フォーマット制約 (CWE-NNN+)"@ja .
+
+sec:AttackTechniqueIdentifier rdf:type rdfs:Datatype ;
+    owl:onDatatype xsd:string ;
+    owl:withRestrictions (
+        [ xsd:pattern "T[0-9]{4}(\.[0-9]{3})?" ]
+    ) ;
+    rdfs:label "ATT&CKテクニックID識別子"@ja ;
+    rdfs:comment "正規表現に準拠するMITRE ATT&CKテクニックIDフォーマット制約 (TNNNNまたはTNNNN.NNN)"@ja .

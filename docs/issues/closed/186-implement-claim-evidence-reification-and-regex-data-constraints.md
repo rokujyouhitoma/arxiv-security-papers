@@ -2,7 +2,7 @@
 ID: 186
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] 主張（Claim）と実証（Evidence）の分離・エッジ属性具現化およびデータ型正規表現制約の実装 (ID: 186)
@@ -22,14 +22,14 @@ ID: 186
 ## 2. トレーサビリティ / Traceability
 - 関連要求: [REQ-ONT-01](../../docs/requirements/REQ-ONT-01-security-paper-ontology.md)
 - 設計仕様: [DSN-22](../../docs/designs/DSN-22-security_and_threat_ontology_w3c_specification.md)
-- 関連Issue: [Issue 184](184-enhance-owl-logic-incident-coupling-and-standards-alignment.md), [Issue 185](185-implement-threat-model-causality-impact-and-precondition-neutralization.md)
+- 関連Issue: [Issue 184](closed/184-enhance-owl-logic-incident-coupling-and-standards-alignment.md), [Issue 185](closed/185-implement-threat-model-causality-impact-and-precondition-neutralization.md)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py) (オントロジー定義・データ型ビルダー)
-- [ ] [outputs/ontology/security_ontology_v2.ttl](../../outputs/ontology/security_ontology_v2.ttl)
-- [ ] [tests/ontology/test_full_spectrum_ontology.py](../../tests/ontology/test_full_spectrum_ontology.py)
+- [x] [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py) (オントロジー定義・データ型ビルダー)
+- [x] [outputs/ontology/security_ontology_v2.ttl](../../outputs/ontology/security_ontology_v2.ttl)
+- [x] [tests/ontology/test_full_spectrum_ontology.py](../../tests/ontology/test_full_spectrum_ontology.py)
 
 ---
 
@@ -55,7 +55,7 @@ Target Branch: `feat/186-implement-claim-evidence-reification`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `sec:Claim`, `sec:EvaluationResult` クラスが定義され、エッジ属性（成功率・動作環境等）を保持できること。
-- [ ] 論文の主張と第三者実証結果が分離して表現できること。
-- [ ] CVE/CWE/ATT&CK 用の `rdfs:Datatype` パターン制約が定義されていること。
-- [ ] テストが全件 PASS すること。
+- [x] `sec:Claim`, `sec:EvaluationResult` クラスが定義され、エッジ属性（成功率・動作環境等）を保持できること。
+- [x] 論文の主張と第三者実証結果が分離して表現できること。
+- [x] CVE/CWE/ATT&CK 用の `rdfs:Datatype` パターン制約が定義されていること。
+- [x] テストが全件 PASS すること。
