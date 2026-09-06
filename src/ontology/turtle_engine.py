@@ -12,6 +12,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
+from ontology.schema import (
+    ENTITY_TYPE_SPECS,
+    EXTRA_OBJECT_PROPERTY_SPECS,
+    PREDICATE_SPECS,
+    EntityType,
+    ObjectPropertySpec,
+    Predicate,
+)
+
 
 @dataclass(frozen=True)
 class RDFTerm:
@@ -946,226 +955,118 @@ def build_sample_enterprise_ontology() -> TurtleDocumentBuilder:
     return builder
 
 
+def _register_entity_types(
+    builder: TurtleDocumentBuilder,
+    entity_types: Sequence[EntityType],
+) -> None:
+    """Registers entity classes from ENTITY_TYPE_SPECS."""
+    for et in entity_types:
+        spec = ENTITY_TYPE_SPECS[et]
+        builder.add_class(
+            uri=spec.uri,
+            label=spec.label_ja,
+            label_lang="ja",
+            comment=spec.description_ja,
+            comment_lang="ja",
+            section_comment=spec.section_comment,
+        )
+
+
+def _register_predicate(
+    builder: TurtleDocumentBuilder,
+    predicate: Predicate,
+) -> None:
+    """Registers a predicate and its inverse from PREDICATE_SPECS."""
+    spec = PREDICATE_SPECS[predicate]
+    domain_uri = f"sec:{spec.domain.value}"
+    range_uri = f"sec:{spec.range.value}"
+    builder.add_object_property(
+        uri=spec.uri,
+        inverse_of=spec.inverse_uri,
+        label=spec.label_ja,
+        label_lang="ja",
+        domain=domain_uri,
+        range_=range_uri,
+        is_transitive=spec.is_transitive,
+        sub_property_of=spec.sub_property_of,
+        section_comment=spec.section_comment,
+    )
+    if spec.inverse_uri and spec.inverse_label_ja:
+        builder.add_object_property(
+            uri=spec.inverse_uri,
+            inverse_of=spec.uri,
+            label=spec.inverse_label_ja,
+            label_lang="ja",
+            domain=range_uri,
+            range_=domain_uri,
+        )
+
+
+def _register_predicates(
+    builder: TurtleDocumentBuilder,
+    predicates: Sequence[Predicate],
+) -> None:
+    """Registers a sequence of predicates from PREDICATE_SPECS."""
+    for pred in predicates:
+        _register_predicate(builder, pred)
+
+
+def _register_extra_object_property(
+    builder: TurtleDocumentBuilder,
+    spec: ObjectPropertySpec,
+) -> None:
+    """Registers an extra ObjectPropertySpec and its inverse."""
+    builder.add_object_property(
+        uri=spec.uri,
+        inverse_of=spec.inverse_uri,
+        label=spec.label_ja,
+        label_lang="ja",
+        domain=spec.domain_uri,
+        range_=spec.range_uri,
+        is_transitive=spec.is_transitive,
+        sub_property_of=spec.sub_property_of,
+        section_comment=spec.section_comment,
+    )
+    if spec.inverse_uri and spec.inverse_label_ja:
+        builder.add_object_property(
+            uri=spec.inverse_uri,
+            inverse_of=spec.uri,
+            label=spec.inverse_label_ja,
+            label_lang="ja",
+            domain=spec.range_uri,
+            range_=spec.domain_uri,
+        )
+
+
 def _add_security_classes(builder: TurtleDocumentBuilder) -> None:
     """Populates core classes for security ontology."""
-    builder.add_class(
-        uri="sec:Paper",
-        label="セキュリティ論文",
-        label_lang="ja",
-        comment="arXiv または IACR 等で公開された学術セキュリティ論文",
-        comment_lang="ja",
-        section_comment="学術知見実体",
+    core_classes = (
+        EntityType.PAPER,
+        EntityType.THREAT_ACTOR,
+        EntityType.ATTACK_TECHNIQUE,
+        EntityType.VULNERABILITY,
+        EntityType.TARGET_ASSET,
+        EntityType.DEFENSE_MECHANISM,
+        EntityType.BENCHMARK_METRIC,
     )
-    builder.add_class(
-        uri="sec:ThreatActor",
-        label="脅威アクター",
-        label_lang="ja",
-        comment="サイバー攻撃を仕掛ける国家主導組織、APTグループ、または脅威主体",
-        comment_lang="ja",
-        section_comment="脅威・インテリジェンス実体",
-    )
-    builder.add_class(
-        uri="sec:AttackTechnique",
-        label="攻撃手法",
-        label_lang="ja",
-        comment="MITRE ATT&CK または学術知見で定義される戦術・技術・手順 (TTP)",
-        comment_lang="ja",
-    )
-    builder.add_class(
-        uri="sec:Vulnerability",
-        label="脆弱性",
-        label_lang="ja",
-        comment="CWE または CVE で特定されるソフトウェア/システムの弱点およびセキュリティ欠陥",
-        comment_lang="ja",
-    )
-    builder.add_class(
-        uri="sec:TargetAsset",
-        label="対象資産",
-        label_lang="ja",
-        comment="攻撃の標的となるシステム、プロトコル、ハードウェア、またはAIモデル",
-        comment_lang="ja",
-    )
-    builder.add_class(
-        uri="sec:DefenseMechanism",
-        label="防御メカニズム",
-        label_lang="ja",
-        comment="論文で提案される防御機構、緩和策、またはセキュアシグネチャ",
-        comment_lang="ja",
-    )
-    builder.add_class(
-        uri="sec:BenchmarkMetric",
-        label="評価ベンチマーク指標",
-        label_lang="ja",
-        comment="防御性能や攻撃成功率を測定するための客観的メトリクス",
-        comment_lang="ja",
-    )
+    _register_entity_types(builder, core_classes)
 
 
 def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
     """Populates core object properties for security ontology with owl:inverseOf and alignments."""
-    builder.add_object_property(
-        uri="sec:discloses",
-        inverse_of="sec:disclosedIn",
-        label="脆弱性を公開・開示する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:Vulnerability",
-        section_comment="論文と脆弱性の関係",
+    core_predicates = (
+        Predicate.DISCLOSES,
+        Predicate.EXPLOITS,
+        Predicate.ANALYZES,
+        Predicate.TARGETS,
+        Predicate.PROPOSES,
+        Predicate.MITIGATES,
+        Predicate.PATCHES,
+        Predicate.EVALUATES,
+        Predicate.ATTRIBUTED_TO,
+        Predicate.CITES,
     )
-    builder.add_object_property(
-        uri="sec:disclosedIn",
-        inverse_of="sec:discloses",
-        label="論文で公開・開示された",
-        label_lang="ja",
-        domain="sec:Vulnerability",
-        range_="sec:Paper",
-    )
-    builder.add_object_property(
-        uri="sec:exploits",
-        inverse_of="sec:exploitedBy",
-        label="脆弱性を悪用する",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:Vulnerability",
-        section_comment="攻撃手法と脆弱性の関係",
-    )
-    builder.add_object_property(
-        uri="sec:exploitedBy",
-        inverse_of="sec:exploits",
-        label="攻撃手法により悪用される",
-        label_lang="ja",
-        domain="sec:Vulnerability",
-        range_="sec:AttackTechnique",
-    )
-    builder.add_object_property(
-        uri="sec:analyzes",
-        inverse_of="sec:analyzedIn",
-        label="攻撃手法を分析する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:AttackTechnique",
-        section_comment="論文と攻撃手法の関係",
-    )
-    builder.add_object_property(
-        uri="sec:analyzedIn",
-        inverse_of="sec:analyzes",
-        label="論文で分析・解明された",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:Paper",
-    )
-    builder.add_object_property(
-        uri="sec:targets",
-        inverse_of="sec:targetedBy",
-        label="資産を標的とする",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:TargetAsset",
-        section_comment="攻撃手法と対象資産の関係",
-    )
-    builder.add_object_property(
-        uri="sec:targetedBy",
-        inverse_of="sec:targets",
-        label="攻撃手法の標的となる",
-        label_lang="ja",
-        domain="sec:TargetAsset",
-        range_="sec:AttackTechnique",
-    )
-    builder.add_object_property(
-        uri="sec:proposes",
-        inverse_of="sec:proposedIn",
-        label="防御策を提案する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:DefenseMechanism",
-        section_comment="論文と防御メカニズムの関係",
-    )
-    builder.add_object_property(
-        uri="sec:proposedIn",
-        inverse_of="sec:proposes",
-        label="論文で提案された",
-        label_lang="ja",
-        domain="sec:DefenseMechanism",
-        range_="sec:Paper",
-    )
-    builder.add_object_property(
-        uri="sec:mitigates",
-        inverse_of="sec:mitigatedBy",
-        label="攻撃手法を緩和・防御する",
-        label_lang="ja",
-        domain="sec:DefenseMechanism",
-        range_="sec:AttackTechnique",
-        section_comment="防御策と攻撃手法の関係",
-    )
-    builder.add_object_property(
-        uri="sec:mitigatedBy",
-        inverse_of="sec:mitigates",
-        label="攻撃手法が緩和・防御される",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:DefenseMechanism",
-    )
-    builder.add_object_property(
-        uri="sec:patches",
-        inverse_of="sec:patchedBy",
-        label="脆弱性を改修・修復する",
-        label_lang="ja",
-        domain="sec:DefenseMechanism",
-        range_="sec:Vulnerability",
-        section_comment="防御策と脆弱性の関係",
-    )
-    builder.add_object_property(
-        uri="sec:patchedBy",
-        inverse_of="sec:patches",
-        label="脆弱性が改修・修復される",
-        label_lang="ja",
-        domain="sec:Vulnerability",
-        range_="sec:DefenseMechanism",
-    )
-    builder.add_object_property(
-        uri="sec:evaluates",
-        inverse_of="sec:evaluatedIn",
-        label="評価指標で測定する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:BenchmarkMetric",
-        section_comment="論文と評価指標の関係",
-    )
-    builder.add_object_property(
-        uri="sec:evaluatedIn",
-        inverse_of="sec:evaluates",
-        label="論文で評価・測定された",
-        label_lang="ja",
-        domain="sec:BenchmarkMetric",
-        range_="sec:Paper",
-    )
-    builder.add_object_property(
-        uri="sec:attributedTo",
-        inverse_of="sec:actorAttributedTechnique",
-        label="脅威アクターに帰属する",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:ThreatActor",
-        section_comment="攻撃手法と脅威アクターの関係",
-    )
-    builder.add_object_property(
-        uri="sec:actorAttributedTechnique",
-        inverse_of="sec:attributedTo",
-        label="脅威アクターが使用する攻撃手法",
-        label_lang="ja",
-        domain="sec:ThreatActor",
-        range_="sec:AttackTechnique",
-    )
-    builder.add_object_property(
-        uri="sec:cites",
-        label="先行研究を引用する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:Paper",
-        is_transitive=False,
-        sub_property_of="cito:cites",
-        section_comment="論文間の引用関係（CiTOアライメント・直接引用）",
-    )
+    _register_predicates(builder, core_predicates)
 
 
 def _add_security_datatype_properties(builder: TurtleDocumentBuilder) -> None:
@@ -1233,312 +1134,64 @@ def build_security_cti_ontology() -> TurtleDocumentBuilder:
 
 def _add_extended_classes_part1(builder: TurtleDocumentBuilder) -> None:
     """Adds Incident, DetectionRule, and PoCArtifact classes."""
-    builder.add_class(
-        uri="sec:Incident",
-        label="実世界インシデント",
-        label_lang="ja",
-        comment="観測された実世界での侵害事例およびセキュリティインシデント",
-        section_comment="実世界脅威事象",
-    )
-    builder.add_class(
-        uri="sec:DetectionRule",
-        label="検知・防御ルール",
-        label_lang="ja",
-        comment="Semgrep, Sigma, YARA などの機械可読な防御シグネチャコード",
-        section_comment="即応防御成果物",
-    )
-    builder.add_class(
-        uri="sec:PoCArtifact",
-        label="PoCソフトウェア成果物",
-        label_lang="ja",
-        comment="GitHub リポジトリや Dockerfile などの実証ソフトウェアコード",
+    _register_entity_types(
+        builder,
+        (
+            EntityType.INCIDENT,
+            EntityType.DETECTION_RULE,
+            EntityType.POC_ARTIFACT,
+        ),
     )
 
 
 def _add_extended_classes_part2(builder: TurtleDocumentBuilder) -> None:
     """Adds Precondition, ResearchGap, ResidualRisk, PublicationVenue, and Impact classes."""
-    builder.add_class(
-        uri="sec:Precondition",
-        label="成立前提条件・脅威モデル",
-        label_lang="ja",
-        comment="攻撃や防御が成立するために必要なアクセス権限や知識モデル要件",
-        section_comment="成立前提・制約境界",
-    )
-    builder.add_class(
-        uri="sec:Impact",
-        label="被害影響・影響度",
-        label_lang="ja",
-        comment="攻撃成立により発生する機密性/完全性/可用性の侵害または権限昇格等の結果事象 (STRIDE/CIA侵害)",
-        section_comment="脅威被害・結果影響",
-    )
-    builder.add_class(
-        uri="sec:ResearchGap",
-        label="未解決研究課題",
-        label_lang="ja",
-        comment="学術的・技術的に未解決の限界および将来の探究テーマ",
-        section_comment="研究限界・未解決課題",
-    )
-    builder.add_class(
-        uri="sec:ResidualRisk",
-        label="残余リスク・死角",
-        label_lang="ja",
-        comment="防御策適用後もなお残存するバイパス手法や潜在的脅威",
-    )
-    builder.add_class(
-        uri="sec:PublicationVenue",
-        label="採択会議・出版媒体",
-        label_lang="ja",
-        comment="IEEE S&P, USENIX, CCS, NDSS などの学術トップカンファレンス",
-        section_comment="学術来歴・信頼性",
+    _register_entity_types(
+        builder,
+        (
+            EntityType.PRECONDITION,
+            EntityType.IMPACT,
+            EntityType.RESEARCH_GAP,
+            EntityType.RESIDUAL_RISK,
+            EntityType.PUBLICATION_VENUE,
+        ),
     )
 
 
 def _add_extended_object_properties_part1(builder: TurtleDocumentBuilder) -> None:
     """Adds Incident coupling, blocks, generatesRule, and requiresPrecondition properties."""
-    # 孤立クラス sec:Incident の結合（インシデントと攻撃手法、脆弱性、アクター、資産）
-    builder.add_object_property(
-        uri="sec:exploitedIn",
-        inverse_of="sec:incidentObservedTechnique",
-        label="インシデントで悪用が観測された",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:Incident",
-        section_comment="攻撃手法とインシデントの関係",
+    _register_predicates(
+        builder,
+        (
+            Predicate.EXPLOITED_IN,
+            Predicate.LEVERAGED_VULNERABILITY,
+        ),
     )
-    builder.add_object_property(
-        uri="sec:incidentObservedTechnique",
-        inverse_of="sec:exploitedIn",
-        label="インシデントで観測された攻撃手法",
-        label_lang="ja",
-        domain="sec:Incident",
-        range_="sec:AttackTechnique",
-    )
-    builder.add_object_property(
-        uri="sec:leveragedVulnerability",
-        inverse_of="sec:vulnerabilityLeveragedIn",
-        label="インシデントで悪用された脆弱性",
-        label_lang="ja",
-        domain="sec:Incident",
-        range_="sec:Vulnerability",
-        section_comment="インシデントと脆弱性の関係",
-    )
-    builder.add_object_property(
-        uri="sec:vulnerabilityLeveragedIn",
-        inverse_of="sec:leveragedVulnerability",
-        label="脆弱性が悪用されたインシデント",
-        label_lang="ja",
-        domain="sec:Vulnerability",
-        range_="sec:Incident",
-    )
-    builder.add_object_property(
-        uri="sec:attributedToActor",
-        inverse_of="sec:actorAttributedIncident",
-        label="インシデントの関与アクター",
-        label_lang="ja",
-        domain="sec:Incident",
-        range_="sec:ThreatActor",
-        section_comment="インシデントと脅威アクターの関係",
-    )
-    builder.add_object_property(
-        uri="sec:actorAttributedIncident",
-        inverse_of="sec:attributedToActor",
-        label="アクターが関与したインシデント",
-        label_lang="ja",
-        domain="sec:ThreatActor",
-        range_="sec:Incident",
-    )
-    builder.add_object_property(
-        uri="sec:targetsAsset",
-        inverse_of="sec:assetTargetedInIncident",
-        label="インシデントの標的資産",
-        label_lang="ja",
-        domain="sec:Incident",
-        range_="sec:TargetAsset",
-        section_comment="インシデントと標的資産の関係",
-    )
-    builder.add_object_property(
-        uri="sec:assetTargetedInIncident",
-        inverse_of="sec:targetsAsset",
-        label="インシデントで標的とされた資産",
-        label_lang="ja",
-        domain="sec:TargetAsset",
-        range_="sec:Incident",
-    )
-
-    # 検知ルールおよび前提条件
-    builder.add_object_property(
-        uri="sec:blocks",
-        inverse_of="sec:blockedBy",
-        label="攻撃手法を検知・遮断する",
-        label_lang="ja",
-        domain="sec:DetectionRule",
-        range_="sec:AttackTechnique",
-        section_comment="検知ルールと攻撃手法の関係",
-    )
-    builder.add_object_property(
-        uri="sec:blockedBy",
-        inverse_of="sec:blocks",
-        label="検知ルールにより検知・遮断される",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:DetectionRule",
-    )
-    builder.add_object_property(
-        uri="sec:generatesRule",
-        inverse_of="sec:ruleGeneratedBy",
-        label="防御シグネチャを生成する",
-        label_lang="ja",
-        domain="sec:DefenseMechanism",
-        range_="sec:DetectionRule",
-        section_comment="防御策と検知ルールの関係",
-    )
-    builder.add_object_property(
-        uri="sec:ruleGeneratedBy",
-        inverse_of="sec:generatesRule",
-        label="防御策から生成されたシグネチャ",
-        label_lang="ja",
-        domain="sec:DetectionRule",
-        range_="sec:DefenseMechanism",
-    )
-    builder.add_object_property(
-        uri="sec:requiresPrecondition",
-        inverse_of="sec:preconditionRequiredBy",
-        label="成立前提条件を要求する",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:Precondition",
-        section_comment="攻撃手法と前提条件の関係",
-    )
-    builder.add_object_property(
-        uri="sec:preconditionRequiredBy",
-        inverse_of="sec:requiresPrecondition",
-        label="前提条件を要求する攻撃手法",
-        label_lang="ja",
-        domain="sec:Precondition",
-        range_="sec:AttackTechnique",
-    )
-    builder.add_object_property(
-        uri="sec:hasImpact",
-        inverse_of="sec:impactCausedBy",
-        label="被害影響をもたらす",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:Impact",
-        section_comment="攻撃手法と被害影響（STRIDE/CIA侵害）の因果関係",
-    )
-    builder.add_object_property(
-        uri="sec:impactCausedBy",
-        inverse_of="sec:hasImpact",
-        label="被害影響をもたらした攻撃手法",
-        label_lang="ja",
-        domain="sec:Impact",
-        range_="sec:AttackTechnique",
-    )
-    builder.add_object_property(
-        uri="sec:neutralizesPrecondition",
-        inverse_of="sec:preconditionNeutralizedBy",
-        label="攻撃前提条件を無力化・打破する",
-        label_lang="ja",
-        domain="sec:DefenseMechanism",
-        range_="sec:Precondition",
-        section_comment="防御策による攻撃成立前提条件の無力化因果関係",
-    )
-    builder.add_object_property(
-        uri="sec:preconditionNeutralizedBy",
-        inverse_of="sec:neutralizesPrecondition",
-        label="防御策により無力化される前提条件",
-        label_lang="ja",
-        domain="sec:Precondition",
-        range_="sec:DefenseMechanism",
+    for extra in EXTRA_OBJECT_PROPERTY_SPECS:
+        _register_extra_object_property(builder, extra)
+    _register_predicates(
+        builder,
+        (
+            Predicate.BLOCKS,
+            Predicate.GENERATES_RULE,
+            Predicate.REQUIRES_PRECONDITION,
+            Predicate.HAS_IMPACT,
+            Predicate.NEUTRALIZES_PRECONDITION,
+        ),
     )
 
 
 def _add_extended_object_properties_part2(builder: TurtleDocumentBuilder) -> None:
     """Adds leavesUnaddressed, identifiesGap, presentedAt, verifiesCVE, and hasPoC with inverseOf."""
-    builder.add_object_property(
-        uri="sec:leavesUnaddressed",
-        inverse_of="sec:unaddressedBy",
-        label="残余リスクを未対処とする",
-        label_lang="ja",
-        domain="sec:DefenseMechanism",
-        range_="sec:ResidualRisk",
-        section_comment="防御策と残余リスクの関係",
-    )
-    builder.add_object_property(
-        uri="sec:unaddressedBy",
-        inverse_of="sec:leavesUnaddressed",
-        label="防御策で未対処として残存する",
-        label_lang="ja",
-        domain="sec:ResidualRisk",
-        range_="sec:DefenseMechanism",
-    )
-    builder.add_object_property(
-        uri="sec:identifiesGap",
-        inverse_of="sec:gapIdentifiedBy",
-        label="未解決課題を提起・特定する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:ResearchGap",
-        section_comment="論文と研究ギャップの関係",
-    )
-    builder.add_object_property(
-        uri="sec:gapIdentifiedBy",
-        inverse_of="sec:identifiesGap",
-        label="論文により特定された未解決課題",
-        label_lang="ja",
-        domain="sec:ResearchGap",
-        range_="sec:Paper",
-    )
-    builder.add_object_property(
-        uri="sec:presentedAt",
-        inverse_of="sec:venuePresentedPaper",
-        label="採択・発表される",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:PublicationVenue",
-        section_comment="論文と発表媒体の関係",
-    )
-    builder.add_object_property(
-        uri="sec:venuePresentedPaper",
-        inverse_of="sec:presentedAt",
-        label="採択・発表された論文",
-        label_lang="ja",
-        domain="sec:PublicationVenue",
-        range_="sec:Paper",
-    )
-    builder.add_object_property(
-        uri="sec:verifiesCVE",
-        inverse_of="sec:cveVerifiedBy",
-        label="既知脆弱性を検証・悪用実証する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:Vulnerability",
-        section_comment="論文と既知脆弱性の実証関係",
-    )
-    builder.add_object_property(
-        uri="sec:cveVerifiedBy",
-        inverse_of="sec:verifiesCVE",
-        label="論文により悪用実証された脆弱性",
-        label_lang="ja",
-        domain="sec:Vulnerability",
-        range_="sec:Paper",
-    )
-    builder.add_object_property(
-        uri="sec:hasPoC",
-        inverse_of="sec:pocOfPaper",
-        label="PoC成果物を有する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:PoCArtifact",
-        section_comment="論文とPoCコードの関係",
-    )
-    builder.add_object_property(
-        uri="sec:pocOfPaper",
-        inverse_of="sec:hasPoC",
-        label="論文のPoC成果物",
-        label_lang="ja",
-        domain="sec:PoCArtifact",
-        range_="sec:Paper",
+    _register_predicates(
+        builder,
+        (
+            Predicate.LEAVES_UNADDRESSED,
+            Predicate.IDENTIFIES_GAP,
+            Predicate.PRESENTED_AT,
+            Predicate.VERIFIES_CVE,
+            Predicate.HAS_POC,
+        ),
     )
 
 
@@ -1616,72 +1269,22 @@ def _add_extended_datatype_properties(builder: TurtleDocumentBuilder) -> None:
 def _add_reification_and_data_constraints(builder: TurtleDocumentBuilder) -> None:
     """Adds Claim-Evidence reification model and regex-constrained datatypes (Issue #186)."""
     # 1. 主張・実証評価クラス (Reification Classes)
-    builder.add_class(
-        uri="sec:Claim",
-        label="学術的主張・命題",
-        label_lang="ja",
-        comment="論文著者が提唱・主張する防御性能や緩和効果の命題",
-        section_comment="学術的主張（著者主張）",
-    )
-    builder.add_class(
-        uri="sec:EvaluationResult",
-        label="実証評価イベント・検証事実",
-        label_lang="ja",
-        comment="独立した第三者や実験環境における客観的ベンチマーク・再現性評価イベント（関係性の具現化ノード）",
-        section_comment="実証事実・エッジ属性保持実体",
+    _register_entity_types(
+        builder,
+        (
+            EntityType.CLAIM,
+            EntityType.EVALUATION_RESULT,
+        ),
     )
 
     # 2. 具現化オブジェクトプロパティ (Reification Object Properties)
-    builder.add_object_property(
-        uri="sec:assertsClaim",
-        inverse_of="sec:claimAssertedBy",
-        label="命題を主張する",
-        label_lang="ja",
-        domain="sec:Paper",
-        range_="sec:Claim",
-        section_comment="論文と主張の関係",
-    )
-    builder.add_object_property(
-        uri="sec:claimAssertedBy",
-        inverse_of="sec:assertsClaim",
-        label="命題を主張した論文",
-        label_lang="ja",
-        domain="sec:Claim",
-        range_="sec:Paper",
-    )
-    builder.add_object_property(
-        uri="sec:evaluatesClaim",
-        inverse_of="sec:claimEvaluatedIn",
-        label="主張を実証・評価する",
-        label_lang="ja",
-        domain="sec:EvaluationResult",
-        range_="sec:Claim",
-        section_comment="評価イベントと主張の関係",
-    )
-    builder.add_object_property(
-        uri="sec:claimEvaluatedIn",
-        inverse_of="sec:evaluatesClaim",
-        label="主張の実証評価イベント",
-        label_lang="ja",
-        domain="sec:Claim",
-        range_="sec:EvaluationResult",
-    )
-    builder.add_object_property(
-        uri="sec:evaluatesTechnique",
-        inverse_of="sec:techniqueEvaluatedIn",
-        label="評価対象の攻撃手法",
-        label_lang="ja",
-        domain="sec:EvaluationResult",
-        range_="sec:AttackTechnique",
-        section_comment="評価イベントと攻撃手法の関係",
-    )
-    builder.add_object_property(
-        uri="sec:techniqueEvaluatedIn",
-        inverse_of="sec:evaluatesTechnique",
-        label="攻撃手法が検証された評価イベント",
-        label_lang="ja",
-        domain="sec:AttackTechnique",
-        range_="sec:EvaluationResult",
+    _register_predicates(
+        builder,
+        (
+            Predicate.ASSERTS_CLAIM,
+            Predicate.EVALUATES_CLAIM,
+            Predicate.EVALUATES_TECHNIQUE,
+        ),
     )
 
     # 3. エッジ属性データプロパティ (Reification Datatype Properties)

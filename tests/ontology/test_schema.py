@@ -5,11 +5,15 @@ Unit tests for Security Knowledge Ontology (SKO) Schema and Taxonomy Registry.
 
 from ontology.extractor import OntologyExtractor
 from ontology.schema import (
+    ENTITY_TYPE_SPECS,
+    PREDICATE_SPECS,
     AttackTechniqueEntity,
     DefenseMechanismEntity,
     EntityType,
+    EntityTypeSpec,
     PaperEntity,
     Predicate,
+    PredicateSpec,
     SecurityOntologySchema,
     TargetAssetEntity,
     VulnerabilityEntity,
@@ -150,3 +154,67 @@ We propose a novel ZKP defense mechanism.
         "MITIGATES",
         "AttackTechnique:Prompt_Injection",
     ) in triple_tuples
+
+
+def test_predicate_specs_completeness() -> None:
+    """Verifies that all Predicates have comprehensive semantic specs in PREDICATE_SPECS."""
+    assert len(PREDICATE_SPECS) >= len(Predicate)
+    for predicate in Predicate:
+        assert predicate in PREDICATE_SPECS
+        spec = SecurityOntologySchema.get_predicate_spec(predicate)
+        assert spec is not None, f"Missing PredicateSpec for {predicate}"
+        assert isinstance(spec, PredicateSpec)
+        assert spec.uri, f"Empty URI for {predicate}"
+        assert spec.label_ja, f"Empty label_ja for {predicate}"
+        assert isinstance(spec.domain, EntityType)
+        assert isinstance(spec.range, EntityType)
+
+
+def test_entity_type_specs_completeness() -> None:
+    """Verifies that all EntityTypes have comprehensive semantic specs in ENTITY_TYPE_SPECS."""
+    assert len(ENTITY_TYPE_SPECS) >= len(EntityType)
+    for entity_type in EntityType:
+        assert entity_type in ENTITY_TYPE_SPECS
+        spec = SecurityOntologySchema.get_entity_type_spec(entity_type)
+        assert spec is not None, f"Missing EntityTypeSpec for {entity_type}"
+        assert isinstance(spec, EntityTypeSpec)
+        assert spec.uri.startswith("sec:"), f"Invalid URI {spec.uri} for {entity_type}"
+        assert spec.label_ja, f"Empty label_ja for {entity_type}"
+
+
+def test_validate_triple_range_validation() -> None:
+    """Verifies validate_triple with Subject, Predicate, and Object (Range) type verification."""
+    # 1. Valid domain, predicate, and range
+    assert SecurityOntologySchema.validate_triple(
+        EntityType.PAPER, Predicate.DISCLOSES, EntityType.VULNERABILITY
+    )
+    assert SecurityOntologySchema.validate_triple(
+        EntityType.DEFENSE_MECHANISM, Predicate.MITIGATES, EntityType.ATTACK_TECHNIQUE
+    )
+    assert SecurityOntologySchema.validate_triple(
+        EntityType.PAPER, Predicate.REQUIRES_PRECONDITION, EntityType.PRECONDITION
+    )
+    assert SecurityOntologySchema.validate_triple(
+        EntityType.ATTACK_TECHNIQUE,
+        Predicate.REQUIRES_PRECONDITION,
+        EntityType.PRECONDITION,
+    )
+
+    # 2. Invalid range (dst_type mismatch)
+    assert not SecurityOntologySchema.validate_triple(
+        EntityType.PAPER, Predicate.DISCLOSES, EntityType.THREAT_ACTOR
+    )
+    assert not SecurityOntologySchema.validate_triple(
+        EntityType.DEFENSE_MECHANISM, Predicate.MITIGATES, EntityType.PAPER
+    )
+
+    # 3. Invalid domain (src_type mismatch)
+    assert not SecurityOntologySchema.validate_triple(
+        EntityType.TARGET_ASSET, Predicate.DISCLOSES, EntityType.VULNERABILITY
+    )
+
+    # 4. Backward compatibility (dst_type omitted)
+    assert SecurityOntologySchema.validate_triple(EntityType.PAPER, Predicate.DISCLOSES)
+    assert not SecurityOntologySchema.validate_triple(
+        EntityType.TARGET_ASSET, Predicate.DISCLOSES
+    )
