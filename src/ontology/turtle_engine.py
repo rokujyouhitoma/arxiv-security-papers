@@ -1,0 +1,1043 @@
+#!/usr/bin/env python3
+"""Pure-Python W3C Turtle (.ttl) / OWL Ontology Generation Engine.
+
+Provides an intuitive, type-safe DSL and builder for constructing W3C RDF 1.1 Turtle
+and OWL 2 ontology definitions (TBox) and instance data assertions (ABox).
+Zero external dependencies.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
+
+@dataclass(frozen=True)
+class RDFTerm:
+    """Base class for all RDF terms in Turtle serialization."""
+
+    def to_turtle(self) -> str:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class URI(RDFTerm):
+    """URI or Prefixed Name (CURIE) RDF Term."""
+
+    value: str
+
+    def to_turtle(self) -> str:
+        if self.value == "a":
+            return "a"
+        if self.value.startswith(("http://", "https://", "urn:")):
+            return f"<{self.value}>"
+        return self.value
+
+
+def _escape_turtle_string(text: str) -> str:
+    """Escapes special characters for Turtle string literals."""
+    return (
+        text.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+
+
+def _format_typed_literal(escaped_str: str, datatype: str) -> str:
+    """Formats a typed literal string."""
+    dt = datatype
+    if dt.startswith(("http://", "https://", "urn:")):
+        dt = f"<{dt}>"
+    return f'"{escaped_str}"^^{dt}'
+
+
+def _resolve_object_term(obj: Union[RDFTerm, Any]) -> str:
+    """Resolves arbitrary Python object or RDFTerm into a Turtle term string."""
+    if isinstance(obj, RDFTerm):
+        return obj.to_turtle()
+    if isinstance(obj, str):
+        if ":" in obj or obj.startswith("http"):
+            return URI(obj).to_turtle()
+        return Literal(obj).to_turtle()
+    return Literal(obj).to_turtle()
+
+
+def _format_number(val: Any) -> Optional[str]:
+    """Formats numeric value to str if int or float."""
+    return str(val) if isinstance(val, (int, float)) else None
+
+
+def _format_primitive_value(
+    val: Any, lang: Optional[str], datatype: Optional[str]
+) -> Optional[str]:
+    """Formats primitive unquoted values if eligible."""
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    if lang or datatype:
+        return None
+    return _format_number(val)
+
+
+@dataclass(frozen=True)
+class Literal(RDFTerm):
+    """RDF Literal with optional datatype URI or language tag."""
+
+    value: Any
+    lang: Optional[str] = None
+    datatype: Optional[str] = None
+
+    def to_turtle(self) -> str:
+        prim = _format_primitive_value(self.value, self.lang, self.datatype)
+        if prim is not None:
+            return prim
+
+        escaped = _escape_turtle_string(str(self.value))
+        if self.lang:
+            return f'"{escaped}"@{self.lang}'
+        if self.datatype:
+            return _format_typed_literal(escaped, self.datatype)
+        return f'"{escaped}"'
+
+
+def _append_annotations(
+    pred_objs: List[str],
+    label: Optional[str],
+    label_lang: Optional[str],
+    comment: Optional[str],
+    comment_lang: Optional[str],
+) -> None:
+    """Appends rdfs:label and rdfs:comment to predicate-object list."""
+    if label:
+        lit_label = Literal(label, lang=label_lang).to_turtle()
+        pred_objs.append(f"    rdfs:label {lit_label}")
+    if comment:
+        lit_comment = Literal(comment, lang=comment_lang).to_turtle()
+        pred_objs.append(f"    rdfs:comment {lit_comment}")
+
+
+@dataclass
+class OntologyMetadata:
+    """Represents owl:Ontology metadata header."""
+
+    uri: str
+    label: Optional[str] = None
+    label_lang: Optional[str] = "ja"
+    comment: Optional[str] = None
+    comment_lang: Optional[str] = "ja"
+    version_info: Optional[str] = None
+    imports: List[str] = field(default_factory=list)
+
+    def to_turtle(self) -> str:
+        subj = URI(self.uri).to_turtle()
+        pred_objs: List[str] = ["    rdf:type owl:Ontology"]
+        _append_annotations(
+            pred_objs, self.label, self.label_lang, self.comment, self.comment_lang
+        )
+        if self.version_info:
+            lit_ver = Literal(self.version_info).to_turtle()
+            pred_objs.append(f"    owl:versionInfo {lit_ver}")
+        for imp in self.imports:
+            pred_objs.append(f"    owl:imports {URI(imp).to_turtle()}")
+
+        return f"{subj}\n" + " ;\n".join(pred_objs) + " ."
+
+
+@dataclass
+class OntologyClass:
+    """Represents an owl:Class definition."""
+
+    uri: str
+    label: Optional[str] = None
+    label_lang: Optional[str] = "ja"
+    comment: Optional[str] = None
+    comment_lang: Optional[str] = "ja"
+    sub_class_of: Optional[str] = None
+    disjoint_with: List[str] = field(default_factory=list)
+    section_comment: Optional[str] = None
+
+    def to_turtle(self) -> str:
+        lines: List[str] = []
+        if self.section_comment:
+            lines.append(f"# {self.section_comment}")
+
+        subj = URI(self.uri).to_turtle()
+        pred_objs: List[str] = [f"{subj} rdf:type owl:Class"]
+        if self.sub_class_of:
+            parent = URI(self.sub_class_of).to_turtle()
+            pred_objs.append(f"    rdfs:subClassOf {parent}")
+
+        _append_annotations(
+            pred_objs, self.label, self.label_lang, self.comment, self.comment_lang
+        )
+        lines.append(" ;\n".join(pred_objs) + " .")
+
+        for dj in self.disjoint_with:
+            lines.append(f"{subj} owl:disjointWith {URI(dj).to_turtle()} .")
+
+        return "\n".join(lines)
+
+
+def _build_object_property_types(is_transitive: bool, is_symmetric: bool) -> str:
+    """Builds comma-separated owl property types."""
+    types = ["owl:ObjectProperty"]
+    if is_transitive:
+        types.append("owl:TransitiveProperty")
+    if is_symmetric:
+        types.append("owl:SymmetricProperty")
+    return ", ".join(types)
+
+
+def _build_op_pred_objs(
+    uri: str,
+    label: Optional[str],
+    label_lang: Optional[str],
+    comment: Optional[str],
+    comment_lang: Optional[str],
+    domain: Optional[str],
+    range_: Optional[str],
+    inverse_of: Optional[str],
+    is_transitive: bool,
+    is_symmetric: bool,
+) -> List[str]:
+    """Constructs predicate-object lines for ObjectProperty."""
+    subj = URI(uri).to_turtle()
+    types_str = _build_object_property_types(is_transitive, is_symmetric)
+    pred_objs: List[str] = [f"{subj} rdf:type {types_str}"]
+    if inverse_of:
+        pred_objs.append(f"    owl:inverseOf {URI(inverse_of).to_turtle()}")
+    _append_annotations(pred_objs, label, label_lang, comment, comment_lang)
+    if domain:
+        pred_objs.append(f"    rdfs:domain {URI(domain).to_turtle()}")
+    if range_:
+        pred_objs.append(f"    rdfs:range {URI(range_).to_turtle()}")
+    return pred_objs
+
+
+@dataclass
+class ObjectProperty:
+    """Represents an owl:ObjectProperty definition."""
+
+    uri: str
+    label: Optional[str] = None
+    label_lang: Optional[str] = "ja"
+    comment: Optional[str] = None
+    comment_lang: Optional[str] = "ja"
+    domain: Optional[str] = None
+    range_: Optional[str] = None
+    inverse_of: Optional[str] = None
+    is_transitive: bool = False
+    is_symmetric: bool = False
+    section_comment: Optional[str] = None
+
+    def to_turtle(self) -> str:
+        lines: List[str] = []
+        if self.section_comment:
+            lines.append(f"# {self.section_comment}")
+
+        pred_objs = _build_op_pred_objs(
+            self.uri,
+            self.label,
+            self.label_lang,
+            self.comment,
+            self.comment_lang,
+            self.domain,
+            self.range_,
+            self.inverse_of,
+            self.is_transitive,
+            self.is_symmetric,
+        )
+        lines.append(" ;\n".join(pred_objs) + " .")
+        return "\n".join(lines)
+
+
+def _build_dp_pred_objs(
+    uri: str,
+    label: Optional[str],
+    label_lang: Optional[str],
+    comment: Optional[str],
+    comment_lang: Optional[str],
+    domain: Optional[str],
+    range_: Optional[str],
+    is_functional: bool,
+) -> List[str]:
+    """Constructs predicate-object lines for DatatypeProperty."""
+    subj = URI(uri).to_turtle()
+    types_str = (
+        "owl:DatatypeProperty, owl:FunctionalProperty"
+        if is_functional
+        else "owl:DatatypeProperty"
+    )
+    pred_objs: List[str] = [f"{subj} rdf:type {types_str}"]
+    _append_annotations(pred_objs, label, label_lang, comment, comment_lang)
+    if domain:
+        pred_objs.append(f"    rdfs:domain {URI(domain).to_turtle()}")
+    if range_:
+        pred_objs.append(f"    rdfs:range {URI(range_).to_turtle()}")
+    return pred_objs
+
+
+@dataclass
+class DatatypeProperty:
+    """Represents an owl:DatatypeProperty definition."""
+
+    uri: str
+    label: Optional[str] = None
+    label_lang: Optional[str] = "ja"
+    comment: Optional[str] = None
+    comment_lang: Optional[str] = "ja"
+    domain: Optional[str] = None
+    range_: Optional[str] = None
+    is_functional: bool = False
+    section_comment: Optional[str] = None
+
+    def to_turtle(self) -> str:
+        lines: List[str] = []
+        if self.section_comment:
+            lines.append(f"# {self.section_comment}")
+
+        pred_objs = _build_dp_pred_objs(
+            self.uri,
+            self.label,
+            self.label_lang,
+            self.comment,
+            self.comment_lang,
+            self.domain,
+            self.range_,
+            self.is_functional,
+        )
+        lines.append(" ;\n".join(pred_objs) + " .")
+        return "\n".join(lines)
+
+
+def _format_property_line(pred: str, obj: Union[RDFTerm, Any]) -> str:
+    """Formats single predicate-object line."""
+    p_term = URI(pred).to_turtle()
+    o_term = _resolve_object_term(obj)
+    return f"    {p_term} {o_term}"
+
+
+def _build_typeless_instance(
+    subj: str, properties: List[Tuple[str, Union[RDFTerm, Any]]]
+) -> str:
+    """Builds instance triples without explicit rdf:type."""
+    first_p, first_o = properties[0]
+    p0 = URI(first_p).to_turtle()
+    o0 = _resolve_object_term(first_o)
+    pred_objs = [f"{subj} {p0} {o0}"]
+    for p, o in properties[1:]:
+        pred_objs.append(_format_property_line(p, o))
+    return " ;\n".join(pred_objs) + " ."
+
+
+def _format_instance_header(subj: str, rdf_types: List[str]) -> str:
+    """Formats instance type assertion header."""
+    if not rdf_types:
+        return subj
+    types_str = ", ".join(URI(t).to_turtle() for t in rdf_types)
+    return f"{subj} rdf:type {types_str}"
+
+
+def _build_instance_triples(
+    subj: str,
+    rdf_types: List[str],
+    properties: List[Tuple[str, Union[RDFTerm, Any]]],
+) -> str:
+    """Builds predicate-object body for an instance."""
+    if not rdf_types and properties:
+        return _build_typeless_instance(subj, properties)
+
+    header = _format_instance_header(subj, rdf_types)
+    lines = [header] + [_format_property_line(p, o) for p, o in properties]
+    return " ;\n".join(lines) + " ."
+
+
+@dataclass
+class OntologyInstance:
+    """Represents an ABox instance with type assertions and property values."""
+
+    uri: str
+    rdf_types: List[str] = field(default_factory=list)
+    properties: List[Tuple[str, Union[RDFTerm, Any]]] = field(default_factory=list)
+    section_comment: Optional[str] = None
+
+    def to_turtle(self) -> str:
+        lines: List[str] = []
+        if self.section_comment:
+            lines.append(f"# {self.section_comment}")
+
+        subj = URI(self.uri).to_turtle()
+        lines.append(_build_instance_triples(subj, self.rdf_types, self.properties))
+        return "\n".join(lines)
+
+
+@dataclass
+class RawTriple:
+    """Represents a standalone subject-predicate-object assertion."""
+
+    subject: str
+    predicate: str
+    object_: Union[RDFTerm, Any]
+    comment: Optional[str] = None
+
+    def to_turtle(self) -> str:
+        lines: List[str] = []
+        if self.comment:
+            lines.append(f"# {self.comment}")
+        s = URI(self.subject).to_turtle()
+        p = URI(self.predicate).to_turtle()
+        o = _resolve_object_term(self.object_)
+        lines.append(f"{s} {p} {o} .")
+        return "\n".join(lines)
+
+
+class TurtleDocumentBuilder:
+    """Fluent Builder for generating W3C Turtle (.ttl) and OWL ontology files."""
+
+    DEFAULT_PREFIXES: Dict[str, str] = {
+        "owl": "http://www.w3.org/2002/07/owl#",
+        "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+        "xsd": "http://www.w3.org/2001/XMLSchema#",
+    }
+
+    def __init__(self) -> None:
+        self.prefixes: Dict[str, str] = dict(self.DEFAULT_PREFIXES)
+        self.ontology_meta: Optional[OntologyMetadata] = None
+        self.classes: List[OntologyClass] = []
+        self.object_properties: List[ObjectProperty] = []
+        self.datatype_properties: List[DatatypeProperty] = []
+        self.instances: List[OntologyInstance] = []
+        self.standalone_triples: List[RawTriple] = []
+
+    def add_prefix(self, prefix: str, uri: str) -> "TurtleDocumentBuilder":
+        """Adds a namespace prefix mapping."""
+        self.prefixes[prefix] = uri
+        return self
+
+    def set_ontology(
+        self,
+        uri: str,
+        label: Optional[str] = None,
+        label_lang: Optional[str] = "ja",
+        comment: Optional[str] = None,
+        comment_lang: Optional[str] = "ja",
+        version_info: Optional[str] = None,
+        imports: Optional[Sequence[str]] = None,
+    ) -> "TurtleDocumentBuilder":
+        """Sets the owl:Ontology metadata header."""
+        self.ontology_meta = OntologyMetadata(
+            uri=uri,
+            label=label,
+            label_lang=label_lang,
+            comment=comment,
+            comment_lang=comment_lang,
+            version_info=version_info,
+            imports=list(imports or []),
+        )
+        return self
+
+    def add_class(
+        self,
+        uri: str,
+        label: Optional[str] = None,
+        label_lang: Optional[str] = "ja",
+        comment: Optional[str] = None,
+        comment_lang: Optional[str] = "ja",
+        sub_class_of: Optional[str] = None,
+        disjoint_with: Optional[Sequence[str]] = None,
+        section_comment: Optional[str] = None,
+    ) -> "TurtleDocumentBuilder":
+        """Adds an owl:Class definition."""
+        self.classes.append(
+            OntologyClass(
+                uri=uri,
+                label=label,
+                label_lang=label_lang,
+                comment=comment,
+                comment_lang=comment_lang,
+                sub_class_of=sub_class_of,
+                disjoint_with=list(disjoint_with or []),
+                section_comment=section_comment,
+            )
+        )
+        return self
+
+    def add_object_property(
+        self,
+        uri: str,
+        label: Optional[str] = None,
+        label_lang: Optional[str] = "ja",
+        comment: Optional[str] = None,
+        comment_lang: Optional[str] = "ja",
+        domain: Optional[str] = None,
+        range_: Optional[str] = None,
+        inverse_of: Optional[str] = None,
+        is_transitive: bool = False,
+        is_symmetric: bool = False,
+        section_comment: Optional[str] = None,
+    ) -> "TurtleDocumentBuilder":
+        """Adds an owl:ObjectProperty definition."""
+        self.object_properties.append(
+            ObjectProperty(
+                uri=uri,
+                label=label,
+                label_lang=label_lang,
+                comment=comment,
+                comment_lang=comment_lang,
+                domain=domain,
+                range_=range_,
+                inverse_of=inverse_of,
+                is_transitive=is_transitive,
+                is_symmetric=is_symmetric,
+                section_comment=section_comment,
+            )
+        )
+        return self
+
+    def add_datatype_property(
+        self,
+        uri: str,
+        label: Optional[str] = None,
+        label_lang: Optional[str] = "ja",
+        comment: Optional[str] = None,
+        comment_lang: Optional[str] = "ja",
+        domain: Optional[str] = None,
+        range_: Optional[str] = None,
+        is_functional: bool = False,
+        section_comment: Optional[str] = None,
+    ) -> "TurtleDocumentBuilder":
+        """Adds an owl:DatatypeProperty definition."""
+        self.datatype_properties.append(
+            DatatypeProperty(
+                uri=uri,
+                label=label,
+                label_lang=label_lang,
+                comment=comment,
+                comment_lang=comment_lang,
+                domain=domain,
+                range_=range_,
+                is_functional=is_functional,
+                section_comment=section_comment,
+            )
+        )
+        return self
+
+    def add_instance(
+        self,
+        uri: str,
+        rdf_types: Optional[Sequence[str]] = None,
+        properties: Optional[Sequence[Tuple[str, Union[RDFTerm, Any]]]] = None,
+        section_comment: Optional[str] = None,
+    ) -> "TurtleDocumentBuilder":
+        """Adds an ABox instance assertion."""
+        self.instances.append(
+            OntologyInstance(
+                uri=uri,
+                rdf_types=list(rdf_types or []),
+                properties=list(properties or []),
+                section_comment=section_comment,
+            )
+        )
+        return self
+
+    def add_triple(
+        self,
+        subject: str,
+        predicate: str,
+        object_: Union[RDFTerm, Any],
+        comment: Optional[str] = None,
+    ) -> "TurtleDocumentBuilder":
+        """Adds a standalone RDF triple assertion."""
+        self.standalone_triples.append(
+            RawTriple(
+                subject=subject, predicate=predicate, object_=object_, comment=comment
+            )
+        )
+        return self
+
+    def _render_prefixes(self) -> str:
+        """Renders prefix declarations."""
+        return "\n".join(
+            f"@prefix {pfx + ':':<6} <{uri}> ."
+            for pfx, uri in sorted(self.prefixes.items())
+        )
+
+    def _render_metadata(self) -> Optional[str]:
+        """Renders ontology metadata section if configured."""
+        if not self.ontology_meta:
+            return None
+        return (
+            "### --------------------------------------------------\n"
+            "### オントロジー メタデータ\n"
+            "### --------------------------------------------------\n"
+            f"{self.ontology_meta.to_turtle()}"
+        )
+
+    def _render_classes(self) -> Optional[str]:
+        """Renders classes section if any defined."""
+        if not self.classes:
+            return None
+        return (
+            "### --------------------------------------------------\n"
+            "### 1. クラス（概念）の定義\n"
+            "### --------------------------------------------------\n"
+            + "\n\n".join(c.to_turtle() for c in self.classes)
+        )
+
+    def _render_object_properties(self) -> Optional[str]:
+        """Renders object properties section if any defined."""
+        if not self.object_properties:
+            return None
+        return (
+            "### --------------------------------------------------\n"
+            "### 2. オブジェクトプロパティ（エンティティ間の関係）\n"
+            "### --------------------------------------------------\n"
+            + "\n\n".join(op.to_turtle() for op in self.object_properties)
+        )
+
+    def _render_datatype_properties(self) -> Optional[str]:
+        """Renders datatype properties section if any defined."""
+        if not self.datatype_properties:
+            return None
+        return (
+            "### --------------------------------------------------\n"
+            "### 3. データプロパティ（属性値・リテラル）\n"
+            "### --------------------------------------------------\n"
+            + "\n\n".join(dp.to_turtle() for dp in self.datatype_properties)
+        )
+
+    def _render_abox(self) -> Optional[str]:
+        """Renders ABox instances and standalone triples."""
+        if not self.instances and not self.standalone_triples:
+            return None
+        items = [inst.to_turtle() for inst in self.instances]
+        items.extend(tr.to_turtle() for tr in self.standalone_triples)
+        return (
+            "### --------------------------------------------------\n"
+            "### 4. インスタンス例（ABox: 実データ）\n"
+            "### --------------------------------------------------\n"
+            + "\n\n".join(items)
+        )
+
+    def serialize(self) -> str:
+        """Serializes the entire ontology model into W3C Turtle (.ttl) text."""
+        parts: List[str] = [self._render_prefixes()]
+
+        for section in (
+            self._render_metadata(),
+            self._render_classes(),
+            self._render_object_properties(),
+            self._render_datatype_properties(),
+            self._render_abox(),
+        ):
+            if section:
+                parts.append(section)
+
+        return "\n\n".join(parts) + "\n"
+
+    def save(self, file_path: Union[str, Path]) -> None:
+        """Saves the serialized Turtle text to the given path."""
+        p = Path(file_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(self.serialize(), encoding="utf-8")
+
+
+def _add_sample_classes(builder: TurtleDocumentBuilder) -> None:
+    """Populates classes for the sample enterprise ontology."""
+    builder.add_class(
+        uri="ex:Agent",
+        label="エージェント",
+        label_lang="ja",
+        comment="行動の主体となる概念（人間または組織）",
+        comment_lang="ja",
+        section_comment="基底クラス: 実体",
+    )
+    builder.add_class(
+        uri="ex:Person",
+        sub_class_of="ex:Agent",
+        label="人物",
+        label_lang="ja",
+        disjoint_with=["ex:Organization"],
+        section_comment="Agentのサブクラス",
+    )
+    builder.add_class(
+        uri="ex:Organization",
+        sub_class_of="ex:Agent",
+        label="組織",
+        label_lang="ja",
+    )
+    builder.add_class(
+        uri="ex:Project",
+        label="プロジェクト",
+        label_lang="ja",
+        section_comment="プロジェクト",
+    )
+    builder.add_class(
+        uri="ex:Skill",
+        label="スキル",
+        label_lang="ja",
+        section_comment="スキル / 技術要素",
+    )
+    builder.add_class(
+        uri="ex:Artifact",
+        label="成果物",
+        label_lang="ja",
+        section_comment="成果物 / ドキュメント",
+    )
+
+
+def _add_sample_object_properties(builder: TurtleDocumentBuilder) -> None:
+    """Populates object properties for sample ontology."""
+    builder.add_object_property(
+        uri="ex:belongsTo",
+        label="所属する",
+        label_lang="ja",
+        domain="ex:Person",
+        range_="ex:Organization",
+        section_comment="所属関係（Person -> Organization）",
+    )
+    builder.add_object_property(
+        uri="ex:hasMember",
+        inverse_of="ex:belongsTo",
+        label="メンバーを有する",
+        label_lang="ja",
+        section_comment="逆関係の定義（Organization hasMember Person）",
+    )
+    builder.add_object_property(
+        uri="ex:subOrganizationOf",
+        label="上位組織である",
+        label_lang="ja",
+        domain="ex:Organization",
+        range_="ex:Organization",
+        is_transitive=True,
+        section_comment="組織の階層関係（部分全体関係 / 推移律を付与）",
+    )
+    builder.add_object_property(
+        uri="ex:assignedTo",
+        label="アサインされている",
+        label_lang="ja",
+        domain="ex:Person",
+        range_="ex:Project",
+        section_comment="プロジェクトへのアサイン（Person -> Project）",
+    )
+    builder.add_object_property(
+        uri="ex:hasSkill",
+        label="スキルを保有する",
+        label_lang="ja",
+        domain="ex:Person",
+        range_="ex:Skill",
+        section_comment="スキルの保有（Person -> Skill）",
+    )
+    builder.add_object_property(
+        uri="ex:createdArtifact",
+        label="成果物を作成した",
+        label_lang="ja",
+        domain="ex:Person",
+        range_="ex:Artifact",
+        section_comment="成果物の作成者（Artifact -> Person）",
+    )
+
+
+def _add_sample_datatype_properties(builder: TurtleDocumentBuilder) -> None:
+    """Populates datatype properties for sample ontology."""
+    builder.add_datatype_property(
+        uri="ex:personId",
+        label="社員ID",
+        label_lang="ja",
+        domain="ex:Person",
+        range_="xsd:string",
+        is_functional=True,
+    )
+    builder.add_datatype_property(
+        uri="ex:name",
+        label="名称",
+        label_lang="ja",
+        domain="owl:Thing",
+        range_="xsd:string",
+    )
+    builder.add_datatype_property(
+        uri="ex:experienceYears",
+        label="経験年数",
+        label_lang="ja",
+        domain="ex:Person",
+        range_="xsd:integer",
+    )
+    builder.add_datatype_property(
+        uri="ex:createdAt",
+        label="作成日時",
+        label_lang="ja",
+        domain="ex:Artifact",
+        range_="xsd:dateTime",
+    )
+
+
+def _add_sample_instances(builder: TurtleDocumentBuilder) -> None:
+    """Populates ABox sample instances."""
+    builder.add_instance(
+        uri="ex:dept_eng",
+        rdf_types=["ex:Organization"],
+        properties=[("ex:name", Literal("技術統括部"))],
+        section_comment="組織構造",
+    )
+    builder.add_instance(
+        uri="ex:team_sec",
+        rdf_types=["ex:Organization"],
+        properties=[
+            ("ex:name", Literal("セキュリティ技術チーム")),
+            ("ex:subOrganizationOf", URI("ex:dept_eng")),
+        ],
+    )
+    builder.add_instance(
+        uri="ex:skill_python",
+        rdf_types=["ex:Skill"],
+        properties=[("ex:name", Literal("Python"))],
+        section_comment="スキル",
+    )
+    builder.add_instance(
+        uri="ex:skill_appsec",
+        rdf_types=["ex:Skill"],
+        properties=[("ex:name", Literal("Application Security"))],
+    )
+    builder.add_instance(
+        uri="ex:emp_001",
+        rdf_types=["ex:Person"],
+        properties=[
+            ("ex:personId", Literal("EMP-001")),
+            ("ex:name", Literal("田中 太郎")),
+            ("ex:experienceYears", Literal(8)),
+            ("ex:belongsTo", URI("ex:team_sec")),
+            ("ex:hasSkill", URI("ex:skill_python")),
+            ("ex:hasSkill", URI("ex:skill_appsec")),
+        ],
+        section_comment="人物",
+    )
+    builder.add_instance(
+        uri="ex:doc_sec_spec",
+        rdf_types=["ex:Artifact"],
+        properties=[
+            ("ex:name", Literal("認証認可基盤 脅威分析仕様書")),
+            ("ex:createdAt", Literal("2026-04-10T14:30:00Z", datatype="xsd:dateTime")),
+        ],
+        section_comment="成果物",
+    )
+    builder.add_triple("ex:emp_001", "ex:createdArtifact", "ex:doc_sec_spec")
+
+
+def build_sample_enterprise_ontology() -> TurtleDocumentBuilder:
+    """Builds the exact sample Enterprise Knowledge Ontology provided by user."""
+    builder = TurtleDocumentBuilder()
+    builder.add_prefix("ex", "https://example.com/ontology/corp#")
+    builder.set_ontology(
+        uri="https://example.com/ontology/corp",
+        label="Enterprise Knowledge Ontology",
+        label_lang="ja",
+        comment="組織、プロジェクト、スキル、成果物を管理・推論するためのオントロジーモデル",
+        comment_lang="ja",
+        version_info="1.0.0",
+    )
+    _add_sample_classes(builder)
+    _add_sample_object_properties(builder)
+    _add_sample_datatype_properties(builder)
+    _add_sample_instances(builder)
+    return builder
+
+
+def _add_security_classes(builder: TurtleDocumentBuilder) -> None:
+    """Populates core classes for security ontology."""
+    builder.add_class(
+        uri="sec:Paper",
+        label="セキュリティ論文",
+        label_lang="ja",
+        comment="arXiv または IACR 等で公開された学術セキュリティ論文",
+        comment_lang="ja",
+        section_comment="学術知見実体",
+    )
+    builder.add_class(
+        uri="sec:ThreatActor",
+        label="脅威アクター",
+        label_lang="ja",
+        comment="サイバー攻撃を仕掛ける国家主導組織、APTグループ、または脅威主体",
+        comment_lang="ja",
+        section_comment="脅威・インテリジェンス実体",
+    )
+    builder.add_class(
+        uri="sec:AttackTechnique",
+        label="攻撃手法",
+        label_lang="ja",
+        comment="MITRE ATT&CK または学術知見で定義される戦術・技術・手順 (TTP)",
+        comment_lang="ja",
+    )
+    builder.add_class(
+        uri="sec:Vulnerability",
+        label="脆弱性",
+        label_lang="ja",
+        comment="CWE または CVE で特定されるソフトウェア/システムの弱点およびセキュリティ欠陥",
+        comment_lang="ja",
+    )
+    builder.add_class(
+        uri="sec:TargetAsset",
+        label="対象資産",
+        label_lang="ja",
+        comment="攻撃の標的となるシステム、プロトコル、ハードウェア、またはAIモデル",
+        comment_lang="ja",
+    )
+    builder.add_class(
+        uri="sec:DefenseMechanism",
+        label="防御メカニズム",
+        label_lang="ja",
+        comment="論文で提案される防御機構、緩和策、またはセキュアシグネチャ",
+        comment_lang="ja",
+    )
+    builder.add_class(
+        uri="sec:BenchmarkMetric",
+        label="評価ベンチマーク指標",
+        label_lang="ja",
+        comment="防御性能や攻撃成功率を測定するための客観的メトリクス",
+        comment_lang="ja",
+    )
+
+
+def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
+    """Populates core object properties for security ontology."""
+    builder.add_object_property(
+        uri="sec:discloses",
+        label="脆弱性を公開・開示する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:Vulnerability",
+        section_comment="論文と脆弱性の関係",
+    )
+    builder.add_object_property(
+        uri="sec:exploits",
+        label="脆弱性を悪用する",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:Vulnerability",
+        section_comment="攻撃手法と脆弱性の関係",
+    )
+    builder.add_object_property(
+        uri="sec:analyzes",
+        label="攻撃手法を分析する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:AttackTechnique",
+        section_comment="論文と攻撃手法の関係",
+    )
+    builder.add_object_property(
+        uri="sec:targets",
+        label="資産を標的とする",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:TargetAsset",
+        section_comment="攻撃手法と対象資産の関係",
+    )
+    builder.add_object_property(
+        uri="sec:proposes",
+        label="防御策を提案する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:DefenseMechanism",
+        section_comment="論文と防御メカニズムの関係",
+    )
+    builder.add_object_property(
+        uri="sec:mitigates",
+        label="攻撃手法を緩和・防御する",
+        label_lang="ja",
+        domain="sec:DefenseMechanism",
+        range_="sec:AttackTechnique",
+        section_comment="防御策と攻撃手法の関係",
+    )
+    builder.add_object_property(
+        uri="sec:patches",
+        label="脆弱性を改修・修復する",
+        label_lang="ja",
+        domain="sec:DefenseMechanism",
+        range_="sec:Vulnerability",
+        section_comment="防御策と脆弱性の関係",
+    )
+    builder.add_object_property(
+        uri="sec:evaluates",
+        label="評価指標で測定する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:BenchmarkMetric",
+        section_comment="論文と評価指標の関係",
+    )
+    builder.add_object_property(
+        uri="sec:attributedTo",
+        label="脅威アクターに帰属する",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:ThreatActor",
+        section_comment="攻撃手法と脅威アクターの関係",
+    )
+    builder.add_object_property(
+        uri="sec:cites",
+        label="先行研究を引用する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:Paper",
+        is_transitive=False,
+        section_comment="論文間の引用関係",
+    )
+
+
+def _add_security_datatype_properties(builder: TurtleDocumentBuilder) -> None:
+    """Populates core datatype properties for security ontology."""
+    builder.add_datatype_property(
+        uri="sec:paperId",
+        label="論文ID",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="xsd:string",
+        is_functional=True,
+    )
+    builder.add_datatype_property(
+        uri="sec:title",
+        label="論文タイトル",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="xsd:string",
+    )
+    builder.add_datatype_property(
+        uri="sec:publishedDate",
+        label="公開日",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="xsd:date",
+    )
+    builder.add_datatype_property(
+        uri="sec:cveId",
+        label="CVE番号",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="xsd:string",
+    )
+    builder.add_datatype_property(
+        uri="sec:techniqueId",
+        label="ATT&CK テクニックID",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="xsd:string",
+    )
+
+
+def build_security_cti_ontology() -> TurtleDocumentBuilder:
+    """Builds the standard Security Knowledge Ontology (SKO) in W3C Turtle / OWL format."""
+    builder = TurtleDocumentBuilder()
+    builder.add_prefix("sec", "https://arxiv-security-papers.org/ontology/security#")
+    builder.set_ontology(
+        uri="https://arxiv-security-papers.org/ontology/security",
+        label="arXiv Security Papers CTI Knowledge Ontology",
+        label_lang="ja",
+        comment="セキュリティ学術論文、サイバー脅威、攻撃手法、脆弱性、および防御策を推論・連携するための知識オントロジーモデル",
+        comment_lang="ja",
+        version_info="2.0.0",
+    )
+    _add_security_classes(builder)
+    _add_security_object_properties(builder)
+    _add_security_datatype_properties(builder)
+    return builder

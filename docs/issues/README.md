@@ -19,6 +19,13 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **178** | オントロジー駆動（Ontology-Driven）開発体系の確立および Pure-Python Turtle (.ttl) 生成エンジンの実装 | Feature / Architecture | 2026-09-06 | [178-establish-ontology-driven-architecture-and-python-turtle-engine.md](closed/178-establish-ontology-driven-architecture-and-python-turtle-engine.md) |
+| **177** | IACR ePrint 論文に対する「arXiv:」プレフィックス誤表記の解消およびマルチソース（arXiv/IACR）動的リンク解決の実装 | Bug | 2026-09-06 | [177-fix-multi-source-paper-prefix-and-links-arxiv-vs-iacr.md](closed/177-fix-multi-source-paper-prefix-and-links-arxiv-vs-iacr.md) |
+| **176** | DSN-21 (エンタープライズ統合デザインシステム ＆ クラウドコンソール UI 包括設計書) の直近作業および UI/UX 全観点からの包括的ブラッシュアップ | Documentation / UIUX | 2026-09-06 | [176-brush-up-dsn-21-enterprise-design-system-and-uiux-architecture.md](closed/176-brush-up-dsn-21-enterprise-design-system-and-uiux-architecture.md) |
+| **175** | dashboard.html における CTI 凡例の左上再配置、スクロール不要なフッター常時表示化、およびキャンバスズーム倍率表示・コントロールボタン (+/-) の実装 | Feature | 2026-09-06 | [175-relocate-legend-pin-footer-and-add-zoom-controls-in-dashboard.md](closed/175-relocate-legend-pin-footer-and-add-zoom-controls-in-dashboard.md) |
+| **174** | dashboard.html における Canvas 領域の見切れ解消、コントロールデッキ表示切替、およびスクロール（縦スクロール＆キャンバス内パン/ズーム）機能の実装 | Bug | 2026-09-06 | [174-enable-canvas-scrolling-and-fix-clipping-in-dashboard.md](closed/174-enable-canvas-scrolling-and-fix-clipping-in-dashboard.md) |
+| **173** | CTI グラフクエリにおける 1-Hop 隣接エンティティおよびインシデントエッジの自動展開（Paper 単体検索時のエッジ消失バグ解消） | Bug | 2026-09-06 | [173-expand-1hop-incident-edges-in-graph-query.md](closed/173-expand-1hop-incident-edges-in-graph-query.md) |
+| **172** | SSE 接続による Web ワーカー枯渇・ブロッキング障害の解消および dashboard.html 内の不要 SSE 撤廃 | Bug / Security | 2026-09-05 | [172-fix-sse-saturation-blocking-web-workers.md](closed/172-fix-sse-saturation-blocking-web-workers.md) |
 | **171** | index.html におけるヘルプ・操作ガイドドロワーの dashboard.html 準拠デザイン・出し方統一実装 | Feature | 2026-09-05 | [171-unify-index-help-guide-drawer-design-with-dashboard.md](closed/171-unify-index-help-guide-drawer-design-with-dashboard.md) |
 | **170** | dashboard.html からの 3 画面削除（Graph 単一画面化）および index.html との統一ヘッダー・相互リンク実装 | Feature | 2026-09-05 | [170-unify-dashboard-header-with-index-and-retain-graph-only.md](closed/170-unify-dashboard-header-with-index-and-retain-graph-only.md) |
 | **169** | dashboard.html の 3 画面 (Product / System / Supervisor) の index.html への移植統合および Graph 画面の独立維持 | Feature | 2026-09-05 | [169-port-product-system-supervisor-views-to-index-console.md](closed/169-port-product-system-supervisor-views-to-index-console.md) |
