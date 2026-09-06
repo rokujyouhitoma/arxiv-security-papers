@@ -2,7 +2,7 @@
 ID: 146
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 (ID: 146)
@@ -39,16 +39,16 @@ ID: 146
 Target Branch: `feat/146-implement-edge-relation-type-filter-in-graph-tab`
 
 1. **凡例 / ツールバー連携 UI の拡張 (`site/dashboard.html`)**:
-   - `ctiLegend`（左下の CTI 凡例）内に、クリック可能なエッジ関係性トグルチップを配置:
+   - `ctiLegend`（左上の CTI 凡例）内に、DSN-21 および Issue #182 準拠の絵文字を排除したクリック可能なエッジ関係性トグルチップを配置:
      ```html
      <div class="legend-relations-row" style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;">
-       <button id="btnRelExploits" class="btn-rel-chip active" onclick="toggleEdgeRelation('EXPLOITS')">🔴 EXPLOITS</button>
-       <button id="btnRelMitigates" class="btn-rel-chip active" onclick="toggleEdgeRelation('MITIGATES')">🟢 MITIGATES</button>
-       <button id="btnRelDiscloses" class="btn-rel-chip active" onclick="toggleEdgeRelation('DISCLOSES')">🟠 DISCLOSES</button>
-       <button id="btnRelSubclass" class="btn-rel-chip active" onclick="toggleEdgeRelation('SUBCLASS_OF')">⚪ SUBCLASS</button>
+       <button id="btnRelExploits" class="btn-rel-chip active" onclick="toggleEdgeRelation('EXPLOITS')" data-tooltip="EXPLOITS 関係のエッジを表示/非表示"><span class="rel-indicator rel-exploits"></span>EXPLOITS</button>
+       <button id="btnRelMitigates" class="btn-rel-chip active" onclick="toggleEdgeRelation('MITIGATES')" data-tooltip="MITIGATES 関係のエッジを表示/非表示"><span class="rel-indicator rel-mitigates"></span>MITIGATES</button>
+       <button id="btnRelDiscloses" class="btn-rel-chip active" onclick="toggleEdgeRelation('DISCLOSES')" data-tooltip="DISCLOSES 関係のエッジを表示/非表示"><span class="rel-indicator rel-discloses"></span>DISCLOSES</button>
+       <button id="btnRelSubclass" class="btn-rel-chip active" onclick="toggleEdgeRelation('SUBCLASS_OF')" data-tooltip="SUBCLASS_OF 関係のエッジを表示/非表示"><span class="rel-indicator rel-subclass"></span>SUBCLASS</button>
      </div>
      ```
-   - トグル状態に応じて `.active` クラスおよびボタンスタイル（透過度）を更新。
+   - トグル状態に応じて `.active` クラスおよびボタンスタイル（不透明度・枠線）を更新。
 
 2. **状態管理とエッジフィルタリングロジック (`site/dashboard.html`)**:
    - 状態オブジェクト:
@@ -82,10 +82,10 @@ Target Branch: `feat/146-implement-edge-relation-type-filter-in-graph-tab`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] CTI 凡例またはツールバーに各エッジ種別（EXPLOITS, MITIGATES, DISCLOSES, SUBCLASS_OF）のトグルチップが配置されていること。
-- [ ] 特定の関係性をオフにすると、該当する種類のエッジが即座に非表示になり、物理シミュレーションからも安全に除外されること。
-- [ ] 再度オンにするとエッジが復元されること。
-- [ ] 孤立ノード非表示トグル (`hideIsolatedNodes`) や次数フィルタ (`minDegreeThreshold`) と完全に協調動作すること。
-- [ ] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
-- [ ] 設計書 `DSN-14` に仕様が完全同期されていること。
+- [x] CTI 凡例またはツールバーに各エッジ種別（EXPLOITS, MITIGATES, DISCLOSES, SUBCLASS_OF）のトグルチップが配置されていること。
+- [x] 特定の関係性をオフにすると、該当する種類のエッジが即座に非表示になり、物理シミュレーションからも安全に除外されること。
+- [x] 再度オンにするとエッジが復元されること。
+- [x] 孤立ノード非表示トグル (`hideIsolatedNodes`) や次数フィルタ (`minDegreeThreshold`) と完全に協調動作すること。
+- [x] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
+- [x] 設計書 `DSN-14` に仕様が完全同期されていること。
 

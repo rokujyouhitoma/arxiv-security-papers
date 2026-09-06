@@ -542,4 +542,31 @@ Canvas による深度 1〜5 の到達度ヒストグラム。
      - **非対象エッジ**: `ctx.globalAlpha = 0.05` に大幅減衰（ディミング）。
      - **中心フォーカスノード**: `r + 5 + sin(t) * 3` の脈動する青色パルス外枠（`#3B82F6`, `lineWidth = 2.5`）を描画し、視覚的アテンションを最大化。
 
+## 11.10 エッジ関係性（Relation Type）個別フィルタ機能 (Issue #146)
+CTI ナレッジグラフ内の特定のリレーション種別（`EXPLOITS`, `MITIGATES`, `DISCLOSES`, `SUBCLASS_OF`）を個別にオン/オフできるフィルタリング機構を提供する。
+1. **UI チップ群**:
+   - CTI 凡例（`#ctiLegend`）内に絵文字を排したスイススタイル CSS ラインインジケータ付きチップ（`btnRelExploits`, `btnRelMitigates`, `btnRelDiscloses`, `btnRelSubclass`）を配備。
+2. **状態管理とホワイトリスト検証**:
+   - `ALLOWED_RELATIONS = ['EXPLOITS', 'MITIGATES', 'DISCLOSES', 'SUBCLASS_OF']` によるホワイトリスト検査。
+   - `activeEdgeRelations` オブジェクトで各リレーションの表示状態を管理し、`toggleEdgeRelation(relType)` でトグル切り替え。
+3. **動的サイズ再計算**:
+   - `applyCtiFilter()` にて無効化された関係性のエッジを除外し、残存エッジ接続度に応じて `updateNodeRadii` を呼び出し頂点半径をリアルタイム再計算。
+
+## 11.11 最大連結成分（LCC: Largest Connected Component）抽出機能 (Issue #147)
+散在する小規模孤立クラスタを除外し、最も相互接続された主要ネットワークコアのみを抽出する機能。
+1. **反復的 BFS アルゴリズム**:
+   - キューを用いたループ型 BFS `computeLargestConnectedComponent(nodes, edges)` を実装し、再帰呼び出しによるコールスタック枯渇リスク（RangeError）をゼロ化。
+2. **モード横断的フィルタリング**:
+   - CTI モード（`applyCtiFilter`）および Context Mesh モード（`applyContextMesh`）の双方で `filterLccOnly` 状態が連動動作。
+   - ツールバーの「メイン成分 (LCC)」（`#btnToggleLcc`）ボタンにより即時トグル。
+
+## 11.12 未研究・未対策脅威（Research Gaps Only）専用絞り込みフィルタ (Issue #148)
+論文による対策や分析が存在しない攻撃手法・脆弱性（`is_research_gap === true`）のみを画面内にワンクリックで絞り込む。
+1. **UI 統合**:
+   - コントロールデッキの CTI フィルタバー内に「Gaps のみ」（`#btnFilterGapsOnly`）ボタンを配備。
+   - オントロジー Gap カラー（`#8B5CF6`）の円形カラーバッジとリアルタイム件数バッジ（`valGapsOnlyCount`）を表示。
+2. **フィルタリングロジック**:
+   - `applyCtiFilter()` にて `if (filterGapsOnly)` を評価し、`is_research_gap` ノードおよびその直接接続エッジのみを抽出・描画。
+
+
 

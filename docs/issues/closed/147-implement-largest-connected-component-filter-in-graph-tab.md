@@ -2,7 +2,7 @@
 ID: 147
 種別: Feature
 優先度: Low
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 (ID: 147)
@@ -38,11 +38,11 @@ ID: 147
 Target Branch: `feat/147-implement-largest-connected-component-filter-in-graph-tab`
 
 1. **UI 拡張 (`site/dashboard.html`)**:
-   - `mesh-toolbar` 内（`btnToggleIsolated` の隣）に「🌐 メイン成分 (LCC)」ボタンを配置:
+   - コントロールデッキ内（`btnToggleIsolated` の隣）に「メイン成分 (LCC)」ボタンを配置:
      ```html
-     <button id="btnToggleLcc" class="btn-tool" onclick="toggleLccOnly()" title="最大連結成分（最も多くのノードが接続された主要クラスタ）のみを表示します">🌐 メイン成分 (LCC)</button>
+     <button id="btnToggleLcc" class="btn-tool" onclick="toggleLccOnly()" data-tooltip="最大連結成分（最も多くのノードが接続された主要クラスタ）のみを表示します" data-tooltip-pos="bottom">メイン成分 (LCC)</button>
      ```
-   - アクティブ時に `.active` クラスを付与し、ボタンテキストを `🌐 メイン成分 (LCC: ON)` に切り替え。
+   - アクティブ時に `.active` クラスを付与。
 
 2. **連結成分解析アルゴリズム (BFS) と状態管理 (`site/dashboard.html`)**:
    - 状態変数 `let filterLccOnly = false;` を新設。
@@ -72,10 +72,10 @@ Target Branch: `feat/147-implement-largest-connected-component-filter-in-graph-t
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] ツールバーに「🌐 メイン成分 (LCC)」ボタンが配置されていること。
-- [ ] ボタン押下で、最大連結成分以外の小規模クラスタが即座に非表示になり、主要ネットワークのみが画面中央に残ること。
-- [ ] 再度押下すると全クラスタが元の位置関係を維持して復元されること。
-- [ ] 非連結グラフや孤立ノード群に対してもコールスタックエラーを起こさず安全に動作すること。
-- [ ] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
-- [ ] 設計書 `DSN-14` に仕様が完全同期されていること。
+- [x] ツールバーに「🌐 メイン成分 (LCC)」ボタンが配置されていること。
+- [x] ボタン押下で、最大連結成分以外の小規模クラスタが即座に非表示になり、主要ネットワークのみが画面中央に残ること。
+- [x] 再度押下すると全クラスタが元の位置関係を維持して復元されること。
+- [x] 非連結グラフや孤立ノード群に対してもコールスタックエラーを起こさず安全に動作すること。
+- [x] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
+- [x] 設計書 `DSN-14` に仕様が完全同期されていること。
 
