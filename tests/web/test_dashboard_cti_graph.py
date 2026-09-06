@@ -147,3 +147,67 @@ def test_cti_filter_buttons_use_css_color_badges() -> None:
         assert (
             emoji not in cti_filters_html
         ), f"Unexpected emoji {emoji} found in ctiFilters"
+
+
+def test_cti_entity_filter_multiselect_implementation() -> None:
+    """Verify Issue #183: CTI Entity Type filter supports multiselect (Set-based state)."""
+    html_path = os.path.join(os.path.dirname(__file__), "../../site/dashboard.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # 1. Set-based state variable instead of single string
+    assert "ctiEntityFilters" in content
+    assert "new Set(['all'])" in content
+
+    # 2. toggleCtiEntityFilter function must exist
+    assert "window.toggleCtiEntityFilter" in content
+
+    # 3. syncEntityFilterButtons must be defined
+    assert "function syncEntityFilterButtons()" in content
+
+    # 4. All filter buttons use toggleCtiEntityFilter onclick
+    multiselect_btns = [
+        "filterAll",
+        "filterPaper",
+        "filterAttack",
+        "filterCwe",
+        "filterPrecondition",
+        "filterRule",
+        "filterPoc",
+        "filterGap",
+    ]
+    for btn_id in multiselect_btns:
+        assert f'id="{btn_id}"' in content, f"Missing button #{btn_id}"
+        # Each button must link to the new toggle function
+        btn_pattern = rf'id="{btn_id}"[^>]*toggleCtiEntityFilter'
+        assert re.search(
+            btn_pattern, content
+        ), f"Button #{btn_id} must use toggleCtiEntityFilter()"
+
+    # 5. CTI_ENTITY_LABEL_MAP must be defined (Set-based matcher)
+    assert "CTI_ENTITY_LABEL_MAP" in content
+    assert "CTI_ENTITY_TYPES" in content
+
+    # 6. Guard: at-least-one selected logic
+    assert "ctiEntityFilters.size === 0" in content
+    assert "new Set(['all'])" in content
+
+    # 7. All-collapse logic (all individuals → 'all')
+    assert "CTI_ENTITY_TYPES.every" in content
+
+    # 8. Legacy setCtiFilter kept for backward compatibility
+    assert "window.setCtiFilter" in content
+
+
+def test_cti_filter_multiselect_applyCtiFilter_uses_set() -> None:
+    """Verify that applyCtiFilter uses Set-based iteration (ctiEntityFilters) not old single string."""
+    html_path = os.path.join(os.path.dirname(__file__), "../../site/dashboard.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # New Set-based check
+    assert "ctiEntityFilters.has('all')" in content
+    assert "for (const type of ctiEntityFilters)" in content
+
+    # Old single-string check must be absent in applyCtiFilter context
+    assert "ctiFilter !== 'all'" not in content
