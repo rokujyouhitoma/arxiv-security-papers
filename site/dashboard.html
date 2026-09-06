@@ -507,6 +507,67 @@
       box-shadow: 0 0 2px rgba(255, 255, 255, 0.5);
     }
 
+    /* Edge Relation Toggle Chips */
+    .legend-relations-row {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn-rel-chip {
+      background: var(--bg-main);
+      border: 1px solid var(--border-dark);
+      border-radius: 2px;
+      font-family: inherit;
+      font-size: 9px;
+      font-weight: bold;
+      padding: 2px 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--fg-main);
+      transition: all 0.15s ease;
+      opacity: 0.45;
+    }
+
+    .btn-rel-chip:hover {
+      opacity: 0.8;
+      background: var(--bg-panel-sub);
+    }
+
+    .btn-rel-chip.active {
+      opacity: 1;
+      background: var(--bg-card, #ffffff);
+      border-color: var(--border-dark);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+
+    .rel-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 2px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    .rel-indicator.rel-exploits {
+      background-color: #EF4444;
+    }
+
+    .rel-indicator.rel-mitigates {
+      background: repeating-linear-gradient(90deg, #10B981, #10B981 3px, transparent 3px, transparent 5px);
+    }
+
+    .rel-indicator.rel-discloses {
+      background-color: #F59E0B;
+    }
+
+    .rel-indicator.rel-subclass {
+      background: repeating-linear-gradient(90deg, #9CA3AF, #9CA3AF 2px, transparent 2px, transparent 4px);
+    }
+
     /* Graph Query Console */
     .graph-query-console {
       display: flex;
@@ -1395,6 +1456,9 @@
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()"
               data-tooltip="論文による研究・対策が未カバーの攻撃テクニック（リサーチギャップ）を点滅強調します" data-tooltip-pos="bottom">⚡ Highlight Gaps (<span
                 id="valGapCount">0</span>)</button>
+            <button id="btnFilterGapsOnly" class="btn-tool" onclick="toggleGapsOnly()"
+              data-tooltip="学術論文が未接続の未研究・未対策脅威ノードのみを画面に絞り込みます" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #8B5CF6;"></span>Gaps のみ (<span
+                id="valGapsOnlyCount">0</span>)</button>
 
             <div
               style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
@@ -1448,6 +1512,8 @@
             </div>
             <button id="btnToggleIsolated" class="btn-tool" onclick="toggleIsolatedNodes()"
               data-tooltip="エッジ接続を持たない孤立頂点 (degree = 0) を一括非表示にします" data-tooltip-pos="bottom">🔗 孤立ノード除外</button>
+            <button id="btnToggleLcc" class="btn-tool" onclick="toggleLccOnly()"
+              data-tooltip="最大連結成分（最も多くのノードが接続された主要クラスタ）のみを表示します" data-tooltip-pos="bottom">メイン成分 (LCC)</button>
             <button id="btnToggleDeckQuick" class="btn-tool" onclick="toggleGraphControlDeck()"
               data-tooltip="コントロールデッキを格納し、グラフ作業領域を最大化します (キー: D)" data-tooltip-pos="bottom" data-tooltip-align="right">▲
               デッキ格納</button>
@@ -1596,6 +1662,18 @@
           <div class="legend-item" data-tooltip="攻撃手法や脆弱性の親子・派生タクソノミー関係（灰点線）" data-tooltip-pos="right">
             <span style="color: #9CA3AF; font-weight: bold;">&middot; &middot; &middot;</span>
             <span style="font-size: 10px;">SUBCLASS_OF (Dotted)</span>
+          </div>
+          <div class="legend-divider"
+            style="border-top: 1px dashed var(--border-dark); margin: 6px 0; padding-top: 4px;"></div>
+          <div style="font-size: 10px; font-weight: 800; margin-bottom: 3px; display: flex; align-items: center; justify-content: space-between;">
+            <span>RELATIONS (FILTER):</span>
+            <span class="info-badge" data-tooltip="クリックして特定のエッジ関係性の表示/非表示を切り替えます" data-tooltip-pos="right">ⓘ</span>
+          </div>
+          <div class="legend-relations-row">
+            <button id="btnRelExploits" class="btn-rel-chip active" onclick="toggleEdgeRelation('EXPLOITS')" data-tooltip="EXPLOITS (攻撃・悪用) 関係のエッジを表示/非表示" data-tooltip-pos="right"><span class="rel-indicator rel-exploits"></span>EXPLOITS</button>
+            <button id="btnRelMitigates" class="btn-rel-chip active" onclick="toggleEdgeRelation('MITIGATES')" data-tooltip="MITIGATES (防御・緩和) 関係のエッジを表示/非表示" data-tooltip-pos="right"><span class="rel-indicator rel-mitigates"></span>MITIGATES</button>
+            <button id="btnRelDiscloses" class="btn-rel-chip active" onclick="toggleEdgeRelation('DISCLOSES')" data-tooltip="DISCLOSES (脆弱性開示) 関係のエッジを表示/非表示" data-tooltip-pos="right"><span class="rel-indicator rel-discloses"></span>DISCLOSES</button>
+            <button id="btnRelSubclass" class="btn-rel-chip active" onclick="toggleEdgeRelation('SUBCLASS_OF')" data-tooltip="SUBCLASS_OF (分類・派生) 関係のエッジを表示/非表示" data-tooltip-pos="right"><span class="rel-indicator rel-subclass"></span>SUBCLASS</button>
           </div>
         </div>
 
@@ -1883,6 +1961,56 @@
       let edgeConfidenceFilter = 'all'; // 'all' | 'MEDIUM' | 'HIGH'
       let edgeRuleFilter = 'all'; // 'all' | <rule_id>
       let highlightGaps = false;
+      let filterGapsOnly = false;
+      let filterLccOnly = false;
+      const ALLOWED_RELATIONS = ['EXPLOITS', 'MITIGATES', 'DISCLOSES', 'SUBCLASS_OF'];
+      const activeEdgeRelations = {
+        EXPLOITS: true,
+        MITIGATES: true,
+        DISCLOSES: true,
+        SUBCLASS_OF: true
+      };
+
+      function computeLargestConnectedComponent(nodes, edges) {
+        if (!nodes || nodes.length === 0) return new Set();
+        const adj = new Map();
+        nodes.forEach(n => adj.set(n.id, []));
+        edges.forEach(e => {
+          if (adj.has(e.source) && adj.has(e.target)) {
+            adj.get(e.source).push(e.target);
+            adj.get(e.target).push(e.source);
+          }
+        });
+
+        const visited = new Set();
+        let maxComponent = new Set();
+
+        nodes.forEach(n => {
+          if (!visited.has(n.id)) {
+            const component = new Set();
+            const queue = [n.id];
+            visited.add(n.id);
+            let head = 0;
+            while (head < queue.length) {
+              const curr = queue[head++];
+              component.add(curr);
+              const neighbors = adj.get(curr) || [];
+              for (let i = 0; i < neighbors.length; i++) {
+                const neighbor = neighbors[i];
+                if (!visited.has(neighbor)) {
+                  visited.add(neighbor);
+                  queue.push(neighbor);
+                }
+              }
+            }
+            if (component.size > maxComponent.size) {
+              maxComponent = component;
+            }
+          }
+        });
+
+        return maxComponent;
+      }
       let ctiRawNodes = [];
       let ctiRawEdges = [];
       let ctiRawGaps = [];
@@ -2004,6 +2132,15 @@
         const activeNodeIds = new Set(filteredNodes.map(n => n.id));
         let candidateEdges = ctiRawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
 
+        // Edge Relation Type filter (Issue #146)
+        candidateEdges = candidateEdges.filter(e => {
+          const rel = e.label || e.relation || e.rel || '';
+          if (rel && activeEdgeRelations[rel] === false) {
+            return false;
+          }
+          return true;
+        });
+
         // Confidence Tier filter (HIGH, MEDIUM, ALL)
         if (edgeConfidenceFilter === 'HIGH') {
           candidateEdges = candidateEdges.filter(e => (e.confidence_tier || 'LOW') === 'HIGH');
@@ -2014,6 +2151,11 @@
         // Primary Rule ID filter
         if (edgeRuleFilter && edgeRuleFilter !== 'all') {
           candidateEdges = candidateEdges.filter(e => e.primary_rule_id === edgeRuleFilter || (e.applied_rules && e.applied_rules.includes(edgeRuleFilter)));
+        }
+
+        // Research Gaps Only filter (Issue #148)
+        if (filterGapsOnly) {
+          filteredNodes = filteredNodes.filter(n => !!n.is_research_gap);
         }
 
         const degrees = new Map();
@@ -2032,6 +2174,13 @@
         if (minDegreeThreshold > 0) {
           filteredNodes = filteredNodes.filter(n => (degrees.get(n.id) || 0) >= minDegreeThreshold);
         }
+
+        // Largest Connected Component (LCC) filter (Issue #147)
+        if (filterLccOnly) {
+          const lccIds = computeLargestConnectedComponent(filteredNodes, candidateEdges);
+          filteredNodes = filteredNodes.filter(n => lccIds.has(n.id));
+        }
+
         const remainingNodeIds = new Set(filteredNodes.map(n => n.id));
         const filteredEdges = candidateEdges.filter(e => remainingNodeIds.has(e.source) && remainingNodeIds.has(e.target));
 
@@ -2132,6 +2281,10 @@
         if (minDegreeThreshold > 0) {
           filteredNodes = filteredNodes.filter(n => (degrees.get(n.id) || 0) >= minDegreeThreshold);
         }
+        if (filterLccOnly) {
+          const lccIds = computeLargestConnectedComponent(filteredNodes, candidateEdges);
+          filteredNodes = filteredNodes.filter(n => lccIds.has(n.id));
+        }
         const remainingNodeIds = new Set(filteredNodes.map(n => n.id));
         const filteredEdges = candidateEdges.filter(e => remainingNodeIds.has(e.source) && remainingNodeIds.has(e.target));
 
@@ -2192,6 +2345,20 @@
             btn.classList.remove('active');
             btn.textContent = '🔗 孤立ノード除外';
           }
+        }
+        if (currentGraphMode === 'cti') {
+          applyCtiFilter();
+        } else if (currentGraphMode === 'context') {
+          applyContextMesh();
+        }
+      };
+
+      window.toggleLccOnly = function() {
+        filterLccOnly = !filterLccOnly;
+        const btn = document.getElementById('btnToggleLcc');
+        if (btn) {
+          btn.classList.toggle('active', filterLccOnly);
+          btn.textContent = filterLccOnly ? 'メイン成分 (LCC: ON)' : 'メイン成分 (LCC)';
         }
         if (currentGraphMode === 'cti') {
           applyCtiFilter();
@@ -2307,6 +2474,34 @@
         }
       };
 
+      window.toggleGapsOnly = function() {
+        filterGapsOnly = !filterGapsOnly;
+        const btn = document.getElementById('btnFilterGapsOnly');
+        if (btn) {
+          btn.classList.toggle('active', filterGapsOnly);
+          const countSpan = document.getElementById('valGapsOnlyCount');
+          const count = countSpan ? countSpan.textContent : '';
+          btn.innerHTML = `<span class="filter-dot" style="background-color: #8B5CF6;"></span>Gaps のみ${filterGapsOnly ? ' (ON)' : ''} (<span id="valGapsOnlyCount">${count}</span>)`;
+        }
+        applyCtiFilter();
+      };
+
+      window.toggleEdgeRelation = function(relType) {
+        if (!ALLOWED_RELATIONS.includes(relType)) return;
+        activeEdgeRelations[relType] = !activeEdgeRelations[relType];
+        const btnIdMap = {
+          'EXPLOITS': 'btnRelExploits',
+          'MITIGATES': 'btnRelMitigates',
+          'DISCLOSES': 'btnRelDiscloses',
+          'SUBCLASS_OF': 'btnRelSubclass'
+        };
+        const btn = document.getElementById(btnIdMap[relType]);
+        if (btn) {
+          btn.classList.toggle('active', !!activeEdgeRelations[relType]);
+        }
+        applyCtiFilter();
+      };
+
       window.executeGraphQuery = async function (customQuery) {
         const input = document.getElementById('graphQueryInput');
         const query = (customQuery !== undefined ? customQuery : (input ? input.value : '')).trim();
@@ -2402,8 +2597,11 @@
           ctiRawEdges = data.mesh.edges || [];
           ctiRawGaps = data.research_gaps || [];
 
+          const gapTotal = (data.stats && data.stats.research_gap_count != null) ? data.stats.research_gap_count : ctiRawGaps.length;
           const gapCountEl = document.getElementById('valGapCount');
-          if (gapCountEl) gapCountEl.textContent = (data.stats && data.stats.research_gap_count != null) ? data.stats.research_gap_count : ctiRawGaps.length;
+          if (gapCountEl) gapCountEl.textContent = gapTotal;
+          const gapOnlyCountEl = document.getElementById('valGapsOnlyCount');
+          if (gapOnlyCountEl) gapOnlyCountEl.textContent = gapTotal;
 
           const rEl = document.getElementById('valResolvedNodes');
           if (rEl && data.stats) {

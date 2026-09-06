@@ -540,3 +540,62 @@ def test_dashboard_legend_relocation_pinned_footer_and_zoom_controls(
     assert "e.key === '0'" in dashboard_html
     assert "+ / - キー" in dashboard_html
     assert "0 キー" in dashboard_html
+
+
+def test_dashboard_edge_relation_type_filter(dashboard_html: str) -> None:
+    """Verify Issue #146: CTI edge relation type individual filter toggle chips and logic."""
+    # 1. Elements and indicators
+    assert 'id="btnRelExploits"' in dashboard_html
+    assert 'id="btnRelMitigates"' in dashboard_html
+    assert 'id="btnRelDiscloses"' in dashboard_html
+    assert 'id="btnRelSubclass"' in dashboard_html
+    assert ".btn-rel-chip" in dashboard_html
+    assert ".rel-indicator" in dashboard_html
+    assert ".rel-exploits" in dashboard_html
+    assert ".rel-mitigates" in dashboard_html
+    assert ".rel-discloses" in dashboard_html
+    assert ".rel-subclass" in dashboard_html
+
+    # 2. State and functions
+    assert "ALLOWED_RELATIONS" in dashboard_html
+    assert "activeEdgeRelations" in dashboard_html
+    assert "window.toggleEdgeRelation = function(relType)" in dashboard_html
+
+    # 3. Filtering logic inside applyCtiFilter
+    assert "activeEdgeRelations[rel] === false" in dashboard_html
+
+
+def test_dashboard_research_gaps_only_filter(dashboard_html: str) -> None:
+    """Verify Issue #148: Dedicated research gaps only filter button and logic."""
+    # 1. Elements
+    assert 'id="btnFilterGapsOnly"' in dashboard_html
+    assert 'id="valGapsOnlyCount"' in dashboard_html
+
+    # 2. State and functions
+    assert "let filterGapsOnly = false;" in dashboard_html
+    assert "window.toggleGapsOnly = function()" in dashboard_html
+
+    # 3. Filtering logic
+    assert "if (filterGapsOnly)" in dashboard_html
+    assert (
+        "filteredNodes = filteredNodes.filter(n => !!n.is_research_gap);"
+        in dashboard_html
+    )
+
+
+def test_dashboard_largest_connected_component_filter(dashboard_html: str) -> None:
+    """Verify Issue #147: Largest Connected Component (LCC) extraction filter and BFS logic."""
+    # 1. Elements
+    assert 'id="btnToggleLcc"' in dashboard_html
+
+    # 2. State and functions
+    assert "let filterLccOnly = false;" in dashboard_html
+    assert "window.toggleLccOnly = function()" in dashboard_html
+    assert "function computeLargestConnectedComponent(nodes, edges)" in dashboard_html
+
+    # 3. Filtering logic in CTI and Context Mesh
+    assert "if (filterLccOnly)" in dashboard_html
+    assert (
+        "computeLargestConnectedComponent(filteredNodes, candidateEdges)"
+        in dashboard_html
+    )

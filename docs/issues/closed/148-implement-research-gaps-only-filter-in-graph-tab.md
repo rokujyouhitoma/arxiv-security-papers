@@ -2,7 +2,7 @@
 ID: 148
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] /dashboard tab=graph における未研究・未対策脅威（Research Gaps Only）専用絞り込みフィルタの実装 (ID: 148)
@@ -39,11 +39,11 @@ ID: 148
 Target Branch: `feat/148-implement-research-gaps-only-filter-in-graph-tab`
 
 1. **UI 拡張 (`site/dashboard.html`)**:
-   - `ctiFilters` 領域の「⚡ Highlight Gaps」ボタンの隣に「🚨 Gaps のみ」ボタンを追加配置:
+   - `ctiFilters` 領域の「⚡ Highlight Gaps」ボタンの隣に、DSN-21 / Issue #182 準拠の「Gaps のみ」ボタンを追加配置:
      ```html
-     <button id="btnFilterGapsOnly" class="btn-tool" onclick="toggleGapsOnly()" title="学術論文が未接続の未研究・未対策脅威ノードのみを画面に絞り込みます">🚨 Gaps のみ (<span id="valGapsOnlyCount">0</span>)</button>
+     <button id="btnFilterGapsOnly" class="btn-tool" onclick="toggleGapsOnly()" data-tooltip="学術論文が未接続の未研究・未対策脅威ノードのみを画面に絞り込みます" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #8B5CF6;"></span>Gaps のみ (<span id="valGapsOnlyCount">0</span>)</button>
      ```
-   - アクティブ時に `.active` クラスを付与し、ボタンテキストを `🚨 Gaps のみ (ON)` に切り替え。
+   - アクティブ時に `.active` クラスを付与し、ボタンテキストを `Gaps のみ (ON)` に切り替え。
    - Gaps 件数バッジ（`valGapsOnlyCount`）をデータフェッチ時に自動更新。
 
 2. **状態管理とフィルタリングロジック (`site/dashboard.html`)**:
@@ -72,10 +72,10 @@ Target Branch: `feat/148-implement-research-gaps-only-filter-in-graph-tab`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] ツールバーの CTI フィルタ領域に「🚨 Gaps のみ」ボタンが配置されていること。
-- [ ] ボタン押下で、未研究・未対策ノード（`is_research_gap === true`）のみが画面に即座に抽出表示されること。
-- [ ] 再度押下すると通常の全ノード表示（または現在のカテゴリフィルタ）に復帰すること。
-- [ ] 「⚡ Highlight Gaps」トグルや孤立ノード非表示トグルと競合せず整合して動作すること。
-- [ ] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
-- [ ] 設計書 `DSN-14` に仕様が完全同期されていること。
+- [x] ツールバーの CTI フィルタ領域に「🚨 Gaps のみ」ボタンが配置されていること。
+- [x] ボタン押下で、未研究・未対策ノード（`is_research_gap === true`）のみが画面に即座に抽出表示されること。
+- [x] 再度押下すると通常の全ノード表示（または現在のカテゴリフィルタ）に復帰すること。
+- [x] 「⚡ Highlight Gaps」トグルや孤立ノード非表示トグルと競合せず整合して動作すること。
+- [x] `tests/web/test_dashboard_graph_tab.py` の新規テストを含む全自動テストが 100% PASS すること。
+- [x] 設計書 `DSN-14` に仕様が完全同期されていること。
 
