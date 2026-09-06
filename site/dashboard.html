@@ -31,6 +31,14 @@
       padding: 0;
     }
 
+    html,
+    body {
+      overflow-x: hidden;
+      overflow-y: auto;
+      min-height: 100vh;
+      height: auto;
+    }
+
     body {
       background-color: var(--bg-main);
       color: var(--fg-main);
@@ -38,8 +46,6 @@
       font-size: 12px;
       line-height: 1.4;
       -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
-      min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
@@ -1001,13 +1007,54 @@
       flex-direction: column;
       flex: 1;
       height: calc(100vh - 48px - 36px);
-      min-height: 520px;
+      min-height: 480px;
       position: relative;
     }
 
     /* Full-height expansion when header is hidden */
     header.header-hidden~#viewGraph .graph-workspace {
       height: calc(100vh - 36px);
+    }
+
+    .graph-control-deck.deck-hidden {
+      display: none !important;
+    }
+
+    .graph-workspace.deck-collapsed .canvas-container {
+      flex: 1;
+      height: 100%;
+    }
+
+    .btn-floating-deck {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 25;
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-dark);
+      box-shadow: 2px 2px 0px var(--border-dark);
+      padding: 5px 14px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--fg-main);
+      cursor: pointer;
+      border-radius: 4px;
+      display: none;
+      backdrop-filter: blur(4px);
+      transition: all 0.15s ease;
+    }
+
+    .btn-floating-deck:hover {
+      background-color: var(--border-dark);
+      color: var(--bg-main);
+    }
+
+    .graph-workspace.deck-collapsed .btn-floating-deck {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .graph-workspace .canvas-container {
@@ -1120,6 +1167,7 @@
 
     <!-- Right: Utility Icons & Status -->
     <div class="header-utilities">
+      <button class="utility-btn" id="deckToggleHeaderBtn" title="コントロールデッキ表示/格納切替 (Shortcut: D)" onclick="toggleGraphControlDeck()">🎛️ デッキ</button>
       <button class="utility-btn" id="notifBtn" title="通知センター">🔔 通知</button>
       <button class="utility-btn" id="portalSwitchBtn" title="エンタープライズクラウドコンソールへ移動" onclick="window.location.href='/index.html'">🏠 クラウドコンソール ↗</button>
       <button class="utility-btn" id="helpModalBtn" title="ヘルプ &amp; 操作ガイド" onclick="toggleGraphHelpDrawer()">❓ ガイド</button>
@@ -1219,6 +1267,9 @@
             </div>
             <button id="btnToggleIsolated" class="btn-tool" onclick="toggleIsolatedNodes()"
               data-tooltip="エッジ接続を持たない孤立頂点 (degree = 0) を一括非表示にします" data-tooltip-pos="bottom">🔗 孤立ノード除外</button>
+            <button id="btnToggleDeckQuick" class="btn-tool" onclick="toggleGraphControlDeck()"
+              data-tooltip="コントロールデッキを格納し、グラフ作業領域を最大化します (キー: D)" data-tooltip-pos="bottom" data-tooltip-align="right">▲
+              デッキ格納</button>
             <button id="btnToggleHeaderQuick" class="btn-tool" onclick="toggleDashboardHeader()"
               data-tooltip="上部ヘッダーを折りたたみ、グラフ作業領域を最大化します (キー: H)" data-tooltip-pos="bottom" data-tooltip-align="right">⛶
               全画面 / ヘッダー切替</button>
@@ -1268,6 +1319,8 @@
       <!-- 🕸️ Canvas Container (Unobstructed Canvas + Overlays) -->
       <div class="canvas-container">
         <canvas id="graphCanvas"></canvas>
+        <button id="btnFloatingDeckToggle" class="btn-floating-deck" onclick="toggleGraphControlDeck(false)"
+          title="コントロールデッキを表示する (Shortcut: D)">🎛️ コントロールデッキ表示 (D)</button>
 
         <!-- Cluster Color Legend (Context Mesh - Bottom-Left) -->
         <div class="cluster-legend" id="contextLegend">
@@ -1395,6 +1448,10 @@
                 <tr>
                   <td><code>背景クリック</code></td>
                   <td>フォーカス解除・全域表示へ復帰</td>
+                </tr>
+                <tr>
+                  <td><code>D キー</code></td>
+                  <td>コントロールデッキ折りたたみ / 表示切替</td>
                 </tr>
                 <tr>
                   <td><code>H キー</code></td>
@@ -2116,6 +2173,24 @@
       }
 
 
+      let viewTransform = { x: 0, y: 0, scale: 1.0 };
+      let isPanning = false;
+      let panStart = { x: 0, y: 0 };
+
+      function screenToWorld(sx, sy) {
+        return {
+          x: (sx - viewTransform.x) / viewTransform.scale,
+          y: (sy - viewTransform.y) / viewTransform.scale
+        };
+      }
+
+      function worldToScreen(wx, wy) {
+        return {
+          x: wx * viewTransform.scale + viewTransform.x,
+          y: wy * viewTransform.scale + viewTransform.y
+        };
+      }
+
       function resizeCanvas() {
         if (!canvas || !canvas.parentElement) return;
         const rect = canvas.parentElement.getBoundingClientRect();
@@ -2219,20 +2294,34 @@
         stepPhysics();
         ctx.clearRect(0, 0, width, height);
 
-        // Draw Background Grid
+        ctx.save();
+        ctx.translate(viewTransform.x, viewTransform.y);
+        ctx.scale(viewTransform.scale, viewTransform.scale);
+
+        // Draw Background Grid (World Coordinates)
+        const left = -viewTransform.x / viewTransform.scale;
+        const top = -viewTransform.y / viewTransform.scale;
+        const right = left + width / viewTransform.scale;
+        const bottom = top + height / viewTransform.scale;
+
         ctx.strokeStyle = '#dcd6cc';
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = 0.5 / viewTransform.scale;
         const gridSize = 40;
-        for (let x = 0; x < width; x += gridSize) {
+        const startX = Math.floor(left / gridSize) * gridSize;
+        const endX = Math.ceil(right / gridSize) * gridSize;
+        const startY = Math.floor(top / gridSize) * gridSize;
+        const endY = Math.ceil(bottom / gridSize) * gridSize;
+
+        for (let x = startX; x <= endX; x += gridSize) {
           ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, height);
+          ctx.moveTo(x, startY);
+          ctx.lineTo(x, endY);
           ctx.stroke();
         }
-        for (let y = 0; y < height; y += gridSize) {
+        for (let y = startY; y <= endY; y += gridSize) {
           ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(width, y);
+          ctx.moveTo(startX, y);
+          ctx.lineTo(endX, y);
           ctx.stroke();
         }
 
@@ -2371,6 +2460,7 @@
           ctx.restore();
         });
 
+        ctx.restore();
         requestAnimationFrame(render);
       }
       requestAnimationFrame(render);
@@ -2379,11 +2469,13 @@
       // 5. Mouse Interaction & Callout Details
       // ----------------------------------------------------------------------
       function findNodeAt(mx, my) {
+        const wpos = screenToWorld(mx, my);
         for (let i = NODES.length - 1; i >= 0; i--) {
           const n = NODES[i];
-          const dx = mx - n.x;
-          const dy = my - n.y;
-          if (dx * dx + dy * dy <= (n.radius + 6) * (n.radius + 6)) {
+          const nodeRadius = n.radius || (n.cluster === 'source' ? 14 : 11);
+          const dx = wpos.x - n.x;
+          const dy = wpos.y - n.y;
+          if (dx * dx + dy * dy <= (nodeRadius + 6) * (nodeRadius + 6)) {
             return n;
           }
         }
@@ -2396,10 +2488,20 @@
         const my = e.clientY - rect.top;
 
         if (draggedNode) {
-          draggedNode.x = mx;
-          draggedNode.y = my;
+          const wpos = screenToWorld(mx, my);
+          draggedNode.x = wpos.x;
+          draggedNode.y = wpos.y;
           draggedNode.vx = 0;
           draggedNode.vy = 0;
+          return;
+        }
+
+        if (isPanning) {
+          const dx = mx - panStart.x;
+          const dy = my - panStart.y;
+          viewTransform.x += dx;
+          viewTransform.y += dy;
+          panStart = { x: mx, y: my };
           return;
         }
 
@@ -2416,6 +2518,9 @@
           draggedNode = node;
           selectNode(node);
         } else {
+          isPanning = true;
+          panStart = { x: mx, y: my };
+          canvas.style.cursor = 'grabbing';
           if (focusedNodeId) {
             clearNodeFocus();
           }
@@ -2434,7 +2539,27 @@
 
       window.addEventListener('mouseup', () => {
         draggedNode = null;
+        if (isPanning) {
+          isPanning = false;
+          canvas.style.cursor = hoveredNode ? 'pointer' : 'crosshair';
+        }
       });
+
+      canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
+        const newScale = Math.max(0.25, Math.min(4.0, viewTransform.scale * zoomFactor));
+        if (Math.abs(newScale - viewTransform.scale) < 1e-4) return;
+
+        const scaleRatio = newScale / viewTransform.scale;
+        viewTransform.x = mx - (mx - viewTransform.x) * scaleRatio;
+        viewTransform.y = my - (my - viewTransform.y) * scaleRatio;
+        viewTransform.scale = newScale;
+      }, { passive: false });
 
       function selectNode(node) {
         selectedNode = node;
@@ -2548,6 +2673,7 @@
       };
 
       window.resetPhysics = function() {
+        viewTransform = { x: 0, y: 0, scale: 1.0 };
         NODES.forEach((n, idx) => {
           const angle = (idx / NODES.length) * Math.PI * 2;
           const radius = Math.min(width, height) * 0.32;
@@ -3183,7 +3309,34 @@
         setTimeout(resizeCanvas, 40);
       };
 
-      // Keyboard Shortcuts: 'H' (Header), '?' (Help Drawer), 'Escape' (Close Drawer / Callout / Focus)
+      // Control Deck Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
+      window.toggleGraphControlDeck = function(forceState) {
+        const deck = document.querySelector('.graph-control-deck');
+        const workspace = document.querySelector('.graph-workspace');
+        const btnQuick = document.getElementById('btnToggleDeckQuick');
+        const btnHeader = document.getElementById('deckToggleHeaderBtn');
+        if (!deck) return;
+        const isHidden = (typeof forceState === 'boolean') ? forceState : !deck.classList.contains('deck-hidden');
+        deck.classList.toggle('deck-hidden', isHidden);
+        if (workspace) {
+          workspace.classList.toggle('deck-collapsed', isHidden);
+        }
+        if (btnQuick) {
+          btnQuick.innerHTML = isHidden ? '▼ デッキ表示' : '▲ デッキ格納';
+          btnQuick.title = isHidden ? 'コントロールデッキを表示する (Shortcut: D)' : 'コントロールデッキを格納して最大化 (Shortcut: D)';
+        }
+        if (btnHeader) {
+          btnHeader.classList.toggle('active', !isHidden);
+          btnHeader.innerHTML = isHidden ? '🎛️ デッキ表示' : '🎛️ デッキ格納';
+          btnHeader.title = isHidden ? 'コントロールデッキを表示する (Shortcut: D)' : 'コントロールデッキを格納して最大化 (Shortcut: D)';
+        }
+        try {
+          localStorage.setItem('dashboard_deck_hidden', isHidden ? '1' : '0');
+        } catch (e) { }
+        setTimeout(resizeCanvas, 40);
+      };
+
+      // Keyboard Shortcuts: 'D' (Control Deck), 'H' (Header), '?' (Help Drawer), 'Escape' (Close Drawer / Callout / Focus)
       window.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
           if (typeof closeGraphHelpDrawer === 'function') {
@@ -3208,6 +3361,9 @@
         }
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
           return;
+        }
+        if (e.key === 'd' || e.key === 'D') {
+          toggleGraphControlDeck();
         }
         if (e.key === 'h' || e.key === 'H') {
           toggleDashboardHeader();
@@ -3313,6 +3469,13 @@
       try {
         if (localStorage.getItem('dashboard_header_hidden') === '1') {
           toggleDashboardHeader(true);
+        }
+      } catch (e) { }
+
+      // Restore Control Deck Hidden state from localStorage
+      try {
+        if (localStorage.getItem('dashboard_deck_hidden') === '1') {
+          toggleGraphControlDeck(true);
         }
       } catch (e) { }
 

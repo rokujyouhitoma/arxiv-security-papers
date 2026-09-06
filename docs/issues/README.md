@@ -19,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **174** | dashboard.html における Canvas 領域の見切れ解消、コントロールデッキ表示切替、およびスクロール（縦スクロール＆キャンバス内パン/ズーム）機能の実装 | Bug | 2026-09-06 | [174-enable-canvas-scrolling-and-fix-clipping-in-dashboard.md](closed/174-enable-canvas-scrolling-and-fix-clipping-in-dashboard.md) |
 | **173** | CTI グラフクエリにおける 1-Hop 隣接エンティティおよびインシデントエッジの自動展開（Paper 単体検索時のエッジ消失バグ解消） | Bug | 2026-09-06 | [173-expand-1hop-incident-edges-in-graph-query.md](closed/173-expand-1hop-incident-edges-in-graph-query.md) |
 | **172** | SSE 接続による Web ワーカー枯渇・ブロッキング障害の解消および dashboard.html 内の不要 SSE 撤廃 | Bug / Security | 2026-09-05 | [172-fix-sse-saturation-blocking-web-workers.md](closed/172-fix-sse-saturation-blocking-web-workers.md) |
 | **171** | index.html におけるヘルプ・操作ガイドドロワーの dashboard.html 準拠デザイン・出し方統一実装 | Feature | 2026-09-05 | [171-unify-index-help-guide-drawer-design-with-dashboard.md](closed/171-unify-index-help-guide-drawer-design-with-dashboard.md) |
