@@ -2,8 +2,9 @@
 
 import io
 import os
-from typing import List, Union
+from typing import List, Tuple, Union
 
+from .image_extractor import FigureMetadata, PdfImageExtractor
 from .interpreter import TextInterpreter
 from .layout import SpatialLayoutEngine
 from .navigator import PageTreeNavigator
@@ -42,6 +43,61 @@ class PurePdfTextExtractor:
                 pages_text.append(page_text)
 
         return "\n\n".join(pages_text)
+
+    @classmethod
+    def extract_figures(
+        cls,
+        source: Union[str, bytes, io.BytesIO],
+        output_dir: str,
+        max_figures: int = 10,
+    ) -> List[FigureMetadata]:
+        """Extracts figures, diagrams, and architecture charts from PDF to output_dir."""
+        raw_bytes = cls._load_bytes(source)
+        if not raw_bytes:
+            return []
+
+        xref = XRefResolver(raw_bytes)
+        xref.parse_all_xrefs()
+
+        navigator = PageTreeNavigator(xref)
+        pages = navigator.extract_all_pages()
+
+        extractor = PdfImageExtractor(xref)
+        return extractor.extract_and_save(
+            pages=pages, output_dir=output_dir, max_total_figures=max_figures
+        )
+
+    @classmethod
+    def extract_text_and_figures(
+        cls,
+        source: Union[str, bytes, io.BytesIO],
+        figures_output_dir: str,
+        max_figures: int = 10,
+    ) -> Tuple[str, List[FigureMetadata]]:
+        """Extracts text and figures in a single parsing pass."""
+        raw_bytes = cls._load_bytes(source)
+        if not raw_bytes:
+            return "", []
+
+        xref = XRefResolver(raw_bytes)
+        xref.parse_all_xrefs()
+
+        navigator = PageTreeNavigator(xref)
+        pages = navigator.extract_all_pages()
+
+        pages_text: List[str] = []
+        for page in pages:
+            interpreter = TextInterpreter(page)
+            glyphs = interpreter.extract_glyphs()
+            page_text = SpatialLayoutEngine.reconstruct(glyphs, page.width, page.height)
+            if page_text:
+                pages_text.append(page_text)
+
+        img_extractor = PdfImageExtractor(xref)
+        figures = img_extractor.extract_and_save(
+            pages=pages, output_dir=figures_output_dir, max_total_figures=max_figures
+        )
+        return "\n\n".join(pages_text), figures
 
     @classmethod
     def extract_text_from_file(cls, filepath: str) -> str:
