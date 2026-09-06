@@ -265,6 +265,31 @@ TOOLS_MANIFEST = [
             "required": ["cwe_id"],
         },
     },
+    {
+        "name": "query_ontology_evidence",
+        "description": (
+            "Query and inspect empirical benchmark evaluations, claims, and PoC artifacts "
+            "linked to an academic paper or security claim in Full-Spectrum SKO (Issue 200, DSN-22)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {
+                    "type": "string",
+                    "description": (
+                        "Target entity ID (e.g. arXiv paper ID '2403.12345', "
+                        "'Paper:2403.12345', or Claim ID)"
+                    ),
+                },
+                "include_pocs": {
+                    "type": "boolean",
+                    "description": "Whether to include PoC code artifact references (default: true)",
+                    "default": True,
+                },
+            },
+            "required": ["entity_id"],
+        },
+    },
 ]
 
 RESOURCES_MANIFEST = [
@@ -859,6 +884,21 @@ def handle_get_cwe_mitigation_recipe(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def handle_query_ontology_evidence(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Queries empirical benchmark evaluations, claims, and PoC artifacts from SKO graph."""
+    entity_id = str(args.get("entity_id", "")).strip()
+    if not entity_id:
+        return {"status": "error", "message": "Missing required parameter 'entity_id'"}
+    include_pocs = bool(args.get("include_pocs", True))
+
+    from mcp.tools.ontology_tools import EvidenceInspector
+
+    inspector = EvidenceInspector()
+    return inspector.get_evidence_for_entity(
+        entity_id=entity_id, include_pocs=include_pocs
+    )
+
+
 def _read_paper_resource(uri: str) -> Dict[str, Any]:
     arxiv_id = uri.replace("arxiv://paper/", "").strip()
     res = handle_get_paper_summary({"arxiv_id": arxiv_id})
@@ -956,6 +996,7 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         "get_related_papers_graph": handle_get_related_papers_graph,
         "verify_code_security": handle_verify_code_security,
         "get_cwe_mitigation_recipe": handle_get_cwe_mitigation_recipe,
+        "query_ontology_evidence": handle_query_ontology_evidence,
     }
     handler = tool_map.get(name)
     if handler:

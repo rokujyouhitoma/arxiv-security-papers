@@ -6,7 +6,12 @@
 
 ## 1. 進行中・未完了 Issue 一覧 (Active Issues)
 
-現在、進行中の Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **197** | 外部脅威インテリジェンス (CISA KEV / NVD CVE) リアルタイム動的突合およびグラフ因果リンク拡張の実装 | Feature | High | Open (New) | [197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md](197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md) |
+| **198** | Pure-Python PDF エンジンにおける図表・アーキテクチャ図の自動抽出および OKF 埋め込み基盤の実装 | Feature | High | Open (New) | [198-extract-figures-and-diagrams-in-pure-python-pdf-engine.md](198-extract-figures-and-diagrams-in-pure-python-pdf-engine.md) |
+| **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
+| **201** | 直近最新セキュリティ論文（2026-09-02〜2026-09-06）の定期フェッチ・PDF抽出・OKF生成および5階層サマリー・グラフDB最新化 | Ops | High | Open (New) | [201-fetch-recent-security-papers-and-update-summaries.md](201-fetch-recent-security-papers-and-update-summaries.md) |
 
 ---
 
@@ -14,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **200** | AI エージェント向け MCP サーバーにおけるオントロジー因果探索・エビデンス推論ツールの拡充 | Feature | 2026-09-06 | [200-expand-mcp-server-ontology-causal-search-and-evidence-tools.md](closed/200-expand-mcp-server-ontology-causal-search-and-evidence-tools.md) |
 | **196** | cti_catalog_db および analytics_db の src/database (自作DBエンジン) 活用とドメイン分離・データ移行の徹底 | Architecture / Refactor | 2026-09-06 | [196-integrate-src-database-engine-for-cti-and-analytics.md](closed/196-integrate-src-database-engine-for-cti-and-analytics.md) |
 | **195** | データベース・ストレージ台帳の専用独立タブ化およびマルチデータベース（cti_catalog / analytics / graph）統合インスペクションの実装 | Feature / UIUX | 2026-09-06 | [195-separate-database-explorer-tab-and-support-multi-database.md](closed/195-separate-database-explorer-tab-and-support-multi-database.md) |
 | **194** | カオスVFS・電源断シミュレーション・ミューテーションテストによる自作DBの耐障害性・ARIES復旧完全性証明 | Feature / Resilience | 2026-09-06 | [194-database-chaos-vfs-and-mutation-crash-resilience.md](closed/194-database-chaos-vfs-and-mutation-crash-resilience.md) |

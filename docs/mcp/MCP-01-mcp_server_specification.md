@@ -65,6 +65,35 @@
   }
   ```
 
+### 2.5 `search_defense_causal_chains` (Issue 200)
+- **目的**: 脅威エンティティ（ATT&CK ID / 脅威キーワード / CWE）から、前提条件、無力化メカニズム、緩和策、検出ルールへの Full-Spectrum SKO 因果連鎖を走査・取得。
+- **Input Schema**:
+  ```json
+  {
+    "type": "object",
+    "properties": {
+      "threat_id": { "type": "string", "description": "対象の脅威識別子 (例: 'T1059', 'Command Injection', 'CWE-89')" },
+      "max_depth": { "type": "integer", "default": 3, "description": "探索深度 (1〜5)" },
+      "min_confidence": { "type": "number", "default": 0.0, "description": "最小エッジ推論確信度 (0.0〜1.0)" }
+    },
+    "required": ["threat_id"]
+  }
+  ```
+
+### 2.6 `query_ontology_evidence` (Issue 200)
+- **目的**: 論文 ID や主張（Claim）に紐付けられた実証エビデンス（ベンチマーク測定結果、指標値、PoC アーティファクト、信頼度スコア）を構造化取得。
+- **Input Schema**:
+  ```json
+  {
+    "type": "object",
+    "properties": {
+      "entity_id": { "type": "string", "description": "対象エンティティ ID (例: '2403.12345', 'Paper:2403.12345', Claim ID)" },
+      "include_pocs": { "type": "boolean", "default": true, "description": "PoC コードアーティファクト情報を含めるか" }
+    },
+    "required": ["entity_id"]
+  }
+  ```
+
 ---
 
 ## 3. セキュリティ ガードレール (Security Sandboxing)
@@ -73,3 +102,4 @@
 1. `os.path.realpath()` によるシンボリックリンクおよび相対パス脱出 (`../`) の絶対パス解決。
 2. ターゲットパスが `WORKSPACE_DIR` の配下にあることの確認 (`startswith`)。
 3. 敏感ファイル・ディレクトリ (`.ssh`, `.aws`, `.env`, `etc/passwd`) へのアクセスの拒絶。
+4. **入力サニタイズ**: `mcp.security.TaintGuard` および `sanitize_payload` による特殊文字の除去と探索深度・件数の上限ガード。

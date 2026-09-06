@@ -274,6 +274,34 @@ TOOLS_MANIFEST = [
             "required": ["technique_id"],
         },
     },
+    {
+        "name": "search_defense_causal_chains",
+        "description": (
+            "Explore ontology causal pathways from threat entities to preconditions, "
+            "neutralizing defense mechanisms, mitigations, and detection rules (Issue 200, DSN-22)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "threat_id": {
+                    "type": "string",
+                    "description": (
+                        "Target threat identifier, technique ID, or keyword "
+                        "(e.g. 'T1059', 'Command Injection', 'CWE-89')"
+                    ),
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "Maximum causal traversal depth (default: 3, range: 1-5)",
+                },
+                "min_confidence": {
+                    "type": "number",
+                    "description": "Minimum edge inference confidence threshold (0.0 to 1.0, default: 0.0)",
+                },
+            },
+            "required": ["threat_id"],
+        },
+    },
 ]
 
 
@@ -654,6 +682,22 @@ def handle_get_mitigations_for_threat(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def handle_search_defense_causal_chains(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Explores Full-Spectrum SKO causal pathways from attack/threat to defense mechanisms."""
+    threat_id = str(params.get("threat_id", "")).strip()
+    if not threat_id:
+        return {"status": "error", "message": "Missing required parameter 'threat_id'"}
+    max_depth = int(params.get("max_depth", 3))
+    min_confidence = float(params.get("min_confidence", 0.0))
+
+    from .tools.ontology_tools import CausalChainFinder
+
+    finder = CausalChainFinder()
+    return finder.find_defense_chains(
+        threat_id=threat_id, max_depth=max_depth, min_confidence=min_confidence
+    )
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generate_semgrep_rule": handle_generate_semgrep_rule,
     "synthesize_secure_patch": handle_synthesize_secure_patch,
@@ -667,6 +711,7 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "synthesize_detection_signature": handle_synthesize_detection_signature,
     "search_mitre_cti": handle_search_mitre_cti,
     "get_mitigations_for_threat": handle_get_mitigations_for_threat,
+    "search_defense_causal_chains": handle_search_defense_causal_chains,
 }
 
 
