@@ -436,3 +436,33 @@ def test_dashboard_glassmorphic_tooltips_and_help_drawer(
     assert "centerX < 160" in dashboard_html
     assert "window.innerWidth - centerX < 160" in dashboard_html
     assert "adjustTooltipViewportAlignment(el);" in dashboard_html
+
+
+def test_dashboard_deck_toggle_and_canvas_pan_zoom(dashboard_html: str) -> None:
+    """Verifies control deck show/hide toggle, canvas pan & zoom, and vertical scroll (Issue 174)."""
+    # 1. Control deck toggle CSS & DOM
+    assert ".graph-control-deck.deck-hidden" in dashboard_html
+    assert ".graph-workspace.deck-collapsed" in dashboard_html
+    assert ".btn-floating-deck" in dashboard_html
+    assert 'id="deckToggleHeaderBtn"' in dashboard_html
+    assert 'id="btnToggleDeckQuick"' in dashboard_html
+    assert 'id="btnFloatingDeckToggle"' in dashboard_html
+    assert "window.toggleGraphControlDeck" in dashboard_html
+    assert "dashboard_deck_hidden" in dashboard_html
+    assert "e.key === 'd' || e.key === 'D'" in dashboard_html
+    assert "D キー" in dashboard_html
+
+    # 2. Canvas Pan & Zoom navigation
+    assert "let viewTransform = { x: 0, y: 0, scale: 1.0 };" in dashboard_html
+    assert "function screenToWorld(sx, sy)" in dashboard_html
+    assert "function worldToScreen(wx, wy)" in dashboard_html
+    assert "canvas.addEventListener('wheel'" in dashboard_html
+    assert "isPanning" in dashboard_html
+    assert "panStart" in dashboard_html
+    assert "ctx.translate(viewTransform.x, viewTransform.y);" in dashboard_html
+    assert "ctx.scale(viewTransform.scale, viewTransform.scale);" in dashboard_html
+    assert "viewTransform = { x: 0, y: 0, scale: 1.0 };" in dashboard_html
+
+    # 3. Vertical page scroll & clipping prevention
+    assert "overflow-y: auto;" in dashboard_html
+    assert "min-height: 480px;" in dashboard_html
