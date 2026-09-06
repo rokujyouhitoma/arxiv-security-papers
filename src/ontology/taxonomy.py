@@ -128,6 +128,21 @@ class TaxonomyRegistry:
             "AttackTechnique",
             "Supply Chain Tampering",
         ),
+        "privilege escalation": (
+            "AttackTechnique:Privilege_Escalation",
+            "AttackTechnique",
+            "Privilege Escalation",
+        ),
+        "data exfiltration": (
+            "AttackTechnique:Data_Exfiltration",
+            "AttackTechnique",
+            "Data Exfiltration",
+        ),
+        "arbitrary code execution": (
+            "AttackTechnique:Code_Execution",
+            "AttackTechnique",
+            "Arbitrary Code Execution",
+        ),
         "typosquatting": (
             "AttackTechnique:Supply_Chain_Tampering",
             "AttackTechnique",

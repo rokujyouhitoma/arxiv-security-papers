@@ -378,11 +378,41 @@ class OntologyExtractor:
         v_ents, v_trips = ExtendedExtractor.extract_venue(
             clean_id, meta, corpus_text, paper_id
         )
-        for ent in list(p_ents) + list(g_ents) + list(r_ents) + list(v_ents):
+
+        tech_ents = [
+            e for e in entities if e.entity_type == EntityType.ATTACK_TECHNIQUE
+        ]
+        def_ents = [
+            e for e in entities if e.entity_type == EntityType.DEFENSE_MECHANISM
+        ]
+        vuln_ents = [e for e in entities if e.entity_type == EntityType.VULNERABILITY]
+
+        imp_ents, imp_trips = ExtendedExtractor.extract_impacts_and_causality(
+            clean_id, corpus_text, paper_id, tech_ents, def_ents, p_ents
+        )
+        ce_ents, ce_trips = ExtendedExtractor.extract_claims_and_evidence(
+            clean_id, corpus_text, meta, paper_id, tech_ents
+        )
+        inc_ents, inc_trips = ExtendedExtractor.extract_incidents(
+            clean_id, corpus_text, paper_id, tech_ents, vuln_ents
+        )
+
+        all_new_ents = (
+            list(p_ents)
+            + list(g_ents)
+            + list(r_ents)
+            + list(v_ents)
+            + list(imp_ents)
+            + list(ce_ents)
+            + list(inc_ents)
+        )
+        for ent in all_new_ents:
             if ent.id not in seen_entity_ids:
                 entities.append(ent)
                 seen_entity_ids.add(ent.id)
-        triples.extend(p_trips + g_trips + r_trips + v_trips)
+        triples.extend(
+            p_trips + g_trips + r_trips + v_trips + imp_trips + ce_trips + inc_trips
+        )
 
     @classmethod
     def ingest_paper_to_graph(

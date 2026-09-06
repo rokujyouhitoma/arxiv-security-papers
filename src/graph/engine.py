@@ -651,6 +651,9 @@ class PropertyGraphEngine:
             "PublicationVenue": "#64748B",
             "ThreatActor": "#7F1D1D",
             "Incident": "#B91C1C",
+            "Impact": "#DB2777",
+            "Claim": "#8B5CF6",
+            "EvaluationResult": "#10B981",
         }
         radius_map = {
             "Paper": 7,
@@ -667,6 +670,9 @@ class PropertyGraphEngine:
             "PublicationVenue": 9,
             "ThreatActor": 9,
             "Incident": 8,
+            "Impact": 8,
+            "Claim": 8,
+            "EvaluationResult": 8,
         }
 
         clean_name = v.properties.get("name") or v.properties.get("title") or v.id
@@ -742,10 +748,18 @@ class PropertyGraphEngine:
         cwe_cnt = len(self.get_vertices_by_label("Vulnerability")) + len(
             self.get_vertices_by_label("CWE")
         )
+        impact_cnt = len(self.get_vertices_by_label("Impact"))
+        claim_cnt = len(self.get_vertices_by_label("Claim"))
+        eval_cnt = len(self.get_vertices_by_label("EvaluationResult"))
+        incident_cnt = len(self.get_vertices_by_label("Incident"))
         return {
             "total_papers": paper_cnt,
             "total_techniques": tech_cnt,
             "total_cwes": cwe_cnt,
+            "total_impacts": impact_cnt,
+            "total_claims": claim_cnt,
+            "total_evaluations": eval_cnt,
+            "total_incidents": incident_cnt,
             "research_gap_count": gap_count,
         }
 
@@ -1016,6 +1030,124 @@ class PropertyGraphEngine:
         edges = self._collect_induced_edges(path_set)
         return nodes, edges, len(nodes)
 
+    CAUSAL_PREDICATES = {
+        "HAS_IMPACT",
+        "IMPACT_CAUSED_BY",
+        "NEUTRALIZES_PRECONDITION",
+        "PRECONDITION_NEUTRALIZED_BY",
+        "REQUIRES_PRECONDITION",
+        "PRECONDITION_FOR",
+        "ASSERTS_CLAIM",
+        "CLAIM_ASSERTED_BY",
+        "EVALUATES_CLAIM",
+        "CLAIM_EVALUATED_IN",
+        "EVALUATES_TECHNIQUE",
+        "TECHNIQUE_EVALUATED_IN",
+        "YIELDS_EVALUATION",
+        "EVALUATION_YIELDED_BY",
+        "EXPLOITED_IN",
+        "OBSERVED_TECHNIQUE",
+        "LEVERAGED_VULNERABILITY",
+        "EXPLOITED_IN_INCIDENT",
+        "ANALYZES",
+        "ANALYZED_IN",
+        "PROPOSES",
+        "PROPOSED_IN",
+        "MITIGATES",
+        "MITIGATED_BY",
+        "EXPLOITS",
+        "EXPLOITED_BY",
+    }
+
+    def _query_causal(
+        self, raw_arg: str, limit: int
+    ) -> Tuple[List[Vertex], List[Edge], int]:
+        """Extracts multi-hop causal inference subgraph starting from target entity."""
+        target_id = self._resolve_ego_node_id(raw_arg.strip())
+        if not target_id:
+            return [], [], 0
+
+        visited_nodes: Set[str] = {target_id}
+        collected_edges: List[Edge] = []
+        queue: List[Tuple[str, int]] = [(target_id, 0)]
+        max_hops = 3
+
+        while queue:
+            curr_id, hops = queue.pop(0)
+            if hops >= max_hops:
+                continue
+
+            for edge in self.get_both_edges(curr_id):
+                if edge.label in self.CAUSAL_PREDICATES:
+                    neighbor_id = edge.dst_id if edge.src_id == curr_id else edge.src_id
+                    collected_edges.append(edge)
+                    if neighbor_id not in visited_nodes:
+                        visited_nodes.add(neighbor_id)
+                        queue.append((neighbor_id, hops + 1))
+                    if len(collected_edges) >= limit:
+                        break
+            if len(collected_edges) >= limit:
+                break
+
+        nodes = self._collect_vertices(visited_nodes)
+        node_id_set = {v.id for v in nodes}
+        valid_edges = self._filter_edges_by_nodes(collected_edges, node_id_set)
+        return nodes, valid_edges, len(nodes)
+
+    def find_causal_chains(
+        self, start_id: str, end_id: Optional[str] = None, max_hops: int = 4
+    ) -> List[List[Dict[str, Any]]]:
+        """Discovers causal inference chains from start_id up to max_hops."""
+        src = self._resolve_ego_node_id(start_id)
+        if not src:
+            return []
+        dst = self._resolve_ego_node_id(end_id) if end_id else None
+
+        chains: List[List[Dict[str, Any]]] = []
+        queue: List[Tuple[str, List[Dict[str, Any]], Set[str]]] = [
+            (
+                src,
+                [
+                    {
+                        "node_id": src,
+                        "label": getattr(self.get_vertex(src), "label", "Vertex"),
+                    }
+                ],
+                {src},
+            )
+        ]
+
+        while queue:
+            curr, path, visited = queue.pop(0)
+            if len(path) > max_hops + 1:
+                continue
+            if dst and curr == dst:
+                chains.append(path)
+                continue
+
+            out_edges = self.get_out_edges(curr)
+            for edge in out_edges:
+                if edge.label in self.CAUSAL_PREDICATES:
+                    nxt = edge.dst_id
+                    if nxt not in visited:
+                        v_obj = self.get_vertex(nxt)
+                        nxt_node = {
+                            "node_id": nxt,
+                            "label": v_obj.label if v_obj else "Vertex",
+                            "via_edge": edge.label,
+                        }
+                        new_path = path + [nxt_node]
+                        if dst is None:
+                            if v_obj and v_obj.label in (
+                                "Impact",
+                                "Incident",
+                                "EvaluationResult",
+                            ):
+                                chains.append(new_path)
+                        queue.append((nxt, new_path, visited | {nxt}))
+
+        return chains
+
     def _dispatch_structured_query(
         self, q_clean: str, q_low: str, limit: int
     ) -> Optional[Tuple[List[Vertex], List[Edge], int]]:
@@ -1025,6 +1157,8 @@ class PropertyGraphEngine:
             return self._query_cwe(q_clean[4:], limit)
         if q_low.startswith("ego:"):
             return self._query_ego(q_clean[4:], limit)
+        if q_low.startswith("causal:"):
+            return self._query_causal(q_clean[7:], limit)
         return None
 
     def _dispatch_graph_query(

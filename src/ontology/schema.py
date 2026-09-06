@@ -30,6 +30,10 @@ class EntityType(str, Enum):
     RESEARCH_GAP = "ResearchGap"
     RESIDUAL_RISK = "ResidualRisk"
     PUBLICATION_VENUE = "PublicationVenue"
+    # Causal & Reified Extensions (Issue #185, #186, #188)
+    IMPACT = "Impact"
+    CLAIM = "Claim"
+    EVALUATION_RESULT = "EvaluationResult"
 
 
 class Predicate(str, Enum):
@@ -56,6 +60,17 @@ class Predicate(str, Enum):
     PRESENTED_AT = "PRESENTED_AT"  # Paper -> PublicationVenue
     VERIFIES_CVE = "VERIFIES_CVE"  # Paper -> Vulnerability
     HAS_POC = "HAS_POC"  # Paper -> PoCArtifact
+    # Causal & Reified Predicates (Issue #185, #186, #188)
+    HAS_IMPACT = "HAS_IMPACT"  # AttackTechnique -> Impact
+    NEUTRALIZES_PRECONDITION = (
+        "NEUTRALIZES_PRECONDITION"  # DefenseMechanism -> Precondition
+    )
+    EXPLOITED_IN = "EXPLOITED_IN"  # AttackTechnique -> Incident
+    LEVERAGED_VULNERABILITY = "LEVERAGED_VULNERABILITY"  # Incident -> Vulnerability
+    ASSERTS_CLAIM = "ASSERTS_CLAIM"  # Paper -> Claim
+    EVALUATES_TECHNIQUE = "EVALUATES_TECHNIQUE"  # EvaluationResult -> AttackTechnique
+    EVALUATES_CLAIM = "EVALUATES_CLAIM"  # EvaluationResult -> Claim
+    YIELDS_EVALUATION = "YIELDS_EVALUATION"  # Paper -> EvaluationResult
 
     @property
     def inverse(self) -> str:
@@ -81,6 +96,14 @@ class Predicate(str, Enum):
             "PRESENTED_AT": "HOSTED_PAPER",
             "VERIFIES_CVE": "VERIFIED_IN",
             "HAS_POC": "POC_OF",
+            "HAS_IMPACT": "IMPACT_CAUSED_BY",
+            "NEUTRALIZES_PRECONDITION": "PRECONDITION_NEUTRALIZED_BY",
+            "EXPLOITED_IN": "OBSERVED_TECHNIQUE",
+            "LEVERAGED_VULNERABILITY": "EXPLOITED_IN_INCIDENT",
+            "ASSERTS_CLAIM": "CLAIM_ASSERTED_BY",
+            "EVALUATES_TECHNIQUE": "TECHNIQUE_EVALUATED_IN",
+            "EVALUATES_CLAIM": "CLAIM_EVALUATED_IN",
+            "YIELDS_EVALUATION": "EVALUATION_YIELDED_BY",
         }
         return inverse_map.get(self.value, f"INVERSE_{self.value}")
 
@@ -308,6 +331,54 @@ class PublicationVenueEntity(BaseEntity):
             self.id = f"PublicationVenue:{self.venue_id or self.name}"
 
 
+@dataclass
+class ImpactEntity(BaseEntity):
+    """Impact entity representing consequences and STRIDE threat impacts."""
+
+    impact_id: str = ""
+    stride_category: str = (
+        "Tampering"  # Spoofing, Tampering, Repudiation, InformationDisclosure, DenialOfService, ElevationOfPrivilege
+    )
+    severity: str = "High"  # Low, Medium, High, Critical
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.IMPACT
+        if not self.id:
+            self.id = f"Impact:{self.impact_id or self.name}"
+
+
+@dataclass
+class ClaimEntity(BaseEntity):
+    """Claim entity representing an academic research proposition or security assertion."""
+
+    claim_id: str = ""
+    target_technique: str = ""
+    claim_type: str = (
+        "DefenseEfficacy"  # AttackDiscovery, DefenseEfficacy, VulnerabilityProof
+    )
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.CLAIM
+        if not self.id:
+            self.id = f"Claim:{self.claim_id or self.name}"
+
+
+@dataclass
+class EvaluationResultEntity(BaseEntity):
+    """EvaluationResult entity reifying experimental metrics and execution environments."""
+
+    evaluation_id: str = ""
+    metric_name: str = "Accuracy"
+    value: float = 0.0
+    success_rate: float = 0.0
+    target_environment: str = "Linux/Cloud"
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.EVALUATION_RESULT
+        if not self.id:
+            self.id = f"EvaluationResult:{self.evaluation_id or self.name}"
+
+
 @dataclass(frozen=True)
 class Triple:
     """Represents a factual Semantic Knowledge Graph Triple (Subject - Predicate - Object)."""
@@ -345,6 +416,10 @@ class SecurityOntologySchema:
             Predicate.REQUIRES_PRECONDITION,
             Predicate.LEAVES_UNADDRESSED,
             Predicate.GENERATES_RULE,
+            Predicate.ASSERTS_CLAIM,
+            Predicate.YIELDS_EVALUATION,
+            Predicate.HAS_IMPACT,
+            Predicate.NEUTRALIZES_PRECONDITION,
         },
         EntityType.ATTACK_TECHNIQUE: {
             Predicate.EXPLOITS,
@@ -352,6 +427,8 @@ class SecurityOntologySchema:
             Predicate.ATTRIBUTED_TO,
             Predicate.SUBCLASS_OF,
             Predicate.REQUIRES_PRECONDITION,
+            Predicate.HAS_IMPACT,
+            Predicate.EXPLOITED_IN,
         },
         EntityType.DEFENSE_MECHANISM: {
             Predicate.MITIGATES,
@@ -359,6 +436,7 @@ class SecurityOntologySchema:
             Predicate.SUBCLASS_OF,
             Predicate.GENERATES_RULE,
             Predicate.LEAVES_UNADDRESSED,
+            Predicate.NEUTRALIZES_PRECONDITION,
         },
         EntityType.TARGET_ASSET: {
             Predicate.PART_OF,
@@ -372,6 +450,18 @@ class SecurityOntologySchema:
             Predicate.SUBCLASS_OF,
         },
         EntityType.INCIDENT: {
+            Predicate.SUBCLASS_OF,
+            Predicate.LEVERAGED_VULNERABILITY,
+        },
+        EntityType.CLAIM: {
+            Predicate.SUBCLASS_OF,
+        },
+        EntityType.EVALUATION_RESULT: {
+            Predicate.EVALUATES_CLAIM,
+            Predicate.EVALUATES_TECHNIQUE,
+            Predicate.SUBCLASS_OF,
+        },
+        EntityType.IMPACT: {
             Predicate.SUBCLASS_OF,
         },
     }
