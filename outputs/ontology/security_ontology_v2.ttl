@@ -1,7 +1,10 @@
+@prefix cito:  <http://purl.org/spar/cito/> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix owl:   <http://www.w3.org/2002/07/owl#> .
 @prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sec:   <https://arxiv-security-papers.org/ontology/security#> .
+@prefix stix:  <http://docs.oasis-open.org/cti/ns/stix#> .
 @prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
 
 ### --------------------------------------------------
@@ -84,111 +87,283 @@ sec:PublicationVenue rdf:type owl:Class ;
 ### --------------------------------------------------
 # 論文と脆弱性の関係
 sec:discloses rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:disclosedIn ;
     rdfs:label "脆弱性を公開・開示する"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:Vulnerability .
 
+sec:disclosedIn rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:discloses ;
+    rdfs:label "論文で公開・開示された"@ja ;
+    rdfs:domain sec:Vulnerability ;
+    rdfs:range sec:Paper .
+
 # 攻撃手法と脆弱性の関係
 sec:exploits rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:exploitedBy ;
     rdfs:label "脆弱性を悪用する"@ja ;
     rdfs:domain sec:AttackTechnique ;
     rdfs:range sec:Vulnerability .
 
+sec:exploitedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:exploits ;
+    rdfs:label "攻撃手法により悪用される"@ja ;
+    rdfs:domain sec:Vulnerability ;
+    rdfs:range sec:AttackTechnique .
+
 # 論文と攻撃手法の関係
 sec:analyzes rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:analyzedIn ;
     rdfs:label "攻撃手法を分析する"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:AttackTechnique .
 
+sec:analyzedIn rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:analyzes ;
+    rdfs:label "論文で分析・解明された"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:Paper .
+
 # 攻撃手法と対象資産の関係
 sec:targets rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:targetedBy ;
     rdfs:label "資産を標的とする"@ja ;
     rdfs:domain sec:AttackTechnique ;
     rdfs:range sec:TargetAsset .
 
+sec:targetedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:targets ;
+    rdfs:label "攻撃手法の標的となる"@ja ;
+    rdfs:domain sec:TargetAsset ;
+    rdfs:range sec:AttackTechnique .
+
 # 論文と防御メカニズムの関係
 sec:proposes rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:proposedIn ;
     rdfs:label "防御策を提案する"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:DefenseMechanism .
 
+sec:proposedIn rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:proposes ;
+    rdfs:label "論文で提案された"@ja ;
+    rdfs:domain sec:DefenseMechanism ;
+    rdfs:range sec:Paper .
+
 # 防御策と攻撃手法の関係
 sec:mitigates rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:mitigatedBy ;
     rdfs:label "攻撃手法を緩和・防御する"@ja ;
     rdfs:domain sec:DefenseMechanism ;
     rdfs:range sec:AttackTechnique .
 
+sec:mitigatedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:mitigates ;
+    rdfs:label "攻撃手法が緩和・防御される"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:DefenseMechanism .
+
 # 防御策と脆弱性の関係
 sec:patches rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:patchedBy ;
     rdfs:label "脆弱性を改修・修復する"@ja ;
     rdfs:domain sec:DefenseMechanism ;
     rdfs:range sec:Vulnerability .
 
+sec:patchedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:patches ;
+    rdfs:label "脆弱性が改修・修復される"@ja ;
+    rdfs:domain sec:Vulnerability ;
+    rdfs:range sec:DefenseMechanism .
+
 # 論文と評価指標の関係
 sec:evaluates rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:evaluatedIn ;
     rdfs:label "評価指標で測定する"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:BenchmarkMetric .
 
+sec:evaluatedIn rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:evaluates ;
+    rdfs:label "論文で評価・測定された"@ja ;
+    rdfs:domain sec:BenchmarkMetric ;
+    rdfs:range sec:Paper .
+
 # 攻撃手法と脅威アクターの関係
 sec:attributedTo rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:actorAttributedTechnique ;
     rdfs:label "脅威アクターに帰属する"@ja ;
     rdfs:domain sec:AttackTechnique ;
     rdfs:range sec:ThreatActor .
 
-# 論文間の引用関係
+sec:actorAttributedTechnique rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:attributedTo ;
+    rdfs:label "脅威アクターが使用する攻撃手法"@ja ;
+    rdfs:domain sec:ThreatActor ;
+    rdfs:range sec:AttackTechnique .
+
+# 論文間の引用関係（CiTOアライメント・直接引用）
 sec:cites rdf:type owl:ObjectProperty ;
+    rdfs:subPropertyOf cito:cites ;
     rdfs:label "先行研究を引用する"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:Paper .
 
+# 攻撃手法とインシデントの関係
+sec:exploitedIn rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:incidentObservedTechnique ;
+    rdfs:label "インシデントで悪用が観測された"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:Incident .
+
+sec:incidentObservedTechnique rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:exploitedIn ;
+    rdfs:label "インシデントで観測された攻撃手法"@ja ;
+    rdfs:domain sec:Incident ;
+    rdfs:range sec:AttackTechnique .
+
+# インシデントと脆弱性の関係
+sec:leveragedVulnerability rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:vulnerabilityLeveragedIn ;
+    rdfs:label "インシデントで悪用された脆弱性"@ja ;
+    rdfs:domain sec:Incident ;
+    rdfs:range sec:Vulnerability .
+
+sec:vulnerabilityLeveragedIn rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:leveragedVulnerability ;
+    rdfs:label "脆弱性が悪用されたインシデント"@ja ;
+    rdfs:domain sec:Vulnerability ;
+    rdfs:range sec:Incident .
+
+# インシデントと脅威アクターの関係
+sec:attributedToActor rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:actorAttributedIncident ;
+    rdfs:label "インシデントの関与アクター"@ja ;
+    rdfs:domain sec:Incident ;
+    rdfs:range sec:ThreatActor .
+
+sec:actorAttributedIncident rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:attributedToActor ;
+    rdfs:label "アクターが関与したインシデント"@ja ;
+    rdfs:domain sec:ThreatActor ;
+    rdfs:range sec:Incident .
+
+# インシデントと標的資産の関係
+sec:targetsAsset rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:assetTargetedInIncident ;
+    rdfs:label "インシデントの標的資産"@ja ;
+    rdfs:domain sec:Incident ;
+    rdfs:range sec:TargetAsset .
+
+sec:assetTargetedInIncident rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:targetsAsset ;
+    rdfs:label "インシデントで標的とされた資産"@ja ;
+    rdfs:domain sec:TargetAsset ;
+    rdfs:range sec:Incident .
+
 # 検知ルールと攻撃手法の関係
 sec:blocks rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:blockedBy ;
     rdfs:label "攻撃手法を検知・遮断する"@ja ;
     rdfs:domain sec:DetectionRule ;
     rdfs:range sec:AttackTechnique .
 
+sec:blockedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:blocks ;
+    rdfs:label "検知ルールにより検知・遮断される"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:DetectionRule .
+
 # 防御策と検知ルールの関係
 sec:generatesRule rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:ruleGeneratedBy ;
     rdfs:label "防御シグネチャを生成する"@ja ;
     rdfs:domain sec:DefenseMechanism ;
     rdfs:range sec:DetectionRule .
 
+sec:ruleGeneratedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:generatesRule ;
+    rdfs:label "防御策から生成されたシグネチャ"@ja ;
+    rdfs:domain sec:DetectionRule ;
+    rdfs:range sec:DefenseMechanism .
+
 # 攻撃手法と前提条件の関係
 sec:requiresPrecondition rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:preconditionRequiredBy ;
     rdfs:label "成立前提条件を要求する"@ja ;
     rdfs:domain sec:AttackTechnique ;
     rdfs:range sec:Precondition .
 
+sec:preconditionRequiredBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:requiresPrecondition ;
+    rdfs:label "前提条件を要求する攻撃手法"@ja ;
+    rdfs:domain sec:Precondition ;
+    rdfs:range sec:AttackTechnique .
+
 # 防御策と残余リスクの関係
 sec:leavesUnaddressed rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:unaddressedBy ;
     rdfs:label "残余リスクを未対処とする"@ja ;
     rdfs:domain sec:DefenseMechanism ;
     rdfs:range sec:ResidualRisk .
 
+sec:unaddressedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:leavesUnaddressed ;
+    rdfs:label "防御策で未対処として残存する"@ja ;
+    rdfs:domain sec:ResidualRisk ;
+    rdfs:range sec:DefenseMechanism .
+
 # 論文と研究ギャップの関係
 sec:identifiesGap rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:gapIdentifiedBy ;
     rdfs:label "未解決課題を提起・特定する"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:ResearchGap .
 
+sec:gapIdentifiedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:identifiesGap ;
+    rdfs:label "論文により特定された未解決課題"@ja ;
+    rdfs:domain sec:ResearchGap ;
+    rdfs:range sec:Paper .
+
 # 論文と発表媒体の関係
 sec:presentedAt rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:venuePresentedPaper ;
     rdfs:label "採択・発表される"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:PublicationVenue .
 
+sec:venuePresentedPaper rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:presentedAt ;
+    rdfs:label "採択・発表された論文"@ja ;
+    rdfs:domain sec:PublicationVenue ;
+    rdfs:range sec:Paper .
+
 # 論文と既知脆弱性の実証関係
 sec:verifiesCVE rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:cveVerifiedBy ;
     rdfs:label "既知脆弱性を検証・悪用実証する"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:Vulnerability .
 
+sec:cveVerifiedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:verifiesCVE ;
+    rdfs:label "論文により悪用実証された脆弱性"@ja ;
+    rdfs:domain sec:Vulnerability ;
+    rdfs:range sec:Paper .
+
 # 論文とPoCコードの関係
 sec:hasPoC rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:pocOfPaper ;
     rdfs:label "PoC成果物を有する"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range sec:PoCArtifact .
+
+sec:pocOfPaper rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:hasPoC ;
+    rdfs:label "論文のPoC成果物"@ja ;
+    rdfs:domain sec:PoCArtifact ;
+    rdfs:range sec:Paper .
 
 ### --------------------------------------------------
 ### 3. データプロパティ（属性値・リテラル）
@@ -199,11 +374,13 @@ sec:paperId rdf:type owl:DatatypeProperty, owl:FunctionalProperty ;
     rdfs:range xsd:string .
 
 sec:title rdf:type owl:DatatypeProperty ;
+    rdfs:subPropertyOf dcterms:title ;
     rdfs:label "論文タイトル"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range xsd:string .
 
 sec:publishedDate rdf:type owl:DatatypeProperty ;
+    rdfs:subPropertyOf dcterms:date ;
     rdfs:label "公開日"@ja ;
     rdfs:domain sec:Paper ;
     rdfs:range xsd:date .
