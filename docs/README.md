@@ -10,6 +10,8 @@
 ### 1. 管理・プロセス (Management & Governance)
 - 📋 **[[MNG-01] 文書管理・ドキュメント台帳](processes/MNG-01-document_ledger.md)**
   - ドキュメント管理方針、分類プレフィックス（MNG, REQ, DSN, MCP, ISS）、採番ルール、および設計ドキュメントの分掌方針。
+- 🛡️ **[[MNG-02] MITRE ATT&CK & CWE 統合ナレッジグラフ対応台帳](processes/MNG-02-mitre_attack_cwe_ledger.md)**
+  - arXiv セキュリティ論文から抽出・マッピングする MITRE ATT&CK / ATLAS 攻撃手法、CWE 脆弱性クラス、および因果関係クロス照合マトリクス。
 
 ### 2. 要件定義 ＆ 機能一覧 (Requirements & Features)
 - 📝 **[[REQ-01] システム要求事項定義書 (WHAT / WHY)](requirements/REQ-01-system_requirements.md)**
@@ -19,7 +21,7 @@
 - 🎯 **[[REQ-03] プロジェクトユースケース台帳 (Project Use Case Ledger)](requirements/REQ-03-use_case_ledger.md)**
   - 6大ペルソナおよび国家サイバー統括室「サイバーセキュリティ人材フレームワーク2026」13役割に対応する全33ユースケース・業務価値創出フローを体系化。
 
-### 3. 設計仕様 (Architecture & Feature Designs)
+### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-22)
 
 #### 上位・横断設計
 - 🏗️ **[[DSN-01] 全体高位アーキテクチャ設計書 (HLD)](designs/DSN-01-high_level_design.md)**
@@ -31,24 +33,30 @@
 - 📦 **[[DSN-03] ETL データパイプライン設計書](designs/DSN-03-pipeline_architecture.md)**
   - `src/pipeline/` — arXiv / IACR / Advisory アダプター、pdftotext 高品質抽出、原本保存 (raw_data/)、Google OKF v0.2 変換、5階層サマリー自律生産。
 - 📊 **[[DSN-04] 2層検索エンジン ＆ プラットフォーム設計書](designs/DSN-04-search_engine_and_platform.md)**
-  - `src/search/` — Lucene パラダイム BM25 コアエンジン層 (engine/)、Solr パラダイム ManagedSchema プラットフォーム層 (platform/)、HNSW ベクトル RRF 融合 (vector/)。
+  - `src/search/` — Lucene パラダイム BM25 コアエンジン層 (core/)、Solr パラダイム ManagedSchema プラットフォーム層 (platform/)、HNSW ベクトル RRF 融合 (vector/)。
   - 補足仕様: **[[DSN-04-01] ハイブリッド検索詳細仕様](designs/DSN-04-01-hybrid_search_specification.md)** — 5手法フュージョン検索アルゴリズム詳細設計。
-- 🧠 **[[DSN-05] ゼロ依存 4層ベクトルデータベース ＆ 分散合意設計書](designs/DSN-05-database_engine_architecture.md)**
-  - `src/database/` — 4KB SlottedPage、2Q Buffer Pool、WAL & ARIES 障害回復、B+Tree、LSM-Tree、PAX 列指向、CBO オプティマイザ、分散 Raft / Saga / 2PC / Consistent Hashing、PEP 249 DB-API 互換ドライバ。
+- 🧠 **[[DSN-05] ゼロ依存 4層ベクトルデータベース ＆ 分散合意・カオス耐性設計書](designs/DSN-05-database_engine_architecture.md)**
+  - `src/database/` — 4KB SlottedPage、2Q Buffer Pool、WAL & ARIES 障害回復、B+Tree、LSM-Tree、PAX 列指向、CBO オプティマイザ、分散 Raft / Saga / 2PC / Consistent Hashing、ChaosVFS 電源断シミュレーション・復元完全性証明。
 - 🕷️ **[[DSN-06] ゼロ外部依存 分散 Web クローラー ＆ スパイダー基盤設計書](designs/DSN-06-distributed_spider_and_crawler.md)**
   - `src/spider/` — OPIC クロール順序付け、AutoThrottle レート制限、スケーラブル・ブルームフィルタ、SPA 状態復元。
 - 🔒 **[[DSN-07] 共通セキュリティ基盤・AST ガード ＆ RBAC エンジン設計書](designs/DSN-07-security_guard_and_rbac.md)**
-  - `src/security/` — ゼロトラスト AST セキュリティサンドボックス、RBAC エンジン、パス走査検証防御。
+  - `src/security/` — ゼロトラスト AST セキュリティサンドボックス、RBAC エンジン、統一セキュリティ WSGI ミドルウェア、DoS 防御、エージェント出力ガードレール。
 - 🔌 **[[DSN-08] MCP 戦略的エコシステム設計書](designs/DSN-08-mcp_strategic_ecosystem.md)**
   - `src/mcp/` — 論文インテリジェンス (papers_server)、技術動向レーダー (tech_radar_server)、脅威防御・パッチ (threat_defense_server)、可観測性プロファイラ (observability_server) の 4 大 JSON-RPC 2.0 サーバー。
 - 🌐 **[[DSN-09] API Gateway ＆ UI プレゼンテーション設計書](designs/DSN-09-web_gateway_and_presentation.md)**
   - `src/web/` — PEP 3333 準拠 WSGI Gateway、REST API、Glassmorphism Web 検索 UI、動的 HTML Markdown プレビュー層。
 - 📈 **[[DSN-10] 可観測性 (Observability) ＆ 情報検索評価 (IR Eval) 設計書](designs/DSN-10-observability_and_eval_framework.md)**
-  - 横断的基盤 — リアルタイムクエリプロファイラ、NDCG@K / MRR@K / MAP 自動ベンチマーク、メトリクスエクスポータ。
-- 🎯 **[[DSN-11] 普遍的自律型インテリジェンス・ライフサイクル・オーケストレーション包括設計書](designs/DSN-11-intelligence_orchestration_engine.md)**
-  - `src/orchestrator/` — 計画 (PIR 策定) → 収集 → 処理 → 分析・生産 → 配布 → 評価 (NDCG/MAP) の 6 大フェーズ閉ループ自律駆動、ナレッジギャップ自己適応。
+  - 横断的基盤 — リアルタイムクエリプロファイラ、NDCG@K / MRR@K / MAP 自動ベンチマーク、BEIR / CTI-Bench 準拠 SOTA IR ランナー。
+- 🎯 **[[DSN-11] 自律常駐型スケジューラー・多重頻度調停・汎用ワークフロー包括設計書 (Rev 2.0)](designs/DSN-11-universal_workflow_engine.md)**
+  - `src/workflow/` — ゼロ依存 Pure-Python 5フィールド Cron パーサー、高頻度ストリーム（4h KEV）vs 日次バッチ（arXiv）共存調停、DSN-12 Supervisor 協調ホスティング (`WorkflowServiceHook`)、WAL 連携リカバリ。
 - ⚙️ **[[DSN-12] 汎用プロセススーパーバイザー ＆ 調停基盤設計書](designs/DSN-12-process_supervisor_and_arbiter.md)**
-  - `src/supervisor/` — Gunicorn スタイル Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー、Systemd 依存関係順序制御、動的スケーリング、自己回復・ハートビート監視。
+  - `src/supervisor/` — Gunicorn スタイル Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー、Systemd 依存関係順序制御、動的スケーリング、自己回復・ハートビート監視、Linux `PR_SET_PDEATHSIG` ワーカー孤児化防止。
+- 📄 **[[DSN-13] ISO 32000 準拠 Pure Python PDF 抽出 ＆ 空間レイアウト再構築エンジン設計書](designs/DSN-13-pure_python_pdf_text_extractor.md)**
+  - `src/pdf_engine/` — ISO 32000-1/2 仕様準拠、ゼロコピー字句解析、XRefStream/ObjStm 解凍、2段組（Two-Column）ガター自動検出 & 読書順序ソート。
+- 📊 **[[DSN-14] 論文・脅威ナレッジグラフ ＆ エンジニアリングダッシュボード設計書](designs/DSN-14-graph_engineering_dashboard.md)**
+  - `src/web/presentation/` — CTI グラフ可視化、隣接エンティティ展開、Glassmorphic ツールチップ、UI/UX 操作ガイド。
+- 🔄 **[[DSN-15] 閉ループ・自律型インテリジェンス・オーケストレーション設計書](designs/DSN-15-closed_loop_intelligence_system.md)**
+  - `src/intelligence/` — 3-Horizon PIR要件管理、Admiralty 方式情報信憑性評価、仮説駆動型自律調査ループ、自己修復ハーベストルーター。
 - 🚀 **[[DSN-16] 次世代セキュリティ・ナレッジプラットフォーム包括設計提言書](designs/DSN-16-nextgen_security_knowledge_platform_proposal.md)**
   - 多段階 LLM 要約、MITRE ATT&CK / TTPs マッピング、Caldera プレイブック生成、MCP / マルチチャネル配信、プロンプトインジェクション防護、CI/CD ゼロトラスト分離。
 - 🧠 **[[DSN-17] セキュリティ知識オントロジー (SKO) 設計仕様書](designs/DSN-17-security_knowledge_ontology.md)**
@@ -58,8 +66,11 @@
 - 📝 **[[DSN-19] NLP重要キーワード抽出・構造化要約エンジン設計仕様書](designs/DSN-19-nlp_keyphrase_extraction_and_structured_synthesis.md)**
   - `src/pipeline/` — Pure-Python TF-IDF/TextRank キーフレーズ抽出、3点エグゼクティブサマリー合成。
 - 🛡️ **[[DSN-20] 外部セキュリティ知識データセット（MITRE ATT&CK / CWE / CVE 等）統合インジェスト・ローカルカタログ管理基盤設計仕様書](designs/DSN-20-external_security_knowledge_ingestion_and_catalog_architecture.md)**
-  - `src/security/cti/` — Zero External Dependencies、プラグイン型ストリーミング同期、統一SQLite WAL + FTS5 全文検索カタログ、ATT&CK/CWE/CVEマルチデータセット対応、PropertyGraph & MCP 統合。
-
+  - `src/security/cti/` — Zero External Dependencies、プラグイン型ストリーミング同期、統一SQLite WAL + FTS5 全文検索カタログ、CISA KEV / NVD / ATT&CK 対応。
+- 🎨 **[[DSN-21] エンタープライズ統合デザインシステム ＆ クラウドコンソール UI 包括設計書](designs/DSN-21-enterprise_design_system_and_unified_console.md)**
+  - `site/`, `src/web/` — エンタープライズ SaaS 型統合クラウドコンソール UI、Schema View（二次ベジェ曲線・有向矢印・物理斥力レイアウト）、CTI フィルタ。
+- 📜 **[[DSN-22] セキュリティ ＆ 脅威オントロジー W3C 仕様書 (Full-Spectrum SKO / OWL DL)](designs/DSN-22-security_and_threat_ontology_w3c_specification.md)**
+  - `src/ontology/` — W3C OWL 2 DL 準拠、Claim/Evidence 分離、前提条件無力化因果連鎖モデル、Pure-Python Turtle (.ttl) 生成、TBox グラフインジェスト。
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
 - 📖 **[[USR-01] ユーザーマニュアル ＆ AI コーディングエージェント連携ガイド](manuals/USR-01-user_manual.md)**
@@ -69,9 +80,10 @@
 
 ### 5. Issue 台帳 ＆ 履歴 (Issues & Task Ledger)
 - 🎯 **[[ISS-00] Issue 台帳 (Issue Ledger)](issues/README.md)**
-  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — Issue 001〜124 完了)。
+  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — **Issue 001〜194 全194件完了**)。
 
-### 6. オントロジー ＆ セキュリティ標準台帳 (Ontology & Security Standards)
-- 🛡️ **[[MNG-02] MITRE ATT&CK & CWE 統合ナレッジグラフ対応台帳](processes/MNG-02-mitre_attack_cwe_ledger.md)**
-  - arXiv セキュリティ論文から抽出・マッピングする MITRE ATT&CK / ATLAS 攻撃手法、CWE 脆弱性クラス、および因果関係クロス照合マトリクス (Issue #135 準拠)。
-
+### 6. ベンチマーク ＆ 監査レポート (Benchmarks & Audits)
+- 📊 **[SOTA IR ベンチマーク評価レポート](benchmarks/sota_evaluation.md)**
+  - BEIR / CTI-Bench 準拠 ハイブリッド検索 (BM25 + HNSW + Graph) の定量的 SOTA 性能立証レポート。
+- 🛡️ **[データベース耐障害性・ARIES 復旧完全性監査レポート](audits/database_resilience_report.md)**
+  - ChaosVFS による電源断シミュレーション・ミューテーションテスト下でのデータ完全復旧証明レポート。
