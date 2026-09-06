@@ -268,5 +268,6 @@ sync_cti: activate ## Sync MITRE ATT&CK CTI definitions into local SQLite catalo
 reannotate_cti: activate ## Re-annotate all historical OKF papers with CTI techniques and mitigations
 	PYTHONPATH=src ${VENV_PYTHON} src/pipeline/cti_backfill.py
 
-
-
+.PHONY: benchmark_ir
+benchmark_ir: activate ## Run SOTA IR Benchmark comparing BM25, Dense Vector, and Hybrid search
+	PYTHONPATH=src:. ${VENV_PYTHON} -m search.eval.sota_runner --output docs/benchmarks/sota_evaluation.md
