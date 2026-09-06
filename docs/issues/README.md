@@ -6,7 +6,7 @@
 
 ## 1. 進行中・未完了 Issue 一覧 (Active Issues)
 
-現在進行中のアクティブな Issue はありません。全 Issue 完了済みです。
+現在、進行中の Issue はありません。
 
 ---
 
@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **196** | cti_catalog_db および analytics_db の src/database (自作DBエンジン) 活用とドメイン分離・データ移行の徹底 | Architecture / Refactor | 2026-09-06 | [196-integrate-src-database-engine-for-cti-and-analytics.md](closed/196-integrate-src-database-engine-for-cti-and-analytics.md) |
 | **195** | データベース・ストレージ台帳の専用独立タブ化およびマルチデータベース（cti_catalog / analytics / graph）統合インスペクションの実装 | Feature / UIUX | 2026-09-06 | [195-separate-database-explorer-tab-and-support-multi-database.md](closed/195-separate-database-explorer-tab-and-support-multi-database.md) |
 | **194** | カオスVFS・電源断シミュレーション・ミューテーションテストによる自作DBの耐障害性・ARIES復旧完全性証明 | Feature / Resilience | 2026-09-06 | [194-database-chaos-vfs-and-mutation-crash-resilience.md](closed/194-database-chaos-vfs-and-mutation-crash-resilience.md) |
 | **193** | IR標準ベンチマーク（BEIR / CTI-Bench）によるハイブリッド探索（BM25+HNSW+Graph）の定量的SOTA性能立証とCI計測基盤の実装 | Feature / Benchmark | 2026-09-06 | [193-benchmark-hybrid-search-ir-sota-and-ci-metrics.md](closed/193-benchmark-hybrid-search-ir-sota-and-ci-metrics.md) |

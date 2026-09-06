@@ -161,6 +161,93 @@ def count_sqlite_table_rows(db_path: str) -> Optional[int]:
         return None
 
 
+def _query_counts_on_connection(
+    conn: sqlite3.Connection, targets: Optional[List[str]]
+) -> Dict[str, int]:
+    cur = conn.cursor()
+    names = targets if targets is not None else get_sqlite_table_names(conn)
+    return {t: _count_table_rows(cur, t) for t in names}
+
+
+def _safe_connect_and_query(
+    db_path: str, targets: Optional[List[str]]
+) -> Optional[Dict[str, int]]:
+    conn = get_sqlite_connection(db_path, init_schema=False, read_only=True)
+    try:
+        return _query_counts_on_connection(conn, targets)
+    finally:
+        conn.close()
+
+
+def _fallback_counts(targets: Optional[List[str]]) -> Dict[str, int]:
+    return {t: 0 for t in (targets or [])}
+
+
+def get_sqlite_table_counts(
+    db_path: str, table_names: Optional[List[str]] = None
+) -> Dict[str, int]:
+    """Safely queries row counts for specified or all user tables in an SQLite database.
+
+    Domain-agnostic database infrastructure utility.
+    """
+    if not os.path.exists(db_path):
+        return _fallback_counts(table_names)
+    try:
+        res = _safe_connect_and_query(db_path, table_names)
+        return res if res else _fallback_counts(table_names)
+    except Exception:
+        return _fallback_counts(table_names)
+
+
+def _rows_to_dicts(cur: sqlite3.Cursor, rows: List[Any]) -> List[Dict[str, Any]]:
+    col_names = [col[0] for col in cur.description] if cur.description else []
+    return [dict(zip(col_names, row)) for row in rows]
+
+
+def dump_sqlite_table_records(
+    conn: sqlite3.Connection, table_name: str
+) -> List[Dict[str, Any]]:
+    """Dumps all rows of an arbitrary table into a list of dictionaries.
+
+    Domain-agnostic database migration utility.
+    """
+    if not table_name.isidentifier():
+        return []
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM {table_name}")
+    rows = cur.fetchall()
+    return _rows_to_dicts(cur, rows) if rows else []
+
+
+def _execute_restore_batch(
+    cur: sqlite3.Cursor, table_name: str, keys: List[str], records: List[Dict[str, Any]]
+) -> int:
+    cols = ", ".join(keys)
+    placeholders = ", ".join(["?" for _ in keys])
+    sql = f"INSERT OR REPLACE INTO {table_name} ({cols}) VALUES ({placeholders})"
+    tuples = [tuple(r.get(k) for k in keys) for r in records]
+    cur.executemany(sql, tuples)
+    return len(records)
+
+
+def restore_sqlite_table_records(
+    conn: sqlite3.Connection, table_name: str, records: List[Dict[str, Any]]
+) -> int:
+    """Restores a list of row dictionaries into a table using INSERT OR REPLACE.
+
+    Domain-agnostic database migration utility.
+    """
+    if not records or not table_name.isidentifier():
+        return 0
+    keys = list(records[0].keys())
+    if not all(k.isidentifier() for k in keys):
+        return 0
+    cur = conn.cursor()
+    inserted = _execute_restore_batch(cur, table_name, keys, records)
+    conn.commit()
+    return inserted
+
+
 def sync_from_vector_storage(
     conn: sqlite3.Connection, storage: VectorStorage, table_name: str = "papers"
 ) -> int:
