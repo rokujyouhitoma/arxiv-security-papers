@@ -1,10 +1,12 @@
-# [DSN-11] 汎用ワークフロー実行基盤（`src/workflow/`）包括的アーキテクチャ設計仕様書
+# [DSN-11] 汎用ワークフロー・常駐オーケストレーション実行基盤（`src/workflow/`）包括的アーキテクチャ設計仕様書 (Rev 2.0)
+## 〜 自律常駐型スケジューラー・多重頻度（高頻度ストリーム vs 日次バッチ）調停・DSN-12連携・ゼロ依存Pure Pythonオーケストレーター 〜
 
 - **文書番号**: `DSN-11`
+- **リビジョン**: `Rev 2.0 (Autonomous Orchestrator & Multi-Cadence Scheduling)`
 - **文書ステータス**: `APPROVED`
-- **対象サブシステム**: `src/workflow/` (`DAGWorkflowEngine`, `StreamingDAG`, `SagaCoordinator`, `OrchestratorWAL`, `CircuitBreaker`)  
-- **【主査・報告】 Systems Architect (SA) / Software Quality Assurance Specialist (QA)**  
-- **【参画】 Project Manager (PM), Database / Data Infrastructure Specialist (DB), Network Specialist (NET), IT Service Manager (OPS)**
+- **対象サブシステム**: `src/workflow/` (`WorkflowScheduler`, `DAGWorkflowEngine`, `StreamingDAG`, `SagaCoordinator`, `OrchestratorWAL`, `CircuitBreaker`)
+- **【主査・報告】 Systems Architect (SA) / Software Quality Assurance Specialist (QA) / Project Manager (PM)**
+- **【参画】 Information Security Specialist (SEC), Database / Data Infrastructure Specialist (DB), Network Specialist (NET), IT Service Manager (OPS), IT Specialist (NLP & Info Retrieval), IT Strategist (ST), Systems Auditor (AUD), UI/UX Designer**
 
 ---
 
@@ -12,7 +14,7 @@
 
 - [1. 汎用ワークフロー基盤の全体アーキテクチャ & レイヤリング](#1-汎用ワークフロー基盤の全体アーキテクチャ--レイヤリング)
   - [1.1 制御プレーンとドメインプレーンの完全分離理論](#11-制御プレーンとドメインプレーンの完全分離理論)
-  - [1.2 主要コンポーネント構成図](#12-主要コンポーネント構成図)
+  - [1.2 主要コンポーネント構成図（Rev 2.0 統合アーキテクチャ）](#12-主要コンポーネント構成図rev-20-統合アーキテクチャ)
   - [1.3 ワークフロー実行ライフサイクルと状態遷移機械](#13-ワークフロー実行ライフサイクルと状態遷移機械)
   - [1.4 メモリおよびストレージフットプリント特性](#14-メモリおよびストレージフットプリント特性)
 - [2. トポロジカル DAG 実行エンジン](#2-トポロジカル-dag-実行エンジン)
@@ -39,9 +41,27 @@
   - [6.1 三状態遷移モデル（CLOSED / OPEN / HALF_OPEN）数理](#61-三状態遷移モデルclosed--open--half_open数理)
   - [6.2 クールダウンと試験プローブ（Canary Probing）ゲートウェイ](#62-クールダウンと試験プローブcanary-probingゲートウェイ)
   - [6.3 指数移動平均（EMA）健全度メトリクス](#63-指数移動平均ema健全度メトリクス)
-- [7. クラス設計・公開 API インターフェース・型アノテーション仕様](#7-クラス設計公開-api-インターフェース型アノテーション仕様)
-- [8. 非機能要件・セキュリティ・リソース制約](#8-非機能要件セキュリティリソース制約)
-- [9. 品質ゲート・テスト・ベンチマーク検証仕様](#9-品質ゲートテストベンチマーク検証仕様)
+- [7. 自律常駐型スケジューラー & 多重頻度調停エンジン (Rev 2.0 新設)](#7-自律常駐型スケジューラー--多重頻度調停エンジン-rev-20-新設)
+  - [7.1 時間軸統合と自立駆動スケジューラーループ（Orchestrator Scheduler Loop）](#71-時間軸統合と自立駆動スケジューラーループorchestrator-scheduler-loop)
+  - [7.2 Pure-Python Cron 式パーサー（分・時・日・月・曜日）](#72-pure-python-cron-式パーサー分時日月曜日)
+  - [7.3 多重実行サイクル（高頻度ストリーム vs 日次バッチ vs 週次監査）の共存調停](#73-多重実行サイクル高頻度ストリーム-vs-日次バッチ-vs-週次監査の共存調停)
+  - [7.4 レート制限保護（HTTP 429 防止ジッター・トークンバケット）](#74-レート制限保護http-429-防止ジッター・トークンバケット)
+- [8. DSN-12（Process Supervisor）ホスティング & 協調プロトコル (Rev 2.0 新設)](#8-dsn-12process-supervisorホスティング--協調プロトコル-rev-20-新設)
+  - [8.1 プロセス管理（DSN-12）とタスク実行制御（DSN-11）の非結合性原則](#81-プロセス管理dsn-12とタスク実行制御dsn-11の非結合性原則)
+  - [8.2 ServiceWorker インターフェースによる常駐ホスティング](#82-serviceworker-インターフェースによる常駐ホスティング)
+  - [8.3 プロセス死活監視・自動再起動・WAL連携リカバリ](#83-プロセス死活監視・自動再起動・wal連携リカバリ)
+  - [8.4 グレースフルシャットダウン（SIGTERM ドレイン制御）](#84-グレースフルシャットダウンsigterm-ドレイン制御)
+- [9. ドメインタスク・オペレーター抽象化（Task & Operator Protocol） (Rev 2.0 新設)](#9-ドメインタスク・オペレーター抽象化task--operator-protocol-rev-20-新設)
+  - [9.1 非破壊的アダプター原則（`src/pipeline/` 温存バインディング）](#91-非破壊的アダプター原則srcpipeline-温存バインディング)
+  - [9.2 宣言的タスク定義（ScheduledTask & TaskInstance）](#92-宣言的タスク定義scheduledtask--taskinstance)
+  - [9.3 標準組み込みタスクカタログ（arXiv, IACR, CISA KEV, CTI Backfill, SOTA Benchmark）](#93-標準組み込みタスクカタログarxiv-iacr-cisa-kev-cti-backfill-sota-benchmark)
+- [10. 可観測性 & ダッシュボード REST/SSE API 統合 (Rev 2.0 新設)](#10-可観測性--ダッシュボード-restsse-api-統合-rev-20-新設)
+  - [10.1 Web Gateway 統合エンドポイント仕様](#101-web-gateway-統合エンドポイント仕様)
+  - [10.2 リアルタイム実行ストリーミング（SSE）と状態購読](#102-リアルタイム実行ストリーミングsseと状態購読)
+  - [10.3 Web UI 運用操作（手動トリガー・タスク一時停止・Clear / Rerun）](#103-web-ui-運用操作手動トリガータスク一時停止clear--rerun)
+- [11. クラス設計・公開 API インターフェース・型アノテーション仕様](#11-クラス設計公開-api-インターフェース型アノテーション仕様)
+- [12. 非機能要件・セキュリティ・リソース制約](#12-非機能要件セキュリティリソース制約)
+- [13. 品質ゲート・テスト・ベンチマーク検証仕様](#13-品質ゲートテストベンチマーク検証仕様)
 
 ---
 
@@ -57,6 +77,19 @@
 +-------------------------------------------------------------------------+
                                     |
                     uses Execution Protocols & Runtime
+```
++-------------------------------------------------------------------------+
+|                  PROCESS SUPERVISOR (src/supervisor/)                   |
+|   (Arbiter, ServiceWorker, Heartbeat Monitor, Top, Signal Management)   |
++-------------------------------------------------------------------------+
+                                    │ Process LifeCycle / Watchdog
+                                    v
++-------------------------------------------------------------------------+
+|             ORCHESTRATION & SCHEDULER (src/workflow/scheduler.py)       |
+|  - Cron & Interval Trigger Engine (Multi-Cadence: Stream vs Batch)      |
+|  - Task Dispatcher & Jitter / Rate-Limit Controller (HTTP 429 Guard)    |
++-------------------------------------------------------------------------+
+                                    │ DAG Execution Trigger
                                     v
 +-------------------------------------------------------------------------+
 |                  CONTROL PLANE (src/workflow/)                          |
@@ -68,9 +101,15 @@
 |  | wal.py (Event Sourcing & State Replay)  |  | circuit.py (Breaker) |  |
 |  +-----------------------------------------+  +----------------------+  |
 +-------------------------------------------------------------------------+
+                                    │ Invokes Non-Invasive Domain Callables
+                                    v
++-------------------------------------------------------------------------+
+|             DOMAIN PLANE (src/pipeline/ & src/security/cti/)            |
+|  (CISA KEV Sync, arXiv/IACR Ingestion, OKF Conversion, Summary Engine)  |
++-------------------------------------------------------------------------+
 ```
 
-### コア設計原則（4大原則）
+### コア設計原則（5大原則）
 1. **ゼロ・ドメイン汚染（Zero Domain Contamination）**:
    - `src/workflow/` 内の全クラス・関数はジェネリクス (`TypeVar("T")`) または抽象プロトコル (`Protocol`) で定義され、ドメイン固有語（`arxiv`, `paper`, `security` 等）を一切含みません。
 2. **決定論的耐障害性（Deterministic Fault Tolerance）**:
@@ -79,36 +118,54 @@
    - 処理対象のデータ量が数万件〜数百万件に増大しても、Bounded Queue とスロットリングによりプロセスの物理メモリ使用量（RSS）を一定上限（$\le 256\text{MB}$）内に抑え込みます。
 4. **アトミック補償ロールバック（Atomic Saga Compensation）**:
    - 多段階パイプラインの途中失敗時、先行ステップの副作用を後入れ先出し（LIFO）順で自動相殺・ロールバックします。
+5. **多重頻度共存と非侵襲アダプター（Multi-Cadence Coexistence & Non-Invasive Adapter）** *(Rev 2.0 新設)*:
+   - 1時間〜4時間ごとの高頻度ストリームタスク（KEV/CVE）と、日次バッチタスク（arXiv/IACR）、週次監査タスク（SOTA/Chaos）を単一スケジューラー上で衝突なく安全に調停。既存パイプラインコード（`src/pipeline/`）を一切書き換えずに Callable としてバインドします。
 
-## 1.2 主要コンポーネント構成図
+## 1.2 主要コンポーネント構成図（Rev 2.0 統合アーキテクチャ）
 
 ```mermaid
 flowchart TD
-    subgraph EngineClient ["上位ドメイン・クライアント"]
-        Client["Domain Engine / Service"]
+    subgraph SupervisorHost ["DSN-12: Process Supervisor 基盤"]
+        Arbiter["Arbiter (Process Tree & Signal Handling)"]
+        SrvWorker["ServiceWorker Host (workflow_worker)"]
+        Arbiter -->|"Fork & Supervise"| SrvWorker
     end
 
-    subgraph WorkflowRuntime ["src/workflow/ (Universal Workflow Engine)"]
-        DAG["DAGWorkflowEngine<br/>(dag.py)"]
-        StreamDAG["StreamingDAG<br/>(streaming_dag.py)"]
-        Saga["SagaCoordinator<br/>(saga.py)"]
-        WAL["OrchestratorWAL<br/>(wal.py)"]
-        Circuit["CircuitBreaker<br/>(circuit.py)"]
+    subgraph WorkflowRuntime ["DSN-11 Rev 2.0: 汎用常駐オーケストレーター (src/workflow/)"]
+        Scheduler["WorkflowScheduler<br/>(scheduler.py)<br/>• Cron & Interval Loop<br/>• Multi-Cadence Dispatcher"]
+        DAG["DAGWorkflowEngine<br/>(dag.py)<br/>• Kahn's Topological Sort"]
+        StreamDAG["StreamingDAG<br/>(streaming_dag.py)<br/>• Bounded Backpressure"]
+        Saga["SagaCoordinator<br/>(saga.py)<br/>• LIFO Reverse Compensation"]
+        WAL["OrchestratorWAL<br/>(wal.py)<br/>• Append-Only State Stream"]
+        Circuit["CircuitBreaker<br/>(circuit.py)<br/>• Closed/Open/Half-Open"]
+        
+        Scheduler -->|"Trigger Execution"| DAG
+        Scheduler -->|"Trigger Stream"| StreamDAG
+        DAG -->|"State Checkpoint"| WAL
+        DAG -->|"API Failure Gating"| Circuit
+        DAG -->|"Transactional Rollback"| Saga
+    end
+
+    subgraph DomainTasks ["非侵襲ドメインタスク群 (src/pipeline/ & src/security/)"]
+        TaskKEV["Task: CISA KEV Sync<br/>(Every 4h)"]
+        TaskArxiv["Task: arXiv cs.CR Ingest<br/>(Daily 09:30 JST)"]
+        TaskIACR["Task: IACR ePrint Ingest<br/>(Daily 09:30 JST)"]
+        TaskSOTA["Task: SOTA IR & Chaos Audit<br/>(Weekly)"]
+        
+        DAG -->|"Dispatches"| TaskKEV
+        DAG -->|"Dispatches"| TaskArxiv
+        DAG -->|"Dispatches"| TaskIACR
+        DAG -->|"Dispatches"| TaskSOTA
     end
 
     subgraph Storage ["永続化ストレージ"]
         WALFile["outputs/wal/<cycle_id>.wal.jsonl<br/>(Append-Only Event Stream)"]
         CPFile["outputs/wal/<cycle_id>.checkpoint.json<br/>(Atomic State Snapshot)"]
+        WAL -->|"fsync Append"| WALFile
+        WAL -->|"Atomic Replace"| CPFile
     end
 
-    Client -->|"Topological Graph"| DAG
-    Client -->|"Reactive Stream"| StreamDAG
-    Client -->|"Transactional Phase"| Saga
-    Client -->|"State Recovery"| WAL
-    Client -->|"Fault Gating"| Circuit
-
-    WAL -->|"fsync Append"| WALFile
-    WAL -->|"Atomic Replace"| CPFile
+    SrvWorker -->|"Executes Long-Running Loop"| Scheduler
 ```
 
 ## 1.3 ワークフロー実行ライフサイクルと状態遷移機械
@@ -341,9 +398,336 @@ $$H(t) = (1 - \alpha) \cdot H(t-1) + \alpha \cdot (\text{Success} \ ? \ 1.0 : 0.
 
 ---
 
-# 7. クラス設計・公開 API インターフェース・型アノテーション仕様
+# 7. 自律常駐型スケジューラー & 多重頻度調停エンジン (Rev 2.0 新設)
+
+## 7.1 時間軸統合と自立駆動スケジューラーループ（Orchestrator Scheduler Loop）
+Apache Airflow や Celery 等の重量級外部フレームワークを一切導入せず、ゼロ依存の Pure Python で常駐稼働する自律スケジューラー `WorkflowScheduler` を提供します。
+
+```
++-------------------------------------------------------------------------------+
+|                       WorkflowScheduler (scheduler.py)                        |
+|                                                                               |
+|  +-------------------+    Tick (1.0s)    +---------------------------------+  |
+|  | CronParser        | ----------------> | Dispatcher & Concurrency Guard  |  |
+|  | (5-Field Engine)  |                   | (max_active=4, overlap_lock)    |  |
+|  +-------------------+                   +---------------------------------+  |
+|           │                                               │                   |
+|           │ Next Run Calculations                         ▼ Spawns            |
+|  +-------------------+                   +---------------------------------+  |
+|  | Task Registry     |                   | TaskInstance Execution Worker   |  |
+|  | (KEV, arXiv, ...) |                   | (DAG Engine / Direct Callable)  |  |
+|  +-------------------+                   +---------------------------------+  |
++-------------------------------------------------------------------------------+
+```
+
+### スケジューラー駆動ループのアルゴリズム
+1. **高精度 Tick 駆動**:
+   - バックグラウンドスレッドまたは常駐プロセス内で、デフォルト $1.0$ 秒間隔（可変）のメインループを実行します。
+   - スリープ時間は次回イベント時刻に応じて動的に最適化され、無駄な CPU ビジーウェイトを完全に排除します（CPU 使用率 $< 0.1\%$）。
+2. **決定論的スケジュール判定**:
+   - 各登録タスク `ScheduledTask` は次回実行予定エポック時刻 `next_run_at` を保持します。
+   - 現在時刻 $T_{\text{now}} \ge \text{next\_run\_at}$ を満たしたタスクを即座にディスパッチ対象キューへ投入します。
+3. **ドリフト補正（Clock Drift Compensation）**:
+   - システムスリープや高負荷による遅延を検知した場合、過去にスキップされた全周期を一括実行するのではなく、最新の直近サイクルのみを実行して次回予定時刻を現在時刻基準で再計算する「スキップ＆キャッチアップ制御」を内蔵します。
+
+## 7.2 Pure-Python Cron 式パーサー（分・時・日・月・曜日）
+外部ライブラリ（`croniter` 等）に依存せず、標準ライブラリのみで動作する完全な 5 フィールド Cron パーサー `CronExpressionParser` を内蔵します。
+
+### 対応構文
+- **書式**: `minute(0-59) hour(0-23) day(1-31) month(1-12) day_of_week(0-6, 0=Sun)`
+- **ワイルドカード**: `*`（全許容）
+- **ステップ値**: `*/15`（15単位毎）、`20-50/10`（特定範囲内のステップ）
+- **列挙値**: `1,15,30`（カンマ区切りによる複数指定）
+- **範囲値**: `1-5`（月曜〜金曜などハイフン区切り）
+- **エイリアス**: `@hourly`, `@daily`, `@weekly`, `@monthly`
 
 ```python
+class CronExpressionParser:
+    """Zero-dependency Pure-Python 5-field Cron parser with timezone support."""
+
+    def __init__(self, expr: str, tz_offset_hours: float = 9.0) -> None:
+        # Default: Asia/Tokyo (JST, UTC+9)
+        self.expr = expr.strip()
+        self.tz_offset_hours = tz_offset_hours
+        self._parse()
+
+    def get_next(self, base_time: Optional[float] = None) -> float:
+        """Calculates next matching epoch timestamp deterministically."""
+        ...
+```
+
+## 7.3 多重実行サイクル（高頻度ストリーム vs 日次バッチ vs 週次監査）の共存調停
+本システムでは、実行周期が大きく異なる異種タスクが同一プロセス空間で共存します。
+
+| タスク分類 | 実行頻度 | 推奨 Cron / 間隔 | 許容タイムアウト | リトライ回数 | 特性・対象ドメイン |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **超高頻度ストリーム** | 15分〜1時間 | `*/15 * * * *` | 60 秒 | 3回（指数バックオフ） | CTI速報フィード、ハートビート監視、ヘルスチェック |
+| **高頻度ストリーム** | 4時間毎 | `0 */4 * * *` | 300 秒 | 3回 | **CISA KEV Sync**, NVD 新着 CVE 差分同期 |
+| **日次バッチ** | 1日1回 (09:30 JST) | `30 9 * * *` | 1800 秒 | 2回 | **arXiv cs.CR 収集**, **IACR ePrint 収集**, OKF 変換 |
+| **定期サマリー生成** | 1日4回 (00/06/12/18) | `0 0,6,12,18 * * *`| 600 秒 | 2回 | 5階層エグゼクティブサマリー自動更新 |
+| **週次・月次監査** | 毎週日曜 03:00 JST | `0 3 * * 0` | 3600 秒 | 1回 | **SOTA IR ベンチマーク**, **カオス電源断復旧試験** |
+
+### 並行実行制御（Concurrency Control）
+1. **最大同時実行数制限（`max_active_tasks = 4`）**:
+   - 高負荷な日次バッチ（PDF抽出・OKF変換）が実行中に高頻度タスク（KEV）が発火した場合でも、スレッドプール上限によりシステムメモリの枯渇（OOM）を防ぎます。
+2. **同一タスクの多重起動防止（`prevent_overlapping = True`）**:
+   - 前回のタスク実行がネットワーク遅延等で長引いている場合、次回スケジュールの重複起動を安全にスキップ（Locking）し、ログに `SKIPPED_PREVIOUS_STILL_RUNNING` を記録します。
+
+## 7.4 レート制限保護（HTTP 429 防止ジッター・トークンバケット）
+arXiv API や NVD API などの公的サービスに対する過負荷・IPアクセス遮断（HTTP 429 Too Many Requests）を恒久的に未然防止するため、スケジューラー層にレート制限ゲートを配備します。
+
+- **トークンバケット調停**:
+  - ドメインごとに独立したバケット（例: `arxiv.org` は 1リクエスト/3秒、バースト最大 1）を設定。
+- **フルジッター付き指数バックオフ（Full Jitter Exponential Backoff）**:
+  
+  $$T_{\text{wait}} = \text{Uniform}\left(0, \min(T_{\max}, T_{\text{base}} \times 2^{\text{attempt}})\right)$$
+  
+  複数タスクが同時にリトライを行うことによる「雷鳴の群れ（Thundering Herd）」問題を完全に抑止します。
+
+---
+
+# 8. DSN-12（Process Supervisor）ホスティング & 協調プロトコル (Rev 2.0 新設)
+
+## 8.1 プロセス管理（DSN-12）とタスク実行制御（DSN-11）の非結合性原則
+本アーキテクチャでは、**「プロセス自体の物理的管理」**と**「プロセス内部での論理的タスク管理」**を厳格に分離します。
+
+```
++-------------------------------------------------------------------------------+
+| DSN-12 Process Supervisor (src/supervisor/)                                   |
+|   • OS Process Tree (Master Arbiter)                                          |
+|   • Worker Lifecycle (Fork, Exec, Healthcheck Socket, Heartbeat Pulse)        |
+|   • Signal Dispatch (SIGTERM, SIGHUP, SIGUSR1)                                |
+|   • Hardware Resource Enforcement (Memory Limits, CPU Affinities)             |
++-------------------------------------------------------------------------------+
+                                        │ Hosts as Managed Worker
+                                        ▼ (via LifecycleHook)
++-------------------------------------------------------------------------------+
+| DSN-11 Universal Workflow Engine (src/workflow/)                              |
+|   • Application Task Scheduling (Cron, High/Low Frequency Coexistence)        |
+|   • Graph Dependency Execution (DAG Engine, Bounded Streaming)                |
+|   • Transactional Safety (Saga Rollback, Append-Only WAL Replay)              |
+|   • Domain Task Ingestion (Non-invasive Callables)                            |
++-------------------------------------------------------------------------------+
+```
+
+- **`src/supervisor` の独立性**:
+  - `src/supervisor` のコード（`arbiter.py`, `service_worker.py` 等）は一切改変・統合しません。
+  - プロセスが致命的障害（SEGV や OOM による強制終了）でダウンした際のプロセス再起動は、すべて DSN-12 Arbiter のマスタープロセスが自律実行します。
+- **`src/workflow` の責任範囲**:
+  - `src/workflow` は Supervisor の一介のワーカー（`ManagedServiceWorker`）として起動されます。
+
+## 8.2 ServiceWorker インターフェースによる常駐ホスティング
+`src/supervisor/workers/service_worker.py` が要求する `LifecycleHook` プロトコルを実装した `WorkflowServiceHook` を `src/workflow/` 側に配備します。
+
+```python
+from src.supervisor.contracts import LifecycleHook
+
+
+class WorkflowServiceHook(LifecycleHook):
+    """Bridge adapter allowing WorkflowScheduler to run under DSN-12 Supervisor."""
+
+    def __init__(self, scheduler: "WorkflowScheduler") -> None:
+        self.scheduler = scheduler
+
+    def setup(self) -> bool:
+        """Called once when worker starts: Replays WAL and starts scheduler thread."""
+        self.scheduler.recover_from_wal()
+        self.scheduler.start(blocking=False)
+        return True
+
+    def health_check(self) -> bool:
+        """Called periodically by Supervisor to verify scheduler liveness."""
+        return self.scheduler.is_alive() and not self.scheduler.is_deadlocked()
+
+    def on_flush(self) -> None:
+        """Called on sync intervals: Flushes WAL buffers and syncs checkpoints."""
+        self.scheduler.wal.flush()
+
+    def teardown(self) -> None:
+        """Called on SIGTERM: Gracefully drains running tasks and stops."""
+        self.scheduler.stop(grace_timeout=30.0)
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Provides real-time telemetry to Supervisor top CLI."""
+        return self.scheduler.get_telemetry()
+```
+
+## 8.3 プロセス死活監視・自動再起動・WAL連携リカバリ
+1. **クラッシュ検知とプロセス再生**:
+   - 万が一、ワーカープロセスが C 拡張や OS レベルの OOM でクラッシュした場合、DSN-12 Arbiter が数ミリ秒以内にプロセス死を検知し、新規ワーカープロセスを自動フォークします。
+2. **自律 WAL リカバリ（Zero Data Loss）**:
+   - 新生ワーカーの `setup()` において、`OrchestratorWAL` がディスク上の未完了ログ（`outputs/wal/`）を自動検知。
+   - クラッシュ時に `RUNNING` 状態であったタスクインスタンスを復元し、以下の決定論的リカバリポリシーを適用します：
+     - **Idempotent Tasks（KEV / arXiv Ingestion）**: チェックポイントから中断フェーズを自律再開（Resume）。
+     - **Non-Idempotent Tasks**: `SagaCoordinator` を通じて先行副作用を逆順補償ロールバック（Rollback）した上で安全に再キューイング。
+
+## 8.4 グレースフルシャットダウン（SIGTERM ドレイン制御）
+Supervisor または OS から `SIGTERM` を受信した際、以下の 3 段階ドレイン手順を実行します：
+1. **フェーズ 1 (受付停止)**: 即座に新規タスクのディスパッチを停止（状態を `DRAINING` へ変更）。
+2. **フェーズ 2 (稼働中タスク待機)**: すでに実行中のタスク完了を最大 `grace_timeout`（例: 30秒）待機。
+3. **フェーズ 3 (アトミック永続化 & 終了)**: 全タスク完了またはタイムアウト時に WAL へ `SYSTEM_SHUTDOWN` をコミットし、正常終了コード `0` で exit。
+
+---
+
+# 9. ドメインタスク・オペレーター抽象化（Task & Operator Protocol） (Rev 2.0 新設)
+
+## 9.1 非破壊的アダプター原則（`src/pipeline/` 温存バインディング）
+既存の `src/pipeline/`（`arxiv_okf_fetcher.py` や各種サマリースクリプト）は、本プロジェクトの中核アセットであり、外部スクリプトや CLI からも単体起動されています。
+したがって、**既存コードを直接ワークフローエンジン専用に書き換えることは固く禁止**します。
+
+### 非侵襲アダプター機構
+既存の Python 関数、クラスメソッド、または CLI スクリプトをそのままラップする `CallableTaskOperator` を提供します。
+
+```
++---------------------------+       wraps       +-------------------------------+
+| ScheduledTask             | ----------------> | Python Callable / Pipeline    |
+| (task_id, cron, metadata) |                   | (e.g. run_arxiv_pipeline)     |
++---------------------------+                   +-------------------------------+
+```
+
+## 9.2 宣言的タスク定義（ScheduledTask & TaskInstance）
+
+### タスク定義モデル (`ScheduledTask`)
+```python
+@dataclass
+class ScheduledTask:
+    task_id: str
+    schedule: str  # Cron expression or interval (e.g. "0 */4 * * *")
+    handler: Callable[..., Any]
+    args: Tuple[Any, ...] = ()
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+    timeout_seconds: float = 600.0
+    max_retries: int = 3
+    retry_delay_seconds: float = 30.0
+    prevent_overlapping: bool = True
+    enabled: bool = True
+    tags: List[str] = field(default_factory=list)
+```
+
+### 実行インスタンスモデル (`TaskInstance`)
+```python
+class TaskState(str, Enum):
+    SCHEDULED = "scheduled"
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    RETRYING = "retrying"
+    SKIPPED = "skipped"
+
+
+@dataclass
+class TaskInstance:
+    run_id: str
+    task_id: str
+    state: TaskState
+    scheduled_time: float
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    attempt: int = 1
+    result: Optional[Any] = None
+    error: Optional[str] = None
+```
+
+## 9.3 標準組み込みタスクカタログ（arXiv, IACR, CISA KEV, CTI Backfill, SOTA Benchmark）
+`src/workflow/scheduler.py` の初期化時に標準登録されるドメインタスク構成：
+
+```python
+def register_default_catalog(scheduler: "WorkflowScheduler") -> None:
+    # 1. CISA KEV 高頻度同期 (4時間毎)
+    scheduler.register_task(
+        ScheduledTask(
+            task_id="cisa_kev_sync",
+            schedule="0 */4 * * *",
+            handler=run_cisa_kev_sync_callable,
+            timeout_seconds=300.0,
+            tags=["cti", "kev", "stream"],
+        )
+    )
+
+    # 2. arXiv cs.CR 日次バッチ収集 (毎日 09:30 JST)
+    scheduler.register_task(
+        ScheduledTask(
+            task_id="arxiv_cscr_daily_ingest",
+            schedule="30 9 * * *",
+            handler=run_arxiv_fetch_and_convert_callable,
+            timeout_seconds=1800.0,
+            tags=["paper", "arxiv", "batch"],
+        )
+    )
+
+    # 3. 5階層エグゼクティブサマリー自動更新 (1日4回 00, 06, 12, 18時)
+    scheduler.register_task(
+        ScheduledTask(
+            task_id="executive_summary_quad_update",
+            schedule="0 0,6,12,18 * * *",
+            handler=run_executive_summary_update_callable,
+            timeout_seconds=600.0,
+            tags=["summary", "reporting"],
+        )
+    )
+
+    # 4. SOTA IR ベンチマーク & カオス障害復元監査 (毎週日曜 03:00 JST)
+    scheduler.register_task(
+        ScheduledTask(
+            task_id="sota_ir_and_chaos_audit",
+            schedule="0 3 * * 0",
+            handler=run_sota_and_chaos_audit_callable,
+            timeout_seconds=3600.0,
+            tags=["audit", "benchmark", "chaos"],
+        )
+    )
+```
+
+---
+
+# 10. 可観測性 & ダッシュボード REST/SSE API 統合 (Rev 2.0 新設)
+
+## 10.1 Web Gateway 統合エンドポイント仕様
+既存の Web Gateway（`src/web/` または `site/dashboard.html`）と直接連携する REST エンドポイントを提供します。
+
+| メソッド | パス | 説明 | レスポンス例 / パラメータ |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/workflow/status` | スケジューラー全体の稼働状態・メトリクス | `{"running": true, "active_workers": 1, "tasks_count": 5, "uptime": 3600}` |
+| `GET` | `/api/workflow/tasks` | 登録全タスク一覧と直近実行ステータス | `[{"task_id": "cisa_kev_sync", "schedule": "0 */4 * * *", "last_run": {...}}]` |
+| `GET` | `/api/workflow/history` | 過去の実行インスタンス履歴（ページネーション） | `{"total": 120, "items": [{"run_id": "...", "state": "success"}]}` |
+| `POST` | `/api/workflow/trigger` | 特定タスクの手動強制実行トリガー | `{"task_id": "arxiv_cscr_daily_ingest"}` $\to$ `{"run_id": "trig_xxx"}` |
+| `POST` | `/api/workflow/tasks/{id}/pause` | 特定タスクのスケジュール一時停止 | `{"task_id": "cisa_kev_sync", "enabled": false}` |
+| `POST` | `/api/workflow/tasks/{id}/resume` | 一時停止タスクのスケジュール再開 | `{"task_id": "cisa_kev_sync", "enabled": true}` |
+
+## 10.2 リアルタイム実行ストリーミング（SSE）と状態購読
+ダッシュボード画面に対し、Server-Sent Events（SSE）を用いてミリ秒単位のタスク進行状況をリアルタイムプッシュします。
+
+- **エンドポイント**: `GET /api/workflow/events/stream`
+- **プロトコル形式**:
+  ```http
+  HTTP/1.1 200 OK
+  Content-Type: text/event-stream
+  Cache-Control: no-cache
+  Connection: keep-alive
+
+  event: task_started
+  data: {"run_id": "run_20260906_0930", "task_id": "arxiv_cscr_daily_ingest", "timestamp": "2026-09-06T09:30:00Z"}
+
+  event: task_progress
+  data: {"run_id": "run_20260906_0930", "task_id": "arxiv_cscr_daily_ingest", "progress": 0.45, "message": "Harvested 45 papers"}
+
+  event: task_completed
+  data: {"run_id": "run_20260906_0930", "task_id": "arxiv_cscr_daily_ingest", "duration": 82.4, "status": "success"}
+  ```
+
+## 10.3 Web UI 運用操作（手動トリガー・タスク一時停止・Clear / Rerun）
+`site/dashboard.html` 上に「オーケストレーター管理コンソール（Orchestrator Management Modal）」を配備し、以下のオペレーションをブラウザ上から直感的に実行可能にします：
+1. **即時テスト実行（One-Click Trigger）**: 日次バッチや KEV 同期のボタン操作によるオンデマンド実行。
+2. **ライブログモニタリング**: SSE によるリアルタイムログストリーム表示。
+3. **失敗タスクのワンクリック再試行（Clear & Rerun）**: 失敗したタスクの WAL 状態をクリアし、即時再実行。
+
+---
+
+# 11. クラス設計・公開 API インターフェース・型アノテーション仕様
+
+```python
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import (
     Any,
@@ -356,10 +740,15 @@ from typing import (
     Set,
     Tuple,
     TypeVar,
+    Union,
     runtime_checkable,
 )
 
 T = TypeVar("T")
+
+# ---------------------------------------------------------------------------
+# 1. Circuit Breaker Specification
+# ---------------------------------------------------------------------------
 
 
 class CircuitState(str, Enum):
@@ -375,6 +764,11 @@ class CircuitBreaker:
     def can_execute(self, current_time: Optional[float] = None) -> bool: ...
     def record_success(self) -> None: ...
     def record_failure(self, current_time: Optional[float] = None) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# 2. DAG Workflow Engine Specification
+# ---------------------------------------------------------------------------
 
 
 class TaskNode:
@@ -398,6 +792,11 @@ class DAGWorkflowEngine:
     def execute(
         self, initial_state: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]: ...
+
+
+# ---------------------------------------------------------------------------
+# 3. Streaming DAG & Backpressure Specification
+# ---------------------------------------------------------------------------
 
 
 class BufferPolicy(str, Enum):
@@ -442,6 +841,11 @@ class StreamingDAG(Generic[T]):
     ) -> List[StreamChunk[T]]: ...
 
 
+# ---------------------------------------------------------------------------
+# 4. Distributed Saga Coordinator Specification
+# ---------------------------------------------------------------------------
+
+
 @runtime_checkable
 class PhaseProtocol(Protocol):
     def execute(self, context: Any) -> Any: ...
@@ -461,10 +865,16 @@ class SagaCoordinator:
     def compensate_all(self, context: Any) -> None: ...
 
 
+# ---------------------------------------------------------------------------
+# 5. Crash Recovery WAL Specification
+# ---------------------------------------------------------------------------
+
+
 class EventType(str, Enum):
     CYCLE_STARTED = "cycle_started"
     CYCLE_COMPLETED = "cycle_completed"
     CYCLE_FAILED = "cycle_failed"
+    CYCLE_SUSPENDED = "cycle_suspended"
     PHASE_STARTED = "phase_started"
     PHASE_COMPLETED = "phase_completed"
     RECORD_HARVESTED = "record_harvested"
@@ -472,6 +882,10 @@ class EventType(str, Enum):
     PRODUCT_PUBLISHED = "product_published"
     HYPOTHESIS_EVALUATED = "hypothesis_evaluated"
     CHECKPOINT_CREATED = "checkpoint_created"
+    TASK_SCHEDULED = "task_scheduled"
+    TASK_STARTED = "task_started"
+    TASK_COMPLETED = "task_completed"
+    TASK_FAILED = "task_failed"
 
 
 class OrchestratorEvent:
@@ -501,28 +915,111 @@ class OrchestratorWAL:
     ) -> Optional[Any]: ...
     def list_active_cycles(self) -> List[Dict[str, Any]]: ...
     def purge_cycle_wal(self, cycle_id: str) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# 6. Autonomous Scheduler & Multi-Cadence Engine Specification (Rev 2.0)
+# ---------------------------------------------------------------------------
+
+
+class TaskState(str, Enum):
+    SCHEDULED = "scheduled"
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    RETRYING = "retrying"
+    SKIPPED = "skipped"
+
+
+@dataclass
+class ScheduledTask:
+    task_id: str
+    schedule: str
+    handler: Callable[..., Any]
+    args: Tuple[Any, ...] = ()
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+    timeout_seconds: float = 600.0
+    max_retries: int = 3
+    retry_delay_seconds: float = 30.0
+    prevent_overlapping: bool = True
+    enabled: bool = True
+    tags: List[str] = field(default_factory=list)
+
+
+@dataclass
+class TaskInstance:
+    run_id: str
+    task_id: str
+    state: TaskState
+    scheduled_time: float
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    attempt: int = 1
+    result: Optional[Any] = None
+    error: Optional[str] = None
+
+
+class CronExpressionParser:
+    def __init__(self, expr: str, tz_offset_hours: float = 9.0) -> None: ...
+    def get_next(self, base_time: Optional[float] = None) -> float: ...
+
+
+class WorkflowScheduler:
+    def __init__(
+        self,
+        wal_dir: str = "outputs/wal",
+        max_active_tasks: int = 4,
+        tick_interval: float = 1.0,
+    ) -> None: ...
+    def register_task(self, task: ScheduledTask) -> None: ...
+    def unregister_task(self, task_id: str) -> bool: ...
+    def trigger_task(self, task_id: str) -> Optional[str]: ...
+    def pause_task(self, task_id: str) -> bool: ...
+    def resume_task(self, task_id: str) -> bool: ...
+    def start(self, blocking: bool = False) -> None: ...
+    def stop(self, grace_timeout: float = 30.0) -> None: ...
+    def recover_from_wal(self) -> int: ...
+    def get_telemetry(self) -> Dict[str, Any]: ...
+    def is_alive(self) -> bool: ...
+    def is_deadlocked(self) -> bool: ...
+
+
+class WorkflowServiceHook:
+    def __init__(self, scheduler: WorkflowScheduler) -> None: ...
+    def setup(self) -> bool: ...
+    def health_check(self) -> bool: ...
+    def on_flush(self) -> None: ...
+    def teardown(self) -> None: ...
+    def get_metrics(self) -> Dict[str, Any]: ...
 ```
 
 ---
 
-# 8. 非機能要件・セキュリティ・リソース制約
+# 12. 非機能要件・セキュリティ・リソース制約
 
-## 8.1 メモリ・CPU リソース制約
-- **メモリ上限**: 常駐実行時 RSS $\le 256\text{MB}$（ストリーミング処理時でも最大 $\le 512\text{MB}$）。
-- **CPU 効率**: バックプレッシャー時のポーリングはビジーウェイトを排除し、イベント駆動または適応型バックオフ（Exponential Jitter）を採用。
+## 12.1 メモリ・CPU リソース制約
+- **メモリ上限**: 常駐実行時 RSS $\le 256\text{MB}$（大量ストリーミングおよび複数並行タスク実行時でも最大 $\le 512\text{MB}$）。
+- **CPU 効率**: スケジューラーの常駐 Tick ループは次回予定時刻に応じた動的スリープを行い、待機時 CPU 使用率 $\le 0.1\%$ を厳守。
+- **ファイルディスクリプタ上限**: WAL ログおよびパイプライン実行における FD リークをゼロ保証（全ファイル操作は `with` 句または確実な `close()`）。
 
-## 8.2 ファイルシステムセキュリティ
-- **パス走査攻撃（Path Traversal）防御**: `cycle_id` のディレクトリ名サニタイズ（`/` や `..` の置換排除）を徹底。
-- **データ不変性（Append-Only Immutability）**: WAL ログは追記専用モード（`"a"`）でのみ開き、過去ログの改ざん・上書きを禁止。
+## 12.2 ファイルシステムセキュリティ
+- **パス走査攻撃（Path Traversal）防御**: `cycle_id` や `task_id`、`run_id` の英数字サニタイズ（`/`, `\`, `..` の完全除去）を徹底。
+- **データ不変性（Append-Only Immutability）**: WAL ログファイルは追記専用モード（`"a"`）でのみ開き、過去ログの改ざん・上書きを禁止。
+- **アトミック更新**: チェックポイントおよびメタデータ書き込み時は一時ファイル＋`os.replace` によるアトミック操作を行い、電源断時の破損を未然防止。
 
 ---
 
-# 9. 品質ゲート・テスト・ベンチマーク検証仕様
+# 13. 品質ゲート・テスト・ベンチマーク検証仕様
 
-| 品質管理ゲート | 検証ツール | 合格基準 |
+| 品質管理ゲート | 検証ツール・対象 | 合格基準 |
 | :--- | :--- | :--- |
 | **静的型検査** | `mypy --strict src/workflow/` | **0 エラー**（型アノテーション 100% 網羅） |
+| **構文・コンパイル** | `python3 -m py_compile src/workflow/*.py` | **0 エラー**（全ファイル正常コンパイル） |
 | **循環的複雑度** | `xenon --max-absolute B --max-modules B --max-average A` | **全モジュール Rank A/B 適合** |
-| **コードスタイル** | `flake8`, `black`, `isort` | **0 リント違反**, 100% フォーマット適合 |
-| **単体テスト** | `pytest tests/workflow/ -v` | **100% PASS**（DAG, Streaming, Saga, WAL, Circuit） |
-| **クラッシュリカバリ検証** | `test_wal_checkpoint_and_replay` | **100% 状態完全復元** |
+| **コードスタイル** | `flake8`, `black --check`, `isort --check` | **0 リント違反**, 100% フォーマット適合 |
+| **単体テスト** | `pytest tests/workflow/ -v` | **100% PASS**（DAG, Streaming, Saga, WAL, Circuit, Scheduler, Cron） |
+| **クラッシュリカバリ検証** | `test_wal_checkpoint_and_replay` | **100% 状態完全復元（Zero Inconsistency）** |
+| **Supervisor 協調検証** | `WorkflowServiceHook` 統合テスト | **setup / health_check / on_flush / teardown 100% 正常応答** |
+| **並行性・重複防止検証** | `test_prevent_overlapping_tasks` | **多重起動ロック 100% 遵守** |
+
