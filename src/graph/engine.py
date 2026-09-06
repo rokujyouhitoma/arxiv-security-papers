@@ -644,7 +644,7 @@ class PropertyGraphEngine:
             "CWE": "#F59E0B",
             "DefenseMechanism": "#10B981",
             "DetectionRule": "#10B981",
-            "Precondition": "#F59E0B",
+            "Precondition": "#EAB308",
             "ResearchGap": "#8B5CF6",
             "ResidualRisk": "#EC4899",
             "PoCArtifact": "#06B6D4",
