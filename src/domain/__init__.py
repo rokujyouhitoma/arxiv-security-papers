@@ -6,6 +6,7 @@ over the reusable infrastructure platforms (DB, Search, Spider, Graph, Workflow,
 
 from .registry import BaseDomainPlugin, DomainRegistry, get_domain_registry
 from .security import SecurityPapersDomainPlugin, create_security_plugin
+from .source_resolver import resolve_paper_source_info
 
 # Automatically register built-in security domain plugin
 get_domain_registry().register(create_security_plugin())
@@ -16,4 +17,5 @@ __all__ = [
     "get_domain_registry",
     "SecurityPapersDomainPlugin",
     "create_security_plugin",
+    "resolve_paper_source_info",
 ]

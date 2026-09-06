@@ -24,6 +24,7 @@ from typing import (
 )
 
 from database.client import DatabaseClient
+from domain.source_resolver import resolve_paper_source_info
 from mcp.papers_server import (
     PROMPTS_MANIFEST,
     RESOURCES_MANIFEST,
@@ -306,13 +307,17 @@ def _build_dynamic_paper_mesh(
         summary = p.get("description") or p.get("summary", "")
         s_id = f"src_{clean_id}"
 
+        source_info = resolve_paper_source_info(clean_id)
         node_dict[s_id] = {
             "id": s_id,
             "cluster": "sources",
-            "title": f"arXiv: {clean_id}",
+            "title": source_info["label"],
             "sub": title[:36],
             "summary": summary[:120],
             "weight": 1.0,
+            "url": source_info["abs_url"],
+            "pdf_url": source_info["pdf_url"],
+            "source": source_info["source"],
         }
 
         text = f"{title} {summary} {' '.join(p.get('tags', []))}".lower()

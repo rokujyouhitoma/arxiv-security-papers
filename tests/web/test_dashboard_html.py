@@ -323,3 +323,82 @@ def test_dashboard_graph_query_console_ui(dashboard_html_content: str) -> None:
     assert "runPresetQuery" in dashboard_html_content
     assert "clearGraphQuery" in dashboard_html_content
     assert "/api/graph/query" in dashboard_html_content
+
+
+def test_multi_source_resolver_and_iacr_links() -> None:
+    """Verifies dynamic paper source resolution and IACR/arXiv links (Issue 177)."""
+    from domain.source_resolver import resolve_paper_source_info
+    from web.gateway.handlers import _build_dynamic_paper_mesh
+    from web.presentation.template import render_okf_preview_html
+
+    # 1. Source Resolver logic
+    arxiv_info = resolve_paper_source_info("2505.12345v2")
+    assert arxiv_info["source"] == "arxiv"
+    assert arxiv_info["label"] == "arXiv: 2505.12345v2"
+    assert arxiv_info["abs_url"] == "https://arxiv.org/abs/2505.12345"
+    assert arxiv_info["pdf_url"] == "https://arxiv.org/pdf/2505.12345v2.pdf"
+
+    iacr_info = resolve_paper_source_info("iacr-2026-386")
+    assert iacr_info["source"] == "iacr"
+    assert iacr_info["label"] == "IACR: 2026/386"
+    assert iacr_info["abs_url"] == "https://eprint.iacr.org/2026/386"
+    assert iacr_info["pdf_url"] == "https://eprint.iacr.org/2026/386.pdf"
+
+    # 2. Dynamic Paper Mesh generation in handlers.py
+    mock_papers = [
+        {
+            "clean_id": "iacr-2026-386",
+            "title": "Boolean Functions in Cryptology",
+            "description": "Analysis of affine spaces in symmetric cryptosystems.",
+            "tags": ["cryptography", "iacr.eprint"],
+        },
+        {
+            "clean_id": "2605.11111",
+            "title": "Adversarial Machine Learning Guardrails",
+            "description": "Safety boundaries in LLM prompt injection defense.",
+            "tags": ["cs.CR", "llm-security"],
+        },
+    ]
+    nodes, edges = _build_dynamic_paper_mesh(mock_papers)
+    nodes_by_id = {n["id"]: n for n in nodes}
+
+    iacr_node = nodes_by_id["src_iacr-2026-386"]
+    assert iacr_node["title"] == "IACR: 2026/386"
+    assert iacr_node["url"] == "https://eprint.iacr.org/2026/386"
+    assert "arXiv: iacr-2026-386" not in iacr_node["title"]
+
+    arxiv_node = nodes_by_id["src_2605.11111"]
+    assert arxiv_node["title"] == "arXiv: 2605.11111"
+    assert arxiv_node["url"] == "https://arxiv.org/abs/2605.11111"
+
+    # 3. HTML Preview template rendering
+    html_preview = render_okf_preview_html(
+        arxiv_id="iacr-2026-386",
+        content="""---
+title: "Test IACR Paper"
+authors: ["Alice", "Bob"]
+tags: ["cryptography"]
+timestamp: "2026-09-06"
+---
+# Content""",
+        raw_md_path="/outputs/okf_papers/2026-09-02/iacr-2026-386.md",
+    )
+    assert "IACR: 2026/386" in html_preview
+    assert "https://eprint.iacr.org/2026/386" in html_preview
+    assert "IACR ePrint 原本 ↗" in html_preview
+
+    # 4. Frontend app.js & index.html checks
+    app_js_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
+    )
+    with open(app_js_path, "r", encoding="utf-8") as f:
+        app_js = f.read()
+    assert "resolvePaperSourceInfo" in app_js
+    assert "eprint.iacr.org" in app_js
+
+    index_html_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
+    )
+    with open(index_html_path, "r", encoding="utf-8") as f:
+        index_html = f.read()
+    assert 'id="modalPaperId">Paper ID: --</span>' in index_html

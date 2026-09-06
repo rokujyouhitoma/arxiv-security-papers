@@ -39,8 +39,13 @@ def generate_japanese_executive_summary(paper: Dict[str, Any]) -> Dict[str, Any]
         ", ".join(keyphrases) if keyphrases else "セキュリティ分析, 脆弱性検証"
     )
 
+    source_label = (
+        f"IACR: {arxiv_id.replace('iacr-', '')}"
+        if arxiv_id.startswith("iacr-")
+        else f"arXiv: {arxiv_id}"
+    )
     overview_desc = (
-        f"本論文「{title_ja}」（原題: {title} / arXiv: {arxiv_id}）は、"
+        f"本論文「{title_ja}」（原題: {title} / {source_label}）は、"
         f"{paper.get('primary_category', 'cs.CR')} 分野における最新セキュリティ研究成果を取り扱っています。"
     )
 
@@ -164,7 +169,7 @@ def _render_okf_markdown(
     txt_link_str: str,
     rec_list: str,
 ) -> str:
-    """Renders formatted OKF markdown content string."""
+    id_label = "IACR ID" if paper["arxiv_id"].startswith("iacr-") else "arXiv ID"
     return raw_template.format(
         title=paper["title"].replace('"', '\\"'),
         title_ja=title_ja.replace('"', '\\"'),
@@ -176,6 +181,7 @@ def _render_okf_markdown(
         published_date=pub_date,
         authors_yaml=authors_yaml,
         arxiv_id=paper["arxiv_id"],
+        id_label=id_label,
         raw_meta_basename=os.path.basename(raw_meta_path),
         overview=exec_summary["overview"],
         background=exec_summary["background"],
@@ -276,7 +282,7 @@ trust:
 ### (日本語題名: {title_ja})
 
 > [!NOTE]
-> **OKF Metadata**: Type = `security-paper` | arXiv ID = [`{arxiv_id}`]({resource})
+> **OKF Metadata**: Type = `security-paper` | {id_label} = [`{arxiv_id}`]({resource})
 > Raw Meta = [`{raw_meta_basename}`]({rel_raw_meta_from_okf})
 
 ## エグゼクティブサマリー (Executive Summary)
@@ -300,7 +306,7 @@ trust:
 
 ## 原論文情報 (Original Paper Metadata & Raw Data)
 
-- **arXiv ID**: `{arxiv_id}`
+- **{id_label}**: `{arxiv_id}`
 - **論文URL**: [{resource}]({resource})
 - **PDFリンク**: [{pdf_url}]({pdf_url})
 - **著者**: {authors_str}
