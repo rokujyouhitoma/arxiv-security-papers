@@ -28,6 +28,20 @@ from .schema import (
     VulnerabilityEntity,
 )
 from .taxonomy import TaxonomyRegistry
+from .turtle_engine import (
+    URI,
+    DatatypeProperty,
+    Literal,
+    ObjectProperty,
+    OntologyClass,
+    OntologyInstance,
+    OntologyMetadata,
+    RawTriple,
+    RDFTerm,
+    TurtleDocumentBuilder,
+    build_sample_enterprise_ontology,
+    build_security_cti_ontology,
+)
 
 __all__ = [
     "EntityType",
@@ -49,4 +63,16 @@ __all__ = [
     "EvidenceExtractionSpec",
     "EdgeInferenceRule",
     "EdgeInferenceRuleRegistry",
+    "RDFTerm",
+    "URI",
+    "Literal",
+    "OntologyMetadata",
+    "OntologyClass",
+    "ObjectProperty",
+    "DatatypeProperty",
+    "OntologyInstance",
+    "RawTriple",
+    "TurtleDocumentBuilder",
+    "build_sample_enterprise_ontology",
+    "build_security_cti_ontology",
 ]
