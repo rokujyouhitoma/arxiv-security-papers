@@ -202,3 +202,27 @@ Presented at IEEE S&P 2026.
         assert "rdfs:subPropertyOf dcterms:title" in ttl
         assert "rdfs:subPropertyOf dcterms:date" in ttl
         assert "rdfs:subPropertyOf cito:cites" in ttl
+
+    def test_threat_model_causality_and_impact(self) -> None:
+        """Verifies Issue #185: Impact class, strideCategory, and precondition neutralization causality."""
+        doc = build_full_spectrum_security_ontology()
+        ttl = doc.serialize()
+
+        # 1. Verify sec:Impact class
+        assert "sec:Impact rdf:type owl:Class" in ttl
+        assert 'rdfs:label "被害影響・影響度"@ja' in ttl
+
+        # 2. Verify causality object properties & inverseOf
+        assert "sec:hasImpact rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:impactCausedBy" in ttl
+        assert "sec:impactCausedBy rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:hasImpact" in ttl
+
+        assert "sec:neutralizesPrecondition rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:preconditionNeutralizedBy" in ttl
+        assert "sec:preconditionNeutralizedBy rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:neutralizesPrecondition" in ttl
+
+        # 3. Verify datatype properties
+        assert "sec:strideCategory rdf:type owl:DatatypeProperty" in ttl
+        assert "sec:impactSeverity rdf:type owl:DatatypeProperty" in ttl

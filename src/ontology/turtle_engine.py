@@ -1181,13 +1181,20 @@ def _add_extended_classes_part1(builder: TurtleDocumentBuilder) -> None:
 
 
 def _add_extended_classes_part2(builder: TurtleDocumentBuilder) -> None:
-    """Adds Precondition, ResearchGap, ResidualRisk, and PublicationVenue classes."""
+    """Adds Precondition, ResearchGap, ResidualRisk, PublicationVenue, and Impact classes."""
     builder.add_class(
         uri="sec:Precondition",
         label="成立前提条件・脅威モデル",
         label_lang="ja",
         comment="攻撃や防御が成立するために必要なアクセス権限や知識モデル要件",
         section_comment="成立前提・制約境界",
+    )
+    builder.add_class(
+        uri="sec:Impact",
+        label="被害影響・影響度",
+        label_lang="ja",
+        comment="攻撃成立により発生する機密性/完全性/可用性の侵害または権限昇格等の結果事象 (STRIDE/CIA侵害)",
+        section_comment="脅威被害・結果影響",
     )
     builder.add_class(
         uri="sec:ResearchGap",
@@ -1335,6 +1342,40 @@ def _add_extended_object_properties_part1(builder: TurtleDocumentBuilder) -> Non
         domain="sec:Precondition",
         range_="sec:AttackTechnique",
     )
+    builder.add_object_property(
+        uri="sec:hasImpact",
+        inverse_of="sec:impactCausedBy",
+        label="被害影響をもたらす",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:Impact",
+        section_comment="攻撃手法と被害影響（STRIDE/CIA侵害）の因果関係",
+    )
+    builder.add_object_property(
+        uri="sec:impactCausedBy",
+        inverse_of="sec:hasImpact",
+        label="被害影響をもたらした攻撃手法",
+        label_lang="ja",
+        domain="sec:Impact",
+        range_="sec:AttackTechnique",
+    )
+    builder.add_object_property(
+        uri="sec:neutralizesPrecondition",
+        inverse_of="sec:preconditionNeutralizedBy",
+        label="攻撃前提条件を無力化・打破する",
+        label_lang="ja",
+        domain="sec:DefenseMechanism",
+        range_="sec:Precondition",
+        section_comment="防御策による攻撃成立前提条件の無力化因果関係",
+    )
+    builder.add_object_property(
+        uri="sec:preconditionNeutralizedBy",
+        inverse_of="sec:neutralizesPrecondition",
+        label="防御策により無力化される前提条件",
+        label_lang="ja",
+        domain="sec:Precondition",
+        range_="sec:DefenseMechanism",
+    )
 
 
 def _add_extended_object_properties_part2(builder: TurtleDocumentBuilder) -> None:
@@ -1478,6 +1519,21 @@ def _add_extended_datatype_properties(builder: TurtleDocumentBuilder) -> None:
         label="会議ティア",
         label_lang="ja",
         domain="sec:PublicationVenue",
+        range_="xsd:string",
+    )
+    builder.add_datatype_property(
+        uri="sec:strideCategory",
+        label="STRIDE脅威分類",
+        label_lang="ja",
+        domain="sec:Impact",
+        range_="xsd:string",
+        section_comment="被害影響属性",
+    )
+    builder.add_datatype_property(
+        uri="sec:impactSeverity",
+        label="影響深刻度",
+        label_lang="ja",
+        domain="sec:Impact",
         range_="xsd:string",
     )
 

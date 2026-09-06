@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **185** | 脅威モデル因果連鎖（STRIDE・Impact / Consequence）および前提条件無力化モデルの実装 (Phase 2) | Feature | High | New | [185-implement-threat-model-causality-impact-and-precondition-neutralization.md](185-implement-threat-model-causality-impact-and-precondition-neutralization.md) |
 | **186** | 主張（Claim）と実証（Evidence）の分離・エッジ属性具現化およびデータ型正規表現制約の実装 (Phase 3) | Feature | High | New | [186-implement-claim-evidence-reification-and-regex-data-constraints.md](186-implement-claim-evidence-reification-and-regex-data-constraints.md) |
 
 ---
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **185** | 脅威モデル因果連鎖（STRIDE・Impact / Consequence）および前提条件無力化モデルの実装 (Phase 2) | Feature | 2026-09-06 | [185-implement-threat-model-causality-impact-and-precondition-neutralization.md](closed/185-implement-threat-model-causality-impact-and-precondition-neutralization.md) |
 | **184** | OWL論理整合性向上・Incident孤立解消および既存標準語彙アライメント (Phase 1) | Feature | 2026-09-06 | [184-enhance-owl-logic-incident-coupling-and-standards-alignment.md](closed/184-enhance-owl-logic-incident-coupling-and-standards-alignment.md) |
 | **183** | CTI Graph フィルター（Entity Type / Relation Type）複数同時選択（マルチセレクト）対応 | Feature | 2026-09-06 | [183-implement-cti-graph-filter-multiselect.md](closed/183-implement-cti-graph-filter-multiselect.md) |
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | 2026-09-06 | [146-implement-edge-relation-type-filter-in-graph-tab.md](closed/146-implement-edge-relation-type-filter-in-graph-tab.md) |

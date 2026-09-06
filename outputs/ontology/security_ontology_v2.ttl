@@ -68,6 +68,11 @@ sec:Precondition rdf:type owl:Class ;
     rdfs:label "成立前提条件・脅威モデル"@ja ;
     rdfs:comment "攻撃や防御が成立するために必要なアクセス権限や知識モデル要件"@ja .
 
+# 脅威被害・結果影響
+sec:Impact rdf:type owl:Class ;
+    rdfs:label "被害影響・影響度"@ja ;
+    rdfs:comment "攻撃成立により発生する機密性/完全性/可用性の侵害または権限昇格等の結果事象 (STRIDE/CIA侵害)"@ja .
+
 # 研究限界・未解決課題
 sec:ResearchGap rdf:type owl:Class ;
     rdfs:label "未解決研究課題"@ja ;
@@ -300,6 +305,32 @@ sec:preconditionRequiredBy rdf:type owl:ObjectProperty ;
     rdfs:domain sec:Precondition ;
     rdfs:range sec:AttackTechnique .
 
+# 攻撃手法と被害影響（STRIDE/CIA侵害）の因果関係
+sec:hasImpact rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:impactCausedBy ;
+    rdfs:label "被害影響をもたらす"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:Impact .
+
+sec:impactCausedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:hasImpact ;
+    rdfs:label "被害影響をもたらした攻撃手法"@ja ;
+    rdfs:domain sec:Impact ;
+    rdfs:range sec:AttackTechnique .
+
+# 防御策による攻撃成立前提条件の無力化因果関係
+sec:neutralizesPrecondition rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:preconditionNeutralizedBy ;
+    rdfs:label "攻撃前提条件を無力化・打破する"@ja ;
+    rdfs:domain sec:DefenseMechanism ;
+    rdfs:range sec:Precondition .
+
+sec:preconditionNeutralizedBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf sec:neutralizesPrecondition ;
+    rdfs:label "防御策により無力化される前提条件"@ja ;
+    rdfs:domain sec:Precondition ;
+    rdfs:range sec:DefenseMechanism .
+
 # 防御策と残余リスクの関係
 sec:leavesUnaddressed rdf:type owl:ObjectProperty ;
     owl:inverseOf sec:unaddressedBy ;
@@ -431,4 +462,15 @@ sec:repoUrl rdf:type owl:DatatypeProperty ;
 sec:venueTier rdf:type owl:DatatypeProperty ;
     rdfs:label "会議ティア"@ja ;
     rdfs:domain sec:PublicationVenue ;
+    rdfs:range xsd:string .
+
+# 被害影響属性
+sec:strideCategory rdf:type owl:DatatypeProperty ;
+    rdfs:label "STRIDE脅威分類"@ja ;
+    rdfs:domain sec:Impact ;
+    rdfs:range xsd:string .
+
+sec:impactSeverity rdf:type owl:DatatypeProperty ;
+    rdfs:label "影響深刻度"@ja ;
+    rdfs:domain sec:Impact ;
     rdfs:range xsd:string .
