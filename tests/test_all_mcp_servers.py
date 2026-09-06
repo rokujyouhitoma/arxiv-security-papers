@@ -68,6 +68,11 @@ SERVERS = [
             {
                 "name": "query_attack_technique",
                 "args": {"technique_id": "T1059"},
+                "max_chars": 15000,
+            },
+            {
+                "name": "query_ontology_evidence",
+                "args": {"entity_id": "2504.03936"},
                 "max_chars": 5000,
             },
         ],
@@ -193,6 +198,11 @@ SERVERS = [
                 "name": "check_threat_coverage",
                 "args": {"declared_defenses": ["pickle-free", "ast-guard"]},
                 "max_chars": 3000,
+            },
+            {
+                "name": "search_defense_causal_chains",
+                "args": {"threat_id": "T1059"},
+                "max_chars": 5000,
             },
         ],
     },
