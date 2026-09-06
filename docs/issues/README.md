@@ -8,6 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **187** | オントロジー・メタモデル（TBox）のグラフDBインジェストおよびスキーマ・エクスプローラー（Schema View）の実装 | Feature | High | In Progress | [187-implement-ontology-tbox-graph-ingestion-and-schema-view.md](187-implement-ontology-tbox-graph-ingestion-and-schema-view.md) |
 
 ---
 

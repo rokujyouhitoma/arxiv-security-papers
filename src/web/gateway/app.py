@@ -77,6 +77,8 @@ class WSGIApplication:
             return self.handlers.handle_cti_graph_mesh(start_response, query_params)
         if path == "/api/graph/query":
             return self.handlers.handle_graph_query(start_response, query_params)
+        if path == "/api/graph/schema":
+            return self.handlers.handle_graph_schema(start_response)
         return None
 
     def _route_simple_api(
