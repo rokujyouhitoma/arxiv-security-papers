@@ -45,6 +45,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const mcpOutput = document.getElementById('mcpOutput');
 
   // ========================================================================
+  // Source Resolution Helper (arXiv vs IACR ePrint)
+  // ========================================================================
+  function resolvePaperSourceInfo(paperId) {
+    const cleanId = (paperId || '').trim();
+    if (cleanId.toLowerCase().startsWith('iacr-')) {
+      const match = cleanId.match(/^iacr-(\d{4})-(\d+)$/i);
+      const path = match ? `${match[1]}/${match[2]}` : cleanId.slice(5);
+      return {
+        source: 'iacr',
+        sourceName: 'IACR ePrint',
+        label: `IACR: ${path}`,
+        cleanId: cleanId,
+        absUrl: `https://eprint.iacr.org/${path}`,
+        pdfUrl: `https://eprint.iacr.org/${path}.pdf`
+      };
+    }
+    const canonId = cleanId.replace(/v\d+$/, '');
+    return {
+      source: 'arxiv',
+      sourceName: 'arXiv',
+      label: `arXiv: ${cleanId}`,
+      cleanId: cleanId,
+      absUrl: `https://arxiv.org/abs/${encodeURIComponent(canonId)}`,
+      pdfUrl: `https://arxiv.org/pdf/${encodeURIComponent(cleanId)}.pdf`
+    };
+  }
+
+  // ========================================================================
   // 1. Sidebar Navigation, Accordions, & Collapsible Toggle
   // ========================================================================
   if (sidebarToggleBtn && consoleSidebar) {
@@ -509,11 +537,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const rawTxtPath = paper.path ? ('/' + encodeURI(paper.path.replace('outputs/okf_papers/', 'raw_data/').replace('.md', '.txt'))) : '#';
       const previewUrl = `/preview/${encodeURIComponent(paper.id)}`;
 
+      const paperSrc = resolvePaperSourceInfo(paper.id);
       return `
       <div class="paper-card">
         <div style="cursor: pointer;" onclick="openPaperModal('${escapeHtml(paper.id)}')">
           <div class="card-top">
-            <span class="arxiv-id-tag">arXiv: ${escapeHtml(paper.id)}</span>
+            <span class="arxiv-id-tag">${escapeHtml(paperSrc.label)}</span>
             <span class="score-badge">Score: ${escapeHtml(String(paper['score']))}</span>
           </div>
           <h3 class="card-title">${escapeHtml(paper.title)}</h3>
@@ -564,9 +593,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.openPaperModal = async function(arxivId) {
     paperModal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
-    modalPaperId.textContent = `arXiv: ${arxivId}`;
-    if (modalArxivLink) modalArxivLink.href = `https://arxiv.org/abs/${encodeURIComponent(arxivId)}`;
-    if (modalPdfLink) modalPdfLink.href = `https://arxiv.org/pdf/${encodeURIComponent(arxivId)}.pdf`;
+    const paperSrc = resolvePaperSourceInfo(arxivId);
+    modalPaperId.textContent = paperSrc.label;
+    if (modalArxivLink) {
+      modalArxivLink.textContent = `${paperSrc.sourceName} 原本 ↗`;
+      modalArxivLink.href = paperSrc.absUrl;
+    }
+    if (modalPdfLink) modalPdfLink.href = paperSrc.pdfUrl;
 
     modalPaperTitle.textContent = '読み込み中...';
     modalPaperTitleJa.textContent = '';
@@ -630,10 +663,12 @@ document.addEventListener('DOMContentLoaded', () => {
           `;
         }
 
-        const cardsHtml = data.related_papers.map(p => `
+        const cardsHtml = data.related_papers.map(p => {
+          const relSrc = resolvePaperSourceInfo(p['target_id'] || '');
+          return `
           <div class="related-card" onclick="openPaperModal('${escapeHtml(p['target_id'] || '')}')">
             <div class="related-card-top">
-              <span class="arxiv-id-tag">arXiv: ${escapeHtml(p['target_id'] || '')}</span>
+              <span class="arxiv-id-tag">${escapeHtml(relSrc.label)}</span>
               <span class="sim-badge">類似度: ${Math.round((p['similarity'] || 0) * 100)}%</span>
             </div>
             <h4 class="related-card-title">${escapeHtml(p['title'] || p['target_id'] || '')}</h4>
@@ -642,7 +677,8 @@ document.addEventListener('DOMContentLoaded', () => {
               ${(p['shared_keywords'] || []).slice(0, 2).map(kw => `<span class="mini-tag">${escapeHtml(kw)}</span>`).join('')}
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
 
         section.innerHTML = `
           <h3 class="related-section-title">🔗 関連論文トポロジーネットワーク (Connected Papers)</h3>

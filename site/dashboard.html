@@ -2108,6 +2108,7 @@
             title: n.sub || n.title || n.name || n.id,
             cluster: clusterKey,
             desc: n.summary || n.desc || '',
+            url: n.url || '',
             x: prev ? prev.x : (width / 2 + Math.cos(angle) * radius),
             y: prev ? prev.y : (height / 2 + Math.sin(angle) * radius),
             vx: prev ? prev.vx : 0,
@@ -2811,7 +2812,14 @@
           tag.textContent = clusterCfg.label;
           tag.style.backgroundColor = clusterCfg.color;
           title.textContent = escapeHtml(node.title || node.name);
-          desc.textContent = escapeHtml(node.desc || '');
+          let contextDescHtml = '';
+          if (node.desc) {
+            contextDescHtml += `<div style="margin-bottom: 6px;">${escapeHtml(node.desc)}</div>`;
+          }
+          if (node.url) {
+            contextDescHtml += `<div><a href="${escapeHtml(node.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-blue); font-weight: bold; text-decoration: underline;">🔗 Open Primary Source &rarr;</a></div>`;
+          }
+          desc.innerHTML = contextDescHtml;
         }
 
         // Connected Edges

@@ -9,6 +9,8 @@ import json
 import re
 from typing import Any, Dict
 
+from domain.source_resolver import resolve_paper_source_info
+
 
 def extract_paper_preview_metadata(content: str) -> Dict[str, Any]:
     """
@@ -50,6 +52,12 @@ def render_okf_preview_html(
     tags_str = meta["tags"]
     date_str = meta["date"]
 
+    source_info = resolve_paper_source_info(arxiv_id)
+    paper_badge = source_info["label"]
+    source_abs_url = source_info["abs_url"]
+    source_pdf_url = source_info["pdf_url"]
+    source_name = source_info["source_name"]
+
     escaped_content = json.dumps(content, ensure_ascii=False)
 
     return f"""<!DOCTYPE html>
@@ -72,14 +80,14 @@ def render_okf_preview_html(
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div style="display: flex; gap: 0.5rem; align-items: center;">
           <span class="modal-badge">Google OKF v0.2</span>
-          <span class="arxiv-id-tag">arXiv: {html.escape(arxiv_id)}</span>
+          <span class="arxiv-id-tag">{html.escape(paper_badge)}</span>
         </div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
           <a href="{html.escape(raw_md_path)}" class="btn-link-action" target="_blank"
              rel="noopener">📝 生の Markdown (.md)</a>
-          <a href="https://arxiv.org/abs/{html.escape(arxiv_id)}" class="btn-link-action" target="_blank"
-             rel="noopener">arXiv 原本 ↗</a>
-          <a href="https://arxiv.org/pdf/{html.escape(arxiv_id)}.pdf" class="btn-link-action" target="_blank"
+          <a href="{html.escape(source_abs_url)}" class="btn-link-action" target="_blank"
+             rel="noopener">{html.escape(source_name)} 原本 ↗</a>
+          <a href="{html.escape(source_pdf_url)}" class="btn-link-action" target="_blank"
              rel="noopener">PDF 📄</a>
           <a href="/" class="btn-link-action">🏠 ポータル</a>
         </div>
