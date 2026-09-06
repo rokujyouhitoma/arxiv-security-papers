@@ -19,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **175** | dashboard.html における CTI 凡例の左上再配置、スクロール不要なフッター常時表示化、およびキャンバスズーム倍率表示・コントロールボタン (+/-) の実装 | Feature | 2026-09-06 | [175-relocate-legend-pin-footer-and-add-zoom-controls-in-dashboard.md](closed/175-relocate-legend-pin-footer-and-add-zoom-controls-in-dashboard.md) |
 | **174** | dashboard.html における Canvas 領域の見切れ解消、コントロールデッキ表示切替、およびスクロール（縦スクロール＆キャンバス内パン/ズーム）機能の実装 | Bug | 2026-09-06 | [174-enable-canvas-scrolling-and-fix-clipping-in-dashboard.md](closed/174-enable-canvas-scrolling-and-fix-clipping-in-dashboard.md) |
 | **173** | CTI グラフクエリにおける 1-Hop 隣接エンティティおよびインシデントエッジの自動展開（Paper 単体検索時のエッジ消失バグ解消） | Bug | 2026-09-06 | [173-expand-1hop-incident-edges-in-graph-query.md](closed/173-expand-1hop-incident-edges-in-graph-query.md) |
 | **172** | SSE 接続による Web ワーカー枯渇・ブロッキング障害の解消および dashboard.html 内の不要 SSE 撤廃 | Bug / Security | 2026-09-05 | [172-fix-sse-saturation-blocking-web-workers.md](closed/172-fix-sse-saturation-blocking-web-workers.md) |

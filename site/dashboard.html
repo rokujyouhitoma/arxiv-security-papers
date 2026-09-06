@@ -33,10 +33,10 @@
 
     html,
     body {
-      overflow-x: hidden;
-      overflow-y: auto;
-      min-height: 100vh;
-      height: auto;
+      overflow: hidden;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
     }
 
     body {
@@ -168,11 +168,12 @@
       cursor: crosshair;
     }
 
-    /* Cluster Legend Overlay (Bottom-Left Collapsible) */
+    /* Cluster Legend Overlay (Top-Left Collapsible) */
     .cluster-legend {
       position: absolute;
-      bottom: 14px;
+      top: 14px;
       left: 14px;
+      bottom: auto;
       background-color: rgba(244, 239, 230, 0.94);
       border: 1px solid var(--border-dark);
       padding: 8px 12px;
@@ -185,6 +186,7 @@
       max-width: 260px;
       pointer-events: auto;
       transition: all 0.2s ease;
+      overflow: visible;
     }
 
     .legend-header {
@@ -226,6 +228,8 @@
       align-items: center;
       gap: 6px;
       font-size: 11px;
+      position: relative;
+      cursor: help;
     }
 
     .legend-dot {
@@ -401,12 +405,17 @@
     /* Footer Controls */
     footer {
       background-color: var(--bg-main);
-      padding: 8px 16px;
+      padding: 0 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       font-size: 11px;
       color: var(--fg-muted);
+      flex-shrink: 0;
+      height: 36px;
+      border-top: 1px solid var(--border-dark);
+      overflow: visible;
+      z-index: 20;
     }
 
     .footer-links a {
@@ -676,6 +685,26 @@
       transform: translateY(-50%) translateX(4px);
     }
 
+    /* Tooltip position: right */
+    [data-tooltip-pos="right"]::before {
+      bottom: auto;
+      top: 50%;
+      left: calc(100% + 4px);
+      right: auto;
+      transform: translateY(-50%) translateX(-4px);
+      border-width: 5px 5px 5px 0;
+      border-style: solid;
+      border-color: transparent rgba(15, 23, 42, 0.95) transparent transparent;
+    }
+
+    [data-tooltip-pos="right"]::after {
+      bottom: auto;
+      top: 50%;
+      left: calc(100% + 12px);
+      right: auto;
+      transform: translateY(-50%) translateX(-4px);
+    }
+
     [data-tooltip]:hover::before,
     [data-tooltip]:hover::after,
     [data-tooltip]:focus-visible::before,
@@ -698,6 +727,22 @@
     [data-tooltip-pos="top"]:focus-visible::after {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
+    }
+
+    [data-tooltip-pos="left"]:hover::before,
+    [data-tooltip-pos="left"]:focus-visible::before,
+    [data-tooltip-pos="left"]:hover::after,
+    [data-tooltip-pos="left"]:focus-visible::after {
+      opacity: 1;
+      transform: translateY(-50%) translateX(0);
+    }
+
+    [data-tooltip-pos="right"]:hover::before,
+    [data-tooltip-pos="right"]:focus-visible::before,
+    [data-tooltip-pos="right"]:hover::after,
+    [data-tooltip-pos="right"]:focus-visible::after {
+      opacity: 1;
+      transform: translateY(-50%) translateX(0);
     }
 
     /* Tooltip horizontal alignment variants for preventing edge cut-off (Issue 166) */
@@ -1006,9 +1051,10 @@
       display: flex;
       flex-direction: column;
       flex: 1;
+      min-height: 0;
       height: calc(100vh - 48px - 36px);
-      min-height: 480px;
       position: relative;
+      overflow: hidden;
     }
 
     /* Full-height expansion when header is hidden */
@@ -1059,8 +1105,80 @@
 
     .graph-workspace .canvas-container {
       flex: 1;
+      min-height: 0;
       height: 100%;
+      position: relative;
+      width: 100%;
+      overflow: hidden;
       border-bottom: none;
+    }
+
+    /* Canvas Zoom Navigation Controls (Bottom-Right) */
+    .canvas-zoom-controls {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      background-color: rgba(244, 239, 230, 0.94);
+      border: 1px solid var(--border-dark);
+      box-shadow: 2px 2px 0px var(--border-dark);
+      padding: 3px 4px;
+      border-radius: 4px;
+      backdrop-filter: blur(4px);
+    }
+
+    .btn-zoom {
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-dark);
+      color: var(--fg-main);
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: all 0.12s ease;
+      line-height: 1;
+    }
+
+    .btn-zoom:hover {
+      background-color: var(--border-dark);
+      color: var(--bg-main);
+    }
+
+    .btn-zoom-reset {
+      font-size: 12px;
+      margin-left: 2px;
+    }
+
+    .zoom-badge {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-dark);
+      color: var(--fg-main);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 0 7px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 3px;
+      min-width: 46px;
+      text-align: center;
+    }
+
+    .zoom-badge:hover {
+      background-color: var(--accent-blue);
+      color: #fff;
     }
 
     /* Product Workspace & CTA Banner */
@@ -1322,72 +1440,84 @@
         <button id="btnFloatingDeckToggle" class="btn-floating-deck" onclick="toggleGraphControlDeck(false)"
           title="コントロールデッキを表示する (Shortcut: D)">🎛️ コントロールデッキ表示 (D)</button>
 
-        <!-- Cluster Color Legend (Context Mesh - Bottom-Left) -->
+        <!-- Cluster Color Legend (Context Mesh - Top-Left) -->
         <div class="cluster-legend" id="contextLegend">
           <div class="legend-header">
             <span class="legend-title">Cluster Classification</span>
-            <button id="btnToggleLegendContext" class="btn-legend-toggle" onclick="toggleLegend()" title="凡例の表示/非表示">▼
-              隠す</button>
+            <button id="btnToggleLegendContext" class="btn-legend-toggle" onclick="toggleLegend()"
+              data-tooltip="Context Mesh 凡例パネルの折りたたみ / 展開" data-tooltip-pos="right" title="凡例の表示/非表示">▼ 隠す</button>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="論文原本データ・学術ソースノード（赤）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: var(--accent-coral);"></div>
             <span>Sources (arXiv/IACR Papers)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="攻撃手法・暗号技術・プロトコルエンティティ（黒）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: var(--border-dark);"></div>
             <span>Entities (Attacks &amp; Crypto)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="攻撃成立証明・セキュリティ主張・侵害事実ノード（緑）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: var(--accent-green);"></div>
             <span>Claims (Proofs &amp; Breaches)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="パッチ適用・セキュリティ意思決定・CISOポリシーノード（青）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: var(--accent-blue);"></div>
             <span>Decisions (Patches &amp; CISO)</span>
           </div>
         </div>
 
-        <!-- CTI Color Legend (CTI Mesh - Bottom-Left) -->
+        <!-- CTI Color Legend (CTI Mesh - Top-Left) -->
         <div class="cluster-legend" id="ctiLegend" style="display: none;">
           <div class="legend-header">
             <span class="legend-title">CTI Entity &amp; Relation</span>
-            <button id="btnToggleLegendCti" class="btn-legend-toggle" onclick="toggleLegend()" title="凡例の表示/非表示">▼
-              隠す</button>
+            <button id="btnToggleLegendCti" class="btn-legend-toggle" onclick="toggleLegend()"
+              data-tooltip="CTI 凡例パネルの折りたたみ / 展開" data-tooltip-pos="right" title="凡例の表示/非表示">▼ 隠す</button>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="arXiv / IACR 暗号・セキュリティ学術論文ノード（青）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: #3B82F6;"></div>
             <span>🔵 :Paper (arXiv Security)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="MITRE ATT&CK / ATLAS 攻撃テクニックノード（赤）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: #EF4444;"></div>
             <span>🔴 :AttackTechnique (ATT&CK / ATLAS)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="CWE 共通脆弱性タイプ・セキュリティ弱点ノード（橙）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: #F59E0B;"></div>
             <span>🟠 :CWE (Vulnerabilities)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="セキュリティ対策・緩和策・防御メカニズムノード（緑）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: #10B981;"></div>
             <span>🟢 :DefenseMechanism (Mitigations)</span>
           </div>
           <div class="legend-divider"
             style="border-top: 1px dashed var(--border-dark); margin: 6px 0; padding-top: 4px;"></div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="論文・実証コードが脆弱性を攻撃・悪用する関係（赤実線）" data-tooltip-pos="right">
             <span style="color: #EF4444; font-weight: bold;">&mdash;&mdash;</span>
             <span style="font-size: 10px;">EXPLOITS (Solid)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="防御策が攻撃手法や脆弱性を緩和・遮断する関係（緑破線）" data-tooltip-pos="right">
             <span style="color: #10B981; font-weight: bold;">- - -</span>
             <span style="font-size: 10px;">MITIGATES (Dashed)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="論文が脆弱性や新たな攻撃ベクトルを報告・開示する関係（橙実線）" data-tooltip-pos="right">
             <span style="color: #F59E0B; font-weight: bold;">&mdash;&mdash;</span>
             <span style="font-size: 10px;">DISCLOSES (Solid)</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item" data-tooltip="攻撃手法や脆弱性の親子・派生タクソノミー関係（灰点線）" data-tooltip-pos="right">
             <span style="color: #9CA3AF; font-weight: bold;">&middot; &middot; &middot;</span>
             <span style="font-size: 10px;">SUBCLASS_OF (Dotted)</span>
           </div>
+        </div>
+
+        <!-- 🔍 Canvas Zoom Navigation Overlay (Bottom-Right) -->
+        <div class="canvas-zoom-controls" id="canvasZoomControls">
+          <button id="btnZoomOut" class="btn-zoom" onclick="zoomCanvasBy(0.85)"
+            data-tooltip="グラフを縮小 (Shortcut: -)" data-tooltip-pos="top">−</button>
+          <button id="zoomLevelBadge" class="zoom-badge" onclick="resetZoom()"
+            data-tooltip="クリックで100%にリセット (Shortcut: 0)" data-tooltip-pos="top">100%</button>
+          <button id="btnZoomIn" class="btn-zoom" onclick="zoomCanvasBy(1.15)"
+            data-tooltip="グラフを拡大 (Shortcut: +)" data-tooltip-pos="top">+</button>
+          <button id="btnZoomReset" class="btn-zoom btn-zoom-reset" onclick="resetZoom()"
+            data-tooltip="ズーム倍率と視点を100%初期位置にリセット (Shortcut: 0)" data-tooltip-pos="top">⟲</button>
         </div>
 
         <!-- Node Details Callout (Side Inspector Drawer) -->
@@ -1456,6 +1586,14 @@
                 <tr>
                   <td><code>H キー</code></td>
                   <td>ヘッダー折りたたみ / 全画面ワークスペース切替</td>
+                </tr>
+                <tr>
+                  <td><code>+ / - キー</code></td>
+                  <td>グラフのズームイン（拡大） / ズームアウト（縮小）</td>
+                </tr>
+                <tr>
+                  <td><code>0 キー</code></td>
+                  <td>ズーム倍率100%等倍 &amp; 視点位置リセット</td>
                 </tr>
                 <tr>
                   <td><code>? キー</code></td>
@@ -1551,13 +1689,21 @@
        ====================================================================== -->
   <footer>
     <div>
-      <strong>arxiv-security-papers</strong> &copy; 2026 | ISO 32000-1 / Google OKF v0.2 Compliant &bull; <span
-        id="footerSyncTime" style="color: var(--fg-muted);">Last Sync: --</span>
+      <strong>arxiv-security-papers</strong> &copy; 2026 | <span class="info-badge"
+        data-tooltip="国際規格 ISO 32000-1 (PDF) および Google Open Knowledge Format v0.2 に完全準拠したセキュリティデータ"
+        data-tooltip-pos="top" data-tooltip-align="left" style="cursor: help;">ISO 32000-1 / Google OKF v0.2 Compliant</span> &bull; <span
+        id="footerSyncTime" style="color: var(--fg-muted);"
+        data-tooltip="arXiv API および SQLite / CTI グラフデータベースの最終同期タイムスタンプ"
+        data-tooltip-pos="top" data-tooltip-align="left">Last Sync: --</span>
     </div>
     <div class="footer-links">
-      <button class="btn-action" onclick="resetPhysics()">Reset Physics</button>
-      <button class="btn-action" onclick="randomizeGraph()">Inject Node</button>
-      <a href="/index.html">&larr; Back to Console</a>
+      <button class="btn-action" id="btnResetPhysicsFooter" onclick="resetPhysics()"
+        data-tooltip="ノードの物理演算力学シミュレーション配置およびズーム視点を初期化します" data-tooltip-pos="top">Reset Physics</button>
+      <button class="btn-action" id="btnRandomizeGraphFooter" onclick="randomizeGraph()"
+        data-tooltip="動作検証用のダミーインシデントノード（CVE-2026-XXXX）をグラフ上に動的注入します" data-tooltip-pos="top">Inject Node</button>
+      <a href="/index.html" id="linkBackToConsoleFooter"
+        data-tooltip="エンタープライズ統合クラウドコンソール (index.html) のポータルへ移動します"
+        data-tooltip-pos="top" data-tooltip-align="right">&larr; Back to Console</a>
     </div>
   </footer>
 
@@ -2559,7 +2705,32 @@
         viewTransform.x = mx - (mx - viewTransform.x) * scaleRatio;
         viewTransform.y = my - (my - viewTransform.y) * scaleRatio;
         viewTransform.scale = newScale;
+        updateZoomBadge();
       }, { passive: false });
+
+      function updateZoomBadge() {
+        const badge = document.getElementById('zoomLevelBadge');
+        if (badge) {
+          badge.textContent = Math.round(viewTransform.scale * 100) + '%';
+        }
+      }
+
+      window.zoomCanvasBy = function(factor) {
+        const center = { x: width / 2, y: height / 2 };
+        const newScale = Math.max(0.25, Math.min(4.0, viewTransform.scale * factor));
+        if (Math.abs(newScale - viewTransform.scale) < 1e-4) return;
+
+        const scaleRatio = newScale / viewTransform.scale;
+        viewTransform.x = center.x - (center.x - viewTransform.x) * scaleRatio;
+        viewTransform.y = center.y - (center.y - viewTransform.y) * scaleRatio;
+        viewTransform.scale = newScale;
+        updateZoomBadge();
+      };
+
+      window.resetZoom = function() {
+        viewTransform = { x: 0, y: 0, scale: 1.0 };
+        updateZoomBadge();
+      };
 
       function selectNode(node) {
         selectedNode = node;
@@ -2674,6 +2845,7 @@
 
       window.resetPhysics = function() {
         viewTransform = { x: 0, y: 0, scale: 1.0 };
+        updateZoomBadge();
         NODES.forEach((n, idx) => {
           const angle = (idx / NODES.length) * Math.PI * 2;
           const radius = Math.min(width, height) * 0.32;
@@ -3367,6 +3539,17 @@
         }
         if (e.key === 'h' || e.key === 'H') {
           toggleDashboardHeader();
+        }
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          window.zoomCanvasBy(1.15);
+        }
+        if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          window.zoomCanvasBy(0.85);
+        }
+        if (e.key === '0') {
+          window.resetZoom();
         }
         if (e.key === '?' || (e.shiftKey && e.key === '/')) {
           if (typeof toggleGraphHelpDrawer === 'function') {
