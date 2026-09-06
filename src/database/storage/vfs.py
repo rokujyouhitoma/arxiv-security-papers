@@ -184,10 +184,107 @@ class MemoryVFS(VFS):
             return path in self._files
 
 
+class ChaosVFSFile(VFSFile):
+    """
+    Chaos-injected VFS file handle wrapper for power-loss and I/O fault simulation.
+    """
+
+    def __init__(self, target_file: VFSFile, vfs: "ChaosVFS") -> None:
+        self._target = target_file
+        self._vfs = vfs
+        self._lock = threading.RLock()
+
+    def read(self, offset: int, size: int) -> bytes:
+        with self._lock:
+            self._vfs.stats["reads"] += 1
+            return self._target.read(offset, size)
+
+    def write(self, offset: int, data: bytes) -> int:
+        with self._lock:
+            limit = self._vfs._fail_after_writes
+            if limit is not None and self._vfs._write_count >= limit:
+                self._vfs.stats["write_failures"] += 1
+                raise IOError("ChaosVFS: Simulated sudden power cut during disk write")
+            self._vfs._write_count += 1
+            self._vfs.stats["writes"] += 1
+            return self._target.write(offset, data)
+
+    def truncate(self, size: int) -> None:
+        with self._lock:
+            self._target.truncate(size)
+
+    def sync(self) -> None:
+        with self._lock:
+            if self._vfs._fail_on_sync:
+                self._vfs.stats["sync_failures"] += 1
+                raise IOError("ChaosVFS: Simulated power cut during disk flush (fsync)")
+            self._vfs.stats["syncs"] += 1
+            self._target.sync()
+
+    def file_size(self) -> int:
+        with self._lock:
+            return self._target.file_size()
+
+    def close(self) -> None:
+        with self._lock:
+            self._target.close()
+
+
+class ChaosVFS(VFS):
+    """
+    Chaos-injected Virtual File System proxy for testing storage crash resilience.
+    """
+
+    def __init__(self, underlying_vfs: Optional[VFS] = None) -> None:
+        self._underlying = underlying_vfs or PosixVFS()
+        self._fail_after_writes: Optional[int] = None
+        self._fail_on_sync: bool = False
+        self._write_count: int = 0
+        self.stats: Dict[str, int] = {
+            "reads": 0,
+            "writes": 0,
+            "syncs": 0,
+            "write_failures": 0,
+            "sync_failures": 0,
+        }
+        self._lock = threading.RLock()
+
+    def set_fail_after_writes(self, count: Optional[int]) -> None:
+        """Sets the number of successful writes before raising an IOError."""
+        with self._lock:
+            self._fail_after_writes = count
+            self._write_count = 0
+
+    def set_fail_on_sync(self, enable: bool = True) -> None:
+        """Enables or disables simulated crash during fsync()."""
+        with self._lock:
+            self._fail_on_sync = enable
+
+    def reset_stats(self) -> None:
+        """Resets all I/O metrics and failure injection flags."""
+        with self._lock:
+            self._write_count = 0
+            self._fail_after_writes = None
+            self._fail_on_sync = False
+            for k in self.stats:
+                self.stats[k] = 0
+
+    def open(self, path: str, mode: str = "r+b") -> VFSFile:
+        underlying_file = self._underlying.open(path, mode=mode)
+        return ChaosVFSFile(underlying_file, self)
+
+    def delete(self, path: str) -> bool:
+        return self._underlying.delete(path)
+
+    def exists(self, path: str) -> bool:
+        return self._underlying.exists(path)
+
+
 # Global VFS Registry
 _VFS_REGISTRY: Dict[str, VFS] = {
     "posix": PosixVFS(),
     "memory": MemoryVFS(),
+    "chaos": ChaosVFS(),
 }
 _DEFAULT_VFS: str = "posix"
 

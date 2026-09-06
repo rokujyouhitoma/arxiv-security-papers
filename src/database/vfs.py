@@ -3,6 +3,8 @@
 
 from .storage.vfs import (
     VFS,
+    ChaosVFS,
+    ChaosVFSFile,
     MemoryVFS,
     MemoryVFSFile,
     PosixVFS,
@@ -13,6 +15,8 @@ from .storage.vfs import (
 )
 
 __all__ = [
+    "ChaosVFS",
+    "ChaosVFSFile",
     "MemoryVFS",
     "MemoryVFSFile",
     "PosixVFS",

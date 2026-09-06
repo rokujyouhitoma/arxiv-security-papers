@@ -271,3 +271,9 @@ reannotate_cti: activate ## Re-annotate all historical OKF papers with CTI techn
 .PHONY: benchmark_ir
 benchmark_ir: activate ## Run SOTA IR Benchmark comparing BM25, Dense Vector, and Hybrid search
 	PYTHONPATH=src:. ${VENV_PYTHON} -m search.eval.sota_runner --output docs/benchmarks/sota_evaluation.md
+
+.PHONY: test_chaos
+test_chaos: activate ## Run ChaosVFS power-loss and ARIES crash resilience audit
+	PYTHONPATH=src:. ${VENV_PYTHON} -m database.chaos_runner --output docs/audits/database_resilience_report.md
+	${VENV_BIN}/pytest tests/database/scenarios/test_chaos_power_loss.py tests/database/test_database_mutation_resilience.py
+

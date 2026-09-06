@@ -6,9 +6,7 @@
 
 ## 1. 進行中・未完了 Issue 一覧 (Active Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **194** | カオスVFS・電源断シミュレーション・ミューテーションテストによる自作DBの耐障害性・ARIES復旧完全性証明 | Feature / Resilience | High | In Progress | [194-database-chaos-vfs-and-mutation-crash-resilience.md](194-database-chaos-vfs-and-mutation-crash-resilience.md) |
+*現在進行中の未完了 Issue はありません。全課題完了済みです。*
 
 ---
 
@@ -16,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **194** | カオスVFS・電源断シミュレーション・ミューテーションテストによる自作DBの耐障害性・ARIES復旧完全性証明 | Feature / Resilience | 2026-09-06 | [194-database-chaos-vfs-and-mutation-crash-resilience.md](closed/194-database-chaos-vfs-and-mutation-crash-resilience.md) |
 | **193** | IR標準ベンチマーク（BEIR / CTI-Bench）によるハイブリッド探索（BM25+HNSW+Graph）の定量的SOTA性能立証とCI計測基盤の実装 | Feature / Benchmark | 2026-09-06 | [193-benchmark-hybrid-search-ir-sota-and-ci-metrics.md](closed/193-benchmark-hybrid-search-ir-sota-and-ci-metrics.md) |
 | **192** | グラフ可視化におけるノード密集の解消と間隔最適化（物理斥力・ばね長動的スケーリング・衝突回避・UI密度制御の実装） | Feature / UIUX | 2026-09-06 | [192-enhance-graph-layout-spacing-and-density-controls.md](closed/192-enhance-graph-layout-spacing-and-density-controls.md) |
 | **191** | Schema View における逆関係・双方向エッジの重なり解消（二次ベジェ曲線・有向矢印・ラベル位置オフセット対応） | Bug | 2026-09-06 | [191-fix-schema-view-bidirectional-edge-overlap-and-curved-arrows.md](closed/191-fix-schema-view-bidirectional-edge-overlap-and-curved-arrows.md) |
