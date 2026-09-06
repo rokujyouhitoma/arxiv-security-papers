@@ -1431,6 +1431,9 @@
             <button id="btnModeCti" class="btn-tool" onclick="setGraphMode('cti')"
               data-tooltip="MITRE ATT&CK 攻撃手法、CWE 脆弱性、論文を結ぶ脅威インテリジェンスグラフを表示" data-tooltip-pos="bottom"
               data-tooltip-align="left">🛡️ CTI Graph (ATT&CK / CWE)</button>
+            <button id="btnModeSchema" class="btn-tool" onclick="setGraphMode('schema')"
+              data-tooltip="W3C OWL / Turtle セキュリティオントロジーの TBox メタスキーマ（17クラスと因果・具現化述語構造）を表示" data-tooltip-pos="bottom"
+              data-tooltip-align="left">📐 Schema View</button>
           </div>
           <div id="ctiFilters" style="display: none; align-items: center; gap: 6px;">
             <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">FILTER:<span class="info-badge"
@@ -1674,6 +1677,45 @@
             <button id="btnRelMitigates" class="btn-rel-chip active" onclick="toggleEdgeRelation('MITIGATES')" data-tooltip="MITIGATES (防御・緩和) 関係のエッジを表示/非表示" data-tooltip-pos="right"><span class="rel-indicator rel-mitigates"></span>MITIGATES</button>
             <button id="btnRelDiscloses" class="btn-rel-chip active" onclick="toggleEdgeRelation('DISCLOSES')" data-tooltip="DISCLOSES (脆弱性開示) 関係のエッジを表示/非表示" data-tooltip-pos="right"><span class="rel-indicator rel-discloses"></span>DISCLOSES</button>
             <button id="btnRelSubclass" class="btn-rel-chip active" onclick="toggleEdgeRelation('SUBCLASS_OF')" data-tooltip="SUBCLASS_OF (分類・派生) 関係のエッジを表示/非表示" data-tooltip-pos="right"><span class="rel-indicator rel-subclass"></span>SUBCLASS</button>
+          </div>
+        </div>
+
+        <!-- Schema Color Legend (Schema View - Top-Left) -->
+        <div class="cluster-legend" id="schemaLegend" style="display: none;">
+          <div class="legend-header">
+            <span class="legend-title">📐 W3C OWL TBox Schema</span>
+            <button id="btnToggleLegendSchema" class="btn-legend-toggle" onclick="toggleLegend()"
+              data-tooltip="Schema 凡例パネルの折りたたみ / 展開" data-tooltip-pos="right" title="凡例の表示/非表示">▼ 隠す</button>
+          </div>
+          <div class="legend-item" data-tooltip="学術論文・知識メタデータ (Paper, Venue, PoC)">
+            <div class="legend-dot" style="background-color: #4f46e5;"></div>
+            <span>sec:Paper / PoCArtifact</span>
+          </div>
+          <div class="legend-item" data-tooltip="脅威アクター・攻撃手法・脆弱性 (ATT&CK, CWE)">
+            <div class="legend-dot" style="background-color: #ea580c;"></div>
+            <span>sec:AttackTechnique / CWE</span>
+          </div>
+          <div class="legend-item" data-tooltip="被害影響・実世界インシデント (STRIDE, Severity)">
+            <div class="legend-dot" style="background-color: #db2777;"></div>
+            <span>sec:Impact / Incident</span>
+          </div>
+          <div class="legend-item" data-tooltip="脅威前提条件・防御・検知・ベンチマーク">
+            <div class="legend-dot" style="background-color: #16a34a;"></div>
+            <span>sec:Defense / Precondition</span>
+          </div>
+          <div class="legend-item" data-tooltip="具現化実体 (学術的主張 Claim & 評価結果 EvaluationResult)">
+            <div class="legend-dot" style="background-color: #8b5cf6;"></div>
+            <span>sec:Claim / Evaluation</span>
+          </div>
+          <div class="legend-divider"
+            style="border-top: 1px dashed var(--border-dark); margin: 6px 0; padding-top: 4px;"></div>
+          <div class="legend-item" data-tooltip="攻撃因果・防御無力化関係（赤実線・橙破線）">
+            <span style="color: #EF4444; font-weight: bold;">&mdash;&mdash;</span>
+            <span style="font-size: 10px;">Causal Properties</span>
+          </div>
+          <div class="legend-item" data-tooltip="具現化実体・評価結果結合関係（紫点線）">
+            <span style="color: #8b5cf6; font-weight: bold;">- - -</span>
+            <span style="font-size: 10px;">Reified &amp; Provenance</span>
           </div>
         </div>
 
@@ -2015,6 +2057,8 @@
       let ctiRawNodes = [];
       let ctiRawEdges = [];
       let ctiRawGaps = [];
+      let schemaRawNodes = [];
+      let schemaRawEdges = [];
       let contextRawNodes = [];
       let contextRawEdges = [];
       const contextBackupNodes = JSON.parse(JSON.stringify(NODES));
@@ -2399,28 +2443,45 @@
         currentGraphMode = mode;
         const btnMesh = document.getElementById('btnModeMesh');
         const btnCti = document.getElementById('btnModeCti');
+        const btnSchema = document.getElementById('btnModeSchema');
         const ctiFiltersEl = document.getElementById('ctiFilters');
         const contextLegend = document.getElementById('contextLegend');
         const ctiLegend = document.getElementById('ctiLegend');
+        const schemaLegend = document.getElementById('schemaLegend');
 
         if (mode === 'cti') {
           if (btnMesh) btnMesh.classList.remove('active');
           if (btnCti) btnCti.classList.add('active');
+          if (btnSchema) btnSchema.classList.remove('active');
           if (ctiFiltersEl) ctiFiltersEl.style.display = 'flex';
           if (contextLegend) contextLegend.style.display = 'none';
           if (ctiLegend) ctiLegend.style.display = 'flex';
+          if (schemaLegend) schemaLegend.style.display = 'none';
           resizeCanvas();
           if (activeGraphQuery) {
             await window.executeGraphQuery(activeGraphQuery);
           } else {
             await fetchCtiMesh(true);
           }
+        } else if (mode === 'schema') {
+          if (btnMesh) btnMesh.classList.remove('active');
+          if (btnCti) btnCti.classList.remove('active');
+          if (btnSchema) btnSchema.classList.add('active');
+          if (ctiFiltersEl) ctiFiltersEl.style.display = 'none';
+          if (contextLegend) contextLegend.style.display = 'none';
+          if (ctiLegend) ctiLegend.style.display = 'none';
+          if (schemaLegend) schemaLegend.style.display = 'flex';
+          activeTwoHopNodes = null;
+          resizeCanvas();
+          await fetchSchemaMesh();
         } else {
           if (btnMesh) btnMesh.classList.add('active');
           if (btnCti) btnCti.classList.remove('active');
+          if (btnSchema) btnSchema.classList.remove('active');
           if (ctiFiltersEl) ctiFiltersEl.style.display = 'none';
           if (contextLegend) contextLegend.style.display = 'flex';
           if (ctiLegend) ctiLegend.style.display = 'none';
+          if (schemaLegend) schemaLegend.style.display = 'none';
           activeTwoHopNodes = null;
           resizeCanvas();
           applyContextMesh();
@@ -2665,6 +2726,94 @@
           applyCtiFilter();
         } catch (err) {
           console.error('Failed to fetch CTI mesh:', err);
+        }
+      }
+
+      async function fetchSchemaMesh() {
+        try {
+          const resp = await fetch('/api/graph/schema');
+          if (!resp.ok) return;
+          const data = await resp.json();
+          if (data.status !== 'success') return;
+
+          schemaRawNodes = data.nodes || [];
+          schemaRawEdges = data.edges || [];
+
+          applySchemaGraph();
+        } catch (err) {
+          console.error('Failed to fetch schema mesh:', err);
+        }
+      }
+
+      function applySchemaGraph() {
+        if (currentGraphMode !== 'schema') return;
+
+        const badge = document.getElementById('graphQueryResultBadge');
+        if (badge) {
+          badge.textContent = `📐 TBox Schema: ${schemaRawNodes.length} Classes / ${schemaRawEdges.length} Relations (W3C OWL v2.0)`;
+          badge.style.color = '#8b5cf6';
+        }
+
+        const existingPos = new Map();
+        NODES.forEach(n => existingPos.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy }));
+
+        NODES.length = 0;
+        nodeMap.clear();
+        EDGES.length = 0;
+
+        const totalNodes = schemaRawNodes.length;
+        schemaRawNodes.forEach((n, idx) => {
+          const prev = existingPos.get(n.id);
+          const angle = (idx / Math.max(1, totalNodes)) * Math.PI * 2;
+          const radius = Math.min(width, height) * 0.35;
+          const nodeObj = {
+            id: n.id,
+            name: n.type || n.id,
+            title: n.label || n.type || n.id,
+            label: 'OntologyClass',
+            category: 'OWL Class',
+            desc: n.comment || '',
+            uri: n.uri || '',
+            url: n.uri || '',
+            color: n.color || '#6366f1',
+            radius: n.radius || 18,
+            is_schema: true,
+            cluster: 'schema',
+            x: prev ? prev.x : (width / 2 + Math.cos(angle) * radius),
+            y: prev ? prev.y : (height / 2 + Math.sin(angle) * radius),
+            vx: prev ? prev.vx : 0,
+            vy: prev ? prev.vy : 0,
+            degree: 0,
+          };
+          NODES.push(nodeObj);
+          nodeMap.set(nodeObj.id, nodeObj);
+        });
+
+        const activeNodeIds = new Set(schemaRawNodes.map(n => n.id));
+        schemaRawEdges.forEach(e => {
+          if (activeNodeIds.has(e.source) && activeNodeIds.has(e.target)) {
+            const edgeObj = {
+              id: e.id,
+              source: e.source,
+              target: e.target,
+              label: e.label || e.type,
+              type: e.type,
+              inverse_of: e.inverse_of || '',
+              is_causal: !!e.is_causal,
+              is_reified: !!e.is_reified,
+              is_schema: true,
+              confidence_tier: 'HIGH',
+            };
+            EDGES.push(edgeObj);
+            const src = nodeMap.get(e.source);
+            const dst = nodeMap.get(e.target);
+            if (src) src.degree = (src.degree || 0) + 1;
+            if (dst) dst.degree = (dst.degree || 0) + 1;
+          }
+        });
+
+        if (simulation) {
+          simulation.alpha(0.8).restart();
         }
       }
 
@@ -3158,6 +3307,20 @@
             descHtml += `<div style="margin-top: 4px; padding: 2px 6px; background: rgba(245, 158, 11, 0.15); border-left: 3px solid #F59E0B; font-size: 10px; color: #B45309; font-weight: bold;">⚡ Research Gap: No linked security papers in corpus yet</div>`;
           }
           desc.innerHTML = descHtml;
+        } else if (currentGraphMode === 'schema') {
+          tag.textContent = 'OWL CLASS';
+          tag.style.backgroundColor = node.color || '#6366f1';
+          title.textContent = escapeHtml(node.title || node.name || node.id);
+
+          let schemaDescHtml = '';
+          if (node.uri) {
+            schemaDescHtml += `<div style="font-size: 11px; color: #8b5cf6; font-family: monospace; margin-bottom: 6px; word-break: break-all;"><strong>URI:</strong> ${escapeHtml(node.uri)}</div>`;
+          }
+          if (node.desc) {
+            schemaDescHtml += `<div style="font-size: 11px; line-height: 1.4; margin-bottom: 8px; padding: 6px 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">${escapeHtml(node.desc)}</div>`;
+          }
+          schemaDescHtml += `<div style="font-size: 10px; color: var(--fg-muted);">📐 W3C OWL 2.0 TBox Metamodel Node</div>`;
+          desc.innerHTML = schemaDescHtml;
         } else {
           const clusterCfg = CLUSTERS[node.cluster] || CLUSTERS.entity;
           tag.textContent = clusterCfg.label;
@@ -3180,8 +3343,15 @@
           const targetNode = nodeMap.get(targetId);
           const tName = targetNode ? (targetNode.name || targetNode.id) : targetId;
           const arrow = e.source === node.id ? '&rarr;' : '&larr;';
+          const relLabel = e.label || e.rel || e.type || 'relates';
           let badge = '';
-          if (e.confidence_tier) {
+          if (e.is_schema) {
+            if (e.is_causal) {
+              badge = ` <span style="font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: #EF4444; color: #fff;">CAUSAL</span>`;
+            } else if (e.is_reified) {
+              badge = ` <span style="font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: #8B5CF6; color: #fff;">REIFIED</span>`;
+            }
+          } else if (e.confidence_tier) {
             const tierColor = e.confidence_tier === 'HIGH' ? '#10B981' : (e.confidence_tier === 'MEDIUM' ? '#F59E0B' : '#EF4444');
             const pct = Math.round((Number(e.confidence) || 0) * 100);
             badge = ` <span style="font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: ${tierColor}; color: #fff; vertical-align: middle;">${escapeHtml(e.confidence_tier)} ${pct}%</span>`;
@@ -3193,7 +3363,10 @@
           if (e.evidence_quote) {
             metaHtml += `<div style="font-size: 9px; color: var(--fg-muted); font-style: italic; margin-top: 1px; padding-left: 10px;">&ldquo;${escapeHtml(e.evidence_quote)}&rdquo;</div>`;
           }
-          return `<div style="margin-bottom: 6px;">${escapeHtml(e.rel)} ${arrow} <strong>${escapeHtml(tName)}</strong>${badge}${metaHtml}</div>`;
+          if (e.inverse_of) {
+            metaHtml += `<div style="font-size: 9px; color: var(--fg-muted); margin-top: 1px; padding-left: 10px;">⇄ inverse: <code>${escapeHtml(e.inverse_of)}</code></div>`;
+          }
+          return `<div style="margin-bottom: 6px;">${escapeHtml(relLabel)} ${arrow} <strong>${escapeHtml(tName)}</strong>${badge}${metaHtml}</div>`;
         });
         edgesInfo.innerHTML = `<strong>Relations (${connected.length}):</strong><br/>` + (rels.length ? rels.join('') : '<em>Isolated Node</em>');
 

@@ -1590,6 +1590,16 @@ class GatewayHandlers:
         }
         return response_json(start_response, res)
 
+    def handle_graph_schema(
+        self,
+        start_response: Callable[..., Any],
+    ) -> List[bytes]:
+        """Handles /api/graph/schema for TBox ontology schema exploration."""
+        from graph.ontology_loader import export_schema_graph_json
+
+        res = export_schema_graph_json()
+        return response_json(start_response, res)
+
     def handle_preview(
         self, start_response: Callable[..., Any], path: str
     ) -> List[bytes]:
