@@ -116,6 +116,10 @@
                 <span class="nav-item-icon">📈</span>
                 <span class="nav-item-text">システム観測 & パイプライン</span>
               </a>
+              <a href="#/database" class="nav-item nav-tab-btn" data-tab="databaseTab" id="navDatabase">
+                <span class="nav-item-icon">🗄️</span>
+                <span class="nav-item-text">データベース & ストレージ</span>
+              </a>
               <a href="#/supervisor" class="nav-item nav-tab-btn" data-tab="supervisorTab" id="navSupervisor">
                 <span class="nav-item-icon">⚡</span>
                 <span class="nav-item-text">プロセス監視 (Supervisor Top)</span>
@@ -541,10 +545,10 @@
                 </div>
               </div>
 
-              <!-- 6. Database & Storage Engine Performance & IOPS -->
+              <!-- 6. Storage Engine & WAL Telemetry (Streamlined) -->
               <div class="metric-card" style="background-color: var(--console-bg-panel);">
                 <div class="card-header">
-                  <span class="card-title">🗄️ Database Performance &amp; IOPS</span>
+                  <span class="card-title">🗄️ Storage Engine &amp; WAL Telemetry</span>
                   <span class="card-tag" id="badgeDbEngine" style="color: var(--console-accent-navy); font-weight: bold;">MVCC + Dual CSR</span>
                 </div>
                 <div style="font-size: 11px; margin-top: 4px;">
@@ -560,18 +564,139 @@
                     <span>Buffer Pool / Vector Cache Hit:</span>
                     <strong style="color: var(--console-accent-green);" id="valDbCacheHit">-- / --</strong>
                   </div>
-                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
-                    <div style="display: flex; justify-content: space-between;">
-                      <span style="color: var(--console-fg-muted);">WAL Throughput / Sync Lag:</span>
+                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                      <span style="color: var(--console-fg-muted);">WAL Sync Lag:</span>
                       <strong style="color: var(--console-fg-primary);" id="valDbWalLag">-- KB/s (0.18ms)</strong>
                     </div>
+                    <a href="#/database" class="nav-tab-btn" data-tab="databaseTab" style="color: var(--console-accent-navy); text-decoration: none; font-weight: bold; font-size: 11px;">詳細台帳 ↗</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 5B: DATABASE & MULTI-DATABASE EXPLORER (DSN-05 / DSN-21 / Issue 195) -->
+        <section id="databaseTab" class="tab-content">
+          <div class="system-workspace">
+            <!-- Multi-Database Selector Deck -->
+            <div class="card-header" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 16px;">🗄️</span>
+                <strong style="font-size: 13px;">Active Database Scope:</strong>
+              </div>
+              <div class="filter-pills-group" id="databaseSelectorPills" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button type="button" class="filter-pill active" data-db="arxiv_security_db" id="btnDbArxiv">🗃️ arxiv_security_db (Core &amp; Vector)</button>
+                <button type="button" class="filter-pill" data-db="cti_catalog_db" id="btnDbCti">🛡️ cti_catalog_db (ATT&amp;CK &amp; CTI)</button>
+                <button type="button" class="filter-pill" data-db="analytics_db" id="btnDbAnalytics">📊 analytics_db (Telemetry &amp; Trends)</button>
+                <button type="button" class="filter-pill" data-db="graph_db" id="btnDbGraph">🕸️ graph_db (Knowledge Graph &amp; SKO)</button>
+              </div>
+            </div>
+
+            <!-- Database Overview KPI Grid -->
+            <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 12px;">
+              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">🗄️ Target Database</span>
+                  <span class="card-tag" id="badgeDbScopeTag" style="color: var(--console-accent-navy); font-weight: bold;">--</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Display Name:</span>
+                    <strong id="valDbTargetName" style="color: var(--console-accent-navy);">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Category:</span>
+                    <span id="valDbCategory" style="font-weight: 500;">--</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--console-fg-muted);">Storage Engine:</span>
+                    <strong id="valDbStorageEngine" style="color: var(--console-fg-primary); font-size: 10px;">--</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="metric-card" style="background-color: var(--console-bg-subpanel);">
+                <div class="card-header">
+                  <span class="card-title">📦 Capacity &amp; Records</span>
+                  <span class="card-tag" id="badgeDbCapacityStatus" style="color: var(--console-accent-green); font-weight: bold;">HEALTHY</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Physical Size:</span>
+                    <strong id="valDbTotalSize" style="color: var(--console-accent-green); font-size: 12px;">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Total Record Count:</span>
+                    <strong id="valDbTotalRows" style="color: var(--console-accent-coral);">--</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--console-fg-muted);">Registered Tables:</span>
+                    <strong id="valDbTableCount">--</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">⚡ IOPS &amp; Query Latency</span>
+                  <span class="card-tag" id="badgeDbIopsTier" style="color: var(--console-accent-green); font-weight: bold;">OPTIMAL</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Read / Write IOPS:</span>
+                    <strong id="valDbExplorerIops" style="color: var(--console-accent-green);">-- / -- IOPS</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Avg / p99 Latency:</span>
+                    <strong id="valDbExplorerLatency" style="color: var(--console-accent-navy);">-- / -- ms</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--console-fg-muted);">Buffer / Cache Hit:</span>
+                    <strong id="valDbExplorerCacheHit" style="color: var(--console-accent-green);">-- / --</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="metric-card" style="background-color: var(--console-bg-subpanel);">
+                <div class="card-header">
+                  <span class="card-title">🛡️ Durability &amp; WAL State</span>
+                  <span class="card-tag" style="color: var(--console-accent-navy); font-weight: bold;">ARIES / WAL</span>
+                </div>
+                <div style="font-size: 11px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">WAL Flush / Lag:</span>
+                    <strong id="valDbExplorerWalLag">-- KB/s (0.00ms)</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--console-fg-muted);">Concurrency Mode:</span>
+                    <span id="valDbConcurrency" style="font-size: 10px; font-weight: 500;">--</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--console-fg-muted);">Storage File Path:</span>
+                    <code id="valDbFilePath" style="font-size: 9px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">--</code>
                   </div>
                 </div>
               </div>
             </div>
 
+            <!-- SQL Query Terminal Snippet -->
+            <div style="background-color: var(--console-bg-canvas); border: 1px solid var(--console-border-dark); border-radius: 4px; padding: 8px 12px; margin-bottom: 12px; font-family: var(--console-font-mono); font-size: 11px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--console-fg-muted);">
+                <span>⚡ Executed SQL Introspection Queries:</span>
+                <span style="color: var(--console-accent-green);">● Status: OK (0.001ms)</span>
+              </div>
+              <div style="color: var(--console-accent-navy); font-weight: 500;">
+                1. <code style="color: var(--console-accent-coral);">SHOW DATABASES;</code> &rarr; <span style="color: var(--console-fg-primary);" id="sqlResultDatabases">--</span>
+              </div>
+              <div style="color: var(--console-accent-navy); font-weight: 500; margin-top: 2px;">
+                2. <code style="color: var(--console-accent-coral);" id="sqlQueryShowTables">SHOW TABLES FROM arxiv_security_db;</code> &rarr; <span style="color: var(--console-fg-primary);" id="sqlResultTablesSummary">--</span>
+              </div>
+            </div>
+
             <!-- Live Database Tables & Storage Breakdown Table -->
-            <div class="metric-card" style="margin-top: 14px; background-color: var(--console-bg-subpanel);">
+            <div class="metric-card" style="background-color: var(--console-bg-subpanel);">
               <div class="card-header" style="border-bottom: 2px solid var(--console-border-dark); padding-bottom: 8px; margin-bottom: 10px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <span style="font-size: 14px;">🗃️</span>
@@ -582,20 +707,6 @@
                   <span>Tables: <strong id="badgeDbTableCount" style="color: var(--console-accent-navy);">--</strong></span>
                   <span>Total Rows: <strong id="badgeDbTotalRows" style="color: var(--console-accent-coral);">--</strong></span>
                   <span>Total Size: <strong id="badgeDbTotalSize" style="color: var(--console-accent-green);">--</strong></span>
-                </div>
-              </div>
-
-              <!-- SQL Query Terminal Snippet -->
-              <div style="background-color: var(--console-bg-canvas); border: 1px solid var(--console-border-dark); border-radius: 4px; padding: 8px 12px; margin-bottom: 10px; font-family: var(--console-font-mono); font-size: 11px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--console-fg-muted);">
-                  <span>⚡ Executed SQL Introspection Queries:</span>
-                  <span style="color: var(--console-accent-green);">● Status: OK (0.001ms)</span>
-                </div>
-                <div style="color: var(--console-accent-navy); font-weight: 500;">
-                  1. <code style="color: var(--console-accent-coral);">SHOW DATABASES;</code> &rarr; <span style="color: var(--console-fg-primary);" id="sqlResultDatabases">--</span>
-                </div>
-                <div style="color: var(--console-accent-navy); font-weight: 500; margin-top: 2px;">
-                  2. <code style="color: var(--console-accent-coral);">SHOW TABLES FROM arxiv_security_db;</code> &rarr; <span style="color: var(--console-fg-primary);" id="sqlResultTablesSummary">--</span>
                 </div>
               </div>
 

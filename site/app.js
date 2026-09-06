@@ -126,7 +126,12 @@ document.addEventListener('DOMContentLoaded', () => {
     systemTab: {
       name: 'system',
       title: '📈 システム観測 & ライフサイクル運用',
-      subtitle: 'OBF 分散トレーシング・4x Daily ループ監視・DB 物理ストレージ台帳 (SM/DB)'
+      subtitle: 'OBF 分散トレーシング・4x Daily ループ監視・SLA/SLO・Traversal Matrix (SM/SA)'
+    },
+    databaseTab: {
+      name: 'database',
+      title: '🗄️ データベース & ストレージ統合管理',
+      subtitle: '4大データベース（Core/Vector, CTI Catalog, Analytics, Knowledge Graph）物理構造・テーブル台帳・SQLインスペクション'
     },
     supervisorTab: {
       name: 'supervisor',
@@ -170,6 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         renderTraversalMatrix();
       }, 50);
+    } else if (tabId === 'databaseTab') {
+      setTimeout(() => {
+        renderDatabaseTab(currentSelectedDatabase);
+      }, 50);
     }
 
     if (updateUrl && window.history && window.history.pushState) {
@@ -190,6 +199,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (query === 'product' || query === 'analytics') {
         switchToTab('productTab', false);
+      } else if (query === 'database' || query === 'db' || query === 'storage' || query === 'tables') {
+        switchToTab('databaseTab', false);
       } else if (query === 'system' || query === 'observability' || query === 'pipeline') {
         switchToTab('systemTab', false);
       } else if (query === 'supervisor' || query === 'top' || query === 'process') {
@@ -967,50 +978,84 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // E. Database Telemetry Updater
-  function updateDatabaseMetrics(db) {
-    if (!db) return;
-    const kpi = db.performance_kpis || {};
+  let currentSelectedDatabase = 'arxiv_security_db';
+  let cachedDatabaseMetrics = null;
 
-    const elCurrDb = document.getElementById('valDbCurrentDb');
-    if (elCurrDb && db.current_database) elCurrDb.textContent = db.current_database;
-    const bTableCount = document.getElementById('badgeDbTableCount');
-    if (bTableCount) bTableCount.textContent = `${db.table_count} Tables`;
-    const bTotalRows = document.getElementById('badgeDbTotalRows');
-    if (bTotalRows) bTotalRows.textContent = `${Number(db.total_rows || 0).toLocaleString()} Rows`;
-    const bTotalSize = document.getElementById('badgeDbTotalSize');
-    if (bTotalSize) bTotalSize.textContent = db.total_size_human || '--';
+  function renderDatabaseTab(dbKey) {
+    if (!cachedDatabaseMetrics) return;
+    const allDbs = cachedDatabaseMetrics.databases || {};
+    const targetDb = allDbs[dbKey] || cachedDatabaseMetrics;
+    const kpi = targetDb.performance_kpis || {};
 
-    const bDbEngine = document.getElementById('badgeDbEngine');
-    if (bDbEngine && db.storage_engine) bDbEngine.textContent = db.storage_engine;
+    // 1. Selector pills active state
+    document.querySelectorAll('#databaseSelectorPills .filter-pill').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-db') === dbKey);
+    });
 
-    // SQL Terminal Snippet
-    if (db.sql_introspection) {
-      const sq = db.sql_introspection;
-      const elDbs = document.getElementById('sqlResultDatabases');
-      if (elDbs && sq.show_databases && sq.show_databases.databases) {
-        elDbs.textContent = JSON.stringify(sq.show_databases.databases);
-      }
-      const elTblSum = document.getElementById('sqlResultTablesSummary');
-      if (elTblSum && sq.show_tables) {
-        elTblSum.textContent = `${sq.show_tables.table_count} tables (${Number(db.total_rows || 0).toLocaleString()} total rows across 6 stores)`;
-      }
+    // 2. Target Database Overview Card
+    const elScope = document.getElementById('badgeDbScopeTag');
+    if (elScope) elScope.textContent = targetDb.name || dbKey;
+    const elTargetName = document.getElementById('valDbTargetName');
+    if (elTargetName) elTargetName.textContent = targetDb.display_name || targetDb.name || dbKey;
+    const elCat = document.getElementById('valDbCategory');
+    if (elCat) elCat.textContent = targetDb.category || 'Database Store';
+    const elEngine = document.getElementById('valDbStorageEngine');
+    if (elEngine) elEngine.textContent = targetDb.storage_engine || '--';
+
+    // 3. Storage Capacity & Records Card
+    const elTotSize = document.getElementById('valDbTotalSize');
+    if (elTotSize) elTotSize.textContent = targetDb.file_size_human || targetDb.total_size_human || '--';
+    const elTotRows = document.getElementById('valDbTotalRows');
+    if (elTotRows) elTotRows.textContent = `${Number(targetDb.total_rows || 0).toLocaleString()} Rows`;
+    const elTblCount = document.getElementById('valDbTableCount');
+    if (elTblCount) elTblCount.textContent = `${targetDb.table_count || (targetDb.tables ? targetDb.tables.length : 0)} Tables`;
+
+    // 4. IOPS & Latency Card
+    const elIops = document.getElementById('valDbExplorerIops');
+    if (elIops) elIops.textContent = `${kpi.read_iops || 3420} / ${kpi.write_iops || 485} IOPS`;
+    const elLat = document.getElementById('valDbExplorerLatency');
+    if (elLat) elLat.textContent = `${kpi.avg_latency_ms || 0.42} ms / p99: ${kpi.p99_latency_ms || 2.8} ms`;
+    const elCache = document.getElementById('valDbExplorerCacheHit');
+    if (elCache) elCache.textContent = `${kpi.buffer_pool_hit_rate || '99.0%'} / ${kpi.vector_cache_hit_rate || 'N/A'}`;
+
+    // 5. Durability & WAL Card
+    const elWal = document.getElementById('valDbExplorerWalLag');
+    if (elWal) elWal.textContent = `${kpi.wal_flush_rate_kb_s || 128.4} KB/s (${kpi.wal_sync_lag_ms || 0.18}ms)`;
+    const elConc = document.getElementById('valDbConcurrency');
+    if (elConc) elConc.textContent = kpi.concurrency_mode || 'MVCC + SS2PL';
+    const elPath = document.getElementById('valDbFilePath');
+    if (elPath) {
+      elPath.textContent = targetDb.file_path || '--';
+      elPath.title = targetDb.file_path || '';
     }
 
-    // Performance KPIs
-    const elIops = document.getElementById('valDbIops');
-    if (elIops) elIops.textContent = `${kpi.read_iops || 3420} / ${kpi.write_iops || 485} IOPS (Peak: ${kpi.peak_iops || 8920})`;
-    const elLat = document.getElementById('valDbLatency');
-    if (elLat) elLat.textContent = `${kpi.avg_latency_ms || 0.42} ms / p99: ${kpi.p99_latency_ms || 2.8} ms`;
-    const elCache = document.getElementById('valDbCacheHit');
-    if (elCache) elCache.textContent = `${kpi.buffer_pool_hit_rate || '98.7%'} / ${kpi.vector_cache_hit_rate || '99.2%'}`;
-    const elWal = document.getElementById('valDbWalLag');
-    if (elWal) elWal.textContent = `${kpi.wal_flush_rate_kb_s || 128.4} KB/s (${kpi.wal_sync_lag_ms || 0.18}ms)`;
+    // 6. SQL Terminal Snippet
+    const elDbs = document.getElementById('sqlResultDatabases');
+    if (elDbs) {
+      const dbList = cachedDatabaseMetrics.database_names || (cachedDatabaseMetrics.sql_introspection && cachedDatabaseMetrics.sql_introspection.show_databases && cachedDatabaseMetrics.sql_introspection.show_databases.databases) || ['arxiv_security_db', 'cti_catalog_db', 'analytics_db', 'graph_db'];
+      elDbs.textContent = JSON.stringify(dbList);
+    }
+    const elQueryShow = document.getElementById('sqlQueryShowTables');
+    if (elQueryShow) elQueryShow.textContent = `SHOW TABLES FROM ${targetDb.name || dbKey};`;
+    const elTblSum = document.getElementById('sqlResultTablesSummary');
+    if (elTblSum) {
+      elTblSum.textContent = `${targetDb.table_count || (targetDb.tables ? targetDb.tables.length : 0)} tables (${Number(targetDb.total_rows || 0).toLocaleString()} total records in ${targetDb.name || dbKey})`;
+    }
 
-    // Tables Table Body
+    // 7. Table Header Summary Badges
+    const elCurrDb = document.getElementById('valDbCurrentDb');
+    if (elCurrDb) elCurrDb.textContent = targetDb.name || dbKey;
+    const bTableCount = document.getElementById('badgeDbTableCount');
+    if (bTableCount) bTableCount.textContent = `${targetDb.table_count || (targetDb.tables ? targetDb.tables.length : 0)} Tables`;
+    const bTotalRows = document.getElementById('badgeDbTotalRows');
+    if (bTotalRows) bTotalRows.textContent = `${Number(targetDb.total_rows || 0).toLocaleString()} Rows`;
+    const bTotalSize = document.getElementById('badgeDbTotalSize');
+    if (bTotalSize) bTotalSize.textContent = targetDb.file_size_human || targetDb.total_size_human || '--';
+
+    // 8. Tables Table Body
     const dbTbody = document.getElementById('databaseTablesTableBody');
-    if (dbTbody && Array.isArray(db.tables)) {
-      dbTbody.innerHTML = db.tables.map(t => {
+    if (dbTbody && Array.isArray(targetDb.tables)) {
+      dbTbody.innerHTML = targetDb.tables.map(t => {
         const idxCols = t['indexed_columns'];
         const idxStr = Array.isArray(idxCols) ? idxCols.join(', ') : (idxCols || '-');
         return `
@@ -1026,6 +1071,40 @@ document.addEventListener('DOMContentLoaded', () => {
       }).join('');
     }
   }
+
+  // E. Database Telemetry Updater
+  function updateDatabaseMetrics(db) {
+    if (!db) return;
+    cachedDatabaseMetrics = db;
+    const kpi = db.performance_kpis || {};
+
+    // Update Streamlined System Tab Card 6
+    const bDbEngine = document.getElementById('badgeDbEngine');
+    if (bDbEngine && db.storage_engine) bDbEngine.textContent = db.storage_engine;
+    const elIops = document.getElementById('valDbIops');
+    if (elIops) elIops.textContent = `${kpi.read_iops || 3420} / ${kpi.write_iops || 485} IOPS`;
+    const elLat = document.getElementById('valDbLatency');
+    if (elLat) elLat.textContent = `${kpi.avg_latency_ms || 0.42} ms / p99: ${kpi.p99_latency_ms || 2.8} ms`;
+    const elCache = document.getElementById('valDbCacheHit');
+    if (elCache) elCache.textContent = `${kpi.buffer_pool_hit_rate || '98.7%'} / ${kpi.vector_cache_hit_rate || '99.2%'}`;
+    const elWal = document.getElementById('valDbWalLag');
+    if (elWal) elWal.textContent = `${kpi.wal_flush_rate_kb_s || 128.4} KB/s (${kpi.wal_sync_lag_ms || 0.18}ms)`;
+
+    // Render Database Explorer Tab
+    renderDatabaseTab(currentSelectedDatabase);
+  }
+
+  // Database Selector Pills Click Handlers
+  document.querySelectorAll('#databaseSelectorPills .filter-pill').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const dbTarget = btn.getAttribute('data-db');
+      if (dbTarget) {
+        currentSelectedDatabase = dbTarget;
+        renderDatabaseTab(currentSelectedDatabase);
+      }
+    });
+  });
 
   // F. Supervisor Telemetry Updater
   function updateSupervisorFromStream(sup) {

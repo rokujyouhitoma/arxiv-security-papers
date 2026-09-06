@@ -150,11 +150,13 @@ def test_ported_product_system_supervisor_views() -> None:
     # 1. Navigation items
     assert 'id="navProduct"' in content, "navProduct nav item required"
     assert 'id="navSystem"' in content, "navSystem nav item required"
+    assert 'id="navDatabase"' in content, "navDatabase nav item required"
     assert 'id="navSupervisor"' in content, "navSupervisor nav item required"
 
     # 2. Main content sections
     assert 'id="productTab"' in content, "productTab section required"
     assert 'id="systemTab"' in content, "systemTab section required"
+    assert 'id="databaseTab"' in content, "databaseTab section required"
     assert 'id="supervisorTab"' in content, "supervisorTab section required"
 
     # 3. Canvas and visual elements
@@ -163,21 +165,29 @@ def test_ported_product_system_supervisor_views() -> None:
     assert 'id="traversalMatrix"' in content, "Traversal matrix container required"
     assert 'id="pipelineBar"' in content, "Pipeline status bar required"
 
-    # 4. Storage ledger and supervisor top tables
+    # 4. Storage ledger, multi-db selector, and supervisor top tables
     assert 'id="databaseTablesTableBody"' in content, "Database tables body required"
+    assert (
+        'id="databaseSelectorPills"' in content
+    ), "Multi-database selector pills required"
+    assert 'id="btnDbArxiv"' in content, "btnDbArxiv selector required"
+    assert 'id="btnDbCti"' in content, "btnDbCti selector required"
+    assert 'id="btnDbAnalytics"' in content, "btnDbAnalytics selector required"
+    assert 'id="btnDbGraph"' in content, "btnDbGraph selector required"
     assert (
         'id="supervisorWorkersTableBody"' in content
     ), "Supervisor workers body required"
 
 
 def test_ported_telemetry_script_handlers() -> None:
-    """Verify site/app.js contains calculation, rendering, and SSE routines (Issue 169)."""
+    """Verify site/app.js contains calculation, rendering, and SSE routines (Issue 169 & 195)."""
     js_text = Path("site/app.js").read_text(encoding="utf-8")
 
     # Routing and tab config
     assert "TAB_CONFIG" in js_text, "TAB_CONFIG object required"
     assert "productTab" in js_text, "productTab in TAB_CONFIG required"
     assert "systemTab" in js_text, "systemTab in TAB_CONFIG required"
+    assert "databaseTab" in js_text, "databaseTab in TAB_CONFIG required"
     assert "supervisorTab" in js_text, "supervisorTab in TAB_CONFIG required"
 
     # Analytics routines
@@ -186,7 +196,8 @@ def test_ported_telemetry_script_handlers() -> None:
     assert "drawWalkChart" in js_text, "Walk chart routine required"
     assert "renderTraversalMatrix" in js_text, "Traversal matrix routine required"
 
-    # Telemetry and SSE streaming
+    # Telemetry, multi-database explorer, and SSE streaming
+    assert "renderDatabaseTab" in js_text, "Multi-database renderer required"
     assert "updateDatabaseMetrics" in js_text, "Database metrics updater required"
     assert "updateSupervisorFromStream" in js_text, "Supervisor updater required"
     assert "syncConsoleTelemetry" in js_text, "Console telemetry sync required"
