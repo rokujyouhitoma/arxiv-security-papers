@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **202** | オントロジー述語仕様（TBox/Domain/Range/Labels）の schema.py への一元化（SSOT化）および turtle_engine の純粋シリアライザー分離 | Architecture / Refactor | 2026-09-06 | [202-unify-ontology-semantics-in-schema-and-decouple-turtle-engine.md](closed/202-unify-ontology-semantics-in-schema-and-decouple-turtle-engine.md) |
 | **198** | Pure-Python PDF エンジンにおける図表・アーキテクチャ図の自動抽出および OKF 埋め込み基盤の実装 (SC-1〜SC-6多層防御完備) | Feature | 2026-09-06 | [198-extract-figures-and-diagrams-in-pure-python-pdf-engine.md](closed/198-extract-figures-and-diagrams-in-pure-python-pdf-engine.md) |
 | **200** | AI エージェント向け MCP サーバーにおけるオントロジー因果探索・エビデンス推論ツールの拡充 | Feature | 2026-09-06 | [200-expand-mcp-server-ontology-causal-search-and-evidence-tools.md](closed/200-expand-mcp-server-ontology-causal-search-and-evidence-tools.md) |
 | **196** | cti_catalog_db および analytics_db の src/database (自作DBエンジン) 活用とドメイン分離・データ移行の徹底 | Architecture / Refactor | 2026-09-06 | [196-integrate-src-database-engine-for-cti-and-analytics.md](closed/196-integrate-src-database-engine-for-cti-and-analytics.md) |
