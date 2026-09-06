@@ -491,6 +491,22 @@
       color: var(--bg-main);
     }
 
+    .filter-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.25);
+      margin-right: 5px;
+      vertical-align: -0.5px;
+      flex-shrink: 0;
+    }
+
+    .btn-tool.active .filter-dot {
+      border-color: rgba(255, 255, 255, 0.7);
+      box-shadow: 0 0 2px rgba(255, 255, 255, 0.5);
+    }
+
     /* Graph Query Console */
     .graph-query-console {
       display: flex;
@@ -1363,19 +1379,19 @@
               data-tooltip="すべての種類のノード（論文・ATT&CK・CWE）を表示します" data-tooltip-pos="bottom"
               data-tooltip-align="left">All</button>
             <button id="filterPaper" class="btn-tool" onclick="setCtiFilter('Paper')" data-tooltip="論文ノード（青）のみを表示します"
-              data-tooltip-pos="bottom">🔵 Papers</button>
+              data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #3B82F6;"></span>Papers</button>
             <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')"
-              data-tooltip="ATT&CK 攻撃テクニックノード（赤）のみを表示します" data-tooltip-pos="bottom">🔴 ATT&CK</button>
+              data-tooltip="ATT&CK 攻撃テクニックノード（赤）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #EF4444;"></span>ATT&CK</button>
             <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')"
-              data-tooltip="CWE 脆弱性弱点ノード（橙）のみを表示します" data-tooltip-pos="bottom">🟠 CWE</button>
+              data-tooltip="CWE 脆弱性弱点ノード（橙）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #F59E0B;"></span>CWE</button>
             <button id="filterPrecondition" class="btn-tool" onclick="setCtiFilter('Precondition')"
-              data-tooltip="前提条件・脅威モデルノード（黄）のみを表示します" data-tooltip-pos="bottom">🟡 Precondition</button>
+              data-tooltip="前提条件・脅威モデルノード（黄）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #EAB308;"></span>Precondition</button>
             <button id="filterRule" class="btn-tool" onclick="setCtiFilter('DetectionRule')"
-              data-tooltip="検知ルールノード（緑）のみを表示します" data-tooltip-pos="bottom">🟢 Rule</button>
+              data-tooltip="検知ルールノード（緑）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #10B981;"></span>Rule</button>
             <button id="filterPoc" class="btn-tool" onclick="setCtiFilter('PoCArtifact')"
-              data-tooltip="PoC実証コードノード（水色）のみを表示します" data-tooltip-pos="bottom">🔷 PoC</button>
+              data-tooltip="PoC実証コードノード（水色）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #06B6D4;"></span>PoC</button>
             <button id="filterGap" class="btn-tool" onclick="setCtiFilter('ResearchGap')"
-              data-tooltip="リサーチギャップノード（紫）のみを表示します" data-tooltip-pos="bottom">🟣 Gap</button>
+              data-tooltip="リサーチギャップノード（紫）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #8B5CF6;"></span>Gap</button>
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()"
               data-tooltip="論文による研究・対策が未カバーの攻撃テクニック（リサーチギャップ）を点滅強調します" data-tooltip-pos="bottom">⚡ Highlight Gaps (<span
                 id="valGapCount">0</span>)</button>

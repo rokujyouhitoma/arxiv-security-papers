@@ -107,3 +107,43 @@ def test_dashboard_cti_mode_elements() -> None:
     # Verify zero external dependencies
     external_scripts = re.findall(r'<script\s+[^>]*src=["\'](http|//)', content, re.I)
     assert len(external_scripts) == 0
+
+
+def test_cti_filter_buttons_use_css_color_badges() -> None:
+    """Verify Issue #182: CTI filter buttons use clean CSS .filter-dot badges without OS emojis."""
+    html_path = os.path.join(os.path.dirname(__file__), "../../site/dashboard.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # 1. Verify .filter-dot CSS definition
+    assert ".filter-dot {" in content
+    assert ".btn-tool.active .filter-dot" in content
+
+    # 2. Verify all CTI filter buttons contain .filter-dot with designated color
+    expected_buttons = {
+        'id="filterPaper"': "#3B82F6",
+        'id="filterAttack"': "#EF4444",
+        'id="filterCwe"': "#F59E0B",
+        'id="filterPrecondition"': "#EAB308",
+        'id="filterRule"': "#10B981",
+        'id="filterPoc"': "#06B6D4",
+        'id="filterGap"': "#8B5CF6",
+    }
+    for btn_id, color in expected_buttons.items():
+        assert btn_id in content
+        # Ensure .filter-dot with the exact color is inside the button definition
+        btn_pattern = rf'{btn_id}[^>]*>.*?<span class="filter-dot" style="background-color: {color};"></span>'
+        assert re.search(
+            btn_pattern, content, re.DOTALL
+        ), f"Button {btn_id} missing filter-dot with {color}"
+
+    # 3. Verify emojis are eradicated from #ctiFilters section
+    cti_filters_match = re.search(
+        r'<div id="ctiFilters".*?</div>\s*</div>', content, re.DOTALL
+    )
+    assert cti_filters_match is not None
+    cti_filters_html = cti_filters_match.group(0)
+    for emoji in ["🔵", "🔴", "🟠", "🟡", "🟢", "🔷", "🟣"]:
+        assert (
+            emoji not in cti_filters_html
+        ), f"Unexpected emoji {emoji} found in ctiFilters"
