@@ -168,10 +168,10 @@
       cursor: crosshair;
     }
 
-    /* Cluster Legend Overlay (Top-Left Collapsible) */
+    /* Cluster Legend Overlay (Top-Left Collapsible, Underneath Zoom Controls) */
     .cluster-legend {
       position: absolute;
-      top: 14px;
+      top: 54px;
       left: 14px;
       bottom: auto;
       background-color: rgba(244, 239, 230, 0.94);
@@ -413,6 +413,10 @@
       color: var(--fg-muted);
       flex-shrink: 0;
       height: 36px;
+      min-height: 36px;
+      max-height: 36px;
+      width: 100%;
+      box-sizing: border-box;
       border-top: 1px solid var(--border-dark);
       overflow: visible;
       z-index: 20;
@@ -884,6 +888,32 @@
       color: #fff;
     }
 
+    /* Compliance Status Badge in Footer */
+    .compliance-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      background: rgba(43, 43, 43, 0.06);
+      border: 1px solid var(--border-dark);
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--fg-main);
+      cursor: help;
+      vertical-align: middle;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      flex-shrink: 0;
+      line-height: 1.3;
+    }
+
+    .compliance-badge:hover {
+      background: var(--bg-panel);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
     /* Graph Help Drawer & Overlay */
     .graph-help-overlay {
       position: fixed;
@@ -1040,6 +1070,8 @@
       display: none;
       flex-direction: column;
       flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .tab-view.active {
@@ -1052,6 +1084,7 @@
       flex-direction: column;
       flex: 1;
       min-height: 0;
+      max-height: calc(100vh - 48px - 36px);
       height: calc(100vh - 48px - 36px);
       position: relative;
       overflow: hidden;
@@ -1059,6 +1092,7 @@
 
     /* Full-height expansion when header is hidden */
     header.header-hidden~#viewGraph .graph-workspace {
+      max-height: calc(100vh - 36px);
       height: calc(100vh - 36px);
     }
 
@@ -1106,18 +1140,19 @@
     .graph-workspace .canvas-container {
       flex: 1;
       min-height: 0;
-      height: 100%;
       position: relative;
       width: 100%;
       overflow: hidden;
       border-bottom: none;
     }
 
-    /* Canvas Zoom Navigation Controls (Bottom-Right) */
+    /* Canvas Zoom Navigation Controls (Top-Left) */
     .canvas-zoom-controls {
       position: absolute;
-      bottom: 14px;
-      right: 14px;
+      top: 14px;
+      left: 14px;
+      bottom: auto;
+      right: auto;
       z-index: 25;
       display: flex;
       align-items: center;
@@ -1440,7 +1475,19 @@
         <button id="btnFloatingDeckToggle" class="btn-floating-deck" onclick="toggleGraphControlDeck(false)"
           title="コントロールデッキを表示する (Shortcut: D)">🎛️ コントロールデッキ表示 (D)</button>
 
-        <!-- Cluster Color Legend (Context Mesh - Top-Left) -->
+        <!-- 🔍 Canvas Zoom Navigation Overlay (Top-Left) -->
+        <div class="canvas-zoom-controls" id="canvasZoomControls">
+          <button id="btnZoomOut" class="btn-zoom" onclick="zoomCanvasBy(0.85)"
+            data-tooltip="グラフを縮小 (Shortcut: -)" data-tooltip-pos="bottom">−</button>
+          <button id="zoomLevelBadge" class="zoom-badge" onclick="resetZoom()"
+            data-tooltip="クリックで100%にリセット (Shortcut: 0)" data-tooltip-pos="bottom">100%</button>
+          <button id="btnZoomIn" class="btn-zoom" onclick="zoomCanvasBy(1.15)"
+            data-tooltip="グラフを拡大 (Shortcut: +)" data-tooltip-pos="bottom">+</button>
+          <button id="btnZoomReset" class="btn-zoom btn-zoom-reset" onclick="resetZoom()"
+            data-tooltip="ズーム倍率と視点を100%初期位置にリセット (Shortcut: 0)" data-tooltip-pos="bottom">⟲</button>
+        </div>
+
+        <!-- Cluster Color Legend (Context Mesh - Top-Left, Underneath Zoom Controls) -->
         <div class="cluster-legend" id="contextLegend">
           <div class="legend-header">
             <span class="legend-title">Cluster Classification</span>
@@ -1465,7 +1512,7 @@
           </div>
         </div>
 
-        <!-- CTI Color Legend (CTI Mesh - Top-Left) -->
+        <!-- CTI Color Legend (CTI Mesh - Top-Left, Underneath Zoom Controls) -->
         <div class="cluster-legend" id="ctiLegend" style="display: none;">
           <div class="legend-header">
             <span class="legend-title">CTI Entity &amp; Relation</span>
@@ -1506,18 +1553,6 @@
             <span style="color: #9CA3AF; font-weight: bold;">&middot; &middot; &middot;</span>
             <span style="font-size: 10px;">SUBCLASS_OF (Dotted)</span>
           </div>
-        </div>
-
-        <!-- 🔍 Canvas Zoom Navigation Overlay (Bottom-Right) -->
-        <div class="canvas-zoom-controls" id="canvasZoomControls">
-          <button id="btnZoomOut" class="btn-zoom" onclick="zoomCanvasBy(0.85)"
-            data-tooltip="グラフを縮小 (Shortcut: -)" data-tooltip-pos="top">−</button>
-          <button id="zoomLevelBadge" class="zoom-badge" onclick="resetZoom()"
-            data-tooltip="クリックで100%にリセット (Shortcut: 0)" data-tooltip-pos="top">100%</button>
-          <button id="btnZoomIn" class="btn-zoom" onclick="zoomCanvasBy(1.15)"
-            data-tooltip="グラフを拡大 (Shortcut: +)" data-tooltip-pos="top">+</button>
-          <button id="btnZoomReset" class="btn-zoom btn-zoom-reset" onclick="resetZoom()"
-            data-tooltip="ズーム倍率と視点を100%初期位置にリセット (Shortcut: 0)" data-tooltip-pos="top">⟲</button>
         </div>
 
         <!-- Node Details Callout (Side Inspector Drawer) -->
@@ -1688,11 +1723,14 @@
        2. Footer
        ====================================================================== -->
   <footer>
-    <div>
-      <strong>arxiv-security-papers</strong> &copy; 2026 | <span class="info-badge"
+    <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+      <strong>arxiv-security-papers</strong> &copy; 2026
+      <span style="color: var(--fg-muted);">|</span>
+      <span class="compliance-badge"
         data-tooltip="国際規格 ISO 32000-1 (PDF) および Google Open Knowledge Format v0.2 に完全準拠したセキュリティデータ"
-        data-tooltip-pos="top" data-tooltip-align="left" style="cursor: help;">ISO 32000-1 / Google OKF v0.2 Compliant</span> &bull; <span
-        id="footerSyncTime" style="color: var(--fg-muted);"
+        data-tooltip-pos="top" data-tooltip-align="left">✓ ISO 32000-1 / Google OKF v0.2 Compliant</span>
+      <span style="color: var(--fg-muted);">&bull;</span>
+      <span id="footerSyncTime" style="color: var(--fg-muted); font-family: var(--font-mono); font-size: 10px;"
         data-tooltip="arXiv API および SQLite / CTI グラフデータベースの最終同期タイムスタンプ"
         data-tooltip-pos="top" data-tooltip-align="left">Last Sync: --</span>
     </div>
