@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from graph.engine import PropertyGraphEngine
 from graph.structures import Edge, Vertex
 from ontology.turtle_engine import (
+    ObjectProperty,
+    OntologyClass,
     TurtleDocumentBuilder,
     build_full_spectrum_security_ontology,
 )
@@ -53,18 +55,10 @@ def _strip_prefix(uri: str) -> str:
     return uri
 
 
-def build_ontology_schema_graph(
-    builder: Optional[TurtleDocumentBuilder] = None,
-) -> Tuple[List[Vertex], List[Edge]]:
-    """Constructs vertices and edges representing the TBox ontology schema."""
-    if builder is None:
-        builder = build_full_spectrum_security_ontology()
-
+def _build_class_vertices(classes: List[OntologyClass]) -> List[Vertex]:
+    """Converts ontology classes into graph schema vertices."""
     vertices: List[Vertex] = []
-    edges: List[Edge] = []
-
-    # 1. Classes -> Vertices
-    for cls in builder.classes:
+    for cls in classes:
         clean_name = _strip_prefix(cls.uri)
         v_id = f"Class:{clean_name}"
         color = ONTOLOGY_CLASS_COLORS.get(clean_name, "#6366f1")
@@ -82,57 +76,72 @@ def build_ontology_schema_graph(
             "is_schema": True,
         }
         vertices.append(Vertex(id=v_id, label="OntologyClass", properties=props))
+    return vertices
 
-    # 2. Object Properties -> Edges
-    edge_idx = 0
-    for op in builder.object_properties:
-        if not op.domain or not op.range_:
-            continue
 
-        src_name = _strip_prefix(op.domain)
-        dst_name = _strip_prefix(op.range_)
-        src_id = f"Class:{src_name}"
-        dst_id = f"Class:{dst_name}"
+def _create_property_edge(op: ObjectProperty) -> Optional[Edge]:
+    """Constructs a single Edge for an object property if domain and range exist."""
+    if not op.domain or not op.range_:
+        return None
 
-        clean_prop = _strip_prefix(op.uri)
-        is_causal = clean_prop in (
-            "hasImpact",
-            "impactCausedBy",
-            "neutralizesPrecondition",
-            "preconditionNeutralizedBy",
-        )
-        is_reified = clean_prop in (
-            "assertsClaim",
-            "claimAssertedBy",
-            "evaluatesClaim",
-            "claimEvaluatedIn",
-            "evaluatesTechnique",
-        )
+    src_name = _strip_prefix(op.domain)
+    dst_name = _strip_prefix(op.range_)
+    clean_prop = _strip_prefix(op.uri)
+    is_causal = clean_prop in (
+        "hasImpact",
+        "impactCausedBy",
+        "neutralizesPrecondition",
+        "preconditionNeutralizedBy",
+    )
+    is_reified = clean_prop in (
+        "assertsClaim",
+        "claimAssertedBy",
+        "evaluatesClaim",
+        "claimEvaluatedIn",
+        "evaluatesTechnique",
+    )
 
-        edge_props: Dict[str, Any] = {
-            "relation_name": clean_prop,
-            "uri": op.uri,
-            "label": op.label or clean_prop,
-            "inverse_of": op.inverse_of,
-            "is_transitive": op.is_transitive,
-            "is_symmetric": op.is_symmetric,
-            "is_causal": is_causal,
-            "is_reified": is_reified,
-            "is_schema": True,
-            "confidence": 1.0,
-            "tier": "HIGH",
-        }
+    edge_props: Dict[str, Any] = {
+        "relation_name": clean_prop,
+        "uri": op.uri,
+        "label": op.label or clean_prop,
+        "inverse_of": op.inverse_of,
+        "is_transitive": op.is_transitive,
+        "is_symmetric": op.is_symmetric,
+        "is_causal": is_causal,
+        "is_reified": is_reified,
+        "is_schema": True,
+        "confidence": 1.0,
+        "tier": "HIGH",
+    }
 
-        edges.append(
-            Edge(
-                src_id=src_id,
-                dst_id=dst_id,
-                label=clean_prop,
-                properties=edge_props,
-            )
-        )
-        edge_idx += 1
+    return Edge(
+        src_id=f"Class:{src_name}",
+        dst_id=f"Class:{dst_name}",
+        label=clean_prop,
+        properties=edge_props,
+    )
 
+
+def _build_property_edges(object_properties: List[ObjectProperty]) -> List[Edge]:
+    """Converts ontology object properties into graph schema edges."""
+    edges: List[Edge] = []
+    for op in object_properties:
+        edge = _create_property_edge(op)
+        if edge is not None:
+            edges.append(edge)
+    return edges
+
+
+def build_ontology_schema_graph(
+    builder: Optional[TurtleDocumentBuilder] = None,
+) -> Tuple[List[Vertex], List[Edge]]:
+    """Constructs vertices and edges representing the TBox ontology schema."""
+    if builder is None:
+        builder = build_full_spectrum_security_ontology()
+
+    vertices = _build_class_vertices(builder.classes)
+    edges = _build_property_edges(builder.object_properties)
     return vertices, edges
 
 

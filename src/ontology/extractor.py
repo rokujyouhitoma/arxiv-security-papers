@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set, Tuple
 
 if TYPE_CHECKING:
     from graph.engine import PropertyGraphEngine
@@ -355,17 +355,24 @@ class OntologyExtractor:
         return entities, cls._deduplicate_triples(triples)
 
     @classmethod
-    def _extract_extended_knowledge(
+    def _categorize_entities(
+        cls, entities: Sequence[BaseEntity]
+    ) -> Dict[EntityType, List[BaseEntity]]:
+        """Groups entities by their EntityType."""
+        grouped: Dict[EntityType, List[BaseEntity]] = {}
+        for ent in entities:
+            grouped.setdefault(ent.entity_type, []).append(ent)
+        return grouped
+
+    @classmethod
+    def _extract_base_extensions(
         cls,
         clean_id: str,
         corpus_text: str,
         meta: Dict[str, Any],
         paper_id: str,
-        seen_entity_ids: Set[str],
-        entities: List[BaseEntity],
-        triples: List[Triple],
-    ) -> None:
-        """Extracts extended entities (preconditions, gaps, rules, pocs, venue)."""
+    ) -> Tuple[List[BaseEntity], List[Triple]]:
+        """Extracts preconditions, research gaps, detection rules/PoCs, and venue."""
         p_ents, p_trips = ExtendedExtractor.extract_preconditions(
             clean_id, corpus_text, paper_id
         )
@@ -378,14 +385,26 @@ class OntologyExtractor:
         v_ents, v_trips = ExtendedExtractor.extract_venue(
             clean_id, meta, corpus_text, paper_id
         )
+        all_ents = list(p_ents) + list(g_ents) + list(r_ents) + list(v_ents)
+        all_trips = p_trips + g_trips + r_trips + v_trips
+        return all_ents, all_trips
 
-        tech_ents = [
-            e for e in entities if e.entity_type == EntityType.ATTACK_TECHNIQUE
-        ]
-        def_ents = [
-            e for e in entities if e.entity_type == EntityType.DEFENSE_MECHANISM
-        ]
-        vuln_ents = [e for e in entities if e.entity_type == EntityType.VULNERABILITY]
+    @classmethod
+    def _extract_relational_extensions(
+        cls,
+        clean_id: str,
+        corpus_text: str,
+        meta: Dict[str, Any],
+        paper_id: str,
+        entities: List[BaseEntity],
+        base_ents: List[BaseEntity],
+    ) -> Tuple[List[BaseEntity], List[Triple]]:
+        """Extracts impact/causality, claims/evidence, and incidents."""
+        by_type = cls._categorize_entities(entities)
+        p_ents = [e for e in base_ents if e.entity_type == EntityType.PRECONDITION]
+        tech_ents = by_type.get(EntityType.ATTACK_TECHNIQUE, [])
+        def_ents = by_type.get(EntityType.DEFENSE_MECHANISM, [])
+        vuln_ents = by_type.get(EntityType.VULNERABILITY, [])
 
         imp_ents, imp_trips = ExtendedExtractor.extract_impacts_and_causality(
             clean_id, corpus_text, paper_id, tech_ents, def_ents, p_ents
@@ -396,23 +415,43 @@ class OntologyExtractor:
         inc_ents, inc_trips = ExtendedExtractor.extract_incidents(
             clean_id, corpus_text, paper_id, tech_ents, vuln_ents
         )
+        all_ents = list(imp_ents) + list(ce_ents) + list(inc_ents)
+        all_trips = imp_trips + ce_trips + inc_trips
+        return all_ents, all_trips
 
-        all_new_ents = (
-            list(p_ents)
-            + list(g_ents)
-            + list(r_ents)
-            + list(v_ents)
-            + list(imp_ents)
-            + list(ce_ents)
-            + list(inc_ents)
-        )
-        for ent in all_new_ents:
+    @classmethod
+    def _append_deduped_entities(
+        cls,
+        new_ents: List[BaseEntity],
+        seen_entity_ids: Set[str],
+        entities: List[BaseEntity],
+    ) -> None:
+        """Appends unseen entities to the main entities list."""
+        for ent in new_ents:
             if ent.id not in seen_entity_ids:
                 entities.append(ent)
                 seen_entity_ids.add(ent.id)
-        triples.extend(
-            p_trips + g_trips + r_trips + v_trips + imp_trips + ce_trips + inc_trips
+
+    @classmethod
+    def _extract_extended_knowledge(
+        cls,
+        clean_id: str,
+        corpus_text: str,
+        meta: Dict[str, Any],
+        paper_id: str,
+        seen_entity_ids: Set[str],
+        entities: List[BaseEntity],
+        triples: List[Triple],
+    ) -> None:
+        """Extracts extended entities and attaches them to entities and triples."""
+        base_ents, base_trips = cls._extract_base_extensions(
+            clean_id, corpus_text, meta, paper_id
         )
+        rel_ents, rel_trips = cls._extract_relational_extensions(
+            clean_id, corpus_text, meta, paper_id, entities, base_ents
+        )
+        cls._append_deduped_entities(base_ents + rel_ents, seen_entity_ids, entities)
+        triples.extend(base_trips + rel_trips)
 
     @classmethod
     def ingest_paper_to_graph(

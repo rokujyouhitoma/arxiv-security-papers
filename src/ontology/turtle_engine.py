@@ -190,6 +190,27 @@ def _build_object_property_types(is_transitive: bool, is_symmetric: bool) -> str
     return ", ".join(types)
 
 
+def _append_sub_properties(
+    pred_objs: List[str], sub_property_of: Optional[Union[str, Sequence[str]]]
+) -> None:
+    """Appends rdfs:subPropertyOf predicates."""
+    if not sub_property_of:
+        return
+    subs = [sub_property_of] if isinstance(sub_property_of, str) else sub_property_of
+    for sp in subs:
+        pred_objs.append(f"    rdfs:subPropertyOf {URI(sp).to_turtle()}")
+
+
+def _append_domain_range(
+    pred_objs: List[str], domain: Optional[str], range_: Optional[str]
+) -> None:
+    """Appends rdfs:domain and rdfs:range predicates."""
+    if domain:
+        pred_objs.append(f"    rdfs:domain {URI(domain).to_turtle()}")
+    if range_:
+        pred_objs.append(f"    rdfs:range {URI(range_).to_turtle()}")
+
+
 def _build_op_pred_objs(
     uri: str,
     label: Optional[str],
@@ -209,19 +230,9 @@ def _build_op_pred_objs(
     pred_objs: List[str] = [f"{subj} rdf:type {types_str}"]
     if inverse_of:
         pred_objs.append(f"    owl:inverseOf {URI(inverse_of).to_turtle()}")
-    if sub_property_of:
-        if isinstance(sub_property_of, str):
-            pred_objs.append(
-                f"    rdfs:subPropertyOf {URI(sub_property_of).to_turtle()}"
-            )
-        else:
-            for sp in sub_property_of:
-                pred_objs.append(f"    rdfs:subPropertyOf {URI(sp).to_turtle()}")
+    _append_sub_properties(pred_objs, sub_property_of)
     _append_annotations(pred_objs, label, label_lang, comment, comment_lang)
-    if domain:
-        pred_objs.append(f"    rdfs:domain {URI(domain).to_turtle()}")
-    if range_:
-        pred_objs.append(f"    rdfs:range {URI(range_).to_turtle()}")
+    _append_domain_range(pred_objs, domain, range_)
     return pred_objs
 
 
@@ -283,19 +294,9 @@ def _build_dp_pred_objs(
         else "owl:DatatypeProperty"
     )
     pred_objs: List[str] = [f"{subj} rdf:type {types_str}"]
-    if sub_property_of:
-        if isinstance(sub_property_of, str):
-            pred_objs.append(
-                f"    rdfs:subPropertyOf {URI(sub_property_of).to_turtle()}"
-            )
-        else:
-            for sp in sub_property_of:
-                pred_objs.append(f"    rdfs:subPropertyOf {URI(sp).to_turtle()}")
+    _append_sub_properties(pred_objs, sub_property_of)
     _append_annotations(pred_objs, label, label_lang, comment, comment_lang)
-    if domain:
-        pred_objs.append(f"    rdfs:domain {URI(domain).to_turtle()}")
-    if range_:
-        pred_objs.append(f"    rdfs:range {URI(range_).to_turtle()}")
+    _append_domain_range(pred_objs, domain, range_)
     return pred_objs
 
 
@@ -1756,3 +1757,49 @@ def build_full_spectrum_security_ontology() -> TurtleDocumentBuilder:
     _add_extended_datatype_properties(builder)
     _add_reification_and_data_constraints(builder)
     return builder
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """CLI entrypoint for generating Full-Spectrum Security Ontology W3C Turtle document."""
+    import argparse
+    import sys
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(
+        prog="python -m ontology.turtle_engine",
+        description="Generate W3C RDF/OWL 2.0 Full-Spectrum Security Knowledge Ontology Turtle (.ttl) document.",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="outputs/ontology/security_ontology_v2.ttl",
+        help="Path to write Turtle (.ttl) output file (default: outputs/ontology/security_ontology_v2.ttl)",
+    )
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Print generated Turtle (.ttl) directly to stdout",
+    )
+    args = parser.parse_args(argv)
+
+    doc = build_full_spectrum_security_ontology()
+    ttl_content = doc.serialize()
+
+    if args.stdout:
+        sys.stdout.write(ttl_content)
+        return 0
+
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(ttl_content, encoding="utf-8")
+    print(
+        f"✨ Successfully generated W3C Turtle ontology ({len(ttl_content)} bytes) -> {out_path}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main())

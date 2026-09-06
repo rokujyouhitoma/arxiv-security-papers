@@ -7,7 +7,7 @@ Extracts Preconditions, Research Gaps, Detection Rules, PoC Artifacts, and Venue
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Sequence, Set, Tuple
 
 from .schema import (
     BaseEntity,
@@ -339,83 +339,170 @@ class ExtendedExtractor:
     ]
 
     @classmethod
+    def _create_stride_impact(
+        cls, clean_id: str, stride_cat: str, severity: str, label_ja: str
+    ) -> ImpactEntity:
+        """Constructs an ImpactEntity for a STRIDE category."""
+        return ImpactEntity(
+            id=f"Impact:{clean_id}:{stride_cat}",
+            entity_type=EntityType.IMPACT,
+            name=f"{stride_cat} ({severity}) - {label_ja}",
+            impact_id=f"{clean_id}-{stride_cat}",
+            stride_category=stride_cat,
+            severity=severity,
+        )
+
+    @classmethod
+    def _extract_stride_entities(
+        cls, clean_id: str, text_lower: str
+    ) -> List[ImpactEntity]:
+        """Extracts unique STRIDE impact entities matching keywords."""
+        entities: List[ImpactEntity] = []
+        seen_impacts: Set[str] = set()
+        for kw, stride_cat, severity, label_ja in cls.IMPACT_PATTERNS:
+            if kw in text_lower and stride_cat not in seen_impacts:
+                seen_impacts.add(stride_cat)
+                entities.append(
+                    cls._create_stride_impact(clean_id, stride_cat, severity, label_ja)
+                )
+        return entities
+
+    @classmethod
+    def _link_technique_impacts(
+        cls,
+        paper_id: str,
+        impact_id: str,
+        tech_entities: Sequence[BaseEntity],
+        triples: List[Triple],
+    ) -> None:
+        """Links AttackTechnique (or Paper) to Impact via HAS_IMPACT."""
+        if tech_entities:
+            for tech in tech_entities:
+                triples.append(
+                    Triple(
+                        subject_id=tech.id,
+                        predicate=Predicate.HAS_IMPACT,
+                        object_id=impact_id,
+                        weight=0.9,
+                    )
+                )
+        else:
+            triples.append(
+                Triple(
+                    subject_id=paper_id,
+                    predicate=Predicate.HAS_IMPACT,
+                    object_id=impact_id,
+                    weight=0.8,
+                )
+            )
+
+    @classmethod
+    def _link_defense_to_preconditions(
+        cls,
+        defense_entities: Sequence[BaseEntity],
+        precondition_entities: Sequence[BaseEntity],
+        triples: List[Triple],
+    ) -> None:
+        """Links DefenseMechanisms to Preconditions via NEUTRALIZES_PRECONDITION."""
+        for dm in defense_entities:
+            for pre in precondition_entities:
+                triples.append(
+                    Triple(
+                        subject_id=dm.id,
+                        predicate=Predicate.NEUTRALIZES_PRECONDITION,
+                        object_id=pre.id,
+                        weight=0.85,
+                    )
+                )
+
+    @classmethod
+    def _link_paper_to_preconditions(
+        cls,
+        paper_id: str,
+        precondition_entities: Sequence[BaseEntity],
+        triples: List[Triple],
+    ) -> None:
+        """Links Paper to Preconditions via NEUTRALIZES_PRECONDITION."""
+        for pre in precondition_entities:
+            triples.append(
+                Triple(
+                    subject_id=paper_id,
+                    predicate=Predicate.NEUTRALIZES_PRECONDITION,
+                    object_id=pre.id,
+                    weight=0.75,
+                )
+            )
+
+    @classmethod
+    def _link_precondition_neutralizations(
+        cls,
+        paper_id: str,
+        text_lower: str,
+        defense_entities: Sequence[BaseEntity],
+        precondition_entities: Sequence[BaseEntity],
+        triples: List[Triple],
+    ) -> None:
+        """Dispatches precondition neutralization linking."""
+        if not precondition_entities:
+            return
+        if defense_entities:
+            cls._link_defense_to_preconditions(
+                defense_entities, precondition_entities, triples
+            )
+        elif "neutraliz" in text_lower or "defen" in text_lower:
+            cls._link_paper_to_preconditions(paper_id, precondition_entities, triples)
+
+    @classmethod
     def extract_impacts_and_causality(
         cls,
         clean_id: str,
         text: str,
         paper_id: str,
-        tech_entities: List[BaseEntity],
-        defense_entities: List[BaseEntity],
-        precondition_entities: List[BaseEntity],
+        tech_entities: Sequence[BaseEntity],
+        defense_entities: Sequence[BaseEntity],
+        precondition_entities: Sequence[BaseEntity],
     ) -> Tuple[List[ImpactEntity], List[Triple]]:
         """Extracts STRIDE Impact entities and causality triples."""
         text_lower = text.lower()
-        entities: List[ImpactEntity] = []
+        entities = cls._extract_stride_entities(clean_id, text_lower)
         triples: List[Triple] = []
-        seen_impacts: Set[str] = set()
 
-        for kw, stride_cat, severity, label_ja in cls.IMPACT_PATTERNS:
-            if kw in text_lower:
-                if stride_cat in seen_impacts:
-                    continue
-                seen_impacts.add(stride_cat)
-                imp_id = f"Impact:{clean_id}:{stride_cat}"
-                impact = ImpactEntity(
-                    id=imp_id,
-                    entity_type=EntityType.IMPACT,
-                    name=f"{stride_cat} ({severity}) - {label_ja}",
-                    impact_id=f"{clean_id}-{stride_cat}",
-                    stride_category=stride_cat,
-                    severity=severity,
-                )
-                entities.append(impact)
+        for imp in entities:
+            cls._link_technique_impacts(paper_id, imp.id, tech_entities, triples)
 
-                # Link AttackTechniques -> HAS_IMPACT -> Impact (or fallback to Paper)
-                if tech_entities:
-                    for tech in tech_entities:
-                        triples.append(
-                            Triple(
-                                subject_id=tech.id,
-                                predicate=Predicate.HAS_IMPACT,
-                                object_id=imp_id,
-                                weight=0.9,
-                            )
-                        )
-                else:
-                    triples.append(
-                        Triple(
-                            subject_id=paper_id,
-                            predicate=Predicate.HAS_IMPACT,
-                            object_id=imp_id,
-                            weight=0.8,
-                        )
-                    )
-
-        # Link DefenseMechanisms -> NEUTRALIZES_PRECONDITION -> Preconditions (or fallback to Paper)
-        if precondition_entities:
-            if defense_entities:
-                for dm in defense_entities:
-                    for pre in precondition_entities:
-                        triples.append(
-                            Triple(
-                                subject_id=dm.id,
-                                predicate=Predicate.NEUTRALIZES_PRECONDITION,
-                                object_id=pre.id,
-                                weight=0.85,
-                            )
-                        )
-            elif "neutraliz" in text_lower or "defen" in text_lower:
-                for pre in precondition_entities:
-                    triples.append(
-                        Triple(
-                            subject_id=paper_id,
-                            predicate=Predicate.NEUTRALIZES_PRECONDITION,
-                            object_id=pre.id,
-                            weight=0.75,
-                        )
-                    )
-
+        cls._link_precondition_neutralizations(
+            paper_id, text_lower, defense_entities, precondition_entities, triples
+        )
         return entities, triples
+
+    @classmethod
+    def _extract_eval_environment(cls, text_lower: str) -> str:
+        """Determines target computing environment from text."""
+        for env_kw, env_name in [
+            ("cloud", "Cloud/Kubernetes"),
+            ("kernel", "Linux Kernel"),
+            ("sgx", "Intel SGX Enclave"),
+            ("android", "Android OS"),
+            ("docker", "Container"),
+            ("firmware", "Embedded/IoT Firmware"),
+        ]:
+            if env_kw in text_lower:
+                return env_name
+        return "General Computing"
+
+    @classmethod
+    def _extract_success_rate(cls, text_lower: str) -> float:
+        """Extracts empirical evaluation success/accuracy rate."""
+        acc_match = re.search(
+            r"(\d{1,3}(?:\.\d+)?)\s*%\s*(?:accuracy|success|precision|recall|detection)",
+            text_lower,
+        )
+        if not acc_match:
+            return 95.0
+        try:
+            return float(acc_match.group(1))
+        except ValueError:
+            return 95.0
 
     @classmethod
     def extract_claims_and_evidence(
@@ -455,29 +542,8 @@ class ExtendedExtractor:
 
         # 2. Reified Evaluation Result (Evidence)
         text_lower = text.lower()
-        success_rate = 95.0
-        acc_match = re.search(
-            r"(\d{1,3}(?:\.\d+)?)\s*%\s*(?:accuracy|success|precision|recall|detection)",
-            text_lower,
-        )
-        if acc_match:
-            try:
-                success_rate = float(acc_match.group(1))
-            except ValueError:
-                pass
-
-        env = "General Computing"
-        for env_kw, env_name in [
-            ("cloud", "Cloud/Kubernetes"),
-            ("kernel", "Linux Kernel"),
-            ("sgx", "Intel SGX Enclave"),
-            ("android", "Android OS"),
-            ("docker", "Container"),
-            ("firmware", "Embedded/IoT Firmware"),
-        ]:
-            if env_kw in text_lower:
-                env = env_name
-                break
+        success_rate = cls._extract_success_rate(text_lower)
+        env = cls._extract_eval_environment(text_lower)
 
         eval_id = f"EvaluationResult:{clean_id}:Empirical"
         evaluation = EvaluationResultEntity(

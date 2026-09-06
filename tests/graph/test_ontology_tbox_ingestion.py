@@ -2,6 +2,7 @@
 """Tests for Ontology TBox (Schema) Ingestion and Visualization API (Issue #187)."""
 
 import json
+
 from graph.engine import PropertyGraphEngine
 from graph.ontology_loader import (
     build_ontology_schema_graph,

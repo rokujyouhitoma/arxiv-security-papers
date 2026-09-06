@@ -1927,7 +1927,8 @@
         source: { color: '#e0533c', label: 'SOURCE' },
         entity: { color: '#2b2b2b', label: 'ENTITY' },
         claim: { color: '#3a7d44', label: 'CLAIM' },
-        decision: { color: '#3d5a80', label: 'DECISION' }
+        decision: { color: '#3d5a80', label: 'DECISION' },
+        schema: { color: '#8b5cf6', label: 'SCHEMA' }
       };
 
       const NODES = [
@@ -2803,17 +2804,18 @@
         const activeNodeIds = new Set(schemaRawNodes.map(n => n.id));
         schemaRawEdges.forEach(e => {
           if (activeNodeIds.has(e.source) && activeNodeIds.has(e.target)) {
+            const relName = e.label || e.type || 'relates';
             const edgeObj = {
               id: e.id,
               source: e.source,
               target: e.target,
-              label: e.label || e.type,
-              type: e.type,
+              label: relName,
+              rel: relName,
+              type: e.type || relName,
               inverse_of: e.inverse_of || '',
               is_causal: !!e.is_causal,
               is_reified: !!e.is_reified,
               is_schema: true,
-              confidence_tier: 'HIGH',
             };
             EDGES.push(edgeObj);
             const src = nodeMap.get(e.source);
@@ -3016,6 +3018,28 @@
             ctx.strokeStyle = '#e0533c';
             ctx.lineWidth = 2.2;
             ctx.setLineDash([]);
+          } else if (currentGraphMode === 'schema') {
+            if (e.is_causal) {
+              // 攻撃因果・被害影響・前提条件無力化関係 (Causal Properties)
+              ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+              ctx.lineWidth = 1.8;
+              ctx.setLineDash([]);
+            } else if (e.is_reified) {
+              // 具現化実体・評価結果結合関係 (Reified & Provenance)
+              ctx.strokeStyle = 'rgba(139, 92, 246, 0.85)';
+              ctx.lineWidth = 1.6;
+              ctx.setLineDash([3, 3]);
+            } else if (e.rel === 'subClassOf' || e.type === 'subClassOf') {
+              // クラス継承関係
+              ctx.strokeStyle = 'rgba(156, 163, 175, 0.7)';
+              ctx.lineWidth = 1.2;
+              ctx.setLineDash([2, 2]);
+            } else {
+              // 標準オントロジーオブジェクトプロパティ
+              ctx.strokeStyle = 'rgba(99, 102, 241, 0.75)';
+              ctx.lineWidth = 1.4;
+              ctx.setLineDash([]);
+            }
           } else if (currentGraphMode === 'cti') {
             if (e.rel === 'EXPLOITS') {
               ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
@@ -3060,9 +3084,11 @@
           if (isHighlighted) {
             const mx = (u.x + v.x) / 2;
             const my = (u.y + v.y) / 2;
-            ctx.fillStyle = '#e0533c';
+            ctx.fillStyle = currentGraphMode === 'schema' ? '#8b5cf6' : '#e0533c';
             ctx.font = '10px monospace';
-            const labelText = e.rel + (e.confidence_tier ? ` [${e.confidence_tier}]` : '');
+            const baseRel = e.label || e.rel || e.type || 'relates';
+            const tierBadge = (currentGraphMode !== 'schema' && e.confidence_tier) ? ` [${e.confidence_tier}]` : '';
+            const labelText = baseRel + tierBadge;
             ctx.fillText(labelText, mx + 4, my - 4);
           }
           ctx.restore();
@@ -3076,7 +3102,9 @@
           const isEgoDimmed = (focusedHopNodeIds && !focusedHopNodeIds.has(n.id));
           const isEgoCenter = (focusedNodeId && n.id === focusedNodeId);
           const clusterCfg = CLUSTERS[n.cluster] || CLUSTERS.entity;
-          const nodeColor = currentGraphMode === 'cti' ? (n.color || '#9CA3AF') : clusterCfg.color;
+          const nodeColor = (currentGraphMode === 'cti' || currentGraphMode === 'schema')
+            ? (n.color || (currentGraphMode === 'schema' ? '#6366f1' : '#9CA3AF'))
+            : clusterCfg.color;
           const nodeRadius = n.radius || (n.cluster === 'source' ? 14 : 11);
 
           ctx.save();
@@ -3111,7 +3139,9 @@
           ctx.fillStyle = nodeColor;
           ctx.fill();
           ctx.lineWidth = isSelected ? 3.0 : 1.5;
-          ctx.strokeStyle = isSelected ? '#e0533c' : (currentGraphMode === 'cti' ? '#1e293b' : '#2b2b2b');
+          ctx.strokeStyle = isSelected
+            ? '#e0533c'
+            : (currentGraphMode === 'schema' ? (n.color || '#6366f1') : (currentGraphMode === 'cti' ? '#1e293b' : '#2b2b2b'));
           ctx.stroke();
 
           // Node Label

@@ -60,7 +60,7 @@
 | **[DSN-21] エンタープライズデザインシステム & 統合コンソール設計** | [designs/DSN-21-enterprise_design_system_and_unified_console.md](../designs/DSN-21-enterprise_design_system_and_unified_console.md) | エンタープライズSaaS型 Glassmorphic UI、レスポンシブ3画面統合コンソール、およびカラー/タイポグラフィ設計仕様。 | **UI/UX HOW** | UI/UX, SA, 前線エンジニア | SA, UI/UX | コンソール画面・UIトークン改訂時 |
 | **[DSN-22] セキュリティおよび脅威知識オントロジー W3C 仕様書** | [designs/DSN-22-security_and_threat_ontology_w3c_specification.md](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | W3C RDF 1.1 Turtle / OWL 2 仕様準拠の純粋 Python オントロジービルダー、TBox/ABox シリアライザ、および因果推論マッピング設計。 | **Ontology Engine HOW** | SA, SEC, DB, 全エージェント | SA, SEC | オントロジーエンジン仕様改訂時 |
 | **[MCP-01] MCP & Vector DB 仕様書** | [mcp/MCP-01-mcp_server_specification.md](../mcp/MCP-01-mcp_server_specification.md) | MCP JSON-RPC サーバ 4大ツールおよびセマンティック Vector DB インデックス仕様。 | 特化仕様 (Specialized HOW) | AI Agent, IR, SC | SA, IR | MCP ツール拡張・アルゴリズム改訂時 |
-| **[USR-01] ユーザーマニュアル** | [manuals/USR-01-user_manual.md](../manuals/USR-01-user_manual.md) | クイックスタート、論文収集・パイプライン運用、4大MCPサーバー連携、トラブルシューティングガイド。 | **User & Agent Guide** | ユーザー, AI Agent, 開発 | PM, SA | パイプライン・MCP仕様変更時 |
+| **[USR-01] ユーザーマニュアル** | [manuals/USR-01-user_manual.md](../manuals/USR-01-user_manual.md) | クイックスタート、収集・ETL運用、閉ループ自律インテリジェンス、オントロジー(TBox)/グラフDB(ABox)操作、Web 3大ビュー、4大MCPサーバー連携、および包括的Makefileチートシート。 | **User & Agent Guide** | ユーザー, AI Agent, 開発 | PM, SA | パイプライン・MCP・CLI仕様変更時 |
 | **[ISS-00] Issue 台帳** | [issues/README.md](../issues/README.md) | プロジェクトの全 Issue (起票・進行中・完了) を一括追跡・管理する中央台帳。 | 作業管理 (Issues) | PM, 開発チーム | PM | Issue 新規作成・ステータス変更時 |
 
 

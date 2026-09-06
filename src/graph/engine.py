@@ -1059,6 +1059,61 @@ class PropertyGraphEngine:
         "EXPLOITED_BY",
     }
 
+    def _record_causal_neighbor(
+        self,
+        edge: Edge,
+        curr_id: str,
+        hops: int,
+        visited_nodes: Set[str],
+        queue: List[Tuple[str, int]],
+        collected_edges: List[Edge],
+    ) -> None:
+        """Records an incident causal edge and queues the unvisited neighbor."""
+        neighbor_id = edge.dst_id if edge.src_id == curr_id else edge.src_id
+        collected_edges.append(edge)
+        if neighbor_id not in visited_nodes:
+            visited_nodes.add(neighbor_id)
+            queue.append((neighbor_id, hops + 1))
+
+    def _expand_causal_incident_edges(
+        self,
+        curr_id: str,
+        hops: int,
+        limit: int,
+        visited_nodes: Set[str],
+        queue: List[Tuple[str, int]],
+        collected_edges: List[Edge],
+    ) -> bool:
+        """Expands incident causal edges from curr_id into queue and collected_edges."""
+        for edge in self.get_both_edges(curr_id):
+            if edge.label in self.CAUSAL_PREDICATES:
+                self._record_causal_neighbor(
+                    edge, curr_id, hops, visited_nodes, queue, collected_edges
+                )
+                if len(collected_edges) >= limit:
+                    return True
+        return False
+
+    def _bfs_causal_subgraph(
+        self,
+        queue: List[Tuple[str, int]],
+        limit: int,
+        visited_nodes: Set[str],
+        collected_edges: List[Edge],
+        max_hops: int = 3,
+    ) -> None:
+        """Runs BFS exploration over causal edges up to max_hops or limit."""
+        while queue:
+            curr_id, hops = queue.pop(0)
+            if hops >= max_hops:
+                continue
+
+            should_stop = self._expand_causal_incident_edges(
+                curr_id, hops, limit, visited_nodes, queue, collected_edges
+            )
+            if should_stop:
+                break
+
     def _query_causal(
         self, raw_arg: str, limit: int
     ) -> Tuple[List[Vertex], List[Edge], int]:
@@ -1070,29 +1125,61 @@ class PropertyGraphEngine:
         visited_nodes: Set[str] = {target_id}
         collected_edges: List[Edge] = []
         queue: List[Tuple[str, int]] = [(target_id, 0)]
-        max_hops = 3
 
-        while queue:
-            curr_id, hops = queue.pop(0)
-            if hops >= max_hops:
-                continue
-
-            for edge in self.get_both_edges(curr_id):
-                if edge.label in self.CAUSAL_PREDICATES:
-                    neighbor_id = edge.dst_id if edge.src_id == curr_id else edge.src_id
-                    collected_edges.append(edge)
-                    if neighbor_id not in visited_nodes:
-                        visited_nodes.add(neighbor_id)
-                        queue.append((neighbor_id, hops + 1))
-                    if len(collected_edges) >= limit:
-                        break
-            if len(collected_edges) >= limit:
-                break
+        self._bfs_causal_subgraph(queue, limit, visited_nodes, collected_edges)
 
         nodes = self._collect_vertices(visited_nodes)
         node_id_set = {v.id for v in nodes}
         valid_edges = self._filter_edges_by_nodes(collected_edges, node_id_set)
         return nodes, valid_edges, len(nodes)
+
+    def _is_terminal_causal_vertex(
+        self, v_obj: Optional[Vertex], dst: Optional[str]
+    ) -> bool:
+        """Returns True if the vertex represents an open-ended terminal causal consequence."""
+        if dst is not None or not v_obj:
+            return False
+        return v_obj.label in ("Impact", "Incident", "EvaluationResult")
+
+    def _try_expand_causal_edge(
+        self,
+        edge: Edge,
+        path: List[Dict[str, Any]],
+        visited: Set[str],
+        dst: Optional[str],
+        queue: List[Tuple[str, List[Dict[str, Any]], Set[str]]],
+        chains: List[List[Dict[str, Any]]],
+    ) -> None:
+        """Expands a single causal edge along the search path."""
+        if edge.label not in self.CAUSAL_PREDICATES:
+            return
+        if edge.dst_id in visited:
+            return
+
+        nxt = edge.dst_id
+        v_obj = self.get_vertex(nxt)
+        label = v_obj.label if v_obj else "Vertex"
+        nxt_node = {"node_id": nxt, "label": label, "via_edge": edge.label}
+        new_path = path + [nxt_node]
+        if self._is_terminal_causal_vertex(v_obj, dst):
+            chains.append(new_path)
+        queue.append((nxt, new_path, visited | {nxt}))
+
+    def _step_causal_chains(
+        self,
+        curr: str,
+        path: List[Dict[str, Any]],
+        visited: Set[str],
+        dst: Optional[str],
+        queue: List[Tuple[str, List[Dict[str, Any]], Set[str]]],
+        chains: List[List[Dict[str, Any]]],
+    ) -> None:
+        """Processes outgoing causal edges for the current path search node."""
+        if dst and curr == dst:
+            chains.append(path)
+            return
+        for edge in self.get_out_edges(curr):
+            self._try_expand_causal_edge(edge, path, visited, dst, queue, chains)
 
     def find_causal_chains(
         self, start_id: str, end_id: Optional[str] = None, max_hops: int = 4
@@ -1104,47 +1191,18 @@ class PropertyGraphEngine:
         dst = self._resolve_ego_node_id(end_id) if end_id else None
 
         chains: List[List[Dict[str, Any]]] = []
+        init_node = {
+            "node_id": src,
+            "label": getattr(self.get_vertex(src), "label", "Vertex"),
+        }
         queue: List[Tuple[str, List[Dict[str, Any]], Set[str]]] = [
-            (
-                src,
-                [
-                    {
-                        "node_id": src,
-                        "label": getattr(self.get_vertex(src), "label", "Vertex"),
-                    }
-                ],
-                {src},
-            )
+            (src, [init_node], {src})
         ]
 
         while queue:
             curr, path, visited = queue.pop(0)
-            if len(path) > max_hops + 1:
-                continue
-            if dst and curr == dst:
-                chains.append(path)
-                continue
-
-            out_edges = self.get_out_edges(curr)
-            for edge in out_edges:
-                if edge.label in self.CAUSAL_PREDICATES:
-                    nxt = edge.dst_id
-                    if nxt not in visited:
-                        v_obj = self.get_vertex(nxt)
-                        nxt_node = {
-                            "node_id": nxt,
-                            "label": v_obj.label if v_obj else "Vertex",
-                            "via_edge": edge.label,
-                        }
-                        new_path = path + [nxt_node]
-                        if dst is None:
-                            if v_obj and v_obj.label in (
-                                "Impact",
-                                "Incident",
-                                "EvaluationResult",
-                            ):
-                                chains.append(new_path)
-                        queue.append((nxt, new_path, visited | {nxt}))
+            if len(path) <= max_hops + 1:
+                self._step_causal_chains(curr, path, visited, dst, queue, chains)
 
         return chains
 

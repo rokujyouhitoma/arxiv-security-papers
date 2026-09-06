@@ -11,11 +11,14 @@ import logging
 import os
 import sys
 import time
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from ontology.extractor import OntologyExtractor
 
-from .engine import PropertyGraphEngine
+try:
+    from .engine import PropertyGraphEngine
+except ImportError:
+    from graph.engine import PropertyGraphEngine
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -122,11 +125,81 @@ def show_graph_stats(workspace_dir: str, graph_path: Optional[str] = None) -> in
     return 0
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def _print_top_nodes(nodes: List[Dict[str, Any]]) -> None:
+    """Prints formatted top matched nodes."""
+    print("\n  [Top Matched Nodes]")
+    for n in nodes[:15]:
+        n_id = n.get("id", "")
+        n_lbl = n.get("label", "")
+        n_props = n.get("properties", {})
+        n_name = n_props.get("name") or n_props.get("title") or n_id
+        print(f"    - [{n_lbl}] {n_id}: {n_name}")
+
+    if len(nodes) > 15:
+        print(f"    ... and {len(nodes) - 15} more nodes.")
+
+
+def _print_sample_edges(edges: List[Dict[str, Any]]) -> None:
+    """Prints formatted sample edges."""
+    print("\n  [Sample Traversed Relationships]")
+    for e in edges[:10]:
+        print(f"    - ({e.get('source')}) --[{e.get('label')}]--> ({e.get('target')})")
+
+    if len(edges) > 10:
+        print(f"    ... and {len(edges) - 10} more edges.")
+    print()
+
+
+def query_knowledge_graph(
+    workspace_dir: str,
+    query_str: str,
+    limit: int = 50,
+    graph_path: Optional[str] = None,
+) -> int:
+    """Executes a domain graph query and displays formatted results."""
+    target_path = _resolve_graph_path(workspace_dir, graph_path)
+    if not os.path.exists(target_path):
+        print(f"[!] Graph database not found at {target_path}. Run build first.")
+        return 1
+
+    engine = PropertyGraphEngine(storage_path=target_path)
+    res = engine.execute_graph_query(query=query_str, limit=limit)
+    nodes = res.get("nodes", [])
+    edges = res.get("edges", [])
+
+    print(f'\n🔍 [Security Knowledge Graph Query]: "{query_str}"')
+    print(f"  • Matched Seeds / Count: {res.get('match_count', len(nodes))}")
+    print(f"  • Returned Vertices:     {len(nodes)}")
+    print(f"  • Returned Edges:        {len(edges)}")
+    _print_top_nodes(nodes)
+    _print_sample_edges(edges)
+    return 0
+
+
+def _create_arg_parser() -> argparse.ArgumentParser:
+    """Constructs the CLI argument parser with subparsers."""
     parser = argparse.ArgumentParser(
         prog="graph.cli",
         description="CLI tool for Property Graph Database Engine & Security Knowledge Graph",
     )
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="Alias for 'build': scan all OKF papers and backfill knowledge graph",
+    )
+    parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="Alias for 'show': show topological statistics of graph database",
+    )
+    parser.add_argument(
+        "--query",
+        "-q",
+        type=str,
+        default=None,
+        help="Execute a graph query directly (e.g. 'causal:T1059', 'ego:CWE-79', 'cwe:79', 'gap')",
+    )
+
     subparsers = parser.add_subparsers(dest="command")
 
     build_p = subparsers.add_parser(
@@ -135,6 +208,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     build_p.add_argument(
         "--output", "-o", type=str, default=None, help="Output graph database path"
     )
+    build_p.add_argument(
+        "--backfill",
+        action="store_true",
+        help="Perform full backfill from all OKF papers",
+    )
 
     show_p = subparsers.add_parser(
         "show", help="Show topological statistics of graph database"
@@ -142,19 +220,66 @@ def main(argv: Optional[List[str]] = None) -> int:
     show_p.add_argument(
         "--input", "-i", type=str, default=None, help="Input graph database path"
     )
+    show_p.add_argument(
+        "--stats",
+        action="store_true",
+        help="Display graph topological statistics",
+    )
 
+    query_p = subparsers.add_parser(
+        "query", help="Execute domain graph query (causal, ego, cwe, path, gap, match)"
+    )
+    query_p.add_argument(
+        "expression",
+        type=str,
+        help="Query expression (e.g. 'causal:T1059', 'ego:CWE-79 2', 'cwe:79', 'path:A->B', 'gap')",
+    )
+    query_p.add_argument(
+        "--limit", "-l", type=int, default=50, help="Maximum nodes/edges to retrieve"
+    )
+    query_p.add_argument(
+        "--input", "-i", type=str, default=None, help="Input graph database path"
+    )
+    return parser
+
+
+def _dispatch_flags(args: argparse.Namespace, workspace_dir: str) -> Optional[int]:
+    """Handles top-level flag shortcuts."""
+    if args.query:
+        return query_knowledge_graph(workspace_dir, args.query)
+    if args.backfill:
+        return build_knowledge_graph(workspace_dir)
+    if args.stats:
+        return show_graph_stats(workspace_dir)
+    return None
+
+
+def _dispatch_command(args: argparse.Namespace, workspace_dir: str) -> int:
+    """Dispatches subcommand to appropriate handler function."""
+    flag_res = _dispatch_flags(args, workspace_dir)
+    if flag_res is not None:
+        return flag_res
+
+    cmd = args.command or "build"
+    if cmd == "build":
+        return build_knowledge_graph(workspace_dir, getattr(args, "output", None))
+    if cmd == "show":
+        return show_graph_stats(workspace_dir, getattr(args, "input", None))
+    return query_knowledge_graph(
+        workspace_dir,
+        getattr(args, "expression", ""),
+        getattr(args, "limit", 50),
+        getattr(args, "input", None),
+    )
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = _create_arg_parser()
     args = parser.parse_args(argv)
     workspace_dir = os.path.abspath(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     )
-
-    if args.command == "build" or not args.command:
-        return build_knowledge_graph(workspace_dir, getattr(args, "output", None))
-    if args.command == "show":
-        return show_graph_stats(workspace_dir, getattr(args, "input", None))
-
-    parser.print_help()
-    return 1
+    return _dispatch_command(args, workspace_dir)
 
 
 if __name__ == "__main__":
