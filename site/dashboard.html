@@ -1365,9 +1365,18 @@
               data-tooltip="ATT&CK 攻撃テクニックノード（赤）のみを表示します" data-tooltip-pos="bottom">🔴 ATT&CK</button>
             <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')"
               data-tooltip="CWE 脆弱性弱点ノード（橙）のみを表示します" data-tooltip-pos="bottom">🟠 CWE</button>
+            <button id="filterPrecondition" class="btn-tool" onclick="setCtiFilter('Precondition')"
+              data-tooltip="前提条件・脅威モデルノード（黄）のみを表示します" data-tooltip-pos="bottom">🟡 Precondition</button>
+            <button id="filterRule" class="btn-tool" onclick="setCtiFilter('DetectionRule')"
+              data-tooltip="検知ルールノード（緑）のみを表示します" data-tooltip-pos="bottom">🟢 Rule</button>
+            <button id="filterPoc" class="btn-tool" onclick="setCtiFilter('PoCArtifact')"
+              data-tooltip="PoC実証コードノード（水色）のみを表示します" data-tooltip-pos="bottom">🔷 PoC</button>
+            <button id="filterGap" class="btn-tool" onclick="setCtiFilter('ResearchGap')"
+              data-tooltip="リサーチギャップノード（紫）のみを表示します" data-tooltip-pos="bottom">🟣 Gap</button>
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()"
               data-tooltip="論文による研究・対策が未カバーの攻撃テクニック（リサーチギャップ）を点滅強調します" data-tooltip-pos="bottom">⚡ Highlight Gaps (<span
                 id="valGapCount">0</span>)</button>
+
             <div
               style="display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--border-dark); padding-left: 8px;">
               <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">CONFIDENCE:<span
@@ -1533,7 +1542,23 @@
           </div>
           <div class="legend-item" data-tooltip="セキュリティ対策・緩和策・防御メカニズムノード（緑）" data-tooltip-pos="right">
             <div class="legend-dot" style="background-color: #10B981;"></div>
-            <span>🟢 :DefenseMechanism (Mitigations)</span>
+            <span>🟢 :Defense / Rule (Sigma/Semgrep)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background-color: #F59E0B;"></div>
+            <span>🟡 :Precondition (Threat Model)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background-color: #8B5CF6;"></div>
+            <span>🟣 :ResearchGap (Unaddressed)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background-color: #06B6D4;"></div>
+            <span>🔷 :PoCArtifact (GitHub Repo)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background-color: #64748B;"></div>
+            <span>🔘 :PublicationVenue (USENIX/S&P)</span>
           </div>
           <div class="legend-divider"
             style="border-top: 1px dashed var(--border-dark); margin: 6px 0; padding-top: 4px;"></div>
@@ -1949,9 +1974,14 @@
             if (ctiFilter === 'Paper') return n.label === 'Paper' || n.label === 'Entity:Paper';
             if (ctiFilter === 'AttackTechnique') return n.label === 'AttackTechnique';
             if (ctiFilter === 'Vulnerability') return n.label === 'Vulnerability' || n.label === 'CWE';
+            if (ctiFilter === 'Precondition') return n.label === 'Precondition';
+            if (ctiFilter === 'DetectionRule') return n.label === 'DetectionRule';
+            if (ctiFilter === 'PoCArtifact') return n.label === 'PoCArtifact';
+            if (ctiFilter === 'ResearchGap') return n.label === 'ResearchGap' || n.label === 'ResidualRisk';
             return true;
           });
         }
+
         const activeNodeIds = new Set(filteredNodes.map(n => n.id));
         let candidateEdges = ctiRawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
 
@@ -2201,17 +2231,26 @@
 
       window.setCtiFilter = function(filter) {
         ctiFilter = filter;
-        ['filterAll', 'filterPaper', 'filterAttack', 'filterCwe'].forEach(id => {
+        ['filterAll', 'filterPaper', 'filterAttack', 'filterCwe', 'filterPrecondition', 'filterRule', 'filterPoc', 'filterGap'].forEach(id => {
           const el = document.getElementById(id);
           if (el) el.classList.remove('active');
         });
-        const activeBtn = filter === 'all' ? 'filterAll' :
-          filter === 'Paper' ? 'filterPaper' :
-            filter === 'AttackTechnique' ? 'filterAttack' : 'filterCwe';
+        const btnMap = {
+          'all': 'filterAll',
+          'Paper': 'filterPaper',
+          'AttackTechnique': 'filterAttack',
+          'Vulnerability': 'filterCwe',
+          'Precondition': 'filterPrecondition',
+          'DetectionRule': 'filterRule',
+          'PoCArtifact': 'filterPoc',
+          'ResearchGap': 'filterGap',
+        };
+        const activeBtn = btnMap[filter] || 'filterAll';
         const ab = document.getElementById(activeBtn);
         if (ab) ab.classList.add('active');
         applyCtiFilter();
       };
+
 
       window.setEdgeConfidenceFilter = function(tier) {
         edgeConfidenceFilter = tier;
@@ -2800,9 +2839,28 @@
           if (node.desc) {
             descHtml += `<div style="margin-bottom: 6px;">${escapeHtml(node.desc)}</div>`;
           }
+          if (node.properties) {
+            const p = node.properties;
+            if (p.access_level) {
+              descHtml += `<div style="font-size: 10px; color: #D97706; margin-bottom: 2px;"><strong>Access Level:</strong> ${escapeHtml(p.access_level)}</div>`;
+            }
+            if (p.assumed_knowledge) {
+              descHtml += `<div style="font-size: 10px; color: #D97706; margin-bottom: 2px;"><strong>Threat Model:</strong> ${escapeHtml(p.assumed_knowledge)}</div>`;
+            }
+            if (p.repo_url) {
+              descHtml += `<div style="margin-bottom: 4px;"><a href="${escapeHtml(p.repo_url)}" target="_blank" rel="noopener noreferrer" style="color: #0284C7; font-weight: bold;">📦 GitHub Repository &rarr;</a></div>`;
+            }
+            if (p.rule_format) {
+              descHtml += `<div style="font-size: 10px; color: #059669; margin-bottom: 2px;"><strong>Rule Format:</strong> ${escapeHtml(p.rule_format.toUpperCase())}</div>`;
+            }
+            if (p.tier) {
+              descHtml += `<div style="font-size: 10px; color: #475569; margin-bottom: 2px;"><strong>Venue Tier:</strong> ${escapeHtml(p.tier)}</div>`;
+            }
+          }
           if (node.url) {
             descHtml += `<div><a href="${escapeHtml(node.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-blue); font-weight: bold; text-decoration: underline;">🔗 Open Primary Source &rarr;</a></div>`;
           }
+
           if (node.is_research_gap) {
             descHtml += `<div style="margin-top: 4px; padding: 2px 6px; background: rgba(245, 158, 11, 0.15); border-left: 3px solid #F59E0B; font-size: 10px; color: #B45309; font-weight: bold;">⚡ Research Gap: No linked security papers in corpus yet</div>`;
           }

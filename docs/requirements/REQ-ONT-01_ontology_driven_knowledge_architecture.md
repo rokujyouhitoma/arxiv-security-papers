@@ -47,6 +47,26 @@
 - **要求**: 検索エンジンおよび GraphRAG パイプラインは、オントロジーで定義された関係性（`sec:exploits`, `sec:mitigates`, `sec:discloses` 等）と推移関係を利用して、マルチホップの因果連鎖（例: 論文 -> 攻撃手法 -> 標的資産 -> 防御策）を論理的に探索・提示できなければならない。
 - **目的**: 単なるキーワード一致を超えた、深いセキュリティインサイトの自動導出を実現するため。
 
+### REQ-ONT-FR-06: 現実世界脅威グラウンディング要求 (Real-world Threat Grounding)
+- **要求**: システムは、学術論文の理論的攻撃を、現実の国家APT・攻撃主体（`ThreatActor`）、観測被害（`Incident`）、および既知脆弱性・KEV（`Vulnerability`）と結びつけ、`sec:verifiesCVE` および `sec:attributedTo` によりグラウンディングできなければならない。
+- **目的**: 学術研究の「机上の空論」を排し、現実の脅威情勢と即座に対照可能にするため。
+
+### REQ-ONT-FR-07: 実践的防御アーティファクト要求 (Actionable Defense Artifacts)
+- **要求**: システムは、提案された防御策から具体的な検知ルール（`DetectionRule`: Semgrep, Sigma, YARA）および検証コード（`PoCArtifact`: GitHub リポジトリ）を抽出し、`sec:generatesRule`, `sec:blocks`, `sec:hasPoC` により実行可能な知見として体系化しなければならない。
+- **目的**: セキュリティ運用者（SOC/CSIRT/開発者）が即座にCI/CDやSIEMにデプロイできる実践的価値を提供するため。
+
+### REQ-ONT-FR-08: 攻撃前提条件・脅威モデルモデル化要求 (Preconditions & Threat Models)
+- **要求**: システムは、攻撃成立に必須となるアクセス権限（Remote, Local, Physical, Root）や知識水準（White-box, Black-box）を `Precondition` エンティティとしてモデル化し、`sec:requiresPrecondition` で因果依存関係を明示しなければならない。
+- **目的**: 「どのような環境・条件で悪用可能なのか」を瞬時にトリアージ可能にするため。
+
+### REQ-ONT-FR-09: 未解決課題・残存リスク構造化要求 (Research Gaps & Residual Risks)
+- **要求**: システムは、論文が残した技術的制約、防御回避可能性、および将来の課題を `ResearchGap` および `ResidualRisk` として抽出し、`sec:identifiesGap` および `sec:leavesUnaddressed` として可視化しなければならない。
+- **目的**: 研究者や技術戦略立案者（CTO/CISO）が未開拓領域や次期投資テーマを即座に特定できるようにするため。
+
+### REQ-ONT-FR-10: 学術権威・再現性ティア管理要求 (Provenance & Venue Tiers)
+- **要求**: システムは、発表会場（USENIX Security, IEEE S&P, ACM CCS, NDSS, IACR 等）を `PublicationVenue` として識別し、ピアレビューの権威ランク（Tier-1, Tier-2, Preprint）やアーティファクト再現性（Artifact Evaluated）を `sec:presentedAt` で連携・管理しなければならない。
+- **目的**: 情報の学術的信頼度と追試容易性を定量的・客観的に格付けするため。
+
 ---
 
 ## 3. 非機能要求事項 (Non-Functional Requirements)
@@ -71,3 +91,9 @@
 | **REQ-ONT-FR-03** | [src/ontology/extractor.py](../../src/ontology/extractor.py) | [DSN-03](../designs/DSN-03-paper_collector_and_okf_converter.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |
 | **REQ-ONT-FR-04** | [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [MNG-01](../processes/MNG-01-document_ledger.md) |
 | **REQ-ONT-FR-05** | [src/graph/](../../src/graph/) / [src/database/](../../src/database/) | [DSN-05](../designs/DSN-05-multi_engine_hybrid_search.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |
+| **REQ-ONT-FR-06** | [src/ontology/schema.py](../../src/ontology/schema.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [MNG-02](../processes/MNG-02-mitre_attack_cwe_ledger.md) |
+| **REQ-ONT-FR-07** | [src/ontology/extended_extractor.py](../../src/ontology/extended_extractor.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |
+| **REQ-ONT-FR-08** | [src/ontology/extended_extractor.py](../../src/ontology/extended_extractor.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |
+| **REQ-ONT-FR-09** | [src/ontology/extended_extractor.py](../../src/ontology/extended_extractor.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |
+| **REQ-ONT-FR-10** | [src/ontology/extended_extractor.py](../../src/ontology/extended_extractor.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |
+

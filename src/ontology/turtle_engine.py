@@ -1041,3 +1041,206 @@ def build_security_cti_ontology() -> TurtleDocumentBuilder:
     _add_security_object_properties(builder)
     _add_security_datatype_properties(builder)
     return builder
+
+
+def _add_extended_classes_part1(builder: TurtleDocumentBuilder) -> None:
+    """Adds Incident, DetectionRule, and PoCArtifact classes."""
+    builder.add_class(
+        uri="sec:Incident",
+        label="実世界インシデント",
+        label_lang="ja",
+        comment="観測された実世界での侵害事例およびセキュリティインシデント",
+        section_comment="実世界脅威事象",
+    )
+    builder.add_class(
+        uri="sec:DetectionRule",
+        label="検知・防御ルール",
+        label_lang="ja",
+        comment="Semgrep, Sigma, YARA などの機械可読な防御シグネチャコード",
+        section_comment="即応防御成果物",
+    )
+    builder.add_class(
+        uri="sec:PoCArtifact",
+        label="PoCソフトウェア成果物",
+        label_lang="ja",
+        comment="GitHub リポジトリや Dockerfile などの実証ソフトウェアコード",
+    )
+
+
+def _add_extended_classes_part2(builder: TurtleDocumentBuilder) -> None:
+    """Adds Precondition, ResearchGap, ResidualRisk, and PublicationVenue classes."""
+    builder.add_class(
+        uri="sec:Precondition",
+        label="成立前提条件・脅威モデル",
+        label_lang="ja",
+        comment="攻撃や防御が成立するために必要なアクセス権限や知識モデル要件",
+        section_comment="成立前提・制約境界",
+    )
+    builder.add_class(
+        uri="sec:ResearchGap",
+        label="未解決研究課題",
+        label_lang="ja",
+        comment="学術的・技術的に未解決の限界および将来の探究テーマ",
+        section_comment="研究限界・未解決課題",
+    )
+    builder.add_class(
+        uri="sec:ResidualRisk",
+        label="残余リスク・死角",
+        label_lang="ja",
+        comment="防御策適用後もなお残存するバイパス手法や潜在的脅威",
+    )
+    builder.add_class(
+        uri="sec:PublicationVenue",
+        label="採択会議・出版媒体",
+        label_lang="ja",
+        comment="IEEE S&P, USENIX, CCS, NDSS などの学術トップカンファレンス",
+        section_comment="学術来歴・信頼性",
+    )
+
+
+def _add_extended_object_properties_part1(builder: TurtleDocumentBuilder) -> None:
+    """Adds blocks, generatesRule, and requiresPrecondition properties."""
+    builder.add_object_property(
+        uri="sec:blocks",
+        label="攻撃手法を検知・遮断する",
+        label_lang="ja",
+        domain="sec:DetectionRule",
+        range_="sec:AttackTechnique",
+        section_comment="検知ルールと攻撃手法の関係",
+    )
+    builder.add_object_property(
+        uri="sec:generatesRule",
+        label="防御シグネチャを生成する",
+        label_lang="ja",
+        domain="sec:DefenseMechanism",
+        range_="sec:DetectionRule",
+        section_comment="防御策と検知ルールの関係",
+    )
+    builder.add_object_property(
+        uri="sec:requiresPrecondition",
+        label="成立前提条件を要求する",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:Precondition",
+        section_comment="攻撃手法と前提条件の関係",
+    )
+
+
+def _add_extended_object_properties_part2(builder: TurtleDocumentBuilder) -> None:
+    """Adds leavesUnaddressed, identifiesGap, presentedAt, verifiesCVE, and hasPoC."""
+    builder.add_object_property(
+        uri="sec:leavesUnaddressed",
+        label="残余リスクを未対処とする",
+        label_lang="ja",
+        domain="sec:DefenseMechanism",
+        range_="sec:ResidualRisk",
+        section_comment="防御策と残余リスクの関係",
+    )
+    builder.add_object_property(
+        uri="sec:identifiesGap",
+        label="未解決課題を提起・特定する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:ResearchGap",
+        section_comment="論文と研究ギャップの関係",
+    )
+    builder.add_object_property(
+        uri="sec:presentedAt",
+        label="採択・発表される",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:PublicationVenue",
+        section_comment="論文と発表媒体の関係",
+    )
+    builder.add_object_property(
+        uri="sec:verifiesCVE",
+        label="既知脆弱性を検証・悪用実証する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:Vulnerability",
+        section_comment="論文と既知脆弱性の実証関係",
+    )
+    builder.add_object_property(
+        uri="sec:hasPoC",
+        label="PoC成果物を有する",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="sec:PoCArtifact",
+        section_comment="論文とPoCコードの関係",
+    )
+
+
+def _add_extended_datatype_properties(builder: TurtleDocumentBuilder) -> None:
+    """Adds datatype properties for full-spectrum ontology."""
+    builder.add_datatype_property(
+        uri="sec:ruleFormat",
+        label="ルール形式",
+        label_lang="ja",
+        domain="sec:DetectionRule",
+        range_="xsd:string",
+        section_comment="防御ルール属性",
+    )
+    builder.add_datatype_property(
+        uri="sec:ruleContent",
+        label="ルール本文",
+        label_lang="ja",
+        domain="sec:DetectionRule",
+        range_="xsd:string",
+    )
+    builder.add_datatype_property(
+        uri="sec:accessLevel",
+        label="要求アクセス権限",
+        label_lang="ja",
+        domain="sec:Precondition",
+        range_="xsd:string",
+        section_comment="前提条件属性",
+    )
+    builder.add_datatype_property(
+        uri="sec:assumedKnowledge",
+        label="前提知識モデル",
+        label_lang="ja",
+        domain="sec:Precondition",
+        range_="xsd:string",
+    )
+    builder.add_datatype_property(
+        uri="sec:reproducibilityTier",
+        label="再現性ランク",
+        label_lang="ja",
+        domain="sec:Paper",
+        range_="xsd:string",
+        section_comment="論文再現性ランク (Tier-1〜3)",
+    )
+    builder.add_datatype_property(
+        uri="sec:repoUrl",
+        label="リポジトリURL",
+        label_lang="ja",
+        domain="sec:PoCArtifact",
+        range_="xsd:anyURI",
+    )
+    builder.add_datatype_property(
+        uri="sec:venueTier",
+        label="会議ティア",
+        label_lang="ja",
+        domain="sec:PublicationVenue",
+        range_="xsd:string",
+    )
+
+
+def build_full_spectrum_security_ontology() -> TurtleDocumentBuilder:
+    """Builds the Full-Spectrum Security Knowledge Ontology (Issue #179).
+
+    Integrates:
+    1. Core Entities & Predicates (Paper, ThreatActor, AttackTechnique, Vulnerability, etc.)
+    2. Real-world Threat Entities (Incident, verifiesCVE)
+    3. Actionable Defense Artifacts (DetectionRule: Semgrep/Sigma, PoCArtifact, blocks)
+    4. Preconditions & Threat Models (Precondition, accessLevel, requiresPrecondition)
+    5. Research Gaps & Residual Risks (ResearchGap, ResidualRisk, leavesUnaddressed)
+    6. Provenance & Trust Tiers (PublicationVenue, reproducibilityTier, presentedAt)
+    """
+    builder = build_security_cti_ontology()
+    _add_extended_classes_part1(builder)
+    _add_extended_classes_part2(builder)
+    _add_extended_object_properties_part1(builder)
+    _add_extended_object_properties_part2(builder)
+    _add_extended_datatype_properties(builder)
+    return builder

@@ -19,7 +19,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **179** | 全領域統合セキュリティ知識オントロジー（Full-Spectrum SKO: 実脅威・防御コード・前提条件・研究ギャップ・信頼性来歴）の実装 | Feature / Architecture | 2026-09-06 | [179-implement-full-spectrum-security-knowledge-ontology.md](closed/179-implement-full-spectrum-security-knowledge-ontology.md) |
 | **178** | オントロジー駆動（Ontology-Driven）開発体系の確立および Pure-Python Turtle (.ttl) 生成エンジンの実装 | Feature / Architecture | 2026-09-06 | [178-establish-ontology-driven-architecture-and-python-turtle-engine.md](closed/178-establish-ontology-driven-architecture-and-python-turtle-engine.md) |
+
 | **177** | IACR ePrint 論文に対する「arXiv:」プレフィックス誤表記の解消およびマルチソース（arXiv/IACR）動的リンク解決の実装 | Bug | 2026-09-06 | [177-fix-multi-source-paper-prefix-and-links-arxiv-vs-iacr.md](closed/177-fix-multi-source-paper-prefix-and-links-arxiv-vs-iacr.md) |
 | **176** | DSN-21 (エンタープライズ統合デザインシステム ＆ クラウドコンソール UI 包括設計書) の直近作業および UI/UX 全観点からの包括的ブラッシュアップ | Documentation / UIUX | 2026-09-06 | [176-brush-up-dsn-21-enterprise-design-system-and-uiux-architecture.md](closed/176-brush-up-dsn-21-enterprise-design-system-and-uiux-architecture.md) |
 | **175** | dashboard.html における CTI 凡例の左上再配置、スクロール不要なフッター常時表示化、およびキャンバスズーム倍率表示・コントロールボタン (+/-) の実装 | Feature | 2026-09-06 | [175-relocate-legend-pin-footer-and-add-zoom-controls-in-dashboard.md](closed/175-relocate-legend-pin-footer-and-add-zoom-controls-in-dashboard.md) |

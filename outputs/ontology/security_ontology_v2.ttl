@@ -1,0 +1,257 @@
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sec:   <https://arxiv-security-papers.org/ontology/security#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+### --------------------------------------------------
+### オントロジー メタデータ
+### --------------------------------------------------
+<https://arxiv-security-papers.org/ontology/security>
+    rdf:type owl:Ontology ;
+    rdfs:label "arXiv Security Papers CTI Knowledge Ontology"@ja ;
+    rdfs:comment "セキュリティ学術論文、サイバー脅威、攻撃手法、脆弱性、および防御策を推論・連携するための知識オントロジーモデル"@ja ;
+    owl:versionInfo "2.0.0" .
+
+### --------------------------------------------------
+### 1. クラス（概念）の定義
+### --------------------------------------------------
+# 学術知見実体
+sec:Paper rdf:type owl:Class ;
+    rdfs:label "セキュリティ論文"@ja ;
+    rdfs:comment "arXiv または IACR 等で公開された学術セキュリティ論文"@ja .
+
+# 脅威・インテリジェンス実体
+sec:ThreatActor rdf:type owl:Class ;
+    rdfs:label "脅威アクター"@ja ;
+    rdfs:comment "サイバー攻撃を仕掛ける国家主導組織、APTグループ、または脅威主体"@ja .
+
+sec:AttackTechnique rdf:type owl:Class ;
+    rdfs:label "攻撃手法"@ja ;
+    rdfs:comment "MITRE ATT&CK または学術知見で定義される戦術・技術・手順 (TTP)"@ja .
+
+sec:Vulnerability rdf:type owl:Class ;
+    rdfs:label "脆弱性"@ja ;
+    rdfs:comment "CWE または CVE で特定されるソフトウェア/システムの弱点およびセキュリティ欠陥"@ja .
+
+sec:TargetAsset rdf:type owl:Class ;
+    rdfs:label "対象資産"@ja ;
+    rdfs:comment "攻撃の標的となるシステム、プロトコル、ハードウェア、またはAIモデル"@ja .
+
+sec:DefenseMechanism rdf:type owl:Class ;
+    rdfs:label "防御メカニズム"@ja ;
+    rdfs:comment "論文で提案される防御機構、緩和策、またはセキュアシグネチャ"@ja .
+
+sec:BenchmarkMetric rdf:type owl:Class ;
+    rdfs:label "評価ベンチマーク指標"@ja ;
+    rdfs:comment "防御性能や攻撃成功率を測定するための客観的メトリクス"@ja .
+
+# 実世界脅威事象
+sec:Incident rdf:type owl:Class ;
+    rdfs:label "実世界インシデント"@ja ;
+    rdfs:comment "観測された実世界での侵害事例およびセキュリティインシデント"@ja .
+
+# 即応防御成果物
+sec:DetectionRule rdf:type owl:Class ;
+    rdfs:label "検知・防御ルール"@ja ;
+    rdfs:comment "Semgrep, Sigma, YARA などの機械可読な防御シグネチャコード"@ja .
+
+sec:PoCArtifact rdf:type owl:Class ;
+    rdfs:label "PoCソフトウェア成果物"@ja ;
+    rdfs:comment "GitHub リポジトリや Dockerfile などの実証ソフトウェアコード"@ja .
+
+# 成立前提・制約境界
+sec:Precondition rdf:type owl:Class ;
+    rdfs:label "成立前提条件・脅威モデル"@ja ;
+    rdfs:comment "攻撃や防御が成立するために必要なアクセス権限や知識モデル要件"@ja .
+
+# 研究限界・未解決課題
+sec:ResearchGap rdf:type owl:Class ;
+    rdfs:label "未解決研究課題"@ja ;
+    rdfs:comment "学術的・技術的に未解決の限界および将来の探究テーマ"@ja .
+
+sec:ResidualRisk rdf:type owl:Class ;
+    rdfs:label "残余リスク・死角"@ja ;
+    rdfs:comment "防御策適用後もなお残存するバイパス手法や潜在的脅威"@ja .
+
+# 学術来歴・信頼性
+sec:PublicationVenue rdf:type owl:Class ;
+    rdfs:label "採択会議・出版媒体"@ja ;
+    rdfs:comment "IEEE S&P, USENIX, CCS, NDSS などの学術トップカンファレンス"@ja .
+
+### --------------------------------------------------
+### 2. オブジェクトプロパティ（エンティティ間の関係）
+### --------------------------------------------------
+# 論文と脆弱性の関係
+sec:discloses rdf:type owl:ObjectProperty ;
+    rdfs:label "脆弱性を公開・開示する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:Vulnerability .
+
+# 攻撃手法と脆弱性の関係
+sec:exploits rdf:type owl:ObjectProperty ;
+    rdfs:label "脆弱性を悪用する"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:Vulnerability .
+
+# 論文と攻撃手法の関係
+sec:analyzes rdf:type owl:ObjectProperty ;
+    rdfs:label "攻撃手法を分析する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:AttackTechnique .
+
+# 攻撃手法と対象資産の関係
+sec:targets rdf:type owl:ObjectProperty ;
+    rdfs:label "資産を標的とする"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:TargetAsset .
+
+# 論文と防御メカニズムの関係
+sec:proposes rdf:type owl:ObjectProperty ;
+    rdfs:label "防御策を提案する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:DefenseMechanism .
+
+# 防御策と攻撃手法の関係
+sec:mitigates rdf:type owl:ObjectProperty ;
+    rdfs:label "攻撃手法を緩和・防御する"@ja ;
+    rdfs:domain sec:DefenseMechanism ;
+    rdfs:range sec:AttackTechnique .
+
+# 防御策と脆弱性の関係
+sec:patches rdf:type owl:ObjectProperty ;
+    rdfs:label "脆弱性を改修・修復する"@ja ;
+    rdfs:domain sec:DefenseMechanism ;
+    rdfs:range sec:Vulnerability .
+
+# 論文と評価指標の関係
+sec:evaluates rdf:type owl:ObjectProperty ;
+    rdfs:label "評価指標で測定する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:BenchmarkMetric .
+
+# 攻撃手法と脅威アクターの関係
+sec:attributedTo rdf:type owl:ObjectProperty ;
+    rdfs:label "脅威アクターに帰属する"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:ThreatActor .
+
+# 論文間の引用関係
+sec:cites rdf:type owl:ObjectProperty ;
+    rdfs:label "先行研究を引用する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:Paper .
+
+# 検知ルールと攻撃手法の関係
+sec:blocks rdf:type owl:ObjectProperty ;
+    rdfs:label "攻撃手法を検知・遮断する"@ja ;
+    rdfs:domain sec:DetectionRule ;
+    rdfs:range sec:AttackTechnique .
+
+# 防御策と検知ルールの関係
+sec:generatesRule rdf:type owl:ObjectProperty ;
+    rdfs:label "防御シグネチャを生成する"@ja ;
+    rdfs:domain sec:DefenseMechanism ;
+    rdfs:range sec:DetectionRule .
+
+# 攻撃手法と前提条件の関係
+sec:requiresPrecondition rdf:type owl:ObjectProperty ;
+    rdfs:label "成立前提条件を要求する"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range sec:Precondition .
+
+# 防御策と残余リスクの関係
+sec:leavesUnaddressed rdf:type owl:ObjectProperty ;
+    rdfs:label "残余リスクを未対処とする"@ja ;
+    rdfs:domain sec:DefenseMechanism ;
+    rdfs:range sec:ResidualRisk .
+
+# 論文と研究ギャップの関係
+sec:identifiesGap rdf:type owl:ObjectProperty ;
+    rdfs:label "未解決課題を提起・特定する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:ResearchGap .
+
+# 論文と発表媒体の関係
+sec:presentedAt rdf:type owl:ObjectProperty ;
+    rdfs:label "採択・発表される"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:PublicationVenue .
+
+# 論文と既知脆弱性の実証関係
+sec:verifiesCVE rdf:type owl:ObjectProperty ;
+    rdfs:label "既知脆弱性を検証・悪用実証する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:Vulnerability .
+
+# 論文とPoCコードの関係
+sec:hasPoC rdf:type owl:ObjectProperty ;
+    rdfs:label "PoC成果物を有する"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range sec:PoCArtifact .
+
+### --------------------------------------------------
+### 3. データプロパティ（属性値・リテラル）
+### --------------------------------------------------
+sec:paperId rdf:type owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "論文ID"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range xsd:string .
+
+sec:title rdf:type owl:DatatypeProperty ;
+    rdfs:label "論文タイトル"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range xsd:string .
+
+sec:publishedDate rdf:type owl:DatatypeProperty ;
+    rdfs:label "公開日"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range xsd:date .
+
+sec:cveId rdf:type owl:DatatypeProperty ;
+    rdfs:label "CVE番号"@ja ;
+    rdfs:domain sec:Vulnerability ;
+    rdfs:range xsd:string .
+
+sec:techniqueId rdf:type owl:DatatypeProperty ;
+    rdfs:label "ATT&CK テクニックID"@ja ;
+    rdfs:domain sec:AttackTechnique ;
+    rdfs:range xsd:string .
+
+# 防御ルール属性
+sec:ruleFormat rdf:type owl:DatatypeProperty ;
+    rdfs:label "ルール形式"@ja ;
+    rdfs:domain sec:DetectionRule ;
+    rdfs:range xsd:string .
+
+sec:ruleContent rdf:type owl:DatatypeProperty ;
+    rdfs:label "ルール本文"@ja ;
+    rdfs:domain sec:DetectionRule ;
+    rdfs:range xsd:string .
+
+# 前提条件属性
+sec:accessLevel rdf:type owl:DatatypeProperty ;
+    rdfs:label "要求アクセス権限"@ja ;
+    rdfs:domain sec:Precondition ;
+    rdfs:range xsd:string .
+
+sec:assumedKnowledge rdf:type owl:DatatypeProperty ;
+    rdfs:label "前提知識モデル"@ja ;
+    rdfs:domain sec:Precondition ;
+    rdfs:range xsd:string .
+
+# 論文再現性ランク (Tier-1〜3)
+sec:reproducibilityTier rdf:type owl:DatatypeProperty ;
+    rdfs:label "再現性ランク"@ja ;
+    rdfs:domain sec:Paper ;
+    rdfs:range xsd:string .
+
+sec:repoUrl rdf:type owl:DatatypeProperty ;
+    rdfs:label "リポジトリURL"@ja ;
+    rdfs:domain sec:PoCArtifact ;
+    rdfs:range xsd:anyURI .
+
+sec:venueTier rdf:type owl:DatatypeProperty ;
+    rdfs:label "会議ティア"@ja ;
+    rdfs:domain sec:PublicationVenue ;
+    rdfs:range xsd:string .

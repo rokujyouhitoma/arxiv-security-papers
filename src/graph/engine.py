@@ -643,6 +643,14 @@ class PropertyGraphEngine:
             "Vulnerability": "#F59E0B",
             "CWE": "#F59E0B",
             "DefenseMechanism": "#10B981",
+            "DetectionRule": "#10B981",
+            "Precondition": "#F59E0B",
+            "ResearchGap": "#8B5CF6",
+            "ResidualRisk": "#EC4899",
+            "PoCArtifact": "#06B6D4",
+            "PublicationVenue": "#64748B",
+            "ThreatActor": "#7F1D1D",
+            "Incident": "#B91C1C",
         }
         radius_map = {
             "Paper": 7,
@@ -651,7 +659,16 @@ class PropertyGraphEngine:
             "Vulnerability": 8,
             "CWE": 8,
             "DefenseMechanism": 8,
+            "DetectionRule": 7,
+            "Precondition": 6,
+            "ResearchGap": 8,
+            "ResidualRisk": 8,
+            "PoCArtifact": 7,
+            "PublicationVenue": 9,
+            "ThreatActor": 9,
+            "Incident": 8,
         }
+
         clean_name = v.properties.get("name") or v.properties.get("title") or v.id
         return {
             "id": v.id,
