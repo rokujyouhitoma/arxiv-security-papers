@@ -38,6 +38,8 @@ from observability.propagation import (
     generate_trace_id,
     set_current_trace_context,
 )
+from security.middleware.wsgi import SecurityWSGIMiddleware
+from security.ratelimit.limiter import SlidingWindowRateLimiter
 
 from .handlers import GatewayHandlers
 from .logger import WORKSPACE_DIR, log_http_access
@@ -267,8 +269,27 @@ class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
     block_on_close = False
 
 
-application = WSGIApplication()
+def create_secured_gateway_app(
+    workspace_dir: Optional[str] = None,
+    vector_engine: Optional[VectorEngine] = None,
+    rate_limiter: Optional[Any] = None,
+) -> SecurityWSGIMiddleware:
+    """Creates a WSGIApplication wrapped with SecurityWSGIMiddleware."""
+    core = WSGIApplication(workspace_dir=workspace_dir, vector_engine=vector_engine)
+    limiter = rate_limiter or SlidingWindowRateLimiter()
+    return SecurityWSGIMiddleware(app=core, rate_limiter=limiter)
+
+
+_core_wsgi_app = WSGIApplication()
+application = SecurityWSGIMiddleware(
+    app=_core_wsgi_app, rate_limiter=SlidingWindowRateLimiter()
+)
 app = application
+
+
+def get_gateway_wsgi_app() -> WSGIApplication:
+    """Returns the underlying WSGIApplication instance from the secured gateway."""
+    return _core_wsgi_app
 
 
 def _find_pid_via_lsof(port: int) -> Optional[int]:

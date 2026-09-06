@@ -23,6 +23,7 @@ from web.gateway import (
     WSGIApplication,
     app,
     application,
+    get_gateway_wsgi_app,
     get_workspace_dir,
     log_query,
     run_web_server,
@@ -37,9 +38,7 @@ run_server = run_web_server
 def __getattr__(name: str) -> Any:
     if name == "VECTOR_ENGINE":
         os.environ["SEARCH_ALLOW_FALLBACK"] = "1"
-        from web.gateway import application
-
-        return application.handlers.vector_engine
+        return get_gateway_wsgi_app().handlers.vector_engine
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 

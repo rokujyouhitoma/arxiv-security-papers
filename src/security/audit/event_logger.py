@@ -98,14 +98,18 @@ class SecurityAuditEvent:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
 
 
+def _norm_attr(val: Any) -> Any:
+    return getattr(val, "value", val)
+
+
 def _matches_type(e: SecurityAuditEvent, event_type: Optional[str]) -> bool:
     """Checks if event matches event_type."""
-    return event_type is None or e.event_type == event_type
+    return event_type is None or _norm_attr(e.event_type) == _norm_attr(event_type)
 
 
 def _matches_severity(e: SecurityAuditEvent, severity: Optional[str]) -> bool:
     """Checks if event matches severity."""
-    return severity is None or e.severity == severity
+    return severity is None or _norm_attr(e.severity) == _norm_attr(severity)
 
 
 def _filter_events(
@@ -181,3 +185,6 @@ class SecurityAuditLogger:
     def __len__(self) -> int:
         with self._lock:
             return len(self._events)
+
+    def __bool__(self) -> bool:
+        return True

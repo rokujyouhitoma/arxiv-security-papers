@@ -2,7 +2,7 @@
 ID: 161
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 (ID: 161)
@@ -57,11 +57,11 @@ Target Branch: `feat/161-security-wsgi-middleware`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `SecurityWSGIMiddleware` が PEP 3333 準拠の WSGI ミドルウェアとして独立動作すること
-- [ ] クライアント IP に基づくレート制限超過時に 429 Too Many Requests が返却されること
-- [ ] パスおよびクエリ内のパストラバーサル（`../`）や Null バイトを検知して 400 Bad Request で遮断すること
-- [ ] 全レスポンスにセキュリティヘッダー（HSTS, CSP, X-Content-Type-Options, X-Frame-Options）が自動注入されること
-- [ ] リクエスト処理イベントが `SecurityAuditLogger` に構造化ログとして自動記録されること
-- [ ] `src/web/gateway/app.py` にミドルウェアが統合され、既存ルートが正常稼働すること
-- [ ] 単体テスト `tests/security/test_wsgi_middleware.py` が 100% PASS すること
-- [ ] `make check_format` および `make static_analysis` が 100% PASS すること
+- [x] `SecurityWSGIMiddleware` が PEP 3333 準拠の WSGI ミドルウェアとして独立動作すること
+- [x] クライアント IP に基づくレート制限超過時に 429 Too Many Requests が返却されること
+- [x] パスおよびクエリ内のパストラバーサル（`../`）や Null バイトを検知して 400 Bad Request で遮断すること
+- [x] 全レスポンスにセキュリティヘッダー（HSTS, CSP, X-Content-Type-Options, X-Frame-Options）が自動注入されること
+- [x] リクエスト処理イベントが `SecurityAuditLogger` に構造化ログとして自動記録されること
+- [x] `src/web/gateway/app.py` にミドルウェアが統合され、既存ルートが正常稼働すること
+- [x] 単体テスト `tests/security/test_wsgi_middleware.py` が 100% PASS すること
+- [x] `make check_format` および `make static_analysis` が 100% PASS すること

@@ -22,6 +22,7 @@ from .guardrails import (
     validate_output_safety,
 )
 from .merkle_tree import MerkleTree, hash_children, hash_leaf
+from .middleware import DEFAULT_SECURITY_HEADERS, SecurityWSGIMiddleware
 from .ratelimit import (
     CircuitBreaker,
     CircuitBreakerOpenError,
@@ -129,6 +130,9 @@ __all__ = [
     "RateLimitExceededError",
     "SlidingWindowRateLimiter",
     "TokenBucketRateLimiter",
+    # Middleware
+    "DEFAULT_SECURITY_HEADERS",
+    "SecurityWSGIMiddleware",
     # RBAC
     "AccessController",
     "DCLPermissionDeniedError",

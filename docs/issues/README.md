@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | In Progress | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 
 
 ---
@@ -20,6 +19,7 @@
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | 2026-09-06 | [146-implement-edge-relation-type-filter-in-graph-tab.md](closed/146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | 2026-09-06 | [147-implement-largest-connected-component-filter-in-graph-tab.md](closed/147-implement-largest-connected-component-filter-in-graph-tab.md) |
 | **148** | /dashboard tab=graph における未研究・未対策脅威（Research Gaps Only）専用絞り込みフィルタの実装 | Feature | 2026-09-06 | [148-implement-research-gaps-only-filter-in-graph-tab.md](closed/148-implement-research-gaps-only-filter-in-graph-tab.md) |
+| **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | 2026-09-06 | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](closed/161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
 | **182** | コントロールデッキ CTI フィルタボタングループにおける丸絵文字の排除および凡例準拠 CSS カラーバッジへの統一 | Feature / UIUX | 2026-09-06 | [182-unify-cti-filter-icons-with-css-color-badges.md](closed/182-unify-cti-filter-icons-with-css-color-badges.md) |
 | **181** | graph.html (dashboard.html) におけるグローバルヘッダー・コントロールデッキ表示時の Canvas 縦縮み歪みおよびノード選択判定不具合の解消 | Bug / UIUX | 2026-09-06 | [181-fix-canvas-vertical-distortion-and-hit-testing-in-graph-view.md](closed/181-fix-canvas-vertical-distortion-and-hit-testing-in-graph-view.md) |
 | **180** | オントロジー宣言DSL（Pure Python Class定義）とASTインタプリタ処理エンジンの完全分離アーキテクチャの実装 | Architecture / Refactor | 2026-09-06 | [180-decouple-ontology-definition-dsl-and-ast-interpreter-engine.md](closed/180-decouple-ontology-definition-dsl-and-ast-interpreter-engine.md) |
