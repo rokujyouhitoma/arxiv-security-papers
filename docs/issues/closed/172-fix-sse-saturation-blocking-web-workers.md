@@ -37,20 +37,20 @@ ID: 172
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [x] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html): Supervisor タブ削除に伴い不要となった SSE 常時接続（`/api/stream/top`）および関連関数の完全撤廃
-- [x] [src/supervisor/workers/sync_worker.py](file:///workspace/arxiv-security-papers/src/supervisor/workers/sync_worker.py): SSE ストリーミングループ内でのワーカー生存状態（`self.alive`）確認と即時イテレータクローズ
-- [x] [src/supervisor/workers/gthread_worker.py](file:///workspace/arxiv-security-papers/src/supervisor/workers/gthread_worker.py): プール設定からの動的 `threads` 引数受け入れ対応
-- [x] [src/supervisor/arbiter.py](file:///workspace/arxiv-security-papers/src/supervisor/arbiter.py): ワーカー生成時に `WorkerSpec` の `threads` を `GthreadWorker` へ確実に伝播
-- [x] [src/supervisor/config.py](file:///workspace/arxiv-security-papers/src/supervisor/config.py): デフォルトワーカー設定の耐久性強化（`PoolConfig` のデフォルト `worker_class="gthread"`, `threads=4`）
-- [x] [config/supervisor.json](file:///workspace/arxiv-security-papers/config/supervisor.json): デフォルト構成ファイルの `web` プールを `worker_class="gthread"`, `threads=4` に更新
-- [x] [config/supervisor.sample.json](file:///workspace/arxiv-security-papers/config/supervisor.sample.json): サンプル設定の `gthread` 化
-- [x] [config/supervisor.sample.toml](file:///workspace/arxiv-security-papers/config/supervisor.sample.toml): サンプル設定の `gthread` 化
-- [x] [config/supervisor.sample.py](file:///workspace/arxiv-security-papers/config/supervisor.sample.py): サンプル設定の `gthread` 化
-- [x] [site/app.js](file:///workspace/arxiv-security-papers/site/app.js): SSE 接続管理の健全化（`onerror` 時のクローズ、タイマー重複の根絶、タブ非表示時の切断、再表示時の再接続）
-- [x] [site/app-min.js](file:///workspace/arxiv-security-papers/site/app-min.js): Google Closure Compiler による再ビルド
-- [x] [tests/web/test_dashboard_html.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_html.py): `dashboard.html` に不要な SSE 接続が存在しないことのテスト更新
-- [x] [tests/web/test_dashboard_rapid_reload.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_rapid_reload.py): SSE 接続非存在確認とコンソール側クリーンアップテストの更新
-- [x] [docs/issues/README.md](file:///workspace/arxiv-security-papers/docs/issues/README.md): Issue 台帳の更新
+- [x] `site/dashboard.html`: Supervisor タブ削除に伴い不要となった SSE 常時接続（`/api/stream/top`）および関連関数の完全撤廃
+- [x] `src/supervisor/workers/sync_worker.py`: SSE ストリーミングループ内でのワーカー生存状態（`self.alive`）確認と即時イテレータクローズ
+- [x] `src/supervisor/workers/gthread_worker.py`: プール設定からの動的 `threads` 引数受け入れ対応
+- [x] `src/supervisor/arbiter.py`: ワーカー生成時に `WorkerSpec` の `threads` を `GthreadWorker` へ確実に伝播
+- [x] `src/supervisor/config.py`: デフォルトワーカー設定の耐久性強化（`PoolConfig` のデフォルト `worker_class="gthread"`, `threads=4`）
+- [x] `config/supervisor.json`: デフォルト構成ファイルの `web` プールを `worker_class="gthread"`, `threads=4` に更新
+- [x] `config/supervisor.sample.json`: サンプル設定の `gthread` 化
+- [x] `config/supervisor.sample.toml`: サンプル設定の `gthread` 化
+- [x] `config/supervisor.sample.py`: サンプル設定の `gthread` 化
+- [x] `site/app.js`: SSE 接続管理の健全化（`onerror` 時のクローズ、タイマー重複の根絶、タブ非表示時の切断、再表示時の再接続）
+- [x] `site/app-min.js`: Google Closure Compiler による再ビルド
+- [x] `tests/web/test_dashboard_html.py`: `dashboard.html` に不要な SSE 接続が存在しないことのテスト更新
+- [x] `tests/web/test_dashboard_rapid_reload.py`: SSE 接続非存在確認とコンソール側クリーンアップテストの更新
+- [x] `docs/issues/README.md`: Issue 台帳の更新
 
 ---
 

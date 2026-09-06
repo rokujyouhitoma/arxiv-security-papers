@@ -19,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **173** | CTI グラフクエリにおける 1-Hop 隣接エンティティおよびインシデントエッジの自動展開（Paper 単体検索時のエッジ消失バグ解消） | Bug | 2026-09-06 | [173-expand-1hop-incident-edges-in-graph-query.md](closed/173-expand-1hop-incident-edges-in-graph-query.md) |
 | **172** | SSE 接続による Web ワーカー枯渇・ブロッキング障害の解消および dashboard.html 内の不要 SSE 撤廃 | Bug / Security | 2026-09-05 | [172-fix-sse-saturation-blocking-web-workers.md](closed/172-fix-sse-saturation-blocking-web-workers.md) |
 | **171** | index.html におけるヘルプ・操作ガイドドロワーの dashboard.html 準拠デザイン・出し方統一実装 | Feature | 2026-09-05 | [171-unify-index-help-guide-drawer-design-with-dashboard.md](closed/171-unify-index-help-guide-drawer-design-with-dashboard.md) |
 | **170** | dashboard.html からの 3 画面削除（Graph 単一画面化）および index.html との統一ヘッダー・相互リンク実装 | Feature | 2026-09-05 | [170-unify-dashboard-header-with-index-and-retain-graph-only.md](closed/170-unify-dashboard-header-with-index-and-retain-graph-only.md) |
