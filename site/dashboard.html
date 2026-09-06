@@ -1507,6 +1507,17 @@
           <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
             <div
               style="display: flex; align-items: center; gap: 4px; border-right: 1px solid var(--border-dark); padding-right: 8px; margin-right: 2px;">
+              <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">SPACING:<span
+                  class="info-badge" data-tooltip="ノード間の反発力とエッジのばね自然長を調整し、密集度を制御します"
+                  data-tooltip-pos="bottom">ⓘ</span></span>
+              <input type="range" id="spacingSlider" min="0.6" max="2.2" step="0.1" value="1.0"
+                style="width: 70px; height: 16px; cursor: pointer; vertical-align: middle;"
+                oninput="setGraphSpacing(this.value)"
+                data-tooltip="ノード間隔倍率を調整 (0.6x 〜 2.2x)" data-tooltip-pos="bottom">
+              <span id="spacingValueBadge" style="font-size: 10px; font-weight: 700; min-width: 24px; color: #4b5563;">1.0x</span>
+            </div>
+            <div
+              style="display: flex; align-items: center; gap: 4px; border-right: 1px solid var(--border-dark); padding-right: 8px; margin-right: 2px;">
               <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">MIN DEGREE:<span
                   class="info-badge" data-tooltip="接続エッジ数（次数）に基づき、ハブとなる主要ノードのみを抽出します"
                   data-tooltip-pos="bottom">ⓘ</span></span>
@@ -2004,6 +2015,7 @@
       let activeGraphQuery = null; // Currently active CTI query (null = full mesh)
       let hideIsolatedNodes = false;
       let minDegreeThreshold = 0;
+      let spacingMultiplier = 1.0;
       let focusedNodeId = null;
       let focusedHopNodeIds = null;
       let ctiEntityFilters = new Set(['all']); // Set of active entity type filters
@@ -2448,6 +2460,19 @@
         }
       };
 
+      window.setGraphSpacing = function(val) {
+        spacingMultiplier = Math.max(0.5, Math.min(3.0, parseFloat(val) || 1.0));
+        const badge = document.getElementById('spacingValueBadge');
+        if (badge) {
+          badge.textContent = spacingMultiplier.toFixed(1) + 'x';
+        }
+        // Micro-impulse to smoothly expand/contract without sudden jarring
+        NODES.forEach(n => {
+          n.vx += (Math.random() - 0.5) * 1.5;
+          n.vy += (Math.random() - 0.5) * 1.5;
+        });
+      };
+
       window.setGraphMode = async function (mode) {
         currentGraphMode = mode;
         const btnMesh = document.getElementById('btnModeMesh');
@@ -2777,7 +2802,7 @@
         schemaRawNodes.forEach((n, idx) => {
           const prev = existingPos.get(n.id);
           const angle = (idx / Math.max(1, totalNodes)) * Math.PI * 2;
-          const radius = Math.min(width, height) * 0.35;
+          const radius = Math.max(190, Math.min(width, height) * 0.42 * Math.min(1.5, spacingMultiplier));
           const nodeObj = {
             id: n.id,
             name: n.type || n.id,
@@ -2885,14 +2910,45 @@
       // ----------------------------------------------------------------------
       // 3. Force-Directed Layout Physics Loop
       // ----------------------------------------------------------------------
-      const K_REPULSION = 2200.0;
-      const K_SPRING = 0.045;
-      const L_SPRING = 80.0;
-      const K_CENTER = 0.008;
       const DAMPING = 0.86;
 
+      function getPhysicsParams() {
+        const isSchema = (currentGraphMode === 'schema');
+        let baseLSpring = 90.0;
+        let baseRepulsion = 2600.0;
+        let baseKCenter = 0.007;
+
+        if (isSchema) {
+          // Schema View: 16 classes and 30+ properties - expand broadly
+          baseLSpring = 175.0;
+          baseRepulsion = 9000.0;
+          baseKCenter = 0.0025;
+        } else {
+          // CTI Graph / Context Mesh: Dynamic scaling based on node count
+          const count = Math.max(10, NODES.length);
+          baseLSpring = Math.max(90.0, Math.min(200.0, 1600.0 / Math.sqrt(count)));
+          baseRepulsion = Math.max(2400.0, Math.min(7500.0, 22000.0 / Math.sqrt(count)));
+          baseKCenter = 0.006;
+        }
+
+        return {
+          L_SPRING: baseLSpring * spacingMultiplier,
+          K_REPULSION: baseRepulsion * (spacingMultiplier * spacingMultiplier),
+          K_SPRING: 0.042,
+          K_CENTER: Math.max(0.001, baseKCenter / Math.max(0.5, spacingMultiplier)),
+          minSeparationBase: isSchema ? 48.0 : 34.0,
+        };
+      }
+
       function stepPhysics() {
-        // 1. Coulomb Repulsion
+        const params = getPhysicsParams();
+        const L_SPRING = params.L_SPRING;
+        const K_REPULSION = params.K_REPULSION;
+        const K_SPRING = params.K_SPRING;
+        const K_CENTER = params.K_CENTER;
+        const minSeparationBase = params.minSeparationBase;
+
+        // 1. Coulomb Repulsion & Hard Collision Avoidance
         for (let i = 0; i < NODES.length; i++) {
           for (let j = i + 1; j < NODES.length; j++) {
             const u = NODES[i];
@@ -2902,8 +2958,19 @@
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
             const clampedDist = Math.max(dist, 16.0);
             const force = K_REPULSION / (clampedDist * clampedDist);
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
+            let fx = (dx / dist) * force;
+            let fy = (dy / dist) * force;
+
+            // Hard Collision Avoidance (Separation Force)
+            const rU = u.radius || 18;
+            const rV = v.radius || 18;
+            const minAllowedDist = rU + rV + (minSeparationBase * spacingMultiplier);
+            if (dist < minAllowedDist) {
+              const overlap = minAllowedDist - dist;
+              const push = Math.min(overlap * 0.45, 15.0);
+              fx += (dx / dist) * push;
+              fy += (dy / dist) * push;
+            }
 
             u.vx -= fx;
             u.vy -= fy;
@@ -2993,6 +3060,18 @@
           ctx.stroke();
         }
 
+        // Build Pair Index for curved edges on bidirectional / parallel links
+        const edgePairMap = new Map();
+        EDGES.forEach(e => {
+          const uId = e.source;
+          const vId = e.target;
+          const pairKey = uId < vId ? `${uId}:::${vId}` : `${vId}:::${uId}`;
+          if (!edgePairMap.has(pairKey)) {
+            edgePairMap.set(pairKey, []);
+          }
+          edgePairMap.get(pairKey).push(e);
+        });
+
         // Draw Edges
         EDGES.forEach(e => {
           const u = nodeMap.get(e.source);
@@ -3003,6 +3082,54 @@
           const isTwoHopDimmed = (activeTwoHopNodes && (!activeTwoHopNodes.has(u.id) || !activeTwoHopNodes.has(v.id)));
           const isEgoDimmed = (focusedHopNodeIds && (!focusedHopNodeIds.has(u.id) || !focusedHopNodeIds.has(v.id)));
 
+          const pairKey = u.id < v.id ? `${u.id}:::${v.id}` : `${v.id}:::${u.id}`;
+          const pairEdges = edgePairMap.get(pairKey) || [e];
+          const totalInPair = pairEdges.length;
+
+          // Calculate curvature offset
+          let curvatureOffset = 0;
+          if (totalInPair > 1) {
+            const reverseEdges = pairEdges.filter(other => other.source === e.target && other.target === e.source);
+            const sameEdges = pairEdges.filter(other => other.source === e.source && other.target === e.target);
+
+            if (reverseEdges.length > 0 && sameEdges.length === 1 && reverseEdges.length === 1) {
+              // Classic single bidirectional pair (A -> B and B -> A)
+              curvatureOffset = 26;
+            } else {
+              // Multiple parallel or multi-bidirectional edges
+              const sameIndex = sameEdges.indexOf(e);
+              curvatureOffset = 22 * (sameIndex + 1);
+            }
+          }
+
+          // Edge Geometry
+          const dx = v.x - u.x;
+          const dy = v.y - u.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 1) return;
+
+          // Normal vector pointing to the right of travel direction
+          const nx = -dy / dist;
+          const ny = dx / dist;
+
+          const mx = (u.x + v.x) / 2;
+          const my = (u.y + v.y) / 2;
+
+          // Control point for quadratic bezier curve
+          const cx = mx + nx * curvatureOffset;
+          const cy = my + ny * curvatureOffset;
+
+          // Target node boundary & arrowhead tip position
+          const targetR = v.radius || (v.cluster === 'source' ? 14 : 11);
+          const tdx = v.x - cx;
+          const tdy = v.y - cy;
+          const tdist = Math.sqrt(tdx * tdx + tdy * tdy) || 1;
+          const tux = tdx / tdist;
+          const tuy = tdy / tdist;
+
+          const tipX = v.x - tux * (targetR + 2);
+          const tipY = v.y - tuy * (targetR + 2);
+
           ctx.save();
           if (isEgoDimmed) {
             ctx.globalAlpha = 0.05;
@@ -3012,7 +3139,11 @@
 
           ctx.beginPath();
           ctx.moveTo(u.x, u.y);
-          ctx.lineTo(v.x, v.y);
+          if (curvatureOffset !== 0) {
+            ctx.quadraticCurveTo(cx, cy, tipX, tipY);
+          } else {
+            ctx.lineTo(tipX, tipY);
+          }
 
           if (isHighlighted) {
             ctx.strokeStyle = '#e0533c';
@@ -3080,16 +3211,50 @@
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // Edge Label on highlight
+          // Draw Arrowhead pointing to target boundary
+          const arrowLength = isHighlighted ? 8.5 : 7.0;
+          const arrowWidth = isHighlighted ? 4.5 : 3.5;
+          const arrowBaseX = tipX - tux * arrowLength;
+          const arrowBaseY = tipY - tuy * arrowLength;
+          const apx = -tuy * arrowWidth;
+          const apy = tux * arrowWidth;
+
+          ctx.beginPath();
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(arrowBaseX + apx, arrowBaseY + apy);
+          ctx.lineTo(arrowBaseX - apx, arrowBaseY - apy);
+          ctx.closePath();
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.fill();
+
+          // Edge Label on highlight (positioned at curvature midpoint)
           if (isHighlighted) {
-            const mx = (u.x + v.x) / 2;
-            const my = (u.y + v.y) / 2;
-            ctx.fillStyle = currentGraphMode === 'schema' ? '#8b5cf6' : '#e0533c';
-            ctx.font = '10px monospace';
+            const labelX = (mx + cx) / 2;
+            const labelY = (my + cy) / 2;
             const baseRel = e.label || e.rel || e.type || 'relates';
             const tierBadge = (currentGraphMode !== 'schema' && e.confidence_tier) ? ` [${e.confidence_tier}]` : '';
             const labelText = baseRel + tierBadge;
-            ctx.fillText(labelText, mx + 4, my - 4);
+
+            ctx.font = 'bold 10px monospace';
+            const textMetrics = ctx.measureText(labelText);
+            const padX = 5;
+            const padY = 3;
+            const textWidth = textMetrics.width;
+            const textHeight = 11;
+
+            // Draw label background pill
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+            ctx.fillRect(labelX - textWidth / 2 - padX, labelY - textHeight / 2 - padY, textWidth + padX * 2, textHeight + padY * 2);
+            ctx.strokeStyle = currentGraphMode === 'schema' ? '#8b5cf6' : '#e0533c';
+            ctx.lineWidth = 1.0;
+            ctx.strokeRect(labelX - textWidth / 2 - padX, labelY - textHeight / 2 - padY, textWidth + padX * 2, textHeight + padY * 2);
+
+            ctx.fillStyle = currentGraphMode === 'schema' ? '#c4b5fd' : '#fca5a5';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(labelText, labelX, labelY);
+            ctx.textAlign = 'start';
+            ctx.textBaseline = 'alphabetic';
           }
           ctx.restore();
         });

@@ -402,3 +402,52 @@ timestamp: "2026-09-06"
     with open(index_html_path, "r", encoding="utf-8") as f:
         index_html = f.read()
     assert 'id="modalPaperId">Paper ID: --</span>' in index_html
+
+
+def test_dashboard_curved_edges_and_arrowheads(dashboard_html_content: str) -> None:
+    """Verifies that dashboard.html implements quadratic bezier curves, arrowheads, and pill labels (Issue #191)."""
+    # 1. Edge pair mapping for bidirectional / parallel separation
+    assert "edgePairMap" in dashboard_html_content
+    assert "curvatureOffset" in dashboard_html_content
+    assert "quadraticCurveTo(cx, cy, tipX, tipY)" in dashboard_html_content
+
+    # 2. Arrowhead rendering at node boundary
+    assert "arrowBaseX" in dashboard_html_content
+    assert "arrowBaseY" in dashboard_html_content
+    assert "tipX" in dashboard_html_content
+    assert "tipY" in dashboard_html_content
+
+    # 3. Curve midpoint label calculation and pill background
+    assert "labelX = (mx + cx) / 2" in dashboard_html_content
+    assert "labelY = (my + cy) / 2" in dashboard_html_content
+    assert "fillRect(labelX - textWidth / 2 - padX" in dashboard_html_content
+    assert "strokeRect(labelX - textWidth / 2 - padX" in dashboard_html_content
+
+
+def test_dashboard_layout_spacing_and_collision_avoidance(
+    dashboard_html_content: str,
+) -> None:
+    """Verifies layout spacing scaling, collision avoidance, and spacing slider UI (Issue #192)."""
+    # 1. Spacing slider control in graph deck
+    assert 'id="spacingSlider"' in dashboard_html_content
+    assert 'id="spacingValueBadge"' in dashboard_html_content
+    assert "setGraphSpacing(this.value)" in dashboard_html_content
+    assert "window.setGraphSpacing = function" in dashboard_html_content
+
+    # 2. Dynamic physics parameter separation (Schema View vs CTI/Context)
+    assert "function getPhysicsParams()" in dashboard_html_content
+    assert "currentGraphMode === 'schema'" in dashboard_html_content
+    assert "baseLSpring" in dashboard_html_content
+    assert "baseRepulsion" in dashboard_html_content
+
+    # 3. Hard collision detection and separation force
+    assert "minSeparationBase" in dashboard_html_content
+    assert (
+        "minAllowedDist = rU + rV + (minSeparationBase * spacingMultiplier)"
+        in dashboard_html_content
+    )
+    assert "overlap = minAllowedDist - dist" in dashboard_html_content
+    assert "push = Math.min(overlap * 0.45, 15.0)" in dashboard_html_content
+
+    # 4. Expanded schema view initial circle layout radius
+    assert "Math.min(width, height) * 0.42" in dashboard_html_content

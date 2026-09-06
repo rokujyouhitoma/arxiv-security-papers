@@ -6,9 +6,7 @@
 
 ## 1. 進行中・未完了 Issue 一覧 (Active Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| - | *現在進行中の未完了 Issue はありません。* | - | - | - | - |
+*現在、進行中のオープン Issue はありません。*
 
 ---
 
@@ -16,6 +14,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **192** | グラフ可視化におけるノード密集の解消と間隔最適化（物理斥力・ばね長動的スケーリング・衝突回避・UI密度制御の実装） | Feature / UIUX | 2026-09-06 | [192-enhance-graph-layout-spacing-and-density-controls.md](closed/192-enhance-graph-layout-spacing-and-density-controls.md) |
+| **191** | Schema View における逆関係・双方向エッジの重なり解消（二次ベジェ曲線・有向矢印・ラベル位置オフセット対応） | Bug | 2026-09-06 | [191-fix-schema-view-bidirectional-edge-overlap-and-curved-arrows.md](closed/191-fix-schema-view-bidirectional-edge-overlap-and-curved-arrows.md) |
 | **190** | Schema View における Edge の undefined [HIGH] 表示および Vertex の全黒色化不具合の改修 | Bug | 2026-09-06 | [190-fix-schema-view-edge-undefined-and-vertex-colors.md](closed/190-fix-schema-view-edge-undefined-and-vertex-colors.md) |
 | **189** | [USR-01] ユーザーマニュアルのコマンド体系網羅的拡充とオントロジー・グラフDB操作ガイド追記 | Documentation | 2026-09-06 | [189-update-user-manual-commands.md](closed/189-update-user-manual-commands.md) |
 | **188** | 実論文データABoxへの新実体統合と因果・エビデンス探索の実装 (Task B) | Feature | 2026-09-06 | [188-integrate-causal-reified-entities-into-paper-abox-graph.md](closed/188-integrate-causal-reified-entities-into-paper-abox-graph.md) |
