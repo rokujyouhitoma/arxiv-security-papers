@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import time
 from typing import (
     TYPE_CHECKING,
@@ -1483,11 +1484,80 @@ class GatewayHandlers:
 
         return None, rel_path
 
+    def _check_figure_candidate(
+        self, root: str, safe_clean: str, safe_fig: str
+    ) -> Optional[str]:
+        cand = os.path.join(root, safe_clean, "figures", safe_fig)
+        if os.path.exists(cand):
+            return cand
+        cand_alt = os.path.join(root, "figures", safe_fig)
+        return cand_alt if os.path.exists(cand_alt) else None
+
+    def _locate_figure_path(self, clean_id: str, fig_id: str) -> Optional[str]:
+        raw_root = os.path.join(self.workspace_dir, "outputs", "raw_data")
+        safe_clean = re.sub(r"[^a-zA-Z0-9._-]", "", clean_id)
+        safe_fig = re.sub(r"[^a-zA-Z0-9._-]", "", fig_id)
+        if not (safe_clean and safe_fig):
+            return None
+
+        for root, _, _ in os.walk(raw_root):
+            found = self._check_figure_candidate(root, safe_clean, safe_fig)
+            if found:
+                return found
+        return None
+
+    def handle_paper_figure(
+        self, start_response: Callable[..., Any], clean_id: str, fig_id: str
+    ) -> List[bytes]:
+        """Serves extracted figure image (PNG/JPEG) with security boundary checks."""
+        target_path = self._locate_figure_path(clean_id, fig_id)
+        if not target_path or not is_safe_workspace_path(
+            target_path, self.workspace_dir
+        ):
+            return response_error(
+                start_response, f"Figure '{fig_id}' not found", status="404 Not Found"
+            )
+
+        ext = os.path.splitext(target_path)[1].lower()
+        content_type = "image/png" if ext == ".png" else "image/jpeg"
+        with open(target_path, "rb") as f:
+            data = f.read()
+
+        headers = [
+            ("Content-Type", content_type),
+            ("Content-Length", str(len(data))),
+            ("X-Content-Type-Options", "nosniff"),
+            ("Content-Security-Policy", "default-src 'none'"),
+            ("Cache-Control", "public, max-age=86400"),
+        ]
+        start_response("200 OK", headers)
+        return [data]
+
+    def _find_paper_figures(self, clean_id: str) -> List[Dict[str, Any]]:
+        raw_root = os.path.join(self.workspace_dir, "outputs", "raw_data")
+        safe_clean = re.sub(r"[^a-zA-Z0-9._-]", "", clean_id)
+        if not safe_clean:
+            return []
+
+        for root, dirs, _ in os.walk(raw_root):
+            meta_file = os.path.join(root, safe_clean, "figures", "metadata.json")
+            if os.path.exists(meta_file):
+                try:
+                    with open(meta_file, "r", encoding="utf-8") as f:
+                        return cast(List[Dict[str, Any]], json.load(f))
+                except Exception:
+                    pass
+        return []
+
     def handle_paper(
         self, start_response: Callable[..., Any], path: str
     ) -> List[bytes]:
-        """Handles /api/paper/<clean_id> retrieval."""
+        """Handles /api/paper/<clean_id> retrieval and /api/paper/<clean_id>/figures/<fig_id>."""
         subpath = path.replace("/api/paper/", "").strip()
+        if "/figures/" in subpath:
+            clean_id, fig_id = subpath.split("/figures/", 1)
+            return self.handle_paper_figure(start_response, clean_id, fig_id)
+
         if subpath.endswith("/related"):
             clean_id = subpath.replace("/related", "").strip()
             return self.handle_paper_related(start_response, clean_id)
@@ -1507,11 +1577,13 @@ class GatewayHandlers:
                 status="404 Not Found",
             )
 
+        figures = self._find_paper_figures(clean_id)
         resp_payload: Dict[str, Any] = {
             "status": "success",
             "content": content,
             "path": rel_path,
             "paper": paper,
+            "figures": figures,
         }
         return response_json(start_response, resp_payload)
 

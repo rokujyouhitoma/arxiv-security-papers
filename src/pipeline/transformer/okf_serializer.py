@@ -8,7 +8,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, Tuple, cast
+from typing import Any, Dict, List, Tuple, cast
 
 from .keyword_extractor import extract_keyphrases
 from .structured_summarizer import generate_structured_summary
@@ -143,6 +143,52 @@ def _resolve_raw_links(
         txt_link_str = f"[`TXT`]({rel_raw_meta})"
 
     return pdf_link_str, txt_link_str
+
+
+def _is_figure_filename(fname: str) -> bool:
+    if fname.startswith("."):
+        return False
+    return fname.lower().endswith((".png", ".jpg", ".jpeg"))
+
+
+def _scan_dir_images(dir_path: str) -> List[str]:
+    if not (os.path.exists(dir_path) and os.path.isdir(dir_path)):
+        return []
+    return [
+        os.path.join(dir_path, f)
+        for f in sorted(os.listdir(dir_path))
+        if _is_figure_filename(f)
+    ]
+
+
+def _find_figure_images(raw_dir: str, safe_clean_id: str) -> List[str]:
+    cand_dirs = [
+        os.path.join(raw_dir, safe_clean_id, "figures"),
+        os.path.join(raw_dir, "figures", safe_clean_id),
+        os.path.join(raw_dir, "figures"),
+    ]
+    for cd in cand_dirs:
+        found = _scan_dir_images(cd)
+        if found:
+            return found
+    return []
+
+
+def _build_figures_markdown(raw_dir: str, safe_clean_id: str, okf_file_dir: str) -> str:
+    """Builds markdown image links for extracted figures and diagrams."""
+    found_images = _find_figure_images(raw_dir, safe_clean_id)
+    if not found_images:
+        return ""
+
+    lines = [
+        "\n\n## 主要アーキテクチャ図・システム構成図 (Key Figures & Architecture Diagrams)\n"
+    ]
+    for idx, img_path in enumerate(found_images[:10], start=1):
+        rel_path = os.path.relpath(img_path, okf_file_dir)
+        fname = os.path.splitext(os.path.basename(img_path))[0]
+        lines.append(f"![図 {idx}: {fname}]({rel_path})")
+
+    return "\n".join(lines)
 
 
 def _load_raw_paper_meta(raw_meta_path: str) -> Dict[str, Any]:
@@ -336,6 +382,10 @@ trust:
         txt_link_str,
         rec_list,
     )
+
+    figures_md = _build_figures_markdown(raw_dir, safe_clean_id, okf_file_dir)
+    if figures_md:
+        okf_content += figures_md
 
     rel_okf_path = _write_validated_okf_file(okf_file_path, workspace_dir, okf_content)
     resolved_target = os.path.realpath(os.path.abspath(okf_file_path))
