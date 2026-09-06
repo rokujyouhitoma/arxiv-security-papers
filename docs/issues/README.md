@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **187** | オントロジー・メタモデル（TBox）のグラフDBインジェストおよびスキーマ・エクスプローラー（Schema View）の実装 | Feature | High | In Progress | [187-implement-ontology-tbox-graph-ingestion-and-schema-view.md](187-implement-ontology-tbox-graph-ingestion-and-schema-view.md) |
+| **188** | 実論文データABoxへの新実体統合と因果・エビデンス探索の実装 (Task B) | Feature | 2026-09-06 | [188-integrate-causal-reified-entities-into-paper-abox-graph.md](closed/188-integrate-causal-reified-entities-into-paper-abox-graph.md) |
 
 ---
 
@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **187** | オントロジー・メタモデル（TBox）のグラフDBインジェストおよびスキーマ・エクスプローラー（Schema View）の実装 (Task A) | Feature | 2026-09-06 | [187-implement-ontology-tbox-graph-ingestion-and-schema-view.md](closed/187-implement-ontology-tbox-graph-ingestion-and-schema-view.md) |
 | **186** | 主張（Claim）と実証（Evidence）の分離・エッジ属性具現化およびデータ型正規表現制約の実装 (Phase 3) | Feature | 2026-09-06 | [186-implement-claim-evidence-reification-and-regex-data-constraints.md](closed/186-implement-claim-evidence-reification-and-regex-data-constraints.md) |
 | **185** | 脅威モデル因果連鎖（STRIDE・Impact / Consequence）および前提条件無力化モデルの実装 (Phase 2) | Feature | 2026-09-06 | [185-implement-threat-model-causality-impact-and-precondition-neutralization.md](closed/185-implement-threat-model-causality-impact-and-precondition-neutralization.md) |
 | **184** | OWL論理整合性向上・Incident孤立解消および既存標準語彙アライメント (Phase 1) | Feature | 2026-09-06 | [184-enhance-owl-logic-incident-coupling-and-standards-alignment.md](closed/184-enhance-owl-logic-incident-coupling-and-standards-alignment.md) |

@@ -11,8 +11,12 @@ from typing import Any, Dict, List, Set, Tuple
 
 from .schema import (
     BaseEntity,
+    ClaimEntity,
     DetectionRuleEntity,
     EntityType,
+    EvaluationResultEntity,
+    ImpactEntity,
+    IncidentEntity,
     PoCArtifactEntity,
     PreconditionEntity,
     Predicate,
@@ -293,3 +297,279 @@ class ExtendedExtractor:
             object_id=venue_id,
         )
         return [venue], [triple]
+
+    IMPACT_PATTERNS: List[Tuple[str, str, str, str]] = [
+        (
+            "data exfiltration",
+            "InformationDisclosure",
+            "High",
+            "機密データ漏洩・持ち出し",
+        ),
+        ("data breach", "InformationDisclosure", "High", "情報漏洩・侵害"),
+        (
+            "privilege escalation",
+            "ElevationOfPrivilege",
+            "Critical",
+            "特権昇格・権限奪取",
+        ),
+        (
+            "arbitrary code execution",
+            "ElevationOfPrivilege",
+            "Critical",
+            "任意コード実行",
+        ),
+        ("remote code execution", "ElevationOfPrivilege", "Critical", "遠隔コード実行"),
+        ("denial of service", "DenialOfService", "High", "サービス拒否・機能停止"),
+        ("service disruption", "DenialOfService", "Medium", "サービス中断"),
+        ("memory corruption", "Tampering", "High", "メモリ破壊・改ざん"),
+        ("integrity violation", "Tampering", "High", "完全性侵害・データ改変"),
+        ("spoofing", "Spoofing", "Medium", "なりすまし"),
+        ("credential theft", "Spoofing", "High", "認証情報窃取"),
+    ]
+
+    INCIDENT_PATTERNS: List[Tuple[str, str, str, str]] = [
+        ("solarwinds", "SolarWinds", "2020-12", "Critical"),
+        ("log4shell", "Log4Shell", "2021-12", "Critical"),
+        ("colonial pipeline", "ColonialPipeline", "2021-05", "Critical"),
+        ("stuxnet", "Stuxnet", "2010-06", "Critical"),
+        ("wannacry", "WannaCry", "2017-05", "High"),
+        ("heartbleed", "Heartbleed", "2014-04", "High"),
+        ("spectre", "Spectre", "2018-01", "High"),
+        ("meltdown", "Meltdown", "2018-01", "High"),
+    ]
+
+    @classmethod
+    def extract_impacts_and_causality(
+        cls,
+        clean_id: str,
+        text: str,
+        paper_id: str,
+        tech_entities: List[BaseEntity],
+        defense_entities: List[BaseEntity],
+        precondition_entities: List[BaseEntity],
+    ) -> Tuple[List[ImpactEntity], List[Triple]]:
+        """Extracts STRIDE Impact entities and causality triples."""
+        text_lower = text.lower()
+        entities: List[ImpactEntity] = []
+        triples: List[Triple] = []
+        seen_impacts: Set[str] = set()
+
+        for kw, stride_cat, severity, label_ja in cls.IMPACT_PATTERNS:
+            if kw in text_lower:
+                if stride_cat in seen_impacts:
+                    continue
+                seen_impacts.add(stride_cat)
+                imp_id = f"Impact:{clean_id}:{stride_cat}"
+                impact = ImpactEntity(
+                    id=imp_id,
+                    entity_type=EntityType.IMPACT,
+                    name=f"{stride_cat} ({severity}) - {label_ja}",
+                    impact_id=f"{clean_id}-{stride_cat}",
+                    stride_category=stride_cat,
+                    severity=severity,
+                )
+                entities.append(impact)
+
+                # Link AttackTechniques -> HAS_IMPACT -> Impact (or fallback to Paper)
+                if tech_entities:
+                    for tech in tech_entities:
+                        triples.append(
+                            Triple(
+                                subject_id=tech.id,
+                                predicate=Predicate.HAS_IMPACT,
+                                object_id=imp_id,
+                                weight=0.9,
+                            )
+                        )
+                else:
+                    triples.append(
+                        Triple(
+                            subject_id=paper_id,
+                            predicate=Predicate.HAS_IMPACT,
+                            object_id=imp_id,
+                            weight=0.8,
+                        )
+                    )
+
+        # Link DefenseMechanisms -> NEUTRALIZES_PRECONDITION -> Preconditions (or fallback to Paper)
+        if precondition_entities:
+            if defense_entities:
+                for dm in defense_entities:
+                    for pre in precondition_entities:
+                        triples.append(
+                            Triple(
+                                subject_id=dm.id,
+                                predicate=Predicate.NEUTRALIZES_PRECONDITION,
+                                object_id=pre.id,
+                                weight=0.85,
+                            )
+                        )
+            elif "neutraliz" in text_lower or "defen" in text_lower:
+                for pre in precondition_entities:
+                    triples.append(
+                        Triple(
+                            subject_id=paper_id,
+                            predicate=Predicate.NEUTRALIZES_PRECONDITION,
+                            object_id=pre.id,
+                            weight=0.75,
+                        )
+                    )
+
+        return entities, triples
+
+    @classmethod
+    def extract_claims_and_evidence(
+        cls,
+        clean_id: str,
+        text: str,
+        meta: Dict[str, Any],
+        paper_id: str,
+        tech_entities: List[BaseEntity],
+    ) -> Tuple[List[BaseEntity], List[Triple]]:
+        """Extracts Claim and EvaluationResult entities and connects them to Paper and Techniques."""
+        entities: List[BaseEntity] = []
+        triples: List[Triple] = []
+
+        # 1. Main Research Claim
+        claim_id = f"Claim:{clean_id}:Proposition"
+        title = meta.get("title", f"Paper {clean_id}")
+        claim = ClaimEntity(
+            id=claim_id,
+            entity_type=EntityType.CLAIM,
+            name=f"Proposition of {clean_id}",
+            claim_id=f"claim-{clean_id}",
+            description=f"Core security assertion/defense proposed in: {title}",
+            claim_type=(
+                "DefenseEfficacy" if "defense" in text.lower() else "AttackDiscovery"
+            ),
+        )
+        entities.append(claim)
+        triples.append(
+            Triple(
+                subject_id=paper_id,
+                predicate=Predicate.ASSERTS_CLAIM,
+                object_id=claim_id,
+                weight=1.0,
+            )
+        )
+
+        # 2. Reified Evaluation Result (Evidence)
+        text_lower = text.lower()
+        success_rate = 95.0
+        acc_match = re.search(
+            r"(\d{1,3}(?:\.\d+)?)\s*%\s*(?:accuracy|success|precision|recall|detection)",
+            text_lower,
+        )
+        if acc_match:
+            try:
+                success_rate = float(acc_match.group(1))
+            except ValueError:
+                pass
+
+        env = "General Computing"
+        for env_kw, env_name in [
+            ("cloud", "Cloud/Kubernetes"),
+            ("kernel", "Linux Kernel"),
+            ("sgx", "Intel SGX Enclave"),
+            ("android", "Android OS"),
+            ("docker", "Container"),
+            ("firmware", "Embedded/IoT Firmware"),
+        ]:
+            if env_kw in text_lower:
+                env = env_name
+                break
+
+        eval_id = f"EvaluationResult:{clean_id}:Empirical"
+        evaluation = EvaluationResultEntity(
+            id=eval_id,
+            entity_type=EntityType.EVALUATION_RESULT,
+            name=f"Empirical Evaluation ({success_rate}% on {env})",
+            evaluation_id=f"eval-{clean_id}",
+            metric_name="SuccessRate",
+            value=success_rate,
+            success_rate=success_rate,
+            target_environment=env,
+        )
+        entities.append(evaluation)
+
+        # Triples: Paper -> YIELDS_EVALUATION -> EvaluationResult
+        triples.append(
+            Triple(
+                subject_id=paper_id,
+                predicate=Predicate.YIELDS_EVALUATION,
+                object_id=eval_id,
+                weight=1.0,
+            )
+        )
+        # Triples: EvaluationResult -> EVALUATES_CLAIM -> Claim
+        triples.append(
+            Triple(
+                subject_id=eval_id,
+                predicate=Predicate.EVALUATES_CLAIM,
+                object_id=claim_id,
+                weight=0.95,
+            )
+        )
+        # Triples: EvaluationResult -> EVALUATES_TECHNIQUE -> AttackTechnique
+        for tech in tech_entities:
+            triples.append(
+                Triple(
+                    subject_id=eval_id,
+                    predicate=Predicate.EVALUATES_TECHNIQUE,
+                    object_id=tech.id,
+                    weight=0.9,
+                )
+            )
+
+        return entities, triples
+
+    @classmethod
+    def extract_incidents(
+        cls,
+        clean_id: str,
+        text: str,
+        paper_id: str,
+        tech_entities: List[BaseEntity],
+        vuln_entities: List[BaseEntity],
+    ) -> Tuple[List[IncidentEntity], List[Triple]]:
+        """Extracts Incident entities and couples them with techniques and vulnerabilities."""
+        text_lower = text.lower()
+        entities: List[IncidentEntity] = []
+        triples: List[Triple] = []
+
+        for kw, inc_name, occurred_at, severity in cls.INCIDENT_PATTERNS:
+            if kw in text_lower:
+                inc_id = f"Incident:{inc_name}"
+                incident = IncidentEntity(
+                    id=inc_id,
+                    entity_type=EntityType.INCIDENT,
+                    name=f"Real-World Incident: {inc_name} ({occurred_at})",
+                    incident_id=inc_name,
+                    occurred_at=occurred_at,
+                    severity=severity,
+                )
+                entities.append(incident)
+
+                # AttackTechnique -> EXPLOITED_IN -> Incident
+                for tech in tech_entities:
+                    triples.append(
+                        Triple(
+                            subject_id=tech.id,
+                            predicate=Predicate.EXPLOITED_IN,
+                            object_id=inc_id,
+                            weight=0.95,
+                        )
+                    )
+
+                # Incident -> LEVERAGED_VULNERABILITY -> Vulnerability
+                for vuln in vuln_entities:
+                    triples.append(
+                        Triple(
+                            subject_id=inc_id,
+                            predicate=Predicate.LEVERAGED_VULNERABILITY,
+                            object_id=vuln.id,
+                            weight=0.9,
+                        )
+                    )
+
+        return entities, triples
