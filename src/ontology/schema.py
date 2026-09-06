@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Set
 
 
 class EntityType(str, Enum):
-    """Enumeration of 7 Core Entity Types in Security Knowledge Ontology."""
+    """Enumeration of Core Entity Types in Security Knowledge Ontology."""
 
     PAPER = "Paper"
     THREAT_ACTOR = "ThreatActor"
@@ -22,10 +22,18 @@ class EntityType(str, Enum):
     TARGET_ASSET = "TargetAsset"
     DEFENSE_MECHANISM = "DefenseMechanism"
     BENCHMARK_METRIC = "BenchmarkMetric"
+    # Full-Spectrum SKO Extensions (Issue #179)
+    INCIDENT = "Incident"
+    DETECTION_RULE = "DetectionRule"
+    POC_ARTIFACT = "PoCArtifact"
+    PRECONDITION = "Precondition"
+    RESEARCH_GAP = "ResearchGap"
+    RESIDUAL_RISK = "ResidualRisk"
+    PUBLICATION_VENUE = "PublicationVenue"
 
 
 class Predicate(str, Enum):
-    """Enumeration of 12 Core Relationship Predicates in Security Knowledge Ontology."""
+    """Enumeration of Relationship Predicates in Security Knowledge Ontology."""
 
     DISCLOSES = "DISCLOSES"  # Paper -> Vulnerability
     EXPLOITS = "EXPLOITS"  # AttackTechnique -> Vulnerability
@@ -39,6 +47,15 @@ class Predicate(str, Enum):
     SUBCLASS_OF = "SUBCLASS_OF"  # Entity -> Entity (Taxonomy hierarchy)
     PART_OF = "PART_OF"  # TargetAsset -> TargetAsset
     CITES = "CITES"  # Paper -> Paper
+    # Full-Spectrum SKO Extensions (Issue #179)
+    BLOCKS = "BLOCKS"  # DetectionRule -> AttackTechnique
+    GENERATES_RULE = "GENERATES_RULE"  # DefenseMechanism -> DetectionRule
+    REQUIRES_PRECONDITION = "REQUIRES_PRECONDITION"  # AttackTechnique -> Precondition
+    LEAVES_UNADDRESSED = "LEAVES_UNADDRESSED"  # DefenseMechanism -> ResidualRisk
+    IDENTIFIES_GAP = "IDENTIFIES_GAP"  # Paper -> ResearchGap
+    PRESENTED_AT = "PRESENTED_AT"  # Paper -> PublicationVenue
+    VERIFIES_CVE = "VERIFIES_CVE"  # Paper -> Vulnerability
+    HAS_POC = "HAS_POC"  # Paper -> PoCArtifact
 
     @property
     def inverse(self) -> str:
@@ -56,6 +73,14 @@ class Predicate(str, Enum):
             "SUBCLASS_OF": "SUPERCLASS_OF",
             "PART_OF": "HAS_PART",
             "CITES": "CITED_BY",
+            "BLOCKS": "BLOCKED_BY",
+            "GENERATES_RULE": "GENERATED_FROM",
+            "REQUIRES_PRECONDITION": "PRECONDITION_FOR",
+            "LEAVES_UNADDRESSED": "UNADDRESSED_IN",
+            "IDENTIFIES_GAP": "IDENTIFIED_IN",
+            "PRESENTED_AT": "HOSTED_PAPER",
+            "VERIFIES_CVE": "VERIFIED_IN",
+            "HAS_POC": "POC_OF",
         }
         return inverse_map.get(self.value, f"INVERSE_{self.value}")
 
@@ -187,6 +212,102 @@ class BenchmarkMetricEntity(BaseEntity):
             self.id = f"BenchmarkMetric:{self.metric_id or self.name}"
 
 
+@dataclass
+class IncidentEntity(BaseEntity):
+    """Incident entity representing observed real-world attack occurrences."""
+
+    incident_id: str = ""
+    occurred_at: str = ""
+    severity: str = "High"
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.INCIDENT
+        if not self.id:
+            self.id = f"Incident:{self.incident_id or self.name}"
+
+
+@dataclass
+class DetectionRuleEntity(BaseEntity):
+    """Detection Rule entity representing actionable defense code (Semgrep, Sigma, YARA)."""
+
+    rule_id: str = ""
+    rule_format: str = "semgrep"  # semgrep, sigma, yara
+    rule_content: str = ""
+    target_technique: str = ""
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.DETECTION_RULE
+        if not self.id:
+            self.id = f"DetectionRule:{self.rule_id or self.name}"
+
+
+@dataclass
+class PoCArtifactEntity(BaseEntity):
+    """PoC Artifact entity representing software code, repositories, or artifacts."""
+
+    artifact_id: str = ""
+    repo_url: str = ""
+    artifact_type: str = "github"  # github, docker, script
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.POC_ARTIFACT
+        if not self.id:
+            self.id = f"PoCArtifact:{self.artifact_id or self.name}"
+
+
+@dataclass
+class PreconditionEntity(BaseEntity):
+    """Precondition entity representing threat model assumptions and access requirements."""
+
+    precondition_id: str = ""
+    access_level: str = "Remote"  # Remote, Local, Physical, Admin
+    assumed_knowledge: str = "Black-box"  # White-box, Gray-box, Black-box
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.PRECONDITION
+        if not self.id:
+            self.id = f"Precondition:{self.precondition_id or self.name}"
+
+
+@dataclass
+class ResearchGapEntity(BaseEntity):
+    """Research Gap entity representing unaddressed limitations and future challenges."""
+
+    gap_id: str = ""
+    domain: str = ""
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.RESEARCH_GAP
+        if not self.id:
+            self.id = f"ResearchGap:{self.gap_id or self.name}"
+
+
+@dataclass
+class ResidualRiskEntity(BaseEntity):
+    """Residual Risk entity representing remaining blind spots after defenses are applied."""
+
+    risk_id: str = ""
+    bypass_vector: str = ""
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.RESIDUAL_RISK
+        if not self.id:
+            self.id = f"ResidualRisk:{self.risk_id or self.name}"
+
+
+@dataclass
+class PublicationVenueEntity(BaseEntity):
+    """Publication Venue entity representing top academic conferences or journals."""
+
+    venue_id: str = ""
+    tier: str = "Tier-1"  # Tier-1 (IEEE S&P, USENIX, CCS, NDSS), Preprint (arXiv)
+
+    def __post_init__(self) -> None:
+        self.entity_type = EntityType.PUBLICATION_VENUE
+        if not self.id:
+            self.id = f"PublicationVenue:{self.venue_id or self.name}"
+
+
 @dataclass(frozen=True)
 class Triple:
     """Represents a factual Semantic Knowledge Graph Triple (Subject - Predicate - Object)."""
@@ -208,9 +329,7 @@ class Triple:
 
 
 class SecurityOntologySchema:
-    """
-    Schema validator enforcing domain constraints on entities and relationships.
-    """
+    """Schema validator enforcing domain constraints on entities and relationships."""
 
     ALLOWED_RELATIONS: Dict[EntityType, Set[Predicate]] = {
         EntityType.PAPER: {
@@ -219,20 +338,40 @@ class SecurityOntologySchema:
             Predicate.PROPOSES,
             Predicate.EVALUATES,
             Predicate.CITES,
+            Predicate.IDENTIFIES_GAP,
+            Predicate.PRESENTED_AT,
+            Predicate.VERIFIES_CVE,
+            Predicate.HAS_POC,
+            Predicate.REQUIRES_PRECONDITION,
+            Predicate.LEAVES_UNADDRESSED,
+            Predicate.GENERATES_RULE,
         },
         EntityType.ATTACK_TECHNIQUE: {
             Predicate.EXPLOITS,
             Predicate.TARGETS,
             Predicate.ATTRIBUTED_TO,
             Predicate.SUBCLASS_OF,
+            Predicate.REQUIRES_PRECONDITION,
         },
         EntityType.DEFENSE_MECHANISM: {
             Predicate.MITIGATES,
             Predicate.PATCHES,
             Predicate.SUBCLASS_OF,
+            Predicate.GENERATES_RULE,
+            Predicate.LEAVES_UNADDRESSED,
         },
         EntityType.TARGET_ASSET: {
             Predicate.PART_OF,
+            Predicate.SUBCLASS_OF,
+        },
+        EntityType.DETECTION_RULE: {
+            Predicate.BLOCKS,
+            Predicate.SUBCLASS_OF,
+        },
+        EntityType.THREAT_ACTOR: {
+            Predicate.SUBCLASS_OF,
+        },
+        EntityType.INCIDENT: {
             Predicate.SUBCLASS_OF,
         },
     }

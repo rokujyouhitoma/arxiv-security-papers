@@ -207,11 +207,46 @@ turtle_output = builder.serialize()
 
 ---
 
-## 5. トレーサビリティマトリクス (Traceability)
+## 5. Full-Spectrum セキュリティ知識オントロジー v2.0 (`security_ontology_v2.ttl`)
+
+拡張オントロジー体系（`build_full_spectrum_security_ontology()`）では、学術知見と実務セキュリティ運用のギャップを埋めるため、以下の 7 つの拡張クラスと関係性述語が定義されています。
+
+### 5.1 拡張クラス体系 (Extended Classes)
+
+| クラス URI | 日本語ラベル | 定義および運用目的 |
+| :--- | :--- | :--- |
+| `sec:Incident` | 観測インシデント | 実世界で発生したサイバー攻撃事案、被害事例、侵害報告 |
+| `sec:DetectionRule` | 検知ルール | Semgrep, Sigma, YARA などの実行可能な防御検知シグネチャ |
+| `sec:PoCArtifact` | 実証コード / アーティファクト | 論文で公開された攻撃実証コード、GitHub リポジトリ、Docker 環境 |
+| `sec:Precondition` | 攻撃前提条件 | 攻撃成立に必要なアクセス権限（Remote/Local/Physical）や脅威モデル |
+| `sec:ResearchGap` | 未解決課題 | 論文で特定されたスケーラビリティ限界、オープン課題、未カバー領域 |
+| `sec:ResidualRisk` | 残存リスク | 防御策適用後も残存するセキュリティ盲点、迂回ベクトル |
+| `sec:PublicationVenue`| 発表会議 / ジャーナル | IEEE S&P, USENIX Security, ACM CCS, NDSS などの学術発表会場 |
+
+### 5.2 拡張オブジェクトプロパティ (Extended Object Properties)
+
+| プロパティ URI | 日本語ラベル | Domain | Range | 逆プロパティ |
+| :--- | :--- | :--- | :--- | :--- |
+| `sec:blocks` | 攻撃を阻止・検知する | `sec:DetectionRule` | `sec:AttackTechnique` | `sec:blockedBy` |
+| `sec:generatesRule` | ルールを生成する | `sec:DefenseMechanism` | `sec:DetectionRule` | `sec:generatedFrom` |
+| `sec:requiresPrecondition`| 前提条件を要求する | `sec:Paper` / `sec:AttackTechnique` | `sec:Precondition` | `sec:preconditionFor` |
+| `sec:identifiesGap` | 課題・ギャップを特定する | `sec:Paper` | `sec:ResearchGap` | `sec:identifiedIn` |
+| `sec:leavesUnaddressed` | 未対応リスクを残す | `sec:Paper` / `sec:DefenseMechanism` | `sec:ResidualRisk` | `sec:unaddressedIn` |
+| `sec:hasPoC` | 実証コードを有する | `sec:Paper` | `sec:PoCArtifact` | `sec:pocOf` |
+| `sec:presentedAt` | 発表された | `sec:Paper` | `sec:PublicationVenue` | `sec:hostedPaper` |
+| `sec:verifiesCVE` | 脆弱性を検証する | `sec:Paper` | `sec:Vulnerability` | `sec:verifiedIn` |
+
+---
+
+## 6. トレーサビリティマトリクス (Traceability)
 
 - [REQ-ONT-01: オントロジー駆動知識アーキテクチャ要求仕様書](../requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md)
 - [MNG-03: オントロジー駆動開発プロセス規範](../processes/MNG-03-ontology_driven_development_process.md)
 - [MNG-01: 文書管理台帳](../processes/MNG-01-document_ledger.md)
 - [DSN-14: 次世代データベース・知識グラフエンジン設計書](DSN-14-graph_engineering_dashboard.md)
 - [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py)
+- [src/ontology/extended_extractor.py](../../src/ontology/extended_extractor.py)
+- [outputs/ontology/security_ontology_v2.ttl](../../outputs/ontology/security_ontology_v2.ttl)
+- [tests/ontology/test_full_spectrum_ontology.py](../../tests/ontology/test_full_spectrum_ontology.py)
 - [tests/ontology/test_turtle_engine.py](../../tests/ontology/test_turtle_engine.py)
+

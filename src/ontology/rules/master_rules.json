@@ -263,6 +263,92 @@
       },
       "version": "2026.09.1",
       "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-PRECONDITION-01",
+      "name": "Threat Model Precondition Requirement",
+      "description": "Infers threat model and access requirements (Remote, Local, Physical, White-box).",
+      "source_label": "Paper",
+      "target_label": "Precondition",
+      "edge_label": "REQUIRES_PRECONDITION",
+      "condition_type": "lexical",
+      "condition_spec": {
+        "target_field": "combined",
+        "min_matches": 1
+      },
+      "base_confidence": 0.85,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "combined",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-DEFENSE-DETECTION-BLOCKS-01",
+      "name": "Detection Rule Blocks Attack Technique",
+      "description": "Links concrete detection rules (Semgrep, Sigma, YARA) to blocked attack techniques.",
+      "source_label": "DetectionRule",
+      "target_label": "AttackTechnique",
+      "edge_label": "BLOCKS",
+      "condition_type": "catalog_axiom",
+      "condition_spec": {
+        "rule_engine": "siem_edr"
+      },
+      "base_confidence": 0.9,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "rule_syntax",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-GAP-IDENTIFIES-01",
+      "name": "Research Gap Identification",
+      "description": "Infers unaddressed open challenges, scalability bottlenecks, and residual risks.",
+      "source_label": "Paper",
+      "target_label": "ResearchGap",
+      "edge_label": "IDENTIFIES_GAP",
+      "condition_type": "lexical",
+      "condition_spec": {
+        "target_field": "combined",
+        "min_matches": 1
+      },
+      "base_confidence": 0.8,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "combined",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
+    },
+    {
+      "rule_id": "RULE-EDGE-PAPER-VENUE-PRESENTED-01",
+      "name": "Academic Venue Provenance Attribution",
+      "description": "Attributes academic prestige, tier, and peer-review venue provenance.",
+      "source_label": "Paper",
+      "target_label": "PublicationVenue",
+      "edge_label": "PRESENTED_AT",
+      "condition_type": "catalog_axiom",
+      "condition_spec": {
+        "venue_registry": "core_rankings"
+      },
+      "base_confidence": 1.0,
+      "confidence_tier": "HIGH",
+      "evidence_spec": {
+        "target_field": "comment",
+        "max_snippet_length": 120,
+        "case_sensitive": false
+      },
+      "version": "2026.09.1",
+      "is_active": true
     }
   ]
 }

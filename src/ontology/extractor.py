@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 if TYPE_CHECKING:
     from graph.engine import PropertyGraphEngine
 
+from .extended_extractor import ExtendedExtractor
 from .schema import (
     AttackTechniqueEntity,
     BaseEntity,
@@ -347,8 +348,41 @@ class OntologyExtractor:
             tokens, paper.id, seen_entity_ids, entities, triples
         )
         cls._link_defense_mitigations(entities, triples)
+        cls._extract_extended_knowledge(
+            clean_id, corpus_text, meta, paper.id, seen_entity_ids, entities, triples
+        )
 
         return entities, cls._deduplicate_triples(triples)
+
+    @classmethod
+    def _extract_extended_knowledge(
+        cls,
+        clean_id: str,
+        corpus_text: str,
+        meta: Dict[str, Any],
+        paper_id: str,
+        seen_entity_ids: Set[str],
+        entities: List[BaseEntity],
+        triples: List[Triple],
+    ) -> None:
+        """Extracts extended entities (preconditions, gaps, rules, pocs, venue)."""
+        p_ents, p_trips = ExtendedExtractor.extract_preconditions(
+            clean_id, corpus_text, paper_id
+        )
+        g_ents, g_trips = ExtendedExtractor.extract_research_gaps(
+            clean_id, corpus_text, paper_id
+        )
+        r_ents, r_trips = ExtendedExtractor.extract_rules_and_pocs(
+            clean_id, corpus_text, paper_id
+        )
+        v_ents, v_trips = ExtendedExtractor.extract_venue(
+            clean_id, meta, corpus_text, paper_id
+        )
+        for ent in list(p_ents) + list(g_ents) + list(r_ents) + list(v_ents):
+            if ent.id not in seen_entity_ids:
+                entities.append(ent)
+                seen_entity_ids.add(ent.id)
+        triples.extend(p_trips + g_trips + r_trips + v_trips)
 
     @classmethod
     def ingest_paper_to_graph(

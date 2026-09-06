@@ -132,12 +132,16 @@ class TestRuleRegistry:
     def test_load_standard_master_rules(self) -> None:
         registry = EdgeInferenceRuleRegistry(auto_load=True)
         rules = registry.get_all_rules()
-        assert len(rules) == 12
+        assert len(rules) == 16
 
         rule_ids = {r.rule_id for r in rules}
         assert "RULE-EDGE-PAPER-TECH-REGEX-01" in rule_ids
         assert "RULE-EDGE-PAPER-CWE-REGEX-01" in rule_ids
         assert "RULE-EDGE-TECH-MITIGATE-AXIOM-01" in rule_ids
+        assert "RULE-EDGE-PAPER-PRECONDITION-01" in rule_ids
+        assert "RULE-EDGE-DEFENSE-DETECTION-BLOCKS-01" in rule_ids
+        assert "RULE-EDGE-PAPER-GAP-IDENTIFIES-01" in rule_ids
+        assert "RULE-EDGE-PAPER-VENUE-PRESENTED-01" in rule_ids
 
     def test_get_rules_for_pair(self) -> None:
         registry = EdgeInferenceRuleRegistry(auto_load=True)
