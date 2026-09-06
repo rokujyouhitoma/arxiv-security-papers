@@ -127,8 +127,8 @@ def test_dashboard_graph_layout_redesign_and_legend_toggle(dashboard_html: str) 
         or ".graph-control-deck" in dashboard_html
     )
 
-    # 2. Bottom-left positioned collapsible legend
-    assert "bottom: 14px;" in dashboard_html
+    # 2. Top-left positioned collapsible legend
+    assert "bottom: auto;" in dashboard_html
     assert "left: 14px;" in dashboard_html
     assert "btnToggleLegendContext" in dashboard_html
     assert "btnToggleLegendCti" in dashboard_html
@@ -472,9 +472,11 @@ def test_dashboard_legend_relocation_pinned_footer_and_zoom_controls(
     dashboard_html: str,
 ) -> None:
     """Verifies legend top-left relocation, pinned footer, zoom controls, and chip hints (Issue 175)."""
-    # 1. Legend top-left CSS and layout
+    # 1. Top-left Zoom Controls and Stacked Legend Layout (Issue 175/176)
+    assert ".canvas-zoom-controls {" in dashboard_html
     assert ".cluster-legend {" in dashboard_html
     assert "top: 14px;" in dashboard_html
+    assert "top: 54px;" in dashboard_html
     assert "left: 14px;" in dashboard_html
     assert "bottom: auto;" in dashboard_html
     assert "overflow: visible;" in dashboard_html
@@ -483,6 +485,8 @@ def test_dashboard_legend_relocation_pinned_footer_and_zoom_controls(
     assert "height: 100vh;" in dashboard_html
     assert "flex-shrink: 0;" in dashboard_html
     assert "height: 36px;" in dashboard_html
+    assert "min-height: 0;" in dashboard_html
+    assert "overflow: hidden;" in dashboard_html
 
     # 3. Tooltip right-side positioning CSS
     assert '[data-tooltip-pos="right"]' in dashboard_html
@@ -502,6 +506,8 @@ def test_dashboard_legend_relocation_pinned_footer_and_zoom_controls(
     assert "MITIGATES" in dashboard_html
 
     # 5. Footer items with chip hints / tooltips
+    assert ".compliance-badge" in dashboard_html
+    assert "ISO 32000-1 / Google OKF v0.2 Compliant" in dashboard_html
     assert 'id="btnResetPhysicsFooter"' in dashboard_html
     assert 'id="btnRandomizeGraphFooter"' in dashboard_html
     assert 'id="linkBackToConsoleFooter"' in dashboard_html
