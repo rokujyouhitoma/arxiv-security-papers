@@ -463,6 +463,74 @@ def test_dashboard_deck_toggle_and_canvas_pan_zoom(dashboard_html: str) -> None:
     assert "ctx.scale(viewTransform.scale, viewTransform.scale);" in dashboard_html
     assert "viewTransform = { x: 0, y: 0, scale: 1.0 };" in dashboard_html
 
-    # 3. Vertical page scroll & clipping prevention
-    assert "overflow-y: auto;" in dashboard_html
-    assert "min-height: 480px;" in dashboard_html
+    # 3. Canvas container and layout
+    assert ".canvas-container" in dashboard_html
+    assert "height: 100%;" in dashboard_html
+
+
+def test_dashboard_legend_relocation_pinned_footer_and_zoom_controls(
+    dashboard_html: str,
+) -> None:
+    """Verifies legend top-left relocation, pinned footer, zoom controls, and chip hints (Issue 175)."""
+    # 1. Legend top-left CSS and layout
+    assert ".cluster-legend {" in dashboard_html
+    assert "top: 14px;" in dashboard_html
+    assert "left: 14px;" in dashboard_html
+    assert "bottom: auto;" in dashboard_html
+    assert "overflow: visible;" in dashboard_html
+
+    # 2. Pinned footer layout (100vh viewport, no scrolling needed)
+    assert "height: 100vh;" in dashboard_html
+    assert "flex-shrink: 0;" in dashboard_html
+    assert "height: 36px;" in dashboard_html
+
+    # 3. Tooltip right-side positioning CSS
+    assert '[data-tooltip-pos="right"]' in dashboard_html
+    assert '[data-tooltip-pos="right"]::before' in dashboard_html
+    assert '[data-tooltip-pos="right"]::after' in dashboard_html
+    assert '[data-tooltip-pos="right"]:hover::before' in dashboard_html
+
+    # 4. Legend items with chip hints / tooltips
+    assert 'data-tooltip-pos="right"' in dashboard_html
+    assert 'id="btnToggleLegendContext"' in dashboard_html
+    assert 'id="btnToggleLegendCti"' in dashboard_html
+    assert "arXiv / IACR 暗号・セキュリティ学術論文ノード" in dashboard_html
+    assert "MITRE ATT&CK / ATLAS 攻撃テクニックノード" in dashboard_html
+    assert "CWE 共通脆弱性タイプ・セキュリティ弱点ノード" in dashboard_html
+    assert "セキュリティ対策・緩和策・防御メカニズムノード" in dashboard_html
+    assert "EXPLOITS" in dashboard_html
+    assert "MITIGATES" in dashboard_html
+
+    # 5. Footer items with chip hints / tooltips
+    assert 'id="btnResetPhysicsFooter"' in dashboard_html
+    assert 'id="btnRandomizeGraphFooter"' in dashboard_html
+    assert 'id="linkBackToConsoleFooter"' in dashboard_html
+    assert (
+        "ノードの物理演算力学シミュレーション配置およびズーム視点を初期化します"
+        in dashboard_html
+    )
+    assert "動作検証用のダミーインシデントノード" in dashboard_html
+    assert (
+        "エンタープライズ統合クラウドコンソール (index.html) のポータルへ移動します"
+        in dashboard_html
+    )
+
+    # 6. Canvas zoom controls, percentage badge, and JS functions
+    assert 'id="canvasZoomControls"' in dashboard_html
+    assert 'id="btnZoomOut"' in dashboard_html
+    assert 'id="zoomLevelBadge"' in dashboard_html
+    assert 'id="btnZoomIn"' in dashboard_html
+    assert 'id="btnZoomReset"' in dashboard_html
+    assert "function updateZoomBadge()" in dashboard_html
+    assert "window.zoomCanvasBy = function(factor)" in dashboard_html
+    assert "window.resetZoom = function()" in dashboard_html
+    assert "zoomCanvasBy(1.15)" in dashboard_html
+    assert "zoomCanvasBy(0.85)" in dashboard_html
+    assert "resetZoom()" in dashboard_html
+
+    # 7. Zoom shortcuts and Help Drawer documentation
+    assert "e.key === '+' || e.key === '='" in dashboard_html
+    assert "e.key === '-' || e.key === '_'" in dashboard_html
+    assert "e.key === '0'" in dashboard_html
+    assert "+ / - キー" in dashboard_html
+    assert "0 キー" in dashboard_html
