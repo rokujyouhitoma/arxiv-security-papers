@@ -8,7 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
-
+| **183** | CTI Graph フィルター（Entity Type / Relation Type）複数同時選択（マルチセレクト）対応 | Feature | High | New | [183-implement-cti-graph-filter-multiselect.md](183-implement-cti-graph-filter-multiselect.md) |
 
 ---
 

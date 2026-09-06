@@ -12,6 +12,7 @@ if "src" not in sys.path:
         0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
     )
 
+from security.middleware.wsgi import SecurityWSGIMiddleware
 from web.server import VECTOR_ENGINE, WSGIApplication, application
 
 os.environ["SEARCH_ALLOW_FALLBACK"] = "1"
@@ -73,7 +74,7 @@ def test_search_handler_logic():
 
 
 def test_wsgi_app_get_index_html():
-    assert isinstance(application, WSGIApplication)
+    assert isinstance(application, (WSGIApplication, SecurityWSGIMiddleware))
     status, headers, body = call_wsgi(application, method="GET", path="/")
     assert status.startswith("200")
     header_dict = dict(headers)
@@ -157,7 +158,10 @@ def test_wsgi_app_path_traversal_blocked():
     status, headers, body = call_wsgi(
         application, method="GET", path="/../../etc/passwd"
     )
-    assert status.startswith("403") or status.startswith("404")
+    # SecurityWSGIMiddleware intercepts traversal before app and returns 400
+    assert (
+        status.startswith("400") or status.startswith("403") or status.startswith("404")
+    )
 
 
 def test_wsgi_app_not_found():
@@ -212,11 +216,11 @@ def test_wsgi_app_get_raw_data_missing_and_traversal():
     )
     assert status.startswith("404")
 
-    # Traversal should return 403
+    # Traversal should return 400 (SecurityWSGIMiddleware) or 403 (app-level)
     status, headers, body = call_wsgi(
         application, method="GET", path="/raw_data/../../../etc/passwd"
     )
-    assert status.startswith("403")
+    assert status.startswith("400") or status.startswith("403")
 
 
 def test_wsgi_app_get_preview_html():

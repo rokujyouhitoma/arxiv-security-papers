@@ -1436,22 +1436,22 @@
             <span style="font-weight: 800; font-size: 11px; letter-spacing: -0.3px;">FILTER:<span class="info-badge"
                 data-tooltip="特定のノード種別（論文・手法・脆弱性）に絞り込んで表示します" data-tooltip-pos="bottom"
                 data-tooltip-align="left">ⓘ</span></span>
-            <button id="filterAll" class="btn-tool active" onclick="setCtiFilter('all')"
-              data-tooltip="すべての種類のノード（論文・ATT&CK・CWE）を表示します" data-tooltip-pos="bottom"
+            <button id="filterAll" class="btn-tool active" data-filter-type="all" onclick="toggleCtiEntityFilter('all')"
+              data-tooltip="すべての種類のノード（論文・ATT&amp;CK・CWE）を表示します" data-tooltip-pos="bottom"
               data-tooltip-align="left">All</button>
-            <button id="filterPaper" class="btn-tool" onclick="setCtiFilter('Paper')" data-tooltip="論文ノード（青）のみを表示します"
+            <button id="filterPaper" class="btn-tool" data-filter-type="Paper" onclick="toggleCtiEntityFilter('Paper')" data-tooltip="論文ノード（青）のみを表示します"
               data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #3B82F6;"></span>Papers</button>
-            <button id="filterAttack" class="btn-tool" onclick="setCtiFilter('AttackTechnique')"
-              data-tooltip="ATT&CK 攻撃テクニックノード（赤）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #EF4444;"></span>ATT&CK</button>
-            <button id="filterCwe" class="btn-tool" onclick="setCtiFilter('Vulnerability')"
+            <button id="filterAttack" class="btn-tool" data-filter-type="AttackTechnique" onclick="toggleCtiEntityFilter('AttackTechnique')"
+              data-tooltip="ATT&amp;CK 攻撃テクニックノード（赤）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #EF4444;"></span>ATT&amp;CK</button>
+            <button id="filterCwe" class="btn-tool" data-filter-type="Vulnerability" onclick="toggleCtiEntityFilter('Vulnerability')"
               data-tooltip="CWE 脆弱性弱点ノード（橙）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #F59E0B;"></span>CWE</button>
-            <button id="filterPrecondition" class="btn-tool" onclick="setCtiFilter('Precondition')"
+            <button id="filterPrecondition" class="btn-tool" data-filter-type="Precondition" onclick="toggleCtiEntityFilter('Precondition')"
               data-tooltip="前提条件・脅威モデルノード（黄）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #EAB308;"></span>Precondition</button>
-            <button id="filterRule" class="btn-tool" onclick="setCtiFilter('DetectionRule')"
+            <button id="filterRule" class="btn-tool" data-filter-type="DetectionRule" onclick="toggleCtiEntityFilter('DetectionRule')"
               data-tooltip="検知ルールノード（緑）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #10B981;"></span>Rule</button>
-            <button id="filterPoc" class="btn-tool" onclick="setCtiFilter('PoCArtifact')"
+            <button id="filterPoc" class="btn-tool" data-filter-type="PoCArtifact" onclick="toggleCtiEntityFilter('PoCArtifact')"
               data-tooltip="PoC実証コードノード（水色）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #06B6D4;"></span>PoC</button>
-            <button id="filterGap" class="btn-tool" onclick="setCtiFilter('ResearchGap')"
+            <button id="filterGap" class="btn-tool" data-filter-type="ResearchGap" onclick="toggleCtiEntityFilter('ResearchGap')"
               data-tooltip="リサーチギャップノード（紫）のみを表示します" data-tooltip-pos="bottom"><span class="filter-dot" style="background-color: #8B5CF6;"></span>Gap</button>
             <button id="btnToggleGaps" class="btn-tool" onclick="toggleResearchGaps()"
               data-tooltip="論文による研究・対策が未カバーの攻撃テクニック（リサーチギャップ）を点滅強調します" data-tooltip-pos="bottom">⚡ Highlight Gaps (<span
@@ -1957,7 +1957,8 @@
       let minDegreeThreshold = 0;
       let focusedNodeId = null;
       let focusedHopNodeIds = null;
-      let ctiFilter = 'all'; // 'all' | 'Paper' | 'AttackTechnique' | 'Vulnerability'
+      let ctiEntityFilters = new Set(['all']); // Set of active entity type filters
+
       let edgeConfidenceFilter = 'all'; // 'all' | 'MEDIUM' | 'HIGH'
       let edgeRuleFilter = 'all'; // 'all' | <rule_id>
       let highlightGaps = false;
@@ -2113,19 +2114,28 @@
       window.focusEgoNetwork = focusEgoNetwork;
       window.getEgoNeighborhood = getEgoNeighborhood;
 
+      // Entity type → node labels mapping
+      const CTI_ENTITY_LABEL_MAP = {
+        'Paper':          n => n.label === 'Paper' || n.label === 'Entity:Paper',
+        'AttackTechnique': n => n.label === 'AttackTechnique',
+        'Vulnerability':  n => n.label === 'Vulnerability' || n.label === 'CWE',
+        'Precondition':   n => n.label === 'Precondition',
+        'DetectionRule':  n => n.label === 'DetectionRule',
+        'PoCArtifact':    n => n.label === 'PoCArtifact',
+        'ResearchGap':    n => n.label === 'ResearchGap' || n.label === 'ResidualRisk',
+      };
+      const CTI_ENTITY_TYPES = Object.keys(CTI_ENTITY_LABEL_MAP);
+
       function applyCtiFilter() {
         if (currentGraphMode !== 'cti') return;
         let filteredNodes = ctiRawNodes;
-        if (ctiFilter !== 'all') {
+        if (!ctiEntityFilters.has('all')) {
           filteredNodes = ctiRawNodes.filter(n => {
-            if (ctiFilter === 'Paper') return n.label === 'Paper' || n.label === 'Entity:Paper';
-            if (ctiFilter === 'AttackTechnique') return n.label === 'AttackTechnique';
-            if (ctiFilter === 'Vulnerability') return n.label === 'Vulnerability' || n.label === 'CWE';
-            if (ctiFilter === 'Precondition') return n.label === 'Precondition';
-            if (ctiFilter === 'DetectionRule') return n.label === 'DetectionRule';
-            if (ctiFilter === 'PoCArtifact') return n.label === 'PoCArtifact';
-            if (ctiFilter === 'ResearchGap') return n.label === 'ResearchGap' || n.label === 'ResidualRisk';
-            return true;
+            for (const type of ctiEntityFilters) {
+              const matcher = CTI_ENTITY_LABEL_MAP[type];
+              if (matcher && matcher(n)) return true;
+            }
+            return false;
           });
         }
 
@@ -2417,27 +2427,70 @@
         }
       };
 
-      window.setCtiFilter = function(filter) {
-        ctiFilter = filter;
-        ['filterAll', 'filterPaper', 'filterAttack', 'filterCwe', 'filterPrecondition', 'filterRule', 'filterPoc', 'filterGap'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.classList.remove('active');
+      // ------------------------------------------------------------------
+      // CTI Entity Type filter — multiselect (Issue #183)
+      // ------------------------------------------------------------------
+      const CTI_FILTER_BTN_MAP = {
+        'all': 'filterAll',
+        'Paper': 'filterPaper',
+        'AttackTechnique': 'filterAttack',
+        'Vulnerability': 'filterCwe',
+        'Precondition': 'filterPrecondition',
+        'DetectionRule': 'filterRule',
+        'PoCArtifact': 'filterPoc',
+        'ResearchGap': 'filterGap',
+      };
+
+      function syncEntityFilterButtons() {
+        const isAll = ctiEntityFilters.has('all');
+        Object.entries(CTI_FILTER_BTN_MAP).forEach(([type, btnId]) => {
+          const el = document.getElementById(btnId);
+          if (!el) return;
+          if (type === 'all') {
+            el.classList.toggle('active', isAll);
+          } else {
+            el.classList.toggle('active', isAll || ctiEntityFilters.has(type));
+          }
         });
-        const btnMap = {
-          'all': 'filterAll',
-          'Paper': 'filterPaper',
-          'AttackTechnique': 'filterAttack',
-          'Vulnerability': 'filterCwe',
-          'Precondition': 'filterPrecondition',
-          'DetectionRule': 'filterRule',
-          'PoCArtifact': 'filterPoc',
-          'ResearchGap': 'filterGap',
-        };
-        const activeBtn = btnMap[filter] || 'filterAll';
-        const ab = document.getElementById(activeBtn);
-        if (ab) ab.classList.add('active');
+      }
+
+      window.toggleCtiEntityFilter = function(type) {
+        if (type === 'all') {
+          // 'All' button: toggle between all-selected and current individual selections
+          if (ctiEntityFilters.has('all')) {
+            // Already all: deselect all (but keep at least first individual type)
+            ctiEntityFilters = new Set([CTI_ENTITY_TYPES[0]]);
+          } else {
+            ctiEntityFilters = new Set(['all']);
+          }
+        } else {
+          // Individual type toggle
+          ctiEntityFilters.delete('all');
+          if (ctiEntityFilters.has(type)) {
+            ctiEntityFilters.delete(type);
+            // Guard: if nothing left, revert to 'all'
+            if (ctiEntityFilters.size === 0) {
+              ctiEntityFilters = new Set(['all']);
+            }
+          } else {
+            ctiEntityFilters.add(type);
+            // If all individual types are selected, collapse to 'all'
+            if (CTI_ENTITY_TYPES.every(t => ctiEntityFilters.has(t))) {
+              ctiEntityFilters = new Set(['all']);
+            }
+          }
+        }
+        syncEntityFilterButtons();
         applyCtiFilter();
       };
+
+      // Legacy alias kept for backward compatibility with any inline callers
+      window.setCtiFilter = function(filter) {
+        ctiEntityFilters = filter === 'all' ? new Set(['all']) : new Set([filter]);
+        syncEntityFilterButtons();
+        applyCtiFilter();
+      };
+
 
 
       window.setEdgeConfidenceFilter = function(tier) {
