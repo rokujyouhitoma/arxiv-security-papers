@@ -159,3 +159,46 @@ Presented at IEEE S&P 2026.
         assert "github.com/firmware-lab/mem-test" in poc_v.properties.get(
             "repo_url", ""
         )
+
+    def test_owl_inverse_of_incident_coupling_and_standards(self) -> None:
+        """Verifies Issue #184: owl:inverseOf, Incident coupling, and Dublin Core / CiTO alignment."""
+        doc = build_full_spectrum_security_ontology()
+        ttl = doc.serialize()
+
+        # 1. Verify standard prefixes
+        assert "@prefix dcterms: <http://purl.org/dc/terms/>" in ttl
+        assert "@prefix cito:  <http://purl.org/spar/cito/>" in ttl
+        assert "@prefix stix:  <http://docs.oasis-open.org/cti/ns/stix#>" in ttl
+
+        # 2. Verify owl:inverseOf bidirectional relations
+        assert "owl:inverseOf sec:mitigatedBy" in ttl
+        assert "owl:inverseOf sec:mitigates" in ttl
+        assert "owl:inverseOf sec:exploitedBy" in ttl
+        assert "owl:inverseOf sec:exploits" in ttl
+        assert "owl:inverseOf sec:proposedIn" in ttl
+        assert "owl:inverseOf sec:proposes" in ttl
+        assert "owl:inverseOf sec:blockedBy" in ttl
+        assert "owl:inverseOf sec:blocks" in ttl
+        assert "owl:inverseOf sec:ruleGeneratedBy" in ttl
+        assert "owl:inverseOf sec:generatesRule" in ttl
+        assert "owl:inverseOf sec:preconditionRequiredBy" in ttl
+        assert "owl:inverseOf sec:requiresPrecondition" in ttl
+        assert "owl:inverseOf sec:cveVerifiedBy" in ttl
+        assert "owl:inverseOf sec:verifiesCVE" in ttl
+        assert "owl:inverseOf sec:pocOfPaper" in ttl
+        assert "owl:inverseOf sec:hasPoC" in ttl
+
+        # 3. Verify Incident coupling properties (no isolated class)
+        assert "sec:exploitedIn rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:incidentObservedTechnique" in ttl
+        assert "sec:leveragedVulnerability rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:vulnerabilityLeveragedIn" in ttl
+        assert "sec:attributedToActor rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:actorAttributedIncident" in ttl
+        assert "sec:targetsAsset rdf:type owl:ObjectProperty" in ttl
+        assert "owl:inverseOf sec:assetTargetedInIncident" in ttl
+
+        # 4. Verify Dublin Core and CiTO alignment
+        assert "rdfs:subPropertyOf dcterms:title" in ttl
+        assert "rdfs:subPropertyOf dcterms:date" in ttl
+        assert "rdfs:subPropertyOf cito:cites" in ttl

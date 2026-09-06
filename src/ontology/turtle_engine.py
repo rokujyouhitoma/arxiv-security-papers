@@ -201,6 +201,7 @@ def _build_op_pred_objs(
     inverse_of: Optional[str],
     is_transitive: bool,
     is_symmetric: bool,
+    sub_property_of: Optional[Union[str, Sequence[str]]] = None,
 ) -> List[str]:
     """Constructs predicate-object lines for ObjectProperty."""
     subj = URI(uri).to_turtle()
@@ -208,6 +209,14 @@ def _build_op_pred_objs(
     pred_objs: List[str] = [f"{subj} rdf:type {types_str}"]
     if inverse_of:
         pred_objs.append(f"    owl:inverseOf {URI(inverse_of).to_turtle()}")
+    if sub_property_of:
+        if isinstance(sub_property_of, str):
+            pred_objs.append(
+                f"    rdfs:subPropertyOf {URI(sub_property_of).to_turtle()}"
+            )
+        else:
+            for sp in sub_property_of:
+                pred_objs.append(f"    rdfs:subPropertyOf {URI(sp).to_turtle()}")
     _append_annotations(pred_objs, label, label_lang, comment, comment_lang)
     if domain:
         pred_objs.append(f"    rdfs:domain {URI(domain).to_turtle()}")
@@ -230,6 +239,7 @@ class ObjectProperty:
     inverse_of: Optional[str] = None
     is_transitive: bool = False
     is_symmetric: bool = False
+    sub_property_of: Optional[Union[str, Sequence[str]]] = None
     section_comment: Optional[str] = None
 
     def to_turtle(self) -> str:
@@ -248,6 +258,7 @@ class ObjectProperty:
             self.inverse_of,
             self.is_transitive,
             self.is_symmetric,
+            self.sub_property_of,
         )
         lines.append(" ;\n".join(pred_objs) + " .")
         return "\n".join(lines)
@@ -262,6 +273,7 @@ def _build_dp_pred_objs(
     domain: Optional[str],
     range_: Optional[str],
     is_functional: bool,
+    sub_property_of: Optional[Union[str, Sequence[str]]] = None,
 ) -> List[str]:
     """Constructs predicate-object lines for DatatypeProperty."""
     subj = URI(uri).to_turtle()
@@ -271,6 +283,14 @@ def _build_dp_pred_objs(
         else "owl:DatatypeProperty"
     )
     pred_objs: List[str] = [f"{subj} rdf:type {types_str}"]
+    if sub_property_of:
+        if isinstance(sub_property_of, str):
+            pred_objs.append(
+                f"    rdfs:subPropertyOf {URI(sub_property_of).to_turtle()}"
+            )
+        else:
+            for sp in sub_property_of:
+                pred_objs.append(f"    rdfs:subPropertyOf {URI(sp).to_turtle()}")
     _append_annotations(pred_objs, label, label_lang, comment, comment_lang)
     if domain:
         pred_objs.append(f"    rdfs:domain {URI(domain).to_turtle()}")
@@ -291,6 +311,7 @@ class DatatypeProperty:
     domain: Optional[str] = None
     range_: Optional[str] = None
     is_functional: bool = False
+    sub_property_of: Optional[Union[str, Sequence[str]]] = None
     section_comment: Optional[str] = None
 
     def to_turtle(self) -> str:
@@ -307,6 +328,7 @@ class DatatypeProperty:
             self.domain,
             self.range_,
             self.is_functional,
+            self.sub_property_of,
         )
         lines.append(" ;\n".join(pred_objs) + " .")
         return "\n".join(lines)
@@ -477,6 +499,7 @@ class TurtleDocumentBuilder:
         inverse_of: Optional[str] = None,
         is_transitive: bool = False,
         is_symmetric: bool = False,
+        sub_property_of: Optional[Union[str, Sequence[str]]] = None,
         section_comment: Optional[str] = None,
     ) -> "TurtleDocumentBuilder":
         """Adds an owl:ObjectProperty definition."""
@@ -492,6 +515,7 @@ class TurtleDocumentBuilder:
                 inverse_of=inverse_of,
                 is_transitive=is_transitive,
                 is_symmetric=is_symmetric,
+                sub_property_of=sub_property_of,
                 section_comment=section_comment,
             )
         )
@@ -507,6 +531,7 @@ class TurtleDocumentBuilder:
         domain: Optional[str] = None,
         range_: Optional[str] = None,
         is_functional: bool = False,
+        sub_property_of: Optional[Union[str, Sequence[str]]] = None,
         section_comment: Optional[str] = None,
     ) -> "TurtleDocumentBuilder":
         """Adds an owl:DatatypeProperty definition."""
@@ -520,6 +545,7 @@ class TurtleDocumentBuilder:
                 domain=domain,
                 range_=range_,
                 is_functional=is_functional,
+                sub_property_of=sub_property_of,
                 section_comment=section_comment,
             )
         )
@@ -901,9 +927,10 @@ def _add_security_classes(builder: TurtleDocumentBuilder) -> None:
 
 
 def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
-    """Populates core object properties for security ontology."""
+    """Populates core object properties for security ontology with owl:inverseOf and alignments."""
     builder.add_object_property(
         uri="sec:discloses",
+        inverse_of="sec:disclosedIn",
         label="脆弱性を公開・開示する",
         label_lang="ja",
         domain="sec:Paper",
@@ -911,7 +938,16 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         section_comment="論文と脆弱性の関係",
     )
     builder.add_object_property(
+        uri="sec:disclosedIn",
+        inverse_of="sec:discloses",
+        label="論文で公開・開示された",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="sec:Paper",
+    )
+    builder.add_object_property(
         uri="sec:exploits",
+        inverse_of="sec:exploitedBy",
         label="脆弱性を悪用する",
         label_lang="ja",
         domain="sec:AttackTechnique",
@@ -919,7 +955,16 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         section_comment="攻撃手法と脆弱性の関係",
     )
     builder.add_object_property(
+        uri="sec:exploitedBy",
+        inverse_of="sec:exploits",
+        label="攻撃手法により悪用される",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="sec:AttackTechnique",
+    )
+    builder.add_object_property(
         uri="sec:analyzes",
+        inverse_of="sec:analyzedIn",
         label="攻撃手法を分析する",
         label_lang="ja",
         domain="sec:Paper",
@@ -927,7 +972,16 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         section_comment="論文と攻撃手法の関係",
     )
     builder.add_object_property(
+        uri="sec:analyzedIn",
+        inverse_of="sec:analyzes",
+        label="論文で分析・解明された",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:Paper",
+    )
+    builder.add_object_property(
         uri="sec:targets",
+        inverse_of="sec:targetedBy",
         label="資産を標的とする",
         label_lang="ja",
         domain="sec:AttackTechnique",
@@ -935,7 +989,16 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         section_comment="攻撃手法と対象資産の関係",
     )
     builder.add_object_property(
+        uri="sec:targetedBy",
+        inverse_of="sec:targets",
+        label="攻撃手法の標的となる",
+        label_lang="ja",
+        domain="sec:TargetAsset",
+        range_="sec:AttackTechnique",
+    )
+    builder.add_object_property(
         uri="sec:proposes",
+        inverse_of="sec:proposedIn",
         label="防御策を提案する",
         label_lang="ja",
         domain="sec:Paper",
@@ -943,7 +1006,16 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         section_comment="論文と防御メカニズムの関係",
     )
     builder.add_object_property(
+        uri="sec:proposedIn",
+        inverse_of="sec:proposes",
+        label="論文で提案された",
+        label_lang="ja",
+        domain="sec:DefenseMechanism",
+        range_="sec:Paper",
+    )
+    builder.add_object_property(
         uri="sec:mitigates",
+        inverse_of="sec:mitigatedBy",
         label="攻撃手法を緩和・防御する",
         label_lang="ja",
         domain="sec:DefenseMechanism",
@@ -951,7 +1023,16 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         section_comment="防御策と攻撃手法の関係",
     )
     builder.add_object_property(
+        uri="sec:mitigatedBy",
+        inverse_of="sec:mitigates",
+        label="攻撃手法が緩和・防御される",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:DefenseMechanism",
+    )
+    builder.add_object_property(
         uri="sec:patches",
+        inverse_of="sec:patchedBy",
         label="脆弱性を改修・修復する",
         label_lang="ja",
         domain="sec:DefenseMechanism",
@@ -959,7 +1040,16 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         section_comment="防御策と脆弱性の関係",
     )
     builder.add_object_property(
+        uri="sec:patchedBy",
+        inverse_of="sec:patches",
+        label="脆弱性が改修・修復される",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="sec:DefenseMechanism",
+    )
+    builder.add_object_property(
         uri="sec:evaluates",
+        inverse_of="sec:evaluatedIn",
         label="評価指標で測定する",
         label_lang="ja",
         domain="sec:Paper",
@@ -967,12 +1057,29 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         section_comment="論文と評価指標の関係",
     )
     builder.add_object_property(
+        uri="sec:evaluatedIn",
+        inverse_of="sec:evaluates",
+        label="論文で評価・測定された",
+        label_lang="ja",
+        domain="sec:BenchmarkMetric",
+        range_="sec:Paper",
+    )
+    builder.add_object_property(
         uri="sec:attributedTo",
+        inverse_of="sec:actorAttributedTechnique",
         label="脅威アクターに帰属する",
         label_lang="ja",
         domain="sec:AttackTechnique",
         range_="sec:ThreatActor",
         section_comment="攻撃手法と脅威アクターの関係",
+    )
+    builder.add_object_property(
+        uri="sec:actorAttributedTechnique",
+        inverse_of="sec:attributedTo",
+        label="脅威アクターが使用する攻撃手法",
+        label_lang="ja",
+        domain="sec:ThreatActor",
+        range_="sec:AttackTechnique",
     )
     builder.add_object_property(
         uri="sec:cites",
@@ -981,12 +1088,13 @@ def _add_security_object_properties(builder: TurtleDocumentBuilder) -> None:
         domain="sec:Paper",
         range_="sec:Paper",
         is_transitive=False,
-        section_comment="論文間の引用関係",
+        sub_property_of="cito:cites",
+        section_comment="論文間の引用関係（CiTOアライメント・直接引用）",
     )
 
 
 def _add_security_datatype_properties(builder: TurtleDocumentBuilder) -> None:
-    """Populates core datatype properties for security ontology."""
+    """Populates core datatype properties for security ontology with standards alignment."""
     builder.add_datatype_property(
         uri="sec:paperId",
         label="論文ID",
@@ -1001,6 +1109,7 @@ def _add_security_datatype_properties(builder: TurtleDocumentBuilder) -> None:
         label_lang="ja",
         domain="sec:Paper",
         range_="xsd:string",
+        sub_property_of="dcterms:title",
     )
     builder.add_datatype_property(
         uri="sec:publishedDate",
@@ -1008,6 +1117,7 @@ def _add_security_datatype_properties(builder: TurtleDocumentBuilder) -> None:
         label_lang="ja",
         domain="sec:Paper",
         range_="xsd:date",
+        sub_property_of="dcterms:date",
     )
     builder.add_datatype_property(
         uri="sec:cveId",
@@ -1029,6 +1139,9 @@ def build_security_cti_ontology() -> TurtleDocumentBuilder:
     """Builds the standard Security Knowledge Ontology (SKO) in W3C Turtle / OWL format."""
     builder = TurtleDocumentBuilder()
     builder.add_prefix("sec", "https://arxiv-security-papers.org/ontology/security#")
+    builder.add_prefix("dcterms", "http://purl.org/dc/terms/")
+    builder.add_prefix("cito", "http://purl.org/spar/cito/")
+    builder.add_prefix("stix", "http://docs.oasis-open.org/cti/ns/stix#")
     builder.set_ontology(
         uri="https://arxiv-security-papers.org/ontology/security",
         label="arXiv Security Papers CTI Knowledge Ontology",
@@ -1099,9 +1212,81 @@ def _add_extended_classes_part2(builder: TurtleDocumentBuilder) -> None:
 
 
 def _add_extended_object_properties_part1(builder: TurtleDocumentBuilder) -> None:
-    """Adds blocks, generatesRule, and requiresPrecondition properties."""
+    """Adds Incident coupling, blocks, generatesRule, and requiresPrecondition properties."""
+    # 孤立クラス sec:Incident の結合（インシデントと攻撃手法、脆弱性、アクター、資産）
+    builder.add_object_property(
+        uri="sec:exploitedIn",
+        inverse_of="sec:incidentObservedTechnique",
+        label="インシデントで悪用が観測された",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:Incident",
+        section_comment="攻撃手法とインシデントの関係",
+    )
+    builder.add_object_property(
+        uri="sec:incidentObservedTechnique",
+        inverse_of="sec:exploitedIn",
+        label="インシデントで観測された攻撃手法",
+        label_lang="ja",
+        domain="sec:Incident",
+        range_="sec:AttackTechnique",
+    )
+    builder.add_object_property(
+        uri="sec:leveragedVulnerability",
+        inverse_of="sec:vulnerabilityLeveragedIn",
+        label="インシデントで悪用された脆弱性",
+        label_lang="ja",
+        domain="sec:Incident",
+        range_="sec:Vulnerability",
+        section_comment="インシデントと脆弱性の関係",
+    )
+    builder.add_object_property(
+        uri="sec:vulnerabilityLeveragedIn",
+        inverse_of="sec:leveragedVulnerability",
+        label="脆弱性が悪用されたインシデント",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="sec:Incident",
+    )
+    builder.add_object_property(
+        uri="sec:attributedToActor",
+        inverse_of="sec:actorAttributedIncident",
+        label="インシデントの関与アクター",
+        label_lang="ja",
+        domain="sec:Incident",
+        range_="sec:ThreatActor",
+        section_comment="インシデントと脅威アクターの関係",
+    )
+    builder.add_object_property(
+        uri="sec:actorAttributedIncident",
+        inverse_of="sec:attributedToActor",
+        label="アクターが関与したインシデント",
+        label_lang="ja",
+        domain="sec:ThreatActor",
+        range_="sec:Incident",
+    )
+    builder.add_object_property(
+        uri="sec:targetsAsset",
+        inverse_of="sec:assetTargetedInIncident",
+        label="インシデントの標的資産",
+        label_lang="ja",
+        domain="sec:Incident",
+        range_="sec:TargetAsset",
+        section_comment="インシデントと標的資産の関係",
+    )
+    builder.add_object_property(
+        uri="sec:assetTargetedInIncident",
+        inverse_of="sec:targetsAsset",
+        label="インシデントで標的とされた資産",
+        label_lang="ja",
+        domain="sec:TargetAsset",
+        range_="sec:Incident",
+    )
+
+    # 検知ルールおよび前提条件
     builder.add_object_property(
         uri="sec:blocks",
+        inverse_of="sec:blockedBy",
         label="攻撃手法を検知・遮断する",
         label_lang="ja",
         domain="sec:DetectionRule",
@@ -1109,7 +1294,16 @@ def _add_extended_object_properties_part1(builder: TurtleDocumentBuilder) -> Non
         section_comment="検知ルールと攻撃手法の関係",
     )
     builder.add_object_property(
+        uri="sec:blockedBy",
+        inverse_of="sec:blocks",
+        label="検知ルールにより検知・遮断される",
+        label_lang="ja",
+        domain="sec:AttackTechnique",
+        range_="sec:DetectionRule",
+    )
+    builder.add_object_property(
         uri="sec:generatesRule",
+        inverse_of="sec:ruleGeneratedBy",
         label="防御シグネチャを生成する",
         label_lang="ja",
         domain="sec:DefenseMechanism",
@@ -1117,19 +1311,37 @@ def _add_extended_object_properties_part1(builder: TurtleDocumentBuilder) -> Non
         section_comment="防御策と検知ルールの関係",
     )
     builder.add_object_property(
+        uri="sec:ruleGeneratedBy",
+        inverse_of="sec:generatesRule",
+        label="防御策から生成されたシグネチャ",
+        label_lang="ja",
+        domain="sec:DetectionRule",
+        range_="sec:DefenseMechanism",
+    )
+    builder.add_object_property(
         uri="sec:requiresPrecondition",
+        inverse_of="sec:preconditionRequiredBy",
         label="成立前提条件を要求する",
         label_lang="ja",
         domain="sec:AttackTechnique",
         range_="sec:Precondition",
         section_comment="攻撃手法と前提条件の関係",
     )
+    builder.add_object_property(
+        uri="sec:preconditionRequiredBy",
+        inverse_of="sec:requiresPrecondition",
+        label="前提条件を要求する攻撃手法",
+        label_lang="ja",
+        domain="sec:Precondition",
+        range_="sec:AttackTechnique",
+    )
 
 
 def _add_extended_object_properties_part2(builder: TurtleDocumentBuilder) -> None:
-    """Adds leavesUnaddressed, identifiesGap, presentedAt, verifiesCVE, and hasPoC."""
+    """Adds leavesUnaddressed, identifiesGap, presentedAt, verifiesCVE, and hasPoC with inverseOf."""
     builder.add_object_property(
         uri="sec:leavesUnaddressed",
+        inverse_of="sec:unaddressedBy",
         label="残余リスクを未対処とする",
         label_lang="ja",
         domain="sec:DefenseMechanism",
@@ -1137,7 +1349,16 @@ def _add_extended_object_properties_part2(builder: TurtleDocumentBuilder) -> Non
         section_comment="防御策と残余リスクの関係",
     )
     builder.add_object_property(
+        uri="sec:unaddressedBy",
+        inverse_of="sec:leavesUnaddressed",
+        label="防御策で未対処として残存する",
+        label_lang="ja",
+        domain="sec:ResidualRisk",
+        range_="sec:DefenseMechanism",
+    )
+    builder.add_object_property(
         uri="sec:identifiesGap",
+        inverse_of="sec:gapIdentifiedBy",
         label="未解決課題を提起・特定する",
         label_lang="ja",
         domain="sec:Paper",
@@ -1145,7 +1366,16 @@ def _add_extended_object_properties_part2(builder: TurtleDocumentBuilder) -> Non
         section_comment="論文と研究ギャップの関係",
     )
     builder.add_object_property(
+        uri="sec:gapIdentifiedBy",
+        inverse_of="sec:identifiesGap",
+        label="論文により特定された未解決課題",
+        label_lang="ja",
+        domain="sec:ResearchGap",
+        range_="sec:Paper",
+    )
+    builder.add_object_property(
         uri="sec:presentedAt",
+        inverse_of="sec:venuePresentedPaper",
         label="採択・発表される",
         label_lang="ja",
         domain="sec:Paper",
@@ -1153,7 +1383,16 @@ def _add_extended_object_properties_part2(builder: TurtleDocumentBuilder) -> Non
         section_comment="論文と発表媒体の関係",
     )
     builder.add_object_property(
+        uri="sec:venuePresentedPaper",
+        inverse_of="sec:presentedAt",
+        label="採択・発表された論文",
+        label_lang="ja",
+        domain="sec:PublicationVenue",
+        range_="sec:Paper",
+    )
+    builder.add_object_property(
         uri="sec:verifiesCVE",
+        inverse_of="sec:cveVerifiedBy",
         label="既知脆弱性を検証・悪用実証する",
         label_lang="ja",
         domain="sec:Paper",
@@ -1161,12 +1400,29 @@ def _add_extended_object_properties_part2(builder: TurtleDocumentBuilder) -> Non
         section_comment="論文と既知脆弱性の実証関係",
     )
     builder.add_object_property(
+        uri="sec:cveVerifiedBy",
+        inverse_of="sec:verifiesCVE",
+        label="論文により悪用実証された脆弱性",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="sec:Paper",
+    )
+    builder.add_object_property(
         uri="sec:hasPoC",
+        inverse_of="sec:pocOfPaper",
         label="PoC成果物を有する",
         label_lang="ja",
         domain="sec:Paper",
         range_="sec:PoCArtifact",
         section_comment="論文とPoCコードの関係",
+    )
+    builder.add_object_property(
+        uri="sec:pocOfPaper",
+        inverse_of="sec:hasPoC",
+        label="論文のPoC成果物",
+        label_lang="ja",
+        domain="sec:PoCArtifact",
+        range_="sec:Paper",
     )
 
 
