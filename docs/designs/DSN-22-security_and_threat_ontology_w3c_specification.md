@@ -210,7 +210,7 @@ turtle_output = builder.serialize()
 ## 5. トレーサビリティマトリクス (Traceability)
 
 - [REQ-ONT-01: オントロジー駆動知識アーキテクチャ要求仕様書](../requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md)
-- [MNG-03: オントロジー駆動開発プロセス規範](../processes/ontology_driven_development_process.md)
+- [MNG-03: オントロジー駆動開発プロセス規範](../processes/MNG-03-ontology_driven_development_process.md)
 - [MNG-01: 文書管理台帳](../processes/MNG-01-document_ledger.md)
 - [DSN-14: 次世代データベース・知識グラフエンジン設計書](DSN-14-graph_engineering_dashboard.md)
 - [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py)

@@ -66,8 +66,8 @@
 
 | 要求 ID | 実装コンポーネント | 設計仕様書 | プロセス規範 |
 | :--- | :--- | :--- | :--- |
-| **REQ-ONT-FR-01** | [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [ODD プロセス](../processes/ontology_driven_development_process.md) |
+| **REQ-ONT-FR-01** | [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |
 | **REQ-ONT-FR-02** | [src/ontology/schema.py](../../src/ontology/schema.py) | [DSN-14](../designs/DSN-14-database_and_knowledge_graph_engine.md) | [MNG-02](../processes/MNG-02-mitre_attack_cwe_ledger.md) |
-| **REQ-ONT-FR-03** | [src/ontology/extractor.py](../../src/ontology/extractor.py) | [DSN-03](../designs/DSN-03-paper_collector_and_okf_converter.md) | [ODD プロセス](../processes/ontology_driven_development_process.md) |
+| **REQ-ONT-FR-03** | [src/ontology/extractor.py](../../src/ontology/extractor.py) | [DSN-03](../designs/DSN-03-paper_collector_and_okf_converter.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |
 | **REQ-ONT-FR-04** | [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py) | [DSN-22](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | [MNG-01](../processes/MNG-01-document_ledger.md) |
-| **REQ-ONT-FR-05** | [src/graph/](../../src/graph/) / [src/database/](../../src/database/) | [DSN-05](../designs/DSN-05-multi_engine_hybrid_search.md) | [ODD プロセス](../processes/ontology_driven_development_process.md) |
+| **REQ-ONT-FR-05** | [src/graph/](../../src/graph/) / [src/database/](../../src/database/) | [DSN-05](../designs/DSN-05-multi_engine_hybrid_search.md) | [ODD プロセス](../processes/MNG-03-ontology_driven_development_process.md) |

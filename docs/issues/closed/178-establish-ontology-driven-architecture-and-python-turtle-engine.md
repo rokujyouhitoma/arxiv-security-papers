@@ -18,14 +18,14 @@ ID: 178
 ## 2. トレーサビリティ / Traceability
 
 - 関連プロセス:
-  - [processes/README.md](../processes/README.md)
-  - [processes/ontology_driven_development_process.md](../processes/ontology_driven_development_process.md) (新規)
+  - [processes/MNG-01-document_ledger.md](../processes/MNG-01-document_ledger.md)
+  - [processes/MNG-03-ontology_driven_development_process.md](../processes/MNG-03-ontology_driven_development_process.md) (新規)
 - 関連要件:
-  - [requirements/README.md](../requirements/README.md)
+  - [requirements/REQ-01-system_requirements.md](../requirements/REQ-01-system_requirements.md)
   - [requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md](../requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md) (新規)
 - 関連設計:
-  - [designs/DSN-01-high_level_architecture.md](../designs/DSN-01-high_level_architecture.md)
-  - [designs/DSN-14-database_and_knowledge_graph_engine.md](../designs/DSN-14-database_and_knowledge_graph_engine.md)
+  - [designs/DSN-01-high_level_design.md](../designs/DSN-01-high_level_design.md)
+  - [designs/DSN-14-database_engine_architecture.md](../designs/DSN-14-database_engine_architecture.md)
   - [designs/DSN-22-security_and_threat_ontology_w3c_specification.md](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) (新規)
 
 ---
@@ -35,7 +35,7 @@ ID: 178
 - [x] [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py) (新規: Pure-Python Turtle/OWL ビルダー & シリアライザエンジン)
 - [x] [src/ontology/__init__.py](../../src/ontology/__init__.py) (エクスポート追加)
 - [x] [tests/ontology/test_turtle_engine.py](../../tests/ontology/test_turtle_engine.py) (新規: 構文・プロパティ・ABox検証ユニットテスト)
-- [x] [docs/processes/ontology_driven_development_process.md](../processes/ontology_driven_development_process.md) (新規: オントロジー駆動開発プロセス規範)
+- [x] [docs/processes/MNG-03-ontology_driven_development_process.md](../processes/MNG-03-ontology_driven_development_process.md) (新規: オントロジー駆動開発プロセス規範)
 - [x] [docs/processes/MNG-01-document_ledger.md](../processes/MNG-01-document_ledger.md) (オントロジー駆動プロセスの追記)
 - [x] [docs/requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md](../requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md) (新規: オントロジー駆動要件仕様書)
 - [x] [docs/requirements/REQ-01-system_requirements.md](../requirements/REQ-01-system_requirements.md) (REQ-FR-08 追記)
@@ -58,7 +58,7 @@ Target Branch: `feat/178-establish-ontology-driven-architecture-and-python-turtl
    - 提示されたサンプルオントロジーを Python コードから 100% 忠実に再現出力できることの検証。
    - セキュリティドメイン（Paper, ThreatActor, AttackTechnique, Vulnerability, Mitigation, Weakness）の標準オントロジービルダー関数 `build_security_cti_ontology()` の提供。
 3. **プロセスおよび要件ドキュメントの策定**:
-   - `docs/processes/ontology_driven_development_process.md` の策定。
+   - `docs/processes/MNG-03-ontology_driven_development_process.md` の策定。
    - `docs/requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md` の策定。
    - `docs/designs/DSN-22-security_and_threat_ontology_w3c_specification.md` の策定。
    - `docs/processes/README.md` および `docs/requirements/README.md` への索引追加。

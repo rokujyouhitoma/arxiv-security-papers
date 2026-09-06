@@ -1,6 +1,16 @@
-# オントロジー駆動開発プロセス標準規範 (Ontology-Driven Development Process Specification)
+# [MNG-03] オントロジー駆動開発プロセス標準規範 (Ontology-Driven Development Process Specification) — arxiv-security-papers
+## 〜 概念モデリング・TBox形式化・ABox推論・全13大専門エージェント統治規程 〜
 
-本ドキュメントは、「`arxiv-security-papers`」プロジェクトにおいて、新機能開発、スキーマ拡張、論文データ抽出、推論パイプライン更新、および UI/API 連携を実施する際の標準的な開発プロセスである **オントロジー駆動開発（ODD: Ontology-Driven Development）** を規定します。
+- **文書番号**: `MNG-03`
+- **文書ステータス**: `APPROVED`
+- **対象サブシステム**: `src/ontology/` / `src/graph/` / `src/database/` / `docs/` (オントロジー生成エンジン, TBox/ABoxシリアライザ, 推論パイプライン, 知識グラフ)
+- **作成日**: 2026-09-06
+- **最終更新日**: 2026-09-06
+- **【主査・報告】 Project Manager (PM) / Systems Architect (SA)**
+- **【参画】 全 13 大専門エージェント (PM, SEC, SA, SQA, DB, NET, NLP, ST, SM, EMB, AU, UI, EDU)**
+- **対象 Issue**: [Issue 178: オントロジー駆動（Ontology-Driven）開発体系の確立および Pure-Python Turtle (.ttl) 生成エンジンの実装](../issues/closed/178-establish-ontology-driven-architecture-and-python-turtle-engine.md)
+- **トレーサビリティ**: [MNG-01: 文書管理台帳](MNG-01-document_ledger.md) / [MNG-02: ATT&CK/CWE対応台帳](MNG-02-mitre_attack_cwe_ledger.md) / [REQ-ONT-01: オントロジー駆動知識アーキテクチャ](../requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md) / [DSN-22: セキュリティおよび脅威知識オントロジー W3C 仕様書](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md)
+- **管理基準**: ゼロ外部依存（Pure Python）・W3C RDF 1.1 Turtle / OWL 2 仕様準拠・100% 日本語ドキュメント統治
 
 ---
 
