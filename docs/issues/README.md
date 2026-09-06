@@ -9,9 +9,11 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・詳細 |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **161** | 統一セキュリティ WSGI ミドルウェアの実装および Web Gateway パイロット適用 | Feature | High | Open (New) | [161-implement-unified-security-wsgi-middleware-and-gateway-integration.md](161-implement-unified-security-wsgi-middleware-and-gateway-integration.md) |
+
 | **146** | /dashboard tab=graph におけるエッジ関係性（Relation Type）個別フィルタ機能の実装 | Feature | Medium | In Progress | [146-implement-edge-relation-type-filter-in-graph-tab.md](146-implement-edge-relation-type-filter-in-graph-tab.md) |
 | **147** | /dashboard tab=graph における最大連結成分（LCC: Largest Connected Component）抽出機能の実装 | Feature | Low | In Progress | [147-implement-largest-connected-component-filter-in-graph-tab.md](147-implement-largest-connected-component-filter-in-graph-tab.md) |
 | **148** | /dashboard tab=graph における未研究・未対策脅威（Research Gaps Only）専用絞り込みフィルタの実装 | Feature | Medium | In Progress | [148-implement-research-gaps-only-filter-in-graph-tab.md](148-implement-research-gaps-only-filter-in-graph-tab.md) |
+
 
 ---
 
@@ -19,6 +21,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **180** | オントロジー宣言DSL（Pure Python Class定義）とASTインタプリタ処理エンジンの完全分離アーキテクチャの実装 | Architecture / Refactor | 2026-09-06 | [180-decouple-ontology-definition-dsl-and-ast-interpreter-engine.md](closed/180-decouple-ontology-definition-dsl-and-ast-interpreter-engine.md) |
 | **179** | 全領域統合セキュリティ知識オントロジー（Full-Spectrum SKO: 実脅威・防御コード・前提条件・研究ギャップ・信頼性来歴）の実装 | Feature / Architecture | 2026-09-06 | [179-implement-full-spectrum-security-knowledge-ontology.md](closed/179-implement-full-spectrum-security-knowledge-ontology.md) |
 | **178** | オントロジー駆動（Ontology-Driven）開発体系の確立および Pure-Python Turtle (.ttl) 生成エンジンの実装 | Feature / Architecture | 2026-09-06 | [178-establish-ontology-driven-architecture-and-python-turtle-engine.md](closed/178-establish-ontology-driven-architecture-and-python-turtle-engine.md) |
 

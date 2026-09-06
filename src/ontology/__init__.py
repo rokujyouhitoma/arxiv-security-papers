@@ -5,6 +5,27 @@ Provides standardized entity schemas, relationship predicates, taxonomy mappings
 and fact triple extraction.
 """
 
+from .core import (
+    ASTNode,
+    ASTVisitor,
+    AxiomNode,
+    ClassDeclaration,
+    ClassNode,
+    DatatypePropertyField,
+    DatatypePropertyNode,
+    Diagnostic,
+    DiagnosticSeverity,
+    InstanceNode,
+    MetadataNode,
+    ObjectPropertyField,
+    ObjectPropertyNode,
+    OntologyDocumentNode,
+    OntologyInterpreter,
+    OntologyParser,
+    SemanticValidator,
+    TurtleCodeGenerator,
+    ontology_class,
+)
 from .extractor import OntologyExtractor
 from .rule_registry import EdgeInferenceRuleRegistry
 from .rule_schema import (
@@ -33,6 +54,12 @@ from .schema import (
     ThreatActorEntity,
     Triple,
     VulnerabilityEntity,
+)
+from .security import (
+    ALL_SECURITY_CLASSES,
+    SECURITY_PREFIXES,
+    build_security_ontology_ast,
+    export_security_ontology_turtle,
 )
 from .taxonomy import TaxonomyRegistry
 from .turtle_engine import (
@@ -91,4 +118,29 @@ __all__ = [
     "build_sample_enterprise_ontology",
     "build_security_cti_ontology",
     "build_full_spectrum_security_ontology",
+    # Core AST & Interpreter
+    "ASTNode",
+    "ClassNode",
+    "ObjectPropertyNode",
+    "DatatypePropertyNode",
+    "AxiomNode",
+    "InstanceNode",
+    "MetadataNode",
+    "OntologyDocumentNode",
+    "ontology_class",
+    "ObjectPropertyField",
+    "DatatypePropertyField",
+    "ClassDeclaration",
+    "OntologyParser",
+    "Diagnostic",
+    "DiagnosticSeverity",
+    "SemanticValidator",
+    "ASTVisitor",
+    "OntologyInterpreter",
+    "TurtleCodeGenerator",
+    # Security DSL & Model
+    "ALL_SECURITY_CLASSES",
+    "SECURITY_PREFIXES",
+    "build_security_ontology_ast",
+    "export_security_ontology_turtle",
 ]

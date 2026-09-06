@@ -238,15 +238,74 @@ turtle_output = builder.serialize()
 
 ---
 
-## 6. トレーサビリティマトリクス (Traceability)
+## 6. AST インタプリタ＆宣言的 Pure Python クラス DSL アーキテクチャ (`src/ontology/core/` & `src/ontology/security/`)
+
+セキュリティドメイン知識（CTI/学術用語）と汎用オントロジー処理エンジンを厳格に分離し、プログラミング言語のコンパイラ／インタプリタと同様の 3 層 AST パイプラインを導入しています（Issue #180）。
+
+```mermaid
+flowchart TD
+    subgraph DomainLayer ["1. セキュリティドメイン層 (src/ontology/security/)"]
+        PYC["Pure Python Classes (@ontology_class)\nPaper, AttackTechnique, Vulnerability, etc."]
+        PROPS["Declarative Property Fields\nObjectPropertyField, DatatypePropertyField"]
+        AXIOM["Domain Axioms (create_security_axioms)"]
+    end
+
+    subgraph CoreASTLayer ["2. 汎用オントロジーコア・AST層 (src/ontology/core/)"]
+        PARSER["OntologyParser\n(Class Reflection -> AST Generation)"]
+        AST["OntologyDocumentNode (AST Root)\n- ClassNode\n- ObjectPropertyNode\n- DatatypePropertyNode\n- AxiomNode\n- InstanceNode"]
+        VAL["SemanticValidator (Static Linter)\n- Cyclic Inheritance Detection\n- Disjointness / Range Completeness"]
+    end
+
+    subgraph InterpreterLayer ["3. インタプリタ＆コード生成層 (src/ontology/core/)"]
+        INT["OntologyInterpreter (Tree Walker)"]
+        VIS["ASTVisitor (Visitor Pattern Base)"]
+        CODEGEN["TurtleCodeGenerator\n(W3C RDF 1.1 Turtle Code Generation)"]
+        OUT[".ttl W3C Standard Turtle Stream"]
+    end
+
+    PYC --> PARSER
+    PROPS --> PARSER
+    AXIOM --> PARSER
+    PARSER --> AST
+    AST --> VAL
+    VAL -->|Valid AST (Severity: 0 Errors)| INT
+    INT --> VIS
+    VIS --> CODEGEN
+    CODEGEN --> OUT
+```
+
+### 6.1 汎用コアコンポーネント (`src/ontology/core/`)
+セキュリティ固有の語彙や概念を一切持たない純粋なオントロジー処理系：
+- `ast.py`: `OntologyDocumentNode`, `ClassNode`, `ObjectPropertyNode`, `DatatypePropertyNode`, `AxiomNode`, `InstanceNode`, `MetadataNode`
+- `dsl.py`: `@ontology_class` デコレータ, `ObjectPropertyField`, `DatatypePropertyField`, `ClassDeclaration` メタ記述子
+- `parser.py`: Python クラスの宣言メタデータとディスクリプタを走査し AST に変換する `OntologyParser`
+- `validator.py`: 静的セマンティック検証器（循環継承検出、自身との排他検出、未定義プロパティ逆関係検出）
+- `interpreter.py`: AST を探索・評価する `ASTVisitor` および `OntologyInterpreter`
+- `codegen_turtle.py`: AST から W3C Turtle を出力するコードジェネレータ
+
+### 6.2 セキュリティドメイン定義 (`src/ontology/security/`)
+コアの DSL を用いて宣言された 14 クラスと関係性述語、および排他公理：
+- `classes.py`: 14 のセキュリティエンティティクラス (`Paper`, `ThreatActor`, `AttackTechnique`, `Vulnerability`, `TargetAsset`, `DefenseMechanism`, `BenchmarkMetric`, `Incident`, `DetectionRule`, `PoCArtifact`, `Precondition`, `ResearchGap`, `ResidualRisk`, `PublicationVenue`)
+- `properties.py`: 20 以上の関係述語・属性述語定義
+- `axioms.py`: セキュリティ概念間の排他公理定義
+- `model.py`: `build_security_ontology_ast()` および `export_security_ontology_turtle()` 統合エントリーポイント
+
+---
+
+## 7. トレーサビリティマトリクス (Traceability)
 
 - [REQ-ONT-01: オントロジー駆動知識アーキテクチャ要求仕様書](../requirements/REQ-ONT-01_ontology_driven_knowledge_architecture.md)
 - [MNG-03: オントロジー駆動開発プロセス規範](../processes/MNG-03-ontology_driven_development_process.md)
-- [MNG-01: 文書管理台帳](../processes/MNG-01-document_ledger.md)
+- [MNG-01: 文書管理台仗](../processes/MNG-01-document_ledger.md)
 - [DSN-14: 次世代データベース・知識グラフエンジン設計書](DSN-14-graph_engineering_dashboard.md)
+- [src/ontology/core/](../../src/ontology/core/)
+- [src/ontology/security/](../../src/ontology/security/)
 - [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py)
 - [src/ontology/extended_extractor.py](../../src/ontology/extended_extractor.py)
 - [outputs/ontology/security_ontology_v2.ttl](../../outputs/ontology/security_ontology_v2.ttl)
+- [tests/ontology/test_core_ast.py](../../tests/ontology/test_core_ast.py)
+- [tests/ontology/test_core_parser_validator.py](../../tests/ontology/test_core_parser_validator.py)
+- [tests/ontology/test_security_dsl.py](../../tests/ontology/test_security_dsl.py)
 - [tests/ontology/test_full_spectrum_ontology.py](../../tests/ontology/test_full_spectrum_ontology.py)
 - [tests/ontology/test_turtle_engine.py](../../tests/ontology/test_turtle_engine.py)
 
