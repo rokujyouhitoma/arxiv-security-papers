@@ -155,7 +155,9 @@
     .canvas-container {
       position: relative;
       width: 100%;
-      height: 480px;
+      height: 100%;
+      flex: 1;
+      min-height: 0;
       background-color: var(--bg-main);
       border-bottom: 2px solid var(--border-dark);
       overflow: hidden;
@@ -1139,6 +1141,7 @@
 
     .graph-workspace .canvas-container {
       flex: 1;
+      height: 100%;
       min-height: 0;
       position: relative;
       width: 100%;
@@ -2213,6 +2216,7 @@
           if (ctiFiltersEl) ctiFiltersEl.style.display = 'flex';
           if (contextLegend) contextLegend.style.display = 'none';
           if (ctiLegend) ctiLegend.style.display = 'flex';
+          resizeCanvas();
           if (activeGraphQuery) {
             await window.executeGraphQuery(activeGraphQuery);
           } else {
@@ -2225,6 +2229,7 @@
           if (contextLegend) contextLegend.style.display = 'flex';
           if (ctiLegend) ctiLegend.style.display = 'none';
           activeTwoHopNodes = null;
+          resizeCanvas();
           applyContextMesh();
         }
       };
@@ -2419,16 +2424,19 @@
         if (!canvas || !canvas.parentElement) return;
         const rect = canvas.parentElement.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return;
-        width = rect.width;
-        height = rect.height;
-        canvas.width = width * window.devicePixelRatio;
-        canvas.height = height * window.devicePixelRatio;
-        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        const dpr = window.devicePixelRatio || 1;
+        width = Math.floor(rect.width);
+        height = Math.floor(rect.height);
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        ctx.scale(dpr, dpr);
 
         // Center initialization
         NODES.forEach((n, idx) => {
           if (n.x === 0 && n.y === 0) {
-            const angle = (idx / NODES.length) * Math.PI * 2;
+            const angle = (idx / Math.max(1, NODES.length)) * Math.PI * 2;
             const radius = Math.min(width, height) * 0.32;
             n.x = width / 2 + Math.cos(angle) * radius;
             n.y = height / 2 + Math.sin(angle) * radius;
@@ -2437,6 +2445,12 @@
       }
 
       window.addEventListener('resize', resizeCanvas);
+      if (window.ResizeObserver && canvas && canvas.parentElement) {
+        const ro = new ResizeObserver(() => {
+          resizeCanvas();
+        });
+        ro.observe(canvas.parentElement);
+      }
       resizeCanvas();
 
       // ----------------------------------------------------------------------
@@ -2504,10 +2518,11 @@
           n.x += n.vx;
           n.y += n.vy;
 
-          // Boundary Clamping
-          const pad = 24;
-          n.x = Math.max(pad, Math.min(width - pad, n.x));
-          n.y = Math.max(pad, Math.min(height - pad, n.y));
+          // Boundary Clamping (Dynamic aspect-ratio aware padding)
+          const padX = 24;
+          const padY = Math.min(24, Math.max(10, height * 0.05));
+          n.x = Math.max(padX, Math.min(width - padX, n.x));
+          n.y = Math.max(padY, Math.min(height - padY, n.y));
         });
       }
 
@@ -2692,14 +2707,25 @@
       // ----------------------------------------------------------------------
       // 5. Mouse Interaction & Callout Details
       // ----------------------------------------------------------------------
+      function getNormalizedCanvasMouse(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = (rect.width > 0) ? (width / rect.width) : 1;
+        const scaleY = (rect.height > 0) ? (height / rect.height) : 1;
+        return {
+          x: (e.clientX - rect.left) * scaleX,
+          y: (e.clientY - rect.top) * scaleY
+        };
+      }
+
       function findNodeAt(mx, my) {
         const wpos = screenToWorld(mx, my);
         for (let i = NODES.length - 1; i >= 0; i--) {
           const n = NODES[i];
           const nodeRadius = n.radius || (n.cluster === 'source' ? 14 : 11);
+          const hitRadius = Math.max(nodeRadius + 8, 16);
           const dx = wpos.x - n.x;
           const dy = wpos.y - n.y;
-          if (dx * dx + dy * dy <= (nodeRadius + 6) * (nodeRadius + 6)) {
+          if (dx * dx + dy * dy <= hitRadius * hitRadius) {
             return n;
           }
         }
@@ -2707,9 +2733,9 @@
       }
 
       canvas.addEventListener('mousemove', e => {
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
+        const mpos = getNormalizedCanvasMouse(e);
+        const mx = mpos.x;
+        const my = mpos.y;
 
         if (draggedNode) {
           const wpos = screenToWorld(mx, my);
@@ -2734,9 +2760,9 @@
       });
 
       canvas.addEventListener('mousedown', e => {
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
+        const mpos = getNormalizedCanvasMouse(e);
+        const mx = mpos.x;
+        const my = mpos.y;
         const node = findNodeAt(mx, my);
         if (node) {
           draggedNode = node;
@@ -2752,9 +2778,9 @@
       });
 
       canvas.addEventListener('dblclick', e => {
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
+        const mpos = getNormalizedCanvasMouse(e);
+        const mx = mpos.x;
+        const my = mpos.y;
         const node = findNodeAt(mx, my);
         if (node) {
           focusEgoNetwork(node.id, 2);
@@ -2771,9 +2797,9 @@
 
       canvas.addEventListener('wheel', e => {
         e.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
+        const mpos = getNormalizedCanvasMouse(e);
+        const mx = mpos.x;
+        const my = mpos.y;
 
         const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
         const newScale = Math.max(0.25, Math.min(4.0, viewTransform.scale * zoomFactor));
@@ -3582,7 +3608,9 @@
         try {
           localStorage.setItem('dashboard_header_hidden', isHidden ? '1' : '0');
         } catch (e) { }
+        resizeCanvas();
         setTimeout(resizeCanvas, 40);
+        setTimeout(resizeCanvas, 220);
       };
 
       // Control Deck Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
@@ -3609,8 +3637,20 @@
         try {
           localStorage.setItem('dashboard_deck_hidden', isHidden ? '1' : '0');
         } catch (e) { }
+        resizeCanvas();
         setTimeout(resizeCanvas, 40);
+        setTimeout(resizeCanvas, 220);
       };
+
+      // Attach transitionend listeners for header and deck to ensure pixel-perfect resize on transition completion
+      const dashboardHeaderEl = document.getElementById('dashboardHeader');
+      if (dashboardHeaderEl) {
+        dashboardHeaderEl.addEventListener('transitionend', resizeCanvas);
+      }
+      const controlDeckEl = document.querySelector('.graph-control-deck');
+      if (controlDeckEl) {
+        controlDeckEl.addEventListener('transitionend', resizeCanvas);
+      }
 
       // Keyboard Shortcuts: 'D' (Control Deck), 'H' (Header), '?' (Help Drawer), 'Escape' (Close Drawer / Callout / Focus)
       window.addEventListener('keydown', function (e) {

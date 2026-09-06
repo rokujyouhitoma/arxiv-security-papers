@@ -21,6 +21,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **181** | graph.html (dashboard.html) におけるグローバルヘッダー・コントロールデッキ表示時の Canvas 縦縮み歪みおよびノード選択判定不具合の解消 | Bug / UIUX | 2026-09-06 | [181-fix-canvas-vertical-distortion-and-hit-testing-in-graph-view.md](closed/181-fix-canvas-vertical-distortion-and-hit-testing-in-graph-view.md) |
 | **180** | オントロジー宣言DSL（Pure Python Class定義）とASTインタプリタ処理エンジンの完全分離アーキテクチャの実装 | Architecture / Refactor | 2026-09-06 | [180-decouple-ontology-definition-dsl-and-ast-interpreter-engine.md](closed/180-decouple-ontology-definition-dsl-and-ast-interpreter-engine.md) |
 | **179** | 全領域統合セキュリティ知識オントロジー（Full-Spectrum SKO: 実脅威・防御コード・前提条件・研究ギャップ・信頼性来歴）の実装 | Feature / Architecture | 2026-09-06 | [179-implement-full-spectrum-security-knowledge-ontology.md](closed/179-implement-full-spectrum-security-knowledge-ontology.md) |
 | **178** | オントロジー駆動（Ontology-Driven）開発体系の確立および Pure-Python Turtle (.ttl) 生成エンジンの実装 | Feature / Architecture | 2026-09-06 | [178-establish-ontology-driven-architecture-and-python-turtle-engine.md](closed/178-establish-ontology-driven-architecture-and-python-turtle-engine.md) |

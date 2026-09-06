@@ -353,6 +353,21 @@ $$\text{panX}' = x_{\text{screen}} - x_{\text{world}} \times \text{scale}', \qua
 - ノードをクリックした瞬間に右側インスペクター（`#nodeInspector`）が連動。
 - arXiv タイトル、著者、アブストラクト日本語要約、関連 CVE/CWE、および EIROM 推論エビデンス（学術本文からの抽出スニペット）を高密度に表示。
 
+### 4.6 Canvas アスペクト比完全同期・ResizeObserver およびマウス座標正規化アーキテクチャ (Issue 181)
+ヘッダー開閉やコントロールデッキの可変高さ（120px〜220px）による Canvas ビットマップ歪み（ノードの楕円形への潰れ）およびクリック判定オフセットを完全防止するための統一グラフィックス制御仕様：
+
+1. **ResizeObserver リアルタイム追従**:
+   - `new ResizeObserver(() => resizeCanvas()).observe(canvas.parentElement)` を接続。
+   - CSS トランジション（200ms）の途中および完了後、フォントロード、CTI フィルタ折り返し等、いかなる親要素寸法変動時も正確に `canvas.width` / `canvas.height` を CSS ピクセル × DPR に 1:1 完全同期。
+2. **ビットマップと CSS スタイル寸法の明示的一致**:
+   - `canvas.style.width = width + 'px'` および `canvas.style.height = height + 'px'` を明示設定。
+   - `#graphCanvas` の CSS 伸縮による GPU 歪み（アスペクト比 $\ne 1.0$）を数学的に排除。
+3. **マウスイベント座標（Hit-Testing）の比率正規化**:
+   - `getNormalizedCanvasMouse(e)` により、`rect = canvas.getBoundingClientRect()` とキャンバス内部論理寸法（`width`, `height`）の比率を算出し、`mx` / `my` を正規化。
+   - アニメーション途中やリフロー中でも画面上の見た目と判定位置が 100% 一致。
+4. **エルゴノミック・ヒット判定半径**:
+   - `findNodeAt` の判定領域を `hitRadius = Math.max(nodeRadius + 8, 16)` に設定し、高密度ノード群でも確実なクリック・ホバー選択性を保証。
+
 ---
 
 ## 5. メインコンテンツ標準 6 大コンポーネント設計 (Standard Content Modules)
@@ -610,3 +625,4 @@ flowchart LR
 | **174** | Canvas 見切れ解消・コントロールデッキ表示切替・スクロール | `site/dashboard.html`, `site/style.css` | 第 3 章, 第 4 章 |
 | **175** | 凡例左上配置・固定フッター・ズーム HUD・多方向チップヒント | `site/dashboard.html`, `site/style.css` | 第 3 章, 第 4 章, 第 6 章 |
 | **176** | DSN-21 包括的ブラッシュアップ（本 Issue） | `docs/designs/DSN-21-...` | 全章 |
+| **181** | Canvas 縦縮み歪み解消・ResizeObserver 追従 & マウス座標正規化 | `site/dashboard.html` | 第 4 章 (4.6) |
