@@ -92,6 +92,8 @@ class TestSOTABenchmarkRunner(unittest.TestCase):
         self.assertIn("BM25 (Lucene Baseline)", md)
         self.assertIn("Hybrid SOTA (BM25 + HNSW + Graph)", md)
         self.assertIn("## 3. 結論（車輪の再発明に対する工学的回答）", md)
+        # Ensure that NDCG and Recall in markdown table are not erroneously 0.0000 across models
+        self.assertNotIn("| 0.0000 | 0.0000 | 0.0000 | 0.0000 |", md)
 
 
 if __name__ == "__main__":
