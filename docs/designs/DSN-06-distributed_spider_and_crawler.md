@@ -14,8 +14,12 @@
 
 - [1. スパイダー・クローラーアーキテクチャと実行基盤](#1-スパイダークローラーアーキテクチャと実行基盤)
   - [1.1 主要コンポーネント構成とデータフロー](#11-主要コンポーネント構成とデータフロー)
+    - [1.1.3 ダウンローダ (Downloader) & ミドルウェア](#113-ダウンローダ-downloader--ミドルウェア)
+      - [1.1.3.1 RFC 7232 条件付きリクエスト (Conditional GET) と HTTP 304 キャッシュ透過機構 (Issue 209)](#1131-rfc-7232-条件付きリクエスト-conditional-get-と-http-304-キャッシュ透過機構-issue-209)
+    - [1.1.5 ドメインスパイダー (Domain Spiders: arXiv / IACR / CISA KEV / NVD CVE) (Issue 205)](#115-ドメインスパイダー-domain-spiders-arxiv--iacr--cisa-kev--nvd-cve-issue-205)
     - [1.1.6 多態的アイテムパイプライン (Polymorphic Item Pipeline: OkfItemPipeline)](#116-多態的アイテムパイプライン-polymorphic-item-pipeline-okfitempipeline)
     - [1.1.7 コアデータモデル仕様 (Request, Response, BaseSpider)](#117-コアデータモデル仕様-request-response-basespider)
+    - [1.1.8 SpiderRegistry & SPI プラグインアーキテクチャ (Issue 205)](#118-spiderregistry--spi-プラグインアーキテクチャ-issue-205)
   - [1.2 イベント駆動非同期実行モデルとシグナル管理](#12-イベント駆動非同期実行モデルとシグナル管理)
   - [1.3 ゼロ外部依存・100% Python 標準ライブラリ原則と技術スタックマッピング](#13-ゼロ外部依存100-python-標準ライブラリ原則と技術スタックマッピング)
   - [1.4 現行 ETL パイプラインとの対比と進化方針](#14-現行-etl-パイプラインとの対比と進化方針)
@@ -123,23 +127,92 @@ flowchart TB
   - **リクエスト送信フロー (正順)**: `OffsiteMiddleware` (SSRF ドメイン水際遮断) $\rightarrow$ `UserAgentMiddleware` (身元注入) $\rightarrow$ `RobotsTxtMiddleware` (RFC 9309 遵守) $\rightarrow$ `AutoThrottlePolicy` (Politeness レート制限) $\rightarrow$ `HttpCacheMiddleware` (ローカルキャッシュ照合) $\rightarrow$ `AsyncHttpDownloader`
   - **レスポンス受信フロー (逆順)**: `AsyncHttpDownloader` $\rightarrow$ `HttpCacheMiddleware` (キャッシュ保存) $\rightarrow$ `AutoThrottlePolicy` (レイテンシ学習) $\rightarrow$ `RobotsTxtMiddleware` $\rightarrow$ `UserAgentMiddleware` $\rightarrow$ `RetryMiddleware` (HTTP 429/5xx 指数バックオフ自己修復) $\rightarrow$ `Engine`
 
+#### 1.1.3.1 RFC 7232 条件付きリクエスト (Conditional GET) と HTTP 304 キャッシュ透過機構 (Issue 209)
+外部脅威インテリジェンス（CISA KEV の約 2MB 静的 JSON カタログや NVD CVE フィード等）の定期巡回において、相手先サーバーへのトラフィック負荷およびネットワーク帯域消費を最小化するため、`HttpCacheMiddleware` に RFC 7232 準拠の条件付きリクエスト機構および 304 キャッシュ透過復元アーキテクチャを導入します。
+
+1. **メタデータキャッシュストレージ (`CacheEntry`)**:
+   - `Response` オブジェクトとともに、レスポンスヘッダから抽出した `ETag` および `Last-Modified` をオンメモリに保持。
+   - メモリ枯渇（CWE-400）防止のため、エントリ数上限（`max_size: int = 1000`）による FIFO/LRU 破棄ポリシーを適用。
+2. **条件付きヘッダー注入 (`process_request`)**:
+   - キャッシュに対象 URL のエントリが存在する場合、`If-None-Match: <etag>` および `If-Modified-Since: <last_modified>` を `request.headers` へ自動注入（CRLF インジェクション防止サニタイズ適用）。
+   - リクエストメタデータに `force_cache=True` が明示されている場合のみ、ネットワーク通信を完全スキップしてキャッシュレスポンスを即座に返却。
+3. **HTTP 304 Not Modified 透過合成 (`process_response`)**:
+   - サーバーから `304 Not Modified` が返却された際、`HttpCacheMiddleware` はキャッシュ済みの前回ボディ（`entry.response.body`）を合成した完全な `Response`（`status_code=200`）を透過復元。
+   - `request.meta["cached"] = True`, `request.meta["validated_304"] = True` を付与し、Spider の `parse` メソッドは前回のデータをゼロダウンロードで処理可能。
+4. **RFC 7230 Section 3.3.2 準拠ボディスキップ**:
+   - `AsyncHttpDownloader` において、`status_code in (204, 304) or (100 <= status_code < 200)` の場合はメッセージボディの読み込みを即座にスキップ（`body = b""`）し、ソケットブロッキングやタイムアウトを恒久防止。
+
 ### 1.1.4 SPA 透過抽出エンジン (SPA Extractor)
 - **役割**: 外部ブラウザ（Playwright 等）を一切起動せず、HTML 内のハイドレーションステート（`__NEXT_DATA__` 等）やインライン JS 内の API エンドポイントを静的解析し、動的 Web ページの完全な構造化データを 0.1ms で復元。
 
-### 1.1.5 ドメインスパイダー (Domain Spiders) & ミドルウェア
+### 1.1.5 ドメインスパイダー (Domain Spiders: arXiv / IACR / CISA KEV / NVD CVE) (Issue 205)
 - **役割**: 対象ドメイン（学術論文、公的脅威インテリジェンス、脆弱性アドバイザリ等）固有の XML/HTML/JSON 構造解析、ページネーションリンク抽出、および構造化アイテム（`ScrapedItem`）の生成。
 - **実装スパイダー体系**:
   1. **学術論文スパイダー群**:
-     - `ArxivSpider` (`cs.CR` カテゴリ Atom XML クロール・PDF リンク導出)
-     - `IacrSpider` (IACR ePrint RSS フィード・論文全文抽出)
-     - `AdvisorySpider` (一般セキュリティアドバイザリ HTML スクレイピング)
+     - `ArxivSpider` (`src/domain/security/spiders/arxiv_spider.py`):
+       - arXiv API (`cs.CR` カテゴリ) Atom XML クロール、論文 ID・タイトル・著者・要約・PDF リンク抽出。
+       - `download_delay = 3.0s`、`allowed_domains = {"export.arxiv.org", "arxiv.org"}`。
+     - `IacrSpider` (`src/domain/security/spiders/iacr_spider.py`):
+       - IACR ePrint RSS 2.0 フィードのクロール、暗号学論文のメタデータ抽出。
+       - `download_delay = 1.0s`、`allowed_domains = {"eprint.iacr.org"}`。
+     - `AdvisorySpider` (`src/domain/security/spiders/advisory_spider.py`):
+       - 一般セキュリティアドバイザリ RSS/XML フィードの収集。
   2. **外部脅威インテリジェンス (CTI) スパイダー群 (Issue 205)**:
      - `CisaKevSpider` (`src/domain/security/spiders/cisa_kev_spider.py`):
-       - 米 CISA Known Exploited Vulnerabilities (KEV) 静的 JSON カタログの収集。
-       - `download_delay = 5.0s`、`cisa.gov` ドメイン制限、`item_id="cisa_kev_{cve_id}"`。
+       - **収集対象**: 米国土安全保障省 CISA (Cybersecurity and Infrastructure Security Agency) Known Exploited Vulnerabilities (KEV) 静的 JSON カタログ。
+       - **レート制御**: `download_delay = 5.0s` (公式規約配慮・安全マージン)。
+       - **ドメイン境界 (SSRF 防護)**: `allowed_domains = {"cisa.gov", "www.cisa.gov"}`。
+       - **キャッシュ協調**: ETag / If-Modified-Since (Issue 209 `HttpCacheMiddleware`) により、未更新時の HTTP 304 透過合成（帯域ゼロ化）。
+       - **抽出ロジック**: `response.json()` から `vulnerabilities` 配列を展開し、各レコードから `cveID`, `vendorProject`, `product`, `vulnerabilityName`, `dateAdded`, `shortDescription`, `requiredAction`, `dueDate`, `knownRansomwareCampaignUse` を正規化。
+       - **出力アイテム**: `item_id="cisa_kev_{cve_id}"`, `type="vulnerability"`, `source="cisa-kev"`, `kev_status=True`, `tags=["vulnerability", "cisa-kev", "exploited-in-the-wild"]`（ランサムウェア該当時は `["ransomware"]` を動的付加）。
      - `NvdCveSpider` (`src/domain/security/spiders/nvd_cve_spider.py`):
-       - NIST NVD REST API 2.0 差分・ページネーション収集。
-       - API キー動的判定（Key なし時 `6.5s`, Key あり時 `0.8s`）、`resultsPerPage=2000`、`startIndex` 再帰的ページネーション。
+       - **収集対象**: 米 NIST (National Institute of Standards and Technology) National Vulnerability Database REST API 2.0 (`https://services.nvd.nist.gov/rest/json/cves/2.0`)。
+       - **動的レート制御**:
+         - API キー未指定時: **`download_delay = 6.5s`** (30秒あたり最大5リクエスト制限準拠)。
+         - API キー指定時: **`download_delay = 0.8s`** (30秒あたり最大50リクエスト制限準拠)。
+         - 環境変数 `NVD_API_KEY` またはコンストラクタ引数から動的判定。
+       - **ドメイン境界**: `allowed_domains = {"services.nvd.nist.gov"}`。
+       - **認証ヘッダー**: `apiKey: <NVD_API_KEY>` をリクエストヘッダーへ安全注入（CWE-113 改行文字サニタイズ済）。
+       - **リクエスト最適化**: `resultsPerPage=2000` (NVD API 2.0 最大値によるリクエスト回数最小化)。
+       - **抽出ロジック**: 各 CVE オブジェクトから英語説明文、CVSS メトリクス (v3.1 > v3.0 > v2.0 優先順位で baseScore / baseSeverity / vectorString を抽出)、CWE 弱点識別子、CPE 構成ノードから影響ベンダー・製品群、公式参照リンクを網羅抽出。
+       - **再帰的ページネーション**: `totalResults`, `startIndex`, `resultsPerPage` を監視し、`startIndex + resultsPerPage < totalResults` である限り、次ページ `Request(url, params={"resultsPerPage": 2000, "startIndex": next_index})` を自律 yield。
+
+```mermaid
+flowchart TD
+    subgraph CTI_Sources ["🌐 外部脅威インテリジェンス (CTI) ソース"]
+        CISA_SRC["CISA KEV 静的 JSON カタログ<br/>(cisa.gov feeds)"]
+        NVD_SRC["NIST NVD REST API 2.0<br/>(services.nvd.nist.gov)"]
+    end
+
+    subgraph Spiders ["🕷️ Pure-Python CTI Spiders"]
+        CISA_SPIDER["CisaKevSpider<br/>download_delay = 5.0s<br/>ETag/304 キャッシュ連携"]
+        NVD_SPIDER["NvdCveSpider<br/>Keyあり 0.8s / なし 6.5s<br/>resultsPerPage=2000"]
+    end
+
+    subgraph CoreEngine ["⚡ Spider Core Engine"]
+        SCHED["Scheduler<br/>(Politeness レート遅延制御)"]
+        DL["AsyncHttpDownloader<br/>(SSRF Offsite / Retry / Cache)"]
+    end
+
+    subgraph ItemPipeline ["💾 OkfItemPipeline (Polymorphic)"]
+        VULN_DISPATCH["vulnerability ディスパッチャ"]
+        OKF_VULN["OKF v0.2 Markdown 生成<br/>outputs/okf_papers/YYYY-MM-DD/{CVE_ID}.md"]
+        DB_VULN[("DSN-14 DB: vulnerabilities")]
+    end
+
+    CISA_SRC --> CISA_SPIDER
+    NVD_SRC --> NVD_SPIDER
+    CISA_SPIDER --> SCHED
+    NVD_SPIDER --> SCHED
+    SCHED --> DL
+    DL --> CISA_SPIDER
+    DL --> NVD_SPIDER
+    CISA_SPIDER -->|"ScrapedItem(type='vulnerability')"| VULN_DISPATCH
+    NVD_SPIDER -->|"ScrapedItem(type='vulnerability')"| VULN_DISPATCH
+    NVD_SPIDER -.->|"次ページ Request(startIndex=2000...)"| SCHED
+    VULN_DISPATCH --> OKF_VULN
+    OKF_VULN --> DB_VULN
+```
 
 ### 1.1.6 多態的アイテムパイプライン (Polymorphic Item Pipeline: OkfItemPipeline)
 - **役割**: 抽出データの正規化・サニタイズ、アイテム種別（学術論文 vs 脆弱性・CTI）の自動判定、Google OKF v0.2 Markdown 生成、および DSN-14 自律分散 DB へのマルチモデル永続化。
@@ -193,6 +266,25 @@ flowchart TD
    - `allowed_domains: Set[str]`: 許可ドメインホワイトリスト（SSRF 防御対象）。
    - `download_delay: float`: スパイダー固有のアクセス遅延秒数（デフォルト: `0.5`）。対象ドメインのレートリミット（例: NVD API の 6.5s）に応じた宣言的指定が可能。
    - `custom_settings: Dict[str, Any]`: スパイダー単位のミドルウェア/パイプライン上書き設定。
+
+### 1.1.8 SpiderRegistry & SPI プラグインアーキテクチャ (Issue 205)
+スパイダーの登録・発見・動的インスタンス化を中央管理する Service Provider Interface (SPI) 設計。
+
+1. **`SpiderRegistry` (`src/spider/registry.py`)**:
+   - `register(name, spider_cls=None, factory=None)`: クラスまたはファクトリ関数によるスパイダー登録。
+   - `get(name) -> Optional[Type[BaseSpider]]`: スパイダークラスの取得。
+   - `create(name, *args, **kwargs) -> Optional[BaseSpider]`: 引数を伴うインスタンス化（NVD API キー等）。
+   - `list_spiders() -> List[str]`: 登録済みスパイダー名一覧の返却。
+2. **ビルトインスパイダー自動登録機構**:
+   - `get_spider_registry()` または `get_available_spiders()` 呼び出し時、レジストリが空の場合はビルトインスパイダー（`arxiv_spider`, `iacr_spider`, `advisory_spider`, `cisa_kev_spider`, `nvd_cve_spider`）を自動遅延インポート・登録。
+   - スパイダー追加時にインフラ側の明示的初期化コードを不要化。
+3. **短縮エイリアス解決 (Short Aliases)**:
+   - スパイダー識別名末尾の `_spider` を自動トリミングした短縮名（`cisa_kev`, `nvd_cve`, `arxiv`, `iacr`, `advisory`）を自動認識。
+4. **CLI & ランナー統合**:
+   - `src/spider/runner.py`: `get_available_spiders()` を通じて全スパイダーを動的列挙し、`--spider cisa_kev` や `--spider nvd_cve` で即時ディスパッチ。
+   - `src/intelligence/cli.py`: `spider` サブコマンドから `python3 src/intelligence/cli.py spider --spider-name cisa_kev --depth 1` で直接呼び出し可能。
+5. **後方互換性シム**:
+   - `src/spider/spiders/` 直下に `cisa_kev_spider.py` および `nvd_cve_spider.py` を配置し、`from spider.spiders.cisa_kev_spider import CisaKevSpider` 形式のインポート完全互換性を担保。
 
 ---
 
