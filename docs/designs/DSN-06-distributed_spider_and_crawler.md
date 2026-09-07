@@ -14,6 +14,7 @@
 
 - [1. スパイダー・クローラーアーキテクチャと実行基盤](#1-スパイダークローラーアーキテクチャと実行基盤)
   - [1.1 主要コンポーネント構成とデータフロー](#11-主要コンポーネント構成とデータフロー)
+    - [1.1.6 多態的アイテムパイプライン (Polymorphic Item Pipeline: OkfItemPipeline)](#116-多態的アイテムパイプライン-polymorphic-item-pipeline-okfitempipeline)
     - [1.1.7 コアデータモデル仕様 (Request, Response, BaseSpider)](#117-コアデータモデル仕様-request-response-basespider)
   - [1.2 イベント駆動非同期実行モデルとシグナル管理](#12-イベント駆動非同期実行モデルとシグナル管理)
   - [1.3 ゼロ外部依存・100% Python 標準ライブラリ原則と技術スタックマッピング](#13-ゼロ外部依存100-python-標準ライブラリ原則と技術スタックマッピング)
@@ -140,8 +141,39 @@ flowchart TB
        - NIST NVD REST API 2.0 差分・ページネーション収集。
        - API キー動的判定（Key なし時 `6.5s`, Key あり時 `0.8s`）、`resultsPerPage=2000`、`startIndex` 再帰的ページネーション。
 
-### 1.1.6 アイテムパイプライン (Item Pipeline)
-- **役割**: 抽出テキストの正規化・サニタイズ、必須フィールド検証、Google OKF v0.2 Markdown 生成、および DSN-14 ベクトル・リレーショナル DB への永続化。
+### 1.1.6 多態的アイテムパイプライン (Polymorphic Item Pipeline: OkfItemPipeline)
+- **役割**: 抽出データの正規化・サニタイズ、アイテム種別（学術論文 vs 脆弱性・CTI）の自動判定、Google OKF v0.2 Markdown 生成、および DSN-14 自律分散 DB へのマルチモデル永続化。
+
+#### 1.1.6.1 多態的ディスパッチアーキテクチャ (Polymorphic Dispatch)
+スパイダーが抽出する構造化アイテム（`ScrapedItem`）は、データソースの性質に応じて異なるドメインモデルを持ちます。`OkfItemPipeline` は `item.payload.get("type", "security-paper")` をキーとして、対応する専用 OKF ビルダーへ動的に処理をディスパッチします：
+
+```mermaid
+flowchart TD
+    ITEM["ScrapedItem(item_id, payload)"] --> DISPATCH{"item.payload.get('type')<br/>による動的ディスパッチ"}
+    
+    DISPATCH -->|"security-paper (学術論文)"| PAPER_BUILDER["_build_paper_okf_markdown()<br/>著者 / 概要 / PDFリンク"]
+    DISPATCH -->|"vulnerability / security-advisory (CTI)"| VULN_BUILDER["_build_vulnerability_okf_markdown()<br/>CVE / CVSS / CWE / EPSS / KEV"]
+    
+    PAPER_BUILDER --> WRITE["ファイルシステムへアトミック出力<br/>outputs/okf_papers/YYYY-MM-DD/{clean_id}.md"]
+    VULN_BUILDER --> WRITE
+    
+    WRITE --> DB_PERSIST{"enable_db_persistence?"}
+    DB_PERSIST -->|"True (security-paper)"| DB_PAPERS[("DSN-14 DB: papers テーブル")]
+    DB_PERSIST -->|"True (vulnerability)"| DB_VULNS[("DSN-14 DB: vulnerabilities テーブル")]
+    DB_PERSIST -->|"False"| FINISH["パイプライン完了"]
+```
+
+#### 1.1.6.2 Google OKF v0.2 スキーマ仕様と Markdown テンプレート
+1. **学術論文スキーマ (`type: "security-paper"`)**:
+   - `authors` (著者リスト), `abstract` (論文要約), `pdf_url` (原本PDFリンク), `raw_metadata_path` (arXiv/IACRメタデータ来歴) を完備。
+2. **脆弱性・CTIスキーマ (`type: "vulnerability"` または `"security-advisory"`)**:
+   - `cve_id` (CVE識別子), `cvss` (基本値・深刻度・ベクター), `cwe` (弱点リスト), `epss` (悪用予測スコア), `kev_status` (CISA KEV 悪用確認フラグ), `affected_products` (影響ベンダー・製品群), `due_date` (CISA 是正期日) を第一級メタデータとしてフロントマターに統合。
+   - Markdown 本文には「1. 脆弱性概要」「2. 脅威評価メトリクス表」「3. 影響製品」「4. 対策・緩和策」「5. 参照リンク」を構造化レンダリング。
+
+#### 1.1.6.3 入力検証・サニタイズ防御 (CWE-94 / CWE-79 / CWE-22)
+外部フィード・REST API から取得した文字列に対して、パイプライン内部で以下の多層防護を適用：
+- **YAML 構文破壊防止 (CWE-94)**: タイトルや要約内のダブルクォート (`"`) および不正改行をサニタイズし、不正な YAML 構造注入を排除。
+- **パストラバーサル防御 (CWE-22)**: `clean_id` および `date_folder` に対し `[^a-zA-Z0-9_\-\.]` の置換と `os.path.basename` 適用により、親ディレクトリ脱出（`../`）を完全遮断。
 
 ### 1.1.7 コアデータモデル仕様 (Request, Response, BaseSpider)
 クロール処理における基本通信単位およびスパイダー契約（Spider Contract）の共通データクラス仕様。
@@ -683,6 +715,13 @@ flowchart LR
     PIPELINE -->|"セマンティック埋め込み"| HNSW
     PIPELINE -->|"クラスタ間合意複製"| RAFT
 ```
+
+#### 6.2.1 マルチモデル永続化テーブル構造
+`OkfItemPipeline` は、アイテム種別に応じて以下の専用テーブルへ自動格納・インデックス付けを行います：
+1. **`papers` テーブル (`type: "security-paper"`)**:
+   - カラム: `(clean_id TEXT PRIMARY KEY, title TEXT, url TEXT, okf_path TEXT, updated_at TEXT)`
+2. **`vulnerabilities` テーブル (`type: "vulnerability"` / `"security-advisory"`)**:
+   - カラム: `(cve_id TEXT PRIMARY KEY, title TEXT, cvss_score REAL, severity TEXT, kev_status INTEGER, url TEXT, okf_path TEXT, updated_at TEXT)`
 
 ---
 
