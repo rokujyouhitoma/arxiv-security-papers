@@ -13,6 +13,8 @@ from .core.scheduler import Scheduler
 from .distributed.state_storage import StateStorage
 from .downloader.middleware import (
     HttpCacheMiddleware,
+    OffsiteMiddleware,
+    RetryMiddleware,
     RobotsTxtMiddleware,
     UserAgentMiddleware,
 )
@@ -45,15 +47,45 @@ def _init_scheduler_state(
         print(f"[*] Resumed {restored} requests from state: {state_file}")
 
 
-def _build_spider_middlewares(default_delay: float, enable_cache: bool) -> List[Any]:
+def _build_spider_middlewares(
+    default_delay: float,
+    enable_cache: bool,
+    downloader: Optional[AsyncHttpDownloader] = None,
+) -> List[Any]:
     middlewares: List[Any] = [
+        OffsiteMiddleware(),
         UserAgentMiddleware(),
         RobotsTxtMiddleware(),
         AutoThrottlePolicy(min_delay=default_delay),
     ]
     if enable_cache:
         middlewares.append(HttpCacheMiddleware())
+    middlewares.append(RetryMiddleware(downloader=downloader))
     return middlewares
+
+
+def _resolve_spider_instance(spider_name: str) -> BaseSpider:
+    avail = get_available_spiders()
+    if spider_name not in avail:
+        raise ValueError(
+            f"Unknown spider: {spider_name}. Available: {list(avail.keys())}"
+        )
+    return avail[spider_name]()
+
+
+def _resolve_effective_delay(
+    spider_instance: BaseSpider, default_delay: float
+) -> float:
+    spider_delay = getattr(spider_instance, "download_delay", 0.5)
+    return default_delay if default_delay != 0.5 else spider_delay
+
+
+def _inject_downloader_to_middlewares(
+    middlewares: List[Any], downloader: AsyncHttpDownloader
+) -> None:
+    for mid in middlewares:
+        if isinstance(mid, RetryMiddleware) and mid.downloader is None:
+            mid.downloader = downloader
 
 
 async def run_spider(
@@ -67,15 +99,8 @@ async def run_spider(
     resume_from_state: bool = False,
 ) -> List[ScrapedItem]:
     """Runs a specific spider with full middleware and pipeline stack."""
-    avail = get_available_spiders()
-    if spider_name not in avail:
-        raise ValueError(
-            f"Unknown spider: {spider_name}. Available: {list(avail.keys())}"
-        )
-
-    spider_instance = avail[spider_name]()
-    spider_delay = getattr(spider_instance, "download_delay", 0.5)
-    effective_delay = default_delay if default_delay != 0.5 else spider_delay
+    spider_instance = _resolve_spider_instance(spider_name)
+    effective_delay = _resolve_effective_delay(spider_instance, default_delay)
 
     scheduler = Scheduler(default_delay=effective_delay)
     _init_scheduler_state(scheduler, state_file, resume_from_state)
@@ -83,6 +108,7 @@ async def run_spider(
     downloader = AsyncHttpDownloader()
     engine = Engine(downloader=downloader, scheduler=scheduler)
     middlewares = _build_spider_middlewares(effective_delay, enable_cache)
+    _inject_downloader_to_middlewares(middlewares, downloader)
     pipelines = [
         OkfItemPipeline(output_dir=output_dir, enable_db_persistence=persist_db)
     ]

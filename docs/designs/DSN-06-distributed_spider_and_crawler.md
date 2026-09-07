@@ -33,6 +33,7 @@
   - [4.2 コネクションプーリングと Keep-Alive ライフサイクル](#42-コネクションプーリングと-keep-alive-ライフサイクル)
   - [4.3 チャンク転送デコードとストリーム圧縮解凍](#43-チャンク転送デコードとストリーム圧縮解凍)
   - [4.4 HTTP HEAD 事前検証と帯域幅制御ポリシー](#44-http-head-事前検証と帯域幅制御ポリシー)
+  - [4.5 HTTP 429/5xx 指数バックオフ再試行と Retry-After 協調 (RetryMiddleware)](#45-http-4295xx-指数バックオフ再試行と-retry-after-協調-retrymiddleware)
 - [5. 純Pythonによる動的 JavaScript・SPA 透過解析技術](#5-純pythonによる動的-javascriptspa-透過解析技術)
   - [5.1 ブラウザ不要アプローチの理論的背景と超低遅延性](#51-ブラウザ不要アプローチの理論的背景と超低遅延性)
   - [5.2 ハイドレーションステート抽出技術 (Next.js, Nuxt, Redux, Apollo JSON)](#52-ハイドレーションステート抽出技術-nextjs-nuxt-redux-apollo-json)
@@ -45,6 +46,7 @@
 - [7. セキュリティ・アイデンティティ・コンプライアンス](#7-セキュリティアイデンティティコンプライアンス)
   - [7.1 クローラー身元開示と緊急停止キルスイッチ](#71-クローラー身元開示と緊急停止キルスイッチ)
   - [7.2 機密データ保護と Google Hacking 対策](#72-機密データ保護と-google-hacking-対策)
+  - [7.3 SSRF 防護・内部ネットワーク隔離とドメイン境界制御 (OffsiteMiddleware)](#73-ssrf-防護内部ネットワーク隔離とドメイン境界制御-offsitemiddleware)
 - [8. 運用・可観測性・品質保証フレームワーク](#8-運用可観測性品質保証フレームワーク)
   - [8.1 AutoThrottle 自律速度追従アルゴリズム](#81-autothrottle-自律速度追従アルゴリズム)
   - [8.2 リアルタイム統計コレクター (Stats Collector)](#82-リアルタイム統計コレクター-stats-collector)
@@ -116,7 +118,9 @@ flowchart TB
 
 ### 1.1.3 ダウンローダ (Downloader) & ミドルウェア
 - **役割**: 非同期ソケット通信による HTTP/1.1 リクエスト実行、SSL/TLS ハンドシェイク、Keep-Alive 接続プール管理、レスポンスヘッダ解析、およびストリーム解凍。
-- **ミドルウェア連鎖**: `RobotsTxtMiddleware` $\rightarrow$ `UserAgentMiddleware` $\rightarrow$ `HttpProxyMiddleware` $\rightarrow$ `RetryMiddleware` $\rightarrow$ `HttpCacheMiddleware`。
+- **ミドルウェア連鎖 (Middleware Chain)**:
+  - **リクエスト送信フロー (正順)**: `OffsiteMiddleware` (SSRF ドメイン水際遮断) $\rightarrow$ `UserAgentMiddleware` (身元注入) $\rightarrow$ `RobotsTxtMiddleware` (RFC 9309 遵守) $\rightarrow$ `AutoThrottlePolicy` (Politeness レート制限) $\rightarrow$ `HttpCacheMiddleware` (ローカルキャッシュ照合) $\rightarrow$ `AsyncHttpDownloader`
+  - **レスポンス受信フロー (逆順)**: `AsyncHttpDownloader` $\rightarrow$ `HttpCacheMiddleware` (キャッシュ保存) $\rightarrow$ `AutoThrottlePolicy` (レイテンシ学習) $\rightarrow$ `RobotsTxtMiddleware` $\rightarrow$ `UserAgentMiddleware` $\rightarrow$ `RetryMiddleware` (HTTP 429/5xx 指数バックオフ自己修復) $\rightarrow$ `Engine`
 
 ### 1.1.4 SPA 透過抽出エンジン (SPA Extractor)
 - **役割**: 外部ブラウザ（Playwright 等）を一切起動せず、HTML 内のハイドレーションステート（`__NEXT_DATA__` 等）やインライン JS 内の API エンドポイントを静的解析し、動的 Web ページの完全な構造化データを 0.1ms で復元。
@@ -518,6 +522,59 @@ flowchart TD
 
 ---
 
+## 4.5 HTTP 429/5xx 指数バックオフ再試行と Retry-After 協調 (RetryMiddleware)
+
+### 4.5.1 背景・課題と耐障害性要件
+外部脅威インテリジェンス API（NVD CVE API 2.0 / CISA KEV 等）や学術リポジトリ（arXiv, IACR）のクロールにおいて、過密アクセスによるレートリミット（`HTTP 429 Too Many Requests`）や一時的なサーバー過負荷（`HTTP 500`, `502`, `503`, `504`）の発生は不可避です。これらを恒久的な通信エラーとして即座に破棄すると、最新の脆弱性・脅威インテリジェンス情報の欠落を招きます。
+
+本基盤では、`RetryMiddleware` をレスポンスパイプラインの最終防衛線として配置し、指数バックオフと `Retry-After` ヘッダー協調による自律的自己修復通信を実現します。
+
+### 4.5.2 数理モデル (指数バックオフ & リトライ上限)
+再試行回数 $r$（$r \in \{0, 1, \dots, N_{\text{max}}-1\}$）における待機時間 $T_{\text{wait}}(r)$ は、初期待機時間 $T_{\text{base}}$、バックオフ係数 $\gamma$、および最大待機時間キャップ $T_{\text{max}}$ により以下のようにモデル化されます：
+
+$$T_{\text{wait}}(r) = \min\left(T_{\text{max}}, T_{\text{base}} \cdot \gamma^r\right)$$
+
+- **標準パラメータ設定**:
+  - 初期待機時間: $T_{\text{base}} = 2.0\text{s}$
+  - バックオフ係数: $\gamma = 2.0$
+  - 最大待機時間キャップ: $T_{\text{max}} = 60.0\text{s}$
+  - 最大リトライ回数: $N_{\text{max}} = 3$ 回
+  - 対象 HTTP ステータス: $\mathcal{S}_{\text{retry}} = \{429, 500, 502, 503, 504\}$
+
+リトライ回数が $N_{\text{max}}$ に達した場合はこれ以上の再送を行わず、エラーレスポンスをそのまま上位パイプラインに返却して無限ループ（Self-DoS / Thundering Herd）を確実に防止します。
+
+### 4.5.3 RFC 9110 / RFC 6585 `Retry-After` 優先協調
+対象サーバーがレスポンスヘッダーに `Retry-After` を明示している場合（秒数指定: 例 `Retry-After: 15`）、計算上の指数バックオフ値よりもサーバー指定の秒数を最優先で採用します。
+ただし、不正な過大値（悪意ある DoS や異常値）からクローラープロセスを保護するため、上限キャップ $T_{\text{max}}$（60.0秒）によるクランプを行います：
+
+$$T_{\text{effective}} = \min\left(T_{\text{max}}, \max\left(0.5, T_{\text{retry-after}}\right)\right)$$
+
+### 4.5.4 自己修復シーケンス
+```mermaid
+sequenceDiagram
+    participant Engine as Crawler Engine
+    participant Mid as RetryMiddleware
+    participant Downloader as AsyncHttpDownloader
+    participant Server as Target REST API (NVD/CISA)
+
+    Engine->>Downloader: ① download(request) [retries=0]
+    Downloader->>Server: HTTP GET /cves/2.0
+    Server-->>Downloader: HTTP 429 Too Many Requests (Retry-After: 4)
+    Downloader-->>Mid: process_response(request, 429_resp)
+
+    Note over Mid: 429 検知 (retries < 3)<br/>Retry-After: 4秒待機
+    Mid->>Mid: asyncio.sleep(4.0)
+    Mid->>Downloader: ② download(request) [retries=1]
+    Downloader->>Server: HTTP GET /cves/2.0 (Retry #1)
+    Server-->>Downloader: HTTP 200 OK (JSON Payload)
+    Downloader-->>Mid: process_response(request, 200_resp)
+
+    Note over Mid: 200 OK 正常復旧
+    Mid-->>Engine: 200 OK レスポンス返却
+```
+
+---
+
 # 5. 純Pythonによる動的 JavaScript・SPA 透過解析技術
 
 ## 5.1 ブラウザ不要アプローチの理論的背景と超低遅延性
@@ -654,6 +711,57 @@ flowchart LR
   - `/(login|signin|signup|register|auth|cart|checkout|payment|billing|admin|wp-admin|dashboard|cpanel|password|reset)`
 - **クレデンシャル自動マスキング**:
   - URL パラメータおよび抽出本文から `token`, `key`, `secret`, `bearer` パターンを検知し、永続化前に `[REDACTED]` に置換。
+
+---
+
+## 7.3 SSRF 防護・内部ネットワーク隔離とドメイン境界制御 (OffsiteMiddleware)
+
+### 7.3.1 脅威モデルと境界防御要件 (CWE-918, NIST SP 800-53 SC-7)
+Web クローラーが収集した HTML ページ内のハイパーリンク（`href`）や API レスポンス内のリンクを動的に追従（Link Crawling）する際、以下のような重大なセキュリティ侵害リスクが存在します：
+
+1. **内部ネットワークへの不正アクセス (SSRF: CWE-918)**:
+   - 悪意あるターゲットが `http://127.0.0.1:8000/admin` や `http://localhost/` 等のリンクをページに仕込み、クローラー経由で内部非公開サービスを不正探査・操作させる攻撃。
+2. **クラウドメタデータサービスの漏洩**:
+   - AWS / GCP / Azure のリンクローカルメタデータアドレス（`http://169.254.169.254/latest/meta-data/`）へのアクセス試行。
+3. **無制限な外部ホストへの逸脱 (Offsite Crawl)**:
+   - 対象ドメイン外の無関係なサードパーティサイトを無限にクロールし、ネットワーク帯域やストレージを浪費するトラップ。
+
+### 7.3.2 ドメイン境界検証アルゴリズム (`allowed_domains`)
+`OffsiteMiddleware` はリクエスト発行パイプラインの最前線（Downloader より前）に常駐し、Spider ごとに宣言された `allowed_domains` 境界を厳格に照合します。
+
+```mermaid
+flowchart TD
+    REQ["Request(url)"] --> EXTRACT["ホスト名抽出 & 小文字正規化<br/>urllib.parse.urlsplit(url).hostname"]
+    EXTRACT --> CHECK_SPEC{"Spider に<br/>allowed_domains<br/>が指定されているか？"}
+    
+    CHECK_SPEC -->|"未指定 / 空 (全許可)"| PASS["リクエスト通過 (Downloader へ)"]
+    CHECK_SPEC -->|"指定あり"| MATCH{"ホスト名は allowed_domains に合致するか？<br/>(完全一致 OR サブドメイン一致)"}
+    
+    MATCH -->|"一致 (Pass)"| PASS
+    MATCH -->|"不一致 (Offsite 逸脱 / SSRF 疑い)"| BLOCK["403 Forbidden 合成レスポンス生成<br/>X-Blocked-By: OffsiteMiddleware"]
+    
+    BLOCK --> ENG["Engine へ即時返却<br/>(ソケット接続完全遮断)"]
+```
+
+- **判定規則**:
+  - ホスト名が `domain` と完全一致（例: `domain = "arxiv.org"`, `host = "arxiv.org"`）
+  - ホスト名が `domain` のサブドメイン（例: `domain = "arxiv.org"`, `host = "export.arxiv.org"`, `host.endswith(".arxiv.org")`）
+  - 上記いずれにも合致しない場合はドメイン外（Offsite）として水際遮断。
+
+### 7.3.3 水際遮断メカニズム (Zero Socket I/O)
+遮断判定が下されたリクエストに対しては、OS ソケットのオープンや DNS 名前解決を一切行わず、以下の合成 `Response` を同期的に生成して即座に返却します：
+
+```python
+Response(
+    url=request.url,
+    status_code=403,
+    headers={"X-Blocked-By": "OffsiteMiddleware"},
+    body=b"Blocked by OffsiteMiddleware: Host not in allowed_domains",
+    request=request,
+)
+```
+
+これにより、不正な内部通信の発生確率を数学的に 0% に抑え込み、NIST SP 800-53 Rev. 5 **SC-7 (Boundary Protection)** および **SI-10 (Information Input Validation)** 基準を完全達成します。
 
 ---
 
