@@ -14,6 +14,7 @@
 
 - [1. スパイダー・クローラーアーキテクチャと実行基盤](#1-スパイダークローラーアーキテクチャと実行基盤)
   - [1.1 主要コンポーネント構成とデータフロー](#11-主要コンポーネント構成とデータフロー)
+    - [1.1.7 コアデータモデル仕様 (Request, Response, BaseSpider)](#117-コアデータモデル仕様-request-response-basespider)
   - [1.2 イベント駆動非同期実行モデルとシグナル管理](#12-イベント駆動非同期実行モデルとシグナル管理)
   - [1.3 ゼロ外部依存・100% Python 標準ライブラリ原則と技術スタックマッピング](#13-ゼロ外部依存100-python-標準ライブラリ原則と技術スタックマッピング)
   - [1.4 現行 ETL パイプラインとの対比と進化方針](#14-現行-etl-パイプラインとの対比と進化方針)
@@ -22,6 +23,7 @@
   - [2.2 選択ポリシー (Selection Policy: OPIC, Partial PageRank, トピック指向フォーカスド探索)](#22-選択ポリシー-selection-policy-opic-partial-pagerank-トピック指向フォーカスド探索)
   - [2.3 再訪問ポリシーと新鮮度最適化モデル (Freshness & Age 数学関数, Harmonic Proportional スケジュール)](#23-再訪問ポリシーと新鮮度最適化モデル-freshness--age-数学関数-harmonic-proportional-スケジュール)
   - [2.4 マナーポリシーと負荷制御 (RFC 9309 robots.txt, Adaptive Delay, ドメインスロット)](#24-マナーポリシーと負荷制御-rfc-9309-robotstxt-adaptive-delay-ドメインスロット)
+    - [2.4.4 Spider宣言遅延と Politeness 連携 (Runner/Scheduler/AutoThrottle)](#244-spider宣言遅延と-politeness-連携-runnerschedulerautothrottle)
 - [3. URL 正規化・正体化とクローラートラップ回避](#3-url-正規化正体化とクローラートラップ回避)
   - [3.1 構文・意味論的 URL 正規化パイプライン (7段階正規化)](#31-構文意味論的-url-正規化パイプライン-7段階正規化)
   - [3.2 クローラー・トラップの分類と多層防御機構](#32-クローラートラップの分類と多層防御機構)
@@ -124,6 +126,25 @@ flowchart TB
 
 ### 1.1.6 アイテムパイプライン (Item Pipeline)
 - **役割**: 抽出テキストの正規化・サニタイズ、必須フィールド検証、Google OKF v0.2 Markdown 生成、および DSN-14 ベクトル・リレーショナル DB への永続化。
+
+### 1.1.7 コアデータモデル仕様 (Request, Response, BaseSpider)
+クロール処理における基本通信単位およびスパイダー契約（Spider Contract）の共通データクラス仕様。
+
+1. **`Request` (クロール要求モデル)**:
+   - `url: str`: クロール対象 URL（完全修飾 URI）。
+   - `params: Optional[Dict[str, Any]]`: クエリパラメータ辞書。`__post_init__` 内で既存 URL クエリと安全にマージされ、`urllib.parse.urlencode` により自動エンコードされるため、URL インジェクションや構文エラーを防止。
+   - `callback: str`: レスポンス受信時に呼び出されるスパイダーのメソッド名（デフォルト: `"parse"`）。
+   - `method: str`, `headers: Dict[str, str]`, `body: Optional[bytes]`, `priority: int`, `meta: Dict[str, Any]`.
+2. **`Response` (HTTP 応答モデル)**:
+   - `url: str`, `status_code: int`, `headers: Dict[str, str]`, `body: bytes`, `download_latency: float`.
+   - `.text: str`: レスポンス本文の UTF-8 デコード文字列プロパティ。
+   - `.json() -> Any`: JSON レスポンス専用ヘルパーメソッド。`json.loads(self.text)` を実行し、REST API や JSON フィード型スパイダーでの冗長なパース処理を排除。
+3. **`BaseSpider` (抽象スパイダークラス)**:
+   - `name: str`: スパイダー識別名。
+   - `start_urls: List[str]`: クロール開始シード URL リスト。
+   - `allowed_domains: Set[str]`: 許可ドメインホワイトリスト（SSRF 防御対象）。
+   - `download_delay: float`: スパイダー固有のアクセス遅延秒数（デフォルト: `0.5`）。対象ドメインのレートリミット（例: NVD API の 6.5s）に応じた宣言的指定が可能。
+   - `custom_settings: Dict[str, Any]`: スパイダー単位のミドルウェア/パイプライン上書き設定。
 
 ---
 
@@ -304,6 +325,24 @@ sequenceDiagram
      $$w = \max\left(w_{\text{min}}, \min\left(w_{\text{max}}, \alpha \cdot t_{\text{download}}\right)\right) \quad (\alpha = 5.0, w_{\text{min}} = 0.5\text{s}, w_{\text{max}} = 30.0\text{s})$$
 3. **ドメインスロット並行数制限 (Domain Concurrency Slots)**:
    - 同一ホストへの同時接続数を厳格に 2〜4 接続に制限。
+
+### 2.4.4 Spider宣言遅延と Politeness 連携 (Runner/Scheduler/AutoThrottle)
+外部 API・フィードごとに異なる厳格な公式利用規約（Rate Limits）を遵守するため、多層協調型の遅延伝搬アーキテクチャを採用：
+
+```mermaid
+flowchart LR
+    SPIDER["Spider 宣言定義<br/>download_delay = 6.5s"] --> RUNNER["SpiderRunner<br/>実行調停部"]
+    RUNNER -->|"effective_delay = 6.5s"| SCHED["Scheduler<br/>ドメインアクセス間隔 (now - last >= 6.5s)"]
+    RUNNER -->|"min_delay = 6.5s"| AUTO["AutoThrottlePolicy<br/>EMA 下限ガード (max(6.5s, delay))"]
+    SCHED --> DL["Downloader 実行"]
+    AUTO --> DL
+```
+
+- **動的注入フロー**:
+  1. 各スパイダー（例: `NvdCveSpider`, `CisaKevSpider`）はクラス定義または認証キー有無に応じて `download_delay` を宣言。
+  2. `SpiderRunner` (`src/spider/runner.py`) はインスタンスから遅延値を取得し、CLI オプション `--delay` との調停を経て `effective_delay` を決定。
+  3. `Scheduler` の `default_delay` および `AutoThrottlePolicy` の `min_delay` に同一遅延値を動的注入。
+  4. サーバーの応答遅延が高速であっても、Spider が要求する安全待機時間が下限ガードとして機能し、HTTP 429（Too Many Requests）や IP バンを確実に防ぐ。
 
 ---
 
@@ -648,6 +687,12 @@ gantt
     section Phase 4 (Quality & Distributed)
     Consistent Hashing 分散協調 & Pause/Resume    :p4_1, after p3_2, 2d
     Spider Contracts 契約駆動テスト & 品質ゲート   :p4_2, after p4_1, 1d
+    section Phase 5 (CTI & Resilience)
+    Response.json & 遅延伝搬基盤 (Issue 206)      :p5_1, 2026-09-07, 1d
+    429 リトライ & SSRF 防護ミドルウェア (Issue 207) :p5_2, after p5_1, 1d
+    CISA KEV & NVD CVE スパイダー群 (Issue 205)   :p5_3, after p5_2, 2d
+    CTI OKF 多態化パイプライン (Issue 208)        :p5_4, after p5_3, 1d
+    304 条件付きキャッシュ機構 (Issue 209)         :p5_5, after p5_4, 1d
 ```
 
 | 実装フェーズ | 対象パッケージ (`src/spider/`) | 主要デリバラブル & 品質目標 |
@@ -656,3 +701,4 @@ gantt
 | **Phase 2: SPA 解析 & ポリシー制御** | `src/spider/downloader/`, `src/spider/policies/` | `spa_handler.py`, `autothrottle.py`, `normalizer.py`, `middleware.py` |
 | **Phase 3: 専門スパイダー & 永続化** | `src/spider/spiders/`, `src/spider/pipeline/` | `arxiv_spider.py`, `iacr_spider.py`, `advisory_spider.py`, `okf_pipeline.py` (DSN-14 結合) |
 | **Phase 4: 分散協調 & 品質保証** | `src/spider/distributed/`, `tests/spider/` | `consistent_hash.py`, `state_storage.py`, `contracts.py`, `make static_analysis` 100% PASS |
+| **Phase 5: 外部脅威インテリジェンス (CTI) スパイダー統合 & 通信堅牢化** | `src/spider/`, `src/domain/security/spiders/` | `Response.json()`, `Request.params`, `download_delay` 伝搬, `RetryMiddleware` (429/503), `OffsiteMiddleware` (SSRF 防護), `CisaKevSpider`, `NvdCveSpider`, CTI 多態化 OKF パイプライン (Issue 205〜209) |

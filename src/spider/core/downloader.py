@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import ssl
 import time
 import urllib.parse
@@ -23,6 +24,18 @@ class Request:
     priority: int = 0
     dont_filter: bool = False
     meta: Dict[str, Any] = field(default_factory=dict)
+    params: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self) -> None:
+        if self.params:
+            parsed = urllib.parse.urlsplit(self.url)
+            existing_query = dict(urllib.parse.parse_qsl(parsed.query))
+            for k, v in self.params.items():
+                existing_query[str(k)] = str(v)
+            new_query = urllib.parse.urlencode(existing_query)
+            self.url = urllib.parse.urlunsplit(
+                (parsed.scheme, parsed.netloc, parsed.path, new_query, parsed.fragment)
+            )
 
 
 @dataclass
@@ -39,6 +52,10 @@ class Response:
     @property
     def text(self) -> str:
         return self.body.decode("utf-8", errors="replace")
+
+    def json(self) -> Any:
+        """Parses response body as JSON."""
+        return json.loads(self.text)
 
 
 class AsyncHttpDownloader:

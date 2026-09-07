@@ -8,6 +8,10 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **207** | Spider基盤における HTTP 429/503 指数バックオフ再試行 (RetryMiddleware) と SSRF ドメイン防御 (OffsiteMiddleware) の実装 | Feature | High | Open (New) | [207-implement-retry-and-offsite-spider-middlewares.md](207-implement-retry-and-offsite-spider-middlewares.md) |
+| **208** | 脆弱性・CTIデータに対応した OKF Item Pipeline の多態化とテンプレート拡張 | Feature | Medium | Open (New) | [208-extend-okf-pipeline-for-vulnerability-and-cti-data.md](208-extend-okf-pipeline-for-vulnerability-and-cti-data.md) |
+| **209** | ETag / If-Modified-Since 条件付きリクエストおよび HTTP 304 キャッシュ機構の実装 | Feature | Medium | Open (New) | [209-implement-conditional-get-and-etag-caching-for-spiders.md](209-implement-conditional-get-and-etag-caching-for-spiders.md) |
+| **205** | CISA KEV および NVD CVE 向け Pure-Python Spider の実装とクローラー基盤への統合 | Feature | Medium | Open (In Progress) | [205-implement-cisa-kev-and-nvd-cve-spiders.md](205-implement-cisa-kev-and-nvd-cve-spiders.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 ---
@@ -16,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **206** | Spider基盤における Response.json プロパティ追加と Spider設定 (download_delay) の伝搬機構実装 | Feature | 2026-09-07 | [206-add-response-json-and-spider-delay-propagation.md](closed/206-add-response-json-and-spider-delay-propagation.md) |
 | **201** | 直近最新セキュリティ論文（2026-09-02〜2026-09-07）の定期フェッチ・PDF抽出・OKF生成および5階層サマリー・グラフDB最新化 | Ops | 2026-09-07 | [201-fetch-recent-security-papers-and-update-summaries.md](closed/201-fetch-recent-security-papers-and-update-summaries.md) |
 | **197** | 外部脅威インテリジェンス (CISA KEV / NVD CVE) リアルタイム動的突合およびグラフ因果リンク拡張の実装 | Feature | 2026-09-07 | [197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md](closed/197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md) |
 | **204** | Pure-Python PDF エンジンにおける LZWDecode / CCITTFaxDecode / JBIG2Decode 高度ストリームデコーダ群の統合実装 | Feature | 2026-09-07 | [204-implement-lzw-ccitt-jbig2-stream-decoders-in-pdf-engine.md](closed/204-implement-lzw-ccitt-jbig2-stream-decoders-in-pdf-engine.md) |
