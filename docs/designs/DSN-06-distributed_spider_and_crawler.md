@@ -122,7 +122,19 @@ flowchart TB
 - **役割**: 外部ブラウザ（Playwright 等）を一切起動せず、HTML 内のハイドレーションステート（`__NEXT_DATA__` 等）やインライン JS 内の API エンドポイントを静的解析し、動的 Web ページの完全な構造化データを 0.1ms で復元。
 
 ### 1.1.5 ドメインスパイダー (Domain Spiders) & ミドルウェア
-- **役割**: 対象ドメイン（arXiv, IACR, NVD/CVE, 各種セキュリティブログ等）固有の HTML/JSON 構造解析、リンク抽出、および構造化アイテム（`ScrapedItem`）の生成。
+- **役割**: 対象ドメイン（学術論文、公的脅威インテリジェンス、脆弱性アドバイザリ等）固有の XML/HTML/JSON 構造解析、ページネーションリンク抽出、および構造化アイテム（`ScrapedItem`）の生成。
+- **実装スパイダー体系**:
+  1. **学術論文スパイダー群**:
+     - `ArxivSpider` (`cs.CR` カテゴリ Atom XML クロール・PDF リンク導出)
+     - `IacrSpider` (IACR ePrint RSS フィード・論文全文抽出)
+     - `AdvisorySpider` (一般セキュリティアドバイザリ HTML スクレイピング)
+  2. **外部脅威インテリジェンス (CTI) スパイダー群 (Issue 205)**:
+     - `CisaKevSpider` (`src/domain/security/spiders/cisa_kev_spider.py`):
+       - 米 CISA Known Exploited Vulnerabilities (KEV) 静的 JSON カタログの収集。
+       - `download_delay = 5.0s`、`cisa.gov` ドメイン制限、`item_id="cisa_kev_{cve_id}"`。
+     - `NvdCveSpider` (`src/domain/security/spiders/nvd_cve_spider.py`):
+       - NIST NVD REST API 2.0 差分・ページネーション収集。
+       - API キー動的判定（Key なし時 `6.5s`, Key あり時 `0.8s`）、`resultsPerPage=2000`、`startIndex` 再帰的ページネーション。
 
 ### 1.1.6 アイテムパイプライン (Item Pipeline)
 - **役割**: 抽出テキストの正規化・サニタイズ、必須フィールド検証、Google OKF v0.2 Markdown 生成、および DSN-14 ベクトル・リレーショナル DB への永続化。
@@ -343,6 +355,15 @@ flowchart LR
   2. `SpiderRunner` (`src/spider/runner.py`) はインスタンスから遅延値を取得し、CLI オプション `--delay` との調停を経て `effective_delay` を決定。
   3. `Scheduler` の `default_delay` および `AutoThrottlePolicy` の `min_delay` に同一遅延値を動的注入。
   4. サーバーの応答遅延が高速であっても、Spider が要求する安全待機時間が下限ガードとして機能し、HTTP 429（Too Many Requests）や IP バンを確実に防ぐ。
+
+#### 外部プロバイダ公式レートリミット仕様対比表
+| 外部データソース | 公式レート制限仕様 | Spider 設定 (`download_delay`) | 認証ヘッダー / 備考 |
+| :--- | :--- | :--- | :--- |
+| **NIST NVD REST API 2.0 (No Key)** | 30秒あたり最大 5 リクエスト (間隔 $\ge$ 6.0s) | **`6.5s`** | なし。通信ジッター・サーバー負荷マージン考慮 |
+| **NIST NVD REST API 2.0 (With Key)** | 30秒あたり最大 50 リクエスト (間隔 $\ge$ 0.6s) | **`0.8s`** | `apiKey: <NVD_API_KEY>` をリクエストヘッダーに付与 |
+| **CISA KEV Catalog** | 静的 JSON ファイル (高頻度ポーリング厳禁) | **`5.0s`** | 定期バッチ（1日4回）に同期、`If-Modified-Since` 併用 |
+| **arXiv API (cs.CR)** | 1リクエストあたり 3.0s 以上の間隔推奨 | **`3.0s`** | arXiv 利用規約遵守、過負荷時は RSS フォールバック |
+| **IACR ePrint** | 一般 RSS フィード | **`1.0s`** | RFC 9309 robots.txt 準拠 |
 
 ---
 

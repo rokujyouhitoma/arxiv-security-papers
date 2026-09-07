@@ -43,6 +43,7 @@ fetch.log
 *.sock
 outputs/logs/
 outputs/supervisor/
+outputs/evaluations/mcp_usage_report.md
 src/outputs/
 
 # Operating System & IDE Files
