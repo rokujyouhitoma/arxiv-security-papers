@@ -123,8 +123,13 @@ class AsyncHttpDownloader:
             await writer.drain()
             status_code = await _read_status_code(reader)
             resp_headers = await _read_headers(reader)
-            raw_body = await _read_body(reader, resp_headers)
-            body = _decompress_body(raw_body, resp_headers.get("content-encoding", ""))
+            if not _should_have_body(status_code):
+                body = b""
+            else:
+                raw_body = await _read_body(reader, resp_headers)
+                body = _decompress_body(
+                    raw_body, resp_headers.get("content-encoding", "")
+                )
             return status_code, resp_headers, body
         finally:
             writer.close()
@@ -253,3 +258,10 @@ def _decompress_body(raw_body: bytes, encoding: str) -> bytes:
     if "deflate" in enc:
         return _decompress_deflate(raw_body)
     return raw_body
+
+
+def _should_have_body(status_code: int) -> bool:
+    """Returns False for responses that MUST NOT have a body per RFC 7230 Section 3.3.2."""
+    if status_code in (204, 304) or (100 <= status_code < 200):
+        return False
+    return True

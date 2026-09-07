@@ -5,8 +5,11 @@ from __future__ import annotations
 import asyncio
 import datetime
 import email.utils
+import re
+import time
 import urllib.parse
 import urllib.robotparser
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set
 
 from ..core.downloader import AsyncHttpDownloader, Request, Response
@@ -97,25 +100,102 @@ class RobotsTxtMiddleware:
         return None
 
 
-class HttpCacheMiddleware:
-    """In-memory HTTP caching middleware for 200 OK responses."""
+def _sanitize_header_value(val: Optional[str]) -> Optional[str]:
+    """Sanitizes header value to prevent CRLF injection (CWE-113)."""
+    if val is None:
+        return None
+    sanitized = re.sub(r"[\r\n\x00-\x08\x0b-\x1f\x7f]", "", str(val))
+    cleaned = sanitized.strip()
+    return cleaned if cleaned else None
 
-    def __init__(self) -> None:
-        self._cache: Dict[str, Response] = {}
+
+def _inject_conditional_header(
+    headers: Dict[str, str], header_name: str, val: Optional[str]
+) -> None:
+    sanitized = _sanitize_header_value(val)
+    if sanitized:
+        headers[header_name] = sanitized
+
+
+@dataclass
+class CacheEntry:
+    """Cached response entry with ETag and Last-Modified validators."""
+
+    response: Response
+    etag: Optional[str] = None
+    last_modified: Optional[str] = None
+    cached_at: float = field(default_factory=time.time)
+
+
+class HttpCacheMiddleware:
+    """RFC 7232/7234 Compliant HTTP Cache Middleware with Conditional Revalidation."""
+
+    def __init__(self, max_size: int = 1000) -> None:
+        self.max_size: int = max_size
+        self._cache: Dict[str, CacheEntry] = {}
 
     async def process_request(
         self, request: Request, spider: Any
     ) -> Optional[Response]:
-        if request.meta.get("use_cache", True) and request.url in self._cache:
-            return self._cache[request.url]
+        if not request.meta.get("use_cache", True):
+            return None
+        entry = self._cache.get(request.url)
+        if entry is None:
+            return None
+        if request.meta.get("force_cache", False):
+            return entry.response
+
+        self._inject_conditional_headers(request, entry)
         return None
+
+    def _inject_conditional_headers(self, request: Request, entry: CacheEntry) -> None:
+        _inject_conditional_header(request.headers, "If-None-Match", entry.etag)
+        _inject_conditional_header(
+            request.headers, "If-Modified-Since", entry.last_modified
+        )
 
     async def process_response(
         self, request: Request, response: Response, spider: Any
     ) -> Response:
-        if response.status_code == 200 and request.meta.get("use_cache", True):
-            self._cache[request.url] = response
+        if not request.meta.get("use_cache", True):
+            return response
+
+        if response.status_code == 200:
+            self._handle_200_response(request.url, response)
+            return response
+        if response.status_code == 304:
+            return self._handle_304_response(request, response)
         return response
+
+    def _handle_200_response(self, url: str, response: Response) -> None:
+        etag = response.headers.get("etag")
+        last_modified = response.headers.get("last-modified")
+        if len(self._cache) >= self.max_size and url not in self._cache:
+            self._cache.pop(next(iter(self._cache)))
+        self._cache[url] = CacheEntry(
+            response=response,
+            etag=etag,
+            last_modified=last_modified,
+        )
+
+    def _handle_304_response(self, request: Request, response: Response) -> Response:
+        entry = self._cache.get(request.url)
+        if entry is None:
+            return response
+
+        merged_headers = dict(entry.response.headers)
+        merged_headers.update(response.headers)
+        request.meta["cached"] = True
+        request.meta["validated_304"] = True
+
+        return Response(
+            url=request.url,
+            status_code=200,
+            headers=merged_headers,
+            body=entry.response.body,
+            request=request,
+            download_latency=response.download_latency,
+        )
 
 
 def _parse_retry_after(header_val: Optional[str]) -> Optional[float]:

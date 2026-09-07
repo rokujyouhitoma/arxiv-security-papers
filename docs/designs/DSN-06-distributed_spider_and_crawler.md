@@ -14,6 +14,8 @@
 
 - [1. スパイダー・クローラーアーキテクチャと実行基盤](#1-スパイダークローラーアーキテクチャと実行基盤)
   - [1.1 主要コンポーネント構成とデータフロー](#11-主要コンポーネント構成とデータフロー)
+    - [1.1.3 ダウンローダ (Downloader) & ミドルウェア](#113-ダウンローダ-downloader--ミドルウェア)
+      - [1.1.3.1 RFC 7232 条件付きリクエスト (Conditional GET) と HTTP 304 キャッシュ透過機構 (Issue 209)](#1131-rfc-7232-条件付きリクエスト-conditional-get-と-http-304-キャッシュ透過機構-issue-209)
     - [1.1.6 多態的アイテムパイプライン (Polymorphic Item Pipeline: OkfItemPipeline)](#116-多態的アイテムパイプライン-polymorphic-item-pipeline-okfitempipeline)
     - [1.1.7 コアデータモデル仕様 (Request, Response, BaseSpider)](#117-コアデータモデル仕様-request-response-basespider)
   - [1.2 イベント駆動非同期実行モデルとシグナル管理](#12-イベント駆動非同期実行モデルとシグナル管理)
@@ -122,6 +124,21 @@ flowchart TB
 - **ミドルウェア連鎖 (Middleware Chain)**:
   - **リクエスト送信フロー (正順)**: `OffsiteMiddleware` (SSRF ドメイン水際遮断) $\rightarrow$ `UserAgentMiddleware` (身元注入) $\rightarrow$ `RobotsTxtMiddleware` (RFC 9309 遵守) $\rightarrow$ `AutoThrottlePolicy` (Politeness レート制限) $\rightarrow$ `HttpCacheMiddleware` (ローカルキャッシュ照合) $\rightarrow$ `AsyncHttpDownloader`
   - **レスポンス受信フロー (逆順)**: `AsyncHttpDownloader` $\rightarrow$ `HttpCacheMiddleware` (キャッシュ保存) $\rightarrow$ `AutoThrottlePolicy` (レイテンシ学習) $\rightarrow$ `RobotsTxtMiddleware` $\rightarrow$ `UserAgentMiddleware` $\rightarrow$ `RetryMiddleware` (HTTP 429/5xx 指数バックオフ自己修復) $\rightarrow$ `Engine`
+
+#### 1.1.3.1 RFC 7232 条件付きリクエスト (Conditional GET) と HTTP 304 キャッシュ透過機構 (Issue 209)
+外部脅威インテリジェンス（CISA KEV の約 2MB 静的 JSON カタログや NVD CVE フィード等）の定期巡回において、相手先サーバーへのトラフィック負荷およびネットワーク帯域消費を最小化するため、`HttpCacheMiddleware` に RFC 7232 準拠の条件付きリクエスト機構および 304 キャッシュ透過復元アーキテクチャを導入します。
+
+1. **メタデータキャッシュストレージ (`CacheEntry`)**:
+   - `Response` オブジェクトとともに、レスポンスヘッダから抽出した `ETag` および `Last-Modified` をオンメモリに保持。
+   - メモリ枯渇（CWE-400）防止のため、エントリ数上限（`max_size: int = 1000`）による FIFO/LRU 破棄ポリシーを適用。
+2. **条件付きヘッダー注入 (`process_request`)**:
+   - キャッシュに対象 URL のエントリが存在する場合、`If-None-Match: <etag>` および `If-Modified-Since: <last_modified>` を `request.headers` へ自動注入（CRLF インジェクション防止サニタイズ適用）。
+   - リクエストメタデータに `force_cache=True` が明示されている場合のみ、ネットワーク通信を完全スキップしてキャッシュレスポンスを即座に返却。
+3. **HTTP 304 Not Modified 透過合成 (`process_response`)**:
+   - サーバーから `304 Not Modified` が返却された際、`HttpCacheMiddleware` はキャッシュ済みの前回ボディ（`entry.response.body`）を合成した完全な `Response`（`status_code=200`）を透過復元。
+   - `request.meta["cached"] = True`, `request.meta["validated_304"] = True` を付与し、Spider の `parse` メソッドは前回のデータをゼロダウンロードで処理可能。
+4. **RFC 7230 Section 3.3.2 準拠ボディスキップ**:
+   - `AsyncHttpDownloader` において、`status_code in (204, 304) or (100 <= status_code < 200)` の場合はメッセージボディの読み込みを即座にスキップ（`body = b""`）し、ソケットブロッキングやタイムアウトを恒久防止。
 
 ### 1.1.4 SPA 透過抽出エンジン (SPA Extractor)
 - **役割**: 外部ブラウザ（Playwright 等）を一切起動せず、HTML 内のハイドレーションステート（`__NEXT_DATA__` 等）やインライン JS 内の API エンドポイントを静的解析し、動的 Web ページの完全な構造化データを 0.1ms で復元。
