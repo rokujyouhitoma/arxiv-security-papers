@@ -8,6 +8,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **210** | src/spider からのドメイン固有実装（セキュリティ/OKF）の完全分離とクローラー純粋基盤化 | Architecture / Refactor | High | Open (New) | [210-decouple-domain-logic-from-spider-core.md](210-decouple-domain-logic-from-spider-core.md) |
 | **205** | CISA KEV および NVD CVE 向け Pure-Python Spider の実装とクローラー基盤への統合 | Feature | Medium | Open (In Progress) | [205-implement-cisa-kev-and-nvd-cve-spiders.md](205-implement-cisa-kev-and-nvd-cve-spiders.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
