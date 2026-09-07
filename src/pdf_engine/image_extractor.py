@@ -129,6 +129,53 @@ def _has_malicious_script_tags(data: bytes) -> bool:
     return False
 
 
+def _expand_1bit_row(
+    row_data: bytes, width: int, out: bytearray, out_idx: int, val_1: int, val_0: int
+) -> int:
+    """Expands a single 1-bit raster row into 8-bit grayscale pixels."""
+    for x in range(width):
+        byte_val = row_data[x >> 3] if (x >> 3) < len(row_data) else 0
+        bit = (byte_val >> (7 - (x & 7))) & 1
+        out[out_idx] = val_1 if bit else val_0
+        out_idx += 1
+    return out_idx
+
+
+def _expand_1bit_to_8bit(
+    data: bytes, width: int, height: int, black_is_1: bool = False
+) -> bytes:
+    """Expands packed 1-bit bitmap to 8-bit grayscale raster (0=Black, 255=White)."""
+    row_bytes = (width + 7) // 8
+    out = bytearray(width * height)
+    val_1 = 0 if black_is_1 else 255
+    val_0 = 255 if black_is_1 else 0
+    out_idx = 0
+
+    for y in range(height):
+        row_start = y * row_bytes
+        row_data = data[row_start : row_start + row_bytes]
+        out_idx = _expand_1bit_row(row_data, width, out, out_idx, val_1, val_0)
+    return bytes(out)
+
+
+def _prepare_raster_pixels(
+    decompressed: bytes, stream: PdfStream, width: int, height: int
+) -> Tuple[bytes, int]:
+    """Prepares raw pixel bytes and determines PNG color_type (0=Gray, 2=RGB)."""
+    bpc = int(stream.dictionary.get("/BitsPerComponent", 8))
+    if bpc == 1:
+        parms = stream.dictionary.get("/DecodeParms")
+        black_is_1 = False
+        if isinstance(parms, dict):
+            black_is_1 = bool(parms.get("/BlackIs1", False))
+        pixels = _expand_1bit_to_8bit(decompressed, width, height, black_is_1)
+        return pixels, 0
+
+    cs = str(stream.dictionary.get("/ColorSpace", "/DeviceRGB"))
+    color_type = 0 if "gray" in cs.lower() else 2
+    return decompressed, color_type
+
+
 class PdfImageExtractor:
     """
     Pure-Python XObject Image Extractor conforming to ISO 32000-1 Clause 8.9.
@@ -178,16 +225,13 @@ class PdfImageExtractor:
             return None
         return (raw_data, "jpg", width, height)
 
-    def _extract_flate_image(
+    def _extract_raster_image(
         self, stream: PdfStream, width: int, height: int
     ) -> Optional[Tuple[bytes, str, int, int]]:
-        """Handles PNG synthesis from /FlateDecode with Decompression Bomb guard (SC-1)."""
-        cs = str(stream.dictionary.get("/ColorSpace", "/DeviceRGB"))
-        color_type = 0 if "gray" in cs.lower() else 2
-        bpp = 1 if color_type == 0 else 3
-        expected_size = width * height * bpp
-
-        if expected_size > MAX_DECOMPRESSED_BYTES:
+        """Handles PNG synthesis from Flate/LZW/CCITT/JBIG2 streams (SC-1)."""
+        bpc = int(stream.dictionary.get("/BitsPerComponent", 8))
+        bytes_needed = width * height * (3 if bpc > 1 else 1)
+        if bytes_needed > MAX_DECOMPRESSED_BYTES:
             return None
 
         decompressed = StreamDecompressor.decompress(
@@ -195,10 +239,11 @@ class PdfImageExtractor:
             stream.dictionary.get("/Filter"),
             stream.dictionary.get("/DecodeParms"),
         )
-        if len(decompressed) > MAX_DECOMPRESSED_BYTES:
+        if len(decompressed) > MAX_DECOMPRESSED_BYTES or not decompressed:
             return None
 
-        png_bytes = _build_png_bytes(decompressed, width, height, color_type)
+        pixels, color_type = _prepare_raster_pixels(decompressed, stream, width, height)
+        png_bytes = _build_png_bytes(pixels, width, height, color_type)
         return (png_bytes, "png", width, height)
 
     def _process_image_stream(
@@ -216,7 +261,7 @@ class PdfImageExtractor:
         filt = str(stream.dictionary.get("/Filter", ""))
         if "/DCTDecode" in filt or "dct" in filt.lower():
             return self._extract_dct_image(stream, int(width), int(height))
-        return self._extract_flate_image(stream, int(width), int(height))
+        return self._extract_raster_image(stream, int(width), int(height))
 
     def _extract_single_xobject(
         self, name: str, ref: Any
