@@ -12,11 +12,16 @@ from .properties import (
     analyzes_property,
     arxiv_id_property,
     blocks_property,
+    cisa_date_added_property,
+    cisa_due_date_property,
+    cisa_required_action_property,
     discloses_property,
     exploits_property,
     generates_rule_property,
     has_poc_property,
     identifies_gap_property,
+    is_known_exploited_property,
+    known_ransomware_campaign_use_property,
     leaves_unaddressed_property,
     mitigates_property,
     presented_at_property,
@@ -82,6 +87,11 @@ class Vulnerability:
     """Software weakness or security flaw."""
 
     severity = severity_property
+    is_known_exploited = is_known_exploited_property
+    cisa_date_added = cisa_date_added_property
+    cisa_due_date = cisa_due_date_property
+    known_ransomware_campaign_use = known_ransomware_campaign_use_property
+    cisa_required_action = cisa_required_action_property
 
 
 @ontology_class(

@@ -19,6 +19,7 @@ from ontology.schema import (
     EntityType,
     ObjectPropertySpec,
     Predicate,
+    VulnerabilityEntity,
 )
 
 
@@ -460,6 +461,30 @@ class RawTriple:
         return "\n".join(lines)
 
 
+def _build_vulnerability_props(
+    vuln: VulnerabilityEntity,
+) -> List[Tuple[str, Union[RDFTerm, Any]]]:
+    """Builds predicate-object pairs for VulnerabilityEntity."""
+    props: List[Tuple[str, Union[RDFTerm, Any]]] = [
+        ("rdfs:label", Literal(vuln.name, lang="ja")),
+        ("sec:severity", Literal(vuln.severity)),
+    ]
+    str_fields = [
+        ("sec:cveId", vuln.cve_id, None),
+        ("sec:cweId", vuln.cwe_id, None),
+        ("sec:cisaDateAdded", vuln.cisa_date_added, "xsd:date"),
+        ("sec:cisaDueDate", vuln.cisa_due_date, "xsd:date"),
+        ("sec:knownRansomwareCampaignUse", vuln.known_ransomware_campaign_use, None),
+        ("sec:cisaRequiredAction", vuln.cisa_required_action, None),
+    ]
+    for pred, val, dt in str_fields:
+        if val:
+            props.append((pred, Literal(val, datatype=dt)))
+    if vuln.is_known_exploited:
+        props.append(("sec:isKnownExploited", Literal(True)))
+    return props
+
+
 class TurtleDocumentBuilder:
     """Fluent Builder for generating W3C Turtle (.ttl) and OWL ontology files."""
 
@@ -636,6 +661,22 @@ class TurtleDocumentBuilder:
                 uri=uri,
                 rdf_types=list(rdf_types or []),
                 properties=list(properties or []),
+                section_comment=section_comment,
+            )
+        )
+        return self
+
+    def add_vulnerability_entity(
+        self, vuln: VulnerabilityEntity, section_comment: Optional[str] = None
+    ) -> "TurtleDocumentBuilder":
+        """Adds an ABox Vulnerability instance with full CISA KEV and CWE metadata."""
+        uri = f"sec:{vuln.id.replace(':', '_')}" if ":" in vuln.id else f"sec:{vuln.id}"
+        props = _build_vulnerability_props(vuln)
+        self.instances.append(
+            OntologyInstance(
+                uri=uri,
+                rdf_types=["sec:Vulnerability"],
+                properties=props,
                 section_comment=section_comment,
             )
         )
@@ -1264,6 +1305,42 @@ def _add_extended_datatype_properties(builder: TurtleDocumentBuilder) -> None:
         domain="sec:Impact",
         range_="xsd:string",
     )
+    builder.add_datatype_property(
+        uri="sec:isKnownExploited",
+        label="CISA KEV悪用確認フラグ",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="xsd:boolean",
+        section_comment="CISA KEV 悪用・実世界脅威インテリジェンス属性",
+    )
+    builder.add_datatype_property(
+        uri="sec:cisaDateAdded",
+        label="CISA KEV追加日",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="xsd:date",
+    )
+    builder.add_datatype_property(
+        uri="sec:cisaDueDate",
+        label="CISA是正対応期限",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="xsd:date",
+    )
+    builder.add_datatype_property(
+        uri="sec:knownRansomwareCampaignUse",
+        label="ランサムウェア悪用確認フラグ",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="xsd:string",
+    )
+    builder.add_datatype_property(
+        uri="sec:cisaRequiredAction",
+        label="CISA要求対策アクション",
+        label_lang="ja",
+        domain="sec:Vulnerability",
+        range_="xsd:string",
+    )
 
 
 def _add_reification_and_data_constraints(builder: TurtleDocumentBuilder) -> None:
@@ -1360,6 +1437,14 @@ def build_full_spectrum_security_ontology() -> TurtleDocumentBuilder:
     _add_extended_datatype_properties(builder)
     _add_reification_and_data_constraints(builder)
     return builder
+
+
+def serialize_vulnerability_entity(vuln: VulnerabilityEntity) -> str:
+    """Serializes a single VulnerabilityEntity into Turtle RDF ABox snippet."""
+    builder = TurtleDocumentBuilder()
+    builder.add_prefix("sec", "https://arxiv-security-papers.org/ontology/security#")
+    builder.add_vulnerability_entity(vuln)
+    return builder.instances[0].to_turtle()
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

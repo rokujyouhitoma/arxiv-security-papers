@@ -8,7 +8,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **197** | 外部脅威インテリジェンス (CISA KEV / NVD CVE) リアルタイム動的突合およびグラフ因果リンク拡張の実装 | Feature | High | In Progress | [197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md](197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 | **201** | 直近最新セキュリティ論文（2026-09-02〜2026-09-06）の定期フェッチ・PDF抽出・OKF生成および5階層サマリー・グラフDB最新化 | Ops | High | Open (New) | [201-fetch-recent-security-papers-and-update-summaries.md](201-fetch-recent-security-papers-and-update-summaries.md) |
 
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **197** | 外部脅威インテリジェンス (CISA KEV / NVD CVE) リアルタイム動的突合およびグラフ因果リンク拡張の実装 | Feature | 2026-09-07 | [197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md](closed/197-integrate-cisa-kev-and-nvd-cve-dynamic-correlation.md) |
 | **204** | Pure-Python PDF エンジンにおける LZWDecode / CCITTFaxDecode / JBIG2Decode 高度ストリームデコーダ群の統合実装 | Feature | 2026-09-07 | [204-implement-lzw-ccitt-jbig2-stream-decoders-in-pdf-engine.md](closed/204-implement-lzw-ccitt-jbig2-stream-decoders-in-pdf-engine.md) |
 | **203** | SOTA ベンチマークレポートにおける全指標 0.0000 出力および「最高精度達成」結論矛盾の修正 | Bug | 2026-09-07 | [203-fix-sota-benchmark-metrics-extraction-and-contradictory-conclusion.md](closed/203-fix-sota-benchmark-metrics-extraction-and-contradictory-conclusion.md) |
 | **202** | オントロジー述語仕様（TBox/Domain/Range/Labels）の schema.py への一元化（SSOT化）および turtle_engine の純粋シリアライザー分離 | Architecture / Refactor | 2026-09-06 | [202-unify-ontology-semantics-in-schema-and-decouple-turtle-engine.md](closed/202-unify-ontology-semantics-in-schema-and-decouple-turtle-engine.md) |

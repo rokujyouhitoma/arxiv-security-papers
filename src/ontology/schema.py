@@ -712,6 +712,12 @@ class VulnerabilityEntity(BaseEntity):
     cwe_id: str = ""  # e.g. CWE-79, CWE-94
     cve_id: str = ""  # e.g. CVE-2024-XXXX
     severity: str = "Medium"  # Critical, High, Medium, Low
+    is_known_exploited: bool = False
+    cisa_date_added: str = ""
+    cisa_due_date: str = ""
+    known_ransomware_campaign_use: str = ""
+    cisa_required_action: str = ""
+    cvss_score: Optional[float] = None
 
     def __post_init__(self) -> None:
         self.entity_type = EntityType.VULNERABILITY
