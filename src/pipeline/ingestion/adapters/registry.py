@@ -30,6 +30,10 @@ class SourceRegistry:
         self.register(
             SpiderSourceAdapter(name="spider_advisory", spider_name="advisory")
         )
+        self.register(
+            SpiderSourceAdapter(name="spider_cisa_kev", spider_name="cisa_kev")
+        )
+        self.register(SpiderSourceAdapter(name="spider_nvd_cve", spider_name="nvd_cve"))
 
     def register(self, adapter: BaseSourceAdapter) -> None:
         """Registers a source adapter instance."""

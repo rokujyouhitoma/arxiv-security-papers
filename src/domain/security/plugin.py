@@ -38,12 +38,16 @@ class SecurityPapersDomainPlugin(BaseDomainPlugin):
     def get_spiders(self) -> Dict[str, Any]:
         from domain.security.spiders.advisory_spider import AdvisorySpider
         from domain.security.spiders.arxiv_spider import ArxivSpider
+        from domain.security.spiders.cisa_kev_spider import CisaKevSpider
         from domain.security.spiders.iacr_spider import IacrSpider
+        from domain.security.spiders.nvd_cve_spider import NvdCveSpider
 
         return {
             "arxiv_spider": ArxivSpider,
             "iacr_spider": IacrSpider,
             "advisory_spider": AdvisorySpider,
+            "cisa_kev_spider": CisaKevSpider,
+            "nvd_cve_spider": NvdCveSpider,
         }
 
     def get_ontology_schema(self) -> Optional[Any]:
