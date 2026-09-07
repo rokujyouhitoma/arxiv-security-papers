@@ -74,12 +74,15 @@ async def run_spider(
         )
 
     spider_instance = avail[spider_name]()
-    scheduler = Scheduler(default_delay=default_delay)
+    spider_delay = getattr(spider_instance, "download_delay", 0.5)
+    effective_delay = default_delay if default_delay != 0.5 else spider_delay
+
+    scheduler = Scheduler(default_delay=effective_delay)
     _init_scheduler_state(scheduler, state_file, resume_from_state)
 
     downloader = AsyncHttpDownloader()
     engine = Engine(downloader=downloader, scheduler=scheduler)
-    middlewares = _build_spider_middlewares(default_delay, enable_cache)
+    middlewares = _build_spider_middlewares(effective_delay, enable_cache)
     pipelines = [
         OkfItemPipeline(output_dir=output_dir, enable_db_persistence=persist_db)
     ]
