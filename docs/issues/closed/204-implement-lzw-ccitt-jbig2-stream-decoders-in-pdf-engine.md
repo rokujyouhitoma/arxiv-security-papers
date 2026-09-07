@@ -2,7 +2,7 @@
 ID: 204
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] Pure-Python PDF エンジンにおける LZWDecode / CCITTFaxDecode / JBIG2Decode 高度ストリームデコーダ群の統合実装 (ID: 204)

@@ -4,6 +4,8 @@ import re
 import zlib
 from typing import Any, Callable, Dict, Optional
 
+from pdf_engine.filters import decode_ccitt_fax, decode_jbig2, decode_lzw
+
 
 def paeth_predictor(a: int, b: int, c: int) -> int:
     """Computes PNG Paeth predictor function (ISO 32000-1 Table 8)."""
@@ -140,16 +142,60 @@ class StreamDecompressor:
     """Unified PDF Stream Decompression and Filter Engine."""
 
     @classmethod
+    def _decompress_lzw(
+        cls, data: bytes, decode_parms: Optional[Dict[str, Any]]
+    ) -> bytes:
+        parms = decode_parms or {}
+        early_change = int(parms.get("/EarlyChange", parms.get("EarlyChange", 1)))
+        decomp = decode_lzw(data, early_change=early_change)
+        if decode_parms:
+            return cls._apply_predictor_params(decomp, decode_parms)
+        return decomp
+
+    @classmethod
+    def _decompress_ccitt(
+        cls, data: bytes, decode_parms: Optional[Dict[str, Any]]
+    ) -> bytes:
+        parms = decode_parms or {}
+        k = int(parms.get("/K", parms.get("K", 0)))
+        columns = int(parms.get("/Columns", parms.get("Columns", 1728)))
+        rows = int(parms.get("/Rows", parms.get("Rows", 0)))
+        black_is_1 = bool(parms.get("/BlackIs1", parms.get("BlackIs1", False)))
+        return decode_ccitt_fax(
+            data, columns=columns, rows=rows, k=k, black_is_1=black_is_1
+        )
+
+    @classmethod
+    def _decompress_jbig2(
+        cls, data: bytes, decode_parms: Optional[Dict[str, Any]]
+    ) -> bytes:
+        parms = decode_parms or {}
+        globals_data = parms.get("/JBIG2Globals", parms.get("JBIG2Globals"))
+        raw_globals = globals_data if isinstance(globals_data, bytes) else None
+        bitmap, _, _ = decode_jbig2(data, globals_data=raw_globals)
+        return bitmap
+
+    @classmethod
     def _apply_single_filter(
         cls, filt: Any, data: bytes, decode_parms: Optional[Dict[str, Any]]
     ) -> bytes:
         fname = filt.strip("/") if isinstance(filt, str) else ""
-        if fname in ("FlateDecode", "Fl"):
-            return cls._decompress_flate(data, decode_parms)
-        if fname in ("ASCIIHexDecode", "AHx"):
-            return decode_ascii_hex(data)
-        if fname in ("ASCII85Decode", "A85"):
-            return decode_ascii85(data)
+        handlers: Dict[str, Callable[[bytes, Optional[Dict[str, Any]]], bytes]] = {
+            "FlateDecode": cls._decompress_flate,
+            "Fl": cls._decompress_flate,
+            "LZWDecode": cls._decompress_lzw,
+            "LZW": cls._decompress_lzw,
+            "CCITTFaxDecode": cls._decompress_ccitt,
+            "CCF": cls._decompress_ccitt,
+            "JBIG2Decode": cls._decompress_jbig2,
+            "ASCIIHexDecode": lambda d, _: decode_ascii_hex(d),
+            "AHx": lambda d, _: decode_ascii_hex(d),
+            "ASCII85Decode": lambda d, _: decode_ascii85(d),
+            "A85": lambda d, _: decode_ascii85(d),
+        }
+        handler = handlers.get(fname)
+        if handler is not None:
+            return handler(data, decode_parms)
         return data
 
     @classmethod
