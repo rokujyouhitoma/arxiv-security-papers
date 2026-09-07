@@ -15,6 +15,7 @@ from .graph_bridge import (
     sync_cti_inferences_to_graph,
 )
 from .inference import InferenceEvidence, InferredTechnique, TechniqueInferenceEngine
+from .kev import BUILTIN_KEV_FALLBACK, CISAKEVRegistry, KEVEntry
 from .navigator import (
     NavigatorLayerConfig,
     export_navigator_file,
@@ -34,11 +35,14 @@ from .sync import CTISyncManager
 
 __all__ = [
     "AttackPattern",
+    "BUILTIN_KEV_FALLBACK",
+    "CISAKEVRegistry",
     "CourseOfAction",
     "CTICatalogStorage",
     "CTISyncManager",
     "InferenceEvidence",
     "InferredTechnique",
+    "KEVEntry",
     "MITRECTIRegistry",
     "NavigatorLayerConfig",
     "STIXCTIParser",

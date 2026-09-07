@@ -164,3 +164,38 @@ reproducibility_tier_property = DatatypePropertyField(
     comment="学術アーティファクトの再現性評価バッジ (Artifact Evaluated, Available)",
     range="xsd:string",
 )
+
+is_known_exploited_property = DatatypePropertyField(
+    uri="sec:isKnownExploited",
+    label="CISA KEV悪用確認フラグ",
+    comment="CISA KEV (Known Exploited Vulnerabilities) カタログ掲載有無フラグ",
+    range="xsd:boolean",
+)
+
+cisa_date_added_property = DatatypePropertyField(
+    uri="sec:cisaDateAdded",
+    label="CISA KEV追加日",
+    comment="CISA KEV カタログに登録された日付 (YYYY-MM-DD)",
+    range="xsd:date",
+)
+
+cisa_due_date_property = DatatypePropertyField(
+    uri="sec:cisaDueDate",
+    label="CISA是正対応期限",
+    comment="CISA BOD 22-01 に基づく是正措置対応期限 (YYYY-MM-DD)",
+    range="xsd:date",
+)
+
+known_ransomware_campaign_use_property = DatatypePropertyField(
+    uri="sec:knownRansomwareCampaignUse",
+    label="ランサムウェア悪用確認フラグ",
+    comment="ランサムウェアキャンペーンでの悪用事実 (Known / Unknown)",
+    range="xsd:string",
+)
+
+cisa_required_action_property = DatatypePropertyField(
+    uri="sec:cisaRequiredAction",
+    label="CISA要求対策アクション",
+    comment="CISA が連邦機関および管理者に要求するパッチ・緩和アクション",
+    range="xsd:string",
+)

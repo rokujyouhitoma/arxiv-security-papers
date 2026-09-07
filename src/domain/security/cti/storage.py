@@ -98,11 +98,29 @@ class CTICatalogStorage:
                     PRIMARY KEY (source_id, target_id, rel_type)
                 )
                 """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cisa_kev_vulnerabilities (
+                    cve_id TEXT PRIMARY KEY,
+                    vendor_project TEXT NOT NULL,
+                    product TEXT NOT NULL,
+                    vulnerability_name TEXT NOT NULL,
+                    date_added TEXT NOT NULL,
+                    short_description TEXT,
+                    required_action TEXT,
+                    due_date TEXT,
+                    known_ransomware_campaign_use TEXT,
+                    notes TEXT
+                )
+                """)
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_tech_parent ON cti_techniques(parent_technique_id)"
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_rel_target ON cti_relationships(target_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cisa_kev_ransomware "
+                "ON cisa_kev_vulnerabilities(known_ransomware_campaign_use)"
             )
 
             self._create_fts_table(cursor)
@@ -219,6 +237,92 @@ class CTICatalogStorage:
                 relationships,
             )
             conn.commit()
+
+    def upsert_cisa_kev_vulnerabilities(self, vulns: List[Dict[str, Any]]) -> int:
+        """Batch inserts or updates CISA Known Exploited Vulnerabilities (KEV)."""
+        rows = [
+            (
+                v["cve_id"].upper(),
+                v.get("vendor_project", ""),
+                v.get("product", ""),
+                v.get("vulnerability_name", ""),
+                v.get("date_added", ""),
+                v.get("short_description", ""),
+                v.get("required_action", ""),
+                v.get("due_date", ""),
+                v.get("known_ransomware_campaign_use", "Unknown"),
+                v.get("notes", ""),
+            )
+            for v in vulns
+            if v.get("cve_id")
+        ]
+        if not rows:
+            return 0
+        with self._connection() as conn:
+            conn.executemany(
+                """
+                INSERT OR REPLACE INTO cisa_kev_vulnerabilities
+                (cve_id, vendor_project, product, vulnerability_name, date_added,
+                 short_description, required_action, due_date,
+                 known_ransomware_campaign_use, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+            conn.commit()
+        return len(rows)
+
+    def get_cisa_kev_vulnerability(self, cve_id: str) -> Optional[Dict[str, Any]]:
+        """Fetches a CISA KEV vulnerability entry by CVE ID."""
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM cisa_kev_vulnerabilities WHERE cve_id = ?",
+                (cve_id.upper(),),
+            ).fetchone()
+            if not row:
+                return None
+            return self._row_to_cisa_kev(row)
+
+    def search_cisa_kev_vulnerabilities(
+        self, query: str = "", ransomware_only: bool = False, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Searches KEV vulnerabilities by keyword or ransomware flag."""
+        with self._connection() as conn:
+            params: List[Any] = []
+            conditions: List[str] = []
+            if query:
+                pattern = f"%{query.strip()}%"
+                conditions.append(
+                    "(cve_id LIKE ? OR product LIKE ? OR vulnerability_name LIKE ? OR vendor_project LIKE ?)"
+                )
+                params.extend([pattern, pattern, pattern, pattern])
+            if ransomware_only:
+                conditions.append("known_ransomware_campaign_use = 'Known'")
+
+            where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+            sql = f"SELECT * FROM cisa_kev_vulnerabilities{where_clause} ORDER BY date_added DESC LIMIT ?"
+            params.append(limit)
+            rows = conn.execute(sql, params).fetchall()
+            return [self._row_to_cisa_kev(r) for r in rows]
+
+    def get_cisa_kev_count(self) -> int:
+        """Returns the total number of KEV entries stored."""
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM cisa_kev_vulnerabilities"
+            ).fetchone()
+            return int(row[0]) if row else 0
+
+    @classmethod
+    def _row_to_cisa_kev(cls, row: SQLiteRow) -> Dict[str, Any]:
+        """Converts an SQLiteRow into a dictionary representation of KEV entry."""
+        d = dict(row)
+        for key in ("short_description", "required_action", "due_date", "notes"):
+            d[key] = d.get(key) or ""
+        d["known_ransomware_campaign_use"] = (
+            d.get("known_ransomware_campaign_use") or "Unknown"
+        )
+        return d
 
     def get_technique(self, technique_id: str) -> Optional[Dict[str, Any]]:
         """Fetches a single technique by ID (e.g. 'T1059' or 'T1059.001')."""
@@ -351,6 +455,11 @@ class CTICatalogStorage:
                 "relationships": int(
                     conn.execute("SELECT COUNT(*) FROM cti_relationships").fetchone()[0]
                 ),
+                "cisa_kev": int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM cisa_kev_vulnerabilities"
+                    ).fetchone()[0]
+                ),
             }
 
     @staticmethod
@@ -386,6 +495,7 @@ class CTICatalogStorage:
                 "cti_techniques",
                 "cti_mitigations",
                 "cti_relationships",
+                "cisa_kev_vulnerabilities",
             ]:
                 dataset[table] = dump_sqlite_table_records(conn, table)
         return dataset
@@ -527,6 +637,16 @@ def _build_cti_table_descriptors(
             "size_human": _format_size_bytes(int(file_size * 0.30)),
             "primary_key": "(source_id, target_id, rel_type)",
             "indexed_columns": ["source_id", "target_id", "rel_type"],
+        },
+        {
+            "table_name": "cisa_kev_vulnerabilities",
+            "category": "CISA Known Exploited Vulnerabilities (Active Exploitation)",
+            "storage_engine": "src/database B-Tree Table",
+            "row_count": counts.get("cisa_kev_vulnerabilities", 0),
+            "size_bytes": int(file_size * 0.15),
+            "size_human": _format_size_bytes(int(file_size * 0.15)),
+            "primary_key": "cve_id (TEXT)",
+            "indexed_columns": ["known_ransomware_campaign_use"],
         },
         {
             "table_name": "cti_techniques_fts",

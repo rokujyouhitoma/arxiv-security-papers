@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set, Tupl
 if TYPE_CHECKING:
     from graph.engine import PropertyGraphEngine
 
+from domain.security.cti.kev import CISAKEVRegistry, KEVEntry
+
 from .extended_extractor import ExtendedExtractor
 from .schema import (
     AttackTechniqueEntity,
@@ -34,6 +36,15 @@ class OntologyExtractor:
     """
 
     FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
+    CVE_PATTERN = re.compile(r"\bCVE-(?:1999|20\d{2})-\d{4,7}\b", re.IGNORECASE)
+    _kev_registry: Optional[CISAKEVRegistry] = None
+
+    @classmethod
+    def get_kev_registry(cls) -> CISAKEVRegistry:
+        """Lazily initializes and caches the default CISAKEVRegistry instance."""
+        if cls._kev_registry is None:
+            cls._kev_registry = CISAKEVRegistry()
+        return cls._kev_registry
 
     @classmethod
     def _parse_list_item(
@@ -138,6 +149,89 @@ class OntologyExtractor:
                     object_id=vuln_id,
                 )
             )
+
+    @classmethod
+    def _create_vulnerability_from_cve(
+        cls,
+        cve_id: str,
+        vuln_id: str,
+        kev_entry: Optional[KEVEntry],
+    ) -> VulnerabilityEntity:
+        """Creates a typed VulnerabilityEntity from CVE ID and optional KEV entry."""
+        if kev_entry is not None:
+            return VulnerabilityEntity(
+                id=vuln_id,
+                entity_type=EntityType.VULNERABILITY,
+                name=kev_entry.vulnerability_name or cve_id,
+                description=kev_entry.short_description
+                or f"CISA KEV確認済み悪用脆弱性 ({cve_id})",
+                cve_id=cve_id,
+                severity="Critical",
+                is_known_exploited=True,
+                cisa_date_added=kev_entry.date_added,
+                cisa_due_date=kev_entry.due_date,
+                known_ransomware_campaign_use=kev_entry.known_ransomware_campaign_use,
+                cisa_required_action=kev_entry.required_action,
+            )
+        return VulnerabilityEntity(
+            id=vuln_id,
+            entity_type=EntityType.VULNERABILITY,
+            name=cve_id,
+            description=f"CVE脆弱性 ({cve_id})",
+            cve_id=cve_id,
+            severity="High",
+            is_known_exploited=False,
+        )
+
+    @classmethod
+    def _append_cve_triples(
+        cls,
+        paper_id: str,
+        vuln_id: str,
+        kev_entry: Optional[KEVEntry],
+        triples: List[Triple],
+    ) -> None:
+        """Appends VERIFIES_CVE and DISCLOSES triples for CVE vulnerability."""
+        if kev_entry is not None:
+            triples.append(
+                Triple(
+                    subject_id=paper_id,
+                    predicate=Predicate.VERIFIES_CVE,
+                    object_id=vuln_id,
+                    weight=1.0,
+                )
+            )
+        triples.append(
+            Triple(
+                subject_id=paper_id,
+                predicate=Predicate.DISCLOSES,
+                object_id=vuln_id,
+                weight=0.9 if kev_entry is not None else 0.8,
+            )
+        )
+
+    @classmethod
+    def _extract_cve_entities(
+        cls,
+        corpus_text: str,
+        paper_id: str,
+        seen_ids: Set[str],
+        entities: List[BaseEntity],
+        triples: List[Triple],
+        kev_registry: Optional[CISAKEVRegistry] = None,
+    ) -> None:
+        """Extracts CVE vulnerabilities, correlates with CISA KEV catalog, and links triples."""
+        registry = kev_registry or cls.get_kev_registry()
+        for match in cls.CVE_PATTERN.finditer(corpus_text):
+            cve_id = match.group(0).upper()
+            vuln_id = f"Vulnerability:{cve_id}"
+            kev_entry = registry.lookup(cve_id)
+            if vuln_id not in seen_ids:
+                entities.append(
+                    cls._create_vulnerability_from_cve(cve_id, vuln_id, kev_entry)
+                )
+                seen_ids.add(vuln_id)
+            cls._append_cve_triples(paper_id, vuln_id, kev_entry, triples)
 
     @classmethod
     def _create_entity_from_type(
@@ -306,7 +400,10 @@ class OntologyExtractor:
 
     @classmethod
     def extract_from_okf(
-        cls, clean_id: str, markdown_content: str
+        cls,
+        clean_id: str,
+        markdown_content: str,
+        kev_registry: Optional[CISAKEVRegistry] = None,
     ) -> Tuple[List[BaseEntity], List[Triple]]:
         """
         Extracts Paper, AttackTechnique, Vulnerability, TargetAsset, DefenseMechanism
@@ -343,6 +440,14 @@ class OntologyExtractor:
 
         cls._extract_cwe_entities(
             corpus_text, paper.id, seen_entity_ids, entities, triples
+        )
+        cls._extract_cve_entities(
+            corpus_text,
+            paper.id,
+            seen_entity_ids,
+            entities,
+            triples,
+            kev_registry=kev_registry,
         )
         cls._extract_taxonomy_terms(
             tokens, paper.id, seen_entity_ids, entities, triples
@@ -461,9 +566,12 @@ class OntologyExtractor:
         engine: PropertyGraphEngine,
         confidence: float = 1.0,
         tier: str = "gold",
+        kev_registry: Optional[CISAKEVRegistry] = None,
     ) -> Tuple[int, int]:
         """Extracts entities and triples from OKF and merges them into PropertyGraphEngine."""
-        entities, triples = cls.extract_from_okf(clean_id, markdown_content)
+        entities, triples = cls.extract_from_okf(
+            clean_id, markdown_content, kev_registry=kev_registry
+        )
         for ent in entities:
             props = asdict(ent)
             props["tier"] = tier

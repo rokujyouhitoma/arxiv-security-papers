@@ -302,6 +302,43 @@ TOOLS_MANIFEST = [
             "required": ["threat_id"],
         },
     },
+    {
+        "name": "check_cve_kev_status",
+        "description": (
+            "Lookup CVE identifier in CISA Known Exploited Vulnerabilities (KEV) catalog "
+            "to check active in-the-wild exploitation, due dates, and ransomware campaign usage."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cve_id": {
+                    "type": "string",
+                    "description": "Target CVE identifier e.g. 'CVE-2021-44228', 'CVE-2017-0144'",
+                },
+            },
+            "required": ["cve_id"],
+        },
+    },
+    {
+        "name": "list_active_exploited_papers",
+        "description": (
+            "Search and correlate security papers addressing vulnerabilities confirmed to be "
+            "actively exploited in the wild (CISA KEV catalog) or involved in ransomware campaigns."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ransomware_only": {
+                    "type": "boolean",
+                    "description": "Filter only CVEs confirmed in ransomware campaigns (default: false)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of correlated papers/CVEs to return (default: 20)",
+                },
+            },
+        },
+    },
 ]
 
 
@@ -698,6 +735,101 @@ def handle_search_defense_causal_chains(params: Dict[str, Any]) -> Dict[str, Any
     )
 
 
+def handle_check_cve_kev_status(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Checks whether a CVE is present in CISA KEV catalog and returns exploitation details."""
+    cve_id = str(params.get("cve_id", "")).strip().upper()
+    if not cve_id:
+        return {"status": "error", "message": "Missing required parameter 'cve_id'"}
+
+    from domain.security.cti.kev import CISAKEVRegistry
+
+    registry = CISAKEVRegistry()
+    entry = registry.lookup(cve_id)
+    if entry is None:
+        return {
+            "status": "success",
+            "cve_id": cve_id,
+            "is_known_exploited": False,
+            "message": f"CVE identifier {cve_id} is not found in CISA KEV catalog.",
+        }
+
+    return {
+        "status": "success",
+        "cve_id": entry.cve_id,
+        "is_known_exploited": True,
+        "vendor_project": entry.vendor_project,
+        "product": entry.product,
+        "vulnerability_name": entry.vulnerability_name,
+        "date_added": entry.date_added,
+        "due_date": entry.due_date,
+        "short_description": entry.short_description,
+        "required_action": entry.required_action,
+        "known_ransomware_campaign_use": entry.known_ransomware_campaign_use,
+        "is_ransomware_related": entry.is_ransomware_related,
+        "notes": entry.notes,
+    }
+
+
+def _extract_paper_link_info(engine: Any, edge: Any) -> Dict[str, Any]:
+    """Extracts paper metadata dictionary from edge and source node."""
+    paper_node = engine.get_vertex(edge.src_id)
+    props = paper_node.properties if paper_node else {}
+    title = props.get("title_ja") or props.get("name", edge.src_id)
+    return {
+        "paper_id": edge.src_id,
+        "title": title,
+        "relation": edge.label,
+        "weight": edge.weight,
+    }
+
+
+def _collect_linked_papers(engine: Any, cve_id: str) -> List[Dict[str, Any]]:
+    """Finds papers linked to a CVE entity in the PropertyGraphEngine."""
+    in_edges = engine.get_incoming_edges(f"Vulnerability:{cve_id}")
+    papers: List[Dict[str, Any]] = []
+    for edge in in_edges:
+        if edge.label in ("VERIFIES_CVE", "DISCLOSES"):
+            papers.append(_extract_paper_link_info(engine, edge))
+    return papers
+
+
+def _build_cve_correlation_item(engine: Any, cve_id: str, entry: Any) -> Dict[str, Any]:
+    """Constructs a correlated paper/CVE report entry."""
+    return {
+        "cve_id": cve_id,
+        "vulnerability_name": entry.vulnerability_name,
+        "product": entry.product,
+        "date_added": entry.date_added,
+        "due_date": entry.due_date,
+        "known_ransomware_campaign_use": entry.known_ransomware_campaign_use,
+        "required_action": entry.required_action,
+        "linked_papers": _collect_linked_papers(engine, cve_id),
+    }
+
+
+def handle_list_active_exploited_papers(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Searches KEV catalog and correlates with security papers in PropertyGraphEngine."""
+    ransomware_only = bool(params.get("ransomware_only", False))
+    limit = int(params.get("limit", 20))
+
+    from domain.security.cti.kev import CISAKEVRegistry
+    from graph.engine import PropertyGraphEngine
+
+    registry = CISAKEVRegistry()
+    matched_entries = registry.search(ransomware_only=ransomware_only, limit=limit)
+    engine = PropertyGraphEngine()
+
+    results = [
+        _build_cve_correlation_item(engine, e.cve_id, e) for e in matched_entries
+    ]
+    return {
+        "status": "success",
+        "total_matched_cves": len(results),
+        "ransomware_only": ransomware_only,
+        "results": results,
+    }
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generate_semgrep_rule": handle_generate_semgrep_rule,
     "synthesize_secure_patch": handle_synthesize_secure_patch,
@@ -712,6 +844,8 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "search_mitre_cti": handle_search_mitre_cti,
     "get_mitigations_for_threat": handle_get_mitigations_for_threat,
     "search_defense_causal_chains": handle_search_defense_causal_chains,
+    "check_cve_kev_status": handle_check_cve_kev_status,
+    "list_active_exploited_papers": handle_list_active_exploited_papers,
 }
 
 
