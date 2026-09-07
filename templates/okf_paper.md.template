@@ -1,8 +1,8 @@
 ---
 type: "security-paper"
-title: "{title}"
-title_ja: "{title_ja}"
-description: "{description}"
+title: "{title_yaml}"
+title_ja: "{title_ja_yaml}"
+description: "{description_yaml}"
 resource: "{resource}"
 tags:
 {tags_yaml}

@@ -15,7 +15,7 @@ ID: 182
 ---
 
 ## 2. トレーサビリティ / Traceability
-- **関連設計書**: [docs/designs/DSN-21-enterprise_design_system_and_unified_console.md](file:///workspace/arxiv-security-papers/docs/designs/DSN-21-enterprise_design_system_and_unified_console.md) (第4章 ナレッジグラフワークスペース設計, 第5章 メインコンテンツ標準コンポーネント)
+- **関連設計書**: [docs/designs/DSN-21-enterprise_design_system_and_unified_console.md](docs/designs/DSN-21-enterprise_design_system_and_unified_console.md) (第4章 ナレッジグラフワークスペース設計, 第5章 メインコンテンツ標準コンポーネント)
 - **関連 Issue**: 
   - Issue #181: CTI 凡例の単一 CSS カラーバッジ統一およびアスペクト比同期
   - Issue #140: ノード半径・色設計仕様
@@ -23,9 +23,9 @@ ID: 182
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [x] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html) (`#ctiFilters` ボタングループのマークアップおよび `.filter-dot` スタイル追加)
-- [x] [tests/web/test_dashboard_cti_graph.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_cti_graph.py) (フィルターボタンスタイルおよびマークアップ検証)
-- [x] [docs/issues/README.md](file:///workspace/arxiv-security-papers/docs/issues/README.md) (Issue 台帳登録)
+- [x] [site/dashboard.html](site/dashboard.html) (`#ctiFilters` ボタングループのマークアップおよび `.filter-dot` スタイル追加)
+- [x] [tests/web/test_dashboard_cti_graph.py](tests/web/test_dashboard_cti_graph.py) (フィルターボタンスタイルおよびマークアップ検証)
+- [x] [docs/issues/README.md](docs/issues/README.md) (Issue 台帳登録)
 
 ---
 

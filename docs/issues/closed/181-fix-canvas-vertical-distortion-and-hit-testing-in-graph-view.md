@@ -27,10 +27,10 @@ ID: 181
 ---
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
-- [x] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html) (Canvas CSS, ResizeObserver 実装, 座標変換 `screenToWorld`, リサイズトリガー改善, ヒットテスト拡大)
-- [x] [tests/web/test_dashboard_canvas_aspect_ratio.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_canvas_aspect_ratio.py) (新規: Canvas寸法・ResizeObserver・ヒットテスト正規化の検証テスト)
-- [x] [docs/designs/DSN-21-enterprise_design_system_and_cloud_console_uiux_architecture.md](file:///workspace/arxiv-security-papers/docs/designs/DSN-21-enterprise_design_system_and_cloud_console_uiux_architecture.md) (Canvas レスポンシブアスペクト比・レイアウト仕様の反映)
-- [x] [docs/issues/README.md](file:///workspace/arxiv-security-papers/docs/issues/README.md) (Issue 台帳登録)
+- [x] [site/dashboard.html](site/dashboard.html) (Canvas CSS, ResizeObserver 実装, 座標変換 `screenToWorld`, リサイズトリガー改善, ヒットテスト拡大)
+- [x] [tests/web/test_dashboard_canvas_aspect_ratio.py](tests/web/test_dashboard_canvas_aspect_ratio.py) (新規: Canvas寸法・ResizeObserver・ヒットテスト正規化の検証テスト)
+- [x] [docs/designs/DSN-21-enterprise_design_system_and_cloud_console_uiux_architecture.md](docs/designs/DSN-21-enterprise_design_system_and_cloud_console_uiux_architecture.md) (Canvas レスポンシブアスペクト比・レイアウト仕様の反映)
+- [x] [docs/issues/README.md](docs/issues/README.md) (Issue 台帳登録)
 
 ---
 

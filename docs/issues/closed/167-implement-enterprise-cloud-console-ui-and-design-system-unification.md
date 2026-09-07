@@ -70,13 +70,13 @@ ID: 167
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
 - [x] [docs/designs/DSN-21-enterprise_design_system_and_unified_console.md](../designs/DSN-21-enterprise_design_system_and_unified_console.md):
   - クラウドコンソール仕様・デザインシステム包括設計書（策定完了）
-- [x] [site/index.html](file:///workspace/arxiv-security-papers/site/index.html):
+- [x] [site/index.html](site/index.html):
   - エンタープライズ SaaS クラウドコンソールレイアウトへの再構築（固定ヘッダー、左サイドバー、メインコンテンツ 5大コンポーネント）
-- [x] [site/style.css](file:///workspace/arxiv-security-papers/site/style.css):
+- [x] [site/style.css](site/style.css):
   - Swiss / Warm Enterprise Palette のトークン定義、2ペインレイアウト、5大コンポーネント用スタイルの統合
-- [x] [site/app.js](file:///workspace/arxiv-security-papers/site/app.js):
+- [x] [site/app.js](site/app.js):
   - アコーディオン開閉、サイドバー折りたたみ、ハッシュルーティング、グローバル検索連動
-- [x] [tests/web/test_enterprise_console_ui.py](file:///workspace/arxiv-security-papers/tests/web/test_enterprise_console_ui.py):
+- [x] [tests/web/test_enterprise_console_ui.py](tests/web/test_enterprise_console_ui.py):
   - コンソールシェル構造、グローバルヘッダー、サイドバー、5大コンポーネントのテスト追加
 
 ---

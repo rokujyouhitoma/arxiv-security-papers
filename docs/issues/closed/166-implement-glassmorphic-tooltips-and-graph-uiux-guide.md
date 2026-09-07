@@ -45,13 +45,13 @@ ID: 166
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [x] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html):
+- [x] [site/dashboard.html](site/dashboard.html):
   - コントロールデッキ全要素（21箇所以上）への `data-tooltip` 属性およびインライン `ⓘ` ヘルプバッジの付与
   - Glassmorphic ツールチップスタイル定義（`[data-tooltip]`, `[data-tooltip-align="left"|"right"]`）
   - 画面端見切れ防止（`adjustTooltipViewportAlignment` による動的・静的位置制御）
   - クイック操作ガイドドロワー（`#graphHelpDrawer`）の HTML 構造およびトグル JS スクリプト
   - Canvas ノードホバーカード（`#nodeCallout`）およびエッジツールチップへのガイダンス追記
-- [x] [tests/web/test_dashboard_graph_tab.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_graph_tab.py):
+- [x] [tests/web/test_dashboard_graph_tab.py](tests/web/test_dashboard_graph_tab.py):
   - `data-tooltip` 属性、見切れ防止 CSS/JS、ヘルプドロワー要素、インライン情報バッジの DOM 構造検証テストの追加
 
 ---

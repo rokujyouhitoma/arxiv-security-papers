@@ -35,17 +35,17 @@ ID: 168
 ---
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/supervisor/workers/sync_worker.py](file:///workspace/arxiv-security-papers/src/supervisor/workers/sync_worker.py):
+- [ ] [src/supervisor/workers/sync_worker.py](src/supervisor/workers/sync_worker.py):
   - `b"".join(resp_iter)` の排除。レスポンスヘッダー先行送信＋チャンク即時フラッシュ（Streaming dispatch）の実装。
   - クライアント切断時（`BrokenPipeError`, `ConnectionResetError`）のイテレータ `close()` およびソケットクリーンアップ。
   - リクエストライフサイクル詳細ログ（`[WORKER-ACCEPT]`, `[WORKER-REQ]`, `[WORKER-STREAM-CHUNK]`, `[WORKER-DONE]`, `[WORKER-DISCONNECT]`）の配備。
-- [ ] [src/supervisor/workers/gthread_worker.py](file:///workspace/arxiv-security-papers/src/supervisor/workers/gthread_worker.py):
+- [ ] [src/supervisor/workers/gthread_worker.py](src/supervisor/workers/gthread_worker.py):
   - マルチスレッド環境下でのストリーミング耐障害性およびスレッドプール健全性ログの強化。
-- [ ] [src/supervisor/config.py](file:///workspace/arxiv-security-papers/src/supervisor/config.py):
+- [ ] [src/supervisor/config.py](src/supervisor/config.py):
   - Web サービス向けデフォルト設定を `worker_class: "gthread"`, `threads: 8` に設定。
-- [ ] [src/web/gateway/app.py](file:///workspace/arxiv-security-papers/src/web/gateway/app.py):
+- [ ] [src/web/gateway/app.py](src/web/gateway/app.py):
   - リクエスト処理中タイムアウト監視およびトレースログの強化。
-- [ ] [tests/supervisor/test_workers.py](file:///workspace/arxiv-security-papers/tests/supervisor/test_workers.py) / [tests/web/test_dashboard_rapid_reload.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_rapid_reload.py):
+- [ ] [tests/supervisor/test_workers.py](tests/supervisor/test_workers.py) / [tests/web/test_dashboard_rapid_reload.py](tests/web/test_dashboard_rapid_reload.py):
   - ストリーミングレスポンスがブロッキングせずに即座にチャンク送信されるかの単体テスト追加。
 
 ---

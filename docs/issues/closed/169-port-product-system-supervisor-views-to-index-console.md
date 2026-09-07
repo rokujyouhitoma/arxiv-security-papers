@@ -39,18 +39,18 @@ ID: 169
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [site/index.html](file:///workspace/arxiv-security-papers/site/index.html):
+- [x] [site/index.html](site/index.html):
   - 左サイドバーに `プロダクト分析 & ROI`、`システム観測 & パイプライン`、`プロセス監視 (Supervisor Top)` を追加。
   - メインコンテンツエリアに `productTab`, `systemTab`, `supervisorTab` の HTML セクションを追加。
-- [x] [site/app.js](file:///workspace/arxiv-security-papers/site/app.js):
+- [x] [site/app.js](site/app.js):
   - タブ切り替え（`switchToTab`）および URL クエリパラメータ（`?tab=product|system|supervisor`）/ ハッシュ（`#/product|#/system|#/supervisor`）の双方向同期。
   - `/api/graph/mesh` からのテレメトリ定周期取得および各パネルへの反映（Hop Histogram, Walk ROI, Traversal Matrix, Database Tables）。
   - `/api/stream/top` を利用したリアルタイム Supervisor Top ワーカーテーブルの更新（SSE 再接続 & 切断クリーンアップ）。
-- [x] [site/style.css](file:///workspace/arxiv-security-papers/site/style.css):
+- [x] [site/style.css](site/style.css):
   - 移植されたパネル用スタイル（`metric-card`, `pipeline-bar`, `traversal-matrix`, `bar-chart-row`, `graph-cta-banner` 等）を Warm Swiss Enterprise トークンに統合。
-- [x] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html):
+- [x] [site/dashboard.html](site/dashboard.html):
   - `tab=graph` をデフォルト表示とし、ヘッダーに `index.html` の各タブへのナビゲーションリンクを配置。
-- [x] [tests/web/test_enterprise_console_ui.py](file:///workspace/arxiv-security-papers/tests/web/test_enterprise_console_ui.py):
+- [x] [tests/web/test_enterprise_console_ui.py](tests/web/test_enterprise_console_ui.py):
   - `index.html` における 3 大移植タブおよび各コンポーネント、ナビゲーションの存在・動作自動テストを追加。
 
 ---

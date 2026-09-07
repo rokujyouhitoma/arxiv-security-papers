@@ -29,13 +29,13 @@ ID: 171
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [x] [site/index.html](file:///workspace/arxiv-security-papers/site/index.html):
+- [x] [site/index.html](site/index.html):
   - `.help-overlay`, `.help-drawer`, `.drawer-header`, `.btn-drawer-close`, `.drawer-content`, `.guide-section`, `.guide-table` の CSS 定義
   - `#consoleHelpOverlay`, `#consoleHelpDrawer` の HTML 構造の追加
   - ヘッダー `#helpModalBtn` へのクリックハンドラバインド (`onclick="toggleConsoleHelpDrawer()"`)
   - ドロワー制御 JS 関数 (`window.toggleConsoleHelpDrawer`, `window.closeConsoleHelpDrawer`) の実装
   - キーボードショートカット (`?`, `Escape`) リスナーの実装
-- [x] [tests/web/test_enterprise_console_ui.py](file:///workspace/arxiv-security-papers/tests/web/test_enterprise_console_ui.py):
+- [x] [tests/web/test_enterprise_console_ui.py](tests/web/test_enterprise_console_ui.py):
   - ガイドドロワー、オーバーレイ、セクション構造、キーボード操作、トグル関数のテストアサーション追加
 
 ---

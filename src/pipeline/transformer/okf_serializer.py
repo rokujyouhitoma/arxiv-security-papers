@@ -200,6 +200,18 @@ def _load_raw_paper_meta(raw_meta_path: str) -> Dict[str, Any]:
         return cast(Dict[str, Any], json.load(f))
 
 
+def _yaml_escape(val: str) -> str:
+    """Escapes string values safely for double-quoted YAML scalars."""
+    if not val:
+        return ""
+    return (
+        val.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", " ")
+        .replace("\r", "")
+    )
+
+
 def _render_okf_markdown(
     raw_template: str,
     paper: Dict[str, Any],
@@ -217,9 +229,12 @@ def _render_okf_markdown(
 ) -> str:
     id_label = "IACR ID" if paper["arxiv_id"].startswith("iacr-") else "arXiv ID"
     return raw_template.format(
-        title=paper["title"].replace('"', '\\"'),
-        title_ja=title_ja.replace('"', '\\"'),
-        description=exec_summary["one_liner"].replace('"', '\\"'),
+        title=paper["title"],
+        title_yaml=_yaml_escape(paper["title"]),
+        title_ja=title_ja,
+        title_ja_yaml=_yaml_escape(title_ja),
+        description=exec_summary["one_liner"],
+        description_yaml=_yaml_escape(exec_summary["one_liner"]),
         resource=paper["abs_url"],
         tags_yaml=tags_yaml,
         timestamp=now_iso,
@@ -252,10 +267,12 @@ def _build_okf_template_vars(
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     pub_date = str(paper.get("published") or now_iso)
 
-    authors_yaml = "\n".join([f'    - "{a}"' for a in paper.get("authors", [])])
+    authors_yaml = "\n".join(
+        [f'    - "{_yaml_escape(a)}"' for a in paper.get("authors", [])]
+    )
     default_tags = config.get("okf", {}).get("default_tags", ["cs.CR", "security"])
     tags = list(set(default_tags + determine_security_tags(paper)))
-    tags_yaml = "\n".join([f'  - "{t}"' for t in sorted(tags)])
+    tags_yaml = "\n".join([f'  - "{_yaml_escape(t)}"' for t in sorted(tags)])
     rec_list = "\n".join([f"- {r}" for r in exec_summary["executive_recommendations"]])
     return title_ja, exec_summary, now_iso, pub_date, authors_yaml, tags_yaml, rec_list
 
@@ -306,9 +323,9 @@ def build_okf_from_raw(
         "okf_paper.md.template",
         """---
 type: "security-paper"
-title: "{title}"
-title_ja: "{title_ja}"
-description: "{description}"
+title: "{title_yaml}"
+title_ja: "{title_ja_yaml}"
+description: "{description_yaml}"
 resource: "{resource}"
 tags:
 {tags_yaml}

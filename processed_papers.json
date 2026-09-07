@@ -116974,5 +116974,941 @@
     "title_ja": "Context or Digits? Balancing Memorability and Efficiency in Virtual Reality Authentication（セキュリティ分析論文）",
     "raw_meta_path": "outputs/raw_data/2026-08-30/2608.29531_meta.json",
     "okf_path": "outputs/okf_papers/2026-08-30/2608.29531.md"
+  },
+  "2609.05380v1": {
+    "processed_at": "2026-09-07T07:12:33.025867+00:00",
+    "published": "2026-09-04T17:31:30Z",
+    "title": "Propagation Model for SSC attacks: Why SBOM (tools) don't tell the whole truth",
+    "title_ja": "Propagation Model for SSC attacks: Why SBOM (tools) don't tell the whole truth（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05380_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05380.md"
+  },
+  "2609.05370v1": {
+    "processed_at": "2026-09-07T07:12:33.033890+00:00",
+    "published": "2026-09-04T17:16:18Z",
+    "title": "When LLM Decompilers Recompile More and Preserve Less",
+    "title_ja": "When LLM Decompilers Recompile More and Preserve Less（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05370_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05370.md"
+  },
+  "2609.05340v1": {
+    "processed_at": "2026-09-07T07:12:33.038337+00:00",
+    "published": "2026-09-04T16:44:52Z",
+    "title": "Trust-Aware Adaptive Disclosure for Inference Privacy Preservation in Multi-Agent Networks",
+    "title_ja": "Trust-Aware Adaptive Disclosure for Inference Privacy Preservation in Multi-Agent Networks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05340_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05340.md"
+  },
+  "2609.05335v1": {
+    "processed_at": "2026-09-07T07:12:33.046729+00:00",
+    "published": "2026-09-04T16:40:22Z",
+    "title": "The History Is the Detector: Executing CVE Patch History, End-to-End",
+    "title_ja": "The History Is the Detector: Executing CVE Patch History, End-to-End（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05335_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05335.md"
+  },
+  "2609.05329v1": {
+    "processed_at": "2026-09-07T07:12:33.051065+00:00",
+    "published": "2026-09-04T16:32:11Z",
+    "title": "Machine Unlearning as Private Retroactive Algorithms",
+    "title_ja": "Machine Unlearning as Private Retroactive Algorithms（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05329_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05329.md"
+  },
+  "2609.05269v1": {
+    "processed_at": "2026-09-07T07:12:33.058122+00:00",
+    "published": "2026-09-04T15:26:35Z",
+    "title": "CONTINUITY: Security-Context Contracts for Composable LLM Agent Controls",
+    "title_ja": "CONTINUITY: Security-Context Contracts for Composable LLM Agent Controls（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05269_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05269.md"
+  },
+  "2609.05236v1": {
+    "processed_at": "2026-09-07T07:12:33.063796+00:00",
+    "published": "2026-09-04T15:03:49Z",
+    "title": "Governing Bring Your Own AI: A Parameterized Maturity Model",
+    "title_ja": "Governing Bring Your Own AI: A Parameterized Maturity Model（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05236_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05236.md"
+  },
+  "2609.05165v1": {
+    "processed_at": "2026-09-07T07:12:33.066267+00:00",
+    "published": "2026-09-04T14:07:47Z",
+    "title": "Conformal Prediction for Offensive Security",
+    "title_ja": "Conformal Prediction for Offensive Security（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05165_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05165.md"
+  },
+  "2609.05119v1": {
+    "processed_at": "2026-09-07T07:12:33.071711+00:00",
+    "published": "2026-09-04T13:16:30Z",
+    "title": "Understanding the Privacy-Preserving Potential of HTTP/2 Against Webpage Fingerprinting",
+    "title_ja": "Understanding the Privacy-Preserving Potential of HTTP/2 Against Webpage Fingerprinting（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05119_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05119.md"
+  },
+  "2609.05117v1": {
+    "processed_at": "2026-09-07T07:12:33.076015+00:00",
+    "published": "2026-09-04T13:13:11Z",
+    "title": "TIER: Threat Implicitness Benchmark for Evaluating LLM Safety Behaviors",
+    "title_ja": "TIER: Threat Implicitness Benchmark for Evaluating LLM Safety Behaviors（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05117_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05117.md"
+  },
+  "2609.05092v1": {
+    "processed_at": "2026-09-07T07:12:33.080289+00:00",
+    "published": "2026-09-04T12:47:32Z",
+    "title": "Operational Roles of QRNG-Derived Quantum Entropy in Bitcoin Proof-of-Work Architectures",
+    "title_ja": "Operational Roles of QRNG-Derived Quantum Entropy in Bitcoin Proof-of-Work Architectures（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05092_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05092.md"
+  },
+  "2609.05013v1": {
+    "processed_at": "2026-09-07T07:12:33.085034+00:00",
+    "published": "2026-09-04T11:23:49Z",
+    "title": "Has MIMO decoding been proved hard from lattice problems?",
+    "title_ja": "Has MIMO decoding been proved hard from lattice problems?（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05013_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05013.md"
+  },
+  "2609.05011v1": {
+    "processed_at": "2026-09-07T07:12:33.090592+00:00",
+    "published": "2026-09-04T11:23:19Z",
+    "title": "TPMSpy: Validation of Measured Boot Systems by Low-Level Tracing of TPM Usage",
+    "title_ja": "TPMSpy: Validation of Measured Boot Systems by Low-Level Tracing of TPM Usage（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.05011_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.05011.md"
+  },
+  "2609.04970v1": {
+    "processed_at": "2026-09-07T07:12:33.094995+00:00",
+    "published": "2026-09-04T10:22:35Z",
+    "title": "Robust Coverless Linguistic Steganography via Sentence Embedding Space with Global Resynchronization",
+    "title_ja": "Robust Coverless Linguistic Steganography via Sentence Embedding Space with Global Resynchronization（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04970_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04970.md"
+  },
+  "2609.04899v1": {
+    "processed_at": "2026-09-07T07:12:33.096598+00:00",
+    "published": "2026-09-04T08:59:48Z",
+    "title": "The Security Feature Location Problem",
+    "title_ja": "The Security Feature Location Problem（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04899_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04899.md"
+  },
+  "2609.04878v1": {
+    "processed_at": "2026-09-07T07:12:33.101332+00:00",
+    "published": "2026-09-04T08:36:21Z",
+    "title": "ReCAST: Restoration-aware Cascaded Stage-wise Training for Obfuscated SMS Risk Classification",
+    "title_ja": "ReCAST: Restoration-aware Cascaded Stage-wise Training for Obfuscated SMS Risk Classification（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04878_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04878.md"
+  },
+  "2609.04875v1": {
+    "processed_at": "2026-09-07T07:12:33.108347+00:00",
+    "published": "2026-09-04T08:31:40Z",
+    "title": "Forgetting Without Restarting: Execution-State Unlearning for Stateful LLM Agents",
+    "title_ja": "Forgetting Without Restarting: Execution-State Unlearning for Stateful LLMエージェント",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04875_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04875.md"
+  },
+  "2609.04820v1": {
+    "processed_at": "2026-09-07T07:12:33.115176+00:00",
+    "published": "2026-09-04T07:17:09Z",
+    "title": "Cost-Aware Hierarchical Multi-Agent Ransomware Detection and Family Attribution",
+    "title_ja": "Cost-Aware Hierarchical Multi-Agent Ransomware Detection and Family Attribution（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04820_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04820.md"
+  },
+  "2609.04815v1": {
+    "processed_at": "2026-09-07T07:12:33.122133+00:00",
+    "published": "2026-09-04T07:13:59Z",
+    "title": "Federated Attack Campaign Detection via Contrastive Encoding of Threat Indicators in Gradient Updates",
+    "title_ja": "Federated Attack Campaign Detection via Contrastive Encoding of Threat Indicators in Gradient Updates（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04815_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04815.md"
+  },
+  "2609.04785v1": {
+    "processed_at": "2026-09-07T07:12:33.127598+00:00",
+    "published": "2026-09-04T06:22:14Z",
+    "title": "Injected and Leaked: Actively Inducing Side-Channel Leakage Using Electromagnetic Injection and Hardware Nonlinearity",
+    "title_ja": "Injected and Leaked: Actively Inducing Side-Channel Leakage Using Electromagnetic Injection and Hardware Nonlinearity（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04785_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04785.md"
+  },
+  "2609.04769v1": {
+    "processed_at": "2026-09-07T07:12:33.132549+00:00",
+    "published": "2026-09-04T06:03:44Z",
+    "title": "Memory-Efficient Designs for Word-Wise Universal Fully Homomorphic Encryption",
+    "title_ja": "Memory-Efficient Designs for Word-Wise Universal Fully Homomorphic Encryption（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04769_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04769.md"
+  },
+  "2609.04626v1": {
+    "processed_at": "2026-09-07T07:12:33.139495+00:00",
+    "published": "2026-09-04T02:00:11Z",
+    "title": "Why Is SHAP Not a Reliable Standalone Explanation Framework for Malware Detection?",
+    "title_ja": "Why Is SHAP Not a Reliable Standalone Explanation Framework for マルウェア検出?",
+    "raw_meta_path": "outputs/raw_data/2026-09-04/2609.04626_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-04/2609.04626.md"
+  },
+  "2609.04566v1": {
+    "processed_at": "2026-09-07T07:12:33.145890+00:00",
+    "published": "2026-09-03T23:42:06Z",
+    "title": "Optimizing Credential Blast Radius Through Trust Boundaries and Delegation Under Post-Quantum Authentication Costs",
+    "title_ja": "Optimizing Credential Blast Radius Through Trust Boundaries and Delegation Under Post-Quantum Authentication Costs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04566_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04566.md"
+  },
+  "2609.04535v1": {
+    "processed_at": "2026-09-07T07:12:33.152641+00:00",
+    "published": "2026-09-03T22:48:21Z",
+    "title": "An Empirical Analysis of CodeQL False Positives and Query Refinements for Java Vulnerabilities",
+    "title_ja": "An Empirical CodeQL False Positives and Query Refinements for Java Vulnerabilitiesの分析",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04535_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04535.md"
+  },
+  "2609.04533v1": {
+    "processed_at": "2026-09-07T07:12:33.159806+00:00",
+    "published": "2026-09-03T22:44:45Z",
+    "title": "Repeat-After-Me: Black-Box Adaptive Visual Prompt Injection",
+    "title_ja": "Repeat-After-Me: Black-Box Adaptive Visual Prompt Injection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04533_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04533.md"
+  },
+  "2609.04522v1": {
+    "processed_at": "2026-09-07T07:12:33.167014+00:00",
+    "published": "2026-09-03T22:21:51Z",
+    "title": "Hoss: Fast Oblivious Semantic Search with Heterogeneous GPU-CPU-TEE Architecture",
+    "title_ja": "Hoss: Fast Oblivious Semantic Search with Heterogeneous GPU-CPU-TEE Architecture（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04522_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04522.md"
+  },
+  "2609.04495v1": {
+    "processed_at": "2026-09-07T07:12:33.171794+00:00",
+    "published": "2026-09-03T21:28:37Z",
+    "title": "Rethinking Indirect Prompt Injection as a Test-Time Search Problem",
+    "title_ja": "Rethinking Indirect Prompt Injection as a Test-Time Search Problem（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04495_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04495.md"
+  },
+  "2609.04475v1": {
+    "processed_at": "2026-09-07T07:12:33.179291+00:00",
+    "published": "2026-09-03T20:59:09Z",
+    "title": "Client-Side Probing of Deleted Ridge Statistics in Federated Unlearning",
+    "title_ja": "Client-Side Probing of Deleted Ridge Statistics in Federated Unlearning（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04475_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04475.md"
+  },
+  "2609.04474v1": {
+    "processed_at": "2026-09-07T07:12:33.183606+00:00",
+    "published": "2026-09-03T20:58:21Z",
+    "title": "Nebulon Enterprise Simulated Threats for Phishing Research (NEST-Phish): A Synthetic Enterprise Phishing Email Dataset for Behavioral and Machine-Learning Research",
+    "title_ja": "Nebulon Enterprise Simulated Threats for Phishing Research (NEST-Phish): A Synthetic Enterprise Phishing Email Dataset for Behavioral and Machine-Learning Research（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04474_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04474.md"
+  },
+  "2609.04410v1": {
+    "processed_at": "2026-09-07T07:12:33.190409+00:00",
+    "published": "2026-09-03T19:21:49Z",
+    "title": "Engineered Persuasion: Evaluating Personalized Pretexts in LLM-Generated Spear Phishing",
+    "title_ja": "Engineered Persuasion: Evaluating Personalized Pretexts in LLM-Generated Spear Phishing（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04410_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04410.md"
+  },
+  "2609.04388v1": {
+    "processed_at": "2026-09-07T07:12:33.196712+00:00",
+    "published": "2026-09-03T18:55:09Z",
+    "title": "Candidate Comparability Before Promotion: Conditional Validation in Adaptive Network Intrusion Detection",
+    "title_ja": "Candidate Comparability Before Promotion: Conditional Validation in Adaptive Network Intrusion Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04388_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04388.md"
+  },
+  "2609.04382v1": {
+    "processed_at": "2026-09-07T07:12:33.203360+00:00",
+    "published": "2026-09-03T18:43:24Z",
+    "title": "Privacy Failure in Split-LLM Training, The Returned Gradient Nullifies the Decoys",
+    "title_ja": "Privacy Failure in Split-LLM Training, The Returned Gradient Nullifies the Decoys（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04382_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04382.md"
+  },
+  "2609.04356v1": {
+    "processed_at": "2026-09-07T07:12:33.208483+00:00",
+    "published": "2026-09-03T18:19:44Z",
+    "title": "Blockchain-Enabled Secure Logging for Fiscal Electronic Mechanisms: Evaluation of the Greek eSEND and myDATA Tax Systems",
+    "title_ja": "Blockchain-Enabled Secure Logging for Fiscal Electronic Mechanisms: Evaluation of the Greek eSEND and myDATA Tax Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04356_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04356.md"
+  },
+  "2609.04159v1": {
+    "processed_at": "2026-09-07T07:12:33.215949+00:00",
+    "published": "2026-09-03T17:49:12Z",
+    "title": "SENTINEL-RL: Offloading Topological Reasoning from LLM Agents in the Security Operations Center",
+    "title_ja": "SENTINEL-RL: Offloading Topological Reasoning from LLMエージェント in the Security Operations Center",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04159_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04159.md"
+  },
+  "2609.04086v1": {
+    "processed_at": "2026-09-07T07:12:33.217836+00:00",
+    "published": "2026-09-03T16:53:22Z",
+    "title": "A Non-Formulable Theorem: A Fundamental Limit of Finite Syntactic Systems and Its Consequences for Security and AI",
+    "title_ja": "A Non-Formulable Theorem: A Fundamental Limit of Finite Syntactic Systems and Its Consequences for Security and AI（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04086_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04086.md"
+  },
+  "2609.04075v1": {
+    "processed_at": "2026-09-07T07:12:33.225657+00:00",
+    "published": "2026-09-03T16:44:22Z",
+    "title": "PatchBench: Evaluating AI Agents for Vulnerability Patching",
+    "title_ja": "PatchBench: Evaluating AI Agents for Vulnerability Patching（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04075_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04075.md"
+  },
+  "2609.04058v1": {
+    "processed_at": "2026-09-07T07:12:33.233631+00:00",
+    "published": "2026-09-03T16:34:50Z",
+    "title": "AI-Assisted Design of a Post-Quantum Cryptographic Accelerator: A Deployed-Silicon Case Study",
+    "title_ja": "AI-Assisted Design of a Post-Quantum Cryptographic Accelerator: A Deployed-Silicon Case Study（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04058_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04058.md"
+  },
+  "2609.04017v1": {
+    "processed_at": "2026-09-07T07:12:33.239890+00:00",
+    "published": "2026-09-03T15:55:39Z",
+    "title": "A Black Box for Agentic Processes: Blockchain-Anchored Evidence for AI Agent Communication, Human Oversight, and GRC Audits",
+    "title_ja": "A Black Box for Agentic Processes: Blockchain-Anchored Evidence for AI Agent Communication, Human Oversight, and GRC Audits（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.04017_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.04017.md"
+  },
+  "2609.03978v1": {
+    "processed_at": "2026-09-07T07:12:33.245423+00:00",
+    "published": "2026-09-03T15:13:33Z",
+    "title": "Barnacle: Adaptive Multi-Leader Scheduling for DAG-Based Consensus",
+    "title_ja": "Barnacle: Adaptive Multi-Leader Scheduling for DAG-Based Consensus（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03978_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03978.md"
+  },
+  "2609.03893v1": {
+    "processed_at": "2026-09-07T07:12:33.253045+00:00",
+    "published": "2026-09-03T14:12:19Z",
+    "title": "Practice Makes (Im)Perfect: A Look Back at Benchmarking Practices for Microarchitectural Side-Channel Attacks",
+    "title_ja": "Practice Makes (Im)Perfect: A Look Back at Practices for Microarchitectural Side-Channel Attacksのベンチマーク評価",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03893_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03893.md"
+  },
+  "2609.03884v1": {
+    "processed_at": "2026-09-07T07:12:33.258839+00:00",
+    "published": "2026-09-03T14:08:42Z",
+    "title": "A Blind Trust, the Bloody Thrust: When Attacker-Controlled Hook Updates Steer AI Agent Harnesses towards Malicious Behaviors",
+    "title_ja": "A Blind Trust, the Bloody Thrust: When Attacker-Controlled Hook Updates Steer AI Agent Harnesses Malicious Behaviorsに向けて",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03884_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03884.md"
+  },
+  "2609.03849v1": {
+    "processed_at": "2026-09-07T07:12:33.265582+00:00",
+    "published": "2026-09-03T13:42:11Z",
+    "title": "NACRE: Rethinking Confidential Containers through Native Architectural Support",
+    "title_ja": "NACRE: Rethinking Confidential Containers through Native Architectural Support（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03849_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03849.md"
+  },
+  "2609.03844v1": {
+    "processed_at": "2026-09-07T07:12:33.273227+00:00",
+    "published": "2026-09-03T13:38:49Z",
+    "title": "Flip, Don't Shuffle: Watermarking LLMs at the Speed of Inference",
+    "title_ja": "Flip, Don't Shuffle: Watermarking LLMs at the Speed of Inference（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03844_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03844.md"
+  },
+  "2609.03839v1": {
+    "processed_at": "2026-09-07T07:12:33.277065+00:00",
+    "published": "2026-09-03T13:36:32Z",
+    "title": "Supersingular Elliptic Curves Without Inseparable Small Degree Endomorphisms",
+    "title_ja": "Supersingular Elliptic Curves Without Inseparable Small Degree Endomorphisms（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03839_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03839.md"
+  },
+  "2609.03815v1": {
+    "processed_at": "2026-09-07T07:12:33.282935+00:00",
+    "published": "2026-09-03T13:19:15Z",
+    "title": "Inferring Hidden User Models from the Behavior of Personalized LLM Agents",
+    "title_ja": "Inferring Hidden User Models from the Behavior of Personalized LLMエージェント",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03815_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03815.md"
+  },
+  "2609.03789v1": {
+    "processed_at": "2026-09-07T07:12:33.290091+00:00",
+    "published": "2026-09-03T13:00:19Z",
+    "title": "Beyond the Trust Boundary: A Critical Reassessment of the FIDO2 Threat Model",
+    "title_ja": "Beyond the Trust Boundary: A Critical Reassessment of the FIDO2 Threat Model（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03789_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03789.md"
+  },
+  "2609.03749v1": {
+    "processed_at": "2026-09-07T07:12:33.296043+00:00",
+    "published": "2026-09-03T12:20:00Z",
+    "title": "Rent-a-RAG: Embedding-Space Watermarks for Auditing Third-Party RAG",
+    "title_ja": "Rent-a-RAG: Embedding-Space Watermarks for Auditing Third-Party RAG（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03749_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03749.md"
+  },
+  "2609.03693v1": {
+    "processed_at": "2026-09-07T07:12:33.303068+00:00",
+    "published": "2026-09-03T11:30:08Z",
+    "title": "AlcaTRAz - Anchored Tree-Rule Defense Against Jailbreaks",
+    "title_ja": "AlcaTRAz - Anchored Tree-Rule Defense Against Jailbreaks（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03693_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03693.md"
+  },
+  "2609.03659v1": {
+    "processed_at": "2026-09-07T07:12:33.310050+00:00",
+    "published": "2026-09-03T10:56:26Z",
+    "title": "Security and Privacy in the Musical Metaverse: Threat Analysis and Design Implications",
+    "title_ja": "Security and Privacy in the Musical Metaverse: Threat Analysis and Design Implications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03659_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03659.md"
+  },
+  "2609.03547v1": {
+    "processed_at": "2026-09-07T07:12:33.315317+00:00",
+    "published": "2026-09-03T08:47:05Z",
+    "title": "The Native-Signature Boundary in Post-Quantum Distributed Authorization",
+    "title_ja": "The Native-Signature Boundary in Post-Quantum Distributed Authorization（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03547_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03547.md"
+  },
+  "2609.03453v1": {
+    "processed_at": "2026-09-07T07:12:33.321245+00:00",
+    "published": "2026-09-03T07:07:53Z",
+    "title": "Preprocessing Failure and Adversarial Detection in Depthwise-Separable Edge Vision Systems",
+    "title_ja": "Preprocessing Failure and Adversarial Detection in Depthwise-Separable Edge Vision Systems（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03453_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03453.md"
+  },
+  "2609.03420v1": {
+    "processed_at": "2026-09-07T07:12:33.327435+00:00",
+    "published": "2026-09-03T06:27:03Z",
+    "title": "Privacy, Robustness, and Fairness Trade-offs in Federated Intrusion Detection: Geometric Indistinguishability at the Aggregation Interface",
+    "title_ja": "Privacy, Robustness, and Fairness Trade-offs in Federated Intrusion Detection: Geometric Indistinguishability at the Aggregation Interface（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03420_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03420.md"
+  },
+  "2609.03376v1": {
+    "processed_at": "2026-09-07T07:12:33.334878+00:00",
+    "published": "2026-09-03T05:19:03Z",
+    "title": "Spruce: Scalable Private Outsourced Retrieval Using Compact Embeddings",
+    "title_ja": "Spruce: Scalable Private Outsourced Retrieval Using Compact Embeddings（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03376_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03376.md"
+  },
+  "2609.03280v1": {
+    "processed_at": "2026-09-07T07:12:33.341052+00:00",
+    "published": "2026-09-03T02:17:23Z",
+    "title": "Long-Range Indirect Control-Flow Prediction in Stripped Binaries via Dual Virtual Hubs and Multi-Task Graph Learning",
+    "title_ja": "Long-Range Indirect Control-Flow Prediction in Stripped Binaries via Dual Virtual Hubs and Multi-Task Graph Learning（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03280_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03280.md"
+  },
+  "2609.03266v1": {
+    "processed_at": "2026-09-07T07:12:33.346821+00:00",
+    "published": "2026-09-03T01:49:32Z",
+    "title": "After Cheap Discovery: From unknown to known-and-unfixed",
+    "title_ja": "After Cheap Discovery: From unknown to known-and-unfixed（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03266_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03266.md"
+  },
+  "2609.03249v1": {
+    "processed_at": "2026-09-07T07:12:33.352682+00:00",
+    "published": "2026-09-03T01:11:06Z",
+    "title": "Memetic Search for Supersingular Elliptic Curves over $\\mathbb{F}_p$",
+    "title_ja": "Memetic Search for Supersingular Elliptic Curves over $\\mathbb{F}_p$（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03249_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03249.md"
+  },
+  "2609.03247v1": {
+    "processed_at": "2026-09-07T07:12:33.359409+00:00",
+    "published": "2026-09-03T01:00:58Z",
+    "title": "Trust Me, I'm Your Developer: Self-Issued Authentication in Large Language Models",
+    "title_ja": "Trust Me, I'm Your Developer: Self-Issued Authentication in 大規模言語モデル",
+    "raw_meta_path": "outputs/raw_data/2026-09-03/2609.03247_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-03/2609.03247.md"
+  },
+  "2609.03139v1": {
+    "processed_at": "2026-09-07T07:12:33.367158+00:00",
+    "published": "2026-09-02T20:24:25Z",
+    "title": "Beyond Small Patches: Black-Box Detection and Purification of Diverse Backdoor Triggers",
+    "title_ja": "Beyond Small Patches: Black-Box Detection and Purification of Diverse Backdoor Triggers（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.03139_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.03139.md"
+  },
+  "2609.03133v1": {
+    "processed_at": "2026-09-07T07:12:33.372338+00:00",
+    "published": "2026-09-02T20:16:37Z",
+    "title": "SecDT: A Profile-Based Security Layer for TRDP Communications",
+    "title_ja": "SecDT: A Profile-Based Security Layer for TRDP Communications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.03133_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.03133.md"
+  },
+  "2609.03107v1": {
+    "processed_at": "2026-09-07T07:12:33.377512+00:00",
+    "published": "2026-09-02T19:44:04Z",
+    "title": "CRAW: Codec Robust Audio Watermarking",
+    "title_ja": "CRAW: Codec Robust Audio Watermarking（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.03107_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.03107.md"
+  },
+  "2609.03096v1": {
+    "processed_at": "2026-09-07T07:12:33.382613+00:00",
+    "published": "2026-09-02T19:12:56Z",
+    "title": "A Bayesian Correlated Equilibrium for Early Insider-Threat Detection",
+    "title_ja": "A Bayesian Correlated Equilibrium for Early Insider-Threat Detection（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.03096_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.03096.md"
+  },
+  "2609.03065v1": {
+    "processed_at": "2026-09-07T07:12:33.388664+00:00",
+    "published": "2026-09-02T18:38:01Z",
+    "title": "Distinctness threshold for pseudorandom unitaries",
+    "title_ja": "Distinctness threshold for pseudorandom unitaries（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.03065_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.03065.md"
+  },
+  "2609.03064v1": {
+    "processed_at": "2026-09-07T07:12:33.395043+00:00",
+    "published": "2026-09-02T18:36:30Z",
+    "title": "Differentially private federated learning with Byzantine-robust aggregation: A cross-domain framework for secure model training in banking and healthcare systems",
+    "title_ja": "Differentially private 連合学習 with Byzantine-robust aggregation: A cross-domain framework for secure model training in banking and healthcare systems",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.03064_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.03064.md"
+  },
+  "2609.03055v1": {
+    "processed_at": "2026-09-07T07:12:33.401636+00:00",
+    "published": "2026-09-02T18:29:08Z",
+    "title": "Seeing Less Is Not Seeing Safely: Privacy Leakage from Task-Scoped Robot Perception Exports",
+    "title_ja": "Seeing Less Is Not Seeing Safely: Privacy Leakage from Task-Scoped Robot Perception Exports（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.03055_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.03055.md"
+  },
+  "2609.03036v1": {
+    "processed_at": "2026-09-07T07:12:33.409294+00:00",
+    "published": "2026-09-02T18:08:07Z",
+    "title": "Population-Calibrated Graph Screening at 835-Million-Address Scale, with Label-Free Transfer to New Chains",
+    "title_ja": "Population-Calibrated Graph Screening at 835-Million-Address Scale, with Label-Free Transfer to New Chains（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.03036_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.03036.md"
+  },
+  "2609.02880v1": {
+    "processed_at": "2026-09-07T07:12:33.412360+00:00",
+    "published": "2026-09-02T17:56:39Z",
+    "title": "Overcoming the Randomness-Utility Trade-off in Answering Differentially Private Linear Queries",
+    "title_ja": "Overcoming the Randomness-Utility Trade-off in Answering Differentially Private Linear Queries（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02880_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02880.md"
+  },
+  "2609.02866v1": {
+    "processed_at": "2026-09-07T07:12:33.419925+00:00",
+    "published": "2026-09-02T17:50:39Z",
+    "title": "When Does Authorization End? Effect Closure at Provider Boundaries",
+    "title_ja": "When Does Authorization End? Effect Closure at Provider Boundaries（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02866_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02866.md"
+  },
+  "2609.02852v1": {
+    "processed_at": "2026-09-07T07:12:33.425836+00:00",
+    "published": "2026-09-02T17:37:22Z",
+    "title": "The Implications of Linguistic Illegibility for LLM Security",
+    "title_ja": "The Implications of Linguistic Illegibility for LLM Security（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02852_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02852.md"
+  },
+  "2609.02786v1": {
+    "processed_at": "2026-09-07T07:12:33.431909+00:00",
+    "published": "2026-09-02T16:19:54Z",
+    "title": "SafeEvolve: Harness-Policy Co-Evolution from Agent Experience for Safety Alignment",
+    "title_ja": "SafeEvolve: Harness-Policy Co-Evolution from Agent Experience for Safety Alignment（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02786_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02786.md"
+  },
+  "2609.02774v1": {
+    "processed_at": "2026-09-07T07:12:33.439856+00:00",
+    "published": "2026-09-02T16:11:01Z",
+    "title": "CodePoisonRAG: Knowledge Poisoning Attacks on Retrieval-Augmented Code Generation",
+    "title_ja": "CodePoisonRAG: Knowledge Poisoning Attacks on Retrieval-Augmented Code Generation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02774_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02774.md"
+  },
+  "2609.02741v1": {
+    "processed_at": "2026-09-07T07:12:33.448419+00:00",
+    "published": "2026-09-02T15:46:55Z",
+    "title": "SPADE: SPaT Attack Detection from the Connected Vehicle's Perspective",
+    "title_ja": "SPADE: SPaT Attack Detection from the Connected Vehicle's Perspective（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02741_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02741.md"
+  },
+  "2609.02716v1": {
+    "processed_at": "2026-09-07T07:12:33.453255+00:00",
+    "published": "2026-09-02T15:24:28Z",
+    "title": "Card-Based Computation in the Virtual Player Simulation Model",
+    "title_ja": "Card-Based Computation in the Virtual Player Simulation Model（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02716_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02716.md"
+  },
+  "2609.02690v1": {
+    "processed_at": "2026-09-07T07:12:33.460909+00:00",
+    "published": "2026-09-02T14:58:17Z",
+    "title": "ACLE-MCP: Attested Capability Leases for Execution-Time Trust in Remote LLM Tool Use",
+    "title_ja": "ACLE-MCP: Attested Capability Leases for Execution-Time Trust in Remote LLM Tool Use（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02690_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02690.md"
+  },
+  "2609.02647v1": {
+    "processed_at": "2026-09-07T07:12:33.466988+00:00",
+    "published": "2026-09-02T14:21:02Z",
+    "title": "PrimSynth: An Agentic Approach to Discover, Validate, and Synthesize Exploit Primitives for Linux Kernel Vulnerabilities",
+    "title_ja": "PrimSynth: An Agentic Approach to Discover, Validate, and Synthesize Exploit Primitives for Linux Kernel Vulnerabilities（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02647_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02647.md"
+  },
+  "2609.02624v1": {
+    "processed_at": "2026-09-07T07:12:33.472172+00:00",
+    "published": "2026-09-02T14:03:09Z",
+    "title": "Automated Vulnerability Injection in Smart Contracts Using Large Language Models",
+    "title_ja": "Automated Vulnerability Injection in Smart Contracts Using 大規模言語モデル",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02624_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02624.md"
+  },
+  "2609.02983v1": {
+    "processed_at": "2026-09-07T07:12:33.480486+00:00",
+    "published": "2026-09-02T13:41:50Z",
+    "title": "Boundary-Mutation Testing for Pattern-Based Secret Detection: A Rule-Level Method and Cross-Scanner Evaluation",
+    "title_ja": "Boundary-Mutation Testing for Pattern-Based Secret Detection: A Rule-Level Method and Cross-Scanner Evaluation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02983_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02983.md"
+  },
+  "2609.02568v1": {
+    "processed_at": "2026-09-07T07:12:33.486386+00:00",
+    "published": "2026-09-02T13:17:38Z",
+    "title": "Learning-Based Reconstruction Attacks on Coordinate-Obfuscated Point Clouds",
+    "title_ja": "Learning-Based Reconstruction Attacks on Coordinate-Obfuscated Point Clouds（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02568_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02568.md"
+  },
+  "2609.02564v1": {
+    "processed_at": "2026-09-07T07:12:33.493073+00:00",
+    "published": "2026-09-02T13:15:14Z",
+    "title": "A Finger on the Scale: Covert Policy Steering through Agentic Skills",
+    "title_ja": "A Finger on the Scale: Covert Policy Steering through Agentic Skills（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02564_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02564.md"
+  },
+  "2609.02553v1": {
+    "processed_at": "2026-09-07T07:12:33.501227+00:00",
+    "published": "2026-09-02T13:04:51Z",
+    "title": "The Shape of Ownership: Verifying LLM Provenance through Semantic Structures",
+    "title_ja": "The Shape of Ownership: Verifying LLM Provenance through Semantic Structures（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02553_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02553.md"
+  },
+  "2609.02532v1": {
+    "processed_at": "2026-09-07T07:12:33.506736+00:00",
+    "published": "2026-09-02T12:42:39Z",
+    "title": "SpiderSapien: Client-Centric Web Crawler and Security Scanner",
+    "title_ja": "SpiderSapien: Client-Centric Web Crawler and Security Scanner（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02532_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02532.md"
+  },
+  "2609.02469v1": {
+    "processed_at": "2026-09-07T07:12:33.511099+00:00",
+    "published": "2026-09-02T11:39:02Z",
+    "title": "Evaluating ML-based Intrusion Detection Systems: The Illusion of Model Efficacy",
+    "title_ja": "Evaluating ML-based Intrusion Detection Systems: The Illusion of Model Efficacy（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02469_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02469.md"
+  },
+  "2609.02465v1": {
+    "processed_at": "2026-09-07T07:12:33.517475+00:00",
+    "published": "2026-09-02T11:37:41Z",
+    "title": "Can Risk-Based Alerting Mitigate Cybersecurity Alert Fatigue?",
+    "title_ja": "Can Risk-Based Alerting Mitigate サイバーセキュリティ Alert Fatigue?",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02465_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02465.md"
+  },
+  "2609.02393v1": {
+    "processed_at": "2026-09-07T07:12:33.523647+00:00",
+    "published": "2026-09-02T10:04:07Z",
+    "title": "CAPTCHAs in the Agentic Era: Solvers That Learn from Every Encounter",
+    "title_ja": "CAPTCHAs in the Agentic Era: Solvers That Learn from Every Encounter（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02393_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02393.md"
+  },
+  "2609.02971v1": {
+    "processed_at": "2026-09-07T07:12:33.530561+00:00",
+    "published": "2026-09-02T09:49:39Z",
+    "title": "Privacy Leakage in Federated Learning: Gradient-Based Client Identity Inference and Defenses for Inertial Sensing in Vehicular Edge Networks",
+    "title_ja": "Privacy Leakage in 連合学習: Gradient-Based Client Identity Inference and Defenses for Inertial Sensing in Vehicular Edge Networks",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02971_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02971.md"
+  },
+  "2609.02376v1": {
+    "processed_at": "2026-09-07T07:12:33.537890+00:00",
+    "published": "2026-09-02T09:48:26Z",
+    "title": "Removing Speech, Keeping Activities: A Privacy Firewall for Acoustic Sensing in Assisted Living",
+    "title_ja": "Removing Speech, Keeping Activities: A Privacy Firewall for Acoustic Sensing in Assisted Living（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02376_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02376.md"
+  },
+  "2609.02328v1": {
+    "processed_at": "2026-09-07T07:12:33.543313+00:00",
+    "published": "2026-09-02T09:08:00Z",
+    "title": "Poisoning Attacks on the PGM-index",
+    "title_ja": "Poisoning Attacks on the PGM-index（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02328_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02328.md"
+  },
+  "2609.02316v1": {
+    "processed_at": "2026-09-07T07:12:33.549388+00:00",
+    "published": "2026-09-02T09:01:51Z",
+    "title": "Counter-GEO-Bench: Evaluating Defenses Against Information-Distorting Generative Engine Optimization",
+    "title_ja": "Counter-GEO-Bench: Evaluating Defenses Against Information-Distorting Generative Engine Optimization（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02316_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02316.md"
+  },
+  "2609.02293v1": {
+    "processed_at": "2026-09-07T07:12:33.558188+00:00",
+    "published": "2026-09-02T08:40:19Z",
+    "title": "SEAL: Reinforcing Global Safety in Mixture-of-Experts through Shared Expert ALignment",
+    "title_ja": "SEAL: Reinforcing Global Safety in Mixture-of-Experts through Shared Expert ALignment（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02293_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02293.md"
+  },
+  "2609.02268v1": {
+    "processed_at": "2026-09-07T07:12:33.563079+00:00",
+    "published": "2026-09-02T08:15:52Z",
+    "title": "Retrosynthesis of Synthetic Media for Explainable AI Provenance Forensics",
+    "title_ja": "Retrosynthesis of Synthetic Media for Explainable AI Provenance Forensics（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02268_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02268.md"
+  },
+  "2609.02967v1": {
+    "processed_at": "2026-09-07T07:12:33.570286+00:00",
+    "published": "2026-09-02T07:57:12Z",
+    "title": "Privacy-Preserving Topology-Guided Safety for LLM-Based Multi-Agent Systems via Federated Graph Learning",
+    "title_ja": "Privacy-Preserving Topology-Guided Safety for LLM-Based Multi-Agent Systems via Federated Graph Learning（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02967_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02967.md"
+  },
+  "2609.02208v1": {
+    "processed_at": "2026-09-07T07:12:33.577337+00:00",
+    "published": "2026-09-02T07:21:25Z",
+    "title": "Agentic Settlement Protocol: An Application Profile for Refundable, Delayed-Fulfilment Agent Commerce on Stablecoin Rails",
+    "title_ja": "Agentic Settlement Protocol: An Application Profile for Refundable, Delayed-Fulfilment Agent Commerce on Stablecoin Rails（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02208_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02208.md"
+  },
+  "2609.02964v1": {
+    "processed_at": "2026-09-07T07:12:33.583553+00:00",
+    "published": "2026-09-02T07:13:40Z",
+    "title": "When Optimization Becomes Manipulation: Defending Generative Search against Malicious Generative Engine Optimization",
+    "title_ja": "When Optimization Becomes Manipulation: Defending Generative Search against Malicious Generative Engine Optimization（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02964_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02964.md"
+  },
+  "2609.02177v1": {
+    "processed_at": "2026-09-07T07:12:33.589153+00:00",
+    "published": "2026-09-02T06:39:43Z",
+    "title": "WeaveMark: Robust and Scalable Multi-bit LLM Watermarking via Coded Payload Spreading",
+    "title_ja": "WeaveMark: Robust and Scalable Multi-bit LLM Watermarking via Coded Payload Spreading（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02177_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02177.md"
+  },
+  "2609.02127v1": {
+    "processed_at": "2026-09-07T07:12:33.596395+00:00",
+    "published": "2026-09-02T05:35:33Z",
+    "title": "Stored Is Not Supported: Typed Provenance and Assertion Guardrails for Persistent AI Agents",
+    "title_ja": "Stored Is Not Supported: Typed Provenance and Assertion Guardrails for Persistent AI Agents（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02127_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02127.md"
+  },
+  "2609.02958v1": {
+    "processed_at": "2026-09-07T07:12:33.601524+00:00",
+    "published": "2026-09-02T04:35:32Z",
+    "title": "PrivateHub: Contrastive Diffusion Model for Private Sensor-Intensive Environment Data Generation",
+    "title_ja": "PrivateHub: Contrastive Diffusion Model for Private Sensor-Intensive Environment Data Generation（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02958_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02958.md"
+  },
+  "2609.02082v2": {
+    "processed_at": "2026-09-07T07:12:33.606983+00:00",
+    "published": "2026-09-02T04:12:35Z",
+    "title": "Transfer Safety Awareness for Cross-Modal Safety Drift in Multimodal Large Language Models",
+    "title_ja": "Transfer Safety Awareness for Cross-Modal Safety Drift in Multimodal 大規模言語モデル",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02082_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02082.md"
+  },
+  "2609.02048v1": {
+    "processed_at": "2026-09-07T07:12:33.614395+00:00",
+    "published": "2026-09-02T03:25:29Z",
+    "title": "Type-Directed, Secure-by-Construction Enclave Partitioning for LLVM",
+    "title_ja": "Type-Directed, Secure-by-Construction Enclave Partitioning for LLVM（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02048_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02048.md"
+  },
+  "2609.02035v1": {
+    "processed_at": "2026-09-07T07:12:33.620018+00:00",
+    "published": "2026-09-02T03:07:11Z",
+    "title": "Implicit Manipulation for Skill Selection in LLM Agents with Semantic Matching",
+    "title_ja": "Implicit Manipulation for Skill Selection in LLMエージェント with Semantic Matching",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02035_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02035.md"
+  },
+  "2609.02007v1": {
+    "processed_at": "2026-09-07T07:12:33.626187+00:00",
+    "published": "2026-09-02T02:32:42Z",
+    "title": "C$^2$T-OpenMax: A Novel Open-Set WiFi RF Fingerprinting Method via Center Constrained Learning and Confidence-Guided Tail Modeling",
+    "title_ja": "C$^2$T-OpenMax: A Novel Open-Set WiFi RF Fingerprinting Method via Center Constrained Learning and Confidence-Guided Tail Modeling（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.02007_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.02007.md"
+  },
+  "2609.01992v1": {
+    "processed_at": "2026-09-07T07:12:33.633531+00:00",
+    "published": "2026-09-02T02:00:02Z",
+    "title": "ClaimReceipt: Verifying Evidence Sufficiency and Coverage in Agent Evaluations",
+    "title_ja": "ClaimReceipt: Verifying Evidence Sufficiency and Coverage in Agent Evaluations（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-02/2609.01992_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-02/2609.01992.md"
+  },
+  "iacr-2024-1580": {
+    "processed_at": "2026-09-07T07:12:33.641515+00:00",
+    "published": "Mon, 07 Oct 2024 09:25:43 +0000",
+    "title": "Polynomial Time Cryptanalytic Extraction of Deep Neural Networks in the Hard-Label Setting (Extended Version)",
+    "title_ja": "Polynomial Time Cryptanalytic Extraction of Deep Neural Networks in the Hard-Label Setting (Extended Version)（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2024-1580_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2024-1580.md"
+  },
+  "iacr-2025-908": {
+    "processed_at": "2026-09-07T07:12:33.647622+00:00",
+    "published": "Wed, 21 May 2025 05:53:01 +0000",
+    "title": "SubLogarithmic Linear Time SNARKs from Improved Sum-Check",
+    "title_ja": "SubLogarithmic Linear Time SNARKs from Improved Sum-Check（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2025-908_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2025-908.md"
+  },
+  "iacr-2026-228": {
+    "processed_at": "2026-09-07T07:12:33.653794+00:00",
+    "published": "Wed, 11 Feb 2026 12:23:21 +0000",
+    "title": "SCA-MAYO: Demystifying Side-channel Security of MAYO Signature Scheme",
+    "title_ja": "SCA-MAYO: Demystifying Side-channel Security of MAYO Signature Scheme（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-228_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-228.md"
+  },
+  "iacr-2026-051": {
+    "processed_at": "2026-09-07T07:12:33.656857+00:00",
+    "published": "Tue, 13 Jan 2026 06:04:59 +0000",
+    "title": "An Improved Randomized AKS-class Primality Proving Algorithm",
+    "title_ja": "An Improved Randomized AKS-class Primality Proving Algorithm（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-051_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-051.md"
+  },
+  "iacr-2025-1957": {
+    "processed_at": "2026-09-07T07:12:33.664637+00:00",
+    "published": "Mon, 20 Oct 2025 07:42:39 +0000",
+    "title": "Fast Batch Matrix Multiplication in Ciphertexts",
+    "title_ja": "Fast Batch Matrix Multiplication in Ciphertexts（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2025-1957_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2025-1957.md"
+  },
+  "iacr-2026-1868": {
+    "processed_at": "2026-09-07T07:12:33.667240+00:00",
+    "published": "Wed, 02 Sep 2026 14:43:12 +0000",
+    "title": "Zero-Knowledge PCPs of Quasilinear Size via Locally Simulatable Sheaf Codes",
+    "title_ja": "Zero-Knowledge PCPs of Quasilinear Size via Locally Simulatable Sheaf Codes（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-1868_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-1868.md"
+  },
+  "iacr-2026-856": {
+    "processed_at": "2026-09-07T07:12:33.678933+00:00",
+    "published": "Fri, 01 May 2026 10:48:14 +0000",
+    "title": "MERIDIAN: A Toroid-Inspired Permutation Block Cipher for Constrained Environments",
+    "title_ja": "MERIDIAN: A Toroid-Inspired Permutation Block Cipher for Constrained Environments（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-856_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-856.md"
+  },
+  "iacr-2026-575": {
+    "processed_at": "2026-09-07T07:12:33.688285+00:00",
+    "published": "Mon, 23 Mar 2026 07:53:09 +0000",
+    "title": "RoKoko: Lattice-based Succinct Arguments, a Committed Refinement",
+    "title_ja": "RoKoko: Lattice-based Succinct Arguments, a Committed Refinement（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-575_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-575.md"
+  },
+  "iacr-2025-1965": {
+    "processed_at": "2026-09-07T07:12:33.691631+00:00",
+    "published": "Mon, 20 Oct 2025 13:26:02 +0000",
+    "title": "Auntie: Unobservable Contracts from Zerocash and Trusted Execution Environments",
+    "title_ja": "Auntie: Unobservable Contracts from Zerocash and Trusted Execution Environments（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2025-1965_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2025-1965.md"
+  },
+  "iacr-2026-1135": {
+    "processed_at": "2026-09-07T07:12:33.696347+00:00",
+    "published": "Mon, 01 Jun 2026 23:26:43 +0000",
+    "title": "Private Information Retrieval: A Tutorial and Survey",
+    "title_ja": "Private Information Retrieval: A Tutorial and Survey（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-1135_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-1135.md"
+  },
+  "iacr-2026-783": {
+    "processed_at": "2026-09-07T07:12:33.702546+00:00",
+    "published": "Tue, 21 Apr 2026 02:54:01 +0000",
+    "title": "Batch-Puncturing Circuit CP-ABE (and More) from Lattices",
+    "title_ja": "Batch-Puncturing Circuit CP-ABE (and More) from Lattices（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-783_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-783.md"
+  },
+  "iacr-2026-1861": {
+    "processed_at": "2026-09-07T07:12:33.708593+00:00",
+    "published": "Wed, 02 Sep 2026 08:26:54 +0000",
+    "title": "Anonymous Attribute-Based Signcryption: Definitions, Constructions, and Applications",
+    "title_ja": "Anonymous Attribute-Based Signcryption: Definitions, Constructions, and Applications（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-1861_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-1861.md"
+  },
+  "iacr-2025-2262": {
+    "processed_at": "2026-09-07T07:12:33.713365+00:00",
+    "published": "Tue, 16 Dec 2025 17:12:27 +0000",
+    "title": "Certified-Everlasting Quantum NIZK Proofs",
+    "title_ja": "Certified-Everlasting Quantum NIZK Proofs（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2025-2262_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2025-2262.md"
+  },
+  "iacr-2025-2236": {
+    "processed_at": "2026-09-07T07:12:33.721230+00:00",
+    "published": "Fri, 12 Dec 2025 00:19:12 +0000",
+    "title": "Extending the SPHINCS+ Framework: Varying the Tree Heights and Chain Lengths",
+    "title_ja": "Extending the SPHINCS+ Framework: Varying the Tree Heights and Chain Lengths（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2025-2236_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2025-2236.md"
+  },
+  "iacr-2026-784": {
+    "processed_at": "2026-09-07T07:12:33.726247+00:00",
+    "published": "Tue, 21 Apr 2026 03:57:03 +0000",
+    "title": "Secure and Updatable Single Password Authentication",
+    "title_ja": "Secure and Updatable Single Password Authentication（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2026-784_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2026-784.md"
+  },
+  "iacr-2025-2021": {
+    "processed_at": "2026-09-07T07:12:33.732680+00:00",
+    "published": "Thu, 30 Oct 2025 15:33:10 +0000",
+    "title": "TreeCast: Multi-Party Key Establishment Protocol for IoT Devices",
+    "title_ja": "TreeCast: Multi-Party Key Establishment Protocol for IoT Devices（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2025-2021_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2025-2021.md"
+  },
+  "iacr-2025-2094": {
+    "processed_at": "2026-09-07T07:12:33.738545+00:00",
+    "published": "Fri, 14 Nov 2025 04:36:08 +0000",
+    "title": "Vega: Low-Latency Zero-Knowledge Proofs over Existing Credentials",
+    "title_ja": "Vega: Low-Latency Zero-Knowledge Proofs over Existing Credentials（セキュリティ分析論文）",
+    "raw_meta_path": "outputs/raw_data/2026-09-07/iacr-2025-2094_meta.json",
+    "okf_path": "outputs/okf_papers/2026-09-07/iacr-2025-2094.md"
   }
 }

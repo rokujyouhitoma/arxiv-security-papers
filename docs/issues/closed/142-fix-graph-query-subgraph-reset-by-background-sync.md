@@ -23,8 +23,8 @@ ID: 142
 ---
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
-- [x] [site/dashboard.html](file:///workspace/arxiv-security-papers/site/dashboard.html)
-- [x] [tests/web/test_dashboard_graph_tab.py](file:///workspace/arxiv-security-papers/tests/web/test_dashboard_graph_tab.py)
+- [x] [site/dashboard.html](site/dashboard.html)
+- [x] [tests/web/test_dashboard_graph_tab.py](tests/web/test_dashboard_graph_tab.py)
 
 ---
 
