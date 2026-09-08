@@ -105,6 +105,13 @@
   - [18.4 SQLExecutor における動的テーブル作成のメモリ局所化](#184-sqlexecutor-における動的テーブル作成のメモリ局所化)
   - [18.5 PEP 249 / sqlite3 互換 API 規約と双方向同期](#185-pep-249--sqlite3-互換-api-規約と双方向同期)
   - [18.6 セキュリティ・多層防御境界（完全一致パス検証・DoS制限・状態破棄）](#186-セキュリティ多層防御境界完全一致パス検証dos制限状態破棄)
+- [19. 単一 .vdb マルチテーブルコンテナ（OKFMTC01）および純粋 Python PEP 249 (sqlite3 完全互換) インターフェース仕様](#19-単一-vdb-マルチテーブルコンテナokfmtc01および純粋-python-pep-249-sqlite3-完全互換インターフェース仕様)
+  - [19.1 背景と設計思想（Single-File Multi-Table Architecture & Zero-C-Extension）](#191-背景と設計思想single-file-multi-table-architecture--zero-c-extension)
+  - [19.2 マルチテーブルコンテナ物理フォーマット（OKFMTC01 Binary Layout）](#192-マルチテーブルコンテナ物理フォーマットokfmtc01-binary-layout)
+  - [19.3 MultiTableVectorStorage コアアーキテクチャとテーブル仮想化](#193-multitablevectorstorage-コアアーキテクチャとテーブル仮想化)
+  - [19.4 純粋 Python PEP 249 ドライバ実装仕様（sqlite3 互換インターフェース）](#194-純粋-python-pep-249-ドライバ実装仕様sqlite3-互換インターフェース)
+  - [19.5 グラフサブシステム（PropertyGraphEngine）との統合仕様](#195-グラフサブシステムpropertygraphengineとの統合仕様)
+  - [19.6 セキュリティ・多層防御境界（STRIDE 脅威分析と耐障害性）](#196-セキュリティ多層防御境界stride-脅威分析と耐障害性)
 
 ---
 
@@ -2005,5 +2012,237 @@ SQLite の公式仕様上、`:memory:` データベースに対して `PRAGMA jo
 | **Information Leakage** | コネクション終了後のプロセスヒープへの機密ベクトルデータ残留 | `close()` 時に内部リストおよび `io.BytesIO` バッファを明示的に解放・ゼロクリア。 |
 
 ---
-*審議終了: Systems Architect, Database Specialist 合意承認済*
+
+# 19. 単一 .vdb マルチテーブルコンテナ（OKFMTC01）および純粋 Python PEP 249 (sqlite3 完全互換) インターフェース仕様
+
+## 19.1 背景と設計思想（Single-File Multi-Table Architecture & Zero-C-Extension）
+
+従来の `src/database`（`VectorStorage` / `OKFVEC01`）は「1 ファイル ＝ 1 テーブル」のセグメント構造を基本としていたため、複数のテーブル（例: `vertices`, `edges`, `claims`, `evidences`）を扱う際にディスク上の物理ファイルが散乱し、バックアップ、アトミックな移動、およびファイル管理のオーバーヘッドが発生していました。
+
+また、リポジトリ全体の方針として **「C 言語拡張である標準 `sqlite3` パッケージを排除し、ゼロ外部依存の純粋 Python で自作データベースエンジンを完結させる」** という厳格な制約が確立されました。しかし、利用側の開発体験（DX）としては、Python 開発者に最も広く定着している標準規約 **PEP 249 (Python Database API Specification v2.0 / `sqlite3` 互換)** と完全に同一の書き味（`connect()`, `cursor()`, `execute()`, `fetchall()`, `commit()`, `close()`）を提供することが、保守性と学習コスト削減の観点から極めて重要です。
+
+本章では、以下の 2 大コア機能の統合仕様を規定します：
+1. **単一の物理ファイル（`.vdb`）内で複数テーブルを独立管理するマルチテーブルコンテナ仕様（`OKFMTC01`）**
+2. **`import sqlite3` を一切使用せず、純粋 Python のみで動作する PEP 249 準拠 `sqlite3` 完全互換プログラミングインターフェース**
+
+```mermaid
+graph TD
+    subgraph "Application & Graph Layer"
+        UserCode["Python Client Code<br>(from database import connect)"]
+        GraphEngine["PropertyGraphEngine<br>(outputs/database/knowledge_graph.vdb)"]
+    end
+
+    subgraph "PEP 249 Driver Layer (src/database/)"
+        Conn["Connection<br>(connect, cursor, commit, rollback, close)"]
+        Cur["Cursor<br>(execute, executemany, fetchone, fetchall)"]
+    end
+
+    subgraph "Execution & Query Engine"
+        SQLExec["SQLExecutor<br>(Pure-Python AST Parser & Execution Engine)"]
+        Catalogs["TableCatalog Dict<br>('vertices' / 'edges' / ...)"]
+    end
+
+    subgraph "Multi-Table Storage Container (OKFMTC01)"
+        MultiStorage["MultiTableVectorStorage<br>(outputs/database/knowledge_graph.vdb)"]
+        SuperBlock["SuperBlock (64B)<br>Magic: OKFMTC01, CRC32, Catalog Offset"]
+        Tbl1["Table: vertices<br>(Header + Float32 Vectors + JSON)"]
+        Tbl2["Table: edges<br>(Header + Float32 Vectors + JSON)"]
+        MasterCat["Master Table Catalog (UTF-8 JSON)<br>Table Offsets, Dimensions, Row Counts"]
+    end
+
+    UserCode --> Conn
+    GraphEngine --> Conn
+    Conn --> Cur
+    Cur --> SQLExec
+    SQLExec --> Catalogs
+    Catalogs --> MultiStorage
+    MultiStorage --> SuperBlock
+    MultiStorage --> Tbl1
+    MultiStorage --> Tbl2
+    MultiStorage --> MasterCat
+```
+
+---
+
+## 19.2 マルチテーブルコンテナ物理フォーマット（OKFMTC01 Binary Layout）
+
+単一の `.vdb` ファイル（または `:memory:` バッファ）内で複数テーブルをカプセル化するためのバイナリレイアウトです。
+
+```text
++-------------------------------------------------------------------------------+
+| SuperBlock (64 bytes):                                                        |
+| - 0x00..0x07 (8B): Magic Bytes: b"OKFMTC01"                                  |
+| - 0x08..0x09 (2B): Format Version: uint16 = 1                                 |
+| - 0x0A..0x0B (2B): Table Count: uint16                                        |
+| - 0x0C..0x13 (8B): Catalog Offset: uint64 (ファイル先頭からの絶対バイトオフセット)     |
+| - 0x14..0x1B (8B): Catalog Length: uint64 (カタログ JSON のバイト長)             |
+| - 0x1C..0x1F (4B): Catalog CRC32 Checksum: uint32 (改ざん・破損検知用)          |
+| - 0x20..0x27 (8B): Modified Timestamp: uint64 (UTC Unix Epoch 秒)             |
+| - 0x28..0x3F (24B): Reserved Padding (全ゼロ予約領域)                         |
++-------------------------------------------------------------------------------+
+| Table Segment 1 (例: vertices)                                                |
+| - OKFVEC01 単一テーブルバイナリ互換ブロック                                    |
+|   [Header 32B (dim, count, meta_offset)]                                      |
+|   [Float32 Vectors: count * dim * 4 bytes]                                    |
+|   [Metadata JSON: [{"id": ...}, ...]]                                         |
++-------------------------------------------------------------------------------+
+| Table Segment 2 (例: edges)                                                   |
+| - OKFVEC01 単一テーブルバイナリ互換ブロック                                    |
+|   [Header 32B (dim, count, meta_offset)]                                      |
+|   [Float32 Vectors: count * dim * 4 bytes]                                    |
+|   [Metadata JSON: [{"src_id": ..., "dst_id": ...}, ...]]                      |
++-------------------------------------------------------------------------------+
+| ... (追加テーブルセグメント群)                                                |
++-------------------------------------------------------------------------------+
+| Master Table Catalog Block (UTF-8 JSON, 可変長):                              |
+| {                                                                             |
+|   "format_version": 1,                                                        |
+|   "created_at": 1757332800,                                                   |
+|   "tables": {                                                                 |
+|     "vertices": {                                                             |
+|       "offset": 64,                                                           |
+|       "length": 32048,                                                        |
+|       "dim": 16,                                                              |
+|       "count": 194,                                                           |
+|       "schema": {"primary_key": "id", "indexed_columns": ["label"]}           |
+|     },                                                                        |
+|     "edges": {                                                                |
+|       "offset": 32112,                                                        |
+|       "length": 18450,                                                        |
+|       "dim": 16,                                                              |
+|       "count": 236,                                                           |
+|       "schema": {"primary_key": "(src_id, dst_id, label)"}                    |
+|     }                                                                         |
+|   }                                                                           |
+| }                                                                             |
++-------------------------------------------------------------------------------+
+```
+
+### 19.2.1 物理設計の特長
+1. **異次元ベクトルの共存**: テーブルごとに `dim`（例: 頂点用 64 次元 vs 辺用 16 次元 vs メタデータのみ 0/16 次元）を個別に定義・保持可能。
+2. **既存 `VectorStorage` との完全なブロック互換性**: 各テーブルセグメントは単体で `OKFVEC01` の有効なバイナリ形式となっているため、オフセットから切り出すだけで既存の `VectorStorage` ロジックで即座にパース・操作可能。
+3. **高速シーク**: 末尾のカタログ JSON を参照することで、不要なテーブルを一切読まずに対象テーブルのみをピンポイントで mmap / read 可能。
+
+---
+
+## 19.3 MultiTableVectorStorage コアアーキテクチャとテーブル仮想化
+
+`src/database/storage/multi_storage.py` に配置されるコアストレージクラスです。
+
+```python
+class MultiTableVectorStorage:
+    """
+    Manages multiple logical VectorStorage tables inside a single .vdb physical container.
+    """
+    SUPERBLOCK_MAGIC = b"OKFMTC01"
+    SUPERBLOCK_FORMAT = "<8sHHQQIQ24s"  # 64 Bytes
+    SUPERBLOCK_SIZE = struct.calcsize(SUPERBLOCK_FORMAT)
+
+    def __init__(self, file_path: str = ":memory:") -> None:
+        self.file_path = file_path
+        self.is_memory = (file_path == ":memory:")
+        self._tables: Dict[str, VectorStorage] = {}
+        if not self.is_memory and os.path.exists(self.file_path):
+            self.load()
+
+    def get_table(self, name: str) -> VectorStorage:
+        """Retrieves or lazily creates a table storage view."""
+        if name not in self._tables:
+            raise KeyError(f"Table '{name}' not found in container")
+        return self._tables[name]
+
+    def create_table(self, name: str, dim: int = 16) -> VectorStorage:
+        """Defines a new table inside the container."""
+        tbl = VectorStorage(file_path=":memory:", dim=dim)
+        self._tables[name] = tbl
+        return tbl
+
+    def list_tables(self) -> List[str]:
+        return sorted(list(self._tables.keys()))
+
+    def save(self, target_path: Optional[str] = None) -> None:
+        """Serializes all tables and catalog into a single atomic binary file."""
+        ...
+```
+
+---
+
+## 19.4 純粋 Python PEP 249 ドライバ実装仕様（sqlite3 互換インターフェース）
+
+### 19.4.1 構文とコード比較
+標準ライブラリの `sqlite3`（C 拡張）と全く同一の書き味を提供します。
+
+```python
+# ============================================================
+# 利用コード（from database import connect を使用）
+# ============================================================
+from database import connect
+
+# 単一の .vdb ファイルに接続（または connect(":memory:")）
+conn = connect("outputs/database/knowledge_graph.vdb")
+cursor = conn.cursor()
+
+# 1. テーブル作成（DDL）
+cursor.execute("CREATE TABLE IF NOT EXISTS vertices (id TEXT PRIMARY KEY, label TEXT);")
+
+# 2. パラメータバインディング付き挿入（DML）
+cursor.execute(
+    "INSERT INTO vertices (id, label) VALUES (?, ?);",
+    ("Paper:2609.12345", "Paper")
+)
+
+# 3. バッチ挿入（executemany）
+papers = [("Paper:1", "Paper"), ("Paper:2", "Paper")]
+cursor.executemany("INSERT INTO vertices (id, label) VALUES (?, ?);", papers)
+
+# 4. クエリとフェッチ（DQL）
+cursor.execute("SELECT id, label FROM vertices WHERE label = ?;", ("Paper",))
+rows = cursor.fetchall()  # -> [('Paper:2609.12345', 'Paper'), ...]
+
+# 5. トランザクションコミット
+conn.commit()
+conn.close()
+```
+
+### 19.4.2 コンテキストマネージャー完全準拠
+```python
+with connect("outputs/database/knowledge_graph.vdb") as conn:
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM edges WHERE label = ?", ("EXPLOITS",))
+        for edge_row in cur.fetchall():
+            print(edge_row)
+```
+
+---
+
+## 19.5 グラフサブシステム（PropertyGraphEngine）との統合仕様
+
+`PropertyGraphEngine`（`src/graph/engine.py`）は、物理ストレージとして単一ファイル `knowledge_graph.vdb` を直接使用します。
+
+1. **初期化 (`_init_storage`)**:
+   - `self.container = MultiTableVectorStorage(self.storage_path)` を生成。
+   - `self.v_storage = self.container.get_or_create_table("vertices", dim=16)`
+   - `self.e_storage = self.container.get_or_create_table("edges", dim=16)`
+   - `SQLExecutor` に両テーブルをカタログ登録。
+2. **単一ファイルセーブ (`save`)**:
+   - `self.container.save(self.storage_path)` により、単一の `.vdb` ファイルとしてアトミックにディスクへフラッシュ。
+3. **PEP 249 直結メソッド (`connect`)**:
+   - `engine.connect() -> Connection` により、グラフエンジンから直接 PEP 249 コネクションを払い出し、標準 SQL クエリや ORM ライクな操作を可能にする。
+
+---
+
+## 19.6 セキュリティ・多層防御境界（STRIDE 脅威分析と耐障害性）
+
+| 脅威分類 (STRIDE) | 潜在リスク (Threat Vector) | 対策仕様 (Mitigation Specification) |
+| :--- | :--- | :--- |
+| **Tampering / Spoofing** | 不正バイナリ・偽造コンテナのロード | SuperBlock の Magic Bytes（`b"OKFMTC01"`）、バージョンチェック（`version == 1`）、および CRC32 チェックサムによるカタログ整合性検証を必須化。 |
+| **Tampering / Memory Corruption** | カタログ内のオフセット改ざんによる任意メモリアクセス・境界破壊 | カタログ内の各テーブル `offset` および `length` が実ファイルサイズ内に厳密に収まっているか、隣接テーブルと重なっていないかを完全検証（`MultiTableSecurityError`）。 |
+| **Information Disclosure** | パストラバーサルによるシステム重要領域の不正読み出し | `connect(path)` のファイルパス引数に対し、安全なワークスペースパス境界チェック（`is_safe_workspace_path`）を実施（`:memory:` 指定は例外許可）。 |
+| **Denial of Service (DoS)** | 巨大コンテナによるメモリ枯渇 (OOM) | `MAX_TABLE_COUNT = 1024`、`MAX_TOTAL_VECTORS = 10_000_000` の安全上限を強制。 |
+| **SQL Injection** | SQL 実行時の不正文字列注入 | PEP 249 カーソルの `execute(sql, params)` において、文字列連結を完全排除し、型安全なパラメータバインディングを強制。 |
+| **Elevation of Privilege** | 閲覧専用ロールによるスキーマ破壊 | `connect(..., role="viewer")` 指定時に DDL / DML クエリを拒絶する RBAC アクセス制御を透過適用。 |
+
+---
+
+*審議終了: Systems Architect, Database Specialist, PM 合意承認済*
 

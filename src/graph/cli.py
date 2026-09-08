@@ -59,7 +59,7 @@ def _index_single_paper(fpath: str, engine: PropertyGraphEngine) -> int:
 def _resolve_graph_path(workspace_dir: str, explicit_path: Optional[str] = None) -> str:
     if explicit_path:
         return explicit_path
-    return os.path.join(workspace_dir, "outputs", "database")
+    return os.path.join(workspace_dir, "outputs", "database", "knowledge_graph.vdb")
 
 
 def build_knowledge_graph(workspace_dir: str, output_path: Optional[str] = None) -> int:

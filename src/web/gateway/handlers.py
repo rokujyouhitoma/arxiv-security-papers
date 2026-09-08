@@ -660,22 +660,31 @@ def _load_graph_instance_and_counts(
         return 0, 0, None
 
 
+def _resolve_graph_file_size(workspace_dir: str) -> int:
+    kg_path = os.path.join(workspace_dir, "outputs", "database", "knowledge_graph.vdb")
+    if os.path.exists(kg_path):
+        return os.path.getsize(kg_path)
+    v_p = os.path.join(workspace_dir, "outputs", "database", "vertices.vdb")
+    e_p = os.path.join(workspace_dir, "outputs", "database", "edges.vdb")
+    v_sz = os.path.getsize(v_p) if os.path.exists(v_p) else 0
+    e_sz = os.path.getsize(e_p) if os.path.exists(e_p) else 0
+    return v_sz + e_sz
+
+
 def _introspect_graph_table_metrics(
     workspace_dir: str,
 ) -> Tuple[List[Dict[str, Any]], int, int, Any]:
-    """Introspects vertices and edges tables from pure VectorStorage backends."""
-    v_path = os.path.join(workspace_dir, "outputs", "database", "vertices.vdb")
-    e_path = os.path.join(workspace_dir, "outputs", "database", "edges.vdb")
-    vertex_size = os.path.getsize(v_path) if os.path.exists(v_path) else 0
-    edge_size = os.path.getsize(e_path) if os.path.exists(e_path) else 0
-
+    """Introspects vertices and edges tables from pure MultiTableVectorStorage container."""
+    kg_size = _resolve_graph_file_size(workspace_dir)
     v_count, e_count, ge_instance = _load_graph_instance_and_counts(workspace_dir)
+    vertex_size = kg_size // 2
+    edge_size = kg_size - vertex_size
 
     tables = [
         {
             "table_name": "vertices",
             "category": "Property Graph / Entity Store",
-            "storage_engine": "VectorStorage / Pure-Python SQLExecutor",
+            "storage_engine": "MultiTableVectorStorage / Pure-Python SQLExecutor",
             "row_count": v_count,
             "size_bytes": vertex_size,
             "size_human": _format_size(vertex_size),
@@ -685,7 +694,7 @@ def _introspect_graph_table_metrics(
         {
             "table_name": "edges",
             "category": "Property Graph / Causal Triples",
-            "storage_engine": "VectorStorage / Pure-Python SQLExecutor",
+            "storage_engine": "MultiTableVectorStorage / Pure-Python SQLExecutor",
             "row_count": e_count,
             "size_bytes": edge_size,
             "size_human": _format_size(edge_size),
@@ -693,7 +702,7 @@ def _introspect_graph_table_metrics(
             "indexed_columns": ["src_id", "dst_id", "label"],
         },
     ]
-    return tables, v_count + e_count, vertex_size + edge_size, ge_instance
+    return tables, v_count + e_count, kg_size, ge_instance
 
 
 def _introspect_paper_table_metrics(
@@ -1039,18 +1048,16 @@ def _safe_graph_stats(ge_instance: Any) -> Tuple[int, int]:
 def _introspect_graph_database(
     workspace_dir: str, ge_instance: Any, db_kpis: Dict[str, Any]
 ) -> Dict[str, Any]:
-    v_path = os.path.join(workspace_dir, "outputs", "database", "vertices.vdb")
-    e_path = os.path.join(workspace_dir, "outputs", "database", "edges.vdb")
-    v_size = os.path.getsize(v_path) if os.path.exists(v_path) else 0
-    e_size = os.path.getsize(e_path) if os.path.exists(e_path) else 0
-    file_size = v_size + e_size
+    file_size = _resolve_graph_file_size(workspace_dir)
+    v_size = file_size // 2
+    e_size = file_size - v_size
     v_count, e_count = _safe_graph_stats(ge_instance)
 
     tables = [
         {
             "table_name": "vertices",
             "category": "Graph Entities & Security Vertices (ABox)",
-            "storage_engine": "VectorStorage / Pure-Python SQLExecutor",
+            "storage_engine": "MultiTableVectorStorage / Pure-Python SQLExecutor",
             "row_count": v_count,
             "size_bytes": v_size,
             "size_human": _format_size(v_size),
@@ -1060,7 +1067,7 @@ def _introspect_graph_database(
         {
             "table_name": "edges",
             "category": "Causal Chains & ATT&CK Triples (ABox)",
-            "storage_engine": "VectorStorage / Pure-Python SQLExecutor",
+            "storage_engine": "MultiTableVectorStorage / Pure-Python SQLExecutor",
             "row_count": e_count,
             "size_bytes": e_size,
             "size_human": _format_size(e_size),
@@ -1113,8 +1120,8 @@ def _introspect_graph_database(
         "name": "graph_db",
         "display_name": "Property Graph & Ontology Store",
         "category": "Knowledge Graph & Full-Spectrum SKO",
-        "storage_engine": "Property Graph Engine (VectorStorage & Pure-Python SQLExecutor + Dual CSR)",
-        "file_path": "outputs/database/vertices.vdb, outputs/database/edges.vdb",
+        "storage_engine": "Property Graph Engine (MultiTableVectorStorage & Pure-Python SQLExecutor + Dual CSR)",
+        "file_path": "outputs/database/knowledge_graph.vdb",
         "file_size_bytes": file_size,
         "file_size_human": _format_size(file_size),
         "table_count": len(tables),

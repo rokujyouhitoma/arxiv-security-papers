@@ -299,14 +299,18 @@ class SQLExecutor:
         catalog: Optional[TableCatalog] = None,
         access_controller: Optional[AccessController] = None,
         tx_manager: Optional[TransactionManager] = None,
+        multi_storage: Optional[Any] = None,
     ) -> None:
         self.parser = SQLParser()
         self.access_controller = access_controller or AccessController()
         self.tx_manager = tx_manager or TransactionManager()
         self.embedding = embedding or DeterministicEmbedding(dim=128)
         self.default_storage = default_storage
+        self.multi_storage = multi_storage
         self.tables: Dict[str, TableCatalog] = {}
         self._init_default_tables(catalog, default_storage, default_index)
+        if self.multi_storage is not None:
+            self.multi_storage.attach_to_executor(self)
 
     def _init_default_tables(
         self,
@@ -366,6 +370,8 @@ class SQLExecutor:
             return self._exec_begin_tx()
         if cmd == SQLCommandType.COMMIT:
             mutations = self.tx_manager.commit()
+            if self.multi_storage is not None:
+                self.multi_storage.save()
             return {
                 "command": "COMMIT",
                 "status": "ok",
@@ -405,16 +411,16 @@ class SQLExecutor:
         )
 
     def _create_new_table_storage(self, stmt: CreateTableStatement) -> None:
-        if self._is_in_memory_mode():
+        if self.multi_storage is not None:
+            storage = self.multi_storage.create_table(
+                stmt.table_name, dim=self.embedding.dim
+            )
+        elif self._is_in_memory_mode():
             storage = VectorStorage(file_path=":memory:", dim=self.embedding.dim)
         else:
             storage_path = os.path.join("outputs", "database", f"{stmt.table_name}.vdb")
             os.makedirs(os.path.dirname(storage_path), exist_ok=True)
-            if os.path.exists(storage_path):
-                try:
-                    os.remove(storage_path)
-                except OSError:
-                    pass
+            _safe_remove_file(storage_path)
             storage = VectorStorage(file_path=storage_path, dim=self.embedding.dim)
         catalog = TableCatalog(
             name=stmt.table_name,
@@ -466,7 +472,10 @@ class SQLExecutor:
             raise SQLExecutionError(f"Table '{stmt.table_name}' does not exist.")
 
         tcat = self.tables.pop(stmt.table_name)
-        self._remove_table_file(tcat)
+        if self.multi_storage is not None:
+            self.multi_storage.drop_table(stmt.table_name)
+        else:
+            self._remove_table_file(tcat)
         return {
             "command": "DROP_TABLE",
             "status": "ok",
@@ -1002,5 +1011,11 @@ class SQLExecutor:
     def _get_table(self, table_name: str) -> TableCatalog:
         table = self.tables.get(table_name)
         if not table:
+            if self.multi_storage is not None and table_name == "papers":
+                storage = self.multi_storage.create_table(
+                    "papers", dim=self.embedding.dim
+                )
+                self.tables["papers"] = TableCatalog(name="papers", storage=storage)
+                return self.tables["papers"]
             raise SQLExecutionError(f"Table '{table_name}' does not exist")
         return table

@@ -13,7 +13,8 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from database.sql.executor import SQLExecutor, TableCatalog
+from database.sql.executor import SQLExecutor
+from database.storage.multi_storage import MultiTableVectorStorage
 from database.storage.storage import VectorStorage
 
 from .structures import Edge, Vertex
@@ -24,36 +25,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_file_like_path(path_str: str) -> bool:
+    return any(path_str.endswith(ext) for ext in (".vdb", ".db", ".sqlite"))
+
+
 def _determine_graph_storage_path(
     workspace_dir: str, explicit_path: Optional[str]
 ) -> str:
+    if explicit_path in (":memory:", ""):
+        return ":memory:"
     if explicit_path:
-        return explicit_path
-    return os.path.join(workspace_dir, "outputs", "database")
-
-
-def _is_file_like_path(path_str: str) -> bool:
-    return any(path_str.endswith(ext) for ext in (".vdb", ".db", ".sqlite"))
+        if _is_file_like_path(explicit_path):
+            return explicit_path
+        return os.path.join(explicit_path, "knowledge_graph.vdb")
+    return os.path.join(workspace_dir, "outputs", "database", "knowledge_graph.vdb")
 
 
 def _resolve_vdb_paths(
     workspace_dir: str, explicit_path: Optional[str]
 ) -> Tuple[str, str]:
-    if explicit_path in (":memory:", ""):
-        return ":memory:", ":memory:"
-    if explicit_path:
-        if _is_file_like_path(explicit_path):
-            base = os.path.splitext(explicit_path)[0]
-            return f"{base}_vertices.vdb", f"{base}_edges.vdb"
-        return (
-            os.path.join(explicit_path, "vertices.vdb"),
-            os.path.join(explicit_path, "edges.vdb"),
-        )
-    db_dir = os.path.join(workspace_dir, "outputs", "database")
-    return (
-        os.path.join(db_dir, "vertices.vdb"),
-        os.path.join(db_dir, "edges.vdb"),
-    )
+    path = _determine_graph_storage_path(workspace_dir, explicit_path)
+    return path, path
 
 
 TIER_SEVERITY: Dict[str, int] = {
@@ -234,14 +226,17 @@ def _save_to_custom_vdb(
     v_meta: List[Dict[str, Any]],
     e_meta: List[Dict[str, Any]],
 ) -> None:
-    v_p, e_p = _resolve_vdb_paths(workspace_dir, filepath)
-    os.makedirs(os.path.dirname(os.path.abspath(v_p)), exist_ok=True)
-    st_v = VectorStorage(file_path=v_p, dim=16)
-    st_e = VectorStorage(file_path=e_p, dim=16)
+    dest = _determine_graph_storage_path(workspace_dir, filepath)
+    if dest != ":memory:":
+        os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
+    container = MultiTableVectorStorage(file_path=dest)
+    st_v = container.create_table("vertices", dim=16)
+    st_e = container.create_table("edges", dim=16)
     v_dummy = tuple(0.0 for _ in range(st_v.dim))
     e_dummy = tuple(0.0 for _ in range(st_e.dim))
     st_v.write_all([v_dummy] * len(v_meta), v_meta)
     st_e.write_all([e_dummy] * len(e_meta), e_meta)
+    container.save(dest)
 
 
 def _load_from_custom_vdb(
@@ -252,11 +247,13 @@ def _load_from_custom_vdb(
     out_edges: Dict[str, List[Edge]],
     in_edges: Dict[str, List[Edge]],
 ) -> None:
-    v_p, e_p = _resolve_vdb_paths(workspace_dir, filepath)
-    if not os.path.exists(v_p) and not os.path.exists(e_p):
+    src = _determine_graph_storage_path(workspace_dir, filepath)
+    if src == ":memory:" or not os.path.exists(src) or os.path.getsize(src) == 0:
         return
-    st_v = VectorStorage(file_path=v_p, dim=128)
-    st_e = VectorStorage(file_path=e_p, dim=128)
+    container = MultiTableVectorStorage(file_path=src)
+    container.load(src)
+    st_v = container.get_table("vertices")
+    st_e = container.get_table("edges")
     _populate_from_metadata(
         st_v.metadata, st_e.metadata, vertices, edges, out_edges, in_edges
     )
@@ -276,10 +273,30 @@ def _is_memory_mode(memory_only: bool, storage_path: str) -> bool:
     return storage_path in (":memory:", "")
 
 
+def _resolve_or_create_table(
+    container: MultiTableVectorStorage, name: str, dim: int = 16
+) -> VectorStorage:
+    if name in container.list_tables():
+        return container.get_table(name)
+    return container.create_table(name, dim=dim)
+
+
+def _prepare_storage_directory(path: str, memory_only: bool) -> None:
+    if not memory_only and path != ":memory:":
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+
+def _load_storage_if_present(
+    container: MultiTableVectorStorage, path: str, memory_only: bool
+) -> None:
+    if not memory_only and os.path.exists(path) and os.path.getsize(path) > 0:
+        container.load()
+
+
 class PropertyGraphEngine:
     """
     High-performance pure Python Property Graph Database Engine.
-    Powered directly by src/database/ (VectorStorage & SQLExecutor).
+    Powered directly by src/database/ (MultiTableVectorStorage & SQLExecutor).
     Maintains forward and reverse adjacency indices for O(1) multi-hop neighborhood lookups.
     """
 
@@ -291,12 +308,11 @@ class PropertyGraphEngine:
     ) -> None:
         self.workspace_dir = _resolve_workspace_dir(workspace_dir)
         self.storage_path = _determine_graph_storage_path(
-            self.workspace_dir, storage_path
+            self.workspace_dir, ":memory:" if memory_only else storage_path
         )
         self.memory_only = _is_memory_mode(memory_only, self.storage_path)
-        self.v_path, self.e_path = _resolve_vdb_paths(
-            self.workspace_dir, ":memory:" if self.memory_only else storage_path
-        )
+        self.v_path = self.storage_path
+        self.e_path = self.storage_path
 
         # Primary Storage: Vertices by ID
         self._vertices: Dict[str, Vertex] = {}
@@ -313,24 +329,18 @@ class PropertyGraphEngine:
     def _maybe_load_existing_data(self) -> None:
         if self.memory_only:
             return
-        if os.path.exists(self.v_path) or os.path.exists(self.e_path):
+        if os.path.exists(self.storage_path) and os.path.getsize(self.storage_path) > 0:
             self.load()
 
     def _init_storage(self) -> None:
-        """Initializes pure VectorStorage engines and SQLExecutor catalogs."""
+        """Initializes pure MultiTableVectorStorage container and SQLExecutor catalogs."""
         dim = 16
-        if not self.memory_only:
-            os.makedirs(os.path.dirname(os.path.abspath(self.v_path)), exist_ok=True)
-            os.makedirs(os.path.dirname(os.path.abspath(self.e_path)), exist_ok=True)
-        self.v_storage = VectorStorage(file_path=self.v_path, dim=dim)
-        self.e_storage = VectorStorage(file_path=self.e_path, dim=dim)
-        self.executor = SQLExecutor()
-        self.executor.tables["vertices"] = TableCatalog(
-            name="vertices", storage=self.v_storage
-        )
-        self.executor.tables["edges"] = TableCatalog(
-            name="edges", storage=self.e_storage
-        )
+        _prepare_storage_directory(self.storage_path, self.memory_only)
+        self.container = MultiTableVectorStorage(file_path=self.storage_path)
+        _load_storage_if_present(self.container, self.storage_path, self.memory_only)
+        self.v_storage = _resolve_or_create_table(self.container, "vertices", dim)
+        self.e_storage = _resolve_or_create_table(self.container, "edges", dim)
+        self.executor = SQLExecutor(multi_storage=self.container)
 
     def execute_sql(self, sql: str, role: Optional[str] = None) -> Dict[str, Any]:
         """Executes a SQL query using pure-Python SQLExecutor."""
@@ -597,26 +607,47 @@ class PropertyGraphEngine:
         e_dummy = tuple(0.0 for _ in range(self.e_storage.dim))
         self.v_storage.write_all([v_dummy] * len(v_meta), v_meta)
         self.e_storage.write_all([e_dummy] * len(e_meta), e_meta)
+        self.container.save(self.storage_path)
         self.executor.tables["vertices"].recompute_stats()
         self.executor.tables["edges"].recompute_stats()
 
     def save(self, filepath: Optional[str] = None) -> None:
-        """Persists vertices and edges into VectorStorage."""
+        """Persists vertices and edges into MultiTableVectorStorage container."""
         v_meta = _serialize_vertices(self._vertices)
         e_meta = _serialize_edges(self._edges)
+        target = filepath or self.storage_path
         if filepath and filepath != self.storage_path:
             _save_to_custom_vdb(self.workspace_dir, filepath, v_meta, e_meta)
         else:
             self._write_default_storage(v_meta, e_meta)
 
         logger.info(
-            "Saved PropertyGraphEngine (%d vertices, %d edges)",
+            "Saved PropertyGraphEngine (%d vertices, %d edges) to %s",
             len(self._vertices),
             len(self._edges),
+            target,
+        )
+
+    def _reload_default_storage(self) -> None:
+        if (
+            not self.memory_only
+            and os.path.exists(self.storage_path)
+            and os.path.getsize(self.storage_path) > 0
+        ):
+            self.container.load(self.storage_path)
+            self.v_storage = self.container.get_table("vertices")
+            self.e_storage = self.container.get_table("edges")
+        _populate_from_metadata(
+            self.v_storage.metadata,
+            self.e_storage.metadata,
+            self._vertices,
+            self._edges,
+            self._out_edges,
+            self._in_edges,
         )
 
     def load(self, filepath: Optional[str] = None) -> None:
-        """Loads graph from VectorStorage."""
+        """Loads graph from MultiTableVectorStorage container."""
         target_path = filepath or self.storage_path
         self.clear()
         if filepath and filepath != self.storage_path:
@@ -629,14 +660,7 @@ class PropertyGraphEngine:
                 self._in_edges,
             )
         else:
-            _populate_from_metadata(
-                self.v_storage.metadata,
-                self.e_storage.metadata,
-                self._vertices,
-                self._edges,
-                self._out_edges,
-                self._in_edges,
-            )
+            self._reload_default_storage()
 
         logger.info(
             "Loaded PropertyGraphEngine (%d vertices, %d edges) from %s",
@@ -645,9 +669,16 @@ class PropertyGraphEngine:
             target_path,
         )
 
+    def connect(self, role: str = "admin") -> Any:
+        """Provides a PEP 249 compliant Connection to the underlying graph container."""
+        from database.ipc.driver import Connection
+
+        return Connection(multi_storage=self.container, role=role)
+
     def close(self) -> None:
-        """Closes underlying VectorStorage resources."""
-        pass
+        """Closes underlying container resources."""
+        if hasattr(self, "container"):
+            self.container.close()
 
     def __enter__(self) -> PropertyGraphEngine:
         return self
@@ -1226,7 +1257,7 @@ class PropertyGraphEngine:
         edges = self._collect_induced_edges(path_set)
         return nodes, edges, len(nodes)
 
-    CAUSAL_PREDICATES = {
+    CAUSAL_PREDICATES: Set[str] = {
         "HAS_IMPACT",
         "IMPACT_CAUSED_BY",
         "NEUTRALIZES_PRECONDITION",
