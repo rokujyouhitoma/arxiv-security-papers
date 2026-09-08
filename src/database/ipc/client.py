@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import socket
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence
 
 from .protocol import VectorDBProtocolError, VectorDBProtocolHandler
 
@@ -31,13 +31,15 @@ class DatabaseClient:
         workspace_dir: Optional[str] = None,
         timeout: float = 5.0,
         handler: Optional[VectorDBProtocolHandler] = None,
+        storage_path: Optional[str] = None,
     ) -> None:
-        self.workspace_dir = workspace_dir or os.path.abspath(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        )
-        self.socket_path = socket_path or os.path.join(
-            self.workspace_dir, "outputs", "supervisor", "db.sock"
-        )
+        self.workspace_dir = workspace_dir
+        self.socket_path: Optional[str] = socket_path
+        if not self.socket_path and self.workspace_dir:
+            self.socket_path = os.path.join(
+                self.workspace_dir, "outputs", "supervisor", "db.sock"
+            )
+        self.storage_path = storage_path
         self.timeout = timeout
         self._custom_handler = handler
         self._fallback_handler: Optional[VectorDBProtocolHandler] = None
@@ -51,10 +53,8 @@ class DatabaseClient:
             logger.info("Initializing fallback in-process Database Storage & Handler")
             from ..storage.storage import VectorStorage
 
-            storage_path = os.path.join(
-                self.workspace_dir, "outputs", "database", "papers.vdb"
-            )
-            storage = VectorStorage(storage_path, dim=128)
+            s_path = self.storage_path or ":memory:"
+            storage = VectorStorage(s_path, dim=128)
             self._fallback_handler = VectorDBProtocolHandler(storage=storage)
         return self._fallback_handler
 
@@ -67,20 +67,14 @@ class DatabaseClient:
         self._fallback_handler = None
 
     def _get_candidate_sockets(self) -> List[str]:
-        """Returns candidate socket paths in priority order (specified socket, canonical db.sock, then node sockets)."""
+        """Returns candidate socket paths in priority order."""
+        if not self.socket_path:
+            return []
         sock_dir = os.path.dirname(self.socket_path)
-        all_candidates = [
-            self.socket_path,
-            os.path.join(sock_dir, "db.sock"),
-            *(os.path.join(sock_dir, f"db_{i}.sock") for i in range(3)),
-        ]
-        seen: Set[str] = set()
-        candidates: List[str] = []
-        for s in all_candidates:
-            if s not in seen and os.path.exists(s):
-                seen.add(s)
-                candidates.append(s)
-        return candidates
+        candidates = [self.socket_path, os.path.join(sock_dir, "db.sock")]
+        for i in range(3):
+            candidates.append(os.path.join(sock_dir, f"db_{i}.sock"))
+        return [s for s in dict.fromkeys(candidates) if os.path.exists(s)]
 
     def is_socket_available(self) -> bool:
         """Checks if any database cluster socket exists and is responsive."""

@@ -53,6 +53,7 @@ from src.database.sqlite_engine import (
     get_sqlite_connection,
     get_sqlite_table_names,
     sum_sqlite_table_rows,
+    sync_from_vector_storage,
     sync_to_vector_storage,
 )
 from src.database.storage import VectorStorage
@@ -260,7 +261,7 @@ def test_sql_executor_and_transaction_lifecycle() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         vdb_path = os.path.join(tmpdir, "test_exec.vdb")
         storage = VectorStorage(vdb_path, dim=4)
-        executor = SQLExecutor(default_storage=storage)
+        executor = SQLExecutor(default_storage=storage, default_table_name="papers")
 
         # DML Insert
         r1 = executor.execute(
@@ -481,17 +482,20 @@ def test_sqlite_engine_sync_lifecycle() -> None:
             {"id": "p2", "title": "Paper 2", "category": "Zero-Trust"},
         )
 
-        conn = get_sqlite_connection(db_path=db_path, storage=storage)
-        cur = conn.cursor()
-        cur.execute("SELECT count(*) FROM papers")
-        assert cur.fetchone()[0] == 2
+        conn = get_sqlite_connection(
+            db_path=db_path, storage=storage, table_name="papers"
+        )
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT count(*) FROM papers")
+            assert cur.fetchone()[0] == 2
 
-        # Sync back to vector storage
-        synced_count = sync_to_vector_storage(conn, storage)
-        assert synced_count == 2
-
-        conn.close()
-        storage.close()
+            # Sync back to vector storage
+            synced_count = sync_to_vector_storage(conn, storage, table_name="papers")
+            assert synced_count == 2
+        finally:
+            conn.close()
+            storage.close()
 
 
 def test_sqlite_engine_extended_options_and_utilities() -> None:
@@ -557,3 +561,56 @@ def test_database_profiler() -> None:
         batch_size=10,
     )
     assert "name" in leak_report
+
+
+def test_get_sqlite_connection_custom_schema_and_table_di() -> None:
+    """Verifies that get_sqlite_connection accepts custom schema_sql and table_name."""
+    custom_ddl = """
+    CREATE TABLE cyber_threats (
+        threat_id TEXT PRIMARY KEY,
+        cve_id TEXT,
+        cvss_score REAL
+    );
+    """
+    conn = get_sqlite_connection(
+        ":memory:",
+        schema_sql=custom_ddl,
+    )
+    try:
+        tables = get_sqlite_table_names(conn)
+        assert "cyber_threats" in tables
+        assert "papers" not in tables
+        assert "records" not in tables
+
+        cur = conn.cursor()
+        cur.execute("INSERT INTO cyber_threats VALUES ('T1', 'CVE-2026-0001', 9.8)")
+        conn.commit()
+        cur.execute(
+            "SELECT cve_id, cvss_score FROM cyber_threats WHERE threat_id = 'T1'"
+        )
+        row = cur.fetchone()
+        assert row["cve_id"] == "CVE-2026-0001"
+        assert row["cvss_score"] == 9.8
+    finally:
+        conn.close()
+
+
+def test_sqlite_identifier_validation_errors() -> None:
+    """Verifies that invalid table identifiers raise ValueError."""
+    conn = get_sqlite_connection(":memory:", init_schema=False)
+    storage = VectorStorage(":memory:", dim=4)
+    try:
+        with pytest.raises(ValueError, match="Invalid table identifier"):
+            get_sqlite_connection(":memory:", table_name="bad-table;drop")
+
+        with pytest.raises(ValueError, match="Invalid table identifier"):
+            sync_from_vector_storage(conn, storage, table_name="bad-table")
+
+        with pytest.raises(ValueError, match="Invalid table identifier"):
+            sync_to_vector_storage(conn, storage, table_name="123_invalid")
+
+        with pytest.raises(ValueError, match="Invalid table identifier"):
+            attach_to_sqlite(conn, storage, table_name="inject;--")
+    finally:
+        conn.close()
+        storage.close()

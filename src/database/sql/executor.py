@@ -285,6 +285,96 @@ def _matches_where_clause(
     return all(_evaluate_single_condition(record, c) for c in clauses)
 
 
+def _inspect_table_slice(tname: str, storage: Any, target: str) -> Dict[str, Any]:
+    r_count = len(getattr(storage, "metadata", []))
+    f_size = len(storage.to_bytes()) if hasattr(storage, "to_bytes") else 0
+    if target == "TABLE_STATUS":
+        return {
+            "Name": tname,
+            "Engine": "MultiTableVectorStorage (OKFMTC01)",
+            "Rows": r_count,
+            "Data_length": f_size,
+            "Create_time": "2026-09-08 00:00:00",
+        }
+    return {"Table": tname, "Rows": r_count, "Size_bytes": f_size}
+
+
+def _load_multitable_rows(path: str, target: str) -> List[Dict[str, Any]]:
+    from ..storage.multi_storage import MultiTableVectorStorage
+
+    rows: List[Dict[str, Any]] = []
+    with MultiTableVectorStorage(path) as container:
+        container.load()
+        for tname in sorted(container.list_tables()):
+            tbl = container.get_table(tname)
+            rows.append(_inspect_table_slice(tname, tbl, target))
+    return rows
+
+
+def _inspect_single_storage_table(path: str, target: str) -> List[Dict[str, Any]]:
+    from ..storage.storage import VectorStorage
+
+    storage = VectorStorage(path, dim=128)
+    try:
+        tname = os.path.splitext(os.path.basename(path))[0]
+        return [_inspect_table_slice(tname, storage, target)]
+    finally:
+        storage.close()
+
+
+def _filter_by_like(
+    rows: List[Dict[str, Any]], pattern: Optional[str]
+) -> List[Dict[str, Any]]:
+    if not pattern:
+        return rows
+    clean = pattern.strip("%'\"").lower()
+    return [r for r in rows if clean in r.get("Table", "").lower()]
+
+
+def _query_external_db_tables(
+    db_name: Optional[str],
+    known_dbs: Dict[str, str],
+    target: str,
+    pattern: Optional[str],
+) -> Optional[List[Dict[str, Any]]]:
+    if not db_name:
+        return None
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", db_name):
+        raise SQLExecutionError(f"Invalid database identifier: {db_name!r}")
+    if db_name not in known_dbs:
+        return []
+    rows = _load_external_db_tables(known_dbs[db_name], target)
+    return _filter_by_like(rows, pattern) if rows else []
+
+
+def _load_external_db_tables(path: str, target: str) -> List[Dict[str, Any]]:
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "rb") as f:
+            magic = f.read(8)
+        if magic == b"OKFMTC01":
+            return _load_multitable_rows(path, target)
+        if magic == b"OKFVEC01":
+            return _inspect_single_storage_table(path, target)
+        return []
+    except Exception:
+        return []
+
+
+def _resolve_default_table_name(
+    default_storage: VectorStorage, default_table_name: Optional[str]
+) -> str:
+    if default_table_name:
+        return default_table_name
+    if default_storage.file_path in (":memory:", ""):
+        return "main"
+    base = os.path.splitext(os.path.basename(default_storage.file_path))[0]
+    if base.endswith("_test"):
+        base = base[:-5]
+    return base if base.isidentifier() else "main"
+
+
 class SQLExecutor:
     """
     Coordinates SQL parsing, access control enforcement, transaction staging,
@@ -300,30 +390,60 @@ class SQLExecutor:
         access_controller: Optional[AccessController] = None,
         tx_manager: Optional[TransactionManager] = None,
         multi_storage: Optional[Any] = None,
+        known_databases: Optional[Dict[str, str]] = None,
+        default_table_name: Optional[str] = None,
     ) -> None:
         self.parser = SQLParser()
+        self._init_components(access_controller, tx_manager, embedding)
+        self.default_storage = default_storage
+        self.multi_storage = multi_storage
+        self.default_table_name = default_table_name
+        self.known_databases: Dict[str, str] = dict(known_databases or {})
+        self.tables: Dict[str, TableCatalog] = {}
+        self._init_default_tables(
+            catalog,
+            default_storage,
+            default_index,
+            default_table_name=default_table_name,
+        )
+        if self.multi_storage is not None:
+            self.multi_storage.attach_to_executor(self)
+
+    def _init_components(
+        self,
+        access_controller: Optional[AccessController],
+        tx_manager: Optional[TransactionManager],
+        embedding: Optional[DeterministicEmbedding],
+    ) -> None:
         self.access_controller = access_controller or AccessController()
         self.tx_manager = tx_manager or TransactionManager()
         self.embedding = embedding or DeterministicEmbedding(dim=128)
-        self.default_storage = default_storage
-        self.multi_storage = multi_storage
-        self.tables: Dict[str, TableCatalog] = {}
-        self._init_default_tables(catalog, default_storage, default_index)
-        if self.multi_storage is not None:
-            self.multi_storage.attach_to_executor(self)
+
+    def register_database(self, name: str, path: str) -> None:
+        """Dynamically register or update a known database path with identifier validation."""
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
+            raise SQLExecutionError(
+                f"Invalid database name '{name}'. Database names must be valid SQL identifiers."
+            )
+        if len(self.known_databases) >= 64 and name not in self.known_databases:
+            raise SQLExecutionError(
+                "Maximum number of registered databases (64) exceeded"
+            )
+        self.known_databases[name] = path
 
     def _init_default_tables(
         self,
         catalog: Optional[TableCatalog],
         default_storage: Optional[VectorStorage],
         default_index: Optional[HNSWIndex],
+        default_table_name: Optional[str] = None,
     ) -> None:
         if catalog is not None:
             self.tables[catalog.name] = catalog
         elif default_storage:
-            table_name = "papers"
-            self.tables[table_name] = TableCatalog(
-                name=table_name,
+            tbl_name = _resolve_default_table_name(default_storage, default_table_name)
+            self.tables[tbl_name] = TableCatalog(
+                name=tbl_name,
                 storage=default_storage,
                 index=default_index or HNSWIndex(dim=default_storage.dim),
             )
@@ -410,6 +530,15 @@ class SQLExecutor:
             for t in self.tables.values()
         )
 
+    def _resolve_new_table_path(self, table_name: str) -> str:
+        if not self.default_storage or self.default_storage.file_path in (
+            ":memory:",
+            "",
+        ):
+            return ":memory:"
+        base_dir = os.path.dirname(self.default_storage.file_path) or "."
+        return os.path.join(base_dir, f"{table_name}.vdb")
+
     def _create_new_table_storage(self, stmt: CreateTableStatement) -> None:
         if self.multi_storage is not None:
             storage = self.multi_storage.create_table(
@@ -418,8 +547,8 @@ class SQLExecutor:
         elif self._is_in_memory_mode():
             storage = VectorStorage(file_path=":memory:", dim=self.embedding.dim)
         else:
-            storage_path = os.path.join("outputs", "database", f"{stmt.table_name}.vdb")
-            os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+            storage_path = self._resolve_new_table_path(stmt.table_name)
+            os.makedirs(os.path.dirname(os.path.abspath(storage_path)), exist_ok=True)
             _safe_remove_file(storage_path)
             storage = VectorStorage(file_path=storage_path, dim=self.embedding.dim)
         catalog = TableCatalog(
@@ -826,6 +955,17 @@ class SQLExecutor:
         self.access_controller.enforce_permission(
             effective_role, stmt.table_name, "INSERT"
         )
+        if (
+            stmt.table_name not in self.tables
+            and self.multi_storage is not None
+            and not self.multi_storage.has_table(stmt.table_name)
+        ):
+            storage = self.multi_storage.create_table(
+                stmt.table_name, dim=self.embedding.dim
+            )
+            self.tables[stmt.table_name] = TableCatalog(
+                name=stmt.table_name, storage=storage
+            )
         table = self._get_table(stmt.table_name)
         col_val_map = dict(zip(stmt.columns, stmt.values))
         doc_id = str(col_val_map.get("id", len(table.storage.metadata)))
@@ -953,23 +1093,42 @@ class SQLExecutor:
             }
         return {"Table": tname, "Rows": r_count, "Size_bytes": f_size}
 
-    def _exec_show(self, stmt: ShowStatement, effective_role: str) -> Dict[str, Any]:
-        target = stmt.target.upper()
-        if target in ("DATABASES", "SCHEMAS"):
-            db_rows = [{"Database": "default_db"}, {"Database": "main"}]
-            return {
-                "command": "SHOW",
-                "status": "ok",
-                "target": "DATABASES",
-                "count": len(db_rows),
-                "rows": db_rows,
-            }
+    def _resolve_show_table_rows(
+        self, stmt: ShowStatement, target: str
+    ) -> List[Dict[str, Any]]:
+        ext_rows = _query_external_db_tables(
+            stmt.from_database, self.known_databases, target, stmt.like_pattern
+        )
+        if ext_rows is not None:
+            return ext_rows
 
-        table_rows = [
+        return [
             self._build_show_table_row(tname, tbl, target)
             for tname, tbl in sorted(self.tables.items())
             if not (stmt.like_pattern and stmt.like_pattern not in tname)
         ]
+
+    def _exec_show_databases(self) -> Dict[str, Any]:
+        dbs = (
+            list(self.known_databases.keys())
+            if self.known_databases
+            else ["default_db", "main"]
+        )
+        db_rows = [{"Database": d} for d in dbs]
+        return {
+            "command": "SHOW",
+            "status": "ok",
+            "target": "DATABASES",
+            "count": len(db_rows),
+            "rows": db_rows,
+        }
+
+    def _exec_show(self, stmt: ShowStatement, effective_role: str) -> Dict[str, Any]:
+        target = stmt.target.upper()
+        if target in ("DATABASES", "SCHEMAS"):
+            return self._exec_show_databases()
+
+        table_rows = self._resolve_show_table_rows(stmt, target)
         return {
             "command": "SHOW",
             "status": "ok",
@@ -1008,14 +1167,26 @@ class SQLExecutor:
 
         return self._exec_dml_or_dql(stmt, effective_role)
 
+    def _lookup_multi_storage_table(self, table_name: str) -> Optional[TableCatalog]:
+        if self.multi_storage is None:
+            return None
+        if self.multi_storage.has_table(table_name):
+            storage = self.multi_storage.get_table(table_name)
+            self.tables[table_name] = TableCatalog(name=table_name, storage=storage)
+            return self.tables[table_name]
+        if self.default_table_name and table_name == self.default_table_name:
+            storage = self.multi_storage.create_table(
+                table_name, dim=self.embedding.dim
+            )
+            self.tables[table_name] = TableCatalog(name=table_name, storage=storage)
+            return self.tables[table_name]
+        return None
+
     def _get_table(self, table_name: str) -> TableCatalog:
         table = self.tables.get(table_name)
-        if not table:
-            if self.multi_storage is not None and table_name == "papers":
-                storage = self.multi_storage.create_table(
-                    "papers", dim=self.embedding.dim
-                )
-                self.tables["papers"] = TableCatalog(name="papers", storage=storage)
-                return self.tables["papers"]
-            raise SQLExecutionError(f"Table '{table_name}' does not exist")
-        return table
+        if table:
+            return table
+        catalog = self._lookup_multi_storage_table(table_name)
+        if catalog is not None:
+            return catalog
+        raise SQLExecutionError(f"Table '{table_name}' does not exist")

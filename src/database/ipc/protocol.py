@@ -42,15 +42,18 @@ class VectorDBProtocolHandler:
         storage: VectorStorage,
         index: Optional[HNSWIndex] = None,
         embedding: Optional[DeterministicEmbedding] = None,
+        default_table_name: Optional[str] = None,
     ) -> None:
         self.storage = storage
         self.dim = storage.dim
         self.index = index or HNSWIndex(dim=self.dim)
         self.embedding = embedding or DeterministicEmbedding(dim=self.dim)
+        self.default_table_name = default_table_name
         self.sql_executor = SQLExecutor(
             default_storage=self.storage,
             default_index=self.index,
             embedding=self.embedding,
+            default_table_name=default_table_name,
         )
 
     def _op_ping(self, params: Dict[str, Any]) -> Dict[str, Any]:

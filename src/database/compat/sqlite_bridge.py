@@ -6,6 +6,7 @@ Enables standard `sqlite3.connect()` clients to query vector data and execute
 """
 
 import json
+import re
 import sqlite3
 from typing import Any, List, Optional
 
@@ -55,12 +56,14 @@ def _build_sqlite_record(
 def attach_to_sqlite(
     sqlite_conn: sqlite3.Connection,
     storage: Optional[VectorStorage] = None,
-    table_name: str = "papers",
+    table_name: str = "records",
 ) -> None:
     """
     Attaches custom Vector functions (COSINE_SIM, KNN) and populates SQLite
     table with vector metadata from VectorStorage.
     """
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table_name):
+        raise ValueError(f"Invalid table identifier: {table_name!r}")
     sqlite_conn.create_function("COSINE_SIM", 2, cosine_similarity)
     sqlite_conn.create_function("KNN_SCORE", 2, cosine_similarity)
 

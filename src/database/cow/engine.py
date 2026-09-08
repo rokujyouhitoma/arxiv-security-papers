@@ -135,7 +135,7 @@ class CoWEngine:
     Copy-on-Write (CoW) B-Tree Engine with SWMR concurrency control.
     """
 
-    def __init__(self, db_path: str = "data/cow/database.vdb") -> None:
+    def __init__(self, db_path: str) -> None:
         self.db_path = db_path
         self.mmap_file = MMapFile(file_path=db_path)
         self.btree = CoWBTree(mmap_file=self.mmap_file)

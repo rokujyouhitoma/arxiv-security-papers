@@ -1,13 +1,13 @@
 # Issue 台帳 (Issue Ledger)
 
-本ドキュメントは、`arxiv-security-papers` プロジェクトにおけるタスク、新機能開発、リファクタリング、および障害修正の全 Issue 台帳です。
+本ドキュメントは、`arxiv-security-papers` プロジェクトにおけるタスク、新機能開発、リファクタリング、バグ修正等の全 Issue を一元管理する台帳である。
 
----
-
-## 1. 進行中・未完了 Issue 一覧 (Active Issues)
+## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **216** | index.html および Web ゲートウェイにおけるモック実装・ダミー固定値の完全排除と実態データ・実DB連携への全面刷新 | Architecture / Refactor | High | Open (New) | [216-eliminate-mock-implementations-and-bind-real-runtime-data.md](216-eliminate-mock-implementations-and-bind-real-runtime-data.md) |
+| **215** | データベース台帳 UI (#/database) における架空テーブル・モック表示の撤廃と実コンテナ・実SQLインスペクションへの刷新 | Bug | High | Open (In Progress) | [215-fix-database-explorer-mock-data-and-real-sql-introspection.md](215-fix-database-explorer-mock-data-and-real-sql-introspection.md) |
 | **211** | 既存Spider群（AdvisorySpider / ArxivSpider / IacrSpider）の最新クローラーAPI準拠化と基盤改善提案 | Feature | Medium | Open (New) | [211-align-existing-spiders-with-latest-crawler-api.md](211-align-existing-spiders-with-latest-crawler-api.md) |
 | **210** | src/spider からのドメイン固有実装（セキュリティ/OKF）の完全分離とクローラー純粋基盤化 | Architecture / Refactor | High | Open (New) | [210-decouple-domain-logic-from-spider-core.md](210-decouple-domain-logic-from-spider-core.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **217** | src/database からの具体的データベース指定・ファイルパス結合の完全排除と利用側一元定義（DI）の確立 | Architecture / Refactor | 2026-09-08 | [217-decouple-database-file-definitions-from-database-engine.md](closed/217-decouple-database-file-definitions-from-database-engine.md) |
 | **214** | src/database における単一 .vdb マルチテーブルコンテナ対応および sqlite3 (PEP 249) 互換インターフェースの実装 | Feature | 2026-09-08 | [214-support-multi-table-vdb-container-and-pep249-sqlite-interface.md](closed/214-support-multi-table-vdb-container-and-pep249-sqlite-interface.md) |
 | **213** | src/graph の永続化・クエリバックエンドへの src/database (自作DB基盤) 統合 & graph.db 完全廃止 | Feature | 2026-09-08 | [213-integrate-database-engine-into-graph-subsystem.md](closed/213-integrate-database-engine-into-graph-subsystem.md) |
 | **212** | src/database における SQLite 準拠「:memory:」インメモリデータベースモードのサポート | Feature | 2026-09-08 | [212-support-in-memory-database-mode.md](closed/212-support-in-memory-database-mode.md) |

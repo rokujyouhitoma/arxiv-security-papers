@@ -8,6 +8,7 @@ with binary VectorStorage (.vdb) and HNSWIndex.
 
 import json
 import os
+import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -71,24 +72,36 @@ def _open_raw_sqlite_connection(
     return sqlite3.connect(abs_path, timeout=timeout)
 
 
-def _init_papers_schema(
-    conn: sqlite3.Connection, storage: Optional[VectorStorage]
+def _init_default_table_schema(
+    conn: sqlite3.Connection,
+    storage: Optional[VectorStorage] = None,
+    table_name: str = "records",
+    schema_sql: Optional[str] = None,
 ) -> None:
     cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS papers (
-            id TEXT PRIMARY KEY,
-            title TEXT,
-            description TEXT,
-            category TEXT,
-            vector TEXT,
-            metadata TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    if schema_sql:
+        cur.executescript(schema_sql)
+    else:
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table_name):
+            raise ValueError(f"Invalid table identifier: {table_name!r}")
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                description TEXT,
+                category TEXT,
+                vector TEXT,
+                metadata TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
     conn.commit()
     if storage and storage.count > 0:
-        sync_from_vector_storage(conn, storage)
+        sync_from_vector_storage(conn, storage, table_name=table_name)
+
+
+# Backward compatibility alias
+_init_papers_schema = _init_default_table_schema
 
 
 def _configure_wal_pragma(conn: sqlite3.Connection, db_path: str) -> None:
@@ -97,13 +110,38 @@ def _configure_wal_pragma(conn: sqlite3.Connection, db_path: str) -> None:
         conn.execute("PRAGMA synchronous=NORMAL;")
 
 
+def _setup_connection_features(
+    conn: sqlite3.Connection,
+    db_path: str,
+    storage: Optional[VectorStorage],
+    init_schema: bool,
+    read_only: bool,
+    enable_wal: bool,
+    table_name: str,
+    schema_sql: Optional[str],
+) -> None:
+    if read_only:
+        return
+    if enable_wal:
+        _configure_wal_pragma(conn, db_path)
+    if init_schema:
+        _init_default_table_schema(
+            conn,
+            storage=storage,
+            table_name=table_name,
+            schema_sql=schema_sql,
+        )
+
+
 def get_sqlite_connection(
-    db_path: str = "outputs/database/papers.db",
+    db_path: str = ":memory:",
     storage: Optional[VectorStorage] = None,
     init_schema: bool = True,
     read_only: bool = False,
     enable_wal: bool = False,
     timeout: float = 5.0,
+    table_name: str = "records",
+    schema_sql: Optional[str] = None,
 ) -> sqlite3.Connection:
     """
     Returns standard `sqlite3.Connection` with full SQLite SQL support and vector UDFs.
@@ -111,23 +149,30 @@ def get_sqlite_connection(
         from database import get_sqlite_connection
 
         conn = get_sqlite_connection(
-            "outputs/database/analytics/analytics.db",
+            "analytics.db",
             init_schema=False,
             enable_wal=True,
         )
         cursor = conn.cursor()
     """
     conn = _open_raw_sqlite_connection(db_path, read_only, timeout)
-    conn.row_factory = sqlite3.Row
-    register_vector_functions(conn)
-
-    if enable_wal and not read_only:
-        _configure_wal_pragma(conn, db_path)
-
-    if init_schema and not read_only:
-        _init_papers_schema(conn, storage)
-
-    return conn
+    try:
+        conn.row_factory = sqlite3.Row
+        register_vector_functions(conn)
+        _setup_connection_features(
+            conn,
+            db_path=db_path,
+            storage=storage,
+            init_schema=init_schema,
+            read_only=read_only,
+            enable_wal=enable_wal,
+            table_name=table_name,
+            schema_sql=schema_sql,
+        )
+        return conn
+    except Exception:
+        conn.close()
+        raise
 
 
 def get_sqlite_table_names(conn: sqlite3.Connection) -> List[str]:
@@ -256,9 +301,11 @@ def restore_sqlite_table_records(
 
 
 def sync_from_vector_storage(
-    conn: sqlite3.Connection, storage: VectorStorage, table_name: str = "papers"
+    conn: sqlite3.Connection, storage: VectorStorage, table_name: str = "records"
 ) -> int:
     """Synchronizes records from binary VectorStorage into SQLite table."""
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table_name):
+        raise ValueError(f"Invalid table identifier: {table_name!r}")
     records = []
     for idx in range(storage.count):
         meta = storage.get_metadata(idx)
@@ -291,9 +338,11 @@ def sync_from_vector_storage(
 
 
 def sync_to_vector_storage(
-    conn: sqlite3.Connection, storage: VectorStorage, table_name: str = "papers"
+    conn: sqlite3.Connection, storage: VectorStorage, table_name: str = "records"
 ) -> int:
     """Synchronizes records from SQLite table back into binary VectorStorage (.vdb)."""
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table_name):
+        raise ValueError(f"Invalid table identifier: {table_name!r}")
     cur = conn.cursor()
     cur.execute(f"SELECT id, vector, metadata FROM {table_name} ORDER BY id ASC")
     rows = cur.fetchall()

@@ -198,6 +198,7 @@ class Connection:
         client: Optional[Any] = None,
         multi_storage: Optional[MultiTableVectorStorage] = None,
         file_path: Optional[str] = None,
+        default_table_name: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         target_db = file_path or database
@@ -211,6 +212,7 @@ class Connection:
         self._executor = SQLExecutor(
             multi_storage=self._storage,
             embedding=DeterministicEmbedding(dim=dim),
+            default_table_name=default_table_name,
         )
 
     @property
@@ -286,16 +288,23 @@ def connect(
     database: str = ":memory:",
     role: str = "admin",
     dim: int = 128,
+    default_table_name: Optional[str] = None,
     **kwargs: Any,
 ) -> Connection:
     """
     PEP 249 entry point connecting to a Multi-Table Vector DB container.
     Usage:
         import database
-        conn = database.connect("outputs/database/knowledge_graph.vdb")
+        conn = database.connect("data/app.vdb")
         cursor = conn.cursor()
         cursor.execute("CREATE TABLE IF NOT EXISTS vertices (id TEXT, name TEXT)")
         cursor.execute("INSERT INTO vertices VALUES (?, ?)", ("v1", "Alice"))
         conn.commit()
     """
-    return Connection(database=database, role=role, dim=dim, **kwargs)
+    return Connection(
+        database=database,
+        role=role,
+        dim=dim,
+        default_table_name=default_table_name,
+        **kwargs,
+    )

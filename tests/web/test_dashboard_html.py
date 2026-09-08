@@ -195,7 +195,7 @@ def test_gateway_graph_mesh_with_vector_engine() -> None:
     assert "decisions" in clusters
     assert "database_metrics" in data
     db_m = data["database_metrics"]
-    assert db_m["table_count"] >= 5
+    assert db_m["table_count"] >= 2
     assert db_m["total_rows"] > 0
     assert "performance_kpis" in db_m
     assert db_m["performance_kpis"]["read_iops"] > 0

@@ -36,6 +36,7 @@ class DatabaseService:
         dim: int = 128,
         node_id: int = 0,
         cluster_size: int = 3,
+        default_table_name: Optional[str] = None,
     ) -> None:
         self.workspace_dir = workspace_dir or os.path.abspath(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -45,16 +46,18 @@ class DatabaseService:
 
         if socket_path:
             self.socket_path = socket_path
-        else:
+        elif self.workspace_dir:
             self.socket_path = os.path.join(
                 self.workspace_dir, "outputs", "supervisor", f"db_{self.node_id}.sock"
             )
+        else:
+            self.socket_path = f"/tmp/db_{self.node_id}.sock"
 
-        self.storage_path = storage_path or os.path.join(
-            self.workspace_dir, "outputs", "database", "papers.vdb"
-        )
+        self.storage_path = storage_path or ":memory:"
         self.storage = VectorStorage(self.storage_path, dim=dim)
-        self.handler = VectorDBProtocolHandler(storage=self.storage)
+        self.handler = VectorDBProtocolHandler(
+            storage=self.storage, default_table_name=default_table_name
+        )
         self.running = False
         self.requests_handled = 0
         self._server_sock: Optional[socket.socket] = None
@@ -147,14 +150,7 @@ class DatabaseService:
         logger.info("DatabaseService (Node %d) stopped.", self.node_id)
 
     def _write_database_log(self, record: Dict[str, Any]) -> None:
-        log_dir = os.path.join(self.workspace_dir, "outputs", "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        log_path = os.path.join(log_dir, "database.jsonl")
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
+        logger.debug("Database Service Log: %s", record)
 
     def _log_sql_request(self, req: Dict[str, Any], tid: str) -> None:
         from datetime import datetime, timezone
