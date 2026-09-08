@@ -9,7 +9,6 @@
 | **216** | index.html および Web ゲートウェイにおけるモック実装・ダミー固定値の完全排除と実態データ・実DB連携への全面刷新 | Architecture / Refactor | High | Open (New) | [216-eliminate-mock-implementations-and-bind-real-runtime-data.md](216-eliminate-mock-implementations-and-bind-real-runtime-data.md) |
 | **215** | データベース台帳 UI (#/database) における架空テーブル・モック表示の撤廃と実コンテナ・実SQLインスペクションへの刷新 | Bug | High | Open (In Progress) | [215-fix-database-explorer-mock-data-and-real-sql-introspection.md](215-fix-database-explorer-mock-data-and-real-sql-introspection.md) |
 | **211** | 既存Spider群（AdvisorySpider / ArxivSpider / IacrSpider）の最新クローラーAPI準拠化と基盤改善提案 | Feature | Medium | Open (New) | [211-align-existing-spiders-with-latest-crawler-api.md](211-align-existing-spiders-with-latest-crawler-api.md) |
-| **210** | src/spider からのドメイン固有実装（セキュリティ/OKF）の完全分離とクローラー純粋基盤化 | Architecture / Refactor | High | Open (New) | [210-decouple-domain-logic-from-spider-core.md](210-decouple-domain-logic-from-spider-core.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 ---
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **210** | src/spider からのドメイン固有実装（セキュリティ/OKF）の完全分離とクローラー純粋基盤化 | Architecture / Refactor | 2026-09-09 | [210-decouple-domain-logic-from-spider-core.md](closed/210-decouple-domain-logic-from-spider-core.md) |
 | **218** | cti_catalog.db および analytics.db の src/database 独自データベース移行とデータマイグレーション | Feature / Refactor | 2026-09-08 | [218-migrate-cti-catalog-and-analytics-db-to-pure-database-engine.md](closed/218-migrate-cti-catalog-and-analytics-db-to-pure-database-engine.md) |
 | **217** | src/database からの具体的データベース指定・ファイルパス結合の完全排除と利用側一元定義（DI）の確立 | Architecture / Refactor | 2026-09-08 | [217-decouple-database-file-definitions-from-database-engine.md](closed/217-decouple-database-file-definitions-from-database-engine.md) |
 | **214** | src/database における単一 .vdb マルチテーブルコンテナ対応および sqlite3 (PEP 249) 互換インターフェースの実装 | Feature | 2026-09-08 | [214-support-multi-table-vdb-container-and-pep249-sqlite-interface.md](closed/214-support-multi-table-vdb-container-and-pep249-sqlite-interface.md) |

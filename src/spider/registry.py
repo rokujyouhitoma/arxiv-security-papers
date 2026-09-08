@@ -77,6 +77,16 @@ class SpiderRegistry:
         self._factories.pop(name, None)
 
 
+DiscoveryHook = Callable[[SpiderRegistry], None]
+_DISCOVERY_HOOKS: List[DiscoveryHook] = []
+
+
+def register_spider_discovery_hook(hook: DiscoveryHook) -> None:
+    """Registers an external SPI discovery hook to be called during spider resolution."""
+    if hook not in _DISCOVERY_HOOKS:
+        _DISCOVERY_HOOKS.append(hook)
+
+
 def _register_plugin_spiders(registry: SpiderRegistry, plugin: object) -> None:
     getter = getattr(plugin, "get_spiders", None)
     if not callable(getter):
@@ -88,7 +98,13 @@ def _register_plugin_spiders(registry: SpiderRegistry, plugin: object) -> None:
 
 
 def _auto_register_domain_spiders(registry: SpiderRegistry) -> None:
-    """Discovers and registers spiders from active domain plugins via SPI."""
+    """Discovers and registers spiders via registered hooks and domain plugins via SPI."""
+    for hook in list(_DISCOVERY_HOOKS):
+        try:
+            hook(registry)
+        except Exception as exc:
+            logger.debug("Discovery hook %s failed: %s", hook, exc)
+
     try:
         from domain import get_domain_registry
 

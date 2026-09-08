@@ -1,3 +1,7 @@
+"""Spider framework core package."""
+
+from typing import Any
+
 from .core.bloom import BloomFilter, ScalableBloomFilter
 from .core.downloader import AsyncHttpDownloader, Request, Response
 from .core.engine import Engine, ScrapedItem
@@ -13,15 +17,19 @@ from .downloader.middleware import (
 )
 from .downloader.spa_handler import SpaContentExtractor
 from .dsl import FunctionalSpider, SpiderBuilder, scrape, spider
-from .pipeline.okf_pipeline import OkfItemPipeline
+from .pipeline.base import (
+    BaseItemPipeline,
+    ConsoleItemPipeline,
+    DropItem,
+    JsonLinesItemPipeline,
+    PipelineRegistry,
+    get_pipeline_registry,
+)
 from .policies.autothrottle import AutoThrottlePolicy
 from .policies.normalizer import TrapDetector, UrlNormalizer
 from .policies.opic import OpicCalculator, TopicRelevanceScorer
 from .registry import SpiderRegistry, get_spider_registry
-from .spiders.advisory_spider import AdvisorySpider
-from .spiders.arxiv_spider import ArxivSpider
 from .spiders.base import BaseSpider
-from .spiders.iacr_spider import IacrSpider
 
 __all__ = [
     "Engine",
@@ -47,10 +55,12 @@ __all__ = [
     "SpiderRegistry",
     "get_spider_registry",
     "BaseSpider",
-    "ArxivSpider",
-    "IacrSpider",
-    "AdvisorySpider",
-    "OkfItemPipeline",
+    "BaseItemPipeline",
+    "JsonLinesItemPipeline",
+    "ConsoleItemPipeline",
+    "DropItem",
+    "PipelineRegistry",
+    "get_pipeline_registry",
     "ConsistentHashRouter",
     "StateStorage",
     "SpiderContractVerifier",
@@ -59,3 +69,20 @@ __all__ = [
     "spider",
     "scrape",
 ]
+
+_LEGACY_EXPORTS = {
+    "OkfItemPipeline": "domain.security.pipeline.okf_pipeline",
+    "ArxivSpider": "domain.security.spiders.arxiv_spider",
+    "IacrSpider": "domain.security.spiders.iacr_spider",
+    "AdvisorySpider": "domain.security.spiders.advisory_spider",
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LEGACY_EXPORTS:
+        import importlib
+
+        mod_name = _LEGACY_EXPORTS[name]
+        mod = importlib.import_module(mod_name)
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

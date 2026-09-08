@@ -81,11 +81,14 @@ class Engine:
         mid_list = list(middlewares or [])
 
         _enqueue_start_urls(spider, self.scheduler, self._stats)
-
-        processed_count = 0
-        while self._should_continue_crawling(max_requests, processed_count):
-            if await self._step_crawl(spider, mid_list, pipe_list, scraped_items):
-                processed_count += 1
+        await _open_pipelines(pipe_list, spider)
+        try:
+            processed_count = 0
+            while self._should_continue_crawling(max_requests, processed_count):
+                if await self._step_crawl(spider, mid_list, pipe_list, scraped_items):
+                    processed_count += 1
+        finally:
+            await _close_pipelines(pipe_list, spider)
 
         self.running = False
         return scraped_items
@@ -121,6 +124,18 @@ class Engine:
 
     def get_stats(self) -> Dict[str, Union[int, float]]:
         return dict(self._stats)
+
+
+async def _open_pipelines(pipelines: List[Any], spider: Any) -> None:
+    for pipe in pipelines:
+        if hasattr(pipe, "open_spider"):
+            await pipe.open_spider(spider)
+
+
+async def _close_pipelines(pipelines: List[Any], spider: Any) -> None:
+    for pipe in pipelines:
+        if hasattr(pipe, "close_spider"):
+            await pipe.close_spider(spider)
 
 
 def _enqueue_start_urls(
@@ -214,14 +229,28 @@ async def _execute_middlewares_resp(
     return current_resp
 
 
+async def _step_pipeline(
+    pipe: Any, item: ScrapedItem, spider: Any
+) -> Optional[ScrapedItem]:
+    if not hasattr(pipe, "process_item"):
+        return item
+    try:
+        return await pipe.process_item(item, spider)  # type: ignore[no-any-return]
+    except Exception as exc:
+        if exc.__class__.__name__ == "DropItem":
+            return None
+        raise
+
+
 async def _process_item_pipelines(
     item: ScrapedItem, pipelines: List[Any], spider: Any
-) -> ScrapedItem:
-    current_item = item
+) -> Optional[ScrapedItem]:
+    current: Optional[ScrapedItem] = item
     for pipe in pipelines:
-        if hasattr(pipe, "process_item"):
-            current_item = await pipe.process_item(current_item, spider)
-    return current_item
+        if current is None:
+            break
+        current = await _step_pipeline(pipe, current, spider)
+    return current
 
 
 async def _handle_result(
@@ -237,5 +266,6 @@ async def _handle_result(
             stats["requests_scheduled"] = int(stats["requests_scheduled"]) + 1
     elif isinstance(res, ScrapedItem):
         item = await _process_item_pipelines(res, pipelines, spider)
-        scraped_items.append(item)
-        stats["items_scraped"] = int(stats["items_scraped"]) + 1
+        if item is not None:
+            scraped_items.append(item)
+            stats["items_scraped"] = int(stats["items_scraped"]) + 1

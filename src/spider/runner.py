@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, cast
 
 from .core.downloader import AsyncHttpDownloader
 from .core.engine import Engine, ScrapedItem
@@ -18,7 +18,11 @@ from .downloader.middleware import (
     RobotsTxtMiddleware,
     UserAgentMiddleware,
 )
-from .pipeline.okf_pipeline import OkfItemPipeline
+from .pipeline.base import (
+    ConsoleItemPipeline,
+    JsonLinesItemPipeline,
+    get_pipeline_registry,
+)
 from .policies.autothrottle import AutoThrottlePolicy
 from .registry import get_spider_registry
 from .spiders.base import BaseSpider
@@ -88,17 +92,116 @@ def _inject_downloader_to_middlewares(
             mid.downloader = downloader
 
 
+_SECURITY_SPIDER_NAMES = {
+    "arxiv",
+    "arxiv_spider",
+    "iacr",
+    "iacr_spider",
+    "advisory",
+    "advisory_spider",
+    "cisa_kev",
+    "cisa_kev_spider",
+    "nvd_cve",
+    "nvd_cve_spider",
+}
+
+
+def _is_security_spider_or_output(spider_name: str, output_dir: Optional[str]) -> bool:
+    if spider_name in _SECURITY_SPIDER_NAMES:
+        return True
+    return bool(output_dir and "okf" in output_dir)
+
+
+def _resolve_okf_pipeline(output_dir: Optional[str], persist_db: bool) -> List[Any]:
+    pipe_reg = get_pipeline_registry()
+    okf_cls = pipe_reg.get("okf")
+    if okf_cls is not None:
+        factory = cast(Any, okf_cls)
+        return [
+            factory(
+                output_dir=output_dir or "outputs/okf_papers",
+                enable_db_persistence=persist_db,
+            )
+        ]
+    from domain.security.pipeline.okf_pipeline import SecurityOkfItemPipeline
+
+    return [
+        SecurityOkfItemPipeline(
+            output_dir=output_dir or "outputs/okf_papers",
+            enable_db_persistence=persist_db,
+        )
+    ]
+
+
+def _resolve_by_type(
+    pipeline_type: str, output_dir: Optional[str], persist_db: bool
+) -> Optional[List[Any]]:
+    ptype = pipeline_type.lower()
+    if ptype == "jsonl":
+        return [JsonLinesItemPipeline(output_dir=output_dir or "outputs/scraped_data")]
+    if ptype == "console":
+        return [ConsoleItemPipeline()]
+    if ptype in ("okf", "security_okf"):
+        return _resolve_okf_pipeline(output_dir, persist_db)
+    return None
+
+
+def _resolve_injected_pipelines(
+    pipelines: Optional[Sequence[Any]],
+    pipeline_factory: Optional[Callable[..., Sequence[Any]]],
+) -> Optional[List[Any]]:
+    if pipelines is not None:
+        return list(pipelines)
+    if pipeline_factory is not None:
+        return list(pipeline_factory())
+    return None
+
+
+def _resolve_default_pipeline(
+    spider_name: str, output_dir: Optional[str], persist_db: bool
+) -> List[Any]:
+    if _is_security_spider_or_output(spider_name, output_dir):
+        return _resolve_okf_pipeline(output_dir, persist_db)
+    target_dir = output_dir if output_dir else "outputs/scraped_data"
+    return [JsonLinesItemPipeline(output_dir=target_dir)]
+
+
+def _resolve_pipelines(
+    spider_name: str,
+    output_dir: Optional[str],
+    persist_db: bool,
+    pipelines: Optional[Sequence[Any]] = None,
+    pipeline_factory: Optional[Callable[..., Sequence[Any]]] = None,
+    pipeline_type: Optional[str] = None,
+) -> List[Any]:
+    """Resolves item pipelines using dependency injection, CLI type, or auto resolution."""
+    injected = _resolve_injected_pipelines(pipelines, pipeline_factory)
+    if injected is not None:
+        return injected
+    typed = (
+        _resolve_by_type(pipeline_type, output_dir, persist_db)
+        if pipeline_type
+        else None
+    )
+    if typed is not None:
+        return typed
+    return _resolve_default_pipeline(spider_name, output_dir, persist_db)
+
+
 async def run_spider(
     spider_name: str,
-    output_dir: str = "outputs/okf_papers",
+    output_dir: Optional[str] = None,
     max_requests: Optional[int] = None,
     default_delay: float = 0.5,
     enable_cache: bool = True,
     persist_db: bool = False,
     state_file: Optional[str] = None,
     resume_from_state: bool = False,
+    pipelines: Optional[Sequence[Any]] = None,
+    pipeline_factory: Optional[Callable[..., Sequence[Any]]] = None,
+    pipeline_type: Optional[str] = None,
 ) -> List[ScrapedItem]:
-    """Runs a specific spider with full middleware and pipeline stack."""
+    """Runs a specific spider with full middleware and DI-injected pipeline stack."""
     spider_instance = _resolve_spider_instance(spider_name)
     effective_delay = _resolve_effective_delay(spider_instance, default_delay)
 
@@ -109,16 +212,25 @@ async def run_spider(
     engine = Engine(downloader=downloader, scheduler=scheduler)
     middlewares = _build_spider_middlewares(effective_delay, enable_cache)
     _inject_downloader_to_middlewares(middlewares, downloader)
-    pipelines = [
-        OkfItemPipeline(output_dir=output_dir, enable_db_persistence=persist_db)
-    ]
 
+    resolved_pipelines = _resolve_pipelines(
+        spider_name=spider_name,
+        output_dir=output_dir,
+        persist_db=persist_db,
+        pipelines=pipelines,
+        pipeline_factory=pipeline_factory,
+        pipeline_type=pipeline_type,
+    )
+
+    pipe_count = len(resolved_pipelines)
+    url_count = len(spider_instance.start_urls)
     print(
-        f"[*] Starting Spider: '{spider_name}' (start_urls: {len(spider_instance.start_urls)})"
+        f"[*] Starting Spider: '{spider_name}' "
+        f"(start_urls: {url_count}, pipelines: {pipe_count})"
     )
     items = await engine.crawl(
         spider=spider_instance,
-        pipelines=pipelines,
+        pipelines=resolved_pipelines,
         middlewares=middlewares,
         max_requests=max_requests,
     )
@@ -134,9 +246,11 @@ async def run_spider(
 
 
 async def run_all_spiders(
-    output_dir: str = "outputs/okf_papers",
+    output_dir: Optional[str] = None,
     max_requests_per_spider: Optional[int] = None,
     persist_db: bool = False,
+    pipelines: Optional[Sequence[Any]] = None,
+    pipeline_type: Optional[str] = None,
 ) -> Dict[str, List[ScrapedItem]]:
     """Runs all registered spiders sequentially."""
     results: Dict[str, List[ScrapedItem]] = {}
@@ -147,6 +261,8 @@ async def run_all_spiders(
             output_dir=output_dir,
             max_requests=max_requests_per_spider,
             persist_db=persist_db,
+            pipelines=pipelines,
+            pipeline_type=pipeline_type,
         )
         results[name] = items
     return results
@@ -155,22 +271,33 @@ async def run_all_spiders(
 class SpiderRunner:
     """Synchronous orchestration wrapper for executing spiders."""
 
-    def __init__(self, workspace_dir: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        workspace_dir: Optional[str] = None,
+        pipelines: Optional[Sequence[Any]] = None,
+        pipeline_type: Optional[str] = None,
+    ) -> None:
         self.workspace_dir = workspace_dir or os.getcwd()
         self.output_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        self.pipelines = pipelines
+        self.pipeline_type = pipeline_type
 
     def run_spider(
         self,
         spider_name: str,
         max_depth: Optional[int] = None,
         max_requests: Optional[int] = None,
+        pipelines: Optional[Sequence[Any]] = None,
+        output_dir: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Runs the spider synchronously and returns stats."""
         items = asyncio.run(
             run_spider(
                 spider_name=spider_name,
-                output_dir=self.output_dir,
+                output_dir=output_dir or self.output_dir,
                 max_requests=max_requests or max_depth,
+                pipelines=pipelines or self.pipelines,
+                pipeline_type=self.pipeline_type,
             )
         )
         return {"spider": spider_name, "crawled": len(items)}
@@ -192,9 +319,15 @@ def parse_cli_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Target spider to run",
     )
     parser.add_argument(
+        "--pipeline",
+        choices=["auto", "jsonl", "okf", "console"],
+        default="auto",
+        help="Item pipeline to apply (auto, jsonl, okf, console)",
+    )
+    parser.add_argument(
         "--output-dir",
-        default="outputs/okf_papers",
-        help="Directory for OKF v0.2 Markdown outputs",
+        default=None,
+        help="Directory for crawler output (defaults to outputs/okf_papers or outputs/scraped_data)",
     )
     parser.add_argument(
         "--max-requests",
@@ -220,12 +353,14 @@ def parse_cli_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 def main() -> None:
     args = parse_cli_args()
+    pipe_type = None if args.pipeline == "auto" else args.pipeline
     if args.spider == "all":
         asyncio.run(
             run_all_spiders(
                 output_dir=args.output_dir,
                 max_requests_per_spider=args.max_requests,
                 persist_db=args.persist_db,
+                pipeline_type=pipe_type,
             )
         )
     else:
@@ -238,6 +373,7 @@ def main() -> None:
                 persist_db=args.persist_db,
                 state_file=args.state_file,
                 resume_from_state=args.resume,
+                pipeline_type=pipe_type,
             )
         )
 

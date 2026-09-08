@@ -50,6 +50,14 @@ class SecurityPapersDomainPlugin(BaseDomainPlugin):
             "nvd_cve_spider": NvdCveSpider,
         }
 
+    def get_pipelines(self) -> Dict[str, Any]:
+        from domain.security.pipeline.okf_pipeline import SecurityOkfItemPipeline
+
+        return {
+            "okf": SecurityOkfItemPipeline,
+            "security_okf": SecurityOkfItemPipeline,
+        }
+
     def get_ontology_schema(self) -> Optional[Any]:
         try:
             from ontology.schema import SecurityOntologySchema
@@ -65,10 +73,20 @@ class SecurityPapersDomainPlugin(BaseDomainPlugin):
         return MITRECTIRegistry.get_instance()
 
     def initialize(self, workspace_dir: str) -> None:
-        """Registers domain spiders into the global SpiderRegistry."""
+        """Registers domain spiders and pipelines into global registries."""
         spider_reg = get_spider_registry()
         for name, spider_cls in self.get_spiders().items():
             spider_reg.register(name, spider_cls=spider_cls)
+
+        try:
+            from spider.pipeline.base import get_pipeline_registry
+
+            pipe_reg = get_pipeline_registry()
+            for name, pipe_cls in self.get_pipelines().items():
+                pipe_reg.register(name, pipeline_cls=pipe_cls)
+        except Exception as exc:
+            logger.debug("Pipeline registration deferred: %s", exc)
+
         logger.info(
             "Initialized SecurityPapersDomainPlugin in workspace: %s", workspace_dir
         )
