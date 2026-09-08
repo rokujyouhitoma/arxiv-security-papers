@@ -39,6 +39,16 @@ from .transaction import TransactionManager
 logger = logging.getLogger(__name__)
 
 
+def _safe_remove_file(path: Optional[str]) -> None:
+    if not path or path == ":memory:":
+        return
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
 class SQLExecutionError(Exception):
     """Raised when SQL execution fails."""
 
@@ -294,6 +304,7 @@ class SQLExecutor:
         self.access_controller = access_controller or AccessController()
         self.tx_manager = tx_manager or TransactionManager()
         self.embedding = embedding or DeterministicEmbedding(dim=128)
+        self.default_storage = default_storage
         self.tables: Dict[str, TableCatalog] = {}
         self._init_default_tables(catalog, default_storage, default_index)
 
@@ -384,15 +395,27 @@ class SQLExecutor:
             "message": f"Revoked '{stmt.permission}' on '{stmt.table_name}' from role '{stmt.role}'",
         }
 
+    def _is_in_memory_mode(self) -> bool:
+        if self.default_storage and getattr(self.default_storage, "is_memory", False):
+            return True
+        return any(
+            getattr(t.storage, "is_memory", False)
+            or getattr(t.storage, "file_path", "") == ":memory:"
+            for t in self.tables.values()
+        )
+
     def _create_new_table_storage(self, stmt: CreateTableStatement) -> None:
-        storage_path = os.path.join("outputs", "database", f"{stmt.table_name}.vdb")
-        os.makedirs(os.path.dirname(storage_path), exist_ok=True)
-        if os.path.exists(storage_path):
-            try:
-                os.remove(storage_path)
-            except OSError:
-                pass
-        storage = VectorStorage(file_path=storage_path, dim=self.embedding.dim)
+        if self._is_in_memory_mode():
+            storage = VectorStorage(file_path=":memory:", dim=self.embedding.dim)
+        else:
+            storage_path = os.path.join("outputs", "database", f"{stmt.table_name}.vdb")
+            os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+            if os.path.exists(storage_path):
+                try:
+                    os.remove(storage_path)
+                except OSError:
+                    pass
+            storage = VectorStorage(file_path=storage_path, dim=self.embedding.dim)
         catalog = TableCatalog(
             name=stmt.table_name,
             storage=storage,
@@ -424,14 +447,8 @@ class SQLExecutor:
         }
 
     def _remove_table_file(self, tcat: TableCatalog) -> None:
-        storage_file = getattr(tcat.storage, "file_path", None) or getattr(
-            tcat.storage, "storage_path", None
-        )
-        if storage_file and os.path.exists(storage_file):
-            try:
-                os.remove(storage_file)
-            except OSError:
-                pass
+        storage_file = getattr(tcat.storage, "file_path", None)
+        _safe_remove_file(storage_file)
 
     def _exec_drop_table(
         self, stmt: DropTableStatement, effective_role: str
@@ -903,15 +920,20 @@ class SQLExecutor:
             return self._exec_show(stmt, role)
         return self._exec_schema_stmt(stmt, role)
 
+    def _calculate_table_size(self, storage: VectorStorage) -> int:
+        if getattr(storage, "is_memory", False) or storage.file_path == ":memory:":
+            return len(storage.to_bytes())
+        return (
+            os.path.getsize(storage.file_path)
+            if os.path.exists(storage.file_path)
+            else 0
+        )
+
     def _build_show_table_row(
         self, tname: str, tbl: TableCatalog, target: str
     ) -> Dict[str, Any]:
         r_count = len(tbl.storage.metadata)
-        f_size = (
-            os.path.getsize(tbl.storage.file_path)
-            if os.path.exists(tbl.storage.file_path)
-            else 0
-        )
+        f_size = self._calculate_table_size(tbl.storage)
         if target == "TABLE_STATUS":
             return {
                 "Name": tname,
