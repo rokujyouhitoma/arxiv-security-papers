@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 import re
-import xml.etree.ElementTree as ET
-from typing import AsyncIterator, Dict, List, Optional, Set, Union
+from typing import AsyncIterator, Iterator, List, Optional, Set, Union
 
 from spider.core.downloader import Request, Response
 from spider.core.engine import ScrapedItem
-from spider.core.selector import Selector
+from spider.core.selector import Selector, XmlNode, XmlSelector
 from spider.spiders.base import BaseSpider
 
 
@@ -17,14 +16,26 @@ class ArxivSpider(BaseSpider):
     """Spider for crawling arXiv computer security and cryptography papers."""
 
     name: str = "arxiv_spider"
+    download_delay: float = 3.0
     start_urls: List[str] = [
-        (
-            "https://export.arxiv.org/api/query?"
-            "search_query=cat:cs.CR&sortBy=submittedDate&sortOrder=descending&max_results=25"
-        ),
+        "https://export.arxiv.org/api/query",
         "https://arxiv.org/list/cs.CR/recent",
     ]
     allowed_domains: Set[str] = {"arxiv.org", "export.arxiv.org"}
+
+    def start_requests(self) -> Iterator[Request]:
+        """Yields initial parameterized API query request and recent papers request."""
+        yield Request(
+            url="https://export.arxiv.org/api/query",
+            params={
+                "search_query": "cat:cs.CR",
+                "sortBy": "submittedDate",
+                "sortOrder": "descending",
+                "max_results": "25",
+            },
+            callback="parse",
+        )
+        yield Request(url="https://arxiv.org/list/cs.CR/recent", callback="parse")
 
     async def parse(
         self, response: Response
@@ -39,15 +50,11 @@ class ArxivSpider(BaseSpider):
     async def _parse_atom_feed(
         self, response: Response
     ) -> AsyncIterator[Union[Request, ScrapedItem]]:
-        try:
-            root = ET.fromstring(response.text)
-            ns = {"atom": "http://www.w3.org/2005/Atom"}
-            for entry in root.findall("atom:entry", ns):
-                item = _map_atom_entry_to_scraped_item(entry, ns)
-                if item is not None:
-                    yield item
-        except Exception:
-            pass
+        selector = XmlSelector(response.text)
+        for entry in selector.find_all("entry"):
+            item = _map_atom_entry_to_scraped_item(entry)
+            if item is not None:
+                yield item
 
     async def _parse_html_list(
         self, response: Response
@@ -79,6 +86,7 @@ class ArxivSpider(BaseSpider):
             source_url=response.url,
             title=title,
             payload={
+                "type": "security-paper",
                 "clean_id": clean_id,
                 "source": "arxiv",
                 "abstract": abstract,
@@ -90,23 +98,27 @@ class ArxivSpider(BaseSpider):
         )
 
 
-def _map_atom_entry_to_scraped_item(
-    entry: ET.Element, ns: Dict[str, str]
-) -> Optional[ScrapedItem]:
-    clean_id = _extract_entry_id(entry, ns)
+def _map_atom_entry_to_scraped_item(entry: XmlNode) -> Optional[ScrapedItem]:
+    raw_id = entry.find_text("id")
+    clean_id = _extract_arxiv_clean_id(raw_id)
     if not clean_id:
         return None
 
-    title = _extract_entry_text(entry, "atom:title", ns, default="")
-    summary = _extract_entry_text(entry, "atom:summary", ns, default="")
-    published = _extract_entry_text(entry, "atom:published", ns, default="")
-    authors = _extract_entry_authors(entry, ns)
+    title = entry.find_text("title")
+    summary = entry.find_text("summary")
+    published = entry.find_text("published")
+    authors: List[str] = [
+        auth.find_text("name")
+        for auth in entry.find_all("author")
+        if auth.find_text("name")
+    ]
 
     return ScrapedItem(
         item_id=f"arxiv_{clean_id}",
         source_url=f"https://arxiv.org/abs/{clean_id}",
         title=title,
         payload={
+            "type": "security-paper",
             "clean_id": clean_id,
             "source": "arxiv",
             "abstract": summary,
@@ -116,30 +128,6 @@ def _map_atom_entry_to_scraped_item(
             "tags": ["cryptography", "network-security"],
         },
     )
-
-
-def _extract_entry_id(entry: ET.Element, ns: Dict[str, str]) -> str:
-    arxiv_id_elem = entry.find("atom:id", ns)
-    raw_id = (arxiv_id_elem.text or "").strip() if arxiv_id_elem is not None else ""
-    return _extract_arxiv_clean_id(raw_id)
-
-
-def _extract_entry_text(
-    entry: ET.Element, tag: str, ns: Dict[str, str], default: str = ""
-) -> str:
-    elem = entry.find(tag, ns)
-    if elem is not None and elem.text:
-        return re.sub(r"\s+", " ", elem.text.strip())
-    return default
-
-
-def _extract_entry_authors(entry: ET.Element, ns: Dict[str, str]) -> List[str]:
-    authors: List[str] = []
-    for auth in entry.findall("atom:author", ns):
-        name_elem = auth.find("atom:name", ns)
-        if name_elem is not None and name_elem.text:
-            authors.append(name_elem.text.strip())
-    return authors
 
 
 def _extract_arxiv_clean_id(raw_id: str) -> str:

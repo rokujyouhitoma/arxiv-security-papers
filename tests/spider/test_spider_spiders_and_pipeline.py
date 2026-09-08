@@ -1,5 +1,6 @@
 """Unit tests for domain spiders and OKF Item Pipeline."""
 
+import asyncio
 import os
 import shutil
 import tempfile
@@ -26,6 +27,20 @@ def test_arxiv_spider_atom_parsing() -> None:
         </feed>
         """
         spider = ArxivSpider()
+        assert spider.download_delay == 3.0
+
+        # Verify start_requests params
+        start_reqs = list(spider.start_requests())
+        assert len(start_reqs) == 2
+        assert start_reqs[0].url.startswith("https://export.arxiv.org/api/query")
+        assert "cat%3Acs.CR" in start_reqs[0].url
+        assert start_reqs[0].params == {
+            "search_query": "cat:cs.CR",
+            "sortBy": "submittedDate",
+            "sortOrder": "descending",
+            "max_results": "25",
+        }
+
         req = Request(url="https://export.arxiv.org/api/query?search_query=cat:cs.CR")
         resp = Response(
             url=req.url,
@@ -41,10 +56,9 @@ def test_arxiv_spider_atom_parsing() -> None:
         assert len(items) == 1
         assert isinstance(items[0], ScrapedItem)
         assert items[0].title == "Robust Zero-Trust Identity Federation"
+        assert items[0].payload["type"] == "security-paper"
         assert items[0].payload["clean_id"] == "2608.12345"
         assert items[0].payload["authors"] == ["Bob Smith"]
-
-    import asyncio
 
     asyncio.run(_run())
 
@@ -64,6 +78,8 @@ def test_iacr_spider_rss_parsing() -> None:
         </rss>
         """
         spider = IacrSpider()
+        assert spider.download_delay == 3.0
+
         req = Request(url="https://eprint.iacr.org/rss/rss.xml")
         resp = Response(
             url=req.url,
@@ -77,9 +93,10 @@ def test_iacr_spider_rss_parsing() -> None:
             items.append(item)
 
         assert len(items) == 1
+        assert items[0].payload["type"] == "security-paper"
         assert items[0].payload["clean_id"] == "2026_999"
-
-    import asyncio
+        assert "iacr-eprint" in items[0].payload["tags"]
+        assert "cryptography" in items[0].payload["tags"]
 
     asyncio.run(_run())
 
@@ -98,6 +115,8 @@ def test_advisory_spider_parsing() -> None:
         </rss>
         """
         spider = AdvisorySpider()
+        assert spider.download_delay == 5.0
+
         req = Request(url="https://cve.mitre.org/data/downloads/allitems.xml")
         resp = Response(
             url=req.url,
@@ -111,9 +130,10 @@ def test_advisory_spider_parsing() -> None:
             items.append(item)
 
         assert len(items) == 1
+        assert items[0].payload["type"] == "security_advisory"
         assert items[0].payload["clean_id"] == "CVE-2026-8888"
-
-    import asyncio
+        assert items[0].payload["cve_id"] == "CVE-2026-8888"
+        assert items[0].payload["source"] == "cve-mitre"
 
     asyncio.run(_run())
 
@@ -128,6 +148,7 @@ def test_okf_pipeline_output() -> None:
                 source_url="https://arxiv.org/abs/2608.1111",
                 title="Formal Verification of Microkernel",
                 payload={
+                    "type": "security-paper",
                     "clean_id": "2608.1111",
                     "source": "arxiv",
                     "abstract": "We prove functional correctness using interactive theorem provers.",
@@ -151,6 +172,43 @@ def test_okf_pipeline_output() -> None:
         finally:
             shutil.rmtree(temp_dir)
 
-    import asyncio
+    asyncio.run(_run())
+
+
+def test_advisory_spider_okf_pipeline_output() -> None:
+    async def _run() -> None:
+        temp_dir = tempfile.mkdtemp()
+        try:
+            pipeline = OkfItemPipeline(output_dir=temp_dir)
+            item = ScrapedItem(
+                item_id="advisory_CVE-2026-8888",
+                source_url="https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-8888",
+                title="CVE-2026-8888 Buffer Overflow in TLS",
+                payload={
+                    "type": "security_advisory",
+                    "clean_id": "CVE-2026-8888",
+                    "cve_id": "CVE-2026-8888",
+                    "source": "cve-mitre",
+                    "abstract": "Critical buffer overflow allowing code execution.",
+                    "published_date": "2026-09-08",
+                    "references": [
+                        "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-8888"
+                    ],
+                    "tags": ["vulnerability", "cve"],
+                },
+            )
+            processed = await pipeline.process_item(item, spider=None)
+            okf_path = processed.payload["okf_path"]
+            assert os.path.exists(okf_path)
+
+            with open(okf_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            assert 'type: "security_advisory"' in content
+            assert 'cve_id: "CVE-2026-8888"' in content
+            assert "CVE-2026-8888 Buffer Overflow in TLS" in content
+            assert "## 1. 脆弱性概要 (Overview)" in content
+        finally:
+            shutil.rmtree(temp_dir)
 
     asyncio.run(_run())

@@ -27,6 +27,8 @@ class Request:
     params: Optional[Dict[str, Any]] = None
 
     def __post_init__(self) -> None:
+        if self.headers is None:
+            self.headers = {}
         if self.params:
             parsed = urllib.parse.urlsplit(self.url)
             existing_query = dict(urllib.parse.parse_qsl(parsed.query))

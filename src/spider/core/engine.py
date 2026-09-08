@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 
 from .downloader import AsyncHttpDownloader, Request, Response
 from .scheduler import Scheduler
@@ -138,14 +138,28 @@ async def _close_pipelines(pipelines: List[Any], spider: Any) -> None:
             await pipe.close_spider(spider)
 
 
+def _schedule_requests(
+    requests: Iterable[Request],
+    scheduler: Scheduler,
+) -> int:
+    scheduled = 0
+    for req in requests:
+        if scheduler.enqueue(req):
+            scheduled += 1
+    return scheduled
+
+
 def _enqueue_start_urls(
     spider: Any, scheduler: Scheduler, stats: Dict[str, Union[int, float]]
 ) -> None:
+    if hasattr(spider, "start_requests") and callable(spider.start_requests):
+        added = _schedule_requests(spider.start_requests(), scheduler)
+        stats["requests_scheduled"] = int(stats["requests_scheduled"]) + added
+        return
     start_urls: Sequence[str] = getattr(spider, "start_urls", [])
-    for url in start_urls:
-        req = Request(url=url, callback="parse")
-        if scheduler.enqueue(req):
-            stats["requests_scheduled"] = int(stats["requests_scheduled"]) + 1
+    reqs = (Request(url=url, callback="parse") for url in start_urls)
+    added = _schedule_requests(reqs, scheduler)
+    stats["requests_scheduled"] = int(stats["requests_scheduled"]) + added
 
 
 async def _fetch_response(

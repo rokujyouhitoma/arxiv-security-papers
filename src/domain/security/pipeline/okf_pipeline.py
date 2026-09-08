@@ -484,7 +484,7 @@ def _build_vulnerability_okf_markdown(
 def _build_okf_markdown(item: ScrapedItem, clean_id: str, date_folder: str) -> str:
     """Polymorphic dispatcher for OKF v0.2 Markdown generation."""
     item_type = str(item.payload.get("type") or "security-paper").lower()
-    if item_type in ("vulnerability", "security-advisory"):
+    if item_type in ("vulnerability", "security-advisory", "security_advisory"):
         return _build_vulnerability_okf_markdown(item, clean_id, date_folder)
     return _build_paper_okf_markdown(item, clean_id, date_folder)
 
@@ -498,7 +498,11 @@ def _persist_to_dsn14_db(item: ScrapedItem, clean_id: str, okf_path: str) -> Non
         cursor = conn.cursor()
         item_type = str(item.payload.get("type") or "security-paper").lower()
 
-        if item_type in ("vulnerability", "security-advisory"):
+        if item_type in (
+            "vulnerability",
+            "security-advisory",
+            "security_advisory",
+        ):
             cve_id = str(item.payload.get("cve_id") or clean_id)
             cvss_val = item.payload.get("cvss")
             base_score, severity, _ = _format_cvss_meta(cvss_val)

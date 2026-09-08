@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import re
-import xml.etree.ElementTree as ET
 from typing import AsyncIterator, List, Optional, Set, Union
 
 from spider.core.downloader import Request, Response
 from spider.core.engine import ScrapedItem
+from spider.core.selector import XmlNode, XmlSelector
 from spider.spiders.base import BaseSpider
 
 
@@ -16,6 +16,7 @@ class AdvisorySpider(BaseSpider):
     """Spider for crawling CVE alerts and security advisory feeds."""
 
     name: str = "advisory_spider"
+    download_delay: float = 5.0
     start_urls: List[str] = [
         "https://cve.mitre.org/data/downloads/allitems.xml",
     ]
@@ -24,40 +25,41 @@ class AdvisorySpider(BaseSpider):
     async def parse(
         self, response: Response
     ) -> AsyncIterator[Union[Request, ScrapedItem]]:
-        try:
-            root = ET.fromstring(response.text)
-            for item in root.findall(".//item"):
-                scraped = _map_advisory_item(item, response.url)
-                if scraped is not None:
-                    yield scraped
-        except Exception:
-            pass
+        selector = XmlSelector(response.text)
+        for item_node in selector.find_all("item"):
+            scraped = _map_advisory_item(item_node, response.url)
+            if scraped is not None:
+                yield scraped
 
 
-def _get_elem_text(item: ET.Element, tag: str, default: str = "") -> str:
-    elem = item.find(tag)
-    return (elem.text or "").strip() if elem is not None else default
-
-
-def _map_advisory_item(item: ET.Element, fallback_url: str) -> Optional[ScrapedItem]:
-    title = _get_elem_text(item, "title", "Advisory")
-    desc = _get_elem_text(item, "description", "")
-    link = _get_elem_text(item, "link", fallback_url)
+def _map_advisory_item(item_node: XmlNode, fallback_url: str) -> Optional[ScrapedItem]:
+    title = item_node.find_text("title", "Advisory")
+    desc = item_node.find_text("description", "")
+    link = item_node.find_text("link", fallback_url)
 
     cve_match = re.search(r"(CVE-\d{4}-\d{4,7})", f"{title} {desc}")
     clean_id = cve_match.group(1) if cve_match else "ADV-UNKNOWN"
+    cve_id = clean_id if clean_id != "ADV-UNKNOWN" else ""
 
     return ScrapedItem(
         item_id=f"advisory_{clean_id}",
         source_url=link,
         title=title,
         payload={
+            "type": "security_advisory",
             "clean_id": clean_id,
-            "source": "advisory",
+            "cve_id": cve_id,
+            "source": "cve-mitre",
             "abstract": desc,
+            "description": desc,
             "authors": ["Security Response Team"],
             "published_date": "",
-            "pdf_url": "",
-            "tags": ["vulnerability", "cve", "threat-intelligence"],
+            "references": [link] if link else [],
+            "tags": [
+                "vulnerability",
+                "cve",
+                "threat-intelligence",
+                "security-advisory",
+            ],
         },
     )

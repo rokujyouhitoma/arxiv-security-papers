@@ -6,7 +6,7 @@ from .core.bloom import BloomFilter, ScalableBloomFilter
 from .core.downloader import AsyncHttpDownloader, Request, Response
 from .core.engine import Engine, ScrapedItem
 from .core.scheduler import Scheduler
-from .core.selector import DOMNode, PureDOMParser, Selector
+from .core.selector import DOMNode, PureDOMParser, Selector, XmlNode, XmlSelector
 from .distributed.consistent_hash import ConsistentHashRouter
 from .distributed.contracts import SpiderContractVerifier
 from .distributed.state_storage import StateStorage
@@ -41,6 +41,8 @@ __all__ = [
     "DOMNode",
     "PureDOMParser",
     "Selector",
+    "XmlNode",
+    "XmlSelector",
     "BloomFilter",
     "ScalableBloomFilter",
     "UserAgentMiddleware",

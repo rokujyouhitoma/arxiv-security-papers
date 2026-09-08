@@ -1,12 +1,13 @@
 """Unit tests for Spider Core: BloomFilter, Selector, Scheduler, and Engine."""
 
 import asyncio
+from typing import Any
 
 from src.spider.core.bloom import BloomFilter, ScalableBloomFilter
 from src.spider.core.downloader import AsyncHttpDownloader, Request, Response
 from src.spider.core.engine import Engine, ScrapedItem
 from src.spider.core.scheduler import Scheduler
-from src.spider.core.selector import Selector
+from src.spider.core.selector import Selector, XmlSelector
 from src.spider.spiders.base import BaseSpider
 
 
@@ -129,3 +130,96 @@ def test_engine_crawl_lifecycle() -> None:
         assert stats["responses_received"] == 2
 
     asyncio.run(_run())
+
+
+def test_xml_selector_namespace_agnostic() -> None:
+    atom_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <title>Security Feed</title>
+        <entry>
+            <id>http://arxiv.org/abs/2609.0001</id>
+            <title>Post-Quantum Cryptography</title>
+            <summary>Lattice based key exchange.</summary>
+            <author>
+                <name>Alice Smith</name>
+                <dc:creator>Alice</dc:creator>
+            </author>
+            <link rel="alternate" href="https://example.com/2609.0001" />
+        </entry>
+        <entry>
+            <id>http://arxiv.org/abs/2609.0002</id>
+            <title>Microarchitectural Attacks</title>
+            <summary>Side channel cache timing.</summary>
+            <author><name>Bob</name></author>
+        </entry>
+    </feed>
+    """
+    selector = XmlSelector(atom_xml)
+    assert selector.root is not None
+    assert selector.root.tag == "feed"
+    assert selector.find_text("title") == "Security Feed"
+
+    entries = selector.find_all("entry")
+    assert len(entries) == 2
+
+    first_entry = entries[0]
+    assert first_entry.find_text("title") == "Post-Quantum Cryptography"
+    assert first_entry.find_text("summary") == "Lattice based key exchange."
+    assert first_entry.find_text("id") == "http://arxiv.org/abs/2609.0001"
+
+    author_node = first_entry.find("author")
+    assert author_node is not None
+    assert author_node.find_text("name") == "Alice Smith"
+    assert author_node.find_text("creator") == "Alice"
+
+    link_node = first_entry.find("link")
+    assert link_node is not None
+    assert link_node.get_attr("rel") == "alternate"
+    assert link_node.get_attr("href") == "https://example.com/2609.0001"
+    assert link_node.get_attr("missing", default="none") == "none"
+
+
+def test_xml_selector_safety_and_edge_cases() -> None:
+    # 1. Empty string returns None root
+    empty_sel = XmlSelector("")
+    assert empty_sel.root is None
+    assert empty_sel.find_text("title", default="fallback") == "fallback"
+    assert empty_sel.find_all("entry") == []
+    assert empty_sel.find("entry") is None
+
+    # 2. Malformed XML returns None root gracefully
+    bad_sel = XmlSelector("<broken><unclosed>")
+    assert bad_sel.root is None
+    assert bad_sel.find_text("anything", default="safe") == "safe"
+
+    # 3. Payload size guard (> 10MB) raises ValueError
+    huge_xml = "<root>" + "x" * (10 * 1024 * 1024 + 1) + "</root>"
+    import pytest
+
+    with pytest.raises(ValueError, match="exceeds safe maximum limit"):
+        XmlSelector(huge_xml)
+
+
+def test_base_spider_start_requests_and_custom_headers() -> None:
+    class HeaderSpider(BaseSpider):
+        name = "header_spider"
+        start_urls = ["https://api.example.com/v1", "https://api.example.com/v2"]
+        custom_headers = {"Authorization": "Bearer secret-token", "X-Custom": "val"}
+
+        async def parse(self, response: Any) -> Any:
+            yield  # type: ignore[misc]
+
+    spider = HeaderSpider()
+    assert spider.download_delay == 0.5
+    requests = list(spider.start_requests())
+    assert len(requests) == 2
+    assert requests[0].url == "https://api.example.com/v1"
+    assert requests[0].headers == {
+        "Authorization": "Bearer secret-token",
+        "X-Custom": "val",
+    }
+    assert requests[1].url == "https://api.example.com/v2"
+    assert requests[1].headers == {
+        "Authorization": "Bearer secret-token",
+        "X-Custom": "val",
+    }
