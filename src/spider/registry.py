@@ -20,9 +20,10 @@ class SpiderRegistry:
     Allows domains to register custom spiders without modifying infrastructure code.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, auto_discover: bool = False) -> None:
         self._spiders: Dict[str, Type[BaseSpider]] = {}
         self._factories: Dict[str, Callable[..., BaseSpider]] = {}
+        self._auto_discover = auto_discover
 
     def register(
         self,
@@ -39,12 +40,23 @@ class SpiderRegistry:
 
     def get(self, name: str) -> Optional[Type[BaseSpider]]:
         """Retrieves a registered spider class by name."""
-        return self._spiders.get(name)
+        res = self._spiders.get(name)
+        if res is None and self._auto_discover:
+            _auto_register_domain_spiders(self)
+            res = self._spiders.get(name)
+        return res
+
+    def _ensure_discovered(self, name: str) -> None:
+        if not self._auto_discover:
+            return
+        if name not in self._spiders and name not in self._factories:
+            _auto_register_domain_spiders(self)
 
     def create(
         self, name: str, *args: object, **kwargs: object
     ) -> Optional[BaseSpider]:
         """Instantiates a registered spider by name."""
+        self._ensure_discovered(name)
         if name in self._factories:
             return self._factories[name](*args, **kwargs)
         spider_cls = self._spiders.get(name)
@@ -54,6 +66,8 @@ class SpiderRegistry:
 
     def list_spiders(self) -> List[str]:
         """Lists all registered spider names."""
+        if self._auto_discover:
+            _auto_register_domain_spiders(self)
         names = set(self._spiders.keys()) | set(self._factories.keys())
         return sorted(list(names))
 
@@ -63,7 +77,28 @@ class SpiderRegistry:
         self._factories.pop(name, None)
 
 
-_GLOBAL_SPIDER_REGISTRY = SpiderRegistry()
+def _register_plugin_spiders(registry: SpiderRegistry, plugin: object) -> None:
+    getter = getattr(plugin, "get_spiders", None)
+    if not callable(getter):
+        return
+    spiders: Dict[str, Type[BaseSpider]] = getter()
+    for name, spider_cls in spiders.items():
+        if name not in registry._spiders and name not in registry._factories:
+            registry.register(name, spider_cls=spider_cls)
+
+
+def _auto_register_domain_spiders(registry: SpiderRegistry) -> None:
+    """Discovers and registers spiders from active domain plugins via SPI."""
+    try:
+        from domain import get_domain_registry
+
+        for plugin in get_domain_registry().get_all():
+            _register_plugin_spiders(registry, plugin)
+    except Exception as exc:
+        logger.debug("Domain plugin spider auto-registration deferred: %s", exc)
+
+
+_GLOBAL_SPIDER_REGISTRY = SpiderRegistry(auto_discover=True)
 
 
 def get_spider_registry() -> SpiderRegistry:

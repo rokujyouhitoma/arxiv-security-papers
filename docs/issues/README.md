@@ -8,8 +8,9 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **212** | src/database における SQLite 準拠「:memory:」インメモリデータベースモードのサポート | Feature | Medium | Open (New) | [212-support-in-memory-database-mode.md](212-support-in-memory-database-mode.md) |
+| **211** | 既存Spider群（AdvisorySpider / ArxivSpider / IacrSpider）の最新クローラーAPI準拠化と基盤改善提案 | Feature | Medium | Open (New) | [211-align-existing-spiders-with-latest-crawler-api.md](211-align-existing-spiders-with-latest-crawler-api.md) |
 | **210** | src/spider からのドメイン固有実装（セキュリティ/OKF）の完全分離とクローラー純粋基盤化 | Architecture / Refactor | High | Open (New) | [210-decouple-domain-logic-from-spider-core.md](210-decouple-domain-logic-from-spider-core.md) |
-| **205** | CISA KEV および NVD CVE 向け Pure-Python Spider の実装とクローラー基盤への統合 | Feature | Medium | Open (In Progress) | [205-implement-cisa-kev-and-nvd-cve-spiders.md](205-implement-cisa-kev-and-nvd-cve-spiders.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 ---
@@ -18,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **205** | CISA KEV および NVD CVE 向け Pure-Python Spider の実装とクローラー基盤への統合 | Feature | 2026-09-07 | [205-implement-cisa-kev-and-nvd-cve-spiders.md](closed/205-implement-cisa-kev-and-nvd-cve-spiders.md) |
 | **209** | ETag / If-Modified-Since 条件付きリクエストおよび HTTP 304 キャッシュ機構の実装 | Feature | 2026-09-07 | [209-implement-conditional-get-and-etag-caching-for-spiders.md](closed/209-implement-conditional-get-and-etag-caching-for-spiders.md) |
 | **208** | 脆弱性・CTIデータに対応した OKF Item Pipeline の多態化とテンプレート拡張 | Feature | 2026-09-07 | [208-extend-okf-pipeline-for-vulnerability-and-cti-data.md](closed/208-extend-okf-pipeline-for-vulnerability-and-cti-data.md) |
 | **207** | Spider基盤における HTTP 429/503 指数バックオフ再試行 (RetryMiddleware) と SSRF ドメイン防御 (OffsiteMiddleware) の実装 | Feature | 2026-09-07 | [207-implement-retry-and-offsite-spider-middlewares.md](closed/207-implement-retry-and-offsite-spider-middlewares.md) |
