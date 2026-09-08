@@ -1012,17 +1012,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4. IOPS & Latency Card
     const elIops = document.getElementById('valDbExplorerIops');
-    if (elIops) elIops.textContent = `${kpi.read_iops || 3420} / ${kpi.write_iops || 485} IOPS`;
+    if (elIops) {
+      elIops.textContent = (kpi.read_iops !== undefined && kpi.write_iops !== undefined)
+        ? `${kpi.read_iops} / ${kpi.write_iops} IOPS`
+        : '-- / -- IOPS';
+    }
     const elLat = document.getElementById('valDbExplorerLatency');
-    if (elLat) elLat.textContent = `${kpi.avg_latency_ms || 0.42} ms / p99: ${kpi.p99_latency_ms || 2.8} ms`;
+    if (elLat) {
+      elLat.textContent = (kpi.avg_latency_ms !== undefined && kpi.p99_latency_ms !== undefined)
+        ? `${kpi.avg_latency_ms} ms / p99: ${kpi.p99_latency_ms} ms`
+        : '-- / -- ms';
+    }
     const elCache = document.getElementById('valDbExplorerCacheHit');
-    if (elCache) elCache.textContent = `${kpi.buffer_pool_hit_rate || '99.0%'} / ${kpi.vector_cache_hit_rate || 'N/A'}`;
+    if (elCache) elCache.textContent = `${kpi.buffer_pool_hit_rate || '--'} / ${kpi.vector_cache_hit_rate || '--'}`;
 
     // 5. Durability & WAL Card
     const elWal = document.getElementById('valDbExplorerWalLag');
-    if (elWal) elWal.textContent = `${kpi.wal_flush_rate_kb_s || 128.4} KB/s (${kpi.wal_sync_lag_ms || 0.18}ms)`;
+    if (elWal) {
+      elWal.textContent = (kpi.wal_flush_rate_kb_s !== undefined && kpi.wal_sync_lag_ms !== undefined)
+        ? `${kpi.wal_flush_rate_kb_s} KB/s (${kpi.wal_sync_lag_ms}ms)`
+        : '-- KB/s (0.00ms)';
+    }
     const elConc = document.getElementById('valDbConcurrency');
-    if (elConc) elConc.textContent = kpi.concurrency_mode || 'MVCC + SS2PL';
+    if (elConc) elConc.textContent = kpi.concurrency_mode || '--';
     const elPath = document.getElementById('valDbFilePath');
     if (elPath) {
       elPath.textContent = targetDb.file_path || '--';
@@ -1030,16 +1042,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 6. SQL Terminal Snippet
+    const sqlInt = targetDb.sql_introspection || cachedDatabaseMetrics.sql_introspection || {};
+    const showDbs = sqlInt.show_databases || {};
+    const showTbls = targetDb.sql_introspection?.show_tables || {};
     const elDbs = document.getElementById('sqlResultDatabases');
     if (elDbs) {
-      const dbList = cachedDatabaseMetrics.database_names || (cachedDatabaseMetrics.sql_introspection && cachedDatabaseMetrics.sql_introspection.show_databases && cachedDatabaseMetrics.sql_introspection.show_databases.databases) || ['arxiv_security_db', 'cti_catalog_db', 'analytics_db', 'graph_db'];
+      const dbList = showDbs.databases || cachedDatabaseMetrics.database_names || [];
       elDbs.textContent = JSON.stringify(dbList);
     }
     const elQueryShow = document.getElementById('sqlQueryShowTables');
-    if (elQueryShow) elQueryShow.textContent = `SHOW TABLES FROM ${targetDb.name || dbKey};`;
+    if (elQueryShow) elQueryShow.textContent = showTbls.query || `SHOW TABLES FROM ${targetDb.name || dbKey};`;
     const elTblSum = document.getElementById('sqlResultTablesSummary');
     if (elTblSum) {
-      elTblSum.textContent = `${targetDb.table_count || (targetDb.tables ? targetDb.tables.length : 0)} tables (${Number(targetDb.total_rows || 0).toLocaleString()} total records in ${targetDb.name || dbKey})`;
+      const latInfo = showTbls.latency_ms !== undefined ? ` [${showTbls.latency_ms}ms]` : '';
+      elTblSum.textContent = `${targetDb.table_count || (targetDb.tables ? targetDb.tables.length : 0)} tables (${Number(targetDb.total_rows || 0).toLocaleString()} records in ${targetDb.name || dbKey})${latInfo}`;
     }
 
     // 7. Table Header Summary Badges

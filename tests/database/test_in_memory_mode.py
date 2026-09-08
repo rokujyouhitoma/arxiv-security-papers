@@ -142,7 +142,9 @@ def test_bidirectional_sync_in_memory() -> None:
     storage = VectorStorage(":memory:", dim=2)
     storage.append([0.5, 0.5], metadata={"id": "p1", "title": "Sync Test"})
 
-    conn = get_sqlite_connection(":memory:", storage=storage, init_schema=True)
+    conn = get_sqlite_connection(
+        ":memory:", storage=storage, init_schema=True, table_name="papers"
+    )
     cur = conn.cursor()
     row = cur.execute("SELECT id, title FROM papers WHERE id='p1'").fetchone()
     assert row is not None
@@ -154,7 +156,7 @@ def test_bidirectional_sync_in_memory() -> None:
     )
     conn.commit()
 
-    sync_to_vector_storage(conn, storage)
+    sync_to_vector_storage(conn, storage, table_name="papers")
     assert storage.count == 2
     assert storage.get_vector_by_id("p2") is not None
 

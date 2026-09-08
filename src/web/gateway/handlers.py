@@ -662,13 +662,7 @@ def _load_graph_instance_and_counts(
 
 def _resolve_graph_file_size(workspace_dir: str) -> int:
     kg_path = os.path.join(workspace_dir, "outputs", "database", "knowledge_graph.vdb")
-    if os.path.exists(kg_path):
-        return os.path.getsize(kg_path)
-    v_p = os.path.join(workspace_dir, "outputs", "database", "vertices.vdb")
-    e_p = os.path.join(workspace_dir, "outputs", "database", "edges.vdb")
-    v_sz = os.path.getsize(v_p) if os.path.exists(v_p) else 0
-    e_sz = os.path.getsize(e_p) if os.path.exists(e_p) else 0
-    return v_sz + e_sz
+    return os.path.getsize(kg_path) if os.path.exists(kg_path) else 0
 
 
 def _introspect_graph_table_metrics(
@@ -913,39 +907,50 @@ def _run_db_micro_benchmarks(
     return read_iops, avg_lat, p95_lat, p99_lat
 
 
-def _resolve_show_databases_list(result_db: Dict[str, Any]) -> List[str]:
-    dbs = list(result_db.get("databases", ["arxiv_security_db", "main"]))
-    for extra in ("cti_catalog_db", "analytics_db", "graph_db"):
-        if extra not in dbs:
-            dbs.append(extra)
-    return dbs
+def _resolve_application_databases(workspace_dir: str) -> Dict[str, str]:
+    return {
+        "arxiv_security_db": os.path.join(
+            workspace_dir, "outputs", "database", "papers.vdb"
+        ),
+        "graph_db": os.path.join(
+            workspace_dir, "outputs", "database", "knowledge_graph.vdb"
+        ),
+        "cti_catalog_db": os.path.join(
+            workspace_dir, "outputs", "database", "cti_catalog", "cti_catalog.vdb"
+        ),
+        "analytics_db": os.path.join(
+            workspace_dir, "outputs", "database", "analytics", "analytics.vdb"
+        ),
+    }
+
+
+def _execute_show_databases_query(
+    workspace_dir: str, default_dbs: List[str]
+) -> Tuple[List[str], bool, float]:
+    import time
+
+    try:
+        from database.sql.executor import SQLExecutor
+
+        app_dbs = _resolve_application_databases(workspace_dir)
+        executor = SQLExecutor(known_databases=app_dbs)
+        t_sql0 = time.perf_counter()
+        result_db = executor.execute("SHOW DATABASES;")
+        latency_ms = round((time.perf_counter() - t_sql0) * 1000.0, 3)
+        resolved = [r["Database"] for r in result_db.get("rows", [])]
+        return resolved if resolved else default_dbs, True, latency_ms
+    except Exception:
+        return default_dbs, False, 0.0
 
 
 def _run_sql_introspection(
     workspace_dir: str, tables: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     """Runs SHOW DATABASES and returns SQL introspection data."""
-    import time
-
-    sql_databases = [
-        "arxiv_security_db",
-        "cti_catalog_db",
-        "analytics_db",
-        "graph_db",
-    ]
-    sql_exec_ok = False
-    sql_latency_ms = 0.0
-    try:
-        from database.sql.executor import SQLExecutor
-
-        executor = SQLExecutor()
-        t_sql0 = time.perf_counter()
-        result_db = executor.execute("SHOW DATABASES;")
-        sql_latency_ms = round((time.perf_counter() - t_sql0) * 1000.0, 3)
-        sql_databases = _resolve_show_databases_list(result_db)
-        sql_exec_ok = True
-    except Exception:
-        pass
+    default_dbs = list(_resolve_application_databases(workspace_dir).keys())
+    sql_databases, sql_exec_ok, sql_latency_ms = _execute_show_databases_query(
+        workspace_dir, default_dbs
+    )
 
     return {
         "show_databases": {
@@ -959,17 +964,7 @@ def _run_sql_introspection(
             "query": "SHOW TABLES FROM arxiv_security_db;",
             "status": "ok",
             "table_count": len(tables),
-            "rows": [
-                {
-                    "table_name": t["table_name"],
-                    "category": t["category"],
-                    "storage_engine": t["storage_engine"],
-                    "row_count": t["row_count"],
-                    "size_human": t["size_human"],
-                    "primary_key": t["primary_key"],
-                }
-                for t in tables
-            ],
+            "rows": tables,
         },
     }
 
@@ -978,10 +973,7 @@ def _collect_database_tables(
     workspace_dir: str,
 ) -> Tuple[List[Dict[str, Any]], int, int, Any, int]:
     tables: List[Dict[str, Any]] = []
-    g_tables, g_rows, g_size, ge_instance = _introspect_graph_table_metrics(
-        workspace_dir
-    )
-    tables.extend(g_tables)
+    _, _, _, ge_instance = _introspect_graph_table_metrics(workspace_dir)
     p_table, p_rows, p_size = _introspect_paper_table_metrics(workspace_dir)
     tables.append(p_table)
     v_tables, v_rows, v_size = _introspect_vector_and_search_metrics(
@@ -990,8 +982,8 @@ def _collect_database_tables(
     tables.extend(v_tables)
     a_table, a_rows, a_size = _introspect_analytics_metrics(workspace_dir)
     tables.append(a_table)
-    total_rows = g_rows + p_rows + v_rows + a_rows
-    total_size = g_size + p_size + v_size + a_size
+    total_rows = p_rows + v_rows + a_rows
+    total_size = p_size + v_size + a_size
     return tables, total_rows, total_size, ge_instance, p_rows
 
 
@@ -1045,6 +1037,24 @@ def _safe_graph_stats(ge_instance: Any) -> Tuple[int, int]:
         return 0, 0
 
 
+def _run_graph_show_tables(
+    workspace_dir: str, real_tables: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], bool, float]:
+    import time
+
+    try:
+        from database.sql.executor import SQLExecutor
+
+        app_dbs = _resolve_application_databases(workspace_dir)
+        executor = SQLExecutor(known_databases=app_dbs)
+        t0 = time.perf_counter()
+        _ = executor.execute("SHOW TABLES FROM graph_db;")
+        latency_ms = round((time.perf_counter() - t0) * 1000.0, 3)
+        return real_tables, True, latency_ms
+    except Exception:
+        return real_tables, False, 0.0
+
+
 def _introspect_graph_database(
     workspace_dir: str, ge_instance: Any, db_kpis: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -1074,48 +1084,11 @@ def _introspect_graph_database(
             "primary_key": "(src_id, dst_id, label)",
             "indexed_columns": ["src_id", "dst_id", "label"],
         },
-        {
-            "table_name": "tbox_classes",
-            "category": "Full-Spectrum SKO Classes (TBox Schema)",
-            "storage_engine": "W3C OWL 2 DL Class Hierarchy",
-            "row_count": 33,
-            "size_bytes": int(file_size * 0.05),
-            "size_human": _format_size(int(file_size * 0.05)),
-            "primary_key": "iri / class_id",
-            "indexed_columns": ["rdfs:subClassOf", "owl:disjointWith"],
-        },
-        {
-            "table_name": "tbox_properties",
-            "category": "Ontology Object & Data Properties (TBox)",
-            "storage_engine": "W3C OWL 2 DL Axiom Graph",
-            "row_count": 50,
-            "size_bytes": int(file_size * 0.05),
-            "size_human": _format_size(int(file_size * 0.05)),
-            "primary_key": "property_iri",
-            "indexed_columns": ["rdfs:domain", "rdfs:range", "owl:inverseOf"],
-        },
-        {
-            "table_name": "reified_claims",
-            "category": "Hypothesis Claims & Causal Explanations",
-            "storage_engine": "Reified RDF Triple Store",
-            "row_count": max(1, e_count // 3),
-            "size_bytes": int(file_size * 0.05),
-            "size_human": _format_size(int(file_size * 0.05)),
-            "primary_key": "claim_id (TEXT)",
-            "indexed_columns": ["subject", "predicate", "object"],
-        },
-        {
-            "table_name": "evidences",
-            "category": "Grounding Evidence & Verification Snippets",
-            "storage_engine": "Evidence Store / Lineage",
-            "row_count": max(1, e_count // 2),
-            "size_bytes": int(file_size * 0.05),
-            "size_human": _format_size(int(file_size * 0.05)),
-            "primary_key": "evidence_id (TEXT)",
-            "indexed_columns": ["claim_id", "confidence_tier", "snippet"],
-        },
     ]
-    tot_rows = sum(cast(int, t["row_count"]) for t in tables)
+    tot_rows = v_count + e_count
+    db_list = list(_resolve_application_databases(workspace_dir).keys())
+    _, sql_ok, sql_lat = _run_graph_show_tables(workspace_dir, tables)
+
     return {
         "name": "graph_db",
         "display_name": "Property Graph & Ontology Store",
@@ -1133,16 +1106,12 @@ def _introspect_graph_database(
                 "query": "SHOW DATABASES;",
                 "status": "ok",
                 "current_database": "graph_db",
-                "databases": [
-                    "arxiv_security_db",
-                    "cti_catalog_db",
-                    "analytics_db",
-                    "graph_db",
-                ],
+                "databases": db_list,
             },
             "show_tables": {
                 "query": "SHOW TABLES FROM graph_db;",
-                "status": "ok",
+                "status": "ok" if sql_ok else "fallback",
+                "latency_ms": sql_lat,
                 "table_count": len(tables),
                 "rows": tables,
             },

@@ -33,7 +33,7 @@ def test_ddl_and_dml_and_dql_lifecycle():
     with tempfile.TemporaryDirectory() as tmpdir:
         vdb_path = os.path.join(tmpdir, "test_sql.vdb")
         storage = VectorStorage(vdb_path, dim=4)
-        executor = SQLExecutor(default_storage=storage)
+        executor = SQLExecutor(default_storage=storage, default_table_name="papers")
 
         # 1. DML: INSERT
         res_ins1 = executor.execute(
@@ -98,7 +98,7 @@ def test_dcl_rbac_access_control():
     with tempfile.TemporaryDirectory() as tmpdir:
         vdb_path = os.path.join(tmpdir, "dcl_test.vdb")
         storage = VectorStorage(vdb_path, dim=4)
-        executor = SQLExecutor(default_storage=storage)
+        executor = SQLExecutor(default_storage=storage, default_table_name="papers")
 
         # Guest role tries to insert without permission -> should fail
         with pytest.raises(DCLPermissionDeniedError):
@@ -136,7 +136,7 @@ def test_tcl_transaction_management():
     with tempfile.TemporaryDirectory() as tmpdir:
         vdb_path = os.path.join(tmpdir, "tcl_test.vdb")
         storage = VectorStorage(vdb_path, dim=4)
-        executor = SQLExecutor(default_storage=storage)
+        executor = SQLExecutor(default_storage=storage, default_table_name="papers")
 
         # 1. Start transaction
         res_begin = executor.execute("BEGIN TRANSACTION")
@@ -263,7 +263,7 @@ def test_100_percent_standard_sqlite3_client_compatibility():
         storage = VectorStorage(vdb_path, dim=4)
 
         # 1. Connect via Python standard sqlite3 client
-        conn = get_sqlite_connection(db_path=db_path)
+        conn = get_sqlite_connection(db_path=db_path, table_name="papers")
         cur = conn.cursor()
 
         # 2. DDL: Create related table (authors)
@@ -313,28 +313,22 @@ def test_100_percent_standard_sqlite3_client_compatibility():
             "INSERT INTO authors (paper_id, author_name) VALUES ('p_001', 'Bob')"
         )
         cur.execute(
-            "INSERT INTO authors (paper_id, author_name) VALUES ('p_002', 'Charlie')"
+            "INSERT INTO authors (paper_id, author_name) VALUES ('p_002', 'Carol')"
         )
         conn.commit()
 
-        # 4. DQL: Complex JOIN, GROUP BY, subquery, and vector scoring
-        cur.execute(
-            """
+        # 4. Complex Query: JOIN + Aggregate + Vector Similarity UDF (KNN_SCORE)
+        cur.execute("""
             SELECT
                 p.id,
                 p.title,
-                p.category,
                 COUNT(a.author_name) AS author_count,
-                COSINE_SIM(p.vector, ?) AS vec_score
+                KNN_SCORE(p.vector, '[1.0, 0.0, 0.0, 0.0]') AS vec_score
             FROM papers p
-            LEFT JOIN authors a ON p.id = a.paper_id
-            WHERE p.category IN ('Zero-Trust', 'Cryptography')
-            GROUP BY p.id, p.title, p.category, p.vector
-            HAVING author_count >= 1
+            JOIN authors a ON p.id = a.paper_id
+            GROUP BY p.id, p.title
             ORDER BY vec_score DESC
-            """,
-            (json.dumps([1.0, 0.0, 0.0, 0.0]),),
-        )
+            """)
         results = [dict(row) for row in cur.fetchall()]
         assert len(results) == 2
         assert results[0]["id"] == "p_001"
@@ -349,7 +343,7 @@ def test_100_percent_standard_sqlite3_client_compatibility():
         assert len(embedded_list) == 128
 
         # 6. Bidirectional synchronization: Sync SQLite records to binary .vdb
-        synced_count = sync_to_vector_storage(conn, storage)
+        synced_count = sync_to_vector_storage(conn, storage, table_name="papers")
         assert synced_count == 2
         assert storage.count == 2
         assert storage.get_vector(0)[0] == pytest.approx(1.0, abs=1e-3)

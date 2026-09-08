@@ -112,6 +112,10 @@
   - [19.4 純粋 Python PEP 249 ドライバ実装仕様（sqlite3 互換インターフェース）](#194-純粋-python-pep-249-ドライバ実装仕様sqlite3-互換インターフェース)
   - [19.5 グラフサブシステム（PropertyGraphEngine）との統合仕様](#195-グラフサブシステムpropertygraphengineとの統合仕様)
   - [19.6 セキュリティ・多層防御境界（STRIDE 脅威分析と耐障害性）](#196-セキュリティ多層防御境界stride-脅威分析と耐障害性)
+- [20. データベースエンジンと利用側の責務分離およびファイルパス DI（Dependency Injection）ガイドライン](#20-データベースエンジンと利用側の責務分離およびファイルパス-di-dependency-injection-ガイドライン)
+  - [20.1 アーキテクチャ分離と依存性逆転の原則 (SoC & DIP)](#201-アーキテクチャ分離と依存性逆転の原則-soc--dip)
+  - [20.2 レイヤー構成とデータフロー (Mermaid アーキテクチャ図)](#202-レイヤー構成とデータフロー-mermaid-アーキテクチャ図)
+  - [20.3 セキュリティ・識別子バリデーション規則 (STRIDE Threat Model & Mitigations)](#203-セキュリティ識別子バリデーション規則-stride-threat-model--mitigations)
 
 ---
 
@@ -2244,5 +2248,72 @@ with connect("outputs/database/knowledge_graph.vdb") as conn:
 
 ---
 
+## 20. データベースエンジンと利用側の責務分離およびファイルパス DI（Dependency Injection）ガイドライン
+
+### 20.1 アーキテクチャ分離と依存性逆転の原則 (SoC & DIP)
+
+Clean Architecture および責務分離（Separation of Concerns: SoC）、依存性逆転の原則（DIP: Dependency Inversion Principle）に基づき、`src/database/` は上位アプリケーションのドメイン知識を持たない汎用独立データベースライブラリとして設計されます。
+
+1. **上位アプリケーション層 (`src/web/gateway/`, `src/pipeline/`, `src/analytics/`)**:
+   - アプリケーション固有のデータベースファイル一覧（例: `papers.vdb`, `knowledge_graph.vdb`, `cti_catalog.vdb`, `analytics.vdb`）の一元定義元（DI Source / Single Source of Truth）。
+   - `_resolve_application_databases(workspace_dir)` により絶対パスおよびコンテナマッピングを動的に解決。
+   - `SQLExecutor(known_databases=...)` や `connect(path)`、`get_sqlite_connection(..., table_name=...)` に依存性注入（DI）として渡す。
+2. **データベースエンジン層 (`src/database/`)**:
+   - 特定のドメインパス（`outputs/database/...` 等）や具体的テーブル名（`papers` 等）の直書きを完全排除。
+   - 純粋な DI シンク（DI Sink）として動作し、呼び出し元から与えられたマッピングおよびパラメータのみを処理。
+   - テーブル名が明示されない場合は、接続先ファイルのベースネームまたは `"main"` / `"records"` 等の汎用デフォルトを採用。
+
+### 20.2 レイヤー構成とデータフロー (Mermaid アーキテクチャ図)
+
+```mermaid
+graph TD
+    subgraph AppLayer ["上位アプリケーション層 (DI Source / Domain Definition)"]
+        GW["Web Gateway (src/web/gateway/handlers.py)"]
+        PL["Paper Pipeline (src/pipeline/)"]
+        AN["Analytics (src/analytics/)"]
+        RESOLVER["_resolve_application_databases(workspace_dir)"]
+        GW --> RESOLVER
+        PL --> RESOLVER
+        AN --> RESOLVER
+    end
+
+    subgraph DIBoundary ["依存性注入 (DI) 境界"]
+        KNOWN_DBS["known_databases: Dict[str, str]"]
+        TBL_NAME["default_table_name / table_name"]
+        SCHEMA_SQL["schema_sql (Custom DDL)"]
+        RESOLVER -.-> KNOWN_DBS
+    end
+
+    subgraph DBLayer ["データベースエンジン層 (Pure DI Sink / src/database/)"]
+        EXEC["SQLExecutor (SQL Parser, Query Planner, RBAC)"]
+        DRV["PEP 249 Driver (Connection, Cursor)"]
+        SQLITE["SQLite Engine & Bridge (get_sqlite_connection, attach_to_sqlite)"]
+        STORAGE["MultiTableVectorStorage / VectorStorage"]
+        KNOWN_DBS --> EXEC
+        TBL_NAME --> EXEC
+        TBL_NAME --> SQLITE
+        SCHEMA_SQL --> SQLITE
+        DRV --> EXEC
+        EXEC --> STORAGE
+        SQLITE --> STORAGE
+    end
+
+    style AppLayer fill:#e8f4fd,stroke:#1a73e8,stroke-width:2px
+    style DIBoundary fill:#fef7e0,stroke:#f9ab00,stroke-width:2px,stroke-dasharray: 5 5
+    style DBLayer fill:#e6f4ea,stroke:#137333,stroke-width:2px
+```
+
+### 20.3 セキュリティ・識別子バリデーション規則 (STRIDE Threat Model & Mitigations)
+
+| 脅威分類 (STRIDE) | 潜在リスク (Threat Vector) | CWE | 対策仕様 (Mitigation Specification) |
+| :--- | :--- | :--- | :--- |
+| **Tampering / Information Disclosure** | 不正な外部パス注入によるパストラバーサル・システム重要ファイル（`/etc/passwd` 等）の読み出し | CWE-22 | `_load_external_db_tables` においてファイル実体ヘッダの Magic Bytes（`OKFMTC01` または `OKFVEC01`）を厳格に検証し、非DBバイナリ・テキストファイルを即時遮断する。 |
+| **Tampering / Injection** | `SHOW TABLES FROM <db>` における悪意ある識別子注入による SQL パーサー誤動作・SQL インジェクション | CWE-89 | 注入されるデータベース名 `db_name` およびテーブル名 `table_name` に対し、英数字およびアンダースコアのみを許容する厳格な正規表現バリデーション（`^[a-zA-Z_][a-zA-Z0-9_]*$`）を実施。 |
+| **Denial of Service (DoS)** | 悪意のある大量の外部 DB パス登録や巨大ファイル指定によるリソース枯渇 | CWE-400 | `register_database` において登録可能上限数（最大 64 個）を設け、実ファイルのインスペクションはオンデマンド（遅延実行）制約下で実行。 |
+| **Elevation of Privilege** | 読み取り専用コンテキストでの未認可 DDL/DML 実行 | CWE-285 | `SQLExecutor` の `role` に基づく RBAC アクセスコントロール（`viewer` ロールでの更新抑止）を外部 DB 参照時にも透過適用。 |
+
+---
+
 *審議終了: Systems Architect, Database Specialist, PM 合意承認済*
+
 
