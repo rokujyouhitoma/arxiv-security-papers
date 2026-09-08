@@ -94,6 +94,17 @@
   - [16.1 プレーンテキスト廃止と JSON Lines (.jsonl) 統合仕様](#161-プレーンテキスト廃止と-json-lines-jsonl-統合仕様)
   - [16.2 W3C TraceContext / Trace ID 連動と SQL 監査ログ](#162-w3c-tracecontext--trace-id-連動と-sql-監査ログ)
   - [16.3 機密データ・SQL パラメータマスキング (CWE-532 準拠)](#163-機密データsql-パラメータマスキング-cwe-532-準拠)
+- [17. 4KB スロットページ & LSM-Tree 構造によるストレージ最適化と原本 FIM (File Integrity Monitoring)](#17-4kb-スロットページ--lsm-tree-構造によるストレージ最適化と原本-fim-file-integrity-monitoring)
+  - [17.1 固定長 4KB バイナリスロットページ構造 (Slotted-Page Architecture)](#171-固定長-4kb-バイナリスロットページ構造-slotted-page-architecture)
+  - [17.2 LSM-Tree (Log-Structured Merge-tree) 書き込みパス & SSTable](#172-lsm-tree-log-structured-merge-tree-書き込みパス--sstable)
+  - [17.3 Merkle Tree 駆動原本・メタデータ改ざん検知 (FIM: File Integrity Monitoring)](#173-merkle-tree-駆動原本メタデータ改ざん検知-fim-file-integrity-monitoring)
+- [18. SQLite 準拠「:memory:」完全インメモリデータベースモード仕様 (Pure In-Memory Architecture)](#18-sqlite-準拠memory完全インメモリデータベースモード仕様-pure-in-memory-architecture)
+  - [18.1 設計思想と適用シナリオ（CI/CD、テスト高速化、ディスク I/O ゼロ）](#181-設計思想と適用シナリオcicdテスト高速化ディスク-io-ゼロ)
+  - [18.2 VFS 統合モデル（MemoryVFS ↔ Pager ↔ WAL）](#182-vfs-統合モデルmemoryvfs--pager--wal)
+  - [18.3 VectorStorage インメモリ化（io.BytesIO と OKFVEC01 シリアライゼーション）](#183-vectorstorage-インメモリ化iobytesio-と-okfvec01-シリアライゼーション)
+  - [18.4 SQLExecutor における動的テーブル作成のメモリ局所化](#184-sqlexecutor-における動的テーブル作成のメモリ局所化)
+  - [18.5 PEP 249 / sqlite3 互換 API 規約と双方向同期](#185-pep-249--sqlite3-互換-api-規約と双方向同期)
+  - [18.6 セキュリティ・多層防御境界（完全一致パス検証・DoS制限・状態破棄）](#186-セキュリティ多層防御境界完全一致パス検証dos制限状態破棄)
 
 ---
 
@@ -163,6 +174,16 @@ graph TD
 | **NVM / PMEM 活用** | バイト単位永続アクセス、WAL レス化 | 高速 WAL バッファ、ゼロ待機 fsync | **NVM 考慮の追記型ジャーナリング** |
 | **キャッシュ効率** | 100% メモリ常駐、キャッシュミス極小 | LRU / Buffer Pool のヒット率に依存 | **Hot Data 自動 LRU 昇格 + ワーキングセット管理** |
 | **揮発性 (Volatility)** | 電源喪失時の全損リスク対策が必須 | 常にディスクが Single Source of Truth | **ディスクを真のマスターとし、メモリはキャッシュ** |
+
+### 1.2.1 ディスクファースト永続モードと SQLite 準拠「:memory:」完全インメモリモードの双対性 (Dual-Engine Mode)
+
+本システムは、プロダクション運用における信頼性を支える **「ディスクファースト永続モード（Disk-First Persistent Mode）」** と、CI/CD・高速ユニットテスト・エフェメラル集計を支える **「SQLite 準拠「:memory:」完全インメモリモード（Pure In-Memory Mode）」** の完全な双対性を保証します。
+
+- **ディスクファースト永続モード (`outputs/database/papers.db`, `.vdb`)**:
+  - `PosixVFS` 経由で 4KB スロットページ、ARIES WAL、CoW B+Tree、ディスクベース HNSW ベクトルインデックスを運用。電源断やクラッシュ耐性を最優先。
+- **完全インメモリモード (`":memory:"`)**:
+  - `MemoryVFS`（`io.BytesIO` バッファ）経由で Pager、WAL、VectorStorage、動的 TableCatalog をすべてヒープメモリ内に封じ込め。
+  - ディスク I/O・ファイル生成が完全にゼロ（`0 bytes`）となり、テスト実行完了時のファイルクリーンアップ（`rm -rf`）を不要化し、テスト並列実行時のファイル競合を物理的に根絶。
 
 ---
 
@@ -258,9 +279,9 @@ graph TD
 | 観点 | 理論的要件 | `src/database/` の現状 | 次世代への進化方針 |
 | :--- | :--- | :--- | :--- |
 | **アーキテクチャ** | 7大サブシステム分離 | VFS / Pager / VDBE / Compiler / Planner / Storage 疎結合 | コネクションプール & Volcano 型イテレータの標準化 |
-| **ストレージ方式** | 4KB 固定長 Disk-First | `Pager` (4KB I/O) + `VectorStorage` (バイナリ+JSON) | Slotted Page バイナリレコード化 |
+| **ストレージ方式** | 4KB 固定長 Disk-First + In-Memory 双対性 | `Pager` (4KB I/O) + `VectorStorage` (バイナリ+JSON) | Slotted Page バイナリレコード化 + `:memory:` 完全サポート |
 | **行/列ハイブリッド** | OLTP 更新 + OLAP 集計 | 行指向ストレージ + ANN ベクトル検索 | PAX 形式によるカラムナー集計スキャン統合 |
-| **バッファ制御** | LRU キャッシュ + WAL 永続化 | `PageCache` (LRU) + インメモリ WAL | ディスク永続 WAL + チェックポイント機構 |
+| **バッファ制御** | LRU キャッシュ + WAL 永続化 | `PageCache` (LRU) + インメモリ WAL | ディスク永続 WAL + チェックポイント機構 + `MemoryVFS` 連携 |
 
 ---
 
@@ -1857,6 +1878,131 @@ mindmap
 原本 PDF、中間テキスト、Google OKF 要約 Markdown、および STIX 2.1 知識グラフ JSON に対し、ストレージ障害や不正改ざんを検知する FIM 機構を `hashlib` のみで実装する。
 - **Merkle Tree 構築**: 各ファイルの SHA-256 ダイジェストをリーフノードとし、親ノードを $H(L + R)$ で階層計算して Merkle Root を算出。
 - **バッチ検証**: 日次バッチ（`outputs/raw_data/YYYY-MM-DD/manifest.json`）に Merkle Root を記録し、$O(\log N)$ の計算オーダーで完全性監査を実施。
+
+---
+
+# 18. SQLite 準拠「:memory:」完全インメモリデータベースモード仕様 (Pure In-Memory Architecture)
+
+## 18.1 設計思想と適用シナリオ（CI/CD、テスト高速化、ディスク I/O ゼロ）
+
+Python 標準 `sqlite3.connect(":memory:")` は、ファイルシステムを一切経由せず、プロセス内 RAM のみでデータベースを即座に生成・破棄できる極めて強力なインターフェースです。
+本システムの次世代データベース基盤（`src/database/`）においても、この SQLite デファクトスタンダードに 100% 準拠する **`":memory:"`** 接続を標準サポートします。
+
+### 18.1.1 導入の目的と解決される課題
+1. **CI/CD およびテスト実行速度の飛躍的向上**:
+   - ディスク I/O（`open`, `write`, `fsync`, `unlink`）のオーバーヘッドをゼロ化し、大量のユニットテスト実行時間を 30% 以上短縮。
+2. **テストファイル汚染および並列競合の撲滅**:
+   - テスト完了後のクリーンアップ処理（`rm -rf outputs/database/`）が不要となり、GitHub Actions やローカル環境でのテスト並列実行（`pytest -n auto`）におけるファイルロック競合やテスト間干渉を物理的に排除。
+3. **エフェメラル（一時）集計・ベクトルキャッシュの実現**:
+   - CTI 探索、一時的なグラフ投影、バッチ処理中の一時ベクトル比較において、ディスクを一切汚さずに高速なインメモリ SQL / KNN クエリを実行可能。
+
+```mermaid
+graph TD
+    subgraph Client["Client Application / Test Harness"]
+        Call["connect(':memory:') / get_sqlite_connection(':memory:') / VectorStorage(':memory:')"]
+    end
+
+    subgraph StorageLayer["Pure In-Memory Stack (RAM 100%)"]
+        VFS["MemoryVFS (src/database/storage/vfs.py)"]
+        Pager["Pager (auto-bind MemoryVFS)"]
+        WAL["WALWriter (':memory:.vdb-wal' in MemoryVFS)"]
+        VS["VectorStorage (io.BytesIO + _memory_vectors)"]
+        SQL["SQLExecutor (Dynamic TableCatalog in RAM)"]
+    end
+
+    subgraph DiskSystem["Physical File System (DISK)"]
+        Disk["❌ NO FILE CREATED (Disk I/O = 0 Bytes)"]
+    end
+
+    Call --> VFS
+    VFS --> Pager
+    Pager --> WAL
+    Call --> VS
+    Call --> SQL
+    SQL --> VS
+    StorageLayer -.->|"Bypassed 100%"| Disk
+```
+
+---
+
+## 18.2 VFS 統合モデル（MemoryVFS ↔ Pager ↔ WAL）
+
+本システムに実装済みの仮想ファイルシステム層 `VFS`（`src/database/storage/vfs.py`）の `MemoryVFS` を中核として、Pager および WAL を透過的に連携させます。
+
+### 18.2.1 Pager における `:memory:` 自動バインド
+`Pager` の初期化時、`file_path == ":memory:"` かつ `vfs is None` の場合、デフォルトの `PosixVFS` ではなく `MemoryVFS` を自動的に採用します。
+
+```python
+# src/database/storage/pager.py
+if file_path == ":memory:" and vfs is None and vfs_name is None:
+    from .vfs import get_vfs
+    self.vfs = get_vfs("memory")
+else:
+    self.vfs = vfs if vfs is not None else get_vfs(vfs_name)
+```
+
+- **メモリ内 4KB ページ I/O**: `MemoryVFSFile`（`io.BytesIO`）に対して 4KB ページ単位の `read` / `write` を実行。
+- **WAL 仮想化**: WAL ログパスも `":memory:.vdb-wal"` として `MemoryVFS` の内部ディクショナリ（`_files`）に保持され、ディスクには一切現れません。
+
+---
+
+## 18.3 VectorStorage インメモリ化（io.BytesIO と OKFVEC01 シリアライゼーション）
+
+`VectorStorage`（`src/database/storage/storage.py`）は、物理バイナリファイル（`.vdb`）の作成をバイパスし、メモリ常駐バッファ駆動で動作します。
+
+### 18.3.1 内部構造とライフサイクル
+1. **初期化 (`__init__`)**:
+   - `self.is_memory = (file_path == ":memory:")`
+   - `self.is_memory` の場合、`os.path.abspath()` を呼び出さず、`self.file_path = ":memory:"` を維持。
+   - `self._memory_buffer = io.BytesIO()` を確保。
+   - `self._memory_vectors: List[Tuple[float, ...]] = []` を初期化。
+2. **mmap のバイパス (`open_mmap`)**:
+   - インメモリモード時は OS の `mmap` をスキップ（`self._mmap = None`）。
+3. **高速アクセス (`get_vector` / `get_all_vectors`)**:
+   - ディスク読み込みや struct アンパックを経由せず、`self._memory_vectors[idx]` から $O(1)$ のゼロコピー相当で即座に Float32 ベクトルタプルを返却。
+4. **バイナリ完全性シリアライズ (`to_bytes`)**:
+   - `write_all()` 実行時、メモリ内リストを更新すると同時に、OKFVEC01 規格に完全準拠した 32 バイトヘッダ＋Float32 配列＋JSON メタデータを `_memory_buffer` に書き出し、`to_bytes()` メソッドで全バイナリを抽出可能。
+5. **明示破棄 (`close`)**:
+   - `close()` 時に `_memory_vectors.clear()`, `metadata.clear()`, `_memory_buffer.close()` を実行し、機密データのメモリ残留を防止。
+
+---
+
+## 18.4 SQLExecutor における動的テーブル作成のメモリ局所化
+
+`SQLExecutor`（`src/database/sql/executor.py`）において、ベースとなるストレージがインメモリの場合、SQL 経由で動的作成されるテーブル（`CREATE TABLE <name>`）もすべて自動的にインメモリで構築します。
+
+1. **`_create_new_table_storage` のインメモリ判定**:
+   - `self.default_storage` が `is_memory == True` の場合、新規テーブルのストレージパスを `outputs/database/<table_name>.vdb` ではなく `":memory:"` として初期化。
+2. **`_remove_table_file` のディスク削除バイパス**:
+   - `DROP TABLE` 実行時、`storage_file == ":memory:"` の場合は `os.remove()` を呼ばず、メモリ内カタログの登録解除のみを実施。
+3. **`_build_show_table_row` のサイズ計算**:
+   - `SHOW TABLES` / `SHOW TABLE STATUS` 実行時、`storage.file_path == ":memory:"` のテーブルサイズを `os.path.getsize` ではなく `len(storage.to_bytes())` で動的に算出。
+
+---
+
+## 18.5 PEP 249 / sqlite3 互換 API 規約と双方向同期
+
+標準 Python `sqlite3` との 100% 互換性を保ちながら、Vector UDF との統合を提供します。
+
+### 18.5.1 パス解決バイパス (`sqlite_engine.py`)
+`_open_raw_sqlite_connection` の先頭で `db_path in (":memory:", "")` を判定し、`os.path.abspath` および `os.makedirs` をスキップして `sqlite3.connect(":memory:", timeout=timeout)` を即座に返却します。
+
+### 18.5.2 WAL プラグマ適正化
+SQLite の公式仕様上、`:memory:` データベースに対して `PRAGMA journal_mode=WAL;` を発行すると無効化（`memory` が返却）されるため、インメモリモード時は WAL 移行プラグマを自動スキップして不要な警告や処理オーバーヘッドを防ぎます。
+
+### 18.5.3 双方向同期 (`sync_from_vector_storage` / `sync_to_vector_storage`)
+メモリ内 SQLite コネクション（`get_sqlite_connection(":memory:")`）とメモリ内 `VectorStorage(":memory:")` の間で、ディスクを介さず直接メモリ内レコード転送（ベクトル・メタデータ同期）が完全動作することを保証します。
+
+---
+
+## 18.6 セキュリティ・多層防御境界（完全一致パス検証・DoS制限・状態破棄）
+
+| 脅威分類 (STRIDE) | 潜在リスク (Threat Vector) | 対策仕様 (Mitigation Specification) |
+| :--- | :--- | :--- |
+| **Tampering / Spoofing** | パストラバーサル・URI 拡張子インジェクション（例: `":memory:/../evil.db"`） | `db_path in (":memory:", "")` または `file_path == ":memory:"` の**完全一致のみ**をインメモリと判定。1文字でも異なる文字列はすべてディスクパスとして正規化・アクセス制御に送致。 |
+| **Denial of Service (DoS)** | インメモリバッファへの無制限レコード挿入によるメモリ枯渇 (OOM) | `VectorStorage.MAX_VECTOR_COUNT` (10,000,000) および `MAX_DIMENSION` (4096) の上限をインメモリでも等しく適用し、不正データを即座にリジェクト。 |
+| **Information Disclosure** | 複数コネクション間におけるインメモリデータの意図しない共有・漏洩 | SQLite 標準の「接続独立性」を厳格遵守。同一プロセス内であっても接続ごとに完全に独立したメモリ空間を確保。 |
+| **Information Leakage** | コネクション終了後のプロセスヒープへの機密ベクトルデータ残留 | `close()` 時に内部リストおよび `io.BytesIO` バッファを明示的に解放・ゼロクリア。 |
 
 ---
 *審議終了: Systems Architect, Database Specialist 合意承認済*

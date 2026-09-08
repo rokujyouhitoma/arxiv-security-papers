@@ -62,6 +62,8 @@ SQLiteOperationalError = sqlite3.OperationalError
 def _open_raw_sqlite_connection(
     db_path: str, read_only: bool, timeout: float
 ) -> sqlite3.Connection:
+    if db_path in (":memory:", ""):
+        return sqlite3.connect(":memory:", timeout=timeout)
     abs_path = os.path.abspath(db_path)
     if read_only:
         return sqlite3.connect(f"file:{abs_path}?mode=ro", uri=True, timeout=timeout)
@@ -89,6 +91,12 @@ def _init_papers_schema(
         sync_from_vector_storage(conn, storage)
 
 
+def _configure_wal_pragma(conn: sqlite3.Connection, db_path: str) -> None:
+    if db_path not in (":memory:", ""):
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+
+
 def get_sqlite_connection(
     db_path: str = "outputs/database/papers.db",
     storage: Optional[VectorStorage] = None,
@@ -114,8 +122,7 @@ def get_sqlite_connection(
     register_vector_functions(conn)
 
     if enable_wal and not read_only:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
+        _configure_wal_pragma(conn, db_path)
 
     if init_schema and not read_only:
         _init_papers_schema(conn, storage)
@@ -296,7 +303,8 @@ def sync_to_vector_storage(
 
     for r in rows:
         vec_list = json.loads(r["vector"]) if r["vector"] else [0.0] * storage.dim
-        meta_dict = json.loads(r["metadata"]) if r["metadata"] else {"id": r["id"]}
+        meta_dict = json.loads(r["metadata"]) if r["metadata"] else {}
+        meta_dict.setdefault("id", str(r["id"]))
         vectors.append(tuple(vec_list))
         metadata.append(meta_dict)
 

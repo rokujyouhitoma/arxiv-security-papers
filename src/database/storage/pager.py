@@ -207,11 +207,30 @@ class PageCache:
             self._pages.clear()
 
 
+def _resolve_vfs_instance(
+    file_path: str, vfs_name: Optional[str], vfs: Optional[VFS]
+) -> Tuple[Optional[str], VFS]:
+    if vfs is not None:
+        return vfs_name, vfs
+    target_name = "memory" if (file_path == ":memory:" and not vfs_name) else vfs_name
+    return target_name, get_vfs(target_name)
+
+
 class Pager:
     """
     Coordinates page I/O between buffer cache, disk VFS storage, and WAL engine.
     Enforces Steal / No-Force buffer policy and coordinates ARIES crash recovery.
     """
+
+    wal: Optional[WALWriter]
+
+    def _init_wal_and_recovery(self, auto_recover: bool) -> None:
+        if not self.use_wal:
+            self.wal = None
+            return
+        self.wal = WALWriter(self.wal_path, vfs=self.vfs)
+        if auto_recover:
+            self.recover()
 
     def __init__(
         self,
@@ -223,26 +242,18 @@ class Pager:
         auto_recover: bool = True,
     ) -> None:
         self.file_path = file_path
-        self.vfs_name = vfs_name
-        self.vfs = vfs if vfs is not None else get_vfs(vfs_name)
+        self.vfs_name, self.vfs = _resolve_vfs_instance(file_path, vfs_name, vfs)
         self.file: VFSFile = self.vfs.open(file_path, mode="r+b")
         self.cache = PageCache(capacity=cache_capacity)
         self.use_wal = use_wal
         self.wal_path = f"{file_path}.vdb-wal"
         self._lock = threading.RLock()
-
-        self.wal: Optional[WALWriter] = None
-        if self.use_wal:
-            self.wal = WALWriter(self.wal_path, vfs=self.vfs)
-
+        self.wal = None
         self.current_tx_id: int = 0
         self.tx_prev_lsn: Dict[int, int] = {}
         self.is_in_transaction = False
         self._tx_counter = 1000
-
-        # Run crash recovery on startup if needed
-        if self.use_wal and auto_recover:
-            self.recover()
+        self._init_wal_and_recovery(auto_recover)
 
     def page_count(self) -> int:
         with self._lock:

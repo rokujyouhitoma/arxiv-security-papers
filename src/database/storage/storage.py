@@ -5,6 +5,7 @@ Provides high-throughput Float32 vector serialization, deserialization, and inde
 using Python standard library (struct, mmap, array, json).
 """
 
+import io
 import json
 import mmap
 import os
@@ -46,22 +47,36 @@ class VectorStorage:
     MAX_DIMENSION = 4096
     MAX_VECTOR_COUNT = 10_000_000
 
-    def __init__(self, file_path: str, dim: int = 128) -> None:
+    def _validate_dimension(self, dim: int) -> int:
+        if 0 < dim <= self.MAX_DIMENSION:
+            return dim
+        raise ValueError(
+            f"Dimension {dim} out of valid bounds (1..{self.MAX_DIMENSION})"
+        )
+
+    def _init_memory_state(self) -> None:
+        self.file_path = ":memory:"
+        self._memory_buffer: Optional[io.BytesIO] = io.BytesIO()
+
+    def _init_disk_state(self, file_path: str) -> None:
         self.file_path = os.path.abspath(file_path)
-        self.dim = int(dim)
+        self._memory_buffer = None
+        if os.path.exists(self.file_path):
+            self._load_existing_file()
+
+    def __init__(self, file_path: str, dim: int = 128) -> None:
+        self.dim = self._validate_dimension(int(dim))
+        self.is_memory = file_path == ":memory:"
         self.count: int = 0
         self.metadata: List[Dict[str, Any]] = []
         self.id_to_idx: Dict[str, int] = {}
         self._file_obj: Optional[Any] = None
         self._mmap: Optional[mmap.mmap] = None
-
-        if self.dim <= 0 or self.dim > self.MAX_DIMENSION:
-            raise ValueError(
-                f"Dimension {dim} out of valid bounds (1..{self.MAX_DIMENSION})"
-            )
-
-        if os.path.exists(self.file_path):
-            self._load_existing_file()
+        self._memory_vectors: List[Tuple[float, ...]] = []
+        if self.is_memory:
+            self._init_memory_state()
+        else:
+            self._init_disk_state(file_path)
 
     def _validate_and_read_header(self, f: Any, file_size: int) -> Tuple[int, int]:
         header_bytes = f.read(self.HEADER_SIZE)
@@ -116,7 +131,7 @@ class VectorStorage:
 
     def open_mmap(self) -> None:
         """Opens memory map for zero-copy vector reads."""
-        if self._mmap is not None:
+        if self.is_memory or self._mmap is not None:
             return
         if not os.path.exists(self.file_path):
             return
@@ -124,8 +139,20 @@ class VectorStorage:
         if os.path.getsize(self.file_path) > 0:
             self._mmap = mmap.mmap(self._file_obj.fileno(), 0, access=mmap.ACCESS_READ)
 
+    def _close_memory(self) -> None:
+        self.count = 0
+        self._memory_vectors.clear()
+        self.metadata.clear()
+        self.id_to_idx.clear()
+        if self._memory_buffer is not None:
+            self._memory_buffer.close()
+            self._memory_buffer = None
+
     def close(self) -> None:
         """Closes memory map and underlying file handle."""
+        if self.is_memory:
+            self._close_memory()
+            return
         if self._mmap is not None:
             self._mmap.close()
             self._mmap = None
@@ -187,6 +214,67 @@ class VectorStorage:
                 f.write(struct.pack(f"<{self.dim}f", *vec))
             f.write(meta_json_bytes)
 
+    def _write_memory_buffer(
+        self,
+        vectors: Sequence[Sequence[float]],
+        meta_list: List[Dict[str, Any]],
+        count: int,
+    ) -> None:
+        meta_json_bytes = json.dumps(meta_list, ensure_ascii=False).encode("utf-8")
+        meta_offset = self.HEADER_SIZE + (count * self.dim * 4)
+        header_bytes = struct.pack(
+            self.HEADER_FORMAT,
+            self.MAGIC,
+            1,  # Version
+            self.dim,
+            count,
+            meta_offset,
+            0,  # Reserved
+        )
+        buf = io.BytesIO()
+        buf.write(header_bytes)
+        for vec in vectors:
+            buf.write(struct.pack(f"<{self.dim}f", *vec))
+        buf.write(meta_json_bytes)
+        if self._memory_buffer is not None and not self._memory_buffer.closed:
+            self._memory_buffer.close()
+        self._memory_buffer = buf
+
+    def _rebuild_index_mapping(
+        self, count: int, meta_list: List[Dict[str, Any]]
+    ) -> None:
+        self.count = count
+        self.metadata = meta_list
+        self.id_to_idx = {
+            m["id"]: idx
+            for idx, m in enumerate(self.metadata)
+            if isinstance(m, dict) and "id" in m
+        }
+
+    def _write_all_memory(
+        self,
+        valid_vecs: List[Tuple[float, ...]],
+        meta_list: List[Dict[str, Any]],
+        count: int,
+    ) -> None:
+        self._memory_vectors = valid_vecs
+        self._rebuild_index_mapping(count, meta_list)
+        self._write_memory_buffer(valid_vecs, meta_list, count)
+
+    def _write_all_disk(
+        self,
+        valid_vecs: List[Tuple[float, ...]],
+        meta_list: List[Dict[str, Any]],
+        count: int,
+    ) -> None:
+        self.close()
+        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+        tmp_path = self.file_path + ".tmp"
+        self._write_tmp_file(tmp_path, valid_vecs, meta_list, count)
+        os.replace(tmp_path, self.file_path)
+        self._rebuild_index_mapping(count, meta_list)
+        self.open_mmap()
+
     def write_all(
         self,
         vectors: Sequence[Sequence[float]],
@@ -195,22 +283,17 @@ class VectorStorage:
         """
         Atomically writes full vector set and metadata to binary storage.
         """
-        self.close()
-        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
         count = len(vectors)
+        if count > self.MAX_VECTOR_COUNT:
+            raise ValueError(
+                f"Vector count {count} exceeds MAX_VECTOR_COUNT {self.MAX_VECTOR_COUNT}"
+            )
+        valid_vecs = self._validate_vectors(vectors)
         meta_list = self._prepare_metadata(count, metadata, 0)
-        tmp_path = self.file_path + ".tmp"
-        self._write_tmp_file(tmp_path, vectors, meta_list, count)
-        os.replace(tmp_path, self.file_path)
-
-        self.count = count
-        self.metadata = meta_list
-        self.id_to_idx = {
-            m["id"]: idx
-            for idx, m in enumerate(self.metadata)
-            if isinstance(m, dict) and "id" in m
-        }
-        self.open_mmap()
+        if self.is_memory:
+            self._write_all_memory(valid_vecs, meta_list, count)
+        else:
+            self._write_all_disk(valid_vecs, meta_list, count)
 
     def _validate_vectors(
         self, vectors: Sequence[Sequence[float]]
@@ -259,6 +342,24 @@ class VectorStorage:
         self.write_all(all_vecs, new_meta)
         return len(all_vecs) - 1
 
+    def to_bytes(self) -> bytes:
+        """Serializes current storage to binary OKFVEC01 bytes."""
+        if self.is_memory:
+            if self._memory_buffer is not None and not self._memory_buffer.closed:
+                return self._memory_buffer.getvalue()
+            return b""
+        if not os.path.exists(self.file_path):
+            return b""
+        with open(self.file_path, "rb") as f:
+            return f.read()
+
+    def _read_disk_vector_bytes(self, offset: int) -> bytes:
+        if self._mmap is not None:
+            return self._mmap[offset : offset + (self.dim * 4)]
+        with open(self.file_path, "rb") as f:
+            f.seek(offset)
+            return f.read(self.dim * 4)
+
     def get_vector(self, idx: int) -> Tuple[float, ...]:
         """
         Retrieves float32 vector at index `idx` using zero-copy memory mapping.
@@ -266,15 +367,11 @@ class VectorStorage:
         if idx < 0 or idx >= self.count:
             raise IndexError(f"Vector index {idx} out of range (0..{self.count-1})")
 
+        if self.is_memory:
+            return self._memory_vectors[idx]
+
         offset = self.HEADER_SIZE + (idx * self.dim * 4)
-
-        if self._mmap is not None:
-            raw_bytes = self._mmap[offset : offset + (self.dim * 4)]
-        else:
-            with open(self.file_path, "rb") as f:
-                f.seek(offset)
-                raw_bytes = f.read(self.dim * 4)
-
+        raw_bytes = self._read_disk_vector_bytes(offset)
         return struct.unpack(f"<{self.dim}f", raw_bytes)
 
     def get_vector_by_id(self, doc_id: str) -> Optional[Tuple[float, ...]]:
@@ -286,6 +383,8 @@ class VectorStorage:
 
     def get_all_vectors(self) -> List[Tuple[float, ...]]:
         """Retrieves all stored vectors."""
+        if self.is_memory:
+            return list(self._memory_vectors)
         return [self.get_vector(i) for i in range(self.count)]
 
     def get_metadata(self, idx: int) -> Dict[str, Any]:
