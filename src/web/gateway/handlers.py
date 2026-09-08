@@ -802,6 +802,20 @@ def _count_vdb_lines(metrics_path: str, metrics_size: int) -> int:
     return 0
 
 
+def _resolve_analytics_db_path(workspace_dir: str) -> str:
+    vdb = os.path.join(
+        workspace_dir, "outputs", "database", "analytics", "analytics.vdb"
+    )
+    if os.path.exists(vdb):
+        return vdb
+    new_db = os.path.join(
+        workspace_dir, "outputs", "database", "analytics", "analytics.db"
+    )
+    if os.path.exists(new_db):
+        return new_db
+    return os.path.join(workspace_dir, "outputs", "analytics", "analytics.db")
+
+
 def _introspect_analytics_metrics(
     workspace_dir: str,
 ) -> Tuple[Dict[str, Any], int, int]:
@@ -814,15 +828,7 @@ def _introspect_analytics_metrics(
     metrics_size = os.path.getsize(metrics_path) if os.path.exists(metrics_path) else 0
     metrics_rows = _count_vdb_lines(metrics_path, metrics_size)
 
-    new_analytics = os.path.join(
-        workspace_dir, "outputs", "database", "analytics", "analytics.db"
-    )
-    legacy_analytics = os.path.join(
-        workspace_dir, "outputs", "analytics", "analytics.db"
-    )
-    analytics_db_path = (
-        new_analytics if os.path.exists(new_analytics) else legacy_analytics
-    )
+    analytics_db_path = _resolve_analytics_db_path(workspace_dir)
     sqlite_rows = _count_analytics_sqlite_rows(analytics_db_path)
     if sqlite_rows is not None:
         metrics_rows = sqlite_rows

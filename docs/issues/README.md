@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **218** | cti_catalog.db および analytics.db の src/database 独自データベース移行とデータマイグレーション | Feature / Refactor | 2026-09-08 | [218-migrate-cti-catalog-and-analytics-db-to-pure-database-engine.md](closed/218-migrate-cti-catalog-and-analytics-db-to-pure-database-engine.md) |
 | **217** | src/database からの具体的データベース指定・ファイルパス結合の完全排除と利用側一元定義（DI）の確立 | Architecture / Refactor | 2026-09-08 | [217-decouple-database-file-definitions-from-database-engine.md](closed/217-decouple-database-file-definitions-from-database-engine.md) |
 | **214** | src/database における単一 .vdb マルチテーブルコンテナ対応および sqlite3 (PEP 249) 互換インターフェースの実装 | Feature | 2026-09-08 | [214-support-multi-table-vdb-container-and-pep249-sqlite-interface.md](closed/214-support-multi-table-vdb-container-and-pep249-sqlite-interface.md) |
 | **213** | src/graph の永続化・クエリバックエンドへの src/database (自作DB基盤) 統合 & graph.db 完全廃止 | Feature | 2026-09-08 | [213-integrate-database-engine-into-graph-subsystem.md](closed/213-integrate-database-engine-into-graph-subsystem.md) |

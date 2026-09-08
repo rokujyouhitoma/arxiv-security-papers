@@ -13,6 +13,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..index.embedding import DeterministicEmbedding
+from ..storage.multi_storage import MultiTableVectorStorage
 from ..storage.storage import VectorStorage
 
 
@@ -133,6 +134,25 @@ def _setup_connection_features(
         )
 
 
+def _is_vdb_container_path(path: str) -> bool:
+    return path.endswith(".vdb") and path not in (":memory:", "")
+
+
+def _open_vdb_connection(
+    db_path: str, read_only: bool, timeout: float
+) -> sqlite3.Connection:
+    abs_path = os.path.abspath(db_path)
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    storage = MultiTableVectorStorage(file_path=abs_path)
+    if os.path.exists(abs_path) and os.path.getsize(abs_path) > 0:
+        storage.load()
+    conn = sqlite3.connect(":memory:", factory=VDBManagedConnection, timeout=timeout)
+    conn._vdb_storage = storage
+    conn._vdb_read_only = read_only
+    sync_from_multi_storage(conn, storage)
+    return conn
+
+
 def get_sqlite_connection(
     db_path: str = ":memory:",
     storage: Optional[VectorStorage] = None,
@@ -145,17 +165,12 @@ def get_sqlite_connection(
 ) -> sqlite3.Connection:
     """
     Returns standard `sqlite3.Connection` with full SQLite SQL support and vector UDFs.
-    Usage:
-        from database import get_sqlite_connection
-
-        conn = get_sqlite_connection(
-            "analytics.db",
-            init_schema=False,
-            enable_wal=True,
-        )
-        cursor = conn.cursor()
+    Seamlessly supports binary .vdb container files with automatic synchronization.
     """
-    conn = _open_raw_sqlite_connection(db_path, read_only, timeout)
+    if _is_vdb_container_path(db_path):
+        conn = _open_vdb_connection(db_path, read_only, timeout)
+    else:
+        conn = _open_raw_sqlite_connection(db_path, read_only, timeout)
     try:
         conn.row_factory = sqlite3.Row
         register_vector_functions(conn)
@@ -235,6 +250,33 @@ def _fallback_counts(targets: Optional[List[str]]) -> Dict[str, int]:
     return {t: 0 for t in (targets or [])}
 
 
+def _resolve_vdb_target_names(
+    storage: MultiTableVectorStorage, targets: Optional[List[str]]
+) -> List[str]:
+    if targets is not None:
+        return targets
+    return [t for t in storage.list_tables() if t != "_schemas"]
+
+
+def _read_table_counts_from_storage(
+    storage: MultiTableVectorStorage, targets: Optional[List[str]]
+) -> Dict[str, int]:
+    names = _resolve_vdb_target_names(storage, targets)
+    return {t: storage.get_table(t).count for t in names if storage.has_table(t)}
+
+
+def _get_vdb_table_counts(db_path: str, targets: Optional[List[str]]) -> Dict[str, int]:
+    abs_path = os.path.abspath(db_path)
+    if not os.path.exists(abs_path) or os.path.getsize(abs_path) == 0:
+        return _fallback_counts(targets)
+    try:
+        storage = MultiTableVectorStorage(file_path=abs_path)
+        storage.load()
+        return _read_table_counts_from_storage(storage, targets)
+    except Exception:
+        return _fallback_counts(targets)
+
+
 def get_sqlite_table_counts(
     db_path: str, table_names: Optional[List[str]] = None
 ) -> Dict[str, int]:
@@ -244,6 +286,8 @@ def get_sqlite_table_counts(
     """
     if not os.path.exists(db_path):
         return _fallback_counts(table_names)
+    if _is_vdb_container_path(db_path):
+        return _get_vdb_table_counts(db_path, table_names)
     try:
         res = _safe_connect_and_query(db_path, table_names)
         return res if res else _fallback_counts(table_names)
@@ -359,3 +403,136 @@ def sync_to_vector_storage(
 
     storage.write_all(vectors, metadata)
     return len(vectors)
+
+
+class VDBManagedConnection(sqlite3.Connection):
+    """SQLite connection automatically synchronized with a MultiTableVectorStorage (.vdb)."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._vdb_storage: Optional[MultiTableVectorStorage] = None
+        self._vdb_read_only: bool = False
+
+    def sync_to_vdb(self) -> None:
+        if self._vdb_storage is not None and not self._vdb_read_only:
+            sync_to_multi_storage(self, self._vdb_storage)
+
+    def commit(self) -> None:
+        super().commit()
+        self.sync_to_vdb()
+
+    def close(self) -> None:
+        try:
+            self.sync_to_vdb()
+        finally:
+            super().close()
+
+
+def _create_table_from_meta_if_missing(
+    conn: sqlite3.Connection, tbl_name: str, meta: List[Dict[str, Any]]
+) -> None:
+    if not meta:
+        return
+    first = meta[0]
+    cols = ", ".join(f"{k} TEXT" for k in first.keys() if k.isidentifier())
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {tbl_name} ({cols})")
+
+
+def _restore_single_multi_table(
+    conn: sqlite3.Connection,
+    tbl_name: str,
+    v_tbl: VectorStorage,
+    schema_sql: Optional[str],
+) -> None:
+    if schema_sql:
+        conn.execute(schema_sql)
+    else:
+        _create_table_from_meta_if_missing(conn, tbl_name, v_tbl.metadata)
+    if v_tbl.metadata:
+        restore_sqlite_table_records(conn, tbl_name, v_tbl.metadata)
+
+
+def _parse_schema_record(row: Any) -> Optional[Tuple[str, str]]:
+    if isinstance(row, dict) and "table_name" in row and "sql" in row:
+        return str(row["table_name"]), str(row["sql"])
+    return None
+
+
+def _load_schemas_from_storage(storage: MultiTableVectorStorage) -> Dict[str, str]:
+    if not storage.has_table("_schemas"):
+        return {}
+    res: Dict[str, str] = {}
+    for row in storage.get_table("_schemas").metadata:
+        item = _parse_schema_record(row)
+        if item:
+            res[item[0]] = item[1]
+    return res
+
+
+def sync_from_multi_storage(
+    conn: sqlite3.Connection,
+    storage: MultiTableVectorStorage,
+) -> Dict[str, int]:
+    """Restores all tables and schemas from MultiTableVectorStorage into an SQLite connection."""
+    schema_map = _load_schemas_from_storage(storage)
+    restored_counts: Dict[str, int] = {}
+    for tbl_name in storage.list_tables():
+        if tbl_name == "_schemas":
+            continue
+        v_tbl = storage.get_table(tbl_name)
+        _restore_single_multi_table(conn, tbl_name, v_tbl, schema_map.get(tbl_name))
+        restored_counts[tbl_name] = v_tbl.count
+    conn.commit()
+    return restored_counts
+
+
+def _save_table_to_storage(
+    storage: MultiTableVectorStorage, tbl: str, recs: List[Dict[str, Any]]
+) -> None:
+    t = (
+        storage.get_table(tbl)
+        if storage.has_table(tbl)
+        else storage.create_table(tbl, dim=4)
+    )
+    v = [(0.0, 0.0, 0.0, 0.0)] * len(recs)
+    t.write_all(v, recs)
+
+
+def _get_savable_tables(conn: sqlite3.Connection) -> List[str]:
+    return [
+        t
+        for t in get_sqlite_table_names(conn)
+        if not t.endswith("_fts") and "_fts_" not in t and t != "_schemas"
+    ]
+
+
+def _build_ddl_records(
+    conn: sqlite3.Connection, tables: List[str]
+) -> List[Dict[str, Any]]:
+    cur = conn.cursor()
+    cur.execute("SELECT name, sql FROM sqlite_master WHERE type='table'")
+    schema_rows = cur.fetchall()
+    return [
+        {"table_name": str(r[0]), "sql": str(r[1])}
+        for r in schema_rows
+        if r[0] in tables and r[1]
+    ]
+
+
+def sync_to_multi_storage(
+    conn: sqlite3.Connection,
+    storage: MultiTableVectorStorage,
+) -> Dict[str, int]:
+    """Dumps user tables from SQLite connection and commits to MultiTableVectorStorage (.vdb)."""
+    user_tables = _get_savable_tables(conn)
+    ddl_records = _build_ddl_records(conn, user_tables)
+    _save_table_to_storage(storage, "_schemas", ddl_records)
+
+    counts: Dict[str, int] = {}
+    for tbl in user_tables:
+        recs = dump_sqlite_table_records(conn, tbl)
+        _save_table_to_storage(storage, tbl, recs)
+        counts[tbl] = len(recs)
+
+    storage.save()
+    return counts
