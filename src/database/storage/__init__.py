@@ -2,6 +2,7 @@
 """Storage and Paging Subpackage."""
 
 from .buffer_pool import BufferFrame, BufferPool2Q, BufferPoolError
+from .multi_storage import MultiTableSecurityError, MultiTableVectorStorage
 from .pager import PAGE_SIZE, Page, PageCache, Pager
 from .slotted_page import (
     DataType,
@@ -33,6 +34,8 @@ __all__ = [
     "DataType",
     "MemoryVFS",
     "MemoryVFSFile",
+    "MultiTableSecurityError",
+    "MultiTableVectorStorage",
     "OverflowManager",
     "Page",
     "PageCache",

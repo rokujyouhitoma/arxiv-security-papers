@@ -129,6 +129,31 @@ class VectorStorage:
             if isinstance(m, dict) and "id" in m
         }
 
+    def _read_vectors_from_stream(
+        self, f: io.BytesIO, count: int
+    ) -> List[Tuple[float, ...]]:
+        f.seek(self.HEADER_SIZE)
+        raw = f.read(count * self.dim * 4)
+        fmt = f"<{self.dim}f"
+        stride = self.dim * 4
+        return [
+            struct.unpack(fmt, raw[i * stride : (i + 1) * stride]) for i in range(count)
+        ]
+
+    def load_from_bytes(self, raw_bytes: bytes) -> None:
+        """Loads and parses storage state directly from binary OKFVEC01 bytes."""
+        if len(raw_bytes) < self.HEADER_SIZE:
+            raise VectorStorageSecurityError(
+                f"Byte size {len(raw_bytes)} < header {self.HEADER_SIZE}"
+            )
+        f = io.BytesIO(raw_bytes)
+        count, meta_offset = self._validate_and_read_header(f, len(raw_bytes))
+        self._read_metadata_block(f, meta_offset, len(raw_bytes))
+        self._memory_vectors = self._read_vectors_from_stream(f, count)
+        self._rebuild_index_mapping(count, self.metadata)
+        if self.is_memory:
+            self._memory_buffer = io.BytesIO(raw_bytes)
+
     def open_mmap(self) -> None:
         """Opens memory map for zero-copy vector reads."""
         if self.is_memory or self._mmap is not None:

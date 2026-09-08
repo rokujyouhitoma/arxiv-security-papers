@@ -56,7 +56,15 @@ from .distributed import (
     prune_dominated_versions,
     resolve_conflict,
 )
-from .driver import Connection, Cursor, DatabaseError, connect
+from .driver import (
+    Connection,
+    Cursor,
+    DatabaseError,
+    IntegrityError,
+    OperationalError,
+    ProgrammingError,
+    connect,
+)
 from .embedding import DeterministicEmbedding
 from .engine import (
     BatchIterator,
@@ -160,7 +168,12 @@ from .sqlite_engine import (
     sync_from_vector_storage,
     sync_to_vector_storage,
 )
-from .storage import VectorStorage, VectorStorageSecurityError
+from .storage import (
+    MultiTableSecurityError,
+    MultiTableVectorStorage,
+    VectorStorage,
+    VectorStorageSecurityError,
+)
 from .vdbe import VDBE, Instruction, OpCode, Statement, StepResult, VDBEProgram
 from .vfs import (
     VFS,
@@ -186,6 +199,8 @@ __all__ = [
     # Storage & Indexing
     "VectorStorage",
     "VectorStorageSecurityError",
+    "MultiTableVectorStorage",
+    "MultiTableSecurityError",
     "DeterministicEmbedding",
     "HNSWIndex",
     # VFS (OS Abstraction Layer)
@@ -367,6 +382,9 @@ __all__ = [
     "Connection",
     "Cursor",
     "DatabaseError",
+    "OperationalError",
+    "ProgrammingError",
+    "IntegrityError",
     "attach_to_sqlite",
     "get_sqlite_connection",
     "register_vector_functions",
