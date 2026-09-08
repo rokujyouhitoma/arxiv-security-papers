@@ -13,6 +13,9 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple
 
+from database.sql.executor import SQLExecutor, TableCatalog
+from database.storage.storage import VectorStorage
+
 from .structures import Edge, Vertex
 
 if TYPE_CHECKING:
@@ -26,13 +29,31 @@ def _determine_graph_storage_path(
 ) -> str:
     if explicit_path:
         return explicit_path
-    default_path = os.path.join(
-        workspace_dir, "outputs", "database", "graph", "graph.db"
+    return os.path.join(workspace_dir, "outputs", "database")
+
+
+def _is_file_like_path(path_str: str) -> bool:
+    return any(path_str.endswith(ext) for ext in (".vdb", ".db", ".sqlite"))
+
+
+def _resolve_vdb_paths(
+    workspace_dir: str, explicit_path: Optional[str]
+) -> Tuple[str, str]:
+    if explicit_path in (":memory:", ""):
+        return ":memory:", ":memory:"
+    if explicit_path:
+        if _is_file_like_path(explicit_path):
+            base = os.path.splitext(explicit_path)[0]
+            return f"{base}_vertices.vdb", f"{base}_edges.vdb"
+        return (
+            os.path.join(explicit_path, "vertices.vdb"),
+            os.path.join(explicit_path, "edges.vdb"),
+        )
+    db_dir = os.path.join(workspace_dir, "outputs", "database")
+    return (
+        os.path.join(db_dir, "vertices.vdb"),
+        os.path.join(db_dir, "edges.vdb"),
     )
-    legacy_path = os.path.join(workspace_dir, "outputs", "database", "graph.db")
-    if os.path.exists(legacy_path) and not os.path.exists(default_path):
-        return legacy_path
-    return default_path
 
 
 TIER_SEVERITY: Dict[str, int] = {
@@ -109,9 +130,156 @@ def _filter_edge(
     return _matches_rules_and_mechanisms(edge, allowed_rules, allowed_mechanisms)
 
 
+def _serialize_vertices(vertices: Dict[str, Vertex]) -> List[Dict[str, Any]]:
+    """Serializes in-memory vertices into VectorStorage metadata dictionaries."""
+    res: List[Dict[str, Any]] = []
+    for v in vertices.values():
+        rec = {
+            "id": v.id,
+            "label": v.label,
+            "name": str(v.properties.get("name") or v.id),
+            "properties": json.dumps(v.properties, ensure_ascii=False),
+        }
+        res.append(rec)
+    return res
+
+
+def _serialize_edges(edges: Dict[str, Edge]) -> List[Dict[str, Any]]:
+    """Serializes in-memory edges into VectorStorage metadata dictionaries."""
+    res: List[Dict[str, Any]] = []
+    for e in edges.values():
+        rec = {
+            "id": e.id,
+            "src_id": e.src_id,
+            "dst_id": e.dst_id,
+            "label": e.label,
+            "confidence": e.get_confidence(),
+            "weight": float(e.weight),
+            "properties": json.dumps(e.properties, ensure_ascii=False),
+        }
+        res.append(rec)
+    return res
+
+
+def _decode_json_properties(raw_p: Any) -> Dict[str, Any]:
+    if not raw_p:
+        return {}
+    try:
+        loaded = json.loads(str(raw_p)) if isinstance(raw_p, str) else raw_p
+        return loaded if isinstance(loaded, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def _populate_vertices(
+    v_meta: List[Dict[str, Any]],
+    vertices: Dict[str, Vertex],
+    out_edges: Dict[str, List[Edge]],
+    in_edges: Dict[str, List[Edge]],
+) -> None:
+    for rec in v_meta:
+        props = _decode_json_properties(rec.get("properties"))
+        name = rec.get("name")
+        if name and "name" not in props:
+            props["name"] = name
+        v = Vertex(
+            id=str(rec.get("id", "")),
+            label=str(rec.get("label", "Vertex")),
+            properties=props,
+        )
+        vertices[v.id] = v
+        out_edges.setdefault(v.id, [])
+        in_edges.setdefault(v.id, [])
+
+
+def _populate_edges(
+    e_meta: List[Dict[str, Any]],
+    edges: Dict[str, Edge],
+    out_edges: Dict[str, List[Edge]],
+    in_edges: Dict[str, List[Edge]],
+) -> None:
+    for rec in e_meta:
+        props = _decode_json_properties(rec.get("properties"))
+        conf = float(rec.get("confidence", 1.0))
+        if "confidence" not in props:
+            props["confidence"] = conf
+        e = Edge(
+            src_id=str(rec.get("src_id", "")),
+            dst_id=str(rec.get("dst_id", "")),
+            label=str(rec.get("label", "RELATED")),
+            weight=float(rec.get("weight", 1.0)),
+            properties=props,
+        )
+        edges[e.id] = e
+        out_edges.setdefault(e.src_id, []).append(e)
+        in_edges.setdefault(e.dst_id, []).append(e)
+
+
+def _populate_from_metadata(
+    v_meta: List[Dict[str, Any]],
+    e_meta: List[Dict[str, Any]],
+    vertices: Dict[str, Vertex],
+    edges: Dict[str, Edge],
+    out_edges: Dict[str, List[Edge]],
+    in_edges: Dict[str, List[Edge]],
+) -> None:
+    """Populates graph data structures from VectorStorage metadata."""
+    _populate_vertices(v_meta, vertices, out_edges, in_edges)
+    _populate_edges(e_meta, edges, out_edges, in_edges)
+
+
+def _save_to_custom_vdb(
+    workspace_dir: str,
+    filepath: str,
+    v_meta: List[Dict[str, Any]],
+    e_meta: List[Dict[str, Any]],
+) -> None:
+    v_p, e_p = _resolve_vdb_paths(workspace_dir, filepath)
+    os.makedirs(os.path.dirname(os.path.abspath(v_p)), exist_ok=True)
+    st_v = VectorStorage(file_path=v_p, dim=16)
+    st_e = VectorStorage(file_path=e_p, dim=16)
+    v_dummy = tuple(0.0 for _ in range(st_v.dim))
+    e_dummy = tuple(0.0 for _ in range(st_e.dim))
+    st_v.write_all([v_dummy] * len(v_meta), v_meta)
+    st_e.write_all([e_dummy] * len(e_meta), e_meta)
+
+
+def _load_from_custom_vdb(
+    workspace_dir: str,
+    filepath: str,
+    vertices: Dict[str, Vertex],
+    edges: Dict[str, Edge],
+    out_edges: Dict[str, List[Edge]],
+    in_edges: Dict[str, List[Edge]],
+) -> None:
+    v_p, e_p = _resolve_vdb_paths(workspace_dir, filepath)
+    if not os.path.exists(v_p) and not os.path.exists(e_p):
+        return
+    st_v = VectorStorage(file_path=v_p, dim=128)
+    st_e = VectorStorage(file_path=e_p, dim=128)
+    _populate_from_metadata(
+        st_v.metadata, st_e.metadata, vertices, edges, out_edges, in_edges
+    )
+
+
+def _resolve_workspace_dir(workspace_dir: Optional[str]) -> str:
+    if workspace_dir:
+        return workspace_dir
+    return os.path.abspath(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+
+
+def _is_memory_mode(memory_only: bool, storage_path: str) -> bool:
+    if memory_only:
+        return True
+    return storage_path in (":memory:", "")
+
+
 class PropertyGraphEngine:
     """
     High-performance pure Python Property Graph Database Engine.
+    Powered directly by src/database/ (VectorStorage & SQLExecutor).
     Maintains forward and reverse adjacency indices for O(1) multi-hop neighborhood lookups.
     """
 
@@ -121,13 +289,14 @@ class PropertyGraphEngine:
         workspace_dir: Optional[str] = None,
         memory_only: bool = False,
     ) -> None:
-        self.workspace_dir = workspace_dir or os.path.abspath(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        )
+        self.workspace_dir = _resolve_workspace_dir(workspace_dir)
         self.storage_path = _determine_graph_storage_path(
             self.workspace_dir, storage_path
         )
-        self.memory_only = memory_only
+        self.memory_only = _is_memory_mode(memory_only, self.storage_path)
+        self.v_path, self.e_path = _resolve_vdb_paths(
+            self.workspace_dir, ":memory:" if self.memory_only else storage_path
+        )
 
         # Primary Storage: Vertices by ID
         self._vertices: Dict[str, Vertex] = {}
@@ -138,8 +307,34 @@ class PropertyGraphEngine:
         # Edge Index: edge_id -> Edge
         self._edges: Dict[str, Edge] = {}
 
-        if not self.memory_only and os.path.exists(self.storage_path):
+        self._init_storage()
+        self._maybe_load_existing_data()
+
+    def _maybe_load_existing_data(self) -> None:
+        if self.memory_only:
+            return
+        if os.path.exists(self.v_path) or os.path.exists(self.e_path):
             self.load()
+
+    def _init_storage(self) -> None:
+        """Initializes pure VectorStorage engines and SQLExecutor catalogs."""
+        dim = 16
+        if not self.memory_only:
+            os.makedirs(os.path.dirname(os.path.abspath(self.v_path)), exist_ok=True)
+            os.makedirs(os.path.dirname(os.path.abspath(self.e_path)), exist_ok=True)
+        self.v_storage = VectorStorage(file_path=self.v_path, dim=dim)
+        self.e_storage = VectorStorage(file_path=self.e_path, dim=dim)
+        self.executor = SQLExecutor()
+        self.executor.tables["vertices"] = TableCatalog(
+            name="vertices", storage=self.v_storage
+        )
+        self.executor.tables["edges"] = TableCatalog(
+            name="edges", storage=self.e_storage
+        )
+
+    def execute_sql(self, sql: str, role: Optional[str] = None) -> Dict[str, Any]:
+        """Executes a SQL query using pure-Python SQLExecutor."""
+        return self.executor.execute(sql, role=role)
 
     def add_vertex(
         self,
@@ -395,72 +590,73 @@ class PropertyGraphEngine:
             "edge_predicates": predicate_counts,
         }
 
+    def _write_default_storage(
+        self, v_meta: List[Dict[str, Any]], e_meta: List[Dict[str, Any]]
+    ) -> None:
+        v_dummy = tuple(0.0 for _ in range(self.v_storage.dim))
+        e_dummy = tuple(0.0 for _ in range(self.e_storage.dim))
+        self.v_storage.write_all([v_dummy] * len(v_meta), v_meta)
+        self.e_storage.write_all([e_dummy] * len(e_meta), e_meta)
+        self.executor.tables["vertices"].recompute_stats()
+        self.executor.tables["edges"].recompute_stats()
+
     def save(self, filepath: Optional[str] = None) -> None:
-        """Persists the graph to disk in compact JSON format."""
-        target_path = filepath or self.storage_path
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        """Persists vertices and edges into VectorStorage."""
+        v_meta = _serialize_vertices(self._vertices)
+        e_meta = _serialize_edges(self._edges)
+        if filepath and filepath != self.storage_path:
+            _save_to_custom_vdb(self.workspace_dir, filepath, v_meta, e_meta)
+        else:
+            self._write_default_storage(v_meta, e_meta)
 
-        payload = {
-            "version": "1.0",
-            "vertices": [v.to_dict() for v in self._vertices.values()],
-            "edges": [e.to_dict() for e in self._edges.values()],
-        }
-
-        temp_path = f"{target_path}.tmp"
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        os.replace(temp_path, target_path)
         logger.info(
-            "Saved PropertyGraphEngine (%d vertices, %d edges) to %s",
+            "Saved PropertyGraphEngine (%d vertices, %d edges)",
+            len(self._vertices),
+            len(self._edges),
+        )
+
+    def load(self, filepath: Optional[str] = None) -> None:
+        """Loads graph from VectorStorage."""
+        target_path = filepath or self.storage_path
+        self.clear()
+        if filepath and filepath != self.storage_path:
+            _load_from_custom_vdb(
+                self.workspace_dir,
+                filepath,
+                self._vertices,
+                self._edges,
+                self._out_edges,
+                self._in_edges,
+            )
+        else:
+            _populate_from_metadata(
+                self.v_storage.metadata,
+                self.e_storage.metadata,
+                self._vertices,
+                self._edges,
+                self._out_edges,
+                self._in_edges,
+            )
+
+        logger.info(
+            "Loaded PropertyGraphEngine (%d vertices, %d edges) from %s",
             len(self._vertices),
             len(self._edges),
             target_path,
         )
 
-    def _load_data(self, data: Dict[str, Any]) -> None:
-        """Populates graph from parsed dictionary payload."""
-        for vd in data.get("vertices", []):
-            v = Vertex(
-                id=vd["id"],
-                label=vd.get("label", "Vertex"),
-                properties=vd.get("properties", {}),
-            )
-            self._vertices[v.id] = v
-            self._out_edges[v.id] = []
-            self._in_edges[v.id] = []
+    def close(self) -> None:
+        """Closes underlying VectorStorage resources."""
+        pass
 
-        for ed in data.get("edges", []):
-            edge = Edge(
-                src_id=ed["src_id"],
-                dst_id=ed["dst_id"],
-                label=ed.get("label", "RELATED"),
-                weight=float(ed.get("weight", 1.0)),
-                properties=ed.get("properties", {}),
-            )
-            self._edges[edge.id] = edge
-            self._out_edges.setdefault(edge.src_id, []).append(edge)
-            self._in_edges.setdefault(edge.dst_id, []).append(edge)
+    def __enter__(self) -> PropertyGraphEngine:
+        return self
 
-    def load(self, filepath: Optional[str] = None) -> None:
-        """Loads graph from persistent disk storage."""
-        target_path = filepath or self.storage_path
-        if not os.path.exists(target_path):
-            return
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
 
-        try:
-            with open(target_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            self.clear()
-            self._load_data(data)
-
-            logger.info(
-                "Loaded PropertyGraphEngine (%d vertices, %d edges) from %s",
-                len(self._vertices),
-                len(self._edges),
-                target_path,
-            )
-        except Exception as ex:
-            logger.error("Failed to load graph from %s: %s", target_path, ex)
+    def __del__(self) -> None:
+        self.close()
 
     def clear(self) -> None:
         """Clears all in-memory vertices and edges."""

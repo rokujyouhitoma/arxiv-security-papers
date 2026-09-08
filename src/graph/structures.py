@@ -7,8 +7,25 @@ Pure Python, Zero External Dependencies.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+
+def _safe_parse_json_props(raw: Any) -> Dict[str, Any]:
+    """Safely decodes JSON properties string into a dictionary."""
+    if not raw:
+        return {}
+    try:
+        loaded = json.loads(str(raw))
+        return loaded if isinstance(loaded, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def _get_field(row: Tuple[Any, ...] | List[Any], idx: int, default: Any = "") -> Any:
+    """Safely gets field from row if within bounds and not None."""
+    return row[idx] if len(row) > idx and row[idx] is not None else default
 
 
 @dataclass
@@ -28,6 +45,23 @@ class Vertex:
             "label": self.label,
             "properties": self.properties,
         }
+
+    def to_db_tuple(self) -> Tuple[str, str, str, str]:
+        """Serializes vertex for relational vertices table insertion."""
+        name = str(self.properties.get("name") or self.id)
+        props_json = json.dumps(self.properties, ensure_ascii=False)
+        return (self.id, self.label, name, props_json)
+
+    @classmethod
+    def from_db_row(cls, row: Tuple[Any, ...] | List[Any]) -> Vertex:
+        """Deserializes vertex from relational vertices table row."""
+        v_id = str(_get_field(row, 0, ""))
+        v_label = str(_get_field(row, 1, "Vertex"))
+        v_name = str(_get_field(row, 2, ""))
+        props = _safe_parse_json_props(_get_field(row, 3, None))
+        if v_name and "name" not in props:
+            props["name"] = v_name
+        return cls(id=v_id, label=v_label, properties=props)
 
 
 @dataclass
@@ -56,6 +90,39 @@ class Edge:
             "weight": self.weight,
             "properties": self.properties,
         }
+
+    def to_db_tuple(self) -> Tuple[str, str, str, str, float, float, str]:
+        """Serializes edge for relational edges table insertion."""
+        conf = self.get_confidence()
+        props_json = json.dumps(self.properties, ensure_ascii=False)
+        return (
+            self.id,
+            self.src_id,
+            self.dst_id,
+            self.label,
+            conf,
+            float(self.weight),
+            props_json,
+        )
+
+    @classmethod
+    def from_db_row(cls, row: Tuple[Any, ...] | List[Any]) -> Edge:
+        """Deserializes edge from relational edges table row."""
+        src_id = str(_get_field(row, 1, ""))
+        dst_id = str(_get_field(row, 2, ""))
+        label = str(_get_field(row, 3, "RELATED"))
+        conf = float(_get_field(row, 4, 1.0))
+        weight = float(_get_field(row, 5, 1.0))
+        props = _safe_parse_json_props(_get_field(row, 6, None))
+        if "confidence" not in props:
+            props["confidence"] = conf
+        return cls(
+            src_id=src_id,
+            dst_id=dst_id,
+            label=label,
+            weight=weight,
+            properties=props,
+        )
 
     def get_confidence(self, default: Optional[float] = None) -> float:
         """Retrieves numerical confidence score from properties or weight."""

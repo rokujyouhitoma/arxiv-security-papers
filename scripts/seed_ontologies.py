@@ -12,7 +12,9 @@ import os
 import sys
 
 # Ensure repository root src is on sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+)
 
 from graph.engine import PropertyGraphEngine  # noqa: E402
 from ontology.seeder import ingest_okf_papers, seed_ontology_graph  # noqa: E402
@@ -25,7 +27,7 @@ def main() -> int:
     parser.add_argument(
         "--db-path",
         default=None,
-        help="Path to target graph.db file (defaults to outputs/database/graph.db)",
+        help="Path to target database directory/file (defaults to outputs/database)",
     )
     parser.add_argument(
         "--ingest-papers",
@@ -45,12 +47,18 @@ def main() -> int:
 
     if args.ingest_papers:
         p_ents, p_trips = ingest_okf_papers(engine, limit=args.limit_papers)
-        print(f"Ingested {args.limit_papers} papers ({p_ents} entities, {p_trips} triples)")
+        print(
+            f"Ingested {args.limit_papers} papers ({p_ents} entities, {p_trips} triples)"
+        )
 
     engine.save()
 
-    print(f"Successfully seeded {v_count} ontology vertices and {e_count} causal edges into {engine.storage_path}")
-    print(f"Total Graph Size: {engine.vertex_count} vertices, {engine.edge_count} edges")
+    print(
+        f"Successfully seeded {v_count} ontology vertices and {e_count} causal edges into {engine.storage_path}"
+    )
+    print(
+        f"Total Graph Size: {engine.vertex_count} vertices, {engine.edge_count} edges"
+    )
     return 0
 
 
