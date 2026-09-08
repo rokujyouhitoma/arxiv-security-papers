@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **213** | src/graph の永続化・クエリバックエンドへの src/database (自作DB基盤) 統合 & graph.db 完全廃止 | Feature | 2026-09-08 | [213-integrate-database-engine-into-graph-subsystem.md](closed/213-integrate-database-engine-into-graph-subsystem.md) |
 | **212** | src/database における SQLite 準拠「:memory:」インメモリデータベースモードのサポート | Feature | 2026-09-08 | [212-support-in-memory-database-mode.md](closed/212-support-in-memory-database-mode.md) |
 | **205** | CISA KEV および NVD CVE 向け Pure-Python Spider の実装とクローラー基盤への統合 | Feature | 2026-09-07 | [205-implement-cisa-kev-and-nvd-cve-spiders.md](closed/205-implement-cisa-kev-and-nvd-cve-spiders.md) |
 | **209** | ETag / If-Modified-Since 条件付きリクエストおよび HTTP 304 キャッシュ機構の実装 | Feature | 2026-09-07 | [209-implement-conditional-get-and-etag-caching-for-spiders.md](closed/209-implement-conditional-get-and-etag-caching-for-spiders.md) |

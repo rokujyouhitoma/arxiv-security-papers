@@ -648,14 +648,12 @@ def _format_size(size_bytes: int) -> str:
 
 
 def _load_graph_instance_and_counts(
-    graph_db_path: str,
+    workspace_dir: str,
 ) -> Tuple[int, int, Any]:
-    if not os.path.exists(graph_db_path):
-        return 0, 0, None
     try:
         from graph.engine import PropertyGraphEngine
 
-        ge = PropertyGraphEngine(storage_path=graph_db_path)
+        ge = PropertyGraphEngine(workspace_dir=workspace_dir)
         st = ge.stats()
         return st.get("vertex_count", 0), st.get("edge_count", 0), ge
     except Exception:
@@ -665,27 +663,19 @@ def _load_graph_instance_and_counts(
 def _introspect_graph_table_metrics(
     workspace_dir: str,
 ) -> Tuple[List[Dict[str, Any]], int, int, Any]:
-    """Introspects vertices and edges tables from graph.db."""
-    new_graph = os.path.join(workspace_dir, "outputs", "database", "graph", "graph.db")
-    legacy_graph = os.path.join(workspace_dir, "outputs", "database", "graph.db")
-    graph_db_path = new_graph if os.path.exists(new_graph) else legacy_graph
-    graph_size = os.path.getsize(graph_db_path) if os.path.exists(graph_db_path) else 0
+    """Introspects vertices and edges tables from pure VectorStorage backends."""
+    v_path = os.path.join(workspace_dir, "outputs", "database", "vertices.vdb")
+    e_path = os.path.join(workspace_dir, "outputs", "database", "edges.vdb")
+    vertex_size = os.path.getsize(v_path) if os.path.exists(v_path) else 0
+    edge_size = os.path.getsize(e_path) if os.path.exists(e_path) else 0
 
-    v_count, e_count, ge_instance = _load_graph_instance_and_counts(graph_db_path)
-
-    total_entities = max(v_count + e_count, 1)
-    vertex_size = (
-        int(graph_size * v_count / total_entities)
-        if total_entities
-        else graph_size // 2
-    )
-    edge_size = graph_size - vertex_size
+    v_count, e_count, ge_instance = _load_graph_instance_and_counts(workspace_dir)
 
     tables = [
         {
             "table_name": "vertices",
             "category": "Property Graph / Entity Store",
-            "storage_engine": "Dual CSR / Pager",
+            "storage_engine": "VectorStorage / Pure-Python SQLExecutor",
             "row_count": v_count,
             "size_bytes": vertex_size,
             "size_human": _format_size(vertex_size),
@@ -695,7 +685,7 @@ def _introspect_graph_table_metrics(
         {
             "table_name": "edges",
             "category": "Property Graph / Causal Triples",
-            "storage_engine": "Dual CSR Adjacency",
+            "storage_engine": "VectorStorage / Pure-Python SQLExecutor",
             "row_count": e_count,
             "size_bytes": edge_size,
             "size_human": _format_size(edge_size),
@@ -1036,39 +1026,44 @@ def _introspect_analytics_database(workspace_dir: str) -> Dict[str, Any]:
     return AnalyticsStorage.get_introspection_metadata(workspace_dir)
 
 
+def _safe_graph_stats(ge_instance: Any) -> Tuple[int, int]:
+    if ge_instance is None:
+        return 0, 0
+    try:
+        st = ge_instance.stats()
+        return int(st.get("vertex_count", 0)), int(st.get("edge_count", 0))
+    except Exception:
+        return 0, 0
+
+
 def _introspect_graph_database(
     workspace_dir: str, ge_instance: Any, db_kpis: Dict[str, Any]
 ) -> Dict[str, Any]:
-    graph_path = os.path.join(workspace_dir, "outputs", "database", "graph", "graph.db")
-    file_size = os.path.getsize(graph_path) if os.path.exists(graph_path) else 0
-    v_count = 0
-    e_count = 0
-    if ge_instance is not None:
-        try:
-            st = ge_instance.stats()
-            v_count = int(st.get("vertex_count", 0))
-            e_count = int(st.get("edge_count", 0))
-        except Exception:
-            pass
+    v_path = os.path.join(workspace_dir, "outputs", "database", "vertices.vdb")
+    e_path = os.path.join(workspace_dir, "outputs", "database", "edges.vdb")
+    v_size = os.path.getsize(v_path) if os.path.exists(v_path) else 0
+    e_size = os.path.getsize(e_path) if os.path.exists(e_path) else 0
+    file_size = v_size + e_size
+    v_count, e_count = _safe_graph_stats(ge_instance)
 
     tables = [
         {
             "table_name": "vertices",
             "category": "Graph Entities & Security Vertices (ABox)",
-            "storage_engine": "Dual CSR Adjacency / Pager",
+            "storage_engine": "VectorStorage / Pure-Python SQLExecutor",
             "row_count": v_count,
-            "size_bytes": int(file_size * 0.40),
-            "size_human": _format_size(int(file_size * 0.40)),
+            "size_bytes": v_size,
+            "size_human": _format_size(v_size),
             "primary_key": "id (TEXT)",
             "indexed_columns": ["label", "properties"],
         },
         {
             "table_name": "edges",
             "category": "Causal Chains & ATT&CK Triples (ABox)",
-            "storage_engine": "Dual CSR Directed Edges",
+            "storage_engine": "VectorStorage / Pure-Python SQLExecutor",
             "row_count": e_count,
-            "size_bytes": int(file_size * 0.40),
-            "size_human": _format_size(int(file_size * 0.40)),
+            "size_bytes": e_size,
+            "size_human": _format_size(e_size),
             "primary_key": "(src_id, dst_id, label)",
             "indexed_columns": ["src_id", "dst_id", "label"],
         },
@@ -1118,8 +1113,8 @@ def _introspect_graph_database(
         "name": "graph_db",
         "display_name": "Property Graph & Ontology Store",
         "category": "Knowledge Graph & Full-Spectrum SKO",
-        "storage_engine": "Property Graph Engine + W3C OWL 2 DL TBox/ABox",
-        "file_path": "outputs/database/graph/graph.db",
+        "storage_engine": "Property Graph Engine (VectorStorage & Pure-Python SQLExecutor + Dual CSR)",
+        "file_path": "outputs/database/vertices.vdb, outputs/database/edges.vdb",
         "file_size_bytes": file_size,
         "file_size_human": _format_size(file_size),
         "table_count": len(tables),
@@ -1760,14 +1755,7 @@ class GatewayHandlers:
 
         from graph.engine import PropertyGraphEngine
 
-        new_db = os.path.join(
-            self.workspace_dir, "outputs", "database", "graph", "graph.db"
-        )
-        legacy_db = os.path.join(self.workspace_dir, "outputs", "database", "graph.db")
-        db_path = new_db if os.path.exists(new_db) else legacy_db
-        engine = PropertyGraphEngine(
-            storage_path=db_path, workspace_dir=self.workspace_dir
-        )
+        engine = PropertyGraphEngine(workspace_dir=self.workspace_dir)
 
         if engine.vertex_count == 0:
             from ontology.seeder import seed_ontology_graph
@@ -1780,6 +1768,7 @@ class GatewayHandlers:
             focus_node=focus_node,
             include_gaps=include_gaps,
         )
+        engine.close()
 
         res = {
             "status": "success",
@@ -1805,14 +1794,7 @@ class GatewayHandlers:
 
         from graph.engine import PropertyGraphEngine
 
-        new_db = os.path.join(
-            self.workspace_dir, "outputs", "database", "graph", "graph.db"
-        )
-        legacy_db = os.path.join(self.workspace_dir, "outputs", "database", "graph.db")
-        db_path = new_db if os.path.exists(new_db) else legacy_db
-        engine = PropertyGraphEngine(
-            storage_path=db_path, workspace_dir=self.workspace_dir
-        )
+        engine = PropertyGraphEngine(workspace_dir=self.workspace_dir)
         if engine.vertex_count == 0:
             from ontology.seeder import seed_ontology_graph
 
@@ -1820,6 +1802,7 @@ class GatewayHandlers:
             engine.save()
 
         query_result = engine.execute_graph_query(q, limit=limit_val)
+        engine.close()
         res = {
             "status": "success",
             "query": q,
