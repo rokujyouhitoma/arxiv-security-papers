@@ -89,7 +89,7 @@ class AnalyticsStorage:
         self,
         workspace_dir: Optional[str] = None,
         analytics_dir: Optional[str] = None,
-        db_name: str = "analytics.db",
+        db_name: str = "analytics.vdb",
     ) -> None:
         self.workspace_dir = workspace_dir or os.path.abspath(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -296,7 +296,7 @@ class AnalyticsStorage:
         ws = workspace_dir or os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..")
         )
-        db_path = os.path.join(ws, "outputs", "database", "analytics", "analytics.db")
+        db_path = os.path.join(ws, "outputs", "database", "analytics", "analytics.vdb")
         file_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
         t_names = [
             "threat_trends",

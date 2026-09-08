@@ -37,7 +37,7 @@ class CTICatalogStorage:
         "outputs",
         "database",
         "catalog",
-        "cti_catalog.db",
+        "cti_catalog.vdb",
     )
 
     def __init__(self, db_path: Optional[str] = None) -> None:
@@ -525,7 +525,7 @@ class CTICatalogStorage:
         ws = workspace_dir or os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
         )
-        db_path = os.path.join(ws, "outputs", "database", "catalog", "cti_catalog.db")
+        db_path = os.path.join(ws, "outputs", "database", "catalog", "cti_catalog.vdb")
         file_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
         t_names = [
             "cti_tactics",

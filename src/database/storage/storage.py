@@ -269,7 +269,7 @@ class VectorStorage:
         self, count: int, meta_list: List[Dict[str, Any]]
     ) -> None:
         self.count = count
-        self.metadata = meta_list
+        self.metadata = list(meta_list)
         self.id_to_idx = {
             m["id"]: idx
             for idx, m in enumerate(self.metadata)
