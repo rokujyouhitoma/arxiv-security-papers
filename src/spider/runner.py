@@ -348,12 +348,34 @@ def parse_cli_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--state-file", default=None, help="Path to state file for Pause/Resume"
     )
     parser.add_argument("--resume", action="store_true", help="Resume from state file")
+    parser.add_argument(
+        "--daemon", action="store_true", help="Start as resident SpiderDaemonWorker"
+    )
     return parser.parse_args(args)
 
 
-def main() -> None:
-    args = parse_cli_args()
-    pipe_type = None if args.pipeline == "auto" else args.pipeline
+def _run_daemon_mode(worker_id: str = "daemon_cli") -> None:
+    import time
+
+    from .daemon.worker import SpiderDaemonWorker
+
+    worker = SpiderDaemonWorker(worker_id=worker_id)
+    print(
+        f"[*] Started SpiderDaemonWorker [{worker_id}] in resident mode. "
+        "Press Ctrl+C to drain."
+    )
+    try:
+        while True:
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("[*] Draining SpiderDaemonWorker...")
+        worker.drain()
+        print("[+] Drain complete. Exiting.")
+
+
+def _dispatch_spider_execution(
+    args: argparse.Namespace, pipe_type: Optional[str]
+) -> None:
     if args.spider == "all":
         asyncio.run(
             run_all_spiders(
@@ -376,6 +398,15 @@ def main() -> None:
                 pipeline_type=pipe_type,
             )
         )
+
+
+def main() -> None:
+    args = parse_cli_args()
+    if args.daemon:
+        _run_daemon_mode()
+        return
+    pipe_type = None if args.pipeline == "auto" else args.pipeline
+    _dispatch_spider_execution(args, pipe_type)
 
 
 if __name__ == "__main__":

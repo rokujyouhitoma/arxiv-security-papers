@@ -47,6 +47,7 @@ from .workers import (
     BaseWorker,
     ManagedServiceWorker,
     QueueWorker,
+    SpiderWorker,
     SyncWorker,
 )
 
@@ -411,6 +412,27 @@ class Arbiter:
         )
         q_worker.run()
 
+    def _run_spider_worker(self, spec: WorkerSpec, worker_id: str) -> None:
+        """Executes resident spider crawler worker."""
+        meta = spec.metadata or {}
+        sp_worker = SpiderWorker(
+            worker_id=worker_id,
+            config=self.config,
+            app_target=spec.app_target,
+            source_queue=meta.get("source_queue"),
+            result_queue=meta.get("result_queue"),
+            cache_state_file=meta.get(
+                "cache_state_file", "outputs/spider/cache_state.json"
+            ),
+            hook=spec.hook,
+            poll_interval=float(meta.get("poll_interval", 0.1)),
+            max_requests=spec.max_requests,
+            max_requests_jitter=spec.max_requests_jitter,
+            max_worker_lifetime=spec.max_worker_lifetime,
+            max_worker_lifetime_jitter=spec.max_worker_lifetime_jitter,
+        )
+        sp_worker.run()
+
     @staticmethod
     def _extract_spec_threads(spec: WorkerSpec) -> Optional[int]:
         if spec.worker_class not in ("gthread", "threaded"):
@@ -438,16 +460,23 @@ class Arbiter:
         web_worker = worker_cls(**worker_kwargs)
         web_worker.run()
 
+    def _dispatch_specialized_worker(self, spec: WorkerSpec, worker_id: str) -> bool:
+        if spec.worker_class == "queue":
+            self._run_queue_worker(spec, worker_id)
+            return True
+        if spec.worker_class == "spider":
+            self._run_spider_worker(spec, worker_id)
+            return True
+        return False
+
     def _execute_child_spec(self, spec: WorkerSpec, worker_id: str) -> int:
         if spec.worker_class == "service" or spec.role == ServiceRole.STATEFUL_SERVICE:
             self._run_service_worker(spec, worker_id)
             return 0
         if spec.role == ServiceRole.ONESHOT_TASK:
             return self._run_oneshot_worker(spec)
-        if spec.worker_class == "queue":
-            self._run_queue_worker(spec, worker_id)
-            return 0
-        self._run_web_worker(spec, worker_id)
+        if not self._dispatch_specialized_worker(spec, worker_id):
+            self._run_web_worker(spec, worker_id)
         return 0
 
     def _run_child_worker(self, spec: WorkerSpec, worker_id: str) -> NoReturn:

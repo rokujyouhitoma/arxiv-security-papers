@@ -70,7 +70,18 @@ __all__ = [
     "FunctionalSpider",
     "spider",
     "scrape",
+    "CrawlJob",
+    "CrawlResult",
+    "SpiderDaemonWorker",
+    "SpiderDaemonClient",
 ]
+
+from .daemon import (  # noqa: E402
+    CrawlJob,
+    CrawlResult,
+    SpiderDaemonClient,
+    SpiderDaemonWorker,
+)
 
 _LEGACY_EXPORTS = {
     "OkfItemPipeline": "domain.security.pipeline.okf_pipeline",

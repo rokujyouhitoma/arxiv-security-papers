@@ -11,6 +11,7 @@ from .base import BaseWorker
 from .gthread_worker import GthreadWorker
 from .queue_worker import QueueWorker
 from .service_worker import ManagedServiceWorker
+from .spider_worker import SpiderWorker
 from .sync_worker import SyncWorker
 
 ConcreteWorkerClass = Type[BaseWorker]
@@ -21,6 +22,7 @@ WORKER_CLASSES: Dict[str, ConcreteWorkerClass] = {
     "threaded": GthreadWorker,
     "async": AsyncWorker,
     "queue": QueueWorker,
+    "spider": SpiderWorker,
 }
 
 __all__ = [
@@ -29,6 +31,7 @@ __all__ = [
     "GthreadWorker",
     "AsyncWorker",
     "QueueWorker",
+    "SpiderWorker",
     "ManagedServiceWorker",
     "WORKER_CLASSES",
 ]

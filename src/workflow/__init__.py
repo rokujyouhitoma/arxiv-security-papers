@@ -10,7 +10,9 @@ Provides domain-agnostic workflow infrastructure:
 
 from workflow.circuit import CircuitBreaker, CircuitState
 from workflow.dag import DAGWorkflowEngine, TaskNode
+from workflow.operators import SpiderTaskOperator
 from workflow.saga import PhaseProtocol, SagaCoordinator, SagaStep
+from workflow.scheduler import ScheduledTask, WorkflowScheduler
 from workflow.streaming_dag import (
     BufferPolicy,
     StreamChunk,
@@ -34,4 +36,7 @@ __all__ = [
     "EventType",
     "CircuitBreaker",
     "CircuitState",
+    "SpiderTaskOperator",
+    "ScheduledTask",
+    "WorkflowScheduler",
 ]
