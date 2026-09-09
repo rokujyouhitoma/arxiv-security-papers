@@ -17,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **226** | src/database における ARIES クラッシュリカバリプロトコルの HSM 統制およびカオス障害耐性の確立 | Feature / Architecture | 2026-09-09 | [226-implement-database-aries-recovery-hsm-governance.md](closed/226-implement-database-aries-recovery-hsm-governance.md) |
 | **225** | src/workflow における Task 実行ライフサイクルおよび Saga 補償トランザクションの HSM 統制 | Feature / Architecture | 2026-09-09 | [225-implement-workflow-task-and-saga-hsm-governance.md](closed/225-implement-workflow-task-and-saga-hsm-governance.md) |
 | **224** | ゼロ外部依存・階層型ステートマシン (HSM) コアエンジンの実装およびシステム全域ライフサイクル統制の確立 | Architecture / Refactor | 2026-09-09 | [224-implement-hierarchical-state-machine-engine-and-cross-system-lifecycle-governance.md](closed/224-implement-hierarchical-state-machine-engine-and-cross-system-lifecycle-governance.md) |
 | **223** | src/spider の常駐型デーモン化および src/workflow・src/supervisor 統合アーキテクチャの実装 | Feature / Architecture | 2026-09-09 | [223-implement-resident-spider-daemon-and-workflow-supervisor-integration.md](closed/223-implement-resident-spider-daemon-and-workflow-supervisor-integration.md) |

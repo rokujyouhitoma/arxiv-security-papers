@@ -10,6 +10,15 @@ import threading
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple, Union
 
 from ..storage.vfs import VFS, VFSFile, get_vfs
+from .contracts import (
+    EVENT_ANALYSIS_DONE,
+    EVENT_FAIL,
+    EVENT_NO_RECOVERY,
+    EVENT_REDO_DONE,
+    EVENT_START_RECOVERY,
+    EVENT_UNDO_DONE,
+    build_aries_recovery_state_tree,
+)
 from .wal import DEFAULT_PAGE_SIZE, LogRecord, LogRecordType, WALReader, WALWriter
 
 if TYPE_CHECKING:
@@ -38,6 +47,25 @@ class ARIESRecoveryManager:
         self.vfs = vfs if vfs is not None else get_vfs(vfs_name)
         self.page_size = page_size
         self._lock = threading.RLock()
+        self.hsm = build_aries_recovery_state_tree()
+
+    def _execute_recovery_phases(
+        self, all_records: List[LogRecord], pager: Optional["Pager"]
+    ) -> Tuple[int, int]:
+        self.hsm.send_event(EVENT_START_RECOVERY, {"total_records": len(all_records)})
+        try:
+            att, dpt, chk_lsn = self._run_analysis_phase(all_records)
+            self.hsm.send_event(
+                EVENT_ANALYSIS_DONE, {"att_size": len(att), "dpt_size": len(dpt)}
+            )
+            redo_count = self._run_redo_phase(all_records, dpt, pager=pager)
+            self.hsm.send_event(EVENT_REDO_DONE, {"redo_count": redo_count})
+            undo_count = self._run_undo_phase(all_records, att, pager=pager)
+            self.hsm.send_event(EVENT_UNDO_DONE, {"undo_count": undo_count})
+            return redo_count, undo_count
+        except Exception as exc:
+            self.hsm.send_event(EVENT_FAIL, {"error": str(exc)})
+            raise
 
     def run_recovery(self, pager: Optional["Pager"] = None) -> Tuple[int, int]:
         """
@@ -46,17 +74,16 @@ class ARIESRecoveryManager:
         """
         with self._lock:
             if not self.vfs.exists(self.wal_file_path):
+                self.hsm.send_event(EVENT_NO_RECOVERY, {"reason": "no_wal_file"})
                 return 0, 0
 
             wal_reader = WALReader(self.wal_file_path, vfs=self.vfs)
             all_records = wal_reader.read_all_records()
             if not all_records:
+                self.hsm.send_event(EVENT_NO_RECOVERY, {"reason": "empty_wal"})
                 return 0, 0
 
-            att, dpt, chk_lsn = self._run_analysis_phase(all_records)
-            redo_count = self._run_redo_phase(all_records, dpt, pager=pager)
-            undo_count = self._run_undo_phase(all_records, att, pager=pager)
-            return redo_count, undo_count
+            return self._execute_recovery_phases(all_records, pager)
 
     def _find_checkpoint_info(
         self, all_records: List[LogRecord]
