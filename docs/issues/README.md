@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **220** | .agents/agents/ への ITSS V3「ソフトウェアデベロップメント」および「アプリケーションスペシャリスト」エージェント定義の追加 | Feature | 2026-09-09 | [220-add-itss-v3-software-development-and-application-specialist-agents.md](closed/220-add-itss-v3-software-development-and-application-specialist-agents.md) |
 | **219** | CTICatalogStorage および sqlite_engine における :memory: 物理ファイル生成バグの改修とインメモリ多層防御の実装 | Bug | 2026-09-09 | [219-fix-in-memory-database-leak-and-disk-creation.md](closed/219-fix-in-memory-database-leak-and-disk-creation.md) |
 | **211** | 既存Spider群（AdvisorySpider / ArxivSpider / IacrSpider）の最新クローラーAPI準拠化と基盤改善提案 | Feature | 2026-09-09 | [211-align-existing-spiders-with-latest-crawler-api.md](closed/211-align-existing-spiders-with-latest-crawler-api.md) |
 | **210** | src/spider からのドメイン固有実装（セキュリティ/OKF）の完全分離とクローラー純粋基盤化 | Architecture / Refactor | 2026-09-09 | [210-decouple-domain-logic-from-spider-core.md](closed/210-decouple-domain-logic-from-spider-core.md) |
