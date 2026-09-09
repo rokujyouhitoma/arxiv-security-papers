@@ -41,12 +41,24 @@ class CTICatalogStorage:
     )
 
     def __init__(self, db_path: Optional[str] = None) -> None:
-        self.db_path = os.path.abspath(db_path or self.DEFAULT_DB_PATH)
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        if db_path in (":memory:", "") or (
+            db_path and os.path.basename(db_path) == ":memory:"
+        ):
+            self.db_path = ":memory:"
+            self._mem_conn: Optional[SQLiteConnection] = get_sqlite_connection(
+                ":memory:", init_schema=False, enable_wal=False, timeout=30.0
+            )
+        else:
+            self.db_path = os.path.abspath(db_path or self.DEFAULT_DB_PATH)
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+            self._mem_conn = None
         self._init_schema()
 
     @contextmanager
     def _connection(self) -> Generator[SQLiteConnection, None, None]:
+        if self._mem_conn is not None:
+            yield self._mem_conn
+            return
         conn = get_sqlite_connection(
             self.db_path, init_schema=False, enable_wal=True, timeout=30.0
         )
@@ -54,6 +66,18 @@ class CTICatalogStorage:
             yield conn
         finally:
             conn.close()
+
+    def close(self) -> None:
+        """Closes any underlying in-memory database connection."""
+        if self._mem_conn is not None:
+            try:
+                self._mem_conn.close()
+            except Exception:
+                pass
+            self._mem_conn = None
+
+    def __del__(self) -> None:
+        self.close()
 
     def _init_schema(self) -> None:
         """Initializes relational tables and full-text search virtual tables."""

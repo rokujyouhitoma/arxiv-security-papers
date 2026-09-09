@@ -7,6 +7,11 @@ and MCP threat defense tools (Issue #197).
 
 from __future__ import annotations
 
+import os
+from typing import Generator
+
+import pytest
+
 from domain.security.cti.kev import BUILTIN_KEV_FALLBACK, CISAKEVRegistry
 from domain.security.cti.storage import CTICatalogStorage
 from mcp.threat_defense_server import (
@@ -16,6 +21,15 @@ from mcp.threat_defense_server import (
 from ontology.extractor import OntologyExtractor
 from ontology.schema import EntityType, Predicate, VulnerabilityEntity
 from ontology.turtle_engine import serialize_vulnerability_entity
+
+
+@pytest.fixture(autouse=True)
+def clean_memory_leak() -> Generator[None, None, None]:
+    """Ensure no physical :memory: files exist or get created."""
+    if os.path.exists(":memory:"):
+        os.remove(":memory:")
+    yield
+    assert not os.path.exists(":memory:"), "Physical :memory: file was created on disk!"
 
 
 class TestCISAKEVRegistry:

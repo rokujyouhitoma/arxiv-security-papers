@@ -66,7 +66,9 @@ class VectorStorage:
 
     def __init__(self, file_path: str, dim: int = 128) -> None:
         self.dim = self._validate_dimension(int(dim))
-        self.is_memory = file_path == ":memory:"
+        self.is_memory = (
+            file_path == ":memory:" or os.path.basename(file_path) == ":memory:"
+        )
         self.count: int = 0
         self.metadata: List[Dict[str, Any]] = []
         self.id_to_idx: Dict[str, int] = {}

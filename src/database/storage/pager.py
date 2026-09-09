@@ -6,6 +6,7 @@ disk-persistent Write-Ahead Logging (WAL), Steal/No-Force buffer policy,
 and ARIES crash recovery integration.
 """
 
+import os
 import struct
 import threading
 from typing import Any, Dict, List, Optional, Tuple
@@ -212,7 +213,8 @@ def _resolve_vfs_instance(
 ) -> Tuple[Optional[str], VFS]:
     if vfs is not None:
         return vfs_name, vfs
-    target_name = "memory" if (file_path == ":memory:" and not vfs_name) else vfs_name
+    is_mem = file_path in (":memory:", "") or os.path.basename(file_path) == ":memory:"
+    target_name = "memory" if (is_mem and not vfs_name) else vfs_name
     return target_name, get_vfs(target_name)
 
 

@@ -20,7 +20,7 @@ from src.database import (
     get_sqlite_connection,
 )
 from src.database.compat.sqlite_engine import sync_to_vector_storage
-from src.database.storage.vfs import MemoryVFS
+from src.database.storage.vfs import MemoryVFS, PosixVFSFile
 
 
 @pytest.fixture(autouse=True)
@@ -284,3 +284,39 @@ def test_security_bounds_enforcement() -> None:
     with pytest.raises(ValueError):
         storage.write_all([[1.0, 2.0, 3.0, 4.0]] * (storage.MAX_VECTOR_COUNT + 1))
     storage.close()
+
+
+def test_abspath_memory_does_not_leak_to_disk() -> None:
+    """Ensure os.path.abspath(':memory:') is treated as in-memory mode."""
+    abs_mem = os.path.abspath(":memory:")
+
+    conn = get_sqlite_connection(abs_mem, enable_wal=True)
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE abs_test (id INT, val TEXT)")
+    cur.execute("INSERT INTO abs_test VALUES (1, 'ok')")
+    conn.commit()
+    row = cur.execute("SELECT val FROM abs_test WHERE id = 1").fetchone()
+    assert row is not None and row[0] == "ok"
+    conn.close()
+
+    vstorage = VectorStorage(abs_mem, dim=4)
+    assert vstorage.is_memory is True
+    vstorage.append([1.0, 0.0, 0.0, 0.0], metadata={"id": "v1"})
+    assert vstorage.count == 1
+    vstorage.close()
+
+    pager = Pager(abs_mem, use_wal=True)
+    assert isinstance(pager.vfs, MemoryVFS)
+    pager.close()
+
+    assert not os.path.exists(":memory:")
+    assert not os.path.exists(abs_mem)
+
+
+def test_posix_vfs_raises_on_memory_path() -> None:
+    """Ensure PosixVFSFile raises ValueError on any :memory: path."""
+    with pytest.raises(ValueError, match="Cannot open :memory: using PosixVFSFile"):
+        PosixVFSFile(":memory:")
+
+    with pytest.raises(ValueError, match="Cannot open :memory: using PosixVFSFile"):
+        PosixVFSFile(os.path.abspath(":memory:"))

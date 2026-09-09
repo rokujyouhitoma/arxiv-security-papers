@@ -80,6 +80,26 @@ SCHEMA_MIGRATIONS: List[Tuple[int, str]] = [
 ]
 
 
+def _resolve_default_workspace_dir() -> str:
+    return os.path.abspath(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+
+
+def _resolve_analytics_dir(
+    workspace_dir: str, analytics_dir: Optional[str], db_name: str
+) -> str:
+    if analytics_dir:
+        return analytics_dir
+    default_dir = os.path.join(workspace_dir, "outputs", "database", "analytics")
+    legacy_dir = os.path.join(workspace_dir, "outputs", "analytics")
+    if os.path.exists(os.path.join(legacy_dir, db_name)) and not os.path.exists(
+        os.path.join(default_dir, db_name)
+    ):
+        return legacy_dir
+    return default_dir
+
+
 class AnalyticsStorage:
     """
     Unified single-file storage manager for pre-aggregated analytics and KPIs (analytics.db).
@@ -91,38 +111,53 @@ class AnalyticsStorage:
         analytics_dir: Optional[str] = None,
         db_name: str = "analytics.vdb",
     ) -> None:
-        self.workspace_dir = workspace_dir or os.path.abspath(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        )
-        default_analytics_dir = os.path.join(
-            self.workspace_dir, "outputs", "database", "analytics"
-        )
-        legacy_analytics_dir = os.path.join(self.workspace_dir, "outputs", "analytics")
-        if analytics_dir:
-            self.analytics_dir = analytics_dir
-        elif os.path.exists(
-            os.path.join(legacy_analytics_dir, db_name)
-        ) and not os.path.exists(os.path.join(default_analytics_dir, db_name)):
-            self.analytics_dir = legacy_analytics_dir
+        if db_name in (":memory:", "") or os.path.basename(db_name) == ":memory:":
+            self.workspace_dir = workspace_dir or ""
+            self.analytics_dir = ":memory:"
+            self.db_path = ":memory:"
+            self._mem_conn: Optional[Any] = get_sqlite_connection(
+                ":memory:", init_schema=False, enable_wal=False
+            )
         else:
-            self.analytics_dir = default_analytics_dir
-        self.db_path = os.path.join(self.analytics_dir, db_name)
-        self._ensure_dir()
+            self.workspace_dir = workspace_dir or _resolve_default_workspace_dir()
+            self.analytics_dir = _resolve_analytics_dir(
+                self.workspace_dir, analytics_dir, db_name
+            )
+            self.db_path = os.path.join(self.analytics_dir, db_name)
+            self._mem_conn = None
+            self._ensure_dir()
         self.initialize_db()
 
     def _ensure_dir(self) -> None:
         """Ensures the analytics output directory exists."""
+        if self.analytics_dir == ":memory:":
+            return
         if not os.path.exists(self.analytics_dir):
             os.makedirs(self.analytics_dir, exist_ok=True)
 
     @contextlib.contextmanager
     def _get_connection(self) -> Any:
         """Yields a configured SQLite connection from core database engine and ensures clean closure."""
+        if self._mem_conn is not None:
+            yield self._mem_conn
+            return
         conn = get_sqlite_connection(self.db_path, init_schema=False, enable_wal=True)
         try:
             yield conn
         finally:
             conn.close()
+
+    def close(self) -> None:
+        """Closes any underlying in-memory database connection."""
+        if self._mem_conn is not None:
+            try:
+                self._mem_conn.close()
+            except Exception:
+                pass
+            self._mem_conn = None
+
+    def __del__(self) -> None:
+        self.close()
 
     def initialize_db(self) -> None:
         """Applies pending schema migrations deterministically."""

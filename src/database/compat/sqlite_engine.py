@@ -61,10 +61,14 @@ SQLiteError = sqlite3.Error
 SQLiteOperationalError = sqlite3.OperationalError
 
 
+def _is_memory_db_path(path: str) -> bool:
+    return path in (":memory:", "") or os.path.basename(path) == ":memory:"
+
+
 def _open_raw_sqlite_connection(
     db_path: str, read_only: bool, timeout: float
 ) -> sqlite3.Connection:
-    if db_path in (":memory:", ""):
+    if _is_memory_db_path(db_path):
         return sqlite3.connect(":memory:", timeout=timeout)
     abs_path = os.path.abspath(db_path)
     if read_only:
@@ -106,7 +110,7 @@ _init_papers_schema = _init_default_table_schema
 
 
 def _configure_wal_pragma(conn: sqlite3.Connection, db_path: str) -> None:
-    if db_path not in (":memory:", ""):
+    if not _is_memory_db_path(db_path):
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
 
@@ -135,17 +139,20 @@ def _setup_connection_features(
 
 
 def _is_vdb_container_path(path: str) -> bool:
-    return path.endswith(".vdb") and path not in (":memory:", "")
+    return path.endswith(".vdb") and not _is_memory_db_path(path)
 
 
 def _open_vdb_connection(
     db_path: str, read_only: bool, timeout: float
 ) -> sqlite3.Connection:
-    abs_path = os.path.abspath(db_path)
-    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-    storage = MultiTableVectorStorage(file_path=abs_path)
-    if os.path.exists(abs_path) and os.path.getsize(abs_path) > 0:
-        storage.load()
+    if _is_memory_db_path(db_path):
+        storage = MultiTableVectorStorage(file_path=":memory:")
+    else:
+        abs_path = os.path.abspath(db_path)
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        storage = MultiTableVectorStorage(file_path=abs_path)
+        if os.path.exists(abs_path) and os.path.getsize(abs_path) > 0:
+            storage.load()
     conn = sqlite3.connect(":memory:", factory=VDBManagedConnection, timeout=timeout)
     conn._vdb_storage = storage
     conn._vdb_read_only = read_only

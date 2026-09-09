@@ -44,6 +44,10 @@ class PosixVFSFile(VFSFile):
     """POSIX file handle wrapper."""
 
     def __init__(self, path: str, mode: str = "r+b") -> None:
+        if path == ":memory:" or os.path.basename(path) == ":memory:":
+            raise ValueError(
+                "Cannot open :memory: using PosixVFSFile. Use MemoryVFSFile instead."
+            )
         self.path = path
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         if not os.path.exists(path):
