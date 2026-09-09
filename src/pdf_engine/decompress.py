@@ -2,8 +2,18 @@
 
 import re
 import zlib
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
+from core.hsm import HierarchicalStateMachine
+from pdf_engine.contracts import (
+    EVENT_CHECK_SAFETY,
+    EVENT_DECOMPRESS,
+    EVENT_FAIL,
+    EVENT_FILTER_START,
+    EVENT_SAFETY_VIOLATION,
+    PdfSafetyLimitExceededError,
+    SafetyLimitConfig,
+)
 from pdf_engine.filters import decode_ccitt_fax, decode_jbig2, decode_lzw
 
 
@@ -138,6 +148,75 @@ def decode_ascii85(data: bytes) -> bytes:
     return bytes(out)
 
 
+def _normalize_filter_list(filter_name: Any) -> List[Any]:
+    """Ensures filter specification is returned as a list."""
+    if isinstance(filter_name, list):
+        return filter_name
+    return [filter_name]
+
+
+def _check_filter_depth(
+    filters: List[Any],
+    cfg: SafetyLimitConfig,
+    hsm: Optional[HierarchicalStateMachine],
+) -> None:
+    """Validates filter chain depth against configured limits."""
+    if len(filters) > cfg.max_filter_depth:
+        if hsm:
+            hsm.send_event(EVENT_SAFETY_VIOLATION)
+        raise PdfSafetyLimitExceededError(
+            f"Filter chain depth {len(filters)} exceeds safety limit {cfg.max_filter_depth}"
+        )
+
+
+def _check_decomp_size_limit(
+    decomp_len: int,
+    cfg: SafetyLimitConfig,
+    hsm: Optional[HierarchicalStateMachine],
+) -> None:
+    """Validates decompressed byte size against configured limits."""
+    if decomp_len > cfg.max_decompressed_bytes:
+        if hsm:
+            hsm.send_event(EVENT_SAFETY_VIOLATION)
+        raise PdfSafetyLimitExceededError(
+            f"Decompressed stream size {decomp_len} exceeds safety limit {cfg.max_decompressed_bytes}"
+        )
+
+
+def _check_expansion_ratio(
+    raw_len: int,
+    decomp_len: int,
+    cfg: SafetyLimitConfig,
+    hsm: Optional[HierarchicalStateMachine],
+) -> None:
+    """Detects Decompression Bombs (CWE-409) via expansion ratio thresholds."""
+    ratio = decomp_len / max(1, raw_len)
+    if ratio > cfg.max_expansion_ratio:
+        if hsm:
+            hsm.send_event(EVENT_SAFETY_VIOLATION)
+        raise PdfSafetyLimitExceededError(
+            f"Expansion ratio {ratio:.1f}x exceeds safety limit {cfg.max_expansion_ratio:.1f}x"
+        )
+
+
+def _is_empty_input(filter_name: Optional[Any], raw_bytes: bytes) -> bool:
+    """Checks if stream input or filter specification is empty."""
+    if not filter_name:
+        return True
+    return len(raw_bytes) == 0
+
+
+def _handle_decompress_error(
+    e: Exception, hsm: Optional[HierarchicalStateMachine]
+) -> None:
+    """Handles exceptions during decompression, ensuring fail-secure transition."""
+    if isinstance(e, PdfSafetyLimitExceededError):
+        raise e
+    if hsm is not None:
+        hsm.send_event(EVENT_FAIL)
+    raise e
+
+
 class StreamDecompressor:
     """Unified PDF Stream Decompression and Filter Engine."""
 
@@ -199,21 +278,64 @@ class StreamDecompressor:
         return data
 
     @classmethod
+    def _decompress_filter_step(
+        cls,
+        filt: Any,
+        data: bytes,
+        raw_len: int,
+        decode_parms: Optional[Dict[str, Any]],
+        cfg: SafetyLimitConfig,
+        hsm: Optional[HierarchicalStateMachine],
+    ) -> bytes:
+        if hsm:
+            hsm.send_event(EVENT_DECOMPRESS)
+        decomp = cls._apply_single_filter(filt, data, decode_parms)
+        if hsm:
+            hsm.send_event(EVENT_CHECK_SAFETY)
+        _check_decomp_size_limit(len(decomp), cfg, hsm)
+        _check_expansion_ratio(raw_len, len(decomp), cfg, hsm)
+        return decomp
+
+    @classmethod
+    def _execute_filter_loop(
+        cls,
+        filters: List[Any],
+        raw_bytes: bytes,
+        decode_parms: Optional[Dict[str, Any]],
+        cfg: SafetyLimitConfig,
+        hsm: Optional[HierarchicalStateMachine],
+    ) -> bytes:
+        data = raw_bytes
+        for idx, filt in enumerate(filters):
+            if hsm and idx > 0:
+                hsm.send_event(EVENT_FILTER_START)
+            data = cls._decompress_filter_step(
+                filt, data, len(raw_bytes), decode_parms, cfg, hsm
+            )
+        return data
+
+    @classmethod
     def decompress(
         cls,
         raw_bytes: bytes,
         filter_name: Optional[Any],
         decode_parms: Optional[Dict[str, Any]] = None,
+        hsm: Optional[HierarchicalStateMachine] = None,
+        config: Optional[SafetyLimitConfig] = None,
     ) -> bytes:
         """Decompresses raw stream payload applying appropriate filter chain."""
-        if not filter_name or not raw_bytes:
+        if _is_empty_input(filter_name, raw_bytes):
             return raw_bytes
 
-        filters = filter_name if isinstance(filter_name, list) else [filter_name]
-        data = raw_bytes
-        for filt in filters:
-            data = cls._apply_single_filter(filt, data, decode_parms)
-        return data
+        cfg = config if config is not None else SafetyLimitConfig()
+        filters = _normalize_filter_list(filter_name)
+        _check_filter_depth(filters, cfg, hsm)
+
+        try:
+            return cls._execute_filter_loop(filters, raw_bytes, decode_parms, cfg, hsm)
+        except Exception as e:
+            _handle_decompress_error(e, hsm)
+            return raw_bytes
 
     @classmethod
     def _safe_zlib_inflate(cls, data: bytes) -> Optional[bytes]:

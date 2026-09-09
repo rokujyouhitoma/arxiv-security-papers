@@ -2,7 +2,9 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from .contracts import PdfPage, PdfStream
+from core.hsm import HierarchicalStateMachine
+
+from .contracts import PdfPage, PdfStream, SafetyLimitConfig
 from .decompress import StreamDecompressor
 from .font import FontDecoder, ToUnicodeParser
 from .xref import XRefResolver
@@ -11,8 +13,15 @@ from .xref import XRefResolver
 class PageTreeNavigator:
     """Traverses /Catalog and /Pages tree, extracting ordered pages with inherited resources."""
 
-    def __init__(self, xref: XRefResolver) -> None:
+    def __init__(
+        self,
+        xref: XRefResolver,
+        hsm: Optional[HierarchicalStateMachine] = None,
+        config: Optional[SafetyLimitConfig] = None,
+    ) -> None:
         self.xref = xref
+        self.hsm = hsm
+        self.config = config
 
     def get_catalog(self) -> Dict[str, Any]:
         """Resolves root document catalog dictionary."""
@@ -169,6 +178,8 @@ class PageTreeNavigator:
                 stream_obj.data,
                 stream_obj.dictionary.get("/Filter"),
                 stream_obj.dictionary.get("/DecodeParms"),
+                hsm=self.hsm,
+                config=self.config,
             )
             out_list.append(decompressed)
 

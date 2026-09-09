@@ -14,7 +14,7 @@ import zlib
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .contracts import IndirectRef, PdfPage, PdfStream
+from .contracts import IndirectRef, PdfPage, PdfSafetyLimitExceededError, PdfStream
 from .decompress import StreamDecompressor
 from .xref import XRefResolver
 
@@ -176,6 +176,22 @@ def _prepare_raster_pixels(
     return decompressed, color_type
 
 
+def _safe_decompress_raster_stream(stream: PdfStream) -> Optional[bytes]:
+    """Safely decompresses image stream catching security limit errors."""
+    try:
+        decomp = StreamDecompressor.decompress(
+            stream.data,
+            stream.dictionary.get("/Filter"),
+            stream.dictionary.get("/DecodeParms"),
+        )
+    except PdfSafetyLimitExceededError:
+        return None
+
+    if len(decomp) > MAX_DECOMPRESSED_BYTES or not decomp:
+        return None
+    return decomp
+
+
 class PdfImageExtractor:
     """
     Pure-Python XObject Image Extractor conforming to ISO 32000-1 Clause 8.9.
@@ -234,12 +250,8 @@ class PdfImageExtractor:
         if bytes_needed > MAX_DECOMPRESSED_BYTES:
             return None
 
-        decompressed = StreamDecompressor.decompress(
-            stream.data,
-            stream.dictionary.get("/Filter"),
-            stream.dictionary.get("/DecodeParms"),
-        )
-        if len(decompressed) > MAX_DECOMPRESSED_BYTES or not decompressed:
+        decompressed = _safe_decompress_raster_stream(stream)
+        if decompressed is None:
             return None
 
         pixels, color_type = _prepare_raster_pixels(decompressed, stream, width, height)
