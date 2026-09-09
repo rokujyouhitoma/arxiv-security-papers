@@ -16,7 +16,7 @@
   - [1.1 主要コンポーネント構成とデータフロー](#11-主要コンポーネント構成とデータフロー)
     - [1.1.3 ダウンローダ (Downloader) & ミドルウェア](#113-ダウンローダ-downloader--ミドルウェア)
       - [1.1.3.1 RFC 7232 条件付きリクエスト (Conditional GET) と HTTP 304 キャッシュ透過機構 (Issue 209)](#1131-rfc-7232-条件付きリクエスト-conditional-get-と-http-304-キャッシュ透過機構-issue-209)
-    - [1.1.5 ドメインスパイダー (Domain Spiders: arXiv / IACR / CISA KEV / NVD CVE) (Issue 205)](#115-ドメインスパイダー-domain-spiders-arxiv--iacr--cisa-kev--nvd-cve-issue-205)
+    - [1.1.5 ドメインスパイダー (Domain Spiders: arXiv / IACR / CISA KEV / NVD CVE / MITRE CWE) (Issue 205, 222)](#115-ドメインスパイダー-domain-spiders-arxiv--iacr--cisa-kev--nvd-cve--mitre-cwe-issue-205-222)
     - [1.1.6 多態的アイテムパイプライン (Polymorphic Item Pipeline: OkfItemPipeline)](#116-多態的アイテムパイプライン-polymorphic-item-pipeline-okfitempipeline)
     - [1.1.7 コアデータモデル仕様 (Request, Response, BaseSpider)](#117-コアデータモデル仕様-request-response-basespider)
     - [1.1.8 SpiderRegistry & SPI プラグインアーキテクチャ (Issue 205)](#118-spiderregistry--spi-プラグインアーキテクチャ-issue-205)
@@ -55,8 +55,12 @@
 - [8. 運用・可観測性・品質保証フレームワーク](#8-運用可観測性品質保証フレームワーク)
   - [8.1 AutoThrottle 自律速度追従アルゴリズム](#81-autothrottle-自律速度追従アルゴリズム)
   - [8.2 リアルタイム統計コレクター (Stats Collector)](#82-リアルタイム統計コレクター-stats-collector)
-  - [8.3 契約駆動型テスト (Spider Contracts フレームワーク)](#83-契約駆動型テスト-spider-contracts-フレームワーク)
-- [9. 次世代スパイダー基盤 実装ロードマップ](#9-次世代スパイダー基盤-実装ロードマップ)
+- [9. 常駐型 Spider Daemon / Spider Worker アーキテクチャ (Issue 223)](#9-常駐型-spider-daemon--spider-worker-アーキテクチャ-issue-223)
+  - [9.1 常駐化の動機とアーキテクチャ変化](#91-常駐化の動機とアーキテクチャ変化)
+  - [9.2 src/workflow (制御プレーン) と src/spider (実行プレーン) のすみわけ](#92-srcworkflow-制御プレーン-と-srcspider-実行プレーン-のすみわけ)
+  - [9.3 src/supervisor によるライフサイクル管理 (Graceful Drain & Auto-Recovery)](#93-srcsupervisor-によるライフサイクル管理-graceful-drain--auto-recovery)
+  - [9.4 透過的アダプター (SpiderTask / SpiderDaemonClient)](#94-透過的アダプター-spidertask--spiderdaemonclient)
+- [10. 次世代スパイダー基盤 実装ロードマップ](#10-次世代スパイダー基盤-実装ロードマップ)
 
 ---
 
@@ -145,8 +149,8 @@ flowchart TB
 ### 1.1.4 SPA 透過抽出エンジン (SPA Extractor)
 - **役割**: 外部ブラウザ（Playwright 等）を一切起動せず、HTML 内のハイドレーションステート（`__NEXT_DATA__` 等）やインライン JS 内の API エンドポイントを静的解析し、動的 Web ページの完全な構造化データを 0.1ms で復元。
 
-### 1.1.5 ドメインスパイダー (Domain Spiders: arXiv / IACR / CISA KEV / NVD CVE) (Issue 205)
-- **役割**: 対象ドメイン（学術論文、公的脅威インテリジェンス、脆弱性アドバイザリ等）固有の XML/HTML/JSON 構造解析、ページネーションリンク抽出、および構造化アイテム（`ScrapedItem`）の生成。
+### 1.1.5 ドメインスパイダー (Domain Spiders: arXiv / IACR / CISA KEV / NVD CVE / MITRE CWE) (Issue 205, 222)
+- **役割**: 対象ドメイン（学術論文、公的脅威インテリジェンス、脆弱性アドバイザリ、弱点カタログ等）固有の XML/HTML/JSON 構造解析、ページネーションリンク抽出、および構造化アイテム（`ScrapedItem`）の生成。
 - **実装スパイダー体系**:
   1. **学術論文スパイダー群**:
      - `ArxivSpider` (`src/domain/security/spiders/arxiv_spider.py`):
@@ -157,7 +161,7 @@ flowchart TB
        - `download_delay = 1.0s`、`allowed_domains = {"eprint.iacr.org"}`。
      - `AdvisorySpider` (`src/domain/security/spiders/advisory_spider.py`):
        - 一般セキュリティアドバイザリ RSS/XML フィードの収集。
-  2. **外部脅威インテリジェンス (CTI) スパイダー群 (Issue 205)**:
+  2. **外部脅威インテリジェンス (CTI) スパイダー群 (Issue 205, 222)**:
      - `CisaKevSpider` (`src/domain/security/spiders/cisa_kev_spider.py`):
        - **収集対象**: 米国土安全保障省 CISA (Cybersecurity and Infrastructure Security Agency) Known Exploited Vulnerabilities (KEV) 静的 JSON カタログ。
        - **レート制御**: `download_delay = 5.0s` (公式規約配慮・安全マージン)。
@@ -176,17 +180,26 @@ flowchart TB
        - **リクエスト最適化**: `resultsPerPage=2000` (NVD API 2.0 最大値によるリクエスト回数最小化)。
        - **抽出ロジック**: 各 CVE オブジェクトから英語説明文、CVSS メトリクス (v3.1 > v3.0 > v2.0 優先順位で baseScore / baseSeverity / vectorString を抽出)、CWE 弱点識別子、CPE 構成ノードから影響ベンダー・製品群、公式参照リンクを網羅抽出。
        - **再帰的ページネーション**: `totalResults`, `startIndex`, `resultsPerPage` を監視し、`startIndex + resultsPerPage < totalResults` である限り、次ページ `Request(url, params={"resultsPerPage": 2000, "startIndex": next_index})` を自律 yield。
+     - `CweSpider` (`src/domain/security/spiders/cwe_spider.py`) (Issue 222):
+       - **セキュリティ分析上の意義**: 論文（Paper）からは「Paper ➔ CVE ➔ CWE」と2ホップ離れる場合があるが、**脆弱性構造・根本原因分析（Root Cause Analysis）および対策（Mitigation）においては「1ホップ（CVE ➔ CWE）」または脆弱性の本質そのもの** を表す最重要タクソノミー。
+       - **収集対象**: 米 MITRE CWE 公式 REST API (`cwe-api.mitre.org`) または公式配布データ (`cwe.mitre.org/data/`)。
+       - **レート制御**: `download_delay = 3.0s` (または API 規約に準拠)。
+       - **ドメイン境界**: `allowed_domains = {"cwe.mitre.org", "cwe-api.mitre.org"}`。
+       - **抽出ロジック**: 全弱点一覧（Weakness ID、名称、抽象度区分 Pillar/Class/Base/Variant、説明文、Top 25 該否・ランク、適用プラットフォーム、Mitigations、関連 CAPEC/CVE）。
+       - **出力アイテム**: `item_id="cwe_{cwe_id}"`, `type="weakness"`, `source="mitre-cwe"`, `tags=["weakness", "cwe", "cwe-top25"]`。
 
 ```mermaid
 flowchart TD
     subgraph CTI_Sources ["🌐 外部脅威インテリジェンス (CTI) ソース"]
         CISA_SRC["CISA KEV 静的 JSON カタログ<br/>(cisa.gov feeds)"]
         NVD_SRC["NIST NVD REST API 2.0<br/>(services.nvd.nist.gov)"]
+        CWE_SRC["MITRE CWE REST API / XML<br/>(cwe.mitre.org / cwe-api.mitre.org)"]
     end
 
     subgraph Spiders ["🕷️ Pure-Python CTI Spiders"]
         CISA_SPIDER["CisaKevSpider<br/>download_delay = 5.0s<br/>ETag/304 キャッシュ連携"]
         NVD_SPIDER["NvdCveSpider<br/>Keyあり 0.8s / なし 6.5s<br/>resultsPerPage=2000"]
+        CWE_SPIDER["CweSpider (Issue 222)<br/>download_delay = 3.0s<br/>弱点ツリー & Top 25 網羅"]
     end
 
     subgraph CoreEngine ["⚡ Spider Core Engine"]
@@ -925,9 +938,57 @@ $$\text{Delay}_{\text{slot}} = \max\left(w_{\text{min}}, \min\left(w_{\text{max}
 
 ---
 
-# 9. 次世代スパイダー基盤 実装ロードマップ
+# 9. 常駐型 Spider Daemon / Spider Worker アーキテクチャ (Issue 223)
 
-本 DSN-15 の実装は、以下の 4 フェーズで段階的・自律的に展開されます。
+## 9.1 常駐化の動機とアーキテクチャ変化
+従来の一回限り実行（One-shot CLI/Script）型スパイダーから、常駐型デーモン（`SpiderWorker` / `SpiderDaemon`）への移行により、以下の劇的な性能・運用メリットを達成します：
+
+1. **Keep-Alive コネクション再利用**:
+   - HTTP/1.1 および HTTP/2 の持続的接続（Persistent Connection）プールを維持し、クロールごとの TCP 3-way ハンドシェイクや TLS ネゴシエーションのオーバーヘッドを削減。
+2. **Politeness 状態・キャッシュのメモリ内永続性**:
+   - ドメイン別の最終アクセス時刻、連続 429 バックオフ係数、AutoThrottle 状態、および ETag / If-Modified-Since テーブルがメモリ上に保持され、真に安全かつ礼儀正しいクローリングを継続。
+3. **イベント駆動オンデマンド即時クロール**:
+   - Web UI からの「即時更新」や外部 Webhook、新着セキュリティ速報（CVE/KEV）検知を受け、プロセス起動オーバーヘッド（コールドスタート）ゼロで即座にクロールを開始。
+
+## 9.2 src/workflow (制御プレーン) と src/spider (実行プレーン) のすみわけ
+スケジュールの二重管理アンチパターンを排除するため、役割を厳格に分離：
+
+- **Control Plane（制御プレーン / 司令塔）: `src/workflow` (`WorkflowScheduler`)**:
+  - 「いつ・何を・何の順序で実行するか（What & When）」を一元統制。
+  - Cron / Interval スケジュール管理、全体 DAG（Fetch ➔ PDF抽出 ➔ OKF ➔ グラフDB ➔ 5階層サマリー）、障害時のリトライ（Circuit / Saga / WAL）。
+- **Execution Plane（実行プレーン / 手足）: `src/spider` (`SpiderWorker`)**:
+  - 「外部通信をどう安全・確実に実行するか（How）」に専念。
+  - SSRF 防護、429 バックオフ、ETag 透過合成、ストリーミングパース。
+
+## 9.3 src/supervisor によるライフサイクル管理 (Graceful Drain & Auto-Recovery)
+`src/supervisor`（DSN-12）の Arbiter 配下に `SpiderWorker`（`QueueWorker` 拡張）として配置：
+
+```mermaid
+graph TD
+    subgraph SupervisorArbiter ["src/supervisor (Arbiter Master)"]
+        Master["Supervisor Arbiter (Master Process)<br/>• 死活監視 (Heartbeat Ping/Pong)<br/>• シグナル統制 (TERM/QUIT/HUP)"]
+        SpiderWorker["SpiderWorker (PID: 1040)<br/>• 常駐待機ループ<br/>• コネクションプール維持<br/>• max_requests=500 / TTL=86400s"]
+        WorkflowWorker["WorkflowWorker (PID: 1030)<br/>• WorkflowScheduler 常駐ループ"]
+        Master -->|fork / 監視| SpiderWorker
+        Master -->|fork / 監視| WorkflowWorker
+    end
+
+    WorkflowWorker -->|CrawlJob 投入 (IPC Queue)| SpiderWorker
+    SpiderWorker -->|HTTP/HTTPS クロール| ExternalWeb["外部ターゲット (arXiv / CWE / NVD)"]
+```
+
+- **自動リカバリ (Self-Healing)**: 通信例外やクラッシュ発生時、Arbiter が即座に検知して子プロセスを再 fork。
+- **自律世代交代 (Graceful Retirement)**: `max_requests` や `max_worker_lifetime`（TTL）により、処理中リクエストを安全に完了（Drain）させてから定期ローテーションし、メモリリークを根絶。
+- **安全停止 (Graceful Drain)**: `SIGQUIT` 受信時、実行中の HTTP リクエスト完了を待ってからソケットを安全切断。
+
+## 9.4 透過的アダプター (SpiderTask / SpiderDaemonClient)
+`src/workflow` 側からは `SpiderTask` アダプターを介して利用。常駐モード時は IPC キュー経由で非同期ディスパッチし、スタンドアロン・CLI 実行時は直接 `SpiderRunner().run_sync()` を呼ぶ透過的ハイブリッド互換性を担保。
+
+---
+
+# 10. 次世代スパイダー基盤 実装ロードマップ
+
+本 DSN-15 の実装は、以下のフェーズで段階的・自律的に展開されます。
 
 ```mermaid
 gantt
@@ -962,3 +1023,5 @@ gantt
 | **Phase 3: 専門スパイダー & 永続化** | `src/spider/spiders/`, `src/spider/pipeline/` | `arxiv_spider.py`, `iacr_spider.py`, `advisory_spider.py`, `okf_pipeline.py` (DSN-14 結合) |
 | **Phase 4: 分散協調 & 品質保証** | `src/spider/distributed/`, `tests/spider/` | `consistent_hash.py`, `state_storage.py`, `contracts.py`, `make static_analysis` 100% PASS |
 | **Phase 5: 外部脅威インテリジェンス (CTI) スパイダー統合 & 通信堅牢化** | `src/spider/`, `src/domain/security/spiders/` | `Response.json()`, `Request.params`, `download_delay` 伝搬, `RetryMiddleware` (429/503), `OffsiteMiddleware` (SSRF 防護), `CisaKevSpider`, `NvdCveSpider`, CTI 多態化 OKF パイプライン (Issue 205〜209) |
+| **Phase 6: MITRE CWE スパイダー統合 & 弱点カタログ自動インジェスト** | `src/domain/security/spiders/`, `src/spider/spiders/` | `CweSpider` (MITRE CWE REST API/データ取得), 弱点ツリー/Top 25 構造化, `cti_catalog.db` 永続化, オントロジー因果連鎖連携 (Issue 222) |
+| **Phase 7: 常駐型 Spider Daemon & Supervisor / Workflow 統合** | `src/spider/daemon/`, `src/supervisor/workers/` | `SpiderWorker` (QueueWorker 拡張), `SpiderDaemonClient`, `SpiderTask` アダプター, Keep-Alive プール & Politeness 永続化, Graceful Drain (Issue 223) |

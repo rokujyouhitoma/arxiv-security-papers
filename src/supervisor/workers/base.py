@@ -151,6 +151,13 @@ class BaseWorker(abc.ABC):
         except Exception:
             pass
 
+    def _resolve_pulse_status(self, is_handling: bool) -> str:
+        if not self.alive:
+            return "TRANSITIONING.DRAINING"
+        if is_handling:
+            return "OPERATIONAL.ACTIVE.PROCESSING"
+        return "OPERATIONAL.ACTIVE.IDLE"
+
     def pulse(self, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Emits a liveness pulse with metrics to the Arbiter."""
         self.pid = os.getpid()
@@ -165,6 +172,9 @@ class BaseWorker(abc.ABC):
         }
         if metadata:
             meta.update(metadata)
+
+        is_handling = bool(meta.get("is_handling_request", False))
+        meta["status_path"] = self._resolve_pulse_status(is_handling)
 
         if self.pulse_callback:
             try:

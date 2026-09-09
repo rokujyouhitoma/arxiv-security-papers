@@ -29,6 +29,8 @@ from typing import (
     cast,
 )
 
+from core.hsm import HierarchicalStateMachine
+
 from .config import SupervisorConfig
 from .contracts import (
     DefaultLifecycleHook,
@@ -36,6 +38,7 @@ from .contracts import (
     ServiceRole,
     ServiceState,
     WorkerSpec,
+    build_supervisor_state_tree,
 )
 from .control import ControlServer
 from .heartbeat import HeartbeatWatchdog
@@ -56,7 +59,31 @@ class ManagedPool:
         self.name = spec.name
         self.workers: Dict[int, BaseWorker] = {}
         self.target_count = spec.target_count
-        self.state: ServiceState = ServiceState.READY
+        self.state_tree = build_supervisor_state_tree(spec.name)
+        self.hsm = HierarchicalStateMachine(
+            root=self.state_tree,
+            fail_secure_target="TERMINATED.FAILED",
+        )
+        self._state: ServiceState = ServiceState.READY
+
+    @property
+    def state(self) -> ServiceState:
+        return self._state
+
+    @state.setter
+    def state(self, new_state: ServiceState) -> None:
+        self._state = new_state
+        self._sync_hsm(new_state)
+
+    def _sync_hsm(self, new_state: ServiceState) -> None:
+        if not self.hsm.is_in_state(new_state.name):
+            self.hsm.force_transition(
+                new_state.hierarchical_path, reason=f"POOL_{new_state.name}"
+            )
+
+    @property
+    def state_path(self) -> str:
+        return self.hsm.get_state_path()
 
 
 def _safe_unlink(path: Optional[str]) -> None:
@@ -92,6 +119,14 @@ class Arbiter:
         self.running = False
         self.boot_time = time.time()
 
+        # Master HSM & lifecycle governance
+        self.state_tree = build_supervisor_state_tree("arbiter")
+        self.hsm = HierarchicalStateMachine(
+            root=self.state_tree,
+            fail_secure_target="TERMINATED.FAILED",
+        )
+        self._state: ServiceState = ServiceState.READY
+
         # Generic Pool Registry (pool_name -> ManagedPool)
         self.pools: Dict[str, ManagedPool] = {}
         self.reloading_old_pids: Set[int] = set()
@@ -99,6 +134,22 @@ class Arbiter:
 
         # Initialize pools from provided specs or config
         self._init_pools(specs)
+
+    @property
+    def state(self) -> ServiceState:
+        return self._state
+
+    @state.setter
+    def state(self, new_state: ServiceState) -> None:
+        self._state = new_state
+        if not self.hsm.is_in_state(new_state.name):
+            self.hsm.force_transition(
+                new_state.hierarchical_path, reason=f"ARBITER_{new_state.name}"
+            )
+
+    @property
+    def state_path(self) -> str:
+        return self.hsm.get_state_path()
 
     def _init_pools(self, custom_specs: Optional[List[WorkerSpec]] = None) -> None:
         """Registers managed pools from custom specs or auto-constructed config specs."""
@@ -212,11 +263,16 @@ class Arbiter:
                     if hasattr(pool.spec.role, "value")
                     else str(pool.spec.role)
                 ),
+                "state": pool.state.value,
+                "state_path": pool.state_path,
+                "super_state": pool.state.super_state,
             }
 
         return {
             "status": "ok",
             "arbiter_pid": self.pid,
+            "arbiter_state": self.state.value,
+            "arbiter_state_path": self.state_path,
             "uptime": round(time.time() - self.boot_time, 2),
             "pools": pools_meta,
             "workers": self.watchdog.get_all_statuses(),
@@ -850,6 +906,10 @@ class Arbiter:
     def shutdown(self) -> None:
         """Executes strictly ordered graceful shutdown sequence."""
         self.running = False
+        self.state = ServiceState.DRAINING
+        for pool in self.pools.values():
+            pool.state = ServiceState.DRAINING
+
         try:
             shutdown_order = list(reversed(self.resolve_boot_order()))
         except Exception:
@@ -857,8 +917,11 @@ class Arbiter:
 
         for pool_name in shutdown_order:
             self._shutdown_pool(pool_name)
+            if pool_name in self.pools:
+                self.pools[pool_name].state = ServiceState.STOPPED
 
         self._cleanup_resources()
+        self.state = ServiceState.STOPPED
 
     def _read_file_pid(self, path: Optional[str]) -> Optional[str]:
         if path and os.path.exists(path):
@@ -1056,15 +1119,17 @@ class Arbiter:
 
     def _dispatch_single_signal(self, sig: int) -> bool:
         """Dispatches an individual signal. Returns False if arbiter should stop."""
-        if sig in (signal.SIGTERM, signal.SIGINT):
+        if sig in (signal.SIGTERM, signal.SIGINT, signal.SIGQUIT):
+            self.state = ServiceState.DRAINING
             self.running = False
             return False
         if sig == signal.SIGHUP:
             self.reload()
-        elif sig == signal.SIGCHLD:
+            return True
+        if sig == signal.SIGCHLD:
             self.handle_sigchld()
-        else:
-            self._dispatch_scale_signals(sig)
+            return True
+        self._dispatch_scale_signals(sig)
         return True
 
     def _handle_sigttin(self) -> None:
@@ -1100,6 +1165,7 @@ class Arbiter:
         if not self._lock_file_obj:
             self.acquire_single_instance_lock()
         self.running = True
+        self.state = ServiceState.ACTIVE
         self.init_signals()
         self.init_server_socket()
         self._write_pid_file()
@@ -1107,6 +1173,8 @@ class Arbiter:
 
         for pool_name in self.resolve_boot_order():
             self.adjust_pool(pool_name)
+            if pool_name in self.pools:
+                self.pools[pool_name].state = ServiceState.ACTIVE
 
         try:
             self._run_event_loop()

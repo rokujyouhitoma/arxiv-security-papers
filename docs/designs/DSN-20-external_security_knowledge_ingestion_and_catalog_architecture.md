@@ -26,7 +26,7 @@
   - [2.3 共通プロバイダ・ライフサイクル仕様](#23-共通プロバイダライフサイクル仕様)
 - [3. マルチデータセット・プロバイダ仕様](#3-マルチデータセットプロバイダ仕様)
   - [3.1 [Phase 1: 本実装] MITRE ATT&CK CTI (STIX 2.0/2.1) プロバイダ](#31-phase-1-本実装-mitre-attck-cti-stix-2021-プロバイダ)
-  - [3.2 [Phase 2: 拡張仕様] CWE (Common Weakness Enumeration) プロバイダ](#32-phase-2-拡張仕様-cwe-common-weakness-enumeration-プロバイダ)
+  - [3.2 [Phase 2: 拡張仕様] CWE (Common Weakness Enumeration) プロバイダ ＆ CweSpider (Issue 222)](#32-phase-2-拡張仕様-cwe-common-weakness-enumeration-プロバイダ--cwespider-issue-222)
   - [3.3 [Phase 3: 拡張仕様] CVE (Common Vulnerabilities and Exposures) & KEV プロバイダ](#33-phase-3-拡張仕様-cve-common-vulnerabilities-and-exposures--kev-プロバイダ)
   - [3.4 [Phase 4: 拡張仕様] CAPEC & NIST SP 800-53 プロバイダ](#34-phase-4-拡張仕様-capec--nist-sp-800-53-プロバイダ)
 - [4. 統一SQLiteカタログ ＆ FTS5 スキーマ設計](#4-統一sqliteカタログ--fts5-スキーマ設計)
@@ -187,15 +187,25 @@ sequenceDiagram
   - `relationship`: `subtechnique-of`, `mitigates`
 - **フィルタリング**: `revoked: true` または `x_mitre_deprecated: true` のオブジェクトは除外。
 
-## 3.2 [Phase 2: 拡張仕様] CWE (Common Weakness Enumeration) プロバイダ
-- **提供元**: MITRE CWE Data (`https://cwe.mitre.org/data/`)
-- **対象形式**: CWE XML (`cwec_v4.14.xml`) または JSON
+## 3.2 [Phase 2: 拡張仕様] CWE (Common Weakness Enumeration) プロバイダ ＆ CweSpider (Issue 222)
+- **セキュリティ分析・因果グラフにおける位置づけ**:
+  - 学術論文（Paper）からは個別具体的な CVE 実例や検証実験を経由するため「Paper ➔ CVE ➔ CWE」と **2ホップ離れる** 傾向がある。
+  - しかしながら、脆弱性構造分析・根本原因分析（Root Cause Analysis）および防御策（Mitigation / Patching）の観点からは、CWE は **「1ホップ（CVE ➔ CWE）」または「脆弱性の本質・弱点カテゴリそのもの」** であり、脅威モデリング（STRIDE）やセキュアコーディング指導において中核的役割を果たす。
+- **提供元・API エンドポイント**:
+  - MITRE CWE REST API: `https://cwe-api.mitre.org/`
+  - MITRE CWE 公式データ配布: `https://cwe.mitre.org/data/downloads.html` (XML: `cwec_v4.14.xml` / CSV: `.csv.zip`)
+- **専用スパイダー連携**:
+  - `src/domain/security/spiders/cwe_spider.py` (`CweSpider`) により、`src/spider/` クローラー基盤経由で定期自動インジェストを実行。
+  - `download_delay = 3.0s`、ETag / 304 キャッシュ連携、SSRF 防護 (`allowed_domains = {"cwe.mitre.org", "cwe-api.mitre.org"}`) を完備。
 - **抽出エンティティ**:
   - Weakness ID (`CWE-89`, `CWE-78`, `CWE-502` 等)
   - 抽象度区分 (`Pillar`, `Class`, `Base`, `Variant`)
   - 名称、詳細説明、悪用可能性、緩和策（Applicable Platforms, Mitigations）
-  - CWE Top 25 ランク情報
-- **リレーション**: `ChildOf`, `PeerOf`, `CanPrecede` (因果連鎖)
+  - CWE Top 25 ランク情報および Most Dangerous Weaknesses フラグ
+- **リレーション・オントロジー連携**:
+  - 階層リレーション: `ChildOf`, `PeerOf`, `CanPrecede` (因果連鎖)
+  - 脆弱性因果リンク: `CVE ➔ CWE` (`cve:affects_weakness` / `cwe:causes_cve`)
+  - 防御マッピング: `CWE ➔ MITRE ATT&CK Mitigation / Semgrep Pattern`
 
 ## 3.3 [Phase 3: 拡張仕様] CVE (Common Vulnerabilities and Exposures) & KEV プロバイダ
 - **提供元**: CVE Project (`cvelistV5`) / CISA KEV (Known Exploited Vulnerabilities)

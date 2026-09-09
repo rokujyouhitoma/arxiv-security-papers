@@ -53,8 +53,8 @@
   - [8.4 グレースフルシャットダウン（SIGTERM ドレイン制御）](#84-グレースフルシャットダウンsigterm-ドレイン制御)
 - [9. ドメインタスク・オペレーター抽象化（Task & Operator Protocol） (Rev 2.0 新設)](#9-ドメインタスク・オペレーター抽象化task--operator-protocol-rev-20-新設)
   - [9.1 非破壊的アダプター原則（`src/pipeline/` 温存バインディング）](#91-非破壊的アダプター原則srcpipeline-温存バインディング)
-  - [9.2 宣言的タスク定義（ScheduledTask & TaskInstance）](#92-宣言的タスク定義scheduledtask--taskinstance)
   - [9.3 標準組み込みタスクカタログ（arXiv, IACR, CISA KEV, CTI Backfill, SOTA Benchmark）](#93-標準組み込みタスクカタログarxiv-iacr-cisa-kev-cti-backfill-sota-benchmark)
+  - [9.4 SpiderTaskOperator による常駐スパイダー連携と透過的ディスパッチ (Issue 223)](#94-spidertaskoperator-による常駐スパイダー連携と透過的ディスパッチ-issue-223)
 - [10. 可観測性 & ダッシュボード REST/SSE API 統合 (Rev 2.0 新設)](#10-可観測性--ダッシュボード-restsse-api-統合-rev-20-新設)
   - [10.1 Web Gateway 統合エンドポイント仕様](#101-web-gateway-統合エンドポイント仕様)
   - [10.2 リアルタイム実行ストリーミング（SSE）と状態購読](#102-リアルタイム実行ストリーミングsseと状態購読)
@@ -678,6 +678,37 @@ def register_default_catalog(scheduler: "WorkflowScheduler") -> None:
         )
     )
 ```
+
+## 9.4 SpiderTaskOperator による常駐スパイダー連携と透過的ディスパッチ (Issue 223)
+`src/spider/` のクローラー基盤が DSN-06/DSN-12 に基づき常駐化（`SpiderWorker`）されることに伴い、`src/workflow` は**「制御プレーン（Control Plane / 司令塔）」**としてタスク定義と DAG スケジュールを一元統制し、実際のクローリング実行を**「実行プレーン（Execution Plane / 手足）」**である Spider ワーカーへ委譲します。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant WS as WorkflowScheduler (src/workflow)
+    participant Op as SpiderTaskOperator (Task Node)
+    participant Client as SpiderDaemonClient
+    participant SW as SpiderWorker (src/spider - 常駐)
+    participant Ext as 外部Web (arXiv / CWE / NVD)
+
+    WS->>Op: DAG トリガー実行 (Step 1: Fetch)
+    Op->>Client: dispatch_and_wait("cwe_spider", options)
+    alt 常駐ワーカー稼働中 (Supervisor 管理下)
+        Client->>SW: IPC Queue エンキュー (CrawlJob)
+        SW->>Ext: HTTP GET (Keep-Alive / ETag / 304 / Politeness 制御)
+        Ext-->>SW: レスポンス返却 (200 / 304)
+        SW->>Client: CrawlResult (items, stats)
+        Client-->>Op: 取得完了
+    else スタンドアロン・ローカル実行時 (Supervisor 未起動)
+        Client->>Client: フォールバック: 直接 SpiderRunner().run_sync() を同期呼出
+        Client-->>Op: 取得完了
+    end
+    Op-->>WS: Step 1 完了 ➔ 後続 DAG (PDF抽出 / OKF変換 / DB格納) へ遷移
+```
+
+### 非侵襲・透過的設計 (`src/workflow/operators/spider_operator.py`)
+- `WorkflowScheduler` は、Spider が常駐プロセスとして動いているか、あるいはローカル CLI から同期実行されているかを意識せずに単一のインターフェースで扱えます。
+- スケジュール定義（Cron / Interval）は `src/workflow` のみで一元定義され、`src/spider` 側に独自のスケジュール設定を散在させないことで、スケジューリングの二重管理を根絶します。
 
 ---
 

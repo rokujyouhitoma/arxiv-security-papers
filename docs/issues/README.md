@@ -6,6 +6,9 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **224** | ゼロ外部依存・階層型ステートマシン (HSM) コアエンジンの実装およびシステム全域ライフサイクル統制の確立 | Architecture / Refactor | High | Closed | [closed/224-implement-hierarchical-state-machine-engine-and-cross-system-lifecycle-governance.md](closed/224-implement-hierarchical-state-machine-engine-and-cross-system-lifecycle-governance.md) |
+| **223** | src/spider の常駐型デーモン化および src/workflow・src/supervisor 統合アーキテクチャの実装 | Feature / Architecture | High | Open (New) | [223-implement-resident-spider-daemon-and-workflow-supervisor-integration.md](223-implement-resident-spider-daemon-and-workflow-supervisor-integration.md) |
+| **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | High | Open (New) | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
 | **216** | index.html および Web ゲートウェイにおけるモック実装・ダミー固定値の完全排除と実態データ・実DB連携への全面刷新 | Architecture / Refactor | High | Open (New) | [216-eliminate-mock-implementations-and-bind-real-runtime-data.md](216-eliminate-mock-implementations-and-bind-real-runtime-data.md) |
 | **215** | データベース台帳 UI (#/database) における架空テーブル・モック表示の撤廃と実コンテナ・実SQLインスペクションへの刷新 | Bug | High | Open (In Progress) | [215-fix-database-explorer-mock-data-and-real-sql-introspection.md](215-fix-database-explorer-mock-data-and-real-sql-introspection.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |

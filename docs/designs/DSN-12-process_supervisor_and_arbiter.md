@@ -47,7 +47,7 @@
 - [6. ミリ秒精度 Watchdog とハートビート障害検出](#6-ミリ秒精度-watchdog-とハートビート障害検出)
   - [6.1 アイドルワーカー誤死滅防止 (`is_handling_request`)](#61-アイドルワーカー誤死滅防止-is_handling_request)
   - [6.2 ハングプロセス検知と強制終了・自動復旧](#62-ハングプロセス検知と強制終了自動復旧)
-  - [6.3 ライフサイクル状態機械 (`ServiceState`)](#63-ライフサイクル状態機械-servicestate)
+  - [6.3 階層型ライフサイクル状態機械 (HSM / Statecharts) と ServiceState](#63-階層型ライフサイクル状態機械-hsm--statecharts-と-servicestate)
   - [6.4 `ONESHOT_TASK` バッチ実行と指数的再試行管理](#64-oneshot_task-バッチ実行と指数的再試行管理)
   - [6.5 障害検出・復旧の要約](#65-障害検出復旧の要約)
 - [7. Unix Domain Socket (UDS) IPC コントロールプロトコル](#7-unix-domain-socket-uds-ipc-コントロールプロトコル)
@@ -525,12 +525,14 @@ classDiagram
 | **`AsyncWorker`** | `asyncio` イベントループ | ★★★★☆ (プロセス単位) | ★★★★★ (極小) | ★★★★★ (最高速) | 大量ストリーミング, SSE |
 | **`QueueWorker`** | バックグラウンドデキュー | ★★★★★ (完全) | ★★★★☆ (軽量) | ★★★★☆ (ポーリング) | 非同期バッチ, ログ集約 |
 | **`ServiceWorker`** | UDS イベント駆動常駐 | ★★★★★ (完全) | ★★★☆☆ (インデックス常駐)| ★★★★★ (UDS 専用) | ベクトル検索, DB エンジン |
+| **`SpiderWorker`** | 常駐クローラー待機ループ | ★★★★★ (完全) | ★★★★☆ (プール制御) | ★★★★★ (非同期 I/O) | 常駐スパイダーデーモン (arXiv/CWE/NVD) (Issue 223) |
 
 ---
 
 ## 4.8 ワーカーアーキテクチャの要約
 
-- 5 つの専用ワーカー種別により、ステートレス Web、大量非同期 I/O、キュー処理、およびステートフル DB/検索サービスを同一基盤上で統一制御。
+- 6 つの専用ワーカー種別により、ステートレス Web、大量非同期 I/O、キュー処理、常駐クローラーデーモン、およびステートフル DB/検索サービスを同一基盤上で統一制御。
+- `SpiderWorker` は `QueueWorker` のメッセージ駆動モデルと `ServiceWorker` のライフサイクル管理を継承し、接続プールの常駐維持、ホスト単位 AutoThrottle 永続化、および `src/workflow` からのクローリング要求の高速ディスパッチを実現します。
 
 ---
 
@@ -573,7 +575,9 @@ class WorkerSpec:
 graph LR
     DB["DatabaseService<br>(in-degree: 0)"] -->|"Depends On"| Web["Web Worker Pool<br>(in-degree: 2)"]
     Search["SearchService<br>(in-degree: 0)"] -->|"Depends On"| Web
-    Search -->|"Depends On"| Batch["Batch Indexer<br>(in-degree: 1)"]
+    DB -->|"Depends On"| Spider["SpiderService (SpiderWorker)<br>(in-degree: 1)"]
+    Spider -->|"Depends On"| Workflow["WorkflowService (WorkflowWorker)<br>(in-degree: 2)"]
+    DB -->|"Depends On"| Workflow
 ```
 
 ### 5.2.1 起動順序解決アルゴリズム
@@ -690,24 +694,117 @@ def get_hung_workers(self, timeout: Optional[float] = None) -> List[int]:
 
 ---
 
-## 6.3 ライフサイクル状態機械 (`ServiceState`)
+## 6.3 階層型ライフサイクル状態機械 (HSM / Statecharts) と ServiceState
 
-各サービスおよびワーカーは、以下の 7 段階の状態機械に従って厳密に遷移します。
+DSN-23 仕様に準拠し、プロセススーパーバイザーおよび全ワーカープロセスのライフサイクルは、標準ライブラリのみで自走する**階層型ステートマシン (HSM: Hierarchical State Machine / Statecharts)** コアエンジン（`src/core/hsm`）によって厳密に統制されます。
+従来のフラットな有限状態機械（FSM）で生じていた「状態数の組み合わせ爆発」「グレースフル停止時の例外や強制終了ハンドリングの未定義領域」「中間状態の不透明性」を完全に解消し、3大スーパーステート（Super State）と 7 つのリーフステート（Leaf State）によるツリー構造でライフサイクルを表現します。
+
+### 6.3.1 3階層ステートツリー構造
+
+全ライフサイクル状態は、以下の 3 つのスーパーステートと 7 つの確定リーフステートに正規化されます。
+
+1. **`OPERATIONAL`（定常稼働スーパーステート）**:
+   - `READY` (`OPERATIONAL.READY`): 初期化が完了し、リクエストやタスクの受付が可能な待機状態。
+   - `ACTIVE` (`OPERATIONAL.ACTIVE`): 実際のリクエスト処理、バッチ実行、またはポーリングを実行中の活動状態。
+2. **`TRANSITIONING`（過渡遷移スーパーステート）**:
+   - `INITIALIZING` (`TRANSITIONING.INITIALIZING`): プロセス起動直後、設定ロード、および `hook.setup()` を実行中の準備状態（初期状態）。
+   - `DRAINING` (`TRANSITIONING.DRAINING`): グレースフル停止要求を受け、新規リクエストの受付を即時遮断し、処理中インフライトタスクの完了を待機しているドレイン状態。
+3. **`TERMINATED`（終了スーパーステート）**:
+   - `STOPPED` (`TERMINATED.STOPPED`): `hook.teardown()` およびリソース解放が完了し、正常にクローズした停止状態。
+   - `FAILED` (`TERMINATED.FAILED`): セットアップ失敗、未処理例外クラッシュ、Watchdog ハングアップ等により異常終了した障害状態（フェイルセーフ待機）。
+   - `COMPLETED` (`TERMINATED.COMPLETED`): `ONESHOT_TASK` 単発ジョブが Exit Code 0 で正常終了した完了状態（自動再起動抑止）。
+
+### 6.3.2 階層型ライフサイクル Statechart 図
 
 ```mermaid
 stateDiagram-v2
-    [*] --> INITIALIZING: Worker Forked
-    INITIALIZING --> READY: hook.setup() Success
-    INITIALIZING --> FAILED: hook.setup() Error
-    READY --> ACTIVE: Start Processing Loop
-    ACTIVE --> DRAINING: SIGQUIT / Shutdown
-    DRAINING --> STOPPED: hook.teardown() & Closed
-    ACTIVE --> COMPLETED: ONESHOT Exit 0
-    ACTIVE --> FAILED: Unhandled Exception / Exit != 0
-    FAILED --> [*]
-    STOPPED --> [*]
-    COMPLETED --> [*]
+    [*] --> TRANSITIONING
+
+    state TRANSITIONING {
+        [*] --> INITIALIZING
+        INITIALIZING --> INITIALIZING: CONFIG_LOAD
+        DRAINING --> DRAINING: INFLIGHT_TICK
+    }
+
+    state OPERATIONAL {
+        [*] --> READY
+        READY --> ACTIVE: DISPATCH / PROCESS_START
+        ACTIVE --> READY: FINISH / PROCESS_IDLE
+        READY --> READY: HEALTH_PULSE
+        ACTIVE --> ACTIVE: WORK_PROGRESS
+    }
+
+    state TERMINATED {
+        [*] --> STOPPED
+        STOPPED --> [*]
+        FAILED --> [*]
+        COMPLETED --> [*]
+    }
+
+    %% 階層間・リーフ間遷移
+    INITIALIZING --> READY: SETUP_SUCCESS
+    INITIALIZING --> FAILED: SETUP_ERROR
+
+    OPERATIONAL --> DRAINING: SIGQUIT / GRACEFUL_STOP
+    DRAINING --> STOPPED: DRAIN_COMPLETE / BUFFERS_FLUSHED
+    DRAINING --> FAILED: DRAIN_TIMEOUT
+
+    %% 緊急停止・強制終了 (スーパーステートレベルでの一括バブリング)
+    TRANSITIONING --> FAILED: FORCE_KILL / CRASH
+    OPERATIONAL --> FAILED: UNHANDLED_EXCEPTION / WATCHDOG_KILL
+    TRANSITIONING --> STOPPED: SIGTERM / IMMEDIATE_STOP
+    OPERATIONAL --> STOPPED: SIGTERM / IMMEDIATE_STOP
+
+    %% 単発バッチ完了
+    ACTIVE --> COMPLETED: ONESHOT_SUCCESS (Exit 0)
+    ACTIVE --> FAILED: ONESHOT_FAILURE (Exit != 0)
+
+    %% 復旧・再試行
+    FAILED --> INITIALIZING: RETRY / RESPAWN
 ```
+
+### 6.3.3 状態マッピング定義表 (`ServiceState`)
+
+`ServiceState`（`src/supervisor/contracts.py`）は、既存の文字列値比較との 100% 下位互換性を保持しつつ、親スーパーステートおよび完全修飾パス（`hierarchical_path`）を提供します。
+
+| Enum 定義 | 文字列値 (`.value`) | 親ステート (`.super_state`) | 階層パス (`.hierarchical_path`) | 責務と動作定義 |
+| :--- | :--- | :--- | :--- | :--- |
+| `INITIALIZING` | `"INITIALIZING"` | `"TRANSITIONING"` | `TRANSITIONING.INITIALIZING` | 初期状態。ソケット初期化・設定読み込み・`hook.setup()` 実行 |
+| `READY` | `"READY"` | `"OPERATIONAL"` | `OPERATIONAL.READY` | 健全待機状態。IPC/ネットワークリクエスト待機、Watchdog 監視対象 |
+| `ACTIVE` | `"ACTIVE"` | `"OPERATIONAL"` | `OPERATIONAL.ACTIVE` | タスク処理中。`is_handling_request=True`、ミリ秒精度 Watchdog 適用 |
+| `DRAINING` | `"DRAINING"` | `"TRANSITIONING"` | `TRANSITIONING.DRAINING` | グレースフル停止中。新規受付遮断・バッファフラッシュ待機 |
+| `STOPPED` | `"STOPPED"` | `"TERMINATED"` | `TERMINATED.STOPPED` | 正常停止。クリーンアップ完了、プロセス終了 |
+| `FAILED` | `"FAILED"` | `"TERMINATED"` | `TERMINATED.FAILED` | 異常停止。未捕捉例外、SIGKILL 強制終了、フェイルセーフ再起動対象 |
+| `COMPLETED` | `"COMPLETED"` | `"TERMINATED"` | `TERMINATED.COMPLETED` | 単発タスク完了。`ONESHOT_TASK` 正常終了時のみ遷移、再起動抑止 |
+
+### 6.3.4 イベント駆動遷移マッピング表
+
+HSM コアエンジン（`HierarchicalStateMachine`）における主要イベントと遷移ルールは下表の通りです。
+
+| イベント名 (`event`) | 発行元 / トリガー | 遷移元ステート (`source`) | 遷移先ステート (`target`) | ガード条件 / 実行アクション |
+| :--- | :--- | :--- | :--- | :--- |
+| `SETUP_SUCCESS` | `WorkerHook` / `init_child_process` | `INITIALIZING` | `READY` | 初期化フックが例外なく完了 |
+| `SETUP_ERROR` | `WorkerHook` | `INITIALIZING` | `FAILED` | 初期化フックで例外送出 |
+| `DISPATCH` | Arbiter メインループ / IPC | `READY` | `ACTIVE` | リクエストまたはジョブの割り当て |
+| `FINISH` | ワーカー実行ループ | `ACTIVE` | `READY` | ジョブ完了、アイドル待機へ復帰 |
+| `SIGQUIT` | Arbiter `stop()` / シグナル | `OPERATIONAL` (共通) | `DRAINING` | リスニングソケット閉塞、インフライト残存 |
+| `DRAIN_COMPLETE` | ドレイン監視タイマー | `DRAINING` | `STOPPED` | インフライト残数 0 件、`teardown()` 成功 |
+| `DRAIN_TIMEOUT` | Arbiter グレースフル期限切れ | `DRAINING` | `FAILED` | タイムアウト到達、`SIGKILL` 発行 |
+| `SIGTERM` | 緊急停止シグナル | `TRANSITIONING`, `OPERATIONAL` | `STOPPED` | 即時停止、リソース強制クローズ |
+| `CRASH` / `FAIL` | `SIGCHLD` / 未捕捉例外 | `*` (全ステート) | `FAILED` | ゾンビ回収、リトライカウント加算 |
+| `ONESHOT_SUCCESS` | バッチ実行完了 | `ACTIVE` | `COMPLETED` | 終了コード 0、自動再起動フラグ OFF |
+| `RESPAWN` | Arbiter 死活監視ループ | `FAILED` | `INITIALIZING` | 再試行上限内での新規プロセス再生成 |
+
+### 6.3.5 HSM コアエンジンのアーキテクチャ特性
+
+1. **イベントバブリング (Event Bubbling)**:
+   - `ACTIVE` や `READY` などのリーフステートが直接ハンドラを持たない緊急イベント（例: `SIGQUIT` や `SIGTERM`）を受信した場合、イベントは自動的に親ステートである `OPERATIONAL` へとバブリングされます。これにより、状態ごとの重複ハンドラ記述が不要となり、コードベースの大幅な簡素化と未処理イベントの根絶を実現します。
+2. **決定論的エグジット・エントリー (LCCA: Lowest Common Canonical Ancestor)**:
+   - 状態遷移時、遷移元から最小共通祖先（LCCA）まで順番に `on_exit` コールバックが実行され、LCCA から遷移先まで順番に `on_entry` コールバックが実行されます。これにより、リソースのクリーンアップ順序と初期化順序が数学的に保証されます。
+3. **フェイルセーフ耐障害性 (Fail-Secure Fallback)**:
+   - ガード条件の評価中やアクションの実行中に予期せぬ例外が発生した場合、状態機械は直ちに安全なフォールバック状態（`TERMINATED.FAILED`）へと退避し、プロセスのハングアップや不正状態での継続稼働を未然に防止します。
+4. **階層パスのリアルタイム可視化**:
+   - `ManagedPool.state_path`、`Arbiter.state_path`、および各ワーカーの `status_path` として `OPERATIONAL.ACTIVE` のような完全修飾文字列が常に公開され、UDS IPC および TUI Top モニターから一目で状態階層を特定可能です。
 
 ---
 
@@ -761,15 +858,41 @@ graph LR
 {
   "status": "ok",
   "arbiter_pid": 123844,
+  "arbiter_state": "ACTIVE",
+  "arbiter_state_path": "OPERATIONAL.ACTIVE",
   "uptime": 120.5,
   "pools": {
-    "web": { "target": 2, "active": 2, "pids": [123850, 123851], "role": "STATELESS_POOL" },
-    "search": { "target": 1, "active": 1, "pids": [123846], "role": "STATEFUL_SERVICE" },
-    "database": { "target": 3, "active": 3, "pids": [123847, 123848, 123849], "role": "STATEFUL_SERVICE" }
+    "web": {
+      "target": 2,
+      "active": 2,
+      "pids": [123850, 123851],
+      "role": "STATELESS_POOL",
+      "state": "ACTIVE",
+      "state_path": "OPERATIONAL.ACTIVE",
+      "super_state": "OPERATIONAL"
+    },
+    "search": {
+      "target": 1,
+      "active": 1,
+      "pids": [123846],
+      "role": "STATEFUL_SERVICE",
+      "state": "ACTIVE",
+      "state_path": "OPERATIONAL.ACTIVE",
+      "super_state": "OPERATIONAL"
+    },
+    "database": {
+      "target": 3,
+      "active": 3,
+      "pids": [123847, 123848, 123849],
+      "role": "STATEFUL_SERVICE",
+      "state": "ACTIVE",
+      "state_path": "OPERATIONAL.ACTIVE",
+      "super_state": "OPERATIONAL"
+    }
   },
   "workers": {
-    "123846": { "pid": 123846, "type": "search", "status": "ALIVE", "is_healthy": true, "idle_seconds": 2.1, "requests_handled": 1420 },
-    "123850": { "pid": 123850, "type": "web", "status": "ALIVE", "is_healthy": true, "idle_seconds": 0.4, "requests_handled": 85 }
+    "123846": { "pid": 123846, "type": "search", "status": "ALIVE", "status_path": "OPERATIONAL.ACTIVE", "is_healthy": true, "idle_seconds": 2.1, "requests_handled": 1420 },
+    "123850": { "pid": 123850, "type": "web", "status": "ALIVE", "status_path": "OPERATIONAL.ACTIVE", "is_healthy": true, "idle_seconds": 0.4, "requests_handled": 85 }
   }
 }
 ```

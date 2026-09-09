@@ -12,6 +12,7 @@ from .contracts import (
     ServiceRole,
     ServiceState,
     WorkerSpec,
+    build_supervisor_state_tree,
 )
 from .control import ControlClient, ControlServer
 from .heartbeat import HeartbeatWatchdog
@@ -38,6 +39,7 @@ __all__ = [
     "WorkerSpec",
     "ServiceRole",
     "ServiceState",
+    "build_supervisor_state_tree",
     "LifecycleHook",
     "DefaultLifecycleHook",
     # IPC & Monitoring

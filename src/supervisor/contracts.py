@@ -10,6 +10,8 @@ import abc
 import enum
 from typing import Any, Callable, Dict, Optional
 
+from core.hsm import StateNode, TransitionRule
+
 
 class ServiceRole(enum.Enum):
     """Archetype classifying the operational model of a managed unit."""
@@ -17,6 +19,20 @@ class ServiceRole(enum.Enum):
     STATELESS_POOL = "STATELESS_POOL"
     STATEFUL_SERVICE = "STATEFUL_SERVICE"
     ONESHOT_TASK = "ONESHOT_TASK"
+
+
+_STATE_HIERARCHY_MAP = {
+    "READY": "OPERATIONAL.READY",
+    "ACTIVE": "OPERATIONAL.ACTIVE.IDLE",
+    "DRAINING": "TRANSITIONING.DRAINING",
+    "STOPPED": "TERMINATED.STOPPED",
+    "FAILED": "TERMINATED.FAILED",
+    "COMPLETED": "TERMINATED.COMPLETED",
+    "OPERATIONAL": "OPERATIONAL",
+    "TRANSITIONING": "TRANSITIONING",
+    "TERMINATED": "TERMINATED",
+    "INITIALIZING": "INITIALIZING",
+}
 
 
 class ServiceState(enum.Enum):
@@ -29,6 +45,109 @@ class ServiceState(enum.Enum):
     STOPPED = "STOPPED"
     FAILED = "FAILED"
     COMPLETED = "COMPLETED"
+    OPERATIONAL = "OPERATIONAL"
+    TRANSITIONING = "TRANSITIONING"
+    TERMINATED = "TERMINATED"
+
+    @property
+    def super_state(self) -> str:
+        """Returns the composite super-state name according to DSN-23."""
+        if self in (
+            ServiceState.READY,
+            ServiceState.ACTIVE,
+            ServiceState.OPERATIONAL,
+        ):
+            return "OPERATIONAL"
+        if self in (ServiceState.DRAINING, ServiceState.TRANSITIONING):
+            return "TRANSITIONING"
+        if self in (
+            ServiceState.STOPPED,
+            ServiceState.FAILED,
+            ServiceState.COMPLETED,
+            ServiceState.TERMINATED,
+        ):
+            return "TERMINATED"
+        return "INITIALIZING"
+
+    @property
+    def hierarchical_path(self) -> str:
+        """Returns dotted Statecharts path, e.g., 'OPERATIONAL.ACTIVE.IDLE'."""
+        return _STATE_HIERARCHY_MAP.get(self.value, self.value)
+
+
+def _build_operational_substates(op: StateNode) -> None:
+    ready = op.add_child(StateNode("READY"))
+    active = op.add_child(StateNode("ACTIVE", initial_child="IDLE"))
+    idle = active.add_child(StateNode("IDLE"))
+    proc = active.add_child(StateNode("PROCESSING"))
+    paused = active.add_child(StateNode("PAUSED"))
+
+    ready.add_transition(TransitionRule("READY", "START", "ACTIVE"))
+    idle.add_transition(TransitionRule("IDLE", "DISPATCH", "PROCESSING"))
+    proc.add_transition(TransitionRule("PROCESSING", "FINISH", "IDLE"))
+    proc.add_transition(TransitionRule("PROCESSING", "PAUSE", "PAUSED"))
+    paused.add_transition(TransitionRule("PAUSED", "RESUME", "IDLE"))
+
+
+def _build_transitioning_substates(trans: StateNode) -> None:
+    draining = trans.add_child(StateNode("DRAINING", initial_child="CLOSING_LISTENERS"))
+    closing = draining.add_child(StateNode("CLOSING_LISTENERS"))
+    waiting = draining.add_child(StateNode("WAITING_INFLIGHT"))
+    flushing = draining.add_child(StateNode("FLUSHING_BUFFERS"))
+    trans.add_child(StateNode("ROTATING"))
+
+    closing.add_transition(
+        TransitionRule("CLOSING_LISTENERS", "LISTENERS_CLOSED", "WAITING_INFLIGHT")
+    )
+    waiting.add_transition(
+        TransitionRule("WAITING_INFLIGHT", "INFLIGHT_DRAINED", "FLUSHING_BUFFERS")
+    )
+    flushing.add_transition(
+        TransitionRule("FLUSHING_BUFFERS", "BUFFERS_FLUSHED", "TERMINATED.STOPPED")
+    )
+
+
+def _build_terminated_substates(term: StateNode) -> None:
+    term.add_child(StateNode("STOPPED"))
+    term.add_child(StateNode("FAILED"))
+    term.add_child(StateNode("COMPLETED"))
+    recovering = term.add_child(StateNode("RECOVERING"))
+    recovering.add_transition(
+        TransitionRule("RECOVERING", "RECOVERED", "OPERATIONAL.READY")
+    )
+
+
+def _attach_supervisor_rules(op: StateNode, trans: StateNode, term: StateNode) -> None:
+    op.add_transition(TransitionRule("OPERATIONAL", "SIGTERM", "TERMINATED.STOPPED"))
+    op.add_transition(
+        TransitionRule("OPERATIONAL", "SIGQUIT", "TRANSITIONING.DRAINING")
+    )
+    op.add_transition(TransitionRule("OPERATIONAL", "FAIL", "TERMINATED.FAILED"))
+    op.add_transition(
+        TransitionRule("OPERATIONAL", "ONESHOT_COMPLETE", "TERMINATED.COMPLETED")
+    )
+    trans.add_transition(
+        TransitionRule("TRANSITIONING", "DRAIN_TIMEOUT", "TERMINATED.FAILED")
+    )
+    trans.add_transition(
+        TransitionRule("TRANSITIONING", "SIGTERM", "TERMINATED.STOPPED")
+    )
+
+
+def build_supervisor_state_tree(pool_name: str = "supervisor") -> StateNode:
+    """
+    Constructs a DSN-23 compliant 3-tier hierarchical state tree for supervisor orchestration.
+    """
+    root = StateNode("ROOT", initial_child="OPERATIONAL")
+    op = root.add_child(StateNode("OPERATIONAL", initial_child="READY"))
+    trans = root.add_child(StateNode("TRANSITIONING", initial_child="DRAINING"))
+    term = root.add_child(StateNode("TERMINATED", initial_child="STOPPED"))
+
+    _build_operational_substates(op)
+    _build_transitioning_substates(trans)
+    _build_terminated_substates(term)
+    _attach_supervisor_rules(op, trans, term)
+    return root
 
 
 class LifecycleHook(abc.ABC):
