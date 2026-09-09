@@ -1,8 +1,21 @@
-"""Directed Acyclic Graph (DAG) Task Orchestration Engine."""
+"""Directed Acyclic Graph (DAG) Task Orchestration Engine with HSM Governance."""
+
+from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set
+
+from core.hsm import HierarchicalStateMachine
+
+from .contracts import (
+    EVENT_COMMIT,
+    EVENT_COMPLETE,
+    EVENT_EXECUTE,
+    EVENT_FAIL,
+    EVENT_START,
+    build_task_state_tree,
+)
 
 
 @dataclass
@@ -12,6 +25,7 @@ class TaskNode:
     task_id: str
     handler: Callable[[Dict[str, Any]], Dict[str, Any]]
     dependencies: Set[str] = field(default_factory=set)
+    hsm: HierarchicalStateMachine = field(default_factory=build_task_state_tree)
 
 
 class DAGWorkflowEngine:
@@ -83,15 +97,28 @@ class DAGWorkflowEngine:
 
         return ordered
 
+    def _execute_single_task(self, node: TaskNode, state: Dict[str, Any]) -> None:
+        """Executes a single task within HSM state transition lifecycle."""
+        node.hsm.send_event(EVENT_START, {"task_id": node.task_id})
+        node.hsm.send_event(EVENT_EXECUTE, {"task_id": node.task_id})
+        try:
+            result = node.handler(state)
+            node.hsm.send_event(EVENT_COMMIT, {"task_id": node.task_id})
+            if isinstance(result, dict):
+                state.update(result)
+            node.hsm.send_event(EVENT_COMPLETE, {"task_id": node.task_id})
+        except Exception as exc:
+            node.hsm.send_event(
+                EVENT_FAIL, {"task_id": node.task_id, "error": str(exc)}
+            )
+            raise
+
     def execute(self, initial_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Executes all DAG tasks in topological order, mutating shared context state."""
         state = dict(initial_state) if initial_state is not None else {}
         execution_order = self._topological_sort()
 
         for task_id in execution_order:
-            node = self.nodes[task_id]
-            result = node.handler(state)
-            if isinstance(result, dict):
-                state.update(result)
+            self._execute_single_task(self.nodes[task_id], state)
 
         return state

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WorkflowScheduler for orchestrating recurring and periodic workflow tasks.
+WorkflowScheduler for orchestrating recurring and periodic workflow tasks with HSM.
 Integrates SpiderTaskOperator for scheduled spider executions.
 """
 
@@ -10,8 +10,18 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
+from core.hsm import HierarchicalStateMachine
 from spider.daemon.client import SpiderDaemonClient
 
+from .contracts import (
+    EVENT_DISPATCH,
+    EVENT_DRAIN,
+    EVENT_IDLE,
+    EVENT_PAUSE,
+    EVENT_RESUME,
+    EVENT_STOP,
+    build_scheduler_state_tree,
+)
 from .operators.spider_operator import SpiderTaskOperator
 
 
@@ -50,12 +60,13 @@ class ScheduledTask:
 
 class WorkflowScheduler:
     """
-    Scheduler coordinating periodic task execution and DAG triggers.
+    Scheduler coordinating periodic task execution and DAG triggers under HSM governance.
     Provides first-class registration for SpiderTaskOperator instances.
     """
 
     def __init__(self) -> None:
         self.tasks: Dict[str, ScheduledTask] = {}
+        self.hsm: HierarchicalStateMachine = build_scheduler_state_tree()
 
     def register_task(
         self,
@@ -107,13 +118,41 @@ class WorkflowScheduler:
         except Exception:
             task.last_run = _now()
 
-    def run_due_tasks(self, context: Optional[Dict[str, Any]] = None) -> List[str]:
-        """Evaluates and executes all due tasks."""
-        ctx = dict(context or {})
+    def _dispatch_due_loop(self, now_t: float, ctx: Dict[str, Any]) -> List[str]:
         executed: List[str] = []
-        now_t = _now()
         for task_id, task in self.tasks.items():
             if task.is_due(now_t):
                 self._execute_task(task, ctx)
                 executed.append(task_id)
         return executed
+
+    def run_due_tasks(self, context: Optional[Dict[str, Any]] = None) -> List[str]:
+        """Evaluates and executes all due tasks under HSM state tracking."""
+        ctx = dict(context or {})
+        now_t = _now()
+        self.hsm.send_event(EVENT_DISPATCH)
+        try:
+            executed = self._dispatch_due_loop(now_t, ctx)
+            self.hsm.send_event(EVENT_IDLE)
+            return executed
+        except Exception:
+            self.hsm.send_event(EVENT_IDLE)
+            raise
+
+    def pause(self, reason: str = "") -> bool:
+        """Pauses scheduler into BACKPRESSURE_PAUSED state."""
+        return self.hsm.send_event(EVENT_PAUSE, {"reason": reason})
+
+    def resume(self) -> bool:
+        """Resumes scheduler back to IDLE state."""
+        return self.hsm.send_event(EVENT_RESUME)
+
+    def drain(self) -> bool:
+        """Drains scheduler into DRAINING state."""
+        return self.hsm.send_event(EVENT_DRAIN)
+
+    def stop(self) -> bool:
+        """Stops scheduler into TERMINATED.STOPPED state."""
+        if self.hsm.current_state.name != "DRAINING":
+            self.drain()
+        return self.hsm.send_event(EVENT_STOP)

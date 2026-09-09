@@ -9,6 +9,11 @@ Provides domain-agnostic workflow infrastructure:
 """
 
 from workflow.circuit import CircuitBreaker, CircuitState
+from workflow.contracts import (
+    build_saga_state_tree,
+    build_scheduler_state_tree,
+    build_task_state_tree,
+)
 from workflow.dag import DAGWorkflowEngine, TaskNode
 from workflow.operators import SpiderTaskOperator
 from workflow.saga import PhaseProtocol, SagaCoordinator, SagaStep
@@ -39,4 +44,7 @@ __all__ = [
     "SpiderTaskOperator",
     "ScheduledTask",
     "WorkflowScheduler",
+    "build_task_state_tree",
+    "build_saga_state_tree",
+    "build_scheduler_state_tree",
 ]

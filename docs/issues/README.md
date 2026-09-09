@@ -17,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **225** | src/workflow における Task 実行ライフサイクルおよび Saga 補償トランザクションの HSM 統制 | Feature / Architecture | 2026-09-09 | [225-implement-workflow-task-and-saga-hsm-governance.md](closed/225-implement-workflow-task-and-saga-hsm-governance.md) |
 | **224** | ゼロ外部依存・階層型ステートマシン (HSM) コアエンジンの実装およびシステム全域ライフサイクル統制の確立 | Architecture / Refactor | 2026-09-09 | [224-implement-hierarchical-state-machine-engine-and-cross-system-lifecycle-governance.md](closed/224-implement-hierarchical-state-machine-engine-and-cross-system-lifecycle-governance.md) |
 | **223** | src/spider の常駐型デーモン化および src/workflow・src/supervisor 統合アーキテクチャの実装 | Feature / Architecture | 2026-09-09 | [223-implement-resident-spider-daemon-and-workflow-supervisor-integration.md](closed/223-implement-resident-spider-daemon-and-workflow-supervisor-integration.md) |
 | **221** | 全15専門エージェント定義ファイルの Gold Standard 準拠化・他案件残骸の完全排除とリポジトリ実態整合 | Architecture / Refactor | 2026-09-09 | [221-unify-and-elevate-all-agent-definitions-to-gold-standard.md](closed/221-unify-and-elevate-all-agent-definitions-to-gold-standard.md) |
