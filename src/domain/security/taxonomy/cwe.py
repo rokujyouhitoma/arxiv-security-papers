@@ -113,3 +113,28 @@ def get_cwe_recipe(cwe_id: str) -> Optional[Dict[str, Any]]:
     if not normalized.startswith("CWE-"):
         normalized = f"CWE-{normalized}"
     return CWE_DEFENSE_MAP.get(normalized)
+
+
+_CWE_TRIE: Optional[Any] = None
+
+
+def _get_cwe_trie() -> Any:
+    global _CWE_TRIE
+    if _CWE_TRIE is None:
+        from core.structures.radix_trie import RadixTrie
+
+        trie: RadixTrie[Dict[str, Any]] = RadixTrie()
+        for c_id, meta in CWE_DEFENSE_MAP.items():
+            trie.insert(c_id, meta)
+        _CWE_TRIE = trie
+    return _CWE_TRIE
+
+
+def search_cwe_by_prefix(prefix: str, limit: int = 10) -> list[Dict[str, Any]]:
+    """Search CWE definitions by prefix (e.g. 'CWE-7', '79') using Radix Trie."""
+    norm_prefix = prefix.upper()
+    if not norm_prefix.startswith("CWE-") and not "CWE-".startswith(norm_prefix):
+        norm_prefix = f"CWE-{norm_prefix}"
+    trie = _get_cwe_trie()
+    matched = trie.find_by_prefix(norm_prefix, limit=limit)
+    return [{"id": k, **v} for k, v in matched]

@@ -182,3 +182,25 @@ falsepositives:
   - "Legitimate administrative and maintenance tasks"
 level: medium
 """
+
+
+_TECHNIQUE_TRIE: Optional[Any] = None
+
+
+def _get_technique_trie() -> Any:
+    global _TECHNIQUE_TRIE
+    if _TECHNIQUE_TRIE is None:
+        from core.structures.radix_trie import RadixTrie
+
+        trie: RadixTrie[Dict[str, Any]] = RadixTrie()
+        for tech_id, meta in MITRE_TECHNIQUES_MAP.items():
+            trie.insert(tech_id, meta)
+        _TECHNIQUE_TRIE = trie
+    return _TECHNIQUE_TRIE
+
+
+def search_techniques_by_prefix(prefix: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """Search ATT&CK techniques by prefix ID (e.g. 'T1059', 'T1') using Radix Trie."""
+    trie = _get_technique_trie()
+    matched = trie.find_by_prefix(prefix.upper(), limit=limit)
+    return [{"id": k, **v} for k, v in matched]

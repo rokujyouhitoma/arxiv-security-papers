@@ -4,6 +4,12 @@ Provides high-performance, space-efficient pure-Python algorithms and containers
 """
 
 from core.structures.bloom_filter import BloomFilter, ScalableBloomFilter
+from core.structures.radix_trie import (
+    MAX_RADIX_KEY_LENGTH,
+    MAX_SUGGEST_LIMIT,
+    RadixNode,
+    RadixTrie,
+)
 from core.structures.roaring_bitmap import (
     ARRAY_MAX_CAPACITY,
     BITMAP_WORDS,
@@ -34,4 +40,8 @@ __all__ = [
     "RoaringBitmap",
     "BloomFilter",
     "ScalableBloomFilter",
+    "RadixNode",
+    "RadixTrie",
+    "MAX_RADIX_KEY_LENGTH",
+    "MAX_SUGGEST_LIMIT",
 ]
