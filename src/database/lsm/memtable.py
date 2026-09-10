@@ -6,19 +6,22 @@ Buffers writes, updates, and tombstones in sorted order before SSTable flush.
 
 import json
 import threading
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
+
+from core.structures.skip_list import SkipList
 
 TOMBSTONE: bytes = b"__LSM_TOMBSTONE__"
 
 
 class MemTable:
     """
-    In-memory sorted write buffer with tombstone deletion support.
+    In-memory sorted write buffer with tombstone deletion support,
+    backed by a SkipList for O(log N) operations and efficient range scans.
     """
 
     def __init__(self, max_bytes: int = 65536) -> None:
         self.max_bytes = max_bytes
-        self._entries: Dict[str, bytes] = {}
+        self._entries: SkipList[str, bytes] = SkipList()
         self._approx_bytes: int = 0
         self._lock = threading.RLock()
         self.is_immutable: bool = False
@@ -54,7 +57,7 @@ class MemTable:
             else:
                 self._approx_bytes += key_bytes_len
 
-            self._entries[key] = val_bytes
+            self._entries.insert(key, val_bytes)
             self._approx_bytes += len(val_bytes)
 
     def delete(self, key: str) -> None:
@@ -71,10 +74,10 @@ class MemTable:
             (False, None) if key is NOT in this MemTable
         """
         with self._lock:
-            if key not in self._entries:
+            raw = self._entries.get(key)
+            if raw is None:
                 return False, None
 
-            raw = self._entries[key]
             if raw == TOMBSTONE:
                 return True, None
 
@@ -90,19 +93,7 @@ class MemTable:
     def items(self) -> List[Tuple[str, bytes]]:
         """Returns all entries sorted by key ascending."""
         with self._lock:
-            return sorted(self._entries.items(), key=lambda x: x[0])
-
-    @staticmethod
-    def _is_before_start(k: str, start_key: Optional[str]) -> bool:
-        if start_key is None:
-            return False
-        return k < start_key
-
-    @staticmethod
-    def _is_past_end(k: str, end_key: Optional[str]) -> bool:
-        if end_key is None:
-            return False
-        return k >= end_key
+            return self._entries.items()
 
     def scan(
         self,
@@ -111,14 +102,7 @@ class MemTable:
     ) -> List[Tuple[str, bytes]]:
         """Scans range [start_key, end_key) in sorted key order."""
         with self._lock:
-            result: List[Tuple[str, bytes]] = []
-            for k, v in sorted(self._entries.items(), key=lambda x: x[0]):
-                if self._is_before_start(k, start_key):
-                    continue
-                if self._is_past_end(k, end_key):
-                    break
-                result.append((k, v))
-            return result
+            return self._entries.range(start_key, end_key)
 
     def clear(self) -> None:
         """Clears all entries."""

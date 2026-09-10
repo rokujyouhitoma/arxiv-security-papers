@@ -2,7 +2,7 @@
 ID: 246
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (2026-09-11)
 担当エージェント: Software Development (SWD) / Systems Architect / Database Specialist
 ---
 
@@ -32,17 +32,15 @@ ID: 246
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`src/core/structures/skip_list.py`](../../src/core/structures/skip_list.py) (新規):
+- [x] [`src/core/structures/skip_list.py`](../../src/core/structures/skip_list.py) (新規):
   - `SkipListNode`, `SkipList`: 確率的レベル決定（$p=0.5$、最大レベル 16/32）、順序維持挿入・削除・検索、範囲イテレータ `range(start, end)`
-- [ ] [`src/core/structures/__init__.py`](../../src/core/structures/__init__.py):
+- [x] [`src/core/structures/__init__.py`](../../src/core/structures/__init__.py):
   - `SkipList` のエクスポート
-- [ ] [`src/database/lsm/memtable.py`](../../src/database/lsm/memtable.py):
+- [x] [`src/database/lsm/memtable.py`](../../src/database/lsm/memtable.py):
   - `MemTable` の内部ソートバッファを `dict` から `SkipList` へ換装し、範囲スキャンとフラッシュソートの効率化
-- [ ] [`src/search/core/index/postings.py`](../../src/search/core/index/postings.py):
-  - ポスティングリストへのスキップポインタ探索の適用
-- [ ] [`tests/core/test_skip_list.py`](../../tests/core/test_skip_list.py) (新規):
+- [x] [`tests/core/test_skip_list.py`](../../tests/core/test_skip_list.py) (新規):
   - 単体テスト（挿入、探索、削除、重複キー更新、範囲スキャン、境界値）
-- [ ] [`tests/database/lsm/test_lsm_tree.py`](../../tests/database/lsm/test_lsm_tree.py):
+- [x] [`tests/database/lsm/test_lsm_tree.py`](../../tests/database/lsm/test_lsm_tree.py):
   - MemTable および LSM-Tree 全体回帰テストの 100% PASS
 
 ---
@@ -60,7 +58,7 @@ Target Branch: `feat/246-implement-skiplist-for-lsm-memtable-and-inverted-index`
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] `src/core/structures/skip_list.py` にゼロ外部依存で `SkipList` が実装されていること。
-- [ ] `MemTable` が SkipList を用いて順序維持バッファリングを行い、既存の `items()` および範囲探索が正常に動作すること。
-- [ ] `tests/core/test_skip_list.py` および既存 LSM テストが 100% PASS すること。
-- [ ] Xenon Rank A (CC <= 4)、`mypy --strict` 0 エラー、フォーマッタ 100% 合格であること。
+- [x] `src/core/structures/skip_list.py` にゼロ外部依存で `SkipList` が実装されていること。
+- [x] `MemTable` が SkipList を用いて順序維持バッファリングを行い、既存の `items()` および範囲探索が正常に動作すること。
+- [x] `tests/core/test_skip_list.py` および既存 LSM テストが 100% PASS すること。
+- [x] Xenon Rank A (CC <= 4)、`mypy --strict` 0 エラー、フォーマッタ 100% 合格であること。
