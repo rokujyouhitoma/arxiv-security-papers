@@ -6,6 +6,8 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **229** | プラガブルストレージエンジンファクトリおよび実ファイル連動プレーンテキスト仮想テーブル基盤の実装 | Feature | High | Open (New) | [229-implement-pluggable-storage-engine-factory-and-file-backed-plain-text-tables.md](229-implement-pluggable-storage-engine-factory-and-file-backed-plain-text-tables.md) |
+| **228** | src/database統合JSONストレージ基盤およびパイプライン・ライフサイクル可観測性刷新 | Feature | High | Open (New) | [228-implement-src-database-json-storage-and-pipeline-lifecycle-observability.md](228-implement-src-database-json-storage-and-pipeline-lifecycle-observability.md) |
 | **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | High | Open (New) | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 

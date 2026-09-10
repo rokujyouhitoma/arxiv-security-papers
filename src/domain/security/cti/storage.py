@@ -449,6 +449,19 @@ class CTICatalogStorage:
         cursor = conn.execute(like_query, (pattern, pattern, pattern, limit))
         return [self._row_to_technique(r) for r in cursor.fetchall()]
 
+    @staticmethod
+    def _merge_exact_match(
+        exact_tech: Optional[Dict[str, Any]],
+        results: List[Dict[str, Any]],
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        if not exact_tech:
+            return results
+        merged = [exact_tech] + [
+            r for r in results if r["technique_id"] != exact_tech["technique_id"]
+        ]
+        return merged[:limit]
+
     def search_techniques(
         self, query_str: str, limit: int = 15
     ) -> List[Dict[str, Any]]:
@@ -457,11 +470,16 @@ class CTICatalogStorage:
         if not cleaned:
             return []
 
+        exact_tech = self.get_technique(cleaned.upper())
         with self._connection() as conn:
             fts_res = self._search_fts(conn, cleaned, limit)
-            if fts_res is not None:
-                return fts_res
-            return self._search_like(conn, cleaned, limit)
+            res = (
+                fts_res
+                if fts_res is not None
+                else self._search_like(conn, cleaned, limit)
+            )
+
+        return self._merge_exact_match(exact_tech, res, limit)
 
     def count_summary(self) -> Dict[str, int]:
         """Returns row counts across all CTI catalog tables."""

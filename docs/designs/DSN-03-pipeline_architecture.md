@@ -37,8 +37,9 @@
   - [4.3 03_monthly (月次トレンド & Mermaid Mindmap)](#43-03_monthly-月次トレンド--mermaid-mindmap)
   - [4.4 04_quarterly (四半期戦略サマリー)](#44-04_quarterly-四半期戦略サマリー)
   - [4.5 05_annual (通期包括年報)](#45-05_annual-通期包括年報)
-  - [4.6 ルートインデックス・監査ログ同期](#46-ルートインデックス監査ログ同期)
-  - [4.7 第4章の要約](#47-第4章の要約)
+  - [4.6 パイプライン 6 フェーズ実態ライフサイクル定義](#46-パイプライン-6-フェーズ実態ライフサイクル定義)
+  - [4.7 監査ログ (outputs/log.md) の自動プロジェクション (Projection Engine)](#47-監査ログ-outputslogmd-の自動プロジェクション-projection-engine)
+  - [4.8 第4章の要約](#48-第4章の要約)
 - [5. バックフィル & 過去データ復元パイプライン](#5-バックフィル--過去データ復元パイプライン)
   - [5.1 160日間過去論文安全フェッチ設計](#51-160日間過去論文安全フェッチ設計)
   - [5.2 バッチ分割とスロットリング制御](#52-バッチ分割とスロットリング制御)
@@ -137,10 +138,12 @@ arXiv API へのアクセス負荷を軽減するため、リクエスト間に 
 3. `<clean_id>.pdf`: arXiv から直接ダウンロードした PDF 原本
 4. `<clean_id>.txt`: Pure-Python PDF エンジンにより抽出された全文テキスト
 
-## 2.4 重複防止台帳 (`processed_papers.json`)
-処理済みの `arxiv_id` をキーとする O(1) ルックアップ台帳を保持し、重複ダウンロードおよび重複要約生成を完全に抑止。
-
-## 2.5 第2章の要約
+## 2.4 重複防止台帳 (`processed_papers.json` から `src/database` 統合への進化)
+処理済みの `arxiv_id` をキーとする O(1) ルックアップ台帳を保持し、重複ダウンロードおよび重複要約生成を完全に抑止する。
+- **レガシー課題**: 従来は単一の 7.2MB 巨大 JSON (`processed_papers.json`) を実行ごとに全件メモリ展開（`json.load()`）および再シリアライズ（`json.dump()`）していたため、起動遅延とメモリ圧迫、Git オブジェクト爆縮を招いていた。
+- **`src/database` 統合仕様**: [DSN-05](../designs/DSN-05-database_engine_architecture.md#21-jsonバックエンドストレージ--git追跡可能オープンデータ永続化仕様-json-backed-storage-architecture) で策定された `src/database` の `JsonTableStorage` へ移行。
+- **インメモリ B-Tree インデックスキャッシュ**: 主キー `arxiv_id` を初回コールドスタート時にメモリインデックス化することで、7.2MB の一括ディスク I/O を撤廃し、重複判定を $O(1)$（0.05ms 未満）で即時解決する。
+- **Git 追跡性と人間/AI可読性の両立**: 物理ファイルは整形済み JSON (`outputs/database/papers_catalog.json`) として Git 管理され、透明性と差分追跡性を 100% 保持する。外部ツール互換用としてワンショットエクスポート機能（`processed_papers.json` 出力）も提供。
 インジェクション層は、レート制限とフォールバック機構を備え、原本データを損失なく確実に保管・台帳管理します。
 
 ---
@@ -203,11 +206,25 @@ $$\text{ThreatScore}(T) = \sum_{w \in T} \left( 2.0 \cdot \mathbb{I}(w \in A) + 
 ## 4.5 05_annual (通期包括年報)
 年間の全セキュリティ論文を総括する包括的年報 `annual_YYYY-MM-DD.md` を生成。
 
-## 4.6 ルートインデックス・監査ログ同期
-各サマリー生成と同時に、ルートポータル `outputs/index.md` および実行証跡 `outputs/log.md` を最新状態へ自動更新。
+## 4.6 パイプライン 6 フェーズ実態ライフサイクル定義
+論文パイプライン全体の実行ライフサイクルは、以下の 6 大フェーズで標準化される：
+1. **[1] FETCH (収集)**: arXiv API / RSS / IACR からのメタデータ取得および重複排除
+2. **[2] EXTRACT (PDF抽出)**: 原本 PDF のダウンロードおよび Pure-Python / `pdftotext` による全文テキスト抽出
+3. **[3] CONVERT (OKF変換)**: 原本データから Google OKF v0.2 仕様準拠 Markdown ドキュメント生成
+4. **[4] TAGGING (脅威分析)**: MITRE ATT&CK / CWE / STRIDE タグ付与および完全日本語エグゼクティブ要約生成
+5. **[5] GRAPH/DB (知識蓄積)**: ABox/TBox オントロジーグラフおよび `src/database` へのエンティティ登録
+6. **[6] SUMMARY (5層サマリー)**: 01_per_run 〜 05_annual の 5 階層サマリー生成およびインデックス同期
 
-## 4.7 第4章の要約
-レポーター層は、5 階層のきめ細かなエグゼクティブサマリーを自律生産し、知見を多角的に可視化します。
+## 4.7 監査ログ (`outputs/log.md`) の自動プロジェクション (Projection Engine)
+- **手動テキスト追記の廃止**:
+  パイプライン実行ログは、[DSN-05](../designs/DSN-05-database_engine_architecture.md#21-jsonバックエンドストレージ--git追跡可能オープンデータ永続化仕様-json-backed-storage-architecture) で定義された `src/database` の `pipeline_runs` テーブル（`JsonLinesStorage`）にトランザクション記録される。
+- **自動プロジェクション**:
+  パイプライン完了時、`src/database` から直近 50 件の実行履歴を高速クエリし、`outputs/log.md` を Markdown テーブルとして自動再生成（Projection）する。
+- **効果**:
+  人間が GitHub 上で閲覧できる透明性を 100% 維持しながら、ファイルの無限肥大化を防止し、Web ゲートウェイ（`handlers.py`）からの集計も SQL で即座に実行可能となる。
+
+## 4.8 第4章の要約
+レポーター層は、6 フェーズの実態ライフサイクルと連動し、5 階層のエグゼクティブサマリーおよび自動プロジェクションされた監査ログを自律生産します。
 
 ---
 

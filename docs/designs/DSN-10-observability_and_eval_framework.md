@@ -67,7 +67,11 @@
   - [12.3 W3C TraceContext / Trace ID 分散伝播と相関追跡](#123-w3c-tracecontext--trace-id-分散伝播と相関追跡)
   - [12.4 機密情報・PII 自動マスキングフィルター (CWE-532 準拠)](#124-機密情報pii-自動マスキングフィルター-cwe-532-準拠)
   - [12.5 横断的サブシステム（Web, Search, DB, Supervisor）統一連携](#125-横断的サブシステムweb-search-db-supervisor統一連携)
-
+- [13. パイプライン・ライフサイクル可観測性 ＆ 4大運用メトリクス仕様 (Pipeline Lifecycle Observability)](#13-パイプラインライフサイクル可観測性--4大運用メトリクス仕様-pipeline-lifecycle-observability)
+  - [13.1 パイプライン可観測性の再定義（探索アルゴリズム内部変数からの脱却）](#131-パイプライン可観測性の再定義探索アルゴリズム内部変数からの脱却)
+  - [13.2 4大運用メトリクス体系と数理仕様（運行・成果物・外部通信・SLA）](#132-4大運用メトリクス体系と数理仕様運行成果物外部通信sla)
+  - [13.3 `/api/system/lifecycle` エンドポイントスキーマと集計アルゴリズム](#133-apisystemlifecycle-エンドポイントスキーマと集計アルゴリズム)
+  - [13.4 ゼロモック原則と動的テレメトリ検証ラチェット規程](#134-ゼロモック原則と動的テレメトリ検証ラチェット規程)
 
 ---
 
@@ -468,4 +472,111 @@ GitHub Actions や CLI バッチ処理の終了時におけるテレメトリ消
 - **Search Engine (`src/search/`)**: `query_log.jsonl` / `search_perf_log.jsonl` のスキーマ統合。
 - **Database Engine (`src/database/`)**: SQL 実行ログ、WAL フラッシュメトリクスを `outputs/logs/database.jsonl` へ記録。
 - **Supervisor Arbiter (`src/supervisor/`)**: `print()` 出力を廃止し、ワーカー起動・停止・シグナル・ヘルスチェックイベントを `outputs/supervisor/supervisor.log`（JSONL）へ構造化記録。
+
+---
+
+# 13. パイプライン・ライフサイクル可観測性 ＆ 4大運用メトリクス仕様 (Pipeline Lifecycle Observability)
+
+## 13.1 パイプライン可観測性の再定義（探索アルゴリズム内部変数からの脱却）
+従来のシステム観測画面では、GraphRAG のグラフ探索内部変数（Dead-End 刈り込み件数、100 Walks Traversal ドット等）や、ファイルベース／組込DB運用に適合しない架空の RDBMS 指標（Read/Write IOPS、Buffer Pool Hit Rate 等）が表示され、多くの項目が未実装プレースホルダー（`--`）やダミー固定値の温床となっていた。
+
+本章では、定期自律パイプライン（`arxiv-security-papers`）の真のライフサイクル運用に必要な可観測性として、**「運行スケジューラ」「データ成果物ライフサイクル」「外部通信健全性」「SLA監査ログ台帳」**の 4 大運用観測ピラーを定義し、実態データに基づくリアルタイム監視仕様を確立する。
+
+```mermaid
+graph TD
+    subgraph ObservabilityCore ["パイプライン・ライフサイクル 4 大運用観測ピラー"]
+        P1["1. 運行スケジューラ<br/>・次回実行カウントダウン<br/>・所要時間 & フェーズ進捗"]
+        P2["2. 成果物ライフサイクル<br/>・OKFドキュメント数<br/>・PDF/TXT原本保存率<br/>・5層サマリー同期状態"]
+        P3["3. 外部通信健全性<br/>・arXiv API 疎通 & 429 回避率<br/>・RSS 自動フォールバック<br/>・Supervisor プロセス状態"]
+        P4["4. SLA 監査ログ台帳<br/>・直近実行履歴テーブル<br/>・連続成功ストリーク<br/>・30日バッチ稼働率 (SLO)"]
+    end
+
+    DB["src/database (JsonLines / JsonTable)"] --> P1
+    DB --> P4
+    FS["outputs/ (okf_papers, raw_data, summaries)"] --> P2
+    SPIDER["src/spider & src/supervisor"] --> P3
+```
+
+## 13.2 4大運用メトリクス体系と数理仕様（運行・成果物・外部通信・SLA）
+
+### 1. 運行スケジューラメトリクス (Cycle & Scheduler)
+- **次回実行時刻 ($T_{\text{next}}$)**: 4x Daily スケジュール（00:00, 06:00, 12:00, 18:00 UTC）に基づき、$T_{\text{now}}$ から直近の未来実行時刻を算出。
+- **バッチ実行所要時間 ($D_{\text{last}}$)**: 直近パイプラインの開始時刻から完了時刻までの経過時間（秒単位）。
+- **アクティブフェーズ**: 6 フェーズ（`FETCH` ➔ `EXTRACT` ➔ `CONVERT` ➔ `TAGGING` ➔ `GRAPH` ➔ `SUMMARY`）の現在進行位置。
+
+### 2. データ成果物ライフサイクルメトリクス (Artifacts Integrity)
+- **OKF 変換完全性 ($R_{\text{okf}}$)**:
+  $$R_{\text{okf}} = \frac{N_{\text{okf\_docs}}}{N_{\text{processed\_papers}}} \times 100\%$$
+- **原本保存・抽出率 ($R_{\text{raw}}$)**:
+  $$R_{\text{raw\_pdf}} = \frac{N_{\text{raw\_pdf}}}{N_{\text{processed\_papers}}} \times 100\%, \quad R_{\text{raw\_txt}} = \frac{N_{\text{raw\_txt}}}{N_{\text{processed\_papers}}} \times 100\%$$
+- **5層サマリー同期状態**: `outputs/executive_summaries/` の 01〜05 各階層の最新更新日と現在日の整合性。
+
+### 3. 外部通信健全性メトリクス (Upstream Resilience)
+- **arXiv API 疎通状態**: HTTP 200 OK の維持、レスポンスタイム（ミリ秒）。
+- **HTTP 429 回避率 ($R_{\text{429}}$)**:
+  $$R_{\text{429}} = \left(1.0 - \frac{E_{429}}{N_{\text{requests}}}\right) \times 100\%$$
+  Spider の Exponential Backoff および Jitter により 100.0% 回避を目標とする。
+- **RSS フォールバック待機状態**: `STANDBY`（正常API通信中）または `ACTIVE`（フォールバック作動中）。
+
+### 4. SLA 監査ログ台帳メトリクス (Service Level Objective)
+- **30 日間バッチ SLO 達成率 ($\text{SLO}_{30\text{D}}$)**:
+  $$\text{SLO}_{30\text{D}} = \frac{\sum_{i \in \text{Runs}_{30\text{D}}} [\text{status}_i = \text{'SUCCESS'}]}{|\text{Runs}_{30\text{D}}|} \times 100\%$$
+- **連続成功ストリーク ($S_{\text{streak}}$)**: 直近から過去に遡り、ステータスが `SUCCESS` である連続バッチ実行回数。
+
+## 13.3 `/api/system/lifecycle` エンドポイントスキーマと集計アルゴリズム
+
+Web Gateway（`src/web/gateway/handlers.py`）において、ライフサイクル統合テレメトリを返却するエンドポイントを提供する：
+
+```json
+{
+  "status": "success",
+  "scheduler": {
+    "status": "ACTIVE (4x Daily Continuous Loop)",
+    "interval": "4x Daily (00/06/12/18 UTC)",
+    "last_sync_utc": "2026-09-11 00:05:37 UTC",
+    "next_scheduled_utc": "2026-09-11 06:00:00 UTC",
+    "last_duration_sec": 42.5,
+    "active_stage": "TAGGING"
+  },
+  "artifacts": {
+    "papers_count": 14169,
+    "okf_docs_count": 14169,
+    "pdf_count": 14169,
+    "text_extracted_count": 14142,
+    "pdf_retention_pct": 100.0,
+    "text_extraction_pct": 99.8,
+    "summary_tiers_synced": "01_per_run 〜 05_annual 全階層同期済"
+  },
+  "upstream": {
+    "arxiv_api_status": "HTTP 200 OK",
+    "http_429_avoidance_pct": 100.0,
+    "rss_fallback_status": "STANDBY",
+    "supervisor": {
+      "status": "online",
+      "arbiter_pid": 12480,
+      "memory_mb": 42.0,
+      "uptime_sec": 32400
+    }
+  },
+  "audit_sla": {
+    "success_streak": 124,
+    "slo_30d_pct": 99.9,
+    "recent_runs": [
+      {
+        "run_id": "run_20260911_000537",
+        "timestamp_utc": "2026-09-11 00:05:37 UTC",
+        "status": "SUCCESS",
+        "papers_processed": 117,
+        "duration_sec": 42.5
+      }
+    ]
+  }
+}
+```
+
+## 13.4 ゼロモック原則と動的テレメトリ検証ラチェット規程
+- すべてのライフサイクル指標は、`src/database`、`outputs/` 実ファイル群、または `src/supervisor` ソケットから動的に導出されなければならない。
+- `|| 3420`, `|| '98.7%'`, `valDeadEndDepth` のような静的ダミー値・未実装プレースホルダーは厳格に禁止される。
+- 回帰防止として、`tests/web/test_zero_mock_integrity.py` においてライフサイクル全レスポンスキーの型・実測値範囲の自動ラチェット検証を義務付ける。
+
 

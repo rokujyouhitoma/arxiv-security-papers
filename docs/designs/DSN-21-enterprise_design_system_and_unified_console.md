@@ -519,11 +519,23 @@ $$\text{panX}' = x_{\text{screen}} - x_{\text{world}} \times \text{scale}', \qua
 | `#/trends` | **Tab 2: Trends & Summaries** | 日次・月次動向、Mermaid マインドマップ、エグゼクティブサマリー |
 | `#/graph` | **Tab 3: Knowledge Graph** | CTI 知識メッシュ簡易ビューおよび専用ダッシュボードへの導線 |
 | `#/product` | **Tab 4: Product & ROI** | コスト削減効果、調査工数削減率、ビジネス価値メトリクス |
-| `#/observability`| **Tab 5: System & Observability**| SQLite / API レイテンシ、メモリ消費、ヘルスステータス |
+| `#/system` | **Tab 5: System & Lifecycle Observability**| 6フェーズ実態パイプライン進行バー、4大運用観測カード（運行・成果物・外部通信・SLA） |
 | `#/supervisor` | **Tab 6: Supervisor & Process Top**| 4x 自律バッチプロセス、バックフィル進捗、ワーカー制御 |
 
 ### 7.2 6 大機能タブ情報設計 (Search, Trends, Graph, ROI, Observability, Supervisor)
 Issue 169 で実施された統合により、以前は `dashboard.html` に分散していた監視・ROI 機能が `index.html` に集約され、`dashboard.html` は CTI グラフ探索に 100% 特化した。両画面は共有グローバルヘッダーにより瞬時に行き来できる。
+
+#### 7.2.1 Tab 5 (System & Lifecycle Observability: #systemTab) UI/UX 刷新仕様
+`DSN-10` 第13章の可観測性仕様に基づき、内部探索用 Traversal Matrix（100 Walks）および未実装の Dead-End Ledger を撤廃し、エンタープライズ運用に即した 4 大カード構成へ刷新する：
+
+1. **実態連動 6 フェーズ進行バー (`#lifecyclePipelineBar`)**:
+   - `[1] 収集 (FETCH) ➔ [2] PDF抽出 (EXTRACT) ➔ [3] OKF変換 (CONVERT) ➔ [4] 脅威分析 (TAGGING) ➔ [5] 知識蓄積 (GRAPH/DB) ➔ [6] 5層サマリー (SUMMARY)`
+   - 状態クラス（`.completed`, `.active`, `.pending`）による動的ハイライト。
+2. **4 大運用観測カード (2x2 レスポンシブグリッド)**:
+   - **Card 1: 🔄 パイプライン運行 & スケジューラ**: 4x Daily 次回カウントダウン、所要時間、アクティブステージ。
+   - **Card 2: 📦 データ成果物ライフサイクル**: OKF 生成数、PDF/テキスト原本保存率、5層サマリー同期状態。
+   - **Card 3: 🌐 外部通信 & アップストリーム健全性**: arXiv API 疎通、HTTP 429 回避率、RSS 待機状態、Supervisor PID/Memory。
+   - **Card 4: 📑 バッチ実行履歴 & SLA 監査台帳**: 連続成功ストリーク、30日稼働率、直近 5 件の実行ログテーブル。
 
 ### 7.3 アナリスト思考速度（TTI）最適化と Dual-Tier 導線モデル
 IT Strategist (ST) の設計方針に基づき、利用者の目的に応じた 2 層型動線を実現：

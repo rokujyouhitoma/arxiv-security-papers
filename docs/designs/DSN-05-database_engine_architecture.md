@@ -116,6 +116,14 @@
   - [20.1 アーキテクチャ分離と依存性逆転の原則 (SoC & DIP)](#201-アーキテクチャ分離と依存性逆転の原則-soc--dip)
   - [20.2 レイヤー構成とデータフロー (Mermaid アーキテクチャ図)](#202-レイヤー構成とデータフロー-mermaid-アーキテクチャ図)
   - [20.3 セキュリティ・識別子バリデーション規則 (STRIDE Threat Model & Mitigations)](#203-セキュリティ識別子バリデーション規則-stride-threat-model--mitigations)
+- [21. JSONバックエンドストレージ ＆ Git追跡可能オープンデータ永続化仕様 (JSON-Backed Storage Architecture)](#21-jsonバックエンドストレージ--git追跡可能オープンデータ永続化仕様-json-backed-storage-architecture)
+  - [21.1 人間・AI可読な Git 追跡可能ストレージの設計思想 (Open-Data Storage Philosophy)](#211-人間ai可読な-git-追跡可能ストレージの設計思想-open-data-storage-philosophy)
+  - [21.2 JsonTableStorage および JsonLinesStorage コアアーキテクチャ](#212-jsontablestorage-および-jsonlinesstorage-コアアーキテクチャ)
+  - [21.3 インメモリ B-Tree インデックスキャッシュと O(1) 検索高速化](#213-インメモリ-b-tree-インデックスキャッシュと-o1-検索高速化)
+  - [21.4 アトミック書き込みとプロセス間ファイルロック (Crash-Safety & Concurrency)](#214-アトミック書き込みとプロセス間ファイルロック-crash-safety--concurrency)
+  - [21.5 DDL スキーマ定義（pipeline_runs / processed_papers）および SQLExecutor バインド](#215-ddl-スキーマ定義pipeline_runs--processed_papersおよび-sqlexecutor-バインド)
+  - [21.6 実ファイル連動 プレーンテキスト/Markdown仮想ストレージ仕様 (File-Backed PlainText Engine)](#216-実ファイル連動-プレーンテキストmarkdown仮想ストレージ仕様-file-backed-plaintext-engine)
+  - [21.7 プラガブルストレージ切り替え・共存アーキテクチャ（URI自動判別 ＆ DDL USING 句ハイブリッドモデル）](#217-プラグ可能ストレージ切り替え共存アーキテクチャuri自動判別--ddl-using-句ハイブリッドモデル)
 
 ---
 
@@ -2314,6 +2322,216 @@ graph TD
 
 ---
 
+# 21. JSONバックエンドストレージ ＆ Git追跡可能オープンデータ永続化仕様 (JSON-Backed Storage Architecture)
+
+## 21.1 人間・AI可読な Git 追跡可能ストレージの設計思想 (Open-Data Storage Philosophy)
+データベース管理システム（DBMS）において、従来は高速化・高密度化のためにバイナリ専用コンテナ（`.vdb`, Slotted Page）が主たるストレージエンジンとして採用されてきた。
+しかし、セキュリティ論文メタデータ、分類タクソノミ、実行監査ログといった**「公知データ（Open Knowledge）かつ人間・AI双方による可読性・透明性が不可欠なデータ」**においては、バイナリ隠蔽が逆に Git バージョン管理との摩擦（巨大差分コミット、コンフリクト解決不能、外部ツール連携コスト）を生む要因となる。
+
+本仕様では、`src/database` のプラガブルストレージ層を拡張し、**「物理ファイル実体は人間・AIが直接読め、Git で綺麗に diff 追跡可能な JSON / JSONLines 形式で保存しつつ、論理アクセス・高速検索・トランザクション統制は `src/database` の SQL 実行エンジン（`SQLExecutor`）が担う」**というハイブリッドオープンデータ永続化モデルを確立する。
+
+```mermaid
+graph TD
+    subgraph AppLayer ["アプリケーション / 利用層"]
+        PL["Pipeline Runner / Ingestion"]
+        GW["Web Gateway / Handlers"]
+    end
+
+    subgraph DBLayer ["src/database コアエンジン層"]
+        SQL["SQLExecutor (SQL Parser, Query Planner)"]
+        LOCK["LockManager / Transaction Coordinator"]
+        IDX["In-Memory B-Tree Index Cache (PK: arxiv_id / run_id)"]
+    end
+
+    subgraph StorageLayer ["プラガブルストレージ層"]
+        JTS["JsonTableStorage (整形済みインデントJSON)"]
+        JLS["JsonLinesStorage (追記型1行1レコードJSONL)"]
+    end
+
+    subgraph FileLayer ["物理ファイル層 (Git 管理 & 人間/AI閲覧可能)"]
+        F_RUNS["outputs/database/pipeline_state.jsonl"]
+        F_PAPERS["outputs/database/papers_catalog.json"]
+    end
+
+    PL --> SQL
+    GW --> SQL
+    SQL --> LOCK
+    SQL --> IDX
+    IDX --> JTS
+    IDX --> JLS
+    JLS --> F_RUNS
+    JTS --> F_PAPERS
+```
+
+## 21.2 JsonTableStorage および JsonLinesStorage コアアーキテクチャ
+
+`src/database/storage/json_storage.py` において以下の 2 つの特化型ストレージエンジンを提供する：
+
+### 1. `JsonLinesStorage` (追記型・時系列監査ログ用)
+- **対象**: `pipeline_runs`（バッチ実行履歴、障害ログ、トランザクション台帳）。
+- **物理フォーマット**: 1 行 1 JSON オブジェクト（JSONL 形式、UTF-8、LF 改行）。
+- **特性**:
+  - 新規レコード挿入（Append）がディスクシーク $O(1)$。
+  - ファイル全体をメモリに再展開・再シリアライズする必要が一切ない。
+  - Git コミット時も追加された行のみが差分（`+` 1 行）として追跡され、リポジトリが爆縮・肥大化しない。
+
+### 2. `JsonTableStorage` (主キー更新型・カタログ台帳用)
+- **対象**: `processed_papers`（処理済み論文メタデータ、CTI カタログ）。
+- **物理フォーマット**: 整形済みインデント付き JSON（Pretty-printed JSON: `indent=2`, キーソート済）。
+- **特性**:
+  - 人間が GitHub やローカルエディタで閲覧した際の可読性を最大化。
+  - Git の diff においても、更新・追加された論文レコードのブロックのみが明確に可視化される。
+
+## 21.3 インメモリ B-Tree インデックスキャッシュと O(1) 検索高速化
+
+7.2MB の巨大 JSON を毎回ファイル全体ロードする $O(N)$ のオーバーヘッドを完全に解消するため、インメモリキャッシュ機構を統合する：
+
+1. **コールドスタートインデックス構築**:
+   初回アクセス時のみ、ストレージファイルから主キー（`arxiv_id` または `run_id`）とファイル内オフセット／レコード参照を読み込み、メモリ上の B-Tree / ハッシュインデックス（`_pk_index: Dict[str, Any]`）を構築する。
+2. **ホットパス照会 $O(1)$**:
+   `SELECT 1 FROM processed_papers WHERE arxiv_id = '2609.12345'` は、ディスク読み込みを一切介さず、インメモリインデックスにより **0.05ms** で即時判定される。
+3. **遅延アトミックコミット (Deferred Flush)**:
+   一連のバッチ処理中はインメモリインデックスおよびライトバッファに蓄積し、トランザクションのコミット時に一括で物理 JSON へアトミックフラッシュする。
+
+## 21.4 アトミック書き込みとプロセス間ファイルロック (Crash-Safety & Concurrency)
+
+- **アトミックリネーム (`.tmp` ➔ `os.replace`)**:
+  `JsonTableStorage` の書き出し時は、必ず同ディレクトリの一時ファイル（`<filename>.tmp.<pid>.<uuid>`）に全データを書き込み、ファイルクローズと `os.fsync` を経てから `os.replace` でアトミックに置換する。書き込み途中のプロセス停止や停電によるデータ破損（Truncation）を完全に遮断する。
+- **プロセス間排他制御 (`fcntl.flock`)**:
+  定期実行バッチ（Pipeline Runner）と Web API（Gateway）が同一ストレージに対して並行書き込みを行う際、POSIX `fcntl.flock(fd, fcntl.LOCK_EX)`（非POSIX環境ではフォールバック排他ロック）を取得し、Lost Update や競合破損を 100% 防止する。
+
+## 21.5 DDL スキーマ定義（pipeline_runs / processed_papers）および SQLExecutor バインド
+
+`src/database/sql/executor.py` から透過的にアクセス可能な DDL 仕様を定義する：
+
+```sql
+-- 1. バッチ実行監査台帳 (JsonLinesStorage 適用)
+CREATE TABLE pipeline_runs (
+    run_id TEXT PRIMARY KEY,          -- 'run_20260911_000537'
+    timestamp_utc TEXT NOT NULL,      -- '2026-09-11 00:05:37 UTC'
+    status TEXT NOT NULL,             -- 'SUCCESS' | 'PARTIAL' | 'FAILED'
+    category TEXT NOT NULL,           -- 'cs.CR'
+    papers_fetched INTEGER NOT NULL,  -- 取得件数
+    papers_processed INTEGER NOT NULL,-- 変換成功件数
+    duration_sec REAL NOT NULL,       -- 所要時間(秒)
+    details TEXT                      -- 補足詳細
+);
+
+-- 2. 処理済み論文台帳 (JsonTableStorage 適用)
+CREATE TABLE processed_papers (
+    clean_id TEXT PRIMARY KEY,        -- '2609_12345'
+    arxiv_id TEXT NOT NULL UNIQUE,    -- '2609.12345v1'
+    title TEXT NOT NULL,              -- 論文タイトル
+    published_date TEXT NOT NULL,     -- '2026-09-10'
+    processed_at TEXT NOT NULL,       -- ISO 8601 UTC
+    okf_path TEXT NOT NULL,           -- 'outputs/okf_papers/...'
+    pdf_path TEXT NOT NULL,           -- 'outputs/raw_data/...'
+    text_path TEXT NOT NULL           -- 'outputs/raw_data/...'
+);
+```
+
+## 21.6 実ファイル連動 プレーンテキスト/Markdown仮想ストレージ仕様 (File-Backed PlainText Engine)
+
+### 1. 設計思想（Zero Data Redundancy & PlainText Virtual Table Mapping）
+データベース内部に長大な論文本文（Markdown や全文抽出テキスト、英語アブストラクト等のプレーンテキスト全般）をバイナリ BLOB として格納すると、ディスク容量の二重消費が発生し、ファイルシステム上の原本ファイルとの同期ズレや Git 差分管理不能を引き起こす。
+本仕様では、ファイルシステム上の実ファイル群（`outputs/okf_papers/**/*.md` および `outputs/raw_data/**/*`）を **Single Source of Truth (SSOT)** として維持し、`src/database` が Markdown に限らず各種プレーンテキスト全般（`.md`, `.txt` 等）を仮想テーブル（`FileBackedPlainTextStorage`）として直接マウントするアーキテクチャを確立する。
+
+```sql
+-- OKF / 論文プレーンテキスト仮想テーブル定義
+CREATE TABLE okf_documents (
+    clean_id        TEXT PRIMARY KEY,          -- ファイル名識別子 (例: '2609_12345')
+    arxiv_id        TEXT NOT NULL UNIQUE,      -- 論文識別子 (例: '2609.12345v1')
+    title           TEXT NOT NULL,             -- 論文タイトル
+    description     TEXT,                      -- 日本語 1 文エグゼクティブ要約
+    tags            JSON,                      -- セキュリティタグ配列 (例: '["zero-trust", "cwe-787"]')
+    provenance      JSON,                      -- 著者リスト・来歴辞書
+    trust           JSON,                      -- 署名検証オブジェクト
+    body_markdown   TEXT,                      -- YAML 除外 Markdown 本文 (遅延評価)
+    raw_text        TEXT,                      -- pdftotext 全文抽出テキスト (遅延評価)
+    raw_abstract    TEXT,                      -- 原文英語アブストラクト (遅延評価)
+    file_path       TEXT NOT NULL,             -- 物理相対パス
+    file_size_bytes INTEGER NOT NULL,          -- 物理バイト数
+    updated_at      TEXT NOT NULL              -- 最終更新日時 ISO 8601
+);
+```
+
+### 2. 遅延読み込み（Lazy Loading）とメモリ最適化
+- **ヘッダーインデックスキャッシュ**: 初回アクセス時、各テキスト/Markdown ファイルの YAML フロントマターおよびファイルサイズ/mtime のみを高速パースしてインメモリインデックス（`_meta_index`）に保持する。
+- **オンデマンド本文 I/O**: `body_markdown`、`raw_text`、`raw_abstract` 列が明示的に `SELECT` された行のみ、対象ファイルをディスクから読み込んで文字列を返却する。これにより、何万件のプレーンテキストファイルが存在してもメモリフットプリントを数 MB 以内に抑制する。
+
+## 21.7 プラガブルストレージ切り替え・共存アーキテクチャ（URI自動判別 ＆ DDL USING 句ハイブリッドモデル）
+
+バイナリ形式（`.vdb` / Slotted Page）とプレーンテキスト形式（JSON / JSONL / Markdown / PlainText）を同一システム内で共存・切り替え可能とするため、以下の多層的ハイブリッド切り替え機構を提供する：
+
+```mermaid
+graph TD
+    subgraph Client ["クエリ / 接続クライアント"]
+        APP["アプリケーション / Pipeline / Web Gateway"]
+    end
+
+    subgraph Factory ["StorageEngineFactory (src/database/storage/)"]
+        DETECT{"パス・URI 拡張子判定"}
+        PARSER{"DDL USING 句判定"}
+    end
+
+    subgraph Engines ["プラガブルストレージエンジン群"]
+        VDB["MultiTableVectorStorage (.vdb)<br/>(バイナリ・高密度・ANNベクトル)"]
+        JLS["JsonLinesStorage (.jsonl)<br/>(追記型・時系列監査ログ)"]
+        JTS["JsonTableStorage (.json)<br/>(主キー更新型・論文カタログ台帳)"]
+        FTS["FileBackedPlainTextStorage (.txt / .md / dir)<br/>(実ファイル仮想マウント)"]
+    end
+
+    APP -->|1. 接続パス指定| DETECT
+    APP -->|2. DDL 構文指定| PARSER
+    DETECT -->|*.vdb| VDB
+    DETECT -->|*.jsonl| JLS
+    DETECT -->|*.json| JTS
+    DETECT -->|dir/ or *.txt or *.md| FTS
+    PARSER -->|USING binary_vdb| VDB
+    PARSER -->|USING json_lines| JLS
+    PARSER -->|USING json_table| JTS
+    PARSER -->|USING file_plain_text| FTS
+```
+
+### 1. 方式 1: URI / 拡張子による自動判別（ゼロ設定切り替え）
+接続先パスまたはファイル名に応じて、`StorageEngineFactory` が自動的に適切なストレージエンジンをインスタンス化する：
+- `outputs/database/knowledge_graph.vdb` $\rightarrow$ `MultiTableVectorStorage`（バイナリ高速）
+- `outputs/database/pipeline_state.jsonl` $\rightarrow$ `JsonLinesStorage`（追記型プレーンテキスト）
+- `outputs/database/papers_catalog.json` $\rightarrow$ `JsonTableStorage`（整形済みJSON台帳）
+- `outputs/okf_papers/` または `outputs/raw_data/` $\rightarrow$ `FileBackedPlainTextStorage`（実ファイル連動仮想テーブル）
+
+### 2. 方式 2: SQL DDL の `USING` 句によるテーブル単位のエンジン指定（マルチエンジン共存）
+同一のデータベース環境下において、テーブルごとに最適なストレージエンジンを共存させ、単一の SQL で透過的に結合（JOIN）可能にする：
+
+```sql
+-- ① 巨大ベクトル・内部インデックス: バイナリ形式
+CREATE TABLE paper_embeddings (
+    clean_id TEXT PRIMARY KEY,
+    embedding VECTOR(128)
+) USING binary_vdb;
+
+-- ② バッチ実行ログ: JSONL 追記型形式
+CREATE TABLE pipeline_runs (
+    run_id TEXT PRIMARY KEY,
+    status TEXT
+) USING json_lines;
+
+-- ③ 論文原本・要約: 実体プレーンテキスト/Markdownファイル連動形式
+CREATE TABLE okf_documents (
+    clean_id TEXT PRIMARY KEY,
+    body_markdown TEXT
+) USING file_plain_text;
+
+-- ★ 異なるストレージエンジン同士を透過的に JOIN！
+SELECT p.title, e.embedding, d.body_markdown
+FROM processed_papers p
+JOIN paper_embeddings e ON p.clean_id = e.clean_id
+JOIN okf_documents d ON p.clean_id = d.clean_id;
+```
+
+---
+
 *審議終了: Systems Architect, Database Specialist, PM 合意承認済*
+
 
 
