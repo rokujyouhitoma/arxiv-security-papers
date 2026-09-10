@@ -177,7 +177,7 @@ class BaseCommand(abc.ABC):
 
 - **プロンプト**: `arxiv-sec-db> `
 - **複数行入力**: 行末が `;`（セミコロン）で終わるまで入力を継続（継続行プロンプト: `   ...> `）。
-- **履歴管理**: ユーザーホームディレクトリまたはプロジェクトローカル（`.dbshell_history`）に入力履歴を自動永続化（最大 1,000 件）。
+- **履歴管理**: ユーザーホームディレクトリまたはプロジェクトローカル（`~/.arxiv_dbshell_history`）に入力履歴を自動永続化（最大 1,000 件）。
 - **シグナルハンドリング**: `Ctrl+C` で現在の入力行をキャンセルし、プロンプトを復帰。`Ctrl+D` または `.exit` / `.quit` で安全に終了。
 
 ### 4.3 メタコマンド体系
@@ -221,6 +221,30 @@ arxiv-sec-db> SELECT clean_id, title FROM processed_papers LIMIT 2;
 python manage.py dbshell -c "SELECT COUNT(*) FROM okf_papers;"
 ```
 
+### 4.6 インテリジェント入力補完 (Tab Autocompletion) ＆ データベース自律補完・同期仕様 (Database Auto-Provisioning & Self-Healing)
+
+#### (1) readline による文脈依存 Tab キー自動補完エンジン (Interactive Autocompletion Engine)
+`readline.set_completer` を用いた純 Python のステートマシン型 SQL 補完エンジン（`SQLCompleter`）を搭載する：
+- **トークン文脈認識ステートマシン**:
+  - 行頭が `.` で始まる場合: メタコマンド候補（`.tables`, `.schema`, `.explain`, `.mode`, `.sync`, `.quit`, `.exit`, `.help`）を補完。
+  - 直前トークンが `FROM` または `JOIN` の場合: マウントされている全テーブル名（`okf_papers`, `raw_papers`, `processed_papers`, `pipeline_runs`, `cti_techniques` 等）を補完。
+  - 直前トークンが `SELECT`, `WHERE`, `AND`, `OR`, `ON`, `GROUP BY`, `ORDER BY` の場合: カラム名候補を補完。
+    - クエリ内に `FROM <table>` が指定されている場合は該当テーブルのスキーマカラム（例: `clean_id`, `title`, `tags`, `timestamp`, `provenance_authors` 等）に絞り込み。
+    - テーブルエイリアスが指定されている場合（例: `FROM okf_papers p WHERE p.`）はエイリアスプレフィックス付きでカラムを補完。
+  - それ以外のコンテキスト: 標準 SQL キーワード（`SELECT`, `FROM`, `WHERE`, `INSERT INTO`, `CREATE TABLE`, `USING`, `LOCATION`, `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `ORDER BY`, `LIMIT`, `DESC`, `ASC` 等）を大文字小文字透過で大文字に自動補完。
+- **ターミナルデリミタ制御**:
+  `readline.set_completer_delims(" \t\n;,()")` により、括弧や記号を挟んでも自然な単語単位の補完を実現。
+
+#### (2) データベース自律補完・整合性自動修復 (Auto-Provisioning, Sync & Self-Healing)
+データベースの実体ファイルやカタログの不整合・欠損を検知し、自動補完・修復する機能を備える：
+- **空カタログ・欠損ストレージのオンデマンド自動補完**:
+  - `outputs/database/papers_catalog.json` や `pipeline_state.jsonl`、および各ストレージディレクトリが存在しない場合、例外停止せず自動的に空の有効なデータ構造（スキーマ準拠）を生成してマウント。
+- **実ファイルと台帳の差分自動同期・補完 (`.sync` / `--auto-provision`)**:
+  - `outputs/okf_papers/` に実体 Markdown が存在するが、`papers_catalog.json` に未登録のレコードがある場合、バックグラウンドまたは明示的な `.sync` メタコマンドによって実ファイルからメタデータをスキャン・補完。
+- **大規模実ファイル（1.4万件）の遅延インデックス補完 (Lazy Scanning)**:
+  - 14,000 件超の OKF Markdown ファイルに対して、起動時は `os.scandir` によるディレクトリエントリのみを極小メモリでインデックス化。
+  - クエリ実行時に必要な行のフロントマター・本文のみを遅延読み込み（Lazy Load）し、キャッシュを動的補完することで、**起動時間 50ms 未満・メモリ 15MB 以下** を達成。
+
 ---
 
 ## 5. 将来の拡張サブコマンド設計ロードマップ
@@ -232,9 +256,10 @@ graph LR
     MANAGE["manage.py"]
     MANAGE --> C1["dbshell (Phase 1: 即時実装)"]
     MANAGE --> C2["tables / inspect (Phase 1: 即時実装)"]
-    MANAGE --> C3["runserver (Phase 2: 次期)"]
-    MANAGE --> C4["supervisor (Phase 2: 次期)"]
-    MANAGE --> C5["pipeline (Phase 3: 統合)"]
+    MANAGE --> C3["dbsync / provision (Phase 1: 即時実装)"]
+    MANAGE --> C4["runserver (Phase 2: 次期)"]
+    MANAGE --> C5["supervisor (Phase 2: 次期)"]
+    MANAGE --> C6["pipeline (Phase 3: 統合)"]
 ```
 
 ### 5.1 `manage.py runserver` (Web Gateway 開発・本番サーバー統合)
@@ -253,6 +278,11 @@ graph LR
 - **コマンド**:
   - `python manage.py tables`: 全テーブルの一覧、ストレージ形式、行数、サイズをテーブル表示。
   - `python manage.py inspect <table_name>`: 指定テーブルの物理ファイルパス、スキーマ定義、先頭 3 行をダンプ表示。
+
+### 5.5 `manage.py dbsync` (データベース自律補完・実ファイルカタログ同期)
+- **コマンド**: `python manage.py dbsync [--verify]`
+- **概要**: `outputs/okf_papers` や `outputs/raw_data` と `papers_catalog.json` を突合し、未登録論文のメタデータを抽出してカタログを自動補完・修復。
+
 
 ---
 

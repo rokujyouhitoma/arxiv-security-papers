@@ -97,7 +97,7 @@ def _parse_yaml_frontmatter_light(raw_header: str) -> Dict[str, Any]:
 
 
 class LazyRecordDict(Mapping[str, Any]):
-    """Proxy mapping that lazy-loads heavy text columns on demand with LRU caching."""
+    """Proxy mapping that lazy-loads frontmatter and heavy text columns on demand."""
 
     def __init__(
         self,
@@ -106,12 +106,15 @@ class LazyRecordDict(Mapping[str, Any]):
     ) -> None:
         self._base = base_meta
         self._storage = storage
+        self._header_loaded = "title" in base_meta
         self._resolved_heavy: Dict[str, str] = {}
 
-    def __getitem__(self, key: str) -> Any:
-        if key in self._base:
-            return self._base[key]
+    def _ensure_header(self) -> None:
+        if not self._header_loaded:
+            self._storage.load_header_for_record(self._base)
+            self._header_loaded = True
 
+    def __getitem__(self, key: str) -> Any:
         if key in ("body_markdown", "raw_text", "raw_abstract"):
             if key in self._resolved_heavy:
                 return self._resolved_heavy[key]
@@ -121,9 +124,13 @@ class LazyRecordDict(Mapping[str, Any]):
             self._resolved_heavy[key] = val
             return val
 
+        self._ensure_header()
+        if key in self._base:
+            return self._base[key]
         raise KeyError(key)
 
     def __iter__(self) -> Iterator[str]:
+        self._ensure_header()
         keys = list(self._base.keys())
         for k in ("body_markdown", "raw_text", "raw_abstract"):
             if k not in keys:
@@ -131,6 +138,7 @@ class LazyRecordDict(Mapping[str, Any]):
         return iter(keys)
 
     def __len__(self) -> int:
+        self._ensure_header()
         return len(self._base) + 3
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -141,6 +149,7 @@ class LazyRecordDict(Mapping[str, Any]):
 
     def to_dict(self) -> Dict[str, Any]:
         """Materializes all fields including heavy text columns into a pure dict."""
+        self._ensure_header()
         res = dict(self._base)
         for k in ("body_markdown", "raw_text", "raw_abstract"):
             res[k] = self[k]
@@ -219,18 +228,24 @@ class FileBackedPlainTextStorage:
         clean_id = os.path.splitext(fname)[0]
         mtime_iso = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
 
-        meta = self._extract_header_metadata(
-            fpath, clean_id, rel_path, stat.st_size, mtime_iso
-        )
-        self._meta_index[clean_id] = meta
+        # Fast lazy index: store lightweight paths without opening file
+        self._meta_index[clean_id] = {
+            "id": clean_id,
+            "clean_id": clean_id,
+            "arxiv_id": clean_id.replace("_", "."),
+            "file_path": rel_path,
+            "file_size_bytes": stat.st_size,
+            "updated_at": mtime_iso,
+        }
 
-    def _extract_header_metadata(
-        self, fpath: str, clean_id: str, rel_path: str, file_size: int, updated_at: str
-    ) -> Dict[str, Any]:
-        """Extracts YAML frontmatter or first 4KB header safely."""
+    def load_header_for_record(self, meta: Dict[str, Any]) -> None:
+        """Loads frontmatter or header on demand when fields are accessed."""
+        clean_id = str(meta.get("clean_id", ""))
+        rel_path = str(meta.get("file_path", ""))
+        full_path = os.path.join(self.workspace_dir, rel_path)
         frontmatter_dict: Dict[str, Any] = {}
         try:
-            with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
                 header = f.read(4096)
                 if header.startswith("---"):
                     parts = header.split("---", 2)
@@ -239,24 +254,13 @@ class FileBackedPlainTextStorage:
         except OSError:
             pass
 
-        arxiv_id = str(frontmatter_dict.get("arxiv_id", clean_id.replace("_", ".")))
-        title = str(frontmatter_dict.get("title", clean_id))
-        description = str(frontmatter_dict.get("description", ""))
-        tags = frontmatter_dict.get("tags", ["security-paper"])
-
-        return {
-            "id": clean_id,
-            "clean_id": clean_id,
-            "arxiv_id": arxiv_id,
-            "title": title,
-            "description": description,
-            "tags": tags,
-            "provenance": frontmatter_dict.get("provenance", {}),
-            "trust": frontmatter_dict.get("trust", {}),
-            "file_path": rel_path,
-            "file_size_bytes": file_size,
-            "updated_at": updated_at,
-        }
+        if "arxiv_id" in frontmatter_dict:
+            meta["arxiv_id"] = str(frontmatter_dict["arxiv_id"])
+        meta["title"] = str(frontmatter_dict.get("title", clean_id))
+        meta["description"] = str(frontmatter_dict.get("description", ""))
+        meta["tags"] = frontmatter_dict.get("tags", ["security-paper"])
+        meta["provenance"] = frontmatter_dict.get("provenance", {})
+        meta["trust"] = frontmatter_dict.get("trust", {})
 
     def read_heavy_column(self, clean_id: str, col_name: str) -> str:
         """Reads heavy content (body_markdown, raw_text, raw_abstract) with LRU caching."""
@@ -298,12 +302,9 @@ class FileBackedPlainTextStorage:
         return len(self._meta_index)
 
     @property
-    def metadata(self) -> List[Dict[str, Any]]:
+    def metadata(self) -> List[Any]:
         """Returns lazy records compatible with executor TableCatalog.storage.metadata interface."""
-        return [
-            LazyRecordDict(base, self).to_dict()  # Materialize safely for queries
-            for base in self._meta_index.values()
-        ]
+        return [LazyRecordDict(base, self) for base in self._meta_index.values()]
 
     def get_by_pk(self, clean_id: str) -> Optional[Dict[str, Any]]:
         """Fast O(1) lookup by primary key."""

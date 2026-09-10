@@ -94,8 +94,30 @@ class ColumnStats:
         return _estimate_op_selectivity(op, value, self.distinct_count)
 
 
+def _extract_sample_keys(sample: List[Dict[str, Any]]) -> Set[str]:
+    keys: Set[str] = set()
+    for row in sample:
+        keys.update(
+            k
+            for k in row.keys()
+            if k not in ("body_markdown", "raw_text", "raw_abstract")
+        )
+    return keys
+
+
+def _compute_columns_stats(
+    sample: List[Dict[str, Any]], keys: Set[str]
+) -> Dict[str, ColumnStats]:
+    cols: Dict[str, ColumnStats] = {}
+    for k in keys:
+        cs = ColumnStats(k)
+        cs.update([row.get(k) for row in sample])
+        cols[k] = cs
+    return cols
+
+
 class TableStats:
-    """Table-level catalog statistics."""
+    """Statistics container for an entire table."""
 
     def __init__(self, table_name: str, total_rows: int = 0) -> None:
         self.table_name = table_name
@@ -103,17 +125,10 @@ class TableStats:
         self.columns: Dict[str, ColumnStats] = {}
 
     def analyze_from_metadata(self, metadata: List[Dict[str, Any]]) -> None:
-        """Collects statistics across all rows in table metadata."""
+        """Collects statistics across table metadata using sampling for large tables."""
         self.total_rows = len(metadata)
         if not metadata:
             return
-
-        all_keys: Set[str] = set()
-        for row in metadata:
-            all_keys.update(row.keys())
-
-        for k in all_keys:
-            col_stats = ColumnStats(k)
-            values = [row.get(k) for row in metadata]
-            col_stats.update(values)
-            self.columns[k] = col_stats
+        sample = metadata[:200] if len(metadata) > 200 else metadata
+        keys = _extract_sample_keys(sample)
+        self.columns = _compute_columns_stats(sample, keys)

@@ -128,6 +128,10 @@ mcp_stats: activate ## Display and export aggregated MCP usage metrics and perfo
 eval_search: activate ## Run search engine quality benchmark (Precision@K, Recall@K, MAP, MRR, NDCG)
 	PYTHONPATH=src ${VENV_PYTHON} -c "from search.eval.evaluator import SearchEvaluator; from search.server.handler.select_handler import SelectHandler; h = SelectHandler(); e = SearchEvaluator(); r = e.evaluate(lambda q, k: [d.get('id', '') for d in h.handle_select(query=q, top_k=k).get('response', {}).get('docs', [])]); print(e.generate_markdown_report(r))"
 
+.PHONY: dbshell
+dbshell: activate ## Launch interactive database shell (manage.py dbshell)
+	PYTHONPATH=src ${VENV_PYTHON} manage.py dbshell $(ARGS)
+
 .PHONY: run_web
 run_web: activate ## Launch Glassmorphic Web Search UI & MCP REST API Server (http://localhost:8000)
 	PYTHONPATH=src ${VENV_PYTHON} src/web/server.py --port 8000 $(ARGS)

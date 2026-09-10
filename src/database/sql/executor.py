@@ -919,6 +919,22 @@ class SQLExecutor:
             )
         return current_rows
 
+    @staticmethod
+    def _handle_count_star(
+        stmt: SelectStatement, count: int
+    ) -> Optional[Dict[str, Any]]:
+        if len(stmt.columns) == 1 and stmt.columns[0].lower() in (
+            "count(*)",
+            "count(1)",
+        ):
+            return {
+                "command": "SELECT",
+                "status": "ok",
+                "count": 1,
+                "rows": [{"COUNT(*)": count}],
+            }
+        return None
+
     def _build_select_result(
         self,
         paged_rows: List[Dict[str, Any]],
@@ -926,6 +942,10 @@ class SQLExecutor:
         effective_role: str,
         temp_tables: Dict[str, List[Dict[str, Any]]],
     ) -> Dict[str, Any]:
+        cnt_res = self._handle_count_star(stmt, len(paged_rows))
+        if cnt_res is not None:
+            return cnt_res
+
         table_ref = stmt.table_ref or TableRef(name=stmt.table_name)
         final_rows = [
             self._project_row(r, stmt.columns, table_ref.name) for r in paged_rows
