@@ -41,6 +41,10 @@ class TestSQLCompleter(unittest.TestCase):
         cand_sync = self.completer._determine_candidates(".sy", ".sy")
         self.assertIn(".sync", cand_sync)
 
+        cand_indexes = self.completer._determine_candidates(".ind", ".ind")
+        self.assertIn(".indexes", cand_indexes)
+        self.assertIn(".indices", cand_indexes)
+
         cand_help = self.completer._determine_candidates(".h", ".h")
         self.assertIn(".help", cand_help)
 

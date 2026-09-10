@@ -47,6 +47,8 @@ SQL_KEYWORDS = [
 META_COMMANDS = [
     ".tables",
     ".schema",
+    ".indexes",
+    ".indices",
     ".explain",
     ".mode",
     ".sync",

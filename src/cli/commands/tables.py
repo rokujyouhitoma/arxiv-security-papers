@@ -23,12 +23,15 @@ def _inspect_table_summary(engine: Any, tname: str) -> List[Any]:
     engine_name = catalog.storage.__class__.__name__
     col_count = len(catalog.schema)
 
-    row_count = 0
     try:
-        res = engine.execute(f"SELECT COUNT(*) FROM {tname}")
-        if res.get("rows"):
-            first_val = next(iter(res["rows"][0].values()))
-            row_count = int(first_val)
+        storage = catalog.storage
+        if hasattr(storage, "__len__"):
+            row_count = len(storage)
+        elif hasattr(storage, "metadata"):
+            row_count = len(storage.metadata)
+        else:
+            res = engine.execute(f"SELECT COUNT(*) FROM {tname}")
+            row_count = int(next(iter(res["rows"][0].values())))
     except Exception:
         row_count = -1
 

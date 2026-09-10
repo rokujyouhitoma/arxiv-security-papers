@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **231** | CLI・dbshell の超高速化およびテーブルスキーマデータ型の適正化 | Performance | 2026-09-11 | [231-optimize-cli-dbshell-performance-and-enrich-schema-types.md](closed/231-optimize-cli-dbshell-performance-and-enrich-schema-types.md) |
 | **230** | プロジェクト統合管理 CLI (manage.py) および対話型データベースシェル (dbshell) の実装 | Feature | 2026-09-11 | [230-implement-manage-py-unified-cli-and-interactive-dbshell.md](closed/230-implement-manage-py-unified-cli-and-interactive-dbshell.md) |
 | **229** | プラガブルストレージエンジンファクトリおよび実ファイル連動プレーンテキスト仮想テーブル基盤の実装 | Feature | 2026-09-11 | [229-implement-pluggable-storage-engine-factory-and-file-backed-plain-text-tables.md](closed/229-implement-pluggable-storage-engine-factory-and-file-backed-plain-text-tables.md) |
 | **228** | src/database統合JSONストレージ基盤およびパイプライン・ライフサイクル可観測性刷新 | Feature | 2026-09-11 | [228-implement-src-database-json-storage-and-pipeline-lifecycle-observability.md](closed/228-implement-src-database-json-storage-and-pipeline-lifecycle-observability.md) |

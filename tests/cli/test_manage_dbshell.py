@@ -129,9 +129,10 @@ class TestManageCLISuite(unittest.TestCase):
         self.assertIn("1 rows in set", buf.getvalue())
 
     def test_dbshell_meta_commands(self) -> None:
-        """Verifies .tables, .schema, .sync, and .help meta-commands."""
+        """Verifies .tables, .schema, .indexes, .sync, and .help meta-commands."""
         executor = SQLExecutor(default_storage=VectorStorage(":memory:", dim=4))
-        executor.execute("CREATE TABLE demo_tbl (id TEXT PRIMARY KEY)")
+        executor.execute("CREATE TABLE demo_tbl (id TEXT PRIMARY KEY, num INTEGER)")
+        executor.execute("CREATE INDEX idx_demo_num ON demo_tbl (num) USING BTREE;")
 
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -139,12 +140,17 @@ class TestManageCLISuite(unittest.TestCase):
             self.assertTrue(
                 _execute_meta_command(executor, ".schema demo_tbl", self.temp_dir)
             )
+            self.assertTrue(_execute_meta_command(executor, ".indexes", self.temp_dir))
             self.assertTrue(_execute_meta_command(executor, ".sync", self.temp_dir))
             self.assertTrue(_execute_meta_command(executor, ".help", self.temp_dir))
 
         out = buf.getvalue()
         self.assertIn("demo_tbl", out)
-        self.assertIn("Column", out)
+        self.assertIn("CREATE TABLE demo_tbl (", out)
+        self.assertIn("    id   TEXT PRIMARY KEY", out)
+        self.assertIn("CREATE UNIQUE INDEX pk_demo_tbl_id", out)
+        self.assertIn("CREATE INDEX idx_demo_num", out)
+        self.assertIn("idx_demo_num", out)
         self.assertIn("Synchronizing", out)
         self.assertIn("Meta-commands:", out)
 

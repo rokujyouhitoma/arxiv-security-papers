@@ -163,15 +163,18 @@ class BaseCommand(abc.ABC):
 
 `dbshell` が起動されると、`SQLExecutor` インスタンスが初期化され、リポジトリ内の実態ファイル群が**自動的に仮想テーブルとして DDL 登録**される：
 
-| 登録テーブル名 | ストレージエンジン | マウント対象実体パス | 提供カラム |
+| 登録テーブル名 | ストレージエンジン | マウント対象実体パス | 提供スキーマとリッチデータ型 |
 | :--- | :---: | :--- | :--- |
-| **`okf_papers`** | `file_plain_text` | `outputs/okf_papers/` | `id`, `title`, `description`, `tags`, `timestamp`, `body_markdown` |
-| **`raw_papers`** | `file_plain_text` | `outputs/raw_data/` | `id`, `raw_text`, `raw_abstract` |
-| **`processed_papers`** | `json_table` | `outputs/database/papers_catalog.json` | `clean_id`, `title`, `okf_path`, `sha256` |
-| **`pipeline_runs`** | `json_lines` | `outputs/database/pipeline_state.jsonl` | `run_id`, `timestamp`, `phase`, `status`, `duration_ms` |
-| **`cti_techniques`** | `binary_vdb` | `outputs/database/catalog/cti_catalog.vdb` | `id`, `name`, `tactics`, `description` |
-| **`cisa_kev`** | `binary_vdb` | `outputs/database/catalog/cti_catalog.vdb` | `cve_id`, `vendor_project`, `vulnerability_name` |
-| **`threat_trends`** | `binary_vdb` | `outputs/database/analytics/analytics.vdb` | `topic_key`, `frequency`, `moving_avg_7d` |
+| **`main`** | `binary_vdb` | `:memory:` | `id VARCHAR(64) PRIMARY KEY`, `vector VECTOR(4)`, `metadata JSON` |
+| **`okf_papers`** | `file_plain_text` | `outputs/okf_papers/` | `clean_id VARCHAR(64) PRIMARY KEY`, `arxiv_id VARCHAR(32)`, `title TEXT`, `title_ja TEXT`, `description TEXT`, `tags JSON`, `published_date TIMESTAMP`, `timestamp TIMESTAMP`, `resource VARCHAR(256)`, `file_size_bytes INTEGER`, `updated_at TIMESTAMP`, `body_markdown TEXT` |
+| **`raw_papers`** | `file_plain_text` | `outputs/raw_data/` | `clean_id VARCHAR(64) PRIMARY KEY`, `arxiv_id VARCHAR(32)`, `file_path VARCHAR(256)`, `file_size_bytes INTEGER`, `updated_at TIMESTAMP`, `raw_abstract TEXT`, `raw_text TEXT` |
+| **`processed_papers`** | `json_table` | `outputs/database/papers_catalog.json` | `clean_id VARCHAR(64) PRIMARY KEY`, `title TEXT`, `title_ja TEXT`, `processed_at TIMESTAMP`, `published TIMESTAMP`, `okf_path VARCHAR(256)`, `raw_meta_path VARCHAR(256)`, `sha256 VARCHAR(64)` |
+| **`pipeline_runs`** | `json_lines` | `outputs/database/pipeline_state.jsonl` | `run_id VARCHAR(64) PRIMARY KEY`, `timestamp TIMESTAMP`, `phase VARCHAR(32)`, `status VARCHAR(32)`, `records_collected INTEGER`, `records_processed INTEGER`, `products_published INTEGER` |
+| **`cti_techniques`** | `binary_vdb` | `outputs/database/catalog/cti_catalog.vdb` | `id VARCHAR(32) PRIMARY KEY`, `name VARCHAR(256)`, `tactics JSON`, `description TEXT` |
+| **`cisa_kev`** | `binary_vdb` | `outputs/database/catalog/cti_catalog.vdb` | `cve_id VARCHAR(32) PRIMARY KEY`, `vendor_project VARCHAR(128)`, `product VARCHAR(128)`, `vulnerability_name TEXT`, `date_added DATE`, `short_description TEXT` |
+| **`threat_trends`** | `binary_vdb` | `outputs/database/analytics/analytics.vdb` | `topic_key VARCHAR(64) PRIMARY KEY`, `frequency INTEGER`, `moving_avg_7d FLOAT` |
+| **`vertices`** | `binary_vdb` | `outputs/database/knowledge_graph.vdb` | `id VARCHAR(64) PRIMARY KEY`, `label VARCHAR(64)`, `name VARCHAR(256)` |
+| **`edges`** | `binary_vdb` | `outputs/database/knowledge_graph.vdb` | `id VARCHAR(64) PRIMARY KEY`, `source VARCHAR(64)`, `target VARCHAR(64)`, `relation VARCHAR(64)` |
 
 ### 4.2 REPL ループと `readline` 制御 (履歴・補完・安全終了)
 
@@ -180,19 +183,24 @@ class BaseCommand(abc.ABC):
 - **履歴管理**: ユーザーホームディレクトリまたはプロジェクトローカル（`~/.arxiv_dbshell_history`）に入力履歴を自動永続化（最大 1,000 件）。
 - **シグナルハンドリング**: `Ctrl+C` で現在の入力行をキャンセルし、プロンプトを復帰。`Ctrl+D` または `.exit` / `.quit` で安全に終了。
 
-### 4.3 メタコマンド体系
+### 4.3 メタコマンド体系 (Prettified DDL ＆ インデックス表示対応)
 
-SQLite のドットコマンドに準拠したメタコマンドを提供する：
+SQLite のドットコマンドに準拠した直感的なメタコマンドを提供する：
 
 ```text
 arxiv-sec-db> .help
-Available meta-commands:
-  .tables              List all available tables across all engines
-  .schema [table]      Show CREATE TABLE definition / columns of a table
-  .explain <sql>       Show execution plan for a query
-  .mode [table|csv]    Change output formatting mode
-  .quit / .exit        Exit database shell
+Meta-commands:
+  .tables             List all auto-mounted tables
+  .schema [table]     Show CREATE TABLE and CREATE INDEX DDL (Prettified & aligned)
+  .indexes [table]    List active indexes (HNSW / BTREE) across tables or for a table
+  .sync               Synchronize catalog with physical files
+  .quit / .exit       Exit dbshell
 ```
+
+- **DDL Prettify フォーマッター**:
+  `.schema [table]` 実行時、各列名が最大幅で左揃え（アラインメント）され、データ型と制約が美しくインデントされた複数行の完全な SQL DDL 文が出力される。関連するインデックス（`CREATE INDEX ...`）も同一テーブル直下に自動結合されて表示される。
+- **インデックス一覧インスペクション**:
+  `.indexes [table]`（または `.indices`）により、HNSW ベクトルインデックスや B+Tree インデックスの名前、種別、対象カラムを ASCII 罫線テーブル形式で瞬時に確認可能。
 
 ### 4.4 ASCII 罫線テーブルフォーマッター仕様
 

@@ -55,6 +55,146 @@ class SQLExecutionError(Exception):
     pass
 
 
+class LazyRow(Dict[str, Any]):
+    """Dictionary proxy that transparently resolves missing or prefixed fields from a lazy source."""
+
+    def __init__(
+        self,
+        base: Dict[str, Any],
+        source: Optional[Any] = None,
+        table_prefix: str = "",
+    ) -> None:
+        super().__init__(base)
+        self._source = source
+        self._table_prefix = table_prefix
+
+    def _fetch_from_source(self, raw_key: str, key: str) -> Tuple[bool, Any]:
+        try:
+            val = self._source[raw_key]  # type: ignore
+            self[key] = val
+            return True, val
+        except (KeyError, TypeError):
+            return False, None
+
+    def _resolve_lazy_key(self, key: str) -> Tuple[bool, Any]:
+        if self._source is None:
+            return False, None
+        raw_key = key.split(".", 1)[-1] if "." in key else key
+        if hasattr(self._source, "__contains__") and raw_key in self._source:
+            return self._fetch_from_source(raw_key, key)
+        return False, None
+
+    def __contains__(self, key: object) -> bool:
+        if super().__contains__(key):
+            return True
+        if isinstance(key, str):
+            found, _ = self._resolve_lazy_key(key)
+            return found
+        return False
+
+    def __getitem__(self, key: str) -> Any:
+        if super().__contains__(key):
+            return super().__getitem__(key)
+        found, val = self._resolve_lazy_key(key)
+        if found:
+            return val
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+class CombinedRow(Dict[str, Any]):
+    """Row combining left and right join sides while preserving lazy resolution."""
+
+    def __init__(self, left: Dict[str, Any], right: Dict[str, Any]) -> None:
+        super().__init__(left)
+        self.update(right)
+        self._left = left
+        self._right = right
+
+    def __contains__(self, key: object) -> bool:
+        return super().__contains__(key) or key in self._right or key in self._left
+
+    def __getitem__(self, key: str) -> Any:
+        if super().__contains__(key):
+            return super().__getitem__(key)
+        if key in self._right:
+            val = self._right[key]
+            self[key] = val
+            return val
+        if key in self._left:
+            val = self._left[key]
+            self[key] = val
+            return val
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+def _parse_col_pair(col_str: str) -> Tuple[str, str]:
+    parts = col_str.split(None, 1)
+    return (parts[0], parts[1]) if len(parts) == 2 else (col_str, "")
+
+
+def _format_col_line(name: str, col_type: str, max_len: int) -> str:
+    return f"    {name.ljust(max_len)}  {col_type}".rstrip()
+
+
+def _split_column_defs(body: str) -> List[Tuple[str, str]]:
+    cols: List[Tuple[str, str]] = []
+    for chunk in body.split(","):
+        cleaned = chunk.strip()
+        if cleaned:
+            cols.append(_parse_col_pair(cleaned))
+    return cols
+
+
+def _format_ddl_columns(body: str) -> str:
+    """Formats comma-separated column definitions with aligned types."""
+    col_pairs = _split_column_defs(body)
+    if not col_pairs:
+        return ""
+    max_len = max(len(name) for name, _ in col_pairs)
+    return ",\n".join(_format_col_line(n, t, max_len) for n, t in col_pairs)
+
+
+def prettify_ddl(raw_sql: str) -> str:
+    """Prettifies a CREATE TABLE statement with indented and aligned columns."""
+    clean = raw_sql.strip().rstrip(";")
+    if "(" not in clean or ")" not in clean:
+        return clean + ";"
+
+    head, _, tail = clean.partition("(")
+    body, _, foot = tail.rpartition(")")
+
+    formatted_cols = _format_ddl_columns(body)
+    foot_clean = foot.strip()
+    if foot_clean:
+        return f"{head.strip()} (\n{formatted_cols}\n) {foot_clean};"
+    return f"{head.strip()} (\n{formatted_cols}\n);"
+
+
+def _extract_pk_col(raw_sql: str) -> Optional[str]:
+    if "PRIMARY KEY" not in raw_sql.upper():
+        return None
+    _, _, tail = raw_sql.partition("(")
+    body, _, _ = tail.rpartition(")")
+    for chunk in body.split(","):
+        if "PRIMARY KEY" in chunk.upper():
+            parts = chunk.strip().split()
+            if parts:
+                return parts[0]
+    return None
+
+
 class TableCatalog:
     """Represents in-memory and on-disk catalog for a database table."""
 
@@ -64,21 +204,82 @@ class TableCatalog:
         storage: Any,
         index: Optional[HNSWIndex] = None,
         schema: Optional[Dict[str, Any]] = None,
+        raw_sql: Optional[str] = None,
+        storage_engine: Optional[str] = None,
+        location: Optional[str] = None,
     ) -> None:
         self.name = name
         self.storage = storage
-        dim = int(getattr(storage, "dim", 128))
-        self.index = index or HNSWIndex(dim=dim)
-        self.schema = schema or {}
+        default_dim = int(getattr(storage, "dim", 128))
+        self.index = index if index is not None else HNSWIndex(dim=default_dim)
+        self.schema = schema if schema is not None else {}
+        self._init_catalog_metadata(raw_sql, storage_engine, location)
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
+        self.index_definitions: List[Dict[str, str]] = []
         self.stats: TableStats = TableStats(name)
         self.recompute_stats()
+
+    def _init_catalog_metadata(
+        self,
+        raw_sql: Optional[str],
+        storage_engine: Optional[str],
+        location: Optional[str],
+    ) -> None:
+        self.raw_sql = raw_sql or ""
+        self.storage_engine = storage_engine or ""
+        self.location = location or ""
 
     def recompute_stats(self) -> None:
         """Refreshes catalog statistics from storage metadata."""
         if self.storage and self.storage.metadata:
             self.stats.analyze_from_metadata(self.storage.metadata)
+
+    def get_ddl(self) -> str:
+        """Returns the prettified CREATE TABLE DDL statement."""
+        if self.raw_sql:
+            return prettify_ddl(self.raw_sql)
+        cols = [f"{col} {dtype}" for col, dtype in self.schema.items()]
+        body = ", ".join(cols)
+        ddl = f"CREATE TABLE {self.name} ({body})"
+        if self.storage_engine:
+            ddl += f" USING {self.storage_engine}"
+        if self.location:
+            ddl += f" LOCATION '{self.location}'"
+        return prettify_ddl(ddl)
+
+    def _format_single_index_ddl(self, defn: Dict[str, str]) -> str:
+        if defn.get("raw_sql"):
+            return defn["raw_sql"].strip().rstrip(";") + ";"
+        iname, col, itype = defn["name"], defn["column"], defn["type"]
+        return f"CREATE INDEX {iname} ON {self.name} ({col}) USING {itype};"
+
+    def _get_pk_index_ddl(self) -> Optional[str]:
+        pk = _extract_pk_col(self.raw_sql)
+        if not pk:
+            return None
+        iname = f"pk_{self.name}_{pk}"
+        if any(d.get("name") == iname for d in self.index_definitions):
+            return None
+        return f"CREATE UNIQUE INDEX {iname} ON {self.name} ({pk}) USING BTREE;"
+
+    def _has_hnsw_index(self) -> bool:
+        return any(d.get("type") == "HNSW" for d in self.index_definitions)
+
+    def _append_vector_ddl_if_needed(self, ddls: List[str]) -> None:
+        if getattr(self.index, "dim", 0) > 0 and not self._has_hnsw_index():
+            ddls.append(
+                f"CREATE INDEX idx_{self.name}_vector ON {self.name} (vector) USING HNSW;"
+            )
+
+    def get_index_ddls(self) -> List[str]:
+        """Returns formatted CREATE INDEX statements for all active indexes."""
+        ddls = [self._format_single_index_ddl(d) for d in self.index_definitions]
+        pk_ddl = self._get_pk_index_ddl()
+        if pk_ddl:
+            ddls.insert(0, pk_ddl)
+        self._append_vector_ddl_if_needed(ddls)
+        return ddls
 
 
 def _extract_quoted_str(expr: str) -> Optional[str]:
@@ -579,6 +780,9 @@ class SQLExecutor:
             name=stmt.table_name,
             storage=storage,
             schema={col.name: col.data_type for col in stmt.columns},
+            raw_sql=stmt.raw_sql,
+            storage_engine=stmt.storage_engine,
+            location=stmt.location,
         )
         self.tables[stmt.table_name] = catalog
 
@@ -659,6 +863,16 @@ class SQLExecutor:
         else:
             raise SQLExecutionError(f"Unsupported index type: {idx_type}")
 
+        table.index_definitions.append(
+            {
+                "name": stmt.index_name,
+                "table": stmt.table_name,
+                "column": stmt.column_name,
+                "type": idx_type,
+                "raw_sql": stmt.raw_sql,
+            }
+        )
+
         return {
             "command": "CREATE_INDEX",
             "status": "ok",
@@ -705,32 +919,56 @@ class SQLExecutor:
                 rows.append(meta)
         return rows
 
-    def _scan_all_table_rows(self, table: TableCatalog) -> List[Dict[str, Any]]:
+    def _scan_all_table_rows(
+        self, table: TableCatalog, limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         for idx, meta in enumerate(table.storage.metadata):
-            item = dict(meta)
+            if limit is not None and len(rows) >= limit:
+                break
+            if hasattr(meta, "to_shallow_dict"):
+                item: Dict[str, Any] = LazyRow(meta.to_shallow_dict(), source=meta)
+            else:
+                item = dict(meta)
             item["_idx"] = idx
             rows.append(item)
         return rows
+
+    def _find_temp_rows(
+        self,
+        temp_tables: Optional[Dict[str, List[Dict[str, Any]]]],
+        table_name: str,
+        limit: Optional[int],
+    ) -> Optional[List[Dict[str, Any]]]:
+        if not temp_tables or table_name not in temp_tables:
+            return None
+        res = [dict(r) for r in temp_tables[table_name]]
+        return res[:limit] if limit is not None else res
 
     def _query_knn_or_scan(
         self,
         table_name: str,
         knn_query: Optional[Dict[str, Any]],
         temporary_tables: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        if temporary_tables and table_name in temporary_tables:
-            return [dict(r) for r in temporary_tables[table_name]]
+        temp_rows = self._find_temp_rows(temporary_tables, table_name, limit)
+        if temp_rows is not None:
+            return temp_rows
 
         table = self._get_table(table_name)
         if knn_query:
             return self._query_knn_rows(table, knn_query)
-        return self._scan_all_table_rows(table)
+        return self._scan_all_table_rows(table, limit=limit)
 
     def _prefix_record(
         self, record: Dict[str, Any], table_ref: TableRef
     ) -> Dict[str, Any]:
-        prefixed: Dict[str, Any] = dict(record)
+        prefixed: Dict[str, Any] = (
+            LazyRow(dict(record), source=record._source, table_prefix=table_ref.name)
+            if isinstance(record, LazyRow)
+            else dict(record)
+        )
         name, alias = table_ref.name, table_ref.alias
         for k, v in list(record.items()):
             prefixed[f"{name}.{k}"] = v
@@ -793,7 +1031,7 @@ class SQLExecutor:
     ) -> List[Dict[str, Any]]:
         matched: List[Dict[str, Any]] = []
         for right_row in j_prefixed_rows:
-            combined = {**left_row, **right_row}
+            combined = CombinedRow(left_row, right_row)
             if _matches_where_clause(combined, conditions):
                 matched.append(combined)
         return matched
@@ -886,6 +1124,12 @@ class SQLExecutor:
             result = result[:limit]
         return result
 
+    @staticmethod
+    def _determine_scan_limit(stmt: SelectStatement) -> Optional[int]:
+        if stmt.where_clauses or stmt.joins or stmt.order_by:
+            return None
+        return stmt.limit
+
     def _get_initial_select_rows(
         self,
         table_ref: TableRef,
@@ -897,8 +1141,12 @@ class SQLExecutor:
             self.access_controller.enforce_permission(
                 effective_role, table_ref.name, "SELECT"
             )
+        scan_limit = self._determine_scan_limit(stmt)
         raw_rows = self._query_knn_or_scan(
-            table_ref.name, stmt.knn_query, temporary_tables=temp_tables
+            table_ref.name,
+            stmt.knn_query,
+            temporary_tables=temp_tables,
+            limit=scan_limit,
         )
         return [self._prefix_record(r, table_ref) for r in raw_rows]
 
@@ -920,6 +1168,19 @@ class SQLExecutor:
         return current_rows
 
     @staticmethod
+    def _has_complex_select_clauses(stmt: SelectStatement) -> bool:
+        return bool(stmt.where_clauses or stmt.joins or stmt.ctes or stmt.union_all)
+
+    @classmethod
+    def _is_simple_count_query(cls, stmt: SelectStatement) -> bool:
+        """Returns True if the SELECT statement is a simple COUNT(*) without joins/filters."""
+        if cls._has_complex_select_clauses(stmt):
+            return False
+        if stmt.limit is not None or len(stmt.columns) != 1:
+            return False
+        return stmt.columns[0].lower() in ("count(*)", "count(1)")
+
+    @staticmethod
     def _handle_count_star(
         stmt: SelectStatement, count: int
     ) -> Optional[Dict[str, Any]]:
@@ -934,6 +1195,29 @@ class SQLExecutor:
                 "rows": [{"COUNT(*)": count}],
             }
         return None
+
+    def _resolve_table_count(self, table_name: str, role: str) -> Optional[int]:
+        if not table_name or table_name not in self.tables:
+            return None
+        self.access_controller.enforce_permission(role, table_name, "SELECT")
+        storage = self.tables[table_name].storage
+        if hasattr(storage, "__len__"):
+            return len(storage)
+        return len(storage.metadata)
+
+    def _exec_fast_count(
+        self, stmt: SelectStatement, effective_role: str
+    ) -> Optional[Dict[str, Any]]:
+        tname = stmt.table_name or (stmt.table_ref.name if stmt.table_ref else "")
+        count_val = self._resolve_table_count(tname, effective_role)
+        if count_val is None:
+            return None
+        return {
+            "command": "SELECT",
+            "status": "ok",
+            "count": 1,
+            "rows": [{"COUNT(*)": count_val}],
+        }
 
     def _build_select_result(
         self,
@@ -964,6 +1248,19 @@ class SQLExecutor:
             "rows": final_rows,
         }
 
+    def _try_fast_count_select(
+        self, stmt: SelectStatement, role: str, temp_tables: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        if not temp_tables and self._is_simple_count_query(stmt):
+            return self._exec_fast_count(stmt, role)
+        return None
+
+    @staticmethod
+    def _filter_select_rows(
+        rows: List[Dict[str, Any]], where_clauses: Any
+    ) -> List[Dict[str, Any]]:
+        return [r for r in rows if _matches_where_clause(r, where_clauses)]
+
     def _exec_select(
         self,
         stmt: SelectStatement,
@@ -971,13 +1268,15 @@ class SQLExecutor:
         temporary_tables: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     ) -> Dict[str, Any]:
         temp_tables = dict(temporary_tables or {})
+        fast_cnt = self._try_fast_count_select(stmt, effective_role, temp_tables)
+        if fast_cnt is not None:
+            return fast_cnt
+
         if stmt.ctes:
             self._evaluate_all_ctes(stmt.ctes, effective_role, temp_tables)
 
         current_rows = self._scan_and_join_tables(stmt, effective_role, temp_tables)
-        filtered_rows = [
-            r for r in current_rows if _matches_where_clause(r, stmt.where_clauses)
-        ]
+        filtered_rows = self._filter_select_rows(current_rows, stmt.where_clauses)
         paged_rows = self._sort_and_paginate(
             filtered_rows, stmt.order_by, stmt.order_desc, stmt.limit
         )

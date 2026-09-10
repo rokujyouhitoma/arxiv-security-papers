@@ -114,32 +114,42 @@ class LazyRecordDict(Mapping[str, Any]):
             self._storage.load_header_for_record(self._base)
             self._header_loaded = True
 
+    def _get_heavy_val(self, key: str) -> str:
+        if key in self._resolved_heavy:
+            return self._resolved_heavy[key]
+        val = self._storage.read_heavy_column(str(self._base.get("clean_id", "")), key)
+        self._resolved_heavy[key] = val
+        return val
+
+    def _is_cached_base_key(self, key: str) -> bool:
+        return key in ("id", "clean_id", "file_path", "file_size_bytes", "updated_at")
+
     def __getitem__(self, key: str) -> Any:
         if key in ("body_markdown", "raw_text", "raw_abstract"):
-            if key in self._resolved_heavy:
-                return self._resolved_heavy[key]
-            val = self._storage.read_heavy_column(
-                str(self._base.get("clean_id", "")), key
-            )
-            self._resolved_heavy[key] = val
-            return val
+            return self._get_heavy_val(key)
 
-        self._ensure_header()
+        if not self._header_loaded and not self._is_cached_base_key(key):
+            self._ensure_header()
+
         if key in self._base:
             return self._base[key]
         raise KeyError(key)
 
+    def __contains__(self, key: object) -> bool:
+        if key in ("body_markdown", "raw_text", "raw_abstract"):
+            return True
+        if key in self._base:
+            return True
+        if not self._header_loaded:
+            self._ensure_header()
+            return key in self._base
+        return False
+
     def __iter__(self) -> Iterator[str]:
-        self._ensure_header()
-        keys = list(self._base.keys())
-        for k in ("body_markdown", "raw_text", "raw_abstract"):
-            if k not in keys:
-                keys.append(k)
-        return iter(keys)
+        return iter(self._base.keys())
 
     def __len__(self) -> int:
-        self._ensure_header()
-        return len(self._base) + 3
+        return len(self._base)
 
     def get(self, key: str, default: Any = None) -> Any:
         try:
@@ -147,12 +157,17 @@ class LazyRecordDict(Mapping[str, Any]):
         except KeyError:
             return default
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Materializes all fields including heavy text columns into a pure dict."""
+    def to_shallow_dict(self) -> Dict[str, Any]:
+        """Returns shallow metadata dict without heavy disk reads."""
+        return dict(self._base)
+
+    def to_dict(self, include_heavy: bool = False) -> Dict[str, Any]:
+        """Materializes fields into a pure dict, loading heavy columns only when requested."""
         self._ensure_header()
         res = dict(self._base)
-        for k in ("body_markdown", "raw_text", "raw_abstract"):
-            res[k] = self[k]
+        if include_heavy:
+            for k in ("body_markdown", "raw_text", "raw_abstract"):
+                res[k] = self[k]
         return res
 
 
@@ -232,7 +247,6 @@ class FileBackedPlainTextStorage:
         self._meta_index[clean_id] = {
             "id": clean_id,
             "clean_id": clean_id,
-            "arxiv_id": clean_id.replace("_", "."),
             "file_path": rel_path,
             "file_size_bytes": stat.st_size,
             "updated_at": mtime_iso,
@@ -254,11 +268,16 @@ class FileBackedPlainTextStorage:
         except OSError:
             pass
 
-        if "arxiv_id" in frontmatter_dict:
-            meta["arxiv_id"] = str(frontmatter_dict["arxiv_id"])
+        meta["arxiv_id"] = str(
+            frontmatter_dict.get("arxiv_id", clean_id.replace("_", "."))
+        )
         meta["title"] = str(frontmatter_dict.get("title", clean_id))
+        meta["title_ja"] = str(frontmatter_dict.get("title_ja", ""))
         meta["description"] = str(frontmatter_dict.get("description", ""))
         meta["tags"] = frontmatter_dict.get("tags", ["security-paper"])
+        meta["published_date"] = str(frontmatter_dict.get("published_date", ""))
+        meta["timestamp"] = str(frontmatter_dict.get("timestamp", ""))
+        meta["resource"] = str(frontmatter_dict.get("resource", ""))
         meta["provenance"] = frontmatter_dict.get("provenance", {})
         meta["trust"] = frontmatter_dict.get("trust", {})
 
@@ -311,7 +330,7 @@ class FileBackedPlainTextStorage:
         base = self._meta_index.get(clean_id)
         if not base:
             return None
-        return LazyRecordDict(base, self).to_dict()
+        return LazyRecordDict(base, self).to_dict(include_heavy=True)
 
     def get_all_vectors(self) -> List[List[float]]:
         """VectorStorage compatibility stub."""
