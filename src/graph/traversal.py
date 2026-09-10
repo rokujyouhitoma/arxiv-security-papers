@@ -745,3 +745,43 @@ def compute_pagerank(
         max_iter,
         tol,
     )
+
+
+def _should_include_edge(label: str, allowed: Optional[Set[str]]) -> bool:
+    """Checks if edge label matches filter criteria."""
+    if allowed is None:
+        return True
+    return label in allowed
+
+
+def _populate_dsu_edges(
+    dsu: Any,
+    engine: PropertyGraphEngine,
+    allowed: Optional[Set[str]],
+) -> None:
+    """Unions vertex pairs across all qualifying graph edges."""
+    for edge in engine.get_all_edges():
+        if _should_include_edge(edge.label, allowed):
+            dsu.union(edge.src_id, edge.dst_id)
+
+
+def find_connected_threat_clusters(
+    engine: PropertyGraphEngine,
+    edge_labels: Optional[List[str]] = None,
+) -> List[Set[str]]:
+    """
+    Detects connected components (threat clusters) using DisjointSet (Union-Find).
+    Returns a list of vertex ID sets, sorted by cluster size descending.
+    """
+    from core.structures.disjoint_set import DisjointSet
+
+    dsu: DisjointSet[str] = DisjointSet()
+    for v in engine.get_all_vertices():
+        dsu.add(v.id)
+
+    allowed = set(edge_labels) if edge_labels is not None else None
+    _populate_dsu_edges(dsu, engine, allowed)
+
+    components = list(dsu.get_components().values())
+    components.sort(key=len, reverse=True)
+    return components

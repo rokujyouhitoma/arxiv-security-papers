@@ -8,7 +8,7 @@ Dual CSR Adjacency Indexing, and GraphRAG Multi-Hop Causal Reasoning.
 from .engine import PropertyGraphEngine
 from .graphrag import GraphRAGPipeline
 from .structures import Edge, Path, Vertex
-from .traversal import GraphTraversal
+from .traversal import GraphTraversal, find_connected_threat_clusters
 
 __all__ = [
     "Vertex",
@@ -17,4 +17,5 @@ __all__ = [
     "PropertyGraphEngine",
     "GraphTraversal",
     "GraphRAGPipeline",
+    "find_connected_threat_clusters",
 ]

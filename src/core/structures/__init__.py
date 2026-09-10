@@ -4,6 +4,7 @@ Provides high-performance, space-efficient pure-Python algorithms and containers
 """
 
 from core.structures.bloom_filter import BloomFilter, ScalableBloomFilter
+from core.structures.disjoint_set import DisjointSet
 from core.structures.radix_trie import (
     MAX_RADIX_KEY_LENGTH,
     MAX_SUGGEST_LIMIT,
@@ -54,4 +55,5 @@ __all__ = [
     "SkipList",
     "DEFAULT_MAX_LEVEL",
     "MAX_ALLOWED_LEVEL",
+    "DisjointSet",
 ]

@@ -8,7 +8,6 @@
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **249** | Adaptive Replacement Cache (ARC) の共通コア実装と検索プラットフォーム・キャッシュ自己適応化 | Feature | Medium | Open (New) | [249-implement-adaptive-replacement-cache-for-search-platform.md](249-implement-adaptive-replacement-cache-for-search-platform.md) |
 | **248** | Count-Min Sketch および t-digest の共通コア実装と可観測性・分析メトリクス要約の省メモリ化 | Feature | Medium | Open (New) | [248-implement-count-min-sketch-and-t-digest-for-observability.md](248-implement-count-min-sketch-and-t-digest-for-observability.md) |
-| **247** | Disjoint Set (Union-Find / 素集合データ構造) の共通コア実装と CTI 脅威グラフ連結成分・クラスタ検出の高速化 | Feature | Medium | Open (New) | [247-implement-disjoint-set-union-find-for-graph-clustering.md](247-implement-disjoint-set-union-find-for-graph-clustering.md) |
 | **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | High | Open (New) | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **247** | Disjoint Set (Union-Find / 素集合データ構造) の共通コア実装と CTI 脅威グラフ連結成分・クラスタ検出の高速化 | Feature | 2026-09-11 | [247-implement-disjoint-set-union-find-for-graph-clustering.md](closed/247-implement-disjoint-set-union-find-for-graph-clustering.md) |
 | **246** | SkipList (スキップリスト) の共通コア実装と LSM MemTable および転置インデックス探索の高速化 | Feature | 2026-09-11 | [246-implement-skiplist-for-lsm-memtable-and-inverted-index.md](closed/246-implement-skiplist-for-lsm-memtable-and-inverted-index.md) |
 | **240** | Radix Trie (Prefix Tree) の共通コア実装と CTI タクソノミー（CWE / ATT&CK / CVE）高速前方一致検索・オートコンプリート基盤の確立 | Feature | 2026-09-11 | [240-implement-radix-trie-for-cti-taxonomy-prefix-search.md](closed/240-implement-radix-trie-for-cti-taxonomy-prefix-search.md) |
 | **245** | ブルームフィルターの共通コア基盤 (src/core/structures/bloom_filter.py) への昇格・一元化と spider / database 重複コードの刷新 | Architecture / Refactor | 2026-09-11 | [245-migrate-and-unify-bloom-filter-to-core-structures.md](closed/245-migrate-and-unify-bloom-filter-to-core-structures.md) |

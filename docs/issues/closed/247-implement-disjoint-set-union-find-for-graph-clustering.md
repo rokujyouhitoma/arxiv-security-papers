@@ -2,7 +2,7 @@
 ID: 247
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (2026-09-11)
 担当エージェント: Software Development (SWD) / Information Security Specialist / Systems Architect
 ---
 
@@ -31,17 +31,17 @@ ID: 247
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`src/core/structures/disjoint_set.py`](../../src/core/structures/disjoint_set.py) (新規):
+- [x] [`src/core/structures/disjoint_set.py`](../../src/core/structures/disjoint_set.py) (新規):
   - `DisjointSet[T]`: 汎用型パラメータ対応、`find(x)` (経路圧縮), `union(x, y)` (ランク結合), `connected(x, y)`, `component_count()`, `get_components()`
-- [ ] [`src/core/structures/__init__.py`](../../src/core/structures/__init__.py):
+- [x] [`src/core/structures/__init__.py`](../../src/core/structures/__init__.py):
   - `DisjointSet` のエクスポート
-- [ ] [`src/graph/structures.py`](../../src/graph/structures.py):
-  - グラフ構造への連結成分抽出ヘルパーの追加
-- [ ] [`src/graph/traversal.py`](../../src/graph/traversal.py):
+- [x] [`src/graph/engine.py`](../../src/graph/engine.py):
+  - `get_all_edges()` メソッドの追加
+- [x] [`src/graph/traversal.py`](../../src/graph/traversal.py):
   - `find_connected_threat_clusters(graph)` の実装
-- [ ] [`tests/core/test_disjoint_set.py`](../../tests/core/test_disjoint_set.py) (新規):
+- [x] [`tests/core/test_disjoint_set.py`](../../tests/core/test_disjoint_set.py) (新規):
   - 単体テスト（初期化、結合、循環結合、連結判定、全グループ辞書抽出）
-- [ ] [`tests/graph/test_graph_engine.py`](../../tests/graph/test_graph_engine.py):
+- [x] [`tests/graph/test_graph_engine.py`](../../tests/graph/test_graph_engine.py):
   - 脅威クラスタ検出の結合テスト
 
 ---
@@ -60,7 +60,7 @@ Target Branch: `feat/247-implement-disjoint-set-union-find-for-graph-clustering`
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] `src/core/structures/disjoint_set.py` に `DisjointSet` が実装されていること。
-- [ ] 経路圧縮とランク結合が正しく動作し、要素数 10 万件以上の結合・判定がミリ秒単位で完了すること。
-- [ ] `tests/core/test_disjoint_set.py` が新規作成され、100% PASS すること。
-- [ ] Xenon Rank A (CC <= 4)、`mypy --strict` 0 エラー、フォーマッタ 100% 合格であること。
+- [x] `src/core/structures/disjoint_set.py` に `DisjointSet` が実装されていること。
+- [x] 経路圧縮とランク結合が正しく動作し、要素数 10 万件以上の結合・判定がミリ秒単位で完了すること。
+- [x] `tests/core/test_disjoint_set.py` が新規作成され、100% PASS すること。
+- [x] Xenon Rank A (CC <= 4)、`mypy --strict` 0 エラー、フォーマッタ 100% 合格であること。

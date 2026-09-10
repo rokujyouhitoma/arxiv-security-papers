@@ -531,6 +531,10 @@ class PropertyGraphEngine:
         """Returns all vertices currently registered in the graph engine."""
         return list(self._vertices.values())
 
+    def get_all_edges(self) -> List[Edge]:
+        """Returns all edges currently registered in the graph engine."""
+        return list(self._edges.values())
+
     def _purge_out_edges(self, vertex_id: str) -> None:
         """Purges outgoing edges connected to vertex_id."""
         for edge in list(self._out_edges.get(vertex_id, [])):
