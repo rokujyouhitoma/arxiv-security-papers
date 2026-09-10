@@ -335,11 +335,12 @@ flowchart TD
 | **10大コア Vertex 型定義** | `src/ontology/schema.py`<br>`src/graph/structures.py` | `EntityType` 列挙型、`Vertex` データクラス、厳格なプロパティ型バリデーション |
 | **エッジ関係述語 & 属性** | `src/graph/structures.py`<br>`src/ontology/rule_schema.py` | `RelationType`、`Edge` データクラス（`evidence_quote`, `confidence_score` ヘルパー） |
 | **ルールマスター (EIROM)** | `src/ontology/rules/master_rules.json`<br>`src/ontology/rule_registry.py` | JSON マスターデータ、ローダー、スキーマ検証、インデクシング |
+| **CTI タクソノミー高速照合** | `src/domain/security/taxonomy/`<br>`src/core/structures/radix_trie.py` | `RadixTrie` による ATT&CK (T1xxx) / CWE (CWE-xxx) / CVE プレフィックス高速補完・前方一致検索 ($O(K)$) |
 | **動的エッジ抽出エンジン** | `src/domain/security/cti/inference.py`<br>`src/ontology/extractor.py` | 正規表現、語彙スコアリング、セクション抽出、エビデンス生成 |
-| **プロパティグラフエンジン** | `src/graph/engine.py`<br>`src/graph/traversal.py` | Dual CSR インデックス、Control Gap パス探索、確信度フィルタリング |
+| **プロパティグラフエンジン** | `src/graph/engine.py`<br>`src/graph/traversal.py`<br>`src/core/structures/disjoint_set.py` | Dual CSR インデックス、Control Gap パス探索、`DisjointSet` による脅威クラスタ連結成分抽出 |
 | **Web 可視化 & HITL** | `src/web/gateway/handlers.py`<br>`site/js/` (tab=graph) | ナレッジグラフ可視化、エビデンスポップアップ、Control Gap パス強調表示 |
 
 ### 品質ゲート要件
-- **循環的複雑度 (Xenon Rank A)**: 全関数・メソッド $\le 5$ を 100% 遵守。
+- **循環的複雑度 (Xenon Rank A)**: 全関数・メソッド $\le 4$ を 100% 遵守。
 - **静的型検査 (Mypy --strict)**: リポジトリ内全ソースファイルで 0 エラー。
 - **外部依存ゼロ**: Python 標準ライブラリのみで稼働。

@@ -361,11 +361,14 @@ src/security/cti/
 
 # 6. 既存サブシステム連携仕様
 
-## 6.1 `src/security/taxonomy/mitre.py` 連携
+## 6.1 `src/domain/security/taxonomy/mitre.py` & `cwe.py` 連携
 - `extract_mitre_techniques(text)`:
   - 正規表現 `\b(T\d{4}(?:\.\d{3})?)\b` による明示的 ID 抽出と、キーワードタクソノミー照合をハイブリッド統合。
 - `get_technique_meta(tech_id)`:
   - `MITRECTIRegistry` 経由で公式のテクニック名称、戦術、説明文、プラットフォームを取得。
+- **共通コア基盤 `RadixTrie` による高速前方一致補完**:
+  - `src/core/structures/radix_trie.py` の **`RadixTrie`** を用いて、メモリ上に ATT&CK ID（`T1059.001` 等）および CWE ID（`CWE-89` 等）の前方一致検索木を構築。
+  - テクニック ID や脆弱性 ID のプレフィックス探索を $O(K)$（キー長 $K$）の定数オーダで高速実行し、UI オートコンプリートや文書スキャンを加速。
 - `generate_caldera_ability` / `generate_sigma_rule`:
   - CTI レジストリから取得した最新の戦術名・テクニック名を用いて高精度なプレイブックおよび検知ルールを生成。
 

@@ -79,6 +79,7 @@
                                             v
 +---------------------------------------------------------------------------------------------------+
 |                        6. [Core Infrastructure & Security Guard Layer] (共通基盤・防御シールド)     |
+|  - src/core/ (共通コア基盤: structures [SkipList, DisjointSet, RadixTrie, ARC, RoaringBitmap] / hsm) |
 |  - src/database/ (4層 Pure-Python DB: SlottedPage / BTree / LSM / PAX / Raft 分散)                 |
 |  - src/security/ (AST ガード / RBAC / パストラバーサル防止 / 入力サニタイザー)                      |
 +---------------------------------------------------------------------------------------------------+
@@ -158,6 +159,7 @@ graph TD
     end
 
     subgraph Layer6["6. Core Infrastructure & Security Layer"]
+        Core["共通コア基盤 (src/core/) - DSN-02, DSN-23<br/>structures (SkipList, DisjointSet, RadixTrie, ARC, RoaringBitmap, Probabilistic)<br/>hsm (Hierarchical State Machine)"]
         DB["4層ベクトルDB & 分散 (src/database/) - DSN-05"]
         SecGuard["AST Guard & RBAC (src/security/) - DSN-07"]
     end
@@ -177,6 +179,7 @@ graph TD
     Taxonomy --> Search
     Pipeline --> DB
     Search <--> DB
+    Core -. 高度データ構造・HSM統制 .-> Layer1 & Layer2 & Layer3 & Layer4 & Layer5 & DB
     SecGuard -. 全レイヤー保護 .-> Layer1 & Layer2 & Layer3 & Layer4 & Layer5 & Layer6
     Layer2 --> Layer1
     Search --> Layer1
@@ -192,15 +195,24 @@ graph TD
 | **1. Presentation & Interface** | `web/`, `mcp/`, `pipeline/reporter/` | 人間・AI・外部システム向けインターフェース、WSGI、JSON-RPC、5層サマリー | DSN-03, DSN-08, DSN-09 |
 | **2. Orchestration & Flow** | `workflow/`, `supervisor/`, `pipeline/` | DAG ワークフロー、プロセス監視、Saga 補償トランザクション | DSN-03, DSN-11, DSN-12 |
 | **3. Domain Intelligence** | `intelligence/`, `security/taxonomy/` | PIR 要件管理、多段階要約、ATT&CK / TTPs マッピング、Caldera 生成 | DSN-07, DSN-11, DSN-16 |
-| **4. Search & IR** | `search/` | BM25、HNSW ベクトル、RAPTOR ツリー、FM-Index、RRF 統合検索 | DSN-04 |
-| **5. Ingestion & Parsing** | `spider/`, `pdf_engine/`, `pipeline/ingestion/` | 分散クローリング、Pure-Python PDF 抽出、arXiv API / RSS 収集 | DSN-03, DSN-06, DSN-13 |
-| **6. Core Infrastructure & Security** | `database/`, `security/` | SlottedPage / 4層ストレージ、Raft 合意、AST ガード、RBAC、パス検証 | DSN-05, DSN-07 |
+| **4. Search & IR** | `search/` | BM25、HNSW ベクトル、RAPTOR ツリー、FM-Index、RRF 統合検索、ARC キャッシュ | DSN-04 |
+| **5. Ingestion & Parsing** | `spider/`, `pdf_engine/`, `pipeline/ingestion/` | 分散クローリング、Pure-Python PDF 抽出、arXiv API / RSS 収集、Bloom Filter 重複排除 | DSN-03, DSN-06, DSN-13 |
+| **6. Core Infrastructure & Security** | `core/`, `database/`, `security/` | 共通コアデータ構造群（SkipList, DisjointSet, RadixTrie, ARCCache, RoaringBitmap, Probabilistic）、HSM ライフサイクル、SlottedPage / 4層ストレージ、Raft 合意、AST ガード、RBAC、パス検証 | DSN-02, DSN-05, DSN-07, DSN-23 |
 
 ---
 
 # 4. コア数理モデル & 共通アルゴリズム基盤
 
-システム全体で統一的に適用される主要数理モデル一覧：
+システム全体で統一的に適用される主要数理モデル・コアデータ構造基盤（`src/core/structures/`）一覧：
+
+0. **共通コアデータ構造基盤 (`src/core/structures/`) (DSN-02)**:
+   - **SkipList (`skip_list.py`)**: LSM MemTable 向けの多段確率的スキップリスト。$O(\log N)$ 探索・挿入・範囲走査。
+   - **DisjointSet (`disjoint_set.py`)**: CTI 脅威グラフの連結成分・脅威クラスタ検出向け素集合データ構造（Path Compression + Union by Rank, $\alpha(N)$ 計算量）。
+   - **RadixTrie (`radix_trie.py`)**: CTI タクソノミー（CWE / ATT&CK / CVE）および検索プレフィックス高速補完・前方一致探索木。
+   - **ARCCache (`arc_cache.py`)**: 走査耐性（Scan Resistance）を備えた Megiddo & Modha (FAST '03) 準拠の自己調整キャッシュ（$T_1, T_2, B_1, B_2$, 目標サイズ $p$ 動的適応）。
+   - **RoaringBitmap (`roaring_bitmap.py`)**: 3段コンテナ（Array / Bitmap / Run）による高密度集合演算。低カーディナリティ列 Bitmap Index、MVCC スナップショット追跡、検索 FilterCache。
+   - **Probabilistic (`probabilistic.py`)**: Count-Min Sketch（省メモリ頻度・Heavy Hitters 検出）および t-digest（動的セントロイドによる P95/P99/P99.9 テールレイテンシ推定）。
+   - **BloomFilter (`bloom_filter.py`)**: クローラー URL 重複排除（SeenURLFilter）および LSM SSTable 存在判定向け Scalable Bloom Filter。
 
 1. **動的 PIR 重みベクトル更新モデル (DSN-11)**:
    $$\mathbf{w}_{k+1} = \alpha \cdot \mathbf{w}_k + (1 - \alpha) \cdot \left( \beta \cdot \mathbf{u}_{\text{usage}} + \gamma \cdot \mathbf{g}_{\text{gap}} + \delta \cdot \mathbf{d}_{\text{drift}} \right)$$
@@ -302,7 +314,7 @@ sequenceDiagram
 | DSN 番号 | 設計書ファイル | 対応パッケージ (`src/`) | 領域 / サブシステム |
 | :---: | :--- | :--- | :--- |
 | **DSN-01** | [DSN-01-high_level_design.md](DSN-01-high_level_design.md) | システム全体 | 全体高位アーキテクチャ設計書 (HLD) |
-| **DSN-02** | [DSN-02-low_level_design.md](DSN-02-low_level_design.md) | システム全体 | 全体低位アーキテクチャ設計書 (LLD / Common Protocols) |
+| **DSN-02** | [DSN-02-low_level_design.md](DSN-02-low_level_design.md) | `src/core/structures/`, システム全体 | 全体低位アーキテクチャ設計書 (LLD / 共通データ構造基盤 & Protocols) |
 | **DSN-03** | [DSN-03-pipeline_architecture.md](DSN-03-pipeline_architecture.md) | `src/pipeline/` | ETL データパイプライン設計書 (`ingestion`, `transformer`, `reporter`) |
 | **DSN-04** | [DSN-04-search_engine_and_platform.md](DSN-04-search_engine_and_platform.md) | `src/search/` | 2層検索エンジン & プラットフォーム設計書 (`engine`, `platform`, `vector`) |
 | **DSN-05** | [DSN-05-database_engine_architecture.md](DSN-05-database_engine_architecture.md) | `src/database/` | ゼロ依存 4層ベクトルデータベース & 分散合意設計書 |
@@ -324,4 +336,5 @@ sequenceDiagram
 | **DSN-21** | [DSN-21-enterprise_design_system_and_unified_console.md](DSN-21-enterprise_design_system_and_unified_console.md) | `site/`, `src/web/` | エンタープライズ統合デザインシステム ＆ クラウドコンソール UI 包括設計書 |
 | **DSN-22** | [DSN-22-security_and_threat_ontology_w3c_specification.md](DSN-22-security_and_threat_ontology_w3c_specification.md) | `src/ontology/` | セキュリティ・脅威知識オントロジー W3C 仕様書 |
 | **DSN-23** | [DSN-23-hierarchical_state_machine_and_lifecycle_governance.md](DSN-23-hierarchical_state_machine_and_lifecycle_governance.md) | `src/core/hsm/`, `src/supervisor/` | ゼロ外部依存・高信頼階層型ステートマシン（HSM）基盤およびシステム全域ライフサイクル統制設計仕様書 |
+| **DSN-24** | [DSN-24-unified_management_cli_and_interactive_database_shell.md](DSN-24-unified_management_cli_and_interactive_database_shell.md) | `src/cli/` | 統合運用管理 CLI & インタラクティブ・データベースシェル設計書 |
 

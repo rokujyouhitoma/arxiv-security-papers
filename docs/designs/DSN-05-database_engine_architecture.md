@@ -794,6 +794,10 @@ graph LR
 - **MVCC（Multi-Version Concurrency Control）**:
   - タプル更新時に上書きせず、新バージョン（`xmin: 作成TxID`, `xmax: 削除TxID`）を作成。
   - **「読み取りは書き込みをブロックせず、書き込みは読み取りをブロックしない」**を実現。
+  - **RoaringBitmap によるスナップショット追跡 (`TransactionSnapshot`)**:
+    - トランザクション開始時のアクティブ TxID リスト（`active_tx_ids`）およびコミット済み TxID リスト（`committed_tx_ids`）の追跡基盤に、従来の `set[int]` に代わり共通コア基盤 **`src/core/structures/roaring_bitmap.py` (`RoaringBitmap`)** を採用。
+    - 単調増加する連続トランザクション ID を `BitmapContainer` / `RunContainer` で高圧縮保持（数千 TxID でも数 KB 以内に抑制）。
+    - スナップショット取得時のメモリディープコピーを排除し、O(1) の高速コンテナ浅いコピー（`clone()`）および $O(1)$ の高速ビット積可視性チェックを実現。
 
 ---
 
@@ -935,6 +939,9 @@ graph LR
   - 赤黒木や AVL 木はツリー回転時に複数ノードの排他ロック（Write Lock）が必要となり、マルチスレッド書き込みで深刻なロック競合が発生。
   - **SkipList**: 各ノードの高さ（レベル）をコイン投げ（確率 $p=1/2$）で決定。ノード挿入・削除が**CAS（Compare-And-Swap）を用いた完全ロックフリー**で実装可能。
 - **計算量**: 探索・挿入ともに $O(\log N)$（確率的保証）。
+- **共通コア基盤の統合 (`src/core/structures/skip_list.py`)**:
+  - `MemTable` の基底データ構造として、共通コア基盤の **`SkipList[str, Tuple[bytes, bool, int]]`** を採用。
+  - メモリ上限到達時のシーケンシャルイテレーションおよび範囲走査（`range_scan`）がソート済み状態で $O(1)$ 追記・フラッシュ可能。
 
 ### 7.2.2 WAL（先行書き込みログ）とフラッシュ（Minor Compaction）
 - メモリ上の MemTable は揮発性のため、同内容をディスク上の WAL にシーケンシャル追記。
@@ -950,7 +957,7 @@ graph LR
 | +-------------------------------------------------------------------------------+ |
 | | DATA BLOCKS: [Data Block 0 (4KB)] [Data Block 1 (4KB)] ... [Data Block K (4KB)]| |
 | +-------------------------------------------------------------------------------+ |
-| | FILTER BLOCK: [Bloom Filter Bit-Array (e.g. 10 bits/key, 3 Hash Functions)]    | |
+| | FILTER BLOCK: [Bloom Filter Bit-Array (src/core/structures/bloom_filter.py)]   | |
 | +-------------------------------------------------------------------------------+ |
 | | INDEX BLOCK: [K0: Block 0 Offset] [K100: Block 1 Offset] ... (Sparse Index)     | |
 | +-------------------------------------------------------------------------------+ |
@@ -958,6 +965,10 @@ graph LR
 | +-------------------------------------------------------------------------------+ |
 +-----------------------------------------------------------------------------------+
 ```
+
+### 7.3.1 共通コア BloomFilter 統合 (`src/core/structures/bloom_filter.py`)
+- SSTable 内の各キー存在判定には、共通コア基盤の **`BloomFilter`** を統合。
+- 10 bits/key、最適ハッシュ関数数 $k=3$ により誤検知率 $P_e \approx 1\%$ を達成し、存在しないキーに対する不要なディスクブロック I/O を 99% スキップ。
 
 ### 7.3.1 SSTable（Sorted String Table）の物理構造
 - **データブロック（Data Block）**: キー順にソートされたレコード列。Prefix 圧縮や LZ4/ZSTD で圧縮。

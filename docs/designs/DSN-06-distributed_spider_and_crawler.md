@@ -571,13 +571,16 @@ graph TD
 
 数億規模の URL 訪問履歴を最小のメモリフットプリントで判定するため、純 Python 製の Scalable Bloom Filter を設計します。
 
-### 3.3.1 数理モデル
+### 3.3.1 数理モデルと共通コア基盤統合 (`src/core/structures/bloom_filter.py`)
 要素数 $n$、ビット配列長 $m$、ハッシュ関数数 $k$ の Bloom Filter において、誤検知率（False Positive Rate）$P_e$ は以下の数式で決定されます：
 $$P_e \approx \left(1 - e^{-kn/m}\right)^k$$
 与えられた許容誤検知率 $P_e \le 10^{-6}$ に対する最適ビット数 $m$ およびハッシュ関数数 $k$ は：
 $$m = -\frac{n \ln P_e}{(\ln 2)^2} \approx 28.7 \cdot n \quad [\text{bits}], \quad k = \frac{m}{n} \ln 2 \approx 20$$
 - 1,000万 URL の重複判定に必要なメモリ量はわずか **34.2 MB**（ハッシュテーブル対比 95% 削減）。
 - ハッシュ関数は標準ライブラリの `hashlib.sha256` の 32 バイト出力を 8 バイトずつ 2 分割（Double Hashing 法: $g_i(x) = h_1(x) + i \cdot h_2(x) \pmod m$）し、超高速に計算。
+- **共通コア基盤への一元化**:
+  - `src/spider/core/bloom.py` の個別実装を廃止し、システム共通基盤 **`src/core/structures/bloom_filter.py`** の `BloomFilter` および容量上限時に動的スライス拡張する `ScalableBloomFilter` を `SeenURLFilter` に統合。
+  - ゼロ外部依存・Xenon Rank A (CC $\le 4$)・`mypy --strict` 準拠の高品質基盤としてクローラー全域で活用。
 
 ---
 

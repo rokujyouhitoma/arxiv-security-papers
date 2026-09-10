@@ -70,7 +70,8 @@
 
 ## 1.1 主要コンポーネントアーキテクチャ
 
-階層型ステートマシン基盤（`src/core/hsm/`）は、イベント駆動かつ決定論的なライフサイクル制御を実現するため、5つの独立した疎結合コンポーネントで構成されます。
+システム全体の共通コア基盤（`src/core/`）は、高信頼データ構造群（`src/core/structures/`: SkipList, DisjointSet, RadixTrie, ARCCache, RoaringBitmap, Probabilistic）と、ライフサイクル統制エンジン（`src/core/hsm/`）の二大支柱によって構成されます。
+階層型ステートマシン基盤（`src/core/hsm/`）は、イベント駆動かつ決定論的なライフサイクル制御を実現するため、以下の疎結合コンポーネント群で設計されます。
 
 ```mermaid
 graph TD

@@ -26,7 +26,7 @@
   - [3.2 固定・優先配置（Query Elevation Component）](#32-固定優先配置query-elevation-component)
   - [3.3 ファセット集計（FieldFacet, RangeFacet 半開区間 `[min, max)`）](#33-ファセット集計fieldfacet-rangefacet-半開区間-min-max)
   - [3.4 高速スニペット生成 & XSS セーフ動的ハイライター（DynamicHighlighter, FastVectorHighlighter）](#34-高速スニペット生成--xss-セーフ動的ハイライターdynamichighlighter-fastvectorhighlighter)
-  - [3.5 多層キャッシュ階層（FilterCache, QueryResultCache, DocumentCache, SolrCache）](#35-多層キャッシュ階層filtercache-queryresultcache-documentcache-solrcache)
+  - [3.5 多層キャッシュ階層（FilterCache, QueryResultCache, DocumentCache, SolrCache）とコアデータ構造統合](#35-多層キャッシュ階層filtercache-queryresultcache-documentcache-solrcacheとコアデータ構造統合)
   - [3.6 分散検索 & シャーディング（DistributedSearcher, ShardHandler, 非同期マージ）](#36-分散検索--シャーディングdistributedsearcher-shardhandler-非同期マージ)
 - [4. ハイブリッド語彙・意味ベクトル検索（Hybrid RAG & Fusion: `src/search/vector/`）](#4-ハイブリッド語彙意味ベクトル検索hybrid-rag--fusion-srcsearchvector)
   - [4.1 語彙検索（Lexical BM25）と意味検索（Semantic HNSW）の双対パイプライン](#41-語彙検索lexical-bm25と意味検索semantic-hnswの双対パイプライン)
@@ -188,23 +188,33 @@ JSON 定義による宣言的スキーマ管理を提供します。
 検索語句に一致した本文箇所を抽出し、前後の文脈を含めた抜粋スニペットを生成します。
 - **XSS セーフ HTML エスケープ**: 特殊文字（`<`, `>`, `&`, `"`, `'`）を完全にエスケープした上で、ハイライトタグ `<mark class="search-hl">...</mark>` のみを安全に挿入。
 
-## 3.5 多層キャッシュ階層（FilterCache, QueryResultCache, DocumentCache, SolrCache）
+## 3.5 多層キャッシュ階層（FilterCache, QueryResultCache, DocumentCache, SolrCache）とコアデータ構造統合
+
+本プラットフォームの検索キャッシュ層は、共通コアデータ構造基盤（`src/core/structures/`）と密結合し、極めて高いヒット率と走査耐性を実現します。
 
 ```mermaid
 graph TD
-    Query["Search Request"] --> QC{"QueryResultCache<br/>(Query -> TopDocIDs)"}
+    Query["Search Request"] --> QC{"QueryResultCache<br/>(Query -> TopDocIDs)<br/>[ARC / LRU]"}
     QC -->|Hit (0.1ms)| Res["Return Hits"]
-    QC -->|Miss| FC{"FilterCache<br/>(Filter -> BitSet)"}
-    FC -->|Hit| Match["Apply Doc Matching"]
+    QC -->|Miss| FC{"FilterCache<br/>(Filter -> RoaringBitmap)<br/>[ARC / LRU]"}
+    FC -->|Hit| Match["Apply Doc Matching (Bitwise &)"]
     FC -->|Miss| Index["Scan Inverted Index"]
     Index --> Match
-    Match --> DC{"DocumentCache<br/>(DocID -> StoredFields)"}
+    Match --> DC{"DocumentCache<br/>(DocID -> StoredFields)<br/>[ARC / LRU]"}
     DC --> Res
 ```
 
 1. **`QueryResultCache`**: クエリ文字列とソート条件から Top-K DocID リストをキャッシュ。
-2. **`FilterCache`**: フィルタ条件（例: `category:cryptography`）ごとのマッチングビットセットをキャッシュ。
-3. **`DocumentCache`**: ディスク物理読み出しを抑制するため、展開済みドキュメントオブジェクトをキャッシュ。
+2. **`FilterCache`**: フィルタ条件（例: `category:cryptography`）ごとのマッチングドキュメント集合を **`RoaringBitmap`** でキャッシュ。高速なビット並列演算（`&`, `|`）による合成フィルター評価を実現。
+3. **`DocumentCache`**: ディスク物理読み出しを抑制するため、展開済みドキュメント辞書をキャッシュ。
+4. **Adaptive Replacement Cache (ARC) 統合 (`ARCCache`, `ARCCacheAdapter`, `ARCFilterCache`)**:
+   - 従来の固定 LRU では、大規模な一括クエリや全件バッチ走査が行われた際に有用なキャッシュが追い出される「キャッシュ汚染（Cache Pollution）」が発生する。
+   - `src/core/structures/arc_cache.py` の `ARCCache`（Megiddo & Modha FAST '03 準拠）を採用し、最新性（$T_1, B_1$）と頻度（$T_2, B_2$）を目標サイズパラメータ $p$ で動的学習。一過性の走査クエリが頻出クエリを追放しない**走査耐性（Scan Resistance）**を担保。
+   - `SolrCache(use_arc=True)` により、`filter_cache`, `query_result_cache`, `document_cache` の全層で透過的に ARC 置換ポリシーを有効化可能。
+
+### 3.5.1 高速サジェスト・オートコンプリート基盤 (`RadixTrie`)
+- 検索 UI および API Gateway におけるリアルタイムキーワードサジェスト・補完において、共通コア基盤の **`RadixTrie`** (`src/core/structures/radix_trie.py`) を統合。
+- インデックス済みの全用語および CTI タクソノミー（CWE / ATT&CK / CVE）に対して、プレフィックス長 $K$ の定数オーダ $O(K)$ での高速補完（`suggest(prefix, limit=10)`）を提供。
 
 ## 3.6 分散検索 & シャーディング（DistributedSearcher, ShardHandler, 非同期マージ）
 複数シャード（インデックスパーティション）に並列でクエリを発行し、各シャードからの部分 Top-K 結果（DocID + スコア）を非同期マージしてグローバル Top-K を合成するスキャッター・ギャザー（Scatter/Gather）アーキテクチャを提供します。
