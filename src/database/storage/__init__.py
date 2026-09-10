@@ -2,6 +2,7 @@
 """Storage and Paging Subpackage."""
 
 from .buffer_pool import BufferFrame, BufferPool2Q, BufferPoolError
+from .json_storage import JsonLinesStorage, JsonStorageError, JsonTableStorage
 from .multi_storage import MultiTableSecurityError, MultiTableVectorStorage
 from .pager import PAGE_SIZE, Page, PageCache, Pager
 from .slotted_page import (
@@ -32,6 +33,9 @@ __all__ = [
     "BufferPool2Q",
     "BufferPoolError",
     "DataType",
+    "JsonLinesStorage",
+    "JsonStorageError",
+    "JsonTableStorage",
     "MemoryVFS",
     "MemoryVFSFile",
     "MultiTableSecurityError",

@@ -38,6 +38,7 @@ try:
         parse_arxiv_entry,
         save_raw_paper_data,
     )
+    from .pipeline_state import PipelineStateManager
     from .reporter import (
         PAPER_META_CACHE,
         build_summary_table_md,
@@ -84,6 +85,7 @@ except ImportError:
         parse_arxiv_entry,
         save_raw_paper_data,
     )
+    from pipeline.pipeline_state import PipelineStateManager
     from pipeline.reporter import (
         PAPER_META_CACHE,
         build_summary_table_md,
@@ -154,15 +156,28 @@ __all__ = [
 ]
 
 
-def _load_state(state_path: str) -> Dict[str, Any]:
-    if os.path.exists(state_path):
-        try:
-            with open(state_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data if isinstance(data, dict) else {}
-        except Exception:
-            return {}
-    return {}
+def _read_legacy_file(state_path: str) -> Dict[str, Any]:
+    if not os.path.exists(state_path):
+        return {}
+    try:
+        with open(state_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _load_state(state_path: str, workspace_dir: str = "") -> Dict[str, Any]:
+    ws = workspace_dir or _detect_workspace_dir()
+    db_dir = os.path.join(ws, "outputs", "database")
+    state_mgr = PipelineStateManager.get_instance(db_dir)
+
+    if os.path.exists(state_path) and state_mgr.catalog_storage.count() == 0:
+        state_mgr.migrate_legacy_processed_papers(state_path)
+
+    if state_mgr.catalog_storage.count() > 0:
+        return {}
+    return _read_legacy_file(state_path)
 
 
 def _parse_pub_date_utc(pub_str: Optional[str]) -> Optional[datetime]:
@@ -176,7 +191,9 @@ def _parse_pub_date_utc(pub_str: Optional[str]) -> Optional[datetime]:
 
 
 def _is_date_in_range(
-    pub_str: Optional[str], start_dt: Optional[datetime], end_dt: Optional[datetime]
+    pub_str: Optional[str],
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
 ) -> bool:
     pub_dt = _parse_pub_date_utc(pub_str)
     if pub_dt is None:
@@ -184,6 +201,18 @@ def _is_date_in_range(
     after_start = start_dt is None or pub_dt >= start_dt
     before_end = end_dt is None or pub_dt <= end_dt
     return after_start and before_end
+
+
+def _is_paper_already_processed(
+    arxiv_id: str,
+    processed_state: Dict[str, Any],
+    workspace_dir: str,
+) -> bool:
+    if arxiv_id in processed_state:
+        return True
+    db_dir = os.path.join(workspace_dir, "outputs", "database")
+    state_mgr = PipelineStateManager.get_instance(db_dir)
+    return state_mgr.is_paper_processed(arxiv_id)
 
 
 def _filter_and_stage_papers(
@@ -204,7 +233,9 @@ def _filter_and_stage_papers(
         if not _is_date_in_range(paper.get("published"), start_dt, end_dt):
             out_of_range += 1
             continue
-        if arxiv_id in processed_state and not force:
+        if not force and _is_paper_already_processed(
+            arxiv_id, processed_state, workspace_dir
+        ):
             already_processed += 1
             continue
         raw_meta_path = save_raw_paper_data(paper, workspace_dir, config)
@@ -309,6 +340,9 @@ def _transform_and_save_okf(
         f"[OKF:Transformer] Converting {total} raw papers into Google OKF v0.2 Markdown..."
     )
 
+    db_dir = os.path.join(workspace_dir, "outputs", "database")
+    state_mgr = PipelineStateManager.get_instance(db_dir)
+
     for idx, (paper, _, raw_meta_path) in enumerate(pdf_fetch_tasks, start=1):
         item = build_okf_from_raw(raw_meta_path, workspace_dir, config)
         processed_items.append(item)
@@ -316,7 +350,9 @@ def _transform_and_save_okf(
         print(
             f"[OKF:Transformer] [{idx}/{total}] Generated OKF document: {item['rel_okf_path']} (ID: {arxiv_id})"
         )
-        processed_state[paper["arxiv_id"]] = {
+        meta_entry = {
+            "clean_id": state_mgr.to_clean_id(paper["arxiv_id"]),
+            "arxiv_id": paper["arxiv_id"],
             "processed_at": datetime.now(timezone.utc).isoformat(),
             "published": paper.get("published"),
             "title": paper["title"],
@@ -324,11 +360,19 @@ def _transform_and_save_okf(
             "raw_meta_path": os.path.relpath(raw_meta_path, workspace_dir),
             "okf_path": item["rel_okf_path"],
         }
+        processed_state[paper["arxiv_id"]] = meta_entry
+        state_mgr.register_paper(meta_entry, auto_flush=False)
 
-    _atomic_json_dump(processed_state, state_path)
+    state_mgr.catalog_storage.flush()
+
+    if processed_items and os.path.exists(state_path):
+        _atomic_json_dump(processed_state, state_path)
     print(
         f"[State] Updated state tracking file ({state_path}) with {len(processed_items)} new entries."
     )
+
+    log_path = os.path.join(workspace_dir, "outputs", "log.md")
+    state_mgr.project_log_markdown(log_path)
     _ingest_items_into_knowledge_graph(processed_items, workspace_dir)
     return processed_items
 
@@ -403,7 +447,7 @@ def run_pipeline(
 ) -> List[Dict[str, Any]]:
     """Executes the full 3-tier ETL pipeline."""
     state_path = os.path.join(workspace_dir, config["paths"]["state_file"])
-    processed_state = _load_state(state_path)
+    processed_state = _load_state(state_path, workspace_dir)
 
     papers = fetch_arxiv_papers(
         query=query, max_results=max_results
@@ -497,7 +541,7 @@ def _stage_theme_papers(
         else f"processed_papers_{theme_id}.json"
     )
     state_path = os.path.join(workspace_dir, state_filename)
-    processed_state = _load_state(state_path)
+    processed_state = _load_state(state_path, workspace_dir)
 
     pdf_fetch_tasks = _filter_and_stage_papers(
         papers_data, workspace_dir, cfg, processed_state, start_dt, end_dt, force

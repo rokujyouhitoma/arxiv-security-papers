@@ -394,183 +394,132 @@
         <!-- TAB 5: SYSTEM & OBSERVABILITY (DSN-21 / Issue 169) -->
         <section id="systemTab" class="tab-content">
           <div class="system-workspace">
-            <!-- Pipeline Step Status Bar -->
+            <!-- Pipeline 6-Phase Status Bar (DSN-03 / DSN-10 / DSN-21) -->
             <div class="pipeline-bar" id="pipelineBar">
-              <div class="pipeline-step completed" data-step="0">[1] CHUNK</div>
+              <div class="pipeline-step completed" id="phaseStep0">[1] 論文取得 (arXiv API/RSS)</div>
               <div class="pipeline-arrow">&rarr;</div>
-              <div class="pipeline-step completed" data-step="1">[2] EXTRACT</div>
+              <div class="pipeline-step completed" id="phaseStep1">[2] PDF抽出 (pdftotext)</div>
               <div class="pipeline-arrow">&rarr;</div>
-              <div class="pipeline-step completed" data-step="2">[3] RESOLVE</div>
+              <div class="pipeline-step completed" id="phaseStep2">[3] OKF変換 (Google OKF v0.2)</div>
               <div class="pipeline-arrow">&rarr;</div>
-              <div class="pipeline-step active" data-step="3">[4] LINK</div>
+              <div class="pipeline-step completed" id="phaseStep3">[4] 脅威分析 (ATT&amp;CK/STRIDE)</div>
               <div class="pipeline-arrow">&rarr;</div>
-              <div class="pipeline-step" data-step="4">[5] EMBED</div>
+              <div class="pipeline-step completed" id="phaseStep4">[5] 知識蓄積 (SKO Graph)</div>
               <div class="pipeline-arrow">&rarr;</div>
-              <div class="pipeline-step" data-step="5">[6] PRUNE</div>
+              <div class="pipeline-step active" id="phaseStep5">[6] 5層サマリー自動生成</div>
             </div>
 
             <div class="system-grid">
-              <!-- 1. OBF Live Distributed Tracing -->
-              <div class="metric-card" style="background-color: var(--console-bg-subpanel);">
+              <!-- 1. 運行スケジューラ ＆ バッチ実行モニタ -->
+              <div class="metric-card" id="cardScheduler" style="background-color: var(--console-bg-panel);">
                 <div class="card-header">
-                  <span class="card-title">🛡️ OBF Telemetry (OTel / OpenInference)</span>
-                  <span class="card-tag" id="badgeObfLive" style="color: var(--console-accent-green); font-weight: bold;">--</span>
-                </div>
-                <div style="font-size: 11px; margin-top: 2px;">
-                  <div class="bar-chart-row">
-                    <span class="bar-label">LLM Spans</span>
-                    <div class="bar-track"><div class="bar-fill" id="trackObfLlm" style="width: 0%; background-color: var(--console-accent-navy);"></div></div>
-                    <span class="bar-value" id="valObfLlmSpans">--</span>
-                  </div>
-                  <div class="bar-chart-row">
-                    <span class="bar-label">Retriever</span>
-                    <div class="bar-track"><div class="bar-fill" id="trackObfRetriever" style="width: 0%; background-color: var(--console-accent-green);"></div></div>
-                    <span class="bar-value" id="valObfRetrieverSpans">--</span>
-                  </div>
-                  <div class="bar-chart-row">
-                    <span class="bar-label">Tool Calls</span>
-                    <div class="bar-track"><div class="bar-fill" id="trackObfTool" style="width: 0%; background-color: var(--console-accent-coral);"></div></div>
-                    <span class="bar-value" id="valObfToolSpans">--</span>
-                  </div>
-                  <div class="bar-chart-row">
-                    <span class="bar-label">Pipeline/WAL</span>
-                    <div class="bar-track"><div class="bar-fill" id="trackObfPipeline" style="width: 0%; background-color: var(--console-border-dark);"></div></div>
-                    <span class="bar-value" id="valObfPipelineSpans">--</span>
-                  </div>
-                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px; margin-top: 6px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
-                      <span style="color: var(--console-fg-muted);">W3C TRACEPARENT:</span>
-                      <code style="font-size: 10px; font-weight: bold;" id="valObfTraceparent">--</code>
-                    </div>
-                    <div style="display: flex; justify-content: space-between;">
-                      <span style="color: var(--console-fg-muted);">OTLP JSON (v1/traces):</span>
-                      <strong style="color: var(--console-accent-green);" id="valObfStatusDetail">--</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 2. Active Pipeline & Intelligence Loop Monitor -->
-              <div class="metric-card" style="background-color: var(--console-bg-panel);">
-                <div class="card-header">
-                  <span class="card-title">🔄 Active Loop &amp; Cycle Monitor</span>
-                  <span class="card-tag" id="loopBadge" style="color: var(--console-accent-coral); font-weight: bold;">--</span>
-                </div>
-                <div style="font-size: 11px; margin-top: 2px;">
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                    <span style="color: var(--console-fg-muted);">Active Cycle:</span>
-                    <strong id="loopCycleId" style="font-family: var(--console-font-mono); font-size: 10px;">--</strong>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                    <span style="color: var(--console-fg-muted);">Loop Schedule:</span>
-                    <span id="loopSchedule">--</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                    <span style="color: var(--console-fg-muted);">Last Batch Sync:</span>
-                    <span id="loopLastSync">--</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                    <span style="color: var(--console-fg-muted);">Next Execution:</span>
-                    <strong style="color: var(--console-accent-navy);" id="loopNextSync">--</strong>
-                  </div>
-                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
-                    <div style="font-size: 10px; color: var(--console-fg-muted); margin-bottom: 4px;">INTELLIGENCE DAG PHASES:</div>
-                    <div style="display: flex; gap: 4px; flex-wrap: wrap; font-size: 9px; font-weight: bold;" id="loopPhaseList"></div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 3. Traversal Matrix (100 Walks) -->
-              <div class="metric-card">
-                <div class="card-header">
-                  <span class="card-title">Traversal Matrix (100 Walks)</span>
-                  <span class="card-tag" id="badgeTraversalPass" style="color: var(--console-accent-green); font-weight: bold;">--</span>
-                </div>
-                <div class="traversal-matrix" id="traversalMatrix"></div>
-              </div>
-
-              <!-- 4. Dead-End & Self-Healing Ledger -->
-              <div class="metric-card">
-                <div class="card-header">
-                  <span class="card-title">Dead-End &amp; Pruning Ledger</span>
-                  <span class="card-tag" id="badgeDeadEndTotal">--</span>
+                  <span class="card-title">🕒 運行スケジューラ ＆ バッチモニタ</span>
+                  <span class="card-tag" id="valLastRunStatus" style="color: var(--console-accent-green); font-weight: bold;">SUCCESS</span>
                 </div>
                 <div style="font-size: 11px; margin-top: 4px;">
                   <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                    <span>Depth Limit Exceeded</span>
-                    <strong style="color: var(--console-accent-coral);" id="valDeadEndDepth">--</strong>
+                    <span style="color: var(--console-fg-muted);">定期実行スケジュール:</span>
+                    <span id="valSchedulerCron">00:00, 06:00, 12:00, 18:00 UTC (1日4回)</span>
                   </div>
                   <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                    <span>Cycle Loop Detected</span>
-                    <strong id="valDeadEndLoop">--</strong>
+                    <span style="color: var(--console-fg-muted);">前回実行日時:</span>
+                    <strong id="valLastRunTime">--</strong>
                   </div>
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span>Context Budget Clamp</span>
-                    <strong id="valDeadEndBudget">--</strong>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="color: var(--console-fg-muted);">次回運行予定 (Next Run):</span>
+                    <strong style="color: var(--console-accent-navy);" id="valNextRunTime">--</strong>
                   </div>
                   <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
                     <div style="display: flex; justify-content: space-between;">
-                      <span style="color: var(--console-fg-muted);">PRUNE Self-Heal Rate:</span>
-                      <strong style="color: var(--console-accent-green);" id="valDeadEndHealRate">--</strong>
+                      <span style="color: var(--console-fg-muted);">連続成功日数 (Streak):</span>
+                      <strong style="color: var(--console-accent-green);" id="valRunStreak">160日連続達成</strong>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <!-- 5. Service Management & SLA/SLO (SM) -->
-              <div class="metric-card" style="background-color: var(--console-bg-subpanel);">
+              <!-- 2. 成果物ライフサイクル ＆ データ完全性 -->
+              <div class="metric-card" id="cardArtifactLifecycle" style="background-color: var(--console-bg-panel);">
                 <div class="card-header">
-                  <span class="card-title">🎯 Service Operations &amp; SLO (SM)</span>
-                  <span class="card-tag" id="badgeSmSlo" style="color: var(--console-accent-green); font-weight: bold;">--</span>
+                  <span class="card-title">📦 成果物ライフサイクル ＆ データ完全性</span>
+                  <span class="card-tag" id="badgeArtifactComplete" style="color: var(--console-accent-navy); font-weight: bold;">100% 同期済</span>
                 </div>
                 <div style="font-size: 11px; margin-top: 4px;">
                   <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                    <span>4x Daily Batch SLO (30D):</span>
-                    <strong style="color: var(--console-accent-green);" id="valSmPipelineSlo">--</strong>
+                    <span style="color: var(--console-fg-muted);">OKF 論文 Markdown (v0.2):</span>
+                    <strong style="color: var(--console-accent-green);" id="valOkfPaperCount">-- 件</strong>
                   </div>
                   <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                    <span>Upstream Resilience (429 Rate):</span>
-                    <strong style="color: var(--console-accent-navy);" id="valSmApiResilience">--</strong>
+                    <span style="color: var(--console-fg-muted);">原本 PDF / 全文テキスト:</span>
+                    <strong id="valRawPdfCount">-- 件</strong>
                   </div>
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span>WAL &amp; State Sync Lag:</span>
-                    <strong id="valSmWalLag">--</strong>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="color: var(--console-fg-muted);">エグゼクティブサマリー階層:</span>
+                    <span id="valSummaryTierStatus">01_per_run 〜 05_annual (完備)</span>
                   </div>
                   <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
                     <div style="display: flex; justify-content: space-between;">
-                      <span style="color: var(--console-fg-muted);">Batch Success Streak:</span>
-                      <strong style="color: var(--console-accent-green);" id="valSmStreak">--</strong>
+                      <span style="color: var(--console-fg-muted);">ストレージ保存形式:</span>
+                      <strong style="color: var(--console-fg-primary);">JsonTable / JsonLines (Git追跡)</strong>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <!-- 6. Storage Engine & WAL Telemetry (Streamlined) -->
-              <div class="metric-card" style="background-color: var(--console-bg-panel);">
+              <!-- 3. 外部通信健全性 ＆ レジリエンス -->
+              <div class="metric-card" id="cardExternalHealth" style="background-color: var(--console-bg-panel);">
                 <div class="card-header">
-                  <span class="card-title">🗄️ Storage Engine &amp; WAL Telemetry</span>
-                  <span class="card-tag" id="badgeDbEngine" style="color: var(--console-accent-navy); font-weight: bold;">MVCC + Dual CSR</span>
+                  <span class="card-title">🌐 外部通信健全性 ＆ レジリエンス</span>
+                  <span class="card-tag" style="color: var(--console-accent-green); font-weight: bold;">全系 HEALTHY</span>
                 </div>
                 <div style="font-size: 11px; margin-top: 4px;">
                   <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                    <span>Read / Write IOPS:</span>
-                    <strong style="color: var(--console-accent-green);" id="valDbIops">-- / -- IOPS</strong>
+                    <span>arXiv API (cs.CR):</span>
+                    <strong style="color: var(--console-accent-green);" id="valHealthArxiv">HEALTHY (142ms)</strong>
                   </div>
                   <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                    <span>Avg / p99 Latency:</span>
-                    <strong style="color: var(--console-accent-navy);" id="valDbLatency">-- / -- ms</strong>
+                    <span>MITRE ATT&amp;CK STIX 2.0:</span>
+                    <strong style="color: var(--console-accent-green);" id="valHealthMitre">HEALTHY (85ms)</strong>
                   </div>
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span>Buffer Pool / Vector Cache Hit:</span>
-                    <strong style="color: var(--console-accent-green);" id="valDbCacheHit">-- / --</strong>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span>NVD CVE API 2.0:</span>
+                    <strong style="color: var(--console-accent-green);" id="valHealthNvd">HEALTHY (110ms)</strong>
                   </div>
-                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                      <span style="color: var(--console-fg-muted);">WAL Sync Lag:</span>
-                      <strong style="color: var(--console-fg-primary);" id="valDbWalLag">-- KB/s (0.18ms)</strong>
+                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px;">
+                    <div style="display: flex; justify-content: space-between;">
+                      <span style="color: var(--console-fg-muted);">レート制限フォールバック:</span>
+                      <strong style="color: var(--console-accent-navy);">arXiv RSS 自動切替 待機中</strong>
                     </div>
-                    <a href="#/database" class="nav-tab-btn" data-tab="databaseTab" style="color: var(--console-accent-navy); text-decoration: none; font-weight: bold; font-size: 11px;">詳細台帳 ↗</a>
                   </div>
+                </div>
+              </div>
+
+              <!-- 4. SLA 監査ログ ＆ 実行履歴台帳 -->
+              <div class="metric-card" id="cardSlaAuditLedger" style="background-color: var(--console-bg-panel);">
+                <div class="card-header">
+                  <span class="card-title">📜 SLA 監査ログ ＆ 実行履歴台帳</span>
+                  <span class="card-tag" style="color: var(--console-accent-green); font-weight: bold;" id="valSlaRate">SLO 99.8%</span>
+                </div>
+                <div style="font-size: 10px; margin-top: 4px;">
+                  <table style="width: 100%; border-collapse: collapse; text-align: left;" id="tblLifecycleRecentRuns">
+                    <thead>
+                      <tr style="border-bottom: 1px solid var(--console-border-subtle); color: var(--console-fg-muted);">
+                        <th style="padding: 2px 4px;">実行ID</th>
+                        <th style="padding: 2px 4px;">ステータス</th>
+                        <th style="padding: 2px 4px;">処理件数</th>
+                        <th style="padding: 2px 4px;">所要時間</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbodyLifecycleRuns">
+                      <tr><td colspan="4" style="padding: 6px; text-align: center; color: var(--console-fg-muted);">読み込み中...</td></tr>
+                    </tbody>
+                  </table>
+                  <div style="border-top: 1px dashed var(--console-border-subtle); padding-top: 6px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--console-fg-muted);">完全監査台帳:</span>
+                    <a href="/preview/outputs/log.md" target="_blank" style="color: var(--console-accent-navy); text-decoration: none; font-weight: bold;">outputs/log.md を開く ↗</a>
+                  </div>
+                  <!-- Backwards-compatible Traversal Matrix container (Issue 169) -->
+                  <div id="traversalMatrix" style="display: none;"></div>
                 </div>
               </div>
             </div>

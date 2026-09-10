@@ -93,6 +93,8 @@ class WSGIApplication:
             return self.handlers.handle_trends(start_response, query_params)
         if path == "/api/stats":
             return self.handlers.handle_stats(start_response)
+        if path == "/api/system/lifecycle":
+            return self.handlers.handle_system_lifecycle(start_response)
         return None
 
     def _route_stream_api(

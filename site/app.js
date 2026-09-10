@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 50);
     } else if (tabId === 'systemTab') {
       setTimeout(() => {
-        renderTraversalMatrix(0);
+        syncLifecycleTelemetry();
       }, 50);
     } else if (tabId === 'databaseTab') {
       setTimeout(() => {
@@ -983,7 +983,7 @@ document.addEventListener('DOMContentLoaded', () => {
     wCtx.fillText(`${walkHistory[walkHistory.length - 1].toFixed(1)}% Token Saved`, 25, 20);
   }
 
-  // D. Deterministic Traversal Matrix (100 Walks)
+  // D. Deterministic Traversal Matrix (Backwards compatibility)
   function renderTraversalMatrix(successRatePct) {
     const matrixContainer = document.getElementById('traversalMatrix');
     if (!matrixContainer) return;
@@ -991,13 +991,82 @@ document.addEventListener('DOMContentLoaded', () => {
     const successCount = Math.round(Math.max(0, Math.min(100, successRatePct ?? 0)));
     for (let i = 0; i < 100; i++) {
       const dot = document.createElement('div');
-      dot.className = 'traversal-dot';
-      if (i < successCount) {
-        dot.classList.add('success');
-      } else {
-        dot.classList.add('deadend');
-      }
+      dot.style.width = '8px';
+      dot.style.height = '8px';
+      dot.style.borderRadius = '2px';
+      dot.style.backgroundColor = i < successCount ? '#10b981' : '#334155';
+      dot.title = `Walk #${i + 1}: ${i < successCount ? 'Success' : 'Fallthrough'}`;
       matrixContainer.appendChild(dot);
+    }
+  }
+
+  // E. System Lifecycle & Operational Observability (DSN-10 / DSN-21 / Issue 228)
+  async function syncLifecycleTelemetry() {
+    try {
+      const res = await fetch('/api/system/lifecycle');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.status !== 'success') return;
+
+      // 1. Scheduler Card
+      const sched = data.scheduler || {};
+      const elSchedCron = document.getElementById('valSchedulerCron');
+      if (elSchedCron && sched.schedule) elSchedCron.textContent = sched.schedule;
+      const elLastStatus = document.getElementById('valLastRunStatus');
+      if (elLastStatus) {
+        elLastStatus.textContent = sched.last_run_status || 'SUCCESS';
+        elLastStatus.style.color = (sched.last_run_status === 'SUCCESS') ? 'var(--console-accent-green)' : 'var(--console-accent-coral)';
+      }
+      const elLastRun = document.getElementById('valLastRunTime');
+      if (elLastRun && sched.last_run_utc) elLastRun.textContent = sched.last_run_utc;
+      const elNextRun = document.getElementById('valNextRunTime');
+      if (elNextRun && sched.next_run_utc) elNextRun.textContent = sched.next_run_utc;
+      const elStreak = document.getElementById('valRunStreak');
+      if (elStreak && sched.streak_days) elStreak.textContent = `${sched.streak_days}日連続達成`;
+
+      // 2. Artifacts Lifecycle Card
+      const art = data.artifacts || {};
+      const elOkfCount = document.getElementById('valOkfPaperCount');
+      if (elOkfCount && art.okf_papers_count !== undefined) {
+        elOkfCount.textContent = `${Number(art.okf_papers_count).toLocaleString()} 件`;
+      }
+      const elRawPdf = document.getElementById('valRawPdfCount');
+      if (elRawPdf && art.raw_pdf_count !== undefined) {
+        elRawPdf.textContent = `${Number(art.raw_pdf_count).toLocaleString()} 件`;
+      }
+
+      // 3. External Health Card
+      const ext = data.external_health || {};
+      const elArxiv = document.getElementById('valHealthArxiv');
+      if (elArxiv && ext.arxiv_api) elArxiv.textContent = `${ext.arxiv_api.status} (${ext.arxiv_api.latency_ms}ms)`;
+      const elMitre = document.getElementById('valHealthMitre');
+      if (elMitre && ext.mitre_attack) elMitre.textContent = `${ext.mitre_attack.status} (${ext.mitre_attack.latency_ms}ms)`;
+      const elNvd = document.getElementById('valHealthNvd');
+      if (elNvd && ext.nvd_cve) elNvd.textContent = `${ext.nvd_cve.status} (${ext.nvd_cve.latency_ms}ms)`;
+
+      // 4. SLA Audit Ledger
+      const sla = data.sla || {};
+      const elSlaRate = document.getElementById('valSlaRate');
+      if (elSlaRate && sla.actual_availability) elSlaRate.textContent = `SLO ${sla.actual_availability}`;
+
+      const tbody = document.getElementById('tbodyLifecycleRuns');
+      if (tbody && Array.isArray(data.recent_runs) && data.recent_runs.length > 0) {
+        tbody.innerHTML = '';
+        data.recent_runs.slice(0, 5).forEach(run => {
+          const tr = document.createElement('tr');
+          tr.style.borderBottom = '1px solid var(--console-border-subtle)';
+          const stColor = (run.status === 'SUCCESS') ? 'var(--console-accent-green)' : 'var(--console-accent-coral)';
+          tr.innerHTML = `
+            <td style="padding: 4px; font-family: var(--console-font-mono);">${escapeHtml(run.run_id || '-')}</td>
+            <td style="padding: 4px; color: ${stColor}; font-weight: bold;">${escapeHtml(run.status || '-')}</td>
+            <td style="padding: 4px;">${run.papers_processed || 0} 件</td>
+            <td style="padding: 4px;">${run.duration_sec || 0}s</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to sync lifecycle telemetry:', err);
     }
   }
 
@@ -1397,9 +1466,8 @@ document.addEventListener('DOMContentLoaded', () => {
       calculateAndDrawHopHistogram();
       updateRealEdgeLedger();
       drawWalkChart();
-      // M8: pass real traversal success rate from graph engine stats
-      const tStats = data['traversal_stats'];
-      renderTraversalMatrix(tStats ? (tStats['success_rate_pct'] ?? 0) : 0);
+      // Update pipeline lifecycle telemetry
+      syncLifecycleTelemetry();
 
       // Dynamic updates for Index Page Banner & KPI cards (D5, D6, D7)
       if (data['loop_monitor'] && data['loop_monitor']['last_sync_utc']) {

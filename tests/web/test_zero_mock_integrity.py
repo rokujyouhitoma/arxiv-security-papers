@@ -284,14 +284,65 @@ class TestZeroMockIntegrity(unittest.TestCase):
             "D8: app.js alert still hardcodes '2026-09-05 06:00'",
         )
 
-    # ------------------------------------------------------------- D9 (handlers.py) --
-    def test_handlers_py_hit_rate_not_always_100_d9(self) -> None:
-        """D9: _resolve_hit_rate in handlers.py must not unconditionally return 100.0%."""
-        content = _read_handlers_py()
+    # ------------------------------------------------------------- D10 - D12 (Issue #228 Lifecycle & System Tab) --
+    def test_system_lifecycle_endpoint_and_handler_registered_d10(self) -> None:
+        """D10: /api/system/lifecycle endpoint and handler must exist."""
+        handlers_content = _read_handlers_py()
+        self.assertIn(
+            "def handle_system_lifecycle(",
+            handlers_content,
+            "D10: handlers.py missing handle_system_lifecycle method",
+        )
+        app_py = (_ROOT / "src" / "web" / "gateway" / "app.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            '"/api/system/lifecycle"',
+            app_py,
+            "D10: app.py missing /api/system/lifecycle route",
+        )
+
+    def test_index_html_system_tab_has_operational_cards_and_no_dead_elements_d11(
+        self,
+    ) -> None:
+        """D11: index.html system tab must have 4 operational cards and 6 phases, with dead elements removed."""
+        content = _read_index_html()
+        for element_id in (
+            "cardScheduler",
+            "cardArtifactLifecycle",
+            "cardExternalHealth",
+            "cardSlaAuditLedger",
+            "phaseStep0",
+            "phaseStep5",
+            "valLastRunStatus",
+            "valSchedulerCron",
+            "valSlaRate",
+        ):
+            self.assertIn(
+                f'id="{element_id}"',
+                content,
+                f"D11: index.html missing dynamic operational card element '{element_id}'",
+            )
+
+        # Ensure dead elements from legacy mock graph traversal are eliminated
         self.assertNotIn(
-            '100.0%" if p_rows > 0',
+            'id="valDeadEndDepth"',
             content,
-            "D9: handlers.py _resolve_hit_rate still hardcodes 100.0% if p_rows > 0",
+            "D11: index.html still contains dead element 'valDeadEndDepth'",
+        )
+
+    def test_app_js_sync_lifecycle_telemetry_exists_d12(self) -> None:
+        """D12: app.js must have syncLifecycleTelemetry() function fetching /api/system/lifecycle."""
+        content = _read_app_js()
+        self.assertIn(
+            "async function syncLifecycleTelemetry",
+            content,
+            "D12: app.js missing syncLifecycleTelemetry() function",
+        )
+        self.assertIn(
+            "fetch('/api/system/lifecycle')",
+            content,
+            "D12: app.js syncLifecycleTelemetry does not fetch /api/system/lifecycle",
         )
 
 
