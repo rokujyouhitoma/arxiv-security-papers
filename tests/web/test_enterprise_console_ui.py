@@ -170,6 +170,7 @@ def test_ported_product_system_supervisor_views() -> None:
     assert (
         'id="databaseSelectorPills"' in content
     ), "Multi-database selector pills required"
+    assert 'id="selectDbScope"' in content, "selectDbScope dropdown required"
     assert 'id="btnDbArxiv"' in content, "btnDbArxiv selector required"
     assert 'id="btnDbCti"' in content, "btnDbCti selector required"
     assert 'id="btnDbAnalytics"' in content, "btnDbAnalytics selector required"
@@ -198,6 +199,7 @@ def test_ported_telemetry_script_handlers() -> None:
 
     # Telemetry, multi-database explorer, and SSE streaming
     assert "renderDatabaseTab" in js_text, "Multi-database renderer required"
+    assert "selectDbScope" in js_text, "selectDbScope handler in app.js required"
     assert "updateDatabaseMetrics" in js_text, "Database metrics updater required"
     assert "updateSupervisorFromStream" in js_text, "Supervisor updater required"
     assert "syncConsoleTelemetry" in js_text, "Console telemetry sync required"

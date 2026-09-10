@@ -1079,10 +1079,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetDb = allDbs[dbKey] || cachedDatabaseMetrics;
     const kpi = targetDb.performance_kpis || {};
 
-    // 1. Selector pills active state
+    // 1. Selector pills and dropdown active state
     document.querySelectorAll('#databaseSelectorPills .filter-pill').forEach(btn => {
       btn.classList.toggle('active', btn.getAttribute('data-db') === dbKey);
     });
+    const elSelectDb = document.getElementById('selectDbScope');
+    if (elSelectDb && elSelectDb.value !== dbKey) {
+      elSelectDb.value = dbKey;
+    }
 
     // 2. Target Database Overview Card
     const elScope = document.getElementById('badgeDbScopeTag');
@@ -1202,7 +1206,18 @@ document.addEventListener('DOMContentLoaded', () => {
     renderDatabaseTab(currentSelectedDatabase);
   }
 
-  // Database Selector Pills Click Handlers
+  // Database Selector Pills and Dropdown Event Handlers
+  const selectDbScopeEl = document.getElementById('selectDbScope');
+  if (selectDbScopeEl) {
+    selectDbScopeEl.addEventListener('change', (e) => {
+      const dbTarget = e.target.value;
+      if (dbTarget) {
+        currentSelectedDatabase = dbTarget;
+        renderDatabaseTab(currentSelectedDatabase);
+      }
+    });
+  }
+
   document.querySelectorAll('#databaseSelectorPills .filter-pill').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();

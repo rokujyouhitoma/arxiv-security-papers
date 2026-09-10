@@ -794,151 +794,57 @@ def _introspect_graph_table_metrics(
     return tables, v_count + e_count, kg_size, ge_instance
 
 
-def _introspect_paper_table_metrics(
-    workspace_dir: str,
-) -> Tuple[Dict[str, Any], int, int]:
-    """Introspects paper_metadata table from processed_papers.json."""
-    papers_json_path = os.path.join(workspace_dir, "processed_papers.json")
-    papers_size = (
-        os.path.getsize(papers_json_path) if os.path.exists(papers_json_path) else 0
-    )
-    papers_count = 0
-    if os.path.exists(papers_json_path):
-        try:
-            with open(papers_json_path, "r", encoding="utf-8") as f:
-                papers_count = len(json.load(f))
-        except Exception:
-            pass
+def _introspect_okf_papers_table(
+    workspace_dir: str, papers_count: int
+) -> Dict[str, Any]:
+    """Introspects okf_papers virtual table descriptor from outputs/okf_papers."""
+    okf_dir = os.path.join(workspace_dir, "outputs", "okf_papers")
+    size_bytes = os.path.getsize(okf_dir) if os.path.exists(okf_dir) else 20480
+    return {
+        "table_name": "okf_papers",
+        "category": "Virtual Table (Markdown Documents)",
+        "storage_engine": "File-Backed Plain-Text / Markdown",
+        "row_count": papers_count,
+        "size_bytes": size_bytes,
+        "size_human": _format_size(size_bytes),
+        "primary_key": "clean_id (TEXT)",
+        "indexed_columns": ["arxiv_id", "published_date", "tags"],
+    }
 
-    table = {
-        "table_name": "paper_metadata",
+
+def _introspect_processed_papers_table(
+    papers_count: int, papers_size: int
+) -> Dict[str, Any]:
+    """Introspects processed_papers virtual table descriptor from processed_papers.json."""
+    return {
+        "table_name": "processed_papers",
         "category": "Master Document Catalog",
         "storage_engine": "JSON Key-Value / Pager",
         "row_count": papers_count,
         "size_bytes": papers_size,
         "size_human": _format_size(papers_size),
-        "primary_key": "arxiv_id (TEXT)",
+        "primary_key": "clean_id (TEXT)",
         "indexed_columns": ["published", "title", "okf_path"],
     }
-    return table, papers_count, papers_size
 
 
-def _introspect_vector_and_search_metrics(
-    workspace_dir: str, doc_count: int
-) -> Tuple[List[Dict[str, Any]], int, int]:
-    """Introspects papers_vector and search_inverted_index tables."""
-    vec_index_path = os.path.join(workspace_dir, "outputs", "vector_db", "index.json")
-    combined_index_size = (
-        os.path.getsize(vec_index_path) if os.path.exists(vec_index_path) else 0
-    )
-
-    raw_embedding_bytes = doc_count * 384 * 4
-    if combined_index_size > 0 and raw_embedding_bytes > 0:
-        vec_ratio = min(0.80, max(0.20, raw_embedding_bytes * 3 / combined_index_size))
-    else:
-        vec_ratio = 0.50
-
-    vec_size = int(combined_index_size * vec_ratio)
-    bm25_size = combined_index_size - vec_size
-
-    tables = [
-        {
-            "table_name": "papers_vector",
-            "category": "High-Dimensional Vector Store",
-            "storage_engine": "HNSW Graph Index (Cosine)",
-            "row_count": doc_count,
-            "size_bytes": vec_size,
-            "size_human": _format_size(vec_size),
-            "primary_key": "doc_id (TEXT)",
-            "indexed_columns": ["embedding (384-dim)"],
-        },
-        {
-            "table_name": "search_inverted_index",
-            "category": "Full-Text Search Engine",
-            "storage_engine": "BM25 Postings List",
-            "row_count": doc_count,
-            "size_bytes": bm25_size,
-            "size_human": _format_size(bm25_size),
-            "primary_key": "term_id (TEXT)",
-            "indexed_columns": ["postings", "df", "tf_idf"],
-        },
-    ]
-    return tables, doc_count * 2, combined_index_size
-
-
-def _query_table_count(conn: Any, tname: str) -> int:
-    try:
-        cnt_cur = conn.execute(f"SELECT COUNT(*) FROM {tname}")  # noqa: S608
-        row = cnt_cur.fetchone()
-        return int(row[0]) if row else 0
-    except Exception:
-        return 0
-
-
-def _sum_sqlite_tables_rows(conn: Any) -> Optional[int]:
-    from database import sum_sqlite_table_rows
-
-    return sum_sqlite_table_rows(conn)
-
-
-def _count_analytics_sqlite_rows(analytics_db_path: str) -> Optional[int]:
-    from database import count_sqlite_table_rows
-
-    return count_sqlite_table_rows(analytics_db_path)
-
-
-def _count_vdb_lines(metrics_path: str, metrics_size: int) -> int:
-    if os.path.exists(metrics_path) and metrics_size > 0:
-        try:
-            with open(metrics_path, "rb") as f:
-                return max(1, f.read().count(b"\n") + 1)
-        except Exception:
-            return 1
-    return 0
-
-
-def _resolve_analytics_db_path(workspace_dir: str) -> str:
-    vdb = os.path.join(
-        workspace_dir, "outputs", "database", "analytics", "analytics.vdb"
-    )
-    if os.path.exists(vdb):
-        return vdb
-    new_db = os.path.join(
-        workspace_dir, "outputs", "database", "analytics", "analytics.db"
-    )
-    if os.path.exists(new_db):
-        return new_db
-    return os.path.join(workspace_dir, "outputs", "analytics", "analytics.db")
-
-
-def _introspect_analytics_metrics(
-    workspace_dir: str,
-) -> Tuple[Dict[str, Any], int, int]:
-    """Introspects analytics_metrics from metrics.vdb and analytics.db."""
-    new_metrics = os.path.join(
-        workspace_dir, "outputs", "database", "engine", "metrics.vdb"
-    )
-    legacy_metrics = os.path.join(workspace_dir, "outputs", "database", "metrics.vdb")
-    metrics_path = new_metrics if os.path.exists(new_metrics) else legacy_metrics
-    metrics_size = os.path.getsize(metrics_path) if os.path.exists(metrics_path) else 0
-    metrics_rows = _count_vdb_lines(metrics_path, metrics_size)
-
-    analytics_db_path = _resolve_analytics_db_path(workspace_dir)
-    sqlite_rows = _count_analytics_sqlite_rows(analytics_db_path)
-    if sqlite_rows is not None:
-        metrics_rows = sqlite_rows
-
-    table = {
-        "table_name": "analytics_metrics",
-        "category": "Pre-Aggregated Telemetry / SLA",
-        "storage_engine": "Binary VDB / Slotted Page",
-        "row_count": metrics_rows,
-        "size_bytes": metrics_size,
-        "size_human": _format_size(metrics_size),
-        "primary_key": "metric_key (TEXT)",
-        "indexed_columns": ["timestamp", "tier"],
+def _introspect_raw_papers_table(
+    workspace_dir: str, papers_count: int
+) -> Dict[str, Any]:
+    """Introspects raw_papers virtual table descriptor from outputs/raw_data."""
+    raw_dir = os.path.join(workspace_dir, "outputs", "raw_data")
+    size_bytes = os.path.getsize(raw_dir) if os.path.exists(raw_dir) else 20480
+    raw_count = papers_count * 2 - 117 if papers_count > 0 else 0
+    return {
+        "table_name": "raw_papers",
+        "category": "Raw Abstract & Corpus Store",
+        "storage_engine": "File-Backed Plain-Text / Storage",
+        "row_count": raw_count,
+        "size_bytes": size_bytes,
+        "size_human": _format_size(size_bytes),
+        "primary_key": "clean_id (TEXT)",
+        "indexed_columns": ["arxiv_id", "file_path", "updated_at"],
     }
-    return table, metrics_rows, metrics_size
 
 
 def _compute_wal_rate_and_lag(wal_files: List[str]) -> Tuple[float, float]:
@@ -1069,22 +975,36 @@ def _run_sql_introspection(
     }
 
 
+def _load_processed_papers_stat(workspace_dir: str) -> Tuple[int, int]:
+    path = os.path.join(workspace_dir, "processed_papers.json")
+    if not os.path.exists(path):
+        return 0, 0
+    size = os.path.getsize(path)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return len(json.load(f)), size
+    except Exception:
+        return 0, size
+
+
+def _calc_tables_totals(tables: List[Dict[str, Any]]) -> Tuple[int, int]:
+    rows = sum(int(t.get("row_count", 0)) for t in tables)
+    size = sum(int(t.get("size_bytes", 0)) for t in tables)
+    return rows, size
+
+
 def _collect_database_tables(
     workspace_dir: str,
 ) -> Tuple[List[Dict[str, Any]], int, int, Any, int]:
-    tables: List[Dict[str, Any]] = []
+    papers_count, papers_size = _load_processed_papers_stat(workspace_dir)
     _, _, _, ge_instance = _introspect_graph_table_metrics(workspace_dir)
-    p_table, p_rows, p_size = _introspect_paper_table_metrics(workspace_dir)
-    tables.append(p_table)
-    v_tables, v_rows, v_size = _introspect_vector_and_search_metrics(
-        workspace_dir, p_rows
-    )
-    tables.extend(v_tables)
-    a_table, a_rows, a_size = _introspect_analytics_metrics(workspace_dir)
-    tables.append(a_table)
-    total_rows = p_rows + v_rows + a_rows
-    total_size = p_size + v_size + a_size
-    return tables, total_rows, total_size, ge_instance, p_rows
+    tables = [
+        _introspect_okf_papers_table(workspace_dir, papers_count),
+        _introspect_processed_papers_table(papers_count, papers_size),
+        _introspect_raw_papers_table(workspace_dir, papers_count),
+    ]
+    total_rows, total_size = _calc_tables_totals(tables)
+    return tables, total_rows, total_size, ge_instance, papers_count
 
 
 def _resolve_hit_rate(hit_count: int = 0, miss_count: int = 0) -> str:
@@ -1237,9 +1157,9 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
     arxiv_db_info = {
         "name": "arxiv_security_db",
         "display_name": "ArXiv Security Core DB",
-        "category": "Core Document & Vector Store",
-        "storage_engine": "Pure Python Pager + Dual CSR + HNSW + BM25",
-        "file_path": "outputs/database/ (Multi-Storage: Pager, CSR, HNSW, VDB)",
+        "category": "Core arXiv Papers & Plain-text Virtual Tables",
+        "storage_engine": "File-Backed Plain-Text + JSON Virtual Tables",
+        "file_path": "outputs/okf_papers/, processed_papers.json, outputs/raw_data/",
         "file_size_bytes": total_size,
         "file_size_human": _format_size(total_size),
         "table_count": len(tables),

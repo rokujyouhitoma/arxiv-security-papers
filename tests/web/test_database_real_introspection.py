@@ -62,10 +62,14 @@ class TestDatabaseRealIntrospection(unittest.TestCase):
             self.workspace_dir
         )
         table_names = [t["table_name"] for t in tables]
-        # Ensure vertices and edges belong to graph_db, not arxiv_security_db
+        # Ensure arxiv_security_db contains only settings.py defined virtual tables
+        self.assertEqual(table_names, ["okf_papers", "processed_papers", "raw_papers"])
+        self.assertNotIn("paper_metadata", table_names)
+        self.assertNotIn("papers_vector", table_names)
+        self.assertNotIn("search_inverted_index", table_names)
+        self.assertNotIn("analytics_metrics", table_names)
         self.assertNotIn("vertices", table_names)
         self.assertNotIn("edges", table_names)
-        self.assertIn("paper_metadata", table_names)
 
     def test_run_sql_introspection_databases(self) -> None:
         dbs_res = _run_sql_introspection(self.workspace_dir, [])
