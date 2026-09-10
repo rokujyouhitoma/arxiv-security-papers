@@ -42,6 +42,13 @@ def _calc_bucket_lt_fraction(
     return float((val - b.min_val) / span)
 
 
+def _safe_distinct_count(vals: List[Any]) -> int:
+    try:
+        return len(set(vals))
+    except TypeError:
+        return len(vals)
+
+
 class EquiDepthHistogram:
     """
     Equi-Depth Histogram managing equal-sized data partitions.
@@ -68,7 +75,7 @@ class EquiDepthHistogram:
                     min_val=slice_vals[0],
                     max_val=slice_vals[-1],
                     count=len(slice_vals),
-                    distinct_count=len(set(slice_vals)),
+                    distinct_count=_safe_distinct_count(slice_vals),
                 )
             )
 

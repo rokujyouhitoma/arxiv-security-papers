@@ -156,6 +156,11 @@ class JsonLinesStorage:
                         total += 1
         return total
 
+    @property
+    def metadata(self) -> List[Dict[str, Any]]:
+        """Returns records as list for TableCatalog compatibility."""
+        return self.scan()
+
 
 class JsonTableStorage:
     """
@@ -302,3 +307,8 @@ class JsonTableStorage:
                     os.remove(tmp_path)
                 except OSError:
                     pass
+
+    @property
+    def metadata(self) -> List[Dict[str, Any]]:
+        """Returns all records for TableCatalog / SQL executor compatibility."""
+        return self.all_records()

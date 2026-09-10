@@ -56,9 +56,12 @@ class ColumnStats:
         for v in non_nulls:
             self.hll.add(v)
         self.distinct_count = self.hll.estimate_cardinality()
-        distinct: Set[Any] = set(non_nulls)
-        if len(distinct) < 16:
-            self.distinct_count = len(distinct)
+        try:
+            distinct: Set[Any] = set(non_nulls)
+            if len(distinct) < 16:
+                self.distinct_count = len(distinct)
+        except TypeError:
+            pass
 
     def _update_min_max(self, non_nulls: List[Any]) -> None:
         try:

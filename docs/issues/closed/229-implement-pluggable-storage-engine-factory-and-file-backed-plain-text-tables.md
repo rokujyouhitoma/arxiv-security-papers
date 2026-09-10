@@ -2,7 +2,7 @@
 ID: 229
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] プラガブルストレージエンジンファクトリおよび実ファイル連動プレーンテキスト仮想テーブル基盤の実装 (ID: 229)
@@ -48,20 +48,20 @@ ID: 229
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
 
 ### (1) データベース基盤層 (`src/database/`)
-- [ ] `src/database/storage/factory.py` [NEW]:
+- [x] `src/database/storage/factory.py` [NEW]:
   - `StorageEngineFactory`: URI / パス拡張子によるエンジン自動判定およびシングルトン管理
-- [ ] `src/database/storage/plain_text_storage.py` [NEW]:
+- [x] `src/database/storage/plain_text_storage.py` [NEW]:
   - `FileBackedPlainTextStorage`: 実ファイル群の仮想テーブルマウント、メタデータインデックス、遅延プロパティ読み込み
-- [ ] `src/database/storage/__init__.py`: ファクトリおよび新ストレージのエクスポート
-- [ ] `src/database/sql/parser.py`: `CREATE TABLE ... USING <engine> [LOCATION '<path>']` 構文の AST 解析拡張
-- [ ] `src/database/sql/executor.py`: マルチストレージエンジンインスタンスの保持、透過的ルーティング、クロスエンジン結合（JOIN）
+- [x] `src/database/storage/__init__.py`: ファクトリおよび新ストレージのエクスポート
+- [x] `src/database/sql/parser.py`: `CREATE TABLE ... USING <engine> [LOCATION '<path>']` 構文の AST 解析拡張
+- [x] `src/database/sql/executor.py`: マルチストレージエンジンインスタンスの保持、透過的ルーティング、クロスエンジン結合（JOIN）
 
 ### (2) テスト ＆ 品質検証
-- [ ] `tests/database/storage/test_storage_factory.py` [NEW]:
+- [x] `tests/database/storage/test_storage_factory.py` [NEW]:
   - `.vdb`, `.jsonl`, `.json`, `.txt`/`.md`/ディレクトリの自動判別およびカスタム登録テスト
-- [ ] `tests/database/storage/test_plain_text_storage.py` [NEW]:
+- [x] `tests/database/storage/test_plain_text_storage.py` [NEW]:
   - YAML フロントマターの高速抽出、遅延読み込み動作、パスバリデーション、LRU メモリ制限テスト
-- [ ] `tests/database/sql/test_multi_engine_join.py` [NEW]:
+- [x] `tests/database/sql/test_multi_engine_join.py` [NEW]:
   - バイナリテーブル（`.vdb`）と PlainText 仮想テーブル（`file_plain_text`）のクロス JOIN 統合テスト
 
 ---
@@ -104,16 +104,17 @@ Target Branch: `feat/229-implement-pluggable-storage-engine-factory-and-file-bac
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] **プラガブルエンジン判別完全性**:
+- [x] **プラガブルエンジン判別完全性**:
   - `StorageEngineFactory.create_from_uri()` が `.vdb`, `.jsonl`, `.json`, ディレクトリ/`.md`/`.txt` を 100% 正しく判別・生成すること。
-- [ ] **実ファイル仮想マウント性能 ＆ メモリフットプリント**:
+- [x] **実ファイル仮想マウント性能 ＆ メモリフットプリント**:
   - 500 件以上の Markdown / テキストファイル群をマウントしても、初期スキャン完了時間が **0.5秒未満**、メモリ消費増が **5MB 未満** であること。
   - 本文列の遅延読み込みが正しく動作し、SELECT で本文列を指定しないクエリ（メタデータのみの検索）では本文ディスク I/O が一切発生しないこと。
-- [ ] **マルチエンジン結合 (Cross-Engine JOIN)**:
+- [x] **マルチエンジン結合 (Cross-Engine JOIN)**:
   - 単一 SQL クエリで `binary_vdb` テーブルと `file_plain_text` 仮想テーブルを JOIN し、正しい結合レコードが返却されること。
-- [ ] **セキュリティ多層防御**:
+- [x] **セキュリティ多層防御**:
   - ワークスペース外部へのパストラバーサルを試みる `LOCATION` 指定が `SecurityException` で安全に拒絶されること。
-- [ ] **コード品質 ＆ 静的解析**:
+- [x] **コード品質 ＆ 静的解析**:
   - 全新規コードが `mypy --strict` でエラー 0 件であること。
   - 全関数のサイクロマティック複雑度が Xenon **Rank A (CC <= 5)** を達成していること。
   - `make check_format` および `make test` が 100% PASS すること。
+

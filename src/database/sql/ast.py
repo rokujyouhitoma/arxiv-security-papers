@@ -89,6 +89,8 @@ class CreateTableStatement(SQLStatement):
     table_name: str = ""
     columns: List[ColumnDef] = field(default_factory=list)
     if_not_exists: bool = False
+    storage_engine: Optional[str] = None
+    location: Optional[str] = None
 
 
 @dataclass

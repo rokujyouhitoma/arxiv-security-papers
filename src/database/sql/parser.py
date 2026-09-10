@@ -115,6 +115,71 @@ def _parse_val_type(clean_val: str) -> Any:
         return clean_val
 
 
+_ALLOWED_ENGINES: set[str] = {
+    "binary_vdb",
+    "json_lines",
+    "json_table",
+    "file_plain_text",
+}
+
+
+def _validate_storage_engine(engine: Optional[str]) -> Optional[str]:
+    if not engine:
+        return None
+    clean = engine.strip().lower()
+    if clean not in _ALLOWED_ENGINES:
+        allowed = ", ".join(sorted(_ALLOWED_ENGINES))
+        raise SQLParseError(
+            f"Unsupported storage engine: '{engine}'. Allowed: [{allowed}]"
+        )
+    return clean
+
+
+def _update_depth(char: str, depth: int) -> int:
+    if char == "(":
+        return depth + 1
+    if char == ")":
+        return max(0, depth - 1)
+    return depth
+
+
+def _append_current_part(current: list[str], cols: list[str]) -> None:
+    part = "".join(current).strip()
+    if part:
+        cols.append(part)
+
+
+def _split_column_defs(cols_body: str) -> list[str]:
+    """Split comma-separated column definitions respecting nested parentheses."""
+    cols: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in cols_body:
+        depth = _update_depth(char, depth)
+        is_sep = char == "," and depth == 0
+        if is_sep:
+            _append_current_part(current, cols)
+            current.clear()
+        else:
+            current.append(char)
+    _append_current_part(current, cols)
+    return cols
+
+
+def _extract_storage_clauses(sql: str) -> tuple[str, Optional[str], Optional[str]]:
+    """Extract optional USING <engine> and LOCATION '<path>' clauses from CREATE TABLE."""
+    loc_match = re.search(r"\s+LOCATION\s+['\"](.*?)['\"]\s*$", sql, re.IGNORECASE)
+    location = loc_match.group(1).strip() if loc_match else None
+    cleaned = sql[: loc_match.start()] if loc_match else sql
+
+    using_match = re.search(r"\s+USING\s+([a-zA-Z0-9_]+)\s*$", cleaned, re.IGNORECASE)
+    raw_engine = using_match.group(1).strip() if using_match else None
+    cleaned = cleaned[: using_match.start()] if using_match else cleaned
+
+    engine = _validate_storage_engine(raw_engine)
+    return cleaned.strip(), engine, location
+
+
 class SQLParser:
     """
     Parses SQL string queries into structured SQLStatement AST nodes.
@@ -244,11 +309,11 @@ class SQLParser:
         )
 
     def _parse_create_table(self, sql: str) -> CreateTableStatement:
-        m = re.match(
-            r"CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s*\((.*)\)",
-            sql,
-            re.IGNORECASE | re.DOTALL,
+        cleaned_sql, engine, location = _extract_storage_clauses(sql)
+        pattern = (
+            r"^CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s*\((.*)\)\s*$"
         )
+        m = re.match(pattern, cleaned_sql, re.IGNORECASE | re.DOTALL)
         if not m:
             raise SQLParseError(f"Malformed CREATE TABLE syntax: {sql}")
 
@@ -258,7 +323,7 @@ class SQLParser:
 
         col_defs = [
             c_def
-            for raw_col in cols_body.split(",")
+            for raw_col in _split_column_defs(cols_body)
             if (c_def := self._parse_column_def(raw_col)) is not None
         ]
 
@@ -268,6 +333,8 @@ class SQLParser:
             table_name=table_name,
             columns=col_defs,
             if_not_exists=if_not_exists,
+            storage_engine=engine,
+            location=location,
         )
 
     def _parse_drop_table(self, sql: str) -> DropTableStatement:

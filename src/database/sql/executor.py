@@ -61,13 +61,14 @@ class TableCatalog:
     def __init__(
         self,
         name: str,
-        storage: VectorStorage,
+        storage: Any,
         index: Optional[HNSWIndex] = None,
         schema: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.name = name
         self.storage = storage
-        self.index = index or HNSWIndex(dim=storage.dim)
+        dim = int(getattr(storage, "dim", 128))
+        self.index = index or HNSWIndex(dim=dim)
         self.schema = schema or {}
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
@@ -539,18 +540,41 @@ class SQLExecutor:
         base_dir = os.path.dirname(self.default_storage.file_path) or "."
         return os.path.join(base_dir, f"{table_name}.vdb")
 
-    def _create_new_table_storage(self, stmt: CreateTableStatement) -> None:
+    def _create_engine_storage(self, stmt: CreateTableStatement) -> Any:
+        from database.storage.factory import StorageEngineFactory
+
+        engine_name = stmt.storage_engine or "binary_vdb"
+        loc = stmt.location
+        if not loc and engine_name == "binary_vdb":
+            loc = self._resolve_new_table_path(stmt.table_name)
+            _safe_remove_file(loc)
+
+        return StorageEngineFactory.create_by_engine_name(
+            engine_name,
+            location=loc,
+            dim=self.embedding.dim,
+        )
+
+    def _create_default_storage(self, stmt: CreateTableStatement) -> Any:
         if self.multi_storage is not None:
-            storage = self.multi_storage.create_table(
+            return self.multi_storage.create_table(
                 stmt.table_name, dim=self.embedding.dim
             )
-        elif self._is_in_memory_mode():
-            storage = VectorStorage(file_path=":memory:", dim=self.embedding.dim)
-        else:
-            storage_path = self._resolve_new_table_path(stmt.table_name)
-            os.makedirs(os.path.dirname(os.path.abspath(storage_path)), exist_ok=True)
-            _safe_remove_file(storage_path)
-            storage = VectorStorage(file_path=storage_path, dim=self.embedding.dim)
+        if self._is_in_memory_mode():
+            return VectorStorage(file_path=":memory:", dim=self.embedding.dim)
+
+        storage_path = self._resolve_new_table_path(stmt.table_name)
+        os.makedirs(os.path.dirname(os.path.abspath(storage_path)), exist_ok=True)
+        _safe_remove_file(storage_path)
+        return VectorStorage(file_path=storage_path, dim=self.embedding.dim)
+
+    def _instantiate_table_storage(self, stmt: CreateTableStatement) -> Any:
+        if stmt.storage_engine:
+            return self._create_engine_storage(stmt)
+        return self._create_default_storage(stmt)
+
+    def _create_new_table_storage(self, stmt: CreateTableStatement) -> None:
+        storage = self._instantiate_table_storage(stmt)
         catalog = TableCatalog(
             name=stmt.table_name,
             storage=storage,
