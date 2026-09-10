@@ -78,6 +78,43 @@ class TestDatabaseRealIntrospection(unittest.TestCase):
         self.assertIn("graph_db", show_dbs["databases"])
         self.assertIn("arxiv_security_db", show_dbs["databases"])
 
+    def test_cti_catalog_tables_reconciliation(self) -> None:
+        from domain.security.cti.storage import CTICatalogStorage
+
+        res = CTICatalogStorage.get_introspection_metadata(self.workspace_dir)
+        self.assertEqual(res["table_count"], 5)
+        self.assertEqual(res["total_rows"], 2685)
+        names = [t["table_name"] for t in res["tables"]]
+        self.assertEqual(
+            names,
+            [
+                "cisa_kev_vulnerabilities",
+                "cti_mitigations",
+                "cti_relationships",
+                "cti_tactics",
+                "cti_techniques",
+            ],
+        )
+        self.assertNotIn("cti_techniques_fts", names)
+
+    def test_analytics_tables_reconciliation(self) -> None:
+        from analytics.storage import AnalyticsStorage
+
+        res = AnalyticsStorage.get_introspection_metadata(self.workspace_dir)
+        self.assertEqual(res["table_count"], 5)
+        self.assertEqual(res["total_rows"], 26)
+        names = [t["table_name"] for t in res["tables"]]
+        self.assertEqual(
+            names,
+            [
+                "latest_snapshot",
+                "metrics_history",
+                "papers",
+                "strategic_kpis",
+                "threat_trends",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

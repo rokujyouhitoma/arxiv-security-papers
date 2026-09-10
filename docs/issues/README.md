@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **237** | Web UI における cti_catalog_db および analytics_db のテーブル構成・行数・サイズ不整合の解消と実 VDB イントロスペクションへの刷新 | Bug | 2026-09-11 | [237-reconcile-cti-catalog-and-analytics-db-tables-with-live-vdb.md](closed/237-reconcile-cti-catalog-and-analytics-db-tables-with-live-vdb.md) |
 | **236** | Web UI (データベース台帳) における arxiv_security_db の旧式合成テーブル廃止と settings.py / SQLExecutor への完全統一およびセレクトボックス化 | Bug | 2026-09-11 | [236-reconcile-web-ui-arxiv-security-db-tables-with-settings.md](closed/236-reconcile-web-ui-arxiv-security-db-tables-with-settings.md) |
 | **235** | dbshell の .schema におけるカラム定義省略 (...) の解消と _schemas 連携・スキーマ推論明記の実装 | Bug | 2026-09-11 | [235-resolve-dbshell-schema-ellipsis-and-support-inferred-ddl.md](closed/235-resolve-dbshell-schema-ellipsis-and-support-inferred-ddl.md) |
 | **234** | settings.py によるデータベース定義の一元管理 (SSOT) と SQL イントロスペクション・Web UI 乖離の解消 | Feature | 2026-09-11 | [234-unify-database-declarations-in-settings-and-reconcile-introspection.md](closed/234-unify-database-declarations-in-settings-and-reconcile-introspection.md) |
