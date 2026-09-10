@@ -6,6 +6,8 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **239** | Roaring Bitmap データ構造の Pure-Python 実装と DeletedDocsBitset 削除フラグ管理の省メモリ・高速化 | Feature | High | Open (New) | [239-implement-roaring-bitmap-for-search-deletion-bitset.md](239-implement-roaring-bitmap-for-search-deletion-bitset.md) |
+| **240** | Radix Trie (Prefix Tree) による CTI タクソノミー（CWE / ATT&CK / CVE）高速前方一致検索とオートコンプリート基盤の実装 | Feature | Medium | Open (New) | [240-implement-radix-trie-for-cti-taxonomy-prefix-search.md](240-implement-radix-trie-for-cti-taxonomy-prefix-search.md) |
 | **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | High | Open (New) | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
@@ -15,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **238** | DSN-23 Phase 4 完結: Web Gateway streaming.py における SSE バックプレッシャーおよび切断ドレインの HSM 統制 | Feature | 2026-09-11 | [238-implement-web-gateway-streaming-hsm-backpressure.md](closed/238-implement-web-gateway-streaming-hsm-backpressure.md) |
 | **237** | Web UI における cti_catalog_db および analytics_db のテーブル構成・行数・サイズ不整合の解消と実 VDB イントロスペクションへの刷新 | Bug | 2026-09-11 | [237-reconcile-cti-catalog-and-analytics-db-tables-with-live-vdb.md](closed/237-reconcile-cti-catalog-and-analytics-db-tables-with-live-vdb.md) |
 | **236** | Web UI (データベース台帳) における arxiv_security_db の旧式合成テーブル廃止と settings.py / SQLExecutor への完全統一およびセレクトボックス化 | Bug | 2026-09-11 | [236-reconcile-web-ui-arxiv-security-db-tables-with-settings.md](closed/236-reconcile-web-ui-arxiv-security-db-tables-with-settings.md) |
 | **235** | dbshell の .schema におけるカラム定義省略 (...) の解消と _schemas 連携・スキーマ推論明記の実装 | Bug | 2026-09-11 | [235-resolve-dbshell-schema-ellipsis-and-support-inferred-ddl.md](closed/235-resolve-dbshell-schema-ellipsis-and-support-inferred-ddl.md) |

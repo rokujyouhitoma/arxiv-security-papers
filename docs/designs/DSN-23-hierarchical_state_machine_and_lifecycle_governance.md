@@ -422,6 +422,40 @@ stateDiagram-v2
 
 ## 4.3 `src/workflow/`: DAG タスク ＆ Saga トランザクション統制
 
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : タスク登録 / DAG依存解決待ち
+    PENDING --> EXECUTING : 前提タスク完了 (DEPENDENCY_SATISFIED)
+
+    state EXECUTING {
+        [*] --> DISPATCHING : ワーカー選定・IPC送信
+        DISPATCHING --> RUNNING : 実行開始パルス受信
+        RUNNING --> COMMITTING : 処理正常終了 / 結果書き出し
+    }
+
+    state FAULT_HANDLING {
+        [*] --> EVALUATING_ERROR
+        EVALUATING_ERROR --> RETRY_WAITING : リトライ可能 (Backoff)
+        EVALUATING_ERROR --> COMPENSATING : 致命的エラー / Saga補償トランザクション
+        EVALUATING_ERROR --> CIRCUIT_TRIPPED : 連続失敗 (閾値超過)
+    }
+
+    EXECUTING --> FAULT_HANDLING : 例外発生 / タイムアウト検知
+    RETRY_WAITING --> EXECUTING : タイマー満了 (RETRY_TRIGGER)
+
+    COMMITTING --> FINALIZED_SUCCEEDED : コミット完了
+    COMPENSATING --> FINALIZED_FAILED : ロールバック完了
+    CIRCUIT_TRIPPED --> FINALIZED_ABORTED : サーキット遮断確定
+
+    state FINALIZED {
+        FINALIZED_SUCCEEDED : SUCCEEDED
+        FINALIZED_FAILED : FAILED_PERMANENTLY
+        FINALIZED_ABORTED : ABORTED
+    }
+
+    FINALIZED --> [*]
+```
+
 - **`PENDING`**: 前提タスクの完了を待機。
 - **`EXECUTING`**:
   - `DISPATCHING`: `SpiderWorker` への IPC 送信。
@@ -437,6 +471,30 @@ stateDiagram-v2
 
 ## 4.4 `src/database/`: ARIES クラッシュリカバリ統制
 
+```mermaid
+stateDiagram-v2
+    [*] --> RECOVERY_ACTIVE : システム起動 / クラッシュ検知
+    [*] --> ONLINE : クリーンシャットダウン後の通常起動
+
+    state RECOVERY_ACTIVE {
+        [*] --> ANALYSIS : チェックポイント探索
+        ANALYSIS --> REDO : Dirty Page / Tx Table 再構築完了
+        REDO --> UNDO : 未フラッシュログのフォワード適用完了 (Repeat History)
+        UNDO --> RECOVERY_COMPLETE : 未コミットTx逆順ロールバック完了 (CLR発行)
+    }
+
+    RECOVERY_COMPLETE --> ONLINE : 整合性検証 PASS (WAL チェックポイント記録)
+
+    state ONLINE {
+        [*] --> IDLE : トランザクション待機
+        IDLE --> PROCESSING : BEGIN TRANSACTION
+        PROCESSING --> IDLE : COMMIT / ROLLBACK 完了
+    }
+
+    ONLINE --> SHUTTING_DOWN : グレースフル停止要求
+    SHUTTING_DOWN --> [*] : チェックポイントフラッシュ完了
+```
+
 - **`ONLINE`**: 通常のトランザクション処理実行中。
 - **`RECOVERY_ACTIVE`**:
   - `ANALYSIS`: WAL スキャン、Dirty Page Table / Transaction Table 復元。
@@ -447,6 +505,31 @@ stateDiagram-v2
 ---
 
 ## 4.5 `src/pdf/`: 構文解析・ストリームデコード・安全ガード統制
+
+```mermaid
+stateDiagram-v2
+    [*] --> PARSING_HEADER : PDFバイト列受信
+    PARSING_HEADER --> STREAM_DECODING : Trailer / XRef 検証成功
+
+    state STREAM_DECODING {
+        [*] --> DECOMPRESSING : オブジェクトストリーム読み出し
+        DECOMPRESSING --> APPLYING_FILTER : Flate / LZW フィルタ適用
+        APPLYING_FILTER --> SAFETY_LIMIT_CHECK : 展開データ抽出
+        SAFETY_LIMIT_CHECK --> STREAM_DECODING : 次のストリーム (再帰展開)
+    }
+
+    STREAM_DECODING --> LAYOUT_SYNTHESIS : 全ストリーム安全展開完了
+    STREAM_DECODING --> QUARANTINE : 展開比率超過 (Zip Bomb) / 再帰深度限界
+
+    state LAYOUT_SYNTHESIS {
+        [*] --> COLUMN_DETECTION : 2カラム段組認識
+        COLUMN_DETECTION --> MATH_NORMALIZATION : 数式記号・リガチャ正規化
+        MATH_NORMALIZATION --> OKF_GENERATION : OKF v0.2 Markdown 構造化
+    }
+
+    LAYOUT_SYNTHESIS --> [*] : OKF 変換完了
+    QUARANTINE --> [*] : 安全隔離・例外レポート生成
+```
 
 - **`PARSING_HEADER`**: Trailer / XRef 読み込み。
 - **`STREAM_DECODING`**:
@@ -459,12 +542,42 @@ stateDiagram-v2
 
 ## 4.6 `src/web/`: SSE リアルタイム通信・バックプレッシャー統制
 
-- **`ESTABLISHED`**:
-  - `IDLE`: イベント配信待ち。
-  - `STREAMING`: チャンク送出中。
-  - `HEARTBEAT`: 30 秒ごとの `: ping\n\n` 送出。
-- **`CONGESTED`**: クライアント受信遅延検知、バッファリング上限待機（バックプレッシャー）。
-- **`TERMINATING`**: 切断検知、ソケット解放、購読解除。
+```mermaid
+stateDiagram-v2
+    [*] --> INITIALIZING : クライアント接続要求 (GET /api/stream/...)
+    INITIALIZING --> STREAMING : ハンドシェイク完了 (200 OK text/event-stream)
+
+    state STREAMING {
+        [*] --> FLOWING : 通常リアルタイム送出 (SLA 遵守)
+        FLOWING --> CONGESTED : 送信遅延検知 (duration > interval * 0.8)
+        CONGESTED --> FLOWING : 遅延解消 (duration <= interval * 0.8)
+        CONGESTED --> DEGRADED : 重度輻輳 (duration > interval * 1.5)
+        DEGRADED --> CONGESTED : 軽快化 (duration <= interval * 1.5)
+        DEGRADED --> FLOWING : 完全復旧
+    }
+
+    state DRAINING {
+        [*] --> FLUSHING : 終了通知イベント送出 (stream_close)
+        FLUSHING --> RELEASING : ソケット・キュー・ファイルハンドル解放
+    }
+
+    STREAMING --> DRAINING : 正常時間満了 / 切断要求 / SIGQUIT
+    STREAMING --> TERMINATED : 異常切断 (BrokenPipeError / ConnectionReset)
+    DRAINING --> TERMINATED : クリーンアップ完了
+    TERMINATED --> [*]
+```
+
+- **`INITIALIZING`**: SSE 接続の初期化、レスポンスヘッダー（`Cache-Control: no-cache`, `Content-Type: text/event-stream`）の設定、接続開始イベントの送出。
+- **`STREAMING`** (親状態):
+  - **`FLOWING`**: 通常ストリーミング。SLA 範囲内でフレームを即時送出。
+  - **`CONGESTED`**: クライアント受信遅延やネットワーク詰まりを検知。キープアライブ間隔を動的に調整し、バッファ警告ログを記録。
+  - **`DEGRADED`**: 深刻な輻輳時。低優先度メトリクス（詳細プロセスツリー等）を間引き、基幹ステータスのみサンプリング配信することで Slow Consumer によるメモリ枯渇を防止（バックプレッシャー多層防御）。
+- **`DRAINING`** (親状態):
+  - **`FLUSHING`**: 切断直前の最終制御パルス送信試行。
+  - **`RELEASING`**: 内部キュー、参照ポインタ、ファイルディスクリプタのゼロ化明示破棄。
+- **`TERMINATED`**:
+  - `COMPLETED`: 正常切断・セッション終了。
+  - `ABORTED`: 異常切断・通信中断。
 
 ---
 
