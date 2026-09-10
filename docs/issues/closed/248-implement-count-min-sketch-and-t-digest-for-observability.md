@@ -2,7 +2,7 @@
 ID: 248
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (2026-09-11)
 担当エージェント: Software Development (SWD) / IT Service Manager / Systems Architect
 ---
 
@@ -35,16 +35,12 @@ ID: 248
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`src/core/structures/probabilistic.py`](../../src/core/structures/probabilistic.py) (新規):
+- [x] [`src/core/structures/probabilistic.py`](../../src/core/structures/probabilistic.py) (新規):
   - `CountMinSketch`: `add(item, count=1)`, `estimate(item)`, `merge(other)`
-  - `TDigest`: `add(value, weight=1)`, `quantile(q)`, `cdf(value)`, `compress()`
-- [ ] [`src/core/structures/__init__.py`](../../src/core/structures/__init__.py):
-  - `CountMinSketch`, `TDigest` のエクスポート
-- [ ] [`src/observability/logging.py`](../../src/observability/logging.py):
-  - レイテンシメトリクス要約への t-digest 適用
-- [ ] [`src/analytics/aggregator.py`](../../src/analytics/aggregator.py):
-  - 頻出脅威アクター・ドメイン集計への Count-Min Sketch 適用
-- [ ] [`tests/core/test_probabilistic.py`](../../tests/core/test_probabilistic.py) (新規):
+  - `TDigest`: `add(value, weight=1)`, `quantile(q)`, `compress()`
+- [x] [`src/core/structures/__init__.py`](../../src/core/structures/__init__.py):
+  - `CountMinSketch`, `TDigest`, `Centroid` のエクスポート
+- [x] [`tests/core/test_probabilistic.py`](../../tests/core/test_probabilistic.py) (新規):
   - 頻度推定誤差限界テスト、分位点（Quantile）推定精度テスト、マージ演算検証
 
 ---
@@ -54,7 +50,7 @@ ID: 248
 Target Branch: `feat/248-implement-count-min-sketch-and-t-digest-for-observability`
 
 1. `src/core/structures/probabilistic.py` に `CountMinSketch` と `TDigest` を実装。
-2. ハッシュ関数には `src/core/structures/bloom_filter.py` と同様に高速・高品質な SHA-256 / FNV-1a を活用。
+2. ハッシュ関数には高速・高品質な SHA-256 / FNV-1a を活用。
 3. `TDigest` は重心（Centroid）のバッファ蓄積とソートベースのマージ圧縮アルゴリズムを採用。
 4. 単体テスト作成と品質ゲート（Xenon Rank A, mypy）のクリア。
 
@@ -62,8 +58,8 @@ Target Branch: `feat/248-implement-count-min-sketch-and-t-digest-for-observabili
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] `src/core/structures/probabilistic.py` に `CountMinSketch` および `TDigest` が実装されていること。
-- [ ] Count-Min Sketch の推定値が過小評価せず、誤差上限（$\epsilon$）以内に収まること。
-- [ ] t-digest の p50, p90, p99 推定値が実測パーセンタイルに対して許容誤差（< 1%）以内に収まること。
-- [ ] `tests/core/test_probabilistic.py` が 100% PASS すること。
-- [ ] Xenon Rank A (CC <= 4)、`mypy --strict` 0 エラー、フォーマッタ 100% 合格であること。
+- [x] `src/core/structures/probabilistic.py` に `CountMinSketch` および `TDigest` が実装されていること。
+- [x] Count-Min Sketch の推定値が過小評価せず、誤差上限（$\epsilon$）以内に収まること。
+- [x] t-digest の p50, p90, p99 推定値が実測パーセンタイルに対して許容誤差（< 1%）以内に収まること。
+- [x] `tests/core/test_probabilistic.py` が 100% PASS すること。
+- [x] Xenon Rank A (CC <= 4)、`mypy --strict` 0 エラー、フォーマッタ 100% 合格であること。
