@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **242** | src/database/transaction/mvcc.py における Roaring Bitmap を用いたトランザクション追跡とスナップショット分離の省メモリ・高速化 | Feature / Performance | High | Open (New) | [242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md](242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md) |
 | **243** | src/search/platform/cache における FilterCache の Roaring Bitmap 換装とブーリアンフィルター演算の高速化 | Feature / Performance | High | Open (New) | [243-apply-roaring-bitmap-to-search-filter-cache.md](243-apply-roaring-bitmap-to-search-filter-cache.md) |
 | **244** | src/database における Roaring Bitmap を用いた低カーディナリティ列向け Bitmap Index およびタプル死活管理の実装 | Feature / Performance | Medium | Open (New) | [244-implement-roaring-bitmap-index-for-database-storage.md](244-implement-roaring-bitmap-index-for-database-storage.md) |
 | **240** | Radix Trie (Prefix Tree) による CTI タクソノミー（CWE / ATT&CK / CVE）高速前方一致検索とオートコンプリート基盤の実装 | Feature | Medium | Open (New) | [240-implement-radix-trie-for-cti-taxonomy-prefix-search.md](240-implement-radix-trie-for-cti-taxonomy-prefix-search.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **242** | src/database/transaction/mvcc.py における Roaring Bitmap を用いたトランザクション追跡とスナップショット分離の省メモリ・高速化 | Feature / Performance | 2026-09-11 | [242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md](closed/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md) |
 | **241** | Roaring Bitmap データ構造の src/core/structures/roaring_bitmap.py への共通化・昇格と直接参照への刷新 | Architecture / Refactor | 2026-09-11 | [241-migrate-roaring-bitmap-to-core-structures.md](closed/241-migrate-roaring-bitmap-to-core-structures.md) |
 | **239** | Roaring Bitmap データ構造の Pure-Python 実装と DeletedDocsBitset 削除フラグ管理の省メモリ・高速化 | Feature | 2026-09-11 | [239-implement-roaring-bitmap-for-search-deletion-bitset.md](closed/239-implement-roaring-bitmap-for-search-deletion-bitset.md) |
 | **238** | DSN-23 Phase 4 完結: Web Gateway streaming.py における SSE バックプレッシャーおよび切断ドレインの HSM 統制 | Feature | 2026-09-11 | [238-implement-web-gateway-streaming-hsm-backpressure.md](closed/238-implement-web-gateway-streaming-hsm-backpressure.md) |

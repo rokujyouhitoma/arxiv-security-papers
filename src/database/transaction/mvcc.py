@@ -7,7 +7,15 @@ non-blocking readers, and garbage collection (VACUUM).
 
 import threading
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Union
+
+from core.structures.roaring_bitmap import RoaringBitmap
+
+
+def _to_roaring_bitmap(val: Union[Set[int], RoaringBitmap]) -> RoaringBitmap:
+    if isinstance(val, RoaringBitmap):
+        return val.clone()
+    return RoaringBitmap(list(val))
 
 
 class VersionedTuple:
@@ -47,12 +55,12 @@ class TransactionSnapshot:
     def __init__(
         self,
         snapshot_tx_id: int,
-        active_tx_ids: Set[int],
-        committed_tx_ids: Set[int],
+        active_tx_ids: Union[Set[int], RoaringBitmap],
+        committed_tx_ids: Union[Set[int], RoaringBitmap],
     ) -> None:
         self.snapshot_tx_id = snapshot_tx_id
-        self.active_tx_ids = set(active_tx_ids)
-        self.committed_tx_ids = set(committed_tx_ids)
+        self.active_tx_ids: RoaringBitmap = _to_roaring_bitmap(active_tx_ids)
+        self.committed_tx_ids: RoaringBitmap = _to_roaring_bitmap(committed_tx_ids)
 
     def _check_xmin_visibility(self, version: "VersionedTuple") -> "Optional[bool]":
         """Returns True/False if xmin determines visibility, else None to continue."""
@@ -95,12 +103,27 @@ class MVCCManager:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._tx_counter = 1000
-        self._active_txs: Set[int] = set()
-        self._committed_txs: Set[int] = set()
-        self._aborted_txs: Set[int] = set()
+        self._active_txs: RoaringBitmap = RoaringBitmap()
+        self._committed_txs: RoaringBitmap = RoaringBitmap()
+        self._aborted_txs: RoaringBitmap = RoaringBitmap()
         self._snapshots: Dict[int, TransactionSnapshot] = {}
         # tuple_id -> List[VersionedTuple] (oldest to newest)
         self._versions: Dict[str, List[VersionedTuple]] = {}
+
+    @property
+    def active_txs(self) -> RoaringBitmap:
+        """Returns the active transactions bitmap."""
+        return self._active_txs
+
+    @property
+    def committed_txs(self) -> RoaringBitmap:
+        """Returns the committed transactions bitmap."""
+        return self._committed_txs
+
+    @property
+    def aborted_txs(self) -> RoaringBitmap:
+        """Returns the aborted transactions bitmap."""
+        return self._aborted_txs
 
     def begin_transaction(self, tx_id: Optional[int] = None) -> int:
         """Starts a new MVCC transaction and captures its Snapshot Isolation view."""
@@ -112,9 +135,11 @@ class MVCCManager:
                 assigned_id = tx_id
 
             self._active_txs.add(assigned_id)
+            active_snapshot = self._active_txs.clone()
+            active_snapshot.discard(assigned_id)
             snapshot = TransactionSnapshot(
                 snapshot_tx_id=assigned_id,
-                active_tx_ids=self._active_txs - {assigned_id},
+                active_tx_ids=active_snapshot,
                 committed_tx_ids=self._committed_txs,
             )
             self._snapshots[assigned_id] = snapshot
@@ -267,7 +292,9 @@ class MVCCManager:
         """
         with self._lock:
             min_active_tx = (
-                min(self._active_txs) if self._active_txs else self._tx_counter + 1
+                min(self._active_txs)
+                if not self._active_txs.is_empty()
+                else self._tx_counter + 1
             )
             return sum(
                 self._vacuum_tuple(tuple_id, version_list, min_active_tx)
