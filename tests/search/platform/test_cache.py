@@ -29,3 +29,28 @@ def test_solr_cache_facade_and_stats():
 
     solr_cache.clear_all()
     assert solr_cache.filter_cache.size() == 0
+
+
+def test_filter_cache_roaring_bitmap_integration():
+    from core.structures.roaring_bitmap import RoaringBitmap
+
+    solr_cache = SolrCache(filter_cap=5)
+    # Direct RoaringBitmap put
+    bm1 = RoaringBitmap([10, 20, 30])
+    solr_cache.filter_cache.put("fq_tag:crypto", bm1)
+    retrieved = solr_cache.filter_cache.get("fq_tag:crypto")
+    assert isinstance(retrieved, RoaringBitmap)
+    assert retrieved == {10, 20, 30}
+
+    # Iterable put auto-conversion
+    solr_cache.filter_cache.put("fq_year:2026", [20, 30, 40])
+    retrieved2 = solr_cache.filter_cache.get("fq_year:2026")
+    assert isinstance(retrieved2, RoaringBitmap)
+    assert retrieved2 == {20, 30, 40}
+
+    # Bitwise intersection
+    combined = retrieved & retrieved2
+    assert isinstance(combined, RoaringBitmap)
+    assert combined == {20, 30}
+    assert 20 in combined
+    assert 10 not in combined

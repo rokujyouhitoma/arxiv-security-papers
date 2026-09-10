@@ -3,7 +3,9 @@
 Request Handlers (Select, Update, Admin) for Search Platform (Solr Paradigm).
 """
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
+
+from core.structures.roaring_bitmap import RoaringBitmap
 
 from ...engine.analysis import Analyzer, CJKAnalyzer
 from ...engine.index import Segment
@@ -147,41 +149,61 @@ class SelectHandler:
             segment, top_docs, doc_scores, query_str, start, rows, params
         )
 
-    def _resolve_single_fq(self, segment: Segment, fq_str: str) -> Set[int]:
-        cached_doc_ids = self.cache.filter_cache.get(fq_str)
-        if cached_doc_ids is None:
-            cached_doc_ids = self._resolve_filter_ids(segment, fq_str)
-            self.cache.filter_cache.put(fq_str, cached_doc_ids)
-        return cached_doc_ids
+    def _resolve_single_fq(self, segment: Segment, fq_str: str) -> RoaringBitmap:
+        cached_bitmap = self.cache.filter_cache.get(fq_str)
+        if cached_bitmap is None:
+            cached_bitmap = self._resolve_filter_ids(segment, fq_str)
+            self.cache.filter_cache.put(fq_str, cached_bitmap)
+        return cached_bitmap
 
     def _apply_single_filter(
         self, segment: Segment, doc_scores: Dict[int, float], fq_str: str
     ) -> Dict[int, float]:
         if not fq_str:
             return doc_scores
-        cached_ids = self._resolve_single_fq(segment, fq_str)
-        return {d: s for d, s in doc_scores.items() if d in cached_ids}
+        cached_bitmap = self._resolve_single_fq(segment, fq_str)
+        return {d: s for d, s in doc_scores.items() if d in cached_bitmap}
+
+    def _extract_valid_fqs(self, fq_list: Any) -> List[str]:
+        raw = [fq_list] if isinstance(fq_list, str) else (fq_list or [])
+        res: List[str] = []
+        for fq in raw:
+            if fq:
+                res.append(str(fq))
+        return res
+
+    def _combine_filter_bitmaps(
+        self, segment: Segment, fqs: List[str]
+    ) -> RoaringBitmap:
+        combined: Optional[RoaringBitmap] = None
+        for fq_str in fqs:
+            fq_bitmap = self._resolve_single_fq(segment, fq_str)
+            combined = fq_bitmap if combined is None else (combined & fq_bitmap)
+        return combined if combined is not None else RoaringBitmap()
 
     def _apply_filter_queries(
         self, segment: Segment, doc_scores: Dict[int, float], fq_list: Any
     ) -> Dict[int, float]:
-        fqs = [fq_list] if isinstance(fq_list, str) else (fq_list or [])
-        for fq_str in fqs:
-            doc_scores = self._apply_single_filter(segment, doc_scores, fq_str)
-        return doc_scores
+        if not doc_scores:
+            return doc_scores
+        valid_fqs = self._extract_valid_fqs(fq_list)
+        if not valid_fqs:
+            return doc_scores
+        combined = self._combine_filter_bitmaps(segment, valid_fqs)
+        return {d: s for d, s in doc_scores.items() if d in combined}
 
-    def _resolve_filter_ids(self, segment: Segment, fq_str: str) -> Set[int]:
+    def _resolve_filter_ids(self, segment: Segment, fq_str: str) -> RoaringBitmap:
         field, val = fq_str.split(":", 1) if ":" in fq_str else ("category", fq_str)
         field, val = field.strip(), val.strip()
 
         matched = self._match_doc_values(segment, field, val)
-        if matched:
+        if len(matched) > 0:
             return matched
 
         fq_scores = self.parse_query(fq_str, default_field=field).match(
             segment, self.similarity
         )
-        return set(fq_scores.keys())
+        return RoaringBitmap(list(fq_scores.keys()))
 
     def _check_doc_value_match(self, d_val: Any, val: str) -> bool:
         if d_val is None:
@@ -190,11 +212,13 @@ class SelectHandler:
             return any(str(v).lower() == val.lower() for v in d_val)
         return str(d_val).lower() == val.lower()
 
-    def _match_doc_values(self, segment: Segment, field: str, val: str) -> Set[int]:
+    def _match_doc_values(
+        self, segment: Segment, field: str, val: str
+    ) -> RoaringBitmap:
         dv = segment.doc_values.get(field)
         if not dv:
-            return set()
-        matched: Set[int] = set()
+            return RoaringBitmap()
+        matched = RoaringBitmap()
         for d_id in range(segment.doc_count):
             if not segment.is_deleted(d_id) and self._check_doc_value_match(
                 dv.get(d_id), val

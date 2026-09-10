@@ -12,7 +12,7 @@ import array
 import bisect
 import struct
 from abc import ABC, abstractmethod
-from typing import Dict, Iterator, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
 # Constants
 SERIAL_COOKIE: int = 0x29380001
@@ -520,6 +520,17 @@ class RoaringBitmap:
 
     def __xor__(self, other: RoaringBitmap) -> RoaringBitmap:
         return self.symmetric_difference(other)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, RoaringBitmap):
+            if len(self) != len(other):
+                return False
+            return self.to_list() == other.to_list()
+        if isinstance(other, (set, frozenset)):
+            return self.to_set() == other
+        if isinstance(other, (list, tuple)):
+            return self.to_list() == list(other)
+        return False
 
     def get_size_in_bytes(self) -> int:
         """Calculates total allocated container memory footprint."""

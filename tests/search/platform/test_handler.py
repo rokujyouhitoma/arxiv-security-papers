@@ -49,6 +49,20 @@ def test_update_and_select_handler_pipeline():
     res_fq = handler.handle_request(seg, {"q": "*:*", "fq": "cs.CR"})
     assert res_fq["response"]["numFound"] == 2
 
+    # 2.1 Multi-filter query with RoaringBitmap bitwise intersection
+    res_multi_fq = handler.handle_request(
+        seg, {"q": "*:*", "fq": ["category:cs.CR", "year:2026"]}
+    )
+    assert res_multi_fq["response"]["numFound"] == 2
+    cached_cat = handler.cache.filter_cache.get("category:cs.CR")
+    assert cached_cat is not None
+    assert len(cached_cat) == 2
+
+    res_empty_fq = handler.handle_request(
+        seg, {"q": "*:*", "fq": ["category:cs.CR", "year:2025"]}
+    )
+    assert res_empty_fq["response"]["numFound"] == 0
+
     # 3. Query Elevation (Fixed Placement)
     elevation = QueryElevationComponent()
     elevation.add_elevation_rule("urgent-cve", ["paper_03"])

@@ -4,7 +4,9 @@ Multi-tier Solr Cache Engine (FilterCache, QueryResultCache, DocumentCache).
 """
 
 from collections import OrderedDict
-from typing import Any, Dict, Generic, List, Optional, Set, TypeVar
+from typing import Any, Dict, Generic, Iterable, List, Optional, TypeVar, Union
+
+from core.structures.roaring_bitmap import RoaringBitmap
 
 T = TypeVar("T")
 
@@ -46,10 +48,14 @@ class LRUCache(Generic[T]):
         return (self.hits / total) if total > 0 else 0.0
 
 
-class FilterCache(LRUCache[Set[int]]):
-    """Caches boolean filter query result doc_id sets."""
+class FilterCache(LRUCache[RoaringBitmap]):
+    """Caches boolean filter query result doc_id RoaringBitmaps."""
 
-    pass
+    def put(self, key: str, value: Union[RoaringBitmap, Iterable[int]]) -> None:
+        if isinstance(value, RoaringBitmap):
+            super().put(key, value)
+        else:
+            super().put(key, RoaringBitmap(list(value)))
 
 
 class QueryResultCache(LRUCache[List[int]]):
