@@ -3,23 +3,43 @@
 Lucene-style Immutable Segment Model & Deletion Bitset.
 """
 
-from typing import Set
+from typing import Dict, Union
+
+from search.core.index.roaring_bitmap import RoaringBitmap
 
 
 class DeletedDocsBitset:
-    """Tracks logically deleted doc IDs within an immutable segment."""
+    """Tracks logically deleted doc IDs within an immutable segment using Roaring Bitmap."""
 
     def __init__(self) -> None:
-        self.deleted_set: Set[str] = set()
+        self._bitmap = RoaringBitmap()
+        self._str_map: Dict[str, int] = {}
+        self._next_id: int = 0
 
-    def mark_deleted(self, doc_id: str) -> None:
-        self.deleted_set.add(doc_id)
+    def _resolve_id(self, doc_id: Union[str, int]) -> int:
+        if isinstance(doc_id, int):
+            return doc_id
+        if doc_id.isdigit():
+            return int(doc_id)
+        if doc_id not in self._str_map:
+            self._str_map[doc_id] = self._next_id
+            self._next_id += 1
+        return self._str_map[doc_id]
 
-    def is_deleted(self, doc_id: str) -> bool:
-        return doc_id in self.deleted_set
+    def mark_deleted(self, doc_id: Union[str, int]) -> None:
+        num_id = self._resolve_id(doc_id)
+        self._bitmap.add(num_id)
+
+    def is_deleted(self, doc_id: Union[str, int]) -> bool:
+        if isinstance(doc_id, int):
+            return doc_id in self._bitmap
+        if doc_id.isdigit():
+            return int(doc_id) in self._bitmap
+        num_id = self._str_map.get(doc_id)
+        return num_id in self._bitmap if num_id is not None else False
 
     def count(self) -> int:
-        return len(self.deleted_set)
+        return len(self._bitmap)
 
 
 class SegmentInfo:

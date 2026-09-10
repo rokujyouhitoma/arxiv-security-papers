@@ -6,6 +6,8 @@ Index Storage, Inverted Index, VByte Compression, and Segment Management (Lucene
 import struct
 from typing import Any, Dict, List, Optional, Set
 
+from search.core.index.roaring_bitmap import RoaringBitmap
+
 
 def encode_vbyte(numbers: List[int]) -> bytes:
     """Encodes a list of positive integers using Variable Byte (VByte) encoding."""
@@ -171,19 +173,25 @@ class StoredFields:
 
 
 class DeletedDocsBitset:
-    """Bitset tracking tombstoned/deleted document IDs."""
+    """Bitset tracking tombstoned/deleted document IDs using Roaring Bitmap."""
 
     def __init__(self) -> None:
-        self._deleted: Set[int] = set()
+        self._bitmap = RoaringBitmap()
 
     def delete(self, doc_id: int) -> None:
-        self._deleted.add(doc_id)
+        self._bitmap.add(doc_id)
 
     def is_deleted(self, doc_id: int) -> bool:
-        return doc_id in self._deleted
+        return doc_id in self._bitmap
 
     def count(self) -> int:
-        return len(self._deleted)
+        return len(self._bitmap)
+
+    def to_set(self) -> Set[int]:
+        return self._bitmap.to_set()
+
+    def get_bitmap(self) -> RoaringBitmap:
+        return self._bitmap
 
 
 class Segment:

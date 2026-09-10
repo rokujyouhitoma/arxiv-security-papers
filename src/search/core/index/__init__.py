@@ -5,11 +5,13 @@ Core Index Storage Subpackage.
 
 from .doc_values import DocValues
 from .postings import MultiFieldPostingsIndex, PostingsList
+from .roaring_bitmap import RoaringBitmap
 from .stored_fields import StoredFields
 
 __all__ = [
     "DocValues",
     "MultiFieldPostingsIndex",
     "PostingsList",
+    "RoaringBitmap",
     "StoredFields",
 ]
