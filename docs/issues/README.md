@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **245** | ブルームフィルターの共通コア基盤 (src/core/structures/bloom_filter.py) への昇格・一元化と spider / database 重複コードの刷新 | Architecture / Refactor | 2026-09-11 | [245-migrate-and-unify-bloom-filter-to-core-structures.md](closed/245-migrate-and-unify-bloom-filter-to-core-structures.md) |
 | **244** | src/database における Roaring Bitmap を用いた低カーディナリティ列向け Bitmap Index およびタプル死活管理の実装 | Feature / Performance | 2026-09-11 | [244-implement-roaring-bitmap-index-for-database-storage.md](closed/244-implement-roaring-bitmap-index-for-database-storage.md) |
 | **243** | src/search/platform/cache における FilterCache の Roaring Bitmap 換装とブーリアンフィルター演算の高速化 | Feature / Performance | 2026-09-11 | [243-apply-roaring-bitmap-to-search-filter-cache.md](closed/243-apply-roaring-bitmap-to-search-filter-cache.md) |
 | **242** | src/database/transaction/mvcc.py における Roaring Bitmap を用いたトランザクション追跡とスナップショット分離の省メモリ・高速化 | Feature / Performance | 2026-09-11 | [242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md](closed/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md) |

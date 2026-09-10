@@ -3,6 +3,7 @@ Core data structures for arxiv-security-papers.
 Provides high-performance, space-efficient pure-Python algorithms and containers.
 """
 
+from core.structures.bloom_filter import BloomFilter, ScalableBloomFilter
 from core.structures.roaring_bitmap import (
     ARRAY_MAX_CAPACITY,
     BITMAP_WORDS,
@@ -31,4 +32,6 @@ __all__ = [
     "BitmapContainer",
     "RunContainer",
     "RoaringBitmap",
+    "BloomFilter",
+    "ScalableBloomFilter",
 ]
