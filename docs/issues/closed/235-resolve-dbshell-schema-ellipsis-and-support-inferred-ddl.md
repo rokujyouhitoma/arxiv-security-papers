@@ -32,11 +32,11 @@ CREATE INDEX idx_edges_vector ON edges (vector) USING HNSW;
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/cli/commands/dbshell.py`](file:///workspace/arxiv-security-papers/src/cli/commands/dbshell.py):
+- [x] [`src/cli/commands/dbshell.py`](../../../src/cli/commands/dbshell.py):
   - `_mount_single_container_table` における固定 `(...)` の撤廃。
   - `_resolve_container_table_ddl` による `_schemas` テーブルルックアップとメタデータからの型推論機能の実装。
   - 推論されたスキーマに対する `-- Inferred from storage metadata` 注記コメントの付与。
-- [x] [`tests/cli/test_manage_dbshell.py`](file:///workspace/arxiv-security-papers/tests/cli/test_manage_dbshell.py):
+- [x] [`tests/cli/test_manage_dbshell.py`](../../../tests/cli/test_manage_dbshell.py):
   - `.schema edges` や `cti_catalog_db` テーブル群で実際のカラム定義・型が出力され、かつ推論スキーマに `-- Inferred from storage metadata` 注記が付与されていることの検証テスト追加。
 
 ---

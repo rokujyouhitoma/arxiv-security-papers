@@ -33,11 +33,11 @@ ID: 233
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/cli/commands/dbshell.py`](file:///workspace/arxiv-security-papers/src/cli/commands/dbshell.py): `--database` 引数、`.databases` / `.use` メタコマンド、および MultiTable VDB マウントの実装
-- [x] [`src/cli/commands/tables.py`](file:///workspace/arxiv-security-papers/src/cli/commands/tables.py): テーブル一覧への `Table Type` (Virtual / Physical / Memory) の識別表示追加
-- [x] [`src/database/sql/executor.py`](file:///workspace/arxiv-security-papers/src/database/sql/executor.py): `USE <database>` 構文および `TableCatalog` への `table_type` メタデータ保持
-- [x] [`src/database/storage/factory.py`](file:///workspace/arxiv-security-papers/src/database/storage/factory.py): `MultiTableVectorStorage` 自動認識またはフラグ判定の整理
-- [x] [`tests/cli/test_manage_dbshell.py`](file:///workspace/arxiv-security-papers/tests/cli/test_manage_dbshell.py): データベース切替およびテーブル種別表示の単体テスト追加
+- [x] [`src/cli/commands/dbshell.py`](../../../src/cli/commands/dbshell.py): `--database` 引数、`.databases` / `.use` メタコマンド、および MultiTable VDB マウントの実装
+- [x] [`src/cli/commands/tables.py`](../../../src/cli/commands/tables.py): テーブル一覧への `Table Type` (Virtual / Physical / Memory) の識別表示追加
+- [x] [`src/database/sql/executor.py`](../../../src/database/sql/executor.py): `USE <database>` 構文および `TableCatalog` への `table_type` メタデータ保持
+- [x] [`src/database/storage/factory.py`](../../../src/database/storage/factory.py): `MultiTableVectorStorage` 自動認識またはフラグ判定の整理
+- [x] [`tests/cli/test_manage_dbshell.py`](../../../tests/cli/test_manage_dbshell.py): データベース切替およびテーブル種別表示の単体テスト追加
 
 ---
 

@@ -10,44 +10,44 @@ ID: 241
 
 ## 1. 概要 / Summary
 
-Issue #239 において `src/search/core/index/roaring_bitmap.py` に実装された 32-bit Pure-Python Roaring Bitmap を、検索エンジン専用コンポーネントからプロジェクト全体の共通コア基盤 [`src/core/structures/roaring_bitmap.py`](file:///workspace/arxiv-security-papers/src/core/structures/roaring_bitmap.py) へ移動・昇格する。
+Issue #239 において `src/search/core/index/roaring_bitmap.py` に実装された 32-bit Pure-Python Roaring Bitmap を、検索エンジン専用コンポーネントからプロジェクト全体の共通コア基盤 [`src/core/structures/roaring_bitmap.py`](../../../src/core/structures/roaring_bitmap.py) へ移動・昇格する。
 
 ユーザー指示に基づき、旧パス `src/search/core/index/roaring_bitmap.py` への後方互換用エイリアス・ラッパー（古いインポートパスの転送定義）は一切設置せず、完全に削除した。
 検索エンジン（`src/search/core/index/__init__.py`, `src/search/core/store/segment.py`, `src/search/engine/index/__init__.py`）およびテストスイートを含むすべての参照元を `from core.structures.roaring_bitmap import RoaringBitmap` へ直接インポートする形へ完全に統一・刷新した。
 
-また、Roaring Bitmap 本体の包括的単体テストを [`tests/core/test_roaring_bitmap.py`](file:///workspace/arxiv-security-papers/tests/core/test_roaring_bitmap.py) へ移動・配置し、コア共通データ構造としての回帰検証体制を確立した。
+また、Roaring Bitmap 本体の包括的単体テストを [`tests/core/test_roaring_bitmap.py`](../../../tests/core/test_roaring_bitmap.py) へ移動・配置し、コア共通データ構造としての回帰検証体制を確立した。
 
 ---
 
 ## 2. トレーサビリティ / Traceability
 
-- **前提 Issue**: [`docs/issues/closed/239-implement-roaring-bitmap-for-search-deletion-bitset.md`](file:///workspace/arxiv-security-papers/docs/issues/closed/239-implement-roaring-bitmap-for-search-deletion-bitset.md)
+- **前提 Issue**: [`docs/issues/closed/239-implement-roaring-bitmap-for-search-deletion-bitset.md`](239-implement-roaring-bitmap-for-search-deletion-bitset.md)
 - **後続 Issue**:
-  - [`docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md`](file:///workspace/arxiv-security-papers/docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md)
-  - [`docs/issues/243-apply-roaring-bitmap-to-search-filter-cache.md`](file:///workspace/arxiv-security-papers/docs/issues/243-apply-roaring-bitmap-to-search-filter-cache.md)
-  - [`docs/issues/244-implement-roaring-bitmap-index-for-database-storage.md`](file:///workspace/arxiv-security-papers/docs/issues/244-implement-roaring-bitmap-index-for-database-storage.md)
-- **設計書**: [`docs/designs/DSN-04-search_engine_architecture.md`](file:///workspace/arxiv-security-papers/docs/designs/DSN-04-search_engine_architecture.md)
-- **コア基盤アーキテクチャ**: [`src/core/`](file:///workspace/arxiv-security-papers/src/core/)（`src/core/hsm/` と並ぶ共通データ構造層 `src/core/structures/` の確立）
+  - [`docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md`](../242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md)
+  - [`docs/issues/243-apply-roaring-bitmap-to-search-filter-cache.md`](../243-apply-roaring-bitmap-to-search-filter-cache.md)
+  - [`docs/issues/244-implement-roaring-bitmap-index-for-database-storage.md`](../244-implement-roaring-bitmap-index-for-database-storage.md)
+- **設計書**: [`docs/designs/DSN-04-search_engine_architecture.md`](../../designs/DSN-04-search_engine_architecture.md)
+- **コア基盤アーキテクチャ**: [`src/core/`](../../../src/core)（`src/core/hsm/` と並ぶ共通データ構造層 `src/core/structures/` の確立）
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/core/structures/__init__.py`](file:///workspace/arxiv-security-papers/src/core/structures/__init__.py) (新規):
+- [x] [`src/core/structures/__init__.py`](../../../src/core/structures/__init__.py) (新規):
   - `core.structures` パッケージ初期化および `RoaringBitmap`、コンテナクラスのエクスポート
-- [x] [`src/core/structures/roaring_bitmap.py`](file:///workspace/arxiv-security-papers/src/core/structures/roaring_bitmap.py) (新規・移動):
+- [x] [`src/core/structures/roaring_bitmap.py`](../../../src/core/structures/roaring_bitmap.py) (新規・移動):
   - `src/search/core/index/roaring_bitmap.py` から移動した Roaring Bitmap コア実装（Pure Python 3.14）
-- [x] [`src/search/core/index/roaring_bitmap.py`](file:///workspace/arxiv-security-papers/src/search/core/index/roaring_bitmap.py) (削除):
+- [x] [`src/search/core/index/roaring_bitmap.py`](../../../src/search/core/index/roaring_bitmap.py) (削除):
   - 旧ファイルを完全削除（ラッパーなし）
-- [x] [`src/search/core/index/__init__.py`](file:///workspace/arxiv-security-papers/src/search/core/index/__init__.py):
+- [x] [`src/search/core/index/__init__.py`](../../../src/search/core/index/__init__.py):
   - `from core.structures.roaring_bitmap import RoaringBitmap` へ更新
-- [x] [`src/search/core/store/segment.py`](file:///workspace/arxiv-security-papers/src/search/core/store/segment.py):
+- [x] [`src/search/core/store/segment.py`](../../../src/search/core/store/segment.py):
   - `from core.structures.roaring_bitmap import RoaringBitmap` へ更新
-- [x] [`src/search/engine/index/__init__.py`](file:///workspace/arxiv-security-papers/src/search/engine/index/__init__.py):
+- [x] [`src/search/engine/index/__init__.py`](../../../src/search/engine/index/__init__.py):
   - `from core.structures.roaring_bitmap import RoaringBitmap` へ更新
-- [x] [`tests/core/test_roaring_bitmap.py`](file:///workspace/arxiv-security-papers/tests/core/test_roaring_bitmap.py) (新規・移動):
+- [x] [`tests/core/test_roaring_bitmap.py`](../../../tests/core/test_roaring_bitmap.py) (新規・移動):
   - コアデータ構造としての単体テストスイート（15テスト）
-- [x] [`tests/search/test_roaring_bitmap.py`](file:///workspace/arxiv-security-papers/tests/search/test_roaring_bitmap.py) (削除・移動):
+- [x] [`tests/search/test_roaring_bitmap.py`](../../../tests/search/test_roaring_bitmap.py) (削除・移動):
   - `tests/core/test_roaring_bitmap.py` へ移動完了
 
 ---

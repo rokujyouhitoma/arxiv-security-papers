@@ -50,20 +50,20 @@ Total Size: 179.77 MB
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/web/gateway/handlers.py`](file:///workspace/arxiv-security-papers/src/web/gateway/handlers.py):
+- [x] [`src/web/gateway/handlers.py`](../../../src/web/gateway/handlers.py):
   - `_collect_database_tables`、`_introspect_paper_table_metrics`、`_introspect_vector_and_search_metrics`、`_introspect_analytics_metrics` 等のレガシー手動合成ロジックを撤廃。
   - `_introspect_okf_papers_table`、`_introspect_processed_papers_table`、`_introspect_raw_papers_table` を新設し、`settings.DATABASES["arxiv_security_db"]` の仮想テーブル定義に完全統一。
   - `analytics_metrics` の `arxiv_security_db` への誤混入を排除（`analytics_db` 側のみで扱う）。
   - `arxiv_db_info` のカテゴリ、ストレージエンジン、ファイルパス定義を更新。
-- [x] [`site/index.html`](file:///workspace/arxiv-security-papers/site/index.html):
+- [x] [`site/index.html`](../../../site/index.html):
   - データベース選択 UI として `<select id="selectDbScope">` を新設。
   - ピルボタン（`databaseSelectorPills`）のテキストを `settings.py` に合わせて統一。
-- [x] [`site/app.js`](file:///workspace/arxiv-security-papers/site/app.js) / [`site/app-min.js`](file:///workspace/arxiv-security-papers/site/app-min.js):
+- [x] [`site/app.js`](../../../site/app.js) / [`site/app-min.js`](../../../site/app-min.js):
   - `selectDbScope` の change イベントリスナーを追加し、データベース切り替えを実装。
   - `renderDatabaseTab` において、ピルクリック時にもセレクトボックスの表示が即座に同期する双方向バインディングを実装。
-- [x] [`tests/web/test_database_real_introspection.py`](file:///workspace/arxiv-security-papers/tests/web/test_database_real_introspection.py):
+- [x] [`tests/web/test_database_real_introspection.py`](../../../tests/web/test_database_real_introspection.py):
   - Web UI イントロスペクションで `arxiv_security_db` に `okf_papers`, `processed_papers`, `raw_papers` が返され、CLI の出力と完全一致することを検証するテストの更新。
-- [x] [`tests/web/test_enterprise_console_ui.py`](file:///workspace/arxiv-security-papers/tests/web/test_enterprise_console_ui.py):
+- [x] [`tests/web/test_enterprise_console_ui.py`](../../../tests/web/test_enterprise_console_ui.py):
   - `site/index.html` の `selectDbScope` ドロップダウンおよび `site/app.js` のハンドラー存在を検証するテストアサーションを追加。
 
 ---

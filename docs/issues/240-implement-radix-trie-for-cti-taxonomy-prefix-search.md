@@ -30,7 +30,7 @@ ID: 240
 
 ## 2. トレーサビリティ / Traceability
 
-- **設計書**: [`docs/designs/DSN-01-cyber_security_ontology_and_graph_engine.md`](file:///workspace/arxiv-security-papers/docs/designs/DSN-01-cyber_security_ontology_and_graph_engine.md)
+- **設計書**: [`docs/designs/DSN-01-cyber_security_ontology_and_graph_engine.md`](../designs/DSN-01-cyber_security_ontology_and_graph_engine.md)
 - **関連タクソノミー**:
   - `src/domain/security/taxonomy/cwe.py`
   - `src/domain/security/taxonomy/mitre.py`
@@ -41,15 +41,15 @@ ID: 240
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`src/domain/security/taxonomy/radix_trie.py`](file:///workspace/arxiv-security-papers/src/domain/security/taxonomy/radix_trie.py) (新規):
+- [ ] [`src/domain/security/taxonomy/radix_trie.py`](../../src/domain/security/taxonomy/radix_trie.py) (新規):
   - Radix Trie (基数木) コアエンジンの実装
   - ノード共有・エッジ圧縮（パス圧縮）
   - API: `insert(key, value)`, `search(key)`, `find_by_prefix(prefix, limit)`, `longest_prefix(key)`
-- [ ] [`src/domain/security/taxonomy/mitre.py`](file:///workspace/arxiv-security-papers/src/domain/security/taxonomy/mitre.py):
+- [ ] [`src/domain/security/taxonomy/mitre.py`](../../src/domain/security/taxonomy/mitre.py):
   - ATT&CK テクニック ID インデックスに Trie をバインド
-- [ ] [`src/domain/security/taxonomy/cwe.py`](file:///workspace/arxiv-security-papers/src/domain/security/taxonomy/cwe.py):
+- [ ] [`src/domain/security/taxonomy/cwe.py`](../../src/domain/security/taxonomy/cwe.py):
   - CWE ID および弱点名称インデックスに Trie をバインド
-- [ ] [`tests/domain/security/test_radix_trie.py`](file:///workspace/arxiv-security-papers/tests/domain/security/test_radix_trie.py) (新規):
+- [ ] [`tests/domain/security/test_radix_trie.py`](../../tests/domain/security/test_radix_trie.py) (新規):
   - 挿入、完全一致、プレフィックス検索、境界値テスト
   - ATT&CK / CWE 実データを用いた検索速度およびサジェスト精度検証
 

@@ -112,6 +112,6 @@ Executive summaries in `outputs/executive_summaries/` MUST be maintained in sort
 ## 7. Relative Link & Documentation Rules
 
 - **Relative Paths Only**:
-  - You MUST strictly use relative paths (never absolute paths like `file:///workspace/...` or `/root/...`) for all internal links across all `.md` files in `docs/`, `outputs/`, and `.agents/`.
+  - You MUST strictly use relative paths (never absolute paths like `path/to/...` or `/root/...`) for all internal links across all `.md` files in `docs/`, `outputs/`, and `.agents/`.
 - **Root Index Synchronization**:
   - Whenever new papers are converted or summaries generated, `outputs/index.md` and `outputs/log.md` MUST be updated.

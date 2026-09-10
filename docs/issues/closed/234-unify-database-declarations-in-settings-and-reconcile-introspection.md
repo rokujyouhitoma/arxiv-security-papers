@@ -33,13 +33,13 @@ ID: 234
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/settings.py`](file:///workspace/arxiv-security-papers/src/settings.py): 新設。`BASE_DIR`、`DATABASES` 辞書定義、およびヘルパー関数（`get_database_scopes`, `get_table_scope_from_settings`, `get_table_type_from_settings` 等）の実装
-- [x] [`src/cli/commands/dbshell.py`](file:///workspace/arxiv-security-papers/src/cli/commands/dbshell.py): ハードコードされた `DATABASE_SCOPES` やパス結合を撤廃し、`settings.DATABASES` を参照するように移行
-- [x] [`src/cli/commands/tables.py`](file:///workspace/arxiv-security-papers/src/cli/commands/tables.py): `settings.DATABASES` を参照してテーブル一覧とスコープ・種別を表示
-- [x] [`src/database/sql/executor.py`](file:///workspace/arxiv-security-papers/src/database/sql/executor.py): `SHOW TABLES FROM <database>` の実行時に、マウント済みテーブルカタログおよび `settings.DATABASES` からスコープに該当するテーブル（仮想テーブル含む）を正確に返却
-- [x] [`src/web/gateway/handlers.py`](file:///workspace/arxiv-security-papers/src/web/gateway/handlers.py): `_resolve_application_databases` 等を `settings.DATABASES` 準拠に統一し、実 SQL エンジン経由でテーブル台帳を取得
-- [x] [`tests/cli/test_manage_dbshell.py`](file:///workspace/arxiv-security-papers/tests/cli/test_manage_dbshell.py): `settings.DATABASES` 連携および `SHOW TABLES FROM <db>` の検証テスト追加
-- [x] [`tests/database/test_show_statements.py`](file:///workspace/arxiv-security-papers/tests/database/test_show_statements.py): 仮想テーブルを含むスコープでの `SHOW TABLES FROM ...` テスト追加
+- [x] [`src/settings.py`](../../../src/settings.py): 新設。`BASE_DIR`、`DATABASES` 辞書定義、およびヘルパー関数（`get_database_scopes`, `get_table_scope_from_settings`, `get_table_type_from_settings` 等）の実装
+- [x] [`src/cli/commands/dbshell.py`](../../../src/cli/commands/dbshell.py): ハードコードされた `DATABASE_SCOPES` やパス結合を撤廃し、`settings.DATABASES` を参照するように移行
+- [x] [`src/cli/commands/tables.py`](../../../src/cli/commands/tables.py): `settings.DATABASES` を参照してテーブル一覧とスコープ・種別を表示
+- [x] [`src/database/sql/executor.py`](../../../src/database/sql/executor.py): `SHOW TABLES FROM <database>` の実行時に、マウント済みテーブルカタログおよび `settings.DATABASES` からスコープに該当するテーブル（仮想テーブル含む）を正確に返却
+- [x] [`src/web/gateway/handlers.py`](../../../src/web/gateway/handlers.py): `_resolve_application_databases` 等を `settings.DATABASES` 準拠に統一し、実 SQL エンジン経由でテーブル台帳を取得
+- [x] [`tests/cli/test_manage_dbshell.py`](../../../tests/cli/test_manage_dbshell.py): `settings.DATABASES` 連携および `SHOW TABLES FROM <db>` の検証テスト追加
+- [x] [`tests/database/test_show_statements.py`](../../../tests/database/test_show_statements.py): 仮想テーブルを含むスコープでの `SHOW TABLES FROM ...` テスト追加
 
 ---
 

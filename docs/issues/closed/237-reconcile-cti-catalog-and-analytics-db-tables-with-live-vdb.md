@@ -57,13 +57,13 @@ UI (修正前): 4 テーブル / 26 行
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`src/domain/security/cti/storage.py`](file:///workspace/arxiv-security-papers/src/domain/security/cti/storage.py):
+- [ ] [`src/domain/security/cti/storage.py`](../../../src/domain/security/cti/storage.py):
   - `_build_cti_table_descriptors` および `get_introspection_metadata` を改修し、実 `cti_catalog.vdb`（`MultiTableVectorStorage`）から正確な行数・サイズを取得する。
   - レガシーな `cti_techniques_fts` を排除し、5 テーブル（`cisa_kev_vulnerabilities`, `cti_mitigations`, `cti_relationships`, `cti_tactics`, `cti_techniques`）に統一。
-- [ ] [`src/analytics/storage.py`](file:///workspace/arxiv-security-papers/src/analytics/storage.py):
+- [ ] [`src/analytics/storage.py`](../../../src/analytics/storage.py):
   - `_build_analytics_table_descriptors` および `get_introspection_metadata` を改修し、実 `analytics.vdb`（`MultiTableVectorStorage`）から正確な行数・サイズを取得する。
   - 欠落していた `papers` テーブルを追加し、5 テーブル（`latest_snapshot`, `metrics_history`, `papers`, `strategic_kpis`, `threat_trends`）に統一。
-- [ ] [`tests/web/test_database_real_introspection.py`](file:///workspace/arxiv-security-papers/tests/web/test_database_real_introspection.py):
+- [ ] [`tests/web/test_database_real_introspection.py`](../../../tests/web/test_database_real_introspection.py):
   - `cti_catalog_db` と `analytics_db` のテーブル構成・行数・サイズが CLI と完全一致することを検証するテストの追加。
 
 ---

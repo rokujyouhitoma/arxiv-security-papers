@@ -10,7 +10,7 @@ ID: 243
 
 ## 1. 概要 / Summary
 
-検索エンジン基盤 `src/search/platform/cache/__init__.py` の `FilterCache(LRUCache[Set[int]])` およびハンドラー層 `src/search/platform/handler/__init__.py` において、フィルタークエリ（`fq`）でマッチした DocID 集合のキャッシュ・結合処理を Python `Set[int]` から [`src/core/structures/roaring_bitmap.py`](file:///workspace/arxiv-security-papers/src/core/structures/roaring_bitmap.py) の `RoaringBitmap` へ換装する。
+検索エンジン基盤 `src/search/platform/cache/__init__.py` の `FilterCache(LRUCache[Set[int]])` およびハンドラー層 `src/search/platform/handler/__init__.py` において、フィルタークエリ（`fq`）でマッチした DocID 集合のキャッシュ・結合処理を Python `Set[int]` から [`src/core/structures/roaring_bitmap.py`](../../../src/core/structures/roaring_bitmap.py) の `RoaringBitmap` へ換装する。
 
 Apache Solr の `BitDocSet` や Apache Lucene の `RoaringDocIdSet` と同様に、フィルター結果をビットマップ表現でキャッシュすることで、メモリ消費量を 1/5 以下に圧縮し、複数フィルター条件（`fq=cat:crypto AND fq=year:2026`）の交差判定・差分判定（AND / OR / NOT）を 64-bit ワード単位のビット演算（`combined_filter = combined_filter & fq_bitmap`）で超高速化する。
 
@@ -18,9 +18,9 @@ Apache Solr の `BitDocSet` や Apache Lucene の `RoaringDocIdSet` と同様に
 
 ## 2. トレーサビリティ / Traceability
 
-- **前提 Issue**: [`docs/issues/241-migrate-roaring-bitmap-to-core-structures.md`](file:///workspace/arxiv-security-papers/docs/issues/241-migrate-roaring-bitmap-to-core-structures.md)
-- **関連 Issue**: [`docs/issues/239-implement-roaring-bitmap-for-search-deletion-bitset.md`](file:///workspace/arxiv-security-papers/docs/issues/239-implement-roaring-bitmap-for-search-deletion-bitset.md), [`docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md`](file:///workspace/arxiv-security-papers/docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md)
-- **設計書**: [`docs/designs/DSN-04-search_engine_architecture.md`](file:///workspace/arxiv-security-papers/docs/designs/DSN-04-search_engine_architecture.md)
+- **前提 Issue**: [`docs/issues/241-migrate-roaring-bitmap-to-core-structures.md`](../241-migrate-roaring-bitmap-to-core-structures.md)
+- **関連 Issue**: [`docs/issues/239-implement-roaring-bitmap-for-search-deletion-bitset.md`](../239-implement-roaring-bitmap-for-search-deletion-bitset.md), [`docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md`](../242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md)
+- **設計書**: [`docs/designs/DSN-04-search_engine_architecture.md`](../../designs/DSN-04-search_engine_architecture.md)
 - **業界参照**:
   - Apache Solr `DocSet` / `BitDocSet` アーキテクチャ
   - Apache Lucene `RoaringDocIdSet` フィルターキャッシュ
@@ -39,19 +39,19 @@ Apache Solr の `BitDocSet` や Apache Lucene の `RoaringDocIdSet` と同様に
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/core/structures/roaring_bitmap.py`](file:///workspace/arxiv-security-papers/src/core/structures/roaring_bitmap.py):
+- [x] [`src/core/structures/roaring_bitmap.py`](../../../src/core/structures/roaring_bitmap.py):
   - `RoaringBitmap.__eq__` の実装（他の `RoaringBitmap` または `Set[int]` との等価判定をサポート）
-- [x] [`src/search/platform/cache/__init__.py`](file:///workspace/arxiv-security-papers/src/search/platform/cache/__init__.py):
+- [x] [`src/search/platform/cache/__init__.py`](../../../src/search/platform/cache/__init__.py):
   - `FilterCache(LRUCache[RoaringBitmap])` への型・実装換装
   - `FilterCache.put` における `Set[int]` / `Iterable[int]` の自動 `RoaringBitmap` 変換サポート（透過的互換性）
-- [x] [`src/search/platform/handler/__init__.py`](file:///workspace/arxiv-security-papers/src/search/platform/handler/__init__.py):
+- [x] [`src/search/platform/handler/__init__.py`](../../../src/search/platform/handler/__init__.py):
   - `_resolve_single_fq(self, segment: Segment, fq_str: str) -> RoaringBitmap`
   - `_resolve_filter_ids(self, segment: Segment, fq_str: str) -> RoaringBitmap`
   - `_match_doc_values(self, segment: Segment, field: str, val: str) -> RoaringBitmap`
   - `_apply_filter_queries(self, segment: Segment, doc_scores: Dict[int, float], fq_list: Any) -> Dict[int, float]` の複数 `fq` ビット積 (`&`) 最適化
-- [x] [`tests/search/platform/test_cache.py`](file:///workspace/arxiv-security-papers/tests/search/platform/test_cache.py):
+- [x] [`tests/search/platform/test_cache.py`](../../../tests/search/platform/test_cache.py):
   - `FilterCache` の `RoaringBitmap` キャッシュ動作、サイズ確認、等価性テストの追加・更新
-- [x] [`tests/search/platform/test_handler.py`](file:///workspace/arxiv-security-papers/tests/search/platform/test_handler.py):
+- [x] [`tests/search/platform/test_handler.py`](../../../tests/search/platform/test_handler.py):
   - 複数 `fq` の合成、空フィルター、削除ドキュメント除外のテスト検証
 
 ---

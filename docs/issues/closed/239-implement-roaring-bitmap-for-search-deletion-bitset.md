@@ -27,7 +27,7 @@ ID: 239
 
 ## 2. トレーサビリティ / Traceability
 
-- **設計書**: [`docs/designs/DSN-04-search_engine_architecture.md`](file:///workspace/arxiv-security-papers/docs/designs/DSN-04-search_engine_architecture.md)
+- **設計書**: [`docs/designs/DSN-04-search_engine_architecture.md`](../../designs/DSN-04-search_engine_architecture.md)
 - **アルゴリズム・学術参照**:
   - Lemire, D., Kaser, O., Awan, N., & Kurz, D. (2016). "Consistently faster and smaller compressed bitmaps with Roaring", *Software: Practice and Experience*, 46(11), 1547-1569.
   - Chambi, S., Lemire, D., Kaser, O., & Godin, R. (2016). "Better bitmap performance with Roaring bitmaps", *Software: Practice and Experience*, 46(5), 709-719.
@@ -102,19 +102,19 @@ stateDiagram-v2
 
 ## 5. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/search/core/index/roaring_bitmap.py`](file:///workspace/arxiv-security-papers/src/search/core/index/roaring_bitmap.py) (新規):
+- [x] [`src/search/core/index/roaring_bitmap.py`](../../../src/search/core/index/roaring_bitmap.py) (新規):
   - `RoaringBitmap` クラスおよびコンテナ基底・派生クラスの実装
   - 基本操作: `add`, `remove`, `discard`, `contains`, `len`, `__iter__`, `to_list`
   - 集合演算: `&` (AND), `|` (OR), `-` (ANDNOT/Difference), `^` (XOR), および対応するインプレース演算
   - 高速シリアライズ: `to_bytes()` / `from_bytes()`
-- [x] [`src/search/core/index/__init__.py`](file:///workspace/arxiv-security-papers/src/search/core/index/__init__.py):
+- [x] [`src/search/core/index/__init__.py`](../../../src/search/core/index/__init__.py):
   - `RoaringBitmap` の公開エクスポート
-- [x] [`src/search/engine/index/__init__.py`](file:///workspace/arxiv-security-papers/src/search/engine/index/__init__.py):
+- [x] [`src/search/engine/index/__init__.py`](../../../src/search/engine/index/__init__.py):
   - `DeletedDocsBitset` の内部ストレージを Python `set[int]` から `RoaringBitmap` へ換装
   - 既存 API（`delete`, `is_deleted`, `count`）の後方互換性を 100% 維持
-- [x] [`src/search/core/store/segment.py`](file:///workspace/arxiv-security-papers/src/search/core/store/segment.py):
+- [x] [`src/search/core/store/segment.py`](../../../src/search/core/store/segment.py):
   - `DeletedDocsBitset` の内部ストレージを `RoaringBitmap` へ換装（doc_id 整数変換対応）
-- [x] [`tests/search/test_roaring_bitmap.py`](file:///workspace/arxiv-security-papers/tests/search/test_roaring_bitmap.py) (新規):
+- [x] [`tests/search/test_roaring_bitmap.py`](../../../tests/search/test_roaring_bitmap.py) (新規):
   - `ArrayContainer` ➔ `BitmapContainer` 昇格・降格テスト
   - Python 標準 `set` との完全な結果一致性テスト（10,000 件ランダム・連続値）
   - 集合演算（AND, OR, ANDNOT）の正当性テスト

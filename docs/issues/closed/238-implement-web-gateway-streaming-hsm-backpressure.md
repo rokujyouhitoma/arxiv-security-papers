@@ -27,7 +27,7 @@ ID: 238
 
 ## 2. トレーサビリティ / Traceability
 
-- **設計書**: [`docs/designs/DSN-23-hierarchical_state_machine_and_lifecycle_governance.md`](file:///workspace/arxiv-security-papers/docs/designs/DSN-23-hierarchical_state_machine_and_lifecycle_governance.md) (第 4 節、第 8.5 節 Phase 4)
+- **設計書**: [`docs/designs/DSN-23-hierarchical_state_machine_and_lifecycle_governance.md`](../../designs/DSN-23-hierarchical_state_machine_and_lifecycle_governance.md) (第 4 節、第 8.5 節 Phase 4)
 - **先行 Issue**:
   - Issue 224: `src/core/hsm/` コアエンジンおよび `src/supervisor/` プロセス生命周期 HSM
   - Issue 225: `src/workflow/` Task & Saga 補償トランザクション HSM
@@ -79,12 +79,12 @@ stateDiagram-v2
 
 ## 5. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`src/web/gateway/streaming.py`](file:///workspace/arxiv-security-papers/src/web/gateway/streaming.py):
+- [ ] [`src/web/gateway/streaming.py`](../../../src/web/gateway/streaming.py):
   - SSE ストリーミングセッション用 HSM 定義（`build_stream_session_hsm`）の実装
   - 状態定数・イベント定数の導入（`STREAM_INITIALIZING`, `STREAM_FLOWING`, `STREAM_CONGESTED`, `STREAM_DEGRADED`, `STREAM_DRAINING`, `STREAM_TERMINATED` 等）
   - `StreamController` によるイテレーション計測、動的サンプリング（`should_emit(priority)`）、安全ドレインの実装
   - `stream_top_metrics` および `stream_log_tail` への統合
-- [ ] [`tests/web/test_streaming_hsm.py`](file:///workspace/arxiv-security-papers/tests/web/test_streaming_hsm.py) (新規):
+- [ ] [`tests/web/test_streaming_hsm.py`](../../../tests/web/test_streaming_hsm.py) (新規):
   - ストリーミング HSM の単体状態遷移テスト
   - Slow Consumer 擬似遅延による `FLOWING` ➔ `CONGESTED` ➔ `DEGRADED` 遷移とフレーム間引き検証
   - クライアント即座切断時の `DRAINING` ➔ `TERMINATED` リソース解放検証

@@ -25,12 +25,12 @@ ID: 232
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/database/storage/plain_text_storage.py`](file:///workspace/arxiv-security-papers/src/database/storage/plain_text_storage.py): ドメイン固定カラム名・固定パスの撤廃、汎用主キー・動的フロントマター展開・ヘビー列設定の導入
-- [x] [`src/database/storage/factory.py`](file:///workspace/arxiv-security-papers/src/database/storage/factory.py): デフォルト主キーの `"id"` 統一
-- [x] [`src/database/storage/json_storage.py`](file:///workspace/arxiv-security-papers/src/database/storage/json_storage.py): デフォルト主キーの `"id"` 統一
-- [x] [`src/database/planner/stats.py`](file:///workspace/arxiv-security-papers/src/database/planner/stats.py): カラム名ブラックリスト撤廃、データサイズベースの汎用統計サンプリング
-- [x] [`src/database/sql/executor.py`](file:///workspace/arxiv-security-papers/src/database/sql/executor.py): DDL 指定の PRIMARY KEY カラムをストレージエンジン生成時に透過的に伝搬
-- [x] [`tests/database/storage/test_plain_text_storage.py`](file:///workspace/arxiv-security-papers/tests/database/storage/test_plain_text_storage.py): 汎用ストレージ仕様（任意主キー・任意フロントマター属性）のテスト拡充
+- [x] [`src/database/storage/plain_text_storage.py`](../../../src/database/storage/plain_text_storage.py): ドメイン固定カラム名・固定パスの撤廃、汎用主キー・動的フロントマター展開・ヘビー列設定の導入
+- [x] [`src/database/storage/factory.py`](../../../src/database/storage/factory.py): デフォルト主キーの `"id"` 統一
+- [x] [`src/database/storage/json_storage.py`](../../../src/database/storage/json_storage.py): デフォルト主キーの `"id"` 統一
+- [x] [`src/database/planner/stats.py`](../../../src/database/planner/stats.py): カラム名ブラックリスト撤廃、データサイズベースの汎用統計サンプリング
+- [x] [`src/database/sql/executor.py`](../../../src/database/sql/executor.py): DDL 指定の PRIMARY KEY カラムをストレージエンジン生成時に透過的に伝搬
+- [x] [`tests/database/storage/test_plain_text_storage.py`](../../../tests/database/storage/test_plain_text_storage.py): 汎用ストレージ仕様（任意主キー・任意フロントマター属性）のテスト拡充
 
 ---
 

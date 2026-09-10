@@ -10,7 +10,7 @@ ID: 242
 
 ## 1. 概要 / Summary
 
-自作DBMS基盤 [`src/database/transaction/mvcc.py`](file:///workspace/arxiv-security-papers/src/database/transaction/mvcc.py)（`MVCCManager` / `TransactionSnapshot`）において、トランザクションのコミット済み ID（`_committed_txs`）、アクティブ ID（`_active_txs`）、およびアボート ID（`_aborted_txs`）の管理を Python 標準 `set[int]` から [`src/core/structures/roaring_bitmap.py`](file:///workspace/arxiv-security-papers/src/core/structures/roaring_bitmap.py) の `RoaringBitmap` へ換装した。
+自作DBMS基盤 [`src/database/transaction/mvcc.py`](../../../src/database/transaction/mvcc.py)（`MVCCManager` / `TransactionSnapshot`）において、トランザクションのコミット済み ID（`_committed_txs`）、アクティブ ID（`_active_txs`）、およびアボート ID（`_aborted_txs`）の管理を Python 標準 `set[int]` から [`src/core/structures/roaring_bitmap.py`](../../../src/core/structures/roaring_bitmap.py) の `RoaringBitmap` へ換装した。
 
 ### 解決した課題
 1. **スナップショット生成時のメモリ複製オーバーヘッド**:
@@ -24,8 +24,8 @@ ID: 242
 
 ## 2. トレーサビリティ / Traceability
 
-- **前提 Issue**: [`docs/issues/closed/241-migrate-roaring-bitmap-to-core-structures.md`](file:///workspace/arxiv-security-papers/docs/issues/closed/241-migrate-roaring-bitmap-to-core-structures.md)
-- **設計書**: [`docs/designs/DSN-14-database_engine_architecture.md`](file:///workspace/arxiv-security-papers/docs/designs/DSN-14-database_engine_architecture.md)
+- **前提 Issue**: [`docs/issues/closed/241-migrate-roaring-bitmap-to-core-structures.md`](241-migrate-roaring-bitmap-to-core-structures.md)
+- **設計書**: [`docs/designs/DSN-14-database_engine_architecture.md`](../../designs/DSN-14-database_engine_architecture.md)
 - **学術・業界参照**:
   - PostgreSQL `pg_xact` (Commit Log / CLOG) および Txid Snapshot アーキテクチャ
   - Berenson, H., et al. (1995). "A Critique of ANSI SQL Isolation Levels", *ACM SIGMOD*.
@@ -44,15 +44,15 @@ ID: 242
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/database/transaction/mvcc.py`](file:///workspace/arxiv-security-papers/src/database/transaction/mvcc.py):
+- [x] [`src/database/transaction/mvcc.py`](../../../src/database/transaction/mvcc.py):
   - `from core.structures.roaring_bitmap import RoaringBitmap` をインポート
   - `TransactionSnapshot`: `active_tx_ids`, `committed_tx_ids` を `RoaringBitmap` に換装。後方互換として `Set[int]` の入力も受容
   - `MVCCManager`: `_active_txs`, `_committed_txs`, `_aborted_txs` を `RoaringBitmap` で管理
   - `begin_transaction()`: `self._committed_txs.clone()` による高速スナップショット生成
   - `vacuum()`: `self._active_txs` の最小値を RoaringBitmap イテレータから取得
-- [x] [`tests/database/transaction/test_mvcc_roaring_bitmap.py`](file:///workspace/arxiv-security-papers/tests/database/transaction/test_mvcc_roaring_bitmap.py) (新規):
+- [x] [`tests/database/transaction/test_mvcc_roaring_bitmap.py`](../../../tests/database/transaction/test_mvcc_roaring_bitmap.py) (新規):
   - Roaring Bitmap 換装後の MVCC スナップショット分離、メモリ圧縮測定、大量トランザクションベンチマーク
-- [x] [`tests/database/transaction/test_mvcc_and_ss2pl.py`](file:///workspace/arxiv-security-papers/tests/database/transaction/test_mvcc_and_ss2pl.py):
+- [x] [`tests/database/transaction/test_mvcc_and_ss2pl.py`](../../../tests/database/transaction/test_mvcc_and_ss2pl.py):
   - 既存テストのノーリグレッション確認（全件 PASS）
 
 ---

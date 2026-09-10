@@ -12,15 +12,15 @@ ID: 244
 
 自作DBMS基盤 `src/database/` において、低カーディナリティカラム（セキュリティカテゴリ、ステータスフラグ、重要度レベル等）の超高速等値・範囲検索を実現する **Bitmap Index（Roaring Bitmap バックエンド）** および、ストレージ層におけるタプル死活管理（Tombstone / Visibility Map）を実装する。
 
-ClickHouse や Oracle Database のビットマップインデックスと同様に、各カラム値に対応するタプル ID（RowID / RID）の集合を [`src/core/structures/roaring_bitmap.py`](file:///workspace/arxiv-security-papers/src/core/structures/roaring_bitmap.py) で保持し、複合検索条件（例: `WHERE severity = 'CRITICAL' AND status = 'OPEN'`）をビット積（`&`）で一括評価可能にする。また、物理削除前の論理削除フラグ管理にも Roaring Bitmap を適用し、VACUUM プロセスおよび可視性判定（Visibility Map）を高速化する。
+ClickHouse や Oracle Database のビットマップインデックスと同様に、各カラム値に対応するタプル ID（RowID / RID）の集合を [`src/core/structures/roaring_bitmap.py`](../../../src/core/structures/roaring_bitmap.py) で保持し、複合検索条件（例: `WHERE severity = 'CRITICAL' AND status = 'OPEN'`）をビット積（`&`）で一括評価可能にする。また、物理削除前の論理削除フラグ管理にも Roaring Bitmap を適用し、VACUUM プロセスおよび可視性判定（Visibility Map）を高速化する。
 
 ---
 
 ## 2. トレーサビリティ / Traceability
 
-- **前提 Issue**: [`docs/issues/241-migrate-roaring-bitmap-to-core-structures.md`](file:///workspace/arxiv-security-papers/docs/issues/241-migrate-roaring-bitmap-to-core-structures.md)
-- **関連 Issue**: [`docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md`](file:///workspace/arxiv-security-papers/docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md), [`docs/issues/243-apply-roaring-bitmap-to-search-filter-cache.md`](file:///workspace/arxiv-security-papers/docs/issues/closed/243-apply-roaring-bitmap-to-search-filter-cache.md)
-- **設計書**: [`docs/designs/DSN-14-database_engine_architecture.md`](file:///workspace/arxiv-security-papers/docs/designs/DSN-14-database_engine_architecture.md)
+- **前提 Issue**: [`docs/issues/241-migrate-roaring-bitmap-to-core-structures.md`](../241-migrate-roaring-bitmap-to-core-structures.md)
+- **関連 Issue**: [`docs/issues/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md`](../242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md), [`docs/issues/243-apply-roaring-bitmap-to-search-filter-cache.md`](243-apply-roaring-bitmap-to-search-filter-cache.md)
+- **設計書**: [`docs/designs/DSN-14-database_engine_architecture.md`](../../designs/DSN-14-database_engine_architecture.md)
 - **学術・技術参照**:
   - O'Neil, P., & Quass, D. (1997). "Improved query performance with variant indexes", *ACM SIGMOD Record*.
   - Wu, K., et al. (2006). "On the performance of bitmap indices for high-cardinality attributes", *VLDB*.
@@ -39,18 +39,18 @@ ClickHouse や Oracle Database のビットマップインデックスと同様�
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [x] [`src/database/index/bitmap_index.py`](file:///workspace/arxiv-security-papers/src/database/index/bitmap_index.py) (新規):
+- [x] [`src/database/index/bitmap_index.py`](../../../src/database/index/bitmap_index.py) (新規):
   - `RoaringBitmapIndex`: 単一カラムの低カーディナリティ値ごとの `RoaringBitmap` マッピング、等値検索 (`get`)、IN 検索 (`get_in`)、複合条件評価 (`eval_and`, `eval_or`, `eval_not`)、シリアライズ/デシリアライズ
   - `TableBitmapIndexes`: テーブル単位で複数カラムのビットマップインデックスを一括管理するマネージャ
-- [x] [`src/database/storage/visibility_map.py`](file:///workspace/arxiv-security-papers/src/database/storage/visibility_map.py) (新規):
+- [x] [`src/database/storage/visibility_map.py`](../../../src/database/storage/visibility_map.py) (新規):
   - `VisibilityMap`: Roaring Bitmap を用いたタプルの可視性・生死（Live / Tombstone）追跡、VACUUM 前後の一括更新
-- [x] [`src/database/index/__init__.py`](file:///workspace/arxiv-security-papers/src/database/index/__init__.py):
+- [x] [`src/database/index/__init__.py`](../../../src/database/index/__init__.py):
   - `RoaringBitmapIndex`, `TableBitmapIndexes` の公開
-- [x] [`src/database/storage/__init__.py`](file:///workspace/arxiv-security-papers/src/database/storage/__init__.py):
+- [x] [`src/database/storage/__init__.py`](../../../src/database/storage/__init__.py):
   - `VisibilityMap` の公開
-- [x] [`src/database/__init__.py`](file:///workspace/arxiv-security-papers/src/database/__init__.py):
+- [x] [`src/database/__init__.py`](../../../src/database/__init__.py):
   - ルートパッケージからのエクスポート整備
-- [x] [`tests/database/test_bitmap_index.py`](file:///workspace/arxiv-security-papers/tests/database/test_bitmap_index.py) (新規):
+- [x] [`tests/database/test_bitmap_index.py`](../../../tests/database/test_bitmap_index.py) (新規):
   - ビットマップインデックスの単一・複合クエリ、VisibilityMap 連携、永続化、メモリ効率のテスト
 
 ---
