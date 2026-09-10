@@ -106,3 +106,35 @@ def test_plain_text_storage_boundary_security() -> None:
 
         with pytest.raises(PlainTextSecurityError, match="violates workspace boundary"):
             FileBackedPlainTextStorage(root_dir=outside, workspace_dir=workspace)
+
+
+def test_plain_text_storage_generic_schema_and_custom_pk() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        doc_file = os.path.join(tmpdir, "doc_42.md")
+        content = (
+            "---\n"
+            "author: 'Alice'\n"
+            "category: 'distributed-systems'\n"
+            "version: '1.2.0'\n"
+            "---\n\n"
+            "# System Architecture\n"
+            "Custom body details here.\n"
+        )
+        with open(doc_file, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        # Mount with custom primary_key and heavy_columns
+        storage = FileBackedPlainTextStorage(
+            root_dir=tmpdir,
+            workspace_dir=tmpdir,
+            primary_key="doc_id",
+            heavy_columns={"content", "body"},
+        )
+        assert storage.count == 1
+        rec = storage.get_by_pk("doc_42")
+        assert rec is not None
+        assert rec["doc_id"] == "doc_42"
+        assert rec["author"] == "Alice"
+        assert rec["category"] == "distributed-systems"
+        assert rec["version"] == "1.2.0"
+        assert "System Architecture" in rec["body"]

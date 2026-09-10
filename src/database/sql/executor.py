@@ -741,19 +741,35 @@ class SQLExecutor:
         base_dir = os.path.dirname(self.default_storage.file_path) or "."
         return os.path.join(base_dir, f"{table_name}.vdb")
 
+    def _resolve_engine_loc(
+        self, stmt: CreateTableStatement, engine_name: str
+    ) -> Optional[str]:
+        if stmt.location:
+            return stmt.location
+        if engine_name == "binary_vdb":
+            loc = self._resolve_new_table_path(stmt.table_name)
+            _safe_remove_file(loc)
+            return loc
+        return None
+
+    def _build_engine_kwargs(self, stmt: CreateTableStatement) -> Dict[str, Any]:
+        kw: Dict[str, Any] = {"dim": self.embedding.dim}
+        for col in stmt.columns:
+            if col.is_primary_key:
+                kw["primary_key"] = col.name
+                break
+        return kw
+
     def _create_engine_storage(self, stmt: CreateTableStatement) -> Any:
         from database.storage.factory import StorageEngineFactory
 
         engine_name = stmt.storage_engine or "binary_vdb"
-        loc = stmt.location
-        if not loc and engine_name == "binary_vdb":
-            loc = self._resolve_new_table_path(stmt.table_name)
-            _safe_remove_file(loc)
-
+        loc = self._resolve_engine_loc(stmt, engine_name)
+        kwargs = self._build_engine_kwargs(stmt)
         return StorageEngineFactory.create_by_engine_name(
             engine_name,
             location=loc,
-            dim=self.embedding.dim,
+            **kwargs,
         )
 
     def _create_default_storage(self, stmt: CreateTableStatement) -> Any:

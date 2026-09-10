@@ -119,7 +119,7 @@ class StorageEngineFactory:
     @staticmethod
     def _create_json_table(location: Optional[str], **kwargs: Any) -> Any:
         loc = location or "catalog.json"
-        pk = str(kwargs.get("primary_key", kwargs.get("pk_field", "clean_id")))
+        pk = str(kwargs.get("primary_key", kwargs.get("pk_field", "id")))
         return JsonTableStorage(file_path=loc, primary_key=pk)
 
     @classmethod

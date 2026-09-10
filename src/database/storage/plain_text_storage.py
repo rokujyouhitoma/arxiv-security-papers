@@ -13,7 +13,7 @@ import os
 import tempfile
 from collections import OrderedDict
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterator, List, Mapping, Optional
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Set
 
 
 class PlainTextStorageError(Exception):
@@ -117,18 +117,20 @@ class LazyRecordDict(Mapping[str, Any]):
     def _get_heavy_val(self, key: str) -> str:
         if key in self._resolved_heavy:
             return self._resolved_heavy[key]
-        val = self._storage.read_heavy_column(str(self._base.get("clean_id", "")), key)
+        pk_field = self._storage.primary_key
+        pk_val = str(self._base.get(pk_field, self._base.get("id", "")))
+        val = self._storage.read_heavy_column(pk_val, key)
         self._resolved_heavy[key] = val
         return val
 
-    def _is_cached_base_key(self, key: str) -> bool:
-        return key in ("id", "clean_id", "file_path", "file_size_bytes", "updated_at")
+    def _is_heavy_key(self, key: str) -> bool:
+        return key in self._storage.heavy_columns
 
     def __getitem__(self, key: str) -> Any:
-        if key in ("body_markdown", "raw_text", "raw_abstract"):
+        if self._is_heavy_key(key):
             return self._get_heavy_val(key)
 
-        if not self._header_loaded and not self._is_cached_base_key(key):
+        if not self._header_loaded and key not in self._base:
             self._ensure_header()
 
         if key in self._base:
@@ -136,7 +138,7 @@ class LazyRecordDict(Mapping[str, Any]):
         raise KeyError(key)
 
     def __contains__(self, key: object) -> bool:
-        if key in ("body_markdown", "raw_text", "raw_abstract"):
+        if isinstance(key, str) and self._is_heavy_key(key):
             return True
         if key in self._base:
             return True
@@ -166,9 +168,22 @@ class LazyRecordDict(Mapping[str, Any]):
         self._ensure_header()
         res = dict(self._base)
         if include_heavy:
-            for k in ("body_markdown", "raw_text", "raw_abstract"):
-                res[k] = self[k]
+            for k in self._storage.heavy_columns:
+                res[k] = self._get_heavy_val(k)
         return res
+
+
+def _extract_frontmatter_from_file(full_path: str) -> Dict[str, Any]:
+    try:
+        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+            header = f.read(4096)
+            if header.startswith("---"):
+                parts = header.split("---", 2)
+                if len(parts) >= 3:
+                    return _parse_yaml_frontmatter_light(parts[1])
+    except OSError:
+        pass
+    return {}
 
 
 class FileBackedPlainTextStorage:
@@ -176,12 +191,17 @@ class FileBackedPlainTextStorage:
 
     MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB DoS mitigation
     LRU_CACHE_CAPACITY = 500
+    DEFAULT_HEAVY_COLUMNS = frozenset(
+        {"body", "content", "body_markdown", "raw_text", "raw_abstract", "text"}
+    )
 
     def __init__(
         self,
         root_dir: Optional[str] = None,
         file_patterns: Optional[List[str]] = None,
         workspace_dir: Optional[str] = None,
+        primary_key: str = "id",
+        heavy_columns: Optional[Set[str]] = None,
     ) -> None:
         self._custom_workspace = workspace_dir is not None
         self.workspace_dir = os.path.realpath(
@@ -189,12 +209,16 @@ class FileBackedPlainTextStorage:
                 workspace_dir or os.environ.get("WORKSPACE_DIR", os.getcwd())
             )
         )
-        target_dir = root_dir or os.path.join(
-            self.workspace_dir, "outputs", "okf_papers"
-        )
+        target_dir = root_dir or self.workspace_dir
         self.root_dir = os.path.realpath(os.path.abspath(target_dir))
         self._verify_workspace_boundary(self.root_dir)
 
+        self.primary_key = primary_key
+        self.heavy_columns = (
+            frozenset(heavy_columns)
+            if heavy_columns is not None
+            else self.DEFAULT_HEAVY_COLUMNS
+        )
         self.patterns = file_patterns or ["*.md", "*.txt"]
         self._meta_index: Dict[str, Dict[str, Any]] = {}
         self._content_cache: OrderedDict[str, str] = OrderedDict()
@@ -240,55 +264,37 @@ class FileBackedPlainTextStorage:
             return
 
         rel_path = os.path.relpath(fpath, self.workspace_dir)
-        clean_id = os.path.splitext(fname)[0]
+        pk_val = os.path.splitext(fname)[0]
         mtime_iso = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
 
-        # Fast lazy index: store lightweight paths without opening file
-        self._meta_index[clean_id] = {
-            "id": clean_id,
-            "clean_id": clean_id,
+        rec: Dict[str, Any] = {
+            "id": pk_val,
+            "file_name": fname,
             "file_path": rel_path,
             "file_size_bytes": stat.st_size,
             "updated_at": mtime_iso,
         }
+        if self.primary_key not in rec:
+            rec[self.primary_key] = pk_val
+        self._meta_index[pk_val] = rec
 
     def load_header_for_record(self, meta: Dict[str, Any]) -> None:
         """Loads frontmatter or header on demand when fields are accessed."""
-        clean_id = str(meta.get("clean_id", ""))
         rel_path = str(meta.get("file_path", ""))
         full_path = os.path.join(self.workspace_dir, rel_path)
-        frontmatter_dict: Dict[str, Any] = {}
-        try:
-            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                header = f.read(4096)
-                if header.startswith("---"):
-                    parts = header.split("---", 2)
-                    if len(parts) >= 3:
-                        frontmatter_dict = _parse_yaml_frontmatter_light(parts[1])
-        except OSError:
-            pass
+        frontmatter_dict = _extract_frontmatter_from_file(full_path)
+        meta.update(frontmatter_dict)
+        if "title" not in meta:
+            meta["title"] = str(meta.get(self.primary_key, meta.get("id", "")))
 
-        meta["arxiv_id"] = str(
-            frontmatter_dict.get("arxiv_id", clean_id.replace("_", "."))
-        )
-        meta["title"] = str(frontmatter_dict.get("title", clean_id))
-        meta["title_ja"] = str(frontmatter_dict.get("title_ja", ""))
-        meta["description"] = str(frontmatter_dict.get("description", ""))
-        meta["tags"] = frontmatter_dict.get("tags", ["security-paper"])
-        meta["published_date"] = str(frontmatter_dict.get("published_date", ""))
-        meta["timestamp"] = str(frontmatter_dict.get("timestamp", ""))
-        meta["resource"] = str(frontmatter_dict.get("resource", ""))
-        meta["provenance"] = frontmatter_dict.get("provenance", {})
-        meta["trust"] = frontmatter_dict.get("trust", {})
-
-    def read_heavy_column(self, clean_id: str, col_name: str) -> str:
-        """Reads heavy content (body_markdown, raw_text, raw_abstract) with LRU caching."""
-        cache_key = f"{clean_id}:{col_name}"
+    def read_heavy_column(self, pk_value: str, col_name: str) -> str:
+        """Reads heavy content (body, content, etc.) with LRU caching."""
+        cache_key = f"{pk_value}:{col_name}"
         if cache_key in self._content_cache:
             self._content_cache.move_to_end(cache_key)
             return self._content_cache[cache_key]
 
-        meta = self._meta_index.get(clean_id)
+        meta = self._meta_index.get(pk_value)
         if not meta:
             return ""
 
@@ -301,7 +307,7 @@ class FileBackedPlainTextStorage:
             self._content_cache.popitem(last=False)
         self._content_cache[key] = value
 
-    def _read_file_content(self, rel_path: str, col_name: str) -> str:
+    def _read_file_content(self, rel_path: str, _col_name: str) -> str:
         full_path = os.path.join(self.workspace_dir, rel_path)
         self._verify_workspace_boundary(full_path)
         try:
@@ -310,7 +316,7 @@ class FileBackedPlainTextStorage:
         except OSError:
             return ""
 
-        if col_name == "body_markdown" and full_text.startswith("---"):
+        if full_text.startswith("---"):
             parts = full_text.split("---", 2)
             if len(parts) >= 3:
                 return parts[2].strip()
@@ -325,9 +331,9 @@ class FileBackedPlainTextStorage:
         """Returns lazy records compatible with executor TableCatalog.storage.metadata interface."""
         return [LazyRecordDict(base, self) for base in self._meta_index.values()]
 
-    def get_by_pk(self, clean_id: str) -> Optional[Dict[str, Any]]:
+    def get_by_pk(self, pk_value: str) -> Optional[Dict[str, Any]]:
         """Fast O(1) lookup by primary key."""
-        base = self._meta_index.get(clean_id)
+        base = self._meta_index.get(pk_value)
         if not base:
             return None
         return LazyRecordDict(base, self).to_dict(include_heavy=True)

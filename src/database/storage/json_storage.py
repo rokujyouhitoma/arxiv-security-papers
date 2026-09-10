@@ -169,7 +169,7 @@ class JsonTableStorage:
     Flushes changes via crash-safe atomic replace (.tmp.<uuid> -> os.replace).
     """
 
-    def __init__(self, file_path: str, primary_key: str = "clean_id") -> None:
+    def __init__(self, file_path: str, primary_key: str = "id") -> None:
         self.file_path = os.path.abspath(file_path)
         self.primary_key = primary_key
         self._pk_index: Dict[str, Dict[str, Any]] = {}

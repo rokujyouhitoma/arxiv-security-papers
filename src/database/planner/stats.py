@@ -94,14 +94,19 @@ class ColumnStats:
         return _estimate_op_selectivity(op, value, self.distinct_count)
 
 
+def _is_sampleable_col(val: Any) -> bool:
+    """Filters out extremely long texts or heavy blobs from statistical sampling."""
+    if isinstance(val, (str, bytes)) and len(val) > 2048:
+        return False
+    return True
+
+
 def _extract_sample_keys(sample: List[Dict[str, Any]]) -> Set[str]:
     keys: Set[str] = set()
     for row in sample:
-        keys.update(
-            k
-            for k in row.keys()
-            if k not in ("body_markdown", "raw_text", "raw_abstract")
-        )
+        for k in row.keys():
+            if _is_sampleable_col(row.get(k)):
+                keys.add(k)
     return keys
 
 
