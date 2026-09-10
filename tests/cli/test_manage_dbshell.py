@@ -15,7 +15,13 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 
-from cli.commands.dbshell import _execute_meta_command, execute_single_query
+from cli.commands.dbshell import (
+    DBShellSession,
+    _execute_meta_command,
+    detect_table_scope,
+    detect_table_type,
+    execute_single_query,
+)
 from cli.commands.dbsync import synchronize_database_catalog
 from cli.commands.inspect import InspectTableCommand
 from cli.commands.tables import ShowTablesCommand
@@ -129,20 +135,22 @@ class TestManageCLISuite(unittest.TestCase):
         self.assertIn("1 rows in set", buf.getvalue())
 
     def test_dbshell_meta_commands(self) -> None:
-        """Verifies .tables, .schema, .indexes, .sync, and .help meta-commands."""
+        """Verifies .tables, .schema, .indexes, .sync, .databases, .use, and .help meta-commands."""
         executor = SQLExecutor(default_storage=VectorStorage(":memory:", dim=4))
         executor.execute("CREATE TABLE demo_tbl (id TEXT PRIMARY KEY, num INTEGER)")
         executor.execute("CREATE INDEX idx_demo_num ON demo_tbl (num) USING BTREE;")
+        session = DBShellSession(engine=executor, ws=self.temp_dir)
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            self.assertTrue(_execute_meta_command(executor, ".tables", self.temp_dir))
-            self.assertTrue(
-                _execute_meta_command(executor, ".schema demo_tbl", self.temp_dir)
-            )
-            self.assertTrue(_execute_meta_command(executor, ".indexes", self.temp_dir))
-            self.assertTrue(_execute_meta_command(executor, ".sync", self.temp_dir))
-            self.assertTrue(_execute_meta_command(executor, ".help", self.temp_dir))
+            self.assertTrue(_execute_meta_command(session, ".tables"))
+            self.assertTrue(_execute_meta_command(session, ".schema demo_tbl"))
+            self.assertTrue(_execute_meta_command(session, ".indexes"))
+            self.assertTrue(_execute_meta_command(session, ".sync"))
+            self.assertTrue(_execute_meta_command(session, ".databases"))
+            self.assertTrue(_execute_meta_command(session, ".use cti_catalog_db"))
+            self.assertEqual(session.scope, "cti_catalog_db")
+            self.assertTrue(_execute_meta_command(session, ".help"))
 
         out = buf.getvalue()
         self.assertIn("demo_tbl", out)
@@ -152,7 +160,31 @@ class TestManageCLISuite(unittest.TestCase):
         self.assertIn("CREATE INDEX idx_demo_num", out)
         self.assertIn("idx_demo_num", out)
         self.assertIn("Synchronizing", out)
+        self.assertIn("Database Scope", out)
+        self.assertIn("cti_catalog_db", out)
         self.assertIn("Meta-commands:", out)
+
+    def test_dbshell_use_statement(self) -> None:
+        """Verifies USE <scope>; command switches session scope."""
+        executor = SQLExecutor(default_storage=VectorStorage(":memory:", dim=4))
+        session = DBShellSession(engine=executor, ws=self.temp_dir)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            res = session.switch_scope("graph_db")
+        self.assertTrue(res)
+        self.assertEqual(session.scope, "graph_db")
+        self.assertIn("Switched database scope to 'graph_db'", buf.getvalue())
+
+    def test_table_type_and_scope_detection(self) -> None:
+        """Verifies table scope and table type introspection."""
+        self.assertEqual(detect_table_scope("cti_techniques"), "cti_catalog_db")
+        self.assertEqual(detect_table_scope("vertices"), "graph_db")
+        self.assertEqual(detect_table_scope("threat_trends"), "analytics_db")
+        self.assertEqual(detect_table_scope("okf_papers"), "arxiv_security_db")
+
+        # In-memory check
+        mem_storage = VectorStorage(":memory:", dim=4)
+        self.assertEqual(detect_table_type(mem_storage), "In-Memory")
 
 
 if __name__ == "__main__":

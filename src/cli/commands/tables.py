@@ -14,50 +14,75 @@ from typing import Any, List
 
 from ..base import BaseCommand
 from ..formatter import format_ascii_table
-from .dbshell import init_mounted_sql_executor
+from .dbshell import (
+    DATABASE_SCOPES,
+    detect_table_scope,
+    detect_table_type,
+    init_mounted_sql_executor,
+)
 
 
-def _inspect_table_summary(engine: Any, tname: str) -> List[Any]:
-    """Inspects a single table's catalog metadata and safe count."""
-    catalog = engine.tables[tname]
-    engine_name = catalog.storage.__class__.__name__
-    col_count = len(catalog.schema)
-
+def _safe_table_row_count(engine: Any, catalog: Any, tname: str) -> str:
+    """Safely calculates row count without throwing exceptions."""
     try:
         storage = catalog.storage
         if hasattr(storage, "__len__"):
-            row_count = len(storage)
-        elif hasattr(storage, "metadata"):
-            row_count = len(storage.metadata)
-        else:
-            res = engine.execute(f"SELECT COUNT(*) FROM {tname}")
-            row_count = int(next(iter(res["rows"][0].values())))
+            return str(len(storage))
+        if hasattr(storage, "metadata"):
+            return str(len(storage.metadata))
+        res = engine.execute(f"SELECT COUNT(*) FROM {tname}")
+        return str(next(iter(res["rows"][0].values())))
     except Exception:
-        row_count = -1
+        return "N/A"
 
-    count_str = str(row_count) if row_count >= 0 else "N/A"
-    return [tname, engine_name, col_count, count_str]
+
+def _inspect_table_summary(engine: Any, tname: str) -> List[Any]:
+    """Inspects a single table's catalog metadata, type, and safe count."""
+    catalog = engine.tables[tname]
+    scope = detect_table_scope(tname)
+    ttype = detect_table_type(catalog)
+    engine_name = catalog.storage.__class__.__name__
+    col_count = len(catalog.schema)
+    count_str = _safe_table_row_count(engine, catalog, tname)
+    return [tname, scope, ttype, engine_name, col_count, count_str]
 
 
 class ShowTablesCommand(BaseCommand):
     """Subcommand to list all auto-mounted database tables and metadata."""
 
     name = "tables"
-    help_text = "Display all mounted tables across binary, JSON, and virtual engines."
+    help_text = "Display mounted tables across scopes, storage types, and row counts."
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        pass
+        parser.add_argument(
+            "-d",
+            "--database",
+            dest="database",
+            default="all",
+            choices=list(DATABASE_SCOPES.keys()),
+            help="Filter tables by database scope (default: all).",
+        )
 
     def handle(self, args: argparse.Namespace) -> int:
-        engine = init_mounted_sql_executor(self.workspace_dir)
+        scope = getattr(args, "database", "all")
+        engine = init_mounted_sql_executor(self.workspace_dir, db_scope=scope)
         table_names = sorted(engine.tables.keys())
 
         if not table_names:
-            sys.stdout.write("No database tables are currently mounted.\n")
+            sys.stdout.write(f"No tables found for database scope '{scope}'.\n")
             return 0
 
         rows = [_inspect_table_summary(engine, t) for t in table_names]
-        headers = ["Table Name", "Storage Engine", "Columns", "Row Count"]
+        headers = [
+            "Table Name",
+            "Database Scope",
+            "Table Type",
+            "Storage Engine",
+            "Columns",
+            "Row Count",
+        ]
         sys.stdout.write(format_ascii_table(headers, rows) + "\n")
-        sys.stdout.write(f"\nTotal: {len(table_names)} tables mounted.\n")
+        sys.stdout.write(
+            f"\nTotal: {len(table_names)} tables mounted (Scope: {scope}).\n"
+        )
         return 0

@@ -753,7 +753,10 @@ class SQLExecutor:
         return None
 
     def _build_engine_kwargs(self, stmt: CreateTableStatement) -> Dict[str, Any]:
-        kw: Dict[str, Any] = {"dim": self.embedding.dim}
+        kw: Dict[str, Any] = {
+            "dim": self.embedding.dim,
+            "table_name": stmt.table_name,
+        }
         for col in stmt.columns:
             if col.is_primary_key:
                 kw["primary_key"] = col.name

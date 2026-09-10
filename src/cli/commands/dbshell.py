@@ -14,7 +14,7 @@ import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from database.sql.executor import SQLExecutor, _extract_pk_col
+from database.sql.executor import SQLExecutor, TableCatalog, _extract_pk_col
 from database.storage.storage import VectorStorage
 
 from ..base import BaseCommand
@@ -108,74 +108,128 @@ def _mount_json_tables(engine: SQLExecutor, ws: str) -> None:
         )
 
 
-def _mount_vdb_tables(engine: SQLExecutor, ws: str) -> None:
-    """Auto-mounts CTI catalog and analytics binary tables."""
-    cti_vdb = os.path.join(ws, "outputs", "database", "catalog", "cti_catalog.vdb")
-    if os.path.exists(cti_vdb):
-        _mount_table_safe(
-            engine,
-            f"CREATE TABLE IF NOT EXISTS cti_techniques ("
-            f"id VARCHAR(32) PRIMARY KEY, "
-            f"name VARCHAR(256), "
-            f"tactics JSON, "
-            f"description TEXT"
-            f") USING binary_vdb LOCATION '{cti_vdb}'",
-            "cti_techniques",
-        )
-        _mount_table_safe(
-            engine,
-            f"CREATE TABLE IF NOT EXISTS cisa_kev ("
-            f"cve_id VARCHAR(32) PRIMARY KEY, "
-            f"vendor_project VARCHAR(128), "
-            f"product VARCHAR(128), "
-            f"vulnerability_name TEXT, "
-            f"date_added DATE, "
-            f"short_description TEXT"
-            f") USING binary_vdb LOCATION '{cti_vdb}'",
-            "cisa_kev",
-        )
+DATABASE_SCOPES: Dict[str, str] = {
+    "all": "All federated databases and virtual tables",
+    "arxiv_security_db": "Core arXiv Papers & PlainText/JSON Virtual Tables",
+    "cti_catalog_db": "ATT&CK & CTI Catalog (MultiTable VDB)",
+    "analytics_db": "Telemetry, Trends & Strategic KPIs (MultiTable VDB)",
+    "graph_db": "Security Knowledge Graph & SKO (MultiTable VDB)",
+}
 
-    analytics_vdb = os.path.join(
-        ws, "outputs", "database", "analytics", "analytics.vdb"
+
+def _mount_single_container_table(
+    engine: SQLExecutor, tname: str, container: Any, file_path: str
+) -> None:
+    if tname.startswith("_") or tname in engine.tables:
+        return
+    storage = container.get_table(tname)
+    catalog = TableCatalog(
+        name=tname,
+        storage=storage,
+        schema={"id": "VARCHAR(64)", "metadata": "JSON"},
+        raw_sql=f"CREATE TABLE IF NOT EXISTS {tname} (...) USING binary_vdb LOCATION '{file_path}'",
+        storage_engine="MultiTableVectorStorage",
+        location=file_path,
     )
-    if os.path.exists(analytics_vdb):
-        _mount_table_safe(
-            engine,
-            f"CREATE TABLE IF NOT EXISTS threat_trends ("
-            f"topic_key VARCHAR(64) PRIMARY KEY, "
-            f"frequency INTEGER, "
-            f"moving_avg_7d FLOAT"
-            f") USING binary_vdb LOCATION '{analytics_vdb}'",
-            "threat_trends",
-        )
+    engine.tables[tname] = catalog
 
 
-def _mount_knowledge_graph(engine: SQLExecutor, ws: str) -> None:
-    kg_vdb = os.path.join(ws, "outputs", "database", "knowledge_graph.vdb")
-    if os.path.exists(kg_vdb):
-        _mount_table_safe(
-            engine,
-            f"CREATE TABLE IF NOT EXISTS vertices ("
-            f"id VARCHAR(64) PRIMARY KEY, "
-            f"label VARCHAR(64), "
-            f"name VARCHAR(256)"
-            f") USING binary_vdb LOCATION '{kg_vdb}'",
-            "vertices",
-        )
-        _mount_table_safe(
-            engine,
-            f"CREATE TABLE IF NOT EXISTS edges ("
-            f"id VARCHAR(64) PRIMARY KEY, "
-            f"source VARCHAR(64), "
-            f"target VARCHAR(64), "
-            f"relation VARCHAR(64)"
-            f") USING binary_vdb LOCATION '{kg_vdb}'",
-            "edges",
-        )
+def _mount_multitable_container(engine: SQLExecutor, file_path: str) -> None:
+    """Auto-mounts all named tables from a MultiTableVectorStorage container."""
+    if not os.path.exists(file_path):
+        return
+    try:
+        from database.storage.multi_storage import MultiTableVectorStorage
+
+        container = MultiTableVectorStorage(file_path)
+        for tname in container.list_tables():
+            _mount_single_container_table(engine, tname, container, file_path)
+    except Exception:
+        pass
 
 
-def init_mounted_sql_executor(workspace_dir: Optional[str] = None) -> SQLExecutor:
-    """Initializes SQLExecutor and auto-mounts all existing workspace tables."""
+def detect_table_scope(tname: str) -> str:
+    """Classifies a table into its corresponding logical database scope."""
+    if tname in ("okf_papers", "raw_papers", "processed_papers", "pipeline_runs"):
+        return "arxiv_security_db"
+    if tname in (
+        "cti_techniques",
+        "cisa_kev_vulnerabilities",
+        "cti_mitigations",
+        "cti_relationships",
+        "cti_tactics",
+    ):
+        return "cti_catalog_db"
+    if tname in (
+        "threat_trends",
+        "strategic_kpis",
+        "metrics_history",
+        "latest_snapshot",
+        "papers",
+    ):
+        return "analytics_db"
+    if tname in ("vertices", "edges"):
+        return "graph_db"
+    return "default"
+
+
+def _is_markdown_patterns(patterns: List[str]) -> bool:
+    has_md = any("md" in p for p in patterns)
+    has_txt = any("txt" in p for p in patterns)
+    return has_md and not has_txt
+
+
+def _detect_plain_text_type(catalog: Any, storage: Any) -> str:
+    if getattr(catalog, "name", "") == "okf_papers":
+        return "Virtual (Markdown)"
+    if _is_markdown_patterns(getattr(storage, "patterns", [])):
+        return "Virtual (Markdown)"
+    return "Virtual (Text)"
+
+
+def _detect_virtual_type(catalog: Any, storage: Any) -> Optional[str]:
+    st_name = storage.__class__.__name__
+    if st_name == "FileBackedPlainTextStorage":
+        return _detect_plain_text_type(catalog, storage)
+    if st_name == "JsonTableStorage":
+        return "Virtual (JSON)"
+    if st_name == "JsonLinesStorage":
+        return "Virtual (JSONL)"
+    return None
+
+
+def detect_table_type(catalog: Any) -> str:
+    """Detects whether a table is a Virtual Table, Physical VDB, or In-Memory."""
+    storage = getattr(catalog, "storage", catalog)
+    v_type = _detect_virtual_type(catalog, storage)
+    if v_type:
+        return v_type
+    loc = getattr(catalog, "location", "") or getattr(storage, "file_path", "")
+    if loc and loc not in (":memory:", ""):
+        return "Physical (VDB)"
+    return "In-Memory"
+
+
+def _mount_scope_tables(engine: SQLExecutor, ws: str, scope: str) -> None:
+    if scope in ("all", "arxiv_security_db"):
+        _mount_file_plain_text_tables(engine, ws)
+        _mount_json_tables(engine, ws)
+    if scope in ("all", "cti_catalog_db"):
+        cti_vdb = os.path.join(ws, "outputs", "database", "catalog", "cti_catalog.vdb")
+        _mount_multitable_container(engine, cti_vdb)
+    if scope in ("all", "analytics_db"):
+        ana_vdb = os.path.join(ws, "outputs", "database", "analytics", "analytics.vdb")
+        _mount_multitable_container(engine, ana_vdb)
+    if scope in ("all", "graph_db"):
+        kg_vdb = os.path.join(ws, "outputs", "database", "knowledge_graph.vdb")
+        _mount_multitable_container(engine, kg_vdb)
+
+
+def init_mounted_sql_executor(
+    workspace_dir: Optional[str] = None,
+    db_scope: Optional[str] = "all",
+) -> SQLExecutor:
+    """Initializes SQLExecutor and auto-mounts tables for the given database scope."""
     ws = os.path.realpath(
         os.path.abspath(workspace_dir or os.environ.get("WORKSPACE_DIR", os.getcwd()))
     )
@@ -186,10 +240,7 @@ def init_mounted_sql_executor(workspace_dir: Optional[str] = None) -> SQLExecuto
             "vector": "VECTOR(4)",
             "metadata": "JSON",
         }
-    _mount_file_plain_text_tables(executor, ws)
-    _mount_json_tables(executor, ws)
-    _mount_vdb_tables(executor, ws)
-    _mount_knowledge_graph(executor, ws)
+    _mount_scope_tables(executor, ws, db_scope or "all")
     return executor
 
 
@@ -206,10 +257,79 @@ def _handle_sync_meta(engine: SQLExecutor, ws: str) -> None:
         sys.stdout.write(f"Already synchronized. Total: {total}\n")
 
 
-def _meta_tables(engine: SQLExecutor, _parts: List[str], _ws: str) -> None:
-    tables = sorted(engine.tables.keys())
-    rows = [[t, engine.tables[t].storage.__class__.__name__] for t in tables]
-    sys.stdout.write(format_ascii_table(["Table Name", "Storage Engine"], rows) + "\n")
+class DBShellSession:
+    """Manages dbshell interactive session state and active database scope."""
+
+    def __init__(
+        self,
+        engine: SQLExecutor,
+        ws: str,
+        initial_scope: str = "all",
+    ) -> None:
+        self.engine = engine
+        self.ws = ws
+        self.scope = initial_scope
+
+    def switch_scope(self, target: str) -> bool:
+        clean = target.rstrip(";").strip()
+        if clean not in DATABASE_SCOPES:
+            valid = ", ".join(sorted(DATABASE_SCOPES.keys()))
+            sys.stdout.write(f"Unknown scope: '{clean}'. Available: [{valid}]\n")
+            return False
+        self.scope = clean
+        sys.stdout.write(f"Switched database scope to '{clean}'.\n")
+        return True
+
+    def get_prompt(self) -> str:
+        if self.scope == "all":
+            return "arxiv-sec-db> "
+        return f"arxiv-sec-db [{self.scope}]> "
+
+
+def _format_table_row(engine: SQLExecutor, t: str) -> List[Any]:
+    cat = engine.tables[t]
+    return [
+        t,
+        detect_table_scope(t),
+        detect_table_type(cat),
+        cat.storage.__class__.__name__,
+    ]
+
+
+def _filter_tables_by_scope(tables: List[str], target: Optional[str]) -> List[str]:
+    if not target or target == "all":
+        return tables
+    return [t for t in tables if detect_table_scope(t) in (target, "default")]
+
+
+def _meta_tables(
+    engine: SQLExecutor, parts: List[str], active_scope: str = "all"
+) -> None:
+    target_scope = parts[1] if len(parts) > 1 else active_scope
+    tables = _filter_tables_by_scope(sorted(engine.tables.keys()), target_scope)
+    if not tables:
+        sys.stdout.write(f"No tables found for scope '{target_scope}'.\n")
+        return
+    rows = [_format_table_row(engine, t) for t in tables]
+    headers = ["Table Name", "Database Scope", "Table Type", "Storage Engine"]
+    sys.stdout.write(format_ascii_table(headers, rows) + "\n")
+
+
+def _scope_row(
+    engine: SQLExecutor, active_scope: str, s_name: str, desc: str
+) -> List[Any]:
+    prefix = "* " if s_name == active_scope else "  "
+    if s_name == "all":
+        cnt = len(engine.tables)
+    else:
+        cnt = sum(1 for t in engine.tables if detect_table_scope(t) == s_name)
+    return [f"{prefix}{s_name}", cnt, desc]
+
+
+def _meta_databases(engine: SQLExecutor, active_scope: str) -> None:
+    rows = [_scope_row(engine, active_scope, s, d) for s, d in DATABASE_SCOPES.items()]
+    headers = ["Database Scope", "Tables", "Description"]
+    sys.stdout.write(format_ascii_table(headers, rows) + "\n")
 
 
 def _print_single_table_ddl(engine: SQLExecutor, tname: str) -> None:
@@ -298,7 +418,9 @@ def _meta_indexes(engine: SQLExecutor, parts: List[str], _ws: str) -> None:
 def _meta_help(_engine: SQLExecutor, _parts: List[str], _ws: str) -> None:
     sys.stdout.write(
         "Meta-commands:\n"
-        "  .tables             List all auto-mounted tables\n"
+        "  .databases          List available database scopes and active scope (*)\n"
+        "  .use <database>     Switch active scope (e.g. .use cti_catalog_db)\n"
+        "  .tables [scope]     List mounted tables (with Table Type & Scope)\n"
         "  .schema [table]     Show CREATE TABLE and CREATE INDEX DDL\n"
         "  .indexes [table]    List active indexes (HNSW / BTREE)\n"
         "  .sync               Synchronize catalog with physical files\n"
@@ -306,37 +428,77 @@ def _meta_help(_engine: SQLExecutor, _parts: List[str], _ws: str) -> None:
     )
 
 
-def _execute_meta_command(engine: SQLExecutor, line: str, ws: str) -> bool:
-    """Handles dot commands like .tables, .schema, .indexes, .sync, .help."""
-    parts = line.strip().split()
-    cmd = parts[0].lower()
-    handlers = {
-        ".tables": lambda: _meta_tables(engine, parts, ws),
-        ".tbl": lambda: _meta_tables(engine, parts, ws),
-        ".schema": lambda: _meta_schema(engine, parts, ws),
-        ".indexes": lambda: _meta_indexes(engine, parts, ws),
-        ".indices": lambda: _meta_indexes(engine, parts, ws),
-        ".sync": lambda: _handle_sync_meta(engine, ws),
-        ".help": lambda: _meta_help(engine, parts, ws),
-    }
-    if cmd in handlers:
-        handlers[cmd]()
+def _handle_use_meta(session: DBShellSession, parts: List[str]) -> None:
+    if len(parts) > 1:
+        session.switch_scope(parts[1])
+    else:
+        sys.stdout.write("Usage: .use <database_scope>\n")
+
+
+def _dispatch_db_meta(session: DBShellSession, cmd: str, parts: List[str]) -> bool:
+    if cmd in (".tables", ".tbl"):
+        _meta_tables(session.engine, parts, session.scope)
+        return True
+    if cmd in (".databases", ".dbs"):
+        _meta_databases(session.engine, session.scope)
+        return True
+    if cmd == ".use":
+        _handle_use_meta(session, parts)
         return True
     return False
 
 
+def _dispatch_schema_meta(session: DBShellSession, cmd: str, parts: List[str]) -> bool:
+    if cmd == ".schema":
+        _meta_schema(session.engine, parts, session.ws)
+        return True
+    if cmd in (".indexes", ".indices"):
+        _meta_indexes(session.engine, parts, session.ws)
+        return True
+    if cmd == ".sync":
+        _handle_sync_meta(session.engine, session.ws)
+        return True
+    if cmd == ".help":
+        _meta_help(session.engine, parts, session.ws)
+        return True
+    return False
+
+
+def _execute_meta_command(session: DBShellSession, line: str) -> bool:
+    """Handles dot commands like .tables, .schema, .indexes, .databases, .use, .sync, .help."""
+    parts = line.strip().split()
+    cmd = parts[0].lower()
+    return _dispatch_db_meta(session, cmd, parts) or _dispatch_schema_meta(
+        session, cmd, parts
+    )
+
+
+def _resolve_session_instance(
+    engine_or_session: Any, ws: Optional[str]
+) -> DBShellSession:
+    if isinstance(engine_or_session, DBShellSession):
+        return engine_or_session
+    return DBShellSession(engine_or_session, ws or os.getcwd(), "all")
+
+
 def execute_single_query(
-    engine: SQLExecutor, sql: str, ws: Optional[str] = None
+    engine_or_session: Any, sql: str, ws: Optional[str] = None
 ) -> int:
     """Executes a single SQL query or meta-command, formats result table, and prints timing."""
+    session = _resolve_session_instance(engine_or_session, ws)
     clean = sql.strip()
     if clean.startswith("."):
-        _execute_meta_command(engine, clean, ws or os.getcwd())
+        _execute_meta_command(session, clean)
         return 0
+    if clean.upper().startswith("USE "):
+        parts = clean.split()
+        if len(parts) >= 2:
+            session.switch_scope(parts[1])
+            return 0
 
     t0 = time.perf_counter()
     try:
-        res = engine.execute(sql)
+        res = session.engine.execute(sql)
     except Exception as err:
         sys.stderr.write(f"SQL Error: {err}\n")
         return 1
@@ -391,10 +553,10 @@ def _append_and_check_statement(buffer: List[str], line: str) -> Optional[str]:
     return None
 
 
-def _read_full_statement() -> Optional[str]:
+def _read_full_statement(initial_prompt: str = "arxiv-sec-db> ") -> Optional[str]:
     """Reads lines from input until a semicolon or meta-command is found."""
     buffer: List[str] = []
-    prompt = "arxiv-sec-db> "
+    prompt = initial_prompt
     while True:
         ok, line = _prompt_user_input(prompt)
         if not ok:
@@ -405,34 +567,42 @@ def _read_full_statement() -> Optional[str]:
         prompt = "   ...> "
 
 
-def _handle_repl_step(engine: SQLExecutor, stmt: str, ws: str) -> bool:
+def _handle_repl_step(session: DBShellSession, stmt: str) -> bool:
     """Handles single REPL statement. Returns False when session should exit."""
-    if stmt in (".quit", ".exit"):
+    clean = stmt.strip()
+    if clean in (".quit", ".exit"):
         sys.stdout.write("Goodbye.\n")
         return False
-    if stmt.startswith("."):
-        _execute_meta_command(engine, stmt, ws)
+    if clean.startswith("."):
+        _execute_meta_command(session, clean)
         return True
-    execute_single_query(engine, stmt)
+    if clean.upper().startswith("USE "):
+        parts = clean.split()
+        if len(parts) >= 2:
+            session.switch_scope(parts[1])
+            return True
+    execute_single_query(session, clean)
     return True
 
 
-def run_repl_loop(engine: SQLExecutor, ws: str) -> int:
+def run_repl_loop(engine_or_session: Any, ws: Optional[str] = None) -> int:
     """Main interactive REPL loop."""
-    _init_readline(engine)
+    session = _resolve_session_instance(engine_or_session, ws)
+    _init_readline(session.engine)
     sys.stdout.write(
         "arXiv Security Papers Database Shell (DSN-24)\n"
         "Auto-mounted tables ready. Press <Tab> for autocomplete, ';' or '.help' for commands.\n"
     )
 
     while True:
-        stmt = _read_full_statement()
+        prompt = session.get_prompt()
+        stmt = _read_full_statement(prompt)
         if stmt is None:
             sys.stdout.write("\nGoodbye.\n")
             break
         if not stmt:
             continue
-        if not _handle_repl_step(engine, stmt, ws):
+        if not _handle_repl_step(session, stmt):
             break
     return 0
 
@@ -451,10 +621,20 @@ class DatabaseShellCommand(BaseCommand):
             default=None,
             help="Execute a single SQL command non-interactively and exit.",
         )
+        parser.add_argument(
+            "-d",
+            "--database",
+            dest="database",
+            default="all",
+            choices=list(DATABASE_SCOPES.keys()),
+            help="Initial active database scope (default: all).",
+        )
 
     def handle(self, args: argparse.Namespace) -> int:
         ws = self.workspace_dir or os.getcwd()
-        engine = init_mounted_sql_executor(ws)
+        scope = getattr(args, "database", "all")
+        engine = init_mounted_sql_executor(ws, db_scope=scope)
+        session = DBShellSession(engine, ws, initial_scope=scope)
         if args.command:
-            return execute_single_query(engine, args.command, ws)
-        return run_repl_loop(engine, ws)
+            return execute_single_query(session, args.command)
+        return run_repl_loop(session)

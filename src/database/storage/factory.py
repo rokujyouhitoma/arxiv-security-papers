@@ -76,6 +76,16 @@ def _detect_engine_by_extension(norm_path: str) -> str:
     return "unknown"
 
 
+def _is_multi_vdb_file(path: str) -> bool:
+    if not os.path.exists(path) or os.path.isdir(path):
+        return False
+    try:
+        with open(path, "rb") as f:
+            return f.read(8) == b"OKFMTC01"
+    except OSError:
+        return False
+
+
 class StorageEngineFactory:
     """Pluggable Storage Engine Factory for URI auto-detection and DDL USING clauses."""
 
@@ -89,6 +99,7 @@ class StorageEngineFactory:
             return
 
         cls._registry["binary_vdb"] = cls._create_binary_vdb
+        cls._registry["multi_vdb"] = cls._create_binary_vdb
         cls._registry["json_lines"] = cls._create_json_lines
         cls._registry["json_table"] = cls._create_json_table
         cls._registry["file_plain_text"] = cls._create_plain_text
@@ -101,14 +112,25 @@ class StorageEngineFactory:
         kw = dict(kwargs)
         ws = kw.pop("workspace_dir", None)
         kw.pop("dim", None)
+        kw.pop("table_name", None)
         return FileBackedPlainTextStorage(root_dir=location, workspace_dir=ws, **kw)
+
+    @staticmethod
+    def _resolve_multi_vdb_table(
+        container: MultiTableVectorStorage, tbl_name: Optional[Any]
+    ) -> Any:
+        if tbl_name and container.has_table(str(tbl_name)):
+            return container.get_table(str(tbl_name))
+        return container
 
     @staticmethod
     def _create_binary_vdb(location: Optional[str], **kwargs: Any) -> Any:
         loc = location or "default.vdb"
         dim = int(kwargs.get("dim", 128))
-        if loc.endswith(".vdb") and "multi" in kwargs:
-            return MultiTableVectorStorage(loc)
+        tbl_name = kwargs.get("table_name")
+        if _is_multi_vdb_file(loc) or "multi" in kwargs:
+            container = MultiTableVectorStorage(loc)
+            return StorageEngineFactory._resolve_multi_vdb_table(container, tbl_name)
         return VectorStorage(file_path=loc, dim=dim)
 
     @staticmethod
