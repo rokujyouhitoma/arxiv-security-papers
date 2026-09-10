@@ -101,6 +101,34 @@ class TestShowStatements(unittest.TestCase):
             self.assertEqual(res["status"], "ok")
             self.assertEqual(res["rows"], [])
 
+    def test_show_tables_from_mounted_virtual_tables(self) -> None:
+        from database.sql.executor import TableCatalog
+        from database.storage.storage import VectorStorage
+
+        executor = SQLExecutor()
+        mem_storage = VectorStorage(":memory:", dim=4)
+        executor.tables["okf_papers"] = TableCatalog(
+            name="okf_papers",
+            storage=mem_storage,
+            database_scope="arxiv_security_db",
+        )
+        executor.tables["processed_papers"] = TableCatalog(
+            name="processed_papers",
+            storage=mem_storage,
+            database_scope="arxiv_security_db",
+        )
+        executor.tables["vertices"] = TableCatalog(
+            name="vertices",
+            storage=mem_storage,
+            database_scope="graph_db",
+        )
+        res = executor.execute("SHOW TABLES FROM arxiv_security_db;")
+        self.assertEqual(res["status"], "ok")
+        t_names = [r["Table"] for r in res["rows"]]
+        self.assertIn("okf_papers", t_names)
+        self.assertIn("processed_papers", t_names)
+        self.assertNotIn("vertices", t_names)
+
 
 if __name__ == "__main__":
     unittest.main()

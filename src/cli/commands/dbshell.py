@@ -16,6 +16,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from database.sql.executor import SQLExecutor, TableCatalog, _extract_pk_col
 from database.storage.storage import VectorStorage
+from settings import (
+    BASE_DIR,
+    DATABASES,
+    get_database_scopes,
+    get_table_scope_from_settings,
+    get_table_type_from_settings,
+)
 
 from ..base import BaseCommand
 from ..formatter import format_ascii_table, format_query_result
@@ -108,17 +115,11 @@ def _mount_json_tables(engine: SQLExecutor, ws: str) -> None:
         )
 
 
-DATABASE_SCOPES: Dict[str, str] = {
-    "all": "All federated databases and virtual tables",
-    "arxiv_security_db": "Core arXiv Papers & PlainText/JSON Virtual Tables",
-    "cti_catalog_db": "ATT&CK & CTI Catalog (MultiTable VDB)",
-    "analytics_db": "Telemetry, Trends & Strategic KPIs (MultiTable VDB)",
-    "graph_db": "Security Knowledge Graph & SKO (MultiTable VDB)",
-}
+DATABASE_SCOPES: Dict[str, str] = get_database_scopes()
 
 
 def _mount_single_container_table(
-    engine: SQLExecutor, tname: str, container: Any, file_path: str
+    engine: SQLExecutor, tname: str, container: Any, file_path: str, scope: str
 ) -> None:
     if tname.startswith("_") or tname in engine.tables:
         return
@@ -130,11 +131,14 @@ def _mount_single_container_table(
         raw_sql=f"CREATE TABLE IF NOT EXISTS {tname} (...) USING binary_vdb LOCATION '{file_path}'",
         storage_engine="MultiTableVectorStorage",
         location=file_path,
+        database_scope=scope,
     )
     engine.tables[tname] = catalog
 
 
-def _mount_multitable_container(engine: SQLExecutor, file_path: str) -> None:
+def _mount_multitable_container(
+    engine: SQLExecutor, file_path: str, scope: str
+) -> None:
     """Auto-mounts all named tables from a MultiTableVectorStorage container."""
     if not os.path.exists(file_path):
         return
@@ -143,34 +147,14 @@ def _mount_multitable_container(engine: SQLExecutor, file_path: str) -> None:
 
         container = MultiTableVectorStorage(file_path)
         for tname in container.list_tables():
-            _mount_single_container_table(engine, tname, container, file_path)
+            _mount_single_container_table(engine, tname, container, file_path, scope)
     except Exception:
         pass
 
 
 def detect_table_scope(tname: str) -> str:
     """Classifies a table into its corresponding logical database scope."""
-    if tname in ("okf_papers", "raw_papers", "processed_papers", "pipeline_runs"):
-        return "arxiv_security_db"
-    if tname in (
-        "cti_techniques",
-        "cisa_kev_vulnerabilities",
-        "cti_mitigations",
-        "cti_relationships",
-        "cti_tactics",
-    ):
-        return "cti_catalog_db"
-    if tname in (
-        "threat_trends",
-        "strategic_kpis",
-        "metrics_history",
-        "latest_snapshot",
-        "papers",
-    ):
-        return "analytics_db"
-    if tname in ("vertices", "edges"):
-        return "graph_db"
-    return "default"
+    return get_table_scope_from_settings(tname)
 
 
 def _is_markdown_patterns(patterns: List[str]) -> bool:
@@ -198,31 +182,40 @@ def _detect_virtual_type(catalog: Any, storage: Any) -> Optional[str]:
     return None
 
 
-def detect_table_type(catalog: Any) -> str:
-    """Detects whether a table is a Virtual Table, Physical VDB, or In-Memory."""
-    storage = getattr(catalog, "storage", catalog)
-    v_type = _detect_virtual_type(catalog, storage)
-    if v_type:
-        return v_type
+def _detect_physical_or_memory_type(catalog: Any, storage: Any) -> str:
     loc = getattr(catalog, "location", "") or getattr(storage, "file_path", "")
     if loc and loc not in (":memory:", ""):
         return "Physical (VDB)"
     return "In-Memory"
 
 
+def detect_table_type(catalog: Any) -> str:
+    """Detects whether a table is a Virtual Table, Physical VDB, or In-Memory."""
+    tname = getattr(catalog, "name", "")
+    declared = get_table_type_from_settings(tname)
+    if declared:
+        return declared
+    storage = getattr(catalog, "storage", catalog)
+    v_type = _detect_virtual_type(catalog, storage)
+    return v_type if v_type else _detect_physical_or_memory_type(catalog, storage)
+
+
+def _mount_single_configured_scope(engine: SQLExecutor, ws: str, s_name: str) -> None:
+    cfg = DATABASES.get(s_name, {})
+    loc = cfg.get("LOCATION")
+    if loc:
+        rel = os.path.relpath(loc, BASE_DIR)
+        target_path = os.path.join(ws, rel)
+        _mount_multitable_container(engine, target_path, s_name)
+
+
 def _mount_scope_tables(engine: SQLExecutor, ws: str, scope: str) -> None:
     if scope in ("all", "arxiv_security_db"):
         _mount_file_plain_text_tables(engine, ws)
         _mount_json_tables(engine, ws)
-    if scope in ("all", "cti_catalog_db"):
-        cti_vdb = os.path.join(ws, "outputs", "database", "catalog", "cti_catalog.vdb")
-        _mount_multitable_container(engine, cti_vdb)
-    if scope in ("all", "analytics_db"):
-        ana_vdb = os.path.join(ws, "outputs", "database", "analytics", "analytics.vdb")
-        _mount_multitable_container(engine, ana_vdb)
-    if scope in ("all", "graph_db"):
-        kg_vdb = os.path.join(ws, "outputs", "database", "knowledge_graph.vdb")
-        _mount_multitable_container(engine, kg_vdb)
+    for s_name in ("cti_catalog_db", "analytics_db", "graph_db"):
+        if scope in ("all", s_name):
+            _mount_single_configured_scope(engine, ws, s_name)
 
 
 def init_mounted_sql_executor(

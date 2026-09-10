@@ -1484,6 +1484,7 @@ document.addEventListener('DOMContentLoaded', () => {
           wGrowth.textContent = `自動同期中 (${data['telemetry']['walks_per_min']} walks/m)`;
         }
       }
+      const tStats = data['traversal_stats'];
       if (tStats) {
         const sPct = tStats['success_rate_pct'] ?? 0;
         const confBadge = document.getElementById('kpiConfidenceBadge');
@@ -1491,12 +1492,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const confVal = document.getElementById('kpiConfidenceVal');
         if (confVal) confVal.textContent = `${sPct}%`;
       }
-      const meshNodes = (data['mesh'] && data['mesh']['nodes']) ? data['mesh']['nodes'] : [];
-      const cweCount = meshNodes.filter(n => (n['id'] && String(n['id']).toLowerCase().startsWith('cwe')) || n['cluster'] === 'vulnerability').length;
+      const scopedMeshNodes = (data['mesh'] && data['mesh']['nodes']) ? data['mesh']['nodes'] : [];
+      const cweCount = scopedMeshNodes.filter(n => (n['id'] && String(n['id']).toLowerCase().startsWith('cwe')) || n['cluster'] === 'vulnerability').length;
       const cweVal = document.getElementById('kpiCweVal');
       if (cweVal) cweVal.textContent = `${cweCount || 0} 件`;
 
-      const gapCount = data['research_gaps'] ? data['research_gaps'].length : meshNodes.filter(n => n['cluster'] === 'gap').length;
+      const gapCount = data['research_gaps'] ? data['research_gaps'].length : scopedMeshNodes.filter(n => n['cluster'] === 'gap').length;
       const gapsVal = document.getElementById('kpiGapsVal');
       if (gapsVal) gapsVal.textContent = `${gapCount || 0} 件`;
     } catch (err) {

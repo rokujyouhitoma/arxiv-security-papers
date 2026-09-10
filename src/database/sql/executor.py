@@ -139,6 +139,18 @@ class CombinedRow(Dict[str, Any]):
             return default
 
 
+def _calc_memory_storage_size(storage: Any) -> int:
+    if hasattr(storage, "to_bytes"):
+        return len(storage.to_bytes())
+    return 0
+
+
+def _calc_file_storage_size(loc: str) -> int:
+    if loc and os.path.exists(loc):
+        return os.path.getsize(loc)
+    return 0
+
+
 def _parse_col_pair(col_str: str) -> Tuple[str, str]:
     parts = col_str.split(None, 1)
     return (parts[0], parts[1]) if len(parts) == 2 else (col_str, "")
@@ -207,13 +219,14 @@ class TableCatalog:
         raw_sql: Optional[str] = None,
         storage_engine: Optional[str] = None,
         location: Optional[str] = None,
+        database_scope: Optional[str] = None,
     ) -> None:
         self.name = name
         self.storage = storage
         default_dim = int(getattr(storage, "dim", 128))
         self.index = index if index is not None else HNSWIndex(dim=default_dim)
         self.schema = schema if schema is not None else {}
-        self._init_catalog_metadata(raw_sql, storage_engine, location)
+        self._init_catalog_metadata(raw_sql, storage_engine, location, database_scope)
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
         self.index_definitions: List[Dict[str, str]] = []
@@ -225,10 +238,12 @@ class TableCatalog:
         raw_sql: Optional[str],
         storage_engine: Optional[str],
         location: Optional[str],
+        database_scope: Optional[str] = None,
     ) -> None:
         self.raw_sql = raw_sql or ""
         self.storage_engine = storage_engine or ""
         self.location = location or ""
+        self.database_scope = database_scope
 
     def recompute_stats(self) -> None:
         """Refreshes catalog statistics from storage metadata."""
@@ -562,6 +577,29 @@ def _load_external_db_tables(path: str, target: str) -> List[Dict[str, Any]]:
         return []
     except Exception:
         return []
+
+
+def _resolve_table_scope(tbl: Any, tname: str) -> str:
+    scope = getattr(tbl, "database_scope", None)
+    if scope:
+        return str(scope)
+    try:
+        from settings import get_table_scope_from_settings
+
+        return get_table_scope_from_settings(tname)
+    except Exception:
+        return "default"
+
+
+def _filter_tables_by_database_scope(
+    tables: Dict[str, Any], db_name: str, pattern: Optional[str]
+) -> List[Tuple[str, Any]]:
+    matched: List[Tuple[str, Any]] = []
+    for tname, tbl in sorted(tables.items()):
+        if _resolve_table_scope(tbl, tname) == db_name:
+            if not (pattern and pattern not in tname):
+                matched.append((tname, tbl))
+    return matched
 
 
 def _resolve_default_table_name(
@@ -1431,44 +1469,63 @@ class SQLExecutor:
             return self._exec_show(stmt, role)
         return self._exec_schema_stmt(stmt, role)
 
-    def _calculate_table_size(self, storage: VectorStorage) -> int:
-        if getattr(storage, "is_memory", False) or storage.file_path == ":memory:":
-            return len(storage.to_bytes())
-        return (
-            os.path.getsize(storage.file_path)
-            if os.path.exists(storage.file_path)
-            else 0
-        )
+    def _calculate_table_size(self, storage: Any) -> int:
+        loc = getattr(storage, "file_path", "") or getattr(storage, "root_dir", "")
+        if loc in (":memory:", "") or getattr(storage, "is_memory", False):
+            return _calc_memory_storage_size(storage)
+        return _calc_file_storage_size(loc)
+
+    def _get_storage_row_count(self, storage: Any) -> int:
+        if hasattr(storage, "count"):
+            cnt = storage.count
+            return int(cnt() if callable(cnt) else cnt)
+        if hasattr(storage, "metadata"):
+            return len(storage.metadata)
+        if hasattr(storage, "__len__"):
+            return len(storage)
+        return 0
 
     def _build_show_table_row(
         self, tname: str, tbl: TableCatalog, target: str
     ) -> Dict[str, Any]:
-        r_count = len(tbl.storage.metadata)
+        r_count = self._get_storage_row_count(tbl.storage)
         f_size = self._calculate_table_size(tbl.storage)
         if target == "TABLE_STATUS":
             return {
                 "Name": tname,
-                "Engine": "Pure Python Pager",
+                "Engine": tbl.storage_engine or "Pure Python Pager",
                 "Rows": r_count,
                 "Data_length": f_size,
                 "Create_time": "2026-08-28 00:00:00",
             }
         return {"Table": tname, "Rows": r_count, "Size_bytes": f_size}
 
-    def _resolve_show_table_rows(
-        self, stmt: ShowStatement, target: str
+    def _resolve_from_database_rows(
+        self, db_name: str, like_pat: Optional[str], target: str
     ) -> List[Dict[str, Any]]:
-        ext_rows = _query_external_db_tables(
-            stmt.from_database, self.known_databases, target, stmt.like_pattern
-        )
-        if ext_rows is not None:
-            return ext_rows
+        scoped = _filter_tables_by_database_scope(self.tables, db_name, like_pat)
+        if scoped:
+            return [self._build_show_table_row(n, t, target) for n, t in scoped]
+        ext = _query_external_db_tables(db_name, self.known_databases, target, like_pat)
+        return ext if ext is not None else []
 
+    def _resolve_default_table_rows(
+        self, like_pat: Optional[str], target: str
+    ) -> List[Dict[str, Any]]:
         return [
             self._build_show_table_row(tname, tbl, target)
             for tname, tbl in sorted(self.tables.items())
-            if not (stmt.like_pattern and stmt.like_pattern not in tname)
+            if not (like_pat and like_pat not in tname)
         ]
+
+    def _resolve_show_table_rows(
+        self, stmt: ShowStatement, target: str
+    ) -> List[Dict[str, Any]]:
+        if stmt.from_database:
+            return self._resolve_from_database_rows(
+                stmt.from_database, stmt.like_pattern, target
+            )
+        return self._resolve_default_table_rows(stmt.like_pattern, target)
 
     def _exec_show_databases(self) -> Dict[str, Any]:
         dbs = (

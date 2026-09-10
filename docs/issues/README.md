@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **234** | settings.py によるデータベース定義の一元管理 (SSOT) と SQL イントロスペクション・Web UI 乖離の解消 | Feature | 2026-09-11 | [234-unify-database-declarations-in-settings-and-reconcile-introspection.md](closed/234-unify-database-declarations-in-settings-and-reconcile-introspection.md) |
 | **233** | dbshell における Active Database Scope 切替 (--database / .use) と仮想テーブル・ストレージ種別の識別明示化 | Feature | 2026-09-11 | [233-support-multi-database-switching-and-virtual-table-type-introspection.md](closed/233-support-multi-database-switching-and-virtual-table-type-introspection.md) |
 | **232** | src/database からのドメイン・テーブル固有実装（DDL/カラム名/固定パス）の完全分離 | Architecture | 2026-09-11 | [232-decouple-domain-specific-logic-from-database-core.md](closed/232-decouple-domain-specific-logic-from-database-core.md) |
 | **231** | CLI・dbshell の超高速化およびテーブルスキーマデータ型の適正化 | Performance | 2026-09-11 | [231-optimize-cli-dbshell-performance-and-enrich-schema-types.md](closed/231-optimize-cli-dbshell-performance-and-enrich-schema-types.md) |

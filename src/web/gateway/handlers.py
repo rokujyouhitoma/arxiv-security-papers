@@ -1009,20 +1009,19 @@ def _run_db_micro_benchmarks(
 
 
 def _resolve_application_databases(workspace_dir: str) -> Dict[str, str]:
-    return {
-        "arxiv_security_db": os.path.join(
-            workspace_dir, "outputs", "database", "papers.vdb"
-        ),
-        "graph_db": os.path.join(
-            workspace_dir, "outputs", "database", "knowledge_graph.vdb"
-        ),
-        "cti_catalog_db": os.path.join(
-            workspace_dir, "outputs", "database", "cti_catalog", "cti_catalog.vdb"
-        ),
-        "analytics_db": os.path.join(
-            workspace_dir, "outputs", "database", "analytics", "analytics.vdb"
-        ),
-    }
+    from settings import BASE_DIR, DATABASES
+
+    app_dbs: Dict[str, str] = {}
+    for s_name, cfg in DATABASES.items():
+        if s_name == "default":
+            continue
+        loc = cfg.get("LOCATION")
+        if loc:
+            rel = os.path.relpath(loc, BASE_DIR)
+            app_dbs[s_name] = os.path.join(workspace_dir, rel)
+        else:
+            app_dbs[s_name] = s_name
+    return app_dbs
 
 
 def _execute_show_databases_query(
