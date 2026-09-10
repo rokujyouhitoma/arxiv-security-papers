@@ -9,7 +9,7 @@ from typing import List
 
 import pytest
 
-from search.core.index.roaring_bitmap import (
+from core.structures.roaring_bitmap import (
     ARRAY_MAX_CAPACITY,
     TYPE_ARRAY,
     TYPE_BITMAP,

@@ -3,9 +3,10 @@
 Core Index Storage Subpackage.
 """
 
+from core.structures.roaring_bitmap import RoaringBitmap
+
 from .doc_values import DocValues
 from .postings import MultiFieldPostingsIndex, PostingsList
-from .roaring_bitmap import RoaringBitmap
 from .stored_fields import StoredFields
 
 __all__ = [

@@ -6,7 +6,7 @@ Index Storage, Inverted Index, VByte Compression, and Segment Management (Lucene
 import struct
 from typing import Any, Dict, List, Optional, Set
 
-from search.core.index.roaring_bitmap import RoaringBitmap
+from core.structures.roaring_bitmap import RoaringBitmap
 
 
 def encode_vbyte(numbers: List[int]) -> bytes:

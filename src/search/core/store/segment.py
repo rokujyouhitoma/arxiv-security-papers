@@ -5,7 +5,7 @@ Lucene-style Immutable Segment Model & Deletion Bitset.
 
 from typing import Dict, Union
 
-from search.core.index.roaring_bitmap import RoaringBitmap
+from core.structures.roaring_bitmap import RoaringBitmap
 
 
 class DeletedDocsBitset:
