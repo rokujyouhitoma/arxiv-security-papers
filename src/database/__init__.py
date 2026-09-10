@@ -82,7 +82,7 @@ from .engine import (
     VectorizedScan,
     VolcanoIterator,
 )
-from .index import HNSWIndex
+from .index import HNSWIndex, RoaringBitmapIndex, TableBitmapIndexes
 from .lock_manager import (
     DeadlockError,
     LockGrant,
@@ -173,6 +173,7 @@ from .storage import (
     MultiTableVectorStorage,
     VectorStorage,
     VectorStorageSecurityError,
+    VisibilityMap,
 )
 from .vdbe import VDBE, Instruction, OpCode, Statement, StepResult, VDBEProgram
 from .vfs import (
@@ -203,6 +204,9 @@ __all__ = [
     "MultiTableSecurityError",
     "DeterministicEmbedding",
     "HNSWIndex",
+    "RoaringBitmapIndex",
+    "TableBitmapIndexes",
+    "VisibilityMap",
     # VFS (OS Abstraction Layer)
     "VFS",
     "VFSFile",

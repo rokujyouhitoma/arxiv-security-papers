@@ -31,6 +31,7 @@ from .vfs import (
     get_vfs,
     register_vfs,
 )
+from .visibility_map import VisibilityMap
 
 __all__ = [
     "PAGE_SIZE",
@@ -67,6 +68,7 @@ __all__ = [
     "VFSFile",
     "VectorStorage",
     "VectorStorageSecurityError",
+    "VisibilityMap",
     "get_vfs",
     "register_vfs",
 ]

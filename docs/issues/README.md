@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **244** | src/database における Roaring Bitmap を用いた低カーディナリティ列向け Bitmap Index およびタプル死活管理の実装 | Feature / Performance | Medium | Open (New) | [244-implement-roaring-bitmap-index-for-database-storage.md](244-implement-roaring-bitmap-index-for-database-storage.md) |
 | **240** | Radix Trie (Prefix Tree) による CTI タクソノミー（CWE / ATT&CK / CVE）高速前方一致検索とオートコンプリート基盤の実装 | Feature | Medium | Open (New) | [240-implement-radix-trie-for-cti-taxonomy-prefix-search.md](240-implement-radix-trie-for-cti-taxonomy-prefix-search.md) |
 | **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | High | Open (New) | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **244** | src/database における Roaring Bitmap を用いた低カーディナリティ列向け Bitmap Index およびタプル死活管理の実装 | Feature / Performance | 2026-09-11 | [244-implement-roaring-bitmap-index-for-database-storage.md](closed/244-implement-roaring-bitmap-index-for-database-storage.md) |
 | **243** | src/search/platform/cache における FilterCache の Roaring Bitmap 換装とブーリアンフィルター演算の高速化 | Feature / Performance | 2026-09-11 | [243-apply-roaring-bitmap-to-search-filter-cache.md](closed/243-apply-roaring-bitmap-to-search-filter-cache.md) |
 | **242** | src/database/transaction/mvcc.py における Roaring Bitmap を用いたトランザクション追跡とスナップショット分離の省メモリ・高速化 | Feature / Performance | 2026-09-11 | [242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md](closed/242-apply-roaring-bitmap-to-mvcc-transaction-snapshots.md) |
 | **241** | Roaring Bitmap データ構造の src/core/structures/roaring_bitmap.py への共通化・昇格と直接参照への刷新 | Architecture / Refactor | 2026-09-11 | [241-migrate-roaring-bitmap-to-core-structures.md](closed/241-migrate-roaring-bitmap-to-core-structures.md) |
