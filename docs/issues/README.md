@@ -7,7 +7,7 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | High | Open (New) | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
-| **216** | index.html および Web ゲートウェイにおけるモック実装・ダミー固定値の完全排除と実態データ・実DB連携への全面刷新 | Architecture / Refactor | High | Open (New) | [216-eliminate-mock-implementations-and-bind-real-runtime-data.md](216-eliminate-mock-implementations-and-bind-real-runtime-data.md) |
+| **216** | index.html および Web ゲートウェイにおけるモック実装・ダミー固定値の完全排除と実態データ・実DB連携への全面刷新 | Architecture / Refactor | High | Open (In Progress) | [216-eliminate-mock-implementations-and-bind-real-runtime-data.md](216-eliminate-mock-implementations-and-bind-real-runtime-data.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 ---
