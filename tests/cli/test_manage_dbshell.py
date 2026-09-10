@@ -21,6 +21,7 @@ from cli.commands.dbshell import (
     detect_table_scope,
     detect_table_type,
     execute_single_query,
+    init_mounted_sql_executor,
 )
 from cli.commands.dbsync import synchronize_database_catalog
 from cli.commands.inspect import InspectTableCommand
@@ -185,6 +186,36 @@ class TestManageCLISuite(unittest.TestCase):
         # In-memory check
         mem_storage = VectorStorage(":memory:", dim=4)
         self.assertEqual(detect_table_type(mem_storage), "In-Memory")
+
+    def test_dbshell_schema_no_ellipsis_and_inferred_notice(self) -> None:
+        """Verifies .schema does not emit ellipsis and adds inferred notice when appropriate."""
+        engine = init_mounted_sql_executor(db_scope="all")
+        session = DBShellSession(engine=engine, ws=os.getcwd(), initial_scope="all")
+
+        # Test graph_db edges table (inferred from metadata)
+        if "edges" in engine.tables:
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                self.assertTrue(_execute_meta_command(session, ".schema edges"))
+            out = buf.getvalue()
+            self.assertNotIn("...", out)
+            self.assertIn("-- Inferred from storage metadata", out)
+            self.assertIn("src_id", out)
+            self.assertIn("dst_id", out)
+            self.assertIn("label", out)
+
+        # Test cti_catalog table (_schemas lookup)
+        if "cisa_kev_vulnerabilities" in engine.tables:
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                self.assertTrue(
+                    _execute_meta_command(session, ".schema cisa_kev_vulnerabilities")
+                )
+            out_cti = buf.getvalue()
+            self.assertNotIn("...", out_cti)
+            self.assertNotIn("-- Inferred", out_cti)
+            self.assertIn("cve_id", out_cti)
+            self.assertIn("PRIMARY KEY", out_cti)
 
 
 if __name__ == "__main__":

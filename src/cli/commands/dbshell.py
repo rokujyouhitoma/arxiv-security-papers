@@ -118,17 +118,92 @@ def _mount_json_tables(engine: SQLExecutor, ws: str) -> None:
 DATABASE_SCOPES: Dict[str, str] = get_database_scopes()
 
 
+def _find_sql_in_metadata(metadata: List[Any], tname: str) -> Optional[str]:
+    for row in metadata:
+        if isinstance(row, dict) and row.get("table_name") == tname:
+            sql = row.get("sql")
+            if sql:
+                return str(sql)
+    return None
+
+
+def _lookup_container_schema_sql(container: Any, tname: str) -> Optional[str]:
+    """Looks up saved CREATE TABLE DDL from _schemas table if present."""
+    if (
+        not hasattr(container, "list_tables")
+        or "_schemas" not in container.list_tables()
+    ):
+        return None
+    try:
+        tbl = container.get_table("_schemas")
+        return _find_sql_in_metadata(getattr(tbl, "metadata", []), tname)
+    except Exception:
+        return None
+
+
+def _is_json_like(val: Any) -> bool:
+    if isinstance(val, (dict, list)):
+        return True
+    return isinstance(val, str) and (val.startswith("{") or val.startswith("["))
+
+
+def _infer_value_sql_type(val: Any) -> str:
+    """Infers SQL data type from a Python value."""
+    if isinstance(val, bool):
+        return "BOOLEAN"
+    if isinstance(val, int):
+        return "INTEGER"
+    if isinstance(val, float):
+        return "FLOAT"
+    return "JSON" if _is_json_like(val) else "VARCHAR(256)"
+
+
+def _infer_column_type(col_name: str, val: Any) -> str:
+    if col_name == "id" or col_name.endswith("_id"):
+        return "VARCHAR(64)"
+    return _infer_value_sql_type(val)
+
+
+def _infer_table_schema(storage: Any) -> Dict[str, str]:
+    """Infers column schema from the first metadata record in storage."""
+    metadata = getattr(storage, "metadata", [])
+    if not (metadata and isinstance(metadata, list) and isinstance(metadata[0], dict)):
+        return {"id": "VARCHAR(64)", "metadata": "JSON"}
+
+    first_row: Dict[str, Any] = metadata[0]
+    return {col: _infer_column_type(col, val) for col, val in first_row.items()}
+
+
+def _resolve_container_table_ddl(
+    container: Any, tname: str, storage: Any, file_path: str
+) -> Tuple[Dict[str, str], str]:
+    """Resolves table schema and DDL, either from _schemas or inferred from metadata."""
+    saved_sql = _lookup_container_schema_sql(container, tname)
+    if saved_sql:
+        return {"id": "VARCHAR(64)", "metadata": "JSON"}, saved_sql
+
+    schema = _infer_table_schema(storage)
+    cols_def = ", ".join(f"{col} {dtype}" for col, dtype in schema.items())
+    inferred_ddl = (
+        f"-- Inferred from storage metadata\n"
+        f"CREATE TABLE IF NOT EXISTS {tname} ({cols_def}) "
+        f"USING binary_vdb LOCATION '{file_path}'"
+    )
+    return schema, inferred_ddl
+
+
 def _mount_single_container_table(
     engine: SQLExecutor, tname: str, container: Any, file_path: str, scope: str
 ) -> None:
     if tname.startswith("_") or tname in engine.tables:
         return
     storage = container.get_table(tname)
+    schema, ddl = _resolve_container_table_ddl(container, tname, storage, file_path)
     catalog = TableCatalog(
         name=tname,
         storage=storage,
-        schema={"id": "VARCHAR(64)", "metadata": "JSON"},
-        raw_sql=f"CREATE TABLE IF NOT EXISTS {tname} (...) USING binary_vdb LOCATION '{file_path}'",
+        schema=schema,
+        raw_sql=ddl,
         storage_engine="MultiTableVectorStorage",
         location=file_path,
         database_scope=scope,
