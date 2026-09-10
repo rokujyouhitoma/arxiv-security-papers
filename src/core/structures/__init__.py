@@ -3,6 +3,7 @@ Core data structures for arxiv-security-papers.
 Provides high-performance, space-efficient pure-Python algorithms and containers.
 """
 
+from core.structures.arc_cache import ARCCache
 from core.structures.bloom_filter import BloomFilter, ScalableBloomFilter
 from core.structures.disjoint_set import DisjointSet
 from core.structures.probabilistic import Centroid, CountMinSketch, TDigest
@@ -60,4 +61,5 @@ __all__ = [
     "CountMinSketch",
     "TDigest",
     "Centroid",
+    "ARCCache",
 ]

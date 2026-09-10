@@ -2,7 +2,7 @@
 ID: 249
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (Completed)
 担当エージェント: Software Development (SWD) / Systems Architect / Application Specialist (APS)
 ---
 
@@ -33,15 +33,15 @@ ID: 249
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`src/core/structures/arc_cache.py`](../../src/core/structures/arc_cache.py) (新規):
+- [x] [`src/core/structures/arc_cache.py`](../../src/core/structures/arc_cache.py) (新規):
   - `ARCCache[K, V]`: $T_1$ (最新ヒット), $T_2$ (頻出ヒット), $B_1$ (最新ゴースト), $B_2$ (頻出ゴースト)、自己調整パラメータ $p$、`get(key)`, `put(key, value)`, `evict()`, `hit_ratio()`
-- [ ] [`src/core/structures/__init__.py`](../../src/core/structures/__init__.py):
+- [x] [`src/core/structures/__init__.py`](../../src/core/structures/__init__.py):
   - `ARCCache` のエクスポート
-- [ ] [`src/search/platform/cache/solr_cache.py`](../../src/search/platform/cache/solr_cache.py):
-  - `LRUCache` から `ARCCache` へのプラグイン換装または選択可能化
-- [ ] [`tests/core/test_arc_cache.py`](../../tests/core/test_arc_cache.py) (新規):
+- [x] [`src/search/platform/cache/__init__.py`](../../src/search/platform/cache/__init__.py):
+  - `ARCCacheAdapter`, `ARCFilterCache`, `SolrCache(use_arc=...)` によるプラグイン換装対応
+- [x] [`tests/core/test_arc_cache.py`](../../tests/core/test_arc_cache.py) (新規):
   - 基本キャッシュ操作、ゴーストキャッシュによる $p$ の動的適応、走査耐性（Scan Resistance）テスト
-- [ ] [`tests/search/platform/test_cache.py`](../../tests/search/platform/test_cache.py):
+- [x] [`tests/search/platform/test_cache.py`](../../tests/search/platform/test_cache.py):
   - 検索キャッシュ層での結合回帰テスト
 
 ---
@@ -59,7 +59,7 @@ Target Branch: `feat/249-implement-adaptive-replacement-cache-for-search-platfor
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] `src/core/structures/arc_cache.py` に `ARCCache` が実装されていること。
-- [ ] 大量の一度きりのキー走査（Scan ワークロード）に対して頻出キー（Frequency）が保護されること。
-- [ ] `tests/core/test_arc_cache.py` が新規作成され、100% PASS すること。
-- [ ] Xenon Rank A (CC <= 4)、`mypy --strict` 0 エラー、フォーマッタ 100% 合格であること。
+- [x] `src/core/structures/arc_cache.py` に `ARCCache` が実装されていること。
+- [x] 大量の一度きりのキー走査（Scan ワークロード）に対して頻出キー（Frequency）が保護されること。
+- [x] `tests/core/test_arc_cache.py` が新規作成され、100% PASS すること。
+- [x] Xenon Rank A (CC <= 4)、`mypy --strict` 0 エラー、フォーマッタ 100% 合格であること。

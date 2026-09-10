@@ -54,3 +54,24 @@ def test_filter_cache_roaring_bitmap_integration():
     assert combined == {20, 30}
     assert 20 in combined
     assert 10 not in combined
+
+
+def test_solr_cache_arc_integration():
+    solr_cache = SolrCache(filter_cap=3, query_cap=3, doc_cap=5, use_arc=True)
+    stats = solr_cache.get_stats()
+    assert stats["use_arc"] is True
+
+    solr_cache.filter_cache.put("fq_cat", {1, 2, 3})
+    assert solr_cache.filter_cache.get("fq_cat") == {1, 2, 3}
+    assert solr_cache.filter_cache.size() == 1
+
+    solr_cache.query_result_cache.put("q_sec", [10, 20])
+    assert solr_cache.query_result_cache.get("q_sec") == [10, 20]
+
+    solr_cache.document_cache.put("doc_1", {"title": "ARC Paper"})
+    assert solr_cache.document_cache.get("doc_1") == {"title": "ARC Paper"}
+
+    solr_cache.clear_all()
+    assert solr_cache.filter_cache.size() == 0
+    assert solr_cache.query_result_cache.size() == 0
+    assert solr_cache.document_cache.size() == 0

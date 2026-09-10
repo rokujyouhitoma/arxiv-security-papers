@@ -6,6 +6,7 @@ Multi-tier Solr Cache Engine (FilterCache, QueryResultCache, DocumentCache).
 from collections import OrderedDict
 from typing import Any, Dict, Generic, Iterable, List, Optional, TypeVar, Union
 
+from core.structures.arc_cache import ARCCache
 from core.structures.roaring_bitmap import RoaringBitmap
 
 T = TypeVar("T")
@@ -48,6 +49,39 @@ class LRUCache(Generic[T]):
         return (self.hits / total) if total > 0 else 0.0
 
 
+class ARCCacheAdapter(Generic[T]):
+    """Adaptive Replacement Cache adapter compatible with Solr cache interfaces."""
+
+    def __init__(self, capacity: int = 1000) -> None:
+        self.capacity = capacity
+        self._arc: ARCCache[str, T] = ARCCache(capacity=capacity)
+
+    def get(self, key: str) -> Optional[T]:
+        return self._arc.get(key)
+
+    def put(self, key: str, value: T) -> None:
+        self._arc.put(key, value)
+
+    def clear(self) -> None:
+        self._arc.clear()
+
+    def size(self) -> int:
+        return len(self._arc)
+
+    def hit_ratio(self) -> float:
+        return self._arc.hit_ratio
+
+
+class ARCFilterCache(ARCCacheAdapter[RoaringBitmap]):
+    """ARC-based FilterCache supporting RoaringBitmap automatic conversions."""
+
+    def put(self, key: str, value: Union[RoaringBitmap, Iterable[int]]) -> None:
+        if isinstance(value, RoaringBitmap):
+            super().put(key, value)
+        else:
+            super().put(key, RoaringBitmap(list(value)))
+
+
 class FilterCache(LRUCache[RoaringBitmap]):
     """Caches boolean filter query result doc_id RoaringBitmaps."""
 
@@ -70,15 +104,44 @@ class DocumentCache(LRUCache[Dict[str, Any]]):
     pass
 
 
+def _create_arc_solr_caches(
+    filter_cap: int, query_cap: int, doc_cap: int
+) -> tuple[ARCFilterCache, ARCCacheAdapter[List[int]], ARCCacheAdapter[Dict[str, Any]]]:
+    fc = ARCFilterCache(filter_cap)
+    qc: ARCCacheAdapter[List[int]] = ARCCacheAdapter(query_cap)
+    dc: ARCCacheAdapter[Dict[str, Any]] = ARCCacheAdapter(doc_cap)
+    return fc, qc, dc
+
+
+def _create_lru_solr_caches(
+    filter_cap: int, query_cap: int, doc_cap: int
+) -> tuple[FilterCache, QueryResultCache, DocumentCache]:
+    return FilterCache(filter_cap), QueryResultCache(query_cap), DocumentCache(doc_cap)
+
+
 class SolrCache:
     """Unified cache facade holding filterCache, queryResultCache, and documentCache."""
 
+    filter_cache: Union[FilterCache, ARCFilterCache]
+    query_result_cache: Union[QueryResultCache, ARCCacheAdapter[List[int]]]
+    document_cache: Union[DocumentCache, ARCCacheAdapter[Dict[str, Any]]]
+
     def __init__(
-        self, filter_cap: int = 500, query_cap: int = 500, doc_cap: int = 2000
+        self,
+        filter_cap: int = 500,
+        query_cap: int = 500,
+        doc_cap: int = 2000,
+        use_arc: bool = False,
     ) -> None:
-        self.filter_cache = FilterCache(filter_cap)
-        self.query_result_cache = QueryResultCache(query_cap)
-        self.document_cache = DocumentCache(doc_cap)
+        self.use_arc = use_arc
+        if use_arc:
+            self.filter_cache, self.query_result_cache, self.document_cache = (
+                _create_arc_solr_caches(filter_cap, query_cap, doc_cap)
+            )
+        else:
+            self.filter_cache, self.query_result_cache, self.document_cache = (
+                _create_lru_solr_caches(filter_cap, query_cap, doc_cap)
+            )
 
     def clear_all(self) -> None:
         self.filter_cache.clear()
@@ -87,6 +150,7 @@ class SolrCache:
 
     def get_stats(self) -> Dict[str, Any]:
         return {
+            "use_arc": self.use_arc,
             "filter_cache": {
                 "size": self.filter_cache.size(),
                 "hit_ratio": self.filter_cache.hit_ratio(),
