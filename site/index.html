@@ -166,7 +166,7 @@
         <section class="console-info-banner" id="systemInfoBanner">
           <div class="banner-content">
             <span class="banner-icon">ℹ️</span>
-            <span>2026-09-05 06:00 の定期パイプライン実行が正常完了しました。新着論文 24 件および EIROM 確信度エッジが更新されています。<a href="/dashboard.html?tab=supervisor" class="banner-link">更新ログを確認 ↗</a></span>
+            <span id="systemInfoBannerText"><span id="bannerPipelineTime">最新</span>の定期パイプライン実行が正常完了しました。新着論文 <span id="bannerNewCount">--</span> 件および EIROM 確信度エッジが更新されています。<a href="/dashboard.html?tab=supervisor" class="banner-link">更新ログを確認 ↗</a></span>
           </div>
           <button class="banner-close-btn" id="closeBannerBtn" title="閉じる">✕</button>
         </section>
@@ -179,17 +179,17 @@
               <span class="kpi-label">インデックス論文総数</span>
               <span class="kpi-badge">cs.CR</span>
             </div>
-            <div class="kpi-value" id="totalPapersCount">14,169</div>
-            <div class="kpi-subtext">前週比 +128 件 (自動同期中)</div>
+            <div class="kpi-value" id="totalPapersCount">--</div>
+            <div class="kpi-subtext" id="kpiWeeklyGrowth">自動同期中</div>
           </div>
 
           <!-- Card 2: Inference Confidence -->
           <div class="kpi-card kpi-card-green">
             <div class="kpi-header">
               <span class="kpi-label">推論確信度 (HIGH)</span>
-              <span class="kpi-badge">84.2%</span>
+              <span class="kpi-badge" id="kpiConfidenceBadge">--</span>
             </div>
-            <div class="kpi-value">84.2%</div>
+            <div class="kpi-value" id="kpiConfidenceVal">--</div>
             <div class="kpi-subtext">EIROM 信頼性スコア &ge; 0.85</div>
           </div>
 
@@ -199,7 +199,7 @@
               <span class="kpi-label">カバー済み CWE 弱点</span>
               <span class="kpi-badge">Alert</span>
             </div>
-            <div class="kpi-value">68 件</div>
+            <div class="kpi-value" id="kpiCweVal">--</div>
             <div class="kpi-subtext">主要: CWE-79, CWE-89, CWE-502</div>
           </div>
 
@@ -209,7 +209,7 @@
               <span class="kpi-label">未研究リサーチギャップ</span>
               <span class="kpi-badge">Gap</span>
             </div>
-            <div class="kpi-value">12 件</div>
+            <div class="kpi-value" id="kpiGapsVal">--</div>
             <div class="kpi-subtext">学術論文未対策の ATT&CK 手法</div>
           </div>
         </section>
@@ -876,7 +876,7 @@
       <div class="guide-section">
         <h4><span>🏢</span> 統合コンソールの主要ワークスペース</h4>
         <p style="margin: 0 0 6px 0; color: #E2E8F0;">
-          <strong>1. 🔍 セマンティック RAG 検索:</strong> DuckDB &amp; Pure-Python BM25/ベクトルハイブリッド検索エンジンにより、14,169件のセキュリティ論文を高速探索します。
+          <strong>1. 🔍 セマンティック RAG 検索:</strong> DuckDB &amp; Pure-Python BM25/ベクトルハイブリッド検索エンジンにより、<span id="descPapersCount">14,169</span>件のセキュリティ論文を高速探索します。
         </p>
         <p style="margin: 0 0 6px 0; color: #E2E8F0;">
           <strong>2. 📊 トレンド &amp; エグゼクティブサマリー:</strong> 階層別動向レポート（月次・四半期・通期）と Mermaid 動的マインドマップを閲覧可能です。

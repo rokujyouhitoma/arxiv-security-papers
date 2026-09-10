@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     searchTab: {
       name: 'search',
       title: '🔍 セマンティック RAG 論文検索 & 脅威インテリジェンス',
-      subtitle: 'Google OKF v0.2 準拠の 14,169 件のセキュリティ学術論文および ATT&CK 推論メタデータを横断探索'
+      subtitle: 'Google OKF v0.2 準拠のセキュリティ学術論文および ATT&CK 推論メタデータを横断探索'
     },
     trendsTab: {
       name: 'trends',
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 50);
     } else if (tabId === 'systemTab') {
       setTimeout(() => {
-        renderTraversalMatrix();
+        renderTraversalMatrix(0);
       }, 50);
     } else if (tabId === 'databaseTab') {
       setTimeout(() => {
@@ -355,7 +355,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (helpModalBtn) helpModalBtn.addEventListener('click', window.toggleConsoleHelpDrawer);
   if (notifBtn) {
     notifBtn.addEventListener('click', () => {
-      alert("🔔【通知センター】\n・2026-09-05 06:00 定期バッチ完了 (新着 24 件)\n・EIROM 推論エンジン: 84.2% HIGH 確信度維持\n・未研究リサーチギャップ: 12 件検出中");
+      const bTimeEl = document.getElementById('bannerPipelineTime');
+      const syncTime = bTimeEl ? bTimeEl.textContent : '最新';
+      const pCount = totalPapersCount ? totalPapersCount.textContent : '--';
+      const confEl = document.getElementById('kpiConfidenceVal');
+      const conf = confEl ? confEl.textContent : '--';
+      const gapsEl = document.getElementById('kpiGapsVal');
+      const gaps = gapsEl ? gapsEl.textContent : '--';
+      alert(`🔔【システム通知センター】\n・定期バッチ実行: ${syncTime}\n・インデックス論文数: ${pCount} 件\n・推論確信度: ${conf}\n・未研究リサーチギャップ: ${gaps}`);
     });
   }
 
@@ -413,6 +420,20 @@ document.addEventListener('DOMContentLoaded', () => {
     performSearch(q, false);
   });
 
+  // Update paper count in all display elements after stats fetch
+  function updatePaperCountDisplay(total) {
+    const fmt = Number(total).toLocaleString('ja-JP');
+    ['sidebarPapersCount', 'totalPapersCount', 'descPapersCount'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = fmt;
+    });
+    const subtitle = document.getElementById('mainPageSubtitle');
+    if (subtitle) {
+      subtitle.textContent =
+        `Google OKF v0.2 準拠の ${fmt} 件のセキュリティ学術論文および ATT&CK 推論メタデータを横断探索`;
+    }
+  }
+
   // Fetch System Stats
   async function fetchStats() {
     try {
@@ -422,6 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const formatted = Number(data.total_papers).toLocaleString();
         if (totalPapersCount) totalPapersCount.textContent = formatted;
         if (sidebarPapersCount) sidebarPapersCount.textContent = formatted;
+        updatePaperCountDisplay(data.total_papers);
       }
     } catch (err) {
       console.warn("Stats fetch failed", err);
@@ -808,7 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========================================================================
   let meshNodes = [];
   let meshEdges = [];
-  const walkHistory = [74.2, 74.2, 74.2, 74.2, 74.2, 74.2, 74.2, 74.2];
+  const walkHistory = [];
   const supervisorWorkerSnapshots = new Map();
   let sseEventSource = null;
 
@@ -849,13 +871,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Baseline fallback if graph is sparse or loading
     if (hopCounts.every(c => c === 0)) {
-      hopCounts[0] = 18;
-      hopCounts[1] = 42;
-      hopCounts[2] = 68;
-      hopCounts[3] = 34;
-      hopCounts[4] = 12;
+      hCtx.clearRect(0, 0, hCanvas.width, hCanvas.height);
+      hCtx.fillStyle = '#888';
+      hCtx.font = '11px monospace';
+      hCtx.fillText('グラフデータ未取得', 20, 60);
+      return;
     }
 
     const maxVal = Math.max(1, ...hopCounts);
@@ -963,13 +984,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // D. Deterministic Traversal Matrix (100 Walks)
-  function renderTraversalMatrix() {
+  function renderTraversalMatrix(successRatePct) {
     const matrixContainer = document.getElementById('traversalMatrix');
-    if (!matrixContainer || matrixContainer.children.length > 0) return;
+    if (!matrixContainer) return;
+    matrixContainer.innerHTML = '';
+    const successCount = Math.round(Math.max(0, Math.min(100, successRatePct ?? 0)));
     for (let i = 0; i < 100; i++) {
       const dot = document.createElement('div');
       dot.className = 'traversal-dot';
-      if (i < 88) {
+      if (i < successCount) {
         dot.classList.add('success');
       } else {
         dot.classList.add('deadend');
@@ -1239,9 +1262,10 @@ document.addEventListener('DOMContentLoaded', () => {
           const pct = Number(data.telemetry.token_savings_pct);
           const bEl = document.getElementById('badgeTokenSavings');
           if (bEl) bEl.textContent = `-${pct}% TOKENS`;
-          if (walkHistory.length > 0 && Math.abs(walkHistory[walkHistory.length - 1] - pct) > 0.01) {
-            walkHistory.shift();
+          // M9: push real token_savings_pct into walkHistory (empty array init)
+          if (!isNaN(pct) && pct > 0) {
             walkHistory.push(pct);
+            if (walkHistory.length > 20) walkHistory.shift();
             drawWalkChart();
           }
         }
@@ -1373,7 +1397,40 @@ document.addEventListener('DOMContentLoaded', () => {
       calculateAndDrawHopHistogram();
       updateRealEdgeLedger();
       drawWalkChart();
-      renderTraversalMatrix();
+      // M8: pass real traversal success rate from graph engine stats
+      const tStats = data['traversal_stats'];
+      renderTraversalMatrix(tStats ? (tStats['success_rate_pct'] ?? 0) : 0);
+
+      // Dynamic updates for Index Page Banner & KPI cards (D5, D6, D7)
+      if (data['loop_monitor'] && data['loop_monitor']['last_sync_utc']) {
+        const bTime = document.getElementById('bannerPipelineTime');
+        if (bTime) bTime.textContent = data['loop_monitor']['last_sync_utc'];
+      }
+      if (data['telemetry']) {
+        const bNew = document.getElementById('bannerNewCount');
+        if (bNew && data['telemetry']['resolved_nodes'] != null) {
+          bNew.textContent = Number(data['telemetry']['resolved_nodes']).toLocaleString();
+        }
+        const wGrowth = document.getElementById('kpiWeeklyGrowth');
+        if (wGrowth && data['telemetry']['walks_per_min'] != null) {
+          wGrowth.textContent = `自動同期中 (${data['telemetry']['walks_per_min']} walks/m)`;
+        }
+      }
+      if (tStats) {
+        const sPct = tStats['success_rate_pct'] ?? 0;
+        const confBadge = document.getElementById('kpiConfidenceBadge');
+        if (confBadge) confBadge.textContent = `${sPct}%`;
+        const confVal = document.getElementById('kpiConfidenceVal');
+        if (confVal) confVal.textContent = `${sPct}%`;
+      }
+      const meshNodes = (data['mesh'] && data['mesh']['nodes']) ? data['mesh']['nodes'] : [];
+      const cweCount = meshNodes.filter(n => (n['id'] && String(n['id']).toLowerCase().startsWith('cwe')) || n['cluster'] === 'vulnerability').length;
+      const cweVal = document.getElementById('kpiCweVal');
+      if (cweVal) cweVal.textContent = `${cweCount || 0} 件`;
+
+      const gapCount = data['research_gaps'] ? data['research_gaps'].length : meshNodes.filter(n => n['cluster'] === 'gap').length;
+      const gapsVal = document.getElementById('kpiGapsVal');
+      if (gapsVal) gapsVal.textContent = `${gapCount || 0} 件`;
     } catch (err) {
       // Graceful fallback
     }

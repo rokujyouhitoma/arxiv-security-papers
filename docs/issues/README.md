@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | High | Open (New) | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
-| **216** | index.html および Web ゲートウェイにおけるモック実装・ダミー固定値の完全排除と実態データ・実DB連携への全面刷新 | Architecture / Refactor | High | Open (In Progress) | [216-eliminate-mock-implementations-and-bind-real-runtime-data.md](216-eliminate-mock-implementations-and-bind-real-runtime-data.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 ---
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **216** | index.html および Web ゲートウェイにおけるモック実装・ダミー固定値の完全排除と実態データ・実DB連携への全面刷新 | Architecture / Refactor | 2026-09-11 | [216-eliminate-mock-implementations-and-bind-real-runtime-data.md](closed/216-eliminate-mock-implementations-and-bind-real-runtime-data.md) |
 | **215** | データベース台帳 UI (#/database) における架空テーブル・モック表示の撤廃と実コンテナ・実SQLインスペクションへの刷新 | Bug | 2026-09-10 | [215-fix-database-explorer-mock-data-and-real-sql-introspection.md](closed/215-fix-database-explorer-mock-data-and-real-sql-introspection.md) |
 | **227** | src/pdf_engine におけるストリームデコード・安全ガード HSM ライフサイクル統制と Decompression Bomb 防御の実装 | Feature / Architecture / Security | 2026-09-09 | [227-implement-pdf-engine-stream-decoding-safety-guard-hsm-governance.md](closed/227-implement-pdf-engine-stream-decoding-safety-guard-hsm-governance.md) |
 | **226** | src/database における ARIES クラッシュリカバリプロトコルの HSM 統制およびカオス障害耐性の確立 | Feature / Architecture | 2026-09-09 | [226-implement-database-aries-recovery-hsm-governance.md](closed/226-implement-database-aries-recovery-hsm-governance.md) |

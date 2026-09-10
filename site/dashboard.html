@@ -3668,9 +3668,10 @@
           if (adj.has(e.source)) adj.get(e.source).push(e.target);
         });
 
-        // BFS from source nodes
-        const sourceNodes = NODES.filter(n => n.cluster === 'source');
-        sourceNodes.forEach(src => {
+        // BFS from source or paper nodes
+        const sourceNodes = NODES.filter(n => n.cluster === 'source' || n.cluster === 'paper');
+        const seeds = sourceNodes.length > 0 ? sourceNodes : NODES.slice(0, 10);
+        seeds.forEach(src => {
           const visited = new Set([src.id]);
           const queue = [{ id: src.id, depth: 0 }];
           while (queue.length > 0) {
@@ -3752,7 +3753,7 @@
       }
 
       // C. Walk vs Flat Token Savings Chart (Real measured ratio)
-      const walkHistory = [74.2, 74.2, 74.2, 74.2, 74.2, 74.2, 74.2, 74.2];
+      const walkHistory = [];
       function drawWalkChart() {
         const wCanvas = document.getElementById('walkVsFlatCanvas') || document.getElementById('walkCanvas');
         if (!wCanvas) return;
@@ -3764,9 +3765,16 @@
         wCtx.strokeStyle = '#2b2b2b';
         wCtx.lineWidth = 1.5;
 
+        if (walkHistory.length === 0) {
+          wCtx.fillStyle = '#888';
+          wCtx.font = '11px monospace';
+          wCtx.fillText('No walk history', 25, 20);
+          return;
+        }
+
         wCtx.beginPath();
         walkHistory.forEach((v, idx) => {
-          const x = 20 + (idx / (walkHistory.length - 1)) * (w - 40);
+          const x = 20 + (idx / Math.max(walkHistory.length - 1, 1)) * (w - 40);
           const y = h - 20 - ((v - 60) / 30) * (h - 40);
           if (idx === 0) wCtx.moveTo(x, y);
           else wCtx.lineTo(x, y);
@@ -3787,14 +3795,15 @@
       }
 
       // D. Deterministic Traversal Matrix (100 Verified Walks from DAG state)
-      function renderTraversalMatrix() {
+      function renderTraversalMatrix(successRatePct) {
         const matrixContainer = document.getElementById('traversalMatrix');
-        if (!matrixContainer || matrixContainer.children.length > 0) return;
+        if (!matrixContainer) return;
+        matrixContainer.innerHTML = '';
+        const successCount = Math.round(Math.max(0, Math.min(100, successRatePct ?? 0)));
         for (let i = 0; i < 100; i++) {
           const dot = document.createElement('div');
           dot.className = 'traversal-dot';
-          // 88 verified successful walks, 12 pruned boundary paths
-          if (i < 88) {
+          if (i < successCount) {
             dot.classList.add('success');
           } else {
             dot.classList.add('deadend');
@@ -3804,8 +3813,8 @@
       }
 
       // E. Live Physics Load Telemetry (Actual Calculated Interactions per Second)
-      let currentResolvedNodes = 14507;
-      let lastMeasuredLatency = 1.84;
+      let currentResolvedNodes = 0;
+      let lastMeasuredLatency = 0.0;
 
       function updateLivePhysicsMetrics() {
         const resolvedEl = document.getElementById('valResolvedNodes');
@@ -4219,7 +4228,8 @@
           updateRealEdgeLedger();
           updateLivePhysicsMetrics();
           drawWalkChart();
-          renderTraversalMatrix();
+          const tStats = data.traversal_stats;
+          renderTraversalMatrix(tStats ? (tStats.success_rate_pct ?? 0) : 0);
         } catch (e) {
           // Gracefully fallback
         }

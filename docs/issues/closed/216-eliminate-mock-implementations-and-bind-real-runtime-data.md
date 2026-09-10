@@ -2,7 +2,7 @@
 ID: 216
 種別: Architecture / Refactor
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Resolved)
 Target Branch: refactor/216-eliminate-mock-implementations-and-bind-real-runtime-data
 ---
 
@@ -10,7 +10,7 @@ Target Branch: refactor/216-eliminate-mock-implementations-and-bind-real-runtime
 
 ## 1. 概要 / Summary
 
-エンタープライズ統合コンソール (`site/index.html` / `site/app.js`) およびそのバックエンド Web ゲートウェイ (`src/web/gateway/handlers.py`) において、プロトタイプ開発期に導入されたハードコード値、架空テーブル定義、ダミーSQLクエリ、固定配列によるグラフ合成などの「モック実装」が複数領域に残存している。
+エンタープライズ統合コンソール (`site/index.html` / `site/app.js` / `site/dashboard.html`) およびそのバックエンド Web ゲートウェイ (`src/web/gateway/handlers.py`) において、プロトタイプ開発期に導入されたハードコード値、架空テーブル定義、ダミーSQLクエリ、固定配列によるグラフ合成などの「モック実装」が複数領域に残存している。
 
 システムが実稼働（Pure-Python Database Engine / MultiTableVectorStorage / PropertyGraphEngine / OTLP Traces / Real Crawlers）へと移行した現在、これら一切のモック実装・ダミー固定値を完全に特定・一覧化し、すべて実態ファイル、実コンテナ、実プロセス、実SQL実行結果へと置き換え、真の運用コンソールへと全面刷新する。
 
@@ -69,6 +69,27 @@ Target Branch: refactor/216-eliminate-mock-implementations-and-bind-real-runtime
   - `last_sync` は `now_utc` をそのまま返しており、実際のバッチ実行ログ（`outputs/log.md`）と非連動。
   - **実データソース確認**: `outputs/log.md` は `| 実行日時 (UTC) | 処理論文数 | ...` 形式のマークダウンテーブル。各行第1列から最終実行タイムスタンプ（例: `2026-09-07 07:13:25 UTC`）が正規表現で取得可能であることを確認済み。
 
+### Category E: 全体再調査により特定・排除されたモック・固定値 (D1〜D9)
+
+* **[D1] `site/dashboard.html` 内の `walkHistory` 固定初期化** (L3755):
+  - `const walkHistory = [74.2, ...];` → 空配列 `[]` に刷新。
+* **[D2] `site/dashboard.html` 内の `renderTraversalMatrix` 固定88%成功** (L3790):
+  - `i < 88` を排除し `successRatePct` パラメータ連動に刷新。
+* **[D3] `site/dashboard.html` 内の `currentResolvedNodes` 初期固定値** (L3807):
+  - `14507` を `0` に初期化し、live telemetry から動的バインド。
+* **[D4] `site/dashboard.html` 内のホップヒストグラムの BFS seed** (L3672):
+  - `paper` クラスタおよび上位ノードへのフォールバックを追加。
+* **[D5] `site/index.html` の固定パイプライン日時・新着数** (L169):
+  - `2026-09-05 06:00` / `24 件` のハードコードをスパン要素化し動的更新。
+* **[D6] `site/index.html` の固定週成長テキスト** (L183):
+  - `前週比 +128 件` を `kpiWeeklyGrowth` に動的バインド。
+* **[D7] `site/index.html` の各 KPI カードの静的固定値** (L186-215):
+  - 確信度 (`84.2%`)、CWE弱点数 (`68 件`)、リサーチギャップ数 (`12 件`) を動的要素 ID 化。
+* **[D8] `site/app.js` 内の通知センター固定文** (L358):
+  - `alert()` の静的固定日付・数値を動的集計値に刷新。
+* **[D9] `src/web/gateway/handlers.py` の `_resolve_hit_rate`** (L1090):
+  - `100.0%" if p_rows > 0` を排除し、実測未計測時は `"N/A"` を返却。
+
 ---
 
 ## 3. トレーサビリティ / Traceability
@@ -81,10 +102,11 @@ Target Branch: refactor/216-eliminate-mock-implementations-and-bind-real-runtime
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py) (M6/M10/M12)
-- [ ] [site/app.js](../../site/app.js) (M7/M8/M9/M11)
-- [ ] [site/index.html](../../site/index.html) (M11)
-- [ ] [tests/web/test_zero_mock_integrity.py](../../tests/web/test_zero_mock_integrity.py) (新規作成)
+- [x] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py) (M6/M10/M12/D9)
+- [x] [site/app.js](../../site/app.js) (M7/M8/M9/M11/D8)
+- [x] [site/index.html](../../site/index.html) (M11/D5/D6/D7)
+- [x] [site/dashboard.html](../../site/dashboard.html) (D1/D2/D3/D4)
+- [x] [tests/web/test_zero_mock_integrity.py](../../tests/web/test_zero_mock_integrity.py) (M6-M12 + D1-D9 全件検証)
 
 **解決済み（変更不要）**: M1, M2, M3, M4, M5（Issue #215 / #102 にて解決済み）
 
@@ -382,13 +404,22 @@ class TestZeroMockIntegrity(unittest.TestCase):
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] **M6**: `/api/graph/mesh` レスポンスのノード・エッジが `knowledge_graph.vdb` の実 ABox データと一致すること（`ge_instance` が有効な場合）。
-- [ ] **M7**: `site/app.js` の Hop Histogram ダミーフォールバック `[18, 42, 68, 34, 12]` が完全に除去されていること。
-- [ ] **M8**: `renderTraversalMatrix` の `i < 88` 固定判定が除去され、実 `traversal_stats.success_rate_pct` でドット数が決定されること。
-- [ ] **M9**: `const walkHistory = [74.2, ...]` の固定配列初期化が除去されていること。
-- [ ] **M10**: `"token_savings_pct"` フォールバックが `"-74.2%"` でなく `"N/A"` であること。`pipeline_slo_pct` デフォルトが `0.0` であること。
-- [ ] **M11**: `site/app.js` TAB_CONFIG の `subtitle` から `14,169` がハードコードされていないこと。`site/index.html` の L879 件数がスパン要素化されていること。
-- [ ] **M12**: `_compute_loop_timestamps()` が `outputs/log.md` から実タイムスタンプを読み込み、`last_sync` が実行時刻を返すこと（log.md 存在時）。
-- [ ] `tests/web/test_zero_mock_integrity.py` の全テストが PASS すること。
-- [ ] `make check_format` および `make static_analysis` (CC <= 5 / Xenon Grade A) が 100% PASS すること。
-- [ ] `http://localhost:8000/index.html` の Graph タブに実グラフデータが描画されること（knowledge_graph.vdb が非空の場合）。
+- [x] **M6**: `/api/graph/mesh` レスポンスのノード・エッジが `knowledge_graph.vdb` の実 ABox データと一致すること（`ge_instance` が有効な場合）。
+- [x] **M7**: `site/app.js` の Hop Histogram ダミーフォールバック `[18, 42, 68, 34, 12]` が完全に除去されていること。
+- [x] **M8**: `renderTraversalMatrix` の `i < 88` 固定判定が除去され、実 `traversal_stats.success_rate_pct` でドット数が決定されること。
+- [x] **M9**: `const walkHistory = [74.2, ...]` の固定配列初期化が除去されていること。
+- [x] **M10**: `"token_savings_pct"` フォールバックが `"-74.2%"` でなく `"N/A"` であること。`pipeline_slo_pct` デフォルトが `0.0` であること。
+- [x] **M11**: `site/app.js` TAB_CONFIG の `subtitle` から `14,169` がハードコードされていないこと。`site/index.html` の L879 件数がスパン要素化されていること。
+- [x] **M12**: `_compute_loop_timestamps()` が `outputs/log.md` から実タイムスタンプを読み込み、`last_sync` が実行時刻を返すこと（log.md 存在時）。
+- [x] **D1**: `site/dashboard.html` の `walkHistory` 固定初期化が除去されていること。
+- [x] **D2**: `site/dashboard.html` の `renderTraversalMatrix` に `successRatePct` パラメータが渡され、固定88%判定が除去されていること。
+- [x] **D3**: `site/dashboard.html` の `currentResolvedNodes = 14507` ハードコードが除去されていること。
+- [x] **D4**: `site/dashboard.html` の BFS シード探索が `paper` クラスタにも対応していること。
+- [x] **D5**: `site/index.html` のパイプライン日時・新着数の固定文字列がスパン化され動的バインドされていること。
+- [x] **D6**: `site/index.html` の週成長表記が動的バインドされていること。
+- [x] **D7**: `site/index.html` の各 KPI カード（確信度・CWE・ギャップ）が動的要素 ID 化されていること。
+- [x] **D8**: `site/app.js` の通知センターのアラート文が動的集計値から生成されていること。
+- [x] **D9**: `src/web/gateway/handlers.py` の `_resolve_hit_rate` が未計測時に `"100.0%"` でなく `"N/A"` を返すこと。
+- [x] `tests/web/test_zero_mock_integrity.py` の全テストが PASS すること。
+- [x] `make check_format` および `make static_analysis` (CC <= 5 / Xenon Grade A) が 100% PASS すること。
+- [x] `http://localhost:8000/index.html` の Graph タブに実グラフデータが描画されること（knowledge_graph.vdb が非空の場合）。
