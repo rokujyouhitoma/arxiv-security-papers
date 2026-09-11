@@ -427,7 +427,7 @@ make run_dashboard
 {
   "mcpServers": {
     "arxiv-security-papers": {
-      "command": "/workspace/arxiv-security-papers/.venv/bin/python3",
+      "command": "python3",
       "args": [
         "src/mcp/papers_server.py"
       ],
@@ -436,7 +436,7 @@ make run_dashboard
       }
     },
     "arxiv-security-observability": {
-      "command": "/workspace/arxiv-security-papers/.venv/bin/python3",
+      "command": "python3",
       "args": [
         "src/mcp/observability_server.py"
       ],
@@ -445,7 +445,7 @@ make run_dashboard
       }
     },
     "arxiv-security-threat-defense": {
-      "command": "/workspace/arxiv-security-papers/.venv/bin/python3",
+      "command": "python3",
       "args": [
         "src/mcp/threat_defense_server.py"
       ],
@@ -454,7 +454,7 @@ make run_dashboard
       }
     },
     "arxiv-security-tech-radar": {
-      "command": "/workspace/arxiv-security-papers/.venv/bin/python3",
+      "command": "python3",
       "args": [
         "src/mcp/tech_radar_server.py"
       ],
@@ -465,6 +465,9 @@ make run_dashboard
   }
 }
 ```
+
+> [!TIP]
+> 仮想環境 `.venv` の Python インタプリタを直接明示したい場合は、`"command": ".venv/bin/python3"` と相対パスで指定することも可能です。
 
 ### 11.2 提供される 4 大 MCP サーバーとツール一覧
 
@@ -569,6 +572,6 @@ make mcp_stats
 | `Index not found` | ベクトルインデックスが未構築 | `make build_vector_db` を実行してインデックスを作成してください。 |
 | `Graph database not found` | グラフ DB が未構築 | `make build_knowledge_graph` を実行してグラフ DB を作成してください。 |
 | `HTTP 429 Too Many Requests` | arXiv API のレートリミット到達 | 自動的に RSS フォールバックまたは指数バックオフリトライが作動します。間隔を空けて再実行してください。 |
-| `MCP connection refused` | Python パスまたは PYTHONPATH の誤り | `mcp_config.json` で仮想環境の絶対パス（`.../.venv/bin/python3`）と `PYTHONPATH: "src"` を指定してください。 |
+| `MCP connection refused` | Python パスまたは PYTHONPATH の誤り | `mcp_config.json` で `command` に `python3`（または `.venv/bin/python3`）と `PYTHONPATH: "src"` が正しく指定されているか確認してください。 |
 | `PDF text extraction empty` | 特殊暗号化または破損した PDF | 内製 Pure-Python エンジンで抽出できない極稀な特殊フォーマットの場合のみ、システムに `pdftotext`（`poppler-utils`）が存在すれば自動フォールバックします。 |
 | `Supervisor control socket not found` | スーパーバイザーが未起動またはクラッシュ | `make start_supervisor` で再起動するか、`outputs/supervisor.log` を確認してください。 |
