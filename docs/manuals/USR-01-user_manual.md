@@ -153,10 +153,10 @@ Django スタイルの統合管理 CLI `manage.py`（DSN-24 準拠）により�
 指定したテーブルのスキーマ定義（カラム名、型）とサンプル行（デフォルト3件）を表示します。
 
 ```bash
-# papers テーブルのスキーマとサンプルデータを表示
-./manage.py inspect papers
+# processed_papers (処理済み論文メタデータ) のスキーマとサンプルデータを表示
+./manage.py inspect processed_papers
 
-# 表示件数を指定して確認 (例: 5件)
+# cti_techniques (ATT&CK 攻撃手法カタログ) を件数指定で確認 (例: 5件)
 ./manage.py inspect -n 5 cti_techniques
 ```
 
@@ -167,11 +167,11 @@ Django スタイルの統合管理 CLI `manage.py`（DSN-24 準拠）により�
 # 対話型 SQL シェルの起動（.tables, .schema, .use, SQL 実行可能）
 ./manage.py dbshell
 
-# ワンライナーによる SQL 検索（最新論文 5 件を取得）
-./manage.py dbshell -c "SELECT arxiv_id, title FROM papers LIMIT 5;"
+# ワンライナーによる論文検索（最新論文 5 件の ID とタイトルを取得）
+./manage.py dbshell -c "SELECT clean_id, title FROM processed_papers LIMIT 5;"
 
-# CTI カタログスコープでテクニックを検索
-./manage.py dbshell -d cti_catalog_db -c "SELECT technique_id, name FROM techniques LIMIT 5;"
+# CTI カタログスコープで MITRE ATT&CK 攻撃手法を検索
+./manage.py dbshell -d cti_catalog_db -c "SELECT technique_id, name FROM cti_techniques LIMIT 5;"
 ```
 
 #### ④ 物理ファイルとカタログの同期・整合性修復 (`dbsync`)

@@ -97,13 +97,16 @@ make setup
 # 1. マウントされている全データベースおよび仮想テーブルの整合性と行数を確認
 ./manage.py tables
 
-# 2. 特定テーブル（例: papers）のスキーマ定義とサンプルレコードをインスペクション
-./manage.py inspect papers
+# 2. 実テーブル（例: processed_papers）のスキーマ定義とサンプルレコードをインスペクション
+./manage.py inspect processed_papers
 
 # 3. 対話型 SQL シェルによる直接クエリ検証（または -c によるワンライナー実行）
-./manage.py dbshell -c "SELECT arxiv_id, title FROM papers LIMIT 3;"
+./manage.py dbshell -c "SELECT clean_id, title FROM processed_papers LIMIT 3;"
 
-# 4. 物理ファイル（raw_data / okf_papers）と DB カタログの同期整合性スキャン
+# 4. CTI カタログスコープに対する直接 SQL クエリ検証
+./manage.py dbshell -d cti_catalog_db -c "SELECT technique_id, name FROM cti_techniques LIMIT 3;"
+
+# 5. 物理ファイル（raw_data / okf_papers）と DB カタログの同期整合性スキャン
 ./manage.py dbsync --dry-run
 ```
 
@@ -297,8 +300,8 @@ PYTHONPATH=src .venv/bin/python3 src/graph/cli.py show --stats
 # マウントされている全テーブルのストレージ型（B+Tree, PAX, Virtual 等）と行数を表示
 ./manage.py tables
 
-# テーブルの物理スキーマ・型定義・推論 DDL の確認
-./manage.py inspect <table_name>
+# テーブルの物理スキーマ・型定義・推論 DDL の確認 (例: processed_papers, cti_techniques)
+./manage.py inspect processed_papers
 
 # 対話型 dbshell で SQL クエリの実行結果や動作を直接デバッグ
 ./manage.py dbshell
