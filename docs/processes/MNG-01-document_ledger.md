@@ -18,6 +18,8 @@
 - **`REQ` (Requirements)**: システム要求事項定義書、機能要求・非機能要求等の要求文書。
 - **`DSN` (Design)**: アーキテクチャ基本設計書 (HLD)、コンポーネント詳細設計書 (LLD) 等の技術設計文書。
 - **`MCP` (Model Context Protocol)**: AI エージェント連携用 MCP サーバおよびベクトル DB 仕様文書。
+- **`USR` (User)**: エンドユーザー、セキュリティアナリスト、システム運用者、AIエージェント利用者向け運用・操作手引書。
+- **`DEV` (Developer)**: リポジトリ開発環境セットアップ、テストスイート、品質ゲート、内部モジュール開発等の開発者向け技術手引書。
 - **`ISS` (Issues)**: 開発タスク・障害追跡用の Issue 台帳および個別 Issue アーカイブ。
 
 #### 文書管理策 (Document Controls)
@@ -60,7 +62,8 @@
 | **[DSN-21] エンタープライズデザインシステム & 統合コンソール設計** | [designs/DSN-21-enterprise_design_system_and_unified_console.md](../designs/DSN-21-enterprise_design_system_and_unified_console.md) | エンタープライズSaaS型 Glassmorphic UI、レスポンシブ3画面統合コンソール、およびカラー/タイポグラフィ設計仕様。 | **UI/UX HOW** | UI/UX, SA, 前線エンジニア | SA, UI/UX | コンソール画面・UIトークン改訂時 |
 | **[DSN-22] セキュリティおよび脅威知識オントロジー W3C 仕様書** | [designs/DSN-22-security_and_threat_ontology_w3c_specification.md](../designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | W3C RDF 1.1 Turtle / OWL 2 仕様準拠の純粋 Python オントロジービルダー、TBox/ABox シリアライザ、および因果推論マッピング設計。 | **Ontology Engine HOW** | SA, SEC, DB, 全エージェント | SA, SEC | オントロジーエンジン仕様改訂時 |
 | **[MCP-01] MCP & Vector DB 仕様書** | [mcp/MCP-01-mcp_server_specification.md](../mcp/MCP-01-mcp_server_specification.md) | MCP JSON-RPC サーバ 4大ツールおよびセマンティック Vector DB インデックス仕様。 | 特化仕様 (Specialized HOW) | AI Agent, IR, SC | SA, IR | MCP ツール拡張・アルゴリズム改訂時 |
-| **[USR-01] ユーザーマニュアル** | [manuals/USR-01-user_manual.md](../manuals/USR-01-user_manual.md) | クイックスタート、収集・ETL運用、閉ループ自律インテリジェンス、オントロジー(TBox)/グラフDB(ABox)操作、Web 3大ビュー、4大MCPサーバー連携、および包括的Makefileチートシート。 | **User & Agent Guide** | ユーザー, AI Agent, 開発 | PM, SA | パイプライン・MCP・CLI仕様変更時 |
+| **[USR-01] ユーザーマニュアル** | [manuals/USR-01-user_manual.md](../manuals/USR-01-user_manual.md) | クイックスタート（利用者編）、論文収集・ETL日常運用、閉ループ自律インテリジェンス（PIR/仮説管理）、オントロジー/グラフDB探索クエリ、Web 3大ビュー操作、4大MCPサーバー連携、および運用者向けMakefileチートシート。 | **User & Operations Guide** | エンドユーザー, アナリスト, 運用者, AI Agent | PM, SA | パイプライン・MCP・CLI利用仕様変更時 |
+| **[DEV-01] 開発者マニュアル** | [manuals/DEV-01-developer_manual.md](../manuals/DEV-01-developer_manual.md) | 内部アーキテクチャ・`src/`構成、環境構築 (`make setup`)、テストスイート (`make test` / シナリオ / カバレッジ)、厳格な品質ゲート (`make check` / `verify_quality` / mypy strict / xenon Grade A / Closure Compiler)、IR回帰検知ゲート、内部開発ガイド、および開発者向けMakefileチートシート。 | **Developer & Quality Guide** | リポジトリ開発者, コントリビューター, AI開発者 | PM, SQA, SWD | ビルド・テスト・品質ゲート・内部構造改訂時 |
 | **[ISS-00] Issue 台帳** | [issues/README.md](../issues/README.md) | プロジェクトの全 Issue (起票・進行中・完了) を一括追跡・管理する中央台帳。 | 作業管理 (Issues) | PM, 開発チーム | PM | Issue 新規作成・ステータス変更時 |
 
 

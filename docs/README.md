@@ -74,7 +74,9 @@
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
 - 📖 **[[USR-01] ユーザーマニュアル ＆ AI コーディングエージェント連携ガイド](manuals/USR-01-user_manual.md)**
-  - クイックスタート手順、論文収集コマンド（ETL / バックフィル / 定期自動実行）、4 大 MCP サーバー連携・ツール利用法、Web ポータル起動、トラブルシューティング。
+  - クイックスタート（利用者編）、論文収集・ETL日常運用、Web ポータル＆ダッシュボード操作、4 大 MCP サーバー連携・ツール利用法、トラブルシューティング。
+- 🛠️ **[[DEV-01] 開発者マニュアル ＆ 品質検証ガイド](manuals/DEV-01-developer_manual.md)**
+  - 開発者向けアーキテクチャ・`src/`構成、環境構築 (`make setup`)、テストスイート (`make test`)、品質ゲート (`make check` / `make verify_quality`)、IR回帰検知ゲート、内部開発ガイド。
 - 🔌 **[[MCP-01] MCP サーバ ＆ ベクトル DB 仕様書](mcp/MCP-01-mcp_server_specification.md)**
   - MCP JSON-RPC 2.0 サーバの 4 大ツール仕様、ベクトル DB スキーマ、およびセキュリティサンドボックス検証規則。
 

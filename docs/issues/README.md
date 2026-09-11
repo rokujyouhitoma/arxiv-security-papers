@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **252** | ユーザーマニュアル (USR-01) のエンドユーザー向けと開発者向け (DEV-01) への分離・再編 | Documentation | 2026-09-12 | [252-separate-user-and-developer-manuals.md](closed/252-separate-user-and-developer-manuals.md) |
 | **249** | Adaptive Replacement Cache (ARC) の共通コア実装と検索プラットフォーム・キャッシュ自己適応化 | Feature | 2026-09-11 | [249-implement-adaptive-replacement-cache-for-search-platform.md](closed/249-implement-adaptive-replacement-cache-for-search-platform.md) |
 | **248** | Count-Min Sketch および t-digest の共通コア実装と可観測性・分析メトリクス要約の省メモリ化 | Feature | 2026-09-11 | [248-implement-count-min-sketch-and-t-digest-for-observability.md](closed/248-implement-count-min-sketch-and-t-digest-for-observability.md) |
 | **247** | Disjoint Set (Union-Find / 素集合データ構造) の共通コア実装と CTI 脅威グラフ連結成分・クラスタ検出の高速化 | Feature | 2026-09-11 | [247-implement-disjoint-set-union-find-for-graph-clustering.md](closed/247-implement-disjoint-set-union-find-for-graph-clustering.md) |

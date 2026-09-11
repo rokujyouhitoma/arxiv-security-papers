@@ -62,26 +62,27 @@ flowchart TB
 - **ディスク**: 1GB 以上の空きストレージ（PDF 原本および OKF マークダウン蓄積用）
 - **システムツール**: `git`, `make`（※ PDF テキスト抽出は内製 Pure-Python エンジン `src/pdf_engine/` で動作するため、`poppler-utils` / `pdftotext` のインストールは不要・完全ゼロ外部依存です）
 
-### 2.2 最速セットアップ手順
+### 2.2 最速スタート手順（利用者・運用者編）
 
-リポジトリルートで以下のコマンドを順に実行します。
+論文インテリジェンスの検索や Web ダッシュボード、MCP 連携を最速で利用開始する手順です。
 
 ```bash
-# 1. 仮想環境の構築と依存パッケージのインストール
-make setup
-
-# 2. 論文の収集・OKF 変換・サマリー生成を実行
+# 1. 論文パイプラインを実行して最新データを収集・サマリー生成
 make pipeline
 
-# 3. セマンティックベクトル検索インデックスのビルド
+# 2. セマンティックベクトル検索インデックスのビルド
 make build_vector_db
 
-# 4. セキュリティナレッジグラフ (Property Graph DB) の構築
+# 3. セキュリティナレッジグラフ (Property Graph DB) の構築
 make build_knowledge_graph
 
-# 5. 全品質ゲート (format, static_analysis, test, closure-compiler) の一括検証
-make verify_quality
+# 4. Web ポータル & グラフダッシュボードの起動 (http://localhost:8000)
+make run_web
 ```
+
+> [!NOTE]
+> **リポジトリ開発者・コントリビューターの方へ**:
+> 仮想環境の構築（`make setup`）、テストスイート実行（`make test`）、静的解析・型検査（`make check` / `make verify_quality`）等の開発者向け手順は、[[DEV-01] 開発者マニュアル](DEV-01-developer_manual.md) を参照してください。
 
 ---
 
@@ -124,15 +125,64 @@ make sync_cti
 make reannotate_cti
 ```
 
-### 3.4 PDF 抽出エンジン（Pure-Python ゼロ依存）の直接実行 ＆ ベンチマーク
+### 3.4 PDF 抽出エンジンの直接実行
 システム依存ライブラリ（`pdftotext` 等）を使用しない内製 Pure-Python PDF 解析エンジンです。
 
 ```bash
 # 単一 PDF ファイルのテキスト抽出テスト
 PYTHONPATH=src .venv/bin/python3 -m pdf_engine outputs/raw_data/2026-09-06/2504.03936.pdf
+```
+※ PDF 解析エンジンのベンチマーク計測や詳細な内部仕様は、[[DEV-01] 開発者マニュアル](DEV-01-developer_manual.md) を参照してください。
 
-# PDF テキスト抽出エンジンのパフォーマンステスト・ベンチマーク実行
-PYTHONPATH=src .venv/bin/python3 -m pdf_engine.benchmark
+### 3.5 データベース・カタログ統合管理 CLI (`manage.py`)
+
+Django スタイルの統合管理 CLI `manage.py`（DSN-24 準拠）により、論文データベース、CTI カタログ、グラフ DB、アナリティクス DB の状態確認、SQL クエリ実行、およびファイル同期を直感的に操作できます。
+
+#### ① マウントテーブル一覧・行数確認 (`tables`)
+マウントされている全データベース（`arxiv_security_db`, `cti_catalog_db`, `graph_db`, `analytics_db`）および仮想テーブルのストレージ種別と行数を一覧表示します。
+
+```bash
+# 全データベースのテーブル一覧を表示
+./manage.py tables
+
+# 特定のデータベーススコープ（例: CTI カタログ）のみを表示
+./manage.py tables -d cti_catalog_db
+```
+
+#### ② テーブル定義・サンプル行確認 (`inspect`)
+指定したテーブルのスキーマ定義（カラム名、型）とサンプル行（デフォルト3件）を表示します。
+
+```bash
+# processed_papers (処理済み論文メタデータ) のスキーマとサンプルデータを表示
+./manage.py inspect processed_papers
+
+# cti_techniques (ATT&CK 攻撃手法カタログ) を件数指定で確認 (例: 5件)
+./manage.py inspect -n 5 cti_techniques
+```
+
+#### ③ 対話型 SQL シェル ＆ ワンライナー検索 (`dbshell`)
+マルチエンジン DB に対して直接 SQL クエリを実行できます。対話型シェルまたは非対話型ワンライナー（`-c`）に対応しています。
+
+```bash
+# 対話型 SQL シェルの起動（.tables, .schema, .use, SQL 実行可能）
+./manage.py dbshell
+
+# ワンライナーによる論文検索（最新論文 5 件の ID とタイトルを取得）
+./manage.py dbshell -c "SELECT clean_id, title FROM processed_papers LIMIT 5;"
+
+# CTI カタログスコープで MITRE ATT&CK 攻撃手法を検索
+./manage.py dbshell -d cti_catalog_db -c "SELECT technique_id, name FROM cti_techniques LIMIT 5;"
+```
+
+#### ④ 物理ファイルとカタログの同期・整合性修復 (`dbsync`)
+ローカルディスク上の論文原本（`outputs/raw_data/`）や OKF ドキュメント（`outputs/okf_papers/`）とデータベースカタログの整合性をスキャンし、未登録エントリを自動補完・同期します。
+
+```bash
+# 同期対象の事前確認（非破壊 dry-run）
+./manage.py dbsync --dry-run
+
+# 物理ファイルとデータベースカタログの同期実行
+./manage.py dbsync
 ```
 
 ---
@@ -318,20 +368,9 @@ make build_vector_db
 make rag_query Q="LLM Prompt Injection and Jailbreak"
 ```
 
-### 7.3 検索エンジン品質ベンチマーク評価
-```bash
-# 検索精度指標 (Precision@K, Recall@K, MAP, MRR, NDCG) の自動計測
-make eval_search
-```
-
-### 7.4 IR メトリクス評価 ＆ CI 回帰検知ゲート
-```bash
-# ベースライン IR メトリクス (NDCG@10, MRR, MAP) の更新
-make ir_eval
-
-# 検索精度回帰防止ゲート (3% 以上の低下を検知して遮断)
-make check_ir_regression
-```
+> [!TIP]
+> **検索精度の品質評価 ＆ CI 回帰防止ゲートについて**:
+> IR ランキング指標（MAP, MRR, NDCG@K）の自動ベンチマーク（`make eval_search`）や CI 精度回帰防止ゲート（`make check_ir_regression`）の実行手順は、[[DEV-01] 開発者マニュアル](DEV-01-developer_manual.md) を参照してください。
 
 ---
 
@@ -439,7 +478,7 @@ make run_dashboard
 {
   "mcpServers": {
     "arxiv-security-papers": {
-      "command": "/workspace/arxiv-security-papers/.venv/bin/python3",
+      "command": "python3",
       "args": [
         "src/mcp/papers_server.py"
       ],
@@ -448,7 +487,7 @@ make run_dashboard
       }
     },
     "arxiv-security-observability": {
-      "command": "/workspace/arxiv-security-papers/.venv/bin/python3",
+      "command": "python3",
       "args": [
         "src/mcp/observability_server.py"
       ],
@@ -457,7 +496,7 @@ make run_dashboard
       }
     },
     "arxiv-security-threat-defense": {
-      "command": "/workspace/arxiv-security-papers/.venv/bin/python3",
+      "command": "python3",
       "args": [
         "src/mcp/threat_defense_server.py"
       ],
@@ -466,7 +505,7 @@ make run_dashboard
       }
     },
     "arxiv-security-tech-radar": {
-      "command": "/workspace/arxiv-security-papers/.venv/bin/python3",
+      "command": "python3",
       "args": [
         "src/mcp/tech_radar_server.py"
       ],
@@ -477,6 +516,9 @@ make run_dashboard
   }
 }
 ```
+
+> [!TIP]
+> 仮想環境 `.venv` の Python インタプリタを直接明示したい場合は、`"command": ".venv/bin/python3"` と相対パスで指定することも可能です。
 
 ### 11.2 提供される 4 大 MCP サーバーとツール一覧
 
@@ -520,35 +562,21 @@ make run_dashboard
 | `get_technology_radar` | Adopt / Trial / Assess / Hold の技術レーダーを出力 | `ring`, `category` |
 | `predict_emerging_threats` | 論文研究速度に基づく新興サイバー脅威・攻撃ベクトル予測 | `min_severity` (`"HIGH"`, `"CRITICAL"`) |
 
-### 11.3 MCP 稼働統計 ＆ 動作検証
+### 11.3 MCP 稼働統計
 ```bash
 # MCP 利用メトリクス集計とレポート出力
 make mcp_stats
-
-# 全 4 大 MCP サーバーの仕様準拠性・プロトコルテスト実行
-PYTHONPATH=src .venv/bin/python3 tests/test_all_mcp_servers.py
 ```
+※ 全 4 大 MCP サーバーの仕様準拠性・プロトコルテストの実行手順は、[[DEV-01] 開発者マニュアル](DEV-01-developer_manual.md) を参照してください。
 
 ---
 
-## 12. 包括的 Makefile コマンド一覧リファレンス (Cheat Sheet)
+## 12. 利用者・運用者向け Makefile コマンド一覧 (Operations Cheat Sheet)
+
+日常の論文運用、サービス起動、検索クエリ実行で使用する主要コマンドの一覧です。
 
 | カテゴリ | コマンド (`make <target>`) | 説明・主な用途 |
 | :--- | :--- | :--- |
-| **セットアップ** | `make setup` | 仮想環境構築、依存パッケージインストール、Git フック登録 |
-| | `make clean` | 一時ファイル・ビルド成果物・キャッシュのクリーンアップ |
-| **品質・テスト** | `make check_format` | isort, black, flake8 によるコードスタイル差分検証（非破壊） |
-| | `make format` | isort, black, flake8 による自動コードフォーマット適用 |
-| | `make static_analysis` | radon (CC/MI/Halstead), xenon (Grade A), mypy (strict), py_compile |
-| | `make py_compile` | 全 Python ソースコードの構文コンパイル検査 |
-| | `make build_js` | Google Closure Compiler による site/js バンドル最適化ビルド |
-| | `make test` | pytest 高速テスト実行（@pytest.mark.slow を除く） |
-| | `make test_scenarios` | データベース整合性・高負荷 DSN-14 シナリオテスト実行 |
-| | `make test_slow` | 時間のかかる包括的ストレステストのみを実行 |
-| | `make test_all` | カバレッジ 80% 以上を要求する全テスト一括実行 |
-| | `make check` | `check_format`, `static_analysis`, `test` の一括ゲート |
-| | `make verify_quality` | Python & JS を網羅する厳格な最終品質検証ゲート |
-| | `make build` | フォーマット・品質ゲート実行および JS/Python ビルド |
 | **収集・ETL** | `make pipeline` | 最新 arXiv 論文収集・PDF抽出・OKF変換・5層サマリー更新 |
 | | `make run` | パイプライン実行（またはカスタム `$SRC` 実行） |
 | | `make backfill_160d` | 過去 160 日間の論文一括バックフィルバッチ実行 |
@@ -557,11 +585,12 @@ PYTHONPATH=src .venv/bin/python3 tests/test_all_mcp_servers.py
 | | `make reannotate_cti` | 全 OKF 論文へ CTI 定義を再アノテーション |
 | **オントロジー / グラフ** | `make build_knowledge_graph` | 全 OKF 論文から実体・トリプルを抽出し Property Graph DB 構築 |
 | | `make graph_stats` | Property Graph DB のトポロジ統計・頂点/エッジ分布表示 |
+| **データベース管理 (`manage.py`)** | `./manage.py tables` | マウントテーブル一覧・行数・ストレージ種別表示 |
+| | `./manage.py inspect <table>` | 指定テーブルのスキーマ定義・サンプル行表示 |
+| | `./manage.py dbshell` | 対話型 SQL シェル起動 / `-c` ワンライナー実行 |
+| | `./manage.py dbsync` | 物理ファイルと DB カタログの自動同期・修復 |
 | **検索 / RAG** | `make build_vector_db` | セマンティックベクトル検索インデックスのビルド |
 | | `make rag_query Q="..."` | セマンティック RAG 検索クエリ実行 |
-| | `make eval_search` | 検索エンジン品質評価 (Precision, Recall, MAP, MRR, NDCG) |
-| | `make ir_eval` | IR ランキング精度ベースライン (NDCG@10 等) の更新 |
-| | `make check_ir_regression` | 検索精度回帰防止 CI ゲート検証（劣化 3% 以内） |
 | **アナリティクス** | `make aggregate_analytics` | 戦略 KPI および脅威アナリティクスのバッチ事前集計 |
 | **閉ループ自律インテリジェンス** | `make orchestrate` | 6 フェーズ自律インテリジェンスサイクルの実行 |
 | | `make orchestrate_daemon` | 閉ループインテリジェンスの継続常駐デーモン実行 |
@@ -579,25 +608,15 @@ PYTHONPATH=src .venv/bin/python3 tests/test_all_mcp_servers.py
 | | `make run_tech_radar_mcp` | 技術レーダー MCP サーバー (`arxiv-security-tech-radar`) 起動 |
 | | `make mcp_stats` | MCP 利用メトリクス集計およびレポート出力 |
 
+> [!NOTE]
+> **開発者向けコマンドについて**:
+> 仮想環境構築（`make setup`）、テスト（`make test`）、コード整形（`make format`）、静的解析・型検査（`make check` / `make verify_quality`）、IR検索評価等の開発者向けコマンドは、[[DEV-01] 開発者マニュアル](DEV-01-developer_manual.md) を参照してください。
+
 ---
 
-## 13. 品質ゲートとテスト検証 (Quality Verification)
+## 13. 開発者向けガイド ＆ 品質検証 (Developer & Quality Verification)
 
-本リポジトリは全コードが厳格な品質ゲートを満たすよう設計・自動化されています。
-
-```bash
-# 1. コード整形・リント・型検査 (mypy strict 0エラー, xenon Grade A)
-make check
-
-# 2. 全 MCP サーバーの仕様準拠性・返却文字数上限テスト
-PYTHONPATH=src .venv/bin/python3 tests/test_all_mcp_servers.py
-
-# 3. オントロジー & グラフDB 統合テスト
-PYTHONPATH=src .venv/bin/python3 -m pytest tests/ontology/ tests/graph/
-
-# 4. ユニットテスト全件実行 (pytest カバレッジ 80% 以上)
-make test
-```
+リポジトリ開発環境の構築（`make setup`）、pytest による単体・シナリオテスト実行（`make test`）、mypy strict / xenon Grade A / Closure Compiler 最適化を含む厳格な品質ゲート、情報検索評価（IR Eval）、および各内部サブシステムの詳細な開発手順については、専用の [[DEV-01] 開発者マニュアル](DEV-01-developer_manual.md) に集約されています。開発・コントリビューション時は同マニュアルを参照してください。
 
 ---
 
@@ -608,6 +627,6 @@ make test
 | `Index not found` | ベクトルインデックスが未構築 | `make build_vector_db` を実行してインデックスを作成してください。 |
 | `Graph database not found` | グラフ DB が未構築 | `make build_knowledge_graph` を実行してグラフ DB を作成してください。 |
 | `HTTP 429 Too Many Requests` | arXiv API のレートリミット到達 | 自動的に RSS フォールバックまたは指数バックオフリトライが作動します。間隔を空けて再実行してください。 |
-| `MCP connection refused` | Python パスまたは PYTHONPATH の誤り | `mcp_config.json` で仮想環境の絶対パス（`.../.venv/bin/python3`）と `PYTHONPATH: "src"` を指定してください。 |
+| `MCP connection refused` | Python パスまたは PYTHONPATH の誤り | `mcp_config.json` で `command` に `python3`（または `.venv/bin/python3`）と `PYTHONPATH: "src"` が正しく指定されているか確認してください。 |
 | `PDF text extraction empty` | 特殊暗号化または破損した PDF | 内製 Pure-Python エンジンで抽出できない極稀な特殊フォーマットの場合のみ、システムに `pdftotext`（`poppler-utils`）が存在すれば自動フォールバックします。 |
 | `Supervisor control socket not found` | スーパーバイザーが未起動またはクラッシュ | `make start_supervisor` で再起動するか、`outputs/supervisor.log` を確認してください。 |
