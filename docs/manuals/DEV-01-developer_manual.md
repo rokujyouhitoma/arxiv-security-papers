@@ -89,13 +89,22 @@ make setup
 2. 開発・リント・テスト・型検査に必要なパッケージ群（`pytest`, `pytest-cov`, `black`, `isort`, `flake8`, `mypy`, `radon`, `xenon` 等）をインストール。
 3. コミット時品質検証のための Git フックを登録。
 
-### 2.3 データベース整合性の初期確認 (`manage.py`)
+### 2.3 データベース統合管理 CLI による整合性確認 (`manage.py`)
 
-セットアップ完了後、統合管理 CLI を用いて各データベースおよびテーブルの認識状態を確認します。
+本リポジトリでは、Django スタイルの統合管理 CLI `manage.py`（DSN-24 準拠）を提供しています。セットアップ後やデータベース・ストレージ層の改修時には、以下のサブコマンドで整合性を検証できます。
 
 ```bash
-# マウントされている全データベースおよび仮想テーブルの整合性を確認
+# 1. マウントされている全データベースおよび仮想テーブルの整合性と行数を確認
 ./manage.py tables
+
+# 2. 特定テーブル（例: papers）のスキーマ定義とサンプルレコードをインスペクション
+./manage.py inspect papers
+
+# 3. 対話型 SQL シェルによる直接クエリ検証（または -c によるワンライナー実行）
+./manage.py dbshell -c "SELECT arxiv_id, title FROM papers LIMIT 3;"
+
+# 4. 物理ファイル（raw_data / okf_papers）と DB カタログの同期整合性スキャン
+./manage.py dbsync --dry-run
 ```
 
 ### 2.4 環境のクリーンアップ (`make clean`)
@@ -281,7 +290,29 @@ PYTHONPATH=src .venv/bin/python3 src/graph/cli.py build --backfill
 PYTHONPATH=src .venv/bin/python3 src/graph/cli.py show --stats
 ```
 
-### 6.4 MCP サーバーの新規ツール拡張 (`src/mcp/`)
+### 6.4 データベース・ストレージ層の検証・SQL デバッグ (`manage.py`)
+自作 DB エンジン（`src/database/`）や CTI カタログ、仮想テーブル（VFS）の開発・テスト時には、`manage.py` が開発者用の強力なインスペクション・デバッグツールとして機能します。
+
+```bash
+# マウントされている全テーブルのストレージ型（B+Tree, PAX, Virtual 等）と行数を表示
+./manage.py tables
+
+# テーブルの物理スキーマ・型定義・推論 DDL の確認
+./manage.py inspect <table_name>
+
+# 対話型 dbshell で SQL クエリの実行結果や動作を直接デバッグ
+./manage.py dbshell
+# dbshell 内で使用可能なメタコマンド:
+#   .tables           - マウントテーブル一覧の表示
+#   .schema [table]   - スキーマ DDL の表示
+#   .use <db_scope>   - アクティブ DB スコープの切り替え
+#   .quit / .exit     - シェルの終了
+
+# 物理ストレージとカタログインデックスの同期検証
+./manage.py dbsync
+```
+
+### 6.5 MCP サーバーの新規ツール拡張 (`src/mcp/`)
 MCP サーバー群（`src/mcp/`）に新しいツールを追加する際は、以下の原則を遵守してください：
 1. **JSON-RPC 2.0 スキーマ定義**: 入出力引数の型ヒントを明示し、詳細な説明（description）を付与する。
 2. **文字数上限ガード**: AI エージェントのコンテキスト溢れを防止するため、返却テキストの文字数を一定上限（例: 8,000文字）で安全に切り詰める。
@@ -292,12 +323,16 @@ MCP サーバー群（`src/mcp/`）に新しいツールを追加する際は、
 
 ## 7. 開発・ビルド・CI/CD コマンドリファレンス (Developer Cheat Sheet)
 
-開発者が日常的に使用する主要な Makefile コマンドの一覧です。
+開発者が日常的に使用する主要な Makefile ＆ CLI コマンドの一覧です。
 
-| カテゴリ | コマンド (`make <target>`) | 説明・主な用途 |
+| カテゴリ | コマンド (`make <target>` / CLI) | 説明・主な用途 |
 | :--- | :--- | :--- |
 | **セットアップ** | `make setup` | 仮想環境構築、依存パッケージインストール、Git フック登録 |
 | | `make clean` | 一時ファイル・ビルド成果物・テストキャッシュの完全削除 |
+| **DB 管理・検証** | `./manage.py tables` | マウントテーブル一覧・行数・ストレージ種別表示 |
+| | `./manage.py inspect <table>` | テーブルスキーマ定義・サンプル行表示 |
+| | `./manage.py dbshell` | 対話型 SQL シェル起動 / `-c` ワンライナー実行 |
+| | `./manage.py dbsync` | 物理ファイルと DB カタログの自動同期・修復 |
 | **フォーマット** | `make check_format` | isort, black, flake8 によるスタイル差分検証（非破壊） |
 | | `make format` | isort, black, flake8 による自動コードフォーマット適用 |
 | **静的解析** | `make static_analysis` | radon (CC/MI), xenon (Grade A), mypy (--strict), py_compile |

@@ -134,6 +134,57 @@ PYTHONPATH=src .venv/bin/python3 -m pdf_engine outputs/raw_data/2026-09-06/2504.
 ```
 ※ PDF 解析エンジンのベンチマーク計測や詳細な内部仕様は、[[DEV-01] 開発者マニュアル](DEV-01-developer_manual.md) を参照してください。
 
+### 3.5 データベース・カタログ統合管理 CLI (`manage.py`)
+
+Django スタイルの統合管理 CLI `manage.py`（DSN-24 準拠）により、論文データベース、CTI カタログ、グラフ DB、アナリティクス DB の状態確認、SQL クエリ実行、およびファイル同期を直感的に操作できます。
+
+#### ① マウントテーブル一覧・行数確認 (`tables`)
+マウントされている全データベース（`arxiv_security_db`, `cti_catalog_db`, `graph_db`, `analytics_db`）および仮想テーブルのストレージ種別と行数を一覧表示します。
+
+```bash
+# 全データベースのテーブル一覧を表示
+./manage.py tables
+
+# 特定のデータベーススコープ（例: CTI カタログ）のみを表示
+./manage.py tables -d cti_catalog_db
+```
+
+#### ② テーブル定義・サンプル行確認 (`inspect`)
+指定したテーブルのスキーマ定義（カラム名、型）とサンプル行（デフォルト3件）を表示します。
+
+```bash
+# papers テーブルのスキーマとサンプルデータを表示
+./manage.py inspect papers
+
+# 表示件数を指定して確認 (例: 5件)
+./manage.py inspect -n 5 cti_techniques
+```
+
+#### ③ 対話型 SQL シェル ＆ ワンライナー検索 (`dbshell`)
+マルチエンジン DB に対して直接 SQL クエリを実行できます。対話型シェルまたは非対話型ワンライナー（`-c`）に対応しています。
+
+```bash
+# 対話型 SQL シェルの起動（.tables, .schema, .use, SQL 実行可能）
+./manage.py dbshell
+
+# ワンライナーによる SQL 検索（最新論文 5 件を取得）
+./manage.py dbshell -c "SELECT arxiv_id, title FROM papers LIMIT 5;"
+
+# CTI カタログスコープでテクニックを検索
+./manage.py dbshell -d cti_catalog_db -c "SELECT technique_id, name FROM techniques LIMIT 5;"
+```
+
+#### ④ 物理ファイルとカタログの同期・整合性修復 (`dbsync`)
+ローカルディスク上の論文原本（`outputs/raw_data/`）や OKF ドキュメント（`outputs/okf_papers/`）とデータベースカタログの整合性をスキャンし、未登録エントリを自動補完・同期します。
+
+```bash
+# 同期対象の事前確認（非破壊 dry-run）
+./manage.py dbsync --dry-run
+
+# 物理ファイルとデータベースカタログの同期実行
+./manage.py dbsync
+```
+
 ---
 
 ## 4. 自律型閉ループ・インテリジェンス統合システム (Universal Intelligence Orchestrator)
@@ -534,6 +585,10 @@ make mcp_stats
 | | `make reannotate_cti` | 全 OKF 論文へ CTI 定義を再アノテーション |
 | **オントロジー / グラフ** | `make build_knowledge_graph` | 全 OKF 論文から実体・トリプルを抽出し Property Graph DB 構築 |
 | | `make graph_stats` | Property Graph DB のトポロジ統計・頂点/エッジ分布表示 |
+| **データベース管理 (`manage.py`)** | `./manage.py tables` | マウントテーブル一覧・行数・ストレージ種別表示 |
+| | `./manage.py inspect <table>` | 指定テーブルのスキーマ定義・サンプル行表示 |
+| | `./manage.py dbshell` | 対話型 SQL シェル起動 / `-c` ワンライナー実行 |
+| | `./manage.py dbsync` | 物理ファイルと DB カタログの自動同期・修復 |
 | **検索 / RAG** | `make build_vector_db` | セマンティックベクトル検索インデックスのビルド |
 | | `make rag_query Q="..."` | セマンティック RAG 検索クエリ実行 |
 | **アナリティクス** | `make aggregate_analytics` | 戦略 KPI および脅威アナリティクスのバッチ事前集計 |
