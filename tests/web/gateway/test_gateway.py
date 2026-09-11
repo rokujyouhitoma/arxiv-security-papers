@@ -413,3 +413,56 @@ def test_gateway_stream_logs_and_events_endpoints(tmp_path: Any) -> None:
     assert "text/event-stream" in dict(headers_cap[0]).get("Content-Type", "")
     first_evt_chunk = next(iter(events_iter))
     assert "event: connected" in first_evt_chunk.decode("utf-8")
+
+
+def test_context_mesh_paper_cluster_classification() -> None:
+    """Verifies that Paper and PublicationVenue are classified as 'sources' cluster (Issue #253)."""
+    from web.gateway.handlers import (
+        _build_dynamic_paper_mesh,
+        _extract_real_nodes,
+        _map_vertex_to_cluster,
+    )
+
+    # 1. Test canonical mapping
+    assert _map_vertex_to_cluster("Paper") == "sources"
+    assert _map_vertex_to_cluster("PublicationVenue") == "sources"
+    assert _map_vertex_to_cluster("paper") == "sources"
+    assert _map_vertex_to_cluster("sources") == "sources"
+    assert _map_vertex_to_cluster("Claim") == "claims"
+    assert _map_vertex_to_cluster("claims") == "claims"
+    assert _map_vertex_to_cluster("Decision") == "decisions"
+    assert _map_vertex_to_cluster("decisions") == "decisions"
+    assert _map_vertex_to_cluster("Schema") == "schema"
+    assert _map_vertex_to_cluster("AttackTechnique") == "entities"
+    assert _map_vertex_to_cluster("Vulnerability") == "entities"
+
+    # 2. Test _extract_real_nodes mapping with mock vertices
+    class MockVertex:
+        def __init__(self, v_id: str, label: str, name: str):
+            self.id = v_id
+            self.label = label
+            self.properties = {"name": name, "description": f"Description of {name}"}
+
+    vertices = [
+        MockVertex("p1", "Paper", "Secure Multi-Party Computation"),
+        MockVertex("v1", "PublicationVenue", "IACR ePrint"),
+        MockVertex("a1", "AttackTechnique", "Side-Channel Attack"),
+    ]
+    nodes = _extract_real_nodes(vertices)
+    assert len(nodes) == 3
+    assert nodes[0]["cluster"] == "sources"
+    assert nodes[1]["cluster"] == "sources"
+    assert nodes[2]["cluster"] == "entities"
+
+    # 3. Test _build_dynamic_paper_mesh output cluster
+    dummy_papers = [
+        {
+            "clean_id": "2401.00001",
+            "title": "Quantum Resistance in Lattice Cryptography",
+            "description": "Explores lattice crypto.",
+            "tags": ["cryptography"],
+        }
+    ]
+    dyn_nodes, _ = _build_dynamic_paper_mesh(dummy_papers)
+    paper_node = next(n for n in dyn_nodes if n["id"] == "src_2401.00001")
+    assert paper_node["cluster"] == "sources"
