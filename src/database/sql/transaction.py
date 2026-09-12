@@ -5,6 +5,7 @@ Provides atomic transaction boundaries, staged buffer mutations,
 MVCC Snapshot Isolation, and SS2PL lock management.
 """
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..lock_manager import LockManager, LockMode
@@ -15,6 +16,13 @@ class TransactionError(Exception):
     """Raised when an illegal transaction state transition is attempted."""
 
     pass
+
+
+@dataclass
+class SavepointRecord:
+    name: str
+    mutation_count: int
+    snapshot_state: Optional[Dict[str, Any]] = None
 
 
 class TransactionManager:
@@ -33,6 +41,7 @@ class TransactionManager:
         self.isolation_level: str = "SNAPSHOT_ISOLATION"
         self._staged_mutations: List[Dict[str, Any]] = []
         self._snapshot_state: Optional[Dict[str, Any]] = None
+        self._savepoints: List[SavepointRecord] = []
         self.mvcc = mvcc_manager if mvcc_manager is not None else MVCCManager()
         self.lock_mgr = lock_manager if lock_manager is not None else LockManager()
         self._current_snapshot: Optional[TransactionSnapshot] = None
@@ -92,6 +101,7 @@ class TransactionManager:
 
         self.is_active = False
         self._staged_mutations.clear()
+        self._savepoints.clear()
         self._snapshot_state = None
         self._current_snapshot = None
         return mutations
@@ -109,6 +119,43 @@ class TransactionManager:
 
         self.is_active = False
         self._staged_mutations.clear()
+        self._savepoints.clear()
         self._snapshot_state = None
         self._current_snapshot = None
         return snapshot
+
+    def create_savepoint(
+        self, name: str, current_state_snapshot: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Creates a named savepoint boundary."""
+        if not self.is_active:
+            self.begin(current_state_snapshot)
+        sp = SavepointRecord(
+            name=name,
+            mutation_count=len(self._staged_mutations),
+            snapshot_state=current_state_snapshot,
+        )
+        self._savepoints.append(sp)
+
+    def _find_savepoint_idx(self, name: str) -> int:
+        for idx in range(len(self._savepoints) - 1, -1, -1):
+            if self._savepoints[idx].name.lower() == name.lower():
+                return idx
+        raise TransactionError(f"No such savepoint: {name}")
+
+    def rollback_to_savepoint(self, name: str) -> Optional[Dict[str, Any]]:
+        """Rolls back staged mutations and table state to the named savepoint."""
+        if not self.is_active:
+            raise TransactionError("No active transaction for savepoint rollback")
+        idx = self._find_savepoint_idx(name)
+        target = self._savepoints[idx]
+        self._savepoints = self._savepoints[: idx + 1]
+        self._staged_mutations = self._staged_mutations[: target.mutation_count]
+        return target.snapshot_state
+
+    def release_savepoint(self, name: str) -> None:
+        """Releases the named savepoint and all later savepoints."""
+        if not self.is_active:
+            raise TransactionError("No active transaction for savepoint release")
+        idx = self._find_savepoint_idx(name)
+        self._savepoints = self._savepoints[:idx]

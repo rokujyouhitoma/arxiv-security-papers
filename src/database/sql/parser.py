@@ -16,26 +16,31 @@ from .ast import (
     CommitStatement,
     CreateIndexStatement,
     CreateTableStatement,
+    CreateTriggerStatement,
     CreateViewStatement,
     CTEDefinition,
     DeleteStatement,
     DropIndexStatement,
     DropTableStatement,
+    DropTriggerStatement,
     DropViewStatement,
     ExplainStatement,
     GrantStatement,
     InsertStatement,
     JoinClause,
     JoinType,
+    PragmaStatement,
     ReindexStatement,
     RevokeStatement,
     RollbackStatement,
+    SavepointStatement,
     SelectStatement,
     ShowStatement,
     SQLCommandType,
     SQLStatement,
     TableRef,
     UpdateStatement,
+    VacuumStatement,
 )
 
 
@@ -599,6 +604,119 @@ def _extract_dml_order_and_limit(
     return cleaned[: order_m.start()].strip(), order_col, order_desc, limit_val
 
 
+def _parse_savepoint_stmt(sql: str) -> Optional[SavepointStatement]:
+    m_sp = re.match(r"^SAVEPOINT\s+([a-zA-Z0-9_]+)$", sql.strip(), re.IGNORECASE)
+    if m_sp:
+        return SavepointStatement(
+            command_type=SQLCommandType.SAVEPOINT,
+            raw_sql=sql,
+            name=m_sp.group(1),
+            action="SAVEPOINT",
+        )
+    m_rel = re.match(
+        r"^RELEASE(?:\s+SAVEPOINT)?\s+([a-zA-Z0-9_]+)$", sql.strip(), re.IGNORECASE
+    )
+    if m_rel:
+        return SavepointStatement(
+            command_type=SQLCommandType.RELEASE,
+            raw_sql=sql,
+            name=m_rel.group(1),
+            action="RELEASE",
+        )
+    m_rb = re.match(
+        r"^ROLLBACK(?:\s+TRANSACTION)?\s+TO(?:\s+SAVEPOINT)?\s+([a-zA-Z0-9_]+)$",
+        sql.strip(),
+        re.IGNORECASE,
+    )
+    if m_rb:
+        return SavepointStatement(
+            command_type=SQLCommandType.ROLLBACK_TO,
+            raw_sql=sql,
+            name=m_rb.group(1),
+            action="ROLLBACK_TO",
+        )
+    return None
+
+
+def _parse_pragma_stmt(sql: str) -> Optional[PragmaStatement]:
+    clean = sql.strip()
+    m = re.match(
+        r"^PRAGMA\s+([a-zA-Z0-9_]+)(?:\s*\(\s*([a-zA-Z0-9_]+)\s*\)|\s*=\s*([a-zA-Z0-9_'\"]+))?$",
+        clean,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    p_name = m.group(1).lower()
+    arg = m.group(2)
+    val = m.group(3).strip("'\"") if m.group(3) else None
+    return PragmaStatement(
+        command_type=SQLCommandType.PRAGMA,
+        raw_sql=sql,
+        pragma_name=p_name,
+        argument=arg,
+        value=val,
+    )
+
+
+def _parse_vacuum_stmt(sql: str) -> Optional[VacuumStatement]:
+    clean = sql.strip()
+    m = re.match(
+        r"^VACUUM(?:\s+INTO\s+['\"](.*?)['\"]|\s+([a-zA-Z0-9_]+))?$",
+        clean,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    into_file = m.group(1)
+    target_table = m.group(2)
+    return VacuumStatement(
+        command_type=SQLCommandType.VACUUM,
+        raw_sql=sql,
+        target_table=target_table,
+        into_file=into_file,
+    )
+
+
+def _parse_create_trigger_stmt(sql: str) -> CreateTriggerStatement:
+    pattern = (
+        r"^CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s+"
+        r"(BEFORE|AFTER|INSTEAD\s+OF)\s+(INSERT|UPDATE|DELETE)\s+ON\s+([a-zA-Z0-9_]+)"
+        r"(?:\s+FOR\s+EACH\s+ROW)?\s+BEGIN\s+(.*?)\s+END$"
+    )
+    m = re.match(pattern, sql.strip(), re.IGNORECASE | re.DOTALL)
+    if not m:
+        raise SQLParseError(f"Malformed CREATE TRIGGER syntax: {sql}")
+    timing = re.sub(r"\s+", " ", m.group(2)).upper()
+    body_raw = m.group(5).strip()
+    body_sqls = [s.strip() for s in body_raw.split(";") if s.strip()]
+    return CreateTriggerStatement(
+        command_type=SQLCommandType.CREATE_TRIGGER,
+        raw_sql=sql,
+        trigger_name=m.group(1),
+        timing=timing,
+        event=m.group(3).upper(),
+        table_name=m.group(4),
+        body_sqls=body_sqls,
+    )
+
+
+def _parse_drop_trigger_stmt(sql: str) -> DropTriggerStatement:
+    m = re.match(
+        r"^DROP\s+TRIGGER\s+(IF\s+EXISTS\s+)?([a-zA-Z0-9_]+)$",
+        sql.strip(),
+        re.IGNORECASE,
+    )
+    if not m:
+        raise SQLParseError(f"Malformed DROP TRIGGER syntax: {sql}")
+    return DropTriggerStatement(
+        command_type=SQLCommandType.DROP_TRIGGER,
+        raw_sql=sql,
+        trigger_name=m.group(2),
+        if_exists=bool(m.group(1)),
+    )
+
+
 class SQLParser:
     """
     Parses SQL string queries into structured SQLStatement AST nodes.
@@ -612,7 +730,7 @@ class SQLParser:
             return CommitStatement(command_type=SQLCommandType.COMMIT, raw_sql=sql)
         if re.match(r"^ROLLBACK$", upper_sql):
             return RollbackStatement(command_type=SQLCommandType.ROLLBACK, raw_sql=sql)
-        return None
+        return _parse_savepoint_stmt(sql)
 
     def _parse_ddl_table(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("CREATE TABLE"):
@@ -639,11 +757,19 @@ class SQLParser:
             return self._parse_drop_view(sql)
         return None
 
+    def _parse_ddl_trigger(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        if upper_sql.startswith("CREATE TRIGGER"):
+            return _parse_create_trigger_stmt(sql)
+        if upper_sql.startswith("DROP TRIGGER"):
+            return _parse_drop_trigger_stmt(sql)
+        return None
+
     def _parse_ddl(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         return (
             self._parse_ddl_table(upper_sql, sql)
             or self._parse_ddl_index(upper_sql, sql)
             or self._parse_ddl_view(upper_sql, sql)
+            or self._parse_ddl_trigger(upper_sql, sql)
         )
 
     def _parse_dml_dql_part(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
@@ -665,13 +791,28 @@ class SQLParser:
             return self._parse_delete(sql)
         return None
 
-    def _parse_dcl_explain(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
-        if upper_sql.startswith("EXPLAIN"):
-            return self._parse_explain(sql)
+    def _parse_admin_ops(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        if upper_sql.startswith("PRAGMA"):
+            return _parse_pragma_stmt(sql)
+        if upper_sql.startswith("VACUUM"):
+            return _parse_vacuum_stmt(sql)
+        return None
+
+    def _parse_dcl_stmt(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("GRANT"):
             return self._parse_grant(sql)
         if upper_sql.startswith("REVOKE"):
             return self._parse_revoke(sql)
+        return None
+
+    def _parse_dcl_explain(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        sub_res = self._parse_admin_ops(upper_sql, sql) or self._parse_dcl_stmt(
+            upper_sql, sql
+        )
+        if sub_res is not None:
+            return sub_res
+        if upper_sql.startswith("EXPLAIN"):
+            return self._parse_explain(sql)
         if upper_sql.startswith("SHOW"):
             return self._parse_show(sql)
         return None

@@ -896,3 +896,89 @@ def test_phase5_set_operations_subqueries_and_window_functions() -> None:
         assert eng_rows[2]["rn"] == 3
         assert eng_rows[2]["rk"] == 2  # Same score 90 as Bob
         assert eng_rows[2]["drk"] == 2
+
+
+def test_phase6_savepoint_pragma_vacuum_and_triggers() -> None:
+    """Verify Phase 6 Savepoint, Pragma, Vacuum, and Triggers."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "p6_test.vdb")
+        executor = SQLExecutor()
+
+        executor.execute(
+            f"CREATE TABLE accounts (id INT PRIMARY KEY, name VARCHAR, balance INT) "
+            f"USING binary_vdb LOCATION '{db_path}'"
+        )
+
+        # 1. SAVEPOINT & ROLLBACK TO
+        executor.execute("SAVEPOINT sp1")
+        executor.execute(
+            "INSERT INTO accounts (id, name, balance) VALUES (1, 'Alice', 100)"
+        )
+        res1 = executor.execute("SELECT id, name FROM accounts")
+        assert len(res1["rows"]) == 1
+
+        executor.execute("SAVEPOINT sp2")
+        executor.execute(
+            "INSERT INTO accounts (id, name, balance) VALUES (2, 'Bob', 200)"
+        )
+        res2 = executor.execute("SELECT id, name FROM accounts")
+        assert len(res2["rows"]) == 2
+
+        # Rollback to sp2 reverts Bob
+        executor.execute("ROLLBACK TO sp2")
+        res_after_rb = executor.execute("SELECT id, name FROM accounts")
+        assert len(res_after_rb["rows"]) == 1
+        assert res_after_rb["rows"][0]["name"] == "Alice"
+
+        executor.execute("RELEASE sp1")
+
+        # 2. PRAGMA table_info, index_list, database_list
+        res_info = executor.execute("PRAGMA table_info(accounts)")
+        assert res_info["status"] == "ok"
+        cols = {r["name"]: r for r in res_info["rows"]}
+        assert "id" in cols
+        assert cols["id"]["pk"] == 1
+        assert "name" in cols
+        assert "balance" in cols
+
+        executor.execute("CREATE INDEX idx_accounts_name ON accounts (name)")
+        res_idx = executor.execute("PRAGMA index_list(accounts)")
+        assert res_idx["status"] == "ok"
+        assert any(r["name"] == "idx_accounts_name" for r in res_idx["rows"])
+
+        res_db = executor.execute("PRAGMA database_list")
+        assert res_db["status"] == "ok"
+        assert res_db["rows"][0]["name"] == "main"
+
+        # 3. VACUUM
+        res_vac1 = executor.execute("VACUUM")
+        assert res_vac1["status"] == "ok"
+        res_vac2 = executor.execute("VACUUM accounts")
+        assert res_vac2["status"] == "ok"
+
+        # 4. Triggers (CREATE TRIGGER, AFTER INSERT hook, DROP TRIGGER)
+        executor.execute(
+            f"CREATE TABLE audit_log (id INT, action VARCHAR, target_id INT) "
+            f"USING binary_vdb LOCATION '{os.path.join(tmpdir, 'p6_audit.vdb')}'"
+        )
+        executor.execute(
+            "CREATE TRIGGER trg_after_insert AFTER INSERT ON accounts "
+            "BEGIN INSERT INTO audit_log (id, action, target_id) VALUES (NEW.id, 'INSERT', NEW.id); END;"
+        )
+
+        executor.execute(
+            "INSERT INTO accounts (id, name, balance) VALUES (3, 'Charlie', 300)"
+        )
+
+        # Verify trigger inserted audit log record
+        res_audit = executor.execute(
+            "SELECT id, action, target_id FROM audit_log WHERE target_id = 3"
+        )
+        assert res_audit["status"] == "ok"
+        assert len(res_audit["rows"]) == 1
+        assert res_audit["rows"][0]["action"] == "INSERT"
+        assert res_audit["rows"][0]["target_id"] == 3
+
+        # Drop trigger
+        res_drop_trg = executor.execute("DROP TRIGGER trg_after_insert")
+        assert res_drop_trg["status"] == "ok"

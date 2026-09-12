@@ -2,7 +2,7 @@
 ID: 261
 種別: Feature
 優先度: Low
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] SQLite 完全互換化 Phase 6: トランザクション拡張 & メタデータ・トリガー (SAVEPOINT, PRAGMA, VACUUM, TRIGGER) の実装 (ID: 261)
@@ -20,12 +20,12 @@ ID: 261
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/database/sql/ast.py](../src/database/sql/ast.py): `SavepointStatement`, `PragmaStatement`, `VacuumStatement`, `CreateTriggerStatement`, `DropTriggerStatement` 追加
-- [ ] [src/database/sql/parser.py](../src/database/sql/parser.py): 各構文パーサーの新設
-- [ ] [src/database/sql/transaction.py](../src/database/sql/transaction.py): スタック型セーブポイント管理の実装
-- [ ] [src/database/sql/executor.py](../src/database/sql/executor.py): PRAGMA ハンドラ、VACUUM 実行、トリガーフック発火パイプライン
-- [ ] [tests/database/sql/test_sql_engine.py](../tests/database/sql/test_sql_engine.py): SAVEPOINT, PRAGMA, VACUUM, TRIGGER 単体テスト
-- [ ] [docs/issues/README.md](README.md): Issue 台帳の登録・追跡
+- [x] [src/database/sql/ast.py](../../src/database/sql/ast.py): `SavepointStatement`, `PragmaStatement`, `VacuumStatement`, `CreateTriggerStatement`, `DropTriggerStatement` 追加
+- [x] [src/database/sql/parser.py](../../src/database/sql/parser.py): 各構文パーサーの新設
+- [x] [src/database/sql/transaction.py](../../src/database/sql/transaction.py): スタック型セーブポイント管理の実装
+- [x] [src/database/sql/executor.py](../../src/database/sql/executor.py): PRAGMA ハンドラ、VACUUM 実行、トリガーフック発火パイプライン
+- [x] [tests/database/sql/test_sql_engine.py](../../tests/database/sql/test_sql_engine.py): SAVEPOINT, PRAGMA, VACUUM, TRIGGER 単体テスト
+- [x] [docs/issues/README.md](../README.md): Issue 台帳の登録・追跡
 
 ---
 
@@ -48,9 +48,9 @@ Target Branch: `feat/261-implement-sqlite-parity-phase6-savepoint-pragma-vacuum-
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `SAVEPOINT sp1` 後に変更を行い、`ROLLBACK TO sp1` でその変更のみが安全に取り消されること。
-- [ ] `PRAGMA table_info(cti_cwes)` で標準的なカラム情報テーブルが返却されること。
-- [ ] `VACUUM` 実行によりテーブルの物理サイズがコンパクションされること。
-- [ ] `CREATE TRIGGER` で登録したトリガーが DML 実行時に自動発火すること。
-- [ ] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
-- [ ] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。
+- [x] `SAVEPOINT sp1` 後に変更を行い、`ROLLBACK TO sp1` でその変更のみが安全に取り消されること。
+- [x] `PRAGMA table_info(cti_cwes)` で標準的なカラム情報テーブルが返却されること。
+- [x] `VACUUM` 実行によりテーブルの物理サイズがコンパクションされること。
+- [x] `CREATE TRIGGER` で登録したトリガーが DML 実行時に自動発火すること。
+- [x] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
+- [x] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。

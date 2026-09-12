@@ -6,8 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **260** | SQLite 完全互換化 Phase 5: 高度な集合演算 & サブクエリ・ウィンドウ関数 (INTERSECT, EXCEPT, Subqueries, Window Functions) の実装 | Feature | Low | Closed | [closed/260-implement-sqlite-parity-phase5-set-subquery-window-functions.md](closed/260-implement-sqlite-parity-phase5-set-subquery-window-functions.md) |
-| **261** | SQLite 完全互換化 Phase 6: トランザクション拡張 & メタデータ・トリガー (SAVEPOINT, PRAGMA, VACUUM, TRIGGER) の実装 | Feature | Low | Open (New) | [261-implement-sqlite-parity-phase6-savepoint-pragma-vacuum-trigger.md](261-implement-sqlite-parity-phase6-savepoint-pragma-vacuum-trigger.md) |
 | **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | Medium | Open (New) | [250-implement-louvain-community-detection-for-cti-graph.md](250-implement-louvain-community-detection-for-cti-graph.md) |
 | **251** | Lehman-Yao 型 B-link Tree によるラッチフリー並行走査およびスプリット追随インデックスエンジンの実装 | Feature | Low | Open (New) | [251-implement-lehman-yao-b-link-tree-concurrent-index.md](251-implement-lehman-yao-b-link-tree-concurrent-index.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
@@ -19,6 +17,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **261** | SQLite 完全互換化 Phase 6: トランザクション拡張 & メタデータ・トリガー (SAVEPOINT, PRAGMA, VACUUM, TRIGGER) の実装 | Feature | 2026-09-12 | [261-implement-sqlite-parity-phase6-savepoint-pragma-vacuum-trigger.md](closed/261-implement-sqlite-parity-phase6-savepoint-pragma-vacuum-trigger.md) |
+| **260** | SQLite 完全互換化 Phase 5: 高度な集合演算 & サブクエリ・ウィンドウ関数 (INTERSECT, EXCEPT, Subqueries, Window Functions) の実装 | Feature | 2026-09-12 | [260-implement-sqlite-parity-phase5-set-subquery-window-functions.md](closed/260-implement-sqlite-parity-phase5-set-subquery-window-functions.md) |
 | **259** | SQLite 完全互換化 Phase 4: ビルトイン関数群 & CASE 式 (文字列・数学・制御・日付時刻・JSON・集約拡張) の実装 | Feature | 2026-09-12 | [259-implement-sqlite-parity-phase4-builtin-functions-and-case.md](closed/259-implement-sqlite-parity-phase4-builtin-functions-and-case.md) |
 | **258** | SQLite 完全互換化 Phase 3: DDL ライフサイクル & VIEW (ALTER TABLE, DROP INDEX, REINDEX, CREATE/DROP VIEW) の実装 | Feature | 2026-09-12 | [258-implement-sqlite-parity-phase3-ddl-lifecycle-and-view.md](closed/258-implement-sqlite-parity-phase3-ddl-lifecycle-and-view.md) |
 | **257** | SQLite 完全互換化 Phase 2: DML 拡張 & 競合制御 (複数行 INSERT, INSERT SELECT, UPSERT, RETURNING) の実装 | Feature | 2026-09-12 | [257-implement-sqlite-parity-phase2-dml-upsert-returning.md](closed/257-implement-sqlite-parity-phase2-dml-upsert-returning.md) |

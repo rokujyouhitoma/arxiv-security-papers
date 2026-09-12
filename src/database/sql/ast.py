@@ -19,6 +19,8 @@ class SQLCommandType(str, Enum):
     REINDEX = "REINDEX"
     CREATE_VIEW = "CREATE_VIEW"
     DROP_VIEW = "DROP_VIEW"
+    CREATE_TRIGGER = "CREATE_TRIGGER"
+    DROP_TRIGGER = "DROP_TRIGGER"
 
     # DQL
     SELECT = "SELECT"
@@ -37,9 +39,14 @@ class SQLCommandType(str, Enum):
     BEGIN = "BEGIN"
     COMMIT = "COMMIT"
     ROLLBACK = "ROLLBACK"
+    SAVEPOINT = "SAVEPOINT"
+    RELEASE = "RELEASE"
+    ROLLBACK_TO = "ROLLBACK_TO"
 
-    # Metadata & Inspection
+    # Metadata & Inspection & Administration
     SHOW = "SHOW"
+    PRAGMA = "PRAGMA"
+    VACUUM = "VACUUM"
 
     @property
     def category(self) -> str:
@@ -303,3 +310,42 @@ class ShowStatement(SQLStatement):
     target: str = "TABLES"  # DATABASES, TABLES, SCHEMAS, TABLE_STATUS
     from_database: Optional[str] = None
     like_pattern: Optional[str] = None
+
+
+# Savepoint (SAVEPOINT, RELEASE, ROLLBACK TO)
+@dataclass
+class SavepointStatement(SQLStatement):
+    name: str = ""
+    action: str = "SAVEPOINT"  # SAVEPOINT, RELEASE, ROLLBACK_TO
+
+
+# PRAGMA
+@dataclass
+class PragmaStatement(SQLStatement):
+    pragma_name: str = ""
+    argument: Optional[str] = None
+    value: Optional[str] = None
+
+
+# VACUUM
+@dataclass
+class VacuumStatement(SQLStatement):
+    target_table: Optional[str] = None
+    into_file: Optional[str] = None
+
+
+# Trigger (CREATE TRIGGER, DROP TRIGGER)
+@dataclass
+class CreateTriggerStatement(SQLStatement):
+    trigger_name: str = ""
+    timing: str = "AFTER"  # BEFORE, AFTER, INSTEAD OF
+    event: str = "INSERT"  # INSERT, UPDATE, DELETE
+    table_name: str = ""
+    for_each_row: bool = True
+    body_sqls: List[str] = field(default_factory=list)
+
+
+@dataclass
+class DropTriggerStatement(SQLStatement):
+    trigger_name: str = ""
+    if_exists: bool = False

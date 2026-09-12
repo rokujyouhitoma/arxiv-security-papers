@@ -21,24 +21,29 @@ from .ast import (
     AlterTableStatement,
     CreateIndexStatement,
     CreateTableStatement,
+    CreateTriggerStatement,
     CreateViewStatement,
     DeleteStatement,
     DropIndexStatement,
     DropTableStatement,
+    DropTriggerStatement,
     DropViewStatement,
     ExplainStatement,
     GrantStatement,
     InsertStatement,
     JoinClause,
     JoinType,
+    PragmaStatement,
     ReindexStatement,
     RevokeStatement,
+    SavepointStatement,
     SelectStatement,
     ShowStatement,
     SQLCommandType,
     SQLStatement,
     TableRef,
     UpdateStatement,
+    VacuumStatement,
 )
 from .functions import BUILTIN_FUNCTIONS
 from .parser import SQLParser, _split_comma_expressions
@@ -1318,6 +1323,7 @@ class SQLExecutor:
         self.known_databases: Dict[str, str] = dict(known_databases or {})
         self.tables: Dict[str, TableCatalog] = {}
         self.views: Dict[str, CreateViewStatement] = {}
+        self.triggers: Dict[str, CreateTriggerStatement] = {}
         self._init_default_tables(
             catalog,
             default_storage,
@@ -1403,23 +1409,233 @@ class SQLExecutor:
         self.tx_manager.begin(snapshot)
         return {"command": "BEGIN", "status": "ok", "message": "Transaction started"}
 
-    def _exec_tcl(self, cmd: SQLCommandType) -> Dict[str, Any]:
+    def _capture_tables_snapshot(self) -> Dict[str, Any]:
+        return {
+            tname: {
+                "meta": [dict(m) for m in tcat.storage.metadata],
+                "vecs": tcat.storage.get_all_vectors(),
+            }
+            for tname, tcat in self.tables.items()
+        }
+
+    def _exec_savepoint(self, stmt: SavepointStatement) -> Dict[str, Any]:
+        if stmt.action == "SAVEPOINT":
+            snapshot = self._capture_tables_snapshot()
+            self.tx_manager.create_savepoint(stmt.name, snapshot)
+            return {"command": "SAVEPOINT", "status": "ok", "name": stmt.name}
+        if stmt.action == "ROLLBACK_TO":
+            rb_snapshot = self.tx_manager.rollback_to_savepoint(stmt.name)
+            self._restore_rollback_snapshot(rb_snapshot)
+            return {"command": "ROLLBACK_TO", "status": "ok", "name": stmt.name}
+        if stmt.action == "RELEASE":
+            self.tx_manager.release_savepoint(stmt.name)
+            return {"command": "RELEASE", "status": "ok", "name": stmt.name}
+        raise SQLExecutionError(f"Unknown savepoint action: {stmt.action}")
+
+    def _exec_commit_tx(self) -> Dict[str, Any]:
+        mutations = self.tx_manager.commit()
+        if self.multi_storage is not None:
+            self.multi_storage.save()
+        return {
+            "command": "COMMIT",
+            "status": "ok",
+            "mutations_applied": len(mutations),
+        }
+
+    def _exec_rollback_tx(self) -> Dict[str, Any]:
+        snapshot_res = self.tx_manager.rollback()
+        self._restore_rollback_snapshot(snapshot_res)
+        return {"command": "ROLLBACK", "status": "ok", "mutations_reverted": 1}
+
+    def _exec_tcl(self, stmt: SQLStatement) -> Dict[str, Any]:
+        cmd = stmt.command_type
+        if isinstance(stmt, SavepointStatement):
+            return self._exec_savepoint(stmt)
         if cmd == SQLCommandType.BEGIN:
             return self._exec_begin_tx()
         if cmd == SQLCommandType.COMMIT:
-            mutations = self.tx_manager.commit()
-            if self.multi_storage is not None:
-                self.multi_storage.save()
-            return {
-                "command": "COMMIT",
-                "status": "ok",
-                "mutations_applied": len(mutations),
-            }
+            return self._exec_commit_tx()
         if cmd == SQLCommandType.ROLLBACK:
-            snapshot_res = self.tx_manager.rollback()
-            self._restore_rollback_snapshot(snapshot_res)
-            return {"command": "ROLLBACK", "status": "ok", "mutations_reverted": 1}
+            return self._exec_rollback_tx()
         raise SQLExecutionError(f"Unknown TCL command: {cmd}")
+
+    def _col_defs_to_pragma_rows(self, col_defs: List[Any]) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for cid, c in enumerate(col_defs):
+            rows.append(
+                {
+                    "cid": cid,
+                    "name": c.name,
+                    "type": c.data_type,
+                    "notnull": 1 if not c.is_nullable else 0,
+                    "dflt_value": None,
+                    "pk": 1 if c.is_primary_key else 0,
+                }
+            )
+        return rows
+
+    def _infer_meta_pragma_rows(self, tcat: TableCatalog) -> List[Dict[str, Any]]:
+        first_meta = tcat.storage.metadata[0] if tcat.storage.metadata else {}
+        rows: List[Dict[str, Any]] = []
+        for cid, k in enumerate(first_meta.keys()):
+            rows.append(
+                {
+                    "cid": cid,
+                    "name": k,
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": None,
+                    "pk": 1 if k == "id" else 0,
+                }
+            )
+        return rows
+
+    def _exec_pragma_table_info(self, table_name: Optional[str]) -> Dict[str, Any]:
+        if not table_name or table_name not in self.tables:
+            return {"command": "PRAGMA", "status": "ok", "rows": [], "count": 0}
+        tcat = self.tables[table_name]
+        col_defs = getattr(tcat, "columns", None) or []
+        rows = (
+            self._col_defs_to_pragma_rows(col_defs)
+            if col_defs
+            else self._infer_meta_pragma_rows(tcat)
+        )
+        return {"command": "PRAGMA", "status": "ok", "rows": rows, "count": len(rows)}
+
+    def _exec_pragma_index_list(self, table_name: Optional[str]) -> Dict[str, Any]:
+        if not table_name or table_name not in self.tables:
+            return {"command": "PRAGMA", "status": "ok", "rows": [], "count": 0}
+        tcat = self.tables[table_name]
+        rows: List[Dict[str, Any]] = []
+        for seq, idef in enumerate(getattr(tcat, "index_definitions", [])):
+            rows.append(
+                {
+                    "seq": seq,
+                    "name": idef.get("name", ""),
+                    "unique": 1 if idef.get("unique") else 0,
+                    "origin": "c",
+                    "partial": 0,
+                }
+            )
+        return {"command": "PRAGMA", "status": "ok", "rows": rows, "count": len(rows)}
+
+    def _exec_pragma_database_list(self) -> Dict[str, Any]:
+        main_path = (
+            getattr(self.default_storage, "file_path", ":memory:")
+            if self.default_storage
+            else ":memory:"
+        )
+        rows = [{"seq": 0, "name": "main", "file": main_path}]
+        return {"command": "PRAGMA", "status": "ok", "rows": rows, "count": len(rows)}
+
+    def _exec_pragma_flag(self, pname: str) -> Optional[Dict[str, Any]]:
+        if pname == "foreign_keys":
+            return {
+                "command": "PRAGMA",
+                "status": "ok",
+                "rows": [{"foreign_keys": 1}],
+                "count": 1,
+            }
+        if pname == "integrity_check":
+            return {
+                "command": "PRAGMA",
+                "status": "ok",
+                "rows": [{"integrity_check": "ok"}],
+                "count": 1,
+            }
+        return None
+
+    def _exec_pragma(self, stmt: PragmaStatement, role: str) -> Dict[str, Any]:
+        pname = stmt.pragma_name.lower()
+        if pname == "table_info":
+            return self._exec_pragma_table_info(stmt.argument)
+        if pname == "index_list":
+            return self._exec_pragma_index_list(stmt.argument)
+        if pname == "database_list":
+            return self._exec_pragma_database_list()
+        flag_res = self._exec_pragma_flag(pname)
+        if flag_res is not None:
+            return flag_res
+        return {"command": "PRAGMA", "status": "ok", "rows": [], "count": 0}
+
+    def _exec_vacuum_table(self, tcat: TableCatalog) -> None:
+        storage = tcat.storage
+        if hasattr(storage, "compact"):
+            storage.compact()
+        elif hasattr(storage, "save"):
+            storage.save()
+
+    def _exec_vacuum(self, stmt: VacuumStatement, role: str) -> Dict[str, Any]:
+        if stmt.target_table and stmt.target_table in self.tables:
+            self._exec_vacuum_table(self.tables[stmt.target_table])
+            tgt = stmt.target_table
+        else:
+            for tcat in self.tables.values():
+                self._exec_vacuum_table(tcat)
+            tgt = "all"
+        return {"command": "VACUUM", "status": "ok", "target": tgt}
+
+    def _exec_create_trigger(
+        self, stmt: CreateTriggerStatement, role: str
+    ) -> Dict[str, Any]:
+        self.triggers[stmt.trigger_name.lower()] = stmt
+        return {
+            "command": "CREATE_TRIGGER",
+            "status": "ok",
+            "trigger": stmt.trigger_name,
+        }
+
+    def _exec_drop_trigger(
+        self, stmt: DropTriggerStatement, role: str
+    ) -> Dict[str, Any]:
+        key = stmt.trigger_name.lower()
+        if key in self.triggers:
+            del self.triggers[key]
+            return {
+                "command": "DROP_TRIGGER",
+                "status": "ok",
+                "trigger": stmt.trigger_name,
+            }
+        if stmt.if_exists:
+            return {
+                "command": "DROP_TRIGGER",
+                "status": "ok",
+                "trigger": stmt.trigger_name,
+                "message": "Trigger did not exist",
+            }
+        raise SQLExecutionError(f"Trigger '{stmt.trigger_name}' does not exist")
+
+    def _substitute_trigger_vars(self, sql: str, record: Dict[str, Any]) -> str:
+        res = sql
+        for k, v in record.items():
+            val_str = f"'{v}'" if isinstance(v, str) else str(v)
+            res = re.sub(rf"\bNEW\.{re.escape(k)}\b", val_str, res, flags=re.IGNORECASE)
+            res = re.sub(rf"\bOLD\.{re.escape(k)}\b", val_str, res, flags=re.IGNORECASE)
+        return res
+
+    def _fire_single_trigger(
+        self, trig: CreateTriggerStatement, record: Optional[Dict[str, Any]], role: str
+    ) -> None:
+        rec = record or {}
+        for raw_sql in trig.body_sqls:
+            sub_sql = self._substitute_trigger_vars(raw_sql, rec)
+            self.execute(sub_sql, role=role)
+
+    def _fire_triggers(
+        self,
+        timing: str,
+        event: str,
+        table_name: str,
+        record: Optional[Dict[str, Any]] = None,
+        role: str = "admin",
+    ) -> None:
+        for trig in list(self.triggers.values()):
+            if (
+                trig.timing.upper() == timing.upper()
+                and trig.event.upper() == event.upper()
+                and trig.table_name.lower() == table_name.lower()
+            ):
+                self._fire_single_trigger(trig, record, role)
 
     def _exec_grant(self, stmt: GrantStatement, effective_role: str) -> Dict[str, Any]:
         self.access_controller.grant(stmt.permission, stmt.table_name, stmt.role)
@@ -2456,9 +2672,8 @@ class SQLExecutor:
             self.tx_manager.stage_mutation(
                 "INSERT", {"table": stmt.table_name, "data": row}
             )
-        else:
-            idx = table.storage.append(vector, row)
-            table.index.add_item(idx, vector)
+        idx = table.storage.append(vector, row)
+        table.index.add_item(idx, vector)
         return dict(row)
 
     def _exec_insert(
@@ -2472,9 +2687,13 @@ class SQLExecutor:
         row_dicts = self._build_insert_row_dicts(stmt, effective_role)
         modified_records: List[Dict[str, Any]] = []
         for r in row_dicts:
+            self._fire_triggers("BEFORE", "INSERT", stmt.table_name, r, effective_role)
             res_rec = self._insert_or_upsert_row(table, r, stmt)
             if res_rec is not None:
                 modified_records.append(res_rec)
+                self._fire_triggers(
+                    "AFTER", "INSERT", stmt.table_name, res_rec, effective_role
+                )
         ret_rows = _project_returning_rows(modified_records, stmt.returning_cols)
         first_id = str(modified_records[0].get("id", "")) if modified_records else ""
         res: Dict[str, Any] = {
@@ -2533,8 +2752,16 @@ class SQLExecutor:
         updated_records: List[Dict[str, Any]] = []
         for i in indices:
             meta = table.storage.metadata[i]
+            old_rec = dict(meta)
+            self._fire_triggers(
+                "BEFORE", "UPDATE", stmt.table_name, old_rec, effective_role
+            )
             meta.update(stmt.assignments)
-            updated_records.append(dict(meta))
+            new_rec = dict(meta)
+            updated_records.append(new_rec)
+            self._fire_triggers(
+                "AFTER", "UPDATE", stmt.table_name, new_rec, effective_role
+            )
 
         if updated_records and not self.tx_manager.is_active:
             table.storage.write_all(
@@ -2584,6 +2811,29 @@ class SQLExecutor:
         )
         return set(limited)
 
+    def _fire_record_list_triggers(
+        self,
+        records: List[Dict[str, Any]],
+        timing: str,
+        event: str,
+        table_name: str,
+        role: str,
+    ) -> None:
+        for r in records:
+            self._fire_triggers(timing, event, table_name, r, role)
+
+    def _persist_deleted_state(
+        self,
+        table: TableCatalog,
+        new_vecs: List[Any],
+        new_meta: List[Dict[str, Any]],
+        has_deleted: bool,
+    ) -> None:
+        if has_deleted and not self.tx_manager.is_active:
+            table.storage.write_all(new_vecs, new_meta)
+            table.index = HNSWIndex(dim=table.storage.dim)
+            table.index.build_from_storage(new_vecs)
+
     def _exec_delete(
         self, stmt: DeleteStatement, effective_role: str
     ) -> Dict[str, Any]:
@@ -2596,10 +2846,13 @@ class SQLExecutor:
             table.storage, del_indices
         )
 
-        if deleted and not self.tx_manager.is_active:
-            table.storage.write_all(new_vecs, new_meta)
-            table.index = HNSWIndex(dim=table.storage.dim)
-            table.index.build_from_storage(new_vecs)
+        self._fire_record_list_triggers(
+            deleted, "BEFORE", "DELETE", stmt.table_name, effective_role
+        )
+        self._persist_deleted_state(table, new_vecs, new_meta, bool(deleted))
+        self._fire_record_list_triggers(
+            deleted, "AFTER", "DELETE", stmt.table_name, effective_role
+        )
 
         ret_rows = _project_returning_rows(deleted, stmt.returning_cols)
         res: Dict[str, Any] = {
@@ -2643,6 +2896,15 @@ class SQLExecutor:
             return self._exec_drop_view(stmt, role)
         return None
 
+    def _exec_schema_trigger_stmt(
+        self, stmt: SQLStatement, role: str
+    ) -> Optional[Dict[str, Any]]:
+        if isinstance(stmt, CreateTriggerStatement):
+            return self._exec_create_trigger(stmt, role)
+        if isinstance(stmt, DropTriggerStatement):
+            return self._exec_drop_trigger(stmt, role)
+        return None
+
     def _exec_schema_stmt(
         self, stmt: SQLStatement, role: str
     ) -> Optional[Dict[str, Any]]:
@@ -2650,17 +2912,33 @@ class SQLExecutor:
             self._exec_schema_table_stmt(stmt, role)
             or self._exec_schema_index_stmt(stmt, role)
             or self._exec_schema_view_stmt(stmt, role)
+            or self._exec_schema_trigger_stmt(stmt, role)
         )
 
-    def _exec_security_or_schema(
+    def _exec_admin_stmt(
         self, stmt: SQLStatement, role: str
     ) -> Optional[Dict[str, Any]]:
-        if isinstance(stmt, ExplainStatement):
-            return self._exec_explain(stmt, role)
+        if isinstance(stmt, PragmaStatement):
+            return self._exec_pragma(stmt, role)
+        if isinstance(stmt, VacuumStatement):
+            return self._exec_vacuum(stmt, role)
+        return None
+
+    def _exec_dcl_stmt(self, stmt: SQLStatement, role: str) -> Optional[Dict[str, Any]]:
         if isinstance(stmt, GrantStatement):
             return self._exec_grant(stmt, role)
         if isinstance(stmt, RevokeStatement):
             return self._exec_revoke(stmt, role)
+        return None
+
+    def _exec_security_or_schema(
+        self, stmt: SQLStatement, role: str
+    ) -> Optional[Dict[str, Any]]:
+        sub_res = self._exec_admin_stmt(stmt, role) or self._exec_dcl_stmt(stmt, role)
+        if sub_res is not None:
+            return sub_res
+        if isinstance(stmt, ExplainStatement):
+            return self._exec_explain(stmt, role)
         if isinstance(stmt, ShowStatement):
             return self._exec_show(stmt, role)
         return self._exec_schema_stmt(stmt, role)
@@ -2773,8 +3051,11 @@ class SQLExecutor:
             SQLCommandType.BEGIN,
             SQLCommandType.COMMIT,
             SQLCommandType.ROLLBACK,
+            SQLCommandType.SAVEPOINT,
+            SQLCommandType.RELEASE,
+            SQLCommandType.ROLLBACK_TO,
         ):
-            return self._exec_tcl(cmd)
+            return self._exec_tcl(stmt)
 
         res = self._exec_security_or_schema(stmt, effective_role)
         if res is not None:
