@@ -451,3 +451,34 @@ def test_dashboard_layout_spacing_and_collision_avoidance(
 
     # 4. Expanded schema view initial circle layout radius
     assert "Math.min(width, height) * 0.42" in dashboard_html_content
+
+
+def test_dashboard_context_mesh_paper_cluster_resolution(
+    dashboard_html_content: str,
+) -> None:
+    """Verifies that dashboard.html resolves Paper, sources, and publication venues to SOURCE cluster (Issue #253)."""
+    # 1. Cluster resolution helpers exist
+    assert "function resolveClusterKey(rawCluster)" in dashboard_html_content
+    assert "function resolveClusterConfig(rawCluster)" in dashboard_html_content
+
+    # 2. Key aliases map to source
+    assert (
+        "k === 'source' || k === 'sources' || k === 'paper' || k === 'papers' || k === 'publicationvenue'"
+        in dashboard_html_content
+    )
+    assert "return 'source';" in dashboard_html_content
+
+    # 3. Used in applyContextMesh
+    assert "const clusterKey = resolveClusterKey(n.cluster);" in dashboard_html_content
+
+    # 4. Used in node rendering and inspector
+    assert (
+        "const clusterCfg = resolveClusterConfig(n.cluster);" in dashboard_html_content
+    )
+    assert (
+        "const clusterCfg = resolveClusterConfig(node.cluster);"
+        in dashboard_html_content
+    )
+    assert (
+        "resolveClusterKey(n.cluster) === 'source' ? 14 : 11" in dashboard_html_content
+    )

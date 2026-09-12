@@ -368,12 +368,42 @@ def _build_fallback_mesh_from_workspace(
     return [], []
 
 
+_CLUSTER_LABEL_MAPPING: Dict[str, str] = {
+    "paper": "sources",
+    "publicationvenue": "sources",
+    "source": "sources",
+    "sources": "sources",
+    "claim": "claims",
+    "claims": "claims",
+    "proposition": "claims",
+    "finding": "claims",
+    "axiom": "claims",
+    "decision": "decisions",
+    "decisions": "decisions",
+    "policy": "decisions",
+    "mitigationpolicy": "decisions",
+    "schema": "schema",
+    "schemas": "schema",
+    "class": "schema",
+    "ontologyclass": "schema",
+    "property": "schema",
+}
+
+
+def _map_vertex_to_cluster(label: str) -> str:
+    """Maps ontology vertex label or domain type to one of the canonical clusters:
+    'sources', 'entities', 'claims', 'decisions', 'schema'.
+    """
+    lbl = (label or "").strip().lower()
+    return _CLUSTER_LABEL_MAPPING.get(lbl, "entities")
+
+
 def _extract_real_nodes(vertices: List[Any]) -> List[Dict[str, Any]]:
     """Transforms PropertyGraphEngine vertices into graph mesh nodes."""
     return [
         {
             "id": v.id,
-            "cluster": v.label.lower(),
+            "cluster": _map_vertex_to_cluster(v.label),
             "title": str(v.properties.get("name", v.id))[:48],
             "sub": v.label,
             "summary": str(v.properties.get("description", ""))[:120],

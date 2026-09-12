@@ -1942,6 +1942,28 @@
         schema: { color: '#8b5cf6', label: 'SCHEMA' }
       };
 
+      function resolveClusterKey(rawCluster) {
+        const k = (rawCluster || '').toLowerCase().trim();
+        if (k === 'source' || k === 'sources' || k === 'paper' || k === 'papers' || k === 'publicationvenue') {
+          return 'source';
+        }
+        if (k === 'claim' || k === 'claims' || k === 'proposition' || k === 'finding' || k === 'axiom') {
+          return 'claim';
+        }
+        if (k === 'decision' || k === 'decisions' || k === 'policy' || k === 'mitigationpolicy') {
+          return 'decision';
+        }
+        if (k === 'schema' || k === 'schemas' || k === 'class' || k === 'ontologyclass' || k === 'property') {
+          return 'schema';
+        }
+        return CLUSTERS[k] ? k : 'entity';
+      }
+
+      function resolveClusterConfig(rawCluster) {
+        const key = resolveClusterKey(rawCluster);
+        return CLUSTERS[key] || CLUSTERS.entity;
+      }
+
       const NODES = [
       ];
 
@@ -2371,10 +2393,7 @@
         EDGES.length = 0;
 
         filteredNodes.forEach((n, idx) => {
-          const clusterKey = n.cluster === 'sources' ? 'source' :
-            n.cluster === 'entities' ? 'entity' :
-              n.cluster === 'claims' ? 'claim' :
-                (n.cluster || 'decision');
+          const clusterKey = resolveClusterKey(n.cluster);
           const angle = (idx / Math.max(1, filteredNodes.length)) * Math.PI * 2;
           const radius = Math.min(width, height) * 0.32;
           const prev = existingPositions.get(n.id);
@@ -3262,11 +3281,11 @@
           const isTwoHopDimmed = (activeTwoHopNodes && !activeTwoHopNodes.has(n.id));
           const isEgoDimmed = (focusedHopNodeIds && !focusedHopNodeIds.has(n.id));
           const isEgoCenter = (focusedNodeId && n.id === focusedNodeId);
-          const clusterCfg = CLUSTERS[n.cluster] || CLUSTERS.entity;
+          const clusterCfg = resolveClusterConfig(n.cluster);
           const nodeColor = (currentGraphMode === 'cti' || currentGraphMode === 'schema')
             ? (n.color || (currentGraphMode === 'schema' ? '#6366f1' : '#9CA3AF'))
             : clusterCfg.color;
-          const nodeRadius = n.radius || (n.cluster === 'source' ? 14 : 11);
+          const nodeRadius = n.radius || (resolveClusterKey(n.cluster) === 'source' ? 14 : 11);
 
           ctx.save();
           if (isEgoDimmed) {
@@ -3524,7 +3543,7 @@
           schemaDescHtml += `<div style="font-size: 10px; color: var(--fg-muted);">📐 W3C OWL 2.0 TBox Metamodel Node</div>`;
           desc.innerHTML = schemaDescHtml;
         } else {
-          const clusterCfg = CLUSTERS[node.cluster] || CLUSTERS.entity;
+          const clusterCfg = resolveClusterConfig(node.cluster);
           tag.textContent = clusterCfg.label;
           tag.style.backgroundColor = clusterCfg.color;
           title.textContent = escapeHtml(node.title || node.name);
