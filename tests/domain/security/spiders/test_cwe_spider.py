@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
+import zipfile
 from typing import List, Union
 
 from domain.security.spiders.cwe_spider import (
@@ -26,8 +28,8 @@ def test_cwe_spider_attributes() -> None:
     assert spider.download_delay == 5.0
     assert "cwe.mitre.org" in spider.allowed_domains
     assert "cwe-api.mitre.org" in spider.allowed_domains
-    assert len(spider.start_urls) == 1
-    assert "cwe-api.mitre.org" in spider.start_urls[0]
+    assert len(spider.start_urls) >= 1
+    assert any("cwe.mitre.org" in u for u in spider.start_urls)
 
 
 def test_normalize_cwe_id() -> None:
@@ -172,3 +174,46 @@ def test_spider_registry_integration() -> None:
     assert spider_cls is not None
     instance = spider_cls()
     assert isinstance(instance, CweSpider)
+
+
+def test_cwe_spider_zip_csv_parse() -> None:
+    """Verifies that CweSpider successfully parses zip-compressed CSV feeds."""
+
+    csv_content = (
+        '"CWE-ID","Name","Weakness Abstraction","Status","Description",'
+        '"Extended Description","Related Weaknesses","Likelihood of Exploit",'
+        '"Potential Mitigations","Related Attack Patterns"\n'
+        '"79","Improper Neutralization of Input","Class","Stable",'
+        '"Neutralization issue","","'
+        '::NATURE:ChildOf:CWE ID:74:VIEW ID:1000::","High","'
+        '::PHASE:Implementation:STRATEGY:Input Validation:DESCRIPTION:Validate input::","'
+        '::63::85::"\n'
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("1425.csv", csv_content)
+    zip_bytes = buf.getvalue()
+
+    req = Request(url="https://cwe.mitre.org/data/csv/1425.csv.zip")
+    resp = Response(
+        url=req.url, status_code=200, headers={}, body=zip_bytes, request=req
+    )
+
+    async def _run() -> None:
+        spider = CweSpider()
+        items: List[ScrapedItem] = []
+        async for item in spider.parse(resp):
+            if isinstance(item, ScrapedItem):
+                items.append(item)
+        assert len(items) == 1
+        payload = items[0].payload
+        assert payload["cwe_id"] == "CWE-79"
+        assert payload["name"] == "Improper Neutralization of Input"
+        assert payload["is_top25"] is True
+        assert len(payload["mitigations"]) == 1
+        assert payload["mitigations"][0]["strategy"] == "Input Validation"
+        assert len(payload["relationships"]) == 1
+        assert payload["relationships"][0]["target_cwe_id"] == "CWE-74"
+        assert payload["related_attack_ids"] == ["63", "85"]
+
+    asyncio.run(_run())

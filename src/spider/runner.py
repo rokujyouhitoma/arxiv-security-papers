@@ -103,6 +103,8 @@ _SECURITY_SPIDER_NAMES = {
     "cisa_kev_spider",
     "nvd_cve",
     "nvd_cve_spider",
+    "cwe",
+    "cwe_spider",
 }
 
 

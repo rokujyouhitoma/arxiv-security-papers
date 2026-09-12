@@ -481,43 +481,133 @@ def _build_vulnerability_okf_markdown(
     return f"{fm}\n\n{body}"
 
 
+def _format_cwe_tags_yaml(tags: Any) -> str:
+    tag_list = tags if isinstance(tags, list) else ["weakness", "mitre-cwe"]
+    return ", ".join([f'"{_sanitize_string(t)}"' for t in tag_list])
+
+
+def _extract_cwe_desc(payload: Dict[str, Any]) -> str:
+    desc = payload.get("description")
+    if not desc:
+        desc = payload.get("abstract")
+    return str(desc or "")
+
+
+def _build_weakness_okf_markdown(
+    item: ScrapedItem, clean_id: str, date_folder: str
+) -> str:
+    payload = item.payload
+    cwe_id = str(payload.get("cwe_id", clean_id))
+    name = str(payload.get("name", item.title))
+    desc = _extract_cwe_desc(payload)
+    tags_yaml = _format_cwe_tags_yaml(payload.get("tags"))
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return f"""---
+type: "weakness"
+title: "[{cwe_id}] {_sanitize_string(name)}"
+description: "{_sanitize_string(desc[:120])}"
+resource: "{item.source_url}"
+tags: [{tags_yaml}]
+timestamp: "{now_iso}"
+provenance:
+  origin: "cwe.mitre.org"
+  clean_id: "{clean_id}"
+  published: "{now_iso[:10]}"
+  authors: ["MITRE CWE"]
+trust:
+  attestation_status: "verified"
+  digital_signature: "antigravity-spider-v1"
+---
+
+# [{cwe_id}] {name}
+
+## 1. 弱点概要 (Overview)
+{desc}
+
+## 2. 対策・緩和策 (Mitigations)
+- 公式リファレンスおよび CWE 推奨の防御策を適用してください。
+
+## 3. 一次ソースリンク
+- [{item.source_url}]({item.source_url})
+"""
+
+
 def _build_okf_markdown(item: ScrapedItem, clean_id: str, date_folder: str) -> str:
     """Polymorphic dispatcher for OKF v0.2 Markdown generation."""
     item_type = str(item.payload.get("type") or "security-paper").lower()
     if item_type in ("vulnerability", "security-advisory", "security_advisory"):
         return _build_vulnerability_okf_markdown(item, clean_id, date_folder)
+    if item_type == "weakness":
+        return _build_weakness_okf_markdown(item, clean_id, date_folder)
     return _build_paper_okf_markdown(item, clean_id, date_folder)
+
+
+def _persist_cwe_relationships(cti_storage: Any, cwe_id: str, rels: Any) -> None:
+    if not isinstance(rels, list):
+        return
+    for rel in rels:
+        if isinstance(rel, dict):
+            target = rel.get("target_cwe_id")
+            if target:
+                cti_storage.insert_cwe_relationship(
+                    cwe_id, target, rel.get("relation_type", "ChildOf")
+                )
+
+
+def _persist_cwe_record(item: ScrapedItem, clean_id: str) -> None:
+    try:
+        from domain.security.cti.storage import CTICatalogStorage
+
+        cti_storage = CTICatalogStorage()
+        cti_storage.insert_cwe(item.payload)
+        cwe_id = str(item.payload.get("cwe_id", clean_id))
+        _persist_cwe_relationships(
+            cti_storage, cwe_id, item.payload.get("relationships")
+        )
+    except Exception:
+        pass
+
+
+def _persist_vulnerability_record(
+    cursor: Any, item: ScrapedItem, clean_id: str, okf_path: str
+) -> None:
+    cve_id = str(item.payload.get("cve_id") or clean_id)
+    cvss_val = item.payload.get("cvss")
+    base_score, severity, _ = _format_cvss_meta(cvss_val)
+    cursor.execute(
+        "INSERT OR REPLACE INTO vulnerabilities "
+        "(cve_id, title, severity, cvss_score, source_url, okf_path) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (cve_id, item.title, severity, base_score, item.source_url, okf_path),
+    )
+
+
+def _persist_paper_record(
+    cursor: Any, item: ScrapedItem, clean_id: str, okf_path: str
+) -> None:
+    cursor.execute(
+        "INSERT OR REPLACE INTO papers (clean_id, title, url, okf_path) "
+        "VALUES (?, ?, ?, ?)",
+        (clean_id, item.title, item.source_url, okf_path),
+    )
 
 
 def _persist_to_dsn14_db(item: ScrapedItem, clean_id: str, okf_path: str) -> None:
     """Persists record to appropriate DSN-14 DB table based on item type."""
+    item_type = str(item.payload.get("type") or "security-paper").lower()
+    if item_type == "weakness":
+        _persist_cwe_record(item, clean_id)
+        return
+
     try:
         from database.driver import connect
 
         conn = connect(database="outputs/vector_db/security_papers.vdb")
         cursor = conn.cursor()
-        item_type = str(item.payload.get("type") or "security-paper").lower()
-
-        if item_type in (
-            "vulnerability",
-            "security-advisory",
-            "security_advisory",
-        ):
-            cve_id = str(item.payload.get("cve_id") or clean_id)
-            cvss_val = item.payload.get("cvss")
-            base_score, severity, _ = _format_cvss_meta(cvss_val)
-            cursor.execute(
-                "INSERT OR REPLACE INTO vulnerabilities "
-                "(cve_id, title, severity, cvss_score, source_url, okf_path) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (cve_id, item.title, severity, base_score, item.source_url, okf_path),
-            )
+        if item_type in ("vulnerability", "security-advisory", "security_advisory"):
+            _persist_vulnerability_record(cursor, item, clean_id, okf_path)
         else:
-            cursor.execute(
-                "INSERT OR REPLACE INTO papers (clean_id, title, url, okf_path) "
-                "VALUES (?, ?, ?, ?)",
-                (clean_id, item.title, item.source_url, okf_path),
-            )
+            _persist_paper_record(cursor, item, clean_id, okf_path)
         conn.commit()
     except Exception:
         pass

@@ -7,6 +7,10 @@ Adheres to MITRE terms with 5.0s politeness delay and HTTP 304 cache integration
 
 from __future__ import annotations
 
+import csv
+import io
+import re
+import zipfile
 from typing import Any, AsyncIterator, Dict, List, Optional, Set, Union
 
 from spider.core.downloader import Request, Response
@@ -28,8 +32,102 @@ def _extract_dict_payload(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return []
 
 
-def _extract_cwe_records(response: Response) -> List[Dict[str, Any]]:
-    """Extracts raw weakness dictionaries from response."""
+def _parse_csv_mitigations(raw_text: str) -> List[Dict[str, str]]:
+    if not raw_text:
+        return []
+    res: List[Dict[str, str]] = []
+    pattern = r"PHASE:([^:]*):STRATEGY:([^:]*):DESCRIPTION:([^:]+)"
+    for m in re.finditer(pattern, raw_text):
+        res.append(
+            {
+                "phase": m.group(1).strip(),
+                "strategy": m.group(2).strip(),
+                "description": m.group(3).strip(),
+            }
+        )
+    if not res and raw_text.strip():
+        res.append({"phase": "", "strategy": "", "description": raw_text.strip()})
+    return res
+
+
+def _parse_csv_related(raw_text: str) -> List[Dict[str, str]]:
+    if not raw_text:
+        return []
+    res: List[Dict[str, str]] = []
+    for m in re.finditer(r"NATURE:([^:]+):CWE ID:(\d+)", raw_text):
+        res.append({"nature": m.group(1).strip(), "cwe_id": m.group(2).strip()})
+    return res
+
+
+def _get_val(
+    row: Dict[str, str], primary: str, secondary: str = "", default: str = ""
+) -> str:
+    val = row.get(primary)
+    if not val and secondary:
+        val = row.get(secondary)
+    return val if val else default
+
+
+def _parse_csv_row(row: Dict[str, str], is_top25: bool) -> Optional[Dict[str, Any]]:
+    cwe_id = _get_val(row, "CWE-ID", "cwe_id")
+    if not cwe_id:
+        return None
+    return {
+        "id": cwe_id,
+        "name": _get_val(row, "Name", "name"),
+        "abstraction": _get_val(row, "Weakness Abstraction", "abstraction", "Base"),
+        "status": _get_val(row, "Status", "status", "Stable"),
+        "description": _get_val(row, "Description", "description"),
+        "extended_description": row.get("Extended Description", ""),
+        "likelihood_of_exploit": row.get("Likelihood of Exploit", ""),
+        "potential_mitigations": _parse_csv_mitigations(
+            row.get("Potential Mitigations", "")
+        ),
+        "related_weaknesses": _parse_csv_related(row.get("Related Weaknesses", "")),
+        "related_attack_patterns": re.findall(
+            r"(\d+)", row.get("Related Attack Patterns", "")
+        ),
+        "is_top25": is_top25,
+    }
+
+
+def _is_top25_url(url: str) -> bool:
+    return "1425" in url or "top25" in url.lower()
+
+
+def _read_csv_from_zip(z: zipfile.ZipFile) -> List[Dict[str, str]]:
+    for n in z.namelist():
+        if n.endswith(".csv"):
+            f = z.open(n)
+            reader = csv.DictReader(
+                io.TextIOWrapper(f, encoding="utf-8", errors="ignore")
+            )
+            return list(reader)
+    return []
+
+
+def _extract_zip_csv_records(response: Response) -> List[Dict[str, Any]]:
+    try:
+        z = zipfile.ZipFile(io.BytesIO(response.body))
+        raw_rows = _read_csv_from_zip(z)
+        is_top25 = _is_top25_url(response.request.url)
+        records: List[Dict[str, Any]] = []
+        for r in raw_rows:
+            parsed = _parse_csv_row(r, is_top25)
+            if parsed is not None:
+                records.append(parsed)
+        return records
+    except Exception:
+        return []
+
+
+def _is_zip_payload(response: Response) -> bool:
+    if response.body.startswith(b"PK\x03\x04"):
+        return True
+    return response.request.url.endswith(".zip")
+
+
+def _extract_json_records(response: Response) -> List[Dict[str, Any]]:
     try:
         data = response.json()
     except Exception:
@@ -39,6 +137,13 @@ def _extract_cwe_records(response: Response) -> List[Dict[str, Any]]:
     if isinstance(data, dict):
         return _extract_dict_payload(data)
     return []
+
+
+def _extract_cwe_records(response: Response) -> List[Dict[str, Any]]:
+    """Extracts raw weakness dictionaries from response (supports ZIP CSV and JSON)."""
+    if _is_zip_payload(response):
+        return _extract_zip_csv_records(response)
+    return _extract_json_records(response)
 
 
 def _normalize_cwe_id(raw_val: Any) -> str:
@@ -240,7 +345,10 @@ class CweSpider(BaseSpider):
     name: str = "cwe_spider"
     download_delay: float = 5.0
     allowed_domains: Set[str] = {"cwe.mitre.org", "cwe-api.mitre.org"}
-    start_urls: List[str] = ["https://cwe-api.mitre.org/api/v1/cwe/weakness"]
+    start_urls: List[str] = [
+        "https://cwe.mitre.org/data/csv/1425.csv.zip",
+        "https://cwe.mitre.org/data/csv/1000.csv.zip",
+    ]
 
     async def parse(
         self, response: Response
