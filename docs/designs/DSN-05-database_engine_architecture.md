@@ -3,6 +3,7 @@
 - **文書番号**: `DSN-05`
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**: `src/database/` (SlottedPage, WAL/ARIES, BTree, LSM, PAX, MVCC, 2PC, Raft, Saga, Sharding, Vector/HNSW)  
+- **補足・個別仕様書**: [[DSN-05-01] SQL構文・機能仕様サポートマトリクス設計書](DSN-05-01-sql_syntax_and_specification_support_matrix.md)
 **【主査・報告】 Database / Data Infrastructure Specialist (DB)**  
 **【参画】 Project Manager (PM), Network Specialist (Net), Information Security Specialist (Sec), Software QA Specialist (QA), IT Specialist (NLP/IR)**
 

@@ -413,3 +413,93 @@ def test_group_by_and_having_pure_python_executor():
         )
         assert res4["status"] == "ok"
         assert res4["count"] == 2
+
+
+def test_dql_phase1_distinct_offset_between_null_glob():
+    """
+    Tests Phase 1 DQL Foundations:
+    DISTINCT, OFFSET (LIMIT n OFFSET m and LIMIT m, n), BETWEEN, IS [NOT] NULL, GLOB, LIKE ESCAPE.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test_p1.vdb")
+        executor = SQLExecutor()
+        create_sql = (
+            "CREATE TABLE records (id VARCHAR PRIMARY KEY, tag VARCHAR, score FLOAT, note TEXT) "
+            f"USING binary_vdb LOCATION '{db_path}'"
+        )
+        executor.execute(create_sql)
+        executor.execute(
+            "INSERT INTO records (id, tag, score, note) VALUES ('r1', 'alpha', 10.0, 'first sample')"
+        )
+        executor.execute(
+            "INSERT INTO records (id, tag, score, note) VALUES ('r2', 'alpha', 20.0, 'second sample')"
+        )
+        executor.execute(
+            "INSERT INTO records (id, tag, score, note) VALUES ('r3', 'beta', 30.0, 'third sample')"
+        )
+        executor.execute(
+            "INSERT INTO records (id, tag, score, note) VALUES ('r4', 'beta', 40.0, 'special 100% discount')"
+        )
+        executor.execute(
+            "INSERT INTO records (id, tag, score, note) VALUES ('r5', 'gamma', 50.0, '')"
+        )
+
+        # 1. DISTINCT
+        res_distinct = executor.execute("SELECT DISTINCT tag FROM records")
+        assert res_distinct["status"] == "ok"
+        assert res_distinct["count"] == 3
+        tags = {r["tag"] for r in res_distinct["rows"]}
+        assert tags == {"alpha", "beta", "gamma"}
+
+        # 2. OFFSET (LIMIT n OFFSET m)
+        res_offset1 = executor.execute(
+            "SELECT id, tag FROM records ORDER BY id ASC LIMIT 2 OFFSET 1"
+        )
+        assert res_offset1["status"] == "ok"
+        assert res_offset1["count"] == 2
+        assert [r["id"] for r in res_offset1["rows"]] == ["r2", "r3"]
+
+        # 3. OFFSET comma syntax (LIMIT offset, count)
+        res_offset2 = executor.execute(
+            "SELECT id, tag FROM records ORDER BY id ASC LIMIT 2, 2"
+        )
+        assert res_offset2["status"] == "ok"
+        assert res_offset2["count"] == 2
+        assert [r["id"] for r in res_offset2["rows"]] == ["r3", "r4"]
+
+        # 4. BETWEEN
+        res_between = executor.execute(
+            "SELECT id, score FROM records WHERE score BETWEEN 20.0 AND 40.0 ORDER BY id ASC"
+        )
+        assert res_between["status"] == "ok"
+        assert [r["id"] for r in res_between["rows"]] == ["r2", "r3", "r4"]
+
+        # 5. NOT BETWEEN
+        res_not_between = executor.execute(
+            "SELECT id, score FROM records WHERE score NOT BETWEEN 20.0 AND 40.0 ORDER BY id ASC"
+        )
+        assert res_not_between["status"] == "ok"
+        assert [r["id"] for r in res_not_between["rows"]] == ["r1", "r5"]
+
+        # 6. IS NULL / IS NOT NULL
+        res_null = executor.execute("SELECT id FROM records WHERE note IS NULL")
+        assert res_null["status"] == "ok"
+        assert res_null["count"] == 1
+        assert res_null["rows"][0]["id"] == "r5"
+
+        res_not_null = executor.execute("SELECT id FROM records WHERE note IS NOT NULL")
+        assert res_not_null["status"] == "ok"
+        assert res_not_null["count"] == 4
+
+        # 7. GLOB
+        res_glob = executor.execute("SELECT id FROM records WHERE tag GLOB 'al*'")
+        assert res_glob["status"] == "ok"
+        assert res_glob["count"] == 2
+
+        # 8. LIKE with ESCAPE
+        res_like_esc = executor.execute(
+            r"SELECT id FROM records WHERE note LIKE '%100\%%' ESCAPE '\'"
+        )
+        assert res_like_esc["status"] == "ok"
+        assert res_like_esc["count"] == 1
+        assert res_like_esc["rows"][0]["id"] == "r4"

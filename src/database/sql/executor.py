@@ -4,6 +4,7 @@ SQL Execution Engine for Pure Python Vector Database.
 Evaluates DDL, DQL, DML, DCL, and TCL AST nodes against underlying vector storages and schemas.
 """
 
+import fnmatch
 import json
 import logging
 import os
@@ -430,9 +431,50 @@ def _eval_relational(op: str, actual: Any, expected: Any) -> bool:
         return _eval_string_rel(op, str(actual), str(expected))
 
 
-def _eval_like(actual: Any, expected: Any) -> bool:
-    pattern = str(expected).replace("%", ".*")
-    return bool(re.search(pattern, str(actual or ""), re.IGNORECASE))
+def _eval_is_null(op: str, actual: Any) -> bool:
+    is_n = actual is None or actual == ""
+    return is_n if op == "IS NULL" else not is_n
+
+
+def _eval_between(op: str, actual: Any, expected: Any) -> bool:
+    if not isinstance(expected, (list, tuple)) or len(expected) != 2:
+        return False
+    v1, v2 = expected
+    try:
+        act_f, v1_f, v2_f = float(str(actual)), float(str(v1)), float(str(v2))
+        res = v1_f <= act_f <= v2_f
+    except (ValueError, TypeError):
+        act_s, v1_s, v2_s = str(actual), str(v1), str(v2)
+        res = v1_s <= act_s <= v2_s
+    return res if op == "BETWEEN" else not res
+
+
+def _eval_glob(op: str, actual: Any, expected: Any) -> bool:
+    matched = fnmatch.fnmatchcase(str(actual or ""), str(expected or ""))
+    return matched if op == "GLOB" else not matched
+
+
+def _build_like_regex(expected: Any, escape: Optional[str] = None) -> str:
+    exp_str = str(expected or "")
+    if escape:
+        parts = re.split(re.escape(escape) + "(.)", exp_str)
+        escaped_pattern = ""
+        for i, p in enumerate(parts):
+            if i % 2 == 1:
+                escaped_pattern += re.escape(p)
+            else:
+                escaped_pattern += re.escape(p).replace("%", ".*").replace("_", ".")
+        return f"^{escaped_pattern}$"
+    escaped_pattern = re.escape(exp_str).replace("%", ".*").replace("_", ".")
+    return f"^{escaped_pattern}$"
+
+
+def _eval_like(
+    op: str, actual: Any, expected: Any, escape: Optional[str] = None
+) -> bool:
+    pattern = _build_like_regex(expected, escape)
+    matched = bool(re.search(pattern, str(actual or ""), re.IGNORECASE))
+    return matched if "NOT" not in op else not matched
 
 
 def _eval_membership(op: str, actual: Any, expected: Any) -> bool:
@@ -441,24 +483,52 @@ def _eval_membership(op: str, actual: Any, expected: Any) -> bool:
     return is_member if op == "IN" else not is_member
 
 
-def _eval_comparison_branches(op: str, actual: Any, expected: Any) -> bool:
+def _eval_null_or_between(op: str, actual: Any, expected: Any) -> Optional[bool]:
+    if op in ("IS NULL", "IS NOT NULL"):
+        return _eval_is_null(op, actual)
+    if op in ("BETWEEN", "NOT BETWEEN"):
+        return _eval_between(op, actual, expected)
+    return None
+
+
+def _eval_pattern_or_null(
+    op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
+) -> Optional[bool]:
+    res = _eval_null_or_between(op, actual, expected)
+    if res is not None:
+        return res
+    if op in ("GLOB", "NOT GLOB"):
+        return _eval_glob(op, actual, expected)
+    if op in ("LIKE", "NOT LIKE"):
+        return _eval_like(op, actual, expected, (c_dict or {}).get("escape"))
+    return None
+
+
+def _eval_comparison_branches(
+    op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
+) -> bool:
+    pat_res = _eval_pattern_or_null(op, actual, expected, c_dict)
+    if pat_res is not None:
+        return pat_res
     if op in (">=", "<=", ">", "<"):
         return _eval_relational(op, actual, expected)
-    if op == "LIKE":
-        return _eval_like(actual, expected)
     if op in ("IN", "NOT IN"):
         return _eval_membership(op, actual, expected)
     return True
 
 
-def _eval_comparison(op: str, actual: Any, expected: Any) -> bool:
+def _eval_comparison(
+    op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
+) -> bool:
+    if op in ("IS NULL", "IS NOT NULL"):
+        return _eval_is_null(op, actual)
     if op == "=":
         return str(actual) == str(expected)
-    if op == "!=":
+    if op in ("!=", "<>"):
         return str(actual) != str(expected)
     if actual is None:
         return False
-    return _eval_comparison_branches(op, actual, expected)
+    return _eval_comparison_branches(op, actual, expected, c_dict)
 
 
 def _is_column_reference(expected_val: str, record: Dict[str, Any]) -> bool:
@@ -479,7 +549,7 @@ def _evaluate_single_condition(record: Dict[str, Any], c: Dict[str, Any]) -> boo
     op = c.get("op") or c.get("operator") or "="
     expected_val = _resolve_condition_expected_val(record, c.get("value"))
     actual = _extract_field_value(record, field)
-    return _eval_comparison(op, actual, expected_val)
+    return _eval_comparison(op, actual, expected_val, c)
 
 
 def _matches_or_branches(
@@ -1358,28 +1428,58 @@ class SQLExecutor:
             projected[k] = v
         return projected
 
+    @staticmethod
+    def _deduplicate_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        seen: set[Tuple[Any, ...]] = set()
+        unique: List[Dict[str, Any]] = []
+        for r in rows:
+            key = tuple((k, str(v)) for k, v in sorted(r.items()))
+            if key not in seen:
+                seen.add(key)
+                unique.append(r)
+        return unique
+
+    @staticmethod
+    def _slice_rows(
+        rows: List[Dict[str, Any]],
+        limit: Optional[int],
+        offset: Optional[int],
+    ) -> List[Dict[str, Any]]:
+        start = 0 if offset is None else offset
+        end = None if limit is None else start + limit
+        return rows[start:end]
+
+    @staticmethod
+    def _sort_key(row: Dict[str, Any], order_by: str) -> Any:
+        val = _extract_field_value(row, order_by)
+        return 0 if val is None else val
+
     def _sort_and_paginate(
         self,
         rows: List[Dict[str, Any]],
         order_by: Optional[str],
         order_desc: bool,
         limit: Optional[int],
+        offset: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        result = rows
         if order_by:
-            result.sort(
-                key=lambda x: _extract_field_value(x, order_by) or 0,
+            rows.sort(
+                key=lambda x: self._sort_key(x, order_by),
                 reverse=order_desc,
             )
-        if limit is not None:
-            result = result[:limit]
-        return result
+        return self._slice_rows(rows, limit, offset)
 
     @staticmethod
     def _determine_scan_limit(stmt: SelectStatement) -> Optional[int]:
-        if stmt.where_clauses or stmt.joins or stmt.order_by:
-            return None
-        return stmt.limit
+        conditions = [
+            bool(stmt.where_clauses),
+            bool(stmt.joins),
+            bool(stmt.order_by),
+            bool(stmt.distinct),
+            bool(stmt.group_by),
+            bool(stmt.offset),
+        ]
+        return None if any(conditions) else stmt.limit
 
     def _get_initial_select_rows(
         self,
@@ -1481,6 +1581,14 @@ class SQLExecutor:
             "rows": [{"COUNT(*)": count_val}],
         }
 
+    def _apply_distinct_and_slice(
+        self, rows: List[Dict[str, Any]], stmt: SelectStatement
+    ) -> List[Dict[str, Any]]:
+        if not stmt.distinct:
+            return rows
+        deduped = self._deduplicate_rows(rows)
+        return self._slice_rows(deduped, stmt.limit, stmt.offset)
+
     def _build_select_result(
         self,
         paged_rows: List[Dict[str, Any]],
@@ -1496,6 +1604,7 @@ class SQLExecutor:
         final_rows = [
             self._project_row(r, stmt.columns, table_ref.name) for r in paged_rows
         ]
+        final_rows = self._apply_distinct_and_slice(final_rows, stmt)
 
         if stmt.union_all:
             union_res = self._exec_select(
@@ -1523,6 +1632,23 @@ class SQLExecutor:
     ) -> List[Dict[str, Any]]:
         return [r for r in rows if _matches_where_clause(r, where_clauses)]
 
+    @staticmethod
+    def _apply_group_and_having(
+        rows: List[Dict[str, Any]], stmt: SelectStatement
+    ) -> List[Dict[str, Any]]:
+        if not stmt.group_by:
+            return rows
+        aggregated_rows = _group_and_aggregate_rows(rows, stmt)
+        return _filter_having_rows(aggregated_rows, stmt.having)
+
+    @staticmethod
+    def _resolve_paginate_limits(
+        stmt: SelectStatement,
+    ) -> Tuple[Optional[int], Optional[int]]:
+        if stmt.distinct:
+            return None, None
+        return stmt.limit, stmt.offset
+
     def _exec_select(
         self,
         stmt: SelectStatement,
@@ -1539,11 +1665,10 @@ class SQLExecutor:
 
         current_rows = self._scan_and_join_tables(stmt, effective_role, temp_tables)
         filtered_rows = self._filter_select_rows(current_rows, stmt.where_clauses)
-        if stmt.group_by:
-            aggregated_rows = _group_and_aggregate_rows(filtered_rows, stmt)
-            filtered_rows = _filter_having_rows(aggregated_rows, stmt.having)
+        grouped_rows = self._apply_group_and_having(filtered_rows, stmt)
+        lim, off = self._resolve_paginate_limits(stmt)
         paged_rows = self._sort_and_paginate(
-            filtered_rows, stmt.order_by, stmt.order_desc, stmt.limit
+            grouped_rows, stmt.order_by, stmt.order_desc, lim, off
         )
         return self._build_select_result(paged_rows, stmt, effective_role, temp_tables)
 

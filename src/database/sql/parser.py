@@ -39,6 +39,15 @@ class SQLParseError(Exception):
     pass
 
 
+def _extract_distinct_prefix(cols_raw: str) -> Tuple[str, bool]:
+    """Strips DISTINCT or ALL prefix from projection column string."""
+    if re.match(r"^DISTINCT\s+", cols_raw, re.IGNORECASE):
+        return re.sub(r"^DISTINCT\s+", "", cols_raw, flags=re.IGNORECASE).strip(), True
+    if re.match(r"^ALL\s+", cols_raw, re.IGNORECASE):
+        return re.sub(r"^ALL\s+", "", cols_raw, flags=re.IGNORECASE).strip(), False
+    return cols_raw, False
+
+
 def _resolve_show_target(upper_sql: str) -> str:
     """Resolves target entity for SHOW command."""
     if "SHOW DATABASES" in upper_sql or "SHOW SCHEMAS" in upper_sql:
@@ -51,17 +60,66 @@ def _resolve_show_target(upper_sql: str) -> str:
 
 
 def _parse_like_clause(part: str) -> Optional[Dict[str, Any]]:
-    """Parses LIKE condition."""
+    """Parses LIKE/NOT LIKE condition with optional ESCAPE."""
     like_m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+LIKE\s+('[^']*'|\"[^\"]*\")$",
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+LIKE|LIKE)\s+('[^']*'|\"[^\"]*\")(?:\s+ESCAPE\s+('[^']*'|\"[^\"]*\"))?$",
         part,
         re.IGNORECASE,
     )
     if like_m:
+        escape_char = like_m.group(4).strip("'\"") if like_m.group(4) else None
         return {
             "column": like_m.group(1),
-            "operator": "LIKE",
-            "value": like_m.group(2).strip("'\""),
+            "operator": like_m.group(2).upper(),
+            "value": like_m.group(3).strip("'\""),
+            "escape": escape_char,
+        }
+    return None
+
+
+def _parse_glob_clause(part: str) -> Optional[Dict[str, Any]]:
+    """Parses GLOB/NOT GLOB condition."""
+    glob_m = re.match(
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+GLOB|GLOB)\s+('[^']*'|\"[^\"]*\")$",
+        part,
+        re.IGNORECASE,
+    )
+    if glob_m:
+        return {
+            "column": glob_m.group(1),
+            "operator": glob_m.group(2).upper(),
+            "value": glob_m.group(3).strip("'\""),
+        }
+    return None
+
+
+def _parse_is_null_clause(part: str) -> Optional[Dict[str, Any]]:
+    """Parses IS NULL / IS NOT NULL condition."""
+    null_m = re.match(
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+IS\s+(NOT\s+NULL|NULL)$",
+        part,
+        re.IGNORECASE,
+    )
+    if null_m:
+        op = "IS NOT NULL" if "NOT" in null_m.group(2).upper() else "IS NULL"
+        return {"column": null_m.group(1), "operator": op, "value": None}
+    return None
+
+
+def _parse_between_clause(part: str) -> Optional[Dict[str, Any]]:
+    """Parses BETWEEN / NOT BETWEEN condition."""
+    pattern = (
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+BETWEEN|BETWEEN)\s+"
+        r"('[^']*'|\"[^\"]*\"|[0-9\.]+)\s+AND\s+('[^']*'|\"[^\"]*\"|[0-9\.]+)$"
+    )
+    between_m = re.match(pattern, part, re.IGNORECASE)
+    if between_m:
+        v1 = _parse_val_type(between_m.group(3).strip("'\""))
+        v2 = _parse_val_type(between_m.group(4).strip("'\""))
+        return {
+            "column": between_m.group(1),
+            "operator": between_m.group(2).upper(),
+            "value": (v1, v2),
         }
     return None
 
@@ -86,7 +144,7 @@ def _parse_in_clause(part: str) -> Optional[Dict[str, Any]]:
 def _parse_cmp_clause(part: str) -> Optional[Dict[str, Any]]:
     """Parses standard comparison condition."""
     cmp_pattern = (
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(>=|<=|!=|=|>|<)\s*"
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(>=|<=|!=|<>|=|>|<)\s*"
         r"('[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|[0-9\.]+)$"
     )
     eq_m = re.match(cmp_pattern, part)
@@ -97,12 +155,26 @@ def _parse_cmp_clause(part: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+_WHERE_PARSERS = (
+    _parse_is_null_clause,
+    _parse_between_clause,
+    _parse_glob_clause,
+    _parse_like_clause,
+    _parse_in_clause,
+    _parse_cmp_clause,
+)
+
+
 def _parse_where_clause_item(part: str) -> Optional[Dict[str, Any]]:
-    """Parses a single WHERE predicate term (LIKE, IN, or comparison)."""
-    part = part.strip()
-    if not part:
+    """Parses a single WHERE predicate term."""
+    clean = part.strip()
+    if not clean:
         return None
-    return _parse_like_clause(part) or _parse_in_clause(part) or _parse_cmp_clause(part)
+    for parser in _WHERE_PARSERS:
+        res = parser(clean)
+        if res is not None:
+            return res
+    return None
 
 
 def _parse_val_type(clean_val: str) -> Any:
@@ -178,6 +250,17 @@ def _extract_storage_clauses(sql: str) -> tuple[str, Optional[str], Optional[str
 
     engine = _validate_storage_engine(raw_engine)
     return cleaned.strip(), engine, location
+
+
+def _split_and_conditions(text: str) -> List[str]:
+    """Splits conditions on AND while preserving BETWEEN ... AND ... clauses."""
+    pattern = (
+        r"(\b(?:NOT\s+)?BETWEEN\s+(?:'[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|[0-9\.]+))\s+AND\s+"
+        r"((?:'[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|[0-9\.]+))"
+    )
+    protected = re.sub(pattern, r"\1 __BETWEEN_AND__ \2", text, flags=re.IGNORECASE)
+    parts = re.split(r"\s+AND\s+", protected, flags=re.IGNORECASE)
+    return [p.replace("__BETWEEN_AND__", "AND").strip() for p in parts if p.strip()]
 
 
 class SQLParser:
@@ -492,12 +575,32 @@ class SQLParser:
                 return match
         return None
 
-    def _extract_limit_clause(self, clean_sql: str) -> Tuple[str, Optional[int]]:
-        """Extracts and strips LIMIT value."""
-        limit_m = re.search(r"\s+LIMIT\s+([0-9]+)$", clean_sql, re.IGNORECASE)
-        if limit_m:
-            return clean_sql[: limit_m.start()].strip(), int(limit_m.group(1))
-        return clean_sql, None
+    def _extract_limit_and_offset(
+        self, clean_sql: str
+    ) -> Tuple[str, Optional[int], Optional[int]]:
+        """Extracts and strips LIMIT and OFFSET values."""
+        m_off = re.search(
+            r"\s+LIMIT\s+([0-9]+)\s+OFFSET\s+([0-9]+)$", clean_sql, re.IGNORECASE
+        )
+        if m_off:
+            return (
+                clean_sql[: m_off.start()].strip(),
+                int(m_off.group(1)),
+                int(m_off.group(2)),
+            )
+        m_comma = re.search(
+            r"\s+LIMIT\s+([0-9]+)\s*,\s*([0-9]+)$", clean_sql, re.IGNORECASE
+        )
+        if m_comma:
+            return (
+                clean_sql[: m_comma.start()].strip(),
+                int(m_comma.group(2)),
+                int(m_comma.group(1)),
+            )
+        m_lim = re.search(r"\s+LIMIT\s+([0-9]+)$", clean_sql, re.IGNORECASE)
+        if m_lim:
+            return clean_sql[: m_lim.start()].strip(), int(m_lim.group(1)), None
+        return clean_sql, None, None
 
     def _extract_order_by_clause(
         self, clean_sql: str
@@ -570,7 +673,7 @@ class SQLParser:
 
     def _parse_single_select(self, sql: str) -> SelectStatement:
         clean_sql = re.sub(r"\s+", " ", sql).strip()
-        clean_sql, limit_val = self._extract_limit_clause(clean_sql)
+        clean_sql, limit_val, offset_val = self._extract_limit_and_offset(clean_sql)
         clean_sql, order_by, order_desc = self._extract_order_by_clause(clean_sql)
         clean_sql, having_raw = self._extract_having_clause(clean_sql)
         clean_sql, group_by_cols = self._extract_group_by_clause(clean_sql)
@@ -582,7 +685,8 @@ class SQLParser:
         if not select_m:
             raise SQLParseError(f"Malformed SELECT syntax: {sql}")
 
-        columns = self._parse_column_list(select_m.group(1).strip())
+        cols_raw, distinct = _extract_distinct_prefix(select_m.group(1).strip())
+        columns = self._parse_column_list(cols_raw)
         table_ref, joins = self._parse_from_and_joins(select_m.group(2).strip())
 
         where_clauses: List[Dict[str, Any]] = []
@@ -604,6 +708,8 @@ class SQLParser:
             order_by=order_by,
             order_desc=order_desc,
             limit=limit_val,
+            offset=offset_val,
+            distinct=distinct,
             group_by=group_by_cols,
             having=having_raw,
         )
@@ -685,7 +791,7 @@ class SQLParser:
         if not text:
             return clauses
 
-        and_parts = re.split(r"\s+AND\s+", text, flags=re.IGNORECASE)
+        and_parts = _split_and_conditions(text)
         for part in and_parts:
             item = _parse_where_clause_item(part)
             if item is not None:

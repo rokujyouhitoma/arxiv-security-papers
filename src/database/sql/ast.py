@@ -155,6 +155,8 @@ class SelectStatement(SQLStatement):
     order_by: Optional[str] = None
     order_desc: bool = False
     limit: Optional[int] = None
+    offset: Optional[int] = None
+    distinct: bool = False
     group_by: List[str] = field(default_factory=list)
     having: Optional[str] = None
 

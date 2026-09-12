@@ -37,6 +37,7 @@
   - 補足仕様: **[[DSN-04-01] ハイブリッド検索詳細仕様](designs/DSN-04-01-hybrid_search_specification.md)** — 5手法フュージョン検索アルゴリズム詳細設計。
 - 🧠 **[[DSN-05] ゼロ依存 4層ベクトルデータベース ＆ 分散合意・カオス耐性設計書](designs/DSN-05-database_engine_architecture.md)**
   - `src/database/` — 4KB SlottedPage、2Q Buffer Pool、WAL & ARIES 障害回復、B+Tree、LSM-Tree、PAX 列指向、CBO オプティマイザ、分散 Raft / Saga / 2PC / Consistent Hashing、ChaosVFS 電源断シミュレーション・復元完全性証明。
+  - 補足仕様: **[[DSN-05-01] SQL構文・機能仕様サポートマトリクス設計書](designs/DSN-05-01-sql_syntax_and_specification_support_matrix.md)** — SQLite 公式仕様対比マトリクス、2層実行モデル、独自拡張、および 6段階完全互換化ロードマップ。
 - 🕷️ **[[DSN-06] ゼロ外部依存 分散 Web クローラー ＆ スパイダー基盤設計書](designs/DSN-06-distributed_spider_and_crawler.md)**
   - `src/spider/` — OPIC クロール順序付け、AutoThrottle レート制限、スケーラブル・ブルームフィルタ、SPA 状態復元。
 - 🔒 **[[DSN-07] 共通セキュリティ基盤・AST ガード ＆ RBAC エンジン設計書](designs/DSN-07-security_guard_and_rbac.md)**
