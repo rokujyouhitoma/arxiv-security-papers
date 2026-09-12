@@ -180,19 +180,19 @@ SQLite 公式文法ダイアグラム（`sql-stmt`）に規定された全 25 �
 
 ### 2.3 高度仕様・拡張構文対比マトリクス (Advanced & Modern SQLite 3.3x+ Features)
 
-SQLite 3.30+ 以降の最新仕様、エンタープライズ制約、および特殊な仮想テーブル機能との対比状況です。中核機能（33 Topics / 25 Statements）の 100% 達成に続き、以下の未対応項目をロードマップ（Phase 8 〜 Phase 10）として推進します。
+SQLite 3.30+ 以降の最新仕様、エンタープライズ制約、および特殊な仮想テーブル機能との対比状況です。中核機能（33 Topics / 25 Statements）の 100% 達成に続き、Phase 8・9（高度構文・エンタープライズ機能 9 件）の実装が完了し、Phase 10（FTS5 / json_each / ユーザー定義照合順序）を推進中です。
 
 | # | 高度機能・構文項目 | SQLite 導入版 | Pure Python Engine | 総合判定 | 構文仕様・制約および対応方針 |
 | :---: | :--- | :---: | :---: | :---: | :--- |
-| 1 | **`UPDATE ... FROM` (Join Update)** | 3.33.0+ | ○ 対応済 | **○ Full** | 他テーブルと結合しながら行を更新する構文 `UPDATE tbl SET col = t2.val FROM t2 WHERE tbl.id = t2.id`（Phase 8）。 |
-| 2 | **スタンドアロン `VALUES` クエリ** | 3.7.11+ | ○ 対応済 | **○ Full** | `SELECT` を伴わずに単独でテーブル値を生成するクエリ `VALUES (1, 'Alice'), (2, 'Bob')`（Phase 8）。 |
-| 3 | **`CREATE TABLE ... STRICT`** | 3.37.0+ | ○ 対応済 | **○ Full** | 動的型付けを排し、厳格なデータ型（`INT`, `REAL`, `TEXT`, `BLOB`, `ANY`）を強制するテーブル宣言（Phase 8）。 |
-| 4 | **生成列 (`GENERATED ALWAYS AS`)** | 3.31.0+ | ○ 対応済 | **○ Full** | 他列の式から自動導出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`（Phase 8）。 |
-| 5 | **`COLLATE` 照合順序句** | 標準 | ○ 対応済 | **○ Full** | 大小文字を区別しない比較 `WHERE col = 'text' COLLATE NOCASE` やソート順序制御（Phase 8）。 |
-| 6 | **`VACUUM INTO 'filename'`** | 3.27.0+ | × 未対応 | **△ Planned** | 稼働中データベースをロックせず別ファイルへ無停止オンラインバックアップ・コンパクション出力（Phase 9）。 |
-| 7 | **`INSTEAD OF` トリガー** | 標準 | × 未対応 | **△ Planned** | 更新不可能な VIEW に対して DML 操作（INSERT/UPDATE/DELETE）をフックして基底テーブルへ転送（Phase 9）。 |
-| 8 | **外部キーカスケード (`CASCADE`)** | 標準 | × 未対応 | **△ Planned** | 親レコード更新・削除時に子レコードを自動連動更新・削除する `ON DELETE CASCADE / ON UPDATE SET NULL`（Phase 9）。 |
-| 9 | **拡張 PRAGMA (`table_xinfo` 等)** | 標準 | △ 部分対応 | **△ Planned** | 生成列・Hidden列を含む拡張カラム情報 `PRAGMA table_xinfo`、スキーマバージョン管理 `PRAGMA user_version`（Phase 9）。 |
+| 1 | **`UPDATE ... FROM` (Join Update)** | 3.33.0+ | ○ 対応済 | **○ Full** | 他テーブルと結合しながら行を更新する構文 `UPDATE tbl SET col = t2.val FROM t2 WHERE tbl.id = t2.id`（Phase 8 / [Issue #266](../issues/closed/266-implement-sqlite-parity-update-from.md)）。 |
+| 2 | **スタンドアロン `VALUES` クエリ** | 3.7.11+ | ○ 対応済 | **○ Full** | `SELECT` を伴わずに単独でテーブル値を生成するクエリ `VALUES (1, 'Alice'), (2, 'Bob')`（Phase 8 / [Issue #267](../issues/closed/267-implement-sqlite-parity-standalone-values.md)）。 |
+| 3 | **`CREATE TABLE ... STRICT`** | 3.37.0+ | ○ 対応済 | **○ Full** | 動的型付けを排し、厳格なデータ型（`INT`, `REAL`, `TEXT`, `BLOB`, `ANY`）を強制するテーブル宣言（Phase 8 / [Issue #268](../issues/closed/268-implement-sqlite-parity-create-table-strict.md)）。 |
+| 4 | **生成列 (`GENERATED ALWAYS AS`)** | 3.31.0+ | ○ 対応済 | **○ Full** | 他列の式から自動導出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`（Phase 8 / [Issue #269](../issues/closed/269-implement-sqlite-parity-generated-columns.md)）。 |
+| 5 | **`COLLATE` 照合順序句** | 標準 | ○ 対応済 | **○ Full** | 大小文字を区別しない比較 `WHERE col = 'text' COLLATE NOCASE` やソート順序制御（Phase 8 / [Issue #270](../issues/closed/270-implement-sqlite-parity-collate-clause.md)）。 |
+| 6 | **`VACUUM INTO 'filename'`** | 3.27.0+ | ○ 対応済 | **○ Full** | 稼働中データベースをロックせず別ファイルへ無停止オンラインバックアップ・コンパクション出力（Phase 9 / [Issue #271](../issues/closed/271-implement-sqlite-parity-vacuum-into.md)）。 |
+| 7 | **`INSTEAD OF` トリガー** | 標準 | ○ 対応済 | **○ Full** | 更新不可能な VIEW に対して DML 操作（INSERT/UPDATE/DELETE）をフックして基底テーブルへ転送（Phase 9 / [Issue #272](../issues/closed/272-implement-sqlite-parity-instead-of-trigger.md)）。 |
+| 8 | **外部キーカスケード (`CASCADE`)** | 標準 | ○ 対応済 | **○ Full** | 親レコード更新・削除時に子レコードを自動連動更新・削除する `ON DELETE CASCADE / ON UPDATE SET NULL`（Phase 9 / [Issue #273](../issues/closed/273-implement-sqlite-parity-foreign-key-cascade.md)）。 |
+| 9 | **拡張 PRAGMA (`table_xinfo` 等)** | 標準 | ○ 対応済 | **○ Full** | 生成列・Hidden列を含む拡張カラム情報 `PRAGMA table_xinfo`、スキーマバージョン管理 `PRAGMA user_version`、外部キー一覧 `PRAGMA foreign_key_list`（Phase 9 / [Issue #274](../issues/closed/274-implement-sqlite-parity-extended-pragma.md)）。 |
 | 10 | **`FTS5` (Full-Text Search 5)** | 拡張 | × 未対応 | **△ Planned** | 仮想テーブルを用いた BM25 スコアリング付き高速全文検索エンジン `CREATE VIRTUAL TABLE fts USING fts5(...)`（Phase 10）。 |
 | 11 | **`json_each()` / `json_tree()`** | 3.38.0+ | × 未対応 | **△ Planned** | JSON 配列・階層オブジェクトを行セットとして展開・走査するテーブル値関数（Phase 10）。 |
 
@@ -457,10 +457,10 @@ gantt
     ANALYZE / ATTACH / VIRTUAL TABLE / INDEXED BY :done, p7, 2026-09, 2026-09
 
     section Phase 8: モダン DQL/DML & 厳格整合性
-    UPDATE FROM / VALUES / STRICT / GENERATED :active, p8, 2026-10, 2026-11
+    UPDATE FROM / VALUES / STRICT / GENERATED / COLLATE :done, p8, 2026-09, 2026-09
 
     section Phase 9: バックアップ & 高度トリガー
-    VACUUM INTO / INSTEAD OF / CASCADE :p9, 2026-11, 2026-12
+    VACUUM INTO / INSTEAD OF / CASCADE / 拡張PRAGMA :done, p9, 2026-09, 2026-09
 
     section Phase 10: 高度モジュール & FTS5
     FTS5 全文検索 / json_each / json_tree :p10, 2026-12, 2027-01
@@ -576,33 +576,33 @@ Phase 1 〜 6 および Phase 7（運用管理・スキーマ・オプティマ�
 
 ---
 
-### 6.8 Phase 8: モダン DQL/DML 構文拡張 & 厳格データ整合性 【計画中 / Planned】
+### 6.8 Phase 8: モダン DQL/DML 構文拡張 & 厳格データ整合性 【完了 / Closed】
 
-SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合性の厳格化を推進します。
+SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合性の厳格化を完全実装しました。
 
-| 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
-| :---: | :--- | :--- | :---: |
-| **[#266](../issues/closed/266-implement-sqlite-parity-update-from.md)** | **`UPDATE ... FROM` (Join Update) 構文の実装** | `UPDATE tbl SET col = t2.val FROM other_tbl t2 WHERE tbl.id = t2.id` 構文のパース、他テーブル結合行を用いた一括更新。 | SQLite 3.33.0+ |
-| **[#267](../issues/closed/267-implement-sqlite-parity-standalone-values.md)** | **スタンドアロン `VALUES` クエリ構文の実装** | `SELECT` を伴わない `VALUES (1, 'Alice'), (2, 'Bob')` 単独実行および CTE / サブクエリ連携。 | SQLite 3.7.11+ |
-| **[#268](../issues/closed/268-implement-sqlite-parity-create-table-strict.md)** | **`CREATE TABLE ... STRICT` モードの実装** | 動的型付け（Any型）を排し、`INT`, `REAL`, `TEXT`, `BLOB`, `ANY` の厳格なデータ型キャスト・検証を強制。 | SQLite 3.37.0+ |
-| **[#269](../issues/closed/269-implement-sqlite-parity-generated-columns.md)** | **生成列 (`GENERATED ALWAYS AS`) の実装** | 他カラムの式から自動算出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`。 | SQLite 3.31.0+ |
-| **[#270](../issues/closed/270-implement-sqlite-parity-collate-clause.md)** | **`COLLATE` 照合順序句 (`NOCASE`, `RTRIM`, `BINARY`) の実装** | 大小文字を区別しない比較・ソート `WHERE col = 'test' COLLATE NOCASE`、`ORDER BY col COLLATE RTRIM`。 | SQLite 標準 |
+| Issue | タイトル | 主な対象機能・構文仕様 | マージコミット | 状態 |
+| :---: | :--- | :--- | :---: | :---: |
+| **[#266](../issues/closed/266-implement-sqlite-parity-update-from.md)** | **`UPDATE ... FROM` (Join Update) 構文の実装** | `UPDATE tbl SET col = t2.val FROM other_tbl t2 WHERE tbl.id = t2.id` 構文のパース、他テーブル結合行を用いた一括更新。 | — | **Closed (完了)** |
+| **[#267](../issues/closed/267-implement-sqlite-parity-standalone-values.md)** | **スタンドアロン `VALUES` クエリ構文の実装** | `SELECT` を伴わない `VALUES (1, 'Alice'), (2, 'Bob')` 単独実行および CTE / サブクエリ連携。 | — | **Closed (完了)** |
+| **[#268](../issues/closed/268-implement-sqlite-parity-create-table-strict.md)** | **`CREATE TABLE ... STRICT` モードの実装** | 動的型付け（Any型）を排し、`INT`, `REAL`, `TEXT`, `BLOB`, `ANY` の厳格なデータ型キャスト・検証を強制。 | — | **Closed (完了)** |
+| **[#269](../issues/closed/269-implement-sqlite-parity-generated-columns.md)** | **生成列 (`GENERATED ALWAYS AS`) の実装** | 他カラムの式から自動算出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`。 | — | **Closed (完了)** |
+| **[#270](../issues/closed/270-implement-sqlite-parity-collate-clause.md)** | **`COLLATE` 照合順序句 (`NOCASE`, `RTRIM`, `BINARY`) の実装** | 大小文字を区別しない比較・ソート `WHERE col = 'test' COLLATE NOCASE`、`ORDER BY col COLLATE RTRIM`。 | — | **Closed (完了)** |
 
 - **目的**: 先端クエリ表現力の向上およびアプリケーション層での型検証オーバーヘッド削減。
 - **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `functions.py`
 
 ---
 
-### 6.9 Phase 9: エンタープライズバックアップ & 高度トリガー・外部キーカスケード 【計画中 / Planned】
+### 6.9 Phase 9: エンタープライズバックアップ & 高度トリガー・外部キーカスケード 【完了 / Closed】
 
-本番運用における無停止バックアップ、ビューに対する変更透過性、および自動リレーショナル整合性を確立します。
+本番運用における無停止バックアップ、ビューに対する変更透過性、自動リレーショナル整合性、および拡張スキーマ照会を完全実装しました。
 
-| 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
-| :---: | :--- | :--- | :---: |
-| **[#271](../issues/closed/271-implement-sqlite-parity-vacuum-into.md)** | **`VACUUM INTO 'filename'` オンラインバックアップの実装** | 稼働中データベースを排他ロックせず、指定ファイルパスへ無停止スナップショット・コンパクションを出力。 | SQLite 3.27.0+ |
-| **[#272](../issues/closed/272-implement-sqlite-parity-instead-of-trigger.md)** | **VIEW 向け `INSTEAD OF` トリガーの実装** | `CREATE TRIGGER ... INSTEAD OF INSERT/UPDATE/DELETE ON view_name BEGIN ... END;` による更新可能ビューの実現。 | SQLite 標準 |
-| **[#273](../issues/closed/273-implement-sqlite-parity-foreign-key-cascade.md)** | **外部キーカスケード (`ON DELETE CASCADE` / `ON UPDATE SET NULL`) の実装** | 親行削除・更新時に子レコードを自動連動処理するリレーショナル整合性エンジン。 | SQLite 標準 |
-| **[#274](../issues/274-implement-sqlite-parity-extended-pragma.md)** | **拡張 PRAGMA (`table_xinfo`, `user_version`) の実装** | 生成列・非表示列を含む拡張スキーマ照会およびスキーママイグレーション追跡用ユーザーバージョン番号管理。 | SQLite 標準 |
+| Issue | タイトル | 主な対象機能・構文仕様 | マージコミット | 状態 |
+| :---: | :--- | :--- | :---: | :---: |
+| **[#271](../issues/closed/271-implement-sqlite-parity-vacuum-into.md)** | **`VACUUM INTO 'filename'` オンラインバックアップの実装** | 稼働中データベースを排他ロックせず、指定ファイルパスへ無停止スナップショット・コンパクションを出力。 | — | **Closed (完了)** |
+| **[#272](../issues/closed/272-implement-sqlite-parity-instead-of-trigger.md)** | **VIEW 向け `INSTEAD OF` トリガーの実装** | `CREATE TRIGGER ... INSTEAD OF INSERT/UPDATE/DELETE ON view_name BEGIN ... END;` による更新可能ビューの実現。 | — | **Closed (完了)** |
+| **[#273](../issues/closed/273-implement-sqlite-parity-foreign-key-cascade.md)** | **外部キーカスケード (`ON DELETE CASCADE` / `ON UPDATE SET NULL`) の実装** | 親行削除・更新時に子レコードを自動連動処理するリレーショナル整合性エンジン。 | — | **Closed (完了)** |
+| **[#274](../issues/closed/274-implement-sqlite-parity-extended-pragma.md)** | **拡張 PRAGMA (`table_xinfo`, `user_version`, `foreign_key_list`) の実装** | 生成列・非表示列を含む拡張スキーマ照会、スキーママイグレーション追跡用ユーザーバージョン管理、外部キー一覧取得。`TableCatalog.columns` フィールド追加による `PRAGMA table_info` 正常化も含む。 | — | **Closed (完了)** |
 
 - **目的**: エンタープライズ級のバックアップ自動化と堅牢なリレーショナル整合性保証。
 - **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `storage/`

@@ -375,6 +375,7 @@ class TableCatalog:
         generated_columns: Optional[Dict[str, ColumnDef]] = None,
         column_collations: Optional[Dict[str, str]] = None,
         foreign_keys: Optional[List[ForeignKeyDef]] = None,
+        columns: Optional[List[ColumnDef]] = None,
     ) -> None:
         self.name = name
         self.storage = storage
@@ -382,7 +383,9 @@ class TableCatalog:
         self.index = index if index is not None else HNSWIndex(dim=default_dim)
         self.schema = schema if schema is not None else {}
         self.strict = strict
-        self._init_catalog_columns(generated_columns, column_collations, foreign_keys)
+        self._init_catalog_columns(
+            generated_columns, column_collations, foreign_keys, columns
+        )
         self._init_catalog_metadata(raw_sql, storage_engine, location, database_scope)
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
@@ -395,10 +398,12 @@ class TableCatalog:
         generated_columns: Optional[Dict[str, ColumnDef]],
         column_collations: Optional[Dict[str, str]],
         foreign_keys: Optional[List[ForeignKeyDef]],
+        columns: Optional[List[ColumnDef]] = None,
     ) -> None:
         self.generated_columns = generated_columns or {}
         self.column_collations = column_collations or {}
         self.foreign_keys = foreign_keys or []
+        self.columns: List[ColumnDef] = columns if columns is not None else []
 
     def _init_catalog_metadata(
         self,
@@ -1558,6 +1563,7 @@ class SQLExecutor:
         self.views: Dict[str, CreateViewStatement] = {}
         self.triggers: Dict[str, CreateTriggerStatement] = {}
         self.foreign_keys_enabled: bool = True
+        self.user_version: int = 0
         self._init_default_tables(
             catalog,
             default_storage,
@@ -1693,46 +1699,80 @@ class SQLExecutor:
             return self._exec_rollback_tx()
         raise SQLExecutionError(f"Unknown TCL command: {cmd}")
 
-    def _col_defs_to_pragma_rows(self, col_defs: List[Any]) -> List[Dict[str, Any]]:
+    def _calc_hidden_attr(self, c: Any) -> int:
+        if not getattr(c, "generated_expr", None):
+            return 0
+        return 3 if getattr(c, "is_stored", False) else 2
+
+    def _should_skip_pragma_row(self, c: Any, is_xinfo: bool) -> bool:
+        """Returns True if this column should be omitted from table_info output."""
+        is_gen = bool(getattr(c, "generated_expr", None))
+        is_stored = bool(getattr(c, "is_stored", False))
+        return not is_xinfo and is_gen and not is_stored
+
+    def _build_pragma_base_row(self, c: Any, cid: int) -> Dict[str, Any]:
+        """Builds the base PRAGMA row dict without the xinfo-only 'hidden' field."""
+        return {
+            "cid": cid,
+            "name": c.name,
+            "type": c.data_type,
+            "notnull": 1 if not c.is_nullable else 0,
+            "dflt_value": None,
+            "pk": 1 if c.is_primary_key else 0,
+        }
+
+    def _build_pragma_row(
+        self, c: Any, cid: int, is_xinfo: bool
+    ) -> Optional[Dict[str, Any]]:
+        if self._should_skip_pragma_row(c, is_xinfo):
+            return None
+        row = self._build_pragma_base_row(c, cid)
+        if is_xinfo:
+            row["hidden"] = self._calc_hidden_attr(c)
+        return row
+
+    def _col_defs_to_pragma_rows(
+        self, col_defs: List[Any], is_xinfo: bool = False
+    ) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
-        for cid, c in enumerate(col_defs):
-            rows.append(
-                {
-                    "cid": cid,
-                    "name": c.name,
-                    "type": c.data_type,
-                    "notnull": 1 if not c.is_nullable else 0,
-                    "dflt_value": None,
-                    "pk": 1 if c.is_primary_key else 0,
-                }
-            )
+        cid = 0
+        for c in col_defs:
+            row = self._build_pragma_row(c, cid, is_xinfo)
+            if row is not None:
+                rows.append(row)
+                cid += 1
         return rows
 
-    def _infer_meta_pragma_rows(self, tcat: TableCatalog) -> List[Dict[str, Any]]:
+    def _infer_meta_pragma_rows(
+        self, tcat: TableCatalog, is_xinfo: bool = False
+    ) -> List[Dict[str, Any]]:
         first_meta = tcat.storage.metadata[0] if tcat.storage.metadata else {}
         rows: List[Dict[str, Any]] = []
         for cid, k in enumerate(first_meta.keys()):
-            rows.append(
-                {
-                    "cid": cid,
-                    "name": k,
-                    "type": "TEXT",
-                    "notnull": 0,
-                    "dflt_value": None,
-                    "pk": 1 if k == "id" else 0,
-                }
-            )
+            row = {
+                "cid": cid,
+                "name": k,
+                "type": "TEXT",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 1 if k == "id" else 0,
+            }
+            if is_xinfo:
+                row["hidden"] = 0
+            rows.append(row)
         return rows
 
-    def _exec_pragma_table_info(self, table_name: Optional[str]) -> Dict[str, Any]:
+    def _exec_pragma_table_info(
+        self, table_name: Optional[str], is_xinfo: bool = False
+    ) -> Dict[str, Any]:
         if not table_name or table_name not in self.tables:
             return {"command": "PRAGMA", "status": "ok", "rows": [], "count": 0}
         tcat = self.tables[table_name]
         col_defs = getattr(tcat, "columns", None) or []
         rows = (
-            self._col_defs_to_pragma_rows(col_defs)
+            self._col_defs_to_pragma_rows(col_defs, is_xinfo=is_xinfo)
             if col_defs
-            else self._infer_meta_pragma_rows(tcat)
+            else self._infer_meta_pragma_rows(tcat, is_xinfo=is_xinfo)
         )
         return {"command": "PRAGMA", "status": "ok", "rows": rows, "count": len(rows)}
 
@@ -1778,6 +1818,40 @@ class SQLExecutor:
             "count": 1,
         }
 
+    def _exec_pragma_foreign_key_list(
+        self, table_name: Optional[str]
+    ) -> Dict[str, Any]:
+        if not table_name or table_name not in self.tables:
+            return {"command": "PRAGMA", "status": "ok", "rows": [], "count": 0}
+        tcat = self.tables[table_name]
+        fks = getattr(tcat, "foreign_keys", []) or []
+        rows: List[Dict[str, Any]] = []
+        for i, fk in enumerate(fks):
+            rows.append(
+                {
+                    "id": i,
+                    "seq": 0,
+                    "table": fk.parent_table,
+                    "from": fk.child_column,
+                    "to": fk.parent_column,
+                    "on_update": fk.on_update,
+                    "on_delete": fk.on_delete,
+                    "match": "NONE",
+                }
+            )
+        return {"command": "PRAGMA", "status": "ok", "rows": rows, "count": len(rows)}
+
+    def _exec_pragma_user_version(self, val: Optional[str]) -> Dict[str, Any]:
+        if val is not None:
+            self.user_version = int(val) if val.isdigit() else 0
+            return {"command": "PRAGMA", "status": "ok", "rows": [], "count": 0}
+        return {
+            "command": "PRAGMA",
+            "status": "ok",
+            "rows": [{"user_version": self.user_version}],
+            "count": 1,
+        }
+
     def _exec_pragma_flag(
         self, pname: str, val: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
@@ -1792,14 +1866,33 @@ class SQLExecutor:
             }
         return None
 
+    def _dispatch_meta_pragma(
+        self, pname: str, stmt: PragmaStatement
+    ) -> Optional[Dict[str, Any]]:
+        handlers = {
+            "table_info": lambda: self._exec_pragma_table_info(
+                stmt.argument, is_xinfo=False
+            ),
+            "table_xinfo": lambda: self._exec_pragma_table_info(
+                stmt.argument, is_xinfo=True
+            ),
+            "foreign_key_list": lambda: self._exec_pragma_foreign_key_list(
+                stmt.argument or stmt.value
+            ),
+            "user_version": lambda: self._exec_pragma_user_version(
+                stmt.value if stmt.value is not None else stmt.argument
+            ),
+            "index_list": lambda: self._exec_pragma_index_list(stmt.argument),
+            "database_list": lambda: self._exec_pragma_database_list(),
+        }
+        handler = handlers.get(pname)
+        return handler() if handler is not None else None
+
     def _exec_pragma(self, stmt: PragmaStatement, role: str) -> Dict[str, Any]:
         pname = stmt.pragma_name.lower()
-        if pname == "table_info":
-            return self._exec_pragma_table_info(stmt.argument)
-        if pname == "index_list":
-            return self._exec_pragma_index_list(stmt.argument)
-        if pname == "database_list":
-            return self._exec_pragma_database_list()
+        meta_res = self._dispatch_meta_pragma(pname, stmt)
+        if meta_res is not None:
+            return meta_res
         flag_res = self._exec_pragma_flag(pname, stmt.value)
         if flag_res is not None:
             return flag_res
@@ -2126,6 +2219,7 @@ class SQLExecutor:
             generated_columns=self._extract_table_gen_columns(stmt.columns),
             column_collations=self._extract_table_collations(stmt.columns),
             foreign_keys=stmt.foreign_keys,
+            columns=stmt.columns,
         )
         self.tables[stmt.table_name] = catalog
 

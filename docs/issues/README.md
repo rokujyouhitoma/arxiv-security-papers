@@ -9,9 +9,6 @@
 | **277** | SQLite 完全互換化: ユーザー定義照合順序 (User-Defined Collation) 登録機構の実装 | Feature | Low | Open (New) | [277-implement-sqlite-parity-user-defined-collation.md](277-implement-sqlite-parity-user-defined-collation.md) |
 | **276** | SQLite 完全互換化: テーブル値関数 json_each() / json_tree() の実装 | Feature | Medium | Open (New) | [276-implement-sqlite-parity-json-each-and-tree.md](276-implement-sqlite-parity-json-each-and-tree.md) |
 | **275** | SQLite 完全互換化: FTS5 全文検索仮想テーブル & MATCH 演算子の実装 | Feature | High | Open (New) | [275-implement-sqlite-parity-fts5-virtual-table.md](275-implement-sqlite-parity-fts5-virtual-table.md) |
-| **274** | SQLite 完全互換化: 拡張 PRAGMA (table_xinfo, user_version) の実装 | Feature | Low | Open (New) | [274-implement-sqlite-parity-extended-pragma.md](274-implement-sqlite-parity-extended-pragma.md) |
-| **273** | SQLite 完全互換化: 外部キーカスケード (ON DELETE CASCADE / ON UPDATE SET NULL) の実装 | Feature | Medium | Closed | [273-implement-sqlite-parity-foreign-key-cascade.md](closed/273-implement-sqlite-parity-foreign-key-cascade.md) |
-| **272** | SQLite 完全互換化: VIEW 向け INSTEAD OF トリガーの実装 | Feature | Medium | Closed | [272-implement-sqlite-parity-instead-of-trigger.md](closed/272-implement-sqlite-parity-instead-of-trigger.md) |
 | **251** | Lehman-Yao 型 B-link Tree によるラッチフリー並行走査およびスプリット追随インデックスエンジンの実装 | Feature | Low | Open (New) | [251-implement-lehman-yao-b-link-tree-concurrent-index.md](251-implement-lehman-yao-b-link-tree-concurrent-index.md) |
 | **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | Medium | Open (New) | [250-implement-louvain-community-detection-for-cti-graph.md](250-implement-louvain-community-detection-for-cti-graph.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
@@ -23,6 +20,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **274** | SQLite 完全互換化: 拡張 PRAGMA (table_xinfo, user_version, foreign_key_list) の実装 | Feature | 2026-09-13 | [274-implement-sqlite-parity-extended-pragma.md](closed/274-implement-sqlite-parity-extended-pragma.md) |
+| **273** | SQLite 完全互換化: 外部キーカスケード (ON DELETE CASCADE / ON UPDATE SET NULL) の実装 | Feature | 2026-09-12 | [273-implement-sqlite-parity-foreign-key-cascade.md](closed/273-implement-sqlite-parity-foreign-key-cascade.md) |
+| **272** | SQLite 完全互換化: VIEW 向け INSTEAD OF トリガーの実装 | Feature | 2026-09-12 | [272-implement-sqlite-parity-instead-of-trigger.md](closed/272-implement-sqlite-parity-instead-of-trigger.md) |
 | **271** | SQLite 完全互換化: VACUUM INTO 'filename' オンラインバックアップの実装 | Feature | 2026-09-12 | [271-implement-sqlite-parity-vacuum-into.md](closed/271-implement-sqlite-parity-vacuum-into.md) |
 | **270** | SQLite 完全互換化: COLLATE 照合順序句 (NOCASE, RTRIM, BINARY) の実装 | Feature | 2026-09-12 | [270-implement-sqlite-parity-collate-clause.md](closed/270-implement-sqlite-parity-collate-clause.md) |
 | **269** | SQLite 完全互換化: 生成列 (GENERATED ALWAYS AS) の実装 | Feature | 2026-09-12 | [269-implement-sqlite-parity-generated-columns.md](closed/269-implement-sqlite-parity-generated-columns.md) |
