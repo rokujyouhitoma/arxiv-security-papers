@@ -13,7 +13,12 @@ class SQLCommandType(str, Enum):
     # DDL
     CREATE_TABLE = "CREATE_TABLE"
     DROP_TABLE = "DROP_TABLE"
+    ALTER_TABLE = "ALTER_TABLE"
     CREATE_INDEX = "CREATE_INDEX"
+    DROP_INDEX = "DROP_INDEX"
+    REINDEX = "REINDEX"
+    CREATE_VIEW = "CREATE_VIEW"
+    DROP_VIEW = "DROP_VIEW"
 
     # DQL
     SELECT = "SELECT"
@@ -45,7 +50,12 @@ class SQLCommandType(str, Enum):
 _CMD_CATEGORY_MAP: Dict[SQLCommandType, str] = {
     SQLCommandType.CREATE_TABLE: "DDL",
     SQLCommandType.DROP_TABLE: "DDL",
+    SQLCommandType.ALTER_TABLE: "DDL",
     SQLCommandType.CREATE_INDEX: "DDL",
+    SQLCommandType.DROP_INDEX: "DDL",
+    SQLCommandType.REINDEX: "DDL",
+    SQLCommandType.CREATE_VIEW: "DDL",
+    SQLCommandType.DROP_VIEW: "DDL",
     SQLCommandType.SELECT: "DQL",
     SQLCommandType.SHOW: "DQL",
     SQLCommandType.EXPLAIN: "DQL",
@@ -105,6 +115,49 @@ class CreateIndexStatement(SQLStatement):
     table_name: str = ""
     column_name: str = ""
     index_type: str = "HNSW"  # HNSW, INVERTED, BTREE
+
+
+class AlterTableAction(str, Enum):
+    RENAME_TABLE = "RENAME_TABLE"
+    RENAME_COLUMN = "RENAME_COLUMN"
+    ADD_COLUMN = "ADD_COLUMN"
+    DROP_COLUMN = "DROP_COLUMN"
+
+
+@dataclass
+class AlterTableStatement(SQLStatement):
+    table_name: str = ""
+    action: AlterTableAction = AlterTableAction.RENAME_TABLE
+    new_table_name: Optional[str] = None
+    old_column_name: Optional[str] = None
+    new_column_name: Optional[str] = None
+    column_def: Optional[ColumnDef] = None
+    default_value: Any = None
+    drop_column_name: Optional[str] = None
+
+
+@dataclass
+class DropIndexStatement(SQLStatement):
+    index_name: str = ""
+    if_exists: bool = False
+
+
+@dataclass
+class ReindexStatement(SQLStatement):
+    target_name: Optional[str] = None  # None: all, or specific table/index name
+
+
+@dataclass
+class CreateViewStatement(SQLStatement):
+    view_name: str = ""
+    select_stmt: Optional[Any] = None  # SelectStatement
+    if_not_exists: bool = False
+
+
+@dataclass
+class DropViewStatement(SQLStatement):
+    view_name: str = ""
+    if_exists: bool = False
 
 
 class JoinType(str, Enum):

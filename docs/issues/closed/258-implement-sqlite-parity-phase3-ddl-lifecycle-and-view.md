@@ -2,7 +2,7 @@
 ID: 258
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] SQLite 完全互換化 Phase 3: DDL ライフサイクル & VIEW (ALTER TABLE, DROP INDEX, REINDEX, CREATE/DROP VIEW) の実装 (ID: 258)
@@ -20,11 +20,11 @@ ID: 258
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/database/sql/ast.py](../src/database/sql/ast.py): `AlterTableStatement`, `DropIndexStatement`, `ReindexStatement`, `CreateViewStatement`, `DropViewStatement` 追加
-- [ ] [src/database/sql/parser.py](../src/database/sql/parser.py): 各 DDL 構文パーサーの新設
-- [ ] [src/database/sql/executor.py](../src/database/sql/executor.py): スキーマメタデータ変更、物理ファイルリネーム、インデックス破棄・再構築、ビューインライン展開
-- [ ] [tests/database/sql/test_sql_engine.py](../tests/database/sql/test_sql_engine.py): ALTER TABLE, DROP INDEX, VIEW 単体テスト追加
-- [ ] [docs/issues/README.md](README.md): Issue 台帳の登録・追跡
+- [x] [src/database/sql/ast.py](../src/database/sql/ast.py): `AlterTableStatement`, `DropIndexStatement`, `ReindexStatement`, `CreateViewStatement`, `DropViewStatement` 追加
+- [x] [src/database/sql/parser.py](../src/database/sql/parser.py): 各 DDL 構文パーサーの新設
+- [x] [src/database/sql/executor.py](../src/database/sql/executor.py): スキーマメタデータ変更、物理ファイルリネーム、インデックス破棄・再構築、ビューインライン展開
+- [x] [tests/database/sql/test_sql_engine.py](../tests/database/sql/test_sql_engine.py): ALTER TABLE, DROP INDEX, VIEW 単体テスト追加
+- [x] [docs/issues/README.md](README.md): Issue 台帳の登録・追跡
 
 ---
 
@@ -52,9 +52,9 @@ Target Branch: `feat/258-implement-sqlite-parity-phase3-ddl-lifecycle-and-view`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `ALTER TABLE tbl RENAME TO new_tbl` でテーブル名およびファイルが正しく変更されること。
-- [ ] `ALTER TABLE tbl ADD COLUMN col VARCHAR DEFAULT 'def'` で全行に新列とデフォルト値が追加されること。
-- [ ] `DROP INDEX idx_name` で指定インデックスが安全に破棄され、以降の EXPLAIN で利用されなくなること。
-- [ ] `CREATE VIEW v_active AS SELECT * FROM tbl WHERE is_active = 1` 定義後、`SELECT * FROM v_active` で正常に結果が返却されること。
-- [ ] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
-- [ ] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。
+- [x] `ALTER TABLE tbl RENAME TO new_tbl` でテーブル名およびファイルが正しく変更されること。
+- [x] `ALTER TABLE tbl ADD COLUMN col VARCHAR DEFAULT 'def'` で全行に新列とデフォルト値が追加されること。
+- [x] `DROP INDEX idx_name` で指定インデックスが安全に破棄され、以降の EXPLAIN で利用されなくなること。
+- [x] `CREATE VIEW v_active AS SELECT * FROM tbl WHERE is_active = 1` 定義後、`SELECT * FROM v_active` で正常に結果が返却されること。
+- [x] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
+- [x] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。

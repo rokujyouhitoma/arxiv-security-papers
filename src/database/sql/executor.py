@@ -17,14 +17,21 @@ from ..index import HNSWIndex
 from ..planner import QueryPlanner, TableStats
 from ..storage import VectorStorage
 from .ast import (
+    AlterTableAction,
+    AlterTableStatement,
     CreateIndexStatement,
     CreateTableStatement,
+    CreateViewStatement,
     DeleteStatement,
+    DropIndexStatement,
     DropTableStatement,
+    DropViewStatement,
     ExplainStatement,
     GrantStatement,
     InsertStatement,
+    JoinClause,
     JoinType,
+    ReindexStatement,
     RevokeStatement,
     SelectStatement,
     ShowStatement,
@@ -65,6 +72,111 @@ def _project_returning_rows(
     if "*" in returning_cols:
         return [dict(r) for r in records]
     return [_project_single_record(r, returning_cols) for r in records]
+
+
+def _resolve_stmt_target_table(stmt: SelectStatement) -> str:
+    if stmt.table_name:
+        return stmt.table_name
+    if stmt.table_ref:
+        return stmt.table_ref.name
+    return ""
+
+
+def _extract_join_tables(joins: List[JoinClause]) -> List[str]:
+    res: List[str] = []
+    for j in joins:
+        if j.table:
+            res.append(j.table.name)
+    return res
+
+
+def _rename_metadata_col(table: Any, old_col: str, new_col: str) -> None:
+    for meta in table.storage.metadata:
+        if old_col in meta:
+            meta[new_col] = meta.pop(old_col)
+
+
+def _update_index_for_renamed_col(table: Any, old_col: str, new_col: str) -> None:
+    if old_col in table.btree_indexes:
+        table.btree_indexes[new_col] = table.btree_indexes.pop(old_col)
+    if old_col in table.btree_index_names:
+        table.btree_index_names[new_col] = table.btree_index_names.pop(old_col)
+    for idef in table.index_definitions:
+        if idef.get("column") == old_col:
+            idef["column"] = new_col
+
+
+def _remove_index_for_dropped_col(table: Any, col_name: str) -> None:
+    table.btree_indexes.pop(col_name, None)
+    table.btree_index_names.pop(col_name, None)
+    table.index_definitions = [
+        d for d in table.index_definitions if d.get("column") != col_name
+    ]
+
+
+def _save_table_storage(table: Any) -> None:
+    if hasattr(table.storage, "save") and callable(table.storage.save):
+        table.storage.save()
+    elif hasattr(table.storage, "write_all") and callable(table.storage.write_all):
+        vecs = table.storage.get_all_vectors()
+        table.storage.write_all(vecs, table.storage.metadata)
+
+
+def _drop_from_index_defs(table: Any, index_name: str) -> bool:
+    found = False
+    for idef in list(table.index_definitions):
+        if idef.get("name") == index_name:
+            table.index_definitions.remove(idef)
+            col = idef.get("column")
+            if col:
+                table.btree_indexes.pop(col, None)
+                table.btree_index_names.pop(col, None)
+            found = True
+    return found
+
+
+def _drop_from_btree_names(table: Any, index_name: str) -> bool:
+    cols = [c for c, iname in table.btree_index_names.items() if iname == index_name]
+    for c in cols:
+        table.btree_indexes.pop(c, None)
+        table.btree_index_names.pop(c, None)
+    return bool(cols)
+
+
+def _drop_matching_index_from_table(table: Any, index_name: str) -> bool:
+    res1 = _drop_from_index_defs(table, index_name)
+    res2 = _drop_from_btree_names(table, index_name)
+    return res1 or res2
+
+
+def _rebuild_table_indexes(table: Any) -> int:
+    vecs = table.storage.get_all_vectors()
+    table.index = HNSWIndex(dim=table.storage.dim)
+    table.index.build_from_storage(vecs)
+    cnt = 1
+    for col, iname in list(table.btree_index_names.items()):
+        btree = BPlusTree(column_name=col)
+        for idx, meta in enumerate(table.storage.metadata):
+            val = meta.get(col)
+            if val is not None:
+                btree.insert(val, idx)
+        table.btree_indexes[col] = btree
+        cnt += 1
+    return cnt
+
+
+def _rebuild_named_btree_index(table: Any, index_name: str) -> int:
+    cnt = 0
+    for col, iname in list(table.btree_index_names.items()):
+        if iname == index_name:
+            btree = BPlusTree(column_name=col)
+            for idx, meta in enumerate(table.storage.metadata):
+                val = meta.get(col)
+                if val is not None:
+                    btree.insert(val, idx)
+            table.btree_indexes[col] = btree
+            cnt += 1
+    return cnt
 
 
 class SQLExecutionError(Exception):
@@ -921,6 +1033,7 @@ class SQLExecutor:
         self.default_table_name = default_table_name
         self.known_databases: Dict[str, str] = dict(known_databases or {})
         self.tables: Dict[str, TableCatalog] = {}
+        self.views: Dict[str, CreateViewStatement] = {}
         self._init_default_tables(
             catalog,
             default_storage,
@@ -1220,6 +1333,154 @@ class SQLExecutor:
             "type": idx_type,
         }
 
+    def _alter_rename_table(
+        self, stmt: AlterTableStatement, table: TableCatalog
+    ) -> Dict[str, Any]:
+        new_name = stmt.new_table_name
+        if not new_name:
+            raise SQLExecutionError("Target table name for RENAME TO is required.")
+        if new_name in self.tables:
+            raise SQLExecutionError(f"Table '{new_name}' already exists.")
+        self.tables.pop(stmt.table_name)
+        table.name = new_name
+        self.tables[new_name] = table
+        return {"action": "RENAME_TABLE", "table": new_name}
+
+    def _alter_rename_column(
+        self, stmt: AlterTableStatement, table: TableCatalog
+    ) -> Dict[str, Any]:
+        old_col = stmt.old_column_name
+        new_col = stmt.new_column_name
+        if not old_col or not new_col:
+            raise SQLExecutionError("Column names for RENAME COLUMN are required.")
+        if table.schema and old_col in table.schema:
+            table.schema[new_col] = table.schema.pop(old_col)
+        _rename_metadata_col(table, old_col, new_col)
+        _update_index_for_renamed_col(table, old_col, new_col)
+        _save_table_storage(table)
+        return {"action": "RENAME_COLUMN", "old": old_col, "new": new_col}
+
+    def _alter_add_column(
+        self, stmt: AlterTableStatement, table: TableCatalog
+    ) -> Dict[str, Any]:
+        c_def = stmt.column_def
+        if not c_def:
+            raise SQLExecutionError("Column definition for ADD COLUMN is required.")
+        if table.schema is not None:
+            table.schema[c_def.name] = c_def.data_type
+        for meta in table.storage.metadata:
+            meta[c_def.name] = stmt.default_value
+        _save_table_storage(table)
+        return {"action": "ADD_COLUMN", "column": c_def.name}
+
+    def _alter_drop_column(
+        self, stmt: AlterTableStatement, table: TableCatalog
+    ) -> Dict[str, Any]:
+        col_name = stmt.drop_column_name
+        if not col_name:
+            raise SQLExecutionError("Column name for DROP COLUMN is required.")
+        if table.schema is not None:
+            table.schema.pop(col_name, None)
+        for meta in table.storage.metadata:
+            meta.pop(col_name, None)
+        _remove_index_for_dropped_col(table, col_name)
+        _save_table_storage(table)
+        return {"action": "DROP_COLUMN", "column": col_name}
+
+    def _exec_alter_table(
+        self, stmt: AlterTableStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        self.access_controller.enforce_permission(
+            effective_role, stmt.table_name, "CREATE_TABLE"
+        )
+        table = self._get_table(stmt.table_name)
+        if stmt.action == AlterTableAction.RENAME_TABLE:
+            res = self._alter_rename_table(stmt, table)
+        elif stmt.action == AlterTableAction.RENAME_COLUMN:
+            res = self._alter_rename_column(stmt, table)
+        elif stmt.action == AlterTableAction.ADD_COLUMN:
+            res = self._alter_add_column(stmt, table)
+        elif stmt.action == AlterTableAction.DROP_COLUMN:
+            res = self._alter_drop_column(stmt, table)
+        else:
+            raise SQLExecutionError(f"Unsupported ALTER TABLE action: {stmt.action}")
+        return {"command": "ALTER_TABLE", "status": "ok", **res}
+
+    def _exec_drop_index(
+        self, stmt: DropIndexStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        found = False
+        for tbl in self.tables.values():
+            if _drop_matching_index_from_table(tbl, stmt.index_name):
+                found = True
+        if not found and not stmt.if_exists:
+            raise SQLExecutionError(f"Index '{stmt.index_name}' does not exist")
+        return {
+            "command": "DROP_INDEX",
+            "status": "ok",
+            "index": stmt.index_name,
+            "dropped": found,
+        }
+
+    def _reindex_single_table_or_target(
+        self, tbl: TableCatalog, tname: str, target: Optional[str]
+    ) -> int:
+        if target is None or target == tname:
+            return _rebuild_table_indexes(tbl)
+        return _rebuild_named_btree_index(tbl, target)
+
+    def _exec_reindex(
+        self, stmt: ReindexStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        target = stmt.target_name
+        reindexed_cnt = sum(
+            self._reindex_single_table_or_target(tbl, tname, target)
+            for tname, tbl in self.tables.items()
+        )
+        return {
+            "command": "REINDEX",
+            "status": "ok",
+            "target": target or "ALL",
+            "reindexed_count": reindexed_cnt,
+        }
+
+    def _exec_create_view(
+        self, stmt: CreateViewStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        if stmt.view_name in self.views:
+            if stmt.if_not_exists:
+                return {
+                    "command": "CREATE_VIEW",
+                    "status": "ok",
+                    "message": f"View '{stmt.view_name}' already exists (skipped)",
+                }
+            raise SQLExecutionError(f"View '{stmt.view_name}' already exists.")
+        if stmt.view_name in self.tables:
+            raise SQLExecutionError(f"Table '{stmt.view_name}' already exists.")
+        self.views[stmt.view_name] = stmt
+        return {"command": "CREATE_VIEW", "status": "ok", "view": stmt.view_name}
+
+    def _exec_drop_view(
+        self, stmt: DropViewStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        if stmt.view_name not in self.views:
+            if stmt.if_exists:
+                return {
+                    "command": "DROP_VIEW",
+                    "status": "ok",
+                    "message": f"View '{stmt.view_name}' does not exist (skipped)",
+                    "view": stmt.view_name,
+                    "dropped": False,
+                }
+            raise SQLExecutionError(f"View '{stmt.view_name}' does not exist.")
+        self.views.pop(stmt.view_name, None)
+        return {
+            "command": "DROP_VIEW",
+            "status": "ok",
+            "view": stmt.view_name,
+            "dropped": True,
+        }
+
     def _exec_explain(
         self, stmt: ExplainStatement, effective_role: str
     ) -> Dict[str, Any]:
@@ -1360,6 +1621,27 @@ class SQLExecutor:
                 temp_tables[cte.name] = self._evaluate_recursive_cte(
                     cte, effective_role, temp_tables
                 )
+
+    def _collect_referenced_table_names(self, stmt: SelectStatement) -> List[str]:
+        target = _resolve_stmt_target_table(stmt)
+        join_tables = _extract_join_tables(stmt.joins)
+        return ([target] if target else []) + join_tables
+
+    def _evaluate_referenced_views(
+        self,
+        stmt: SelectStatement,
+        effective_role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> None:
+        ref_names = self._collect_referenced_table_names(stmt)
+        for name in ref_names:
+            if name in self.views and name not in temp_tables:
+                v_stmt = self.views[name]
+                if v_stmt.select_stmt is not None:
+                    res = self._exec_select(
+                        v_stmt.select_stmt, effective_role, temporary_tables=temp_tables
+                    )
+                    temp_tables[name] = res.get("rows", [])
 
     def _find_matching_join_rows(
         self,
@@ -1677,6 +1959,9 @@ class SQLExecutor:
         if fast_cnt is not None:
             return fast_cnt
 
+        if self.views:
+            self._evaluate_referenced_views(stmt, effective_role, temp_tables)
+
         if stmt.ctes:
             self._evaluate_all_ctes(stmt.ctes, effective_role, temp_tables)
 
@@ -1966,16 +2251,45 @@ class SQLExecutor:
             res["count"] = len(ret_rows)
         return res
 
-    def _exec_schema_stmt(
+    def _exec_schema_table_stmt(
         self, stmt: SQLStatement, role: str
     ) -> Optional[Dict[str, Any]]:
         if isinstance(stmt, CreateTableStatement):
             return self._exec_create_table(stmt, role)
         if isinstance(stmt, DropTableStatement):
             return self._exec_drop_table(stmt, role)
+        if isinstance(stmt, AlterTableStatement):
+            return self._exec_alter_table(stmt, role)
+        return None
+
+    def _exec_schema_index_stmt(
+        self, stmt: SQLStatement, role: str
+    ) -> Optional[Dict[str, Any]]:
         if isinstance(stmt, CreateIndexStatement):
             return self._exec_create_index(stmt, role)
+        if isinstance(stmt, DropIndexStatement):
+            return self._exec_drop_index(stmt, role)
+        if isinstance(stmt, ReindexStatement):
+            return self._exec_reindex(stmt, role)
         return None
+
+    def _exec_schema_view_stmt(
+        self, stmt: SQLStatement, role: str
+    ) -> Optional[Dict[str, Any]]:
+        if isinstance(stmt, CreateViewStatement):
+            return self._exec_create_view(stmt, role)
+        if isinstance(stmt, DropViewStatement):
+            return self._exec_drop_view(stmt, role)
+        return None
+
+    def _exec_schema_stmt(
+        self, stmt: SQLStatement, role: str
+    ) -> Optional[Dict[str, Any]]:
+        return (
+            self._exec_schema_table_stmt(stmt, role)
+            or self._exec_schema_index_stmt(stmt, role)
+            or self._exec_schema_view_stmt(stmt, role)
+        )
 
     def _exec_security_or_schema(
         self, stmt: SQLStatement, role: str

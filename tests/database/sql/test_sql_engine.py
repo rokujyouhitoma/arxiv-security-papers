@@ -581,3 +581,94 @@ def test_dml_phase2_multi_insert_upsert_returning():
         assert res_del_lim["status"] == "ok"
         assert res_del_lim["deleted_count"] == 1
         assert res_del_lim["rows"][0]["id"] == "i2"
+
+
+def test_ddl_phase3_alter_table_view_lifecycle():
+    """
+    Tests Phase 3 DDL Lifecycle & VIEW:
+    ALTER TABLE (RENAME TO, ADD COLUMN, RENAME COLUMN, DROP COLUMN),
+    CREATE/DROP INDEX, REINDEX, CREATE/DROP VIEW.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test_p3.vdb")
+        executor = SQLExecutor()
+        executor.execute(
+            f"CREATE TABLE users (id VARCHAR PRIMARY KEY, name VARCHAR, age INT) USING binary_vdb LOCATION '{db_path}'"
+        )
+        executor.execute("INSERT INTO users (id, name, age) VALUES ('u1', 'Alice', 25)")
+        executor.execute("INSERT INTO users (id, name, age) VALUES ('u2', 'Bob', 30)")
+
+        # 1. ALTER TABLE ADD COLUMN with DEFAULT
+        res_add = executor.execute(
+            "ALTER TABLE users ADD COLUMN status VARCHAR DEFAULT 'active'"
+        )
+        assert res_add["status"] == "ok"
+        rows = executor.execute("SELECT id, name, status FROM users ORDER BY id ASC")[
+            "rows"
+        ]
+        assert rows[0]["status"] == "active"
+        assert rows[1]["status"] == "active"
+
+        # 2. ALTER TABLE RENAME COLUMN
+        res_ren_col = executor.execute(
+            "ALTER TABLE users RENAME COLUMN name TO full_name"
+        )
+        assert res_ren_col["status"] == "ok"
+        rows_ren = executor.execute(
+            "SELECT id, full_name, status FROM users ORDER BY id ASC"
+        )["rows"]
+        assert rows_ren[0]["full_name"] == "Alice"
+
+        # 3. ALTER TABLE DROP COLUMN
+        res_drop_col = executor.execute("ALTER TABLE users DROP COLUMN age")
+        assert res_drop_col["status"] == "ok"
+        rows_drop = executor.execute("SELECT * FROM users ORDER BY id ASC")["rows"]
+        assert "age" not in rows_drop[0]
+
+        # 4. ALTER TABLE RENAME TO
+        res_ren_tbl = executor.execute("ALTER TABLE users RENAME TO members")
+        assert res_ren_tbl["status"] == "ok"
+        rows_tbl = executor.execute(
+            "SELECT id, full_name FROM members ORDER BY id ASC"
+        )["rows"]
+        assert len(rows_tbl) == 2
+
+        # 5. CREATE INDEX, REINDEX, DROP INDEX
+        res_idx = executor.execute(
+            "CREATE INDEX idx_members_name ON members(full_name) USING BTREE"
+        )
+        assert res_idx["status"] == "ok"
+
+        res_reindex = executor.execute("REINDEX members")
+        assert res_reindex["status"] == "ok"
+        assert res_reindex["reindexed_count"] >= 1
+
+        res_drop_idx = executor.execute("DROP INDEX idx_members_name")
+        assert res_drop_idx["status"] == "ok"
+        assert res_drop_idx["dropped"] is True
+
+        res_drop_idx_exists = executor.execute("DROP INDEX IF EXISTS idx_members_name")
+        assert res_drop_idx_exists["status"] == "ok"
+        assert res_drop_idx_exists["dropped"] is False
+
+        # 6. CREATE VIEW and query through view
+        res_view = executor.execute(
+            "CREATE VIEW v_active_members AS SELECT id, full_name FROM members WHERE status = 'active'"
+        )
+        assert res_view["status"] == "ok"
+
+        res_view_sel = executor.execute(
+            "SELECT id, full_name FROM v_active_members ORDER BY id ASC"
+        )
+        assert res_view_sel["status"] == "ok"
+        assert res_view_sel["count"] == 2
+        assert res_view_sel["rows"][0]["full_name"] == "Alice"
+
+        # 7. DROP VIEW
+        res_drop_v = executor.execute("DROP VIEW v_active_members")
+        assert res_drop_v["status"] == "ok"
+        assert res_drop_v["dropped"] is True
+
+        res_drop_v_exists = executor.execute("DROP VIEW IF EXISTS v_active_members")
+        assert res_drop_v_exists["status"] == "ok"
+        assert res_drop_v_exists["dropped"] is False

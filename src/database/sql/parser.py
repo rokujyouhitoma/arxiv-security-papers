@@ -9,19 +9,25 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from .ast import (
+    AlterTableAction,
+    AlterTableStatement,
     BeginStatement,
     ColumnDef,
     CommitStatement,
     CreateIndexStatement,
     CreateTableStatement,
+    CreateViewStatement,
     CTEDefinition,
     DeleteStatement,
+    DropIndexStatement,
     DropTableStatement,
+    DropViewStatement,
     ExplainStatement,
     GrantStatement,
     InsertStatement,
     JoinClause,
     JoinType,
+    ReindexStatement,
     RevokeStatement,
     RollbackStatement,
     SelectStatement,
@@ -46,6 +52,109 @@ def _extract_distinct_prefix(cols_raw: str) -> Tuple[str, bool]:
     if re.match(r"^ALL\s+", cols_raw, re.IGNORECASE):
         return re.sub(r"^ALL\s+", "", cols_raw, flags=re.IGNORECASE).strip(), False
     return cols_raw, False
+
+
+def _parse_alter_rename_table(sql: str) -> Optional[AlterTableStatement]:
+    """Parses ALTER TABLE tbl RENAME TO new_tbl."""
+    m = re.match(
+        r"^ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+RENAME\s+TO\s+([a-zA-Z0-9_]+)$",
+        sql,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    return AlterTableStatement(
+        command_type=SQLCommandType.ALTER_TABLE,
+        raw_sql=sql,
+        table_name=m.group(1),
+        action=AlterTableAction.RENAME_TABLE,
+        new_table_name=m.group(2),
+    )
+
+
+def _parse_alter_rename_column(sql: str) -> Optional[AlterTableStatement]:
+    """Parses ALTER TABLE tbl RENAME [COLUMN] old_col TO new_col."""
+    m = re.match(
+        r"^ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+RENAME\s+(?:COLUMN\s+)?([a-zA-Z0-9_]+)\s+TO\s+([a-zA-Z0-9_]+)$",
+        sql,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    return AlterTableStatement(
+        command_type=SQLCommandType.ALTER_TABLE,
+        raw_sql=sql,
+        table_name=m.group(1),
+        action=AlterTableAction.RENAME_COLUMN,
+        old_column_name=m.group(2),
+        new_column_name=m.group(3),
+    )
+
+
+def _resolve_raw_default_val(raw_val: Optional[str]) -> Any:
+    """Parses raw DEFAULT literal string into typed value."""
+    if raw_val is None or raw_val.upper() == "NULL":
+        return None
+    if re.match(r"^-?\d+$", raw_val):
+        return int(raw_val)
+    if re.match(r"^-?\d+\.\d+$", raw_val):
+        return float(raw_val)
+    return raw_val
+
+
+def _extract_default_value(col_def_str: str) -> Tuple[str, Any]:
+    """Extracts DEFAULT clause from column definition string."""
+    m = re.search(
+        r"\s+DEFAULT\s+('([^']*)'|\"([^\"]*)\"|([a-zA-Z0-9_\.\-]+))",
+        col_def_str,
+        re.IGNORECASE,
+    )
+    if not m:
+        return col_def_str, None
+    raw_val = m.group(2) or m.group(3) or m.group(4)
+    cleaned_col = col_def_str[: m.start()] + col_def_str[m.end() :]
+    return cleaned_col.strip(), _resolve_raw_default_val(raw_val)
+
+
+def _parse_alter_add_column(
+    sql: str, parser_instance: Any
+) -> Optional[AlterTableStatement]:
+    """Parses ALTER TABLE tbl ADD [COLUMN] col_def."""
+    m = re.match(
+        r"^ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+ADD\s+(?:COLUMN\s+)?(.*)$",
+        sql,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    cleaned_def, default_val = _extract_default_value(m.group(2).strip())
+    c_def = parser_instance._parse_column_def(cleaned_def)
+    return AlterTableStatement(
+        command_type=SQLCommandType.ALTER_TABLE,
+        raw_sql=sql,
+        table_name=m.group(1),
+        action=AlterTableAction.ADD_COLUMN,
+        column_def=c_def,
+        default_value=default_val,
+    )
+
+
+def _parse_alter_drop_column(sql: str) -> Optional[AlterTableStatement]:
+    """Parses ALTER TABLE tbl DROP [COLUMN] col_name."""
+    m = re.match(
+        r"^ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+DROP\s+(?:COLUMN\s+)?([a-zA-Z0-9_]+)$",
+        sql,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    return AlterTableStatement(
+        command_type=SQLCommandType.ALTER_TABLE,
+        raw_sql=sql,
+        table_name=m.group(1),
+        action=AlterTableAction.DROP_COLUMN,
+        drop_column_name=m.group(2),
+    )
 
 
 def _resolve_show_target(upper_sql: str) -> str:
@@ -414,14 +523,37 @@ class SQLParser:
             return RollbackStatement(command_type=SQLCommandType.ROLLBACK, raw_sql=sql)
         return None
 
-    def _parse_ddl(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+    def _parse_ddl_table(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("CREATE TABLE"):
             return self._parse_create_table(sql)
         if upper_sql.startswith("DROP TABLE"):
             return self._parse_drop_table(sql)
+        if upper_sql.startswith("ALTER TABLE"):
+            return self._parse_alter_table(sql)
+        return None
+
+    def _parse_ddl_index(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("CREATE INDEX"):
             return self._parse_create_index(sql)
+        if upper_sql.startswith("DROP INDEX"):
+            return self._parse_drop_index(sql)
+        if upper_sql.startswith("REINDEX"):
+            return self._parse_reindex(sql)
         return None
+
+    def _parse_ddl_view(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        if upper_sql.startswith("CREATE VIEW"):
+            return self._parse_create_view(sql)
+        if upper_sql.startswith("DROP VIEW"):
+            return self._parse_drop_view(sql)
+        return None
+
+    def _parse_ddl(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        return (
+            self._parse_ddl_table(upper_sql, sql)
+            or self._parse_ddl_index(upper_sql, sql)
+            or self._parse_ddl_view(upper_sql, sql)
+        )
 
     def _parse_dml_dql_part(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("WITH"):
@@ -596,6 +728,73 @@ class SQLParser:
             table_name=table_name,
             column_name=col_name,
             index_type=idx_type.upper(),
+        )
+
+    def _parse_alter_table(self, sql: str) -> AlterTableStatement:
+        res = (
+            _parse_alter_rename_table(sql)
+            or _parse_alter_rename_column(sql)
+            or _parse_alter_add_column(sql, self)
+            or _parse_alter_drop_column(sql)
+        )
+        if res is not None:
+            return res
+        raise SQLParseError(f"Malformed ALTER TABLE syntax: {sql}")
+
+    def _parse_drop_index(self, sql: str) -> DropIndexStatement:
+        m = re.match(
+            r"^DROP\s+INDEX\s+(IF\s+EXISTS\s+)?([a-zA-Z0-9_]+)$",
+            sql,
+            re.IGNORECASE,
+        )
+        if not m:
+            raise SQLParseError(f"Malformed DROP INDEX syntax: {sql}")
+        return DropIndexStatement(
+            command_type=SQLCommandType.DROP_INDEX,
+            raw_sql=sql,
+            index_name=m.group(2),
+            if_exists=bool(m.group(1)),
+        )
+
+    def _parse_reindex(self, sql: str) -> ReindexStatement:
+        m = re.match(r"^REINDEX(?:\s+([a-zA-Z0-9_]+))?$", sql, re.IGNORECASE)
+        if not m:
+            raise SQLParseError(f"Malformed REINDEX syntax: {sql}")
+        return ReindexStatement(
+            command_type=SQLCommandType.REINDEX,
+            raw_sql=sql,
+            target_name=m.group(1),
+        )
+
+    def _parse_create_view(self, sql: str) -> CreateViewStatement:
+        m = re.match(
+            r"^CREATE\s+VIEW\s+(IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s+AS\s+(.*)$",
+            sql,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not m:
+            raise SQLParseError(f"Malformed CREATE VIEW syntax: {sql}")
+        return CreateViewStatement(
+            command_type=SQLCommandType.CREATE_VIEW,
+            raw_sql=sql,
+            view_name=m.group(2),
+            select_stmt=self.parse(m.group(3).strip()),
+            if_not_exists=bool(m.group(1)),
+        )
+
+    def _parse_drop_view(self, sql: str) -> DropViewStatement:
+        m = re.match(
+            r"^DROP\s+VIEW\s+(IF\s+EXISTS\s+)?([a-zA-Z0-9_]+)$",
+            sql,
+            re.IGNORECASE,
+        )
+        if not m:
+            raise SQLParseError(f"Malformed DROP VIEW syntax: {sql}")
+        return DropViewStatement(
+            command_type=SQLCommandType.DROP_VIEW,
+            raw_sql=sql,
+            view_name=m.group(2),
+            if_exists=bool(m.group(1)),
         )
 
     def _find_matching_paren(self, text: str, start_pos: int) -> int:
