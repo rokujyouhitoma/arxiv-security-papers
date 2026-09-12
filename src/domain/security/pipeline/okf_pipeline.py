@@ -24,22 +24,19 @@ class SecurityOkfItemPipeline(BaseItemPipeline):
     ) -> None:
         self.output_dir: str = output_dir or "outputs/okf_papers"
         self.enable_db_persistence: bool = enable_db_persistence
+        self._processed_count: int = 0
 
     async def process_item(self, item: ScrapedItem, spider: Any) -> ScrapedItem:
         """Processes scraped item, generates OKF v0.2 Markdown, and persists record."""
         payload = item.payload
-        raw_clean_id = str(payload.get("clean_id") or item.item_id)
-        clean_id = _sanitize_path_id(raw_clean_id)
+        clean_id = _resolve_item_clean_id(payload, item.item_id)
         item.payload["clean_id"] = clean_id
 
-        pub_date = str(payload.get("published_date") or "")
-        date_folder = _extract_date_folder(pub_date)
-
+        date_folder = _extract_date_folder(str(payload.get("published_date") or ""))
         target_dir = os.path.join(self.output_dir, date_folder)
         os.makedirs(target_dir, exist_ok=True)
         okf_file = os.path.join(target_dir, f"{clean_id}.md")
 
-        # Generate OKF v0.2 Markdown content (polymorphic dispatch)
         markdown_content = _build_okf_markdown(item, clean_id, date_folder)
         with open(okf_file, "w", encoding="utf-8") as f:
             f.write(markdown_content)
@@ -49,11 +46,52 @@ class SecurityOkfItemPipeline(BaseItemPipeline):
         if self.enable_db_persistence:
             _persist_to_dsn14_db(item, clean_id, okf_file)
 
+        self._processed_count += 1
+        _log_processed_item(
+            self._processed_count, payload, clean_id, self.enable_db_persistence
+        )
         return item
+
+    async def close_spider(self, spider: Any) -> None:
+        spider_name = getattr(spider, "name", "spider")
+        print(
+            f"[✓] [{spider_name}] OKF Pipeline complete: {self._processed_count} items generated "
+            f"in '{self.output_dir}' (DB persistence: {self.enable_db_persistence})",
+            flush=True,
+        )
 
 
 # Backward-compatible alias
 OkfItemPipeline = SecurityOkfItemPipeline
+
+
+def _resolve_item_clean_id(payload: Dict[str, Any], default_id: str) -> str:
+    raw_clean_id = str(payload.get("clean_id") or default_id)
+    return _sanitize_path_id(raw_clean_id)
+
+
+def _extract_log_title(payload: Dict[str, Any]) -> str:
+    name = str(payload.get("name") or payload.get("title") or "")
+    return _truncate_desc(name, 50)
+
+
+def _extract_log_type(payload: Dict[str, Any]) -> str:
+    return str(payload.get("type") or payload.get("item_type") or "paper")
+
+
+def _log_processed_item(
+    count: int,
+    payload: Dict[str, Any],
+    clean_id: str,
+    enable_db: bool,
+) -> None:
+    item_type = _extract_log_type(payload)
+    short_name = _extract_log_title(payload)
+    db_label = " [DB saved]" if enable_db else ""
+    print(
+        f"    [+] [{count}] OKF ({item_type}): {clean_id} - '{short_name}'{db_label}",
+        flush=True,
+    )
 
 
 def _sanitize_string(val: Any) -> str:

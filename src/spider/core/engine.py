@@ -37,6 +37,7 @@ class Engine:
         self.scheduler: Scheduler = scheduler or Scheduler()
         self.max_concurrent_requests: int = max_concurrent_requests
         self.running: bool = False
+        self._waiting_delay: bool = False
         self._stats: Dict[str, Union[int, float]] = {
             "requests_scheduled": 0,
             "responses_received": 0,
@@ -53,9 +54,16 @@ class Engine:
     ) -> bool:
         request = self.scheduler.next_request()
         if request is None:
-            await asyncio.sleep(0.05)
+            if self.scheduler.has_pending_requests() and not self._waiting_delay:
+                self._waiting_delay = True
+                spider_name = getattr(spider, "name", "spider")
+                delay = getattr(self.scheduler, "default_delay", 0.5)
+                msg = f"[*] [{spider_name}] Politeness delay: waiting {delay:.1f}s cooldown..."
+                print(msg, flush=True)
+            await asyncio.sleep(0.1)
             return False
 
+        self._waiting_delay = False
         return await self._process_single_request(
             request, spider, mid_list, pipe_list, scraped_items
         )
@@ -101,13 +109,21 @@ class Engine:
         pipe_list: List[Any],
         scraped_items: List[ScrapedItem],
     ) -> bool:
+        spider_name = getattr(spider, "name", "spider")
+        print(f"[*] [{spider_name}] Fetching: {request.url} ...", flush=True)
         response = await _fetch_response(request, spider, mid_list, self.downloader)
         if response is None:
+            print(f"[-] [{spider_name}] Failed to fetch: {request.url}", flush=True)
             return False
 
         self._stats["responses_received"] = int(self._stats["responses_received"]) + 1
         self._stats["bytes_downloaded"] = int(self._stats["bytes_downloaded"]) + len(
             response.body
+        )
+        print(
+            f"[+] [{spider_name}] Received HTTP {response.status_code}: {response.url} "
+            f"({len(response.body):,} bytes, latency={response.download_latency:.2f}s)",
+            flush=True,
         )
 
         response = await _execute_middlewares_resp(request, response, spider, mid_list)

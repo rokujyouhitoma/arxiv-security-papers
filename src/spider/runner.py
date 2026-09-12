@@ -228,7 +228,8 @@ async def run_spider(
     url_count = len(spider_instance.start_urls)
     print(
         f"[*] Starting Spider: '{spider_name}' "
-        f"(start_urls: {url_count}, pipelines: {pipe_count})"
+        f"(start_urls: {url_count}, pipelines: {pipe_count}, delay: {effective_delay:.1f}s, persist_db: {persist_db})",
+        flush=True,
     )
     items = await engine.crawl(
         spider=spider_instance,

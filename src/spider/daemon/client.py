@@ -12,7 +12,6 @@ import queue
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from ..runner import run_spider
 from .contracts import CrawlJob, CrawlResult
 
 logger = logging.getLogger(__name__)
@@ -57,6 +56,8 @@ class SpiderDaemonClient:
     async def _execute_local_async(self, job: CrawlJob) -> CrawlResult:
         start_t = _now()
         params = dict(job.params)
+        from ..runner import run_spider
+
         try:
             raw_items = await run_spider(
                 spider_name=job.spider_name,

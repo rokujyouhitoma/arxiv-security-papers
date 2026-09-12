@@ -98,16 +98,29 @@ def _is_top25_url(url: str) -> bool:
 def _read_csv_from_zip(z: zipfile.ZipFile) -> List[Dict[str, str]]:
     for n in z.namelist():
         if n.endswith(".csv"):
+            print(
+                f"[*] [cwe_spider] Found '{n}' in ZIP archive. Reading CSV rows...",
+                flush=True,
+            )
             f = z.open(n)
             reader = csv.DictReader(
                 io.TextIOWrapper(f, encoding="utf-8", errors="ignore")
             )
-            return list(reader)
+            rows = list(reader)
+            print(
+                f"[+] [cwe_spider] Extracted {len(rows)} CSV rows from '{n}'.",
+                flush=True,
+            )
+            return rows
     return []
 
 
 def _extract_zip_csv_records(response: Response) -> List[Dict[str, Any]]:
     try:
+        print(
+            f"[*] [cwe_spider] Decompressing ZIP archive ({len(response.body):,} bytes)...",
+            flush=True,
+        )
         z = zipfile.ZipFile(io.BytesIO(response.body))
         raw_rows = _read_csv_from_zip(z)
         is_top25 = _is_top25_url(response.request.url)
@@ -116,8 +129,13 @@ def _extract_zip_csv_records(response: Response) -> List[Dict[str, Any]]:
             parsed = _parse_csv_row(r, is_top25)
             if parsed is not None:
                 records.append(parsed)
+        print(
+            f"[+] [cwe_spider] Prepared {len(records)} CWE records from {response.url}.",
+            flush=True,
+        )
         return records
-    except Exception:
+    except Exception as exc:
+        print(f"[-] [cwe_spider] Failed to extract ZIP archive: {exc}", flush=True)
         return []
 
 
@@ -359,7 +377,13 @@ class CweSpider(BaseSpider):
         except Exception:
             return
 
+        emitted = 0
         for record in records:
             item = _map_cwe_item(record)
             if item is not None:
+                emitted += 1
                 yield item
+        print(
+            f"[+] [cwe_spider] Emitted {emitted} items from {response.url} to pipeline.",
+            flush=True,
+        )
