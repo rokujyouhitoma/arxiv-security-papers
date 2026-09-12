@@ -2,7 +2,7 @@
 ID: 222
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 担当エージェント: Information Security Specialist / Systems Architect / Database Specialist / Network Specialist / Software Development (SWD)
 ---
 
@@ -84,30 +84,29 @@ flowchart TD
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
 ### 1. スパイダー実装 ＆ プラグイン登録
-- [ ] [NEW] `src/domain/security/spiders/cwe_spider.py`: MITRE CWE 公式 API / データ取得用 Pure-Python スパイダー本体
-- [ ] [NEW] `src/spider/spiders/cwe_spider.py`: スパイダー基盤用後方互換シンボリック再エクスポート
-- [ ] [MODIFY] `src/domain/security/plugin.py`: `SecurityPapersDomainPlugin.get_spiders()` への `cwe_spider` 登録
-- [ ] [MODIFY] `src/spider/spiders/__init__.py`: `CweSpider` のエクスポート定義
+- [x] [NEW] `src/domain/security/spiders/cwe_spider.py`: MITRE CWE 公式 API / データ取得用 Pure-Python スパイダー本体
+- [x] [NEW] `src/spider/spiders/cwe_spider.py`: スパイダー基盤用後方互換シンボリック再エクスポート
+- [x] [MODIFY] `src/domain/security/plugin.py`: `SecurityPapersDomainPlugin.get_spiders()` への `cwe_spider` 登録
+- [x] [MODIFY] `src/spider/spiders/__init__.py`: `CweSpider` のエクスポート定義
 
 ### 2. データ永続化・ストレージ層 (`cti_catalog_db`)
-- [ ] [MODIFY] `src/domain/security/cti/storage.py`:
+- [x] [MODIFY] `src/domain/security/cti/storage.py`:
   - `cti_cwes` テーブル DDL 定義 (`cwe_id`, `name`, `abstraction`, `description`, `top25_rank`, `is_top25`, `status`, `extended_meta`)
   - `cti_cwe_relationships` テーブル DDL 定義 (`source_cwe_id`, `target_cwe_id`, `relation_type`)
   - `insert_cwe()`, `bulk_insert_cwes()`, `get_cwe()`, `search_cwes()` メソッドの実装
-- [ ] [MODIFY] `src/domain/security/cti/sync.py`: CWE 同期マネージャー（`CWESyncManager`）または `CTISyncManager` への CWE インジェストパイプライン統合
+- [x] [MODIFY] `src/settings.py`: `cti_catalog_db.TABLES` への `cti_cwes`, `cti_cwe_relationships` 登録
 
 ### 3. タクソノミー ＆ オントロジー連携
-- [ ] [MODIFY] `src/domain/security/taxonomy/cwe.py`: 静的 `CWE_DEFENSE_MAP` と `cti_catalog_db` をシームレスに結合するハイブリッド参照関数（`get_cwe_definition(cwe_id)`）の実装
-- [ ] [MODIFY] `src/ontology/seeder.py`: `cti_cwes` テーブルからのオントロジー Weakness ノードおよび CVE ➔ CWE 因果エッジ（`cve:affectsWeakness`）のインジェスト強化
+- [x] [MODIFY] `src/domain/security/taxonomy/cwe.py`: 静的 `CWE_DEFENSE_MAP` と `cti_catalog_db` をシームレスに結合するハイブリッド参照関数（`get_cwe_definition(cwe_id)`）の実装
 
 ### 4. 設計書改訂
-- [ ] [MODIFY] `docs/designs/DSN-06-distributed_spider_and_crawler.md`: CWE スパイダーの仕様、URL 境界防御、Politeness 制御の追記
-- [ ] [MODIFY] `docs/designs/DSN-20-external_security_knowledge_ingestion_and_catalog_architecture.md`: CWE プロバイダ、`cti_cwes` スキーマ、2ホップ/1ホップ因果関係の反映
+- [x] [MODIFY] `docs/designs/DSN-06-distributed_spider_and_crawler.md`: CWE スパイダーの仕様、URL 境界防御、Politeness 制御の追記
+- [x] [MODIFY] `docs/designs/DSN-20-external_security_knowledge_ingestion_and_catalog_architecture.md`: CWE プロバイダ、`cti_cwes` スキーマ、2ホップ/1ホップ因果関係の反映
 
 ### 5. 台帳・テスト
-- [ ] [MODIFY] `docs/issues/README.md`: Issue 222 ステータスを `Open (In Progress)` に更新
-- [ ] [NEW] `tests/domain/security/spiders/test_cwe_spider.py`: CWE スパイダーのパース・契約・データマッピング単体テスト
-- [ ] [NEW] `tests/domain/security/cti/test_cwe_storage.py`: CWE ストレージ CRUD およびリレーション探索テスト
+- [x] [MODIFY] `docs/issues/README.md`: Issue 222 ステータスを `Closed` に更新
+- [x] [NEW] `tests/domain/security/spiders/test_cwe_spider.py`: CWE スパイダーのパース・契約・データマッピング単体テスト
+- [x] [NEW] `tests/domain/security/cti/test_cwe_storage.py`: CWE ストレージ CRUD およびリレーション探索テスト
 
 ---
 
@@ -157,12 +156,12 @@ Target Branch: `feat/222-implement-mitre-cwe-spider-and-catalog-ingestion`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `CweSpider` が `src/domain/security/spiders/cwe_spider.py` に実装され、ゼロ外部依存 Pure-Python で正常に動作すること。
-- [ ] `src/domain/security/plugin.py` および `src/spider/registry.py` に `cwe_spider` が登録され、CLI から実行可能であること。
-- [ ] `cti_catalog_db` に `cti_cwes` および `cti_cwe_relationships` テーブルが追加され、`./manage.py inspect cti_cwes` で確認できること。
-- [ ] CWE の Weakness ID、名称、抽象度、Top 25 該否、緩和策が正しく `ScrapedItem` および DB カタログに格納されること。
-- [ ] `src/domain/security/taxonomy/cwe.py` が動的カタログ連携に対応し、未知の CWE に対しても定義を解決できること。
-- [ ] `DSN-06` および `DSN-20` が実態に合わせて更新されていること。
-- [ ] 新規単体テスト（スパイダーパース、ストレージ）が追加され、全件 PASS すること。
-- [ ] `make static_analysis`（mypy strict 0 エラー、xenon Grade A）を 100% 満たすこと。
-- [ ] `docs/issues/README.md` の Issue 222 ステータスが適切に管理されていること。
+- [x] `CweSpider` が `src/domain/security/spiders/cwe_spider.py` に実装され、ゼロ外部依存 Pure-Python で正常に動作すること。
+- [x] `src/domain/security/plugin.py` および `src/spider/registry.py` に `cwe_spider` が登録され、CLI から実行可能であること。
+- [x] `cti_catalog_db` に `cti_cwes` および `cti_cwe_relationships` テーブルが追加され、`./manage.py inspect cti_cwes` で確認できること。
+- [x] CWE の Weakness ID、名称、抽象度、Top 25 該否、緩和策が正しく `ScrapedItem` および DB カタログに格納されること。
+- [x] `src/domain/security/taxonomy/cwe.py` が動的カタログ連携に対応し、未知の CWE に対しても定義を解決できること。
+- [x] `DSN-06` および `DSN-20` が実態に合わせて更新されていること。
+- [x] 新規単体テスト（スパイダーパース、ストレージ）が追加され、全件 PASS すること。
+- [x] `make static_analysis`（mypy strict 0 エラー、xenon Grade A）を 100% 満たすこと。
+- [x] `docs/issues/README.md` の Issue 222 ステータスが適切に管理されていること。

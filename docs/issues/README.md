@@ -8,7 +8,6 @@
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | Medium | Open (New) | [250-implement-louvain-community-detection-for-cti-graph.md](250-implement-louvain-community-detection-for-cti-graph.md) |
 | **251** | Lehman-Yao 型 B-link Tree によるラッチフリー並行走査およびスプリット追随インデックスエンジンの実装 | Feature | Low | Open (New) | [251-implement-lehman-yao-b-link-tree-concurrent-index.md](251-implement-lehman-yao-b-link-tree-concurrent-index.md) |
-| **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | High | Open (In Progress) | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | 2026-09-12 | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](closed/222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
 | **253** | Context Mesh における Paper ノードのクラスタ分類不整合（Entities → Sources）の改修 | Bug | 2026-09-12 | [253-fix-context-mesh-paper-cluster-classification.md](closed/253-fix-context-mesh-paper-cluster-classification.md) |
 | **252** | ユーザーマニュアル (USR-01) のエンドユーザー向けと開発者向け (DEV-01) への分離・再編 | Documentation | 2026-09-12 | [252-separate-user-and-developer-manuals.md](closed/252-separate-user-and-developer-manuals.md) |
 | **249** | Adaptive Replacement Cache (ARC) の共通コア実装と検索プラットフォーム・キャッシュ自己適応化 | Feature | 2026-09-11 | [249-implement-adaptive-replacement-cache-for-search-platform.md](closed/249-implement-adaptive-replacement-cache-for-search-platform.md) |

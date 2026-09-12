@@ -289,15 +289,15 @@ flowchart TD
    - `create(name, *args, **kwargs) -> Optional[BaseSpider]`: 引数を伴うインスタンス化（NVD API キー等）。
    - `list_spiders() -> List[str]`: 登録済みスパイダー名一覧の返却。
 2. **ビルトインスパイダー自動登録機構**:
-   - `get_spider_registry()` または `get_available_spiders()` 呼び出し時、レジストリが空の場合はビルトインスパイダー（`arxiv_spider`, `iacr_spider`, `advisory_spider`, `cisa_kev_spider`, `nvd_cve_spider`）を自動遅延インポート・登録。
+   - `get_spider_registry()` または `get_available_spiders()` 呼び出し時、レジストリが空の場合はビルトインスパイダー（`arxiv_spider`, `iacr_spider`, `advisory_spider`, `cisa_kev_spider`, `nvd_cve_spider`, `cwe_spider`）を自動遅延インポート・登録。
    - スパイダー追加時にインフラ側の明示的初期化コードを不要化。
 3. **短縮エイリアス解決 (Short Aliases)**:
-   - スパイダー識別名末尾の `_spider` を自動トリミングした短縮名（`cisa_kev`, `nvd_cve`, `arxiv`, `iacr`, `advisory`）を自動認識。
+   - スパイダー識別名末尾の `_spider` を自動トリミングした短縮名（`cisa_kev`, `nvd_cve`, `cwe`, `arxiv`, `iacr`, `advisory`）を自動認識。
 4. **CLI & ランナー統合**:
-   - `src/spider/runner.py`: `get_available_spiders()` を通じて全スパイダーを動的列挙し、`--spider cisa_kev` や `--spider nvd_cve` で即時ディスパッチ。
-   - `src/intelligence/cli.py`: `spider` サブコマンドから `python3 src/intelligence/cli.py spider --spider-name cisa_kev --depth 1` で直接呼び出し可能。
+   - `src/spider/runner.py`: `get_available_spiders()` を通じて全スパイダーを動的列挙し、`--spider cisa_kev`, `--spider nvd_cve`, `--spider cwe` で即時ディスパッチ。
+   - `src/intelligence/cli.py`: `spider` サブコマンドから `python3 src/intelligence/cli.py spider --spider-name cwe_spider --depth 1` で直接呼び出し可能。
 5. **後方互換性シム**:
-   - `src/spider/spiders/` 直下に `cisa_kev_spider.py` および `nvd_cve_spider.py` を配置し、`from spider.spiders.cisa_kev_spider import CisaKevSpider` 形式のインポート完全互換性を担保。
+   - `src/spider/spiders/` 直下に `cisa_kev_spider.py`, `nvd_cve_spider.py`, `cwe_spider.py` を配置し、`from spider.spiders.cwe_spider import CweSpider` 形式のインポート完全互換性を担保。
 
 ---
 

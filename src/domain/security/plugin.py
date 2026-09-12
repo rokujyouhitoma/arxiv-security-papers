@@ -39,6 +39,7 @@ class SecurityPapersDomainPlugin(BaseDomainPlugin):
         from domain.security.spiders.advisory_spider import AdvisorySpider
         from domain.security.spiders.arxiv_spider import ArxivSpider
         from domain.security.spiders.cisa_kev_spider import CisaKevSpider
+        from domain.security.spiders.cwe_spider import CweSpider
         from domain.security.spiders.iacr_spider import IacrSpider
         from domain.security.spiders.nvd_cve_spider import NvdCveSpider
 
@@ -48,6 +49,7 @@ class SecurityPapersDomainPlugin(BaseDomainPlugin):
             "advisory_spider": AdvisorySpider,
             "cisa_kev_spider": CisaKevSpider,
             "nvd_cve_spider": NvdCveSpider,
+            "cwe_spider": CweSpider,
         }
 
     def get_pipelines(self) -> Dict[str, Any]:

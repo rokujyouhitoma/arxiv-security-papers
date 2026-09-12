@@ -8,6 +8,7 @@ Pure Python, Zero External Dependencies.
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 from contextlib import contextmanager
@@ -122,6 +123,29 @@ class CTICatalogStorage:
                 )
                 """)
             cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cti_cwes (
+                    cwe_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    abstraction TEXT,
+                    description TEXT,
+                    top25_rank INTEGER,
+                    is_top25 INTEGER DEFAULT 0,
+                    status TEXT,
+                    mitigations_json TEXT,
+                    extended_meta TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cti_cwe_relationships (
+                    source_cwe_id TEXT NOT NULL,
+                    target_cwe_id TEXT NOT NULL,
+                    relation_type TEXT NOT NULL,
+                    PRIMARY KEY (source_cwe_id, target_cwe_id, relation_type)
+                )
+                """)
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS cisa_kev_vulnerabilities (
                     cve_id TEXT PRIMARY KEY,
                     vendor_project TEXT NOT NULL,
@@ -140,6 +164,12 @@ class CTICatalogStorage:
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_rel_target ON cti_relationships(target_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cwe_top25 ON cti_cwes(is_top25)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cwe_rel_target ON cti_cwe_relationships(target_cwe_id)"
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_cisa_kev_ransomware "
@@ -347,6 +377,186 @@ class CTICatalogStorage:
         )
         return d
 
+    @classmethod
+    def _normalize_cwe_id(cls, raw_id: Any) -> str:
+        s = str(raw_id or "").strip().upper()
+        if s and not s.startswith("CWE-"):
+            return f"CWE-{s}"
+        return s
+
+    def insert_cwe(self, cwe_dict: Dict[str, Any]) -> None:
+        """Inserts or updates a single CWE entry."""
+        with self._connection() as conn:
+            self._insert_cwe_row(conn, cwe_dict)
+            conn.commit()
+
+    def bulk_insert_cwes(self, cwes: List[Dict[str, Any]]) -> int:
+        """Bulk inserts or updates multiple CWE entries."""
+        if not cwes:
+            return 0
+        with self._connection() as conn:
+            for c in cwes:
+                self._insert_cwe_row(conn, c)
+            conn.commit()
+        return len(cwes)
+
+    @staticmethod
+    def _format_cwe_meta(c: Dict[str, Any]) -> tuple[str, str]:
+        mitigations = c.get("mitigations")
+        m_json = json.dumps(mitigations) if mitigations else "[]"
+        meta = c.get("extended_meta")
+        e_json = json.dumps(meta) if meta else "{}"
+        return m_json, e_json
+
+    @staticmethod
+    def _determine_top25_flag(c: Dict[str, Any], top25_rank: Any) -> int:
+        if c.get("is_top25") or top25_rank is not None:
+            return 1
+        return 0
+
+    @staticmethod
+    def _extract_cwe_timestamps(c: Dict[str, Any]) -> tuple[str, str]:
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        created = str(c.get("created_at") or now_iso)
+        updated = str(c.get("updated_at") or now_iso)
+        return created, updated
+
+    def _insert_cwe_row(self, conn: SQLiteConnection, c: Dict[str, Any]) -> None:
+        cwe_id = self._normalize_cwe_id(c.get("cwe_id"))
+        top25_rank = c.get("top25_rank")
+        is_top25 = self._determine_top25_flag(c, top25_rank)
+        mitigations_json, extended_meta_json = self._format_cwe_meta(c)
+        created_at, updated_at = self._extract_cwe_timestamps(c)
+
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO cti_cwes (
+                cwe_id, name, abstraction, description, top25_rank,
+                is_top25, status, mitigations_json, extended_meta, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                cwe_id,
+                str(c.get("name", "")).strip(),
+                str(c.get("abstraction", "")).strip(),
+                str(c.get("description", "")).strip(),
+                top25_rank,
+                is_top25,
+                str(c.get("status", "Draft")).strip(),
+                mitigations_json,
+                extended_meta_json,
+                created_at,
+                updated_at,
+            ),
+        )
+
+    def get_cwe(self, cwe_id: str) -> Optional[Dict[str, Any]]:
+        """Fetches a single CWE entry by ID (e.g. 'CWE-79' or '79')."""
+        norm_id = self._normalize_cwe_id(cwe_id)
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM cti_cwes WHERE cwe_id = ?", (norm_id,)
+            ).fetchone()
+            return self._row_to_cwe(row) if row else None
+
+    def get_all_cwes(self, top25_only: bool = False) -> List[Dict[str, Any]]:
+        """Retrieves all stored CWEs, optionally filtered by Top 25."""
+        with self._connection() as conn:
+            sql = (
+                "SELECT * FROM cti_cwes WHERE is_top25 = 1 ORDER BY top25_rank ASC"
+                if top25_only
+                else "SELECT * FROM cti_cwes ORDER BY cwe_id ASC"
+            )
+            rows = conn.execute(sql).fetchall()
+            return [self._row_to_cwe(r) for r in rows]
+
+    def get_cwe_count(self) -> int:
+        """Returns the total number of CWE records."""
+        with self._connection() as conn:
+            row = conn.execute("SELECT COUNT(*) FROM cti_cwes").fetchone()
+            return int(row[0]) if row else 0
+
+    def search_cwes(self, query_str: str, limit: int = 15) -> List[Dict[str, Any]]:
+        """Search CWEs by ID, name, or description."""
+        cleaned = query_str.strip()
+        if not cleaned:
+            return []
+        pattern = f"%{cleaned}%"
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM cti_cwes
+                WHERE cwe_id LIKE ? OR name LIKE ? OR description LIKE ?
+                ORDER BY is_top25 DESC, cwe_id ASC LIMIT ?
+                """,
+                (pattern, pattern, pattern, limit),
+            ).fetchall()
+            return [self._row_to_cwe(r) for r in rows]
+
+    def insert_cwe_relationship(
+        self, source_cwe_id: str, target_cwe_id: str, relation_type: str
+    ) -> None:
+        """Inserts a relationship between two CWEs (e.g. ChildOf, CanPrecede)."""
+        s_id = self._normalize_cwe_id(source_cwe_id)
+        t_id = self._normalize_cwe_id(target_cwe_id)
+        with self._connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO cti_cwe_relationships (source_cwe_id, target_cwe_id, relation_type)
+                VALUES (?, ?, ?)
+                """,
+                (s_id, t_id, relation_type.strip()),
+            )
+            conn.commit()
+
+    def bulk_insert_cwe_relationships(
+        self, relationships: List[Tuple[str, str, str]]
+    ) -> int:
+        """Bulk inserts CWE relationships."""
+        if not relationships:
+            return 0
+        with self._connection() as conn:
+            for s_id, t_id, r_type in relationships:
+                s_norm = self._normalize_cwe_id(s_id)
+                t_norm = self._normalize_cwe_id(t_id)
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO cti_cwe_relationships (source_cwe_id, target_cwe_id, relation_type)
+                    VALUES (?, ?, ?)
+                    """,
+                    (s_norm, t_norm, r_type.strip()),
+                )
+            conn.commit()
+        return len(relationships)
+
+    def get_cwe_children(self, cwe_id: str) -> List[str]:
+        """Returns child CWE IDs that declare ChildOf this CWE."""
+        norm_id = self._normalize_cwe_id(cwe_id)
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT source_cwe_id FROM cti_cwe_relationships WHERE target_cwe_id = ? AND relation_type = 'ChildOf'",
+                (norm_id,),
+            ).fetchall()
+            return [str(r[0]) for r in rows]
+
+    def get_cwe_parents(self, cwe_id: str) -> List[str]:
+        """Returns parent CWE IDs for which this CWE declares ChildOf."""
+        norm_id = self._normalize_cwe_id(cwe_id)
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT target_cwe_id FROM cti_cwe_relationships WHERE source_cwe_id = ? AND relation_type = 'ChildOf'",
+                (norm_id,),
+            ).fetchall()
+            return [str(r[0]) for r in rows]
+
+    @classmethod
+    def _row_to_cwe(cls, row: SQLiteRow) -> Dict[str, Any]:
+        d = dict(row)
+        d["mitigations"] = cls._parse_json_list(d.get("mitigations_json"))
+        d["extended_meta"] = cls._parse_json_dict(d.get("extended_meta"))
+        d["is_top25"] = bool(d.get("is_top25", 0))
+        return d
+
     def get_technique(self, technique_id: str) -> Optional[Dict[str, Any]]:
         """Fetches a single technique by ID (e.g. 'T1059' or 'T1059.001')."""
         with self._connection() as conn:
@@ -501,6 +711,14 @@ class CTICatalogStorage:
                         "SELECT COUNT(*) FROM cisa_kev_vulnerabilities"
                     ).fetchone()[0]
                 ),
+                "cwes": int(
+                    conn.execute("SELECT COUNT(*) FROM cti_cwes").fetchone()[0]
+                ),
+                "cwe_relationships": int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM cti_cwe_relationships"
+                    ).fetchone()[0]
+                ),
             }
 
     @staticmethod
@@ -512,6 +730,16 @@ class CTICatalogStorage:
             return parsed if isinstance(parsed, list) else []
         except (ValueError, TypeError):
             return []
+
+    @staticmethod
+    def _parse_json_dict(raw_val: Any) -> Dict[str, Any]:
+        if not raw_val:
+            return {}
+        try:
+            parsed = json.loads(raw_val)
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            return {}
 
     @classmethod
     def _row_to_technique(cls, row: SQLiteRow) -> Dict[str, Any]:
@@ -537,6 +765,8 @@ class CTICatalogStorage:
                 "cti_mitigations",
                 "cti_relationships",
                 "cisa_kev_vulnerabilities",
+                "cti_cwes",
+                "cti_cwe_relationships",
             ]:
                 dataset[table] = dump_sqlite_table_records(conn, table)
         return dataset
@@ -699,6 +929,24 @@ CTI_DEFAULT_SPECS: List[Dict[str, Any]] = [
         "indexed_columns": ["parent_technique_id", "stix_id"],
         "default_rows": 697,
         "default_size": 1249718,
+    },
+    {
+        "table_name": "cti_cwes",
+        "category": "CWE Weaknesses & Top 25 (MITRE CWE)",
+        "storage_engine": "MultiTableVectorStorage / Pure-Python Engine",
+        "primary_key": "cwe_id (TEXT)",
+        "indexed_columns": ["is_top25", "abstraction"],
+        "default_rows": 930,
+        "default_size": 842100,
+    },
+    {
+        "table_name": "cti_cwe_relationships",
+        "category": "CWE Weakness Relationships (ChildOf / CanPrecede)",
+        "storage_engine": "MultiTableVectorStorage / Pure-Python Engine",
+        "primary_key": "(source_cwe_id, target_cwe_id, relation_type)",
+        "indexed_columns": ["source_cwe_id", "target_cwe_id"],
+        "default_rows": 1420,
+        "default_size": 128400,
     },
 ]
 
