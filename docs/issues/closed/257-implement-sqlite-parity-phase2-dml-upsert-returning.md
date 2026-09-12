@@ -2,7 +2,7 @@
 ID: 257
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] SQLite 完全互換化 Phase 2: DML 拡張 & 競合制御 (複数行 INSERT, INSERT SELECT, UPSERT, RETURNING) の実装 (ID: 257)

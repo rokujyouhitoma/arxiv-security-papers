@@ -167,6 +167,12 @@ class InsertStatement(SQLStatement):
     table_name: str = ""
     columns: List[str] = field(default_factory=list)
     values: List[Any] = field(default_factory=list)
+    rows_values: List[List[Any]] = field(default_factory=list)
+    select_stmt: Optional[Any] = None  # SelectStatement
+    upsert_target: Optional[List[str]] = None
+    upsert_action: Optional[str] = None  # "NOTHING" or "UPDATE"
+    upsert_update_set: Dict[str, Any] = field(default_factory=dict)
+    returning_cols: Optional[List[str]] = None
 
 
 @dataclass
@@ -174,12 +180,20 @@ class UpdateStatement(SQLStatement):
     table_name: str = ""
     assignments: Dict[str, Any] = field(default_factory=dict)
     where_clauses: List[Dict[str, Any]] = field(default_factory=list)
+    returning_cols: Optional[List[str]] = None
+    order_by: Optional[str] = None
+    order_desc: bool = False
+    limit: Optional[int] = None
 
 
 @dataclass
 class DeleteStatement(SQLStatement):
     table_name: str = ""
     where_clauses: List[Dict[str, Any]] = field(default_factory=list)
+    returning_cols: Optional[List[str]] = None
+    order_by: Optional[str] = None
+    order_desc: bool = False
+    limit: Optional[int] = None
 
 
 # DCL

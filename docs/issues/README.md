@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **257** | SQLite 完全互換化 Phase 2: DML 拡張 & 競合制御 (複数行 INSERT, INSERT SELECT, UPSERT, RETURNING) の実装 | Feature | High | Open (New) | [257-implement-sqlite-parity-phase2-dml-upsert-returning.md](257-implement-sqlite-parity-phase2-dml-upsert-returning.md) |
 | **258** | SQLite 完全互換化 Phase 3: DDL ライフサイクル & VIEW (ALTER TABLE, DROP INDEX, REINDEX, CREATE/DROP VIEW) の実装 | Feature | Medium | Open (New) | [258-implement-sqlite-parity-phase3-ddl-lifecycle-and-view.md](258-implement-sqlite-parity-phase3-ddl-lifecycle-and-view.md) |
 | **259** | SQLite 完全互換化 Phase 4: ビルトイン関数群 & CASE 式 (文字列・数学・制御・日付時刻・JSON・集約拡張) の実装 | Feature | Medium | Open (New) | [259-implement-sqlite-parity-phase4-builtin-functions-and-case.md](259-implement-sqlite-parity-phase4-builtin-functions-and-case.md) |
 | **260** | SQLite 完全互換化 Phase 5: 高度な集合演算 & サブクエリ・ウィンドウ関数 (INTERSECT, EXCEPT, Subqueries, Window Functions) の実装 | Feature | Low | Open (New) | [260-implement-sqlite-parity-phase5-set-subquery-window-functions.md](260-implement-sqlite-parity-phase5-set-subquery-window-functions.md) |
@@ -22,6 +21,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **257** | SQLite 完全互換化 Phase 2: DML 拡張 & 競合制御 (複数行 INSERT, INSERT SELECT, UPSERT, RETURNING) の実装 | Feature | 2026-09-12 | [257-implement-sqlite-parity-phase2-dml-upsert-returning.md](closed/257-implement-sqlite-parity-phase2-dml-upsert-returning.md) |
 | **256** | SQLite 完全互換化 Phase 1: DQL 基礎拡張 (DISTINCT, OFFSET, BETWEEN, IS NULL, LIKE ESCAPE, GLOB) の実装 | Feature | 2026-09-12 | [256-implement-sqlite-parity-phase1-dql-foundations.md](closed/256-implement-sqlite-parity-phase1-dql-foundations.md) |
 | **254** | SQL Parser における GROUP BY / HAVING 句未対応によるテーブル名誤パースおよび dbshell 実行エラーの改修 | Bug | 2026-09-12 | [254-support-group-by-and-having-in-sql-parser.md](closed/254-support-group-by-and-having-in-sql-parser.md) |
 | **255** | 汎用CSVテーブルストレージエンジン (CsvTableStorage) のサポートと cti_cwes CSV化 | Feature | 2026-09-12 | [255-support-csv-table-storage-engine.md](closed/255-support-csv-table-storage-engine.md) |

@@ -503,3 +503,81 @@ def test_dql_phase1_distinct_offset_between_null_glob():
         assert res_like_esc["status"] == "ok"
         assert res_like_esc["count"] == 1
         assert res_like_esc["rows"][0]["id"] == "r4"
+
+
+def test_dml_phase2_multi_insert_upsert_returning():
+    """
+    Tests Phase 2 DML extensions:
+    Multi-row INSERT, INSERT SELECT, UPSERT (DO UPDATE / DO NOTHING), RETURNING, UPDATE/DELETE ORDER BY LIMIT.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test_p2.vdb")
+        executor = SQLExecutor()
+        create_sql = (
+            "CREATE TABLE items (id VARCHAR PRIMARY KEY, category VARCHAR, qty INT) "
+            f"USING binary_vdb LOCATION '{db_path}'"
+        )
+        executor.execute(create_sql)
+
+        # 1. Multi-row INSERT with RETURNING
+        res_multi = executor.execute(
+            "INSERT INTO items (id, category, qty) VALUES "
+            "('i1', 'fruit', 10), ('i2', 'fruit', 20), ('i3', 'veggie', 30) RETURNING *"
+        )
+        assert res_multi["status"] == "ok"
+        assert res_multi["inserted_count"] == 3
+        assert len(res_multi["rows"]) == 3
+        assert [r["id"] for r in res_multi["rows"]] == ["i1", "i2", "i3"]
+
+        # 2. UPSERT ON CONFLICT DO NOTHING
+        res_do_nothing = executor.execute(
+            "INSERT INTO items (id, category, qty) VALUES ('i1', 'fruit', 99) "
+            "ON CONFLICT(id) DO NOTHING"
+        )
+        assert res_do_nothing["status"] == "ok"
+        assert res_do_nothing["inserted_count"] == 0
+
+        # Verify i1 qty remains 10
+        sel_i1 = executor.execute("SELECT qty FROM items WHERE id = 'i1'")
+        assert sel_i1["rows"][0]["qty"] == 10
+
+        # 3. UPSERT ON CONFLICT DO UPDATE
+        res_do_update = executor.execute(
+            "INSERT INTO items (id, category, qty) VALUES ('i1', 'fruit', 99) "
+            "ON CONFLICT(id) DO UPDATE SET qty = 99 RETURNING id, qty"
+        )
+        assert res_do_update["status"] == "ok"
+        assert res_do_update["inserted_count"] == 1
+        assert res_do_update["rows"][0]["qty"] == 99
+
+        # 4. INSERT INTO ... SELECT ...
+        res_ins_sel = executor.execute(
+            "INSERT INTO items (id, category, qty) "
+            "SELECT 'i4', category, 40 FROM items WHERE id = 'i2'"
+        )
+        assert res_ins_sel["status"] == "ok"
+        assert res_ins_sel["inserted_count"] == 1
+
+        sel_i4 = executor.execute("SELECT id, category, qty FROM items WHERE id = 'i4'")
+        assert sel_i4["count"] == 1
+        assert sel_i4["rows"][0]["category"] == "fruit"
+        assert sel_i4["rows"][0]["qty"] == 40
+
+        # 5. UPDATE ... ORDER BY ... LIMIT ... RETURNING
+        res_upd_lim = executor.execute(
+            "UPDATE items SET qty = 500 WHERE category = 'fruit' "
+            "ORDER BY qty DESC LIMIT 1 RETURNING id, qty"
+        )
+        assert res_upd_lim["status"] == "ok"
+        assert res_upd_lim["updated_count"] == 1
+        assert res_upd_lim["rows"][0]["id"] == "i1"
+        assert res_upd_lim["rows"][0]["qty"] == 500
+
+        # 6. DELETE ... ORDER BY ... LIMIT ... RETURNING
+        res_del_lim = executor.execute(
+            "DELETE FROM items WHERE category = 'fruit' "
+            "ORDER BY qty ASC LIMIT 1 RETURNING id"
+        )
+        assert res_del_lim["status"] == "ok"
+        assert res_del_lim["deleted_count"] == 1
+        assert res_del_lim["rows"][0]["id"] == "i2"

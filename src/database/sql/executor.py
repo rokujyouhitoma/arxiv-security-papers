@@ -50,6 +50,23 @@ def _safe_remove_file(path: Optional[str]) -> None:
             pass
 
 
+def _project_single_record(
+    record: Dict[str, Any], returning_cols: List[str]
+) -> Dict[str, Any]:
+    return {c: record.get(c) for c in returning_cols}
+
+
+def _project_returning_rows(
+    records: List[Dict[str, Any]], returning_cols: Optional[List[str]]
+) -> List[Dict[str, Any]]:
+    """Projects requested columns for RETURNING clause."""
+    if not returning_cols:
+        return []
+    if "*" in returning_cols:
+        return [dict(r) for r in records]
+    return [_project_single_record(r, returning_cols) for r in records]
+
+
 class SQLExecutionError(Exception):
     """Raised when SQL execution fails."""
 
@@ -1682,54 +1699,182 @@ class SQLExecutor:
             raw_vec = [0.0] * dim
         return list(self.embedding.normalize(raw_vec))
 
+    def _ensure_table_exists_for_insert(self, table_name: str) -> None:
+        if (
+            table_name not in self.tables
+            and self.multi_storage is not None
+            and not self.multi_storage.has_table(table_name)
+        ):
+            storage = self.multi_storage.create_table(
+                table_name, dim=self.embedding.dim
+            )
+            self.tables[table_name] = TableCatalog(name=table_name, storage=storage)
+
+    @staticmethod
+    def _map_select_row_to_cols(
+        r: Dict[str, Any], columns: List[str]
+    ) -> Dict[str, Any]:
+        mapped: Dict[str, Any] = {}
+        vals = list(r.values())
+        for idx, col in enumerate(columns):
+            val = r.get(col) if col in r else (vals[idx] if idx < len(vals) else None)
+            mapped[col] = val
+        return mapped
+
+    def _build_from_select(
+        self, stmt: InsertStatement, role: str
+    ) -> List[Dict[str, Any]]:
+        if not isinstance(stmt.select_stmt, SelectStatement):
+            return []
+        sel_res = self._exec_select(stmt.select_stmt, role)
+        raw_rows = sel_res.get("rows", [])
+        if not stmt.columns:
+            return [dict(r) for r in raw_rows]
+        return [self._map_select_row_to_cols(r, stmt.columns) for r in raw_rows]
+
+    def _build_insert_row_dicts(
+        self, stmt: InsertStatement, role: str
+    ) -> List[Dict[str, Any]]:
+        if stmt.select_stmt is not None:
+            return self._build_from_select(stmt, role)
+        if stmt.rows_values:
+            return [dict(zip(stmt.columns, row)) for row in stmt.rows_values]
+        if stmt.values:
+            return [dict(zip(stmt.columns, stmt.values))]
+        return []
+
+    @staticmethod
+    def _is_conflict(
+        meta: Dict[str, Any], row: Dict[str, Any], targets: List[str]
+    ) -> bool:
+        return all(
+            str(meta.get(col)) == str(row.get(col)) for col in targets if col in row
+        )
+
+    def _find_conflict_index(
+        self,
+        metadata: List[Dict[str, Any]],
+        row: Dict[str, Any],
+        targets: List[str],
+    ) -> Optional[int]:
+        for idx, meta in enumerate(metadata):
+            if self._is_conflict(meta, row, targets):
+                return idx
+        return None
+
+    def _handle_conflict(
+        self,
+        table: TableCatalog,
+        conflict_idx: int,
+        row: Dict[str, Any],
+        stmt: InsertStatement,
+    ) -> Optional[Dict[str, Any]]:
+        if stmt.upsert_action == "NOTHING":
+            return None
+        if stmt.upsert_action == "UPDATE":
+            existing = table.storage.metadata[conflict_idx]
+            update_values = stmt.upsert_update_set or row
+            existing.update(update_values)
+            return dict(existing)
+        return None
+
+    @staticmethod
+    def _resolve_upsert_targets(
+        upsert_target: Optional[List[str]], row: Dict[str, Any]
+    ) -> List[str]:
+        if upsert_target:
+            return upsert_target
+        return ["id"] if "id" in row else []
+
+    def _try_upsert_conflict(
+        self, table: TableCatalog, row: Dict[str, Any], stmt: InsertStatement
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        if stmt.upsert_action is None:
+            return False, None
+        targets = self._resolve_upsert_targets(stmt.upsert_target, row)
+        if not targets:
+            return False, None
+        conflict_idx = self._find_conflict_index(table.storage.metadata, row, targets)
+        if conflict_idx is None:
+            return False, None
+        return True, self._handle_conflict(table, conflict_idx, row, stmt)
+
+    def _insert_or_upsert_row(
+        self, table: TableCatalog, row: Dict[str, Any], stmt: InsertStatement
+    ) -> Optional[Dict[str, Any]]:
+        is_conflict, conflict_res = self._try_upsert_conflict(table, row, stmt)
+        if is_conflict:
+            return conflict_res
+        vector = self._resolve_insert_vector(row, table.storage.dim)
+        if self.tx_manager.is_active:
+            self.tx_manager.stage_mutation(
+                "INSERT", {"table": stmt.table_name, "data": row}
+            )
+        else:
+            idx = table.storage.append(vector, row)
+            table.index.add_item(idx, vector)
+        return dict(row)
+
     def _exec_insert(
         self, stmt: InsertStatement, effective_role: str
     ) -> Dict[str, Any]:
         self.access_controller.enforce_permission(
             effective_role, stmt.table_name, "INSERT"
         )
-        if (
-            stmt.table_name not in self.tables
-            and self.multi_storage is not None
-            and not self.multi_storage.has_table(stmt.table_name)
-        ):
-            storage = self.multi_storage.create_table(
-                stmt.table_name, dim=self.embedding.dim
-            )
-            self.tables[stmt.table_name] = TableCatalog(
-                name=stmt.table_name, storage=storage
-            )
+        self._ensure_table_exists_for_insert(stmt.table_name)
         table = self._get_table(stmt.table_name)
-        col_val_map = dict(zip(stmt.columns, stmt.values))
-        doc_id = str(col_val_map.get("id", len(table.storage.metadata)))
-
-        vector = self._resolve_insert_vector(col_val_map, table.storage.dim)
-        if self.tx_manager.is_active:
-            self.tx_manager.stage_mutation(
-                "INSERT", {"table": stmt.table_name, "data": col_val_map}
-            )
-        else:
-            idx = table.storage.append(vector, col_val_map)
-            table.index.add_item(idx, vector)
-
-        return {
+        row_dicts = self._build_insert_row_dicts(stmt, effective_role)
+        modified_records: List[Dict[str, Any]] = []
+        for r in row_dicts:
+            res_rec = self._insert_or_upsert_row(table, r, stmt)
+            if res_rec is not None:
+                modified_records.append(res_rec)
+        ret_rows = _project_returning_rows(modified_records, stmt.returning_cols)
+        first_id = str(modified_records[0].get("id", "")) if modified_records else ""
+        res: Dict[str, Any] = {
             "command": "INSERT",
             "status": "ok",
             "table": stmt.table_name,
-            "id": doc_id,
-            "inserted_count": 1,
+            "id": first_id,
+            "inserted_count": len(modified_records),
         }
+        if stmt.returning_cols is not None:
+            res["rows"] = ret_rows
+            res["count"] = len(ret_rows)
+        return res
 
-    def _update_matching_records(
+    def _sort_and_limit_indices(
+        self,
+        metadata: List[Dict[str, Any]],
+        indices: List[int],
+        order_by: Optional[str],
+        order_desc: bool,
+        limit: Optional[int],
+    ) -> List[int]:
+        if order_by:
+            indices.sort(
+                key=lambda i: self._sort_key(metadata[i], order_by),
+                reverse=order_desc,
+            )
+        if limit is not None:
+            return indices[:limit]
+        return indices
+
+    def _find_update_indices(
         self, table: TableCatalog, stmt: UpdateStatement
-    ) -> int:
-        updated_count = 0
-        for meta in table.storage.metadata:
-            if _matches_where_clause(meta, stmt.where_clauses):
-                for k, v in stmt.assignments.items():
-                    meta[k] = v
-                updated_count += 1
-        return updated_count
+    ) -> List[int]:
+        matching = [
+            idx
+            for idx, meta in enumerate(table.storage.metadata)
+            if _matches_where_clause(meta, stmt.where_clauses)
+        ]
+        return self._sort_and_limit_indices(
+            table.storage.metadata,
+            matching,
+            stmt.order_by,
+            stmt.order_desc,
+            stmt.limit,
+        )
 
     def _exec_update(
         self, stmt: UpdateStatement, effective_role: str
@@ -1738,29 +1883,60 @@ class SQLExecutor:
             effective_role, stmt.table_name, "UPDATE"
         )
         table = self._get_table(stmt.table_name)
-        updated_count = self._update_matching_records(table, stmt)
+        indices = self._find_update_indices(table, stmt)
+        updated_records: List[Dict[str, Any]] = []
+        for i in indices:
+            meta = table.storage.metadata[i]
+            meta.update(stmt.assignments)
+            updated_records.append(dict(meta))
 
-        if updated_count > 0 and not self.tx_manager.is_active:
+        if updated_records and not self.tx_manager.is_active:
             table.storage.write_all(
                 table.storage.get_all_vectors(), table.storage.metadata
             )
 
-        return {"command": "UPDATE", "status": "ok", "updated_count": updated_count}
+        ret_rows = _project_returning_rows(updated_records, stmt.returning_cols)
+        res: Dict[str, Any] = {
+            "command": "UPDATE",
+            "status": "ok",
+            "updated_count": len(updated_records),
+        }
+        if stmt.returning_cols is not None:
+            res["rows"] = ret_rows
+            res["count"] = len(ret_rows)
+        return res
 
-    def _filter_deleted_records(
-        self, table: TableCatalog, stmt: DeleteStatement
-    ) -> Tuple[List[Tuple[float, ...]], List[Dict[str, Any]], int]:
+    @staticmethod
+    def _split_live_and_deleted(
+        storage: Any, del_indices: set[int]
+    ) -> Tuple[List[Tuple[float, ...]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         new_vecs: List[Tuple[float, ...]] = []
         new_meta: List[Dict[str, Any]] = []
-        deleted_count = 0
-
-        for idx, meta in enumerate(table.storage.metadata):
-            if stmt.where_clauses and _matches_where_clause(meta, stmt.where_clauses):
-                deleted_count += 1
+        deleted_records: List[Dict[str, Any]] = []
+        for idx, meta in enumerate(storage.metadata):
+            if idx in del_indices:
+                deleted_records.append(dict(meta))
             else:
-                new_vecs.append(table.storage.get_vector(idx))
+                new_vecs.append(storage.get_vector(idx))
                 new_meta.append(meta)
-        return new_vecs, new_meta, deleted_count
+        return new_vecs, new_meta, deleted_records
+
+    def _find_delete_indices(
+        self, table: TableCatalog, stmt: DeleteStatement
+    ) -> set[int]:
+        matching = [
+            idx
+            for idx, meta in enumerate(table.storage.metadata)
+            if not stmt.where_clauses or _matches_where_clause(meta, stmt.where_clauses)
+        ]
+        limited = self._sort_and_limit_indices(
+            table.storage.metadata,
+            matching,
+            stmt.order_by,
+            stmt.order_desc,
+            stmt.limit,
+        )
+        return set(limited)
 
     def _exec_delete(
         self, stmt: DeleteStatement, effective_role: str
@@ -1769,14 +1945,26 @@ class SQLExecutor:
             effective_role, stmt.table_name, "DELETE"
         )
         table = self._get_table(stmt.table_name)
-        new_vecs, new_meta, deleted_count = self._filter_deleted_records(table, stmt)
+        del_indices = self._find_delete_indices(table, stmt)
+        new_vecs, new_meta, deleted = self._split_live_and_deleted(
+            table.storage, del_indices
+        )
 
-        if deleted_count > 0 and not self.tx_manager.is_active:
+        if deleted and not self.tx_manager.is_active:
             table.storage.write_all(new_vecs, new_meta)
             table.index = HNSWIndex(dim=table.storage.dim)
             table.index.build_from_storage(new_vecs)
 
-        return {"command": "DELETE", "status": "ok", "deleted_count": deleted_count}
+        ret_rows = _project_returning_rows(deleted, stmt.returning_cols)
+        res: Dict[str, Any] = {
+            "command": "DELETE",
+            "status": "ok",
+            "deleted_count": len(deleted),
+        }
+        if stmt.returning_cols is not None:
+            res["rows"] = ret_rows
+            res["count"] = len(ret_rows)
+        return res
 
     def _exec_schema_stmt(
         self, stmt: SQLStatement, role: str

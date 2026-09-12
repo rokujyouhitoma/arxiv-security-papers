@@ -238,6 +238,34 @@ def _split_column_defs(cols_body: str) -> list[str]:
     return cols
 
 
+def _extract_limit_and_offset(
+    clean_sql: str,
+) -> Tuple[str, Optional[int], Optional[int]]:
+    """Extracts and strips LIMIT and OFFSET values."""
+    m_off = re.search(
+        r"\s+LIMIT\s+([0-9]+)\s+OFFSET\s+([0-9]+)$", clean_sql, re.IGNORECASE
+    )
+    if m_off:
+        return (
+            clean_sql[: m_off.start()].strip(),
+            int(m_off.group(1)),
+            int(m_off.group(2)),
+        )
+    m_comma = re.search(
+        r"\s+LIMIT\s+([0-9]+)\s*,\s*([0-9]+)$", clean_sql, re.IGNORECASE
+    )
+    if m_comma:
+        return (
+            clean_sql[: m_comma.start()].strip(),
+            int(m_comma.group(2)),
+            int(m_comma.group(1)),
+        )
+    m_lim = re.search(r"\s+LIMIT\s+([0-9]+)$", clean_sql, re.IGNORECASE)
+    if m_lim:
+        return clean_sql[: m_lim.start()].strip(), int(m_lim.group(1)), None
+    return clean_sql, None, None
+
+
 def _extract_storage_clauses(sql: str) -> tuple[str, Optional[str], Optional[str]]:
     """Extract optional USING <engine> and LOCATION '<path>' clauses from CREATE TABLE."""
     loc_match = re.search(r"\s+LOCATION\s+['\"](.*?)['\"]\s*$", sql, re.IGNORECASE)
@@ -261,6 +289,114 @@ def _split_and_conditions(text: str) -> List[str]:
     protected = re.sub(pattern, r"\1 __BETWEEN_AND__ \2", text, flags=re.IGNORECASE)
     parts = re.split(r"\s+AND\s+", protected, flags=re.IGNORECASE)
     return [p.replace("__BETWEEN_AND__", "AND").strip() for p in parts if p.strip()]
+
+
+def _extract_returning_clause(sql: str) -> Tuple[str, Optional[List[str]]]:
+    """Extracts optional RETURNING col1, col2, ... from end of DML statement."""
+    m = re.search(r"\s+RETURNING\s+(.+)$", sql, re.IGNORECASE)
+    if not m:
+        return sql, None
+    returning_raw = m.group(1).strip()
+    cleaned_sql = sql[: m.start()].strip()
+    cols = [c.strip() for c in returning_raw.split(",")]
+    return cleaned_sql, cols
+
+
+def _parse_set_assignments_static(set_raw: str) -> Dict[str, Any]:
+    """Parses SET k1=v1, k2=v2 assignments."""
+    assignments: Dict[str, Any] = {}
+    for item in set_raw.split(","):
+        if "=" in item:
+            k, v_raw = item.split("=", 1)
+            assignments[k.strip()] = _parse_val_type(v_raw.strip().strip("'\""))
+    return assignments
+
+
+def _extract_upsert_nothing(
+    sql: str,
+) -> Optional[Tuple[str, Optional[List[str]], str, Dict[str, Any]]]:
+    pattern = r"\s+ON\s+CONFLICT(?:\s*\((.*?)\))?\s+DO\s+NOTHING\s*$"
+    m = re.search(pattern, sql, re.IGNORECASE)
+    if not m:
+        return None
+    cleaned = sql[: m.start()].strip()
+    cols_raw = m.group(1)
+    cols = [c.strip() for c in cols_raw.split(",")] if cols_raw else None
+    return cleaned, cols, "NOTHING", {}
+
+
+def _extract_upsert_update(
+    sql: str,
+) -> Optional[Tuple[str, Optional[List[str]], str, Dict[str, Any]]]:
+    pattern = r"\s+ON\s+CONFLICT(?:\s*\((.*?)\))?\s+DO\s+UPDATE\s+SET\s+(.+)$"
+    m = re.search(pattern, sql, re.IGNORECASE)
+    if not m:
+        return None
+    cleaned = sql[: m.start()].strip()
+    cols_raw = m.group(1)
+    cols = [c.strip() for c in cols_raw.split(",")] if cols_raw else None
+    update_set = _parse_set_assignments_static(m.group(2).strip())
+    return cleaned, cols, "UPDATE", update_set
+
+
+def _extract_upsert_clause(
+    sql: str,
+) -> Tuple[str, Optional[List[str]], Optional[str], Dict[str, Any]]:
+    """Extracts optional ON CONFLICT clause."""
+    nothing_res = _extract_upsert_nothing(sql)
+    if nothing_res is not None:
+        return nothing_res
+    update_res = _extract_upsert_update(sql)
+    if update_res is not None:
+        return update_res
+    return sql, None, None, {}
+
+
+def _handle_close_paren(depth: int, current: List[str], tuples: List[str]) -> int:
+    if depth == 1:
+        tuples.append("".join(current).strip())
+        current.clear()
+        return 0
+    current.append(")")
+    return max(0, depth - 1)
+
+
+def _handle_value_char(
+    ch: str, depth: int, current: List[str], tuples: List[str]
+) -> int:
+    if ch == "(":
+        if depth >= 1:
+            current.append(ch)
+        return depth + 1
+    if ch == ")":
+        return _handle_close_paren(depth, current, tuples)
+    if depth >= 1:
+        current.append(ch)
+    return depth
+
+
+def _extract_values_tuples(values_raw: str) -> List[str]:
+    """Splits multiple (val1, val2), (val3, val4) value tuples."""
+    tuples: List[str] = []
+    current: List[str] = []
+    depth = 0
+    for ch in values_raw:
+        depth = _handle_value_char(ch, depth, current, tuples)
+    return tuples
+
+
+def _extract_dml_order_and_limit(
+    sql: str,
+) -> Tuple[str, Optional[str], bool, Optional[int]]:
+    """Extracts optional ORDER BY and LIMIT from UPDATE or DELETE statement."""
+    cleaned, limit_val, _ = _extract_limit_and_offset(sql)
+    order_pattern = r"\s+ORDER\s+BY\s+([a-zA-Z0-9_\.\->>\'\"]+)(?:\s+(ASC|DESC))?\s*$"
+    order_m = re.search(order_pattern, cleaned, re.IGNORECASE)
+    if not order_m:
+        return cleaned, None, False, limit_val
+    order_col = order_m.group(1).strip()
+    order_desc = bool(order_m.group(2) and order_m.group(2).upper() == "DESC")
+    return cleaned[: order_m.start()].strip(), order_col, order_desc, limit_val
 
 
 class SQLParser:
@@ -292,7 +428,7 @@ class SQLParser:
             return self._parse_cte(sql)
         if upper_sql.startswith("SELECT"):
             return self._parse_select(sql)
-        if upper_sql.startswith("INSERT INTO"):
+        if upper_sql.startswith("INSERT INTO") or upper_sql.startswith("REPLACE INTO"):
             return self._parse_insert(sql)
         return None
 
@@ -575,32 +711,12 @@ class SQLParser:
                 return match
         return None
 
+    @staticmethod
     def _extract_limit_and_offset(
-        self, clean_sql: str
+        clean_sql: str,
     ) -> Tuple[str, Optional[int], Optional[int]]:
         """Extracts and strips LIMIT and OFFSET values."""
-        m_off = re.search(
-            r"\s+LIMIT\s+([0-9]+)\s+OFFSET\s+([0-9]+)$", clean_sql, re.IGNORECASE
-        )
-        if m_off:
-            return (
-                clean_sql[: m_off.start()].strip(),
-                int(m_off.group(1)),
-                int(m_off.group(2)),
-            )
-        m_comma = re.search(
-            r"\s+LIMIT\s+([0-9]+)\s*,\s*([0-9]+)$", clean_sql, re.IGNORECASE
-        )
-        if m_comma:
-            return (
-                clean_sql[: m_comma.start()].strip(),
-                int(m_comma.group(2)),
-                int(m_comma.group(1)),
-            )
-        m_lim = re.search(r"\s+LIMIT\s+([0-9]+)$", clean_sql, re.IGNORECASE)
-        if m_lim:
-            return clean_sql[: m_lim.start()].strip(), int(m_lim.group(1)), None
-        return clean_sql, None, None
+        return _extract_limit_and_offset(clean_sql)
 
     def _extract_order_by_clause(
         self, clean_sql: str
@@ -808,53 +924,113 @@ class SQLParser:
         except Exception:
             return [v.strip().strip("'\"") for v in vals_raw.split(",")]
 
-    def _parse_insert(self, sql: str) -> InsertStatement:
-        m = re.match(
-            r"INSERT\s+INTO\s+([a-zA-Z0-9_]+)\s*\((.*?)\)\s*VALUES\s*\((.*?)\)",
+    def _parse_insert_select_stmt(
+        self,
+        sql: str,
+        returning_cols: Optional[List[str]],
+        upsert_target: Optional[List[str]],
+        upsert_action: Optional[str],
+        upsert_update_set: Dict[str, Any],
+    ) -> Optional[InsertStatement]:
+        m_sel = re.match(
+            r"^(?:INSERT|REPLACE)\s+INTO\s+([a-zA-Z0-9_]+)(?:\s*\((.*?)\))?\s+(SELECT\s+.+)$",
             sql,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not m_sel:
+            return None
+        tbl = m_sel.group(1).strip()
+        cols = [c.strip() for c in m_sel.group(2).split(",")] if m_sel.group(2) else []
+        sel_stmt = self._parse_select(m_sel.group(3).strip())
+        return InsertStatement(
+            command_type=SQLCommandType.INSERT,
+            raw_sql=sql,
+            table_name=tbl,
+            columns=cols,
+            select_stmt=sel_stmt,
+            upsert_target=upsert_target,
+            upsert_action=upsert_action,
+            upsert_update_set=upsert_update_set,
+            returning_cols=returning_cols,
+        )
+
+    def _parse_insert_rows(
+        self, raw_vals_body: str, cols_count: int
+    ) -> List[List[Any]]:
+        tuples = _extract_values_tuples(raw_vals_body)
+        rows: List[List[Any]] = []
+        for t in tuples:
+            vals = self._parse_insert_values(t)
+            if cols_count and len(vals) != cols_count:
+                raise SQLParseError(
+                    f"Column count ({cols_count}) does not match values count ({len(vals)})"
+                )
+            rows.append(vals)
+        return rows
+
+    @staticmethod
+    def _resolve_upsert_action(clean_sql: str, up_act: Optional[str]) -> Optional[str]:
+        if re.match(r"^REPLACE\s+INTO", clean_sql, re.IGNORECASE):
+            return up_act or "UPDATE"
+        return up_act
+
+    @staticmethod
+    def _split_insert_cols(raw_cols: Optional[str]) -> List[str]:
+        if not raw_cols:
+            return []
+        return [c.strip() for c in raw_cols.split(",")]
+
+    def _parse_insert(self, sql: str) -> InsertStatement:
+        clean_sql, ret_cols = _extract_returning_clause(sql)
+        clean_sql, up_tgt, up_act, up_set = _extract_upsert_clause(clean_sql)
+        up_act = self._resolve_upsert_action(clean_sql, up_act)
+
+        sel_res = self._parse_insert_select_stmt(
+            clean_sql, ret_cols, up_tgt, up_act, up_set
+        )
+        if sel_res is not None:
+            return sel_res
+
+        m = re.match(
+            r"^(?:INSERT|REPLACE)\s+INTO\s+([a-zA-Z0-9_]+)(?:\s*\((.*?)\))?\s+VALUES\s*(.+)$",
+            clean_sql,
             re.IGNORECASE | re.DOTALL,
         )
         if not m:
             raise SQLParseError(f"Malformed INSERT syntax: {sql}")
 
-        table_name = m.group(1).strip()
-        columns = [c.strip() for c in m.group(2).strip().split(",")]
-        values = self._parse_insert_values(m.group(3).strip())
-
-        if len(columns) != len(values):
-            raise SQLParseError(
-                f"Column count ({len(columns)}) does not match values count ({len(values)})"
-            )
-
+        tbl = m.group(1).strip()
+        cols = self._split_insert_cols(m.group(2))
+        rows = self._parse_insert_rows(m.group(3).strip(), len(cols))
+        first_val = rows[0] if rows else []
         return InsertStatement(
             command_type=SQLCommandType.INSERT,
             raw_sql=sql,
-            table_name=table_name,
-            columns=columns,
-            values=values,
+            table_name=tbl,
+            columns=cols,
+            values=first_val,
+            rows_values=rows,
+            upsert_target=up_tgt,
+            upsert_action=up_act,
+            upsert_update_set=up_set,
+            returning_cols=ret_cols,
         )
 
-    def _parse_set_assignments(self, set_raw: str) -> Dict[str, Any]:
-        """Parses SET k1=v1, k2=v2 assignments."""
-        assignments: Dict[str, Any] = {}
-        for item in set_raw.split(","):
-            if "=" in item:
-                k, v_raw = item.split("=", 1)
-                clean_v = v_raw.strip().strip("'\"")
-                assignments[k.strip()] = _parse_val_type(clean_v)
-        return assignments
-
     def _parse_update(self, sql: str) -> UpdateStatement:
+        clean_sql, ret_cols = _extract_returning_clause(sql)
+        clean_sql, order_col, order_desc, limit_val = _extract_dml_order_and_limit(
+            clean_sql
+        )
         m = re.match(
             r"UPDATE\s+([a-zA-Z0-9_]+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
-            sql,
+            clean_sql,
             re.IGNORECASE | re.DOTALL,
         )
         if not m:
             raise SQLParseError(f"Malformed UPDATE syntax: {sql}")
 
         table_name = m.group(1).strip()
-        assignments = self._parse_set_assignments(m.group(2).strip())
+        assignments = _parse_set_assignments_static(m.group(2).strip())
         where_raw = m.group(3)
         where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
 
@@ -864,12 +1040,20 @@ class SQLParser:
             table_name=table_name,
             assignments=assignments,
             where_clauses=where_clauses,
+            returning_cols=ret_cols,
+            order_by=order_col,
+            order_desc=order_desc,
+            limit=limit_val,
         )
 
     def _parse_delete(self, sql: str) -> DeleteStatement:
+        clean_sql, ret_cols = _extract_returning_clause(sql)
+        clean_sql, order_col, order_desc, limit_val = _extract_dml_order_and_limit(
+            clean_sql
+        )
         m = re.match(
             r"DELETE\s+FROM\s+([a-zA-Z0-9_]+)(?:\s+WHERE\s+(.+))?$",
-            sql,
+            clean_sql,
             re.IGNORECASE | re.DOTALL,
         )
         if not m:
@@ -884,6 +1068,10 @@ class SQLParser:
             raw_sql=sql,
             table_name=table_name,
             where_clauses=where_clauses,
+            returning_cols=ret_cols,
+            order_by=order_col,
+            order_desc=order_desc,
+            limit=limit_val,
         )
 
     def _parse_grant(self, sql: str) -> GrantStatement:
