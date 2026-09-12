@@ -25,6 +25,7 @@ from .ast import (
     CreateTableStatement,
     CreateTriggerStatement,
     CreateViewStatement,
+    CreateVirtualTableStatement,
     DeleteStatement,
     DetachStatement,
     DropIndexStatement,
@@ -2619,10 +2620,18 @@ class SQLExecutor:
         )
         return self._build_select_result(paged_rows, stmt, effective_role, temp_tables)
 
+    def _parse_raw_vector(self, raw_vec: Any) -> Any:
+        if isinstance(raw_vec, str) and raw_vec.startswith("["):
+            try:
+                return json.loads(raw_vec)
+            except Exception:
+                return raw_vec
+        return raw_vec
+
     def _resolve_insert_vector(
         self, col_val_map: Dict[str, Any], dim: int
     ) -> List[float]:
-        raw_vec = col_val_map.get("vector")
+        raw_vec = self._parse_raw_vector(col_val_map.get("vector"))
         if not raw_vec and "text" in col_val_map:
             raw_vec = self.embedding.embed_text(str(col_val_map["text"]))
         elif not raw_vec:
@@ -2729,20 +2738,37 @@ class SQLExecutor:
             return False, None
         return True, self._handle_conflict(table, conflict_idx, row, stmt)
 
-    def _insert_or_upsert_row(
+    def _insert_non_vector_row(
+        self, table: TableCatalog, row: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if hasattr(table.storage, "upsert"):
+            table.storage.upsert(row)
+        elif hasattr(table.storage, "append"):
+            table.storage.append(row)
+        return dict(row)
+
+    def _insert_vector_row(
         self, table: TableCatalog, row: Dict[str, Any], stmt: InsertStatement
-    ) -> Optional[Dict[str, Any]]:
-        is_conflict, conflict_res = self._try_upsert_conflict(table, row, stmt)
-        if is_conflict:
-            return conflict_res
+    ) -> Dict[str, Any]:
         vector = self._resolve_insert_vector(row, table.storage.dim)
         if self.tx_manager.is_active:
             self.tx_manager.stage_mutation(
                 "INSERT", {"table": stmt.table_name, "data": row}
             )
         idx = table.storage.append(vector, row)
-        table.index.add_item(idx, vector)
+        if table.index is not None:
+            table.index.add_item(idx, vector)
         return dict(row)
+
+    def _insert_or_upsert_row(
+        self, table: TableCatalog, row: Dict[str, Any], stmt: InsertStatement
+    ) -> Optional[Dict[str, Any]]:
+        is_conflict, conflict_res = self._try_upsert_conflict(table, row, stmt)
+        if is_conflict:
+            return conflict_res
+        if not hasattr(table.storage, "dim"):
+            return self._insert_non_vector_row(table, row)
+        return self._insert_vector_row(table, row, stmt)
 
     def _exec_insert(
         self, stmt: InsertStatement, effective_role: str
@@ -2936,6 +2962,8 @@ class SQLExecutor:
     def _exec_schema_table_stmt(
         self, stmt: SQLStatement, role: str
     ) -> Optional[Dict[str, Any]]:
+        if isinstance(stmt, CreateVirtualTableStatement):
+            return self._exec_create_virtual_table(stmt, role)
         if isinstance(stmt, CreateTableStatement):
             return self._exec_create_table(stmt, role)
         if isinstance(stmt, DropTableStatement):
@@ -2943,6 +2971,89 @@ class SQLExecutor:
         if isinstance(stmt, AlterTableStatement):
             return self._exec_alter_table(stmt, role)
         return None
+
+    def _parse_single_module_arg(
+        self, arg: str, location: Optional[str], kwargs: Dict[str, Any]
+    ) -> Optional[str]:
+        if "=" in arg:
+            k, v = arg.split("=", 1)
+            k, v = k.strip().lower(), v.strip().strip("'\"")
+            if k in ("path", "location", "file", "filename", "file_path", "root_dir"):
+                return v
+            kwargs[k] = v
+            return location
+        val = arg.strip("'\"")
+        if location is None:
+            return val
+        kwargs[f"arg_{len(kwargs)}"] = val
+        return location
+
+    def _parse_virtual_module_args(
+        self, raw_args: List[str]
+    ) -> Tuple[Optional[str], Dict[str, Any]]:
+        loc: Optional[str] = None
+        kwargs: Dict[str, Any] = {}
+        for raw in raw_args:
+            clean_arg = raw.strip()
+            if clean_arg:
+                loc = self._parse_single_module_arg(clean_arg, loc, kwargs)
+        return loc, kwargs
+
+    @staticmethod
+    def _schema_from_fieldnames(storage: Any) -> Dict[str, str]:
+        fn = getattr(storage, "fieldnames", None)
+        names = fn() if callable(fn) else fn
+        return {col: "TEXT" for col in names} if names else {}
+
+    @classmethod
+    def _resolve_vtab_schema(cls, storage: Any) -> Dict[str, str]:
+        schema = getattr(storage, "schema", None)
+        if isinstance(schema, dict):
+            return dict(schema)
+        return cls._schema_from_fieldnames(storage)
+
+    def _exec_create_virtual_table(
+        self, stmt: CreateVirtualTableStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        self.access_controller.enforce_permission(
+            effective_role, stmt.table_name, "CREATE_TABLE"
+        )
+        if stmt.table_name in self.tables:
+            if stmt.if_not_exists:
+                return {
+                    "command": "CREATE_VIRTUAL_TABLE",
+                    "status": "ok",
+                    "message": f"Table '{stmt.table_name}' already exists (skipped)",
+                }
+            raise SQLExecutionError(f"Table '{stmt.table_name}' already exists.")
+
+        from database.storage.factory import StorageEngineFactory
+
+        location, kwargs = self._parse_virtual_module_args(stmt.module_args)
+        kwargs.setdefault("dim", self.embedding.dim)
+        kwargs.setdefault("table_name", stmt.table_name)
+
+        storage = StorageEngineFactory.create_by_engine_name(
+            stmt.module_name, location=location, **kwargs
+        )
+        schema = self._resolve_vtab_schema(storage)
+
+        catalog = TableCatalog(
+            name=stmt.table_name,
+            storage=storage,
+            schema=schema,
+            raw_sql=stmt.raw_sql,
+            storage_engine=stmt.module_name,
+            location=location,
+        )
+        self.tables[stmt.table_name] = catalog
+
+        return {
+            "command": "CREATE_VIRTUAL_TABLE",
+            "status": "ok",
+            "table": stmt.table_name,
+            "module": stmt.module_name,
+        }
 
     def _exec_schema_index_stmt(
         self, stmt: SQLStatement, role: str

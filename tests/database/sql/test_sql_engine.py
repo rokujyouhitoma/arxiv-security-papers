@@ -1112,3 +1112,72 @@ def test_phase7_attach_detach_database() -> None:
         r = new_exec.execute("SELECT id, note FROM disk_db.notes")
         assert len(r["rows"]) == 1
         assert r["rows"][0]["note"] == "confidential"
+
+
+def test_phase7_create_virtual_table() -> None:
+    """
+    Validates SQLite parity for CREATE VIRTUAL TABLE statements,
+    dynamic storage engine binding (csv, vector, json), DDL lifecycle, and queries.
+    """
+    executor = SQLExecutor()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_path = os.path.join(tmpdir, "v_papers.csv")
+        vec_path = os.path.join(tmpdir, "v_embeddings.vdb")
+
+        # 1. CREATE VIRTUAL TABLE USING csv
+        res_vcsv = executor.execute(
+            f"CREATE VIRTUAL TABLE v_csv USING csv(path='{csv_path}', columns='id,title,category')"
+        )
+        assert res_vcsv["status"] == "ok"
+        assert res_vcsv["command"] == "CREATE_VIRTUAL_TABLE"
+        assert res_vcsv["module"] == "csv"
+
+        # 2. DML operations on virtual CSV table
+        executor.execute(
+            "INSERT INTO v_csv (id, title, category) VALUES ('p1', 'Zero Trust Architecture', 'cs.CR')"
+        )
+        executor.execute(
+            "INSERT INTO v_csv (id, title, category) VALUES ('p2', 'Post-Quantum Crypto', 'cs.CR')"
+        )
+
+        sel_csv = executor.execute(
+            "SELECT id, title, category FROM v_csv ORDER BY id ASC"
+        )
+        assert len(sel_csv["rows"]) == 2
+        assert sel_csv["rows"][0]["title"] == "Zero Trust Architecture"
+        assert sel_csv["rows"][1]["title"] == "Post-Quantum Crypto"
+
+        # 3. IF NOT EXISTS idempotency
+        res_dup = executor.execute(
+            f"CREATE VIRTUAL TABLE IF NOT EXISTS v_csv USING csv(path='{csv_path}')"
+        )
+        assert res_dup["status"] == "ok"
+        assert "skipped" in res_dup["message"]
+
+        with pytest.raises(SQLExecutionError):
+            executor.execute(f"CREATE VIRTUAL TABLE v_csv USING csv(path='{csv_path}')")
+
+        # 4. CREATE VIRTUAL TABLE USING vector
+        res_vvec = executor.execute(
+            f"CREATE VIRTUAL TABLE v_vec USING vector(location='{vec_path}', dim=4)"
+        )
+        assert res_vvec["status"] == "ok"
+        assert res_vvec["module"] == "vector"
+
+        executor.execute(
+            "INSERT INTO v_vec (id, title, category, vector) "
+            "VALUES ('v1', 'LLM Jailbreak Defense', 'cs.CR', '[0.1, 0.2, 0.3, 0.4]')"
+        )
+        sel_vec = executor.execute("SELECT id, title FROM v_vec WHERE id = 'v1'")
+        assert len(sel_vec["rows"]) == 1
+        assert sel_vec["rows"][0]["title"] == "LLM Jailbreak Defense"
+
+        # 5. DROP TABLE for virtual tables
+        res_drop_csv = executor.execute("DROP TABLE v_csv")
+        assert res_drop_csv["status"] == "ok"
+        assert "v_csv" not in executor.tables
+
+        res_drop_vec = executor.execute("DROP TABLE v_vec")
+        assert res_drop_vec["status"] == "ok"
+        assert "v_vec" not in executor.tables

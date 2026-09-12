@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .json_storage import JsonLinesStorage, JsonTableStorage
 from .multi_storage import MultiTableVectorStorage
@@ -87,6 +87,23 @@ def _is_multi_vdb_file(path: str) -> bool:
         return False
 
 
+def _extract_storage_loc(
+    location: Optional[str], kwargs: Dict[str, Any], default: str
+) -> str:
+    for key in ("path", "filename", "file_path"):
+        val = kwargs.get(key)
+        if val:
+            return str(val)
+    return location or default
+
+
+def _extract_csv_fieldnames(kwargs: Dict[str, Any]) -> Optional[List[str]]:
+    raw = kwargs.get("fieldnames") or kwargs.get("columns")
+    if isinstance(raw, str):
+        return [f.strip() for f in raw.split(",") if f.strip()]
+    return raw
+
+
 class StorageEngineFactory:
     """Pluggable Storage Engine Factory for URI auto-detection and DDL USING clauses."""
 
@@ -101,10 +118,14 @@ class StorageEngineFactory:
 
         cls._registry["binary_vdb"] = cls._create_binary_vdb
         cls._registry["multi_vdb"] = cls._create_binary_vdb
+        cls._registry["vector"] = cls._create_binary_vdb
         cls._registry["json_lines"] = cls._create_json_lines
         cls._registry["json_table"] = cls._create_json_table
+        cls._registry["json"] = cls._create_json_table
         cls._registry["csv_table"] = cls._create_csv_table
+        cls._registry["csv"] = cls._create_csv_table
         cls._registry["file_plain_text"] = cls._create_plain_text
+        cls._registry["text"] = cls._create_plain_text
         cls._initialized = True
 
     @staticmethod
@@ -113,9 +134,10 @@ class StorageEngineFactory:
 
         kw = dict(kwargs)
         ws = kw.pop("workspace_dir", None)
+        root = location or kw.pop("path", None) or kw.pop("root_dir", None)
         kw.pop("dim", None)
         kw.pop("table_name", None)
-        return FileBackedPlainTextStorage(root_dir=location, workspace_dir=ws, **kw)
+        return FileBackedPlainTextStorage(root_dir=root, workspace_dir=ws, **kw)
 
     @staticmethod
     def _resolve_multi_vdb_table(
@@ -127,7 +149,7 @@ class StorageEngineFactory:
 
     @staticmethod
     def _create_binary_vdb(location: Optional[str], **kwargs: Any) -> Any:
-        loc = location or "default.vdb"
+        loc = _extract_storage_loc(location, kwargs, "default.vdb")
         dim = int(kwargs.get("dim", 128))
         tbl_name = kwargs.get("table_name")
         if _is_multi_vdb_file(loc) or "multi" in kwargs:
@@ -137,12 +159,12 @@ class StorageEngineFactory:
 
     @staticmethod
     def _create_json_lines(location: Optional[str], **kwargs: Any) -> Any:
-        loc = location or "data.jsonl"
+        loc = _extract_storage_loc(location, kwargs, "data.jsonl")
         return JsonLinesStorage(file_path=loc)
 
     @staticmethod
     def _create_json_table(location: Optional[str], **kwargs: Any) -> Any:
-        loc = location or "catalog.json"
+        loc = _extract_storage_loc(location, kwargs, "catalog.json")
         pk = str(kwargs.get("primary_key", kwargs.get("pk_field", "id")))
         return JsonTableStorage(file_path=loc, primary_key=pk)
 
@@ -150,9 +172,9 @@ class StorageEngineFactory:
     def _create_csv_table(location: Optional[str], **kwargs: Any) -> Any:
         from .csv_storage import CsvTableStorage
 
-        loc = location or "table.csv"
+        loc = _extract_storage_loc(location, kwargs, "table.csv")
         pk = str(kwargs.get("primary_key", kwargs.get("pk_field", "id")))
-        fieldnames = kwargs.get("fieldnames")
+        fieldnames = _extract_csv_fieldnames(kwargs)
         return CsvTableStorage(file_path=loc, primary_key=pk, fieldnames=fieldnames)
 
     @classmethod

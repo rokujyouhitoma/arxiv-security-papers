@@ -21,6 +21,7 @@ class SQLCommandType(str, Enum):
     DROP_VIEW = "DROP_VIEW"
     CREATE_TRIGGER = "CREATE_TRIGGER"
     DROP_TRIGGER = "DROP_TRIGGER"
+    CREATE_VIRTUAL_TABLE = "CREATE_VIRTUAL_TABLE"
 
     # DQL
     SELECT = "SELECT"
@@ -66,6 +67,9 @@ _CMD_CATEGORY_MAP: Dict[SQLCommandType, str] = {
     SQLCommandType.REINDEX: "DDL",
     SQLCommandType.CREATE_VIEW: "DDL",
     SQLCommandType.DROP_VIEW: "DDL",
+    SQLCommandType.CREATE_TRIGGER: "DDL",
+    SQLCommandType.DROP_TRIGGER: "DDL",
+    SQLCommandType.CREATE_VIRTUAL_TABLE: "DDL",
     SQLCommandType.SELECT: "DQL",
     SQLCommandType.SHOW: "DQL",
     SQLCommandType.EXPLAIN: "DQL",
@@ -376,3 +380,12 @@ class AttachStatement(SQLStatement):
 @dataclass
 class DetachStatement(SQLStatement):
     schema_name: str = ""
+
+
+# VIRTUAL TABLE
+@dataclass
+class CreateVirtualTableStatement(SQLStatement):
+    table_name: str = ""
+    module_name: str = ""
+    module_args: List[str] = field(default_factory=list)
+    if_not_exists: bool = False
