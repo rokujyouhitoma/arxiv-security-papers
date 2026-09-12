@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..btree import BPlusTree
 from ..embedding import DeterministicEmbedding
@@ -71,7 +71,15 @@ def _safe_remove_file(path: Optional[str]) -> None:
 def _project_single_record(
     record: Dict[str, Any], returning_cols: List[str]
 ) -> Dict[str, Any]:
-    return {c: record.get(c) for c in returning_cols}
+    projected: Dict[str, Any] = {}
+    for c in returning_cols:
+        c_clean = c.strip()
+        val = record.get(c_clean)
+        if val is None and "." in c_clean:
+            val = record.get(c_clean.split(".")[-1])
+        out_col = c_clean.split(".")[-1] if "." in c_clean else c_clean
+        projected[out_col] = val
+    return projected
 
 
 def _project_returning_rows(
@@ -466,21 +474,57 @@ def _extract_literal(expr: str) -> Optional[Any]:
     return _extract_numeric_literal(expr)
 
 
+def _eval_binary_arith_op(op: str, v1: float, v2: float) -> Optional[float]:
+    ops: Dict[str, Callable[[float, float], Optional[float]]] = {
+        "+": lambda a, b: a + b,
+        "-": lambda a, b: a - b,
+        "*": lambda a, b: a * b,
+        "/": lambda a, b: a / b if b != 0 else None,
+    }
+    fn = ops.get(op)
+    return fn(v1, v2) if fn is not None else None
+
+
+def _cast_arith_result(
+    res: Optional[float], v1: Any, v2: Any, op: str
+) -> Optional[Any]:
+    if res is None:
+        return None
+    if isinstance(v1, int) and isinstance(v2, int) and op != "/":
+        return int(res)
+    return res
+
+
+def _resolve_arith_operand(record: Dict[str, Any], r_str: str) -> Any:
+    lit = _extract_literal(r_str)
+    return lit if lit is not None else _extract_field_value(record, r_str)
+
+
+def _safe_eval_arith(op: str, v1: Any, v2: Any) -> Optional[Any]:
+    try:
+        res = _eval_binary_arith_op(op, float(v1), float(v2))
+        return _cast_arith_result(res, v1, v2, op)
+    except (ValueError, TypeError):
+        return None
+
+
 def _extract_arithmetic(record: Dict[str, Any], expr: str) -> Optional[Any]:
-    arith_m = re.match(r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*([\+\-])\s*([0-9]+)$", expr)
+    arith_m = re.match(
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*([\+\-\*\/])\s*([a-zA-Z0-9_\.\->>\'\"0-9\.]+)$",
+        expr.strip(),
+    )
     if not arith_m:
         return None
-    base_col, op, num_str = (
+    l_str, op, r_str = (
         arith_m.group(1).strip(),
         arith_m.group(2),
-        int(arith_m.group(3)),
+        arith_m.group(3).strip(),
     )
-    base_val = _extract_field_value(record, base_col)
-    try:
-        base_num = int(base_val) if base_val is not None else 0
-        return base_num + num_str if op == "+" else base_num - num_str
-    except (ValueError, TypeError):
-        return base_val
+    v1 = _extract_field_value(record, l_str)
+    v2 = _resolve_arith_operand(record, r_str)
+    if None in (v1, v2):
+        return None
+    return _safe_eval_arith(op, v1, v2)
 
 
 def _parse_json_field(raw_obj: Any) -> Optional[Dict[str, Any]]:
@@ -520,17 +564,22 @@ def _extract_json_op(record: Dict[str, Any], expr: str) -> Optional[Any]:
     return _extract_json_val(dict_obj, path_part, json_unquote)
 
 
+def _lookup_dot_parts(record: Dict[str, Any], expr: str) -> Any:
+    if "." not in expr:
+        return None
+    parts = expr.split(".")
+    if parts[-1] in record:
+        return record[parts[-1]]
+    one_stripped = ".".join(parts[1:])
+    return record.get(one_stripped)
+
+
 def _lookup_record_col(record: Dict[str, Any], expr: str) -> Any:
     if expr in record:
         return record[expr]
-    if "." in expr:
-        parts = expr.split(".")
-        if parts[-1] in record:
-            return record[parts[-1]]
-        one_stripped = ".".join(parts[1:])
-        if one_stripped in record:
-            return record[one_stripped]
-    return None
+    if any(c in expr for c in (" ", "*", "/", "+", "-")):
+        return None
+    return _lookup_dot_parts(record, expr)
 
 
 def _dispatch_builtin_func(func_name: str, args: List[Any]) -> Any:
@@ -2704,15 +2753,22 @@ class SQLExecutor:
             return [dict(r) for r in raw_rows]
         return [self._map_select_row_to_cols(r, stmt.columns) for r in raw_rows]
 
+    def _resolve_insert_columns(self, stmt: InsertStatement) -> List[str]:
+        if stmt.columns:
+            return stmt.columns
+        table = self._get_table(stmt.table_name)
+        return list(table.schema.keys()) if table.schema else []
+
     def _build_insert_row_dicts(
         self, stmt: InsertStatement, role: str
     ) -> List[Dict[str, Any]]:
         if stmt.select_stmt is not None:
             return self._build_from_select(stmt, role)
+        cols = self._resolve_insert_columns(stmt)
         if stmt.rows_values:
-            return [dict(zip(stmt.columns, row)) for row in stmt.rows_values]
+            return [dict(zip(cols, row)) for row in stmt.rows_values]
         if stmt.values:
-            return [dict(zip(stmt.columns, stmt.values))]
+            return [dict(zip(cols, stmt.values))]
         return []
 
     @staticmethod
@@ -2868,6 +2924,119 @@ class SQLExecutor:
             stmt.limit,
         )
 
+    def _enforce_update_from_perms(
+        self, stmt: UpdateStatement, effective_role: str
+    ) -> None:
+        if stmt.from_table:
+            self.access_controller.enforce_permission(
+                effective_role, stmt.from_table.name, "SELECT"
+            )
+            for j in stmt.joins:
+                self.access_controller.enforce_permission(
+                    effective_role, j.table.name, "SELECT"
+                )
+
+    def _build_from_joined_rows(
+        self, stmt: UpdateStatement, effective_role: str
+    ) -> List[Dict[str, Any]]:
+        if not stmt.from_table:
+            return []
+        from_raw = self._query_knn_or_scan(stmt.from_table.name, None)
+        curr = [self._prefix_record(r, stmt.from_table) for r in from_raw]
+        for j in stmt.joins:
+            curr = self._join_table_rows(curr, j, effective_role, {})
+        return curr
+
+    def _match_update_from_row(
+        self,
+        base_meta: Dict[str, Any],
+        table_ref: TableRef,
+        joined_rows: List[Dict[str, Any]],
+        where_clauses: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        prefixed_base = self._prefix_record(base_meta, table_ref)
+        for j_row in joined_rows:
+            combined = {**j_row, **prefixed_base}
+            if _matches_where_clause(combined, where_clauses):
+                return combined
+        return None
+
+    def _compute_update_assignments(
+        self,
+        stmt: UpdateStatement,
+        eval_ctx: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        applied: Dict[str, Any] = {}
+        for col, expr in stmt.raw_assignments.items():
+            applied[col] = _extract_field_value(eval_ctx, expr)
+        return applied
+
+    def _apply_single_update(
+        self,
+        table: TableCatalog,
+        idx: int,
+        stmt: UpdateStatement,
+        eval_ctx: Dict[str, Any],
+        effective_role: str,
+    ) -> Dict[str, Any]:
+        meta = table.storage.metadata[idx]
+        old_rec = dict(meta)
+        self._fire_triggers(
+            "BEFORE", "UPDATE", stmt.table_name, old_rec, effective_role
+        )
+        if stmt.raw_assignments:
+            assignments = self._compute_update_assignments(stmt, eval_ctx)
+        else:
+            assignments = stmt.assignments
+        meta.update(assignments)
+        new_rec = dict(meta)
+        self._fire_triggers("AFTER", "UPDATE", stmt.table_name, new_rec, effective_role)
+        return new_rec
+
+    def _exec_update_standard(
+        self, table: TableCatalog, stmt: UpdateStatement, effective_role: str
+    ) -> List[Dict[str, Any]]:
+        indices = self._find_update_indices(table, stmt)
+        updated: List[Dict[str, Any]] = []
+        for i in indices:
+            meta = table.storage.metadata[i]
+            ctx = dict(meta)
+            updated.append(
+                self._apply_single_update(table, i, stmt, ctx, effective_role)
+            )
+        return updated
+
+    def _iterate_update_from_rows(
+        self,
+        table: TableCatalog,
+        stmt: UpdateStatement,
+        t_ref: TableRef,
+        joined_rows: List[Dict[str, Any]],
+        role: str,
+    ) -> List[Dict[str, Any]]:
+        updated: List[Dict[str, Any]] = []
+        for i, meta in enumerate(table.storage.metadata):
+            match_ctx = self._match_update_from_row(
+                meta, t_ref, joined_rows, stmt.where_clauses
+            )
+            if match_ctx is not None:
+                updated.append(
+                    self._apply_single_update(table, i, stmt, match_ctx, role)
+                )
+                if stmt.limit is not None and len(updated) >= stmt.limit:
+                    break
+        return updated
+
+    def _exec_update_with_from(
+        self, table: TableCatalog, stmt: UpdateStatement, effective_role: str
+    ) -> List[Dict[str, Any]]:
+        assert stmt.from_table is not None
+        joined_rows = self._build_from_joined_rows(stmt, effective_role)
+        t_ref = TableRef(name=stmt.table_name)
+        return self._iterate_update_from_rows(
+            table, stmt, t_ref, joined_rows, effective_role
+        )
+
     def _exec_update(
         self, stmt: UpdateStatement, effective_role: str
     ) -> Dict[str, Any]:
@@ -2875,21 +3044,12 @@ class SQLExecutor:
         self.access_controller.enforce_permission(
             effective_role, stmt.table_name, "UPDATE"
         )
+        self._enforce_update_from_perms(stmt, effective_role)
         table = self._get_table(stmt.table_name)
-        indices = self._find_update_indices(table, stmt)
-        updated_records: List[Dict[str, Any]] = []
-        for i in indices:
-            meta = table.storage.metadata[i]
-            old_rec = dict(meta)
-            self._fire_triggers(
-                "BEFORE", "UPDATE", stmt.table_name, old_rec, effective_role
-            )
-            meta.update(stmt.assignments)
-            new_rec = dict(meta)
-            updated_records.append(new_rec)
-            self._fire_triggers(
-                "AFTER", "UPDATE", stmt.table_name, new_rec, effective_role
-            )
+        if stmt.from_table:
+            updated_records = self._exec_update_with_from(table, stmt, effective_role)
+        else:
+            updated_records = self._exec_update_standard(table, stmt, effective_role)
 
         if updated_records and not self.tx_manager.is_active:
             table.storage.write_all(

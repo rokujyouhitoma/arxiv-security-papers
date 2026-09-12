@@ -1258,9 +1258,66 @@ def test_phase7_indexed_by_and_not_indexed() -> None:
         "JOIN users AS u2 INDEXED BY idx_user_age ON u1.id = u2.id"
     )
     assert res_join["status"] == "ok"
-
     with pytest.raises(SQLExecutionError, match="no such index: bad_join_idx"):
         executor.execute(
             "SELECT u1.name FROM users AS u1 "
             "JOIN users AS u2 INDEXED BY bad_join_idx ON u1.id = u2.id"
+        )
+
+
+def test_update_from_clause() -> None:
+    executor = SQLExecutor()
+
+    # 1. Setup tables
+    executor.execute(
+        "CREATE TABLE employees (id VARCHAR PRIMARY KEY, name TEXT, dept VARCHAR, salary REAL)"
+    )
+    executor.execute(
+        "CREATE TABLE bonuses (dept VARCHAR PRIMARY KEY, multiplier REAL, bonus_type TEXT)"
+    )
+    executor.execute("CREATE TABLE dept_ranks (dept VARCHAR PRIMARY KEY, rank_val INT)")
+
+    executor.execute("INSERT INTO employees VALUES ('e1', 'Alice', 'D1', 1000.0)")
+    executor.execute("INSERT INTO employees VALUES ('e2', 'Bob', 'D2', 2000.0)")
+    executor.execute("INSERT INTO employees VALUES ('e3', 'Charlie', 'D1', 1500.0)")
+
+    executor.execute("INSERT INTO bonuses VALUES ('D1', 1.2, 'standard')")
+    executor.execute("INSERT INTO bonuses VALUES ('D2', 1.5, 'exec')")
+
+    executor.execute("INSERT INTO dept_ranks VALUES ('D1', 10)")
+    executor.execute("INSERT INTO dept_ranks VALUES ('D2', 20)")
+
+    # 2. Basic UPDATE ... FROM with expression referencing both tables
+    res1 = executor.execute(
+        "UPDATE employees SET salary = employees.salary * bonuses.multiplier "
+        "FROM bonuses WHERE employees.dept = bonuses.dept"
+    )
+    assert res1["status"] == "ok"
+    assert res1["updated_count"] == 3
+
+    check1 = executor.execute("SELECT id, salary FROM employees ORDER BY id")
+    assert check1["rows"][0]["salary"] == pytest.approx(1200.0)
+    assert check1["rows"][1]["salary"] == pytest.approx(3000.0)
+    assert check1["rows"][2]["salary"] == pytest.approx(1800.0)
+
+    # 3. UPDATE ... FROM with JOIN and RETURNING
+    res2 = executor.execute(
+        "UPDATE employees SET salary = employees.salary + dept_ranks.rank_val "
+        "FROM bonuses JOIN dept_ranks ON bonuses.dept = dept_ranks.dept "
+        "WHERE employees.dept = bonuses.dept AND employees.id = 'e1' "
+        "RETURNING employees.id, employees.salary"
+    )
+    assert res2["status"] == "ok"
+    assert res2["updated_count"] == 1
+    assert len(res2["rows"]) == 1
+    assert res2["rows"][0]["id"] == "e1"
+    assert res2["rows"][0]["salary"] == pytest.approx(1210.0)
+
+    # 4. Enforce SELECT permission on FROM tables
+    executor.execute("GRANT UPDATE ON employees TO limited_user", role="admin")
+    # Missing SELECT on bonuses for limited_user
+    with pytest.raises(DCLPermissionDeniedError):
+        executor.execute(
+            "UPDATE employees SET salary = 999 FROM bonuses WHERE employees.dept = bonuses.dept",
+            role="limited_user",
         )

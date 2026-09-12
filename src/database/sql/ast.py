@@ -263,6 +263,9 @@ class InsertStatement(SQLStatement):
 class UpdateStatement(SQLStatement):
     table_name: str = ""
     assignments: Dict[str, Any] = field(default_factory=dict)
+    raw_assignments: Dict[str, str] = field(default_factory=dict)
+    from_table: Optional[TableRef] = None
+    joins: List[JoinClause] = field(default_factory=list)
     where_clauses: List[Dict[str, Any]] = field(default_factory=list)
     returning_cols: Optional[List[str]] = None
     order_by: Optional[str] = None

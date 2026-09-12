@@ -582,7 +582,7 @@ SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合�
 
 | 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
 | :---: | :--- | :--- | :---: |
-| **[#266](../issues/266-implement-sqlite-parity-update-from.md)** | **`UPDATE ... FROM` (Join Update) 構文の実装** | `UPDATE tbl SET col = t2.val FROM other_tbl t2 WHERE tbl.id = t2.id` 構文のパース、他テーブル結合行を用いた一括更新。 | SQLite 3.33.0+ |
+| **[#266](../issues/closed/266-implement-sqlite-parity-update-from.md)** | **`UPDATE ... FROM` (Join Update) 構文の実装** | `UPDATE tbl SET col = t2.val FROM other_tbl t2 WHERE tbl.id = t2.id` 構文のパース、他テーブル結合行を用いた一括更新。 | SQLite 3.33.0+ |
 | **[#267](../issues/267-implement-sqlite-parity-standalone-values.md)** | **スタンドアロン `VALUES` クエリ構文の実装** | `SELECT` を伴わない `VALUES (1, 'Alice'), (2, 'Bob')` 単独実行および CTE / サブクエリ連携。 | SQLite 3.7.11+ |
 | **[#268](../issues/268-implement-sqlite-parity-create-table-strict.md)** | **`CREATE TABLE ... STRICT` モードの実装** | 動的型付け（Any型）を排し、`INT`, `REAL`, `TEXT`, `BLOB`, `ANY` の厳格なデータ型キャスト・検証を強制。 | SQLite 3.37.0+ |
 | **[#269](../issues/269-implement-sqlite-parity-generated-columns.md)** | **生成列 (`GENERATED ALWAYS AS`) の実装** | 他カラムの式から自動算出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`。 | SQLite 3.31.0+ |

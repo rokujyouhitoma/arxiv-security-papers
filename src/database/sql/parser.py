@@ -511,13 +511,23 @@ def _extract_returning_clause(sql: str) -> Tuple[str, Optional[List[str]]]:
     return cleaned_sql, cols
 
 
-def _parse_set_assignments_static(set_raw: str) -> Dict[str, Any]:
-    """Parses SET k1=v1, k2=v2 assignments."""
+def _parse_set_assignments(set_raw: str) -> Tuple[Dict[str, Any], Dict[str, str]]:
+    """Parses SET k1=v1, k2=v2 into static assignments and raw expression strings."""
     assignments: Dict[str, Any] = {}
+    raw_assignments: Dict[str, str] = {}
     for item in set_raw.split(","):
         if "=" in item:
             k, v_raw = item.split("=", 1)
-            assignments[k.strip()] = _parse_val_type(v_raw.strip().strip("'\""))
+            k_clean = k.strip()
+            v_clean = v_raw.strip()
+            raw_assignments[k_clean] = v_clean
+            assignments[k_clean] = _parse_val_type(v_clean.strip("'\""))
+    return assignments, raw_assignments
+
+
+def _parse_set_assignments_static(set_raw: str) -> Dict[str, Any]:
+    """Parses SET k1=v1, k2=v2 assignments statically."""
+    assignments, _ = _parse_set_assignments(set_raw)
     return assignments
 
 
@@ -1588,8 +1598,20 @@ class SQLParser:
         clean_sql, order_col, order_desc, limit_val = _extract_dml_order_and_limit(
             clean_sql
         )
+        clean_sql, where_raw = self._extract_where_clause(clean_sql)
+        where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
+
+        from_table: Optional[TableRef] = None
+        joins: List[JoinClause] = []
+        from_pos = _find_top_level_keyword_pos(clean_sql, r"FROM")
+        if from_pos:
+            f_start, f_end = from_pos
+            from_body = clean_sql[f_end:].strip()
+            from_table, joins = self._parse_from_and_joins(from_body)
+            clean_sql = clean_sql[:f_start].strip()
+
         m = re.match(
-            r"UPDATE\s+(.+?)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
+            r"UPDATE\s+(.+?)\s+SET\s+(.+)$",
             clean_sql,
             re.IGNORECASE | re.DOTALL,
         )
@@ -1597,15 +1619,16 @@ class SQLParser:
             raise SQLParseError(f"Malformed UPDATE syntax: {sql}")
 
         table_name, indexed_by, not_indexed = _extract_index_hint(m.group(1).strip())
-        assignments = _parse_set_assignments_static(m.group(2).strip())
-        where_raw = m.group(3)
-        where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
+        assignments, raw_assignments = _parse_set_assignments(m.group(2).strip())
 
         return UpdateStatement(
             command_type=SQLCommandType.UPDATE,
             raw_sql=sql,
             table_name=table_name,
             assignments=assignments,
+            raw_assignments=raw_assignments,
+            from_table=from_table,
+            joins=joins,
             where_clauses=where_clauses,
             returning_cols=ret_cols,
             order_by=order_col,
