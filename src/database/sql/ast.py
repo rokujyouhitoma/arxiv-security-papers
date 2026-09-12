@@ -243,6 +243,7 @@ class SelectStatement(SQLStatement):
     distinct: bool = False
     group_by: List[str] = field(default_factory=list)
     having: Optional[str] = None
+    values_rows: Optional[List[List[Any]]] = None
 
 
 # DML

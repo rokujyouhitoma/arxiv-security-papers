@@ -604,6 +604,30 @@ def _extract_values_tuples(values_raw: str) -> List[str]:
     return tuples
 
 
+def _extract_values_rows(parser: Any, raw_sql: str, clean_sql: str) -> List[List[Any]]:
+    m = re.match(r"^VALUES\s*(.+)$", clean_sql, re.IGNORECASE | re.DOTALL)
+    if not m:
+        raise SQLParseError(f"Malformed VALUES syntax: {raw_sql}")
+    raw_tuples = _extract_values_tuples(m.group(1).strip())
+    if not raw_tuples:
+        raise SQLParseError(f"Empty VALUES clause: {raw_sql}")
+    res: List[List[Any]] = []
+    for t in raw_tuples:
+        res.append(parser._parse_insert_values(t))
+    return res
+
+
+def _generate_default_column_names(rows: List[List[Any]]) -> List[str]:
+    max_cols = 0
+    for r in rows:
+        if len(r) > max_cols:
+            max_cols = len(r)
+    res: List[str] = []
+    for i in range(max_cols):
+        res.append(f"column{i+1}")
+    return res
+
+
 def _extract_dml_order_and_limit(
     sql: str,
 ) -> Tuple[str, Optional[str], bool, Optional[int]]:
@@ -881,9 +905,9 @@ class SQLParser:
     def _parse_dml_dql_part(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("WITH"):
             return self._parse_cte(sql)
-        if upper_sql.startswith("SELECT"):
+        if upper_sql.startswith(("SELECT", "VALUES")):
             return self._parse_select(sql)
-        if upper_sql.startswith("INSERT INTO") or upper_sql.startswith("REPLACE INTO"):
+        if upper_sql.startswith(("INSERT INTO", "REPLACE INTO")):
             return self._parse_insert(sql)
         return None
 
@@ -1351,10 +1375,37 @@ class SQLParser:
         ).strip()
         return cleaned_raw, knn_query
 
+    def _parse_standalone_values(
+        self,
+        raw_sql: str,
+        clean_sql: str,
+        order_by: Optional[str],
+        order_desc: bool,
+        limit_val: Optional[int],
+        offset_val: Optional[int],
+    ) -> SelectStatement:
+        rows = _extract_values_rows(self, raw_sql, clean_sql)
+        columns = _generate_default_column_names(rows)
+        return SelectStatement(
+            command_type=SQLCommandType.SELECT,
+            raw_sql=raw_sql,
+            table_name="",
+            columns=columns,
+            values_rows=rows,
+            order_by=order_by,
+            order_desc=order_desc,
+            limit=limit_val,
+            offset=offset_val,
+        )
+
     def _parse_single_select(self, sql: str) -> SelectStatement:
         clean_sql = re.sub(r"\s+", " ", sql).strip()
         clean_sql, limit_val, offset_val = self._extract_limit_and_offset(clean_sql)
         clean_sql, order_by, order_desc = self._extract_order_by_clause(clean_sql)
+        if re.match(r"^VALUES\s*\(", clean_sql, re.IGNORECASE):
+            return self._parse_standalone_values(
+                sql, clean_sql, order_by, order_desc, limit_val, offset_val
+            )
         clean_sql, having_raw = self._extract_having_clause(clean_sql)
         clean_sql, group_by_cols = self._extract_group_by_clause(clean_sql)
         clean_sql, where_raw = self._extract_where_clause(clean_sql)

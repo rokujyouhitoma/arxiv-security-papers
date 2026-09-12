@@ -1321,3 +1321,40 @@ def test_update_from_clause() -> None:
             "UPDATE employees SET salary = 999 FROM bonuses WHERE employees.dept = bonuses.dept",
             role="limited_user",
         )
+
+
+def test_standalone_values_clause() -> None:
+    executor = SQLExecutor()
+
+    # 1. Basic standalone VALUES
+    res1 = executor.execute("VALUES (1, 'Alice'), (2, 'Bob')")
+    assert res1["status"] == "ok"
+    assert res1["count"] == 2
+    assert res1["rows"][0] == {"column1": 1, "column2": "Alice"}
+    assert res1["rows"][1] == {"column1": 2, "column2": "Bob"}
+
+    # 2. ORDER BY, LIMIT, OFFSET
+    res2 = executor.execute(
+        "VALUES (3, 'C'), (1, 'A'), (2, 'B') ORDER BY column1 DESC LIMIT 2"
+    )
+    assert res2["status"] == "ok"
+    assert res2["count"] == 2
+    assert res2["rows"][0]["column1"] == 3
+    assert res2["rows"][1]["column1"] == 2
+
+    # 3. CTE integration with VALUES
+    res3 = executor.execute(
+        "WITH static_data AS (VALUES ('US', 'United States'), ('JP', 'Japan')) "
+        "SELECT column1, column2 FROM static_data WHERE column1 = 'JP'"
+    )
+    assert res3["status"] == "ok"
+    assert res3["count"] == 1
+    assert res3["rows"][0]["column1"] == "JP"
+    assert res3["rows"][0]["column2"] == "Japan"
+
+    # 4. Compound operation: UNION ALL with VALUES
+    res4 = executor.execute("VALUES (10, 'X') UNION ALL VALUES (20, 'Y')")
+    assert res4["status"] == "ok"
+    assert res4["count"] == 2
+    assert res4["rows"][0]["column1"] == 10
+    assert res4["rows"][1]["column1"] == 20

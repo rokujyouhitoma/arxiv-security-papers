@@ -2426,6 +2426,8 @@ class SQLExecutor:
         effective_role: str,
         temp_tables: Dict[str, List[Dict[str, Any]]],
     ) -> List[Dict[str, Any]]:
+        if stmt.values_rows is not None:
+            return [dict(zip(stmt.columns, r)) for r in stmt.values_rows]
         self._validate_index_hint(table_ref.name, table_ref.indexed_by)
         if table_ref.name not in temp_tables:
             self.access_controller.enforce_permission(
