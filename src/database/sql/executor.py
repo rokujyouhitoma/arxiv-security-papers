@@ -369,12 +369,14 @@ class TableCatalog:
         storage_engine: Optional[str] = None,
         location: Optional[str] = None,
         database_scope: Optional[str] = None,
+        strict: bool = False,
     ) -> None:
         self.name = name
         self.storage = storage
         default_dim = int(getattr(storage, "dim", 128))
         self.index = index if index is not None else HNSWIndex(dim=default_dim)
         self.schema = schema if schema is not None else {}
+        self.strict = strict
         self._init_catalog_metadata(raw_sql, storage_engine, location, database_scope)
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
@@ -981,6 +983,66 @@ def _matches_where_clause(
         _evaluate_single_condition(record, c, executor, role, temp_tables)
         for c in clauses
     )
+
+
+def _check_strict_int(table_name: str, col: str, dt: str, val: Any) -> None:
+    if isinstance(val, bool) or not isinstance(val, int):
+        raise SQLExecutionError(
+            f"cannot store {type(val).__name__} in {dt} column {col} in STRICT table {table_name}"
+        )
+
+
+def _check_strict_real(table_name: str, col: str, val: Any) -> None:
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        raise SQLExecutionError(
+            f"cannot store {type(val).__name__} in REAL column {col} in STRICT table {table_name}"
+        )
+
+
+def _check_strict_text(table_name: str, col: str, val: Any) -> None:
+    if not isinstance(val, str):
+        raise SQLExecutionError(
+            f"cannot store {type(val).__name__} in TEXT column {col} in STRICT table {table_name}"
+        )
+
+
+def _check_strict_blob(table_name: str, col: str, val: Any) -> None:
+    if not isinstance(val, (bytes, bytearray)):
+        raise SQLExecutionError(
+            f"cannot store {type(val).__name__} in BLOB column {col} in STRICT table {table_name}"
+        )
+
+
+def _check_strict_type(table_name: str, col: str, dt: str, val: Any) -> None:
+    if dt in ("INT", "INTEGER"):
+        _check_strict_int(table_name, col, dt, val)
+    elif dt == "REAL":
+        _check_strict_real(table_name, col, val)
+    elif dt == "TEXT":
+        _check_strict_text(table_name, col, val)
+    elif dt == "BLOB":
+        _check_strict_blob(table_name, col, val)
+
+
+def _validate_strict_row(
+    table_name: str,
+    schema: Dict[str, Any],
+    row: Dict[str, Any],
+) -> None:
+    for col, val in row.items():
+        if val is None:
+            continue
+        dt = str(schema.get(col, "ANY")).strip().upper()
+        _check_strict_type(table_name, col, dt, val)
+
+
+def _check_strict_table_rows(
+    table: TableCatalog, table_name: str, rows: List[Dict[str, Any]]
+) -> None:
+    if not table.strict:
+        return
+    for r in rows:
+        _validate_strict_row(table_name, table.schema, r)
 
 
 def _inspect_table_slice(tname: str, storage: Any, target: str) -> Dict[str, Any]:
@@ -1850,6 +1912,7 @@ class SQLExecutor:
             raw_sql=stmt.raw_sql,
             storage_engine=stmt.storage_engine,
             location=stmt.location,
+            strict=stmt.strict,
         )
         self.tables[stmt.table_name] = catalog
 
@@ -2861,6 +2924,24 @@ class SQLExecutor:
             return self._insert_non_vector_row(table, row)
         return self._insert_vector_row(table, row, stmt)
 
+    def _apply_insert_loop(
+        self,
+        table: TableCatalog,
+        row_dicts: List[Dict[str, Any]],
+        stmt: InsertStatement,
+        effective_role: str,
+    ) -> List[Dict[str, Any]]:
+        modified: List[Dict[str, Any]] = []
+        for r in row_dicts:
+            self._fire_triggers("BEFORE", "INSERT", stmt.table_name, r, effective_role)
+            res_rec = self._insert_or_upsert_row(table, r, stmt)
+            if res_rec is not None:
+                modified.append(res_rec)
+                self._fire_triggers(
+                    "AFTER", "INSERT", stmt.table_name, res_rec, effective_role
+                )
+        return modified
+
     def _exec_insert(
         self, stmt: InsertStatement, effective_role: str
     ) -> Dict[str, Any]:
@@ -2870,15 +2951,10 @@ class SQLExecutor:
         self._ensure_table_exists_for_insert(stmt.table_name)
         table = self._get_table(stmt.table_name)
         row_dicts = self._build_insert_row_dicts(stmt, effective_role)
-        modified_records: List[Dict[str, Any]] = []
-        for r in row_dicts:
-            self._fire_triggers("BEFORE", "INSERT", stmt.table_name, r, effective_role)
-            res_rec = self._insert_or_upsert_row(table, r, stmt)
-            if res_rec is not None:
-                modified_records.append(res_rec)
-                self._fire_triggers(
-                    "AFTER", "INSERT", stmt.table_name, res_rec, effective_role
-                )
+        _check_strict_table_rows(table, stmt.table_name, row_dicts)
+        modified_records = self._apply_insert_loop(
+            table, row_dicts, stmt, effective_role
+        )
         ret_rows = _project_returning_rows(modified_records, stmt.returning_cols)
         first_id = str(modified_records[0].get("id", "")) if modified_records else ""
         res: Dict[str, Any] = {
@@ -2990,6 +3066,8 @@ class SQLExecutor:
             assignments = self._compute_update_assignments(stmt, eval_ctx)
         else:
             assignments = stmt.assignments
+        if table.strict:
+            _validate_strict_row(table.name, table.schema, assignments)
         meta.update(assignments)
         new_rec = dict(meta)
         self._fire_triggers("AFTER", "UPDATE", stmt.table_name, new_rec, effective_role)

@@ -19,6 +19,41 @@ class VectorStorageSecurityError(Exception):
     pass
 
 
+def _meta_json_default(obj: Any) -> Any:
+    if isinstance(obj, (bytes, bytearray)):
+        return f"__bytes_hex__{obj.hex()}"
+    return str(obj)
+
+
+def _parse_bytes_hex(val: str) -> Any:
+    if val.startswith("__bytes_hex__"):
+        try:
+            return bytes.fromhex(val[13:])
+        except ValueError:
+            return val
+    return val
+
+
+def _decode_dict(val: Dict[str, Any]) -> Dict[str, Any]:
+    res: Dict[str, Any] = {}
+    for k, v in val.items():
+        res[k] = _decode_meta_bytes(v)
+    return res
+
+
+def _decode_meta_bytes(val: Any) -> Any:
+    if isinstance(val, str):
+        return _parse_bytes_hex(val)
+    if isinstance(val, dict):
+        return _decode_dict(val)
+    if isinstance(val, list):
+        res: List[Any] = []
+        for item in val:
+            res.append(_decode_meta_bytes(item))
+        return res
+    return val
+
+
 class VectorStorage:
     """
     High-performance binary vector storage using custom OKFVEC01 format.
@@ -106,7 +141,8 @@ class VectorStorage:
             meta_bytes = f.read()
             if meta_bytes:
                 try:
-                    self.metadata = json.loads(meta_bytes.decode("utf-8"))
+                    raw_meta = json.loads(meta_bytes.decode("utf-8"))
+                    self.metadata = _decode_meta_bytes(raw_meta)
                 except Exception as e:
                     raise VectorStorageSecurityError(
                         f"Corrupt metadata JSON: {e}"
@@ -220,7 +256,9 @@ class VectorStorage:
         meta_list: List[Dict[str, Any]],
         count: int,
     ) -> None:
-        meta_json_bytes = json.dumps(meta_list, ensure_ascii=False).encode("utf-8")
+        meta_json_bytes = json.dumps(
+            meta_list, ensure_ascii=False, default=_meta_json_default
+        ).encode("utf-8")
         meta_offset = self.HEADER_SIZE + (count * self.dim * 4)
         header_bytes = struct.pack(
             self.HEADER_FORMAT,
@@ -247,7 +285,9 @@ class VectorStorage:
         meta_list: List[Dict[str, Any]],
         count: int,
     ) -> None:
-        meta_json_bytes = json.dumps(meta_list, ensure_ascii=False).encode("utf-8")
+        meta_json_bytes = json.dumps(
+            meta_list, ensure_ascii=False, default=_meta_json_default
+        ).encode("utf-8")
         meta_offset = self.HEADER_SIZE + (count * self.dim * 4)
         header_bytes = struct.pack(
             self.HEADER_FORMAT,

@@ -489,6 +489,18 @@ def _extract_storage_clauses(sql: str) -> tuple[str, Optional[str], Optional[str
     return cleaned.strip(), engine, location
 
 
+ALLOWED_STRICT_TYPES = {"INT", "INTEGER", "REAL", "TEXT", "BLOB", "ANY"}
+
+
+def _validate_strict_columns(columns: List[ColumnDef]) -> None:
+    for col in columns:
+        dt = col.data_type.strip().upper()
+        if dt not in ALLOWED_STRICT_TYPES:
+            raise SQLParseError(
+                f"Unknown datatype for {col.name} in STRICT table: {col.data_type}"
+            )
+
+
 def _split_and_conditions(text: str) -> List[str]:
     """Splits conditions on AND while preserving BETWEEN ... AND ... clauses."""
     pattern = (
@@ -1034,9 +1046,7 @@ class SQLParser:
 
     def _parse_create_table(self, sql: str) -> CreateTableStatement:
         cleaned_sql, engine, location = _extract_storage_clauses(sql)
-        pattern = (
-            r"^CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.]+)\s*\((.*)\)\s*$"
-        )
+        pattern = r"^CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.]+)\s*\((.*)\)\s*(.*)$"
         m = re.match(pattern, cleaned_sql, re.IGNORECASE | re.DOTALL)
         if not m:
             raise SQLParseError(f"Malformed CREATE TABLE syntax: {sql}")
@@ -1044,12 +1054,16 @@ class SQLParser:
         if_not_exists = bool(m.group(1))
         table_name = m.group(2)
         cols_body = m.group(3).strip()
+        table_options = m.group(4).strip()
+        strict = bool(re.search(r"\bSTRICT\b", table_options, re.IGNORECASE))
 
         col_defs = [
             c_def
             for raw_col in _split_column_defs(cols_body)
             if (c_def := self._parse_column_def(raw_col)) is not None
         ]
+        if strict:
+            _validate_strict_columns(col_defs)
 
         return CreateTableStatement(
             command_type=SQLCommandType.CREATE_TABLE,
@@ -1059,6 +1073,7 @@ class SQLParser:
             if_not_exists=if_not_exists,
             storage_engine=engine,
             location=location,
+            strict=strict,
         )
 
     def _parse_drop_table(self, sql: str) -> DropTableStatement:

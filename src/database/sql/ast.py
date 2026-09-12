@@ -120,6 +120,7 @@ class CreateTableStatement(SQLStatement):
     if_not_exists: bool = False
     storage_engine: Optional[str] = None
     location: Optional[str] = None
+    strict: bool = False
 
 
 @dataclass

@@ -186,7 +186,7 @@ SQLite 3.30+ 以降の最新仕様、エンタープライズ制約、および�
 | :---: | :--- | :---: | :---: | :---: | :--- |
 | 1 | **`UPDATE ... FROM` (Join Update)** | 3.33.0+ | ○ 対応済 | **○ Full** | 他テーブルと結合しながら行を更新する構文 `UPDATE tbl SET col = t2.val FROM t2 WHERE tbl.id = t2.id`（Phase 8）。 |
 | 2 | **スタンドアロン `VALUES` クエリ** | 3.7.11+ | ○ 対応済 | **○ Full** | `SELECT` を伴わずに単独でテーブル値を生成するクエリ `VALUES (1, 'Alice'), (2, 'Bob')`（Phase 8）。 |
-| 3 | **`CREATE TABLE ... STRICT`** | 3.37.0+ | × 未対応 | **△ Planned** | 動的型付けを排し、厳格なデータ型（`INT`, `REAL`, `TEXT`, `BLOB`, `ANY`）を強制するテーブル宣言（Phase 8）。 |
+| 3 | **`CREATE TABLE ... STRICT`** | 3.37.0+ | ○ 対応済 | **○ Full** | 動的型付けを排し、厳格なデータ型（`INT`, `REAL`, `TEXT`, `BLOB`, `ANY`）を強制するテーブル宣言（Phase 8）。 |
 | 4 | **生成列 (`GENERATED ALWAYS AS`)** | 3.31.0+ | × 未対応 | **△ Planned** | 他列の式から自動導出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`（Phase 8）。 |
 | 5 | **`COLLATE` 照合順序句** | 標準 | × 未対応 | **△ Planned** | 大小文字を区別しない比較 `WHERE col = 'text' COLLATE NOCASE` やソート順序制御（Phase 8）。 |
 | 6 | **`VACUUM INTO 'filename'`** | 3.27.0+ | × 未対応 | **△ Planned** | 稼働中データベースをロックせず別ファイルへ無停止オンラインバックアップ・コンパクション出力（Phase 9）。 |
@@ -584,7 +584,7 @@ SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合�
 | :---: | :--- | :--- | :---: |
 | **[#266](../issues/closed/266-implement-sqlite-parity-update-from.md)** | **`UPDATE ... FROM` (Join Update) 構文の実装** | `UPDATE tbl SET col = t2.val FROM other_tbl t2 WHERE tbl.id = t2.id` 構文のパース、他テーブル結合行を用いた一括更新。 | SQLite 3.33.0+ |
 | **[#267](../issues/closed/267-implement-sqlite-parity-standalone-values.md)** | **スタンドアロン `VALUES` クエリ構文の実装** | `SELECT` を伴わない `VALUES (1, 'Alice'), (2, 'Bob')` 単独実行および CTE / サブクエリ連携。 | SQLite 3.7.11+ |
-| **[#268](../issues/268-implement-sqlite-parity-create-table-strict.md)** | **`CREATE TABLE ... STRICT` モードの実装** | 動的型付け（Any型）を排し、`INT`, `REAL`, `TEXT`, `BLOB`, `ANY` の厳格なデータ型キャスト・検証を強制。 | SQLite 3.37.0+ |
+| **[#268](../issues/closed/268-implement-sqlite-parity-create-table-strict.md)** | **`CREATE TABLE ... STRICT` モードの実装** | 動的型付け（Any型）を排し、`INT`, `REAL`, `TEXT`, `BLOB`, `ANY` の厳格なデータ型キャスト・検証を強制。 | SQLite 3.37.0+ |
 | **[#269](../issues/269-implement-sqlite-parity-generated-columns.md)** | **生成列 (`GENERATED ALWAYS AS`) の実装** | 他カラムの式から自動算出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`。 | SQLite 3.31.0+ |
 | **[#270](../issues/270-implement-sqlite-parity-collate-clause.md)** | **`COLLATE` 照合順序句 (`NOCASE`, `RTRIM`, `BINARY`) の実装** | 大小文字を区別しない比較・ソート `WHERE col = 'test' COLLATE NOCASE`、`ORDER BY col COLLATE RTRIM`。 | SQLite 標準 |
 

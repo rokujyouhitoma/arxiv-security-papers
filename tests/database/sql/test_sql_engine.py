@@ -28,6 +28,7 @@ from database import (
     connect,
 )
 from database.sql.executor import SQLExecutionError
+from database.sql.parser import SQLParseError
 
 
 def test_ddl_and_dml_and_dql_lifecycle():
@@ -1358,3 +1359,76 @@ def test_standalone_values_clause() -> None:
     assert res4["count"] == 2
     assert res4["rows"][0]["column1"] == 10
     assert res4["rows"][1]["column1"] == 20
+
+
+def test_create_table_strict_mode() -> None:
+    executor = SQLExecutor()
+
+    # 1. Invalid data type in STRICT table raises SQLParseError
+    with pytest.raises(
+        SQLParseError, match="Unknown datatype for email in STRICT table"
+    ):
+        executor.execute("CREATE TABLE bad_strict (id INT, email VARCHAR(100)) STRICT;")
+
+    # 2. Valid STRICT table creation
+    create_res = executor.execute(
+        "CREATE TABLE strict_users ("
+        "id INT PRIMARY KEY, name TEXT NOT NULL, score REAL, data BLOB, misc ANY"
+        ") STRICT;"
+    )
+    assert create_res["status"] == "ok"
+
+    # 3. Valid inserts
+    ins_res = executor.execute(
+        "INSERT INTO strict_users (id, name, score, misc) "
+        "VALUES (1, 'Alice', 95.5, 'any string or object');"
+    )
+    assert ins_res["status"] == "ok"
+    assert ins_res["inserted_count"] == 1
+
+    # Insert with BLOB and integer-compatible REAL
+    ins_res2 = executor.execute(
+        "INSERT INTO strict_users (id, name, score, data, misc) "
+        "VALUES (2, 'Bob', 100, b'binary', 42);"
+    )
+    assert ins_res2["status"] == "ok"
+
+    # 4. Type mismatch errors on INSERT
+    with pytest.raises(SQLExecutionError, match="cannot store str in INT column id"):
+        executor.execute(
+            "INSERT INTO strict_users (id, name, score) VALUES ('not_an_int', 'Charlie', 50.0);"
+        )
+
+    with pytest.raises(SQLExecutionError, match="cannot store bool in INT column id"):
+        executor.execute(
+            "INSERT INTO strict_users (id, name, score) VALUES (True, 'Charlie', 50.0);"
+        )
+
+    with pytest.raises(SQLExecutionError, match="cannot store int in TEXT column name"):
+        executor.execute(
+            "INSERT INTO strict_users (id, name, score) VALUES (3, 12345, 50.0);"
+        )
+
+    with pytest.raises(
+        SQLExecutionError, match="cannot store str in REAL column score"
+    ):
+        executor.execute(
+            "INSERT INTO strict_users (id, name, score) VALUES (4, 'Dave', 'invalid_real');"
+        )
+
+    # 5. Type mismatch errors on UPDATE
+    with pytest.raises(SQLExecutionError, match="cannot store int in TEXT column name"):
+        executor.execute("UPDATE strict_users SET name = 999 WHERE id = 1;")
+
+    with pytest.raises(
+        SQLExecutionError, match="cannot store str in REAL column score"
+    ):
+        executor.execute("UPDATE strict_users SET score = 'not_a_float' WHERE id = 1;")
+
+    # 6. Valid UPDATE
+    up_res = executor.execute("UPDATE strict_users SET score = 98.5 WHERE id = 1;")
+    assert up_res["status"] == "ok"
+    assert up_res["updated_count"] == 1
+
+    sel_res = executor.execute("SELECT score FROM strict_users WHERE id = 1;")
+    assert sel_res["rows"][0]["score"] == 98.5
