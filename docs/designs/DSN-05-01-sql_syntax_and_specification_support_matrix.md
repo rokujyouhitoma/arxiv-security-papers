@@ -126,7 +126,7 @@ flowchart TD
 | 16 | **DELETE** (行削除) | ○ | ○ | ○ | **○ Full** | `DELETE FROM tbl [WHERE expr]` に対応（AND, OR, LIKE, IN, 比較演算子連動、BEFORE/AFTER トリガー自動発火）。 |
 | 17 | **EXPLAIN / EXPLAIN QUERY PLAN** | ○ | ○ | ○ | **○ Full** | `EXPLAIN [QUERY PLAN] SELECT ...` に対応。`QueryPlanner` が Full Table Scan / B-Tree Index Scan / HNSW Vector Scan の選択理由と推定コストを出力。 |
 | 18 | **expression** (式評価) | ○ | ○ | ○ | **○ Full** | 四則演算 (`+`, `-`, `*`, `/`, `%`), 比較 (`=`, `!=`, `<`, `>`, `<=`, `>=`), `LIKE ... ESCAPE`, `GLOB` (fnmatch), `BETWEEN ... AND ...`, `IS [NOT] NULL`, `CASE ... WHEN ... THEN ... ELSE ... END`, `IN/NOT IN (SELECT ...)`, `EXISTS (SELECT ...)`, スカラーサブクエリを完全サポート（Phase 1, 4, 5）。 |
-| 19 | **INDEXED BY / NOT INDEXED** | ○ | △ | ○ | **△ Partial** | オプティマイザが最適なインデックスを自動判定。明示的な特定インデックス走査強制 / フルスキャン強制構文は [Issue #265](../issues/265-implement-sqlite-parity-indexed-by-hint.md) にて策定。 |
+| 19 | **INDEXED BY / NOT INDEXED** | ○ | ○ | ○ | **○ Full** | `FROM/JOIN tbl INDEXED BY idx` による特定インデックス走査強制、`FROM/JOIN tbl NOT INDEXED` によるフルスキャン強制、オプティマイザ判定の上書きと `EXPLAIN QUERY PLAN` への反映、UPDATE/DELETE でのインデックスヒント検証を完全実装（[Issue #265](../issues/closed/265-implement-sqlite-parity-indexed-by-hint.md)）。 |
 | 20 | **INSERT** (行挿入) | ○ | ○ | ○ | **○ Full** | 単一レコード挿入、複数行 `VALUES (...), (...)`、`INSERT INTO ... SELECT`、および `RETURNING` 句を完全サポート（Phase 2）。 |
 | 21 | **JSON functions** | ○ | ○ | ○ | **★ Extended** | `JSON_EXTRACT`, `JSON_ARRAY`, `JSON_OBJECT`, `JSON_TYPE`, `JSON_VALID` 関数、および PostgreSQL / SQLite 3.38+ 準拠の **`->` (JSON抽出)** / **`->>` (テキスト非クォート抽出)** 演算子をネイティブサポート（Phase 4）。 |
 | 22 | **keywords** (予約語) | ○ | ○ | ○ | **○ Full** | 主要な DDL/DML/DQL/TCL/DCL キーワードおよびクォート識別子（`"col"`, `[col]`, `` `col` ``）を完全認識。 |
@@ -531,16 +531,16 @@ gantt
 
 ---
 
-### 6.7 Phase 7: 次世代拡張 & プラガブル機能の完全化 (Issue #262 〜 #265) 【進行中 / Open】
+### 6.7 Phase 7: 次世代拡張 & プラガブル機能の完全化 (Issue #262 〜 #265) 【完了 / Closed】
 
-Phase 1 〜 6 の完了により中核機能の約90%以上が SQLite 完全互換となりました。残る運用管理・スキーマ・オプティマイザヒント構文を以下の 4 件の独立 Issue として策定・推進しています。
+Phase 1 〜 6 および Phase 7（運用管理・スキーマ・オプティマイザヒント構文 4 件）の完了により、中核機能の 100% が SQLite 完全互換となりました。
 
 | Issue ID | タイトル | 主な対象機能・構文仕様 | 状態 |
-| :---: | :--- | :--- | :---: |
-| **[#262](../issues/262-implement-sqlite-parity-analyze-statement.md)** | **ANALYZE 構文による統計情報収集と CBO 最適化連携** | `ANALYZE [schema \| tbl \| idx]` 構文のパース、行数・カーディナリティ・NULL比率の明示走査集計、`sqlite_stat1` 互換メタデータおよび CBO 最適化（`cbo.py`）への統計情報連携。 | Open (New) |
-| **[#263](../issues/263-implement-sqlite-parity-attach-detach-database.md)** | **ATTACH / DETACH DATABASE 構文による動的マルチスキーママウント** | `ATTACH DATABASE 'path' AS schema` による SQL 内からの動的外部 DB マウント、`schema.table` クロススキーマ結合、`DETACH DATABASE schema`、`PRAGMA database_list` 動的反映。 | Open (New) |
-| **[#264](../issues/264-implement-sqlite-parity-create-virtual-table.md)** | **CREATE VIRTUAL TABLE 構文によるプラガブルストレージ DDL マッピング** | `CREATE VIRTUAL TABLE tbl USING module(args...)` 構文のパース、`PluggableStorageFactory` 連携（CSV/Vector/PlainText）、SQL DDL 経由での動的仮想テーブル登録と透過 DQL/DML 実行。 | Open (New) |
-| **[#265](../issues/265-implement-sqlite-parity-indexed-by-hint.md)** | **INDEXED BY / NOT INDEXED 句による明示的インデックスヒント** | `FROM tbl INDEXED BY idx` による特定インデックス走査強制、`FROM tbl NOT INDEXED` によるフルスキャン強制、オプティマイザ判定の上書きと `EXPLAIN QUERY PLAN` への反映。 | Open (New) |
+| :---: | :--- | :--- | :--- |
+| **[#262](../issues/closed/262-implement-sqlite-parity-analyze-statement.md)** | **ANALYZE 構文による統計情報収集と CBO 最適化連携** | `ANALYZE [schema \| tbl \| idx]` 構文のパース、行数・カーディナリティ・NULL比率の明示走査集計、`sqlite_stat1` 互換メタデータおよび CBO 最適化（`cbo.py`）への統計情報連携。 | **Closed (完了)** |
+| **[#263](../issues/closed/263-implement-sqlite-parity-attach-detach-database.md)** | **ATTACH / DETACH DATABASE 構文による動的マルチスキーママウント** | `ATTACH DATABASE 'path' AS schema` による SQL 内からの動的外部 DB マウント、`schema.table` クロススキーマ結合、`DETACH DATABASE schema`、`PRAGMA database_list` 動的反映。 | **Closed (完了)** |
+| **[#264](../issues/closed/264-implement-sqlite-parity-create-virtual-table.md)** | **CREATE VIRTUAL TABLE 構文によるプラガブルストレージ DDL マッピング** | `CREATE VIRTUAL TABLE tbl USING module(args...)` 構文のパース、`PluggableStorageFactory` 連携（CSV/Vector/PlainText）、SQL DDL 経由での動的仮想テーブル登録と透過 DQL/DML 実行。 | **Closed (完了)** |
+| **[#265](../issues/closed/265-implement-sqlite-parity-indexed-by-hint.md)** | **INDEXED BY / NOT INDEXED 句による明示的インデックスヒント** | `FROM tbl INDEXED BY idx` による特定インデックス走査強制、`FROM tbl NOT INDEXED` によるフルスキャン強制、オプティマイザ判定の上書きと `EXPLAIN QUERY PLAN` への反映。 | **Closed (完了)** |
 
 ---
 

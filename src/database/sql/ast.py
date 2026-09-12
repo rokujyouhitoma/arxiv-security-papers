@@ -190,6 +190,8 @@ class JoinType(str, Enum):
 class TableRef:
     name: str
     alias: Optional[str] = None
+    indexed_by: Optional[str] = None
+    not_indexed: bool = False
 
     @property
     def display_name(self) -> str:
@@ -266,6 +268,8 @@ class UpdateStatement(SQLStatement):
     order_by: Optional[str] = None
     order_desc: bool = False
     limit: Optional[int] = None
+    indexed_by: Optional[str] = None
+    not_indexed: bool = False
 
 
 @dataclass
@@ -276,6 +280,8 @@ class DeleteStatement(SQLStatement):
     order_by: Optional[str] = None
     order_desc: bool = False
     limit: Optional[int] = None
+    indexed_by: Optional[str] = None
+    not_indexed: bool = False
 
 
 # DCL

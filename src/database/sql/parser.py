@@ -796,6 +796,21 @@ def _parse_drop_trigger_stmt(sql: str) -> DropTriggerStatement:
     )
 
 
+def _extract_index_hint(text: str) -> Tuple[str, Optional[str], bool]:
+    """Extracts INDEXED BY <idx> or NOT INDEXED hint from table reference string."""
+    clean = text.strip()
+    m_not_indexed = re.search(r"\s+NOT\s+INDEXED\s*$", clean, re.IGNORECASE)
+    if m_not_indexed:
+        return clean[: m_not_indexed.start()].strip(), None, True
+    m_indexed_by = re.search(
+        r"\s+INDEXED\s+BY\s+([a-zA-Z0-9_]+)\s*$", clean, re.IGNORECASE
+    )
+    if m_indexed_by:
+        idx_name = m_indexed_by.group(1)
+        return clean[: m_indexed_by.start()].strip(), idx_name, False
+    return clean, None, False
+
+
 class SQLParser:
     """
     Parses SQL string queries into structured SQLStatement AST nodes.
@@ -1421,14 +1436,24 @@ class SQLParser:
         return table_ref, joins
 
     def _parse_single_table_ref(self, text: str) -> TableRef:
+        clean_tbl, indexed_by, not_indexed = _extract_index_hint(text)
         m = re.match(
             r"^([a-zA-Z0-9_.]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$",
-            text.strip(),
+            clean_tbl.strip(),
             re.IGNORECASE,
         )
         if not m:
-            return TableRef(name=text.strip())
-        return TableRef(name=m.group(1), alias=m.group(2))
+            return TableRef(
+                name=clean_tbl.strip(),
+                indexed_by=indexed_by,
+                not_indexed=not_indexed,
+            )
+        return TableRef(
+            name=m.group(1),
+            alias=m.group(2),
+            indexed_by=indexed_by,
+            not_indexed=not_indexed,
+        )
 
     def _extract_where_clauses(self, where_raw: str) -> List[Dict[str, Any]]:
         clauses: List[Dict[str, Any]] = []
@@ -1564,14 +1589,14 @@ class SQLParser:
             clean_sql
         )
         m = re.match(
-            r"UPDATE\s+([a-zA-Z0-9_.]+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
+            r"UPDATE\s+(.+?)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
             clean_sql,
             re.IGNORECASE | re.DOTALL,
         )
         if not m:
             raise SQLParseError(f"Malformed UPDATE syntax: {sql}")
 
-        table_name = m.group(1).strip()
+        table_name, indexed_by, not_indexed = _extract_index_hint(m.group(1).strip())
         assignments = _parse_set_assignments_static(m.group(2).strip())
         where_raw = m.group(3)
         where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
@@ -1586,6 +1611,8 @@ class SQLParser:
             order_by=order_col,
             order_desc=order_desc,
             limit=limit_val,
+            indexed_by=indexed_by,
+            not_indexed=not_indexed,
         )
 
     def _parse_delete(self, sql: str) -> DeleteStatement:
@@ -1594,14 +1621,14 @@ class SQLParser:
             clean_sql
         )
         m = re.match(
-            r"DELETE\s+FROM\s+([a-zA-Z0-9_.]+)(?:\s+WHERE\s+(.+))?$",
+            r"DELETE\s+FROM\s+(.+?)(?:\s+WHERE\s+(.+))?$",
             clean_sql,
             re.IGNORECASE | re.DOTALL,
         )
         if not m:
             raise SQLParseError(f"Malformed DELETE syntax: {sql}")
 
-        table_name = m.group(1).strip()
+        table_name, indexed_by, not_indexed = _extract_index_hint(m.group(1).strip())
         where_raw = m.group(2)
         where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
 
@@ -1614,6 +1641,8 @@ class SQLParser:
             order_by=order_col,
             order_desc=order_desc,
             limit=limit_val,
+            indexed_by=indexed_by,
+            not_indexed=not_indexed,
         )
 
     def _parse_grant(self, sql: str) -> GrantStatement:

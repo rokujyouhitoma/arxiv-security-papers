@@ -2,7 +2,7 @@
 ID: 265
 種別: Feature
 優先度: Low
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/DATABASE] SQLite 完全互換化: INDEXED BY / NOT INDEXED 句による明示的インデックスヒントの実装 (ID: 265)
@@ -23,12 +23,12 @@ SQLite 公式仕様 ([sqlite.org/lang_indexedby.html](https://sqlite.org/lang_in
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/database/sql/ast.py](../../src/database/sql/ast.py): `TableRef` クラスへの `indexed_by: Optional[str]` および `not_indexed: bool` 属性追加
-- [ ] [src/database/sql/parser.py](../../src/database/sql/parser.py): `FROM` 句および `JOIN` 句における `INDEXED BY index_name` / `NOT INDEXED` のパース
-- [ ] [src/database/sql/executor.py](../../src/database/sql/executor.py): クエリ実行エンジンにおけるインデックス選択ヒントの反映
-- [ ] [src/database/planner/cbo.py](../../src/database/planner/cbo.py): オプティマイザのインデックス決定ロジックへの強制・禁止ルール適用
-- [ ] [tests/database/sql/test_sql_engine.py](../../tests/database/sql/test_sql_engine.py): INDEXED BY / NOT INDEXED 実行および EXPLAIN 検証テスト
-- [ ] [docs/issues/README.md](../README.md): Issue 台帳の登録・追跡
+- [x] [src/database/sql/ast.py](../../src/database/sql/ast.py): `TableRef` クラスへの `indexed_by: Optional[str]` および `not_indexed: bool` 属性追加
+- [x] [src/database/sql/parser.py](../../src/database/sql/parser.py): `FROM` 句および `JOIN` 句における `INDEXED BY index_name` / `NOT INDEXED` のパース
+- [x] [src/database/sql/executor.py](../../src/database/sql/executor.py): クエリ実行エンジンにおけるインデックス選択ヒントの反映
+- [x] [src/database/planner/planner.py](../../src/database/planner/planner.py): オプティマイザのインデックス決定ロジックへの強制・禁止ルール適用
+- [x] [tests/database/sql/test_sql_engine.py](../../tests/database/sql/test_sql_engine.py): INDEXED BY / NOT INDEXED 実行および EXPLAIN 検証テスト
+- [x] [docs/issues/README.md](../README.md): Issue 台帳の登録・追跡
 
 ---
 
@@ -51,9 +51,9 @@ Target Branch: `feat/265-implement-sqlite-parity-indexed-by-hint`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `SELECT * FROM tbl INDEXED BY idx_col WHERE ...` が指定されたインデックスを用いて実行されること。
-- [ ] `SELECT * FROM tbl NOT INDEXED WHERE ...` がインデックスを使用せずフルスキャンで実行されること。
-- [ ] 存在しないインデックスを `INDEXED BY` で指定した場合に適切なエラーが発生すること。
-- [ ] `EXPLAIN QUERY PLAN` で意図した走査方式が反映されていること。
-- [ ] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
-- [ ] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。
+- [x] `SELECT * FROM tbl INDEXED BY idx_col WHERE ...` が指定されたインデックスを用いて実行されること。
+- [x] `SELECT * FROM tbl NOT INDEXED WHERE ...` がインデックスを使用せずフルスキャンで実行されること。
+- [x] 存在しないインデックスを `INDEXED BY` で指定した場合に適切なエラーが発生すること。
+- [x] `EXPLAIN QUERY PLAN` で意図した走査方式が反映されていること。
+- [x] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
+- [x] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。

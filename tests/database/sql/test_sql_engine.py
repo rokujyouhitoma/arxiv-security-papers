@@ -1181,3 +1181,86 @@ def test_phase7_create_virtual_table() -> None:
         res_drop_vec = executor.execute("DROP TABLE v_vec")
         assert res_drop_vec["status"] == "ok"
         assert "v_vec" not in executor.tables
+
+
+def test_phase7_indexed_by_and_not_indexed() -> None:
+    """Tests SQLite-parity INDEXED BY and NOT INDEXED syntax and optimizer hints."""
+    executor = SQLExecutor()
+    executor.execute("CREATE TABLE users (id TEXT, name TEXT, age INT)")
+    executor.execute("CREATE INDEX idx_user_age ON users(age)")
+    executor.execute("INSERT INTO users (id, name, age) VALUES ('u1', 'Alice', 30)")
+    executor.execute("INSERT INTO users (id, name, age) VALUES ('u2', 'Bob', 25)")
+
+    # 1. EXPLAIN verification with INDEXED BY
+    exp_indexed = executor.execute(
+        "EXPLAIN SELECT id, name FROM users INDEXED BY idx_user_age WHERE age = 25"
+    )
+    assert exp_indexed["status"] == "ok"
+    assert exp_indexed["rows"][0]["plan_type"] == "INDEX_SCAN"
+    assert "USING INDEX idx_user_age" in exp_indexed["rows"][0]["detail"]
+
+    # 2. EXPLAIN verification with NOT INDEXED
+    exp_not_indexed = executor.execute(
+        "EXPLAIN SELECT id, name FROM users NOT INDEXED WHERE age = 25"
+    )
+    assert exp_not_indexed["status"] == "ok"
+    assert exp_not_indexed["rows"][0]["plan_type"] == "TABLE_SCAN"
+    assert "FULL SCAN" in exp_not_indexed["rows"][0]["detail"]
+
+    # 3. SELECT execution with INDEXED BY & NOT INDEXED
+    sel_idx = executor.execute(
+        "SELECT id, name, age FROM users INDEXED BY idx_user_age WHERE age = 25"
+    )
+    assert len(sel_idx["rows"]) == 1
+    assert sel_idx["rows"][0]["name"] == "Bob"
+
+    sel_no_idx = executor.execute(
+        "SELECT id, name, age FROM users NOT INDEXED WHERE age = 30"
+    )
+    assert len(sel_no_idx["rows"]) == 1
+    assert sel_no_idx["rows"][0]["name"] == "Alice"
+
+    # 4. Error on non-existent index (SELECT and EXPLAIN)
+    with pytest.raises(SQLExecutionError, match="no such index: non_existent_idx"):
+        executor.execute(
+            "SELECT id FROM users INDEXED BY non_existent_idx WHERE age = 25"
+        )
+
+    with pytest.raises(SQLExecutionError, match="no such index: non_existent_idx"):
+        executor.execute(
+            "EXPLAIN SELECT id FROM users INDEXED BY non_existent_idx WHERE age = 25"
+        )
+
+    # 5. DML (UPDATE and DELETE) with INDEXED BY
+    res_upd = executor.execute(
+        "UPDATE users INDEXED BY idx_user_age SET age = 26 WHERE name = 'Bob'"
+    )
+    assert res_upd["status"] == "ok"
+    assert res_upd["updated_count"] == 1
+
+    with pytest.raises(SQLExecutionError, match="no such index: bad_idx"):
+        executor.execute(
+            "UPDATE users INDEXED BY bad_idx SET age = 27 WHERE name = 'Bob'"
+        )
+
+    res_del = executor.execute(
+        "DELETE FROM users INDEXED BY idx_user_age WHERE age = 26"
+    )
+    assert res_del["status"] == "ok"
+    assert res_del["deleted_count"] == 1
+
+    with pytest.raises(SQLExecutionError, match="no such index: bad_idx"):
+        executor.execute("DELETE FROM users INDEXED BY bad_idx WHERE age = 30")
+
+    # 6. JOIN with INDEXED BY
+    res_join = executor.execute(
+        "SELECT u1.name FROM users AS u1 "
+        "JOIN users AS u2 INDEXED BY idx_user_age ON u1.id = u2.id"
+    )
+    assert res_join["status"] == "ok"
+
+    with pytest.raises(SQLExecutionError, match="no such index: bad_join_idx"):
+        executor.execute(
+            "SELECT u1.name FROM users AS u1 "
+            "JOIN users AS u2 INDEXED BY bad_join_idx ON u1.id = u2.id"
+        )
