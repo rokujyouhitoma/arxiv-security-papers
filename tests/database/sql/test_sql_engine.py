@@ -1505,3 +1505,114 @@ def test_generated_columns_lifecycle() -> None:
     assert sel3["rows"][0]["price"] == 150.0
     assert sel3["rows"][0]["total"] == 750.0  # 150.0 * 5
     assert sel3["rows"][0]["discounted"] == 135.0  # 150.0 * 0.9
+
+
+def test_collate_clause_lifecycle() -> None:
+    """Tests SQLite-parity COLLATE clause (NOCASE, RTRIM, BINARY) across WHERE, ORDER BY, and ColumnDef."""
+    executor = SQLExecutor()
+
+    # 1. CREATE TABLE with COLLATE in column definition
+    res = executor.execute("""
+        CREATE TABLE accounts (
+            id INT PRIMARY KEY,
+            username TEXT COLLATE NOCASE,
+            tag TEXT COLLATE RTRIM,
+            code TEXT
+        );
+        """)
+    assert res["status"] == "ok"
+    table = executor.tables["accounts"]
+    assert table.column_collations.get("username") == "NOCASE"
+    assert table.column_collations.get("tag") == "RTRIM"
+    assert "code" not in table.column_collations
+
+    # 2. Insert records
+    executor.execute(
+        "INSERT INTO accounts (id, username, tag, code) VALUES (1, 'Alice', 'admin  ', 'secA');"
+    )
+    executor.execute(
+        "INSERT INTO accounts (id, username, tag, code) VALUES (2, 'BOB', 'dev', 'SECb');"
+    )
+    executor.execute(
+        "INSERT INTO accounts (id, username, tag, code) VALUES (3, 'charlie', 'ops   ', 'secc');"
+    )
+
+    # 3. Explicit COLLATE in WHERE clause
+    # NOCASE
+    res_nocase = executor.execute(
+        "SELECT * FROM accounts WHERE code = 'seca' COLLATE NOCASE;"
+    )
+    assert len(res_nocase["rows"]) == 1
+    assert res_nocase["rows"][0]["id"] == 1
+
+    res_bin = executor.execute(
+        "SELECT * FROM accounts WHERE code = 'seca' COLLATE BINARY;"
+    )
+    assert len(res_bin["rows"]) == 0
+
+    # RTRIM
+    res_rtrim = executor.execute(
+        "SELECT * FROM accounts WHERE tag = 'admin' COLLATE RTRIM;"
+    )
+    assert len(res_rtrim["rows"]) == 1
+    assert res_rtrim["rows"][0]["id"] == 1
+
+    res_rtrim_bin = executor.execute(
+        "SELECT * FROM accounts WHERE tag = 'admin' COLLATE BINARY;"
+    )
+    assert len(res_rtrim_bin["rows"]) == 0
+
+    # 4. Column-default collation applied without explicit COLLATE in query
+    # username is COLLATE NOCASE by default
+    res_def_nocase = executor.execute(
+        "SELECT * FROM accounts WHERE username = 'alice';"
+    )
+    assert len(res_def_nocase["rows"]) == 1
+    assert res_def_nocase["rows"][0]["id"] == 1
+
+    res_def_nocase2 = executor.execute("SELECT * FROM accounts WHERE username = 'bob';")
+    assert len(res_def_nocase2["rows"]) == 1
+    assert res_def_nocase2["rows"][0]["id"] == 2
+
+    # tag is COLLATE RTRIM by default
+    res_def_rtrim = executor.execute("SELECT * FROM accounts WHERE tag = 'ops';")
+    assert len(res_def_rtrim["rows"]) == 1
+    assert res_def_rtrim["rows"][0]["id"] == 3
+
+    # Override column-default collation with explicit COLLATE BINARY
+    res_override = executor.execute(
+        "SELECT * FROM accounts WHERE username = 'alice' COLLATE BINARY;"
+    )
+    assert len(res_override["rows"]) == 0  # 'Alice' != 'alice' in BINARY
+
+    # 5. ORDER BY with COLLATE
+    # ASCII order (BINARY): 'Alice' (65), 'BOB' (66), 'charlie' (99)
+    res_ord_bin = executor.execute(
+        "SELECT username FROM accounts ORDER BY username COLLATE BINARY ASC;"
+    )
+    names_bin = [r["username"] for r in res_ord_bin["rows"]]
+    assert names_bin == ["Alice", "BOB", "charlie"]
+
+    # Case-insensitive order (NOCASE): 'Alice' ('alice'), 'BOB' ('bob'), 'charlie' ('charlie')
+    res_ord_nocase = executor.execute(
+        "SELECT username FROM accounts ORDER BY username COLLATE NOCASE ASC;"
+    )
+    names_nocase = [r["username"] for r in res_ord_nocase["rows"]]
+    assert names_nocase == ["Alice", "BOB", "charlie"]
+
+    # 6. IN & BETWEEN clauses with COLLATE
+    res_in = executor.execute(
+        "SELECT * FROM accounts WHERE code IN ('SECA', 'secb') COLLATE NOCASE;"
+    )
+    assert len(res_in["rows"]) == 2
+
+    res_between = executor.execute(
+        "SELECT * FROM accounts WHERE code BETWEEN 'seca' AND 'secc' COLLATE NOCASE;"
+    )
+    assert len(res_between["rows"]) == 3
+
+    # 7. Invalid collation error handling
+    with pytest.raises(SQLParseError, match="no such collation sequence: INVALID_COLL"):
+        executor.execute(
+            "SELECT * FROM accounts WHERE username = 'alice' COLLATE INVALID_COLL;"
+        )

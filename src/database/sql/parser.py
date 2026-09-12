@@ -299,28 +299,42 @@ def _parse_is_null_clause(part: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+_ALLOWED_COLLATIONS: set[str] = {"BINARY", "NOCASE", "RTRIM"}
+
+
+def _validate_collation(name: str) -> str:
+    clean = name.strip().upper()
+    if clean not in _ALLOWED_COLLATIONS:
+        raise SQLParseError(f"no such collation sequence: {name}")
+    return clean
+
+
 def _parse_between_clause(part: str) -> Optional[Dict[str, Any]]:
     """Parses BETWEEN / NOT BETWEEN condition."""
     pattern = (
         r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+BETWEEN|BETWEEN)\s+"
-        r"('[^']*'|\"[^\"]*\"|[0-9\.]+)\s+AND\s+('[^']*'|\"[^\"]*\"|[0-9\.]+)$"
+        r"('[^']*'|\"[^\"]*\"|[0-9\.]+)\s+AND\s+('[^']*'|\"[^\"]*\"|[0-9\.]+)"
+        r"(?:\s+COLLATE\s+([a-zA-Z0-9_]+))?$"
     )
     between_m = re.match(pattern, part, re.IGNORECASE)
     if between_m:
         v1 = _parse_val_type(between_m.group(3).strip("'\""))
         v2 = _parse_val_type(between_m.group(4).strip("'\""))
-        return {
+        res: Dict[str, Any] = {
             "column": between_m.group(1),
             "operator": between_m.group(2).upper(),
             "value": (v1, v2),
         }
+        if between_m.group(5):
+            res["collate"] = _validate_collation(between_m.group(5))
+        return res
     return None
 
 
 def _parse_in_clause(part: str) -> Optional[Dict[str, Any]]:
     """Parses IN/NOT IN condition (literals or subqueries)."""
     in_m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+IN|IN)\s*\((.*?)\)$",
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+IN|IN)\s*\((.*?)\)(?:\s+COLLATE\s+([a-zA-Z0-9_]+))?$",
         part,
         re.IGNORECASE | re.DOTALL,
     )
@@ -329,9 +343,17 @@ def _parse_in_clause(part: str) -> Optional[Dict[str, Any]]:
     raw_inner = in_m.group(3).strip()
     op = re.sub(r"\s+", " ", in_m.group(2).upper())
     if raw_inner.upper().startswith("SELECT"):
-        return {"column": in_m.group(1), "operator": op, "subquery": raw_inner}
-    items = [x.strip().strip("'\"") for x in raw_inner.split(",")]
-    return {"column": in_m.group(1), "operator": op, "value": items}
+        res: Dict[str, Any] = {
+            "column": in_m.group(1),
+            "operator": op,
+            "subquery": raw_inner,
+        }
+    else:
+        items = [x.strip().strip("'\"") for x in raw_inner.split(",")]
+        res = {"column": in_m.group(1), "operator": op, "value": items}
+    if in_m.group(4):
+        res["collate"] = _validate_collation(in_m.group(4))
+    return res
 
 
 def _parse_exists_clause(part: str) -> Optional[Dict[str, Any]]:
@@ -355,13 +377,16 @@ def _parse_cmp_clause(part: str) -> Optional[Dict[str, Any]]:
     """Parses standard comparison condition."""
     cmp_pattern = (
         r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(>=|<=|!=|<>|=|>|<)\s*"
-        r"('[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|[0-9\.]+)$"
+        r"('[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|[0-9\.]+)(?:\s+COLLATE\s+([a-zA-Z0-9_]+))?$"
     )
-    eq_m = re.match(cmp_pattern, part)
+    eq_m = re.match(cmp_pattern, part, re.IGNORECASE)
     if eq_m:
         clean_val = eq_m.group(3).strip("'\"")
         v: Any = _parse_val_type(clean_val)
-        return {"column": eq_m.group(1), "operator": eq_m.group(2), "value": v}
+        res = {"column": eq_m.group(1), "operator": eq_m.group(2), "value": v}
+        if eq_m.group(4):
+            res["collate"] = _validate_collation(eq_m.group(4))
+        return res
     return None
 
 
@@ -514,6 +539,15 @@ def _extract_generated_column_info(
     is_stored = bool(gen_m.group(2) and gen_m.group(2).upper() == "STORED")
     cleaned = raw_col[: gen_m.start()] + raw_col[gen_m.end() :]
     return cleaned.strip(), gen_expr, is_stored
+
+
+def _extract_collate_from_col_def(raw_col: str) -> Tuple[str, Optional[str]]:
+    m = re.search(r"\bCOLLATE\s+([a-zA-Z0-9_]+)\b", raw_col, re.IGNORECASE)
+    if not m:
+        return raw_col, None
+    collate = _validate_collation(m.group(1))
+    cleaned = (raw_col[: m.start()] + raw_col[m.end() :]).strip()
+    return cleaned, collate
 
 
 def _split_and_conditions(text: str) -> List[str]:
@@ -1049,8 +1083,9 @@ class SQLParser:
             return None
         parts = raw_col.split()
         c_name = parts[0]
+        cleaned_col, collate = _extract_collate_from_col_def(raw_col)
         cleaned_col, gen_expr, is_stored = _extract_generated_column_info(
-            raw_col, c_name
+            cleaned_col, c_name
         )
         c_parts = cleaned_col.split()
         c_type = c_parts[1] if len(c_parts) > 1 else "TEXT"
@@ -1063,6 +1098,7 @@ class SQLParser:
             is_nullable=is_nullable,
             generated_expr=gen_expr,
             is_stored=is_stored,
+            collate=collate,
         )
 
     def _parse_create_table(self, sql: str) -> CreateTableStatement:
@@ -1342,17 +1378,24 @@ class SQLParser:
 
     def _extract_order_by_clause(
         self, clean_sql: str
-    ) -> Tuple[str, Optional[str], bool]:
-        """Extracts and strips ORDER BY clause (supports multiple comma-separated keys)."""
+    ) -> Tuple[str, Optional[str], bool, Optional[str]]:
+        """Extracts and strips ORDER BY clause (supports COLLATE and multiple keys)."""
         pos = _find_top_level_keyword_pos(clean_sql, r"ORDER\s+BY")
         if not pos:
-            return clean_sql, None, False
+            return clean_sql, None, False, None
         k_start, k_end = pos
         first_item = clean_sql[k_end:].strip().split(",")[0].strip()
+        collate: Optional[str] = None
+        m_col = re.search(r"\bCOLLATE\s+([a-zA-Z0-9_]+)\b", first_item, re.IGNORECASE)
+        if m_col:
+            collate = _validate_collation(m_col.group(1))
+            first_item = (
+                first_item[: m_col.start()] + first_item[m_col.end() :]
+            ).strip()
         parts = first_item.split()
         order_by = parts[0] if parts else None
         order_desc = len(parts) > 1 and parts[1].upper() == "DESC"
-        return clean_sql[:k_start].strip(), order_by, order_desc
+        return clean_sql[:k_start].strip(), order_by, order_desc, collate
 
     def _extract_having_clause(self, clean_sql: str) -> Tuple[str, Optional[str]]:
         """Extracts and strips HAVING condition."""
@@ -1417,6 +1460,7 @@ class SQLParser:
         clean_sql: str,
         order_by: Optional[str],
         order_desc: bool,
+        order_collate: Optional[str],
         limit_val: Optional[int],
         offset_val: Optional[int],
     ) -> SelectStatement:
@@ -1430,6 +1474,7 @@ class SQLParser:
             values_rows=rows,
             order_by=order_by,
             order_desc=order_desc,
+            order_collate=order_collate,
             limit=limit_val,
             offset=offset_val,
         )
@@ -1437,10 +1482,18 @@ class SQLParser:
     def _parse_single_select(self, sql: str) -> SelectStatement:
         clean_sql = re.sub(r"\s+", " ", sql).strip()
         clean_sql, limit_val, offset_val = self._extract_limit_and_offset(clean_sql)
-        clean_sql, order_by, order_desc = self._extract_order_by_clause(clean_sql)
+        clean_sql, order_by, order_desc, order_collate = self._extract_order_by_clause(
+            clean_sql
+        )
         if re.match(r"^VALUES\s*\(", clean_sql, re.IGNORECASE):
             return self._parse_standalone_values(
-                sql, clean_sql, order_by, order_desc, limit_val, offset_val
+                sql,
+                clean_sql,
+                order_by,
+                order_desc,
+                order_collate,
+                limit_val,
+                offset_val,
             )
         clean_sql, having_raw = self._extract_having_clause(clean_sql)
         clean_sql, group_by_cols = self._extract_group_by_clause(clean_sql)
@@ -1477,6 +1530,7 @@ class SQLParser:
             joins=joins,
             order_by=order_by,
             order_desc=order_desc,
+            order_collate=order_collate,
             limit=limit_val,
             offset=offset_val,
             distinct=distinct,

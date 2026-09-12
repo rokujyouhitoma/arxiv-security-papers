@@ -102,6 +102,7 @@ class ColumnDef:
     is_nullable: bool = True
     generated_expr: Optional[str] = None
     is_stored: bool = False
+    collate: Optional[str] = None
 
 
 @dataclass
@@ -241,6 +242,7 @@ class SelectStatement(SQLStatement):
     except_: Optional[Any] = None  # SelectStatement (EXCEPT)
     order_by: Optional[str] = None
     order_desc: bool = False
+    order_collate: Optional[str] = None
     limit: Optional[int] = None
     offset: Optional[int] = None
     distinct: bool = False

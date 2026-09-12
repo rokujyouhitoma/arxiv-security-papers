@@ -372,6 +372,7 @@ class TableCatalog:
         database_scope: Optional[str] = None,
         strict: bool = False,
         generated_columns: Optional[Dict[str, ColumnDef]] = None,
+        column_collations: Optional[Dict[str, str]] = None,
     ) -> None:
         self.name = name
         self.storage = storage
@@ -380,6 +381,7 @@ class TableCatalog:
         self.schema = schema if schema is not None else {}
         self.strict = strict
         self.generated_columns = generated_columns or {}
+        self.column_collations = column_collations or {}
         self._init_catalog_metadata(raw_sql, storage_engine, location, database_scope)
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
@@ -760,12 +762,26 @@ def _eval_relational(op: str, actual: Any, expected: Any) -> bool:
         return _eval_string_rel(op, str(actual), str(expected))
 
 
+def _collate_transform(val: Any, collation: Optional[str]) -> Any:
+    """Applies collation transformation to string values."""
+    if not isinstance(val, str) or not collation:
+        return val
+    col = collation.upper()
+    if col == "NOCASE":
+        return val.lower()
+    if col == "RTRIM":
+        return val.rstrip(" ")
+    return val
+
+
 def _eval_is_null(op: str, actual: Any) -> bool:
     is_n = actual is None or actual == ""
     return is_n if op == "IS NULL" else not is_n
 
 
-def _eval_between(op: str, actual: Any, expected: Any) -> bool:
+def _eval_between(
+    op: str, actual: Any, expected: Any, collate: Optional[str] = None
+) -> bool:
     if not isinstance(expected, (list, tuple)) or len(expected) != 2:
         return False
     v1, v2 = expected
@@ -773,7 +789,9 @@ def _eval_between(op: str, actual: Any, expected: Any) -> bool:
         act_f, v1_f, v2_f = float(str(actual)), float(str(v1)), float(str(v2))
         res = v1_f <= act_f <= v2_f
     except (ValueError, TypeError):
-        act_s, v1_s, v2_s = str(actual), str(v1), str(v2)
+        act_s = str(_collate_transform(actual, collate))
+        v1_s = str(_collate_transform(v1, collate))
+        v2_s = str(_collate_transform(v2, collate))
         res = v1_s <= act_s <= v2_s
     return res if op == "BETWEEN" else not res
 
@@ -806,31 +824,52 @@ def _eval_like(
     return matched if "NOT" not in op else not matched
 
 
-def _eval_membership(op: str, actual: Any, expected: Any) -> bool:
+def _normalize_in_list(expected: Any, collate: Optional[str]) -> List[Any]:
     in_list = expected if isinstance(expected, (list, tuple, set)) else [expected]
-    is_member = (actual in in_list) or (str(actual) in [str(x) for x in in_list])
+    return [_collate_transform(x, collate) for x in in_list]
+
+
+def _check_membership_raw(norm_actual: Any, norm_list: List[Any]) -> bool:
+    if norm_actual in norm_list:
+        return True
+    return str(norm_actual) in [str(x) for x in norm_list]
+
+
+def _eval_membership(
+    op: str, actual: Any, expected: Any, collate: Optional[str] = None
+) -> bool:
+    norm_actual = _collate_transform(actual, collate)
+    norm_list = _normalize_in_list(expected, collate)
+    is_member = _check_membership_raw(norm_actual, norm_list)
     return is_member if op == "IN" else not is_member
 
 
-def _eval_null_or_between(op: str, actual: Any, expected: Any) -> Optional[bool]:
+def _eval_null_or_between(
+    op: str, actual: Any, expected: Any, collate: Optional[str] = None
+) -> Optional[bool]:
     if op in ("IS NULL", "IS NOT NULL"):
         return _eval_is_null(op, actual)
     if op in ("BETWEEN", "NOT BETWEEN"):
-        return _eval_between(op, actual, expected)
+        return _eval_between(op, actual, expected, collate)
+    return None
+
+
+def _eval_pattern_match(
+    op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
+) -> Optional[bool]:
+    if op in ("GLOB", "NOT GLOB"):
+        return _eval_glob(op, actual, expected)
+    if op in ("LIKE", "NOT LIKE"):
+        return _eval_like(op, actual, expected, (c_dict or {}).get("escape"))
     return None
 
 
 def _eval_pattern_or_null(
     op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
 ) -> Optional[bool]:
-    res = _eval_null_or_between(op, actual, expected)
-    if res is not None:
-        return res
-    if op in ("GLOB", "NOT GLOB"):
-        return _eval_glob(op, actual, expected)
-    if op in ("LIKE", "NOT LIKE"):
-        return _eval_like(op, actual, expected, (c_dict or {}).get("escape"))
-    return None
+    collate = (c_dict or {}).get("collate")
+    res = _eval_null_or_between(op, actual, expected, collate)
+    return res if res is not None else _eval_pattern_match(op, actual, expected, c_dict)
 
 
 def _eval_comparison_branches(
@@ -841,9 +880,18 @@ def _eval_comparison_branches(
         return pat_res
     if op in (">=", "<=", ">", "<"):
         return _eval_relational(op, actual, expected)
+    collate = (c_dict or {}).get("collate")
     if op in ("IN", "NOT IN"):
-        return _eval_membership(op, actual, expected)
+        return _eval_membership(op, actual, expected, collate)
     return True
+
+
+def _eval_equality(op: str, norm_actual: Any, norm_expected: Any) -> Optional[bool]:
+    if op == "=":
+        return str(norm_actual) == str(norm_expected)
+    if op in ("!=", "<>"):
+        return str(norm_actual) != str(norm_expected)
+    return None
 
 
 def _eval_comparison(
@@ -851,13 +899,41 @@ def _eval_comparison(
 ) -> bool:
     if op in ("IS NULL", "IS NOT NULL"):
         return _eval_is_null(op, actual)
-    if op == "=":
-        return str(actual) == str(expected)
-    if op in ("!=", "<>"):
-        return str(actual) != str(expected)
+    collate = (c_dict or {}).get("collate")
+    norm_act = _collate_transform(actual, collate)
+    norm_exp = _collate_transform(expected, collate)
+    eq_res = _eval_equality(op, norm_act, norm_exp)
+    if eq_res is not None:
+        return eq_res
     if actual is None:
         return False
-    return _eval_comparison_branches(op, actual, expected, c_dict)
+    return _eval_comparison_branches(op, norm_act, norm_exp, c_dict)
+
+
+def _inject_collate_into_dict(d: Dict[str, Any], collations: Dict[str, str]) -> None:
+    col = d.get("column")
+    if "collate" not in d and col and col in collations:
+        d["collate"] = collations[col]
+
+
+def _enrich_where_clause_item(
+    c: Dict[str, Any], collations: Dict[str, str]
+) -> Dict[str, Any]:
+    new_c = dict(c)
+    _inject_collate_into_dict(new_c, collations)
+    if "clauses" in new_c:
+        new_c["clauses"] = [
+            _enrich_where_clause_item(sub, collations) for sub in new_c["clauses"]
+        ]
+    return new_c
+
+
+def _enrich_where_clauses_with_collations(
+    clauses: List[Dict[str, Any]], collations: Dict[str, str]
+) -> List[Dict[str, Any]]:
+    if not collations or not clauses:
+        return clauses
+    return [_enrich_where_clause_item(c, collations) for c in clauses]
 
 
 def _is_column_reference(expected_val: str, record: Dict[str, Any]) -> bool:
@@ -1926,11 +2002,16 @@ class SQLExecutor:
             return self._create_engine_storage(stmt)
         return self._create_default_storage(stmt)
 
+    @staticmethod
+    def _extract_table_gen_columns(columns: List[ColumnDef]) -> Dict[str, ColumnDef]:
+        return {c.name: c for c in columns if c.generated_expr is not None}
+
+    @staticmethod
+    def _extract_table_collations(columns: List[ColumnDef]) -> Dict[str, str]:
+        return {c.name: c.collate for c in columns if c.collate is not None}
+
     def _create_new_table_storage(self, stmt: CreateTableStatement) -> None:
         storage = self._instantiate_table_storage(stmt)
-        gen_cols = {
-            col.name: col for col in stmt.columns if col.generated_expr is not None
-        }
         catalog = TableCatalog(
             name=stmt.table_name,
             storage=storage,
@@ -1939,7 +2020,8 @@ class SQLExecutor:
             storage_engine=stmt.storage_engine,
             location=stmt.location,
             strict=stmt.strict,
-            generated_columns=gen_cols,
+            generated_columns=self._extract_table_gen_columns(stmt.columns),
+            column_collations=self._extract_table_collations(stmt.columns),
         )
         self.tables[stmt.table_name] = catalog
 
@@ -2478,9 +2560,15 @@ class SQLExecutor:
         return rows[start:end]
 
     @staticmethod
-    def _sort_key(row: Dict[str, Any], order_by: str) -> Any:
+    def _sort_key(
+        row: Dict[str, Any],
+        order_by: str,
+        order_collate: Optional[str] = None,
+    ) -> Any:
         val = _extract_field_value(row, order_by)
-        return 0 if val is None else val
+        if val is None:
+            return 0
+        return _collate_transform(val, order_collate)
 
     def _sort_and_paginate(
         self,
@@ -2489,10 +2577,11 @@ class SQLExecutor:
         order_desc: bool,
         limit: Optional[int],
         offset: Optional[int] = None,
+        order_collate: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         if order_by:
             rows.sort(
-                key=lambda x: self._sort_key(x, order_by),
+                key=lambda x: self._sort_key(x, order_by, order_collate),
                 reverse=order_desc,
             )
         return self._slice_rows(rows, limit, offset)
@@ -2761,6 +2850,39 @@ class SQLExecutor:
             return None, None
         return stmt.limit, stmt.offset
 
+    def _prepare_select_views_and_ctes(
+        self, stmt: SelectStatement, role: str, temp_tables: Dict[str, Any]
+    ) -> None:
+        if self.views:
+            self._evaluate_referenced_views(stmt, role, temp_tables)
+        if stmt.ctes:
+            self._evaluate_all_ctes(stmt.ctes, role, temp_tables)
+
+    def _resolve_effective_order_collate(
+        self, stmt: SelectStatement, tbl_collations: Dict[str, str]
+    ) -> Optional[str]:
+        if stmt.order_collate:
+            return stmt.order_collate
+        return tbl_collations.get(stmt.order_by) if stmt.order_by else None
+
+    def _filter_and_window_select_rows(
+        self,
+        current_rows: List[Dict[str, Any]],
+        stmt: SelectStatement,
+        tbl_collations: Dict[str, str],
+        role: str,
+        temp_tables: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        where_conds = _enrich_where_clauses_with_collations(
+            stmt.where_clauses, tbl_collations
+        )
+        filtered = self._filter_select_rows(
+            current_rows, where_conds, role=role, temp_tables=temp_tables
+        )
+        grouped = self._apply_group_and_having(filtered, stmt)
+        win_specs = extract_window_functions(stmt.columns)
+        return list(compute_window_functions(grouped, win_specs))
+
     def _exec_select(
         self,
         stmt: SelectStatement,
@@ -2772,25 +2894,18 @@ class SQLExecutor:
         if fast_cnt is not None:
             return fast_cnt
 
-        if self.views:
-            self._evaluate_referenced_views(stmt, effective_role, temp_tables)
-
-        if stmt.ctes:
-            self._evaluate_all_ctes(stmt.ctes, effective_role, temp_tables)
-
+        self._prepare_select_views_and_ctes(stmt, effective_role, temp_tables)
         current_rows = self._scan_and_join_tables(stmt, effective_role, temp_tables)
-        filtered_rows = self._filter_select_rows(
-            current_rows,
-            stmt.where_clauses,
-            role=effective_role,
-            temp_tables=temp_tables,
+        tbl = self.tables.get(stmt.table_name)
+        tbl_collations = tbl.column_collations if tbl else {}
+
+        windowed_rows = self._filter_and_window_select_rows(
+            current_rows, stmt, tbl_collations, effective_role, temp_tables
         )
-        grouped_rows = self._apply_group_and_having(filtered_rows, stmt)
-        win_specs = extract_window_functions(stmt.columns)
-        windowed_rows = compute_window_functions(grouped_rows, win_specs)
         lim, off = self._resolve_paginate_limits(stmt)
+        eff_collate = self._resolve_effective_order_collate(stmt, tbl_collations)
         paged_rows = self._sort_and_paginate(
-            windowed_rows, stmt.order_by, stmt.order_desc, lim, off
+            windowed_rows, stmt.order_by, stmt.order_desc, lim, off, eff_collate
         )
         return self._build_select_result(paged_rows, stmt, effective_role, temp_tables)
 
@@ -3007,10 +3122,11 @@ class SQLExecutor:
         order_by: Optional[str],
         order_desc: bool,
         limit: Optional[int],
+        order_collate: Optional[str] = None,
     ) -> List[int]:
         if order_by:
             indices.sort(
-                key=lambda i: self._sort_key(metadata[i], order_by),
+                key=lambda i: self._sort_key(metadata[i], order_by, order_collate),
                 reverse=order_desc,
             )
         if limit is not None:
@@ -3020,10 +3136,13 @@ class SQLExecutor:
     def _find_update_indices(
         self, table: TableCatalog, stmt: UpdateStatement
     ) -> List[int]:
+        where_conds = _enrich_where_clauses_with_collations(
+            stmt.where_clauses, table.column_collations
+        )
         matching = [
             idx
             for idx, meta in enumerate(table.storage.metadata)
-            if _matches_where_clause(meta, stmt.where_clauses)
+            if _matches_where_clause(meta, where_conds)
         ]
         return self._sort_and_limit_indices(
             table.storage.metadata,
@@ -3201,10 +3320,13 @@ class SQLExecutor:
     def _find_delete_indices(
         self, table: TableCatalog, stmt: DeleteStatement
     ) -> set[int]:
+        where_conds = _enrich_where_clauses_with_collations(
+            stmt.where_clauses, table.column_collations
+        )
         matching = [
             idx
             for idx, meta in enumerate(table.storage.metadata)
-            if not stmt.where_clauses or _matches_where_clause(meta, stmt.where_clauses)
+            if not where_conds or _matches_where_clause(meta, where_conds)
         ]
         limited = self._sort_and_limit_indices(
             table.storage.metadata,
