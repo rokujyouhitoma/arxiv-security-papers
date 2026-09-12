@@ -43,10 +43,11 @@ class SQLCommandType(str, Enum):
     RELEASE = "RELEASE"
     ROLLBACK_TO = "ROLLBACK_TO"
 
-    # Metadata & Inspection & Administration
+    # Metadata & Inspection    # Admin / Maintenance
     SHOW = "SHOW"
     PRAGMA = "PRAGMA"
     VACUUM = "VACUUM"
+    ANALYZE = "ANALYZE"
 
     @property
     def category(self) -> str:
@@ -349,3 +350,10 @@ class CreateTriggerStatement(SQLStatement):
 class DropTriggerStatement(SQLStatement):
     trigger_name: str = ""
     if_exists: bool = False
+
+
+# ANALYZE
+@dataclass
+class AnalyzeStatement(SQLStatement):
+    target_name: Optional[str] = None
+    schema_name: Optional[str] = None
