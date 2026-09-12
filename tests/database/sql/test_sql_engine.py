@@ -27,6 +27,7 @@ from database import (
     attach_to_sqlite,
     connect,
 )
+from database.sql.executor import SQLExecutionError
 
 
 def test_ddl_and_dml_and_dql_lifecycle():
@@ -1023,3 +1024,91 @@ def test_phase7_analyze_statement() -> None:
         assert res_all["status"] == "ok"
         assert "metrics" in res_all["tables_analyzed"]
         assert res_all["total_rows"] == 3
+
+
+def test_phase7_attach_detach_database() -> None:
+    """
+    Validates SQLite parity for ATTACH and DETACH DATABASE statements,
+    dynamic multi-schema mounting, PRAGMA database_list integration,
+    and cross-database query execution.
+    """
+    executor = SQLExecutor()
+
+    # Initial state: only 'main'
+    db_list_0 = executor.execute("PRAGMA database_list")["rows"]
+    assert len(db_list_0) == 1
+    assert db_list_0[0]["name"] == "main"
+
+    # 1. ATTACH DATABASE ':memory:' AS aux
+    res_attach = executor.execute("ATTACH DATABASE ':memory:' AS aux")
+    assert res_attach["status"] == "ok"
+    assert res_attach["command"] == "ATTACH"
+
+    db_list_1 = executor.execute("PRAGMA database_list")["rows"]
+    assert len(db_list_1) == 2
+    assert db_list_1[1]["name"] == "aux"
+
+    # Cannot attach with existing name or reserved 'main'
+    with pytest.raises(SQLExecutionError):
+        executor.execute("ATTACH DATABASE ':memory:' AS aux")
+    with pytest.raises(SQLExecutionError):
+        executor.execute("ATTACH DATABASE ':memory:' AS main")
+
+    # 2. CREATE TABLE and DML in attached schema
+    executor.execute("CREATE TABLE aux.ext_items (id INT, title VARCHAR)")
+    executor.execute("INSERT INTO aux.ext_items (id, title) VALUES (1, 'paper1')")
+    executor.execute("INSERT INTO aux.ext_items (id, title) VALUES (2, 'paper2')")
+
+    sel_aux = executor.execute("SELECT id, title FROM aux.ext_items ORDER BY id ASC")
+    assert len(sel_aux["rows"]) == 2
+    assert sel_aux["rows"][0]["title"] == "paper1"
+
+    # 3. Cross-database queries: main and aux JOIN
+    executor.execute("CREATE TABLE local_authors (id INT, name VARCHAR)")
+    executor.execute("INSERT INTO local_authors (id, name) VALUES (1, 'Alice')")
+    executor.execute("INSERT INTO local_authors (id, name) VALUES (2, 'Bob')")
+
+    cross_sel = executor.execute(
+        "SELECT local_authors.name, aux.ext_items.title "
+        "FROM local_authors JOIN aux.ext_items ON local_authors.id = aux.ext_items.id "
+        "ORDER BY local_authors.id ASC"
+    )
+    assert len(cross_sel["rows"]) == 2
+    assert cross_sel["rows"][0]["name"] == "Alice"
+    assert cross_sel["rows"][0]["title"] == "paper1"
+
+    # 4. DETACH DATABASE aux
+    res_detach = executor.execute("DETACH DATABASE aux")
+    assert res_detach["status"] == "ok"
+    assert res_detach["command"] == "DETACH"
+
+    db_list_2 = executor.execute("PRAGMA database_list")["rows"]
+    assert len(db_list_2) == 1
+    assert db_list_2[0]["name"] == "main"
+
+    # Querying detached table should raise error
+    with pytest.raises(SQLExecutionError):
+        executor.execute("SELECT * FROM aux.ext_items")
+
+    # Cannot detach main or non-existent db
+    with pytest.raises(SQLExecutionError):
+        executor.execute("DETACH DATABASE main")
+    with pytest.raises(SQLExecutionError):
+        executor.execute("DETACH DATABASE nonexistent")
+
+    # 5. File-backed persistent ATTACH
+    with tempfile.TemporaryDirectory() as tmpdir:
+        disk_db = os.path.join(tmpdir, "disk.vdb")
+        executor.execute(f"ATTACH DATABASE '{disk_db}' AS disk_db")
+        executor.execute("CREATE TABLE disk_db.notes (id INT, note TEXT)")
+        executor.execute(
+            "INSERT INTO disk_db.notes (id, note) VALUES (10, 'confidential')"
+        )
+        executor.execute("DETACH DATABASE disk_db")
+
+        # Re-attach in a new executor
+        new_exec = SQLExecutor()
+        new_exec.execute(f"ATTACH DATABASE '{disk_db}' AS disk_db")
+        r = new_exec.execute("SELECT id, note FROM disk_db.notes")
+        assert len(r["rows"]) == 1
+        assert r["rows"][0]["note"] == "confidential"

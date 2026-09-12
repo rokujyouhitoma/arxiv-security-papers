@@ -12,6 +12,7 @@ from .ast import (
     AlterTableAction,
     AlterTableStatement,
     AnalyzeStatement,
+    AttachStatement,
     BeginStatement,
     ColumnDef,
     CommitStatement,
@@ -21,6 +22,7 @@ from .ast import (
     CreateViewStatement,
     CTEDefinition,
     DeleteStatement,
+    DetachStatement,
     DropIndexStatement,
     DropTableStatement,
     DropTriggerStatement,
@@ -698,6 +700,36 @@ def _parse_analyze_stmt(sql: str) -> Optional[AnalyzeStatement]:
     )
 
 
+def _parse_attach_stmt(sql: str) -> AttachStatement:
+    clean = sql.strip().rstrip(";")
+    pattern = r"^ATTACH(?:\s+DATABASE)?\s+(?:'([^']*)'|\"([^\"]*)\"|(\S+))\s+AS\s+([a-zA-Z_][a-zA-Z0-9_]*)$"
+    m = re.match(pattern, clean, re.IGNORECASE)
+    if not m:
+        raise SQLParseError(f"Malformed ATTACH syntax: {sql}")
+    filename = m.group(1) or m.group(2) or m.group(3)
+    schema_name = m.group(4)
+    return AttachStatement(
+        command_type=SQLCommandType.ATTACH,
+        raw_sql=sql,
+        filename=filename,
+        schema_name=schema_name,
+    )
+
+
+def _parse_detach_stmt(sql: str) -> DetachStatement:
+    clean = sql.strip().rstrip(";")
+    pattern = r"^DETACH(?:\s+DATABASE)?\s+([a-zA-Z_][a-zA-Z0-9_]*)$"
+    m = re.match(pattern, clean, re.IGNORECASE)
+    if not m:
+        raise SQLParseError(f"Malformed DETACH syntax: {sql}")
+    schema_name = m.group(1)
+    return DetachStatement(
+        command_type=SQLCommandType.DETACH,
+        raw_sql=sql,
+        schema_name=schema_name,
+    )
+
+
 def _parse_create_trigger_stmt(sql: str) -> CreateTriggerStatement:
     pattern = (
         r"^CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s+"
@@ -811,6 +843,15 @@ class SQLParser:
             return self._parse_delete(sql)
         return None
 
+    def _parse_schema_mount_ops(
+        self, upper_sql: str, sql: str
+    ) -> Optional[SQLStatement]:
+        if upper_sql.startswith("ATTACH"):
+            return _parse_attach_stmt(sql)
+        if upper_sql.startswith("DETACH"):
+            return _parse_detach_stmt(sql)
+        return None
+
     def _parse_admin_ops(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("PRAGMA"):
             return _parse_pragma_stmt(sql)
@@ -818,7 +859,7 @@ class SQLParser:
             return _parse_vacuum_stmt(sql)
         if upper_sql.startswith("ANALYZE"):
             return _parse_analyze_stmt(sql)
-        return None
+        return self._parse_schema_mount_ops(upper_sql, sql)
 
     def _parse_dcl_stmt(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
         if upper_sql.startswith("GRANT"):
@@ -916,7 +957,7 @@ class SQLParser:
     def _parse_create_table(self, sql: str) -> CreateTableStatement:
         cleaned_sql, engine, location = _extract_storage_clauses(sql)
         pattern = (
-            r"^CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s*\((.*)\)\s*$"
+            r"^CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.]+)\s*\((.*)\)\s*$"
         )
         m = re.match(pattern, cleaned_sql, re.IGNORECASE | re.DOTALL)
         if not m:
@@ -944,7 +985,7 @@ class SQLParser:
 
     def _parse_drop_table(self, sql: str) -> DropTableStatement:
         m = re.match(
-            r"DROP\s+TABLE\s+(IF\s+EXISTS\s+)?([a-zA-Z0-9_]+)",
+            r"DROP\s+TABLE\s+(IF\s+EXISTS\s+)?([a-zA-Z0-9_.]+)",
             sql,
             re.IGNORECASE,
         )
@@ -1352,7 +1393,7 @@ class SQLParser:
 
     def _parse_single_table_ref(self, text: str) -> TableRef:
         m = re.match(
-            r"^([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$",
+            r"^([a-zA-Z0-9_.]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$",
             text.strip(),
             re.IGNORECASE,
         )
@@ -1464,7 +1505,7 @@ class SQLParser:
             return sel_res
 
         m = re.match(
-            r"^(?:INSERT|REPLACE)\s+INTO\s+([a-zA-Z0-9_]+)(?:\s*\((.*?)\))?\s+VALUES\s*(.+)$",
+            r"^(?:INSERT|REPLACE)\s+INTO\s+([a-zA-Z0-9_.]+)(?:\s*\((.*?)\))?\s+VALUES\s*(.+)$",
             clean_sql,
             re.IGNORECASE | re.DOTALL,
         )
@@ -1494,7 +1535,7 @@ class SQLParser:
             clean_sql
         )
         m = re.match(
-            r"UPDATE\s+([a-zA-Z0-9_]+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
+            r"UPDATE\s+([a-zA-Z0-9_.]+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
             clean_sql,
             re.IGNORECASE | re.DOTALL,
         )
@@ -1524,7 +1565,7 @@ class SQLParser:
             clean_sql
         )
         m = re.match(
-            r"DELETE\s+FROM\s+([a-zA-Z0-9_]+)(?:\s+WHERE\s+(.+))?$",
+            r"DELETE\s+FROM\s+([a-zA-Z0-9_.]+)(?:\s+WHERE\s+(.+))?$",
             clean_sql,
             re.IGNORECASE | re.DOTALL,
         )

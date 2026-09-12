@@ -15,16 +15,18 @@ from ..btree import BPlusTree
 from ..embedding import DeterministicEmbedding
 from ..index import HNSWIndex
 from ..planner import QueryPlanner, TableStats
-from ..storage import VectorStorage
+from ..storage import MultiTableVectorStorage, VectorStorage
 from .ast import (
     AlterTableAction,
     AlterTableStatement,
     AnalyzeStatement,
+    AttachStatement,
     CreateIndexStatement,
     CreateTableStatement,
     CreateTriggerStatement,
     CreateViewStatement,
     DeleteStatement,
+    DetachStatement,
     DropIndexStatement,
     DropTableStatement,
     DropTriggerStatement,
@@ -520,7 +522,14 @@ def _extract_json_op(record: Dict[str, Any], expr: str) -> Optional[Any]:
 def _lookup_record_col(record: Dict[str, Any], expr: str) -> Any:
     if expr in record:
         return record[expr]
-    return record.get(expr.split(".", 1)[1]) if "." in expr else None
+    if "." in expr:
+        parts = expr.split(".")
+        if parts[-1] in record:
+            return record[parts[-1]]
+        one_stripped = ".".join(parts[1:])
+        if one_stripped in record:
+            return record[one_stripped]
+    return None
 
 
 def _dispatch_builtin_func(func_name: str, args: List[Any]) -> Any:
@@ -1322,6 +1331,7 @@ class SQLExecutor:
         self.multi_storage = multi_storage
         self.default_table_name = default_table_name
         self.known_databases: Dict[str, str] = dict(known_databases or {})
+        self.attached_databases: Dict[str, Dict[str, Any]] = {}
         self.tables: Dict[str, TableCatalog] = {}
         self.views: Dict[str, CreateViewStatement] = {}
         self.triggers: Dict[str, CreateTriggerStatement] = {}
@@ -1527,6 +1537,11 @@ class SQLExecutor:
             else ":memory:"
         )
         rows = [{"seq": 0, "name": "main", "file": main_path}]
+        for idx, name in enumerate(sorted(self.attached_databases.keys()), start=1):
+            info = self.attached_databases[name]
+            rows.append(
+                {"seq": idx, "name": name, "file": info.get("file", ":memory:")}
+            )
         return {"command": "PRAGMA", "status": "ok", "rows": rows, "count": len(rows)}
 
     def _exec_pragma_flag(self, pname: str) -> Optional[Dict[str, Any]]:
@@ -1745,7 +1760,20 @@ class SQLExecutor:
             **kwargs,
         )
 
+    def _create_attached_storage(self, table_name: str) -> Optional[Any]:
+        if "." not in table_name:
+            return None
+        schema, tbl = table_name.split(".", 1)
+        if schema in self.attached_databases:
+            return self.attached_databases[schema]["storage"].create_table(
+                tbl, dim=self.embedding.dim
+            )
+        return None
+
     def _create_default_storage(self, stmt: CreateTableStatement) -> Any:
+        attached_st = self._create_attached_storage(stmt.table_name)
+        if attached_st is not None:
+            return attached_st
         if self.multi_storage is not None:
             return self.multi_storage.create_table(
                 stmt.table_name, dim=self.embedding.dim
@@ -2109,6 +2137,8 @@ class SQLExecutor:
         name, alias = table_ref.name, table_ref.alias
         for k, v in list(record.items()):
             prefixed[f"{name}.{k}"] = v
+            if "." in name:
+                prefixed[f"{name.split('.', 1)[1]}.{k}"] = v
             if alias:
                 prefixed[f"{alias}.{k}"] = v
         return prefixed
@@ -2246,7 +2276,7 @@ class SQLExecutor:
 
         out_key = col_expr
         if "." in out_key and "->" not in out_key:
-            _, out_key = out_key.split(".", 1)
+            out_key = out_key.split(".")[-1]
         return out_key, _extract_field_value(r, col_expr)
 
     def _project_wildcard(self, r: Dict[str, Any], table_name: str) -> Dict[str, Any]:
@@ -2953,6 +2983,15 @@ class SQLExecutor:
             or self._exec_schema_trigger_stmt(stmt, role)
         )
 
+    def _exec_mount_stmt(
+        self, stmt: SQLStatement, role: str
+    ) -> Optional[Dict[str, Any]]:
+        if isinstance(stmt, AttachStatement):
+            return self._exec_attach(stmt, role)
+        if isinstance(stmt, DetachStatement):
+            return self._exec_detach(stmt, role)
+        return None
+
     def _exec_admin_stmt(
         self, stmt: SQLStatement, role: str
     ) -> Optional[Dict[str, Any]]:
@@ -2962,7 +3001,65 @@ class SQLExecutor:
             return self._exec_vacuum(stmt, role)
         if isinstance(stmt, AnalyzeStatement):
             return self._exec_analyze(stmt, role)
-        return None
+        return self._exec_mount_stmt(stmt, role)
+
+    def _validate_attach_schema(self, schema: str) -> None:
+        if schema.lower() in ("main", "temp"):
+            raise SQLExecutionError(f"cannot attach to reserved schema name '{schema}'")
+        if schema in self.attached_databases:
+            raise SQLExecutionError(f"database {schema} is already attached")
+
+    def _init_attached_storage(self, file_path: str) -> MultiTableVectorStorage:
+        storage = MultiTableVectorStorage(file_path=file_path)
+        if file_path != ":memory:" and os.path.exists(file_path):
+            try:
+                storage.load()
+            except Exception as e:
+                logger.warning("Could not load attached DB %s: %s", file_path, e)
+        return storage
+
+    def _exec_attach(self, stmt: AttachStatement, role: str) -> Dict[str, Any]:
+        schema = stmt.schema_name
+        self._validate_attach_schema(schema)
+        storage = self._init_attached_storage(stmt.filename)
+        self.attached_databases[schema] = {
+            "file": stmt.filename,
+            "storage": storage,
+            "tables": {},
+        }
+        self.known_databases[schema] = stmt.filename
+        return {"command": "ATTACH", "status": "ok", "rows": [], "count": 0}
+
+    def _validate_detach_schema(self, schema: str) -> None:
+        if schema.lower() in ("main", "temp"):
+            raise SQLExecutionError(f"cannot detach schema '{schema}'")
+        if schema not in self.attached_databases:
+            raise SQLExecutionError(f"no such database: {schema}")
+
+    def _flush_attached_storage(self, storage: Any) -> None:
+        if storage is not None and hasattr(storage, "save"):
+            try:
+                storage.save()
+            except Exception:
+                pass
+
+    def _purge_schema_tables(self, schema: str) -> None:
+        prefix = f"{schema}."
+        for k in list(self.tables.keys()):
+            if k.startswith(prefix):
+                del self.tables[k]
+
+    def _cleanup_detached_db(self, schema: str) -> None:
+        db_info = self.attached_databases.pop(schema)
+        self.known_databases.pop(schema, None)
+        self._flush_attached_storage(db_info.get("storage"))
+        self._purge_schema_tables(schema)
+
+    def _exec_detach(self, stmt: DetachStatement, role: str) -> Dict[str, Any]:
+        schema = stmt.schema_name
+        self._validate_detach_schema(schema)
+        self._cleanup_detached_db(schema)
+        return {"command": "DETACH", "status": "ok", "rows": [], "count": 0}
 
     def _exec_dcl_stmt(self, stmt: SQLStatement, role: str) -> Optional[Dict[str, Any]]:
         if isinstance(stmt, GrantStatement):
@@ -3118,11 +3215,41 @@ class SQLExecutor:
             return self.tables[table_name]
         return None
 
+    def _lookup_attached_by_schema(
+        self, schema: str, tbl: str, table_name: str
+    ) -> Optional[TableCatalog]:
+        if schema.lower() == "main":
+            return self.tables.get(tbl) or self._lookup_multi_storage_table(tbl)
+        if schema not in self.attached_databases:
+            raise SQLExecutionError(f"unknown database {schema}")
+        db_storage = self.attached_databases[schema]["storage"]
+        if db_storage.has_table(tbl):
+            st = db_storage.get_table(tbl)
+            catalog = TableCatalog(name=table_name, storage=st)
+            self.tables[table_name] = catalog
+            return catalog
+        return None
+
+    def _lookup_attached_table(self, table_name: str) -> Optional[TableCatalog]:
+        if "." in table_name:
+            schema, tbl = table_name.split(".", 1)
+            return self._lookup_attached_by_schema(schema, tbl, table_name)
+        for name, info in self.attached_databases.items():
+            db_storage = info["storage"]
+            if db_storage.has_table(table_name):
+                st = db_storage.get_table(table_name)
+                catalog = TableCatalog(name=table_name, storage=st)
+                self.tables[table_name] = catalog
+                return catalog
+        return None
+
     def _get_table(self, table_name: str) -> TableCatalog:
         table = self.tables.get(table_name)
         if table:
             return table
-        catalog = self._lookup_multi_storage_table(table_name)
+        catalog = self._lookup_multi_storage_table(
+            table_name
+        ) or self._lookup_attached_table(table_name)
         if catalog is not None:
             return catalog
         raise SQLExecutionError(f"Table '{table_name}' does not exist")
