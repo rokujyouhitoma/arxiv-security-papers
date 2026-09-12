@@ -2,7 +2,7 @@
 ID: 263
 種別: Feature
 優先度: Low
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/DATABASE] SQLite 完全互換化: ATTACH / DETACH DATABASE 構文による動的マルチスキーママウントの実装 (ID: 263)
@@ -25,12 +25,12 @@ SQLite 公式仕様 ([sqlite.org/lang_attach.html](https://sqlite.org/lang_attac
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/database/sql/ast.py](../../src/database/sql/ast.py): `AttachStatement`, `DetachStatement` AST クラスの追加
-- [ ] [src/database/sql/parser.py](../../src/database/sql/parser.py): `ATTACH [DATABASE] 'filename' AS schema_name`, `DETACH [DATABASE] schema_name` パース処理
-- [ ] [src/database/sql/executor.py](../../src/database/sql/executor.py): `_exec_attach`, `_exec_detach` ハンドラ、スキーマプレフィックス名前解決
-- [ ] [src/database/settings.py](../../src/database/settings.py): 動的スキーマ登録・ライフサイクル管理連携
-- [ ] [tests/database/sql/test_sql_engine.py](../../tests/database/sql/test_sql_engine.py): ATTACH/DETACH およびスキーマ間クエリの単体テスト
-- [ ] [docs/issues/README.md](../README.md): Issue 台帳の登録・追跡
+- [x] [src/database/sql/ast.py](../../src/database/sql/ast.py): `AttachStatement`, `DetachStatement` AST クラスの追加
+- [x] [src/database/sql/parser.py](../../src/database/sql/parser.py): `ATTACH [DATABASE] 'filename' AS schema_name`, `DETACH [DATABASE] schema_name` パース処理
+- [x] [src/database/sql/executor.py](../../src/database/sql/executor.py): `_exec_attach`, `_exec_detach` ハンドラ、スキーマプレフィックス名前解決
+- [x] [src/database/settings.py](../../src/database/settings.py): 動的スキーマ登録・ライフサイクル管理連携
+- [x] [tests/database/sql/test_sql_engine.py](../../tests/database/sql/test_sql_engine.py): ATTACH/DETACH およびスキーマ間クエリの単体テスト
+- [x] [docs/issues/README.md](../README.md): Issue 台帳の登録・追跡
 
 ---
 
@@ -53,9 +53,9 @@ Target Branch: `feat/263-implement-sqlite-parity-attach-detach-database`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `ATTACH DATABASE 'path' AS aux;` で外部スキーマがマウントできること。
-- [ ] `SELECT * FROM main.t1 JOIN aux.t2 ON ...` でクロススキーマ JOIN が実行できること。
-- [ ] `PRAGMA database_list` でアタッチされたスキーマが表示されること。
-- [ ] `DETACH DATABASE aux;` でアンマウントされ、以後の参照でエラーとなること。
-- [ ] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
-- [ ] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。
+- [x] `ATTACH DATABASE 'path' AS aux;` で外部スキーマがマウントできること。
+- [x] `SELECT * FROM main.t1 JOIN aux.t2 ON ...` でクロススキーマ JOIN が実行できること。
+- [x] `PRAGMA database_list` でアタッチされたスキーマが表示されること。
+- [x] `DETACH DATABASE aux;` でアンマウントされ、以後の参照でエラーとなること。
+- [x] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
+- [x] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。

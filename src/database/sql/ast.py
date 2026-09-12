@@ -48,6 +48,8 @@ class SQLCommandType(str, Enum):
     PRAGMA = "PRAGMA"
     VACUUM = "VACUUM"
     ANALYZE = "ANALYZE"
+    ATTACH = "ATTACH"
+    DETACH = "DETACH"
 
     @property
     def category(self) -> str:
@@ -75,6 +77,11 @@ _CMD_CATEGORY_MAP: Dict[SQLCommandType, str] = {
     SQLCommandType.BEGIN: "TCL",
     SQLCommandType.COMMIT: "TCL",
     SQLCommandType.ROLLBACK: "TCL",
+    SQLCommandType.PRAGMA: "ADMIN",
+    SQLCommandType.VACUUM: "ADMIN",
+    SQLCommandType.ANALYZE: "ADMIN",
+    SQLCommandType.ATTACH: "DDL",
+    SQLCommandType.DETACH: "DDL",
 }
 
 
@@ -357,3 +364,15 @@ class DropTriggerStatement(SQLStatement):
 class AnalyzeStatement(SQLStatement):
     target_name: Optional[str] = None
     schema_name: Optional[str] = None
+
+
+# ATTACH / DETACH
+@dataclass
+class AttachStatement(SQLStatement):
+    filename: str = ""
+    schema_name: str = ""
+
+
+@dataclass
+class DetachStatement(SQLStatement):
+    schema_name: str = ""
