@@ -20,6 +20,7 @@ from .ast import (
     CreateTableStatement,
     CreateTriggerStatement,
     CreateViewStatement,
+    CreateVirtualTableStatement,
     CTEDefinition,
     DeleteStatement,
     DetachStatement,
@@ -730,6 +731,32 @@ def _parse_detach_stmt(sql: str) -> DetachStatement:
     )
 
 
+def _parse_create_virtual_table(sql: str) -> CreateVirtualTableStatement:
+    clean = sql.strip().rstrip(";")
+    pattern = (
+        r"^CREATE\s+VIRTUAL\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?"
+        r"([a-zA-Z0-9_.]+)\s+USING\s+([a-zA-Z0-9_]+)(?:\s*\((.*)\))?$"
+    )
+    m = re.match(pattern, clean, re.IGNORECASE | re.DOTALL)
+    if not m:
+        raise SQLParseError(f"Malformed CREATE VIRTUAL TABLE syntax: {sql}")
+
+    if_not_exists = bool(m.group(1))
+    table_name = m.group(2)
+    module_name = m.group(3)
+    args_raw = m.group(4)
+    args = _split_comma_expressions(args_raw.strip()) if args_raw else []
+
+    return CreateVirtualTableStatement(
+        command_type=SQLCommandType.CREATE_VIRTUAL_TABLE,
+        raw_sql=sql,
+        table_name=table_name,
+        module_name=module_name,
+        module_args=args,
+        if_not_exists=if_not_exists,
+    )
+
+
 def _parse_create_trigger_stmt(sql: str) -> CreateTriggerStatement:
     pattern = (
         r"^CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s+"
@@ -785,6 +812,8 @@ class SQLParser:
         return _parse_savepoint_stmt(sql)
 
     def _parse_ddl_table(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:
+        if upper_sql.startswith("CREATE VIRTUAL TABLE"):
+            return _parse_create_virtual_table(sql)
         if upper_sql.startswith("CREATE TABLE"):
             return self._parse_create_table(sql)
         if upper_sql.startswith("DROP TABLE"):

@@ -2,7 +2,7 @@
 ID: 264
 種別: Feature
 優先度: Low
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/DATABASE] SQLite 完全互換化: CREATE VIRTUAL TABLE 構文によるプラガブルストレージ DDL マッピングの実装 (ID: 264)
@@ -23,12 +23,12 @@ SQLite 公式仕様 ([sqlite.org/lang_createvtab.html](https://sqlite.org/lang_c
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/database/sql/ast.py](../../src/database/sql/ast.py): `CreateVirtualTableStatement` AST クラスの追加
-- [ ] [src/database/sql/parser.py](../../src/database/sql/parser.py): `CREATE VIRTUAL TABLE ... USING module(args)` のパース処理
-- [ ] [src/database/sql/executor.py](../../src/database/sql/executor.py): `_exec_create_virtual_table` ハンドラおよび `PluggableStorageFactory` 呼び出し
-- [ ] [src/database/storage/factory.py](../../src/database/storage/factory.py): モジュール名に基づくストレージインスタンス化引数のバインド
-- [ ] [tests/database/sql/test_sql_engine.py](../../tests/database/sql/test_sql_engine.py): CREATE VIRTUAL TABLE 単体テスト
-- [ ] [docs/issues/README.md](../README.md): Issue 台帳の登録・追跡
+- [x] [src/database/sql/ast.py](../../src/database/sql/ast.py): `CreateVirtualTableStatement` AST クラスの追加
+- [x] [src/database/sql/parser.py](../../src/database/sql/parser.py): `CREATE VIRTUAL TABLE ... USING module(args)` のパース処理
+- [x] [src/database/sql/executor.py](../../src/database/sql/executor.py): `_exec_create_virtual_table` ハンドラおよび `PluggableStorageFactory` 呼び出し
+- [x] [src/database/storage/factory.py](../../src/database/storage/factory.py): モジュール名に基づくストレージインスタンス化引数のバインド
+- [x] [tests/database/sql/test_sql_engine.py](../../tests/database/sql/test_sql_engine.py): CREATE VIRTUAL TABLE 単体テスト
+- [x] [docs/issues/README.md](../README.md): Issue 台帳の登録・追跡
 
 ---
 
@@ -49,8 +49,8 @@ Target Branch: `feat/264-implement-sqlite-parity-create-virtual-table`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `CREATE VIRTUAL TABLE v_csv USING csv(path='...')` でテーブルが作成され、データ照会ができること。
-- [ ] `CREATE VIRTUAL TABLE IF NOT EXISTS` が重複作成時にエラーとならないこと。
-- [ ] 作成された仮想テーブルに対して `DROP TABLE` が正常に機能すること。
-- [ ] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
-- [ ] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。
+- [x] `CREATE VIRTUAL TABLE v_csv USING csv(path='...')` でテーブルが作成され、データ照会ができること。
+- [x] `CREATE VIRTUAL TABLE IF NOT EXISTS` が重複作成時にエラーとならないこと。
+- [x] 作成された仮想テーブルに対して `DROP TABLE` が正常に機能すること。
+- [x] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
+- [x] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。
