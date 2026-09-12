@@ -54,6 +54,62 @@ def _extract_distinct_prefix(cols_raw: str) -> Tuple[str, bool]:
     return cols_raw, False
 
 
+def _update_quote_state(ch: str, in_quote: bool, quote_char: str) -> Tuple[bool, str]:
+    if ch in ("'", '"') and not in_quote:
+        return True, ch
+    if ch == quote_char and in_quote:
+        return False, ""
+    return in_quote, quote_char
+
+
+def _update_paren_depth(ch: str, depth: int) -> int:
+    delta = 1 if ch == "(" else (-1 if ch == ")" else 0)
+    return depth + delta
+
+
+def _update_scan_state(
+    ch: str, paren_depth: int, in_quote: bool, quote_char: str
+) -> Tuple[int, bool, str]:
+    """Updates quote and paren states for expression scanning."""
+    new_in_quote, new_quote_char = _update_quote_state(ch, in_quote, quote_char)
+    if not in_quote and not new_in_quote:
+        return _update_paren_depth(ch, paren_depth), False, ""
+    return paren_depth, new_in_quote, new_quote_char
+
+
+def _is_top_level_comma(ch: str, paren_depth: int, in_quote: bool) -> bool:
+    return ch == "," and paren_depth == 0 and not in_quote
+
+
+def _collect_remaining_chunk(res: List[str], curr: List[str]) -> List[str]:
+    if curr:
+        res.append("".join(curr).strip())
+    return [c for c in res if c]
+
+
+def _process_comma_char(
+    ch: str, paren_depth: int, in_quote: bool, curr: List[str], res: List[str]
+) -> None:
+    if _is_top_level_comma(ch, paren_depth, in_quote):
+        res.append("".join(curr).strip())
+        curr.clear()
+    else:
+        curr.append(ch)
+
+
+def _split_comma_expressions(expr_str: str) -> List[str]:
+    """Splits comma-separated expressions respecting parentheses and quotes."""
+    res: List[str] = []
+    curr: List[str] = []
+    paren_depth, in_quote, quote_char = 0, False, ""
+    for ch in expr_str:
+        paren_depth, in_quote, quote_char = _update_scan_state(
+            ch, paren_depth, in_quote, quote_char
+        )
+        _process_comma_char(ch, paren_depth, in_quote, curr, res)
+    return _collect_remaining_chunk(res, curr)
+
+
 def _parse_alter_rename_table(sql: str) -> Optional[AlterTableStatement]:
     """Parses ALTER TABLE tbl RENAME TO new_tbl."""
     m = re.match(
@@ -1030,10 +1086,10 @@ class SQLParser:
         )
 
     def _parse_column_list(self, cols_raw: str) -> List[str]:
-        """Parses comma-separated column projections including json path expressions."""
+        """Parses comma-separated column projections respecting parentheses and quotes."""
         if cols_raw == "*":
             return ["*"]
-        return [tok.strip() for tok in cols_raw.split(",") if tok.strip()]
+        return _split_comma_expressions(cols_raw)
 
     def _resolve_join_type(self, join_kw: str) -> JoinType:
         """Resolves JoinType enum from join keyword."""

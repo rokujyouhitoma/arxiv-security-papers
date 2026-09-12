@@ -2,7 +2,7 @@
 ID: 259
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] SQLite 完全互換化 Phase 4: ビルトイン関数群 & CASE 式 (文字列・数学・制御・日付時刻・JSON・集約拡張) の実装 (ID: 259)
@@ -20,11 +20,11 @@ ID: 259
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [src/database/sql/functions.py](../src/database/sql/functions.py): [NEW] ビルトイン関数レジストリおよび純粋 Python 関数実装群
-- [ ] [src/database/sql/parser.py](../src/database/sql/parser.py): `CASE WHEN` 構文および関数呼出式の字句・構文解析
-- [ ] [src/database/sql/executor.py](../src/database/sql/executor.py): 式評価器（`_extract_field_value`）への関数呼出・CASE 評価統合
-- [ ] [tests/database/sql/test_sql_engine.py](../tests/database/sql/test_sql_engine.py): 各種関数の計算・変換単体テスト
-- [ ] [docs/issues/README.md](README.md): Issue 台帳の登録・追跡
+- [x] [src/database/sql/functions.py](../src/database/sql/functions.py): [NEW] ビルトイン関数レジストリおよび純粋 Python 関数実装群
+- [x] [src/database/sql/parser.py](../src/database/sql/parser.py): `CASE WHEN` 構文および関数呼出式の字句・構文解析
+- [x] [src/database/sql/executor.py](../src/database/sql/executor.py): 式評価器（`_extract_field_value`）への関数呼出・CASE 評価統合
+- [x] [tests/database/sql/test_sql_engine.py](../tests/database/sql/test_sql_engine.py): 各種関数の計算・変換単体テスト
+- [x] [docs/issues/README.md](README.md): Issue 台帳の登録・追跡
 
 ---
 
@@ -47,10 +47,10 @@ Target Branch: `feat/259-implement-sqlite-parity-phase4-builtin-functions-and-ca
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `SELECT CASE WHEN score >= 9 THEN 'High' ELSE 'Normal' END AS level FROM papers` が正常に分岐評価されること。
-- [ ] `SELECT UPPER(title), LENGTH(description), COALESCE(status, 'Unknown') FROM cti_cwes` が正常動作すること。
-- [ ] `SELECT DATE('now'), STRFTIME('%Y-%m', created_at) FROM cti_cwes` で日付変換が行われること。
-- [ ] `SELECT JSON_EXTRACT(metadata, '$.category') FROM papers` で JSON フィールドが抽出されること。
-- [ ] `SELECT category, GROUP_CONCAT(id, ', ') FROM papers GROUP BY category` で集約文字列が返却されること。
-- [ ] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
-- [ ] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。
+- [x] `SELECT CASE WHEN score >= 9 THEN 'High' ELSE 'Normal' END AS level FROM papers` が正常に分岐評価されること。
+- [x] `SELECT UPPER(title), LENGTH(description), COALESCE(status, 'Unknown') FROM cti_cwes` が正常動作すること。
+- [x] `SELECT DATE('now'), STRFTIME('%Y-%m', created_at) FROM cti_cwes` で日付変換が行われること。
+- [x] `SELECT JSON_EXTRACT(metadata, '$.category') FROM papers` で JSON フィールドが抽出されること。
+- [x] `SELECT category, GROUP_CONCAT(id, ', ') FROM papers GROUP BY category` で集約文字列が返却されること。
+- [x] `tests/database/sql/test_sql_engine.py` に単体テストを追加し、既存テストを含む全テストが PASS すること。
+- [x] `make format`, `make static_analysis` (xenon CC Rank A <= 5, mypy --strict) が 100% PASS すること。

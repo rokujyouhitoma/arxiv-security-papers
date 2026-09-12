@@ -672,3 +672,129 @@ def test_ddl_phase3_alter_table_view_lifecycle():
         res_drop_v_exists = executor.execute("DROP VIEW IF EXISTS v_active_members")
         assert res_drop_v_exists["status"] == "ok"
         assert res_drop_v_exists["dropped"] is False
+
+
+def test_phase4_builtin_functions_and_case() -> None:
+    """Verify Phase 4 built-in functions (String, Math, Control, Date, JSON) and CASE expressions."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test_p4.vdb")
+        executor = SQLExecutor()
+
+        # Setup tables
+        executor.execute(
+            "CREATE TABLE students ("
+            "id INT PRIMARY KEY, name VARCHAR, score FLOAT, role VARCHAR, meta VARCHAR"
+            f") USING binary_vdb LOCATION '{db_path}'"
+        )
+        executor.execute(
+            "INSERT INTO students (id, name, score, role, meta) "
+            "VALUES (1, 'Alice', 95.5, 'admin', '{\"city\": \"Tokyo\", \"active\": true}')"
+        )
+        executor.execute(
+            "INSERT INTO students (id, name, score, role, meta) "
+            "VALUES (2, 'Bob', 72.0, 'member', '{\"city\": \"Osaka\", \"active\": false}')"
+        )
+        executor.execute(
+            "INSERT INTO students (id, name, score, role, meta) "
+            "VALUES (3, 'Charlie', 48.0, 'guest', '{\"city\": \"Nagoya\", \"active\": true}')"
+        )
+
+        # 1. CASE WHEN expressions
+        res_case = executor.execute(
+            "SELECT id, "
+            "CASE WHEN score >= 90 THEN 'Grade_A' WHEN score >= 70 THEN 'Grade_B' ELSE 'Grade_C' END AS grade, "
+            "CASE role WHEN 'admin' THEN 'SuperUser' ELSE 'NormalUser' END AS role_label "
+            "FROM students ORDER BY id ASC"
+        )
+        assert res_case["status"] == "ok"
+        assert res_case["rows"][0]["grade"] == "Grade_A"
+        assert res_case["rows"][0]["role_label"] == "SuperUser"
+        assert res_case["rows"][1]["grade"] == "Grade_B"
+        assert res_case["rows"][1]["role_label"] == "NormalUser"
+        assert res_case["rows"][2]["grade"] == "Grade_C"
+
+        # 2. String functions
+        res_str = executor.execute(
+            "SELECT id, UPPER(name) AS up, LOWER(name) AS low, LENGTH(name) AS len, "
+            "SUBSTR(name, 1, 3) AS sub, REPLACE(name, 'ice', 'icia') AS rep, INSTR(name, 'li') AS inst "
+            "FROM students WHERE id = 1"
+        )
+        assert res_str["status"] == "ok"
+        assert res_str["rows"][0]["up"] == "ALICE"
+        assert res_str["rows"][0]["low"] == "alice"
+        assert res_str["rows"][0]["len"] == 5
+        assert res_str["rows"][0]["sub"] == "Ali"
+        assert res_str["rows"][0]["rep"] == "Alicia"
+        assert res_str["rows"][0]["inst"] == 2
+
+        # 3. Math functions
+        res_math = executor.execute(
+            "SELECT ROUND(score, 0) AS rnd, CEIL(score) AS c, FLOOR(score) AS f, "
+            "ABS(-42) AS a, POWER(2, 3) AS p, SQRT(16) AS s, SIGN(-5) AS sgn "
+            "FROM students WHERE id = 1"
+        )
+        assert res_math["status"] == "ok"
+        assert res_math["rows"][0]["rnd"] == 96.0
+        assert res_math["rows"][0]["c"] == 96
+        assert res_math["rows"][0]["f"] == 95
+        assert res_math["rows"][0]["a"] == 42
+        assert res_math["rows"][0]["p"] == 8.0
+        assert res_math["rows"][0]["s"] == 4.0
+        assert res_math["rows"][0]["sgn"] == -1
+
+        # 4. Control functions
+        res_ctrl = executor.execute(
+            "SELECT COALESCE(NULL, NULL, 'first_val') AS c_val, "
+            "NULLIF(10, 10) AS n_null, NULLIF(10, 20) AS n_val, "
+            "IIF(score > 90, 'excellent', 'regular') AS eval, "
+            "IFNULL(NULL, 'fallback') AS ifn, "
+            "TYPEOF(name) AS t_name, TYPEOF(score) AS t_score "
+            "FROM students WHERE id = 1"
+        )
+        assert res_ctrl["status"] == "ok"
+        assert res_ctrl["rows"][0]["c_val"] == "first_val"
+        assert res_ctrl["rows"][0]["n_null"] is None
+        assert res_ctrl["rows"][0]["n_val"] == 10
+        assert res_ctrl["rows"][0]["eval"] == "excellent"
+        assert res_ctrl["rows"][0]["ifn"] == "fallback"
+        assert res_ctrl["rows"][0]["t_name"] == "text"
+        assert res_ctrl["rows"][0]["t_score"] == "real"
+
+        # 5. Date/Time functions
+        res_dt = executor.execute(
+            "SELECT DATE('2026-09-12 14:30:00') AS d, "
+            "TIME('2026-09-12 14:30:00') AS t, "
+            "DATETIME('2026-09-12 14:30:00') AS dt, "
+            "STRFTIME('%Y/%m', '2026-09-12 14:30:00') AS fmt, "
+            "UNIXEPOCH('1970-01-01 00:00:00') AS ep "
+            "FROM students WHERE id = 1"
+        )
+        assert res_dt["status"] == "ok"
+        assert res_dt["rows"][0]["d"] == "2026-09-12"
+        assert res_dt["rows"][0]["t"] == "14:30:00"
+        assert res_dt["rows"][0]["dt"] == "2026-09-12 14:30:00"
+        assert res_dt["rows"][0]["fmt"] == "2026/09"
+        assert res_dt["rows"][0]["ep"] == 0
+
+        # 6. JSON functions
+        res_json = executor.execute(
+            "SELECT JSON_EXTRACT(meta, '$.city') AS city, "
+            "JSON_EXTRACT(meta, '$.active') AS active, "
+            "JSON_VALID(meta) AS valid, "
+            "JSON_ARRAY(1, 2, 'three') AS arr, "
+            "JSON_OBJECT('status', 'ok') AS obj "
+            "FROM students WHERE id = 1"
+        )
+        assert res_json["status"] == "ok"
+        assert res_json["rows"][0]["city"] == "Tokyo"
+        assert res_json["rows"][0]["active"] is True
+        assert res_json["rows"][0]["valid"] == 1
+        assert res_json["rows"][0]["arr"] == '[1, 2, "three"]'
+        assert res_json["rows"][0]["obj"] == '{"status": "ok"}'
+
+        # 7. Aggregate GROUP_CONCAT / STRING_AGG
+        res_gc = executor.execute(
+            "SELECT GROUP_CONCAT(name, '; ') AS all_names FROM students"
+        )
+        assert res_gc["status"] == "ok"
+        assert res_gc["rows"][0]["all_names"] == "Alice; Bob; Charlie"

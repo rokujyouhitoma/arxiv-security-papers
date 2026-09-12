@@ -40,7 +40,8 @@ from .ast import (
     TableRef,
     UpdateStatement,
 )
-from .parser import SQLParser
+from .functions import BUILTIN_FUNCTIONS
+from .parser import SQLParser, _split_comma_expressions
 from .security import AccessController
 from .transaction import TransactionManager
 
@@ -436,8 +437,10 @@ def _extract_quoted_str(expr: str) -> Optional[str]:
 
 
 def _extract_numeric_literal(expr: str) -> Optional[Any]:
-    if expr.isdigit():
+    try:
         return int(expr)
+    except ValueError:
+        pass
     try:
         if "." in expr:
             return float(expr)
@@ -513,19 +516,145 @@ def _lookup_record_col(record: Dict[str, Any], expr: str) -> Any:
     return record.get(expr.split(".", 1)[1]) if "." in expr else None
 
 
+def _dispatch_builtin_func(func_name: str, args: List[Any]) -> Any:
+    try:
+        return BUILTIN_FUNCTIONS[func_name](*args)
+    except Exception:
+        return None
+
+
+def _extract_function_call(record: Dict[str, Any], expr: str) -> Any:
+    """Evaluates built-in SQL function call if expression matches FUNC(...)."""
+    m = re.match(r"^([a-zA-Z0-9_]+)\s*\((.*)\)$", expr, re.DOTALL)
+    if not m or m.group(1).upper() not in BUILTIN_FUNCTIONS:
+        return None
+    raw_args = m.group(2).strip()
+    args_strs = _split_comma_expressions(raw_args) if raw_args else []
+    args = [_extract_field_value(record, a) for a in args_strs]
+    return _dispatch_builtin_func(m.group(1).upper(), args)
+
+
+def _eval_raw_condition_truth(record: Dict[str, Any], cond_str: str) -> bool:
+    val = _extract_field_value(record, cond_str)
+    return bool(val and val != 0 and val != "0" and val is not False)
+
+
+def _eval_binary_condition(record: Dict[str, Any], m: Any) -> bool:
+    op = re.sub(r"\s+", " ", m.group(2).strip().upper())
+    act = _extract_field_value(record, m.group(1).strip())
+    exp = _extract_field_value(record, m.group(3).strip()) if m.group(3) else None
+    return _eval_comparison(op, act, exp)
+
+
+def _eval_case_condition_match(
+    record: Dict[str, Any], cond_str: str, base_val: Any = None
+) -> bool:
+    """Matches single condition in CASE WHEN branch."""
+    cond_str = cond_str.strip()
+    if base_val is not None:
+        return str(base_val) == str(_extract_field_value(record, cond_str))
+    m = re.match(
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE|IS\s+NULL|IS\s+NOT\s+NULL)\s*(.*)$",
+        cond_str,
+        re.IGNORECASE,
+    )
+    if not m:
+        return _eval_raw_condition_truth(record, cond_str)
+    return _eval_binary_condition(record, m)
+
+
+def _eval_when_branches(
+    record: Dict[str, Any], rest_body: str, base_val: Any
+) -> Tuple[bool, Any]:
+    """Iterates through WHEN ... THEN branches."""
+    branch_pat = re.compile(
+        r"\bWHEN\b(.*?)\bTHEN\b(.*?)(?=\bWHEN\b|\bELSE\b|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for m in branch_pat.finditer(rest_body):
+        cond_str = m.group(1).strip()
+        then_str = m.group(2).strip()
+        if _eval_case_condition_match(record, cond_str, base_val):
+            return True, _extract_field_value(record, then_str)
+    return False, None
+
+
+def _extract_case_else_val(record: Dict[str, Any], body: str) -> Any:
+    else_m = re.search(r"\bELSE\b(.*)$", body, re.IGNORECASE | re.DOTALL)
+    return _extract_field_value(record, else_m.group(1).strip()) if else_m else None
+
+
+def _is_valid_case_syntax(expr: str) -> bool:
+    return bool(
+        re.match(r"^CASE\b", expr, re.IGNORECASE)
+        and re.search(r"\bEND$", expr, re.IGNORECASE)
+    )
+
+
+def _extract_case_base_val(record: Dict[str, Any], body: str, when_start: int) -> Any:
+    base_part = body[:when_start].strip()
+    return _extract_field_value(record, base_part) if base_part else None
+
+
+def _extract_case_when(record: Dict[str, Any], expr: str) -> Any:
+    """Evaluates CASE [base] WHEN ... THEN ... [ELSE ...] END expression."""
+    if not _is_valid_case_syntax(expr):
+        return None
+    body = expr[4:-3].strip()
+    when_pos = re.search(r"\bWHEN\b", body, re.IGNORECASE)
+    if not when_pos:
+        return None
+    base_val = _extract_case_base_val(record, body, when_pos.start())
+    matched, res = _eval_when_branches(record, body[when_pos.start() :], base_val)
+    return res if matched else _extract_case_else_val(record, body)
+
+
+def _extract_comparison_expr(record: Dict[str, Any], expr: str) -> Optional[bool]:
+    """Evaluates comparison expressions like 'score > 90' to boolean."""
+    m = re.match(
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE)\s+(.+)$",
+        expr.strip(),
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    return _eval_case_condition_match(record, expr)
+
+
+def _eval_core_expr_features(record: Dict[str, Any], expr: str) -> Any:
+    case_res = _extract_case_when(record, expr)
+    if case_res is not None:
+        return case_res
+    func_res = _extract_function_call(record, expr)
+    if func_res is not None:
+        return func_res
+    return _extract_comparison_expr(record, expr)
+
+
+def _extract_complex_expr(record: Dict[str, Any], expr: str) -> Any:
+    """Evaluates CASE, function call, comparison, arithmetic, or JSON operators."""
+    core_res = _eval_core_expr_features(record, expr)
+    if core_res is not None:
+        return core_res
+    arith = _extract_arithmetic(record, expr)
+    if arith is not None:
+        return arith
+    if "->" in expr:
+        return _extract_json_op(record, expr)
+    return None
+
+
 def _extract_field_value(record: Dict[str, Any], expr: str) -> Any:
-    """Extracts value from record supporting dot qualification and JSON operators."""
+    """Extracts value from record supporting literals, functions, CASE, arithmetic, and JSON."""
     if not expr:
         return None
     expr = expr.strip()
     lit = _extract_literal(expr)
     if lit is not None:
         return lit
-    arith = _extract_arithmetic(record, expr)
-    if arith is not None:
-        return arith
-    if "->" in expr:
-        return _extract_json_op(record, expr)
+    c_val = _extract_complex_expr(record, expr)
+    if c_val is not None:
+        return c_val
     return _lookup_record_col(record, expr)
 
 
@@ -875,17 +1004,68 @@ def _compute_agg_min_max(
     return None
 
 
+def _parse_group_concat_args(norm: str) -> Tuple[str, str]:
+    inner = norm[norm.find("(") + 1 : norm.rfind(")")].strip()
+    parts = [p.strip() for p in _split_comma_expressions(inner)]
+    col = parts[0] if parts else ""
+    sep = parts[1].strip("'\"") if len(parts) > 1 else ","
+    return col, sep
+
+
+def _compute_agg_group_concat(
+    upper: str, norm: str, group_rows: List[Dict[str, Any]]
+) -> Optional[Any]:
+    if not (
+        _is_valid_agg_call(upper, "GROUP_CONCAT(")
+        or _is_valid_agg_call(upper, "STRING_AGG(")
+    ):
+        return None
+    col, sep = _parse_group_concat_args(norm)
+    values = [
+        str(v) for r in group_rows if (v := _extract_field_value(r, col)) is not None
+    ]
+    return sep.join(values)
+
+
 def _compute_agg_func(
     upper: str, norm: str, group_rows: List[Dict[str, Any]]
 ) -> Optional[Any]:
     c_val = _compute_agg_count_sum_avg(upper, norm, group_rows)
     if c_val is not None:
         return c_val
-    return _compute_agg_min_max(upper, norm, group_rows)
+    m_val = _compute_agg_min_max(upper, norm, group_rows)
+    if m_val is not None:
+        return m_val
+    return _compute_agg_group_concat(upper, norm, group_rows)
+
+
+def _strip_as_alias(col_expr: str) -> str:
+    as_m = re.search(r"\s+AS\s+([a-zA-Z0-9_]+)$", col_expr, re.IGNORECASE)
+    return col_expr[: as_m.start()].strip() if as_m else col_expr.strip()
+
+
+def _is_aggregate_expression(col_expr: str) -> bool:
+    norm = _strip_as_alias(col_expr).upper()
+    return any(
+        norm.startswith(fn)
+        for fn in (
+            "COUNT(",
+            "SUM(",
+            "AVG(",
+            "MIN(",
+            "MAX(",
+            "GROUP_CONCAT(",
+            "STRING_AGG(",
+        )
+    )
+
+
+def _has_aggregate_columns(stmt: SelectStatement) -> bool:
+    return any(_is_aggregate_expression(c) for c in stmt.columns)
 
 
 def _compute_agg_col(col_expr: str, group_rows: List[Dict[str, Any]]) -> Any:
-    norm = col_expr.strip()
+    norm = _strip_as_alias(col_expr)
     upper = norm.upper()
     val = _compute_agg_func(upper, norm, group_rows)
     if val is not None:
@@ -918,19 +1098,29 @@ def _extract_target_columns(stmt: SelectStatement) -> List[str]:
     return cols
 
 
+def _populate_agg_row(
+    target_cols: List[str], g_rows: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    row_dict: Dict[str, Any] = {}
+    for col_expr in target_cols:
+        val = _compute_agg_col(col_expr, g_rows)
+        raw_col = _strip_as_alias(col_expr)
+        row_dict[col_expr] = val
+        row_dict[raw_col] = val
+    return row_dict
+
+
 def _group_and_aggregate_rows(
     rows: List[Dict[str, Any]], stmt: SelectStatement
 ) -> List[Dict[str, Any]]:
-    if not stmt.group_by:
-        return rows
-    groups = _cluster_rows(rows, stmt.group_by)
     target_cols = _extract_target_columns(stmt)
+    if not stmt.group_by:
+        return [_populate_agg_row(target_cols, rows)]
+
+    groups = _cluster_rows(rows, stmt.group_by)
     result: List[Dict[str, Any]] = []
     for _gkey, g_rows in groups.items():
-        row_dict: Dict[str, Any] = {}
-        for col_expr in target_cols:
-            row_dict[col_expr] = _compute_agg_col(col_expr, g_rows)
-        result.append(row_dict)
+        result.append(_populate_agg_row(target_cols, g_rows))
     return result
 
 
@@ -1935,7 +2125,7 @@ class SQLExecutor:
     def _apply_group_and_having(
         rows: List[Dict[str, Any]], stmt: SelectStatement
     ) -> List[Dict[str, Any]]:
-        if not stmt.group_by:
+        if not stmt.group_by and not _has_aggregate_columns(stmt):
             return rows
         aggregated_rows = _group_and_aggregate_rows(rows, stmt)
         return _filter_having_rows(aggregated_rows, stmt.having)
