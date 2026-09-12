@@ -58,7 +58,14 @@ DATABASES: Dict[str, Dict[str, Any]] = {
         "TABLES": {
             "cti_techniques": {"TYPE": "Physical (VDB)"},
             "cisa_kev_vulnerabilities": {"TYPE": "Physical (VDB)"},
-            "cti_cwes": {"TYPE": "Physical (VDB)"},
+            "cti_cwes": {
+                "ENGINE": "csv_table",
+                "LOCATION": os.path.join(
+                    BASE_DIR, "outputs", "database", "catalog", "cti_cwes.csv"
+                ),
+                "PRIMARY_KEY": "cwe_id",
+                "TYPE": "Virtual (CSV)",
+            },
             "cti_cwe_relationships": {"TYPE": "Physical (VDB)"},
             "cti_mitigations": {"TYPE": "Physical (VDB)"},
             "cti_relationships": {"TYPE": "Physical (VDB)"},

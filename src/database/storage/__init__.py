@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Storage and Paging Subpackage."""
 
+from .csv_storage import CsvStorageError, CsvTableStorage
 from .factory import StorageEngineFactory, StorageFactoryError, StorageSecurityError
 from .json_storage import JsonLinesStorage, JsonStorageError, JsonTableStorage
 from .multi_storage import MultiTableSecurityError, MultiTableVectorStorage
@@ -38,6 +39,8 @@ __all__ = [
     "BufferFrame",
     "BufferPool2Q",
     "BufferPoolError",
+    "CsvStorageError",
+    "CsvTableStorage",
     "DataType",
     "FileBackedPlainTextStorage",
     "JsonLinesStorage",

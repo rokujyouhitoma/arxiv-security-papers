@@ -254,6 +254,8 @@ def _detect_virtual_type(catalog: Any, storage: Any) -> Optional[str]:
         return "Virtual (JSON)"
     if st_name == "JsonLinesStorage":
         return "Virtual (JSONL)"
+    if st_name == "CsvTableStorage":
+        return "Virtual (CSV)"
     return None
 
 
@@ -275,8 +277,53 @@ def detect_table_type(catalog: Any) -> str:
     return v_type if v_type else _detect_physical_or_memory_type(catalog, storage)
 
 
+def _mount_single_csv_table(
+    engine: SQLExecutor, ws: str, s_name: str, tname: str, tcfg: Dict[str, Any]
+) -> None:
+    loc = tcfg.get("LOCATION")
+    if not loc:
+        return
+    rel = os.path.relpath(loc, BASE_DIR)
+    target_path = os.path.join(ws, rel)
+    if not os.path.exists(target_path):
+        return
+    pk = tcfg.get("PRIMARY_KEY", "id")
+    from database.storage.factory import StorageEngineFactory
+
+    storage = StorageEngineFactory.create_by_engine_name(
+        "csv_table", location=target_path, primary_key=pk
+    )
+    schema = _infer_table_schema(storage)
+    cols_def = ", ".join(f"{col} {dtype}" for col, dtype in schema.items())
+    ddl = (
+        f"-- Inferred from CSV metadata\n"
+        f"CREATE TABLE IF NOT EXISTS {tname} ({cols_def}) "
+        f"USING csv_table LOCATION '{target_path}'"
+    )
+    catalog = TableCatalog(
+        name=tname,
+        storage=storage,
+        schema=schema,
+        raw_sql=ddl,
+        storage_engine="CsvTableStorage",
+        location=target_path,
+        database_scope=s_name,
+    )
+    engine.tables[tname] = catalog
+
+
+def _mount_configured_csv_tables(
+    engine: SQLExecutor, ws: str, s_name: str, cfg: Dict[str, Any]
+) -> None:
+    tables_cfg = cfg.get("TABLES", {})
+    for tname, tcfg in tables_cfg.items():
+        if tcfg.get("ENGINE") == "csv_table":
+            _mount_single_csv_table(engine, ws, s_name, tname, tcfg)
+
+
 def _mount_single_configured_scope(engine: SQLExecutor, ws: str, s_name: str) -> None:
     cfg = DATABASES.get(s_name, {})
+    _mount_configured_csv_tables(engine, ws, s_name, cfg)
     loc = cfg.get("LOCATION")
     if loc:
         rel = os.path.relpath(loc, BASE_DIR)

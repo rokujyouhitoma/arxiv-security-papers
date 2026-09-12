@@ -15,6 +15,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from core.hsm import HierarchicalStateMachine
+from spider.runner import run_spider
 
 from .contracts import CrawlJob, CrawlResult, build_spider_session_state_tree
 
@@ -121,7 +122,6 @@ class SpiderDaemonWorker:
         max_requests = params.get("max_requests")
         default_delay = float(params.get("default_delay", 0.5))
         persist_db = bool(params.get("persist_db", False))
-        from ..runner import run_spider
 
         raw_items = await run_spider(
             spider_name=job.spider_name,

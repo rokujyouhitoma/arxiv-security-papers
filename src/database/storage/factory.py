@@ -33,6 +33,7 @@ _EXT_MAP = {
     ".vdb": "binary_vdb",
     ".jsonl": "json_lines",
     ".json": "json_table",
+    ".csv": "csv_table",
     ".md": "file_plain_text",
     ".txt": "file_plain_text",
 }
@@ -102,6 +103,7 @@ class StorageEngineFactory:
         cls._registry["multi_vdb"] = cls._create_binary_vdb
         cls._registry["json_lines"] = cls._create_json_lines
         cls._registry["json_table"] = cls._create_json_table
+        cls._registry["csv_table"] = cls._create_csv_table
         cls._registry["file_plain_text"] = cls._create_plain_text
         cls._initialized = True
 
@@ -143,6 +145,15 @@ class StorageEngineFactory:
         loc = location or "catalog.json"
         pk = str(kwargs.get("primary_key", kwargs.get("pk_field", "id")))
         return JsonTableStorage(file_path=loc, primary_key=pk)
+
+    @staticmethod
+    def _create_csv_table(location: Optional[str], **kwargs: Any) -> Any:
+        from .csv_storage import CsvTableStorage
+
+        loc = location or "table.csv"
+        pk = str(kwargs.get("primary_key", kwargs.get("pk_field", "id")))
+        fieldnames = kwargs.get("fieldnames")
+        return CsvTableStorage(file_path=loc, primary_key=pk, fieldnames=fieldnames)
 
     @classmethod
     def register_engine(cls, name: str, factory_fn: Callable[..., Any]) -> None:

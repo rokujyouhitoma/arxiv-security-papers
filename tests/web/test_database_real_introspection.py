@@ -82,8 +82,8 @@ class TestDatabaseRealIntrospection(unittest.TestCase):
         from domain.security.cti.storage import CTICatalogStorage
 
         res = CTICatalogStorage.get_introspection_metadata(self.workspace_dir)
-        self.assertEqual(res["table_count"], 5)
-        self.assertEqual(res["total_rows"], 2685)
+        self.assertEqual(res["table_count"], 7)
+        self.assertEqual(res["total_rows"], 5073)
         names = [t["table_name"] for t in res["tables"]]
         self.assertEqual(
             names,
@@ -93,6 +93,8 @@ class TestDatabaseRealIntrospection(unittest.TestCase):
                 "cti_relationships",
                 "cti_tactics",
                 "cti_techniques",
+                "cti_cwes",
+                "cti_cwe_relationships",
             ],
         )
         self.assertNotIn("cti_techniques_fts", names)

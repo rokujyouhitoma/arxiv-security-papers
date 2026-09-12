@@ -476,6 +476,35 @@ class CTICatalogStorage:
             row = conn.execute("SELECT COUNT(*) FROM cti_cwes").fetchone()
             return int(row[0]) if row else 0
 
+    def sync_cwes_to_csv(self, csv_path: Optional[str] = None) -> int:
+        """Exports stored CWE entries to RFC 4180 CSV for AI readability and Git tracking."""
+        from database.storage.csv_storage import CsvTableStorage
+
+        target_path = csv_path or os.path.join(
+            os.path.dirname(self.db_path), "cti_cwes.csv"
+        )
+        cwes = self.get_all_cwes()
+        if not cwes:
+            return 0
+        fieldnames = [
+            "cwe_id",
+            "name",
+            "is_top25",
+            "top25_rank",
+            "abstraction",
+            "status",
+            "description",
+            "mitigations_json",
+            "extended_meta",
+            "created_at",
+            "updated_at",
+        ]
+        storage = CsvTableStorage(
+            file_path=target_path, primary_key="cwe_id", fieldnames=fieldnames
+        )
+        storage.upsert_many(cwes, auto_flush=True)
+        return len(cwes)
+
     def search_cwes(self, query_str: str, limit: int = 15) -> List[Dict[str, Any]]:
         """Search CWEs by ID, name, or description."""
         cleaned = query_str.strip()
