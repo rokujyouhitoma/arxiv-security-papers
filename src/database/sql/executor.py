@@ -1869,9 +1869,32 @@ class SQLExecutor:
             "total_rows": total,
         }
 
+    def _find_view(self, name: str) -> Optional[CreateViewStatement]:
+        for vname, vstmt in self.views.items():
+            if vname.lower() == name.lower():
+                return vstmt
+        return None
+
+    def _find_instead_of_trigger(
+        self, table_name: str, event: str
+    ) -> Optional[CreateTriggerStatement]:
+        for trig in self.triggers.values():
+            if (
+                trig.table_name.lower() == table_name.lower()
+                and trig.timing.upper() == "INSTEAD OF"
+                and trig.event.upper() == event.upper()
+            ):
+                return trig
+        return None
+
     def _exec_create_trigger(
         self, stmt: CreateTriggerStatement, role: str
     ) -> Dict[str, Any]:
+        if stmt.timing.upper() == "INSTEAD OF":
+            if not self._find_view(stmt.table_name):
+                raise SQLExecutionError(
+                    f"cannot create INSTEAD OF trigger on table: {stmt.table_name}"
+                )
         self.triggers[stmt.trigger_name.lower()] = stmt
         return {
             "command": "CREATE_TRIGGER",
@@ -1899,20 +1922,50 @@ class SQLExecutor:
             }
         raise SQLExecutionError(f"Trigger '{stmt.trigger_name}' does not exist")
 
-    def _substitute_trigger_vars(self, sql: str, record: Dict[str, Any]) -> str:
+    @staticmethod
+    def _format_trigger_val(val: Any) -> str:
+        if val is None:
+            return "NULL"
+        if isinstance(val, str):
+            return f"'{val}'"
+        return str(val)
+
+    @classmethod
+    def _substitute_var_prefix(
+        cls, sql: str, prefix: str, record: Dict[str, Any]
+    ) -> str:
         res = sql
         for k, v in record.items():
-            val_str = f"'{v}'" if isinstance(v, str) else str(v)
-            res = re.sub(rf"\bNEW\.{re.escape(k)}\b", val_str, res, flags=re.IGNORECASE)
-            res = re.sub(rf"\bOLD\.{re.escape(k)}\b", val_str, res, flags=re.IGNORECASE)
+            val_str = cls._format_trigger_val(v)
+            res = re.sub(
+                rf"\b{prefix}\.{re.escape(k)}\b", val_str, res, flags=re.IGNORECASE
+            )
         return res
 
+    def _substitute_trigger_vars(
+        self,
+        sql: str,
+        record: Optional[Dict[str, Any]] = None,
+        new_record: Optional[Dict[str, Any]] = None,
+        old_record: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        n_rec = new_record if new_record is not None else (record or {})
+        o_rec = old_record if old_record is not None else (record or {})
+        res = self._substitute_var_prefix(sql, "NEW", n_rec)
+        return self._substitute_var_prefix(res, "OLD", o_rec)
+
     def _fire_single_trigger(
-        self, trig: CreateTriggerStatement, record: Optional[Dict[str, Any]], role: str
+        self,
+        trig: CreateTriggerStatement,
+        record: Optional[Dict[str, Any]] = None,
+        role: str = "admin",
+        new_record: Optional[Dict[str, Any]] = None,
+        old_record: Optional[Dict[str, Any]] = None,
     ) -> None:
-        rec = record or {}
         for raw_sql in trig.body_sqls:
-            sub_sql = self._substitute_trigger_vars(raw_sql, rec)
+            sub_sql = self._substitute_trigger_vars(
+                raw_sql, record=record, new_record=new_record, old_record=old_record
+            )
             self.execute(sub_sql, role=role)
 
     def _fire_triggers(
@@ -3116,9 +3169,77 @@ class SQLExecutor:
                 )
         return modified
 
+    def _exec_view_select(
+        self, vstmt: CreateViewStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        if vstmt.select_stmt is None:
+            return {"columns": [], "rows": []}
+        return self._exec_select(vstmt.select_stmt, effective_role)
+
+    @staticmethod
+    def _item_to_col_name(c: Any) -> Optional[str]:
+        raw = getattr(c, "alias", None) or getattr(c, "expr", None) or c
+        s = str(raw)
+        return None if s == "*" else s
+
+    @classmethod
+    def _collect_extracted_columns(cls, columns: List[Any]) -> List[str]:
+        cols: List[str] = []
+        for c in columns:
+            name = cls._item_to_col_name(c)
+            if name:
+                cols.append(name)
+        return cols
+
+    def _fallback_view_columns(
+        self, vstmt: CreateViewStatement, effective_role: str
+    ) -> List[str]:
+        rows = self._exec_view_select(vstmt, effective_role).get("rows", [])
+        return [k for k in rows[0].keys() if not k.startswith("_")] if rows else []
+
+    def _resolve_view_columns(
+        self, vstmt: CreateViewStatement, effective_role: str
+    ) -> List[str]:
+        if not vstmt.select_stmt:
+            return []
+        cols = self._collect_extracted_columns(vstmt.select_stmt.columns)
+        if cols:
+            return cols
+        return self._fallback_view_columns(vstmt, effective_role)
+
+    def _build_view_insert_rows(
+        self, stmt: InsertStatement, vstmt: CreateViewStatement, effective_role: str
+    ) -> List[Dict[str, Any]]:
+        cols = stmt.columns or self._resolve_view_columns(vstmt, effective_role)
+        if stmt.rows_values:
+            return [dict(zip(cols, row)) for row in stmt.rows_values]
+        if stmt.values:
+            return [dict(zip(cols, stmt.values))]
+        return []
+
+    def _exec_insert_view(
+        self, stmt: InsertStatement, vstmt: CreateViewStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        trig = self._find_instead_of_trigger(stmt.table_name, "INSERT")
+        if not trig:
+            raise SQLExecutionError(f"cannot modify view '{stmt.table_name}'")
+        row_dicts = self._build_view_insert_rows(stmt, vstmt, effective_role)
+        for r in row_dicts:
+            self._fire_single_trigger(trig, record=r, role=effective_role, new_record=r)
+        return {
+            "command": "INSERT",
+            "status": "ok",
+            "table": stmt.table_name,
+            "id": "",
+            "inserted_count": len(row_dicts),
+        }
+
     def _exec_insert(
         self, stmt: InsertStatement, effective_role: str
     ) -> Dict[str, Any]:
+        vstmt = self._find_view(stmt.table_name)
+        if vstmt:
+            return self._exec_insert_view(stmt, vstmt, effective_role)
         self.access_controller.enforce_permission(
             effective_role, stmt.table_name, "INSERT"
         )
@@ -3302,7 +3423,46 @@ class SQLExecutor:
             table, stmt, t_ref, joined_rows, effective_role
         )
 
-    def _exec_update(
+    def _apply_view_update_triggers(
+        self,
+        trig: CreateTriggerStatement,
+        matching_rows: List[Dict[str, Any]],
+        assignments: Dict[str, Any],
+        effective_role: str,
+    ) -> None:
+        for old_rec in matching_rows:
+            new_rec = dict(old_rec)
+            new_rec.update(assignments)
+            self._fire_single_trigger(
+                trig, role=effective_role, new_record=new_rec, old_record=old_rec
+            )
+
+    @staticmethod
+    def _filter_view_rows(
+        rows: List[Dict[str, Any]], where_clauses: List[Any]
+    ) -> List[Dict[str, Any]]:
+        if not where_clauses:
+            return rows
+        return [r for r in rows if _matches_where_clause(r, where_clauses)]
+
+    def _exec_update_view(
+        self, stmt: UpdateStatement, vstmt: CreateViewStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        trig = self._find_instead_of_trigger(stmt.table_name, "UPDATE")
+        if not trig:
+            raise SQLExecutionError(f"cannot modify view '{stmt.table_name}'")
+        v_res = self._exec_view_select(vstmt, effective_role)
+        matching = self._filter_view_rows(v_res.get("rows", []), stmt.where_clauses)
+        self._apply_view_update_triggers(
+            trig, matching, stmt.assignments, effective_role
+        )
+        return {
+            "command": "UPDATE",
+            "status": "ok",
+            "updated_count": len(matching),
+        }
+
+    def _exec_update_table(
         self, stmt: UpdateStatement, effective_role: str
     ) -> Dict[str, Any]:
         self._validate_index_hint(stmt.table_name, stmt.indexed_by)
@@ -3331,6 +3491,14 @@ class SQLExecutor:
             res["rows"] = ret_rows
             res["count"] = len(ret_rows)
         return res
+
+    def _exec_update(
+        self, stmt: UpdateStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        vstmt = self._find_view(stmt.table_name)
+        if vstmt:
+            return self._exec_update_view(stmt, vstmt, effective_role)
+        return self._exec_update_table(stmt, effective_role)
 
     @staticmethod
     def _split_live_and_deleted(
@@ -3390,9 +3558,36 @@ class SQLExecutor:
             table.index = HNSWIndex(dim=table.storage.dim)
             table.index.build_from_storage(new_vecs)
 
+    def _apply_view_delete_triggers(
+        self,
+        trig: CreateTriggerStatement,
+        matching_rows: List[Dict[str, Any]],
+        effective_role: str,
+    ) -> None:
+        for old_rec in matching_rows:
+            self._fire_single_trigger(trig, role=effective_role, old_record=old_rec)
+
+    def _exec_delete_view(
+        self, stmt: DeleteStatement, vstmt: CreateViewStatement, effective_role: str
+    ) -> Dict[str, Any]:
+        trig = self._find_instead_of_trigger(stmt.table_name, "DELETE")
+        if not trig:
+            raise SQLExecutionError(f"cannot modify view '{stmt.table_name}'")
+        v_res = self._exec_view_select(vstmt, effective_role)
+        matching = self._filter_view_rows(v_res.get("rows", []), stmt.where_clauses)
+        self._apply_view_delete_triggers(trig, matching, effective_role)
+        return {
+            "command": "DELETE",
+            "status": "ok",
+            "deleted_count": len(matching),
+        }
+
     def _exec_delete(
         self, stmt: DeleteStatement, effective_role: str
     ) -> Dict[str, Any]:
+        vstmt = self._find_view(stmt.table_name)
+        if vstmt:
+            return self._exec_delete_view(stmt, vstmt, effective_role)
         self._validate_index_hint(stmt.table_name, stmt.indexed_by)
         self.access_controller.enforce_permission(
             effective_role, stmt.table_name, "DELETE"

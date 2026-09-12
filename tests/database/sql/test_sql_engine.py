@@ -1646,3 +1646,94 @@ def test_vacuum_into_lifecycle(tmp_path):
     assert len(res["rows"]) == 2
     assert res["rows"][0]["name"] == "Alpha"
     assert res["rows"][1]["val"] == 20.0
+
+
+def test_instead_of_trigger_lifecycle():
+    executor = SQLExecutor()
+    executor.execute(
+        "CREATE TABLE base_users (id INT PRIMARY KEY, name TEXT, active INT);"
+    )
+    executor.execute(
+        "CREATE VIEW v_users AS SELECT id, name FROM base_users WHERE active = 1;"
+    )
+
+    # 1. Error: cannot create INSTEAD OF trigger on a regular table
+    with pytest.raises(
+        SQLExecutionError, match="cannot create INSTEAD OF trigger on table"
+    ):
+        executor.execute(
+            "CREATE TRIGGER tr_tbl_instead INSTEAD OF INSERT ON base_users "
+            "BEGIN INSERT INTO base_users (id, name, active) VALUES (NEW.id, NEW.name, 1); END;"
+        )
+
+    # 2. Error: cannot modify view without INSTEAD OF trigger
+    with pytest.raises(SQLExecutionError, match="cannot modify view 'v_users'"):
+        executor.execute("INSERT INTO v_users (id, name) VALUES (1, 'Alice');")
+    with pytest.raises(SQLExecutionError, match="cannot modify view 'v_users'"):
+        executor.execute("UPDATE v_users SET name = 'Alice' WHERE id = 1;")
+    with pytest.raises(SQLExecutionError, match="cannot modify view 'v_users'"):
+        executor.execute("DELETE FROM v_users WHERE id = 1;")
+
+    # 3. Create INSTEAD OF INSERT trigger on view
+    executor.execute(
+        "CREATE TRIGGER tr_v_insert INSTEAD OF INSERT ON v_users "
+        "BEGIN INSERT INTO base_users (id, name, active) VALUES (NEW.id, NEW.name, 1); END;"
+    )
+    ins_res = executor.execute("INSERT INTO v_users (id, name) VALUES (1, 'Alice');")
+    assert ins_res["command"] == "INSERT"
+    assert ins_res["status"] == "ok"
+    executor.execute("INSERT INTO v_users (id, name) VALUES (2, 'Bob');")
+
+    # Multi-row insert into view
+    executor.execute(
+        "INSERT INTO v_users (id, name) VALUES (3, 'Charlie'), (4, 'Dave');"
+    )
+
+    # Insert without explicit columns into view
+    executor.execute("INSERT INTO v_users VALUES (5, 'Eve');")
+
+    base_rows = executor.execute("SELECT * FROM base_users ORDER BY id ASC;")["rows"]
+    assert len(base_rows) == 5
+    assert base_rows[0]["name"] == "Alice"
+    assert base_rows[0]["active"] == 1
+    assert base_rows[1]["name"] == "Bob"
+    assert base_rows[2]["name"] == "Charlie"
+    assert base_rows[3]["name"] == "Dave"
+    assert base_rows[4]["name"] == "Eve"
+
+    view_rows = executor.execute("SELECT * FROM v_users ORDER BY id ASC;")["rows"]
+    assert len(view_rows) == 5
+
+    # 4. Create INSTEAD OF UPDATE trigger on view
+    executor.execute(
+        "CREATE TRIGGER tr_v_update INSTEAD OF UPDATE ON v_users "
+        "BEGIN UPDATE base_users SET name = NEW.name WHERE id = OLD.id; END;"
+    )
+    upd_res = executor.execute(
+        "UPDATE v_users SET name = 'Alice In Chains' WHERE id = 1;"
+    )
+    assert upd_res["command"] == "UPDATE"
+    assert upd_res["status"] == "ok"
+    assert upd_res["updated_count"] == 1
+
+    updated_user = executor.execute("SELECT * FROM base_users WHERE id = 1;")["rows"][0]
+    assert updated_user["name"] == "Alice In Chains"
+
+    # 5. Create INSTEAD OF DELETE trigger on view (soft delete pattern)
+    executor.execute(
+        "CREATE TRIGGER tr_v_delete INSTEAD OF DELETE ON v_users "
+        "BEGIN UPDATE base_users SET active = 0 WHERE id = OLD.id; END;"
+    )
+    del_res = executor.execute("DELETE FROM v_users WHERE id = 1;")
+    assert del_res["command"] == "DELETE"
+    assert del_res["status"] == "ok"
+    assert del_res["deleted_count"] == 1
+
+    remaining_v = executor.execute("SELECT * FROM v_users ORDER BY id ASC;")["rows"]
+    assert len(remaining_v) == 4
+    assert remaining_v[0]["id"] == 2
+
+    soft_deleted_row = executor.execute("SELECT * FROM base_users WHERE id = 1;")[
+        "rows"
+    ][0]
+    assert soft_deleted_row["active"] == 0
