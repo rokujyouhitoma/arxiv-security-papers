@@ -582,11 +582,11 @@ SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合�
 
 | 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
 | :---: | :--- | :--- | :---: |
-| **#266** | **`UPDATE ... FROM` (Join Update) 構文の実装** | `UPDATE tbl SET col = t2.val FROM other_tbl t2 WHERE tbl.id = t2.id` 構文のパース、他テーブル結合行を用いた一括更新。 | SQLite 3.33.0+ |
-| **#267** | **スタンドアロン `VALUES` クエリ構文の実装** | `SELECT` を伴わない `VALUES (1, 'Alice'), (2, 'Bob')` 単独実行および CTE / サブクエリ連携。 | SQLite 3.7.11+ |
-| **#268** | **`CREATE TABLE ... STRICT` モードの実装** | 動的型付け（Any型）を排し、`INT`, `REAL`, `TEXT`, `BLOB`, `ANY` の厳格なデータ型キャスト・検証を強制。 | SQLite 3.37.0+ |
-| **#269** | **生成列 (`GENERATED ALWAYS AS`) の実装** | 他カラムの式から自動算出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`。 | SQLite 3.31.0+ |
-| **#270** | **`COLLATE` 照合順序句 (`NOCASE`, `RTRIM`, `BINARY`) の実装** | 大小文字を区別しない比較・ソート `WHERE col = 'test' COLLATE NOCASE`、`ORDER BY col COLLATE RTRIM`。 | SQLite 標準 |
+| **[#266](../issues/266-implement-sqlite-parity-update-from.md)** | **`UPDATE ... FROM` (Join Update) 構文の実装** | `UPDATE tbl SET col = t2.val FROM other_tbl t2 WHERE tbl.id = t2.id` 構文のパース、他テーブル結合行を用いた一括更新。 | SQLite 3.33.0+ |
+| **[#267](../issues/267-implement-sqlite-parity-standalone-values.md)** | **スタンドアロン `VALUES` クエリ構文の実装** | `SELECT` を伴わない `VALUES (1, 'Alice'), (2, 'Bob')` 単独実行および CTE / サブクエリ連携。 | SQLite 3.7.11+ |
+| **[#268](../issues/268-implement-sqlite-parity-create-table-strict.md)** | **`CREATE TABLE ... STRICT` モードの実装** | 動的型付け（Any型）を排し、`INT`, `REAL`, `TEXT`, `BLOB`, `ANY` の厳格なデータ型キャスト・検証を強制。 | SQLite 3.37.0+ |
+| **[#269](../issues/269-implement-sqlite-parity-generated-columns.md)** | **生成列 (`GENERATED ALWAYS AS`) の実装** | 他カラムの式から自動算出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`。 | SQLite 3.31.0+ |
+| **[#270](../issues/270-implement-sqlite-parity-collate-clause.md)** | **`COLLATE` 照合順序句 (`NOCASE`, `RTRIM`, `BINARY`) の実装** | 大小文字を区別しない比較・ソート `WHERE col = 'test' COLLATE NOCASE`、`ORDER BY col COLLATE RTRIM`。 | SQLite 標準 |
 
 - **目的**: 先端クエリ表現力の向上およびアプリケーション層での型検証オーバーヘッド削減。
 - **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `functions.py`
@@ -599,10 +599,10 @@ SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合�
 
 | 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
 | :---: | :--- | :--- | :---: |
-| **#271** | **`VACUUM INTO 'filename'` オンラインバックアップの実装** | 稼働中データベースを排他ロックせず、指定ファイルパスへ無停止スナップショット・コンパクションを出力。 | SQLite 3.27.0+ |
-| **#272** | **VIEW 向け `INSTEAD OF` トリガーの実装** | `CREATE TRIGGER ... INSTEAD OF INSERT/UPDATE/DELETE ON view_name BEGIN ... END;` による更新可能ビューの実現。 | SQLite 標準 |
-| **#273** | **外部キーカスケード (`ON DELETE CASCADE` / `ON UPDATE SET NULL`) の実装** | 親行削除・更新時に子レコードを自動連動処理するリレーショナル整合性エンジン。 | SQLite 標準 |
-| **#274** | **拡張 PRAGMA (`table_xinfo`, `user_version`) の実装** | 生成列・非表示列を含む拡張スキーマ照会およびスキーママイグレーション追跡用ユーザーバージョン番号管理。 | SQLite 標準 |
+| **[#271](../issues/271-implement-sqlite-parity-vacuum-into.md)** | **`VACUUM INTO 'filename'` オンラインバックアップの実装** | 稼働中データベースを排他ロックせず、指定ファイルパスへ無停止スナップショット・コンパクションを出力。 | SQLite 3.27.0+ |
+| **[#272](../issues/272-implement-sqlite-parity-instead-of-trigger.md)** | **VIEW 向け `INSTEAD OF` トリガーの実装** | `CREATE TRIGGER ... INSTEAD OF INSERT/UPDATE/DELETE ON view_name BEGIN ... END;` による更新可能ビューの実現。 | SQLite 標準 |
+| **[#273](../issues/273-implement-sqlite-parity-foreign-key-cascade.md)** | **外部キーカスケード (`ON DELETE CASCADE` / `ON UPDATE SET NULL`) の実装** | 親行削除・更新時に子レコードを自動連動処理するリレーショナル整合性エンジン。 | SQLite 標準 |
+| **[#274](../issues/274-implement-sqlite-parity-extended-pragma.md)** | **拡張 PRAGMA (`table_xinfo`, `user_version`) の実装** | 生成列・非表示列を含む拡張スキーマ照会およびスキーママイグレーション追跡用ユーザーバージョン番号管理。 | SQLite 標準 |
 
 - **目的**: エンタープライズ級のバックアップ自動化と堅牢なリレーショナル整合性保証。
 - **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `storage/`
@@ -615,9 +615,9 @@ SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合�
 
 | 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
 | :---: | :--- | :--- | :---: |
-| **#275** | **`FTS5` (Full-Text Search 5) 仮想テーブル & `MATCH` 演算子の実装** | `CREATE VIRTUAL TABLE fts USING fts5(title, abstract)`、`MATCH` 演算子および BM25 ランキングスコアリング。 | SQLite FTS5 |
-| **#276** | **テーブル値関数 `json_each()` / `json_tree()` の実装** | JSON 配列・階層木構造を行セットとして動的展開し、JOIN 句内で走査・フィルタリング可能にする機能。 | SQLite 3.38.0+ |
-| **#277** | **ユーザー定義照合順序 (User-Defined Collation) 登録機構の実装** | Python コールバック関数を用いた多言語・カスタムソート順序の動的登録インターフェース。 | SQLite C/Python API |
+| **[#275](../issues/275-implement-sqlite-parity-fts5-virtual-table.md)** | **`FTS5` (Full-Text Search 5) 仮想テーブル & `MATCH` 演算子の実装** | `CREATE VIRTUAL TABLE fts USING fts5(title, abstract)`、`MATCH` 演算子および BM25 ランキングスコアリング。 | SQLite FTS5 |
+| **[#276](../issues/276-implement-sqlite-parity-json-each-and-tree.md)** | **テーブル値関数 `json_each()` / `json_tree()` の実装** | JSON 配列・階層木構造を行セットとして動的展開し、JOIN 句内で走査・フィルタリング可能にする機能。 | SQLite 3.38.0+ |
+| **[#277](../issues/277-implement-sqlite-parity-user-defined-collation.md)** | **ユーザー定義照合順序 (User-Defined Collation) 登録機構の実装** | Python コールバック関数を用いた多言語・カスタムソート順序の動的登録インターフェース。 | SQLite C/Python API |
 
 - **目的**: 論文抄録・脅威インテリジェンスの全文検索と複雑な階層型 JSON データのシームレスな分析。
 - **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `functions.py`
