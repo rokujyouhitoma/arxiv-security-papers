@@ -179,18 +179,78 @@ class QueryPlanner:
         )
 
     @classmethod
+    def _find_matching_index_col(
+        cls, indexed_by: str, available_indexes: Dict[str, str]
+    ) -> Optional[str]:
+        for col, idx_name in available_indexes.items():
+            if idx_name == indexed_by or col == indexed_by:
+                return col
+        return None
+
+    @classmethod
+    def _plan_indexed_by_query(
+        cls,
+        table_name: str,
+        total_rows: int,
+        indexed_by: str,
+        matching_col: str,
+    ) -> ExecutionPlan:
+        index_scan_cost = CostModel.estimate_index_scan_cost(total_rows, 0.05)
+        return ExecutionPlan(
+            plan_type=PlanType.INDEX_SCAN,
+            estimated_cost=index_scan_cost,
+            table_name=table_name,
+            selected_index=indexed_by,
+            index_column=matching_col,
+            description=f"SEARCH TABLE {table_name} USING INDEX {indexed_by} ({matching_col})",
+        )
+
+    @classmethod
+    def _plan_not_indexed_query(cls, table_name: str, total_rows: int) -> ExecutionPlan:
+        table_scan_cost = CostModel.estimate_table_scan_cost(total_rows)
+        return ExecutionPlan(
+            plan_type=PlanType.TABLE_SCAN,
+            estimated_cost=table_scan_cost,
+            table_name=table_name,
+            description=f"SCAN TABLE {table_name} (FULL SCAN)",
+        )
+
+    @classmethod
+    def _try_plan_with_hint(
+        cls,
+        stmt: SelectStatement,
+        total_rows: int,
+        available_indexes: Dict[str, str],
+    ) -> Optional[ExecutionPlan]:
+        tbl_ref = stmt.table_ref
+        if getattr(tbl_ref, "not_indexed", False):
+            return cls._plan_not_indexed_query(stmt.table_name, total_rows)
+        indexed_by = getattr(tbl_ref, "indexed_by", None)
+        if indexed_by:
+            col = cls._find_matching_index_col(indexed_by, available_indexes)
+            if not col:
+                raise ValueError(f"no such index: {indexed_by}")
+            return cls._plan_indexed_by_query(
+                stmt.table_name, total_rows, indexed_by, col
+            )
+        return None
+
+    @classmethod
     def plan_select(
         cls,
         stmt: SelectStatement,
         stats: Optional[TableStats],
         available_indexes: Optional[Dict[str, str]] = None,
     ) -> ExecutionPlan:
-        table_name = stmt.table_name
         total_rows = stats.total_rows if stats else 100
-        available_indexes = available_indexes or {}
+        avail = available_indexes or {}
+
+        hinted = cls._try_plan_with_hint(stmt, total_rows, avail)
+        if hinted is not None:
+            return hinted
 
         best_index, best_col, min_sel = cls._find_best_indexed_column(
-            stmt.where_clauses, stats, available_indexes
+            stmt.where_clauses, stats, avail
         )
 
         if stmt.knn_query:
@@ -199,7 +259,7 @@ class QueryPlanner:
             )
 
         return cls._plan_relational_query(
-            table_name, total_rows, best_index, best_col, min_sel
+            stmt.table_name, total_rows, best_index, best_col, min_sel
         )
 
     @classmethod

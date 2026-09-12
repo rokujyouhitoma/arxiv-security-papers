@@ -2048,6 +2048,27 @@ class SQLExecutor:
             "dropped": True,
         }
 
+    def _validate_index_hint(self, table_name: str, indexed_by: Optional[str]) -> None:
+        """Validates that indexed_by exists on table_name if provided."""
+        if not indexed_by or table_name not in self.tables:
+            return
+        table = self.tables[table_name]
+        avail = set(table.btree_indexes.keys()).union(table.btree_index_names.values())
+        avail.update(d.get("name", "") for d in table.index_definitions)
+        if indexed_by not in avail:
+            raise SQLExecutionError(f"no such index: {indexed_by}")
+
+    @staticmethod
+    def _build_explain_indexes(table: TableCatalog) -> Dict[str, str]:
+        avail = {
+            col: table.btree_index_names.get(col, f"idx_{col}")
+            for col in table.btree_indexes.keys()
+        }
+        for d in table.index_definitions:
+            if "column" in d and "name" in d:
+                avail[d["column"]] = d["name"]
+        return avail
+
     def _exec_explain(
         self, stmt: ExplainStatement, effective_role: str
     ) -> Dict[str, Any]:
@@ -2063,13 +2084,13 @@ class SQLExecutor:
         )
         table = self._get_table(sub_stmt.table_name)
         table.recompute_stats()
-        avail_indexes = {
-            col: table.btree_index_names.get(col, f"idx_{col}")
-            for col in table.btree_indexes.keys()
-        }
-        explain_rows = QueryPlanner.explain(
-            sub_stmt, table.stats, available_indexes=avail_indexes
-        )
+        avail_indexes = self._build_explain_indexes(table)
+        try:
+            explain_rows = QueryPlanner.explain(
+                sub_stmt, table.stats, available_indexes=avail_indexes
+            )
+        except ValueError as e:
+            raise SQLExecutionError(str(e))
         return {"command": "EXPLAIN", "status": "ok", "rows": explain_rows}
 
     def _query_knn_rows(
@@ -2356,6 +2377,7 @@ class SQLExecutor:
         effective_role: str,
         temp_tables: Dict[str, List[Dict[str, Any]]],
     ) -> List[Dict[str, Any]]:
+        self._validate_index_hint(table_ref.name, table_ref.indexed_by)
         if table_ref.name not in temp_tables:
             self.access_controller.enforce_permission(
                 effective_role, table_ref.name, "SELECT"
@@ -2369,6 +2391,17 @@ class SQLExecutor:
         )
         return [self._prefix_record(r, table_ref) for r in raw_rows]
 
+    def _apply_single_join(
+        self,
+        current_rows: List[Dict[str, Any]],
+        join: JoinClause,
+        effective_role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        if join.table and join.table.indexed_by:
+            self._validate_index_hint(join.table.name, join.table.indexed_by)
+        return self._join_table_rows(current_rows, join, effective_role, temp_tables)
+
     def _scan_and_join_tables(
         self,
         stmt: SelectStatement,
@@ -2381,7 +2414,7 @@ class SQLExecutor:
         )
 
         for join in stmt.joins or []:
-            current_rows = self._join_table_rows(
+            current_rows = self._apply_single_join(
                 current_rows, join, effective_role, temp_tables
             )
         return current_rows
@@ -2838,6 +2871,7 @@ class SQLExecutor:
     def _exec_update(
         self, stmt: UpdateStatement, effective_role: str
     ) -> Dict[str, Any]:
+        self._validate_index_hint(stmt.table_name, stmt.indexed_by)
         self.access_controller.enforce_permission(
             effective_role, stmt.table_name, "UPDATE"
         )
@@ -2931,6 +2965,7 @@ class SQLExecutor:
     def _exec_delete(
         self, stmt: DeleteStatement, effective_role: str
     ) -> Dict[str, Any]:
+        self._validate_index_hint(stmt.table_name, stmt.indexed_by)
         self.access_controller.enforce_permission(
             effective_role, stmt.table_name, "DELETE"
         )

@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **265** | SQLite 完全互換化: INDEXED BY / NOT INDEXED 句による明示的インデックスヒントの実装 | Feature | Low | Open (New) | [265-implement-sqlite-parity-indexed-by-hint.md](265-implement-sqlite-parity-indexed-by-hint.md) |
 | **251** | Lehman-Yao 型 B-link Tree によるラッチフリー並行走査およびスプリット追随インデックスエンジンの実装 | Feature | Low | Open (New) | [251-implement-lehman-yao-b-link-tree-concurrent-index.md](251-implement-lehman-yao-b-link-tree-concurrent-index.md) |
 | **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | Medium | Open (New) | [250-implement-louvain-community-detection-for-cti-graph.md](250-implement-louvain-community-detection-for-cti-graph.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **265** | SQLite 完全互換化: INDEXED BY / NOT INDEXED 句による明示的インデックスヒントの実装 | Feature | 2026-09-12 | [265-implement-sqlite-parity-indexed-by-hint.md](closed/265-implement-sqlite-parity-indexed-by-hint.md) |
 | **264** | SQLite 完全互換化: CREATE VIRTUAL TABLE 構文によるプラガブルストレージ DDL マッピングの実装 | Feature | 2026-09-12 | [264-implement-sqlite-parity-create-virtual-table.md](closed/264-implement-sqlite-parity-create-virtual-table.md) |
 | **263** | SQLite 完全互換化: ATTACH / DETACH DATABASE 構文による動的マルチスキーママウントの実装 | Feature | 2026-09-12 | [263-implement-sqlite-parity-attach-detach-database.md](closed/263-implement-sqlite-parity-attach-detach-database.md) |
 | **262** | SQLite 完全互換化: ANALYZE 構文による統計情報収集と CBO 最適化連携の実装 | Feature | 2026-09-12 | [262-implement-sqlite-parity-analyze-statement.md](closed/262-implement-sqlite-parity-analyze-statement.md) |
