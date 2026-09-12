@@ -29,6 +29,7 @@ from .ast import (
     DropTriggerStatement,
     DropViewStatement,
     ExplainStatement,
+    ForeignKeyDef,
     GrantStatement,
     InsertStatement,
     JoinClause,
@@ -539,6 +540,62 @@ def _extract_generated_column_info(
     is_stored = bool(gen_m.group(2) and gen_m.group(2).upper() == "STORED")
     cleaned = raw_col[: gen_m.start()] + raw_col[gen_m.end() :]
     return cleaned.strip(), gen_expr, is_stored
+
+
+def _extract_fk_action_clause(clause_str: str, event: str) -> str:
+    pat = rf"\bON\s+{event}\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION|SET\s+DEFAULT)\b"
+    m = re.search(pat, clause_str, re.IGNORECASE)
+    if not m:
+        return "NO ACTION"
+    return re.sub(r"\s+", " ", m.group(1).upper())
+
+
+def _extract_fk_actions(clause_str: str) -> Tuple[str, str]:
+    return (
+        _extract_fk_action_clause(clause_str, "DELETE"),
+        _extract_fk_action_clause(clause_str, "UPDATE"),
+    )
+
+
+def _parse_table_fk_constraint(raw: str) -> Optional[ForeignKeyDef]:
+    pat = (
+        r"^\s*FOREIGN\s+KEY\s*\(\s*([a-zA-Z0-9_]+)\s*\)\s*"
+        r"REFERENCES\s+([a-zA-Z0-9_.]+)\s*\(\s*([a-zA-Z0-9_]+)\s*\)(.*)$"
+    )
+    m = re.match(pat, raw, re.IGNORECASE | re.DOTALL)
+    if not m:
+        return None
+    on_del, on_upd = _extract_fk_actions(m.group(4))
+    return ForeignKeyDef(
+        child_column=m.group(1).strip(),
+        parent_table=m.group(2).strip(),
+        parent_column=m.group(3).strip(),
+        on_delete=on_del,
+        on_update=on_upd,
+    )
+
+
+def _extract_column_fk_def(
+    raw_col: str, c_name: str
+) -> Tuple[str, Optional[ForeignKeyDef]]:
+    pat = (
+        r"\bREFERENCES\s+([a-zA-Z0-9_.]+)\s*\(\s*([a-zA-Z0-9_]+)\s*\)"
+        r"(?:\s+ON\s+(?:DELETE|UPDATE)\s+(?:CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION|SET\s+DEFAULT))*"
+        r"(?:\s+ON\s+(?:DELETE|UPDATE)\s+(?:CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION|SET\s+DEFAULT))*"
+    )
+    m = re.search(pat, raw_col, re.IGNORECASE)
+    if not m:
+        return raw_col, None
+    on_del, on_upd = _extract_fk_actions(m.group(0))
+    fk = ForeignKeyDef(
+        child_column=c_name,
+        parent_table=m.group(1).strip(),
+        parent_column=m.group(2).strip(),
+        on_delete=on_del,
+        on_update=on_upd,
+    )
+    cleaned = (raw_col[: m.start()] + raw_col[m.end() :]).strip()
+    return cleaned, fk
 
 
 def _extract_collate_from_col_def(raw_col: str) -> Tuple[str, Optional[str]]:
@@ -1083,7 +1140,8 @@ class SQLParser:
             return None
         parts = raw_col.split()
         c_name = parts[0]
-        cleaned_col, collate = _extract_collate_from_col_def(raw_col)
+        cleaned_col, fk_def = _extract_column_fk_def(raw_col, c_name)
+        cleaned_col, collate = _extract_collate_from_col_def(cleaned_col)
         cleaned_col, gen_expr, is_stored = _extract_generated_column_info(
             cleaned_col, c_name
         )
@@ -1099,7 +1157,30 @@ class SQLParser:
             generated_expr=gen_expr,
             is_stored=is_stored,
             collate=collate,
+            foreign_key=fk_def,
         )
+
+    def _process_create_table_item(
+        self, raw_col: str, col_defs: List[ColumnDef], fk_defs: List[ForeignKeyDef]
+    ) -> None:
+        tbl_fk = _parse_table_fk_constraint(raw_col)
+        if tbl_fk is not None:
+            fk_defs.append(tbl_fk)
+            return
+        c_def = self._parse_column_def(raw_col)
+        if c_def is not None:
+            col_defs.append(c_def)
+            if c_def.foreign_key is not None:
+                fk_defs.append(c_def.foreign_key)
+
+    def _collect_create_table_items(
+        self, cols_body: str
+    ) -> Tuple[List[ColumnDef], List[ForeignKeyDef]]:
+        col_defs: List[ColumnDef] = []
+        fk_defs: List[ForeignKeyDef] = []
+        for raw_col in _split_column_defs(cols_body):
+            self._process_create_table_item(raw_col, col_defs, fk_defs)
+        return col_defs, fk_defs
 
     def _parse_create_table(self, sql: str) -> CreateTableStatement:
         cleaned_sql, engine, location = _extract_storage_clauses(sql)
@@ -1114,11 +1195,7 @@ class SQLParser:
         table_options = m.group(4).strip()
         strict = bool(re.search(r"\bSTRICT\b", table_options, re.IGNORECASE))
 
-        col_defs = [
-            c_def
-            for raw_col in _split_column_defs(cols_body)
-            if (c_def := self._parse_column_def(raw_col)) is not None
-        ]
+        col_defs, fk_defs = self._collect_create_table_items(cols_body)
         if strict:
             _validate_strict_columns(col_defs)
 
@@ -1131,6 +1208,7 @@ class SQLParser:
             storage_engine=engine,
             location=location,
             strict=strict,
+            foreign_keys=fk_defs,
         )
 
     def _parse_drop_table(self, sql: str) -> DropTableStatement:

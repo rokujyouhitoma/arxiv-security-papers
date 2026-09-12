@@ -601,7 +601,7 @@ SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合�
 | :---: | :--- | :--- | :---: |
 | **[#271](../issues/closed/271-implement-sqlite-parity-vacuum-into.md)** | **`VACUUM INTO 'filename'` オンラインバックアップの実装** | 稼働中データベースを排他ロックせず、指定ファイルパスへ無停止スナップショット・コンパクションを出力。 | SQLite 3.27.0+ |
 | **[#272](../issues/closed/272-implement-sqlite-parity-instead-of-trigger.md)** | **VIEW 向け `INSTEAD OF` トリガーの実装** | `CREATE TRIGGER ... INSTEAD OF INSERT/UPDATE/DELETE ON view_name BEGIN ... END;` による更新可能ビューの実現。 | SQLite 標準 |
-| **[#273](../issues/273-implement-sqlite-parity-foreign-key-cascade.md)** | **外部キーカスケード (`ON DELETE CASCADE` / `ON UPDATE SET NULL`) の実装** | 親行削除・更新時に子レコードを自動連動処理するリレーショナル整合性エンジン。 | SQLite 標準 |
+| **[#273](../issues/closed/273-implement-sqlite-parity-foreign-key-cascade.md)** | **外部キーカスケード (`ON DELETE CASCADE` / `ON UPDATE SET NULL`) の実装** | 親行削除・更新時に子レコードを自動連動処理するリレーショナル整合性エンジン。 | SQLite 標準 |
 | **[#274](../issues/274-implement-sqlite-parity-extended-pragma.md)** | **拡張 PRAGMA (`table_xinfo`, `user_version`) の実装** | 生成列・非表示列を含む拡張スキーマ照会およびスキーママイグレーション追跡用ユーザーバージョン番号管理。 | SQLite 標準 |
 
 - **目的**: エンタープライズ級のバックアップ自動化と堅牢なリレーショナル整合性保証。

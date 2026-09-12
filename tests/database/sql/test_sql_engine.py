@@ -1737,3 +1737,89 @@ def test_instead_of_trigger_lifecycle():
         "rows"
     ][0]
     assert soft_deleted_row["active"] == 0
+
+
+def test_foreign_key_cascade_lifecycle():
+    executor = SQLExecutor()
+
+    # 1. PRAGMA foreign_keys verification
+    p_off = executor.execute("PRAGMA foreign_keys = OFF;")
+    assert p_off["rows"][0]["foreign_keys"] == 0
+    p_on = executor.execute("PRAGMA foreign_keys = ON;")
+    assert p_on["rows"][0]["foreign_keys"] == 1
+
+    # 2. Setup parent and child tables (CASCADE & SET NULL & RESTRICT)
+    executor.execute("CREATE TABLE parent (id INT PRIMARY KEY, name TEXT);")
+    executor.execute(
+        "CREATE TABLE child_cascade ("
+        "  id INT PRIMARY KEY, "
+        "  parent_id INT REFERENCES parent(id) ON DELETE CASCADE, "
+        "  info TEXT"
+        ");"
+    )
+    executor.execute(
+        "CREATE TABLE child_set_null ("
+        "  id INT PRIMARY KEY, "
+        "  parent_id INT, "
+        "  info TEXT, "
+        "  FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE SET NULL"
+        ");"
+    )
+    executor.execute(
+        "CREATE TABLE child_restrict ("
+        "  id INT PRIMARY KEY, "
+        "  parent_id INT REFERENCES parent(id) ON DELETE RESTRICT"
+        ");"
+    )
+
+    executor.execute(
+        "INSERT INTO parent (id, name) VALUES (1, 'Parent 1'), (2, 'Parent 2'), (3, 'Parent 3');"
+    )
+    executor.execute(
+        "INSERT INTO child_cascade (id, parent_id, info) VALUES (10, 1, 'C1'), (20, 1, 'C2'), (30, 2, 'C3');"
+    )
+    executor.execute(
+        "INSERT INTO child_set_null (id, parent_id, info) VALUES (100, 2, 'CSN1');"
+    )
+    executor.execute("INSERT INTO child_restrict (id, parent_id) VALUES (200, 3);")
+
+    # 3. ON DELETE CASCADE: Deleting parent 1 cascades to child_cascade (10, 20)
+    del1 = executor.execute("DELETE FROM parent WHERE id = 1;")
+    assert del1["status"] == "ok"
+    c_cascade_rows = executor.execute("SELECT * FROM child_cascade ORDER BY id ASC;")[
+        "rows"
+    ]
+    assert len(c_cascade_rows) == 1
+    assert c_cascade_rows[0]["id"] == 30
+
+    # 4. ON DELETE SET NULL: Deleting parent 2 sets parent_id to None in child_set_null (100)
+    del2 = executor.execute("DELETE FROM parent WHERE id = 2;")
+    assert del2["status"] == "ok"
+    c_set_null_rows = executor.execute("SELECT * FROM child_set_null WHERE id = 100;")[
+        "rows"
+    ]
+    assert len(c_set_null_rows) == 1
+    assert c_set_null_rows[0]["parent_id"] is None
+
+    # 5. ON DELETE RESTRICT: Deleting parent 3 is blocked by child_restrict (200)
+    with pytest.raises(SQLExecutionError, match="FOREIGN KEY constraint failed"):
+        executor.execute("DELETE FROM parent WHERE id = 3;")
+    # Verify parent 3 still exists
+    p3_rows = executor.execute("SELECT * FROM parent WHERE id = 3;")["rows"]
+    assert len(p3_rows) == 1
+
+    # 6. ON UPDATE CASCADE
+    executor.execute("CREATE TABLE dept (id INT PRIMARY KEY, name TEXT);")
+    executor.execute(
+        "CREATE TABLE emp ("
+        "  id INT PRIMARY KEY, "
+        "  dept_id INT REFERENCES dept(id) ON UPDATE CASCADE"
+        ");"
+    )
+    executor.execute("INSERT INTO dept (id, name) VALUES (10, 'Security');")
+    executor.execute("INSERT INTO emp (id, dept_id) VALUES (1, 10);")
+
+    executor.execute("UPDATE dept SET id = 99 WHERE id = 10;")
+    emp_rows = executor.execute("SELECT * FROM emp WHERE id = 1;")["rows"]
+    assert len(emp_rows) == 1
+    assert emp_rows[0]["dept_id"] == 99

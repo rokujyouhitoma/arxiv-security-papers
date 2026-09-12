@@ -95,6 +95,15 @@ def _resolve_cmd_category(cmd: SQLCommandType) -> str:
 
 
 @dataclass
+class ForeignKeyDef:
+    child_column: str
+    parent_table: str
+    parent_column: str
+    on_delete: str = "NO ACTION"  # CASCADE, SET NULL, RESTRICT, NO ACTION, SET DEFAULT
+    on_update: str = "NO ACTION"  # CASCADE, SET NULL, RESTRICT, NO ACTION, SET DEFAULT
+
+
+@dataclass
 class ColumnDef:
     name: str
     data_type: str  # e.g., "VARCHAR", "INT", "FLOAT", "VECTOR(128)", "JSON", "TEXT"
@@ -103,6 +112,7 @@ class ColumnDef:
     generated_expr: Optional[str] = None
     is_stored: bool = False
     collate: Optional[str] = None
+    foreign_key: Optional[ForeignKeyDef] = None
 
 
 @dataclass
@@ -124,6 +134,7 @@ class CreateTableStatement(SQLStatement):
     storage_engine: Optional[str] = None
     location: Optional[str] = None
     strict: bool = False
+    foreign_keys: List[ForeignKeyDef] = field(default_factory=list)
 
 
 @dataclass

@@ -34,6 +34,7 @@ from .ast import (
     DropTriggerStatement,
     DropViewStatement,
     ExplainStatement,
+    ForeignKeyDef,
     GrantStatement,
     InsertStatement,
     JoinClause,
@@ -373,6 +374,7 @@ class TableCatalog:
         strict: bool = False,
         generated_columns: Optional[Dict[str, ColumnDef]] = None,
         column_collations: Optional[Dict[str, str]] = None,
+        foreign_keys: Optional[List[ForeignKeyDef]] = None,
     ) -> None:
         self.name = name
         self.storage = storage
@@ -380,14 +382,23 @@ class TableCatalog:
         self.index = index if index is not None else HNSWIndex(dim=default_dim)
         self.schema = schema if schema is not None else {}
         self.strict = strict
-        self.generated_columns = generated_columns or {}
-        self.column_collations = column_collations or {}
+        self._init_catalog_columns(generated_columns, column_collations, foreign_keys)
         self._init_catalog_metadata(raw_sql, storage_engine, location, database_scope)
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
         self.index_definitions: List[Dict[str, str]] = []
         self.stats: TableStats = TableStats(name)
         self.recompute_stats()
+
+    def _init_catalog_columns(
+        self,
+        generated_columns: Optional[Dict[str, ColumnDef]],
+        column_collations: Optional[Dict[str, str]],
+        foreign_keys: Optional[List[ForeignKeyDef]],
+    ) -> None:
+        self.generated_columns = generated_columns or {}
+        self.column_collations = column_collations or {}
+        self.foreign_keys = foreign_keys or []
 
     def _init_catalog_metadata(
         self,
@@ -1546,6 +1557,7 @@ class SQLExecutor:
         self.tables: Dict[str, TableCatalog] = {}
         self.views: Dict[str, CreateViewStatement] = {}
         self.triggers: Dict[str, CreateTriggerStatement] = {}
+        self.foreign_keys_enabled: bool = True
         self._init_default_tables(
             catalog,
             default_storage,
@@ -1755,14 +1767,22 @@ class SQLExecutor:
             )
         return {"command": "PRAGMA", "status": "ok", "rows": rows, "count": len(rows)}
 
-    def _exec_pragma_flag(self, pname: str) -> Optional[Dict[str, Any]]:
+    def _exec_pragma_foreign_keys(self, val: Optional[str]) -> Dict[str, Any]:
+        if val is not None:
+            self.foreign_keys_enabled = val.upper() in ("ON", "1", "TRUE", "YES")
+        flag_int = 1 if self.foreign_keys_enabled else 0
+        return {
+            "command": "PRAGMA",
+            "status": "ok",
+            "rows": [{"foreign_keys": flag_int}],
+            "count": 1,
+        }
+
+    def _exec_pragma_flag(
+        self, pname: str, val: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         if pname == "foreign_keys":
-            return {
-                "command": "PRAGMA",
-                "status": "ok",
-                "rows": [{"foreign_keys": 1}],
-                "count": 1,
-            }
+            return self._exec_pragma_foreign_keys(val)
         if pname == "integrity_check":
             return {
                 "command": "PRAGMA",
@@ -1780,7 +1800,7 @@ class SQLExecutor:
             return self._exec_pragma_index_list(stmt.argument)
         if pname == "database_list":
             return self._exec_pragma_database_list()
-        flag_res = self._exec_pragma_flag(pname)
+        flag_res = self._exec_pragma_flag(pname, stmt.value)
         if flag_res is not None:
             return flag_res
         return {"command": "PRAGMA", "status": "ok", "rows": [], "count": 0}
@@ -2105,6 +2125,7 @@ class SQLExecutor:
             strict=stmt.strict,
             generated_columns=self._extract_table_gen_columns(stmt.columns),
             column_collations=self._extract_table_collations(stmt.columns),
+            foreign_keys=stmt.foreign_keys,
         )
         self.tables[stmt.table_name] = catalog
 
@@ -3376,6 +3397,9 @@ class SQLExecutor:
             _validate_strict_row(table.name, table.schema, new_rec)
         meta.clear()
         meta.update(new_rec)
+        self._apply_single_update_cascades(
+            stmt.table_name, old_rec, new_rec, effective_role
+        )
         self._fire_triggers("AFTER", "UPDATE", stmt.table_name, new_rec, effective_role)
         return new_rec
 
@@ -3558,6 +3582,177 @@ class SQLExecutor:
             table.index = HNSWIndex(dim=table.storage.dim)
             table.index.build_from_storage(new_vecs)
 
+    def _find_child_foreign_keys(
+        self, parent_table_name: str
+    ) -> List[Tuple[TableCatalog, ForeignKeyDef]]:
+        results: List[Tuple[TableCatalog, ForeignKeyDef]] = []
+        for tcat in self.tables.values():
+            for fk in tcat.foreign_keys:
+                if fk.parent_table.lower() == parent_table_name.lower():
+                    results.append((tcat, fk))
+        return results
+
+    def _cascade_delete_for_fk(
+        self,
+        child_cat: TableCatalog,
+        fk: ForeignKeyDef,
+        parent_val: Any,
+        role: str,
+        visited: Set[Tuple[str, Any]],
+    ) -> None:
+        action = fk.on_delete.upper()
+        if action == "NO ACTION":
+            return
+        val_str = f"'{parent_val}'" if isinstance(parent_val, str) else str(parent_val)
+        if action == "CASCADE":
+            del_sql = (
+                f"DELETE FROM {child_cat.name} WHERE {fk.child_column} = {val_str};"
+            )
+            self.execute(del_sql, role=role)
+        elif action == "SET NULL":
+            upd_sql = (
+                f"UPDATE {child_cat.name} SET {fk.child_column} = NULL "
+                f"WHERE {fk.child_column} = {val_str};"
+            )
+            self.execute(upd_sql, role=role)
+
+    def _cascade_delete_record(
+        self,
+        rec: Dict[str, Any],
+        child_refs: List[Tuple[TableCatalog, ForeignKeyDef]],
+        role: str,
+        visited: Set[Tuple[str, Any]],
+    ) -> None:
+        for child_cat, fk in child_refs:
+            parent_val = rec.get(fk.parent_column)
+            if parent_val is None:
+                continue
+            key = (child_cat.name.lower(), parent_val)
+            if key in visited:
+                continue
+            visited.add(key)
+            self._cascade_delete_for_fk(child_cat, fk, parent_val, role, visited)
+
+    def _check_fk_restrict_match(
+        self, child_cat: TableCatalog, fk: ForeignKeyDef, rec: Dict[str, Any]
+    ) -> None:
+        parent_val = rec.get(fk.parent_column)
+        if parent_val is None:
+            return
+        for m in child_cat.storage.metadata:
+            if str(m.get(fk.child_column)) == str(parent_val):
+                raise SQLExecutionError(
+                    f"FOREIGN KEY constraint failed: cannot delete from '{fk.parent_table}' "
+                    f"due to RESTRICT reference in '{child_cat.name}'"
+                )
+
+    def _check_fk_restrict_for_ref(
+        self, child_cat: TableCatalog, fk: ForeignKeyDef, deleted: List[Dict[str, Any]]
+    ) -> None:
+        if fk.on_delete.upper() == "RESTRICT":
+            for rec in deleted:
+                self._check_fk_restrict_match(child_cat, fk, rec)
+
+    def _validate_fk_delete_restrict(
+        self, parent_table_name: str, deleted: List[Dict[str, Any]]
+    ) -> None:
+        if not self.foreign_keys_enabled or not deleted:
+            return
+        for child_cat, fk in self._find_child_foreign_keys(parent_table_name):
+            self._check_fk_restrict_for_ref(child_cat, fk, deleted)
+
+    def _apply_fk_delete_cascades(
+        self,
+        parent_table_name: str,
+        deleted_records: List[Dict[str, Any]],
+        role: str,
+    ) -> None:
+        if not self.foreign_keys_enabled or not deleted_records:
+            return
+        child_refs = self._find_child_foreign_keys(parent_table_name)
+        if not child_refs:
+            return
+        visited: Set[Tuple[str, Any]] = set()
+        for rec in deleted_records:
+            self._cascade_delete_record(rec, child_refs, role, visited)
+
+    def _execute_fk_update_action(
+        self,
+        child_name: str,
+        child_col: str,
+        action: str,
+        old_str: str,
+        new_str: str,
+        role: str,
+    ) -> None:
+        if action == "CASCADE":
+            upd_sql = (
+                f"UPDATE {child_name} SET {child_col} = {new_str} "
+                f"WHERE {child_col} = {old_str};"
+            )
+            self.execute(upd_sql, role=role)
+        elif action == "SET NULL":
+            upd_sql = (
+                f"UPDATE {child_name} SET {child_col} = NULL "
+                f"WHERE {child_col} = {old_str};"
+            )
+            self.execute(upd_sql, role=role)
+
+    @staticmethod
+    def _has_fk_matching_row(table: TableCatalog, col: str, val: Any) -> bool:
+        s_val = str(val)
+        return any(str(m.get(col)) == s_val for m in table.storage.metadata)
+
+    def _cascade_update_for_fk(
+        self,
+        child_cat: TableCatalog,
+        fk: ForeignKeyDef,
+        old_val: Any,
+        new_val: Any,
+        role: str,
+    ) -> None:
+        action = fk.on_update.upper()
+        if action == "NO ACTION":
+            return
+        if not self._has_fk_matching_row(child_cat, fk.child_column, old_val):
+            return
+        if action == "RESTRICT":
+            raise SQLExecutionError(
+                f"FOREIGN KEY constraint failed: cannot update '{fk.parent_table}' "
+                f"due to RESTRICT reference in '{child_cat.name}'"
+            )
+        old_str = self._format_trigger_val(old_val)
+        new_str = self._format_trigger_val(new_val)
+        self._execute_fk_update_action(
+            child_cat.name, fk.child_column, action, old_str, new_str, role
+        )
+
+    def _apply_single_fk_update(
+        self,
+        child_cat: TableCatalog,
+        fk: ForeignKeyDef,
+        old_rec: Dict[str, Any],
+        new_rec: Dict[str, Any],
+        role: str,
+    ) -> None:
+        old_val = old_rec.get(fk.parent_column)
+        new_val = new_rec.get(fk.parent_column)
+        if old_val is not None and old_val != new_val:
+            self._cascade_update_for_fk(child_cat, fk, old_val, new_val, role)
+
+    def _apply_single_update_cascades(
+        self,
+        parent_table_name: str,
+        old_rec: Dict[str, Any],
+        new_rec: Dict[str, Any],
+        role: str,
+    ) -> None:
+        if not self.foreign_keys_enabled:
+            return
+        child_refs = self._find_child_foreign_keys(parent_table_name)
+        for child_cat, fk in child_refs:
+            self._apply_single_fk_update(child_cat, fk, old_rec, new_rec, role)
+
     def _apply_view_delete_triggers(
         self,
         trig: CreateTriggerStatement,
@@ -3598,10 +3793,12 @@ class SQLExecutor:
             table.storage, del_indices
         )
 
+        self._validate_fk_delete_restrict(stmt.table_name, deleted)
         self._fire_record_list_triggers(
             deleted, "BEFORE", "DELETE", stmt.table_name, effective_role
         )
         self._persist_deleted_state(table, new_vecs, new_meta, bool(deleted))
+        self._apply_fk_delete_cascades(stmt.table_name, deleted, effective_role)
         self._fire_record_list_triggers(
             deleted, "AFTER", "DELETE", stmt.table_name, effective_role
         )
