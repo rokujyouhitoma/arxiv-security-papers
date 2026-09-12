@@ -514,6 +514,21 @@ class SQLParser:
             return clean_sql[: order_m.start()].strip(), order_by, order_desc
         return clean_sql, None, False
 
+    def _extract_having_clause(self, clean_sql: str) -> Tuple[str, Optional[str]]:
+        """Extracts and strips HAVING condition."""
+        having_m = re.search(r"\s+HAVING\s+(.+)$", clean_sql, re.IGNORECASE)
+        if having_m:
+            return clean_sql[: having_m.start()].strip(), having_m.group(1).strip()
+        return clean_sql, None
+
+    def _extract_group_by_clause(self, clean_sql: str) -> Tuple[str, List[str]]:
+        """Extracts and strips GROUP BY columns."""
+        group_m = re.search(r"\s+GROUP\s+BY\s+(.+)$", clean_sql, re.IGNORECASE)
+        if group_m:
+            cols = [c.strip() for c in group_m.group(1).split(",") if c.strip()]
+            return clean_sql[: group_m.start()].strip(), cols
+        return clean_sql, []
+
     def _extract_where_clause(self, clean_sql: str) -> Tuple[str, Optional[str]]:
         """Extracts and strips WHERE condition."""
         where_m = re.search(r"\s+WHERE\s+(.+)$", clean_sql, re.IGNORECASE)
@@ -557,6 +572,8 @@ class SQLParser:
         clean_sql = re.sub(r"\s+", " ", sql).strip()
         clean_sql, limit_val = self._extract_limit_clause(clean_sql)
         clean_sql, order_by, order_desc = self._extract_order_by_clause(clean_sql)
+        clean_sql, having_raw = self._extract_having_clause(clean_sql)
+        clean_sql, group_by_cols = self._extract_group_by_clause(clean_sql)
         clean_sql, where_raw = self._extract_where_clause(clean_sql)
 
         select_m = re.match(
@@ -587,6 +604,8 @@ class SQLParser:
             order_by=order_by,
             order_desc=order_desc,
             limit=limit_val,
+            group_by=group_by_cols,
+            having=having_raw,
         )
 
     def _parse_column_list(self, cols_raw: str) -> List[str]:

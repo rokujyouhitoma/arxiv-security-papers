@@ -17,6 +17,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **254** | SQL Parser における GROUP BY / HAVING 句未対応によるテーブル名誤パースおよび dbshell 実行エラーの改修 | Bug | 2026-09-12 | [254-support-group-by-and-having-in-sql-parser.md](closed/254-support-group-by-and-having-in-sql-parser.md) |
+| **255** | 汎用CSVテーブルストレージエンジン (CsvTableStorage) のサポートと cti_cwes CSV化 | Feature | 2026-09-12 | [255-support-csv-table-storage-engine.md](closed/255-support-csv-table-storage-engine.md) |
 | **222** | MITRE CWE 公式カタログ自動インジェスト用 CweSpider の実装と DB / オントロジー連携基盤の確立 | Feature | 2026-09-12 | [222-implement-mitre-cwe-spider-and-catalog-ingestion.md](closed/222-implement-mitre-cwe-spider-and-catalog-ingestion.md) |
 | **253** | Context Mesh における Paper ノードのクラスタ分類不整合（Entities → Sources）の改修 | Bug | 2026-09-12 | [253-fix-context-mesh-paper-cluster-classification.md](closed/253-fix-context-mesh-paper-cluster-classification.md) |
 | **252** | ユーザーマニュアル (USR-01) のエンドユーザー向けと開発者向け (DEV-01) への分離・再編 | Documentation | 2026-09-12 | [252-separate-user-and-developer-manuals.md](closed/252-separate-user-and-developer-manuals.md) |

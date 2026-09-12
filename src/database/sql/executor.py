@@ -615,6 +615,200 @@ def _resolve_default_table_name(
     return base if base.isidentifier() else "main"
 
 
+def _agg_count(inner: str, group_rows: List[Dict[str, Any]]) -> int:
+    if inner in ("*", "1"):
+        return len(group_rows)
+    return sum(
+        1 for r in group_rows if _extract_field_value(r, inner) not in (None, "")
+    )
+
+
+def _agg_numeric_list(inner: str, group_rows: List[Dict[str, Any]]) -> List[float]:
+    return [float(_extract_field_value(r, inner) or 0) for r in group_rows]
+
+
+def _agg_sum_avg(op: str, inner: str, group_rows: List[Dict[str, Any]]) -> float:
+    nums = _agg_numeric_list(inner, group_rows)
+    if not nums:
+        return 0.0
+    total = sum(nums)
+    return total / len(nums) if op == "AVG" else total
+
+
+def _agg_min_max(op: str, inner: str, group_rows: List[Dict[str, Any]]) -> Any:
+    vals = [
+        _extract_field_value(r, inner)
+        for r in group_rows
+        if _extract_field_value(r, inner) is not None
+    ]
+    if not vals:
+        return None
+    return min(vals) if op == "MIN" else max(vals)
+
+
+def _is_valid_agg_call(upper: str, prefix: str) -> bool:
+    return upper.startswith(prefix) and upper.endswith(")")
+
+
+def _extract_agg_inner(norm: str, prefix_len: int) -> str:
+    return norm[prefix_len:-1].strip()
+
+
+def _compute_agg_count_sum_avg(
+    upper: str, norm: str, group_rows: List[Dict[str, Any]]
+) -> Optional[Any]:
+    if _is_valid_agg_call(upper, "COUNT("):
+        return _agg_count(_extract_agg_inner(norm, 6), group_rows)
+    if _is_valid_agg_call(upper, "SUM("):
+        return _agg_sum_avg("SUM", _extract_agg_inner(norm, 4), group_rows)
+    if _is_valid_agg_call(upper, "AVG("):
+        return _agg_sum_avg("AVG", _extract_agg_inner(norm, 4), group_rows)
+    return None
+
+
+def _compute_agg_min_max(
+    upper: str, norm: str, group_rows: List[Dict[str, Any]]
+) -> Optional[Any]:
+    if _is_valid_agg_call(upper, "MIN("):
+        return _agg_min_max("MIN", _extract_agg_inner(norm, 4), group_rows)
+    if _is_valid_agg_call(upper, "MAX("):
+        return _agg_min_max("MAX", _extract_agg_inner(norm, 4), group_rows)
+    return None
+
+
+def _compute_agg_func(
+    upper: str, norm: str, group_rows: List[Dict[str, Any]]
+) -> Optional[Any]:
+    c_val = _compute_agg_count_sum_avg(upper, norm, group_rows)
+    if c_val is not None:
+        return c_val
+    return _compute_agg_min_max(upper, norm, group_rows)
+
+
+def _compute_agg_col(col_expr: str, group_rows: List[Dict[str, Any]]) -> Any:
+    norm = col_expr.strip()
+    upper = norm.upper()
+    val = _compute_agg_func(upper, norm, group_rows)
+    if val is not None:
+        return val
+    first_row = group_rows[0] if group_rows else {}
+    return _extract_field_value(first_row, norm)
+
+
+def _build_group_key(row: Dict[str, Any], group_cols: List[str]) -> Tuple[Any, ...]:
+    return tuple(_extract_field_value(row, col) for col in group_cols)
+
+
+def _cluster_rows(
+    rows: List[Dict[str, Any]], group_cols: List[str]
+) -> Dict[Tuple[Any, ...], List[Dict[str, Any]]]:
+    groups: Dict[Tuple[Any, ...], List[Dict[str, Any]]] = {}
+    for r in rows:
+        k = _build_group_key(r, group_cols)
+        if k not in groups:
+            groups[k] = []
+        groups[k].append(r)
+    return groups
+
+
+def _extract_target_columns(stmt: SelectStatement) -> List[str]:
+    cols = list(stmt.columns)
+    for gcol in stmt.group_by:
+        if gcol not in cols and "*" not in cols:
+            cols.append(gcol)
+    return cols
+
+
+def _group_and_aggregate_rows(
+    rows: List[Dict[str, Any]], stmt: SelectStatement
+) -> List[Dict[str, Any]]:
+    if not stmt.group_by:
+        return rows
+    groups = _cluster_rows(rows, stmt.group_by)
+    target_cols = _extract_target_columns(stmt)
+    result: List[Dict[str, Any]] = []
+    for _gkey, g_rows in groups.items():
+        row_dict: Dict[str, Any] = {}
+        for col_expr in target_cols:
+            row_dict[col_expr] = _compute_agg_col(col_expr, g_rows)
+        result.append(row_dict)
+    return result
+
+
+def _parse_having_expression(expr: str) -> Optional[Tuple[str, str, str]]:
+    m = re.match(r"^(.+?)\s*(=|!=|<>|>=|<=|>|<)\s*(.+)$", expr.strip())
+    if not m:
+        return None
+    return m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+
+
+def _coerce_having_vals(val_str: str, act_val: Any) -> Tuple[Any, Any]:
+    cleaned = val_str.strip("'\"")
+    if isinstance(act_val, (int, float)):
+        try:
+            return act_val, float(cleaned)
+        except ValueError:
+            return act_val, cleaned
+    return str(act_val), cleaned
+
+
+def _eval_having_eq_neq(act: Any, op: str, exp: Any) -> Optional[bool]:
+    if op in ("=", "=="):
+        return bool(act == exp)
+    if op in ("!=", "<>"):
+        return bool(act != exp)
+    return None
+
+
+def _eval_having_rel(act: Any, op: str, exp: Any) -> bool:
+    if op == ">":
+        return bool(act > exp)
+    if op == ">=":
+        return bool(act >= exp)
+    if op == "<":
+        return bool(act < exp)
+    if op == "<=":
+        return bool(act <= exp)
+    return False
+
+
+def _eval_having_comparison(act: Any, op: str, exp: Any) -> bool:
+    eq_res = _eval_having_eq_neq(act, op, exp)
+    if eq_res is not None:
+        return eq_res
+    return _eval_having_rel(act, op, exp)
+
+
+def _resolve_having_actual_val(row: Dict[str, Any], left_expr: str) -> Any:
+    if left_expr in row:
+        return row[left_expr]
+    for k, v in row.items():
+        if k.upper() == left_expr.upper():
+            return v
+    return _extract_field_value(row, left_expr)
+
+
+def _matches_having(row: Dict[str, Any], having_expr: str) -> bool:
+    parsed = _parse_having_expression(having_expr)
+    if not parsed:
+        return True
+    left_expr, op, right_expr = parsed
+    act_val = _resolve_having_actual_val(row, left_expr)
+    act, exp = _coerce_having_vals(right_expr, act_val)
+    try:
+        return _eval_having_comparison(act, op, exp)
+    except TypeError:
+        return False
+
+
+def _filter_having_rows(
+    rows: List[Dict[str, Any]], having_expr: Optional[str]
+) -> List[Dict[str, Any]]:
+    if not having_expr:
+        return rows
+    return [r for r in rows if _matches_having(r, having_expr)]
+
+
 class SQLExecutor:
     """
     Coordinates SQL parsing, access control enforcement, transaction staging,
@@ -1226,7 +1420,16 @@ class SQLExecutor:
 
     @staticmethod
     def _has_complex_select_clauses(stmt: SelectStatement) -> bool:
-        return bool(stmt.where_clauses or stmt.joins or stmt.ctes or stmt.union_all)
+        return any(
+            (
+                stmt.where_clauses,
+                stmt.joins,
+                stmt.ctes,
+                stmt.union_all,
+                stmt.group_by,
+                stmt.having,
+            )
+        )
 
     @classmethod
     def _is_simple_count_query(cls, stmt: SelectStatement) -> bool:
@@ -1241,6 +1444,8 @@ class SQLExecutor:
     def _handle_count_star(
         stmt: SelectStatement, count: int
     ) -> Optional[Dict[str, Any]]:
+        if stmt.group_by:
+            return None
         if len(stmt.columns) == 1 and stmt.columns[0].lower() in (
             "count(*)",
             "count(1)",
@@ -1334,6 +1539,9 @@ class SQLExecutor:
 
         current_rows = self._scan_and_join_tables(stmt, effective_role, temp_tables)
         filtered_rows = self._filter_select_rows(current_rows, stmt.where_clauses)
+        if stmt.group_by:
+            aggregated_rows = _group_and_aggregate_rows(filtered_rows, stmt)
+            filtered_rows = _filter_having_rows(aggregated_rows, stmt.having)
         paged_rows = self._sort_and_paginate(
             filtered_rows, stmt.order_by, stmt.order_desc, stmt.limit
         )

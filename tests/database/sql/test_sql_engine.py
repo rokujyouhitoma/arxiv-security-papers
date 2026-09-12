@@ -349,3 +349,67 @@ def test_100_percent_standard_sqlite3_client_compatibility():
         assert storage.get_vector(0)[0] == pytest.approx(1.0, abs=1e-3)
 
         conn.close()
+
+
+def test_group_by_and_having_pure_python_executor():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        vdb_path = os.path.join(tmpdir, "test_group_by.vdb")
+        storage = VectorStorage(vdb_path, dim=4)
+        executor = SQLExecutor(default_storage=storage, default_table_name="papers")
+
+        # Insert test records
+        items = [
+            ("p1", "Zero Trust 1", "Zero-Trust", 10.0),
+            ("p2", "Zero Trust 2", "Zero-Trust", 20.0),
+            ("p3", "Zero Trust 3", "Zero-Trust", 30.0),
+            ("p4", "Crypto 1", "Cryptography", 15.0),
+            ("p5", "Network 1", "Network", 5.0),
+        ]
+        for pid, title, cat, score in items:
+            executor.execute(
+                f"INSERT INTO papers (id, title, category, score) "
+                f"VALUES ('{pid}', '{title}', '{cat}', {score})"
+            )
+
+        # 1. Simple GROUP BY
+        res1 = executor.execute(
+            "SELECT category, COUNT(*) FROM papers GROUP BY category"
+        )
+        assert res1["status"] == "ok"
+        assert res1["count"] == 3
+        cat_counts = {r["category"]: r["COUNT(*)"] for r in res1["rows"]}
+        assert cat_counts["Zero-Trust"] == 3
+        assert cat_counts["Cryptography"] == 1
+        assert cat_counts["Network"] == 1
+
+        # 2. GROUP BY + HAVING (COUNT(*) > 1)
+        res2 = executor.execute(
+            "SELECT category, COUNT(*) FROM papers GROUP BY category HAVING COUNT(*) > 1"
+        )
+        assert res2["status"] == "ok"
+        assert res2["count"] == 1
+        assert res2["rows"][0]["category"] == "Zero-Trust"
+        assert res2["rows"][0]["COUNT(*)"] == 3
+
+        # 3. Aggregation functions: SUM, AVG, MIN, MAX
+        res3 = executor.execute(
+            "SELECT category, SUM(score), AVG(score), MIN(score), MAX(score) "
+            "FROM papers WHERE category = 'Zero-Trust' GROUP BY category"
+        )
+        assert res3["status"] == "ok"
+        row = res3["rows"][0]
+        assert row["SUM(score)"] == 60.0
+        assert row["AVG(score)"] == 20.0
+        assert row["MIN(score)"] == 10.0
+        assert row["MAX(score)"] == 30.0
+
+        # 4. Complex pipeline: WHERE + GROUP BY + HAVING + ORDER BY + LIMIT
+        res4 = executor.execute(
+            "SELECT category, COUNT(*) FROM papers "
+            "WHERE score >= 10.0 "
+            "GROUP BY category "
+            "HAVING COUNT(*) >= 1 "
+            "ORDER BY category ASC LIMIT 2"
+        )
+        assert res4["status"] == "ok"
+        assert res4["count"] == 2
