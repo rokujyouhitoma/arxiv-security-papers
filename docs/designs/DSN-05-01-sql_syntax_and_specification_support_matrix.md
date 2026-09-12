@@ -110,8 +110,8 @@ flowchart TD
 | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
 | 1 | **aggregate functions**<br>(集約関数) | ○ | ○ | ○ | **○ Full** | `COUNT(*)`, `COUNT(col)`, `COUNT(1)`, `SUM(col)`, `AVG(col)`, `MIN(col)`, `MAX(col)`, `TOTAL(col)`, `GROUP_CONCAT(col [, sep])` を完全サポート（Phase 4）。`GROUP BY` および `HAVING` 連動。 |
 | 2 | **ALTER TABLE**<br>(テーブル定義変更) | ○ | ○ | ○ | **○ Full** | `RENAME TO`, `RENAME COLUMN ... TO ...`, `ADD COLUMN`, `DROP COLUMN` を完全サポート（Phase 3）。 |
-| 3 | **ANALYZE**<br>(統計情報収集) | ○ | △ | ○ | **△ Partial** | 内部オプティマイザ（`QueryPlanner.explain`）の自動統計収集をサポート。明示的 SQL 構文 `ANALYZE` は [Issue #262](../issues/262-implement-sqlite-parity-analyze-statement.md) にて策定。 |
-| 4 | **ATTACH DATABASE**<br>**DETACH DATABASE** | ○ | △ | ○ | **△ Partial** | dbshell の `.use <db>` / `--database`、`settings.py` のマルチDBスコープ切替機構、`SHOW DATABASES` で同等機能を提供。標準 SQL 構文 `ATTACH / DETACH` は [Issue #263](../issues/263-implement-sqlite-parity-attach-detach-database.md) にて策定。 |
+| 3 | **ANALYZE**<br>(統計情報収集) | ○ | ○ | ○ | **○ Full** | `ANALYZE [schema | tbl | idx]` 構文を完全サポート（Phase 7 / [Issue #262](../issues/closed/262-implement-sqlite-parity-analyze-statement.md)）。全テーブル・特定テーブル・インデックスの行数・カーディナリティ・NULL比率を走査集計し、CBO オプティマイザと連携。 |
+| 4 | **ATTACH DATABASE**<br>**DETACH DATABASE** | ○ | ○ | ○ | **○ Full** | `ATTACH DATABASE 'path' AS schema` および `DETACH DATABASE schema` を完全サポート（Phase 7 / [Issue #263](../issues/closed/263-implement-sqlite-parity-attach-detach-database.md)）。`schema.table` によるクロススキーマ透過クエリ、`PRAGMA database_list` 連動。 |
 | 5 | **BEGIN TRANSACTION**<br>**COMMIT / ROLLBACK** | ○ | ○ | ○ | **○ Full** | `BEGIN`, `BEGIN TRANSACTION`, `COMMIT`, `COMMIT TRANSACTION`, `ROLLBACK`, `ROLLBACK TRANSACTION` を完全サポート。MVCC Snapshot Isolation および ARIES/SS2PL ロックマネージャと完全統合。 |
 | 6 | **comment** (コメント) | ○ | ○ | ○ | **○ Full** | `-- line comment` 行コメントおよび `/* ... */` 複数行コメントの安全なパース・除去に対応。 |
 | 7 | **core functions**<br>(組み込みスカラ関数) | ○ | ○ | ○ | **○ Full** | `ABS`, `ROUND`, `RANDOM`, `LOWER`, `UPPER`, `LENGTH`, `SUBSTR`, `TRIM`, `LTRIM`, `RTRIM`, `REPLACE`, `COALESCE`, `NULLIF`, `IIF`, `TYPEOF`, `HEX`, `ZEROBLOB` 等を `src/database/sql/functions.py` に完全実装（Phase 4）。 |
@@ -121,12 +121,12 @@ flowchart TD
 | 11 | **DROP TABLE** | ○ | ○ | ○ | **○ Full** | `DROP TABLE [IF EXISTS] tbl` に対応。メモリカタログおよび物理ファイルを安全にクリーンアップ。 |
 | 12 | **CREATE TRIGGER**<br>**DROP TRIGGER** | ○ | ○ | ○ | **○ Full** | `CREATE TRIGGER [IF NOT EXISTS] ... BEFORE/AFTER INSERT/UPDATE/DELETE ON tbl BEGIN ... END;` および `DROP TRIGGER [IF EXISTS]` を完全サポート（Phase 6）。DML 実行時の自動発火・カスケード実行に対応。 |
 | 13 | **CREATE VIEW**<br>**DROP VIEW** | ○ | ○ | ○ | **○ Full** | `CREATE VIEW [IF NOT EXISTS] view_name AS select-stmt` および `DROP VIEW [IF EXISTS]` を完全サポート（Phase 3）。遅延バインド・自動インラインクエリ展開に対応。 |
-| 14 | **CREATE VIRTUAL TABLE**<br>(仮想テーブル) | ○ | ○ | ○ | **★ Extended** | `CREATE TABLE ... USING <engine> LOCATION '...'` 構文により `csv_table`, `json_table`, `binary_vdb`, `file_plain_text` を直接マウント可能。標準 DDL 構文 `USING module(args)` の動的指定は [Issue #264](../issues/264-implement-sqlite-parity-create-virtual-table.md) にて策定。 |
+| 14 | **CREATE VIRTUAL TABLE**<br>(仮想テーブル) | ○ | ○ | ○ | **★ Extended** | `CREATE VIRTUAL TABLE [IF NOT EXISTS] tbl USING module(args...)` および `CREATE TABLE ... USING <engine> LOCATION '...'` を完全サポート（Phase 7 / [Issue #264](../issues/closed/264-implement-sqlite-parity-create-virtual-table.md)）。プラガブルストレージ（CSV/Vector/PlainText）との動的マッピングと DQL/DML 透過実行。 |
 | 15 | **date and time functions**<br>(日付・時刻関数) | ○ | ○ | ○ | **○ Full** | `DATE()`, `TIME()`, `DATETIME()`, `JULIANDAY()`, `UNIXEPOCH()`, `STRFTIME()` を完全実装（Phase 4）。 |
-| 16 | **DELETE** (行削除) | ○ | ○ | ○ | **○ Full** | `DELETE FROM tbl [WHERE expr]` に対応（AND, OR, LIKE, IN, 比較演算子連動、BEFORE/AFTER トリガー自動発火）。 |
-| 17 | **EXPLAIN / EXPLAIN QUERY PLAN** | ○ | ○ | ○ | **○ Full** | `EXPLAIN [QUERY PLAN] SELECT ...` に対応。`QueryPlanner` が Full Table Scan / B-Tree Index Scan / HNSW Vector Scan の選択理由と推定コストを出力。 |
+| 16 | **DELETE** (行削除) | ○ | ○ | ○ | **○ Full** | `DELETE FROM tbl [INDEXED BY idx | NOT INDEXED] [WHERE expr] [RETURNING ...]` に対応（Phase 2, 7）。AND, OR, LIKE, IN, 比較演算子連動、BEFORE/AFTER トリガー自動発火。 |
+| 17 | **EXPLAIN / EXPLAIN QUERY PLAN** | ○ | ○ | ○ | **○ Full** | `EXPLAIN [QUERY PLAN] SELECT ...` に対応。`QueryPlanner` が Full Table Scan / B-Tree Index Scan / HNSW Vector Scan の選択理由と推定コストを出力。`INDEXED BY` / `NOT INDEXED` 連動（Phase 7）。 |
 | 18 | **expression** (式評価) | ○ | ○ | ○ | **○ Full** | 四則演算 (`+`, `-`, `*`, `/`, `%`), 比較 (`=`, `!=`, `<`, `>`, `<=`, `>=`), `LIKE ... ESCAPE`, `GLOB` (fnmatch), `BETWEEN ... AND ...`, `IS [NOT] NULL`, `CASE ... WHEN ... THEN ... ELSE ... END`, `IN/NOT IN (SELECT ...)`, `EXISTS (SELECT ...)`, スカラーサブクエリを完全サポート（Phase 1, 4, 5）。 |
-| 19 | **INDEXED BY / NOT INDEXED** | ○ | ○ | ○ | **○ Full** | `FROM/JOIN tbl INDEXED BY idx` による特定インデックス走査強制、`FROM/JOIN tbl NOT INDEXED` によるフルスキャン強制、オプティマイザ判定の上書きと `EXPLAIN QUERY PLAN` への反映、UPDATE/DELETE でのインデックスヒント検証を完全実装（[Issue #265](../issues/closed/265-implement-sqlite-parity-indexed-by-hint.md)）。 |
+| 19 | **INDEXED BY / NOT INDEXED** | ○ | ○ | ○ | **○ Full** | `FROM/JOIN tbl INDEXED BY idx` による特定インデックス走査強制、`FROM/JOIN tbl NOT INDEXED` によるフルスキャン強制、オプティマイザ判定の上書きと `EXPLAIN QUERY PLAN` への反映、UPDATE/DELETE でのインデックスヒント検証を完全実装（Phase 7 / [Issue #265](../issues/closed/265-implement-sqlite-parity-indexed-by-hint.md)）。 |
 | 20 | **INSERT** (行挿入) | ○ | ○ | ○ | **○ Full** | 単一レコード挿入、複数行 `VALUES (...), (...)`、`INSERT INTO ... SELECT`、および `RETURNING` 句を完全サポート（Phase 2）。 |
 | 21 | **JSON functions** | ○ | ○ | ○ | **★ Extended** | `JSON_EXTRACT`, `JSON_ARRAY`, `JSON_OBJECT`, `JSON_TYPE`, `JSON_VALID` 関数、および PostgreSQL / SQLite 3.38+ 準拠の **`->` (JSON抽出)** / **`->>` (テキスト非クォート抽出)** 演算子をネイティブサポート（Phase 4）。 |
 | 22 | **keywords** (予約語) | ○ | ○ | ○ | **○ Full** | 主要な DDL/DML/DQL/TCL/DCL キーワードおよびクォート識別子（`"col"`, `[col]`, `` `col` ``）を完全認識。 |
@@ -137,8 +137,8 @@ flowchart TD
 | 27 | **RELEASE / SAVEPOINT** | ○ | ○ | ○ | **○ Full** | `SAVEPOINT sp`, `RELEASE [SAVEPOINT] sp`, `ROLLBACK TO [SAVEPOINT] sp` によるネスト可能なトランザクション制御と ARIES スナップショット復元を完全サポート（Phase 6）。 |
 | 28 | **REPLACE** | ○ | ○ | ○ | **○ Full** | `REPLACE INTO tbl ...` (INSERT OR REPLACE 意味論) を完全サポート（Phase 2）。 |
 | 29 | **RETURNING clause** | ○ | ○ | ○ | **○ Full** | `INSERT / UPDATE / DELETE ... RETURNING ...` による変更行結果セット返却を完全サポート（Phase 2）。 |
-| 30 | **SELECT** (検索・結合・集約) | ○ | ○ | ○ | **○ Full** | 射影, `DISTINCT`, `OFFSET`, `*`, エイリアス (`AS`), 四則演算, `FROM`, `JOIN` (INNER/LEFT/CROSS/複数結合), `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`, 集合演算 (`UNION [ALL]`, `INTERSECT`, `EXCEPT`), 窓関数 (`OVER`) を完全サポート（Phase 1, 5）。 |
-| 31 | **UPDATE** (行更新) | ○ | ○ | ○ | **○ Full** | `UPDATE tbl SET col1 = val1 [WHERE expr]`、`RETURNING` 句、BEFORE/AFTER トリガー自動発火を完全サポート。 |
+| 30 | **SELECT** (検索・結合・集約) | ○ | ○ | ○ | **○ Full** | 射影, `DISTINCT`, `OFFSET`, `*`, エイリアス (`AS`), 四則演算, `FROM`, `JOIN` (INNER/LEFT/CROSS/複数結合), `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`, 集合演算 (`UNION [ALL]`, `INTERSECT`, `EXCEPT`), 窓関数 (`OVER`), インデックスヒント (`INDEXED BY / NOT INDEXED`) を完全サポート（Phase 1, 5, 7）。 |
+| 31 | **UPDATE** (行更新) | ○ | ○ | ○ | **○ Full** | `UPDATE tbl [INDEXED BY idx | NOT INDEXED] SET col1 = val1 [WHERE expr]`、`RETURNING` 句、BEFORE/AFTER トリガー自動発火を完全サポート（Phase 2, 7）。 |
 | 32 | **VACUUM** | ○ | ○ | ○ | **○ Full** | `VACUUM [tbl]` による物理ストレージコンパクション・断片化解消を完全サポート（Phase 6）。 |
 | 33 | **WITH clause (CTE)** | ○ | ○ | ○ | **○ Full** | `WITH [RECURSIVE] cte_name [(cols...)] AS (SELECT ...) SELECT ...` に対応。共通テーブル式および再帰クエリのパース・実行をサポート。 |
 
@@ -146,22 +146,22 @@ flowchart TD
 
 ### 2.2 トップレベルステートメント対比表 (sql-stmt 25種類)
 
-SQLite 公式文法ダイアグラム（`sql-stmt`）に規定された全 25 種類のトップレベルステートメントとの対応関係です。
+SQLite 公式文法ダイアグラム（`sql-stmt`）に規定された全 25 種類のトップレベルステートメントとの対応関係です。**全25種類が Pure Python Engine において完全サポート（100% カバレッジ達成）** されています。
 
 | # | SQLite Statement (`sql-stmt`) | Pure Python Engine | SQLite Bridge | 主な構文例 / 動作仕様 |
 | :---: | :--- | :---: | :---: | :--- |
 | 1 | `alter-table-stmt` | **○** | ○ | `ALTER TABLE tbl RENAME TO / RENAME COLUMN / ADD COLUMN / DROP COLUMN` (Phase 3) |
-| 2 | `analyze-stmt` | △ | ○ | 内部オプティマイザが自動統計収集。明示 SQL 構文は [Issue #262](../issues/262-implement-sqlite-parity-analyze-statement.md) にて策定 |
-| 3 | `attach-stmt` | △ | ○ | dbshell `.use <db>` / `settings.py` で代替。明示 SQL 構文は [Issue #263](../issues/263-implement-sqlite-parity-attach-detach-database.md) にて策定 |
-| 4 | `begin-stmt` | **○** | ○ | `BEGIN [TRANSACTION]` |
-| 5 | `commit-stmt` | **○** | ○ | `COMMIT [TRANSACTION]` |
-| 6 | `create-index-stmt` | **○** | ○ | `CREATE [UNIQUE] INDEX idx ON tbl (col) [USING HNSW/BTREE]` |
+| 2 | `analyze-stmt` | **○** | ○ | `ANALYZE [tbl \| idx]` テーブル・インデックス走査と統計収集・CBO連携 (Phase 7 / Issue #262) |
+| 3 | `attach-stmt` | **○** | ○ | `ATTACH DATABASE 'path' AS schema` 外部DB動的マウント・クロススキーマ結合 (Phase 7 / Issue #263) |
+| 4 | `begin-stmt` | **○** | ○ | `BEGIN [TRANSACTION]` (Phase 1, 6) |
+| 5 | `commit-stmt` | **○** | ○ | `COMMIT [TRANSACTION]` (Phase 1, 6) |
+| 6 | `create-index-stmt` | **○** | ○ | `CREATE [UNIQUE] INDEX idx ON tbl (col) [USING HNSW/BTREE]` (Phase 1, 3) |
 | 7 | `create-table-stmt` | **○** | ○ | `CREATE TABLE tbl (...) [USING engine LOCATION '...']` |
 | 8 | `create-trigger-stmt` | **○** | ○ | `CREATE TRIGGER trig BEFORE/AFTER INSERT/UPDATE/DELETE ON tbl BEGIN ... END;` (Phase 6) |
 | 9 | `create-view-stmt` | **○** | ○ | `CREATE VIEW view_name AS select-stmt` (Phase 3) |
-| 10 | `create-virtual-table-stmt` | **○** | ○ | `CREATE TABLE ... USING csv_table/json_table/...` (動的モジュール指定は [Issue #264](../issues/264-implement-sqlite-parity-create-virtual-table.md)) |
-| 11 | `delete-stmt` / `-limited` | **○** | ○ | `DELETE FROM tbl WHERE cond [RETURNING ...]` |
-| 12 | `detach-stmt` | △ | ○ | dbshell スコープ切替で代替。明示 SQL 構文は [Issue #263](../issues/263-implement-sqlite-parity-attach-detach-database.md) にて策定 |
+| 10 | `create-virtual-table-stmt` | **○** | ○ | `CREATE VIRTUAL TABLE tbl USING module(args...)` 動的仮想テーブルマウント (Phase 7 / Issue #264) |
+| 11 | `delete-stmt` / `-limited` | **○** | ○ | `DELETE FROM tbl [INDEXED BY idx] WHERE cond [RETURNING ...]` (Phase 2, 7) |
+| 12 | `detach-stmt` | **○** | ○ | `DETACH DATABASE schema` スキーマ動的アンマウント (Phase 7 / Issue #263) |
 | 13 | `drop-index-stmt` | **○** | ○ | `DROP INDEX [IF EXISTS] idx` (Phase 3) |
 | 14 | `drop-table-stmt` | **○** | ○ | `DROP TABLE [IF EXISTS] tbl` |
 | 15 | `drop-trigger-stmt` | **○** | ○ | `DROP TRIGGER [IF EXISTS] trig` (Phase 6) |
@@ -172,9 +172,29 @@ SQLite 公式文法ダイアグラム（`sql-stmt`）に規定された全 25 �
 | 20 | `release-stmt` | **○** | ○ | `RELEASE [SAVEPOINT] sp` (Phase 6) |
 | 21 | `rollback-stmt` | **○** | ○ | `ROLLBACK [TRANSACTION]`, `ROLLBACK TO [SAVEPOINT] sp` (Phase 6) |
 | 22 | `savepoint-stmt` | **○** | ○ | `SAVEPOINT sp` (Phase 6) |
-| 23 | `select-stmt` | **○** | ○ | `SELECT DISTINCT ... FROM ... JOIN ... WHERE ... GROUP BY ... HAVING ... ORDER BY ... LIMIT ... OFFSET ...` (Phase 1, 5) |
-| 24 | `update-stmt` / `-limited` | **○** | ○ | `UPDATE tbl SET col = val WHERE cond [RETURNING ...]` (Phase 2) |
+| 23 | `select-stmt` | **○** | ○ | `SELECT DISTINCT ... FROM ... [INDEXED BY ...] JOIN ... WHERE ... GROUP BY ... HAVING ... ORDER BY ... LIMIT ... OFFSET ...` (Phase 1, 5, 7) |
+| 24 | `update-stmt` / `-limited` | **○** | ○ | `UPDATE tbl [INDEXED BY idx] SET col = val WHERE cond [RETURNING ...]` (Phase 2, 7) |
 | 25 | `vacuum-stmt` | **○** | ○ | `VACUUM [tbl]` (Phase 6) |
+
+---
+
+### 2.3 高度仕様・拡張構文対比マトリクス (Advanced & Modern SQLite 3.3x+ Features)
+
+SQLite 3.30+ 以降の最新仕様、エンタープライズ制約、および特殊な仮想テーブル機能との対比状況です。中核機能（33 Topics / 25 Statements）の 100% 達成に続き、以下の未対応項目をロードマップ（Phase 8 〜 Phase 10）として推進します。
+
+| # | 高度機能・構文項目 | SQLite 導入版 | Pure Python Engine | 総合判定 | 構文仕様・制約および対応方針 |
+| :---: | :--- | :---: | :---: | :---: | :--- |
+| 1 | **`UPDATE ... FROM` (Join Update)** | 3.33.0+ | × 未対応 | **△ Planned** | 他テーブルと結合しながら行を更新する構文 `UPDATE tbl SET col = t2.val FROM t2 WHERE tbl.id = t2.id`（Phase 8）。 |
+| 2 | **スタンドアロン `VALUES` クエリ** | 3.7.11+ | × 未対応 | **△ Planned** | `SELECT` を伴わずに単独でテーブル値を生成するクエリ `VALUES (1, 'Alice'), (2, 'Bob')`（Phase 8）。 |
+| 3 | **`CREATE TABLE ... STRICT`** | 3.37.0+ | × 未対応 | **△ Planned** | 動的型付けを排し、厳格なデータ型（`INT`, `REAL`, `TEXT`, `BLOB`, `ANY`）を強制するテーブル宣言（Phase 8）。 |
+| 4 | **生成列 (`GENERATED ALWAYS AS`)** | 3.31.0+ | × 未対応 | **△ Planned** | 他列の式から自動導出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`（Phase 8）。 |
+| 5 | **`COLLATE` 照合順序句** | 標準 | × 未対応 | **△ Planned** | 大小文字を区別しない比較 `WHERE col = 'text' COLLATE NOCASE` やソート順序制御（Phase 8）。 |
+| 6 | **`VACUUM INTO 'filename'`** | 3.27.0+ | × 未対応 | **△ Planned** | 稼働中データベースをロックせず別ファイルへ無停止オンラインバックアップ・コンパクション出力（Phase 9）。 |
+| 7 | **`INSTEAD OF` トリガー** | 標準 | × 未対応 | **△ Planned** | 更新不可能な VIEW に対して DML 操作（INSERT/UPDATE/DELETE）をフックして基底テーブルへ転送（Phase 9）。 |
+| 8 | **外部キーカスケード (`CASCADE`)** | 標準 | × 未対応 | **△ Planned** | 親レコード更新・削除時に子レコードを自動連動更新・削除する `ON DELETE CASCADE / ON UPDATE SET NULL`（Phase 9）。 |
+| 9 | **拡張 PRAGMA (`table_xinfo` 等)** | 標準 | △ 部分対応 | **△ Planned** | 生成列・Hidden列を含む拡張カラム情報 `PRAGMA table_xinfo`、スキーマバージョン管理 `PRAGMA user_version`（Phase 9）。 |
+| 10 | **`FTS5` (Full-Text Search 5)** | 拡張 | × 未対応 | **△ Planned** | 仮想テーブルを用いた BM25 スコアリング付き高速全文検索エンジン `CREATE VIRTUAL TABLE fts USING fts5(...)`（Phase 10）。 |
+| 11 | **`json_each()` / `json_tree()`** | 3.38.0+ | × 未対応 | **△ Planned** | JSON 配列・階層オブジェクトを行セットとして展開・走査するテーブル値関数（Phase 10）。 |
 
 ---
 
@@ -407,11 +427,11 @@ SELECT id, title FROM papers WHERE KNN_SCORE(vector, EMBED('Post-Quantum Cryptog
 
 ## 6. SQLite 完全互換化ロードマップ (Full Feature Parity Roadmap)
 
-SQLite 公式仕様（[sqlite.org/lang.html](https://sqlite.org/lang.html)）の全機能を Pure Python SQL Engine において完全サポートするため、段階的実装ロードマップ（Phase 1 〜 Phase 6）を実行し、全中核機能の実装・マージを完了しました。さらに今後の拡張候補として Phase 7（残課題 Issue #262 〜 #265）を策定しています。
+SQLite 公式仕様（[sqlite.org/lang.html](https://sqlite.org/lang.html)）の全機能を Pure Python SQL Engine において完全サポートするため、段階的実装ロードマップ（Phase 1 〜 Phase 7）を実行し、全中核機能（33 Topics / 25 Statements）の実装・マージを 100% 完了しました。さらに今後の先端・高度拡張ロードマップとして Phase 8 〜 Phase 10 を策定しています。
 
 ```mermaid
 gantt
-    title SQLite 完全互換化実装ロードマップ (Phase 1 〜 Phase 7)
+    title SQLite 完全互換化実装ロードマップ (Phase 1 〜 Phase 10)
     dateFormat  YYYY-MM
     axisFormat  %Y-%m
 
@@ -434,7 +454,16 @@ gantt
     SAVEPOINT / PRAGMA / VACUUM / TRIGGER :done, p6, 2026-09, 2026-09
 
     section Phase 7: 次世代拡張 & 完全化
-    ANALYZE / ATTACH / VIRTUAL TABLE / INDEXED BY :active, p7, 2026-09, 2026-10
+    ANALYZE / ATTACH / VIRTUAL TABLE / INDEXED BY :done, p7, 2026-09, 2026-09
+
+    section Phase 8: モダン DQL/DML & 厳格整合性
+    UPDATE FROM / VALUES / STRICT / GENERATED :active, p8, 2026-10, 2026-11
+
+    section Phase 9: バックアップ & 高度トリガー
+    VACUUM INTO / INSTEAD OF / CASCADE :p9, 2026-11, 2026-12
+
+    section Phase 10: 高度モジュール & FTS5
+    FTS5 全文検索 / json_each / json_tree :p10, 2026-12, 2027-01
 ```
 
 ---
@@ -533,14 +562,65 @@ gantt
 
 ### 6.7 Phase 7: 次世代拡張 & プラガブル機能の完全化 (Issue #262 〜 #265) 【完了 / Closed】
 
-Phase 1 〜 6 および Phase 7（運用管理・スキーマ・オプティマイザヒント構文 4 件）の完了により、中核機能の 100% が SQLite 完全互換となりました。
+Phase 1 〜 6 および Phase 7（運用管理・スキーマ・オプティマイザヒント構文 4 件）の完了により、中核機能（33 Topics / 25 Statements）の 100% が SQLite 完全互換となりました。
 
-| Issue ID | タイトル | 主な対象機能・構文仕様 | 状態 |
-| :---: | :--- | :--- | :--- |
-| **[#262](../issues/closed/262-implement-sqlite-parity-analyze-statement.md)** | **ANALYZE 構文による統計情報収集と CBO 最適化連携** | `ANALYZE [schema \| tbl \| idx]` 構文のパース、行数・カーディナリティ・NULL比率の明示走査集計、`sqlite_stat1` 互換メタデータおよび CBO 最適化（`cbo.py`）への統計情報連携。 | **Closed (完了)** |
-| **[#263](../issues/closed/263-implement-sqlite-parity-attach-detach-database.md)** | **ATTACH / DETACH DATABASE 構文による動的マルチスキーママウント** | `ATTACH DATABASE 'path' AS schema` による SQL 内からの動的外部 DB マウント、`schema.table` クロススキーマ結合、`DETACH DATABASE schema`、`PRAGMA database_list` 動的反映。 | **Closed (完了)** |
-| **[#264](../issues/closed/264-implement-sqlite-parity-create-virtual-table.md)** | **CREATE VIRTUAL TABLE 構文によるプラガブルストレージ DDL マッピング** | `CREATE VIRTUAL TABLE tbl USING module(args...)` 構文のパース、`PluggableStorageFactory` 連携（CSV/Vector/PlainText）、SQL DDL 経由での動的仮想テーブル登録と透過 DQL/DML 実行。 | **Closed (完了)** |
-| **[#265](../issues/closed/265-implement-sqlite-parity-indexed-by-hint.md)** | **INDEXED BY / NOT INDEXED 句による明示的インデックスヒント** | `FROM tbl INDEXED BY idx` による特定インデックス走査強制、`FROM tbl NOT INDEXED` によるフルスキャン強制、オプティマイザ判定の上書きと `EXPLAIN QUERY PLAN` への反映。 | **Closed (完了)** |
+| Issue ID | タイトル | 主な対象機能・構文仕様 | マージコミット | 状態 |
+| :---: | :--- | :--- | :---: | :---: |
+| **[#262](../issues/closed/262-implement-sqlite-parity-analyze-statement.md)** | **ANALYZE 構文による統計情報収集と CBO 最適化連携** | `ANALYZE [schema \| tbl \| idx]` 構文のパース、行数・カーディナリティ・NULL比率の明示走査集計、`sqlite_stat1` 互換メタデータおよび CBO 最適化（`cbo.py`）への統計情報連携。 | `4d8cfdd8` | **Closed (完了)** |
+| **[#263](../issues/closed/263-implement-sqlite-parity-attach-detach-database.md)** | **ATTACH / DETACH DATABASE 構文による動的マルチスキーママウント** | `ATTACH DATABASE 'path' AS schema` による SQL 内からの動的外部 DB マウント、`schema.table` クロススキーマ結合、`DETACH DATABASE schema`、`PRAGMA database_list` 動的反映。 | `b9a54345` | **Closed (完了)** |
+| **[#264](../issues/closed/264-implement-sqlite-parity-create-virtual-table.md)** | **CREATE VIRTUAL TABLE 構文によるプラガブルストレージ DDL マッピング** | `CREATE VIRTUAL TABLE tbl USING module(args...)` 構文のパース、`PluggableStorageFactory` 連携（CSV/Vector/PlainText）、SQL DDL 経由での動的仮想テーブル登録と透過 DQL/DML 実行。 | `7f38bcb9` | **Closed (完了)** |
+| **[#265](../issues/closed/265-implement-sqlite-parity-indexed-by-hint.md)** | **INDEXED BY / NOT INDEXED 句による明示的インデックスヒント** | `FROM tbl INDEXED BY idx` による特定インデックス走査強制、`FROM tbl NOT INDEXED` によるフルスキャン強制、オプティマイザ判定の上書きと `EXPLAIN QUERY PLAN` への反映。 | `92407458` | **Closed (完了)** |
+
+- **目的**: 運用管理・統計収集・外部ストレージ連動・オプティマイザ制御の完全 SQL 化。
+- **変更モジュール**: `ast.py`, `parser.py`, `executor.py`, `planner/planner.py`, `planner/cost.py`
+
+---
+
+### 6.8 Phase 8: モダン DQL/DML 構文拡張 & 厳格データ整合性 【計画中 / Planned】
+
+SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合性の厳格化を推進します。
+
+| 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
+| :---: | :--- | :--- | :---: |
+| **#266** | **`UPDATE ... FROM` (Join Update) 構文の実装** | `UPDATE tbl SET col = t2.val FROM other_tbl t2 WHERE tbl.id = t2.id` 構文のパース、他テーブル結合行を用いた一括更新。 | SQLite 3.33.0+ |
+| **#267** | **スタンドアロン `VALUES` クエリ構文の実装** | `SELECT` を伴わない `VALUES (1, 'Alice'), (2, 'Bob')` 単独実行および CTE / サブクエリ連携。 | SQLite 3.7.11+ |
+| **#268** | **`CREATE TABLE ... STRICT` モードの実装** | 動的型付け（Any型）を排し、`INT`, `REAL`, `TEXT`, `BLOB`, `ANY` の厳格なデータ型キャスト・検証を強制。 | SQLite 3.37.0+ |
+| **#269** | **生成列 (`GENERATED ALWAYS AS`) の実装** | 他カラムの式から自動算出される計算列 `col INT GENERATED ALWAYS AS (c1 + c2) [STORED \| VIRTUAL]`。 | SQLite 3.31.0+ |
+| **#270** | **`COLLATE` 照合順序句 (`NOCASE`, `RTRIM`, `BINARY`) の実装** | 大小文字を区別しない比較・ソート `WHERE col = 'test' COLLATE NOCASE`、`ORDER BY col COLLATE RTRIM`。 | SQLite 標準 |
+
+- **目的**: 先端クエリ表現力の向上およびアプリケーション層での型検証オーバーヘッド削減。
+- **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `functions.py`
+
+---
+
+### 6.9 Phase 9: エンタープライズバックアップ & 高度トリガー・外部キーカスケード 【計画中 / Planned】
+
+本番運用における無停止バックアップ、ビューに対する変更透過性、および自動リレーショナル整合性を確立します。
+
+| 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
+| :---: | :--- | :--- | :---: |
+| **#271** | **`VACUUM INTO 'filename'` オンラインバックアップの実装** | 稼働中データベースを排他ロックせず、指定ファイルパスへ無停止スナップショット・コンパクションを出力。 | SQLite 3.27.0+ |
+| **#272** | **VIEW 向け `INSTEAD OF` トリガーの実装** | `CREATE TRIGGER ... INSTEAD OF INSERT/UPDATE/DELETE ON view_name BEGIN ... END;` による更新可能ビューの実現。 | SQLite 標準 |
+| **#273** | **外部キーカスケード (`ON DELETE CASCADE` / `ON UPDATE SET NULL`) の実装** | 親行削除・更新時に子レコードを自動連動処理するリレーショナル整合性エンジン。 | SQLite 標準 |
+| **#274** | **拡張 PRAGMA (`table_xinfo`, `user_version`) の実装** | 生成列・非表示列を含む拡張スキーマ照会およびスキーママイグレーション追跡用ユーザーバージョン番号管理。 | SQLite 標準 |
+
+- **目的**: エンタープライズ級のバックアップ自動化と堅牢なリレーショナル整合性保証。
+- **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `storage/`
+
+---
+
+### 6.10 Phase 10: 高度拡張モジュール & 全文検索インテグレーション 【計画中 / Planned】
+
+自然言語検索と半構造化データ解析を SQL 上で融合する拡張モジュール群を提供します。
+
+| 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
+| :---: | :--- | :--- | :---: |
+| **#275** | **`FTS5` (Full-Text Search 5) 仮想テーブル & `MATCH` 演算子の実装** | `CREATE VIRTUAL TABLE fts USING fts5(title, abstract)`、`MATCH` 演算子および BM25 ランキングスコアリング。 | SQLite FTS5 |
+| **#276** | **テーブル値関数 `json_each()` / `json_tree()` の実装** | JSON 配列・階層木構造を行セットとして動的展開し、JOIN 句内で走査・フィルタリング可能にする機能。 | SQLite 3.38.0+ |
+| **#277** | **ユーザー定義照合順序 (User-Defined Collation) 登録機構の実装** | Python コールバック関数を用いた多言語・カスタムソート順序の動的登録インターフェース。 | SQLite C/Python API |
+
+- **目的**: 論文抄録・脅威インテリジェンスの全文検索と複雑な階層型 JSON データのシームレスな分析。
+- **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `functions.py`
 
 ---
 
