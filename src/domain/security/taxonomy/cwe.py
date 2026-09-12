@@ -115,6 +115,73 @@ def get_cwe_recipe(cwe_id: str) -> Optional[Dict[str, Any]]:
     return CWE_DEFENSE_MAP.get(normalized)
 
 
+def _extract_first_mitigation(mitigations: Any) -> str:
+    if isinstance(mitigations, list) and mitigations:
+        first = mitigations[0]
+        if isinstance(first, dict):
+            return str(first.get("description", "") or "Refer to MITRE CWE guidance.")
+    return "Refer to MITRE CWE guidance."
+
+
+def _build_dynamic_cwe_definition(
+    cwe_record: Dict[str, Any], normalized: str
+) -> Dict[str, Any]:
+    mitigations = cwe_record.get("mitigations") or []
+    return {
+        "name": cwe_record.get("name", normalized),
+        "description": cwe_record.get("description", ""),
+        "semgrep_pattern": "",
+        "secure_alternative": _extract_first_mitigation(mitigations),
+        "patch_strategy": "Apply defensive coding and mitigations recommended by MITRE CWE.",
+        "mitre_technique": "",
+        "is_top25": cwe_record.get("is_top25", False),
+        "top25_rank": cwe_record.get("top25_rank"),
+        "abstraction": cwe_record.get("abstraction", "Base"),
+        "mitigations": mitigations,
+        "secure_coding_patterns": [],
+    }
+
+
+def _normalize_cwe_key(cwe_id: str) -> str:
+    s = cwe_id.strip().upper()
+    return s if s.startswith("CWE-") or not s else f"CWE-{s}"
+
+
+def _fetch_storage_cwe(storage: Any, normalized: str) -> Optional[Dict[str, Any]]:
+    try:
+        from domain.security.cti.storage import CTICatalogStorage
+
+        inst: CTICatalogStorage = (
+            storage if isinstance(storage, CTICatalogStorage) else CTICatalogStorage()
+        )
+        return inst.get_cwe(normalized)
+    except Exception:
+        return None
+
+
+def get_cwe_definition(
+    cwe_id: str, storage: Optional[Any] = None
+) -> Optional[Dict[str, Any]]:
+    """Hybrid resolver for CWE definitions.
+
+    Prefers static high-fidelity defense recipes in CWE_DEFENSE_MAP,
+    falling back to dynamic cti_catalog_db records stored via CweSpider.
+    """
+    recipe = get_cwe_recipe(cwe_id)
+    if recipe is not None:
+        return recipe
+
+    normalized = _normalize_cwe_key(cwe_id)
+    if not normalized:
+        return None
+
+    cwe_record = _fetch_storage_cwe(storage, normalized)
+    if cwe_record:
+        return _build_dynamic_cwe_definition(cwe_record, normalized)
+
+    return None
+
+
 _CWE_TRIE: Optional[Any] = None
 
 

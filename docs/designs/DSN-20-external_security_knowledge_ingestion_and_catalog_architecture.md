@@ -265,17 +265,32 @@ CREATE TABLE IF NOT EXISTS cti_mitigations (
 );
 
 -- ============================================================================
--- 2. CWE & CVE 拡張スロットテーブル (Phase 2/3 用)
+-- 2. CWE カタログ & リレーションシップテーブル (Phase 2)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS cwe_weaknesses (
+CREATE TABLE IF NOT EXISTS cti_cwes (
     cwe_id TEXT PRIMARY KEY,          -- e.g. 'CWE-89'
-    name TEXT NOT NULL,               -- e.g. 'SQL Injection'
-    abstraction TEXT,                 -- 'Class', 'Base', 'Variant'
-    description TEXT,
-    likelihood_of_exploit TEXT,
-    extended_notes TEXT
+    name TEXT NOT NULL,               -- e.g. 'Improper Neutralization of Special Elements used in an SQL Command'
+    weakness_abstraction TEXT,        -- 'Class', 'Base', 'Variant'
+    status TEXT,                      -- 'Draft', 'Stable', 'Incomplete'
+    description TEXT,                 -- 概要説明
+    extended_description TEXT,        -- 詳細説明
+    likelihood_of_exploit TEXT,       -- 'High', 'Medium', 'Low'
+    is_top25 INTEGER DEFAULT 0,       -- MITRE Top 25 該当フラグ (0 or 1)
+    parent_cwe_id TEXT,               -- 親CWE ID
+    url TEXT                          -- 公式CWEリファレンスURL
 );
+
+CREATE INDEX IF NOT EXISTS idx_cwe_top25 ON cti_cwes(is_top25);
+
+CREATE TABLE IF NOT EXISTS cti_cwe_relationships (
+    source_cwe_id TEXT NOT NULL,      -- e.g. 'CWE-89'
+    target_cwe_id TEXT NOT NULL,      -- e.g. 'CWE-20' (Parent / Child)
+    relationship_type TEXT NOT NULL,  -- 'ChildOf' | 'ParentOf' | 'PeerOf'
+    PRIMARY KEY (source_cwe_id, target_cwe_id, relationship_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cwe_rel_target ON cti_cwe_relationships(target_cwe_id);
 
 CREATE TABLE IF NOT EXISTS cve_advisories (
     cve_id TEXT PRIMARY KEY,          -- e.g. 'CVE-2024-1234'
@@ -310,6 +325,40 @@ CREATE VIRTUAL TABLE IF NOT EXISTS cti_techniques_fts USING fts5(
     content_rowid='rowid'
 );
 ```
+
+## 4.3 クロスドメイン因果モデル (Cross-Domain Causality Graph)
+
+`cti_catalog.db` は、単独のタクソノミー保管に留まらず、論文（Paper）、脆弱性（CVE）、弱点体系（CWE）、攻撃手法（ATT&CK）を多段ホップで接続する因果グラフモデルを提供する。
+
+```mermaid
+graph LR
+    subgraph Research_Domain ["学術研究ドメイン"]
+        Paper["📄 arXiv Security Paper"]
+    end
+
+    subgraph Vulnerability_Domain ["脆弱性・弱点ドメイン"]
+        CVE["⚠️ CVE Advisory<br/>(cve_advisories)"]
+        CWE["🧩 MITRE CWE<br/>(cti_cwes)"]
+    end
+
+    subgraph Threat_Domain ["脅威インテリジェンスドメイン"]
+        Technique["🛡️ ATT&CK Technique<br/>(cti_techniques)"]
+        Mitigation["🛡️ ATT&CK Mitigation<br/>(cti_mitigations)"]
+    end
+
+    Paper -->|"1-hop: mentions / targets"| CVE
+    CVE -->|"1-hop: classified_as"| CWE
+    Paper -.->"2-hop: abstracts_to (Paper ➔ CVE ➔ CWE)"| CWE
+    CWE -->|"exploited_via"| Technique
+    Mitigation -->|"mitigates"| Technique
+```
+
+1. **1-Hop 結合 (CVE ➔ CWE)**:
+   - `cve_advisories.cwe_id` を介して、各 CVE から親・派生弱点 `cti_cwes` へ直接ナビゲート。
+   - `cti_cwe_relationships` を走査することで、個別バリアント（Variant）から基底弱点（Base / Class）への上位抽象化および階層推論が可能。
+2. **2-Hop 結合 (Paper ➔ CVE ➔ CWE)**:
+   - 学術論文の Context Mesh / エンティティ抽出において、論文から抽出された具体的脆弱性（CVE）を経由して、背後にある根本原因弱点（CWE）および MITRE ATT&CK TTPs へ自動接続。
+   - これにより、ゼロデイ脆弱性や新規攻撃手法を論文から検知した際、既知の CWE Top 25 弱点カテゴリや ATT&CK 防御緩和策（Mitigation）とのマッピングが自律的に完成する。
 
 ---
 
@@ -436,9 +485,10 @@ gantt
     STIX 2.0/2.1 パーサー & SQLite FTS5基盤      :done, p1_1, 2026-09-01, 2026-09-04
     Registry & オフラインフォールバック実装      :done, p1_2, 2026-09-04, 2026-09-05
     Taxonomy, Seeder, MCP ツール統合            :done, p1_3, 2026-09-05, 2026-09-05
-    section Phase 2: CWE 体系化 (次期)
-    CWE XML/JSON ストリーミングパーサー実装     :active, p2_1, 2026-09-06, 2026-09-08
-    CWE Top 25 & 階層リレーションカタログ統合   :p2_2, 2026-09-08, 2026-09-10
+    section Phase 2: CWE 体系化 (完了・運用中)
+    MITRE CWE Spider & カタログインジェスト基盤 :done, p2_1, 2026-09-06, 2026-09-08
+    CWE Top 25 & 階層リレーション走査 API       :done, p2_2, 2026-09-08, 2026-09-10
+    Hybrid CWE Resolver & Taxonomy 連携         :done, p2_3, 2026-09-10, 2026-09-12
     section Phase 3: CVE & KEV 連携
     cvelistV5 / CISA KEV JSON プロバイダ実装    :p3_1, 2026-09-11, 2026-09-14
     CVSS/EPSS スコアリング & 悪用フラグ連携     :p3_2, 2026-09-14, 2026-09-16
