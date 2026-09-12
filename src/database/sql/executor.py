@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..btree import BPlusTree
 from ..embedding import DeterministicEmbedding
@@ -44,6 +44,7 @@ from .functions import BUILTIN_FUNCTIONS
 from .parser import SQLParser, _split_comma_expressions
 from .security import AccessController
 from .transaction import TransactionManager
+from .window import compute_window_functions, extract_window_functions
 
 logger = logging.getLogger(__name__)
 
@@ -802,32 +803,119 @@ def _resolve_condition_expected_val(record: Dict[str, Any], expected_val: Any) -
     return expected_val
 
 
-def _evaluate_single_condition(record: Dict[str, Any], c: Dict[str, Any]) -> bool:
-    field = c.get("field") or c.get("column") or ""
-    op = c.get("op") or c.get("operator") or "="
+def _substitute_correlated_vars(sql: str, record: Dict[str, Any]) -> str:
+    for k, v in record.items():
+        if "." in k:
+            sql = re.sub(
+                rf"\b{re.escape(k)}\b",
+                f"'{v}'" if isinstance(v, str) else str(v),
+                sql,
+            )
+    return sql
+
+
+def _val_in_inner_rows(actual: Any, inner_rows: List[Dict[str, Any]]) -> bool:
+    flat_vals = [v for r in inner_rows for v in r.values()]
+    if actual in flat_vals:
+        return True
+    str_actual = str(actual)
+    return any(str(x) == str_actual for x in flat_vals)
+
+
+def _eval_subquery_membership(
+    actual: Any, inner_rows: List[Dict[str, Any]], op: str
+) -> bool:
+    is_in = _val_in_inner_rows(actual, inner_rows)
+    return is_in if op == "IN" else not is_in
+
+
+def _eval_exists_op(op: str, inner_rows: List[Dict[str, Any]]) -> bool:
+    has_rows = len(inner_rows) > 0
+    return has_rows if op == "EXISTS" else not has_rows
+
+
+def _exec_subquery(
+    executor: Any, subquery_sql: str, record: Dict[str, Any], role: str
+) -> List[Dict[str, Any]]:
+    sub_sql = _substitute_correlated_vars(subquery_sql, record)
+    res = executor.execute(sub_sql, role=role)
+    return list(res.get("rows", []))
+
+
+def _eval_subquery_predicate(
+    record: Dict[str, Any],
+    c: Dict[str, Any],
+    executor: Any,
+    role: str,
+    temp_tables: Any,
+) -> bool:
+    subquery_sql = str(c.get("subquery") or "")
+    if not executor or not subquery_sql:
+        return False
+    op = _get_cond_op(c).upper()
+    inner_rows = _exec_subquery(executor, subquery_sql, record, role)
+    if "EXISTS" in op:
+        return _eval_exists_op(op, inner_rows)
+    actual = _extract_field_value(record, _get_cond_field(c))
+    return _eval_subquery_membership(actual, inner_rows, op)
+
+
+def _get_cond_field(c: Dict[str, Any]) -> str:
+    return str(c.get("field") or c.get("column") or "")
+
+
+def _get_cond_op(c: Dict[str, Any]) -> str:
+    return str(c.get("op") or c.get("operator") or "=")
+
+
+def _evaluate_single_condition(
+    record: Dict[str, Any],
+    c: Dict[str, Any],
+    executor: Any = None,
+    role: str = "admin",
+    temp_tables: Any = None,
+) -> bool:
+    if "subquery" in c:
+        return _eval_subquery_predicate(record, c, executor, role, temp_tables)
+    field = _get_cond_field(c)
+    op = _get_cond_op(c)
     expected_val = _resolve_condition_expected_val(record, c.get("value"))
     actual = _extract_field_value(record, field)
     return _eval_comparison(op, actual, expected_val, c)
 
 
 def _matches_or_branches(
-    record: Dict[str, Any], branches: List[Dict[str, Any]]
+    record: Dict[str, Any],
+    branches: List[Dict[str, Any]],
+    executor: Any = None,
+    role: str = "admin",
+    temp_tables: Any = None,
 ) -> bool:
     for branch in branches:
         sub_clauses = branch.get("clauses", [])
-        if all(_evaluate_single_condition(record, c) for c in sub_clauses):
+        if all(
+            _evaluate_single_condition(record, c, executor, role, temp_tables)
+            for c in sub_clauses
+        ):
             return True
     return False
 
 
 def _matches_where_clause(
-    record: Dict[str, Any], clauses: List[Dict[str, Any]]
+    record: Dict[str, Any],
+    clauses: List[Dict[str, Any]],
+    executor: Any = None,
+    role: str = "admin",
+    temp_tables: Any = None,
 ) -> bool:
     if not clauses:
         return True
     if any(c.get("logic") == "OR_BRANCH" for c in clauses):
-        return _matches_or_branches(record, clauses)
-    return all(_evaluate_single_condition(record, c) for c in clauses)
+        return _matches_or_branches(record, clauses, executor, role, temp_tables)
+    return all(
+        _evaluate_single_condition(record, c, executor, role, temp_tables)
+        for c in clauses
+    )
 
 
 def _inspect_table_slice(tname: str, storage: Any, target: str) -> Dict[str, Any]:
@@ -1044,8 +1132,14 @@ def _strip_as_alias(col_expr: str) -> str:
     return col_expr[: as_m.start()].strip() if as_m else col_expr.strip()
 
 
+def _is_window_expression(norm: str) -> bool:
+    return " OVER (" in norm or " OVER(" in norm
+
+
 def _is_aggregate_expression(col_expr: str) -> bool:
     norm = _strip_as_alias(col_expr).upper()
+    if _is_window_expression(norm):
+        return False
     return any(
         norm.startswith(fn)
         for fn in (
@@ -2094,12 +2188,9 @@ class SQLExecutor:
             self._project_row(r, stmt.columns, table_ref.name) for r in paged_rows
         ]
         final_rows = self._apply_distinct_and_slice(final_rows, stmt)
-
-        if stmt.union_all:
-            union_res = self._exec_select(
-                stmt.union_all, effective_role, temporary_tables=temp_tables
-            )
-            final_rows.extend(union_res.get("rows", []))
+        final_rows = self._apply_compound_operations(
+            final_rows, stmt, effective_role, temp_tables
+        )
 
         return {
             "command": "SELECT",
@@ -2108,6 +2199,70 @@ class SQLExecutor:
             "rows": final_rows,
         }
 
+    def _combine_union_rows(
+        self,
+        final_rows: List[Dict[str, Any]],
+        stmt: SelectStatement,
+        role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        if stmt.union_all:
+            res = self._exec_select(stmt.union_all, role, temporary_tables=temp_tables)
+            final_rows.extend(res.get("rows", []))
+            return final_rows
+        if stmt.union:
+            res = self._exec_select(stmt.union, role, temporary_tables=temp_tables)
+            return self._deduplicate_rows(final_rows + res.get("rows", []))
+        return final_rows
+
+    @staticmethod
+    def _row_to_hashable(r: Dict[str, Any]) -> Tuple[Tuple[str, str], ...]:
+        return tuple((k, str(v)) for k, v in sorted(r.items()))
+
+    def _build_row_hash_set(
+        self, rows: List[Dict[str, Any]]
+    ) -> Set[Tuple[Tuple[str, str], ...]]:
+        return {self._row_to_hashable(r) for r in rows}
+
+    def _combine_intersect_rows(
+        self,
+        final_rows: List[Dict[str, Any]],
+        intersect_stmt: Optional[SelectStatement],
+        role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        if not intersect_stmt:
+            return final_rows
+        res = self._exec_select(intersect_stmt, role, temporary_tables=temp_tables)
+        right_set = self._build_row_hash_set(res.get("rows", []))
+        matched = [r for r in final_rows if self._row_to_hashable(r) in right_set]
+        return self._deduplicate_rows(matched)
+
+    def _combine_except_rows(
+        self,
+        final_rows: List[Dict[str, Any]],
+        except_stmt: Optional[SelectStatement],
+        role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        if not except_stmt:
+            return final_rows
+        res = self._exec_select(except_stmt, role, temporary_tables=temp_tables)
+        right_set = self._build_row_hash_set(res.get("rows", []))
+        diff = [r for r in final_rows if self._row_to_hashable(r) not in right_set]
+        return self._deduplicate_rows(diff)
+
+    def _apply_compound_operations(
+        self,
+        final_rows: List[Dict[str, Any]],
+        stmt: SelectStatement,
+        role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        rows = self._combine_union_rows(final_rows, stmt, role, temp_tables)
+        rows = self._combine_intersect_rows(rows, stmt.intersect, role, temp_tables)
+        return self._combine_except_rows(rows, stmt.except_, role, temp_tables)
+
     def _try_fast_count_select(
         self, stmt: SelectStatement, role: str, temp_tables: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -2115,11 +2270,20 @@ class SQLExecutor:
             return self._exec_fast_count(stmt, role)
         return None
 
-    @staticmethod
     def _filter_select_rows(
-        rows: List[Dict[str, Any]], where_clauses: Any
+        self,
+        rows: List[Dict[str, Any]],
+        where_clauses: Any,
+        role: str = "admin",
+        temp_tables: Any = None,
     ) -> List[Dict[str, Any]]:
-        return [r for r in rows if _matches_where_clause(r, where_clauses)]
+        return [
+            r
+            for r in rows
+            if _matches_where_clause(
+                r, where_clauses, executor=self, role=role, temp_tables=temp_tables
+            )
+        ]
 
     @staticmethod
     def _apply_group_and_having(
@@ -2156,11 +2320,18 @@ class SQLExecutor:
             self._evaluate_all_ctes(stmt.ctes, effective_role, temp_tables)
 
         current_rows = self._scan_and_join_tables(stmt, effective_role, temp_tables)
-        filtered_rows = self._filter_select_rows(current_rows, stmt.where_clauses)
+        filtered_rows = self._filter_select_rows(
+            current_rows,
+            stmt.where_clauses,
+            role=effective_role,
+            temp_tables=temp_tables,
+        )
         grouped_rows = self._apply_group_and_having(filtered_rows, stmt)
+        win_specs = extract_window_functions(stmt.columns)
+        windowed_rows = compute_window_functions(grouped_rows, win_specs)
         lim, off = self._resolve_paginate_limits(stmt)
         paged_rows = self._sort_and_paginate(
-            grouped_rows, stmt.order_by, stmt.order_desc, lim, off
+            windowed_rows, stmt.order_by, stmt.order_desc, lim, off
         )
         return self._build_select_result(paged_rows, stmt, effective_role, temp_tables)
 

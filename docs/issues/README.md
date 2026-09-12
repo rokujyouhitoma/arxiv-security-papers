@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **260** | SQLite 完全互換化 Phase 5: 高度な集合演算 & サブクエリ・ウィンドウ関数 (INTERSECT, EXCEPT, Subqueries, Window Functions) の実装 | Feature | Low | Open (New) | [260-implement-sqlite-parity-phase5-set-subquery-window-functions.md](260-implement-sqlite-parity-phase5-set-subquery-window-functions.md) |
+| **260** | SQLite 完全互換化 Phase 5: 高度な集合演算 & サブクエリ・ウィンドウ関数 (INTERSECT, EXCEPT, Subqueries, Window Functions) の実装 | Feature | Low | Closed | [closed/260-implement-sqlite-parity-phase5-set-subquery-window-functions.md](closed/260-implement-sqlite-parity-phase5-set-subquery-window-functions.md) |
 | **261** | SQLite 完全互換化 Phase 6: トランザクション拡張 & メタデータ・トリガー (SAVEPOINT, PRAGMA, VACUUM, TRIGGER) の実装 | Feature | Low | Open (New) | [261-implement-sqlite-parity-phase6-savepoint-pragma-vacuum-trigger.md](261-implement-sqlite-parity-phase6-savepoint-pragma-vacuum-trigger.md) |
 | **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | Medium | Open (New) | [250-implement-louvain-community-detection-for-cti-graph.md](250-implement-louvain-community-detection-for-cti-graph.md) |
 | **251** | Lehman-Yao 型 B-link Tree によるラッチフリー並行走査およびスプリット追随インデックスエンジンの実装 | Feature | Low | Open (New) | [251-implement-lehman-yao-b-link-tree-concurrent-index.md](251-implement-lehman-yao-b-link-tree-concurrent-index.md) |

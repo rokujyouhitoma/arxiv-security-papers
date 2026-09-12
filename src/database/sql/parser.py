@@ -81,6 +81,25 @@ def _is_top_level_comma(ch: str, paren_depth: int, in_quote: bool) -> bool:
     return ch == "," and paren_depth == 0 and not in_quote
 
 
+def _is_top_level_boundary(i: int, sql: str, paren_depth: int, in_quote: bool) -> bool:
+    return paren_depth == 0 and not in_quote and (i == 0 or sql[i - 1].isspace())
+
+
+def _find_top_level_keyword_pos(sql: str, pattern: str) -> Optional[Tuple[int, int]]:
+    """Finds start and end index of top-level keyword pattern."""
+    regex = re.compile(rf"^({pattern})(?:\s+|$)", re.IGNORECASE)
+    paren_depth, in_quote, quote_char = 0, False, ""
+    for i, ch in enumerate(sql):
+        if _is_top_level_boundary(i, sql, paren_depth, in_quote):
+            m = regex.match(sql[i:])
+            if m:
+                return i, i + len(m.group(1))
+        paren_depth, in_quote, quote_char = _update_scan_state(
+            ch, paren_depth, in_quote, quote_char
+        )
+    return None
+
+
 def _collect_remaining_chunk(res: List[str], curr: List[str]) -> List[str]:
     if curr:
         res.append("".join(curr).strip())
@@ -290,20 +309,37 @@ def _parse_between_clause(part: str) -> Optional[Dict[str, Any]]:
 
 
 def _parse_in_clause(part: str) -> Optional[Dict[str, Any]]:
-    """Parses IN/NOT IN condition."""
+    """Parses IN/NOT IN condition (literals or subqueries)."""
     in_m = re.match(
         r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+IN|IN)\s*\((.*?)\)$",
         part,
-        re.IGNORECASE,
+        re.IGNORECASE | re.DOTALL,
     )
-    if in_m:
-        items = [x.strip().strip("'\"") for x in in_m.group(3).split(",")]
-        return {
-            "column": in_m.group(1),
-            "operator": in_m.group(2).upper(),
-            "value": items,
-        }
-    return None
+    if not in_m:
+        return None
+    raw_inner = in_m.group(3).strip()
+    op = re.sub(r"\s+", " ", in_m.group(2).upper())
+    if raw_inner.upper().startswith("SELECT"):
+        return {"column": in_m.group(1), "operator": op, "subquery": raw_inner}
+    items = [x.strip().strip("'\"") for x in raw_inner.split(",")]
+    return {"column": in_m.group(1), "operator": op, "value": items}
+
+
+def _parse_exists_clause(part: str) -> Optional[Dict[str, Any]]:
+    """Parses EXISTS/NOT EXISTS (SELECT ...) condition."""
+    m = re.match(
+        r"^(NOT\s+EXISTS|EXISTS)\s*\((.*?)\)$", part.strip(), re.IGNORECASE | re.DOTALL
+    )
+    if not m:
+        return None
+    raw_inner = m.group(2).strip()
+    if not raw_inner.upper().startswith("SELECT"):
+        return None
+    return {
+        "column": "*",
+        "operator": re.sub(r"\s+", " ", m.group(1).upper()),
+        "subquery": raw_inner,
+    }
 
 
 def _parse_cmp_clause(part: str) -> Optional[Dict[str, Any]]:
@@ -325,6 +361,7 @@ _WHERE_PARSERS = (
     _parse_between_clause,
     _parse_glob_clause,
     _parse_like_clause,
+    _parse_exists_clause,
     _parse_in_clause,
     _parse_cmp_clause,
 )
@@ -403,32 +440,30 @@ def _split_column_defs(cols_body: str) -> list[str]:
     return cols
 
 
+def _parse_limit_offset_clause(lim_str: str) -> Tuple[Optional[int], Optional[int]]:
+    """Parses numeric LIMIT and optional OFFSET from limit string."""
+    m_off = re.match(r"^([0-9]+)\s+OFFSET\s+([0-9]+)$", lim_str, re.IGNORECASE)
+    if m_off:
+        return int(m_off.group(1)), int(m_off.group(2))
+    m_comma = re.match(r"^([0-9]+)\s*,\s*([0-9]+)$", lim_str)
+    if m_comma:
+        return int(m_comma.group(2)), int(m_comma.group(1))
+    m_single = re.match(r"^([0-9]+)$", lim_str)
+    if m_single:
+        return int(m_single.group(1)), None
+    return None, None
+
+
 def _extract_limit_and_offset(
     clean_sql: str,
 ) -> Tuple[str, Optional[int], Optional[int]]:
     """Extracts and strips LIMIT and OFFSET values."""
-    m_off = re.search(
-        r"\s+LIMIT\s+([0-9]+)\s+OFFSET\s+([0-9]+)$", clean_sql, re.IGNORECASE
-    )
-    if m_off:
-        return (
-            clean_sql[: m_off.start()].strip(),
-            int(m_off.group(1)),
-            int(m_off.group(2)),
-        )
-    m_comma = re.search(
-        r"\s+LIMIT\s+([0-9]+)\s*,\s*([0-9]+)$", clean_sql, re.IGNORECASE
-    )
-    if m_comma:
-        return (
-            clean_sql[: m_comma.start()].strip(),
-            int(m_comma.group(2)),
-            int(m_comma.group(1)),
-        )
-    m_lim = re.search(r"\s+LIMIT\s+([0-9]+)$", clean_sql, re.IGNORECASE)
-    if m_lim:
-        return clean_sql[: m_lim.start()].strip(), int(m_lim.group(1)), None
-    return clean_sql, None, None
+    pos = _find_top_level_keyword_pos(clean_sql, r"LIMIT")
+    if not pos:
+        return clean_sql, None, None
+    k_start, k_end = pos
+    lim, off = _parse_limit_offset_clause(clean_sql[k_end:].strip())
+    return clean_sql[:k_start].strip(), lim, off
 
 
 def _extract_storage_clauses(sql: str) -> tuple[str, Optional[str], Optional[str]]:
@@ -921,35 +956,49 @@ class SQLParser:
         main_stmt.raw_sql = sql
         return main_stmt
 
+    @staticmethod
+    def _assign_compound_stmt(
+        left_stmt: SelectStatement, op: str, right_stmt: SelectStatement
+    ) -> None:
+        if op == "UNION ALL":
+            left_stmt.union_all = right_stmt
+        elif op == "UNION":
+            left_stmt.union = right_stmt
+        elif op == "INTERSECT":
+            left_stmt.intersect = right_stmt
+        elif op == "EXCEPT":
+            left_stmt.except_ = right_stmt
+
     def _parse_select(self, sql: str) -> SelectStatement:
         union_split = self._split_top_level_union(sql)
         if union_split:
-            left_sql, _, right_sql = union_split
+            left_sql, op, right_sql = union_split
             left_stmt = self._parse_single_select(left_sql)
-            left_stmt.union_all = self._parse_select(right_sql)
+            right_stmt = self._parse_select(right_sql)
+            self._assign_compound_stmt(left_stmt, op, right_stmt)
             return left_stmt
 
         return self._parse_single_select(sql)
 
     def _check_union_at_pos(self, sql: str, i: int) -> Optional[Tuple[str, str, str]]:
-        """Checks for UNION ALL or UNION match at index i."""
-        union_all_m = re.match(r"^\s+UNION\s+ALL\s+", sql[i:], re.IGNORECASE)
-        if union_all_m:
-            left_part = sql[:i].strip()
-            right_part = sql[i + union_all_m.end() :].strip()
-            return left_part, "UNION ALL", right_part
-
-        union_m = re.match(r"^\s+UNION\s+", sql[i:], re.IGNORECASE)
-        if union_m:
-            left_part = sql[:i].strip()
-            right_part = sql[i + union_m.end() :].strip()
-            return left_part, "UNION", right_part
+        """Checks for compound operator match at index i."""
+        for pat, op_name in (
+            (r"^\s+UNION\s+ALL\s+", "UNION ALL"),
+            (r"^\s+UNION\s+", "UNION"),
+            (r"^\s+INTERSECT\s+", "INTERSECT"),
+            (r"^\s+EXCEPT\s+", "EXCEPT"),
+        ):
+            m = re.match(pat, sql[i:], re.IGNORECASE)
+            if m:
+                left_part = sql[:i].strip()
+                right_part = sql[i + m.end() :].strip()
+                return left_part, op_name, right_part
         return None
 
     def _update_depth_and_check(
         self, sql: str, i: int, char: str, paren_depth: int
     ) -> Tuple[int, Optional[Tuple[str, str, str]]]:
-        """Updates paren_depth and checks for union at position i."""
+        """Updates paren_depth and checks for compound op at position i."""
         if char == "(":
             return paren_depth + 1, None
         if char == ")":
@@ -976,39 +1025,41 @@ class SQLParser:
     def _extract_order_by_clause(
         self, clean_sql: str
     ) -> Tuple[str, Optional[str], bool]:
-        """Extracts and strips ORDER BY column and sort direction."""
-        order_m = re.search(
-            r"\s+ORDER\s+BY\s+([a-zA-Z0-9_\.\->>\'\"]+)(?:\s+(ASC|DESC))?$",
-            clean_sql,
-            re.IGNORECASE,
-        )
-        if order_m:
-            order_by = order_m.group(1).strip()
-            order_desc = (order_m.group(2) or "").upper() == "DESC"
-            return clean_sql[: order_m.start()].strip(), order_by, order_desc
-        return clean_sql, None, False
+        """Extracts and strips ORDER BY clause (supports multiple comma-separated keys)."""
+        pos = _find_top_level_keyword_pos(clean_sql, r"ORDER\s+BY")
+        if not pos:
+            return clean_sql, None, False
+        k_start, k_end = pos
+        first_item = clean_sql[k_end:].strip().split(",")[0].strip()
+        parts = first_item.split()
+        order_by = parts[0] if parts else None
+        order_desc = len(parts) > 1 and parts[1].upper() == "DESC"
+        return clean_sql[:k_start].strip(), order_by, order_desc
 
     def _extract_having_clause(self, clean_sql: str) -> Tuple[str, Optional[str]]:
         """Extracts and strips HAVING condition."""
-        having_m = re.search(r"\s+HAVING\s+(.+)$", clean_sql, re.IGNORECASE)
-        if having_m:
-            return clean_sql[: having_m.start()].strip(), having_m.group(1).strip()
-        return clean_sql, None
+        pos = _find_top_level_keyword_pos(clean_sql, r"HAVING")
+        if not pos:
+            return clean_sql, None
+        k_start, k_end = pos
+        return clean_sql[:k_start].strip(), clean_sql[k_end:].strip()
 
     def _extract_group_by_clause(self, clean_sql: str) -> Tuple[str, List[str]]:
         """Extracts and strips GROUP BY columns."""
-        group_m = re.search(r"\s+GROUP\s+BY\s+(.+)$", clean_sql, re.IGNORECASE)
-        if group_m:
-            cols = [c.strip() for c in group_m.group(1).split(",") if c.strip()]
-            return clean_sql[: group_m.start()].strip(), cols
-        return clean_sql, []
+        pos = _find_top_level_keyword_pos(clean_sql, r"GROUP\s+BY")
+        if not pos:
+            return clean_sql, []
+        k_start, k_end = pos
+        cols = [c.strip() for c in clean_sql[k_end:].strip().split(",") if c.strip()]
+        return clean_sql[:k_start].strip(), cols
 
     def _extract_where_clause(self, clean_sql: str) -> Tuple[str, Optional[str]]:
         """Extracts and strips WHERE condition."""
-        where_m = re.search(r"\s+WHERE\s+(.+)$", clean_sql, re.IGNORECASE)
-        if where_m:
-            return clean_sql[: where_m.start()].strip(), where_m.group(1).strip()
-        return clean_sql, None
+        pos = _find_top_level_keyword_pos(clean_sql, r"WHERE")
+        if not pos:
+            return clean_sql, None
+        k_start, k_end = pos
+        return clean_sql[:k_start].strip(), clean_sql[k_end:].strip()
 
     def _extract_knn_query(
         self, where_raw: str
@@ -1050,15 +1101,18 @@ class SQLParser:
         clean_sql, group_by_cols = self._extract_group_by_clause(clean_sql)
         clean_sql, where_raw = self._extract_where_clause(clean_sql)
 
-        select_m = re.match(
-            r"^SELECT\s+(.+?)\s+FROM\s+(.+)$", clean_sql, re.IGNORECASE | re.DOTALL
-        )
-        if not select_m:
+        from_pos = _find_top_level_keyword_pos(clean_sql, r"FROM")
+        if not from_pos:
+            raise SQLParseError(f"Malformed SELECT syntax: {sql}")
+        f_start, f_end = from_pos
+        select_prefix = clean_sql[:f_start].strip()
+        m_sel = re.match(r"^SELECT\s+(.+)$", select_prefix, re.IGNORECASE | re.DOTALL)
+        if not m_sel:
             raise SQLParseError(f"Malformed SELECT syntax: {sql}")
 
-        cols_raw, distinct = _extract_distinct_prefix(select_m.group(1).strip())
+        cols_raw, distinct = _extract_distinct_prefix(m_sel.group(1).strip())
         columns = self._parse_column_list(cols_raw)
-        table_ref, joins = self._parse_from_and_joins(select_m.group(2).strip())
+        table_ref, joins = self._parse_from_and_joins(clean_sql[f_end:].strip())
 
         where_clauses: List[Dict[str, Any]] = []
         knn_query: Optional[Dict[str, Any]] = None

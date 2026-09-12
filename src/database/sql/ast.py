@@ -192,6 +192,13 @@ class CTEDefinition:
     is_recursive: bool = False
 
 
+@dataclass
+class WindowSpec:
+    partition_by: List[str] = field(default_factory=list)
+    order_by: Optional[str] = None
+    order_desc: bool = False
+
+
 # DQL
 @dataclass
 class SelectStatement(SQLStatement):
@@ -204,7 +211,10 @@ class SelectStatement(SQLStatement):
     )
     joins: List[JoinClause] = field(default_factory=list)
     ctes: List[CTEDefinition] = field(default_factory=list)
-    union_all: Optional[Any] = None  # SelectStatement
+    union: Optional[Any] = None  # SelectStatement (UNION distinct)
+    union_all: Optional[Any] = None  # SelectStatement (UNION ALL)
+    intersect: Optional[Any] = None  # SelectStatement (INTERSECT)
+    except_: Optional[Any] = None  # SelectStatement (EXCEPT)
     order_by: Optional[str] = None
     order_desc: bool = False
     limit: Optional[int] = None

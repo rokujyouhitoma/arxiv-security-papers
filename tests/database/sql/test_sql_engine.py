@@ -798,3 +798,101 @@ def test_phase4_builtin_functions_and_case() -> None:
         )
         assert res_gc["status"] == "ok"
         assert res_gc["rows"][0]["all_names"] == "Alice; Bob; Charlie"
+
+
+def test_phase5_set_operations_subqueries_and_window_functions() -> None:
+    """Verify Phase 5 set operations (INTERSECT, EXCEPT), subqueries, and window functions."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db1 = os.path.join(tmpdir, "p5_t1.vdb")
+        db2 = os.path.join(tmpdir, "p5_t2.vdb")
+        executor = SQLExecutor()
+
+        executor.execute(
+            f"CREATE TABLE employees (id INT PRIMARY KEY, name VARCHAR, dept VARCHAR, score INT) "
+            f"USING binary_vdb LOCATION '{db1}'"
+        )
+        executor.execute(
+            f"CREATE TABLE managers (id INT PRIMARY KEY, title VARCHAR) USING binary_vdb LOCATION '{db2}'"
+        )
+
+        executor.execute(
+            "INSERT INTO employees (id, name, dept, score) VALUES (1, 'Alice', 'ENG', 100)"
+        )
+        executor.execute(
+            "INSERT INTO employees (id, name, dept, score) VALUES (2, 'Bob', 'ENG', 90)"
+        )
+        executor.execute(
+            "INSERT INTO employees (id, name, dept, score) VALUES (3, 'Charlie', 'ENG', 90)"
+        )
+        executor.execute(
+            "INSERT INTO employees (id, name, dept, score) VALUES (4, 'Dave', 'SALES', 80)"
+        )
+        executor.execute(
+            "INSERT INTO employees (id, name, dept, score) VALUES (5, 'Eve', 'SALES', 95)"
+        )
+
+        executor.execute("INSERT INTO managers (id, title) VALUES (1, 'Lead Engineer')")
+        executor.execute("INSERT INTO managers (id, title) VALUES (4, 'Sales Lead')")
+        executor.execute("INSERT INTO managers (id, title) VALUES (99, 'CEO')")
+
+        # 1. Set operations: INTERSECT, EXCEPT, UNION
+        res_intersect = executor.execute(
+            "SELECT id FROM employees INTERSECT SELECT id FROM managers ORDER BY id ASC"
+        )
+        assert res_intersect["status"] == "ok"
+        assert [r["id"] for r in res_intersect["rows"]] == [1, 4]
+
+        res_except = executor.execute(
+            "SELECT id FROM employees EXCEPT SELECT id FROM managers ORDER BY id ASC"
+        )
+        assert res_except["status"] == "ok"
+        assert [r["id"] for r in res_except["rows"]] == [2, 3, 5]
+
+        res_union = executor.execute(
+            "SELECT id FROM employees UNION SELECT id FROM managers ORDER BY id ASC"
+        )
+        assert res_union["status"] == "ok"
+        assert [r["id"] for r in res_union["rows"]] == [1, 2, 3, 4, 5, 99]
+
+        # 2. Subqueries: IN, NOT IN, EXISTS
+        res_in = executor.execute(
+            "SELECT id, name FROM employees WHERE id IN (SELECT id FROM managers) ORDER BY id ASC"
+        )
+        assert res_in["status"] == "ok"
+        assert [r["id"] for r in res_in["rows"]] == [1, 4]
+
+        res_not_in = executor.execute(
+            "SELECT id, name FROM employees WHERE id NOT IN (SELECT id FROM managers) ORDER BY id ASC"
+        )
+        assert res_not_in["status"] == "ok"
+        assert [r["id"] for r in res_not_in["rows"]] == [2, 3, 5]
+
+        res_exists = executor.execute(
+            "SELECT id, name FROM employees WHERE EXISTS (SELECT id FROM managers WHERE id = 99) ORDER BY id ASC"
+        )
+        assert res_exists["status"] == "ok"
+        assert res_exists["count"] == 5
+
+        # 3. Window functions: ROW_NUMBER, RANK, DENSE_RANK, SUM OVER
+        res_win = executor.execute(
+            "SELECT id, name, dept, score, "
+            "ROW_NUMBER() OVER (PARTITION BY dept ORDER BY score DESC) AS rn, "
+            "RANK() OVER (PARTITION BY dept ORDER BY score DESC) AS rk, "
+            "DENSE_RANK() OVER (PARTITION BY dept ORDER BY score DESC) AS drk, "
+            "SUM(score) OVER (PARTITION BY dept ORDER BY score ASC) AS running_sum "
+            "FROM employees ORDER BY dept ASC, rn ASC"
+        )
+        assert res_win["status"] == "ok"
+        eng_rows = [r for r in res_win["rows"] if r["dept"] == "ENG"]
+        assert eng_rows[0]["name"] == "Alice"
+        assert eng_rows[0]["rn"] == 1
+        assert eng_rows[0]["rk"] == 1
+        assert eng_rows[0]["drk"] == 1
+
+        assert eng_rows[1]["rn"] == 2
+        assert eng_rows[1]["rk"] == 2
+        assert eng_rows[1]["drk"] == 2
+
+        assert eng_rows[2]["rn"] == 3
+        assert eng_rows[2]["rk"] == 2  # Same score 90 as Bob
+        assert eng_rows[2]["drk"] == 2

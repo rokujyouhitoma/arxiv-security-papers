@@ -2,7 +2,7 @@
 ID: 260
 種別: Feature
 優先度: Low
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] SQLite 完全互換化 Phase 5: 高度な集合演算 & サブクエリ・ウィンドウ関数 (INTERSECT, EXCEPT, Subqueries, Window Functions) の実装 (ID: 260)
