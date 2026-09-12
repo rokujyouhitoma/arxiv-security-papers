@@ -100,6 +100,8 @@ class ColumnDef:
     data_type: str  # e.g., "VARCHAR", "INT", "FLOAT", "VECTOR(128)", "JSON", "TEXT"
     is_primary_key: bool = False
     is_nullable: bool = True
+    generated_expr: Optional[str] = None
+    is_stored: bool = False
 
 
 @dataclass

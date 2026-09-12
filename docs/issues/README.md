@@ -14,7 +14,6 @@
 | **272** | SQLite 完全互換化: VIEW 向け INSTEAD OF トリガーの実装 | Feature | Medium | Open (New) | [272-implement-sqlite-parity-instead-of-trigger.md](272-implement-sqlite-parity-instead-of-trigger.md) |
 | **271** | SQLite 完全互換化: VACUUM INTO 'filename' オンラインバックアップの実装 | Feature | Medium | Open (New) | [271-implement-sqlite-parity-vacuum-into.md](271-implement-sqlite-parity-vacuum-into.md) |
 | **270** | SQLite 完全互換化: COLLATE 照合順序句 (NOCASE, RTRIM, BINARY) の実装 | Feature | Low | Open (New) | [270-implement-sqlite-parity-collate-clause.md](270-implement-sqlite-parity-collate-clause.md) |
-| **269** | SQLite 完全互換化: 生成列 (GENERATED ALWAYS AS) の実装 | Feature | Low | Open (New) | [269-implement-sqlite-parity-generated-columns.md](269-implement-sqlite-parity-generated-columns.md) |
 | **251** | Lehman-Yao 型 B-link Tree によるラッチフリー並行走査およびスプリット追随インデックスエンジンの実装 | Feature | Low | Open (New) | [251-implement-lehman-yao-b-link-tree-concurrent-index.md](251-implement-lehman-yao-b-link-tree-concurrent-index.md) |
 | **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | Medium | Open (New) | [250-implement-louvain-community-detection-for-cti-graph.md](250-implement-louvain-community-detection-for-cti-graph.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
@@ -26,6 +25,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **269** | SQLite 完全互換化: 生成列 (GENERATED ALWAYS AS) の実装 | Feature | 2026-09-12 | [269-implement-sqlite-parity-generated-columns.md](closed/269-implement-sqlite-parity-generated-columns.md) |
 | **268** | SQLite 完全互換化: CREATE TABLE ... STRICT モードの実装 | Feature | 2026-09-12 | [268-implement-sqlite-parity-create-table-strict.md](closed/268-implement-sqlite-parity-create-table-strict.md) |
 | **267** | SQLite 完全互換化: スタンドアロン VALUES クエリ構文の実装 | Feature | 2026-09-12 | [267-implement-sqlite-parity-standalone-values.md](closed/267-implement-sqlite-parity-standalone-values.md) |
 | **266** | SQLite 完全互換化: UPDATE ... FROM (Join Update) 構文の実装 | Feature | 2026-09-12 | [266-implement-sqlite-parity-update-from.md](closed/266-implement-sqlite-parity-update-from.md) |

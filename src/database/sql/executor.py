@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from ..btree import BPlusTree
 from ..embedding import DeterministicEmbedding
@@ -21,6 +21,7 @@ from .ast import (
     AlterTableStatement,
     AnalyzeStatement,
     AttachStatement,
+    ColumnDef,
     CreateIndexStatement,
     CreateTableStatement,
     CreateTriggerStatement,
@@ -370,6 +371,7 @@ class TableCatalog:
         location: Optional[str] = None,
         database_scope: Optional[str] = None,
         strict: bool = False,
+        generated_columns: Optional[Dict[str, ColumnDef]] = None,
     ) -> None:
         self.name = name
         self.storage = storage
@@ -377,6 +379,7 @@ class TableCatalog:
         self.index = index if index is not None else HNSWIndex(dim=default_dim)
         self.schema = schema if schema is not None else {}
         self.strict = strict
+        self.generated_columns = generated_columns or {}
         self._init_catalog_metadata(raw_sql, storage_engine, location, database_scope)
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
@@ -1043,6 +1046,26 @@ def _check_strict_table_rows(
         return
     for r in rows:
         _validate_strict_row(table_name, table.schema, r)
+
+
+def _check_generated_column_writes(
+    table: TableCatalog, write_cols: Sequence[str]
+) -> None:
+    if not table.generated_columns:
+        return
+    for c in write_cols:
+        if c in table.generated_columns:
+            raise SQLExecutionError(
+                f"cannot write to generated column '{c}' in table '{table.name}'"
+            )
+
+
+def _compute_generated_columns(table: TableCatalog, row: Dict[str, Any]) -> None:
+    if not table.generated_columns:
+        return
+    for col_name, col_def in table.generated_columns.items():
+        if col_def.generated_expr is not None:
+            row[col_name] = _extract_field_value(row, col_def.generated_expr)
 
 
 def _inspect_table_slice(tname: str, storage: Any, target: str) -> Dict[str, Any]:
@@ -1905,6 +1928,9 @@ class SQLExecutor:
 
     def _create_new_table_storage(self, stmt: CreateTableStatement) -> None:
         storage = self._instantiate_table_storage(stmt)
+        gen_cols = {
+            col.name: col for col in stmt.columns if col.generated_expr is not None
+        }
         catalog = TableCatalog(
             name=stmt.table_name,
             storage=storage,
@@ -1913,6 +1939,7 @@ class SQLExecutor:
             storage_engine=stmt.storage_engine,
             location=stmt.location,
             strict=stmt.strict,
+            generated_columns=gen_cols,
         )
         self.tables[stmt.table_name] = catalog
 
@@ -2818,18 +2845,20 @@ class SQLExecutor:
             return [dict(r) for r in raw_rows]
         return [self._map_select_row_to_cols(r, stmt.columns) for r in raw_rows]
 
-    def _resolve_insert_columns(self, stmt: InsertStatement) -> List[str]:
+    def _resolve_insert_columns(
+        self, stmt: InsertStatement, table: TableCatalog
+    ) -> List[str]:
         if stmt.columns:
+            _check_generated_column_writes(table, stmt.columns)
             return stmt.columns
-        table = self._get_table(stmt.table_name)
-        return list(table.schema.keys()) if table.schema else []
+        return [c for c in table.schema.keys() if c not in table.generated_columns]
 
     def _build_insert_row_dicts(
-        self, stmt: InsertStatement, role: str
+        self, stmt: InsertStatement, table: TableCatalog, role: str
     ) -> List[Dict[str, Any]]:
         if stmt.select_stmt is not None:
             return self._build_from_select(stmt, role)
-        cols = self._resolve_insert_columns(stmt)
+        cols = self._resolve_insert_columns(stmt, table)
         if stmt.rows_values:
             return [dict(zip(cols, row)) for row in stmt.rows_values]
         if stmt.values:
@@ -2950,7 +2979,9 @@ class SQLExecutor:
         )
         self._ensure_table_exists_for_insert(stmt.table_name)
         table = self._get_table(stmt.table_name)
-        row_dicts = self._build_insert_row_dicts(stmt, effective_role)
+        row_dicts = self._build_insert_row_dicts(stmt, table, effective_role)
+        for r in row_dicts:
+            _compute_generated_columns(table, r)
         _check_strict_table_rows(table, stmt.table_name, row_dicts)
         modified_records = self._apply_insert_loop(
             table, row_dicts, stmt, effective_role
@@ -3062,14 +3093,19 @@ class SQLExecutor:
         self._fire_triggers(
             "BEFORE", "UPDATE", stmt.table_name, old_rec, effective_role
         )
-        if stmt.raw_assignments:
-            assignments = self._compute_update_assignments(stmt, eval_ctx)
-        else:
-            assignments = stmt.assignments
-        if table.strict:
-            _validate_strict_row(table.name, table.schema, assignments)
-        meta.update(assignments)
+        assignments = (
+            self._compute_update_assignments(stmt, eval_ctx)
+            if stmt.raw_assignments
+            else stmt.assignments
+        )
+        _check_generated_column_writes(table, list(assignments.keys()))
         new_rec = dict(meta)
+        new_rec.update(assignments)
+        _compute_generated_columns(table, new_rec)
+        if table.strict:
+            _validate_strict_row(table.name, table.schema, new_rec)
+        meta.clear()
+        meta.update(new_rec)
         self._fire_triggers("AFTER", "UPDATE", stmt.table_name, new_rec, effective_role)
         return new_rec
 

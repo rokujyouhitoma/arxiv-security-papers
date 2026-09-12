@@ -1432,3 +1432,76 @@ def test_create_table_strict_mode() -> None:
 
     sel_res = executor.execute("SELECT score FROM strict_users WHERE id = 1;")
     assert sel_res["rows"][0]["score"] == 98.5
+
+
+def test_generated_columns_lifecycle() -> None:
+    executor = SQLExecutor()
+
+    # 1. Circular reference error in generated column
+    with pytest.raises(
+        SQLParseError, match="Generated column 'c1' cannot refer to itself"
+    ):
+        executor.execute("CREATE TABLE bad_gencol (c1 INT AS (c1 + 1));")
+
+    # 2. Table creation with STORED and VIRTUAL generated columns
+    create_res = executor.execute(
+        "CREATE TABLE products ("
+        "id INT PRIMARY KEY, "
+        "price REAL, "
+        "qty INT, "
+        "total REAL GENERATED ALWAYS AS (price * qty) STORED, "
+        "discounted REAL AS (price * 0.9) VIRTUAL"
+        ");"
+    )
+    assert create_res["status"] == "ok"
+
+    # 3. INSERT with explicit column list (omitting generated columns)
+    ins_res1 = executor.execute(
+        "INSERT INTO products (id, price, qty) VALUES (1, 100.0, 5);"
+    )
+    assert ins_res1["status"] == "ok"
+    assert ins_res1["inserted_count"] == 1
+
+    sel1 = executor.execute(
+        "SELECT id, price, qty, total, discounted FROM products WHERE id = 1;"
+    )
+    assert sel1["status"] == "ok"
+    assert sel1["rows"][0]["total"] == 500.0
+    assert sel1["rows"][0]["discounted"] == 90.0
+
+    # 4. Implicit INSERT without column list (automatically skips generated columns)
+    ins_res2 = executor.execute("INSERT INTO products VALUES (2, 20.0, 10);")
+    assert ins_res2["status"] == "ok"
+    sel2 = executor.execute("SELECT total, discounted FROM products WHERE id = 2;")
+    assert sel2["rows"][0]["total"] == 200.0
+    assert sel2["rows"][0]["discounted"] == 18.0
+
+    # 5. Direct write restriction to generated columns (Tampering prevention)
+    with pytest.raises(
+        SQLExecutionError, match="cannot write to generated column 'total'"
+    ):
+        executor.execute(
+            "INSERT INTO products (id, price, qty, total) VALUES (3, 10.0, 2, 999.0);"
+        )
+
+    with pytest.raises(
+        SQLExecutionError, match="cannot write to generated column 'total'"
+    ):
+        executor.execute("UPDATE products SET total = 999.0 WHERE id = 1;")
+
+    with pytest.raises(
+        SQLExecutionError, match="cannot write to generated column 'discounted'"
+    ):
+        executor.execute("UPDATE products SET discounted = 50.0 WHERE id = 1;")
+
+    # 6. Automatic recomputation upon UPDATE of underlying columns
+    up_res = executor.execute("UPDATE products SET price = 150.0 WHERE id = 1;")
+    assert up_res["status"] == "ok"
+    assert up_res["updated_count"] == 1
+
+    sel3 = executor.execute(
+        "SELECT price, qty, total, discounted FROM products WHERE id = 1;"
+    )
+    assert sel3["rows"][0]["price"] == 150.0
+    assert sel3["rows"][0]["total"] == 750.0  # 150.0 * 5
+    assert sel3["rows"][0]["discounted"] == 135.0  # 150.0 * 0.9

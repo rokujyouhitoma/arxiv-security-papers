@@ -501,6 +501,21 @@ def _validate_strict_columns(columns: List[ColumnDef]) -> None:
             )
 
 
+def _extract_generated_column_info(
+    raw_col: str, c_name: str
+) -> Tuple[str, Optional[str], bool]:
+    gen_pattern = r"(?:GENERATED\s+ALWAYS\s+)?AS\s*\((.*?)\)(?:\s+(STORED|VIRTUAL))?"
+    gen_m = re.search(gen_pattern, raw_col, re.IGNORECASE)
+    if not gen_m:
+        return raw_col, None, False
+    gen_expr = gen_m.group(1).strip()
+    if re.search(rf"\b{re.escape(c_name)}\b", gen_expr):
+        raise SQLParseError(f"Generated column '{c_name}' cannot refer to itself")
+    is_stored = bool(gen_m.group(2) and gen_m.group(2).upper() == "STORED")
+    cleaned = raw_col[: gen_m.start()] + raw_col[gen_m.end() :]
+    return cleaned.strip(), gen_expr, is_stored
+
+
 def _split_and_conditions(text: str) -> List[str]:
     """Splits conditions on AND while preserving BETWEEN ... AND ... clauses."""
     pattern = (
@@ -1034,14 +1049,20 @@ class SQLParser:
             return None
         parts = raw_col.split()
         c_name = parts[0]
-        c_type = parts[1] if len(parts) > 1 else "TEXT"
-        is_pk = "PRIMARY KEY" in raw_col.upper()
-        is_nullable = "NOT NULL" not in raw_col.upper()
+        cleaned_col, gen_expr, is_stored = _extract_generated_column_info(
+            raw_col, c_name
+        )
+        c_parts = cleaned_col.split()
+        c_type = c_parts[1] if len(c_parts) > 1 else "TEXT"
+        is_pk = "PRIMARY KEY" in cleaned_col.upper()
+        is_nullable = "NOT NULL" not in cleaned_col.upper()
         return ColumnDef(
             name=c_name,
             data_type=c_type,
             is_primary_key=is_pk,
             is_nullable=is_nullable,
+            generated_expr=gen_expr,
+            is_stored=is_stored,
         )
 
     def _parse_create_table(self, sql: str) -> CreateTableStatement:
