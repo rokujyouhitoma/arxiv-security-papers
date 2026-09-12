@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .ast import (
     AlterTableAction,
     AlterTableStatement,
+    AnalyzeStatement,
     BeginStatement,
     ColumnDef,
     CommitStatement,
@@ -678,6 +679,25 @@ def _parse_vacuum_stmt(sql: str) -> Optional[VacuumStatement]:
     )
 
 
+def _parse_analyze_stmt(sql: str) -> Optional[AnalyzeStatement]:
+    clean = sql.strip()
+    m = re.match(
+        r"^ANALYZE(?:\s+(?:([a-zA-Z0-9_]+)\.)?([a-zA-Z0-9_]+))?$",
+        clean,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    schema_name = m.group(1)
+    target_name = m.group(2)
+    return AnalyzeStatement(
+        command_type=SQLCommandType.ANALYZE,
+        raw_sql=sql,
+        target_name=target_name,
+        schema_name=schema_name,
+    )
+
+
 def _parse_create_trigger_stmt(sql: str) -> CreateTriggerStatement:
     pattern = (
         r"^CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s+"
@@ -796,6 +816,8 @@ class SQLParser:
             return _parse_pragma_stmt(sql)
         if upper_sql.startswith("VACUUM"):
             return _parse_vacuum_stmt(sql)
+        if upper_sql.startswith("ANALYZE"):
+            return _parse_analyze_stmt(sql)
         return None
 
     def _parse_dcl_stmt(self, upper_sql: str, sql: str) -> Optional[SQLStatement]:

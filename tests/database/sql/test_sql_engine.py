@@ -982,3 +982,44 @@ def test_phase6_savepoint_pragma_vacuum_and_triggers() -> None:
         # Drop trigger
         res_drop_trg = executor.execute("DROP TRIGGER trg_after_insert")
         assert res_drop_trg["status"] == "ok"
+
+
+def test_phase7_analyze_statement() -> None:
+    """Verify Issue #262: SQLite Parity ANALYZE statement."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "analyze_test.vdb")
+        executor = SQLExecutor()
+
+        executor.execute(
+            f"CREATE TABLE metrics (id INT PRIMARY KEY, tag VARCHAR, val FLOAT) "
+            f"USING binary_vdb LOCATION '{db_path}'"
+        )
+        executor.execute("CREATE INDEX idx_metrics_tag ON metrics (tag)")
+
+        executor.execute("INSERT INTO metrics (id, tag, val) VALUES (1, 'cpu', 80.5)")
+        executor.execute("INSERT INTO metrics (id, tag, val) VALUES (2, 'mem', 45.0)")
+        executor.execute("INSERT INTO metrics (id, tag, val) VALUES (3, 'cpu', 92.1)")
+
+        # 1. ANALYZE single table
+        res_tbl = executor.execute("ANALYZE metrics")
+        assert res_tbl["status"] == "ok"
+        assert res_tbl["command"] == "ANALYZE"
+        assert "metrics" in res_tbl["tables_analyzed"]
+        assert res_tbl["total_rows"] == 3
+
+        # Verify TableStats are computed
+        table = executor.tables["metrics"]
+        assert table.stats.total_rows == 3
+        assert "tag" in table.stats.columns
+        assert table.stats.columns["tag"].distinct_count >= 1
+
+        # 2. ANALYZE via index name
+        res_idx = executor.execute("ANALYZE idx_metrics_tag")
+        assert res_idx["status"] == "ok"
+        assert "metrics" in res_idx["tables_analyzed"]
+
+        # 3. Full ANALYZE without arguments
+        res_all = executor.execute("ANALYZE")
+        assert res_all["status"] == "ok"
+        assert "metrics" in res_all["tables_analyzed"]
+        assert res_all["total_rows"] == 3

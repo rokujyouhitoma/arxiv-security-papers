@@ -19,6 +19,7 @@ from ..storage import VectorStorage
 from .ast import (
     AlterTableAction,
     AlterTableStatement,
+    AnalyzeStatement,
     CreateIndexStatement,
     CreateTableStatement,
     CreateTriggerStatement,
@@ -1575,6 +1576,43 @@ class SQLExecutor:
             tgt = "all"
         return {"command": "VACUUM", "status": "ok", "target": tgt}
 
+    def _analyze_single_table(self, tbl_name: str) -> Tuple[List[str], int]:
+        if tbl_name in self.tables:
+            tcat = self.tables[tbl_name]
+            tcat.recompute_stats()
+            return [tbl_name], tcat.stats.total_rows
+        return self._analyze_by_index(tbl_name)
+
+    def _analyze_by_index(self, idx_name: str) -> Tuple[List[str], int]:
+        for tbl_name, tcat in self.tables.items():
+            has_btree = idx_name in tcat.btree_indexes
+            has_def = any(d.get("name") == idx_name for d in tcat.index_definitions)
+            if has_btree or has_def:
+                tcat.recompute_stats()
+                return [tbl_name], tcat.stats.total_rows
+        return [], 0
+
+    def _analyze_all_tables(self) -> Tuple[List[str], int]:
+        tables: List[str] = []
+        total = 0
+        for name, tcat in self.tables.items():
+            tcat.recompute_stats()
+            tables.append(name)
+            total += tcat.stats.total_rows
+        return tables, total
+
+    def _exec_analyze(self, stmt: AnalyzeStatement, role: str) -> Dict[str, Any]:
+        if stmt.target_name:
+            tables, total = self._analyze_single_table(stmt.target_name)
+        else:
+            tables, total = self._analyze_all_tables()
+        return {
+            "command": "ANALYZE",
+            "status": "ok",
+            "tables_analyzed": tables,
+            "total_rows": total,
+        }
+
     def _exec_create_trigger(
         self, stmt: CreateTriggerStatement, role: str
     ) -> Dict[str, Any]:
@@ -2922,6 +2960,8 @@ class SQLExecutor:
             return self._exec_pragma(stmt, role)
         if isinstance(stmt, VacuumStatement):
             return self._exec_vacuum(stmt, role)
+        if isinstance(stmt, AnalyzeStatement):
+            return self._exec_analyze(stmt, role)
         return None
 
     def _exec_dcl_stmt(self, stmt: SQLStatement, role: str) -> Optional[Dict[str, Any]]:
