@@ -761,14 +761,14 @@ def _parse_pragma_stmt(sql: str) -> Optional[PragmaStatement]:
 def _parse_vacuum_stmt(sql: str) -> Optional[VacuumStatement]:
     clean = sql.strip()
     m = re.match(
-        r"^VACUUM(?:\s+INTO\s+['\"](.*?)['\"]|\s+([a-zA-Z0-9_]+))?$",
+        r"^VACUUM(?:\s+([a-zA-Z0-9_]+))?(?:\s+INTO\s+['\"](.*?)['\"])?$",
         clean,
         re.IGNORECASE,
     )
     if not m:
         return None
-    into_file = m.group(1)
-    target_table = m.group(2)
+    target_table = m.group(1)
+    into_file = m.group(2)
     return VacuumStatement(
         command_type=SQLCommandType.VACUUM,
         raw_sql=sql,

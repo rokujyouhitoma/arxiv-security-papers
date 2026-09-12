@@ -1792,7 +1792,37 @@ class SQLExecutor:
         elif hasattr(storage, "save"):
             storage.save()
 
+    def _copy_table_to_container(
+        self, tcat: TableCatalog, container: MultiTableVectorStorage, tbl_name: str
+    ) -> None:
+        dim = getattr(tcat.storage, "dim", 16)
+        dest_tbl = container.create_table(tbl_name, dim=dim)
+        vecs = tcat.storage.get_all_vectors()
+        meta = [dict(m) for m in tcat.storage.metadata]
+        dest_tbl.write_all(vecs, meta)
+
+    def _resolve_vacuum_target_tables(self, target_table: Optional[str]) -> List[str]:
+        if target_table and target_table in self.tables:
+            return [target_table]
+        return list(self.tables.keys())
+
+    def _exec_vacuum_into(self, stmt: VacuumStatement) -> Dict[str, Any]:
+        dest_file = stmt.into_file or ""
+        if os.path.exists(dest_file):
+            raise SQLExecutionError(
+                f"cannot VACUUM - target file already exists: {dest_file}"
+            )
+        container = MultiTableVectorStorage(file_path=dest_file)
+        for tname in self._resolve_vacuum_target_tables(stmt.target_table):
+            self._copy_table_to_container(self.tables[tname], container, tname)
+        container.save()
+        container.close()
+        tgt = stmt.target_table if stmt.target_table else "all"
+        return {"command": "VACUUM", "status": "ok", "target": tgt, "into": dest_file}
+
     def _exec_vacuum(self, stmt: VacuumStatement, role: str) -> Dict[str, Any]:
+        if stmt.into_file:
+            return self._exec_vacuum_into(stmt)
         if stmt.target_table and stmt.target_table in self.tables:
             self._exec_vacuum_table(self.tables[stmt.target_table])
             tgt = stmt.target_table

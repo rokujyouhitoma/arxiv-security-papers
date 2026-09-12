@@ -1616,3 +1616,33 @@ def test_collate_clause_lifecycle() -> None:
         executor.execute(
             "SELECT * FROM accounts WHERE username = 'alice' COLLATE INVALID_COLL;"
         )
+
+
+def test_vacuum_into_lifecycle(tmp_path):
+    executor = SQLExecutor()
+    executor.execute("CREATE TABLE dataset (id INT PRIMARY KEY, name TEXT, val REAL);")
+    executor.execute("INSERT INTO dataset (id, name, val) VALUES (1, 'Alpha', 10.5);")
+    executor.execute("INSERT INTO dataset (id, name, val) VALUES (2, 'Beta', 20.0);")
+
+    backup_file = str(tmp_path / "backup.vdb")
+
+    # 1. Successful VACUUM INTO
+    vac_res = executor.execute(f"VACUUM INTO '{backup_file}';")
+    assert vac_res["command"] == "VACUUM"
+    assert vac_res["status"] == "ok"
+    assert vac_res["into"] == backup_file
+    assert os.path.exists(backup_file)
+
+    # 2. Error when target file already exists
+    with pytest.raises(
+        SQLExecutionError, match="cannot VACUUM - target file already exists"
+    ):
+        executor.execute(f"VACUUM INTO '{backup_file}';")
+
+    # 3. Verify backup file can be ATTACHed and queried
+    verify_exec = SQLExecutor()
+    verify_exec.execute(f"ATTACH DATABASE '{backup_file}' AS bk;")
+    res = verify_exec.execute("SELECT * FROM bk.dataset ORDER BY id ASC;")
+    assert len(res["rows"]) == 2
+    assert res["rows"][0]["name"] == "Alpha"
+    assert res["rows"][1]["val"] == 20.0
