@@ -2,7 +2,7 @@
 ID: 253
 種別: Bug
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [BUG] Fix Context Mesh Paper Cluster Mapping to Sources Instead of Entities (ID: 253)
