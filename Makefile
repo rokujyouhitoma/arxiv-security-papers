@@ -281,3 +281,9 @@ test_chaos: activate ## Run ChaosVFS power-loss and ARIES crash resilience audit
 	PYTHONPATH=src:. ${VENV_PYTHON} -m database.chaos_runner --output docs/audits/database_resilience_report.md
 	${VENV_BIN}/pytest tests/database/scenarios/test_chaos_power_loss.py tests/database/test_database_mutation_resilience.py
 
+.PHONY: differential_audit
+differential_audit: activate ## Run Pure Python DB vs sqlite3 comparative differential evaluation
+	PYTHONPATH=src ${VENV_PYTHON} scripts/compare_sqlite3_differential.py
+	${VENV_BIN}/pytest tests/database/compatibility/test_sqlite3_differential.py
+
+
