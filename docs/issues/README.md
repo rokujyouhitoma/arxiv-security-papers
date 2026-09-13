@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **285** | 検索クエリパーサーの Packrat PEG 換装と括弧ネスト対応ブーリアンクエリ解析の実装 (DSN-25 Phase 1) | Feature | 2026-09-14 | [285-integrate-packrat-peg-into-search-query-parser.md](closed/285-integrate-packrat-peg-into-search-query-parser.md) |
 | **284** | 純粋 Python 製汎用 Packrat PEG (Parsing Expression Grammar) コアランタイム基盤の実装 (DSN-25 Phase 1) | Feature | 2026-09-14 | [284-implement-pure-python-packrat-peg-parser-core.md](closed/284-implement-pure-python-packrat-peg-parser-core.md) |
 | **283** | SQLite パリティ フェーズ4: 異常系エラーハンドリング統一 (無効なROLLBACKのOperationalError化) および BOTH_ERROR 評価確立 | Feature | 2026-09-13 | [283-sqlite-parity-phase4-error-handling-and-both-error-alignment.md](closed/283-sqlite-parity-phase4-error-handling-and-both-error-alignment.md) |
 | **282** | SQLite パリティ フェーズ4: DML 実行時の制約バリデーション（PRIMARY KEY 重複 ＆ NOT NULL 制約違反時の IntegrityError 送出）の実装 | Feature | 2026-09-13 | [282-sqlite-parity-phase4-dml-constraint-validation.md](closed/282-sqlite-parity-phase4-dml-constraint-validation.md) |

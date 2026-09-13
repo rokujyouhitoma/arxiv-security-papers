@@ -329,8 +329,8 @@ Phase 2 の事前コンパイラを作成する際、`.peg` 文法定義ファ�
 
 ### 8.2 完了条件 (Definition of Done)
 
-- [ ] `src/core/structures/peg.py` に Packrat PEG コアランタイムエンジンが実装されていること。
-- [ ] `src/core/structures/__init__.py` に公開クラスおよびヘルパー関数がエクスポートされていること。
-- [ ] `tests/core/test_peg.py` に単体テスト（リテラル、正規表現、連接、順序選択、反復、先読み、メモ化線形時間実証、エラー位置追跡、再帰深度リミット）が網羅されていること。
-- [ ] `src/search/query/query_parser.py` が PEG エンジンを用いて括弧ネスト検索クエリを完全解析できること。
-- [ ] 全品質ゲート（`make check_format` および `make static_analysis`）がエラー 0 件で通過すること。
+- [x] `src/core/structures/peg.py` に Packrat PEG コアランタイムエンジンが実装されていること。
+- [x] `src/core/structures/__init__.py` に公開クラスおよびヘルパー関数がエクスポートされていること。
+- [x] `tests/core/test_peg.py` に単体テスト（リテラル、正規表現、連接、順序選択、反復、先読み、メモ化線形時間実証、エラー位置追跡、再帰深度リミット）が網羅されていること。
+- [x] `src/search/query/query_parser.py` が PEG エンジンを用いて括弧ネスト検索クエリを完全解析できること。
+- [x] 全品質ゲート（`make check_format` および `make static_analysis`）がエラー 0 件で通過すること。
