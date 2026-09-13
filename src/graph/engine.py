@@ -157,7 +157,7 @@ def _decode_json_properties(raw_p: Any) -> Dict[str, Any]:
     if not raw_p:
         return {}
     try:
-        loaded = json.loads(str(raw_p)) if isinstance(raw_p, str) else raw_p
+        loaded = json.loads(raw_p) if isinstance(raw_p, str) else raw_p
         return loaded if isinstance(loaded, dict) else {}
     except (ValueError, TypeError):
         return {}
@@ -1002,7 +1002,7 @@ class PropertyGraphEngine:
     ) -> Dict[str, Any]:
         """Exports CTI knowledge graph formatted for /dashboard Canvas 2D visualization."""
         nodes_raw, edges_raw = self._resolve_subgraph_nodes_and_edges(limit, focus_node)
-        gaps = self.get_research_gaps() if include_gaps else []
+        gaps: List[Dict[str, Any]] = self.get_research_gaps() if include_gaps else []
         gap_id_set = {g["id"] for g in gaps}
 
         nodes = [self._format_cti_node(v, gap_id_set) for v in nodes_raw]
@@ -1504,6 +1504,11 @@ class PropertyGraphEngine:
         res = self._dispatch_structured_query(q_clean, q_low, limit)
         if res is not None:
             return res
+        from .query_dsl import execute_dsl_query
+
+        dsl_res = execute_dsl_query(self, q_clean, limit)
+        if dsl_res is not None:
+            return dsl_res
         if "->" in q_clean:
             return self._query_path(q_clean.replace("path:", ""))
         return self._query_match(q_clean.replace("match:", ""), limit)

@@ -9,6 +9,7 @@ from core.structures.community import LouvainCommunityDetector
 
 from .engine import PropertyGraphEngine
 from .graphrag import GraphRAGPipeline
+from .query_dsl import GraphQueryDSLParser, execute_dsl_query
 from .structures import Edge, Path, Vertex
 from .traversal import (
     GraphTraversal,
@@ -26,4 +27,6 @@ __all__ = [
     "find_connected_threat_clusters",
     "detect_threat_communities",
     "LouvainCommunityDetector",
+    "GraphQueryDSLParser",
+    "execute_dsl_query",
 ]
