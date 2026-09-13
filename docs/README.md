@@ -97,3 +97,6 @@
   - BEIR / CTI-Bench 準拠 ハイブリッド検索 (BM25 + HNSW + Graph) の定量的 SOTA 性能立証レポート。
 - 🛡️ **[データベース耐障害性・ARIES 復旧完全性監査レポート](audits/database_resilience_report.md)**
   - ChaosVFS による電源断シミュレーション・ミューテーションテスト下でのデータ完全復旧証明レポート。
+- ⚖️ **[Pure Python DB vs sqlite3 挙動同等性・差異監査報告書](audits/pure_python_db_vs_sqlite3_differential_report.md)**
+  - 全75テストケースによる自作 RDBMS (`src/database`) と標準 `sqlite3` の同等性実証・挙動差異・独自拡張詳細監査レポート。
+
