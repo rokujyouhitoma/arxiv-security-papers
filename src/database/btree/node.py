@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 B+Tree Node Implementation for 4096-Byte Paged Database Storage.
-Supports Interior and Leaf node serialization and splitting.
+Supports Lehman-Yao B-link tree High Key and Right Link serialization and splitting.
 """
 
 import json
@@ -27,7 +27,8 @@ def compare_keys(k1: ScalarKey, k2: ScalarKey) -> int:
 
 class BTreeNode:
     """
-    Represents a single B+Tree node stored inside a 4096-byte database page.
+    Represents a single B-link Tree node stored inside a 4096-byte database page.
+    Maintains High Key and Right Link invariants for latch-free concurrent traversal.
     """
 
     MAX_KEYS = 32  # Balanced fanout for 4KB page safety
@@ -38,6 +39,8 @@ class BTreeNode:
         is_leaf: bool = True,
         next_leaf: Optional[int] = None,
         prev_leaf: Optional[int] = None,
+        high_key: Optional[ScalarKey] = None,
+        right_link: Optional[int] = None,
     ) -> None:
         self.page_id = page_id
         self.is_leaf = is_leaf
@@ -46,14 +49,26 @@ class BTreeNode:
         self.values: List[List[int]] = []
         # For interior nodes: children are page_ids (len(children) == len(keys) + 1)
         self.children: List[int] = []
-        self.next_leaf = next_leaf
         self.prev_leaf = prev_leaf
+        self.high_key: Optional[ScalarKey] = high_key
+        self.right_link: Optional[int] = (
+            right_link if right_link is not None else next_leaf
+        )
+
+    @property
+    def next_leaf(self) -> Optional[int]:
+        """Maintains backward compatibility with B+Tree leaf sibling pointer."""
+        return self.right_link if self.is_leaf else None
+
+    @next_leaf.setter
+    def next_leaf(self, val: Optional[int]) -> None:
+        self.right_link = val
 
     def is_full(self) -> bool:
         return len(self.keys) >= self.MAX_KEYS
 
     def serialize(self) -> bytes:
-        """Serializes node structure to 4096-byte page payload."""
+        """Serializes node structure to 4096-byte page payload with zero padding."""
         data: Dict[str, Any] = {
             "page_id": self.page_id,
             "is_leaf": self.is_leaf,
@@ -62,6 +77,8 @@ class BTreeNode:
             "children": self.children if not self.is_leaf else [],
             "next_leaf": self.next_leaf,
             "prev_leaf": self.prev_leaf,
+            "high_key": self.high_key,
+            "right_link": self.right_link,
         }
         encoded = json.dumps(data, ensure_ascii=False).encode("utf-8")
         if len(encoded) > 4096:
@@ -82,8 +99,9 @@ class BTreeNode:
         node = cls(
             page_id=data.get("page_id", page_id),
             is_leaf=data.get("is_leaf", True),
-            next_leaf=data.get("next_leaf"),
             prev_leaf=data.get("prev_leaf"),
+            high_key=data.get("high_key"),
+            right_link=data.get("right_link", data.get("next_leaf")),
         )
         node.keys = data.get("keys", [])
         node.values = data.get("values", [])
@@ -105,30 +123,43 @@ class BTreeNode:
         self.keys.append(key)
         self.values.append([row_id])
 
+    def _split_leaf(self, sibling: "BTreeNode", mid: int) -> ScalarKey:
+        promoted_key = self.keys[mid]
+        sibling.keys = self.keys[mid:]
+        sibling.values = self.values[mid:]
+        self.keys = self.keys[:mid]
+        self.values = self.values[:mid]
+        self.high_key = self.keys[-1]
+        self.right_link = sibling.page_id
+        return promoted_key
+
+    def _split_interior(self, sibling: "BTreeNode", mid: int) -> ScalarKey:
+        promoted_key = self.keys[mid]
+        sibling.keys = self.keys[mid + 1 :]
+        sibling.children = self.children[mid + 1 :]
+        self.keys = self.keys[:mid]
+        self.children = self.children[: mid + 1]
+        self.high_key = promoted_key
+        self.right_link = sibling.page_id
+        return promoted_key
+
     def split(self, new_page_id: int) -> Tuple[ScalarKey, "BTreeNode"]:
         """
-        Splits this node into two nodes and returns (promoted_key, new_sibling_node).
+        Splits this node into two nodes under Lehman-Yao B-link invariants
+        and returns (promoted_key, new_sibling_node).
         """
         mid = len(self.keys) // 2
         sibling = BTreeNode(
             page_id=new_page_id,
             is_leaf=self.is_leaf,
-            next_leaf=self.next_leaf,
             prev_leaf=self.page_id if self.is_leaf else None,
+            high_key=self.high_key,
+            right_link=self.right_link,
         )
 
         if self.is_leaf:
-            promoted_key = self.keys[mid]
-            sibling.keys = self.keys[mid:]
-            sibling.values = self.values[mid:]
-            self.keys = self.keys[:mid]
-            self.values = self.values[:mid]
-            self.next_leaf = new_page_id
+            promoted_key = self._split_leaf(sibling, mid)
         else:
-            promoted_key = self.keys[mid]
-            sibling.keys = self.keys[mid + 1 :]
-            sibling.children = self.children[mid + 1 :]
-            self.keys = self.keys[:mid]
-            self.children = self.children[: mid + 1]
+            promoted_key = self._split_interior(sibling, mid)
 
         return promoted_key, sibling
