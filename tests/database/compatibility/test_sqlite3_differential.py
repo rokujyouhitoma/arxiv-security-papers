@@ -364,6 +364,67 @@ class TestSQLite3Differential(unittest.TestCase):
         self.assertEqual(py_json, sq_json)
         self.assertEqual(py_json, [(1, "alice")])
 
+    def test_phase3_standalone_set_ops_and_from_subqueries(self) -> None:
+        """Verifies Phase 3 parity: standalone SELECTs, compound set ops, and derived FROM subqueries."""
+        import sqlite3 as _sq3
+
+        import database as _pydb
+
+        def _new_conns() -> Tuple[Any, Any]:
+            return _pydb.connect(":memory:"), _sq3.connect(":memory:")
+
+        # --- Test 1: Standalone UNION (Deduplicating) with ORDER BY ---
+        py_c, sq_c = _new_conns()
+        query_union = "SELECT 1 AS x UNION SELECT 2 UNION SELECT 1 ORDER BY x"
+        py_res = py_c.cursor().execute(query_union).fetchall()
+        sq_res = sq_c.cursor().execute(query_union).fetchall()
+        self.assertEqual(py_res, sq_res)
+        self.assertEqual(py_res, [(1,), (2,)])
+
+        # --- Test 2: Standalone UNION ALL ---
+        query_union_all = "SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 1"
+        py_res = py_c.cursor().execute(query_union_all).fetchall()
+        sq_res = sq_c.cursor().execute(query_union_all).fetchall()
+        self.assertEqual(py_res, sq_res)
+        self.assertEqual(py_res, [(1,), (2,), (1,)])
+
+        # --- Test 3: Standalone INTERSECT in compound pipeline ---
+        query_intersect = (
+            "SELECT 1 AS x UNION SELECT 2 INTERSECT SELECT 2 AS x UNION SELECT 3"
+        )
+        py_res = py_c.cursor().execute(query_intersect).fetchall()
+        sq_res = sq_c.cursor().execute(query_intersect).fetchall()
+        self.assertEqual(py_res, sq_res)
+        self.assertEqual(py_res, [(2,), (3,)])
+
+        # --- Test 4: Standalone EXCEPT in compound pipeline ---
+        query_except = "SELECT 1 AS x UNION SELECT 2 UNION SELECT 3 EXCEPT SELECT 2"
+        py_res = py_c.cursor().execute(query_except).fetchall()
+        sq_res = sq_c.cursor().execute(query_except).fetchall()
+        self.assertEqual(py_res, sq_res)
+        self.assertEqual(py_res, [(1,), (3,)])
+        py_c.close()
+        sq_c.close()
+
+        # --- Test 5: Derived table in FROM clause ---
+        py_c, sq_c = _new_conns()
+        for cur in (py_c.cursor(), sq_c.cursor()):
+            cur.execute("CREATE TABLE employees (id INT, name TEXT, dept_id INT)")
+            cur.execute(
+                "INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 10), "
+                "(3, 'Charlie', 20), (4, 'David', 99)"
+            )
+        query_derived = (
+            "SELECT dept_id, COUNT(*) FROM (SELECT * FROM employees WHERE dept_id < 50) sub "
+            "GROUP BY dept_id ORDER BY dept_id"
+        )
+        py_res = py_c.cursor().execute(query_derived).fetchall()
+        sq_res = sq_c.cursor().execute(query_derived).fetchall()
+        py_c.close()
+        sq_c.close()
+        self.assertEqual(py_res, sq_res)
+        self.assertEqual(py_res, [(10, 2), (20, 1)])
+
 
 if __name__ == "__main__":
     unittest.main()

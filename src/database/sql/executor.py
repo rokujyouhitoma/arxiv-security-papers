@@ -2934,7 +2934,7 @@ class SQLExecutor:
         seen: set[Tuple[Any, ...]] = set()
         unique: List[Dict[str, Any]] = []
         for r in rows:
-            key = tuple((k, str(v)) for k, v in sorted(r.items()))
+            key = tuple(r.values())
             if key not in seen:
                 seen.add(key)
                 unique.append(r)
@@ -3036,6 +3036,10 @@ class SQLExecutor:
         )
         return [self._prefix_record(r, table_ref) for r in raw_rows]
 
+    @staticmethod
+    def _is_tableless_select(table_ref: TableRef, stmt: SelectStatement) -> bool:
+        return not table_ref.name and not stmt.table_name
+
     def _get_initial_select_rows(
         self,
         table_ref: TableRef,
@@ -3047,6 +3051,8 @@ class SQLExecutor:
             return [dict(zip(stmt.columns, r)) for r in stmt.values_rows]
         if table_ref.function_name in ("json_each", "json_tree"):
             return self._generate_table_func_rows(table_ref)
+        if self._is_tableless_select(table_ref, stmt):
+            return [{}]
         return self._scan_regular_initial_rows(
             table_ref, stmt, effective_role, temp_tables
         )
@@ -3177,6 +3183,28 @@ class SQLExecutor:
             "rows": final_rows,
         }
 
+    @staticmethod
+    def _align_compound_rows(
+        target_keys: List[str], rows: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        if not target_keys:
+            return rows
+        aligned: List[Dict[str, Any]] = []
+        for r in rows:
+            vals = list(r.values())
+            if len(vals) == len(target_keys):
+                aligned.append(dict(zip(target_keys, vals)))
+            else:
+                aligned.append(r)
+        return aligned
+
+    @staticmethod
+    def _row_to_hashable(r: Dict[str, Any]) -> Tuple[Any, ...]:
+        return tuple(r.values())
+
+    def _build_row_hash_set(self, rows: List[Dict[str, Any]]) -> Set[Tuple[Any, ...]]:
+        return {self._row_to_hashable(r) for r in rows}
+
     def _combine_union_rows(
         self,
         final_rows: List[Dict[str, Any]],
@@ -3184,23 +3212,18 @@ class SQLExecutor:
         role: str,
         temp_tables: Dict[str, List[Dict[str, Any]]],
     ) -> List[Dict[str, Any]]:
+        target_keys = list(final_rows[0].keys()) if final_rows else list(stmt.columns)
         if stmt.union_all:
             res = self._exec_select(stmt.union_all, role, temporary_tables=temp_tables)
-            final_rows.extend(res.get("rows", []))
+            final_rows.extend(
+                self._align_compound_rows(target_keys, res.get("rows", []))
+            )
             return final_rows
         if stmt.union:
             res = self._exec_select(stmt.union, role, temporary_tables=temp_tables)
-            return self._deduplicate_rows(final_rows + res.get("rows", []))
+            right_rows = self._align_compound_rows(target_keys, res.get("rows", []))
+            return self._deduplicate_rows(final_rows + right_rows)
         return final_rows
-
-    @staticmethod
-    def _row_to_hashable(r: Dict[str, Any]) -> Tuple[Tuple[str, str], ...]:
-        return tuple((k, str(v)) for k, v in sorted(r.items()))
-
-    def _build_row_hash_set(
-        self, rows: List[Dict[str, Any]]
-    ) -> Set[Tuple[Tuple[str, str], ...]]:
-        return {self._row_to_hashable(r) for r in rows}
 
     def _combine_intersect_rows(
         self,
@@ -3230,6 +3253,46 @@ class SQLExecutor:
         diff = [r for r in final_rows if self._row_to_hashable(r) not in right_set]
         return self._deduplicate_rows(diff)
 
+    def _fold_intersect_or_except(
+        self,
+        current_rows: List[Dict[str, Any]],
+        op: str,
+        right_rows: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        r_set = self._build_row_hash_set(right_rows)
+        keep_in = op == "INTERSECT"
+        filtered = [
+            r for r in current_rows if (self._row_to_hashable(r) in r_set) == keep_in
+        ]
+        return self._deduplicate_rows(filtered)
+
+    def _fold_single_compound_op(
+        self,
+        current_rows: List[Dict[str, Any]],
+        op: str,
+        right_rows: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        if op == "UNION ALL":
+            return current_rows + right_rows
+        if op == "UNION":
+            return self._deduplicate_rows(current_rows + right_rows)
+        return self._fold_intersect_or_except(current_rows, op, right_rows)
+
+    def _apply_compound_pipeline(
+        self,
+        final_rows: List[Dict[str, Any]],
+        stmt: SelectStatement,
+        role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        target_keys = list(final_rows[0].keys()) if final_rows else list(stmt.columns)
+        current_rows = list(final_rows)
+        for op, right_stmt in stmt.compounds:
+            res = self._exec_select(right_stmt, role, temporary_tables=temp_tables)
+            right_rows = self._align_compound_rows(target_keys, res.get("rows", []))
+            current_rows = self._fold_single_compound_op(current_rows, op, right_rows)
+        return current_rows
+
     def _apply_compound_operations(
         self,
         final_rows: List[Dict[str, Any]],
@@ -3237,6 +3300,8 @@ class SQLExecutor:
         role: str,
         temp_tables: Dict[str, List[Dict[str, Any]]],
     ) -> List[Dict[str, Any]]:
+        if getattr(stmt, "compounds", None):
+            return self._apply_compound_pipeline(final_rows, stmt, role, temp_tables)
         rows = self._combine_union_rows(final_rows, stmt, role, temp_tables)
         rows = self._combine_intersect_rows(rows, stmt.intersect, role, temp_tables)
         return self._combine_except_rows(rows, stmt.except_, role, temp_tables)
@@ -3280,6 +3345,25 @@ class SQLExecutor:
             return None, None
         return stmt.limit, stmt.offset
 
+    @staticmethod
+    def _collect_table_refs(stmt: SelectStatement) -> List[TableRef]:
+        refs: List[TableRef] = []
+        if stmt.table_ref:
+            refs.append(stmt.table_ref)
+        for j in stmt.joins or []:
+            if j.table:
+                refs.append(j.table)
+        return refs
+
+    def _evaluate_derived_tables(
+        self, stmt: SelectStatement, role: str, temp_tables: Dict[str, Any]
+    ) -> None:
+        for tref in self._collect_table_refs(stmt):
+            sub = getattr(tref, "subquery", None)
+            if sub is not None and tref.name not in temp_tables:
+                sub_res = self._exec_select(sub, role, temporary_tables=temp_tables)
+                temp_tables[tref.name] = list(sub_res.get("rows", []))
+
     def _prepare_select_views_and_ctes(
         self, stmt: SelectStatement, role: str, temp_tables: Dict[str, Any]
     ) -> None:
@@ -3287,6 +3371,7 @@ class SQLExecutor:
             self._evaluate_referenced_views(stmt, role, temp_tables)
         if stmt.ctes:
             self._evaluate_all_ctes(stmt.ctes, role, temp_tables)
+        self._evaluate_derived_tables(stmt, role, temp_tables)
 
     def _resolve_effective_order_collate(
         self, stmt: SelectStatement, tbl_collations: Dict[str, str]
@@ -3409,6 +3494,24 @@ class SQLExecutor:
             SQLExecutor._apply_single_col_default(c, row)
 
     @staticmethod
+    def _coerce_int_val(val: Any) -> Any:
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return val
+
+    @staticmethod
+    def _coerce_real_val(val: Any) -> Any:
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return val
+
+    @staticmethod
+    def _is_null_literal(val: Any) -> bool:
+        return val is None or (isinstance(val, str) and val.upper() == "NULL")
+
+    @staticmethod
     def _coerce_value_to_type(val: Any, data_type: str) -> Any:
         """Coerce a raw value to the Python type matching the SQLite column affinity.
 
@@ -3416,30 +3519,13 @@ class SQLExecutor:
         be stored as plain strings so that TYPEOF(), IS NULL, and arithmetic
         all behave identically to SQLite.
         """
-        # 'NULL' string from parser → Python None regardless of column type
-        if val is None or (isinstance(val, str) and val.upper() == "NULL"):
+        if SQLExecutor._is_null_literal(val):
             return None
         dt = data_type.upper().split("(")[0].strip()
-        integer_types = {
-            "INT",
-            "INTEGER",
-            "BIGINT",
-            "SMALLINT",
-            "TINYINT",
-            "INT2",
-            "INT8",
-        }
-        real_types = {"REAL", "FLOAT", "DOUBLE", "NUMERIC", "DECIMAL", "NUMBER"}
-        if dt in integer_types:
-            try:
-                return int(val)
-            except (ValueError, TypeError):
-                return val
-        if dt in real_types:
-            try:
-                return float(val)
-            except (ValueError, TypeError):
-                return val
+        if dt in {"INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "INT2", "INT8"}:
+            return SQLExecutor._coerce_int_val(val)
+        if dt in {"REAL", "FLOAT", "DOUBLE", "NUMERIC", "DECIMAL", "NUMBER"}:
+            return SQLExecutor._coerce_real_val(val)
         return val
 
     @staticmethod
@@ -3492,6 +3578,19 @@ class SQLExecutor:
                 return idx
         return None
 
+    @staticmethod
+    def _evaluate_upsert_update_set(
+        raw_update: Dict[str, Any], existing: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        evaluated: Dict[str, Any] = {}
+        ctx = dict(existing)
+        for col, expr_val in raw_update.items():
+            if isinstance(expr_val, str):
+                evaluated[col] = _extract_field_value(ctx, expr_val)
+            else:
+                evaluated[col] = expr_val
+        return evaluated
+
     def _handle_conflict(
         self,
         table: TableCatalog,
@@ -3499,24 +3598,13 @@ class SQLExecutor:
         row: Dict[str, Any],
         stmt: InsertStatement,
     ) -> Optional[Dict[str, Any]]:
-        if stmt.upsert_action == "NOTHING":
+        if stmt.upsert_action != "UPDATE":
             return None
-        if stmt.upsert_action == "UPDATE":
-            existing = table.storage.metadata[conflict_idx]
-            raw_update = stmt.upsert_update_set or row
-            # Evaluate RHS expressions using existing row as context so that
-            # expressions like "cnt + 10" resolve to the correct numeric value
-            # rather than being stored as a raw string.
-            evaluated: Dict[str, Any] = {}
-            ctx = dict(existing)
-            for col, expr_val in raw_update.items():
-                if isinstance(expr_val, str):
-                    evaluated[col] = _extract_field_value(ctx, expr_val)
-                else:
-                    evaluated[col] = expr_val
-            existing.update(evaluated)
-            return dict(existing)
-        return None
+        existing = table.storage.metadata[conflict_idx]
+        raw_update = stmt.upsert_update_set or row
+        evaluated = self._evaluate_upsert_update_set(raw_update, existing)
+        existing.update(evaluated)
+        return dict(existing)
 
     @staticmethod
     def _resolve_upsert_targets(

@@ -1429,14 +1429,72 @@ class SQLParser:
         elif op == "EXCEPT":
             left_stmt.except_ = right_stmt
 
+    def _match_compound_op(self, sql: str, i: int) -> Tuple[Optional[str], int]:
+        match = self._check_union_at_pos(sql, i)
+        if match is None:
+            return None, 0
+        _, op_name, _ = match
+        for pat in (
+            r"^\s+UNION\s+ALL\s+",
+            r"^\s+UNION\s+",
+            r"^\s+INTERSECT\s+",
+            r"^\s+EXCEPT\s+",
+        ):
+            m = re.match(pat, sql[i:], re.IGNORECASE)
+            if m:
+                return op_name, m.end()
+        return op_name, 0
+
+    @staticmethod
+    def _update_paren_depth(char: str, depth: int) -> int:
+        if char == "(":
+            return depth + 1
+        if char == ")":
+            return depth - 1
+        return depth
+
+    def _split_all_top_level_compounds(
+        self, sql: str
+    ) -> List[Tuple[Optional[str], str]]:
+        """Splits sql by top-level compound operators into a left-to-right list:
+        [(None, select_1), (op_2, select_2), (op_3, select_3), ...]
+        """
+        results: List[Tuple[Optional[str], str]] = []
+        paren_depth = 0
+        current_start = 0
+        last_op: Optional[str] = None
+        i = 0
+        n = len(sql)
+        while i < n:
+            paren_depth = self._update_paren_depth(sql[i], paren_depth)
+            if paren_depth == 0:
+                op_name, pat_len = self._match_compound_op(sql, i)
+                if op_name is not None:
+                    segment = sql[current_start:i].strip()
+                    results.append((last_op, segment))
+                    last_op = op_name
+                    i += pat_len
+                    current_start = i
+                    continue
+            i += 1
+        segment = sql[current_start:].strip()
+        results.append((last_op, segment))
+        return results
+
     def _parse_select(self, sql: str) -> SelectStatement:
-        union_split = self._split_top_level_union(sql)
-        if union_split:
-            left_sql, op, right_sql = union_split
-            left_stmt = self._parse_single_select(left_sql)
-            right_stmt = self._parse_select(right_sql)
-            self._assign_compound_stmt(left_stmt, op, right_stmt)
-            return left_stmt
+        compounds = self._split_all_top_level_compounds(sql)
+        if len(compounds) > 1:
+            _, first_sql = compounds[0]
+            base_stmt = self._parse_single_select(first_sql)
+            for op, part_sql in compounds[1:]:
+                if op is not None:
+                    part_stmt = self._parse_single_select(part_sql)
+                    base_stmt.compounds.append((op, part_stmt))
+            first_op, first_right_sql = compounds[1]
+            if first_op is not None:
+                first_right_stmt = self._parse_single_select(first_right_sql)
+                self._assign_compound_stmt(base_stmt, first_op, first_right_stmt)
+            return base_stmt
 
         return self._parse_single_select(sql)
 
@@ -1586,6 +1644,38 @@ class SQLParser:
             offset=offset_val,
         )
 
+    def _parse_standalone_select_without_from(
+        self,
+        sql: str,
+        clean_sql: str,
+        order_by: Optional[str],
+        order_desc: bool,
+        order_collate: Optional[str],
+        limit_val: Optional[int],
+        offset_val: Optional[int],
+    ) -> SelectStatement:
+        m_sel = re.match(r"^SELECT\s+(.+)$", clean_sql, re.IGNORECASE | re.DOTALL)
+        if not m_sel:
+            raise SQLParseError(f"Malformed SELECT syntax: {sql}")
+        cols_raw, distinct = _extract_distinct_prefix(m_sel.group(1).strip())
+        columns = self._parse_column_list(cols_raw)
+        return SelectStatement(
+            command_type=SQLCommandType.SELECT,
+            raw_sql=sql,
+            table_name="",
+            table_ref=TableRef(name=""),
+            columns=columns,
+            where_clauses=[],
+            knn_query=None,
+            joins=[],
+            order_by=order_by,
+            order_desc=order_desc,
+            order_collate=order_collate,
+            limit=limit_val,
+            offset=offset_val,
+            distinct=distinct,
+        )
+
     def _parse_single_select(self, sql: str) -> SelectStatement:
         clean_sql = re.sub(r"\s+", " ", sql).strip()
         clean_sql, limit_val, offset_val = self._extract_limit_and_offset(clean_sql)
@@ -1608,7 +1698,15 @@ class SQLParser:
 
         from_pos = _find_top_level_keyword_pos(clean_sql, r"FROM")
         if not from_pos:
-            raise SQLParseError(f"Malformed SELECT syntax: {sql}")
+            return self._parse_standalone_select_without_from(
+                sql,
+                clean_sql,
+                order_by,
+                order_desc,
+                order_collate,
+                limit_val,
+                offset_val,
+            )
         f_start, f_end = from_pos
         select_prefix = clean_sql[:f_start].strip()
         m_sel = re.match(r"^SELECT\s+(.+)$", select_prefix, re.IGNORECASE | re.DOTALL)
@@ -1697,6 +1795,37 @@ class SQLParser:
             function_args=args,
         )
 
+    @staticmethod
+    def _find_closing_paren(text: str) -> int:
+        depth = 0
+        for idx, ch in enumerate(text):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    return idx
+        return -1
+
+    def _parse_derived_table_ref(
+        self, stripped_tbl: str, indexed_by: Optional[str], not_indexed: bool
+    ) -> Optional[TableRef]:
+        closing_idx = self._find_closing_paren(stripped_tbl)
+        if closing_idx == -1:
+            return None
+        inner_sql = stripped_tbl[1:closing_idx].strip()
+        rest = stripped_tbl[closing_idx + 1 :].strip()
+        m_alias = re.match(r"^(?:AS\s+)?([a-zA-Z0-9_]+)$", rest, re.IGNORECASE)
+        alias = m_alias.group(1) if m_alias else (rest or "__subquery__")
+        inner_stmt = self._parse_select(inner_sql)
+        return TableRef(
+            name=alias,
+            alias=alias,
+            indexed_by=indexed_by,
+            not_indexed=not_indexed,
+            subquery=inner_stmt,
+        )
+
     def _parse_single_table_ref(self, text: str) -> TableRef:
         clean_tbl, indexed_by, not_indexed = _extract_index_hint(text)
         func_ref = self._parse_table_function_ref(clean_tbl)
@@ -1704,6 +1833,13 @@ class SQLParser:
             func_ref.indexed_by = indexed_by
             func_ref.not_indexed = not_indexed
             return func_ref
+        stripped_tbl = clean_tbl.strip()
+        if stripped_tbl.startswith("("):
+            derived = self._parse_derived_table_ref(
+                stripped_tbl, indexed_by, not_indexed
+            )
+            if derived is not None:
+                return derived
         m = re.match(
             r"^([a-zA-Z0-9_.]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$",
             clean_tbl.strip(),

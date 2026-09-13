@@ -6,7 +6,7 @@ Supports 5 major SQL categories: DDL, DQL, DML, DCL, TCL.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class SQLCommandType(str, Enum):
@@ -210,6 +210,7 @@ class TableRef:
     not_indexed: bool = False
     function_name: Optional[str] = None
     function_args: List[str] = field(default_factory=list)
+    subquery: Optional[Any] = None
 
     @property
     def display_name(self) -> str:
@@ -254,6 +255,7 @@ class SelectStatement(SQLStatement):
     union_all: Optional[Any] = None  # SelectStatement (UNION ALL)
     intersect: Optional[Any] = None  # SelectStatement (INTERSECT)
     except_: Optional[Any] = None  # SelectStatement (EXCEPT)
+    compounds: List[Tuple[str, Any]] = field(default_factory=list)
     order_by: Optional[str] = None
     order_desc: bool = False
     order_collate: Optional[str] = None

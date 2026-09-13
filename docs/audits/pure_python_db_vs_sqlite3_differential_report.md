@@ -51,10 +51,10 @@
 SUMMARY OF DIFFERENTIAL COMPARISON: Pure Python DB vs sqlite3
 ==================================================================
 Total Evaluated Test Cases: 79
-  - MATCH / EQUIVALENT:               68 件 (86.1%)  [完全一致・実質等価 (+34.1% 向上)]
+  - MATCH / EQUIVALENT:               73 件 (92.4%)  [完全一致・実質等価 (+40.5% 向上)]
   - BEHAVIORAL DIFFERENCES:            0 件 ( 0.0%)  [挙動差異 完全解消 (27件 → 0件)]
   - PURE PYTHON EXTENSIONS:            5 件 ( 6.3%)  [VECTOR / KNN / NoSQL 独自拡張]
-  - SQLITE-ONLY SUCCESS:               5 件 ( 6.3%)  [FROM無しの集合演算 / サブクエリFROM]
+  - SQLITE-ONLY SUCCESS:               0 件 ( 0.0%)  [未対応構文 完全解消 (5件 → 0件)]
   - BOTH EXPECTEDLY REJECTED:          1 件 ( 1.3%)  [両者とも正当にエラー送出]
 ==================================================================
 ```
@@ -131,10 +131,10 @@ Total Evaluated Test Cases: 79
 | テストケース | 分類 | Pure Python DB 挙動 | SQLite3 挙動 | 差異分析・技術的詳細 |
 | :--- | :---: | :--- | :--- | :--- |
 | **ORDER BY DESC with LIMIT & OFFSET** | `MATCH` | `[(40,), (30,), (20,)]` | `[(40,), (30,), (20,)]` | 降順ソートおよびページネーションの完全一致。 |
-| **UNION (Deduplicating)** | `SQ_ONLY_SUCCESS` | `Execution error: Malformed SELECT syntax` | `[(1,), (2,)]` | `SELECT 1 UNION SELECT 2` のように `FROM` テーブルが存在しないスタンドアロンリテラルクエリに対するパース制約。 |
-| **UNION ALL** | `SQ_ONLY_SUCCESS` | `Execution error: Malformed SELECT syntax` | `[(1,), (2,), (1,)]` | 同上（テーブル付き UNION では動作可能）。 |
-| **INTERSECT** | `SQ_ONLY_SUCCESS` | `Execution error: Malformed SELECT syntax` | `[(2,), (3,)]` | 同上。 |
-| **EXCEPT** | `SQ_ONLY_SUCCESS` | `Execution error: Malformed SELECT syntax` | `[(1,), (3,)]` | 同上。 |
+| **UNION (Deduplicating)** | `MATCH` | `[(1,), (2,)]` | `[(1,), (2,)]` | **Phase 3 で解決**: スタンドアロン SELECT のパースと左辺列名アラインメント・値タプル重複排除により完全一致。 |
+| **UNION ALL** | `MATCH` | `[(1,), (2,), (1,)]` | `[(1,), (2,), (1,)]` | **Phase 3 で解決**: スタンドアロン UNION ALL の連鎖結合が完全一致。 |
+| **INTERSECT** | `MATCH` | `[(2,), (3,)]` | `[(2,), (3,)]` | **Phase 3 で解決**: `_split_all_top_level_compounds` による左結合パイプライン評価により完全一致。 |
+| **EXCEPT** | `MATCH` | `[(1,), (3,)]` | `[(1,), (3,)]` | **Phase 3 で解決**: 同上。左結合による差集合演算が完全一致。 |
 
 ---
 
@@ -154,7 +154,7 @@ Total Evaluated Test Cases: 79
 | **Subquery in WHERE (`IN (SELECT ...)` )** | `MATCH` | `[('Alice',), ('Bob',)]` | `[('Alice',), ('Bob',)]` | **サブクエリによる IN 条件絞り込み完全一致。** |
 | **EXISTS Subquery** | `MATCH` | `[('Infra',), ('Security',)]` | `[('Infra',), ('Security',)]` | **相関 EXISTS サブクエリ完全一致。** |
 | **Common Table Expression (`WITH` CTE)** | `MATCH` | `[('Alice',), ('Bob',)]` | `[('Alice',), ('Bob',)]` | **WITH 句による共通テーブル式インライン化完全一致。** |
-| **Derived Table in FROM** | `SQ_ONLY_SUCCESS` | `Table '(SELECT ...) sub' does not exist` | `[(10, 2), (20, 1)]` | `FROM (SELECT ...) sub` のインライン派生テーブルが未解決（物理テーブルとして探索）。 |
+| **Derived Table in FROM** | `MATCH` | `[(10, 2), (20, 1)]` | `[(10, 2), (20, 1)]` | **Phase 3 で解決**: `_parse_single_table_ref` で `FROM (SELECT ...) alias` をパースし、`_evaluate_derived_tables` で動的インメモリ一時テーブルとして評価・解決。完全一致達成。 |
 
 ---
 
@@ -365,6 +365,56 @@ Total Evaluated Test Cases: 79
 
 ---
 
+## 8. フェーズ3 改善実績および最終評価 (Phase 3 Progress & Parity Audit)
+
+- **実施日**: 2026年9月13日
+- **対応 Issue**: [Issue #281: SQLite パリティ フェーズ3 — スタンドアロン集合演算 ＆ FROM句派生サブクエリ](../issues/closed/281-sqlite-parity-phase3-set-operations-and-from-subqueries.md)
+- **対象項目**: 残存していた 5 件の `SQLITE-ONLY SUCCESS` (スタンドアロン UNION / UNION ALL / INTERSECT / EXCEPT、FROM句インライン派生テーブル)
+
+### 8.1 定量比較結果 (Before vs After Phase 3)
+
+| 判定カテゴリ | Baseline | Phase 1 終了時 | Phase 2 終了時 | Phase 3 終了時 (最終) | 総合改善幅 (vs Baseline) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **MATCH / EQUIVALENT** | 41 件 (51.9%) | 60 件 (75.9%) | 68 件 (86.1%) | **73 件 (92.4%)** | **+32 件 (+40.5% 向上)** |
+| **BEHAVIORAL DIFFERENCES** | 27 件 (34.2%) | 8 件 (10.1%) | 0 件 ( 0.0%) | **0 件 ( 0.0%)** | **-27 件 (完全解消 0件維持)** |
+| **PURE PYTHON EXTENSIONS** | 5 件 ( 6.3%) | 5 件 ( 6.3%) | 5 件 ( 6.3%) | **5 件 ( 6.3%)** | ±0 件 (独自機能維持) |
+| **SQLITE-ONLY SUCCESS** | 5 件 ( 6.3%) | 5 件 ( 6.3%) | 5 件 ( 6.3%) | **0 件 ( 0.0%)** | **-5 件 (完全解消 0件達成)** |
+| **BOTH REJECTED (ERRORS)** | 1 件 ( 1.3%) | 1 件 ( 1.3%) | 1 件 ( 1.3%) | **1 件 ( 1.3%)** | ±0 件 (仕様通りの拒絶) |
+| **合計テストケース** | 79 件 | 79 件 | 79 件 | **79 件** | - |
+
+### 8.2 カテゴリ別改善進捗推移 (Category Progression to Phase 3)
+
+| カテゴリ | Baseline MATCH | Phase 1 MATCH | Phase 2 MATCH | Phase 3 MATCH | 最終状態 |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **1. DDL & Basic DML** | 4 / 9 (44.4%) | 9 / 9 (100.0%) | 9 / 9 (100.0%) | **9 / 9 (100.0%)** | 完遂 |
+| **2. Types & NULL Handling** | 1 / 6 (16.7%) | 1 / 6 (16.7%) | 5 / 6 ( 83.3%) | **5 / 6 ( 83.3%)** | BEHAVIORAL_DIFF 0件 (1件は制約) |
+| **3. Operators & Functions** | 4 / 8 (50.0%) | 8 / 8 (100.0%) | 8 / 8 (100.0%) | **8 / 8 (100.0%)** | 完遂 |
+| **4. Aggregations & Grouping** | 4 / 5 (80.0%) | 5 / 5 (100.0%) | 5 / 5 (100.0%) | **5 / 5 (100.0%)** | 完遂 |
+| **5. Paging & Set Operations** | 2 / 7 (28.6%) | 3 / 7 (42.9%) | 3 / 7 ( 42.9%) | **7 / 7 (100.0%)** | **完遂 (集合演算4件完全一致)** |
+| **6. Joins** | 2 / 6 (33.3%) | 4 / 6 (66.7%) | 6 / 6 (100.0%) | **6 / 6 (100.0%)** | 完遂 |
+| **7. Subqueries & CTEs** | 5 / 8 (62.5%) | 7 / 8 (87.5%) | 7 / 8 ( 87.5%) | **8 / 8 (100.0%)** | **完遂 (派生テーブル解決)** |
+| **8. Constraints & Transactions**| 3 / 8 (37.5%) | 4 / 8 (50.0%) | 4 / 8 ( 50.0%) | **4 / 8 ( 50.0%)** | 独自トランザクション挙動 |
+| **9. UPSERT & RETURNING** | 3 / 5 (60.0%) | 4 / 5 (80.0%) | 5 / 5 (100.0%) | **5 / 5 (100.0%)** | 完遂 |
+| **10. Views & Introspection** | 3 / 5 (60.0%) | 5 / 5 (100.0%) | 5 / 5 (100.0%) | **5 / 5 (100.0%)** | 完遂 |
+| **11. Advanced / Extensions** | 6 / 8 (75.0%) | 6 / 8 (75.0%) | 7 / 8 ( 87.5%) | **7 / 8 ( 87.5%)** | 独自拡張 (VECTOR/KNN) |
+| **12. Performance & Memory** | 4 / 4 (100.0%)| 4 / 4 (100.0%) | 4 / 4 (100.0%) | **4 / 4 (100.0%)** | 性能ベンチマーク維持 |
+
+### 8.3 Phase 3 で解決された主要課題の技術詳細
+
+1. **スタンドアロン SELECT (`FROM` 句なし) のサポート**:
+   - `_parse_single_select()` において、`FROM` 句が存在しない場合でも `SELECT <expressions>` 形式のクエリを妥当な `SelectStatement` としてパース（`table_name=""`）。
+   - `_get_initial_select_rows()` において、テーブル名が存在しない場合に単一の空行辞書 `[{}]` を生成し、射影式を評価。
+2. **左結合（Left-to-Right）複合演算子パイプライン (`stmt.compounds`)**:
+   - `_split_all_top_level_compounds()` を新設し、トップレベルの `UNION [ALL]`, `INTERSECT`, `EXCEPT` を左から右へ分解して順次パイプラインとして AST（`SelectStatement.compounds`）に格納。
+   - `_align_compound_rows()` により、右辺の結果行を左辺の列キーにアラインメント。
+   - `_deduplicate_rows()` および `_row_to_hashable()` で、辞書キー名に依存しない値タプル比較を行い、SQL 標準および SQLite 仕様に完全準拠した順次演算を実現。
+3. **FROM 句インライン派生テーブル (Derived Table) のオンザフライ解決**:
+   - `_parse_single_table_ref()` において、`FROM (SELECT ...) alias` 形式を検知し、内部クエリを `TableRef.subquery` として再帰パース。
+   - `_evaluate_derived_tables()` を新設し、外部クエリ実行前に内部クエリを再帰実行してインメモリ一時テーブル（`temp_tables[alias]`）として自動登録。
+
+---
+
 **監査報告完了**: Software Development (SWD) / Systems Architect (SA) / Database Specialist (DB) 合意承認済
+
 
 

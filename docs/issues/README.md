@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **281** | SQLite パリティ フェーズ3: スタンドアロン集合演算 (UNION/INTERSECT/EXCEPT) ＆ FROM句派生サブクエリの実装 | Feature | 2026-09-13 | [281-sqlite-parity-phase3-set-operations-and-from-subqueries.md](closed/281-sqlite-parity-phase3-set-operations-and-from-subqueries.md) |
 | **280** | SQLite パリティ フェーズ2: JOIN投影キー衝突・型強制・UPSERT式評価・JSON ->> 演算子の修正 | Feature | 2026-09-13 | [280-sqlite-parity-phase2-join-type-coercion-upsert-json.md](closed/280-sqlite-parity-phase2-join-type-coercion-upsert-json.md) |
 | **279** | SQLite 互換性向上 Phase 1: DDL rowcount=-1 準拠、DEFAULT 句自動補完、および数値比較アフィニティの実装 | Feature | 2026-09-13 | [279-sqlite-parity-phase1-rowcount-default-and-numeric-affinity.md](closed/279-sqlite-parity-phase1-rowcount-default-and-numeric-affinity.md) |
 | **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | 2026-09-13 | [250-implement-louvain-community-detection-for-cti-graph.md](closed/250-implement-louvain-community-detection-for-cti-graph.md) |

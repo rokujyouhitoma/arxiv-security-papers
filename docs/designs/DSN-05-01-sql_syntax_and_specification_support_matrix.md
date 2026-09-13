@@ -762,6 +762,11 @@ flowchart TD
   - JOIN 列キー衝突回避 (`used_keys` 式保持)、INSERT 時型強制 (`_coerce_value_to_type` による INT/REAL/NULL キャスト)、UPSERT 右辺式評価、JSON 矢印演算子 (`->>`) の `$.key` 正規化。
   - 結果: MATCH 率 75.9% → **86.1% (68/79)**、**BEHAVIORAL_DIFF: 0件 (完全解消)**。
   - 回帰防止テスト: `tests/database/compatibility/test_sqlite3_differential.py` 全 8 テスト完全パス。
+- **Phase 3 (Issue #281)**:
+  - スタンドアロン SELECT (`FROM` なし) 実行サポート、トップレベル複合演算子 (`UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`) の左結合パイプライン評価 (`_split_all_top_level_compounds` / `_align_compound_rows`)、および `FROM (SELECT ...) alias` インライン派生テーブル (Derived Table) の動的オンザフライ解決。
+  - 結果: MATCH 率 86.1% → **92.4% (73/79)**、**SQLITE-ONLY SUCCESS: 0件 (完全解消)**、**BEHAVIORAL_DIFF: 0件維持**。
+  - 回帰防止テスト: `tests/database/compatibility/test_sqlite3_differential.py` 全 9 テスト完全パス。
+
 
 
 
