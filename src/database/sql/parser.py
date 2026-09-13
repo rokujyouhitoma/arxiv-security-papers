@@ -310,6 +310,13 @@ def _validate_collation(name: str) -> str:
     return clean
 
 
+def _validate_order_collate(name: str) -> str:
+    clean = name.strip().upper()
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", clean):
+        raise SQLParseError(f"no such collation sequence: {name}")
+    return clean
+
+
 def _parse_between_clause(part: str) -> Optional[Dict[str, Any]]:
     """Parses BETWEEN / NOT BETWEEN condition."""
     pattern = (
@@ -1483,10 +1490,11 @@ class SQLParser:
         collate: Optional[str] = None
         m_col = re.search(r"\bCOLLATE\s+([a-zA-Z0-9_]+)\b", first_item, re.IGNORECASE)
         if m_col:
-            collate = _validate_collation(m_col.group(1))
+            collate = _validate_order_collate(m_col.group(1))
             first_item = (
                 first_item[: m_col.start()] + first_item[m_col.end() :]
             ).strip()
+
         parts = first_item.split()
         order_by = parts[0] if parts else None
         order_desc = len(parts) > 1 and parts[1].upper() == "DESC"

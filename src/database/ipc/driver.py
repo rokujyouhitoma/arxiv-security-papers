@@ -7,7 +7,7 @@ with full multi-table .vdb container (OKFMTC01) support and zero external C-depe
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ..embedding import DeterministicEmbedding
 from ..sql.executor import SQLExecutionError, SQLExecutor
@@ -252,6 +252,16 @@ class Connection:
         """Executes a prepared SQL query against a sequence of parameter tuples."""
         cur = self.cursor()
         return cur.executemany(sql, seq_of_params)
+
+    def create_collation(
+        self,
+        name: str,
+        callback: Optional[Callable[[str, str], int]],
+    ) -> None:
+        """Registers a user-defined collation callback function with the underlying SQL engine."""
+        if self._closed:
+            raise OperationalError("Connection is closed")
+        self._executor.create_collation(name, callback)
 
     def commit(self) -> None:
         if self._closed:

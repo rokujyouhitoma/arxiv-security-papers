@@ -5,6 +5,7 @@ Evaluates DDL, DQL, DML, DCL, and TCL AST nodes against underlying vector storag
 """
 
 import fnmatch
+import functools
 import json
 import logging
 import os
@@ -1653,6 +1654,7 @@ class SQLExecutor:
         self.triggers: Dict[str, CreateTriggerStatement] = {}
         self.foreign_keys_enabled: bool = True
         self.user_version: int = 0
+        self.collations: Dict[str, Callable[[str, str], int]] = {}
         self._init_default_tables(
             catalog,
             default_storage,
@@ -1661,6 +1663,18 @@ class SQLExecutor:
         )
         if self.multi_storage is not None:
             self.multi_storage.attach_to_executor(self)
+
+    def create_collation(
+        self,
+        name: str,
+        callback: Optional[Callable[[str, str], int]],
+    ) -> None:
+        """Registers or removes a user-defined collation function."""
+        clean_name = name.strip().upper()
+        if callback is None:
+            self.collations.pop(clean_name, None)
+        else:
+            self.collations[clean_name] = callback
 
     def _init_components(
         self,
@@ -1682,6 +1696,7 @@ class SQLExecutor:
             raise SQLExecutionError(
                 "Maximum number of registered databases (64) exceeded"
             )
+
         self.known_databases[name] = path
 
     def _init_default_tables(
@@ -2901,6 +2916,26 @@ class SQLExecutor:
             return 0
         return _collate_transform(val, order_collate)
 
+    def _sort_custom_collate(
+        self,
+        rows: List[Dict[str, Any]],
+        order_by: str,
+        order_desc: bool,
+        cmp_fn: Callable[[str, str], int],
+    ) -> None:
+        def custom_cmp(r1: Dict[str, Any], r2: Dict[str, Any]) -> int:
+            v1 = _extract_field_value(r1, order_by)
+            v2 = _extract_field_value(r2, order_by)
+            if v1 is None and v2 is None:
+                return 0
+            if v1 is None:
+                return -1
+            if v2 is None:
+                return 1
+            return cmp_fn(str(v1), str(v2))
+
+        rows.sort(key=functools.cmp_to_key(custom_cmp), reverse=order_desc)
+
     def _sort_and_paginate(
         self,
         rows: List[Dict[str, Any]],
@@ -2911,10 +2946,16 @@ class SQLExecutor:
         order_collate: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         if order_by:
-            rows.sort(
-                key=lambda x: self._sort_key(x, order_by, order_collate),
-                reverse=order_desc,
-            )
+            clean_col = order_collate.upper() if order_collate else ""
+            if clean_col in self.collations:
+                self._sort_custom_collate(
+                    rows, order_by, order_desc, self.collations[clean_col]
+                )
+            else:
+                rows.sort(
+                    key=lambda x: self._sort_key(x, order_by, order_collate),
+                    reverse=order_desc,
+                )
         return self._slice_rows(rows, limit, offset)
 
     @staticmethod

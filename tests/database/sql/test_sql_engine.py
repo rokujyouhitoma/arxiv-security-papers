@@ -2075,3 +2075,57 @@ def test_json_each_and_tree() -> None:
     )
     assert res_join2["status"] == "ok"
     assert res_join2["count"] == 3
+
+
+def test_user_defined_collation() -> None:
+    """Tests SQLite-parity user-defined collation registration on SQLExecutor and Connection."""
+    executor = SQLExecutor()
+
+    executor.execute("CREATE TABLE words (id INTEGER PRIMARY KEY, word TEXT);")
+    executor.execute("INSERT INTO words VALUES (1, 'apple');")
+    executor.execute("INSERT INTO words VALUES (2, 'cat');")
+    executor.execute("INSERT INTO words VALUES (3, 'banana');")
+
+    # 1. Custom collation: reverse string comparison
+    def reverse_cmp(a: str, b: str) -> int:
+        if a < b:
+            return 1
+        elif a > b:
+            return -1
+        return 0
+
+    executor.create_collation("REVERSE", reverse_cmp)
+
+    res_rev = executor.execute("SELECT word FROM words ORDER BY word COLLATE REVERSE;")
+    assert res_rev["status"] == "ok"
+    words_rev = [r["word"] for r in res_rev["rows"]]
+    assert words_rev == ["cat", "banana", "apple"]
+
+    # 2. Custom collation: length-based comparison
+    def length_cmp(a: str, b: str) -> int:
+        len_a, len_b = len(a), len(b)
+        if len_a != len_b:
+            return len_a - len_b
+        return (a > b) - (a < b)
+
+    executor.create_collation("BY_LEN", length_cmp)
+
+    res_len = executor.execute("SELECT word FROM words ORDER BY word COLLATE BY_LEN;")
+    assert res_len["status"] == "ok"
+    words_len = [r["word"] for r in res_len["rows"]]
+    assert words_len == ["cat", "apple", "banana"]
+
+    # 3. Connection interface (PEP 249 / sqlite3 compatibility)
+    conn = connect(":memory:")
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE items (id INTEGER, code TEXT);")
+    cur.execute("INSERT INTO items VALUES (1, 'B1');")
+    cur.execute("INSERT INTO items VALUES (2, 'A2');")
+    cur.execute("INSERT INTO items VALUES (3, 'C0');")
+
+    conn.create_collation("MY_REV", reverse_cmp)
+    cur.execute("SELECT code FROM items ORDER BY code COLLATE MY_REV;")
+    rows = cur.fetchall()
+    codes = [r[0] for r in rows]
+    assert codes == ["C0", "B1", "A2"]
+    conn.close()
