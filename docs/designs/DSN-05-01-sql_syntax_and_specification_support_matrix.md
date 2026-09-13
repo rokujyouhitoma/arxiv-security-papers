@@ -180,7 +180,7 @@ SQLite 公式文法ダイアグラム（`sql-stmt`）に規定された全 25 �
 
 ### 2.3 高度仕様・拡張構文対比マトリクス (Advanced & Modern SQLite 3.3x+ Features)
 
-SQLite 3.30+ 以降の最新仕様、エンタープライズ制約、および特殊な仮想テーブル機能との対比状況です。中核機能（33 Topics / 25 Statements）の 100% 達成に続き、Phase 8・9（高度構文・エンタープライズ機能 9 件）の実装が完了し、Phase 10（FTS5 / json_each / ユーザー定義照合順序）を推進中です。
+SQLite 3.30+ 以降の最新仕様、エンタープライズ制約、および特殊な仮想テーブル機能との対比状況です。中核機能（33 Topics / 25 Statements）の 100% 達成に続き、Phase 8・9・10（高度構文・エンタープライズ機能・FTS5・テーブル値関数・照合順序 計 12 件）の実装が 100% 完了しました。
 
 | # | 高度機能・構文項目 | SQLite 導入版 | Pure Python Engine | 総合判定 | 構文仕様・制約および対応方針 |
 | :---: | :--- | :---: | :---: | :---: | :--- |
@@ -193,8 +193,10 @@ SQLite 3.30+ 以降の最新仕様、エンタープライズ制約、および�
 | 7 | **`INSTEAD OF` トリガー** | 標準 | ○ 対応済 | **○ Full** | 更新不可能な VIEW に対して DML 操作（INSERT/UPDATE/DELETE）をフックして基底テーブルへ転送（Phase 9 / [Issue #272](../issues/closed/272-implement-sqlite-parity-instead-of-trigger.md)）。 |
 | 8 | **外部キーカスケード (`CASCADE`)** | 標準 | ○ 対応済 | **○ Full** | 親レコード更新・削除時に子レコードを自動連動更新・削除する `ON DELETE CASCADE / ON UPDATE SET NULL`（Phase 9 / [Issue #273](../issues/closed/273-implement-sqlite-parity-foreign-key-cascade.md)）。 |
 | 9 | **拡張 PRAGMA (`table_xinfo` 等)** | 標準 | ○ 対応済 | **○ Full** | 生成列・Hidden列を含む拡張カラム情報 `PRAGMA table_xinfo`、スキーマバージョン管理 `PRAGMA user_version`、外部キー一覧 `PRAGMA foreign_key_list`（Phase 9 / [Issue #274](../issues/closed/274-implement-sqlite-parity-extended-pragma.md)）。 |
-| 10 | **`FTS5` (Full-Text Search 5)** | 拡張 | × 未対応 | **△ Planned** | 仮想テーブルを用いた BM25 スコアリング付き高速全文検索エンジン `CREATE VIRTUAL TABLE fts USING fts5(...)`（Phase 10）。 |
-| 11 | **`json_each()` / `json_tree()`** | 3.38.0+ | × 未対応 | **△ Planned** | JSON 配列・階層オブジェクトを行セットとして展開・走査するテーブル値関数（Phase 10）。 |
+| 10 | **`FTS5` (Full-Text Search 5)** | 拡張 | ○ 対応済 | **○ Full** | 仮想テーブルを用いた BM25 スコアリング・前方一致検索付き高速全文検索エンジン `CREATE VIRTUAL TABLE fts USING fts5(...)`（Phase 10 / [Issue #275](../issues/closed/275-implement-sqlite-parity-fts5-virtual-table.md)）。 |
+| 11 | **`json_each()` / `json_tree()`** | 3.38.0+ | ○ 対応済 | **○ Full** | JSON 配列・階層オブジェクトを行セットとして展開・走査するテーブル値関数（Phase 10 / [Issue #276](../issues/closed/276-implement-sqlite-parity-json-each-and-tree.md)）。 |
+| 12 | **ユーザー定義照合順序 (`create_collation`)** | 標準 | ○ 対応済 | **○ Full** | Python コールバック関数を用いたカスタム比較関数・ソート順序の動的登録インターフェース（Phase 10 / [Issue #277](../issues/closed/277-implement-sqlite-parity-user-defined-collation.md)）。 |
+
 
 ---
 
@@ -463,7 +465,7 @@ gantt
     VACUUM INTO / INSTEAD OF / CASCADE / 拡張PRAGMA :done, p9, 2026-09, 2026-09
 
     section Phase 10: 高度モジュール & FTS5
-    FTS5 全文検索 / json_each / json_tree :p10, 2026-12, 2027-01
+    FTS5 全文検索 / json_each / ユーザー定義照合順序 :done, p10, 2026-09, 2026-09
 ```
 
 ---
@@ -609,18 +611,18 @@ SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合�
 
 ---
 
-### 6.10 Phase 10: 高度拡張モジュール & 全文検索インテグレーション 【計画中 / Planned】
+### 6.10 Phase 10: 高度拡張モジュール & 全文検索インテグレーション 【完了 / Closed】
 
-自然言語検索と半構造化データ解析を SQL 上で融合する拡張モジュール群を提供します。
+自然言語検索と半構造化データ解析を SQL 上で融合する拡張モジュール群、および多言語・カスタム照合順序登録機構を完全実装しました。
 
-| 計画 Issue | タイトル | 主な対象機能・構文仕様 | 導入対象版 |
-| :---: | :--- | :--- | :---: |
-| **[#275](../issues/275-implement-sqlite-parity-fts5-virtual-table.md)** | **`FTS5` (Full-Text Search 5) 仮想テーブル & `MATCH` 演算子の実装** | `CREATE VIRTUAL TABLE fts USING fts5(title, abstract)`、`MATCH` 演算子および BM25 ランキングスコアリング。 | SQLite FTS5 |
-| **[#276](../issues/276-implement-sqlite-parity-json-each-and-tree.md)** | **テーブル値関数 `json_each()` / `json_tree()` の実装** | JSON 配列・階層木構造を行セットとして動的展開し、JOIN 句内で走査・フィルタリング可能にする機能。 | SQLite 3.38.0+ |
-| **[#277](../issues/277-implement-sqlite-parity-user-defined-collation.md)** | **ユーザー定義照合順序 (User-Defined Collation) 登録機構の実装** | Python コールバック関数を用いた多言語・カスタムソート順序の動的登録インターフェース。 | SQLite C/Python API |
+| Issue | タイトル | 主な対象機能・構文仕様 | マージコミット | 状態 |
+| :---: | :--- | :--- | :---: | :---: |
+| **[#275](../issues/closed/275-implement-sqlite-parity-fts5-virtual-table.md)** | **`FTS5` (Full-Text Search 5) 仮想テーブル & `MATCH` 演算子の実装** | `CREATE VIRTUAL TABLE fts USING fts5(title, abstract)`、`MATCH` 演算子、プレフィックス検索および BM25 ランキングスコアリング。 | `ce07bc8d` | **Closed (完了)** |
+| **[#276](../issues/closed/276-implement-sqlite-parity-json-each-and-tree.md)** | **テーブル値関数 `json_each()` / `json_tree()` の実装** | JSON 配列・階層木構造を行セット（8標準列）として動的展開し、SELECT/JOIN 句内で走査・フィルタリング可能にするテーブル値関数。 | `9df2a97c` | **Closed (完了)** |
+| **[#277](../issues/closed/277-implement-sqlite-parity-user-defined-collation.md)** | **ユーザー定義照合順序 (User-Defined Collation) 登録機構の実装** | Python コールバック関数を用いたカスタム比較・ソート順序の動的登録インターフェース (`create_collation`) と ORDER BY 統合。 | `16fd290d` | **Closed (完了)** |
 
-- **目的**: 論文抄録・脅威インテリジェンスの全文検索と複雑な階層型 JSON データのシームレスな分析。
-- **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `functions.py`
+- **目的**: 論文抄録・脅威インテリジェンスの全文検索と複雑な階層型 JSON データのシームレスな分析、および柔軟なカスタムソートの実現。
+- **対象モジュール**: `ast.py`, `parser.py`, `executor.py`, `json_tree.py`, `storage/fts5_storage.py`, `ipc/driver.py`
 
 ---
 
