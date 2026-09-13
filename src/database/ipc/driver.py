@@ -10,7 +10,12 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ..embedding import DeterministicEmbedding
-from ..sql.executor import SQLExecutionError, SQLExecutor
+from ..sql.executor import (
+    SQLExecutionError,
+    SQLExecutor,
+    SQLIntegrityError,
+    SQLOperationalError,
+)
 from ..storage.multi_storage import MultiTableVectorStorage
 from ..storage.storage import VectorStorage
 
@@ -105,6 +110,16 @@ class Cursor:
         else:
             self.description = None
 
+    @staticmethod
+    def _raise_db_error(resp: Dict[str, Any]) -> None:
+        err_type = resp.get("error_type")
+        err_msg = resp.get("error", "SQL Execution failed")
+        if err_type == "IntegrityError":
+            raise IntegrityError(err_msg)
+        if err_type == "OperationalError":
+            raise OperationalError(err_msg)
+        raise ProgrammingError(err_msg)
+
     def execute(self, sql: str, params: Optional[Sequence[Any]] = None) -> "Cursor":
         """Executes a SQL query with optional positional parameter bindings."""
         if self._connection.is_closed:
@@ -112,7 +127,7 @@ class Cursor:
         query = _bind_params(sql, params)
         resp = self._connection._execute_query(query)
         if resp.get("status") != "ok":
-            raise ProgrammingError(resp.get("error", "SQL Execution failed"))
+            self._raise_db_error(resp)
         self._update_cursor_metadata(resp.get("result", {}))
         return self
 
@@ -231,16 +246,35 @@ class Connection:
         """Retrieves raw VectorStorage table for vector search or HNSW operations."""
         return self._storage.get_table(name)
 
+    @staticmethod
+    def _map_execution_error(exc: Exception) -> Dict[str, Any]:
+        if isinstance(exc, SQLIntegrityError):
+            return {
+                "status": "error",
+                "error": str(exc),
+                "error_type": "IntegrityError",
+            }
+        if isinstance(exc, SQLOperationalError):
+            return {
+                "status": "error",
+                "error": str(exc),
+                "error_type": "OperationalError",
+            }
+        prefix = "" if isinstance(exc, SQLExecutionError) else "Execution error: "
+        return {
+            "status": "error",
+            "error": f"{prefix}{exc}",
+            "error_type": "ProgrammingError",
+        }
+
     def _execute_query(self, query: str) -> Dict[str, Any]:
         if self._client is not None:
             return self._client.execute_sql(query, role=self.role)  # type: ignore[no-any-return]
         try:
             res = self._executor.execute(query, role=self.role)
             return {"status": "ok", "result": res}
-        except SQLExecutionError as exc:
-            return {"status": "error", "error": str(exc)}
         except Exception as exc:
-            return {"status": "error", "error": f"Execution error: {exc}"}
+            return self._map_execution_error(exc)
 
     def cursor(self) -> Cursor:
         if self._closed:

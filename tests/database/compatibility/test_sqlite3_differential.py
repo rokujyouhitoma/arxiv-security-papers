@@ -425,6 +425,68 @@ class TestSQLite3Differential(unittest.TestCase):
         self.assertEqual(py_res, sq_res)
         self.assertEqual(py_res, [(10, 2), (20, 1)])
 
+    def test_phase4_dml_constraints_and_error_handling(self) -> None:
+        """Verifies Phase 4 parity: PRIMARY KEY/UNIQUE, NOT NULL, and invalid ROLLBACK errors."""
+        import sqlite3 as _sq3
+
+        import database as _pydb
+
+        py_c = _pydb.connect(":memory:")
+        sq_c = _sq3.connect(":memory:")
+
+        # 1. Setup table with PK and NOT NULL
+        ddl = (
+            "CREATE TABLE unique_test (id INT PRIMARY KEY, email TEXT UNIQUE NOT NULL)"
+        )
+        py_c.cursor().execute(ddl)
+        sq_c.cursor().execute(ddl)
+
+        # 2. Insert initial valid row
+        ins_valid = "INSERT INTO unique_test VALUES (1, 'alice@example.com')"
+        py_c.cursor().execute(ins_valid)
+        sq_c.cursor().execute(ins_valid)
+        py_c.commit()
+        sq_c.commit()
+
+        # 3. Duplicate PRIMARY KEY violation
+        ins_dup = "INSERT INTO unique_test VALUES (1, 'another@example.com')"
+        with self.assertRaises(_pydb.IntegrityError) as py_ctx:
+            py_c.cursor().execute(ins_dup)
+        with self.assertRaises(_sq3.IntegrityError) as sq_ctx:
+            sq_c.cursor().execute(ins_dup)
+        self.assertIn("UNIQUE constraint failed: unique_test.id", str(py_ctx.exception))
+        self.assertIn("UNIQUE constraint failed: unique_test.id", str(sq_ctx.exception))
+
+        # 4. NOT NULL constraint violation
+        ins_null = "INSERT INTO unique_test VALUES (2, NULL)"
+        with self.assertRaises(_pydb.IntegrityError) as py_ctx:
+            py_c.cursor().execute(ins_null)
+        with self.assertRaises(_sq3.IntegrityError) as sq_ctx:
+            sq_c.cursor().execute(ins_null)
+        self.assertIn(
+            "NOT NULL constraint failed: unique_test.email", str(py_ctx.exception)
+        )
+        self.assertIn(
+            "NOT NULL constraint failed: unique_test.email", str(sq_ctx.exception)
+        )
+
+        # 5. Invalid ROLLBACK without active transaction (after commit)
+        py_c.commit()
+        sq_c.commit()
+        with self.assertRaises(_pydb.OperationalError) as py_ctx:
+            py_c.cursor().execute("ROLLBACK")
+        with self.assertRaises(_sq3.OperationalError) as sq_ctx:
+            sq_c.cursor().execute("ROLLBACK")
+        self.assertIn(
+            "cannot rollback - no transaction is active", str(py_ctx.exception)
+        )
+        self.assertIn(
+            "cannot rollback - no transaction is active", str(sq_ctx.exception)
+        )
+
+        py_c.close()
+        sq_c.close()
+
 
 if __name__ == "__main__":
     unittest.main()

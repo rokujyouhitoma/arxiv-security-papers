@@ -15,6 +15,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **283** | SQLite パリティ フェーズ4: 異常系エラーハンドリング統一 (無効なROLLBACKのOperationalError化) および BOTH_ERROR 評価確立 | Feature | 2026-09-13 | [283-sqlite-parity-phase4-error-handling-and-both-error-alignment.md](closed/283-sqlite-parity-phase4-error-handling-and-both-error-alignment.md) |
+| **282** | SQLite パリティ フェーズ4: DML 実行時の制約バリデーション（PRIMARY KEY 重複 ＆ NOT NULL 制約違反時の IntegrityError 送出）の実装 | Feature | 2026-09-13 | [282-sqlite-parity-phase4-dml-constraint-validation.md](closed/282-sqlite-parity-phase4-dml-constraint-validation.md) |
 | **281** | SQLite パリティ フェーズ3: スタンドアロン集合演算 (UNION/INTERSECT/EXCEPT) ＆ FROM句派生サブクエリの実装 | Feature | 2026-09-13 | [281-sqlite-parity-phase3-set-operations-and-from-subqueries.md](closed/281-sqlite-parity-phase3-set-operations-and-from-subqueries.md) |
 | **280** | SQLite パリティ フェーズ2: JOIN投影キー衝突・型強制・UPSERT式評価・JSON ->> 演算子の修正 | Feature | 2026-09-13 | [280-sqlite-parity-phase2-join-type-coercion-upsert-json.md](closed/280-sqlite-parity-phase2-join-type-coercion-upsert-json.md) |
 | **279** | SQLite 互換性向上 Phase 1: DDL rowcount=-1 準拠、DEFAULT 句自動補完、および数値比較アフィニティの実装 | Feature | 2026-09-13 | [279-sqlite-parity-phase1-rowcount-default-and-numeric-affinity.md](closed/279-sqlite-parity-phase1-rowcount-default-and-numeric-affinity.md) |

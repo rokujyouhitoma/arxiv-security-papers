@@ -766,6 +766,13 @@ flowchart TD
   - スタンドアロン SELECT (`FROM` なし) 実行サポート、トップレベル複合演算子 (`UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`) の左結合パイプライン評価 (`_split_all_top_level_compounds` / `_align_compound_rows`)、および `FROM (SELECT ...) alias` インライン派生テーブル (Derived Table) の動的オンザフライ解決。
   - 結果: MATCH 率 86.1% → **92.4% (73/79)**、**SQLITE-ONLY SUCCESS: 0件 (完全解消)**、**BEHAVIORAL_DIFF: 0件維持**。
   - 回帰防止テスト: `tests/database/compatibility/test_sqlite3_differential.py` 全 9 テスト完全パス。
+- **Phase 4 (Issue #282 / #283)**:
+  - DML 実行時における `PRIMARY KEY` (UNIQUE) 重複検知、`NOT NULL` 制約検査エンジン、および無効な `ROLLBACK` 発行時の `OperationalError` 統一。
+  - 例外クラス `SQLIntegrityError`, `SQLOperationalError` を新設し、DB-API 2.0 ドライバ (`src/database/ipc/driver.py`) で `IntegrityError` / `OperationalError` へマッピング。
+  - 結果: **BEHAVIORAL_DIFF: 0件維持**, **SQLITE-ONLY: 0件維持**, **MATCH: 92.4% (73/79)**, **BOTH_ERROR: 3.8% (3/79)**, **PY_EXTENSIONS: 3.8% (3/79)**。
+  - 制約違反2件および無効ROLLBACK1件が SQLite3 と完全同一の例外型・メッセージで `BOTH_ERROR`（両者正当拒絶）に合流。
+  - 回帰防止テスト: `tests/database/compatibility/test_sqlite3_differential.py` 全 10 テスト完全パス。
+
 
 
 

@@ -209,6 +209,18 @@ class SQLExecutionError(Exception):
     pass
 
 
+class SQLIntegrityError(SQLExecutionError):
+    """Raised when a relational constraint (UNIQUE, PRIMARY KEY, NOT NULL, CHECK, FK) is violated."""
+
+    pass
+
+
+class SQLOperationalError(SQLExecutionError):
+    """Raised when an operational database error occurs (e.g. invalid transaction operation)."""
+
+    pass
+
+
 class LazyRow(Dict[str, Any]):
     """Dictionary proxy that transparently resolves missing or prefixed fields from a lazy source."""
 
@@ -1820,7 +1832,12 @@ class SQLExecutor:
         }
 
     def _exec_rollback_tx(self) -> Dict[str, Any]:
-        snapshot_res = self.tx_manager.rollback()
+        try:
+            snapshot_res = self.tx_manager.rollback()
+        except Exception as exc:
+            raise SQLOperationalError(
+                "cannot rollback - no transaction is active"
+            ) from exc
         self._restore_rollback_snapshot(snapshot_res)
         return {"command": "ROLLBACK", "status": "ok", "mutations_reverted": 1}
 
@@ -2724,6 +2741,17 @@ class SQLExecutor:
                 prefixed[f"{alias}.{k}"] = v
         return prefixed
 
+    @staticmethod
+    def _extract_recursive_stmt(anchor_stmt: Any) -> Optional[Any]:
+        rec_stmt: Optional[Any] = getattr(anchor_stmt, "union_all", None)
+        anchor_stmt.union_all = None
+        if getattr(anchor_stmt, "compounds", None):
+            if not rec_stmt and anchor_stmt.compounds:
+                rec_stmt = anchor_stmt.compounds[0][1]
+            empty_compounds: List[Tuple[str, Any]] = []
+            anchor_stmt.compounds = empty_compounds
+        return rec_stmt
+
     def _evaluate_recursive_cte(
         self,
         cte: Any,
@@ -2731,8 +2759,7 @@ class SQLExecutor:
         temp_tables: Dict[str, List[Dict[str, Any]]],
     ) -> List[Dict[str, Any]]:
         anchor_stmt = cte.statement
-        rec_stmt = anchor_stmt.union_all
-        anchor_stmt.union_all = None
+        rec_stmt = self._extract_recursive_stmt(anchor_stmt)
 
         anchor_res = self._exec_select(
             anchor_stmt, effective_role, temporary_tables=temp_tables
@@ -3495,6 +3522,8 @@ class SQLExecutor:
 
     @staticmethod
     def _coerce_int_val(val: Any) -> Any:
+        if isinstance(val, bool):
+            return val
         try:
             return int(val)
         except (ValueError, TypeError):
@@ -3649,12 +3678,57 @@ class SQLExecutor:
             table.index.add_item(idx, vector)
         return dict(row)
 
+    @staticmethod
+    def _validate_single_not_null(table_name: str, col: ColumnDef, val: Any) -> None:
+        if not col.is_nullable and val is None:
+            raise SQLIntegrityError(
+                f"NOT NULL constraint failed: {table_name}.{col.name}"
+            )
+
+    @staticmethod
+    def _validate_not_null_constraints(
+        table: TableCatalog, row: Dict[str, Any]
+    ) -> None:
+        for col in table.columns:
+            SQLExecutor._validate_single_not_null(table.name, col, row.get(col.name))
+
+    @staticmethod
+    def _is_matching_unique_val(existing_val: Any, new_val: Any) -> bool:
+        if existing_val is None or new_val is None:
+            return False
+        return str(existing_val) == str(new_val)
+
+    @staticmethod
+    def _check_column_uniqueness(
+        table: TableCatalog, col_name: str, new_val: Any
+    ) -> None:
+        for m in getattr(table.storage, "metadata", []):
+            if SQLExecutor._is_matching_unique_val(m.get(col_name), new_val):
+                raise SQLIntegrityError(
+                    f"UNIQUE constraint failed: {table.name}.{col_name}"
+                )
+
+    @staticmethod
+    def _validate_unique_and_pk_constraints(
+        table: TableCatalog, row: Dict[str, Any]
+    ) -> None:
+        for col in table.columns:
+            is_uniq = getattr(col, "is_unique", False) or col.is_primary_key
+            if is_uniq and col.name in row:
+                SQLExecutor._check_column_uniqueness(table, col.name, row[col.name])
+
+    @staticmethod
+    def _validate_row_constraints(table: TableCatalog, row: Dict[str, Any]) -> None:
+        SQLExecutor._validate_not_null_constraints(table, row)
+        SQLExecutor._validate_unique_and_pk_constraints(table, row)
+
     def _insert_or_upsert_row(
         self, table: TableCatalog, row: Dict[str, Any], stmt: InsertStatement
     ) -> Optional[Dict[str, Any]]:
         is_conflict, conflict_res = self._try_upsert_conflict(table, row, stmt)
         if is_conflict:
             return conflict_res
+        self._validate_row_constraints(table, row)
         if not hasattr(table.storage, "dim"):
             return self._insert_non_vector_row(table, row)
         return self._insert_vector_row(table, row, stmt)

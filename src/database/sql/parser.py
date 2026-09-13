@@ -1174,12 +1174,15 @@ class SQLParser:
         )
         c_parts = cleaned_col.split()
         c_type = c_parts[1] if len(c_parts) > 1 else "TEXT"
-        is_pk = "PRIMARY KEY" in cleaned_col.upper()
-        is_nullable = "NOT NULL" not in cleaned_col.upper()
+        upper_def = cleaned_col.upper()
+        is_pk = "PRIMARY KEY" in upper_def
+        is_unique = "UNIQUE" in upper_def or is_pk
+        is_nullable = "NOT NULL" not in upper_def
         return ColumnDef(
             name=c_name,
             data_type=c_type,
             is_primary_key=is_pk,
+            is_unique=is_unique,
             is_nullable=is_nullable,
             generated_expr=gen_expr,
             is_stored=is_stored,

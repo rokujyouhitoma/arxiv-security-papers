@@ -53,9 +53,9 @@ SUMMARY OF DIFFERENTIAL COMPARISON: Pure Python DB vs sqlite3
 Total Evaluated Test Cases: 79
   - MATCH / EQUIVALENT:               73 件 (92.4%)  [完全一致・実質等価 (+40.5% 向上)]
   - BEHAVIORAL DIFFERENCES:            0 件 ( 0.0%)  [挙動差異 完全解消 (27件 → 0件)]
-  - PURE PYTHON EXTENSIONS:            5 件 ( 6.3%)  [VECTOR / KNN / NoSQL 独自拡張]
+  - PURE PYTHON EXTENSIONS:            3 件 ( 3.8%)  [VECTOR / KNN 独自拡張 ＆ BEGIN]
   - SQLITE-ONLY SUCCESS:               0 件 ( 0.0%)  [未対応構文 完全解消 (5件 → 0件)]
-  - BOTH EXPECTEDLY REJECTED:          1 件 ( 1.3%)  [両者とも正当にエラー送出]
+  - BOTH EXPECTEDLY REJECTED:          3 件 ( 3.8%)  [制約違反 ＆ 無効ROLLBACK 正当拒絶 (+2件)]
 ==================================================================
 ```
 
@@ -411,6 +411,53 @@ Total Evaluated Test Cases: 79
 3. **FROM 句インライン派生テーブル (Derived Table) のオンザフライ解決**:
    - `_parse_single_table_ref()` において、`FROM (SELECT ...) alias` 形式を検知し、内部クエリを `TableRef.subquery` として再帰パース。
    - `_evaluate_derived_tables()` を新設し、外部クエリ実行前に内部クエリを再帰実行してインメモリ一時テーブル（`temp_tables[alias]`）として自動登録。
+
+---
+
+## 9. フェーズ4 改善実績および最終評価 (Phase 4 Execution & Final Assessment)
+
+2026年9月13日、Issue #282（DML制約バリデーション）および Issue #283（異常系エラーハンドリング統一・BOTH_ERROR確立）に基づき、PRIMARY KEY/UNIQUE重複検知、NOT NULL制約検査、および無効なROLLBACK時のOperationalError統一改修を実施した。
+
+### 9.1 フェーズ4 開始前・終了後 定量メトリクス推移 (Phase 4 Before / After)
+
+| 評価指標 (Metric) | Baseline (初期) | Phase 2 終了時点 | Phase 3 終了時点 (Phase 4 開始前) | **Phase 4 終了後 (現在)** | 変動量 (Phase 4 による改善) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **MATCH / EQUIVALENT** | 41 件 (51.9%) | 68 件 (86.1%) | 73 件 (92.4%) | **73 件 (92.4%)** | ±0 件 (高互換性水準維持) |
+| **BEHAVIORAL DIFFERENCES** | 5 件 ( 6.3%) | 0 件 ( 0.0%) | 0 件 ( 0.0%) | **0 件 ( 0.0%)** | 0 件 (完全解消維持) |
+| **PURE PYTHON EXTENSIONS** | 5 件 ( 6.3%) | 5 件 ( 6.3%) | 5 件 ( 6.3%) | **3 件 ( 3.8%)** | **-2 件 (制約未検証の解消・純化)** |
+| **SQLITE-ONLY SUCCESS** | 5 件 ( 6.3%) | 5 件 ( 6.3%) | 0 件 ( 0.0%) | **0 件 ( 0.0%)** | 0 件 (完全解消維持) |
+| **BOTH REJECTED (ERRORS)** | 1 件 ( 1.3%) | 1 件 ( 1.3%) | 1 件 ( 1.3%) | **3 件 ( 3.8%)** | **+2 件 (制約違反の両者正当拒絶合流)** |
+| **合計テストケース** | 79 件 | 79 件 | 79 件 | **79 件** | - |
+
+### 9.2 カテゴリ別改善進捗推移 (Category Progression to Phase 4)
+
+| カテゴリ | Baseline MATCH/BOTH | Phase 3 MATCH/BOTH | Phase 4 MATCH/BOTH | 最終状態 |
+| :--- | :---: | :---: | :---: | :---: |
+| **1. DDL & Basic DML** | 4 / 9 (44.4%) | 9 / 9 (100.0%) | **9 / 9 (100.0%)** | 完遂 |
+| **2. Types & NULL Handling** | 1 / 6 (16.7%) | 5 / 6 ( 83.3%) | **5 / 6 ( 83.3%)** | 完遂 (1件はVECTOR型) |
+| **3. Operators & Functions** | 4 / 8 (50.0%) | 8 / 8 (100.0%) | **8 / 8 (100.0%)** | 完遂 |
+| **4. Aggregations & Grouping** | 4 / 5 (80.0%) | 5 / 5 (100.0%) | **5 / 5 (100.0%)** | 完遂 |
+| **5. Paging & Set Operations** | 2 / 7 (28.6%) | 7 / 7 (100.0%) | **7 / 7 (100.0%)** | 完遂 |
+| **6. Joins** | 2 / 6 (33.3%) | 6 / 6 (100.0%) | **6 / 6 (100.0%)** | 完遂 |
+| **7. Subqueries & CTEs** | 5 / 8 (62.5%) | 8 / 8 (100.0%) | **8 / 8 (100.0%)** | 完遂 |
+| **8. Constraints & Transactions**| 3 / 8 (37.5%) | 5 / 8 ( 62.5%) | **7 / 8 ( 87.5%)** | **+2件向上 (制約違反 ＆ ROLLBACK一致)** |
+| **9. UPSERT & RETURNING** | 3 / 5 (60.0%) | 5 / 5 (100.0%) | **5 / 5 (100.0%)** | 完遂 |
+| **10. Views & Introspection** | 3 / 5 (60.0%) | 5 / 5 (100.0%) | **5 / 5 (100.0%)** | 完遂 |
+| **11. Advanced / Extensions** | 6 / 8 (75.0%) | 7 / 8 ( 87.5%) | **7 / 8 ( 87.5%)** | 独自拡張 (VECTOR/KNN) |
+| **12. Performance & Memory** | 4 / 4 (100.0%)| 4 / 4 (100.0%) | **4 / 4 (100.0%)** | 性能ベンチマーク維持 |
+
+### 9.3 Phase 4 で解決された主要課題の技術詳細
+
+1. **PRIMARY KEY / UNIQUE 制約違反のリアルタイム検知 (`SQLIntegrityError`)**:
+   - `ColumnDef` に `is_unique` 属性を追加し、`parser.py` で `UNIQUE` / `PRIMARY KEY` 句を解析。
+   - `executor.py` に `_validate_unique_and_pk_constraints` を新設し、重複行が存在する場合に `UNIQUE constraint failed: {table}.{col}` メッセージを保持する `SQLIntegrityError` を送出。
+   - DB-API 2.0 ドライバ層 (`src/database/ipc/driver.py`) で `IntegrityError` にマッピングして送出し、SQLite3 と完全一致のエラー挙動を達成。
+2. **NOT NULL 制約違反のリアルタイム検知 (`SQLIntegrityError`)**:
+   - `executor.py` に `_validate_not_null_constraints` を新設。
+   - 列値が `None` の場合に `NOT NULL constraint failed: {table}.{col}` を即時送出し、不正な NULL 挿入を防止。
+3. **無効な ROLLBACK 時の OperationalError 統一**:
+   - トランザクションが存在しない状態での `ROLLBACK` 発行時、`SQLOperationalError("cannot rollback - no transaction is active")` を送出。
+   - ドライバ層で `OperationalError` として伝播させ、SQLite3 と例外クラスおよびエラー文字列を 100% 同一化。
 
 ---
 
