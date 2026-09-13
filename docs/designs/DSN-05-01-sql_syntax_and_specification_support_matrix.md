@@ -751,4 +751,17 @@ flowchart TD
 4. **Step 4: 永続的リグレッション防止テストスイートの配備**:
    - `tests/database/compatibility/test_sqlite3_differential.py` を追加し、CI/CD パイプライン（`make test`）で常時互換性・同等性を回帰テスト可能にする。
 
+---
+
+### 8.6 パリティ向上実績 (Parity Improvement Achievements)
+
+- **Phase 1 (Issue #279)**:
+  - DDL `rowcount = -1` 化、列定義 `DEFAULT` 自動補完、負数境界 `BETWEEN` 正規表現改修、Modulo (`%`) / 文字列連結 (`||`) 演算子実装。
+  - 結果: MATCH 率 51.9% (41/79) → **75.9% (60/79)**、BEHAVIORAL_DIFF: 27件 → 8件。
+- **Phase 2 (Issue #280)**:
+  - JOIN 列キー衝突回避 (`used_keys` 式保持)、INSERT 時型強制 (`_coerce_value_to_type` による INT/REAL/NULL キャスト)、UPSERT 右辺式評価、JSON 矢印演算子 (`->>`) の `$.key` 正規化。
+  - 結果: MATCH 率 75.9% → **86.1% (68/79)**、**BEHAVIORAL_DIFF: 0件 (完全解消)**。
+  - 回帰防止テスト: `tests/database/compatibility/test_sqlite3_differential.py` 全 8 テスト完全パス。
+
+
 

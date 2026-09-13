@@ -573,7 +573,14 @@ def _get_raw_json_col(record: Dict[str, Any], col_part: str) -> Any:
 def _extract_json_val(
     dict_obj: Dict[str, Any], path_part: str, json_unquote: bool
 ) -> Optional[Any]:
-    val = dict_obj.get(path_part.strip().strip("'\""))
+    # Normalize JSONPath: '$.key' or "$.key" → key; also plain 'key'
+    key = path_part.strip().strip("'\"")
+    # Strip leading $. or $ so that "$.user" becomes "user"
+    if key.startswith("$."):
+        key = key[2:]
+    elif key.startswith("$"):
+        key = key[1:]
+    val = dict_obj.get(key)
     if val is None:
         return None
     return str(val) if json_unquote else val
@@ -762,6 +769,10 @@ def _extract_field_value(record: Dict[str, Any], expr: str) -> Any:
     if not expr:
         return None
     expr = expr.strip()
+    # Handle NULL keyword explicitly (cannot go through _extract_literal because
+    # that returns None which is indistinguishable from "not a literal").
+    if expr.upper() == "NULL":
+        return None
     lit = _extract_literal(expr)
     if lit is not None:
         return lit
@@ -2903,11 +2914,20 @@ class SQLExecutor:
     ) -> Dict[str, Any]:
         if "*" in columns and len(columns) == 1:
             return self._project_wildcard(r, table_name)
-        projected = {}
+        # Use an ordered list of (key, value) pairs to preserve column order and
+        # handle duplicate short names (e.g. e.name vs d.name both → "name").
+        # When a short name collides, fall back to the original qualified expression
+        # as the output key so that both values are preserved in the result tuple.
+        pairs: List[Tuple[str, Any]] = []
+        used_keys: set[str] = set()
         for col_expr in columns:
             k, v = self._project_column_item(r, col_expr.strip())
-            projected[k] = v
-        return projected
+            if k in used_keys:
+                # Collision: use original expression as key to keep both values
+                k = col_expr.strip()
+            used_keys.add(k)
+            pairs.append((k, v))
+        return dict(pairs)
 
     @staticmethod
     def _deduplicate_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -3389,6 +3409,48 @@ class SQLExecutor:
             SQLExecutor._apply_single_col_default(c, row)
 
     @staticmethod
+    def _coerce_value_to_type(val: Any, data_type: str) -> Any:
+        """Coerce a raw value to the Python type matching the SQLite column affinity.
+
+        SQLite stores values with type affinity; integers and reals should not
+        be stored as plain strings so that TYPEOF(), IS NULL, and arithmetic
+        all behave identically to SQLite.
+        """
+        # 'NULL' string from parser → Python None regardless of column type
+        if val is None or (isinstance(val, str) and val.upper() == "NULL"):
+            return None
+        dt = data_type.upper().split("(")[0].strip()
+        integer_types = {
+            "INT",
+            "INTEGER",
+            "BIGINT",
+            "SMALLINT",
+            "TINYINT",
+            "INT2",
+            "INT8",
+        }
+        real_types = {"REAL", "FLOAT", "DOUBLE", "NUMERIC", "DECIMAL", "NUMBER"}
+        if dt in integer_types:
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                return val
+        if dt in real_types:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return val
+        return val
+
+    @staticmethod
+    def _apply_type_coercion(table: TableCatalog, row: Dict[str, Any]) -> None:
+        """Coerce all row values to their declared column types in-place."""
+        type_map = {c.name: c.data_type for c in table.columns}
+        for col, val in list(row.items()):
+            if col in type_map:
+                row[col] = SQLExecutor._coerce_value_to_type(val, type_map[col])
+
+    @staticmethod
     def _materialize_insert_rows(
         stmt: InsertStatement, cols: List[str]
     ) -> List[Dict[str, Any]]:
@@ -3408,6 +3470,7 @@ class SQLExecutor:
             rows = self._materialize_insert_rows(stmt, cols)
         for r in rows:
             self._apply_column_defaults(table, r)
+            self._apply_type_coercion(table, r)
         return rows
 
     @staticmethod
@@ -3440,8 +3503,18 @@ class SQLExecutor:
             return None
         if stmt.upsert_action == "UPDATE":
             existing = table.storage.metadata[conflict_idx]
-            update_values = stmt.upsert_update_set or row
-            existing.update(update_values)
+            raw_update = stmt.upsert_update_set or row
+            # Evaluate RHS expressions using existing row as context so that
+            # expressions like "cnt + 10" resolve to the correct numeric value
+            # rather than being stored as a raw string.
+            evaluated: Dict[str, Any] = {}
+            ctx = dict(existing)
+            for col, expr_val in raw_update.items():
+                if isinstance(expr_val, str):
+                    evaluated[col] = _extract_field_value(ctx, expr_val)
+                else:
+                    evaluated[col] = expr_val
+            existing.update(evaluated)
             return dict(existing)
         return None
 

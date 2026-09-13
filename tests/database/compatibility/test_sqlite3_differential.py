@@ -239,6 +239,131 @@ class TestSQLite3Differential(unittest.TestCase):
         self.assertEqual(py_e, sq_e)
         self.assertEqual(py_e, [(1, -1.0, "Item: 1")])
 
+    def test_phase2_join_type_coercion_upsert_json(self) -> None:
+        """Verifies Phase 2 parity: JOIN projection, NULL coercion, TYPEOF, UPSERT expr, JSON ->>."""
+        import sqlite3 as _sq3
+
+        import database as _pydb
+
+        def _new_conns() -> tuple:  # type: ignore[type-arg]
+            return _pydb.connect(":memory:"), _sq3.connect(":memory:")
+
+        # --- Issue A: JOIN column projection key collision ---
+        py_c, sq_c = _new_conns()
+        for cur in (py_c.cursor(), sq_c.cursor()):
+            cur.execute("CREATE TABLE depts (id INT, name TEXT)")
+            cur.execute("CREATE TABLE emps (id INT, name TEXT, dept_id INT)")
+            cur.execute("INSERT INTO depts VALUES (10, 'Security'), (20, 'Infra')")
+            cur.execute(
+                "INSERT INTO emps VALUES (1, 'Alice', 10), (2, 'Bob', 10), (3, 'Charlie', 20)"
+            )
+        q_join = (
+            "SELECT e.name, d.name FROM emps e INNER JOIN depts d "
+            "ON e.dept_id = d.id ORDER BY e.name"
+        )
+        rows_py = py_c.cursor().execute(q_join).fetchall()
+        rows_sq = sq_c.cursor().execute(q_join).fetchall()
+        py_c.close()
+        sq_c.close()
+        self.assertEqual(rows_py, rows_sq)
+        self.assertEqual(
+            rows_py,
+            [("Alice", "Security"), ("Bob", "Security"), ("Charlie", "Infra")],
+        )
+
+        # --- Issue B: NULL coercion, IS NULL, IS NOT NULL, TYPEOF ---
+        py_c, sq_c = _new_conns()
+        for cur in (py_c.cursor(), sq_c.cursor()):
+            cur.execute("CREATE TABLE tt (id INT, score REAL, tag TEXT)")
+            cur.execute("INSERT INTO tt VALUES (1, 3.14, NULL)")
+            cur.execute("INSERT INTO tt VALUES (2, NULL, 'hello')")
+            cur.execute("INSERT INTO tt VALUES (3, 13.0, 'world')")
+
+        py_null = (
+            py_c.cursor().execute("SELECT id FROM tt WHERE score IS NULL").fetchall()
+        )
+        sq_null = (
+            sq_c.cursor().execute("SELECT id FROM tt WHERE score IS NULL").fetchall()
+        )
+        self.assertEqual(py_null, sq_null)
+        self.assertEqual(py_null, [(2,)])
+
+        py_not = (
+            py_c.cursor()
+            .execute("SELECT id FROM tt WHERE score IS NOT NULL ORDER BY id")
+            .fetchall()
+        )
+        sq_not = (
+            sq_c.cursor()
+            .execute("SELECT id FROM tt WHERE score IS NOT NULL ORDER BY id")
+            .fetchall()
+        )
+        self.assertEqual(py_not, sq_not)
+        self.assertEqual(py_not, [(1,), (3,)])
+
+        py_typeof = (
+            py_c.cursor()
+            .execute(
+                "SELECT TYPEOF(id), TYPEOF(score), TYPEOF(tag) FROM tt WHERE id = 1"
+            )
+            .fetchall()
+        )
+        sq_typeof = (
+            sq_c.cursor()
+            .execute(
+                "SELECT TYPEOF(id), TYPEOF(score), TYPEOF(tag) FROM tt WHERE id = 1"
+            )
+            .fetchall()
+        )
+        py_c.close()
+        sq_c.close()
+        self.assertEqual(py_typeof, sq_typeof)
+        self.assertEqual(py_typeof, [("integer", "real", "null")])
+
+        # --- Issue C: UPSERT SET RHS expression evaluation ---
+        py_c, sq_c = _new_conns()
+        for cur in (py_c.cursor(), sq_c.cursor()):
+            cur.execute("CREATE TABLE counters (k TEXT PRIMARY KEY, cnt INT)")
+            cur.execute("INSERT INTO counters VALUES ('hits', 1)")
+            cur.execute(
+                "INSERT INTO counters VALUES ('hits', 10) "
+                "ON CONFLICT (k) DO UPDATE SET cnt = cnt + 10"
+            )
+        py_upsert = (
+            py_c.cursor()
+            .execute("SELECT k, cnt FROM counters WHERE k = 'hits'")
+            .fetchall()
+        )
+        sq_upsert = (
+            sq_c.cursor()
+            .execute("SELECT k, cnt FROM counters WHERE k = 'hits'")
+            .fetchall()
+        )
+        py_c.close()
+        sq_c.close()
+        self.assertEqual(py_upsert, sq_upsert)
+        self.assertEqual(py_upsert, [("hits", 11)])
+
+        # --- Issue D: JSON ->> operator ---
+        py_c, sq_c = _new_conns()
+        for cur in (py_c.cursor(), sq_c.cursor()):
+            cur.execute("CREATE TABLE audit_logs (id INT, payload TEXT)")
+            cur.execute('INSERT INTO audit_logs VALUES (1, \'{"user": "alice"}\')')
+        py_json = (
+            py_c.cursor()
+            .execute("SELECT id, payload ->> '$.user' FROM audit_logs WHERE id = 1")
+            .fetchall()
+        )
+        sq_json = (
+            sq_c.cursor()
+            .execute("SELECT id, payload ->> '$.user' FROM audit_logs WHERE id = 1")
+            .fetchall()
+        )
+        py_c.close()
+        sq_c.close()
+        self.assertEqual(py_json, sq_json)
+        self.assertEqual(py_json, [(1, "alice")])
+
 
 if __name__ == "__main__":
     unittest.main()
