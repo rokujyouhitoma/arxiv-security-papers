@@ -334,7 +334,7 @@ def test_sqlite3_pep249_parameter_binding_and_exceptions():
 
         # Execute table creation
         cur.execute("CREATE TABLE metrics (id VARCHAR(32), value INT)")
-        assert cur.rowcount == 0
+        assert cur.rowcount == -1
 
         # Execute inserts with ? parameter binding
         cur.execute("INSERT INTO metrics (id, value) VALUES (?, ?)", ["m1", 42])

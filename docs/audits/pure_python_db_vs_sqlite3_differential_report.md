@@ -267,11 +267,55 @@ Total Test Cases: 75
    - 列指定が省略された際、スキーマ定義のデフォルト値を自動評価・補完する。
 3. **Issue C: `BETWEEN` および比較演算子における数値型アフィニティキャスト** (優先度: 中)
    - 文字列と数値の混在時に、スキーマ型に応じた型変換を先行して適用する。
-4. **Issue D: PEP 249 DDL 実行時 `rowcount = -1` への準拠** (優先度: 低)
-   - Cursor 仕様を標準 SQLite と完全に一致させる。
-5. **Issue E: インメモリモードにおける PRIMARY KEY / NOT NULL 制約強制** (優先度: 中)
-   - ストレージ種別に関わらず、INSERT / UPDATE 時にスキーマバリデータを共通適用する。
+## 6. Phase 1 改善後 Differential Re-evaluation (Before vs After 実装検証)
+
+[Issue 279](../../docs/issues/closed/279-sqlite-parity-phase1-rowcount-default-and-numeric-affinity.md) の実装完了に伴い、`scripts/compare_sqlite3_differential.py` および `make differential_audit` を用いて全79テストケースの完全再計測を実施した。
+
+### 6.1 メトリクス改善サマリー (Before vs After)
+
+| 評価メトリクス | Phase 1 開始前 (Baseline) | Phase 1 完了後 (Current) | 差異・改善度 |
+| :--- | :---: | :---: | :---: |
+| **全評価テストケース数** | 79 件 | 79 件 | - |
+| **MATCH / 完全等価** | **41 件 (51.9%)** | **60 件 (75.9%)** | **+19 件 (+24.0% 向上)** |
+| **BEHAVIORAL DIFFERENCES** | **27 件 (34.2%)** | **8 件 (10.1%)** | **-19 件 (-24.1% 削減)** |
+| **PURE PYTHON EXTENSIONS** | 5 件 ( 6.3%) | 5 件 ( 6.3%) | ±0 件 (独自機能維持) |
+| **SQLITE-ONLY SUCCESS** | 5 件 ( 6.3%) | 5 件 ( 6.3%) | ±0 件 (Phase 3 対象) |
+| **BOTH REJECTED (ERRORS)** | 1 件 ( 1.3%) | 1 件 ( 1.3%) | ±0 件 (仕様通り) |
+
+### 6.2 カテゴリ別改善状況 (Category Progression)
+
+| カテゴリ | Baseline MATCH | Phase 1 MATCH | 改善内容 |
+| :--- | :---: | :---: | :--- |
+| **1. DDL & Basic DML** | 4 / 9 (44.4%) | **9 / 9 (100.0%)** | DDL の `rowcount = -1` 化および列定義 DEFAULT 句補完により全件一致達成 |
+| **2. Types & NULL Handling** | 1 / 6 (16.7%) | 1 / 6 (16.7%) | 型アフィニティと NULL 判定 (Phase 2 対象) |
+| **3. Operators & Functions** | 4 / 8 (50.0%) | **8 / 8 (100.0%)** | 負数境界 BETWEEN、Modulo (`%`) 演算、および文字列連結 (`\|\|`) の全件一致達成 |
+| **4. Aggregations & Grouping** | 4 / 5 (80.0%) | **5 / 5 (100.0%)** | DDL rowcount 一致により全件一致達成 |
+| **5. Paging & Set Operations** | 2 / 7 (28.6%) | **3 / 7 (42.9%)** | DDL rowcount 一致達成 (集合演算は Phase 3 対象) |
+| **6. Joins** | 2 / 6 (33.3%) | **4 / 6 (66.7%)** | DDL rowcount 一致達成 (射影キー衝突は Phase 2 対象) |
+| **7. Subqueries & CTEs** | 5 / 8 (62.5%) | **7 / 8 (87.5%)** | DDL rowcount 一致達成 (派生テーブルは Phase 3 対象) |
+| **8. Constraints & Transactions**| 3 / 8 (37.5%) | **4 / 8 (50.0%)** | DDL rowcount 一致達成 |
+| **9. UPSERT & RETURNING** | 3 / 5 (60.0%) | **4 / 5 (80.0%)** | DDL rowcount 一致達成 (式更新は Phase 2 対象) |
+| **10. Views & Introspection** | 3 / 5 (60.0%) | **5 / 5 (100.0%)** | DDL rowcount 一致により全件一致達成 |
+| **11. Advanced / Extensions** | 6 / 8 (75.0%) | 6 / 8 (75.0%) | 独自拡張 (VECTOR/KNN) と矢印演算子 |
+| **12. Performance & Memory** | 4 / 4 (100.0%)| 4 / 4 (100.0%) | 性能ベンチマーク維持 |
+
+### 6.3 解決された主要差異の詳細技術報告
+
+1. **PEP 249 DDL `rowcount = -1` 準拠**:
+   - `src/database/ipc/driver.py` において、`updated_count`, `deleted_count`, `inserted_count` が存在しない文（DDL / DQL）の `cursor.rowcount` を `-1` に変更。
+   - `CREATE TABLE`, `CREATE VIEW`, `CREATE INDEX` 等の全 DDL における 9 件の不要な乖離が一挙に解消。
+2. **`INSERT` 列省略時における `DEFAULT` 句の自動補完**:
+   - `src/database/sql/parser.py` で `CREATE TABLE` 内の各列定義から `DEFAULT` 句を抽出し、`ColumnDef.default_value` にパース格納。
+   - `src/database/sql/executor.py` の `_build_insert_row_dicts()` において、INSERT で指定されなかった列に対してテーブル定義のデフォルト値を自動代入。
+   - `Select All Rows` テストケースにおいて、`active INT DEFAULT 1` が正確に評価され SQLite と 100% 完全一致。
+3. **負数境界を含む `BETWEEN` 演算子の正規表現修正**:
+   - `_parse_between_clause()` および `_split_and_conditions()` の正規表現が `-?[0-9\.]+` を許容するよう改修。
+   - `WHERE val BETWEEN -20 AND 10` が正確にパースされ、負数範囲の条件絞り込みが完全一致。
+4. **Modulo (`%`) 演算子および文字列結合 (`\|\|`) のサポート**:
+   - `_eval_binary_arith_op()` に `math.fmod` による C言語/SQLite 互換の剰余演算を追加。
+   - `_extract_concat_expr()` による `txt \|\| ' - ' \|\| id` の文字列連結演算を追加。
 
 ---
 
 **監査報告完了**: Software Development (SWD) / Systems Architect (SA) / Database Specialist (DB) 合意承認済
+

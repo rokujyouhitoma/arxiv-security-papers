@@ -8,6 +8,7 @@ import fnmatch
 import functools
 import json
 import logging
+import math
 import os
 import re
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
@@ -505,6 +506,7 @@ def _eval_binary_arith_op(op: str, v1: float, v2: float) -> Optional[float]:
         "-": lambda a, b: a - b,
         "*": lambda a, b: a * b,
         "/": lambda a, b: a / b if b != 0 else None,
+        "%": lambda a, b: math.fmod(a, b) if b != 0 else None,
     }
     fn = ops.get(op)
     return fn(v1, v2) if fn is not None else None
@@ -535,7 +537,7 @@ def _safe_eval_arith(op: str, v1: Any, v2: Any) -> Optional[Any]:
 
 def _extract_arithmetic(record: Dict[str, Any], expr: str) -> Optional[Any]:
     arith_m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*([\+\-\*\/])\s*([a-zA-Z0-9_\.\->>\'\"0-9\.]+)$",
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*([\+\-\*\/\%])\s*([a-zA-Z0-9_\.\->>\'\"0-9\.]+)$",
         expr.strip(),
     )
     if not arith_m:
@@ -722,17 +724,37 @@ def _eval_core_expr_features(record: Dict[str, Any], expr: str) -> Any:
     return _extract_comparison_expr(record, expr)
 
 
-def _extract_complex_expr(record: Dict[str, Any], expr: str) -> Any:
-    """Evaluates CASE, function call, comparison, arithmetic, or JSON operators."""
-    core_res = _eval_core_expr_features(record, expr)
-    if core_res is not None:
-        return core_res
+def _extract_concat_expr(record: Dict[str, Any], expr: str) -> Optional[str]:
+    if "||" not in expr:
+        return None
+    parts = expr.split("||")
+    out: List[str] = []
+    for p in parts:
+        v = _extract_field_value(record, p.strip())
+        if v is None:
+            return None
+        out.append(str(v))
+    return "".join(out)
+
+
+def _eval_extended_ops(record: Dict[str, Any], expr: str) -> Any:
     arith = _extract_arithmetic(record, expr)
     if arith is not None:
         return arith
     if "->" in expr:
         return _extract_json_op(record, expr)
     return None
+
+
+def _extract_complex_expr(record: Dict[str, Any], expr: str) -> Any:
+    """Evaluates CASE, function call, comparison, arithmetic, concat, or JSON operators."""
+    concat_res = _extract_concat_expr(record, expr)
+    if concat_res is not None:
+        return concat_res
+    core_res = _eval_core_expr_features(record, expr)
+    if core_res is not None:
+        return core_res
+    return _eval_extended_ops(record, expr)
 
 
 def _extract_field_value(record: Dict[str, Any], expr: str) -> Any:
@@ -2456,6 +2478,9 @@ class SQLExecutor:
         c_def = stmt.column_def
         if not c_def:
             raise SQLExecutionError("Column definition for ADD COLUMN is required.")
+        if stmt.default_value is not None:
+            c_def.default_value = stmt.default_value
+        table.columns.append(c_def)
         if table.schema is not None:
             table.schema[c_def.name] = c_def.data_type
         for meta in table.storage.metadata:
@@ -3353,17 +3378,37 @@ class SQLExecutor:
             return stmt.columns
         return [c for c in table.schema.keys() if c not in table.generated_columns]
 
-    def _build_insert_row_dicts(
-        self, stmt: InsertStatement, table: TableCatalog, role: str
+    @staticmethod
+    def _apply_single_col_default(c: ColumnDef, row: Dict[str, Any]) -> None:
+        if c.name not in row and c.default_value is not None:
+            row[c.name] = c.default_value
+
+    @staticmethod
+    def _apply_column_defaults(table: TableCatalog, row: Dict[str, Any]) -> None:
+        for c in table.columns:
+            SQLExecutor._apply_single_col_default(c, row)
+
+    @staticmethod
+    def _materialize_insert_rows(
+        stmt: InsertStatement, cols: List[str]
     ) -> List[Dict[str, Any]]:
-        if stmt.select_stmt is not None:
-            return self._build_from_select(stmt, role)
-        cols = self._resolve_insert_columns(stmt, table)
         if stmt.rows_values:
             return [dict(zip(cols, row)) for row in stmt.rows_values]
         if stmt.values:
             return [dict(zip(cols, stmt.values))]
         return []
+
+    def _build_insert_row_dicts(
+        self, stmt: InsertStatement, table: TableCatalog, role: str
+    ) -> List[Dict[str, Any]]:
+        if stmt.select_stmt is not None:
+            rows = self._build_from_select(stmt, role)
+        else:
+            cols = self._resolve_insert_columns(stmt, table)
+            rows = self._materialize_insert_rows(stmt, cols)
+        for r in rows:
+            self._apply_column_defaults(table, r)
+        return rows
 
     @staticmethod
     def _is_conflict(

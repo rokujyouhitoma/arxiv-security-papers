@@ -321,7 +321,7 @@ def _parse_between_clause(part: str) -> Optional[Dict[str, Any]]:
     """Parses BETWEEN / NOT BETWEEN condition."""
     pattern = (
         r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+BETWEEN|BETWEEN)\s+"
-        r"('[^']*'|\"[^\"]*\"|[0-9\.]+)\s+AND\s+('[^']*'|\"[^\"]*\"|[0-9\.]+)"
+        r"('[^']*'|\"[^\"]*\"|-?[0-9\.]+)\s+AND\s+('[^']*'|\"[^\"]*\"|-?[0-9\.]+)"
         r"(?:\s+COLLATE\s+([a-zA-Z0-9_]+))?$"
     )
     between_m = re.match(pattern, part, re.IGNORECASE)
@@ -437,8 +437,10 @@ def _parse_where_clause_item(part: str) -> Optional[Dict[str, Any]]:
 
 def _parse_val_type(clean_val: str) -> Any:
     """Parses numeric literal or returns string."""
-    if clean_val.isdigit():
+    try:
         return int(clean_val)
+    except ValueError:
+        pass
     try:
         return float(clean_val)
     except ValueError:
@@ -634,8 +636,8 @@ def _extract_collate_from_col_def(raw_col: str) -> Tuple[str, Optional[str]]:
 def _split_and_conditions(text: str) -> List[str]:
     """Splits conditions on AND while preserving BETWEEN ... AND ... clauses."""
     pattern = (
-        r"(\b(?:NOT\s+)?BETWEEN\s+(?:'[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|[0-9\.]+))\s+AND\s+"
-        r"((?:'[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|[0-9\.]+))"
+        r"(\b(?:NOT\s+)?BETWEEN\s+(?:'[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|-?[0-9\.]+))\s+AND\s+"
+        r"((?:'[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|-?[0-9\.]+))"
     )
     protected = re.sub(pattern, r"\1 __BETWEEN_AND__ \2", text, flags=re.IGNORECASE)
     parts = re.split(r"\s+AND\s+", protected, flags=re.IGNORECASE)
@@ -1166,6 +1168,7 @@ class SQLParser:
         c_name = parts[0]
         cleaned_col, fk_def = _extract_column_fk_def(raw_col, c_name)
         cleaned_col, collate = _extract_collate_from_col_def(cleaned_col)
+        cleaned_col, default_val = _extract_default_value(cleaned_col)
         cleaned_col, gen_expr, is_stored = _extract_generated_column_info(
             cleaned_col, c_name
         )
@@ -1182,6 +1185,7 @@ class SQLParser:
             is_stored=is_stored,
             collate=collate,
             foreign_key=fk_def,
+            default_value=default_val,
         )
 
     def _process_create_table_item(

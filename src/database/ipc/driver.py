@@ -86,13 +86,17 @@ class Cursor:
         self.arraysize: int = 1
         self.lastrowid: Optional[int] = None
 
+    @staticmethod
+    def _resolve_cursor_rowcount(result: Dict[str, Any]) -> int:
+        for key in ("updated_count", "deleted_count", "inserted_count"):
+            if key in result:
+                return int(result[key])
+        return -1
+
     def _update_cursor_metadata(self, result: Dict[str, Any]) -> None:
         self._rows = result.get("rows", [])
         self._pos = 0
-        self.rowcount = result.get(
-            "updated_count",
-            result.get("deleted_count", result.get("inserted_count", len(self._rows))),
-        )
+        self.rowcount = self._resolve_cursor_rowcount(result)
         if self._rows:
             sample = self._rows[0]
             self.description = [

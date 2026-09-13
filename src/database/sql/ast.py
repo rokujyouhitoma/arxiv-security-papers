@@ -113,6 +113,7 @@ class ColumnDef:
     is_stored: bool = False
     collate: Optional[str] = None
     foreign_key: Optional[ForeignKeyDef] = None
+    default_value: Any = None
 
 
 @dataclass

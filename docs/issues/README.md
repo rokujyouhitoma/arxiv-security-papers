@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **279** | SQLite 互換性向上 Phase 1: DDL rowcount=-1 準拠、DEFAULT 句自動補完、および数値比較アフィニティの実装 | Feature | 2026-09-13 | [279-sqlite-parity-phase1-rowcount-default-and-numeric-affinity.md](closed/279-sqlite-parity-phase1-rowcount-default-and-numeric-affinity.md) |
 | **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | 2026-09-13 | [250-implement-louvain-community-detection-for-cti-graph.md](closed/250-implement-louvain-community-detection-for-cti-graph.md) |
 | **251** | Lehman-Yao 型 B-link Tree によるラッチフリー並行走査およびスプリット追随インデックスエンジンの実装 | Feature | 2026-09-13 | [251-implement-lehman-yao-b-link-tree-concurrent-index.md](closed/251-implement-lehman-yao-b-link-tree-concurrent-index.md) |
 | **277** | SQLite 完全互換化: ユーザー定義照合順序 (User-Defined Collation) 登録機構の実装 | Feature | 2026-09-13 | [277-implement-sqlite-parity-user-defined-collation.md](closed/277-implement-sqlite-parity-user-defined-collation.md) |

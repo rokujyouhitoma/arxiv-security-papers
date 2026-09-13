@@ -193,6 +193,52 @@ class TestSQLite3Differential(unittest.TestCase):
                 "SELECT id FROM papers WHERE emb KNN [0.1, 0.2, 0.3, 0.4] TOP 1"
             )
 
+    def test_phase1_defaults_and_between_and_rowcount(self) -> None:
+        """Verifies Phase 1 parity: rowcount=-1, column defaults, negative BETWEEN, and concat."""
+        py_cur = self.py_conn.cursor()
+        sq_cur = self.sq_conn.cursor()
+
+        # 1. DDL rowcount is -1 on both engines
+        self.assertEqual(
+            py_cur.execute(
+                "CREATE TABLE products (id INT, active INT DEFAULT 1, score REAL)"
+            ).rowcount,
+            -1,
+        )
+        self.assertEqual(
+            sq_cur.execute(
+                "CREATE TABLE products (id INT, active INT DEFAULT 1, score REAL)"
+            ).rowcount,
+            -1,
+        )
+
+        # 2. DEFAULT value auto-population when column omitted
+        self._execute_both_dml("INSERT INTO products (id, score) VALUES (1, -15.0)")
+        self._execute_both_dml(
+            "INSERT INTO products (id, active, score) VALUES (2, 0, 42.0)"
+        )
+        self._execute_both_dml("INSERT INTO products (id, score) VALUES (3, 0.0)")
+
+        rows_py, rows_sq = self._query_both(
+            "SELECT id, active, score FROM products ORDER BY id"
+        )
+        self.assertEqual(rows_py, rows_sq)
+        self.assertEqual(rows_py, [(1, 1, -15.0), (2, 0, 42.0), (3, 1, 0.0)])
+
+        # 3. Negative BETWEEN clause
+        q_between = (
+            "SELECT id, score FROM products WHERE score BETWEEN -20 AND 10 ORDER BY id"
+        )
+        py_b, sq_b = self._query_both(q_between)
+        self.assertEqual(py_b, sq_b)
+        self.assertEqual(py_b, [(1, -15.0), (3, 0.0)])
+
+        # 4. Modulo and String Concat
+        q_expr = "SELECT id, score % 7, 'Item: ' || id FROM products WHERE id = 1"
+        py_e, sq_e = self._query_both(q_expr)
+        self.assertEqual(py_e, sq_e)
+        self.assertEqual(py_e, [(1, -1.0, "Item: 1")])
+
 
 if __name__ == "__main__":
     unittest.main()
