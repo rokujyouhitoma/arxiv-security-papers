@@ -1905,3 +1905,90 @@ def test_extended_pragma_user_version_table_xinfo_fk_list() -> None:
     fkl_quoted = executor.execute("PRAGMA foreign_key_list('user_logs');")
     assert len(fkl_quoted["rows"]) == 1
     assert executor.execute("PRAGMA foreign_key_list(no_table);")["rows"] == []
+
+
+def test_fts5_virtual_table_and_match() -> None:
+    """
+    Validates SQLite parity for FTS5 full-text search virtual tables,
+    MATCH predicate, Okapi BM25 ranking, and prefix queries (Issue #275).
+    """
+    executor = SQLExecutor()
+
+    # 1. CREATE VIRTUAL TABLE USING fts5
+    create_res = executor.execute(
+        "CREATE VIRTUAL TABLE fts_papers USING fts5(title, abstract);"
+    )
+    assert create_res["status"] == "ok"
+    assert create_res["table"] == "fts_papers"
+    assert create_res["module"] == "fts5"
+
+    # Idempotency with IF NOT EXISTS
+    create_if_res = executor.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS fts_papers USING fts5(title, abstract);"
+    )
+    assert create_if_res["status"] == "ok"
+
+    # 2. INSERT records
+    executor.execute(
+        "INSERT INTO fts_papers (title, abstract) VALUES ("
+        "'Zero Trust Architecture in Cloud', "
+        "'A comprehensive analysis of zero trust network access and identity defense.'"
+        ");"
+    )
+    executor.execute(
+        "INSERT INTO fts_papers (title, abstract) VALUES ("
+        "'Adversarial Attacks on Deep Learning', "
+        "'Evaluation of evasion attacks and robust defense models for neural networks.'"
+        ");"
+    )
+    executor.execute(
+        "INSERT INTO fts_papers (title, abstract) VALUES ("
+        "'Zero-Day Vulnerability Discovery', "
+        "'Automated binary analysis and memory safety exploit mitigation.'"
+        ");"
+    )
+
+    # 3. Whole-table MATCH query
+    res_zt = executor.execute(
+        "SELECT title FROM fts_papers WHERE fts_papers MATCH 'zero trust';"
+    )
+    assert res_zt["status"] == "ok"
+    assert res_zt["count"] == 1
+    assert "Zero Trust Architecture" in res_zt["rows"][0]["title"]
+
+    # 4. Column-specific MATCH query
+    res_title = executor.execute(
+        "SELECT title FROM fts_papers WHERE title MATCH 'learning';"
+    )
+    assert res_title["status"] == "ok"
+    assert res_title["count"] == 1
+    assert "Deep Learning" in res_title["rows"][0]["title"]
+
+    # 5. Multi-document term match
+    res_defense = executor.execute(
+        "SELECT title FROM fts_papers WHERE fts_papers MATCH 'defense';"
+    )
+    assert res_defense["status"] == "ok"
+    assert res_defense["count"] == 2
+    matched_titles = [r["title"] for r in res_defense["rows"]]
+    assert any("Zero Trust" in t for t in matched_titles)
+    assert any("Deep Learning" in t for t in matched_titles)
+
+    # 6. Prefix query (e.g. 'vulnerab*')
+    res_prefix = executor.execute(
+        "SELECT title FROM fts_papers WHERE fts_papers MATCH 'vulnerab*';"
+    )
+    assert res_prefix["status"] == "ok"
+    assert res_prefix["count"] == 1
+    assert "Zero-Day Vulnerability" in res_prefix["rows"][0]["title"]
+
+    # 7. Ranking and virtual rank column
+    res_ranked = executor.execute(
+        "SELECT title, rank FROM fts_papers WHERE fts_papers MATCH 'zero' ORDER BY rank;"
+    )
+    assert res_ranked["status"] == "ok"
+    assert res_ranked["count"] == 2
+    assert "rank" in res_ranked["rows"][0]
+    # In SQLite FTS5, lower (more negative) rank indicates higher relevance (Paper 1 has 'zero' twice)
+    assert res_ranked["rows"][0]["rank"] <= res_ranked["rows"][1]["rank"]
+    assert "Zero Trust Architecture" in res_ranked["rows"][0]["title"]

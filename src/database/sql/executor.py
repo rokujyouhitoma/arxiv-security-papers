@@ -1030,6 +1030,85 @@ def _get_cond_op(c: Dict[str, Any]) -> str:
     return str(c.get("op") or c.get("operator") or "=")
 
 
+def _collect_match_target_texts(record: Dict[str, Any], field: str) -> List[str]:
+    actual = _extract_field_value(record, field)
+    if actual is not None:
+        return [str(actual)]
+    return [
+        str(v)
+        for k, v in record.items()
+        if not k.startswith("_") and isinstance(v, (str, int, float))
+    ]
+
+
+def _match_single_term(q_tok: str, target_words: Set[str]) -> bool:
+    if q_tok.endswith("*"):
+        prefix = q_tok[:-1]
+        return any(w.startswith(prefix) for w in target_words)
+    return q_tok in target_words
+
+
+def _check_terms_match(q_tokens: List[str], target_words: Set[str]) -> bool:
+    return all(_match_single_term(tok, target_words) for tok in q_tokens)
+
+
+def _get_storage_bm25(
+    record: Dict[str, Any], field: str, query: str, executor: Any
+) -> Optional[float]:
+    idx = record.get("_idx")
+    tables = getattr(executor, "tables", None)
+    if idx is None or not tables:
+        return None
+    table_cat = tables.get(field)
+    storage = getattr(table_cat, "storage", None)
+    bm25_fn = getattr(storage, "bm25", None)
+    if callable(bm25_fn):
+        return float(bm25_fn(int(idx), query))
+    return None
+
+
+def _calc_token_freq_score(tok: str, texts: List[str]) -> float:
+    clean_tok = tok[:-1] if tok.endswith("*") else tok
+    tf = sum(len(re.findall(rf"\b{re.escape(clean_tok)}", t.lower())) for t in texts)
+    return tf * 1.5 / (tf + 0.5)
+
+
+def _calc_bm25_from_storage_or_freq(
+    record: Dict[str, Any], field: str, query: str, executor: Any
+) -> float:
+    s_score = _get_storage_bm25(record, field, query, executor)
+    if s_score is not None:
+        return s_score
+    q_tokens = [t for t in re.findall(r"\b\w+\*?", query.lower()) if t]
+    texts = _collect_match_target_texts(record, field)
+    score = sum(_calc_token_freq_score(tok, texts) for tok in q_tokens)
+    return round(max(0.1, score), 4)
+
+
+def _extract_target_words(target_texts: List[str]) -> Set[str]:
+    words: Set[str] = set()
+    for t in target_texts:
+        words.update(re.findall(r"\b\w+\b", t.lower()))
+    return words
+
+
+def _eval_match_predicate(
+    record: Dict[str, Any], field: str, query: str, executor: Any = None
+) -> bool:
+    q_tokens = [t for t in re.findall(r"\b\w+\*?", query.lower()) if t]
+    if not q_tokens:
+        return False
+    target_texts = _collect_match_target_texts(record, field)
+    all_words = _extract_target_words(target_texts)
+    if not _check_terms_match(q_tokens, all_words):
+        return False
+    score = _calc_bm25_from_storage_or_freq(record, field, query, executor)
+    record["rank"] = -score
+    record["score"] = score
+    record[f"bm25({field})"] = score
+    return True
+
+
 def _evaluate_single_condition(
     record: Dict[str, Any],
     c: Dict[str, Any],
@@ -1042,6 +1121,8 @@ def _evaluate_single_condition(
     field = _get_cond_field(c)
     op = _get_cond_op(c)
     expected_val = _resolve_condition_expected_val(record, c.get("value"))
+    if op == "MATCH":
+        return _eval_match_predicate(record, field, str(expected_val), executor)
     actual = _extract_field_value(record, field)
     return _eval_comparison(op, actual, expected_val, c)
 
@@ -2729,7 +2810,10 @@ class SQLExecutor:
 
     def _project_wildcard(self, r: Dict[str, Any], table_name: str) -> Dict[str, Any]:
         return {
-            k: v for k, v in r.items() if "." not in k or k.startswith(f"{table_name}.")
+            k: v
+            for k, v in r.items()
+            if not k.startswith("_")
+            and ("." not in k or k.startswith(f"{table_name}."))
         }
 
     def _project_row(
@@ -3944,15 +4028,44 @@ class SQLExecutor:
         kwargs[f"arg_{len(kwargs)}"] = val
         return location
 
+    def _parse_vtab_kv_arg(
+        self, clean: str, loc: Optional[str], kwargs: Dict[str, Any]
+    ) -> Optional[str]:
+        k, v = clean.split("=", 1)
+        k, v = k.strip().lower(), v.strip().strip("'\"")
+        if k in ("path", "location", "file", "filename", "file_path", "root_dir"):
+            return v
+        kwargs[k] = v
+        return loc
+
+    def _parse_single_vtab_arg(
+        self,
+        clean: str,
+        is_fts5: bool,
+        loc: Optional[str],
+        kwargs: Dict[str, Any],
+        cols: List[str],
+    ) -> Optional[str]:
+        if "=" in clean:
+            return self._parse_vtab_kv_arg(clean, loc, kwargs)
+        if is_fts5:
+            cols.append(clean.split()[0].strip("'\""))
+            return loc
+        return self._parse_single_module_arg(clean, loc, kwargs)
+
     def _parse_virtual_module_args(
-        self, raw_args: List[str]
+        self, raw_args: List[str], module_name: str = ""
     ) -> Tuple[Optional[str], Dict[str, Any]]:
         loc: Optional[str] = None
         kwargs: Dict[str, Any] = {}
+        cols: List[str] = []
+        is_fts5 = module_name.lower() == "fts5"
         for raw in raw_args:
-            clean_arg = raw.strip()
-            if clean_arg:
-                loc = self._parse_single_module_arg(clean_arg, loc, kwargs)
+            clean = raw.strip()
+            if clean:
+                loc = self._parse_single_vtab_arg(clean, is_fts5, loc, kwargs, cols)
+        if cols:
+            kwargs["columns"] = cols
         return loc, kwargs
 
     @staticmethod
@@ -3985,7 +4098,9 @@ class SQLExecutor:
 
         from database.storage.factory import StorageEngineFactory
 
-        location, kwargs = self._parse_virtual_module_args(stmt.module_args)
+        location, kwargs = self._parse_virtual_module_args(
+            stmt.module_args, stmt.module_name
+        )
         kwargs.setdefault("dim", self.embedding.dim)
         kwargs.setdefault("table_name", stmt.table_name)
 

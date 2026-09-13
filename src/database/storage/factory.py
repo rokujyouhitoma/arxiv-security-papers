@@ -126,7 +126,19 @@ class StorageEngineFactory:
         cls._registry["csv"] = cls._create_csv_table
         cls._registry["file_plain_text"] = cls._create_plain_text
         cls._registry["text"] = cls._create_plain_text
+        cls._registry["fts5"] = cls._create_fts5
         cls._initialized = True
+
+    @staticmethod
+    def _create_fts5(location: Optional[str], **kwargs: Any) -> Any:
+        from .fts5_storage import Fts5StorageEngine
+
+        loc = _extract_storage_loc(location, kwargs, "")
+        cols = _extract_csv_fieldnames(kwargs)
+        tok = str(kwargs.get("tokenize", "unicode61"))
+        return Fts5StorageEngine(
+            file_path=loc if loc else None, columns=cols, tokenize=tok
+        )
 
     @staticmethod
     def _create_plain_text(location: Optional[str], **kwargs: Any) -> Any:

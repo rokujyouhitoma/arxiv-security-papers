@@ -374,6 +374,19 @@ def _parse_exists_clause(part: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def _parse_match_clause(part: str) -> Optional[Dict[str, Any]]:
+    """Parses MATCH condition: column MATCH 'query' or table MATCH 'query'."""
+    pattern = (
+        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+MATCH\s+"
+        r"('[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+)$"
+    )
+    m = re.match(pattern, part, re.IGNORECASE)
+    if m:
+        val = m.group(2).strip("'\"")
+        return {"column": m.group(1), "operator": "MATCH", "value": val}
+    return None
+
+
 def _parse_cmp_clause(part: str) -> Optional[Dict[str, Any]]:
     """Parses standard comparison condition."""
     cmp_pattern = (
@@ -398,6 +411,7 @@ _WHERE_PARSERS = (
     _parse_like_clause,
     _parse_exists_clause,
     _parse_in_clause,
+    _parse_match_clause,
     _parse_cmp_clause,
 )
 
@@ -429,6 +443,9 @@ _ALLOWED_ENGINES: set[str] = {
     "json_lines",
     "json_table",
     "file_plain_text",
+    "fts5",
+    "csv_table",
+    "csv",
 }
 
 
