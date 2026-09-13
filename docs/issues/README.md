@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **287** | W3C Turtle 1.1 / RDF インジェストパーサーの Packrat PEG による実装 (DSN-25 / Issue 199 連携) | Feature | 2026-09-14 | [287-implement-packrat-peg-w3c-turtle-parser.md](closed/287-implement-packrat-peg-w3c-turtle-parser.md) |
 | **286** | CTI ナレッジグラフ向け Packrat PEG パスクエリ DSL の実装 (DSN-25 / DSN-18 連携) | Feature | 2026-09-14 | [286-implement-packrat-peg-graph-query-dsl.md](closed/286-implement-packrat-peg-graph-query-dsl.md) |
 | **285** | 検索クエリパーサーの Packrat PEG 換装と括弧ネスト対応ブーリアンクエリ解析の実装 (DSN-25 Phase 1) | Feature | 2026-09-14 | [285-integrate-packrat-peg-into-search-query-parser.md](closed/285-integrate-packrat-peg-into-search-query-parser.md) |
 | **284** | 純粋 Python 製汎用 Packrat PEG (Parsing Expression Grammar) コアランタイム基盤の実装 (DSN-25 Phase 1) | Feature | 2026-09-14 | [284-implement-pure-python-packrat-peg-parser-core.md](closed/284-implement-pure-python-packrat-peg-parser-core.md) |

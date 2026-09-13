@@ -77,8 +77,20 @@ from .turtle_engine import (
     build_sample_enterprise_ontology,
     build_security_cti_ontology,
 )
+from .turtle_parser import (
+    TurtleDocument,
+    TurtlePEGParser,
+    TurtleTerm,
+    TurtleTriple,
+    parse_turtle,
+)
 
 __all__ = [
+    "TurtleDocument",
+    "TurtlePEGParser",
+    "TurtleTerm",
+    "TurtleTriple",
+    "parse_turtle",
     "EntityType",
     "Predicate",
     "BaseEntity",
