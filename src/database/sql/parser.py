@@ -797,14 +797,14 @@ def _parse_savepoint_stmt(sql: str) -> Optional[SavepointStatement]:
 def _parse_pragma_stmt(sql: str) -> Optional[PragmaStatement]:
     clean = sql.strip()
     m = re.match(
-        r"^PRAGMA\s+([a-zA-Z0-9_]+)(?:\s*\(\s*([a-zA-Z0-9_]+)\s*\)|\s*=\s*([a-zA-Z0-9_'\"]+))?$",
+        r"^PRAGMA\s+([a-zA-Z0-9_]+)(?:\s*\(\s*([a-zA-Z0-9_'\"]+)\s*\)|\s*=\s*([a-zA-Z0-9_'\"]+))?$",
         clean,
         re.IGNORECASE,
     )
     if not m:
         return None
     p_name = m.group(1).lower()
-    arg = m.group(2)
+    arg = m.group(2).strip("'\"") if m.group(2) else None
     val = m.group(3).strip("'\"") if m.group(3) else None
     return PragmaStatement(
         command_type=SQLCommandType.PRAGMA,

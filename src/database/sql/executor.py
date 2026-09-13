@@ -1249,15 +1249,22 @@ def _resolve_table_scope(tbl: Any, tname: str) -> str:
         return "default"
 
 
+def _matches_scope_and_pattern(
+    tbl: Any, tname: str, db_name: str, pattern: Optional[str]
+) -> bool:
+    if pattern and pattern not in tname:
+        return False
+    return db_name == "all" or _resolve_table_scope(tbl, tname) == db_name
+
+
 def _filter_tables_by_database_scope(
     tables: Dict[str, Any], db_name: str, pattern: Optional[str]
 ) -> List[Tuple[str, Any]]:
-    matched: List[Tuple[str, Any]] = []
-    for tname, tbl in sorted(tables.items()):
-        if _resolve_table_scope(tbl, tname) == db_name:
-            if not (pattern and pattern not in tname):
-                matched.append((tname, tbl))
-    return matched
+    return [
+        (tname, tbl)
+        for tname, tbl in sorted(tables.items())
+        if _matches_scope_and_pattern(tbl, tname, db_name, pattern)
+    ]
 
 
 def _resolve_default_table_name(
@@ -4199,12 +4206,11 @@ class SQLExecutor:
         return self._resolve_default_table_rows(stmt.like_pattern, target)
 
     def _exec_show_databases(self) -> Dict[str, Any]:
-        dbs = (
-            list(self.known_databases.keys())
-            if self.known_databases
-            else ["default_db", "main"]
-        )
-        db_rows = [{"Database": d} for d in dbs]
+        all_dbs: List[str] = list(self.known_databases.keys())
+        for att_name in sorted(self.attached_databases.keys()):
+            if att_name not in all_dbs:
+                all_dbs.append(att_name)
+        db_rows = [{"Database": d} for d in all_dbs]
         return {
             "command": "SHOW",
             "status": "ok",

@@ -340,6 +340,22 @@ def _mount_scope_tables(engine: SQLExecutor, ws: str, scope: str) -> None:
             _mount_single_configured_scope(engine, ws, s_name)
 
 
+def _resolve_scope_location(ws: str, s_name: str) -> str:
+    cfg = DATABASES.get(s_name, {})
+    loc = cfg.get("LOCATION")
+    if loc:
+        rel = os.path.relpath(loc, BASE_DIR)
+        return os.path.join(ws, rel)
+    return ":memory:" if s_name == "default" else s_name
+
+
+def _resolve_known_databases_from_scopes(ws: str) -> Dict[str, str]:
+    """Resolves mapping of scope name to location path from settings."""
+    return {
+        s_name: _resolve_scope_location(ws, s_name) for s_name in get_database_scopes()
+    }
+
+
 def init_mounted_sql_executor(
     workspace_dir: Optional[str] = None,
     db_scope: Optional[str] = "all",
@@ -348,7 +364,11 @@ def init_mounted_sql_executor(
     ws = os.path.realpath(
         os.path.abspath(workspace_dir or os.environ.get("WORKSPACE_DIR", os.getcwd()))
     )
-    executor = SQLExecutor(default_storage=VectorStorage(":memory:", dim=4))
+    known_dbs = _resolve_known_databases_from_scopes(ws)
+    executor = SQLExecutor(
+        default_storage=VectorStorage(":memory:", dim=4),
+        known_databases=known_dbs,
+    )
     if "main" in executor.tables:
         executor.tables["main"].schema = {
             "id": "VARCHAR(64)",

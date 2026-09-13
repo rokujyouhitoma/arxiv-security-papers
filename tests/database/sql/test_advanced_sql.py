@@ -173,12 +173,18 @@ def test_recursive_cte_graph_traversal(advanced_sql_executor: SQLExecutor) -> No
 
 
 def test_show_databases_and_tables(advanced_sql_executor: SQLExecutor) -> None:
-    # 1. SHOW DATABASES
+    # 1. SHOW DATABASES (initial empty without dummy fallback)
     res_db = advanced_sql_executor.execute("SHOW DATABASES")
     assert res_db["status"] == "ok"
     assert res_db["target"] == "DATABASES"
     db_names = [r["Database"] for r in res_db["rows"]]
-    assert "default_db" in db_names
+    assert db_names == []
+
+    # Dynamically register database and verify SHOW DATABASES reflection
+    advanced_sql_executor.register_database("graph_db", ":memory:")
+    res_db2 = advanced_sql_executor.execute("SHOW DATABASES")
+    db_names2 = [r["Database"] for r in res_db2["rows"]]
+    assert "graph_db" in db_names2
 
     # 2. SHOW TABLES
     res_tbl = advanced_sql_executor.execute("SHOW TABLES")

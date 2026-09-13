@@ -29,8 +29,7 @@ class TestShowStatements(unittest.TestCase):
         self.assertEqual(res["status"], "ok")
         self.assertEqual(res["target"], "DATABASES")
         dbs = [r["Database"] for r in res["rows"]]
-        self.assertIn("default_db", dbs)
-        self.assertIn("main", dbs)
+        self.assertEqual(dbs, [])
 
     def test_show_databases_with_injected_dbs(self) -> None:
         executor = SQLExecutor(known_databases=self.known_dbs)
@@ -128,6 +127,28 @@ class TestShowStatements(unittest.TestCase):
         self.assertIn("okf_papers", t_names)
         self.assertIn("processed_papers", t_names)
         self.assertNotIn("vertices", t_names)
+
+    def test_show_tables_from_all_scope(self) -> None:
+        from database.sql.executor import TableCatalog
+        from database.storage.storage import VectorStorage
+
+        executor = SQLExecutor()
+        mem_storage = VectorStorage(":memory:", dim=4)
+        executor.tables["okf_papers"] = TableCatalog(
+            name="okf_papers",
+            storage=mem_storage,
+            database_scope="arxiv_security_db",
+        )
+        executor.tables["vertices"] = TableCatalog(
+            name="vertices",
+            storage=mem_storage,
+            database_scope="graph_db",
+        )
+        res = executor.execute("SHOW TABLES FROM all;")
+        self.assertEqual(res["status"], "ok")
+        t_names = [r["Table"] for r in res["rows"]]
+        self.assertIn("okf_papers", t_names)
+        self.assertIn("vertices", t_names)
 
 
 if __name__ == "__main__":

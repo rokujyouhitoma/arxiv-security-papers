@@ -1823,3 +1823,85 @@ def test_foreign_key_cascade_lifecycle():
     emp_rows = executor.execute("SELECT * FROM emp WHERE id = 1;")["rows"]
     assert len(emp_rows) == 1
     assert emp_rows[0]["dept_id"] == 99
+
+
+def test_extended_pragma_user_version_table_xinfo_fk_list() -> None:
+    """Test extended PRAGMA commands: user_version, table_xinfo, foreign_key_list."""
+    executor = SQLExecutor()
+
+    # 1. PRAGMA user_version: Initial value is 0
+    uv_init = executor.execute("PRAGMA user_version;")
+    assert uv_init["status"] == "ok"
+    assert uv_init["rows"] == [{"user_version": 0}]
+
+    # Update user_version = 42
+    set_uv = executor.execute("PRAGMA user_version = 42;")
+    assert set_uv["status"] == "ok"
+    assert set_uv["rows"] == []
+
+    uv_read = executor.execute("PRAGMA user_version;")
+    assert uv_read["rows"] == [{"user_version": 42}]
+
+    # Update user_version(100) via function-call syntax
+    executor.execute("PRAGMA user_version(100);")
+    assert executor.execute("PRAGMA user_version;")["rows"] == [{"user_version": 100}]
+
+    # 2. PRAGMA table_xinfo vs table_info with generated columns
+    executor.execute(
+        "CREATE TABLE items ("
+        "  id INT PRIMARY KEY,"
+        "  price FLOAT,"
+        "  qty INT,"
+        "  total FLOAT GENERATED ALWAYS AS (price * qty) STORED,"
+        "  tax FLOAT GENERATED ALWAYS AS (total * 0.1) VIRTUAL"
+        ");"
+    )
+
+    info_res = executor.execute("PRAGMA table_info(items);")
+    assert info_res["status"] == "ok"
+    info_cols = [r["name"] for r in info_res["rows"]]
+    # Normal and STORED columns appear in table_info, but VIRTUAL generated column is omitted
+    assert info_cols == ["id", "price", "qty", "total"]
+
+    xinfo_res = executor.execute("PRAGMA table_xinfo(items);")
+    assert xinfo_res["status"] == "ok"
+    assert len(xinfo_res["rows"]) == 5
+    xcols = {r["name"]: r for r in xinfo_res["rows"]}
+    assert xcols["id"]["hidden"] == 0
+    assert xcols["price"]["hidden"] == 0
+    assert xcols["qty"]["hidden"] == 0
+    assert xcols["total"]["hidden"] == 3  # STORED
+    assert xcols["tax"]["hidden"] == 2  # VIRTUAL
+
+    # Quoted table argument and nonexistent table
+    xinfo_quoted = executor.execute("PRAGMA table_xinfo('items');")
+    assert len(xinfo_quoted["rows"]) == 5
+    assert executor.execute("PRAGMA table_xinfo(no_such_table);")["rows"] == []
+
+    # 3. PRAGMA foreign_key_list
+    executor.execute("CREATE TABLE users (uid INT PRIMARY KEY, name TEXT);")
+    executor.execute(
+        "CREATE TABLE user_logs ("
+        "  log_id INT PRIMARY KEY,"
+        "  user_id INT REFERENCES users(uid) ON DELETE CASCADE ON UPDATE SET NULL,"
+        "  action TEXT"
+        ");"
+    )
+
+    fkl_res = executor.execute("PRAGMA foreign_key_list(user_logs);")
+    assert fkl_res["status"] == "ok"
+    assert len(fkl_res["rows"]) == 1
+    fk_entry = fkl_res["rows"][0]
+    assert fk_entry["id"] == 0
+    assert fk_entry["seq"] == 0
+    assert fk_entry["table"] == "users"
+    assert fk_entry["from"] == "user_id"
+    assert fk_entry["to"] == "uid"
+    assert fk_entry["on_delete"] == "CASCADE"
+    assert fk_entry["on_update"] == "SET NULL"
+    assert fk_entry["match"] == "NONE"
+
+    # Quoted argument and nonexistent table
+    fkl_quoted = executor.execute("PRAGMA foreign_key_list('user_logs');")
+    assert len(fkl_quoted["rows"]) == 1
+    assert executor.execute("PRAGMA foreign_key_list(no_table);")["rows"] == []

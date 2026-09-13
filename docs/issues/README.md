@@ -20,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **278** | `SHOW DATABASES;` と `.databases` メタコマンドの返却結果乖離の修正 | Bug | 2026-09-13 | [278-unify-show-databases-with-meta-databases-command.md](closed/278-unify-show-databases-with-meta-databases-command.md) |
 | **274** | SQLite 完全互換化: 拡張 PRAGMA (table_xinfo, user_version, foreign_key_list) の実装 | Feature | 2026-09-13 | [274-implement-sqlite-parity-extended-pragma.md](closed/274-implement-sqlite-parity-extended-pragma.md) |
 | **273** | SQLite 完全互換化: 外部キーカスケード (ON DELETE CASCADE / ON UPDATE SET NULL) の実装 | Feature | 2026-09-12 | [273-implement-sqlite-parity-foreign-key-cascade.md](closed/273-implement-sqlite-parity-foreign-key-cascade.md) |
 | **272** | SQLite 完全互換化: VIEW 向け INSTEAD OF トリガーの実装 | Feature | 2026-09-12 | [272-implement-sqlite-parity-instead-of-trigger.md](closed/272-implement-sqlite-parity-instead-of-trigger.md) |

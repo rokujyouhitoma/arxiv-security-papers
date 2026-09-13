@@ -217,6 +217,41 @@ class TestManageCLISuite(unittest.TestCase):
             self.assertIn("cve_id", out_cti)
             self.assertIn("PRIMARY KEY", out_cti)
 
+    def test_show_databases_unification_with_scopes(self) -> None:
+        """Verifies Issue 278: SHOW DATABASES returns configured scopes and matches .databases."""
+        from settings import get_database_scopes
+
+        engine = init_mounted_sql_executor(db_scope="all")
+        res = engine.execute("SHOW DATABASES;")
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["target"], "DATABASES")
+        dbs = [r["Database"] for r in res["rows"]]
+
+        expected_scopes = list(get_database_scopes().keys())
+        self.assertEqual(dbs, expected_scopes)
+
+        # Verify SHOW TABLES FROM all;
+        res_tables_all = engine.execute("SHOW TABLES FROM all;")
+        self.assertEqual(res_tables_all["status"], "ok")
+        self.assertEqual(len(res_tables_all["rows"]), len(engine.tables))
+
+        # Dynamic ATTACH DATABASE reflection
+        engine.execute("ATTACH DATABASE ':memory:' AS dyn_test_db;")
+        res_att = engine.execute("SHOW DATABASES;")
+        dbs_att = [r["Database"] for r in res_att["rows"]]
+        self.assertIn("dyn_test_db", dbs_att)
+
+        # Dynamic DETACH DATABASE
+        engine.execute("DETACH DATABASE dyn_test_db;")
+        res_det = engine.execute("SHOW DATABASES;")
+        dbs_det = [r["Database"] for r in res_det["rows"]]
+        self.assertNotIn("dyn_test_db", dbs_det)
+
+        # PRAGMA database_list parity check
+        res_pragma = engine.execute("PRAGMA database_list;")
+        self.assertEqual(res_pragma["status"], "ok")
+        self.assertEqual(res_pragma["rows"][0]["name"], "main")
+
 
 if __name__ == "__main__":
     unittest.main()
