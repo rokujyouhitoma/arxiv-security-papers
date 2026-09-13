@@ -242,26 +242,33 @@ Xenon Grade A（サイクロマティック複雑度 $CC \le 4$）および mypy
 
 ## 5. サブシステム横断適用設計 (Cross-System Integration)
 
-### 5.1 検索プラットフォーム: 括弧ネスト対応ブーリアンクエリパーサー
+### 5.1 検索プラットフォーム: 括弧ネスト対応ブーリアンクエリパーサー (実装完了: Issue #285)
 
-[`src/search/query/query_parser.py`](../../src/search/query/query_parser.py) を PEG コンビネータで再構築し、任意の深さの論理式ネストに対応する。
+[`src/search/query/query_parser.py`](../../src/search/query/query_parser.py) を PEG コンビネータで再構築し、任意の深さの論理式ネストに対応。
+- 単一語句、フィールド指定 (`title:ransomware`, `year:2024`)、フレーズ検索 (`"supply chain"`、slop `~2`)、ブーリアン演算子 (`AND`, `OR`, `NOT`, `+`, `-`)、および多段括弧ネスト (`(A OR B) AND -(C OR D)`) を Packrat PEG により $O(N)$ 線形時間で AST 構築。
+- 関連テスト: [`tests/search/test_query_parser_peg.py`](../../tests/search/test_query_parser_peg.py) (全項目 PASS)
 
 ### 5.2 データベースエンジン: SQL 複雑式の PEG 連携
 
 [`src/database/sql/parser.py`](../../src/database/sql/parser.py) の中で最も脆弱かつ複雑な式（Expression）パーサー（`CASE WHEN`、二項演算子、比較演算子、関数呼び出し、サブクエリ）を PEG エンジンへ移管。
 - 文全体のステートメント分割（DDL / DML）は維持しつつ、`WHERE` 句、`HAVING` 句、`ON` 句の内部式を PEG で高精度に AST 化する。
 
-### 5.3 グラフエンジン: Canvas 向け CTI パスクエリ DSL
+### 5.3 グラフエンジン: Canvas 向け CTI パスクエリ DSL (実装完了: Issue #286)
 
-[`src/graph/engine.py`](../../src/graph/engine.py) の `execute_graph_query` に高度なパスクエリ DSL を導入：
-- `APT29 -> [USES] -> Malware -> [EXPLOITS] -> CWE-79`
-- `community:0 AND label:ThreatActor`
-これを PEG でパースし、直接 `GraphTraversal` のステップ列へコンパイル実行する。
+[`src/graph/query_dsl.py`](../../src/graph/query_dsl.py) を新規開発し、[`src/graph/engine.py`](../../src/graph/engine.py) の `execute_graph_query` に高度な CTI パスクエリ DSL を統合：
+- 多段パスマッチング: `APT29 -> [USES] -> Malware -> [EXPLOITS] -> CWE-79`、`A -> B`、逆方向 `<-`、無向 `--`
+- 複合条件フィルタ: `community:0 AND label:ThreatActor`
+- Packrat PEG で構文解析した AST を既存の BFS / DFS トラバーサルおよび Louvain コミュニティ検出と連動し、誘導部分グラフ（`nodes`, `edges`, `stats`）として即座に Canvas 2D 可視化 / REST API へ返却。
+- 関連テスト: [`tests/graph/test_graph_query_dsl.py`](../../tests/graph/test_graph_query_dsl.py) (全項目 PASS)
 
-### 5.4 セキュリティオントロジー: W3C Turtle (.ttl) インジェスト構文解析
+### 5.4 セキュリティオントロジー: W3C Turtle (.ttl) インジェスト構文解析 (実装完了: Issue #287)
 
-Issue #199（W3C Turtle エクスポート）に続くインポート機能として、W3C 規格準拠の Turtle 1.1 パーサーを PEG 上に構築。
-`PREFIX`, `@prefix`, 三つ組 `s p o .`, ブランクノード `[ ... ]` をゼロ外部依存で構文解析可能にする。
+Issue #199（W3C Turtle エクスポート）に続くインポート機能として、W3C 規格準拠の純粋 Python 製 Turtle 1.1 パーサー [`src/ontology/turtle_parser.py`](../../src/ontology/turtle_parser.py) を Packrat PEG 上に新規構築。
+- ディレクティブ: `@prefix prefix: <iri> .` および SPARQL 形式 `PREFIX prefix: <iri>`、`@base` / `BASE`
+- 主語/述語/目的語: IRI、Prefixed Name (CURIE)、ブランクノード (`_:b1`, `[]`)、キーワード `a` (`rdf:type` 自動展開)
+- リテラル: 文字列（エスケープ対応）、言語タグ (`"..."@en`)、型注記 (`"..."^^xsd:date`)、真偽値 (`true`, `false`)、数値（浮動小数点数、整数）
+- 省略構文: セミコロン `;`（同一主語の述語リスト展開）およびカンマ `,`（同一述語の目的語リスト展開）
+- 関連テスト: [`tests/ontology/test_turtle_parser.py`](../../tests/ontology/test_turtle_parser.py) (全項目 PASS)
 
 ---
 
@@ -329,8 +336,10 @@ Phase 2 の事前コンパイラを作成する際、`.peg` 文法定義ファ�
 
 ### 8.2 完了条件 (Definition of Done)
 
-- [x] `src/core/structures/peg.py` に Packrat PEG コアランタイムエンジンが実装されていること。
+- [x] `src/core/structures/peg.py` に Packrat PEG コアランタイムエンジンが実装されていること（Issue #284）。
 - [x] `src/core/structures/__init__.py` に公開クラスおよびヘルパー関数がエクスポートされていること。
 - [x] `tests/core/test_peg.py` に単体テスト（リテラル、正規表現、連接、順序選択、反復、先読み、メモ化線形時間実証、エラー位置追跡、再帰深度リミット）が網羅されていること。
-- [x] `src/search/query/query_parser.py` が PEG エンジンを用いて括弧ネスト検索クエリを完全解析できること。
+- [x] `src/search/query/query_parser.py` が PEG エンジンを用いて括弧ネスト検索クエリを完全解析できること（Issue #285、`tests/search/test_query_parser_peg.py` PASS）。
+- [x] `src/graph/query_dsl.py` に CTI グラフパスクエリ DSL パーサーが実装され、エンジンへ統合されていること（Issue #286、`tests/graph/test_graph_query_dsl.py` PASS）。
+- [x] `src/ontology/turtle_parser.py` に W3C Turtle 1.1 / RDF インジェストパーサーが実装され、トリプル抽出・プレフィックス解決ができること（Issue #287、`tests/ontology/test_turtle_parser.py` PASS）。
 - [x] 全品質ゲート（`make check_format` および `make static_analysis`）がエラー 0 件で通過すること。
