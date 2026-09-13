@@ -306,7 +306,7 @@ class GraphTraversal:
     ) -> bool:
         """Evaluates predicate function or sub-traversal on an object."""
         if callable(predicate_fn):
-            return bool(predicate_fn(obj))
+            return predicate_fn(obj)
         if isinstance(predicate_fn, GraphTraversal):
             sub = self.engine.V(getattr(obj, "id", ""))._clone([obj])
             return len(sub._current) > 0
@@ -571,6 +571,25 @@ class GraphTraversal:
             ranks = self._pagerank_step(damping, ranks, vertices, N)
         return ranks
 
+    def detect_communities(
+        self,
+        resolution: float = 1.0,
+        seed: Optional[int] = None,
+        edge_labels: Optional[List[str]] = None,
+        weight_property: Optional[str] = None,
+    ) -> Dict[str, int]:
+        """
+        Executes Louvain community detection across all vertices in the graph.
+        Returns a mapping from vertex ID to community ID.
+        """
+        return detect_threat_communities(
+            self.engine,
+            edge_labels=edge_labels,
+            weight_property=weight_property,
+            resolution=resolution,
+            seed=seed,
+        )
+
     # -------------------------------------------------------------------------
     # 5. Terminal Steps (toList, toSet, next, iterate, to_triples)
     # -------------------------------------------------------------------------
@@ -785,3 +804,58 @@ def find_connected_threat_clusters(
     components = list(dsu.get_components().values())
     components.sort(key=len, reverse=True)
     return components
+
+
+def _parse_edge_weight(edge: Edge, weight_prop: Optional[str]) -> float:
+    """Parses optional numeric edge weight property with fallback to edge.weight."""
+    if weight_prop and weight_prop in edge.properties:
+        try:
+            return float(edge.properties[weight_prop])
+        except (ValueError, TypeError):
+            return float(edge.weight)
+    return float(edge.weight)
+
+
+def _accumulate_graph_edge(
+    adj: Dict[str, Dict[str, float]],
+    edge: Edge,
+    weight_prop: Optional[str],
+) -> None:
+    """Accumulates undirected edge weights into adjacency dictionary."""
+    w = _parse_edge_weight(edge, weight_prop)
+    u, v = edge.src_id, edge.dst_id
+    adj.setdefault(u, {})[v] = adj.setdefault(u, {}).get(v, 0.0) + w
+    if u != v:
+        adj.setdefault(v, {})[u] = adj.setdefault(v, {}).get(u, 0.0) + w
+
+
+def _extract_engine_adj(
+    engine: PropertyGraphEngine,
+    allowed: Optional[Set[str]],
+    weight_prop: Optional[str],
+) -> Dict[str, Dict[str, float]]:
+    """Constructs symmetric adjacency dictionary from graph engine edges."""
+    adj: Dict[str, Dict[str, float]] = {v.id: {} for v in engine.get_all_vertices()}
+    for edge in engine.get_all_edges():
+        if _should_include_edge(edge.label, allowed):
+            _accumulate_graph_edge(adj, edge, weight_prop)
+    return adj
+
+
+def detect_threat_communities(
+    engine: PropertyGraphEngine,
+    edge_labels: Optional[List[str]] = None,
+    weight_property: Optional[str] = None,
+    resolution: float = 1.0,
+    seed: Optional[int] = None,
+) -> Dict[str, int]:
+    """
+    Detects modular communities of threat actors, techniques, and CVEs
+    using Louvain modularity optimization (pure-Python, zero external dependencies).
+    """
+    from core.structures.community import LouvainCommunityDetector
+
+    allowed = set(edge_labels) if edge_labels is not None else None
+    adj = _extract_engine_adj(engine, allowed, weight_property)
+    detector = LouvainCommunityDetector()
+    return detector.detect(adj, resolution=resolution, seed=seed)

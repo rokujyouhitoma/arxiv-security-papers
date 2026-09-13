@@ -5,10 +5,16 @@ Non-invasive graph engine providing Apache TinkerPop Gremlin-compatible Fluent T
 Dual CSR Adjacency Indexing, and GraphRAG Multi-Hop Causal Reasoning.
 """
 
+from core.structures.community import LouvainCommunityDetector
+
 from .engine import PropertyGraphEngine
 from .graphrag import GraphRAGPipeline
 from .structures import Edge, Path, Vertex
-from .traversal import GraphTraversal, find_connected_threat_clusters
+from .traversal import (
+    GraphTraversal,
+    detect_threat_communities,
+    find_connected_threat_clusters,
+)
 
 __all__ = [
     "Vertex",
@@ -18,4 +24,6 @@ __all__ = [
     "GraphTraversal",
     "GraphRAGPipeline",
     "find_connected_threat_clusters",
+    "detect_threat_communities",
+    "LouvainCommunityDetector",
 ]

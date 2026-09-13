@@ -1437,7 +1437,42 @@ class PropertyGraphEngine:
 
         return chains
 
-    def _dispatch_structured_query(
+    def detect_communities(
+        self,
+        edge_labels: Optional[List[str]] = None,
+        weight_property: Optional[str] = None,
+        resolution: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> Dict[str, int]:
+        """
+        Detects threat communities using Louvain modularity optimization.
+        Pure Python, zero external dependencies.
+        """
+        from .traversal import detect_threat_communities
+
+        return detect_threat_communities(
+            self,
+            edge_labels=edge_labels,
+            weight_property=weight_property,
+            resolution=resolution,
+            seed=seed,
+        )
+
+    def _query_community(
+        self, raw_arg: str, limit: int
+    ) -> Tuple[List[Vertex], List[Edge], int]:
+        """Extracts subgraph for a given community ID, or top community if unspecified."""
+        arg = raw_arg.strip()
+        comms = self.detect_communities()
+        if not comms:
+            return [], [], 0
+        target_comm = int(arg) if arg.isdigit() else 0
+        target_nodes = {vid for vid, cid in comms.items() if cid == target_comm}
+        nodes = self._collect_vertices(target_nodes)
+        edges = self._collect_induced_edges(target_nodes, limit=limit)
+        return nodes, edges, len(nodes)
+
+    def _dispatch_structured_query_prefix(
         self, q_clean: str, q_low: str, limit: int
     ) -> Optional[Tuple[List[Vertex], List[Edge], int]]:
         if q_low.startswith("gap"):
@@ -1446,8 +1481,18 @@ class PropertyGraphEngine:
             return self._query_cwe(q_clean[4:], limit)
         if q_low.startswith("ego:"):
             return self._query_ego(q_clean[4:], limit)
+        return None
+
+    def _dispatch_structured_query(
+        self, q_clean: str, q_low: str, limit: int
+    ) -> Optional[Tuple[List[Vertex], List[Edge], int]]:
+        prefix_res = self._dispatch_structured_query_prefix(q_clean, q_low, limit)
+        if prefix_res is not None:
+            return prefix_res
         if q_low.startswith("causal:"):
             return self._query_causal(q_clean[7:], limit)
+        if q_low.startswith("community:"):
+            return self._query_community(q_clean[10:], limit)
         return None
 
     def _dispatch_graph_query(

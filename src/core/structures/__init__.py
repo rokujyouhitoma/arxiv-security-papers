@@ -5,6 +5,10 @@ Provides high-performance, space-efficient pure-Python algorithms and containers
 
 from core.structures.arc_cache import ARCCache
 from core.structures.bloom_filter import BloomFilter, ScalableBloomFilter
+from core.structures.community import (
+    LouvainCommunityDetector,
+    detect_louvain_communities,
+)
 from core.structures.disjoint_set import DisjointSet
 from core.structures.probabilistic import Centroid, CountMinSketch, TDigest
 from core.structures.radix_trie import (
@@ -62,4 +66,6 @@ __all__ = [
     "TDigest",
     "Centroid",
     "ARCCache",
+    "LouvainCommunityDetector",
+    "detect_louvain_communities",
 ]

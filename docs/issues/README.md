@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | Medium | Open (New) | [250-implement-louvain-community-detection-for-cti-graph.md](250-implement-louvain-community-detection-for-cti-graph.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **250** | CTI 脅威知識グラフにおける Louvain 法（モジュラリティ最適化）コミュニティ検出および攻撃キャンペーンクラスタリングの実装 | Feature | 2026-09-13 | [250-implement-louvain-community-detection-for-cti-graph.md](closed/250-implement-louvain-community-detection-for-cti-graph.md) |
 | **251** | Lehman-Yao 型 B-link Tree によるラッチフリー並行走査およびスプリット追随インデックスエンジンの実装 | Feature | 2026-09-13 | [251-implement-lehman-yao-b-link-tree-concurrent-index.md](closed/251-implement-lehman-yao-b-link-tree-concurrent-index.md) |
 | **277** | SQLite 完全互換化: ユーザー定義照合順序 (User-Defined Collation) 登録機構の実装 | Feature | 2026-09-13 | [277-implement-sqlite-parity-user-defined-collation.md](closed/277-implement-sqlite-parity-user-defined-collation.md) |
 | **276** | SQLite 完全互換化: テーブル値関数 json_each() / json_tree() の実装 | Feature | 2026-09-13 | [276-implement-sqlite-parity-json-each-and-tree.md](closed/276-implement-sqlite-parity-json-each-and-tree.md) |
