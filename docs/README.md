@@ -21,7 +21,7 @@
 - 🎯 **[[REQ-03] プロジェクトユースケース台帳 (Project Use Case Ledger)](requirements/REQ-03-use_case_ledger.md)**
   - 6大ペルソナおよび国家サイバー統括室「サイバーセキュリティ人材フレームワーク2026」13役割に対応する全33ユースケース・業務価値創出フローを体系化。
 
-### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-22)
+### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-25)
 
 #### 上位・横断設計
 - 🏗️ **[[DSN-01] 全体高位アーキテクチャ設計書 (HLD)](designs/DSN-01-high_level_design.md)**
@@ -72,6 +72,13 @@
   - `site/`, `src/web/` — エンタープライズ SaaS 型統合クラウドコンソール UI、Schema View（二次ベジェ曲線・有向矢印・物理斥力レイアウト）、CTI フィルタ。
 - 📜 **[[DSN-22] セキュリティ ＆ 脅威オントロジー W3C 仕様書 (Full-Spectrum SKO / OWL DL)](designs/DSN-22-security_and_threat_ontology_w3c_specification.md)**
   - `src/ontology/` — W3C OWL 2 DL 準拠、Claim/Evidence 分離、前提条件無力化因果連鎖モデル、Pure-Python Turtle (.ttl) 生成、TBox グラフインジェスト。
+- 🔄 **[[DSN-23] ゼロ外部依存・高信頼階層型ステートマシン（HSM）基盤設計書](designs/DSN-23-hierarchical_state_machine_and_lifecycle_governance.md)**
+  - `src/core/hsm/` — 状態爆発抑止・共通例外一括継承・プロセス/クローラー/ワークフロー/DBMS/通信全域横断ガバナンス。
+- 🖥️ **[[DSN-24] プロジェクト統合管理 CLI (manage.py) および対話型データベースシェル (dbshell) 設計書](designs/DSN-24-unified_management_cli_and_interactive_database_shell.md)**
+  - `manage.py`, `src/cli/` — Django スタイル統一エントリポイント、マルチストレージ自動マウント、ゼロ外部依存 REPL。
+- 🧩 **[[DSN-25] 純粋 Python 製汎用 Packrat PEG ランタイム基盤および構文解析エンジン統合設計仕様書](designs/DSN-25-pure_python_packrat_peg_parser_engine.md)**
+  - `src/core/structures/peg.py` — 線形時間 $O(N)$ パース保証、AST コンビネータ、検索クエリ/SQL/グラフDSL/オントロジー横断適用、将来の事前コード生成 (pegen型) 進化ロードマップ。
+
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
 - 📖 **[[USR-01] ユーザーマニュアル ＆ AI コーディングエージェント連携ガイド](manuals/USR-01-user_manual.md)**
