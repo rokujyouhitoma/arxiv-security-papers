@@ -44,6 +44,12 @@
   - [6.6 Phase 6: トランザクション拡張 & メタデータ・トリガー (Issue #261 - 完了)](#66-phase-6-トランザクション拡張--メタデータトリガー-issue-261---完了)
   - [6.7 Phase 7: 次世代拡張 & プラガブル機能の完全化 (Issue #262 〜 #265)](#67-phase-7-次世代拡張--プラガブル機能の完全化-issue-262--265)
 - [7. 実装ガバナンス & 品質ゲート規準](#7-実装ガバナンス--品質ゲート規準)
+- [8. Pure Python データベース (src/database) と sqlite3 の同等性・差異比較検証計画](#8-pure-python-データベース-srcdatabase-と-sqlite3-の同等性差異比較検証計画)
+  - [8.1 目的と検証背景](#81-目的と検証背景)
+  - [8.2 比較検証アーキテクチャ & 実行モデル](#82-比較検証アーキテクチャ--実行モデル)
+  - [8.3 12大比較検証カテゴリ・マトリクス](#83-12大比較検証カテゴリマトリクス)
+  - [8.4 判定・差異分類タクソノミー](#84-判定差異分類タクソノミー)
+  - [8.5 実施手順・成果物及びリグレッション防止体制](#85-実施手順成果物及びリグレッション防止体制)
 
 ---
 
@@ -642,4 +648,107 @@ SQLite 3.3x+ で追加された最新 DQL/DML 構文およびデータ型整合�
    - 式パーサー、関数呼出、条件評価器において、いかなる場合も Python の組み込み `eval()` / `exec()` を使用しないこと。
 4. **Clean Architecture の順守**:
    - `src/database/` 配下にドメイン固有（CWE, arXiv 等）の固定テーブル名・カラム名をハードコードせず、完全な汎用インフラストラクチャとして設計すること。
+
+---
+
+## 8. Pure Python データベース (src/database) と sqlite3 の同等性・差異比較検証計画
+
+### 8.1 目的と検証背景
+
+自作 RDBMS (`src/database/`、`SQLExecutor`、および PEP 249 ドライバ) と、標準 C 拡張組み込み RDBMS である `sqlite3` に対し、**「完全に同一の SQL スキーマ・データセット・クエリシーケンス」** を投入して両者の挙動を横並びで実行・比較検証する。
+
+本計画の目的は、単に「動く」ことの確認にとどまらず、以下の 4 象限を定量的かつ明確に把握・文書化することである：
+
+1. **完全一致（Match / Feature Parity）領域**:
+   - DDL, DQL, DML, TCL, 集約, 結合における ANSI/SQLite 互換性の実証。
+2. **挙動差異（Behavioral Differences）領域**:
+   - 型アフィニティ、NULL の並び順（ORDER BY 未指定時の自然順序や NULL の昇順位置）、0 除算時の処理（NULL 返却 vs 例外）、およびエラーメッセージ・例外クラス体系の微細なニュアンスの差異。
+3. **独自拡張（Repository-Specific Extensions）領域**:
+   - `VECTOR(dim)` 型、`KNN` 近傍探索、`->` / `->>` JSON アロー演算子、外部ファイル連携 (`USING <engine> LOCATION '...'`) などの Pure Python DB 特有の先進機能。
+4. **未サポート・制約（Unsupported / Constraints）領域**:
+   - ネイティブ C 拡張版 SQLite にのみ存在する特殊動作や、今後 Pure Python 側でキャッチアップすべき構文要素の特定。
+
+---
+
+### 8.2 比較検証アーキテクチャ & 実行モデル
+
+同一の Python テストプロセス内で、インメモリ接続（`database.connect(":memory:")` vs `sqlite3.connect(":memory:")`）を初期化し、共通のテストケース定義（SQL 文字列、パラメータ、期待動作）を順次実行して結果を突合する。
+
+```mermaid
+flowchart TD
+    TestCase["テストケース定義<br>(SQL, Params, Category)"] --> Runner["比較検証ランナー<br>(DBComparisonHarness)"]
+    
+    subgraph PyDB ["Pure Python Database (Layer 1)"]
+        Runner -->|"execute(sql, params)"| PyConn["database.connect(':memory:')"]
+        PyConn --> PyExecutor["SQLExecutor / AST Parser"]
+        PyExecutor --> PyResult["(Success, Rows, Error)"]
+    end
+    
+    subgraph SQLite3 ["Python Standard sqlite3 (Layer 2)"]
+        Runner -->|"execute(sql, params)"| SqConn["sqlite3.connect(':memory:')"]
+        SqConn --> SqEngine["Native SQLite 3.x C-Engine"]
+        SqEngine --> SqResult["(Success, Rows, Error)"]
+    end
+    
+    PyResult --> Comparator{"差分比較・分類エンジン<br>(classify_outcome)"}
+    SqResult --> Comparator
+    
+    Comparator -->|"完全一致"| Match["MATCH / EQUIVALENT"]
+    Comparator -->|"挙動差異"| Diff["BEHAVIORAL_DIFF"]
+    Comparator -->|"独自拡張"| Ext["EXTENSION"]
+    Comparator -->|"一方のみ成功"| Unsup["UNSUPPORTED / PY_ONLY / SQ_ONLY"]
+    
+    Comparator --> Report["差分監査レポート<br>(pure_python_db_vs_sqlite3_differential_report.md)"]
+    Comparator --> RegressionSuite["回帰防止テスト<br>(test_sqlite3_differential.py)"]
+```
+
+---
+
+### 8.3 12大比較検証カテゴリ・マトリクス
+
+| # | 検証カテゴリ | 主な対象 SQL / 構文 | 検証内容 & 差異着眼点 |
+| :-: | :--- | :--- | :--- |
+| **1** | **基本 DDL & DML** | `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `SELECT` | 基本 CRUD、パラメータバインド (`?`)、複数行 `VALUES (...)` の戻り値・行数カウント (`rowcount`) |
+| **2** | **データ型 & NULL 伝播** | `INT`, `REAL`, `TEXT`, `BLOB`, `IS [NOT] NULL`, `typeof()` | 動的型付け、型変換ルール、NULL を含む四則演算 (`val + NULL`) の結果 |
+| **3** | **演算子 & スカラー関数** | 四則演算, `BETWEEN`, `IN`, `LIKE`, `GLOB`, `\|\|`, `ABS`, `ROUND`, `LOWER/UPPER`, `LENGTH`, `SUBSTR`, `TRIM`, `COALESCE`, `NULLIF`, `IIF`, `CASE` | 組み込み関数の返却値、文字列連結、条件分岐の完全性 |
+| **4** | **集約 & グループ化** | `COUNT(*)`, `COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`, `TOTAL`, `GROUP_CONCAT`, `GROUP BY`, `HAVING` | 集約計算の精度、空テーブルに対する集約値 (`COUNT`=0, `SUM`=NULL)、`HAVING` フィルタ |
+| **5** | **ソート・ページング・集合演算** | `ORDER BY ASC/DESC`, `NULLS FIRST/LAST`, `LIMIT / OFFSET`, `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` | ソートの安定性、NULL の並び順、集合演算の重複排除挙動 |
+| **6** | **テーブル結合 (JOIN)** | `INNER JOIN`, `LEFT [OUTER] JOIN`, `CROSS JOIN`, テーブル別名 (`AS`), 複数結合 | 結合キー不一致時の NULL 埋め、結合列名の解決、エイリアススコープ |
+| **7** | **サブクエリ & CTE** | スカラーサブクエリ, `WHERE IN (SELECT ...)`, `EXISTS`, `FROM (SELECT ...) sub`, `WITH cte AS (...)` | ネストしたクエリのスコープ解決、一時テーブルのインライン化 |
+| **8** | **制約 & トランザクション** | `PRIMARY KEY`, `NOT NULL`, `UNIQUE`, `CHECK`, `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT` | 制約違反時の例外発生、ロールバックによるデータ巻き戻しの確実性 |
+| **9** | **高度な DML 構文** | `INSERT ... ON CONFLICT DO UPDATE / DO NOTHING`, `INSERT/UPDATE/DELETE ... RETURNING` | UPSERT 動作、更新直後の行データを即時取得する `RETURNING` 句 |
+| **10** | **VIEW & イントロスペクション** | `CREATE VIEW`, VIEW へのクエリ, `PRAGMA table_info(...)`, `PRAGMA database_list` | 仮想ビューの遅延展開、テーブルメタデータ取得インターフェース |
+| **11** | **独自拡張機能** | `VECTOR(dim)` 型, `KNN` 近傍探索, `->` / `->>` JSON 抽出演算子, スタンドアロン `VALUES` | Pure Python DB 特有の AI/ベクトル検索機能の検証と、sqlite3 側での拒絶/互換性の確認 |
+| **12** | **極限境界値 & 性能指標** | 0 除算 (`val / 0`), 巨大文字列, 浮動小数点丸め, 1,000 件一括処理レイテンシ比較 | 異常値入力時のフォールバック、例外安全性、メモリ/実行時間の定量的対比 |
+
+---
+
+### 8.4 判定・差異分類タクソノミー
+
+両エンジンの結果を以下の 5 つのステータスに分類して集計する：
+
+1. **`MATCH` (完全一致)**:
+   - 行数、各列の値、データ型が 100% 一致。
+2. **`EQUIVALENT` (実質等価)**:
+   - セマンティクスは同一だが、コンテナ型や軽微な表記揺れがある場合（例: タプルとリスト、整数値の float 表現など）。
+3. **`BEHAVIORAL_DIFF` (挙動差異)**:
+   - クエリ自体は両方成功するが、結果の並び順（ORDER BY 未指定時の自然順序）、NULL と数値の比較結果、0 除算時の戻り値（NULL か例外か）など、言語仕様の解釈に差がある場合。
+4. **`EXTENSION` (独自拡張)**:
+   - Pure Python DB が提供する拡張構文（`VECTOR`, `KNN`, プラガブルストレージなど）であり、標準 `sqlite3` では構文エラー（あるいは拡張モジュールが必要）となる機能。
+5. **`UNSUPPORTED` / `DIFFERENCE` (機能差分・未対応)**:
+   - 一方でサポートされ、他方で未対応の構文や制約。
+
+---
+
+### 8.5 実施手順・成果物及びリグレッション防止体制
+
+1. **Step 1: 比較検証ランナーの作成と生データ収集**:
+   - `database.connect` と `sqlite3.connect` を並行駆動する比較ハーネスを作成し、全 12 カテゴリのテストケースを実行。
+2. **Step 2: 差異の深掘り・要因分析**:
+   - 差異が検出された項目について、`src/database/sql/parser.py`, `executor.py`, `functions.py` のコードベースと突き合わせ、差異の技術的背景を解明。
+3. **Step 3: 差分監査レポートの作成**:
+   - `docs/audits/pure_python_db_vs_sqlite3_differential_report.md` を作成し、全テストケースの SQL、両エンジンの実出力、判定分類、および設計上の考察を詳細に記録。
+4. **Step 4: 永続的リグレッション防止テストスイートの配備**:
+   - `tests/database/compatibility/test_sqlite3_differential.py` を追加し、CI/CD パイプライン（`make test`）で常時互換性・同等性を回帰テスト可能にする。
+
 
