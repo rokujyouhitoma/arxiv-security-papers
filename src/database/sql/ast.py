@@ -207,6 +207,8 @@ class TableRef:
     alias: Optional[str] = None
     indexed_by: Optional[str] = None
     not_indexed: bool = False
+    function_name: Optional[str] = None
+    function_args: List[str] = field(default_factory=list)
 
     @property
     def display_name(self) -> str:

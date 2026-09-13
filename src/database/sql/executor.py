@@ -52,6 +52,7 @@ from .ast import (
     VacuumStatement,
 )
 from .functions import BUILTIN_FUNCTIONS
+from .json_tree import iter_json_each, iter_json_tree
 from .parser import SQLParser, _split_comma_expressions
 from .security import AccessController
 from .transaction import TransactionManager
@@ -2773,6 +2774,44 @@ class SQLExecutor:
             return self._left_join_fallback(left_row, j_prefixed_rows)
         return matched
 
+    def _resolve_table_func_args(
+        self,
+        tbl_ref: TableRef,
+        ctx: Dict[str, Any],
+    ) -> Tuple[Any, Optional[str]]:
+        args = tbl_ref.function_args
+        arg0_expr = args[0] if args else "null"
+        val0 = _extract_field_value(ctx, arg0_expr)
+        if len(args) <= 1:
+            return val0, None
+        val_path = _extract_field_value(ctx, args[1])
+        return val0, (str(val_path) if val_path is not None else None)
+
+    def _generate_table_func_rows(
+        self,
+        tbl_ref: TableRef,
+        parent_row: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Generates dynamic rows for table-valued functions json_each / json_tree."""
+        func = (
+            iter_json_each if tbl_ref.function_name == "json_each" else iter_json_tree
+        )
+        val0, p_str = self._resolve_table_func_args(tbl_ref, parent_row or {})
+        raw_rows = func(val0, p_str)
+        return [self._prefix_record(r, tbl_ref) for r in raw_rows]
+
+    def _join_table_func_rows(
+        self,
+        current_rows: List[Dict[str, Any]],
+        join: Any,
+    ) -> List[Dict[str, Any]]:
+        next_rows: List[Dict[str, Any]] = []
+        for left_row in current_rows:
+            right_rows = self._generate_table_func_rows(join.table, left_row)
+            matched = self._match_join_row(left_row, right_rows, join)
+            next_rows.extend(matched)
+        return next_rows
+
     def _join_table_rows(
         self,
         current_rows: List[Dict[str, Any]],
@@ -2781,6 +2820,9 @@ class SQLExecutor:
         temp_tables: Dict[str, List[Dict[str, Any]]],
     ) -> List[Dict[str, Any]]:
         join_tbl_ref = join.table
+        if join_tbl_ref.function_name in ("json_each", "json_tree"):
+            return self._join_table_func_rows(current_rows, join)
+
         if join_tbl_ref.name not in temp_tables:
             self.access_controller.enforce_permission(
                 effective_role, join_tbl_ref.name, "SELECT"
@@ -2887,15 +2929,13 @@ class SQLExecutor:
         ]
         return None if any(conditions) else stmt.limit
 
-    def _get_initial_select_rows(
+    def _scan_regular_initial_rows(
         self,
         table_ref: TableRef,
         stmt: SelectStatement,
         effective_role: str,
         temp_tables: Dict[str, List[Dict[str, Any]]],
     ) -> List[Dict[str, Any]]:
-        if stmt.values_rows is not None:
-            return [dict(zip(stmt.columns, r)) for r in stmt.values_rows]
         self._validate_index_hint(table_ref.name, table_ref.indexed_by)
         if table_ref.name not in temp_tables:
             self.access_controller.enforce_permission(
@@ -2909,6 +2949,21 @@ class SQLExecutor:
             limit=scan_limit,
         )
         return [self._prefix_record(r, table_ref) for r in raw_rows]
+
+    def _get_initial_select_rows(
+        self,
+        table_ref: TableRef,
+        stmt: SelectStatement,
+        effective_role: str,
+        temp_tables: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        if stmt.values_rows is not None:
+            return [dict(zip(stmt.columns, r)) for r in stmt.values_rows]
+        if table_ref.function_name in ("json_each", "json_tree"):
+            return self._generate_table_func_rows(table_ref)
+        return self._scan_regular_initial_rows(
+            table_ref, stmt, effective_role, temp_tables
+        )
 
     def _apply_single_join(
         self,

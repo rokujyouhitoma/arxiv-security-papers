@@ -1665,24 +1665,33 @@ class SQLParser:
             join_type=join_type, table=target_table_ref, on_conditions=on_conds
         )
 
-    def _parse_from_and_joins(self, from_raw: str) -> Tuple[TableRef, List[JoinClause]]:
-        """Parses FROM table [AS alias] [JOIN table2 [AS alias2] ON cond1 = cond2 ...]"""
-        join_regex = r"\s+(INNER\s+JOIN|LEFT\s+OUTER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|CROSS\s+JOIN|JOIN)\s+"
-        parts = re.split(join_regex, from_raw, flags=re.IGNORECASE)
-
-        table_ref = self._parse_single_table_ref(parts[0].strip())
-        joins: List[JoinClause] = []
-        idx = 1
-        while idx < len(parts):
-            join_kw = parts[idx].strip().upper()
-            join_body = parts[idx + 1].strip()
-            idx += 2
-            joins.append(self._parse_join_part(join_kw, join_body))
-
-        return table_ref, joins
+    def _parse_table_function_ref(self, clean_tbl: str) -> Optional[TableRef]:
+        """Parses json_each(...) [AS alias] or json_tree(...) [AS alias]."""
+        m_func = re.match(
+            r"^(json_each|json_tree)\s*\((.*)\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$",
+            clean_tbl.strip(),
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not m_func:
+            return None
+        func_name = m_func.group(1).lower()
+        args_raw = m_func.group(2).strip()
+        args = _split_comma_expressions(args_raw) if args_raw else []
+        alias = m_func.group(3)
+        return TableRef(
+            name=func_name,
+            alias=alias,
+            function_name=func_name,
+            function_args=args,
+        )
 
     def _parse_single_table_ref(self, text: str) -> TableRef:
         clean_tbl, indexed_by, not_indexed = _extract_index_hint(text)
+        func_ref = self._parse_table_function_ref(clean_tbl)
+        if func_ref is not None:
+            func_ref.indexed_by = indexed_by
+            func_ref.not_indexed = not_indexed
+            return func_ref
         m = re.match(
             r"^([a-zA-Z0-9_.]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$",
             clean_tbl.strip(),
@@ -1700,6 +1709,30 @@ class SQLParser:
             indexed_by=indexed_by,
             not_indexed=not_indexed,
         )
+
+    def _normalize_comma_joins(self, from_raw: str) -> str:
+        """Converts top-level comma table lists to CROSS JOINs."""
+        parts = _split_comma_expressions(from_raw)
+        if len(parts) <= 1:
+            return from_raw
+        return " CROSS JOIN ".join(parts)
+
+    def _parse_from_and_joins(self, from_raw: str) -> Tuple[TableRef, List[JoinClause]]:
+        """Parses FROM table [AS alias] [JOIN table2 [AS alias2] ON cond1 = cond2 ...]"""
+        normalized_from = self._normalize_comma_joins(from_raw)
+        join_regex = r"\s+(INNER\s+JOIN|LEFT\s+OUTER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|CROSS\s+JOIN|JOIN)\s+"
+        parts = re.split(join_regex, normalized_from, flags=re.IGNORECASE)
+
+        table_ref = self._parse_single_table_ref(parts[0].strip())
+        joins: List[JoinClause] = []
+        idx = 1
+        while idx < len(parts):
+            join_kw = parts[idx].strip().upper()
+            join_body = parts[idx + 1].strip()
+            idx += 2
+            joins.append(self._parse_join_part(join_kw, join_body))
+
+        return table_ref, joins
 
     def _extract_where_clauses(self, where_raw: str) -> List[Dict[str, Any]]:
         clauses: List[Dict[str, Any]] = []

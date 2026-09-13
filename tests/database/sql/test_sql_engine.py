@@ -1992,3 +1992,86 @@ def test_fts5_virtual_table_and_match() -> None:
     # In SQLite FTS5, lower (more negative) rank indicates higher relevance (Paper 1 has 'zero' twice)
     assert res_ranked["rows"][0]["rank"] <= res_ranked["rows"][1]["rank"]
     assert "Zero Trust Architecture" in res_ranked["rows"][0]["title"]
+
+
+def test_json_each_and_tree() -> None:
+    """Tests SQLite-parity table-valued functions json_each and json_tree."""
+    executor = SQLExecutor()
+
+    # 1. Standalone json_each on array
+    res1 = executor.execute(
+        'SELECT key, value, type FROM json_each(\'["apple", "banana", "cherry"]\');'
+    )
+    assert res1["status"] == "ok"
+    assert res1["count"] == 3
+    assert [r["key"] for r in res1["rows"]] == [0, 1, 2]
+    assert [r["value"] for r in res1["rows"]] == ["apple", "banana", "cherry"]
+    assert [r["type"] for r in res1["rows"]] == ["text", "text", "text"]
+
+    # 2. Standalone json_each on object with alias
+    res2 = executor.execute(
+        'SELECT j.key, j.value, j.type, j.fullkey FROM json_each(\'{"name": "Alice", "age": 30}\') AS j;'
+    )
+    assert res2["status"] == "ok"
+    assert res2["count"] == 2
+    keys = [r["key"] for r in res2["rows"]]
+    assert "name" in keys and "age" in keys
+    for r in res2["rows"]:
+        if r["key"] == "name":
+            assert r["value"] == "Alice"
+            assert r["type"] == "text"
+            assert r["fullkey"] == "$.name"
+        elif r["key"] == "age":
+            assert r["value"] == 30
+            assert r["type"] == "integer"
+            assert r["fullkey"] == "$.age"
+
+    # 3. json_each with path parameter
+    res3 = executor.execute(
+        "SELECT key, value FROM json_each('{\"data\": {\"items\": [100, 200]}}', '$.data.items');"
+    )
+    assert res3["status"] == "ok"
+    assert res3["count"] == 2
+    assert [r["value"] for r in res3["rows"]] == [100, 200]
+
+    # 4. json_tree recursive expansion
+    nested_json = '{"user": "Bob", "roles": ["admin", "dev"], "profile": {"age": 25, "active": true}}'
+    res_tree = executor.execute(
+        f"SELECT key, value, type, fullkey, path FROM json_tree('{nested_json}');"
+    )
+    assert res_tree["status"] == "ok"
+    fullkeys = [r["fullkey"] for r in res_tree["rows"]]
+    assert "$" in fullkeys
+    assert "$.user" in fullkeys
+    assert "$.roles" in fullkeys
+    assert "$.roles[0]" in fullkeys
+    assert "$.roles[1]" in fullkeys
+    assert "$.profile" in fullkeys
+    assert "$.profile.age" in fullkeys
+    assert "$.profile.active" in fullkeys
+
+    # 5. Cross join with table rows: SELECT tbl.id, j.value FROM tbl, json_each(tbl.tags_json) j
+    executor.execute(
+        "CREATE TABLE papers (id INTEGER PRIMARY KEY, title TEXT, tags_json TEXT);"
+    )
+    executor.execute(
+        "INSERT INTO papers VALUES (1, 'Paper 1', '[\"crypto\", \"zero-trust\"]');"
+    )
+    executor.execute("INSERT INTO papers VALUES (2, 'Paper 2', '[\"network\"]');")
+
+    res_join1 = executor.execute(
+        "SELECT papers.id, j.value AS tag FROM papers, json_each(papers.tags_json) AS j;"
+    )
+    assert res_join1["status"] == "ok"
+    assert res_join1["count"] == 3
+    tags_by_id = [(r["id"], r["tag"]) for r in res_join1["rows"]]
+    assert (1, "crypto") in tags_by_id
+    assert (1, "zero-trust") in tags_by_id
+    assert (2, "network") in tags_by_id
+
+    # 6. Explicit JOIN json_each
+    res_join2 = executor.execute(
+        "SELECT papers.title, j.value AS tag FROM papers JOIN json_each(papers.tags_json) j;"
+    )
+    assert res_join2["status"] == "ok"
+    assert res_join2["count"] == 3
