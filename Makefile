@@ -76,6 +76,12 @@ py_compile: activate ## py_compile syntax check for all python sources
 		${VENV_PYTHON} -m py_compile $$py || exit 1; \
 	done
 
+.PHONY: compile_grammars
+compile_grammars: activate ## Compile .peg grammar specifications to standalone Python parsers
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/turtle.peg -o src/ontology/generated_turtle_parser.py
+	${VENV_BIN}/isort src/ontology/generated_turtle_parser.py
+	${VENV_BIN}/black -q src/ontology/generated_turtle_parser.py
+
 .PHONY: build_js
 build_js: activate ## Build minified JS bundle using Google Closure Compiler with strict checks
 	${VENV_PYTHON} tools/closure-compiler/setup_compiler.py

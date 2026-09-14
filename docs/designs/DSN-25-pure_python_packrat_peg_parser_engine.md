@@ -355,10 +355,31 @@ graph TD
 - 変数バインドの自動アンパック展開 (`left = val[0]`, `rest = val[1]`)
 - 単一式・複数文のセマンティックアクション関数の静的生成
 - `tools/peg_compiler/compile_peg.py` による CLI 実行サポート (`-o output.py --class-name CustomParser`)
+- 使用シンボルの動的解析による最小インポート生成（`# flake8: noqa` ゼロ方針の完全遵守）
 
 ---
 
-## 7. セキュリティ分析 (STRIDE Threat Model) と防御策
+## 7. AOT コンパイラ実戦投入と本番運用 (Production Deployment) (Phase 2 実装完了: Issue #294)
+
+### 7.1 W3C Turtle 1.1 パーサーの宣言的 AOT 換装
+
+事前コンパイラの本格運用第1弾として、W3C 規格準拠の **W3C Turtle 1.1 パーサー ([`src/ontology/turtle_parser.py`](../../src/ontology/turtle_parser.py))** を AOT 駆動型へ完全移行。
+
+1. **形式文法定義の宣言的分離 ([`grammars/turtle.peg`](../../grammars/turtle.peg))**:
+   - W3C Turtle 1.1 構文仕様（ディレクティブ `@prefix`, `PREFIX`, `@base`, `BASE`、主語・述語・目的語、ブランクノード、リテラル、データ型、コメント）を純粋な宣言的 PEG 仕様として分離。
+   - ダブルクォート `"` およびシングルクォート `'` の両方に対応する文字列リテラル規則。
+2. **静的パーサー自動生成 ([`src/ontology/generated_turtle_parser.py`](../../src/ontology/generated_turtle_parser.py))**:
+   - `tools/peg_compiler/compile_peg.py` により、完全型安全・ゼロ外部依存の静的パーサークラス `TurtleParser` を生成。
+3. **ビルドパイプラインへの統合 (`Makefile`)**:
+   - `make compile_grammars` ターゲットを新設し、CI/CD・開発ワークフローで文法ファイルから自動コンパイル・整合性検証を担保。
+4. **ゼロオーバーヘッドと性能実証 ([`tests/ontology/test_turtle_benchmark.py`](../../tests/ontology/test_turtle_benchmark.py))**:
+   - 実行時の動的コンビネータ構築コストを完全排除（50回のインスタンス生成が 0.01 秒未満）。
+   - 200件のトリプルを含む複合ドキュメントを 0.2 秒未満で一括解析。
+   - 既存の全テスト ([`tests/ontology/test_turtle_parser.py`](../../tests/ontology/test_turtle_parser.py)) と 100% 互換動作。
+
+---
+
+## 8. セキュリティ分析 (STRIDE Threat Model) と防御策
 
 | 脅威分類 (STRIDE) | 潜在リスク・攻撃シナリオ | 本設計における多層防御策 |
 | :--- | :--- | :--- |
@@ -370,9 +391,9 @@ graph TD
 
 ---
 
-## 8. 非機能要件・品質基準・DoD
+## 9. 非機能要件・品質基準・DoD
 
-### 8.1 非機能要件
+### 9.1 非機能要件
 
 1. **ゼロ外部依存**:
    - Python 標準ライブラリ（`typing`, `re`, `dataclasses`, `textwrap`）のみで完結。
@@ -383,7 +404,7 @@ graph TD
    - `xenon --max-absolute A --max-modules A --max-average A`（全関数 $CC \le 4$）。
    - `mypy --strict` エラー 0 件。
 
-### 8.2 完了条件 (Definition of Done)
+### 9.2 完了条件 (Definition of Done)
 
 - [x] `src/core/structures/peg.py` に Packrat PEG コアランタイムエンジンが実装されていること（Issue #284）。
 - [x] `src/core/structures/__init__.py` に公開クラスおよびヘルパー関数がエクスポートされていること。
@@ -397,4 +418,5 @@ graph TD
 - [x] `src/database/sql/ddl_parser.py` および `admin_parser.py` に Packrat PEG DDL/管理構文パーサーが実装され、旧正規表現パーサーが完全撤廃されたこと（Issue #291、`tests/database/test_sql_ddl_peg.py` PASS）。
 - [x] `src/database/sql/parser.py` における残存正規表現・WHERE 文字列走査ロジックが完全撤廃され、純粋 PEG AST 走査へ一本化されたこと（Issue #292、全 401 テスト PASS）。
 - [x] `src/core/structures/peg_compiler/` に DSN-25 Phase 2 事前コンパイラ（AOT Compiler）が実装され、`.peg` 文法定義ファイルから Python パーサーコードが事前生成できること（Issue #293、`tests/core/test_peg_compiler.py` PASS）。
+- [x] `grammars/turtle.peg` が W3C Turtle 1.1 仕様に準拠して定義され、`tools/peg_compiler/compile_peg.py` および `make compile_grammars` により `src/ontology/generated_turtle_parser.py` が自動生成され、`turtle_parser.py` に本番実戦投入されたこと（Issue #294、`tests/ontology/test_turtle_parser.py` & `test_turtle_benchmark.py` PASS）。
 - [x] 全品質ゲート（`make check_format` および `make static_analysis`）がエラー 0 件で通過すること。

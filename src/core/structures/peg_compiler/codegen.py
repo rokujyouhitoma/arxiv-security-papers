@@ -27,6 +27,38 @@ from core.structures.peg_compiler.ast_nodes import (
 )
 
 
+def _find_used_symbols(symbols: Tuple[str, ...], text: str) -> List[str]:
+    return [s for s in symbols if s in text]
+
+
+_PEG_SYMBOLS: Tuple[str, ...] = (
+    "AndPred",
+    "Choice",
+    "Lit",
+    "NotPred",
+    "OneOrMore",
+    "Opt",
+    "ParseContext",
+    "ParseResult",
+    "Parser",
+    "PEGSyntaxError",
+    "Reg",
+    "RuleRef",
+    "Seq",
+    "ZeroOrMore",
+)
+
+_TYPING_SYMBOLS: Tuple[str, ...] = (
+    "Any",
+    "Dict",
+    "List",
+    "Optional",
+    "Set",
+    "Tuple",
+    "cast",
+)
+
+
 class CodeGenerator:
     """Generates Python source code for a GrammarDef AST."""
 
@@ -55,17 +87,22 @@ class CodeGenerator:
 
     def generate(self) -> str:
         """Generates complete Python module source code."""
-        lines = self._build_module_header()
+        class_lines = self._build_class_definition()
+        header_code = self.grammar.header_code or ""
+        body_text = f"{header_code}\n" + "\n".join(class_lines)
+        lines = self._build_module_header(body_text)
         if self.grammar.header_code:
             lines.append(f"# User header code\n{self.grammar.header_code}\n")
 
-        class_lines = self._build_class_definition()
         lines.extend(class_lines)
         lines.append("")
         return "\n".join(lines)
 
-    def _build_module_header(self) -> List[str]:
-        return [
+    def _build_module_header(self, body_text: str) -> List[str]:
+        peg_syms = _find_used_symbols(_PEG_SYMBOLS, body_text)
+        typing_syms = _find_used_symbols(_TYPING_SYMBOLS, body_text)
+
+        lines = [
             "#!/usr/bin/env python3",
             '"""',
             f"Auto-generated Packrat PEG Parser for grammar: {self.grammar.name}",
@@ -74,26 +111,17 @@ class CodeGenerator:
             "",
             "from __future__ import annotations",
             "",
-            "from typing import Any, Dict, List, Optional, Set, Tuple, cast",
-            "",
-            "from core.structures.peg import (",
-            "    AndPred,",
-            "    Choice,",
-            "    Lit,",
-            "    NotPred,",
-            "    OneOrMore,",
-            "    Opt,",
-            "    ParseContext,",
-            "    ParseResult,",
-            "    Parser,",
-            "    PEGSyntaxError,",
-            "    Reg,",
-            "    RuleRef,",
-            "    Seq,",
-            "    ZeroOrMore,",
-            ")",
-            "",
         ]
+        if typing_syms:
+            lines.append(f"from typing import {', '.join(typing_syms)}")
+            lines.append("")
+        if peg_syms:
+            lines.append("from core.structures.peg import (")
+            for sym in peg_syms:
+                lines.append(f"    {sym},")
+            lines.append(")")
+            lines.append("")
+        return lines
 
     def _build_class_definition(self) -> List[str]:
         class_name = f"{self.grammar.name}Parser"
@@ -110,8 +138,9 @@ class CodeGenerator:
         class_lines.extend(self._build_rule_init())
         class_lines.extend(self._emit_parser_methods())
         if self.action_methods:
-            class_lines.append("")
-            class_lines.extend(self.action_methods)
+            for method in self.action_methods:
+                class_lines.append("")
+                class_lines.append(method)
         return class_lines
 
     def _build_rule_init(self) -> List[str]:

@@ -143,7 +143,7 @@ class MetaGrammarParser:
         ident_tok = lex(Reg(r"[A-Za-z_][A-Za-z0-9_]*"))
         str_dq = lex(Reg(r'"(?:[^"\\]|\\.)*"'))
         str_sq = lex(Reg(r"'(?:[^'\\]|\\.)*'"))
-        regex_tok = lex(Reg(r"/((?:[^\r\n/\\]|\\.)+)/"))
+        regex_tok = lex(Reg(r"/(?![ \t\r\n])((?:[^\r\n/\\]|\\.)+)/"))
 
         # Semantic action code block: { ... }
         action_tok = lex(ActionBlockParser())

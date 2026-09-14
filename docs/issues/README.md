@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **294** | AOT PEG コンパイラ実戦投入: W3C Turtle 1.1 パーサーの AOT 化と運用パイプライン統合 | Feature | 2026-09-14 | [294-deploy-aot-peg-compiler-to-production-turtle-parser.md](closed/294-deploy-aot-peg-compiler-to-production-turtle-parser.md) |
 | **293** | DSN-25 Phase 2: Packrat PEG 事前コンパイラ (AOT Compiler) 基盤の実装 | Feature | 2026-09-14 | [293-implement-dsn25-phase2-peg-ahead-of-time-compiler.md](closed/293-implement-dsn25-phase2-peg-ahead-of-time-compiler.md) |
 | **292** | SQL Parser 残存手書き正規表現・文字列走査ロジックの完全撤廃と純粋 PEG 化 | Refactor | 2026-09-14 | [292-eliminate-legacy-regex-where-helpers-with-pure-peg.md](closed/292-eliminate-legacy-regex-where-helpers-with-pure-peg.md) |
 | **291** | SQL Parser 全面 Packrat PEG 換装 (DDL / TCL / DCL / Admin) による手書き正規表現コード完全撤廃 (DSN-25 Phase 2-D) | Feature | 2026-09-14 | [291-replace-sql-parser-with-packrat-peg.md](closed/291-replace-sql-parser-with-packrat-peg.md) |

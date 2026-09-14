@@ -1,0 +1,143 @@
+# W3C RDF 1.1 Turtle (.ttl) Grammar Specification
+# Conforms to DSN-25 Phase 2 Ahead-of-Time Packrat PEG Compiler.
+grammar Turtle
+
+@header {
+from ontology.turtle_parser import (
+    RDF_TYPE_IRI,
+    TurtleDocument,
+    TurtleTerm,
+    _apply_turtle_statement,
+    _extract_datatype_uri,
+    _unescape_turtle_str,
+)
+}
+
+document = ws stmts:statement* ws {
+    doc = TurtleDocument()
+    for stmt in stmts:
+        if stmt:
+            _apply_turtle_statement(doc, stmt)
+    return doc
+}
+
+statement = s:(directive / triple_stmt) { return s }
+
+directive = at_prefix / sparql_prefix / at_base / sparql_base
+
+at_prefix = "@prefix" ws p:prefix_id ws u:iri_val ws "." ws {
+    return ("prefix", p[:-1], u)
+}
+
+sparql_prefix = "PREFIX" ws p:prefix_id ws u:iri_val ws ("." ws)? {
+    return ("prefix", p[:-1], u)
+}
+
+at_base = "@base" ws u:iri_val ws "." ws {
+    return ("base", "", u)
+}
+
+sparql_base = "BASE" ws u:iri_val ws ("." ws)? {
+    return ("base", "", u)
+}
+
+prefix_id = id_str:/[a-zA-Z0-9_-]*:/ { return id_str }
+
+iri_val = "<" raw:/[^>]*/ ">" { return raw }
+
+triple_stmt = s:subject ws po:po_list ws "." ws {
+    return ("triples", str(s.value), po)
+}
+
+subject = iri_term / bnode_term
+
+predicate = iri_term
+
+object = iri_term / bnode_term / literal_term
+
+po_list = first:po_pair rest:(ws ";" ws next_pair:po_pair { return next_pair })* (ws ";")? {
+    res = [first]
+    if rest:
+        res.extend(rest)
+    return res
+}
+
+po_pair = pred:predicate ws objs:object_list {
+    return (str(pred.value), objs)
+}
+
+object_list = first:object rest:(ws "," ws next_obj:object { return next_obj })* {
+    res = [first]
+    if rest:
+        res.extend(rest)
+    return res
+}
+
+iri_term = full_iri / prefixed_name / a_kw
+
+full_iri = "<" u:/[^>]*/ ">" ws {
+    return TurtleTerm(u, "iri")
+}
+
+prefixed_name = p:/[a-zA-Z0-9_-]*/ ":" loc:/[a-zA-Z0-9_.\-%]+/ ws {
+    return TurtleTerm(f"{p}:{loc}", "iri")
+}
+
+a_kw = "a" ws {
+    return TurtleTerm(RDF_TYPE_IRI, "iri")
+}
+
+bnode_term = named_bnode / anon_bnode
+
+named_bnode = b:/_:[a-zA-Z0-9_.-]+/ ws {
+    return TurtleTerm(b, "bnode")
+}
+
+anon_bnode = "[" ws "]" ws {
+    return TurtleTerm("_:bnode_anon", "bnode")
+}
+
+literal_term = full_str_lit / bool_lit / float_lit / int_lit
+
+quoted_str = '"' s:/(?:[^"\\]|\\.)*/ '"' { return s }
+           / "'" s:/(?:[^'\\]|\\.)*/ "'" { return s }
+
+full_str_lit = s:quoted_str suf:str_suffix? ws {
+    raw_text = _unescape_turtle_str(s)
+    if not suf:
+        return TurtleTerm(raw_text, "literal")
+    tag, val = suf
+    if tag == "@":
+        return TurtleTerm(raw_text, "literal", language=str(val))
+    if tag == "^^":
+        return TurtleTerm(raw_text, "literal", datatype=_extract_datatype_uri(val))
+    return TurtleTerm(raw_text, "literal")
+}
+
+str_suffix = lang_suffix / dt_suffix
+
+lang_suffix = "@" lang:/[a-zA-Z]+(-[a-zA-Z0-9]+)*/ {
+    return ("@", lang)
+}
+
+dt_suffix = "^^" dt:(iri_val / curie_dt) {
+    return ("^^", dt)
+}
+
+curie_dt = p:/[a-zA-Z0-9_.-]*/ ":" loc:/[a-zA-Z0-9_.-]+/ {
+    return f"{p}:{loc}"
+}
+
+bool_lit = b:("true" / "false") ws {
+    return TurtleTerm(b == "true", "literal", datatype="http://www.w3.org/2001/XMLSchema#boolean")
+}
+
+float_lit = num:/[+-]?[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/ ws {
+    return TurtleTerm(float(num), "literal", datatype="http://www.w3.org/2001/XMLSchema#decimal")
+}
+
+int_lit = num:/[+-]?[0-9]+/ ws {
+    return TurtleTerm(int(num), "literal", datatype="http://www.w3.org/2001/XMLSchema#integer")
+}
+
+ws = /(?:\s+|#[^\r\n]*)*/
