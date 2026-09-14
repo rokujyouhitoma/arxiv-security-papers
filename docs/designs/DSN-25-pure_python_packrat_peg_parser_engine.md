@@ -263,14 +263,20 @@ Xenon Grade A（サイクロマティック複雑度 $CC \le 4$）および mypy
 - 既存 RDBMS 実行エンジンへの透過的ブリッジ（`to_legacy_dict()`）および SQL 再シリアライズ（`to_sql()`）
 - 関連テスト: [`tests/database/test_sql_expr_peg.py`](../../tests/database/test_sql_expr_peg.py) (全 21 項目 100% PASS)
 
-#### 5.2.2 Phase 2-B: DQL & 派生クエリ構文の PEG 換装 (進行中: Issue #289)
+#### 5.2.2 Phase 2-B: DQL & 派生クエリ構文の PEG 換装 (実装完了: Issue #289)
 `SELECT`, CTE (`WITH [RECURSIVE]`), `FROM` 句（テーブル・派生サブクエリ・JOIN 結合構文）、`WHERE` 句（`expr_parser` 統合）、`GROUP BY`, `HAVING`, ウィンドウ関数（`OVER (...)`）、集合演算（`UNION`, `INTERSECT`, `EXCEPT`）、スタンドアロン `VALUES` 句を PEG 文法として定義。
+- [`src/database/sql/dql_parser.py`](../../src/database/sql/dql_parser.py) (全 21 項目テスト PASS)
 
-#### 5.2.3 Phase 2-C: DML 構文の PEG 換装 (計画: Issue #290)
+#### 5.2.3 Phase 2-C: DML 構文の PEG 換装 (実装完了: Issue #290)
 `INSERT INTO` / `REPLACE INTO`（VALUES 挿入、SELECT 挿入）、`UPDATE ... FROM`、`DELETE FROM`、`UPSERT` (`ON CONFLICT DO UPDATE/NOTHING`)、`RETURNING` 句を PEG 文法として定義。
+- [`src/database/sql/dml_parser.py`](../../src/database/sql/dml_parser.py) (全 16 項目テスト PASS)
 
-#### 5.2.4 Phase 2-D: DDL / TCL / DCL & 管理構文の PEG 換装と完全統合 (計画: Issue #291)
-`CREATE TABLE` (STRICT / GENERATED ALWAYS AS), `ALTER TABLE`, `CREATE INDEX`, `CREATE VIEW`, `CREATE TRIGGER`, `VIRTUAL TABLE`, `ATTACH/DETACH DATABASE`, `BEGIN/COMMIT/ROLLBACK/SAVEPOINT`, `PRAGMA`, `VACUUM`, `ANALYZE`, `EXPLAIN`, `SHOW`, `GRANT/REVOKE` を PEG 化し、`src/database/sql/parser.py` を Packrat PEG ベースの `SQLParser` として完全一本化。旧正規表現コードを全廃止。
+#### 5.2.4 Phase 2-D: DDL / TCL / DCL & 管理構文の PEG 換装と完全統合 (実装完了: Issue #291)
+`CREATE TABLE` (STRICT / GENERATED ALWAYS AS), `ALTER TABLE`, `CREATE INDEX`, `CREATE VIEW`, `CREATE TRIGGER`, `VIRTUAL TABLE`, `ATTACH/DETACH DATABASE`, `BEGIN/COMMIT/ROLLBACK/SAVEPOINT`, `PRAGMA`, `VACUUM`, `ANALYZE`, `EXPLAIN`, `SHOW`, `GRANT/REVOKE` を PEG 化し、`src/database/sql/parser.py` を Packrat PEG ベースの `SQLParser` として完全一本化。旧正規表現コード（2,000行超）を全廃止。
+- [`src/database/sql/ddl_parser.py`](../../src/database/sql/ddl_parser.py) (全 18 項目テスト PASS)
+- [`src/database/sql/admin_parser.py`](../../src/database/sql/admin_parser.py)
+- [`src/database/sql/parser.py`](../../src/database/sql/parser.py) (約 380 行の純粋 PEG 統合ディスパッチャー)
+- データベース全 400 件テスト 100% PASS、Xenon Rank A ($CC \le 4$)、`mypy --strict` 完全適合。
 
 ### 5.3 グラフエンジン: Canvas 向け CTI パスクエリ DSL (実装完了: Issue #286)
 
