@@ -46,7 +46,7 @@ def _index_single_paper(fpath: str, engine: PropertyGraphEngine) -> int:
             engine.add_edge(
                 src_id=t.subject_id,
                 dst_id=t.object_id,
-                label=t.predicate.value,
+                label=t.predicate_value,
                 weight=t.weight,
                 properties=t.properties,
             )

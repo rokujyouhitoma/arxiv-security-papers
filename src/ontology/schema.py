@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 
 class EntityType(str, Enum):
@@ -920,15 +920,22 @@ class Triple:
     """Represents a factual Semantic Knowledge Graph Triple (Subject - Predicate - Object)."""
 
     subject_id: str
-    predicate: Predicate
+    predicate: Union[Predicate, str]
     object_id: str
     weight: float = 1.0
     properties: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def predicate_value(self) -> str:
+        """Returns string representation of predicate value."""
+        if isinstance(self.predicate, Predicate):
+            return self.predicate.value
+        return self.predicate
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "subject": self.subject_id,
-            "predicate": self.predicate.value,
+            "predicate": self.predicate_value,
             "object": self.object_id,
             "weight": self.weight,
             "properties": self.properties,

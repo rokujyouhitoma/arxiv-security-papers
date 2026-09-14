@@ -339,6 +339,56 @@ TOOLS_MANIFEST = [
             },
         },
     },
+    {
+        "name": "check_ontology_consistency",
+        "description": (
+            "Verify logical consistency and satisfiability of the security ontology and ABox instances "
+            "using the Pure Python OWL DL / RL Reasoner (DSN-26). Validates against HermiT / Pellet specifications."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "subclass_axioms": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "sub": {"type": "string"},
+                            "super": {"type": "string"},
+                        },
+                        "required": ["sub", "super"],
+                    },
+                    "description": (
+                        "Optional list of SubClassOf axioms e.g. "
+                        "[{'sub': 'Ransomware', 'super': 'Malware'}]"
+                    ),
+                },
+                "disjoint_axioms": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "description": (
+                        "Optional list of DisjointClasses tuples e.g. "
+                        "[['DeterministicEncryption', 'ProbabilisticEncryption']]"
+                    ),
+                },
+                "individual_assertions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "individual": {"type": "string"},
+                            "classes": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["individual", "classes"],
+                    },
+                    "description": "Optional list of individual type assertions to check for disjointness clashes",
+                },
+            },
+        },
+    },
 ]
 
 
@@ -848,6 +898,80 @@ def handle_list_active_exploited_papers(params: Dict[str, Any]) -> Dict[str, Any
     }
 
 
+def _parse_subclass_axioms(inputs: List[Any]) -> List[Any]:
+    from ontology.reasoner import AtomicConcept, SubClassOfAxiom
+
+    axioms = []
+    for s in inputs:
+        if isinstance(s, dict) and "sub" in s and "super" in s:
+            axioms.append(
+                SubClassOfAxiom(
+                    AtomicConcept(str(s["sub"])), AtomicConcept(str(s["super"]))
+                )
+            )
+    return axioms
+
+
+def _parse_disjoint_axioms(inputs: List[Any]) -> List[Any]:
+    from ontology.reasoner import AtomicConcept, DisjointClassesAxiom
+
+    axioms = []
+    for group in inputs:
+        if isinstance(group, (list, tuple)) and len(group) >= 2:
+            axioms.append(
+                DisjointClassesAxiom(tuple(AtomicConcept(str(c)) for c in group))
+            )
+    return axioms
+
+
+def _assert_single_individual(reasoner: Any, ind: Any) -> None:
+    """Applies class assertions for a single individual dictionary."""
+    if not (isinstance(ind, dict) and "individual" in ind and "classes" in ind):
+        return
+    for cls_name in ind.get("classes", []):
+        reasoner.add_class_assertion(str(ind["individual"]), str(cls_name))
+
+
+def _apply_individual_assertions(reasoner: Any, assertions: List[Any]) -> None:
+    """Iterates through individual assertions and applies them to reasoner."""
+    for ind in assertions:
+        _assert_single_individual(reasoner, ind)
+
+
+def handle_check_ontology_consistency(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Evaluates logical consistency and satisfiability with the Pure Python OWL Reasoner (DSN-26)."""
+    from ontology.reasoner import HermiTPelletSpecificationTracker, PureOWLReasoner
+
+    sub_axioms = _parse_subclass_axioms(params.get("subclass_axioms", []))
+    disj_axioms = _parse_disjoint_axioms(params.get("disjoint_axioms", []))
+    reasoner = PureOWLReasoner(subclass_axioms=sub_axioms, disjoint_axioms=disj_axioms)
+    _apply_individual_assertions(reasoner, params.get("individual_assertions", []))
+
+    report = reasoner.check_consistency()
+    tracker = HermiTPelletSpecificationTracker()
+    return {
+        "status": "success",
+        "is_consistent": report.is_consistent,
+        "clash_count": len(report.clashes),
+        "unsatisfiable_classes": report.unsatisfiable_classes,
+        "clashes": [
+            {
+                "type": clash.clash_type.value,
+                "node_id": clash.node_id,
+                "conflicting_concepts": list(clash.conflicting_concepts),
+                "justification_axioms": list(clash.justification_axioms),
+                "message": clash.explanation_message,
+            }
+            for clash in report.clashes
+        ],
+        "explanation_report": report.explanation,
+        "reference_implementations": {
+            "hermit": tracker.get_profile("HermiT").name,
+            "pellet": tracker.get_profile("Pellet").name,
+        },
+    }
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generate_semgrep_rule": handle_generate_semgrep_rule,
     "synthesize_secure_patch": handle_synthesize_secure_patch,
@@ -864,6 +988,7 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "search_defense_causal_chains": handle_search_defense_causal_chains,
     "check_cve_kev_status": handle_check_cve_kev_status,
     "list_active_exploited_papers": handle_list_active_exploited_papers,
+    "check_ontology_consistency": handle_check_ontology_consistency,
 }
 
 

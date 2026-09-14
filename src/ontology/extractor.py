@@ -392,7 +392,7 @@ class OntologyExtractor:
         unique: List[Triple] = []
         seen: Set[Tuple[str, str, str]] = set()
         for t in triples:
-            key = (t.subject_id, t.predicate.value, t.object_id)
+            key = (t.subject_id, t.predicate_value, t.object_id)
             if key not in seen and t.subject_id != t.object_id:
                 seen.add(key)
                 unique.append(t)
@@ -589,7 +589,7 @@ class OntologyExtractor:
             engine.add_edge(
                 src_id=trip.subject_id,
                 dst_id=trip.object_id,
-                label=trip.predicate.value,
+                label=trip.predicate_value,
                 weight=trip.weight,
                 properties=edge_props,
             )

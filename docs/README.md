@@ -78,6 +78,8 @@
   - `manage.py`, `src/cli/` — Django スタイル統一エントリポイント、マルチストレージ自動マウント、ゼロ外部依存 REPL。
 - 🧩 **[[DSN-25] 純粋 Python 製汎用 Packrat PEG ランタイム基盤および構文解析エンジン統合設計仕様書](designs/DSN-25-pure_python_packrat_peg_parser_engine.md)**
   - `src/core/structures/peg.py` — 線形時間 $O(N)$ パース保証、AST コンビネータ、検索クエリ/SQL/グラフDSL/オントロジー横断適用、将来の事前コード生成 (pegen型) 進化ロードマップ。
+- 🦉 **[[DSN-26] 純粋 Python 製完全自作 OWL DL / RL 推論エンジンおよび先行推論器 (HermiT / Pellet) 参考実装トラッキング設計仕様書](designs/DSN-26-pure-python-owl-dl-reasoner.md)**
+  - `src/ontology/reasoner/` — 超タブロー法 (Hypertableau)・多項式時間 Datalog 前向き連鎖・2層分離アーキテクチャ・最小充足不能部分系 (MUS) 監査説明機構・HermiT / Pellet 先行推論器アルゴリズム規範追跡。
 
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
@@ -90,7 +92,7 @@
 
 ### 5. Issue 台帳 ＆ 履歴 (Issues & Task Ledger)
 - 🎯 **[[ISS-00] Issue 台帳 (Issue Ledger)](issues/README.md)**
-  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — **Issue 001〜295 全295件完了**)。
+  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — **Issue 001〜296 全296件完了**)。
 
 ### 6. ベンチマーク ＆ 監査レポート (Benchmarks & Audits)
 - 📊 **[SOTA IR ベンチマーク評価レポート](benchmarks/sota_evaluation.md)**

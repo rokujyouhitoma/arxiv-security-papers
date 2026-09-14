@@ -45,8 +45,8 @@ arXiv のコンピュータサイエンス・暗号・セキュリティ分野�
    - 外部データベース（PostgreSQL / Elasticsearch / Redis / Neo4j）や OS 依存バイナリ（Poppler / pdftotext / Airflow）を必須とせず、**Python 3.14+ 標準ライブラリ主軸の Pure Python 実装** を採用。開発用端末、軽量コンテナ、閉域・エアギャップ環境でも容易にセットアップ・稼働可能です。
 3. **自律常駐型オーケストレーション & 多重頻度調停 (DSN-11 Rev 2.0)**:
    - 外部オーケストレーターに頼らず、インプロセス 5 フィールド Cron パーサーとスケジューラーを内蔵。4時間毎の高頻度ストリーム（CISA KEV）と日次バッチ（arXiv / IACR）、定期サマリー生成、週次 SOTA / カオス監査を単一プロセスツリーで調停します。
-4. **全領域統合セキュリティ知識オントロジー & グラフ可視化 (DSN-17, DSN-21, DSN-22)**:
-   - W3C OWL 準拠の Full-Spectrum SKO により、論文・攻撃手法・脆弱性・防御コード・前提条件・実証エビデンスを因果関係連鎖としてモデル化。ブラウザ統合コンソール上の **Schema View** および **CTI Knowledge Graph** で直感的に探索可能です（※ 注記: OWL DL ボキャブラリおよび内製ルール推論に準拠しており、Pellet/HermiT 等の外部自動推論エンジンは未統合です）。
+4. **全領域統合セキュリティ知識オントロジー & グラフ可視化 & Pure Python OWL 推論 (DSN-17, DSN-21, DSN-22, DSN-26)**:
+   - W3C OWL 準拠の Full-Spectrum SKO により、論文・攻撃手法・脆弱性・防御コード・前提条件・実証エビデンスを因果関係連鎖としてモデル化。先行する HermiT / Pellet 推論器をアルゴリズム規範としてトラッキングし、**Pure Python 完全自作の OWL DL / RL 推論エンジン (DSN-26)** により、外部 JVM / ライブラリ依存ゼロで論理無矛盾性検証（Tableau）および前向き演繹推論（Datalog）を実行します。
 5. **AI コーディングエージェントとの標準プロトコル（MCP）連携**:
    - 業界標準の **Model Context Protocol (MCP)** サーバーを標準装備。Cursor、Claude Desktop、Antigravity IDE などの AI ツールから、論文知識・技術動向・脅威モデル・実証エビデンス（原文引用・算定根拠付与）・システム可観測性データへ直接アクセス可能です。
 6. **科学的ベンチマークと極限耐障害性の実証**:
@@ -74,7 +74,7 @@ arXiv のコンピュータサイエンス・暗号・セキュリティ分野�
 2. [6層モジュールアーキテクチャ (6-Layer Modular Architecture)](#-2-6層モジュールアーキテクチャ-6-layer-modular-architecture)
 3. [閉ループ・インテリジェンス・ライフサイクル (Intelligence Lifecycle)](#-3-閉ループインテリジェンスライフサイクル-intelligence-lifecycle)
 4. [主要機能とサブシステム (Key Features & Subsystems)](#-4-主要機能とサブシステム-key-features--subsystems)
-5. [包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-22)](#-5-包括的設計書体系-design-specifications-dsn-01--dsn-22)
+5. [包括的設計書体系 (Design Specifications: DSN-01 〜 DSN-26)](#-5-包括的設計書体系-design-specifications-dsn-01--dsn-26)
 6. [クイックスタート (Quick Start)](#-6-クイックスタート-quick-start)
 7. [Makefile コマンド一覧 (Command Reference)](#-7-makefile-コマンド一覧-command-reference)
 8. [ディレクトリ構成 (Directory Structure)](#-8-ディレクトリ構成-directory-structure)
@@ -239,6 +239,10 @@ sequenceDiagram
 | **DSN-20** | [DSN-20-external_security_knowledge_ingestion_and_catalog_architecture.md](docs/designs/DSN-20-external_security_knowledge_ingestion_and_catalog_architecture.md) | `src/security/cti/` | 外部セキュリティ知識データセット（CISA KEV / NVD / ATT&CK）統合インジェスト設計書 |
 | **DSN-21** | [DSN-21-enterprise_design_system_and_unified_console.md](docs/designs/DSN-21-enterprise_design_system_and_unified_console.md) | `site/`, `src/web/` | エンタープライズ統合デザインシステム & クラウドコンソール UI 包括設計書 |
 | **DSN-22** | [DSN-22-security_and_threat_ontology_w3c_specification.md](docs/designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | `src/ontology/` | セキュリティ & 脅威オントロジー W3C 仕様書 (Full-Spectrum SKO / OWL DL) |
+| **DSN-23** | [DSN-23-hierarchical_state_machine_and_lifecycle_governance.md](docs/designs/DSN-23-hierarchical_state_machine_and_lifecycle_governance.md) | `src/core/hsm/` | ゼロ外部依存・高信頼階層型ステートマシン (HSM) 基盤設計書 |
+| **DSN-24** | [DSN-24-unified_management_cli_and_interactive_database_shell.md](docs/designs/DSN-24-unified_management_cli_and_interactive_database_shell.md) | `manage.py`, `src/cli/` | プロジェクト統合管理 CLI (manage.py) および対話型データベースシェル (dbshell) 設計書 |
+| **DSN-25** | [DSN-25-pure_python_packrat_peg_parser_engine.md](docs/designs/DSN-25-pure_python_packrat_peg_parser_engine.md) | `src/core/structures/peg.py` | 純粋 Python 製汎用 Packrat PEG ランタイム基盤および構文解析エンジン統合設計仕様書 |
+| **DSN-26** | [DSN-26-pure-python-owl-dl-reasoner.md](docs/designs/DSN-26-pure-python-owl-dl-reasoner.md) | `src/ontology/reasoner/` | 純粋 Python 製完全自作 OWL DL / RL 推論エンジンおよび先行推論器 (HermiT / Pellet) 参考実装トラッキング設計仕様書 |
 
 ---
 
