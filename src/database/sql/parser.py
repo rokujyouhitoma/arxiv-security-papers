@@ -6,7 +6,7 @@ Parses standard SQL statements into typed AST objects without external dependenc
 
 import ast as py_ast
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from .ast import (
     AlterTableAction,
@@ -47,6 +47,7 @@ from .ast import (
     UpdateStatement,
     VacuumStatement,
 )
+from .dml_parser import parse_dml
 from .dql_parser import parse_dql
 
 
@@ -1946,115 +1947,13 @@ class SQLParser:
         return [c.strip() for c in raw_cols.split(",")]
 
     def _parse_insert(self, sql: str) -> InsertStatement:
-        clean_sql, ret_cols = _extract_returning_clause(sql)
-        clean_sql, up_tgt, up_act, up_set = _extract_upsert_clause(clean_sql)
-        up_act = self._resolve_upsert_action(clean_sql, up_act)
-
-        sel_res = self._parse_insert_select_stmt(
-            clean_sql, ret_cols, up_tgt, up_act, up_set
-        )
-        if sel_res is not None:
-            return sel_res
-
-        m = re.match(
-            r"^(?:INSERT|REPLACE)\s+INTO\s+([a-zA-Z0-9_.]+)(?:\s*\((.*?)\))?\s+VALUES\s*(.+)$",
-            clean_sql,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if not m:
-            raise SQLParseError(f"Malformed INSERT syntax: {sql}")
-
-        tbl = m.group(1).strip()
-        cols = self._split_insert_cols(m.group(2))
-        rows = self._parse_insert_rows(m.group(3).strip(), len(cols))
-        first_val = rows[0] if rows else []
-        return InsertStatement(
-            command_type=SQLCommandType.INSERT,
-            raw_sql=sql,
-            table_name=tbl,
-            columns=cols,
-            values=first_val,
-            rows_values=rows,
-            upsert_target=up_tgt,
-            upsert_action=up_act,
-            upsert_update_set=up_set,
-            returning_cols=ret_cols,
-        )
+        return cast(InsertStatement, parse_dml(sql))
 
     def _parse_update(self, sql: str) -> UpdateStatement:
-        clean_sql, ret_cols = _extract_returning_clause(sql)
-        clean_sql, order_col, order_desc, limit_val = _extract_dml_order_and_limit(
-            clean_sql
-        )
-        clean_sql, where_raw = self._extract_where_clause(clean_sql)
-        where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
-
-        from_table: Optional[TableRef] = None
-        joins: List[JoinClause] = []
-        from_pos = _find_top_level_keyword_pos(clean_sql, r"FROM")
-        if from_pos:
-            f_start, f_end = from_pos
-            from_body = clean_sql[f_end:].strip()
-            from_table, joins = self._parse_from_and_joins(from_body)
-            clean_sql = clean_sql[:f_start].strip()
-
-        m = re.match(
-            r"UPDATE\s+(.+?)\s+SET\s+(.+)$",
-            clean_sql,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if not m:
-            raise SQLParseError(f"Malformed UPDATE syntax: {sql}")
-
-        table_name, indexed_by, not_indexed = _extract_index_hint(m.group(1).strip())
-        assignments, raw_assignments = _parse_set_assignments(m.group(2).strip())
-
-        return UpdateStatement(
-            command_type=SQLCommandType.UPDATE,
-            raw_sql=sql,
-            table_name=table_name,
-            assignments=assignments,
-            raw_assignments=raw_assignments,
-            from_table=from_table,
-            joins=joins,
-            where_clauses=where_clauses,
-            returning_cols=ret_cols,
-            order_by=order_col,
-            order_desc=order_desc,
-            limit=limit_val,
-            indexed_by=indexed_by,
-            not_indexed=not_indexed,
-        )
+        return cast(UpdateStatement, parse_dml(sql))
 
     def _parse_delete(self, sql: str) -> DeleteStatement:
-        clean_sql, ret_cols = _extract_returning_clause(sql)
-        clean_sql, order_col, order_desc, limit_val = _extract_dml_order_and_limit(
-            clean_sql
-        )
-        m = re.match(
-            r"DELETE\s+FROM\s+(.+?)(?:\s+WHERE\s+(.+))?$",
-            clean_sql,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if not m:
-            raise SQLParseError(f"Malformed DELETE syntax: {sql}")
-
-        table_name, indexed_by, not_indexed = _extract_index_hint(m.group(1).strip())
-        where_raw = m.group(2)
-        where_clauses = self._extract_where_clauses(where_raw) if where_raw else []
-
-        return DeleteStatement(
-            command_type=SQLCommandType.DELETE,
-            raw_sql=sql,
-            table_name=table_name,
-            where_clauses=where_clauses,
-            returning_cols=ret_cols,
-            order_by=order_col,
-            order_desc=order_desc,
-            limit=limit_val,
-            indexed_by=indexed_by,
-            not_indexed=not_indexed,
-        )
+        return cast(DeleteStatement, parse_dml(sql))
 
     def _parse_grant(self, sql: str) -> GrantStatement:
         m = re.match(

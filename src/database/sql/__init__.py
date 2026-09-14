@@ -21,6 +21,7 @@ from .ast import (
     SQLStatement,
     UpdateStatement,
 )
+from .dml_parser import SQLDMLParser, parse_dml
 from .dql_parser import SQLDQLParser, parse_dql
 from .executor import SQLExecutionError, SQLExecutor, TableCatalog
 from .expr_parser import (
@@ -82,4 +83,6 @@ __all__ = [
     "parse_sql_expr",
     "SQLDQLParser",
     "parse_dql",
+    "SQLDMLParser",
+    "parse_dml",
 ]

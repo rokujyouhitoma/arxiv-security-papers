@@ -362,4 +362,6 @@ Phase 2 の事前コンパイラを作成する際、`.peg` 文法定義ファ�
 - [x] `src/graph/query_dsl.py` に CTI グラフパスクエリ DSL パーサーが実装され、エンジンへ統合されていること（Issue #286、`tests/graph/test_graph_query_dsl.py` PASS）。
 - [x] `src/ontology/turtle_parser.py` に W3C Turtle 1.1 / RDF インジェストパーサーが実装され、トリプル抽出・プレフィックス解決ができること（Issue #287、`tests/ontology/test_turtle_parser.py` PASS）。
 - [x] `src/database/sql/expr_parser.py` に Packrat PEG SQL 式パーサーが実装され、複雑な論理式・算術式・CASE・関数呼び出しの AST 化ができること（Issue #288、`tests/database/test_sql_expr_peg.py` PASS）。
+- [x] `src/database/sql/dql_parser.py` に Packrat PEG DQL パーサーが実装され、SELECT/CTE/JOIN/SET/VALUES の AST 化および既存 SQLParser への委譲ができること（Issue #289、`tests/database/test_sql_dql_peg.py` PASS）。
+- [ ] `src/database/sql/dml_parser.py` に Packrat PEG DML パーサーが実装され、INSERT/UPDATE/DELETE/UPSERT/RETURNING の AST 化ができること（Issue #290）。
 - [x] 全品質ゲート（`make check_format` および `make static_analysis`）がエラー 0 件で通過すること。
