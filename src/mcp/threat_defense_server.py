@@ -723,16 +723,34 @@ def handle_search_defense_causal_chains(params: Dict[str, Any]) -> Dict[str, Any
     """Explores Full-Spectrum SKO causal pathways from attack/threat to defense mechanisms."""
     threat_id = str(params.get("threat_id", "")).strip()
     if not threat_id:
-        return {"status": "error", "message": "Missing required parameter 'threat_id'"}
-    max_depth = int(params.get("max_depth", 3))
-    min_confidence = float(params.get("min_confidence", 0.0))
+        return {
+            "status": "error",
+            "message": "Missing required parameter 'threat_id'",
+            "chains": [],
+        }
+    try:
+        max_depth = int(params.get("max_depth", 3))
+    except (ValueError, TypeError):
+        max_depth = 3
+    try:
+        min_confidence = float(params.get("min_confidence", 0.0))
+    except (ValueError, TypeError):
+        min_confidence = 0.0
 
-    from .tools.ontology_tools import CausalChainFinder
+    try:
+        from .tools.ontology_tools import CausalChainFinder
 
-    finder = CausalChainFinder()
-    return finder.find_defense_chains(
-        threat_id=threat_id, max_depth=max_depth, min_confidence=min_confidence
-    )
+        finder = CausalChainFinder()
+        return finder.find_defense_chains(
+            threat_id=threat_id, max_depth=max_depth, min_confidence=min_confidence
+        )
+    except Exception as exc:
+        return {
+            "status": "error",
+            "message": f"Failed to search defense causal chains: {exc}",
+            "threat_id": threat_id,
+            "chains": [],
+        }
 
 
 def handle_check_cve_kev_status(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -773,7 +791,7 @@ def handle_check_cve_kev_status(params: Dict[str, Any]) -> Dict[str, Any]:
 def _extract_paper_link_info(engine: Any, edge: Any) -> Dict[str, Any]:
     """Extracts paper metadata dictionary from edge and source node."""
     paper_node = engine.get_vertex(edge.src_id)
-    props = paper_node.properties if paper_node else {}
+    props: Dict[str, Any] = paper_node.properties if paper_node else {}
     title = props.get("title_ja") or props.get("name", edge.src_id)
     return {
         "paper_id": edge.src_id,

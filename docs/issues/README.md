@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **295** | システム監査所見の是正: テスト環境パス不整合修復、プロトタイプ仮の値（フォールバック固定値）の客観的抽出化、MCP耐障害性向上、およびドキュメント整合性回復 | Bug / Quality Improvement | 2026-09-15 | [295-remediate-audit-findings-test-failures-and-mcp-bugs.md](closed/295-remediate-audit-findings-test-failures-and-mcp-bugs.md) |
 | **294** | AOT PEG コンパイラ実戦投入: W3C Turtle 1.1 パーサーの AOT 化と運用パイプライン統合 | Feature | 2026-09-14 | [294-deploy-aot-peg-compiler-to-production-turtle-parser.md](closed/294-deploy-aot-peg-compiler-to-production-turtle-parser.md) |
 | **293** | DSN-25 Phase 2: Packrat PEG 事前コンパイラ (AOT Compiler) 基盤の実装 | Feature | 2026-09-14 | [293-implement-dsn25-phase2-peg-ahead-of-time-compiler.md](closed/293-implement-dsn25-phase2-peg-ahead-of-time-compiler.md) |
 | **292** | SQL Parser 残存手書き正規表現・文字列走査ロジックの完全撤廃と純粋 PEG 化 | Refactor | 2026-09-14 | [292-eliminate-legacy-regex-where-helpers-with-pure-peg.md](closed/292-eliminate-legacy-regex-where-helpers-with-pure-peg.md) |

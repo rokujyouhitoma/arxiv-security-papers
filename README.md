@@ -46,11 +46,11 @@ arXiv のコンピュータサイエンス・暗号・セキュリティ分野�
 3. **自律常駐型オーケストレーション & 多重頻度調停 (DSN-11 Rev 2.0)**:
    - 外部オーケストレーターに頼らず、インプロセス 5 フィールド Cron パーサーとスケジューラーを内蔵。4時間毎の高頻度ストリーム（CISA KEV）と日次バッチ（arXiv / IACR）、定期サマリー生成、週次 SOTA / カオス監査を単一プロセスツリーで調停します。
 4. **全領域統合セキュリティ知識オントロジー & グラフ可視化 (DSN-17, DSN-21, DSN-22)**:
-   - W3C OWL 準拠の Full-Spectrum SKO により、論文・攻撃手法・脆弱性・防御コード・前提条件・実証エビデンスを因果関係連鎖としてモデル化。ブラウザ統合コンソール上の **Schema View** および **CTI Knowledge Graph** で直感的に探索可能です。
+   - W3C OWL 準拠の Full-Spectrum SKO により、論文・攻撃手法・脆弱性・防御コード・前提条件・実証エビデンスを因果関係連鎖としてモデル化。ブラウザ統合コンソール上の **Schema View** および **CTI Knowledge Graph** で直感的に探索可能です（※ 注記: OWL DL ボキャブラリおよび内製ルール推論に準拠しており、Pellet/HermiT 等の外部自動推論エンジンは未統合です）。
 5. **AI コーディングエージェントとの標準プロトコル（MCP）連携**:
-   - 業界標準の **Model Context Protocol (MCP)** サーバーを標準装備。Cursor、Claude Desktop、Antigravity IDE などの AI ツールから、論文知識・技術動向・脅威モデル・システム可観測性データへ直接アクセス可能です。
+   - 業界標準の **Model Context Protocol (MCP)** サーバーを標準装備。Cursor、Claude Desktop、Antigravity IDE などの AI ツールから、論文知識・技術動向・脅威モデル・実証エビデンス（原文引用・算定根拠付与）・システム可観測性データへ直接アクセス可能です。
 6. **科学的ベンチマークと極限耐障害性の実証**:
-   - **SOTA IR ベンチマーク**: BEIR / CTI-Bench 評価基盤による定量的探索性能立証。
+   - **SOTA IR ベンチマーク**: BEIR / CTI-Bench 評価基盤による定量的探索性能立証（現行は合成データセット120件による感度検証。実論文データセットでの評価拡充を進行中）。
    - **カオス VFS & ARIES 復元**: 電源断・プロセス強制終了シミュレーション下でのデータ損失ゼロ（Zero Inconsistency）証明。
 
 ### 📊 特徴マトリクス
@@ -199,7 +199,7 @@ sequenceDiagram
 - **極限耐障害性 4層データベース基盤 & カオス VFS (`src/database/` / [DSN-05](docs/designs/DSN-05-database_engine_architecture.md))**:
   - 4KB SlottedPage, 2Q Buffer Pool, WAL & ARIES 障害回復, B+Tree, LSM-Tree, PAX 列指向, 分散 Raft / Saga / 2PC。**カオス VFS による電源断シミュレーション・ミューテーションテスト下でのデータ完全復旧証明済**。（**全モジュール Xenon 100% Rank A 達成**）
 - **2層分離検索エンジン基盤 & SOTA IR 評価 (`src/search/` / [DSN-04](docs/designs/DSN-04-search_engine_and_platform.md), [DSN-10](docs/designs/DSN-10-observability_and_eval_framework.md))**:
-  - Lucene パラダイム（BM25, AST, VByte）と Solr パラダイム（ManagedSchema, Facet, LRU Cache）の分離。HNSW ベクトル RRF 融合。**BEIR / CTI-Bench 準拠 SOTA IR ベンチマークランナー** による定量的検索精度保証。
+  - Lucene パラダイム（BM25, AST, VByte）と Solr パラダイム（ManagedSchema, Facet, LRU Cache）の分離。HNSW ベクトル RRF 融合。**BEIR / CTI-Bench 準拠 SOTA IR ベンチマークランナー** による定量的検索精度保証（※ 現行スコアは合成データセット120件による動作・感度検証値）。
 - **Gunicorn スタイル汎用プロセススーパーバイザー (`src/supervisor/` / [DSN-12](docs/designs/DSN-12-process_supervisor_and_arbiter.md))**:
   - Pre-fork ワーカーモデル、Erlang/OTP Supervisor ツリー構造、POSIX シグナル調停、Unix ドメインソケット IPC、ハートビート自己回復、`top` リアルタイムモニタリング CLI。Linux `PR_SET_PDEATHSIG` によるワーカー孤児化完全防止。
 - **外部セキュリティ知識データセット統合インジェスト (`src/security/cti/` / [DSN-20](docs/designs/DSN-20-external_security_knowledge_ingestion_and_catalog_architecture.md))**:
@@ -387,7 +387,7 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 │   ├── audits/                 # 監査レポート (database_resilience_report.md 等)
 │   ├── benchmarks/             # 性能評価レポート (sota_evaluation.md 等)
 │   ├── designs/                # 22大包括設計書体系 (DSN-01 〜 DSN-22)
-│   ├── issues/                 # Issue 台帳 & クローズ済み履歴 (closed/ — 001〜194)
+│   ├── issues/                 # Issue 台帳 & クローズ済み履歴 (closed/ — 001〜295)
 │   ├── manuals/                # ユーザーマニュアル (USR-01)
 │   ├── mcp/                    # MCP サーバ仕様書 (MCP-01)
 │   ├── processes/              # 文書管理台帳 (MNG-01, MNG-02)
@@ -454,7 +454,7 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 1. **トリプル品質ゲート (Triple Quality Gates)**:
    - 全コード変更は `make check` (`make check_format`, `make static_analysis`, `make test`) を 100% 通過する必要があります。
 2. **Issue 駆動開発**:
-   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（**Issue 001〜194 全194件完了**）。
+   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（**Issue 001〜295 全295件完了**）。
 3. **循環的複雑度（Cyclomatic Complexity）厳格管理**:
    - 全モジュールにおいて `xenon --max-absolute A --max-modules A --max-average A` および `radon cc -s -n B`（全関数 CC $\le 5$）を達成しています。
 4. **相対パス厳守**:

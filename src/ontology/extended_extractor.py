@@ -7,7 +7,7 @@ Extracts Preconditions, Research Gaps, Detection Rules, PoC Artifacts, and Venue
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from .schema import (
     BaseEntity,
@@ -258,8 +258,8 @@ class ExtendedExtractor:
         rule_ents, rule_trips = cls._extract_detection_rules(
             text.lower(), clean_id, paper_id
         )
-        all_ents: List[BaseEntity] = list(poc_ents) + list(rule_ents)
-        all_trips: List[Triple] = list(poc_trips) + list(rule_trips)
+        all_ents: List[BaseEntity] = [*poc_ents, *rule_ents]
+        all_trips: List[Triple] = [*poc_trips, *rule_trips]
         return all_ents, all_trips
 
     @classmethod
@@ -476,8 +476,8 @@ class ExtendedExtractor:
         return entities, triples
 
     @classmethod
-    def _extract_eval_environment(cls, text_lower: str) -> str:
-        """Determines target computing environment from text."""
+    def _extract_eval_environment(cls, text_lower: str) -> Optional[str]:
+        """Determines target computing environment from text, or None if unspecified."""
         for env_kw, env_name in [
             ("cloud", "Cloud/Kubernetes"),
             ("kernel", "Linux Kernel"),
@@ -488,21 +488,140 @@ class ExtendedExtractor:
         ]:
             if env_kw in text_lower:
                 return env_name
-        return "General Computing"
+        return None
+
+    @staticmethod
+    def _classify_metric_type(raw_kw: str) -> str:
+        """Classifies the raw metric keyword into standardized ontology metric types."""
+        kw_map = {
+            "asr": "AttackSuccessRate",
+            "success": "AttackSuccessRate",
+            "detection": "DetectionRate",
+            "false positive": "FalsePositiveRate",
+            "precision": "Precision",
+            "recall": "Recall",
+        }
+        for k, v in kw_map.items():
+            if k in raw_kw:
+                return v
+        return "Accuracy"
+
+    @staticmethod
+    def _extract_sentence_snippet(text: str, match_start: int, match_end: int) -> str:
+        """Extracts the sentence containing the metric as audit evidence snippet."""
+        start = max(0, text.rfind(".", 0, match_start) + 1)
+        end = text.find(".", match_end)
+        end_idx = end + 1 if end != -1 else len(text)
+        return text[start:end_idx].strip()[:256]
 
     @classmethod
-    def _extract_success_rate(cls, text_lower: str) -> float:
-        """Extracts empirical evaluation success/accuracy rate."""
-        acc_match = re.search(
-            r"(\d{1,3}(?:\.\d+)?)\s*%\s*(?:accuracy|success|precision|recall|detection)",
+    def _extract_metric_details(cls, text: str) -> Tuple[Optional[float], str, str]:
+        """Extracts empirical metric value, classified metric type, and raw evidence snippet."""
+        text_lower = text.lower()
+        match = re.search(
+            r"(\d{1,3}(?:\.\d+)?)\s*%\s*(accuracy|success|precision|recall|detection|false positive|asr)",
             text_lower,
         )
-        if not acc_match:
-            return 95.0
+        if not match:
+            return None, "EmpiricalObservation", ""
+
         try:
-            return float(acc_match.group(1))
+            val = float(match.group(1))
         except ValueError:
-            return 95.0
+            return None, "EmpiricalObservation", ""
+
+        metric_type = cls._classify_metric_type(match.group(2))
+        snippet = cls._extract_sentence_snippet(text, match.start(), match.end())
+        return val, metric_type, snippet
+
+    @classmethod
+    def _compute_confidence_score(
+        cls, metric_type: str, has_env: bool, text_lower: str
+    ) -> Tuple[float, str]:
+        """Calculates audit-verifiable confidence score f_conf and transparent rationale."""
+        w_metric = 1.0 if metric_type != "EmpiricalObservation" else 0.6
+        w_env = 1.0 if has_env else 0.4
+        eval_verbs = ("achieve", "evaluate", "report", "reach", "measure", "outperform")
+        has_eval_verb = any(v in text_lower for v in eval_verbs)
+        w_syntax = 1.0 if has_eval_verb else 0.5
+
+        conf = round(w_metric * 0.4 + w_env * 0.3 + w_syntax * 0.3, 2)
+        rationale = (
+            f"f_conf={conf:.2f} (w_metric={w_metric} [{metric_type}], "
+            f"w_env={w_env}, w_syntax={w_syntax})"
+        )
+        return conf, rationale
+
+    @staticmethod
+    def _build_tech_triples(
+        eval_id: str, tech_entities: List[BaseEntity], conf: float
+    ) -> List[Triple]:
+        """Builds technique evaluation triples."""
+        return [
+            Triple(
+                subject_id=eval_id,
+                predicate=Predicate.EVALUATES_TECHNIQUE,
+                object_id=tech.id,
+                weight=round(conf * 0.9, 2),
+            )
+            for tech in tech_entities
+        ]
+
+    @classmethod
+    def _build_evaluation_evidence(
+        cls,
+        clean_id: str,
+        paper_id: str,
+        claim_id: str,
+        success_rate: Optional[float],
+        metric_type: str,
+        snippet: str,
+        env: Optional[str],
+        text_lower: str,
+        tech_entities: List[BaseEntity],
+    ) -> Tuple[List[BaseEntity], List[Triple]]:
+        """Constructs reified EvaluationResult entity with full audit provenance."""
+        if success_rate is None and env is None:
+            return [], []
+
+        env_str = env or "Unspecified Environment"
+        rate_str = f"{success_rate}%" if success_rate is not None else "Observed"
+        eval_id = f"EvaluationResult:{clean_id}:Empirical"
+        conf, rationale = cls._compute_confidence_score(
+            metric_type=metric_type, has_env=env is not None, text_lower=text_lower
+        )
+
+        evaluation = EvaluationResultEntity(
+            id=eval_id,
+            entity_type=EntityType.EVALUATION_RESULT,
+            name=f"Empirical Evaluation ({rate_str} {metric_type} on {env_str})",
+            evaluation_id=f"eval-{clean_id}",
+            metric_name=metric_type,
+            metric_type=metric_type,
+            value=success_rate,
+            success_rate=success_rate,
+            target_environment=env_str,
+            evidence_snippet=snippet,
+            confidence_score=conf,
+            confidence_rationale=rationale,
+        )
+
+        triples = [
+            Triple(
+                subject_id=paper_id,
+                predicate=Predicate.YIELDS_EVALUATION,
+                object_id=eval_id,
+                weight=conf,
+            ),
+            Triple(
+                subject_id=eval_id,
+                predicate=Predicate.EVALUATES_CLAIM,
+                object_id=claim_id,
+                weight=conf,
+            ),
+        ]
+        triples.extend(cls._build_tech_triples(eval_id, tech_entities, conf))
+        return [evaluation], triples
 
     @classmethod
     def extract_claims_and_evidence(
@@ -513,11 +632,7 @@ class ExtendedExtractor:
         paper_id: str,
         tech_entities: List[BaseEntity],
     ) -> Tuple[List[BaseEntity], List[Triple]]:
-        """Extracts Claim and EvaluationResult entities and connects them to Paper and Techniques."""
-        entities: List[BaseEntity] = []
-        triples: List[Triple] = []
-
-        # 1. Main Research Claim
+        """Extracts Claim and empirical EvaluationResult entities with transparent accountability."""
         claim_id = f"Claim:{clean_id}:Proposition"
         title = meta.get("title", f"Paper {clean_id}")
         claim = ClaimEntity(
@@ -530,63 +645,31 @@ class ExtendedExtractor:
                 "DefenseEfficacy" if "defense" in text.lower() else "AttackDiscovery"
             ),
         )
-        entities.append(claim)
-        triples.append(
+        entities: List[BaseEntity] = [claim]
+        triples: List[Triple] = [
             Triple(
                 subject_id=paper_id,
                 predicate=Predicate.ASSERTS_CLAIM,
                 object_id=claim_id,
                 weight=1.0,
             )
-        )
+        ]
 
-        # 2. Reified Evaluation Result (Evidence)
         text_lower = text.lower()
-        success_rate = cls._extract_success_rate(text_lower)
-        env = cls._extract_eval_environment(text_lower)
-
-        eval_id = f"EvaluationResult:{clean_id}:Empirical"
-        evaluation = EvaluationResultEntity(
-            id=eval_id,
-            entity_type=EntityType.EVALUATION_RESULT,
-            name=f"Empirical Evaluation ({success_rate}% on {env})",
-            evaluation_id=f"eval-{clean_id}",
-            metric_name="SuccessRate",
-            value=success_rate,
-            success_rate=success_rate,
-            target_environment=env,
+        val, metric_type, snippet = cls._extract_metric_details(text)
+        ev_entities, ev_triples = cls._build_evaluation_evidence(
+            clean_id=clean_id,
+            paper_id=paper_id,
+            claim_id=claim_id,
+            success_rate=val,
+            metric_type=metric_type,
+            snippet=snippet,
+            env=cls._extract_eval_environment(text_lower),
+            text_lower=text_lower,
+            tech_entities=tech_entities,
         )
-        entities.append(evaluation)
-
-        # Triples: Paper -> YIELDS_EVALUATION -> EvaluationResult
-        triples.append(
-            Triple(
-                subject_id=paper_id,
-                predicate=Predicate.YIELDS_EVALUATION,
-                object_id=eval_id,
-                weight=1.0,
-            )
-        )
-        # Triples: EvaluationResult -> EVALUATES_CLAIM -> Claim
-        triples.append(
-            Triple(
-                subject_id=eval_id,
-                predicate=Predicate.EVALUATES_CLAIM,
-                object_id=claim_id,
-                weight=0.95,
-            )
-        )
-        # Triples: EvaluationResult -> EVALUATES_TECHNIQUE -> AttackTechnique
-        for tech in tech_entities:
-            triples.append(
-                Triple(
-                    subject_id=eval_id,
-                    predicate=Predicate.EVALUATES_TECHNIQUE,
-                    object_id=tech.id,
-                    weight=0.9,
-                )
-            )
-
+        entities.extend(ev_entities)
+        triples.extend(ev_triples)
         return entities, triples
 
     @classmethod

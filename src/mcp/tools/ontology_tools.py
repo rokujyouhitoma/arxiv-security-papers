@@ -52,7 +52,12 @@ class CausalChainFinder:
 
     def _get_engine(self) -> PropertyGraphEngine:
         if self._engine is None:
-            self._engine = PropertyGraphEngine(workspace_dir=self.workspace_dir)
+            try:
+                self._engine = PropertyGraphEngine(workspace_dir=self.workspace_dir)
+            except Exception:
+                self._engine = PropertyGraphEngine(
+                    workspace_dir=self.workspace_dir, memory_only=True
+                )
         return self._engine
 
     def _find_by_prefix(
@@ -189,38 +194,51 @@ class CausalChainFinder:
         """Discovers causal defense pathways for the specified threat identifier."""
         clean_id = _sanitize_identifier(threat_id)
         if not clean_id:
-            return {"status": "error", "message": "Invalid or empty threat_id"}
-
-        target_vtx = self._find_matching_vertex(clean_id)
-        if not target_vtx:
             return {
-                "status": "not_found",
-                "message": f"Threat entity '{clean_id}' not found in ontology graph",
-                "threat_id": clean_id,
+                "status": "error",
+                "message": "Invalid or empty threat_id",
                 "chains": [],
             }
 
-        effective_conf = max(0.0, min(1.0, float(min_confidence)))
-        impacts = self._collect_impacts(target_vtx.id, effective_conf)
-        preconditions = self._collect_preconditions(target_vtx.id, effective_conf)
-        direct_mitigations = self._collect_direct_mitigations(
-            target_vtx.id, effective_conf
-        )
+        try:
+            target_vtx = self._find_matching_vertex(clean_id)
+            if not target_vtx:
+                return {
+                    "status": "not_found",
+                    "message": f"Threat entity '{clean_id}' not found in ontology graph",
+                    "threat_id": clean_id,
+                    "chains": [],
+                }
 
-        return {
-            "status": "success",
-            "threat_id": target_vtx.id,
-            "threat_name": target_vtx.properties.get("name", target_vtx.id),
-            "threat_label": target_vtx.label,
-            "impacts": impacts,
-            "preconditions": preconditions,
-            "direct_mitigations": direct_mitigations,
-            "summary": {
-                "impact_count": len(impacts),
-                "precondition_count": len(preconditions),
-                "direct_mitigation_count": len(direct_mitigations),
-            },
-        }
+            effective_conf = max(0.0, min(1.0, float(min_confidence)))
+            impacts = self._collect_impacts(target_vtx.id, effective_conf)
+            preconditions = self._collect_preconditions(target_vtx.id, effective_conf)
+            direct_mitigations = self._collect_direct_mitigations(
+                target_vtx.id, effective_conf
+            )
+
+            return {
+                "status": "success",
+                "threat_id": target_vtx.id,
+                "threat_name": target_vtx.properties.get("name", target_vtx.id),
+                "threat_label": target_vtx.label,
+                "impacts": impacts,
+                "preconditions": preconditions,
+                "direct_mitigations": direct_mitigations,
+                "summary": {
+                    "impact_count": len(impacts),
+                    "precondition_count": len(preconditions),
+                    "direct_mitigation_count": len(direct_mitigations),
+                },
+                "chains": direct_mitigations,
+            }
+        except Exception as exc:
+            return {
+                "status": "error",
+                "message": f"Error searching defense causal chains: {exc}",
+                "threat_id": clean_id,
+                "chains": [],
+            }
 
 
 class EvidenceInspector:
@@ -239,7 +257,12 @@ class EvidenceInspector:
 
     def _get_engine(self) -> PropertyGraphEngine:
         if self._engine is None:
-            self._engine = PropertyGraphEngine(workspace_dir=self.workspace_dir)
+            try:
+                self._engine = PropertyGraphEngine(workspace_dir=self.workspace_dir)
+            except Exception:
+                self._engine = PropertyGraphEngine(
+                    workspace_dir=self.workspace_dir, memory_only=True
+                )
         return self._engine
 
     def _resolve_entity(self, entity_id: str) -> Optional[Vertex]:
@@ -277,13 +300,25 @@ class EvidenceInspector:
             root_id, "YIELDS_EVALUATION", "EVALUATES", "EVALUATES_CLAIM"
         ):
             ev_vtx = engine.get_vertex(edge.dst_id)
+            ev_props = ev_vtx.properties if ev_vtx else {}
+            snippet = ev_props.get("evidence_snippet", "") or edge.properties.get(
+                "evidence_snippet", ""
+            )
             evaluations.append(
                 {
                     "evaluation_id": edge.dst_id,
                     "predicate": edge.label,
-                    "properties": ev_vtx.properties if ev_vtx else {},
+                    "metric_type": ev_props.get("metric_type", ""),
+                    "metric_name": ev_props.get("metric_name", ""),
+                    "value": ev_props.get("value"),
+                    "target_environment": ev_props.get("target_environment", ""),
+                    "evidence_snippet": snippet,
+                    "confidence_score": ev_props.get(
+                        "confidence_score", edge.get_confidence()
+                    ),
+                    "confidence_rationale": ev_props.get("confidence_rationale", ""),
+                    "properties": ev_props,
                     "confidence": edge.get_confidence(),
-                    "evidence_snippet": edge.properties.get("evidence_snippet", ""),
                 }
             )
         return evaluations
@@ -322,7 +357,9 @@ class EvidenceInspector:
 
         claims = self._gather_claims(target_vtx.id)
         evaluations = self._gather_evaluations(target_vtx.id)
-        pocs = self._gather_pocs(target_vtx.id) if include_pocs else []
+        pocs: List[Dict[str, Any]] = (
+            self._gather_pocs(target_vtx.id) if include_pocs else []
+        )
 
         return {
             "status": "success",

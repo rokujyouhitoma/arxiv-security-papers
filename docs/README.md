@@ -90,11 +90,11 @@
 
 ### 5. Issue 台帳 ＆ 履歴 (Issues & Task Ledger)
 - 🎯 **[[ISS-00] Issue 台帳 (Issue Ledger)](issues/README.md)**
-  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — **Issue 001〜194 全194件完了**)。
+  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — **Issue 001〜295 全295件完了**)。
 
 ### 6. ベンチマーク ＆ 監査レポート (Benchmarks & Audits)
 - 📊 **[SOTA IR ベンチマーク評価レポート](benchmarks/sota_evaluation.md)**
-  - BEIR / CTI-Bench 準拠 ハイブリッド検索 (BM25 + HNSW + Graph) の定量的 SOTA 性能立証レポート。
+  - BEIR / CTI-Bench 準拠 ハイブリッド検索 (BM25 + HNSW + Graph) の性能検証レポート（※現在120件の合成クエリ評価セットに基づく検証を実施、実データ拡大検証を進行中）。
 - 🛡️ **[データベース耐障害性・ARIES 復旧完全性監査レポート](audits/database_resilience_report.md)**
   - ChaosVFS による電源断シミュレーション・ミューテーションテスト下でのデータ完全復旧証明レポート。
 - ⚖️ **[Pure Python DB vs sqlite3 挙動同等性・差異監査報告書](audits/pure_python_db_vs_sqlite3_differential_report.md)**

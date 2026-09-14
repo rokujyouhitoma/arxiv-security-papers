@@ -897,13 +897,17 @@ class ClaimEntity(BaseEntity):
 
 @dataclass
 class EvaluationResultEntity(BaseEntity):
-    """EvaluationResult entity reifying experimental metrics and execution environments."""
+    """EvaluationResult entity reifying experimental metrics and execution environments with audit provenance."""
 
     evaluation_id: str = ""
     metric_name: str = "Accuracy"
-    value: float = 0.0
-    success_rate: float = 0.0
-    target_environment: str = "Linux/Cloud"
+    metric_type: str = "Accuracy"
+    value: Optional[float] = None
+    success_rate: Optional[float] = None
+    target_environment: str = ""
+    evidence_snippet: str = ""
+    confidence_score: float = 1.0
+    confidence_rationale: str = ""
 
     def __post_init__(self) -> None:
         self.entity_type = EntityType.EVALUATION_RESULT
