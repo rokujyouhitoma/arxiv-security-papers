@@ -99,8 +99,8 @@ Target Branch: `fix/295-remediate-audit-findings-test-failures-and-mcp-bugs`
 ---
 
 ## 5. 完了条件 (Definition of Done)
-- [ ] `pyproject.toml` およびテスト閾値の調整により、全テストスイートが 100% PASS すること。
-- [ ] `query_ontology_evidence` が証拠のない論文に対して仮の値（95.0% on General Computing）を返さず、客観的抽出結果（None / 抽出なし）を返すこと。
-- [ ] `search_defense_causal_chains` が例外クラッシュを起こさず、任意の引数に対して安全に応答すること。
-- [ ] `README.md` および `docs/README.md` の Issue 完了数、テスト実測、推論エンジン・ベンチマークの制限事項が正確に記述されていること。
-- [ ] `mypy --strict` (0 errors)、Xenon Grade A ($CC \le 4$)、flake8 (0 errors) を完全に満たしていること。
+- [x] `pyproject.toml` およびテスト閾値の調整により、全テストスイートが 100% PASS すること。
+- [x] `query_ontology_evidence` が証拠のない論文に対して仮の値（95.0% on General Computing）を返さず、客観的抽出結果（None / 抽出なし）を返すこと。
+- [x] `search_defense_causal_chains` が例外クラッシュを起こさず、任意の引数に対して安全に応答すること。
+- [x] `README.md` および `docs/README.md` の Issue 完了数、テスト実測、推論エンジン・ベンチマークの制限事項が正確に記述されていること。
+- [x] `mypy --strict` (0 errors)、Xenon Grade A ($CC \le 4$)、flake8 (0 errors) を完全に満たしていること。
