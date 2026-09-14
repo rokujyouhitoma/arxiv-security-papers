@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **289** | DQL & 派生クエリ (SELECT / CTE / JOIN / SET / VALUES) の Packrat PEG パーサー化 (DSN-25 Phase 2-B) | Feature | 2026-09-14 | [289-implement-packrat-peg-dql-parser.md](closed/289-implement-packrat-peg-dql-parser.md) |
 | **288** | SQL 複雑式（論理演算・比較・CASE・関数）向け Packrat PEG 式パーサーの実装 (DSN-25 / DSN-05 連携) | Feature | 2026-09-14 | [288-implement-packrat-peg-sql-expression-parser.md](closed/288-implement-packrat-peg-sql-expression-parser.md) |
 | **287** | W3C Turtle 1.1 / RDF インジェストパーサーの Packrat PEG による実装 (DSN-25 / Issue 199 連携) | Feature | 2026-09-14 | [287-implement-packrat-peg-w3c-turtle-parser.md](closed/287-implement-packrat-peg-w3c-turtle-parser.md) |
 | **286** | CTI ナレッジグラフ向け Packrat PEG パスクエリ DSL の実装 (DSN-25 / DSN-18 連携) | Feature | 2026-09-14 | [286-implement-packrat-peg-graph-query-dsl.md](closed/286-implement-packrat-peg-graph-query-dsl.md) |

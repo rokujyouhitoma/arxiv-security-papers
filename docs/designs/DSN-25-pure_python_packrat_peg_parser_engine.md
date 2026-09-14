@@ -248,8 +248,12 @@ Xenon Grade A（サイクロマティック複雑度 $CC \le 4$）および mypy
 - 単一語句、フィールド指定 (`title:ransomware`, `year:2024`)、フレーズ検索 (`"supply chain"`、slop `~2`)、ブーリアン演算子 (`AND`, `OR`, `NOT`, `+`, `-`)、および多段括弧ネスト (`(A OR B) AND -(C OR D)`) を Packrat PEG により $O(N)$ 線形時間で AST 構築。
 - 関連テスト: [`tests/search/test_query_parser_peg.py`](../../tests/search/test_query_parser_peg.py) (全項目 PASS)
 
-### 5.2 データベースエンジン: SQL 複雑式の PEG 連携 (実装完了: Issue #288)
+### 5.2 データベースエンジン: SQL パーサーの Packrat PEG 完全換装 (Phase 2)
 
+従来 `src/database/sql/parser.py` は 2,100 行を超えるアドホックな正規表現と文字列置換で実装されており、複雑なネストや演算子優先順位の解釈において ReDoS や構文エラーのリスクを抱えていた。
+これを解決するため、Packrat PEG エンジンによる段階的完全換装を実施する。
+
+#### 5.2.1 Phase 2-A: SQL 式（Expression）パーサー (実装完了: Issue #288)
 [`src/database/sql/expr_parser.py`](../../src/database/sql/expr_parser.py) を新規開発し、Packrat PEG エンジンによる SQL 式（Expression）パーサーを確立：
 - リテラル（数値、シングル/ダブル引用符文字列、`TRUE`/`FALSE`/`NULL`）、列参照（`col`, `table.col`, `col->>'key'`）
 - 算術演算子（`+`, `-`, `*`, `/`, `%`）の優先順位制御、単項演算子（`+`, `-`, `NOT`）
@@ -258,6 +262,15 @@ Xenon Grade A（サイクロマティック複雑度 $CC \le 4$）および mypy
 - 関数呼び出し（`COUNT(*)`, `COALESCE(...)`）、CASE 条件分岐式（Searched CASE / Simple CASE）
 - 既存 RDBMS 実行エンジンへの透過的ブリッジ（`to_legacy_dict()`）および SQL 再シリアライズ（`to_sql()`）
 - 関連テスト: [`tests/database/test_sql_expr_peg.py`](../../tests/database/test_sql_expr_peg.py) (全 21 項目 100% PASS)
+
+#### 5.2.2 Phase 2-B: DQL & 派生クエリ構文の PEG 換装 (進行中: Issue #289)
+`SELECT`, CTE (`WITH [RECURSIVE]`), `FROM` 句（テーブル・派生サブクエリ・JOIN 結合構文）、`WHERE` 句（`expr_parser` 統合）、`GROUP BY`, `HAVING`, ウィンドウ関数（`OVER (...)`）、集合演算（`UNION`, `INTERSECT`, `EXCEPT`）、スタンドアロン `VALUES` 句を PEG 文法として定義。
+
+#### 5.2.3 Phase 2-C: DML 構文の PEG 換装 (計画: Issue #290)
+`INSERT INTO` / `REPLACE INTO`（VALUES 挿入、SELECT 挿入）、`UPDATE ... FROM`、`DELETE FROM`、`UPSERT` (`ON CONFLICT DO UPDATE/NOTHING`)、`RETURNING` 句を PEG 文法として定義。
+
+#### 5.2.4 Phase 2-D: DDL / TCL / DCL & 管理構文の PEG 換装と完全統合 (計画: Issue #291)
+`CREATE TABLE` (STRICT / GENERATED ALWAYS AS), `ALTER TABLE`, `CREATE INDEX`, `CREATE VIEW`, `CREATE TRIGGER`, `VIRTUAL TABLE`, `ATTACH/DETACH DATABASE`, `BEGIN/COMMIT/ROLLBACK/SAVEPOINT`, `PRAGMA`, `VACUUM`, `ANALYZE`, `EXPLAIN`, `SHOW`, `GRANT/REVOKE` を PEG 化し、`src/database/sql/parser.py` を Packrat PEG ベースの `SQLParser` として完全一本化。旧正規表現コードを全廃止。
 
 ### 5.3 グラフエンジン: Canvas 向け CTI パスクエリ DSL (実装完了: Issue #286)
 

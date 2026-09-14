@@ -21,6 +21,7 @@ from .ast import (
     SQLStatement,
     UpdateStatement,
 )
+from .dql_parser import SQLDQLParser, parse_dql
 from .executor import SQLExecutionError, SQLExecutor, TableCatalog
 from .expr_parser import (
     BetweenExpr,
@@ -79,4 +80,6 @@ __all__ = [
     "CaseExpr",
     "SQLExpressionParser",
     "parse_sql_expr",
+    "SQLDQLParser",
+    "parse_dql",
 ]

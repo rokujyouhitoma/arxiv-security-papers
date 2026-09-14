@@ -47,6 +47,7 @@ from .ast import (
     UpdateStatement,
     VacuumStatement,
 )
+from .dql_parser import parse_dql
 
 
 class SQLParseError(Exception):
@@ -1391,33 +1392,11 @@ class SQLParser:
         return cte_def, remaining
 
     def _parse_cte(self, sql: str) -> SelectStatement:
-        """
-        Parses WITH [RECURSIVE] name [(cols...)] AS (SELECT ...) [, ...] SELECT ...
-        """
-        is_recursive = bool(re.match(r"^WITH\s+RECURSIVE\s+", sql, re.IGNORECASE))
-        header_match = re.match(r"^WITH(\s+RECURSIVE)?\s+", sql, re.IGNORECASE)
-        if not header_match:
-            raise SQLParseError(f"Malformed WITH syntax: {sql}")
-
-        rest = sql[header_match.end() :].strip()
-        ctes: List[CTEDefinition] = []
-
-        while True:
-            res = self._extract_single_cte(rest, is_recursive)
-            if not res:
-                break
-            cte_def, rest = res
-            ctes.append(cte_def)
-
-        if not rest.upper().startswith("SELECT"):
-            raise SQLParseError(
-                f"Expected SELECT query following CTE definitions, got: {rest}"
-            )
-
-        main_stmt = self._parse_select(rest)
-        main_stmt.ctes = ctes
-        main_stmt.raw_sql = sql
-        return main_stmt
+        """Parses WITH [RECURSIVE] name [(cols...)] AS (SELECT ...) [, ...] SELECT ..."""
+        try:
+            return parse_dql(sql)
+        except Exception as e:
+            raise SQLParseError(str(e)) from e
 
     @staticmethod
     def _assign_compound_stmt(
@@ -1485,21 +1464,10 @@ class SQLParser:
         return results
 
     def _parse_select(self, sql: str) -> SelectStatement:
-        compounds = self._split_all_top_level_compounds(sql)
-        if len(compounds) > 1:
-            _, first_sql = compounds[0]
-            base_stmt = self._parse_single_select(first_sql)
-            for op, part_sql in compounds[1:]:
-                if op is not None:
-                    part_stmt = self._parse_single_select(part_sql)
-                    base_stmt.compounds.append((op, part_stmt))
-            first_op, first_right_sql = compounds[1]
-            if first_op is not None:
-                first_right_stmt = self._parse_single_select(first_right_sql)
-                self._assign_compound_stmt(base_stmt, first_op, first_right_stmt)
-            return base_stmt
-
-        return self._parse_single_select(sql)
+        try:
+            return parse_dql(sql)
+        except Exception as e:
+            raise SQLParseError(str(e)) from e
 
     def _check_union_at_pos(self, sql: str, i: int) -> Optional[Tuple[str, str, str]]:
         """Checks for compound operator match at index i."""
