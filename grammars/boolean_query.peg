@@ -1,0 +1,45 @@
+# Boolean Search Query Grammar
+grammar BooleanQuery
+
+query = ws e:expr ws { return e }
+
+expr = left:or_expr rest:(ws "AND" ws right:or_expr)* {
+    if not rest:
+        return left
+    clauses = [left] + [r[3] for r in rest]
+    return {"op": "AND", "clauses": clauses}
+}
+
+or_expr = left:not_expr rest:(ws "OR" ws right:not_expr)* {
+    if not rest:
+        return left
+    clauses = [left] + [r[3] for r in rest]
+    return {"op": "OR", "clauses": clauses}
+}
+
+not_expr = "NOT" ws primary:primary_expr {
+    return {"op": "NOT", "clause": primary}
+} / primary_expr
+
+primary_expr = "(" ws e:expr ws ")" { return e }
+             / field_clause
+             / phrase_clause
+             / term_clause
+
+field_clause = f:identifier ":" v:term_clause {
+    return {"field": f, "value": v}
+}
+
+phrase_clause = '"' s:/[^"]*/ '"' {
+    return {"phrase": s}
+}
+
+term_clause = word:/[A-Za-z0-9_-]+/ {
+    return {"term": word}
+}
+
+identifier = id_str:/[A-Za-z_][A-Za-z0-9_]*/ {
+    return id_str
+}
+
+ws = /[ \t\r\n]*/

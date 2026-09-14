@@ -304,40 +304,57 @@ Issue #199（W3C Turtle エクスポート）に続くインポート機能と�
 
 ---
 
-## 6. 将来の事前コード生成型パーサージェネレータ (Ahead-of-Time Compiler) 進化ロードマップ
+---
 
-### 6.1 2段階進化戦略 (Phase 1 ランタイム → Phase 2 コンパイラ)
+## 6. 事前コード生成型パーサージェネレータ (Ahead-of-Time Compiler) (Phase 2 実装完了: Issue #293)
+
+### 6.1 2段階進化戦略の完遂 (Phase 1 ランタイム → Phase 2 コンパイラ)
 
 ```mermaid
 graph TD
-    subgraph Phase 1 [Phase 1: 現在（即効性・低工数）]
-        P1_Core["src/core/structures/peg.py<br/>(インメモリ Packrat ランタイム)"]
-        Search["src/search/query/query_parser.py"]
-        Graph["src/graph/query DSL"]
+    subgraph Phase 1 [Phase 1: インメモリ Packrat ランタイム]
+        P1_Core["src/core/structures/peg.py<br/>(共通 Packrat PEG エンジン)"]
+        Search["検索クエリ DSL (Issue #285)"]
+        Graph["CTI グラフパスクエリ (Issue #286)"]
+        Turtle["W3C Turtle インジェスト (Issue #287)"]
+        SQL["SQL 全層 (Issue #288-292)"]
         P1_Core --> Search
         P1_Core --> Graph
+        P1_Core --> Turtle
+        P1_Core --> SQL
     end
 
-    subgraph Phase 2 [Phase 2: 将来（本格コンパイラ化）]
-        MetaPeg["grammars/sql.peg<br/>grammars/turtle.peg"]
-        Compiler["tools/peg_compiler/codegen.py<br/>(事前コード生成器)"]
-        GenCode["src/generated/*_parser.py<br/>(生成された静的パーサーコード)"]
+    subgraph Phase 2 [Phase 2: 事前コード生成コンパイラ (Issue #293)]
+        GrammarFile["grammars/*.peg<br/>(文法仕様ファイル)"]
+        MetaParser["src/core/structures/peg_compiler/meta_grammar.py<br/>(セルフホスティング・ブートストラップ)"]
+        CodeGen["src/core/structures/peg_compiler/codegen.py<br/>(コードエミッター)"]
+        CLI["tools/peg_compiler/compile_peg.py<br/>(CLI ツール)"]
+        GenParser["generated/*_parser.py<br/>(静的 Python パーサーコード)"]
         
-        P1_Core -.->|ブートストラップ<br/>文法定義のパースに利用| Compiler
-        MetaPeg --> Compiler
-        Compiler --> GenCode
-        GenCode -->|実行時共通基盤として参照| P1_Core
+        P1_Core -.->|ブートストラップ<br/>コンビネータによりパース| MetaParser
+        GrammarFile --> MetaParser
+        MetaParser --> CodeGen
+        CodeGen --> GenParser
+        CLI --> CodeGen
+        GenParser -->|実行時共通基盤として参照| P1_Core
     end
 ```
 
-### 6.2 PEG メタ文法によるセルフホスティング (ブートストラップ) 仕様
+### 6.2 PEG メタ文法によるセルフホスティング (ブートストラップ)
 
-Phase 2 の事前コンパイラを作成する際、`.peg` 文法定義ファイルそのものをパースするために、Phase 1 の `peg.py` を用いてセルフホスティングを行う。
+[`src/core/structures/peg_compiler/meta_grammar.py`](../../src/core/structures/peg_compiler/meta_grammar.py) は、`src/core/structures/peg.py` の Packrat PEG コンビネータ（`Lit`, `Reg`, `Seq`, `Choice`, `OneOrMore`, `Opt`, `RuleRef`, `NotPred`）を用いて自ら `.peg` 記法を構文解析する。
+- 終端トークン: 引用符文字列 (`"..."`, `'...'`)、正規表現 (`/pattern/`)、識別子
+- 式演算子: 順序付き選択 (`/`, `|`)、連接、反復 (`*`, `+`)、省略可能 (`?`)、先読み (`&`, `!`)
+- 構文拡張: 変数ラベルバインド (`name:expr`)、および多段波括弧ネスト対応セマンティックアクション (`{ python_code }`)
+- 先読み防御: ルール宣言先読み (`!Seq(ident, "=")`) により、連続識別子の貪欲消費を完全防止。
 
-### 6.3 静的コードエミッター (`tools/peg_compiler/codegen.py`) 構想
+### 6.3 静的コードエミッター (`codegen.py`) と CLI ツール
 
-文法 AST を入力とし、再帰関数呼び出しをインライン展開した最適化 Python ソースコードを出力するエミッター。
-生成されたコードは `src/core/structures/peg.py` の `ParseContext` および `ParseResult` をランタイムライブラリとしてインポートして高速動作する。
+[`src/core/structures/peg_compiler/codegen.py`](../../src/core/structures/peg_compiler/codegen.py) は、`GrammarDef` AST を入力とし、純粋 Python の静的パーサークラスを出力する。
+- 自動インデント補正 (`textwrap.dedent`)
+- 変数バインドの自動アンパック展開 (`left = val[0]`, `rest = val[1]`)
+- 単一式・複数文のセマンティックアクション関数の静的生成
+- `tools/peg_compiler/compile_peg.py` による CLI 実行サポート (`-o output.py --class-name CustomParser`)
 
 ---
 
@@ -358,7 +375,7 @@ Phase 2 の事前コンパイラを作成する際、`.peg` 文法定義ファ�
 ### 8.1 非機能要件
 
 1. **ゼロ外部依存**:
-   - Python 標準ライブラリ（`typing`, `re`, `dataclasses`）のみで完結。
+   - Python 標準ライブラリ（`typing`, `re`, `dataclasses`, `textwrap`）のみで完結。
 2. **極小レイテンシ**:
    - 100 文字程度の典型的な検索クエリを $< 0.2\text{ms}$ でパース完了。
 3. **最高水準の静的解析品質**:
@@ -376,5 +393,8 @@ Phase 2 の事前コンパイラを作成する際、`.peg` 文法定義ファ�
 - [x] `src/ontology/turtle_parser.py` に W3C Turtle 1.1 / RDF インジェストパーサーが実装され、トリプル抽出・プレフィックス解決ができること（Issue #287、`tests/ontology/test_turtle_parser.py` PASS）。
 - [x] `src/database/sql/expr_parser.py` に Packrat PEG SQL 式パーサーが実装され、複雑な論理式・算術式・CASE・関数呼び出しの AST 化ができること（Issue #288、`tests/database/test_sql_expr_peg.py` PASS）。
 - [x] `src/database/sql/dql_parser.py` に Packrat PEG DQL パーサーが実装され、SELECT/CTE/JOIN/SET/VALUES の AST 化および既存 SQLParser への委譲ができること（Issue #289、`tests/database/test_sql_dql_peg.py` PASS）。
-- [ ] `src/database/sql/dml_parser.py` に Packrat PEG DML パーサーが実装され、INSERT/UPDATE/DELETE/UPSERT/RETURNING の AST 化ができること（Issue #290）。
+- [x] `src/database/sql/dml_parser.py` に Packrat PEG DML パーサーが実装され、INSERT/UPDATE/DELETE/UPSERT/RETURNING の AST 化ができること（Issue #290、`tests/database/test_sql_dml_peg.py` PASS）。
+- [x] `src/database/sql/ddl_parser.py` および `admin_parser.py` に Packrat PEG DDL/管理構文パーサーが実装され、旧正規表現パーサーが完全撤廃されたこと（Issue #291、`tests/database/test_sql_ddl_peg.py` PASS）。
+- [x] `src/database/sql/parser.py` における残存正規表現・WHERE 文字列走査ロジックが完全撤廃され、純粋 PEG AST 走査へ一本化されたこと（Issue #292、全 401 テスト PASS）。
+- [x] `src/core/structures/peg_compiler/` に DSN-25 Phase 2 事前コンパイラ（AOT Compiler）が実装され、`.peg` 文法定義ファイルから Python パーサーコードが事前生成できること（Issue #293、`tests/core/test_peg_compiler.py` PASS）。
 - [x] 全品質ゲート（`make check_format` および `make static_analysis`）がエラー 0 件で通過すること。

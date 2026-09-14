@@ -34,6 +34,11 @@ from core.structures.peg import (
     Sequence,
     ZeroOrMore,
 )
+from core.structures.peg_compiler import (
+    CodeGenerator,
+    MetaGrammarParser,
+    compile_grammar_to_code,
+)
 from core.structures.probabilistic import Centroid, CountMinSketch, TDigest
 from core.structures.radix_trie import (
     MAX_RADIX_KEY_LENGTH,
@@ -114,4 +119,7 @@ __all__ = [
     "OneOrMore",
     "AndPred",
     "NotPred",
+    "MetaGrammarParser",
+    "CodeGenerator",
+    "compile_grammar_to_code",
 ]
