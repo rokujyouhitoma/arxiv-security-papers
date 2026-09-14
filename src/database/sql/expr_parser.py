@@ -126,6 +126,27 @@ class UnaryOpExpr(SQLExpr):
         return None
 
 
+def _eval_unary_constant(op: str, inner: Any) -> Optional[Any]:
+    if op == "-":
+        try:
+            return -inner
+        except TypeError:
+            return None
+    if op == "+":
+        return inner
+    return None
+
+
+def _eval_constant(expr: SQLExpr) -> Optional[Any]:
+    if isinstance(expr, LiteralExpr):
+        return cast(Any, expr.value)
+    if isinstance(expr, UnaryOpExpr):
+        inner = _eval_constant(expr.operand)
+        if inner is not None:
+            return _eval_unary_constant(expr.op, inner)
+    return None
+
+
 class BinaryOpExpr(SQLExpr):
     """Represents a binary operation (+, -, *, /, AND, OR, =, !=, <, etc.)."""
 
@@ -142,13 +163,20 @@ class BinaryOpExpr(SQLExpr):
         return f"({self.left.to_sql()} {self.op} {self.right.to_sql()})"
 
     def to_legacy_dict(self) -> Optional[Dict[str, Any]]:
-        if isinstance(self.left, ColumnRefExpr) and isinstance(self.right, LiteralExpr):
-            return {
-                "column": self.left.full_name,
-                "operator": self.op,
-                "value": self.right.value,
-            }
-        return None
+        if not isinstance(self.left, ColumnRefExpr):
+            return None
+        const_val = _eval_constant(self.right)
+        if const_val is not None:
+            val: Any = const_val
+        elif isinstance(self.right, ColumnRefExpr):
+            val = self.right.full_name
+        else:
+            return None
+        return {
+            "column": self.left.full_name,
+            "operator": self.op,
+            "value": val,
+        }
 
 
 class BetweenExpr(SQLExpr):
@@ -171,16 +199,18 @@ class BetweenExpr(SQLExpr):
         return f"{self.expr.to_sql()} {op} {self.low.to_sql()} AND {self.high.to_sql()}"
 
     def to_legacy_dict(self) -> Optional[Dict[str, Any]]:
+        low_val = _eval_constant(self.low)
+        high_val = _eval_constant(self.high)
         if (
             isinstance(self.expr, ColumnRefExpr)
-            and isinstance(self.low, LiteralExpr)
-            and isinstance(self.high, LiteralExpr)
+            and low_val is not None
+            and high_val is not None
         ):
             op = "NOT BETWEEN" if self.is_not else "BETWEEN"
             return {
                 "column": self.expr.full_name,
                 "operator": op,
-                "value": [self.low.value, self.high.value],
+                "value": [low_val, high_val],
             }
         return None
 
@@ -374,6 +404,53 @@ class CaseExpr(SQLExpr):
         return None
 
 
+_ALLOWED_COLLATIONS: set[str] = {"BINARY", "NOCASE", "RTRIM"}
+
+
+class CollateExpr(SQLExpr):
+    """Represents an expression with COLLATE collation_name."""
+
+    def __init__(self, expr: SQLExpr, collation: str) -> None:
+        self.expr = expr
+        c_up = collation.strip().upper()
+        if c_up not in _ALLOWED_COLLATIONS:
+            from .parser import SQLParseError
+
+            raise SQLParseError(f"no such collation sequence: {collation.strip()}")
+        self.collation = c_up
+
+    def to_sql(self) -> str:
+        return f"{self.expr.to_sql()} COLLATE {self.collation}"
+
+    def to_legacy_dict(self) -> Optional[Dict[str, Any]]:
+        d = self.expr.to_legacy_dict()
+        if d is not None:
+            res = dict(d)
+            res["collate"] = self.collation
+            return res
+        return None
+
+
+class ExistsExpr(SQLExpr):
+    """Represents [NOT] EXISTS (subquery) predicate."""
+
+    def __init__(self, subquery: str, is_not: bool = False) -> None:
+        self.subquery = subquery.strip()
+        self.is_not = is_not
+
+    def to_sql(self) -> str:
+        op = "NOT EXISTS" if self.is_not else "EXISTS"
+        return f"{op} ({self.subquery})"
+
+    def to_legacy_dict(self) -> Optional[Dict[str, Any]]:
+        op = "NOT EXISTS" if self.is_not else "EXISTS"
+        return {
+            "column": "*",
+            "operator": op,
+            "subquery": self.subquery,
+        }
+
+
 def _tok(p: Parser[Any]) -> Parser[Any]:
     ws = Reg(r"(\s+|#[^\r\n]*)*")
     return Seq(p, ws).map(lambda r: r[0])
@@ -534,12 +611,20 @@ def _build_primary_parser(expr_ref: RuleRef) -> Parser[SQLExpr]:
 
 def _build_unary_parser(expr_ref: RuleRef) -> Parser[SQLExpr]:
     primary = _build_primary_parser(expr_ref)
+    exists_p = Seq(
+        Opt(_kw("NOT")),
+        _kw("EXISTS"),
+        _tok(Lit("(")),
+        Reg(r"[^)]+"),
+        _tok(Lit(")")),
+    ).map(lambda r: ExistsExpr(str(r[3]), is_not=bool(r[0])))
     u_op = Choice(
         _tok(Lit("+")),
         _tok(Lit("-")),
         _kw("NOT"),
     )
     return Choice(
+        exists_p,
         Seq(u_op, primary).map(lambda r: UnaryOpExpr(str(r[0]), cast(SQLExpr, r[1]))),
         primary,
     )
@@ -610,21 +695,32 @@ def _build_like_suffix(
     )
 
 
-def _build_in_suffix(add: Parser[SQLExpr]) -> Parser[Tuple[str, bool, List[SQLExpr]]]:
+def _build_in_suffix(
+    add: Parser[SQLExpr],
+) -> Parser[Tuple[str, bool, Optional[List[SQLExpr]], Optional[str]]]:
+    in_subquery = Seq(
+        _tok(Lit("(")),
+        _tok(Reg(r"(?i)SELECT\b[^;)]*(?:\([^;)]*\)[^;)]*)*")),
+        _tok(Lit(")")),
+    ).map(lambda r: (None, str(r[1]).strip()))
     in_val_list = Seq(
         _tok(Lit("(")),
         add,
         ZeroOrMore(Seq(_tok(Lit(",")), add)),
         _tok(Lit(")")),
     ).map(
-        lambda r: [cast(SQLExpr, r[1])]
-        + [cast(SQLExpr, item[1]) for item in cast(List[Any], r[2])]
+        lambda r: (
+            [cast(SQLExpr, r[1])]
+            + [cast(SQLExpr, item[1]) for item in cast(List[Any], r[2])],
+            None,
+        )
     )
+    in_body = Choice(in_subquery, in_val_list)
     return Seq(
         Opt(_kw("NOT")),
         _kw("IN"),
-        in_val_list,
-    ).map(lambda r: ("IN", bool(r[0]), cast(List[SQLExpr], r[2])))
+        in_body,
+    ).map(lambda r: ("IN", bool(r[0]), r[2][0], r[2][1]))
 
 
 def _build_cmp_suffix(add: Parser[SQLExpr]) -> Parser[Tuple[str, str, SQLExpr]]:
@@ -645,7 +741,7 @@ def _dispatch_match_or_in(base: SQLExpr, suf: Any) -> SQLExpr:
     if kind == "LIKE":
         return LikeExpr(base, suf[3], operator=suf[2], escape=suf[4], is_not=suf[1])
     if kind == "IN":
-        return InExpr(base, suf[2], is_not=suf[1])
+        return InExpr(base, suf[2] or [], subquery=suf[3], is_not=suf[1])
     return BinaryOpExpr(suf[1], base, suf[2])
 
 
@@ -666,15 +762,18 @@ def _build_predicate_parser(expr_ref: RuleRef) -> Parser[SQLExpr]:
     in_p = _build_in_suffix(add)
     cmp_p = _build_cmp_suffix(add)
     pred_suffix = Choice(is_null, between_p, like_p, in_p, cmp_p)
+    collate_suffix = Opt(Seq(_kw("COLLATE"), _tok(Reg(r"[a-zA-Z0-9_]+"))))
 
     def _resolve_pred(r: List[Any]) -> SQLExpr:
         base = cast(SQLExpr, r[0])
         suf = r[1]
-        if not suf:
-            return base
-        return _dispatch_pred(base, suf)
+        coll = r[2]
+        expr = _dispatch_pred(base, suf) if suf else base
+        if coll:
+            return CollateExpr(expr, str(coll[1]))
+        return expr
 
-    return Seq(add, Opt(pred_suffix)).map(_resolve_pred)
+    return Seq(add, Opt(pred_suffix), collate_suffix).map(_resolve_pred)
 
 
 def _build_and_parser(expr_ref: RuleRef) -> Parser[SQLExpr]:

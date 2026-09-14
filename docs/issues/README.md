@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **292** | SQL Parser 残存手書き正規表現・文字列走査ロジックの完全撤廃と純粋 PEG 化 | Refactor | 2026-09-14 | [292-eliminate-legacy-regex-where-helpers-with-pure-peg.md](closed/292-eliminate-legacy-regex-where-helpers-with-pure-peg.md) |
 | **291** | SQL Parser 全面 Packrat PEG 換装 (DDL / TCL / DCL / Admin) による手書き正規表現コード完全撤廃 (DSN-25 Phase 2-D) | Feature | 2026-09-14 | [291-replace-sql-parser-with-packrat-peg.md](closed/291-replace-sql-parser-with-packrat-peg.md) |
 | **290** | DML (INSERT / UPDATE / DELETE / UPSERT / RETURNING) の Packrat PEG パーサー化 (DSN-25 Phase 2-C) | Feature | 2026-09-14 | [290-implement-packrat-peg-dml-parser.md](closed/290-implement-packrat-peg-dml-parser.md) |
 | **289** | DQL & 派生クエリ (SELECT / CTE / JOIN / SET / VALUES) の Packrat PEG パーサー化 (DSN-25 Phase 2-B) | Feature | 2026-09-14 | [289-implement-packrat-peg-dql-parser.md](closed/289-implement-packrat-peg-dql-parser.md) |

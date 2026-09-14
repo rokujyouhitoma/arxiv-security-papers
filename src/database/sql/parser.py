@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""
-Pure Python Packrat PEG SQL Parser Dispatcher.
+"""Pure Python Packrat PEG SQL Parser Dispatcher.
+
 Coordinates DQL, DML, DDL, and Admin Packrat PEG parsers into a unified interface.
-Eliminates all ad-hoc regular expression parsers and scanner logic in favor of PEG grammar.
+Zero external dependencies, zero ad-hoc regular expressions.
 """
 
 from __future__ import annotations
 
-import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+
+from core.structures.peg import Choice, Lit, OneOrMore, Parser, Reg, Seq, ZeroOrMore
 
 from .admin_parser import parse_admin
 from .ast import (
@@ -22,7 +23,7 @@ from .ast import (
 from .ddl_parser import parse_ddl
 from .dml_parser import parse_dml
 from .dql_parser import parse_dql
-from .expr_parser import SQLExpressionParser
+from .expr_parser import BinaryOpExpr, SQLExpr, SQLExpressionParser
 
 
 class SQLParseError(Exception):
@@ -31,247 +32,112 @@ class SQLParseError(Exception):
     pass
 
 
-def _process_paren_depth(ch: str, depth: int) -> int:
-    if ch == "(":
-        return depth + 1
-    if ch == ")":
-        return max(0, depth - 1)
-    return depth
+# -----------------------------------------------------------------------------
+# Packrat PEG Comma Expression Splitter
+# -----------------------------------------------------------------------------
 
 
-def _update_quote_flags(ch: str, in_s: bool, in_d: bool) -> Tuple[bool, bool]:
-    if ch == "'" and not in_d:
-        return not in_s, in_d
-    if ch == '"' and not in_s:
-        return in_s, not in_d
-    return in_s, in_d
+def _combine_comma_list(r: List[Any]) -> List[str]:
+    first = cast(str, r[0])
+    rest = [cast(str, item[1]) for item in cast(List[Any], r[1])]
+    return [first] + rest
 
 
-def _process_comma_char(
-    ch: str,
-    depth: int,
-    in_s: bool,
-    in_d: bool,
-    cur: List[str],
-    res: List[str],
-) -> Tuple[int, bool, bool]:
-    in_s, in_d = _update_quote_flags(ch, in_s, in_d)
-    if not in_s and not in_d:
-        depth = _process_paren_depth(ch, depth)
-        if ch == "," and depth == 0:
-            res.append("".join(cur).strip())
-            cur.clear()
-            return depth, in_s, in_d
-    cur.append(ch)
-    return depth, in_s, in_d
+def _build_comma_split_parser() -> Parser[List[str]]:
+    """Builds a pure PEG parser that splits comma-separated expressions."""
+    chunk_item = Choice(
+        Reg(r"'[^']*'"),
+        Reg(r'"[^"]*"'),
+        Reg(r"\((?:[^()]+|\([^()]*\))*\)"),
+        Reg(r"[^,'\"()]+"),
+    )
+    chunk = OneOrMore(chunk_item).map(lambda chunks: "".join(chunks).strip())
+    ws = Reg(r"\s*")
+    sep = Seq(ws, Lit(","), ws)
+    return Seq(chunk, ZeroOrMore(Seq(sep, chunk))).map(_combine_comma_list)
+
+
+_COMMA_SPLIT_PARSER: Parser[List[str]] = _build_comma_split_parser()
 
 
 def _split_comma_expressions(text: str) -> List[str]:
-    """Splits a comma-separated list of expressions at top paren nesting level."""
-    res: List[str] = []
-    cur: List[str] = []
-    depth = 0
-    in_single = False
-    in_double = False
-
-    for ch in text:
-        depth, in_single, in_double = _process_comma_char(
-            ch, depth, in_single, in_double, cur, res
-        )
-
-    if cur:
-        res.append("".join(cur).strip())
-    return res
-
-
-def _parse_val_type(clean_val: str) -> Any:
+    """Splits a comma-separated list of expressions at top paren nesting level using PEG."""
+    clean = text.strip()
+    if not clean:
+        return []
     try:
-        return int(clean_val)
-    except ValueError:
-        pass
-    try:
-        return float(clean_val)
-    except ValueError:
-        return clean_val
-
-
-_ALLOWED_COLLATIONS: set[str] = {"BINARY", "NOCASE", "RTRIM"}
-
-
-def _validate_collation(name: str) -> str:
-    clean = name.strip().upper()
-    if clean not in _ALLOWED_COLLATIONS:
-        raise SQLParseError(f"no such collation sequence: {name}")
-    return clean
-
-
-def _parse_is_null_clause(part: str) -> Optional[Dict[str, Any]]:
-    null_m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+IS\s+(NOT\s+NULL|NULL)$",
-        part,
-        re.IGNORECASE,
-    )
-    if null_m:
-        op = "IS NOT NULL" if "NOT" in null_m.group(2).upper() else "IS NULL"
-        return {"column": null_m.group(1), "operator": op, "value": None}
-    return None
-
-
-def _parse_between_clause(part: str) -> Optional[Dict[str, Any]]:
-    pattern = (
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+BETWEEN|BETWEEN)\s+"
-        r"('[^']*'|\"[^\"]*\"|-?[0-9\.]+)\s+AND\s+('[^']*'|\"[^\"]*\"|-?[0-9\.]+)"
-        r"(?:\s+COLLATE\s+([a-zA-Z0-9_]+))?$"
-    )
-    between_m = re.match(pattern, part, re.IGNORECASE)
-    if between_m:
-        v1 = _parse_val_type(between_m.group(3).strip("'\""))
-        v2 = _parse_val_type(between_m.group(4).strip("'\""))
-        res: Dict[str, Any] = {
-            "column": between_m.group(1),
-            "operator": between_m.group(2).upper(),
-            "value": (v1, v2),
-        }
-        if between_m.group(5):
-            res["collate"] = _validate_collation(between_m.group(5))
-        return res
-    return None
-
-
-def _parse_glob_clause(part: str) -> Optional[Dict[str, Any]]:
-    glob_m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+GLOB|GLOB)\s+('[^']*'|\"[^\"]*\")$",
-        part,
-        re.IGNORECASE,
-    )
-    if glob_m:
-        return {
-            "column": glob_m.group(1),
-            "operator": glob_m.group(2).upper(),
-            "value": glob_m.group(3).strip("'\""),
-        }
-    return None
-
-
-def _parse_like_clause(part: str) -> Optional[Dict[str, Any]]:
-    like_m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+LIKE|LIKE)\s+('[^']*'|\"[^\"]*\")(?:\s+ESCAPE\s+('[^']*'|\"[^\"]*\"))?$",
-        part,
-        re.IGNORECASE,
-    )
-    if like_m:
-        escape_char = like_m.group(4).strip("'\"") if like_m.group(4) else None
-        return {
-            "column": like_m.group(1),
-            "operator": like_m.group(2).upper(),
-            "value": like_m.group(3).strip("'\""),
-            "escape": escape_char,
-        }
-    return None
-
-
-def _parse_exists_clause(part: str) -> Optional[Dict[str, Any]]:
-    m = re.match(
-        r"^(NOT\s+EXISTS|EXISTS)\s*\((.*?)\)$", part.strip(), re.IGNORECASE | re.DOTALL
-    )
-    if not m:
-        return None
-    raw_inner = m.group(2).strip()
-    if not raw_inner.upper().startswith("SELECT"):
-        return None
-    return {
-        "column": "*",
-        "operator": re.sub(r"\s+", " ", m.group(1).upper()),
-        "subquery": raw_inner,
-    }
-
-
-def _parse_in_clause(part: str) -> Optional[Dict[str, Any]]:
-    in_m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+(NOT\s+IN|IN)\s*\((.*?)\)(?:\s+COLLATE\s+([a-zA-Z0-9_]+))?$",
-        part,
-        re.IGNORECASE | re.DOTALL,
-    )
-    if not in_m:
-        return None
-    raw_inner = in_m.group(3).strip()
-    op = re.sub(r"\s+", " ", in_m.group(2).upper())
-    if raw_inner.upper().startswith("SELECT"):
-        res: Dict[str, Any] = {
-            "column": in_m.group(1),
-            "operator": op,
-            "subquery": raw_inner,
-        }
-    else:
-        items = [x.strip().strip("'\"") for x in raw_inner.split(",")]
-        res = {"column": in_m.group(1), "operator": op, "value": items}
-    if in_m.group(4):
-        res["collate"] = _validate_collation(in_m.group(4))
-    return res
-
-
-def _parse_match_clause(part: str) -> Optional[Dict[str, Any]]:
-    pattern = (
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s+MATCH\s+"
-        r"('[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+)$"
-    )
-    m = re.match(pattern, part, re.IGNORECASE)
-    if m:
-        val = m.group(2).strip("'\"")
-        return {"column": m.group(1), "operator": "MATCH", "value": val}
-    return None
-
-
-def _parse_cmp_clause(part: str) -> Optional[Dict[str, Any]]:
-    cmp_pattern = (
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(>=|<=|!=|<>|=|>|<)\s*"
-        r"('[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|-?[0-9\.]+)(?:\s+COLLATE\s+([a-zA-Z0-9_]+))?$"
-    )
-    eq_m = re.match(cmp_pattern, part, re.IGNORECASE)
-    if eq_m:
-        clean_val = eq_m.group(3).strip("'\"")
-        v: Any = _parse_val_type(clean_val)
-        res = {"column": eq_m.group(1), "operator": eq_m.group(2), "value": v}
-        if eq_m.group(4):
-            res["collate"] = _validate_collation(eq_m.group(4))
-        return res
-    return None
-
-
-_WHERE_PARSERS = (
-    _parse_is_null_clause,
-    _parse_between_clause,
-    _parse_glob_clause,
-    _parse_like_clause,
-    _parse_exists_clause,
-    _parse_in_clause,
-    _parse_match_clause,
-    _parse_cmp_clause,
-)
+        items = _COMMA_SPLIT_PARSER.parse(clean)
+        return [item for item in items if item]
+    except Exception:
+        return [clean]
 
 
 def _parse_where_clause_item(part: str) -> Optional[Dict[str, Any]]:
-    """Parses a single WHERE predicate term."""
+    """Parses a single WHERE predicate term using Packrat PEG."""
     clean = part.strip()
     if not clean:
         return None
-    for parser in _WHERE_PARSERS:
-        res = parser(clean)
-        if res is not None:
-            return res
-    return _parse_where_expr_fallback(clean)
-
-
-def _parse_where_expr_fallback(clean: str) -> Dict[str, Any]:
     try:
         expr = SQLExpressionParser().parse(clean)
         leg = expr.to_legacy_dict()
         if leg is not None:
             return leg
+    except SQLParseError:
+        raise
     except Exception:
         pass
     return {"column": clean, "operator": "=", "value": True}
 
+
+# -----------------------------------------------------------------------------
+# Packrat PEG WHERE AST Traversal & Legacy Mapping
+# -----------------------------------------------------------------------------
+
+
+def _flatten_and_exprs(expr: SQLExpr) -> List[SQLExpr]:
+    """Flattens a binary tree of AND operations into a flat list of expressions."""
+    if isinstance(expr, BinaryOpExpr) and expr.op == "AND":
+        return _flatten_and_exprs(expr.left) + _flatten_and_exprs(expr.right)
+    return [expr]
+
+
+def _flatten_or_exprs(expr: SQLExpr) -> List[SQLExpr]:
+    """Flattens a binary tree of OR operations into a flat list of branch expressions."""
+    if isinstance(expr, BinaryOpExpr) and expr.op == "OR":
+        return _flatten_or_exprs(expr.left) + _flatten_or_exprs(expr.right)
+    return [expr]
+
+
+def _expr_to_legacy_dict(expr: SQLExpr) -> Dict[str, Any]:
+    """Converts a parsed SQLExpr into legacy engine WHERE dictionary."""
+    leg = expr.to_legacy_dict()
+    if leg is not None:
+        return leg
+    return {"column": expr.to_sql(), "operator": "=", "value": True}
+
+
+def _build_or_clauses(or_branches: List[SQLExpr]) -> List[Dict[str, Any]]:
+    clauses: List[Dict[str, Any]] = []
+    for branch in or_branches:
+        sub_clauses = [_expr_to_legacy_dict(e) for e in _flatten_and_exprs(branch)]
+        clauses.append({"logic": "OR_BRANCH", "clauses": sub_clauses})
+    return clauses
+
+
+def _safe_parse_where_expr(
+    parser: SQLExpressionParser, clean: str
+) -> Optional[SQLExpr]:
+    try:
+        return parser.parse(clean)
+    except SQLParseError:
+        raise
+    except Exception:
+        return None
+
+
+# -----------------------------------------------------------------------------
+# Dispatcher Table & Keywords
+# -----------------------------------------------------------------------------
 
 _ADMIN_KEYWORDS: tuple[str, ...] = (
     "BEGIN",
@@ -290,13 +156,28 @@ _ADMIN_KEYWORDS: tuple[str, ...] = (
     "SHOW",
 )
 
-
 _PREFIX_DISPATCH: Tuple[Tuple[Tuple[str, ...], Callable[[str], SQLStatement]], ...] = (
     (("SELECT", "WITH", "VALUES"), parse_dql),
     (("INSERT", "REPLACE", "UPDATE", "DELETE"), parse_dml),
     (("CREATE", "ALTER", "DROP", "REINDEX"), parse_ddl),
     (_ADMIN_KEYWORDS, parse_admin),
 )
+
+
+def _clean_sql_text(text: Optional[str]) -> str:
+    return text.strip() if text else ""
+
+
+def _parse_where_to_clauses(
+    parser: SQLExpressionParser, clean: str
+) -> List[Dict[str, Any]]:
+    expr = _safe_parse_where_expr(parser, clean)
+    if expr is None:
+        return [{"column": clean, "operator": "=", "value": True}]
+    or_branches = _flatten_or_exprs(expr)
+    if len(or_branches) > 1:
+        return _build_or_clauses(or_branches)
+    return [_expr_to_legacy_dict(e) for e in _flatten_and_exprs(expr)]
 
 
 class SQLParser:
@@ -330,34 +211,15 @@ class SQLParser:
         raise SQLParseError(f"Unsupported or unrecognized SQL statement: '{sql}'")
 
     # -------------------------------------------------------------------------
-    # Backward compatibility helpers for internal callers
+    # Backward compatibility helpers for internal callers (Pure PEG Powered)
     # -------------------------------------------------------------------------
 
     def _extract_where_clauses(self, where_raw: Optional[str]) -> List[Dict[str, Any]]:
-        clauses: List[Dict[str, Any]] = []
-        if not where_raw:
-            return clauses
-
-        or_parts = re.split(r"\s+OR\s+", where_raw, flags=re.IGNORECASE)
-        if len(or_parts) > 1:
-            for part in or_parts:
-                sub_clauses = self._extract_simple_clauses(part)
-                clauses.append({"logic": "OR_BRANCH", "clauses": sub_clauses})
-            return clauses
-
-        return self._extract_simple_clauses(where_raw)
-
-    def _extract_simple_clauses(self, text: str) -> List[Dict[str, Any]]:
-        clauses: List[Dict[str, Any]] = []
-        if not text:
-            return clauses
-
-        and_parts = _split_and_conditions(text)
-        for part in and_parts:
-            item = _parse_where_clause_item(part)
-            if item is not None:
-                clauses.append(item)
-        return clauses
+        """Extracts legacy WHERE clause dictionary list purely using Packrat PEG."""
+        clean = _clean_sql_text(where_raw)
+        if not clean:
+            return []
+        return _parse_where_to_clauses(self._expr_parser, clean)
 
     def _parse_select(self, sql: str) -> SelectStatement:
         return parse_dql(sql)
@@ -376,17 +238,6 @@ class SQLParser:
 
     def _parse_create_table(self, sql: str) -> CreateTableStatement:
         return cast(CreateTableStatement, parse_ddl(sql))
-
-
-def _split_and_conditions(text: str) -> List[str]:
-    """Splits conditions on AND while preserving BETWEEN ... AND ... clauses."""
-    pattern = (
-        r"(\b(?:NOT\s+)?BETWEEN\s+(?:'[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|-?[0-9\.]+))\s+AND\s+"
-        r"((?:'[^']*'|\"[^\"]*\"|[a-zA-Z0-9_\.\->>\'\"]+|-?[0-9\.]+))"
-    )
-    protected = re.sub(pattern, r"\1 __BETWEEN_AND__ \2", text, flags=re.IGNORECASE)
-    parts = re.split(r"\s+AND\s+", protected, flags=re.IGNORECASE)
-    return [p.replace("__BETWEEN_AND__", "AND").strip() for p in parts if p.strip()]
 
 
 def parse_sql(sql_query: str) -> SQLStatement:

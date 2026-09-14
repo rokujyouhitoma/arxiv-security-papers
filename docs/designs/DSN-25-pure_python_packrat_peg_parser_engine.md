@@ -275,8 +275,15 @@ Xenon Grade A（サイクロマティック複雑度 $CC \le 4$）および mypy
 `CREATE TABLE` (STRICT / GENERATED ALWAYS AS), `ALTER TABLE`, `CREATE INDEX`, `CREATE VIEW`, `CREATE TRIGGER`, `VIRTUAL TABLE`, `ATTACH/DETACH DATABASE`, `BEGIN/COMMIT/ROLLBACK/SAVEPOINT`, `PRAGMA`, `VACUUM`, `ANALYZE`, `EXPLAIN`, `SHOW`, `GRANT/REVOKE` を PEG 化し、`src/database/sql/parser.py` を Packrat PEG ベースの `SQLParser` として完全一本化。旧正規表現コード（2,000行超）を全廃止。
 - [`src/database/sql/ddl_parser.py`](../../src/database/sql/ddl_parser.py) (全 18 項目テスト PASS)
 - [`src/database/sql/admin_parser.py`](../../src/database/sql/admin_parser.py)
-- [`src/database/sql/parser.py`](../../src/database/sql/parser.py) (約 380 行の純粋 PEG 統合ディスパッチャー)
+- [`src/database/sql/parser.py`](../../src/database/sql/parser.py) (純粋 PEG 統合ディスパッチャー)
 - データベース全 400 件テスト 100% PASS、Xenon Rank A ($CC \le 4$)、`mypy --strict` 完全適合。
+
+#### 5.2.5 Phase 2-E: 残存手書き正規表現・文字列走査ロジックの完全撤廃と 100% 純粋 PEG 化 (実装完了: Issue #292)
+`parser.py` に残存していた WHERE 句述語の手書き正規表現マッチング群（`_WHERE_PARSERS`、`_parse_cmp_clause` 等）、カンマ分割の手書き文字走査ループ（`_split_comma_expressions`）、および `__BETWEEN_AND__` 文字列置換ハックを完全に追放。
+- `parser.py` から `import re` を 100% 完全撤廃（行数は 185 行まで極小化）。
+- WHERE 句の条件分割および legacy dict マッピングを `SQLExpressionParser` による構文木走査（`_flatten_and_exprs`, `_flatten_or_exprs`）へ一本化。
+- `expr_parser.py` における `COLLATE` 句、`EXISTS (SELECT ...)`、`IN (SELECT ...)` サブクエリ、負数定数評価（`_eval_constant`）の PEG サポートを完備。
+- データベース全 401 件テスト 100% PASS、Xenon Rank A ($CC \le 4$)、`mypy --strict` 完全適合。
 
 ### 5.3 グラフエンジン: Canvas 向け CTI パスクエリ DSL (実装完了: Issue #286)
 

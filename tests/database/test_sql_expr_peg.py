@@ -238,6 +238,30 @@ class TestSQLExprPredicatesAndComparisons:
         assert isinstance(expr_match, LikeExpr)
         assert expr_match.operator == "MATCH"
 
+    def test_collate_and_exists_predicate(self) -> None:
+        expr_collate = parse_sql_expr("name = 'alice' COLLATE NOCASE")
+        assert expr_collate.to_legacy_dict() == {
+            "column": "name",
+            "operator": "=",
+            "value": "alice",
+            "collate": "NOCASE",
+        }
+
+        expr_between_collate = parse_sql_expr("code BETWEEN 'a' AND 'z' COLLATE RTRIM")
+        assert expr_between_collate.to_legacy_dict() == {
+            "column": "code",
+            "operator": "BETWEEN",
+            "value": ["a", "z"],
+            "collate": "RTRIM",
+        }
+
+        expr_exists = parse_sql_expr("EXISTS (SELECT 1 FROM users)")
+        assert expr_exists.to_legacy_dict() == {
+            "column": "*",
+            "operator": "EXISTS",
+            "subquery": "SELECT 1 FROM users",
+        }
+
 
 class TestSQLExprLogicalAndNesting:
     """Tests for logical operators (AND, OR) and complex nesting."""
