@@ -4,23 +4,32 @@ Enterprise Multi-Field Query Parser powered by Pure Python Packrat PEG.
 Parses field-specific queries (e.g. author:Nakatani, title:malware),
 Boolean operators (+/-, AND/OR/NOT), nested parentheses, phrase slop,
 prefix (term*), and fuzzy (term~N).
-Conforms to DSN-25 Phase 1 specification.
+Conforms to DSN-25 Phase 2 Ahead-of-Time PEG specification.
 """
 
 import re
 from typing import Any, ClassVar, Dict, List, Optional, Set, cast
 
-from core.structures.peg import (
-    Lit,
-    NotPred,
-    Opt,
-    Parser,
-    PEGSyntaxError,
-    Reg,
-    RuleRef,
-    Seq,
-    ZeroOrMore,
-)
+from core.structures.peg import PEGSyntaxError
+
+SEARCH_ALLOWED_FIELDS: Set[str] = {
+    "author",
+    "authors",
+    "title",
+    "abstract",
+    "content",
+    "tag",
+    "tags",
+    "keyword",
+    "keywords",
+    "id",
+}
+
+SEARCH_FIELD_ALIAS: Dict[str, str] = {
+    "authors": "author",
+    "tags": "tag",
+    "keywords": "keyword",
+}
 
 
 class QueryClause:
@@ -104,30 +113,185 @@ class QueryClause:
         )
 
 
+# =========================================================================
+# Standalone Helper Functions for AOT PEG Parser Actions
+# =========================================================================
+
+
+def _resolve_search_field(field_raw: Optional[str]) -> Optional[str]:
+    """Resolves and normalizes field alias to canonical field name."""
+    if not field_raw:
+        return None
+    field_lower = field_raw.lower()
+    field_canon = SEARCH_FIELD_ALIAS.get(field_lower, field_lower)
+    if field_canon in SEARCH_ALLOWED_FIELDS:
+        return field_canon
+    return None
+
+
+def _parse_fuzzy_term(
+    term: str, field: Optional[str], is_required: bool, is_prohibited: bool
+) -> QueryClause:
+    parts = term.split("~")
+    dist = min(int(parts[1]), 2) if len(parts) > 1 and parts[1].isdigit() else 1
+    return QueryClause(
+        field=field,
+        term=parts[0],
+        is_required=is_required,
+        is_prohibited=is_prohibited,
+        is_fuzzy=True,
+        fuzzy_distance=dist,
+    )
+
+
+def _parse_prefix_term(
+    term: str, field: Optional[str], is_required: bool, is_prohibited: bool
+) -> QueryClause:
+    return QueryClause(
+        field=field,
+        term=term[:-1],
+        is_required=is_required,
+        is_prohibited=is_prohibited,
+        is_prefix=True,
+    )
+
+
+def _is_reserved_query_term(term: str) -> bool:
+    return not term or term.upper() in ("AND", "OR", "NOT")
+
+
+def _is_valid_prefix(term: str) -> bool:
+    return term.endswith("*") and len(term) > 1
+
+
+def _is_valid_fuzzy(term: str) -> bool:
+    return "~" in term and not term.startswith("~")
+
+
+def _parse_search_plain_term(
+    term: str,
+    field: Optional[str] = None,
+    is_required: bool = False,
+    is_prohibited: bool = False,
+) -> Optional[QueryClause]:
+    """Parses a plain term, prefix term, or fuzzy term into a QueryClause."""
+    if _is_reserved_query_term(term):
+        return None
+    if _is_valid_prefix(term):
+        return _parse_prefix_term(term, field, is_required, is_prohibited)
+    if _is_valid_fuzzy(term):
+        return _parse_fuzzy_term(term, field, is_required, is_prohibited)
+    return QueryClause(
+        field=field, term=term, is_required=is_required, is_prohibited=is_prohibited
+    )
+
+
+def _create_search_phrase(
+    content: str,
+    slop_val: Optional[int] = None,
+    field: Optional[str] = None,
+    is_required: bool = False,
+    is_prohibited: bool = False,
+) -> QueryClause:
+    """Creates a phrase query clause with optional slop."""
+    return QueryClause(
+        field=field,
+        term=content.strip(),
+        is_phrase=True,
+        phrase_slop=slop_val or 0,
+        is_required=is_required,
+        is_prohibited=is_prohibited,
+    )
+
+
+def _apply_field_to_subclauses(fld: Optional[str], target: List[Any]) -> QueryClause:
+    for sub in target:
+        if isinstance(sub, QueryClause) and sub.field is None:
+            sub.field = fld
+    return QueryClause(field=fld, nested_clauses=target)
+
+
+def _apply_search_field(fld: Optional[str], target: Any) -> QueryClause:
+    """Applies resolved field constraint to a QueryClause or nested subclause list."""
+    if isinstance(target, QueryClause):
+        target.field = fld
+        return target
+    if isinstance(target, list):
+        return _apply_field_to_subclauses(fld, target)
+    return QueryClause(field=fld, term=str(target))
+
+
+def _apply_search_modifier(
+    mod: Optional[str], clause: Optional[QueryClause]
+) -> Optional[QueryClause]:
+    """Applies + or - modifiers to the targeted QueryClause."""
+    if clause is None:
+        return None
+    if mod == "+":
+        clause.is_required = True
+    elif mod == "-":
+        clause.is_prohibited = True
+    return clause
+
+
+def _fold_search_conjunction(
+    first: Optional[QueryClause], rest: List[Any]
+) -> List[QueryClause]:
+    """Folds a sequence of AND-joined or whitespace-separated clauses."""
+    clauses: List[QueryClause] = [first] if first else []
+    for r in rest:
+        if r:
+            clauses.append(r)
+    return clauses
+
+
+def _wrap_list_group(items: List[Any]) -> Optional[QueryClause]:
+    if not items:
+        return None
+    if len(items) == 1:
+        first = items[0]
+        return first if isinstance(first, QueryClause) else None
+    return QueryClause(nested_clauses=cast(List[QueryClause], items), logical_op="AND")
+
+
+def _wrap_clause_group(item: Any) -> Optional[QueryClause]:
+    if isinstance(item, QueryClause):
+        return item
+    if isinstance(item, list):
+        return _wrap_list_group(item)
+    return None
+
+
+def _fold_search_disjunction(
+    first_list: List[QueryClause], rest: List[Any]
+) -> List[QueryClause]:
+    """Folds a sequence of OR-joined conjunction groups into a disjunction QueryClause."""
+    if not rest:
+        return first_list
+    all_groups: List[QueryClause] = []
+    first_grp = _wrap_clause_group(first_list)
+    if first_grp:
+        all_groups.append(first_grp)
+    for item in rest:
+        grp = _wrap_clause_group(item)
+        if grp:
+            all_groups.append(grp)
+    return [QueryClause(nested_clauses=all_groups, logical_op="OR")]
+
+
+# =========================================================================
+# Enterprise Query Parser Facade
+# =========================================================================
+
+
 class EnterpriseQueryParser:
     """
     Parses full-featured query expressions into structured QueryClause objects
-    using the Pure Python Packrat PEG Engine.
+    using the Ahead-of-Time Packrat PEG Compiler (grammars/search_query.peg).
     """
 
-    ALLOWED_FIELDS: ClassVar[Set[str]] = {
-        "author",
-        "authors",
-        "title",
-        "abstract",
-        "content",
-        "tag",
-        "tags",
-        "keyword",
-        "keywords",
-        "id",
-    }
-
-    FIELD_ALIAS: ClassVar[Dict[str, str]] = {
-        "authors": "author",
-        "tags": "tag",
-        "keywords": "keyword",
-    }
+    ALLOWED_FIELDS: ClassVar[Set[str]] = SEARCH_ALLOWED_FIELDS
+    FIELD_ALIAS: ClassVar[Dict[str, str]] = SEARCH_FIELD_ALIAS
 
     def __init__(
         self,
@@ -142,85 +306,42 @@ class EnterpriseQueryParser:
                 "content": 1.0,
             }
         self.default_field_weights = default_field_weights
-        self._grammar: Optional[Parser[List[QueryClause]]] = None
+        self._parser: Optional[Any] = None
 
-    def _get_grammar(self) -> Parser[List[QueryClause]]:
-        """Lazily initializes and compiles the PEG query grammar."""
-        if self._grammar is None:
-            self._grammar = _build_peg_query_grammar(self)
-        return self._grammar
+    def _get_parser(self) -> Any:
+        """Lazily imports and instantiates the AOT-compiled SearchQueryParser."""
+        if self._parser is None:
+            from search.query.generated_search_query_parser import SearchQueryParser
 
-    def _parse_fuzzy_plain_term(
-        self, term: str, field: Optional[str], is_required: bool, is_prohibited: bool
-    ) -> QueryClause:
-        parts = term.split("~")
-        dist = min(int(parts[1]), 2) if len(parts) > 1 and parts[1].isdigit() else 1
-        return QueryClause(
-            field=field,
-            term=parts[0],
-            is_required=is_required,
-            is_prohibited=is_prohibited,
-            is_fuzzy=True,
-            fuzzy_distance=dist,
-        )
+            self._parser = SearchQueryParser()
+        return self._parser
 
-    def _is_reserved_op(self, term: str) -> bool:
-        return not term or term.upper() in ("AND", "OR", "NOT")
-
-    def _parse_prefix_plain_term(
-        self, term: str, field: Optional[str], is_required: bool, is_prohibited: bool
-    ) -> QueryClause:
-        return QueryClause(
-            field=field,
-            term=term[:-1],
-            is_required=is_required,
-            is_prohibited=is_prohibited,
-            is_prefix=True,
-        )
-
-    def _is_prefix_term(self, term: str) -> bool:
-        return term.endswith("*") and len(term) > 1
-
-    def _is_fuzzy_term(self, term: str) -> bool:
-        return "~" in term and not term.startswith("~")
+    def _resolve_field(self, field_raw: Optional[str]) -> Optional[str]:
+        return _resolve_search_field(field_raw)
 
     def _parse_plain_term(
         self, term: str, field: Optional[str], is_required: bool, is_prohibited: bool
     ) -> Optional[QueryClause]:
-        if self._is_reserved_op(term):
-            return None
-        if self._is_prefix_term(term):
-            return self._parse_prefix_plain_term(
-                term, field, is_required, is_prohibited
-            )
-        if self._is_fuzzy_term(term):
-            return self._parse_fuzzy_plain_term(term, field, is_required, is_prohibited)
-        return QueryClause(
-            field=field, term=term, is_required=is_required, is_prohibited=is_prohibited
-        )
+        return _parse_search_plain_term(term, field, is_required, is_prohibited)
 
-    def _resolve_field(self, field_raw: Optional[str]) -> Optional[str]:
-        if not field_raw:
-            return None
-        field_lower = field_raw.lower()
-        field_canon = self.FIELD_ALIAS.get(field_lower, field_lower)
-        if (
-            field_canon in self.ALLOWED_FIELDS
-            or field_canon in self.default_field_weights
-        ):
-            return field_canon
-        return None
+    @staticmethod
+    def _coerce_parse_result(res: Any) -> List[QueryClause]:
+        if isinstance(res, list):
+            return cast(List[QueryClause], res)
+        if isinstance(res, QueryClause):
+            return [res]
+        return []
 
     def parse(self, raw_query: str) -> List[QueryClause]:
-        """Parses raw query into a list of QueryClause objects using PEG."""
-        if not raw_query or not raw_query.strip():
+        """Parses raw query into a list of QueryClause objects using AOT PEG."""
+        cleaned = (raw_query or "").strip()
+        if not cleaned:
             return []
 
-        grammar = self._get_grammar()
+        parser = self._get_parser()
         try:
-            return grammar.parse(raw_query.strip())
+            return self._coerce_parse_result(parser.parse(cleaned))
         except PEGSyntaxError:
-            # Resilient fallback: parse individual tokens via regex
             return self._fallback_regex_parse(raw_query)
 
     def _parse_fallback_match(self, m: Any) -> Optional[QueryClause]:
@@ -232,10 +353,10 @@ class EnterpriseQueryParser:
             return QueryClause(
                 field=fld,
                 term=phr.strip(),
-                is_required=req,
-                is_prohibited=proh,
                 is_phrase=True,
                 phrase_slop=int(slop) if slop else 0,
+                is_required=req,
+                is_prohibited=proh,
             )
         if plain is not None:
             return self._parse_plain_term(plain.strip(), fld, req, proh)
@@ -378,144 +499,3 @@ class QueryContext:
             f"QueryContext(raw='{self.raw_query}', clauses={len(self.clauses)}, "
             f"tokens={len(self.expanded_tokens)}, fields={self.target_fields}, intent='{self.intent}')"
         )
-
-
-# =========================================================================
-# PEG Grammar Construction for Search Queries (Conforming to DSN-25)
-# =========================================================================
-
-
-def _build_peg_query_grammar(
-    qp: EnterpriseQueryParser,
-) -> Parser[List[QueryClause]]:
-    """Constructs the Packrat PEG grammar for full Lucene-style boolean queries."""
-    ws = Reg(r"\s+")
-    opt_ws = Opt(ws)
-
-    expr_ref = RuleRef("Expr")
-
-    # 1. Atomic Term / Phrase tokens
-    def _create_phrase(val: Any) -> QueryClause:
-        content = val[1]
-        slop_part = val[3]
-        slop = int(slop_part[1]) if slop_part else 0
-        return QueryClause(term=content.strip(), is_phrase=True, phrase_slop=slop)
-
-    phrase_p = Seq(
-        Lit('"'),
-        Reg(r'[^"]*'),
-        Lit('"'),
-        Opt(Seq(Lit("~"), Reg(r"\d+"))),
-    ).map(_create_phrase)
-
-    # Keywords not matching standalone as plain terms
-    reserved = Reg(r"(?i)\b(AND|OR|NOT)\b")
-    term_chars = Reg(r'[^\s"():]+')
-    plain_p = Seq(NotPred(reserved), term_chars).map(
-        lambda val: qp._parse_plain_term(
-            val[1], field=None, is_required=False, is_prohibited=False
-        )
-    )
-
-    # 2. Field specification: field:term or field:"phrase" or field:(...)
-    field_name = Reg(r"[a-zA-Z_]+").map(qp._resolve_field)
-
-    def _apply_field(val: Any) -> QueryClause:
-        fld, _, target = val
-        if isinstance(target, QueryClause):
-            target.field = fld
-            return target
-        if isinstance(target, list):
-            # Target is a nested sub-query list
-            for sub in target:
-                if sub.field is None:
-                    sub.field = fld
-            return QueryClause(field=fld, nested_clauses=target)
-        return QueryClause(field=fld, term=str(target))
-
-    nested_parens = Seq(Lit("("), opt_ws, expr_ref, opt_ws, Lit(")")).map(
-        lambda val: val[2]
-    )
-
-    field_target = nested_parens / phrase_p / plain_p
-    field_expr = Seq(field_name, Lit(":"), field_target).map(_apply_field)
-
-    # 3. Primary unit
-    primary = (
-        field_expr
-        / phrase_p
-        / plain_p
-        / nested_parens.map(
-            lambda clauses: (
-                clauses[0] if len(clauses) == 1 else QueryClause(nested_clauses=clauses)
-            )
-        )
-    )
-
-    # 4. Modifiers (+, -, NOT)
-    mod_plus = Lit("+").map(lambda _: "+")
-    mod_minus = Lit("-").map(lambda _: "-")
-    mod_not = Seq(Reg(r"(?i)\bNOT\b"), ws).map(lambda _: "-")
-    mod_p = mod_plus / mod_minus / mod_not
-
-    def _apply_modifier(val: Any) -> Optional[QueryClause]:
-        mod, clause = val
-        if clause is None:
-            return None
-        target_clause: QueryClause = cast(QueryClause, clause)
-        if mod == "+":
-            target_clause.is_required = True
-        elif mod == "-":
-            target_clause.is_prohibited = True
-        return target_clause
-
-    factor = Seq(Opt(mod_p), primary).map(_apply_modifier)
-
-    # 5. Conjunction (AND / implicit whitespace concatenation)
-    and_op = Seq(opt_ws, Reg(r"(?i)\bAND\b|&&?"), ws)
-    sep_and = and_op / ws
-
-    def _fold_conjunction(val: Any) -> List[QueryClause]:
-        first, rest = val
-        clauses: List[QueryClause] = [first] if first else []
-        for item in rest:
-            c = item[1]
-            if c:
-                clauses.append(c)
-        return clauses
-
-    conjunction = Seq(factor, ZeroOrMore(Seq(sep_and, factor))).map(_fold_conjunction)
-
-    # 6. Disjunction (OR)
-    or_op = Seq(opt_ws, Reg(r"(?i)\bOR\b|\|\|?"), ws)
-
-    def _fold_disjunction(val: Any) -> List[QueryClause]:
-        first_group, rest = val
-        first_list = cast(List[QueryClause], first_group)
-        if not rest:
-            return first_list
-        # Create an OR group
-        all_groups: List[QueryClause] = []
-        if len(first_list) == 1:
-            all_groups.append(first_list[0])
-        elif first_list:
-            all_groups.append(QueryClause(nested_clauses=first_list, logical_op="AND"))
-        for item in rest:
-            grp = cast(List[QueryClause], item[1])
-            if len(grp) == 1:
-                all_groups.append(grp[0])
-            elif grp:
-                all_groups.append(QueryClause(nested_clauses=grp, logical_op="AND"))
-        return [QueryClause(nested_clauses=all_groups, logical_op="OR")]
-
-    disjunction = Seq(conjunction, ZeroOrMore(Seq(or_op, conjunction))).map(
-        _fold_disjunction
-    )
-
-    expr_ref.define(disjunction)
-
-    # Top-level query
-    query_grammar = Seq(opt_ws, expr_ref, opt_ws).map(
-        lambda val: cast(List[QueryClause], val[1])
-    )
-    return query_grammar

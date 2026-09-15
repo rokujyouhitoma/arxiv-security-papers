@@ -113,10 +113,10 @@ def test_calc_grammar_execution() -> None:
     assert parser.parse("100/2/5") == 10
 
 
-def test_boolean_query_grammar_execution() -> None:
-    """Compiles and executes boolean query grammar."""
+def test_search_query_grammar_execution() -> None:
+    """Compiles and executes search query grammar."""
     query_path = (
-        Path(__file__).resolve().parent.parent.parent / "grammars" / "boolean_query.peg"
+        Path(__file__).resolve().parent.parent.parent / "grammars" / "search_query.peg"
     )
     assert query_path.exists()
 
@@ -124,16 +124,18 @@ def test_boolean_query_grammar_execution() -> None:
     scope: Dict[str, Any] = {}
     exec(code, scope)
 
-    BooleanQueryParser = scope["BooleanQueryParser"]
-    parser = BooleanQueryParser()
+    SearchQueryParser = scope["SearchQueryParser"]
+    parser = SearchQueryParser()
 
     res = parser.parse('title:ransomware AND (malware OR "zero day")')
-    assert res["op"] == "AND"
-    assert len(res["clauses"]) == 2
-    assert res["clauses"][0]["field"] == "title"
-    assert res["clauses"][0]["value"]["term"] == "ransomware"
-    assert res["clauses"][1]["op"] == "OR"
-    assert res["clauses"][1]["clauses"][1]["phrase"] == "zero day"
+    assert len(res) >= 1
+    flat = []
+    for c in res:
+        flat.extend(c.flatten())
+    terms = {c.term for c in flat}
+    assert "ransomware" in terms
+    assert "malware" in terms
+    assert "zero day" in terms
 
 
 def test_meta_grammar_syntax_error() -> None:

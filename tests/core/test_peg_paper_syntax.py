@@ -190,22 +190,25 @@ def test_calc_grammar_execution_with_paper_syntax() -> None:
     assert calc_parser.parse("(100 - 20) / (2 * 4)") == 10
 
 
-def test_boolean_query_grammar_execution_with_paper_syntax() -> None:
-    """Verifies that grammars/boolean_query.peg compiles and parses boolean expressions."""
-    bq_path = _get_grammars_dir() / "boolean_query.peg"
-    assert bq_path.exists()
-    content = bq_path.read_text(encoding="utf-8")
+def test_search_query_grammar_execution_with_paper_syntax() -> None:
+    """Verifies that grammars/search_query.peg compiles and parses expressions using paper syntax."""
+    sq_path = _get_grammars_dir() / "search_query.peg"
+    assert sq_path.exists()
+    content = sq_path.read_text(encoding="utf-8")
 
     code = compile_grammar_to_code(content)
     scope: Dict[str, Any] = {}
     exec(code, scope)
-    bq_parser = scope["BooleanQueryParser"]()
+    sq_parser = scope["SearchQueryParser"]()
 
-    ast = bq_parser.parse("title:cve AND author:smith")
-    assert ast["op"] == "AND"
-    assert len(ast["clauses"]) == 2
-    assert ast["clauses"][0] == {"field": "title", "value": {"term": "cve"}}
-    assert ast["clauses"][1] == {"field": "author", "value": {"term": "smith"}}
+    clauses = sq_parser.parse("title:cve AND author:smith")
+    assert len(clauses) == 2
+    assert clauses[0].field == "title"
+    assert clauses[0].term == "cve"
+    assert clauses[1].field == "author"
+    assert clauses[1].term == "smith"
 
-    phrase_ast = bq_parser.parse('"zero trust architecture"')
-    assert phrase_ast == {"phrase": "zero trust architecture"}
+    phrase_clauses = sq_parser.parse('"zero trust architecture"')
+    assert len(phrase_clauses) == 1
+    assert phrase_clauses[0].is_phrase
+    assert phrase_clauses[0].term == "zero trust architecture"
