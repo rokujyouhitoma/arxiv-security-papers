@@ -41,7 +41,7 @@ from .expr_parser import (
     UnaryOpExpr,
     parse_sql_expr,
 )
-from .parser import SQLParseError, SQLParser, parse_sql
+from .parser import SQLParseError, SQLParser, clear_sql_parser_caches, parse_sql
 from .security import AccessController, DCLPermissionDeniedError
 from .transaction import TransactionError, TransactionManager
 
@@ -92,4 +92,5 @@ __all__ = [
     "SQLAdminParser",
     "parse_admin",
     "parse_sql",
+    "clear_sql_parser_caches",
 ]

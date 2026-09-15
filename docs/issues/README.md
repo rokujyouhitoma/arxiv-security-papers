@@ -15,7 +15,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **303** | Packrat PEG パーサーエンジンの包括的最適化（選択的メモ化・整数ビットパックキー化・ファサード LRU キャッシュ層）の実装 | Optimization | 2026-09-16 | [303-optimize-packrat-peg-parser-engine.md](closed/303-optimize-packrat-peg-parser-engine.md) |
 | **302** | SQL 全構文解析層（DQL / DML / DDL）の包括的 AOT Packrat PEG 化 | Feature | 2026-09-16 | [302-deploy-aot-peg-to-all-sql-subsystems.md](closed/302-deploy-aot-peg-to-all-sql-subsystems.md) |
+
 | **301** | SQL 式（Expression）パーサーの段階的 AOT PEG 化と並行検証基盤の確立 | Feature | 2026-09-16 | [301-deploy-aot-peg-sql-expression-parser.md](closed/301-deploy-aot-peg-sql-expression-parser.md) |
 | **300** | CTI ナレッジグラフ クエリ DSL への AOT PEG 事前コンパイラ実戦投入と動的ビルダー完全撤廃 | Feature | 2026-09-16 | [300-deploy-aot-peg-graph-query-parser.md](closed/300-deploy-aot-peg-graph-query-parser.md) |
 | **299** | AOT PEG コンパイラ実戦投入第2弾: 検索クエリパーサーの search_query.peg 化と本番パイプライン統合 | Feature | 2026-09-16 | [299-deploy-aot-peg-search-query-parser.md](closed/299-deploy-aot-peg-search-query-parser.md) |

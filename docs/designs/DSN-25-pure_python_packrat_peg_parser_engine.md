@@ -500,7 +500,65 @@ graph TD
    - 各サブシステム 500 件以上のクエリ/文をミリ秒未満のレイテンシで高速解析。
    - データベース全 420 テスト（トランザクション、MVCC、B-Link Tree、ストレージ、実行プランナー、互換性テスト）が 100% PASS。
 
+### 7.6 Packrat PEG エンジン包括的最適化（選択的メモ化・ビットパック整数キー・Bounded LRU キャッシュ）(Issue #303)
+
+DSN-25 の Packrat PEG パーサーエンジンが大規模運用される中で判明したメモ化オーバーヘッド、タプル生成によるヒープ GC 圧迫、および高頻度クエリでの AST 再生成コストを解消するため、**プラン D（コアエンジンの選択的メモ化＆ビットパック整数キー化 ＋ ファサード層 Bounded LRU AST キャッシュ）** を全面投入。
+
+```mermaid
+flowchart TD
+    subgraph FacadeLayer["高頻度ファサード層 (Bounded LRU Cache: maxsize=1024)"]
+        SQL_In["SQL / 検索クエリ文字列"] --> LRU{"LRU キャッシュ Hit?"}
+        LRU -- "Hit (暖気時 < 50μs)" --> Clone["浅い防御的コピー (list / AST)"] --> Out["即時返却 (ゼロ解析)"]
+        LRU -- "Miss (初回コールド)" --> AOT_Dispatch["AOT PEG パーサー呼出"]
+    end
+
+    subgraph CoreEngine["コア Packrat PEG ランタイム (低レベル最適化)"]
+        AOT_Dispatch --> Eval["Parser._eval_cached(ctx, pos)"]
+        Eval --> MemoCheck{"self.memoize == True ?"}
+        MemoCheck -- "False (終端記号: Lit, Reg, Class, Dot, Empty)" --> DirectParse["直接 parse_at() 実行\n(辞書検索・タプル生成ゼロ)"]
+        MemoCheck -- "True (非終端記号 / 複合構文)" --> BitPack["ビットパック整数キー生成\nkey = (rule_id << 20) | pos"]
+        BitPack --> TableLookup{"ctx.memo[key] 存在?"}
+        TableLookup -- "Hit" --> MemoReturn["メモ化結果を O(1) 返却"]
+        TableLookup -- "Miss" --> Guard["スタック深度 & 循環チェック"]
+        Guard --> ActualParse["parse_at() 実行"]
+        ActualParse --> StoreMemo["ctx.memo[key] 格納"]
+    end
+```
+
+#### 1. コアランタイムの低レベル最適化 (`src/core/structures/peg.py`)
+- **単一整数ビットパックキー化**:
+  - `(rule_id, pos)` タプルオブジェクトの生成を廃止し、`key = (self.rule_id << 20) | pos`（単一 Python 整数）を採用。
+  - パース 1 回あたり数千〜数万個のタプルヒープアロケーションをゼロ化し、Python ガベージコレクション (GC) 負荷を極限まで低減。
+  - `ParseContext.memo`: `Dict[int, ParseResult[Any]]`、`ParseContext.in_progress`: `Set[int]` へ全面移行。
+- **選択的メモ化 (Selective Memoization)**:
+  - `Parser.memoize: ClassVar[bool] = True` を基底に導入。
+  - 判定コストが極小（~10-20ns）な終端記号（`Empty`, `Literal`, `Regex`, `AnyChar`, `CharClass`）において `memoize: ClassVar[bool] = False` を指定。
+  - 辞書ハッシュ計算・格納のオーバーヘッドをバイパスし、Packrat メモ化逆転現象を根本解消。
+- **循環・深度ガードのメソッド分離**:
+  - `_check_recursion_guards(ctx, pos, key)` に分離し、循環的複雑度 $CC \le 4$ (Xenon Grade A) を死守。
+
+#### 2. SQL サブシステム ファサード LRU キャッシュ層 (`src/database/sql/`)
+- モジュールシングルトンによるパーサー再利用と `@functools.lru_cache(maxsize=1024)` による AST キャッシュ化：
+  - `parse_sql(sql_query: str) -> SQLStatement`
+  - `parse_sql_expr(text: str) -> SQLExpr`
+  - `parse_dql(text: str) -> SelectStatement`
+  - `parse_dml(text: str) -> SQLStatement`
+  - `parse_ddl(text: str) -> SQLStatement`
+- 一括キャッシュクリア API `clear_sql_parser_caches()` を提供し、メモリ回収やテスト分離性を完全保証。
+
+#### 3. 検索クエリパーサー LRU キャッシュ層 (`src/search/query/`)
+- `_cached_aot_search_parse(cleaned: str) -> Tuple[QueryClause, ...]`:
+  - 構文木をイミュータブルな `tuple` でキャッシュ。
+- **キャッシュ汚染・可変副作用の防護**:
+  - `EnterpriseQueryParser.parse` はキャッシュタプルから `list()` を生成して返却。呼び出し元が戻り値リストを加工・クリアしてもキャッシュ本体は無傷で保護。
+- キャッシュクリア API `clear_search_query_cache()` を提供。
+
+#### 4. ベンチマーク定量検証 (`tests/database/`, `tests/search/`)
+- **ウォームスループット**: 1,000 回の反復クエリ解析が 0.05 秒未満（1 回あたり 50 マイクロ秒未満）。コールド時と比較して数十倍以上の高速化を達成。
+- **テスト全件 PASS**: `tests/core/` (59 tests), `tests/search/` (全件), `tests/database/` (426 tests) が 100% PASS。
+
 ---
+
 
 ## 8. セキュリティ分析 (STRIDE Threat Model) と防御策
 

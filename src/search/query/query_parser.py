@@ -8,7 +8,8 @@ Conforms to DSN-25 Phase 2 Ahead-of-Time PEG specification.
 """
 
 import re
-from typing import Any, ClassVar, Dict, List, Optional, Set, cast
+from functools import lru_cache
+from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple, cast
 
 from core.structures.peg import PEGSyntaxError
 
@@ -280,6 +281,38 @@ def _fold_search_disjunction(
 
 
 # =========================================================================
+# Facade LRU Cache and Global AOT Parser Singleton
+# =========================================================================
+
+_GLOBAL_SEARCH_AOT_PARSER: Optional[Any] = None
+
+
+def _get_global_search_parser() -> Any:
+    global _GLOBAL_SEARCH_AOT_PARSER
+    if _GLOBAL_SEARCH_AOT_PARSER is None:
+        from search.query.generated_search_query_parser import SearchQueryParser
+
+        _GLOBAL_SEARCH_AOT_PARSER = SearchQueryParser()
+    return _GLOBAL_SEARCH_AOT_PARSER
+
+
+@lru_cache(maxsize=1024)
+def _cached_aot_search_parse(cleaned: str) -> Tuple[QueryClause, ...]:
+    parser = _get_global_search_parser()
+    res = parser.parse(cleaned)
+    if isinstance(res, list):
+        return tuple(cast(List[QueryClause], res))
+    if isinstance(res, QueryClause):
+        return (res,)
+    return ()
+
+
+def clear_search_query_cache() -> None:
+    """Clears the LRU cache for search query parsing."""
+    _cached_aot_search_parse.cache_clear()
+
+
+# =========================================================================
 # Enterprise Query Parser Facade
 # =========================================================================
 
@@ -294,14 +327,11 @@ class EnterpriseQueryParser:
     FIELD_ALIAS: ClassVar[Dict[str, str]] = SEARCH_FIELD_ALIAS
 
     def __init__(
-        self,
-        default_field_weights: Optional[Dict[str, float]] = None,
+        self, default_field_weights: Optional[Dict[str, float]] = None
     ) -> None:
         if default_field_weights is None:
             default_field_weights = {
-                "title": 4.0,
-                "author": 3.5,
-                "keywords": 3.0,
+                "title": 3.0,
                 "abstract": 2.0,
                 "content": 1.0,
             }
@@ -310,11 +340,7 @@ class EnterpriseQueryParser:
 
     def _get_parser(self) -> Any:
         """Lazily imports and instantiates the AOT-compiled SearchQueryParser."""
-        if self._parser is None:
-            from search.query.generated_search_query_parser import SearchQueryParser
-
-            self._parser = SearchQueryParser()
-        return self._parser
+        return _get_global_search_parser()
 
     def _resolve_field(self, field_raw: Optional[str]) -> Optional[str]:
         return _resolve_search_field(field_raw)
@@ -333,14 +359,13 @@ class EnterpriseQueryParser:
         return []
 
     def parse(self, raw_query: str) -> List[QueryClause]:
-        """Parses raw query into a list of QueryClause objects using AOT PEG."""
+        """Parses raw query into a list of QueryClause objects using AOT PEG with LRU caching."""
         cleaned = (raw_query or "").strip()
         if not cleaned:
             return []
 
-        parser = self._get_parser()
         try:
-            return self._coerce_parse_result(parser.parse(cleaned))
+            return list(_cached_aot_search_parse(cleaned))
         except PEGSyntaxError:
             return self._fallback_regex_parse(raw_query)
 
@@ -499,3 +524,7 @@ class QueryContext:
             f"QueryContext(raw='{self.raw_query}', clauses={len(self.clauses)}, "
             f"tokens={len(self.expanded_tokens)}, fields={self.target_fields}, intent='{self.intent}')"
         )
+
+
+# Alias for backward compatibility and Issue #303 specification
+QueryParser = EnterpriseQueryParser

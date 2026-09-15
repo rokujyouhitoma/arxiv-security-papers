@@ -7,6 +7,7 @@ Zero external dependencies, zero ad-hoc regular expressions.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from core.structures.peg import Choice, Lit, OneOrMore, Parser, Reg, Seq, ZeroOrMore
@@ -20,10 +21,15 @@ from .ast import (
     SQLStatement,
     UpdateStatement,
 )
-from .ddl_parser import parse_ddl
-from .dml_parser import parse_dml
-from .dql_parser import parse_dql
-from .expr_parser import BinaryOpExpr, SQLExpr, SQLExpressionParser
+from .ddl_parser import clear_ddl_cache, parse_ddl
+from .dml_parser import clear_dml_cache, parse_dml
+from .dql_parser import clear_dql_cache, parse_dql
+from .expr_parser import (
+    BinaryOpExpr,
+    SQLExpr,
+    SQLExpressionParser,
+    clear_sql_expr_cache,
+)
 
 
 class SQLParseError(Exception):
@@ -240,7 +246,27 @@ class SQLParser:
         return cast(CreateTableStatement, parse_ddl(sql))
 
 
+_GLOBAL_SQL_PARSER: Optional[SQLParser] = None
+
+
+def _get_global_sql_parser() -> SQLParser:
+    global _GLOBAL_SQL_PARSER
+    if _GLOBAL_SQL_PARSER is None:
+        _GLOBAL_SQL_PARSER = SQLParser()
+    return _GLOBAL_SQL_PARSER
+
+
+@lru_cache(maxsize=1024)
 def parse_sql(sql_query: str) -> SQLStatement:
-    """Convenience helper to parse an SQL string into SQLStatement AST."""
-    parser = SQLParser()
+    """Convenience helper to parse an SQL string into SQLStatement AST with LRU caching."""
+    parser = _get_global_sql_parser()
     return parser.parse(sql_query)
+
+
+def clear_sql_parser_caches() -> None:
+    """Clears all SQL subsystem LRU caches (dispatcher, DQL, DML, DDL, expressions)."""
+    parse_sql.cache_clear()
+    clear_dql_cache()
+    clear_dml_cache()
+    clear_ddl_cache()
+    clear_sql_expr_cache()
