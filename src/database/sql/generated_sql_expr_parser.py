@@ -22,18 +22,40 @@ from core.structures.peg import (
     ZeroOrMore,
 )
 from database.sql.expr_parser import (
+    BetweenExpr,
     BinaryOpExpr,
     CaseExpr,
     CollateExpr,
     ColumnRefExpr,
     ExistsExpr,
     FunctionCallExpr,
+    InExpr,
+    IsNullExpr,
+    LikeExpr,
     LiteralExpr,
+    SQLExpr,
     UnaryOpExpr,
-    _dispatch_pred,
 )
 
 # User header code
+
+
+def _dispatch_match_or_in(base: SQLExpr, suf: Any) -> SQLExpr:
+    kind = suf[0]
+    if kind == "LIKE":
+        return LikeExpr(base, suf[3], operator=suf[2], escape=suf[4], is_not=suf[1])
+    if kind == "IN":
+        return InExpr(base, suf[2] or [], subquery=suf[3], is_not=suf[1])
+    return BinaryOpExpr(suf[1], base, suf[2])
+
+
+def _dispatch_pred(base: SQLExpr, suf: Any) -> SQLExpr:
+    kind = suf[0]
+    if kind == "IS_NULL":
+        return IsNullExpr(base, is_not=suf[1])
+    if kind == "BETWEEN":
+        return BetweenExpr(base, suf[2], suf[3], is_not=suf[1])
+    return _dispatch_match_or_in(base, suf)
 
 
 class SQLExprParser(Parser[Any]):
