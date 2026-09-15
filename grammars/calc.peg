@@ -1,23 +1,25 @@
 # Arithmetic Calculator Grammar
+# Bryan Ford POPL '04 compliant syntax with <- and [...] character classes
 grammar Calc
 
-expr = left:term rest:(op:add_op right:term)* {
+expr <- ws left:term rest:(op:add_op right:term)* {
     val = left
     for o, r in rest:
         val = val + r if o == "+" else val - r
     return val
 }
 
-term = left:factor rest:(op:mul_op right:factor)* {
+term <- left:factor rest:(op:mul_op right:factor)* {
     val = left
     for o, r in rest:
         val = val * r if o == "*" else val // r
     return val
 }
 
-factor = "(" e:expr ")" { return e }
-       / n:number { return n }
+factor <- "(" ws e:expr ")" ws { return e }
+        / n:number { return n }
 
-number = raw:/[0-9]+/ { return int(raw) }
-add_op = op:/[+-]/ { return op }
-mul_op = op:/[*\/]/ { return op }
+number <- raw:[0-9]+ ws { return int("".join(raw)) }
+add_op <- op:[+-] ws { return op }
+mul_op <- op:[*/] ws { return op }
+ws <- [ \t\r\n]*

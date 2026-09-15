@@ -33,6 +33,21 @@ class RegexExpr(Expression):
 
 
 @dataclass(frozen=True)
+class CharClassExpr(Expression):
+    """Character class match expression (e.g. [a-z0-9], [^a-z])."""
+
+    raw_spec: str
+    inverted: bool = False
+
+
+@dataclass(frozen=True)
+class AnyCharExpr(Expression):
+    """Any character match expression (Bryan Ford POPL '04 '.' token)."""
+
+    pass
+
+
+@dataclass(frozen=True)
 class RuleRefExpr(Expression):
     """Reference to another non-terminal grammar rule (e.g. expr, term)."""
 

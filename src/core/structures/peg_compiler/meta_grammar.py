@@ -27,6 +27,8 @@ from core.structures.peg import (
 )
 from core.structures.peg_compiler.ast_nodes import (
     ActionExpr,
+    AnyCharExpr,
+    CharClassExpr,
     ChoiceExpr,
     Expression,
     GrammarDef,
@@ -180,7 +182,7 @@ class MetaGrammarParser:
         action_tok = lex(ActionBlockParser())
 
         # Punctuation
-        eq_tok = lex(Lit("="))
+        arrow_tok = lex(Choice(Lit("<-"), Lit("=")))
         slash_tok = lex(Choice(Lit("/"), Lit("|")))
         colon_tok = lex(Lit(":"))
         lparen = lex(Lit("("))
@@ -190,6 +192,8 @@ class MetaGrammarParser:
         question_tok = lex(Lit("?"))
         amp_tok = lex(Lit("&"))
         excl_tok = lex(Lit("!"))
+        dot_tok = lex(Lit("."))
+        char_class_tok = lex(Reg(r"\[(?:\^)?(?:\\\]|[^\]])+\]"))
 
         # Directives
         grammar_kw = lex(Lit("grammar"))
@@ -205,10 +209,19 @@ class MetaGrammarParser:
         reg_p = regex_tok.map(
             lambda m: RegexExpr(cast(str, m)[1:-1].replace(r"\/", "/"))
         )
+
+        def _make_char_class(raw: Any) -> Expression:
+            s = cast(str, raw)
+            inv = s.startswith("[^")
+            spec = s[2:-1] if inv else s[1:-1]
+            return CharClassExpr(raw_spec=spec, inverted=inv)
+
+        char_class_p = char_class_tok.map(_make_char_class)
+        dot_p = dot_tok.map(lambda _: AnyCharExpr())
         group_p = Seq(lparen, choice_ref, rparen).map(lambda res: res[1])
         ref_p = ident_tok.map(lambda name: RuleRefExpr(cast(str, name)))
 
-        primary = Choice(lit_p, reg_p, group_p, ref_p)
+        primary = Choice(lit_p, reg_p, char_class_p, dot_p, group_p, ref_p)
 
         # Suffix: *, +, ?
         def _apply_suffix(res: List[Any]) -> Expression:
@@ -237,7 +250,7 @@ class MetaGrammarParser:
             lambda res: PredExpr(cast(Expression, res[1]), is_positive=False)
         )
         prefixed_item = Choice(named_p, pos_pred, neg_pred, suffixed)
-        new_rule_head = Seq(ident_tok, eq_tok)
+        new_rule_head = Seq(ident_tok, arrow_tok)
         prefixed = Seq(NotPred(new_rule_head), prefixed_item).map(
             lambda res: cast(Expression, res[1])
         )
@@ -271,7 +284,7 @@ class MetaGrammarParser:
         choice_p = Seq(alt_expr, ZeroOrMore(Seq(slash_tok, alt_expr))).map(_make_choice)
         choice_ref.define(choice_p)
 
-        # Rule definition: name = choice [action]
+        # Rule definition: name <- choice [action] or name = choice [action]
         def _make_rule(res: List[Any]) -> RuleDef:
             name = cast(str, res[0])
             final_expr = cast(Expression, res[2])
@@ -280,7 +293,7 @@ class MetaGrammarParser:
                 final_expr = ActionExpr(final_expr, cast(str, act))
             return RuleDef(name=name, expr=final_expr)
 
-        rule_def = Seq(ident_tok, eq_tok, choice_p, Opt(action_tok)).map(_make_rule)
+        rule_def = Seq(ident_tok, arrow_tok, choice_p, Opt(action_tok)).map(_make_rule)
 
         # Directives
         grammar_decl = Seq(grammar_kw, ident_tok).map(lambda res: res[1])

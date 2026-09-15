@@ -57,6 +57,11 @@
   - [10.2 ブートストラップ循環依存の解消 (Pragmatic Bootstrapping Pattern)](#102-ブートストラップ循環依存の解消-pragmatic-bootstrapping-pattern)
   - [10.3 セルフホスティング仕様と AST マッピング](#103-セルフホスティング仕様と-ast-マッピング)
   - [10.4 完了条件 (DoD for Phase 3)](#104-完了条件-dod-for-phase-3)
+- [11. Phase 4: Bryan Ford 論文（POPL '04）公式文法仕様への改定と実用的拡張 (Issue #298)](#11-phase-4-bryan-ford-論文popl-04公式文法仕様への改定と実用的拡張-issue-298)
+  - [11.1 POPL '04 Figure 1 公式構文マッピング](#111-popl-04-figure-1-公式構文マッピング)
+  - [11.2 第一級構文 (`<-`, `[...]`, `.`) と実用拡張の調和](#112-第一級構文---実用拡張の調和)
+  - [11.3 セルフホスティング Fixpoint 不変性と ReDoS 根絶](#113-セルフホスティング-fixpoint-不変性と-redos-根絶)
+  - [11.4 完了条件 (DoD for Phase 4)](#114-完了条件-dod-for-phase-4)
 
 ---
 
@@ -139,8 +144,10 @@ PEG でサポートする構文式（Parsing Expression）の演算体系は以�
 | 演算子種別 | PEG 表記 | クラス名 | 意味 / 動作 |
 | :--- | :---: | :--- | :--- |
 | **空文字列** | $\epsilon$ | `Empty()` | 何も消費せず常に成功。 |
-| **文字列リテラル** | `"abc"` | `Literal("abc")` | 現在位置が `"abc"` と完全一致すれば消費して成功。 |
-| **正規表現トークン** | `/pattern/` | `Regex(pattern)` | 現在位置から正規表現にマッチすれば消費して成功。 |
+| **文字列リテラル** | `"abc"` | `Literal("abc")` / `Lit("abc")` | 現在位置が `"abc"` と完全一致すれば消費して成功。 |
+| **任意文字 (AnyChar)** | `.` | `AnyChar()` / `Dot()` | 現在位置から任意の 1 文字を消費（EOF 時は失敗）。 |
+| **文字クラス** | `[...]` / `[^...]` | `CharClass(spec, inv)` / `Class(...)` | Pure Python $O(1)$ 判定による 1 文字マッチ（ReDoS ゼロ）。 |
+| **正規表現トークン** | `/pattern/` | `Regex(pattern)` / `Reg(pattern)` | 現在位置から正規表現にマッチすれば消費して成功。 |
 | **連接 (Sequence)** | $e_1 \ e_2$ | `Seq(e1, e2)` | $e_1$ をパースし、成功したら直後から $e_2$ をパース。 |
 | **順序付き選択 (Choice)** | $e_1 \ / \ e_2$ | `Choice(e1, e2)` | $e_1$ を試し、成功すれば確定。失敗時のみ現在位置を復元し $e_2$ を試行。 |
 | **0回以上の反復** | $e^*$ | `ZeroOrMore(e)` | $e$ が失敗するまで貪欲に繰り返す（常に成功扱い）。 |
@@ -486,4 +493,52 @@ generated_turtle_parser.py    GeneratedCalcParser        GeneratedQueryParser
 - [x] `MetaGrammarParser` が自己生成された AOT メタパーサーを優先利用し、既存の全 `.peg` ファイルが透過的にコンパイル可能であること。
 - [x] `tests/core/test_peg_bootstrap.py` において、手書きパーサーとの AST 等価性および自己再コンパイル Fixpoint が 100% PASS すること。
 - [x] `Makefile` に `verify_peg_bootstrap` が追加され、`make compile_grammars` と共に正常動作すること。
+
+---
+
+## 11. Phase 4: Bryan Ford 論文（POPL '04）公式文法仕様への改定と実用的拡張 (Issue #298)
+
+### 11.1 POPL '04 Figure 1 公式構文マッピング
+
+Bryan Ford 氏の原著論文 *"Parsing Expression Grammars: A Recognition-Based Syntactic Foundation"* (POPL '04) Figure 1 における公式構文規則と、本 AOT コンパイラの実装対照仕様を策定する：
+
+| 論文定義 (Figure 1) | 本実装 (Target Syntax) | 意味・ランタイムコンビネータ |
+| :--- | :--- | :--- |
+| `Grammar <- Spacing (Nonterminal '<-' Expression)* EndOfFile` | `rule_name <- expr` *(互換: `=`) `* | 規則定義記号 `<-` を第一級標準化。 |
+| `Primary <- Identifier !LEFTARROW` | `ident` (非終端参照) | `RuleRef("ident")` による遅延参照解決。 |
+| `Class <- '[' (!']' Range)* ']' Spacing` | `[a-z0-9]`, `[ \t\r\n]`, `[\-\]]` | `CharClass(spec)` による Pure Python $O(1)$ 判定。 |
+| *(Inverted Class)* | `[^a-z0-9]` | `CharClass(spec, inverted=True)` 否定文字クラス。 |
+| `DOT <- '.' Spacing` | `.` | `AnyChar()` / `Dot()` 任意 1 文字消費。 |
+| `Literal <- ['] ... ['] / ["] ... ["]` | `"..."` / `'...'` | `Literal("...")` / `Lit("...")` |
+| `Expression <- Sequence ('/' Sequence)*` | `alt1 / alt2` *(互換: `\|`)* | `Choice(alt1, alt2)` 順序付き選択。 |
+| `Prefix <- ('&' / '!')? Suffix` | `&e`, `!e`, `name:e` | `AndPred`, `NotPred`, `NamedExpr` |
+| `Suffix <- Primary ('?' / '*' / '+')?` | `e*`, `e+`, `e?` | `ZeroOrMore`, `OneOrMore`, `Opt` |
+
+### 11.2 第一級構文 (`<-`, `[...]`, `.`) と実用拡張の調和
+
+学術標準の厳密性を維持しつつ、実用的な言語処理基盤として以下の拡張を共存・調和させる：
+1. **セマンティックアクション `{ ... }`**:
+   - 各規則または連接に Python コードブロックを埋め込み可能。
+2. **名前付きバインド `name:expr`**:
+   - セマンティックアクション内で即座に変数として参照可能。
+3. **正規表現リテラル `/[pattern]/`**:
+   - 複雑なトークンパターン（URL、識別子等）の高速記述を維持。
+4. **ディレクティブ `grammar Name`, `@header { ... }`**:
+   - 生成パーサークラス名およびモジュールヘッダーインポートの宣言。
+
+### 11.3 セルフホスティング Fixpoint 不変性と ReDoS 根絶
+
+1. **ReDoS (破局的バックトラッキング) の根絶**:
+   - `CharClass` は範囲リスト `(start_ord, end_ord)` および文字集合による直接比較を行い、正規表現エンジンをバイパスして $O(1)$ 判定を保証。
+2. **セルフホスティング Fixpoint**:
+   - 論文構文（`<-` 等）で全面改定された `grammars/peg_meta.peg` から生成された `generated_meta_parser.py` が自身を再パース・再コンパイルした結果とバイト単位で一致（Fixpoint 保証）。
+
+### 11.4 完了条件 (DoD for Phase 4)
+- [x] `src/core/structures/peg.py` に `AnyChar` および `CharClass` コンビネータが実装されていること。
+- [x] `src/core/structures/peg_compiler/` (AST, Codegen, MetaGrammar) が `<-`, `[...]`, `[^...]`, `.` を完全サポートすること。
+- [x] `grammars/peg_meta.peg` が Bryan Ford 論文スタイル（`<-` 等）で改定され、`generated_meta_parser.py` が決定論的に再生成されること。
+- [x] `grammars/calc.peg`, `grammars/boolean_query.peg`, `grammars/turtle.peg` が新構文へ移行し全動作すること。
+- [x] `tests/core/test_peg_paper_syntax.py` および `tests/core/test_peg_bootstrap.py` を含む全テストが 100% PASS すること。
+- [x] DSN-25 設計仕様書が改定され、Phase 4 構文仕様が APPROVED ステータスで文書化されていること。
+
 

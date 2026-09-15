@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from core.structures.peg_compiler.ast_nodes import (
     ActionExpr,
+    AnyCharExpr,
+    CharClassExpr,
     ChoiceExpr,
     Expression,
     GrammarDef,
@@ -30,6 +32,8 @@ __all__ = [
     "Expression",
     "LitExpr",
     "RegexExpr",
+    "CharClassExpr",
+    "AnyCharExpr",
     "RuleRefExpr",
     "SeqExpr",
     "ChoiceExpr",
