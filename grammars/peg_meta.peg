@@ -1,0 +1,150 @@
+# DSN-25 Phase 3 PEG Meta-Grammar Specification
+# Self-hosting grammar definition for PEG AOT Compiler
+
+grammar MetaGrammar
+
+@header {
+import re
+from typing import Any
+from core.structures.peg_compiler.ast_nodes import (
+    ActionExpr,
+    ChoiceExpr,
+    GrammarDef,
+    LitExpr,
+    NamedExpr,
+    OptExpr,
+    PredExpr,
+    RegexExpr,
+    RepeatExpr,
+    RuleDef,
+    RuleRefExpr,
+    SeqExpr,
+)
+
+def _unescape_char(char: str) -> str:
+    escapes = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "'": "'", "\\": "\\"}
+    return escapes.get(char, char)
+
+def _unescape_string(raw: str) -> str:
+    content = raw[1:-1]
+    return re.sub(r"\\(.)", lambda m: _unescape_char(m.group(1)), content)
+}
+
+# --- Entry Point ---
+grammar_file = ws g_decl:grammar_decl? h_decl:header_decl? rules:rule_def+ ws? {
+    name_str = g_decl if g_decl is not None else "GeneratedParser"
+    hdr_str = h_decl if h_decl is not None else ""
+    start_r = rules[0].name if rules else None
+    return GrammarDef(name=name_str, rules=rules, header_code=hdr_str, start_rule=start_r)
+}
+
+grammar_decl = "grammar" ws name:ident { return name }
+header_decl = "@header" ws act:action_block { return act }
+
+# --- Rules ---
+rule_def = name:ident "=" ws ch:choice_expr act:action_block? {
+    final_expr = ch
+    if act is not None:
+        final_expr = ActionExpr(ch, act)
+    return RuleDef(name=name, expr=final_expr)
+}
+
+# --- Expressions ---
+choice_expr = first:alt_expr rest:choice_rest* {
+    if not rest:
+        return first
+    alts = [first] + rest
+    return ChoiceExpr(alts)
+}
+
+choice_rest = ("/" / "|") ws alt:alt_expr { return alt }
+
+alt_expr = seq:seq_expr act:action_block? {
+    if act is not None:
+        return ActionExpr(seq, act)
+    return seq
+}
+
+seq_expr = items:prefixed+ {
+    if len(items) == 1:
+        return items[0]
+    return SeqExpr(items)
+}
+
+prefixed = !new_rule_head item:prefix_item { return item }
+new_rule_head = ident "="
+
+prefix_item = named_expr / pos_pred / neg_pred / suffixed
+
+named_expr = name:ident ":" ws expr:suffixed {
+    return NamedExpr(name=name, expr=expr)
+}
+
+pos_pred = "&" ws expr:suffixed {
+    return PredExpr(expr, is_positive=True)
+}
+
+neg_pred = "!" ws expr:suffixed {
+    return PredExpr(expr, is_positive=False)
+}
+
+suffixed = expr:primary op:suffix_op? {
+    if op == "*":
+        return RepeatExpr(expr, min_count=0)
+    if op == "+":
+        return RepeatExpr(expr, min_count=1)
+    if op == "?":
+        return OptExpr(expr)
+    return expr
+}
+
+suffix_op = op:("*" / "+" / "?") ws { return op }
+
+primary = lit_str / regex_lit / group_expr / rule_ref
+
+lit_str = raw:(str_dq / str_sq) {
+    return LitExpr(_unescape_string(raw))
+}
+
+regex_lit = raw:regex_tok {
+    pattern = raw[1:-1].replace(r"\/", "/")
+    return RegexExpr(pattern)
+}
+
+group_expr = "(" ws ch:choice_expr ")" ws { return ch }
+
+rule_ref = name:ident {
+    return RuleRefExpr(name)
+}
+
+# --- Action Blocks (O(N) non-backtracking nested extraction) ---
+action_block = "{" pieces:action_piece* "}" ws {
+    return "".join(pieces)
+}
+
+action_piece = chunk:/[^{}"'\\]+/ {
+    return chunk
+} / dq:raw_str_dq {
+    return dq
+} / sq:raw_str_sq {
+    return sq
+} / esc:/\\./ {
+    return esc
+} / sub:action_sub_block {
+    return sub
+}
+
+action_sub_block = "{" pieces:action_piece* "}" {
+    return "{" + "".join(pieces) + "}"
+}
+
+# --- Lexical Tokens ---
+ident = name:/[A-Za-z_][A-Za-z0-9_]*/ ws { return name }
+str_dq = s:raw_str_dq ws { return s }
+str_sq = s:raw_str_sq ws { return s }
+regex_tok = r:/\/(?![ \t\r\n])((?:[^\r\n\/]|\\.)+)\// ws { return r }
+
+raw_str_dq = /"(?:[^"\\]|\\.)*"/
+raw_str_sq = /'(?:[^'\\]|\\.)*'/
+
+ws = /(?:\s+|#[^\r\n]*)*/

@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **297** | PEG AOT コンパイラのセルフホスティング（自己完結ブートストラップ化）の実装と DSN-25 設計仕様書改定 | Feature | 2026-09-15 | [297-self-hosting-peg-aot-compiler.md](closed/297-self-hosting-peg-aot-compiler.md) |
 | **296** | Pure Python 完全自作 OWL DL / RL 推論エンジン (Tableau / Hypertableau & Datalog) の実装と HermiT / Pellet 参考実装トラッキング | Feature | 2026-09-15 | [296-implement-pure-python-owl-reasoner.md](closed/296-implement-pure-python-owl-reasoner.md) |
 | **295** | システム監査所見の是正: テスト環境パス不整合修復、プロトタイプ仮の値（フォールバック固定値）の客観的抽出化、MCP耐障害性向上、およびドキュメント整合性回復 | Bug / Quality Improvement | 2026-09-15 | [295-remediate-audit-findings-test-failures-and-mcp-bugs.md](closed/295-remediate-audit-findings-test-failures-and-mcp-bugs.md) |
 | **294** | AOT PEG コンパイラ実戦投入: W3C Turtle 1.1 パーサーの AOT 化と運用パイプライン統合 | Feature | 2026-09-14 | [294-deploy-aot-peg-compiler-to-production-turtle-parser.md](closed/294-deploy-aot-peg-compiler-to-production-turtle-parser.md) |

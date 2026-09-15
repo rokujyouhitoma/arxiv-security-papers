@@ -48,9 +48,15 @@
 - [6. 将来の事前コード生成型パーサージェネレータ (Ahead-of-Time Compiler) 進化ロードマップ](#6-将来の事前コード生成型パーサージェネレータ-ahead-of-time-compiler-進化ロードマップ)
   - [6.1 2段階進化戦略 (Phase 1 ランタイム → Phase 2 コンパイラ)](#61-2段階進化戦略-phase-1-ランタイム--phase-2-コンパイラ)
   - [6.2 PEG メタ文法によるセルフホスティング (ブートストラップ) 仕様](#62-peg-メタ文法によるセルフホスティング-ブートストラップ-仕様)
-  - [6.3 静的コードエミッター (`tools/peg_compiler/codegen.py`) 構想](#63-静的コードエミッター-toolspeg_compilercodegenpy-構想)
-- [7. セキュリティ分析 (STRIDE Threat Model) と防御策](#7-セキュリティ分析-stride-threat-model-と防御策)
-- [8. 非機能要件・品質基準・DoD](#8-非機能要件品質基準dod)
+- [7. AOT コンパイラ実戦投入と本番運用 (Production Deployment) (Phase 2 実装完了: Issue #294)](#7-aot-コンパイラ実戦投入と本番運用-production-deployment-phase-2-実装完了-issue-294)
+  - [7.1 W3C Turtle 1.1 パーサーの宣言的 AOT 換装](#71-w3c-turtle-11-パーサーの宣言的-aot-換装)
+- [8. セキュリティ分析 (STRIDE Threat Model) と防御策](#8-セキュリティ分析-stride-threat-model-と防御策)
+- [9. 非機能要件・品質基準・DoD](#9-非機能要件品質基準dod)
+- [10. Phase 3: PEG AOT コンパイラのセルフホスティング（自己完結ブートストラップ化）仕様 (Issue #297)](#10-phase-3-peg-aot-コンパイラのセルフホスティング自己完結ブートストラップ化仕様-issue-297)
+  - [10.1 概要と自己完結ブートストラップ哲学](#101-概要と自己完結ブートストラップ哲学)
+  - [10.2 ブートストラップ循環依存の解消 (Pragmatic Bootstrapping Pattern)](#102-ブートストラップ循環依存の解消-pragmatic-bootstrapping-pattern)
+  - [10.3 セルフホスティング仕様と AST マッピング](#103-セルフホスティング仕様と-ast-マッピング)
+  - [10.4 完了条件 (DoD for Phase 3)](#104-完了条件-dod-for-phase-3)
 
 ---
 
@@ -420,3 +426,64 @@ graph TD
 - [x] `src/core/structures/peg_compiler/` に DSN-25 Phase 2 事前コンパイラ（AOT Compiler）が実装され、`.peg` 文法定義ファイルから Python パーサーコードが事前生成できること（Issue #293、`tests/core/test_peg_compiler.py` PASS）。
 - [x] `grammars/turtle.peg` が W3C Turtle 1.1 仕様に準拠して定義され、`tools/peg_compiler/compile_peg.py` および `make compile_grammars` により `src/ontology/generated_turtle_parser.py` が自動生成され、`turtle_parser.py` に本番実戦投入されたこと（Issue #294、`tests/ontology/test_turtle_parser.py` & `test_turtle_benchmark.py` PASS）。
 - [x] 全品質ゲート（`make check_format` および `make static_analysis`）がエラー 0 件で通過すること。
+
+---
+
+## 10. Phase 3: PEG AOT コンパイラのセルフホスティング（自己完結ブートストラップ化）仕様 (Issue #297)
+
+### 10.1 概要と自己完結ブートストラップ哲学
+Phase 2 で構築された PEG AOT コンパイラ（`src/core/structures/peg_compiler/`）の表現力と正当性を自律的に証明するため、PEG メタ文法パーサー自身を PEG 文法記法（`grammars/peg_meta.peg`）で定義し、AOT コンパイラ自身によって生成された Python コード（`src/core/structures/peg_compiler/generated_meta_parser.py`）を用いてメタ文法を解析する**「セルフホスティング（Self-Hosting / Bootstrapping）」**機構を確立する。
+
+```
+                    [ メタ文法仕様: grammars/peg_meta.peg ]
+                                      │
+                                      ▼ (tools/peg_compiler/compile_peg.py)
+[ AOT コード生成器: codegen.py ] ──▶ [ 生成コード: generated_meta_parser.py ] (Git 管理)
+                                      │
+                                      ▼ (優先ロード)
+                     [ 統合ファサード: meta_grammar.py ]
+                                      │
+         ┌────────────────────────────┼────────────────────────────┐
+         ▼                            ▼                            ▼
+  grammars/turtle.peg         grammars/calc.peg          grammars/boolean_query.peg
+         │                            │                            │
+         ▼                            ▼                            ▼
+generated_turtle_parser.py    GeneratedCalcParser        GeneratedQueryParser
+```
+
+### 10.2 ブートストラップ循環依存の解消 (Pragmatic Bootstrapping Pattern)
+コンパイラのセルフホスティングにおける典型的な「鶏と卵問題（初回環境構築時の循環依存）」に対し、本システムでは CPython (`pegen`) と同様の**コミット型決定論的ブートストラップ（Committed Deterministic Bootstrapping）**を採用する。
+
+1. **自己生成コードの Git 追跡**:
+   - `src/core/structures/peg_compiler/generated_meta_parser.py` は Git 管理下にコミットされる。
+   - 新規クローン環境やクリーン CI 環境では、文法コンパイルを必要とせず即座に `GeneratedMetaGrammarParser` が稼働する。
+2. **メタ文法更新時の再ブートストラップ**:
+   - `grammars/peg_meta.peg` が改定された場合、開発者は `make compile_grammars` を実行することで最新のパーサーコードを再生成する。
+3. **Fixpoint（不動点）等価性検証 (`make verify_peg_bootstrap`)**:
+   - 生成された `generated_meta_parser.py` を用いて再度 `grammars/peg_meta.peg` をパースし、再コード生成された出力がコミット済みファイルとバイト単位で一致することを自動検証（Fixpoint Invariant）。
+
+### 10.3 セルフホスティング仕様と AST マッピング
+
+`grammars/peg_meta.peg` は以下の主要構文規則を PEG 自身で定義する：
+
+| 構文規則 | PEG 記法例 | 生成 AST ノード |
+| :--- | :--- | :--- |
+| 文法ヘッダー | `grammar Ident` / `@header { ... }` | `GrammarDef(name, header_code)` |
+| 規則定義 | `rule_name = choice_expr` | `RuleDef(name, expr)` |
+| 順序選択 (Choice) | `alt1 / alt2 / alt3` | `ChoiceExpr([alt1, alt2, alt3])` |
+| 連接 (Sequence) | `item1 item2 item3` | `SeqExpr([item1, item2, item3])` |
+| ラベル付き式 | `val:item` | `NamedExpr("val", item)` |
+| 肯定先読み述語 | `&item` | `PredExpr(item, is_positive=True)` |
+| 否定先読み述語 | `!item` | `PredExpr(item, is_positive=False)` |
+| 反復サフィックス | `item*` / `item+` / `item?` | `RepeatExpr(0+)` / `RepeatExpr(1+)` / `OptExpr` |
+| 文字列リテラル | `"text"` / `'text'` | `LitExpr("text")` |
+| 正規表現リテラル | `/[0-9]+/` | `RegexExpr("[0-9]+")` |
+| セマンティックアクション | `{ return AstNode(...) }` | `ActionExpr(expr, code)` |
+
+### 10.4 完了条件 (DoD for Phase 3)
+- [x] `grammars/peg_meta.peg` が作成され、PEG メタ文法自身が完全記述されていること。
+- [x] `src/core/structures/peg_compiler/generated_meta_parser.py` が自動生成され、Git 管理下に配置されていること。
+- [x] `MetaGrammarParser` が自己生成された AOT メタパーサーを優先利用し、既存の全 `.peg` ファイルが透過的にコンパイル可能であること。
+- [x] `tests/core/test_peg_bootstrap.py` において、手書きパーサーとの AST 等価性および自己再コンパイル Fixpoint が 100% PASS すること。
+- [x] `Makefile` に `verify_peg_bootstrap` が追加され、`make compile_grammars` と共に正常動作すること。
+

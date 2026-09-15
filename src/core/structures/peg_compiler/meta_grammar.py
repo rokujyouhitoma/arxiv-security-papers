@@ -122,14 +122,45 @@ class ActionBlockParser(Parser[str]):
 
 
 class MetaGrammarParser:
-    """Packrat PEG parser that parses .peg grammar files into GrammarDef AST."""
+    """Packrat PEG parser that parses .peg grammar files into GrammarDef AST.
 
-    def __init__(self) -> None:
-        self.root_parser: Parser[GrammarDef] = self._build_grammar()
+    Uses AOT compiled generated_meta_parser if available, falling back to combinators.
+    """
+
+    def __init__(self, use_aot: bool = True) -> None:
+        self.use_aot = use_aot
+        self._aot_parser: Optional[Any] = None
+        self._combinator_parser: Optional[Parser[GrammarDef]] = None
+
+        if self.use_aot:
+            self._try_load_aot()
+
+        if self._aot_parser is None:
+            self._combinator_parser = self._build_grammar()
+
+    def _try_load_aot(self) -> None:
+        try:
+            from core.structures.peg_compiler.generated_meta_parser import (
+                MetaGrammarParser as GeneratedParser,
+            )
+
+            self._aot_parser = GeneratedParser()
+        except ImportError:
+            self._aot_parser = None
 
     def parse(self, text: str) -> GrammarDef:
         """Parses PEG grammar specification text into GrammarDef AST."""
-        return self.root_parser.parse(text)
+        if self._aot_parser is not None:
+            try:
+                return cast(GrammarDef, self._aot_parser.parse(text))
+            except Exception:
+                if self._combinator_parser is None:
+                    self._combinator_parser = self._build_grammar()
+                return self._combinator_parser.parse(text)
+
+        if self._combinator_parser is None:
+            self._combinator_parser = self._build_grammar()
+        return self._combinator_parser.parse(text)
 
     def _build_grammar(self) -> Parser[GrammarDef]:
         """Builds PEG combinator rules for parsing .peg files."""
