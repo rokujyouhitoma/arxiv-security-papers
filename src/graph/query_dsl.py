@@ -8,16 +8,7 @@ Conforms to DSN-25 Phase 1 / DSN-18 specifications.
 
 from typing import Any, List, Optional, Set, Tuple, cast
 
-from core.structures.peg import (
-    Lit,
-    OneOrMore,
-    Opt,
-    Parser,
-    PEGSyntaxError,
-    Reg,
-    Seq,
-    ZeroOrMore,
-)
+from core.structures.peg import PEGSyntaxError
 from graph.structures import Edge, Vertex
 
 
@@ -114,147 +105,49 @@ class GraphDSLQuery:
 
 
 # =========================================================================
-# PEG Grammar Construction for Graph Query DSL
+# AST Helper Functions for AOT Generated Parser (graph_query.peg)
 # =========================================================================
 
 
-def _extract_paren_node(body: Any) -> NodePattern:
+def _create_paren_node(
+    body: Optional[Tuple[Optional[str], Optional[str]]],
+) -> NodePattern:
+    """Constructs a NodePattern from parsed parenthesized node components."""
     if body is None:
         return NodePattern()
-    alias_str, label_part = body
-    lbl = label_part[1] if label_part else None
+    alias_str, lbl = body
     name = alias_str if alias_str and not lbl else None
     return NodePattern(name_or_id=name, label=lbl, alias=alias_str)
 
 
-def _make_node_pattern(val: Any) -> NodePattern:
-    if isinstance(val, str):
-        return NodePattern(name_or_id=val)
-    return _extract_paren_node(val[2])
-
-
-def _build_node_parser() -> Parser[NodePattern]:
-    opt_ws = Opt(Reg(r"\s+"))
-    ident = Reg(r"[a-zA-Z0-9_\-]+")
-    label_part = Seq(Lit(":"), ident)
-    node_body = Seq(Opt(ident), Opt(label_part))
-    paren_node = Seq(Lit("("), opt_ws, Opt(node_body), opt_ws, Lit(")"))
-    simple_node = ident
-    return (paren_node / simple_node).map(_make_node_pattern)
-
-
-def _parse_arrow_bracket_arrow(val: Any) -> EdgePattern:
-    b_content = val[2]
-    colon_part = b_content[2]
-    lbl = colon_part[1] if (colon_part and len(colon_part) > 1) else None
-    return EdgePattern(label=lbl, direction="out")
-
-
-def _parse_bracket_edge(val: Any) -> EdgePattern:
-    prefix, _, lbl_part, _, suffix = val
-    lbl = lbl_part[1] if (lbl_part and len(lbl_part) > 1) else None
-    if str(prefix).startswith("<-"):
-        direction = "in"
-    elif str(suffix).endswith("->"):
-        direction = "out"
-    else:
-        direction = "both"
-    return EdgePattern(label=lbl, direction=direction)
-
-
-def _make_edge_pattern(val: Any) -> EdgePattern:
-    if val in ("->", "<-", "--"):
-        dir_map = {"->": "out", "<-": "in", "--": "both"}
-        return EdgePattern(direction=dir_map[val])
-    if isinstance(val, (list, tuple)) and len(val) == 5:
-        if val[0] == "->":
-            return _parse_arrow_bracket_arrow(val)
-        return _parse_bracket_edge(val)
-    return EdgePattern(direction="out")
-
-
-def _build_edge_parser() -> Parser[EdgePattern]:
-    opt_ws = Opt(Reg(r"\s+"))
-    ident = Reg(r"[a-zA-Z0-9_\-]+")
-    colon_ident = Seq(Opt(Lit(":")), ident).map(lambda val: (None, val[1]))
-
-    bracket_content = Seq(Lit("["), opt_ws, Opt(colon_ident), opt_ws, Lit("]"))
-    arrow_bracket_arrow = Seq(Lit("->"), opt_ws, bracket_content, opt_ws, Lit("->"))
-    bracket_out = Seq(Lit("-["), opt_ws, Opt(colon_ident), opt_ws, Lit("]->"))
-    bracket_in = Seq(Lit("<-["), opt_ws, Opt(colon_ident), opt_ws, Lit("]-"))
-    bracket_both = Seq(Lit("-["), opt_ws, Opt(colon_ident), opt_ws, Lit("]-"))
-
-    edge_tokens = (
-        arrow_bracket_arrow
-        / bracket_out
-        / bracket_in
-        / bracket_both
-        / Lit("->")
-        / Lit("<-")
-        / Lit("--")
-    )
-    return edge_tokens.map(_make_edge_pattern)
-
-
-def _fold_path(val: Any) -> PathPattern:
-    start_node, rest = val
-    nodes = [start_node]
-    edges = []
-    for item in rest:
-        # item is [opt_ws, edge, opt_ws, node]
-        edges.append(item[1])
-        nodes.append(item[3])
+def _fold_graph_path(
+    start: NodePattern,
+    rest: List[Tuple[EdgePattern, NodePattern]],
+) -> PathPattern:
+    """Folds a start node and subsequent (edge, node) pairs into a PathPattern."""
+    nodes = [start]
+    edges: List[EdgePattern] = []
+    for edge, node in rest:
+        edges.append(edge)
+        nodes.append(node)
     return PathPattern(nodes=nodes, edges=edges)
 
 
-def _build_path_parser(
-    node_p: Parser[NodePattern], edge_p: Parser[EdgePattern]
-) -> Parser[PathPattern]:
-    opt_ws = Opt(Reg(r"\s+"))
-    hop = Seq(opt_ws, edge_p, opt_ws, node_p)
-    return Seq(node_p, OneOrMore(hop)).map(_fold_path)
-
-
-def _fold_filter(val: Any) -> FilterQuery:
-    first, rest = val
-    conds = [first]
-    for item in rest:
-        conds.append(item[3])
-    return FilterQuery(conditions=conds, op="AND")
-
-
-def _build_filter_parser() -> Parser[FilterQuery]:
-    opt_ws = Opt(Reg(r"\s+"))
-    ident = Reg(r"[a-zA-Z0-9_\-]+")
-    filter_item = Seq(ident, Lit(":"), ident).map(
-        lambda v: FilterCondition(key=v[0], value=v[2])
-    )
-    and_kw = Reg(r"(?i)\bAND\b")
-    rest_filter = Seq(opt_ws, and_kw, opt_ws, filter_item)
-    return Seq(filter_item, ZeroOrMore(rest_filter)).map(_fold_filter)
-
-
-def _build_graph_dsl_grammar() -> Parser[GraphDSLQuery]:
-    node_p = _build_node_parser()
-    edge_p = _build_edge_parser()
-    path_p = _build_path_parser(node_p, edge_p).map(
-        lambda p: GraphDSLQuery(kind="path", path=p)
-    )
-    filter_p = _build_filter_parser().map(
-        lambda f: GraphDSLQuery(kind="filter", filter_q=f)
-    )
-
-    opt_ws = Opt(Reg(r"\s+"))
-    return Seq(opt_ws, (path_p / filter_p), opt_ws).map(
-        lambda val: cast(GraphDSLQuery, val[1])
-    )
+def _fold_graph_filter(
+    first: FilterCondition,
+    rest: List[FilterCondition],
+) -> FilterQuery:
+    """Folds a sequence of filter conditions into an AND FilterQuery."""
+    return FilterQuery(conditions=[first] + list(rest), op="AND")
 
 
 class GraphQueryDSLParser:
-    """Packrat PEG Parser for Graph Query DSL."""
+    """Packrat PEG Parser for Graph Query DSL powered by Ahead-of-Time generated parser."""
 
     def __init__(self) -> None:
-        self._grammar = _build_graph_dsl_grammar()
+        from graph.generated_graph_query_parser import GraphQueryParser
+
+        self._parser = GraphQueryParser()
 
     def parse(self, query_str: str) -> GraphDSLQuery:
         """Parses a graph query DSL string into a GraphDSLQuery AST."""
@@ -268,7 +161,17 @@ class GraphQueryDSLParser:
                 expected_tokens={"node", "filter"},
                 snippet="",
             )
-        return self._grammar.parse(clean)
+        res = self._parser.parse(clean)
+        if res is None:
+            raise PEGSyntaxError(
+                f"Invalid graph DSL query: {clean}",
+                pos=0,
+                line=1,
+                col=1,
+                expected_tokens={"node", "filter"},
+                snippet=clean[:20],
+            )
+        return cast(GraphDSLQuery, res)
 
 
 # =========================================================================

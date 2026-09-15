@@ -87,6 +87,9 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/search_query.peg -o src/search/query/generated_search_query_parser.py
 	${VENV_BIN}/isort src/search/query/generated_search_query_parser.py
 	${VENV_BIN}/black -q src/search/query/generated_search_query_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/graph_query.peg -o src/graph/generated_graph_query_parser.py
+	${VENV_BIN}/isort src/graph/generated_graph_query_parser.py
+	${VENV_BIN}/black -q src/graph/generated_graph_query_parser.py
 
 .PHONY: verify_peg_bootstrap
 verify_peg_bootstrap: activate ## Verify PEG AOT compiler self-hosting fixpoint

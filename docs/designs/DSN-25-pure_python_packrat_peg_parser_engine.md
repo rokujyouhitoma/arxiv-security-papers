@@ -48,9 +48,10 @@
 - [6. 将来の事前コード生成型パーサージェネレータ (Ahead-of-Time Compiler) 進化ロードマップ](#6-将来の事前コード生成型パーサージェネレータ-ahead-of-time-compiler-進化ロードマップ)
   - [6.1 2段階進化戦略 (Phase 1 ランタイム → Phase 2 コンパイラ)](#61-2段階進化戦略-phase-1-ランタイム--phase-2-コンパイラ)
   - [6.2 PEG メタ文法によるセルフホスティング (ブートストラップ) 仕様](#62-peg-メタ文法によるセルフホスティング-ブートストラップ-仕様)
-- [7. AOT コンパイラ実戦投入と本番運用 (Production Deployment) (Phase 2 実装完了: Issue #294, #299)](#7-aot-コンパイラ実戦投入と本番運用-production-deployment-phase-2-実装完了-issue-294-299)
+- [7. AOT コンパイラ実戦投入と本番運用 (Production Deployment) (Phase 2 実装完了: Issue #294, #299, #300)](#7-aot-コンパイラ実戦投入と本番運用-production-deployment-phase-2-実装完了-issue-294-299-300)
   - [7.1 W3C Turtle 1.1 パーサーの宣言的 AOT 換装](#71-w3c-turtle-11-パーサーの宣言的-aot-換装)
   - [7.2 検索クエリパーサーの宣言的 AOT 換装 (Issue #299)](#72-検索クエリパーサーの宣言的-aot-換装-issue-299)
+  - [7.3 CTI ナレッジグラフ クエリ DSL の宣言的 AOT 換装 (Issue #300)](#73-cti-ナレッジグラフ-クエリ-dsl-の宣言的-aot-換装-issue-300)
 - [8. セキュリティ分析 (STRIDE Threat Model) と防御策](#8-セキュリティ分析-stride-threat-model-と防御策)
 - [9. 非機能要件・品質基準・DoD](#9-非機能要件品質基準dod)
 - [10. Phase 3: PEG AOT コンパイラのセルフホスティング（自己完結ブートストラップ化）仕様 (Issue #297)](#10-phase-3-peg-aot-コンパイラのセルフホスティング自己完結ブートストラップ化仕様-issue-297)
@@ -406,7 +407,25 @@ graph TD
 4. **性能実証とゼロオーバーヘッド ([`tests/search/test_query_benchmark.py`](../../tests/search/test_query_benchmark.py))**:
    - クエリごとの動的コンビネータオブジェクト生成コストを完全排除（100回のインスタンス生成が 0.05 秒未満）。
    - 複雑な論理式クエリ 500 回のパースを 0.1 秒未満（$< 0.2\text{ms}$/query）で高速処理。
-   - 既存全単体テスト ([`tests/search/test_query_parser_peg.py`](../../tests/search/test_query_parser_peg.py)) と 100% 互換動作。
+   - 既存の全単体テスト ([`tests/search/test_query_parser_peg.py`](../../tests/search/test_query_parser_peg.py)) と 100% 互換動作。
+
+### 7.3 CTI ナレッジグラフ クエリ DSL の宣言的 AOT 換装 (Issue #300)
+
+事前コンパイラ実戦投入第3弾として、CTI ナレッジグラフ クエリ DSL ([`src/graph/query_dsl.py`](../../src/graph/query_dsl.py)) を動的コンビネータ構築から AOT 駆動型へ全面移行。
+
+1. **形式文法定義の宣言的分離 ([`grammars/graph_query.peg`](../../grammars/graph_query.peg))**:
+   - Bryan Ford POPL '04 論文構文（`<-`, `[...]`, `.`）に基づき、Cypher 風パスクエリ（`APT29 -> [USES] -> Malware`、逆方向 `<-`、無向 `--`、括弧ノード `(:ThreatActor)`）および複合フィルタ（`community:0 AND label:ThreatActor`）を完全定義。
+   - セマンティックアクションにより直接 `GraphDSLQuery` AST を生成。
+2. **静的パーサー自動生成 ([`src/graph/generated_graph_query_parser.py`](../../src/graph/generated_graph_query_parser.py))**:
+   - `tools/peg_compiler/compile_peg.py` により、完全型安全・ゼロ外部依存の静的パーサークラス `GraphQueryParser` を自動生成。
+3. **動的ビルダーの完全撤廃と委譲**:
+   - `src/graph/query_dsl.py` から約 150 行に及ぶ動的コンビネータ構築関数群を完全撤廃し、AOT パーサーへ委譲。
+4. **ビルドパイプライン統合 (`Makefile`)**:
+   - `make compile_grammars` に `graph_query.peg` $\to$ `generated_graph_query_parser.py` を追加。
+5. **性能実証とゼロオーバーヘッド ([`tests/graph/test_graph_benchmark.py`](../../tests/graph/test_graph_benchmark.py))**:
+   - 100 回のインスタンス生成が 0.05 秒未満（初期化オーバーヘッド 0ms の実証）。
+   - 100 回のパースを 0.2 秒未満（$< 2\text{ms}$/query）で高速処理。
+   - 既存全単体テスト ([`tests/graph/test_graph_query_dsl.py`](../../tests/graph/test_graph_query_dsl.py)) と 100% 互換動作。
 
 ---
 
@@ -450,6 +469,8 @@ graph TD
 - [x] `src/database/sql/parser.py` における残存正規表現・WHERE 文字列走査ロジックが完全撤廃され、純粋 PEG AST 走査へ一本化されたこと（Issue #292、全 401 テスト PASS）。
 - [x] `src/core/structures/peg_compiler/` に DSN-25 Phase 2 事前コンパイラ（AOT Compiler）が実装され、`.peg` 文法定義ファイルから Python パーサーコードが事前生成できること（Issue #293、`tests/core/test_peg_compiler.py` PASS）。
 - [x] `grammars/turtle.peg` が W3C Turtle 1.1 仕様に準拠して定義され、`tools/peg_compiler/compile_peg.py` および `make compile_grammars` により `src/ontology/generated_turtle_parser.py` が自動生成され、`turtle_parser.py` に本番実戦投入されたこと（Issue #294、`tests/ontology/test_turtle_parser.py` & `test_turtle_benchmark.py` PASS）。
+- [x] `grammars/search_query.peg` が Bryan Ford POPL '04 準拠で定義され、`src/search/query/generated_search_query_parser.py` が自動生成され、検索クエリパーサーが AOT 化されたこと（Issue #299、`tests/search/test_query_parser_peg.py` & `test_query_benchmark.py` PASS）。
+- [x] `grammars/graph_query.peg` が Bryan Ford POPL '04 準拠で定義され、`src/graph/generated_graph_query_parser.py` が自動生成され、CTI グラフクエリ DSL が AOT 化されたこと（Issue #300、`tests/graph/test_graph_query_dsl.py` & `test_graph_benchmark.py` PASS）。
 - [x] 全品質ゲート（`make check_format` および `make static_analysis`）がエラー 0 件で通過すること。
 
 ---

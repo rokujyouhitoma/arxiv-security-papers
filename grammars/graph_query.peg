@@ -1,0 +1,105 @@
+# CTI Knowledge Graph Query DSL Grammar Specification
+# Conforms to DSN-25 Phase 2 Ahead-of-Time Packrat PEG Compiler.
+# Conforms to Bryan Ford POPL '04 specification using <- rules.
+grammar GraphQuery
+
+@header {
+from graph.query_dsl import (
+    EdgePattern,
+    FilterCondition,
+    GraphDSLQuery,
+    NodePattern,
+    _create_paren_node,
+    _fold_graph_path,
+    _fold_graph_filter,
+)
+}
+
+query <- opt_ws q:(path_query / filter_query) opt_ws {
+    return q
+}
+
+path_query <- path:path_pattern {
+    return GraphDSLQuery(kind="path", path=path)
+}
+
+filter_query <- f:filter_expr {
+    return GraphDSLQuery(kind="filter", filter_q=f)
+}
+
+path_pattern <- start:node_pattern rest:(opt_ws edge:edge_pattern opt_ws n:node_pattern { return (edge, n) })+ {
+    return _fold_graph_path(start, rest)
+}
+
+node_pattern <- paren_node / simple_node
+
+simple_node <- name:ident {
+    return NodePattern(name_or_id=name)
+}
+
+paren_node <- "(" opt_ws body:node_body? opt_ws ")" {
+    return _create_paren_node(body)
+}
+
+node_body <- alias:ident? lbl:label_part? {
+    return (alias, lbl)
+}
+
+label_part <- ":" id:ident {
+    return id
+}
+
+edge_pattern <-
+    arrow_bracket_arrow
+    / bracket_out
+    / bracket_in
+    / bracket_both
+    / arrow_out
+    / arrow_in
+    / arrow_both
+
+arrow_bracket_arrow <- "->" opt_ws "[" opt_ws lbl:colon_label? opt_ws "]" opt_ws "->" {
+    return EdgePattern(label=lbl, direction="out")
+}
+
+bracket_out <- "-[" opt_ws lbl:colon_label? opt_ws "]->" {
+    return EdgePattern(label=lbl, direction="out")
+}
+
+bracket_in <- "<-[" opt_ws lbl:colon_label? opt_ws "]-" {
+    return EdgePattern(label=lbl, direction="in")
+}
+
+bracket_both <- "-[" opt_ws lbl:colon_label? opt_ws "]-" {
+    return EdgePattern(label=lbl, direction="both")
+}
+
+arrow_out <- "->" {
+    return EdgePattern(direction="out")
+}
+
+arrow_in <- "<-" {
+    return EdgePattern(direction="in")
+}
+
+arrow_both <- "--" {
+    return EdgePattern(direction="both")
+}
+
+colon_label <- ":"? id:ident {
+    return id
+}
+
+filter_expr <- first:filter_item rest:(opt_ws and_kw opt_ws itm:filter_item { return itm })* {
+    return _fold_graph_filter(first, rest)
+}
+
+filter_item <- k:ident ":" v:ident {
+    return FilterCondition(key=k, value=v)
+}
+
+and_kw <- /(?i)\bAND\b/
+
+ident <- /[a-zA-Z0-9_\-]+/
+ws <- /[ \t\r\n]+/
+opt_ws <- /[ \t\r\n]*/
