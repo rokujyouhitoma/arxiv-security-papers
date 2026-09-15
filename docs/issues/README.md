@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **301** | SQL 式（Expression）パーサーの段階的 AOT PEG 化と並行検証基盤の確立 | Feature | High | In Progress | [301-deploy-aot-peg-sql-expression-parser.md](301-deploy-aot-peg-sql-expression-parser.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **301** | SQL 式（Expression）パーサーの段階的 AOT PEG 化と並行検証基盤の確立 | Feature | 2026-09-16 | [301-deploy-aot-peg-sql-expression-parser.md](closed/301-deploy-aot-peg-sql-expression-parser.md) |
 | **300** | CTI ナレッジグラフ クエリ DSL への AOT PEG 事前コンパイラ実戦投入と動的ビルダー完全撤廃 | Feature | 2026-09-16 | [300-deploy-aot-peg-graph-query-parser.md](closed/300-deploy-aot-peg-graph-query-parser.md) |
 | **299** | AOT PEG コンパイラ実戦投入第2弾: 検索クエリパーサーの search_query.peg 化と本番パイプライン統合 | Feature | 2026-09-16 | [299-deploy-aot-peg-search-query-parser.md](closed/299-deploy-aot-peg-search-query-parser.md) |
 | **298** | Bryan Ford 論文（POPL '04）準拠 PEG 文法仕様への改定と実用的拡張の実装 | Feature | 2026-09-16 | [298-align-peg-grammar-with-bryan-ford-paper.md](closed/298-align-peg-grammar-with-bryan-ford-paper.md) |
