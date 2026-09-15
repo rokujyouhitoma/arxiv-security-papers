@@ -792,22 +792,26 @@ def _build_or_parser(expr_ref: RuleRef) -> Parser[SQLExpr]:
     ).map(_fold_binary_chain)
 
 
+from database.sql.generated_sql_expr_parser import (  # noqa: E402
+    SQLExprParser as _AOTSQLExprParser,
+)
+
+
 class SQLExpressionParser:
-    """Packrat PEG Parser for SQL expressions with operator precedence and nested parens."""
+    """Packrat PEG Parser for SQL expressions with operator precedence and nested parens.
+
+    Delegates to AOT-compiled SQLExprParser for sub-millisecond parsing and zero startup overhead.
+    """
 
     def __init__(self) -> None:
-        expr_ref = RuleRef("expr")
-        or_expr = _build_or_parser(expr_ref)
-        expr_ref.define(or_expr)
-        leading_ws = Reg(r"(\s+|#[^\r\n]*)*")
-        self._grammar = Seq(leading_ws, or_expr, leading_ws).map(lambda r: r[1])
+        self._aot_parser = _AOTSQLExprParser()
 
     def parse(self, text: str) -> SQLExpr:
         """Parses a SQL expression string into an SQLExpr AST."""
         stripped = text.strip()
         if not stripped:
             raise ValueError("Empty SQL expression")
-        return cast(SQLExpr, self._grammar.parse(stripped))
+        return cast(SQLExpr, self._aot_parser.parse(stripped))
 
 
 def parse_sql_expr(text: str) -> SQLExpr:
