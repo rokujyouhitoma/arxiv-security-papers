@@ -42,7 +42,7 @@ def test_ast_equivalence_between_aot_and_combinator() -> None:
     parser_combinator = MetaGrammarParser(use_aot=False)
     parser_aot = MetaGrammarParser(use_aot=True)
 
-    test_grammars: List[str] = ["calc.peg", "boolean_query.peg", "turtle.peg"]
+    test_grammars: List[str] = ["calc.peg", "search_query.peg", "turtle.peg"]
     for g_name in test_grammars:
         g_path = grammars_dir / g_name
         if not g_path.exists():

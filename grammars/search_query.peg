@@ -1,0 +1,94 @@
+# Enterprise Search Query Grammar Specification
+# Conforms to DSN-25 Phase 2 Ahead-of-Time Packrat PEG Compiler.
+# Conforms to Bryan Ford POPL '04 specification using <- rules.
+grammar SearchQuery
+
+@header {
+from search.query.query_parser import (
+    QueryClause,
+    _apply_search_field,
+    _apply_search_modifier,
+    _create_search_phrase,
+    _fold_search_disjunction,
+    _parse_search_plain_term,
+    _resolve_search_field,
+)
+}
+
+query <- opt_ws e:disjunction opt_ws {
+    return e
+}
+
+disjunction <- first:conjunction rest:(opt_ws or_op ws conj:conjunction { return conj })* {
+    if not rest:
+        return first
+    return _fold_search_disjunction(first, rest)
+}
+
+or_op <- /(?i)\bOR\b|\|\|?/
+
+conjunction <- first:factor rest:(sep next_fac:factor { return next_fac })* {
+    clauses = [first] if first else []
+    for r in rest:
+        if r:
+            clauses.append(r)
+    return clauses
+}
+
+sep <- and_op / ws
+
+and_op <- opt_ws /(?i)\bAND\b|&&?/ ws
+
+factor <- mod:modifier? prim:primary {
+    return _apply_search_modifier(mod, prim)
+}
+
+modifier <- "+" { return "+" }
+          / "-" { return "-" }
+          / not_kw { return "-" }
+
+not_kw <- /(?i)\bNOT\b/ ws { return "-" }
+
+primary <- field_expr
+         / phrase_expr
+         / plain_expr
+         / parens:nested_parens {
+             if isinstance(parens, list):
+                 return parens[0] if len(parens) == 1 else QueryClause(nested_clauses=parens)
+             return parens
+         }
+
+field_expr <- fld:field_name ":" target:field_target {
+    resolved = _resolve_search_field(fld)
+    return _apply_search_field(resolved, target)
+}
+
+field_name <- raw:[a-zA-Z_]+ {
+    return "".join(raw)
+}
+
+field_target <- nested_parens
+              / phrase_expr
+              / plain_expr
+
+nested_parens <- "(" opt_ws e:disjunction opt_ws ")" {
+    return e
+}
+
+phrase_expr <- '"' s:[^"]* '"' slop:slop_suffix? {
+    slop_val = int(slop) if slop else 0
+    return _create_search_phrase("".join(s), slop_val)
+}
+
+slop_suffix <- "~" n:[0-9]+ {
+    return "".join(n)
+}
+
+plain_expr <- !reserved_kw word:[^ \t\r\n"():]+ {
+    return _parse_search_plain_term("".join(word))
+}
+
+reserved_kw <- /(?i)\b(AND|OR|NOT)\b/
+
+ws <- [ \t\r\n]+
+opt_ws <- [ \t\r\n]*

@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **299** | AOT PEG コンパイラ実戦投入第2弾: 検索クエリパーサーの search_query.peg 化と本番パイプライン統合 | Feature | 2026-09-16 | [299-deploy-aot-peg-search-query-parser.md](closed/299-deploy-aot-peg-search-query-parser.md) |
 | **298** | Bryan Ford 論文（POPL '04）準拠 PEG 文法仕様への改定と実用的拡張の実装 | Feature | 2026-09-16 | [298-align-peg-grammar-with-bryan-ford-paper.md](closed/298-align-peg-grammar-with-bryan-ford-paper.md) |
 | **297** | PEG AOT コンパイラのセルフホスティング（自己完結ブートストラップ化）の実装と DSN-25 設計仕様書改定 | Feature | 2026-09-15 | [297-self-hosting-peg-aot-compiler.md](closed/297-self-hosting-peg-aot-compiler.md) |
 | **296** | Pure Python 完全自作 OWL DL / RL 推論エンジン (Tableau / Hypertableau & Datalog) の実装と HermiT / Pellet 参考実装トラッキング | Feature | 2026-09-15 | [296-implement-pure-python-owl-reasoner.md](closed/296-implement-pure-python-owl-reasoner.md) |

@@ -48,8 +48,9 @@
 - [6. 将来の事前コード生成型パーサージェネレータ (Ahead-of-Time Compiler) 進化ロードマップ](#6-将来の事前コード生成型パーサージェネレータ-ahead-of-time-compiler-進化ロードマップ)
   - [6.1 2段階進化戦略 (Phase 1 ランタイム → Phase 2 コンパイラ)](#61-2段階進化戦略-phase-1-ランタイム--phase-2-コンパイラ)
   - [6.2 PEG メタ文法によるセルフホスティング (ブートストラップ) 仕様](#62-peg-メタ文法によるセルフホスティング-ブートストラップ-仕様)
-- [7. AOT コンパイラ実戦投入と本番運用 (Production Deployment) (Phase 2 実装完了: Issue #294)](#7-aot-コンパイラ実戦投入と本番運用-production-deployment-phase-2-実装完了-issue-294)
+- [7. AOT コンパイラ実戦投入と本番運用 (Production Deployment) (Phase 2 実装完了: Issue #294, #299)](#7-aot-コンパイラ実戦投入と本番運用-production-deployment-phase-2-実装完了-issue-294-299)
   - [7.1 W3C Turtle 1.1 パーサーの宣言的 AOT 換装](#71-w3c-turtle-11-パーサーの宣言的-aot-換装)
+  - [7.2 検索クエリパーサーの宣言的 AOT 換装 (Issue #299)](#72-検索クエリパーサーの宣言的-aot-換装-issue-299)
 - [8. セキュリティ分析 (STRIDE Threat Model) と防御策](#8-セキュリティ分析-stride-threat-model-と防御策)
 - [9. 非機能要件・品質基準・DoD](#9-非機能要件品質基準dod)
 - [10. Phase 3: PEG AOT コンパイラのセルフホスティング（自己完結ブートストラップ化）仕様 (Issue #297)](#10-phase-3-peg-aot-コンパイラのセルフホスティング自己完結ブートストラップ化仕様-issue-297)
@@ -389,6 +390,23 @@ graph TD
    - 実行時の動的コンビネータ構築コストを完全排除（50回のインスタンス生成が 0.01 秒未満）。
    - 200件のトリプルを含む複合ドキュメントを 0.2 秒未満で一括解析。
    - 既存の全テスト ([`tests/ontology/test_turtle_parser.py`](../../tests/ontology/test_turtle_parser.py)) と 100% 互換動作。
+
+### 7.2 検索クエリパーサーの宣言的 AOT 換装 (Issue #299)
+
+事前コンパイラの実戦投入第2弾として、エンタープライズ検索クエリパーサー ([`src/search/query/query_parser.py`](../../src/search/query/query_parser.py)) を動的コンビネータ構築から AOT 駆動型へ全面移行。
+
+1. **形式文法定義の宣言的分離 ([`grammars/search_query.peg`](../../grammars/search_query.peg))**:
+   - 旧プロトタイプ `boolean_query.peg` を検索クエリの全仕様を網羅する `search_query.peg` に改称・拡充。
+   - Bryan Ford POPL '04 論文構文（`<-`, `[...]`, `.`）に基づき、フィールド指定（`title:xxx`, `author:(A OR B)`）、フレーズ検索（`"..."`, スロップ `~N`）、プレフィックス（`*`）、ファジー（`~N`）、修飾子（`+`, `-`, `NOT`）、論理演算子（`AND`, `OR`, 暗黙空白）、および多段括弧ネストを完全定義。
+   - セマンティックアクションにより直接 `QueryClause` AST を生成。
+2. **静的パーサー自動生成 ([`src/search/query/generated_search_query_parser.py`](../../src/search/query/generated_search_query_parser.py))**:
+   - `tools/peg_compiler/compile_peg.py` により、完全型安全・外部依存ゼロの静的パーサークラス `SearchQueryParser` を自動生成。
+3. **ビルドパイプライン統合 (`Makefile`)**:
+   - `make compile_grammars` に `search_query.peg` $\to$ `generated_search_query_parser.py` を追加。
+4. **性能実証とゼロオーバーヘッド ([`tests/search/test_query_benchmark.py`](../../tests/search/test_query_benchmark.py))**:
+   - クエリごとの動的コンビネータオブジェクト生成コストを完全排除（100回のインスタンス生成が 0.05 秒未満）。
+   - 複雑な論理式クエリ 500 回のパースを 0.1 秒未満（$< 0.2\text{ms}$/query）で高速処理。
+   - 既存全単体テスト ([`tests/search/test_query_parser_peg.py`](../../tests/search/test_query_parser_peg.py)) と 100% 互換動作。
 
 ---
 
