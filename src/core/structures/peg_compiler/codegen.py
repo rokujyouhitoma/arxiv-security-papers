@@ -8,11 +8,14 @@ Zero external dependencies.
 
 from __future__ import annotations
 
+import re
 import textwrap
 from typing import Callable, ClassVar, Dict, List, Tuple, Type, cast
 
 from core.structures.peg_compiler.ast_nodes import (
     ActionExpr,
+    AnyCharExpr,
+    CharClassExpr,
     ChoiceExpr,
     Expression,
     GrammarDef,
@@ -28,12 +31,16 @@ from core.structures.peg_compiler.ast_nodes import (
 
 
 def _find_used_symbols(symbols: Tuple[str, ...], text: str) -> List[str]:
-    return [s for s in symbols if s in text]
+    return [s for s in symbols if re.search(rf"\b{s}\b", text)]
 
 
 _PEG_SYMBOLS: Tuple[str, ...] = (
     "AndPred",
+    "AnyChar",
+    "CharClass",
     "Choice",
+    "Class",
+    "Dot",
     "Lit",
     "NotPred",
     "OneOrMore",
@@ -70,6 +77,10 @@ class CodeGenerator:
     ] = {
         LitExpr: lambda self, e, r: f"Lit({cast(LitExpr, e).value!r})",
         RegexExpr: lambda self, e, r: f"Reg({cast(RegexExpr, e).pattern!r})",
+        CharClassExpr: lambda self, e, r: (
+            f"Class({cast(CharClassExpr, e).raw_spec!r}, inverted={cast(CharClassExpr, e).inverted})"
+        ),
+        AnyCharExpr: lambda self, e, r: "Dot()",
         RuleRefExpr: lambda self, e, r: f"self._r_{cast(RuleRefExpr, e).name}",
         OptExpr: lambda self, e, r: f"Opt({self._emit_expr(cast(OptExpr, e).expr, r)})",
         RepeatExpr: lambda self, e, r: self._emit_repeat(cast(RepeatExpr, e), r),

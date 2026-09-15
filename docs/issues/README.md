@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **298** | Bryan Ford 論文（POPL '04）準拠 PEG 文法仕様への改定と実用的拡張の実装 | Feature | 2026-09-16 | [298-align-peg-grammar-with-bryan-ford-paper.md](closed/298-align-peg-grammar-with-bryan-ford-paper.md) |
 | **297** | PEG AOT コンパイラのセルフホスティング（自己完結ブートストラップ化）の実装と DSN-25 設計仕様書改定 | Feature | 2026-09-15 | [297-self-hosting-peg-aot-compiler.md](closed/297-self-hosting-peg-aot-compiler.md) |
 | **296** | Pure Python 完全自作 OWL DL / RL 推論エンジン (Tableau / Hypertableau & Datalog) の実装と HermiT / Pellet 参考実装トラッキング | Feature | 2026-09-15 | [296-implement-pure-python-owl-reasoner.md](closed/296-implement-pure-python-owl-reasoner.md) |
 | **295** | システム監査所見の是正: テスト環境パス不整合修復、プロトタイプ仮の値（フォールバック固定値）の客観的抽出化、MCP耐障害性向上、およびドキュメント整合性回復 | Bug / Quality Improvement | 2026-09-15 | [295-remediate-audit-findings-test-failures-and-mcp-bugs.md](closed/295-remediate-audit-findings-test-failures-and-mcp-bugs.md) |

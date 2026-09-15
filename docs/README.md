@@ -77,7 +77,7 @@
 - 🖥️ **[[DSN-24] プロジェクト統合管理 CLI (manage.py) および対話型データベースシェル (dbshell) 設計書](designs/DSN-24-unified_management_cli_and_interactive_database_shell.md)**
   - `manage.py`, `src/cli/` — Django スタイル統一エントリポイント、マルチストレージ自動マウント、ゼロ外部依存 REPL。
 - 🧩 **[[DSN-25] 純粋 Python 製汎用 Packrat PEG ランタイム基盤および構文解析エンジン統合設計仕様書](designs/DSN-25-pure_python_packrat_peg_parser_engine.md)**
-  - `src/core/structures/peg.py`, `src/core/structures/peg_compiler/` — 線形時間 $O(N)$ パース保証、AST コンビネータ、検索クエリ/SQL/グラフDSL/Turtle AOT横断適用、自己完結セルフホスティング (ブートストラップ) PEG AOT コンパイラ。
+  - `src/core/structures/peg.py`, `src/core/structures/peg_compiler/` — 線形時間 $O(N)$ パース保証、AST コンビネータ、検索クエリ/SQL/グラフDSL/Turtle AOT横断適用、自己完結セルフホスティング (ブートストラップ) PEG AOT コンパイラ、Bryan Ford (POPL '04) 準拠第一級構文 (`<-`, `[...]`, `.`)。
 - 🦉 **[[DSN-26] 純粋 Python 製完全自作 OWL DL / RL 推論エンジンおよび先行推論器 (HermiT / Pellet) 参考実装トラッキング設計仕様書](designs/DSN-26-pure-python-owl-dl-reasoner.md)**
   - `src/ontology/reasoner/` — 超タブロー法 (Hypertableau)・多項式時間 Datalog 前向き連鎖・2層分離アーキテクチャ・最小充足不能部分系 (MUS) 監査説明機構・HermiT / Pellet 先行推論器アルゴリズム規範追跡。
 

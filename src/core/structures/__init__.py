@@ -12,7 +12,11 @@ from core.structures.community import (
 from core.structures.disjoint_set import DisjointSet
 from core.structures.peg import (
     AndPred,
+    AnyChar,
+    CharClass,
     Choice,
+    Class,
+    Dot,
     Empty,
     Lit,
     Literal,
@@ -119,6 +123,10 @@ __all__ = [
     "OneOrMore",
     "AndPred",
     "NotPred",
+    "AnyChar",
+    "CharClass",
+    "Dot",
+    "Class",
     "MetaGrammarParser",
     "CodeGenerator",
     "compile_grammar_to_code",

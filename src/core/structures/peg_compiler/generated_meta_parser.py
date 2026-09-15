@@ -25,6 +25,8 @@ from core.structures.peg import (
 )
 from core.structures.peg_compiler.ast_nodes import (
     ActionExpr,
+    AnyCharExpr,
+    CharClassExpr,
     ChoiceExpr,
     GrammarDef,
     LitExpr,
@@ -77,6 +79,8 @@ class MetaGrammarParser(Parser[Any]):
         self._r_primary = RuleRef("primary")
         self._r_lit_str = RuleRef("lit_str")
         self._r_regex_lit = RuleRef("regex_lit")
+        self._r_char_class = RuleRef("char_class")
+        self._r_any_char = RuleRef("any_char")
         self._r_group_expr = RuleRef("group_expr")
         self._r_rule_ref = RuleRef("rule_ref")
         self._r_action_block = RuleRef("action_block")
@@ -86,6 +90,7 @@ class MetaGrammarParser(Parser[Any]):
         self._r_str_dq = RuleRef("str_dq")
         self._r_str_sq = RuleRef("str_sq")
         self._r_regex_tok = RuleRef("regex_tok")
+        self._r_char_class_tok = RuleRef("char_class_tok")
         self._r_raw_str_dq = RuleRef("raw_str_dq")
         self._r_raw_str_sq = RuleRef("raw_str_sq")
         self._r_ws = RuleRef("ws")
@@ -112,7 +117,7 @@ class MetaGrammarParser(Parser[Any]):
         self._r_rule_def.define(
             Seq(
                 self._r_ident,
-                Lit("="),
+                Choice(Lit("<-"), Lit("=")),
                 self._r_ws,
                 self._r_choice_expr,
                 Opt(self._r_action_block),
@@ -141,7 +146,7 @@ class MetaGrammarParser(Parser[Any]):
                 self._action_prefixed_8
             )
         )
-        self._r_new_rule_head.define(Seq(self._r_ident, Lit("=")))
+        self._r_new_rule_head.define(Seq(self._r_ident, Choice(Lit("<-"), Lit("="))))
         self._r_prefix_item.define(
             Choice(
                 self._r_named_expr, self._r_pos_pred, self._r_neg_pred, self._r_suffixed
@@ -168,50 +173,64 @@ class MetaGrammarParser(Parser[Any]):
         )
         self._r_primary.define(
             Choice(
-                self._r_lit_str, self._r_regex_lit, self._r_group_expr, self._r_rule_ref
+                self._r_lit_str,
+                self._r_regex_lit,
+                self._r_char_class,
+                self._r_any_char,
+                self._r_group_expr,
+                self._r_rule_ref,
             )
         )
         self._r_lit_str.define(
             Choice(self._r_str_dq, self._r_str_sq).map(self._action_lit_str_14)
         )
         self._r_regex_lit.define(self._r_regex_tok.map(self._action_regex_lit_15))
+        self._r_char_class.define(
+            self._r_char_class_tok.map(self._action_char_class_16)
+        )
+        self._r_any_char.define(Seq(Lit("."), self._r_ws).map(self._action_any_char_17))
         self._r_group_expr.define(
             Seq(Lit("("), self._r_ws, self._r_choice_expr, Lit(")"), self._r_ws).map(
-                self._action_group_expr_16
+                self._action_group_expr_18
             )
         )
-        self._r_rule_ref.define(self._r_ident.map(self._action_rule_ref_17))
+        self._r_rule_ref.define(self._r_ident.map(self._action_rule_ref_19))
         self._r_action_block.define(
             Seq(Lit("{"), ZeroOrMore(self._r_action_piece), Lit("}"), self._r_ws).map(
-                self._action_action_block_18
+                self._action_action_block_20
             )
         )
         self._r_action_piece.define(
             Choice(
-                Reg("[^{}\"'\\\\]+").map(self._action_action_piece_19),
-                self._r_raw_str_dq.map(self._action_action_piece_20),
-                self._r_raw_str_sq.map(self._action_action_piece_21),
-                Reg("\\\\.").map(self._action_action_piece_22),
-                self._r_action_sub_block.map(self._action_action_piece_23),
+                Reg("[^{}\"'\\\\]+").map(self._action_action_piece_21),
+                self._r_raw_str_dq.map(self._action_action_piece_22),
+                self._r_raw_str_sq.map(self._action_action_piece_23),
+                Reg("\\\\.").map(self._action_action_piece_24),
+                self._r_action_sub_block.map(self._action_action_piece_25),
             )
         )
         self._r_action_sub_block.define(
             Seq(Lit("{"), ZeroOrMore(self._r_action_piece), Lit("}")).map(
-                self._action_action_sub_block_24
+                self._action_action_sub_block_26
             )
         )
         self._r_ident.define(
-            Seq(Reg("[A-Za-z_][A-Za-z0-9_]*"), self._r_ws).map(self._action_ident_25)
+            Seq(Reg("[A-Za-z_][A-Za-z0-9_]*"), self._r_ws).map(self._action_ident_27)
         )
         self._r_str_dq.define(
-            Seq(self._r_raw_str_dq, self._r_ws).map(self._action_str_dq_26)
+            Seq(self._r_raw_str_dq, self._r_ws).map(self._action_str_dq_28)
         )
         self._r_str_sq.define(
-            Seq(self._r_raw_str_sq, self._r_ws).map(self._action_str_sq_27)
+            Seq(self._r_raw_str_sq, self._r_ws).map(self._action_str_sq_29)
         )
         self._r_regex_tok.define(
             Seq(Reg("/(?![ \\t\\r\\n])((?:[^\\r\\n/]|\\\\.)+)/"), self._r_ws).map(
-                self._action_regex_tok_28
+                self._action_regex_tok_30
+            )
+        )
+        self._r_char_class_tok.define(
+            Seq(Reg("\\[\\^?(?:\\\\\\]|[^\\]])+\\]"), self._r_ws).map(
+                self._action_char_class_tok_31
             )
         )
         self._r_raw_str_dq.define(Reg('"(?:[^"\\\\]|\\\\.)*"'))
@@ -339,66 +358,82 @@ class MetaGrammarParser(Parser[Any]):
         return RegexExpr(pattern)
 
     @staticmethod
-    def _action_group_expr_16(val: Any) -> Any:
+    def _action_char_class_16(val: Any) -> Any:
+        raw = val
+        inv = raw.startswith("[^")
+        spec = raw[2:-1] if inv else raw[1:-1]
+        return CharClassExpr(raw_spec=spec, inverted=inv)
+
+    @staticmethod
+    def _action_any_char_17(val: Any) -> Any:
+        return AnyCharExpr()
+
+    @staticmethod
+    def _action_group_expr_18(val: Any) -> Any:
         ch = val[2]
         return ch
 
     @staticmethod
-    def _action_rule_ref_17(val: Any) -> Any:
+    def _action_rule_ref_19(val: Any) -> Any:
         name = val
         return RuleRefExpr(name)
 
     @staticmethod
-    def _action_action_block_18(val: Any) -> Any:
+    def _action_action_block_20(val: Any) -> Any:
         pieces = val[1]
         return "".join(pieces)
 
     @staticmethod
-    def _action_action_piece_19(val: Any) -> Any:
+    def _action_action_piece_21(val: Any) -> Any:
         chunk = val
         return chunk
 
     @staticmethod
-    def _action_action_piece_20(val: Any) -> Any:
+    def _action_action_piece_22(val: Any) -> Any:
         dq = val
         return dq
 
     @staticmethod
-    def _action_action_piece_21(val: Any) -> Any:
+    def _action_action_piece_23(val: Any) -> Any:
         sq = val
         return sq
 
     @staticmethod
-    def _action_action_piece_22(val: Any) -> Any:
+    def _action_action_piece_24(val: Any) -> Any:
         esc = val
         return esc
 
     @staticmethod
-    def _action_action_piece_23(val: Any) -> Any:
+    def _action_action_piece_25(val: Any) -> Any:
         sub = val
         return sub
 
     @staticmethod
-    def _action_action_sub_block_24(val: Any) -> Any:
+    def _action_action_sub_block_26(val: Any) -> Any:
         pieces = val[1]
         return "{" + "".join(pieces) + "}"
 
     @staticmethod
-    def _action_ident_25(val: Any) -> Any:
+    def _action_ident_27(val: Any) -> Any:
         name = val[0]
         return name
 
     @staticmethod
-    def _action_str_dq_26(val: Any) -> Any:
+    def _action_str_dq_28(val: Any) -> Any:
         s = val[0]
         return s
 
     @staticmethod
-    def _action_str_sq_27(val: Any) -> Any:
+    def _action_str_sq_29(val: Any) -> Any:
         s = val[0]
         return s
 
     @staticmethod
-    def _action_regex_tok_28(val: Any) -> Any:
+    def _action_regex_tok_30(val: Any) -> Any:
         r = val[0]
         return r
+
+    @staticmethod
+    def _action_char_class_tok_31(val: Any) -> Any:
+        raw = val[0]
+        return raw

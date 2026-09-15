@@ -241,7 +241,7 @@ sequenceDiagram
 | **DSN-22** | [DSN-22-security_and_threat_ontology_w3c_specification.md](docs/designs/DSN-22-security_and_threat_ontology_w3c_specification.md) | `src/ontology/` | セキュリティ & 脅威オントロジー W3C 仕様書 (Full-Spectrum SKO / OWL DL) |
 | **DSN-23** | [DSN-23-hierarchical_state_machine_and_lifecycle_governance.md](docs/designs/DSN-23-hierarchical_state_machine_and_lifecycle_governance.md) | `src/core/hsm/` | ゼロ外部依存・高信頼階層型ステートマシン (HSM) 基盤設計書 |
 | **DSN-24** | [DSN-24-unified_management_cli_and_interactive_database_shell.md](docs/designs/DSN-24-unified_management_cli_and_interactive_database_shell.md) | `manage.py`, `src/cli/` | プロジェクト統合管理 CLI (manage.py) および対話型データベースシェル (dbshell) 設計書 |
-| **DSN-25** | [DSN-25-pure_python_packrat_peg_parser_engine.md](docs/designs/DSN-25-pure_python_packrat_peg_parser_engine.md) | `src/core/structures/peg.py`, `src/core/structures/peg_compiler/` | 純粋 Python 製汎用 Packrat PEG ランタイム基盤および構文解析エンジン統合設計仕様書 (Phase 3 セルフホスティング完備) |
+| **DSN-25** | [DSN-25-pure_python_packrat_peg_parser_engine.md](docs/designs/DSN-25-pure_python_packrat_peg_parser_engine.md) | `src/core/structures/peg.py`, `src/core/structures/peg_compiler/` | 純粋 Python 製汎用 Packrat PEG ランタイム基盤および構文解析エンジン統合設計仕様書 (Bryan Ford POPL '04 準拠 & Phase 4 第一級構文完備) |
 | **DSN-26** | [DSN-26-pure-python-owl-dl-reasoner.md](docs/designs/DSN-26-pure-python-owl-dl-reasoner.md) | `src/ontology/reasoner/` | 純粋 Python 製完全自作 OWL DL / RL 推論エンジンおよび先行推論器 (HermiT / Pellet) 参考実装トラッキング設計仕様書 |
 
 ---

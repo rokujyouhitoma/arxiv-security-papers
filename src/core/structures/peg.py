@@ -425,11 +425,94 @@ class MappedParser(Parser[R], Generic[T, R]):
         return ParseResult(True, mapped_val, res.next_pos)
 
 
+def _unescape_class_char(char: str) -> str:
+    escapes = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "]": "]", "-": "-"}
+    return escapes.get(char, char)
+
+
+def _tokenize_class_spec(spec: str) -> List[str]:
+    tokens: List[str] = []
+    i = 0
+    n = len(spec)
+    while i < n:
+        if spec[i] == "\\" and i + 1 < n:
+            tokens.append(_unescape_class_char(spec[i + 1]))
+            i += 2
+        else:
+            tokens.append(spec[i])
+            i += 1
+    return tokens
+
+
+def _parse_class_tokens(tokens: List[str]) -> Tuple[List[Tuple[int, int]], Set[str]]:
+    ranges: List[Tuple[int, int]] = []
+    chars: Set[str] = set()
+    i = 0
+    n = len(tokens)
+    while i < n:
+        if i + 2 < n and tokens[i + 1] == "-":
+            start_ord = ord(tokens[i])
+            end_ord = ord(tokens[i + 2])
+            ranges.append((min(start_ord, end_ord), max(start_ord, end_ord)))
+            i += 3
+        else:
+            chars.add(tokens[i])
+            i += 1
+    return ranges, chars
+
+
+class AnyChar(Parser[str]):
+    """Matches any single character except EOF (Bryan Ford POPL '04 '.' token)."""
+
+    def __init__(self, name: Optional[str] = None) -> None:
+        super().__init__(name or "AnyChar")
+
+    def parse_at(self, ctx: ParseContext, pos: int) -> ParseResult[str]:
+        if pos < ctx.length:
+            ch = ctx.text[pos]
+            return ParseResult(True, ch, pos + 1)
+        ctx.update_max_pos(pos, "any character")
+        return ParseResult(False, None, pos, "Unexpected EOF")
+
+
+class CharClass(Parser[str]):
+    """Matches a single character within a character class [...] or [^...]."""
+
+    def __init__(
+        self, spec: str, inverted: bool = False, name: Optional[str] = None
+    ) -> None:
+        prefix = "^" if inverted else ""
+        super().__init__(name or f"[{prefix}{spec}]")
+        self.spec = spec
+        self.inverted = inverted
+        tokens = _tokenize_class_spec(spec)
+        self.ranges, self.chars = _parse_class_tokens(tokens)
+
+    def _matches(self, ch: str) -> bool:
+        ch_ord = ord(ch)
+        in_range = any(start <= ch_ord <= end for start, end in self.ranges)
+        in_chars = ch in self.chars
+        found = in_range or in_chars
+        return not found if self.inverted else found
+
+    def parse_at(self, ctx: ParseContext, pos: int) -> ParseResult[str]:
+        if pos >= ctx.length:
+            ctx.update_max_pos(pos, self.name or "char_class")
+            return ParseResult(False, None, pos, "Unexpected EOF")
+        ch = ctx.text[pos]
+        if self._matches(ch):
+            return ParseResult(True, ch, pos + 1)
+        ctx.update_max_pos(pos, self.name or "char_class")
+        return ParseResult(False, None, pos, f"Expected character matching {self.name}")
+
+
 # Factory aliases and shorthand combinators
 Seq = Sequence
 Opt = OptionalParser
 Lit = Literal
 Reg = Regex
+Dot = AnyChar
+Class = CharClass
 
 
 def ZeroOrMore(child: Parser[T], name: Optional[str] = None) -> Repetition[T]:
