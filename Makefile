@@ -93,6 +93,15 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_expr.peg -o src/database/sql/generated_sql_expr_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_expr_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_expr_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_dql.peg --no-aot -o src/database/sql/generated_sql_dql_parser.py
+	${VENV_BIN}/isort src/database/sql/generated_sql_dql_parser.py
+	${VENV_BIN}/black -q src/database/sql/generated_sql_dql_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_dml.peg --no-aot -o src/database/sql/generated_sql_dml_parser.py
+	${VENV_BIN}/isort src/database/sql/generated_sql_dml_parser.py
+	${VENV_BIN}/black -q src/database/sql/generated_sql_dml_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_ddl.peg --no-aot -o src/database/sql/generated_sql_ddl_parser.py
+	${VENV_BIN}/isort src/database/sql/generated_sql_ddl_parser.py
+	${VENV_BIN}/black -q src/database/sql/generated_sql_ddl_parser.py
 
 
 .PHONY: verify_peg_bootstrap

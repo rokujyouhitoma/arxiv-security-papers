@@ -1,0 +1,714 @@
+# SQL DQL (Data Query Language) Grammar Specification
+# Conforms to Bryan Ford POPL '04 Packrat PEG Specification.
+# Generates strongly-typed SelectStatement AST nodes.
+
+grammar SQLDQL
+
+@header {
+import ast as py_ast
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    from .ast import (
+        CTEDefinition,
+        JoinClause,
+        JoinType,
+        SelectStatement,
+        SQLCommandType,
+        TableRef,
+    )
+except (ImportError, ValueError):
+    from database.sql.ast import (
+        CTEDefinition,
+        JoinClause,
+        JoinType,
+        SelectStatement,
+        SQLCommandType,
+        TableRef,
+    )
+
+
+def _extract_knn_from_where(where_raw: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+    knn_m = re.search(
+        r"KNN\s*\(\s*([a-zA-Z0-9_\.]+)\s*,\s*(\[.*?\])\s*,\s*([0-9]+)\s*\)",
+        where_raw,
+        re.IGNORECASE,
+    )
+    if not knn_m:
+        knn_m = re.search(
+            r"([a-zA-Z0-9_\.]+)\s+KNN\s+(\[.*?\])\s+TOP\s+([0-9]+)",
+            where_raw,
+            re.IGNORECASE,
+        )
+    if not knn_m:
+        return where_raw, None
+
+    knn_col = knn_m.group(1)
+    try:
+        knn_vec = py_ast.literal_eval(knn_m.group(2))
+    except Exception as e:
+        from database.sql.dql_parser import SQLParseError
+        raise SQLParseError(f"Invalid vector in KNN clause: {e}") from e
+    top_k = int(knn_m.group(3))
+    knn_query: Dict[str, Any] = {
+        "column": knn_col,
+        "vector": [float(x) for x in knn_vec],
+        "top_k": top_k,
+    }
+    cleaned = where_raw.replace(knn_m.group(0), "").strip()
+    cleaned = re.sub(r"^(AND|OR)\s+", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\s+(AND|OR)$", "", cleaned, flags=re.IGNORECASE).strip()
+    return cleaned, knn_query
+
+
+def _parse_where_condition_terms(where_str: str) -> List[Dict[str, Any]]:
+    clean = where_str.strip()
+    if not clean:
+        return []
+    from database.sql.parser import SQLParser
+    dummy_parser = SQLParser()
+    return dummy_parser._extract_where_clauses(clean)
+
+
+def _split_tvf_args(raw_args: Optional[str]) -> List[str]:
+    if not raw_args:
+        return []
+    from database.sql.parser import _split_comma_expressions
+    return _split_comma_expressions(raw_args)
+
+
+def _set_compound_attr(base: SelectStatement, op: str, part: SelectStatement) -> None:
+    attr_map = {
+        "UNION": "union",
+        "UNION ALL": "union_all",
+        "INTERSECT": "intersect",
+        "EXCEPT": "except_",
+    }
+    field = attr_map.get(op)
+    if field and getattr(base, field) is None:
+        setattr(base, field, part)
+
+
+def _apply_compounds(
+    base: SelectStatement,
+    compounds: List[Tuple[str, SelectStatement]],
+) -> SelectStatement:
+    for op, part in compounds:
+        base.compounds.append((op, part))
+        _set_compound_attr(base, op, part)
+    return base
+
+
+def _unpack_order(
+    order: Optional[Tuple[str, bool, Optional[str]]],
+) -> Tuple[Optional[str], bool, Optional[str]]:
+    if not order:
+        return None, False, None
+    return order[0], order[1], order[2]
+
+
+def _unpack_limit(
+    limit: Optional[Tuple[Optional[int], Optional[int]]],
+) -> Tuple[Optional[int], Optional[int]]:
+    if not limit:
+        return None, None
+    return limit[0], limit[1]
+
+
+def _unpack_from_part(
+    from_part: Optional[Tuple[TableRef, List[JoinClause]]],
+) -> Tuple[str, Optional[TableRef], List[JoinClause]]:
+    if not from_part:
+        return "", None, []
+    tbl_ref = from_part[0]
+    tbl_name = tbl_ref.name or tbl_ref.alias or ""
+    return tbl_name, tbl_ref, from_part[1]
+
+
+def _unpack_where_part(
+    where_part: Optional[str],
+) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    if not where_part:
+        return [], None
+    clean_where, knn_query = _extract_knn_from_where(where_part)
+    where_clauses = _parse_where_condition_terms(clean_where)
+    return where_clauses, knn_query
+
+
+def _assemble_single_select(
+    dist: Any,
+    projs: List[str],
+    from_part: Optional[Tuple[TableRef, List[JoinClause]]],
+    where_part: Optional[str],
+    group_part: Optional[List[str]],
+    having_part: Optional[str],
+    order_part: Optional[Tuple[str, bool, Optional[str]]],
+    limit_part: Optional[Tuple[Optional[int], Optional[int]]],
+) -> SelectStatement:
+    tbl_name, tbl_ref, joins_list = _unpack_from_part(from_part)
+    where_clauses, knn_query = _unpack_where_part(where_part)
+    order_col, order_desc, order_collate = _unpack_order(order_part)
+    lim_val, off_val = _unpack_limit(limit_part)
+    return SelectStatement(
+        command_type=SQLCommandType.SELECT,
+        raw_sql="",
+        table_name=tbl_name,
+        table_ref=tbl_ref,
+        columns=projs,
+        where_clauses=where_clauses,
+        knn_query=knn_query,
+        joins=joins_list,
+        distinct=bool(dist),
+        group_by=group_part or [],
+        having=having_part,
+        order_by=order_col,
+        order_desc=order_desc,
+        order_collate=order_collate,
+        limit=lim_val,
+        offset=off_val,
+    )
+
+
+def _assemble_values_statement(
+    rows: List[List[Any]],
+    order: Optional[Tuple[str, bool, Optional[str]]],
+    limit: Optional[Tuple[Optional[int], Optional[int]]],
+) -> SelectStatement:
+    ncols = len(rows[0]) if rows else 0
+    cols = [f"column{i + 1}" for i in range(ncols)]
+    order_col, order_desc, order_collate = _unpack_order(order)
+    lim_val, off_val = _unpack_limit(limit)
+    return SelectStatement(
+        command_type=SQLCommandType.SELECT,
+        raw_sql="",
+        table_name="",
+        columns=cols,
+        values_rows=rows,
+        order_by=order_col,
+        order_desc=order_desc,
+        order_collate=order_collate,
+        limit=lim_val,
+        offset=off_val,
+    )
+}
+
+# -------------------------------------------------------------
+# Top-Level Root Rule
+# -------------------------------------------------------------
+root <- opt_ws dql:full_dql opt_ws {
+    return dql
+}
+
+full_dql <- ctes:(c:cte_clause ws { return c })? q:compound_query {
+    if ctes:
+        q.ctes = ctes
+    return q
+}
+
+# -------------------------------------------------------------
+# CTE Clause: WITH [RECURSIVE] cte1, cte2 ...
+# -------------------------------------------------------------
+cte_clause <- with_kw is_rec:(ws recursive_kw)? ws defs:cte_def_list {
+    rec_flag = bool(is_rec)
+    res: List[CTEDefinition] = []
+    for c in defs:
+        res.append(
+            CTEDefinition(
+                name=c.name,
+                columns=c.columns,
+                statement=c.statement,
+                is_recursive=rec_flag,
+            )
+        )
+    return res
+}
+
+cte_def_list <- first:cte_def rest:(opt_ws "," opt_ws next_c:cte_def { return next_c })* {
+    return [first] + rest
+}
+
+cte_def <- name:ident cols:(opt_ws "(" opt_ws cl:ident_list opt_ws ")" { return cl })? ws as_kw ws "(" opt_ws stmt:full_dql opt_ws ")" {
+    return CTEDefinition(
+        name=name,
+        columns=cols or [],
+        statement=stmt,
+        is_recursive=False,
+    )
+}
+
+ident_list <- first:ident rest:(opt_ws "," opt_ws next_id:ident { return next_id })* {
+    return [first] + rest
+}
+
+# -------------------------------------------------------------
+# Compound Queries: core_query (UNION|INTERSECT|EXCEPT core_query)*
+# -------------------------------------------------------------
+compound_query <- first:core_query rest:(opt_ws op:compound_op ws next_q:core_query { return (op, next_q) })* {
+    return _apply_compounds(first, rest)
+}
+
+compound_op <-
+    union_all_kw
+    / union_kw
+    / intersect_kw
+    / except_kw
+
+union_all_kw <- /(?i)\bUNION\s+ALL\b/ { return "UNION ALL" }
+union_kw <- /(?i)\bUNION\b/ { return "UNION" }
+intersect_kw <- /(?i)\bINTERSECT\b/ { return "INTERSECT" }
+except_kw <- /(?i)\bEXCEPT\b/ { return "EXCEPT" }
+
+core_query <-
+    single_select
+    / values_statement
+
+# -------------------------------------------------------------
+# Standalone VALUES query: VALUES (1, 2), (3, 4) [ORDER BY ...] [LIMIT ...]
+# -------------------------------------------------------------
+values_statement <- values_kw ws rows:value_row_list order:(opt_ws o:order_by_clause { return o })? limit:(opt_ws lim:limit_offset_clause { return lim })? {
+    return _assemble_values_statement(rows, order, limit)
+}
+
+value_row_list <- first:value_row rest:(opt_ws "," opt_ws r:value_row { return r })* {
+    return [first] + rest
+}
+
+value_row <- "(" opt_ws first:value_atom rest:(opt_ws "," opt_ws a:value_atom { return a })* opt_ws ")" {
+    return [first] + rest
+}
+
+value_atom <-
+    s:string_literal { return s[1:-1].replace("''", "'") }
+    / n:number_literal { return n }
+    / true_kw { return True }
+    / false_kw { return False }
+    / null_kw { return None }
+
+# -------------------------------------------------------------
+# Single SELECT Statement
+# -------------------------------------------------------------
+single_select <-
+    select_kw
+    dist:(ws d:distinct_modifier { return d })?
+    ws projs:projection_list
+    from_part:(opt_ws f:from_clause { return f })?
+    where_part:(opt_ws w:where_clause { return w })?
+    group_part:(opt_ws g:group_by_clause { return g })?
+    having_part:(opt_ws h:having_clause { return h })?
+    order_part:(opt_ws o:order_by_clause { return o })?
+    limit_part:(opt_ws lim:limit_offset_clause { return lim })? {
+        return _assemble_single_select(
+            dist,
+            projs,
+            from_part,
+            where_part,
+            group_part,
+            having_part,
+            order_part,
+            limit_part,
+        )
+    }
+
+distinct_modifier <-
+    distinct_kw { return True }
+    / all_kw { return False }
+
+# -------------------------------------------------------------
+# Projection List: *, tbl.*, expr AS alias, col, etc.
+# -------------------------------------------------------------
+projection_list <- first:projection_item rest:(opt_ws "," opt_ws next_p:projection_item { return next_p })* {
+    return [first] + rest
+}
+
+projection_item <-
+    table_star
+    / star
+    / proj_expr
+
+star <- "*" { return "*" }
+
+table_star <- id:ident opt_ws "." opt_ws "*" {
+    return f"{id}.*"
+}
+
+proj_expr <- parts:proj_chunk+ {
+    return " ".join(parts).strip()
+}
+
+proj_chunk <- !clause_end raw:chunk_token opt_ws {
+    return raw
+}
+
+# -------------------------------------------------------------
+# FROM Clause & JOINs
+# -------------------------------------------------------------
+from_clause <- from_kw ws primary_table:table_ref joins:(opt_ws j:join_clause { return j })* {
+    return (primary_table, joins)
+}
+
+table_ref <-
+    subquery_table_ref
+    / tvf_table_ref
+    / plain_table_ref
+
+subquery_table_ref <- "(" opt_ws sub:full_dql opt_ws ")" al:(ws a:alias_clause { return a })? {
+    alias_str = al if al else None
+    return TableRef(
+        name=alias_str or "",
+        alias=alias_str,
+        subquery=sub,
+    )
+}
+
+tvf_table_ref <- id:non_reserved_ident opt_ws "(" raw_args:tvf_args_content? ")" al:(ws a:alias_clause { return a })? {
+    parsed_args = _split_tvf_args(raw_args)
+    return TableRef(
+        name=id,
+        alias=al,
+        function_name=id,
+        function_args=parsed_args,
+    )
+}
+
+tvf_args_content <- raw:/[^)]+/ {
+    return raw
+}
+
+plain_table_ref <-
+    id:non_reserved_ident al:(ws a:alias_clause { return a })? hint:(ws h:index_hint { return h })? {
+        idx_by = hint[1] if (hint and hint[0] == "INDEXED") else None
+        not_idx = bool(hint and hint[0] == "NOT_INDEXED")
+        return TableRef(
+            name=id,
+            alias=al,
+            indexed_by=idx_by,
+            not_indexed=not_idx,
+        )
+    }
+    / id:non_reserved_ident hint:(ws h:index_hint { return h }) al:(ws a:alias_clause { return a })? {
+        idx_by = hint[1] if (hint and hint[0] == "INDEXED") else None
+        not_idx = bool(hint and hint[0] == "NOT_INDEXED")
+        return TableRef(
+            name=id,
+            alias=al,
+            indexed_by=idx_by,
+            not_indexed=not_idx,
+        )
+    }
+
+index_hint <-
+    indexed_kw ws by_kw ws id:non_reserved_ident { return ("INDEXED", id) }
+    / not_kw ws indexed_kw { return ("NOT_INDEXED", None) }
+
+alias_clause <-
+    as_kw ws id:ident { return id }
+    / id:non_reserved_ident { return id }
+
+join_clause <-
+    comma_join
+    / explicit_join
+
+comma_join <- "," opt_ws tbl:table_ref {
+    return JoinClause(
+        join_type=JoinType.CROSS,
+        table=tbl,
+        on_conditions=[],
+    )
+}
+
+explicit_join <-
+    (natural_kw ws)?
+    jt:join_type_spec?
+    join_kw ws tbl:table_ref
+    cond:(ws c:join_condition { return c })? {
+        jtype = jt if jt else JoinType.INNER
+        return JoinClause(
+            join_type=jtype,
+            table=tbl,
+            on_conditions=cond or [],
+        )
+    }
+
+join_type_spec <-
+    inner_kw ws { return JoinType.INNER }
+    / left_kw (ws outer_kw)? ws { return JoinType.LEFT }
+    / right_kw (ws outer_kw)? ws { return JoinType.RIGHT }
+    / cross_kw ws { return JoinType.CROSS }
+
+join_condition <-
+    on_kw ws cond_str:on_condition_expr {
+        return _parse_where_condition_terms(cond_str)
+    }
+    / using_kw opt_ws "(" opt_ws cols:ident_list opt_ws ")" {
+        return [{"column": c, "operator": "=", "value": c} for c in cols]
+    }
+
+on_condition_expr <- parts:on_chunk+ {
+    return " ".join(parts).strip()
+}
+
+on_chunk <- !on_end raw:chunk_token opt_ws {
+    return raw
+}
+
+on_end <-
+    natural_kw
+    / join_kw
+    / inner_kw
+    / left_kw
+    / right_kw
+    / cross_kw
+    / where_kw
+    / group_kw
+    / having_kw
+    / window_kw
+    / order_kw
+    / limit_kw
+    / union_kw
+    / intersect_kw
+    / except_kw
+    / ";"
+
+# -------------------------------------------------------------
+# WHERE, GROUP BY, HAVING, ORDER BY, LIMIT / OFFSET
+# -------------------------------------------------------------
+where_clause <- where_kw ws body:where_body_expr {
+    return body
+}
+
+where_body_expr <- parts:where_chunk+ {
+    return " ".join(parts).strip()
+}
+
+where_chunk <- !where_end raw:chunk_token opt_ws {
+    return raw
+}
+
+where_end <-
+    group_kw
+    / having_kw
+    / window_kw
+    / order_kw
+    / limit_kw
+    / union_kw
+    / intersect_kw
+    / except_kw
+    / ";"
+
+group_by_clause <- group_kw ws by_kw ws cols:ident_or_expr_list {
+    return cols
+}
+
+ident_or_expr_list <- first:group_item rest:(opt_ws "," opt_ws next_i:group_item { return next_i })* {
+    return [first] + rest
+}
+
+group_item <- raw:/[a-zA-Z0-9_\.\->>\'\"]+/ {
+    return raw
+}
+
+having_clause <- having_kw ws cond:having_body_expr {
+    return cond
+}
+
+having_body_expr <- parts:having_chunk+ {
+    return " ".join(parts).strip()
+}
+
+having_chunk <- !having_end raw:chunk_token opt_ws {
+    return raw
+}
+
+having_end <-
+    window_kw
+    / order_kw
+    / limit_kw
+    / union_kw
+    / intersect_kw
+    / except_kw
+    / ";"
+
+order_by_clause <- order_kw ws by_kw ws items:order_item_list {
+    return items[0]
+}
+
+order_item_list <- first:order_item rest:(opt_ws "," opt_ws next_o:order_item { return next_o })* {
+    return [first] + rest
+}
+
+order_item <- col:order_col coll:(ws collate_kw ws c:ident { return c.upper() })? dir:(ws d:order_dir { return d })? (ws nulls_clause)? {
+    is_desc = (dir == "DESC") if dir else False
+    return (col, is_desc, coll)
+}
+
+order_col <- raw:/[a-zA-Z0-9_\.\->>\'\"]+/ {
+    return raw
+}
+
+order_dir <-
+    asc_kw { return "ASC" }
+    / desc_kw { return "DESC" }
+
+nulls_clause <- nulls_kw ws (first_kw / last_kw)
+
+limit_offset_clause <-
+    limit_kw ws lim:integer_num ws offset_kw ws off:integer_num { return (lim, off) }
+    / limit_kw ws off:integer_num opt_ws "," opt_ws lim:integer_num { return (lim, off) }
+    / limit_kw ws lim:integer_num { return (lim, None) }
+
+integer_num <- raw:/[0-9]+/ {
+    return int(raw)
+}
+
+# -------------------------------------------------------------
+# Clause End Tokens & General Delimited Expression Chunks
+# -------------------------------------------------------------
+clause_end <-
+    from_kw
+    / where_kw
+    / group_kw
+    / having_kw
+    / window_kw
+    / order_kw
+    / limit_kw
+    / union_kw
+    / intersect_kw
+    / except_kw
+    / ";"
+
+chunk_token <-
+    func_call_token
+    / paren_token
+    / bracket_token
+    / string_literal
+    / double_quote_literal
+    / non_ws_token
+
+func_call_token <- !clause_end fn:/[a-zA-Z_][a-zA-Z0-9_]*/ args:/\s*\((?:[^()]|\([^()]*\))*\)/ {
+    return f"{fn}{args}"
+}
+
+paren_token <- raw:/\((?:[^()]|\([^()]*\))*\)/ {
+    return raw
+}
+
+bracket_token <- raw:/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/ {
+    return raw
+}
+
+non_ws_token <- !clause_end raw:/[^\s,;()]+/ {
+    return raw
+}
+
+# -------------------------------------------------------------
+# Identifiers & Literals
+# -------------------------------------------------------------
+ident <-
+    plain:ident_pattern { return plain }
+    / backtick:backtick_pattern { return backtick }
+    / double_quote:double_quote_pattern { return double_quote }
+
+ident_pattern <- raw:/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?/ {
+    return raw
+}
+
+backtick_pattern <- raw:/`[^`]*`/ {
+    return raw[1:-1]
+}
+
+double_quote_pattern <- raw:/"[^"]*"/ {
+    return raw[1:-1]
+}
+
+non_reserved_ident <- !reserved_kw id:ident {
+    return id
+}
+
+reserved_kw <-
+    select_kw
+    / from_kw
+    / where_kw
+    / group_kw
+    / by_kw
+    / having_kw
+    / window_kw
+    / order_kw
+    / limit_kw
+    / offset_kw
+    / join_kw
+    / inner_kw
+    / left_kw
+    / right_kw
+    / cross_kw
+    / natural_kw
+    / on_kw
+    / using_kw
+    / union_kw
+    / intersect_kw
+    / except_kw
+    / with_kw
+    / recursive_kw
+    / as_kw
+    / indexed_kw
+    / not_kw
+    / values_kw
+    / distinct_kw
+    / all_kw
+
+string_literal <- raw:/'([^']|'')*'/ {
+    return raw
+}
+
+double_quote_literal <- raw:/"([^"\\]|\\.)*"/ {
+    return raw
+}
+
+number_literal <- raw:/[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?/ {
+    if "." in raw or "e" in raw or "E" in raw:
+        return float(raw)
+    return int(raw)
+}
+
+# -------------------------------------------------------------
+# Keywords (Case-Insensitive with Word Boundary)
+# -------------------------------------------------------------
+select_kw <- /(?i)\bSELECT\b/
+from_kw <- /(?i)\bFROM\b/
+where_kw <- /(?i)\bWHERE\b/
+group_kw <- /(?i)\bGROUP\b/
+by_kw <- /(?i)\bBY\b/
+having_kw <- /(?i)\bHAVING\b/
+window_kw <- /(?i)\bWINDOW\b/
+order_kw <- /(?i)\bORDER\b/
+limit_kw <- /(?i)\bLIMIT\b/
+offset_kw <- /(?i)\bOFFSET\b/
+join_kw <- /(?i)\bJOIN\b/
+inner_kw <- /(?i)\bINNER\b/
+left_kw <- /(?i)\bLEFT\b/
+right_kw <- /(?i)\bRIGHT\b/
+cross_kw <- /(?i)\bCROSS\b/
+natural_kw <- /(?i)\bNATURAL\b/
+outer_kw <- /(?i)\bOUTER\b/
+on_kw <- /(?i)\bON\b/
+using_kw <- /(?i)\bUSING\b/
+with_kw <- /(?i)\bWITH\b/
+recursive_kw <- /(?i)\bRECURSIVE\b/
+as_kw <- /(?i)\bAS\b/
+indexed_kw <- /(?i)\bINDEXED\b/
+not_kw <- /(?i)\bNOT\b/
+values_kw <- /(?i)\bVALUES\b/
+distinct_kw <- /(?i)\bDISTINCT\b/
+all_kw <- /(?i)\bALL\b/
+collate_kw <- /(?i)\bCOLLATE\b/
+asc_kw <- /(?i)\bASC\b/
+desc_kw <- /(?i)\bDESC\b/
+nulls_kw <- /(?i)\bNULLS\b/
+first_kw <- /(?i)\bFIRST\b/
+last_kw <- /(?i)\bLAST\b/
+true_kw <- /(?i)\bTRUE\b/
+false_kw <- /(?i)\bFALSE\b/
+null_kw <- /(?i)\bNULL\b/
+
+ws <- /[ \t\r\n]+|#[^\r\n]*|--[^\r\n]*/
+opt_ws <- /[ \t\r\n]*|#[^\r\n]*|--[^\r\n]*/
