@@ -48,6 +48,13 @@ class AnyCharExpr(Expression):
 
 
 @dataclass(frozen=True)
+class CutExpr(Expression):
+    """Cut operator expression (^) committing branch choice."""
+
+    pass
+
+
+@dataclass(frozen=True)
 class RuleRefExpr(Expression):
     """Reference to another non-terminal grammar rule (e.g. expr, term)."""
 

@@ -17,6 +17,7 @@ from core.structures.peg_compiler.ast_nodes import (
     AnyCharExpr,
     CharClassExpr,
     ChoiceExpr,
+    CutExpr,
     Expression,
     GrammarDef,
     LitExpr,
@@ -40,6 +41,7 @@ _PEG_SYMBOLS: Tuple[str, ...] = (
     "CharClass",
     "Choice",
     "Class",
+    "CutOp",
     "Dot",
     "Lit",
     "NotPred",
@@ -80,6 +82,7 @@ class CodeGenerator:
             f"Class({cast(CharClassExpr, e).raw_spec!r}, inverted={cast(CharClassExpr, e).inverted})"
         ),
         AnyCharExpr: lambda self, e, r: "Dot()",
+        CutExpr: lambda self, e, r: "CutOp()",
         RuleRefExpr: lambda self, e, r: f"self._r_{cast(RuleRefExpr, e).name}",
         OptExpr: lambda self, e, r: f"Opt({self._emit_expr(cast(OptExpr, e).expr, r)})",
         RepeatExpr: lambda self, e, r: self._emit_repeat(cast(RepeatExpr, e), r),
