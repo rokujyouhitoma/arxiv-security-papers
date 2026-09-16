@@ -36,7 +36,9 @@ def detect_two_column_gutter(
     num_bins = 60
     bin_width = (max_center_x - min_center_x) / num_bins
 
-    histogram = _build_gutter_histogram(glyphs, min_center_x, bin_width, num_bins)
+    histogram = _build_gutter_histogram(
+        glyphs, min_center_x, bin_width, num_bins, page_width
+    )
     best_len, best_center = _find_widest_gutter(
         histogram, min_center_x, bin_width, num_bins
     )
@@ -46,11 +48,27 @@ def detect_two_column_gutter(
     return None
 
 
+def _is_column_bound(g: GlyphBox, page_width: float) -> bool:
+    if page_width <= 0:
+        return True
+    if g.width > page_width * 0.45:
+        return False
+    if g.x < page_width * 0.35 and (g.x + g.width) > page_width * 0.65:
+        return False
+    return True
+
+
 def _build_gutter_histogram(
-    glyphs: List[GlyphBox], min_x: float, bin_width: float, num_bins: int
+    glyphs: List[GlyphBox],
+    min_x: float,
+    bin_width: float,
+    num_bins: int,
+    page_width: float,
 ) -> List[int]:
     histogram = [0] * num_bins
     for g in glyphs:
+        if not _is_column_bound(g, page_width):
+            continue
         gx1, gx2 = g.x, g.x + g.width
         for b_idx in range(num_bins):
             bx1 = min_x + b_idx * bin_width
@@ -83,7 +101,20 @@ def _find_widest_gutter(
     return best_len, best_center
 
 
-def cluster_into_lines(glyphs: List[GlyphBox]) -> List[TextLine]:
+def _is_same_line(prev_g: GlyphBox, g: GlyphBox, gutter_x: Optional[float]) -> bool:
+    y_diff = abs(g.y - prev_g.y)
+    threshold = max(g.font_size, prev_g.font_size) * 0.45
+    if y_diff > threshold:
+        return False
+    if gutter_x is not None:
+        if (prev_g.x + prev_g.width) <= gutter_x and g.x >= gutter_x:
+            return False
+    return True
+
+
+def cluster_into_lines(
+    glyphs: List[GlyphBox], gutter_x: Optional[float] = None
+) -> List[TextLine]:
     """Groups sorted glyphs into discrete horizontal text lines."""
     if not glyphs:
         return []
@@ -95,10 +126,7 @@ def cluster_into_lines(glyphs: List[GlyphBox]) -> List[TextLine]:
 
     for g in sorted_glyphs[1:]:
         prev_g = cur_line.glyphs[-1]
-        y_diff = abs(g.y - prev_g.y)
-        threshold = max(g.font_size, prev_g.font_size) * 0.45
-
-        if y_diff <= threshold:
+        if _is_same_line(prev_g, g, gutter_x):
             cur_line.glyphs.append(g)
         else:
             _finalize_line(cur_line)
@@ -146,6 +174,82 @@ def render_line_text(line: TextLine) -> str:
     return "".join(tokens).strip()
 
 
+def _is_header_or_footer(line: TextLine, page_height: float) -> bool:
+    text = render_line_text(line).strip()
+    if not text:
+        return False
+    if line.min_y > page_height - 35 and len(text) < 80:
+        return True
+    if line.min_y < 35 and (text.isdigit() or len(text) < 15):
+        return True
+    return False
+
+
+def _classify_line_column_type(line: TextLine, gutter_x: float) -> str:
+    """Classifies line as FULL-span, LEFT column, or RIGHT column."""
+    if line.min_x < gutter_x - 20.0 and line.max_x > gutter_x + 20.0:
+        return "FULL"
+    if line.max_x <= gutter_x + 15.0:
+        return "LEFT"
+    if line.min_x >= gutter_x - 15.0:
+        return "RIGHT"
+    mid_line = (line.min_x + line.max_x) / 2.0
+    return "LEFT" if mid_line < gutter_x else "RIGHT"
+
+
+class VerticalBand:
+    """Represents a discrete horizontal slice of a page (Single-column or Two-column)."""
+
+    def __init__(self, is_two_column: bool) -> None:
+        self.is_two_column = is_two_column
+        self.full_lines: List[TextLine] = []
+        self.left_lines: List[TextLine] = []
+        self.right_lines: List[TextLine] = []
+
+    def add_line(self, line: TextLine, col_type: str) -> None:
+        if col_type == "FULL":
+            self.full_lines.append(line)
+        elif col_type == "LEFT":
+            self.left_lines.append(line)
+        else:
+            self.right_lines.append(line)
+
+    def _render_two_column_parts(self) -> Optional[str]:
+        parts: List[str] = []
+        left_str = [t for line in self.left_lines if (t := render_line_text(line))]
+        if left_str:
+            parts.append("\n".join(left_str))
+        right_str = [t for line in self.right_lines if (t := render_line_text(line))]
+        if right_str:
+            parts.append("\n".join(right_str))
+        return "\n\n".join(parts) if parts else None
+
+    def render(self) -> Optional[str]:
+        if not self.is_two_column:
+            lines_str = [t for line in self.full_lines if (t := render_line_text(line))]
+            return "\n".join(lines_str) if lines_str else None
+        return self._render_two_column_parts()
+
+
+def _segment_into_vertical_bands(
+    lines: List[TextLine], gutter_x: float, page_height: float
+) -> List[VerticalBand]:
+    bands: List[VerticalBand] = []
+    cur_band: Optional[VerticalBand] = None
+
+    for line in lines:
+        if _is_header_or_footer(line, page_height):
+            continue
+        col_type = _classify_line_column_type(line, gutter_x)
+        is_two_col = col_type != "FULL"
+        if cur_band is None or cur_band.is_two_column != is_two_col:
+            cur_band = VerticalBand(is_two_col)
+            bands.append(cur_band)
+        cur_band.add_line(line, col_type)
+
+    return bands
+
+
 class SpatialLayoutEngine:
     """Reconstructs reading-order text flow with two-column paper layout awareness."""
 
@@ -171,65 +275,10 @@ class SpatialLayoutEngine:
         return "\n".join(out)
 
     @classmethod
-    def _render_group_text(cls, group: List[TextLine]) -> Optional[str]:
-        if not group:
-            return None
-        rendered = "\n".join(t for line in group if (t := render_line_text(line)))
-        return rendered if rendered else None
-
-    @classmethod
     def _render_two_column_flow(
         cls, glyphs: List[GlyphBox], gutter_x: float, page_height: float
     ) -> str:
-        lines = cluster_into_lines(glyphs)
-        header, left, right, footer = cls._partition_lines(lines, gutter_x, page_height)
-
-        sections: List[str] = []
-        for group in (header, left, right, footer):
-            res = cls._render_group_text(group)
-            if res:
-                sections.append(res)
-
+        lines = cluster_into_lines(glyphs, gutter_x=gutter_x)
+        bands = _segment_into_vertical_bands(lines, gutter_x, page_height)
+        sections = [res for band in bands if (res := band.render())]
         return "\n\n".join(sections)
-
-    @staticmethod
-    def _classify_line_column(
-        line: TextLine,
-        gutter_x: float,
-        page_height: float,
-        header: List[TextLine],
-        left: List[TextLine],
-        right: List[TextLine],
-        footer: List[TextLine],
-    ) -> None:
-        if line.min_x < gutter_x - 30 and line.max_x > gutter_x + 30:
-            if line.min_y > page_height * 0.5:
-                header.append(line)
-            else:
-                footer.append(line)
-        elif line.max_x <= gutter_x + 10:
-            left.append(line)
-        else:
-            right.append(line)
-
-    @classmethod
-    def _partition_lines(
-        cls, lines: List[TextLine], gutter_x: float, page_height: float
-    ) -> Tuple[List[TextLine], List[TextLine], List[TextLine], List[TextLine]]:
-        header_lines: List[TextLine] = []
-        left_lines: List[TextLine] = []
-        right_lines: List[TextLine] = []
-        footer_lines: List[TextLine] = []
-
-        for line in lines:
-            cls._classify_line_column(
-                line,
-                gutter_x,
-                page_height,
-                header_lines,
-                left_lines,
-                right_lines,
-                footer_lines,
-            )
-
-        return header_lines, left_lines, right_lines, footer_lines
