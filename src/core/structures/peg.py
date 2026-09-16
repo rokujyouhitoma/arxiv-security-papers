@@ -115,12 +115,91 @@ def _check_unmatched_brackets(text: str) -> Optional[str]:
     return _format_unclosed_bracket(stack, text)
 
 
-def _diagnose_syntax_anomaly(text: str) -> Optional[str]:
+def _diagnose_syntax_anomaly(
+    text: str,
+    pos: int = 0,
+    expected_tokens: Optional[Set[str]] = None,
+) -> Optional[str]:
     """Runs lightweight diagnostic heuristics on anomalous syntax errors."""
     quote_hint = _check_unclosed_quotes(text)
     if quote_hint:
         return quote_hint
-    return _check_unmatched_brackets(text)
+    bracket_hint = _check_unmatched_brackets(text)
+    if bracket_hint:
+        return bracket_hint
+    if expected_tokens:
+        return _diagnose_typo(text, pos, expected_tokens)
+    return None
+
+
+_KEYWORD_REGEX = re.compile(r"^\(\?i\)\\b([a-zA-Z0-9_]+)\\b$")
+
+
+def _humanize_token(token: str) -> str:
+    """Normalizes raw regex patterns like (?i)\\bSELECT\\b into clean keywords."""
+    m = _KEYWORD_REGEX.match(token)
+    if m:
+        return m.group(1).upper()
+    return token
+
+
+def _is_ignorable_expected_token(token: str) -> bool:
+    """Checks if a pattern is internal optional whitespace or meaningless token."""
+    stripped = token.strip()
+    if not stripped:
+        return True
+    if stripped.startswith("[ \\t\\r\\n]*") or stripped == "[ \\t\\r\\n]*":
+        return True
+    if stripped.startswith("[ \\t\\r\\n]+|#") or stripped.startswith("[ \\t\\r\\n]*|#"):
+        return True
+    return False
+
+
+def _levenshtein_step(c1: str, s2: str, prev_row: List[int], i: int) -> List[int]:
+    curr_row = [i + 1]
+    for j, c2 in enumerate(s2):
+        cost = 0 if c1.lower() == c2.lower() else 1
+        curr_row.append(min(curr_row[j] + 1, prev_row[j + 1] + 1, prev_row[j] + cost))
+    return curr_row
+
+
+def _levenshtein(s1: str, s2: str) -> int:
+    """Computes Levenshtein edit distance between two strings."""
+    if len(s1) < len(s2):
+        return _levenshtein(s2, s1)
+    if not s2:
+        return len(s1)
+    prev_row = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        prev_row = _levenshtein_step(c1, s2, prev_row, i)
+    return prev_row[-1]
+
+
+def _extract_word_at_pos(text: str, pos: int) -> str:
+    end = pos
+    while end < len(text) and (text[end].isalnum() or text[end] == "_"):
+        end += 1
+    return text[pos:end]
+
+
+def _match_typo_candidate(actual: str, candidate: str) -> bool:
+    if not candidate.isalpha() or len(candidate) < 2:
+        return False
+    if abs(len(actual) - len(candidate)) > 1:
+        return False
+    dist = _levenshtein(actual, candidate)
+    return 0 < dist <= 2
+
+
+def _diagnose_typo(text: str, pos: int, expected_tokens: Set[str]) -> Optional[str]:
+    actual = _extract_word_at_pos(text, pos)
+    if not actual or len(actual) < 2:
+        return None
+    for exp in sorted(expected_tokens):
+        candidate = _humanize_token(exp).strip("'\"")
+        if _match_typo_candidate(actual, candidate):
+            return f"Did you mean '{candidate}' instead of '{actual}'?"
+    return None
 
 
 class PEGSyntaxError(Exception):
@@ -141,15 +220,14 @@ class PEGSyntaxError(Exception):
         self.line = line
         self.col = col
         self.expected_tokens = expected_tokens
+        self.expected: Tuple[str, ...] = tuple(sorted(self.expected_tokens))
         self.snippet = snippet
         self.hint = hint
         super().__init__(self._format_message())
 
     def _format_message(self) -> str:
         tokens_str = (
-            ", ".join(f"'{t}'" for t in sorted(self.expected_tokens))
-            if self.expected_tokens
-            else "none"
+            ", ".join(f"'{t}'" for t in self.expected) if self.expected else "none"
         )
         caret_indent = " " * max(0, self.col - 1)
         hint_str = f"\n  Diagnosis: {self.hint}" if self.hint else ""
@@ -213,11 +291,14 @@ class ParseContext:
 
     def update_max_pos(self, pos: int, token: str) -> None:
         """Tracks the furthest position reached for syntax error diagnostics."""
+        if _is_ignorable_expected_token(token):
+            return
+        norm_token = _humanize_token(token)
         if pos > self.max_pos:
             self.max_pos = pos
-            self.expected_tokens = {token} if token else set()
-        elif pos == self.max_pos and token:
-            self.expected_tokens.add(token)
+            self.expected_tokens = {norm_token} if norm_token else set()
+        elif pos == self.max_pos and norm_token:
+            self.expected_tokens.add(norm_token)
 
     def calculate_line_col(self, pos: int) -> Tuple[int, int, str]:
         """Calculates 1-indexed line and column numbers and returns the line snippet."""
@@ -335,7 +416,7 @@ class Parser(ABC, Generic[T]):
         """Parses the entire text. Raises PEGSyntaxError on failure or trailing characters."""
         ctx = ParseContext(text)
         res = self._eval_cached(ctx, 0)
-        anomaly_hint = _diagnose_syntax_anomaly(text)
+        anomaly_hint = _diagnose_syntax_anomaly(text, ctx.max_pos, ctx.expected_tokens)
         if not res.success:
             line, col, snippet = ctx.calculate_line_col(ctx.max_pos)
             raise PEGSyntaxError(

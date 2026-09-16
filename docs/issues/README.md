@@ -15,6 +15,8 @@
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: |
+| **311** | Packrat PEG ランタイムにおける期待トークン（Expected Tokens）追跡と高度構文エラー診断基盤の実装 | Feature | 2026-09-16 | [311-peg-expected-tokens-and-syntax-diagnostics.md](closed/311-peg-expected-tokens-and-syntax-diagnostics.md) |
 | **310** | PDF ToUnicode CMap ストリーム構文解析の純粋 Packrat PEG 化 | Feature | 2026-09-16 | [310-pure-peg-pdf-tounicode-cmap-parser.md](closed/310-pure-peg-pdf-tounicode-cmap-parser.md) |
 | **309** | SQL TCL / DCL / Admin / Utility 構文解析層の包括的 AOT Packrat PEG 化 | Feature | 2026-09-16 | [309-deploy-aot-peg-sql-admin-and-tcl-parser.md](closed/309-deploy-aot-peg-sql-admin-and-tcl-parser.md) |
 | **308** | BibTeX/LaTeX 構文抽出および OKF Frontmatter (YAMLサブセット) の純粋 Packrat PEG 化 | Feature | 2026-09-16 | [308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md](closed/308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md) |
