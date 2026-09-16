@@ -427,6 +427,34 @@ graph TD
    - 100 回のパースを 0.2 秒未満（$< 2\text{ms}$/query）で高速処理。
    - 既存全単体テスト ([`tests/graph/test_graph_query_dsl.py`](../../tests/graph/test_graph_query_dsl.py)) と 100% 互換動作。
 
+### 7.4 SQL 式パーサーの宣言的 AOT 換装 (Issue #301)
+
+事前コンパイラ実戦投入第4弾として、自作 RDBMS 最深部の SQL 式パーサー ([`src/database/sql/expr_parser.py`](../../src/database/sql/expr_parser.py)) を動的コンビネータ構築から AOT 駆動型へ全面移行。
+
+1. **形式文法定義の宣言的分離 ([`grammars/sql_expr.peg`](../../grammars/sql_expr.peg))**:
+   - Bryan Ford POPL '04 論文構文（`<-`, `[...]`, `.`）に基づき、SQL 式の全構文を完全定義：
+     - リテラル（整数、浮動小数点数、単一/二重引用符文字列、`TRUE`/`FALSE`、`NULL`）
+     - 列参照（単純名、`table.col`、JSON パス `col->>'path'`）
+     - 四則演算子優先度（乗除 `%`, `*`, `/` > 加減 `+`, `-`, `||`）
+     - 単項演算子（`+`, `-`, `NOT`）
+     - 述語（`IS NULL`, `IS NOT NULL`, `BETWEEN ... AND ...`, `IN (...)`, `LIKE`, `GLOB`, `MATCH`, 比較演算子 `=`, `!=`, `<>`, `<`, `<=`, `>`, `>=`, `COLLATE`）
+     - 論理積 `AND`、論理和 `OR`、任意深さの括弧ネスト
+     - 関数呼び出し（`COUNT(*)`, `UPPER(col)`, `DISTINCT` 引数対応）
+     - CASE 式（Searched `CASE WHEN ... THEN ... ELSE ... END` / Simple `CASE expr WHEN ...`）
+     - サブクエリ述語（`[NOT] EXISTS (SELECT ...)`）
+   - 各規則のセマンティックアクションにより直接型付き `SQLExpr` AST を生成。
+2. **静的パーサー自動生成 ([`src/database/sql/generated_sql_expr_parser.py`](../../src/database/sql/generated_sql_expr_parser.py))**:
+   - `tools/peg_compiler/compile_peg.py` により、完全型安全・ゼロ外部依存の静的パーサークラス `SQLExprParser` を自動生成。
+3. **動的ビルダーの完全撤廃と委譲 ([`src/database/sql/expr_parser.py`](../../src/database/sql/expr_parser.py))**:
+   - `expr_parser.py` から 350 行超に及ぶ動的コンビネータ構築関数群（`_tok`, `_kw`, `_build_add_parser`, `_build_or_parser` 等）を完全撤廃。
+   - `SQLExpressionParser` クラスを AOT パーサーへの薄い委譲ラッパーとし、実行時オブジェクトグラフ構築コスト（43ノード超）を完全排除（コードベースを 820 行から 469 行へ 43% 削減）。
+4. **ビルドパイプライン統合 (`Makefile`)**:
+   - `make compile_grammars` に `sql_expr.peg` $\to$ `generated_sql_expr_parser.py` を追加。
+5. **性能実証とゼロオーバーヘッド ([`tests/database/test_sql_expr_benchmark.py`](../../tests/database/test_sql_expr_benchmark.py), [`tests/database/test_sql_expr_aot.py`](../../tests/database/test_sql_expr_aot.py))**:
+   - 100 回のインスタンス生成が 0.01 秒未満（初期化オーバーヘッド 0ms の実証）。
+   - 1,000 件の多様な SQL 式パースを 1.0 秒未満（$< 1.0\text{ms}$/expr）で高速処理。
+   - 既存データベースの全 416 テスト（B-Link Tree, MVCC, SS2PL, 2PC, Raft, VDBE, CBO, クエリ実行エンジン）と 100% 互換動作。
+
 ---
 
 ## 8. セキュリティ分析 (STRIDE Threat Model) と防御策

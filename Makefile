@@ -90,6 +90,10 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/graph_query.peg -o src/graph/generated_graph_query_parser.py
 	${VENV_BIN}/isort src/graph/generated_graph_query_parser.py
 	${VENV_BIN}/black -q src/graph/generated_graph_query_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_expr.peg -o src/database/sql/generated_sql_expr_parser.py
+	${VENV_BIN}/isort src/database/sql/generated_sql_expr_parser.py
+	${VENV_BIN}/black -q src/database/sql/generated_sql_expr_parser.py
+
 
 .PHONY: verify_peg_bootstrap
 verify_peg_bootstrap: activate ## Verify PEG AOT compiler self-hosting fixpoint
