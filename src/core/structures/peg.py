@@ -108,8 +108,8 @@ class ParseContext:
         self.depth = 0
         self.max_pos = 0
         self.expected_tokens: Set[str] = set()
-        self.memo: Dict[Tuple[int, int], ParseResult[Any]] = {}
-        self.in_progress: Set[Tuple[int, int]] = set()
+        self.memo: Dict[int, ParseResult[Any]] = {}
+        self.in_progress: Set[int] = set()
 
     def update_max_pos(self, pos: int, token: str) -> None:
         """Tracks the furthest position reached for syntax error diagnostics."""
@@ -136,6 +136,7 @@ class Parser(ABC, Generic[T]):
     """Abstract Base Class for all PEG Parsing Expressions."""
 
     _id_counter: ClassVar[int] = 0
+    memoize: ClassVar[bool] = True
 
     def __init__(self, name: Optional[str] = None) -> None:
         Parser._id_counter += 1
@@ -147,12 +148,8 @@ class Parser(ABC, Generic[T]):
         """Evaluates the parsing expression at the given position."""
         pass
 
-    def _eval_cached(self, ctx: ParseContext, pos: int) -> ParseResult[T]:
-        """Packrat memoization wrapper guaranteeing O(1) lookup per (rule, pos)."""
-        key = (self.rule_id, pos)
-        if key in ctx.memo:
-            return cast(ParseResult[T], ctx.memo[key])
-
+    def _check_recursion_guards(self, ctx: ParseContext, pos: int, key: int) -> None:
+        """Validates left recursion and recursion depth limits."""
         if key in ctx.in_progress:
             line, col, snippet = ctx.calculate_line_col(pos)
             raise PEGSyntaxError(
@@ -163,7 +160,6 @@ class Parser(ABC, Generic[T]):
                 expected_tokens=set(),
                 snippet=snippet,
             )
-
         if ctx.depth > ctx.max_depth:
             line, col, snippet = ctx.calculate_line_col(pos)
             raise PEGSyntaxError(
@@ -174,6 +170,17 @@ class Parser(ABC, Generic[T]):
                 expected_tokens=set(),
                 snippet=snippet,
             )
+
+    def _eval_cached(self, ctx: ParseContext, pos: int) -> ParseResult[T]:
+        """Packrat memoization wrapper guaranteeing O(1) lookup per (rule, pos)."""
+        if not self.memoize:
+            return self.parse_at(ctx, pos)
+
+        key = (self.rule_id << 20) | pos
+        if key in ctx.memo:
+            return cast(ParseResult[T], ctx.memo[key])
+
+        self._check_recursion_guards(ctx, pos, key)
 
         ctx.depth += 1
         ctx.in_progress.add(key)
@@ -241,6 +248,8 @@ class Parser(ABC, Generic[T]):
 class Empty(Parser[None]):
     """Matches the empty string epsilon without consuming input."""
 
+    memoize: ClassVar[bool] = False
+
     def __init__(self, name: Optional[str] = None) -> None:
         super().__init__(name or "Empty")
 
@@ -250,6 +259,8 @@ class Empty(Parser[None]):
 
 class Literal(Parser[str]):
     """Matches an exact literal string."""
+
+    memoize: ClassVar[bool] = False
 
     def __init__(self, expected: str, name: Optional[str] = None) -> None:
         super().__init__(name or f"'{expected}'")
@@ -265,6 +276,8 @@ class Literal(Parser[str]):
 
 class Regex(Parser[str]):
     """Matches a regular expression pattern starting at the current position."""
+
+    memoize: ClassVar[bool] = False
 
     def __init__(
         self, pattern: Union[str, Pattern[str]], name: Optional[str] = None
@@ -464,6 +477,8 @@ def _parse_class_tokens(tokens: List[str]) -> Tuple[List[Tuple[int, int]], Set[s
 class AnyChar(Parser[str]):
     """Matches any single character except EOF (Bryan Ford POPL '04 '.' token)."""
 
+    memoize: ClassVar[bool] = False
+
     def __init__(self, name: Optional[str] = None) -> None:
         super().__init__(name or "AnyChar")
 
@@ -477,6 +492,8 @@ class AnyChar(Parser[str]):
 
 class CharClass(Parser[str]):
     """Matches a single character within a character class [...] or [^...]."""
+
+    memoize: ClassVar[bool] = False
 
     def __init__(
         self, spec: str, inverted: bool = False, name: Optional[str] = None

@@ -14,7 +14,7 @@ import time
 from database.sql.ddl_parser import SQLDDLParser, parse_ddl
 from database.sql.dml_parser import SQLDMLParser, parse_dml
 from database.sql.dql_parser import SQLDQLParser, parse_dql
-from database.sql.parser import SQLParser
+from database.sql.parser import SQLParser, clear_sql_parser_caches, parse_sql
 
 
 def test_sql_subsystems_aot_parser_initialization_speed() -> None:
@@ -147,3 +147,42 @@ def test_sql_subsystems_convenience_functions_delegation() -> None:
 
     # 300 function calls in less than 1.0 second
     assert elapsed < 1.0
+
+
+def test_sql_lru_cache_cold_vs_warm_throughput() -> None:
+    """Verifies that LRU cache provides dramatic speedup for repeated query parsing."""
+    query = "SELECT id, title, score FROM papers WHERE score > 0.85 ORDER BY score DESC LIMIT 10"
+
+    clear_sql_parser_caches()
+
+    # Cold parse (first execution)
+    t0 = time.perf_counter()
+    cold_stmt = parse_sql(query)
+    cold_elapsed = time.perf_counter() - t0
+    assert cold_stmt is not None
+
+    # Warm parses (1,000 cached hits)
+    t1 = time.perf_counter()
+    for _ in range(1000):
+        warm_stmt = parse_sql(query)
+        assert warm_stmt is not None
+    warm_elapsed = time.perf_counter() - t1
+
+    # 1,000 warm hits should complete in less than 0.05 seconds (< 50 microseconds per hit)
+    assert warm_elapsed < 0.05
+    # Average warm parse should be significantly faster than cold parse
+    avg_warm = warm_elapsed / 1000.0
+    assert avg_warm < cold_elapsed
+
+
+def test_sql_subsystems_cache_clear_integrity() -> None:
+    """Verifies that cache clearing safely purges entries and subsequent parsing succeeds."""
+    q = "SELECT 42 AS answer"
+    stmt1 = parse_sql(q)
+    assert stmt1 is not None
+
+    clear_sql_parser_caches()
+
+    stmt2 = parse_sql(q)
+    assert stmt2 is not None
+    assert stmt2.raw_sql == q

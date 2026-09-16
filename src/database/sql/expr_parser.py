@@ -17,6 +17,7 @@ Zero external dependencies. Conforms to DSN-25 Phase 2 / DSN-05.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 
@@ -443,6 +444,30 @@ from database.sql.generated_sql_expr_parser import (  # noqa: E402
     SQLExprParser as _AOTSQLExprParser,
 )
 
+_GLOBAL_EXPR_AOT_PARSER: Optional[_AOTSQLExprParser] = None
+
+
+def _get_expr_aot_parser() -> _AOTSQLExprParser:
+    global _GLOBAL_EXPR_AOT_PARSER
+    if _GLOBAL_EXPR_AOT_PARSER is None:
+        _GLOBAL_EXPR_AOT_PARSER = _AOTSQLExprParser()
+    return _GLOBAL_EXPR_AOT_PARSER
+
+
+@lru_cache(maxsize=1024)
+def parse_sql_expr(text: str) -> SQLExpr:
+    """Convenience helper to parse a SQL expression string with LRU caching."""
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("Empty SQL expression")
+    parser = _get_expr_aot_parser()
+    return cast(SQLExpr, parser.parse(stripped))
+
+
+def clear_sql_expr_cache() -> None:
+    """Clears the LRU cache for SQL expression parsing."""
+    parse_sql_expr.cache_clear()
+
 
 class SQLExpressionParser:
     """Packrat PEG Parser for SQL expressions with operator precedence and nested parens.
@@ -451,17 +476,8 @@ class SQLExpressionParser:
     """
 
     def __init__(self) -> None:
-        self._aot_parser = _AOTSQLExprParser()
+        self._aot_parser = _get_expr_aot_parser()
 
     def parse(self, text: str) -> SQLExpr:
         """Parses a SQL expression string into an SQLExpr AST."""
-        stripped = text.strip()
-        if not stripped:
-            raise ValueError("Empty SQL expression")
-        return cast(SQLExpr, self._aot_parser.parse(stripped))
-
-
-def parse_sql_expr(text: str) -> SQLExpr:
-    """Convenience helper to parse a SQL expression string."""
-    parser = SQLExpressionParser()
-    return parser.parse(text)
+        return parse_sql_expr(text)
