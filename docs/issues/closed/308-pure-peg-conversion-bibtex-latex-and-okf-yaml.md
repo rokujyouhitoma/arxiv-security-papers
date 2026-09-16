@@ -2,7 +2,7 @@
 ID: 308
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (2026-09-16)
 ---
 
 # [FEAT] BibTeX/LaTeX 構文抽出および OKF Frontmatter (YAMLサブセット) の純粋 Packrat PEG 化 (ID: 308)
