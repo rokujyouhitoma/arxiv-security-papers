@@ -1,0 +1,248 @@
+# SQL Expression Grammar Specification
+# Conforms to DSN-25 Phase 2 Ahead-of-Time Packrat PEG Compiler.
+# Conforms to Bryan Ford POPL '04 specification using <- rules.
+grammar SQLExpr
+
+@header {
+from database.sql.expr_parser import (
+    BinaryOpExpr,
+    CaseExpr,
+    CollateExpr,
+    ColumnRefExpr,
+    ExistsExpr,
+    FunctionCallExpr,
+    LiteralExpr,
+    UnaryOpExpr,
+    _dispatch_pred,
+)
+}
+
+root <- opt_ws e:or_expr opt_ws {
+    return e
+}
+
+# 1. 論理 OR (Lowest Precedence)
+or_expr <- first:and_expr rest:(ws or_kw ws next_e:and_expr { return next_e })* {
+    res = first
+    for r in rest:
+        res = BinaryOpExpr("OR", res, r)
+    return res
+}
+
+or_kw <- /(?i)\bOR\b/
+
+# 2. 論理 AND
+and_expr <- first:pred_expr rest:(ws and_kw ws next_e:pred_expr { return next_e })* {
+    res = first
+    for r in rest:
+        res = BinaryOpExpr("AND", res, r)
+    return res
+}
+
+and_kw <- /(?i)\bAND\b/
+
+# 3. 述語式 (Predicates: IS NULL, BETWEEN, LIKE/GLOB/MATCH, IN, CMP, COLLATE)
+pred_expr <- base:add_expr suf:(ws s:pred_suffix { return s })? coll:(ws collate_kw ws c:ident { return c })? {
+    expr = _dispatch_pred(base, suf) if suf else base
+    if coll:
+        return CollateExpr(expr, coll)
+    return expr
+}
+
+collate_kw <- /(?i)\bCOLLATE\b/
+
+pred_suffix <-
+    is_null_suffix
+    / between_suffix
+    / like_suffix
+    / in_suffix
+    / cmp_suffix
+
+is_null_suffix <- is_kw ws is_not:(not_kw ws)? null_kw {
+    return ("IS_NULL", bool(is_not))
+}
+
+is_kw <- /(?i)\bIS\b/
+null_kw <- /(?i)\bNULL\b/
+
+between_suffix <- is_not:(not_kw ws)? between_kw ws low:add_expr ws and_kw ws high:add_expr {
+    return ("BETWEEN", bool(is_not), low, high)
+}
+
+between_kw <- /(?i)\bBETWEEN\b/
+
+like_suffix <- is_not:(not_kw ws)? op:like_op ws pat:add_expr esc:(ws escape_kw ws e_str:single_string_lit { return e_str })? {
+    esc_val = esc.value if esc else None
+    return ("LIKE", bool(is_not), op, pat, esc_val)
+}
+
+like_op <- /(?i)\b(?:LIKE|GLOB|MATCH)\b/
+escape_kw <- /(?i)\bESCAPE\b/
+
+in_suffix <- is_not:(not_kw ws)? in_kw opt_ws body:in_body {
+    vals, subquery = body
+    return ("IN", bool(is_not), vals, subquery)
+}
+
+in_kw <- /(?i)\bIN\b/
+
+in_body <- in_subquery / in_val_list
+
+in_subquery <- "(" opt_ws subq:subquery_text opt_ws ")" {
+    return (None, subq)
+}
+
+subquery_text <- /(?i)SELECT\b[^;)]*(?:\([^;)]*\)[^;)]*)*/
+
+in_val_list <- "(" opt_ws first:add_expr rest:(opt_ws "," opt_ws next_val:add_expr { return next_val })* opt_ws ")" {
+    return ([first] + rest, None)
+}
+
+cmp_suffix <- op:cmp_op opt_ws right:add_expr {
+    return ("CMP", op, right)
+}
+
+cmp_op <- ">=" / "<=" / "<>" / "!=" / "=" / ">" / "<"
+
+# 4. 加減算 (Add / Sub)
+add_expr <- first:mult_expr rest:(opt_ws op:add_op opt_ws next_e:mult_expr { return (op, next_e) })* {
+    res = first
+    for op, r in rest:
+        res = BinaryOpExpr(op, res, r)
+    return res
+}
+
+add_op <- "+" / "-"
+
+# 5. 乗除算 (Mult / Div / Mod)
+mult_expr <- first:unary_expr rest:(opt_ws op:mult_op opt_ws next_e:unary_expr { return (op, next_e) })* {
+    res = first
+    for op, r in rest:
+        res = BinaryOpExpr(op, res, r)
+    return res
+}
+
+mult_op <- "*" / "/" / "%"
+
+# 6. 単項演算 (Unary: +, -, NOT, EXISTS)
+unary_expr <- exists_expr / prefix_unary_expr / primary_expr
+
+exists_expr <- is_not:(not_kw ws)? exists_kw opt_ws "(" opt_ws subq:subquery_text opt_ws ")" {
+    return ExistsExpr(subq, is_not=bool(is_not))
+}
+
+exists_kw <- /(?i)\bEXISTS\b/
+
+prefix_unary_expr <- op:prefix_unary_op opt_ws e:primary_expr {
+    return UnaryOpExpr(op, e)
+}
+
+prefix_unary_op <- "+" / "-" / not_kw
+
+not_kw <- /(?i)\bNOT\b/
+
+# 7. 基本式 (Primary: paren, case, func, lit, col)
+primary_expr <-
+    paren_expr
+    / case_expr
+    / func_call_expr
+    / literal_expr
+    / column_ref_expr
+
+paren_expr <- "(" opt_ws e:or_expr opt_ws ")" {
+    return e
+}
+
+# CASE 式
+case_expr <- searched_case / simple_case
+
+searched_case <- case_kw ws branches:(b:when_branch ws { return b })+ else_b:(eb:else_branch ws { return eb })? end_kw {
+    return CaseExpr(base_expr=None, when_then_list=branches, else_expr=else_b)
+}
+
+simple_case <- case_kw ws base:atom_expr ws branches:(b:when_branch ws { return b })+ else_b:(eb:else_branch ws { return eb })? end_kw {
+    return CaseExpr(base_expr=base, when_then_list=branches, else_expr=else_b)
+}
+
+case_kw <- /(?i)\bCASE\b/
+when_kw <- /(?i)\bWHEN\b/
+then_kw <- /(?i)\bTHEN\b/
+else_kw <- /(?i)\bELSE\b/
+end_kw <- /(?i)\bEND\b/
+
+when_branch <- when_kw ws cond:or_expr ws then_kw ws res:or_expr {
+    return (cond, res)
+}
+
+else_branch <- else_kw ws e:or_expr {
+    return e
+}
+
+atom_expr <- func_call_expr / literal_expr / column_ref_expr / paren_expr
+
+# 関数呼び出し
+func_call_expr <- name:ident opt_ws args:func_args {
+    is_star, is_dist, arg_list = args
+    return FunctionCallExpr(name, arg_list, is_star=is_star, is_distinct=is_dist)
+}
+
+func_args <-
+    func_star_args
+    / func_list_args
+
+func_star_args <- "(" opt_ws "*" opt_ws ")" {
+    return (True, False, [])
+}
+
+func_list_args <- "(" opt_ws dist:(distinct_kw ws)? first:or_expr? rest:(opt_ws "," opt_ws next_a:or_expr { return next_a })* opt_ws ")" {
+    args = []
+    if first is not None:
+        args.append(first)
+        args.extend(rest)
+    return (False, bool(dist), args)
+}
+
+distinct_kw <- /(?i)\bDISTINCT\b/
+
+# リテラル式
+literal_expr <-
+    bool_lit
+    / null_lit
+    / number_lit
+    / string_lit
+
+bool_lit <- /(?i)\bTRUE\b/ { return LiteralExpr(True) }
+          / /(?i)\bFALSE\b/ { return LiteralExpr(False) }
+
+null_lit <- /(?i)\bNULL\b/ { return LiteralExpr(None) }
+
+number_lit <- f:float_val { return LiteralExpr(f) }
+            / i:int_val { return LiteralExpr(i) }
+
+float_val <- raw:/[0-9]+\.[0-9]+/ { return float(raw) }
+int_val <- raw:/[0-9]+/ { return int(raw) }
+
+string_lit <- single_string_lit / double_string_lit
+
+single_string_lit <- raw:/'(''|[^'])*'/ {
+    s = raw[1:-1].replace("''", "'")
+    return LiteralExpr(s)
+}
+
+double_string_lit <- raw:/"(""|[^"])*"/ {
+    s = raw[1:-1].replace('""', '"')
+    return LiteralExpr(s)
+}
+
+# 列参照 (table.column->>'json_path')
+column_ref_expr <- tbl:(id1:ident opt_ws "." opt_ws { return id1 })? col:ident json_p:(opt_ws "->>" opt_ws p:json_path_lit { return p })? {
+    return ColumnRefExpr(column=col, table=tbl, json_path=json_p)
+}
+
+json_path_lit <- raw:/'[^']*'/ { return raw.strip("'") }
+               / raw:/"[^"]*"/ { return raw.strip('"') }
+
+ident <- /[a-zA-Z_][a-zA-Z0-9_]*/
+
+ws <- /[ \t\r\n]+/
+opt_ws <- /[ \t\r\n]*/

@@ -6,6 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **301** | SQL 式（Expression）パーサーの段階的 AOT PEG 化と並行検証基盤の確立 | Feature | High | In Progress | [301-deploy-aot-peg-sql-expression-parser.md](301-deploy-aot-peg-sql-expression-parser.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
