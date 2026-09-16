@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **308** | BibTeX/LaTeX 構文抽出および OKF Frontmatter (YAMLサブセット) の純粋 Packrat PEG 化 | Feature | Medium | Open (New) | [308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md](308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md) |
+| **308** | BibTeX/LaTeX 構文抽出および OKF Frontmatter (YAMLサブセット) の純粋 Packrat PEG 化 | Feature | Medium | Open (In Progress) | [308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md](308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
