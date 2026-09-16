@@ -15,6 +15,7 @@
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
+| **309** | SQL TCL / DCL / Admin / Utility 構文解析層の包括的 AOT Packrat PEG 化 | Feature | 2026-09-16 | [309-deploy-aot-peg-sql-admin-and-tcl-parser.md](closed/309-deploy-aot-peg-sql-admin-and-tcl-parser.md) |
 | **308** | BibTeX/LaTeX 構文抽出および OKF Frontmatter (YAMLサブセット) の純粋 Packrat PEG 化 | Feature | 2026-09-16 | [308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md](closed/308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md) |
 | **307** | PEG ファサード LRU キャッシュ可観測性統合 (Observability MCP) および文法境界値 ReDoS ファジングテスト基盤の実装 | Reliability | 2026-09-16 | [307-implement-peg-lru-cache-observability-and-fuzzing-suite.md](closed/307-implement-peg-lru-cache-observability-and-fuzzing-suite.md) |
 | **306** | 耐障害構文解析 (Resilient Parsing) および構文診断ヒューリスティクス (Intelligent Diagnostics) の実装 | Feature | 2026-09-16 | [306-implement-peg-resilient-parsing-and-intelligent-diagnostics.md](closed/306-implement-peg-resilient-parsing-and-intelligent-diagnostics.md) |

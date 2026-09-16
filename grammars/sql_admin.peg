@@ -1,0 +1,338 @@
+# SQL TCL / DCL / Admin / Utility Grammar Specification
+# Conforms to Bryan Ford POPL '04 Packrat PEG Specification.
+# Generates strongly-typed AST nodes for BEGIN, COMMIT, ROLLBACK, SAVEPOINT,
+# RELEASE, GRANT, REVOKE, PRAGMA, VACUUM, ANALYZE, ATTACH, DETACH, EXPLAIN, SHOW.
+
+grammar SQLAdmin
+
+@header {
+try:
+    from .ast import (
+        AnalyzeStatement,
+        AttachStatement,
+        BeginStatement,
+        CommitStatement,
+        DetachStatement,
+        ExplainStatement,
+        GrantStatement,
+        PragmaStatement,
+        RevokeStatement,
+        RollbackStatement,
+        SavepointStatement,
+        ShowStatement,
+        SQLCommandType,
+        SQLStatement,
+        VacuumStatement,
+    )
+except (ImportError, ValueError):
+    from database.sql.ast import (
+        AnalyzeStatement,
+        AttachStatement,
+        BeginStatement,
+        CommitStatement,
+        DetachStatement,
+        ExplainStatement,
+        GrantStatement,
+        PragmaStatement,
+        RevokeStatement,
+        RollbackStatement,
+        SavepointStatement,
+        ShowStatement,
+        SQLCommandType,
+        SQLStatement,
+        VacuumStatement,
+    )
+
+
+def _parse_explain_stmt(raw_stmt: str) -> SQLStatement:
+    from database.sql.parser import SQLParser
+    return SQLParser().parse(raw_stmt.strip())
+}
+
+# -------------------------------------------------------------
+# Top-Level Root Rule
+# -------------------------------------------------------------
+root <- opt_ws admin:admin_stmt opt_ws {
+    return admin
+}
+
+admin_stmt <-
+    begin_stmt
+    / commit_stmt
+    / rollback_stmt
+    / savepoint_stmt
+    / release_stmt
+    / grant_stmt
+    / revoke_stmt
+    / pragma_stmt
+    / vacuum_stmt
+    / analyze_stmt
+    / attach_stmt
+    / detach_stmt
+    / explain_stmt
+    / show_stmt
+
+# -------------------------------------------------------------
+# TCL: BEGIN / COMMIT / ROLLBACK / SAVEPOINT / RELEASE
+# -------------------------------------------------------------
+begin_stmt <- begin_kw (ws isolation_mode)? (ws transaction_kw)? {
+    return BeginStatement(command_type=SQLCommandType.BEGIN, raw_sql="")
+}
+
+isolation_mode <- deferred_kw / immediate_kw / exclusive_kw
+
+commit_stmt <- commit_kw (ws transaction_kw)? {
+    return CommitStatement(command_type=SQLCommandType.COMMIT, raw_sql="")
+}
+
+rollback_stmt <-
+    rollback_to_stmt
+    / rollback_plain_stmt
+
+rollback_to_stmt <- rollback_kw (ws transaction_kw)? ws to_kw (ws savepoint_kw)? ws name:ident {
+    return SavepointStatement(
+        command_type=SQLCommandType.ROLLBACK_TO,
+        raw_sql="",
+        name=str(name),
+        action="ROLLBACK_TO",
+    )
+}
+
+rollback_plain_stmt <- rollback_kw (ws transaction_kw)? {
+    return RollbackStatement(command_type=SQLCommandType.ROLLBACK, raw_sql="")
+}
+
+savepoint_stmt <- savepoint_kw ws name:ident {
+    return SavepointStatement(
+        command_type=SQLCommandType.SAVEPOINT,
+        raw_sql="",
+        name=str(name),
+        action="SAVEPOINT",
+    )
+}
+
+release_stmt <- release_kw (ws savepoint_kw)? ws name:ident {
+    return SavepointStatement(
+        command_type=SQLCommandType.RELEASE,
+        raw_sql="",
+        name=str(name),
+        action="RELEASE",
+    )
+}
+
+# -------------------------------------------------------------
+# DCL: GRANT / REVOKE
+# -------------------------------------------------------------
+grant_stmt <- grant_kw ws perm:permission_spec on_clause:(ws on_kw ws t:table_or_star { return t })? ws to_kw ws role:ident {
+    tbl = on_clause if on_clause is not None else "*"
+    return GrantStatement(
+        command_type=SQLCommandType.GRANT,
+        raw_sql="",
+        permission=str(perm).upper(),
+        table_name=str(tbl),
+        role=str(role),
+    )
+}
+
+revoke_stmt <- revoke_kw ws perm:permission_spec on_clause:(ws on_kw ws t:table_or_star { return t })? ws from_kw ws role:ident {
+    tbl = on_clause if on_clause is not None else "*"
+    return RevokeStatement(
+        command_type=SQLCommandType.REVOKE,
+        raw_sql="",
+        permission=str(perm).upper(),
+        table_name=str(tbl),
+        role=str(role),
+    )
+}
+
+permission_spec <-
+    all_kw (ws privileges_kw)? { return "ALL" }
+    / id:ident { return id }
+
+table_or_star <-
+    "*" { return "*" }
+    / id:ident { return id }
+
+# -------------------------------------------------------------
+# Admin / Utility: PRAGMA / VACUUM / ANALYZE / ATTACH / DETACH / EXPLAIN / SHOW
+# -------------------------------------------------------------
+pragma_stmt <- pragma_kw ws name:pragma_name_spec arg:(opt_ws a:pragma_arg_spec { return a })? {
+    mode, val = arg if arg else (None, None)
+    return PragmaStatement(
+        command_type=SQLCommandType.PRAGMA,
+        raw_sql="",
+        pragma_name=str(name).lower(),
+        argument=val if mode == "call" else None,
+        value=val if mode == "eq" else None,
+    )
+}
+
+pragma_name_spec <-
+    s:ident opt_ws "." opt_ws t:ident { return f"{s}.{t}" }
+    / id:ident { return id }
+
+pragma_arg_spec <-
+    pragma_call_spec
+    / pragma_eq_spec
+
+pragma_call_spec <- "(" opt_ws val:pragma_val_token opt_ws ")" {
+    return ("call", str(val).strip("'\""))
+}
+
+pragma_eq_spec <- "=" opt_ws val:pragma_val_token {
+    return ("eq", str(val).strip("'\""))
+}
+
+pragma_val_token <-
+    str_literal
+    / raw:/[a-zA-Z0-9_\-]+/ { return raw }
+
+vacuum_stmt <- vacuum_kw tgt:(ws !into_kw t:ident { return t })? into:(ws into_kw ws f:str_literal { return f })? {
+    return VacuumStatement(
+        command_type=SQLCommandType.VACUUM,
+        raw_sql="",
+        target_table=tgt if tgt is not None else None,
+        into_file=into if into is not None else None,
+    )
+}
+
+analyze_stmt <- analyze_kw tgt:(ws t:analyze_target { return t })? {
+    schema, target = tgt if tgt else (None, None)
+    return AnalyzeStatement(
+        command_type=SQLCommandType.ANALYZE,
+        raw_sql="",
+        schema_name=schema,
+        target_name=target,
+    )
+}
+
+analyze_target <-
+    s:ident opt_ws "." opt_ws t:ident { return (str(s), str(t)) }
+    / t:ident { return (None, str(t)) }
+
+attach_stmt <- attach_kw (ws database_kw)? ws fn:attach_fn ws as_kw ws schema:ident {
+    return AttachStatement(
+        command_type=SQLCommandType.ATTACH,
+        raw_sql="",
+        filename=str(fn),
+        schema_name=str(schema),
+    )
+}
+
+attach_fn <-
+    str_literal
+    / raw:/[^\s;]+/ { return raw }
+
+detach_stmt <- detach_kw (ws database_kw)? ws schema:ident {
+    return DetachStatement(
+        command_type=SQLCommandType.DETACH,
+        raw_sql="",
+        schema_name=str(schema),
+    )
+}
+
+explain_stmt <- explain_kw qp:(ws query_kw ws plan_kw { return True })? ws stmt:rest_of_query {
+    return ExplainStatement(
+        command_type=SQLCommandType.EXPLAIN,
+        raw_sql="",
+        statement=_parse_explain_stmt(stmt),
+        query_plan=bool(qp),
+    )
+}
+
+rest_of_query <- raw:/[^\r\n;]+/ {
+    return raw.strip()
+}
+
+show_stmt <- show_kw ws tgt:show_target from_clause:(ws from_kw ws d:ident { return d })? like_clause:(ws like_kw ws p:str_literal { return p })? {
+    return ShowStatement(
+        command_type=SQLCommandType.SHOW,
+        raw_sql="",
+        target=tgt,
+        from_database=str(from_clause) if from_clause else None,
+        like_pattern=str(like_clause) if like_clause else None,
+    )
+}
+
+show_target <-
+    databases_kw { return "DATABASES" }
+    / schemas_kw { return "DATABASES" }
+    / table_kw ws status_kw { return "TABLE_STATUS" }
+    / tables_kw { return "TABLES" }
+    / columns_kw { return "COLUMNS" }
+    / indexes_kw { return "INDEXES" }
+
+# -------------------------------------------------------------
+# Identifiers & Literals
+# -------------------------------------------------------------
+ident <-
+    plain:ident_pattern { return plain }
+    / backtick:backtick_pattern { return backtick }
+    / double_quote:double_quote_pattern { return double_quote }
+    / bracket:bracket_pattern { return bracket }
+
+ident_pattern <- raw:/[a-zA-Z_][a-zA-Z0-9_]*/ {
+    return raw
+}
+
+backtick_pattern <- raw:/`[^`]*`/ {
+    return raw[1:-1]
+}
+
+double_quote_pattern <- raw:/"[^"]*"/ {
+    return raw[1:-1]
+}
+
+bracket_pattern <- raw:/\[[^\]]*\]/ {
+    return raw[1:-1]
+}
+
+str_literal <-
+    s:/'([^']*)'/ { return s[1:-1] }
+    / s:/"([^"]*)"/ { return s[1:-1] }
+
+# -------------------------------------------------------------
+# SQL Keywords (Case-Insensitive)
+# -------------------------------------------------------------
+begin_kw <- /(?i)\bBEGIN\b/
+commit_kw <- /(?i)\bCOMMIT\b/
+rollback_kw <- /(?i)\bROLLBACK\b/
+savepoint_kw <- /(?i)\bSAVEPOINT\b/
+release_kw <- /(?i)\bRELEASE\b/
+grant_kw <- /(?i)\bGRANT\b/
+revoke_kw <- /(?i)\bREVOKE\b/
+pragma_kw <- /(?i)\bPRAGMA\b/
+vacuum_kw <- /(?i)\bVACUUM\b/
+analyze_kw <- /(?i)\bANALYZE\b/
+attach_kw <- /(?i)\bATTACH\b/
+detach_kw <- /(?i)\bDETACH\b/
+explain_kw <- /(?i)\bEXPLAIN\b/
+show_kw <- /(?i)\bSHOW\b/
+
+deferred_kw <- /(?i)\bDEFERRED\b/
+immediate_kw <- /(?i)\bIMMEDIATE\b/
+exclusive_kw <- /(?i)\bEXCLUSIVE\b/
+transaction_kw <- /(?i)\bTRANSACTION\b/
+
+to_kw <- /(?i)\bTO\b/
+from_kw <- /(?i)\bFROM\b/
+all_kw <- /(?i)\bALL\b/
+privileges_kw <- /(?i)\bPRIVILEGES\b/
+on_kw <- /(?i)\bON\b/
+into_kw <- /(?i)\bINTO\b/
+database_kw <- /(?i)\bDATABASE\b/
+as_kw <- /(?i)\bAS\b/
+query_kw <- /(?i)\bQUERY\b/
+plan_kw <- /(?i)\bPLAN\b/
+
+databases_kw <- /(?i)\bDATABASES\b/
+schemas_kw <- /(?i)\bSCHEMAS\b/
+tables_kw <- /(?i)\bTABLES\b/
+table_kw <- /(?i)\bTABLE\b/
+status_kw <- /(?i)\bSTATUS\b/
+columns_kw <- /(?i)\bCOLUMNS\b/
+indexes_kw <- /(?i)\bINDEXES\b/
+like_kw <- /(?i)\bLIKE\b/
+
+ws <- /[ \t\r\n]+|#[^\r\n]*|--[^\r\n]*/
+opt_ws <- /[ \t\r\n]*|#[^\r\n]*|--[^\r\n]*/

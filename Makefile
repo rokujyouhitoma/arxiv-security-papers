@@ -101,6 +101,9 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_ddl.peg --no-aot -o src/database/sql/generated_sql_ddl_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_ddl_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_ddl_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_admin.peg --no-aot -o src/database/sql/generated_sql_admin_parser.py
+	${VENV_BIN}/isort src/database/sql/generated_sql_admin_parser.py
+	${VENV_BIN}/black -q src/database/sql/generated_sql_admin_parser.py
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/yaml_frontmatter.peg -o src/pipeline/transformer/generated_yaml_frontmatter_parser.py
 	${VENV_BIN}/isort src/pipeline/transformer/generated_yaml_frontmatter_parser.py
 	${VENV_BIN}/black -q src/pipeline/transformer/generated_yaml_frontmatter_parser.py

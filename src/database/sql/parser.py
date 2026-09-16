@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from core.structures.peg import Choice, Lit, OneOrMore, Parser, Reg, Seq, ZeroOrMore
 
-from .admin_parser import parse_admin
+from .admin_parser import clear_admin_cache, parse_admin
 from .ast import (
     CreateTableStatement,
     DeleteStatement,
@@ -264,9 +264,10 @@ def parse_sql(sql_query: str) -> SQLStatement:
 
 
 def clear_sql_parser_caches() -> None:
-    """Clears all SQL subsystem LRU caches (dispatcher, DQL, DML, DDL, expressions)."""
+    """Clears all SQL subsystem LRU caches (dispatcher, DQL, DML, DDL, Admin, expressions)."""
     parse_sql.cache_clear()
     clear_dql_cache()
     clear_dml_cache()
     clear_ddl_cache()
+    clear_admin_cache()
     clear_sql_expr_cache()
