@@ -2889,20 +2889,41 @@
         };
       }
 
+      let prevCanvasWidth = 0;
+      let prevCanvasHeight = 0;
+
       function resizeCanvas() {
         if (!canvas || !canvas.parentElement) return;
         const rect = canvas.parentElement.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return;
         const dpr = window.devicePixelRatio || 1;
-        width = Math.floor(rect.width);
-        height = Math.floor(rect.height);
+        const newWidth = Math.floor(rect.width);
+        const newHeight = Math.floor(rect.height);
+
+        const dimensionsChanged = (newWidth !== width || newHeight !== height);
+        width = newWidth;
+        height = newHeight;
         canvas.width = Math.floor(width * dpr);
         canvas.height = Math.floor(height * dpr);
         canvas.style.width = width + 'px';
         canvas.style.height = height + 'px';
         ctx.scale(dpr, dpr);
 
-        // Center initialization
+        // If canvas dimensions changed, scale existing node positions proportionally
+        if (dimensionsChanged && prevCanvasWidth > 0 && prevCanvasHeight > 0) {
+          const scaleX = width / prevCanvasWidth;
+          const scaleY = height / prevCanvasHeight;
+          NODES.forEach(n => {
+            if (n.x !== 0 || n.y !== 0) {
+              n.x = width / 2 + (n.x - prevCanvasWidth / 2) * scaleX;
+              n.y = height / 2 + (n.y - prevCanvasHeight / 2) * scaleY;
+            }
+          });
+        }
+        prevCanvasWidth = width;
+        prevCanvasHeight = height;
+
+        // Center initialization for unpositioned nodes
         NODES.forEach((n, idx) => {
           if (n.x === 0 && n.y === 0) {
             const angle = (idx / Math.max(1, NODES.length)) * Math.PI * 2;
@@ -3014,14 +3035,28 @@
           v.vy -= fy;
         });
 
-        // 3. Center Gravity & Integration
+        // 3. Center Gravity & Integration with Dynamic World-Space Scaling
         const cx = width / 2;
         const cy = height / 2;
+
+        // Scale-aware world span calculation
+        // When zoomed out (scale < 1.0), allow nodes to expand across the full visible world frustum
+        const curScale = Math.max(0.1, (viewTransform && viewTransform.scale) ? viewTransform.scale : 1.0);
+        const worldSpanX = width / Math.min(1.0, curScale);
+        const worldSpanY = height / Math.min(1.0, curScale);
+        const padX = 24;
+        const padY = Math.min(24, Math.max(10, height * 0.05));
+        const halfSpanX = worldSpanX / 2 - padX;
+        const halfSpanY = worldSpanY / 2 - padY;
+
+        // Soften center gravity on zoom-out so nodes naturally spread across the expanded canvas view
+        const effectiveKCenter = K_CENTER * Math.min(1.0, curScale);
+
         NODES.forEach(n => {
           if (n === draggedNode) return;
 
-          n.vx += (cx - n.x) * K_CENTER;
-          n.vy += (cy - n.y) * K_CENTER;
+          n.vx += (cx - n.x) * effectiveKCenter;
+          n.vy += (cy - n.y) * effectiveKCenter;
 
           n.vx *= DAMPING;
           n.vy *= DAMPING;
@@ -3029,11 +3064,15 @@
           n.x += n.vx;
           n.y += n.vy;
 
-          // Boundary Clamping (Dynamic aspect-ratio aware padding)
-          const padX = 24;
-          const padY = Math.min(24, Math.max(10, height * 0.05));
-          n.x = Math.max(padX, Math.min(width - padX, n.x));
-          n.y = Math.max(padY, Math.min(height - padY, n.y));
+          // Dynamic World-Aware Boundary Clamping:
+          // Clamps to exact viewport bounds at 100% scale, and expands dynamically into world space when zoomed out
+          if (curScale >= 0.999 && (!viewTransform || (viewTransform.x === 0 && viewTransform.y === 0))) {
+            n.x = Math.max(padX, Math.min(width - padX, n.x));
+            n.y = Math.max(padY, Math.min(height - padY, n.y));
+          } else {
+            n.x = Math.max(cx - halfSpanX, Math.min(cx + halfSpanX, n.x));
+            n.y = Math.max(cy - halfSpanY, Math.min(cy + halfSpanY, n.y));
+          }
         });
       }
 

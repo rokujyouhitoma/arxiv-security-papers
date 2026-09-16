@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **316** | ダッシュボード Canvas における縮小表示（ズームアウト）時の描画領域スケーリング不全および物理境界クランプの解消 | Bug / UX | 2026-09-16 | [316-fix-dashboard-canvas-zoom-scaling-and-physics-bounds.md](closed/316-fix-dashboard-canvas-zoom-scaling-and-physics-bounds.md) |
 | **315** | PDF パーサーおよびオブジェクト解決層の包括的堅牢化とクリティカルバグ修正 | Bug / Reliability | 2026-09-16 | [315-pdf-parser-and-object-resolution-hardening.md](closed/315-pdf-parser-and-object-resolution-hardening.md) |
 | **314** | セキュリティ複合語・専門用語を保護するインテリジェント・デハイフネーション (Intelligent Dehyphenation) の実装 | Feature | 2026-09-16 | [314-pdf-intelligent-dehyphenation.md](closed/314-pdf-intelligent-dehyphenation.md) |
 | **313** | 動的垂直バンド分割 (Vertical Band Segmentation) による 1段組・2段組混在学術論文レイアウト読書順序復元 | Feature | 2026-09-16 | [313-pdf-dynamic-band-segmentation-two-column.md](closed/313-pdf-dynamic-band-segmentation-two-column.md) |

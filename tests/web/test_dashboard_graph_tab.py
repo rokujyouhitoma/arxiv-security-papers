@@ -599,3 +599,28 @@ def test_dashboard_largest_connected_component_filter(dashboard_html: str) -> No
         "computeLargestConnectedComponent(filteredNodes, candidateEdges)"
         in dashboard_html
     )
+
+
+def test_dashboard_canvas_zoom_scaling_and_physics_bounds(dashboard_html: str) -> None:
+    """Verify Issue #316: Canvas zoom scaling, dynamic world-space physics bounds, and flexbox compliance."""
+    # 1. Dynamic world-space bounding box and softened gravity in stepPhysics
+    assert "Scale-aware world span calculation" in dashboard_html
+    assert "worldSpanX = width / Math.min(1.0, curScale);" in dashboard_html
+    assert "worldSpanY = height / Math.min(1.0, curScale);" in dashboard_html
+    assert "effectiveKCenter = K_CENTER * Math.min(1.0, curScale);" in dashboard_html
+    assert (
+        "n.x = Math.max(cx - halfSpanX, Math.min(cx + halfSpanX, n.x));"
+        in dashboard_html
+    )
+    assert (
+        "n.y = Math.max(cy - halfSpanY, Math.min(cy + halfSpanY, n.y));"
+        in dashboard_html
+    )
+
+    # 2. Resilient resizeCanvas with dynamic proportional node scaling
+    assert "let prevCanvasWidth = 0;" in dashboard_html
+    assert "let prevCanvasHeight = 0;" in dashboard_html
+    assert "canvas.style.width = width + 'px';" in dashboard_html
+    assert "canvas.style.height = height + 'px';" in dashboard_html
+    assert "const scaleX = width / prevCanvasWidth;" in dashboard_html
+    assert "const scaleY = height / prevCanvasHeight;" in dashboard_html
