@@ -2948,6 +2948,8 @@
       let viewTransform = { x: 0, y: 0, scale: 1.0 };
       let isPanning = false;
       let panStart = { x: 0, y: 0 };
+      let selectedEdge = null;
+      let hoveredEdge = null;
 
       function screenToWorld(sx, sy) {
         return {
@@ -3206,9 +3208,12 @@
           const v = nodeMap.get(e.target);
           if (!u || !v) return;
 
-          const isHighlighted = (hoveredNode && (u === hoveredNode || v === hoveredNode));
+          const isEdgeSelected = (selectedEdge === e);
+          const isEdgeHovered = (hoveredEdge === e);
+          const isHighlighted = (hoveredNode && (u === hoveredNode || v === hoveredNode)) || isEdgeSelected || isEdgeHovered;
           const isTwoHopDimmed = (activeTwoHopNodes && (!activeTwoHopNodes.has(u.id) || !activeTwoHopNodes.has(v.id)));
           const isEgoDimmed = (focusedHopNodeIds && (!focusedHopNodeIds.has(u.id) || !focusedHopNodeIds.has(v.id)));
+          const isOtherEdgeDimmed = (selectedEdge && !isEdgeSelected && (!hoveredNode || (u !== hoveredNode && v !== hoveredNode)));
 
           const pairKey = u.id < v.id ? `${u.id}:::${v.id}` : `${v.id}:::${u.id}`;
           const pairEdges = edgePairMap.get(pairKey) || [e];
@@ -3263,6 +3268,8 @@
             ctx.globalAlpha = 0.05;
           } else if (isTwoHopDimmed) {
             ctx.globalAlpha = 0.12;
+          } else if (isOtherEdgeDimmed) {
+            ctx.globalAlpha = 0.20;
           }
 
           ctx.beginPath();
@@ -3273,7 +3280,15 @@
             ctx.lineTo(tipX, tipY);
           }
 
-          if (isHighlighted) {
+          if (isEdgeSelected) {
+            ctx.strokeStyle = '#D97706';
+            ctx.lineWidth = 3.6;
+            ctx.setLineDash([]);
+          } else if (isEdgeHovered) {
+            ctx.strokeStyle = '#F59E0B';
+            ctx.lineWidth = 2.8;
+            ctx.setLineDash([]);
+          } else if (isHighlighted) {
             ctx.strokeStyle = '#e0533c';
             ctx.lineWidth = 2.2;
             ctx.setLineDash([]);
@@ -3340,8 +3355,8 @@
           ctx.setLineDash([]);
 
           // Draw Arrowhead pointing to target boundary
-          const arrowLength = isHighlighted ? 8.5 : 7.0;
-          const arrowWidth = isHighlighted ? 4.5 : 3.5;
+          const arrowLength = isEdgeSelected ? 10.0 : (isHighlighted ? 8.5 : 7.0);
+          const arrowWidth = isEdgeSelected ? 5.5 : (isHighlighted ? 4.5 : 3.5);
           const arrowBaseX = tipX - tux * arrowLength;
           const arrowBaseY = tipY - tuy * arrowLength;
           const apx = -tuy * arrowWidth;
@@ -3355,8 +3370,8 @@
           ctx.fillStyle = ctx.strokeStyle;
           ctx.fill();
 
-          // Edge Label on highlight (positioned at curvature midpoint)
-          if (isHighlighted) {
+          // Edge Label on highlight or selection (positioned at curvature midpoint)
+          if (isHighlighted || isEdgeSelected || isEdgeHovered) {
             const labelX = (mx + cx) / 2;
             const labelY = (my + cy) / 2;
             const baseRel = e.label || e.rel || e.type || 'relates';
@@ -3371,13 +3386,13 @@
             const textHeight = 11;
 
             // Draw label background pill
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+            ctx.fillStyle = isEdgeSelected ? 'rgba(30, 27, 22, 0.96)' : 'rgba(15, 23, 42, 0.92)';
             ctx.fillRect(labelX - textWidth / 2 - padX, labelY - textHeight / 2 - padY, textWidth + padX * 2, textHeight + padY * 2);
-            ctx.strokeStyle = currentGraphMode === 'schema' ? '#8b5cf6' : '#e0533c';
-            ctx.lineWidth = 1.0;
+            ctx.strokeStyle = isEdgeSelected ? '#D97706' : (currentGraphMode === 'schema' ? '#8b5cf6' : '#e0533c');
+            ctx.lineWidth = isEdgeSelected ? 1.5 : 1.0;
             ctx.strokeRect(labelX - textWidth / 2 - padX, labelY - textHeight / 2 - padY, textWidth + padX * 2, textHeight + padY * 2);
 
-            ctx.fillStyle = currentGraphMode === 'schema' ? '#c4b5fd' : '#fca5a5';
+            ctx.fillStyle = isEdgeSelected ? '#FDE68A' : (currentGraphMode === 'schema' ? '#c4b5fd' : '#fca5a5');
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(labelText, labelX, labelY);
@@ -3391,6 +3406,7 @@
         NODES.forEach(n => {
           const isHovered = (n === hoveredNode);
           const isSelected = (n === selectedNode);
+          const isEdgeEndpoint = selectedEdge && (n.id === selectedEdge.source || n.id === selectedEdge.target);
           const isTwoHopDimmed = (activeTwoHopNodes && !activeTwoHopNodes.has(n.id));
           const isEgoDimmed = (focusedHopNodeIds && !focusedHopNodeIds.has(n.id));
           const isEgoCenter = (focusedNodeId && n.id === focusedNodeId);
@@ -3405,6 +3421,15 @@
             ctx.globalAlpha = 0.08;
           } else if (isTwoHopDimmed) {
             ctx.globalAlpha = 0.15;
+          }
+
+          // Edge Endpoint Amber Ring
+          if (isEdgeEndpoint && !isSelected) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, nodeRadius + 4, 0, Math.PI * 2);
+            ctx.strokeStyle = '#D97706';
+            ctx.lineWidth = 2.2;
+            ctx.stroke();
           }
 
           // Ego Center Pulsing Blue Ring
@@ -3482,6 +3507,89 @@
         return null;
       }
 
+      function pointToSegmentDistanceSq(px, py, x1, y1, x2, y2) {
+        const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+        if (l2 === 0) return (px - x1) * (px - x1) + (py - y1) * (py - y1);
+        let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const projX = x1 + t * (x2 - x1);
+        const projY = y1 + t * (y2 - y1);
+        return (px - projX) * (px - projX) + (py - projY) * (py - projY);
+      }
+
+      function findEdgeAt(mx, my) {
+        const wpos = screenToWorld(mx, my);
+        const hitThreshold = 8.0 / (viewTransform.scale || 1.0);
+        const hitThresholdSq = hitThreshold * hitThreshold;
+
+        // Build edge pair map for curvature calculation
+        const edgePairMap = new Map();
+        EDGES.forEach(e => {
+          const uId = e.source;
+          const vId = e.target;
+          const pairKey = uId < vId ? `${uId}:::${vId}` : `${vId}:::${uId}`;
+          if (!edgePairMap.has(pairKey)) {
+            edgePairMap.set(pairKey, []);
+          }
+          edgePairMap.get(pairKey).push(e);
+        });
+
+        let closestEdge = null;
+        let minDistanceSq = hitThresholdSq;
+
+        for (let i = 0; i < EDGES.length; i++) {
+          const e = EDGES[i];
+          const u = nodeMap.get(e.source);
+          const v = nodeMap.get(e.target);
+          if (!u || !v) continue;
+
+          const pairKey = u.id < v.id ? `${u.id}:::${v.id}` : `${v.id}:::${u.id}`;
+          const pairEdges = edgePairMap.get(pairKey) || [e];
+          const totalInPair = pairEdges.length;
+
+          let curvatureOffset = 0;
+          if (totalInPair > 1) {
+            const reverseEdges = pairEdges.filter(other => other.source === e.target && other.target === e.source);
+            const sameEdges = pairEdges.filter(other => other.source === e.source && other.target === e.target);
+            if (reverseEdges.length > 0 && sameEdges.length === 1 && reverseEdges.length === 1) {
+              curvatureOffset = 26;
+            } else {
+              const sameIndex = sameEdges.indexOf(e);
+              curvatureOffset = 22 * (sameIndex + 1);
+            }
+          }
+
+          const dx = v.x - u.x;
+          const dy = v.y - u.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 1) continue;
+
+          let distSq = Infinity;
+          if (curvatureOffset === 0) {
+            distSq = pointToSegmentDistanceSq(wpos.x, wpos.y, u.x, u.y, v.x, v.y);
+          } else {
+            const nx = -dy / dist;
+            const ny = dx / dist;
+            const mx_pt = (u.x + v.x) / 2;
+            const my_pt = (u.y + v.y) / 2;
+            const cx = mx_pt + nx * curvatureOffset;
+            const cy = my_pt + ny * curvatureOffset;
+            for (let t = 0.0; t <= 1.0; t += 0.16) {
+              const bx = (1 - t) * (1 - t) * u.x + 2 * (1 - t) * t * cx + t * t * v.x;
+              const by = (1 - t) * (1 - t) * u.y + 2 * (1 - t) * t * cy + t * t * v.y;
+              const d2 = (wpos.x - bx) * (wpos.x - bx) + (wpos.y - by) * (wpos.y - by);
+              if (d2 < distSq) distSq = d2;
+            }
+          }
+
+          if (distSq <= minDistanceSq) {
+            minDistanceSq = distSq;
+            closestEdge = e;
+          }
+        }
+        return closestEdge;
+      }
+
       canvas.addEventListener('mousemove', e => {
         const mpos = getNormalizedCanvasMouse(e);
         const mx = mpos.x;
@@ -3506,7 +3614,12 @@
         }
 
         hoveredNode = findNodeAt(mx, my);
-        canvas.style.cursor = hoveredNode ? 'pointer' : 'crosshair';
+        if (!hoveredNode) {
+          hoveredEdge = findEdgeAt(mx, my);
+        } else {
+          hoveredEdge = null;
+        }
+        canvas.style.cursor = (hoveredNode || hoveredEdge) ? 'pointer' : 'crosshair';
       });
 
       canvas.addEventListener('mousedown', e => {
@@ -3516,13 +3629,23 @@
         const node = findNodeAt(mx, my);
         if (node) {
           draggedNode = node;
+          selectedEdge = null;
           selectNode(node);
         } else {
-          isPanning = true;
-          panStart = { x: mx, y: my };
-          canvas.style.cursor = 'grabbing';
-          if (focusedNodeId) {
+          const edge = findEdgeAt(mx, my);
+          if (edge) {
+            selectEdge(edge);
+          } else {
+            if (selectedNode || selectedEdge) {
+              if (typeof closeCallout === 'function') closeCallout();
+            }
+            selectedEdge = null;
+            isPanning = true;
+            panStart = { x: mx, y: my };
+            canvas.style.cursor = 'grabbing';
+            if (focusedNodeId) {
             clearNodeFocus();
+            }
           }
         }
       });
@@ -3588,7 +3711,13 @@
 
       function selectNode(node) {
         selectedNode = node;
+        selectedEdge = null;
         activeTwoHopNodes = calculateTwoHopNeighborhood(node.id);
+
+        const btnFocus = document.getElementById('btnFocusEgo');
+        const btnHide = document.getElementById('btnHideSelectedNode');
+        if (btnFocus) btnFocus.style.display = 'flex';
+        if (btnHide) btnHide.style.display = 'flex';
 
         const callout = document.getElementById('nodeCallout');
         const tag = document.getElementById('calloutTag');
@@ -3707,8 +3836,75 @@
         callout.style.display = 'flex';
       }
 
+      function selectEdge(edge) {
+        selectedEdge = edge;
+        selectedNode = null;
+        activeTwoHopNodes = null;
+
+        const u = nodeMap.get(edge.source);
+        const v = nodeMap.get(edge.target);
+
+        const callout = document.getElementById('nodeCallout');
+        const tag = document.getElementById('calloutTag');
+        const degEl = document.getElementById('calloutDegree');
+        const title = document.getElementById('calloutTitle');
+        const desc = document.getElementById('calloutDesc');
+        const edgesInfo = document.getElementById('calloutEdges');
+        const btnFocus = document.getElementById('btnFocusEgo');
+        const btnHide = document.getElementById('btnHideSelectedNode');
+
+        if (btnFocus) btnFocus.style.display = 'none';
+        if (btnHide) btnHide.style.display = 'none';
+
+        if (tag) {
+          tag.textContent = `REL: ${escapeHtml(edge.rel || 'LINKS')}`;
+          tag.style.backgroundColor = '#D97706';
+        }
+        if (degEl) {
+          const conf = edge.confidence !== undefined ? Math.round(edge.confidence * 100) : 100;
+          const tier = edge.confidence_tier || (edge.tier ? edge.tier.toUpperCase() : 'HIGH');
+          degEl.textContent = `Conf: ${conf}% (${tier})`;
+        }
+        if (title) {
+          const uName = u ? (u.title || u.name || u.id) : edge.source;
+          const vName = v ? (v.title || v.name || v.id) : edge.target;
+          title.innerHTML = `${escapeHtml(uName)} <span style="color: #D97706; font-size: 13px;">➔</span> ${escapeHtml(vName)}`;
+        }
+
+        let descHtml = '';
+        descHtml += `<div style="font-size: 11px; margin-bottom: 6px;"><strong>Relation Type:</strong> <span style="color: #B45309; font-weight: bold;">${escapeHtml(edge.rel || 'links')}</span></div>`;
+
+        if (edge.inference_mechanism) {
+          descHtml += `<div style="font-size: 10px; color: var(--fg-muted); margin-bottom: 4px;"><strong>Inference:</strong> ${escapeHtml(edge.inference_mechanism)}</div>`;
+        }
+        if (edge.primary_rule_id) {
+          descHtml += `<div style="font-size: 10px; color: #059669; margin-bottom: 4px;"><strong>Primary Rule:</strong> <code>${escapeHtml(edge.primary_rule_id)}</code></div>`;
+        }
+        if (edge.applied_rules && edge.applied_rules.length > 0) {
+          descHtml += `<div style="font-size: 10px; color: var(--fg-muted); margin-bottom: 4px;"><strong>Applied Rules:</strong> ${edge.applied_rules.map(r => `<code>${escapeHtml(r)}</code>`).join(', ')}</div>`;
+        }
+        if (edge.evidence_quote) {
+          descHtml += `<div style="margin-top: 6px; padding: 6px 8px; background: rgba(217, 119, 6, 0.08); border-left: 3px solid #D97706; font-size: 11px; font-style: italic; line-height: 1.4;">&ldquo;${escapeHtml(edge.evidence_quote)}&rdquo;</div>`;
+        }
+        if (edge.evidences && edge.evidences.length > 0) {
+          descHtml += `<div style="font-size: 10px; margin-top: 6px;"><strong>Evidences:</strong> ${edge.evidences.map(ev => escapeHtml(ev)).join(', ')}</div>`;
+        }
+        if (desc) desc.innerHTML = descHtml;
+
+        if (edgesInfo) {
+          edgesInfo.innerHTML = `
+            <div style="font-size: 10px; color: var(--fg-muted); margin-top: 6px; padding: 6px; background: var(--bg-main); border: 1px dashed var(--border-light); border-radius: 3px;">
+              <div><strong>Source:</strong> ${escapeHtml(edge.source)}</div>
+              <div><strong>Target:</strong> ${escapeHtml(edge.target)}</div>
+            </div>`;
+        }
+
+        callout.style.display = 'flex';
+      }
+
       window.closeCallout = function() {
         selectedNode = null;
+        selectedEdge = null;
         activeTwoHopNodes = null;
         document.getElementById('nodeCallout').style.display = 'none';
       };
@@ -4445,7 +4641,7 @@
           if (typeof clearNodeFocus === 'function' && focusedNodeId) {
             clearNodeFocus();
           }
-          if (typeof closeCallout === 'function' && selectedNode) {
+          if (typeof closeCallout === 'function' && (selectedNode || selectedEdge)) {
             closeCallout();
           }
           return;

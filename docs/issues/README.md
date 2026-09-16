@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **318** | ダッシュボード ナレッジグラフにおけるエッジ選択・関係性メタデータ＆エビデンス詳細インスペクターの実装 | Feature / UX | 2026-09-16 | [318-implement-edge-selection-and-inspection-in-dashboard.md](closed/318-implement-edge-selection-and-inspection-in-dashboard.md) |
 | **317** | ダッシュボード ナレッジグラフにおける選択ノードの動的非表示および一括再表示機能の実装 | Feature / UX | 2026-09-16 | [317-implement-node-hiding-and-unhiding-in-dashboard.md](closed/317-implement-node-hiding-and-unhiding-in-dashboard.md) |
 | **316** | ダッシュボード Canvas における縮小表示（ズームアウト）時の描画領域スケーリング不全および物理境界クランプの解消 | Bug / UX | 2026-09-16 | [316-fix-dashboard-canvas-zoom-scaling-and-physics-bounds.md](closed/316-fix-dashboard-canvas-zoom-scaling-and-physics-bounds.md) |
 | **315** | PDF パーサーおよびオブジェクト解決層の包括的堅牢化とクリティカルバグ修正 | Bug / Reliability | 2026-09-16 | [315-pdf-parser-and-object-resolution-hardening.md](closed/315-pdf-parser-and-object-resolution-hardening.md) |

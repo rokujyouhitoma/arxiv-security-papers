@@ -659,3 +659,39 @@ def test_dashboard_node_hiding_and_unhiding(dashboard_html: str) -> None:
     )
     assert "e.key === 'u' || e.key === 'U'" in dashboard_html
     assert "e.shiftKey" in dashboard_html
+
+
+def test_dashboard_edge_selection_and_inspection(dashboard_html: str) -> None:
+    """Verify Issue #318: Edge selection, two-tier hit testing, and evidence inspection drawer."""
+    # 1. State Variables & Hit Testing
+    assert "let selectedEdge = null;" in dashboard_html
+    assert "let hoveredEdge = null;" in dashboard_html
+    assert "function findEdgeAt(mx, my)" in dashboard_html
+    assert "function pointToSegmentDistanceSq(px, py, x1, y1, x2, y2)" in dashboard_html
+    assert "hitThreshold = 8.0 / (viewTransform.scale || 1.0);" in dashboard_html
+
+    # 2. Edge Selection & Evidence Inspection
+    assert "function selectEdge(edge)" in dashboard_html
+    assert "REL: ${escapeHtml(edge.rel || 'LINKS')}" in dashboard_html
+    assert "edge.evidence_quote" in dashboard_html
+    assert "edge.inference_mechanism" in dashboard_html
+    assert "edge.primary_rule_id" in dashboard_html
+    assert "edge.applied_rules" in dashboard_html
+
+    # 3. Canvas Rendering & Highlighting
+    assert "const isEdgeSelected = (selectedEdge === e);" in dashboard_html
+    assert "const isEdgeHovered = (hoveredEdge === e);" in dashboard_html
+    assert "const isOtherEdgeDimmed =" in dashboard_html
+    assert "ctx.strokeStyle = '#D97706';" in dashboard_html
+    assert "ctx.lineWidth = 3.6;" in dashboard_html
+    assert (
+        "const isEdgeEndpoint = selectedEdge && (n.id === selectedEdge.source || n.id === selectedEdge.target);"
+        in dashboard_html
+    )
+
+    # 4. Mouse and Keyboard Dismissal
+    assert "if (selectedNode || selectedEdge)" in dashboard_html
+    assert (
+        "if (typeof closeCallout === 'function' && (selectedNode || selectedEdge))"
+        in dashboard_html
+    )
