@@ -228,7 +228,8 @@ class XRefResolver:
         if pos == -1:
             return b""
 
-        length = stream_dict.get("/Length")
+        length_ref = stream_dict.get("/Length")
+        length = self.resolve_object(length_ref) if length_ref is not None else None
         if isinstance(length, int) and pos + length <= self.length:
             return self.data[pos : pos + length]
 

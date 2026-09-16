@@ -155,7 +155,8 @@ class PageTreeNavigator:
             contents_resolved = self.xref.resolve_object(contents_ref)
             if isinstance(contents_resolved, list):
                 for sub_ref in contents_resolved:
-                    self._append_stream_content(sub_ref, contents_raw)
+                    resolved_stream = self.xref.resolve_object(sub_ref)
+                    self._append_stream_content(resolved_stream, contents_raw)
             else:
                 self._append_stream_content(contents_resolved, contents_raw)
 

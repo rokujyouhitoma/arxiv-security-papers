@@ -110,6 +110,15 @@ class PdfLexer:
 
     def _decode_escape_seq(self) -> bytes:
         eb = self.data[self.pos]
+        if eb == 13:
+            self.pos += 1
+            if self.pos < self.length and self.data[self.pos] == 10:
+                self.pos += 1
+            return b""
+        if eb == 10:
+            self.pos += 1
+            return b""
+
         escape_map = {
             ord("n"): b"\n",
             ord("r"): b"\r",
@@ -139,7 +148,8 @@ class PdfLexer:
         ):
             octal_bytes.append(self.data[self.pos])
             self.pos += 1
-        return bytes([int(octal_bytes.decode("ascii"), 8)])
+        val = int(octal_bytes.decode("ascii"), 8) & 0xFF
+        return bytes([val])
 
     def _scan_hex_string(self) -> Tuple[TokenType, bytes]:
         self.pos += 1  # Skip '<'
@@ -149,13 +159,15 @@ class PdfLexer:
         raw_hex = self.data[self.pos : end_idx]
         self.pos = min(end_idx + 1, self.length)
 
-        cleaned = re.sub(rb"\s+", b"", raw_hex)
-        if len(cleaned) % 2 != 0:
-            cleaned += b"0"
+        valid_hex = [
+            b for b in raw_hex if (48 <= b <= 57) or (65 <= b <= 70) or (97 <= b <= 102)
+        ]
+        if len(valid_hex) % 2 != 0:
+            valid_hex.append(ord("0"))
         try:
             return (
                 TokenType.STRING_HEX,
-                bytes.fromhex(cleaned.decode("ascii", errors="ignore")),
+                bytes.fromhex(bytes(valid_hex).decode("ascii")),
             )
         except ValueError:
             return (TokenType.STRING_HEX, b"")
