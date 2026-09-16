@@ -557,6 +557,58 @@ flowchart TD
 - **ウォームスループット**: 1,000 回の反復クエリ解析が 0.05 秒未満（1 回あたり 50 マイクロ秒未満）。コールド時と比較して数十倍以上の高速化を達成。
 - **テスト全件 PASS**: `tests/core/` (59 tests), `tests/search/` (全件), `tests/database/` (426 tests) が 100% PASS。
 
+### 7.7 次世代 PEG 高度化（左再帰・カット演算子・AOT最適化パス・耐障害構文解析・LRU可観測性）(Issue #304-#307)
+
+```mermaid
+flowchart TD
+    subgraph CoreEngine["コアランタイム高度化 (peg.py)"]
+        LR["Warth '08 左再帰解消\n(_grow_lr_seed)"]
+        Cut["カット演算子 (^ / Cut)\nコミット失敗枝刈り"]
+        Resilient["耐障害パニックモード解析\n(parse_resilient)"]
+        Diag["構文診断ヒューリスティクス\n(未閉じクォート・括弧不整合提示)"]
+    end
+
+    subgraph AOTCompiler["AOT コンパイラ最適化 (optimizer.py)"]
+        Fold["リテラル定数畳み込み\n'a' + 'b' -> 'ab'"]
+        Factor["左因数分解 (Left-Factoring)\nA B / A C -> A (B / C)"]
+        Prune["冗長ノード剪定\n単一要素 Seq / Choice 昇格"]
+    end
+
+    subgraph ObservabilityAndFuzzing["可観測性 & 境界耐性"]
+        MCP["MCP get_parser_cache_metrics\nSQL & 検索 LRU 統計可視化"]
+        Fuzz["境界値・ReDoS ファジングテスト\n(test_peg_fuzzing.py)"]
+    end
+
+    CoreEngine --> AOTCompiler --> ObservabilityAndFuzzing
+```
+
+#### 1. 左再帰解消 (Warth et al. '08) & カット演算子 (`^`) (Issue #304)
+- **直接・間接左再帰の自然解決**:
+  - Warth et al. (2008) "Packrat Parsers Can Support Left Recursion" に基づくシード成長法 (`_grow_lr_seed`) を実装。
+  - 初回呼び出し時に失敗ダミー結果をメモに登録し、マッチ長が単調増加する限り再帰的にルールを再評価。評価ごとに `(k & 0xFFFFF) >= pos` の依存メモエントリを無効化することで正確な左結合 AST を構築。
+- **カット演算子 (`Cut` / `^`)**:
+  - `p1 ^ p2` または `Sequence(p1, Cut(), p2)` により、`p1` 成功後に続く構文でパース失敗が発生した場合、`committed = True` を返却して `Choice` の後続代替枝探索を即時打ち切り。不要なバックトラックを確実に排除。
+
+#### 2. PEG AOT コンパイラ AST 最適化パス (`src/core/structures/peg_compiler/optimizer.py`) (Issue #305)
+- **`GrammarOptimizer` 静的最適化パス**:
+  1. **リテラル畳み込み**: 連続する文字列リテラルを単一ノードに結合（`LitExpr('a') + LitExpr('b') -> LitExpr('ab')`）。
+  2. **共通接頭辞の左因数分解 (Left-Factoring)**: 同一の先頭マッチを持つ `Choice` 候補を単一の判定へ集約（`A B / A C -> A (B / C)`）。
+  3. **冗長ノード剪定**: 1 要素のみの `SeqExpr` / `ChoiceExpr` のアンラップ、および空リテラルの除去。
+- CLI コマンドに `--no-optimize` フラグを提供し、最適化の切り替えを担保。
+
+#### 3. 耐障害構文解析 (Resilient Parsing) & 高度構文診断 (Issue #306)
+- **`Parser.parse_resilient(text, sync_tokens=None) -> tuple[Optional[T], list[PEGSyntaxError]]`**:
+  - トークン同期パニックモードにより、構文エラー発生箇所を記録した上で空白・デリミタをスキップして後続の構文解析を継続。IDE やバッチ処理向けに複数エラーの一括報告を実現。
+- **高度構文診断ヒューリスティクス (`_diagnose_syntax_anomaly`)**:
+  - 未終了文字列リテラル（`'` / `"` / `"""`）の早期検知。
+  - 括弧対応不整合（`(` `[` `{` と `)` `]` `}`）の追跡と、`PEGSyntaxError.hint` での具体的修正案提示。
+
+#### 4. LRU キャッシュ可観測性 MCP 統合 & 文法境界値ファジング (Issue #307)
+- **Observability MCP サーバー統合 (`src/mcp/observability_server.py`)**:
+  - `get_parser_cache_metrics` ツールを追加し、SQL および検索クエリの LRU キャッシュヒット率、サイズ、ミス数をリアルタイム取得。
+  - `get_system_metrics` レスポンスにも `parser_cache_stats` を統合。
+- **境界値・ReDoS ファジングテスト (`tests/core/test_peg_fuzzing.py`)**:
+  - 深いネスト括弧、ReDoS 攻撃パターンに対する線形時間保護、制御文字・NULL バイト入力に対する安全性を立証。
 ---
 
 
@@ -713,4 +765,17 @@ Bryan Ford 氏の原著論文 *"Parsing Expression Grammars: A Recognition-Based
 - [x] `tests/core/test_peg_paper_syntax.py` および `tests/core/test_peg_bootstrap.py` を含む全テストが 100% PASS すること。
 - [x] DSN-25 設計仕様書が改定され、Phase 4 構文仕様が APPROVED ステータスで文書化されていること。
 
+---
+
+## 12. Phase 5: 次世代 PEG 高度化と可観測性・耐障害性確立 (Issue #304-#307)
+
+### 12.1 完了条件 (DoD for Phase 5)
+- [x] **左再帰解消 & カット演算子 (Issue #304)**:
+  - Warth et al. ('08) シード成長法による直接・間接左再帰の自然解決と `Cut` / `^` 演算子によるコミット枝刈りが実装され、`tests/core/test_peg_left_recursion.py` が 100% PASS すること。
+- [x] **AOT コンパイラ AST 最適化パス (Issue #305)**:
+  - `GrammarOptimizer` によるリテラル畳み込み・左因数分解・冗長剪定が実装され、`--no-optimize` CLI オプションおよび `tests/core/test_peg_optimizer.py` が 100% PASS すること。
+- [x] **耐障害構文解析 & 高度構文診断 (Issue #306)**:
+  - `Parser.parse_resilient` によるトークンスキップ・エラー一括収集と、未終了引用符・括弧不整合のヒント診断が実装され、`tests/core/test_peg_cut_and_resilient.py` が 100% PASS すること。
+- [x] **LRU キャッシュ可観測性 MCP & ファジング基盤 (Issue #307)**:
+  - Observability MCP サーバーに `get_parser_cache_metrics` ツールが統合され、境界値・ReDoS ファジングテスト `tests/core/test_peg_fuzzing.py` が 100% PASS すること。
 

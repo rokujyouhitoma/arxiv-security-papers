@@ -281,3 +281,25 @@ def test_mcp_base_and_search_logging_integration():
     recent = data["records"][0]
     assert "cpu_ms" in recent
     assert "peak_memory_kb" in recent
+
+
+def test_mcp_get_parser_cache_metrics() -> None:
+    req = {
+        "jsonrpc": "2.0",
+        "id": 15,
+        "method": "tools/call",
+        "params": {
+            "name": "get_parser_cache_metrics",
+            "arguments": {},
+        },
+    }
+    resp = dispatch_rpc_request(req)
+    assert resp is not None
+    data = json.loads(resp["result"]["content"][0]["text"])
+    assert data["status"] == "healthy"
+    assert "parser_cache_stats" in data
+    stats = data["parser_cache_stats"]
+    assert "sql_parser" in stats
+    assert "search_query_parser" in stats
+    assert "hits" in stats["sql_parser"]
+    assert "hit_ratio" in stats["sql_parser"]

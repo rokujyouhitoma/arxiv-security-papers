@@ -321,6 +321,54 @@ def _get_activity_stats(
     }
 
 
+def _format_cache_info(info: Any) -> Dict[str, Any]:
+    if info is None:
+        return {"hits": 0, "misses": 0, "maxsize": 0, "currsize": 0, "hit_ratio": 0.0}
+    total = info.hits + info.misses
+    ratio = round((info.hits / total) * 100.0, 2) if total > 0 else 0.0
+    return {
+        "hits": info.hits,
+        "misses": info.misses,
+        "maxsize": info.maxsize,
+        "currsize": info.currsize,
+        "hit_ratio": ratio,
+    }
+
+
+def _get_sql_parser_cache_stats() -> Dict[str, Any]:
+    try:
+        from database.sql.parser import parse_sql
+
+        return _format_cache_info(parse_sql.cache_info())
+    except Exception:
+        return _format_cache_info(None)
+
+
+def _get_search_parser_cache_stats() -> Dict[str, Any]:
+    try:
+        from search.query.query_parser import _cached_aot_search_parse
+
+        return _format_cache_info(_cached_aot_search_parse.cache_info())
+    except Exception:
+        return _format_cache_info(None)
+
+
+def _get_parser_cache_stats() -> Dict[str, Any]:
+    return {
+        "sql_parser": _get_sql_parser_cache_stats(),
+        "search_query_parser": _get_search_parser_cache_stats(),
+    }
+
+
+def handle_get_parser_cache_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Retrieves Packrat PEG LRU cache metrics across SQL and Search Query subsystems."""
+    return {
+        "status": "healthy",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "parser_cache_stats": _get_parser_cache_stats(),
+    }
+
+
 def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
     """Returns system, memory allocation, and search engine runtime metrics."""
     from search.server.cache import FilterCache, QueryResultCache
@@ -341,6 +389,7 @@ def handle_get_system_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
         "memory": _get_memory_status(),
         "filter_cache_stats": fc.stats(),
         "query_cache_stats": qc.stats(),
+        "parser_cache_stats": _get_parser_cache_stats(),
         "recent_activity": _get_activity_stats(mcp_records, search_records),
     }
 
@@ -643,6 +692,11 @@ TOOLS_REGISTRY = {
         "description": "Retrieves live search engine metrics, cache hit ratios, RAM stats, and latency records.",
         "inputSchema": {"type": "object", "properties": {}},
         "handler": handle_get_system_metrics,
+    },
+    "get_parser_cache_metrics": {
+        "description": "Retrieves Packrat PEG LRU cache metrics across SQL and Search Query subsystems.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "handler": handle_get_parser_cache_metrics,
     },
     "get_performance_logs": {
         "description": (

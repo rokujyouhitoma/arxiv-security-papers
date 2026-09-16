@@ -15,12 +15,14 @@ from typing import List, Optional
 from core.structures.peg import PEGSyntaxError
 from core.structures.peg_compiler.codegen import CodeGenerator
 from core.structures.peg_compiler.meta_grammar import MetaGrammarParser
+from core.structures.peg_compiler.optimizer import GrammarOptimizer
 
 
 def compile_grammar_to_code(
     grammar_text: str,
     class_name_override: Optional[str] = None,
     use_aot: bool = True,
+    optimize: bool = True,
 ) -> str:
     """Compiles .peg grammar text into Python source code string."""
     parser = MetaGrammarParser(use_aot=use_aot)
@@ -30,6 +32,9 @@ def compile_grammar_to_code(
         from dataclasses import replace
 
         grammar_ast = replace(grammar_ast, name=class_name_override)
+    if optimize:
+        optimizer = GrammarOptimizer()
+        grammar_ast = optimizer.optimize_grammar(grammar_ast)
     generator = CodeGenerator(grammar_ast)
     return generator.generate()
 
@@ -62,6 +67,11 @@ def run_cli(args: Optional[List[str]] = None) -> int:
         "--no-aot",
         action="store_true",
         help="Disable AOT compiled meta-parser and use runtime combinators",
+    )
+    arg_parser.add_argument(
+        "--no-optimize",
+        action="store_true",
+        help="Disable AST optimization passes (constant folding, left-factoring)",
     )
 
     parsed = arg_parser.parse_args(args)
