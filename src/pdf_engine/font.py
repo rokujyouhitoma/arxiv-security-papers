@@ -1,7 +1,10 @@
 """Font decoding, ToUnicode CMap, and encoding converters conforming to ISO 32000-1 Clause 9.6-9.10."""
 
-import re
+import threading
 from typing import Any, Dict, List, Optional
+
+from core.structures.peg import PEGSyntaxError
+from pdf_engine.generated_cmap_parser import PDFCMapParser
 
 # Standard Adobe Glyph List (AGL) sample mappings for common font characters
 STANDARD_AGL: Dict[str, str] = {
@@ -120,68 +123,31 @@ LIGATURE_MAP: Dict[str, str] = {
 }
 
 
-def _parse_bfchar_block(block: str, mapping: Dict[int, str]) -> None:
-    for match in re.finditer(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block):
-        src_code = int(match.group(1), 16)
-        dst_hex = match.group(2)
-        try:
-            mapping[src_code] = bytes.fromhex(dst_hex).decode(
-                "utf-16-be", errors="replace"
-            )
-        except Exception:
-            pass
+_cmap_parser_lock = threading.Lock()
+_global_cmap_parser: Optional[PDFCMapParser] = None
 
 
-def _parse_bfrange_block(block: str, mapping: Dict[int, str]) -> None:
-    for match in re.finditer(
-        r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block
-    ):
-        _decode_single_bfrange(match, mapping)
-
-    for match in re.finditer(
-        r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[(.*?)\]", block, re.DOTALL
-    ):
-        _decode_array_bfrange(match, mapping)
+def _get_cmap_parser() -> PDFCMapParser:
+    """Thread-safe singleton getter for PDFCMapParser."""
+    global _global_cmap_parser
+    if _global_cmap_parser is None:
+        with _cmap_parser_lock:
+            if _global_cmap_parser is None:
+                _global_cmap_parser = PDFCMapParser()
+    return _global_cmap_parser
 
 
-def _map_bfrange_char(cur_val: int, hex_len: int) -> str:
-    if cur_val < 0x110000 and hex_len <= 4:
-        try:
-            return chr(cur_val)
-        except ValueError:
-            return ""
+def _has_cmap_markers(text: str) -> bool:
+    return "beginbfchar" in text or "beginbfrange" in text
+
+
+def _parse_cmap_text(text: str) -> Dict[int, str]:
     try:
-        raw_b = cur_val.to_bytes((hex_len + 1) // 2, "big")
-        return raw_b.decode("utf-16-be", errors="replace")
-    except Exception:
-        return ""
-
-
-def _decode_single_bfrange(match: re.Match[str], mapping: Dict[int, str]) -> None:
-    start = int(match.group(1), 16)
-    end = int(match.group(2), 16)
-    dst_hex_str = match.group(3)
-    dst_base_int = int(dst_hex_str, 16)
-    hex_len = len(dst_hex_str)
-
-    for offset in range(end - start + 1):
-        res = _map_bfrange_char(dst_base_int + offset, hex_len)
-        if res:
-            mapping[start + offset] = res
-
-
-def _decode_array_bfrange(match: re.Match[str], mapping: Dict[int, str]) -> None:
-    start = int(match.group(1), 16)
-    end = int(match.group(2), 16)
-    dest_list = re.findall(r"<([0-9A-Fa-f]+)>", match.group(3))
-    for offset, dst_hex in enumerate(dest_list):
-        if start + offset <= end:
-            try:
-                mapping[start + offset] = bytes.fromhex(dst_hex).decode(
-                    "utf-16-be", errors="replace"
-                )
-            except Exception:
-                pass
+        parser = _get_cmap_parser()
+        result = parser.parse(text)
+        return result if isinstance(result, dict) else {}
+    except PEGSyntaxError:
+        return {}
 
 
 class ToUnicodeParser:
@@ -189,16 +155,10 @@ class ToUnicodeParser:
 
     @staticmethod
     def parse(cmap_data: bytes) -> Dict[int, str]:
-        mapping: Dict[int, str] = {}
         text = cmap_data.decode("latin1", errors="ignore")
-
-        for block in re.findall(r"beginbfchar(.*?)endbfchar", text, re.DOTALL):
-            _parse_bfchar_block(block, mapping)
-
-        for block in re.findall(r"beginbfrange(.*?)endbfrange", text, re.DOTALL):
-            _parse_bfrange_block(block, mapping)
-
-        return mapping
+        if not _has_cmap_markers(text):
+            return {}
+        return _parse_cmap_text(text)
 
 
 class FontDecoder:

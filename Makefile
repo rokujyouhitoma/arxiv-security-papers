@@ -110,6 +110,9 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/bibtex.peg -o src/pdf_engine/generated_bibtex_parser.py
 	${VENV_BIN}/isort src/pdf_engine/generated_bibtex_parser.py
 	${VENV_BIN}/black -q src/pdf_engine/generated_bibtex_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/pdf_cmap.peg -o src/pdf_engine/generated_cmap_parser.py
+	${VENV_BIN}/isort src/pdf_engine/generated_cmap_parser.py
+	${VENV_BIN}/black -q src/pdf_engine/generated_cmap_parser.py
 
 
 .PHONY: verify_peg_bootstrap

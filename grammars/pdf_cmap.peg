@@ -1,0 +1,94 @@
+# PDF /ToUnicode CMap Stream PEG Grammar Specification
+# Conforms to ISO 32000-1 Clause 9.10.2 and Bryan Ford POPL '04 Packrat PEG Specification.
+# Extracts bfchar and bfrange mapping tables into typed CID-to-Unicode dictionaries.
+
+grammar PDFCMap
+
+@header {
+from pdf_engine.cmap_helpers import (
+    _build_cmap_mapping,
+    _decode_bfchar_pair,
+    _decode_bfrange_array,
+    _decode_bfrange_single,
+)
+}
+
+cmap_file <- ws items:(it:cmap_item ws { return it })* {
+    return _build_cmap_mapping(items)
+}
+
+cmap_item <-
+    bfchar_block
+    / bfrange_block
+    / dict_delim
+    / any_hex_chunk
+    / other_token
+
+bfchar_block <-
+    opt_count beginbfchar_kw ws pairs:(p:bfchar_pair ws { return p })* endbfchar_kw {
+        return ("bfchar", pairs)
+    }
+
+opt_count <- (integer ws)?
+
+bfchar_pair <-
+    src:hex_string ws dst:hex_string {
+        return _decode_bfchar_pair(src, dst)
+    }
+
+bfrange_block <-
+    opt_count beginbfrange_kw ws ranges:(r:bfrange_entry ws { return r })* endbfrange_kw {
+        return ("bfrange", ranges)
+    }
+
+bfrange_entry <-
+    bfrange_array_entry
+    / bfrange_single_entry
+
+bfrange_single_entry <-
+    start:hex_string ws end:hex_string ws base:hex_string {
+        return _decode_bfrange_single(start, end, base)
+    }
+
+bfrange_array_entry <-
+    start:hex_string ws end:hex_string ws "[" ws arr:(h:hex_string ws { return h })* "]" {
+        return _decode_bfrange_array(start, end, arr)
+    }
+
+hex_string <-
+    "<" raw:/[0-9A-Fa-f]+/ ">" {
+        return raw
+    }
+
+dict_delim <-
+    ("<<" / ">>") {
+        return None
+    }
+
+any_hex_chunk <-
+    "<" [^>]* ">" {
+        return None
+    }
+
+other_token <-
+    !beginbfchar_kw !beginbfrange_kw !endbfchar_kw !endbfrange_kw token_chars {
+        return None
+    }
+
+token_chars <-
+    /[^ \t\r\n%<>\[\]]+/
+
+integer <-
+    /[0-9]+/
+
+beginbfchar_kw <- /(?i)beginbfchar\b/
+endbfchar_kw <- /(?i)endbfchar\b/
+beginbfrange_kw <- /(?i)beginbfrange\b/
+endbfrange_kw <- /(?i)endbfrange\b/
+
+ws <-
+    ws_char*
+
+ws_char <-
+    [ \t\r\n]
+    / "%" [^\r\n]*
