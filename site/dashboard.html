@@ -1579,6 +1579,8 @@
               data-tooltip="サイドチャネル攻撃（キャッシュ・電力解析等）に関連する脅威サブグラフを抽出します" data-tooltip-pos="top">⚡ Side-Channel
               Leakage</button>
             <span id="graphQueryResultBadge" class="query-badge">全データ待機中</span>
+            <button id="btnUnhideAllNodes" class="btn-preset" onclick="unhideAllNodes()" style="display: none; background: rgba(217, 119, 6, 0.18); border-color: var(--accent-amber); font-weight: bold; color: var(--fg-main);"
+              data-tooltip="非表示にした全ノードを再表示します (Shortcut: Shift+H / u)" data-tooltip-pos="top">👁️ 復元 (<span id="hiddenNodesCount">0</span>)</button>
           </div>
         </div>
       </div>
@@ -1750,13 +1752,16 @@
           <div class="callout-title" id="calloutTitle">--</div>
           <div class="callout-desc" id="calloutDesc">--</div>
           <div class="callout-edges" id="calloutEdges">--</div>
-          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-dark);">
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-dark); display: flex; flex-direction: column; gap: 6px;">
             <button id="btnFocusEgo" class="btn-tool"
               style="width: 100%; justify-content: center; background: rgba(59, 130, 246, 0.18); border: 1px solid #3B82F6; font-weight: bold; color: var(--fg-main);"
               onclick="focusCurrentSelectedEgo()" data-tooltip="このノードと2ホップ以内の近傍ノードのみに絞り込んでハイライト表示します"
               data-tooltip-pos="top">🎯 このノードにフォーカス (2-Hop)</button>
-            <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px; text-align: center;">💡 背景クリックまたは Esc
-              でフォーカス解除</div>
+            <button id="btnHideSelectedNode" class="btn-tool"
+              style="width: 100%; justify-content: center; background: rgba(224, 83, 60, 0.12); border: 1px solid var(--accent-coral); font-weight: bold; color: var(--fg-main);"
+              onclick="hideCurrentSelectedNode()" data-tooltip="このノードを一時的に非表示にします (Shortcut: Del / Backspace / x)"
+              data-tooltip-pos="top">👁️ このノードを非表示</button>
+            <div style="font-size: 10px; color: var(--fg-muted); text-align: center;">💡 背景クリックまたは Esc で解除 / Del で非表示</div>
           </div>
         </div>
 
@@ -1810,6 +1815,14 @@
                 <tr>
                   <td><code>0 キー</code></td>
                   <td>ズーム倍率100%等倍 &amp; 視点位置リセット</td>
+                </tr>
+                <tr>
+                  <td><code>Del / Backspace / X</code></td>
+                  <td>選択中のノードを一時的に非表示</td>
+                </tr>
+                <tr>
+                  <td><code>Shift + H / U</code></td>
+                  <td>非表示にした全ノードを一括再表示（復元）</td>
                 </tr>
                 <tr>
                   <td><code>? キー</code></td>
@@ -2199,6 +2212,55 @@
       window.focusEgoNetwork = focusEgoNetwork;
       window.getEgoNeighborhood = getEgoNeighborhood;
 
+      // ----------------------------------------------------------------------
+      // Manual Node Hiding & Unhiding State (Issue #317)
+      // ----------------------------------------------------------------------
+      const hiddenNodeIds = new Set();
+
+      window.hideNode = function(nodeId) {
+        if (!nodeId) return;
+        hiddenNodeIds.add(nodeId);
+        if (selectedNode && selectedNode.id === nodeId) {
+          if (typeof closeCallout === 'function') closeCallout();
+        }
+        if (focusedHopNodeIds && focusedHopNodeIds.has(nodeId) && focusedNodeId === nodeId) {
+          if (typeof clearNodeFocus === 'function') clearNodeFocus();
+        }
+        refreshCurrentGraphFilter();
+        updateHiddenNodesUI();
+      };
+
+      window.hideCurrentSelectedNode = function() {
+        if (selectedNode && selectedNode.id) {
+          window.hideNode(selectedNode.id);
+        }
+      };
+
+      window.unhideAllNodes = function() {
+        if (hiddenNodeIds.size === 0) return;
+        hiddenNodeIds.clear();
+        refreshCurrentGraphFilter();
+        updateHiddenNodesUI();
+      };
+
+      function updateHiddenNodesUI() {
+        const btn = document.getElementById('btnUnhideAllNodes');
+        const countEl = document.getElementById('hiddenNodesCount');
+        const count = hiddenNodeIds.size;
+        if (countEl) countEl.textContent = count;
+        if (btn) {
+          btn.style.display = count > 0 ? 'inline-flex' : 'none';
+        }
+      }
+
+      function refreshCurrentGraphFilter() {
+        if (currentGraphMode === 'cti') {
+          applyCtiFilter();
+        } else if (currentGraphMode === 'context') {
+          applyContextMesh();
+        }
+      }
+
       const CTI_ENTITY_LABEL_MAP = {
         'Paper':          n => n.label === 'Paper' || n.label === 'Entity:Paper',
         'AttackTechnique': n => n.label === 'AttackTechnique',
@@ -2216,8 +2278,14 @@
       function applyCtiFilter() {
         if (currentGraphMode !== 'cti') return;
         let filteredNodes = ctiRawNodes;
+
+        // Upstream exclusion of manually hidden nodes (Issue #317)
+        if (hiddenNodeIds.size > 0) {
+          filteredNodes = filteredNodes.filter(n => !hiddenNodeIds.has(n.id));
+        }
+
         if (!ctiEntityFilters.has('all')) {
-          filteredNodes = ctiRawNodes.filter(n => {
+          filteredNodes = filteredNodes.filter(n => {
             for (const type of ctiEntityFilters) {
               const matcher = CTI_ENTITY_LABEL_MAP[type];
               if (matcher && matcher(n)) return true;
@@ -2359,7 +2427,13 @@
         const rawNodes = (contextRawNodes && contextRawNodes.length > 0) ? contextRawNodes : contextBackupNodes;
         const rawEdges = (contextRawEdges && contextRawEdges.length > 0) ? contextRawEdges : contextBackupEdges;
 
-        const activeNodeIds = new Set(rawNodes.map(n => n.id));
+        // Upstream exclusion of manually hidden nodes (Issue #317)
+        let baseNodes = rawNodes;
+        if (hiddenNodeIds.size > 0) {
+          baseNodes = baseNodes.filter(n => !hiddenNodeIds.has(n.id));
+        }
+
+        const activeNodeIds = new Set(baseNodes.map(n => n.id));
         const candidateEdges = rawEdges.filter(e => activeNodeIds.has(e.source) && activeNodeIds.has(e.target));
 
         const degrees = new Map();
@@ -2371,7 +2445,7 @@
           degrees.set(e.target, (degrees.get(e.target) || 0) + 1);
         });
 
-        let filteredNodes = rawNodes;
+        let filteredNodes = baseNodes;
         if (hideIsolatedNodes) {
           filteredNodes = filteredNodes.filter(n => connectedIds.has(n.id));
         }
@@ -4392,7 +4466,25 @@
           toggleGraphControlDeck();
         }
         if (e.key === 'h' || e.key === 'H') {
-          toggleDashboardHeader();
+          if (e.shiftKey) {
+            // Shift + H: Unhide all nodes
+            if (typeof unhideAllNodes === 'function') {
+              unhideAllNodes();
+            }
+          } else {
+            toggleDashboardHeader();
+          }
+        }
+        if (e.key === 'u' || e.key === 'U') {
+          if (typeof unhideAllNodes === 'function') {
+            unhideAllNodes();
+          }
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace' || e.key === 'x' || e.key === 'X') {
+          if (selectedNode && typeof hideCurrentSelectedNode === 'function') {
+            e.preventDefault();
+            hideCurrentSelectedNode();
+          }
         }
         if (e.key === '+' || e.key === '=') {
           e.preventDefault();

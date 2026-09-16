@@ -624,3 +624,38 @@ def test_dashboard_canvas_zoom_scaling_and_physics_bounds(dashboard_html: str) -
     assert "canvas.style.height = height + 'px';" in dashboard_html
     assert "const scaleX = width / prevCanvasWidth;" in dashboard_html
     assert "const scaleY = height / prevCanvasHeight;" in dashboard_html
+
+
+def test_dashboard_node_hiding_and_unhiding(dashboard_html: str) -> None:
+    """Verify Issue #317: Dynamic node hiding, unhiding all, UI badges, and pipeline integration."""
+    # 1. DOM Elements
+    assert 'id="btnHideSelectedNode"' in dashboard_html
+    assert "hideCurrentSelectedNode()" in dashboard_html
+    assert 'id="btnUnhideAllNodes"' in dashboard_html
+    assert "unhideAllNodes()" in dashboard_html
+    assert 'id="hiddenNodesCount"' in dashboard_html
+
+    # 2. State & Core Logic
+    assert "const hiddenNodeIds = new Set();" in dashboard_html
+    assert "window.hideNode = function(nodeId)" in dashboard_html
+    assert "window.hideCurrentSelectedNode = function()" in dashboard_html
+    assert "window.unhideAllNodes = function()" in dashboard_html
+    assert "function updateHiddenNodesUI()" in dashboard_html
+    assert "function refreshCurrentGraphFilter()" in dashboard_html
+
+    # 3. Pipeline Integration (Upstream filtering)
+    assert (
+        "filteredNodes = filteredNodes.filter(n => !hiddenNodeIds.has(n.id));"
+        in dashboard_html
+    )
+    assert (
+        "baseNodes = baseNodes.filter(n => !hiddenNodeIds.has(n.id));" in dashboard_html
+    )
+
+    # 4. Keyboard Shortcuts
+    assert (
+        "e.key === 'Delete' || e.key === 'Backspace' || e.key === 'x' || e.key === 'X'"
+        in dashboard_html
+    )
+    assert "e.key === 'u' || e.key === 'U'" in dashboard_html
+    assert "e.shiftKey" in dashboard_html
