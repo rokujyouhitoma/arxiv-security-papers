@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **314** | セキュリティ複合語・専門用語を保護するインテリジェント・デハイフネーション (Intelligent Dehyphenation) の実装 | Feature | 2026-09-16 | [314-pdf-intelligent-dehyphenation.md](closed/314-pdf-intelligent-dehyphenation.md) |
 | **313** | 動的垂直バンド分割 (Vertical Band Segmentation) による 1段組・2段組混在学術論文レイアウト読書順序復元 | Feature | 2026-09-16 | [313-pdf-dynamic-band-segmentation-two-column.md](closed/313-pdf-dynamic-band-segmentation-two-column.md) |
 | **312** | PDF フォント /Widths 配列解析と文字間スペース・カーニング精密推定の実装 | Feature | 2026-09-16 | [312-pdf-font-widths-and-space-inference.md](closed/312-pdf-font-widths-and-space-inference.md) |
 | **311** | Packrat PEG ランタイムにおける期待トークン（Expected Tokens）追跡と高度構文エラー診断基盤の実装 | Feature | 2026-09-16 | [311-peg-expected-tokens-and-syntax-diagnostics.md](closed/311-peg-expected-tokens-and-syntax-diagnostics.md) |

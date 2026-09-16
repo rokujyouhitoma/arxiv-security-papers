@@ -5,10 +5,97 @@ from typing import List, Optional, Tuple
 
 from .contracts import GlyphBox, TextLine
 
+# Prefixes and terms that should preserve their hyphen when line-broken
+COMPOUND_HYPHEN_PREFIXES = {
+    "anti",
+    "auto",
+    "cross",
+    "fault",
+    "fine",
+    "inter",
+    "intra",
+    "macro",
+    "micro",
+    "multi",
+    "non",
+    "open",
+    "out",
+    "over",
+    "peer",
+    "post",
+    "pre",
+    "pseudo",
+    "quasi",
+    "real",
+    "self",
+    "semi",
+    "side",
+    "tamper",
+    "ultra",
+    "under",
+    "zero",
+}
+
+KNOWN_COMPOUND_TERMS = {
+    "zero-trust",
+    "cross-site",
+    "side-channel",
+    "fault-tolerant",
+    "state-of-the-art",
+    "end-to-end",
+    "real-time",
+    "proof-of-concept",
+    "man-in-the-middle",
+    "machine-in-the-middle",
+    "denial-of-service",
+    "zero-day",
+    "coarse-grained",
+    "fine-grained",
+    "tamper-proof",
+    "tamper-resistant",
+    "self-sovereign",
+    "peer-to-peer",
+    "open-source",
+    "out-of-band",
+    "in-band",
+    "public-key",
+    "private-key",
+    "secret-key",
+    "role-based",
+    "attribute-based",
+    "policy-based",
+    "rate-limiting",
+    "time-of-check",
+    "time-of-use",
+}
+
+
+def _should_preserve_hyphen(p1: str, p2: str) -> bool:
+    low1 = p1.lower()
+    low2 = p2.lower()
+    if f"{low1}-{low2}" in KNOWN_COMPOUND_TERMS:
+        return True
+    if low1 in COMPOUND_HYPHEN_PREFIXES:
+        return True
+    if p2 and p2[0].isupper():
+        return True
+    return False
+
+
+def _dehyphenate_match(match: re.Match[str]) -> str:
+    p1 = match.group(1)
+    p2 = match.group(2)
+    if _should_preserve_hyphen(p1, p2):
+        return f"{p1}-{p2}"
+    return f"{p1}{p2}"
+
+
+_DEHYPHEN_REGEX = re.compile(r"([A-Za-z]{2,})-\n\s*([A-Za-z]{2,})")
+
 
 def dehyphenate_text(text: str) -> str:
-    """Merges line-broken hyphenated English words (e.g. cyber-\\nsecurity -> cybersecurity)."""
-    return re.sub(r"([A-Za-z]{2,})-\n([A-Za-z]{2,})", r"\1\2", text)
+    """Intelligently merges line-broken hyphenated words while preserving compound terms."""
+    return _DEHYPHEN_REGEX.sub(_dehyphenate_match, text)
 
 
 def _is_valid_gutter(
