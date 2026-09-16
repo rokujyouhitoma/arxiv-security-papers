@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **308** | BibTeX/LaTeX 構文抽出および OKF Frontmatter (YAMLサブセット) の純粋 Packrat PEG 化 | Feature | Medium | Open (In Progress) | [308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md](308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
@@ -16,6 +15,7 @@
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
+| **308** | BibTeX/LaTeX 構文抽出および OKF Frontmatter (YAMLサブセット) の純粋 Packrat PEG 化 | Feature | 2026-09-16 | [308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md](closed/308-pure-peg-conversion-bibtex-latex-and-okf-yaml.md) |
 | **307** | PEG ファサード LRU キャッシュ可観測性統合 (Observability MCP) および文法境界値 ReDoS ファジングテスト基盤の実装 | Reliability | 2026-09-16 | [307-implement-peg-lru-cache-observability-and-fuzzing-suite.md](closed/307-implement-peg-lru-cache-observability-and-fuzzing-suite.md) |
 | **306** | 耐障害構文解析 (Resilient Parsing) および構文診断ヒューリスティクス (Intelligent Diagnostics) の実装 | Feature | 2026-09-16 | [306-implement-peg-resilient-parsing-and-intelligent-diagnostics.md](closed/306-implement-peg-resilient-parsing-and-intelligent-diagnostics.md) |
 | **305** | PEG AOT 事前コンパイラにおける AST 最適化パス（定数畳み込み・左因数分解・冗長性剪定）の実装 | Optimization | 2026-09-16 | [305-implement-peg-aot-compiler-ast-optimizer-passes.md](closed/305-implement-peg-aot-compiler-ast-optimizer-passes.md) |
