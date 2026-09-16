@@ -83,17 +83,11 @@ def _process_frontmatter_line(
 
 
 def _parse_yaml_frontmatter_light(raw_header: str) -> Dict[str, Any]:
-    """Lightweight pure-Python YAML frontmatter parser for OKF documents."""
-    meta: Dict[str, Any] = {}
-    in_tags = False
-    tags_list: List[str] = []
+    """Lightweight pure-Python Packrat PEG YAML frontmatter parser for OKF documents."""
+    from pipeline.transformer.yaml_parser import parse_okf_frontmatter
 
-    for line in raw_header.splitlines():
-        in_tags = _process_frontmatter_line(line, in_tags, meta, tags_list)
-
-    if tags_list and "tags" not in meta:
-        meta["tags"] = tags_list
-    return meta
+    wrapped = f"---\n{raw_header.strip()}\n---"
+    return parse_okf_frontmatter(wrapped)
 
 
 class LazyRecordDict(Mapping[str, Any]):

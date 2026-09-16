@@ -8,7 +8,7 @@ and builds directed [:CITES] edges in the PropertyGraphEngine.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, List, Set
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from .engine import PropertyGraphEngine
@@ -24,17 +24,13 @@ class CitationLinker:
 
     @classmethod
     def extract_cited_arxiv_ids(cls, text: str, self_id: str = "") -> List[str]:
-        """
-        Extracts valid, unique arXiv IDs cited within the text,
-        excluding the paper's own ID.
-        """
-        matches: Set[str] = set()
+        """Extracts valid, unique arXiv IDs cited within the text,
+        excluding the paper's own ID."""
+        from pdf_engine.bibtex_extractor import extract_arxiv_references
+
         clean_self = self_id.replace("Paper:", "").strip()
-        for match in ARXIV_ID_RE.finditer(text):
-            found_id = match.group(1).split("v")[0]  # strip version suffix
-            if found_id != clean_self:
-                matches.add(found_id)
-        return sorted(list(matches))
+        found = extract_arxiv_references(text)
+        return sorted([fid for fid in found if fid != clean_self])
 
     @classmethod
     def link_paper_citations(

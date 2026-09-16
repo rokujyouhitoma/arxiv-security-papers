@@ -105,19 +105,10 @@ class OntologyExtractor:
 
     @classmethod
     def parse_okf_frontmatter(cls, markdown_text: str) -> Dict[str, Any]:
-        """Parses basic YAML frontmatter keys from markdown without external YAML library."""
-        meta: Dict[str, Any] = {}
-        fm_match = cls.FRONTMATTER_PATTERN.search(markdown_text)
-        if not fm_match:
-            return meta
+        """Parses OKF YAML frontmatter using pure Packrat PEG parser."""
+        from pipeline.transformer.yaml_parser import parse_okf_frontmatter
 
-        current_list_key = ""
-        current_list: List[str] = []
-        for line in fm_match.group(1).splitlines():
-            current_list_key, current_list = cls._parse_frontmatter_line(
-                line, current_list_key, current_list, meta
-            )
-        return meta
+        return parse_okf_frontmatter(markdown_text)
 
     @classmethod
     def _extract_cwe_entities(

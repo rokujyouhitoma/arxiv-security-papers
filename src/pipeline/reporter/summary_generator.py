@@ -20,15 +20,15 @@ PAPER_META_CACHE: Dict[str, Any] = {}
 
 
 def _extract_frontmatter_field(text: str, field_name: str) -> Optional[str]:
-    """Safely extracts and unescapes a YAML frontmatter field value."""
-    pattern = rf'^{field_name}:\s*"((?:\\.|[^"\\])*)"'
-    match = re.search(pattern, text, re.MULTILINE)
-    if match:
-        val = match.group(1)
-        return re.sub(r'\\(["\\])', r"\1", val)
-    fallback_match = re.search(rf"^{field_name}:\s*([^\n\r]+)", text, re.MULTILINE)
-    if fallback_match:
-        return fallback_match.group(1).strip().strip("'\"")
+    """Safely extracts and unescapes a YAML frontmatter field value using Packrat PEG."""
+    from pipeline.transformer.yaml_parser import parse_okf_frontmatter
+
+    data = parse_okf_frontmatter(text)
+    if field_name in data:
+        val = data[field_name]
+        if isinstance(val, list):
+            return ", ".join(str(v) for v in val)
+        return str(val)
     return None
 
 

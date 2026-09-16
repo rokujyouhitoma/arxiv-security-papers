@@ -1,0 +1,128 @@
+# Google OKF (Open Knowledge Format) v0.2 Frontmatter PEG Grammar Specification
+# Conforms to Bryan Ford POPL '04 PEG Specification and DSN-25 Packrat PEG Architecture.
+grammar YAMLFrontmatter
+
+@header {
+from typing import Any
+from pipeline.transformer.yaml_helpers import (
+    _build_frontmatter_dict,
+    _make_kv_pair,
+    _parse_scalar,
+    _unescape_double_quotes,
+    _unescape_single_quotes,
+)
+}
+
+document <- opt_newlines fm:frontmatter opt_newlines .* {
+    return fm
+}
+
+frontmatter <- delim newline entries:entries (delim / !.) {
+    return _build_frontmatter_dict(entries)
+}
+
+delim <- "---" [ \t]*
+
+entries <- items:(entry_item)* {
+    return [it for it in items if it is not None]
+}
+
+entry_item <- comment_or_blank
+            / nested_mapping
+            / list_mapping
+            / inline_list_mapping
+            / scalar_mapping
+
+comment_or_blank <- [ \t]* "#" [^\r\n]* newline { return None }
+                  / [ \t]+ newline { return None }
+                  / newline { return None }
+
+scalar_mapping <- key:key_ident [ \t]* ":" [ \t]* val:scalar_val opt_comment newline {
+    return _make_kv_pair(key, val)
+}
+
+inline_list_mapping <- key:key_ident [ \t]* ":" [ \t]* "[" [ \t]* items:inline_list_items? [ \t]* "]" opt_comment newline {
+    return _make_kv_pair(key, items or [])
+}
+
+inline_list_items <- first:scalar_val rest:([ \t]* "," [ \t]* s:scalar_val { return s })* {
+    return [first] + rest
+}
+
+list_mapping <- key:key_ident [ \t]* ":" [ \t]* opt_comment newline items:block_list_items {
+    return _make_kv_pair(key, items)
+}
+
+block_list_items <- lines:(block_list_entry)+ {
+    return [item for item in lines if item is not None]
+}
+
+block_list_entry <- [ \t]* "-" [ \t]+ first_k:key_ident [ \t]* ":" [ \t]* first_v:scalar_val opt_comment newline cont_fields:block_dict_cont* {
+    d = {first_k: first_v}
+    for k, v in cont_fields:
+        d[k] = v
+    return d
+}
+                  / [ \t]* "-" [ \t]+ dict_item:inline_dict_entry opt_comment newline {
+    return dict_item
+}
+                  / [ \t]* "-" [ \t]+ val:scalar_val opt_comment newline {
+    return val
+}
+
+block_dict_cont <- [ \t]+ !("-" [ \t]+) k:key_ident [ \t]* ":" [ \t]* v:scalar_val opt_comment newline {
+    return (k, v)
+}
+
+inline_dict_entry <- k:key_ident [ \t]* ":" [ \t]* v:scalar_val rest:([ \t]* "," [ \t]* rk:key_ident [ \t]* ":" [ \t]* rv:scalar_val { return (rk, rv) })* {
+    d = {k: v}
+    for rk, rv in rest:
+        d[rk] = rv
+    return d
+}
+
+nested_mapping <- key:key_ident [ \t]* ":" [ \t]* opt_comment newline pairs:nested_pairs {
+    return _make_kv_pair(key, _build_frontmatter_dict(pairs))
+}
+
+nested_pairs <- lines:(nested_pair_item)+ {
+    return [item for item in lines if item is not None]
+}
+
+nested_pair_item <- comment_or_blank
+                  / nested_list_mapping
+                  / nested_scalar_mapping
+
+nested_scalar_mapping <- [ \t]+ k:key_ident [ \t]* ":" [ \t]* v:scalar_val opt_comment newline {
+    return _make_kv_pair(k, v)
+}
+
+nested_list_mapping <- [ \t]+ k:key_ident [ \t]* ":" [ \t]* opt_comment newline items:block_list_items {
+    return _make_kv_pair(k, items)
+}
+
+key_ident <- raw:/[a-zA-Z0-9_-]+/ {
+    return raw
+}
+
+scalar_val <- double_quoted_str
+            / single_quoted_str
+            / unquoted_scalar
+
+double_quoted_str <- raw:/"(?:[^"\\]|\\.)*"/ {
+    return _unescape_double_quotes(raw)
+}
+
+single_quoted_str <- raw:/'(?:[^'\\]|\\.)*'/ {
+    return _unescape_single_quotes(raw)
+}
+
+unquoted_scalar <- raw:/[^\r\n#,\{\}\[\]]+([ \t]+[^\r\n#,\{\}\[\]]+)*/ {
+    return _parse_scalar(raw)
+}
+
+opt_comment <- ( [ \t]* "#" [^\r\n]* )?
+
+newline <- "\r\n" / "\n" / "\r"
+
+opt_newlines <- newline*

@@ -98,10 +98,15 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 	${VENV_BIN}/black -q src/database/sql/generated_sql_dql_parser.py
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_dml.peg --no-aot -o src/database/sql/generated_sql_dml_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_dml_parser.py
-	${VENV_BIN}/black -q src/database/sql/generated_sql_dml_parser.py
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_ddl.peg --no-aot -o src/database/sql/generated_sql_ddl_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_ddl_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_ddl_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/yaml_frontmatter.peg -o src/pipeline/transformer/generated_yaml_frontmatter_parser.py
+	${VENV_BIN}/isort src/pipeline/transformer/generated_yaml_frontmatter_parser.py
+	${VENV_BIN}/black -q src/pipeline/transformer/generated_yaml_frontmatter_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/bibtex.peg -o src/pdf_engine/generated_bibtex_parser.py
+	${VENV_BIN}/isort src/pdf_engine/generated_bibtex_parser.py
+	${VENV_BIN}/black -q src/pdf_engine/generated_bibtex_parser.py
 
 
 .PHONY: verify_peg_bootstrap

@@ -609,6 +609,45 @@ flowchart TD
   - `get_system_metrics` レスポンスにも `parser_cache_stats` を統合。
 - **境界値・ReDoS ファジングテスト (`tests/core/test_peg_fuzzing.py`)**:
   - 深いネスト括弧、ReDoS 攻撃パターンに対する線形時間保護、制御文字・NULL バイト入力に対する安全性を立証。
+
+### 7.8 学術文書・メタデータ構文解析の純粋 PEG 化 (BibTeX/LaTeX & OKF Frontmatter) (Issue #308)
+
+```mermaid
+flowchart LR
+    subgraph DocInput["学術文書入力"]
+        OKF["OKF Markdown\n(YAML Frontmatter)"]
+        Paper["PDF抽出テキスト\n(References / Citations)"]
+    end
+
+    subgraph PegEngine["純粋 Packrat PEG パーサー群"]
+        YAMLPeg["YAML Frontmatter Parser\n(grammars/yaml_frontmatter.peg)"]
+        BibPeg["BibTeX / LaTeX Parser\n(grammars/bibtex.peg)"]
+    end
+
+    subgraph Consumers["パイプライン活用層"]
+        Extractor["Ontology Extractor\n(src/ontology/extractor.py)"]
+        VTable["FileBacked PlainText Storage\n(src/database/storage/)"]
+        Graph["Citation Network Linker\n(src/graph/citation_linker.py)"]
+    end
+
+    OKF --> YAMLPeg
+    Paper --> BibPeg
+    YAMLPeg --> Extractor
+    YAMLPeg --> VTable
+    BibPeg --> Graph
+```
+
+#### 1. OKF YAML-Subset PEG 文法 (`grammars/yaml_frontmatter.peg`)
+- Google Open Knowledge Format (OKF) v0.2 のフロントマターを純粋 PEG で解釈。
+- スカラー（文字列、数値、真偽値、null）、インラインリスト、複数行ブロックリスト、および `provenance` / `trust` などのネスト辞書を完全サポート。
+- `src/pipeline/transformer/yaml_parser.py` によるスレッドセーフなシングルトン＆LRU キャッシュ層。
+- 従来の `ontology/extractor.py`, `plain_text_storage.py`, `summary_generator.py` に点在していた手書き正規表現・行走査ヒューリスティクスを完全撤廃し、純粋 PEG パーサーへ統合。
+
+#### 2. BibTeX / LaTeX 構文抽出 PEG 文法 (`grammars/bibtex.peg`)
+- 学術論文の引用情報（`@article`, `@inproceedings`, `@book`, `@misc`）をゼロ外部依存で構造化抽出。
+- 波括弧ネスト（`{...}`）、LaTeX 特殊エスケープ文字・アクセント・ダッシュ記号（`---` -> `—`, `--` -> `–`）の正規化。
+- `\cite{...}`, `\citep{...}`, `\citet{...}` 構文および arXiv 識別子抽出と `src/graph/citation_linker.py` への統合。
+
 ---
 
 

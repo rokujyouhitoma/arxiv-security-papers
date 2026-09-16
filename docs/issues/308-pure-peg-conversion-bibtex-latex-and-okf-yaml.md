@@ -20,18 +20,18 @@ ID: 308
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `grammars/yaml_frontmatter.peg` (OKF Frontmatter YAMLサブセット文法定義)
-- [ ] `grammars/bibtex.peg` (BibTeX / LaTeX 引用・エントリ文法定義)
-- [ ] `src/pipeline/transformer/generated_yaml_frontmatter_parser.py` (AOT 生成パーサー)
-- [ ] `src/pipeline/transformer/yaml_parser.py` (OKF Frontmatter PEG ファサードおよび辞書変換)
-- [ ] `src/ontology/extractor.py` (フロントマター抽出の PEG 統合)
-- [ ] `src/database/storage/plain_text_storage.py` (フロントマター解析の PEG 統合)
-- [ ] `src/pipeline/reporter/summary_generator.py` (フロントマター抽出の PEG 統合)
-- [ ] `src/pdf_engine/generated_bibtex_parser.py` (AOT 生成パーサー)
-- [ ] `src/pdf_engine/bibtex_extractor.py` (BibTeX / LaTeX 引用・書誌情報抽出エンジン)
-- [ ] `Makefile` (`compile_grammars` ターゲット更新)
-- [ ] `tests/pipeline/test_okf_peg_frontmatter.py` (YAML フロントマター PEG テストスイート)
-- [ ] `tests/pdf_engine/test_bibtex_peg.py` (BibTeX / LaTeX 構文抽出 PEG テストスイート)
+- [x] `grammars/yaml_frontmatter.peg` (OKF Frontmatter YAMLサブセット文法定義)
+- [x] `grammars/bibtex.peg` (BibTeX / LaTeX 引用・エントリ文法定義)
+- [x] `src/pipeline/transformer/generated_yaml_frontmatter_parser.py` (AOT 生成パーサー)
+- [x] `src/pipeline/transformer/yaml_parser.py` (OKF Frontmatter PEG ファサードおよび辞書変換)
+- [x] `src/ontology/extractor.py` (フロントマター抽出の PEG 統合)
+- [x] `src/database/storage/plain_text_storage.py` (フロントマター解析の PEG 統合)
+- [x] `src/pipeline/reporter/summary_generator.py` (フロントマター抽出の PEG 統合)
+- [x] `src/pdf_engine/generated_bibtex_parser.py` (AOT 生成パーサー)
+- [x] `src/pdf_engine/bibtex_extractor.py` (BibTeX / LaTeX 引用・書誌情報抽出エンジン)
+- [x] `Makefile` (`compile_grammars` ターゲット更新)
+- [x] `tests/pipeline/test_okf_peg_frontmatter.py` (YAML フロントマター PEG テストスイート)
+- [x] `tests/pdf_engine/test_bibtex_peg.py` (BibTeX / LaTeX 構文抽出 PEG テストスイート)
 
 ---
 
@@ -74,9 +74,9 @@ Target Branch: `feat/308-pure-peg-conversion-bibtex-latex-and-okf-yaml`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `grammars/yaml_frontmatter.peg` および `grammars/bibtex.peg` が作成され、`make compile_grammars` で AOT Python コードが正常生成されること。
-- [ ] OKF フロントマターパーサーがネスト辞書（`provenance`, `trust` 等）、リスト（`tags`, `authors` 等）、クォート文字列を正確に辞書構造化できること。
-- [ ] 既存の OKF 生成・読み込み処理（`extractor.py`, `plain_text_storage.py`, `summary_generator.py`）が純粋 PEG パーサー経由で 100% 互換動作すること。
-- [ ] BibTeX パーサーが多様なエントリ種別、ネスト波括弧、および LaTeX 引用コマンドを安全かつ正確にパースできること。
-- [ ] 全ての新規関数・クラスが循環的複雑度 $CC \le 4$（Xenon Grade A）および `mypy --strict` をクリアすること。
-- [ ] 単体テストが全件 PASS すること。
+- [x] `grammars/yaml_frontmatter.peg` および `grammars/bibtex.peg` が作成され、`make compile_grammars` で AOT Python コードが正常生成されること。
+- [x] OKF フロントマターパーサーがネスト辞書（`provenance`, `trust` 等）、リスト（`tags`, `authors` 等）、クォート文字列を正確に辞書構造化できること。
+- [x] 既存の OKF 生成・読み込み処理（`extractor.py`, `plain_text_storage.py`, `summary_generator.py`）が純粋 PEG パーサー経由で 100% 互換動作すること。
+- [x] BibTeX パーサーが多様なエントリ種別、ネスト波括弧、および LaTeX 引用コマンドを安全かつ正確にパースできること。
+- [x] 全ての新規関数・クラスが循環的複雑度 $CC \le 4$（Xenon Grade A）および `mypy --strict` をクリアすること。
+- [x] 単体テストが全件 PASS すること。

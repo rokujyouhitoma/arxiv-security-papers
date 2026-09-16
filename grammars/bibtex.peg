@@ -1,0 +1,80 @@
+# BibTeX and LaTeX Citation PEG Grammar Specification
+# Conforms to Bryan Ford POPL '04 PEG Specification and DSN-25 Packrat PEG Architecture.
+grammar BibTeX
+
+@header {
+from pdf_engine.bibtex_helpers import (
+    _build_bibtex_entry,
+    _collect_bibtex_entries,
+)
+}
+
+file <- ws items:item* ws {
+    return _collect_bibtex_entries(items)
+}
+
+item <- entry
+      / comment_item
+      / string_def
+      / preamble
+      / skip_char
+
+entry <- "@" ws t:entry_type ws "{" ws k:cite_key ws "," ws f:field_list? ws "}" {
+    return _build_bibtex_entry(t, k, f or [])
+}
+
+entry_type <- raw:/[a-zA-Z]+/ {
+    return raw
+}
+
+cite_key <- raw:/[^,\s\}]+/ {
+    return raw
+}
+
+field_list <- first:field_assign rest:(ws "," ws nxt:field_assign { return nxt })* (ws ",")? {
+    return [first] + rest
+}
+
+field_assign <- k:field_name ws "=" ws v:field_value {
+    return (k, v)
+}
+
+field_name <- raw:/[a-zA-Z0-9_-]+/ {
+    return raw
+}
+
+field_value <- braced_value
+             / quoted_value
+             / plain_value
+
+braced_value <- raw:/\{(?:[^{}\\]|\\.|(?:\{[^{}]*\}))*\}/ {
+    return raw
+}
+
+quoted_value <- raw:/"(?:[^"\\]|\\.)*"/ {
+    return raw
+}
+
+plain_value <- raw:/[a-zA-Z0-9_#]+/ {
+    return raw
+}
+
+comment_item <- "@" /(?i)comment/ ws "{" [^}]* "}" {
+    return None
+} / "%" [^\r\n]* {
+    return None
+}
+
+string_def <- "@" /(?i)string/ ws "{" ws field_name ws "=" ws field_value ws "}" {
+    return None
+}
+
+preamble <- "@" /(?i)preamble/ ws "{" [^}]* "}" {
+    return None
+}
+
+skip_char <- !("@" / !.) . {
+    return None
+}
+
+ws <- [ \t\r\n]*
