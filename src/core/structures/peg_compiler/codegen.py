@@ -62,7 +62,6 @@ _TYPING_SYMBOLS: Tuple[str, ...] = (
     "Optional",
     "Set",
     "Tuple",
-    "cast",
 )
 
 

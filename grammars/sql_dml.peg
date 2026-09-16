@@ -1,0 +1,581 @@
+# SQL DML (Data Manipulation Language) Grammar Specification
+# Conforms to Bryan Ford POPL '04 Packrat PEG Specification.
+# Generates strongly-typed InsertStatement, UpdateStatement, DeleteStatement AST nodes.
+
+grammar SQLDML
+
+@header {
+import ast as py_ast
+from typing import Any, Dict, List, Optional, Tuple, cast
+
+try:
+    from .ast import (
+        DeleteStatement,
+        InsertStatement,
+        JoinClause,
+        JoinType,
+        SelectStatement,
+        SQLCommandType,
+        TableRef,
+        UpdateStatement,
+    )
+    from .dql_parser import parse_dql
+except (ImportError, ValueError):
+    from database.sql.ast import (
+        DeleteStatement,
+        InsertStatement,
+        JoinClause,
+        JoinType,
+        SelectStatement,
+        SQLCommandType,
+        TableRef,
+        UpdateStatement,
+    )
+    from database.sql.dql_parser import parse_dql
+
+
+def _resolve_boolean_or_null(clean: str) -> Tuple[bool, Any]:
+    u = clean.upper()
+    if u == "NULL":
+        return True, None
+    if u == "TRUE":
+        return True, True
+    if u == "FALSE":
+        return True, False
+    return False, None
+
+
+def _resolve_raw_literal(val_str: str) -> Any:
+    clean = val_str.strip()
+    is_special, val = _resolve_boolean_or_null(clean)
+    if is_special:
+        return val
+    try:
+        return py_ast.literal_eval(clean)
+    except Exception:
+        return clean.strip("'\"")
+
+
+def _extract_where_list(where_raw: Optional[str]) -> List[Dict[str, Any]]:
+    if not where_raw:
+        return []
+    from database.sql.parser import SQLParser
+    dummy_parser = SQLParser()
+    return dummy_parser._extract_where_clauses(where_raw.strip())
+
+
+def _validate_insert_rows_columns(cols: List[str], rows: List[List[Any]]) -> None:
+    if not cols:
+        return
+    for r in rows:
+        if len(r) != len(cols):
+            from database.sql.dml_parser import SQLParseError
+            raise SQLParseError(
+                f"Column count ({len(cols)}) does not match values count ({len(r)})"
+            )
+
+
+def _make_insert_values_stmt(
+    table_name: str,
+    cols: List[str],
+    rows: List[List[Any]],
+    up_tgt: Optional[List[str]],
+    up_act: Optional[str],
+    up_set: Dict[str, Any],
+    ret_cols: Optional[List[str]],
+) -> InsertStatement:
+    _validate_insert_rows_columns(cols, rows)
+    first_val = rows[0] if rows else []
+    return InsertStatement(
+        command_type=SQLCommandType.INSERT,
+        raw_sql="",
+        table_name=table_name,
+        columns=cols,
+        values=first_val,
+        rows_values=rows,
+        upsert_target=up_tgt,
+        upsert_action=up_act,
+        upsert_update_set=up_set,
+        returning_cols=ret_cols,
+    )
+
+
+def _resolve_upsert_metadata(
+    is_replace: bool,
+    upsert_info: Optional[Tuple[Optional[List[str]], str, Dict[str, Any]]],
+) -> Tuple[Optional[List[str]], Optional[str], Dict[str, Any]]:
+    if upsert_info:
+        up_act: Optional[str] = "UPDATE" if is_replace else upsert_info[1]
+        return upsert_info[0], up_act, upsert_info[2]
+    no_up_act: Optional[str] = "UPDATE" if is_replace else None
+    return None, no_up_act, {}
+
+
+def _assemble_insert_stmt(
+    is_replace: bool,
+    table_name: str,
+    cols: Optional[List[str]],
+    body: Any,
+    upsert_info: Optional[Tuple[Optional[List[str]], str, Dict[str, Any]]],
+    ret_cols: Optional[List[str]],
+) -> InsertStatement:
+    cols_list = cols or []
+    up_tgt, up_act, up_set = _resolve_upsert_metadata(is_replace, upsert_info)
+
+    if isinstance(body, SelectStatement):
+        return InsertStatement(
+            command_type=SQLCommandType.INSERT,
+            raw_sql="",
+            table_name=table_name,
+            columns=cols_list,
+            select_stmt=body,
+            upsert_target=up_tgt,
+            upsert_action=up_act,
+            upsert_update_set=up_set,
+            returning_cols=ret_cols,
+        )
+
+    return _make_insert_values_stmt(
+        table_name=table_name,
+        cols=cols_list,
+        rows=cast(List[List[Any]], body),
+        up_tgt=up_tgt,
+        up_act=up_act,
+        up_set=up_set,
+        ret_cols=ret_cols,
+    )
+
+
+def _unpack_hint(
+    hint: Optional[Tuple[Optional[str], bool]],
+) -> Tuple[Optional[str], bool]:
+    if not hint:
+        return None, False
+    return hint[0], hint[1]
+
+
+def _unpack_ord_lim(
+    ord_lim: Optional[Tuple[Optional[str], bool, Optional[int]]],
+) -> Tuple[Optional[str], bool, Optional[int]]:
+    if not ord_lim:
+        return None, False, None
+    return ord_lim[0], ord_lim[1], ord_lim[2]
+
+
+def _unpack_from_info(
+    from_info: Optional[Tuple[TableRef, List[JoinClause]]],
+) -> Tuple[Optional[TableRef], List[JoinClause]]:
+    if not from_info:
+        return None, []
+    return from_info[0], from_info[1]
+
+
+def _assemble_update_stmt(
+    tbl_name: str,
+    hint: Optional[Tuple[Optional[str], bool]],
+    sets: Tuple[Dict[str, Any], Dict[str, str]],
+    from_info: Optional[Tuple[TableRef, List[JoinClause]]],
+    where_raw: Optional[str],
+    ord_lim: Optional[Tuple[Optional[str], bool, Optional[int]]],
+    ret_cols: Optional[List[str]],
+) -> UpdateStatement:
+    indexed_by, not_indexed = _unpack_hint(hint)
+    from_tbl, joins_list = _unpack_from_info(from_info)
+    order_by, order_desc, limit_val = _unpack_ord_lim(ord_lim)
+    where_clauses = _extract_where_list(where_raw)
+
+    return UpdateStatement(
+        command_type=SQLCommandType.UPDATE,
+        raw_sql="",
+        table_name=tbl_name,
+        assignments=sets[0],
+        raw_assignments=sets[1],
+        from_table=from_tbl,
+        joins=joins_list,
+        where_clauses=where_clauses,
+        returning_cols=ret_cols,
+        order_by=order_by,
+        order_desc=order_desc,
+        limit=limit_val,
+        indexed_by=indexed_by,
+        not_indexed=not_indexed,
+    )
+
+
+def _assemble_delete_stmt(
+    tbl_name: str,
+    hint: Optional[Tuple[Optional[str], bool]],
+    where_raw: Optional[str],
+    ord_lim: Optional[Tuple[Optional[str], bool, Optional[int]]],
+    ret_cols: Optional[List[str]],
+) -> DeleteStatement:
+    indexed_by, not_indexed = _unpack_hint(hint)
+    order_by, order_desc, limit_val = _unpack_ord_lim(ord_lim)
+    where_clauses = _extract_where_list(where_raw)
+
+    return DeleteStatement(
+        command_type=SQLCommandType.DELETE,
+        raw_sql="",
+        table_name=tbl_name,
+        where_clauses=where_clauses,
+        returning_cols=ret_cols,
+        order_by=order_by,
+        order_desc=order_desc,
+        limit=limit_val,
+        indexed_by=indexed_by,
+        not_indexed=not_indexed,
+    )
+}
+
+# -------------------------------------------------------------
+# Top-Level Root Rule
+# -------------------------------------------------------------
+root <- opt_ws dml:dml_stmt opt_ws {
+    return dml
+}
+
+dml_stmt <-
+    insert_stmt
+    / update_stmt
+    / delete_stmt
+
+# -------------------------------------------------------------
+# INSERT / REPLACE Statement
+# -------------------------------------------------------------
+insert_stmt <-
+    hdr:insert_header
+    ws tbl:ident
+    cols:(opt_ws "(" opt_ws cl:ident_list opt_ws ")" { return cl })?
+    ws body:insert_body
+    upsert:(opt_ws u:upsert_clause { return u })?
+    ret:(opt_ws r:returning_clause { return r })? {
+        return _assemble_insert_stmt(
+            is_replace=hdr,
+            table_name=tbl,
+            cols=cols,
+            body=body,
+            upsert_info=upsert,
+            ret_cols=ret,
+        )
+    }
+
+insert_header <-
+    replace_kw ws into_kw { return True }
+    / insert_kw ws or_kw ws replace_kw ws into_kw { return True }
+    / insert_kw ws into_kw { return False }
+
+insert_body <-
+    values_clause
+    / select_insert_body
+
+values_clause <- values_kw ws rows:values_rows {
+    return rows
+}
+
+values_rows <- first:value_row rest:(opt_ws "," opt_ws r:value_row { return r })* {
+    return [first] + rest
+}
+
+value_row <- "(" opt_ws first:value_atom rest:(opt_ws "," opt_ws a:value_atom { return a })* opt_ws ")" {
+    return [first] + rest
+}
+
+value_atom <- raw:atom_token opt_ws {
+    return _resolve_raw_literal(raw)
+}
+
+atom_token <-
+    string_literal
+    / double_quote_literal
+    / bracket_token
+    / /[^\s,)]+/
+
+select_insert_body <- raw:select_raw_text {
+    return parse_dql(raw)
+}
+
+select_raw_text <- select_kw ws parts:select_chunk+ {
+    return "SELECT " + " ".join(parts).strip()
+}
+
+select_chunk <- !select_insert_end raw:("," / chunk_token) opt_ws {
+    return raw
+}
+
+select_insert_end <-
+    on_conflict_kw
+    / returning_kw
+    / ";"
+
+on_conflict_kw <- on_kw ws conflict_kw
+
+# -------------------------------------------------------------
+# UPSERT: ON CONFLICT [(target)] [WHERE ...] DO NOTHING / UPDATE SET ...
+# -------------------------------------------------------------
+upsert_clause <-
+    on_kw ws conflict_kw
+    tgt:(opt_ws "(" opt_ws tl:ident_list opt_ws ")" { return tl })?
+    (ws where_kw ws /[^\bDO\b;]+/)?
+    ws do_kw ws act:upsert_action {
+        return (tgt, act[0], act[1])
+    }
+
+upsert_action <-
+    nothing_kw { return ("NOTHING", {}) }
+    / update_kw ws set_kw ws sets:set_assignment_list (ws where_kw ws /[^\bRETURNING\b;]+/)? {
+        return ("UPDATE", sets[0])
+    }
+
+# -------------------------------------------------------------
+# UPDATE Statement
+# -------------------------------------------------------------
+update_stmt <-
+    update_kw
+    (ws or_kw ws (rollback_kw / abort_kw / fail_kw / ignore_kw / replace_kw))?
+    ws tbl:ident
+    hint:(ws h:idx_hint { return h })?
+    ws set_kw ws sets:set_assignment_list
+    from_p:(opt_ws f:update_from_clause { return f })?
+    where_p:(opt_ws w:where_clause { return w })?
+    ord_lim:(opt_ws ol:order_limit_clause { return ol })?
+    ret:(opt_ws r:returning_clause { return r })? {
+        return _assemble_update_stmt(
+            tbl_name=tbl,
+            hint=hint,
+            sets=sets,
+            from_info=from_p,
+            where_raw=where_p,
+            ord_lim=ord_lim,
+            ret_cols=ret,
+        )
+    }
+
+set_assignment_list <- first:set_item rest:(opt_ws "," opt_ws next_i:set_item { return next_i })* {
+    static_map: Dict[str, Any] = {}
+    raw_map: Dict[str, str] = {}
+    for col, val, raw_expr in [first] + rest:
+        static_map[col] = val
+        raw_map[col] = raw_expr
+    return (static_map, raw_map)
+}
+
+set_item <- col:ident opt_ws "=" opt_ws expr:set_expr {
+    return (col, _resolve_raw_literal(expr), expr)
+}
+
+set_expr <- parts:set_chunk+ {
+    return " ".join(parts).strip()
+}
+
+set_chunk <- !set_end raw:chunk_token opt_ws {
+    return raw
+}
+
+set_end <-
+    from_kw
+    / where_kw
+    / order_kw
+    / limit_kw
+    / returning_kw
+    / ";"
+
+update_from_clause <- from_kw ws tbl:ident opt_alias:(ws a:non_reserved_ident { return a })? joins:(opt_ws j:join_spec { return j })* {
+    t_ref = TableRef(name=tbl, alias=opt_alias)
+    return (t_ref, joins)
+}
+
+join_spec <-
+    join_kw ws tbl:ident opt_alias:(ws a:non_reserved_ident { return a })? (ws on_kw ws raw:/[^\bWHERE\b\bORDER\b\bLIMIT\b\bRETURNING\b;]+/)? {
+        t_ref = TableRef(name=tbl, alias=opt_alias)
+        return JoinClause(
+            join_type=JoinType.INNER,
+            table=t_ref,
+            on_conditions=[],
+        )
+    }
+
+# -------------------------------------------------------------
+# DELETE Statement
+# -------------------------------------------------------------
+delete_stmt <-
+    delete_kw ws from_kw ws tbl:ident
+    hint:(ws h:idx_hint { return h })?
+    where_p:(opt_ws w:where_clause { return w })?
+    ord_lim:(opt_ws ol:order_limit_clause { return ol })?
+    ret:(opt_ws r:returning_clause { return r })? {
+        return _assemble_delete_stmt(
+            tbl_name=tbl,
+            hint=hint,
+            where_raw=where_p,
+            ord_lim=ord_lim,
+            ret_cols=ret,
+        )
+    }
+
+# -------------------------------------------------------------
+# Clauses (WHERE, ORDER BY, LIMIT, RETURNING, Index Hint)
+# -------------------------------------------------------------
+where_clause <- where_kw ws body:where_body_expr {
+    return body
+}
+
+where_body_expr <- parts:where_chunk+ {
+    return " ".join(parts).strip()
+}
+
+where_chunk <- !where_end raw:chunk_token opt_ws {
+    return raw
+}
+
+where_end <-
+    order_kw
+    / limit_kw
+    / returning_kw
+    / ";"
+
+order_limit_clause <-
+    ord:order_by_clause?
+    lim:limit_clause? {
+        order_col = ord[0] if ord else None
+        order_desc = ord[1] if ord else False
+        limit_val = lim if lim is not None else None
+        return (order_col, order_desc, limit_val)
+    }
+
+order_by_clause <- order_kw ws by_kw ws col:ident dir:(ws d:order_dir { return d })? {
+    is_desc = (dir == "DESC") if dir else False
+    return (col, is_desc)
+}
+
+order_dir <-
+    asc_kw { return "ASC" }
+    / desc_kw { return "DESC" }
+
+limit_clause <- opt_ws limit_kw ws num:integer_num {
+    return num
+}
+
+returning_clause <- returning_kw ws items:returning_item_list {
+    return items
+}
+
+returning_item_list <- first:returning_item rest:(opt_ws "," opt_ws next_i:returning_item { return next_i })* {
+    return [first] + rest
+}
+
+returning_item <-
+    "*" { return "*" }
+    / raw:/[a-zA-Z0-9_\.]+(\s+AS\s+[a-zA-Z0-9_]+)?/ { return raw }
+
+idx_hint <-
+    indexed_kw ws by_kw ws name:ident { return (name, False) }
+    / not_kw ws indexed_kw { return (None, True) }
+
+# -------------------------------------------------------------
+# Identifiers & Literals
+# -------------------------------------------------------------
+ident_list <- first:ident rest:(opt_ws "," opt_ws next_i:ident { return next_i })* {
+    return [first] + rest
+}
+
+ident <-
+    plain:ident_pattern { return plain }
+    / backtick:backtick_pattern { return backtick }
+    / double_quote:double_quote_pattern { return double_quote }
+
+ident_pattern <- raw:/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?/ {
+    return raw
+}
+
+backtick_pattern <- raw:/`[^`]*`/ {
+    return raw[1:-1]
+}
+
+double_quote_pattern <- raw:/"[^"]*"/ {
+    return raw[1:-1]
+}
+
+non_reserved_ident <- !reserved_kw id:ident {
+    return id
+}
+
+reserved_kw <-
+    where_kw
+    / order_kw
+    / limit_kw
+    / returning_kw
+    / join_kw
+    / from_kw
+    / set_kw
+    / on_kw
+
+string_literal <- raw:/'([^']|'')*'/ {
+    return raw
+}
+
+double_quote_literal <- raw:/"([^"\\]|\\.)*"/ {
+    return raw
+}
+
+bracket_token <- raw:/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/ {
+    return raw
+}
+
+chunk_token <-
+    func_call_token
+    / paren_token
+    / bracket_token
+    / string_literal
+    / double_quote_literal
+    / non_ws_token
+
+func_call_token <- fn:/[a-zA-Z_][a-zA-Z0-9_]*/ args:/\s*\((?:[^()]|\([^()]*\))*\)/ {
+    return f"{fn}{args}"
+}
+
+paren_token <- raw:/\((?:[^()]|\([^()]*\))*\)/ {
+    return raw
+}
+
+non_ws_token <- raw:/[^\s,;()]+/ {
+    return raw
+}
+
+integer_num <- raw:/[0-9]+/ {
+    return int(raw)
+}
+
+# -------------------------------------------------------------
+# SQL Keywords (Case-Insensitive)
+# -------------------------------------------------------------
+insert_kw <- /(?i)\bINSERT\b/
+replace_kw <- /(?i)\bREPLACE\b/
+into_kw <- /(?i)\bINTO\b/
+update_kw <- /(?i)\bUPDATE\b/
+delete_kw <- /(?i)\bDELETE\b/
+from_kw <- /(?i)\bFROM\b/
+set_kw <- /(?i)\bSET\b/
+values_kw <- /(?i)\bVALUES\b/
+where_kw <- /(?i)\bWHERE\b/
+order_kw <- /(?i)\bORDER\b/
+by_kw <- /(?i)\bBY\b/
+limit_kw <- /(?i)\bLIMIT\b/
+returning_kw <- /(?i)\bRETURNING\b/
+on_kw <- /(?i)\bON\b/
+conflict_kw <- /(?i)\bCONFLICT\b/
+do_kw <- /(?i)\bDO\b/
+nothing_kw <- /(?i)\bNOTHING\b/
+indexed_kw <- /(?i)\bINDEXED\b/
+not_kw <- /(?i)\bNOT\b/
+or_kw <- /(?i)\bOR\b/
+rollback_kw <- /(?i)\bROLLBACK\b/
+abort_kw <- /(?i)\bABORT\b/
+fail_kw <- /(?i)\bFAIL\b/
+ignore_kw <- /(?i)\bIGNORE\b/
+join_kw <- /(?i)\bJOIN\b/
+asc_kw <- /(?i)\bASC\b/
+desc_kw <- /(?i)\bDESC\b/
+select_kw <- /(?i)\bSELECT\b/
+
+ws <- /[ \t\r\n]+|#[^\r\n]*|--[^\r\n]*/
+opt_ws <- /[ \t\r\n]*|#[^\r\n]*|--[^\r\n]*/
