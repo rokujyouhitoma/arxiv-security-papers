@@ -170,7 +170,76 @@ class FontDecoder:
         self.font_dict = font_dict
         self.to_unicode_map = to_unicode_map or {}
         self.differences_map: Dict[int, str] = {}
+        self.first_char: Optional[int] = None
+        self.last_char: Optional[int] = None
+        self.widths: List[float] = []
+        self.missing_width: float = 250.0
         self._init_differences()
+        self._init_widths()
+
+    def _init_widths(self) -> None:
+        fc = self.font_dict.get("/FirstChar")
+        if isinstance(fc, int):
+            self.first_char = fc
+        lc = self.font_dict.get("/LastChar")
+        if isinstance(lc, int):
+            self.last_char = lc
+        w = self.font_dict.get("/Widths")
+        if isinstance(w, list):
+            self.widths = [float(x) for x in w if isinstance(x, (int, float))]
+        descriptor = self.font_dict.get("/FontDescriptor")
+        if isinstance(descriptor, dict):
+            mw = descriptor.get("/MissingWidth")
+            if isinstance(mw, (int, float)):
+                self.missing_width = float(mw)
+
+    def _resolve_raw_glyph_width(self, char_code: int) -> float:
+        if (
+            self.first_char is not None
+            and self.widths
+            and self.first_char <= char_code < self.first_char + len(self.widths)
+        ):
+            return self.widths[char_code - self.first_char]
+        base_font = str(self.font_dict.get("/BaseFont", ""))
+        if "Courier" in base_font:
+            return 600.0
+        return 500.0
+
+    def get_char_width(
+        self, char_code: int, font_size: float, horiz_scale: float = 100.0
+    ) -> float:
+        """Calculates glyph advance width in text space (ISO 32000-1 Clause 9.6.2.1)."""
+        scale = font_size * (horiz_scale / 100.0) / 1000.0
+        return self._resolve_raw_glyph_width(char_code) * scale
+
+    def _calculate_cid_width(self, cid: int, scale: float) -> float:
+        if (
+            self.first_char is not None
+            and self.widths
+            and self.first_char <= cid < self.first_char + len(self.widths)
+        ):
+            return self.widths[cid - self.first_char] * scale
+        return 1000.0 * scale if cid > 255 else 500.0 * scale
+
+    def _get_cid_text_width(
+        self, raw_bytes: bytes, font_size: float, horiz_scale: float
+    ) -> float:
+        total = 0.0
+        scale = font_size * (horiz_scale / 100.0) / 1000.0
+        for i in range(0, len(raw_bytes), 2):
+            cid = int.from_bytes(raw_bytes[i : i + 2], "big")
+            total += self._calculate_cid_width(cid, scale)
+        return total
+
+    def get_text_width(
+        self, raw_bytes: bytes, font_size: float, horiz_scale: float = 100.0
+    ) -> float:
+        """Calculates total advance width for a raw byte sequence."""
+        if not raw_bytes:
+            return 0.0
+        if self._is_2byte_cid(raw_bytes):
+            return self._get_cid_text_width(raw_bytes, font_size, horiz_scale)
+        return sum(self.get_char_width(b, font_size, horiz_scale) for b in raw_bytes)
 
     def _init_differences(self) -> None:
         encoding = self.font_dict.get("/Encoding")

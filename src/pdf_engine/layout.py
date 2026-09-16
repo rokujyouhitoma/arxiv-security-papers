@@ -122,7 +122,7 @@ def _finalize_line(line: TextLine) -> None:
 
 def _should_insert_space(prev_g: GlyphBox, cur_g: GlyphBox) -> bool:
     gap = cur_g.x - (prev_g.x + prev_g.width)
-    space_threshold = max(prev_g.font_size, cur_g.font_size) * 0.2
+    space_threshold = max(prev_g.font_size, cur_g.font_size) * 0.18
     return (
         gap >= space_threshold
         and not prev_g.text.endswith(" ")

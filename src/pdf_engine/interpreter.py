@@ -172,8 +172,20 @@ class TextInterpreter:
 
         cur_x = self.tm[4]
         cur_y = self.tm[5]
-        approx_char_width = self.font_size * 0.5 * (self.horiz_scale / 100.0)
-        total_width = approx_char_width * len(decoded_text)
+        if decoder is not None:
+            text_width = decoder.get_text_width(
+                raw_bytes, self.font_size, self.horiz_scale
+            )
+        else:
+            approx_char_width = self.font_size * 0.5 * (self.horiz_scale / 100.0)
+            text_width = approx_char_width * len(decoded_text)
+
+        num_spaces = raw_bytes.count(b" ")
+        total_width = (
+            text_width
+            + (self.word_spacing * num_spaces)
+            + (self.char_spacing * max(0, len(decoded_text) - 1))
+        )
 
         glyph_box = GlyphBox(
             text=decoded_text,
@@ -187,4 +199,4 @@ class TextInterpreter:
         self.glyphs.append(glyph_box)
 
         # Advance horizontal position
-        self.tm[4] += total_width + (self.char_spacing * len(decoded_text))
+        self.tm[4] += total_width

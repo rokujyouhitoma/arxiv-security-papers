@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **312** | PDF フォント /Widths 配列解析と文字間スペース・カーニング精密推定の実装 | Feature | 2026-09-16 | [312-pdf-font-widths-and-space-inference.md](closed/312-pdf-font-widths-and-space-inference.md) |
 | **311** | Packrat PEG ランタイムにおける期待トークン（Expected Tokens）追跡と高度構文エラー診断基盤の実装 | Feature | 2026-09-16 | [311-peg-expected-tokens-and-syntax-diagnostics.md](closed/311-peg-expected-tokens-and-syntax-diagnostics.md) |
 | **310** | PDF ToUnicode CMap ストリーム構文解析の純粋 Packrat PEG 化 | Feature | 2026-09-16 | [310-pure-peg-pdf-tounicode-cmap-parser.md](closed/310-pure-peg-pdf-tounicode-cmap-parser.md) |
 | **309** | SQL TCL / DCL / Admin / Utility 構文解析層の包括的 AOT Packrat PEG 化 | Feature | 2026-09-16 | [309-deploy-aot-peg-sql-admin-and-tcl-parser.md](closed/309-deploy-aot-peg-sql-admin-and-tcl-parser.md) |
