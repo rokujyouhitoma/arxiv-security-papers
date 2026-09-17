@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Database persistence storage for resident Spider Daemon executions.
-Maintains crawler execution history, live status, and metrics in SQLite.
+Maintains crawler execution history, live status, and metrics in pure-Python Vector DB container (.vdb).
 """
 
 from __future__ import annotations
@@ -9,8 +9,9 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import sqlite3
 from typing import Any, Dict, List, Optional
+
+from database.ipc.driver import Connection, connect
 
 from .contracts import CrawlJob, CrawlResult
 
@@ -22,7 +23,7 @@ def _utc_now_iso() -> str:
 class SpiderExecutionStorage:
     """
     Manages persistent execution logs and operational status for crawlers.
-    Pure Python SQLite-backed implementation.
+    Pure-Python Vector Database (.vdb / OKFMTC01) backed implementation.
     """
 
     DEFAULT_SPIDERS = ("arxiv", "cwe", "cve_nvd", "cisa_kev")
@@ -39,37 +40,32 @@ class SpiderExecutionStorage:
                 )
             )
             os.makedirs(base_dir, exist_ok=True)
-            self.db_path = os.path.join(base_dir, "spider_execution.db")
+            self.db_path = os.path.join(base_dir, "spider_execution.vdb")
         else:
             os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
             self.db_path = db_path
 
         self._init_tables()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
-        conn.row_factory = sqlite3.Row
-        return conn
+    def _get_connection(self) -> Connection:
+        return connect(database=self.db_path)
 
     def _init_tables(self) -> None:
         with self._get_connection() as conn:
-            conn.execute("""
+            cur = conn.cursor()
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS spider_execution_logs (
-                    job_id TEXT PRIMARY KEY,
-                    spider_name TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    started_at TEXT NOT NULL,
+                    job_id TEXT,
+                    spider_name TEXT,
+                    status TEXT,
+                    started_at TEXT,
                     finished_at TEXT,
-                    duration_seconds REAL DEFAULT 0.0,
-                    item_count INTEGER DEFAULT 0,
+                    duration_seconds REAL,
+                    item_count INTEGER,
                     http_status_counts TEXT,
                     error_message TEXT,
                     params TEXT
                 )
-                """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_spider_logs_name_time
-                ON spider_execution_logs (spider_name, started_at DESC)
                 """)
             conn.commit()
 
@@ -77,9 +73,10 @@ class SpiderExecutionStorage:
         """Records the beginning of a crawl job with RUNNING status."""
         params_json = json.dumps(job.params or {})
         with self._get_connection() as conn:
-            conn.execute(
+            cur = conn.cursor()
+            cur.execute(
                 """
-                INSERT OR REPLACE INTO spider_execution_logs
+                REPLACE INTO spider_execution_logs
                 (job_id, spider_name, status, started_at, params)
                 VALUES (?, ?, 'RUNNING', ?, ?)
                 """,
@@ -92,7 +89,8 @@ class SpiderExecutionStorage:
         status = "SUCCESS" if result.success else "FAILED"
         stats_json = json.dumps(result.stats or {})
         with self._get_connection() as conn:
-            conn.execute(
+            cur = conn.cursor()
+            cur.execute(
                 """
                 UPDATE spider_execution_logs
                 SET status = ?,
@@ -115,13 +113,18 @@ class SpiderExecutionStorage:
             )
             conn.commit()
 
+    def _rows_to_dicts(self, cur: Any, rows: List[Any]) -> List[Dict[str, Any]]:
+        cols = [d[0] for d in cur.description] if cur.description else []
+        return [dict(zip(cols, r)) for r in rows]
+
     def list_history(
         self, limit: int = 20, spider_name: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Retrieves recent execution history, optionally filtered by spider name."""
         with self._get_connection() as conn:
+            cur = conn.cursor()
             if spider_name:
-                cursor = conn.execute(
+                cur.execute(
                     """
                     SELECT * FROM spider_execution_logs
                     WHERE spider_name = ?
@@ -131,7 +134,7 @@ class SpiderExecutionStorage:
                     (spider_name, max(1, limit)),
                 )
             else:
-                cursor = conn.execute(
+                cur.execute(
                     """
                     SELECT * FROM spider_execution_logs
                     ORDER BY started_at DESC
@@ -139,13 +142,14 @@ class SpiderExecutionStorage:
                     """,
                     (max(1, limit),),
                 )
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
+            rows = cur.fetchall()
+            return self._rows_to_dicts(cur, rows)
 
     def _query_latest_row(
-        self, conn: sqlite3.Connection, name: str
+        self, conn: Connection, name: str
     ) -> Optional[Dict[str, Any]]:
-        cursor = conn.execute(
+        cur = conn.cursor()
+        cur.execute(
             """
             SELECT * FROM spider_execution_logs
             WHERE spider_name = ?
@@ -154,8 +158,11 @@ class SpiderExecutionStorage:
             """,
             (name,),
         )
-        row = cursor.fetchone()
-        return dict(row) if row else None
+        row = cur.fetchone()
+        if not row:
+            return None
+        cols = [d[0] for d in cur.description] if cur.description else []
+        return dict(zip(cols, row))
 
     def _build_spider_status(
         self, name: str, latest: Optional[Dict[str, Any]]

@@ -99,6 +99,17 @@ DATABASES: Dict[str, Dict[str, Any]] = {
             "papers": {"TYPE": "Physical (VDB)"},
         },
     },
+    "spider_execution_db": {
+        "DESCRIPTION": "Spider Crawler Autonomous Execution & Status Logs (MultiTable VDB)",
+        "ENGINE": "multi_vdb",
+        "LOCATION": os.path.join(
+            BASE_DIR, "outputs", "database", "spider_execution.vdb"
+        ),
+        "TYPE": "Physical (VDB)",
+        "TABLES": {
+            "spider_execution_logs": {"TYPE": "Physical (VDB)"},
+        },
+    },
 }
 
 

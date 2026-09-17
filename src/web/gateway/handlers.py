@@ -2312,7 +2312,7 @@ class GatewayHandlers:
         from spider.daemon.storage import SpiderExecutionStorage
 
         db_path = os.path.join(
-            self.workspace_dir, "outputs", "database", "spider_execution.db"
+            self.workspace_dir, "outputs", "database", "spider_execution.vdb"
         )
         storage = SpiderExecutionStorage(db_path=db_path)
         summary = storage.get_status_summary()
@@ -2340,7 +2340,7 @@ class GatewayHandlers:
 
         spider_name, limit = self._parse_spider_history_params(query_params)
         db_path = os.path.join(
-            self.workspace_dir, "outputs", "database", "spider_execution.db"
+            self.workspace_dir, "outputs", "database", "spider_execution.vdb"
         )
         storage = SpiderExecutionStorage(db_path=db_path)
         logs = storage.list_history(spider_name=spider_name, limit=limit)
@@ -2374,7 +2374,7 @@ class GatewayHandlers:
 
         spider_name = self._extract_trigger_name(environ)
         db_path = os.path.join(
-            self.workspace_dir, "outputs", "database", "spider_execution.db"
+            self.workspace_dir, "outputs", "database", "spider_execution.vdb"
         )
         storage = SpiderExecutionStorage(db_path=db_path)
         job_id = f"manual_{spider_name}_{int(time.time())}"

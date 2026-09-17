@@ -19,11 +19,11 @@ from workflow.service import WorkflowLifecycleHook
 
 
 class TestSpiderExecutionStorage(unittest.TestCase):
-    """Verifies SQLite persistence for spider execution logs."""
+    """Verifies custom database persistence for spider execution logs."""
 
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self.temp_dir.name, "spider_test.db")
+        self.db_path = os.path.join(self.temp_dir.name, "spider_test.vdb")
         self.storage = SpiderExecutionStorage(db_path=self.db_path)
 
     def tearDown(self) -> None:
@@ -118,7 +118,7 @@ class TestWebGatewaySpiderApis(unittest.TestCase):
         os.makedirs(db_dir, exist_ok=True)
         self.handlers = GatewayHandlers(workspace_dir=self.temp_dir.name)
         # Pre-populate DB
-        db_path = os.path.join(db_dir, "spider_execution.db")
+        db_path = os.path.join(db_dir, "spider_execution.vdb")
         storage = SpiderExecutionStorage(db_path=db_path)
         job = CrawlJob(job_id="api_test_job", spider_name="arxiv")
         storage.record_start(job)
