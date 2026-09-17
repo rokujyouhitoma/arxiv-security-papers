@@ -108,15 +108,20 @@ class PdfLexer:
             depth = self._process_literal_char(b, depth, out)
         return (TokenType.STRING_LITERAL, bytes(out))
 
-    def _decode_escape_seq(self) -> bytes:
-        eb = self.data[self.pos]
+    def _skip_crlf_escape(self, eb: int) -> bool:
         if eb == 13:
             self.pos += 1
             if self.pos < self.length and self.data[self.pos] == 10:
                 self.pos += 1
-            return b""
+            return True
         if eb == 10:
             self.pos += 1
+            return True
+        return False
+
+    def _decode_escape_seq(self) -> bytes:
+        eb = self.data[self.pos]
+        if self._skip_crlf_escape(eb):
             return b""
 
         escape_map = {
@@ -151,6 +156,17 @@ class PdfLexer:
         val = int(octal_bytes.decode("ascii"), 8) & 0xFF
         return bytes([val])
 
+    @staticmethod
+    def _is_hex_byte(b: int) -> bool:
+        return (48 <= b <= 57) or (65 <= b <= 70) or (97 <= b <= 102)
+
+    @staticmethod
+    def _parse_hex_bytes(valid_hex: bytearray) -> bytes:
+        try:
+            return bytes.fromhex(bytes(valid_hex).decode("ascii"))
+        except ValueError:
+            return b""
+
     def _scan_hex_string(self) -> Tuple[TokenType, bytes]:
         self.pos += 1  # Skip '<'
         end_idx = self.data.find(b">", self.pos)
@@ -159,18 +175,10 @@ class PdfLexer:
         raw_hex = self.data[self.pos : end_idx]
         self.pos = min(end_idx + 1, self.length)
 
-        valid_hex = [
-            b for b in raw_hex if (48 <= b <= 57) or (65 <= b <= 70) or (97 <= b <= 102)
-        ]
+        valid_hex = bytearray(b for b in raw_hex if self._is_hex_byte(b))
         if len(valid_hex) % 2 != 0:
             valid_hex.append(ord("0"))
-        try:
-            return (
-                TokenType.STRING_HEX,
-                bytes.fromhex(bytes(valid_hex).decode("ascii")),
-            )
-        except ValueError:
-            return (TokenType.STRING_HEX, b"")
+        return (TokenType.STRING_HEX, self._parse_hex_bytes(valid_hex))
 
     def _scan_name(self) -> Tuple[TokenType, str]:
         self.pos += 1  # Skip '/'

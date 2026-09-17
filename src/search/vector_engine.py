@@ -129,7 +129,7 @@ class VectorEngine:
         self.analyzer = SearchAnalyzer()
         self.query_parser = EnterpriseQueryParser(self.FIELD_WEIGHTS)
         self.highlighter = DynamicHighlighter()
-        self.multi_field_index = MultiFieldPostingsIndex()
+        self.multi_field_index = MultiFieldPostingsIndex(track_positions=False)
 
         # Extended Index Structures
         self.semantic_cache = QuerySemanticCache()
@@ -357,7 +357,7 @@ class VectorEngine:
         self.documents_by_id = {}
         self.inverted_index = defaultdict(list)
         self.inverted_keyword_index = defaultdict(list)
-        self.multi_field_index = MultiFieldPostingsIndex()
+        self.multi_field_index = MultiFieldPostingsIndex(track_positions=False)
         self.faceted_index = FacetedIndex()
         self.knowledge_graph = KnowledgeGraphIndex()
         self.citation_network = CitationNetworkIndex()
@@ -382,12 +382,30 @@ class VectorEngine:
         num_docs = len(self.documents)
         if num_docs == 0:
             return
-        self.avg_doc_len = sum(len(d["tokens"]) for d in self.documents) / num_docs
+        total_tokens = sum(
+            (
+                len(d["tokens"])
+                if "tokens" in d
+                else sum(
+                    len(d.get(f, ()))
+                    for f in (
+                        "_title_set",
+                        "_desc_set",
+                        "_kw_set",
+                        "_tags_set",
+                        "_author_set",
+                    )
+                )
+            )
+            for d in self.documents
+        )
+        self.avg_doc_len = total_tokens / num_docs
         self.idf = self._compute_idf_map(doc_freq, num_docs)
         self._post_index_build_steps(num_docs)
         self.proximity_graph.build_graph(
             self.documents, dict(self.inverted_keyword_index)
         )
+        self._cleanup_doc_tokens()
 
     def _index_files_in_dir(
         self, root: str, files: List[str], doc_freq: Counter[str]
@@ -477,12 +495,22 @@ class VectorEngine:
                     "authors_tokens": doc.get("authors_tokens", []),
                     "keywords_tokens": doc.get("keywords_tokens", []),
                     "abstract_tokens": doc.get("abstract_tokens", []),
-                    "tokens": doc.get("tokens", []),
-                    "token_counts": doc.get("token_counts", {}),
                 }
             )
+
+        compact_proximity: Dict[str, List[Dict[str, Any]]] = {}
+        for did, n_list in self.proximity_graph.graph.items():
+            compact_proximity[did] = [
+                {
+                    "target_id": n.get("target_id", ""),
+                    "similarity": round(float(n.get("similarity", 0.0)), 4),
+                    "shared_keywords": n.get("shared_keywords", []),
+                }
+                for n in n_list
+            ]
+
         data = {
-            "version": "3.4.0",
+            "version": "3.5.0",
             "updated_at": datetime.now().isoformat(),
             "total_documents": len(serializable_docs),
             "documents": serializable_docs,
@@ -490,7 +518,7 @@ class VectorEngine:
             "avg_doc_len": self.avg_doc_len,
             "inverted_index": dict(self.inverted_index),
             "inverted_keywords": dict(self.inverted_keyword_index),
-            "proximity_graph": dict(self.proximity_graph.graph),
+            "proximity_graph": compact_proximity,
         }
         with open(self.index_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
@@ -505,14 +533,6 @@ class VectorEngine:
                 " ".join(d.get("annotated_keywords", []))
             )
             d["abstract_tokens"] = []
-            d["tokens"] = (
-                d["title_tokens"]
-                + d["desc_tokens"]
-                + d["tags_tokens"]
-                + d["authors_tokens"]
-                + d["keywords_tokens"]
-            )
-            d["token_counts"] = dict(Counter(d["tokens"]))
         return d
 
     def _populate_loaded_doc_indexes(self, d: Dict[str, Any], arxiv_id: str) -> None:
@@ -546,6 +566,25 @@ class VectorEngine:
         for author in d.get("authors", []):
             self.knowledge_graph.add_entity(author, "author", author, arxiv_id)
 
+        # Precompute frozensets for ultra-fast O(1) membership in scoring
+        d["_title_set"] = frozenset(d.get("title_tokens", []))
+        d["_author_set"] = frozenset(d.get("authors_tokens", []))
+        d["_kw_set"] = frozenset(d.get("keywords_tokens", []))
+        d["_tags_set"] = frozenset(d.get("tags_tokens", []))
+        d["_desc_set"] = frozenset(d.get("desc_tokens", []))
+        d["_abstract_set"] = frozenset(d.get("abstract_tokens", []))
+
+    def _cleanup_doc_tokens(self) -> None:
+        """Releases redundant token arrays and token_counts to minimize memory footprint."""
+        for d in self.documents:
+            d.pop("tokens", None)
+            d.pop("token_counts", None)
+            d.pop("abstract_tokens", None)
+            d.pop("desc_tokens", None)
+            d.pop("keywords_tokens", None)
+            d.pop("authors_tokens", None)
+            d.pop("tags_tokens", None)
+
     def _populate_index_from_dict(
         self, data: Dict[str, Any], max_docs: Optional[int]
     ) -> None:
@@ -567,6 +606,7 @@ class VectorEngine:
             self._populate_loaded_doc_indexes(d_res, d_res.get("id", ""))
 
         self._post_index_build_steps(len(self.documents))
+        self._cleanup_doc_tokens()
 
     def _load_vector_storage_if_present(self) -> None:
         if not os.path.exists(self.vector_storage_path):
@@ -605,6 +645,10 @@ class VectorEngine:
             logging.warning("Failed to load index from %s: %s", self.index_file, e)
             self._init_index_structures()
             self.idf = {}
+        finally:
+            import gc
+
+            gc.collect()
 
     def _score_neighbor_candidate(
         self, doc: Dict[str, Any], tid: str
@@ -647,6 +691,18 @@ class VectorEngine:
         self.proximity_graph.graph[doc_id] = neighbors
         return neighbors
 
+    def _enrich_neighbor(self, n: Dict[str, Any]) -> Dict[str, Any]:
+        """Dynamically enriches a compact neighbor dictionary with document metadata."""
+        tid = n.get("target_id", "")
+        tdoc = self.documents_by_id.get(tid)
+        if not tdoc:
+            return n
+        res = dict(n)
+        for k in ("title", "description", "path", "published_date"):
+            if not res.get(k):
+                res[k] = tdoc.get(k, "")
+        return res
+
     def get_related_papers(self, doc_id: str) -> Dict[str, Any]:
         """Retrieves precomputed nearest neighbors for a paper."""
         doc = self.documents_by_id.get(doc_id)
@@ -657,15 +713,18 @@ class VectorEngine:
         if not neighbors:
             neighbors = self._compute_fallback_neighbors(doc, doc_id)
 
+        enriched_neighbors = [self._enrich_neighbor(n) for n in neighbors]
+
+        # Update graph copy with enriched nodes for mermaid rendering
         mermaid_str = self.proximity_graph.generate_mermaid_graph(
-            doc_id, doc.get("title", "")
+            doc_id, doc.get("title", ""), neighbors=enriched_neighbors
         )
         return {
             "status": "success",
             "paper_id": doc_id,
             "title": doc.get("title", ""),
-            "related_count": len(neighbors),
-            "related_papers": neighbors,
+            "related_count": len(enriched_neighbors),
+            "related_papers": enriched_neighbors,
             "mermaid_graph": mermaid_str,
         }
 
@@ -817,43 +876,82 @@ class VectorEngine:
             candidate_ids = self._merge_candidate_ids(candidate_ids, vec_ids)
         return self._fetch_target_docs(candidate_ids, max_candidates)
 
-    def _compute_token_field_score(self, qt: str, doc: Dict[str, Any]) -> float:
-        idf_val = self.idf.get(qt, 1.2)
-        field_checks = (
-            ("title", set(doc.get("title_tokens", [])), doc.get("title", "").lower()),
+    def _matches_raw_text(self, qt: str, raw_text: str) -> bool:
+        return bool(len(qt) >= 2 and raw_text and qt in raw_text)
+
+    def _score_single_field(
+        self,
+        qt: str,
+        tokens_set: Optional[Any],
+        raw_text: str,
+        weight: float,
+        idf_val: float,
+    ) -> float:
+        if tokens_set and qt in tokens_set:
+            return weight * idf_val
+        if self._matches_raw_text(qt, raw_text):
+            return (weight * 0.5) * idf_val
+        return 0.0
+
+    def _score_fast_path(self, qt: str, doc: Dict[str, Any], idf_val: float) -> float:
+        fw = self.FIELD_WEIGHTS
+        checks = (
+            (doc.get("_title_set"), doc.get("title", "").lower(), fw.get("title", 4.0)),
+            (doc.get("_author_set"), "", fw.get("author", 3.5)),
+            (doc.get("_kw_set"), "", fw.get("keywords", 3.0)),
+            (doc.get("_tags_set"), "", fw.get("tags", 2.5)),
             (
-                "author",
+                doc.get("_desc_set"),
+                doc.get("description", "").lower(),
+                fw.get("description", 2.0),
+            ),
+            (doc.get("_abstract_set"), "", fw.get("abstract", 2.0)),
+        )
+        return sum(self._score_single_field(qt, s, t, w, idf_val) for s, t, w in checks)
+
+    def _score_fallback_path(
+        self, qt: str, doc: Dict[str, Any], idf_val: float
+    ) -> float:
+        fw = self.FIELD_WEIGHTS
+        checks = (
+            (
+                set(doc.get("title_tokens", [])),
+                doc.get("title", "").lower(),
+                fw.get("title", 4.0),
+            ),
+            (
                 set(doc.get("authors_tokens", [])),
                 " ".join(doc.get("authors", [])).lower(),
+                fw.get("author", 3.5),
             ),
             (
-                "keywords",
                 set(doc.get("keywords_tokens", [])),
                 " ".join(doc.get("annotated_keywords", [])).lower(),
+                fw.get("keywords", 3.0),
             ),
             (
-                "tags",
                 set(doc.get("tags_tokens", [])),
                 " ".join(doc.get("tags", [])).lower(),
+                fw.get("tags", 2.5),
             ),
             (
-                "description",
                 set(doc.get("desc_tokens", [])),
                 doc.get("description", "").lower(),
+                fw.get("description", 2.0),
             ),
             (
-                "abstract",
                 set(doc.get("abstract_tokens", [])),
                 " ".join(doc.get("abstract_tokens", [])).lower(),
+                fw.get("abstract", 2.0),
             ),
         )
-        token_score = 0.0
-        for fld, tokens_set, raw_text in field_checks:
-            if qt in tokens_set:
-                token_score += self.FIELD_WEIGHTS.get(fld, 1.0) * idf_val
-            elif len(qt) >= 2 and qt in raw_text:
-                token_score += (self.FIELD_WEIGHTS.get(fld, 1.0) * 0.5) * idf_val
-        return token_score
+        return sum(self._score_single_field(qt, s, t, w, idf_val) for s, t, w in checks)
+
+    def _compute_token_field_score(self, qt: str, doc: Dict[str, Any]) -> float:
+        idf_val = self.idf.get(qt, 1.2)
+        if doc.get("_title_set") is not None:
+            return self._score_fast_path(qt, doc, idf_val)
+        return self._score_fallback_path(qt, doc, idf_val)
 
     def calculate_multi_field_bm25_score(
         self, query_tokens: List[str], doc: Dict[str, Any]

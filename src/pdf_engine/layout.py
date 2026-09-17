@@ -261,27 +261,34 @@ def render_line_text(line: TextLine) -> str:
     return "".join(tokens).strip()
 
 
+def _is_header(line: TextLine, page_height: float, text: str) -> bool:
+    return bool(line.min_y > page_height - 35 and len(text) < 80)
+
+
+def _is_footer(line: TextLine, text: str) -> bool:
+    return bool(line.min_y < 35 and (text.isdigit() or len(text) < 15))
+
+
 def _is_header_or_footer(line: TextLine, page_height: float) -> bool:
     text = render_line_text(line).strip()
     if not text:
         return False
-    if line.min_y > page_height - 35 and len(text) < 80:
-        return True
-    if line.min_y < 35 and (text.isdigit() or len(text) < 15):
-        return True
-    return False
+    return _is_header(line, page_height, text) or _is_footer(line, text)
+
+
+def _is_full_span_line(line: TextLine, gutter_x: float) -> bool:
+    return bool(line.min_x < gutter_x - 20.0 and line.max_x > gutter_x + 20.0)
 
 
 def _classify_line_column_type(line: TextLine, gutter_x: float) -> str:
     """Classifies line as FULL-span, LEFT column, or RIGHT column."""
-    if line.min_x < gutter_x - 20.0 and line.max_x > gutter_x + 20.0:
+    if _is_full_span_line(line, gutter_x):
         return "FULL"
     if line.max_x <= gutter_x + 15.0:
         return "LEFT"
     if line.min_x >= gutter_x - 15.0:
         return "RIGHT"
-    mid_line = (line.min_x + line.max_x) / 2.0
-    return "LEFT" if mid_line < gutter_x else "RIGHT"
+    return "LEFT" if ((line.min_x + line.max_x) / 2.0) < gutter_x else "RIGHT"
 
 
 class VerticalBand:
@@ -301,14 +308,16 @@ class VerticalBand:
         else:
             self.right_lines.append(line)
 
+    def _join_rendered_lines(self, lines: List[TextLine]) -> Optional[str]:
+        texts = [t for line in lines if (t := render_line_text(line))]
+        return "\n".join(texts) if texts else None
+
     def _render_two_column_parts(self) -> Optional[str]:
-        parts: List[str] = []
-        left_str = [t for line in self.left_lines if (t := render_line_text(line))]
-        if left_str:
-            parts.append("\n".join(left_str))
-        right_str = [t for line in self.right_lines if (t := render_line_text(line))]
-        if right_str:
-            parts.append("\n".join(right_str))
+        parts = [
+            s
+            for lines in (self.left_lines, self.right_lines)
+            if (s := self._join_rendered_lines(lines))
+        ]
         return "\n\n".join(parts) if parts else None
 
     def render(self) -> Optional[str]:

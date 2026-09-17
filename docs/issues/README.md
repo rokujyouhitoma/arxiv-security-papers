@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **319** | Search Worker メモリ消費削減 (1.3GB → 454MB: 約1/2.6) & 検索レイテンシ高速化 | Optimization | 2026-09-17 | [319-optimize-search-worker-memory-consumption-and-latency.md](closed/319-optimize-search-worker-memory-consumption-and-latency.md) |
 | **318** | ダッシュボード ナレッジグラフにおけるエッジ選択・関係性メタデータ＆エビデンス詳細インスペクターの実装 | Feature / UX | 2026-09-16 | [318-implement-edge-selection-and-inspection-in-dashboard.md](closed/318-implement-edge-selection-and-inspection-in-dashboard.md) |
 | **317** | ダッシュボード ナレッジグラフにおける選択ノードの動的非表示および一括再表示機能の実装 | Feature / UX | 2026-09-16 | [317-implement-node-hiding-and-unhiding-in-dashboard.md](closed/317-implement-node-hiding-and-unhiding-in-dashboard.md) |
 | **316** | ダッシュボード Canvas における縮小表示（ズームアウト）時の描画領域スケーリング不全および物理境界クランプの解消 | Bug / UX | 2026-09-16 | [316-fix-dashboard-canvas-zoom-scaling-and-physics-bounds.md](closed/316-fix-dashboard-canvas-zoom-scaling-and-physics-bounds.md) |

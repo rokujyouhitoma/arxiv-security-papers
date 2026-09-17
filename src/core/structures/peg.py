@@ -143,16 +143,15 @@ def _humanize_token(token: str) -> str:
     return token
 
 
+_IGNORABLE_PREFIXES = ("[ \\t\\r\\n]*", "[ \\t\\r\\n]+|#", "[ \\t\\r\\n]*|#")
+
+
 def _is_ignorable_expected_token(token: str) -> bool:
     """Checks if a pattern is internal optional whitespace or meaningless token."""
     stripped = token.strip()
     if not stripped:
         return True
-    if stripped.startswith("[ \\t\\r\\n]*") or stripped == "[ \\t\\r\\n]*":
-        return True
-    if stripped.startswith("[ \\t\\r\\n]+|#") or stripped.startswith("[ \\t\\r\\n]*|#"):
-        return True
-    return False
+    return any(stripped.startswith(p) for p in _IGNORABLE_PREFIXES)
 
 
 def _levenshtein_step(c1: str, s2: str, prev_row: List[int], i: int) -> List[int]:
@@ -294,10 +293,12 @@ class ParseContext:
         if _is_ignorable_expected_token(token):
             return
         norm_token = _humanize_token(token)
+        if not norm_token:
+            return
         if pos > self.max_pos:
             self.max_pos = pos
-            self.expected_tokens = {norm_token} if norm_token else set()
-        elif pos == self.max_pos and norm_token:
+            self.expected_tokens = {norm_token}
+        elif pos == self.max_pos:
             self.expected_tokens.add(norm_token)
 
     def calculate_line_col(self, pos: int) -> Tuple[int, int, str]:

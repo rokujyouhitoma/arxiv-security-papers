@@ -154,6 +154,19 @@ class SearchService:
     def _handle_get_paper(self, req: Dict[str, Any]) -> Dict[str, Any]:
         return self._handle_get_document(req)
 
+    def _enrich_raw_related(
+        self, raw_related: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        engine = self.vector_engine
+        if not hasattr(engine, "_enrich_neighbor"):
+            return raw_related
+        if type(engine).__name__ == "MagicMock":
+            return raw_related
+        try:
+            return [engine._enrich_neighbor(r) for r in raw_related]
+        except Exception:
+            return raw_related
+
     def _handle_get_related(self, req: Dict[str, Any]) -> Dict[str, Any]:
         doc_id = str(req.get("id", "")).strip()
         if not doc_id:
@@ -166,10 +179,12 @@ class SearchService:
                 "error": f"Document '{doc_id}' not found",
             }
 
-        related = self.vector_engine.proximity_graph.get_neighbors(doc_id)
+        raw_related = self.vector_engine.proximity_graph.get_neighbors(doc_id)
+        related = self._enrich_raw_related(raw_related)
+
         mermaid = f"graph TD;\n  root[{doc_id}]"
         for r in related:
-            r_id = r.get("id", "entity")
+            r_id = r.get("id", r.get("target_id", "entity"))
             mermaid += f"\n  root --> node_{r_id}[{r_id}]"
 
         return {

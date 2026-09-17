@@ -177,16 +177,20 @@ class FontDecoder:
         self._init_differences()
         self._init_widths()
 
+    def _extract_widths(self, w: Any) -> List[float]:
+        if not isinstance(w, list):
+            return []
+        return [float(x) for x in w if isinstance(x, (int, float))]
+
     def _init_widths(self) -> None:
         fc = self.font_dict.get("/FirstChar")
-        if isinstance(fc, int):
-            self.first_char = fc
+        self.first_char = fc if isinstance(fc, int) else None
         lc = self.font_dict.get("/LastChar")
-        if isinstance(lc, int):
-            self.last_char = lc
-        w = self.font_dict.get("/Widths")
-        if isinstance(w, list):
-            self.widths = [float(x) for x in w if isinstance(x, (int, float))]
+        self.last_char = lc if isinstance(lc, int) else None
+        self.widths = self._extract_widths(self.font_dict.get("/Widths"))
+        self._init_missing_width()
+
+    def _init_missing_width(self) -> None:
         descriptor = self.font_dict.get("/FontDescriptor")
         if isinstance(descriptor, dict):
             mw = descriptor.get("/MissingWidth")

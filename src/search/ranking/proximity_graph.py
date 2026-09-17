@@ -161,12 +161,19 @@ class ProximityGraphIndex:
         edge_line = f'    Current ===|"{kw_str} ({sim_pct}%)"| {node_var}'
         return node_line, edge_line
 
-    def generate_mermaid_graph(self, doc_id: str, doc_title: str = "") -> str:
+    def generate_mermaid_graph(
+        self,
+        doc_id: str,
+        doc_title: str = "",
+        neighbors: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
         """
         Generates a Connected Papers style Mermaid diagram string for visualization.
         """
-        neighbors = self.get_neighbors(doc_id)
-        if not neighbors:
+        target_neighbors = (
+            neighbors if neighbors is not None else self.get_neighbors(doc_id)
+        )
+        if not target_neighbors:
             return ""
 
         clean_title = self._format_mermaid_title(doc_title or doc_id, 40)
@@ -176,7 +183,7 @@ class ProximityGraphIndex:
             "    style Current fill:#4f46e5,stroke:#818cf8,color:#fff",
         ]
 
-        for i, n in enumerate(neighbors, 1):
+        for i, n in enumerate(target_neighbors, 1):
             n_line, e_line = self._render_neighbor_node(i, n)
             lines.append(n_line)
             lines.append(e_line)
