@@ -2366,8 +2366,10 @@ class GatewayHandlers:
         environ: Dict[str, Any],
         start_response: Callable[..., Any],
     ) -> List[bytes]:
-        """Triggers manual spider execution and records trigger event in database."""
-        from spider.daemon.contracts import CrawlJob, CrawlResult
+        """Triggers actual spider execution in background and records progress in database."""
+        import threading
+
+        from spider.daemon.contracts import CrawlJob
         from spider.daemon.storage import SpiderExecutionStorage
 
         spider_name = self._extract_trigger_name(environ)
@@ -2376,22 +2378,50 @@ class GatewayHandlers:
         )
         storage = SpiderExecutionStorage(db_path=db_path)
         job_id = f"manual_{spider_name}_{int(time.time())}"
-        job = CrawlJob(job_id=job_id, spider_name=spider_name)
+        target_spider = _normalize_spider_name(spider_name)
+        job = CrawlJob(job_id=job_id, spider_name=target_spider)
         storage.record_start(job)
-        res = CrawlResult(
-            job_id=job_id,
-            spider_name=spider_name,
-            success=True,
-            item_count=0,
-            duration_seconds=0.01,
-            stats={"triggered_by": "web_gateway"},
+
+        thread = threading.Thread(
+            target=_run_spider_job_bg,
+            args=(job, db_path),
+            daemon=True,
         )
-        storage.record_finish(res)
+        thread.start()
+
         return response_json(
             start_response,
             {
                 "status": "ok",
-                "message": f"Spider '{spider_name}' triggered successfully",
+                "message": f"Spider '{spider_name}' execution started in background",
                 "job_id": job_id,
             },
         )
+
+
+def _normalize_spider_name(name: str) -> str:
+    mapping = {
+        "kev_cve": "cisa_kev",
+        "cve": "nvd_cve",
+    }
+    return mapping.get(name, name)
+
+
+def _run_spider_job_bg(job: Any, db_path: str) -> None:
+    from spider.daemon.client import SpiderDaemonClient
+    from spider.daemon.contracts import CrawlResult
+    from spider.daemon.storage import SpiderExecutionStorage
+
+    storage = SpiderExecutionStorage(db_path=db_path)
+    try:
+        client = SpiderDaemonClient()
+        result = client.submit_job(job)
+        storage.record_finish(result)
+    except Exception as exc:
+        fail_res = CrawlResult(
+            job_id=job.job_id,
+            spider_name=job.spider_name,
+            success=False,
+            error=str(exc),
+        )
+        storage.record_finish(fail_res)

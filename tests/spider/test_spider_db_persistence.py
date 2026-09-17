@@ -162,7 +162,8 @@ class TestWebGatewaySpiderApis(unittest.TestCase):
         self.assertEqual(len(data["history"]), 1)
         self.assertEqual(data["history"][0]["job_id"], "api_test_job")
 
-    def test_spider_trigger_endpoint(self) -> None:
+    @patch("threading.Thread")
+    def test_spider_trigger_endpoint(self, mock_thread_cls: MagicMock) -> None:
         status_received = []
 
         def mock_start_response(status: str, headers: List[Any]) -> None:
@@ -180,6 +181,7 @@ class TestWebGatewaySpiderApis(unittest.TestCase):
         self.assertEqual(status_received[0], "200 OK")
         self.assertEqual(data["status"], "ok")
         self.assertIn("cwe", data["message"])
+        self.assertTrue(mock_thread_cls.return_value.start.called)
 
 
 if __name__ == "__main__":
