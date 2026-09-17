@@ -470,13 +470,14 @@ class Arbiter:
         return False
 
     def _execute_child_spec(self, spec: WorkerSpec, worker_id: str) -> int:
+        if self._dispatch_specialized_worker(spec, worker_id):
+            return 0
         if spec.worker_class == "service" or spec.role == ServiceRole.STATEFUL_SERVICE:
             self._run_service_worker(spec, worker_id)
             return 0
         if spec.role == ServiceRole.ONESHOT_TASK:
             return self._run_oneshot_worker(spec)
-        if not self._dispatch_specialized_worker(spec, worker_id):
-            self._run_web_worker(spec, worker_id)
+        self._run_web_worker(spec, worker_id)
         return 0
 
     def _run_child_worker(self, spec: WorkerSpec, worker_id: str) -> NoReturn:

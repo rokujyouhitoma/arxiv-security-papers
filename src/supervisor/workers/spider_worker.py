@@ -12,7 +12,6 @@ import time
 from typing import Any, Callable, Dict, Optional
 
 from spider.daemon.contracts import CrawlJob, CrawlResult
-from spider.daemon.worker import SpiderDaemonWorker
 
 from ..config import SupervisorConfig
 from ..contracts import LifecycleHook
@@ -65,6 +64,8 @@ class SpiderWorker(BaseWorker):
         self.result_queue = result_queue
         self.hook = hook
         self.poll_interval = max(0.01, poll_interval)
+        from spider.daemon.worker import SpiderDaemonWorker
+
         self.daemon = SpiderDaemonWorker(
             worker_id=worker_id, cache_state_file=cache_state_file
         )
@@ -95,6 +96,7 @@ class SpiderWorker(BaseWorker):
         self.pulse(
             {
                 "handling": True,
+                "is_handling_request": True,
                 "job_id": job.job_id,
                 "state_path": self.daemon.current_path,
             }

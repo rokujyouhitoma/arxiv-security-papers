@@ -115,6 +115,25 @@ class TestSpiderWorker(unittest.TestCase):
         self.assertEqual(spec.worker_class, "spider")
         self.assertEqual(spec.target_count, 2)
 
+    @patch("supervisor.arbiter.Arbiter._run_spider_worker")
+    @patch("supervisor.arbiter.Arbiter._run_service_worker")
+    def test_arbiter_execute_child_spec_spider_priority(
+        self, mock_svc: MagicMock, mock_sp: MagicMock
+    ) -> None:
+        from supervisor.arbiter import Arbiter
+
+        arbiter = Arbiter(config=self.config)
+        spec = WorkerSpec(
+            name="spider",
+            worker_class="spider",
+            target_count=1,
+            role=ServiceRole.STATEFUL_SERVICE,
+        )
+        res = arbiter._execute_child_spec(spec, "spider_0")
+        self.assertEqual(res, 0)
+        mock_sp.assert_called_once_with(spec, "spider_0")
+        mock_svc.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
