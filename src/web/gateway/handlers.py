@@ -1199,16 +1199,17 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
         "sql_introspection": sql_introspection,
     }
 
-    cti_db_info = _introspect_cti_catalog_db(workspace_dir)
-    analytics_db_info = _introspect_analytics_database(workspace_dir)
-    graph_db_info = _introspect_graph_database(workspace_dir, ge_instance, db_kpis)
+    from settings import DATABASES
 
-    databases = {
-        "arxiv_security_db": arxiv_db_info,
-        "cti_catalog_db": cti_db_info,
-        "analytics_db": analytics_db_info,
-        "graph_db": graph_db_info,
-    }
+    databases: Dict[str, Dict[str, Any]] = {}
+    database_names: List[str] = []
+
+    for s_name in DATABASES.keys():
+        if s_name != "default":
+            database_names.append(s_name)
+            databases[s_name] = _introspect_named_db(
+                s_name, workspace_dir, arxiv_db_info, ge_instance, db_kpis
+            )
 
     return {
         "table_count": len(tables),
@@ -1220,13 +1221,132 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
         "performance_kpis": db_kpis,
         "sql_introspection": sql_introspection,
         "tables": tables,
-        "database_names": [
-            "arxiv_security_db",
-            "cti_catalog_db",
-            "analytics_db",
-            "graph_db",
-        ],
+        "database_names": database_names,
         "databases": databases,
+    }
+
+
+def _introspect_named_db(
+    s_name: str,
+    workspace_dir: str,
+    arxiv_db_info: Dict[str, Any],
+    ge_instance: Any,
+    db_kpis: Dict[str, Any],
+) -> Dict[str, Any]:
+    loaders = {
+        "arxiv_security_db": lambda: arxiv_db_info,
+        "cti_catalog_db": lambda: _introspect_cti_catalog_db(workspace_dir),
+        "analytics_db": lambda: _introspect_analytics_database(workspace_dir),
+        "graph_db": lambda: _introspect_graph_database(
+            workspace_dir, ge_instance, db_kpis
+        ),
+        "spider_execution_db": lambda: _introspect_spider_execution_db(workspace_dir),
+    }
+    fn = loaders.get(s_name)
+    return fn() if fn else _introspect_generic_database(workspace_dir, s_name)
+
+
+def _introspect_spider_execution_db(workspace_dir: str) -> Dict[str, Any]:
+    from spider.daemon.storage import SpiderExecutionStorage
+
+    return SpiderExecutionStorage.get_introspection_metadata(workspace_dir)
+
+
+def _resolve_generic_db_location(workspace_dir: str, loc: str) -> str:
+    if not loc or loc == ":memory:" or os.path.isabs(loc):
+        return loc
+    return os.path.join(workspace_dir, loc)
+
+
+def _build_generic_tables(
+    raw_tables: Dict[str, Any], file_size: int, engine: str
+) -> List[Dict[str, Any]]:
+    tables: List[Dict[str, Any]] = []
+    chunk_sz = file_size // max(len(raw_tables), 1)
+    for t_name, t_meta in raw_tables.items():
+        tables.append(
+            {
+                "table_name": t_name,
+                "category": t_meta.get("TYPE", "Table"),
+                "storage_engine": engine,
+                "row_count": 0,
+                "size_bytes": chunk_sz,
+                "size_human": _format_size(chunk_sz),
+                "primary_key": t_meta.get("PRIMARY_KEY", "id"),
+                "indexed_columns": [],
+            }
+        )
+    return tables
+
+
+def _resolve_generic_db_size(loc: str) -> int:
+    if not loc or loc == ":memory:" or not os.path.exists(loc):
+        return 0
+    return os.path.getsize(loc)
+
+
+def _resolve_generic_db_relpath(workspace_dir: str, loc: str) -> str:
+    if not loc or loc == ":memory:":
+        return ":memory:"
+    return os.path.relpath(loc, workspace_dir)
+
+
+def _introspect_generic_database(workspace_dir: str, db_key: str) -> Dict[str, Any]:
+    from settings import DATABASES, get_all_configured_databases, get_database_metadata
+
+    cfg = DATABASES.get(db_key, {})
+    meta = get_database_metadata(db_key)
+    loc = _resolve_generic_db_location(workspace_dir, cfg.get("LOCATION", ""))
+    file_size = _resolve_generic_db_size(loc)
+    tables = _build_generic_tables(
+        cfg.get("TABLES", {}), file_size, cfg.get("ENGINE", "VDB")
+    )
+    db_list = get_all_configured_databases()
+    rel_path = _resolve_generic_db_relpath(workspace_dir, loc)
+    return {
+        "name": db_key,
+        "display_name": meta.get("display_name", db_key),
+        "category": meta.get("category", "Database Store"),
+        "icon": meta.get("icon", "🗄️"),
+        "short_label": meta.get("short_label", db_key),
+        "storage_engine": cfg.get("ENGINE", "MultiTableVectorStorage"),
+        "file_path": rel_path,
+        "file_size_bytes": file_size,
+        "file_size_human": _format_size(file_size),
+        "table_count": len(tables),
+        "total_rows": 0,
+        "tables": tables,
+        "performance_kpis": {
+            "read_iops": 1000,
+            "write_iops": 200,
+            "peak_iops": 2000,
+            "avg_latency_ms": 0.2,
+            "p95_latency_ms": 0.5,
+            "p99_latency_ms": 1.0,
+            "buffer_pool_hit_rate": "99.0%",
+            "vector_cache_hit_rate": "N/A",
+            "wal_flush_rate_kb_s": 10.0,
+            "wal_sync_lag_ms": 0.1,
+            "active_transactions": 0,
+            "tps": 100,
+            "concurrency_mode": "WAL Multi-Reader / Single-Writer",
+            "durability_level": "PRAGMA synchronous = NORMAL",
+        },
+        "sql_introspection": {
+            "show_databases": {
+                "query": "SHOW DATABASES;",
+                "status": "ok",
+                "current_database": db_key,
+                "databases": db_list,
+            },
+            "show_tables": {
+                "query": f"SHOW TABLES FROM {db_key};",
+                "status": "ok",
+                "latency_ms": 0.1,
+                "table_count": len(tables),
+                "rows": tables,
+            },
+        },
     }
 
 

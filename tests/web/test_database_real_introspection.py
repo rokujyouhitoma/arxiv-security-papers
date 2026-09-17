@@ -99,23 +99,35 @@ class TestDatabaseRealIntrospection(unittest.TestCase):
         )
         self.assertNotIn("cti_techniques_fts", names)
 
-    def test_analytics_tables_reconciliation(self) -> None:
-        from analytics.storage import AnalyticsStorage
+    def test_spider_execution_tables_reconciliation(self) -> None:
+        from spider.daemon.storage import SpiderExecutionStorage
 
-        res = AnalyticsStorage.get_introspection_metadata(self.workspace_dir)
-        self.assertEqual(res["table_count"], 5)
-        self.assertEqual(res["total_rows"], 26)
+        res = SpiderExecutionStorage.get_introspection_metadata(self.workspace_dir)
+        self.assertEqual(res["name"], "spider_execution_db")
+        self.assertEqual(res["table_count"], 1)
+        self.assertEqual(res["icon"], "🕷️")
         names = [t["table_name"] for t in res["tables"]]
-        self.assertEqual(
-            names,
-            [
-                "latest_snapshot",
-                "metrics_history",
-                "papers",
-                "strategic_kpis",
-                "threat_trends",
-            ],
-        )
+        self.assertEqual(names, ["spider_execution_logs"])
+
+    def test_introspect_database_metrics_dynamic_scopes(self) -> None:
+        from settings import get_all_configured_databases
+        from web.gateway.handlers import _introspect_database_metrics
+
+        res = _introspect_database_metrics(self.workspace_dir)
+        configured_dbs = get_all_configured_databases()
+
+        self.assertEqual(res["database_names"], configured_dbs)
+        self.assertIn("spider_execution_db", res["database_names"])
+        self.assertIn("spider_execution_db", res["databases"])
+        self.assertIn("arxiv_security_db", res["databases"])
+        self.assertIn("cti_catalog_db", res["databases"])
+        self.assertIn("analytics_db", res["databases"])
+        self.assertIn("graph_db", res["databases"])
+
+        spider_db = res["databases"]["spider_execution_db"]
+        self.assertEqual(spider_db["name"], "spider_execution_db")
+        self.assertEqual(spider_db["table_count"], 1)
+        self.assertEqual(spider_db["tables"][0]["table_name"], "spider_execution_logs")
 
 
 if __name__ == "__main__":

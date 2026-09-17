@@ -1217,8 +1217,70 @@ document.addEventListener('DOMContentLoaded', () => {
     const elWal = document.getElementById('valDbWalLag');
     if (elWal) elWal.textContent = `${kpi.wal_flush_rate_kb_s || 128.4} KB/s (${kpi.wal_sync_lag_ms || 0.18}ms)`;
 
+    // Dynamically reconcile and update Database Scope Select and Pills from settings/API
+    renderDatabaseSelectorUI(db);
+
     // Render Database Explorer Tab
     renderDatabaseTab(currentSelectedDatabase);
+  }
+
+  function renderDatabaseSelectorUI(db) {
+    if (!db) return;
+    const dbNames = db.database_names || Object.keys(db.databases || {});
+    if (!dbNames || dbNames.length === 0) return;
+    const allDbs = db.databases || {};
+
+    // 1. Reconcile <select id="selectDbScope">
+    const elSelect = document.getElementById('selectDbScope');
+    if (elSelect) {
+      const currentOpts = Array.from(elSelect.options).map(o => o.value);
+      const isOptsDifferent = currentOpts.length !== dbNames.length ||
+        !dbNames.every((name, i) => name === currentOpts[i]);
+      if (isOptsDifferent) {
+        const savedVal = elSelect.value;
+        elSelect.innerHTML = '';
+        dbNames.forEach(dbKey => {
+          const dbMeta = allDbs[dbKey] || {};
+          const opt = document.createElement('option');
+          opt.value = dbKey;
+          const icon = dbMeta.icon || '🗄️';
+          const label = dbMeta.category || dbMeta.display_name || dbMeta.description || '';
+          opt.textContent = `${icon} ${dbKey}${label ? ' (' + label + ')' : ''}`;
+          elSelect.appendChild(opt);
+        });
+        if (dbNames.includes(savedVal)) {
+          elSelect.value = savedVal;
+        } else if (dbNames.includes(currentSelectedDatabase)) {
+          elSelect.value = currentSelectedDatabase;
+        } else if (dbNames.length > 0) {
+          currentSelectedDatabase = dbNames[0];
+          elSelect.value = currentSelectedDatabase;
+        }
+      }
+    }
+
+    // 2. Reconcile #databaseSelectorPills
+    const elPills = document.getElementById('databaseSelectorPills');
+    if (elPills) {
+      const currentBtns = Array.from(elPills.querySelectorAll('.filter-pill'));
+      const currentKeys = currentBtns.map(b => b.getAttribute('data-db'));
+      const isPillsDifferent = currentKeys.length !== dbNames.length ||
+        !dbNames.every((name, i) => name === currentKeys[i]);
+      if (isPillsDifferent) {
+        elPills.innerHTML = '';
+        dbNames.forEach(dbKey => {
+          const dbMeta = allDbs[dbKey] || {};
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `filter-pill${dbKey === currentSelectedDatabase ? ' active' : ''}`;
+          btn.setAttribute('data-db', dbKey);
+          const icon = dbMeta.icon || '🗄️';
+          const short = dbMeta.short_label || (dbMeta.category ? dbMeta.category.split('&')[0].trim() : dbKey);
+          btn.textContent = `${icon} ${dbKey}${short ? ' (' + short + ')' : ''}`;
+          elPills.appendChild(btn);
+        });
+      }
+    }
   }
 
   // Database Selector Pills and Dropdown Event Handlers
@@ -1233,16 +1295,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.querySelectorAll('#databaseSelectorPills .filter-pill').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      const dbTarget = btn.getAttribute('data-db');
-      if (dbTarget) {
-        currentSelectedDatabase = dbTarget;
-        renderDatabaseTab(currentSelectedDatabase);
+  const databaseSelectorPillsEl = document.getElementById('databaseSelectorPills');
+  if (databaseSelectorPillsEl) {
+    databaseSelectorPillsEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter-pill');
+      if (btn) {
+        e.preventDefault();
+        const dbTarget = btn.getAttribute('data-db');
+        if (dbTarget) {
+          currentSelectedDatabase = dbTarget;
+          renderDatabaseTab(currentSelectedDatabase);
+        }
       }
     });
-  });
+  }
 
   // F. Supervisor Telemetry Updater
   function updateSupervisorFromStream(sup) {

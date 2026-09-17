@@ -7,7 +7,7 @@ Conforms to DSN-24 and DSN-05 Section 21. Zero external dependencies, Xenon CC <
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 BASE_DIR = os.path.realpath(
     os.path.abspath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,6 +25,10 @@ DATABASES: Dict[str, Dict[str, Any]] = {
     },
     "arxiv_security_db": {
         "DESCRIPTION": "Core arXiv Papers & Plain-text Virtual Tables",
+        "DISPLAY_NAME": "ArXiv Security Core DB",
+        "SHORT_LABEL": "Virtual Tables",
+        "ICON": "🗃️",
+        "CATEGORY": "Core arXiv Papers & Plain-text Virtual Tables",
         "TABLES": {
             "okf_papers": {
                 "ENGINE": "file_plain_text",
@@ -50,6 +54,10 @@ DATABASES: Dict[str, Dict[str, Any]] = {
     },
     "cti_catalog_db": {
         "DESCRIPTION": "MITRE ATT&CK & CTI Catalog (MultiTable VDB)",
+        "DISPLAY_NAME": "MITRE ATT&CK & CTI Catalog",
+        "SHORT_LABEL": "ATT&CK & CTI",
+        "ICON": "🛡️",
+        "CATEGORY": "Threat Intelligence & Taxonomy",
         "ENGINE": "multi_vdb",
         "LOCATION": os.path.join(
             BASE_DIR, "outputs", "database", "catalog", "cti_catalog.vdb"
@@ -74,6 +82,10 @@ DATABASES: Dict[str, Dict[str, Any]] = {
     },
     "graph_db": {
         "DESCRIPTION": "Security Knowledge Graph & SKO (MultiTable VDB)",
+        "DISPLAY_NAME": "Property Graph & Ontology Store",
+        "SHORT_LABEL": "Knowledge Graph & SKO",
+        "ICON": "🕸️",
+        "CATEGORY": "Security Knowledge Graph & SKO",
         "ENGINE": "multi_vdb",
         "LOCATION": os.path.join(
             BASE_DIR, "outputs", "database", "knowledge_graph.vdb"
@@ -86,6 +98,10 @@ DATABASES: Dict[str, Dict[str, Any]] = {
     },
     "analytics_db": {
         "DESCRIPTION": "Telemetry, Trends & Strategic KPIs (MultiTable VDB)",
+        "DISPLAY_NAME": "Analytics & Trends Store",
+        "SHORT_LABEL": "Telemetry & Trends",
+        "ICON": "📊",
+        "CATEGORY": "Telemetry, Trends & Strategic KPIs",
         "ENGINE": "multi_vdb",
         "LOCATION": os.path.join(
             BASE_DIR, "outputs", "database", "analytics", "analytics.vdb"
@@ -101,6 +117,10 @@ DATABASES: Dict[str, Dict[str, Any]] = {
     },
     "spider_execution_db": {
         "DESCRIPTION": "Spider Crawler Autonomous Execution & Status Logs (MultiTable VDB)",
+        "DISPLAY_NAME": "Spider Crawler Execution DB",
+        "SHORT_LABEL": "Crawler Execution Logs",
+        "ICON": "🕷️",
+        "CATEGORY": "Spider Crawlers & Execution Logs",
         "ENGINE": "multi_vdb",
         "LOCATION": os.path.join(
             BASE_DIR, "outputs", "database", "spider_execution.vdb"
@@ -122,6 +142,27 @@ def get_database_scopes() -> Dict[str, str]:
         if s_name != "default":
             scopes[s_name] = str(cfg.get("DESCRIPTION", s_name))
     return scopes
+
+
+def get_all_configured_databases() -> List[str]:
+    """Returns list of all non-default configured database scope names."""
+    return [name for name in DATABASES.keys() if name != "default"]
+
+
+def get_database_metadata(scope_name: str) -> Dict[str, Any]:
+    """Returns UI and introspection metadata for a database scope."""
+    cfg = DATABASES.get(scope_name, {})
+    return {
+        "name": scope_name,
+        "description": cfg.get("DESCRIPTION", scope_name),
+        "icon": cfg.get("ICON", "🗄️"),
+        "short_label": cfg.get("SHORT_LABEL", scope_name),
+        "display_name": cfg.get("DISPLAY_NAME", scope_name),
+        "category": cfg.get("CATEGORY", cfg.get("DESCRIPTION", "Database Store")),
+        "engine": cfg.get("ENGINE", "unknown"),
+        "location": cfg.get("LOCATION", ""),
+        "type": cfg.get("TYPE", "Unknown"),
+    }
 
 
 def get_table_scope_from_settings(tname: str) -> str:
