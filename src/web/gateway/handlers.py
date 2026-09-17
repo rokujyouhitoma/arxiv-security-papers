@@ -1184,6 +1184,8 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
     db_kpis = _build_database_kpis(ge_instance, workspace_dir, p_rows)
     sql_introspection = _run_sql_introspection(workspace_dir, tables)
 
+    from settings import DATABASES, TIME_ZONE, USE_TZ
+
     arxiv_db_info = {
         "name": "arxiv_security_db",
         "display_name": "ArXiv Security Core DB",
@@ -1197,9 +1199,10 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
         "tables": tables,
         "performance_kpis": db_kpis,
         "sql_introspection": sql_introspection,
+        "time_zone": "UTC",
+        "use_tz": USE_TZ,
+        "display_time_zone": TIME_ZONE,
     }
-
-    from settings import DATABASES
 
     databases: Dict[str, Dict[str, Any]] = {}
     database_names: List[str] = []
@@ -1218,6 +1221,9 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
         "total_size_human": _format_size(total_size),
         "storage_engine": "Pure Python Pager + Dual CSR + HNSW + BM25",
         "current_database": "arxiv_security_db",
+        "time_zone": "UTC",
+        "use_tz": USE_TZ,
+        "display_time_zone": TIME_ZONE,
         "performance_kpis": db_kpis,
         "sql_introspection": sql_introspection,
         "tables": tables,
@@ -1243,7 +1249,17 @@ def _introspect_named_db(
         "spider_execution_db": lambda: _introspect_spider_execution_db(workspace_dir),
     }
     fn = loaders.get(s_name)
-    return fn() if fn else _introspect_generic_database(workspace_dir, s_name)
+    res = fn() if fn else _introspect_generic_database(workspace_dir, s_name)
+    from settings import get_database_metadata
+
+    meta = get_database_metadata(s_name)
+    if "time_zone" not in res:
+        res["time_zone"] = meta.get("time_zone", "UTC")
+    if "use_tz" not in res:
+        res["use_tz"] = meta.get("use_tz", True)
+    if "display_time_zone" not in res:
+        res["display_time_zone"] = meta.get("display_time_zone", "Asia/Tokyo")
+    return res
 
 
 def _introspect_spider_execution_db(workspace_dir: str) -> Dict[str, Any]:
@@ -1316,6 +1332,9 @@ def _introspect_generic_database(workspace_dir: str, db_key: str) -> Dict[str, A
         "table_count": len(tables),
         "total_rows": 0,
         "tables": tables,
+        "time_zone": meta.get("time_zone", "UTC"),
+        "use_tz": meta.get("use_tz", True),
+        "display_time_zone": meta.get("display_time_zone", "Asia/Tokyo"),
         "performance_kpis": {
             "read_iops": 1000,
             "write_iops": 200,

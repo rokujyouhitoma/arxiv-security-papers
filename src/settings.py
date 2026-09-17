@@ -9,9 +9,23 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
+from core.settings.metadata import (
+    resolve_all_configured_databases,
+    resolve_database_metadata,
+    resolve_database_scopes,
+    resolve_table_scope,
+    resolve_table_type,
+)
+
 BASE_DIR = os.path.realpath(
     os.path.abspath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
+
+TIME_ZONE: str = "Asia/Tokyo"
+USE_TZ: bool = True
+DATABASE_TIME_ZONE: str = "UTC"
+DISPLAY_TIME_ZONE: str = TIME_ZONE
+DB_TIME_ZONE: str = DATABASE_TIME_ZONE
 
 DATABASES: Dict[str, Dict[str, Any]] = {
     "default": {
@@ -135,50 +149,46 @@ DATABASES: Dict[str, Dict[str, Any]] = {
 
 def get_database_scopes() -> Dict[str, str]:
     """Returns mapping of scope name to description for all configured scopes."""
-    scopes: Dict[str, str] = {
-        "all": "All federated databases and scopes",
-    }
-    for s_name, cfg in DATABASES.items():
-        if s_name != "default":
-            scopes[s_name] = str(cfg.get("DESCRIPTION", s_name))
-    return scopes
+    return resolve_database_scopes(DATABASES)
 
 
 def get_all_configured_databases() -> List[str]:
     """Returns list of all non-default configured database scope names."""
-    return [name for name in DATABASES.keys() if name != "default"]
+    return resolve_all_configured_databases(DATABASES)
 
 
 def get_database_metadata(scope_name: str) -> Dict[str, Any]:
     """Returns UI and introspection metadata for a database scope."""
-    cfg = DATABASES.get(scope_name, {})
-    return {
-        "name": scope_name,
-        "description": cfg.get("DESCRIPTION", scope_name),
-        "icon": cfg.get("ICON", "🗄️"),
-        "short_label": cfg.get("SHORT_LABEL", scope_name),
-        "display_name": cfg.get("DISPLAY_NAME", scope_name),
-        "category": cfg.get("CATEGORY", cfg.get("DESCRIPTION", "Database Store")),
-        "engine": cfg.get("ENGINE", "unknown"),
-        "location": cfg.get("LOCATION", ""),
-        "type": cfg.get("TYPE", "Unknown"),
-    }
+    return resolve_database_metadata(
+        scope_name=scope_name,
+        databases=DATABASES,
+        default_tz=DATABASE_TIME_ZONE,
+        default_use_tz=USE_TZ,
+        default_display_tz=DISPLAY_TIME_ZONE,
+    )
 
 
 def get_table_scope_from_settings(tname: str) -> str:
     """Resolves which database scope a table belongs to based on settings."""
-    for s_name, cfg in DATABASES.items():
-        tables = cfg.get("TABLES", {})
-        if tname in tables:
-            return s_name
-    return "default"
+    return resolve_table_scope(tname=tname, databases=DATABASES)
 
 
 def get_table_type_from_settings(tname: str) -> Optional[str]:
     """Retrieves declared table type from settings if explicitly configured."""
-    for cfg in DATABASES.values():
-        tables = cfg.get("TABLES", {})
-        if tname in tables:
-            val = tables[tname].get("TYPE")
-            return str(val) if val else None
-    return None
+    return resolve_table_type(tname=tname, databases=DATABASES)
+
+
+__all__ = [
+    "BASE_DIR",
+    "TIME_ZONE",
+    "USE_TZ",
+    "DATABASE_TIME_ZONE",
+    "DISPLAY_TIME_ZONE",
+    "DB_TIME_ZONE",
+    "DATABASES",
+    "get_database_scopes",
+    "get_all_configured_databases",
+    "get_database_metadata",
+    "get_table_scope_from_settings",
+    "get_table_type_from_settings",
+]
