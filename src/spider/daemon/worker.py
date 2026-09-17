@@ -18,6 +18,7 @@ from core.hsm import HierarchicalStateMachine
 from spider.runner import run_spider
 
 from .contracts import CrawlJob, CrawlResult, build_spider_session_state_tree
+from .storage import SpiderExecutionStorage
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +43,11 @@ class SpiderDaemonWorker:
         self,
         worker_id: str = "daemon_01",
         cache_state_file: Optional[str] = "outputs/spider/cache_state.json",
+        db_path: Optional[str] = None,
     ) -> None:
         self.worker_id = worker_id
         self.cache_state_file = cache_state_file
+        self.storage = SpiderExecutionStorage(db_path=db_path)
         self.state_tree = build_spider_session_state_tree(worker_id)
         self.hsm = HierarchicalStateMachine(
             root=self.state_tree,
@@ -183,11 +186,14 @@ class SpiderDaemonWorker:
         """
         start_t = _now()
         self.hsm.send_event("START_JOB")
+        self.storage.record_start(job)
         try:
             raw_items, stats = await self._execute_crawl(job)
-            return self._handle_job_success(job, raw_items, stats, start_t)
+            res = self._handle_job_success(job, raw_items, stats, start_t)
         except Exception as exc:
-            return self._handle_job_error(job, exc, start_t)
+            res = self._handle_job_error(job, exc, start_t)
+        self.storage.record_finish(res)
+        return res
 
     def execute_job_sync(self, job: CrawlJob) -> CrawlResult:
         """Synchronous wrapper for execute_job."""

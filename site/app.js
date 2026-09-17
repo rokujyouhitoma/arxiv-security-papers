@@ -138,6 +138,11 @@ document.addEventListener('DOMContentLoaded', () => {
       title: '⚡ プロセス監視 & Supervisor Top',
       subtitle: 'マルチワーカープロセス・IPC ソケット制御・自己修復ヘルスチェック (SA/SM)'
     },
+    spiderTab: {
+      name: 'spiders',
+      title: '🕷️ スパイダー自律実行 & 定期クローラー監視',
+      subtitle: 'Supervisor管理下SpiderWorker・自律スケジュール実行・SQLite実行ログ永続化 (spider_execution.db)'
+    },
     mcpTab: {
       name: 'mcp',
       title: '🔌 Model Context Protocol (MCP) JSON-RPC サンドボックス',
@@ -179,6 +184,11 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         renderDatabaseTab(currentSelectedDatabase);
       }, 50);
+    } else if (tabId === 'spiderTab') {
+      setTimeout(() => {
+        loadSpiderStatus();
+        loadSpiderHistory();
+      }, 50);
     }
 
     if (updateUrl && window.history && window.history.pushState) {
@@ -205,6 +215,8 @@ document.addEventListener('DOMContentLoaded', () => {
         switchToTab('systemTab', false);
       } else if (query === 'supervisor' || query === 'top' || query === 'process') {
         switchToTab('supervisorTab', false);
+      } else if (query === 'spider' || query === 'spiders' || query === 'crawler') {
+        switchToTab('spiderTab', false);
       } else if (query === 'trends') {
         switchToTab('trendsTab', false);
       } else if (query === 'mcp') {
@@ -1582,6 +1594,127 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Start telemetry & SSE
   initSseLiveStream();
+
+  // ==========================================
+  // SPIDER MONITORING & CONTROL (Issue 320)
+  // ==========================================
+  async function loadSpiderStatus() {
+    try {
+      const res = await fetch('/api/spiders/status');
+      if (!res.ok) return;
+      const data = await res.json();
+      const spiders = data.spiders || {};
+
+      ['arxiv', 'cwe', 'kev_cve'].forEach(key => {
+        const info = spiders[key];
+        const badge = document.getElementById(`badgeSpiderStatus_${key}`);
+        const lastEl = document.getElementById(`valSpiderLast_${key}`);
+        const itemsEl = document.getElementById(`valSpiderItems_${key}`);
+        const durEl = document.getElementById(`valSpiderDuration_${key}`);
+
+        if (info) {
+          const st = info.status || info.last_status || 'IDLE';
+          if (badge) {
+            const isSuccess = st === 'SUCCESS';
+            badge.textContent = st;
+            badge.style.color = isSuccess ? '#10B981' : (st === 'RUNNING' ? '#3B82F6' : '#EF4444');
+            badge.style.background = isSuccess ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
+          }
+          if (lastEl) lastEl.textContent = info.last_run ? info.last_run.substring(0, 19).replace('T', ' ') : '--';
+          const items = info.item_count ?? info.total_items_collected ?? 0;
+          if (itemsEl) itemsEl.textContent = `${items} 件`;
+          const dur = info.duration_seconds ?? info.avg_duration_seconds ?? 0;
+          if (durEl) durEl.textContent = `${Number(dur).toFixed(2)} 秒`;
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to load spider status:', err);
+    }
+  }
+
+  async function loadSpiderHistory(spiderName = '') {
+    try {
+      const url = spiderName ? `/api/spiders/history?limit=50&spider_name=${encodeURIComponent(spiderName)}` : '/api/spiders/history?limit=50';
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+      const logs = data.history || [];
+      const tbody = document.getElementById('spiderHistoryTableBody');
+      if (!tbody) return;
+
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 16px; text-align: center; color: var(--console-fg-muted);">実行履歴はありません</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = logs.map(row => {
+        const isSuccess = row.status === 'SUCCESS';
+        const color = isSuccess ? '#10B981' : (row.status === 'RUNNING' ? '#3B82F6' : '#EF4444');
+        const started = row.started_at ? row.started_at.substring(0, 19).replace('T', ' ') : '--';
+        const finished = row.finished_at ? row.finished_at.substring(0, 19).replace('T', ' ') : '--';
+        const dur = row.duration_seconds != null ? `${row.duration_seconds.toFixed(2)}s` : '--';
+        const items = row.item_count != null ? `${row.item_count}件` : '--';
+        const msg = escapeHtml(row.error_message || row.params || '-');
+
+        return `
+          <tr style="border-bottom: 1px solid var(--console-border);">
+            <td style="padding: 6px 8px; font-family: var(--console-font-mono);">${escapeHtml(row.job_id || '')}</td>
+            <td style="padding: 6px 8px; font-weight: 500;">${escapeHtml(row.spider_name || '')}</td>
+            <td style="padding: 6px 8px;"><span style="color: ${color}; font-weight: bold; font-size: 10px;">${escapeHtml(row.status || '')}</span></td>
+            <td style="padding: 6px 8px; font-family: var(--console-font-mono); font-size: 10px;">${started}</td>
+            <td style="padding: 6px 8px; font-family: var(--console-font-mono); font-size: 10px;">${finished}</td>
+            <td style="padding: 6px 8px; text-align: right; font-family: var(--console-font-mono);">${dur}</td>
+            <td style="padding: 6px 8px; text-align: right; font-weight: 600;">${items}</td>
+            <td style="padding: 6px 8px; color: var(--console-fg-muted); font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${msg}">${msg}</td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      console.warn('Failed to load spider history:', err);
+    }
+  }
+
+  async function triggerSpider(spiderName) {
+    try {
+      const res = await fetch('/api/spiders/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spider_name: spiderName })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      alert(`✅ スパイダー [${spiderName}] の自律実行をトリガーしました。\nJobID: ${data.job_id}`);
+      loadSpiderStatus();
+      loadSpiderHistory();
+    } catch (err) {
+      alert(`❌ トリガー失敗: ${err.message}`);
+    }
+  }
+
+  // Setup Spider Listeners
+  const btnRefreshSpiders = document.getElementById('btnRefreshSpiders');
+  if (btnRefreshSpiders) {
+    btnRefreshSpiders.addEventListener('click', () => {
+      loadSpiderStatus();
+      const sel = document.getElementById('selectSpiderFilter');
+      loadSpiderHistory(sel ? sel.value : '');
+    });
+  }
+
+  const selectSpiderFilter = document.getElementById('selectSpiderFilter');
+  if (selectSpiderFilter) {
+    selectSpiderFilter.addEventListener('change', (e) => {
+      loadSpiderHistory(e.target.value);
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-trigger-spider');
+    if (btn) {
+      const spider = btn.getAttribute('data-spider');
+      if (spider) triggerSpider(spider);
+    }
+  });
 
   function escapeHtml(str) {
     if (!str) return '';

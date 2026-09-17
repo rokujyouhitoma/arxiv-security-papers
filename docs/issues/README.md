@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **320** | スパイダー自律定期実行・実行状態DB永続化およびWebコンソール監視UIの実装 | Feature | 2026-09-17 | [320-implement-scheduled-spider-execution-with-db-persistence-and-web-ui.md](closed/320-implement-scheduled-spider-execution-with-db-persistence-and-web-ui.md) |
 | **319** | Search Worker メモリ消費削減 (1.3GB → 454MB: 約1/2.6) & 検索レイテンシ高速化 | Optimization | 2026-09-17 | [319-optimize-search-worker-memory-consumption-and-latency.md](closed/319-optimize-search-worker-memory-consumption-and-latency.md) |
 | **318** | ダッシュボード ナレッジグラフにおけるエッジ選択・関係性メタデータ＆エビデンス詳細インスペクターの実装 | Feature / UX | 2026-09-16 | [318-implement-edge-selection-and-inspection-in-dashboard.md](closed/318-implement-edge-selection-and-inspection-in-dashboard.md) |
 | **317** | ダッシュボード ナレッジグラフにおける選択ノードの動的非表示および一括再表示機能の実装 | Feature / UX | 2026-09-16 | [317-implement-node-hiding-and-unhiding-in-dashboard.md](closed/317-implement-node-hiding-and-unhiding-in-dashboard.md) |

@@ -40,6 +40,7 @@ class ServiceConfig:
     name: str = "default_service"
     workers: int = 3
     hook_uri: Optional[str] = None
+    worker_class: str = "service"
     sync_interval: float = 2.0
     timeout: float = 30.0
     graceful_timeout: float = 30.0
@@ -168,7 +169,7 @@ class SupervisorConfig:
         return WorkerSpec(
             name=svc.name,
             target_count=svc.workers,
-            worker_class="service",
+            worker_class=svc.worker_class or "service",
             role=ServiceRole.STATEFUL_SERVICE,
             sync_interval=svc.sync_interval,
             max_requests=self._resolve_limit(svc.max_requests, self.max_requests),

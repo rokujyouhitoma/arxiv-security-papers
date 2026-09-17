@@ -124,6 +124,10 @@
                 <span class="nav-item-icon">⚡</span>
                 <span class="nav-item-text">プロセス監視 (Supervisor Top)</span>
               </a>
+              <a href="#/spiders" class="nav-item nav-tab-btn" data-tab="spiderTab" id="navSpider">
+                <span class="nav-item-icon">🕷️</span>
+                <span class="nav-item-text">スパイダー自律実行 &amp; 監視</span>
+              </a>
               <a href="#/mcp" class="nav-item nav-tab-btn" data-tab="mcpTab" id="navMcp">
                 <span class="nav-item-icon">🔌</span>
                 <span class="nav-item-text">MCP ツールサンドボックス</span>
@@ -783,6 +787,113 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 7: SPIDER MONITORING & WORKFLOW SCHEDULER (Issue 320) -->
+        <section id="spiderTab" class="tab-content">
+          <div class="system-workspace">
+            <!-- Top Controls & Status Summary -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--console-fg-title);">🕷️ スパイダー自律実行 &amp; 定期クローラー監視</h3>
+                <p style="margin: 0; font-size: 12px; color: var(--console-fg-muted);">Supervisor 管理下の SpiderWorker と WorkflowScheduler が連携し、arXiv / CWE / KEV-CVE の定期フェッチと SQLite 永続化を自律実行します。</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-console-secondary" id="btnRefreshSpiders" style="padding: 6px 12px; font-size: 12px; cursor: pointer;">🔄 状態を更新</button>
+              </div>
+            </div>
+
+            <!-- Spider Target Cards -->
+            <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 20px;" id="spiderCardsContainer">
+              <!-- arXiv Spider Card -->
+              <div class="metric-card" style="background-color: var(--console-bg-panel); border: 1px solid var(--console-border);">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="card-title" style="font-weight: 600; font-size: 14px;">📄 arXiv Security Spider</span>
+                  <span class="card-tag" id="badgeSpiderStatus_arxiv" style="background: rgba(16,185,129,0.2); color: #10B981; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">IDLE</span>
+                </div>
+                <div style="font-size: 12px; margin-top: 10px; line-height: 1.6;">
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">実行間隔:</span> <strong>6時間ごと (1日4回)</strong></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">最終実行:</span> <span id="valSpiderLast_arxiv" style="font-family: var(--console-font-mono);">--</span></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">取得件数:</span> <strong id="valSpiderItems_arxiv" style="color: var(--console-accent-green);">--</strong></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">平均所要時間:</span> <span id="valSpiderDuration_arxiv">--</span></div>
+                </div>
+                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px;">
+                  <button class="btn-console-primary btn-trigger-spider" data-spider="arxiv" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>
+                </div>
+              </div>
+
+              <!-- CWE Spider Card -->
+              <div class="metric-card" style="background-color: var(--console-bg-panel); border: 1px solid var(--console-border);">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="card-title" style="font-weight: 600; font-size: 14px;">🛡️ MITRE CWE Spider</span>
+                  <span class="card-tag" id="badgeSpiderStatus_cwe" style="background: rgba(16,185,129,0.2); color: #10B981; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">IDLE</span>
+                </div>
+                <div style="font-size: 12px; margin-top: 10px; line-height: 1.6;">
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">実行間隔:</span> <strong>24時間ごと (日次)</strong></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">最終実行:</span> <span id="valSpiderLast_cwe" style="font-family: var(--console-font-mono);">--</span></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">取得件数:</span> <strong id="valSpiderItems_cwe" style="color: var(--console-accent-green);">--</strong></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">平均所要時間:</span> <span id="valSpiderDuration_cwe">--</span></div>
+                </div>
+                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px;">
+                  <button class="btn-console-primary btn-trigger-spider" data-spider="cwe" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>
+                </div>
+              </div>
+
+              <!-- KEV / CVE Spider Card -->
+              <div class="metric-card" style="background-color: var(--console-bg-panel); border: 1px solid var(--console-border);">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="card-title" style="font-weight: 600; font-size: 14px;">⚠️ CISA KEV &amp; CVE Spider</span>
+                  <span class="card-tag" id="badgeSpiderStatus_kev_cve" style="background: rgba(16,185,129,0.2); color: #10B981; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">IDLE</span>
+                </div>
+                <div style="font-size: 12px; margin-top: 10px; line-height: 1.6;">
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">実行間隔:</span> <strong>6時間ごと (1日4回)</strong></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">最終実行:</span> <span id="valSpiderLast_kev_cve" style="font-family: var(--console-font-mono);">--</span></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">取得件数:</span> <strong id="valSpiderItems_kev_cve" style="color: var(--console-accent-green);">--</strong></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">平均所要時間:</span> <span id="valSpiderDuration_kev_cve">--</span></div>
+                </div>
+                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px;">
+                  <button class="btn-console-primary btn-trigger-spider" data-spider="kev_cve" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Execution Logs Table (DB Persistence) -->
+            <div class="metric-card" style="background-color: var(--console-bg-panel); border: 1px solid var(--console-border); padding: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="font-weight: 600; font-size: 14px; color: var(--console-fg-title);">📝 データベース永続化 実行ログ台帳 (spider_execution_logs)</div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <label style="font-size: 11px; color: var(--console-fg-muted);">フィルター:</label>
+                  <select id="selectSpiderFilter" style="background: var(--console-bg-app); color: var(--console-fg-body); border: 1px solid var(--console-border); padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                    <option value="">すべてのスパイダー</option>
+                    <option value="arxiv">arXiv</option>
+                    <option value="cwe">CWE</option>
+                    <option value="kev_cve">KEV / CVE</option>
+                  </select>
+                </div>
+              </div>
+              <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid var(--console-border); color: var(--console-fg-muted);">
+                      <th style="padding: 6px 8px;">JOB ID</th>
+                      <th style="padding: 6px 8px;">スパイダー</th>
+                      <th style="padding: 6px 8px;">ステータス</th>
+                      <th style="padding: 6px 8px;">開始日時 (UTC)</th>
+                      <th style="padding: 6px 8px;">終了日時 (UTC)</th>
+                      <th style="padding: 6px 8px; text-align: right;">所要時間</th>
+                      <th style="padding: 6px 8px; text-align: right;">件数</th>
+                      <th style="padding: 6px 8px;">メッセージ / エラー</th>
+                    </tr>
+                  </thead>
+                  <tbody id="spiderHistoryTableBody">
+                    <tr>
+                      <td colspan="8" style="padding: 16px; text-align: center; color: var(--console-fg-muted);">実行履歴を読み込み中...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>

@@ -81,6 +81,32 @@ class WSGIApplication:
             return self.handlers.handle_graph_schema(start_response)
         return None
 
+    def _route_spider_api(
+        self,
+        start_response: Callable[..., Any],
+        path: str,
+        query_params: Dict[str, List[str]],
+    ) -> Optional[Any]:
+        if path == "/api/spiders/status":
+            return self.handlers.handle_spider_status(start_response)
+        if path == "/api/spiders/history":
+            return self.handlers.handle_spider_history(start_response, query_params)
+        return None
+
+    def _route_system_api(
+        self,
+        start_response: Callable[..., Any],
+        path: str,
+        query_params: Dict[str, List[str]],
+    ) -> Optional[Any]:
+        if path == "/api/trends":
+            return self.handlers.handle_trends(start_response, query_params)
+        if path == "/api/stats":
+            return self.handlers.handle_stats(start_response)
+        if path == "/api/system/lifecycle":
+            return self.handlers.handle_system_lifecycle(start_response)
+        return None
+
     def _route_simple_api(
         self,
         start_response: Callable[..., Any],
@@ -89,13 +115,9 @@ class WSGIApplication:
     ) -> Optional[Any]:
         if path.startswith("/api/graph/"):
             return self._route_graph_api(start_response, path, query_params)
-        if path == "/api/trends":
-            return self.handlers.handle_trends(start_response, query_params)
-        if path == "/api/stats":
-            return self.handlers.handle_stats(start_response)
-        if path == "/api/system/lifecycle":
-            return self.handlers.handle_system_lifecycle(start_response)
-        return None
+        if path.startswith("/api/spiders/"):
+            return self._route_spider_api(start_response, path, query_params)
+        return self._route_system_api(start_response, path, query_params)
 
     def _route_stream_api(
         self,
@@ -152,6 +174,8 @@ class WSGIApplication:
     ) -> List[bytes]:
         if path == "/api/mcp":
             return self.handlers.handle_mcp_post(environ, start_response)
+        if path == "/api/spiders/trigger":
+            return self.handlers.handle_spider_trigger(environ, start_response)
         return response_error(
             start_response, "Endpoint not found", status="404 Not Found"
         )

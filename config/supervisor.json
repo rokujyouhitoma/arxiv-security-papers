@@ -37,6 +37,23 @@
       "sync_interval": 2.0,
       "timeout": 30.0,
       "dependencies": []
+    },
+    {
+      "name": "spider",
+      "workers": 1,
+      "worker_class": "spider",
+      "sync_interval": 2.0,
+      "timeout": 30.0,
+      "dependencies": []
+    },
+    {
+      "name": "workflow",
+      "workers": 1,
+      "worker_class": "service",
+      "hook_uri": "workflow.service:WorkflowLifecycleHook",
+      "sync_interval": 2.0,
+      "timeout": 30.0,
+      "dependencies": []
     }
   ]
 }

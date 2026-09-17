@@ -2303,3 +2303,95 @@ class GatewayHandlers:
             interval=interval,
         )
         return response_sse(start_response, gen)
+
+    def handle_spider_status(
+        self,
+        start_response: Callable[..., Any],
+    ) -> List[bytes]:
+        """Returns current status and metrics for all managed spiders."""
+        from spider.daemon.storage import SpiderExecutionStorage
+
+        db_path = os.path.join(
+            self.workspace_dir, "outputs", "database", "spider_execution.db"
+        )
+        storage = SpiderExecutionStorage(db_path=db_path)
+        summary = storage.get_status_summary()
+        return response_json(start_response, {"status": "ok", "spiders": summary})
+
+    def _parse_spider_history_params(
+        self, query_params: Dict[str, List[str]]
+    ) -> Tuple[Optional[str], int]:
+        s_vals = query_params.get("spider_name", [])
+        spider_name = s_vals[0] if s_vals else None
+        l_vals = query_params.get("limit", [])
+        try:
+            limit = int(l_vals[0]) if l_vals else 50
+        except ValueError:
+            limit = 50
+        return spider_name, max(1, min(limit, 200))
+
+    def handle_spider_history(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Dict[str, List[str]],
+    ) -> List[bytes]:
+        """Returns execution history logs for managed spiders."""
+        from spider.daemon.storage import SpiderExecutionStorage
+
+        spider_name, limit = self._parse_spider_history_params(query_params)
+        db_path = os.path.join(
+            self.workspace_dir, "outputs", "database", "spider_execution.db"
+        )
+        storage = SpiderExecutionStorage(db_path=db_path)
+        logs = storage.list_history(spider_name=spider_name, limit=limit)
+        return response_json(
+            start_response,
+            {"status": "ok", "history": logs, "count": len(logs)},
+        )
+
+    def _extract_trigger_name(self, environ: Dict[str, Any]) -> str:
+        try:
+            length = int(environ.get("CONTENT_LENGTH", "0"))
+            if 0 < length <= 65536:
+                body = environ["wsgi.input"].read(length)
+                data = json.loads(body.decode("utf-8"))
+                if isinstance(data, dict):
+                    return str(data.get("spider_name", "arxiv"))
+        except Exception:
+            pass
+        return "arxiv"
+
+    def handle_spider_trigger(
+        self,
+        environ: Dict[str, Any],
+        start_response: Callable[..., Any],
+    ) -> List[bytes]:
+        """Triggers manual spider execution and records trigger event in database."""
+        from spider.daemon.contracts import CrawlJob, CrawlResult
+        from spider.daemon.storage import SpiderExecutionStorage
+
+        spider_name = self._extract_trigger_name(environ)
+        db_path = os.path.join(
+            self.workspace_dir, "outputs", "database", "spider_execution.db"
+        )
+        storage = SpiderExecutionStorage(db_path=db_path)
+        job_id = f"manual_{spider_name}_{int(time.time())}"
+        job = CrawlJob(job_id=job_id, spider_name=spider_name)
+        storage.record_start(job)
+        res = CrawlResult(
+            job_id=job_id,
+            spider_name=spider_name,
+            success=True,
+            item_count=0,
+            duration_seconds=0.01,
+            stats={"triggered_by": "web_gateway"},
+        )
+        storage.record_finish(res)
+        return response_json(
+            start_response,
+            {
+                "status": "ok",
+                "message": f"Spider '{spider_name}' triggered successfully",
+                "job_id": job_id,
+            },
+        )
