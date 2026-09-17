@@ -188,7 +188,10 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         loadSpiderStatus();
         loadSpiderHistory();
+        startSpiderAutoPolling();
       }, 50);
+    } else {
+      stopSpiderAutoPolling();
     }
 
     if (updateUrl && window.history && window.history.pushState) {
@@ -1674,6 +1677,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  let spiderPollingInterval = null;
+
+  function startSpiderAutoPolling() {
+    if (spiderPollingInterval) return;
+    const indicator = document.getElementById('spiderAutoRefreshIndicator');
+    if (indicator) indicator.style.opacity = '1';
+
+    spiderPollingInterval = setInterval(async () => {
+      const spiderTab = document.getElementById('spiderTab');
+      const isTabActive = spiderTab && spiderTab.classList.contains('active');
+      if (!isTabActive) {
+        stopSpiderAutoPolling();
+        return;
+      }
+      await loadSpiderStatus();
+      const sel = document.getElementById('selectSpiderFilter');
+      await loadSpiderHistory(sel ? sel.value : '');
+    }, 2500);
+  }
+
+  function stopSpiderAutoPolling() {
+    if (spiderPollingInterval) {
+      clearInterval(spiderPollingInterval);
+      spiderPollingInterval = null;
+    }
+    const indicator = document.getElementById('spiderAutoRefreshIndicator');
+    if (indicator) indicator.style.opacity = '0.5';
+  }
+
   async function triggerSpider(spiderName) {
     try {
       const res = await fetch('/api/spiders/trigger', {
@@ -1683,9 +1715,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      alert(`✅ スパイダー [${spiderName}] の自律実行をトリガーしました。\nJobID: ${data.job_id}`);
-      loadSpiderStatus();
-      loadSpiderHistory();
+      // Start real-time polling immediately
+      await loadSpiderStatus();
+      await loadSpiderHistory();
+      startSpiderAutoPolling();
     } catch (err) {
       alert(`❌ トリガー失敗: ${err.message}`);
     }
@@ -1694,10 +1727,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Setup Spider Listeners
   const btnRefreshSpiders = document.getElementById('btnRefreshSpiders');
   if (btnRefreshSpiders) {
-    btnRefreshSpiders.addEventListener('click', () => {
-      loadSpiderStatus();
+    btnRefreshSpiders.addEventListener('click', async () => {
+      await loadSpiderStatus();
       const sel = document.getElementById('selectSpiderFilter');
-      loadSpiderHistory(sel ? sel.value : '');
+      await loadSpiderHistory(sel ? sel.value : '');
     });
   }
 

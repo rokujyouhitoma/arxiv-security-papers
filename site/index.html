@@ -800,8 +800,9 @@
                 <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--console-fg-title);">🕷️ スパイダー自律実行 &amp; 定期クローラー監視</h3>
                 <p style="margin: 0; font-size: 12px; color: var(--console-fg-muted);">Supervisor 管理下の SpiderWorker と WorkflowScheduler が連携し、arXiv / CWE / KEV-CVE の定期フェッチと SQLite 永続化を自律実行します。</p>
               </div>
-              <div style="display: flex; gap: 8px;">
-                <button class="btn-console-secondary" id="btnRefreshSpiders" style="padding: 6px 12px; font-size: 12px; cursor: pointer;">🔄 状態を更新</button>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span id="spiderAutoRefreshIndicator" style="font-size: 11px; color: var(--console-accent-green); background: rgba(16,185,129,0.1); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3);">● 自動ポーリング更新中 (3秒ごと)</span>
+                <button class="btn-console-secondary" id="btnRefreshSpiders" style="padding: 6px 12px; font-size: 12px; cursor: pointer;">🔄 今すぐ手動更新</button>
               </div>
             </div>
 
