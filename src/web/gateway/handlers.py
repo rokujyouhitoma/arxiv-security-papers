@@ -1515,7 +1515,8 @@ class GatewayHandlers:
         mode = query_params.get("mode", ["hybrid"])[0]
         top_k, offset = self._parse_pagination_params(query_params)
 
-        if not query:
+        effective_query = query or (category or "")
+        if not effective_query:
             return response_json(
                 start_response,
                 {
@@ -1532,11 +1533,11 @@ class GatewayHandlers:
 
         if self._vector_engine is not None:
             results, profile = self._execute_vector_search(
-                query, top_k, category, mode, offset=offset
+                effective_query, top_k, category, mode, offset=offset
             )
         else:
             results, profile = self._execute_client_search(
-                query, top_k, category, mode, offset=offset
+                effective_query, top_k, category, mode, offset=offset
             )
 
         total_hits = int(profile.get("total_hits", len(results)))

@@ -86,14 +86,27 @@ def test_faceted_index():
         "doc1", "2026-06-01", ["cs.CR", "malware"], ["マルウェア・脅威解析"]
     )
     facet.add_document("doc2", "2025-05-01", ["cs.AI"], ["LLM・AIセキュリティ"])
+    facet.add_document(
+        "doc3", "2026-08-01", ["cs.CR"], ["ペネトレーションテスト・脆弱性検証"]
+    )
 
     # Filter by Year
     cand2026 = facet.filter(year="2026")
-    assert cand2026 == {"doc1"}
+    assert cand2026 == {"doc1", "doc3"}
 
     # Filter by Category
     cand_cr = facet.filter(category="cs.CR")
-    assert cand_cr == {"doc1"}
+    assert cand_cr == {"doc1", "doc3"}
+
+    # Filter by Category Alias (pentest, malware, llm)
+    cand_pentest = facet.filter(category="pentest")
+    assert cand_pentest == {"doc3"}
+
+    cand_malware = facet.filter(category="malware")
+    assert cand_malware == {"doc1"}
+
+    cand_llm = facet.filter(category="llm")
+    assert cand_llm == {"doc2"}
 
     # Filter by Domain
     cand_domain = facet.filter(domain="マルウェア・脅威解析")

@@ -360,6 +360,11 @@ class TestCoreTimezoneAndSettingsPackages(unittest.TestCase):
         )
         self.assertIsNone(get_table_type_from_settings("non_existent_table"))
 
+        # Verify backward-compatibility fallback on settings module
+        import settings
+
+        self.assertEqual(settings.get_all_configured_databases(), all_dbs)
+
 
 if __name__ == "__main__":
     unittest.main()

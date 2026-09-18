@@ -6,6 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **327** | Webコンソール ナビゲーションリンクの統廃合および死にリンク・循環リダイレクトの根絶 | Refactor | Medium | Open (New) | [327-reorganize-index-navigation-links-and-eliminate-dead-links.md](327-reorganize-index-navigation-links-and-eliminate-dead-links.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
@@ -16,6 +17,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **328** | xenon 循環的複雑度(CC)違反の解消 (SearchClient, SearchService, FacetedIndex) | Bug | 2026-09-19 | [328-resolve-xenon-cyclomatic-complexity-violations.md](closed/328-resolve-xenon-cyclomatic-complexity-violations.md) |
+| **326** | Webコンソール初期化時におけるTDZ参照エラーの解消およびテレメトリ・検索パイプライン堅牢化 | Bug | 2026-09-19 | [326-fix-web-console-initialization-tdz-reference-errors-and-telemetry-sync.md](closed/326-fix-web-console-initialization-tdz-reference-errors-and-telemetry-sync.md) |
 | **325** | settings.py のスコープ・メタデータ関数の core/settings/ への集約と settings.py 宣言的定数化 | Refactor | 2026-09-18 | [325-aggregate-settings-functions-to-core-settings.md](closed/325-aggregate-settings-functions-to-core-settings.md) |
 | **324** | Django互換のTIME_ZONE/USE_TZ設定およびDSN構成の追加 | Feature | 2026-09-18 | [324-add-timezone-and-use-tz-settings-and-dsn-support.md](closed/324-add-timezone-and-use-tz-settings-and-dsn-support.md) |
 | **323** | settings.py に基づく Active Database Scope 一覧の動的生成と spider_execution_db 表示の実装 | Bug | 2026-09-18 | [323-dynamically-populate-database-scopes-from-settings.md](closed/323-dynamically-populate-database-scopes-from-settings.md) |

@@ -2,6 +2,17 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeTag = '';
   let activePeriod = 'monthly';
   let currentSearchResults = [];
+  let currentSelectedDatabase = 'arxiv_security_db';
+  let cachedDatabaseMetrics = null;
+  let spiderPollingInterval = null;
+  let sseEventSource = null;
+  let telemetryIntervalId = null;
+  let meshNodes = [];
+  let meshEdges = [];
+  let currentOffset = 0;
+  let currentLimit = 12;
+  let currentTotalHits = 0;
+  let currentLoadedCount = 0;
 
   // DOM Elements
   const searchInput = document.getElementById('searchInput');
@@ -15,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const sidebarPapersCount = document.getElementById('sidebarPapersCount');
   const mainPageTitle = document.getElementById('mainPageTitle');
   const mainPageSubtitle = document.getElementById('mainPageSubtitle');
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  const loadMoreContainer = document.getElementById('loadMoreContainer');
+  const loadMoreBtn = document.getElementById('loadMoreBtn');
+  const allLoadedMsg = document.getElementById('allLoadedMsg');
   
   const consoleSidebar = document.getElementById('consoleSidebar');
   const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
@@ -454,26 +469,17 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await fetch('/api/stats');
       const data = await res.json();
-      if (data.total_papers) {
-        const formatted = Number(data.total_papers).toLocaleString();
+      const total = data.total_papers || data.total_documents || data.vector_index_size;
+      if (total) {
+        const formatted = Number(total).toLocaleString();
         if (totalPapersCount) totalPapersCount.textContent = formatted;
         if (sidebarPapersCount) sidebarPapersCount.textContent = formatted;
-        updatePaperCountDisplay(data.total_papers);
+        updatePaperCountDisplay(total);
       }
     } catch (err) {
       console.warn("Stats fetch failed", err);
     }
   }
-
-  let currentOffset = 0;
-  let currentLimit = 12;
-  let currentTotalHits = 0;
-  let currentLoadedCount = 0;
-
-  const pageSizeSelect = document.getElementById('pageSizeSelect');
-  const loadMoreContainer = document.getElementById('loadMoreContainer');
-  const loadMoreBtn = document.getElementById('loadMoreBtn');
-  const allLoadedMsg = document.getElementById('allLoadedMsg');
 
   if (pageSizeSelect) {
     pageSizeSelect.addEventListener('change', () => {
@@ -843,11 +849,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========================================================================
   // 6. Real-Time Telemetry, Structural Analytics & Supervisor Top (Issue 169)
   // ========================================================================
-  let meshNodes = [];
-  let meshEdges = [];
   const walkHistory = [];
   const supervisorWorkerSnapshots = new Map();
-  let sseEventSource = null;
 
   // A. Hop Budget Histogram
   function calculateAndDrawHopHistogram() {
@@ -968,6 +971,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function drawWalkChart() {
     const wCanvas = document.getElementById('walkVsFlatCanvas');
     if (!wCanvas) return;
+    if (!walkHistory || walkHistory.length === 0) return;
+    const lastVal = walkHistory[walkHistory.length - 1];
+    if (lastVal === undefined || isNaN(lastVal)) return;
+
     const wCtx = wCanvas.getContext('2d');
     const w = wCanvas.width;
     const h = wCanvas.height;
@@ -977,8 +984,9 @@ document.addEventListener('DOMContentLoaded', () => {
     wCtx.lineWidth = 1.5;
 
     wCtx.beginPath();
+    const denom = Math.max(1, walkHistory.length - 1);
     walkHistory.forEach((v, idx) => {
-      const x = 20 + (idx / (walkHistory.length - 1)) * (w - 40);
+      const x = 20 + (idx / denom) * (w - 40);
       const y = h - 20 - ((v - 60) / 30) * (h - 40);
       if (idx === 0) wCtx.moveTo(x, y);
       else wCtx.lineTo(x, y);
@@ -995,7 +1003,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Current Value Text
     wCtx.fillStyle = '#e0533c';
     wCtx.font = 'bold 12px monospace';
-    wCtx.fillText(`${walkHistory[walkHistory.length - 1].toFixed(1)}% Token Saved`, 25, 20);
+    wCtx.fillText(`${Number(lastVal).toFixed(1)}% Token Saved`, 25, 20);
   }
 
   // D. Deterministic Traversal Matrix (Backwards compatibility)
@@ -1085,10 +1093,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  let currentSelectedDatabase = 'arxiv_security_db';
-  let cachedDatabaseMetrics = null;
-
-  function renderDatabaseTab(dbKey) {
+  async function renderDatabaseTab(dbKey) {
+    if (!cachedDatabaseMetrics) {
+      await syncConsoleTelemetry();
+    }
     if (!cachedDatabaseMetrics) return;
     const allDbs = cachedDatabaseMetrics.databases || {};
     const targetDb = allDbs[dbKey] || cachedDatabaseMetrics;
@@ -1409,9 +1417,15 @@ document.addEventListener('DOMContentLoaded', () => {
   async function syncConsoleTelemetry() {
     try {
       const resp = await fetch('/api/graph/mesh');
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        console.warn(`[Telemetry] /api/graph/mesh HTTP error: ${resp.status} ${resp.statusText}`);
+        return;
+      }
       const data = await resp.json();
-      if (data.status !== 'success') return;
+      if (data.status !== 'success') {
+        console.warn('[Telemetry] /api/graph/mesh non-success status:', data);
+        return;
+      }
 
       if (data.database_metrics) {
         updateDatabaseMetrics(data.database_metrics);
@@ -1597,13 +1611,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const gapsVal = document.getElementById('kpiGapsVal');
       if (gapsVal) gapsVal.textContent = `${gapCount || 0} 件`;
     } catch (err) {
-      // Graceful fallback
+      console.warn('[Telemetry] syncConsoleTelemetry exception:', err);
     }
   }
 
   // H. SSE Real-time Stream Client (/api/stream/top)
-  let telemetryIntervalId = null;
-
   function ensureTelemetryPolling() {
     if (!telemetryIntervalId) {
       syncConsoleTelemetry();
@@ -1742,8 +1754,6 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn('Failed to load spider history:', err);
     }
   }
-
-  let spiderPollingInterval = null;
 
   function startSpiderAutoPolling() {
     if (spiderPollingInterval) return;

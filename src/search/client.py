@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import socket
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from .vector_engine import VectorEngine
@@ -150,6 +150,75 @@ class SearchClient:
             )
         return self._execute_socket_query(cmd_dict)
 
+    @staticmethod
+    def _build_empty_search_result(offset: int, limit: int) -> Dict[str, Any]:
+        return {
+            "status": "success",
+            "query": "",
+            "total": 0,
+            "total_hits": 0,
+            "offset": offset,
+            "limit": limit,
+            "has_more": False,
+            "results": [],
+            "profile": {},
+        }
+
+    @staticmethod
+    def _search_vector_ann_mode(
+        engine: Any, query: str, top_k: int, offset: int
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any], int]:
+        all_vec = engine.search_vector_ann(query=query, top_k=top_k + offset)
+        results = all_vec[offset : offset + top_k]
+        total_hits = len(all_vec)
+        profile: Dict[str, Any] = {
+            "mode": "vector",
+            "total_hits": total_hits,
+            "offset": offset,
+            "limit": top_k,
+            "has_more": (offset + len(results) < total_hits),
+            "total_ms": 1.0,
+        }
+        return results, profile, total_hits
+
+    @staticmethod
+    def _search_rrf_hybrid_mode(
+        engine: Any, query: str, category: Optional[str], top_k: int, offset: int
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any], int]:
+        all_rrf = engine.search_rrf_hybrid(
+            query=query, top_k=top_k + offset, category=category
+        )
+        results = all_rrf[offset : offset + top_k]
+        total_hits = len(all_rrf)
+        profile: Dict[str, Any] = {
+            "mode": "rrf",
+            "total_hits": total_hits,
+            "offset": offset,
+            "limit": top_k,
+            "has_more": (offset + len(results) < total_hits),
+            "total_ms": 1.0,
+        }
+        return results, profile, total_hits
+
+    def _execute_search_by_mode(
+        self,
+        engine: Any,
+        mode: str,
+        query: str,
+        category: Optional[str],
+        top_k: int,
+        offset: int,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any], int]:
+        if mode == "vector":
+            return self._search_vector_ann_mode(engine, query, top_k, offset)
+        if mode == "rrf":
+            return self._search_rrf_hybrid_mode(engine, query, category, top_k, offset)
+        results, profile = engine.search_with_profile(
+            query=query, top_k=top_k, category=category, offset=offset
+        )
+        total_hits = int(profile.get("total_hits", len(results)))
+        return results, profile, total_hits
+
     def _fallback_search(self, req: Dict[str, Any]) -> Dict[str, Any]:
         engine = self.fallback_engine
         query = req.get("query", "").strip()
@@ -158,63 +227,24 @@ class SearchClient:
         category = req.get("category")
         mode = req.get("mode", "hybrid")
 
-        if not query:
-            return {
-                "status": "success",
-                "query": "",
-                "total": 0,
-                "total_hits": 0,
-                "offset": offset,
-                "limit": top_k,
-                "has_more": False,
-                "results": [],
-                "profile": {},
-            }
+        effective_query = query or category or ""
+        if not effective_query:
+            return self._build_empty_search_result(offset, top_k)
 
-        if mode == "vector":
-            all_vec = engine.search_vector_ann(query=query, top_k=top_k + offset)
-            results = all_vec[offset : offset + top_k]
-            total_hits = len(all_vec)
-            profile: Dict[str, Any] = {
-                "mode": "vector",
-                "total_hits": total_hits,
-                "offset": offset,
-                "limit": top_k,
-                "has_more": (offset + len(results) < total_hits),
-                "total_ms": 1.0,
-            }
-        elif mode == "rrf":
-            all_rrf = engine.search_rrf_hybrid(
-                query=query, top_k=top_k + offset, category=category
-            )
-            results = all_rrf[offset : offset + top_k]
-            total_hits = len(all_rrf)
-            profile = {
-                "mode": "rrf",
-                "total_hits": total_hits,
-                "offset": offset,
-                "limit": top_k,
-                "has_more": (offset + len(results) < total_hits),
-                "total_ms": 1.0,
-            }
-        else:
-            results, profile = engine.search_with_profile(
-                query=query, top_k=top_k, category=category, offset=offset
-            )
-            total_hits = int(profile.get("total_hits", len(results)))
-
+        results, profile, total_hits = self._execute_search_by_mode(
+            engine, mode, effective_query, category, top_k, offset
+        )
+        has_more = bool(profile.get("has_more", (offset + len(results) < total_hits)))
         return {
             "status": "success",
-            "query": query,
+            "query": effective_query,
             "category": category,
             "mode": mode,
             "total": len(results),
             "total_hits": total_hits,
             "offset": offset,
             "limit": top_k,
-            "has_more": bool(
-                profile.get("has_more", (offset + len(results) < total_hits))
-            ),
+            "has_more": has_more,
             "profile": profile,
             "results": results,
         }
