@@ -7,15 +7,7 @@ Conforms to DSN-24 and DSN-05 Section 21. Zero external dependencies, Xenon CC <
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
-
-from core.settings.metadata import (
-    resolve_all_configured_databases,
-    resolve_database_metadata,
-    resolve_database_scopes,
-    resolve_table_scope,
-    resolve_table_type,
-)
+from typing import Any, Dict
 
 BASE_DIR = os.path.realpath(
     os.path.abspath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -147,37 +139,6 @@ DATABASES: Dict[str, Dict[str, Any]] = {
 }
 
 
-def get_database_scopes() -> Dict[str, str]:
-    """Returns mapping of scope name to description for all configured scopes."""
-    return resolve_database_scopes(DATABASES)
-
-
-def get_all_configured_databases() -> List[str]:
-    """Returns list of all non-default configured database scope names."""
-    return resolve_all_configured_databases(DATABASES)
-
-
-def get_database_metadata(scope_name: str) -> Dict[str, Any]:
-    """Returns UI and introspection metadata for a database scope."""
-    return resolve_database_metadata(
-        scope_name=scope_name,
-        databases=DATABASES,
-        default_tz=DATABASE_TIME_ZONE,
-        default_use_tz=USE_TZ,
-        default_display_tz=DISPLAY_TIME_ZONE,
-    )
-
-
-def get_table_scope_from_settings(tname: str) -> str:
-    """Resolves which database scope a table belongs to based on settings."""
-    return resolve_table_scope(tname=tname, databases=DATABASES)
-
-
-def get_table_type_from_settings(tname: str) -> Optional[str]:
-    """Retrieves declared table type from settings if explicitly configured."""
-    return resolve_table_type(tname=tname, databases=DATABASES)
-
-
 __all__ = [
     "BASE_DIR",
     "TIME_ZONE",
@@ -186,9 +147,4 @@ __all__ = [
     "DISPLAY_TIME_ZONE",
     "DB_TIME_ZONE",
     "DATABASES",
-    "get_database_scopes",
-    "get_all_configured_databases",
-    "get_database_metadata",
-    "get_table_scope_from_settings",
-    "get_table_type_from_settings",
 ]

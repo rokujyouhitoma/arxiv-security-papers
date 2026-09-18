@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **325** | settings.py のスコープ・メタデータ関数の core/settings/ への集約と settings.py 宣言的定数化 | Refactor | 2026-09-18 | [325-aggregate-settings-functions-to-core-settings.md](closed/325-aggregate-settings-functions-to-core-settings.md) |
 | **324** | Django互換のTIME_ZONE/USE_TZ設定およびDSN構成の追加 | Feature | 2026-09-18 | [324-add-timezone-and-use-tz-settings-and-dsn-support.md](closed/324-add-timezone-and-use-tz-settings-and-dsn-support.md) |
 | **323** | settings.py に基づく Active Database Scope 一覧の動的生成と spider_execution_db 表示の実装 | Bug | 2026-09-18 | [323-dynamically-populate-database-scopes-from-settings.md](closed/323-dynamically-populate-database-scopes-from-settings.md) |
 | **322** | Supervisor SpiderWorker ディスパッチ優先順位の是正および Top Table 常駐表示の実装 | Bug | 2026-09-17 | [322-fix-supervisor-spider-worker-dispatch-and-table-visibility.md](closed/322-fix-supervisor-spider-worker-dispatch-and-table-visibility.md) |

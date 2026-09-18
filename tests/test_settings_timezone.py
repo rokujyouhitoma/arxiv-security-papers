@@ -9,6 +9,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from core.settings import get_all_configured_databases, get_database_metadata
 from core.timezone import (
     format_display_datetime,
     get_database_timezone,
@@ -26,8 +27,6 @@ from settings import (
     DISPLAY_TIME_ZONE,
     TIME_ZONE,
     USE_TZ,
-    get_all_configured_databases,
-    get_database_metadata,
 )
 
 
@@ -46,6 +45,23 @@ class TestSettingsConstants(unittest.TestCase):
         self.assertTrue(is_use_tz())
         self.assertEqual(get_database_timezone(), "UTC")
         self.assertEqual(get_display_timezone(), "Asia/Tokyo")
+
+    def test_settings_module_has_zero_functions(self) -> None:
+        """Verifies Issue 325: settings.py is purely declarative with 0 functions."""
+        import inspect
+
+        import settings
+
+        defined_funcs = [
+            k
+            for k, v in vars(settings).items()
+            if not k.startswith("__") and inspect.isfunction(v)
+        ]
+        self.assertEqual(
+            defined_funcs,
+            [],
+            f"settings.py should have zero functions, found: {defined_funcs}",
+        )
 
 
 class TestDatabasesDSNTimezone(unittest.TestCase):
@@ -313,6 +329,36 @@ class TestCoreTimezoneAndSettingsPackages(unittest.TestCase):
 
         tbl_type = resolve_table_type("test_table", mock_dbs)
         self.assertEqual(tbl_type, "MockTable")
+
+    def test_core_settings_aggregated_functions(self) -> None:
+        """Verifies Issue 325: core.settings exports all 5 functions and default-binds settings."""
+        from core.settings import (
+            get_all_configured_databases,
+            get_database_metadata,
+            get_database_scopes,
+            get_table_scope_from_settings,
+            get_table_type_from_settings,
+        )
+
+        scopes = get_database_scopes()
+        self.assertIn("arxiv_security_db", scopes)
+        self.assertNotIn("default", scopes)
+
+        all_dbs = get_all_configured_databases()
+        self.assertIn("arxiv_security_db", all_dbs)
+        self.assertNotIn("default", all_dbs)
+
+        meta = get_database_metadata("arxiv_security_db")
+        self.assertEqual(meta["name"], "arxiv_security_db")
+        self.assertEqual(meta["time_zone"], "UTC")
+
+        self.assertEqual(
+            get_table_scope_from_settings("okf_papers"), "arxiv_security_db"
+        )
+        self.assertEqual(
+            get_table_type_from_settings("okf_papers"), "Virtual (Markdown)"
+        )
+        self.assertIsNone(get_table_type_from_settings("non_existent_table"))
 
 
 if __name__ == "__main__":

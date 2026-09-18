@@ -219,7 +219,7 @@ class TestManageCLISuite(unittest.TestCase):
 
     def test_show_databases_unification_with_scopes(self) -> None:
         """Verifies Issue 278: SHOW DATABASES returns configured scopes and matches .databases."""
-        from settings import get_database_scopes
+        from core.settings import get_database_scopes
 
         engine = init_mounted_sql_executor(db_scope="all")
         res = engine.execute("SHOW DATABASES;")

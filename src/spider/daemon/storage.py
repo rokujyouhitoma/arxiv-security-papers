@@ -224,7 +224,7 @@ class SpiderExecutionStorage:
             }
         ]
 
-        from settings import get_all_configured_databases
+        from core.settings import get_all_configured_databases
 
         db_list = get_all_configured_databases()
 

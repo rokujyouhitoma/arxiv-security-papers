@@ -1250,7 +1250,7 @@ def _introspect_named_db(
     }
     fn = loaders.get(s_name)
     res = fn() if fn else _introspect_generic_database(workspace_dir, s_name)
-    from settings import get_database_metadata
+    from core.settings import get_database_metadata
 
     meta = get_database_metadata(s_name)
     if "time_zone" not in res:
@@ -1308,7 +1308,8 @@ def _resolve_generic_db_relpath(workspace_dir: str, loc: str) -> str:
 
 
 def _introspect_generic_database(workspace_dir: str, db_key: str) -> Dict[str, Any]:
-    from settings import DATABASES, get_all_configured_databases, get_database_metadata
+    from core.settings import get_all_configured_databases, get_database_metadata
+    from settings import DATABASES
 
     cfg = DATABASES.get(db_key, {})
     meta = get_database_metadata(db_key)

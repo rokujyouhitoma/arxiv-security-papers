@@ -110,7 +110,7 @@ class TestDatabaseRealIntrospection(unittest.TestCase):
         self.assertEqual(names, ["spider_execution_logs"])
 
     def test_introspect_database_metrics_dynamic_scopes(self) -> None:
-        from settings import get_all_configured_databases
+        from core.settings import get_all_configured_databases
         from web.gateway.handlers import _introspect_database_metrics
 
         res = _introspect_database_metrics(self.workspace_dir)

@@ -14,15 +14,14 @@ import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from database.sql.executor import SQLExecutor, TableCatalog, _extract_pk_col
-from database.storage.storage import VectorStorage
-from settings import (
-    BASE_DIR,
-    DATABASES,
+from core.settings import (
     get_database_scopes,
     get_table_scope_from_settings,
     get_table_type_from_settings,
 )
+from database.sql.executor import SQLExecutor, TableCatalog, _extract_pk_col
+from database.storage.storage import VectorStorage
+from settings import BASE_DIR, DATABASES
 
 from ..base import BaseCommand
 from ..formatter import format_ascii_table, format_query_result

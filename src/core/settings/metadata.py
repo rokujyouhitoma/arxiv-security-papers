@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+import settings
+
 
 def resolve_database_scopes(databases: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
     """Returns mapping of scope name to description for all configured scopes."""
@@ -75,3 +77,66 @@ def resolve_table_type(
             val = tables[tname].get("TYPE")
             return str(val) if val else None
     return None
+
+
+def get_database_scopes(
+    databases: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, str]:
+    """Returns mapping of scope name to description for all configured scopes."""
+    target_dbs = databases if databases is not None else settings.DATABASES
+    return resolve_database_scopes(target_dbs)
+
+
+def get_all_configured_databases(
+    databases: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> List[str]:
+    """Returns list of all non-default configured database scope names."""
+    target_dbs = databases if databases is not None else settings.DATABASES
+    return resolve_all_configured_databases(target_dbs)
+
+
+def get_database_metadata(
+    scope_name: str,
+    databases: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Returns UI and introspection metadata for a database scope."""
+    target_dbs = databases if databases is not None else settings.DATABASES
+    return resolve_database_metadata(
+        scope_name=scope_name,
+        databases=target_dbs,
+        default_tz=settings.DATABASE_TIME_ZONE,
+        default_use_tz=settings.USE_TZ,
+        default_display_tz=settings.DISPLAY_TIME_ZONE,
+    )
+
+
+def get_table_scope_from_settings(
+    tname: str,
+    databases: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> str:
+    """Resolves which database scope a table belongs to based on settings."""
+    target_dbs = databases if databases is not None else settings.DATABASES
+    return resolve_table_scope(tname=tname, databases=target_dbs)
+
+
+def get_table_type_from_settings(
+    tname: str,
+    databases: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Optional[str]:
+    """Retrieves declared table type from settings if explicitly configured."""
+    target_dbs = databases if databases is not None else settings.DATABASES
+    return resolve_table_type(tname=tname, databases=target_dbs)
+
+
+__all__ = [
+    "resolve_database_scopes",
+    "resolve_all_configured_databases",
+    "resolve_database_metadata",
+    "resolve_table_scope",
+    "resolve_table_type",
+    "get_database_scopes",
+    "get_all_configured_databases",
+    "get_database_metadata",
+    "get_table_scope_from_settings",
+    "get_table_type_from_settings",
+]

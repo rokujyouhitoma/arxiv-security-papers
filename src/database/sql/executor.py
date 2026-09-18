@@ -1370,7 +1370,7 @@ def _resolve_table_scope(tbl: Any, tname: str) -> str:
     if scope:
         return str(scope)
     try:
-        from settings import get_table_scope_from_settings
+        from core.settings import get_table_scope_from_settings
 
         return get_table_scope_from_settings(tname)
     except Exception:
