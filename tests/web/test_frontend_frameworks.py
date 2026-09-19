@@ -13,6 +13,7 @@ APP_MIN_JS = REPO_ROOT / "site" / "app-min.js"
 EXPECTED_MODULES = [
     "animation.js",
     "api-client.js",
+    "disjoint-set.js",
     "dom-utils.js",
     "event.js",
     "hsm.js",
@@ -62,6 +63,7 @@ def test_externs_contain_yuzora_interfaces() -> None:
         "RadixTrieInterface",
         "QueryValidatorInterface",
         "HierarchicalStateMachineInterface",
+        "DisjointSetInterface",
     ]
     for iface in required_interfaces:
         assert iface in content, f"Interface {iface} missing from site/externs.js"
@@ -107,6 +109,7 @@ def test_app_min_js_contains_bundled_framework_classes() -> None:
         "ModalController",
         "RadixTrie",
         "QueryValidator",
+        "DisjointSet",
     ]
     for sym in core_framework_symbols:
         assert sym in content, f"Symbol {sym} not found in compiled {APP_MIN_JS.name}"
@@ -244,3 +247,96 @@ def test_hsm_state_transitions_and_lcca() -> None:
     assert data["path4"] == "Operational.Normal"
     assert data["guardAllowed"] is True
     assert data["path5"] == "Operational.Inspect"
+
+
+def test_disjoint_set_union_find_and_lcc() -> None:
+    """Validate DisjointSet Union-Find operations, LCC extraction, and isolates via Node.js."""
+    import json
+    import shutil
+    import subprocess
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        return
+
+    script = """
+    const { DisjointSet } = require('./site/js/frameworks/disjoint-set.js');
+
+    const ds = new DisjointSet();
+
+    // 1. Basic add and size
+    ds.add('A');
+    ds.add('B');
+    ds.add('C');
+    ds.add('D');
+    ds.add('E');
+    ds.add('Isolated1');
+
+    const initialSize = ds.size();
+    const initialComponents = ds.componentCount();
+
+    // 2. Union operations
+    ds.union('A', 'B');
+    ds.union('B', 'C');
+    ds.union('D', 'E');
+
+    const afterUnionComponents = ds.componentCount();
+    const connectedAB = ds.connected('A', 'C');
+    const connectedAD = ds.connected('A', 'D');
+    const sizeA = ds.componentSize('A');
+    const sizeD = ds.componentSize('D');
+    const sizeIso = ds.componentSize('Isolated1');
+
+    // 3. LCC (Largest Connected Component)
+    const lcc = ds.getLargestComponent();
+    const isolates = ds.getIsolates();
+
+    // 4. Benchmark 10,000 elements
+    const benchDs = new DisjointSet();
+    const t0 = Date.now();
+    for (let i = 0; i < 10000; i++) {
+        benchDs.add(i);
+    }
+    for (let i = 0; i < 9999; i += 2) {
+        benchDs.union(i, i + 1);
+    }
+    for (let i = 0; i < 9998; i += 4) {
+        benchDs.union(i, i + 2);
+    }
+    const benchTimeMs = Date.now() - t0;
+    const benchCount = benchDs.componentCount();
+
+    console.log(JSON.stringify({
+        initialSize,
+        initialComponents,
+        afterUnionComponents,
+        connectedAB,
+        connectedAD,
+        sizeA,
+        sizeD,
+        sizeIso,
+        lcc: lcc.sort(),
+        isolates,
+        benchTimeMs,
+        benchCount
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["initialSize"] == 6
+    assert data["initialComponents"] == 6
+    assert data["afterUnionComponents"] == 3  # {A,B,C}, {D,E}, {Isolated1}
+    assert data["connectedAB"] is True
+    assert data["connectedAD"] is False
+    assert data["sizeA"] == 3
+    assert data["sizeD"] == 2
+    assert data["sizeIso"] == 1
+    assert data["lcc"] == ["A", "B", "C"]
+    assert data["isolates"] == ["Isolated1"]
+    assert data["benchCount"] == 2500
+    assert data["benchTimeMs"] < 1000  # under 1 second for 10,000 items
