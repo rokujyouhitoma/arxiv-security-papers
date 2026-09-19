@@ -129,3 +129,39 @@ ApiClientInterface.prototype.put = function(path, body, options) {};
  * @return {!Promise<*>}
  */
 ApiClientInterface.prototype.delete = function(path, options) {};
+
+/**
+ * @interface
+ */
+function StateStoreInterface() {}
+/**
+ * @param {string} key
+ * @param {*=} defaultValue
+ * @return {*}
+ */
+StateStoreInterface.prototype.get = function(key, defaultValue) {};
+/**
+ * @param {string} key
+ * @param {*} value
+ * @return {boolean}
+ */
+StateStoreInterface.prototype.set = function(key, value) {};
+/**
+ * @param {!Object<string, *>} partialState
+ */
+StateStoreInterface.prototype.update = function(partialState) {};
+/**
+ * @param {string} key
+ * @param {function(*, *, string): void} callback
+ * @return {function(): void}
+ */
+StateStoreInterface.prototype.subscribe = function(key, callback) {};
+/**
+ * @return {!Object<string, *>}
+ */
+StateStoreInterface.prototype.getState = function() {};
+/**
+ * @param {!Object<string, *>=} initialState
+ */
+StateStoreInterface.prototype.reset = function(initialState) {};
+
