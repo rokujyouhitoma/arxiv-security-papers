@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
-| **334** | スパイダー定期実行 DB 永続化およびスケジューラー自動ディスパッチの包括的回帰テスト追加 | Test / Quality | High | Open (New) | [334-add-regression-tests-for-spider-scheduler-persistence.md](334-add-regression-tests-for-spider-scheduler-persistence.md) |
 
 
 
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **334** | スパイダー定期実行 DB 永続化およびスケジューラー自動ディスパッチの包括的回帰テスト追加 | Test / Quality | 2026-09-19 | [334-add-regression-tests-for-spider-scheduler-persistence.md](closed/334-add-regression-tests-for-spider-scheduler-persistence.md) |
 | **333** | スケジューラー初回起動時におけるスパイダー即時実行挙動の制御と仕様明記 | Feature | 2026-09-19 | [333-clarify-or-adjust-scheduler-initial-execution-behavior.md](closed/333-clarify-or-adjust-scheduler-initial-execution-behavior.md) |
 | **332** | スケジューラー本体 (Arbiter) 常駐プロセスの明示化と Web コンソール稼働状態警告の実装 | Feature / Doc | 2026-09-19 | [332-clarify-arbiter-daemon-requirement-and-ui-status.md](closed/332-clarify-arbiter-daemon-requirement-and-ui-status.md) |
 | **331** | Webコンソールにおけるスパイダー実行間隔表示の API・設定値動的連動 | Feature | 2026-09-19 | [331-bind-spider-execution-interval-display-to-api.md](closed/331-bind-spider-execution-interval-display-to-api.md) |

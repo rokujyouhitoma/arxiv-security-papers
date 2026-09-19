@@ -228,6 +228,76 @@ class TestSpiderTaskOperator(unittest.TestCase):
             self.assertEqual(entry["status"], "SUCCESS")
             self.assertEqual(entry["item_count"], 12)
 
+    def test_scheduler_dispatch_end_to_end_db_persistence_increment(
+        self,
+    ) -> None:
+        """Verifies full scheduler dispatch cycles with DB record count increment (Issue 334)."""
+        from workflow.scheduler import WorkflowScheduler
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_db = os.path.join(tmpdir, "test_spider_execution.vdb")
+            storage = SpiderExecutionStorage(db_path=test_db)
+
+            def mock_crawler(job: CrawlJob) -> CrawlResult:
+                items_map = {"arxiv": 7, "cwe": 3, "cisa_kev": 15}
+                return CrawlResult(
+                    job_id=job.job_id,
+                    spider_name=job.spider_name,
+                    success=True,
+                    item_count=items_map.get(job.spider_name, 1),
+                )
+
+            client = SpiderDaemonClient(fallback_executor=mock_crawler)
+            scheduler = WorkflowScheduler()
+
+            # Register 3 spiders with storage injected via SpiderTaskOperator
+            op_arxiv = SpiderTaskOperator(
+                spider_name="arxiv", client=client, storage=storage
+            )
+            op_cwe = SpiderTaskOperator(
+                spider_name="cwe", client=client, storage=storage
+            )
+            op_kev = SpiderTaskOperator(
+                spider_name="kev_cve", client=client, storage=storage
+            )
+
+            scheduler.register_task("spider_arxiv_6h", 21600.0, op_arxiv)
+            scheduler.register_task("spider_cwe_24h", 86400.0, op_cwe)
+            scheduler.register_task("spider_kev_6h", 21600.0, op_kev)
+
+            # Initial history in VDB should be empty
+            self.assertEqual(len(storage.list_history()), 0)
+
+            # Cycle 1: all 3 tasks are due on startup
+            executed = scheduler.run_due_tasks()
+            self.assertEqual(len(executed), 3)
+            self.assertIn("spider_arxiv_6h", executed)
+            self.assertIn("spider_cwe_24h", executed)
+            self.assertIn("spider_kev_6h", executed)
+
+            # Verify VDB history incremented to exactly 3 records
+            history = storage.list_history(limit=50)
+            self.assertEqual(len(history), 3)
+            for row in history:
+                self.assertEqual(row["status"], "SUCCESS")
+                self.assertTrue(row["job_id"].startswith("scheduled_"))
+
+            # Summary should reflect the success statuses
+            summary = storage.get_status_summary()
+            self.assertEqual(summary["arxiv"]["status"], "SUCCESS")
+            self.assertEqual(summary["arxiv"]["item_count"], 7)
+            self.assertEqual(summary["cwe"]["status"], "SUCCESS")
+            self.assertEqual(summary["cwe"]["item_count"], 3)
+            self.assertEqual(summary["cisa_kev"]["status"], "SUCCESS")
+            self.assertEqual(summary["cisa_kev"]["item_count"], 15)
+
+            # Cycle 2: immediately running due tasks dispatches 0 tasks
+            executed_next = scheduler.run_due_tasks()
+            self.assertEqual(len(executed_next), 0)
+
+            # VDB history remains exactly 3
+            self.assertEqual(len(storage.list_history()), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
