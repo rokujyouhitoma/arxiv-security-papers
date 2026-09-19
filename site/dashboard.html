@@ -2212,6 +2212,24 @@
 
       function computeLargestConnectedComponent(nodes, edges) {
         if (!nodes || nodes.length === 0) return new Set();
+
+        const DisjointSetCtor =
+            (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['DisjointSet']) ||
+            window['DisjointSet'];
+        if (DisjointSetCtor) {
+          const ds = new DisjointSetCtor();
+          nodes.forEach(n => {
+            if (n && n.id !== undefined) ds.add(n.id);
+          });
+          edges.forEach(e => {
+            if (e && e.source !== undefined && e.target !== undefined) {
+              ds.union(e.source, e.target);
+            }
+          });
+          return new Set(ds.getLargestComponent());
+        }
+
+        // Fallback BFS if DisjointSet is not loaded
         const adj = new Map();
         nodes.forEach(n => adj.set(n.id, []));
         edges.forEach(e => {
@@ -2250,6 +2268,7 @@
 
         return maxComponent;
       }
+      window.computeLargestConnectedComponent = computeLargestConnectedComponent;
       let ctiRawNodes = [];
       let ctiRawEdges = [];
       let ctiRawGaps = [];
