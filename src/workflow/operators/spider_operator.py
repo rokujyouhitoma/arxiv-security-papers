@@ -8,7 +8,6 @@ with automatic fallback to synchronous execution.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from typing import Any, Dict, Optional
 
@@ -71,6 +70,15 @@ def _handle_execution_error(
     storage.record_finish(failed_res)
 
 
+def _resolve_storage(
+    storage: Optional[SpiderExecutionStorage],
+    db_path: Optional[str],
+) -> SpiderExecutionStorage:
+    if storage is not None:
+        return storage
+    return SpiderExecutionStorage(db_path=db_path)
+
+
 class SpiderTaskOperator:
     """
     Workflow Task Operator executing web scraping tasks.
@@ -92,16 +100,7 @@ class SpiderTaskOperator:
         self.params = dict(params or {})
         self.timeout = timeout
         self.output_key = output_key
-        resolved_db = (
-            db_path
-            or os.getenv("SPIDER_EXECUTION_DB_PATH")
-            or os.path.join("outputs", "database", "spider_execution.vdb")
-        )
-        self.storage = (
-            storage
-            if storage is not None
-            else SpiderExecutionStorage(db_path=resolved_db)
-        )
+        self.storage = _resolve_storage(storage, db_path)
 
     def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Executes crawl job via SpiderDaemonClient and updates context dict."""
