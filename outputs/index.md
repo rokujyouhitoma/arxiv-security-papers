@@ -8,7 +8,7 @@ timestamp: "2026-09-07T07:13:25Z"
 # 🛡️ arXiv セキュリティ論文 ナレッジカタログ (Google OKF v0.2)
 
 > [!INFO]
-> このカタログは、arXiv (`cs.CR`) から取得したセキュリティ論文について、**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、および**日本語表形式エグゼクティブサマリー (01_per_run, 02_daily, 03_monthly, 04_quarterly, 05_annual)** を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供します。
+> 本カタログは、**汎用自律型インテリジェンス基盤（Universal Autonomous Intelligence Platform: UIP）** の最難関パイロットであるサイバーセキュリティ領域（arXiv `cs.CR` / IACR ePrint）について、**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、および**日本語表形式エグゼクティブサマリー (01_per_run 〜 05_annual)** を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供します。
 
 ---
 
