@@ -21,7 +21,12 @@ def dashboard_html_content() -> str:
     )
     assert os.path.exists(path), f"dashboard.html not found at {path}"
     with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+        content = f.read()
+    js_path = os.path.join(os.path.dirname(path), "js", "dashboard.js")
+    if os.path.exists(js_path):
+        with open(js_path, "r", encoding="utf-8") as js_f:
+            content += "\n" + js_f.read()
+    return content
 
 
 def test_canvas_container_flexbox_styles_no_static_height(

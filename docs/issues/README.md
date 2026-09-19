@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **356** | 柱 1: `site/dashboard.html` インラインスクリプトの全廃と `site/app.js` のドメイン別ファイル分離 | Refactor | High | New | [356-eliminate-inline-scripts-and-modularize-by-domain.md](356-eliminate-inline-scripts-and-modularize-by-domain.md) |
 | **357** | 柱 2: 外部バンドラー不要の「純粋 Python 連結・ビルドパイプライン」整備 | Feature | Medium | New | [357-pure-python-bundling-and-build-pipeline.md](357-pure-python-bundling-and-build-pipeline.md) |
 | **358** | 柱 3: TypeScript 不要の「標準 JSDoc 契約定義と Closure Compiler 厳格静的検査」整備 | Quality | Medium | New | [358-standard-jsdoc-and-strict-static-analysis.md](358-standard-jsdoc-and-strict-static-analysis.md) |
 | **359** | 柱 4: Pure Python (`pytest`) によるフロントエンド JS 構文・契約・整合性ヘッドレステストの洗練 | Test / Quality | High | New | [359-pure-python-headless-js-test-suite.md](359-pure-python-headless-js-test-suite.md) |
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **356** | 柱 1: `site/dashboard.html` インラインスクリプトの全廃と `site/app.js` のドメイン別ファイル分離 | Refactor | 2026-09-19 | [356-eliminate-inline-scripts-and-modularize-by-domain.md](closed/356-eliminate-inline-scripts-and-modularize-by-domain.md) |
 | **355** | 名前空間の汎用化: 他プロジェクト名 `yuzora` から汎用的な `Application` への刷新 | Refactor | 2026-09-19 | [355-refactor-namespace-from-yuzora-to-application.md](closed/355-refactor-namespace-from-yuzora-to-application.md) |
 | **354** | `ModalController`: 全モーダル・ドロワー要素のアクセシブル制御とフォーカストラップ統一 | Feature | 2026-09-19 | [354-apply-modal-controller-to-all-dialogs-and-drawers.md](closed/354-apply-modal-controller-to-all-dialogs-and-drawers.md) |
 | **353** | `StateStore` & `HierarchicalStateMachine`: フロントエンド状態一元管理と検索・操作ステートチャート統合 | Refactor | 2026-09-19 | [353-centralize-state-store-and-hsm-governance.md](closed/353-centralize-state-store-and-hsm-governance.md) |

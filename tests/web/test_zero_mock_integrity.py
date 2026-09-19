@@ -37,7 +37,11 @@ def _read_index_html() -> str:
 
 
 def _read_dashboard_html() -> str:
-    return (_ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
+    content = (_ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
+    js_file = _ROOT / "site" / "js" / "dashboard.js"
+    if js_file.exists():
+        content += "\n" + js_file.read_text(encoding="utf-8")
+    return content
 
 
 # ---------------------------------------------------------------------------

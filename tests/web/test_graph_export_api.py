@@ -148,7 +148,12 @@ class TestDashboardExportUI:
         )
         dashboard_path = os.path.join(workspace_dir, "site", "dashboard.html")
         with open(dashboard_path, "r", encoding="utf-8") as f:
-            return f.read()
+            content = f.read()
+        js_path = os.path.join(workspace_dir, "site", "js", "dashboard.js")
+        if os.path.exists(js_path):
+            with open(js_path, "r", encoding="utf-8") as js_f:
+                content += "\n" + js_f.read()
+        return content
 
     def test_ui_dropdown_elements(self) -> None:
         html = self._read_dashboard_html()

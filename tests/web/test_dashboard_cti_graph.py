@@ -71,13 +71,22 @@ def test_api_graph_cti_mesh_endpoint() -> None:
         assert "evidence_quote" in e
 
 
-def test_dashboard_cti_mode_elements() -> None:
-    """Verifies that site/dashboard.html includes all required CTI controls and legends."""
+def _read_dashboard_content() -> str:
     dash_path = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "..", "site", "dashboard.html")
     )
     with open(dash_path, "r", encoding="utf-8") as f:
         content = f.read()
+    js_path = os.path.join(os.path.dirname(dash_path), "js", "dashboard.js")
+    if os.path.exists(js_path):
+        with open(js_path, "r", encoding="utf-8") as js_f:
+            content += "\n" + js_f.read()
+    return content
+
+
+def test_dashboard_cti_mode_elements() -> None:
+    """Verifies that site/dashboard.html includes all required CTI controls and legends."""
+    content = _read_dashboard_content()
 
     # Verify CTI Mode buttons & filters
     assert 'id="btnModeMesh"' in content
@@ -151,9 +160,7 @@ def test_cti_filter_buttons_use_css_color_badges() -> None:
 
 def test_cti_entity_filter_multiselect_implementation() -> None:
     """Verify Issue #183: CTI Entity Type filter supports multiselect (Set-based state)."""
-    html_path = os.path.join(os.path.dirname(__file__), "../../site/dashboard.html")
-    with open(html_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    content = _read_dashboard_content()
 
     # 1. Set-based state variable instead of single string
     assert "ctiEntityFilters" in content
@@ -201,9 +208,7 @@ def test_cti_entity_filter_multiselect_implementation() -> None:
 
 def test_cti_filter_multiselect_applyCtiFilter_uses_set() -> None:
     """Verify that applyCtiFilter uses Set-based iteration (ctiEntityFilters) not old single string."""
-    html_path = os.path.join(os.path.dirname(__file__), "../../site/dashboard.html")
-    with open(html_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    content = _read_dashboard_content()
 
     # New Set-based check
     assert "ctiEntityFilters.has('all')" in content

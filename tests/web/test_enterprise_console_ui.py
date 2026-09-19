@@ -272,6 +272,9 @@ def test_enterprise_console_help_drawer() -> None:
 def test_dashboard_url_query_param_support() -> None:
     """Verify site/dashboard.html parses ?q= parameter and dispatches to openGraphWithQuery (Issue 327)."""
     dashboard_html = Path("site/dashboard.html").read_text(encoding="utf-8")
+    js_file = Path("site/js/dashboard.js")
+    if js_file.exists():
+        dashboard_html += "\n" + js_file.read_text(encoding="utf-8")
     assert "openGraphWithQuery" in dashboard_html, "openGraphWithQuery helper required"
     assert (
         "params.get('q')" in dashboard_html or 'params.get("q")' in dashboard_html
