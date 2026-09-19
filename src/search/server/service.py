@@ -333,7 +333,9 @@ class SearchService:
             json.dumps(
                 resp,
                 ensure_ascii=False,
-                default=lambda o: list(o) if isinstance(o, (set, frozenset)) else str(o),
+                default=lambda o: (
+                    list(o) if isinstance(o, (set, frozenset)) else str(o)
+                ),
             )
             + "\n"
         ).encode("utf-8")

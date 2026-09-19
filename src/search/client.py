@@ -249,14 +249,18 @@ class SearchClient:
             "results": results,
         }
 
+    def _find_fallback_doc(self, clean_id: str) -> Optional[Dict[str, Any]]:
+        doc = self.fallback_engine.documents_by_id.get(clean_id)
+        if doc:
+            return doc
+        for d in self.fallback_engine.documents:
+            if d.get("id") == clean_id:
+                return d
+        return None
+
     def _fallback_get_paper(self, req: Dict[str, Any]) -> Dict[str, Any]:
         clean_id = str(req.get("id", "")).strip()
-        doc = self.fallback_engine.documents_by_id.get(clean_id)
-        if not doc:
-            for d in self.fallback_engine.documents:
-                if d.get("id") == clean_id:
-                    doc = d
-                    break
+        doc = self._find_fallback_doc(clean_id)
         if not doc:
             return {"status": "error", "error": f"Paper '{clean_id}' not found"}
         clean_doc = {k: v for k, v in doc.items() if not k.startswith("_")}
