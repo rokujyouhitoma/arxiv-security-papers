@@ -555,3 +555,20 @@ GraphCanvasEngineInterface.prototype.computeLargestConnectedComponent = function
  */
 GraphCanvasEngineInterface.prototype.destroy = function() {};
 
+/* ==========================================================================
+   Application & Generic Global Namespaces (Issue 355)
+   ========================================================================== */
+
+/** @type {!Object<string, *>} */
+var Application;
+/** @type {!Object<string, *>} */
+var App;
+/** @type {!Object<string, *>} */
+var yuzora;
+
+/** @typedef {YuzoraEventInterface} */
+var AppEventInterface;
+/** @typedef {YuzoraEventTargetInterface} */
+var AppEventTargetInterface;
+
+

@@ -926,11 +926,14 @@
   // high-level QueryValidator facade.
   // ===========================================================================
 
-  var yuzora = global['yuzora'] = global['yuzora'] || {};
-  var frameworks = yuzora['frameworks'] = yuzora['frameworks'] || {};
+  var Application = global['Application'] = global['Application'] || {};
+  var frameworks = Application['frameworks'] = Application['frameworks'] || {};
+  global['App'] = Application;
+  global['yuzora'] = Application;
 
   // High-level facade
   frameworks['QueryValidator'] = QueryValidator;
+  global['QueryValidator'] = QueryValidator;
 
   // PEG Runtime Engine (for grammar composition in other modules)
   var peg = frameworks['peg'] = frameworks['peg'] || {};

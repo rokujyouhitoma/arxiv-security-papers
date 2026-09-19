@@ -113,7 +113,7 @@
     this.kineticEnergy = 100.0;
 
     /** @type {?Object} */
-    this.publisher_ = opts['publisher'] || (typeof window !== 'undefined' && window.yuzora && window.yuzora.frameworks && window.yuzora.frameworks.Publisher ? new window.yuzora.frameworks.Publisher() : null);
+    this.publisher_ = opts['publisher'] || (typeof window !== 'undefined' && ((window.Application && window.Application.frameworks && window.Application.frameworks.Publisher) || (window.yuzora && window.yuzora.frameworks && window.yuzora.frameworks.Publisher)) ? new ((window.Application && window.Application.frameworks && window.Application.frameworks.Publisher) || window.yuzora.frameworks.Publisher)() : null);
 
     /** @type {boolean} */
     this.hideIsolated = false;
@@ -695,13 +695,15 @@
     this.ctx = null;
   };
 
-  // Export to global scope & yuzora frameworks namespace
+  // Export to global scope & Application frameworks namespace
   if (typeof window !== 'undefined') {
     window.GraphCanvasEngine = GraphCanvasEngine;
 
-    window.yuzora = window.yuzora || {};
-    window.yuzora.frameworks = window.yuzora.frameworks || {};
-    window.yuzora.frameworks.GraphCanvasEngine = GraphCanvasEngine;
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.GraphCanvasEngine = GraphCanvasEngine;
+    window.App = window.Application;
+    window.yuzora = window.Application;
   }
 
   // Export for Node.js / CommonJS testing

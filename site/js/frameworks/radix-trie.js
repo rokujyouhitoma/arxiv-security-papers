@@ -354,8 +354,11 @@
   // ---------------------------------------------------------------------------
   // Export
   // ---------------------------------------------------------------------------
-  var yuzora = global['yuzora'] = global['yuzora'] || {};
-  var frameworks = yuzora['frameworks'] = yuzora['frameworks'] || {};
+  var Application = global['Application'] = global['Application'] || {};
+  var frameworks = Application['frameworks'] = Application['frameworks'] || {};
   frameworks['RadixTrie'] = RadixTrie;
+  global['RadixTrie'] = RadixTrie;
+  global['App'] = Application;
+  global['yuzora'] = Application;
 
 })(window);

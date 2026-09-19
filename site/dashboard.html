@@ -2082,9 +2082,14 @@
   <script src="js/frameworks/graph-canvas.js"></script>
   <script>
     (function () {
-      // Initialize Dashboard API Client with ARCCache (Issue 349)
-      const ARCCacheCtor = (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ARCCache']) || window['ARCCache'];
-      const ApiClientCtor = (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ApiClient']) || window['ApiClient'];
+      // Resolve Application / Core Framework Services (Issue 349, 355)
+      const resolveFramework = (name) => {
+        return (window['Application'] && window['Application']['frameworks'] && window['Application']['frameworks'][name]) ||
+               (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks'][name]) ||
+               window[name];
+      };
+      const ARCCacheCtor = resolveFramework('ARCCache');
+      const ApiClientCtor = resolveFramework('ApiClient');
       const dashboardCache = ARCCacheCtor ? new ARCCacheCtor(256) : null;
       const dashboardApiClient = ApiClientCtor ? new ApiClientCtor('', dashboardCache ? { cache: dashboardCache } : {}) : null;
       window.dashboardApiClient = dashboardApiClient;
@@ -2215,9 +2220,7 @@
       function computeLargestConnectedComponent(nodes, edges) {
         if (!nodes || nodes.length === 0) return new Set();
 
-        const DisjointSetCtor =
-            (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['DisjointSet']) ||
-            window['DisjointSet'];
+        const DisjointSetCtor = resolveFramework('DisjointSet');
         if (DisjointSetCtor) {
           const ds = new DisjointSetCtor();
           nodes.forEach(n => {
@@ -4129,9 +4132,7 @@
       };
 
       // Graph Help Drawer Toggle Functions (Issue 166 & 354)
-      const ModalControllerCtor =
-          (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ModalController']) ||
-          window['ModalController'];
+      const ModalControllerCtor = resolveFramework('ModalController');
       const graphHelpDrawerEl = document.getElementById('graphHelpDrawer');
       const graphHelpModal = (ModalControllerCtor && graphHelpDrawerEl)
           ? new ModalControllerCtor(graphHelpDrawerEl, {

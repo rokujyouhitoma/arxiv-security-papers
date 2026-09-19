@@ -588,7 +588,7 @@
     return new HierarchicalStateMachine(rootNode, null, config.failSecureTarget || null);
   };
 
-  // Export to global scope & yuzora frameworks namespace
+  // Export to global scope & Application frameworks namespace
   if (typeof window !== 'undefined') {
     window.EventContext = EventContext;
     window.TransitionRule = TransitionRule;
@@ -596,13 +596,15 @@
     window.HierarchicalStateMachine = HierarchicalStateMachine;
     window.HSM = HierarchicalStateMachine;
 
-    window.yuzora = window.yuzora || {};
-    window.yuzora.frameworks = window.yuzora.frameworks || {};
-    window.yuzora.frameworks.EventContext = EventContext;
-    window.yuzora.frameworks.TransitionRule = TransitionRule;
-    window.yuzora.frameworks.StateNode = StateNode;
-    window.yuzora.frameworks.HierarchicalStateMachine = HierarchicalStateMachine;
-    window.yuzora.frameworks.HSM = HierarchicalStateMachine;
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.EventContext = EventContext;
+    window.Application.frameworks.TransitionRule = TransitionRule;
+    window.Application.frameworks.StateNode = StateNode;
+    window.Application.frameworks.HierarchicalStateMachine = HierarchicalStateMachine;
+    window.Application.frameworks.HSM = HierarchicalStateMachine;
+    window.App = window.Application;
+    window.yuzora = window.Application;
   }
 
   // Export for Node.js / CommonJS testing

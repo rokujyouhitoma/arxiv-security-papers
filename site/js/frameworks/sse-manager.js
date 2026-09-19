@@ -77,6 +77,7 @@
    */
   SSEStreamManager.prototype.initHSM_ = function() {
     var HSMClass = global['HierarchicalStateMachine'] ||
+                   (global['Application'] && global['Application']['frameworks'] && global['Application']['frameworks']['HierarchicalStateMachine']) ||
                    (global['yuzora'] && global['yuzora']['frameworks'] && global['yuzora']['frameworks']['HierarchicalStateMachine']);
     if (!HSMClass || typeof HSMClass.fromConfig !== 'function') {
       return;
@@ -306,9 +307,12 @@
    */
   SSEStreamManager.prototype.publish_ = function(topic, data) {
     try {
-      var loc = global['yuzora'] && global['yuzora']['locator'];
+      var loc = (global['Application'] && global['Application']['locator']) ||
+                (global['yuzora'] && global['yuzora']['locator']);
       if (loc) {
-        var pub = loc.resolve(global['yuzora']['frameworks']['Publisher']);
+        var pubCtor = (global['Application'] && global['Application']['frameworks'] && global['Application']['frameworks']['Publisher']) ||
+                      (global['yuzora'] && global['yuzora']['frameworks'] && global['yuzora']['frameworks']['Publisher']);
+        var pub = loc.resolve(pubCtor);
         if (pub) pub.publishAsync(topic, data);
       }
     } catch (_) {}
@@ -402,8 +406,11 @@
   // ---------------------------------------------------------------------------
   // Export
   // ---------------------------------------------------------------------------
-  var yuzora = global['yuzora'] = global['yuzora'] || {};
-  var frameworks = yuzora['frameworks'] = yuzora['frameworks'] || {};
+  var Application = global['Application'] = global['Application'] || {};
+  var frameworks = Application['frameworks'] = Application['frameworks'] || {};
   frameworks['SSEStreamManager'] = SSEStreamManager;
+  global['SSEStreamManager'] = SSEStreamManager;
+  global['App'] = Application;
+  global['yuzora'] = Application;
 
 })(window);

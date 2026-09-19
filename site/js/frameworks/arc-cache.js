@@ -328,13 +328,15 @@
     };
   };
 
-  // Export to global scope & yuzora frameworks namespace
+  // Export to global scope & Application frameworks namespace
   if (typeof window !== 'undefined') {
     window.ARCCache = ARCCache;
 
-    window.yuzora = window.yuzora || {};
-    window.yuzora.frameworks = window.yuzora.frameworks || {};
-    window.yuzora.frameworks.ARCCache = ARCCache;
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.ARCCache = ARCCache;
+    window.App = window.Application;
+    window.yuzora = window.Application;
   }
 
   // Export for Node.js / CommonJS testing

@@ -2,14 +2,14 @@
 ID: 355
 種別: Refactor
 優先度: High
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] 名前空間の汎用化: 他プロジェクト名 `yuzora` から汎用的な `Application` への刷新 (ID: 355)
 
 ## 1. 概要 / Summary
-現在、フロントエンドの基盤フレームワークモジュール（`site/js/frameworks/`）および各画面スクリプト（`site/app.js`, `site/dashboard.html`）では、名前空間として `window.yuzora` および `window.yuzora.frameworks` が使用されている。
-しかし「yuzora」は別プロジェクトの名称であるため、特定の外部プロジェクトに依存しない汎用的な名称 `Application`（およびショートハンド `App`）へ統一改称・刷新する。
+現在、フロントエンドの基盤フレームワークモジュール（`site/js/frameworks/`）および各画面スクリプト（`site/app.js`, `site/dashboard.html`）では、名前空間として `window.yuzora` および `window.yuzora.frameworks` が使用されていた。
+しかし「yuzora」は別プロジェクトの名称であるため、特定の外部プロジェクトに依存しない汎用的な名称 `Application`（およびショートハンド `App`）へ統一改称・刷新した。
 
 ---
 
@@ -22,11 +22,11 @@ ID: 355
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [site/js/frameworks/*.js](../site/js/frameworks/) (全19フレームワークモジュールの export 定義)
-- [ ] [site/externs.js](../site/externs.js) (Closure Compiler 向け extern 定義)
-- [ ] [site/app.js](../site/app.js) (`window['yuzora']` 参照箇所)
-- [ ] [site/dashboard.html](../site/dashboard.html) (`window['yuzora']` 参照箇所)
-- [ ] [tests/web/test_frontend_frameworks.py](../tests/web/test_frontend_frameworks.py) (名前空間アサーション)
+- [x] [site/js/frameworks/*.js](../../site/js/frameworks/) (全19フレームワークモジュールの export 定義)
+- [x] [site/externs.js](../../site/externs.js) (Closure Compiler 向け extern 定義)
+- [x] [site/app.js](../../site/app.js) (`window['yuzora']` 参照箇所)
+- [x] [site/dashboard.html](../../site/dashboard.html) (`window['yuzora']` 参照箇所)
+- [x] [tests/web/test_frontend_frameworks.py](../../tests/web/test_frontend_frameworks.py) (名前空間アサーション)
 
 ---
 
@@ -45,7 +45,7 @@ Target Branch: `refactor/355-refactor-namespace-to-application`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 全フレームワークモジュールが `window.Application` / `Application.frameworks` 下に配置されていること。
-- [ ] `site/app.js` および `site/dashboard.html` から `yuzora` への直接依存が解消されていること。
-- [ ] Closure Compiler によるコンパイルが 0 Warnings, 0 Errors で完了すること。
-- [ ] 全 175 件の Web 統合テストが 100% PASS すること。
+- [x] 全フレームワークモジュールが `window.Application` / `Application.frameworks` 下に配置されていること。
+- [x] `site/app.js` および `site/dashboard.html` から `yuzora` への直接依存が解消されていること。
+- [x] Closure Compiler によるコンパイルが 0 Warnings, 0 Errors で完了すること。
+- [x] 全 175 件の Web 統合テストが 100% PASS すること。

@@ -234,13 +234,15 @@
     this.componentsCount_ = 0;
   };
 
-  // Export to global scope & yuzora frameworks namespace
+  // Export to global scope & Application frameworks namespace
   if (typeof window !== 'undefined') {
     window.DisjointSet = DisjointSet;
 
-    window.yuzora = window.yuzora || {};
-    window.yuzora.frameworks = window.yuzora.frameworks || {};
-    window.yuzora.frameworks.DisjointSet = DisjointSet;
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.DisjointSet = DisjointSet;
+    window.App = window.Application;
+    window.yuzora = window.Application;
   }
 
   // Export for Node.js / CommonJS testing

@@ -1,11 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize Yuzora Framework Services (Issue 338, Issue 349)
+  // Resolve Application / Core Framework Services (Issue 338, 349, 355)
+  const resolveFramework = (name) => {
+    return (window['Application'] && window['Application']['frameworks'] && window['Application']['frameworks'][name]) ||
+           (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks'][name]) ||
+           window[name];
+  };
+
   const appEventTarget = new AppEventTarget();
   const appPublisher = new Publisher(appEventTarget);
   const appLocator = new Locator();
-  const ARCCacheCtor =
-      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ARCCache']) ||
-      window['ARCCache'];
+  const ARCCacheCtor = resolveFramework('ARCCache');
   const appCache = ARCCacheCtor ? new ARCCacheCtor(256) : null;
   const appApiClient = new ApiClient('', appCache ? { cache: appCache } : {}, appPublisher);
   const appStateStore = new StateStore({
@@ -26,13 +30,9 @@ document.addEventListener('DOMContentLoaded', () => {
   appLocator.register('apiClient', appApiClient);
   appLocator.register('stateStore', appStateStore);
 
-  // RadixTrie & QueryValidator (Issue 351)
-  const RadixTrieCtor =
-      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['RadixTrie']) ||
-      window['RadixTrie'];
-  const QueryValidatorCtor =
-      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['QueryValidator']) ||
-      window['QueryValidator'];
+  // RadixTrie & QueryValidator (Issue 351, 355)
+  const RadixTrieCtor = resolveFramework('RadixTrie');
+  const QueryValidatorCtor = resolveFramework('QueryValidator');
   const appTrie = RadixTrieCtor ? new RadixTrieCtor() : null;
   const appValidator = QueryValidatorCtor ? new QueryValidatorCtor() : null;
   if (appTrie) {
@@ -49,22 +49,16 @@ document.addEventListener('DOMContentLoaded', () => {
     appLocator.register('queryValidator', appValidator);
   }
 
-  // SceneDirector & Router for Tab Lifecycle Governance (Issue 352)
-  const SceneDirectorCtor =
-      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['SceneDirector']) ||
-      window['SceneDirector'];
-  const RouterCtor =
-      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['Router']) ||
-      window['Router'];
+  // SceneDirector & Router for Tab Lifecycle Governance (Issue 352, 355)
+  const SceneDirectorCtor = resolveFramework('SceneDirector');
+  const RouterCtor = resolveFramework('Router');
   const appSceneDirector = SceneDirectorCtor ? new SceneDirectorCtor() : null;
   const appRouter = RouterCtor ? new RouterCtor('papers') : null;
   if (appSceneDirector) appLocator.register('sceneDirector', appSceneDirector);
   if (appRouter) appLocator.register('router', appRouter);
 
-  // Hierarchical State Machine (HSM) for Search Governance (Issue 353)
-  const HSMCtor =
-      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['HierarchicalStateMachine']) ||
-      window['HierarchicalStateMachine'];
+  // Hierarchical State Machine (HSM) for Search Governance (Issue 353, 355)
+  const HSMCtor = resolveFramework('HierarchicalStateMachine') || resolveFramework('HSM');
   const searchHSM = (HSMCtor && HSMCtor.fromConfig) ? HSMCtor.fromConfig({
     name: 'SearchRoot',
     initialChild: 'Idle',
@@ -97,10 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ModalController for paper detail modal and console help drawer (Issue 341 & 354)
-  const ModalControllerCtor =
-      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ModalController']) ||
-      window['ModalController'];
+  // ModalController for paper detail modal and console help drawer (Issue 341, 354, 355)
+  const ModalControllerCtor = resolveFramework('ModalController');
   /** @type {?ModalControllerInterface} */
   const appPaperModal = (ModalControllerCtor && document.getElementById('paperModal'))
       ? new ModalControllerCtor(document.getElementById('paperModal'), {closeOnOverlayClick: false})
@@ -285,9 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Register Scenes in SceneDirector for declarative lifecycle (Issue 352)
   if (appSceneDirector) {
-    const SceneCtor =
-        (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['Scene']) ||
-        window['Scene'];
+    const SceneCtor = resolveFramework('Scene');
     const createTabScene = (onEnter, onExit) => {
       if (SceneCtor) {
         class TabScene extends SceneCtor {
@@ -1886,15 +1876,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function initSseLiveStream() {
     ensureTelemetryPolling();
 
-    if (!window['SSEStreamManager'] && !(window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['SSEStreamManager'])) {
+    const SSEStreamManagerCtor = resolveFramework('SSEStreamManager');
+    if (!SSEStreamManagerCtor) {
       // SSEStreamManager not loaded; fall back gracefully — telemetry polling covers it.
       return;
     }
 
     if (!sseManager) {
-      const SSEStreamManagerCtor =
-          (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['SSEStreamManager']) ||
-          window['SSEStreamManager'];
       sseManager = new SSEStreamManagerCtor();
     }
 

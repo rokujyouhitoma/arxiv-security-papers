@@ -71,6 +71,10 @@ def test_externs_contain_yuzora_interfaces() -> None:
     ]
     for iface in required_interfaces:
         assert iface in content, f"Interface {iface} missing from site/externs.js"
+    assert (
+        "var Application;" in content
+    ), "Application namespace missing from externs.js"
+    assert "var App;" in content, "App alias missing from externs.js"
 
 
 def test_makefile_includes_frameworks_in_js_srcs() -> None:
