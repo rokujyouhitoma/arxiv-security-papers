@@ -210,3 +210,50 @@ ModalControllerInterface.prototype.toggle = function() {};
  */
 ModalControllerInterface.prototype.destroy = function() {};
 
+/**
+ * @interface
+ */
+function RadixTrieInterface() {}
+/**
+ * @return {number}
+ */
+RadixTrieInterface.prototype.size = function() {};
+/**
+ * @param {string} key
+ * @param {*} value
+ */
+RadixTrieInterface.prototype.insert = function(key, value) {};
+/**
+ * @param {string} key
+ * @return {*}
+ */
+RadixTrieInterface.prototype.get = function(key) {};
+/**
+ * @param {string} key
+ * @return {boolean}
+ */
+RadixTrieInterface.prototype.contains = function(key) {};
+/**
+ * @param {string} prefix
+ * @param {number=} limit
+ * @return {!Array<!Array>}
+ */
+RadixTrieInterface.prototype.searchPrefix = function(prefix, limit) {};
+/**
+ * @param {string} text
+ * @return {?Array}
+ */
+RadixTrieInterface.prototype.longestPrefix = function(text) {};
+/**
+ * @param {string} key
+ * @return {boolean}
+ */
+RadixTrieInterface.prototype.delete = function(key) {};
+/**
+ */
+RadixTrieInterface.prototype.clear = function() {};
+/**
+ * @return {!Array<!Array>}
+ */
+RadixTrieInterface.prototype.entries = function() {};
+

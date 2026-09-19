@@ -28,6 +28,7 @@ JS_SRCS = site/js/frameworks/dom-utils.js \
           site/js/frameworks/store.js \
           site/js/frameworks/sse-manager.js \
           site/js/frameworks/modal.js \
+          site/js/frameworks/radix-trie.js \
           site/js/lexer.js \
           site/js/parser.js \
           site/js/evaluator.js \

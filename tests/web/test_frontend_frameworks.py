@@ -18,6 +18,7 @@ EXPECTED_MODULES = [
     "locator.js",
     "modal.js",
     "publisher.js",
+    "radix-trie.js",
     "router.js",
     "scene.js",
     "scheduler.js",
@@ -56,6 +57,7 @@ def test_externs_contain_yuzora_interfaces() -> None:
         "StateStoreInterface",
         "SSEStreamManagerInterface",
         "ModalControllerInterface",
+        "RadixTrieInterface",
     ]
     for iface in required_interfaces:
         assert iface in content, f"Interface {iface} missing from site/externs.js"
@@ -98,6 +100,7 @@ def test_app_min_js_contains_bundled_framework_classes() -> None:
         "StateStore",
         "SSEStreamManager",
         "ModalController",
+        "RadixTrie",
     ]
     for sym in core_framework_symbols:
         assert sym in content, f"Symbol {sym} not found in compiled {APP_MIN_JS.name}"
