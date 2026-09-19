@@ -279,3 +279,23 @@ def test_dashboard_url_query_param_support() -> None:
     assert (
         "window.openGraphWithQuery(qParam.trim())" in dashboard_html
     ), "Query parameter must trigger openGraphWithQuery"
+
+
+def test_spider_execution_interval_ui() -> None:
+    """Verify site/index.html and site/app.js support dynamic spider execution intervals (Issue 331)."""
+    index_html = Path("site/index.html").read_text(encoding="utf-8")
+    assert (
+        'id="valSpiderInterval_arxiv"' in index_html
+    ), "arXiv spider interval element required"
+    assert (
+        'id="valSpiderInterval_cwe"' in index_html
+    ), "CWE spider interval element required"
+    assert (
+        'id="valSpiderInterval_kev_cve"' in index_html
+    ), "KEV/CVE spider interval element required"
+
+    app_js = Path("site/app.js").read_text(encoding="utf-8")
+    assert (
+        "valSpiderInterval_" in app_js
+    ), "app.js must dynamically target spider interval elements"
+    assert "interval_seconds" in app_js, "app.js must parse interval_seconds from API"

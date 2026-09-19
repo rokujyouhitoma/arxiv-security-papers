@@ -1687,11 +1687,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const spiders = data.spiders || {};
 
       ['arxiv', 'cwe', 'kev_cve'].forEach(key => {
-        const info = spiders[key];
+        const info = spiders[key] || (key === 'kev_cve' ? spiders['cisa_kev'] : null);
         const badge = document.getElementById(`badgeSpiderStatus_${key}`);
         const lastEl = document.getElementById(`valSpiderLast_${key}`);
         const itemsEl = document.getElementById(`valSpiderItems_${key}`);
         const durEl = document.getElementById(`valSpiderDuration_${key}`);
+        const intervalEl = document.getElementById(`valSpiderInterval_${key}`);
 
         if (info) {
           const st = info.status || info.last_status || 'IDLE';
@@ -1706,6 +1707,22 @@ document.addEventListener('DOMContentLoaded', () => {
           if (itemsEl) itemsEl.textContent = `${items} 件`;
           const dur = info.duration_seconds ?? info.avg_duration_seconds ?? 0;
           if (durEl) durEl.textContent = `${Number(dur).toFixed(2)} 秒`;
+
+          if (intervalEl && info.interval_seconds != null) {
+            const sec = Number(info.interval_seconds);
+            if (sec >= 86400) {
+              const days = Math.round(sec / 86400);
+              intervalEl.textContent = days === 1 ? '24時間ごと (日次)' : `${days}日ごと`;
+            } else if (sec >= 3600) {
+              const hours = Math.round(sec / 3600);
+              const timesPerDay = Math.round(24 / hours);
+              intervalEl.textContent = timesPerDay > 1 ? `${hours}時間ごと (1日${timesPerDay}回)` : `${hours}時間ごと`;
+            } else if (sec >= 60) {
+              intervalEl.textContent = `${Math.round(sec / 60)}分ごと`;
+            } else {
+              intervalEl.textContent = `${sec}秒ごと`;
+            }
+          }
         }
       });
     } catch (err) {

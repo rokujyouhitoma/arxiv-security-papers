@@ -83,7 +83,10 @@ class TestSpiderExecutionStorage(unittest.TestCase):
         self.assertIn("cwe", summary)
         self.assertEqual(summary["arxiv"]["status"], "SUCCESS")
         self.assertEqual(summary["arxiv"]["item_count"], 10)
+        self.assertEqual(summary["arxiv"]["interval_seconds"], 21600.0)
         self.assertEqual(summary["cwe"]["status"], "FAILED")
+        self.assertEqual(summary["cwe"]["interval_seconds"], 86400.0)
+        self.assertIn("kev_cve", summary)
 
 
 class TestWorkflowService(unittest.TestCase):
