@@ -4,11 +4,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const appPublisher = new Publisher(appEventTarget);
   const appLocator = new Locator();
   const appApiClient = new ApiClient('', {}, appPublisher);
+  const appStateStore = new StateStore({
+    activeTag: '',
+    activePeriod: 'monthly',
+    currentSelectedDatabase: 'arxiv_security_db',
+    currentLimit: 12,
+    currentOffset: 0
+  }, appPublisher);
   appLocator.register('eventTarget', appEventTarget);
   appLocator.register('publisher', appPublisher);
   appLocator.register('timing', Timing);
   appLocator.register('domUtils', DOMUtils);
   appLocator.register('apiClient', appApiClient);
+  appLocator.register('stateStore', appStateStore);
 
   let activeTag = '';
   let activePeriod = 'monthly';
