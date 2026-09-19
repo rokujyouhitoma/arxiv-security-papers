@@ -41,6 +41,8 @@ class ScheduledTask:
     handler: Callable[[Dict[str, Any]], Dict[str, Any]]
     last_run: float = 0.0
     enabled: bool = True
+    last_status: str = "IDLE"
+    last_error: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def is_due(self, current_time: Optional[float] = None) -> bool:
@@ -57,6 +59,8 @@ class ScheduledTask:
             "interval_seconds": self.interval_seconds,
             "last_run": self.last_run,
             "enabled": self.enabled,
+            "last_status": self.last_status,
+            "last_error": self.last_error,
             "metadata": dict(self.metadata),
         }
 
@@ -117,6 +121,8 @@ class WorkflowScheduler:
     def _execute_task(self, task: ScheduledTask, context: Dict[str, Any]) -> None:
         try:
             task.handler(context)
+            task.last_status = "SUCCESS"
+            task.last_error = None
             task.last_run = _now()
         except Exception as exc:
             logger.exception(
@@ -124,6 +130,8 @@ class WorkflowScheduler:
                 task.task_id,
                 exc,
             )
+            task.last_status = "FAILED"
+            task.last_error = str(exc)
             task.last_run = _now()
 
     def _dispatch_due_loop(self, now_t: float, ctx: Dict[str, Any]) -> List[str]:

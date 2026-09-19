@@ -201,6 +201,38 @@ class TestWorkflowHSM(unittest.TestCase):
         self.assertTrue(hsm.send_event(EVENT_FAIL))
         self.assertEqual(hsm.current_state.name, "FAILED")
 
+    def test_scheduler_task_failure_tracking(self) -> None:
+        """Verifies task status and error tracking on handler success and exception."""
+        from workflow.scheduler import WorkflowScheduler
+
+        scheduler = WorkflowScheduler()
+
+        def succeeding_handler(ctx: dict) -> dict:
+            return {"status": "ok"}
+
+        def failing_handler(ctx: dict) -> dict:
+            raise ValueError("Task computation fault")
+
+        t1 = scheduler.register_task("t_success", 0.01, succeeding_handler)
+        t2 = scheduler.register_task("t_failure", 0.01, failing_handler)
+
+        self.assertEqual(t1.last_status, "IDLE")
+        self.assertIsNone(t1.last_error)
+
+        executed = scheduler.run_due_tasks()
+        self.assertIn("t_success", executed)
+        self.assertIn("t_failure", executed)
+
+        self.assertEqual(t1.last_status, "SUCCESS")
+        self.assertIsNone(t1.last_error)
+
+        self.assertEqual(t2.last_status, "FAILED")
+        self.assertIn("Task computation fault", t2.last_error or "")
+
+        t2_dict = t2.to_dict()
+        self.assertEqual(t2_dict["last_status"], "FAILED")
+        self.assertEqual(t2_dict["last_error"], "Task computation fault")
+
 
 if __name__ == "__main__":
     unittest.main()
