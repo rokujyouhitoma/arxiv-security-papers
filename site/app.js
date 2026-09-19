@@ -3,10 +3,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const appEventTarget = new AppEventTarget();
   const appPublisher = new Publisher(appEventTarget);
   const appLocator = new Locator();
+  const appApiClient = new ApiClient('', {}, appPublisher);
   appLocator.register('eventTarget', appEventTarget);
   appLocator.register('publisher', appPublisher);
   appLocator.register('timing', Timing);
   appLocator.register('domUtils', DOMUtils);
+  appLocator.register('apiClient', appApiClient);
 
   let activeTag = '';
   let activePeriod = 'monthly';
@@ -484,14 +486,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch System Stats
   async function fetchStats() {
     try {
-      const res = await fetch('/api/stats');
-      const data = await res.json();
-      const total = data.total_papers || data.total_documents || data.vector_index_size;
-      if (total) {
-        const formatted = Number(total).toLocaleString();
-        if (totalPapersCount) totalPapersCount.textContent = formatted;
-        if (sidebarPapersCount) sidebarPapersCount.textContent = formatted;
-        updatePaperCountDisplay(total);
+      const data = await appApiClient.get('/api/stats');
+      if (data) {
+        const total = data.total_papers || data.total_documents || data.vector_index_size;
+        if (total) {
+          const formatted = Number(total).toLocaleString();
+          if (totalPapersCount) totalPapersCount.textContent = formatted;
+          if (sidebarPapersCount) sidebarPapersCount.textContent = formatted;
+          updatePaperCountDisplay(total);
+        }
       }
     } catch (err) {
       console.warn("Stats fetch failed", err);
@@ -677,9 +680,8 @@ document.addEventListener('DOMContentLoaded', () => {
     modalPaperBody.innerHTML = '<p class="loading-text">OKF ドキュメントを取得中...</p>';
 
     try {
-      const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}`);
-      const data = await res.json();
-      if (data.status === 'success') {
+      const data = await appApiClient.get(`/api/paper/${encodeURIComponent(arxivId)}`);
+      if (data && data.status === 'success') {
         const rawContent = data.content || (data.paper ? `# ${data.paper.title}\n\n## 概要\n${data.paper.description || data.paper.summary || ''}` : '');
         const paperMeta = data.paper || {};
         const paperPath = data.path || paperMeta.path || '';
@@ -710,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
           window.MarkdownCompiler.renderMermaid(modalPaperBody);
         }
       } else {
-        modalPaperBody.innerHTML = `<p style="color:#ef4444;">エラー: ${escapeHtml(data.message || 'データが見つかりませんでした')}</p>`;
+        modalPaperBody.innerHTML = `<p style="color:#ef4444;">エラー: ${escapeHtml((data && data.message) || 'データが見つかりませんでした')}</p>`;
       }
     } catch (err) {
       modalPaperBody.innerHTML = `<p style="color:#ef4444;">取得エラー: ${escapeHtml(err.message)}</p>`;
@@ -719,9 +721,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function fetchRelatedPapersTopology(arxivId, container) {
     try {
-      const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/related`);
-      const data = await res.json();
-      if (data.status === 'success' && data.related_papers && data.related_papers.length > 0) {
+      const data = await appApiClient.get(`/api/paper/${encodeURIComponent(arxivId)}/related`);
+      if (data && data.status === 'success' && data.related_papers && data.related_papers.length > 0) {
         const section = document.createElement('div');
         section.className = 'related-papers-section';
         
