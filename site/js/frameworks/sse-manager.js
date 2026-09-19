@@ -64,8 +64,110 @@
     /** @private {!Array<function(): void>} Cleanup callbacks. */
     this.cleanups_ = [];
 
+    /** @private {?Object} Hierarchical State Machine instance for lifecycle governance. */
+    this.hsm_ = null;
+    this.initHSM_();
+
     this.init_();
   }
+
+  /**
+   * Initializes the HSM state machine if HierarchicalStateMachine is available.
+   * @private
+   */
+  SSEStreamManager.prototype.initHSM_ = function() {
+    var HSMClass = global['HierarchicalStateMachine'] ||
+                   (global['yuzora'] && global['yuzora']['frameworks'] && global['yuzora']['frameworks']['HierarchicalStateMachine']);
+    if (!HSMClass || typeof HSMClass.fromConfig !== 'function') {
+      return;
+    }
+    var self = this;
+    this.hsm_ = HSMClass.fromConfig({
+      name: 'ROOT',
+      initial: 'ACTIVE',
+      children: {
+        ACTIVE: {
+          initial: 'DISCONNECTED',
+          children: {
+            DISCONNECTED: {
+              transitions: {
+                'OPEN': 'CONNECTING'
+              }
+            },
+            CONNECTING: {
+              transitions: {
+                'CONNECTED': 'STREAMING',
+                'ERROR': 'RECONNECTING',
+                'CLOSE': 'DISCONNECTED'
+              }
+            },
+            STREAMING: {
+              transitions: {
+                'ERROR': 'RECONNECTING',
+                'CLOSE': 'DISCONNECTED'
+              }
+            },
+            RECONNECTING: {
+              transitions: {
+                'OPEN': 'CONNECTING',
+                'CLOSE': 'DISCONNECTED'
+              }
+            }
+          },
+          transitions: {
+            'DESTROY': 'DESTROYED'
+          }
+        },
+        DESTROYED: {}
+      }
+    });
+  };
+
+  /**
+   * Dispatches lifecycle event to HSM if configured.
+   * @param {string} eventName
+   * @param {Object<string, *>=} opt_payload
+   * @private
+   */
+  SSEStreamManager.prototype.dispatchHSM_ = function(eventName, opt_payload) {
+    if (this.hsm_ && typeof this.hsm_.dispatch === 'function') {
+      this.hsm_.dispatch(eventName, opt_payload);
+    }
+  };
+
+  /**
+   * Returns current HSM state path if configured.
+   * @return {string}
+   */
+  SSEStreamManager.prototype.getState = function() {
+    if (this.hsm_ && typeof this.hsm_.getStatePath === 'function') {
+      return this.hsm_.getStatePath();
+    }
+    if (this.destroyed_) return 'DESTROYED';
+    if (this.eventSource_) return 'STREAMING';
+    if (this.reconnectTimer_) return 'RECONNECTING';
+    return 'DISCONNECTED';
+  };
+
+  /**
+   * Returns whether current SSE connection is in the given state.
+   * @param {string} stateNameOrPath
+   * @return {boolean}
+   */
+  SSEStreamManager.prototype.isInState = function(stateNameOrPath) {
+    if (this.hsm_ && typeof this.hsm_.isInState === 'function') {
+      return this.hsm_.isInState(stateNameOrPath);
+    }
+    return this.getState() === stateNameOrPath;
+  };
+
+  /**
+   * Returns internal HSM instance.
+   * @return {?Object}
+   */
+  SSEStreamManager.prototype.getHSM = function() {
+    return this.hsm_;
+  };
 
   /**
    * Validates that a URL string is a safe relative path.
@@ -131,6 +233,7 @@
     this.url_ = url;
     this.userHandlers_ = eventHandlers || {};
     this.reconnectDelay_ = RECONNECT_DELAY_MS;
+    this.dispatchHSM_('OPEN');
     this.connect_(url);
     return true;
   };
@@ -156,6 +259,12 @@
       this.eventSource_ = es;
       this.handlers_ = Object.create(null);
 
+      var onOpen = function() {
+        self.dispatchHSM_('CONNECTED');
+      };
+      es.addEventListener('open', onOpen);
+      this.handlers_['open'] = [onOpen];
+
       var userHandlers = this.userHandlers_;
       var eventTypes = Object.keys(userHandlers);
       for (var i = 0; i < eventTypes.length; i++) {
@@ -173,6 +282,7 @@
 
       var onError = function() {
         if (self.destroyed_) return;
+        self.dispatchHSM_('ERROR');
         self.closeEventSource_();
         self.scheduleReconnect_();
       };
@@ -183,6 +293,7 @@
       self.publish_('sse:open', {url: url});
     } catch (err) {
       console.error('[SSEStreamManager] Failed to create EventSource:', err);
+      this.dispatchHSM_('ERROR');
       this.scheduleReconnect_();
     }
   };
@@ -259,6 +370,7 @@
   SSEStreamManager.prototype.close = function() {
     this.cancelReconnectTimer_();
     this.closeEventSource_();
+    this.dispatchHSM_('CLOSE');
     this.url_ = null;
     this.userHandlers_ = {};
   };
@@ -269,6 +381,7 @@
   SSEStreamManager.prototype.destroy = function() {
     if (this.destroyed_) return;
     this.destroyed_ = true;
+    this.dispatchHSM_('DESTROY');
     this.cancelReconnectTimer_();
     this.closeEventSource_();
     for (var i = 0; i < this.cleanups_.length; i++) {

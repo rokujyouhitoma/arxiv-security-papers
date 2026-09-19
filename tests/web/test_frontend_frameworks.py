@@ -15,6 +15,7 @@ EXPECTED_MODULES = [
     "api-client.js",
     "dom-utils.js",
     "event.js",
+    "hsm.js",
     "locator.js",
     "modal.js",
     "publisher.js",
@@ -60,6 +61,7 @@ def test_externs_contain_yuzora_interfaces() -> None:
         "ModalControllerInterface",
         "RadixTrieInterface",
         "QueryValidatorInterface",
+        "HierarchicalStateMachineInterface",
     ]
     for iface in required_interfaces:
         assert iface in content, f"Interface {iface} missing from site/externs.js"
@@ -101,9 +103,144 @@ def test_app_min_js_contains_bundled_framework_classes() -> None:
         "ApiError",
         "StateStore",
         "SSEStreamManager",
+        "HierarchicalStateMachine",
         "ModalController",
         "RadixTrie",
         "QueryValidator",
     ]
     for sym in core_framework_symbols:
         assert sym in content, f"Symbol {sym} not found in compiled {APP_MIN_JS.name}"
+
+
+def test_hsm_state_transitions_and_lcca() -> None:
+    """Validate HSM hierarchical transitions, LCCA resolution, entry/exit passes and guards via Node.js."""
+    import json
+    import shutil
+    import subprocess
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        return
+
+    script = """
+    const { HierarchicalStateMachine, StateNode, TransitionRule } = require('./site/js/frameworks/hsm.js');
+
+    const root = new StateNode('ROOT', null, 'Operational');
+    const op = new StateNode('Operational', root, 'Normal');
+    const maint = new StateNode('Maintenance', root, 'Diagnostics');
+    root.addChild(op);
+    root.addChild(maint);
+
+    const normal = new StateNode('Normal', op);
+    const inspect = new StateNode('Inspect', op);
+    op.addChild(normal);
+    op.addChild(inspect);
+
+    const diag = new StateNode('Diagnostics', maint);
+    maint.addChild(diag);
+
+    const log = [];
+    op.onEntry = () => log.push('enter:Operational');
+    op.onExit = () => log.push('exit:Operational');
+    normal.onEntry = () => log.push('enter:Normal');
+    normal.onExit = () => log.push('exit:Normal');
+    inspect.onEntry = () => log.push('enter:Inspect');
+    inspect.onExit = () => log.push('exit:Inspect');
+    maint.onEntry = () => log.push('enter:Maintenance');
+    maint.onExit = () => log.push('exit:Maintenance');
+    diag.onEntry = () => log.push('enter:Diagnostics');
+    diag.onExit = () => log.push('exit:Diagnostics');
+
+    // Intra-hierarchy transition
+    normal.addTransition(new TransitionRule('Normal', 'SELECT_NODE', 'Inspect'));
+    inspect.addTransition(new TransitionRule('Inspect', 'DESELECT', 'Normal'));
+
+    // Guarded transition on child
+    normal.addTransition(new TransitionRule('Normal', 'SEC_CHECK', 'Inspect', ctx => ctx.payload.authorized === true));
+
+    // Bubble-up transition on composite parent (Operational -> Maintenance)
+    op.addTransition(new TransitionRule('Operational', 'MAINT_MODE', 'Maintenance'));
+
+    const hsm = new HierarchicalStateMachine(root);
+    const initialPath = hsm.getStatePath();
+
+    // 1. Intra-hierarchy transition
+    log.length = 0;
+    const ok1 = hsm.dispatch('SELECT_NODE', { nodeId: 'N1' });
+    const path1 = hsm.getStatePath();
+    const log1 = [...log];
+
+    // 2. Cross-hierarchy transition via event bubbling to Operational
+    log.length = 0;
+    const ok2 = hsm.dispatch('MAINT_MODE');
+    const path2 = hsm.getStatePath();
+    const log2 = [...log];
+
+    // 3. isInState checks
+    const inMaint = hsm.isInState('Maintenance');
+    const inDiag = hsm.isInState('Diagnostics');
+    const inOp = hsm.isInState('Operational');
+
+    // 4. Force transition back to Normal
+    log.length = 0;
+    hsm.forceTransition('Operational.Normal');
+    const path3 = hsm.getStatePath();
+    const log3 = [...log];
+
+    // 5. Guard evaluation
+    const guardDenied = hsm.dispatch('SEC_CHECK', { authorized: false });
+    const path4 = hsm.getStatePath();
+    const guardAllowed = hsm.dispatch('SEC_CHECK', { authorized: true });
+    const path5 = hsm.getStatePath();
+
+    console.log(JSON.stringify({
+        initialPath,
+        ok1, path1, log1,
+        ok2, path2, log2,
+        inMaint, inDiag, inOp,
+        path3, log3,
+        guardDenied, path4,
+        guardAllowed, path5
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["initialPath"] == "Operational.Normal"
+    assert data["ok1"] is True
+    assert data["path1"] == "Operational.Inspect"
+    assert data["log1"] == ["exit:Normal", "enter:Inspect"]
+
+    # Cross-hierarchy LCCA test (Inspect -> Diagnostics via Operational.MAINT_MODE)
+    assert data["ok2"] is True
+    assert data["path2"] == "Maintenance.Diagnostics"
+    assert data["log2"] == [
+        "exit:Inspect",
+        "exit:Operational",
+        "enter:Maintenance",
+        "enter:Diagnostics",
+    ]
+
+    # State checks
+    assert data["inMaint"] is True
+    assert data["inDiag"] is True
+    assert data["inOp"] is False
+
+    # Force transition
+    assert data["path3"] == "Operational.Normal"
+    assert data["log3"] == [
+        "exit:Diagnostics",
+        "exit:Maintenance",
+        "enter:Operational",
+        "enter:Normal",
+    ]
+
+    # Guard checks
+    assert data["guardDenied"] is False
+    assert data["path4"] == "Operational.Normal"
+    assert data["guardAllowed"] is True
+    assert data["path5"] == "Operational.Inspect"

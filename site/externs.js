@@ -284,3 +284,51 @@ QueryValidatorInterface.prototype.validate = function(queryString) {};
  */
 QueryValidatorInterface.prototype.parse = function(queryString) {};
 
+/**
+ * @interface
+ */
+function HierarchicalStateMachineInterface() {}
+/**
+ * @param {string} eventName
+ * @param {Object<string, *>=} opt_payload
+ * @return {boolean}
+ */
+HierarchicalStateMachineInterface.prototype.dispatch = function(eventName, opt_payload) {};
+/**
+ * @param {string} eventName
+ * @param {Object<string, *>=} opt_payload
+ * @return {boolean}
+ */
+HierarchicalStateMachineInterface.prototype.sendEvent = function(eventName, opt_payload) {};
+/**
+ * @param {string} stateNameOrPath
+ * @return {boolean}
+ */
+HierarchicalStateMachineInterface.prototype.isInState = function(stateNameOrPath) {};
+/**
+ * @return {string}
+ */
+HierarchicalStateMachineInterface.prototype.getStatePath = function() {};
+/**
+ * @return {string}
+ */
+HierarchicalStateMachineInterface.prototype.getCurrentStatePath = function() {};
+/**
+ * @return {!Object}
+ */
+HierarchicalStateMachineInterface.prototype.getCurrentState = function() {};
+/**
+ * @param {string} targetPath
+ * @param {string=} opt_reason
+ * @return {boolean}
+ */
+HierarchicalStateMachineInterface.prototype.forceTransition = function(targetPath, opt_reason) {};
+/**
+ * @param {function(!Object, !Object, !Object): void} observer
+ */
+HierarchicalStateMachineInterface.prototype.addObserver = function(observer) {};
+/**
+ * @param {function(!Object, !Object, !Object): void} observer
+ */
+HierarchicalStateMachineInterface.prototype.removeObserver = function(observer) {};
+

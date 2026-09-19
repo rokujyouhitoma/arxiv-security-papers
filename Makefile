@@ -27,6 +27,7 @@ JS_SRCS = site/js/frameworks/dom-utils.js \
           site/js/frameworks/api-client.js \
           site/js/frameworks/store.js \
           site/js/frameworks/sse-manager.js \
+          site/js/frameworks/hsm.js \
           site/js/frameworks/modal.js \
           site/js/frameworks/radix-trie.js \
           site/js/frameworks/query-validator.js \
