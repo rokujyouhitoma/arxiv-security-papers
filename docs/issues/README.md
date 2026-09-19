@@ -9,7 +9,6 @@
 | **343** | `HierarchicalStateMachine (HSM)`: `src/core/hsm/` の JS 移植と状態管理統合 | Feature | High | [343-port-hsm-core-to-frontend-state-governance.md](343-port-hsm-core-to-frontend-state-governance.md) |
 | **344** | `DisjointSet`: `src/core/structures/disjoint_set.py` の JS 移植と LCC 計算 | Feature | Medium | [344-port-disjoint-set-to-frontend-lcc-clustering.md](344-port-disjoint-set-to-frontend-lcc-clustering.md) |
 | **346** | `ARCCache`: `src/core/structures/arc_cache.py` の JS 移植と適応型キャッシュ | Feature | Medium | [346-port-arc-cache-to-frontend-metadata-caching.md](346-port-arc-cache-to-frontend-metadata-caching.md) |
-| **347** | `QueryValidator`: `src/core/structures/peg.py` クエリ構文の JS 移植と構文検証 | Feature | Medium | [347-port-peg-query-validator-to-frontend-search-input.md](347-port-peg-query-validator-to-frontend-search-input.md) |
 | **348** | `GraphCanvasEngine`: `site/dashboard.html` からの力学モデル・Canvas 描画の完全分離 | Refactor | High | [348-extract-graph-canvas-engine-from-dashboard.md](348-extract-graph-canvas-engine-from-dashboard.md) |
 
 ---
