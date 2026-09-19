@@ -507,3 +507,37 @@ def test_arbiter_check_memory_limits_rotation(tmp_path: Any) -> None:
         assert 201 in arbiter.reloading_old_pids
         mock_spawn.assert_called_once_with("search")
         mock_kill.assert_called_once_with(201, signal.SIGTERM)
+
+
+def test_arbiter_workflow_lifecycle_hook_dispatch() -> None:
+    """Verifies WorkflowLifecycleHook setup, polling dispatch, and metrics integration (Issue 334)."""
+    from spider.daemon.contracts import CrawlResult
+    from workflow.service import WorkflowLifecycleHook
+
+    with patch("spider.daemon.client.SpiderDaemonClient.submit_job") as mock_submit:
+        mock_submit.return_value = CrawlResult(
+            job_id="test_hook_job",
+            spider_name="arxiv",
+            success=True,
+            item_count=5,
+        )
+        hook = WorkflowLifecycleHook()
+        hook.bind_worker("workflow_test_01")
+        assert hook.setup() is True
+        assert hook.health_check() is True
+
+        # Initial metrics
+        m1 = hook.get_metrics()
+        assert m1["tasks_count"] == 3
+
+        # on_flush triggers poll_and_dispatch
+        hook.on_flush()
+
+        # After flush
+        m2 = hook.get_metrics()
+        assert m2["tasks_count"] == 3
+
+        # Clean teardown
+        hook.teardown()
+        assert hook.health_check() is False
+        assert hook.get_metrics() == {}
