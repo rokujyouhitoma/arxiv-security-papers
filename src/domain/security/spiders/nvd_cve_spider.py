@@ -9,6 +9,8 @@ and supports recursive pagination with resultsPerPage=2000.
 from __future__ import annotations
 
 import os
+import urllib.parse
+from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple, Union
 
 from spider.core.downloader import Request, Response
@@ -16,10 +18,78 @@ from spider.core.engine import ScrapedItem
 from spider.spiders.base import BaseSpider
 
 NVD_API_BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+DEFAULT_NVD_DAYS_BACK = 120
+MAX_NVD_DAYS_SPAN = 120
+DEFAULT_NVD_MAX_PAGES = 5
+
+
+def _format_nvd_iso(dt_str: str) -> str:
+    """Formats or validates an ISO-8601 UTC timestamp string for NVD API 2.0."""
+    try:
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000")
+    except Exception:
+        return dt_str
+
+
+def _resolve_date_range(
+    days_back: Optional[int],
+    start_date_str: Optional[str],
+    end_date_str: Optional[str],
+) -> Tuple[Optional[str], Optional[str]]:
+    """Resolves pubStartDate and pubEndDate conforming to NVD 120-day span limit."""
+    if start_date_str and end_date_str:
+        return _format_nvd_iso(start_date_str), _format_nvd_iso(end_date_str)
+
+    now = datetime.now(timezone.utc)
+    span_days = (
+        DEFAULT_NVD_DAYS_BACK
+        if days_back is None
+        else min(max(1, days_back), MAX_NVD_DAYS_SPAN)
+    )
+    start_dt = now - timedelta(days=span_days)
+    return (
+        start_dt.strftime("%Y-%m-%dT%H:%M:%S.000"),
+        now.strftime("%Y-%m-%dT%H:%M:%S.000"),
+    )
+
+
+def _build_nvd_query_params(
+    results_per_page: int,
+    days_back: Optional[int],
+    pub_start_date: Optional[str],
+    pub_end_date: Optional[str],
+    all_history: bool,
+) -> Dict[str, str]:
+    """Constructs query parameter mapping with optional date range constraints."""
+    params: Dict[str, str] = {"resultsPerPage": str(results_per_page)}
+    if all_history:
+        return params
+    s_date, e_date = _resolve_date_range(days_back, pub_start_date, pub_end_date)
+    if s_date:
+        params["pubStartDate"] = s_date
+    if e_date:
+        params["pubEndDate"] = e_date
+    return params
+
+
+def _extract_response_json(response: Response) -> Optional[Dict[str, Any]]:
+    """Safely extracts dictionary JSON body from HTTP response."""
+    try:
+        data = response.json()
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
 
 
 class NvdCveSpider(BaseSpider):
-    """Spider for crawling NIST National Vulnerability Database REST API 2.0."""
+    """Spider for crawling NIST National Vulnerability Database REST API 2.0.
+
+    Equipped with 120-day date range safety filters and max pagination guards
+    to prevent runaway crawls across all 250,000+ historical CVEs.
+    """
 
     name: str = "nvd_cve_spider"
     allowed_domains: Set[str] = {"services.nvd.nist.gov"}
@@ -28,6 +98,11 @@ class NvdCveSpider(BaseSpider):
         self,
         api_key: Optional[str] = None,
         results_per_page: int = 2000,
+        days_back: Optional[int] = DEFAULT_NVD_DAYS_BACK,
+        pub_start_date: Optional[str] = None,
+        pub_end_date: Optional[str] = None,
+        max_pages: Optional[int] = DEFAULT_NVD_MAX_PAGES,
+        all_history: bool = False,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -35,14 +110,24 @@ class NvdCveSpider(BaseSpider):
         self.api_key = (api_key or os.environ.get("NVD_API_KEY", "")).strip()
         self.download_delay = 0.8 if self.api_key else 6.5
         self.results_per_page = min(max(1, results_per_page), 2000)
+        self.max_pages = max_pages
+        self.all_history = all_history
+        self._current_page = 1
 
         self.custom_headers: Dict[str, str] = {}
         if self.api_key:
             self.custom_headers["apiKey"] = self.api_key
 
-        self.start_urls: List[str] = [
-            f"{NVD_API_BASE_URL}?resultsPerPage={self.results_per_page}"
-        ]
+        self.query_params = _build_nvd_query_params(
+            self.results_per_page,
+            days_back,
+            pub_start_date,
+            pub_end_date,
+            all_history,
+        )
+
+        query_str = urllib.parse.urlencode(self.query_params)
+        self.start_urls: List[str] = [f"{NVD_API_BASE_URL}?{query_str}"]
 
     def start_requests(self) -> List[Request]:
         """Yields initial seed requests with authentication headers."""
@@ -52,24 +137,31 @@ class NvdCveSpider(BaseSpider):
             for url in self.start_urls
         ]
 
+    def _should_stop_pagination(self) -> bool:
+        return self.max_pages is not None and self._current_page >= self.max_pages
+
     async def parse(
         self, response: Response
     ) -> AsyncIterator[Union[Request, ScrapedItem]]:
         """Parses NVD CVE JSON response, yields items, and paginates recursively."""
-        try:
-            data = response.json()
-            if not isinstance(data, dict):
-                return
-        except Exception:
+        data = _extract_response_json(response)
+        if data is None:
             return
 
         for item in _extract_cve_items(data):
             yield item
 
+        if self._should_stop_pagination():
+            return
+
         next_req = _build_next_pagination_request(
-            data, self.results_per_page, self.custom_headers
+            data,
+            self.results_per_page,
+            self.custom_headers,
+            base_params=self.query_params,
         )
         if next_req is not None:
+            self._current_page += 1
             yield next_req
 
 
@@ -102,7 +194,10 @@ def _parse_pagination_meta(
 
 
 def _build_next_pagination_request(
-    data: Dict[str, Any], results_per_page: int, headers: Dict[str, str]
+    data: Dict[str, Any],
+    results_per_page: int,
+    headers: Dict[str, str],
+    base_params: Optional[Dict[str, Any]] = None,
 ) -> Optional[Request]:
     """Calculates next pagination offset and builds Request if more records exist."""
     meta = _parse_pagination_meta(data, results_per_page)
@@ -113,9 +208,13 @@ def _build_next_pagination_request(
     if next_index >= total:
         return None
 
+    params: Dict[str, Any] = dict(base_params or {})
+    params["resultsPerPage"] = rpp
+    params["startIndex"] = next_index
+
     return Request(
         url=NVD_API_BASE_URL,
-        params={"resultsPerPage": rpp, "startIndex": next_index},
+        params=params,
         headers=dict(headers),
         callback="parse",
     )
