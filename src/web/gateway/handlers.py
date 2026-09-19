@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 API Handlers for Gateway Layer.
-Provides REST endpoints (/api/search, /api/paper, /api/trends, /api/stats, /api/mcp),
-static asset streaming, and presentation preview routing.
+Provides REST endpoints (/api/search, /api/paper, /api/trends, /api/stats, /api/mcp,
+/api/export/graph), static asset streaming, and presentation preview routing.
 """
 
 from __future__ import annotations
@@ -2161,6 +2161,55 @@ class GatewayHandlers:
 
         res = export_schema_graph_json()
         return response_json(start_response, res)
+
+    def handle_graph_export(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Optional[Dict[str, List[str]]] = None,
+    ) -> List[bytes]:
+        """Handles /api/export/graph?format={turtle|jsonld|stix} for multi-format download.
+
+        Query Parameters:
+            format (str): Serialization format. One of ``turtle``, ``jsonld``, or ``stix``.
+                          Defaults to ``turtle``.
+
+        Returns:
+            A file attachment response with appropriate Content-Type and
+            Content-Disposition headers for browser download.
+        """
+        params = query_params or {}
+        fmt = (params.get("format", ["turtle"])[0] or "turtle").lower().strip()
+
+        from graph.engine import PropertyGraphEngine
+        from ontology.export import GraphExporter
+
+        engine = PropertyGraphEngine(workspace_dir=self.workspace_dir)
+        if engine.vertex_count == 0:
+            from ontology.seeder import seed_ontology_graph
+
+            seed_ontology_graph(engine)
+            engine.save()
+
+        exporter = GraphExporter(engine)
+        try:
+            content_str, content_type, filename = exporter.export(fmt)
+        except ValueError as exc:
+            engine.close()
+            return response_error(start_response, str(exc), status="400 Bad Request")
+
+        engine.close()
+
+        body = content_str.encode("utf-8")
+        from .router import CORS_HEADERS
+
+        headers = [
+            ("Content-Type", content_type),
+            ("Content-Length", str(len(body))),
+            ("Content-Disposition", f'attachment; filename="{filename}"'),
+            ("Cache-Control", "no-store"),
+        ] + CORS_HEADERS
+        start_response("200 OK", headers)
+        return [body]
 
     def handle_preview(
         self, start_response: Callable[..., Any], path: str

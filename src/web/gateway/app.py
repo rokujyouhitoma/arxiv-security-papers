@@ -81,6 +81,16 @@ class WSGIApplication:
             return self.handlers.handle_graph_schema(start_response)
         return None
 
+    def _route_export_api(
+        self,
+        start_response: Callable[..., Any],
+        path: str,
+        query_params: Dict[str, List[str]],
+    ) -> Optional[Any]:
+        if path == "/api/export/graph":
+            return self.handlers.handle_graph_export(start_response, query_params)
+        return None
+
     def _route_spider_api(
         self,
         start_response: Callable[..., Any],
@@ -115,6 +125,8 @@ class WSGIApplication:
     ) -> Optional[Any]:
         if path.startswith("/api/graph/"):
             return self._route_graph_api(start_response, path, query_params)
+        if path.startswith("/api/export/"):
+            return self._route_export_api(start_response, path, query_params)
         if path.startswith("/api/spiders/"):
             return self._route_spider_api(start_response, path, query_params)
         return self._route_system_api(start_response, path, query_params)
