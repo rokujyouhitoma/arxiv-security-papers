@@ -444,6 +444,17 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 ```
 
+### 9.2 初回起動時の即時実行挙動と制御（ARXIV_SPIDER_RUN_ON_STARTUP）
+デフォルトの動作では、Supervisor / WorkflowScheduler 起動直後に未収集状態（コールドスタート）を即座に解消し最新キャッシュを形成するため、各スパイダー（arXiv, CWE, CVE）が即時初回発火します（`run_on_startup: True`）。
+
+再起動時やメンテナンス時など、初回起動時の即時発火を抑止し、規定のインターバル（arXiv 6時間後、CWE 24時間後）が経過するまで巡回を遅延させたい場合は、環境変数 `ARXIV_SPIDER_RUN_ON_STARTUP` を設定します。
+
+```bash
+# 初回起動時の即時クロールをスキップし、インターバル経過後から定期巡回を開始
+export ARXIV_SPIDER_RUN_ON_STARTUP=false
+make start_supervisor
+```
+
 ---
 
 ## 10. Web ポータル UI ＆ ダッシュボード (3大可視化モード操作ガイド)
