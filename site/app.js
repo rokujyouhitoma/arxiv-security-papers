@@ -13,7 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
     activePeriod: 'monthly',
     currentSelectedDatabase: 'arxiv_security_db',
     currentLimit: 12,
-    currentOffset: 0
+    currentOffset: 0,
+    currentTotalHits: 0,
+    currentLoadedCount: 0,
+    searchState: 'Idle'
   }, appPublisher);
   appLocator.register('eventTarget', appEventTarget);
   appLocator.register('publisher', appPublisher);
@@ -57,6 +60,42 @@ document.addEventListener('DOMContentLoaded', () => {
   const appRouter = RouterCtor ? new RouterCtor('papers') : null;
   if (appSceneDirector) appLocator.register('sceneDirector', appSceneDirector);
   if (appRouter) appLocator.register('router', appRouter);
+
+  // Hierarchical State Machine (HSM) for Search Governance (Issue 353)
+  const HSMCtor =
+      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['HierarchicalStateMachine']) ||
+      window['HierarchicalStateMachine'];
+  const searchHSM = (HSMCtor && HSMCtor.fromConfig) ? HSMCtor.fromConfig({
+    name: 'SearchRoot',
+    initialChild: 'Idle',
+    children: {
+      Idle: {
+        transitions: {
+          START_SEARCH: 'Fetching'
+        }
+      },
+      Fetching: {
+        transitions: {
+          SEARCH_SUCCESS: 'Idle',
+          SEARCH_ERROR: 'Error'
+        }
+      },
+      Error: {
+        transitions: {
+          START_SEARCH: 'Fetching',
+          RETRY: 'Fetching',
+          RESET: 'Idle'
+        }
+      }
+    }
+  }) : null;
+  if (searchHSM) {
+    appLocator.register('searchHSM', searchHSM);
+    searchHSM.addObserver((prior, next, ctx) => {
+      appStateStore.set('searchState', next.name);
+      appPublisher.publish('search:state_change', { from: prior.name, to: next.name, context: ctx });
+    });
+  }
 
   // ModalController for paper detail modal (Issue 341)
   const ModalControllerCtor =
@@ -673,6 +712,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const cleanQuery = (query === null || query === undefined) ? '' : String(query).trim();
     currentOffset = offset;
 
+    if (searchHSM) {
+      if (searchHSM.isInState('Fetching')) {
+        return; // Guard against concurrent overlapping searches
+      }
+      searchHSM.dispatch('START_SEARCH', { query: cleanQuery, offset: offset, append: append });
+    }
+
     if (updateUrl) {
       const params = new URLSearchParams();
       if (cleanQuery) params.set('q', cleanQuery);
@@ -727,17 +773,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
         }
+        if (searchHSM) searchHSM.dispatch('SEARCH_SUCCESS', { count: data.results.length });
       } else {
         if (!append) {
           resultsGrid.innerHTML = '<p class="loading-text" style="padding: 16px;">該当する論文は見つかりませんでした。</p>';
           resultsCount.textContent = '検索結果 (0件)';
           if (loadMoreContainer) loadMoreContainer.style.display = 'none';
         }
+        if (searchHSM) searchHSM.dispatch('SEARCH_SUCCESS', { count: 0 });
       }
+      appStateStore.update({
+        currentOffset: currentOffset,
+        currentLimit: currentLimit,
+        activeTag: activeTag,
+        currentTotalHits: currentTotalHits,
+        currentLoadedCount: currentLoadedCount
+      });
     } catch (err) {
       if (!append) {
         resultsGrid.innerHTML = `<p style="color: #ef4444; padding: 16px;">検索エラーが発生しました: ${escapeHtml(err.message)}</p>`;
       }
+      if (searchHSM) searchHSM.dispatch('SEARCH_ERROR', { error: err.message });
+      appStateStore.update({
+        currentOffset: currentOffset,
+        currentLimit: currentLimit,
+        activeTag: activeTag,
+        currentTotalHits: currentTotalHits,
+        currentLoadedCount: currentLoadedCount
+      });
     } finally {
       if (loadMoreBtn) {
         loadMoreBtn.disabled = false;

@@ -2,7 +2,7 @@
 ID: 353
 種別: Refactor
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] `StateStore` & `HierarchicalStateMachine`: フロントエンド状態一元管理と検索・操作ステートチャート統合 (ID: 353)
@@ -22,8 +22,8 @@ ID: 353
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [site/app.js](../site/app.js) (ローカル変数の集約、HSM 状態マシンの適用)
-- [ ] [site/dashboard.html](../site/dashboard.html) (キャンバス操作状態 HSM)
+- [x] [site/app.js](../../site/app.js) (ローカル変数の集約、HSM 状態マシンの適用)
+- [x] [site/dashboard.html](../../site/dashboard.html) (キャンバス操作状態 HSM)
 
 ---
 
@@ -41,6 +41,6 @@ Target Branch: `refactor/353-centralize-state-store-and-hsm`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `site/app.js` の主要状態変数が `StateStore` で一元管理されていること。
-- [ ] 検索フローが HSM 経由で遷移し、競合や二重実行が防止されること。
-- [ ] 回帰テスト全件 PASS、Closure Compiler コンパイル 0 エラー。
+- [x] `site/app.js` の主要状態変数が `StateStore` で一元管理されていること。
+- [x] 検索フローが HSM 経由で遷移し、競合や二重実行が防止されること。
+- [x] 回帰テスト全件 PASS、Closure Compiler コンパイル 0 エラー。
