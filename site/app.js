@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ModalController for paper detail modal (Issue 341)
+  // ModalController for paper detail modal and console help drawer (Issue 341 & 354)
   const ModalControllerCtor =
       (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ModalController']) ||
       window['ModalController'];
@@ -105,6 +105,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const appPaperModal = (ModalControllerCtor && document.getElementById('paperModal'))
       ? new ModalControllerCtor(document.getElementById('paperModal'), {closeOnOverlayClick: false})
       : null;
+  /** @type {?ModalControllerInterface} */
+  const appHelpDrawerModal = (ModalControllerCtor && document.getElementById('consoleHelpDrawer'))
+      ? new ModalControllerCtor(document.getElementById('consoleHelpDrawer'), {
+          closeOnOverlayClick: true,
+          overlaySelector: '#consoleHelpOverlay'
+        })
+      : null;
+  if (appPaperModal) appLocator.register('paperModal', appPaperModal);
+  if (appHelpDrawerModal) appLocator.register('helpDrawerModal', appHelpDrawerModal);
 
   let activeTag = '';
   let activePeriod = 'monthly';
@@ -541,6 +550,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const consoleHelpOverlay = document.getElementById('consoleHelpOverlay');
 
   window.toggleConsoleHelpDrawer = function() {
+    if (appHelpDrawerModal) {
+      if (appHelpDrawerModal.isOpen()) {
+        window.closeConsoleHelpDrawer();
+      } else {
+        appHelpDrawerModal.open();
+        if (consoleHelpOverlay) consoleHelpOverlay.classList.add('active');
+      }
+      return;
+    }
     if (!consoleHelpDrawer) return;
     const isActive = consoleHelpDrawer.classList.contains('active');
     if (isActive) {
@@ -553,6 +571,11 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   window.closeConsoleHelpDrawer = function() {
+    if (appHelpDrawerModal) {
+      appHelpDrawerModal.close();
+      if (consoleHelpOverlay) consoleHelpOverlay.classList.remove('active');
+      return;
+    }
     if (consoleHelpDrawer) consoleHelpDrawer.classList.remove('active');
     if (consoleHelpOverlay) consoleHelpOverlay.classList.remove('active');
   };
@@ -1001,8 +1024,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function closeFullscreenModal() {
-    paperModal.classList.add('hidden');
-    document.body.style.overflow = '';
+    if (appPaperModal && appPaperModal.isOpen()) {
+      appPaperModal.close();
+    } else {
+      paperModal.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
   }
 
   if (closeModalBtn) closeModalBtn.addEventListener('click', closeFullscreenModal);

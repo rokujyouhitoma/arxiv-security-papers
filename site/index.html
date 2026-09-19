@@ -903,10 +903,10 @@
   </div>
 
   <!-- ❓ Enterprise Console Help & Guide Drawer (Issue 171) -->
-  <div class="help-overlay" id="consoleHelpOverlay" onclick="toggleConsoleHelpDrawer()"></div>
-  <div class="help-drawer" id="consoleHelpDrawer">
+  <div class="help-overlay" id="consoleHelpOverlay" onclick="toggleConsoleHelpDrawer()" aria-hidden="true"></div>
+  <div class="help-drawer" id="consoleHelpDrawer" role="dialog" aria-modal="true" aria-labelledby="consoleHelpTitle" aria-hidden="true">
     <div class="drawer-header">
-      <h3><span>📖</span> エンタープライズコンソール 操作ガイド &amp; 機能解説</h3>
+      <h3 id="consoleHelpTitle"><span>📖</span> エンタープライズコンソール 操作ガイド &amp; 機能解説</h3>
       <button class="btn-drawer-close" onclick="toggleConsoleHelpDrawer()" title="閉じる (Esc)">✕</button>
     </div>
     <div class="drawer-content">

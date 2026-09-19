@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **354** | `ModalController`: 全モーダル・ドロワー要素のアクセシブル制御とフォーカストラップ統一 | Feature | Medium | New | [354-apply-modal-controller-to-all-dialogs-and-drawers.md](354-apply-modal-controller-to-all-dialogs-and-drawers.md) |
+*現在オープンな Issue はありません。*
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **354** | `ModalController`: 全モーダル・ドロワー要素のアクセシブル制御とフォーカストラップ統一 | Feature | 2026-09-19 | [354-apply-modal-controller-to-all-dialogs-and-drawers.md](closed/354-apply-modal-controller-to-all-dialogs-and-drawers.md) |
 | **353** | `StateStore` & `HierarchicalStateMachine`: フロントエンド状態一元管理と検索・操作ステートチャート統合 | Refactor | 2026-09-19 | [353-centralize-state-store-and-hsm-governance.md](closed/353-centralize-state-store-and-hsm-governance.md) |
 | **352** | `SceneDirector` & `Router`: タブナビゲーションのライフサイクルガバナンスと URL ディープリンク同期 | Refactor | 2026-09-19 | [352-integrate-scene-director-and-router-tab-lifecycle.md](closed/352-integrate-scene-director-and-router-tab-lifecycle.md) |
 | **351** | `QueryValidator` & `RadixTrie`: 検索入力における PEG リアルタイム構文検証および 0ms プレフィックス補完の統合 | Feature | 2026-09-19 | [351-integrate-query-validator-and-radix-trie-search-input.md](closed/351-integrate-query-validator-and-radix-trie-search-input.md) |

@@ -1890,10 +1890,10 @@
         </div>
 
         <!-- ❓ Graph Help & Cheat Sheet Drawer (Issue 166) -->
-        <div class="graph-help-overlay" id="graphHelpOverlay" onclick="toggleGraphHelpDrawer()"></div>
-        <div class="graph-help-drawer" id="graphHelpDrawer">
+        <div class="graph-help-overlay" id="graphHelpOverlay" onclick="toggleGraphHelpDrawer()" aria-hidden="true"></div>
+        <div class="graph-help-drawer" id="graphHelpDrawer" role="dialog" aria-modal="true" aria-labelledby="graphHelpTitle" aria-hidden="true">
           <div class="drawer-header">
-            <h3><span>🕸️</span> Graph 操作ガイド &amp; 用語解説</h3>
+            <h3 id="graphHelpTitle"><span>🕸️</span> Graph 操作ガイド &amp; 用語解説</h3>
             <button class="btn-drawer-close" onclick="toggleGraphHelpDrawer()" title="閉じる (Esc)">✕</button>
           </div>
           <div class="drawer-content">
@@ -2072,8 +2072,10 @@
        ====================================================================== -->
   <script src="js/frameworks/dom-utils.js"></script>
   <script src="js/frameworks/timing.js"></script>
+  <script src="js/frameworks/animation.js"></script>
   <script src="js/frameworks/event.js"></script>
   <script src="js/frameworks/publisher.js"></script>
+  <script src="js/frameworks/modal.js"></script>
   <script src="js/frameworks/disjoint-set.js"></script>
   <script src="js/frameworks/arc-cache.js"></script>
   <script src="js/frameworks/api-client.js"></script>
@@ -4126,10 +4128,30 @@
         document.getElementById('nodeCallout').style.display = 'none';
       };
 
-      // Graph Help Drawer Toggle Functions (Issue 166)
+      // Graph Help Drawer Toggle Functions (Issue 166 & 354)
+      const ModalControllerCtor =
+          (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ModalController']) ||
+          window['ModalController'];
+      const graphHelpDrawerEl = document.getElementById('graphHelpDrawer');
+      const graphHelpModal = (ModalControllerCtor && graphHelpDrawerEl)
+          ? new ModalControllerCtor(graphHelpDrawerEl, {
+              closeOnOverlayClick: true,
+              overlaySelector: '#graphHelpOverlay'
+            })
+          : null;
+
       window.toggleGraphHelpDrawer = function() {
-        const drawer = document.getElementById('graphHelpDrawer');
         const overlay = document.getElementById('graphHelpOverlay');
+        if (graphHelpModal) {
+          if (graphHelpModal.isOpen()) {
+            window.closeGraphHelpDrawer();
+          } else {
+            graphHelpModal.open();
+            if (overlay) overlay.classList.add('active');
+          }
+          return;
+        }
+        const drawer = document.getElementById('graphHelpDrawer');
         if (!drawer) return;
         const isActive = drawer.classList.contains('active');
         if (isActive) {
@@ -4142,8 +4164,13 @@
       };
 
       window.closeGraphHelpDrawer = function() {
-        const drawer = document.getElementById('graphHelpDrawer');
         const overlay = document.getElementById('graphHelpOverlay');
+        if (graphHelpModal) {
+          graphHelpModal.close();
+          if (overlay) overlay.classList.remove('active');
+          return;
+        }
+        const drawer = document.getElementById('graphHelpDrawer');
         if (drawer) drawer.classList.remove('active');
         if (overlay) overlay.classList.remove('active');
       };
