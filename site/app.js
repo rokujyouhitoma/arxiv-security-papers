@@ -18,6 +18,15 @@ document.addEventListener('DOMContentLoaded', () => {
   appLocator.register('apiClient', appApiClient);
   appLocator.register('stateStore', appStateStore);
 
+  // ModalController for paper detail modal (Issue 341)
+  const ModalControllerCtor =
+      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ModalController']) ||
+      window['ModalController'];
+  /** @type {?ModalControllerInterface} */
+  const appPaperModal = (ModalControllerCtor && document.getElementById('paperModal'))
+      ? new ModalControllerCtor(document.getElementById('paperModal'), {closeOnOverlayClick: false})
+      : null;
+
   let activeTag = '';
   let activePeriod = 'monthly';
   let currentSearchResults = [];
@@ -671,11 +680,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================================
-  // 5. Fullscreen Modal Viewer
+  // 5. Fullscreen Modal Viewer — managed by ModalController (Issue 341)
   // ========================================================================
+
+
   window.openPaperModal = async function(arxivId) {
-    paperModal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+    if (!paperModal) return;
+    if (appPaperModal) {
+      appPaperModal.open();
+    } else {
+      // Graceful fallback when ModalController is unavailable
+      paperModal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
     const paperSrc = resolvePaperSourceInfo(arxivId);
     modalPaperId.textContent = paperSrc.label;
     if (modalArxivLink) {

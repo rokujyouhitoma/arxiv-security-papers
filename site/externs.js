@@ -186,3 +186,27 @@ SSEStreamManagerInterface.prototype.destroy = function() {};
  */
 SSEStreamManagerInterface.prototype.isConnected = function() {};
 
+/**
+ * @interface
+ */
+function ModalControllerInterface() {}
+/**
+ * @param {{focusFirstElement: (boolean|undefined)}=} opts
+ */
+ModalControllerInterface.prototype.open = function(opts) {};
+/**
+ * @return {!Promise<void>}
+ */
+ModalControllerInterface.prototype.close = function() {};
+/**
+ * @return {boolean}
+ */
+ModalControllerInterface.prototype.isOpen = function() {};
+/**
+ * @return {!Promise<void>}
+ */
+ModalControllerInterface.prototype.toggle = function() {};
+/**
+ */
+ModalControllerInterface.prototype.destroy = function() {};
+
