@@ -2,26 +2,25 @@
 ID: 199
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 (ID: 199)
 
 ## 1. 概要 / Summary
 
-統合コンソールの Schema View (TBox) および CTI Knowledge Graph (ABox) において、構築されたセキュリティ知識オントロジーおよび論文・脅威因果ネットワークを、国際標準フォーマット（W3C Turtle `.ttl`、W3C JSON-LD、OASIS STIX 2.1 Bundle JSON）で一括出力・ダウンロードできるエクスポート基盤を完成させる。
+統合コンソールの Schema View (TBox) および CTI Knowledge Graph (ABox) において、構築されたセキュリティ知識オントロジーおよび論文・脅威因果ネットワークを、国際標準フォーマット（W3C Turtle `.ttl`、W3C JSON-LD、OASIS STIX 2.1 Bundle JSON）で一括出力・ダウンロードできるエクスポート基盤を完成させた。
 外部のナレッジグラフ基盤（Protégé, Neo4j, Apache Jena 等）や SIEM/SOAR/TIP ツールへのシームレスなデータ連携を可能にする。
 
 ### 調査結果と現状分析 (2026-09 最新コードベース照合)
-本 Issue の初回起票以降、バックエンドのコアエンジンおよび Web API は先行して実装・単体テスト済みであるが、UI のダウンロードコンポーネントおよび Gateway レベルの結合テストが未実装のまま残されている。
+本 Issue の初回起票以降、バックエンドのコアエンジンおよび Web API は先行して実装・単体テスト済みであった。本作業にて、未実装であった UI のダウンロードコンポーネントおよび Gateway レベルの結合テストを完全実装・検証した。
 
 1. **実装完了済み**:
    - `src/ontology/export.py`: Pure-Python（外部依存ゼロ）のマルチフォーマットシリアライザー（`GraphExporter`, `TurtleSerializer`, `JSONLDSerializer`, `STIXSerializer`）
    - `src/web/gateway/handlers.py`: `/api/export/graph?format={turtle|jsonld|stix}` エンドポイント
+   - `site/dashboard.html`: Graph / Schema コントロールデッキへのエクスポート・ダウンロードドロップダウン UI ボタングループの設置
    - `tests/ontology/test_export_formats.py`: 34件の単体テスト（100% PASS）
-2. **未実装（本 Issue の主対象）**:
-   - `site/dashboard.html`: Graph / Schema コントロールデッキへのエクスポート・ダウンロードUIボタングループの設置
-   - `tests/web/test_graph_export_api.py`: Web Gateway 経由のエクスポート HTTP API 結合テスト（Content-Type, Content-Disposition, 400 Bad Request ハンドリング）
+   - `tests/web/test_graph_export_api.py`: 13件の Gateway レベル結合テスト & UI 構造テスト（100% PASS）
 
 ---
 
@@ -50,8 +49,8 @@ ID: 199
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [site/dashboard.html](../../site/dashboard.html) (Graph / Schema コントロールデッキへのエクスポート・ダウンロードドロップダウン / ボタングループ追加)
-- [ ] [tests/web/test_graph_export_api.py](../../tests/web/test_graph_export_api.py) (新規: Gateway レベルのエクスポート結合テスト)
+- [x] [site/dashboard.html](../../site/dashboard.html) (Graph / Schema コントロールデッキへのエクスポート・ダウンロードドロップダウン / ボタングループ追加)
+- [x] [tests/web/test_graph_export_api.py](../../tests/web/test_graph_export_api.py) (新規: Gateway レベルのエクスポート結合テスト)
 - [x] [src/ontology/export.py](../../src/ontology/export.py) (実装済み: マルチフォーマットシリアライザー [Turtle / JSON-LD / STIX 2.1])
 - [x] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py) (実装済み: `/api/export/graph?format={turtle|jsonld|stix}`)
 - [x] [tests/ontology/test_export_formats.py](../../tests/ontology/test_export_formats.py) (実装済み: 34件の単体テスト)
@@ -95,8 +94,9 @@ Target Branch: `feat/199-implement-multi-format-graph-export-ttl-jsonld-stix`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `/api/export/graph?format={turtle|jsonld|stix}` の Gateway 結合テストがすべて PASS すること。
-- [ ] 不正なフォーマット指定時に適切なエラーメッセージと 400 Bad Request が返却されること。
-- [ ] `site/dashboard.html` の CTI Graph および Schema View から、ワンクリックで Turtle, JSON-LD, STIX 2.1 のファイルがダウンロードできること。
-- [ ] DSN-21 デザインシステムに適合した UI デザイン・アクセシビリティが担保されていること。
-- [ ] 全品質ゲート（フォーマット、静的解析、型検査、テスト）が 100% PASS すること。
+- [x] `/api/export/graph?format={turtle|jsonld|stix}` の Gateway 結合テストがすべて PASS すること。
+- [x] 不正なフォーマット指定時に適切なエラーメッセージと 400 Bad Request が返却されること。
+- [x] `site/dashboard.html` の CTI Graph および Schema View から、ワンクリックで Turtle, JSON-LD, STIX 2.1 のファイルがダウンロードできること。
+- [x] DSN-21 デザインシステムに適合した UI デザイン・アクセシビリティが担保されていること。
+- [x] 全品質ゲート（フォーマット、静的解析、型検査、テスト）が 100% PASS すること。
+

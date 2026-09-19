@@ -4,12 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | In Progress | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
-
-
-
+現在、未着手・進行中の Open Issue はありません。
 
 ---
 
@@ -17,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | 2026-09-19 | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](closed/199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 | **337** | NVD CVEスパイダーによる全歴史無制限フェッチ暴走の是正および脆弱性・弱点OKFデータ格納領域の分離 | Bug | 2026-09-19 | [337-fix-nvd-cve-spider-runaway-and-isolate-vulnerability-okf-storage.md](closed/337-fix-nvd-cve-spider-runaway-and-isolate-vulnerability-okf-storage.md) |
 | **336** | スパイダー実行ログ台帳汚染の根本原因調査と恒久対策（テスト DB 完全分離・ジョブ ID 防御強化） | Bug | 2026-09-19 | [336-spider-execution-log-pollution-root-cause-and-permanent-fix.md](closed/336-spider-execution-log-pollution-root-cause-and-permanent-fix.md) |
 | **335** | スパイダー自動テストにおける本番DB汚染の解消（テストDB完全分離）と実行ログ台帳クリーンアップ | Bug | 2026-09-19 | [335-isolate-spider-test-db-and-cleanup-execution-log.md](closed/335-isolate-spider-test-db-and-cleanup-execution-log.md) |
