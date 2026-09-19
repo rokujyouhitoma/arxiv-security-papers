@@ -467,3 +467,91 @@ ARCCacheInterface.prototype.keys = function() {};
  */
 ARCCacheInterface.prototype.getStats = function() {};
 
+/**
+ * @interface
+ */
+function GraphCanvasEngineInterface() {}
+/**
+ * @param {{nodes: !Array<!Object<string, *>>, edges: !Array<!Object<string, *>>}} data
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.loadData = function(data) {};
+/**
+ * @param {number=} opt_dt
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.stepPhysics = function(opt_dt) {};
+/**
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.render = function() {};
+/**
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.start = function() {};
+/**
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.stop = function() {};
+/**
+ * @param {number=} opt_factor
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.zoomIn = function(opt_factor) {};
+/**
+ * @param {number=} opt_factor
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.zoomOut = function(opt_factor) {};
+/**
+ * @param {number} px
+ * @param {number} py
+ * @param {number} factor
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.zoomAt = function(px, py, factor) {};
+/**
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.resetView = function() {};
+/**
+ * @param {number} width
+ * @param {number} height
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.resize = function(width, height) {};
+/**
+ * @param {number} sx
+ * @param {number} sy
+ * @return {{x: number, y: number}}
+ */
+GraphCanvasEngineInterface.prototype.screenToWorld = function(sx, sy) {};
+/**
+ * @param {number} wx
+ * @param {number} wy
+ * @return {{x: number, y: number}}
+ */
+GraphCanvasEngineInterface.prototype.worldToScreen = function(wx, wy) {};
+/**
+ * @param {(!MouseEvent|!Event)} e
+ * @return {{x: number, y: number}}
+ */
+GraphCanvasEngineInterface.prototype.getNormalizedCanvasMouse = function(e) {};
+/**
+ * @param {number} wx
+ * @param {number} wy
+ * @param {number=} opt_radius
+ * @return {?Object<string, *>}
+ */
+GraphCanvasEngineInterface.prototype.findNodeAtWorld = function(wx, wy, opt_radius) {};
+/**
+ * @param {!Array<!Object<string, *>>} nodes
+ * @param {!Array<!Object<string, *>>} edges
+ * @return {!Array<!Object<string, *>>}
+ */
+GraphCanvasEngineInterface.prototype.computeLargestConnectedComponent = function(nodes, edges) {};
+/**
+ * @return {void}
+ */
+GraphCanvasEngineInterface.prototype.destroy = function() {};
+

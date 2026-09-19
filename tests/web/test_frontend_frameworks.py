@@ -17,6 +17,7 @@ EXPECTED_MODULES = [
     "disjoint-set.js",
     "dom-utils.js",
     "event.js",
+    "graph-canvas.js",
     "hsm.js",
     "locator.js",
     "modal.js",
@@ -66,6 +67,7 @@ def test_externs_contain_yuzora_interfaces() -> None:
         "HierarchicalStateMachineInterface",
         "DisjointSetInterface",
         "ARCCacheInterface",
+        "GraphCanvasEngineInterface",
     ]
     for iface in required_interfaces:
         assert iface in content, f"Interface {iface} missing from site/externs.js"
@@ -113,6 +115,7 @@ def test_app_min_js_contains_bundled_framework_classes() -> None:
         "QueryValidator",
         "DisjointSet",
         "ARCCache",
+        "GraphCanvasEngine",
     ]
     for sym in core_framework_symbols:
         assert sym in content, f"Symbol {sym} not found in compiled {APP_MIN_JS.name}"
@@ -451,3 +454,89 @@ def test_arc_cache_adaptive_replacement_and_scan_resistance() -> None:
     assert data["pIncreased"] is True
     assert data["delRes"] is True
     assert data["sizeAfterClear"] == 0
+
+
+def test_graph_canvas_engine_simulation_and_spatial_transform() -> None:
+    """Validate GraphCanvasEngine physics simulation, spatial transforms, and LCC via Node.js."""
+    import json
+    import shutil
+    import subprocess
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        return
+
+    script = """
+    const { GraphCanvasEngine } = require('./site/js/frameworks/graph-canvas.js');
+    const { DisjointSet } = require('./site/js/frameworks/disjoint-set.js');
+    global.DisjointSet = DisjointSet;
+
+    const engine = new GraphCanvasEngine(null, { width: 800, height: 600 });
+
+    // 1. Data loading
+    engine.loadData({
+        nodes: [
+            { id: 'n1', label: 'Paper 1', x: 400, y: 300 },
+            { id: 'n2', label: 'Paper 2', x: 450, y: 300 },
+            { id: 'n3', label: 'Paper 3', x: 500, y: 300 },
+            { id: 'isolated', label: 'Isolated', x: 100, y: 100 }
+        ],
+        edges: [
+            { source: 'n1', target: 'n2' },
+            { source: 'n2', target: 'n3' }
+        ]
+    });
+
+    const nodeCount = engine.nodes.length;
+    const edgeCount = engine.edges.length;
+    const n2Degree = engine.nodeMap.get('n2').degree;
+
+    // 2. Physics step
+    const xBefore = engine.nodeMap.get('n1').x;
+    engine.stepPhysics(1.0);
+    const xAfter = engine.nodeMap.get('n1').x;
+    const physicsMoved = (xBefore !== xAfter);
+
+    // 3. Spatial transforms & Zooming
+    const originWorld = engine.screenToWorld(400, 300);
+    engine.zoomIn(1.25);
+    const scaleAfterZoom = engine.viewTransform.scale;
+    engine.zoomOut(0.8);
+    const scaleAfterZoomOut = engine.viewTransform.scale;
+    engine.resetView();
+    const scaleAfterReset = engine.viewTransform.scale;
+
+    // 4. Hit testing
+    const hitNode = engine.findNodeAtWorld(engine.nodeMap.get('n1').x, engine.nodeMap.get('n1').y, 25.0);
+    const hitId = hitNode ? hitNode.id : null;
+
+    // 5. LCC computation
+    const lccNodes = engine.computeLargestConnectedComponent(engine.nodes, engine.edges);
+    const lccIds = lccNodes.map(n => n.id).sort();
+
+    console.log(JSON.stringify({
+        nodeCount,
+        edgeCount,
+        n2Degree,
+        physicsMoved,
+        scaleAfterZoom,
+        scaleAfterReset,
+        hitId,
+        lccIds
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["nodeCount"] == 4
+    assert data["edgeCount"] == 2
+    assert data["n2Degree"] == 2
+    assert data["physicsMoved"] is True
+    assert data["scaleAfterZoom"] == 1.25
+    assert data["scaleAfterReset"] == 1.0
+    assert data["hitId"] == "n1"
+    assert data["lccIds"] == ["n1", "n2", "n3"]
