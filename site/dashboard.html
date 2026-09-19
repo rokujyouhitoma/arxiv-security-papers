@@ -4743,8 +4743,10 @@
           const input = document.getElementById('graphQueryInput');
           if (input) {
             input.value = query;
-            if (typeof executeGraphQuery === 'function') {
-              executeGraphQuery();
+            if (typeof window.executeGraphQuery === 'function') {
+              window.executeGraphQuery(query);
+            } else if (typeof executeGraphQuery === 'function') {
+              executeGraphQuery(query);
             }
           }
         }
@@ -4784,6 +4786,10 @@
           const tabParam = params.get('tab') || window.location.hash.replace('#', '');
           if (tabParam && tabParam !== 'graph') {
             window.switchDashboardTab(tabParam, false);
+          }
+          const qParam = params.get('q');
+          if (qParam && typeof window.openGraphWithQuery === 'function') {
+            window.openGraphWithQuery(qParam.trim());
           }
         } catch (e) { }
       }

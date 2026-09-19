@@ -26,16 +26,24 @@ def test_enterprise_console_html_structure() -> None:
     assert "脅威インテリジェンス" in content, "Threat intelligence group required"
     assert "システム運用 & 監査" in content, "Operations group required"
 
-    # Submenu items and links
+    # Submenu items and links (Issue 327 reorganized structure)
     assert 'id="navSearch"' in content, "Search nav item required"
     assert 'id="navTrends"' in content, "Trends nav item required"
     assert 'id="navGraph"' in content, "Graph nav item required"
-    assert 'id="navMatrix"' in content, "ATT&CK matrix nav item required"
+    assert (
+        'href="/dashboard.html"' in content
+    ), "Graph link should target /dashboard.html"
     assert 'id="navGaps"' in content, "Research gaps nav item required"
-    assert 'id="navRules"' in content, "Inference rules nav item required"
-    assert 'id="navTelemetry"' in content, "Telemetry nav item required"
+    assert (
+        'href="/dashboard.html?q=gaps"' in content
+    ), "Research gaps link should target /dashboard.html?q=gaps"
     assert 'id="navMcp"' in content, "MCP sandbox nav item required"
-    assert 'id="navLogs"' in content, "Audit logs nav item required"
+
+    # Verify dead/redundant links are removed (Issue 327)
+    assert 'id="navTelemetry"' not in content, "Dead telemetry link must be removed"
+    assert 'id="navLogs"' not in content, "Redundant audit logs link must be removed"
+    assert 'id="navMatrix"' not in content, "Redundant matrix link must be removed"
+    assert 'id="navRules"' not in content, "Redundant rules link must be removed"
 
     # 3. Main Content Area - Standard 5 Components
     # Component 1: Page Header & Action Buttons
@@ -49,6 +57,12 @@ def test_enterprise_console_html_structure() -> None:
     assert "console-info-banner" in content, "Info banner component required"
     assert 'id="systemInfoBanner"' in content, "Info banner element required"
     assert 'id="closeBannerBtn"' in content, "Banner close button required"
+    assert (
+        'href="#/supervisor"' in content
+    ), "Banner update log link must use direct SPA hash navigation"
+    assert (
+        "/dashboard.html?tab=supervisor" not in content
+    ), "Circular redirect link must not exist in index.html"
 
     # Component 3: KPI Summary Cards with Left Color Bars
     assert "kpi-card-grid" in content, "KPI card grid required"
@@ -253,3 +267,15 @@ def test_enterprise_console_help_drawer() -> None:
     )
     assert "e.key === 'Escape'" in app_js
     assert "e.key === '?'" in app_js
+
+
+def test_dashboard_url_query_param_support() -> None:
+    """Verify site/dashboard.html parses ?q= parameter and dispatches to openGraphWithQuery (Issue 327)."""
+    dashboard_html = Path("site/dashboard.html").read_text(encoding="utf-8")
+    assert "openGraphWithQuery" in dashboard_html, "openGraphWithQuery helper required"
+    assert (
+        "params.get('q')" in dashboard_html or 'params.get("q")' in dashboard_html
+    ), "Query parameter 'q' must be parsed in dashboard.html"
+    assert (
+        "window.openGraphWithQuery(qParam.trim())" in dashboard_html
+    ), "Query parameter must trigger openGraphWithQuery"

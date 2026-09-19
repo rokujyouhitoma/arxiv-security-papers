@@ -76,7 +76,7 @@
                 <span class="nav-item-icon">💡</span>
                 <span class="nav-item-text">プロダクト分析 & ROI</span>
               </a>
-              <a href="/dashboard.html?tab=graph" class="nav-item" id="navGraph">
+              <a href="/dashboard.html" class="nav-item" id="navGraph">
                 <span class="nav-item-icon">🕸️</span>
                 <span class="nav-item-text">CTI ナレッジグラフ ↗</span>
               </a>
@@ -90,17 +90,9 @@
               <span class="nav-group-arrow">▼</span>
             </button>
             <div class="nav-sub-items">
-              <a href="/dashboard.html?tab=graph&view=matrix" class="nav-item" id="navMatrix">
-                <span class="nav-item-icon">🛡️</span>
-                <span class="nav-item-text">ATT&CK / CWE マトリクス ↗</span>
-              </a>
-              <a href="/dashboard.html?tab=graph&view=gaps" class="nav-item" id="navGaps">
+              <a href="/dashboard.html?q=gaps" class="nav-item" id="navGaps">
                 <span class="nav-item-icon">⚡</span>
-                <span class="nav-item-text">リサーチギャップ分析 ↗</span>
-              </a>
-              <a href="/dashboard.html?tab=graph&view=rules" class="nav-item" id="navRules">
-                <span class="nav-item-icon">📜</span>
-                <span class="nav-item-text">推論ルール (EIROM) ↗</span>
+                <span class="nav-item-text">リサーチギャップ探索 ↗</span>
               </a>
             </div>
           </div>
@@ -132,14 +124,6 @@
                 <span class="nav-item-icon">🔌</span>
                 <span class="nav-item-text">MCP ツールサンドボックス</span>
               </a>
-              <a href="/dashboard.html?tab=telemetry" class="nav-item" id="navTelemetry">
-                <span class="nav-item-icon">📊</span>
-                <span class="nav-item-text">レガシーテレメトリ ↗</span>
-              </a>
-              <a href="/dashboard.html?tab=supervisor" class="nav-item" id="navLogs">
-                <span class="nav-item-icon">📑</span>
-                <span class="nav-item-text">システム監査ログ ↗</span>
-              </a>
             </div>
           </div>
         </nav>
@@ -170,7 +154,7 @@
         <section class="console-info-banner" id="systemInfoBanner">
           <div class="banner-content">
             <span class="banner-icon">ℹ️</span>
-            <span id="systemInfoBannerText"><span id="bannerPipelineTime">最新</span>の定期パイプライン実行が正常完了しました。新着論文 <span id="bannerNewCount">--</span> 件および EIROM 確信度エッジが更新されています。<a href="/dashboard.html?tab=supervisor" class="banner-link">更新ログを確認 ↗</a></span>
+            <span id="systemInfoBannerText"><span id="bannerPipelineTime">最新</span>の定期パイプライン実行が正常完了しました。新着論文 <span id="bannerNewCount">--</span> 件および EIROM 確信度エッジが更新されています。<a href="#/supervisor" class="banner-link" data-tab="supervisorTab">更新ログを確認</a></span>
           </div>
           <button class="banner-close-btn" id="closeBannerBtn" title="閉じる">✕</button>
         </section>

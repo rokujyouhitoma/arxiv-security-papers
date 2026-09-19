@@ -181,7 +181,8 @@ class SearchService:
                 "status": "error",
                 "error": f"Document '{doc_id}' not found",
             }
-        return {"status": "success", "document": doc, "paper": doc}
+        clean_doc = {k: v for k, v in doc.items() if not k.startswith("_")}
+        return {"status": "success", "document": clean_doc, "paper": clean_doc}
 
     def _handle_get_paper(self, req: Dict[str, Any]) -> Dict[str, Any]:
         return self._handle_get_document(req)
@@ -328,7 +329,14 @@ class SearchService:
         self, client_sock: socket.socket, resp: Dict[str, Any]
     ) -> None:
         self.requests_handled += 1
-        resp_bytes = (json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8")
+        resp_bytes = (
+            json.dumps(
+                resp,
+                ensure_ascii=False,
+                default=lambda o: list(o) if isinstance(o, (set, frozenset)) else str(o),
+            )
+            + "\n"
+        ).encode("utf-8")
         client_sock.sendall(resp_bytes)
 
     def _send_client_error(self, client_sock: socket.socket, exc: Exception) -> None:

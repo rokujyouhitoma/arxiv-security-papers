@@ -259,7 +259,8 @@ class SearchClient:
                     break
         if not doc:
             return {"status": "error", "error": f"Paper '{clean_id}' not found"}
-        return {"status": "success", "paper": doc}
+        clean_doc = {k: v for k, v in doc.items() if not k.startswith("_")}
+        return {"status": "success", "paper": clean_doc}
 
     def _fallback_get_related(self, req: Dict[str, Any]) -> Dict[str, Any]:
         clean_id = str(req.get("id", "")).strip()
