@@ -255,5 +255,32 @@ RadixTrieInterface.prototype.clear = function() {};
 /**
  * @return {!Array<!Array>}
  */
+/**
+ * @return {!Array<!Array>}
+ */
 RadixTrieInterface.prototype.entries = function() {};
+
+/**
+ * @interface
+ */
+function QueryValidatorInterface() {}
+/**
+ * @param {string} queryString
+ * @return {{
+ *   valid: boolean,
+ *   error: (?string),
+ *   offset: (?number),
+ *   line: (?number),
+ *   col: (?number),
+ *   expected: (!Array<string>),
+ *   hint: (?string),
+ *   ast: *
+ * }}
+ */
+QueryValidatorInterface.prototype.validate = function(queryString) {};
+/**
+ * @param {string} queryString
+ * @return {*}
+ */
+QueryValidatorInterface.prototype.parse = function(queryString) {};
 
