@@ -332,3 +332,68 @@ HierarchicalStateMachineInterface.prototype.addObserver = function(observer) {};
  */
 HierarchicalStateMachineInterface.prototype.removeObserver = function(observer) {};
 
+/**
+ * @interface
+ */
+function DisjointSetInterface() {}
+/**
+ * @param {*} x
+ * @return {boolean}
+ */
+DisjointSetInterface.prototype.add = function(x) {};
+/**
+ * @param {*} x
+ * @return {boolean}
+ */
+DisjointSetInterface.prototype.has = function(x) {};
+/**
+ * @return {number}
+ */
+DisjointSetInterface.prototype.size = function() {};
+/**
+ * @return {number}
+ */
+DisjointSetInterface.prototype.componentCount = function() {};
+/**
+ * @return {number}
+ */
+DisjointSetInterface.prototype.getComponentCount = function() {};
+/**
+ * @param {*} x
+ * @return {*}
+ */
+DisjointSetInterface.prototype.find = function(x) {};
+/**
+ * @param {*} x
+ * @param {*} y
+ * @return {boolean}
+ */
+DisjointSetInterface.prototype.union = function(x, y) {};
+/**
+ * @param {*} x
+ * @param {*} y
+ * @return {boolean}
+ */
+DisjointSetInterface.prototype.connected = function(x, y) {};
+/**
+ * @param {*} x
+ * @return {number}
+ */
+DisjointSetInterface.prototype.componentSize = function(x) {};
+/**
+ * @return {!Map<*, !Array<*>>}
+ */
+DisjointSetInterface.prototype.getComponents = function() {};
+/**
+ * @return {!Array<*>}
+ */
+DisjointSetInterface.prototype.getLargestComponent = function() {};
+/**
+ * @return {!Array<*>}
+ */
+DisjointSetInterface.prototype.getIsolates = function() {};
+/**
+ * @return {void}
+ */
+DisjointSetInterface.prototype.clear = function() {};
+
