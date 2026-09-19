@@ -139,16 +139,13 @@ verify_peg_bootstrap: activate ## Verify PEG AOT compiler self-hosting fixpoint
 	PYTHONPATH=src ${VENV_PYTHON} -m pytest tests/core/test_peg_bootstrap.py -v
 
 .PHONY: build_js
-build_js: activate ## Build minified JS bundle using Google Closure Compiler with strict checks
+build_js: activate ## Build minified JS bundles using pure Python pipeline & Closure Compiler
 	${VENV_PYTHON} tools/closure-compiler/setup_compiler.py
-	java -jar $(COMPILER) \
-		--compilation_level SIMPLE_OPTIMIZATIONS \
-		--warning_level VERBOSE \
-		--language_in ECMASCRIPT_NEXT \
-		--language_out ECMASCRIPT_2020 \
-		--externs site/externs.js \
-		--js $(JS_SRCS) \
-		--js_output_file $(JS_OUT)
+	${VENV_PYTHON} scripts/compile_frontend.py
+
+.PHONY: watch_js
+watch_js: activate ## Watch frontend JS sources and automatically recompile bundles on change
+	${VENV_PYTHON} scripts/compile_frontend.py --watch
 
 .PHONY: test
 test: pytest ## pytest

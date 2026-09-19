@@ -571,4 +571,7 @@ var AppEventInterface;
 /** @typedef {YuzoraEventTargetInterface} */
 var AppEventTargetInterface;
 
+/** @type {!Storage} */
+var localStorage;
+
 

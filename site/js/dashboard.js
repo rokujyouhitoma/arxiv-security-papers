@@ -2834,7 +2834,7 @@
           return;
         }
         if (e.key === 'd' || e.key === 'D') {
-          toggleGraphControlDeck();
+          window.toggleGraphControlDeck();
         }
         if (e.key === 'h' || e.key === 'H') {
           if (e.shiftKey) {
@@ -2843,7 +2843,7 @@
               unhideAllNodes();
             }
           } else {
-            toggleDashboardHeader();
+            window.toggleDashboardHeader();
           }
         }
         if (e.key === 'u' || e.key === 'U') {
@@ -2913,7 +2913,7 @@
 
       // Cross-tab Deep Linking Helper: Switch to Graph and prefill/execute query
       window.openGraphWithQuery = function(query) {
-        switchDashboardTab('graph');
+        window.switchDashboardTab('graph');
         if (query) {
           const input = document.getElementById('graphQueryInput');
           if (input) {
@@ -2974,14 +2974,14 @@
       // Restore Header Hidden state from localStorage
       try {
         if (localStorage.getItem('dashboard_header_hidden') === '1') {
-          toggleDashboardHeader(true);
+          window.toggleDashboardHeader(true);
         }
       } catch (e) { }
 
       // Restore Control Deck Hidden state from localStorage
       try {
         if (localStorage.getItem('dashboard_deck_hidden') === '1') {
-          toggleGraphControlDeck(true);
+          window.toggleGraphControlDeck(true);
         }
       } catch (e) { }
 
