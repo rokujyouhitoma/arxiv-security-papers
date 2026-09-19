@@ -2457,7 +2457,19 @@ class GatewayHandlers:
         )
         storage = SpiderExecutionStorage(db_path=db_path)
         summary = storage.get_status_summary()
-        return response_json(start_response, {"status": "ok", "spiders": summary})
+        supervisor_state = _introspect_supervisor_state(self.workspace_dir)
+        return response_json(
+            start_response,
+            {
+                "status": "ok",
+                "spiders": summary,
+                "supervisor": {
+                    "status": supervisor_state.get("status", "offline"),
+                    "is_supervised": supervisor_state.get("is_supervised", False),
+                    "message": supervisor_state.get("message", ""),
+                },
+            },
+        )
 
     def _parse_spider_history_params(
         self, query_params: Dict[str, List[str]]

@@ -1685,6 +1685,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) return;
       const data = await res.json();
       const spiders = data.spiders || {};
+      const supervisor = data.supervisor || {};
+
+      const offlineBanner = document.getElementById('spiderSupervisorOfflineBanner');
+      if (offlineBanner) {
+        if (supervisor.status === 'offline' || supervisor.is_supervised === false) {
+          offlineBanner.style.display = 'flex';
+        } else {
+          offlineBanner.style.display = 'none';
+        }
+      }
 
       ['arxiv', 'cwe', 'kev_cve'].forEach(key => {
         const info = spiders[key] || (key === 'kev_cve' ? spiders['cisa_kev'] : null);

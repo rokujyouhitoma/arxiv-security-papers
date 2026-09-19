@@ -418,6 +418,32 @@ PYTHONPATH=src .venv/bin/python3 -m supervisor.cli logs --lines 50
 make stop_supervisor
 ```
 
+### 9.1 スパイダー自律実行（WorkflowScheduler）と常駐化要件
+スパイダーの定期自動巡回（arXiv 6時間毎、CWE 24時間毎、KEV/CVE 6時間毎）は、Supervisor Arbiter プロセス内で稼働する `WorkflowScheduler` が担います。Web サーバー単体のみ起動している場合、定期巡回は動作しません（Web コンソールのスパイダー監視画面に `OFFLINE` 警告バナーが表示されます）。
+
+本番環境で常駐サービス化する場合の systemd ユニットファイル設定例（`/etc/systemd/system/arxiv-supervisor.service`）:
+
+```ini
+[Unit]
+Description=arXiv Security Papers Process Supervisor & Autonomous Scheduler
+After=network.target
+
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=/workspace/arxiv-security-papers
+Environment=PYTHONPATH=src
+ExecStart=/workspace/arxiv-security-papers/.venv/bin/python -m supervisor.cli start
+ExecStop=/workspace/arxiv-security-papers/.venv/bin/python -m supervisor.cli stop
+ExecReload=/workspace/arxiv-security-papers/.venv/bin/python -m supervisor.cli reload
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ---
 
 ## 10. Web ポータル UI ＆ ダッシュボード (3大可視化モード操作ガイド)
