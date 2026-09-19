@@ -16,15 +16,53 @@ from spider.pipeline.base import BaseItemPipeline
 _DATE_REGEX = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
+def _map_isolated_output_dir(item_type: str, default_dir: str) -> str:
+    """Maps normalized item type to dedicated storage directory."""
+    norm = item_type.lower()
+    if norm in ("vulnerability", "security-advisory", "security_advisory"):
+        return SecurityOkfItemPipeline.DEFAULT_VULN_DIR
+    if norm == "weakness":
+        return SecurityOkfItemPipeline.DEFAULT_WEAKNESS_DIR
+    return default_dir
+
+
 class SecurityOkfItemPipeline(BaseItemPipeline):
-    """Item Pipeline for converting ScrapedItems to Google OKF v0.2 Markdown and DSN-14 DB records."""
+    """Item Pipeline for converting ScrapedItems to Google OKF v0.2 Markdown and DSN-14 DB records.
+
+    Isolates output storage by item type:
+      - 'security-paper' -> 'outputs/okf_papers' (protected scholarly paper store)
+      - 'vulnerability', 'security-advisory' -> 'outputs/okf_vulnerabilities'
+      - 'weakness' -> 'outputs/okf_weaknesses'
+    """
+
+    DEFAULT_PAPER_DIR: str = "outputs/okf_papers"
+    DEFAULT_VULN_DIR: str = "outputs/okf_vulnerabilities"
+    DEFAULT_WEAKNESS_DIR: str = "outputs/okf_weaknesses"
 
     def __init__(
-        self, output_dir: Optional[str] = None, enable_db_persistence: bool = False
+        self,
+        output_dir: Optional[str] = None,
+        enable_db_persistence: bool = False,
+        isolate_by_type: bool = True,
     ) -> None:
-        self.output_dir: str = output_dir or "outputs/okf_papers"
+        self._custom_output_dir: Optional[str] = output_dir
+        self.output_dir: str = output_dir or self.DEFAULT_PAPER_DIR
         self.enable_db_persistence: bool = enable_db_persistence
+        self.isolate_by_type: bool = isolate_by_type
         self._processed_count: int = 0
+
+    def resolve_output_root(self, item_type: str) -> str:
+        """Determines destination root directory based on item type and isolation setting."""
+        if (
+            self._custom_output_dir
+            and self._custom_output_dir != self.DEFAULT_PAPER_DIR
+        ):
+            return self._custom_output_dir
+
+        if not self.isolate_by_type:
+            return self.output_dir
+
+        return _map_isolated_output_dir(item_type, self.DEFAULT_PAPER_DIR)
 
     async def process_item(self, item: ScrapedItem, spider: Any) -> ScrapedItem:
         """Processes scraped item, generates OKF v0.2 Markdown, and persists record."""
@@ -32,8 +70,10 @@ class SecurityOkfItemPipeline(BaseItemPipeline):
         clean_id = _resolve_item_clean_id(payload, item.item_id)
         item.payload["clean_id"] = clean_id
 
+        item_type = str(payload.get("type") or "security-paper").lower()
+        base_dir = self.resolve_output_root(item_type)
         date_folder = _extract_date_folder(str(payload.get("published_date") or ""))
-        target_dir = os.path.join(self.output_dir, date_folder)
+        target_dir = os.path.join(base_dir, date_folder)
         os.makedirs(target_dir, exist_ok=True)
         okf_file = os.path.join(target_dir, f"{clean_id}.md")
 
@@ -54,11 +94,12 @@ class SecurityOkfItemPipeline(BaseItemPipeline):
 
     async def close_spider(self, spider: Any) -> None:
         spider_name = getattr(spider, "name", "spider")
-        print(
+        msg = (
             f"[✓] [{spider_name}] OKF Pipeline complete: {self._processed_count} items generated "
-            f"in '{self.output_dir}' (DB persistence: {self.enable_db_persistence})",
-            flush=True,
+            f"(base: '{self.output_dir}', isolated: {self.isolate_by_type}, "
+            f"DB persistence: {self.enable_db_persistence})"
         )
+        print(msg, flush=True)
 
 
 # Backward-compatible alias
@@ -110,7 +151,7 @@ def _sanitize_string(val: Any) -> str:
 
 def _sanitize_path_id(clean_id: str) -> str:
     """Sanitizes clean_id to prevent Path Traversal (CWE-22)."""
-    base = os.path.basename(str(clean_id or ""))
+    base = os.path.basename(clean_id or "")
     sanitized = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", base)
     sanitized = sanitized.strip("._-")
     return sanitized if sanitized else "UNKNOWN_ID"
@@ -327,7 +368,7 @@ def _render_vuln_affected_products(
 
 def _render_vuln_references(raw_refs: List[str], fallback_url: str) -> str:
     """Renders references list markdown."""
-    refs = raw_refs if raw_refs else ([fallback_url] if fallback_url else [])
+    refs: List[str] = raw_refs if raw_refs else ([fallback_url] if fallback_url else [])
     if not refs:
         return "- なし"
     return "\n".join([f"- [{r}]({r})" for r in refs])
