@@ -21,6 +21,14 @@ from workflow.operators.spider_operator import SpiderTaskOperator
 class TestSpiderTaskOperator(unittest.TestCase):
     """Tests SpiderTaskOperator execution within workflow DAGs."""
 
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.test_db = os.path.join(self.temp_dir.name, "test_spider_operator.vdb")
+        self.storage = SpiderExecutionStorage(db_path=self.test_db)
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
     def test_direct_operator_execution(self) -> None:
         def dummy_fallback(job: CrawlJob) -> CrawlResult:
             return CrawlResult(
@@ -38,6 +46,7 @@ class TestSpiderTaskOperator(unittest.TestCase):
             client=client,
             params={"max_requests": 5},
             output_key="arxiv_data",
+            storage=self.storage,
         )
 
         initial_context = {"pipeline_id": "dag-001"}
@@ -70,6 +79,7 @@ class TestSpiderTaskOperator(unittest.TestCase):
             spider_name="arxiv",
             client=client,
             output_key="crawled_papers",
+            storage=self.storage,
         )
 
         # Step 3: Analysis node
@@ -105,6 +115,7 @@ class TestSpiderTaskOperator(unittest.TestCase):
             spider_name="cwe",
             interval_seconds=0.01,
             client=client,
+            storage=self.storage,
         )
 
         self.assertEqual(task.metadata["spider_name"], "cwe")

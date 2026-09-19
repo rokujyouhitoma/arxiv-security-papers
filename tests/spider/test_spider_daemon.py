@@ -74,9 +74,11 @@ class TestSpiderDaemonWorker(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.mkdtemp()
         self.cache_file = os.path.join(self.temp_dir, "cache.json")
+        self.test_db = os.path.join(self.temp_dir, "test_spider.vdb")
         self.worker = SpiderDaemonWorker(
             worker_id="test_worker",
             cache_state_file=self.cache_file,
+            db_path=self.test_db,
         )
 
     def tearDown(self) -> None:

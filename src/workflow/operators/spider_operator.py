@@ -92,8 +92,10 @@ class SpiderTaskOperator:
         self.params = dict(params or {})
         self.timeout = timeout
         self.output_key = output_key
-        resolved_db = db_path or os.path.join(
-            "outputs", "database", "spider_execution.vdb"
+        resolved_db = (
+            db_path
+            or os.getenv("SPIDER_EXECUTION_DB_PATH")
+            or os.path.join("outputs", "database", "spider_execution.vdb")
         )
         self.storage = (
             storage

@@ -12,6 +12,7 @@ import os
 from typing import Any, Dict, Optional
 
 from spider.daemon.client import SpiderDaemonClient
+from spider.daemon.storage import SpiderExecutionStorage
 from supervisor.contracts import LifecycleHook
 
 from .scheduler import WorkflowScheduler
@@ -22,9 +23,16 @@ logger = logging.getLogger(__name__)
 class WorkflowService:
     """Core domain service coordinating the WorkflowScheduler and periodic triggers."""
 
-    def __init__(self, run_on_startup: Optional[bool] = None) -> None:
+    def __init__(
+        self,
+        run_on_startup: Optional[bool] = None,
+        storage: Optional[SpiderExecutionStorage] = None,
+        db_path: Optional[str] = None,
+    ) -> None:
         self.scheduler = WorkflowScheduler()
         self.client = SpiderDaemonClient()
+        self.storage = storage
+        self.db_path = db_path
         self.tasks_registered = False
         if run_on_startup is None:
             self.run_on_startup = os.getenv(
@@ -47,6 +55,8 @@ class WorkflowService:
             client=self.client,
             task_id="spider_arxiv_6h",
             run_on_startup=ros,
+            storage=self.storage,
+            db_path=self.db_path,
         )
         # MITRE CWE: every 24 hours (86400 seconds)
         self.scheduler.register_spider_task(
@@ -55,6 +65,8 @@ class WorkflowService:
             client=self.client,
             task_id="spider_cwe_24h",
             run_on_startup=ros,
+            storage=self.storage,
+            db_path=self.db_path,
         )
         # CISA KEV & NVD CVE: every 6 hours (21600 seconds)
         self.scheduler.register_spider_task(
@@ -63,6 +75,8 @@ class WorkflowService:
             client=self.client,
             task_id="spider_cve_nvd_6h",
             run_on_startup=ros,
+            storage=self.storage,
+            db_path=self.db_path,
         )
         self.tasks_registered = True
         logger.info(
@@ -79,9 +93,15 @@ class WorkflowService:
 class WorkflowLifecycleHook(LifecycleHook):
     """Supervisor LifecycleHook managing the WorkflowService and periodic crawler scheduler."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        storage: Optional[SpiderExecutionStorage] = None,
+        db_path: Optional[str] = None,
+    ) -> None:
         self.service: Optional[WorkflowService] = None
         self.worker_id = "workflow_01"
+        self.storage = storage
+        self.db_path = db_path
 
     def bind_worker(self, worker_id: str) -> None:
         self.worker_id = worker_id
@@ -89,7 +109,7 @@ class WorkflowLifecycleHook(LifecycleHook):
     def setup(self) -> bool:
         """Initializes WorkflowService and registers default spider schedules."""
         try:
-            self.service = WorkflowService()
+            self.service = WorkflowService(storage=self.storage, db_path=self.db_path)
             self.service.register_default_spider_tasks()
             return True
         except Exception as exc:

@@ -38,6 +38,9 @@ class SpiderExecutionStorage:
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         if db_path is None:
+            db_path = os.getenv("SPIDER_EXECUTION_DB_PATH")
+
+        if db_path is None:
             base_dir = os.path.abspath(
                 os.path.join(
                     os.path.dirname(

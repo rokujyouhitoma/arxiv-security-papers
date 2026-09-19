@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from core.hsm import HierarchicalStateMachine
 from spider.daemon.client import SpiderDaemonClient
+from spider.daemon.storage import SpiderExecutionStorage
 
 from .contracts import (
     EVENT_DISPATCH,
@@ -124,6 +125,8 @@ class WorkflowScheduler:
         task_id: Optional[str] = None,
         run_on_startup: bool = True,
         initial_delay: float = 0.0,
+        storage: Optional[SpiderExecutionStorage] = None,
+        db_path: Optional[str] = None,
     ) -> ScheduledTask:
         """Registers a recurring spider crawl task using SpiderTaskOperator."""
         t_id = task_id or f"spider_{spider_name}_periodic"
@@ -131,6 +134,8 @@ class WorkflowScheduler:
             spider_name=spider_name,
             client=client,
             params=params,
+            storage=storage,
+            db_path=db_path,
         )
         return self.register_task(
             task_id=t_id,

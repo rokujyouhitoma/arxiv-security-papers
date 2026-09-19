@@ -92,12 +92,28 @@ class TestSpiderExecutionStorage(unittest.TestCase):
 class TestWorkflowService(unittest.TestCase):
     """Verifies workflow scheduler dispatching."""
 
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.test_db = os.path.join(self.temp_dir.name, "test_workflow_service.vdb")
+        self.storage = SpiderExecutionStorage(db_path=self.test_db)
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
     @patch("spider.daemon.client.SpiderDaemonClient.submit_job")
     def test_task_scheduling_logic(self, mock_submit: MagicMock) -> None:
-        mock_submit.return_value = CrawlResult(
-            job_id="test", spider_name="arxiv", success=True
-        )
-        hook = WorkflowLifecycleHook()
+        def mock_submit_side_effect(
+            job: CrawlJob, timeout: float = 60.0
+        ) -> CrawlResult:
+            return CrawlResult(
+                job_id=job.job_id,
+                spider_name=job.spider_name,
+                success=True,
+                item_count=1,
+            )
+
+        mock_submit.side_effect = mock_submit_side_effect
+        hook = WorkflowLifecycleHook(storage=self.storage)
         self.assertTrue(hook.setup())
         self.assertTrue(hook.health_check())
 
@@ -107,6 +123,12 @@ class TestWorkflowService(unittest.TestCase):
         hook.on_flush()
         # Ensure submit_job was called for registered tasks
         self.assertGreaterEqual(mock_submit.call_count, 1)
+
+        # Verify DB records in isolated test storage
+        history = self.storage.list_history(limit=10)
+        self.assertEqual(len(history), 3)
+        for entry in history:
+            self.assertEqual(entry["status"], "SUCCESS")
 
         hook.teardown()
         self.assertFalse(hook.health_check())
