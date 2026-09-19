@@ -13,6 +13,7 @@ APP_MIN_JS = REPO_ROOT / "site" / "app-min.js"
 EXPECTED_MODULES = [
     "animation.js",
     "api-client.js",
+    "arc-cache.js",
     "disjoint-set.js",
     "dom-utils.js",
     "event.js",
@@ -64,6 +65,7 @@ def test_externs_contain_yuzora_interfaces() -> None:
         "QueryValidatorInterface",
         "HierarchicalStateMachineInterface",
         "DisjointSetInterface",
+        "ARCCacheInterface",
     ]
     for iface in required_interfaces:
         assert iface in content, f"Interface {iface} missing from site/externs.js"
@@ -86,7 +88,7 @@ def test_makefile_includes_frameworks_in_js_srcs() -> None:
 
 
 def test_app_min_js_contains_bundled_framework_classes() -> None:
-    """site/app-min.js must contain definitions for the compiled framework classes."""
+    """site/app-min.js must contain compiled classes from frameworks."""
     assert APP_MIN_JS.is_file(), f"Missing compiled bundle: {APP_MIN_JS}"
     content = APP_MIN_JS.read_text(encoding="utf-8")
 
@@ -110,6 +112,7 @@ def test_app_min_js_contains_bundled_framework_classes() -> None:
         "RadixTrie",
         "QueryValidator",
         "DisjointSet",
+        "ARCCache",
     ]
     for sym in core_framework_symbols:
         assert sym in content, f"Symbol {sym} not found in compiled {APP_MIN_JS.name}"
@@ -340,3 +343,111 @@ def test_disjoint_set_union_find_and_lcc() -> None:
     assert data["isolates"] == ["Isolated1"]
     assert data["benchCount"] == 2500
     assert data["benchTimeMs"] < 1000  # under 1 second for 10,000 items
+
+
+def test_arc_cache_adaptive_replacement_and_scan_resistance() -> None:
+    """Validate ARCCache self-tuning adaptation, scan resistance, and ApiClient integration via Node.js."""
+    import json
+    import shutil
+    import subprocess
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        return
+
+    script = """
+    const { ARCCache } = require('./site/js/frameworks/arc-cache.js');
+
+    // 1. Basic operations & boundaries
+    const cache = new ARCCache(5);
+    cache.put('a', 1);
+    cache.put('b', 2);
+    cache.put('c', 3);
+
+    const hasA = cache.has('a');
+    const getA = cache.get('a');
+    const initialStats = cache.getStats();
+
+    // 2. Promotion to T2 on second access
+    // 'a' was accessed once via get('a'), so it moved to T2
+    const inT2Before = cache.t2.has('a');
+    const inT1Before = cache.t1.has('a');
+
+    // 3. Scan resistance demonstration
+    // Fill cache capacity 5 with 3 hot items in T2 and 2 items in T1
+    const scanCache = new ARCCache(5);
+    ['hot1', 'hot2', 'hot3'].forEach(k => {
+        scanCache.put(k, 'val_' + k);
+        scanCache.get(k); // second access -> moves to T2
+    });
+
+    // Verify hot items are in T2
+    const hotInT2 = scanCache.t2.has('hot1') && scanCache.t2.has('hot2') && scanCache.t2.has('hot3');
+
+    // Scan through 20 distinct cold items
+    for (let i = 0; i < 20; i++) {
+        scanCache.put('cold_' + i, i);
+    }
+
+    // Hot items in T2 must survive the scan (ARC scan-resistance)
+    const hot1Survives = scanCache.has('hot1');
+    const hot2Survives = scanCache.has('hot2');
+    const hot3Survives = scanCache.has('hot3');
+
+    // 4. Ghost cache adaptation of parameter p
+    const adaptCache = new ARCCache(4);
+    adaptCache.put(1, 'one');
+    adaptCache.put(2, 'two');
+    adaptCache.put(3, 'three');
+    adaptCache.put(4, 'four');
+    // Now push a 5th item to evict LRU of T1 to B1
+    adaptCache.put(5, 'five');
+    const b1HasKey = adaptCache.b1.has(1);
+    const pBefore = adaptCache.p;
+    // Accessing key 1 now triggers B1 hit and adapts p upwards
+    adaptCache.put(1, 'one_revisited');
+    const pAfterB1 = adaptCache.p;
+
+    // 5. Deletion and clearing
+    const delRes = adaptCache.delete(1);
+    const sizeAfterDel = adaptCache.size();
+    adaptCache.clear();
+    const sizeAfterClear = adaptCache.size();
+
+    console.log(JSON.stringify({
+        hasA,
+        getA,
+        inT2Before,
+        inT1Before,
+        hotInT2,
+        hot1Survives,
+        hot2Survives,
+        hot3Survives,
+        b1HasKey,
+        pBefore,
+        pAfterB1,
+        pIncreased: pAfterB1 > pBefore,
+        delRes,
+        sizeAfterDel,
+        sizeAfterClear
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["hasA"] is True
+    assert data["getA"] == 1
+    assert data["inT2Before"] is True
+    assert data["inT1Before"] is False
+    assert data["hotInT2"] is True
+    assert data["hot1Survives"] is True
+    assert data["hot2Survives"] is True
+    assert data["hot3Survives"] is True
+    assert data["b1HasKey"] is True
+    assert data["pIncreased"] is True
+    assert data["delRes"] is True
+    assert data["sizeAfterClear"] == 0

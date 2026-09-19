@@ -17,6 +17,7 @@ TESTS := $(shell find tests -type f -name "*.py" | sort)
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar
 JS_SRCS = site/js/frameworks/dom-utils.js \
           site/js/frameworks/disjoint-set.js \
+          site/js/frameworks/arc-cache.js \
           site/js/frameworks/timing.js \
           site/js/frameworks/event.js \
           site/js/frameworks/publisher.js \

@@ -39,8 +39,9 @@ class ApiClient {
    * @param {string=} baseUrl Base URL prefix (defaults to empty for relative paths)
    * @param {!Object<string, *>=} defaultOptions Default fetch options (headers, timeout, etc.)
    * @param {?Object=} publisher Optional event publisher instance (Publisher)
+   * @param {?Object=} cache Optional cache instance (ARCCache)
    */
-  constructor(baseUrl = '', defaultOptions = {}, publisher = null) {
+  constructor(baseUrl = '', defaultOptions = {}, publisher = null, cache = null) {
     /** @private @type {string} */
     this.baseUrl_ = baseUrl;
     /** @private @type {!Object<string, *>} */
@@ -52,6 +53,8 @@ class ApiClient {
     }, defaultOptions);
     /** @private @type {?Object} */
     this.publisher_ = publisher;
+    /** @private @type {?Object} */
+    this.cache_ = cache;
   }
 
   /**
@@ -192,14 +195,45 @@ class ApiClient {
   }
 
   /**
-   * Convenience method for GET requests.
+   * Convenience method for GET requests with optional caching.
    * @param {string} path Relative API path
    * @param {?Object<string, *>=} params Optional query parameters
-   * @param {!Object<string, *>=} options Additional options
+   * @param {!Object<string, *>=} options Additional options (useCache: boolean)
    * @return {!Promise<*>}
    */
-  get(path, params = null, options = {}) {
-    return this.request(path, Object.assign({}, options, { method: 'GET', params: params }));
+  async get(path, params = null, options = {}) {
+    const url = this.buildUrl_(path, params);
+    const useCache = options.useCache !== false && Boolean(this.cache_);
+    if (useCache && this.cache_ && typeof this.cache_.get === 'function') {
+      const cached = this.cache_.get(url);
+      if (cached !== null && cached !== undefined) {
+        if (this.publisher_ && typeof this.publisher_.publish === 'function') {
+          this.publisher_.publish('api:cache_hit', { url });
+        }
+        return cached;
+      }
+    }
+    const result = await this.request(path, Object.assign({}, options, { method: 'GET', params: params }));
+    if (useCache && this.cache_ && typeof this.cache_.put === 'function' && result !== null && result !== undefined) {
+      this.cache_.put(url, result);
+    }
+    return result;
+  }
+
+  /**
+   * Returns current cache instance.
+   * @return {?Object}
+   */
+  getCache() {
+    return this.cache_;
+  }
+
+  /**
+   * Sets or updates cache instance.
+   * @param {?Object} cache
+   */
+  setCache(cache) {
+    this.cache_ = cache;
   }
 
   /**
