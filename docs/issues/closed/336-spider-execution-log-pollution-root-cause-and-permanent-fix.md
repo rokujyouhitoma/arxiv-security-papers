@@ -2,7 +2,7 @@
 ID: 336
 種別: Bug
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 依存: 335 (完了済み)
 ---
 
@@ -248,11 +248,11 @@ print('records:', len(s.list_history()))
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] `make check` (122件以上のテスト) 完全 PASS。
-- [ ] `make static_analysis` (xenon / flake8 / mypy) エラー 0 件。
-- [ ] `make py_compile` エラー 0 件。
-- [ ] `pytest tests/` 実行後、`outputs/database/spider_execution.vdb` に新規テスト由来レコードが 0 件であること。
-- [ ] `SpiderExecutionStorage.record_finish()` に未知 `job_id` が渡された場合、`WARNING` ログが出力されて例外が発生しないこと。
-- [ ] `test_record_finish_with_unknown_job_id` テスト PASS（`assertLogs` で WARNING を検証）。
-- [ ] `src/spider/daemon/storage.py` が `import logging` / `logger = logging.getLogger(__name__)` を持つこと。
+- [x] `make check` (122件以上のテスト) 完全 PASS。
+- [x] `make static_analysis` (xenon / flake8 / mypy) エラー 0 件。
+- [x] `make py_compile` エラー 0 件。
+- [x] `pytest tests/` 実行後、`outputs/database/spider_execution.vdb` に新規テスト由来レコードが 0 件であること。
+- [x] `SpiderExecutionStorage.record_finish()` に未知 `job_id` が渡された場合、`WARNING` ログが出力されて例外が発生しないこと。
+- [x] `test_record_finish_with_unknown_job_id` テスト PASS（`assertLogs` で WARNING を検証）。
+- [x] `src/spider/daemon/storage.py` が `import logging` / `logger = logging.getLogger(__name__)` を持つこと。
 

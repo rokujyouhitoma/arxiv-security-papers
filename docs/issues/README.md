@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **336** | スパイダー実行ログ台帳汚染の根本原因調査と恒久対策（テスト DB 完全分離・ジョブ ID 防御強化） | Bug | High | In Progress | [336-spider-execution-log-pollution-root-cause-and-permanent-fix.md](336-spider-execution-log-pollution-root-cause-and-permanent-fix.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **336** | スパイダー実行ログ台帳汚染の根本原因調査と恒久対策（テスト DB 完全分離・ジョブ ID 防御強化） | Bug | 2026-09-19 | [336-spider-execution-log-pollution-root-cause-and-permanent-fix.md](closed/336-spider-execution-log-pollution-root-cause-and-permanent-fix.md) |
 | **335** | スパイダー自動テストにおける本番DB汚染の解消（テストDB完全分離）と実行ログ台帳クリーンアップ | Bug | 2026-09-19 | [335-isolate-spider-test-db-and-cleanup-execution-log.md](closed/335-isolate-spider-test-db-and-cleanup-execution-log.md) |
 | **334** | スパイダー定期実行 DB 永続化およびスケジューラー自動ディスパッチの包括的回帰テスト追加 | Test / Quality | 2026-09-19 | [334-add-regression-tests-for-spider-scheduler-persistence.md](closed/334-add-regression-tests-for-spider-scheduler-persistence.md) |
 | **333** | スケジューラー初回起動時におけるスパイダー即時実行挙動の制御と仕様明記 | Feature | 2026-09-19 | [333-clarify-or-adjust-scheduler-initial-execution-behavior.md](closed/333-clarify-or-adjust-scheduler-initial-execution-behavior.md) |

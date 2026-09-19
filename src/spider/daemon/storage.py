@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
 from database.ipc.driver import Connection, connect
 
 from .contracts import CrawlJob, CrawlResult
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_now_iso() -> str:
@@ -123,6 +126,15 @@ class SpiderExecutionStorage:
                 ),
             )
             conn.commit()
+            if cur.rowcount <= 0:
+                logger.warning(
+                    "[SpiderExecutionStorage] record_finish: job_id '%s' not found "
+                    "in spider_execution_logs. "
+                    "This may indicate a job_id mismatch (e.g. test mock vs. dynamic ID). "
+                    "Status '%s' was NOT persisted.",
+                    result.job_id,
+                    status,
+                )
 
     def _rows_to_dicts(self, cur: Any, rows: List[Any]) -> List[Dict[str, Any]]:
         cols = [d[0] for d in cur.description] if cur.description else []

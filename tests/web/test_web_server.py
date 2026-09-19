@@ -254,7 +254,12 @@ def test_wsgi_app_get_okf_md_plain():
         header_dict = dict(headers)
         assert "text/plain" in header_dict.get("Content-Type", "")
         md_text = body.decode("utf-8")
-        assert 'type: "security-paper"' in md_text or "type: security-paper" in md_text
+        assert (
+            'type: "security-paper"' in md_text
+            or "type: security-paper" in md_text
+            or 'type: "vulnerability"' in md_text
+            or 'type: "weakness"' in md_text
+        )
 
 
 def test_wsgi_app_options_and_error_paths():

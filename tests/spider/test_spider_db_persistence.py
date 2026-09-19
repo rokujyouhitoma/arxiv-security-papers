@@ -88,6 +88,23 @@ class TestSpiderExecutionStorage(unittest.TestCase):
         self.assertEqual(summary["cwe"]["interval_seconds"], 86400.0)
         self.assertIn("kev_cve", summary)
 
+    def test_record_finish_with_unknown_job_id(self) -> None:
+        """record_finish() with unknown job_id must not raise and must emit WARNING."""
+        unknown_result = CrawlResult(
+            job_id="nonexistent_job_id_xyz",
+            spider_name="arxiv",
+            success=True,
+            item_count=0,
+        )
+        with self.assertLogs("spider.daemon.storage", level="WARNING") as cm:
+            self.storage.record_finish(unknown_result)
+        self.assertTrue(
+            any("nonexistent_job_id_xyz" in line for line in cm.output),
+            f"Expected WARNING with job_id in log output, got: {cm.output}",
+        )
+        history = self.storage.list_history()
+        self.assertEqual(len(history), 0)
+
 
 class TestWorkflowService(unittest.TestCase):
     """Verifies workflow scheduler dispatching."""

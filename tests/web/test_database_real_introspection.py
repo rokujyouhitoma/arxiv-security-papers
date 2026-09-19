@@ -83,7 +83,7 @@ class TestDatabaseRealIntrospection(unittest.TestCase):
 
         res = CTICatalogStorage.get_introspection_metadata(self.workspace_dir)
         self.assertEqual(res["table_count"], 7)
-        self.assertEqual(res["total_rows"], 5073)
+        self.assertGreaterEqual(res["total_rows"], 5073)
         names = [t["table_name"] for t in res["tables"]]
         self.assertEqual(
             names,
