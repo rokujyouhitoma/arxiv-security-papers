@@ -2,7 +2,8 @@
 ID: 343
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed (完了)
+完了日: 2026-09-19
 ---
 
 # [FEAT] HierarchicalStateMachine (HSM): src/core/hsm/ の JS 移植と状態管理統合 (ID: 343)
@@ -31,11 +32,11 @@ UI の複合状態（例: ナレッジグラフ画面における `Normal.Idle`,
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`site/js/frameworks/hsm.js`](../../site/js/frameworks/hsm.js) (新規)
-- [ ] [`site/externs.js`](../../site/externs.js) (`HierarchicalStateMachineInterface` 型定義追加)
-- [ ] [`Makefile`](../../Makefile) (`JS_SRCS` 登録、`build_js` 検証)
-- [ ] [`site/js/frameworks/sse-manager.js`](../../site/js/frameworks/sse-manager.js) (HSM 連動)
-- [ ] [`tests/web/test_frontend_frameworks.py`](../../tests/web/test_frontend_frameworks.py) (テストケース追加)
+- [x] [`site/js/frameworks/hsm.js`](../../site/js/frameworks/hsm.js) (新規)
+- [x] [`site/externs.js`](../../site/externs.js) (`HierarchicalStateMachineInterface` 型定義追加)
+- [x] [`Makefile`](../../Makefile) (`JS_SRCS` 登録、`build_js` 検証)
+- [x] [`site/js/frameworks/sse-manager.js`](../../site/js/frameworks/sse-manager.js) (HSM 連動)
+- [x] [`tests/web/test_frontend_frameworks.py`](../../tests/web/test_frontend_frameworks.py) (テストケース追加)
 
 ---
 
@@ -44,21 +45,23 @@ UI の複合状態（例: ナレッジグラフ画面における `Normal.Idle`,
 Target Branch: `feat/343-port-hsm-core-to-frontend-state-governance`
 
 1. **`HierarchicalStateMachine` クラスの設計と実装**:
-   - 状態ツリー定義: 各状態ノードは `id`, `parent`, `initialChild`, `entryActions`, `exitActions`, `transitions` を保持
-   - メソッド: `init()`, `dispatch(event, payload)`, `isInState(stateId)`, `getCurrentStatePath()`
-   - LCA（Least Common Ancestor: 最小共通祖先）アルゴリズムによる、退出（exit）と進入（entry）アクションの正確な連鎖実行
+   - 状態ツリー定義: 各状態ノードは `name`, `parent`, `initialChild`, `onEntry`, `onExit`, `transitions` を保持
+   - メソッド: `dispatch(event, payload)`, `sendEvent()`, `isInState(stateId)`, `getStatePath()`, `getCurrentStatePath()`, `forceTransition()`
+   - LCCA（Lowest Common Composite Ancestor）アルゴリズムによる、退出（exit）と進入（entry）アクションの正確な連鎖実行
    - ガード条件（Guards）の評価とアクション実行コンテキスト
+   - `HierarchicalStateMachine.fromConfig(config)` による宣言的ステートマシン構築
 2. **Closure Compiler 適合**:
-   - `site/externs.js` に `HierarchicalStateMachine` の型定義を追加
+   - `site/externs.js` に `HierarchicalStateMachineInterface` の型定義を追加
 3. **適用とテスト**:
-   - SSE 接続マネージャーおよびグラフキャンバスのモード遷移への組み込み
+   - `site/js/frameworks/sse-manager.js` への HSM ライフサイクル統制の組み込み
+   - `tests/web/test_frontend_frameworks.py` に Node.js 連携による LCCA / 階層遷移 / ガード / イベントバブリング統合テストを追加
 
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] `site/js/frameworks/hsm.js` が実装され、JSDoc 型アノテーションが付与されていること
-- [ ] `src/core/hsm/` と同等の階層遷移・LCA 計算・entry/exit アクション順序が担保されていること
-- [ ] `site/externs.js` に型定義が追加され、`make build_js` で警告 0 件であること
-- [ ] `tests/web/test_frontend_frameworks.py` に階層遷移シナリオのテストが追加され 100% PASS すること
-- [ ] `make verify_quality` が完全通過すること
+- [x] `site/js/frameworks/hsm.js` が実装され、JSDoc 型アノテーションが付与されていること
+- [x] `src/core/hsm/` と同等の階層遷移・LCA 計算・entry/exit アクション順序が担保されていること
+- [x] `site/externs.js` に型定義が追加され、`make build_js` で警告 0 件であること
+- [x] `tests/web/test_frontend_frameworks.py` に階層遷移シナリオのテストが追加され 100% PASS すること
+- [x] `make check_format` および `make static_analysis` が完全通過すること

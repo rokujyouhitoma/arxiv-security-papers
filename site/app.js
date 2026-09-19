@@ -1691,7 +1691,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Start telemetry & SSE (SSEStreamManager handles beforeunload / pagehide / visibilitychange internally)
+  function closeSseStream() {
+    if (sseManager) {
+      sseManager.close();
+    }
+  }
+  window['closeSseStream'] = closeSseStream;
+
+  // Start telemetry & SSE (Native EventSource lifecycle: beforeunload, pagehide, visibilitychange is managed by SSEStreamManager)
   initSseLiveStream();
 
   // ==========================================
