@@ -397,3 +397,73 @@ DisjointSetInterface.prototype.getIsolates = function() {};
  */
 DisjointSetInterface.prototype.clear = function() {};
 
+/**
+ * @param {?Object} cache
+ * @return {void}
+ */
+ApiClientInterface.prototype.setCache = function(cache) {};
+/**
+ * @return {?Object}
+ */
+ApiClientInterface.prototype.getCache = function() {};
+
+/**
+ * @interface
+ */
+function ARCCacheInterface() {}
+/**
+ * @return {number}
+ */
+ARCCacheInterface.prototype.size = function() {};
+/**
+ * @param {*} key
+ * @return {boolean}
+ */
+ARCCacheInterface.prototype.has = function(key) {};
+/**
+ * @param {*} key
+ * @param {*=} defaultValue
+ * @return {*}
+ */
+ARCCacheInterface.prototype.get = function(key, defaultValue) {};
+/**
+ * @param {*} key
+ * @param {*} value
+ * @return {void}
+ */
+ARCCacheInterface.prototype.put = function(key, value) {};
+/**
+ * @param {*} key
+ * @param {*} value
+ * @return {void}
+ */
+ARCCacheInterface.prototype.set = function(key, value) {};
+/**
+ * @param {*} key
+ * @return {boolean}
+ */
+ARCCacheInterface.prototype.delete = function(key) {};
+/**
+ * @return {void}
+ */
+ARCCacheInterface.prototype.clear = function() {};
+/**
+ * @return {!Array<*>}
+ */
+ARCCacheInterface.prototype.keys = function() {};
+/**
+ * @return {{
+ *   hits: number,
+ *   misses: number,
+ *   hitRatio: number,
+ *   p: number,
+ *   capacity: number,
+ *   t1Size: number,
+ *   t2Size: number,
+ *   b1Size: number,
+ *   b2Size: number,
+ *   totalEntries: number
+ * }}
+ */
+ARCCacheInterface.prototype.getStats = function() {};
+
