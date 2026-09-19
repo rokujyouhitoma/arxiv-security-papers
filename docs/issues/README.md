@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **336** | スパイダー実行ログ台帳汚染の根本原因調査と恒久対策（テスト DB 完全分離・ジョブ ID 防御強化） | Bug | High | Open (New) | [336-spider-execution-log-pollution-root-cause-and-permanent-fix.md](336-spider-execution-log-pollution-root-cause-and-permanent-fix.md) |
+| **336** | スパイダー実行ログ台帳汚染の根本原因調査と恒久対策（テスト DB 完全分離・ジョブ ID 防御強化） | Bug | High | In Progress | [336-spider-execution-log-pollution-root-cause-and-permanent-fix.md](336-spider-execution-log-pollution-root-cause-and-permanent-fix.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | Medium | Open (New) | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 
 
