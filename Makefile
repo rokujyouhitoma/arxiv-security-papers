@@ -15,7 +15,16 @@ PYTHON_SRCS := $(shell find src -type f -name "*.py" | sort)
 TESTS := $(shell find tests -type f -name "*.py" | sort)
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar
-JS_SRCS = site/js/lexer.js \
+JS_SRCS = site/js/frameworks/dom-utils.js \
+          site/js/frameworks/timing.js \
+          site/js/frameworks/event.js \
+          site/js/frameworks/publisher.js \
+          site/js/frameworks/locator.js \
+          site/js/frameworks/scheduler.js \
+          site/js/frameworks/scene.js \
+          site/js/frameworks/router.js \
+          site/js/frameworks/animation.js \
+          site/js/lexer.js \
           site/js/parser.js \
           site/js/evaluator.js \
           site/js/renderer.js \

@@ -25,3 +25,69 @@ var escapeHtml;
 
 /** @type {function(string): !Promise<void>} */
 var openPaperModal;
+
+/* ==========================================================================
+   Yuzora Frameworks Interfaces & Global Symbols
+   ========================================================================== */
+
+/** @interface */
+function YuzoraEventInterface() {}
+/** @type {string} */ YuzoraEventInterface.prototype.type;
+/** @type {*} */ YuzoraEventInterface.prototype.detail;
+/** @type {?Object} */ YuzoraEventInterface.prototype.target;
+
+/** @interface */
+function YuzoraEventTargetInterface() {}
+/** @param {string} type @param {function(!YuzoraEventInterface): void} listener */
+YuzoraEventTargetInterface.prototype.addEventListener = function(type, listener) {};
+/** @param {string} type @param {function(!YuzoraEventInterface): void} listener */
+YuzoraEventTargetInterface.prototype.removeEventListener = function(type, listener) {};
+/** @param {!YuzoraEventInterface} event */
+YuzoraEventTargetInterface.prototype.dispatchEvent = function(event) {};
+/** @param {string} scopePrefix @return {!YuzoraEventTargetInterface} */
+YuzoraEventTargetInterface.prototype.scoped = function(scopePrefix) {};
+
+/** @interface */
+function LocatorInterface() {}
+/** @param {?} Class @return {?} */
+LocatorInterface.prototype.resolve = function(Class) {};
+/** @param {?} Class @return {?} */
+LocatorInterface.prototype.locate = function(Class) {};
+/** @param {?} Class @param {!Object} instance */
+LocatorInterface.prototype.register = function(Class, instance) {};
+
+/** @interface */
+function PublisherInterface() {}
+/** @param {string} topic @param {function(*): void} callback */
+PublisherInterface.prototype.subscribe = function(topic, callback) {};
+/** @param {string} topic @param {function(*): void} callback */
+PublisherInterface.prototype.unsubscribe = function(topic, callback) {};
+/** @param {string} topic @param {*=} data */
+PublisherInterface.prototype.publish = function(topic, data) {};
+/** @param {string} topic @param {*=} data */
+PublisherInterface.prototype.publishAsync = function(topic, data) {};
+
+/** @interface */
+function RouterInterface() {}
+/** @type {?string} */ RouterInterface.prototype.currentHash;
+/** @param {string} pattern @param {!Function} callback */
+RouterInterface.prototype.register = function(pattern, callback) {};
+/** @param {string} hash @return {boolean} */
+RouterInterface.prototype.resolve = function(hash) {};
+RouterInterface.prototype.listen = function() {};
+/** @param {string} hash */
+RouterInterface.prototype.navigate = function(hash) {};
+
+/** @interface */
+function SceneInterface() {}
+/** @param {*=} data */ SceneInterface.prototype.enter = function(data) {};
+SceneInterface.prototype.exit = function() {};
+
+/** @interface */
+function SceneDirectorInterface() {}
+/** @type {?string} */ SceneDirectorInterface.prototype.currentSceneName;
+/** @type {boolean} */ SceneDirectorInterface.prototype.isTransitioning;
+/** @param {string} sceneName @param {!SceneInterface} sceneInstance */
+SceneDirectorInterface.prototype.register = function(sceneName, sceneInstance) {};
+/** @param {string} sceneName @param {*=} data */
+SceneDirectorInterface.prototype.transitionTo = function(sceneName, data) {};

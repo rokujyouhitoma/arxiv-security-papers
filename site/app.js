@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize Yuzora Framework Services (Issue 338)
+  const appEventTarget = new AppEventTarget();
+  const appPublisher = new Publisher(appEventTarget);
+  const appLocator = new Locator();
+  appLocator.register('eventTarget', appEventTarget);
+  appLocator.register('publisher', appPublisher);
+  appLocator.register('timing', Timing);
+  appLocator.register('domUtils', DOMUtils);
+
   let activeTag = '';
   let activePeriod = 'monthly';
   let currentSearchResults = [];
@@ -164,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
       subtitle: 'AI エージェント・外部システム向け標準ツール呼び出しインターフェースの即時テスト環境'
     }
   };
+  appLocator.register('tabConfig', TAB_CONFIG);
 
   function switchToTab(tabId, updateUrl = true) {
     if (!TAB_CONFIG[tabId]) tabId = 'searchTab';
@@ -183,28 +193,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (mainPageTitle) mainPageTitle.textContent = cfg.title;
     if (mainPageSubtitle) mainPageSubtitle.textContent = cfg.subtitle;
 
+    // Publish tab change event via Publisher (Issue 338)
+    appPublisher.publish('tab:changed', { tabId: tabId, config: cfg });
+
     if (tabId === 'trendsTab') {
       fetchTrends(activePeriod);
     } else if (tabId === 'productTab') {
-      setTimeout(() => {
+      DOMUtils.afterReflow(() => {
         calculateAndDrawHopHistogram();
         drawWalkChart();
         updateRealEdgeLedger();
-      }, 50);
+      });
     } else if (tabId === 'systemTab') {
-      setTimeout(() => {
+      DOMUtils.afterReflow(() => {
         syncLifecycleTelemetry();
-      }, 50);
+      });
     } else if (tabId === 'databaseTab') {
-      setTimeout(() => {
+      DOMUtils.afterReflow(() => {
         renderDatabaseTab(currentSelectedDatabase);
-      }, 50);
+      });
     } else if (tabId === 'spiderTab') {
-      setTimeout(() => {
+      DOMUtils.afterReflow(() => {
         loadSpiderStatus();
         loadSpiderHistory();
         startSpiderAutoPolling();
-      }, 50);
+      });
     } else {
       stopSpiderAutoPolling();
     }
@@ -433,6 +446,10 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') performSearch(searchInput.value, true);
     });
+    // Debounced query change notification using Timing (Issue 338)
+    searchInput.addEventListener('input', Timing.debounce(() => {
+      appPublisher.publish('search:input', { query: searchInput.value });
+    }, 250));
   }
 
   // Browser Navigation History (Popstate)

@@ -4,7 +4,9 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在、未着手・進行中の Open Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当 | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: | :---: |
+| **338** | Webフロントエンド設計・アーキテクチャの刷新と yuzora frameworks の統合 | Refactor | High | In Progress | Frontend / SWD | [338-refactor-web-frontend-architecture-and-import-yuzora-frameworks.md](338-refactor-web-frontend-architecture-and-import-yuzora-frameworks.md) |
 
 ---
 
