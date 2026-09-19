@@ -299,3 +299,20 @@ def test_spider_execution_interval_ui() -> None:
         "valSpiderInterval_" in app_js
     ), "app.js must dynamically target spider interval elements"
     assert "interval_seconds" in app_js, "app.js must parse interval_seconds from API"
+
+
+def test_spider_supervisor_offline_banner() -> None:
+    """Verify site/index.html and site/app.js contain Supervisor offline alert banner (Issue 332)."""
+    index_html = Path("site/index.html").read_text(encoding="utf-8")
+    assert (
+        'id="spiderSupervisorOfflineBanner"' in index_html
+    ), "Supervisor offline warning banner required in index.html"
+    assert "python -m supervisor.cli start -D" in index_html
+
+    app_js = Path("site/app.js").read_text(encoding="utf-8")
+    assert (
+        "spiderSupervisorOfflineBanner" in app_js
+    ), "app.js must handle spiderSupervisorOfflineBanner visibility"
+    assert (
+        "data.supervisor" in app_js or "supervisor.status" in app_js
+    ), "app.js must introspect supervisor state from API"

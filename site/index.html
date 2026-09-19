@@ -792,6 +792,20 @@
               </div>
             </div>
 
+            <!-- Supervisor Offline Warning Banner (Issue 332) -->
+            <div id="spiderSupervisorOfflineBanner" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; color: #F87171; font-size: 13px; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 18px;">⚠️</span>
+                <div>
+                  <strong>Supervisor (Arbiter) がオフラインです</strong>
+                  <div style="font-size: 11px; color: var(--console-fg-muted); margin-top: 2px;">
+                    定期自動実行（WorkflowScheduler）を稼働させるには、常駐プロセス <code>python -m supervisor.cli start -D</code>（または <code>make start_supervisor</code>）を起動してください。（手動トリガーは単体実行可能です）
+                  </div>
+                </div>
+              </div>
+              <span style="font-size: 11px; font-family: var(--console-font-mono); background: rgba(239,68,68,0.2); padding: 3px 8px; border-radius: 4px;">OFFLINE</span>
+            </div>
+
             <!-- Spider Target Cards -->
             <div class="metrics-panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 20px;" id="spiderCardsContainer">
               <!-- arXiv Spider Card -->

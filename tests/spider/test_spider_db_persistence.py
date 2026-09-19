@@ -150,6 +150,9 @@ class TestWebGatewaySpiderApis(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertIn("arxiv", data["spiders"])
         self.assertEqual(data["spiders"]["arxiv"]["item_count"], 42)
+        self.assertIn("supervisor", data)
+        self.assertEqual(data["supervisor"]["status"], "offline")
+        self.assertFalse(data["supervisor"]["is_supervised"])
 
     def test_spider_history_endpoint(self) -> None:
         status_received = []

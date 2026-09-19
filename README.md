@@ -306,8 +306,14 @@ make run_threat_defense_mcp
 ```
 
 ### 8. プロセススーパーバイザーの起動 & 監視
+スパイダーの定期自動実行（WorkflowScheduler）およびワーカープロセスの自律監視を稼働させるには、Supervisor Arbiter をバックグラウンドデーモン（`-D`）として常駐起動します。
+
 ```bash
-# Gunicorn スタイル Pre-fork プロセス監視起動
+# バックグラウンドデーモン (-D) で常駐起動 (定期実行・スケジューラー稼働に必須)
+make start_supervisor
+# (直接 CLI 実行の場合: python -m supervisor.cli start -D)
+
+# フォアグラウンドでプロセス監視起動
 make run_supervisor
 
 # ライブステータス確認 (IPC Unix ドメインソケット)
@@ -315,6 +321,9 @@ make status_supervisor
 
 # top リアルタイムモニタリングダッシュボード
 make top_supervisor
+
+# スーパーバイザーデーモンの安全停止
+make stop_supervisor
 ```
 
 ---
