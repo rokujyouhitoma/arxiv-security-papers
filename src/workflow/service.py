@@ -8,6 +8,7 @@ and dispatches periodic tasks on each supervisor sync tick.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, Optional
 
 from spider.daemon.client import SpiderDaemonClient
@@ -21,21 +22,31 @@ logger = logging.getLogger(__name__)
 class WorkflowService:
     """Core domain service coordinating the WorkflowScheduler and periodic triggers."""
 
-    def __init__(self) -> None:
+    def __init__(self, run_on_startup: Optional[bool] = None) -> None:
         self.scheduler = WorkflowScheduler()
         self.client = SpiderDaemonClient()
         self.tasks_registered = False
+        if run_on_startup is None:
+            self.run_on_startup = os.getenv(
+                "ARXIV_SPIDER_RUN_ON_STARTUP", "true"
+            ).lower() in ("1", "true", "yes")
+        else:
+            self.run_on_startup = run_on_startup
 
-    def register_default_spider_tasks(self) -> None:
+    def register_default_spider_tasks(
+        self, run_on_startup: Optional[bool] = None
+    ) -> None:
         """Registers default periodic spider crawlers (arXiv, CWE, CVE)."""
         if self.tasks_registered:
             return
+        ros = self.run_on_startup if run_on_startup is None else run_on_startup
         # arXiv: every 6 hours (21600 seconds)
         self.scheduler.register_spider_task(
             spider_name="arxiv",
             interval_seconds=21600.0,
             client=self.client,
             task_id="spider_arxiv_6h",
+            run_on_startup=ros,
         )
         # MITRE CWE: every 24 hours (86400 seconds)
         self.scheduler.register_spider_task(
@@ -43,6 +54,7 @@ class WorkflowService:
             interval_seconds=86400.0,
             client=self.client,
             task_id="spider_cwe_24h",
+            run_on_startup=ros,
         )
         # CISA KEV & NVD CVE: every 6 hours (21600 seconds)
         self.scheduler.register_spider_task(
@@ -50,9 +62,13 @@ class WorkflowService:
             interval_seconds=21600.0,
             client=self.client,
             task_id="spider_cve_nvd_6h",
+            run_on_startup=ros,
         )
         self.tasks_registered = True
-        logger.info("[WorkflowService] Registered default periodic spider tasks.")
+        logger.info(
+            "[WorkflowService] Registered default periodic spider tasks (run_on_startup=%s).",
+            ros,
+        )
 
     def poll_and_dispatch(self) -> int:
         """Triggers due tasks in the scheduler."""

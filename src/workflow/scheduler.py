@@ -41,6 +41,7 @@ class ScheduledTask:
     handler: Callable[[Dict[str, Any]], Dict[str, Any]]
     last_run: float = 0.0
     enabled: bool = True
+    run_on_startup: bool = True
     last_status: str = "IDLE"
     last_error: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -59,6 +60,7 @@ class ScheduledTask:
             "interval_seconds": self.interval_seconds,
             "last_run": self.last_run,
             "enabled": self.enabled,
+            "run_on_startup": self.run_on_startup,
             "last_status": self.last_status,
             "last_error": self.last_error,
             "metadata": dict(self.metadata),
@@ -75,18 +77,39 @@ class WorkflowScheduler:
         self.tasks: Dict[str, ScheduledTask] = {}
         self.hsm: HierarchicalStateMachine = build_scheduler_state_tree()
 
+    @staticmethod
+    def _compute_initial_last_run(
+        now: float,
+        interval_seconds: float,
+        run_on_startup: bool,
+        initial_delay: float,
+    ) -> float:
+        if not run_on_startup:
+            return now
+        if initial_delay > 0.0:
+            return (now - interval_seconds) + initial_delay
+        return 0.0
+
     def register_task(
         self,
         task_id: str,
         interval_seconds: float,
         handler: Callable[[Dict[str, Any]], Dict[str, Any]],
         metadata: Optional[Dict[str, Any]] = None,
+        run_on_startup: bool = True,
+        initial_delay: float = 0.0,
     ) -> ScheduledTask:
-        """Registers a generic task with execution interval."""
+        """Registers a generic task with execution interval and startup policy."""
+        now = _now()
+        last_run = self._compute_initial_last_run(
+            now, interval_seconds, run_on_startup, initial_delay
+        )
         task = ScheduledTask(
             task_id=task_id,
             interval_seconds=max(0.1, interval_seconds),
             handler=handler,
+            last_run=last_run,
+            run_on_startup=run_on_startup,
             metadata=metadata or {},
         )
         self.tasks[task_id] = task
@@ -99,6 +122,8 @@ class WorkflowScheduler:
         client: Optional[SpiderDaemonClient] = None,
         params: Optional[Dict[str, Any]] = None,
         task_id: Optional[str] = None,
+        run_on_startup: bool = True,
+        initial_delay: float = 0.0,
     ) -> ScheduledTask:
         """Registers a recurring spider crawl task using SpiderTaskOperator."""
         t_id = task_id or f"spider_{spider_name}_periodic"
@@ -112,6 +137,8 @@ class WorkflowScheduler:
             interval_seconds=interval_seconds,
             handler=operator,
             metadata={"spider_name": spider_name, "type": "spider_operator"},
+            run_on_startup=run_on_startup,
+            initial_delay=initial_delay,
         )
 
     def list_tasks(self) -> List[Dict[str, Any]]:

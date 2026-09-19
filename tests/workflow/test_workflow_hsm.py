@@ -233,6 +233,42 @@ class TestWorkflowHSM(unittest.TestCase):
         self.assertEqual(t2_dict["last_status"], "FAILED")
         self.assertEqual(t2_dict["last_error"], "Task computation fault")
 
+    def test_scheduler_startup_execution_behavior(self) -> None:
+        """Verifies run_on_startup and initial delay behavior (Issue 333)."""
+        import os
+        from unittest.mock import patch
+
+        from workflow.scheduler import WorkflowScheduler
+        from workflow.service import WorkflowService
+
+        scheduler = WorkflowScheduler()
+
+        def dummy_handler(ctx: dict) -> dict:
+            return {"status": "ok"}
+
+        # Default run_on_startup=True -> immediately due
+        t_default = scheduler.register_task("t_default", 3600.0, dummy_handler)
+        self.assertTrue(t_default.is_due())
+        self.assertTrue(t_default.run_on_startup)
+
+        # Explicit run_on_startup=False -> not due immediately
+        t_deferred = scheduler.register_task(
+            "t_deferred", 3600.0, dummy_handler, run_on_startup=False
+        )
+        self.assertFalse(t_deferred.is_due())
+        self.assertFalse(t_deferred.run_on_startup)
+
+        # WorkflowService respects run_on_startup=False constructor
+        srv = WorkflowService(run_on_startup=False)
+        srv.register_default_spider_tasks()
+        self.assertFalse(srv.scheduler.tasks["spider_arxiv_6h"].is_due())
+
+        # WorkflowService respects ARXIV_SPIDER_RUN_ON_STARTUP environment variable
+        with patch.dict(os.environ, {"ARXIV_SPIDER_RUN_ON_STARTUP": "false"}):
+            srv_env = WorkflowService()
+            srv_env.register_default_spider_tasks()
+            self.assertFalse(srv_env.scheduler.tasks["spider_arxiv_6h"].is_due())
+
 
 if __name__ == "__main__":
     unittest.main()
