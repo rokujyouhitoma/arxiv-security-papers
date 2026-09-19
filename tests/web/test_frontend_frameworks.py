@@ -20,6 +20,7 @@ EXPECTED_MODULES = [
     "router.js",
     "scene.js",
     "scheduler.js",
+    "sse-manager.js",
     "store.js",
     "timing.js",
 ]
@@ -52,6 +53,7 @@ def test_externs_contain_yuzora_interfaces() -> None:
         "SceneDirectorInterface",
         "ApiClientInterface",
         "StateStoreInterface",
+        "SSEStreamManagerInterface",
     ]
     for iface in required_interfaces:
         assert iface in content, f"Interface {iface} missing from site/externs.js"
@@ -92,6 +94,7 @@ def test_app_min_js_contains_bundled_framework_classes() -> None:
         "ApiClient",
         "ApiError",
         "StateStore",
+        "SSEStreamManager",
     ]
     for sym in core_framework_symbols:
         assert sym in content, f"Symbol {sym} not found in compiled {APP_MIN_JS.name}"

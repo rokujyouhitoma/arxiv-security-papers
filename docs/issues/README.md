@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **340** | `SSEStreamManager`: SSE 接続・指数バックオフ再接続マネージャーの実装 | Feature | High | [340-implement-ssestreammanager-with-exponential-backoff.md](340-implement-ssestreammanager-with-exponential-backoff.md) |
 | **341** | `ModalController`: アクセシブル・モーダル＆ドロワー制御コンポーネントの実装 | Feature | Medium | [341-implement-accessible-modal-controller.md](341-implement-accessible-modal-controller.md) |
 | **343** | `HierarchicalStateMachine (HSM)`: `src/core/hsm/` の JS 移植と状態管理統合 | Feature | High | [343-port-hsm-core-to-frontend-state-governance.md](343-port-hsm-core-to-frontend-state-governance.md) |
 | **344** | `DisjointSet`: `src/core/structures/disjoint_set.py` の JS 移植と LCC 計算 | Feature | Medium | [344-port-disjoint-set-to-frontend-lcc-clustering.md](344-port-disjoint-set-to-frontend-lcc-clustering.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **340** | `SSEStreamManager`: SSE 接続・指数バックオフ再接続マネージャーの実装 | Feature | 2026-09-19 | [340-implement-ssestreammanager-with-exponential-backoff.md](closed/340-implement-ssestreammanager-with-exponential-backoff.md) |
 | **342** | `StateStore`: Pub/Sub 連動型軽量リアクティブ状態ストアの実装 | Feature | 2026-09-19 | [342-implement-statestore-pubsub-reactive-store.md](closed/342-implement-statestore-pubsub-reactive-store.md) |
 | **339** | `ApiClient`: 統一 HTTP 通信クライアント基盤の実装 | Feature | 2026-09-19 | [339-implement-apiclient-unified-http-gateway.md](closed/339-implement-apiclient-unified-http-gateway.md) |
 | **338** | Webフロントエンド設計・アーキテクチャの刷新と yuzora frameworks の統合 | Refactor | 2026-09-19 | [338-refactor-web-frontend-architecture-and-import-yuzora-frameworks.md](closed/338-refactor-web-frontend-architecture-and-import-yuzora-frameworks.md) |

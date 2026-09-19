@@ -24,7 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentSelectedDatabase = 'arxiv_security_db';
   let cachedDatabaseMetrics = null;
   let spiderPollingInterval = null;
-  let sseEventSource = null;
+  /** @type {?SSEStreamManagerInterface} */
+  let sseManager = null;
   let telemetryIntervalId = null;
   let meshNodes = [];
   let meshEdges = [];
@@ -1641,7 +1642,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // H. SSE Real-time Stream Client (/api/stream/top)
+  // H. SSE Real-time Stream Client (/api/stream/top) — managed by SSEStreamManager
   function ensureTelemetryPolling() {
     if (!telemetryIntervalId) {
       syncConsoleTelemetry();
@@ -1649,57 +1650,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function closeSseStream() {
-    if (sseEventSource) {
-      try {
-        sseEventSource.close();
-      } catch (_) {}
-      sseEventSource = null;
-    }
-  }
-
   function initSseLiveStream() {
     ensureTelemetryPolling();
 
-    if (!window.EventSource) {
+    if (!window['SSEStreamManager'] && !(window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['SSEStreamManager'])) {
+      // SSEStreamManager not loaded; fall back gracefully — telemetry polling covers it.
       return;
     }
 
-    closeSseStream();
+    if (!sseManager) {
+      const SSEStreamManagerCtor =
+          (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['SSEStreamManager']) ||
+          window['SSEStreamManager'];
+      sseManager = new SSEStreamManagerCtor();
+    }
 
-    try {
-      sseEventSource = new EventSource('/api/stream/top?interval=1.0');
-      sseEventSource.addEventListener('top_update', (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          if (data && (data.status === 'ok' || data.is_supervised !== undefined)) {
-            updateSupervisorFromStream(data);
-          }
-        } catch (_) {}
-      });
-
-      sseEventSource.onerror = () => {
-        // Explicitly close EventSource on error to release worker slot immediately
-        closeSseStream();
-      };
-    } catch (_) {}
+    sseManager.open('/api/stream/top?interval=1.0', {
+      'top_update': (data) => {
+        if (data && (data['status'] === 'ok' || data['is_supervised'] !== undefined)) {
+          updateSupervisorFromStream(data);
+        }
+      }
+    });
   }
 
-  window.addEventListener('beforeunload', () => {
-    closeSseStream();
-  });
-  window.addEventListener('pagehide', () => {
-    closeSseStream();
-  });
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      closeSseStream();
-    } else if (document.visibilityState === 'visible' && !sseEventSource) {
-      initSseLiveStream();
-    }
-  });
-
-  // Start telemetry & SSE
+  // Start telemetry & SSE (SSEStreamManager handles beforeunload / pagehide / visibilitychange internally)
   initSseLiveStream();
 
   // ==========================================

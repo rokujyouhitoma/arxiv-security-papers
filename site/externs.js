@@ -165,3 +165,24 @@ StateStoreInterface.prototype.getState = function() {};
  */
 StateStoreInterface.prototype.reset = function(initialState) {};
 
+/**
+ * @interface
+ */
+function SSEStreamManagerInterface() {}
+/**
+ * @param {string} url
+ * @param {!Object<string, function(*, string): void>=} eventHandlers
+ * @return {boolean}
+ */
+SSEStreamManagerInterface.prototype.open = function(url, eventHandlers) {};
+/**
+ */
+SSEStreamManagerInterface.prototype.close = function() {};
+/**
+ */
+SSEStreamManagerInterface.prototype.destroy = function() {};
+/**
+ * @return {boolean}
+ */
+SSEStreamManagerInterface.prototype.isConnected = function() {};
+
