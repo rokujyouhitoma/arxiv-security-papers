@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **351** | `QueryValidator` & `RadixTrie`: 検索入力における PEG リアルタイム構文検証および 0ms プレフィックス補完の統合 | Feature | High | New | [351-integrate-query-validator-and-radix-trie-search-input.md](351-integrate-query-validator-and-radix-trie-search-input.md) |
 | **352** | `SceneDirector` & `Router`: タブナビゲーションのライフサイクルガバナンスと URL ディープリンク同期 | Refactor | Medium | New | [352-integrate-scene-director-and-router-tab-lifecycle.md](352-integrate-scene-director-and-router-tab-lifecycle.md) |
 | **353** | `StateStore` & `HierarchicalStateMachine`: フロントエンド状態一元管理と検索・操作ステートチャート統合 | Refactor | Medium | New | [353-centralize-state-store-and-hsm-governance.md](353-centralize-state-store-and-hsm-governance.md) |
 | **354** | `ModalController`: 全モーダル・ドロワー要素のアクセシブル制御とフォーカストラップ統一 | Feature | Medium | New | [354-apply-modal-controller-to-all-dialogs-and-drawers.md](354-apply-modal-controller-to-all-dialogs-and-drawers.md) |
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **351** | `QueryValidator` & `RadixTrie`: 検索入力における PEG リアルタイム構文検証および 0ms プレフィックス補完の統合 | Feature | 2026-09-19 | [351-integrate-query-validator-and-radix-trie-search-input.md](closed/351-integrate-query-validator-and-radix-trie-search-input.md) |
 | **350** | `DisjointSet`: `site/dashboard.html` の LCC 計算 (`computeLargestConnectedComponent`) および孤立ノード判定の高速化 | Refactor | 2026-09-19 | [350-delegate-dashboard-lcc-to-disjoint-set.md](closed/350-delegate-dashboard-lcc-to-disjoint-set.md) |
 | **349** | `ApiClient` & `ARCCache`: 残存生 `fetch()` の一掃、HTTP通信一元化、および適応型キャッシュ (`ARCCache(256)`) 統合 | Feature | 2026-09-19 | [349-integrate-apiclient-and-arc-cache-across-frontend.md](closed/349-integrate-apiclient-and-arc-cache-across-frontend.md) |
 | **348** | `GraphCanvasEngine`: `site/dashboard.html` からの力学モデル・Canvas 描画の完全分離 | Refactor | 2026-09-19 | [348-extract-graph-canvas-engine-from-dashboard.md](closed/348-extract-graph-canvas-engine-from-dashboard.md) |

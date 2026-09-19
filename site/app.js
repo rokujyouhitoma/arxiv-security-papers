@@ -23,6 +23,29 @@ document.addEventListener('DOMContentLoaded', () => {
   appLocator.register('apiClient', appApiClient);
   appLocator.register('stateStore', appStateStore);
 
+  // RadixTrie & QueryValidator (Issue 351)
+  const RadixTrieCtor =
+      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['RadixTrie']) ||
+      window['RadixTrie'];
+  const QueryValidatorCtor =
+      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['QueryValidator']) ||
+      window['QueryValidator'];
+  const appTrie = RadixTrieCtor ? new RadixTrieCtor() : null;
+  const appValidator = QueryValidatorCtor ? new QueryValidatorCtor() : null;
+  if (appTrie) {
+    appLocator.register('trie', appTrie);
+    const SEED_TERMS = [
+      'cryptography', 'zero-trust', 'network-security', 'malware', 'hardware-security',
+      'privacy', 'web-security', 'cloud-security', 'adversarial-ml', 'llm-security',
+      'firmware', 'side-channel', 'post-quantum', 'cve', 'cwe', 'ransomware',
+      'phishing', 'exploit', 'mitre', 'att&ck', 'cs.CR', 'cs.AI', 'cs.LG'
+    ];
+    SEED_TERMS.forEach(t => appTrie.insert(t, { type: 'tag', value: t }));
+  }
+  if (appValidator) {
+    appLocator.register('queryValidator', appValidator);
+  }
+
   // ModalController for paper detail modal (Issue 341)
   const ModalControllerCtor =
       (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ModalController']) ||
@@ -471,9 +494,40 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') performSearch(searchInput.value, true);
     });
-    // Debounced query change notification using Timing (Issue 338)
+    // Debounced query change, PEG syntax validation & prefix autocomplete (Issue 338, Issue 351)
     searchInput.addEventListener('input', Timing.debounce(() => {
-      appPublisher.publish('search:input', { query: searchInput.value });
+      const q = searchInput.value;
+      appPublisher.publish('search:input', { query: q });
+
+      // 1. Real-time PEG syntax validation
+      if (appValidator) {
+        const trimmed = q.trim();
+        if (trimmed.length > 0) {
+          const vResult = appValidator.validate(trimmed);
+          if (!vResult.valid && vResult.error) {
+            searchInput.style.borderColor = '#ef4444';
+            searchInput.title = `構文警告: ${vResult.error.message || '構文エラー'}`;
+            appPublisher.publish('search:syntax_error', { query: trimmed, error: vResult.error });
+          } else {
+            searchInput.style.borderColor = '';
+            searchInput.title = '';
+            appPublisher.publish('search:valid', { query: trimmed });
+          }
+        } else {
+          searchInput.style.borderColor = '';
+          searchInput.title = '';
+        }
+      }
+
+      // 2. Real-time RadixTrie prefix suggestion
+      if (appTrie) {
+        const words = q.trim().split(/\s+/);
+        const lastWord = words[words.length - 1] || '';
+        if (lastWord.length >= 2) {
+          const suggestions = appTrie.searchPrefix(lastWord.toLowerCase(), 5);
+          appPublisher.publish('search:autocomplete', { prefix: lastWord, suggestions });
+        }
+      }
     }, 250));
   }
 
@@ -586,6 +640,17 @@ document.addEventListener('DOMContentLoaded', () => {
           currentSearchResults = data.results;
         }
         renderResults(data.results, append, data['has_more']);
+        if (appTrie && Array.isArray(data.results)) {
+          data.results.forEach(p => {
+            if (p && Array.isArray(p.tags)) {
+              p.tags.forEach(t => {
+                if (typeof t === 'string' && t.length > 0) {
+                  appTrie.insert(t.toLowerCase(), { type: 'tag', value: t });
+                }
+              });
+            }
+          });
+        }
       } else {
         if (!append) {
           resultsGrid.innerHTML = '<p class="loading-text" style="padding: 16px;">該当する論文は見つかりませんでした。</p>';
