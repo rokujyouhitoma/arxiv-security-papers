@@ -4,8 +4,9 @@
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**: `src/web/` (gateway, presentation, server)
 - **関連パッケージ**: `src/search/`, `src/mcp/`, `src/security/`
+- **関連設計書**: [DSN-01](DSN-01-high_level_design.md), [DSN-14](DSN-14-graph_engineering_dashboard.md), [DSN-21](DSN-21-enterprise_design_system_and_unified_console.md), [DSN-27](DSN-27-modular_frontend_framework_and_client_architecture.md)
 - **作成日**: 2026-08-22
-- **最終更新日**: 2026-08-28
+- **最終更新日**: 2026-09-19 (DSN-27 フロントエンドフレームワーク連携追記)
 - **【主査・報告】 UI/UX & Documentation Designer (UI) & Systems Architect (SA)**  
 - **【参画】 Project Manager (PM), Information Security Specialist (Sec), Software QA Specialist (QA), Database Specialist (DB), Network Specialist (Net), IT Specialist (NLP/IR)**
 

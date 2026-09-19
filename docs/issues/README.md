@@ -4,7 +4,18 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在、未着手・進行中の Open Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: |
+| **339** | `ApiClient`: 統一 HTTP 通信クライアント基盤の実装 | Feature | High | [339-implement-apiclient-unified-http-gateway.md](339-implement-apiclient-unified-http-gateway.md) |
+| **340** | `SSEStreamManager`: SSE 接続・指数バックオフ再接続マネージャーの実装 | Feature | High | [340-implement-ssestreammanager-with-exponential-backoff.md](340-implement-ssestreammanager-with-exponential-backoff.md) |
+| **341** | `ModalController`: アクセシブル・モーダル＆ドロワー制御コンポーネントの実装 | Feature | Medium | [341-implement-accessible-modal-controller.md](341-implement-accessible-modal-controller.md) |
+| **342** | `StateStore`: Pub/Sub 連動型軽量リアクティブ状態ストアの実装 | Feature | High | [342-implement-statestore-pubsub-reactive-store.md](342-implement-statestore-pubsub-reactive-store.md) |
+| **343** | `HierarchicalStateMachine (HSM)`: `src/core/hsm/` の JS 移植と状態管理統合 | Feature | High | [343-port-hsm-core-to-frontend-state-governance.md](343-port-hsm-core-to-frontend-state-governance.md) |
+| **344** | `DisjointSet`: `src/core/structures/disjoint_set.py` の JS 移植と LCC 計算 | Feature | Medium | [344-port-disjoint-set-to-frontend-lcc-clustering.md](344-port-disjoint-set-to-frontend-lcc-clustering.md) |
+| **345** | `RadixTrie`: `src/core/structures/radix_trie.py` の JS 移植と 0ms 検索サジェスト | Feature | High | [345-port-radix-trie-to-frontend-instant-autocomplete.md](345-port-radix-trie-to-frontend-instant-autocomplete.md) |
+| **346** | `ARCCache`: `src/core/structures/arc_cache.py` の JS 移植と適応型キャッシュ | Feature | Medium | [346-port-arc-cache-to-frontend-metadata-caching.md](346-port-arc-cache-to-frontend-metadata-caching.md) |
+| **347** | `QueryValidator`: `src/core/structures/peg.py` クエリ構文の JS 移植と構文検証 | Feature | Medium | [347-port-peg-query-validator-to-frontend-search-input.md](347-port-peg-query-validator-to-frontend-search-input.md) |
+| **348** | `GraphCanvasEngine`: `site/dashboard.html` からの力学モデル・Canvas 描画の完全分離 | Refactor | High | [348-extract-graph-canvas-engine-from-dashboard.md](348-extract-graph-canvas-engine-from-dashboard.md) |
 
 ---
 

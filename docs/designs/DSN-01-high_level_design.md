@@ -307,9 +307,9 @@ sequenceDiagram
 
 ---
 
-# 10. 完了定義 (DoD) & 包括設計書体系 (DSN-01 〜 DSN-16)
+# 10. 完了定義 (DoD) & 包括設計書体系 (DSN-01 〜 DSN-27)
 
-全サブシステムは、以下の **18 大包括設計書体系 (DSN-01 〜 DSN-18)** に基づき整合・運用される：
+全サブシステムは、以下の **27 大包括設計書体系 (DSN-01 〜 DSN-27)** に基づき整合・運用される：
 
 | DSN 番号 | 設計書ファイル | 対応パッケージ (`src/`) | 領域 / サブシステム |
 | :---: | :--- | :--- | :--- |
@@ -337,4 +337,7 @@ sequenceDiagram
 | **DSN-22** | [DSN-22-security_and_threat_ontology_w3c_specification.md](DSN-22-security_and_threat_ontology_w3c_specification.md) | `src/ontology/` | セキュリティ・脅威知識オントロジー W3C 仕様書 |
 | **DSN-23** | [DSN-23-hierarchical_state_machine_and_lifecycle_governance.md](DSN-23-hierarchical_state_machine_and_lifecycle_governance.md) | `src/core/hsm/`, `src/supervisor/` | ゼロ外部依存・高信頼階層型ステートマシン（HSM）基盤およびシステム全域ライフサイクル統制設計仕様書 |
 | **DSN-24** | [DSN-24-unified_management_cli_and_interactive_database_shell.md](DSN-24-unified_management_cli_and_interactive_database_shell.md) | `src/cli/` | 統合運用管理 CLI & インタラクティブ・データベースシェル設計書 |
+| **DSN-25** | [DSN-25-pure_python_packrat_peg_parser_engine.md](DSN-25-pure_python_packrat_peg_parser_engine.md) | `src/core/structures/peg.py` | Pure-Python Packrat PEG 構文解析エンジン設計書 |
+| **DSN-26** | [DSN-26-pure-python-owl-dl-reasoner.md](DSN-26-pure-python-owl-dl-reasoner.md) | `src/ontology/` | Pure-Python OWL-DL 推論エンジン設計書 |
+| **DSN-27** | [DSN-27-modular_frontend_framework_and_client_architecture.md](DSN-27-modular_frontend_framework_and_client_architecture.md) | `site/js/frameworks/`, `site/` | モジュール型 Web フロントエンド・フレームワーク ＆ クライアントアーキテクチャ設計仕様書 |
 

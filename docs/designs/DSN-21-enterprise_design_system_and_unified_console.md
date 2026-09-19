@@ -3,9 +3,9 @@
 - **文書番号**: `DSN-21`
 - **文書ステータス**: `PRODUCTION-VALIDATED & VERIFIED` (Issue 167〜175 開発・稼働検証完了)
 - **対象サブシステム**: `site/` (`index.html`, `dashboard.html`, `style.css`, `app.js`), `src/web/` (`gateway`, `presentation`, `handlers`)
-- **関連設計書**: `DSN-01` (High-Level Architecture), `DSN-09` (Web Gateway & Presentation), `DSN-14` (Graph Engineering Dashboard), `DSN-04` (Search Platform), `DSN-12` (Process Supervisor)
+- **関連設計書**: `DSN-01` (High-Level Architecture), `DSN-09` (Web Gateway & Presentation), `DSN-14` (Graph Engineering Dashboard), `DSN-04` (Search Platform), `DSN-12` (Process Supervisor), `DSN-27` (Modular Frontend Framework & Client Architecture)
 - **作成日**: 2026-09-05
-- **最終更新日**: 2026-09-06 (Issue 176 包括的ブラッシュアップ)
+- **最終更新日**: 2026-09-19 (DSN-27 モジュール型フレームワーク連携追記)
 - **【主査・報告】 UI/UX & Documentation Designer (UI)**
 - **【参画・協調】 Systems Architect (SA), IT Strategist (ST), Software QA Specialist (QA), Project Manager (PM), Information Security Specialist (Sec), Systems Auditor (AU)**
 
