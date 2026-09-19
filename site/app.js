@@ -46,6 +46,18 @@ document.addEventListener('DOMContentLoaded', () => {
     appLocator.register('queryValidator', appValidator);
   }
 
+  // SceneDirector & Router for Tab Lifecycle Governance (Issue 352)
+  const SceneDirectorCtor =
+      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['SceneDirector']) ||
+      window['SceneDirector'];
+  const RouterCtor =
+      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['Router']) ||
+      window['Router'];
+  const appSceneDirector = SceneDirectorCtor ? new SceneDirectorCtor() : null;
+  const appRouter = RouterCtor ? new RouterCtor('papers') : null;
+  if (appSceneDirector) appLocator.register('sceneDirector', appSceneDirector);
+  if (appRouter) appLocator.register('router', appRouter);
+
   // ModalController for paper detail modal (Issue 341)
   const ModalControllerCtor =
       (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ModalController']) ||
@@ -223,6 +235,53 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   appLocator.register('tabConfig', TAB_CONFIG);
 
+  // Register Scenes in SceneDirector for declarative lifecycle (Issue 352)
+  if (appSceneDirector) {
+    const SceneCtor =
+        (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['Scene']) ||
+        window['Scene'];
+    const createTabScene = (onEnter, onExit) => {
+      if (SceneCtor) {
+        class TabScene extends SceneCtor {
+          enter(data) { if (onEnter) onEnter(data); }
+          exit() { if (onExit) onExit(); }
+        }
+        return new TabScene();
+      }
+      return { enter: onEnter || (() => {}), exit: onExit || (() => {}) };
+    };
+
+    appSceneDirector.register('searchTab', createTabScene(null, null));
+    appSceneDirector.register('trendsTab', createTabScene(() => fetchTrends(activePeriod), null));
+    appSceneDirector.register('productTab', createTabScene(() => {
+      DOMUtils.afterReflow(() => {
+        calculateAndDrawHopHistogram();
+        drawWalkChart();
+        updateRealEdgeLedger();
+      });
+    }, null));
+    appSceneDirector.register('systemTab', createTabScene(() => {
+      DOMUtils.afterReflow(() => {
+        syncLifecycleTelemetry();
+      });
+    }, null));
+    appSceneDirector.register('databaseTab', createTabScene(() => {
+      DOMUtils.afterReflow(() => {
+        renderDatabaseTab(currentSelectedDatabase);
+      });
+    }, null));
+    appSceneDirector.register('spiderTab', createTabScene(() => {
+      DOMUtils.afterReflow(() => {
+        loadSpiderStatus();
+        loadSpiderHistory();
+        startSpiderAutoPolling();
+      });
+    }, () => {
+      stopSpiderAutoPolling();
+    }));
+    appSceneDirector.register('mcpTab', createTabScene(null, null));
+  }
+
   function switchToTab(tabId, updateUrl = true) {
     if (!TAB_CONFIG[tabId]) tabId = 'searchTab';
 
@@ -244,30 +303,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // Publish tab change event via Publisher (Issue 338)
     appPublisher.publish('tab:changed', { tabId: tabId, config: cfg });
 
-    if (tabId === 'trendsTab') {
-      fetchTrends(activePeriod);
-    } else if (tabId === 'productTab') {
-      DOMUtils.afterReflow(() => {
-        calculateAndDrawHopHistogram();
-        drawWalkChart();
-        updateRealEdgeLedger();
-      });
-    } else if (tabId === 'systemTab') {
-      DOMUtils.afterReflow(() => {
-        syncLifecycleTelemetry();
-      });
-    } else if (tabId === 'databaseTab') {
-      DOMUtils.afterReflow(() => {
-        renderDatabaseTab(currentSelectedDatabase);
-      });
-    } else if (tabId === 'spiderTab') {
-      DOMUtils.afterReflow(() => {
-        loadSpiderStatus();
-        loadSpiderHistory();
-        startSpiderAutoPolling();
-      });
+    // Delegate lifecycle to SceneDirector (Issue 352)
+    if (appSceneDirector && appSceneDirector.scenes[tabId]) {
+      appSceneDirector.transitionTo(tabId);
     } else {
-      stopSpiderAutoPolling();
+      if (tabId === 'trendsTab') {
+        fetchTrends(activePeriod);
+      } else if (tabId === 'productTab') {
+        DOMUtils.afterReflow(() => {
+          calculateAndDrawHopHistogram();
+          drawWalkChart();
+          updateRealEdgeLedger();
+        });
+      } else if (tabId === 'systemTab') {
+        DOMUtils.afterReflow(() => {
+          syncLifecycleTelemetry();
+        });
+      } else if (tabId === 'databaseTab') {
+        DOMUtils.afterReflow(() => {
+          renderDatabaseTab(currentSelectedDatabase);
+        });
+      } else if (tabId === 'spiderTab') {
+        DOMUtils.afterReflow(() => {
+          loadSpiderStatus();
+          loadSpiderHistory();
+          startSpiderAutoPolling();
+        });
+      } else {
+        stopSpiderAutoPolling();
+      }
     }
 
     if (updateUrl && window.history && window.history.pushState) {
@@ -276,6 +340,18 @@ document.addEventListener('DOMContentLoaded', () => {
       url.hash = `#/${cfg.name}`;
       window.history.pushState({ tab: cfg.name }, '', url.toString());
     }
+  }
+
+  // Register client-side routes in Router (Issue 352)
+  if (appRouter) {
+    appRouter.register('/papers', () => switchToTab('searchTab', false));
+    appRouter.register('/trends', () => switchToTab('trendsTab', false));
+    appRouter.register('/product', () => switchToTab('productTab', false));
+    appRouter.register('/system', () => switchToTab('systemTab', false));
+    appRouter.register('/database', () => switchToTab('databaseTab', false));
+    appRouter.register('/spiders', () => switchToTab('spiderTab', false));
+    appRouter.register('/mcp', () => switchToTab('mcpTab', false));
+    appRouter.listen();
   }
 
   // URL Query & Hash-based Routing
