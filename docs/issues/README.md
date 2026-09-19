@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **349** | `ApiClient` & `ARCCache`: 残存生 `fetch()` の一掃、HTTP通信一元化、および適応型キャッシュ (`ARCCache(256)`) 統合 | Feature | High | New | [349-integrate-apiclient-and-arc-cache-across-frontend.md](349-integrate-apiclient-and-arc-cache-across-frontend.md) |
 | **350** | `DisjointSet`: `site/dashboard.html` の LCC 計算 (`computeLargestConnectedComponent`) および孤立ノード判定の高速化 | Refactor | High | New | [350-delegate-dashboard-lcc-to-disjoint-set.md](350-delegate-dashboard-lcc-to-disjoint-set.md) |
 | **351** | `QueryValidator` & `RadixTrie`: 検索入力における PEG リアルタイム構文検証および 0ms プレフィックス補完の統合 | Feature | High | New | [351-integrate-query-validator-and-radix-trie-search-input.md](351-integrate-query-validator-and-radix-trie-search-input.md) |
 | **352** | `SceneDirector` & `Router`: タブナビゲーションのライフサイクルガバナンスと URL ディープリンク同期 | Refactor | Medium | New | [352-integrate-scene-director-and-router-tab-lifecycle.md](352-integrate-scene-director-and-router-tab-lifecycle.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **349** | `ApiClient` & `ARCCache`: 残存生 `fetch()` の一掃、HTTP通信一元化、および適応型キャッシュ (`ARCCache(256)`) 統合 | Feature | 2026-09-19 | [349-integrate-apiclient-and-arc-cache-across-frontend.md](closed/349-integrate-apiclient-and-arc-cache-across-frontend.md) |
 | **348** | `GraphCanvasEngine`: `site/dashboard.html` からの力学モデル・Canvas 描画の完全分離 | Refactor | 2026-09-19 | [348-extract-graph-canvas-engine-from-dashboard.md](closed/348-extract-graph-canvas-engine-from-dashboard.md) |
 | **346** | `ARCCache`: `src/core/structures/arc_cache.py` の JS 移植と適応型キャッシュ | Feature | 2026-09-19 | [346-port-arc-cache-to-frontend-metadata-caching.md](closed/346-port-arc-cache-to-frontend-metadata-caching.md) |
 | **344** | `DisjointSet`: `src/core/structures/disjoint_set.py` の JS 移植と LCC 計算 | Feature | 2026-09-19 | [344-port-disjoint-set-to-frontend-lcc-clustering.md](closed/344-port-disjoint-set-to-frontend-lcc-clustering.md) |

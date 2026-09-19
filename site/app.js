@@ -1,9 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize Yuzora Framework Services (Issue 338)
+  // Initialize Yuzora Framework Services (Issue 338, Issue 349)
   const appEventTarget = new AppEventTarget();
   const appPublisher = new Publisher(appEventTarget);
   const appLocator = new Locator();
-  const appApiClient = new ApiClient('', {}, appPublisher);
+  const ARCCacheCtor =
+      (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ARCCache']) ||
+      window['ARCCache'];
+  const appCache = ARCCacheCtor ? new ARCCacheCtor(256) : null;
+  const appApiClient = new ApiClient('', appCache ? { cache: appCache } : {}, appPublisher);
   const appStateStore = new StateStore({
     activeTag: '',
     activePeriod: 'monthly',
@@ -15,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   appLocator.register('publisher', appPublisher);
   appLocator.register('timing', Timing);
   appLocator.register('domUtils', DOMUtils);
+  appLocator.register('cache', appCache);
   appLocator.register('apiClient', appApiClient);
   appLocator.register('stateStore', appStateStore);
 
@@ -562,11 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
       let url = `/api/search?q=${encodeURIComponent(cleanQuery)}&top_k=${currentLimit}&offset=${offset}`;
       if (activeTag) url += `&category=${encodeURIComponent(activeTag)}`;
 
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      }
-      const data = await res.json();
+      const data = await appApiClient.get(url);
       const endTime = performance.now();
 
       const profile = data['profile'];
@@ -823,8 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!trendContent) return;
     trendContent.innerHTML = '<p class="loading-text">トレンドデータを取得中...</p>';
     try {
-      const res = await fetch(`/api/trends?period=${encodeURIComponent(period)}`);
-      const data = await res.json();
+      const data = await appApiClient.get(`/api/trends?period=${encodeURIComponent(period)}`);
       if (data.status === 'success' && data.content) {
         const compiled = window.MarkdownCompiler.compile(data.content);
         trendContent.innerHTML = compiled.html;
@@ -877,12 +877,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         const name = mcpToolSelect.value;
-        const res = await fetch('/api/mcp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, arguments: args })
-        });
-        const data = await res.json();
+        const data = await appApiClient.post('/api/mcp', { name, arguments: args });
         mcpOutput.textContent = JSON.stringify(data, null, 2);
       } catch (err) {
         mcpOutput.textContent = `API 呼び出しエラー: ${err.message}`;
@@ -1070,10 +1065,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // E. System Lifecycle & Operational Observability (DSN-10 / DSN-21 / Issue 228)
   async function syncLifecycleTelemetry() {
     try {
-      const res = await fetch('/api/system/lifecycle');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.status !== 'success') return;
+      const data = appApiClient ? await appApiClient.get('/api/system/lifecycle') : await (await fetch('/api/system/lifecycle')).json();
+      if (!data || data.status !== 'success') return;
 
       // 1. Scheduler Card
       const sched = data.scheduler || {};
@@ -1460,16 +1453,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // G. Live Telemetry Polling (/api/graph/mesh)
   async function syncConsoleTelemetry() {
     try {
-      const resp = await fetch('/api/graph/mesh');
-      if (!resp.ok) {
-        console.warn(`[Telemetry] /api/graph/mesh HTTP error: ${resp.status} ${resp.statusText}`);
-        return;
-      }
-      const data = await resp.json();
-      if (data.status !== 'success') {
-        console.warn('[Telemetry] /api/graph/mesh non-success status:', data);
-        return;
-      }
+      const data = await appApiClient.get('/api/graph/mesh');
+      if (!data || data.status !== 'success') return;
 
       if (data.database_metrics) {
         updateDatabaseMetrics(data.database_metrics);
@@ -1706,9 +1691,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   async function loadSpiderStatus() {
     try {
-      const res = await fetch('/api/spiders/status');
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await appApiClient.get('/api/spiders/status');
+      if (!data) return;
       const spiders = data.spiders || {};
       const supervisor = data.supervisor || {};
 
@@ -1768,9 +1752,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadSpiderHistory(spiderName = '') {
     try {
       const url = spiderName ? `/api/spiders/history?limit=50&spider_name=${encodeURIComponent(spiderName)}` : '/api/spiders/history?limit=50';
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await appApiClient.get(url);
+      if (!data) return;
       const logs = data.history || [];
       const tbody = document.getElementById('spiderHistoryTableBody');
       if (!tbody) return;
@@ -1836,13 +1819,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function triggerSpider(spiderName) {
     try {
-      const res = await fetch('/api/spiders/trigger', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spider_name: spiderName })
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await appApiClient.post('/api/spiders/trigger', { spider_name: spiderName });
       // Start real-time polling immediately
       await loadSpiderStatus();
       await loadSpiderHistory();

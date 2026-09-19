@@ -339,9 +339,11 @@ class TestZeroMockIntegrity(unittest.TestCase):
             content,
             "D12: app.js missing syncLifecycleTelemetry() function",
         )
-        self.assertIn(
-            "fetch('/api/system/lifecycle')",
-            content,
+        self.assertTrue(
+            "fetch('/api/system/lifecycle')" in content
+            or "appApiClient.get('/api/system/lifecycle')" in content
+            or "appApiClient ? await appApiClient.get('/api/system/lifecycle')"
+            in content,
             "D12: app.js syncLifecycleTelemetry does not fetch /api/system/lifecycle",
         )
 

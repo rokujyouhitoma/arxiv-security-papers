@@ -2070,9 +2070,22 @@
   <!-- ======================================================================
        3. Pure JavaScript: Force-Directed Physics & Rendering Engine
        ====================================================================== -->
+  <script src="js/frameworks/dom-utils.js"></script>
+  <script src="js/frameworks/timing.js"></script>
+  <script src="js/frameworks/event.js"></script>
+  <script src="js/frameworks/publisher.js"></script>
+  <script src="js/frameworks/disjoint-set.js"></script>
+  <script src="js/frameworks/arc-cache.js"></script>
+  <script src="js/frameworks/api-client.js"></script>
   <script src="js/frameworks/graph-canvas.js"></script>
   <script>
     (function () {
+      // Initialize Dashboard API Client with ARCCache (Issue 349)
+      const ARCCacheCtor = (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ARCCache']) || window['ARCCache'];
+      const ApiClientCtor = (window['yuzora'] && window['yuzora']['frameworks'] && window['yuzora']['frameworks']['ApiClient']) || window['ApiClient'];
+      const dashboardCache = ARCCacheCtor ? new ARCCacheCtor(256) : null;
+      const dashboardApiClient = ApiClientCtor ? new ApiClientCtor('', dashboardCache ? { cache: dashboardCache } : {}) : null;
+      window.dashboardApiClient = dashboardApiClient;
       // ----------------------------------------------------------------------
       // 1. Initial Knowledge Mesh Data (Tailored for arxiv-security-papers)
       // ----------------------------------------------------------------------
@@ -2963,9 +2976,8 @@
         }
 
         try {
-          const res = await fetch('/api/graph/query?q=' + encodeURIComponent(query) + '&limit=100');
-          if (!res.ok) throw new Error('Query request failed');
-          const data = await res.json();
+          const queryUrl = '/api/graph/query?q=' + encodeURIComponent(query) + '&limit=100';
+          const data = dashboardApiClient ? await dashboardApiClient.get(queryUrl) : await (await fetch(queryUrl)).json();
 
           // Guard against stale response if user switched queries in flight
           if (activeGraphQuery !== query) return;
@@ -3019,10 +3031,8 @@
         }
 
         try {
-          const resp = await fetch('/api/graph/cti-mesh?limit=150');
-          if (!resp.ok) return;
-          const data = await resp.json();
-          if (data.status !== 'success') return;
+          const data = dashboardApiClient ? await dashboardApiClient.get('/api/graph/cti-mesh?limit=150') : await (await fetch('/api/graph/cti-mesh?limit=150')).json();
+          if (!data || data.status !== 'success') return;
 
           // Double check query state before replacing nodes/edges
           if (activeGraphQuery && !force) return;
@@ -3051,10 +3061,8 @@
 
       async function fetchSchemaMesh() {
         try {
-          const resp = await fetch('/api/graph/schema');
-          if (!resp.ok) return;
-          const data = await resp.json();
-          if (data.status !== 'success') return;
+          const data = dashboardApiClient ? await dashboardApiClient.get('/api/graph/schema') : await (await fetch('/api/graph/schema')).json();
+          if (!data || data.status !== 'success') return;
 
           schemaRawNodes = data.nodes || [];
           schemaRawEdges = data.edges || [];
@@ -4420,11 +4428,9 @@
         }
         try {
           const t0 = performance.now();
-          const resp = await fetch('/api/graph/mesh');
-          if (!resp.ok) return;
-          const data = await resp.json();
+          const data = dashboardApiClient ? await dashboardApiClient.get('/api/graph/mesh') : await (await fetch('/api/graph/mesh')).json();
           lastMeasuredLatency = performance.now() - t0;
-          if (data.status !== 'success') return;
+          if (!data || data.status !== 'success') return;
 
           // 1. Always update Database Metrics immediately
           if (data.database_metrics) {
