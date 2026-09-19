@@ -27,6 +27,14 @@ class SpiderExecutionStorage:
     """
 
     DEFAULT_SPIDERS = ("arxiv", "cwe", "cve_nvd", "cisa_kev")
+    DEFAULT_INTERVALS = {
+        "arxiv": 21600.0,
+        "cwe": 86400.0,
+        "cve_nvd": 21600.0,
+        "nvd_cve": 21600.0,
+        "cisa_kev": 21600.0,
+        "kev_cve": 21600.0,
+    }
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         if db_path is None:
@@ -167,10 +175,12 @@ class SpiderExecutionStorage:
     def _build_spider_status(
         self, name: str, latest: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
+        interval = self.DEFAULT_INTERVALS.get(name, 21600.0)
         if not latest:
             return {
                 "spider_name": name,
                 "status": "IDLE",
+                "interval_seconds": interval,
                 "last_run": None,
                 "duration_seconds": 0.0,
                 "item_count": 0,
@@ -179,6 +189,7 @@ class SpiderExecutionStorage:
         return {
             "spider_name": name,
             "status": latest.get("status", "IDLE"),
+            "interval_seconds": interval,
             "last_run": latest.get("started_at"),
             "finished_at": latest.get("finished_at"),
             "duration_seconds": latest.get("duration_seconds", 0.0),
@@ -193,6 +204,8 @@ class SpiderExecutionStorage:
             for name in self.DEFAULT_SPIDERS:
                 latest = self._query_latest_row(conn, name)
                 summary[name] = self._build_spider_status(name, latest)
+            if "cisa_kev" in summary and "kev_cve" not in summary:
+                summary["kev_cve"] = summary["cisa_kev"]
         return summary
 
     @classmethod
