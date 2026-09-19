@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **339** | `ApiClient`: 統一 HTTP 通信クライアント基盤の実装 | Feature | High | [339-implement-apiclient-unified-http-gateway.md](339-implement-apiclient-unified-http-gateway.md) |
 | **340** | `SSEStreamManager`: SSE 接続・指数バックオフ再接続マネージャーの実装 | Feature | High | [340-implement-ssestreammanager-with-exponential-backoff.md](340-implement-ssestreammanager-with-exponential-backoff.md) |
 | **341** | `ModalController`: アクセシブル・モーダル＆ドロワー制御コンポーネントの実装 | Feature | Medium | [341-implement-accessible-modal-controller.md](341-implement-accessible-modal-controller.md) |
 | **342** | `StateStore`: Pub/Sub 連動型軽量リアクティブ状態ストアの実装 | Feature | High | [342-implement-statestore-pubsub-reactive-store.md](342-implement-statestore-pubsub-reactive-store.md) |
@@ -23,6 +22,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **339** | `ApiClient`: 統一 HTTP 通信クライアント基盤の実装 | Feature | 2026-09-19 | [339-implement-apiclient-unified-http-gateway.md](closed/339-implement-apiclient-unified-http-gateway.md) |
 | **338** | Webフロントエンド設計・アーキテクチャの刷新と yuzora frameworks の統合 | Refactor | 2026-09-19 | [338-refactor-web-frontend-architecture-and-import-yuzora-frameworks.md](closed/338-refactor-web-frontend-architecture-and-import-yuzora-frameworks.md) |
 | **199** | W3C Turtle (.ttl) / JSON-LD / STIX 2.1 マルチフォーマットエクスポート API および UI ダウンロード機能の実装 | Feature | 2026-09-19 | [199-implement-multi-format-graph-export-ttl-jsonld-stix.md](closed/199-implement-multi-format-graph-export-ttl-jsonld-stix.md) |
 | **337** | NVD CVEスパイダーによる全歴史無制限フェッチ暴走の是正および脆弱性・弱点OKFデータ格納領域の分離 | Bug | 2026-09-19 | [337-fix-nvd-cve-spider-runaway-and-isolate-vulnerability-okf-storage.md](closed/337-fix-nvd-cve-spider-runaway-and-isolate-vulnerability-okf-storage.md) |

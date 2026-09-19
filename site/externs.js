@@ -91,3 +91,41 @@ function SceneDirectorInterface() {}
 SceneDirectorInterface.prototype.register = function(sceneName, sceneInstance) {};
 /** @param {string} sceneName @param {*=} data */
 SceneDirectorInterface.prototype.transitionTo = function(sceneName, data) {};
+
+/**
+ * @interface
+ */
+function ApiClientInterface() {}
+/**
+ * @param {string} path
+ * @param {!Object<string, *>=} options
+ * @return {!Promise<*>}
+ */
+ApiClientInterface.prototype.request = function(path, options) {};
+/**
+ * @param {string} path
+ * @param {?Object<string, *>=} params
+ * @param {!Object<string, *>=} options
+ * @return {!Promise<*>}
+ */
+ApiClientInterface.prototype.get = function(path, params, options) {};
+/**
+ * @param {string} path
+ * @param {*=} body
+ * @param {!Object<string, *>=} options
+ * @return {!Promise<*>}
+ */
+ApiClientInterface.prototype.post = function(path, body, options) {};
+/**
+ * @param {string} path
+ * @param {*=} body
+ * @param {!Object<string, *>=} options
+ * @return {!Promise<*>}
+ */
+ApiClientInterface.prototype.put = function(path, body, options) {};
+/**
+ * @param {string} path
+ * @param {!Object<string, *>=} options
+ * @return {!Promise<*>}
+ */
+ApiClientInterface.prototype.delete = function(path, options) {};

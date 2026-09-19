@@ -24,6 +24,7 @@ JS_SRCS = site/js/frameworks/dom-utils.js \
           site/js/frameworks/scene.js \
           site/js/frameworks/router.js \
           site/js/frameworks/animation.js \
+          site/js/frameworks/api-client.js \
           site/js/lexer.js \
           site/js/parser.js \
           site/js/evaluator.js \
