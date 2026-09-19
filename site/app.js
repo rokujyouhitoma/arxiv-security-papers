@@ -277,16 +277,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Register Scenes in SceneDirector for declarative lifecycle (Issue 352)
   if (appSceneDirector) {
-    const SceneCtor = resolveFramework('Scene');
+    /**
+     * @param {?function(*=): *} onEnter
+     * @param {?function(): *} onExit
+     * @return {!SceneInterface}
+     */
     const createTabScene = (onEnter, onExit) => {
-      if (SceneCtor) {
+      if (resolveFramework('Scene')) {
+        /**
+         * @extends {SceneCtor}
+         */
         class TabScene extends SceneCtor {
+          /**
+           * @param {*=} data
+           * @override
+           */
           enter(data) { if (onEnter) onEnter(data); }
+          /**
+           * @override
+           */
           exit() { if (onExit) onExit(); }
         }
         return new TabScene();
       }
-      return { enter: onEnter || (() => {}), exit: onExit || (() => {}) };
+      return /** @type {!SceneInterface} */ ({ enter: onEnter || (() => {}), exit: onExit || (() => {}) });
     };
 
     appSceneDirector.register('searchTab', createTabScene(null, null));
@@ -1553,7 +1567,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectDbScopeEl = document.getElementById('selectDbScope');
   if (selectDbScopeEl) {
     selectDbScopeEl.addEventListener('change', (e) => {
-      const dbTarget = e.target.value;
+      const target = /** @type {!HTMLSelectElement} */ (e.target);
+      const dbTarget = target.value;
       if (dbTarget) {
         currentSelectedDatabase = dbTarget;
         renderDatabaseTab(currentSelectedDatabase);
@@ -1564,7 +1579,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const databaseSelectorPillsEl = document.getElementById('databaseSelectorPills');
   if (databaseSelectorPillsEl) {
     databaseSelectorPillsEl.addEventListener('click', (e) => {
-      const btn = e.target.closest('.filter-pill');
+      const target = /** @type {?Element} */ (e.target);
+      const btn = target ? target.closest('.filter-pill') : null;
       if (btn) {
         e.preventDefault();
         const dbTarget = btn.getAttribute('data-db');
@@ -1972,7 +1988,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const url = spiderName ? `/api/spiders/history?limit=50&spider_name=${encodeURIComponent(spiderName)}` : '/api/spiders/history?limit=50';
       const data = await appApiClient.get(url);
-      if (!data) return;
+      /** @type {!Array<!SpiderTaskRecord>} */
       const logs = data.history || [];
       const tbody = document.getElementById('spiderHistoryTableBody');
       if (!tbody) return;
@@ -1987,7 +2003,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const color = isSuccess ? '#10B981' : (row.status === 'RUNNING' ? '#3B82F6' : '#EF4444');
         const started = row.started_at ? row.started_at.substring(0, 19).replace('T', ' ') : '--';
         const finished = row.finished_at ? row.finished_at.substring(0, 19).replace('T', ' ') : '--';
-        const dur = row.duration_seconds != null ? `${row.duration_seconds.toFixed(2)}s` : '--';
+        const dur = row.duration_seconds != null ? `${Number(row.duration_seconds).toFixed(2)}s` : '--';
         const items = row.item_count != null ? `${row.item_count}件` : '--';
         const msg = escapeHtml(row.error_message || row.params || '-');
 
@@ -2061,12 +2077,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectSpiderFilter = document.getElementById('selectSpiderFilter');
   if (selectSpiderFilter) {
     selectSpiderFilter.addEventListener('change', (e) => {
-      loadSpiderHistory(e.target.value);
+      const target = /** @type {!HTMLSelectElement} */ (e.target);
+      loadSpiderHistory(target.value);
     });
   }
 
   document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-trigger-spider');
+    const target = /** @type {?Element} */ (e.target);
+    const btn = target ? target.closest('.btn-trigger-spider') : null;
     if (btn) {
       const spider = btn.getAttribute('data-spider');
       if (spider) triggerSpider(spider);

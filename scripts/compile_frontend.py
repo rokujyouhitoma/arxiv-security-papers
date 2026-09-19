@@ -91,8 +91,9 @@ def compile_bundle(
     dest_path: str,
     compilation_level: str = "SIMPLE_OPTIMIZATIONS",
     warning_level: str = "VERBOSE",
+    strict: bool = True,
 ) -> int:
-    """Compiles JavaScript bundle using Google Closure Compiler."""
+    """Compiles JavaScript bundle using Google Closure Compiler with strict type checks."""
     compiler_full_path = WORKSPACE_ROOT / COMPILER_JAR
     externs_full_path = WORKSPACE_ROOT / EXTERNS_FILE
     dest_full_path = WORKSPACE_ROOT / dest_path
@@ -122,10 +123,17 @@ def compile_bundle(
         "--js_output_file",
         str(dest_full_path),
     ]
+    if strict:
+        cmd.extend([
+            "--jscomp_error",
+            "checkTypes",
+            "--jscomp_error",
+            "checkVars",
+        ])
     for src in src_paths:
         cmd.extend(["--js", str(WORKSPACE_ROOT / src)])
 
-    print(f"Compiling {len(src_paths)} files -> {dest_path}...")
+    print(f"Compiling {len(src_paths)} files -> {dest_path} (strict={strict})...")
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.stdout.strip():
         print(res.stdout)
@@ -134,7 +142,7 @@ def compile_bundle(
     return res.returncode
 
 
-def build_all(concat_only: bool = False) -> int:
+def build_all(concat_only: bool = False, strict: bool = True) -> int:
     """Builds both app-min.js and dashboard-min.js."""
     if concat_only:
         print("Concatenating app bundle...")
@@ -144,12 +152,12 @@ def build_all(concat_only: bool = False) -> int:
         print("[SUCCESS] All bundles concatenated successfully.")
         return 0
 
-    rc_app = compile_bundle(APP_SRCS, APP_OUT)
+    rc_app = compile_bundle(APP_SRCS, APP_OUT, strict=strict)
     if rc_app != 0:
         print("[FAIL] Compilation failed for app bundle.", file=sys.stderr)
         return rc_app
 
-    rc_dash = compile_bundle(DASHBOARD_SRCS, DASHBOARD_OUT)
+    rc_dash = compile_bundle(DASHBOARD_SRCS, DASHBOARD_OUT, strict=strict)
     if rc_dash != 0:
         print("[FAIL] Compilation failed for dashboard bundle.", file=sys.stderr)
         return rc_dash
@@ -158,7 +166,9 @@ def build_all(concat_only: bool = False) -> int:
     return 0
 
 
-def watch_and_rebuild(concat_only: bool = False, poll_interval: float = 1.0) -> None:
+def watch_and_rebuild(
+    concat_only: bool = False, poll_interval: float = 1.0, strict: bool = True
+) -> None:
     """Watches source files and triggers automatic rebuild on changes."""
     all_monitored_srcs = set(APP_SRCS + DASHBOARD_SRCS + [EXTERNS_FILE])
     last_mtimes = {}
@@ -186,7 +196,7 @@ def watch_and_rebuild(concat_only: bool = False, poll_interval: float = 1.0) -> 
                     changed = True
             if changed:
                 print("Rebuilding frontend bundles...")
-                build_all(concat_only=concat_only)
+                build_all(concat_only=concat_only, strict=strict)
     except KeyboardInterrupt:
         print("\nWatcher stopped.")
 
@@ -199,6 +209,12 @@ def main() -> int:
         "--concat-only",
         action="store_true",
         help="Only concatenate source files without invoking Closure Compiler",
+    )
+    parser.add_argument(
+        "--strict",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enforce strict static type checking (--jscomp_error checkTypes, checkVars) (default: True)",
     )
     parser.add_argument(
         "--watch",
@@ -215,10 +231,14 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.watch:
-        watch_and_rebuild(concat_only=args.concat_only, poll_interval=args.poll_interval)
+        watch_and_rebuild(
+            concat_only=args.concat_only,
+            poll_interval=args.poll_interval,
+            strict=args.strict,
+        )
         return 0
 
-    return build_all(concat_only=args.concat_only)
+    return build_all(concat_only=args.concat_only, strict=args.strict)
 
 
 if __name__ == "__main__":

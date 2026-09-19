@@ -574,4 +574,114 @@ var AppEventTargetInterface;
 /** @type {!Storage} */
 var localStorage;
 
+/**
+ * @constructor
+ * @implements {SceneInterface}
+ */
+function SceneCtor() {}
+/** @param {*=} data @override */
+SceneCtor.prototype.enter = function(data) {};
+/** @override */
+SceneCtor.prototype.exit = function() {};
+
+/**
+ * @typedef {{
+ *   job_id: (string|undefined),
+ *   spider_name: (string|undefined),
+ *   status: (string|undefined),
+ *   started_at: (string|undefined),
+ *   finished_at: (string|undefined),
+ *   duration_seconds: (number|undefined),
+ *   item_count: (number|undefined),
+ *   error_message: (string|undefined),
+ *   params: (string|undefined)
+ * }}
+ */
+var SpiderTaskRecord;
+
+/**
+ * @typedef {{
+ *   status: string,
+ *   history: (!Array<!SpiderTaskRecord>|undefined),
+ *   total: (number|undefined)
+ * }}
+ */
+var SpiderHistoryResponse;
+
+/**
+ * @typedef {{
+ *   run_id: (string|undefined),
+ *   status: (string|undefined),
+ *   papers_processed: (number|undefined),
+ *   duration_sec: (number|undefined),
+ *   duration_seconds: (number|undefined),
+ *   item_count: (number|undefined),
+ *   timestamp: (string|undefined)
+ * }}
+ */
+var TelemetryRunRecord;
+
+/**
+ * @typedef {{
+ *   schedule: (string|undefined),
+ *   last_run_status: (string|undefined),
+ *   last_run_utc: (string|undefined),
+ *   next_run_utc: (string|undefined),
+ *   streak_days: (number|undefined)
+ * }}
+ */
+var SchedulerTelemetry;
+
+/**
+ * @typedef {{
+ *   scheduler: (?SchedulerTelemetry|undefined),
+ *   artifacts: (?{
+ *     okf_papers_count: (number|undefined),
+ *     raw_pdf_count: (number|undefined)
+ *   }|undefined),
+ *   external_health: (?{
+ *     arxiv_api: (?{status: string, latency_ms: number}|undefined),
+ *     mitre_attack: (?{status: string, latency_ms: number}|undefined),
+ *     nvd_cve: (?{status: string, latency_ms: number}|undefined)
+ *   }|undefined),
+ *   sla: (?{
+ *     actual_availability: (string|undefined)
+ *   }|undefined),
+ *   recent_runs: (!Array<!TelemetryRunRecord>|undefined)
+ * }}
+ */
+var LifecycleTelemetry;
+
+/**
+ * @typedef {{
+ *   resolved_nodes: (number|undefined),
+ *   walks_per_min: (number|undefined),
+ *   edges_per_tick: (number|undefined),
+ *   token_savings_pct: (number|string|undefined),
+ *   obf_spans: (number|undefined),
+ *   duration_seconds: (number|undefined),
+ *   item_count: (number|undefined)
+ * }}
+ */
+var GraphTelemetry;
+
+/** @param {boolean=} forceState */
+Window.prototype.toggleGraphControlDeck = function(forceState) {};
+/** @param {boolean=} forceState */
+Window.prototype.toggleDashboardHeader = function(forceState) {};
+/** @param {string} tabName @param {boolean=} updateUrl */
+Window.prototype.switchDashboardTab = function(tabName, updateUrl) {};
+/** @param {string} query */
+Window.prototype.openGraphWithQuery = function(query) {};
+
+/** @param {boolean=} forceState */
+var toggleGraphControlDeck = function(forceState) {};
+/** @param {boolean=} forceState */
+var toggleDashboardHeader = function(forceState) {};
+/** @param {string} tabName @param {boolean=} updateUrl */
+var switchDashboardTab = function(tabName, updateUrl) {};
+/** @param {string} query */
+var openGraphWithQuery = function(query) {};
+
+
 

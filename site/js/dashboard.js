@@ -710,7 +710,7 @@
 
       document.addEventListener('click', function(e) {
         const wrapper = document.getElementById('exportDropdownWrapper');
-        if (wrapper && !wrapper.contains(e.target)) {
+        if (wrapper && !wrapper.contains(/** @type {?Node} */ (e.target))) {
           window.closeExportDropdown();
         }
       });
@@ -928,14 +928,14 @@
           // Guard against stale response if user switched queries in flight
           if (activeGraphQuery !== query) return;
 
-          if (data.status === 'success' && data.mesh) {
-            ctiRawNodes = data.mesh.nodes || [];
-            ctiRawEdges = data.mesh.edges || [];
+          if (data.status === 'success' && data['mesh']) {
+            ctiRawNodes = (data['mesh'] && data['mesh']['nodes']) || [];
+            ctiRawEdges = (data['mesh'] && data['mesh']['edges']) || [];
             activeTwoHopNodes = null;
             applyCtiFilter();
 
             if (badge) {
-              const count = data.match_count !== undefined ? data.match_count : ctiRawNodes.length;
+              const count = data['match_count'] !== undefined ? data['match_count'] : ctiRawNodes.length;
               badge.textContent = `✅ ${count} 件一致 (${ctiRawEdges.length} リンク)`;
               badge.style.color = 'var(--accent-green)';
             }
@@ -983,8 +983,8 @@
           // Double check query state before replacing nodes/edges
           if (activeGraphQuery && !force) return;
 
-          ctiRawNodes = data.mesh.nodes || [];
-          ctiRawEdges = data.mesh.edges || [];
+          ctiRawNodes = (data['mesh'] && data['mesh']['nodes']) || [];
+          ctiRawEdges = (data['mesh'] && data['mesh']['edges']) || [];
           ctiRawGaps = data.research_gaps || [];
 
           const gapTotal = (data.stats && data.stats.research_gap_count != null) ? data.stats.research_gap_count : ctiRawGaps.length;
@@ -2379,11 +2379,11 @@
             const idxStr = Array.isArray(t.indexed_columns) ? t.indexed_columns.join(', ') : (t.indexed_columns || '-');
             return `
               <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">${t.table_name}</code></td>
+                <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);"><code style="font-size: 11px;">${t['table_name']}</code></td>
                 <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${t.category || '-'}</td>
-                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">${t.storage_engine}</span></td>
+                <td style="padding: 6px 8px;"><span style="background: var(--bg-panel); border: 1px solid var(--border-dark); padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold;">${t['storage_engine']}</span></td>
                 <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-coral);">${Number(t.row_count || 0).toLocaleString()}</td>
-                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">${t.size_human}</td>
+                <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: var(--accent-green);">${t['size_human']}</td>
                 <td style="padding: 6px 8px; font-size: 10px; color: var(--fg-muted);">PK: <strong>${t.primary_key || '-'}</strong> | Idx: <code>${idxStr}</code></td>
               </tr>
             `;
@@ -2477,7 +2477,8 @@
                   { k: 'EVALUATION', label: 'EVAL' }
                 ];
                 phaseListEl.innerHTML = pMap.map(p => {
-                  const st = data.loop_monitor.phases[p.k] || 'DONE';
+                  const phases = data['loop_monitor'] ? data['loop_monitor']['phases'] : null;
+                  const st = (phases && phases[p.k]) || 'DONE';
                   const isDone = st === 'DONE' || st === 'completed';
                   const bg = isDone ? 'var(--accent-green)' : 'var(--accent-coral)';
                   const icon = isDone ? '✓' : '⟳';
@@ -2683,7 +2684,7 @@
                       <strong style="color: var(--accent-coral); font-size: 10px;">${tv.name}</strong>
                       <span style="font-size: 9px; color: var(--fg-muted); margin-left: 4px;">(${tv.category})</span>
                     </div>
-                    <span style="font-size: 10px; font-weight: bold; color: var(--accent-green);">${tv.growth}</span>
+                    <span style="font-size: 10px; font-weight: bold; color: var(--accent-green);">${tv['growth']}</span>
                   </div>
                 `).join('');
               }
@@ -2721,7 +2722,7 @@
           updateRealEdgeLedger();
           updateLivePhysicsMetrics();
           drawWalkChart();
-          const tStats = data.traversal_stats;
+          const tStats = data['traversal_stats'];
           renderTraversalMatrix(tStats ? (tStats.success_rate_pct ?? 0) : 0);
         } catch (e) {
           // Gracefully fallback
@@ -2734,7 +2735,10 @@
       syncLiveMesh();
       setInterval(syncLiveMesh, 5000);
 
-      // Header Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
+      /**
+       * Header Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
+       * @param {boolean=} forceState
+       */
       window.toggleDashboardHeader = function(forceState) {
         const header = document.getElementById('dashboardHeader');
         const btn = document.getElementById('btnToggleHeader');
@@ -2758,7 +2762,10 @@
         setTimeout(resizeCanvas, 220);
       };
 
-      // Control Deck Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
+      /**
+       * Control Deck Toggle (Collapse / Expand) with LocalStorage and Dynamic Canvas Resize
+       * @param {boolean=} forceState
+       */
       window.toggleGraphControlDeck = function(forceState) {
         const deck = document.querySelector('.graph-control-deck');
         const workspace = document.querySelector('.graph-workspace');
@@ -2911,7 +2918,10 @@
         }
       };
 
-      // Cross-tab Deep Linking Helper: Switch to Graph and prefill/execute query
+      /**
+       * Cross-tab Deep Linking Helper: Switch to Graph and prefill/execute query
+       * @param {string} query
+       */
       window.openGraphWithQuery = function(query) {
         window.switchDashboardTab('graph');
         if (query) {
@@ -2927,8 +2937,12 @@
         }
       };
 
-      // Global Tab Handling: Knowledge & CTI Graph Dedicated View
-      // Seamlessly forwards ported tabs (product, system, supervisor) to Enterprise Console (index.html)
+      /**
+       * Global Tab Handling: Knowledge & CTI Graph Dedicated View
+       * Seamlessly forwards ported tabs (product, system, supervisor) to Enterprise Console (index.html)
+       * @param {string} tabName
+       * @param {boolean=} updateUrl
+       */
       window.switchDashboardTab = function(tabName, updateUrl = true) {
         const normTab = (tabName || 'graph').toLowerCase().trim();
         if (normTab === 'product' || normTab === 'analytics' ||
