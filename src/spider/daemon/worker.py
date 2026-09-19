@@ -124,7 +124,7 @@ class SpiderDaemonWorker:
         output_dir = params.get("output_dir")
         max_requests = params.get("max_requests")
         default_delay = float(params.get("default_delay", 0.5))
-        persist_db = bool(params.get("persist_db", False))
+        persist_db = bool(params.get("persist_db", True))
 
         raw_items = await run_spider(
             spider_name=job.spider_name,

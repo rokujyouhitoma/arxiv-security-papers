@@ -8,12 +8,24 @@ with automatic fallback to synchronous execution.
 from __future__ import annotations
 
 import logging
+import os
+import time
 from typing import Any, Dict, Optional
 
 from spider.daemon.client import SpiderDaemonClient
 from spider.daemon.contracts import CrawlJob, CrawlResult
+from spider.daemon.storage import SpiderExecutionStorage
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_spider_name(name: str) -> str:
+    mapping = {
+        "kev_cve": "cisa_kev",
+        "cve": "nvd_cve",
+        "cve_nvd": "nvd_cve",
+    }
+    return mapping.get(name, name)
 
 
 def _copy_context_key(
@@ -32,7 +44,31 @@ def _merge_params(
         merged.update(ctx_params)
     for key in ("output_dir", "max_requests", "default_delay", "persist_db"):
         _copy_context_key(merged, context, key)
+    if "persist_db" not in merged:
+        merged["persist_db"] = True
     return merged
+
+
+def _handle_execution_error(
+    storage: SpiderExecutionStorage,
+    job: CrawlJob,
+    exc: Exception,
+    start_t: float,
+) -> None:
+    logger.exception(
+        "[SpiderTaskOperator] Job '%s' (%s) execution error: %s",
+        job.job_id,
+        job.spider_name,
+        exc,
+    )
+    failed_res = CrawlResult(
+        job_id=job.job_id,
+        spider_name=job.spider_name,
+        success=False,
+        error=str(exc),
+        duration_seconds=time.time() - start_t,
+    )
+    storage.record_finish(failed_res)
 
 
 class SpiderTaskOperator:
@@ -48,21 +84,41 @@ class SpiderTaskOperator:
         params: Optional[Dict[str, Any]] = None,
         timeout: float = 300.0,
         output_key: str = "crawl_result",
+        storage: Optional[SpiderExecutionStorage] = None,
+        db_path: Optional[str] = None,
     ) -> None:
-        self.spider_name = spider_name
+        self.spider_name = _normalize_spider_name(spider_name)
         self.client = client if client is not None else SpiderDaemonClient()
         self.params = dict(params or {})
         self.timeout = timeout
         self.output_key = output_key
+        resolved_db = db_path or os.path.join(
+            "outputs", "database", "spider_execution.vdb"
+        )
+        self.storage = (
+            storage
+            if storage is not None
+            else SpiderExecutionStorage(db_path=resolved_db)
+        )
 
     def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Executes crawl job via SpiderDaemonClient and updates context dict."""
         merged_params = _merge_params(self.params, context)
+        job_id = f"scheduled_{self.spider_name}_{int(time.time())}"
         job = CrawlJob(
+            job_id=job_id,
             spider_name=self.spider_name,
             params=merged_params,
         )
-        result: CrawlResult = self.client.submit_job(job, timeout=self.timeout)
+        start_t = time.time()
+        self.storage.record_start(job)
+        try:
+            result: CrawlResult = self.client.submit_job(job, timeout=self.timeout)
+            self.storage.record_finish(result)
+        except Exception as exc:
+            _handle_execution_error(self.storage, job, exc, start_t)
+            raise
+
         return {
             self.output_key: result.to_dict(),
             f"{self.spider_name}_items_count": result.item_count,

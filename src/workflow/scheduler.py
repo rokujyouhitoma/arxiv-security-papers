@@ -6,6 +6,7 @@ Integrates SpiderTaskOperator for scheduled spider executions.
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
@@ -23,6 +24,8 @@ from .contracts import (
     build_scheduler_state_tree,
 )
 from .operators.spider_operator import SpiderTaskOperator
+
+logger = logging.getLogger(__name__)
 
 
 def _now() -> float:
@@ -115,7 +118,12 @@ class WorkflowScheduler:
         try:
             task.handler(context)
             task.last_run = _now()
-        except Exception:
+        except Exception as exc:
+            logger.exception(
+                "[WorkflowScheduler] Task '%s' execution failed: %s",
+                task.task_id,
+                exc,
+            )
             task.last_run = _now()
 
     def _dispatch_due_loop(self, now_t: float, ctx: Dict[str, Any]) -> List[str]:
