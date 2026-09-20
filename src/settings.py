@@ -171,18 +171,3 @@ __all__ = [
     "DB_TIME_ZONE",
     "DATABASES",
 ]
-
-
-def __getattr__(name: str) -> Any:
-    """Backward compatibility fallback for functions migrated to core.settings."""
-    if name in (
-        "get_database_scopes",
-        "get_all_configured_databases",
-        "get_database_metadata",
-        "get_table_scope_from_settings",
-        "get_table_type_from_settings",
-    ):
-        import core.settings as _core_settings
-
-        return getattr(_core_settings, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -381,10 +381,14 @@ class TestCoreTimezoneAndSettingsPackages(unittest.TestCase):
         self.assertEqual(get_table_type_from_settings("okf_cwes"), "Virtual (Markdown)")
         self.assertIsNone(get_table_type_from_settings("non_existent_table"))
 
-        # Verify backward-compatibility fallback on settings module
+        # Verify backward-compatibility fallback on settings module has been removed (Issue 367)
         import settings
 
-        self.assertEqual(settings.get_all_configured_databases(), all_dbs)
+        self.assertFalse(hasattr(settings, "get_all_configured_databases"))
+        self.assertFalse(hasattr(settings, "get_database_scopes"))
+        self.assertFalse(hasattr(settings, "get_database_metadata"))
+        self.assertFalse(hasattr(settings, "get_table_scope_from_settings"))
+        self.assertFalse(hasattr(settings, "get_table_type_from_settings"))
 
 
 if __name__ == "__main__":

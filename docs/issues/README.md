@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **367** | `src/settings.py` の後方互換レイヤー (`__getattr__`) の撤去と `core.settings` への参照一本化 | Refactor | Medium | In Progress | [367-deprecate-settings-getattr-fallback-to-core-settings.md](367-deprecate-settings-getattr-fallback-to-core-settings.md) |
 | **368** | 巨大単一ファイル `outputs/index.md` (6.8MB) のスリム化および `papers_catalog.json` / Web UI との責務分離 | Refactor | Medium | In Progress | [368-streamline-index-md-and-decouple-catalog-views.md](368-streamline-index-md-and-decouple-catalog-views.md) |
 
 ---
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **367** | `src/settings.py` の後方互換レイヤー (`__getattr__`) の撤去と `core.settings` への参照一本化 | Refactor | 2026-09-20 | [367-deprecate-settings-getattr-fallback-to-core-settings.md](closed/367-deprecate-settings-getattr-fallback-to-core-settings.md) |
 | **366** | ルート `config.json` の `config/` ディレクトリ配下への集約および設定ロード体系の統一 | Refactor | 2026-09-20 | [366-unify-configuration-files-into-config-directory.md](closed/366-unify-configuration-files-into-config-directory.md) |
 | **365** | Supervisor 実行時ソケットの `src/outputs/` 漏洩防止およびログ・PID/ロックファイルの適正配置への一本化 | Refactor | 2026-09-20 | [365-isolate-runtime-sockets-and-unify-supervisor-logging.md](closed/365-isolate-runtime-sockets-and-unify-supervisor-logging.md) |
 | **364** | Issue 360 移行用シンボリックリンク (`okf_papers`, `okf_vulnerabilities`, `okf_weaknesses`, `vector_db`) の撤去と新ストレージ階層への完全一本化 | Refactor | 2026-09-20 | [364-remove-legacy-okf-symlinks-and-unify-paths.md](closed/364-remove-legacy-okf-symlinks-and-unify-paths.md) |
