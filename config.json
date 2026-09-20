@@ -23,7 +23,7 @@
     "annual_dir": "outputs/executive_summaries/05_annual",
     "index_file": "outputs/index.md",
     "log_file": "outputs/log.md",
-    "state_file": "processed_papers.json",
+    "state_file": "outputs/database/papers_catalog.json",
     "templates_dir": "templates"
   }
 }

@@ -49,8 +49,13 @@ def running_threaded_server() -> Generator[str, None, None]:
 
     yield base_url
 
-    httpd.shutdown()
-    httpd.server_close()
+    shut_thread = threading.Thread(target=httpd.shutdown, daemon=True)
+    shut_thread.start()
+    shut_thread.join(timeout=1.5)
+    try:
+        httpd.server_close()
+    except Exception:
+        pass
 
 
 def test_threading_wsgi_server_structure() -> None:

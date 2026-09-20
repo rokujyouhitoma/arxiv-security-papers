@@ -327,6 +327,19 @@ def _ingest_items_into_knowledge_graph(
         print(f"[WARN] Knowledge graph ingestion error (non-fatal): {e}")
 
 
+def _sync_legacy_state_file(
+    processed_items: List[Dict[str, Any]],
+    processed_state: Dict[str, Any],
+    state_path: str,
+) -> None:
+    """Updates legacy state JSON if path exists and is not catalog."""
+    if not processed_items or not os.path.exists(state_path):
+        return
+    if state_path.endswith("papers_catalog.json"):
+        return
+    _atomic_json_dump(processed_state, state_path)
+
+
 def _transform_and_save_okf(
     pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]],
     workspace_dir: str,
@@ -364,11 +377,9 @@ def _transform_and_save_okf(
         state_mgr.register_paper(meta_entry, auto_flush=False)
 
     state_mgr.catalog_storage.flush()
-
-    if processed_items and os.path.exists(state_path):
-        _atomic_json_dump(processed_state, state_path)
+    _sync_legacy_state_file(processed_items, processed_state, state_path)
     print(
-        f"[State] Updated state tracking file ({state_path}) with {len(processed_items)} new entries."
+        f"[State] Updated state tracking catalog with {len(processed_items)} new entries."
     )
 
     log_path = os.path.join(workspace_dir, "outputs", "log.md")
@@ -519,7 +530,7 @@ def _ensure_config_paths(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             "monthly_dir": "outputs/executive_summaries/03_monthly",
             "quarterly_dir": "outputs/executive_summaries/04_quarterly",
             "annual_dir": "outputs/executive_summaries/05_annual",
-            "state_file": "processed_papers.json",
+            "state_file": "outputs/database/papers_catalog.json",
         }
     return cfg
 
@@ -536,9 +547,9 @@ def _stage_theme_papers(
     """Stages theme papers for download and returns tasks, state, and state_path."""
     papers_data = [item.to_dict() for item in all_raw_items]
     state_filename = (
-        "processed_papers.json"
+        os.path.join("outputs", "database", "papers_catalog.json")
         if theme_id == "security"
-        else f"processed_papers_{theme_id}.json"
+        else os.path.join("outputs", "database", f"papers_catalog_{theme_id}.json")
     )
     state_path = os.path.join(workspace_dir, state_filename)
     processed_state = _load_state(state_path, workspace_dir)

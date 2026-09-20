@@ -111,8 +111,6 @@ def _mount_file_plain_text_tables(engine: SQLExecutor, ws: str) -> None:
 def _mount_json_tables(engine: SQLExecutor, ws: str) -> None:
     """Auto-mounts JSON and JSONL pipeline states."""
     cat_json = os.path.join(ws, "outputs", "database", "papers_catalog.json")
-    if not os.path.exists(cat_json):
-        cat_json = os.path.join(ws, "processed_papers.json")
     if os.path.exists(cat_json):
         _mount_table_safe(
             engine,

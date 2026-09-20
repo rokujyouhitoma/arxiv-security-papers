@@ -95,7 +95,7 @@ class AnalyticsAggregator:
     def _calculate_token_savings(self) -> Tuple[float, str]:
         """Calculates token cost savings and reduction percentage."""
         processed_file = os.path.join(
-            self.workspace_dir, "outputs", "processed_papers.json"
+            self.workspace_dir, "outputs", "database", "papers_catalog.json"
         )
         processed_count = 0
         if os.path.exists(processed_file):

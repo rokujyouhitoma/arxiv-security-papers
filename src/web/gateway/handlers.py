@@ -640,7 +640,9 @@ def _introspect_live_loop_and_obf_state(
     wal_dir = os.path.join(workspace_dir, "outputs", "wal")
     latest_cycle, phase_status = _read_wal_phase_statuses(wal_dir)
 
-    proc_papers_path = os.path.join(workspace_dir, "processed_papers.json")
+    proc_papers_path = os.path.join(
+        workspace_dir, "outputs", "database", "papers_catalog.json"
+    )
     proc_count = 0
     if os.path.exists(proc_papers_path):
         try:
@@ -895,7 +897,7 @@ def _introspect_okf_cwes_table(
 def _introspect_processed_papers_table(
     papers_count: int, papers_size: int
 ) -> Dict[str, Any]:
-    """Introspects processed_papers virtual table descriptor from processed_papers.json."""
+    """Introspects processed_papers virtual table descriptor from outputs/database/papers_catalog.json."""
     return {
         "table_name": "processed_papers",
         "category": "Master Document Catalog",
@@ -1056,7 +1058,7 @@ def _run_sql_introspection(
 
 
 def _load_processed_papers_stat(workspace_dir: str) -> Tuple[int, int]:
-    path = os.path.join(workspace_dir, "processed_papers.json")
+    path = os.path.join(workspace_dir, "outputs", "database", "papers_catalog.json")
     if not os.path.exists(path):
         return 0, 0
     size = os.path.getsize(path)
@@ -1243,7 +1245,7 @@ def _introspect_database_metrics(workspace_dir: str) -> Dict[str, Any]:
         "display_name": "ArXiv Security Core DB",
         "category": "Core arXiv Papers & Plain-text Virtual Tables",
         "storage_engine": "File-Backed Plain-Text + JSON Virtual Tables",
-        "file_path": "outputs/okf_papers/, processed_papers.json, outputs/raw_data/",
+        "file_path": "outputs/okf/papers/, outputs/database/papers_catalog.json, outputs/raw_data/",
         "file_size_bytes": total_size,
         "file_size_human": _format_size(total_size),
         "table_count": len(tables),

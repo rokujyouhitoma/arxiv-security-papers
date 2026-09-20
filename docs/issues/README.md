@@ -4,7 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在オープン中の Issue はありません。
+現在進行中のオープンな Issue はありません。
 
 ---
 
@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **361** | レガシー重複台帳 `processed_papers.json` (7.2MB) の完全廃止および `outputs/database/papers_catalog.json` への一本化 | Refactor | 2026-09-20 | [361-deprecate-and-purge-legacy-processed-papers-json.md](closed/361-deprecate-and-purge-legacy-processed-papers-json.md) |
 | **360** | OKFストレージ階層の再編 (`outputs/okf/papers`, `outputs/okf/cves`) および `okf_papers` 配下 `CVE-*.md` の安全移管・完全削除 | Refactor | 2026-09-20 | [360-migrate-okf-storage-to-hierarchical-structure.md](closed/360-migrate-okf-storage-to-hierarchical-structure.md) |
 | **359** | 柱 4: Pure Python (`pytest`) によるフロントエンド JS 構文・契約・整合性ヘッドレステストの洗練 | Test / Quality | 2026-09-20 | [359-pure-python-headless-js-test-suite.md](closed/359-pure-python-headless-js-test-suite.md) |
 | **358** | 柱 3: TypeScript 不要の「標準 JSDoc 契約定義と Closure Compiler 厳格静的検査」整備 | Quality | 2026-09-19 | [358-standard-jsdoc-and-strict-static-analysis.md](closed/358-standard-jsdoc-and-strict-static-analysis.md) |

@@ -59,7 +59,9 @@ DATABASES: Dict[str, Dict[str, Any]] = {
             },
             "processed_papers": {
                 "ENGINE": "json_table",
-                "LOCATION": os.path.join(BASE_DIR, "processed_papers.json"),
+                "LOCATION": os.path.join(
+                    BASE_DIR, "outputs", "database", "papers_catalog.json"
+                ),
                 "TYPE": "Virtual (JSON)",
                 "PRIMARY_KEY": "clean_id",
             },
