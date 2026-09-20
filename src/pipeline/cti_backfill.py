@@ -48,7 +48,10 @@ class CTIBackfillEnricher:
         self.inference_engine = TechniqueInferenceEngine(
             rule_registry=self.rule_registry
         )
-        self.okf_base_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        okf_papers_dir = os.path.join(self.workspace_dir, "outputs", "okf", "papers")
+        if not os.path.exists(okf_papers_dir):
+            okf_papers_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        self.okf_base_dir = okf_papers_dir
         self.graph_db_path = graph_db_path
         self.sync_graph = sync_graph
         self._graph_engine: Optional[PropertyGraphEngine] = None

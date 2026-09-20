@@ -358,6 +358,10 @@ class TestCoreTimezoneAndSettingsPackages(unittest.TestCase):
         self.assertEqual(
             get_table_type_from_settings("okf_papers"), "Virtual (Markdown)"
         )
+        self.assertEqual(get_table_scope_from_settings("okf_cves"), "arxiv_security_db")
+        self.assertEqual(get_table_type_from_settings("okf_cves"), "Virtual (Markdown)")
+        self.assertEqual(get_table_scope_from_settings("okf_cwes"), "arxiv_security_db")
+        self.assertEqual(get_table_type_from_settings("okf_cwes"), "Virtual (Markdown)")
         self.assertIsNone(get_table_type_from_settings("non_existent_table"))
 
         # Verify backward-compatibility fallback on settings module

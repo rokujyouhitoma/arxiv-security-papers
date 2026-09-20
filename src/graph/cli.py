@@ -67,8 +67,11 @@ def build_knowledge_graph(workspace_dir: str, output_path: Optional[str] = None)
     graph_path = _resolve_graph_path(workspace_dir, output_path)
     engine = PropertyGraphEngine(storage_path=graph_path)
 
-    okf_pattern = os.path.join(workspace_dir, "outputs", "okf_papers", "*", "*.md")
+    okf_pattern = os.path.join(workspace_dir, "outputs", "okf", "papers", "*", "*.md")
     files = sorted(glob.glob(okf_pattern))
+    if not files:
+        okf_pattern = os.path.join(workspace_dir, "outputs", "okf_papers", "*", "*.md")
+        files = sorted(glob.glob(okf_pattern))
     logger.info(
         "Found %d OKF markdown papers to index into Knowledge Graph", len(files)
     )

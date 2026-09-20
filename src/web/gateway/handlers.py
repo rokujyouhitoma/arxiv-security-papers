@@ -101,12 +101,20 @@ def _collect_papers_from_dir(
     return False
 
 
+def _resolve_papers_base_dir(workspace_dir: str) -> str:
+    """Resolves okf papers directory with fallback."""
+    new_dir = os.path.join(workspace_dir, "outputs", "okf", "papers")
+    if os.path.exists(new_dir):
+        return new_dir
+    return os.path.join(workspace_dir, "outputs", "okf_papers")
+
+
 def _scan_real_okf_papers(
     workspace_dir: str, max_count: int = 15
 ) -> List[Dict[str, Any]]:
-    """Scans outputs/okf_papers for actual security papers metadata in sorted order."""
+    """Scans outputs/okf/papers for actual security papers metadata in sorted order."""
     papers: List[Dict[str, Any]] = []
-    okf_base = os.path.join(workspace_dir, "outputs", "okf_papers")
+    okf_base = _resolve_papers_base_dir(workspace_dir)
     if not os.path.exists(okf_base):
         return papers
 
@@ -828,7 +836,9 @@ def _introspect_okf_papers_table(
     workspace_dir: str, papers_count: int
 ) -> Dict[str, Any]:
     """Introspects okf_papers virtual table descriptor from outputs/okf_papers."""
-    okf_dir = os.path.join(workspace_dir, "outputs", "okf_papers")
+    okf_dir = os.path.join(workspace_dir, "outputs", "okf", "papers")
+    if not os.path.exists(okf_dir):
+        okf_dir = os.path.join(workspace_dir, "outputs", "okf_papers")
     size_bytes = os.path.getsize(okf_dir) if os.path.exists(okf_dir) else 20480
     return {
         "table_name": "okf_papers",
@@ -839,6 +849,46 @@ def _introspect_okf_papers_table(
         "size_human": _format_size(size_bytes),
         "primary_key": "clean_id (TEXT)",
         "indexed_columns": ["arxiv_id", "published_date", "tags"],
+    }
+
+
+def _introspect_okf_cves_table(
+    workspace_dir: str,
+) -> Dict[str, Any]:
+    """Introspects okf_cves virtual table descriptor from outputs/okf/cves."""
+    cves_dir = os.path.join(workspace_dir, "outputs", "okf", "cves")
+    if not os.path.exists(cves_dir):
+        cves_dir = os.path.join(workspace_dir, "outputs", "okf_vulnerabilities")
+    size_bytes = os.path.getsize(cves_dir) if os.path.exists(cves_dir) else 20480
+    return {
+        "table_name": "okf_cves",
+        "category": "Virtual Table (Markdown Vulnerabilities)",
+        "storage_engine": "File-Backed Plain-Text / Markdown",
+        "row_count": 0,
+        "size_bytes": size_bytes,
+        "size_human": _format_size(size_bytes),
+        "primary_key": "clean_id (TEXT)",
+        "indexed_columns": ["cve_id", "published_date", "tags"],
+    }
+
+
+def _introspect_okf_cwes_table(
+    workspace_dir: str,
+) -> Dict[str, Any]:
+    """Introspects okf_cwes virtual table descriptor from outputs/okf/cwes."""
+    cwes_dir = os.path.join(workspace_dir, "outputs", "okf", "cwes")
+    if not os.path.exists(cwes_dir):
+        cwes_dir = os.path.join(workspace_dir, "outputs", "okf_weaknesses")
+    size_bytes = os.path.getsize(cwes_dir) if os.path.exists(cwes_dir) else 20480
+    return {
+        "table_name": "okf_cwes",
+        "category": "Virtual Table (Markdown Weaknesses)",
+        "storage_engine": "File-Backed Plain-Text / Markdown",
+        "row_count": 0,
+        "size_bytes": size_bytes,
+        "size_human": _format_size(size_bytes),
+        "primary_key": "clean_id (TEXT)",
+        "indexed_columns": ["cwe_id", "name", "tags"],
     }
 
 
@@ -1030,6 +1080,8 @@ def _collect_database_tables(
     _, _, _, ge_instance = _introspect_graph_table_metrics(workspace_dir)
     tables = [
         _introspect_okf_papers_table(workspace_dir, papers_count),
+        _introspect_okf_cves_table(workspace_dir),
+        _introspect_okf_cwes_table(workspace_dir),
         _introspect_processed_papers_table(papers_count, papers_size),
         _introspect_raw_papers_table(workspace_dir, papers_count),
     ]
@@ -1620,7 +1672,7 @@ class GatewayHandlers:
         return None
 
     def _find_okf_paper_file(self, clean_id: str) -> Tuple[str, str]:
-        okf_base = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        okf_base = _resolve_papers_base_dir(self.workspace_dir)
         if not os.path.exists(okf_base):
             return "", ""
         target_name = f"{clean_id}.md"
@@ -1872,7 +1924,9 @@ class GatewayHandlers:
         return total
 
     def _build_artifacts_status(self) -> Dict[str, Any]:
-        okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        okf_dir = os.path.join(self.workspace_dir, "outputs", "okf", "papers")
+        if not os.path.exists(okf_dir):
+            okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
         raw_dir = os.path.join(self.workspace_dir, "outputs", "raw_data")
         return {
             "okf_papers_count": self._count_all_files(okf_dir),
@@ -2271,8 +2325,10 @@ class GatewayHandlers:
         if os.path.exists(site_path) and os.path.isfile(site_path):
             return site_path
 
-        # Handle outputs/ alias mapping (raw_data, okf_papers, executive_summaries)
-        if target.startswith(("raw_data/", "okf_papers/", "executive_summaries/")):
+        # Handle outputs/ alias mapping (raw_data, okf, okf_papers, executive_summaries)
+        if target.startswith(
+            ("raw_data/", "okf/", "okf_papers/", "executive_summaries/")
+        ):
             return self._check_safe_file(
                 os.path.join(self.workspace_dir, "outputs", target)
             )

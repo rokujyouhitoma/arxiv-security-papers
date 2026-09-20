@@ -38,7 +38,21 @@ DATABASES: Dict[str, Dict[str, Any]] = {
         "TABLES": {
             "okf_papers": {
                 "ENGINE": "file_plain_text",
-                "LOCATION": os.path.join(BASE_DIR, "outputs", "okf_papers"),
+                "LOCATION": os.path.join(BASE_DIR, "outputs", "okf", "papers"),
+                "PATTERNS": ["*.md"],
+                "TYPE": "Virtual (Markdown)",
+                "PRIMARY_KEY": "clean_id",
+            },
+            "okf_cves": {
+                "ENGINE": "file_plain_text",
+                "LOCATION": os.path.join(BASE_DIR, "outputs", "okf", "cves"),
+                "PATTERNS": ["*.md"],
+                "TYPE": "Virtual (Markdown)",
+                "PRIMARY_KEY": "clean_id",
+            },
+            "okf_cwes": {
+                "ENGINE": "file_plain_text",
+                "LOCATION": os.path.join(BASE_DIR, "outputs", "okf", "cwes"),
                 "PATTERNS": ["*.md"],
                 "TYPE": "Virtual (Markdown)",
                 "PRIMARY_KEY": "clean_id",

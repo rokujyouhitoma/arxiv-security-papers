@@ -174,8 +174,14 @@ class AnalyticsAggregator:
         vectors.sort(key=lambda x: int(x.get("count", 0)), reverse=True)
         return vectors
 
+    def _resolve_okf_dir(self) -> str:
+        new_dir = os.path.join(self.workspace_dir, "outputs", "okf", "papers")
+        if os.path.exists(new_dir):
+            return new_dir
+        return os.path.join(self.workspace_dir, "outputs", "okf_papers")
+
     def _collect_okf_files(self) -> List[str]:
-        okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        okf_dir = self._resolve_okf_dir()
         okf_files: List[str] = []
         if os.path.exists(okf_dir):
             for root, _, walk_files in os.walk(okf_dir):

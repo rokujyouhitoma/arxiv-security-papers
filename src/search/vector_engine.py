@@ -458,7 +458,9 @@ class VectorEngine:
 
     def build_index(self) -> int:
         """Scans all OKF files, builds multi-field index and saves index.json."""
-        okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        okf_dir = os.path.join(self.workspace_dir, "outputs", "okf", "papers")
+        if not os.path.exists(okf_dir):
+            okf_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
         if not os.path.exists(okf_dir):
             return 0
 

@@ -13,7 +13,9 @@
   "paths": {
     "outputs_dir": "outputs",
     "raw_data_dir": "outputs/raw_data",
-    "okf_papers_dir": "outputs/okf_papers",
+    "okf_papers_dir": "outputs/okf/papers",
+    "okf_cves_dir": "outputs/okf/cves",
+    "okf_cwes_dir": "outputs/okf/cwes",
     "per_run_dir": "outputs/executive_summaries/01_per_run",
     "daily_dir": "outputs/executive_summaries/02_daily",
     "monthly_dir": "outputs/executive_summaries/03_monthly",

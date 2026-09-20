@@ -859,7 +859,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const authorsBadge = authors ? `<div class="card-authors">👥 著者: ${escapeHtml(authors)}</div>` : '';
       const highlightHtml = paper['highlight'] ? `<div class="card-snippet">${paper['highlight']}</div>` : `<p class="card-desc">${escapeHtml(paper.description || '要約情報なし')}</p>`;
       const okfPath = paper.path ? ('/' + encodeURI(paper.path)) : '#';
-      const rawTxtPath = paper.path ? ('/' + encodeURI(paper.path.replace('outputs/okf_papers/', 'raw_data/').replace('.md', '.txt'))) : '#';
+      const rawTxtPath = paper.path ? ('/' + encodeURI(paper.path.replace('outputs/okf/papers/', 'raw_data/').replace('outputs/okf_papers/', 'raw_data/').replace('.md', '.txt'))) : '#';
       const previewUrl = `/preview/${encodeURIComponent(paper.id)}`;
 
       const paperSrc = resolvePaperSourceInfo(paper.id);
@@ -947,7 +947,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (modalOkfLink && paperPath) modalOkfLink.href = '/' + encodeURI(paperPath);
         if (modalTxtLink && paperPath) {
-          modalTxtLink.href = '/' + encodeURI(paperPath.replace('outputs/okf_papers/', 'raw_data/').replace('.md', '.txt'));
+          modalTxtLink.href = '/' + encodeURI(paperPath.replace('outputs/okf/papers/', 'raw_data/').replace('outputs/okf_papers/', 'raw_data/').replace('.md', '.txt'));
         }
 
         const titleEn = paperMeta.title || rawContent.match(/title:\s*"(.*?)"/)?.[1] || arxivId;

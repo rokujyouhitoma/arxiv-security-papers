@@ -145,6 +145,39 @@ def test_gateway_static_okf_papers_transparent_resolution(tmp_path: Any) -> None
     assert b"# Test OKF Paper Content" in res[0]
 
 
+def test_gateway_static_okf_hierarchical_resolution(tmp_path: Any) -> None:
+    # Verify new hierarchical paths: outputs/okf/papers/ and outputs/okf/cves/
+    papers_dir = tmp_path / "outputs" / "okf" / "papers" / "2026-09-20"
+    papers_dir.mkdir(parents=True)
+    paper_file = papers_dir / "2609.99999.md"
+    paper_file.write_text("# Hierarchical OKF Paper", encoding="utf-8")
+
+    cves_dir = tmp_path / "outputs" / "okf" / "cves" / "2026-09-20"
+    cves_dir.mkdir(parents=True)
+    cve_file = cves_dir / "CVE-2026-99999.md"
+    cve_file.write_text("# Hierarchical OKF CVE", encoding="utf-8")
+
+    app = WSGIApplication(workspace_dir=str(tmp_path))
+
+    # Test /okf/papers/
+    status_captured: List[str] = []
+    env_paper = make_test_environ(
+        method="GET", path="/okf/papers/2026-09-20/2609.99999.md"
+    )
+    res_paper = app(env_paper, lambda s, h: status_captured.append(s))
+    assert status_captured[0] == "200 OK"
+    assert b"# Hierarchical OKF Paper" in res_paper[0]
+
+    # Test /okf/cves/
+    status_captured.clear()
+    env_cve = make_test_environ(
+        method="GET", path="/okf/cves/2026-09-20/CVE-2026-99999.md"
+    )
+    res_cve = app(env_cve, lambda s, h: status_captured.append(s))
+    assert status_captured[0] == "200 OK"
+    assert b"# Hierarchical OKF CVE" in res_cve[0]
+
+
 def test_gateway_handle_paper_with_content(tmp_path: Any) -> None:
     # Setup mock OKF paper on disk
     outputs_dir = tmp_path / "outputs" / "okf_papers" / "2025-02-23"

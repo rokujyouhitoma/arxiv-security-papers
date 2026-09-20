@@ -513,7 +513,9 @@ def handle_query_knowledge_graph(args: Dict[str, Any]) -> Dict[str, Any]:
 def handle_get_paper_summary(args: Dict[str, Any]) -> Dict[str, Any]:
     arxiv_id = args.get("arxiv_id", "").strip().replace("/", "_").replace("..", "")
     clean_id = arxiv_id
-    okf_root = os.path.join(WORKSPACE_DIR, "outputs", "okf_papers")
+    okf_root = os.path.join(WORKSPACE_DIR, "outputs", "okf", "papers")
+    if not os.path.exists(okf_root):
+        okf_root = os.path.join(WORKSPACE_DIR, "outputs", "okf_papers")
 
     matches = glob.glob(os.path.join(okf_root, "**", f"{clean_id}.md"), recursive=True)
     if not matches:

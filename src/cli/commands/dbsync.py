@@ -92,7 +92,9 @@ def synchronize_database_catalog(workspace_dir: str) -> Tuple[int, int]:
     cat_path = os.path.join(ws, "outputs", "database", "papers_catalog.json")
     catalog = _load_existing_catalog(cat_path)
 
-    okf_dir = os.path.join(ws, "outputs", "okf_papers")
+    okf_dir = os.path.join(ws, "outputs", "okf", "papers")
+    if not os.path.exists(okf_dir):
+        okf_dir = os.path.join(ws, "outputs", "okf_papers")
     existing_ids = set(catalog.keys())
     missing = _find_unregistered_okf_papers(okf_dir, ws, existing_ids)
 

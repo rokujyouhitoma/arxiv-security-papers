@@ -513,7 +513,7 @@ def _ensure_config_paths(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if "paths" not in cfg:
         cfg["paths"] = {
             "raw_data_dir": "outputs/raw_data",
-            "okf_papers_dir": "outputs/okf_papers",
+            "okf_papers_dir": "outputs/okf/papers",
             "per_run_dir": "outputs/executive_summaries/01_per_run",
             "daily_dir": "outputs/executive_summaries/02_daily",
             "monthly_dir": "outputs/executive_summaries/03_monthly",

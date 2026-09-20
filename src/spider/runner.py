@@ -121,7 +121,7 @@ def _resolve_okf_pipeline(output_dir: Optional[str], persist_db: bool) -> List[A
         factory = cast(Any, okf_cls)
         return [
             factory(
-                output_dir=output_dir or "outputs/okf_papers",
+                output_dir=output_dir or "outputs/okf/papers",
                 enable_db_persistence=persist_db,
             )
         ]
@@ -129,7 +129,7 @@ def _resolve_okf_pipeline(output_dir: Optional[str], persist_db: bool) -> List[A
 
     return [
         SecurityOkfItemPipeline(
-            output_dir=output_dir or "outputs/okf_papers",
+            output_dir=output_dir or "outputs/okf/papers",
             enable_db_persistence=persist_db,
         )
     ]
@@ -281,7 +281,7 @@ class SpiderRunner:
         pipeline_type: Optional[str] = None,
     ) -> None:
         self.workspace_dir = workspace_dir or os.getcwd()
-        self.output_dir = os.path.join(self.workspace_dir, "outputs", "okf_papers")
+        self.output_dir = os.path.join(self.workspace_dir, "outputs", "okf", "papers")
         self.pipelines = pipelines
         self.pipeline_type = pipeline_type
 
@@ -330,7 +330,7 @@ def parse_cli_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Directory for crawler output (defaults to outputs/okf_papers or outputs/scraped_data)",
+        help="Directory for crawler output (defaults to outputs/okf/papers or outputs/scraped_data)",
     )
     parser.add_argument(
         "--max-requests",

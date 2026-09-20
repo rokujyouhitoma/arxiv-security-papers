@@ -36,9 +36,10 @@ def _mount_table_safe(engine: SQLExecutor, ddl: str, table_name: str) -> bool:
         return False
 
 
-def _mount_file_plain_text_tables(engine: SQLExecutor, ws: str) -> None:
-    """Auto-mounts okf_papers and raw_papers directories as virtual tables."""
-    okf_dir = os.path.join(ws, "outputs", "okf_papers")
+def _mount_okf_papers_table(engine: SQLExecutor, ws: str) -> None:
+    okf_dir = os.path.join(ws, "outputs", "okf", "papers")
+    if not os.path.exists(okf_dir):
+        okf_dir = os.path.join(ws, "outputs", "okf_papers")
     if os.path.exists(okf_dir):
         _mount_table_safe(
             engine,
@@ -59,6 +60,30 @@ def _mount_file_plain_text_tables(engine: SQLExecutor, ws: str) -> None:
             "okf_papers",
         )
 
+
+def _mount_okf_cves_table(engine: SQLExecutor, ws: str) -> None:
+    cves_dir = os.path.join(ws, "outputs", "okf", "cves")
+    if not os.path.exists(cves_dir):
+        cves_dir = os.path.join(ws, "outputs", "okf_vulnerabilities")
+    if os.path.exists(cves_dir):
+        _mount_table_safe(
+            engine,
+            f"CREATE TABLE IF NOT EXISTS okf_cves ("
+            f"clean_id VARCHAR(64) PRIMARY KEY, "
+            f"title TEXT, "
+            f"description TEXT, "
+            f"tags JSON, "
+            f"published_date TIMESTAMP, "
+            f"timestamp TIMESTAMP, "
+            f"resource VARCHAR(256), "
+            f"file_size_bytes INTEGER, "
+            f"body_markdown TEXT"
+            f") USING file_plain_text LOCATION '{cves_dir}'",
+            "okf_cves",
+        )
+
+
+def _mount_raw_papers_table(engine: SQLExecutor, ws: str) -> None:
     raw_dir = os.path.join(ws, "outputs", "raw_data")
     if os.path.exists(raw_dir):
         _mount_table_safe(
@@ -74,6 +99,13 @@ def _mount_file_plain_text_tables(engine: SQLExecutor, ws: str) -> None:
             f") USING file_plain_text LOCATION '{raw_dir}'",
             "raw_papers",
         )
+
+
+def _mount_file_plain_text_tables(engine: SQLExecutor, ws: str) -> None:
+    """Auto-mounts okf_papers, okf_cves, and raw_papers directories as virtual tables."""
+    _mount_okf_papers_table(engine, ws)
+    _mount_okf_cves_table(engine, ws)
+    _mount_raw_papers_table(engine, ws)
 
 
 def _mount_json_tables(engine: SQLExecutor, ws: str) -> None:

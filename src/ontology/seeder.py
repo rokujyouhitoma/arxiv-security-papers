@@ -636,7 +636,10 @@ def ingest_okf_papers(
     limit: int = 100,
 ) -> Tuple[int, int]:
     """Scans and ingests OKF papers into PropertyGraphEngine."""
-    base_dir = okf_dir or os.path.join(engine.workspace_dir, "outputs", "okf_papers")
+    default_dir = os.path.join(engine.workspace_dir, "outputs", "okf", "papers")
+    if not os.path.exists(default_dir):
+        default_dir = os.path.join(engine.workspace_dir, "outputs", "okf_papers")
+    base_dir = okf_dir or default_dir
     if not os.path.exists(base_dir):
         return 0, 0
     files = _scan_okf_files(base_dir)

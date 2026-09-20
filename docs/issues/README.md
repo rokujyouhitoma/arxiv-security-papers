@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **360** | OKFストレージ階層の再編 (`outputs/okf/papers`, `outputs/okf/cves`) および `okf_papers` 配下 `CVE-*.md` の安全移管・完全削除 | Refactor | 2026-09-20 | [360-migrate-okf-storage-to-hierarchical-structure.md](closed/360-migrate-okf-storage-to-hierarchical-structure.md) |
 | **359** | 柱 4: Pure Python (`pytest`) によるフロントエンド JS 構文・契約・整合性ヘッドレステストの洗練 | Test / Quality | 2026-09-20 | [359-pure-python-headless-js-test-suite.md](closed/359-pure-python-headless-js-test-suite.md) |
 | **358** | 柱 3: TypeScript 不要の「標準 JSDoc 契約定義と Closure Compiler 厳格静的検査」整備 | Quality | 2026-09-19 | [358-standard-jsdoc-and-strict-static-analysis.md](closed/358-standard-jsdoc-and-strict-static-analysis.md) |
 | **357** | 柱 2: 外部バンドラー不要の「純粋 Python 連結・ビルドパイプライン」整備 | Feature | 2026-09-19 | [357-pure-python-bundling-and-build-pipeline.md](closed/357-pure-python-bundling-and-build-pipeline.md) |

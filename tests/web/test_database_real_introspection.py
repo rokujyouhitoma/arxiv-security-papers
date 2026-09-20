@@ -62,8 +62,10 @@ class TestDatabaseRealIntrospection(unittest.TestCase):
             self.workspace_dir
         )
         table_names = [t["table_name"] for t in tables]
-        # Ensure arxiv_security_db contains only settings.py defined virtual tables
-        self.assertEqual(table_names, ["okf_papers", "processed_papers", "raw_papers"])
+        self.assertEqual(
+            table_names,
+            ["okf_papers", "okf_cves", "okf_cwes", "processed_papers", "raw_papers"],
+        )
         self.assertNotIn("paper_metadata", table_names)
         self.assertNotIn("papers_vector", table_names)
         self.assertNotIn("search_inverted_index", table_names)

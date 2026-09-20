@@ -552,8 +552,15 @@ def run_harvest_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_papers_dir(workspace_dir: str) -> str:
+    new_dir = os.path.join(workspace_dir, "outputs", "okf", "papers")
+    if os.path.exists(new_dir):
+        return new_dir
+    return os.path.join(workspace_dir, "outputs", "okf_papers")
+
+
 def _count_okf_papers(workspace_dir: str) -> int:
-    okf_dir = os.path.join(workspace_dir, "outputs", "okf_papers")
+    okf_dir = _resolve_papers_dir(workspace_dir)
     if not os.path.exists(okf_dir):
         return 0
     return sum(

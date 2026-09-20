@@ -22,20 +22,12 @@ def test_resolve_output_root_defaults() -> None:
     """Verifies default directory routing by item type."""
     pipeline = SecurityOkfItemPipeline()
 
-    assert pipeline.resolve_output_root("security-paper") == "outputs/okf_papers"
-    assert pipeline.resolve_output_root("paper") == "outputs/okf_papers"
-    assert (
-        pipeline.resolve_output_root("vulnerability") == "outputs/okf_vulnerabilities"
-    )
-    assert (
-        pipeline.resolve_output_root("security-advisory")
-        == "outputs/okf_vulnerabilities"
-    )
-    assert (
-        pipeline.resolve_output_root("security_advisory")
-        == "outputs/okf_vulnerabilities"
-    )
-    assert pipeline.resolve_output_root("weakness") == "outputs/okf_weaknesses"
+    assert pipeline.resolve_output_root("security-paper") == "outputs/okf/papers"
+    assert pipeline.resolve_output_root("paper") == "outputs/okf/papers"
+    assert pipeline.resolve_output_root("vulnerability") == "outputs/okf/cves"
+    assert pipeline.resolve_output_root("security-advisory") == "outputs/okf/cves"
+    assert pipeline.resolve_output_root("security_advisory") == "outputs/okf/cves"
+    assert pipeline.resolve_output_root("weakness") == "outputs/okf/cwes"
 
 
 def test_resolve_output_root_custom_dir() -> None:

@@ -30,14 +30,14 @@ class SecurityOkfItemPipeline(BaseItemPipeline):
     """Item Pipeline for converting ScrapedItems to Google OKF v0.2 Markdown and DSN-14 DB records.
 
     Isolates output storage by item type:
-      - 'security-paper' -> 'outputs/okf_papers' (protected scholarly paper store)
-      - 'vulnerability', 'security-advisory' -> 'outputs/okf_vulnerabilities'
-      - 'weakness' -> 'outputs/okf_weaknesses'
+      - 'security-paper' -> 'outputs/okf/papers' (protected scholarly paper store)
+      - 'vulnerability', 'security-advisory' -> 'outputs/okf/cves'
+      - 'weakness' -> 'outputs/okf/cwes'
     """
 
-    DEFAULT_PAPER_DIR: str = "outputs/okf_papers"
-    DEFAULT_VULN_DIR: str = "outputs/okf_vulnerabilities"
-    DEFAULT_WEAKNESS_DIR: str = "outputs/okf_weaknesses"
+    DEFAULT_PAPER_DIR: str = "outputs/okf/papers"
+    DEFAULT_VULN_DIR: str = "outputs/okf/cves"
+    DEFAULT_WEAKNESS_DIR: str = "outputs/okf/cwes"
 
     def __init__(
         self,
