@@ -16,12 +16,19 @@ from spider.pipeline.base import BaseItemPipeline
 _DATE_REGEX = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
-def _map_isolated_output_dir(item_type: str, default_dir: str) -> str:
-    """Maps normalized item type to dedicated storage directory."""
+def _map_isolated_output_dir(
+    item_type: str, default_dir: str, clean_id: str = ""
+) -> str:
+    """Maps normalized item type or clean_id prefix to dedicated storage directory."""
     norm = item_type.lower()
-    if norm in ("vulnerability", "security-advisory", "security_advisory"):
+    cid_upper = clean_id.upper()
+    if norm in (
+        "vulnerability",
+        "security-advisory",
+        "security_advisory",
+    ) or cid_upper.startswith("CVE-"):
         return SecurityOkfItemPipeline.DEFAULT_VULN_DIR
-    if norm == "weakness":
+    if norm in ("weakness", "cwe") or cid_upper.startswith("CWE-"):
         return SecurityOkfItemPipeline.DEFAULT_WEAKNESS_DIR
     return default_dir
 
@@ -51,7 +58,7 @@ class SecurityOkfItemPipeline(BaseItemPipeline):
         self.isolate_by_type: bool = isolate_by_type
         self._processed_count: int = 0
 
-    def resolve_output_root(self, item_type: str) -> str:
+    def resolve_output_root(self, item_type: str, clean_id: str = "") -> str:
         """Determines destination root directory based on item type and isolation setting."""
         if (
             self._custom_output_dir
@@ -62,7 +69,7 @@ class SecurityOkfItemPipeline(BaseItemPipeline):
         if not self.isolate_by_type:
             return self.output_dir
 
-        return _map_isolated_output_dir(item_type, self.DEFAULT_PAPER_DIR)
+        return _map_isolated_output_dir(item_type, self.DEFAULT_PAPER_DIR, clean_id)
 
     async def process_item(self, item: ScrapedItem, spider: Any) -> ScrapedItem:
         """Processes scraped item, generates OKF v0.2 Markdown, and persists record."""
@@ -71,7 +78,10 @@ class SecurityOkfItemPipeline(BaseItemPipeline):
         item.payload["clean_id"] = clean_id
 
         item_type = str(payload.get("type") or "security-paper").lower()
-        base_dir = self.resolve_output_root(item_type)
+        try:
+            base_dir = self.resolve_output_root(item_type, clean_id)
+        except TypeError:
+            base_dir = self.resolve_output_root(item_type)
         date_folder = _extract_date_folder(str(payload.get("published_date") or ""))
         target_dir = os.path.join(base_dir, date_folder)
         os.makedirs(target_dir, exist_ok=True)

@@ -125,3 +125,24 @@ def test_pipeline_process_item_storage_isolation() -> None:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     asyncio.run(_run())
+
+
+def test_resolve_output_root_clean_id_guard() -> None:
+    """Verifies CWE-* and CVE-* prefix guard routes to proper directory even with default type."""
+    pipeline = SecurityOkfItemPipeline()
+
+    # Even if item_type is 'security-paper', CWE-* clean_id is isolated to cwes/
+    assert (
+        pipeline.resolve_output_root("security-paper", "CWE-79")
+        == SecurityOkfItemPipeline.DEFAULT_WEAKNESS_DIR
+    )
+    # Even if item_type is 'security-paper', CVE-* clean_id is isolated to cves/
+    assert (
+        pipeline.resolve_output_root("security-paper", "CVE-2026-1234")
+        == SecurityOkfItemPipeline.DEFAULT_VULN_DIR
+    )
+    # Standard paper clean_id routes to papers/
+    assert (
+        pipeline.resolve_output_root("security-paper", "2609.12345")
+        == SecurityOkfItemPipeline.DEFAULT_PAPER_DIR
+    )
