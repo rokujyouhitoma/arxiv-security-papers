@@ -21,10 +21,14 @@ from core.timezone import (
     to_storage_utc,
 )
 from settings import (
+    BASE_DIR,
+    CONFIG_DIR,
     DATABASE_TIME_ZONE,
     DATABASES,
     DB_TIME_ZONE,
     DISPLAY_TIME_ZONE,
+    LEGACY_CONFIG_PATH,
+    PIPELINE_CONFIG_PATH,
     TIME_ZONE,
     USE_TZ,
 )
@@ -32,6 +36,19 @@ from settings import (
 
 class TestSettingsConstants(unittest.TestCase):
     """Tests for top-level timezone constants and getters."""
+
+    def test_config_paths(self) -> None:
+        import os
+
+        self.assertEqual(CONFIG_DIR, os.path.join(BASE_DIR, "config"))
+        self.assertEqual(
+            PIPELINE_CONFIG_PATH, os.path.join(CONFIG_DIR, "pipeline.json")
+        )
+        self.assertEqual(LEGACY_CONFIG_PATH, os.path.join(BASE_DIR, "config.json"))
+        self.assertTrue(
+            os.path.exists(PIPELINE_CONFIG_PATH),
+            f"Expected pipeline config file to exist at {PIPELINE_CONFIG_PATH}",
+        )
 
     def test_timezone_constants(self) -> None:
         self.assertEqual(TIME_ZONE, "Asia/Tokyo")

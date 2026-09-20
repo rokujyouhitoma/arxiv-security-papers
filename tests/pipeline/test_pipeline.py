@@ -50,8 +50,10 @@ def test_detect_workspace_dir_resolution() -> None:
     import os
 
     assert os.path.isabs(ws)
-    assert os.path.exists(os.path.join(ws, "config.json")) or os.path.exists(
-        os.path.join(ws, "pyproject.toml")
+    assert (
+        os.path.exists(os.path.join(ws, "config", "pipeline.json"))
+        or os.path.exists(os.path.join(ws, "config.json"))
+        or os.path.exists(os.path.join(ws, "pyproject.toml"))
     )
     assert not ws.endswith("src/pipeline")
     assert not ws.endswith("src")

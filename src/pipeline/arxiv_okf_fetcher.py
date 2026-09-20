@@ -638,7 +638,13 @@ def _parse_cli_date_range(
 
 
 def _is_workspace_root(dir_path: str) -> bool:
-    markers = ("config.json", "pyproject.toml", "Makefile", ".agents")
+    markers = (
+        os.path.join("config", "pipeline.json"),
+        "config.json",
+        "pyproject.toml",
+        "Makefile",
+        ".agents",
+    )
     return any(os.path.exists(os.path.join(dir_path, m)) for m in markers)
 
 
@@ -847,10 +853,16 @@ def main() -> None:
     parser.add_argument(
         "--checkpoint-file", type=str, help="Custom backfill state checkpoint path"
     )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to pipeline configuration JSON file",
+    )
     args, _ = parser.parse_known_args()
 
     workspace_dir = _detect_workspace_dir()
-    config = load_config()
+    config = load_config(args.config)
     theme_mgr = get_theme_manager()
 
     _load_custom_theme_if_given(args, theme_mgr)

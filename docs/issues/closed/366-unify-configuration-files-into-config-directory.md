@@ -2,7 +2,7 @@
 ID: 366
 種別: Refactor
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [REFACTOR] ルート `config.json` の `config/` ディレクトリ配下への集約および設定ロード体系の統一 (ID: 366)
@@ -17,27 +17,29 @@ ID: 366
 
 ## 2. トレーサビリティ / Traceability
 
-- 関連 Issue: [Issue 361: レガシー重複台帳 processed_papers.json の完全廃止](closed/361-deprecate-and-purge-legacy-processed-papers-json.md)
-- 関連設定: `config.json`, `config/supervisor.json`
-- 関連コード: `src/settings.py`, `src/pipeline/arxiv_okf_fetcher.py`
+- 関連 Issue: [Issue 361: レガシー重複台帳 processed_papers.json の完全廃止](361-deprecate-and-purge-legacy-processed-papers-json.md)
+- 関連設定: `config/pipeline.json`, `config/supervisor.json`
+- 関連コード: `src/settings.py`, `src/pipeline/ingestion/arxiv_client.py`, `src/pipeline/arxiv_okf_fetcher.py`
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
 ### 設定ファイル
-- [ ] `config.json` (移動・削除)
-- [ ] `config/pipeline.json` (新規配置・移行)
+- [x] `config.json` (移動・削除)
+- [x] `config/pipeline.json` (新規配置・移行)
 
 ### パイプライン・コア設定ローダー
-- [ ] `src/settings.py`
-- [ ] `src/pipeline/arxiv_okf_fetcher.py`
-- [ ] `Makefile` (引数指定箇所の同期)
-- [ ] `manage.py`
+- [x] `src/settings.py` (CONFIG_DIR, PIPELINE_CONFIG_PATH, LEGACY_CONFIG_PATH 定義)
+- [x] `src/pipeline/ingestion/arxiv_client.py` (load_config 拡張・後方互換探索)
+- [x] `src/pipeline/arxiv_okf_fetcher.py` (ワークスペースマーカーおよび --config CLI 追加)
+- [x] `Makefile` (引数指定箇所の確認)
+- [x] `manage.py` (動作確認)
 
 ### テストスイート
-- [ ] `tests/test_settings_timezone.py`
-- [ ] `tests/pipeline/` 配下の設定読み込みテスト
+- [x] `tests/test_settings_timezone.py`
+- [x] `tests/pipeline/test_ingestion.py`
+- [x] `tests/pipeline/test_pipeline.py`
 
 ---
 
@@ -54,14 +56,15 @@ Target Branch: `refactor/366-unify-config-files`
 4. **テストの更新と実行**:
    - 設定ファイルを指定・読み込む全ユニットテストを新パスに同期し、実行。
 5. **品質ゲートの検証**:
-   - `make check_format`
-   - `make static_analysis`
+   - `make isort black`
+   - `make flake8`
+   - `make radon-cc`
    - `make test`
 
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] リポジトリルートから `config.json` が解消され、`config/` ディレクトリ配下に集約されていること。
-- [ ] パイプライン実行（`make run` や各種 CLI）が `config/pipeline.json` を正常にロードできること。
-- [ ] 全ユニットテストが 100% PASS すること。
+- [x] リポジトリルートから `config.json` が解消され、`config/` ディレクトリ配下に集約されていること。
+- [x] パイプライン実行（`make run` や各種 CLI）が `config/pipeline.json` を正常にロードできること。
+- [x] 全ユニットテストが 100% PASS すること。

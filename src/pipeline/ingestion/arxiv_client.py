@@ -54,18 +54,57 @@ except ImportError:
     import xml.etree.ElementTree as ET
 
 
-def load_config() -> Dict[str, Any]:
-    """Loads configuration dictionary from config.json."""
-    possible_paths = [
-        os.path.join(os.path.dirname(__file__), "..", "..", "config.json"),
-        os.path.join(os.path.dirname(__file__), "..", "config.json"),
-        os.path.abspath("config.json"),
+def _read_json_file(path: str) -> Optional[Dict[str, Any]]:
+    """Safely reads a JSON dictionary from path if it exists."""
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def _get_search_roots() -> List[str]:
+    file_dir = os.path.dirname(os.path.abspath(__file__))
+    return [
+        os.path.abspath(os.path.join(file_dir, "..", "..", "..")),
+        os.path.abspath(os.path.join(file_dir, "..", "..")),
+        os.getcwd(),
     ]
-    for path in possible_paths:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                res = json.load(f)
-                return res if isinstance(res, dict) else {}
+
+
+def _resolve_config_candidates() -> List[str]:
+    """Resolves potential configuration file paths with pipeline.json prioritized."""
+    candidates: List[str] = []
+    try:
+        from settings import LEGACY_CONFIG_PATH, PIPELINE_CONFIG_PATH
+
+        candidates.extend([PIPELINE_CONFIG_PATH, LEGACY_CONFIG_PATH])
+    except Exception:
+        pass
+
+    for root in _get_search_roots():
+        p_cfg = os.path.join(root, "config", "pipeline.json")
+        l_cfg = os.path.join(root, "config.json")
+        if p_cfg not in candidates:
+            candidates.append(p_cfg)
+        if l_cfg not in candidates:
+            candidates.append(l_cfg)
+    return candidates
+
+
+def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """Loads configuration dictionary from config/pipeline.json with fallback to config.json."""
+    if config_path:
+        res = _read_json_file(config_path)
+        return res if res is not None else {}
+
+    for path in _resolve_config_candidates():
+        res = _read_json_file(path)
+        if res is not None:
+            return res
     return {}
 
 

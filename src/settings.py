@@ -13,6 +13,10 @@ BASE_DIR = os.path.realpath(
     os.path.abspath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
+CONFIG_DIR: str = os.path.join(BASE_DIR, "config")
+PIPELINE_CONFIG_PATH: str = os.path.join(CONFIG_DIR, "pipeline.json")
+LEGACY_CONFIG_PATH: str = os.path.join(BASE_DIR, "config.json")
+
 TIME_ZONE: str = "Asia/Tokyo"
 USE_TZ: bool = True
 DATABASE_TIME_ZONE: str = "UTC"
@@ -157,6 +161,9 @@ DATABASES: Dict[str, Dict[str, Any]] = {
 
 __all__ = [
     "BASE_DIR",
+    "CONFIG_DIR",
+    "PIPELINE_CONFIG_PATH",
+    "LEGACY_CONFIG_PATH",
     "TIME_ZONE",
     "USE_TZ",
     "DATABASE_TIME_ZONE",

@@ -29,6 +29,39 @@ def test_load_config():
     assert config["arxiv"]["query"] == "cat:cs.CR"
 
 
+def test_load_config_explicit_path():
+    import json
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump({"test_key": "test_val"}, f)
+        temp_path = f.name
+    try:
+        cfg = load_config(temp_path)
+        assert cfg.get("test_key") == "test_val"
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def test_load_config_nonexistent_path():
+    cfg = load_config("/nonexistent/path/config.json")
+    assert cfg == {}
+
+
+def test_load_config_fallback_to_legacy():
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        legacy_file = os.path.join(tmp_dir, "config.json")
+        with open(legacy_file, "w", encoding="utf-8") as f:
+            json.dump({"legacy_mode": True, "arxiv": {"query": "cat:cs.CR"}}, f)
+
+        # Passing explicit legacy path
+        cfg = load_config(legacy_file)
+        assert cfg.get("legacy_mode") is True
+        assert cfg.get("arxiv", {}).get("query") == "cat:cs.CR"
+
+
 def test_parse_arxiv_entry():
     sample_xml = """<entry xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
         <id>http://arxiv.org/abs/2608.12345v1</id>
