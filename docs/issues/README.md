@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **363** | `.gitignore` 対象でありながら Git 追跡され続けているレガシー WAL / VDB ファイルの Git インデックスからの完全除外・パージ | Refactor | High | In Progress | [363-purge-legacy-wal-and-vdb-from-git.md](363-purge-legacy-wal-and-vdb-from-git.md) |
 | **364** | Issue 360 移行用シンボリックリンク (`okf_papers`, `okf_vulnerabilities`, `okf_weaknesses`, `vector_db`) の撤去と新ストレージ階層への完全一本化 | Refactor | Medium | In Progress | [364-remove-legacy-okf-symlinks-and-unify-paths.md](364-remove-legacy-okf-symlinks-and-unify-paths.md) |
 | **365** | Supervisor 実行時ソケットの `src/outputs/` 漏洩防止およびログ・PID/ロックファイルの適正配置への一本化 | Refactor | Medium | In Progress | [365-isolate-runtime-sockets-and-unify-supervisor-logging.md](365-isolate-runtime-sockets-and-unify-supervisor-logging.md) |
 | **366** | ルート `config.json` の `config/` ディレクトリ配下への集約および設定ロード体系の統一 | Refactor | Medium | In Progress | [366-unify-configuration-files-into-config-directory.md](366-unify-configuration-files-into-config-directory.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **363** | `.gitignore` 対象でありながら Git 追跡され続けているレガシー WAL / VDB ファイルの Git インデックスからの完全除外・パージ | Refactor | 2026-09-20 | [363-purge-legacy-wal-and-vdb-from-git.md](closed/363-purge-legacy-wal-and-vdb-from-git.md) |
 | **362** | `outputs/okf/papers/` 内に混入・残留した CWE-*.md (2,832件) の `outputs/okf/cwes/` への完全移管およびパージ | Refactor | 2026-09-20 | [362-purge-cwe-markdown-from-okf-papers.md](closed/362-purge-cwe-markdown-from-okf-papers.md) |
 | **361** | レガシー重複台帳 `processed_papers.json` (7.2MB) の完全廃止および `outputs/database/papers_catalog.json` への一本化 | Refactor | 2026-09-20 | [361-deprecate-and-purge-legacy-processed-papers-json.md](closed/361-deprecate-and-purge-legacy-processed-papers-json.md) |
 | **360** | OKFストレージ階層の再編 (`outputs/okf/papers`, `outputs/okf/cves`) および `okf_papers` 配下 `CVE-*.md` の安全移管・完全削除 | Refactor | 2026-09-20 | [360-migrate-okf-storage-to-hierarchical-structure.md](closed/360-migrate-okf-storage-to-hierarchical-structure.md) |
