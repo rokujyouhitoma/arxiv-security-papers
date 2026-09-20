@@ -1,7 +1,8 @@
 /**
  * Task Scheduler & Time-Slicing Infrastructure
  */
-"use strict";
+(function() {
+  'use strict';
 
 class TaskScheduler {
     /**
@@ -51,8 +52,29 @@ class TaskScheduler {
     }
 }
 
-window['TaskScheduler'] = TaskScheduler;
-window['Scheduler'] = /** @type {?} */ (TaskScheduler);
-TaskScheduler.prototype['yieldToMainThread'] = TaskScheduler.yieldToMainThread;
-TaskScheduler.prototype['requestIdle'] = TaskScheduler.requestIdle;
-TaskScheduler.prototype['delay'] = TaskScheduler.delay;
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window['TaskScheduler'] = TaskScheduler;
+    window['Scheduler'] = /** @type {?} */ (TaskScheduler);
+    window.TaskScheduler = TaskScheduler;
+    window.Scheduler = TaskScheduler;
+    TaskScheduler.prototype['yieldToMainThread'] = TaskScheduler.yieldToMainThread;
+    TaskScheduler.prototype['requestIdle'] = TaskScheduler.requestIdle;
+    TaskScheduler.prototype['delay'] = TaskScheduler.delay;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.TaskScheduler = TaskScheduler;
+    window.Application.frameworks.Scheduler = TaskScheduler;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      TaskScheduler: TaskScheduler,
+      Scheduler: TaskScheduler
+    };
+  }
+})();

@@ -3,6 +3,7 @@
  * Transforms AST nodes into CSS-styled HTML5 elements (.md-table, .md-h1~.md-h3, .md-blockquote)
  * and asynchronously calls mermaid.run() to render Mermaid code blocks graphically.
  */
+'use strict';
 
 class MarkdownRenderer {
   /**

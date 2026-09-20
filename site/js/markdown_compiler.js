@@ -2,6 +2,7 @@
  * Unified Markdown Compiler Engine Orchestrator
  * Integrates Lexer, Parser, Evaluator, and Renderer modules into a cohesive API.
  */
+'use strict';
 
 class MarkdownCompilerEngine {
   constructor() {

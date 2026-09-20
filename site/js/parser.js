@@ -2,6 +2,7 @@
  * Markdown Parser Module
  * Builds Abstract Syntax Tree (DocumentNode AST) with node hierarchy from token streams.
  */
+'use strict';
 
 class MarkdownParser {
   /**

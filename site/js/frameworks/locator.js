@@ -1,7 +1,5 @@
-/**
- * Generic Service Locator Module
- */
-"use strict";
+(function() {
+  'use strict';
 
 /**
  * Service Locator manages class instance registrations and dependencies.
@@ -72,3 +70,22 @@ class Locator {
         return instance;
     }
 }
+
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window.Locator = Locator;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.Locator = Locator;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      Locator: Locator
+    };
+  }
+})();

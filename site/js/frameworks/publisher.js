@@ -1,7 +1,5 @@
-/**
- * Generic Publish/Subscribe Publisher Module
- */
-"use strict";
+(function() {
+  'use strict';
 
 /**
  * Publisher class.
@@ -99,3 +97,22 @@ class Publisher {
         }, 0);
     }
 }
+
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window.Publisher = Publisher;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.Publisher = Publisher;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      Publisher: Publisher
+    };
+  }
+})();

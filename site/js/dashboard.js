@@ -4,6 +4,7 @@
  */
 
     (function () {
+      'use strict';
       // Resolve Application / Core Framework Services (Issue 349, 355)
       const resolveFramework = (name) => {
         return (window['Application'] && window['Application']['frameworks'] && window['Application']['frameworks'][name]) ||

@@ -4,6 +4,9 @@
  * Part of yuzora-frameworks integration (DSN-27 / Issue 342).
  */
 
+(function() {
+  'use strict';
+
 /**
  * Reactive State Store.
  * Provides granular key-level subscriptions, Pub/Sub event broadcasting,
@@ -185,3 +188,22 @@ class StateStore {
     }
   }
 }
+
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window.StateStore = StateStore;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.StateStore = StateStore;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      StateStore: StateStore
+    };
+  }
+})();

@@ -3,6 +3,7 @@
  * Tokenizes raw markdown text into structured token streams:
  * HEADING, TABLE, MERMAID, CODE_BLOCK, LIST, BLOCKQUOTE, HR, PARAGRAPH.
  */
+'use strict';
 
 class MarkdownLexer {
   /**

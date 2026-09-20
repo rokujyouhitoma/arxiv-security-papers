@@ -351,6 +351,148 @@ class TestZeroMockIntegrity(unittest.TestCase):
             "D12: app.js syncLifecycleTelemetry does not fetch /api/system/lifecycle",
         )
 
+    # ------------------------------------------------------------- Issue #359 DOM ID Binding Integrity --
+    def test_html_element_ids_binding_integrity_app_js(self) -> None:
+        """Issue 359: Verify all static DOM IDs referenced in app.js exist in index.html."""
+        import re
+
+        index_html = _read_index_html()
+        app_js = _read_app_js()
+
+        html_ids = set(re.findall(r'\bid=["\']([a-zA-Z0-9_\-]+)["\']', index_html))
+        self.assertGreater(
+            len(html_ids), 100, "Expected over 100 IDs in site/index.html"
+        )
+
+        # Extract getElementById('...') and querySelector('#...')
+        js_ids = set(
+            re.findall(r'getElementById\(["\']([a-zA-Z0-9_\-]+)["\']\)', app_js)
+        )
+        qs_ids = set(
+            re.findall(
+                r'(?:querySelector(?:All)?)\(["\']#([a-zA-Z0-9_\-]+)["\']\)', app_js
+            )
+        )
+        all_referenced_ids = js_ids | qs_ids
+        self.assertGreater(
+            len(all_referenced_ids), 80, "Expected over 80 referenced IDs in app.js"
+        )
+
+        # Documented optional telemetry hooks guarded with null checks
+        optional_or_legacy_telemetry: set[str] = {
+            "badgeDbEngine",
+            "badgeObfLive",
+            "badgeSmSlo",
+            "loopBadge",
+            "loopCycleId",
+            "loopLastSync",
+            "loopNextSync",
+            "loopPhaseList",
+            "loopSchedule",
+            "trackObfLlm",
+            "trackObfRetriever",
+            "trackObfTool",
+            "valDbCacheHit",
+            "valDbIops",
+            "valDbLatency",
+            "valDbWalLag",
+            "valObfLlmSpans",
+            "valObfPipelineSpans",
+            "valObfRetrieverSpans",
+            "valObfStatusDetail",
+            "valObfToolSpans",
+            "valObfTraceparent",
+            "valSmApiResilience",
+            "valSmPipelineSlo",
+            "valSmStreak",
+            "valSmWalLag",
+        }
+
+        unresolved_ids = (all_referenced_ids - html_ids) - optional_or_legacy_telemetry
+        self.assertEqual(
+            unresolved_ids,
+            set(),
+            f"app.js references undefined HTML element IDs: {sorted(list(unresolved_ids))}",
+        )
+
+    def test_html_element_ids_binding_integrity_dashboard_js(self) -> None:
+        """Issue 359: Verify all static DOM IDs referenced in dashboard.js exist in dashboard.html or index.html."""
+        import re
+
+        dash_html = (_ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
+        index_html = _read_index_html()
+        dash_js = (_ROOT / "site" / "js" / "dashboard.js").read_text(encoding="utf-8")
+
+        all_html_ids = set(
+            re.findall(r'\bid=["\']([a-zA-Z0-9_\-]+)["\']', dash_html)
+        ) | set(re.findall(r'\bid=["\']([a-zA-Z0-9_\-]+)["\']', index_html))
+
+        js_ids = set(
+            re.findall(r'getElementById\(["\']([a-zA-Z0-9_\-]+)["\']\)', dash_js)
+        )
+        qs_ids = set(
+            re.findall(
+                r'(?:querySelector(?:All)?)\(["\']#([a-zA-Z0-9_\-]+)["\']\)', dash_js
+            )
+        )
+        all_referenced_ids = js_ids | qs_ids
+
+        # Documented optional telemetry hooks and legacy prototype elements
+        optional_legacy_ids: set[str] = {
+            # Shared telemetry hooks
+            "badgeDbEngine",
+            "badgeObfLive",
+            "badgeSmSlo",
+            "loopBadge",
+            "loopCycleId",
+            "loopLastSync",
+            "loopNextSync",
+            "loopPhaseList",
+            "loopSchedule",
+            "trackObfLlm",
+            "trackObfRetriever",
+            "trackObfTool",
+            "valDbCacheHit",
+            "valDbIops",
+            "valDbLatency",
+            "valDbWalLag",
+            "valObfLlmSpans",
+            "valObfPipelineSpans",
+            "valObfRetrieverSpans",
+            "valObfStatus",
+            "valObfStatusDetail",
+            "valObfSpans",
+            "valObfToolSpans",
+            "valObfTraceparent",
+            "valSmApiResilience",
+            "valSmPipelineSlo",
+            "valSmStreak",
+            "valSmWalLag",
+            # Legacy graph prototype elements guarded with null-checks
+            "valDeadEndBudget",
+            "valDeadEndDepth",
+            "valDeadEndHealRate",
+            "valDeadEndLoop",
+            "valLatency",
+            "valSavings",
+            "valTokenSavings",
+            "badgeDeadEndTotal",
+            "badgeTraversalPass",
+            "btnToggleHeader",
+            "headerSyncTime",
+            "valEdgesTick",
+            "valResolvedNodes",
+            "valWalksMin",
+            "walkCanvas",
+        }
+
+        unresolved_ids = (all_referenced_ids - all_html_ids) - optional_legacy_ids
+        self.assertEqual(
+            unresolved_ids,
+            set(),
+            f"dashboard.js references undefined HTML element IDs: {sorted(list(unresolved_ids))}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

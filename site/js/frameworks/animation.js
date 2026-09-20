@@ -1,7 +1,8 @@
 /**
  * Event-Driven Animation & CSS Transition Infrastructure
  */
-"use strict";
+(function() {
+  'use strict';
 
 class AnimationUtils {
     /**
@@ -56,6 +57,24 @@ class AnimationUtils {
     }
 }
 
-window['AnimationUtils'] = AnimationUtils;
-AnimationUtils.prototype['waitForTransition'] = AnimationUtils.waitForTransition;
-AnimationUtils.prototype['delay'] = AnimationUtils.delay;
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window['AnimationUtils'] = AnimationUtils;
+    window.AnimationUtils = AnimationUtils;
+    AnimationUtils.prototype['waitForTransition'] = AnimationUtils.waitForTransition;
+    AnimationUtils.prototype['delay'] = AnimationUtils.delay;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.AnimationUtils = AnimationUtils;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      AnimationUtils: AnimationUtils
+    };
+  }
+})();

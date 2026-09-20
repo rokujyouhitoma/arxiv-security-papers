@@ -1,7 +1,5 @@
-/**
- * Generic Scene Transition Framework
- */
-"use strict";
+(function() {
+  'use strict';
 
 /**
  * Base Scene Class
@@ -99,3 +97,25 @@ class SceneDirector {
         }
     }
 }
+
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window.Scene = Scene;
+    window.SceneDirector = SceneDirector;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.Scene = Scene;
+    window.Application.frameworks.SceneDirector = SceneDirector;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      Scene: Scene,
+      SceneDirector: SceneDirector
+    };
+  }
+})();

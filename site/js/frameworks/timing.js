@@ -1,7 +1,8 @@
 /**
  * Event Debouncing & Inactivity Control Infrastructure
  */
-"use strict";
+(function() {
+  'use strict';
 
 class Timing {
     /**
@@ -60,7 +61,25 @@ class Timing {
     }
 }
 
-window['Timing'] = Timing;
-Timing.prototype['debounce'] = Timing.debounce;
-Timing.prototype['createInactivityTimer'] = Timing.createInactivityTimer;
-Timing.prototype['createSettlementBuffer'] = Timing.createSettlementBuffer;
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window['Timing'] = Timing;
+    window.Timing = Timing;
+    Timing.prototype['debounce'] = Timing.debounce;
+    Timing.prototype['createInactivityTimer'] = Timing.createInactivityTimer;
+    Timing.prototype['createSettlementBuffer'] = Timing.createSettlementBuffer;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.Timing = Timing;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      Timing: Timing
+    };
+  }
+})();

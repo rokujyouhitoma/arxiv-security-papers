@@ -125,11 +125,117 @@ def test_app_min_js_contains_bundled_framework_classes() -> None:
         assert sym in content, f"Symbol {sym} not found in compiled {APP_MIN_JS.name}"
 
 
+def _verify_hsm_pure_python_contract() -> None:
+    """Verify HSM classes, methods, and LCCA routing logic statically."""
+    hsm_path = FRAMEWORKS_DIR / "hsm.js"
+    assert hsm_path.is_file()
+    content = hsm_path.read_text(encoding="utf-8")
+    for cls in [
+        "function StateNode",
+        "function TransitionRule",
+        "function HierarchicalStateMachine",
+    ]:
+        assert cls in content, f"Missing constructor in hsm.js: {cls}"
+    assert "function findLCCA(" in content, "Missing findLCCA function in hsm.js"
+    for method in [
+        "addChild",
+        "addTransition",
+        "isLeaf",
+        "isRoot",
+        "getPath",
+        "getAncestors",
+    ]:
+        assert (
+            f"StateNode.prototype.{method} =" in content
+        ), f"Missing StateNode prototype method in hsm.js: {method}"
+    for method in [
+        "dispatch",
+        "forceTransition",
+        "isInState",
+        "getStatePath",
+        "computeTransitionPlan_",
+    ]:
+        assert (
+            f"HierarchicalStateMachine.prototype.{method} =" in content
+        ), f"Missing HSM prototype method in hsm.js: {method}"
+
+
+def _verify_disjoint_set_pure_python_contract() -> None:
+    """Verify DisjointSet methods, rank, and LCC algorithms statically."""
+    ds_path = FRAMEWORKS_DIR / "disjoint-set.js"
+    assert ds_path.is_file()
+    content = ds_path.read_text(encoding="utf-8")
+    assert (
+        "function DisjointSet" in content
+    ), "Missing constructor DisjointSet in disjoint-set.js"
+    for method in [
+        "add",
+        "find",
+        "union",
+        "connected",
+        "componentCount",
+        "componentSize",
+        "getLargestComponent",
+        "getIsolates",
+        "size",
+    ]:
+        assert (
+            f".prototype.{method} =" in content
+        ), f"Missing prototype method in disjoint-set.js: {method}"
+    # Verify path compression and rank/size tracking
+    assert "this.parent" in content
+    assert "this.rank" in content or "this.sizes" in content
+
+
+def _verify_arc_cache_pure_python_contract() -> None:
+    """Verify ARCCache dual-LRU and ghost lists structure statically."""
+    arc_path = FRAMEWORKS_DIR / "arc-cache.js"
+    assert arc_path.is_file()
+    content = arc_path.read_text(encoding="utf-8")
+    assert (
+        "function ARCCache" in content
+    ), "Missing constructor ARCCache in arc-cache.js"
+    for prop in ["this.capacity", "this.p", "this.t1", "this.t2", "this.b1", "this.b2"]:
+        assert prop in content, f"Missing property in arc-cache.js: {prop}"
+    for method in ["get", "put", "delete", "clear", "has", "size", "getStats"]:
+        assert (
+            f".prototype.{method} =" in content
+        ), f"Missing prototype method in arc-cache.js: {method}"
+
+
+def _verify_graph_canvas_engine_pure_python_contract() -> None:
+    """Verify GraphCanvasEngine physics, spatial projection, and LCC methods statically."""
+    gc_path = FRAMEWORKS_DIR / "graph-canvas.js"
+    assert gc_path.is_file()
+    content = gc_path.read_text(encoding="utf-8")
+    assert (
+        "function GraphCanvasEngine" in content
+    ), "Missing constructor GraphCanvasEngine in graph-canvas.js"
+    for method in [
+        "loadData",
+        "stepPhysics",
+        "screenToWorld",
+        "worldToScreen",
+        "zoomIn",
+        "zoomOut",
+        "resetView",
+        "findNodeAtWorld",
+        "computeLargestConnectedComponent",
+    ]:
+        assert (
+            f".prototype.{method} =" in content
+        ), f"Missing prototype method in graph-canvas.js: {method}"
+    for prop in ["this.viewTransform", "this.nodes", "this.edges", "this.nodeMap"]:
+        assert prop in content, f"Missing property in graph-canvas.js: {prop}"
+
+
 def test_hsm_state_transitions_and_lcca() -> None:
     """Validate HSM hierarchical transitions, LCCA resolution, entry/exit passes and guards via Node.js."""
     import json
     import shutil
     import subprocess
+
+    _verify_hsm_pure_python_contract()
 
     node_bin = shutil.which("node")
     if not node_bin:
@@ -265,6 +371,8 @@ def test_disjoint_set_union_find_and_lcc() -> None:
     import shutil
     import subprocess
 
+    _verify_disjoint_set_pure_python_contract()
+
     node_bin = shutil.which("node")
     if not node_bin:
         return
@@ -357,6 +465,8 @@ def test_arc_cache_adaptive_replacement_and_scan_resistance() -> None:
     import json
     import shutil
     import subprocess
+
+    _verify_arc_cache_pure_python_contract()
 
     node_bin = shutil.which("node")
     if not node_bin:
@@ -465,6 +575,8 @@ def test_graph_canvas_engine_simulation_and_spatial_transform() -> None:
     import json
     import shutil
     import subprocess
+
+    _verify_graph_canvas_engine_pure_python_contract()
 
     node_bin = shutil.which("node")
     if not node_bin:

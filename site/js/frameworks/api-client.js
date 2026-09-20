@@ -4,6 +4,9 @@
  * Part of yuzora-frameworks integration (DSN-27 / Issue 339).
  */
 
+(function() {
+  'use strict';
+
 /**
  * Custom error class representing HTTP API communication errors.
  * @extends {Error}
@@ -268,3 +271,25 @@ class ApiClient {
     return this.request(path, Object.assign({}, options, { method: 'DELETE' }));
   }
 }
+
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window.ApiError = ApiError;
+    window.ApiClient = ApiClient;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.ApiError = ApiError;
+    window.Application.frameworks.ApiClient = ApiClient;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      ApiError: ApiError,
+      ApiClient: ApiClient
+    };
+  }
+})();

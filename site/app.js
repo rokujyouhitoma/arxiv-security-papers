@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+  'use strict';
   // Resolve Application / Core Framework Services (Issue 338, 349, 355)
   const resolveFramework = (name) => {
     return (window['Application'] && window['Application']['frameworks'] && window['Application']['frameworks'][name]) ||
@@ -534,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (exportDataBtn) {
     exportDataBtn.addEventListener('click', () => {
       if (!currentSearchResults || currentSearchResults.length === 0) {
-        alert('エクスポート対象の検索結果がありません。');
+        console.warn('エクスポート対象の検索結果がありません。');
         return;
       }
       const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(currentSearchResults, null, 2));
@@ -595,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const conf = confEl ? confEl.textContent : '--';
       const gapsEl = document.getElementById('kpiGapsVal');
       const gaps = gapsEl ? gapsEl.textContent : '--';
-      alert(`🔔【システム通知センター】\n・定期バッチ実行: ${syncTime}\n・インデックス論文数: ${pCount} 件\n・推論確信度: ${conf}\n・未研究リサーチギャップ: ${gaps}`);
+      console.info(`🔔【システム通知センター】\n・定期バッチ実行: ${syncTime}\n・インデックス論文数: ${pCount} 件\n・推論確信度: ${conf}\n・未研究リサーチギャップ: ${gaps}`);
     });
   }
 
@@ -2060,7 +2061,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadSpiderHistory();
       startSpiderAutoPolling();
     } catch (err) {
-      alert(`❌ トリガー失敗: ${err.message}`);
+      console.error(`❌ トリガー失敗: ${err.message}`);
     }
   }
 

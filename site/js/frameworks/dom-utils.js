@@ -1,7 +1,8 @@
 /**
  * DOM Rendering & Frame Synchronization Infrastructure
  */
-"use strict";
+(function() {
+  'use strict';
 
 class DOMUtils {
     /**
@@ -41,7 +42,25 @@ class DOMUtils {
     }
 }
 
-window['DOMUtils'] = DOMUtils;
-DOMUtils.prototype['afterReflow'] = DOMUtils.afterReflow;
-DOMUtils.prototype['afterRender'] = DOMUtils.afterRender;
-DOMUtils.prototype['nextFrame'] = DOMUtils.nextFrame;
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window['DOMUtils'] = DOMUtils;
+    window.DOMUtils = DOMUtils;
+    DOMUtils.prototype['afterReflow'] = DOMUtils.afterReflow;
+    DOMUtils.prototype['afterRender'] = DOMUtils.afterRender;
+    DOMUtils.prototype['nextFrame'] = DOMUtils.nextFrame;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.DOMUtils = DOMUtils;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      DOMUtils: DOMUtils
+    };
+  }
+})();

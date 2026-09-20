@@ -566,6 +566,27 @@ var App;
 /** @type {!Object<string, *>} */
 var yuzora;
 
+/** @type {function(new:?, string, *)} */
+var AppEvent;
+/** @type {function(new:?)} */
+var AppEventTarget;
+/** @type {function(new:?, !YuzoraEventTargetInterface)} */
+var Publisher;
+/** @type {function(new:?)} */
+var Locator;
+/** @type {function(new:?, string=, !Object=, ?=)} */
+var ApiClient;
+/** @type {function(new:?, !Object=, ?=)} */
+var StateStore;
+/** @type {?} */
+var Timing;
+/** @type {?} */
+var DOMUtils;
+/** @type {?} */
+var AnimationUtils;
+/** @type {?} */
+var TaskScheduler;
+
 /** @typedef {YuzoraEventInterface} */
 var AppEventInterface;
 /** @typedef {YuzoraEventTargetInterface} */

@@ -1,7 +1,5 @@
-/**
- * Generic Event Driven Architecture Module
- */
-"use strict";
+(function() {
+  'use strict';
 
 /**
  * AppEvent class.
@@ -181,3 +179,28 @@ class ScopedEventTarget {
         return new ScopedEventTarget(this.parent_, `${this.scopePrefix_}:${scopePrefix}`);
     }
 }
+
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window.AppEvent = AppEvent;
+    window.AppEventTarget = AppEventTarget;
+    window.ScopedEventTarget = ScopedEventTarget;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.AppEvent = AppEvent;
+    window.Application.frameworks.AppEventTarget = AppEventTarget;
+    window.Application.frameworks.ScopedEventTarget = ScopedEventTarget;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      AppEvent: AppEvent,
+      AppEventTarget: AppEventTarget,
+      ScopedEventTarget: ScopedEventTarget
+    };
+  }
+})();

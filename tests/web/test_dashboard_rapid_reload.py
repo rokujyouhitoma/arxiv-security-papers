@@ -27,13 +27,15 @@ def _get_free_port() -> int:
 
 @pytest.fixture
 def running_threaded_server() -> Generator[str, None, None]:
-    """Spins up a real ThreadingWSGIServer instance on a free localhost port."""
+    """Spins up a real ThreadingWSGIServer instance on an ephemeral localhost port."""
     workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     app = WSGIApplication(workspace_dir=workspace_dir)
-    port = _get_free_port()
-    httpd = make_server("127.0.0.1", port, app, server_class=ThreadingWSGIServer)
+    httpd = make_server("127.0.0.1", 0, app, server_class=ThreadingWSGIServer)
+    port = int(httpd.server_address[1])
 
-    server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    server_thread = threading.Thread(
+        target=lambda: httpd.serve_forever(poll_interval=0.05), daemon=True
+    )
     server_thread.start()
 
     base_url = f"http://127.0.0.1:{port}"
@@ -123,10 +125,18 @@ def test_concurrent_sse_and_rapid_dashboard_reload(
     stop_event.set()
     if sse_resp:
         try:
+            raw_fp = getattr(sse_resp, "fp", None)
+            raw_sock = getattr(raw_fp, "raw", None)
+            if raw_sock and hasattr(raw_sock, "_sock"):
+                raw_sock._sock.shutdown(socket.SHUT_RDWR)
+                raw_sock._sock.close()
+        except Exception:
+            pass
+        try:
             sse_resp.close()
         except Exception:
             pass
-    t_sse.join(timeout=1.0)
+    t_sse.join(timeout=2.0)
 
 
 def test_dashboard_html_contains_unload_cleanup() -> None:

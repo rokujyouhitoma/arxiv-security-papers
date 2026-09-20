@@ -3,6 +3,7 @@
  * Traverses AST nodes, transforms inline syntax (**bold**, `code`, [link](url)),
  * and assigns unique IDs for Mermaid diagrams.
  */
+'use strict';
 
 class MarkdownEvaluator {
   constructor() {

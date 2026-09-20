@@ -1,7 +1,5 @@
-/**
- * Generic Hash Routing Framework
- */
-"use strict";
+(function() {
+  'use strict';
 
 /**
  * Router manages the hash-based client-side routing
@@ -138,3 +136,22 @@ class Router {
         this.resolve(hash);
     }
 }
+
+  // Export to global scope & Application frameworks namespace
+  if (typeof window !== 'undefined') {
+    window.Router = Router;
+
+    window.Application = window.Application || {};
+    window.Application.frameworks = window.Application.frameworks || {};
+    window.Application.frameworks.Router = Router;
+    window.App = window.Application;
+    window.yuzora = window.Application;
+  }
+
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      Router: Router
+    };
+  }
+})();
