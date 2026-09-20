@@ -81,3 +81,21 @@ def test_database_lifecycle_hook_bind_worker() -> None:
     hook2 = DatabaseLifecycleHook()
     hook2.bind_worker("database_2")
     assert hook2.node_id == 2
+
+
+def test_database_service_workspace_dir_isolation_from_src() -> None:
+    """Verifies that DatabaseService and DatabaseClient resolve to project root and do not touch src/outputs."""
+    from settings import BASE_DIR
+
+    svc = DatabaseService(node_id=0)
+    assert svc.workspace_dir == BASE_DIR
+    assert "src/outputs" not in svc.socket_path
+    assert svc.socket_path.startswith(BASE_DIR)
+    assert not os.path.exists(os.path.join(BASE_DIR, "src", "outputs"))
+
+    client = DatabaseClient()
+    assert client.workspace_dir == BASE_DIR
+    assert client.socket_path is not None
+    assert "src/outputs" not in client.socket_path
+    assert client.socket_path.startswith(BASE_DIR)
+    assert not os.path.exists(os.path.join(BASE_DIR, "src", "outputs"))

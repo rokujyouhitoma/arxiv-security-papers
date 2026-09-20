@@ -2531,11 +2531,15 @@ class GatewayHandlers:
         interval = self._parse_stream_interval(query_params, default=1.0)
         log_file = os.path.join(self.workspace_dir, "outputs", "logs", "events.jsonl")
         if not os.path.exists(log_file):
-            alt_log = os.path.join(
-                self.workspace_dir, "outputs", "supervisor", "supervisor.log"
-            )
-            if os.path.exists(alt_log):
-                log_file = alt_log
+            for candidate in (
+                os.path.join(self.workspace_dir, "outputs", "logs", "supervisor.log"),
+                os.path.join(
+                    self.workspace_dir, "outputs", "supervisor", "supervisor.log"
+                ),
+            ):
+                if os.path.exists(candidate):
+                    log_file = candidate
+                    break
         gen = stream_log_tail(log_file, interval=interval)
         return response_sse(start_response, gen)
 

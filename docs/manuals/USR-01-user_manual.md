@@ -666,4 +666,4 @@ make mcp_stats
 | `HTTP 429 Too Many Requests` | arXiv API のレートリミット到達 | 自動的に RSS フォールバックまたは指数バックオフリトライが作動します。間隔を空けて再実行してください。 |
 | `MCP connection refused` | Python パスまたは PYTHONPATH の誤り | `mcp_config.json` で `command` に `python3`（または `.venv/bin/python3`）と `PYTHONPATH: "src"` が正しく指定されているか確認してください。 |
 | `PDF text extraction empty` | 特殊暗号化または破損した PDF | 内製 Pure-Python エンジンで抽出できない極稀な特殊フォーマットの場合のみ、システムに `pdftotext`（`poppler-utils`）が存在すれば自動フォールバックします。 |
-| `Supervisor control socket not found` | スーパーバイザーが未起動またはクラッシュ | `make start_supervisor` で再起動するか、`outputs/supervisor.log` を確認してください。 |
+| `Supervisor control socket not found` | スーパーバイザーが未起動またはクラッシュ | `make start_supervisor` で再起動するか、`outputs/logs/supervisor.log` を確認してください。 |

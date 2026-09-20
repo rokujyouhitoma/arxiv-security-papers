@@ -213,16 +213,38 @@ class SupervisorConfig:
                 f"Invalid bind_port {pool.bind_port} in pool '{pool.name}'."
             )
 
-    def _fill_log_if_daemon(self, base: str) -> None:
+    def _fill_log_if_daemon(self, logs_base: str) -> None:
         if self.daemon and not self.log_file:
-            self.log_file = os.path.join(base, "supervisor.log")
+            self.log_file = os.path.join(logs_base, "supervisor.log")
+
+    def _normalize_relative_path(self, p: Optional[str]) -> Optional[str]:
+        if not p:
+            return None
+        if not os.path.isabs(p):
+            return os.path.abspath(os.path.join(self.workspace_dir, p))
+        return os.path.abspath(p)
+
+    def _redirect_legacy_log(self, logs_base: str) -> None:
+        if self.log_file and self.log_file.rstrip("/").endswith(
+            "outputs/supervisor/supervisor.log"
+        ):
+            self.log_file = os.path.join(logs_base, "supervisor.log")
+
+    def _normalize_all_paths(self) -> None:
+        self.pid_file = self._normalize_relative_path(self.pid_file)
+        self.lock_file = self._normalize_relative_path(self.lock_file)
+        self.control_socket = self._normalize_relative_path(self.control_socket)
+        self.log_file = self._normalize_relative_path(self.log_file)
 
     def _fill_default_paths(self) -> None:
         base = os.path.join(self.workspace_dir, "outputs", "supervisor")
+        logs_base = os.path.join(self.workspace_dir, "outputs", "logs")
         self.pid_file = self.pid_file or os.path.join(base, "arbiter.pid")
         self.lock_file = self.lock_file or os.path.join(base, "arbiter.lock")
         self.control_socket = self.control_socket or os.path.join(base, "control.sock")
-        self._fill_log_if_daemon(base)
+        self._fill_log_if_daemon(logs_base)
+        self._redirect_legacy_log(logs_base)
+        self._normalize_all_paths()
 
     def _validate_timeouts(self) -> None:
         if self.threads < 1:

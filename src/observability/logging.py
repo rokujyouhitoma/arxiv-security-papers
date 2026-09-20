@@ -140,10 +140,20 @@ def _create_stream_handler(
 
 
 def _create_file_handler(
-    log_file: str, formatter: logging.Formatter
+    log_file: str,
+    formatter: logging.Formatter,
+    max_bytes: int = 10 * 1024 * 1024,
+    backup_count: int = 3,
 ) -> logging.Handler:
+    from logging.handlers import RotatingFileHandler
+
     os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
-    handler = logging.FileHandler(log_file, encoding="utf-8")
+    handler = RotatingFileHandler(
+        log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8",
+    )
     handler.setFormatter(formatter)
     return handler
 
@@ -153,6 +163,8 @@ def configure_logging(
     log_level: str = "INFO",
     log_file: Optional[str] = None,
     console: bool = True,
+    max_bytes: int = 10 * 1024 * 1024,
+    backup_count: int = 3,
 ) -> logging.Logger:
     """Configures structured JSON logging for a designated subsystem."""
     level = getattr(logging, log_level.upper(), logging.INFO)
@@ -172,7 +184,9 @@ def configure_logging(
         logger.addHandler(sh)
 
     if log_file:
-        fh = _create_file_handler(log_file, formatter)
+        fh = _create_file_handler(
+            log_file, formatter, max_bytes=max_bytes, backup_count=backup_count
+        )
         fh.addFilter(trace_filter)
         fh.addFilter(mask_filter)
         logger.addHandler(fh)

@@ -22,6 +22,35 @@ from .protocol import VectorDBProtocolHandler
 logger = logging.getLogger(__name__)
 
 
+def _resolve_workspace_dir(workspace_dir: Optional[str]) -> str:
+    if workspace_dir:
+        return os.path.abspath(workspace_dir)
+    try:
+        from settings import BASE_DIR
+
+        return BASE_DIR
+    except ImportError:
+        return os.path.abspath(
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                )
+            )
+        )
+
+
+def _resolve_socket_path(
+    socket_path: Optional[str], workspace_dir: str, node_id: int
+) -> str:
+    if socket_path:
+        return socket_path
+    if workspace_dir:
+        return os.path.join(
+            workspace_dir, "outputs", "supervisor", f"db_{node_id}.sock"
+        )
+    return f"/tmp/db_{node_id}.sock"
+
+
 class DatabaseService:
     """
     Standalone Database IPC Daemon listening on a Unix Domain Socket.
@@ -38,20 +67,12 @@ class DatabaseService:
         cluster_size: int = 3,
         default_table_name: Optional[str] = None,
     ) -> None:
-        self.workspace_dir = workspace_dir or os.path.abspath(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        )
+        self.workspace_dir = _resolve_workspace_dir(workspace_dir)
         self.node_id = int(node_id)
         self.cluster_size = int(cluster_size)
-
-        if socket_path:
-            self.socket_path = socket_path
-        elif self.workspace_dir:
-            self.socket_path = os.path.join(
-                self.workspace_dir, "outputs", "supervisor", f"db_{self.node_id}.sock"
-            )
-        else:
-            self.socket_path = f"/tmp/db_{self.node_id}.sock"
+        self.socket_path = _resolve_socket_path(
+            socket_path, self.workspace_dir, self.node_id
+        )
 
         self.storage_path = storage_path or ":memory:"
         self.storage = VectorStorage(self.storage_path, dim=dim)

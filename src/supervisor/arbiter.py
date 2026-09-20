@@ -96,6 +96,14 @@ def _safe_unlink(path: Optional[str]) -> None:
             pass
 
 
+def _has_matching_rotating_handler(logger: logging.Logger, file_path: str) -> bool:
+    target = os.path.abspath(file_path)
+    for h in logger.handlers:
+        if getattr(h, "baseFilename", None) == target:
+            return True
+    return False
+
+
 class Arbiter:
     """
     Generic master process orchestrator managing declarative worker pools and life cycles.
@@ -128,7 +136,8 @@ class Arbiter:
         )
         self._state: ServiceState = ServiceState.READY
 
-        # Generic Pool Registry (pool_name -> ManagedPool)
+        # Initialize logging and pools
+        self.setup_logging()
         self.pools: Dict[str, ManagedPool] = {}
         self.reloading_old_pids: Set[int] = set()
         self._signal_queue: List[int] = []
@@ -1180,6 +1189,68 @@ class Arbiter:
             if not self._dispatch_single_signal(sig):
                 break
 
+    def setup_logging(self) -> None:
+        """Configures RotatingFileHandler for Supervisor logging."""
+        if not self.config.log_file:
+            return
+        os.makedirs(
+            os.path.dirname(os.path.abspath(self.config.log_file)), exist_ok=True
+        )
+        root_logger = logging.getLogger()
+        if _has_matching_rotating_handler(root_logger, self.config.log_file):
+            return
+        from logging.handlers import RotatingFileHandler
+
+        from observability.logging import StructuredJsonFormatter
+
+        handler = RotatingFileHandler(
+            self.config.log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=3,
+            encoding="utf-8",
+        )
+        handler.setFormatter(StructuredJsonFormatter(service_name="supervisor"))
+        root_logger.addHandler(handler)
+
+    def _rotate_backup_files(self, backup_count: int) -> None:
+        log_path = str(self.config.log_file)
+        for i in range(backup_count - 1, 0, -1):
+            sfn = f"{log_path}.{i}"
+            dfn = f"{log_path}.{i + 1}"
+            if os.path.exists(sfn):
+                if os.path.exists(dfn):
+                    _safe_unlink(dfn)
+                os.rename(sfn, dfn)
+        dfn = f"{log_path}.1"
+        if os.path.exists(dfn):
+            _safe_unlink(dfn)
+        os.rename(log_path, dfn)
+
+    def _reopen_daemon_streams(self) -> None:
+        if not self.config.daemon or not self.config.log_file:
+            return
+        new_fd = os.open(
+            self.config.log_file,
+            os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+            0o644,
+        )
+        self._safe_dup2(new_fd, 1)
+        self._safe_dup2(new_fd, 2)
+        if new_fd > 2:
+            os.close(new_fd)
+
+    def _check_and_rotate_log(
+        self, max_bytes: int = 10 * 1024 * 1024, backup_count: int = 3
+    ) -> None:
+        if not self.config.log_file or not os.path.isfile(self.config.log_file):
+            return
+        try:
+            if os.path.getsize(self.config.log_file) >= max_bytes:
+                self._rotate_backup_files(backup_count)
+                self._reopen_daemon_streams()
+        except OSError as ex:
+            logging.warning("[Arbiter] Failed to rotate log file: %s", ex)
+
     def _run_event_loop(self) -> None:
         while self.running:
             self._handle_queued_signals()
@@ -1188,6 +1259,7 @@ class Arbiter:
             self.handle_sigchld()
             self.check_hung_workers()
             self.check_memory_limits()
+            self._check_and_rotate_log()
             time.sleep(0.5)
 
     def start(self) -> None:

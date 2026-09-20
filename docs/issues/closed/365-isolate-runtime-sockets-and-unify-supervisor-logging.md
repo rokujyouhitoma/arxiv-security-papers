@@ -2,7 +2,7 @@
 ID: 365
 種別: Refactor
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (Resolved)
 ---
 
 # [REFACTOR] Supervisor 実行時ソケットの `src/outputs/` 漏洩防止およびログ・PID/ロックファイルの適正配置への一本化 (ID: 365)
@@ -31,16 +31,16 @@ ID: 365
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
 ### ソースコード・設定
-- [ ] `src/supervisor/` 配下のパス解決ロジック（ベースディレクトリ解決）
-- [ ] `config/supervisor.json`（ソケットおよびログパス定義）
-- [ ] `src/outputs/` (完全削除)
+- [x] `src/supervisor/` 配下のパス解決ロジック（ベースディレクトリ解決）
+- [x] `config/supervisor.json`（ソケットおよびログパス定義）
+- [x] `src/outputs/` (完全削除)
 
 ### 出力・ランタイムストレージ
-- [ ] `outputs/supervisor/`（ランタイムファイル管理）
-- [ ] `outputs/logs/`（ログ集約先）
+- [x] `outputs/supervisor/`（ランタイムファイル管理）
+- [x] `outputs/logs/`（ログ集約先）
 
 ### テストスイート
-- [ ] `tests/supervisor/` 配下のユニットテスト
+- [x] `tests/supervisor/` 配下のユニットテスト
 
 ---
 
@@ -65,7 +65,8 @@ Target Branch: `refactor/365-isolate-runtime-sockets-logging`
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] Supervisor 起動・停止・テスト実行時に `src/outputs/` が一切作成されないこと。
-- [ ] ログ出力が `outputs/logs/supervisor.log` に統一され、ローテーションが機能していること。
-- [ ] UNIX ドメインソケットおよび PID/Lock が指定の一時ディレクトリ配下にのみ配置されること。
-- [ ] 全テストスイートが 100% PASS すること。
+- [x] Supervisor 起動・停止・テスト実行時に `src/outputs/` が一切作成されないこと。
+- [x] ログ出力が `outputs/logs/supervisor.log` に統一され、ローテーションが機能していること。
+- [x] UNIX ドメインソケットおよび PID/Lock が指定の一時ディレクトリ配下にのみ配置されること。
+- [x] 全テストスイートが 100% PASS すること。
+

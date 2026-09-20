@@ -714,9 +714,13 @@ def _collect_log_files(log_arg: Optional[str], workspace_dir: str) -> List[str]:
     if log_arg:
         return [log_arg] if os.path.isfile(log_arg) else []
     logs_dir = os.path.join(workspace_dir, "outputs", "logs")
-    sup_log = os.path.join(workspace_dir, "outputs", "supervisor", "supervisor.log")
+    sup_log = os.path.join(logs_dir, "supervisor.log")
+    legacy_sup_log = os.path.join(
+        workspace_dir, "outputs", "supervisor", "supervisor.log"
+    )
     candidates = [
         sup_log,
+        legacy_sup_log,
         os.path.join(logs_dir, "web_access.jsonl"),
         os.path.join(logs_dir, "query_log.jsonl"),
         os.path.join(logs_dir, "database.jsonl"),

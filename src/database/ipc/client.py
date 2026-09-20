@@ -33,7 +33,21 @@ class DatabaseClient:
         handler: Optional[VectorDBProtocolHandler] = None,
         storage_path: Optional[str] = None,
     ) -> None:
-        self.workspace_dir = workspace_dir
+        if workspace_dir:
+            self.workspace_dir = os.path.abspath(workspace_dir)
+        else:
+            try:
+                from settings import BASE_DIR
+
+                self.workspace_dir = BASE_DIR
+            except ImportError:
+                self.workspace_dir = os.path.abspath(
+                    os.path.dirname(
+                        os.path.dirname(
+                            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        )
+                    )
+                )
         self.socket_path: Optional[str] = socket_path
         if not self.socket_path and self.workspace_dir:
             self.socket_path = os.path.join(
