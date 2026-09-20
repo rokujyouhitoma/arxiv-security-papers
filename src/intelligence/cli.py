@@ -591,11 +591,13 @@ def run_status_command(args: argparse.Namespace) -> int:
     print(f"Workspace Directory : {workspace_dir}")
     print(f"OKF Papers Ingested : {_count_okf_papers(workspace_dir):,} documents")
 
-    vector_db_path = os.path.join(workspace_dir, "outputs", "vector_db", "index.json")
+    vector_db_path = os.path.join(
+        workspace_dir, "outputs", "database", "search_vector", "index.json"
+    )
     if os.path.exists(vector_db_path):
         size_mb = os.path.getsize(vector_db_path) / (1024 * 1024)
         print(
-            f"Vector Search Index : Active ({size_mb:.1f} MB in outputs/vector_db/index.json)"
+            f"Vector Search Index : Active ({size_mb:.1f} MB in outputs/database/search_vector/index.json)"
         )
     else:
         print("Vector Search Index : Not built (Run 'make build_vector_db')")

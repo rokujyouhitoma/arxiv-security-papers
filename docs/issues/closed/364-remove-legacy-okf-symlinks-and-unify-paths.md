@@ -2,7 +2,7 @@
 ID: 364
 種別: Refactor
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [REFACTOR] Issue 360 移行用シンボリックリンク (`okf_papers`, `okf_vulnerabilities`, `okf_weaknesses`, `vector_db`) の撤去と新ストレージ階層への完全一本化 (ID: 364)
@@ -22,7 +22,7 @@ Issue 360 において、OKFストレージ階層を `outputs/okf/{papers,cves,c
 
 ## 2. トレーサビリティ / Traceability
 
-- 関連 Issue: [Issue 360: OKFストレージ階層の再編](closed/360-migrate-okf-storage-to-hierarchical-structure.md)
+- 関連 Issue: [Issue 360: OKFストレージ階層の再編](360-migrate-okf-storage-to-hierarchical-structure.md)
 - 関連規定: `.agents/AGENTS.md` Section 4 & Section 7 (Relative Link & Documentation Rules)
 
 ---
@@ -30,18 +30,17 @@ Issue 360 において、OKFストレージ階層を `outputs/okf/{papers,cves,c
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
 ### シンボリックリンク（撤去対象）
-- [ ] `outputs/okf_papers`
-- [ ] `outputs/okf_vulnerabilities`
-- [ ] `outputs/okf_weaknesses`
-- [ ] `outputs/vector_db`
+- [x] `outputs/okf_papers`
+- [x] `outputs/okf_vulnerabilities`
+- [x] `outputs/okf_weaknesses`
+- [x] `outputs/vector_db`
 
 ### 参照監査対象ファイル
-- [ ] `Makefile`
-- [ ] `scripts/`
-- [ ] `tools/`
-- [ ] `docs/`
-- [ ] `.agents/AGENTS.md`
-- [ ] `.agents/skills/`
+- [x] `Makefile`
+- [x] `src/domain/security/pipeline/okf_pipeline.py`
+- [x] `src/intelligence/cli.py`
+- [x] `docs/`
+- [x] `.agents/AGENTS.md`
 
 ---
 
@@ -53,7 +52,7 @@ Target Branch: `refactor/364-remove-legacy-okf-symlinks`
    - `outputs/okf_papers`, `outputs/okf_vulnerabilities`, `outputs/okf_weaknesses`, `outputs/vector_db` の文字列をプロジェクト全体で grep 検索。
    - 残存している参照箇所をすべて新正規パス（`outputs/okf/papers/`, `outputs/okf/cves/`, `outputs/okf/cwes/`, `outputs/database/search_vector/`）へ置換。
 2. **シンボリックリンクの安全な撤去**:
-   - `git rm outputs/okf_papers outputs/okf_vulnerabilities outputs/okf_weaknesses outputs/vector_db` を実行。
+   - `git rm outputs/okf_papers outputs/okf_vulnerabilities outputs/okf_weaknesses` および `rm outputs/vector_db` を実行。
 3. **リンク不在環境でのテスト検証**:
    - リンクが存在しない状態で `make test` およびパイプライン実行を行い、Broken Link やパス解決エラーが発生しないことを確認。
 4. **品質ゲートの検証**:
@@ -63,6 +62,6 @@ Target Branch: `refactor/364-remove-legacy-okf-symlinks`
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] `outputs/` 直下の 4 つの後方互換シンボリックリンクがリポジトリから完全に削除されていること。
-- [ ] プロジェクト全コード・設定・ドキュメントにおいて旧パスへの直接参照が 0 件であること。
-- [ ] シンボリックリンクが存在しない状態で全テストスイートが 100% PASS すること。
+- [x] `outputs/` 直下の 4 つの後方互換シンボリックリンクがリポジトリから完全に削除されていること。
+- [x] プロジェクト全コード・設定・ドキュメントにおいて旧パスへの直接参照が 0 件であること。
+- [x] シンボリックリンクが存在しない状態で全テストスイートが 100% PASS すること。

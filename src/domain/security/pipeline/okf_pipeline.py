@@ -691,7 +691,7 @@ def _persist_to_dsn14_db(item: ScrapedItem, clean_id: str, okf_path: str) -> Non
     try:
         from database.driver import connect
 
-        conn = connect(database="outputs/vector_db/security_papers.vdb")
+        conn = connect(database="outputs/database/search_vector/security_papers.vdb")
         cursor = conn.cursor()
         if item_type in ("vulnerability", "security-advisory", "security_advisory"):
             _persist_vulnerability_record(cursor, item, clean_id, okf_path)

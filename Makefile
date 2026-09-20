@@ -50,7 +50,7 @@ help: ## help command
 
 .PHONY: clean
 clean: ## clean virtualenv and build artifacts
-	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache outputs/vector_db/ ${JS_OUT}
+	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache outputs/database/search_vector/ ${JS_OUT}
 
 .PHONY: setup
 setup: activate install setup_hooks ## setup venv, activate, install python libraries, and setup git hooks
