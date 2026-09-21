@@ -17,6 +17,7 @@ src/
 │   ├── aggregator.py    # バッチ事前集計ロジック
 │   └── cli.py           # アナリティクス CLI
 ├── core/                # システム共通データ構造・基盤アルゴリズム
+│   ├── profiler/        # PyNYTProf 高精度プロファイラ ＆ 可視化統合スイート (DSN-28)
 │   └── structures/      # Roaring Bitmap, Bloom Filter, Trie, SkipList 等
 ├── database/            # ゼロ外部依存 自作データベースエンジン (DSN-05, DSN-14)
 │   ├── engine.py        # 4KB SlottedPage, 2Q Buffer Pool, WAL & ARIES リカバリ
@@ -61,6 +62,7 @@ src/
 機能追加や内部改修を行う際は、必ず対応する設計ドキュメントを参照してください：
 - 全体基本設計: [[DSN-01] 全体高位アーキテクチャ設計書 (HLD)](../designs/DSN-01-high_level_design.md)
 - 詳細設計・プロトコル: [[DSN-02] 全体低位アーキテクチャ設計書 (LLD)](../designs/DSN-02-low_level_design.md)
+- 性能工学・プロファイラ: [[DSN-28] PyNYTProf 高精度プロファイラ ＆ 可視化統合スイート](../designs/DSN-28-python_nytprof_profiler_and_visualization_suite.md)
 - 文書管理基準: [[MNG-01] 文書管理・ドキュメント台帳](../processes/MNG-01-document_ledger.md)
 
 ---
@@ -322,6 +324,51 @@ MCP サーバー群（`src/mcp/`）に新しいツールを追加する際は、
 3. **境界防御**: ファイルアクセスを行うツールは、リポジトリ外へのパストラバーサルを厳格に遮断する（`src/security/` 連携）。
 4. **テスト追加**: `tests/test_all_mcp_servers.py` に新規ツールの単体・準拠性テストを追加する。
 
+### 6.6 PyNYTProf による高精度コードプロファイリング＆性能解析 (`tools/pynytprof`)
+Perl の最高峰プロファイラ Devel::NYTProf の設計思想を純粋 Python で完全再現した **PyNYTProf**（DSN-28 準拠）を提供しています。パイプライン、DB 探索、クローラー等のミリ秒単位のホットスポット特定・最適化に活用してください。
+
+#### 1. CLI によるスクリプト実行＆HTMLレポート生成
+```bash
+# 1. 任意スクリプトを行単位 (line) でプロファイル実行
+./tools/pynytprof run -o pynytprof.out script.py arg1 arg2
+# (※ サブコマンド省略時も自動的に run としてディスパッチされます: ./tools/pynytprof script.py)
+
+# 2. ヒートマップ付き自己完結型 HTML レポート一式を生成 (nytprofhtml 互換)
+./tools/pynytprofhtml -i pynytprof.out -d ./pynytprof_html
+# 生成された ./pynytprof_html/index.html をブラウザで開くと、インタラクティブ Flame Graph、
+# Top Subroutines ランキング、および行単位ヒートマップ付きソースコードが閲覧可能です。
+
+# 3. 単体 Flame Graph SVG のみを出力
+./tools/pynytprof flamegraph -i pynytprof.out -o flamegraph.svg
+
+# 4. KCachegrind / QCacheGrind 形式へのエクスポート
+./tools/pynytprof callgrind -i pynytprof.out -o callgrind.out.1234
+
+# 5. マルチプロセス (fork / multiprocessing) 実行ログの合算マージ
+./tools/pynytprof merge -o merged.out run1.out run2.out
+```
+
+#### 2. 環境変数 `PYNYTPROF` による透過インジェクション
+コードを一切書き換えることなく、環境変数を設定するだけで任意の Python プログラムをプロファイル可能です：
+```bash
+# 環境変数でプロファイラを自動注入
+PYNYTPROF="file=prof.out:lines=1:calls=1" python -m src.pipeline.arxiv_okf_fetcher
+```
+
+#### 3. Python コード内からのプログラマブル API
+```python
+from src.core.profiler import Profiler, profile
+
+# コンテキストマネージャ形式 (ピンポイント計測)
+with Profiler(output_file="batch.out", mode="line") as p:
+    heavy_database_processing()
+
+# デコレータ形式 (関数単位)
+@profile(output_file="func.out")
+def parse_large_json(data: bytes):
+    ...
+```
+
 ---
 
 ## 7. 開発・ビルド・CI/CD コマンドリファレンス (Developer Cheat Sheet)
@@ -332,6 +379,11 @@ MCP サーバー群（`src/mcp/`）に新しいツールを追加する際は、
 | :--- | :--- | :--- |
 | **セットアップ** | `make setup` | 仮想環境構築、依存パッケージインストール、Git フック登録 |
 | | `make clean` | 一時ファイル・ビルド成果物・テストキャッシュの完全削除 |
+| **性能プロファイル** | `./tools/pynytprof <script.py>` | スクリプトの行単位・高精度プロファイリング実行 |
+| | `./tools/pynytprofhtml` | ヒートマップ・Flame Graph 付き HTML レポート生成 |
+| | `./tools/pynytprof flamegraph` | 単体インタラクティブ Flame Graph SVG 出力 |
+| | `./tools/pynytprof callgrind` | KCachegrind 互換 Callgrind 形式エクスポート |
+| | `./tools/pynytprof merge` | 複数プロセス・バッチプロファイルデータの合算統合 |
 | **DB 管理・検証** | `./manage.py tables` | マウントテーブル一覧・行数・ストレージ種別表示 |
 | | `./manage.py inspect <table>` | テーブルスキーマ定義・サンプル行表示 |
 | | `./manage.py dbshell` | 対話型 SQL シェル起動 / `-c` ワンライナー実行 |

@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""
+tools/pynytprof
+===============
+PyNYTProf コマンドライン実行ランチャー。
+使用例:
+    ./tools/pynytprof script.py arg1 arg2
+    ./tools/pynytprof run -o prof.out script.py
+    ./tools/pynytprof html -i prof.out -d ./html_report
+"""
+
+import os
+import sys
+
+workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if workspace_dir not in sys.path:
+    sys.path.insert(0, workspace_dir)
+
+from src.core.profiler.cli import main
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    if args and args[0] not in ("run", "html", "flamegraph", "callgrind", "merge", "-h", "--help"):
+        args = ["run"] + args
+    sys.exit(main(args))

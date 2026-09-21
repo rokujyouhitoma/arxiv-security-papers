@@ -14,6 +14,11 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **373** | PyNYTProf CLI ツール群および環境変数 PYNYTPROF 透過インジェクションの実装 (Phase 5) | Feature | 2026-09-20 | [373-implement-pynytprof-cli-and-e2e.md](closed/373-implement-pynytprof-cli-and-e2e.md) |
+| **372** | PyNYTProf Callgrind 形式エクスポートおよびマルチプロセスマージエンジンの実装 (Phase 4) | Feature | 2026-09-20 | [372-implement-pynytprof-callgrind-exporter-and-merger.md](closed/372-implement-pynytprof-callgrind-exporter-and-merger.md) |
+| **371** | PyNYTProf ヒートマップ付きソースコード HTML アノテータおよび Caller/Callee 双方向レポート生成器の実装 (Phase 3) | Feature | 2026-09-20 | [371-implement-pynytprof-html-reporter.md](closed/371-implement-pynytprof-html-reporter.md) |
+| **370** | PyNYTProf Pure-Python インタラクティブ Flame Graph SVG 生成器の実装 (Phase 2) | Feature | 2026-09-20 | [370-implement-pynytprof-pure-python-flamegraph.md](closed/370-implement-pynytprof-pure-python-flamegraph.md) |
+| **369** | PyNYTProf コア計測エンジンおよび整数ナノ秒Tickストリーミングストレージの実装 (Phase 1) | Feature | 2026-09-20 | [369-implement-pynytprof-core-profiling-engine-and-storage.md](closed/369-implement-pynytprof-core-profiling-engine-and-storage.md) |
 | **368** | 巨大単一ファイル `outputs/index.md` (6.8MB) のスリム化および `papers_catalog.json` / Web UI との責務分離 | Refactor | 2026-09-20 | [368-streamline-index-md-and-decouple-catalog-views.md](closed/368-streamline-index-md-and-decouple-catalog-views.md) |
 | **367** | `src/settings.py` の後方互換レイヤー (`__getattr__`) の撤去と `core.settings` への参照一本化 | Refactor | 2026-09-20 | [367-deprecate-settings-getattr-fallback-to-core-settings.md](closed/367-deprecate-settings-getattr-fallback-to-core-settings.md) |
 | **366** | ルート `config.json` の `config/` ディレクトリ配下への集約および設定ロード体系の統一 | Refactor | 2026-09-20 | [366-unify-configuration-files-into-config-directory.md](closed/366-unify-configuration-files-into-config-directory.md) |

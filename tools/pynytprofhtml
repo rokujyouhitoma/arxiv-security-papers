@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+"""
+tools/pynytprofhtml
+===================
+PyNYTProf HTML レポート生成専用ランチャー (nytprofhtml 互換)。
+使用例:
+    ./tools/pynytprofhtml
+    ./tools/pynytprofhtml -i pynytprof.out -d ./html_report
+"""
+
+import os
+import sys
+
+workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if workspace_dir not in sys.path:
+    sys.path.insert(0, workspace_dir)
+
+from src.core.profiler.cli import main
+
+if __name__ == "__main__":
+    args = ["html"] + sys.argv[1:]
+    sys.exit(main(args))
