@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import zlib
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -73,7 +74,7 @@ class SubroutineMetric:
 
 @dataclass
 class ProfileMetadata:
-    """プロファイル実行メタデータ"""
+    """プロファイル実行メタデータ (DSN-28 Section 3.2 / 8.2 準拠)"""
 
     cmdline: List[str] = field(default_factory=list)
     start_time_iso: str = ""
@@ -85,6 +86,16 @@ class ProfileMetadata:
     clock_type: str = "perf_counter_ns"
     mode: str = "line"
     calls_mode: int = 1
+    # --- W3C TraceContext 連携フィールド (DSN-28 Section 8.2 / DSN-10 統合) ---
+    # traceparent ヘッダから抽出した trace_id (128-bit hex string)。
+    # 空文字列の場合は TraceContext 未設定（スタンドアロン実行）を示す。
+    trace_id: str = ""
+    # W3C TraceContext の span_id (64-bit hex string)。
+    span_id: str = ""
+    # --- 機密情報スクラビング (DSN-28 Section 8.3 / CWE-532 準拠) ---
+    # メタデータ・スタックトレース内の機密パターンを [REDACTED] に置換する。
+    # 正規表現パターン文字列のリスト（シリアライズ互換のため str で保持）。
+    scrub_patterns: List[str] = field(default_factory=list)
 
 
 class ProfileData:
@@ -274,6 +285,15 @@ class ProfileData:
 class ProfileStorage:
     """
     プロファイルデータの保存・ロード・エクスポートを管掌するストレージクラス。
+
+    バイナリストリーム形式 (DSN-28 Section 3.2 BNF)::
+
+        file    = magic version compressed_json
+        magic   = b'PYNYTPROF\\x01'  ; 10 バイト固定
+        version = <埋め込み済み; magic 末尾 \\x01 が v1 を示す>
+        compressed_json = zlib.compress(json_utf8_bytes, level=6)
+
+    将来拡張のためのチャンク形式への移行は v2 以降で検討する。
     """
 
     MAGIC_HEADER = b"PYNYTPROF\x01"
@@ -282,9 +302,22 @@ class ProfileStorage:
     def save(cls, profile: ProfileData, filepath: str) -> None:
         """
         zlib 圧縮付き JSON バイナリ形式でファイルへ永続化。
+        機密スクラビングパターンが設定されている場合は保存前にスクラブを実行する。
         """
         os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        raw_json = json.dumps(profile.to_dict(), ensure_ascii=False).encode("utf-8")
+        data_dict = profile.to_dict()
+        # 機密スクラビング (DSN-28 Section 8.3)
+        scrub_patterns = profile.metadata.scrub_patterns
+        if scrub_patterns:
+            raw_str = json.dumps(data_dict, ensure_ascii=False)
+            for pattern in scrub_patterns:
+                try:
+                    raw_str = re.sub(pattern, "[REDACTED]", raw_str)
+                except re.error:
+                    pass
+            raw_json = raw_str.encode("utf-8")
+        else:
+            raw_json = json.dumps(data_dict, ensure_ascii=False).encode("utf-8")
         compressed = zlib.compress(raw_json, level=6)
         with open(filepath, "wb") as f:
             f.write(cls.MAGIC_HEADER)

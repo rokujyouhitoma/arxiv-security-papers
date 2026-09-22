@@ -122,6 +122,25 @@ class HTMLReporter:
     .heat-4 { background-color: #e69138; }
     .heat-5 { background-color: #cc4125; color: #ffffff !important; font-weight: bold; }
     .heat-5 a { color: #ffffff !important; }
+    /* 最適化ヒント (DSN-28 Section 5.5) */
+    .hint-icon { cursor: help; font-size: 12px; margin-left: 6px; }
+    .hint-wrap { position: relative; display: inline-block; }
+    .hint-wrap .hint-tip {
+        visibility: hidden;
+        background: #212529;
+        color: #f8f9fa;
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        white-space: nowrap;
+        position: absolute;
+        z-index: 100;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        pointer-events: none;
+    }
+    .hint-wrap:hover .hint-tip { visibility: visible; }
     """
 
     HEAT_THRESHOLDS = (
@@ -415,6 +434,53 @@ class HTMLReporter:
         heat_class = cls._get_heat_class(m.time_ns, total_time_ns)
         return (count_str, time_str, avg_str, heat_class)
 
+    @staticmethod
+    def _hint_high_freq_loop(m: Any) -> str:
+        """ループ内高頻度実行ヒント (Rule 1)。"""
+        if m.count > 10_000 and m.time_ns > 0 and (m.time_ns // m.count) > 10_000:
+            return "🔁 ループ内高頻度実行—キャッシュ化を検討"
+        return ""
+
+    @staticmethod
+    def _hint_regex_not_compiled(m: Any, code_strip: str) -> str:
+        """正規表現非コンパイルヒント (Rule 2)。"""
+        patterns = ("re.search", "re.match", "re.findall")
+        if any(p in code_strip for p in patterns) and m.count > 100:
+            return "🔍 re.関数の多用—re.compile()で事前コンパイル済オブジェクトを使用"
+        return ""
+
+    @staticmethod
+    def _hint_json_loads(m: Any, code_strip: str) -> str:
+        """JSON デシリアライズ多用ヒント (Rule 3)。"""
+        if "json.loads" in code_strip and m.count > 1_000:
+            return "📦 json.loads多用—orjson/ujson等高速ライブラリへの移行を検討"
+        return ""
+
+    @staticmethod
+    def _hint_high_freq_return(m: Any, code_strip: str) -> str:
+        """高頻度 return ヒント (Rule 4)。"""
+        if "return" in code_strip and m.count > 50_000:
+            return "↩️ 高頻度 return—再帰を反復法に書き換えることを検討"
+        return ""
+
+    @classmethod
+    def _get_optimization_hints(cls, m: Any, line_code: str) -> list[str]:
+        """行メトリクスとソースコードからルールベースの最適化ヒントを抽出する。
+
+        DSN-28 Section 5.5 準拠。
+        高頻度実行・正規表現非コンパイル・ JSON 多用・深いスタックを自動検出。
+        """
+        if m is None:
+            return []
+        code_strip = line_code.strip()
+        candidates = [
+            cls._hint_high_freq_loop(m),
+            cls._hint_regex_not_compiled(m, code_strip),
+            cls._hint_json_loads(m, code_strip),
+            cls._hint_high_freq_return(m, code_strip),
+        ]
+        return [h for h in candidates if h]
+
     @classmethod
     def _format_source_line(
         cls, lno: int, code_str: str, m: Any, total_time_ns: int
@@ -424,13 +490,26 @@ class HTMLReporter:
             m, total_time_ns
         )
         escaped_code = html.escape(code_str) or "&nbsp;"
+
+        # 最適化ヒントアイコン生成 (C-3)
+        hints = cls._get_optimization_hints(m, code_str)
+        hint_html = ""
+        for hint in hints:
+            escaped_hint = html.escape(hint)
+            hint_html += (
+                f'<span class="hint-wrap">'
+                f'<span class="hint-icon" aria-label="{escaped_hint}">⚡</span>'
+                f'<span class="hint-tip">{escaped_hint}</span>'
+                f"</span>"
+            )
+
         return f"""
         <tr id="L{lno}" class="{heat_class}">
             <td class="line-no"><a href="#L{lno}">{lno}</a></td>
             <td class="line-count">{count_str}</td>
             <td class="line-time">{time_str}</td>
             <td class="line-time" style="color: var(--text-muted);">{avg_str}</td>
-            <td class="line-code">{escaped_code}</td>
+            <td class="line-code">{escaped_code}{hint_html}</td>
         </tr>
         """
 

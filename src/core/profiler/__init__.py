@@ -16,13 +16,13 @@ from __future__ import annotations
 import functools
 from typing import Any, Callable, Optional
 
-from core.profiler.cli import main as pynytprof_cli_main
-from core.profiler.cli import parse_pynytprof_env
+from core.profiler.diff import ProfileDiffer
 from core.profiler.engine import ProfilerEngine
 from core.profiler.exporter import CallgrindExporter
 from core.profiler.flamegraph import FlameGraphGenerator
 from core.profiler.merge import ProfileMerger
 from core.profiler.reporter import HTMLReporter
+from core.profiler.sampling import SamplingEngine, SamplingProfiler
 from core.profiler.storage import ProfileData, ProfileMetadata, ProfileStorage
 
 _GLOBAL_ENGINE: Optional[ProfilerEngine] = None
@@ -115,6 +115,20 @@ def pynytprof_disable() -> None:
         _GLOBAL_ENGINE.disable()
 
 
+def pynytprof_cli_main() -> None:
+    """CLI エントリポイント（遅延インポート）"""
+    from core.profiler.cli import main  # noqa: PLC0415
+
+    main()
+
+
+def parse_pynytprof_env(env_val: str) -> "dict[str, object]":
+    """環境変数パーサ（遅延インポート）"""
+    from core.profiler.cli import parse_pynytprof_env as _parse  # noqa: PLC0415
+
+    return _parse(env_val)
+
+
 __all__ = [
     "Profiler",
     "profile",
@@ -130,6 +144,9 @@ __all__ = [
     "ProfileData",
     "ProfileMetadata",
     "ProfileStorage",
+    "SamplingEngine",
+    "SamplingProfiler",
+    "ProfileDiffer",
     "pynytprof_cli_main",
     "parse_pynytprof_env",
 ]

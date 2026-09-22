@@ -14,6 +14,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **375** | PyNYTProf 統計的サンプリングエンジン (SamplingEngine / SamplingProfiler) の実装 (Phase 7) | Feature | 2026-09-21 | [375-implement-pynytprof-sampling-engine.md](closed/375-implement-pynytprof-sampling-engine.md) |
+| **374** | PyNYTProf 差分プロファイリングエンジン (ProfileDiffer / pynytprofdiff) の実装 (Phase 6) | Feature | 2026-09-21 | [374-implement-pynytprof-profilediffer-diff-engine.md](closed/374-implement-pynytprof-profilediffer-diff-engine.md) |
 | **373** | PyNYTProf CLI ツール群および環境変数 PYNYTPROF 透過インジェクションの実装 (Phase 5) | Feature | 2026-09-20 | [373-implement-pynytprof-cli-and-e2e.md](closed/373-implement-pynytprof-cli-and-e2e.md) |
 | **372** | PyNYTProf Callgrind 形式エクスポートおよびマルチプロセスマージエンジンの実装 (Phase 4) | Feature | 2026-09-20 | [372-implement-pynytprof-callgrind-exporter-and-merger.md](closed/372-implement-pynytprof-callgrind-exporter-and-merger.md) |
 | **371** | PyNYTProf ヒートマップ付きソースコード HTML アノテータおよび Caller/Callee 双方向レポート生成器の実装 (Phase 3) | Feature | 2026-09-20 | [371-implement-pynytprof-html-reporter.md](closed/371-implement-pynytprof-html-reporter.md) |
