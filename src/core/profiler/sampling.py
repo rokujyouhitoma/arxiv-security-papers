@@ -267,9 +267,7 @@ class SamplingProfiler:
     ) -> None:
         self.interval_sec = interval_sec
         self.output_file = output_file
-        self._engine = SamplingEngine(
-            interval_sec=interval_sec, use_signal=use_signal
-        )
+        self._engine = SamplingEngine(interval_sec=interval_sec, use_signal=use_signal)
         self.profile_data: Optional[ProfileData] = None
 
     def __enter__(self) -> "SamplingProfiler":
