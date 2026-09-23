@@ -4,6 +4,7 @@ SQL Execution Engine for Pure Python Vector Database.
 Evaluates DDL, DQL, DML, DCL, and TCL AST nodes against underlying vector storages and schemas.
 """
 
+import collections
 import copy
 import fnmatch
 import functools
@@ -424,6 +425,7 @@ class TableCatalog:
         self.btree_indexes: Dict[str, BPlusTree] = {}
         self.btree_index_names: Dict[str, str] = {}
         self.index_definitions: List[Dict[str, str]] = []
+        self.unique_val_sets: Dict[str, Set[str]] = {}
         self.stats: TableStats = TableStats(name)
         self.recompute_stats()
 
@@ -455,6 +457,29 @@ class TableCatalog:
         """Refreshes catalog statistics from storage metadata."""
         if self.storage and self.storage.metadata:
             self.stats.analyze_from_metadata(self.storage.metadata)
+
+    def get_unique_set(self, col_name: str) -> Set[str]:
+        """Returns or builds cached set of unique column string values."""
+        if col_name not in self.unique_val_sets:
+            s: Set[str] = set()
+            for m in getattr(self.storage, "metadata", []):
+                val = m.get(col_name)
+                if val is not None:
+                    s.add(str(val))
+            self.unique_val_sets[col_name] = s
+        return self.unique_val_sets[col_name]
+
+    def invalidate_unique_sets(self) -> None:
+        """Invalidates unique constraint caches upon table mutation."""
+        self.unique_val_sets.clear()
+
+    def record_inserted_unique_values(self, row: Dict[str, Any]) -> None:
+        """Updates active unique sets in O(1) after successful row insertion."""
+        if not self.unique_val_sets:
+            return
+        for col_name, u_set in self.unique_val_sets.items():
+            if col_name in row and row[col_name] is not None:
+                u_set.add(str(row[col_name]))
 
     def get_ddl(self) -> str:
         """Returns the prettified CREATE TABLE DDL statement."""
@@ -844,11 +869,27 @@ def _eval_string_rel(op: str, act_s: str, exp_s: str) -> bool:
     return False
 
 
-def _eval_relational(op: str, actual: Any, expected: Any) -> bool:
+def _eval_numeric_fast(op: str, actual: Any, expected: Any) -> Optional[bool]:
+    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
+        if not isinstance(actual, bool) and not isinstance(expected, bool):
+            return _eval_numeric_rel(op, float(actual), float(expected))
+    return None
+
+
+def _eval_relational_fallback(op: str, actual: Any, expected: Any) -> bool:
     try:
         return _eval_numeric_rel(op, float(str(actual)), float(str(expected)))
     except (ValueError, TypeError):
         return _eval_string_rel(op, str(actual), str(expected))
+
+
+def _eval_relational(op: str, actual: Any, expected: Any) -> bool:
+    num_res = _eval_numeric_fast(op, actual, expected)
+    if num_res is not None:
+        return num_res
+    if isinstance(actual, str) and isinstance(expected, str):
+        return _eval_string_rel(op, actual, expected)
+    return _eval_relational_fallback(op, actual, expected)
 
 
 def _collate_transform(val: Any, collation: Optional[str]) -> Any:
@@ -1837,6 +1878,135 @@ def _bind_params_fallback(sql: str, params: Optional[Sequence[Any]]) -> str:
     for p in params:
         query = query.replace("?", _format_fallback_param(p), 1)
     return query
+
+
+def _is_right_tbl_qualifier(expr: str, right_tbl_name: str) -> bool:
+    if not isinstance(expr, str):
+        return False
+    return expr.lower().startswith(f"{right_tbl_name.lower()}.")
+
+
+def _resolve_equi_key_by_prefix(
+    col: str, val: str, right_name: str
+) -> Optional[Tuple[str, str]]:
+    if _is_right_tbl_qualifier(val, right_name) and not _is_right_tbl_qualifier(
+        col, right_name
+    ):
+        return col, val
+    if _is_right_tbl_qualifier(col, right_name) and not _is_right_tbl_qualifier(
+        val, right_name
+    ):
+        return val, col
+    return None
+
+
+def _has_field_or_col(rec: Dict[str, Any], f: str) -> bool:
+    return f in rec or _lookup_record_col(rec, f) is not None
+
+
+def _resolve_equi_key_by_lookup(
+    col: str, val: str, s_left: Dict[str, Any], s_right: Dict[str, Any]
+) -> Optional[Tuple[str, str]]:
+    if _has_field_or_col(s_left, col) and _has_field_or_col(s_right, val):
+        return col, val
+    if _has_field_or_col(s_left, val) and _has_field_or_col(s_right, col):
+        return val, col
+    return None
+
+
+def _resolve_equi_key_pair(
+    col: str,
+    val: Any,
+    right_name: str,
+    s_left: Dict[str, Any],
+    s_right: Dict[str, Any],
+) -> Optional[Tuple[str, str]]:
+    if not isinstance(col, str) or not isinstance(val, str):
+        return None
+    p_res = _resolve_equi_key_by_prefix(col, val, right_name)
+    if p_res is not None:
+        return p_res
+    return _resolve_equi_key_by_lookup(col, val, s_left, s_right)
+
+
+def _check_single_equi_cond(
+    c: Dict[str, Any],
+    right_name: str,
+    s_left: Dict[str, Any],
+    s_right: Dict[str, Any],
+) -> Optional[Tuple[str, str]]:
+    if _get_cond_op(c) != "=":
+        return None
+    return _resolve_equi_key_pair(
+        _get_cond_field(c), c.get("value"), right_name, s_left, s_right
+    )
+
+
+def _has_or_branch(conditions: List[Dict[str, Any]]) -> bool:
+    for c in conditions:
+        if c.get("logic") == "OR_BRANCH":
+            return True
+    return False
+
+
+def _filter_remaining_conds(
+    conditions: List[Dict[str, Any]], skip_idx: int
+) -> List[Dict[str, Any]]:
+    out = []
+    for i, cond in enumerate(conditions):
+        if i != skip_idx:
+            out.append(cond)
+    return out
+
+
+def _find_equi_join_keys(
+    conditions: List[Dict[str, Any]],
+    right_name: str,
+    s_left: Dict[str, Any],
+    s_right: Dict[str, Any],
+) -> Optional[Tuple[str, str, List[Dict[str, Any]]]]:
+    if _has_or_branch(conditions):
+        return None
+    for idx, c in enumerate(conditions):
+        pair = _check_single_equi_cond(c, right_name, s_left, s_right)
+        if pair is not None:
+            rem = _filter_remaining_conds(conditions, idx)
+            return pair[0], pair[1], rem
+    return None
+
+
+def _build_hash_bucket(
+    rows: List[Dict[str, Any]], key_expr: str
+) -> Dict[str, List[Dict[str, Any]]]:
+    bucket: Dict[str, List[Dict[str, Any]]] = collections.defaultdict(list)
+    for r in rows:
+        v = _extract_field_value(r, key_expr)
+        if v is not None:
+            bucket[str(v)].append(r)
+    return bucket
+
+
+def _probe_hash_bucket_row(
+    left_row: Dict[str, Any],
+    candidates: List[Dict[str, Any]],
+    rem_conds: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    row_matches: List[Dict[str, Any]] = []
+    for right_row in candidates:
+        combined = CombinedRow(left_row, right_row)
+        if not rem_conds or _matches_where_clause(combined, rem_conds):
+            row_matches.append(combined)
+    return row_matches
+
+
+def _is_hash_joinable(
+    join: Any,
+    current_rows: List[Dict[str, Any]],
+    j_prefixed_rows: List[Dict[str, Any]],
+) -> bool:
+    if join.join_type not in (JoinType.INNER, JoinType.LEFT):
+        return False
+    return bool(current_rows and j_prefixed_rows and join.on_conditions)
 
 
 class SQLExecutor:
@@ -3101,6 +3271,59 @@ class SQLExecutor:
             next_rows.extend(matched)
         return next_rows
 
+    def _execute_hash_join(
+        self,
+        current_rows: List[Dict[str, Any]],
+        j_prefixed_rows: List[Dict[str, Any]],
+        join: Any,
+        left_key: str,
+        right_key: str,
+        rem_conds: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        bucket = _build_hash_bucket(j_prefixed_rows, right_key)
+        is_left_join = join.join_type == JoinType.LEFT
+        next_rows: List[Dict[str, Any]] = []
+
+        for left_row in current_rows:
+            lv = _extract_field_value(left_row, left_key)
+            candidates = bucket.get(str(lv), []) if lv is not None else []
+            matched = _probe_hash_bucket_row(left_row, candidates, rem_conds)
+            if not matched and is_left_join:
+                next_rows.extend(self._left_join_fallback(left_row, j_prefixed_rows))
+            else:
+                next_rows.extend(matched)
+        return next_rows
+
+    def _try_hash_join(
+        self,
+        current_rows: List[Dict[str, Any]],
+        j_prefixed_rows: List[Dict[str, Any]],
+        join: Any,
+    ) -> Optional[List[Dict[str, Any]]]:
+        if not _is_hash_joinable(join, current_rows, j_prefixed_rows):
+            return None
+        r_name = getattr(join.table, "display_name", "") or join.table.name
+        keys = _find_equi_join_keys(
+            join.on_conditions, r_name, current_rows[0], j_prefixed_rows[0]
+        )
+        if keys is None:
+            return None
+        left_k, right_k, rem = keys
+        return self._execute_hash_join(
+            current_rows, j_prefixed_rows, join, left_k, right_k, rem
+        )
+
+    def _nested_loop_join(
+        self,
+        current_rows: List[Dict[str, Any]],
+        j_prefixed_rows: List[Dict[str, Any]],
+        join: Any,
+    ) -> List[Dict[str, Any]]:
+        next_rows: List[Dict[str, Any]] = []
+        for left_row in current_rows:
+            next_rows.extend(self._match_join_row(left_row, j_prefixed_rows, join))
+        return next_rows
+
     def _join_table_rows(
         self,
         current_rows: List[Dict[str, Any]],
@@ -3117,15 +3340,14 @@ class SQLExecutor:
                 effective_role, join_tbl_ref.name, "SELECT"
             )
 
-        j_raw_rows = self._query_knn_or_scan(
+        j_raw = self._query_knn_or_scan(
             join_tbl_ref.name, None, temporary_tables=temp_tables
         )
-        j_prefixed_rows = [self._prefix_record(r, join_tbl_ref) for r in j_raw_rows]
-
-        next_rows: List[Dict[str, Any]] = []
-        for left_row in current_rows:
-            next_rows.extend(self._match_join_row(left_row, j_prefixed_rows, join))
-        return next_rows
+        j_pref = [self._prefix_record(r, join_tbl_ref) for r in j_raw]
+        hash_res = self._try_hash_join(current_rows, j_pref, join)
+        if hash_res is not None:
+            return hash_res
+        return self._nested_loop_join(current_rows, j_pref, join)
 
     def _project_column_item(self, r: Dict[str, Any], col_expr: str) -> Tuple[str, Any]:
         as_m = re.search(r"\s+AS\s+([a-zA-Z0-9_]+)$", col_expr, re.IGNORECASE)
@@ -3927,11 +4149,12 @@ class SQLExecutor:
     def _check_column_uniqueness(
         table: TableCatalog, col_name: str, new_val: Any
     ) -> None:
-        for m in getattr(table.storage, "metadata", []):
-            if SQLExecutor._is_matching_unique_val(m.get(col_name), new_val):
-                raise SQLIntegrityError(
-                    f"UNIQUE constraint failed: {table.name}.{col_name}"
-                )
+        if new_val is None:
+            return
+        if str(new_val) in table.get_unique_set(col_name):
+            raise SQLIntegrityError(
+                f"UNIQUE constraint failed: {table.name}.{col_name}"
+            )
 
     @staticmethod
     def _validate_unique_and_pk_constraints(
@@ -3970,6 +4193,7 @@ class SQLExecutor:
             self._fire_triggers("BEFORE", "INSERT", stmt.table_name, r, effective_role)
             res_rec = self._insert_or_upsert_row(table, r, stmt)
             if res_rec is not None:
+                table.record_inserted_unique_values(res_rec)
                 modified.append(res_rec)
                 self._fire_triggers(
                     "AFTER", "INSERT", stmt.table_name, res_rec, effective_role
@@ -4286,10 +4510,12 @@ class SQLExecutor:
         else:
             updated_records = self._exec_update_standard(table, stmt, effective_role)
 
-        if updated_records and not self.tx_manager.is_active:
-            table.storage.write_all(
-                table.storage.get_all_vectors(), table.storage.metadata
-            )
+        if updated_records:
+            table.invalidate_unique_sets()
+            if not self.tx_manager.is_active:
+                table.storage.write_all(
+                    table.storage.get_all_vectors(), table.storage.metadata
+                )
 
         ret_rows = _project_returning_rows(updated_records, stmt.returning_cols)
         res: Dict[str, Any] = {
@@ -4363,11 +4589,13 @@ class SQLExecutor:
         new_meta: List[Dict[str, Any]],
         has_deleted: bool,
     ) -> None:
-        if has_deleted and not self.tx_manager.is_active:
-            table.storage.write_all(new_vecs, new_meta)
-            if table.index is not None:
-                table.index = HNSWIndex(dim=table.storage.dim)
-                table.index.build_from_storage(new_vecs)
+        if has_deleted:
+            table.invalidate_unique_sets()
+            if not self.tx_manager.is_active:
+                table.storage.write_all(new_vecs, new_meta)
+                if table.index is not None:
+                    table.index = HNSWIndex(dim=table.storage.dim)
+                    table.index.build_from_storage(new_vecs)
 
     def _find_child_foreign_keys(
         self, parent_table_name: str
