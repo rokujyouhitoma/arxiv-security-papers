@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **376** | PyNYTProf CLI 差分サブコマンド・Trace フィルタ統合および Diff/Sampling テスト・品質ゲート整備 (Phase 8) | Feature | 2026-09-23 | [376-implement-pynytprof-diff-sampling-cli-and-test-suite.md](closed/376-implement-pynytprof-diff-sampling-cli-and-test-suite.md) |
 | **375** | PyNYTProf 統計的サンプリングエンジン (SamplingEngine / SamplingProfiler) の実装 (Phase 7) | Feature | 2026-09-21 | [375-implement-pynytprof-sampling-engine.md](closed/375-implement-pynytprof-sampling-engine.md) |
 | **374** | PyNYTProf 差分プロファイリングエンジン (ProfileDiffer / pynytprofdiff) の実装 (Phase 6) | Feature | 2026-09-21 | [374-implement-pynytprof-profilediffer-diff-engine.md](closed/374-implement-pynytprof-profilediffer-diff-engine.md) |
 | **373** | PyNYTProf CLI ツール群および環境変数 PYNYTPROF 透過インジェクションの実装 (Phase 5) | Feature | 2026-09-20 | [373-implement-pynytprof-cli-and-e2e.md](closed/373-implement-pynytprof-cli-and-e2e.md) |

@@ -150,6 +150,111 @@ if __name__ == "__main__":
             with open(cg_file, "r", encoding="utf-8") as f:
                 self.assertIn("events: Nanoseconds", f.read())
 
+    def test_cli_diff_subcommand(self):
+        """diff サブコマンドおよび tools/pynytprofdiff ランチャーの検証"""
+        launcher_diff = os.path.join(self.workspace_root, "tools", "pynytprofdiff")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script1 = os.path.join(tmpdir, "v1.py")
+            with open(script1, "w", encoding="utf-8") as f:
+                f.write("def work(): return sum(range(100))\nwork()\n")
+
+            script2 = os.path.join(tmpdir, "v2.py")
+            with open(script2, "w", encoding="utf-8") as f:
+                f.write("def work(): return sum(range(1000))\nwork()\n")
+
+            p1_out = os.path.join(tmpdir, "v1.out")
+            p2_out = os.path.join(tmpdir, "v2.out")
+            diff_dir = os.path.join(tmpdir, "diff_report")
+
+            subprocess.run(
+                [sys.executable, self.launcher_prof, "-o", p1_out, script1],
+                check=True,
+            )
+            subprocess.run(
+                [sys.executable, self.launcher_prof, "-o", p2_out, script2],
+                check=True,
+            )
+
+            # tools/pynytprofdiff を直接実行
+            cmd_diff = [
+                sys.executable,
+                launcher_diff,
+                "--before",
+                p1_out,
+                "--after",
+                p2_out,
+                "-d",
+                diff_dir,
+                "--noise-threshold-ns",
+                "0",
+            ]
+            p_diff = subprocess.run(
+                cmd_diff, capture_output=True, text=True, cwd=self.workspace_root
+            )
+            self.assertEqual(p_diff.returncode, 0, f"Diff stderr: {p_diff.stderr}")
+
+            diff_index = os.path.join(diff_dir, "index.html")
+            self.assertTrue(os.path.isfile(diff_index))
+            with open(diff_index, "r", encoding="utf-8") as f:
+                content = f.read()
+                self.assertIn("work", content)
+                self.assertIn("Differential Profile Report", content)
+
+    def test_cli_html_trace_filter(self):
+        """html サブコマンドの --trace-filter オプション検証"""
+        from src.core.profiler.storage import (
+            ProfileData,
+            ProfileMetadata,
+            ProfileStorage,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prof_file = os.path.join(tmpdir, "traced.out")
+            html_dir = os.path.join(tmpdir, "html_filtered")
+
+            data = ProfileData(
+                metadata=ProfileMetadata(
+                    trace_id="4bf92f3577b34da6a3ce929d0e0e4736",
+                    total_time_ns=1_000_000,
+                )
+            )
+            ProfileStorage.save(data, prof_file)
+
+            # 一致する trace_id の場合は PASS
+            cmd_match = [
+                sys.executable,
+                self.launcher_prof,
+                "html",
+                "-i",
+                prof_file,
+                "-d",
+                html_dir,
+                "--trace-filter",
+                "4bf92f3577b34da6a3ce929d0e0e4736",
+            ]
+            res_match = subprocess.run(
+                cmd_match, capture_output=True, text=True, cwd=self.workspace_root
+            )
+            self.assertEqual(res_match.returncode, 0)
+            self.assertTrue(os.path.isfile(os.path.join(html_dir, "index.html")))
+
+            # 一致しない trace_id の場合は exit code 1
+            cmd_mismatch = [
+                sys.executable,
+                self.launcher_prof,
+                "html",
+                "-i",
+                prof_file,
+                "-d",
+                html_dir,
+                "--trace-filter",
+                "00000000000000000000000000000000",
+            ]
+            res_mismatch = subprocess.run(
+                cmd_mismatch, capture_output=True, text=True, cwd=self.workspace_root
+            )
+            self.assertEqual(res_mismatch.returncode, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

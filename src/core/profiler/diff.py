@@ -61,6 +61,8 @@ class SubDiff:
     @property
     def diff_class(self) -> str:
         """差分の方向を示す CSS クラス文字列"""
+        if self.before_exclusive_ns <= 0:
+            return "new-hot" if self.after_exclusive_ns > 0 else "neutral"
         ratio = self.exclusive_ratio
         if ratio > 1.20:
             return "regression"  # 20% 以上遅化
@@ -83,6 +85,10 @@ class LineDiff:
 
     @property
     def time_delta_ns(self) -> int:
+        return self.after_time_ns - self.before_time_ns
+
+    @property
+    def exclusive_delta_ns(self) -> int:
         return self.after_time_ns - self.before_time_ns
 
     @property

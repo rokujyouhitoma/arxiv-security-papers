@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-tools/pynytprofhtml
+tools/pynytprofdiff
 ===================
-PyNYTProf HTML レポート生成専用ランチャー (nytprofhtml 互換)。
+PyNYTProf 差分プロファイル HTML レポート生成専用ランチャー。
 使用例:
-    ./tools/pynytprofhtml
-    ./tools/pynytprofhtml -i pynytprof.out -d ./html_report
+    ./tools/pynytprofdiff --before base.out --after test.out -d ./diff_report
 """
 
 import os
@@ -20,5 +19,5 @@ for p in (src_dir, workspace_dir):
 from src.core.profiler.cli import main
 
 if __name__ == "__main__":
-    args = ["html"] + sys.argv[1:]
+    args = ["diff"] + sys.argv[1:]
     sys.exit(main(args))

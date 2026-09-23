@@ -581,11 +581,12 @@ graph TD
     P2["Phase 2: Flame Graph<br/>（実装済み✓）"]
     P3["Phase 3: HTML Reporter<br/>（実装済み✓ + C-3最適化ヒント追加）"]
     P4["Phase 4: Exporter + Merge<br/>（実装済み✓）"]
-    P5["Phase 5: CLI + Integration Tests"]
+    P5["Phase 5: CLI + Integration Tests<br/>（実装済み✓）"]
     P6["Phase 6 NEW: 差分プロファイリング<br/>（diff.py 実装済み✓）"]
     P7["Phase 7 NEW: サンプリングエンジン<br/>（sampling.py 実装済み✓）"]
-    P8["Phase 8 FUTURE: asyncio / GIL 分析"]
-    P9["Phase 9 FUTURE: 時系列 Flame Chart"]
+    P8["Phase 8 NEW: CLI 差分統合 ＆ 品質ゲート<br/>（実装済み✓）"]
+    P9["Phase 9 FUTURE: asyncio / GIL 分析"]
+    P10["Phase 10 FUTURE: 時系列 Flame Chart"]
 
     P1 --> P2
     P1 --> P3
@@ -597,6 +598,7 @@ graph TD
     P6 --> P8
     P7 --> P8
     P8 --> P9
+    P8 --> P10
 ```
 
 ### 9.2 フェーズ一覧と DoD チェックリスト
@@ -610,8 +612,9 @@ graph TD
 | **Phase 5** | `cli.py` `tools/pynytprof` | CLI ラッパー、`PYNYTPROF` ディスパッチャ、統合回帰テスト、ベンチマーク品質ゲート | ✅ 完了 | Issue 373 |
 | **Phase 6** **[NEW]** | `diff.py` | 差分プロファイリングエンジン、退行/改善 HTML Diff レポート、SubDiff/LineDiff、ノイズフィルタリング | ✅ 完了 | Issue 374 |
 | **Phase 7** **[NEW]** | `sampling.py` | SIGPROF / threading.Timer サンプリングエンジン、`SamplingProfiler` コンテキストマネージャ | ✅ 完了 | Issue 375 |
-| **Phase 8** **[FUTURE]** | `engine.py` 拡張 | asyncio コルーチン対応、SUSPEND_TIME_NS 計上、GIL 競合分析（Python 3.13+ 実験的 API） | 📋 計画中 | Issue 376 |
-| **Phase 9** **[FUTURE]** | `chart.py` (新規) | calls=2 データから Chrome Trace Event JSON 生成、時系列 Flame Chart 表示 | 📋 計画中 | Issue 377 |
+| **Phase 8** **[NEW]** | `cli.py` `tools/` `tests/` | CLI 差分サブコマンド、Trace フィルタ、包括的テストスイート (`test_diff`, `test_sampling`, `test_xss`, `test_leak`) | ✅ 完了 | Issue 376 |
+| **Phase 9** **[FUTURE]** | `engine.py` 拡張 | asyncio コルーチン対応、SUSPEND_TIME_NS 計上、GIL 競合分析（Python 3.13+ 実験的 API） | 📋 計画中 | Issue 377 |
+| **Phase 10** **[FUTURE]** | `chart.py` (新規) | calls=2 データから Chrome Trace Event JSON 生成、時系列 Flame Chart 表示 | 📋 計画中 | Issue 378 |
 
 **各フェーズ共通 DoD チェックリスト**:
 - `[ ]` `make py_compile` PASS（構文エラー 0 件）

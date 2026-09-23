@@ -20,6 +20,7 @@ import runpy
 import sys
 from typing import Any, Callable, Dict, List, Optional
 
+from core.profiler.diff import ProfileDiffer
 from core.profiler.engine import ProfilerEngine
 from core.profiler.exporter import CallgrindExporter
 from core.profiler.flamegraph import FlameGraphGenerator
@@ -179,6 +180,17 @@ def cmd_html(args: argparse.Namespace) -> int:
     print(f"[*] PyNYTProf: Reading profile '{in_file}'...")
     profile_data = ProfileStorage.load(in_file)
 
+    trace_filter = getattr(args, "trace_filter", None)
+    if trace_filter:
+        data_trace_id = getattr(profile_data.metadata, "trace_id", "")
+        if data_trace_id != trace_filter:
+            print(
+                f"[*] PyNYTProf: Trace filter '{trace_filter}' did not match profile trace_id '{data_trace_id}'.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"[*] PyNYTProf: Trace filter matched: '{trace_filter}'")
+
     reporter = HTMLReporter()
     index_path = reporter.generate_report(profile_data, out_dir, title=args.title)
     print("[*] PyNYTProf: HTML Report successfully generated at:")
@@ -306,6 +318,44 @@ def cmd_merge(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_diff_inputs(before_path: str, after_path: str) -> bool:
+    """差分入力ファイルの存在を検証する"""
+    if not os.path.exists(before_path):
+        print(f"Error: Baseline profile not found: {before_path}", file=sys.stderr)
+        return False
+    if not os.path.exists(after_path):
+        print(f"Error: Target profile not found: {after_path}", file=sys.stderr)
+        return False
+    return True
+
+
+def _configure_differ_thresholds(
+    differ: ProfileDiffer, args: argparse.Namespace
+) -> None:
+    """ProfileDiffer のノイズしきい値を設定する"""
+    ns_val = getattr(args, "noise_threshold_ns", None)
+    if ns_val is not None:
+        differ.NOISE_THRESHOLD_NS = ns_val
+    ratio_val = getattr(args, "noise_threshold_ratio", None)
+    if ratio_val is not None:
+        differ.NOISE_THRESHOLD_RATIO = ratio_val
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """差分プロファイル HTML レポート生成"""
+    if not _validate_diff_inputs(args.before, args.after):
+        return 1
+
+    print(f"[*] PyNYTProf: Comparing '{args.before}' -> '{args.after}'...")
+    differ = ProfileDiffer.compare(args.before, args.after)
+    _configure_differ_thresholds(differ, args)
+
+    index_path = differ.render_html(args.output_dir, title=args.title)
+    print("[*] PyNYTProf: Differential Report successfully generated at:")
+    print(f"    file://{os.path.abspath(index_path)}")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # パーサ
 # ---------------------------------------------------------------------------
@@ -380,6 +430,11 @@ def create_parser() -> argparse.ArgumentParser:
     p_html.add_argument(
         "-t", "--title", default="PyNYTProf Performance Report", help="Report title"
     )
+    p_html.add_argument(
+        "--trace-filter",
+        default=None,
+        help="Filter profile by W3C TraceContext trace_id (DSN-28 Section 8.2)",
+    )
 
     # flamegraph
     p_flame = subparsers.add_parser(
@@ -433,6 +488,47 @@ def create_parser() -> argparse.ArgumentParser:
     )
     p_merge.add_argument("files", nargs="+", help="Input profile files to merge")
 
+    # diff
+    p_diff = subparsers.add_parser(
+        "diff", help="Generate differential profile HTML report between two profiles"
+    )
+    p_diff.add_argument(
+        "--before",
+        "-b",
+        required=True,
+        help="Baseline profile file (before)",
+    )
+    p_diff.add_argument(
+        "--after",
+        "-a",
+        required=True,
+        help="Comparison profile file (after)",
+    )
+    p_diff.add_argument(
+        "-d",
+        "--output-dir",
+        default="diff_report",
+        help="Output HTML directory (default: diff_report)",
+    )
+    p_diff.add_argument(
+        "-t",
+        "--title",
+        default="PyNYTProf Differential Profile Report",
+        help="Report title",
+    )
+    p_diff.add_argument(
+        "--noise-threshold-ns",
+        type=int,
+        default=500000,
+        help="Noise threshold in nanoseconds (default: 500000)",
+    )
+    p_diff.add_argument(
+        "--noise-threshold-ratio",
+        type=float,
+        default=0.05,
+        help="Noise threshold ratio (default: 0.05)",
+    )
+
     return parser
 
 
@@ -446,6 +542,7 @@ _COMMAND_MAP: Dict[str, Callable[[argparse.Namespace], int]] = {
     "flamegraph": cmd_flamegraph,
     "callgrind": cmd_callgrind,
     "merge": cmd_merge,
+    "diff": cmd_diff,
 }
 
 
