@@ -1,5 +1,5 @@
 # [DSN-30] 自作データベース (`src/database`) ファースト・生SQL駆動マイグレーションエンジンおよびスキーマライフサイクルガバナンス設計仕様書
-## 〜 自作 Pure Python RDBMS（第一対象）＆ SQLite（第二対象・互換検証）デュアルバックエンド・Single Source of Truth DDL統合・アトミックトランザクション・schema_migrations 履歴管理・src/cli.py ＆ manage.py migrations CLI統合 〜
+## 〜 自作 Pure Python RDBMS（第一優先・Primary）＆ SQLite（第二優先・Secondary正式対応）マルチデータベース対応・Single Source of Truth DDL統合・アトミックトランザクション・schema_migrations 履歴管理・src/cli.py ＆ manage.py migrations CLI統合 〜
 
 - **文書番号**: `DSN-30`
 - **文書ステータス**: `APPROVED`
@@ -32,7 +32,7 @@
 
 - [1. 概要・背景とスキーマガバナンスの設計思想 (Executive Summary & Philosophy)](#1-概要背景とスキーマガバナンスの設計思想-executive-summary--philosophy)
   - [1.1 散在 DDL の課題とスキーマライフサイクルガバナンスの必要性](#11-散在-ddl-の課題とスキーマライフサイクルガバナンスの必要性)
-  - [1.2 デュアルバックエンド原則（自作DB第一・SQLite第二）と4大設計方針](#12-デュアルバックエンド原則自作db第一sqlite第二と4大設計方針)
+  - [1.2 データベース優先度原則（自作DB第一優先・SQLite第二優先正式対応）と4大設計方針](#12-データベース優先度原則自作db第一優先sqlite第二優先正式対応と4大設計方針)
   - [1.3 15大専門エージェントによる多角的レビュー ＆ 合意事項マトリクス](#13-15大専門エージェントによる多角的レビュー--合意事項マトリクス)
 - [2. システム構成と配置標準 (System Architecture & Directory Layout)](#2-システム構成と配置標準-system-architecture--directory-layout)
   - [2.1 ディレクトリ構成とモジュール分掌（`src/database/migrations/` への完全集約・高凝集化）](#21-ディレクトリ構成とモジュール分掌srcdatabasemigrations-への完全集約高凝集化)
@@ -95,25 +95,28 @@
 3. **ロールバックの困難さ**:
    - カラム追加、インデックス更新、制約変更を安全に巻き戻す（ロールバックする）手段が存在せず、不具合発生時の切り戻し作業が極めてハイリスク。
 
-### 1.2 デュアルバックエンド原則（自作DB第一・SQLite第二）と4大設計方針
+### 1.2 データベース優先度原則（自作DB第一優先・SQLite第二優先正式対応）と4大設計方針
 
 本プロジェクトには、外部依存を一切排除したゼロ依存純粋 Python 製の本格派 DBMS エンジン **`src/database/`**（DSN-05: 4KB Slotted Page, 2Q Buffer Pool, ARIES WAL, B+Tree, LSM, CBO Optimizer, MVCC）が構築されている。
-したがって、本マイグレーションツールにおける対象データベースは、**`src/database`（自作DB）を第一対象（Primary Database）**とし、**標準 `sqlite3` を第二対象（Secondary / Fallback / Differential Test Database）**とする厳格な優先順位を規定する。
+
+本マイグレーションツールにおける対象データベースの「第一優先」「第二優先」という位置づけは、**「優先度として自作DBのほうが高く（最優先・標準ターゲット）、またSQLiteにも正式に対応する（実運用可能な第2ターゲット）」** という明確なマルチデータベース支援方針を意味する。
 
 ```text
-【対象データベースの二重階層構造】
-  第1優先 (Primary)   : src/database (自作 Pure Python RDBMS / SQLExecutor / SlottedPage / ARIES WAL)
-  第2優先 (Secondary) : 標準 sqlite3 (SQLite Bridge / 互換性検証 / 差分監査 / 外部連携用)
+【対象データベースの優先度階層と対応範囲】
+  第1優先 (Primary Target)   : src/database (自作 Pure Python RDBMS / SQLExecutor / SlottedPage / ARIES WAL)
+                               → 本プロジェクトの標準・本番中核データベース。CLI デフォルトおよび最優先開発・適用対象。
+  第2優先 (Secondary Target) : 標準 sqlite3 (SQLite Bridge / 実運用・外部連携・マルチ環境展開)
+                               → 第2の正式対応データベース。自作DBと同一のマイグレーションを透過適用・完全運用可能。
 ```
 
 この方針に基づき、以下の 4 大設計方針を厳格に順守する。
 
 | 原則 | 内容 | 技術的帰結 |
 | :--- | :--- | :--- |
-| **1. 自作DBファースト ＆ デュアルバックエンド** | 自作 Pure Python RDBMS（`src.database.driver`）での動作を最優先標準とし、SQLite も第二対象として完全サポート。 | PEP 249 (DB-API 2.0) 共通アダプタにより、同一の SQL ファイルで自作 DB と SQLite の双方に同一スキーマを透過適用可能。 |
+| **1. 自作DB最優先 ＆ SQLite正式対応** | 自作 Pure Python RDBMS（`src.database.driver`）での動作を最優先標準（既定値）としつつ、SQLite も正式対応データベースとして完全サポート。 | PEP 249 (DB-API 2.0) 共通アダプタにより、同一の SQL ファイルで自作 DB と SQLite の双方に同一スキーマを透過適用可能。 |
 | **2. Single Source of Truth (SSOT)** | DDLの定義・管理をリポジトリ直下の `migrations/` ディレクトリ配下に一元集約する。 | アプリケーションコード（DAO, リポジトリ層, 起動スクリプト）からのDDL実行を全廃。 |
 | **3. ゼロ外部依存 (Zero External Dependencies)** | Python標準ライブラリおよび自作コアモジュール（`src.database`）のみで構築。重量なORMは完全排除。 | サードパーティ製ライブラリの脆弱性リスク・依存競合ゼロ。ポータビリティと自律性を最大化。 |
-| **4. アトミック性・ARIES トランザクション保証** | 1マイグレーションファイル単位で厳密なトランザクション境界を維持。適用失敗時は直ちにROLLBACK。 | 自作DBの ARIES WAL および SQLite の EXCLUSIVE ロックにより、障害時の確実なロールバックと冪等性を担保。 |
+| **4. アトミック性・ARIES トランザクション保証** | 1マイグレーションファイル単位で厳密なトランザクション境界を維持。適用失敗時は直ちにROLLBACK。 | 自作DBの ARIES WAL および SQLite の EXCLUSIVE ロックにより、両エンジンで障害時の確実なロールバックと冪等性を担保。 |
 
 ### 1.3 15大専門エージェントによる多角的レビュー ＆ 合意事項マトリクス
 
@@ -221,14 +224,14 @@ graph TD
     end
 
     subgraph LayerEngines["永続化エンジン層 (Dual Backend)"]
-        PrimaryDB[("【第1対象】自作 Pure Python RDBMS<br>(src/database/ SlottedPage + ARIES WAL)")]:::core
-        SecondaryDB[("【第2対象】標準 SQLite3<br>(sqlite3 / sqlite_bridge)")]:::infra
+        PrimaryDB[("【第1優先: Primary】自作 Pure Python RDBMS<br>(src/database/ SlottedPage + ARIES WAL)")]:::core
+        SecondaryDB[("【第2優先: Secondary正式対応】標準 SQLite3<br>(sqlite3 / sqlite_bridge)")]:::infra
     end
 
     Registry -.->|遅延ロード・ディスパッチ| SubCmd
     MM -->|ファイル走査・SQL読出| SQLFiles
-    Conn -->|デフォルト (Primary)| PrimaryDB
-    Conn -->|--backend sqlite (Secondary)| SecondaryDB
+    Conn -->|既定 (第1優先: Primary)| PrimaryDB
+    Conn -->|--backend sqlite (第2優先: Secondary)| SecondaryDB
 ```
 
 #### モジュール詳細分掌マトリクス (Separation of Concerns: SoC)
@@ -335,9 +338,9 @@ def get_pydb_connection(db_path: str | Path) -> Any:
   - `conn.cursor().executescript(sql_text)` による複数 DDL/DML 文の逐次評価。
   - ARIES WAL ログへのコミットレコード書き出し、およびクラッシュリカバリ保証。
 
-### 4.2 第二対象: 標準 `sqlite3` / `sqlite_bridge` アダプタ仕様
+### 4.2 第二対象: 標準 `sqlite3` / `sqlite_bridge` アダプタ仕様（正式対応）
 
-第二対象として、標準ライブラリの `sqlite3` または `src.database.sqlite_bridge` を用いた接続を提供する。
+第二優先対象（正式対応）として、標準ライブラリの `sqlite3` または `src.database.sqlite_bridge` を用いた接続を提供する。マルチ環境展開や外部連携、他システムとの互換性確保において SQLite を本番・検証問わずフルサポートする。
 
 ```python
 import sqlite3
@@ -1163,7 +1166,7 @@ gantt
   - `src/database/migrations/inspector.py`
 - **主要実装内容**:
   1. `MigrationFile`, `MigrationRecord`, `BackendType` (`pydb` / `sqlite`) 等の不変値オブジェクトの定義。
-  2. `src.database.driver`（Primary: 自作DB）および `sqlite3`（Secondary: SQLite）への PEP 249 透過接続アダプタの実装。
+  2. 第一優先の自作DB（`src.database.driver`）および第二優先として正式対応する `sqlite3` への PEP 249 透過接続アダプタの実装。
   3. `schema_migrations` 管理テーブルの存在確認および自動初期化ロジックの実装（両エンジンで動作検証）。
 - **完了の定義 (DoD)**:
   - 自作DB（`.vdb`）および SQLite（`.db`）の両方で `schema_migrations` テーブルが正常に作成され、メタデータの読み出しが可能な単体テストが 100% 通過すること。
@@ -1175,11 +1178,11 @@ gantt
   - `src/database/migrations/manager.py`
   - `tests/test_database_migrations_engine.py`
 - **主要実装内容**:
-  1. `runner.py`: ARIES WAL コミットフラッシュおよび SQLite 排他トランザクション下での SQL スクリプト実行器。
+  1. `runner.py`: 第一優先の自作DB（ARIES WAL コミットフラッシュ）および第二優先のSQLite（排他トランザクション）下での SQL スクリプト実行器。
   2. `manager.py`: `create`, `up`, `down`, `status` のコアオーケストレーションロジックの実装。
   3. ロールバック機能（直近 1 世代巻き戻し）の実装。
 - **完了の定義 (DoD)**:
-  - 自作DB（Primary）および SQLite（Secondary）の両方において、`up` による連続適用、`down` による安全な巻き戻し、途中の SQL エラー発生時における完全な自動ロールバック（DB破損ゼロ）が単体テストで証明されること。
+  - 第一優先の自作DB（Primary）および第二優先のSQLite（Secondary正式対応）の両方において、`up` による連続適用、`down` による安全な巻き戻し、途中の SQL エラー発生時における完全な自動ロールバック（DB破損ゼロ）が単体テストで証明されること。
   - カバレッジ 95% 以上。
 
 #### 【Phase 3】 自己完結型 CLI コマンド ＆ 統合管理エントリポイントの実装 (Issue #386)
@@ -1189,12 +1192,12 @@ gantt
   - `src/cli.py`
   - `manage.py`
 - **主要実装内容**:
-  1. `src/database/migrations/cli.py` に `MigrationsCommand` を実装（`--backend` スイッチ、ASCII 罫線テーブル表示）。
+  1. `src/database/migrations/cli.py` に `MigrationsCommand` を実装（第一優先の自作DBをデフォルトとし、第二優先のSQLiteへの切り替えスイッチ `--backend`、ASCII 罫線テーブル表示を完備）。
   2. `src/cli/registry.py` への `MigrationsCommand` 遅延ローダーの登録。
   3. `python src/cli.py migrations ...` および `python manage.py migrations ...` からの完全動作検証。
 - **完了の定義 (DoD)**:
   - 端末上で `create`, `up`, `down`, `status` の各コマンドが美麗な ASCII テーブルで実行可能であること。
-  - `--backend=pydb` および `--backend=sqlite` の切り替えが CLI から正常に行えること。
+  - 既定の `--backend=pydb`（第一優先）および `--backend=sqlite`（第二優先・正式対応）の双方が CLI から実運用可能であること。
 
 #### 【Phase 4】 現行スキーマのベースライン化 ＆ 散在 DDL の全廃リファクタリング (Issue #387)
 - **対象サブシステム**:
@@ -1202,12 +1205,12 @@ gantt
   - `migrations/20260923000000_baseline.down.sql`
   - `src/pipeline/`, `src/security/`, リポジトリ内の全スクリプト
 - **主要実装内容**:
-  1. 現在の全テーブル（`papers`, `authors`, `categories`, `audit_logs` 等）の完全な DDL を抽出し、ベースラインマイグレーションとしてコミット。
+  1. 現在の全テーブル（`papers`, `authors`, `categories`, `audit_logs` 等）の完全な DDL を抽出し、自作DB（第一優先）および SQLite（第二優先）の双方で適合するベースラインマイグレーションとしてコミット。
   2. アプリケーションコード（DAO、Repository、初期化スクリプト）内の `CREATE TABLE` / `CREATE INDEX` 発行ロジックをすべて特定し、完全に削除。
   3. 既存の稼働中 DB ファイルに対してベースライン適用済みレコード（`20260923000000`）を初期登録。
 - **完了の定義 (DoD)**:
   - `src/` 配下に DDL 発行コードが 1 件も残存していないことが静的解析で保証されること。
-  - クリーンな新規環境において `python manage.py migrations up` を実行するだけで、システム全体の全テーブル・インデックスが自作DB上に完全に再現されること。
+  - クリーンな新規環境において `python manage.py migrations up` を実行するだけで、自作DB（最優先）および SQLite（正式対応）の双方でシステム全体の全テーブル・インデックスが完全に再現されること。
 
 #### 【Phase 5】 デュアルバックエンド差分 CI テスト ＆ 品質ゲート統合 (Issue #388)
 - **対象サブシステム**:
@@ -1215,11 +1218,11 @@ gantt
   - `.github/workflows/ci.yml` (CI パイプライン)
   - `docs/manuals/DEV-01-developer_manual.md`
 - **主要実装内容**:
-  1. `Makefile` へのマイグレーション関連ターゲットの追加。
-  2. CI パイプラインにおいて、自作DB（`pydb`）と SQLite（`sqlite`）の双方で全マイグレーションを走査・適用し、両者のテーブル・カラム構造が完全一致することを自動監査する差分テスト（Differential Test）ステップを構築。
+  1. `Makefile` へのマイグレーション関連ターゲットの追加（既定の自作DB用および正式対応のSQLite用）。
+  2. CI パイプラインにおいて、第一優先の自作DB（`pydb`）と第二優先のSQLite（`sqlite`）の双方で全マイグレーションを走査・適用し、両者のテーブル・カラム構造が完全一致することを自動監査する差分テスト（Differential Test）ステップを構築。
   3. 開発者マニュアル（`DEV-01`）に新マイグレーション作成プロトコルを追記。
 - **完了の定義 (DoD)**:
-  - `make migrations-up` および `make test` がエラー 0 件で通過すること。
+  - `make migrations-up`（自作DB）および `make migrations-up-sqlite`（SQLite）、`make test` がエラー 0 件で通過すること。
   - CI パイプラインで自作DB・SQLite差分テストが 100% パスすること。
 
 ---

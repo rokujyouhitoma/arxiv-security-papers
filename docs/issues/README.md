@@ -6,7 +6,11 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| - | *現在未着手の Issue はありません* | - | - | - | - |
+| **384** | データモデル・PEP 249 デュアル接続アダプタ基盤の実装 (Phase 1) | Feature | High | Open (New) | [384-implement-migration-models-and-dual-pep249-connection-adapter.md](384-implement-migration-models-and-dual-pep249-connection-adapter.md) |
+| **385** | トランザクション実行器＆MigrationManagerオーケストレータの実装 (Phase 2) | Feature | High | Open (New) | [385-implement-atomic-migration-runner-and-manager-orchestrator.md](385-implement-atomic-migration-runner-and-manager-orchestrator.md) |
+| **386** | 自己完結型 CLI コマンド＆manage.py統合の実装 (Phase 3) | Feature | High | Open (New) | [386-implement-migrations-cli-command-and-manage-py-integration.md](386-implement-migrations-cli-command-and-manage-py-integration.md) |
+| **387** | 現行DDLベースライン化＆散在DDL全廃リファクタリング (Phase 4) | Refactor | High | Open (New) | [387-extract-baseline-ddl-and-purge-scattered-ddl-statements.md](387-extract-baseline-ddl-and-purge-scattered-ddl-statements.md) |
+| **388** | デュアルバックエンド差分CIテスト＆品質ゲート統合 (Phase 5) | Quality | Medium | Open (New) | [388-integrate-dual-backend-differential-ci-test-and-quality-gates.md](388-integrate-dual-backend-differential-ci-test-and-quality-gates.md) |
 
 ---
 
