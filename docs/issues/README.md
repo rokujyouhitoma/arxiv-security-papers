@@ -6,6 +6,11 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **379** | HNSW ベクトル内積計算におけるジェネレータ多重呼出オーバーヘッドの解消と高速化 | Optimization | High | Open (New) | [379-optimize-hnsw-distance-computation-and-generator-overhead.md](379-optimize-hnsw-distance-computation-and-generator-overhead.md) |
+| **380** | リレーショナルテーブルと VectorStorage / HNSW の密結合解消および書き込み増幅 (Write Amplification) の防止 | Refactor | High | Open (New) | [380-decouple-hnsw-from-relational-tables-and-prevent-write-amplification.md](380-decouple-hnsw-from-relational-tables-and-prevent-write-amplification.md) |
+| **381** | SQL プリペアドステートメント構文木キャッシュ (AST Parameterized Cache) の導入と PEG パースオーバーヘッドの削減 | Optimization | High | Open (New) | [381-implement-sql-parameterized-ast-cache-and-parser-optimization.md](381-implement-sql-parameterized-ast-cache-and-parser-optimization.md) |
+| **382** | SQLExecutor における Hash Join 統合および制約検査・式評価アルゴリズムの高速化 | Optimization | Medium | Open (New) | [382-integrate-hash-join-and-optimize-executor-algorithms.md](382-integrate-hash-join-and-optimize-executor-algorithms.md) |
+| **383** | トランザクション開始時の全テーブルディープコピー廃止および Pager / SlottedPage ストレージ層の統合 | Architecture | Medium | Open (New) | [383-eliminate-full-database-tx-snapshot-and-unify-pager-storage.md](383-eliminate-full-database-tx-snapshot-and-unify-pager-storage.md) |
 
 ---
 

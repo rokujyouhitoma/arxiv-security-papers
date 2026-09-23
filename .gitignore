@@ -43,6 +43,8 @@ fetch.log
 *.sock
 outputs/logs/
 outputs/supervisor/
+outputs/profiling/
+*.calls
 outputs/evaluations/mcp_usage_report.md
 src/outputs/
 
