@@ -15,12 +15,13 @@ from __future__ import annotations
 import datetime
 import os
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from types import FrameType
 from typing import Any, Dict, List, Optional
 
-from core.profiler.storage import ProfileData, ProfileMetadata
+from core.profiler.storage import ProfileData, ProfileMetadata, TimelineEvent
 
 
 @dataclass
@@ -91,6 +92,7 @@ class ProfilerEngine:
         self.is_enabled = False
         self.call_stack: List[CallFrame] = []
         self.profile_data: Optional[ProfileData] = None
+        self.tid: int = threading.get_ident()
 
         # 自身のモジュールパス（自身の関数呼び出しをプロファイル対象から除外するため）
         self._profiler_dir = os.path.dirname(os.path.abspath(__file__))
@@ -499,3 +501,41 @@ class ProfilerEngine:
                 suspend_ns=suspend_ns,
             )
             self._record_stack_stream(frame, inclusive_ns)
+            if self.calls_mode == 2:
+                self._record_timeline_event(
+                    frame, now_ns, inclusive_ns, exclusive_ns, suspend_ns
+                )
+
+    def _record_timeline_event(
+        self,
+        frame: CallFrame,
+        now_ns: int,
+        inclusive_ns: int,
+        exclusive_ns: int,
+        suspend_ns: int,
+    ) -> None:
+        """calls_mode=2 時の時系列コールイベントを蓄積"""
+        if not self.profile_data:
+            return
+        cat = (
+            "coroutine"
+            if frame.is_coroutine
+            else ("builtin" if frame.sub_name.startswith("CORE:") else "function")
+        )
+        self.profile_data.record_timeline_event(
+            TimelineEvent(
+                name=frame.sub_name,
+                cat=cat,
+                entry_ns=frame.entry_time_ns,
+                exit_ns=now_ns,
+                inclusive_ns=inclusive_ns,
+                exclusive_ns=exclusive_ns,
+                suspend_ns=suspend_ns,
+                depth=len(self.call_stack),
+                caller=frame.caller_name,
+                filename=frame.filename,
+                first_line=frame.first_line,
+                task_id=frame.task_id or 0,
+                tid=self.tid,
+            )
+        )

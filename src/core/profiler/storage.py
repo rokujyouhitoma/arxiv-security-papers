@@ -77,6 +77,25 @@ class SubroutineMetric:
 
 
 @dataclass
+class TimelineEvent:
+    """時系列コールイベント (Chrome Trace / Flame Chart 用)"""
+
+    name: str
+    cat: str = "function"
+    entry_ns: int = 0
+    exit_ns: int = 0
+    inclusive_ns: int = 0
+    exclusive_ns: int = 0
+    suspend_ns: int = 0
+    depth: int = 0
+    caller: str = ""
+    filename: str = ""
+    first_line: int = 0
+    task_id: int = 0
+    tid: int = 0
+
+
+@dataclass
 class ProfileMetadata:
     """プロファイル実行メタデータ (DSN-28 Section 3.2 / 8.2 準拠)"""
 
@@ -120,6 +139,8 @@ class ProfileData:
         self.stack_traces: Dict[str, int] = {}
         # 実行中にロードされたソースファイル内容キャッシュ (file_path -> content)
         self.source_files: Dict[str, str] = {}
+        # 時系列コールイベント (calls_mode=2 / Chrome Trace / Flame Chart 用)
+        self.timeline_events: List[TimelineEvent] = []
 
     def record_line(self, filename: str, line_no: int, delta_ns: int) -> None:
         """行実行メトリクスを記録"""
@@ -192,6 +213,10 @@ class ProfileData:
         """コールスタック実行時間を集計"""
         self.stack_traces[stack_str] = self.stack_traces.get(stack_str, 0) + time_ns
 
+    def record_timeline_event(self, event: TimelineEvent) -> None:
+        """時系列コールイベントを記録 (calls_mode=2 / Chrome Trace / Flame Chart 用)"""
+        self.timeline_events.append(event)
+
     def cache_source_file(self, filename: str) -> None:
         """HTMLレポート生成用にソースファイルをキャッシュ"""
         if filename in self.source_files or not os.path.isfile(filename):
@@ -202,9 +227,9 @@ class ProfileData:
         except Exception:
             pass
 
-    def to_dict(self) -> Dict[str, Any]:
-        """直列化可能な辞書へ変換"""
-        lines_serialized = {
+    def _serialize_lines(self) -> Dict[str, Any]:
+        """lines メトリクスをシリアライズ"""
+        return {
             fname: {
                 str(lno): {"count": m.count, "time_ns": m.time_ns}
                 for lno, m in file_lines.items()
@@ -212,9 +237,10 @@ class ProfileData:
             for fname, file_lines in self.lines.items()
         }
 
-        subs_serialized = {}
-        for sname, sub in self.subroutines.items():
-            subs_serialized[sname] = {
+    def _serialize_subs(self) -> Dict[str, Any]:
+        """subroutines メトリクスをシリアライズ"""
+        return {
+            sname: {
                 "name": sub.name,
                 "filename": sub.filename,
                 "first_line": sub.first_line,
@@ -225,8 +251,12 @@ class ProfileData:
                 "callers": sub.callers,
                 "callees": sub.callees,
             }
+            for sname, sub in self.subroutines.items()
+        }
 
-        arcs_serialized = [
+    def _serialize_arcs(self) -> List[Dict[str, Any]]:
+        """arcs メトリクスをシリアライズ"""
+        return [
             {
                 "caller": k[0],
                 "callee": k[1],
@@ -237,32 +267,36 @@ class ProfileData:
             for k, m in self.arcs.items()
         ]
 
+    def to_dict(self) -> Dict[str, Any]:
+        """直列化可能な辞書へ変換"""
+        events_serialized = [asdict(ev) for ev in self.timeline_events]
         return {
             "version": "1.0.0",
             "metadata": asdict(self.metadata),
-            "lines": lines_serialized,
-            "subroutines": subs_serialized,
-            "arcs": arcs_serialized,
+            "lines": self._serialize_lines(),
+            "subroutines": self._serialize_subs(),
+            "arcs": self._serialize_arcs(),
             "stack_traces": self.stack_traces,
             "source_files": self.source_files,
+            "timeline_events": events_serialized,
         }
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ProfileData:
-        """辞書から復元"""
-        meta_dict = data.get("metadata", {})
-        metadata = ProfileMetadata(**meta_dict)
-        profile = cls(metadata=metadata)
-
-        for fname, file_lines in data.get("lines", {}).items():
-            profile.lines[fname] = {}
-            for lno_str, m_dict in file_lines.items():
-                profile.lines[fname][int(lno_str)] = LineMetric(
+    @staticmethod
+    def _load_lines(profile: ProfileData, lines_data: Dict[str, Any]) -> None:
+        """lines データを復元"""
+        for fname, file_lines in lines_data.items():
+            profile.lines[fname] = {
+                int(lno_str): LineMetric(
                     count=m_dict.get("count", 0),
                     time_ns=m_dict.get("time_ns", 0),
                 )
+                for lno_str, m_dict in file_lines.items()
+            }
 
-        for sname, s_dict in data.get("subroutines", {}).items():
+    @staticmethod
+    def _load_subs(profile: ProfileData, subs_data: Dict[str, Any]) -> None:
+        """subroutines データを復元"""
+        for sname, s_dict in subs_data.items():
             sub = SubroutineMetric(
                 name=s_dict["name"],
                 filename=s_dict["filename"],
@@ -276,13 +310,34 @@ class ProfileData:
             )
             profile.subroutines[sname] = sub
 
-        for arc in data.get("arcs", []):
+    @staticmethod
+    def _load_arcs(profile: ProfileData, arcs_data: List[Dict[str, Any]]) -> None:
+        """arcs データを復元"""
+        for arc in arcs_data:
             k = (arc["caller"], arc["callee"])
             profile.arcs[k] = ArcMetric(
                 calls=arc.get("calls", 0),
                 inclusive_time_ns=arc.get("inc_ns", 0),
                 exclusive_time_ns=arc.get("exc_ns", 0),
             )
+
+    @staticmethod
+    def _load_timeline(profile: ProfileData, events_data: List[Dict[str, Any]]) -> None:
+        """timeline データを復元"""
+        for ev_dict in events_data:
+            profile.timeline_events.append(TimelineEvent(**ev_dict))
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ProfileData:
+        """辞書から復元"""
+        meta_dict = data.get("metadata", {})
+        metadata = ProfileMetadata(**meta_dict)
+        profile = cls(metadata=metadata)
+
+        cls._load_lines(profile, data.get("lines", {}))
+        cls._load_subs(profile, data.get("subroutines", {}))
+        cls._load_arcs(profile, data.get("arcs", []))
+        cls._load_timeline(profile, data.get("timeline_events", []))
 
         profile.stack_traces = data.get("stack_traces", {})
         profile.source_files = data.get("source_files", {})

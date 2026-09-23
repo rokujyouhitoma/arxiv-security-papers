@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""
+tools/pynytprofchart
+====================
+PyNYTProf 時系列 Flame Chart (SVG/HTML) および Chrome Trace Event JSON 生成ランチャー。
+使用例:
+    ./tools/pynytprofchart -i pynytprof.out -o chart.html --output-trace trace.json
+"""
+
+import os
+import sys
+
+workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+src_dir = os.path.join(workspace_dir, "src")
+for p in (src_dir, workspace_dir):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+from src.core.profiler.cli import main
+
+if __name__ == "__main__":
+    args = ["chart"] + sys.argv[1:]
+    sys.exit(main(args))

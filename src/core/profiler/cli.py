@@ -20,6 +20,7 @@ import runpy
 import sys
 from typing import Any, Callable, Dict, List, Optional
 
+from core.profiler.chart import FlameChartGenerator, TraceEventExporter
 from core.profiler.diff import ProfileDiffer
 from core.profiler.engine import ProfilerEngine
 from core.profiler.exporter import CallgrindExporter
@@ -356,6 +357,35 @@ def cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_chart_html_path(args: argparse.Namespace, in_file: str) -> Optional[str]:
+    """出力 HTML ファイルパスを決定"""
+    out_html: Optional[str] = args.output_html or getattr(args, "output", None)
+    if not out_html and not args.output_trace:
+        return os.path.splitext(in_file)[0] + "_chart.html"
+    return out_html
+
+
+def cmd_chart(args: argparse.Namespace) -> int:
+    """時系列 Flame Chart HTML / SVG および Chrome Trace Event JSON 生成"""
+    in_file = args.input
+    if not os.path.exists(in_file):
+        print(f"Error: Input profile not found: {in_file}", file=sys.stderr)
+        return 1
+
+    profile_data = ProfileStorage.load(in_file)
+    if args.output_trace:
+        TraceEventExporter.export_file(profile_data, args.output_trace)
+        print(f"[*] PyNYTProf: Chrome Trace Event JSON saved to '{args.output_trace}'")
+
+    out_html = _resolve_chart_html_path(args, in_file)
+    if out_html:
+        title = getattr(args, "title", "PyNYTProf Timeline Flame Chart")
+        FlameChartGenerator.generate_html(profile_data, out_path=out_html, title=title)
+        print(f"[*] PyNYTProf: Flame Chart HTML saved to '{out_html}'")
+
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # パーサ
 # ---------------------------------------------------------------------------
@@ -529,6 +559,23 @@ def create_parser() -> argparse.ArgumentParser:
         help="Noise threshold ratio (default: 0.05)",
     )
 
+    # chart
+    p_chart = subparsers.add_parser(
+        "chart",
+        help="Generate timeline Flame Chart HTML/SVG and Chrome Trace Event JSON",
+    )
+    p_chart.add_argument(
+        "-i", "--input", default="pynytprof.out", help="Input profile (.out) file"
+    )
+    p_chart.add_argument("-o", "--output-html", help="Output Flame Chart HTML file")
+    p_chart.add_argument("--output-trace", help="Output Chrome Trace Event JSON file")
+    p_chart.add_argument(
+        "-t",
+        "--title",
+        default="PyNYTProf Timeline Flame Chart",
+        help="Chart title",
+    )
+
     return parser
 
 
@@ -543,6 +590,7 @@ _COMMAND_MAP: Dict[str, Callable[[argparse.Namespace], int]] = {
     "callgrind": cmd_callgrind,
     "merge": cmd_merge,
     "diff": cmd_diff,
+    "chart": cmd_chart,
 }
 
 

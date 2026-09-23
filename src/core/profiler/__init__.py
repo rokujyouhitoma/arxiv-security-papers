@@ -16,6 +16,7 @@ from __future__ import annotations
 import functools
 from typing import Any, Callable, Optional
 
+from core.profiler.chart import FlameChartGenerator, TraceEventExporter
 from core.profiler.diff import ProfileDiffer
 from core.profiler.engine import ProfilerEngine
 from core.profiler.exporter import CallgrindExporter
@@ -23,7 +24,12 @@ from core.profiler.flamegraph import FlameGraphGenerator
 from core.profiler.merge import ProfileMerger
 from core.profiler.reporter import HTMLReporter
 from core.profiler.sampling import SamplingEngine, SamplingProfiler
-from core.profiler.storage import ProfileData, ProfileMetadata, ProfileStorage
+from core.profiler.storage import (
+    ProfileData,
+    ProfileMetadata,
+    ProfileStorage,
+    TimelineEvent,
+)
 
 _GLOBAL_ENGINE: Optional[ProfilerEngine] = None
 
@@ -147,6 +153,9 @@ __all__ = [
     "SamplingEngine",
     "SamplingProfiler",
     "ProfileDiffer",
+    "FlameChartGenerator",
+    "TraceEventExporter",
+    "TimelineEvent",
     "pynytprof_cli_main",
     "parse_pynytprof_env",
 ]

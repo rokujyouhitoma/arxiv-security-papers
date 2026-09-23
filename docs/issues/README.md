@@ -13,6 +13,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **378** | PyNYTProf 時系列 Flame Chart 可視化および Chrome Trace Event エクスポーターの実装 (Phase 10) | Feature | 2026-09-23 | [378-implement-pynytprof-flame-chart-and-trace-events.md](closed/378-implement-pynytprof-flame-chart-and-trace-events.md) |
 | **377** | PyNYTProf asyncio コルーチン対応・Await待機時間分離・マルチタスク追跡 (Phase 9) | Feature | 2026-09-23 | [377-implement-pynytprof-asyncio-coroutine-profiling.md](closed/377-implement-pynytprof-asyncio-coroutine-profiling.md) |
 | **376** | PyNYTProf CLI 差分サブコマンド・Trace フィルタ統合および Diff/Sampling テスト・品質ゲート整備 (Phase 8) | Feature | 2026-09-23 | [376-implement-pynytprof-diff-sampling-cli-and-test-suite.md](closed/376-implement-pynytprof-diff-sampling-cli-and-test-suite.md) |
 | **375** | PyNYTProf 統計的サンプリングエンジン (SamplingEngine / SamplingProfiler) の実装 (Phase 7) | Feature | 2026-09-21 | [375-implement-pynytprof-sampling-engine.md](closed/375-implement-pynytprof-sampling-engine.md) |
