@@ -8,6 +8,7 @@ Provides sub-10ms high-dimensional vector search using only Python standard libr
 import heapq
 import json
 import math
+import operator
 import os
 import random
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
@@ -42,20 +43,41 @@ class HNSWIndex:
         self.enter_point: Optional[int] = None
         self.max_level: int = -1
 
+        # Pre-bind distance & similarity functions to eliminate repeated string lookups & branching
+        if self.metric in ("cosine", "dot_product"):
+            self._distance_fn: Callable[[Sequence[float], Sequence[float]], float] = (
+                self._dist_cosine
+            )
+            self._similarity_fn: Callable[[float], float] = self._similarity_cosine
+        else:
+            self._distance_fn = self._dist_euclidean
+            self._similarity_fn = self._similarity_euclidean
+
+    def _dist_cosine(self, v1: Sequence[float], v2: Sequence[float]) -> float:
+        """Computes cosine distance using generator-free C-level map(operator.mul)."""
+        dot = float(sum(map(operator.mul, v1, v2)))
+        return max(0.0, 1.0 - dot)
+
+    def _dist_euclidean(self, v1: Sequence[float], v2: Sequence[float]) -> float:
+        """Computes Euclidean distance squared using generator-free map."""
+        diff = tuple(a - b for a, b in zip(v1, v2))
+        return float(sum(map(operator.mul, diff, diff)))
+
+    def _similarity_cosine(self, dist: float) -> float:
+        """Converts cosine distance back to 0.0 ~ 1.0 similarity score."""
+        return max(0.0, min(1.0, 1.0 - dist))
+
+    def _similarity_euclidean(self, dist: float) -> float:
+        """Converts Euclidean distance back to 0.0 ~ 1.0 similarity score."""
+        return 1.0 / (1.0 + math.sqrt(dist))
+
     def _distance(self, v1: Sequence[float], v2: Sequence[float]) -> float:
         """Computes distance between two vectors (lower = closer)."""
-        if self.metric in ("cosine", "dot_product"):
-            dot = sum(x * y for x, y in zip(v1, v2))
-            return max(0.0, 1.0 - dot)
-        else:
-            return sum((x - y) ** 2 for x, y in zip(v1, v2))
+        return self._distance_fn(v1, v2)
 
     def _similarity_from_distance(self, dist: float) -> float:
         """Converts distance back to a 0.0 ~ 1.0 similarity score."""
-        if self.metric in ("cosine", "dot_product"):
-            return max(0.0, min(1.0, 1.0 - dist))
-        else:
-            return 1.0 / (1.0 + math.sqrt(dist))
+        return self._similarity_fn(dist)
 
     def _random_level(self) -> int:
         """Generates random level with exponential decay."""

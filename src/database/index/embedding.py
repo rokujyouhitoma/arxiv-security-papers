@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import operator
 import re
 from typing import Dict, List, Sequence, Tuple
 
@@ -182,11 +183,11 @@ def _score_cluster_match(
 
 
 def _vector_norm(v: Sequence[float]) -> float:
-    return math.sqrt(sum(a * a for a in v))
+    return math.sqrt(sum(map(operator.mul, v, v)))
 
 
 def _vector_dot(v1: Sequence[float], v2: Sequence[float]) -> float:
-    return sum(a * b for a, b in zip(v1, v2))
+    return float(sum(map(operator.mul, v1, v2)))
 
 
 def _expand_hyphenated_token(tok: str, out: List[str]) -> None:
