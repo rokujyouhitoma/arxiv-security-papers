@@ -92,10 +92,12 @@ class VectorStorage:
     def _init_memory_state(self) -> None:
         self.file_path = ":memory:"
         self._memory_buffer: Optional[io.BytesIO] = io.BytesIO()
+        self._memory_buffer_dirty: bool = False
 
     def _init_disk_state(self, file_path: str) -> None:
         self.file_path = os.path.abspath(file_path)
         self._memory_buffer = None
+        self._memory_buffer_dirty = False
         if os.path.exists(self.file_path):
             self._load_existing_file()
 
@@ -110,6 +112,7 @@ class VectorStorage:
         self._file_obj: Optional[Any] = None
         self._mmap: Optional[mmap.mmap] = None
         self._memory_vectors: List[Tuple[float, ...]] = []
+        self._memory_buffer_dirty = False
         if self.is_memory:
             self._init_memory_state()
         else:
@@ -326,7 +329,7 @@ class VectorStorage:
     ) -> None:
         self._memory_vectors = valid_vecs
         self._rebuild_index_mapping(count, meta_list)
-        self._write_memory_buffer(valid_vecs, meta_list, count)
+        self._memory_buffer_dirty = True
 
     def _write_all_disk(
         self,
@@ -372,6 +375,35 @@ class VectorStorage:
             res.append(tuple(v))
         return res
 
+    def _append_memory_batch(
+        self,
+        valid_vecs: List[Tuple[float, ...]],
+        meta_list: List[Dict[str, Any]],
+        count: int,
+    ) -> List[int]:
+        start_idx = self.count
+        self.count += count
+        self._memory_vectors.extend(valid_vecs)
+        self.metadata.extend(meta_list)
+        for i, m in enumerate(meta_list):
+            if isinstance(m, dict) and "id" in m:
+                self.id_to_idx[m["id"]] = start_idx + i
+        self._memory_buffer_dirty = True
+        return list(range(start_idx, self.count))
+
+    def _append_memory_single(
+        self, t_vec: Tuple[float, ...], metadata: Optional[Dict[str, Any]]
+    ) -> int:
+        idx = self.count
+        self.count += 1
+        self._memory_vectors.append(t_vec)
+        meta = metadata or {"id": str(idx)}
+        self.metadata.append(meta)
+        if isinstance(meta, dict) and "id" in meta:
+            self.id_to_idx[meta["id"]] = idx
+        self._memory_buffer_dirty = True
+        return idx
+
     def append_batch(
         self,
         vectors: Sequence[Sequence[float]],
@@ -383,9 +415,13 @@ class VectorStorage:
         if not vectors:
             return []
         count = len(vectors)
+        valid_vecs = self._validate_vectors(vectors)
         meta_list = self._prepare_metadata(count, metadata, self.count)
+        if self.is_memory:
+            return self._append_memory_batch(valid_vecs, meta_list, count)
+
         all_vecs = self.get_all_vectors()
-        all_vecs.extend(self._validate_vectors(vectors))
+        all_vecs.extend(valid_vecs)
         new_meta = list(self.metadata) + meta_list
         start_idx = len(all_vecs) - count
         self.write_all(all_vecs, new_meta)
@@ -401,17 +437,27 @@ class VectorStorage:
         if len(vector) != self.dim:
             raise ValueError(f"Vector dimension {len(vector)} != expected {self.dim}")
 
+        t_vec = tuple(vector)
+        if self.is_memory:
+            return self._append_memory_single(t_vec, metadata)
+
         all_vecs = self.get_all_vectors()
-        all_vecs.append(tuple(vector))
+        all_vecs.append(t_vec)
         new_meta = list(self.metadata)
         new_meta.append(metadata or {"id": str(len(all_vecs) - 1)})
 
         self.write_all(all_vecs, new_meta)
         return len(all_vecs) - 1
 
+    def _sync_memory_buffer(self) -> None:
+        if getattr(self, "_memory_buffer_dirty", False) or self._memory_buffer is None:
+            self._write_memory_buffer(self._memory_vectors, self.metadata, self.count)
+            self._memory_buffer_dirty = False
+
     def to_bytes(self) -> bytes:
         """Serializes current storage to binary OKFVEC01 bytes."""
         if self.is_memory:
+            self._sync_memory_buffer()
             if self._memory_buffer is not None and not self._memory_buffer.closed:
                 return self._memory_buffer.getvalue()
             return b""

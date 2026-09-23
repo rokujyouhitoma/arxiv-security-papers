@@ -174,10 +174,12 @@ def _drop_matching_index_from_table(table: Any, index_name: str) -> bool:
 
 
 def _rebuild_table_indexes(table: Any) -> int:
-    vecs = table.storage.get_all_vectors()
-    table.index = HNSWIndex(dim=table.storage.dim)
-    table.index.build_from_storage(vecs)
-    cnt = 1
+    cnt = 0
+    if getattr(table, "index", None) is not None:
+        vecs = table.storage.get_all_vectors()
+        table.index = HNSWIndex(dim=table.storage.dim)
+        table.index.build_from_storage(vecs)
+        cnt += 1
     for col, iname in list(table.btree_index_names.items()):
         btree = BPlusTree(column_name=col)
         for idx, meta in enumerate(table.storage.metadata):
@@ -376,6 +378,23 @@ def _extract_pk_col(raw_sql: str) -> Optional[str]:
 class TableCatalog:
     """Represents in-memory and on-disk catalog for a database table."""
 
+    @staticmethod
+    def _is_vector_column(col: ColumnDef) -> bool:
+        dt = (col.data_type or "").upper()
+        return "VECTOR" in dt or "EMBEDDING" in dt
+
+    @staticmethod
+    def _resolve_table_index(
+        storage: Any,
+        index: Optional[HNSWIndex],
+        columns: Optional[List[ColumnDef]],
+    ) -> Optional[HNSWIndex]:
+        if index is not None:
+            return index
+        if any(TableCatalog._is_vector_column(col) for col in (columns or [])):
+            return HNSWIndex(dim=int(getattr(storage, "dim", 128)))
+        return None
+
     def __init__(
         self,
         name: str,
@@ -394,8 +413,7 @@ class TableCatalog:
     ) -> None:
         self.name = name
         self.storage = storage
-        default_dim = int(getattr(storage, "dim", 128))
-        self.index = index if index is not None else HNSWIndex(dim=default_dim)
+        self.index = self._resolve_table_index(storage, index, columns)
         self.schema = schema if schema is not None else {}
         self.strict = strict
         self._init_catalog_columns(
@@ -2669,9 +2687,27 @@ class SQLExecutor:
             raise SQLExecutionError(str(e))
         return {"command": "EXPLAIN", "status": "ok", "rows": explain_rows}
 
+    @staticmethod
+    def _has_non_zero_vector(vecs: Sequence[Sequence[float]]) -> bool:
+        return any(any(x != 0.0 for x in v) for v in vecs)
+
+    @staticmethod
+    def _ensure_table_vector_index(table: TableCatalog) -> None:
+        if table.index is not None:
+            return
+        vecs = table.storage.get_all_vectors()
+        if not vecs or not SQLExecutor._has_non_zero_vector(vecs):
+            raise SQLExecutionError(
+                f"Table '{table.name}' does not have a vector index for KNN search."
+            )
+        table.index = HNSWIndex(dim=table.storage.dim)
+        table.index.build_from_storage(vecs)
+
     def _query_knn_rows(
         self, table: TableCatalog, knn_query: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
+        self._ensure_table_vector_index(table)
+        assert table.index is not None
         query_vec = self.embedding.normalize(knn_query["vector"])
         rows: List[Dict[str, Any]] = []
         for idx, sim in table.index.search(query_vec, top_k=knn_query["top_k"]):
@@ -3665,10 +3701,24 @@ class SQLExecutor:
             table.storage.append(row)
         return dict(row)
 
+    def _prepare_insert_vector(
+        self, table: TableCatalog, row: Dict[str, Any]
+    ) -> Sequence[float]:
+        has_vector_input = "vector" in row or "embedding" in row
+        if table.index is not None:
+            return self._resolve_insert_vector(row, table.storage.dim)
+        if has_vector_input:
+            vector = self._resolve_insert_vector(row, table.storage.dim)
+            table.index = HNSWIndex(dim=table.storage.dim)
+            for prev_idx, prev_v in enumerate(table.storage.get_all_vectors()):
+                table.index.add_item(prev_idx, prev_v)
+            return vector
+        return (0.0,) * getattr(table.storage, "dim", 128)
+
     def _insert_vector_row(
         self, table: TableCatalog, row: Dict[str, Any], stmt: InsertStatement
     ) -> Dict[str, Any]:
-        vector = self._resolve_insert_vector(row, table.storage.dim)
+        vector = self._prepare_insert_vector(table, row)
         if self.tx_manager.is_active:
             self.tx_manager.stage_mutation(
                 "INSERT", {"table": stmt.table_name, "data": row}
@@ -4140,8 +4190,9 @@ class SQLExecutor:
     ) -> None:
         if has_deleted and not self.tx_manager.is_active:
             table.storage.write_all(new_vecs, new_meta)
-            table.index = HNSWIndex(dim=table.storage.dim)
-            table.index.build_from_storage(new_vecs)
+            if table.index is not None:
+                table.index = HNSWIndex(dim=table.storage.dim)
+                table.index.build_from_storage(new_vecs)
 
     def _find_child_foreign_keys(
         self, parent_table_name: str
