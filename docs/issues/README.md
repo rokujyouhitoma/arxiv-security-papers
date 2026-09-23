@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **389** | pylisp.dynvar 非同期セーフ動的スコープ基盤の実装 | Feature | High | Open (New) | [389-implement-pylisp-dynvar-dynamic-scope.md](389-implement-pylisp-dynvar-dynamic-scope.md) |
 | **390** | pylisp.atom Free-threaded対応アトミック状態同期コンテナの実装 | Feature | High | Open (New) | [390-implement-pylisp-atom-free-threaded-atomic-container.md](390-implement-pylisp-atom-free-threaded-atomic-container.md) |
 | **391** | pylisp.condition 現場復帰・非巻き戻し型コンディション機構の実装 | Feature | Medium | Open (New) | [391-implement-pylisp-condition-restarts-mechanism.md](391-implement-pylisp-condition-restarts-mechanism.md) |
 | **392** | pylisp.logic HAMT構造共有＆Occurs Check付きminiKanren推論エンジンの実装 | Feature | Medium | Open (New) | [392-implement-pylisp-logic-minikanren-engine.md](392-implement-pylisp-logic-minikanren-engine.md) |
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **389** | pylisp.dynvar 非同期セーフ動的スコープ基盤の実装 (Phase 0) | Feature | 2026-09-24 | [389-implement-pylisp-dynvar-dynamic-scope.md](closed/389-implement-pylisp-dynvar-dynamic-scope.md) |
 | **388** | デュアルバックエンド差分CIテスト＆品質ゲート統合 (Phase 5) | Quality | 2026-09-23 | [388-integrate-dual-backend-differential-ci-test-and-quality-gates.md](closed/388-integrate-dual-backend-differential-ci-test-and-quality-gates.md) |
 | **387** | 現行DDLベースライン化＆散在DDL全廃リファクタリング (Phase 4) | Refactor | 2026-09-23 | [387-extract-baseline-ddl-and-purge-scattered-ddl-statements.md](closed/387-extract-baseline-ddl-and-purge-scattered-ddl-statements.md) |
 | **386** | 自己完結型 CLI コマンド＆manage.py統合の実装 (Phase 3) | Feature | 2026-09-23 | [386-implement-migrations-cli-command-and-manage-py-integration.md](closed/386-implement-migrations-cli-command-and-manage-py-integration.md) |
