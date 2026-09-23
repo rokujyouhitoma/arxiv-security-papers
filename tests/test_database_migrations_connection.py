@@ -66,6 +66,19 @@ class TestMigrationModels:
         assert mf.identifier == "20260923000000_init_schema"
         assert mf.filepath == tmp_path / fname
 
+        # Sequential number pattern (e.g., 0001_baseline.up.sql)
+        seq_fname = "0001_baseline.up.sql"
+        mf_seq = parse_migration_filename(seq_fname, base_dir=tmp_path)
+        assert mf_seq.version == "0001"
+        assert mf_seq.name == "baseline"
+        assert mf_seq.identifier == "0001_baseline"
+
+        # Sequential + timestamp pattern
+        comb_fname = "0001_20260923000000_baseline.up.sql"
+        mf_comb = parse_migration_filename(comb_fname, base_dir=tmp_path)
+        assert mf_comb.version == "0001_20260923000000"
+        assert mf_comb.name == "baseline"
+
     def test_parse_migration_filename_down(self, tmp_path: Path) -> None:
         fname = "20260923120000_drop_table.down.sql"
         mf = parse_migration_filename(fname, base_dir=tmp_path)

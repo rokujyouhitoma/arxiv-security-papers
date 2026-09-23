@@ -7,6 +7,7 @@ Conforms to DSN-30 Section 6 specification.
 """
 
 import datetime
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -24,6 +25,22 @@ from .models import (
     validate_migration_name,
 )
 from .runner import MigrationRunner
+
+
+def _extract_seq_num(entry: Path) -> int:
+    if not entry.is_file() or not entry.name.endswith(".sql"):
+        return 0
+    m = re.match(r"^(\d{4})_", entry.name)
+    return int(m.group(1)) if m else 0
+
+
+def _compute_next_sequence_prefix(migrations_dir: Path) -> str:
+    """Computes the next 4-digit zero-padded sequential prefix (e.g. '0001')."""
+    if not migrations_dir.exists():
+        return "0001"
+    seqs = [_extract_seq_num(e) for e in migrations_dir.iterdir()]
+    max_seq = max(seqs) if seqs else 0
+    return f"{max_seq + 1:04d}"
 
 
 class MigrationManager:
@@ -62,28 +79,28 @@ class MigrationManager:
 
     def create(self, name: str) -> Tuple[Path, Path]:
         """
-        Generates a new pair of timestamped .up.sql and .down.sql skeleton files.
+        Generates a new pair of sequential .up.sql and .down.sql skeleton files (e.g. 0001_name.up.sql).
         Validates name to avoid path traversal and shell injection.
         """
         clean_name = validate_migration_name(name)
         now = datetime.datetime.now(datetime.timezone.utc)
-        timestamp = now.strftime("%Y%m%d%H%M%S")
+        seq = _compute_next_sequence_prefix(self.migrations_dir)
 
-        up_filename = f"{timestamp}_{clean_name}.up.sql"
-        down_filename = f"{timestamp}_{clean_name}.down.sql"
+        up_filename = f"{seq}_{clean_name}.up.sql"
+        down_filename = f"{seq}_{clean_name}.down.sql"
 
         up_path = self.migrations_dir / up_filename
         down_path = self.migrations_dir / down_filename
 
         up_header = (
             f"-- Migration: {clean_name} (UP)\n"
-            f"-- Version:   {timestamp}\n"
+            f"-- Version:   {seq}\n"
             f"-- Backend:   Compatible with Primary (src.database) and Secondary (sqlite3)\n"
             f"-- Created:   {now.isoformat()}\n\n"
         )
         down_header = (
             f"-- Migration: {clean_name} (DOWN)\n"
-            f"-- Version:   {timestamp}\n"
+            f"-- Version:   {seq}\n"
             f"-- Backend:   Compatible with Primary (src.database) and Secondary (sqlite3)\n"
             f"-- Created:   {now.isoformat()}\n\n"
         )

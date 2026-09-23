@@ -108,9 +108,17 @@ class SQLiteAdapter(DatabaseAdapter):
     Fully supported for multi-environment deployments and compatibility.
     """
 
-    def __init__(self, db_path: Path | str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        db_path: Path | str,
+        timeout: float = 30.0,
+        connection: Optional[sqlite3.Connection] = None,
+    ) -> None:
         super().__init__(db_path=db_path, backend_type=BackendType.SQLITE)
         self.timeout = timeout
+        self._is_external = connection is not None
+        if connection is not None:
+            self._connection = connection
 
     def connect(self) -> sqlite3.Connection:
         if self._connection is None:
@@ -159,7 +167,8 @@ class SQLiteAdapter(DatabaseAdapter):
 
     def close(self) -> None:
         if self._connection is not None:
-            self._connection.close()
+            if not self._is_external:
+                self._connection.close()
             self._connection = None
 
 

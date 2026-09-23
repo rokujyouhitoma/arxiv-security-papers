@@ -63,7 +63,7 @@ def _count_by_status(records: Sequence[Dict[str, Any]], target_status: str) -> i
 
 def _format_table_row(r: Dict[str, Any]) -> str:
     """Formats a single migration status record as an ASCII table row."""
-    ver = str(r["version"])
+    ver = str(r["version"])[:14].ljust(14)
     name = str(r["name"])[:30].ljust(30)
     status = str(r["status"]).ljust(8)
     applied_at = str(r.get("applied_at") or "-")[:19].ljust(19)

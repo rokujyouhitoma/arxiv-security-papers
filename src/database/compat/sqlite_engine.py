@@ -501,7 +501,7 @@ def _save_table_to_storage(
         if storage.has_table(tbl)
         else storage.create_table(tbl, dim=4)
     )
-    v = [(0.0, 0.0, 0.0, 0.0)] * len(recs)
+    v = [(0.0,) * t.dim] * len(recs)
     t.write_all(v, recs)
 
 

@@ -10,7 +10,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-MIGRATION_FILENAME_PATTERN = re.compile(r"^(\d{14})_([a-z0-9_]+)\.(up|down)\.sql$")
+MIGRATION_FILENAME_PATTERN = re.compile(
+    r"^(\d{4}_\d{14}|\d{14}|\d{4})_([a-z0-9_]+)\.(up|down)\.sql$"
+)
 MIGRATION_NAME_PATTERN = re.compile(r"^[a-z0-9_]+$")
 
 
@@ -152,8 +154,8 @@ def parse_migration_filename(
     if not match:
         raise ValueError(
             f"Invalid migration filename '{filepath.name}'. "
-            f"Must follow format: 'YYYYMMDDHHMMSS_description.(up|down).sql' "
-            f"(e.g., '20260923000000_init_schema.up.sql')."
+            f"Must follow format: '<version>_<description>.(up|down).sql' "
+            f"(e.g., '0001_baseline.up.sql' or '20260923000000_init_schema.up.sql')."
         )
 
     _check_path_traversal(filepath, base_dir)

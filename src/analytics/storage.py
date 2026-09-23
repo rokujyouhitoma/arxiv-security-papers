@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from database import (
@@ -21,62 +22,21 @@ from database import (
 
 logger = logging.getLogger(__name__)
 
-# Schema Migrations Table Definition
-SCHEMA_MIGRATIONS: List[Tuple[int, str]] = [
-    (
-        1,
-        """
-        CREATE TABLE IF NOT EXISTS threat_trends (
-            name TEXT PRIMARY KEY,
-            category TEXT NOT NULL,
-            count INTEGER NOT NULL,
-            prev_count INTEGER NOT NULL,
-            growth_pct REAL NOT NULL,
-            sample_ids TEXT,
-            updated_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS strategic_kpis (
-            kpi_key TEXT PRIMARY KEY,
-            kpi_category TEXT NOT NULL,
-            num_value REAL,
-            text_value TEXT,
-            metadata_json TEXT,
-            updated_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS metrics_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_json TEXT NOT NULL,
-            collected_at TEXT NOT NULL,
-            created_epoch REAL NOT NULL
-        );
-        """,
-    ),
-    (
-        2,
-        """
-        CREATE INDEX IF NOT EXISTS idx_threat_category ON threat_trends(category);
-        CREATE INDEX IF NOT EXISTS idx_kpis_category ON strategic_kpis(kpi_category);
-        CREATE INDEX IF NOT EXISTS idx_history_epoch ON metrics_history(created_epoch);
-        """,
-    ),
-    (
-        3,
-        """
-        CREATE TABLE IF NOT EXISTS latest_snapshot (
-            snapshot_key TEXT PRIMARY KEY,
-            snapshot_json TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            updated_at_epoch REAL NOT NULL
-        );
-        """,
-    ),
-    (
-        4,
-        """
-        DROP TABLE IF EXISTS papers;
-        """,
-    ),
-]
+
+def _apply_baseline_to_conn(conn: Any) -> None:
+    from database.migrations.connection import SQLiteAdapter
+    from database.migrations.models import MigrationFile
+    from database.migrations.runner import MigrationRunner
+
+    adapter = SQLiteAdapter(db_path=Path(":memory:"), connection=conn)
+    runner = MigrationRunner(adapter=adapter)
+    mig_dir = Path(__file__).resolve().parent.parent.parent / "migrations"
+    up_sql = mig_dir / "0001_baseline.up.sql"
+    if up_sql.exists():
+        mf = MigrationFile(
+            version="0001", name="baseline", direction="up", filepath=up_sql
+        )
+        runner.apply(mf)
 
 
 def _resolve_default_workspace_dir() -> str:
@@ -159,26 +119,12 @@ class AnalyticsStorage:
         self.close()
 
     def initialize_db(self) -> None:
-        """Applies pending schema migrations deterministically."""
+        """Applies baseline schema migrations deterministically via MigrationManager."""
         try:
             with self._get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute("PRAGMA user_version;")
-                row = cur.fetchone()
-                current_version = row[0] if row else 0
-
-                for version, script in SCHEMA_MIGRATIONS:
-                    if version > current_version:
-                        logger.info(
-                            "Applying Analytics DB Migration v%d -> v%d",
-                            current_version,
-                            version,
-                        )
-                        conn.executescript(script)
-                        conn.execute(f"PRAGMA user_version = {version};")
-                        current_version = version
+                _apply_baseline_to_conn(conn)
         except Exception as e:
-            logger.error("Failed to initialize Analytics DB: %s", e)
+            logger.error("Failed to initialize Analytics DB via migrations: %s", e)
 
     def _upsert_threat_trends(
         self, cur: SQLiteCursor, top_threats: List[Dict[str, Any]], now_str: str

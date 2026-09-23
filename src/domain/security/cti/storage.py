@@ -12,6 +12,7 @@ import datetime
 import json
 import os
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from database import (
@@ -23,6 +24,25 @@ from database import (
     get_sqlite_connection,
     restore_sqlite_table_records,
 )
+
+
+def _apply_cti_baseline_migration(conn: Any) -> None:
+    from database.migrations.connection import SQLiteAdapter
+    from database.migrations.models import MigrationFile
+    from database.migrations.runner import MigrationRunner
+
+    adapter = SQLiteAdapter(db_path=Path(":memory:"), connection=conn)
+    runner = MigrationRunner(adapter=adapter)
+    mig_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "migrations"
+    up_sql = mig_dir / "0001_baseline.up.sql"
+    if up_sql.exists():
+        mf = MigrationFile(
+            version="0001",
+            name="baseline",
+            direction="up",
+            filepath=up_sql,
+        )
+        runner.apply(mf)
 
 
 class CTICatalogStorage:
@@ -82,100 +102,8 @@ class CTICatalogStorage:
     def _init_schema(self) -> None:
         """Initializes relational tables and full-text search virtual tables."""
         with self._connection() as conn:
+            _apply_cti_baseline_migration(conn)
             cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS cti_tactics (
-                    tactic_id TEXT PRIMARY KEY,
-                    shortname TEXT UNIQUE NOT NULL,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    external_url TEXT
-                )
-                """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS cti_techniques (
-                    technique_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    is_subtechnique INTEGER DEFAULT 0,
-                    parent_technique_id TEXT,
-                    platforms_json TEXT,
-                    tactics_json TEXT,
-                    external_url TEXT,
-                    stix_id TEXT NOT NULL
-                )
-                """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS cti_mitigations (
-                    mitigation_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    external_url TEXT,
-                    stix_id TEXT NOT NULL
-                )
-                """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS cti_relationships (
-                    source_id TEXT NOT NULL,
-                    target_id TEXT NOT NULL,
-                    rel_type TEXT NOT NULL,
-                    PRIMARY KEY (source_id, target_id, rel_type)
-                )
-                """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS cti_cwes (
-                    cwe_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    abstraction TEXT,
-                    description TEXT,
-                    top25_rank INTEGER,
-                    is_top25 INTEGER DEFAULT 0,
-                    status TEXT,
-                    mitigations_json TEXT,
-                    extended_meta TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-                """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS cti_cwe_relationships (
-                    source_cwe_id TEXT NOT NULL,
-                    target_cwe_id TEXT NOT NULL,
-                    relation_type TEXT NOT NULL,
-                    PRIMARY KEY (source_cwe_id, target_cwe_id, relation_type)
-                )
-                """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS cisa_kev_vulnerabilities (
-                    cve_id TEXT PRIMARY KEY,
-                    vendor_project TEXT NOT NULL,
-                    product TEXT NOT NULL,
-                    vulnerability_name TEXT NOT NULL,
-                    date_added TEXT NOT NULL,
-                    short_description TEXT,
-                    required_action TEXT,
-                    due_date TEXT,
-                    known_ransomware_campaign_use TEXT,
-                    notes TEXT
-                )
-                """)
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_tech_parent ON cti_techniques(parent_technique_id)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_rel_target ON cti_relationships(target_id)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_cwe_top25 ON cti_cwes(is_top25)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_cwe_rel_target ON cti_cwe_relationships(target_cwe_id)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_cisa_kev_ransomware "
-                "ON cisa_kev_vulnerabilities(known_ransomware_campaign_use)"
-            )
-
             self._create_fts_table(cursor)
             conn.commit()
 

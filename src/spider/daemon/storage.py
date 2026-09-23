@@ -10,6 +10,7 @@ import datetime
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from database.ipc.driver import Connection, connect
@@ -65,23 +66,34 @@ class SpiderExecutionStorage:
         return connect(database=self.db_path)
 
     def _init_tables(self) -> None:
-        with self._get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS spider_execution_logs (
-                    job_id TEXT,
-                    spider_name TEXT,
-                    status TEXT,
-                    started_at TEXT,
-                    finished_at TEXT,
-                    duration_seconds REAL,
-                    item_count INTEGER,
-                    http_status_counts TEXT,
-                    error_message TEXT,
-                    params TEXT
+        """Initializes tables via baseline migration runner."""
+        try:
+            from database.migrations.connection import get_adapter
+            from database.migrations.models import BackendType, MigrationFile
+            from database.migrations.runner import MigrationRunner
+
+            backend = (
+                BackendType.PYDB
+                if str(self.db_path).endswith(".vdb")
+                else BackendType.SQLITE
+            )
+            adapter = get_adapter(backend=backend, db_path=Path(self.db_path))
+            runner = MigrationRunner(adapter=adapter)
+            mig_dir = (
+                Path(__file__).resolve().parent.parent.parent.parent / "migrations"
+            )
+            up_sql = mig_dir / "0001_baseline.up.sql"
+            if up_sql.exists():
+                mf = MigrationFile(
+                    version="0001",
+                    name="baseline",
+                    direction="up",
+                    filepath=up_sql,
                 )
-                """)
-            conn.commit()
+                runner.apply(mf)
+            adapter.close()
+        except Exception as e:
+            logger.debug("Spider storage migration check: %s", e)
 
     def record_start(self, job: CrawlJob) -> None:
         """Records the beginning of a crawl job with RUNNING status."""
