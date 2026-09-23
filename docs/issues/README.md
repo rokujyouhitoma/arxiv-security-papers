@@ -6,7 +6,10 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| - | 現在進行中のオープン Issue はありません | - | - | - | - |
+| **389** | pylisp.dynvar 非同期セーフ動的スコープ基盤の実装 | Feature | High | Open (New) | [389-implement-pylisp-dynvar-dynamic-scope.md](389-implement-pylisp-dynvar-dynamic-scope.md) |
+| **390** | pylisp.atom Free-threaded対応アトミック状態同期コンテナの実装 | Feature | High | Open (New) | [390-implement-pylisp-atom-free-threaded-atomic-container.md](390-implement-pylisp-atom-free-threaded-atomic-container.md) |
+| **391** | pylisp.condition 現場復帰・非巻き戻し型コンディション機構の実装 | Feature | Medium | Open (New) | [391-implement-pylisp-condition-restarts-mechanism.md](391-implement-pylisp-condition-restarts-mechanism.md) |
+| **392** | pylisp.logic HAMT構造共有＆Occurs Check付きminiKanren推論エンジンの実装 | Feature | Medium | Open (New) | [392-implement-pylisp-logic-minikanren-engine.md](392-implement-pylisp-logic-minikanren-engine.md) |
 
 ---
 
