@@ -46,6 +46,24 @@ class MigrationDirection(str, Enum):
     DOWN = "down"
 
 
+class MigrationError(Exception):
+    """Base exception for all database migration related errors."""
+
+    pass
+
+
+class MigrationExecutionError(MigrationError):
+    """Raised when SQL execution fails during migration application or rollback."""
+
+    pass
+
+
+class MigrationFileNotFoundError(MigrationError):
+    """Raised when a required migration file (e.g. .down.sql) is not found."""
+
+    pass
+
+
 @dataclass(frozen=True)
 class MigrationFile:
     """Represents a physical SQL migration file on disk."""

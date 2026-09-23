@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **385** | トランザクション実行器＆MigrationManagerオーケストレータの実装 (Phase 2) | Feature | High | Open (New) | [385-implement-atomic-migration-runner-and-manager-orchestrator.md](385-implement-atomic-migration-runner-and-manager-orchestrator.md) |
 | **386** | 自己完結型 CLI コマンド＆manage.py統合の実装 (Phase 3) | Feature | High | Open (New) | [386-implement-migrations-cli-command-and-manage-py-integration.md](386-implement-migrations-cli-command-and-manage-py-integration.md) |
 | **387** | 現行DDLベースライン化＆散在DDL全廃リファクタリング (Phase 4) | Refactor | High | Open (New) | [387-extract-baseline-ddl-and-purge-scattered-ddl-statements.md](387-extract-baseline-ddl-and-purge-scattered-ddl-statements.md) |
 | **388** | デュアルバックエンド差分CIテスト＆品質ゲート統合 (Phase 5) | Quality | Medium | Open (New) | [388-integrate-dual-backend-differential-ci-test-and-quality-gates.md](388-integrate-dual-backend-differential-ci-test-and-quality-gates.md) |
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **385** | トランザクション実行器＆MigrationManagerオーケストレータの実装 (Phase 2) | Feature | 2026-09-23 | [385-implement-atomic-migration-runner-and-manager-orchestrator.md](closed/385-implement-atomic-migration-runner-and-manager-orchestrator.md) |
 | **384** | データモデル・PEP 249 デュアル接続アダプタ基盤の実装 (Phase 1) | Feature | 2026-09-23 | [384-implement-migration-models-and-dual-pep249-connection-adapter.md](closed/384-implement-migration-models-and-dual-pep249-connection-adapter.md) |
 | **383** | トランザクション開始時の全テーブルディープコピー廃止および Pager / SlottedPage ストレージ層の統合 | Architecture | 2026-09-23 | [383-eliminate-full-database-tx-snapshot-and-unify-pager-storage.md](closed/383-eliminate-full-database-tx-snapshot-and-unify-pager-storage.md) |
 | **382** | SQLExecutor における Hash Join 統合および制約検査・式評価アルゴリズムの高速化 | Optimization | 2026-09-23 | [382-integrate-hash-join-and-optimize-executor-algorithms.md](closed/382-integrate-hash-join-and-optimize-executor-algorithms.md) |
