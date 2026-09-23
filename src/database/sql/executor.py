@@ -2009,6 +2009,88 @@ def _is_hash_joinable(
     return bool(current_rows and j_prefixed_rows and join.on_conditions)
 
 
+def _pop_storage_metadata(storage: Any, idx: Optional[int]) -> None:
+    if not hasattr(storage, "metadata") or not storage.metadata:
+        return
+    if idx is not None and idx < len(storage.metadata):
+        storage.metadata.pop(idx)
+    else:
+        storage.metadata.pop()
+
+
+def _pop_memory_vectors(storage: Any, idx: Optional[int]) -> None:
+    if not hasattr(storage, "_memory_vectors") or not storage._memory_vectors:
+        return
+    if idx is not None and idx < len(storage._memory_vectors):
+        storage._memory_vectors.pop(idx)
+    else:
+        storage._memory_vectors.pop()
+
+
+def _pop_storage_id_mapping(storage: Any, row: Any) -> None:
+    if isinstance(row, dict) and "id" in row and hasattr(storage, "id_to_idx"):
+        storage.id_to_idx.pop(str(row["id"]), None)
+
+
+def _undo_single_insert(table: TableCatalog, payload: Dict[str, Any]) -> None:
+    idx = payload.get("idx")
+    st = table.storage
+    _pop_storage_metadata(st, idx)
+    _pop_memory_vectors(st, idx)
+    if hasattr(st, "count") and st.count > 0:
+        st.count -= 1
+    _pop_storage_id_mapping(st, payload.get("row"))
+    table.invalidate_unique_sets()
+
+
+def _undo_single_update(table: TableCatalog, payload: Dict[str, Any]) -> None:
+    idx = payload.get("idx")
+    old_row = payload.get("old_row")
+    if (
+        idx is not None
+        and old_row is not None
+        and hasattr(table.storage, "metadata")
+        and idx < len(table.storage.metadata)
+    ):
+        table.storage.metadata[idx].clear()
+        table.storage.metadata[idx].update(old_row)
+        table.invalidate_unique_sets()
+
+
+def _undo_single_delete(table: TableCatalog, payload: Dict[str, Any]) -> None:
+    all_meta = payload.get("all_meta")
+    all_vecs = payload.get("all_vecs")
+    if all_meta is not None and all_vecs is not None:
+        table.storage.write_all(all_vecs, all_meta)
+        table.invalidate_unique_sets()
+        if table.index is not None:
+            table.index = HNSWIndex(dim=table.storage.dim)
+            table.index.build_from_storage(all_vecs)
+
+
+def _dispatch_single_undo(tables: Dict[str, TableCatalog], act: Any) -> None:
+    tname = getattr(act, "table_name", "")
+    table = tables.get(tname)
+    if not table:
+        return
+    act_type = getattr(act, "action_type", "")
+    payload = getattr(act, "payload", {})
+    if act_type == "INSERT":
+        _undo_single_insert(table, payload)
+    elif act_type == "UPDATE":
+        _undo_single_update(table, payload)
+    elif act_type == "DELETE":
+        _undo_single_delete(table, payload)
+
+
+def _apply_undo_actions(
+    tables: Dict[str, TableCatalog], undo_actions: List[Any]
+) -> int:
+    for act in reversed(undo_actions):
+        _dispatch_single_undo(tables, act)
+    return len(undo_actions)
+
+
 class SQLExecutor:
     """
     Coordinates SQL parsing, access control enforcement, transaction staging,
@@ -2143,41 +2225,43 @@ class SQLExecutor:
             tcat.storage.write_all(vecs, tcat.storage.metadata)
             tcat.index = HNSWIndex(dim=tcat.storage.dim)
             tcat.index.build_from_storage(vecs)
+            tcat.invalidate_unique_sets()
 
-    def _restore_rollback_snapshot(self, snapshot: Optional[Dict[str, Any]]) -> None:
-        if not snapshot or not isinstance(snapshot, dict):
-            return
-        for tname, sdata in snapshot.items():
+    def _restore_legacy_snapshot(self, legacy: Dict[str, Any]) -> int:
+        for tname, sdata in legacy.items():
             self._restore_table_snapshot(tname, sdata)
+        return len(legacy)
+
+    def _restore_tuple_snapshot(
+        self, legacy_snapshot: Any, undo_actions: List[Any]
+    ) -> int:
+        if undo_actions:
+            return _apply_undo_actions(self.tables, undo_actions)
+        if isinstance(legacy_snapshot, dict):
+            return self._restore_legacy_snapshot(legacy_snapshot)
+        return 0
+
+    def _restore_rollback_snapshot(self, snapshot_res: Any) -> int:
+        if isinstance(snapshot_res, tuple):
+            return self._restore_tuple_snapshot(snapshot_res[0], snapshot_res[1])
+        if isinstance(snapshot_res, dict):
+            return self._restore_legacy_snapshot(snapshot_res)
+        return 0
 
     def _exec_begin_tx(self) -> Dict[str, Any]:
-        snapshot = {
-            tname: {
-                "meta": [dict(m) for m in tcat.storage.metadata],
-                "vecs": tcat.storage.get_all_vectors(),
-            }
-            for tname, tcat in self.tables.items()
-        }
-        self.tx_manager.begin(snapshot)
+        self.tx_manager.begin(None)
         return {"command": "BEGIN", "status": "ok", "message": "Transaction started"}
 
     def _capture_tables_snapshot(self) -> Dict[str, Any]:
-        return {
-            tname: {
-                "meta": [dict(m) for m in tcat.storage.metadata],
-                "vecs": tcat.storage.get_all_vectors(),
-            }
-            for tname, tcat in self.tables.items()
-        }
+        return {}
 
     def _exec_savepoint(self, stmt: SavepointStatement) -> Dict[str, Any]:
         if stmt.action == "SAVEPOINT":
-            snapshot = self._capture_tables_snapshot()
-            self.tx_manager.create_savepoint(stmt.name, snapshot)
+            self.tx_manager.create_savepoint(stmt.name, None)
             return {"command": "SAVEPOINT", "status": "ok", "name": stmt.name}
         if stmt.action == "ROLLBACK_TO":
-            rb_snapshot = self.tx_manager.rollback_to_savepoint(stmt.name)
-            self._restore_rollback_snapshot(rb_snapshot)
+            rb_res = self.tx_manager.rollback_to_savepoint(stmt.name)
+            self._restore_rollback_snapshot(rb_res)
             return {"command": "ROLLBACK_TO", "status": "ok", "name": stmt.name}
         if stmt.action == "RELEASE":
             self.tx_manager.release_savepoint(stmt.name)
@@ -2201,8 +2285,12 @@ class SQLExecutor:
             raise SQLOperationalError(
                 "cannot rollback - no transaction is active"
             ) from exc
-        self._restore_rollback_snapshot(snapshot_res)
-        return {"command": "ROLLBACK", "status": "ok", "mutations_reverted": 1}
+        reverted = self._restore_rollback_snapshot(snapshot_res)
+        return {
+            "command": "ROLLBACK",
+            "status": "ok",
+            "mutations_reverted": max(1, reverted),
+        }
 
     def _exec_tcl(self, stmt: SQLStatement) -> Dict[str, Any]:
         cmd = stmt.command_type
@@ -4116,11 +4204,14 @@ class SQLExecutor:
         self, table: TableCatalog, row: Dict[str, Any], stmt: InsertStatement
     ) -> Dict[str, Any]:
         vector = self._prepare_insert_vector(table, row)
+        idx = table.storage.append(vector, row)
         if self.tx_manager.is_active:
             self.tx_manager.stage_mutation(
                 "INSERT", {"table": stmt.table_name, "data": row}
             )
-        idx = table.storage.append(vector, row)
+            self.tx_manager.record_undo(
+                "INSERT", stmt.table_name, {"idx": idx, "row": dict(row)}
+            )
         if table.index is not None:
             table.index.add_item(idx, vector)
         return dict(row)
@@ -4391,6 +4482,10 @@ class SQLExecutor:
     ) -> Dict[str, Any]:
         meta = table.storage.metadata[idx]
         old_rec = dict(meta)
+        if self.tx_manager.is_active:
+            self.tx_manager.record_undo(
+                "UPDATE", stmt.table_name, {"idx": idx, "old_row": old_rec}
+            )
         self._fire_triggers(
             "BEFORE", "UPDATE", stmt.table_name, old_rec, effective_role
         )
@@ -4792,6 +4887,19 @@ class SQLExecutor:
             "deleted_count": len(matching),
         }
 
+    def _record_delete_undo(
+        self, table_name: str, table: TableCatalog, deleted: bool
+    ) -> None:
+        if self.tx_manager.is_active and deleted:
+            self.tx_manager.record_undo(
+                "DELETE",
+                table_name,
+                {
+                    "all_meta": [dict(m) for m in table.storage.metadata],
+                    "all_vecs": table.storage.get_all_vectors(),
+                },
+            )
+
     def _exec_delete(
         self, stmt: DeleteStatement, effective_role: str
     ) -> Dict[str, Any]:
@@ -4807,6 +4915,7 @@ class SQLExecutor:
         new_vecs, new_meta, deleted = self._split_live_and_deleted(
             table.storage, del_indices
         )
+        self._record_delete_undo(stmt.table_name, table, bool(deleted))
 
         self._validate_fk_delete_restrict(stmt.table_name, deleted)
         self._fire_record_list_triggers(

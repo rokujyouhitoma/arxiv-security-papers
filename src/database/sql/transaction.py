@@ -6,7 +6,7 @@ MVCC Snapshot Isolation, and SS2PL lock management.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..lock_manager import LockManager, LockMode
 from ..mvcc import MVCCManager, TransactionSnapshot
@@ -19,10 +19,18 @@ class TransactionError(Exception):
 
 
 @dataclass
+class UndoAction:
+    action_type: str
+    table_name: str
+    payload: Dict[str, Any]
+
+
+@dataclass
 class SavepointRecord:
     name: str
     mutation_count: int
     snapshot_state: Optional[Dict[str, Any]] = None
+    undo_index: int = 0
 
 
 class TransactionManager:
@@ -40,6 +48,7 @@ class TransactionManager:
         self.tx_id: int = 0
         self.isolation_level: str = "SNAPSHOT_ISOLATION"
         self._staged_mutations: List[Dict[str, Any]] = []
+        self._undo_actions: List[UndoAction] = []
         self._snapshot_state: Optional[Dict[str, Any]] = None
         self._savepoints: List[SavepointRecord] = []
         self.mvcc = mvcc_manager if mvcc_manager is not None else MVCCManager()
@@ -60,6 +69,7 @@ class TransactionManager:
         self.is_active = True
         self.isolation_level = isolation_level
         self._staged_mutations.clear()
+        self._undo_actions.clear()
         self._snapshot_state = current_state_snapshot
 
         if tx_id is None:
@@ -77,6 +87,18 @@ class TransactionManager:
         if not self.is_active:
             return
         self._staged_mutations.append({"type": mutation_type, "payload": payload})
+
+    def record_undo(
+        self, action_type: str, table_name: str, payload: Dict[str, Any]
+    ) -> None:
+        """Records an undo action for delta-rollback inside the active transaction."""
+        if not self.is_active:
+            return
+        self._undo_actions.append(UndoAction(action_type, table_name, payload))
+
+    def get_undo_actions(self) -> List[UndoAction]:
+        """Returns recorded undo actions."""
+        return list(self._undo_actions)
 
     def acquire_lock(
         self, resource_id: str, mode: LockMode = LockMode.SHARED, timeout: float = 2.0
@@ -101,28 +123,32 @@ class TransactionManager:
 
         self.is_active = False
         self._staged_mutations.clear()
+        self._undo_actions.clear()
         self._savepoints.clear()
         self._snapshot_state = None
         self._current_snapshot = None
         return mutations
 
-    def rollback(self) -> Optional[Dict[str, Any]]:
+    def rollback(self) -> Tuple[Optional[Dict[str, Any]], List[UndoAction]]:
         """
         Aborts active transaction, reverting MVCC versions and releasing all SS2PL locks.
+        Returns a tuple of (snapshot_state, undo_actions).
         """
         if not self.is_active:
             raise TransactionError("No active transaction to rollback")
 
         snapshot = self._snapshot_state
+        revert_actions = list(self._undo_actions)
         self.mvcc.abort_transaction(self.tx_id)
         self.lock_mgr.release_all_locks(self.tx_id)
 
         self.is_active = False
         self._staged_mutations.clear()
+        self._undo_actions.clear()
         self._savepoints.clear()
         self._snapshot_state = None
         self._current_snapshot = None
-        return snapshot
+        return snapshot, revert_actions
 
     def create_savepoint(
         self, name: str, current_state_snapshot: Optional[Dict[str, Any]] = None
@@ -134,6 +160,7 @@ class TransactionManager:
             name=name,
             mutation_count=len(self._staged_mutations),
             snapshot_state=current_state_snapshot,
+            undo_index=len(self._undo_actions),
         )
         self._savepoints.append(sp)
 
@@ -143,7 +170,9 @@ class TransactionManager:
                 return idx
         raise TransactionError(f"No such savepoint: {name}")
 
-    def rollback_to_savepoint(self, name: str) -> Optional[Dict[str, Any]]:
+    def rollback_to_savepoint(
+        self, name: str
+    ) -> Tuple[Optional[Dict[str, Any]], List[UndoAction]]:
         """Rolls back staged mutations and table state to the named savepoint."""
         if not self.is_active:
             raise TransactionError("No active transaction for savepoint rollback")
@@ -151,7 +180,9 @@ class TransactionManager:
         target = self._savepoints[idx]
         self._savepoints = self._savepoints[: idx + 1]
         self._staged_mutations = self._staged_mutations[: target.mutation_count]
-        return target.snapshot_state
+        revert_actions = self._undo_actions[target.undo_index :]
+        self._undo_actions = self._undo_actions[: target.undo_index]
+        return target.snapshot_state, revert_actions
 
     def release_savepoint(self, name: str) -> None:
         """Releases the named savepoint and all later savepoints."""

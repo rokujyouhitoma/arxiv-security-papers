@@ -36,6 +36,8 @@ _EXT_MAP = {
     ".csv": "csv_table",
     ".md": "file_plain_text",
     ".txt": "file_plain_text",
+    ".slotted": "slotted",
+    ".page": "slotted",
 }
 
 
@@ -127,7 +129,18 @@ class StorageEngineFactory:
         cls._registry["file_plain_text"] = cls._create_plain_text
         cls._registry["text"] = cls._create_plain_text
         cls._registry["fts5"] = cls._create_fts5
+        cls._registry["slotted"] = cls._create_slotted_page
+        cls._registry["slotted_page"] = cls._create_slotted_page
+        cls._registry["pager"] = cls._create_slotted_page
         cls._initialized = True
+
+    @staticmethod
+    def _create_slotted_page(location: Optional[str], **kwargs: Any) -> Any:
+        from .slotted_page_storage import SlottedPageStorage
+
+        loc = _extract_storage_loc(location, kwargs, ":memory:")
+        dim = int(kwargs.get("dim", 128))
+        return SlottedPageStorage(file_path=loc, dim=dim)
 
     @staticmethod
     def _create_fts5(location: Optional[str], **kwargs: Any) -> Any:

@@ -72,6 +72,9 @@ _ALLOWED_ENGINES: set[str] = {
     "fts5",
     "csv_table",
     "csv",
+    "slotted",
+    "slotted_page",
+    "pager",
 }
 
 
