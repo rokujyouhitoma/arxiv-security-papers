@@ -118,6 +118,7 @@ class SQLExprParser(Parser[Any]):
         self._r_func_list_args = RuleRef("func_list_args")
         self._r_distinct_kw = RuleRef("distinct_kw")
         self._r_literal_expr = RuleRef("literal_expr")
+        self._r_placeholder_lit = RuleRef("placeholder_lit")
         self._r_bool_lit = RuleRef("bool_lit")
         self._r_null_lit = RuleRef("null_lit")
         self._r_number_lit = RuleRef("number_lit")
@@ -429,37 +430,39 @@ class SQLExprParser(Parser[Any]):
                 self._r_null_lit,
                 self._r_number_lit,
                 self._r_string_lit,
+                self._r_placeholder_lit,
             )
         )
+        self._r_placeholder_lit.define(Lit("?").map(self._action_placeholder_lit_36))
         self._r_bool_lit.define(
             Choice(
-                Reg("(?i)\\bTRUE\\b").map(self._action_bool_lit_36),
-                Reg("(?i)\\bFALSE\\b").map(self._action_bool_lit_37),
+                Reg("(?i)\\bTRUE\\b").map(self._action_bool_lit_37),
+                Reg("(?i)\\bFALSE\\b").map(self._action_bool_lit_38),
             )
         )
-        self._r_null_lit.define(Reg("(?i)\\bNULL\\b").map(self._action_null_lit_38))
+        self._r_null_lit.define(Reg("(?i)\\bNULL\\b").map(self._action_null_lit_39))
         self._r_number_lit.define(
             Choice(
-                self._r_float_val.map(self._action_number_lit_39),
-                self._r_int_val.map(self._action_number_lit_40),
+                self._r_float_val.map(self._action_number_lit_40),
+                self._r_int_val.map(self._action_number_lit_41),
             )
         )
-        self._r_float_val.define(Reg("[0-9]+\\.[0-9]+").map(self._action_float_val_41))
-        self._r_int_val.define(Reg("[0-9]+").map(self._action_int_val_42))
+        self._r_float_val.define(Reg("[0-9]+\\.[0-9]+").map(self._action_float_val_42))
+        self._r_int_val.define(Reg("[0-9]+").map(self._action_int_val_43))
         self._r_string_lit.define(
             Choice(self._r_single_string_lit, self._r_double_string_lit)
         )
         self._r_single_string_lit.define(
-            Reg("'(''|[^'])*'").map(self._action_single_string_lit_43)
+            Reg("'(''|[^'])*'").map(self._action_single_string_lit_44)
         )
         self._r_double_string_lit.define(
-            Reg('"(""|[^"])*"').map(self._action_double_string_lit_44)
+            Reg('"(""|[^"])*"').map(self._action_double_string_lit_45)
         )
         self._r_column_ref_expr.define(
             Seq(
                 Opt(
                     Seq(self._r_ident, self._r_opt_ws, Lit("."), self._r_opt_ws).map(
-                        self._action_column_ref_expr_45
+                        self._action_column_ref_expr_46
                     )
                 ),
                 self._r_ident,
@@ -469,14 +472,14 @@ class SQLExprParser(Parser[Any]):
                         Lit("->>"),
                         self._r_opt_ws,
                         self._r_json_path_lit,
-                    ).map(self._action_column_ref_expr_46)
+                    ).map(self._action_column_ref_expr_47)
                 ),
-            ).map(self._action_column_ref_expr_47)
+            ).map(self._action_column_ref_expr_48)
         )
         self._r_json_path_lit.define(
             Choice(
-                Reg("'[^']*'").map(self._action_json_path_lit_48),
-                Reg('"[^"]*"').map(self._action_json_path_lit_49),
+                Reg("'[^']*'").map(self._action_json_path_lit_49),
+                Reg('"[^"]*"').map(self._action_json_path_lit_50),
             )
         )
         self._r_ident.define(Reg("[a-zA-Z_][a-zA-Z0-9_]*"))
@@ -720,72 +723,76 @@ class SQLExprParser(Parser[Any]):
         return (False, bool(dist), args)
 
     @staticmethod
-    def _action_bool_lit_36(val: Any) -> Any:
-        return LiteralExpr(True)
+    def _action_placeholder_lit_36(val: Any) -> Any:
+        return LiteralExpr("?")
 
     @staticmethod
     def _action_bool_lit_37(val: Any) -> Any:
+        return LiteralExpr(True)
+
+    @staticmethod
+    def _action_bool_lit_38(val: Any) -> Any:
         return LiteralExpr(False)
 
     @staticmethod
-    def _action_null_lit_38(val: Any) -> Any:
+    def _action_null_lit_39(val: Any) -> Any:
         return LiteralExpr(None)
 
     @staticmethod
-    def _action_number_lit_39(val: Any) -> Any:
+    def _action_number_lit_40(val: Any) -> Any:
         f = val
         return LiteralExpr(f)
 
     @staticmethod
-    def _action_number_lit_40(val: Any) -> Any:
+    def _action_number_lit_41(val: Any) -> Any:
         i = val
         return LiteralExpr(i)
 
     @staticmethod
-    def _action_float_val_41(val: Any) -> Any:
+    def _action_float_val_42(val: Any) -> Any:
         raw = val
         return float(raw)
 
     @staticmethod
-    def _action_int_val_42(val: Any) -> Any:
+    def _action_int_val_43(val: Any) -> Any:
         raw = val
         return int(raw)
 
     @staticmethod
-    def _action_single_string_lit_43(val: Any) -> Any:
+    def _action_single_string_lit_44(val: Any) -> Any:
         raw = val
         s = raw[1:-1].replace("''", "'")
         return LiteralExpr(s)
 
     @staticmethod
-    def _action_double_string_lit_44(val: Any) -> Any:
+    def _action_double_string_lit_45(val: Any) -> Any:
         raw = val
         s = raw[1:-1].replace('""', '"')
         return LiteralExpr(s)
 
     @staticmethod
-    def _action_column_ref_expr_45(val: Any) -> Any:
+    def _action_column_ref_expr_46(val: Any) -> Any:
         id1 = val[0]
         return id1
 
     @staticmethod
-    def _action_column_ref_expr_46(val: Any) -> Any:
+    def _action_column_ref_expr_47(val: Any) -> Any:
         p = val[3]
         return p
 
     @staticmethod
-    def _action_column_ref_expr_47(val: Any) -> Any:
+    def _action_column_ref_expr_48(val: Any) -> Any:
         tbl = val[0]
         col = val[1]
         json_p = val[2]
         return ColumnRefExpr(column=col, table=tbl, json_path=json_p)
 
     @staticmethod
-    def _action_json_path_lit_48(val: Any) -> Any:
+    def _action_json_path_lit_49(val: Any) -> Any:
         raw = val
         return raw.strip("'")
 
     @staticmethod
-    def _action_json_path_lit_49(val: Any) -> Any:
+    def _action_json_path_lit_50(val: Any) -> Any:
         raw = val
         return raw.strip('"')

@@ -143,15 +143,17 @@ def _humanize_token(token: str) -> str:
     return token
 
 
-_IGNORABLE_PREFIXES = ("[ \\t\\r\\n]*", "[ \\t\\r\\n]+|#", "[ \\t\\r\\n]*|#")
+_IGNORABLE_PREFIXES: Tuple[str, ...] = (
+    "[ \\t\\r\\n]*",
+    "[ \\t\\r\\n]+|#",
+    "[ \\t\\r\\n]*|#",
+)
 
 
 def _is_ignorable_expected_token(token: str) -> bool:
     """Checks if a pattern is internal optional whitespace or meaningless token."""
     stripped = token.strip()
-    if not stripped:
-        return True
-    return any(stripped.startswith(p) for p in _IGNORABLE_PREFIXES)
+    return not stripped or stripped.startswith(_IGNORABLE_PREFIXES)
 
 
 def _levenshtein_step(c1: str, s2: str, prev_row: List[int], i: int) -> List[int]:

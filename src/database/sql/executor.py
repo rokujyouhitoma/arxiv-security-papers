@@ -4,6 +4,7 @@ SQL Execution Engine for Pure Python Vector Database.
 Evaluates DDL, DQL, DML, DCL, and TCL AST nodes against underlying vector storages and schemas.
 """
 
+import copy
 import fnmatch
 import functools
 import json
@@ -11,7 +12,7 @@ import logging
 import math
 import os
 import re
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from ..btree import BPlusTree
 from ..embedding import DeterministicEmbedding
@@ -55,7 +56,7 @@ from .ast import (
 )
 from .functions import BUILTIN_FUNCTIONS
 from .json_tree import iter_json_each, iter_json_tree
-from .parser import SQLParser, _split_comma_expressions
+from .parser import SQLParser, _split_comma_expressions, parse_sql
 from .security import AccessController
 from .transaction import TransactionManager
 from .window import compute_window_functions, extract_window_functions
@@ -794,22 +795,29 @@ def _extract_complex_expr(record: Dict[str, Any], expr: str) -> Any:
     return _eval_extended_ops(record, expr)
 
 
+def _extract_direct_or_literal(record: Dict[str, Any], expr: str) -> Tuple[bool, Any]:
+    if not expr:
+        return True, None
+    s = expr.strip()
+    if s in record:
+        return True, record[s]
+    if s.upper() == "NULL":
+        return True, None
+    lit = _extract_literal(s)
+    if lit is not None:
+        return True, lit
+    return False, s
+
+
 def _extract_field_value(record: Dict[str, Any], expr: str) -> Any:
     """Extracts value from record supporting literals, functions, CASE, arithmetic, and JSON."""
-    if not expr:
-        return None
-    expr = expr.strip()
-    # Handle NULL keyword explicitly (cannot go through _extract_literal because
-    # that returns None which is indistinguishable from "not a literal").
-    if expr.upper() == "NULL":
-        return None
-    lit = _extract_literal(expr)
-    if lit is not None:
-        return lit
-    c_val = _extract_complex_expr(record, expr)
+    found, val = _extract_direct_or_literal(record, expr)
+    if found:
+        return val
+    c_val = _extract_complex_expr(record, val)
     if c_val is not None:
         return c_val
-    return _lookup_record_col(record, expr)
+    return _lookup_record_col(record, val)
 
 
 def _eval_numeric_rel(op: str, act_f: float, exp_f: float) -> bool:
@@ -1687,6 +1695,150 @@ def _filter_having_rows(
     return [r for r in rows if _matches_having(r, having_expr)]
 
 
+def _bind_list_val(val: List[Any], param_iter: Any) -> List[Any]:
+    out = []
+    for v in val:
+        out.append(next(param_iter) if v == "?" else v)
+    return out
+
+
+def _bind_single_val(val: Any, param_iter: Any) -> Any:
+    if val == "?":
+        return next(param_iter)
+    if isinstance(val, list):
+        return _bind_list_val(val, param_iter)
+    return val
+
+
+def _bind_single_clause(c: Dict[str, Any], param_iter: Any) -> Dict[str, Any]:
+    if c.get("logic") == "OR_BRANCH":
+        sub_clauses = c.get("clauses", [])
+        bound_sub = [_bind_single_clause(sub_c, param_iter) for sub_c in sub_clauses]
+        return {**c, "clauses": bound_sub}
+    return {**c, "value": _bind_single_val(c.get("value"), param_iter)}
+
+
+def _bind_insert_rows(
+    stmt: InsertStatement, param_iter: Any, sc: InsertStatement
+) -> None:
+    sc.rows_values = [
+        [next(param_iter) if v == "?" else v for v in row] for row in stmt.rows_values
+    ]
+    if stmt.values:
+        sc.values = list(sc.rows_values[0])
+
+
+def _bind_insert_values(
+    stmt: InsertStatement, param_iter: Any, sc: InsertStatement
+) -> None:
+    sc.values = [next(param_iter) if v == "?" else v for v in stmt.values]
+    if stmt.rows_values:
+        sc.rows_values = [list(sc.values)]
+
+
+def _bind_insert_stmt(stmt: InsertStatement, param_iter: Any) -> InsertStatement:
+    sc = copy.copy(stmt)
+    if stmt.rows_values:
+        _bind_insert_rows(stmt, param_iter, sc)
+    elif stmt.values:
+        _bind_insert_values(stmt, param_iter, sc)
+    return sc
+
+
+def _bind_int_placeholder(val: Any, param_iter: Any) -> Optional[int]:
+    if val == "?":
+        return int(next(param_iter))
+    return int(val) if isinstance(val, int) else None
+
+
+def _bind_select_stmt(stmt: SelectStatement, param_iter: Any) -> SelectStatement:
+    sc = copy.copy(stmt)
+    if stmt.where_clauses:
+        sc.where_clauses = [
+            _bind_single_clause(c, param_iter) for c in stmt.where_clauses
+        ]
+    sc.limit = _bind_int_placeholder(getattr(sc, "limit", None), param_iter)
+    sc.offset = _bind_int_placeholder(getattr(sc, "offset", None), param_iter)
+    return sc
+
+
+def _bind_assignments(assignments: Dict[str, Any], param_iter: Any) -> Dict[str, Any]:
+    return {k: (next(param_iter) if v == "?" else v) for k, v in assignments.items()}
+
+
+def _bind_update_stmt(stmt: UpdateStatement, param_iter: Any) -> UpdateStatement:
+    sc = copy.copy(stmt)
+    if stmt.assignments:
+        sc.assignments = _bind_assignments(stmt.assignments, param_iter)
+    if stmt.where_clauses:
+        sc.where_clauses = [
+            _bind_single_clause(c, param_iter) for c in stmt.where_clauses
+        ]
+    sc.limit = _bind_int_placeholder(getattr(sc, "limit", None), param_iter)
+    return sc
+
+
+def _bind_delete_stmt(stmt: DeleteStatement, param_iter: Any) -> DeleteStatement:
+    sc = copy.copy(stmt)
+    if stmt.where_clauses:
+        sc.where_clauses = [
+            _bind_single_clause(c, param_iter) for c in stmt.where_clauses
+        ]
+    sc.limit = _bind_int_placeholder(getattr(sc, "limit", None), param_iter)
+    return sc
+
+
+def _bind_statement_params(stmt: SQLStatement, params: Sequence[Any]) -> SQLStatement:
+    param_iter = iter(params)
+    if isinstance(stmt, InsertStatement):
+        return _bind_insert_stmt(stmt, param_iter)
+    if isinstance(stmt, SelectStatement):
+        return _bind_select_stmt(stmt, param_iter)
+    if isinstance(stmt, UpdateStatement):
+        return _bind_update_stmt(stmt, param_iter)
+    if isinstance(stmt, DeleteStatement):
+        return _bind_delete_stmt(stmt, param_iter)
+    return stmt
+
+
+def _format_fallback_sequence(p: Any) -> Optional[str]:
+    if isinstance(p, (list, tuple)):
+        return str(list(p))
+    return None
+
+
+def _format_fallback_primitive(p: Any) -> Optional[str]:
+    if p is None:
+        return "NULL"
+    if isinstance(p, bool):
+        return "TRUE" if p else "FALSE"
+    if isinstance(p, (int, float)):
+        return str(p)
+    return None
+
+
+def _format_fallback_param(p: Any) -> str:
+    prim = _format_fallback_primitive(p)
+    if prim is not None:
+        return prim
+    seq = _format_fallback_sequence(p)
+    if seq is not None:
+        return seq
+    if isinstance(p, dict):
+        return f"'{json.dumps(p, ensure_ascii=False)}'"
+    escaped = str(p).replace("'", "''")
+    return f"'{escaped}'"
+
+
+def _bind_params_fallback(sql: str, params: Optional[Sequence[Any]]) -> str:
+    if not params:
+        return sql
+    query = sql
+    for p in params:
+        query = query.replace("?", _format_fallback_param(p), 1)
+    return query
+
+
 class SQLExecutor:
     """
     Coordinates SQL parsing, access control enforcement, transaction staging,
@@ -1779,15 +1931,38 @@ class SQLExecutor:
                 index=default_index or HNSWIndex(dim=default_storage.dim),
             )
 
+    def _resolve_exec_params(
+        self, params: Optional[Union[Sequence[Any], Dict[str, Any]]]
+    ) -> Optional[Sequence[Any]]:
+        if not params:
+            return None
+        if isinstance(params, dict):
+            p = params.get("params") or params.get("query_params")
+            return p if isinstance(p, Sequence) else None
+        return params
+
+    def _parse_and_bind_stmt(
+        self, sql: str, params: Optional[Sequence[Any]]
+    ) -> SQLStatement:
+        if not params:
+            return parse_sql(sql)
+        if "KNN(" in sql.upper():
+            return parse_sql(_bind_params_fallback(sql, params))
+        try:
+            return _bind_statement_params(parse_sql(sql), params)
+        except Exception:
+            return parse_sql(_bind_params_fallback(sql, params))
+
     def execute(
         self,
         sql: str,
         role: Optional[str] = None,
-        params: Optional[Dict[str, Any]] = None,
+        params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         effective_role = role or self.access_controller.current_role
         logger.info("⚡ [SQL Exec] [%s] %s", effective_role, sql.strip())
-        stmt = self.parser.parse(sql)
+        seq_params = self._resolve_exec_params(params)
+        stmt = self._parse_and_bind_stmt(sql, seq_params)
         return self.execute_statement(stmt, role=effective_role)
 
     def _restore_table_snapshot(self, tname: str, sdata: Dict[str, Any]) -> None:

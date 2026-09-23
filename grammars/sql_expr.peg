@@ -234,6 +234,9 @@ literal_expr <-
     / null_lit
     / number_lit
     / string_lit
+    / placeholder_lit
+
+placeholder_lit <- "?" { return LiteralExpr("?") }
 
 bool_lit <- /(?i)\bTRUE\b/ { return LiteralExpr(True) }
           / /(?i)\bFALSE\b/ { return LiteralExpr(False) }

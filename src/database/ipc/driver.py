@@ -124,8 +124,7 @@ class Cursor:
         """Executes a SQL query with optional positional parameter bindings."""
         if self._connection.is_closed:
             raise OperationalError("Connection is closed")
-        query = _bind_params(sql, params)
-        resp = self._connection._execute_query(query)
+        resp = self._connection._execute_query(sql, params=params)
         if resp.get("status") != "ok":
             self._raise_db_error(resp)
         self._update_cursor_metadata(resp.get("result", {}))
@@ -133,8 +132,12 @@ class Cursor:
 
     def executemany(self, sql: str, seq_of_params: Sequence[Sequence[Any]]) -> "Cursor":
         """Executes a prepared SQL query against a sequence of parameter tuples."""
+        total_rowcount = 0
         for params in seq_of_params:
             self.execute(sql, params)
+            if self.rowcount > 0:
+                total_rowcount += self.rowcount
+        self.rowcount = total_rowcount if total_rowcount > 0 else -1
         return self
 
     def fetchone(self) -> Optional[Tuple[Any, ...]]:
@@ -267,11 +270,14 @@ class Connection:
             "error_type": "ProgrammingError",
         }
 
-    def _execute_query(self, query: str) -> Dict[str, Any]:
+    def _execute_query(
+        self, query: str, params: Optional[Sequence[Any]] = None
+    ) -> Dict[str, Any]:
         if self._client is not None:
-            return self._client.execute_sql(query, role=self.role)  # type: ignore[no-any-return]
+            bound = _bind_params(query, params) if params else query
+            return self._client.execute_sql(bound, role=self.role)  # type: ignore[no-any-return]
         try:
-            res = self._executor.execute(query, role=self.role)
+            res = self._executor.execute(query, role=self.role, params=params)
             return {"status": "ok", "result": res}
         except Exception as exc:
             return self._map_execution_error(exc)
