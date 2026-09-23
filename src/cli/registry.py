@@ -56,6 +56,13 @@ def _load_dbsync() -> Type[BaseCommand]:
     return DatabaseSyncCommand
 
 
+def _load_migrations() -> Type[BaseCommand]:
+    from database.migrations.cli import MigrationsCommand
+
+    cmd_cls: Type[BaseCommand] = MigrationsCommand
+    return cmd_cls
+
+
 _BUILTINS_REGISTERED = False
 
 
@@ -67,4 +74,5 @@ def _ensure_builtins() -> None:
     _COMMAND_LOADERS["tables"] = _load_tables
     _COMMAND_LOADERS["inspect"] = _load_inspect
     _COMMAND_LOADERS["dbsync"] = _load_dbsync
+    _COMMAND_LOADERS["migrations"] = _load_migrations
     _BUILTINS_REGISTERED = True

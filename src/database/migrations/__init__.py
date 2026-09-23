@@ -6,6 +6,7 @@ and Secondary (sqlite3) database backends.
 Conforms to DSN-30 specification.
 """
 
+from .cli import MigrationsCommand
 from .connection import DatabaseAdapter, PyDBAdapter, SQLiteAdapter, get_adapter
 from .inspector import SchemaInspector
 from .manager import MigrationManager
@@ -35,6 +36,7 @@ __all__ = [
     "MigrationRecord",
     "MigrationRunner",
     "MigrationStatus",
+    "MigrationsCommand",
     "PyDBAdapter",
     "SQLiteAdapter",
     "SchemaInspector",
