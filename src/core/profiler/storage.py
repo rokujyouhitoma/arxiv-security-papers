@@ -56,15 +56,19 @@ class SubroutineMetric:
     calls: int = 0
     inclusive_time_ns: int = 0
     exclusive_time_ns: int = 0
+    suspend_time_ns: int = 0
     # 呼び出し元一覧: caller_name -> (calls, inclusive_ns, exclusive_ns)
     callers: Dict[str, List[int]] = field(default_factory=dict)
     # 呼び出し先一覧: callee_name -> (calls, inclusive_ns, exclusive_ns)
     callees: Dict[str, List[int]] = field(default_factory=dict)
 
-    def record_call(self, caller: str, inc_ns: int, exc_ns: int) -> None:
+    def record_call(
+        self, caller: str, inc_ns: int, exc_ns: int, suspend_ns: int = 0
+    ) -> None:
         self.calls += 1
         self.inclusive_time_ns += inc_ns
         self.exclusive_time_ns += exc_ns
+        self.suspend_time_ns += suspend_ns
         if caller not in self.callers:
             self.callers[caller] = [0, 0, 0]
         self.callers[caller][0] += 1
@@ -170,6 +174,7 @@ class ProfileData:
         caller_name: str,
         inclusive_ns: int,
         exclusive_ns: int,
+        suspend_ns: int = 0,
     ) -> None:
         """サブルーチン終了時のメトリクスを加算"""
         if sub_name not in self.subroutines:
@@ -178,7 +183,7 @@ class ProfileData:
             )
         sub = self.subroutines[sub_name]
         self._update_sub_location(sub, filename, first_line)
-        sub.record_call(caller_name, inclusive_ns, exclusive_ns)
+        sub.record_call(caller_name, inclusive_ns, exclusive_ns, suspend_ns)
 
         self._record_callee(caller_name, sub_name, inclusive_ns, exclusive_ns)
         self._record_arc(caller_name, sub_name, inclusive_ns, exclusive_ns)
@@ -216,6 +221,7 @@ class ProfileData:
                 "calls": sub.calls,
                 "inclusive_time_ns": sub.inclusive_time_ns,
                 "exclusive_time_ns": sub.exclusive_time_ns,
+                "suspend_time_ns": sub.suspend_time_ns,
                 "callers": sub.callers,
                 "callees": sub.callees,
             }
@@ -264,6 +270,7 @@ class ProfileData:
                 calls=s_dict.get("calls", 0),
                 inclusive_time_ns=s_dict.get("inclusive_time_ns", 0),
                 exclusive_time_ns=s_dict.get("exclusive_time_ns", 0),
+                suspend_time_ns=s_dict.get("suspend_time_ns", 0),
                 callers=s_dict.get("callers", {}),
                 callees=s_dict.get("callees", {}),
             )

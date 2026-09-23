@@ -35,6 +35,35 @@ class CallFrame:
     caller_name: str = ""
     last_line_no: int = 0
     last_line_time_ns: int = 0
+    task_id: int = 0
+    frame_id: int = 0
+    is_coroutine: bool = False
+    suspend_start_ns: int = 0
+    accumulated_suspend_ns: int = 0
+
+
+def _get_current_async_task_id() -> int:
+    """現在の asyncio タスク ID を取得 (非同期実行外では 0)"""
+    try:
+        import asyncio
+
+        loop = asyncio._get_running_loop()
+        if loop is not None:
+            task = asyncio.current_task(loop)
+            if task is not None:
+                return id(task)
+    except Exception:
+        pass
+    return 0
+
+
+def _resume_task_suspend_time(
+    stack: List[CallFrame], prev_start: Optional[int], now_ns: int
+) -> None:
+    """復帰したタスクの最上位フレームに中断時間を累積加算"""
+    if prev_start is not None and stack:
+        delta = now_ns - prev_start
+        stack[-1].accumulated_suspend_ns += delta
 
 
 class ProfilerEngine:
@@ -75,6 +104,12 @@ class ProfilerEngine:
         self._start_time_iso = ""
         self._start_time_ns = 0
 
+        # asyncio コルーチン / タスク別追跡用データ構造 (DSN-28 Phase 9)
+        self._current_task_id: int = 0
+        self._task_last_switch_ns: Dict[int, int] = {}
+        self._task_stacks: Dict[int, List[CallFrame]] = {}
+        self._suspended_coros: Dict[int, CallFrame] = {}
+
     def start(self) -> None:
         """プロファイリングを開始（初期化およびトレーサの有効化）"""
         if self.is_active:
@@ -94,6 +129,10 @@ class ProfilerEngine:
         )
         self.profile_data = ProfileData(metadata=meta)
         self.call_stack.clear()
+        self._task_stacks.clear()
+        self._task_last_switch_ns.clear()
+        self._suspended_coros.clear()
+        self._current_task_id = 0
 
         # ルートフレームの初期化
         root_frame = CallFrame(
@@ -104,8 +143,10 @@ class ProfilerEngine:
             caller_name="",
             last_line_no=0,
             last_line_time_ns=self._start_time_ns,
+            task_id=0,
         )
         self.call_stack.append(root_frame)
+        self._task_stacks[0] = self.call_stack
 
         self.is_active = True
         self.is_enabled = True
@@ -128,19 +169,35 @@ class ProfilerEngine:
         while len(self.call_stack) > 1:
             self._pop_frame(now_ns)
 
+        # 残存した中断コルーチンの安全な清算
+        for frame in list(self._suspended_coros.values()):
+            self.call_stack.append(frame)
+            self._pop_frame(now_ns)
+        self._suspended_coros.clear()
+
         if self.call_stack:
             root = self.call_stack.pop()
             root_inc = now_ns - root.entry_time_ns
             root_exc = max(0, root_inc - root.children_time_ns)
             if self.profile_data:
                 self.profile_data.record_subroutine_exit(
-                    sub_name="<root>",
-                    filename="<root>",
-                    first_line=0,
+                    sub_name=root.sub_name,
+                    filename=root.filename,
+                    first_line=root.first_line,
                     caller_name="",
                     inclusive_ns=root_inc,
                     exclusive_ns=root_exc,
+                    suspend_ns=root.accumulated_suspend_ns,
                 )
+
+    def _unwind_all_task_stacks(self, now_ns: int) -> None:
+        """全タスクのコールスタックをアンワインド (DSN-28 Phase 9)"""
+        for stack in list(self._task_stacks.values()):
+            self.call_stack = stack
+            self._unwind_call_stack(now_ns)
+        self._task_stacks.clear()
+        self._task_last_switch_ns.clear()
+        self._current_task_id = 0
 
     @staticmethod
     def _is_valid_source_path(path: str) -> bool:
@@ -180,7 +237,7 @@ class ProfilerEngine:
 
         sys.settrace(None)
         now_ns = time.perf_counter_ns()
-        self._unwind_call_stack(now_ns)
+        self._unwind_all_task_stacks(now_ns)
 
         self.is_active = False
         self.is_enabled = False
@@ -241,7 +298,7 @@ class ProfilerEngine:
         if event == "call":
             self._handle_call(frame, now_ns)
         elif event == "return":
-            self._handle_return(now_ns)
+            self._handle_return(frame, now_ns)
         elif event == "line" and self._should_trace_line(co_filename):
             self._handle_line(frame, now_ns)
 
@@ -254,6 +311,32 @@ class ProfilerEngine:
         elif event in ("c_return", "c_exception"):
             self._handle_c_return(now_ns)
 
+    def _switch_task_stack_if_needed(self, now_ns: int) -> None:
+        """現在の asyncio タスクを検出し、必要に応じてスタックを切り替える"""
+        tid = _get_current_async_task_id()
+        if tid == self._current_task_id:
+            return
+
+        old_tid = self._current_task_id
+        self._task_stacks[old_tid] = self.call_stack
+        self._task_last_switch_ns[old_tid] = now_ns
+
+        self._current_task_id = tid
+        if tid not in self._task_stacks:
+            label = "<root>" if tid == 0 else f"<task_{tid}>"
+            self._task_stacks[tid] = [
+                CallFrame(
+                    sub_name=label,
+                    filename="<asyncio>" if tid != 0 else "<root>",
+                    first_line=0,
+                    entry_time_ns=now_ns,
+                    task_id=tid,
+                )
+            ]
+        self.call_stack = self._task_stacks[tid]
+        prev_start = self._task_last_switch_ns.pop(tid, None)
+        _resume_task_suspend_time(self.call_stack, prev_start, now_ns)
+
     def _trace_dispatch(self, frame: Any, event: str, arg: Any) -> Any:
         """sys.settrace コールバックディスパッチャ"""
         if not self.is_enabled:
@@ -264,6 +347,7 @@ class ProfilerEngine:
             return None
 
         now_ns = time.perf_counter_ns()
+        self._switch_task_stack_if_needed(now_ns)
         self._dispatch_py_event(event, frame, now_ns, co_filename)
         self._dispatch_c_event(event, arg, now_ns)
         return self._trace_dispatch
@@ -271,6 +355,18 @@ class ProfilerEngine:
     def _handle_call(self, frame: Any, now_ns: int) -> None:
         """関数呼び出しイベント"""
         code = frame.f_code
+        fid = id(frame)
+        is_coro = bool(code.co_flags & 0x280)
+
+        # 中断されたコルーチンの再開 (Resume)
+        if is_coro and fid in self._suspended_coros:
+            resumed = self._suspended_coros.pop(fid)
+            suspend_delta = now_ns - resumed.suspend_start_ns
+            resumed.accumulated_suspend_ns += max(0, suspend_delta)
+            resumed.last_line_time_ns = now_ns
+            self.call_stack.append(resumed)
+            return
+
         sub_name = self._get_sub_name(frame)
         caller_name = self.call_stack[-1].sub_name if self.call_stack else "<root>"
 
@@ -283,13 +379,32 @@ class ProfilerEngine:
             caller_name=caller_name,
             last_line_no=frame.f_lineno,
             last_line_time_ns=now_ns,
+            task_id=self._current_task_id,
+            frame_id=fid,
+            is_coroutine=is_coro,
         )
         self.call_stack.append(call_frame)
 
-    def _handle_return(self, now_ns: int) -> None:
+    def _handle_return(self, frame: Any, now_ns: int) -> None:
         """関数復帰イベント"""
-        if len(self.call_stack) > 1:
-            self._pop_frame(now_ns)
+        if len(self.call_stack) <= 1:
+            return
+
+        top = self.call_stack[-1]
+        code = frame.f_code
+        is_coro = bool(code.co_flags & 0x280)
+
+        # コルーチンの中断 (Suspend / Await)
+        if (
+            is_coro
+            and top.frame_id == id(frame)
+            and frame.f_lasti < len(code.co_code) - 10
+        ):
+            top.suspend_start_ns = now_ns
+            self._suspended_coros[id(frame)] = self.call_stack.pop()
+            return
+
+        self._pop_frame(now_ns)
 
     def _record_line_delta(
         self, top: CallFrame, line_no: int, filename: str, delta_ns: int
@@ -364,11 +479,13 @@ class ProfilerEngine:
         self._finalize_frame_line(frame, now_ns)
 
         inclusive_ns = now_ns - frame.entry_time_ns
-        exclusive_ns = max(0, inclusive_ns - frame.children_time_ns)
+        suspend_ns = frame.accumulated_suspend_ns
+        exclusive_ns = max(0, inclusive_ns - frame.children_time_ns - suspend_ns)
 
         if self.call_stack:
             parent = self.call_stack[-1]
             parent.children_time_ns += inclusive_ns
+            parent.accumulated_suspend_ns += suspend_ns
             parent.last_line_time_ns = now_ns
 
         if self.profile_data:
@@ -379,5 +496,6 @@ class ProfilerEngine:
                 caller_name=frame.caller_name,
                 inclusive_ns=inclusive_ns,
                 exclusive_ns=exclusive_ns,
+                suspend_ns=suspend_ns,
             )
             self._record_stack_stream(frame, inclusive_ns)

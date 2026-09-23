@@ -613,7 +613,7 @@ graph TD
 | **Phase 6** **[NEW]** | `diff.py` | 差分プロファイリングエンジン、退行/改善 HTML Diff レポート、SubDiff/LineDiff、ノイズフィルタリング | ✅ 完了 | Issue 374 |
 | **Phase 7** **[NEW]** | `sampling.py` | SIGPROF / threading.Timer サンプリングエンジン、`SamplingProfiler` コンテキストマネージャ | ✅ 完了 | Issue 375 |
 | **Phase 8** **[NEW]** | `cli.py` `tools/` `tests/` | CLI 差分サブコマンド、Trace フィルタ、包括的テストスイート (`test_diff`, `test_sampling`, `test_xss`, `test_leak`) | ✅ 完了 | Issue 376 |
-| **Phase 9** **[FUTURE]** | `engine.py` 拡張 | asyncio コルーチン対応、SUSPEND_TIME_NS 計上、GIL 競合分析（Python 3.13+ 実験的 API） | 📋 計画中 | Issue 377 |
+| **Phase 9** | `engine.py` `storage.py` | asyncio コルーチン対応、`suspend_time_ns` 計上・待機時間分離、マルチタスク追跡 | ✅ 完了 | Issue 377 |
 | **Phase 10** **[FUTURE]** | `chart.py` (新規) | calls=2 データから Chrome Trace Event JSON 生成、時系列 Flame Chart 表示 | 📋 計画中 | Issue 378 |
 
 **各フェーズ共通 DoD チェックリスト**:
