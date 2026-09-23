@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **388** | デュアルバックエンド差分CIテスト＆品質ゲート統合 (Phase 5) | Quality | Medium | Open (New) | [388-integrate-dual-backend-differential-ci-test-and-quality-gates.md](388-integrate-dual-backend-differential-ci-test-and-quality-gates.md) |
+| - | 現在進行中のオープン Issue はありません | - | - | - | - |
 
 ---
 
@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **388** | デュアルバックエンド差分CIテスト＆品質ゲート統合 (Phase 5) | Quality | 2026-09-23 | [388-integrate-dual-backend-differential-ci-test-and-quality-gates.md](closed/388-integrate-dual-backend-differential-ci-test-and-quality-gates.md) |
 | **387** | 現行DDLベースライン化＆散在DDL全廃リファクタリング (Phase 4) | Refactor | 2026-09-23 | [387-extract-baseline-ddl-and-purge-scattered-ddl-statements.md](closed/387-extract-baseline-ddl-and-purge-scattered-ddl-statements.md) |
 | **386** | 自己完結型 CLI コマンド＆manage.py統合の実装 (Phase 3) | Feature | 2026-09-23 | [386-implement-migrations-cli-command-and-manage-py-integration.md](closed/386-implement-migrations-cli-command-and-manage-py-integration.md) |
 | **385** | トランザクション実行器＆MigrationManagerオーケストレータの実装 (Phase 2) | Feature | 2026-09-23 | [385-implement-atomic-migration-runner-and-manager-orchestrator.md](closed/385-implement-atomic-migration-runner-and-manager-orchestrator.md) |

@@ -217,14 +217,21 @@ def _extract_fk_from_raw(
     return fk, cleaned_wo_fk
 
 
+_TABLE_CONSTRAINT_PREFIXES: Tuple[str, ...] = (
+    "FOREIGN KEY ",
+    "FOREIGN KEY(",
+    "PRIMARY KEY ",
+    "PRIMARY KEY(",
+    "UNIQUE ",
+    "UNIQUE(",
+    "CHECK ",
+    "CHECK(",
+    "CONSTRAINT ",
+)
+
+
 def _is_table_level_constraint(upper_c: str) -> bool:
-    return bool(
-        upper_c.startswith("FOREIGN KEY")
-        or upper_c.startswith("PRIMARY KEY")
-        or upper_c.startswith("UNIQUE")
-        or upper_c.startswith("CHECK")
-        or upper_c.startswith("CONSTRAINT")
-    )
+    return upper_c.startswith(_TABLE_CONSTRAINT_PREFIXES)
 
 
 def _parse_single_column_def(col_str: str) -> Optional[ColumnDef]:

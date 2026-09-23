@@ -341,8 +341,37 @@ test_chaos: activate ## Run ChaosVFS power-loss and ARIES crash resilience audit
 	${VENV_BIN}/pytest tests/database/scenarios/test_chaos_power_loss.py tests/database/test_database_mutation_resilience.py
 
 .PHONY: differential_audit
-differential_audit: activate ## Run Pure Python DB vs sqlite3 comparative differential evaluation
+differential_audit: activate migrations-diff-test ## Run Pure Python DB vs sqlite3 comparative differential evaluation
 	PYTHONPATH=src ${VENV_PYTHON} scripts/compare_sqlite3_differential.py
 	${VENV_BIN}/pytest tests/database/compatibility/test_sqlite3_differential.py
+
+.PHONY: migrations-up
+migrations-up: activate ## Apply pending migrations on Primary database (src.database / pydb)
+	PYTHONPATH=src ${VENV_PYTHON} src/cli.py migrations up $(ARGS)
+
+.PHONY: migrations-up-sqlite
+migrations-up-sqlite: activate ## Apply pending migrations on Secondary database (sqlite3)
+	PYTHONPATH=src ${VENV_PYTHON} src/cli.py migrations up --backend sqlite $(ARGS)
+
+.PHONY: migrations-down
+migrations-down: activate ## Roll back latest migration on Primary database (src.database / pydb)
+	PYTHONPATH=src ${VENV_PYTHON} src/cli.py migrations down $(ARGS)
+
+.PHONY: migrations-down-sqlite
+migrations-down-sqlite: activate ## Roll back latest migration on Secondary database (sqlite3)
+	PYTHONPATH=src ${VENV_PYTHON} src/cli.py migrations down --backend sqlite $(ARGS)
+
+.PHONY: migrations-status
+migrations-status: activate ## Show migration status (default: pydb, use ARGS='--backend sqlite' for sqlite)
+	PYTHONPATH=src ${VENV_PYTHON} src/cli.py migrations status $(ARGS)
+
+.PHONY: migrations-create
+migrations-create: activate ## Create new migration skeleton (Usage: make migrations-create NAME=migration_name)
+	@test -n "$(NAME)" || (echo "Error: NAME is required. Example: make migrations-create NAME=add_audit_table" && exit 1)
+	PYTHONPATH=src ${VENV_PYTHON} src/cli.py migrations create $(NAME) $(ARGS)
+
+.PHONY: migrations-diff-test
+migrations-diff-test: activate ## Run Dual-Backend Differential Test (PyDB vs SQLite schema & DML parity)
+	${VENV_BIN}/pytest -v tests/test_database_migrations_differential.py
 
 

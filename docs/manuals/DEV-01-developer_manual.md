@@ -113,7 +113,44 @@ make setup
 ./manage.py dbsync --dry-run
 ```
 
-### 2.4 環境のクリーンアップ (`make clean`)
+### 2.4 データベースマイグレーション運用ガイド (DSN-30)
+
+本リポジトリでは、自作 Pure Python RDBMS（`pydb`）を第一優先（Primary）、標準 SQLite3（`sqlite`）を第二優先の正式対応（Secondary）とするデュアルバックエンド・スキーママイグレーション基盤（DSN-30）を備えています。
+
+```bash
+# 1. 新規マイグレーション雛形の生成（4桁通し番号 0001_ 自動採番）
+make migrations-create NAME=add_audit_logs_table
+# または
+./manage.py migrations create add_audit_logs_table
+
+# 2. マイグレーション適用（デフォルト: Primary 自作DB）
+make migrations-up
+# または
+./manage.py migrations up
+
+# 3. マイグレーション適用（Secondary: SQLite3 正式対応環境）
+make migrations-up-sqlite
+# または
+./manage.py migrations up --backend sqlite
+
+# 4. マイグレーション適用状況・ステータス一覧の表示
+make migrations-status
+make migrations-status ARGS="--backend sqlite"
+
+# 5. 直近マイグレーションの安全なロールバック (down)
+make migrations-down
+make migrations-down-sqlite
+
+# 6. デュアルバックエンド差分等価性テスト (Differential Testing)
+make migrations-diff-test
+```
+
+#### スキーマ変更規約とテーブル再作成標準パターン
+- **DDL 記述原則**: `migrations/*.up.sql` および `*.down.sql` は、自作DBおよび SQLite の双方でそのまま実行可能な標準 SQL DDL 構文（`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `DROP TABLE IF EXISTS`, `DROP INDEX IF EXISTS`）で記述します。
+- **破壊的変更**: カラム削除・型変更・複合主キー変更等の破壊的スキーマ変更を行う際は、新テーブル作成 → データ移行 → 旧テーブル削除 → テーブルリネームの「テーブル再作成標準パターン」（DSN-30 第8.3節）に従います。
+- **散在 DDL の禁止**: アプリケーションコード（`src/` 配下）内にインライン DDL（`CREATE TABLE`, `CREATE INDEX` 等）を直接記述することは固く禁止されています。すべてのスキーマ定義は `migrations/` 配下に集約してください。
+
+### 2.5 環境のクリーンアップ (`make clean`)
 
 ビルド成果物、キャッシュ（`__pycache__`, `.pytest_cache`, `.mypy_cache`）、一時ファイルを初期化したい場合は以下を実行します。
 
@@ -167,6 +204,13 @@ W3C OWL 2.0 Turtle シリアライズ整合性および Dual CSR グラフエン
 
 ```bash
 PYTHONPATH=src .venv/bin/python3 -m pytest tests/ontology/ tests/graph/
+```
+
+### 3.7 デュアルバックエンド差分マイグレーションテスト (`make migrations-diff-test`)
+第一優先の自作DB（`pydb`）と第二優先の SQLite3（`sqlite`）の双方で全マイグレーションをクリーン適用・ロールバック・再適用し、テーブル定義・カラム型・インデックス・DML 挙動が 100% 完全等価であることを自動検証します。
+
+```bash
+make migrations-diff-test
 ```
 
 ---
