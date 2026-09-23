@@ -63,6 +63,7 @@ src/
 - 全体基本設計: [[DSN-01] 全体高位アーキテクチャ設計書 (HLD)](../designs/DSN-01-high_level_design.md)
 - 詳細設計・プロトコル: [[DSN-02] 全体低位アーキテクチャ設計書 (LLD)](../designs/DSN-02-low_level_design.md)
 - 性能工学・プロファイラ: [[DSN-28] PyNYTProf 高精度プロファイラ ＆ 可視化統合スイート](../designs/DSN-28-python_nytprof_profiler_and_visualization_suite.md)
+- LISP統合アーキテクチャ: [[DSN-29] Python-LISP 統合アーキテクチャ設計仕様書 (pylisp)](../designs/DSN-29-python_lisp_integrated_architecture_specification.md)
 - 文書管理基準: [[MNG-01] 文書管理・ドキュメント台帳](../processes/MNG-01-document_ledger.md)
 
 ---
