@@ -21,7 +21,7 @@
 - 🎯 **[[REQ-03] プロジェクトユースケース台帳 (Project Use Case Ledger)](requirements/REQ-03-use_case_ledger.md)**
   - 6大ペルソナおよび国家サイバー統括室「サイバーセキュリティ人材フレームワーク2026」13役割に対応する全33ユースケース・業務価値創出フローを体系化。
 
-### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-25)
+### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-30)
 
 #### 上位・横断設計
 - 🏗️ **[[DSN-01] 全体高位アーキテクチャ設計書 (HLD)](designs/DSN-01-high_level_design.md)**
@@ -80,6 +80,14 @@
   - `src/core/structures/peg.py`, `src/core/structures/peg_compiler/` — 線形時間 $O(N)$ パース保証、AST コンビネータ、検索クエリ/SQL/グラフDSL/Turtle AOT横断適用、自己完結セルフホスティング (ブートストラップ) PEG AOT コンパイラ、Bryan Ford (POPL '04) 準拠第一級構文 (`<-`, `[...]`, `.`)。
 - 🦉 **[[DSN-26] 純粋 Python 製完全自作 OWL DL / RL 推論エンジンおよび先行推論器 (HermiT / Pellet) 参考実装トラッキング設計仕様書](designs/DSN-26-pure-python-owl-dl-reasoner.md)**
   - `src/ontology/reasoner/` — 超タブロー法 (Hypertableau)・多項式時間 Datalog 前向き連鎖・2層分離アーキテクチャ・最小充足不能部分系 (MUS) 監査説明機構・HermiT / Pellet 先行推論器アルゴリズム規範追跡。
+- 🌐 **[[DSN-27] モジュール型 Web フロントエンド・フレームワーク ＆ クライアントアーキテクチャ設計仕様書](designs/DSN-27-modular_frontend_framework_and_client_architecture.md)**
+  - `site/` — yuzora frameworks 統合・5大共通コンポーネント集約・`src/core/` データ構造移植による高凝縮・イベント駆動フロントエンド刷新。
+- ⏱️ **[[DSN-28] Python 版 NYTProf (PyNYTProf) 高精度プロファイラ ＆ 可視化統合スイート設計仕様書](designs/DSN-28-python_nytprof_profiler_and_visualization_suite.md)**
+  - `src/profiler/` — PEP 669 / sys.monitoring ＆ sys.settrace 統合・統計的サンプリングエンジン・差分プロファイリング・Flame Graph ＆ ヒートマップ HTML 出力。
+- 📜 **[[DSN-29] Python-LISP 統合アーキテクチャ設計仕様書 (pylisp)](designs/DSN-29-python_lisp_integrated_architecture_specification.md)**
+  - `pylisp/` — contextvars 動的スコープ・現場復帰型コンディション機構・HAMT miniKanren・Free-threaded (No-GIL) 整合。
+- 🗄️ **[[DSN-30] 自作データベース (`src/database`) ファースト・生SQL駆動マイグレーションエンジンおよびスキーマライフサイクルガバナンス設計仕様書](designs/DSN-30-database_migration_engine_and_schema_lifecycle_governance.md)**
+  - `src/cli.py`, `src/database/migrations/` (コア＋CLI), `migrations/` — 自作 Pure Python RDBMS（第一対象）＆ SQLite（第二対象）デュアルバックエンド・Single Source of Truth DDL統合・アトミックトランザクション・schema_migrations 履歴管理・migrations CLI統合。
 
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
