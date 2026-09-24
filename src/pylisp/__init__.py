@@ -10,6 +10,17 @@ from pylisp.condition import (
     signal,
 )
 from pylisp.dynvar import DynamicVar, dynamic_bind
+from pylisp.logic import (
+    PersistentMap,
+    Var,
+    conde,
+    eq,
+    occurs_check,
+    run,
+    unify,
+    walk,
+    walk_all,
+)
 
 __all__ = [
     "DynamicVar",
@@ -21,4 +32,13 @@ __all__ = [
     "handler_bind",
     "signal",
     "safe_create_task",
+    "Var",
+    "PersistentMap",
+    "walk",
+    "walk_all",
+    "occurs_check",
+    "unify",
+    "eq",
+    "conde",
+    "run",
 ]
