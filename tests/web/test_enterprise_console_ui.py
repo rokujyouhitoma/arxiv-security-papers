@@ -218,6 +218,12 @@ def test_ported_telemetry_script_handlers() -> None:
     assert "updateSupervisorFromStream" in js_text, "Supervisor updater required"
     assert "syncConsoleTelemetry" in js_text, "Console telemetry sync required"
     assert "initSseLiveStream" in js_text, "SSE live stream initializer required"
+    assert (
+        "appSceneDirector.register('supervisorTab'" in js_text
+    ), "Supervisor tab must be registered in SceneDirector"
+    assert (
+        "tabId === 'supervisorTab'" in js_text
+    ), "Supervisor tab must be handled in switchToTab"
 
 
 def test_enterprise_console_help_drawer() -> None:

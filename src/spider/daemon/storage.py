@@ -115,6 +115,31 @@ class SpiderExecutionStorage:
             )
             conn.commit()
 
+    def _execute_record_finish(
+        self, cur: Any, result: CrawlResult, status: str, now_iso: str, stats_json: str
+    ) -> None:
+        cur.execute(
+            """
+            UPDATE spider_execution_logs
+            SET status = ?,
+                finished_at = ?,
+                duration_seconds = ?,
+                item_count = ?,
+                http_status_counts = ?,
+                error_message = ?
+            WHERE job_id = ?
+            """,
+            (
+                status,
+                now_iso,
+                result.duration_seconds or 0.0,
+                result.item_count or 0,
+                stats_json,
+                result.error,
+                result.job_id,
+            ),
+        )
+
     def record_finish(self, result: CrawlResult) -> None:
         """Updates the execution log entry with final status and statistics."""
         status = "SUCCESS" if result.success else "FAILED"
@@ -122,27 +147,7 @@ class SpiderExecutionStorage:
         now_iso = _utc_now_iso()
         with self._get_connection() as conn:
             cur = conn.cursor()
-            cur.execute(
-                """
-                UPDATE spider_execution_logs
-                SET status = ?,
-                    finished_at = ?,
-                    duration_seconds = ?,
-                    item_count = ?,
-                    http_status_counts = ?,
-                    error_message = ?
-                WHERE job_id = ?
-                """,
-                (
-                    status,
-                    now_iso,
-                    result.duration_seconds or 0.0,
-                    result.item_count or 0,
-                    stats_json,
-                    result.error,
-                    result.job_id,
-                ),
-            )
+            self._execute_record_finish(cur, result, status, now_iso, stats_json)
             conn.commit()
             if cur.rowcount <= 0:
                 logger.warning(
@@ -154,21 +159,22 @@ class SpiderExecutionStorage:
                     status,
                 )
 
-    def _rows_to_dicts(self, cur: Any, rows: List[Any]) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _extract_column_names(cur: Any) -> List[str]:
         raw_cols = [d[0] for d in cur.description] if cur.description else []
-        # Strip table prefix if present (e.g. 'spider_execution_logs.job_id' -> 'job_id')
-        normalized_cols = [c.split(".")[-1] for c in raw_cols]
-        results: List[Dict[str, Any]] = []
-        for r in rows:
-            entry: Dict[str, Any] = {}
-            for col_idx, val in enumerate(r):
-                if col_idx < len(normalized_cols):
-                    col_name = normalized_cols[col_idx]
-                    # Only populate if not already set or prioritize non-None
-                    if col_name not in entry or entry[col_name] is None:
-                        entry[col_name] = val
-            results.append(entry)
-        return results
+        return [c.split(".")[-1] for c in raw_cols]
+
+    @staticmethod
+    def _row_to_dict(row: Any, cols: List[str]) -> Dict[str, Any]:
+        entry: Dict[str, Any] = {}
+        for col_name, val in zip(cols, row):
+            if col_name not in entry or entry[col_name] is None:
+                entry[col_name] = val
+        return entry
+
+    def _rows_to_dicts(self, cur: Any, rows: List[Any]) -> List[Dict[str, Any]]:
+        cols = self._extract_column_names(cur)
+        return [self._row_to_dict(r, cols) for r in rows]
 
     def list_history(
         self, limit: int = 20, spider_name: Optional[str] = None

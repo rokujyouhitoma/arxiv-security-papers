@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **394** | Supervisor Top Workers Table の描画例外防止およびタブライフサイクル同期の修正 | Bug | 2026-09-25 | [394-fix-supervisor-top-table-rendering-and-tab-lifecycle.md](closed/394-fix-supervisor-top-table-rendering-and-tab-lifecycle.md) |
 | **393** | スパイダー手動トリガーのUI即時フィードバック実装および実行ログ台帳カラム整合性の修正 | Bug | 2026-09-24 | [393-fix-spider-manual-trigger-feedback-and-storage-mapping.md](closed/393-fix-spider-manual-trigger-feedback-and-storage-mapping.md) |
 | **392** | pylisp.logic 構造共有＆Occurs Check付きminiKanren推論エンジンの実装 | Feature | 2026-09-24 | [392-implement-pylisp-logic-minikanren-engine.md](closed/392-implement-pylisp-logic-minikanren-engine.md) |
 | **391** | pylisp.condition 現場復帰・非巻き戻し型コンディション機構の実装 | Feature | 2026-09-24 | [391-implement-pylisp-condition-restarts-mechanism.md](closed/391-implement-pylisp-condition-restarts-mechanism.md) |

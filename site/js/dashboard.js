@@ -2609,7 +2609,7 @@
             // Workers Table
             const tbody = document.getElementById('supervisorWorkersTableBody');
             if (tbody) {
-              const wEntries = sup.workers ? Object.entries(sup.workers) : [];
+              const wEntries = (sup && sup.workers && typeof sup.workers === 'object') ? Object.entries(/** @type {!Object} */ (sup.workers)) : [];
               const wBadge = document.getElementById('badgeTotalWorkers');
               if (wBadge) wBadge.textContent = `${wEntries.length} Processes`;
 
@@ -2625,39 +2625,58 @@
                 `;
               } else {
                 const nowTs = performance.now() / 1000.0;
-                tbody.innerHTML = wEntries.map(([spid, w]) => {
-                  const pid = Number(w.pid || spid);
-                  const reqCount = Number(w.requests_handled || 0);
+                const rows = [];
+                for (let i = 0; i < wEntries.length; i++) {
+                  const entry = wEntries[i];
+                  if (!entry || !Array.isArray(entry)) continue;
+                  const [spid, w] = entry;
+                  if (!w || typeof w !== 'object') continue;
 
-                  let rps = 0.0;
-                  if (supervisorWorkerSnapshots.has(pid)) {
-                    const prev = supervisorWorkerSnapshots.get(pid);
-                    const elapsed = nowTs - prev.time;
-                    if (elapsed > 0.05) {
-                      const deltaReq = Math.max(0, reqCount - prev.req);
-                      rps = deltaReq / elapsed;
+                  try {
+                    const pid = Number(w['pid'] || spid);
+                    const reqCount = Number(w['requests_handled'] || 0);
+
+                    let rps = 0.0;
+                    if (supervisorWorkerSnapshots.has(pid)) {
+                      const prev = supervisorWorkerSnapshots.get(pid);
+                      if (prev && typeof prev.time === 'number') {
+                        const elapsed = nowTs - prev.time;
+                        if (elapsed > 0.05) {
+                          const deltaReq = Math.max(0, reqCount - (prev.req || 0));
+                          rps = deltaReq / elapsed;
+                        }
+                      }
                     }
-                  }
-                  supervisorWorkerSnapshots.set(pid, { req: reqCount, time: nowTs });
+                    supervisorWorkerSnapshots.set(pid, { req: reqCount, time: nowTs });
 
-                  const statusBg = w.status === 'ALIVE' ? 'var(--accent-green)' : 'var(--accent-coral)';
-                  const healthBg = w.is_healthy ? 'var(--accent-green)' : 'var(--accent-coral)';
-                  const healthText = w.is_healthy ? 'HEALTHY' : 'UNHEALTHY';
-                  const rpsColor = rps > 0 ? 'var(--accent-coral)' : 'var(--fg-muted)';
-                  const rpsDisplay = `${rps.toFixed(1)}/s`;
-                  return `
-                    <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
-                      <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${pid}</td>
-                      <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${w.type || 'worker'}</td>
-                      <td style="padding: 6px 8px;"><span style="background: ${statusBg}; color: #fff; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: bold;">${w.status}</span></td>
-                      <td style="padding: 6px 8px;"><span style="color: ${healthBg}; font-weight: bold;">● ${healthText}</span></td>
-                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-main); font-weight: 600;">${reqCount.toLocaleString()}</td>
-                      <td style="padding: 6px 8px; text-align: right; color: ${rpsColor}; font-weight: bold;">${rpsDisplay}</td>
-                      <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${(w.idle_seconds || 0).toFixed(1)}s</td>
-                      <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${w.memory_mb || 0} MB</td>
-                    </tr>
-                  `;
-                }).join('');
+                    const statusBg = w['status'] === 'ALIVE' ? 'var(--accent-green)' : 'var(--accent-coral)';
+                    const isHealthy = Boolean(w['is_healthy']);
+                    const healthBg = isHealthy ? 'var(--accent-green)' : 'var(--accent-coral)';
+                    const healthText = isHealthy ? 'HEALTHY' : 'UNHEALTHY';
+                    const rpsColor = rps > 0 ? 'var(--accent-coral)' : 'var(--fg-muted)';
+                    const rpsDisplay = `${rps.toFixed(1)}/s`;
+                    const idleSec = Number(w['idle_seconds'] || 0);
+                    const memMb = Number(w['memory_mb'] || 0);
+
+                    rows.push(`
+                      <tr style="border-bottom: 1px solid var(--border-dark); transition: background-color 0.15s;">
+                        <td style="padding: 6px 8px; font-weight: bold; color: var(--accent-blue);">${pid}</td>
+                        <td style="padding: 6px 8px; color: var(--fg-main); font-weight: 500;">${escapeHtml(String(w['type'] || 'worker'))}</td>
+                        <td style="padding: 6px 8px;"><span style="background: ${statusBg}; color: #fff; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: bold;">${escapeHtml(String(w['status'] || 'UNKNOWN'))}</span></td>
+                        <td style="padding: 6px 8px;"><span style="color: ${healthBg}; font-weight: bold;">● ${escapeHtml(healthText)}</span></td>
+                        <td style="padding: 6px 8px; text-align: right; color: var(--fg-main); font-weight: 600;">${reqCount.toLocaleString()}</td>
+                        <td style="padding: 6px 8px; text-align: right; color: ${rpsColor}; font-weight: bold;">${rpsDisplay}</td>
+                        <td style="padding: 6px 8px; text-align: right; color: var(--fg-muted);">${idleSec.toFixed(1)}s</td>
+                        <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${memMb.toFixed(1)} MB</td>
+                      </tr>
+                    `);
+                  } catch (rowErr) {
+                    console.warn('[Supervisor] Worker row render exception:', rowErr);
+                  }
+                }
+                if (rows.length > 0) {
+                  tbody.innerHTML = rows.join('');
+                }
               }
             }
           }

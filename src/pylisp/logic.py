@@ -161,11 +161,13 @@ def _is_unifiable_seq(u: Any, v: Any) -> bool:
 
 def _unify_seq(us: Any, vs: Any, s: PersistentMap) -> Optional[PersistentMap]:
     """シーケンス各要素を順に単一化するヘルパー."""
+    curr_s = s
     for x, y in zip(us, vs):
-        s = unify(x, y, s)
-        if s is None:
+        next_s = unify(x, y, curr_s)
+        if next_s is None:
             return None
-    return s
+        curr_s = next_s
+    return curr_s
 
 
 def unify(u: Any, v: Any, s: PersistentMap) -> Optional[PersistentMap]:
