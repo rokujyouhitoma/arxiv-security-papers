@@ -2053,15 +2053,117 @@ document.addEventListener('DOMContentLoaded', () => {
     if (indicator) indicator.style.opacity = '0.5';
   }
 
-  async function triggerSpider(spiderName) {
+  /**
+   * Shows a toast notification at the bottom-right corner.
+   * @param {string} message
+   * @param {string} type
+   * @param {number=} durationMs
+   */
+  function showSpiderToast(message, type, durationMs) {
+    if (durationMs === undefined) durationMs = 4000;
+    var containerId = 'spiderToastContainer';
+    var container = document.getElementById(containerId);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = containerId;
+      container.style.cssText = 'position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:9999;pointer-events:none;';
+      document.body.appendChild(container);
+    }
+    var colors = {
+      success: { bg: 'rgba(16,185,129,0.95)', border: '#10B981', icon: '✅' },
+      error:   { bg: 'rgba(239,68,68,0.95)',  border: '#EF4444', icon: '❌' },
+      info:    { bg: 'rgba(59,130,246,0.95)', border: '#3B82F6', icon: '⚡' }
+    };
+    var c = colors[type] || colors.info;
+    var toast = document.createElement('div');
+    toast.style.cssText = [
+      'display:flex;align-items:center;gap:10px;',
+      'background:' + c.bg + ';',
+      'border:1px solid ' + c.border + ';',
+      'border-radius:8px;padding:10px 16px;',
+      'font-size:13px;color:#fff;font-weight:500;',
+      'box-shadow:0 4px 20px rgba(0,0,0,0.4);',
+      'pointer-events:auto;',
+      'max-width:360px;word-break:break-word;',
+      'transform:translateX(110%);transition:transform 0.3s ease;'
+    ].join('');
+    toast.innerHTML = '<span style="font-size:16px;flex-shrink:0;">' + c.icon + '</span><span>' + escapeHtml(message) + '</span>';
+    container.appendChild(toast);
+    // Animate in
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { toast.style.transform = 'translateX(0)'; });
+    });
+    // Auto-dismiss
+    setTimeout(function() {
+      toast.style.transform = 'translateX(110%)';
+      setTimeout(function() {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 350);
+    }, durationMs);
+  }
+
+  /**
+   * Immediately updates a spider card's status badge.
+   * @param {string} spiderKey  e.g. 'arxiv', 'cwe', 'kev_cve'
+   * @param {string} status     e.g. 'RUNNING', 'IDLE'
+   */
+  function _setSpiderBadge(spiderKey, status) {
+    var badge = document.getElementById('badgeSpiderStatus_' + spiderKey);
+    if (!badge) return;
+    var isRunning = status === 'RUNNING';
+    var isSuccess = status === 'SUCCESS';
+    badge.textContent = status;
+    badge.style.color = isRunning ? '#3B82F6' : (isSuccess ? '#10B981' : '#EF4444');
+    badge.style.background = isRunning ? 'rgba(59,130,246,0.2)' : (isSuccess ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)');
+  }
+
+  /**
+   * Triggers a spider execution with full UI feedback.
+   * @param {string} spiderName
+   * @param {Element=} triggerBtn  The button element that was clicked.
+   */
+  async function triggerSpider(spiderName, triggerBtn) {
+    var ORIGINAL_TEXT = '⚡ 今すぐ実行 (Manual Trigger)';
+
+    // --- Immediate UI: disable button and show loading state ---
+    if (triggerBtn) {
+      triggerBtn.disabled = true;
+      triggerBtn.textContent = '⏳ 実行リクエスト送信中...';
+    }
+    // Immediately update the card badge to RUNNING
+    _setSpiderBadge(spiderName, 'RUNNING');
+
     try {
       const data = await appApiClient.post('/api/spiders/trigger', { spider_name: spiderName });
+      var jobId = data && data.job_id ? data.job_id : 'N/A';
+      showSpiderToast(spiderName.toUpperCase() + ' スパイダーの実行を開始しました (Job: ' + jobId + ')', 'info');
+
+      // Reflect success state on button briefly
+      if (triggerBtn) {
+        triggerBtn.textContent = '✔ 実行開始完了';
+        setTimeout(function() {
+          triggerBtn.textContent = ORIGINAL_TEXT;
+          triggerBtn.disabled = false;
+        }, 3000);
+      }
+
       // Start real-time polling immediately
       await loadSpiderStatus();
       await loadSpiderHistory();
       startSpiderAutoPolling();
     } catch (err) {
-      console.error(`❌ トリガー失敗: ${err.message}`);
+      console.error('❌ トリガー失敗:', err.message);
+      showSpiderToast('トリガー失敗: ' + err.message, 'error');
+      // Restore badge to IDLE on failure
+      _setSpiderBadge(spiderName, 'IDLE');
+      // Restore button
+      if (triggerBtn) {
+        triggerBtn.textContent = '⚠ 失敗 – 再試行';
+        setTimeout(function() {
+          triggerBtn.textContent = ORIGINAL_TEXT;
+          triggerBtn.disabled = false;
+        }, 4000);
+      }
     }
   }
 
@@ -2088,7 +2190,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = target ? target.closest('.btn-trigger-spider') : null;
     if (btn) {
       const spider = btn.getAttribute('data-spider');
-      if (spider) triggerSpider(spider);
+      if (spider) triggerSpider(spider, btn);
     }
   });
 

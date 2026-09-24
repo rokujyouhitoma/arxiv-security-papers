@@ -39,6 +39,10 @@ class SpiderExecutionStorage:
         "cisa_kev": 21600.0,
         "kev_cve": 21600.0,
     }
+    ALL_COLUMNS_SQL = (
+        "job_id, spider_name, status, started_at, finished_at, "
+        "duration_seconds, item_count, http_status_counts, error_message, params"
+    )
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         if db_path is None:
@@ -98,15 +102,16 @@ class SpiderExecutionStorage:
     def record_start(self, job: CrawlJob) -> None:
         """Records the beginning of a crawl job with RUNNING status."""
         params_json = json.dumps(job.params or {})
+        now_iso = _utc_now_iso()
         with self._get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                """
+                f"""
                 REPLACE INTO spider_execution_logs
-                (job_id, spider_name, status, started_at, params)
-                VALUES (?, ?, 'RUNNING', ?, ?)
+                ({self.ALL_COLUMNS_SQL})
+                VALUES (?, ?, 'RUNNING', ?, NULL, 0.0, 0, '{{}}', NULL, ?)
                 """,
-                (job.job_id, job.spider_name, _utc_now_iso(), params_json),
+                (job.job_id, job.spider_name, now_iso, params_json),
             )
             conn.commit()
 
@@ -114,6 +119,7 @@ class SpiderExecutionStorage:
         """Updates the execution log entry with final status and statistics."""
         status = "SUCCESS" if result.success else "FAILED"
         stats_json = json.dumps(result.stats or {})
+        now_iso = _utc_now_iso()
         with self._get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
@@ -129,9 +135,9 @@ class SpiderExecutionStorage:
                 """,
                 (
                     status,
-                    _utc_now_iso(),
-                    result.duration_seconds,
-                    result.item_count,
+                    now_iso,
+                    result.duration_seconds or 0.0,
+                    result.item_count or 0,
                     stats_json,
                     result.error,
                     result.job_id,
@@ -149,8 +155,20 @@ class SpiderExecutionStorage:
                 )
 
     def _rows_to_dicts(self, cur: Any, rows: List[Any]) -> List[Dict[str, Any]]:
-        cols = [d[0] for d in cur.description] if cur.description else []
-        return [dict(zip(cols, r)) for r in rows]
+        raw_cols = [d[0] for d in cur.description] if cur.description else []
+        # Strip table prefix if present (e.g. 'spider_execution_logs.job_id' -> 'job_id')
+        normalized_cols = [c.split(".")[-1] for c in raw_cols]
+        results: List[Dict[str, Any]] = []
+        for r in rows:
+            entry: Dict[str, Any] = {}
+            for col_idx, val in enumerate(r):
+                if col_idx < len(normalized_cols):
+                    col_name = normalized_cols[col_idx]
+                    # Only populate if not already set or prioritize non-None
+                    if col_name not in entry or entry[col_name] is None:
+                        entry[col_name] = val
+            results.append(entry)
+        return results
 
     def list_history(
         self, limit: int = 20, spider_name: Optional[str] = None
@@ -160,8 +178,8 @@ class SpiderExecutionStorage:
             cur = conn.cursor()
             if spider_name:
                 cur.execute(
-                    """
-                    SELECT * FROM spider_execution_logs
+                    f"""
+                    SELECT {self.ALL_COLUMNS_SQL} FROM spider_execution_logs
                     WHERE spider_name = ?
                     ORDER BY started_at DESC
                     LIMIT ?
@@ -170,8 +188,8 @@ class SpiderExecutionStorage:
                 )
             else:
                 cur.execute(
-                    """
-                    SELECT * FROM spider_execution_logs
+                    f"""
+                    SELECT {self.ALL_COLUMNS_SQL} FROM spider_execution_logs
                     ORDER BY started_at DESC
                     LIMIT ?
                     """,
@@ -185,8 +203,8 @@ class SpiderExecutionStorage:
     ) -> Optional[Dict[str, Any]]:
         cur = conn.cursor()
         cur.execute(
-            """
-            SELECT * FROM spider_execution_logs
+            f"""
+            SELECT {self.ALL_COLUMNS_SQL} FROM spider_execution_logs
             WHERE spider_name = ?
             ORDER BY started_at DESC
             LIMIT 1
@@ -196,8 +214,7 @@ class SpiderExecutionStorage:
         row = cur.fetchone()
         if not row:
             return None
-        cols = [d[0] for d in cur.description] if cur.description else []
-        return dict(zip(cols, row))
+        return self._rows_to_dicts(cur, [row])[0]
 
     def _build_spider_status(
         self, name: str, latest: Optional[Dict[str, Any]]

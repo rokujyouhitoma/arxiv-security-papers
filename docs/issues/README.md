@@ -4,10 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-
-*(現在、進行中・未着手 Issue はありません)*
+*現在進行中・未着手の Issue はありません。*
 
 ---
 
@@ -15,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **393** | スパイダー手動トリガーのUI即時フィードバック実装および実行ログ台帳カラム整合性の修正 | Bug | 2026-09-24 | [393-fix-spider-manual-trigger-feedback-and-storage-mapping.md](closed/393-fix-spider-manual-trigger-feedback-and-storage-mapping.md) |
 | **392** | pylisp.logic 構造共有＆Occurs Check付きminiKanren推論エンジンの実装 | Feature | 2026-09-24 | [392-implement-pylisp-logic-minikanren-engine.md](closed/392-implement-pylisp-logic-minikanren-engine.md) |
 | **391** | pylisp.condition 現場復帰・非巻き戻し型コンディション機構の実装 | Feature | 2026-09-24 | [391-implement-pylisp-condition-restarts-mechanism.md](closed/391-implement-pylisp-condition-restarts-mechanism.md) |
 | **390** | pylisp.atom Free-threaded対応アトミック状態同期コンテナの実装 (Phase 0) | Feature | 2026-09-24 | [390-implement-pylisp-atom-free-threaded-atomic-container.md](closed/390-implement-pylisp-atom-free-threaded-atomic-container.md) |

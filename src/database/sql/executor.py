@@ -4469,7 +4469,10 @@ class SQLExecutor:
     ) -> Dict[str, Any]:
         applied: Dict[str, Any] = {}
         for col, expr in stmt.raw_assignments.items():
-            applied[col] = _extract_field_value(eval_ctx, expr)
+            if expr == "?" and col in stmt.assignments:
+                applied[col] = stmt.assignments[col]
+            else:
+                applied[col] = _extract_field_value(eval_ctx, expr)
         return applied
 
     def _apply_single_update(
