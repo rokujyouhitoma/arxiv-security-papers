@@ -204,6 +204,80 @@ class SpiderExecutionStorage:
             rows = cur.fetchall()
             return self._rows_to_dicts(cur, rows)
 
+    @staticmethod
+    def _normalize_name(name: str) -> str:
+        mapping = {
+            "kev_cve": "cisa_kev",
+            "cve": "nvd_cve",
+            "cve_nvd": "nvd_cve",
+        }
+        return mapping.get(name, name)
+
+    def _query_running_row(
+        self, conn: Connection, name: str, norm_name: str
+    ) -> Optional[Dict[str, Any]]:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT {self.ALL_COLUMNS_SQL} FROM spider_execution_logs
+            WHERE spider_name = ? AND status = 'RUNNING'
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            (name,),
+        )
+        row = cur.fetchone()
+        if not row and norm_name != name:
+            cur.execute(
+                f"""
+                SELECT {self.ALL_COLUMNS_SQL} FROM spider_execution_logs
+                WHERE spider_name = ? AND status = 'RUNNING'
+                ORDER BY started_at DESC
+                LIMIT 1
+                """,
+                (norm_name,),
+            )
+            row = cur.fetchone()
+        return self._rows_to_dicts(cur, [row])[0] if row else None
+
+    @staticmethod
+    def _is_job_active(row_dict: Dict[str, Any], max_age_seconds: float) -> bool:
+        started_str = row_dict.get("started_at")
+        if not started_str or max_age_seconds <= 0:
+            return True
+        try:
+            started_dt = datetime.datetime.fromisoformat(str(started_str))
+            now_dt = datetime.timezone.utc
+            delta = (datetime.datetime.now(now_dt) - started_dt).total_seconds()
+            return delta < max_age_seconds
+        except Exception:
+            return True
+
+    def get_running_job(
+        self, spider_name: str, max_age_seconds: float = 7200.0
+    ) -> Optional[Dict[str, Any]]:
+        """実行中 (status = 'RUNNING') のデータベース行を取得し排他ロックを判定."""
+        norm_name = self._normalize_name(spider_name)
+        with self._get_connection() as conn:
+            row_dict = self._query_running_row(conn, spider_name, norm_name)
+            if not row_dict:
+                return None
+            if self._is_job_active(row_dict, max_age_seconds):
+                return row_dict
+            return None
+
+    def has_running_job(
+        self, spider_name: str, max_age_seconds: float = 7200.0
+    ) -> bool:
+        """データベースの行 (status = 'RUNNING') が存在するかどうかで排他ロック状態を判定."""
+        return self.get_running_job(spider_name, max_age_seconds) is not None
+
+    def is_spider_running(
+        self, spider_name: str, max_age_seconds: float = 7200.0
+    ) -> bool:
+        """Alias for has_running_job."""
+        return self.has_running_job(spider_name, max_age_seconds)
+
     def _query_latest_row(
         self, conn: Connection, name: str
     ) -> Optional[Dict[str, Any]]:
@@ -218,6 +292,18 @@ class SpiderExecutionStorage:
             (name,),
         )
         row = cur.fetchone()
+        norm_name = self._normalize_name(name)
+        if not row and norm_name != name:
+            cur.execute(
+                f"""
+                SELECT {self.ALL_COLUMNS_SQL} FROM spider_execution_logs
+                WHERE spider_name = ?
+                ORDER BY started_at DESC
+                LIMIT 1
+                """,
+                (norm_name,),
+            )
+            row = cur.fetchone()
         if not row:
             return None
         return self._rows_to_dicts(cur, [row])[0]

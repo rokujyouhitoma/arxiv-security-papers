@@ -511,3 +511,34 @@ def test_run_web_server_keyboard_interrupt_graceful(monkeypatch):
 
     run_web_server(port=8000, host="0.0.0.0")
     assert mock_server.server_close.called
+
+
+def test_spider_trigger_conflict_409(tmp_path, monkeypatch):
+    """Tests that triggering a spider whose database row is RUNNING returns 409 Conflict."""
+    from spider.daemon.contracts import CrawlJob
+    from spider.daemon.storage import SpiderExecutionStorage
+
+    test_db = str(tmp_path / "test_trigger_lock.vdb")
+    storage = SpiderExecutionStorage(db_path=test_db)
+    monkeypatch.setattr(
+        "spider.daemon.storage.SpiderExecutionStorage",
+        lambda db_path=None: storage,
+    )
+
+    # 1. Insert a RUNNING row for arxiv
+    job = CrawlJob(job_id="manual_arxiv_test_409", spider_name="arxiv")
+    storage.record_start(job)
+
+    # 2. Triggering while running row exists: returns 409 Conflict
+    payload = json.dumps({"spider_name": "arxiv"})
+    status, headers, body = call_wsgi(
+        application,
+        method="POST",
+        path="/api/spiders/trigger",
+        body=payload,
+    )
+    assert status.startswith("409")
+    data = json.loads(body.decode("utf-8"))
+    assert data["status"] == "conflict"
+    assert data["job_id"] == "manual_arxiv_test_409"
+    assert "already running" in data["error"]

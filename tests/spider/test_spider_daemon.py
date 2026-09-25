@@ -171,5 +171,50 @@ class TestSpiderDaemonClient(unittest.TestCase):
         self.assertEqual(queued_req["job_id"], "q-job-1")
 
 
+class TestSpiderExecutionStorageLock(unittest.TestCase):
+    """Tests database-row-based mutual exclusion locking for spider executions."""
+
+    def setUp(self) -> None:
+        self.test_dir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.test_dir, "test_spider_lock.vdb")
+        from spider.daemon.storage import SpiderExecutionStorage
+
+        self.storage = SpiderExecutionStorage(db_path=self.db_path)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_database_row_mutual_exclusion(self) -> None:
+        spider = "arxiv"
+        # 1. No running job initially
+        self.assertFalse(self.storage.has_running_job(spider))
+        self.assertIsNone(self.storage.get_running_job(spider))
+
+        # 2. Record start: database row inserted with status = 'RUNNING'
+        job = CrawlJob(job_id="lock_test_job_1", spider_name=spider)
+        self.storage.record_start(job)
+
+        # 3. Database row exists with status = 'RUNNING' -> lock is active
+        self.assertTrue(self.storage.has_running_job(spider))
+        running_row = self.storage.get_running_job(spider)
+        self.assertIsNotNone(running_row)
+        if running_row:
+            self.assertEqual(running_row["job_id"], "lock_test_job_1")
+            self.assertEqual(running_row["status"], "RUNNING")
+
+        # 4. Record finish: status transitions to 'SUCCESS', finished_at is set
+        result = CrawlResult(
+            job_id="lock_test_job_1",
+            spider_name=spider,
+            success=True,
+            item_count=10,
+        )
+        self.storage.record_finish(result)
+
+        # 5. Database row no longer has status = 'RUNNING' -> lock is released
+        self.assertFalse(self.storage.has_running_job(spider))
+        self.assertIsNone(self.storage.get_running_job(spider))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2641,8 +2641,23 @@ class GatewayHandlers:
             self.workspace_dir, "outputs", "database", "spider_execution.vdb"
         )
         storage = SpiderExecutionStorage(db_path=db_path)
-        job_id = f"manual_{spider_name}_{int(time.time())}"
         target_spider = _normalize_spider_name(spider_name)
+
+        running_job = storage.get_running_job(target_spider)
+        if running_job:
+            active_id = running_job.get("job_id", "N/A")
+            return response_json(
+                start_response,
+                {
+                    "status": "conflict",
+                    "error": f"Spider '{spider_name}' is already running (Job: {active_id})",
+                    "job_id": active_id,
+                    "started_at": running_job.get("started_at"),
+                },
+                status="409 Conflict",
+            )
+
+        job_id = f"manual_{spider_name}_{int(time.time())}"
         job = CrawlJob(job_id=job_id, spider_name=target_spider)
         storage.record_start(job)
 

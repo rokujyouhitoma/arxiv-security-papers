@@ -4,7 +4,10 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-*現在進行中・未着手の Issue はありません。*
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **396** | 停止・異常終了した孤立スパイダージョブの定期検知および状態修復（Reconciler / Janitor）の実装 | Bug | High | Open (New) | [396-spider-stale-job-reconciliation-and-watchdog.md](396-spider-stale-job-reconciliation-and-watchdog.md) |
+| **397** | 中断スパイダーの巡回状態（Frontier）保存・デーモンによる自動再開（Resume）機能の実装 | Feature | Medium | Open (New) | [397-spider-frontier-state-persistence-and-daemon-resume.md](397-spider-frontier-state-persistence-and-daemon-resume.md) |
 
 ---
 
@@ -12,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **395** | スパイダー実行の排他制御（Mutex）および二重起動防止の実装 | Bug | 2026-09-25 | [395-spider-execution-concurrency-control-and-mutex.md](closed/395-spider-execution-concurrency-control-and-mutex.md) |
 | **394** | Supervisor Top Workers Table の描画例外防止およびタブライフサイクル同期の修正 | Bug | 2026-09-25 | [394-fix-supervisor-top-table-rendering-and-tab-lifecycle.md](closed/394-fix-supervisor-top-table-rendering-and-tab-lifecycle.md) |
 | **393** | スパイダー手動トリガーのUI即時フィードバック実装および実行ログ台帳カラム整合性の修正 | Bug | 2026-09-24 | [393-fix-spider-manual-trigger-feedback-and-storage-mapping.md](closed/393-fix-spider-manual-trigger-feedback-and-storage-mapping.md) |
 | **392** | pylisp.logic 構造共有＆Occurs Check付きminiKanren推論エンジンの実装 | Feature | 2026-09-24 | [392-implement-pylisp-logic-minikanren-engine.md](closed/392-implement-pylisp-logic-minikanren-engine.md) |

@@ -1977,13 +1977,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const durEl = document.getElementById(`valSpiderDuration_${key}`);
         const intervalEl = document.getElementById(`valSpiderInterval_${key}`);
 
+        const triggerBtn = document.querySelector(`.btn-trigger-spider[data-spider="${key}"]`);
+
         if (info) {
           const st = info.status || info.last_status || 'IDLE';
+          const isRunning = st === 'RUNNING';
           if (badge) {
             const isSuccess = st === 'SUCCESS';
             badge.textContent = st;
-            badge.style.color = isSuccess ? '#10B981' : (st === 'RUNNING' ? '#3B82F6' : '#EF4444');
+            badge.style.color = isSuccess ? '#10B981' : (isRunning ? '#3B82F6' : '#EF4444');
             badge.style.background = isSuccess ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
+          }
+          if (triggerBtn) {
+            if (isRunning) {
+              triggerBtn.setAttribute('disabled', 'true');
+              triggerBtn.textContent = '⏳ 実行中...';
+              triggerBtn.style.opacity = '0.6';
+              triggerBtn.style.cursor = 'not-allowed';
+            } else {
+              triggerBtn.removeAttribute('disabled');
+              triggerBtn.textContent = '⚡ 今すぐ実行 (Manual Trigger)';
+              triggerBtn.style.opacity = '1.0';
+              triggerBtn.style.cursor = 'pointer';
+            }
           }
           if (lastEl) lastEl.textContent = info.last_run ? info.last_run.substring(0, 19).replace('T', ' ') : '--';
           const items = info.item_count ?? info.total_items_collected ?? 0;
@@ -2151,12 +2167,14 @@ document.addEventListener('DOMContentLoaded', () => {
    * @param {Element=} triggerBtn  The button element that was clicked.
    */
   async function triggerSpider(spiderName, triggerBtn) {
-    var ORIGINAL_TEXT = '⚡ 今すぐ実行 (Manual Trigger)';
+    if (triggerBtn && triggerBtn.hasAttribute('disabled')) return;
 
     // --- Immediate UI: disable button and show loading state ---
     if (triggerBtn) {
-      triggerBtn.disabled = true;
+      triggerBtn.setAttribute('disabled', 'true');
       triggerBtn.textContent = '⏳ 実行リクエスト送信中...';
+      triggerBtn.style.opacity = '0.6';
+      triggerBtn.style.cursor = 'not-allowed';
     }
     // Immediately update the card badge to RUNNING
     _setSpiderBadge(spiderName, 'RUNNING');
@@ -2166,13 +2184,9 @@ document.addEventListener('DOMContentLoaded', () => {
       var jobId = data && data.job_id ? data.job_id : 'N/A';
       showSpiderToast(spiderName.toUpperCase() + ' スパイダーの実行を開始しました (Job: ' + jobId + ')', 'info');
 
-      // Reflect success state on button briefly
       if (triggerBtn) {
-        triggerBtn.textContent = '✔ 実行開始完了';
-        setTimeout(function() {
-          triggerBtn.textContent = ORIGINAL_TEXT;
-          triggerBtn.disabled = false;
-        }, 3000);
+        triggerBtn.textContent = '⏳ 実行中...';
+        triggerBtn.setAttribute('disabled', 'true');
       }
 
       // Start real-time polling immediately
@@ -2180,18 +2194,27 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadSpiderHistory();
       startSpiderAutoPolling();
     } catch (err) {
-      console.error('❌ トリガー失敗:', err.message);
-      showSpiderToast('トリガー失敗: ' + err.message, 'error');
-      // Restore badge to IDLE on failure
-      _setSpiderBadge(spiderName, 'IDLE');
-      // Restore button
-      if (triggerBtn) {
-        triggerBtn.textContent = '⚠ 失敗 – 再試行';
-        setTimeout(function() {
-          triggerBtn.textContent = ORIGINAL_TEXT;
-          triggerBtn.disabled = false;
-        }, 4000);
+      const errMsg = err && err.message ? err.message : String(err);
+      if (errMsg.includes('409') || errMsg.includes('already running')) {
+        showSpiderToast('⚠️ ' + spiderName.toUpperCase() + ' スパイダーは既に実行中です', 'warning');
+        _setSpiderBadge(spiderName, 'RUNNING');
+        if (triggerBtn) {
+          triggerBtn.textContent = '⏳ 実行中...';
+          triggerBtn.setAttribute('disabled', 'true');
+        }
+      } else {
+        console.error('❌ トリガー失敗:', errMsg);
+        showSpiderToast('トリガー失敗: ' + errMsg, 'error');
+        _setSpiderBadge(spiderName, 'IDLE');
+        if (triggerBtn) {
+          triggerBtn.textContent = '⚠ 失敗 – 再試行';
+          triggerBtn.removeAttribute('disabled');
+          triggerBtn.style.opacity = '1.0';
+          triggerBtn.style.cursor = 'pointer';
+        }
       }
+      await loadSpiderStatus();
+      await loadSpiderHistory();
     }
   }
 
