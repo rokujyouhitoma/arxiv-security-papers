@@ -11,7 +11,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from database.ipc.driver import Connection, connect
 
@@ -277,6 +277,65 @@ class SpiderExecutionStorage:
     ) -> bool:
         """Alias for has_running_job."""
         return self.has_running_job(spider_name, max_age_seconds)
+
+    @staticmethod
+    def _calculate_job_elapsed(
+        started_str: Optional[str], now_utc: datetime.datetime
+    ) -> float:
+        if not started_str:
+            return 0.0
+        try:
+            started_dt = datetime.datetime.fromisoformat(str(started_str))
+            return (now_utc - started_dt).total_seconds()
+        except Exception:
+            return 0.0
+
+    def _find_stale_jobs(
+        self, cur: Any, timeout_seconds: float, now_utc: datetime.datetime
+    ) -> List[Tuple[str, float]]:
+        cur.execute("""
+            SELECT job_id, started_at FROM spider_execution_logs
+            WHERE status = 'RUNNING'
+            """)
+        stale_list: List[Tuple[str, float]] = []
+        for row in cur.fetchall():
+            job_id, started_str = row[0], row[1]
+            elapsed = self._calculate_job_elapsed(started_str, now_utc)
+            if elapsed >= timeout_seconds:
+                stale_list.append((str(job_id), elapsed))
+        return stale_list
+
+    @staticmethod
+    def _execute_stale_reconciliation(
+        cur: Any, job_id: str, elapsed: float, now_iso: str
+    ) -> None:
+        err_msg = (
+            f"Execution timed out or process aborted (stale after {int(elapsed)}s)"
+        )
+        cur.execute(
+            """
+            UPDATE spider_execution_logs
+            SET status = 'INTERRUPTED',
+                finished_at = ?,
+                duration_seconds = ?,
+                error_message = ?
+            WHERE job_id = ?
+            """,
+            (now_iso, elapsed, err_msg, job_id),
+        )
+
+    def reconcile_stale_jobs(self, timeout_seconds: float = 7200.0) -> int:
+        """長時間 RUNNING のまま更新のない孤立・ゾンビジョブを検知し INTERRUPTED に修復."""
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+        now_iso = now_dt.isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            stale_jobs = self._find_stale_jobs(cur, timeout_seconds, now_dt)
+            for job_id, elapsed in stale_jobs:
+                self._execute_stale_reconciliation(cur, job_id, elapsed, now_iso)
+            if stale_jobs:
+                conn.commit()
+            return len(stale_jobs)
 
     def _query_latest_row(
         self, conn: Connection, name: str

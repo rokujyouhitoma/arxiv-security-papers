@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -56,6 +57,8 @@ from .router import (
     response_sse,
 )
 from .streaming import stream_log_tail, stream_system_events, stream_top_metrics
+
+logger = logging.getLogger(__name__)
 
 MAX_MCP_PAYLOAD_BYTES = 1024 * 1024  # 1MB
 
@@ -2556,6 +2559,15 @@ class GatewayHandlers:
         )
         return response_sse(start_response, gen)
 
+    @staticmethod
+    def _reconcile_spider_storage_safe(storage: Any) -> None:
+        try:
+            storage.reconcile_stale_jobs()
+        except Exception as exc:
+            logger.warning(
+                "[handle_spider_status] reconcile_stale_jobs failed: %s", exc
+            )
+
     def handle_spider_status(
         self,
         start_response: Callable[..., Any],
@@ -2567,6 +2579,7 @@ class GatewayHandlers:
             self.workspace_dir, "outputs", "database", "spider_execution.vdb"
         )
         storage = SpiderExecutionStorage(db_path=db_path)
+        self._reconcile_spider_storage_safe(storage)
         summary = storage.get_status_summary()
         supervisor_state = _introspect_supervisor_state(self.workspace_dir)
         return response_json(

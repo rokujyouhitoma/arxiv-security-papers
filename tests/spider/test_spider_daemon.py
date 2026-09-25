@@ -7,6 +7,7 @@ ETag cache persistence, and SpiderDaemonClient fallback execution.
 
 from __future__ import annotations
 
+import datetime
 import os
 import queue
 import shutil
@@ -214,6 +215,91 @@ class TestSpiderExecutionStorageLock(unittest.TestCase):
         # 5. Database row no longer has status = 'RUNNING' -> lock is released
         self.assertFalse(self.storage.has_running_job(spider))
         self.assertIsNone(self.storage.get_running_job(spider))
+
+
+class TestSpiderStaleJobReconciliation(unittest.TestCase):
+    """Tests stale / orphan job detection and automatic reconciliation (Reconciler / Janitor)."""
+
+    def setUp(self) -> None:
+        self.test_dir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.test_dir, "test_stale_reconcile.vdb")
+        from spider.daemon.storage import SpiderExecutionStorage
+
+        self.storage = SpiderExecutionStorage(db_path=self.db_path)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_reconcile_no_running_jobs(self) -> None:
+        self.assertEqual(self.storage.reconcile_stale_jobs(), 0)
+
+    def test_reconcile_recent_running_job_not_interrupted(self) -> None:
+        job = CrawlJob(job_id="recent_job_1", spider_name="arxiv")
+        self.storage.record_start(job)
+        self.assertEqual(self.storage.reconcile_stale_jobs(timeout_seconds=7200.0), 0)
+        self.assertTrue(self.storage.has_running_job("arxiv"))
+
+    def _insert_stale_job(
+        self, job_id: str, spider_name: str, seconds_ago: float
+    ) -> None:
+        stale_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            seconds=seconds_ago
+        )
+        stale_iso = stale_time.isoformat()
+        with self.storage._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                f"""
+                REPLACE INTO spider_execution_logs
+                ({self.storage.ALL_COLUMNS_SQL})
+                VALUES (?, ?, 'RUNNING', ?, NULL, 0.0, 0, '{{}}', NULL, '{{}}')
+                """,
+                (job_id, spider_name, stale_iso),
+            )
+            conn.commit()
+
+    def test_reconcile_stale_running_job_interrupted(self) -> None:
+        self._insert_stale_job("stale_job_1", "nvd_cve", 10000.0)
+        self.assertTrue(
+            self.storage.has_running_job("nvd_cve", max_age_seconds=12000.0)
+        )
+
+        reconciled = self.storage.reconcile_stale_jobs(timeout_seconds=7200.0)
+        self.assertEqual(reconciled, 1)
+
+        self.assertFalse(self.storage.has_running_job("nvd_cve"))
+        history = self.storage.list_history(spider_name="nvd_cve")
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["status"], "INTERRUPTED")
+        self.assertIsNotNone(history[0]["finished_at"])
+        self.assertIn("timed out or process aborted", str(history[0]["error_message"]))
+        self.assertGreaterEqual(float(history[0]["duration_seconds"]), 10000.0)
+
+    def test_workflow_service_startup_reconciles_stale_jobs(self) -> None:
+        from workflow.service import WorkflowService
+
+        self._insert_stale_job("startup_stale_1", "cwe", 9000.0)
+        service = WorkflowService(storage=self.storage, run_on_startup=False)
+        self.assertIsNotNone(service)
+
+        history = self.storage.list_history(spider_name="cwe")
+        self.assertEqual(history[0]["status"], "INTERRUPTED")
+
+    @patch("workflow.service.WorkflowService.poll_and_dispatch")
+    def test_workflow_lifecycle_hook_on_flush_reconciliation(
+        self, mock_dispatch: Any
+    ) -> None:
+        from workflow.service import WorkflowLifecycleHook
+
+        self._insert_stale_job("watchdog_stale_1", "arxiv", 8000.0)
+        hook = WorkflowLifecycleHook(storage=self.storage)
+        hook.setup()
+        hook._last_reconcile_time = time.time() - 301.0
+        hook.on_flush()
+
+        history = self.storage.list_history(spider_name="arxiv")
+        self.assertEqual(history[0]["status"], "INTERRUPTED")
+        mock_dispatch.assert_called_once()
 
 
 if __name__ == "__main__":

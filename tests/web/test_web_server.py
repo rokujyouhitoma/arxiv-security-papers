@@ -542,3 +542,46 @@ def test_spider_trigger_conflict_409(tmp_path, monkeypatch):
     assert data["status"] == "conflict"
     assert data["job_id"] == "manual_arxiv_test_409"
     assert "already running" in data["error"]
+
+
+def _seed_stale_spider_job(storage: Any, spider: str, job_id: str) -> None:
+    import datetime
+
+    stale_time = datetime.datetime.now(
+        datetime.timezone.utc
+    ) - datetime.timedelta(seconds=8000)
+    with storage._get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            REPLACE INTO spider_execution_logs
+            ({storage.ALL_COLUMNS_SQL})
+            VALUES (?, ?, 'RUNNING', ?, NULL, 0.0, 0, '{{}}', NULL, '{{}}')
+            """,
+            (job_id, spider, stale_time.isoformat()),
+        )
+        conn.commit()
+
+
+def test_spider_status_reconciles_stale_jobs(tmp_path, monkeypatch):
+    """Tests that querying /api/spiders/status automatically reconciles stale RUNNING jobs."""
+    from spider.daemon.storage import SpiderExecutionStorage
+
+    test_db = str(tmp_path / "test_status_stale.vdb")
+    storage = SpiderExecutionStorage(db_path=test_db)
+    monkeypatch.setattr(
+        "spider.daemon.storage.SpiderExecutionStorage",
+        lambda db_path=None: storage,
+    )
+    _seed_stale_spider_job(storage, "cwe", "stale_web_job_1")
+
+    status, headers, body = call_wsgi(
+        application,
+        method="GET",
+        path="/api/spiders/status",
+    )
+    data = json.loads(body.decode("utf-8"))
+    history = storage.list_history(spider_name="cwe")
+    assert status.startswith("200") and data["spiders"]["cwe"]["status"] == "INTERRUPTED"
+    assert history and history[0]["status"] == "INTERRUPTED"
+

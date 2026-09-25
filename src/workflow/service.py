@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any, Dict, Optional
 
 from spider.daemon.client import SpiderDaemonClient
@@ -34,12 +35,31 @@ class WorkflowService:
         self.storage = storage
         self.db_path = db_path
         self.tasks_registered = False
+        if self.storage is None:
+            self._init_default_storage()
+        self._reconcile_on_startup()
         if run_on_startup is None:
             self.run_on_startup = os.getenv(
                 "ARXIV_SPIDER_RUN_ON_STARTUP", "true"
             ).lower() in ("1", "true", "yes")
         else:
             self.run_on_startup = run_on_startup
+
+    def _init_default_storage(self) -> None:
+        try:
+            self.storage = SpiderExecutionStorage(db_path=self.db_path)
+        except Exception as exc:
+            logger.warning("[WorkflowService] Could not init default storage: %s", exc)
+
+    def _reconcile_on_startup(self) -> None:
+        if self.storage is None:
+            return
+        try:
+            self.storage.reconcile_stale_jobs()
+        except Exception as exc:
+            logger.warning(
+                "[WorkflowService] Failed to reconcile stale jobs: %s", exc
+            )
 
     def register_default_spider_tasks(
         self, run_on_startup: Optional[bool] = None
@@ -102,6 +122,7 @@ class WorkflowLifecycleHook(LifecycleHook):
         self.worker_id = "workflow_01"
         self.storage = storage
         self.db_path = db_path
+        self._last_reconcile_time: float = 0.0
 
     def bind_worker(self, worker_id: str) -> None:
         self.worker_id = worker_id
@@ -122,11 +143,31 @@ class WorkflowLifecycleHook(LifecycleHook):
         """Health check returns True if the service instance is active."""
         return self.service is not None
 
+    def _safe_reconcile(self, storage: SpiderExecutionStorage) -> None:
+        try:
+            storage.reconcile_stale_jobs()
+        except Exception as exc:
+            logger.warning(
+                "[WorkflowLifecycleHook %s] Stale reconciliation error: %s",
+                self.worker_id,
+                exc,
+            )
+
+    def _run_storage_reconcile(self) -> None:
+        if self.service and self.service.storage:
+            self._safe_reconcile(self.service.storage)
+
+    def _maybe_reconcile_stale(self, now: float) -> None:
+        if (now - self._last_reconcile_time) >= 300.0:
+            self._last_reconcile_time = now
+            self._run_storage_reconcile()
+
     def on_flush(self) -> None:
         """Invoked periodically by ManagedServiceWorker to poll and dispatch due tasks."""
         if self.service is not None:
             try:
                 self.service.poll_and_dispatch()
+                self._maybe_reconcile_stale(time.time())
             except Exception as exc:
                 logger.error(
                     "[WorkflowLifecycleHook %s] Poll error: %s", self.worker_id, exc
