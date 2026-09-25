@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **397** | 中断スパイダーの巡回状態（Frontier）保存・デーモンによる自動再開（Resume）機能の実装 | Feature | Medium | Open (New) | [397-spider-frontier-state-persistence-and-daemon-resume.md](397-spider-frontier-state-persistence-and-daemon-resume.md) |
+| **397** | 中断スパイダーの巡回状態（Frontier）保存・デーモンによる自動再開（Resume）機能の実装 | Feature | Medium | In Progress | [397-spider-frontier-state-persistence-and-daemon-resume.md](397-spider-frontier-state-persistence-and-daemon-resume.md) |
 
 ---
 

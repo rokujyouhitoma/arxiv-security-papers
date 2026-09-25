@@ -6,6 +6,7 @@ import io
 import json
 import os
 import sys
+from typing import Any
 
 if "src" not in sys.path:
     sys.path.insert(
@@ -547,9 +548,9 @@ def test_spider_trigger_conflict_409(tmp_path, monkeypatch):
 def _seed_stale_spider_job(storage: Any, spider: str, job_id: str) -> None:
     import datetime
 
-    stale_time = datetime.datetime.now(
-        datetime.timezone.utc
-    ) - datetime.timedelta(seconds=8000)
+    stale_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+        seconds=8000
+    )
     with storage._get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -582,6 +583,7 @@ def test_spider_status_reconciles_stale_jobs(tmp_path, monkeypatch):
     )
     data = json.loads(body.decode("utf-8"))
     history = storage.list_history(spider_name="cwe")
-    assert status.startswith("200") and data["spiders"]["cwe"]["status"] == "INTERRUPTED"
+    assert (
+        status.startswith("200") and data["spiders"]["cwe"]["status"] == "INTERRUPTED"
+    )
     assert history and history[0]["status"] == "INTERRUPTED"
-

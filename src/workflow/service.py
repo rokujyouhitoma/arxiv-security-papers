@@ -57,9 +57,7 @@ class WorkflowService:
         try:
             self.storage.reconcile_stale_jobs()
         except Exception as exc:
-            logger.warning(
-                "[WorkflowService] Failed to reconcile stale jobs: %s", exc
-            )
+            logger.warning("[WorkflowService] Failed to reconcile stale jobs: %s", exc)
 
     def register_default_spider_tasks(
         self, run_on_startup: Optional[bool] = None
