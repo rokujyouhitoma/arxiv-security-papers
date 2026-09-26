@@ -7,6 +7,8 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **397** | 中断スパイダーの巡回状態（Frontier）保存・デーモンによる自動再開（Resume）機能の実装 | Feature | Medium | In Progress | [397-spider-frontier-state-persistence-and-daemon-resume.md](397-spider-frontier-state-persistence-and-daemon-resume.md) |
+| **398** | VectorEngine のインデックスパス参照不整合の是正およびセマンティック RAG 検索の復旧 | Bug | High | New | [398-fix-vector-engine-index-path-and-restore-semantic-search.md](398-fix-vector-engine-index-path-and-restore-semantic-search.md) |
+| **399** | MCP JSON-RPC サンドボックスの初期ガイダンス改善およびタブ遷移ライフサイクルの整備 | Bug | Medium | New | [399-improve-mcp-sandbox-initial-guidance-and-tab-lifecycle.md](399-improve-mcp-sandbox-initial-guidance-and-tab-lifecycle.md) |
 
 ---
 
