@@ -5,6 +5,8 @@ Unit tests for SynonymExpander, FMIndex, and Extended Multi-Stage RAG VectorEngi
 import os
 import sys
 
+import pytest
+
 from search.vector_engine import (
     CitationNetworkIndex,
     FacetedIndex,
@@ -16,12 +18,18 @@ from search.vector_engine import (
     SynonymExpander,
     VectorEngine,
     extract_abstract_from_okf,
+    resolve_vector_db_dir,
 )
 
 if "src" not in sys.path:
     sys.path.insert(
         0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
     )
+
+
+@pytest.fixture(scope="module")
+def shared_engine():
+    return VectorEngine(lazy=False)
 
 
 def test_synonym_expander():
@@ -147,8 +155,8 @@ def test_raptor_tree_index():
     assert "マルウェア" in summaries[0]["domain"]
 
 
-def test_vector_engine_multi_engine_search():
-    engine = VectorEngine()
+def test_vector_engine_multi_engine_search(shared_engine):
+    engine = shared_engine
     results = engine.search("マルウェア解析", top_k=3)
     assert isinstance(results, list)
     if results:
@@ -157,8 +165,8 @@ def test_vector_engine_multi_engine_search():
         assert "annotated_keywords" in results[0]
 
 
-def test_vector_engine_hybrid_pipeline():
-    engine = VectorEngine()
+def test_vector_engine_hybrid_pipeline(shared_engine):
+    engine = shared_engine
     resp = engine.search_hybrid_pipeline("脱獄攻撃", top_k=3)
     assert "papers" in resp
     assert "profile" in resp
@@ -208,8 +216,8 @@ def test_proximity_graph_index():
     assert "doc2" in mermaid_str
 
 
-def test_vector_engine_get_related_papers():
-    engine = VectorEngine()
+def test_vector_engine_get_related_papers(shared_engine):
+    engine = shared_engine
     # Test on existing index
     if engine.documents:
         first_id = engine.documents[0]["id"]
@@ -296,8 +304,8 @@ def test_dynamic_highlighter():
     assert "RapidPen" in res
 
 
-def test_enterprise_author_and_field_search():
-    engine = VectorEngine()
+def test_enterprise_author_and_field_search(shared_engine):
+    engine = shared_engine
     # Test query parsing and search
     results, profile = engine.search_with_profile("author:Nakatani", top_k=5)
     assert isinstance(results, list)
@@ -332,7 +340,7 @@ def test_query_context_and_intent():
 
 
 def test_modular_search_pipeline():
-    engine = VectorEngine()
+    engine = VectorEngine(lazy=True)
     engine.documents = [
         {
             "id": "2608.0001",
@@ -578,7 +586,7 @@ def test_observability_and_profiling_framework():
 
 def test_vector_engine_pagination_and_total_hits():
     """Validates VectorEngine pagination offset, top_k slicing, and total_hits accuracy."""
-    engine = VectorEngine()
+    engine = VectorEngine(lazy=True)
     engine.documents = [
         {
             "id": f"paper_{i}",
@@ -736,3 +744,35 @@ def test_rrf_hybrid_fusion(tmp_path):
     hit_ids = [h["id"] for h in rrf_hits]
     assert "p_lexical" in hit_ids
     assert "p_semantic" in hit_ids
+
+
+def test_vector_engine_path_resolution(tmp_path):
+    ws = str(tmp_path)
+    canonical = os.path.join(ws, "outputs", "database", "search_vector")
+    legacy = os.path.join(ws, "outputs", "vector_db")
+
+    # 1. Default to canonical if neither exists
+    assert resolve_vector_db_dir(ws) == canonical
+
+    # 2. Prefer canonical if both exist
+    os.makedirs(canonical, exist_ok=True)
+    os.makedirs(legacy, exist_ok=True)
+    with open(os.path.join(canonical, "index.json"), "w") as f:
+        f.write("{}")
+    with open(os.path.join(legacy, "index.json"), "w") as f:
+        f.write("{}")
+    assert resolve_vector_db_dir(ws) == canonical
+
+    # 3. Fallback to legacy if only legacy exists
+    os.remove(os.path.join(canonical, "index.json"))
+    assert resolve_vector_db_dir(ws) == legacy
+
+    # 4. Custom directory within workspace succeeds
+    custom = os.path.join(ws, "custom_vdb")
+    os.makedirs(custom, exist_ok=True)
+    assert resolve_vector_db_dir(ws, custom_dir=custom) == custom
+
+    # 5. Path traversal escapes workspace -> raises ValueError
+    traversal = os.path.abspath(os.path.join(ws, "..", "escaped_vdb"))
+    with pytest.raises(ValueError, match="escapes workspace"):
+        resolve_vector_db_dir(ws, custom_dir=traversal)

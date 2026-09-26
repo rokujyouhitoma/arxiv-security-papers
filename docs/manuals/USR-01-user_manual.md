@@ -25,7 +25,7 @@ flowchart TB
 
     subgraph SearchAndRAG ["3. 検索・GraphRAG 基盤 (Vector & Graph)"]
         OKFPapers --> VectorEngine["VectorEngine (Dense + Sparse + Graph)"]
-        VectorEngine --> VectorDB["outputs/vector_db/"]
+        VectorEngine --> VectorDB["outputs/database/search_vector/"]
         GraphEngine --> GraphDB["outputs/database/graph/graph.db"]
     end
 

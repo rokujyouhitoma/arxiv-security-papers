@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **397** | 中断スパイダーの巡回状態（Frontier）保存・デーモンによる自動再開（Resume）機能の実装 | Feature | Medium | In Progress | [397-spider-frontier-state-persistence-and-daemon-resume.md](397-spider-frontier-state-persistence-and-daemon-resume.md) |
-| **398** | VectorEngine のインデックスパス参照不整合の是正およびセマンティック RAG 検索の復旧 | Bug | High | New | [398-fix-vector-engine-index-path-and-restore-semantic-search.md](398-fix-vector-engine-index-path-and-restore-semantic-search.md) |
 | **399** | MCP JSON-RPC サンドボックスの初期ガイダンス改善およびタブ遷移ライフサイクルの整備 | Bug | Medium | New | [399-improve-mcp-sandbox-initial-guidance-and-tab-lifecycle.md](399-improve-mcp-sandbox-initial-guidance-and-tab-lifecycle.md) |
 
 ---
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **398** | VectorEngine のインデックスパス参照不整合の是正およびセマンティック RAG 検索の復旧 | Bug | 2026-09-27 | [398-fix-vector-engine-index-path-and-restore-semantic-search.md](closed/398-fix-vector-engine-index-path-and-restore-semantic-search.md) |
 | **396** | 停止・異常終了した孤立スパイダージョブの定期検知および状態修復（Reconciler / Janitor）の実装 | Bug | 2026-09-25 | [396-spider-stale-job-reconciliation-and-watchdog.md](closed/396-spider-stale-job-reconciliation-and-watchdog.md) |
 | **395** | スパイダー実行の排他制御（Mutex）および二重起動防止の実装 | Bug | 2026-09-25 | [395-spider-execution-concurrency-control-and-mutex.md](closed/395-spider-execution-concurrency-control-and-mutex.md) |
 | **394** | Supervisor Top Workers Table の描画例外防止およびタブライフサイクル同期の修正 | Bug | 2026-09-25 | [394-fix-supervisor-top-table-rendering-and-tab-lifecycle.md](closed/394-fix-supervisor-top-table-rendering-and-tab-lifecycle.md) |

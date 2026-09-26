@@ -48,6 +48,31 @@ from .vector import (
 )
 
 
+def resolve_vector_db_dir(workspace_dir: str, custom_dir: Optional[str] = None) -> str:
+    """
+    Resolves the vector DB directory.
+    Prefers canonical outputs/database/search_vector, with fallback to legacy outputs/vector_db.
+    Guards against path traversal by asserting containment within workspace_dir.
+    """
+    ws_abs = os.path.abspath(workspace_dir)
+    if custom_dir:
+        cand = os.path.abspath(custom_dir)
+        if os.path.commonpath([ws_abs, cand]) != ws_abs:
+            raise ValueError(
+                f"vector_db_dir '{custom_dir}' escapes workspace '{workspace_dir}'"
+            )
+        return cand
+
+    canonical_dir = os.path.join(ws_abs, "outputs", "database", "search_vector")
+    legacy_dir = os.path.join(ws_abs, "outputs", "vector_db")
+
+    if os.path.exists(os.path.join(canonical_dir, "index.json")):
+        return canonical_dir
+    if os.path.exists(os.path.join(legacy_dir, "index.json")):
+        return legacy_dir
+    return canonical_dir
+
+
 class VectorEngine:
     FIELD_WEIGHTS = {
         "title": 4.0,
@@ -104,6 +129,7 @@ class VectorEngine:
         workspace_dir: Optional[str] = None,
         lazy: bool = False,
         auto_build: bool = False,
+        vector_db_dir: Optional[str] = None,
     ):
         if workspace_dir is None:
             workspace_dir = os.path.dirname(
@@ -112,7 +138,7 @@ class VectorEngine:
         self.workspace_dir = workspace_dir
         self.lazy = lazy
         self.auto_build = auto_build
-        self.vector_db_dir = os.path.join(self.workspace_dir, "outputs", "vector_db")
+        self.vector_db_dir = resolve_vector_db_dir(self.workspace_dir, vector_db_dir)
         self.raw_data_dir = os.path.join(self.workspace_dir, "outputs", "raw_data")
         self.index_file = os.path.join(self.vector_db_dir, "index.json")
         self.documents: List[Dict[str, Any]] = []
@@ -1395,4 +1421,5 @@ __all__ = [
     "KnowledgeGraphIndex",
     "ProximityGraphIndex",
     "extract_abstract_from_okf",
+    "resolve_vector_db_dir",
 ]

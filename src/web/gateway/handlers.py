@@ -2270,6 +2270,20 @@ class GatewayHandlers:
         start_response("200 OK", headers)
         return [body]
 
+    @staticmethod
+    def _resolve_preview_document(
+        workspace_dir: str, rel_path: str
+    ) -> Tuple[str, Optional[str]]:
+        abs_path = os.path.join(workspace_dir, rel_path)
+        if os.path.exists(abs_path):
+            return rel_path, abs_path
+        if "outputs/okf_papers/" in rel_path:
+            alt_rel = rel_path.replace("outputs/okf_papers/", "outputs/okf/papers/")
+            alt_abs = os.path.join(workspace_dir, alt_rel)
+            if os.path.exists(alt_abs):
+                return alt_rel, alt_abs
+        return rel_path, None
+
     def handle_preview(
         self, start_response: Callable[..., Any], path: str
     ) -> List[bytes]:
@@ -2281,9 +2295,10 @@ class GatewayHandlers:
                 start_response, f"Paper '{clean_id}' not found", status="404 Not Found"
             )
 
-        rel_path = paper.get("path", "")
-        abs_path = os.path.join(self.workspace_dir, rel_path)
-        if not os.path.exists(abs_path):
+        rel_path, abs_path = self._resolve_preview_document(
+            self.workspace_dir, paper.get("path", "")
+        )
+        if not abs_path:
             return response_error(
                 start_response,
                 f"OKF document file not found: {rel_path}",
