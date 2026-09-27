@@ -355,6 +355,35 @@ def test_index_html_mcp_sandbox_default_json_validity():
     assert parsed["top_k"] == 5
 
 
+def test_index_html_mcp_output_and_badge_guidance():
+    """Verifies that index.html contains #mcpStatusBadge and #mcpOutput with status: ready (Issue 399)."""
+    import re
+
+    index_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
+    )
+    with open(index_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    assert (
+        'id="mcpStatusBadge"' in html_content
+    ), "mcpStatusBadge not found in index.html"
+    assert "🟢 待機中 (Ready)" in html_content
+
+    match = re.search(
+        r'<pre\s+id="mcpOutput"[^>]*>(.*?)</pre>',
+        html_content,
+        re.DOTALL | re.IGNORECASE,
+    )
+    assert match is not None, "mcpOutput pre tag not found in index.html"
+    raw_output = match.group(1).strip()
+    parsed_output = json.loads(raw_output)
+    assert isinstance(parsed_output, dict)
+    assert parsed_output.get("status") == "ready"
+    assert "message" in parsed_output
+    assert "hint" in parsed_output
+
+
 def test_wsgi_app_post_mcp_ipc_isolation():
     """Verifies that POST /api/mcp executes via SearchClient IPC without loading VectorEngine in Web process."""
     from unittest.mock import MagicMock

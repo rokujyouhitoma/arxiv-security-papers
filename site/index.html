@@ -305,8 +305,15 @@
             </div>
 
             <div class="mcp-output-wrapper" style="margin-top: 20px;">
-              <h3 style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">JSON-RPC レスポンス:</h3>
-              <pre id="mcpOutput" class="code-block">{ "status": "idle" }</pre>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h3 style="font-size: 13px; font-weight: 700; margin: 0;">JSON-RPC レスポンス:</h3>
+                <span id="mcpStatusBadge" class="card-tag" style="background: rgba(56, 189, 248, 0.2); color: #0284c7; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">🟢 待機中 (Ready)</span>
+              </div>
+              <pre id="mcpOutput" class="code-block">{
+  "status": "ready",
+  "message": "MCP JSON-RPC サンドボックスは利用可能です。",
+  "hint": "上記のツール名と引数(JSON)を確認し、「⚡ MCP ツール呼び出し実行」をクリックしてください。"
+}</pre>
             </div>
           </div>
         </section>

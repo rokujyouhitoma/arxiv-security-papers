@@ -725,3 +725,15 @@ def test_scene_and_tab_scene_lifecycle() -> None:
         {"action": "exit:search"},
         {"action": "enter:trends", "data": {"period": "monthly"}},
     ]
+
+
+def test_mcp_tab_scene_director_registration() -> None:
+    """Verifies that site/app.js registers mcpTab with non-null onEnter lifecycle hook (Issue 399)."""
+    app_js_text = (REPO_ROOT / "site" / "app.js").read_text(encoding="utf-8")
+    assert (
+        "appSceneDirector.register('mcpTab', createTabScene(null, null));"
+        not in app_js_text
+    ), "site/app.js still registers mcpTab with createTabScene(null, null)"
+    assert (
+        "syncMcpSandboxState" in app_js_text
+    ), "site/app.js must call syncMcpSandboxState in mcpTab onEnter lifecycle"

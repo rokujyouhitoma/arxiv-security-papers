@@ -168,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const mcpArgsInput = document.getElementById('mcpArgsInput');
   const runMcpBtn = document.getElementById('runMcpBtn');
   const mcpOutput = document.getElementById('mcpOutput');
+  const mcpStatusBadge = document.getElementById('mcpStatusBadge');
 
   // ========================================================================
   // Source Resolution Helper (arXiv vs IACR ePrint)
@@ -334,7 +335,11 @@ document.addEventListener('DOMContentLoaded', () => {
         syncConsoleTelemetry();
       });
     }, null));
-    appSceneDirector.register('mcpTab', createTabScene(null, null));
+    appSceneDirector.register('mcpTab', createTabScene(() => {
+      DOMUtils.afterReflow(() => {
+        syncMcpSandboxState();
+      });
+    }, null));
   }
 
   function switchToTab(tabId, updateUrl = true) {
@@ -1082,6 +1087,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========================================================================
   // 7. MCP Sandbox Logic
   // ========================================================================
+  let mcpSandboxExecuted = false;
+
+  /**
+   * @param {string} status
+   * @param {string} label
+   */
+  function updateMcpStatusBadge(status, label) {
+    if (!mcpStatusBadge) return;
+    mcpStatusBadge.textContent = label;
+    if (status === 'ready') {
+      mcpStatusBadge.style.background = 'rgba(56, 189, 248, 0.2)';
+      mcpStatusBadge.style.color = '#0284c7';
+    } else if (status === 'running') {
+      mcpStatusBadge.style.background = 'rgba(234, 179, 8, 0.2)';
+      mcpStatusBadge.style.color = '#b45309';
+    } else if (status === 'success') {
+      mcpStatusBadge.style.background = 'rgba(34, 197, 94, 0.2)';
+      mcpStatusBadge.style.color = '#15803d';
+    } else if (status === 'error') {
+      mcpStatusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+      mcpStatusBadge.style.color = '#b91c1c';
+    }
+  }
+
+  function syncMcpSandboxState() {
+    if (!mcpSandboxExecuted) {
+      updateMcpStatusBadge('ready', '🟢 待機中 (Ready)');
+    }
+  }
+
   if (mcpToolSelect && mcpArgsInput) {
     mcpToolSelect.addEventListener('change', () => {
       const selected = mcpToolSelect.value;
@@ -1108,11 +1143,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (runMcpBtn && mcpOutput && mcpToolSelect && mcpArgsInput) {
     runMcpBtn.addEventListener('click', async () => {
+      mcpSandboxExecuted = true;
+      updateMcpStatusBadge('running', '⚡ 実行中 (Running)');
       mcpOutput.textContent = '⚡ MCP JSON-RPC 呼び出し中...';
       let args;
       try {
         args = JSON.parse(mcpArgsInput.value);
       } catch (err) {
+        updateMcpStatusBadge('error', '❌ 引数エラー (Error)');
         mcpOutput.textContent = `引数 (JSON) パースエラー: ${err.message}\n正しい JSON 形式（キーをダブルクォートで囲む等）で入力してください。`;
         return;
       }
@@ -1120,8 +1158,10 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const name = mcpToolSelect.value;
         const data = await appApiClient.post('/api/mcp', { name, arguments: args });
+        updateMcpStatusBadge('success', '✅ 完了 (Success)');
         mcpOutput.textContent = JSON.stringify(data, null, 2);
       } catch (err) {
+        updateMcpStatusBadge('error', '❌ 実行失敗 (Error)');
         mcpOutput.textContent = `API 呼び出しエラー: ${err.message}`;
       }
     });
