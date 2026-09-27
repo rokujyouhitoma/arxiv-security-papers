@@ -367,6 +367,46 @@ class TestJsSyntaxAndContracts(unittest.TestCase):
             f"Build manifest sources have issues: {missing_or_empty}",
         )
 
+    # ----------------------------------------------------------------------
+    # 6. Class Extends and Scope Hygiene (Issue 400)
+    # ----------------------------------------------------------------------
+    def test_no_unbound_class_extends_and_scenector_hygiene(self) -> None:
+        """Verify no unbound identifiers in class extends and ensure SceneCtor hygiene (Issue 400)."""
+        app_content = self.app_js.read_text(encoding="utf-8")
+        clean_app = _strip_comments_and_strings(app_content)
+
+        # 1. Ensure no unbound SceneCtor extends in app.js
+        self.assertNotIn(
+            "extends SceneCtor",
+            clean_app,
+            "site/app.js must not extend unbound identifier SceneCtor (Issue 400)",
+        )
+
+        # 2. Check all `class ... extends <ID>` occurrences in modular JS
+        targets = (
+            [self.app_js, self.dashboard_js]
+            + self.modular_js_files
+            + self.all_framework_files
+        )
+        for file_path in targets:
+            if file_path.name.endswith("-min.js") or file_path.name == "externs.js":
+                continue
+            text = _strip_comments_and_strings(file_path.read_text(encoding="utf-8"))
+            matches = re.findall(r"class\s+\w+\s+extends\s+([A-Za-z0-9_$]+)", text)
+            for target in matches:
+                # Allowed targets: built-ins or declared symbols in module
+                allowed = {"Error", "Object", "EventTarget", "HTMLElement"}
+                if target not in allowed:
+                    declared = bool(
+                        re.search(
+                            rf"\b(?:class|function|const|let|var)\s+{target}\b", text
+                        )
+                    )
+                    self.assertTrue(
+                        declared,
+                        f"Unbound class inheritance target '{target}' in {file_path.name}",
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()

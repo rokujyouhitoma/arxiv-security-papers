@@ -284,24 +284,21 @@ document.addEventListener('DOMContentLoaded', () => {
      * @return {!SceneInterface}
      */
     const createTabScene = (onEnter, onExit) => {
-      if (resolveFramework('Scene')) {
+      /**
+       * @implements {SceneInterface}
+       */
+      class TabScene {
         /**
-         * @extends {SceneCtor}
+         * @param {*=} data
+         * @override
          */
-        class TabScene extends SceneCtor {
-          /**
-           * @param {*=} data
-           * @override
-           */
-          enter(data) { if (onEnter) onEnter(data); }
-          /**
-           * @override
-           */
-          exit() { if (onExit) onExit(); }
-        }
-        return new TabScene();
+        enter(data) { if (onEnter) onEnter(data); }
+        /**
+         * @override
+         */
+        exit() { if (onExit) onExit(); }
       }
-      return /** @type {!SceneInterface} */ ({ enter: onEnter || (() => {}), exit: onExit || (() => {}) });
+      return new TabScene();
     };
 
     appSceneDirector.register('searchTab', createTabScene(null, null));

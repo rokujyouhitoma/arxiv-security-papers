@@ -656,3 +656,72 @@ def test_graph_canvas_engine_simulation_and_spatial_transform() -> None:
     assert data["scaleAfterReset"] == 1.0
     assert data["hitId"] == "n1"
     assert data["lccIds"] == ["n1", "n2", "n3"]
+
+
+def test_scene_and_tab_scene_lifecycle() -> None:
+    """Validate Scene, SceneCtor, SceneDirector, and TabScene lifecycle in Node.js (Issue 400)."""
+    import json
+    import shutil
+    import subprocess
+
+    app_js_text = (REPO_ROOT / "site" / "app.js").read_text(encoding="utf-8")
+    app_min_js_text = (REPO_ROOT / "site" / "app-min.js").read_text(encoding="utf-8")
+
+    # Static guard: app.js must not reference undeclared SceneCtor
+    assert (
+        "class TabScene extends SceneCtor" not in app_js_text
+    ), "site/app.js still contains 'class TabScene extends SceneCtor' without local binding (Issue 400)"
+    assert (
+        "extends SceneCtor" not in app_min_js_text
+    ), "site/app-min.js still contains 'extends SceneCtor' (Issue 400)"
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        return
+
+    script = """
+    const { Scene, SceneDirector } = require('./site/js/frameworks/scene.js');
+
+    const director = new SceneDirector();
+    const trace = [];
+
+    // TabScene implementation matching site/app.js
+    class SearchTabScene {
+        enter(data) { trace.push({ action: 'enter:search', data }); }
+        exit() { trace.push({ action: 'exit:search' }); }
+    }
+
+    class TrendsTabScene {
+        enter(data) { trace.push({ action: 'enter:trends', data }); }
+        exit() { trace.push({ action: 'exit:trends' }); }
+    }
+
+    director.register('searchTab', new SearchTabScene());
+    director.register('trendsTab', new TrendsTabScene());
+
+    // Execute transition lifecycle
+    director.transitionTo('searchTab', { query: 'cryptography' });
+    director.transitionTo('trendsTab', { period: 'monthly' });
+
+    console.log(JSON.stringify({
+        hasScene: typeof Scene === 'function',
+        hasSceneDirector: typeof SceneDirector === 'function',
+        currentScene: director.currentSceneName,
+        trace
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["hasScene"] is True
+    assert data["hasSceneDirector"] is True
+    assert data["currentScene"] == "trendsTab"
+    assert data["trace"] == [
+        {"action": "enter:search", "data": {"query": "cryptography"}},
+        {"action": "exit:search"},
+        {"action": "enter:trends", "data": {"period": "monthly"}},
+    ]
