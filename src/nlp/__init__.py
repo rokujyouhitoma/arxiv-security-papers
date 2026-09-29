@@ -13,6 +13,10 @@ from nlp.core.protocols import (
     TopicClustererSPI,
 )
 from nlp.core.tokens import Morpheme, Sentence, Span, Token, TopicCluster
+from nlp.lexicon.security_thesaurus import SecurityThesaurus
+from nlp.lexicon.stop_words import STOPWORDS, is_stop_word
+from nlp.morphology.trie import PrefixTrie, TrieNode
+from nlp.morphology.viterbi_tokenizer import PureMorphTokenizer
 from nlp.segmentation.academic_segmenter import AcademicSentenceSegmenter
 
 __all__ = [
@@ -28,4 +32,10 @@ __all__ = [
     "DiscourseSummarizerSPI",
     "TopicClustererSPI",
     "AcademicSentenceSegmenter",
+    "PrefixTrie",
+    "TrieNode",
+    "PureMorphTokenizer",
+    "SecurityThesaurus",
+    "STOPWORDS",
+    "is_stop_word",
 ]
