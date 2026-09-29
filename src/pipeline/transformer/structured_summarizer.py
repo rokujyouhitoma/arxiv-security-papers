@@ -11,6 +11,7 @@ Designed for future promotion to `src/nlp/` generic package.
 import re
 from typing import Dict, List, Optional, Tuple
 
+from nlp.segmentation.academic_segmenter import AcademicSentenceSegmenter
 from pipeline.transformer.translator import translate_title_ja
 
 # Discourse Markers for rhetoric classification
@@ -88,13 +89,12 @@ KEYWORD_TRANSLATIONS = [
 ]
 
 
+_SEGMENTER = AcademicSentenceSegmenter(min_sentence_length=10)
+
+
 def _split_into_sentences(text: str) -> List[str]:
-    """Splits an abstract into individual sentences."""
-    if not text:
-        return []
-    cleaned = text.replace("\n", " ").strip()
-    sentences = re.split(r"(?<=[.!?])\s+", cleaned)
-    return [s.strip() for s in sentences if len(s.strip()) > 10]
+    """Splits an abstract into individual sentences using AcademicSentenceSegmenter."""
+    return _SEGMENTER.split_text(text)
 
 
 def _score_sentence(sentence: str, markers: List[str]) -> int:
