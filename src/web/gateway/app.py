@@ -184,10 +184,14 @@ class WSGIApplication:
     def _handle_post(
         self, environ: Dict[str, Any], start_response: Callable[..., Any], path: str
     ) -> List[bytes]:
-        if path == "/api/mcp":
-            return self.handlers.handle_mcp_post(environ, start_response)
-        if path == "/api/spiders/trigger":
-            return self.handlers.handle_spider_trigger(environ, start_response)
+        routes = {
+            "/api/mcp": self.handlers.handle_mcp_post,
+            "/api/spiders/trigger": self.handlers.handle_spider_trigger,
+            "/api/spiders/checkpoint/clear": self.handlers.handle_spider_checkpoint_clear,
+        }
+        handler = routes.get(path)
+        if handler:
+            return handler(environ, start_response)
         return response_error(
             start_response, "Endpoint not found", status="404 Not Found"
         )

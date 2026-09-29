@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **401** | Web コンソールにおけるスパイダー巡回状態（チェックポイント）の可視化および再開・破棄制御UIの実装 | Feature | 2026-09-29 | [401-spider-checkpoint-status-visualization-and-web-resume-control.md](closed/401-spider-checkpoint-status-visualization-and-web-resume-control.md) |
 | **397** | 中断スパイダーの巡回状態（Frontier）保存・デーモンによる自動再開（Resume）機能の実装 | Feature | 2026-09-29 | [397-spider-frontier-state-persistence-and-daemon-resume.md](closed/397-spider-frontier-state-persistence-and-daemon-resume.md) |
 | **399** | MCP JSON-RPC サンドボックスの初期ガイダンス改善およびタブ遷移ライフサイクルの整備 | Bug | 2026-09-27 | [399-improve-mcp-sandbox-initial-guidance-and-tab-lifecycle.md](closed/399-improve-mcp-sandbox-initial-guidance-and-tab-lifecycle.md) |
 | **400** | site/app.js における SceneCtor 未定義エラー (ReferenceError) の解消 | Bug | 2026-09-27 | [400-fix-scenector-reference-error-in-tab-scene-creation.md](closed/400-fix-scenector-reference-error-in-tab-scene-creation.md) |

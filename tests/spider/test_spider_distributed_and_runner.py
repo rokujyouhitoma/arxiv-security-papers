@@ -40,6 +40,13 @@ def test_state_storage_pause_resume() -> None:
         StateStorage.save_state(scheduler, state_file)
         assert os.path.exists(state_file)
 
+        # Check metadata retrieval
+        info = StateStorage.get_checkpoint_info(state_file)
+        assert info["has_checkpoint"] is True
+        assert info["pending_count"] == 2
+        assert info["bloom_count"] == 2
+        assert "mtime" in info
+
         # Restore into new scheduler
         new_scheduler = Scheduler()
         restored = StateStorage.restore_state(new_scheduler, state_file)
@@ -51,6 +58,10 @@ def test_state_storage_pause_resume() -> None:
         first = new_scheduler.next_request()
         assert first is not None
         assert first.url == "https://arxiv.org/abs/2"  # Higher priority first
+
+        # Clear and verify info
+        StateStorage.clear_checkpoint(state_file)
+        assert StateStorage.get_checkpoint_info(state_file)["has_checkpoint"] is False
     finally:
         shutil.rmtree(temp_dir)
 

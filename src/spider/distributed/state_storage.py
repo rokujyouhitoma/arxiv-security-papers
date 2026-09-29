@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import heapq
 import json
 import os
@@ -129,6 +130,31 @@ def _restore_queue(scheduler: Scheduler, state: Dict[str, Any]) -> int:
     return restored
 
 
+def _format_mtime(mtime: float) -> str:
+    dt = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc)
+    return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def _read_checkpoint_metadata(path: str) -> Dict[str, Any]:
+    try:
+        stat = os.stat(path)
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        pending = int(data.get("pending_count", len(data.get("pending_requests", []))))
+        bloom_cnt = int(data.get("bloom_count", 0))
+        return {
+            "has_checkpoint": True,
+            "path": path,
+            "size_bytes": stat.st_size,
+            "mtime": _format_mtime(stat.st_mtime),
+            "pending_count": pending,
+            "bloom_count": bloom_cnt,
+            "version": str(data.get("version", "1.0")),
+        }
+    except Exception:
+        return {"has_checkpoint": False, "corrupted": True}
+
+
 class StateStorage:
     """Persists and restores Scheduler state (Frontier & Bloom filter) to atomic JSON."""
 
@@ -186,3 +212,14 @@ class StateStorage:
         except OSError:
             pass
         return False
+
+    @staticmethod
+    def get_checkpoint_info(
+        spider_name_or_path: str,
+        base_dir: str = "outputs/spider/checkpoints",
+    ) -> Dict[str, Any]:
+        """Returns structured metadata of a spider checkpoint if it exists."""
+        path = _resolve_checkpoint_file(spider_name_or_path, base_dir)
+        if not (os.path.isfile(path) and os.path.getsize(path) > 0):
+            return {"has_checkpoint": False}
+        return _read_checkpoint_metadata(path)

@@ -2059,6 +2059,22 @@ document.addEventListener('DOMContentLoaded', () => {
               intervalEl.textContent = `${sec}秒ごと`;
             }
           }
+
+          const ckpt = info.checkpoint;
+          const ckptContainer = document.getElementById(`containerSpiderCheckpoint_${key}`);
+          const ckptBadge = document.getElementById(`badgeSpiderCheckpoint_${key}`);
+          const ckptTime = document.getElementById(`valSpiderCheckpointTime_${key}`);
+          const resumeGroup = document.getElementById(`groupSpiderResume_${key}`);
+
+          if (ckpt && ckpt.has_checkpoint) {
+            if (ckptContainer) ckptContainer.style.display = 'block';
+            if (ckptBadge) ckptBadge.textContent = `${ckpt.pending_count ?? 0} 件保留`;
+            if (ckptTime) ckptTime.textContent = ckpt.mtime || '--';
+            if (resumeGroup) resumeGroup.style.display = 'flex';
+          } else {
+            if (ckptContainer) ckptContainer.style.display = 'none';
+            if (resumeGroup) resumeGroup.style.display = 'none';
+          }
         }
       });
     } catch (err) {
@@ -2202,14 +2218,15 @@ document.addEventListener('DOMContentLoaded', () => {
    * Triggers a spider execution with full UI feedback.
    * @param {string} spiderName
    * @param {Element=} triggerBtn  The button element that was clicked.
+   * @param {boolean=} resume      Whether to resume from existing checkpoint.
    */
-  async function triggerSpider(spiderName, triggerBtn) {
+  async function triggerSpider(spiderName, triggerBtn, resume = false) {
     if (triggerBtn && triggerBtn.hasAttribute('disabled')) return;
 
     // --- Immediate UI: disable button and show loading state ---
     if (triggerBtn) {
       triggerBtn.setAttribute('disabled', 'true');
-      triggerBtn.textContent = '⏳ 実行リクエスト送信中...';
+      triggerBtn.textContent = resume ? '⏳ 再開リクエスト送信中...' : '⏳ 実行リクエスト送信中...';
       triggerBtn.style.opacity = '0.6';
       triggerBtn.style.cursor = 'not-allowed';
     }
@@ -2217,9 +2234,14 @@ document.addEventListener('DOMContentLoaded', () => {
     _setSpiderBadge(spiderName, 'RUNNING');
 
     try {
-      const data = await appApiClient.post('/api/spiders/trigger', { spider_name: spiderName });
+      const payload = { spider_name: spiderName };
+      if (resume) {
+        payload.resume = true;
+      }
+      const data = await appApiClient.post('/api/spiders/trigger', payload);
       var jobId = data && data.job_id ? data.job_id : 'N/A';
-      showSpiderToast(spiderName.toUpperCase() + ' スパイダーの実行を開始しました (Job: ' + jobId + ')', 'info');
+      const actionLabel = resume ? 'の中断再開' : 'の実行';
+      showSpiderToast(spiderName.toUpperCase() + ' スパイダー' + actionLabel + 'を開始しました (Job: ' + jobId + ')', 'info');
 
       if (triggerBtn) {
         triggerBtn.textContent = '⏳ 実行中...';
@@ -2255,6 +2277,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  /**
+   * Clears a spider's saved checkpoint with user confirmation.
+   * @param {string} spiderName
+   * @param {Element=} clearBtn
+   */
+  async function clearSpiderCheckpoint(spiderName, clearBtn) {
+    if (clearBtn && clearBtn.hasAttribute('disabled')) return;
+    if (!window.confirm(`${spiderName.toUpperCase()} スパイダーの中断チェックポイントを破棄して初期化しますか？`)) {
+      return;
+    }
+    if (clearBtn) {
+      clearBtn.setAttribute('disabled', 'true');
+      clearBtn.textContent = '⏳ 破棄中...';
+    }
+    try {
+      const res = await appApiClient.post('/api/spiders/checkpoint/clear', { spider_name: spiderName });
+      if (res && res.cleared) {
+        showSpiderToast(`${spiderName.toUpperCase()} のチェックポイントを安全に破棄しました`, 'success');
+      } else {
+        showSpiderToast(`${spiderName.toUpperCase()} のチェックポイントは既に存在しません`, 'info');
+      }
+      await loadSpiderStatus();
+    } catch (err) {
+      const errMsg = err && err.message ? err.message : String(err);
+      showSpiderToast('チェックポイント破棄失敗: ' + errMsg, 'error');
+    } finally {
+      if (clearBtn) {
+        clearBtn.removeAttribute('disabled');
+        clearBtn.textContent = '🗑️ 破棄';
+      }
+    }
+  }
+
   // Setup Spider Listeners
   const btnRefreshSpiders = document.getElementById('btnRefreshSpiders');
   if (btnRefreshSpiders) {
@@ -2275,10 +2330,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('click', (e) => {
     const target = /** @type {?Element} */ (e.target);
-    const btn = target ? target.closest('.btn-trigger-spider') : null;
-    if (btn) {
-      const spider = btn.getAttribute('data-spider');
-      if (spider) triggerSpider(spider, btn);
+    const triggerBtn = target ? target.closest('.btn-trigger-spider') : null;
+    if (triggerBtn) {
+      const spider = triggerBtn.getAttribute('data-spider');
+      if (spider) triggerSpider(spider, triggerBtn, false);
+      return;
+    }
+    const resumeBtn = target ? target.closest('.btn-resume-spider') : null;
+    if (resumeBtn) {
+      const spider = resumeBtn.getAttribute('data-spider');
+      if (spider) triggerSpider(spider, resumeBtn, true);
+      return;
+    }
+    const clearBtn = target ? target.closest('.btn-clear-spider-checkpoint') : null;
+    if (clearBtn) {
+      const spider = clearBtn.getAttribute('data-spider');
+      if (spider) clearSpiderCheckpoint(spider, clearBtn);
+      return;
     }
   });
 

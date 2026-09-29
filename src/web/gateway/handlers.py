@@ -2596,6 +2596,7 @@ class GatewayHandlers:
         storage = SpiderExecutionStorage(db_path=db_path)
         self._reconcile_spider_storage_safe(storage)
         summary = storage.get_status_summary()
+        _enrich_spider_checkpoints(summary, self.workspace_dir)
         supervisor_state = _introspect_supervisor_state(self.workspace_dir)
         return response_json(
             start_response,
@@ -2726,6 +2727,59 @@ class GatewayHandlers:
                 "job_id": job_id,
             },
         )
+
+    def handle_spider_checkpoint_clear(
+        self,
+        environ: Dict[str, Any],
+        start_response: Callable[..., Any],
+    ) -> List[bytes]:
+        """Safely removes checkpoint file for specified spider."""
+        from spider.distributed.state_storage import StateStorage
+
+        body = self._read_trigger_data(environ)
+        spider_name = _validate_spider_name(body.get("spider_name"))
+        if not spider_name:
+            return response_json(
+                start_response,
+                {"error": "Invalid or missing spider_name"},
+                status="400 Bad Request",
+            )
+        checkpoints_dir = os.path.join(
+            self.workspace_dir, "outputs", "spider", "checkpoints"
+        )
+        cleared = StateStorage.clear_checkpoint(spider_name, base_dir=checkpoints_dir)
+        if not cleared and spider_name == "kev_cve":
+            cleared = StateStorage.clear_checkpoint(
+                "cisa_kev", base_dir=checkpoints_dir
+            )
+        return response_json(
+            start_response,
+            {"status": "ok", "cleared": cleared, "spider_name": spider_name},
+        )
+
+
+_SPIDER_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+
+def _validate_spider_name(name: Any) -> Optional[str]:
+    if not isinstance(name, str):
+        return None
+    val = name.strip()
+    return val if _SPIDER_NAME_RE.match(val) else None
+
+
+def _enrich_spider_checkpoints(summary: Dict[str, Any], workspace_dir: str) -> None:
+    from spider.distributed.state_storage import StateStorage
+
+    checkpoints_dir = os.path.join(workspace_dir, "outputs", "spider", "checkpoints")
+    for key, data in summary.items():
+        if isinstance(data, dict):
+            info = StateStorage.get_checkpoint_info(key, base_dir=checkpoints_dir)
+            if not info.get("has_checkpoint") and key == "kev_cve":
+                info = StateStorage.get_checkpoint_info(
+                    "cisa_kev", base_dir=checkpoints_dir
+                )
+            data["checkpoint"] = info
 
 
 def _normalize_spider_name(name: str) -> str:

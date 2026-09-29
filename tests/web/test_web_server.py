@@ -616,3 +616,100 @@ def test_spider_status_reconciles_stale_jobs(tmp_path, monkeypatch):
         status.startswith("200") and data["spiders"]["cwe"]["status"] == "INTERRUPTED"
     )
     assert history and history[0]["status"] == "INTERRUPTED"
+
+
+def test_spider_status_includes_checkpoint_info(tmp_path, monkeypatch):
+    """Tests that querying /api/spiders/status includes checkpoint metadata."""
+    from spider.core.downloader import Request
+    from spider.core.scheduler import Scheduler
+    from spider.daemon.storage import SpiderExecutionStorage
+    from spider.distributed.state_storage import StateStorage
+
+    test_db = str(tmp_path / "test_status_ckpt.vdb")
+    storage = SpiderExecutionStorage(db_path=test_db)
+    monkeypatch.setattr(
+        "spider.daemon.storage.SpiderExecutionStorage",
+        lambda db_path=None: storage,
+    )
+
+    ckpt_dir = tmp_path / "outputs" / "spider" / "checkpoints"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    scheduler = Scheduler()
+    scheduler.enqueue(Request(url="https://arxiv.org/abs/test.123"))
+    StateStorage.save_state(scheduler, str(ckpt_dir / "arxiv.state"))
+
+    inner_app = getattr(application, "app", application)
+    monkeypatch.setattr(
+        inner_app.handlers,
+        "workspace_dir",
+        str(tmp_path),
+    )
+
+    status, headers, body = call_wsgi(
+        application,
+        method="GET",
+        path="/api/spiders/status",
+    )
+    assert status.startswith("200")
+    data = json.loads(body.decode("utf-8"))
+    arxiv_info = data["spiders"]["arxiv"]
+    assert "checkpoint" in arxiv_info
+    assert arxiv_info["checkpoint"]["has_checkpoint"] is True
+    assert arxiv_info["checkpoint"]["pending_count"] == 1
+
+
+def test_spider_checkpoint_clear_api(tmp_path, monkeypatch):
+    """Tests POST /api/spiders/checkpoint/clear safely deletes checkpoint file."""
+    from spider.core.downloader import Request
+    from spider.core.scheduler import Scheduler
+    from spider.distributed.state_storage import StateStorage
+
+    ckpt_dir = tmp_path / "outputs" / "spider" / "checkpoints"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    scheduler = Scheduler()
+    scheduler.enqueue(Request(url="https://cwe.mitre.org/data/definitions/79.html"))
+    ckpt_path = str(ckpt_dir / "cwe.state")
+    StateStorage.save_state(scheduler, ckpt_path)
+    assert os.path.exists(ckpt_path)
+
+    inner_app = getattr(application, "app", application)
+    monkeypatch.setattr(
+        inner_app.handlers,
+        "workspace_dir",
+        str(tmp_path),
+    )
+
+    payload = json.dumps({"spider_name": "cwe"})
+    status, headers, body = call_wsgi(
+        application,
+        method="POST",
+        path="/api/spiders/checkpoint/clear",
+        body=payload,
+    )
+    assert status.startswith("200")
+    data = json.loads(body.decode("utf-8"))
+    assert data["status"] == "ok"
+    assert data["cleared"] is True
+    assert not os.path.exists(ckpt_path)
+
+
+def test_spider_checkpoint_clear_invalid_name(tmp_path, monkeypatch):
+    """Tests POST /api/spiders/checkpoint/clear rejects invalid spider names (path traversal)."""
+    inner_app = getattr(application, "app", application)
+    monkeypatch.setattr(
+        inner_app.handlers,
+        "workspace_dir",
+        str(tmp_path),
+    )
+
+    for bad_name in ["../etc/passwd", "spider/name", "", "   ", "a" * 100]:
+        payload = json.dumps({"spider_name": bad_name})
+        status, headers, body = call_wsgi(
+            application,
+            method="POST",
+            path="/api/spiders/checkpoint/clear",
+            body=payload,
+        )
+        assert status.startswith("400")
+        data = json.loads(body.decode("utf-8"))
+        assert "error" in data

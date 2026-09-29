@@ -827,8 +827,19 @@
                   <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">取得件数:</span> <strong id="valSpiderItems_arxiv" style="color: var(--console-accent-green);">--</strong></div>
                   <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">平均所要時間:</span> <span id="valSpiderDuration_arxiv">--</span></div>
                 </div>
-                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px;">
+                <div id="containerSpiderCheckpoint_arxiv" style="display: none; margin-top: 10px; padding: 6px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 6px; font-size: 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <span style="color: #60A5FA; font-weight: 600;">💾 中断チェックポイント</span>
+                    <span id="badgeSpiderCheckpoint_arxiv" style="background: rgba(59,130,246,0.25); color: #93C5FD; padding: 1px 6px; border-radius: 3px; font-family: var(--console-font-mono);">-- 件保留</span>
+                  </div>
+                  <div style="color: var(--console-fg-muted); font-size: 10px;">保存日時: <span id="valSpiderCheckpointTime_arxiv">--</span></div>
+                </div>
+                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
                   <button class="btn-console-primary btn-trigger-spider" data-spider="arxiv" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>
+                  <div id="groupSpiderResume_arxiv" style="display: none; gap: 6px;">
+                    <button class="btn-console-secondary btn-resume-spider" data-spider="arxiv" style="flex: 1; padding: 6px; font-size: 12px; cursor: pointer; border-color: rgba(59,130,246,0.5); color: #60A5FA;">⏯️ 中断から再開</button>
+                    <button class="btn-console-secondary btn-clear-spider-checkpoint" data-spider="arxiv" style="padding: 6px 10px; font-size: 12px; cursor: pointer; border-color: rgba(239,68,68,0.4); color: #F87171;" title="チェックポイントを破棄して初期化">🗑️ 破棄</button>
+                  </div>
                 </div>
               </div>
 
@@ -844,8 +855,19 @@
                   <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">取得件数:</span> <strong id="valSpiderItems_cwe" style="color: var(--console-accent-green);">--</strong></div>
                   <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">平均所要時間:</span> <span id="valSpiderDuration_cwe">--</span></div>
                 </div>
-                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px;">
+                <div id="containerSpiderCheckpoint_cwe" style="display: none; margin-top: 10px; padding: 6px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 6px; font-size: 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <span style="color: #60A5FA; font-weight: 600;">💾 中断チェックポイント</span>
+                    <span id="badgeSpiderCheckpoint_cwe" style="background: rgba(59,130,246,0.25); color: #93C5FD; padding: 1px 6px; border-radius: 3px; font-family: var(--console-font-mono);">-- 件保留</span>
+                  </div>
+                  <div style="color: var(--console-fg-muted); font-size: 10px;">保存日時: <span id="valSpiderCheckpointTime_cwe">--</span></div>
+                </div>
+                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
                   <button class="btn-console-primary btn-trigger-spider" data-spider="cwe" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>
+                  <div id="groupSpiderResume_cwe" style="display: none; gap: 6px;">
+                    <button class="btn-console-secondary btn-resume-spider" data-spider="cwe" style="flex: 1; padding: 6px; font-size: 12px; cursor: pointer; border-color: rgba(59,130,246,0.5); color: #60A5FA;">⏯️ 中断から再開</button>
+                    <button class="btn-console-secondary btn-clear-spider-checkpoint" data-spider="cwe" style="padding: 6px 10px; font-size: 12px; cursor: pointer; border-color: rgba(239,68,68,0.4); color: #F87171;" title="チェックポイントを破棄して初期化">🗑️ 破棄</button>
+                  </div>
                 </div>
               </div>
 
@@ -861,8 +883,19 @@
                   <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">取得件数:</span> <strong id="valSpiderItems_kev_cve" style="color: var(--console-accent-green);">--</strong></div>
                   <div style="display: flex; justify-content: space-between;"><span style="color: var(--console-fg-muted);">平均所要時間:</span> <span id="valSpiderDuration_kev_cve">--</span></div>
                 </div>
-                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px;">
+                <div id="containerSpiderCheckpoint_kev_cve" style="display: none; margin-top: 10px; padding: 6px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 6px; font-size: 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <span style="color: #60A5FA; font-weight: 600;">💾 中断チェックポイント</span>
+                    <span id="badgeSpiderCheckpoint_kev_cve" style="background: rgba(59,130,246,0.25); color: #93C5FD; padding: 1px 6px; border-radius: 3px; font-family: var(--console-font-mono);">-- 件保留</span>
+                  </div>
+                  <div style="color: var(--console-fg-muted); font-size: 10px;">保存日時: <span id="valSpiderCheckpointTime_kev_cve">--</span></div>
+                </div>
+                <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
                   <button class="btn-console-primary btn-trigger-spider" data-spider="kev_cve" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>
+                  <div id="groupSpiderResume_kev_cve" style="display: none; gap: 6px;">
+                    <button class="btn-console-secondary btn-resume-spider" data-spider="kev_cve" style="flex: 1; padding: 6px; font-size: 12px; cursor: pointer; border-color: rgba(59,130,246,0.5); color: #60A5FA;">⏯️ 中断から再開</button>
+                    <button class="btn-console-secondary btn-clear-spider-checkpoint" data-spider="kev_cve" style="padding: 6px 10px; font-size: 12px; cursor: pointer; border-color: rgba(239,68,68,0.4); color: #F87171;" title="チェックポイントを破棄して初期化">🗑️ 破棄</button>
+                  </div>
                 </div>
               </div>
             </div>
