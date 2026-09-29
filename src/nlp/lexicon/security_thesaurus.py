@@ -106,6 +106,14 @@ class SecurityThesaurus:
             return term
         return group[0]
 
+    def get_translations(self) -> Dict[str, str]:
+        """Return a copy of the English-to-Japanese mapping dictionary."""
+        return _EN_TO_JA_DICT.copy()
+
+    def items(self) -> Tuple[Tuple[str, str], ...]:
+        """Return tuple of (english_term, japanese_translation) pairs."""
+        return tuple(_EN_TO_JA_DICT.items())
+
     def get_all_vocabulary(self) -> Tuple[str, ...]:
         """Return all indexed security terms across languages."""
         vocab: Set[str] = set(_EN_TO_JA_DICT.keys()) | set(_EN_TO_JA_DICT.values())

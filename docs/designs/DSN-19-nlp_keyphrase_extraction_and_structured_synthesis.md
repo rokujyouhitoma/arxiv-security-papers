@@ -36,13 +36,15 @@
 - [7. 5階層サマリー（01_per_run 〜 05_annual）データフロー刷新](#7-5階層サマリー01_per_run--05_annualデータフロー刷新)
   - [7.1 サマリーディレクトリ構成と出力仕様](#71-サマリーディレクトリ構成と出力仕様)
   - [7.2 マークダウン表レイアウトと視覚的バッジ](#72-マークダウン表レイアウトと視覚的バッジ)
-- [8. 将来の `src/nlp/` 独立パッケージ化設計](#8-将来の-srcnlp-独立パッケージ化設計)
-  - [8.1 ドメイン非依存インターフェース（SPI）](#81-ドメイン非依存インターフェースspi)
-  - [8.2 依存関係逆転の原則（DIP）の遵守](#82-依存関係逆転の原則dipの遵守)
-- [9. 品質ゲート・検証計画・実装ロードマップ](#9-品質ゲート検証計画実装ロードマップ)
-  - [9.1 品質ゲート基準（Xenon Rank A, CC $\le 5$）](#91-品質ゲート基準xenon-rank-a-cc-le-5)
-  - [9.2 テストスイート構成](#92-テストスイート構成)
-  - [9.3 実装ステップとマイルストーン](#93-実装ステップとマイルストーン)
+- [8. `src/nlp/` 共通基盤パッケージアーキテクチャと段階的進化](#8-srcnlp-共通基盤パッケージアーキテクチャと段階的進化)
+  - [8.1 パッケージ構成とレイヤードアーキテクチャ](#81-パッケージ構成とレイヤードアーキテクチャ)
+  - [8.2 ドメイン非依存インターフェース（SPI Protocols）](#82-ドメイン非依存インターフェースspi-protocols)
+  - [8.3 Pure-Python 形態素解析器と Trie 木辞書の数理モデル](#83-pure-python-形態素解析器と-trie-木辞書の数理モデル)
+  - [8.4 学術論文向け文境界解析（Academic Sentence Segmentation）](#84-学術論文向け文境界解析academic-sentence-segmentation)
+  - [8.5 談話構造解析（Discourse Rhetoric）とモダリティ・否定文スコアリング](#85-談話構造解析discourse-rhetoricとモダリティ否定文スコアリング)
+  - [8.6 動的トピッククラスタリング（Dynamic Thematic Clustering）](#86-動的トピッククラスタリングdynamic-thematic-clustering)
+- [9. 自然言語処理基盤の4段階強化ロードマップ (Phased Roadmap)](#9-自然言語処理基盤の4段階強化ロードマップ-phased-roadmap)
+  - [9.1 品質ゲート基準 (Quality Gate Constraints)](#91-品質ゲート基準-quality-gate-constraints)
 
 ---
 
@@ -264,34 +266,145 @@ $$\text{C-Value}(a) = (\log_2 |a| + 1) \times \text{freq}(a)$$
 
 ---
 
-# 8. 将来の `src/nlp/` 独立パッケージ化設計
+# 8. `src/nlp/` 共通基盤パッケージアーキテクチャと段階的進化
 
-## 8.1 ドメイン非依存インターフェース（SPI）
+## 8.1 パッケージ構成とレイヤードアーキテクチャ
+
+`src/pipeline/transformer/` や `src/search/core/analysis/`、`src/database/index/` に散在している自然言語処理コンポーネントを、ゼロ外部依存の純粋 Python 汎用基盤 `src/nlp/` に統合・昇格（promotion）する。
+
+```
+src/nlp/
+├── __init__.py                  # 公開 API ファサード
+├── core/                        # ドメイン非依存 SPI プロトコル & 共通データ構造
+│   ├── __init__.py
+│   ├── protocols.py             # TokenizerSPI, SentenceSegmenterSPI, MorphologicalAnalyzerSPI 等
+│   └── tokens.py                # Token, Span, Sentence, AspectScore 構造体
+├── segmentation/                # 文境界解析
+│   ├── __init__.py
+│   └── academic_segmenter.py    # 略語・数式・引用保護付き学術論文向け文境界解析器
+├── morphology/                  # 形態素解析 & トークナイズ
+│   ├── __init__.py
+│   ├── trie.py                  # 純粋 Python ダブル配列 / プレフィックス Trie 木
+│   └── viterbi_tokenizer.py     # 最小コストパス / 最長一致 Pure-Python 形態素解析器
+├── lexicon/                     # 語彙辞書 & シソーラス
+│   ├── __init__.py
+│   ├── security_thesaurus.py    # セキュリティ専門用語対訳・類義語辞書
+│   └── stop_words.py            # 日英ストップワード・学術定型ノイズ語集
+├── extraction/                  # 重要語句抽出
+│   ├── __init__.py
+│   ├── textrank.py              # グラフベース TextRank (PageRank 数理モデル)
+│   └── cvalue.py                # 専門複合名詞句抽出 (C-Value アルゴリズム)
+├── summarization/               # 談話構造解析 & 構造化要約
+│   ├── __init__.py
+│   ├── discourse_parser.py      # 談話マーカー・モダリティ・否定文解析器
+│   └── structured_synthesizer.py# 【背景】【提案】【実証】3点要約合成器
+└── clustering/                  # 動的トピッククラスタリング
+    ├── __init__.py
+    └── topic_model.py           # TextRank/TF-IDF/ベクトル動的クラスタリング
+```
+
+## 8.2 ドメイン非依存インターフェース（SPI Protocols）
 
 ```python
+from typing import Dict, List, Optional, Protocol, Sequence, Set, Tuple
+
+
+class TokenizerSPI(Protocol):
+    """テキストをトークン列に分割する基本インターフェース。"""
+
+    def tokenize(self, text: str) -> List["Token"]: ...
+
+
+class SentenceSegmenterSPI(Protocol):
+    """テキストを文単位に分割するインターフェース。学術略語・数式・引用を保護。"""
+
+    def split_sentences(self, text: str) -> List[str]: ...
+
+
+class MorphologicalAnalyzerSPI(Protocol):
+    """ゼロ外部依存の形態素解析・品詞および複合語分かち書きインターフェース。"""
+
+    def parse(self, text: str) -> List["Morpheme"]: ...
+
+
 class KeyphraseExtractionSPI(Protocol):
+    """重要キーワードおよび複合名詞句抽出インターフェース。"""
+
     def extract_keyphrases(
         self, text: str, top_k: int = 5
-    ) -> List[str]: ...
+    ) -> List[Tuple[str, float]]: ...
 
 
 class DiscourseSummarizerSPI(Protocol):
+    """談話構造（Threat, Proposal, Impact）に基づく構造化要約インターフェース。"""
+
     def summarize(self, text: str) -> Dict[str, str]: ...
+
+
+class TopicClustererSPI(Protocol):
+    """複数ドキュメント群の動的トピッククラスタリング・トレンド抽出インターフェース。"""
+
+    def cluster(
+        self, documents: Sequence[Dict[str, str]], num_clusters: Optional[int] = None
+    ) -> List["TopicCluster"]: ...
 ```
+
+## 8.3 Pure-Python 形態素解析器と Trie 木辞書の数理モデル
+
+外部 C 拡張ライブラリ（MeCab / Janome / Sudachi 等）を一切用いず、純粋 Python のみで日本語セキュリティ論文・脆弱性情報の分かち書きを実現する。
+
+1. **プレフィックス Trie 木構造**:
+   - セキュリティ専門用語辞書（CVE, CWE, MITRE ATT&CK, 暗号技術, 脆弱性タイプ）を Trie 木にインデックス化。
+   - 文字列プレフィックス走査を $O(L)$（$L$ は単語長）で実行。
+2. **最小コストパス（Viterbi アルゴリズム）/ 最長一致法**:
+   - 文 $S = c_1 c_2 \dots c_n$ に対して単語生起コスト $C(w)$ と連接コスト $C(w_i, w_{i+1})$ を定義。
+   - 動的計画法（DP）により総コスト $\sum C$ が最小となる最適な単語境界分割パスを探索。未知語に対しては文字種（漢字・ひらがな・カタカナ・英数字）に基づく遷移コストヒューリスティクスを適用。
+
+## 8.4 学術論文向け文境界解析（Academic Sentence Segmentation）
+
+学術論文に頻出する以下のパターンによる誤分割を正規表現事前コンパイルとエスケープトークン保護により遮断：
+- **学術略語**: `e.g.`, `i.e.`, `et al.`, `cf.`, `etc.`, `vs.`, `approx.`
+- **文献・図表参照**: `Fig. 1`, `Table. 2`, `Ref. [3]`, `Sec. 4`
+- **バージョン・数値表記**: `v1.2.3`, `CVE-2026-1234`, `0.05`
+- **括弧・引用保護**: 引用符（`"..."`）および丸括弧（`(...)`）内のピリオドでは分割を行わない。
+
+## 8.5 談話構造解析（Discourse Rhetoric）とモダリティ・否定文スコアリング
+
+単純なキーワード出現カウントから、構文依存性を考慮した談話解析モデルへ進化：
+1. **否定表現・反論の減衰**:
+   - `not`, `never`, `cannot`, `fail to`, `despite` 等の否定詞のスコープ内にある提案マーカーはスコアを逆転・除外。
+2. **先行研究と自研究の分離**:
+   - `previously`, `prior work`, `existing methods`, `conventional` 等の先行研究コンテキスト文を識別し、自研究の【提案手法】と誤認することを防止。
+3. **モダリティ（確信度・実証強度）の判定**:
+   - `demonstrate`, `empirically prove`, `achieve`, `outperform` 等の強い実証語を持つ文を【実証結果・セキュリティ影響】の代表文として優先抽出。
+
+## 8.6 動的トピッククラスタリング（Dynamic Thematic Clustering）
+
+固定6カテゴリの辞書マッチングから、語彙共起グラフとベクトル空間モデルに基づく自律クラスタリングへ拡張：
+- 論文メタデータ（タイトル、アブストラクト、抽出キーワード）の TF-IDF / DeterministicEmbedding 行列を構築。
+- グラフベースの Louvain 法（モジュラリティ最大化）またはコサイン類似度凝縮型階層クラスタリング（Agglomerative Hierarchical Clustering）により、未知の新たなセキュリティ脅威（例: "Agentic AI Privilege Escalation", "Post-Quantum Cryptanalysis"）を動的にクラスタとして同定。
 
 ---
 
-# 9. 品質ゲート・検証計画・実装ロードマップ
+# 9. 自然言語処理基盤の4段階強化ロードマップ (Phased Roadmap)
 
-## 9.1 品質ゲート基準
-* **Xenon 循環的複雑度**: 全モジュール 100% Rank A（関数単体 CC $\le 5$）
-* **Radon Maintainability Index (MI)**: MI $\ge 80$ (Rank A)
-* **フォーマット**: `make check_format` (isort, black, flake8) 0 エラー
-* **テストカバレッジ**: 新設モジュール 100% 分岐網羅
+全15大専門エージェントの合意のもと、自然言語処理基盤の抜本的刷新を以下の4つの段階的 Issue として分割推進する。
 
-## 9.2 実装マイルストーン
-1. `keyword_extractor.py` の実装と単体テスト
-2. `structured_summarizer.py` の実装と単体テスト
-3. `thematic_synthesizer.py` の実装と単体テスト
-4. `summary_generator.py`, `index_updater.py` の統合
-5. 総合検証およびサマリー再生成テスト
+| Phase | 対応 Issue | 概要 | 対象モジュール | 主査エージェント |
+| :---: | :---: | :--- | :--- | :--- |
+| **Phase 1** | **Issue 405** | `src/nlp/` 共通基盤パッケージ創設、SPI 定義、学術文境界解析器の実装および既存モジュールの後方互換移管 | `src/nlp/core/`, `src/nlp/segmentation/`, `src/pipeline/transformer/` | Systems Architect, IT Specialist (NLP) |
+| **Phase 2** | **Issue 406** | ゼロ外部依存 Pure-Python 形態素解析器、Trie木辞書、セキュリティ専門用語シソーラスの実装と検索エンジントークナイザーへの統合 | `src/nlp/morphology/`, `src/nlp/lexicon/`, `src/search/core/analysis/` | Software Development, IT Specialist (NLP) |
+| **Phase 3** | **Issue 407** | 談話構造解析（Discourse Rhetoric）・否定文・モダリティ検知付き 3 点構造化要約エンジンの高度化 | `src/nlp/summarization/`, `src/nlp/extraction/` | Information Security, Education Specialist |
+| **Phase 4** | **Issue 408** | 動的トピッククラスタリングエンジンの実装と 5 階層エグゼクティブサマリー（Issue 404）自動連携 | `src/nlp/clustering/`, `src/summary/`, `outputs/executive_summaries/` | IT Strategist, UI/UX Designer |
+
+## 9.1 品質ゲート基準 (Quality Gate Constraints)
+
+1. **ゼロ外部依存 (Zero External Dependencies)**:
+   - 全モジュールは標準ライブラリのみで構成され、外部 NLP ライブラリ（spaCy, nltk, MeCab, HuggingFace 等）を一切要求しない。
+2. **循環的複雑度 (Cyclomatic Complexity)**:
+   - Xenon CC $\le 3$ (Rank A) を厳格遵守。
+3. **静的型検査 (Mypy Strict)**:
+   - `mypy --strict` 0 エラー（型注釈 100% 網羅）。
+4. **テストカバレッジ & 結合検証**:
+   - `pytest` による単体テストおよび後方互換性リグレッションテスト 100% PASS。
+
