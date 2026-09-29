@@ -2641,17 +2641,39 @@ class GatewayHandlers:
             {"status": "ok", "history": logs, "count": len(logs)},
         )
 
-    def _extract_trigger_name(self, environ: Dict[str, Any]) -> str:
+    @staticmethod
+    def _read_trigger_data(environ: Dict[str, Any]) -> Dict[str, Any]:
         try:
             length = int(environ.get("CONTENT_LENGTH", "0"))
-            if 0 < length <= 65536:
-                body = environ["wsgi.input"].read(length)
-                data = json.loads(body.decode("utf-8"))
-                if isinstance(data, dict):
-                    return str(data.get("spider_name", "arxiv"))
+            if length <= 0 or length > 65536:
+                return {}
+            raw = environ["wsgi.input"].read(length)
+            parsed = json.loads(raw.decode("utf-8"))
+            return parsed if isinstance(parsed, dict) else {}
         except Exception:
-            pass
-        return "arxiv"
+            return {}
+
+    @staticmethod
+    def _filter_trigger_keys(data: Dict[str, Any]) -> Dict[str, Any]:
+        allowed = (
+            "resume",
+            "resume_from_state",
+            "state_file",
+            "auto_resume",
+            "auto_checkpoint",
+        )
+        return {k: data[k] for k in allowed if k in data}
+
+    def _extract_trigger_params(
+        self, environ: Dict[str, Any]
+    ) -> tuple[str, Dict[str, Any]]:
+        data = self._read_trigger_data(environ)
+        spider_name = str(data.get("spider_name", "arxiv"))
+        return spider_name, self._filter_trigger_keys(data)
+
+    def _extract_trigger_name(self, environ: Dict[str, Any]) -> str:
+        spider_name, _ = self._extract_trigger_params(environ)
+        return spider_name
 
     def handle_spider_trigger(
         self,
@@ -2664,7 +2686,7 @@ class GatewayHandlers:
         from spider.daemon.contracts import CrawlJob
         from spider.daemon.storage import SpiderExecutionStorage
 
-        spider_name = self._extract_trigger_name(environ)
+        spider_name, params = self._extract_trigger_params(environ)
         db_path = os.path.join(
             self.workspace_dir, "outputs", "database", "spider_execution.vdb"
         )
@@ -2686,7 +2708,7 @@ class GatewayHandlers:
             )
 
         job_id = f"manual_{spider_name}_{int(time.time())}"
-        job = CrawlJob(job_id=job_id, spider_name=target_spider)
+        job = CrawlJob(job_id=job_id, spider_name=target_spider, params=params)
         storage.record_start(job)
 
         thread = threading.Thread(

@@ -125,6 +125,13 @@ class SpiderDaemonWorker:
         max_requests = params.get("max_requests")
         default_delay = float(params.get("default_delay", 0.5))
         persist_db = bool(params.get("persist_db", True))
+        state_file = params.get("state_file")
+        resume_from_state = bool(
+            params.get("resume_from_state", params.get("resume", False))
+        )
+
+        auto_checkpoint = bool(params.get("auto_checkpoint", True))
+        auto_resume = bool(params.get("auto_resume", True))
 
         raw_items = await run_spider(
             spider_name=job.spider_name,
@@ -132,6 +139,10 @@ class SpiderDaemonWorker:
             max_requests=max_requests,
             default_delay=default_delay,
             persist_db=persist_db,
+            state_file=state_file,
+            resume_from_state=resume_from_state,
+            auto_checkpoint=auto_checkpoint,
+            auto_resume=auto_resume,
         )
         stats: Dict[str, Any] = {
             "spider": job.spider_name,

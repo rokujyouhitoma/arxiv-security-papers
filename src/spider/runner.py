@@ -48,7 +48,57 @@ def _init_scheduler_state(
 ) -> None:
     if resume and state_file and os.path.exists(state_file):
         restored = StateStorage.restore_state(scheduler, state_file)
-        print(f"[*] Resumed {restored} requests from state: {state_file}")
+        print(f"[*] Resumed {restored} requests from state: {state_file}", flush=True)
+
+
+def _get_target_state_file(
+    spider_name: str, state_file: Optional[str], auto_checkpoint: bool
+) -> Optional[str]:
+    if state_file is not None:
+        return state_file
+    return (
+        StateStorage.get_default_checkpoint_path(spider_name)
+        if auto_checkpoint
+        else None
+    )
+
+
+def _is_resumable(auto_resume: bool, state_file: Optional[str]) -> bool:
+    if not auto_resume:
+        return False
+    return StateStorage.has_checkpoint(state_file) if state_file else False
+
+
+def _should_auto_resume(
+    resume_from_state: bool, auto_resume: bool, state_file: Optional[str]
+) -> bool:
+    if resume_from_state:
+        return True
+    return _is_resumable(auto_resume, state_file)
+
+
+def _resolve_effective_checkpoint(
+    spider_name: str,
+    state_file: Optional[str],
+    auto_checkpoint: bool,
+    resume_from_state: bool,
+    auto_resume: bool,
+) -> tuple[Optional[str], bool]:
+    target_file = _get_target_state_file(spider_name, state_file, auto_checkpoint)
+    should_resume = _should_auto_resume(resume_from_state, auto_resume, target_file)
+    return target_file, should_resume
+
+
+def _handle_spider_state_lifecycle(
+    scheduler: Scheduler, state_file: Optional[str]
+) -> None:
+    if not state_file:
+        return
+    if scheduler.has_pending_requests():
+        StateStorage.save_state(scheduler, state_file)
+        print(f"[*] Saved scheduler state to: {state_file}", flush=True)
+    else:
+        StateStorage.clear_checkpoint(state_file)
 
 
 def _build_spider_middlewares(
@@ -202,13 +252,19 @@ async def run_spider(
     pipelines: Optional[Sequence[Any]] = None,
     pipeline_factory: Optional[Callable[..., Sequence[Any]]] = None,
     pipeline_type: Optional[str] = None,
+    auto_checkpoint: bool = True,
+    auto_resume: bool = True,
 ) -> List[ScrapedItem]:
     """Runs a specific spider with full middleware and DI-injected pipeline stack."""
     spider_instance = _resolve_spider_instance(spider_name)
     effective_delay = _resolve_effective_delay(spider_instance, default_delay)
 
+    effective_state_file, should_resume = _resolve_effective_checkpoint(
+        spider_name, state_file, auto_checkpoint, resume_from_state, auto_resume
+    )
+
     scheduler = Scheduler(default_delay=effective_delay)
-    _init_scheduler_state(scheduler, state_file, resume_from_state)
+    _init_scheduler_state(scheduler, effective_state_file, should_resume)
 
     downloader = AsyncHttpDownloader()
     engine = Engine(downloader=downloader, scheduler=scheduler)
@@ -231,19 +287,20 @@ async def run_spider(
         f"(start_urls: {url_count}, pipelines: {pipe_count}, delay: {effective_delay:.1f}s, persist_db: {persist_db})",
         flush=True,
     )
-    items = await engine.crawl(
-        spider=spider_instance,
-        pipelines=resolved_pipelines,
-        middlewares=middlewares,
-        max_requests=max_requests,
-    )
-
-    if state_file:
-        StateStorage.save_state(scheduler, state_file)
-        print(f"[*] Saved scheduler state to: {state_file}")
+    items: List[ScrapedItem] = []
+    try:
+        items = await engine.crawl(
+            spider=spider_instance,
+            pipelines=resolved_pipelines,
+            middlewares=middlewares,
+            max_requests=max_requests,
+        )
+    finally:
+        _handle_spider_state_lifecycle(scheduler, effective_state_file)
 
     print(
-        f"[+] Spider '{spider_name}' completed. Scraped {len(items)} items. Stats: {engine.get_stats()}"
+        f"[+] Spider '{spider_name}' completed. Scraped {len(items)} items. Stats: {engine.get_stats()}",
+        flush=True,
     )
     return items
 
@@ -292,6 +349,10 @@ class SpiderRunner:
         max_requests: Optional[int] = None,
         pipelines: Optional[Sequence[Any]] = None,
         output_dir: Optional[str] = None,
+        state_file: Optional[str] = None,
+        resume_from_state: bool = False,
+        auto_checkpoint: bool = True,
+        auto_resume: bool = True,
     ) -> Dict[str, Any]:
         """Runs the spider synchronously and returns stats."""
         items = asyncio.run(
@@ -301,6 +362,10 @@ class SpiderRunner:
                 max_requests=max_requests or max_depth,
                 pipelines=pipelines or self.pipelines,
                 pipeline_type=self.pipeline_type,
+                state_file=state_file,
+                resume_from_state=resume_from_state,
+                auto_checkpoint=auto_checkpoint,
+                auto_resume=auto_resume,
             )
         )
         return {"spider": spider_name, "crawled": len(items)}

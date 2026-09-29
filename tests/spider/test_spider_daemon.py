@@ -106,6 +106,35 @@ class TestSpiderDaemonWorker(unittest.TestCase):
         self.assertEqual(self.worker.current_state, "IDLE")
 
     @patch("spider.daemon.worker.run_spider", new_callable=AsyncMock)
+    def test_execute_job_sync_with_resume_and_state_file(
+        self, mock_run: AsyncMock
+    ) -> None:
+        mock_run.return_value = [{"title": "Paper 1"}]
+        job = CrawlJob(
+            spider_name="arxiv",
+            params={
+                "max_requests": 2,
+                "state_file": "/tmp/test_state.json",
+                "resume_from_state": True,
+                "auto_resume": False,
+                "auto_checkpoint": True,
+            },
+        )
+        result = self.worker.execute_job_sync(job)
+        self.assertTrue(result.success)
+        mock_run.assert_called_once_with(
+            spider_name="arxiv",
+            output_dir=None,
+            max_requests=2,
+            default_delay=0.5,
+            persist_db=True,
+            state_file="/tmp/test_state.json",
+            resume_from_state=True,
+            auto_checkpoint=True,
+            auto_resume=False,
+        )
+
+    @patch("spider.daemon.worker.run_spider", new_callable=AsyncMock)
     def test_execute_job_sync_rate_limit(self, mock_run: AsyncMock) -> None:
         mock_run.side_effect = RuntimeError("HTTP 429 Too Many Requests")
         job = CrawlJob(spider_name="arxiv")
@@ -145,6 +174,33 @@ class TestSpiderDaemonClient(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.item_count, 5)
         self.assertEqual(result.stats.get("source"), "custom_fallback")
+
+    @patch("spider.daemon.client.run_spider", new_callable=AsyncMock)
+    def test_local_fallback_propagates_resume_params(self, mock_run: AsyncMock) -> None:
+        mock_run.return_value = [{"title": "Paper 1"}]
+        client = SpiderDaemonClient()
+        job = CrawlJob(
+            spider_name="arxiv",
+            params={
+                "state_file": "/tmp/custom_frontier.json",
+                "resume_from_state": True,
+                "auto_resume": False,
+                "auto_checkpoint": True,
+            },
+        )
+        result = client.submit_job(job)
+        self.assertTrue(result.success)
+        mock_run.assert_called_once_with(
+            spider_name="arxiv",
+            output_dir=None,
+            max_requests=None,
+            default_delay=0.5,
+            persist_db=False,
+            state_file="/tmp/custom_frontier.json",
+            resume_from_state=True,
+            auto_checkpoint=True,
+            auto_resume=False,
+        )
 
     def test_queue_dispatch_success(self) -> None:
         req_q: queue.Queue[Dict[str, Any]] = queue.Queue()

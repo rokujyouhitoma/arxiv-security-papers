@@ -33,8 +33,11 @@ class Engine:
         scheduler: Optional[Scheduler] = None,
         max_concurrent_requests: int = 16,
     ) -> None:
-        self.downloader: AsyncHttpDownloader = downloader or AsyncHttpDownloader()
-        self.scheduler: Scheduler = scheduler or Scheduler()
+        self.downloader: AsyncHttpDownloader = (
+            downloader if downloader is not None else AsyncHttpDownloader()
+        )
+        self.scheduler: Scheduler = scheduler if scheduler is not None else Scheduler()
+
         self.max_concurrent_requests: int = max_concurrent_requests
         self.running: bool = False
         self._waiting_delay: bool = False

@@ -34,17 +34,31 @@ def _copy_context_key(
         merged[key] = context[key]
 
 
+def _merge_context_spider_params(
+    merged: Dict[str, Any], context: Dict[str, Any]
+) -> None:
+    ctx_params = context.get("spider_params")
+    if isinstance(ctx_params, dict):
+        merged.update(ctx_params)
+
+
 def _merge_params(
     base_params: Optional[Dict[str, Any]], context: Dict[str, Any]
 ) -> Dict[str, Any]:
     merged: Dict[str, Any] = dict(base_params or {})
-    ctx_params = context.get("spider_params")
-    if isinstance(ctx_params, dict):
-        merged.update(ctx_params)
-    for key in ("output_dir", "max_requests", "default_delay", "persist_db"):
+    _merge_context_spider_params(merged, context)
+    for key in (
+        "output_dir",
+        "max_requests",
+        "default_delay",
+        "persist_db",
+        "state_file",
+        "resume_from_state",
+        "auto_checkpoint",
+        "auto_resume",
+    ):
         _copy_context_key(merged, context, key)
-    if "persist_db" not in merged:
-        merged["persist_db"] = True
+    merged.setdefault("persist_db", True)
     return merged
 
 

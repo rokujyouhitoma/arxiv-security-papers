@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import math
 import struct
-from typing import List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 _MASK64 = 0xFFFFFFFFFFFFFFFF
 
@@ -206,6 +206,31 @@ class BloomFilter:
             bf.count = count
         return bf
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serializes BloomFilter state into a dictionary."""
+        return {
+            "capacity": self.capacity,
+            "error_rate": self.error_rate,
+            "num_bits": self.num_bits,
+            "num_hashes": self.num_hashes,
+            "count": self.count,
+            "data_hex": self.bit_array.hex(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> BloomFilter:
+        """Deserializes BloomFilter from dictionary."""
+        bit_array = bytearray.fromhex(data["data_hex"])
+        bf = cls(
+            capacity=data["capacity"],
+            error_rate=data["error_rate"],
+            raw_bits=bit_array,
+            num_bits=data["num_bits"],
+            num_hashes=data["num_hashes"],
+        )
+        bf.count = data.get("count", 0)
+        return bf
+
 
 class ScalableBloomFilter:
     """Scalable Bloom Filter that dynamically adds sub-filters as capacity fills."""
@@ -263,3 +288,23 @@ class ScalableBloomFilter:
 
     def __len__(self) -> int:
         return sum(len(f) for f in self.filters)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serializes ScalableBloomFilter into a dictionary."""
+        return {
+            "initial_capacity": self.initial_capacity,
+            "error_rate": self.error_rate,
+            "scale_factor": self.scale_factor,
+            "filters": [f.to_dict() for f in self.filters],
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ScalableBloomFilter:
+        """Deserializes ScalableBloomFilter from dictionary."""
+        sbf = cls(
+            initial_capacity=data["initial_capacity"],
+            error_rate=data["error_rate"],
+            scale_factor=data["scale_factor"],
+        )
+        sbf.filters = [BloomFilter.from_dict(fd) for fd in data["filters"]]
+        return sbf

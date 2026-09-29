@@ -25,42 +25,50 @@ class Scheduler:
         self._domain_queues: DefaultDict[str, Deque[Request]] = defaultdict(deque)
         self._last_access: Dict[str, float] = {}
 
+    def __bool__(self) -> bool:
+        """Ensures scheduler instance is always truthy even when empty."""
+        return True
+
     def enqueue(self, request: Request) -> bool:
         """Enqueue a request if not already visited (unless dont_filter=True)."""
-        if not request.dont_filter:
-            if not self.bloom.add(request.url):
-                return False
+        if not request.dont_filter and not self.bloom.add(request.url):
+            return False
 
         self._counter += 1
         heapq.heappush(self._heap, (-request.priority, self._counter, request))
         return True
+
+    def _is_request_ready(self, req: Request, now: float) -> bool:
+        domain = _extract_domain(req.url)
+        last = self._last_access.get(domain, 0.0)
+        delay = float(req.meta.get("download_delay", self.default_delay))
+        return bool((now - last) >= delay)
+
+    def _mark_domain_accessed(self, req: Request, now: float) -> None:
+        domain = _extract_domain(req.url)
+        self._last_access[domain] = now
+
+    def _pop_ready_request(
+        self, now: float
+    ) -> Tuple[Optional[Request], List[Tuple[int, int, Request]]]:
+        skipped: List[Tuple[int, int, Request]] = []
+        while self._heap:
+            neg_prio, cnt, req = heapq.heappop(self._heap)
+            if self._is_request_ready(req, now):
+                self._mark_domain_accessed(req, now)
+                return req, skipped
+            skipped.append((neg_prio, cnt, req))
+        return None, skipped
 
     def next_request(self) -> Optional[Request]:
         """Pulls the next highest priority request respecting per-domain rate limits."""
         if not self._heap:
             return None
 
-        # Re-queue check for domain politeness
         now = time.perf_counter()
-        skipped: List[Tuple[int, int, Request]] = []
-        chosen: Optional[Request] = None
-
-        while self._heap:
-            neg_prio, cnt, req = heapq.heappop(self._heap)
-            domain = _extract_domain(req.url)
-            last = self._last_access.get(domain, 0.0)
-            delay = req.meta.get("download_delay", self.default_delay)
-
-            if now - last >= delay:
-                chosen = req
-                self._last_access[domain] = now
-                break
-            else:
-                skipped.append((neg_prio, cnt, req))
-
+        chosen, skipped = self._pop_ready_request(now)
         for item in skipped:
             heapq.heappush(self._heap, item)
-
         return chosen
 
     def has_pending_requests(self) -> bool:

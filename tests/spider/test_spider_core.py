@@ -223,3 +223,36 @@ def test_base_spider_start_requests_and_custom_headers() -> None:
         "Authorization": "Bearer secret-token",
         "X-Custom": "val",
     }
+
+
+def test_bloom_filter_dict_roundtrip() -> None:
+    bf = BloomFilter(capacity=500, error_rate=0.005)
+    bf.add("https://arxiv.org/abs/2609.1111")
+    bf.add("https://arxiv.org/abs/2609.2222")
+
+    d = bf.to_dict()
+    assert isinstance(d, dict)
+    assert d["count"] == 2
+    assert "data_hex" in d
+
+    restored_bf = BloomFilter.from_dict(d)
+    assert len(restored_bf) == 2
+    assert "https://arxiv.org/abs/2609.1111" in restored_bf
+    assert "https://arxiv.org/abs/2609.2222" in restored_bf
+    assert "https://arxiv.org/abs/2609.3333" not in restored_bf
+
+
+def test_scalable_bloom_filter_dict_roundtrip() -> None:
+    sbf = ScalableBloomFilter(initial_capacity=5, scale_factor=2)
+    for i in range(25):
+        sbf.add(f"https://nvd.nist.gov/vuln/detail/CVE-2026-{1000 + i}")
+
+    d = sbf.to_dict()
+    assert isinstance(d, dict)
+    assert len(d["filters"]) >= 2
+
+    restored_sbf = ScalableBloomFilter.from_dict(d)
+    assert len(restored_sbf) == 25
+    for i in range(25):
+        assert f"https://nvd.nist.gov/vuln/detail/CVE-2026-{1000 + i}" in restored_sbf
+    assert "https://nvd.nist.gov/vuln/detail/CVE-2026-9999" not in restored_sbf

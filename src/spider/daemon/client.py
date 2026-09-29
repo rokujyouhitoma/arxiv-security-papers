@@ -12,6 +12,8 @@ import queue
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from spider.runner import run_spider
+
 from .contracts import CrawlJob, CrawlResult
 
 logger = logging.getLogger(__name__)
@@ -56,7 +58,7 @@ class SpiderDaemonClient:
     async def _execute_local_async(self, job: CrawlJob) -> CrawlResult:
         start_t = _now()
         params = dict(job.params)
-        from ..runner import run_spider
+        resume_flag = bool(params.get("resume_from_state", params.get("resume", False)))
 
         try:
             raw_items = await run_spider(
@@ -65,7 +67,12 @@ class SpiderDaemonClient:
                 max_requests=params.get("max_requests"),
                 default_delay=float(params.get("default_delay", 0.5)),
                 persist_db=bool(params.get("persist_db", False)),
+                state_file=params.get("state_file"),
+                resume_from_state=resume_flag,
+                auto_checkpoint=bool(params.get("auto_checkpoint", True)),
+                auto_resume=bool(params.get("auto_resume", True)),
             )
+
             converted = self._convert_items(raw_items)
             return CrawlResult(
                 job_id=job.job_id,
