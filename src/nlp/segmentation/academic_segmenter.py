@@ -8,26 +8,17 @@ Zero external dependencies.
 """
 
 import re
-from typing import List
+from typing import List, Optional, Sequence, Tuple
 
+from nlp.core.context import _DEFAULT_ABBREVIATIONS, resolve_abbreviations
 from nlp.core.protocols import SentenceSegmenterSPI
 from nlp.core.tokens import Sentence, Span
 
 _DOT_PLACEHOLDER = "\ue001"
 _DEFAULT_MAX_LENGTH = 1_000_000
 
-# Academic abbreviations needing dot protection
-_ABBREVIATIONS = (
-    ("et al.", f"et al{_DOT_PLACEHOLDER}"),
-    ("e.g.", f"e{_DOT_PLACEHOLDER}g{_DOT_PLACEHOLDER}"),
-    ("i.e.", f"i{_DOT_PLACEHOLDER}e{_DOT_PLACEHOLDER}"),
-    ("etc.", f"etc{_DOT_PLACEHOLDER}"),
-    ("cf.", f"cf{_DOT_PLACEHOLDER}"),
-    ("vs.", f"vs{_DOT_PLACEHOLDER}"),
-    ("approx.", f"approx{_DOT_PLACEHOLDER}"),
-    ("viz.", f"viz{_DOT_PLACEHOLDER}"),
-    ("al.", f"al{_DOT_PLACEHOLDER}"),
-)
+# Academic abbreviations needing dot protection (backward-compatible)
+_ABBREVIATIONS: Tuple[Tuple[str, str], ...] = _DEFAULT_ABBREVIATIONS
 
 _REF_PATTERN = re.compile(
     r"\b(Fig|Figs|Table|Ref|Refs|Sec|Eq|No|Vol)\.\s*(\d+|\[)", re.IGNORECASE
@@ -38,10 +29,10 @@ _PAREN_PATTERN = re.compile(r"\(([^)\n]{1,500})\)")
 _SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 
 
-def _mask_abbreviations(text: str) -> str:
+def _mask_abbreviations(text: str, abbreviations: Sequence[Tuple[str, str]]) -> str:
     """Mask known academic abbreviations."""
     result = text
-    for abbr, repl in _ABBREVIATIONS:
+    for abbr, repl in abbreviations:
         pattern = re.compile(re.escape(abbr), re.IGNORECASE)
         result = pattern.sub(repl, result)
     return result
@@ -67,9 +58,9 @@ def _mask_quotes_and_parens(text: str) -> str:
     )
 
 
-def _mask_text(text: str) -> str:
+def _mask_text(text: str, abbreviations: Sequence[Tuple[str, str]]) -> str:
     """Apply sequential masking passes to protect non-sentence dots."""
-    step1 = _mask_abbreviations(text)
+    step1 = _mask_abbreviations(text, abbreviations)
     step2 = _mask_references(step1)
     step3 = _mask_decimals(step2)
     return _mask_quotes_and_parens(step3)
@@ -97,10 +88,16 @@ class AcademicSentenceSegmenter(SentenceSegmenterSPI):
         self,
         max_text_length: int = _DEFAULT_MAX_LENGTH,
         min_sentence_length: int = 5,
+        abbreviations: Optional[Sequence[Tuple[str, str]]] = None,
     ) -> None:
-        """Initialize segmenter with safety limits."""
+        """Initialize segmenter with safety limits and optional abbreviations."""
         self._max_text_length = max_text_length
         self._min_sentence_length = min_sentence_length
+        self._abbreviations = abbreviations
+
+    def _get_abbreviations(self) -> Sequence[Tuple[str, str]]:
+        """Resolve abbreviations via 3-tier fallback."""
+        return resolve_abbreviations(self._abbreviations)
 
     def split_sentences(self, text: str) -> List[Sentence]:
         """Split text into rich Sentence instances with exact spans."""
@@ -115,7 +112,8 @@ class AcademicSentenceSegmenter(SentenceSegmenterSPI):
         if not cleaned:
             return []
 
-        masked = _mask_text(cleaned)
+        abbrs = self._get_abbreviations()
+        masked = _mask_text(cleaned, abbrs)
         raw_chunks = _SPLIT_PATTERN.split(masked)
         return self._build_sentences(cleaned, raw_chunks)
 

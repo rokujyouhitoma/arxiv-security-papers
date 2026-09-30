@@ -7,43 +7,28 @@ Synthesizes high-precision structured Japanese summaries from academic papers:
 Zero external dependencies. Fully compliant with DiscourseSummarizerSPI.
 """
 
+from __future__ import annotations
+
 import re
 from typing import Callable, Dict, Optional, Tuple
 
+from nlp.core.context import (
+    _DEFAULT_SYNTHESIZER_RULES,
+    SynthesizerRuleConfig,
+    resolve_synthesizer_rules,
+    resolve_thesaurus,
+)
 from nlp.core.protocols import DiscourseSummarizerSPI
 from nlp.lexicon.security_thesaurus import SecurityThesaurus
 from nlp.segmentation.academic_segmenter import AcademicSentenceSegmenter
 from nlp.summarization.discourse_parser import DiscourseRhetoricParser
 
+# Backward-compatible module constants
 KEYWORD_TRANSLATIONS: Tuple[Tuple[str, str], ...] = (
-    ("prompt injection", "プロンプトインジェクション"),
-    ("jailbreak", "ジェイルブレイク"),
-    ("side-channel", "サイドチャネル攻撃"),
-    ("fault injection", "フォールト注入"),
-    ("zero-trust", "ゼロトラスト"),
-    ("differential privacy", "差分プライバシー"),
-    ("smart contract", "スマートコントラクト"),
-    ("malware", "マルウェア"),
-    ("rowhammer", "RowHammer"),
-    ("quantum", "量子"),
-    ("cryptography", "暗号技術"),
-    ("vulnerability", "脆弱性"),
-    ("adversarial attack", "敵対的攻撃"),
-    ("denial of service", "サービス拒否攻撃"),
-    ("access control", "アクセス制御"),
-    ("post-quantum", "耐量子計算機暗号"),
+    _DEFAULT_SYNTHESIZER_RULES.keyword_translations
 )
-
 PHRASE_REPLACEMENTS: Tuple[Tuple[str, str], ...] = (
-    ("in this paper, we", "本論文では"),
-    ("we propose", "新規に提案し"),
-    ("we present", "提示し"),
-    ("we design", "設計し"),
-    ("we develop", "開発し"),
-    ("we introduce", "導入し"),
-    ("we evaluate", "評価し"),
-    ("our results show that", "検証結果として"),
-    ("in this work,", "本研究では"),
+    _DEFAULT_SYNTHESIZER_RULES.phrase_replacements
 )
 
 
@@ -57,18 +42,18 @@ def _apply_thesaurus_replacement(text: str, thesaurus: SecurityThesaurus) -> str
     return res
 
 
-def _apply_keyword_replacements(text: str) -> str:
-    """Apply standard security keyword replacements."""
+def _apply_keyword_replacements(text: str, rules: SynthesizerRuleConfig) -> str:
+    """Apply configured keyword replacements."""
     res = text
-    for eng, jpn in KEYWORD_TRANSLATIONS:
+    for eng, jpn in rules.keyword_translations:
         res = re.sub(re.escape(eng), jpn, res, flags=re.IGNORECASE)
     return res
 
 
-def _apply_academic_phrase_replacements(text: str) -> str:
+def _apply_academic_phrase_replacements(text: str, rules: SynthesizerRuleConfig) -> str:
     """Replace common academic English phrasing with Japanese equivalents."""
     res = text
-    for eng_phrase, jpn_phrase in PHRASE_REPLACEMENTS:
+    for eng_phrase, jpn_phrase in rules.phrase_replacements:
         res = re.sub(re.escape(eng_phrase), jpn_phrase, res, flags=re.IGNORECASE)
     return res
 
@@ -81,21 +66,31 @@ def _truncate_with_ellipsis(text: str, max_chars: int) -> str:
 
 
 def _translate_sentence_to_japanese(
-    frag: Optional[str], default_text: str, thesaurus: SecurityThesaurus
+    frag: Optional[str],
+    default_text: str,
+    thesaurus: SecurityThesaurus,
+    rules: SynthesizerRuleConfig,
 ) -> str:
     """Convert an English sentence fragment into a concise Japanese summary element."""
     if not frag:
         return default_text
 
     res = _apply_thesaurus_replacement(frag, thesaurus)
-    res = _apply_keyword_replacements(res)
-    res = _apply_academic_phrase_replacements(res)
+    res = _apply_keyword_replacements(res, rules)
+    res = _apply_academic_phrase_replacements(res, rules)
     return _truncate_with_ellipsis(res, 90)
 
 
-def _format_executive_one_liner(prop_desc: str, impact_desc: str) -> str:
+def _format_executive_one_liner(
+    prop_desc: str,
+    impact_desc: str,
+    rules: Optional[SynthesizerRuleConfig] = None,
+) -> str:
     """Format single-line cohesive executive summary."""
-    one_liner = f"【提案】{prop_desc}。実証評価により{impact_desc}。"
+    active_rules = resolve_synthesizer_rules(rules)
+    one_liner = active_rules.executive_template.format(
+        prop=prop_desc, impact=impact_desc
+    )
     return _truncate_with_ellipsis(one_liner, 130)
 
 
@@ -105,22 +100,27 @@ def _build_descriptions(
     impact_sent: Optional[str],
     j_title: str,
     thesaurus: SecurityThesaurus,
+    rules: SynthesizerRuleConfig,
 ) -> Tuple[str, str, str]:
     """Construct 3-point structured textual descriptions."""
     threat_desc = _translate_sentence_to_japanese(
         threat_sent,
-        "既存システムのセキュリティ境界における脆弱性課題",
+        rules.threat_default_text,
         thesaurus,
+        rules,
     )
+    prop_default = rules.prop_default_template.format(j_title=j_title)
     prop_desc = _translate_sentence_to_japanese(
         prop_sent,
-        f"{j_title}の提案フレームワーク",
+        prop_default,
         thesaurus,
+        rules,
     )
     impact_desc = _translate_sentence_to_japanese(
         impact_sent,
-        "実験的評価による防御性能と攻撃耐性の実証",
+        rules.impact_default_text,
         thesaurus,
+        rules,
     )
     return threat_desc, prop_desc, impact_desc
 
@@ -134,16 +134,26 @@ class StructuredSynthesizer(DiscourseSummarizerSPI):
         parser: Optional[DiscourseRhetoricParser] = None,
         thesaurus: Optional[SecurityThesaurus] = None,
         title_translator: Optional[Callable[[str], str]] = None,
+        rules: Optional[SynthesizerRuleConfig] = None,
     ) -> None:
-        """Initialize StructuredSynthesizer with optional NLP components."""
+        """Initialize StructuredSynthesizer with optional NLP components and rules."""
         self._segmenter = (
             segmenter
             if segmenter is not None
             else AcademicSentenceSegmenter(min_sentence_length=10)
         )
         self._parser = parser if parser is not None else DiscourseRhetoricParser()
-        self._thesaurus = thesaurus if thesaurus is not None else SecurityThesaurus()
+        self._thesaurus = thesaurus
         self._title_translator = title_translator
+        self._rules = rules
+
+    def _get_thesaurus(self) -> SecurityThesaurus:
+        """Resolve SecurityThesaurus via 3-tier fallback."""
+        return resolve_thesaurus(self._thesaurus)
+
+    def _get_rules(self) -> SynthesizerRuleConfig:
+        """Resolve SynthesizerRuleConfig via 3-tier fallback."""
+        return resolve_synthesizer_rules(self._rules)
 
     def _resolve_japanese_title(self, title: str, override: Optional[str]) -> str:
         """Resolve Japanese title using override, translator, or fallback."""
@@ -176,8 +186,11 @@ class StructuredSynthesizer(DiscourseSummarizerSPI):
         sentences = self._segmenter.split_text(abstract)
         threat_s, prop_s, impact_s = self._parser.select_aspect_sentences(sentences)
 
+        thesaurus = self._get_thesaurus()
+        rules = self._get_rules()
+
         threat_desc, prop_desc, impact_desc = _build_descriptions(
-            threat_s, prop_s, impact_s, j_title, self._thesaurus
+            threat_s, prop_s, impact_s, j_title, thesaurus, rules
         )
 
         return {
@@ -185,5 +198,7 @@ class StructuredSynthesizer(DiscourseSummarizerSPI):
             "threat": threat_desc,
             "proposal": prop_desc,
             "impact": impact_desc,
-            "executive_summary": _format_executive_one_liner(prop_desc, impact_desc),
+            "executive_summary": _format_executive_one_liner(
+                prop_desc, impact_desc, rules
+            ),
         }

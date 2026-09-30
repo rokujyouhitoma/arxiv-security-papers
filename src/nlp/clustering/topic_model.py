@@ -14,6 +14,11 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from core.structures.community import LouvainCommunityDetector
+from nlp.core.context import (
+    _DEFAULT_TOPIC_DOMAINS,
+    resolve_thesaurus,
+    resolve_topic_domains,
+)
 from nlp.core.protocols import TopicClustererSPI
 from nlp.core.tokens import TopicCluster
 from nlp.lexicon.security_thesaurus import SecurityThesaurus
@@ -22,79 +27,7 @@ from nlp.lexicon.stop_words import STOPWORDS
 _WORD_PATTERN = re.compile(r"[a-zA-Z0-9_\-\.]{2,}")
 
 _CANONICAL_DOMAIN_MAP: List[Tuple[str, Tuple[str, ...]]] = [
-    (
-        "AI/LLM セキュリティ & 敵対的攻撃",
-        (
-            "llm",
-            "prompt injection",
-            "jailbreak",
-            "agent",
-            "adversarial",
-            "rag",
-            "poisoning",
-            "backdoor",
-        ),
-    ),
-    (
-        "ハードウェア & 低レイヤ物理セキュリティ",
-        (
-            "rowhammer",
-            "fault injection",
-            "dram",
-            "hardware",
-            "side-channel",
-            "spectre",
-            "meltdown",
-        ),
-    ),
-    (
-        "量子暗号 & ゼロ知識証明技術",
-        (
-            "quantum",
-            "qkd",
-            "post-quantum",
-            "lattice",
-            "zero-knowledge",
-            "cryptography",
-            "pqc",
-            "zkp",
-        ),
-    ),
-    (
-        "ソフトウェア脆弱性 & Web3/DeFi",
-        (
-            "smart contract",
-            "defi",
-            "blockchain",
-            "vulnerability",
-            "fuzzing",
-            "malware",
-            "exploit",
-        ),
-    ),
-    (
-        "ネットワークセキュリティ & 通信耐障害性",
-        (
-            "network",
-            "ipsec",
-            "ddos",
-            "traffic",
-            "quic",
-            "routing",
-            "firewall",
-            "dns",
-        ),
-    ),
-    (
-        "プライバシー保護 & 匿名化技術",
-        (
-            "privacy",
-            "anonymity",
-            "differential privacy",
-            "federated learning",
-            "tracking",
-        ),
-    ),
+    (name, tuple(kws)) for name, kws in _DEFAULT_TOPIC_DOMAINS
 ]
 
 
@@ -189,7 +122,7 @@ def _build_similarity_graph(
     return adj
 
 
-def _score_domain_match(cluster_text: str, domain_keywords: Tuple[str, ...]) -> int:
+def _score_domain_match(cluster_text: str, domain_keywords: Sequence[str]) -> int:
     """Score how well a cluster text matches a canonical domain's keywords."""
     score = 0
     for kw in domain_keywords:
@@ -198,11 +131,13 @@ def _score_domain_match(cluster_text: str, domain_keywords: Tuple[str, ...]) -> 
     return score
 
 
-def _match_canonical_domain(cluster_text: str) -> Optional[str]:
+def _match_canonical_domain(
+    cluster_text: str, domain_map: Sequence[Tuple[str, Sequence[str]]]
+) -> Optional[str]:
     """Match cluster text to standard security domains if score threshold met."""
     best_domain: Optional[str] = None
     best_score = 0
-    for domain_name, kw_tuple in _CANONICAL_DOMAIN_MAP:
+    for domain_name, kw_tuple in domain_map:
         score = _score_domain_match(cluster_text, kw_tuple)
         if score > best_score:
             best_score = score
@@ -228,10 +163,11 @@ def _resolve_cluster_label(
     cluster_docs: List[Dict[str, Any]],
     top_terms: Tuple[str, ...],
     thesaurus: SecurityThesaurus,
+    domain_map: Sequence[Tuple[str, Sequence[str]]],
 ) -> str:
     """Resolve cluster label prioritizing canonical domains, then dynamic naming."""
     combined_text = " ".join(_extract_document_text(d) for d in cluster_docs)
-    matched = _match_canonical_domain(combined_text)
+    matched = _match_canonical_domain(combined_text, domain_map)
     if matched:
         return matched
     return _format_dynamic_label(top_terms, thesaurus)
@@ -267,12 +203,22 @@ class DynamicTopicClusterer(TopicClustererSPI):
         similarity_threshold: float = 0.15,
         resolution: float = 1.0,
         thesaurus: Optional[SecurityThesaurus] = None,
+        domain_map: Optional[Sequence[Tuple[str, Sequence[str]]]] = None,
     ) -> None:
-        """Initialize clusterer with similarity threshold and resolution."""
+        """Initialize clusterer with similarity threshold, resolution, and DI inputs."""
         self._similarity_threshold = similarity_threshold
         self._resolution = resolution
-        self._thesaurus = thesaurus if thesaurus is not None else SecurityThesaurus()
+        self._thesaurus = thesaurus
+        self._domain_map = domain_map
         self._detector = LouvainCommunityDetector()
+
+    def _get_thesaurus(self) -> SecurityThesaurus:
+        """Resolve SecurityThesaurus via 3-tier fallback."""
+        return resolve_thesaurus(self._thesaurus)
+
+    def _get_domain_map(self) -> Sequence[Tuple[str, Sequence[str]]]:
+        """Resolve canonical topic domain map via 3-tier fallback."""
+        return resolve_topic_domains(self._domain_map)
 
     def _prepare_vectors(
         self, documents: Sequence[Dict[str, Any]]
@@ -298,7 +244,9 @@ class DynamicTopicClusterer(TopicClustererSPI):
         did = _derive_doc_id(doc, 0)
         tokens = _tokenize_text(_extract_document_text(doc))
         top_k = tuple(sorted(set(tokens), key=tokens.count, reverse=True)[:3])
-        label = _resolve_cluster_label([doc], top_k, self._thesaurus)
+        active_thesaurus = self._get_thesaurus()
+        active_domains = self._get_domain_map()
+        label = _resolve_cluster_label([doc], top_k, active_thesaurus, active_domains)
         return [
             TopicCluster(
                 cluster_id="cluster_0",
@@ -332,12 +280,17 @@ class DynamicTopicClusterer(TopicClustererSPI):
             comm_to_indices.items(), key=lambda kv: len(kv[1]), reverse=True
         )
 
+        active_thesaurus = self._get_thesaurus()
+        active_domains = self._get_domain_map()
+
         for c_id, indices in enumerate(sorted_comms, start=1):
             comm_num, doc_idx_list = indices
             c_docs = [documents[i] for i in doc_idx_list]
             c_dids = tuple(doc_ids[i] for i in doc_idx_list)
             top_terms = _extract_top_cluster_terms(doc_idx_list, vectors, top_k=3)
-            label = _resolve_cluster_label(c_docs, top_terms, self._thesaurus)
+            label = _resolve_cluster_label(
+                c_docs, top_terms, active_thesaurus, active_domains
+            )
             score = float(len(doc_idx_list))
 
             clusters.append(

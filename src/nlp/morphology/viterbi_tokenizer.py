@@ -6,55 +6,21 @@ domain-specific cybersecurity lexicon.
 Guaranteed linear O(N) runtime and Xenon CC <= 3 (Rank A).
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
+from nlp.core.context import (
+    _DEFAULT_GRAMMAR_ENTRIES,
+    resolve_grammar_entries,
+    resolve_thesaurus,
+)
 from nlp.core.protocols import MorphologicalAnalyzerSPI, TokenizerSPI
 from nlp.core.tokens import Morpheme, Span, Token
 from nlp.lexicon.security_thesaurus import SecurityThesaurus
 from nlp.morphology.trie import PrefixTrie
 
 # Default Japanese grammar vocabulary (surface, cost, pos)
-_GRAMMAR_ENTRIES: Tuple[Tuple[str, int, str], ...] = (
-    ("は", 20, "助詞"),
-    ("が", 20, "助詞"),
-    ("の", 15, "助詞"),
-    ("に", 20, "助詞"),
-    ("を", 20, "助詞"),
-    ("で", 20, "助詞"),
-    ("と", 20, "助詞"),
-    ("から", 30, "助詞"),
-    ("より", 30, "助詞"),
-    ("へ", 30, "助詞"),
-    ("も", 25, "助詞"),
-    ("や", 25, "助詞"),
-    ("である", 30, "助動詞"),
-    ("です", 30, "助動詞"),
-    ("ます", 30, "助動詞"),
-    ("だ", 30, "助動詞"),
-    ("た", 30, "助動詞"),
-    ("ない", 40, "助動詞"),
-    ("れる", 40, "助動詞"),
-    ("られる", 40, "助動詞"),
-    ("せる", 40, "助動詞"),
-    ("させる", 40, "助動詞"),
-    ("また", 40, "接続詞"),
-    ("しかし", 40, "接続詞"),
-    ("および", 40, "接続詞"),
-    ("さらに", 40, "接続詞"),
-    ("防ぐ", 50, "動詞"),
-    ("行う", 50, "動詞"),
-    ("用いる", 50, "動詞"),
-    ("示す", 50, "動詞"),
-    ("新しい", 60, "形容詞"),
-    ("高い", 60, "形容詞"),
-    ("低い", 60, "形容詞"),
-    ("手法", 40, "名詞"),
-    ("研究", 40, "名詞"),
-    ("評価", 40, "名詞"),
-    ("技術", 40, "名詞"),
-    ("モデル", 40, "名詞"),
-    ("システム", 40, "名詞"),
-)
+_GRAMMAR_ENTRIES: Tuple[Tuple[str, int, str], ...] = _DEFAULT_GRAMMAR_ENTRIES
+
 
 _MAX_UNKNOWN_LEN = 32
 _INF_COST = 1_000_000_000
@@ -107,25 +73,73 @@ def _extract_unknown_span(text: str, start: int) -> Tuple[int, int, str]:
     return end, cost, pos
 
 
-def _build_default_trie() -> PrefixTrie:
+def _build_default_trie(
+    grammar_entries: Optional[Sequence[Tuple[str, int, str]]] = None,
+    thesaurus: Optional[SecurityThesaurus] = None,
+) -> PrefixTrie:
     """Construct PrefixTrie populated with grammar and security vocabularies."""
     trie = PrefixTrie()
-    for surface, cost, pos in _GRAMMAR_ENTRIES:
+    entries = resolve_grammar_entries(grammar_entries)
+    for surface, cost, pos in entries:
         trie.insert(surface, (cost, pos))
 
-    thesaurus = SecurityThesaurus()
-    for term in thesaurus.get_all_vocabulary():
+    active_thesaurus = resolve_thesaurus(thesaurus)
+    for term in active_thesaurus.get_all_vocabulary():
         # Security terms given high priority (low cost = 10)
         trie.insert(term, (10, "名詞(セキュリティ)"))
     return trie
 
 
+def _is_default_morph_context() -> bool:
+    """Return True if dynamic morph context matches default constants."""
+    from nlp.core.context import (
+        _DEFAULT_GRAMMAR_ENTRIES,
+        _DEFAULT_SECURITY_TRANSLATIONS,
+        _DEFAULT_SYNONYM_GROUPS,
+        CURRENT_GRAMMAR_ENTRIES,
+        CURRENT_SECURITY_TRANSLATIONS,
+        CURRENT_SYNONYM_GROUPS,
+        CURRENT_THESAURUS,
+    )
+
+    flags = (
+        CURRENT_THESAURUS.value is None,
+        CURRENT_GRAMMAR_ENTRIES.value is _DEFAULT_GRAMMAR_ENTRIES,
+        CURRENT_SECURITY_TRANSLATIONS.value is _DEFAULT_SECURITY_TRANSLATIONS,
+        CURRENT_SYNONYM_GROUPS.value is _DEFAULT_SYNONYM_GROUPS,
+    )
+    return all(flags)
+
+
 class PureMorphTokenizer(MorphologicalAnalyzerSPI, TokenizerSPI):
     """Zero-dependency Viterbi-based morphological analyzer and tokenizer."""
 
-    def __init__(self, trie: Optional[PrefixTrie] = None) -> None:
-        """Initialize tokenizer with trie dictionary."""
-        self._trie = trie if trie is not None else _build_default_trie()
+    def __init__(
+        self,
+        trie: Optional[PrefixTrie] = None,
+        grammar_entries: Optional[Sequence[Tuple[str, int, str]]] = None,
+        thesaurus: Optional[SecurityThesaurus] = None,
+    ) -> None:
+        """Initialize tokenizer with optional trie, grammar entries, or thesaurus."""
+        self._explicit_trie: Optional[PrefixTrie] = trie
+        if trie is None and (grammar_entries is not None or thesaurus is not None):
+            self._explicit_trie = _build_default_trie(grammar_entries, thesaurus)
+        self._cached_default_trie: Optional[PrefixTrie] = None
+
+    def _get_active_trie(self) -> PrefixTrie:
+        """Return the active PrefixTrie using 3-tier fallback."""
+        if self._explicit_trie is not None:
+            return self._explicit_trie
+        if not _is_default_morph_context():
+            return _build_default_trie()
+        if self._cached_default_trie is None:
+            self._cached_default_trie = _build_default_trie()
+        return self._cached_default_trie
+
+    @property
+    def _trie(self) -> PrefixTrie:
+        """Backward-compatible trie accessor."""
+        return self._get_active_trie()
 
     def parse(self, text: str) -> List[Morpheme]:
         """Segment Japanese/English text into a list of Morpheme instances."""

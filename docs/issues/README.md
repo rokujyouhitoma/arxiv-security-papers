@@ -9,7 +9,6 @@
 | **402** | スパイダー巡回中のリアルタイム進捗率・ETA可視化およびプログレスバー表示の実装 | Feature | Medium | Open (New) | [402-spider-crawl-progress-bar-and-eta-visualization.md](402-spider-crawl-progress-bar-and-eta-visualization.md) |
 | **403** | ワーカー異常終了時の未完了チェックポイント自動検出と自己修復・自律再開ポリシーの実装 | Feature | Medium | Open (New) | [403-spider-crash-recovery-and-autonomous-resume-policy.md](403-spider-crash-recovery-and-autonomous-resume-policy.md) |
 | **404** | 最新OKF収集データの5階層エグゼクティブサマリー自動集約と動的Mermaidトレンド同期 | Feature | Medium | Open (New) | [404-okf-5-tier-executive-summary-sync-and-trend-analysis.md](404-okf-5-tier-executive-summary-sync-and-trend-analysis.md) |
-| **409** | 自然言語処理およびパイプライン層におけるドメイン固有語彙・文法規則・シソーラスの依存性注入 (DI) 化と責務分離 | Feature | High | Open (New) | [409-nlp-domain-lexicon-and-rules-di-injection.md](409-nlp-domain-lexicon-and-rules-di-injection.md) |
 
 ---
 
@@ -17,7 +16,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **409** | 自然言語処理およびパイプライン層におけるドメイン固有語彙・文法規則・シソーラスの依存性注入 (DI) 化と責務分離 | Feature | 2026-10-01 | [409-nlp-domain-lexicon-and-rules-di-injection.md](closed/409-nlp-domain-lexicon-and-rules-di-injection.md) |
 | **408** | 自然言語処理基盤 Phase 4: 動的トピッククラスタリングエンジンの実装と5階層エグゼクティブサマリー自動連携 | Feature | 2026-09-30 | [408-nlp-phase4-dynamic-topic-clustering-and-executive-sync.md](closed/408-nlp-phase4-dynamic-topic-clustering-and-executive-sync.md) |
+
 | **407** | 自然言語処理基盤 Phase 3: 談話構造解析・否定文＆モダリティ検知付き3点構造化要約エンジンの高度化 | Feature | 2026-09-29 | [407-nlp-phase3-discourse-rhetoric-and-structured-summarizer.md](closed/407-nlp-phase3-discourse-rhetoric-and-structured-summarizer.md) |
 | **406** | 自然言語処理基盤 Phase 2: Pure-Python 形態素解析器・Trie木辞書・セキュリティ専門語シソーラスの実装 | Feature | 2026-09-29 | [406-nlp-phase2-pure-python-morphology-and-security-thesaurus.md](closed/406-nlp-phase2-pure-python-morphology-and-security-thesaurus.md) |
 | **405** | 自然言語処理基盤 Phase 1: src/nlp/ 共通パッケージ創設・SPI定義・学術文境界解析器の実装 | Feature | 2026-09-29 | [405-nlp-phase1-core-package-spi-and-academic-segmenter.md](closed/405-nlp-phase1-core-package-spi-and-academic-segmenter.md) |

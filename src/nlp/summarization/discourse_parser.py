@@ -13,6 +13,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Sequence, Set, Tuple
 
+from nlp.core.context import (
+    _DEFAULT_DISCOURSE_MARKERS,
+    DiscourseMarkerConfig,
+    resolve_discourse_markers,
+)
+
 
 class SentenceAspect(str, Enum):
     """Aspect category of an academic sentence."""
@@ -44,96 +50,13 @@ class AspectScore:
         return SentenceAspect.IMPACT
 
 
-THREAT_MARKERS: Tuple[str, ...] = (
-    "vulnerab",
-    "threat",
-    "attack",
-    "exploit",
-    "leak",
-    "risk",
-    "flaw",
-    "problem",
-    "challenge",
-    "bypass",
-    "poison",
-    "jailbreak",
-    "side-channel",
-    "fault injection",
-    "malware",
-    "compromise",
-    "adversar",
-)
-
-PROPOSAL_MARKERS: Tuple[str, ...] = (
-    "propose",
-    "present",
-    "introduce",
-    "develop",
-    "design",
-    "framework",
-    "architecture",
-    "mechanism",
-    "approach",
-    "scheme",
-    "protocol",
-    "system",
-    "tool",
-    "algorithm",
-    "pipeline",
-)
-
-IMPACT_MARKERS: Tuple[str, ...] = (
-    "result",
-    "evaluat",
-    "demonstrat",
-    "experiment",
-    "achiev",
-    "outperform",
-    "effective",
-    "accuracy",
-    "overhead",
-    "mitigat",
-    "reduc",
-    "prevent",
-    "success rate",
-)
-
-NEGATION_PATTERNS: Tuple[str, ...] = (
-    r"\bnot\b",
-    r"\bnever\b",
-    r"\bcannot\b",
-    r"\bcan't\b",
-    r"\bfail(?:s|ed|ing)? to\b",
-    r"\bdespite\b",
-    r"\bwithout\b",
-    r"\bneither\b",
-    r"\bno longer\b",
-    r"\bunable to\b",
-    r"\blacks?\b",
-)
-
-PRIOR_WORK_PATTERNS: Tuple[str, ...] = (
-    r"\bprior work\b",
-    r"\bexisting (?:methods?|studies|approaches|tools?|systems?|solutions?)\b",
-    r"\btraditionally\b",
-    r"\bconventionally\b",
-    r"\bprevious literature\b",
-    r"\bstate-of-the-art\b",
-    r"\bpast work\b",
-    r"\bearlier work\b",
-    r"\bmost existing\b",
-)
-
-MODALITY_BOOSTERS: Tuple[str, ...] = (
-    r"\bempirically prove\b",
-    r"\bdemonstrate(?:s|d)?\b",
-    r"\boutperform(?:s|ed)?\b",
-    r"\bachieve(?:s|d)?\b",
-    r"\breduce(?:s|d)?\s+.*?\s+by\b",
-    r"\b\d+(?:\.\d+)?%\b",
-    r"\bsignificant(?:ly)?\b",
-    r"\brobust(?:ness)?\b",
-)
+# Backward-compatible default markers
+THREAT_MARKERS: Tuple[str, ...] = _DEFAULT_DISCOURSE_MARKERS.threat_markers
+PROPOSAL_MARKERS: Tuple[str, ...] = _DEFAULT_DISCOURSE_MARKERS.proposal_markers
+IMPACT_MARKERS: Tuple[str, ...] = _DEFAULT_DISCOURSE_MARKERS.impact_markers
+NEGATION_PATTERNS: Tuple[str, ...] = _DEFAULT_DISCOURSE_MARKERS.negation_patterns
+PRIOR_WORK_PATTERNS: Tuple[str, ...] = _DEFAULT_DISCOURSE_MARKERS.prior_work_patterns
+MODALITY_BOOSTERS: Tuple[str, ...] = _DEFAULT_DISCOURSE_MARKERS.modality_boosters
 
 
 def _matches_any_pattern(text: str, patterns: Sequence[str]) -> bool:
@@ -151,17 +74,19 @@ def _count_marker_matches(text: str, markers: Sequence[str]) -> int:
     return sum(1 for m in markers if m in lower)
 
 
-def _evaluate_modality(text: str) -> float:
+def _evaluate_modality(text: str, config: DiscourseMarkerConfig) -> float:
     """Compute empirical strength multiplier."""
-    boosts = sum(1 for pat in MODALITY_BOOSTERS if re.search(pat, text.lower()))
+    boosts = sum(1 for pat in config.modality_boosters if re.search(pat, text.lower()))
     return 1.0 + min(boosts * 0.5, 2.0)
 
 
-def _compute_raw_aspect_scores(sentence: str) -> Tuple[float, float, float]:
+def _compute_raw_aspect_scores(
+    sentence: str, config: DiscourseMarkerConfig
+) -> Tuple[float, float, float]:
     """Calculate raw keyword match counts for aspects."""
-    t_raw = float(_count_marker_matches(sentence, THREAT_MARKERS))
-    p_raw = float(_count_marker_matches(sentence, PROPOSAL_MARKERS))
-    i_raw = float(_count_marker_matches(sentence, IMPACT_MARKERS))
+    t_raw = float(_count_marker_matches(sentence, config.threat_markers))
+    p_raw = float(_count_marker_matches(sentence, config.proposal_markers))
+    i_raw = float(_count_marker_matches(sentence, config.impact_markers))
     return t_raw, p_raw, i_raw
 
 
@@ -201,18 +126,20 @@ def _adjust_for_prior_work(
     return adjusted_p, adjusted_t
 
 
-def _score_single_sentence(sentence: str, idx: int, total: int) -> AspectScore:
+def _score_single_sentence(
+    sentence: str, idx: int, total: int, config: DiscourseMarkerConfig
+) -> AspectScore:
     """Analyze rhetorical aspect and modifiers for one sentence."""
-    raw = _compute_raw_aspect_scores(sentence)
+    raw = _compute_raw_aspect_scores(sentence, config)
     t_pos, p_pos, i_pos = _apply_position_bias(raw, idx, total)
 
-    is_neg = _matches_any_pattern(sentence, NEGATION_PATTERNS)
+    is_neg = _matches_any_pattern(sentence, config.negation_patterns)
     p_neg, t_neg = _adjust_for_negation(p_pos, t_pos, is_neg)
 
-    is_prior = _matches_any_pattern(sentence, PRIOR_WORK_PATTERNS)
+    is_prior = _matches_any_pattern(sentence, config.prior_work_patterns)
     p_final, t_final = _adjust_for_prior_work(p_neg, t_neg, is_prior)
 
-    mod_weight = _evaluate_modality(sentence)
+    mod_weight = _evaluate_modality(sentence, config)
     i_final = i_pos * mod_weight
 
     return AspectScore(
@@ -249,11 +176,21 @@ def _find_best_sentence(
 class DiscourseRhetoricParser:
     """Rhetorical discourse parser with negation, prior-work, and modality filters."""
 
+    def __init__(self, marker_config: Optional[DiscourseMarkerConfig] = None) -> None:
+        """Initialize parser with optional DI marker configuration."""
+        self._marker_config = marker_config
+
+    def _get_marker_config(self) -> DiscourseMarkerConfig:
+        """Resolve active DiscourseMarkerConfig via 3-tier fallback."""
+        return resolve_discourse_markers(self._marker_config)
+
     def parse_sentences(self, sentences: Sequence[str]) -> List[AspectScore]:
         """Parse all sentences into detailed AspectScore objects."""
         total = len(sentences)
+        cfg = self._get_marker_config()
         return [
-            _score_single_sentence(s, idx, total) for idx, s in enumerate(sentences)
+            _score_single_sentence(s, idx, total, cfg)
+            for idx, s in enumerate(sentences)
         ]
 
     def select_aspect_sentences(

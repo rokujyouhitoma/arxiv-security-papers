@@ -3,7 +3,9 @@
 Zero external dependencies.
 """
 
-from typing import FrozenSet
+from typing import AbstractSet, FrozenSet, Optional
+
+from nlp.core.context import resolve_stopwords
 
 _EN_STOPWORDS = {
     "a",
@@ -254,8 +256,9 @@ _ACADEMIC_NOISE = {
 STOPWORDS: FrozenSet[str] = frozenset(_EN_STOPWORDS | _JA_STOPWORDS | _ACADEMIC_NOISE)
 
 
-def is_stop_word(term: str) -> bool:
+def is_stop_word(term: str, stopwords: Optional[AbstractSet[str]] = None) -> bool:
     """Return True if term is a known English or Japanese stopword."""
     if not term:
         return True
-    return term.strip().lower() in STOPWORDS
+    active_stopwords = resolve_stopwords(stopwords)
+    return term.strip().lower() in active_stopwords
