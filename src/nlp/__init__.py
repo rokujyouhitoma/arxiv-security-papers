@@ -4,6 +4,7 @@ Zero-dependency, pure-Python foundational framework for sentence segmentation,
 morphological analysis, keyphrase extraction, and discourse summarization.
 """
 
+from nlp.clustering import DynamicTopicClusterer, TrendAnalyzer
 from nlp.core.protocols import (
     DiscourseSummarizerSPI,
     KeyphraseExtractionSPI,
@@ -52,4 +53,6 @@ __all__ = [
     "AspectScore",
     "DiscourseRhetoricParser",
     "StructuredSynthesizer",
+    "DynamicTopicClusterer",
+    "TrendAnalyzer",
 ]
