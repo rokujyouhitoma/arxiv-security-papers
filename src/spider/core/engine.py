@@ -93,12 +93,24 @@ class Engine:
 
         _enqueue_start_urls(spider, self.scheduler, self._stats)
         await _open_pipelines(pipe_list, spider)
+        start_t = datetime.now(timezone.utc).timestamp()
+        _report_crawl_progress(spider, self.scheduler, 0, start_t, status="RUNNING")
+        processed_count = 0
         try:
-            processed_count = 0
             while self._should_continue_crawling(max_requests, processed_count):
                 if await self._step_crawl(spider, mid_list, pipe_list, scraped_items):
                     processed_count += 1
+                    _report_crawl_progress(
+                        spider,
+                        self.scheduler,
+                        processed_count,
+                        start_t,
+                        status="RUNNING",
+                    )
         finally:
+            _report_crawl_progress(
+                spider, self.scheduler, processed_count, start_t, status="COMPLETED"
+            )
             await _close_pipelines(pipe_list, spider)
 
         self.running = False
@@ -302,3 +314,25 @@ async def _handle_result(
         if item is not None:
             scraped_items.append(item)
             stats["items_scraped"] = int(stats["items_scraped"]) + 1
+
+
+def _report_crawl_progress(
+    spider: Any,
+    scheduler: Scheduler,
+    processed: int,
+    start_time: float,
+    status: str = "RUNNING",
+) -> None:
+    spider_name = getattr(spider, "name", "spider")
+    try:
+        from ..distributed.state_storage import StateStorage
+
+        StateStorage.save_progress(
+            spider_name=spider_name,
+            processed=processed,
+            pending=len(scheduler),
+            start_time=start_time,
+            status=status,
+        )
+    except Exception:
+        pass

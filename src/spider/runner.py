@@ -90,15 +90,18 @@ def _resolve_effective_checkpoint(
 
 
 def _handle_spider_state_lifecycle(
-    scheduler: Scheduler, state_file: Optional[str]
+    scheduler: Scheduler,
+    state_file: Optional[str],
+    spider_name: Optional[str] = None,
 ) -> None:
-    if not state_file:
-        return
-    if scheduler.has_pending_requests():
-        StateStorage.save_state(scheduler, state_file)
-        print(f"[*] Saved scheduler state to: {state_file}", flush=True)
-    else:
-        StateStorage.clear_checkpoint(state_file)
+    if state_file:
+        if scheduler.has_pending_requests():
+            StateStorage.save_state(scheduler, state_file)
+            print(f"[*] Saved scheduler state to: {state_file}", flush=True)
+        else:
+            StateStorage.clear_checkpoint(state_file)
+    if not scheduler.has_pending_requests() and spider_name:
+        StateStorage.clear_progress(spider_name)
 
 
 def _build_spider_middlewares(
@@ -296,7 +299,7 @@ async def run_spider(
             max_requests=max_requests,
         )
     finally:
-        _handle_spider_state_lifecycle(scheduler, effective_state_file)
+        _handle_spider_state_lifecycle(scheduler, effective_state_file, spider_name)
 
     print(
         f"[+] Spider '{spider_name}' completed. Scraped {len(items)} items. Stats: {engine.get_stats()}",

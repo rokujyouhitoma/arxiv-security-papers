@@ -2075,6 +2075,44 @@ document.addEventListener('DOMContentLoaded', () => {
             if (ckptContainer) ckptContainer.style.display = 'none';
             if (resumeGroup) resumeGroup.style.display = 'none';
           }
+
+          const prog = info.progress;
+          const progContainer = document.getElementById(`containerSpiderProgress_${key}`);
+          const progPct = document.getElementById(`valSpiderProgressPct_${key}`);
+          const progBar = document.getElementById(`barSpiderProgress_${key}`);
+          const progRatio = document.getElementById(`valSpiderProgressRatio_${key}`);
+          const progRate = document.getElementById(`valSpiderProgressRate_${key}`);
+          const progEta = document.getElementById(`valSpiderProgressEta_${key}`);
+
+          if (progContainer) {
+            const hasActiveProgress = isRunning || (prog && prog.is_active) || (prog && prog.status === 'RUNNING');
+            if (hasActiveProgress && prog) {
+              progContainer.style.display = 'block';
+              const pct = Number(prog.ratio_pct ?? 0).toFixed(1);
+              if (progPct) progPct.textContent = `${pct}%`;
+              if (progBar) {
+                progBar.style.width = `${Math.min(100, Math.max(0, Number(pct)))}%`;
+                progBar.setAttribute('aria-valuenow', pct);
+              }
+              if (progRatio) {
+                progRatio.textContent = `${prog.processed ?? 0} / ${prog.total ?? 0}`;
+              }
+              if (progRate) {
+                const r = Number(prog.pages_per_second ?? 0).toFixed(1);
+                progRate.textContent = `${r}/s`;
+              }
+              if (progEta) {
+                const etaSec = Number(prog.eta_seconds ?? 0);
+                if (etaSec > 0) {
+                  progEta.textContent = etaSec >= 60 ? `${Math.floor(etaSec / 60)}分${Math.round(etaSec % 60)}秒` : `${Math.round(etaSec)}秒`;
+                } else {
+                  progEta.textContent = (prog.processed ?? 0) > 0 && (prog.pending ?? 0) === 0 ? '完了間近' : '--';
+                }
+              }
+            } else {
+              progContainer.style.display = 'none';
+            }
+          }
         }
       });
     } catch (err) {

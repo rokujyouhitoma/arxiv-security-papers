@@ -2,7 +2,7 @@
 ID: 402
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] スパイダー巡回中のリアルタイム進捗率・ETA可視化およびプログレスバー表示の実装 (ID: 402)
@@ -31,14 +31,15 @@ Issue 397 および Issue 401 により、スパイダーの中断時巡回状�
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [src/spider/core/base_spider.py](../../src/spider/core/base_spider.py) (巡回カウンタ、処理速度、進捗テレメトリ集計ヘルパーの追加)
-- [ ] [src/spider/distributed/state_storage.py](../../src/spider/distributed/state_storage.py) (実行中スパイダーのリアルタイム進捗メトリクス取得API)
-- [ ] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py) (`handle_spider_status` レスポンスへの進捗率・ETA・処理レート情報の追加)
-- [ ] [site/index.html](../../site/index.html) (スパイダーカード内プログレスバー要素および ETA 表示コンテナの追加)
-- [ ] [site/app.js](../../site/app.js) (`loadSpiderStatus` におけるプログレスバー更新・ETA レンダリング処理の統合)
-- [ ] [tests/web/test_web_server.py](../../tests/web/test_web_server.py) (進捗率・ETA レスポンス構造の回帰テスト)
-- [ ] [tests/web/test_js_syntax_and_contracts.py](../../tests/web/test_js_syntax_and_contracts.py) (UI 要素バインディングの整合性検証)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳の進捗更新)
+- [x] [src/spider/core/engine.py](../../src/spider/core/engine.py) (巡回カウンタ、処理速度、リアルタイム進捗テレメトリ集計・更新)
+- [x] [src/spider/distributed/state_storage.py](../../src/spider/distributed/state_storage.py) (実行中スパイダーのリアルタイム進捗メトリクス取得・永続化・ETA計算API)
+- [x] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py) (`handle_spider_status` レスポンスへの進捗率・ETA・処理レート情報の追加)
+- [x] [site/index.html](../../site/index.html) (スパイダーカード内プログレスバー要素および ETA 表示コンテナの追加)
+- [x] [site/app.js](../../site/app.js) (`loadSpiderStatus` におけるプログレスバー更新・ETA レンダリング処理の統合)
+- [x] [tests/web/test_web_server.py](../../tests/web/test_web_server.py) (進捗率・ETA レスポンス構造の回帰テスト)
+- [x] [tests/web/test_js_syntax_and_contracts.py](../../tests/web/test_js_syntax_and_contracts.py) (UI 要素バインディングの整合性検証)
+- [x] [tests/spider/test_spider_progress.py](../../tests/spider/test_spider_progress.py) (進捗計算およびテレメトリ永続化テスト)
+- [x] [docs/issues/README.md](README.md) (Issue 台帳の進捗更新)
 
 ---
 
@@ -47,11 +48,11 @@ Issue 397 および Issue 401 により、スパイダーの中断時巡回状�
 Target Branch: `feat/402-spider-crawl-progress-bar-and-eta-visualization`
 
 1. **バックエンド**:
-   - `BaseSpider` および `Frontier` において、`processed_count`, `pending_count`, `start_time` から進捗率（`progress_ratio`）および巡回レート（`pages_per_second`）、ETA（秒）を計算する軽量ヘルパーを実装。
-   - `handlers.py` の `/api/spiders/status` レスポンスに `progress` オブジェクト（`processed`, `pending`, `total`, `ratio_pct`, `eta_seconds`, `rate`）を含める。
+   - `StateStorage` において、`processed_count`, `pending_count`, `start_time` から進捗率（`ratio_pct`）、巡回レート（`pages_per_second`）、ETA（秒）を計算・アトミック保存する API を実装。
+   - `handlers.py` の `/api/spiders/status` レスポンスに `progress` オブジェクトを含める。
 2. **フロントエンド**:
    - `site/index.html` の各スパイダーカード内にアニメーション付きプログレスバー（`<div class="progress-bar">`）と ETA / レートラベルを追加。
-   - `site/app.js` で `status === 'running'` 時のプログレスバー動的更新およびアクセシブルな `aria-valuenow` 属性の同期を行う。
+   - `site/app.js` で `status === 'RUNNING'` 時のプログレスバー動的更新およびアクセシブルな `aria-valuenow` 属性の同期を行う。
 3. **品質テスト**:
    - Web サーバー結合テストおよびフロントエンド静的構文テストを追加し、CC <= 3 を厳格維持。
 
@@ -59,7 +60,8 @@ Target Branch: `feat/402-spider-crawl-progress-bar-and-eta-visualization`
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] スパイダー実行中に `/api/spiders/status` から進捗メトリクス（処理済み数、保留数、進捗率%、ETA）が正しく返却される。
-- [ ] Web コンソールのスパイダー管理カードで実行中にプログレスバーおよび ETA 表示が滑らかに更新される。
-- [ ] チェックポイント再開時にも、再開時点の保留件数に基づき正確な進捗率が計算・表示される。
-- [ ] `make static_analysis` (mypy --strict, xenon CC <= 3) および全テストが 100% PASS すること。
+- [x] スパイダー実行中に `/api/spiders/status` から進捗メトリクス（処理済み数、保留数、進捗率%、ETA）が正しく返却される。
+- [x] Web コンソールのスパイダー管理カードで実行中にプログレスバーおよび ETA 表示が滑らかに更新される。
+- [x] チェックポイント再開時にも、再開時点の保留件数に基づき正確な進捗率が計算・表示される。
+- [x] `make static_analysis` (mypy --strict, xenon CC <= 3) および全テストが 100% PASS すること。
+

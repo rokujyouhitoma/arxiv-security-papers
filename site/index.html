@@ -834,6 +834,20 @@
                   </div>
                   <div style="color: var(--console-fg-muted); font-size: 10px;">保存日時: <span id="valSpiderCheckpointTime_arxiv">--</span></div>
                 </div>
+                <div id="containerSpiderProgress_arxiv" style="display: none; margin-top: 10px; padding: 8px 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 6px; font-size: 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="color: #60A5FA; font-weight: 600;">🔄 巡回進捗率</span>
+                    <strong id="valSpiderProgressPct_arxiv" style="color: #60A5FA; font-family: var(--console-font-mono);">0.0%</strong>
+                  </div>
+                  <div style="height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; margin: 4px 0 6px 0;">
+                    <div id="barSpiderProgress_arxiv" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3B82F6 0%, #10B981 100%); transition: width 0.3s ease; border-radius: 3px;"></div>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; color: var(--console-fg-muted); font-size: 10px;">
+                    <span>処理: <strong id="valSpiderProgressRatio_arxiv" style="color: var(--console-fg-body);">0 / 0</strong></span>
+                    <span>速度: <span id="valSpiderProgressRate_arxiv">0.0/s</span></span>
+                    <span>ETA: <strong id="valSpiderProgressEta_arxiv" style="color: #FBBF24;">--</strong></span>
+                  </div>
+                </div>
                 <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
                   <button class="btn-console-primary btn-trigger-spider" data-spider="arxiv" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>
                   <div id="groupSpiderResume_arxiv" style="display: none; gap: 6px;">
@@ -862,6 +876,20 @@
                   </div>
                   <div style="color: var(--console-fg-muted); font-size: 10px;">保存日時: <span id="valSpiderCheckpointTime_cwe">--</span></div>
                 </div>
+                <div id="containerSpiderProgress_cwe" style="display: none; margin-top: 10px; padding: 8px 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 6px; font-size: 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="color: #60A5FA; font-weight: 600;">🔄 巡回進捗率</span>
+                    <strong id="valSpiderProgressPct_cwe" style="color: #60A5FA; font-family: var(--console-font-mono);">0.0%</strong>
+                  </div>
+                  <div style="height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; margin: 4px 0 6px 0;">
+                    <div id="barSpiderProgress_cwe" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3B82F6 0%, #10B981 100%); transition: width 0.3s ease; border-radius: 3px;"></div>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; color: var(--console-fg-muted); font-size: 10px;">
+                    <span>処理: <strong id="valSpiderProgressRatio_cwe" style="color: var(--console-fg-body);">0 / 0</strong></span>
+                    <span>速度: <span id="valSpiderProgressRate_cwe">0.0/s</span></span>
+                    <span>ETA: <strong id="valSpiderProgressEta_cwe" style="color: #FBBF24;">--</strong></span>
+                  </div>
+                </div>
                 <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
                   <button class="btn-console-primary btn-trigger-spider" data-spider="cwe" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>
                   <div id="groupSpiderResume_cwe" style="display: none; gap: 6px;">
@@ -889,6 +917,20 @@
                     <span id="badgeSpiderCheckpoint_kev_cve" style="background: rgba(59,130,246,0.25); color: #93C5FD; padding: 1px 6px; border-radius: 3px; font-family: var(--console-font-mono);">-- 件保留</span>
                   </div>
                   <div style="color: var(--console-fg-muted); font-size: 10px;">保存日時: <span id="valSpiderCheckpointTime_kev_cve">--</span></div>
+                </div>
+                <div id="containerSpiderProgress_kev_cve" style="display: none; margin-top: 10px; padding: 8px 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 6px; font-size: 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="color: #60A5FA; font-weight: 600;">🔄 巡回進捗率</span>
+                    <strong id="valSpiderProgressPct_kev_cve" style="color: #60A5FA; font-family: var(--console-font-mono);">0.0%</strong>
+                  </div>
+                  <div style="height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; margin: 4px 0 6px 0;">
+                    <div id="barSpiderProgress_kev_cve" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3B82F6 0%, #10B981 100%); transition: width 0.3s ease; border-radius: 3px;"></div>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; color: var(--console-fg-muted); font-size: 10px;">
+                    <span>処理: <strong id="valSpiderProgressRatio_kev_cve" style="color: var(--console-fg-body);">0 / 0</strong></span>
+                    <span>速度: <span id="valSpiderProgressRate_kev_cve">0.0/s</span></span>
+                    <span>ETA: <strong id="valSpiderProgressEta_kev_cve" style="color: #FBBF24;">--</strong></span>
+                  </div>
                 </div>
                 <div style="margin-top: 14px; border-top: 1px solid var(--console-border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
                   <button class="btn-console-primary btn-trigger-spider" data-spider="kev_cve" style="width: 100%; padding: 6px; font-size: 12px; cursor: pointer;">⚡ 今すぐ実行 (Manual Trigger)</button>

@@ -656,6 +656,55 @@ def test_spider_status_includes_checkpoint_info(tmp_path, monkeypatch):
     assert "checkpoint" in arxiv_info
     assert arxiv_info["checkpoint"]["has_checkpoint"] is True
     assert arxiv_info["checkpoint"]["pending_count"] == 1
+    assert "progress" in arxiv_info
+    assert arxiv_info["progress"]["is_active"] is False
+
+
+def test_spider_status_includes_progress_info(tmp_path, monkeypatch):
+    """Tests that querying /api/spiders/status includes live crawl progress metrics."""
+    from spider.daemon.storage import SpiderExecutionStorage
+    from spider.distributed.state_storage import StateStorage
+
+    test_db = str(tmp_path / "test_status_prog.vdb")
+    storage = SpiderExecutionStorage(db_path=test_db)
+    monkeypatch.setattr(
+        "spider.daemon.storage.SpiderExecutionStorage",
+        lambda db_path=None: storage,
+    )
+
+    prog_dir = tmp_path / "outputs" / "spider" / "progress"
+    prog_dir.mkdir(parents=True, exist_ok=True)
+    start_t = 1000.0
+    StateStorage.save_progress(
+        spider_name="arxiv",
+        processed=20,
+        pending=60,
+        start_time=start_t,
+        status="RUNNING",
+        base_dir=str(prog_dir),
+    )
+
+    inner_app = getattr(application, "app", application)
+    monkeypatch.setattr(
+        inner_app.handlers,
+        "workspace_dir",
+        str(tmp_path),
+    )
+
+    status, headers, body = call_wsgi(
+        application,
+        method="GET",
+        path="/api/spiders/status",
+    )
+    assert status.startswith("200")
+    data = json.loads(body.decode("utf-8"))
+    arxiv_prog = data["spiders"]["arxiv"]["progress"]
+    assert arxiv_prog["is_active"] is True
+    assert arxiv_prog["status"] == "RUNNING"
+    assert arxiv_prog["processed"] == 20
+    assert arxiv_prog["pending"] == 60
+    assert arxiv_prog["total"] == 80
+    assert arxiv_prog["ratio_pct"] == 25.0
 
 
 def test_spider_checkpoint_clear_api(tmp_path, monkeypatch):

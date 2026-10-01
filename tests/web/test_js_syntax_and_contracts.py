@@ -407,6 +407,41 @@ class TestJsSyntaxAndContracts(unittest.TestCase):
                         f"Unbound class inheritance target '{target}' in {file_path.name}",
                     )
 
+    # ----------------------------------------------------------------------
+    # 7. Spider Progress Bar and ETA UI Element Binding (Issue 402)
+    # ----------------------------------------------------------------------
+    def test_spider_progress_bar_and_eta_elements_binding(self) -> None:
+        """Verify spider progress bar and ETA DOM bindings in site/index.html and site/app.js (Issue 402)."""
+        html = (_SITE / "index.html").read_text(encoding="utf-8")
+        app_js = self.app_js.read_text(encoding="utf-8")
+
+        for key in ("arxiv", "cwe", "kev_cve"):
+            self.assertIn(
+                f'id="containerSpiderProgress_{key}"',
+                html,
+                f"Missing containerSpiderProgress_{key} in site/index.html",
+            )
+            self.assertIn(
+                f'id="valSpiderProgressPct_{key}"',
+                html,
+                f"Missing valSpiderProgressPct_{key} in site/index.html",
+            )
+            self.assertIn(
+                f'id="barSpiderProgress_{key}"',
+                html,
+                f"Missing barSpiderProgress_{key} in site/index.html",
+            )
+            self.assertIn(
+                f'id="valSpiderProgressEta_{key}"',
+                html,
+                f"Missing valSpiderProgressEta_{key} in site/index.html",
+            )
+
+        self.assertIn("containerSpiderProgress_", app_js)
+        self.assertIn("valSpiderProgressPct_", app_js)
+        self.assertIn("barSpiderProgress_", app_js)
+        self.assertIn("valSpiderProgressEta_", app_js)
+
 
 if __name__ == "__main__":
     unittest.main()

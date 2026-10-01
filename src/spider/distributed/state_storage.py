@@ -155,6 +155,71 @@ def _read_checkpoint_metadata(path: str) -> Dict[str, Any]:
         return {"has_checkpoint": False, "corrupted": True}
 
 
+def _resolve_progress_file(target: str, base_dir: str) -> str:
+    """Resolves standard path for spider progress telemetry."""
+    if "/" in target or target.endswith(".json"):
+        return target
+    clean_name = re.sub(r"[^a-zA-Z0-9_-]", "", os.path.basename(target))
+    return os.path.join(base_dir, f"{clean_name}.progress.json")
+
+
+def _calc_progress_metrics(
+    processed: int, pending: int, elapsed_seconds: float
+) -> Dict[str, Any]:
+    """Calculates ratio, rate, and ETA from processed and pending queue counts."""
+    total = processed + pending
+    ratio_pct = round((processed / total * 100.0) if total > 0 else 0.0, 1)
+    rate = round(processed / elapsed_seconds, 2) if elapsed_seconds > 0 else 0.0
+    eta_sec = round(pending / rate, 1) if rate > 0 else 0.0
+    return {
+        "processed": processed,
+        "pending": pending,
+        "total": total,
+        "ratio_pct": ratio_pct,
+        "pages_per_second": rate,
+        "eta_seconds": eta_sec,
+        "elapsed_seconds": round(max(0.0, elapsed_seconds), 1),
+    }
+
+
+def _build_progress_dict(
+    spider_name: str, metrics: Dict[str, Any], start_time: float, status: str
+) -> Dict[str, Any]:
+    """Constructs progress telemetry document with UTC timestamp."""
+    now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+    res: Dict[str, Any] = {
+        "spider_name": spider_name,
+        "status": status,
+        "is_active": status == "RUNNING",
+        "start_time": start_time,
+        "updated_at": now,
+    }
+    res.update(metrics)
+    return res
+
+
+def _read_progress_metadata(path: str) -> Dict[str, Any]:
+    """Safely reads and deserializes progress file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {
+        "is_active": False,
+        "status": "IDLE",
+        "processed": 0,
+        "pending": 0,
+        "total": 0,
+        "ratio_pct": 0.0,
+        "pages_per_second": 0.0,
+        "eta_seconds": 0.0,
+        "elapsed_seconds": 0.0,
+    }
+
+
 class StateStorage:
     """Persists and restores Scheduler state (Frontier & Bloom filter) to atomic JSON."""
 
@@ -223,3 +288,64 @@ class StateStorage:
         if not (os.path.isfile(path) and os.path.getsize(path) > 0):
             return {"has_checkpoint": False}
         return _read_checkpoint_metadata(path)
+
+    @staticmethod
+    def calculate_progress(
+        processed: int, pending: int, elapsed_seconds: float
+    ) -> Dict[str, Any]:
+        """Calculates percentage, crawl rate, and ETA from processed and pending counts."""
+        return _calc_progress_metrics(processed, pending, elapsed_seconds)
+
+    @staticmethod
+    def save_progress(
+        spider_name: str,
+        processed: int,
+        pending: int,
+        start_time: float,
+        status: str = "RUNNING",
+        base_dir: str = "outputs/spider/progress",
+    ) -> Dict[str, Any]:
+        """Atomically persists live crawl telemetry progress to disk."""
+        elapsed = datetime.datetime.now(datetime.timezone.utc).timestamp() - start_time
+        metrics = _calc_progress_metrics(processed, pending, elapsed)
+        progress = _build_progress_dict(spider_name, metrics, start_time, status)
+        path = _resolve_progress_file(spider_name, base_dir)
+        _write_atomic_json(path, progress)
+        return progress
+
+    @staticmethod
+    def get_progress_info(
+        spider_name: str,
+        base_dir: str = "outputs/spider/progress",
+    ) -> Dict[str, Any]:
+        """Reads live crawl telemetry progress from disk."""
+        path = _resolve_progress_file(spider_name, base_dir)
+        if not (os.path.isfile(path) and os.path.getsize(path) > 0):
+            return {
+                "spider_name": spider_name,
+                "is_active": False,
+                "status": "IDLE",
+                "processed": 0,
+                "pending": 0,
+                "total": 0,
+                "ratio_pct": 0.0,
+                "pages_per_second": 0.0,
+                "eta_seconds": 0.0,
+                "elapsed_seconds": 0.0,
+            }
+        return _read_progress_metadata(path)
+
+    @staticmethod
+    def clear_progress(
+        spider_name: str,
+        base_dir: str = "outputs/spider/progress",
+    ) -> bool:
+        """Removes progress telemetry file."""
+        path = _resolve_progress_file(spider_name, base_dir)
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+                return True
+        except OSError:
+            pass
+        return False
