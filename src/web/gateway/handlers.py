@@ -56,7 +56,12 @@ from .router import (
     response_json,
     response_sse,
 )
-from .streaming import stream_log_tail, stream_system_events, stream_top_metrics
+from .streaming import (
+    stream_log_tail,
+    stream_pipeline_progress,
+    stream_system_events,
+    stream_top_metrics,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2572,6 +2577,16 @@ class GatewayHandlers:
             lambda: {"type": "heartbeat", "time": time.time(), "status": "online"},
             interval=interval,
         )
+        return response_sse(start_response, gen)
+
+    def handle_stream_pipeline(
+        self,
+        start_response: Callable[..., Any],
+        query_params: Dict[str, List[str]],
+    ) -> Any:
+        """Streams real-time pipeline execution progress and stages over Server-Sent Events (SSE)."""
+        interval = self._parse_stream_interval(query_params, default=1.0)
+        gen = stream_pipeline_progress(interval=interval)
         return response_sse(start_response, gen)
 
     @staticmethod

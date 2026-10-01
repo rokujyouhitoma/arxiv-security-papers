@@ -1984,6 +1984,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   window['closeSseStream'] = closeSseStream;
 
+  let pipelineSseManager = null;
+  function initPipelineStream(callback) {
+    const SSEStreamManagerCtor = resolveFramework('SSEStreamManager');
+    if (!SSEStreamManagerCtor) return null;
+    if (!pipelineSseManager) {
+      pipelineSseManager = new SSEStreamManagerCtor();
+    }
+    pipelineSseManager.open('/api/stream/pipeline?interval=1.0', {
+      'pipeline_event': (data) => {
+        if (callback && typeof callback === 'function') {
+          callback(data);
+        }
+      }
+    });
+    return pipelineSseManager;
+  }
+  window['initPipelineStream'] = initPipelineStream;
+
   // Start telemetry & SSE (Native EventSource lifecycle: beforeunload, pagehide, visibilitychange is managed by SSEStreamManager)
   initSseLiveStream();
 

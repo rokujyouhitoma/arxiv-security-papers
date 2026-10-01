@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import sys
 import threading
 import time
@@ -534,3 +535,59 @@ def stream_system_events(
         "system_events",
         lambda: _loop_system_events(ctrl, event_fetcher, interval, max_duration),
     )
+
+
+def _loop_pipeline_events(
+    ctrl: StreamController,
+    sub_q: queue.Queue[Dict[str, Any]],
+    interval: float,
+    max_duration: float,
+) -> Iterator[bytes]:
+    start_time = time.monotonic()
+    last_ping = start_time
+    seq = 0
+    while (time.monotonic() - start_time) < max_duration:
+        cycle_start = time.monotonic()
+        try:
+            evt = sub_q.get(timeout=min(interval, 0.5))
+            seq += 1
+            if ctrl.should_emit(priority=0):
+                yield format_sse_event(evt, event="pipeline_event", event_id=str(seq))
+        except queue.Empty:
+            pass
+
+        ping, last_ping = _check_ping(time.monotonic(), last_ping)
+        if ping is not None:
+            yield ping
+        ctrl.evaluate_cycle(time.monotonic() - cycle_start)
+
+
+def stream_pipeline_progress(
+    interval: float = 1.0,
+    max_duration: float = 3600.0,
+    controller: Optional[StreamController] = None,
+) -> Iterator[bytes]:
+    """Streams real-time pipeline execution progress, stages, and status updates via SSE."""
+    from pipeline.events import PipelineEventBroadcaster
+
+    broadcaster = PipelineEventBroadcaster.get_instance()
+    sub_q = broadcaster.subscribe()
+    ctrl = _resolve_ctrl(controller, "pipeline_progress", interval)
+
+    yield format_sse_event(
+        {"status": "connected", "stream": "pipeline_progress"},
+        event="connected",
+        event_id="0",
+    )
+
+    last_evt = broadcaster.get_last_event()
+    if last_evt:
+        yield format_sse_event(last_evt, event="pipeline_event", event_id="init")
+
+    def _safe_stream() -> Iterator[bytes]:
+        try:
+            yield from _loop_pipeline_events(ctrl, sub_q, interval, max_duration)
+        finally:
+            broadcaster.unsubscribe(sub_q)
+
+    yield from _wrap_stream(ctrl, "pipeline_progress", _safe_stream)

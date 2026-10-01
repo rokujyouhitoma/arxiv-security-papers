@@ -143,6 +143,8 @@ class WSGIApplication:
             return self.handlers.handle_stream_logs(start_response, query_params)
         if path == "/api/stream/events":
             return self.handlers.handle_stream_events(start_response, query_params)
+        if path == "/api/stream/pipeline":
+            return self.handlers.handle_stream_pipeline(start_response, query_params)
         return None
 
     def _route_api_get(

@@ -20,6 +20,7 @@ if _SRC_DIR not in sys.path:
 
 # 1. Ingestion Layer (Extract)
 try:
+    from .events import PipelineEventBroadcaster
     from .ingestion import (
         AdaptiveRateLimiter,
         ArxivSourceAdapter,
@@ -67,6 +68,7 @@ try:
     )
 except ImportError:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    from pipeline.events import PipelineEventBroadcaster
     from pipeline.ingestion import (
         AdaptiveRateLimiter,
         ArxivSourceAdapter,
@@ -376,6 +378,17 @@ def _transform_and_save_okf(
             processed_items.append(item)
             ok_count += 1
             status_desc = "OK"
+            PipelineEventBroadcaster.get_instance().emit(
+                "transformation_progress",
+                {
+                    "completed": idx,
+                    "total": total,
+                    "pct": round(pct, 1),
+                    "clean_id": clean_id,
+                    "status": "OK",
+                    "okf_path": item["rel_okf_path"],
+                },
+            )
             print(
                 f"[OKF:Transformer] [{idx:>3d}/{total:<3d}] ({pct:>5.1f}%) "
                 f"Paper: {clean_id:<25s} [{status_desc}] -> {item['rel_okf_path']}",
@@ -395,6 +408,16 @@ def _transform_and_save_okf(
             state_mgr.register_paper(meta_entry, auto_flush=False)
         except Exception as exc:
             err_count += 1
+            PipelineEventBroadcaster.get_instance().emit(
+                "transformation_progress",
+                {
+                    "completed": idx,
+                    "total": total,
+                    "pct": round(pct, 1),
+                    "clean_id": clean_id,
+                    "status": f"ERROR: {exc}",
+                },
+            )
             print(
                 f"[OKF:Transformer] [{idx:>3d}/{total:<3d}] ({pct:>5.1f}%) "
                 f"Paper: {clean_id:<25s} [ERROR: {exc}]",
@@ -621,6 +644,18 @@ def _execute_pdf_download_pool(
             status_desc, has_pdf, has_txt = _extract_task_status(future)
             pdf_count += int(has_pdf)
             txt_count += int(has_txt)
+            PipelineEventBroadcaster.get_instance().emit(
+                "ingestion_progress",
+                {
+                    "completed": completed,
+                    "total": total,
+                    "pct": round(pct, 1),
+                    "clean_id": clean_id,
+                    "status": status_desc,
+                    "has_pdf": has_pdf,
+                    "has_txt": has_txt,
+                },
+            )
             print(
                 f"[Ingestion:PDF] [{completed:>3d}/{total:<3d}] ({pct:>5.1f}%) "
                 f"Paper: {clean_id:<25s} [{status_desc}]",
@@ -677,6 +712,10 @@ def run_theme_pipeline(
         f"=== [Theme Pipeline] Running theme '{theme.name}' ({theme.theme_id}) ===",
         flush=True,
     )
+    PipelineEventBroadcaster.get_instance().emit(
+        "pipeline_start",
+        {"theme_id": theme.theme_id, "theme_name": theme.name},
+    )
     from observability import get_tracer, init_observability
 
     init_observability(service_name="arxiv-security-papers-pipeline")
@@ -692,17 +731,37 @@ def run_theme_pipeline(
         )
         if not pdf_fetch_tasks:
             print(f"[Theme: {theme_id}] No new papers to stage.", flush=True)
+            PipelineEventBroadcaster.get_instance().emit(
+                "pipeline_finish",
+                {
+                    "theme_id": theme.theme_id,
+                    "processed_count": 0,
+                    "message": "No new papers to stage",
+                },
+            )
             return []
 
         print(
             f"--- [Stage 1/3: Ingestion] Downloading raw PDFs & extracting text ({len(pdf_fetch_tasks)} papers) ---",
             flush=True,
         )
+        PipelineEventBroadcaster.get_instance().emit(
+            "stage_start",
+            {"stage": 1, "name": "Ingestion", "total_papers": len(pdf_fetch_tasks)},
+        )
         _download_theme_pdfs(pdf_fetch_tasks, max_workers)
 
         print(
             "--- [Stage 2/3: Transformation] Converting to Google OKF v0.2 Markdown ---",
             flush=True,
+        )
+        PipelineEventBroadcaster.get_instance().emit(
+            "stage_start",
+            {
+                "stage": 2,
+                "name": "Transformation",
+                "total_papers": len(pdf_fetch_tasks),
+            },
         )
         processed_items = _transform_and_save_okf(
             pdf_fetch_tasks, target_workspace, cfg, processed_state, state_path
@@ -712,7 +771,22 @@ def run_theme_pipeline(
             "--- [Stage 3/3: Reporting] Generating 5-tier summaries & updating indexes ---",
             flush=True,
         )
+        PipelineEventBroadcaster.get_instance().emit(
+            "stage_start",
+            {
+                "stage": 3,
+                "name": "Reporting",
+                "total_papers": len(processed_items),
+            },
+        )
         _generate_summaries_and_index(target_workspace, cfg, processed_items)
+        PipelineEventBroadcaster.get_instance().emit(
+            "pipeline_finish",
+            {
+                "theme_id": theme.theme_id,
+                "processed_count": len(processed_items),
+            },
+        )
         return processed_items
 
 
