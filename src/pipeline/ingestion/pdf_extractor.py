@@ -22,17 +22,34 @@ def get_paper_pub_date_str(paper: Dict[str, Any]) -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def fetch_single_pdf_and_text(paper: Dict[str, Any], raw_dir: str) -> None:
-    """Downloads PDF and extracts full text via Pure Python Engine with pdftotext fallback."""
+def fetch_single_pdf_and_text(paper: Dict[str, Any], raw_dir: str) -> Dict[str, Any]:
+    """Downloads PDF and extracts full text via Pure Python Engine with pdftotext fallback.
+
+    Returns:
+        Dict[str, Any]: Status dictionary containing download and extraction outcomes.
+    """
     clean_id = paper["clean_id"]
     pdf_path = os.path.join(raw_dir, f"{clean_id}.pdf")
     txt_path = os.path.join(raw_dir, f"{clean_id}.txt")
 
-    if not os.path.exists(pdf_path):
+    pdf_cached = os.path.exists(pdf_path)
+    if not pdf_cached:
         _download_pdf_file(paper, pdf_path)
+    pdf_ok = os.path.exists(pdf_path)
 
-    if os.path.exists(pdf_path) and not os.path.exists(txt_path):
+    txt_cached = os.path.exists(txt_path)
+    if pdf_ok and not txt_cached:
         _extract_text_with_fallback(pdf_path, txt_path)
+    txt_ok = os.path.exists(txt_path)
+
+    return {
+        "clean_id": clean_id,
+        "arxiv_id": paper.get("arxiv_id", clean_id),
+        "pdf": pdf_ok,
+        "txt": txt_ok,
+        "pdf_cached": pdf_cached,
+        "txt_cached": txt_cached,
+    }
 
 
 def _download_pdf_file(paper: Dict[str, Any], pdf_path: str) -> None:

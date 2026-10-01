@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **410** | パイプラインにおけるPDF取得・全文テキスト抽出の進捗可視化とリアルタイムログの強化 | Feature | 2026-10-01 | [410-enhance-pipeline-pdf-ingestion-progress-logging.md](closed/410-enhance-pipeline-pdf-ingestion-progress-logging.md) |
 | **404** | 最新OKF収集データの5階層エグゼクティブサマリー自動集約と動的Mermaidトレンド同期 | Feature | 2026-10-01 | [404-okf-5-tier-executive-summary-sync-and-trend-analysis.md](closed/404-okf-5-tier-executive-summary-sync-and-trend-analysis.md) |
 | **403** | ワーカー異常終了時の未完了チェックポイント自動検出と自己修復・自律再開ポリシーの実装 | Feature | 2026-10-01 | [403-spider-crash-recovery-and-autonomous-resume-policy.md](closed/403-spider-crash-recovery-and-autonomous-resume-policy.md) |
 | **402** | スパイダー巡回中のリアルタイム進捗率・ETA可視化およびプログレスバー表示の実装 | Feature | 2026-10-01 | [402-spider-crawl-progress-bar-and-eta-visualization.md](closed/402-spider-crawl-progress-bar-and-eta-visualization.md) |

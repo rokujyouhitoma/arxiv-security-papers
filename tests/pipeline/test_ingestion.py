@@ -222,3 +222,76 @@ def test_api_429_backoff_delays() -> None:
         assert sleep_times == [8, 16, 32, 64]
     finally:
         he_429.close()
+
+
+def test_fetch_single_pdf_and_text_status() -> None:
+    import tempfile
+    from unittest.mock import patch
+
+    from pipeline.ingestion.pdf_extractor import fetch_single_pdf_and_text
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        paper = {"clean_id": "2401.12345v1", "arxiv_id": "2401.12345v1"}
+        pdf_path = os.path.join(tmp_dir, "2401.12345v1.pdf")
+        txt_path = os.path.join(tmp_dir, "2401.12345v1.txt")
+
+        # 1. First run: mocks download and text extraction
+        def mock_download(p: Any, path: str) -> None:
+            with open(path, "wb") as f:
+                f.write(b"%PDF-1.4 dummy")
+
+        def mock_extract(p: str, t: str) -> None:
+            with open(t, "w", encoding="utf-8") as f:
+                f.write("Extracted full text content")
+
+        with patch(
+            "pipeline.ingestion.pdf_extractor._download_pdf_file",
+            side_effect=mock_download,
+        ):
+            with patch(
+                "pipeline.ingestion.pdf_extractor._extract_text_with_fallback",
+                side_effect=mock_extract,
+            ):
+                status = fetch_single_pdf_and_text(paper, tmp_dir)
+                assert isinstance(status, dict)
+                assert status["clean_id"] == "2401.12345v1"
+                assert status["pdf"] is True
+                assert status["txt"] is True
+                assert status["pdf_cached"] is False
+                assert status["txt_cached"] is False
+                assert os.path.exists(pdf_path)
+                assert os.path.exists(txt_path)
+
+        # 2. Second run: already cached
+        status2 = fetch_single_pdf_and_text(paper, tmp_dir)
+        assert status2["pdf_cached"] is True
+        assert status2["txt_cached"] is True
+
+
+def test_download_theme_pdfs_progress_logging(capsys: Any) -> None:
+    import tempfile
+
+    from pipeline.arxiv_okf_fetcher import _download_theme_pdfs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tasks = [
+            ({"clean_id": "paper1", "arxiv_id": "paper1"}, tmp_dir, "meta1.json"),
+            ({"clean_id": "paper2", "arxiv_id": "paper2"}, tmp_dir, "meta2.json"),
+        ]
+        # Create dummy pdf and txt to test cached status
+        for pid in ("paper1", "paper2"):
+            with open(os.path.join(tmp_dir, f"{pid}.pdf"), "w") as f:
+                f.write("dummy pdf")
+            with open(os.path.join(tmp_dir, f"{pid}.txt"), "w") as f:
+                f.write("dummy txt")
+
+        _download_theme_pdfs(tasks, max_workers=2)
+        captured = capsys.readouterr().out
+        assert (
+            "[ETL:Ingestion] Starting parallel download & text extraction for 2 papers"
+            in captured
+        )
+        assert "[Ingestion:PDF]" in captured
+        assert "Paper: paper1" in captured
+        assert "Paper: paper2" in captured
+        assert "Finished downloading & extracting 2 papers" in captured

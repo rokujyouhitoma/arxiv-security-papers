@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -248,7 +249,8 @@ def _filter_and_stage_papers(
         f"[Pipeline:Filter] Total items received: {len(papers)} | "
         f"Out of date range: {out_of_range} | "
         f"Already processed: {already_processed} | "
-        f"New papers to process: {len(tasks)}"
+        f"New papers to process: {len(tasks)}",
+        flush=True,
     )
     return tasks
 
@@ -351,7 +353,8 @@ def _transform_and_save_okf(
     processed_items = []
     total = len(pdf_fetch_tasks)
     print(
-        f"[OKF:Transformer] Converting {total} raw papers into Google OKF v0.2 Markdown..."
+        f"[OKF:Transformer] Converting {total} raw papers into Google OKF v0.2 Markdown...",
+        flush=True,
     )
 
     db_dir = os.path.join(workspace_dir, "outputs", "database")
@@ -362,7 +365,8 @@ def _transform_and_save_okf(
         processed_items.append(item)
         arxiv_id = paper.get("arxiv_id", "unknown")
         print(
-            f"[OKF:Transformer] [{idx}/{total}] Generated OKF document: {item['rel_okf_path']} (ID: {arxiv_id})"
+            f"[OKF:Transformer] [{idx}/{total}] Generated OKF document: {item['rel_okf_path']} (ID: {arxiv_id})",
+            flush=True,
         )
         meta_entry = {
             "clean_id": state_mgr.to_clean_id(paper["arxiv_id"]),
@@ -380,7 +384,8 @@ def _transform_and_save_okf(
     state_mgr.catalog_storage.flush()
     _sync_legacy_state_file(processed_items, processed_state, state_path)
     print(
-        f"[State] Updated state tracking catalog with {len(processed_items)} new entries."
+        f"[State] Updated state tracking catalog with {len(processed_items)} new entries.",
+        flush=True,
     )
 
     log_path = os.path.join(workspace_dir, "outputs", "log.md")
@@ -471,20 +476,7 @@ def run_pipeline(
     pdf_fetch_tasks = _filter_and_stage_papers(
         papers, workspace_dir, config, processed_state, start_dt, end_dt, force
     )
-
-    now_str = datetime.now().isoformat()
-    print(
-        f"[{now_str}] [ETL:Ingestion] Downloading PDFs & extracting full-text "
-        f"via Pure-Python Engine for {len(pdf_fetch_tasks)} papers..."
-    )
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(fetch_single_pdf_and_text, p, r_dir)
-            for p, r_dir, _ in pdf_fetch_tasks
-        ]
-        for _ in as_completed(futures):
-            pass
+    _download_theme_pdfs(pdf_fetch_tasks, max_workers)
 
     processed_items = _transform_and_save_okf(
         pdf_fetch_tasks, workspace_dir, config, processed_state, state_path
@@ -561,17 +553,77 @@ def _stage_theme_papers(
     return pdf_fetch_tasks, processed_state, state_path
 
 
+def _format_pdf_status_tag(cached: bool, success: bool) -> str:
+    if cached:
+        return "CACHED"
+    return "OK" if success else "FAILED"
+
+
+def _extract_task_status(future: Any) -> tuple[str, bool, bool]:
+    """Extracts status description and success flags from completed future."""
+    try:
+        res = future.result()
+        if not isinstance(res, dict):
+            return "DONE", False, False
+        has_pdf = bool(res.get("pdf"))
+        has_txt = bool(res.get("txt"))
+        pdf_stat = _format_pdf_status_tag(bool(res.get("pdf_cached")), has_pdf)
+        txt_stat = _format_pdf_status_tag(bool(res.get("txt_cached")), has_txt)
+        return f"PDF:{pdf_stat} | TXT:{txt_stat}", has_pdf, has_txt
+    except Exception as exc:
+        return f"ERROR: {exc}", False, False
+
+
+def _execute_pdf_download_pool(
+    pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]],
+    max_workers: int,
+) -> tuple[int, int]:
+    """Runs parallel worker pool and returns (pdf_ok_count, txt_ok_count)."""
+    total = len(pdf_fetch_tasks)
+    pdf_count = 0
+    txt_count = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(fetch_single_pdf_and_text, p, r_dir): p
+            for p, r_dir, _ in pdf_fetch_tasks
+        }
+        for completed, future in enumerate(as_completed(futures), start=1):
+            paper = futures[future]
+            clean_id = paper.get("clean_id", paper.get("arxiv_id", "unknown"))
+            pct = (completed / total) * 100.0
+            status_desc, has_pdf, has_txt = _extract_task_status(future)
+            pdf_count += int(has_pdf)
+            txt_count += int(has_txt)
+            print(
+                f"[Ingestion:PDF] [{completed:>3d}/{total:<3d}] ({pct:>5.1f}%) "
+                f"Paper: {clean_id:<25s} [{status_desc}]",
+                flush=True,
+            )
+    return pdf_count, txt_count
+
+
 def _download_theme_pdfs(
     pdf_fetch_tasks: List[tuple[Dict[str, Any], str, str]], max_workers: int
 ) -> None:
-    """Downloads PDFs for tasks in parallel."""
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(fetch_single_pdf_and_text, p, r_dir)
-            for p, r_dir, _ in pdf_fetch_tasks
-        ]
-        for _ in as_completed(futures):
-            pass
+    """Downloads PDFs and extracts text in parallel with granular real-time progress logging."""
+    total = len(pdf_fetch_tasks)
+    if total == 0:
+        return
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(
+        f"[{now_str}] [ETL:Ingestion] Starting parallel download & text extraction for {total} papers "
+        f"(concurrency: {max_workers})...",
+        flush=True,
+    )
+    start_time = time.time()
+    pdf_count, txt_count = _execute_pdf_download_pool(pdf_fetch_tasks, max_workers)
+    elapsed = time.time() - start_time
+    print(
+        f"[ETL:Ingestion] Finished downloading & extracting {total} papers in {elapsed:.1f}s "
+        f"(PDF OK: {pdf_count}/{total}, TXT OK: {txt_count}/{total}).",
+        flush=True,
+    )
 
 
 def run_theme_pipeline(
@@ -591,10 +643,13 @@ def run_theme_pipeline(
     theme_mgr = get_theme_manager()
     theme = theme_mgr.get(theme_id)
     if not theme:
-        print(f"[ERROR] Unknown theme ID: {theme_id}.")
+        print(f"[ERROR] Unknown theme ID: {theme_id}.", flush=True)
         return []
 
-    print(f"=== [Theme Pipeline] Running theme '{theme.name}' ({theme.theme_id}) ===")
+    print(
+        f"=== [Theme Pipeline] Running theme '{theme.name}' ({theme.theme_id}) ===",
+        flush=True,
+    )
     from observability import get_tracer, init_observability
 
     init_observability(service_name="arxiv-security-papers-pipeline")
@@ -609,12 +664,26 @@ def run_theme_pipeline(
             theme_id, all_raw_items, target_workspace, cfg, start_dt, end_dt, force
         )
         if not pdf_fetch_tasks:
-            print(f"[Theme: {theme_id}] No new papers to stage.")
+            print(f"[Theme: {theme_id}] No new papers to stage.", flush=True)
             return []
 
+        print(
+            f"--- [Stage 1/3: Ingestion] Downloading raw PDFs & extracting text ({len(pdf_fetch_tasks)} papers) ---",
+            flush=True,
+        )
         _download_theme_pdfs(pdf_fetch_tasks, max_workers)
+
+        print(
+            "--- [Stage 2/3: Transformation] Converting to Google OKF v0.2 Markdown ---",
+            flush=True,
+        )
         processed_items = _transform_and_save_okf(
             pdf_fetch_tasks, target_workspace, cfg, processed_state, state_path
+        )
+
+        print(
+            "--- [Stage 3/3: Reporting] Generating 5-tier summaries & updating indexes ---",
+            flush=True,
         )
         _generate_summaries_and_index(target_workspace, cfg, processed_items)
         return processed_items
