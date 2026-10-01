@@ -5,6 +5,7 @@ Unit tests for the Transformer layer (translation, security domain & threat tagg
 import json
 import os
 import tempfile
+from typing import Any, Dict
 
 from pipeline.transformer import (
     build_okf_from_raw,
@@ -118,3 +119,77 @@ def test_build_okf_from_raw():
         assert 'type: "security-paper"' in okf_content
         assert "Securing QUIC Against Delay Attacks in IoT Networks" in okf_content
         assert "エグゼクティブサマリー" in okf_content
+
+
+def test_transform_and_save_okf_progress_and_error_handling(capsys: Any) -> None:
+    from unittest.mock import patch
+
+    from pipeline.arxiv_okf_fetcher import _transform_and_save_okf
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = {
+            "paths": {
+                "okf_papers_dir": "outputs/okf/papers",
+                "state_file": "outputs/database/papers_catalog.json",
+            }
+        }
+        os.makedirs(os.path.join(tmpdir, "outputs", "database"), exist_ok=True)
+        state_path = os.path.join(tmpdir, "outputs", "database", "papers_catalog.json")
+        processed_state: Dict[str, Any] = {}
+
+        tasks = [
+            (
+                {
+                    "arxiv_id": "2608.11111v1",
+                    "clean_id": "2608.11111",
+                    "title": "Paper 1",
+                },
+                tmpdir,
+                "meta1.json",
+            ),
+            (
+                {
+                    "arxiv_id": "2608.22222v1",
+                    "clean_id": "2608.22222",
+                    "title": "Paper 2",
+                },
+                tmpdir,
+                "meta2.json",
+            ),
+        ]
+
+        # First paper succeeds, second paper raises exception
+        def mock_build(meta_path: str, ws: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+            if "meta2.json" in meta_path:
+                raise ValueError("Corrupt metadata payload")
+            return {
+                "rel_okf_path": "outputs/okf/papers/2026-08-17/2608.11111.md",
+                "title_ja": "論文1",
+            }
+
+        with patch(
+            "pipeline.arxiv_okf_fetcher.build_okf_from_raw", side_effect=mock_build
+        ):
+            with patch("pipeline.arxiv_okf_fetcher._ingest_items_into_knowledge_graph"):
+                results = _transform_and_save_okf(
+                    tasks, tmpdir, config, processed_state, state_path
+                )
+
+        assert len(results) == 1
+        assert "2608.11111v1" in processed_state
+        assert "2608.22222v1" not in processed_state
+
+        captured = capsys.readouterr().out
+        assert (
+            "[ETL:Transformation] Starting OKF v0.2 Markdown generation for 2 papers"
+            in captured
+        )
+        assert "[OKF:Transformer]" in captured
+        assert "( 50.0%)" in captured
+        assert "Paper: 2608.11111" in captured
+        assert "[OK]" in captured
+        assert "(100.0%)" in captured
+        assert "Paper: 2608.22222" in captured
+        assert "[ERROR: Corrupt metadata payload]" in captured
+        assert "Finished OKF transformation for 2 papers" in captured
+        assert "(OK: 1/2, Error: 1/2)" in captured

@@ -4,7 +4,10 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-*現在オープン中の Issue はありません。*
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **411** | Web コンソールにおけるパイプラインリアルタイム進捗ストリーミング (SSE) とステータス可視化の実装 | Feature | High | In Progress | [411-web-console-pipeline-sse-streaming-and-progress-visualization.md](411-web-console-pipeline-sse-streaming-and-progress-visualization.md) |
+| **413** | パイプライン全ステージ (Ingestion/Transformation/Reporting) のE2E自動統合テスト基盤の構築 | Feature | Medium | In Progress | [413-pipeline-full-stages-e2e-integration-test-suite.md](413-pipeline-full-stages-e2e-integration-test-suite.md) |
 
 ---
 
@@ -12,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **412** | OKF変換 (Transformation) フェーズにおける進捗可視化・失敗耐性・リアルタイムログの強化 | Feature | 2026-10-01 | [412-enhance-okf-transformation-progress-logging-and-resilience.md](closed/412-enhance-okf-transformation-progress-logging-and-resilience.md) |
 | **410** | パイプラインにおけるPDF取得・全文テキスト抽出の進捗可視化とリアルタイムログの強化 | Feature | 2026-10-01 | [410-enhance-pipeline-pdf-ingestion-progress-logging.md](closed/410-enhance-pipeline-pdf-ingestion-progress-logging.md) |
 | **404** | 最新OKF収集データの5階層エグゼクティブサマリー自動集約と動的Mermaidトレンド同期 | Feature | 2026-10-01 | [404-okf-5-tier-executive-summary-sync-and-trend-analysis.md](closed/404-okf-5-tier-executive-summary-sync-and-trend-analysis.md) |
 | **403** | ワーカー異常終了時の未完了チェックポイント自動検出と自己修復・自律再開ポリシーの実装 | Feature | 2026-10-01 | [403-spider-crash-recovery-and-autonomous-resume-policy.md](closed/403-spider-crash-recovery-and-autonomous-resume-policy.md) |

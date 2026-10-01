@@ -350,36 +350,63 @@ def _transform_and_save_okf(
     processed_state: Dict[str, Any],
     state_path: str,
 ) -> List[Dict[str, Any]]:
-    processed_items = []
+    processed_items: List[Dict[str, Any]] = []
     total = len(pdf_fetch_tasks)
+    if total == 0:
+        return processed_items
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(
-        f"[OKF:Transformer] Converting {total} raw papers into Google OKF v0.2 Markdown...",
+        f"[{now_str}] [ETL:Transformation] Starting OKF v0.2 Markdown generation for {total} papers...",
         flush=True,
     )
+    start_time = time.time()
 
     db_dir = os.path.join(workspace_dir, "outputs", "database")
     state_mgr = PipelineStateManager.get_instance(db_dir)
 
+    ok_count = 0
+    err_count = 0
+
     for idx, (paper, _, raw_meta_path) in enumerate(pdf_fetch_tasks, start=1):
-        item = build_okf_from_raw(raw_meta_path, workspace_dir, config)
-        processed_items.append(item)
-        arxiv_id = paper.get("arxiv_id", "unknown")
-        print(
-            f"[OKF:Transformer] [{idx}/{total}] Generated OKF document: {item['rel_okf_path']} (ID: {arxiv_id})",
-            flush=True,
-        )
-        meta_entry = {
-            "clean_id": state_mgr.to_clean_id(paper["arxiv_id"]),
-            "arxiv_id": paper["arxiv_id"],
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-            "published": paper.get("published"),
-            "title": paper["title"],
-            "title_ja": item["title_ja"],
-            "raw_meta_path": os.path.relpath(raw_meta_path, workspace_dir),
-            "okf_path": item["rel_okf_path"],
-        }
-        processed_state[paper["arxiv_id"]] = meta_entry
-        state_mgr.register_paper(meta_entry, auto_flush=False)
+        clean_id = paper.get("clean_id", paper.get("arxiv_id", "unknown"))
+        pct = (idx / total) * 100.0
+        try:
+            item = build_okf_from_raw(raw_meta_path, workspace_dir, config)
+            processed_items.append(item)
+            ok_count += 1
+            status_desc = "OK"
+            print(
+                f"[OKF:Transformer] [{idx:>3d}/{total:<3d}] ({pct:>5.1f}%) "
+                f"Paper: {clean_id:<25s} [{status_desc}] -> {item['rel_okf_path']}",
+                flush=True,
+            )
+            meta_entry = {
+                "clean_id": state_mgr.to_clean_id(paper["arxiv_id"]),
+                "arxiv_id": paper["arxiv_id"],
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "published": paper.get("published"),
+                "title": paper["title"],
+                "title_ja": item["title_ja"],
+                "raw_meta_path": os.path.relpath(raw_meta_path, workspace_dir),
+                "okf_path": item["rel_okf_path"],
+            }
+            processed_state[paper["arxiv_id"]] = meta_entry
+            state_mgr.register_paper(meta_entry, auto_flush=False)
+        except Exception as exc:
+            err_count += 1
+            print(
+                f"[OKF:Transformer] [{idx:>3d}/{total:<3d}] ({pct:>5.1f}%) "
+                f"Paper: {clean_id:<25s} [ERROR: {exc}]",
+                flush=True,
+            )
+
+    elapsed = time.time() - start_time
+    print(
+        f"[ETL:Transformation] Finished OKF transformation for {total} papers in {elapsed:.1f}s "
+        f"(OK: {ok_count}/{total}, Error: {err_count}/{total}).",
+        flush=True,
+    )
 
     state_mgr.catalog_storage.flush()
     _sync_legacy_state_file(processed_items, processed_state, state_path)
