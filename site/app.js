@@ -2113,6 +2113,43 @@ document.addEventListener('DOMContentLoaded', () => {
               progContainer.style.display = 'none';
             }
           }
+
+          const rec = info.recovery;
+          const recContainer = document.getElementById(`containerSpiderRecovery_${key}`);
+          const recBadge = document.getElementById(`badgeSpiderRecovery_${key}`);
+          const recTime = document.getElementById(`valSpiderRecoveryTime_${key}`);
+
+          if (recContainer) {
+            if (rec && rec.has_recovery && rec.status !== 'NONE') {
+              recContainer.style.display = 'block';
+              if (recBadge) {
+                if (rec.status === 'EXHAUSTED') {
+                  recBadge.textContent = `試行超過 (${rec.attempts || 0}/${rec.max_attempts || 3})`;
+                  recBadge.style.color = '#F87171';
+                  recBadge.style.background = 'rgba(239, 68, 68, 0.25)';
+                } else if (rec.status === 'CORRUPTED') {
+                  recBadge.textContent = '破損隔離済';
+                  recBadge.style.color = '#F87171';
+                  recBadge.style.background = 'rgba(239, 68, 68, 0.25)';
+                } else if (rec.status === 'RECOVERABLE') {
+                  recBadge.textContent = `再開可能 (${rec.attempts || 0}/${rec.max_attempts || 3})`;
+                  recBadge.style.color = '#FCD34D';
+                  recBadge.style.background = 'rgba(245, 158, 11, 0.25)';
+                } else {
+                  recBadge.textContent = rec.status;
+                  recBadge.style.color = '#FCD34D';
+                  recBadge.style.background = 'rgba(245, 158, 11, 0.25)';
+                }
+              }
+              if (recTime) {
+                const ts = rec.last_attempt ? rec.last_attempt.substring(0, 19).replace('T', ' ') : '--';
+                const reasonStr = rec.reason ? ` (${rec.reason})` : '';
+                recTime.textContent = `${ts}${reasonStr}`;
+              }
+            } else {
+              recContainer.style.display = 'none';
+            }
+          }
         }
       });
     } catch (err) {

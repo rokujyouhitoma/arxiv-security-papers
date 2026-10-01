@@ -442,6 +442,35 @@ class TestJsSyntaxAndContracts(unittest.TestCase):
         self.assertIn("barSpiderProgress_", app_js)
         self.assertIn("valSpiderProgressEta_", app_js)
 
+    # ----------------------------------------------------------------------
+    # 8. Spider Crash Recovery UI Element Binding (Issue 403)
+    # ----------------------------------------------------------------------
+    def test_spider_recovery_elements_binding(self) -> None:
+        """Verify spider recovery DOM bindings in site/index.html and site/app.js (Issue 403)."""
+        html = (_SITE / "index.html").read_text(encoding="utf-8")
+        app_js = self.app_js.read_text(encoding="utf-8")
+
+        for key in ("arxiv", "cwe", "kev_cve"):
+            self.assertIn(
+                f'id="containerSpiderRecovery_{key}"',
+                html,
+                f"Missing containerSpiderRecovery_{key} in site/index.html",
+            )
+            self.assertIn(
+                f'id="badgeSpiderRecovery_{key}"',
+                html,
+                f"Missing badgeSpiderRecovery_{key} in site/index.html",
+            )
+            self.assertIn(
+                f'id="valSpiderRecoveryTime_{key}"',
+                html,
+                f"Missing valSpiderRecoveryTime_{key} in site/index.html",
+            )
+
+        self.assertIn("containerSpiderRecovery_", app_js)
+        self.assertIn("badgeSpiderRecovery_", app_js)
+        self.assertIn("valSpiderRecoveryTime_", app_js)
+
 
 if __name__ == "__main__":
     unittest.main()

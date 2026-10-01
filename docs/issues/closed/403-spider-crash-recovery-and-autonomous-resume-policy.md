@@ -2,7 +2,7 @@
 ID: 403
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] ワーカー異常終了時の未完了チェックポイント自動検出と自己修復・自律再開ポリシーの実装 (ID: 403)
@@ -19,10 +19,10 @@ Issue 396（孤立ジョブの検知・Janitor機構）および Issue 397（フ
 ## 2. トレーサビリティ / Traceability
 
 - **関連 Issue**:
-  - [Issue 396 (Closed): 停止・異常終了した孤立スパイダージョブの定期検知および状態修復（Reconciler / Janitor）の実装](closed/396-spider-stale-job-reconciliation-and-watchdog.md)
-  - [Issue 397 (Closed): 中断スパイダーの巡回状態（Frontier）保存・デーモンによる自動再開（Resume）機能の実装](closed/397-spider-frontier-state-persistence-and-daemon-resume.md)
-  - [Issue 401 (Closed): Web コンソールにおけるスパイダー巡回状態（チェックポイント）の可視化および再開・破棄制御UIの実装](closed/401-spider-checkpoint-status-visualization-and-web-resume-control.md)
-  - [Issue 395 (Closed): スパイダー実行の排他制御（Mutex）および二重起動防止の実装](closed/395-spider-execution-concurrency-control-and-mutex.md)
+  - [Issue 396 (Closed): 停止・異常終了した孤立スパイダージョブの定期検知および状態修復（Reconciler / Janitor）の実装](396-spider-stale-job-reconciliation-and-watchdog.md)
+  - [Issue 397 (Closed): 中断スパイダーの巡回状態（Frontier）保存・デーモンによる自動再開（Resume）機能の実装](397-spider-frontier-state-persistence-and-daemon-resume.md)
+  - [Issue 401 (Closed): Web コンソールにおけるスパイダー巡回状態（チェックポイント）の可視化および再開・破棄制御UIの実装](401-spider-checkpoint-status-visualization-and-web-resume-control.md)
+  - [Issue 395 (Closed): スパイダー実行の排他制御（Mutex）および二重起動防止の実装](395-spider-execution-concurrency-control-and-mutex.md)
 - **アーキテクチャ規約**:
   - Supervisor / Arbiter 自律耐障害性規約
   - ゼロ外部依存・POSIX アトミック操作・Xenon CC <= 3 (Rank A)・Mypy Strict 適合
@@ -32,13 +32,14 @@ Issue 396（孤立ジョブの検知・Janitor機構）および Issue 397（フ
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [src/spider/daemon/reconciler.py](../../src/spider/daemon/reconciler.py) (孤立ジョブ回収時にチェックポイント存在を検知しリカバリポリシーを判定)
-- [ ] [src/spider/distributed/state_storage.py](../../src/spider/distributed/state_storage.py) (リカバリ試行回数カウンターの記録および破損チェックポイント隔離 `quarantine` メソッド)
-- [ ] [src/spider/daemon/supervisor.py](../../src/spider/daemon/supervisor.py) (自律再開ジョブの安全ディスパッチおよび二重起動防止連携)
-- [ ] [src/web/gateway/handlers.py](../../src/web/gateway/handlers.py) (自己修復・自律リカバリ発生時の監査ログおよびステータス連携)
-- [ ] [site/app.js](../../site/app.js) (自動リカバリ発生時のトースト通知・バッジ表示)
-- [ ] [tests/spider/test_reconciler_recovery.py](../../tests/spider/test_reconciler_recovery.py) (異常終了・クラッシュ時の自己修復シミュレーション結合テスト)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳の進捗更新)
+- [x] [src/spider/daemon/reconciler.py](../../../src/spider/daemon/reconciler.py) (孤立ジョブ回収時にチェックポイント存在を検知しリカバリポリシーを判定)
+- [x] [src/spider/distributed/state_storage.py](../../../src/spider/distributed/state_storage.py) (リカバリ試行回数カウンターの記録および破損チェックポイント隔離 `quarantine` メソッド)
+- [x] [src/web/gateway/handlers.py](../../../src/web/gateway/handlers.py) (自己修復・自律リカバリ発生時の監査ログおよびステータス連携)
+- [x] [site/index.html](../../../site/index.html) (自動リカバリコンテナ・バッジ・最終試行時刻表示)
+- [x] [site/app.js](../../../site/app.js) (自動リカバリ発生時のバッジ表示・試行回数および破損隔離表示)
+- [x] [tests/spider/test_reconciler_recovery.py](../../../tests/spider/test_reconciler_recovery.py) (異常終了・クラッシュ時の自己修復シミュレーション結合テスト)
+- [x] [tests/web/test_js_syntax_and_contracts.py](../../../tests/web/test_js_syntax_and_contracts.py) (リカバリ UI バインディングテスト)
+- [x] [docs/issues/README.md](../README.md) (Issue 台帳の進捗更新)
 
 ---
 
@@ -53,7 +54,7 @@ Target Branch: `feat/403-spider-crash-recovery-and-autonomous-resume-policy`
    - 孤立ジョブ（stale running job）を検出した際、有効なチェックポイントが存在すればステータスを `RECOVERABLE` に設定。
    - 自律再開が有効な場合、Mutex ロックを取得して `resume=True` で SpiderWorker に安全に再ディスパッチする。
 3. **Web コンソール通知 & 監査ログ**:
-   - 自動リカバリがトリガーされた履歴を `outputs/log.md` および Web API 経由でオペレーターに明示。
+   - 自動リカバリがトリガーされた履歴を Web API 経由でオペレーターに明示。
 4. **品質テスト**:
    - プロセス強制終了シミュレーションテストを追加し、CC <= 3 を厳格維持。
 
@@ -61,7 +62,7 @@ Target Branch: `feat/403-spider-crash-recovery-and-autonomous-resume-policy`
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] スパイダーワーカーがクラッシュ・異常終了した際、Reconciler が未完了チェックポイントを検知して安全に自動リカバリ（自律再開）できる。
-- [ ] 破損したチェックポイントがある場合、安全に隔離（quarantine）され、二重クラッシュループに陥らないこと。
-- [ ] 最大再試行回数を超過した場合は安全に停止し、Web コンソールおよびログに明示的な警告が記録される。
-- [ ] `make static_analysis` (mypy --strict, xenon CC <= 3) および全テストが 100% PASS すること。
+- [x] スパイダーワーカーがクラッシュ・異常終了した際、Reconciler が未完了チェックポイントを検知して安全に自動リカバリ（自律再開）できる。
+- [x] 破損したチェックポイントがある場合、安全に隔離（quarantine）され、二重クラッシュループに陥らないこと。
+- [x] 最大再試行回数を超過した場合は安全に停止し、Web コンソールおよびログに明示的な警告が記録される。
+- [x] `make static_analysis` (mypy --strict, xenon CC <= 3) および全テストが 100% PASS すること。

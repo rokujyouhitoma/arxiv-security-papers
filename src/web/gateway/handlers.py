@@ -2598,6 +2598,7 @@ class GatewayHandlers:
         summary = storage.get_status_summary()
         _enrich_spider_checkpoints(summary, self.workspace_dir)
         _enrich_spider_progress(summary, self.workspace_dir)
+        _enrich_spider_recovery(summary, self.workspace_dir)
         supervisor_state = _introspect_supervisor_state(self.workspace_dir)
         return response_json(
             start_response,
@@ -2793,6 +2794,18 @@ def _enrich_spider_progress(summary: Dict[str, Any], workspace_dir: str) -> None
             if not info.get("is_active") and key == "kev_cve":
                 info = StateStorage.get_progress_info("cisa_kev", base_dir=progress_dir)
             data["progress"] = info
+
+
+def _enrich_spider_recovery(summary: Dict[str, Any], workspace_dir: str) -> None:
+    from spider.distributed.state_storage import StateStorage
+
+    recovery_dir = os.path.join(workspace_dir, "outputs", "spider", "recovery")
+    for key, data in summary.items():
+        if isinstance(data, dict):
+            info = StateStorage.get_recovery_info(key, base_dir=recovery_dir)
+            if not info.get("has_recovery") and key == "kev_cve":
+                info = StateStorage.get_recovery_info("cisa_kev", base_dir=recovery_dir)
+            data["recovery"] = info
 
 
 def _normalize_spider_name(name: str) -> str:

@@ -46,12 +46,20 @@ def _is_explicit_checkpoint_path(target: str) -> bool:
     return target.endswith((".state", ".json"))
 
 
+def _find_candidate_checkpoint(clean_name: str, base_dir: str) -> str:
+    for ext in (".state", ".json"):
+        cand = os.path.join(base_dir, f"{clean_name}{ext}")
+        if os.path.exists(cand):
+            return cand
+    return os.path.join(base_dir, f"{clean_name}.state")
+
+
 def _resolve_checkpoint_file(target: str, base_dir: str) -> str:
     """Resolves whether target is an explicit filepath or spider name."""
     if _is_explicit_checkpoint_path(target):
         return target
     clean_name = re.sub(r"[^a-zA-Z0-9_-]", "", os.path.basename(target))
-    return os.path.join(base_dir, f"{clean_name}.state")
+    return _find_candidate_checkpoint(clean_name, base_dir)
 
 
 def _is_valid_heap_entry(item: Any) -> bool:
@@ -220,6 +228,73 @@ def _read_progress_metadata(path: str) -> Dict[str, Any]:
     }
 
 
+def _has_valid_queue_data(data: Any) -> bool:
+    if not isinstance(data, dict):
+        return False
+    return "pending_requests" in data or "pending_count" in data
+
+
+def _validate_checkpoint_file(path: str) -> Tuple[bool, Optional[str]]:
+    """Validates structural integrity of checkpoint JSON file."""
+    if not (os.path.isfile(path) and os.path.getsize(path) > 0):
+        return False, "Checkpoint file does not exist or is empty"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not _has_valid_queue_data(data):
+            return False, "Checkpoint payload must contain pending requests"
+        return True, None
+    except Exception as exc:
+        return False, f"JSON parse error or corrupted file: {exc}"
+
+
+def _quarantine_checkpoint_file(
+    src_path: str,
+    quarantine_dir: str,
+    reason: str = "corrupt",
+) -> Optional[str]:
+    """Safely isolates corrupted or exhausted checkpoint file into quarantine directory."""
+    if not os.path.exists(src_path):
+        return None
+    try:
+        os.makedirs(quarantine_dir, exist_ok=True)
+        ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+        basename = os.path.basename(src_path)
+        dst_name = f"{basename}.{reason}.{ts}"
+        dst_path = os.path.join(quarantine_dir, dst_name)
+        os.replace(src_path, dst_path)
+        return dst_path
+    except OSError:
+        return None
+
+
+def _resolve_recovery_file(target: str, base_dir: str) -> str:
+    """Resolves standard path for spider recovery metadata."""
+    if "/" in target or target.endswith(".json"):
+        return target
+    clean_name = re.sub(r"[^a-zA-Z0-9_-]", "", os.path.basename(target))
+    return os.path.join(base_dir, f"{clean_name}.recovery.json")
+
+
+def _read_recovery_metadata(path: str, spider_name: str) -> Dict[str, Any]:
+    """Safely reads and deserializes recovery state metadata."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {
+        "spider_name": spider_name,
+        "attempts": 0,
+        "max_attempts": 3,
+        "status": "INITIAL",
+        "last_attempt_at": None,
+        "reason": None,
+    }
+
+
 class StateStorage:
     """Persists and restores Scheduler state (Frontier & Bloom filter) to atomic JSON."""
 
@@ -342,6 +417,92 @@ class StateStorage:
     ) -> bool:
         """Removes progress telemetry file."""
         path = _resolve_progress_file(spider_name, base_dir)
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+                return True
+        except OSError:
+            pass
+        return False
+
+    @staticmethod
+    def validate_checkpoint(
+        spider_name_or_path: str,
+        base_dir: str = "outputs/spider/checkpoints",
+    ) -> Tuple[bool, Optional[str]]:
+        """Checks if checkpoint exists, is uncorrupted JSON, and contains valid queues."""
+        path = _resolve_checkpoint_file(spider_name_or_path, base_dir)
+        return _validate_checkpoint_file(path)
+
+    @staticmethod
+    def quarantine_checkpoint(
+        spider_name_or_path: str,
+        base_dir: str = "outputs/spider/checkpoints",
+        quarantine_dir: Optional[str] = None,
+        reason: str = "corrupt",
+    ) -> Optional[str]:
+        """Safely isolates an unreadable or exhausted checkpoint."""
+        path = _resolve_checkpoint_file(spider_name_or_path, base_dir)
+        qdir = quarantine_dir or os.path.join(base_dir, "quarantine")
+        return _quarantine_checkpoint_file(path, qdir, reason=reason)
+
+    @staticmethod
+    def record_recovery_attempt(
+        spider_name: str,
+        base_dir: str = "outputs/spider/recovery",
+        max_attempts: int = 3,
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        """Increments recovery attempts and transitions status atomically."""
+        path = _resolve_recovery_file(spider_name, base_dir)
+        cur = _read_recovery_metadata(path, spider_name)
+        new_attempts = int(cur.get("attempts", 0)) + 1
+        is_exhausted = new_attempts > max_attempts
+        status = "EXHAUSTED" if is_exhausted else "RECOVERABLE"
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        res: Dict[str, Any] = {
+            "spider_name": spider_name,
+            "attempts": new_attempts,
+            "max_attempts": max_attempts,
+            "status": status,
+            "last_attempt_at": now_iso,
+            "reason": reason or cur.get("reason"),
+            "is_exhausted": is_exhausted,
+        }
+        _write_atomic_json(path, res)
+        return res
+
+    @staticmethod
+    def get_recovery_info(
+        spider_name: str,
+        base_dir: str = "outputs/spider/recovery",
+    ) -> Dict[str, Any]:
+        """Returns recovery status and attempt counters."""
+        path = _resolve_recovery_file(spider_name, base_dir)
+        if not (os.path.isfile(path) and os.path.getsize(path) > 0):
+            return {
+                "spider_name": spider_name,
+                "has_recovery": False,
+                "attempts": 0,
+                "max_attempts": 3,
+                "status": "INITIAL",
+                "is_exhausted": False,
+                "can_resume": False,
+            }
+        data = _read_recovery_metadata(path, spider_name)
+        data["has_recovery"] = True
+        is_ex = data.get("attempts", 0) > data.get("max_attempts", 3)
+        data["is_exhausted"] = is_ex
+        data["can_resume"] = not is_ex
+        return data
+
+    @staticmethod
+    def clear_recovery_state(
+        spider_name: str,
+        base_dir: str = "outputs/spider/recovery",
+    ) -> bool:
+        """Clears recovery attempts record upon successful run or operator reset."""
+        path = _resolve_recovery_file(spider_name, base_dir)
         try:
             if os.path.exists(path):
                 os.remove(path)
