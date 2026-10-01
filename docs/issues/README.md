@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **413** | パイプライン全ステージ (Ingestion/Transformation/Reporting) のE2E自動統合テスト基盤の構築 | Feature | Medium | In Progress | [413-pipeline-full-stages-e2e-integration-test-suite.md](413-pipeline-full-stages-e2e-integration-test-suite.md) |
+*現在オープン中の Issue はありません。*
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **413** | パイプライン全ステージ (Ingestion/Transformation/Reporting) のE2E自動統合テスト基盤の構築 | Feature | 2026-10-01 | [413-pipeline-full-stages-e2e-integration-test-suite.md](closed/413-pipeline-full-stages-e2e-integration-test-suite.md) |
 | **411** | Web コンソールにおけるパイプラインリアルタイム進捗ストリーミング (SSE) とステータス可視化の実装 | Feature | 2026-10-01 | [411-web-console-pipeline-sse-streaming-and-progress-visualization.md](closed/411-web-console-pipeline-sse-streaming-and-progress-visualization.md) |
 | **412** | OKF変換 (Transformation) フェーズにおける進捗可視化・失敗耐性・リアルタイムログの強化 | Feature | 2026-10-01 | [412-enhance-okf-transformation-progress-logging-and-resilience.md](closed/412-enhance-okf-transformation-progress-logging-and-resilience.md) |
 | **410** | パイプラインにおけるPDF取得・全文テキスト抽出の進捗可視化とリアルタイムログの強化 | Feature | 2026-10-01 | [410-enhance-pipeline-pdf-ingestion-progress-logging.md](closed/410-enhance-pipeline-pdf-ingestion-progress-logging.md) |
