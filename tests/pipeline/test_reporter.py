@@ -151,3 +151,92 @@ def test_get_paper_meta_cached_with_escaped_quotes(tmp_path):
     assert 'When "Do Not" Is Not Deny: Security Rules in CLAUDE.md' in t_ja
     assert 'When "Do Not" Is Not Deny' in one_liner
     assert ar_id == "2608.23550v1"
+
+
+def test_reporter_hierarchical_storage_and_mermaid_mindmap():
+    from pipeline.arxiv_okf_fetcher import update_all_summaries_and_index
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = {
+            "paths": {
+                "okf_papers_dir": "outputs/okf/papers",
+                "per_run_dir": "outputs/executive_summaries/01_per_run",
+                "daily_dir": "outputs/executive_summaries/02_daily",
+                "monthly_dir": "outputs/executive_summaries/03_monthly",
+                "quarterly_dir": "outputs/executive_summaries/04_quarterly",
+                "annual_dir": "outputs/executive_summaries/05_annual",
+                "index_file": "outputs/index.md",
+                "log_file": "outputs/log.md",
+                "raw_data_dir": "outputs/raw_data",
+                "templates_dir": "templates",
+            }
+        }
+
+        # Create sample OKF paper in hierarchical structure
+        day_dir = os.path.join(tmpdir, "outputs", "okf", "papers", "2026-09-01")
+        os.makedirs(day_dir, exist_ok=True)
+        okf_path = os.path.join(day_dir, "2609.11111.md")
+        with open(okf_path, "w", encoding="utf-8") as f:
+            f.write("""---
+type: "security-paper"
+title: "Zero Trust and LLM Defense Evaluation"
+title_ja: "ゼロトラストとLLM防御の評価分析"
+description: "ゼロトラスト環境におけるLLM推論保護の検証"
+tags: ["cs.CR", "zero-trust", "llm"]
+published_date: "2026-09-01"
+---
+# Zero Trust and LLM Defense Evaluation
+arXiv ID = [`2609.11111v1`]
+""")
+
+        # Execute full update of 5-tier summaries and index
+        update_all_summaries_and_index(tmpdir, config)
+
+        daily_file = os.path.join(
+            tmpdir, "outputs", "executive_summaries", "02_daily", "2026-09-01.md"
+        )
+        assert os.path.exists(daily_file)
+        with open(daily_file, "r", encoding="utf-8") as f:
+            d_content = f.read()
+            assert "```mermaid" in d_content
+            assert "mindmap" in d_content
+            assert "../../okf/papers/2026-09-01/2609.11111.md" in d_content
+
+        monthly_file = os.path.join(
+            tmpdir,
+            "outputs",
+            "executive_summaries",
+            "03_monthly",
+            "monthly_2026-09-01.md",
+        )
+        assert os.path.exists(monthly_file)
+        with open(monthly_file, "r", encoding="utf-8") as f:
+            m_content = f.read()
+            assert "```mermaid" in m_content
+            assert "mindmap" in m_content
+            assert "../../okf/papers/2026-09-01/2609.11111.md" in m_content
+
+        quarterly_file = os.path.join(
+            tmpdir,
+            "outputs",
+            "executive_summaries",
+            "04_quarterly",
+            "quarterly_2026-09-01.md",
+        )
+        assert os.path.exists(quarterly_file)
+
+        annual_file = os.path.join(
+            tmpdir,
+            "outputs",
+            "executive_summaries",
+            "05_annual",
+            "annual_2026-09-01.md",
+        )
+        assert os.path.exists(annual_file)
+
+        index_file = os.path.join(tmpdir, "outputs", "index.md")
+        assert os.path.exists(index_file)
+        with open(index_file, "r", encoding="utf-8") as f:
+            idx_content = f.read()
+            assert "okf/papers" in idx_content
+            assert "2609.11111" in idx_content

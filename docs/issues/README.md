@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **404** | 最新OKF収集データの5階層エグゼクティブサマリー自動集約と動的Mermaidトレンド同期 | Feature | Medium | Open (New) | [404-okf-5-tier-executive-summary-sync-and-trend-analysis.md](404-okf-5-tier-executive-summary-sync-and-trend-analysis.md) |
+*現在オープン中の Issue はありません。*
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **404** | 最新OKF収集データの5階層エグゼクティブサマリー自動集約と動的Mermaidトレンド同期 | Feature | 2026-10-01 | [404-okf-5-tier-executive-summary-sync-and-trend-analysis.md](closed/404-okf-5-tier-executive-summary-sync-and-trend-analysis.md) |
 | **403** | ワーカー異常終了時の未完了チェックポイント自動検出と自己修復・自律再開ポリシーの実装 | Feature | 2026-10-01 | [403-spider-crash-recovery-and-autonomous-resume-policy.md](closed/403-spider-crash-recovery-and-autonomous-resume-policy.md) |
 | **402** | スパイダー巡回中のリアルタイム進捗率・ETA可視化およびプログレスバー表示の実装 | Feature | 2026-10-01 | [402-spider-crawl-progress-bar-and-eta-visualization.md](closed/402-spider-crawl-progress-bar-and-eta-visualization.md) |
 | **409** | 自然言語処理およびパイプライン層におけるドメイン固有語彙・文法規則・シソーラスの依存性注入 (DI) 化と責務分離 | Feature | 2026-10-01 | [409-nlp-domain-lexicon-and-rules-di-injection.md](closed/409-nlp-domain-lexicon-and-rules-di-injection.md) |

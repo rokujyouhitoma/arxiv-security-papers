@@ -19,6 +19,44 @@ from ..transformer.translator import translate_title_ja
 PAPER_META_CACHE: Dict[str, Any] = {}
 
 
+def _cleanup_tmp_file(tmp_path: str) -> None:
+    if os.path.exists(tmp_path):
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+
+def _atomic_write_file(target_path: str, full_text: str) -> None:
+    """Writes file atomically using temporary file rename."""
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    tmp_path = f"{target_path}.tmp.{os.getpid()}"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(full_text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, target_path)
+    except Exception:
+        _cleanup_tmp_file(tmp_path)
+        raise
+
+
+def _resolve_okf_root(workspace_dir: str, config: Dict[str, Any]) -> str:
+    """Resolves root directory for OKF papers, checking config paths and fallbacks."""
+    okf_rel = config.get("paths", {}).get("okf_papers_dir", "outputs/okf/papers")
+    primary_root = os.path.join(workspace_dir, okf_rel)
+    if os.path.exists(primary_root):
+        return primary_root
+    hierarchical_fallback = os.path.join(workspace_dir, "outputs", "okf", "papers")
+    if os.path.exists(hierarchical_fallback):
+        return hierarchical_fallback
+    legacy_fallback = os.path.join(workspace_dir, "outputs", "okf_papers")
+    if os.path.exists(legacy_fallback):
+        return legacy_fallback
+    return primary_root
+
+
 def _extract_frontmatter_field(text: str, field_name: str) -> Optional[str]:
     """Safely extracts and unescapes a YAML frontmatter field value using Packrat PEG."""
     from pipeline.transformer.yaml_parser import parse_okf_frontmatter
@@ -261,9 +299,7 @@ timestamp: "{timestamp}"
         table_md=table_md,
     )
 
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-
+    _atomic_write_file(filepath, content)
     return filepath
 
 
@@ -367,14 +403,13 @@ timestamp: "{timestamp}"
         table_md=table_md,
     )
 
-    with open(filepath, "w", encoding="utf-8") as out_f:
-        out_f.write(content)
+    _atomic_write_file(filepath, content)
     return filepath
 
 
 def generate_all_daily_summaries(workspace_dir: str, config: Dict[str, Any]) -> str:
     """Generates 02_daily aggregated summary reports for each day in okf_papers."""
-    okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
+    okf_root = _resolve_okf_root(workspace_dir, config)
     daily_dir = os.path.join(workspace_dir, config["paths"]["daily_dir"])
     os.makedirs(daily_dir, exist_ok=True)
 
@@ -468,8 +503,7 @@ timestamp: "{timestamp}"
             table_md if monthly_papers else "過去30日間の論文データはありません。"
         ),
     )
-    with open(filepath, "w", encoding="utf-8") as out_f:
-        out_f.write(content)
+    _atomic_write_file(filepath, content)
     return filepath
 
 
@@ -485,7 +519,7 @@ def _is_monthly_summary_day(day_str: str, max_day: str) -> Optional[datetime]:
 
 def generate_monthly_summary(workspace_dir: str, config: Dict[str, Any]) -> str:
     """Generates 03_monthly 30-day aggregated summary reports."""
-    okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
+    okf_root = _resolve_okf_root(workspace_dir, config)
     monthly_dir = os.path.join(workspace_dir, config["paths"]["monthly_dir"])
     os.makedirs(monthly_dir, exist_ok=True)
 
@@ -564,8 +598,7 @@ timestamp: "{timestamp}"
             table_md if quarterly_papers else "過去90日間の論文データはありません。"
         ),
     )
-    with open(filepath, "w", encoding="utf-8") as out_f:
-        out_f.write(content)
+    _atomic_write_file(filepath, content)
     return filepath
 
 
@@ -582,7 +615,7 @@ def _is_quarterly_summary_day(day_str: str, max_day: str) -> Optional[datetime]:
 
 def generate_quarterly_summary(workspace_dir: str, config: Dict[str, Any]) -> str:
     """Generates 04_quarterly 90-day aggregated summary reports."""
-    okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
+    okf_root = _resolve_okf_root(workspace_dir, config)
     q_dir = os.path.join(workspace_dir, config["paths"]["quarterly_dir"])
     os.makedirs(q_dir, exist_ok=True)
 
@@ -661,8 +694,7 @@ timestamp: "{timestamp}"
             table_md if annual_papers else "過去365日間の論文データはありません。"
         ),
     )
-    with open(filepath, "w", encoding="utf-8") as out_f:
-        out_f.write(content)
+    _atomic_write_file(filepath, content)
     return filepath
 
 
@@ -678,7 +710,7 @@ def _is_annual_summary_day(day_str: str, max_day: str) -> Optional[datetime]:
 
 def generate_annual_summary(workspace_dir: str, config: Dict[str, Any]) -> str:
     """Generates 05_annual 365-day aggregated summary reports."""
-    okf_root = os.path.join(workspace_dir, config["paths"]["okf_papers_dir"])
+    okf_root = _resolve_okf_root(workspace_dir, config)
     annual_dir = os.path.join(workspace_dir, config["paths"]["annual_dir"])
     os.makedirs(annual_dir, exist_ok=True)
 

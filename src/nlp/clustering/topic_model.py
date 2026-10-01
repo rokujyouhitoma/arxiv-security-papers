@@ -313,9 +313,14 @@ class DynamicTopicClusterer(TopicClustererSPI):
         if len(documents) <= 1:
             return self._cluster_single_or_empty(documents)
 
-        doc_ids, vectors = self._prepare_vectors(documents)
+        # Safeguard: cap documents to 300 to prevent O(N^2) similarity explosion
+        target_docs = documents[:300] if len(documents) > 300 else documents
+
+        doc_ids, vectors = self._prepare_vectors(target_docs)
         adj = _build_similarity_graph(vectors, doc_ids, self._similarity_threshold)
         partition = self._detector.detect(adj, resolution=self._resolution)
         comm_to_indices = self._group_by_community(partition, doc_ids)
 
-        return self._build_topic_clusters(comm_to_indices, documents, doc_ids, vectors)
+        return self._build_topic_clusters(
+            comm_to_indices, target_docs, doc_ids, vectors
+        )

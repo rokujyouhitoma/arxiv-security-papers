@@ -138,6 +138,7 @@ __all__ = [
     "generate_annual_summary",
     "generate_mermaid_mindmap",
     "update_index_and_log",
+    "update_all_summaries_and_index",
     "run_pipeline",
     "run_theme_pipeline",
     "BaseSourceAdapter",
@@ -660,8 +661,9 @@ def detect_workspace_dir() -> str:
 _detect_workspace_dir = detect_workspace_dir
 
 
-def _execute_dry_run_validation(workspace_dir: str, config: Dict[str, Any]) -> None:
-    print("[DRY-RUN] Dry run mode enabled. Validating local templates and index...")
+def update_all_summaries_and_index(workspace_dir: str, config: Dict[str, Any]) -> None:
+    """Regenerates 02_daily through 05_annual summaries and updates outputs/index.md."""
+    print("[Reporter] Updating 5-tier executive summaries and catalog index...")
     daily_path = generate_all_daily_summaries(workspace_dir, config)
     monthly_path = generate_monthly_summary(workspace_dir, config)
     quarterly_path = generate_quarterly_summary(workspace_dir, config)
@@ -676,6 +678,14 @@ def _execute_dry_run_validation(workspace_dir: str, config: Dict[str, Any]) -> N
         annual_path,
         config,
     )
+    print(
+        "[Reporter] 5-tier executive summaries and catalog index successfully updated."
+    )
+
+
+def _execute_dry_run_validation(workspace_dir: str, config: Dict[str, Any]) -> None:
+    print("[DRY-RUN] Dry run mode enabled. Validating local templates and index...")
+    update_all_summaries_and_index(workspace_dir, config)
     print("[DRY-RUN] Dry run validation completed successfully.")
 
 
@@ -837,6 +847,11 @@ def main() -> None:
     parser.add_argument(
         "--dry-run", action="store_true", help="Run without network operations"
     )
+    parser.add_argument(
+        "--update-summaries",
+        action="store_true",
+        help="Regenerate all 5-tier executive summaries and synchronize index catalog",
+    )
     parser.add_argument("--theme", type=str, default="security", help="Target theme")
     parser.add_argument(
         "--all-themes", action="store_true", help="Execute across all themes"
@@ -869,6 +884,10 @@ def main() -> None:
 
     if args.dry_run:
         _execute_dry_run_validation(workspace_dir, config)
+        return
+
+    if getattr(args, "update_summaries", False):
+        update_all_summaries_and_index(workspace_dir, config)
         return
 
     _execute_cli_pipeline(args, workspace_dir, config, theme_mgr)

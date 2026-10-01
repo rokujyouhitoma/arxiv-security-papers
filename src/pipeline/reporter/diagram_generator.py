@@ -4,7 +4,14 @@ Diagram Generator Module
 Generates dynamic Mermaid mindmaps and category breakdown visualizations.
 """
 
+import re
 from typing import Any, Dict, List
+
+
+def _sanitize_mermaid_label(text: str) -> str:
+    """Sanitizes text for safe inclusion in Mermaid node labels."""
+    cleaned = re.sub(r'["\[\]\(\);<>]', "", text)
+    return cleaned.strip()
 
 
 def generate_mermaid_mindmap(papers: List[Dict[str, Any]]) -> str:
@@ -16,7 +23,9 @@ def generate_mermaid_mindmap(papers: List[Dict[str, Any]]) -> str:
 
     lines = ["```mermaid", "mindmap", "  root((arXiv Security Papers))"]
     for cat, count in categories.items():
-        lines.append(f"    {cat}[{cat} ({count} papers)]")
+        safe_cat = _sanitize_mermaid_label(cat)
+        node_id = safe_cat.replace(" ", "_").replace(".", "_")
+        lines.append(f'    {node_id}["{safe_cat} ({count} papers)"]')
 
     lines.append("```")
     return "\n".join(lines)
@@ -41,8 +50,9 @@ def _build_trend_mindmap_lines(counts: Dict[str, int]) -> List[str]:
     top_items = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:6]
     for kw, count in top_items:
         if count > 0:
-            clean_kw = kw.replace(" ", "_")
-            lines.append(f"    {clean_kw}[{kw} ({count} 件)]")
+            safe_kw = _sanitize_mermaid_label(kw)
+            clean_id = safe_kw.replace(" ", "_")
+            lines.append(f'    {clean_id}["{safe_kw} ({count} 件)"]')
     lines.append("```")
     return lines
 

@@ -234,7 +234,7 @@ def _render_index_header(
 
     info_desc = (
         "> 本カタログは、arXiv (`cs.CR`) から取得したサイバーセキュリティ論文について、"
-        "**原データ保持 (raw_data: JSON / PDF / TXT)**、**OKF変換ドキュメント (okf_papers)**、"
+        f"**原データ保持 ({raw_data_rel}: JSON / PDF / TXT)**、**OKF変換ドキュメント ({okf_papers_rel})**、"
         "および**日本語表形式エグゼクティブサマリー (01_per_run 〜 05_annual)** "
         "を全成果物集約ディレクトリ `outputs/` の下で独立管理・提供するナビゲーションポータルです。"
     )
@@ -261,7 +261,7 @@ timestamp: "{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
 |---|---|---|
 | 🌐 **Web コンソール** | [Web Console]({web_console_rel}) | キーワード検索、ドメイン・タグ絞り込み、高速グラフ・統計可視化 |
 | 🗄️ **全件カタログ台帳** | [papers_catalog.json]({catalog_json_rel}) | 全収集論文のメタデータ・要約・OKF/Rawリンクを完全網羅した構造化JSON |
-| 📄 **OKF ドキュメント** | [okf_papers/]({okf_papers_rel}) | 日付別 OKF v0.2 Markdown ドキュメント群 |
+| 📄 **OKF ドキュメント** | [{okf_papers_rel}/]({okf_papers_rel}) | 日付別 OKF v0.2 Markdown ドキュメント群 |
 | 📦 **原本生データ** | [raw_data/]({raw_data_rel}) | arXiv 公式 JSON / PDF / pdftotext 抽出 TXT 原本 |
 
 ---

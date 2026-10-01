@@ -1,23 +1,23 @@
 ---
-type: "executive-summary-per-run"
+type: "executive-summary-run"
 title: "arXiv セキュリティ 取得時エグゼクティブサマリー ({date_str} {time_str} UTC)"
-description: "{date_str} {time_str} 取得分のセキュリティ論文 {count} 件の実行サマリー"
+description: "取得バッチ実行における新着セキュリティ論文 {count} 件のエグゼクティブサマリー"
 timestamp: "{timestamp}"
 ---
 
 # ⏱️ 01_per_run: 取得時エグゼクティブサマリー報告書 ({date_str} {time_str} UTC)
 
-**取得日時**: {date_str} {time_str} UTC  
+**実行日時**: {datetime_utc}  
 **新着論文数**: {count} 件  
 
 ---
 
 ## 💡 エグゼクティブサマリー (Executive Summary)
 
-本報告書は {date_str} {time_str} UTC の自動取得バッチにて処理されたセキュリティ論文 {count} 件に関する実行サマリーです。新着論文の原データ（JSON/PDF/TXT）の永続化および Google OKF v0.2 形式への変換が完了しており、以下に各論文の要約一覧を提示します。
+{macro_insights}
 
 ---
 
-## 📌 今回のバッチで処理されたセキュリティ論文一覧 (日本語表形式)
+## 📌 新着セキュリティ論文一覧 (日本語表形式)
 
 {table_md}
