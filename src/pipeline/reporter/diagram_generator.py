@@ -21,11 +21,10 @@ def generate_mermaid_mindmap(papers: List[Dict[str, Any]]) -> str:
         cat = p.get("primary_category", "cs.CR")
         categories[cat] = categories.get(cat, 0) + 1
 
-    lines = ["```mermaid", "mindmap", "  root((arXiv Security Papers))"]
+    lines = ["```mermaid", "mindmap", '  root["arXiv Security Papers"]']
     for cat, count in categories.items():
         safe_cat = _sanitize_mermaid_label(cat)
-        node_id = safe_cat.replace(" ", "_").replace(".", "_")
-        lines.append(f'    {node_id}["{safe_cat} ({count} papers)"]')
+        lines.append(f'    ["{safe_cat} ({count} papers)"]')
 
     lines.append("```")
     return "\n".join(lines)
@@ -46,13 +45,12 @@ def _count_keywords_in_text(
 
 def _build_trend_mindmap_lines(counts: Dict[str, int]) -> List[str]:
     """Builds mindmap lines for top keyword trends."""
-    lines = ["```mermaid", "mindmap", "  root((急上昇セキュリティ動向))"]
+    lines = ["```mermaid", "mindmap", '  root["急上昇セキュリティ動向"]']
     top_items = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:6]
     for kw, count in top_items:
         if count > 0:
             safe_kw = _sanitize_mermaid_label(kw)
-            clean_id = safe_kw.replace(" ", "_")
-            lines.append(f'    {clean_id}["{safe_kw} ({count} 件)"]')
+            lines.append(f'    ["{safe_kw} ({count} 件)"]')
     lines.append("```")
     return lines
 

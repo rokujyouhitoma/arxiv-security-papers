@@ -576,6 +576,8 @@ def _truncate_trends_content(content: str, max_chars: int) -> tuple[str, bool]:
 
 def _get_trend_summary_files(period: str) -> tuple[Optional[str], List[str]]:
     period_prefix_map = {
+        "per_run": "01_per_run",
+        "daily": "02_daily",
         "monthly": "03_monthly",
         "quarterly": "04_quarterly",
         "annual": "05_annual",

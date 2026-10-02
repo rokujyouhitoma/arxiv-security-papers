@@ -1824,7 +1824,16 @@ class GatewayHandlers:
             limit = int(limit_str)
         except ValueError:
             limit = 10
-        trends_res = handle_get_latest_trends({"limit": limit})
+        period = query_params.get("period", ["monthly"])[0].strip().lower()
+        if period not in ("per_run", "daily", "monthly", "quarterly", "annual"):
+            period = "monthly"
+        trends_res = handle_get_latest_trends(
+            {
+                "period": period,
+                "full_content": True,
+                "limit": limit,
+            }
+        )
         return response_json(start_response, trends_res)
 
     def _build_vector_engine_stats(self) -> Dict[str, Any]:

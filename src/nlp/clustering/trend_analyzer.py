@@ -46,8 +46,7 @@ def _build_cluster_insight_bullet(
 def _render_mindmap_node(label: str, count: int) -> str:
     """Render cluster node for Mermaid mindmap."""
     safe_label = _sanitize_mermaid_text(label, max_length=30)
-    node_id = re.sub(r"\W+", "_", safe_label).strip("_") or "topic"
-    return f'    {node_id}["{safe_label} ({count}件)"]'
+    return f'    ["{safe_label} ({count}件)"]'
 
 
 def _render_mindmap_leaf(paper: Dict[str, Any]) -> str:
@@ -66,7 +65,7 @@ def _build_mermaid_mindmap_tree(
     lines: List[str] = [
         "```mermaid",
         "mindmap",
-        f"  root((セキュリティ動向<br/>{safe_date}))",
+        f'  root["セキュリティ動向 ({safe_date})"]',
     ]
     for cluster, papers in cluster_pairs[:5]:
         lines.append(_render_mindmap_node(cluster.label, len(papers)))

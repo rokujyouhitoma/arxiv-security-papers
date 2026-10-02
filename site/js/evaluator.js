@@ -65,6 +65,7 @@ class MarkdownEvaluator {
         ...node,
         evaluated: {
           id: diagramId,
+          elementId: diagramId,
           code: node.payload.code
         }
       };

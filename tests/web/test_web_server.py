@@ -103,15 +103,25 @@ def test_wsgi_app_get_search():
 
 
 def test_wsgi_app_get_trends():
-    status, headers, body = call_wsgi(
-        application,
-        method="GET",
-        path="/api/trends",
-        query_string="period=monthly",
-    )
-    assert status.startswith("200") or status.startswith("404")
-    data = json.loads(body.decode("utf-8"))
-    assert "status" in data
+    for period in ["monthly", "quarterly", "annual"]:
+        status, headers, body = call_wsgi(
+            application,
+            method="GET",
+            path="/api/trends",
+            query_string=f"period={period}",
+        )
+        assert status.startswith("200")
+        data = json.loads(body.decode("utf-8"))
+        assert data["status"] == "success"
+        assert data["period"] == period
+        assert "content" in data
+        assert len(data["content"]) > 0
+        if period == "monthly":
+            assert "monthly_" in data["file"]
+        elif period == "quarterly":
+            assert "quarterly_" in data["file"]
+        elif period == "annual":
+            assert "annual_" in data["file"]
 
 
 def test_wsgi_app_get_stats():

@@ -57,9 +57,10 @@ class MarkdownRenderer {
 
         case 'MERMAID':
           mermaidElements.push(ev);
+          const elemId = ev.elementId || ev.id || `mermaid-${Math.random().toString(36).substring(2, 7)}`;
           htmlParts.push(`
             <div class="md-mermaid-wrapper">
-              <div class="mermaid" id="${ev.elementId}">
+              <div class="mermaid" id="${elemId}">
 ${ev.code}
               </div>
             </div>

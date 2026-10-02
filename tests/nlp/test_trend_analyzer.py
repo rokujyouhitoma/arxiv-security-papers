@@ -66,7 +66,8 @@ def test_trend_analyzer_synthesis_structure() -> None:
     mindmap = res["mermaid_mindmap"]
     assert mindmap.startswith("```mermaid\nmindmap")
     assert mindmap.endswith("```")
-    assert "root((セキュリティ動向<br/>2026-09-30))" in mindmap
+    assert 'root["セキュリティ動向 (2026-09-30)"]' in mindmap
+    assert '["AI/LLM セキュリティ & 敵対的攻撃 (1件)"]' in mindmap
     assert "LLMジェイルブレイク" in mindmap or "LLM" in mindmap
 
 
