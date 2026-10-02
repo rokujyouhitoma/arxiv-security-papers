@@ -258,6 +258,20 @@ def _render_okf_markdown(
     )
 
 
+def _format_authors_yaml(authors: List[str]) -> str:
+    """Formats authors list into YAML items or N/A fallback."""
+    if not authors:
+        return '    - "N/A"'
+    return "\n".join([f'    - "{_yaml_escape(a)}"' for a in authors])
+
+
+def _format_tags_yaml(paper: Dict[str, Any], config: Dict[str, Any]) -> str:
+    """Formats tags list into YAML items."""
+    default_tags = config.get("okf", {}).get("default_tags", ["cs.CR", "security"])
+    tags = list(set(default_tags + determine_security_tags(paper)))
+    return "\n".join([f'  - "{_yaml_escape(t)}"' for t in sorted(tags)])
+
+
 def _build_okf_template_vars(
     paper: Dict[str, Any], config: Dict[str, Any]
 ) -> Tuple[str, Dict[str, Any], str, str, str, str, str]:
@@ -266,14 +280,10 @@ def _build_okf_template_vars(
     exec_summary = generate_japanese_executive_summary(paper)
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     pub_date = str(paper.get("published") or now_iso)
-
-    authors_yaml = "\n".join(
-        [f'    - "{_yaml_escape(a)}"' for a in paper.get("authors", [])]
-    )
-    default_tags = config.get("okf", {}).get("default_tags", ["cs.CR", "security"])
-    tags = list(set(default_tags + determine_security_tags(paper)))
-    tags_yaml = "\n".join([f'  - "{_yaml_escape(t)}"' for t in sorted(tags)])
-    rec_list = "\n".join([f"- {r}" for r in exec_summary["executive_recommendations"]])
+    authors_yaml = _format_authors_yaml(paper.get("authors", []))
+    tags_yaml = _format_tags_yaml(paper, config)
+    recs = exec_summary["executive_recommendations"]
+    rec_list = "\n".join([f"- {r}" for r in recs])
     return title_ja, exec_summary, now_iso, pub_date, authors_yaml, tags_yaml, rec_list
 
 

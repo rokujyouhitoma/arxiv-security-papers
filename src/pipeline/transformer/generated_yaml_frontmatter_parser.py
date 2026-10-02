@@ -48,6 +48,7 @@ class YAMLFrontmatterParser(Parser[Any]):
         self._r_entries = RuleRef("entries")
         self._r_entry_item = RuleRef("entry_item")
         self._r_comment_or_blank = RuleRef("comment_or_blank")
+        self._r_empty_mapping = RuleRef("empty_mapping")
         self._r_scalar_mapping = RuleRef("scalar_mapping")
         self._r_inline_list_mapping = RuleRef("inline_list_mapping")
         self._r_inline_list_items = RuleRef("inline_list_items")
@@ -59,6 +60,7 @@ class YAMLFrontmatterParser(Parser[Any]):
         self._r_nested_mapping = RuleRef("nested_mapping")
         self._r_nested_pairs = RuleRef("nested_pairs")
         self._r_nested_pair_item = RuleRef("nested_pair_item")
+        self._r_nested_empty_mapping = RuleRef("nested_empty_mapping")
         self._r_nested_scalar_mapping = RuleRef("nested_scalar_mapping")
         self._r_nested_list_mapping = RuleRef("nested_list_mapping")
         self._r_key_ident = RuleRef("key_ident")
@@ -97,6 +99,7 @@ class YAMLFrontmatterParser(Parser[Any]):
                 self._r_list_mapping,
                 self._r_inline_list_mapping,
                 self._r_scalar_mapping,
+                self._r_empty_mapping,
             )
         )
         self._r_comment_or_blank.define(
@@ -113,6 +116,16 @@ class YAMLFrontmatterParser(Parser[Any]):
                 self._r_newline.map(self._action_comment_or_blank_5),
             )
         )
+        self._r_empty_mapping.define(
+            Seq(
+                self._r_key_ident,
+                ZeroOrMore(Class(" \\t", inverted=False)),
+                Lit(":"),
+                ZeroOrMore(Class(" \\t", inverted=False)),
+                self._r_opt_comment,
+                self._r_newline,
+            ).map(self._action_empty_mapping_6)
+        )
         self._r_scalar_mapping.define(
             Seq(
                 self._r_key_ident,
@@ -122,7 +135,7 @@ class YAMLFrontmatterParser(Parser[Any]):
                 self._r_scalar_val,
                 self._r_opt_comment,
                 self._r_newline,
-            ).map(self._action_scalar_mapping_6)
+            ).map(self._action_scalar_mapping_7)
         )
         self._r_inline_list_mapping.define(
             Seq(
@@ -137,7 +150,7 @@ class YAMLFrontmatterParser(Parser[Any]):
                 Lit("]"),
                 self._r_opt_comment,
                 self._r_newline,
-            ).map(self._action_inline_list_mapping_7)
+            ).map(self._action_inline_list_mapping_8)
         )
         self._r_inline_list_items.define(
             Seq(
@@ -148,9 +161,9 @@ class YAMLFrontmatterParser(Parser[Any]):
                         Lit(","),
                         ZeroOrMore(Class(" \\t", inverted=False)),
                         self._r_scalar_val,
-                    ).map(self._action_inline_list_items_8)
+                    ).map(self._action_inline_list_items_9)
                 ),
-            ).map(self._action_inline_list_items_9)
+            ).map(self._action_inline_list_items_10)
         )
         self._r_list_mapping.define(
             Seq(
@@ -161,10 +174,10 @@ class YAMLFrontmatterParser(Parser[Any]):
                 self._r_opt_comment,
                 self._r_newline,
                 self._r_block_list_items,
-            ).map(self._action_list_mapping_10)
+            ).map(self._action_list_mapping_11)
         )
         self._r_block_list_items.define(
-            OneOrMore(self._r_block_list_entry).map(self._action_block_list_items_11)
+            OneOrMore(self._r_block_list_entry).map(self._action_block_list_items_12)
         )
         self._r_block_list_entry.define(
             Choice(
@@ -180,7 +193,7 @@ class YAMLFrontmatterParser(Parser[Any]):
                     self._r_opt_comment,
                     self._r_newline,
                     ZeroOrMore(self._r_block_dict_cont),
-                ).map(self._action_block_list_entry_12),
+                ).map(self._action_block_list_entry_13),
                 Seq(
                     ZeroOrMore(Class(" \\t", inverted=False)),
                     Lit("-"),
@@ -188,7 +201,7 @@ class YAMLFrontmatterParser(Parser[Any]):
                     self._r_inline_dict_entry,
                     self._r_opt_comment,
                     self._r_newline,
-                ).map(self._action_block_list_entry_13),
+                ).map(self._action_block_list_entry_14),
                 Seq(
                     ZeroOrMore(Class(" \\t", inverted=False)),
                     Lit("-"),
@@ -196,7 +209,7 @@ class YAMLFrontmatterParser(Parser[Any]):
                     self._r_scalar_val,
                     self._r_opt_comment,
                     self._r_newline,
-                ).map(self._action_block_list_entry_14),
+                ).map(self._action_block_list_entry_15),
             )
         )
         self._r_block_dict_cont.define(
@@ -210,7 +223,7 @@ class YAMLFrontmatterParser(Parser[Any]):
                 self._r_scalar_val,
                 self._r_opt_comment,
                 self._r_newline,
-            ).map(self._action_block_dict_cont_15)
+            ).map(self._action_block_dict_cont_16)
         )
         self._r_inline_dict_entry.define(
             Seq(
@@ -229,9 +242,9 @@ class YAMLFrontmatterParser(Parser[Any]):
                         Lit(":"),
                         ZeroOrMore(Class(" \\t", inverted=False)),
                         self._r_scalar_val,
-                    ).map(self._action_inline_dict_entry_16)
+                    ).map(self._action_inline_dict_entry_17)
                 ),
-            ).map(self._action_inline_dict_entry_17)
+            ).map(self._action_inline_dict_entry_18)
         )
         self._r_nested_mapping.define(
             Seq(
@@ -242,17 +255,29 @@ class YAMLFrontmatterParser(Parser[Any]):
                 self._r_opt_comment,
                 self._r_newline,
                 self._r_nested_pairs,
-            ).map(self._action_nested_mapping_18)
+            ).map(self._action_nested_mapping_19)
         )
         self._r_nested_pairs.define(
-            OneOrMore(self._r_nested_pair_item).map(self._action_nested_pairs_19)
+            OneOrMore(self._r_nested_pair_item).map(self._action_nested_pairs_20)
         )
         self._r_nested_pair_item.define(
             Choice(
                 self._r_comment_or_blank,
                 self._r_nested_list_mapping,
                 self._r_nested_scalar_mapping,
+                self._r_nested_empty_mapping,
             )
+        )
+        self._r_nested_empty_mapping.define(
+            Seq(
+                OneOrMore(Class(" \\t", inverted=False)),
+                self._r_key_ident,
+                ZeroOrMore(Class(" \\t", inverted=False)),
+                Lit(":"),
+                ZeroOrMore(Class(" \\t", inverted=False)),
+                self._r_opt_comment,
+                self._r_newline,
+            ).map(self._action_nested_empty_mapping_21)
         )
         self._r_nested_scalar_mapping.define(
             Seq(
@@ -264,7 +289,7 @@ class YAMLFrontmatterParser(Parser[Any]):
                 self._r_scalar_val,
                 self._r_opt_comment,
                 self._r_newline,
-            ).map(self._action_nested_scalar_mapping_20)
+            ).map(self._action_nested_scalar_mapping_22)
         )
         self._r_nested_list_mapping.define(
             Seq(
@@ -276,9 +301,9 @@ class YAMLFrontmatterParser(Parser[Any]):
                 self._r_opt_comment,
                 self._r_newline,
                 self._r_block_list_items,
-            ).map(self._action_nested_list_mapping_21)
+            ).map(self._action_nested_list_mapping_23)
         )
-        self._r_key_ident.define(Reg("[a-zA-Z0-9_-]+").map(self._action_key_ident_22))
+        self._r_key_ident.define(Reg("[a-zA-Z0-9_-]+").map(self._action_key_ident_24))
         self._r_scalar_val.define(
             Choice(
                 self._r_double_quoted_str,
@@ -287,14 +312,14 @@ class YAMLFrontmatterParser(Parser[Any]):
             )
         )
         self._r_double_quoted_str.define(
-            Reg('"(?:[^"\\\\]|\\\\.)*"').map(self._action_double_quoted_str_23)
+            Reg('"(?:[^"\\\\]|\\\\.)*"').map(self._action_double_quoted_str_25)
         )
         self._r_single_quoted_str.define(
-            Reg("'(?:[^'\\\\]|\\\\.)*'").map(self._action_single_quoted_str_24)
+            Reg("'(?:[^'\\\\]|\\\\.)*'").map(self._action_single_quoted_str_26)
         )
         self._r_unquoted_scalar.define(
             Reg("[^\\r\\n#,\\{\\}\\[\\]]+([ \\t]+[^\\r\\n#,\\{\\}\\[\\]]+)*").map(
-                self._action_unquoted_scalar_25
+                self._action_unquoted_scalar_27
             )
         )
         self._r_opt_comment.define(
@@ -347,41 +372,46 @@ class YAMLFrontmatterParser(Parser[Any]):
         return None
 
     @staticmethod
-    def _action_scalar_mapping_6(val: Any) -> Any:
+    def _action_empty_mapping_6(val: Any) -> Any:
+        key = val[0]
+        return _make_kv_pair(key, None)
+
+    @staticmethod
+    def _action_scalar_mapping_7(val: Any) -> Any:
         key = val[0]
         val = val[4]
         return _make_kv_pair(key, val)
 
     @staticmethod
-    def _action_inline_list_mapping_7(val: Any) -> Any:
+    def _action_inline_list_mapping_8(val: Any) -> Any:
         key = val[0]
         items = val[6]
         return _make_kv_pair(key, items or [])
 
     @staticmethod
-    def _action_inline_list_items_8(val: Any) -> Any:
+    def _action_inline_list_items_9(val: Any) -> Any:
         s = val[3]
         return s
 
     @staticmethod
-    def _action_inline_list_items_9(val: Any) -> Any:
+    def _action_inline_list_items_10(val: Any) -> Any:
         first = val[0]
         rest = val[1]
         return [first] + rest
 
     @staticmethod
-    def _action_list_mapping_10(val: Any) -> Any:
+    def _action_list_mapping_11(val: Any) -> Any:
         key = val[0]
         items = val[6]
         return _make_kv_pair(key, items)
 
     @staticmethod
-    def _action_block_list_items_11(val: Any) -> Any:
+    def _action_block_list_items_12(val: Any) -> Any:
         lines = val
         return [item for item in lines if item is not None]
 
     @staticmethod
-    def _action_block_list_entry_12(val: Any) -> Any:
+    def _action_block_list_entry_13(val: Any) -> Any:
         first_k = val[3]
         first_v = val[7]
         cont_fields = val[10]
@@ -391,29 +421,29 @@ class YAMLFrontmatterParser(Parser[Any]):
         return d
 
     @staticmethod
-    def _action_block_list_entry_13(val: Any) -> Any:
+    def _action_block_list_entry_14(val: Any) -> Any:
         dict_item = val[3]
         return dict_item
 
     @staticmethod
-    def _action_block_list_entry_14(val: Any) -> Any:
+    def _action_block_list_entry_15(val: Any) -> Any:
         val = val[3]
         return val
 
     @staticmethod
-    def _action_block_dict_cont_15(val: Any) -> Any:
+    def _action_block_dict_cont_16(val: Any) -> Any:
         k = val[2]
         v = val[6]
         return (k, v)
 
     @staticmethod
-    def _action_inline_dict_entry_16(val: Any) -> Any:
+    def _action_inline_dict_entry_17(val: Any) -> Any:
         rk = val[3]
         rv = val[7]
         return (rk, rv)
 
     @staticmethod
-    def _action_inline_dict_entry_17(val: Any) -> Any:
+    def _action_inline_dict_entry_18(val: Any) -> Any:
         k = val[0]
         v = val[4]
         rest = val[5]
@@ -423,44 +453,49 @@ class YAMLFrontmatterParser(Parser[Any]):
         return d
 
     @staticmethod
-    def _action_nested_mapping_18(val: Any) -> Any:
+    def _action_nested_mapping_19(val: Any) -> Any:
         key = val[0]
         pairs = val[6]
         return _make_kv_pair(key, _build_frontmatter_dict(pairs))
 
     @staticmethod
-    def _action_nested_pairs_19(val: Any) -> Any:
+    def _action_nested_pairs_20(val: Any) -> Any:
         lines = val
         return [item for item in lines if item is not None]
 
     @staticmethod
-    def _action_nested_scalar_mapping_20(val: Any) -> Any:
+    def _action_nested_empty_mapping_21(val: Any) -> Any:
+        k = val[1]
+        return _make_kv_pair(k, [])
+
+    @staticmethod
+    def _action_nested_scalar_mapping_22(val: Any) -> Any:
         k = val[1]
         v = val[5]
         return _make_kv_pair(k, v)
 
     @staticmethod
-    def _action_nested_list_mapping_21(val: Any) -> Any:
+    def _action_nested_list_mapping_23(val: Any) -> Any:
         k = val[1]
         items = val[7]
         return _make_kv_pair(k, items)
 
     @staticmethod
-    def _action_key_ident_22(val: Any) -> Any:
+    def _action_key_ident_24(val: Any) -> Any:
         raw = val
         return raw
 
     @staticmethod
-    def _action_double_quoted_str_23(val: Any) -> Any:
+    def _action_double_quoted_str_25(val: Any) -> Any:
         raw = val
         return _unescape_double_quotes(raw)
 
     @staticmethod
-    def _action_single_quoted_str_24(val: Any) -> Any:
+    def _action_single_quoted_str_26(val: Any) -> Any:
         raw = val
         return _unescape_single_quotes(raw)
 
     @staticmethod
-    def _action_unquoted_scalar_25(val: Any) -> Any:
+    def _action_unquoted_scalar_27(val: Any) -> Any:
         raw = val
         return _parse_scalar(raw)

@@ -32,10 +32,15 @@ entry_item <- comment_or_blank
             / list_mapping
             / inline_list_mapping
             / scalar_mapping
+            / empty_mapping
 
 comment_or_blank <- [ \t]* "#" [^\r\n]* newline { return None }
                   / [ \t]+ newline { return None }
                   / newline { return None }
+
+empty_mapping <- key:key_ident [ \t]* ":" [ \t]* opt_comment newline {
+    return _make_kv_pair(key, None)
+}
 
 scalar_mapping <- key:key_ident [ \t]* ":" [ \t]* val:scalar_val opt_comment newline {
     return _make_kv_pair(key, val)
@@ -92,6 +97,11 @@ nested_pairs <- lines:(nested_pair_item)+ {
 nested_pair_item <- comment_or_blank
                   / nested_list_mapping
                   / nested_scalar_mapping
+                  / nested_empty_mapping
+
+nested_empty_mapping <- [ \t]+ k:key_ident [ \t]* ":" [ \t]* opt_comment newline {
+    return _make_kv_pair(k, [])
+}
 
 nested_scalar_mapping <- [ \t]+ k:key_ident [ \t]* ":" [ \t]* v:scalar_val opt_comment newline {
     return _make_kv_pair(k, v)

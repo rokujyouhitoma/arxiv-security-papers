@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 担当・リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **416** | 空 authors および OKF フロントマター PEG パース失敗による「unknown」タイトルおよびフロントマター漏洩要約の解消 | Bug | High | In Progress | [416-fix-okf-empty-authors-and-frontmatter-parser.md](416-fix-okf-empty-authors-and-frontmatter-parser.md) |
+*現在オープン中の Issue はありません。*
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **416** | 空 authors および OKF フロントマター PEG パース失敗による「unknown」タイトルおよびフロントマター漏洩要約の解消 | Bug | 2026-10-03 | [416-fix-okf-empty-authors-and-frontmatter-parser.md](closed/416-fix-okf-empty-authors-and-frontmatter-parser.md) |
 | **415** | Mermaid mindmap 構文エラーの解消とトレンド分析マインドマップ描画の正常化 | Bug | 2026-10-03 | [415-fix-mermaid-mindmap-syntax-and-rendering.md](closed/415-fix-mermaid-mindmap-syntax-and-rendering.md) |
 | **414** | Webコンソール /api/trends における period パラメータ未反映およびサマリー切り替え不全の解消 | Bug | 2026-10-03 | [414-fix-trends-api-period-param-and-content-switching.md](closed/414-fix-trends-api-period-param-and-content-switching.md) |
 | **413** | パイプライン全ステージ (Ingestion/Transformation/Reporting) のE2E自動統合テスト基盤の構築 | Feature | 2026-10-01 | [413-pipeline-full-stages-e2e-integration-test-suite.md](closed/413-pipeline-full-stages-e2e-integration-test-suite.md) |

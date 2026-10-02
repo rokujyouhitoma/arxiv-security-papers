@@ -4,11 +4,11 @@ Conforms to Google OKF (Open Knowledge Format) v0.2 specification.
 Provides cached parsing and resilient fallbacks with zero external dependencies.
 """
 
+import re
 import threading
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
-from core.structures.peg import PEGSyntaxError
 from pipeline.transformer.generated_yaml_frontmatter_parser import YAMLFrontmatterParser
 
 _parser_lock = threading.Lock()
@@ -38,6 +38,36 @@ def _extract_frontmatter_block(text: str) -> Optional[str]:
     return trimmed[: end_idx + 4]
 
 
+def _extract_regex_tags(raw_block: str) -> list[str]:
+    """Helper to extract tags from malformed YAML block."""
+    tags_m = re.search(r'tags:\s*\n((?:\s*-\s*["\']?[^\r\n]+["\']?\s*\n)+)', raw_block)
+    if not tags_m:
+        return []
+    raw_tags = tags_m.group(1).strip().split("\n")
+    return [re.sub(r'^\s*-\s*["\']?|["\']?\s*$', "", t) for t in raw_tags if t.strip()]
+
+
+def _fallback_regex_frontmatter(raw_block: str) -> Dict[str, Any]:
+    """Fallback extractor using regex when PEG parser encounters unexpected syntax."""
+    res: Dict[str, Any] = {}
+    patterns = {
+        "type": r'type:\s*["\']?([^"\'\r\n]+)["\']?',
+        "title": r'title:\s*["\'](.*?)["\']\s*$',
+        "title_ja": r'title_ja:\s*["\'](.*?)["\']\s*$',
+        "description": r'description:\s*["\'](.*?)["\']\s*$',
+        "resource": r'resource:\s*["\']?([^"\'\r\n]+)["\']?',
+        "timestamp": r'timestamp:\s*["\']?([^"\'\r\n]+)["\']?',
+    }
+    for k, pat in patterns.items():
+        m = re.search(pat, raw_block, re.MULTILINE)
+        if m:
+            res[k] = m.group(1).replace(r"\"", '"').replace(r"\'", "'")
+    tags = _extract_regex_tags(raw_block)
+    if tags:
+        res["tags"] = tags
+    return res
+
+
 @lru_cache(maxsize=1024)
 def _parse_cached_frontmatter(raw_block: str) -> Dict[str, Any]:
     """Internal memoized parser for raw frontmatter text blocks."""
@@ -45,8 +75,8 @@ def _parse_cached_frontmatter(raw_block: str) -> Dict[str, Any]:
     try:
         parsed = parser.parse(raw_block)
         return parsed if isinstance(parsed, dict) else {}
-    except PEGSyntaxError:
-        return {}
+    except Exception:
+        return _fallback_regex_frontmatter(raw_block)
 
 
 def parse_okf_frontmatter(markdown_text: str) -> Dict[str, Any]:

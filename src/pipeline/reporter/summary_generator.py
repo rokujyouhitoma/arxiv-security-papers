@@ -80,9 +80,10 @@ def _resolve_one_liner(
         or extracted_desc == "unknown"
     )
     if is_legacy:
+        clean_text = re.sub(r"^---[\s\S]*?---\s*", "", text).strip()
         sum_data = generate_structured_summary(
             title=title,
-            abstract=text[:1500],
+            abstract=clean_text[:1500],
             clean_id="unknown",
             japanese_title=title_ja,
         )
