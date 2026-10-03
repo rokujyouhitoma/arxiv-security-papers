@@ -1,0 +1,14 @@
+{
+  "spider_name": "cve_spider",
+  "status": "COMPLETED",
+  "is_active": false,
+  "start_time": 1790857775.25414,
+  "updated_at": 1790857775.257083,
+  "processed": 2,
+  "pending": 0,
+  "total": 2,
+  "ratio_pct": 100.0,
+  "pages_per_second": 683.95,
+  "eta_seconds": 0.0,
+  "elapsed_seconds": 0.0
+}

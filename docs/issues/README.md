@@ -11,7 +11,7 @@
 | **420** | 検索窓における Lucene PEG リアルタイム構文検証・エラーハイライト・オートコンプリートの実装 | Feature | High | Open (New) | [420-search-input-realtime-peg-validation-and-autocomplete.md](420-search-input-realtime-peg-validation-and-autocomplete.md) |
 | **421** | クライアントサイドルーターの URL パス＆クエリ構文解析の PEG 化 | Feature | High | Open (New) | [421-client-router-url-path-query-peg-parser.md](421-client-router-url-path-query-peg-parser.md) |
 | **422** | Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 | Feature | High | Open (New) | [422-mermaid-diagram-pre-validation-and-sanitizer.md](422-mermaid-diagram-pre-validation-and-sanitizer.md) |
-| **426** | JS 生成パーサーにおける PEGSyntaxError 診断情報拡充と parseWithDiagnostics API の実装 | Feature | High | Open (New) | [426-peg-js-syntax-error-diagnostics-and-tolerant-api.md](426-peg-js-syntax-error-diagnostics-and-tolerant-api.md) |
+| **426** | JS 生成パーサーにおける PEGSyntaxError 診断情報拡充と parseWithDiagnostics API の実装 | Feature | High | Open (In Progress) | [426-peg-js-syntax-error-diagnostics-and-tolerant-api.md](426-peg-js-syntax-error-diagnostics-and-tolerant-api.md) |
 | **427** | PEG AOT コンパイラにおける --no-runtime モジュール化と外部ランタイム共有の導入 | Feature | High | Open (New) | [427-peg-compiler-cli-modular-runtime-options.md](427-peg-compiler-cli-modular-runtime-options.md) |
 
 ---

@@ -932,7 +932,20 @@ Python 側コアランタイム（`src/core/structures/peg.py`）で確立され
 3. **純粋文字長判定 `AnyChar` への刷新**:
    - 従来の `reg(/[\s\S]/)` を廃止し、`pos < ctx.length` の直接インデックス判定を行う `AnyChar` クラスを導入。不要な正規表現オブジェクト生成をゼロ化。
 
-### 13.7 完了条件 (DoD for Phase 6)
+### 13.7 PEGSyntaxError 診断情報拡充と parseWithDiagnostics API の実装 (Issue #426)
+
+リアルタイム構文検証・オートコンプリート（Issue #420）および Mermaid 事前検証（Issue #422）に向けて、JS 生成パーサーの診断能力および耐障害性を強化した。
+
+1. **`PEGSyntaxError` コンテキストメタデータの完全付与**:
+   - `PEGSyntaxError(message, offset, line, col, expectedTokens, snippet)`
+   - エラー発生位置の行・桁・オフセットに加え、その時点でパーサーが期待していたトークン一覧 `expectedTokens`（`['EOF']`, `["'AND'"]`, `["'OR'"]` 等）およびエラー周辺のコンテキスト文字列 `snippet` をエラーオブジェクト上に保持。
+2. **例外非発生型ファサード API `parseWithDiagnostics(text)`**:
+   - UI タイピング時の頻繁なパース失敗に伴う `try...catch` 例外スローのオーバーヘッドをゼロ化。
+   - 成功時: `{ success: true, value: parsedAST, diagnostics: null }`
+   - 失敗時: `{ success: false, value: null, diagnostics: { errorMsg, offset, line, col, expectedTokens, snippet } }`
+   - エラーハイライトやサジェスト表示に必要な全コンテキストを構造化オブジェクトとして O(1) 返却。
+
+### 13.8 完了条件 (DoD for Phase 6)
 
 - [x] **Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)**:
   - 正規表現 `.replace()` から PEG コンビネータベースの構文解析に刷新され、コードスパン保護・エスケープ処理・XSS 防御を達成。
@@ -942,6 +955,8 @@ Python 側コアランタイム（`src/core/structures/peg.py`）で確立され
   - 直接・間接左再帰文法におけるスタック枯渇（RangeError）を解消し、シード成長法による最長一致・左結合 AST 生成を完全保証。
 - [x] **JS コードジェネレータにおける CharClass の文字コード範囲判定化と ReDoS 根絶 (Issue #425)**:
   - `new RegExp('[' + spec + ']')` を完全撤廃し、文字コード範囲直接比較および純粋 AnyChar による安全・高速な $O(1)$ 判定を実現。
+- [x] **PEGSyntaxError 診断情報拡充と parseWithDiagnostics API の実装 (Issue #426)**:
+  - `expectedTokens`, `snippet` の完全付与および例外を投げずに完全診断情報を返すファサード API を配備。
 - [x] **CLI `--target js` および `--ast-only` オプションの統合 (Issue #423)**:
   - `src/core/structures/peg_compiler/cli.py` に `--target {python,js}` および `--ast-only` が追加され、拡張子判定、Pythonアクション自動バイパス、インライン正規表現フラグ変換が動作すること。
 - [x] **Xenon Rank A および静的解析 100% 達成**:
