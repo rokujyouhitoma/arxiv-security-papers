@@ -4,7 +4,16 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在、未着手・進行中の Issue はありません（すべての登録済み Issue は完了・クローズ済み）。
+| Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: |
+| **429** | CLI ストリーム基底プロトコルと JSONL 入出力ハンドラーの実装 | Feature | New | [429-implement-cli-stream-base-and-jsonl-protocol.md](429-implement-cli-stream-base-and-jsonl-protocol.md) |
+| **430** | manage.py fetch 論文メタデータ取得ストリームサブコマンドの実装 | Feature | New | [430-implement-manage-py-fetch-stream.md](430-implement-manage-py-fetch-stream.md) |
+| **431** | manage.py pdf-extract 全文テキスト抽出ストリームフィルタの実装 | Feature | New | [431-implement-manage-py-pdf-extract-stream.md](431-implement-manage-py-pdf-extract-stream.md) |
+| **432** | manage.py okf-convert Google OKF構造化ストリームフィルタの実装 | Feature | New | [432-implement-manage-py-okf-convert-stream.md](432-implement-manage-py-okf-convert-stream.md) |
+| **433** | manage.py summarize 日本語エグゼクティブ要約ストリームフィルタの実装 | Feature | New | [433-implement-manage-py-summarize-stream.md](433-implement-manage-py-summarize-stream.md) |
+| **434** | manage.py db-index データベース・ベクトル検索インデクス登録シンクの実装 | Feature | New | [434-implement-manage-py-db-index-stream.md](434-implement-manage-py-db-index-stream.md) |
+| **435** | src/intelligence/cli.py オーケストレータにおける診断ログ(stderr)とデータ(stdout)の完全分離 | Feature | New | [435-separate-orchestrator-stdout-and-stderr-streams.md](435-separate-orchestrator-stdout-and-stderr-streams.md) |
+| **436** | Unix ストリームパイプライン統合テストスイートおよびOSツール連携検証の実装 | Feature | New | [436-e2e-unix-stream-pipeline-test-suite.md](436-e2e-unix-stream-pipeline-test-suite.md) |
 
 ---
 

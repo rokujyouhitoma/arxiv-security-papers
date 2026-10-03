@@ -1,14 +1,14 @@
 {
   "spider_name": "cwe_spider",
-  "status": "RUNNING",
-  "is_active": true,
-  "start_time": 1790944925.666585,
-  "updated_at": 1790945128.779083,
-  "processed": 1,
-  "pending": 1,
+  "status": "COMPLETED",
+  "is_active": false,
+  "start_time": 1791035443.660308,
+  "updated_at": 1791041418.157476,
+  "processed": 2,
+  "pending": 0,
   "total": 2,
-  "ratio_pct": 50.0,
+  "ratio_pct": 100.0,
   "pages_per_second": 0.0,
   "eta_seconds": 0.0,
-  "elapsed_seconds": 203.1
+  "elapsed_seconds": 5974.5
 }

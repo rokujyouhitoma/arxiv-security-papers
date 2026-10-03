@@ -2,13 +2,13 @@
   "spider_name": "arxiv_spider",
   "status": "COMPLETED",
   "is_active": false,
-  "start_time": 1790944716.336449,
-  "updated_at": 1790944925.59819,
+  "start_time": 1791035253.150948,
+  "updated_at": 1791035443.569937,
   "processed": 52,
   "pending": 0,
   "total": 52,
   "ratio_pct": 100.0,
-  "pages_per_second": 0.25,
+  "pages_per_second": 0.27,
   "eta_seconds": 0.0,
-  "elapsed_seconds": 209.3
+  "elapsed_seconds": 190.4
 }

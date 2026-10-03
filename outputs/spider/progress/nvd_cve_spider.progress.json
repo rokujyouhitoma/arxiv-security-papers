@@ -1,0 +1,14 @@
+{
+  "spider_name": "nvd_cve_spider",
+  "status": "RUNNING",
+  "is_active": true,
+  "start_time": 1791041418.271503,
+  "updated_at": 1791041418.271549,
+  "processed": 0,
+  "pending": 1,
+  "total": 1,
+  "ratio_pct": 0.0,
+  "pages_per_second": 0.0,
+  "eta_seconds": 0.0,
+  "elapsed_seconds": 0.0
+}
