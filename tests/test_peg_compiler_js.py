@@ -203,3 +203,37 @@ def test_cli_ast_only_with_graph_query_peg(node_bin: str) -> None:
         )
         data = json.loads(proc.stdout)
         assert data["success"] is True
+
+
+def test_warth_left_recursion_in_generated_js(node_bin: str) -> None:
+    """Verifies that Warth et al. ('08) left-recursion seed growing works in generated JS."""
+    grammar = """
+    grammar LeftRecCalc
+    expr <- left:expr _ '+' _ right:num {
+        return left + right;
+    } / num
+    num <- [0-9]+ {
+        return parseInt(val.join(''), 10);
+    }
+    _ <- [ \t]*
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_js = Path(tmp_dir) / "lr_calc_parser.js"
+        js_code = compile_grammar_to_code(grammar, target="js")
+        out_js.write_text(js_code, encoding="utf-8")
+
+        test_script = f"""
+        const {{ LeftRecCalcParser }} = require({json.dumps(str(out_js))});
+        const parser = new LeftRecCalcParser();
+        // 1 + 2 + 3 + 4 -> evaluates left-associatively without stack overflow
+        const res = parser.parse("1 + 2 + 3 + 4");
+        console.log(JSON.stringify({{ res: res }}));
+        """
+        proc = subprocess.run(
+            [node_bin, "-e", test_script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        data = json.loads(proc.stdout)
+        assert data["res"] == 10

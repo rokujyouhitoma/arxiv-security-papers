@@ -903,14 +903,31 @@ Web フロントエンドのマークダウン評価エンジンにおいて、�
 5. **UMD / CommonJS デュアルエクスポート**:
    - `query-validator.js` を UMD 化し、ブラウザ（`window.QueryValidator`）および Node.js（`require` / テスト自動化）の双方から利用可能とした。
 
-### 13.5 完了条件 (DoD for Phase 6)
+### 13.5 内蔵 JavaScript PEG ランタイムにおける Warth ('08) 左再帰解消 (Issue #424)
+
+Python 側コアランタイム（`src/core/structures/peg.py`）で確立された Warth et al. ('08) のシード成長アルゴリズムを、`JSCodeGenerator`（`src/core/structures/peg_compiler/codegen_js.py`）が出力する内蔵 JS ランタイムへ完全移植した。
+
+1. **左再帰の検知 (`ParseContext.inProgress` & `lrDetected`)**:
+   - `ParseContext` に `inProgress` および `lrDetected` の `Set` を導入。
+   - `_evalCached` において、同一ルール・同一位置での再帰呼び出しを検知した際、`lrDetected` にマークし一時的に失敗ダミー結果（シード）を返却することで無限ループやスタックオーバーフロー（`RangeError`）を確実に抑止。
+2. **シード成長ループ (`Parser.prototype._growLrSeed`)**:
+   - 非左再帰選択肢のマッチ結果を初期シードとして `ctx.memo` に格納。
+   - `parseAt(ctx, pos)` を繰り返し実行し、マッチ長が単調増加（`nextPos > curr.nextPos`）する限りシードを更新。固定点（Fixpoint）に到達した時点でループを終了し、最長マッチ結果を確定。
+3. **依存メモ無効化 (`Parser.prototype._clearLrDependentMemo`)**:
+   - シード成長の各イテレーションにおいて、再評価位置以降に生成された依存メモ化エントリー（`(key & 0xFFFFF) >= pos && key !== lrKey`）を確実にパージ。文脈依存規則の誤キャッシュ汚染を排除。
+4. **数式・DSL の自然な左結合解析**:
+   - `expr <- expr '+' num / num` のような標準的な左再帰算術文法を変換なしでそのままコンパイル可能とし、`1 + 2 + 3` を `((1 + 2) + 3)` の左結合ツリーとして正確に解析。
+
+### 13.6 完了条件 (DoD for Phase 6)
 
 - [x] **Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)**:
   - 正規表現 `.replace()` から PEG コンビネータベースの構文解析に刷新され、コードスパン保護・エスケープ処理・XSS 防御を達成。
 - [x] **JavaScript コードジェネレータ (`JSCodeGenerator`) 実装**:
   - `src/core/structures/peg_compiler/codegen_js.py` が実装され、内蔵ランタイムを含む UMD 互換の自己完結型 JS コードを出力可能であること。
-- [x] **CLI `--target js` オプションの統合**:
-  - `src/core/structures/peg_compiler/cli.py` に `--target {python,js}` が追加され、拡張子判定および最適化連携が動作すること。
+- [x] **内蔵 JS ランタイムにおける Warth ('08) 左再帰解消移植 (Issue #424)**:
+  - 直接・間接左再帰文法におけるスタック枯渇（RangeError）を解消し、シード成長法による最長一致・左結合 AST 生成を完全保証。
+- [x] **CLI `--target js` および `--ast-only` オプションの統合 (Issue #423)**:
+  - `src/core/structures/peg_compiler/cli.py` に `--target {python,js}` および `--ast-only` が追加され、拡張子判定、Pythonアクション自動バイパス、インライン正規表現フラグ変換が動作すること。
 - [x] **Xenon Rank A および静的解析 100% 達成**:
   - `codegen_js.py` および関連モジュールが Xenon Rank A、flake8、mypy --strict、black、isort を完全パスすること。
 - [x] **回帰テストおよびビルド検証 PASS**:

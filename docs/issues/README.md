@@ -11,7 +11,6 @@
 | **420** | 検索窓における Lucene PEG リアルタイム構文検証・エラーハイライト・オートコンプリートの実装 | Feature | High | Open (New) | [420-search-input-realtime-peg-validation-and-autocomplete.md](420-search-input-realtime-peg-validation-and-autocomplete.md) |
 | **421** | クライアントサイドルーターの URL パス＆クエリ構文解析の PEG 化 | Feature | High | Open (New) | [421-client-router-url-path-query-peg-parser.md](421-client-router-url-path-query-peg-parser.md) |
 | **422** | Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 | Feature | High | Open (New) | [422-mermaid-diagram-pre-validation-and-sanitizer.md](422-mermaid-diagram-pre-validation-and-sanitizer.md) |
-| **424** | 内蔵 JavaScript PEG ランタイムへの Warth ('08) 左再帰解消アルゴリズムの移植 | Feature | High | Open (In Progress) | [424-peg-js-runtime-warth-left-recursion.md](424-peg-js-runtime-warth-left-recursion.md) |
 | **425** | JS コードジェネレータにおける CharClass の文字コード範囲判定化と ReDoS 根絶 | Feature | High | Open (New) | [425-peg-js-charclass-range-evaluation-and-redos-eradication.md](425-peg-js-charclass-range-evaluation-and-redos-eradication.md) |
 | **426** | JS 生成パーサーにおける PEGSyntaxError 診断情報拡充と parseWithDiagnostics API の実装 | Feature | High | Open (New) | [426-peg-js-syntax-error-diagnostics-and-tolerant-api.md](426-peg-js-syntax-error-diagnostics-and-tolerant-api.md) |
 | **427** | PEG AOT コンパイラにおける --no-runtime モジュール化と外部ランタイム共有の導入 | Feature | High | Open (New) | [427-peg-compiler-cli-modular-runtime-options.md](427-peg-compiler-cli-modular-runtime-options.md) |
@@ -22,6 +21,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **424** | 内蔵 JavaScript PEG ランタイムへの Warth ('08) 左再帰解消アルゴリズムの移植 | Feature | 2026-10-03 | [424-peg-js-runtime-warth-left-recursion.md](closed/424-peg-js-runtime-warth-left-recursion.md) |
 | **423** | PEG AOT コンパイラにおける --ast-only 汎用構文木生成とアクション抽象化の実装 | Feature | 2026-10-03 | [423-peg-compiler-ast-only-mode-and-action-abstraction.md](closed/423-peg-compiler-ast-only-mode-and-action-abstraction.md) |
 | **417** | WebフロントエンドJS向けPEGインラインパーサー換装およびPEG AOTコンパイラ JavaScriptコードジェネレータ基盤の実装 (Phase 1 & Phase 2) | Feature | 2026-10-03 | [417-frontend-peg-inline-parser-and-js-aot-codegen.md](closed/417-frontend-peg-inline-parser-and-js-aot-codegen.md) |
 | **416** | 空 authors および OKF フロントマター PEG パース失敗による「unknown」タイトルおよびフロントマター漏洩要約の解消 | Bug | 2026-10-03 | [416-fix-okf-empty-authors-and-frontmatter-parser.md](closed/416-fix-okf-empty-authors-and-frontmatter-parser.md) |
