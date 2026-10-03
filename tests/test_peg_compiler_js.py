@@ -286,3 +286,98 @@ def test_char_class_range_evaluation_in_generated_js(node_bin: str) -> None:
         assert data["res2"]["id"] == "_test123"
         assert data["res2"]["val"] == "abc-def"
         assert data["res2"]["sep"] == "]"
+
+
+def test_parse_with_diagnostics_and_syntax_error_details(node_bin: str) -> None:
+    """Verifies that parseWithDiagnostics returns structured diagnostics without throwing."""
+    grammar = r"""
+    grammar DiagDemo
+    entry <- id:ident ':' _ val:word _ sep:';' {
+        return { id: id, val: val };
+    }
+    ident <- [a-zA-Z_]+ { return val.join(''); }
+    word <- [a-z]+ { return val.join(''); }
+    _ <- [ \t]*
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_js = Path(tmp_dir) / "diag_demo_parser.js"
+        js_code = compile_grammar_to_code(grammar, target="js")
+        out_js.write_text(js_code, encoding="utf-8")
+
+        test_script = f"""
+        const {{ DiagDemoParser, PEGSyntaxError }} = require({json.dumps(str(out_js))});
+        const parser = new DiagDemoParser();
+
+        // 1. Successful parse
+        const resOk = parser.parseWithDiagnostics("my_key: validvalue ;");
+
+        // 2. Syntax error in middle
+        const resErr = parser.parseWithDiagnostics("my_key: 12345 ;");
+
+        // 3. Trailing unconsumed input
+        const resTrailing = parser.parseWithDiagnostics("my_key: validvalue ; extra_garbage");
+
+        // 4. Standard parse throwing PEGSyntaxError with detailed diagnostics
+        let thrownError = null;
+        try {{
+            parser.parse("my_key: 12345 ;");
+        }} catch (e) {{
+            if (e instanceof PEGSyntaxError) {{
+                thrownError = {{
+                    message: e.message,
+                    offset: e.offset,
+                    line: e.line,
+                    col: e.col,
+                    expectedTokens: e.expectedTokens,
+                    snippet: e.snippet
+                }};
+            }}
+        }}
+
+        console.log(JSON.stringify({{
+            resOk,
+            resErr,
+            resTrailing,
+            thrownError
+        }}));
+        """
+        proc = subprocess.run(
+            [node_bin, "-e", test_script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        data = json.loads(proc.stdout)
+
+        # 1. Success check
+        assert data["resOk"]["success"] is True
+        assert data["resOk"]["value"]["id"] == "my_key"
+        assert data["resOk"]["value"]["val"] == "validvalue"
+        assert data["resOk"]["diagnostics"] is None
+
+        # 2. Middle syntax error check
+        assert data["resErr"]["success"] is False
+        assert data["resErr"]["value"] is None
+        diag = data["resErr"]["diagnostics"]
+        assert diag["offset"] == 8
+        assert diag["line"] == 1
+        assert diag["col"] == 9
+        assert isinstance(diag["expectedTokens"], list)
+        assert len(diag["expectedTokens"]) > 0
+        assert "12345" in diag["snippet"]
+
+        # 3. Trailing check
+        assert data["resTrailing"]["success"] is False
+        diag_trail = data["resTrailing"]["diagnostics"]
+        assert diag_trail["errorMsg"] == "Unconsumed trailing input"
+        assert diag_trail["offset"] == 20
+        assert diag_trail["expectedTokens"] == ["EOF"]
+
+        # 4. Thrown error check
+        err = data["thrownError"]
+        assert err is not None
+        assert err["offset"] == 8
+        assert err["line"] == 1
+        assert err["col"] == 9
+        assert isinstance(err["expectedTokens"], list)
+        assert "12345" in err["snippet"]

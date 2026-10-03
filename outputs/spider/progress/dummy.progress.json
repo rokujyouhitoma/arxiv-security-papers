@@ -1,0 +1,14 @@
+{
+  "spider_name": "dummy",
+  "status": "RUNNING",
+  "is_active": true,
+  "start_time": 0.0,
+  "updated_at": 1790856314.475667,
+  "processed": 1,
+  "pending": 2,
+  "total": 3,
+  "ratio_pct": 33.3,
+  "pages_per_second": 0.0,
+  "eta_seconds": 0.0,
+  "elapsed_seconds": 1790856314.5
+}
