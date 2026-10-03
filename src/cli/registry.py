@@ -81,6 +81,12 @@ def _load_okf_convert() -> Type[BaseCommand]:
     return OkfConvertCommand
 
 
+def _load_summarize() -> Type[BaseCommand]:
+    from .commands.summarize import SummarizeCommand
+
+    return SummarizeCommand
+
+
 _BUILTINS_REGISTERED = False
 
 
@@ -96,4 +102,5 @@ def _ensure_builtins() -> None:
     _COMMAND_LOADERS["fetch"] = _load_fetch
     _COMMAND_LOADERS["pdf-extract"] = _load_pdf_extract
     _COMMAND_LOADERS["okf-convert"] = _load_okf_convert
+    _COMMAND_LOADERS["summarize"] = _load_summarize
     _BUILTINS_REGISTERED = True
