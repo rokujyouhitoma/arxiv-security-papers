@@ -87,6 +87,12 @@ def _load_summarize() -> Type[BaseCommand]:
     return SummarizeCommand
 
 
+def _load_db_index() -> Type[BaseCommand]:
+    from .commands.db_index import DbIndexCommand
+
+    return DbIndexCommand
+
+
 _BUILTINS_REGISTERED = False
 
 
@@ -103,4 +109,5 @@ def _ensure_builtins() -> None:
     _COMMAND_LOADERS["pdf-extract"] = _load_pdf_extract
     _COMMAND_LOADERS["okf-convert"] = _load_okf_convert
     _COMMAND_LOADERS["summarize"] = _load_summarize
+    _COMMAND_LOADERS["db-index"] = _load_db_index
     _BUILTINS_REGISTERED = True
