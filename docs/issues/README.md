@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **428** | Unix哲学的ツール間連携（標準入出力・JSON Linesストリーム）の要求仕様・高位設計への統合 | Feature | 2026-10-04 | [closed/428-incorporate-unix-composition-into-requirements-and-design.md](closed/428-incorporate-unix-composition-into-requirements-and-design.md) |
 | **422** | Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 | Feature | 2026-10-03 | [closed/422-mermaid-diagram-pre-validation-and-sanitizer.md](closed/422-mermaid-diagram-pre-validation-and-sanitizer.md) |
 | **421** | クライアントサイドルーターの URL パス＆クエリ構文解析の PEG 化 | Feature | 2026-10-03 | [closed/421-client-router-url-path-query-peg-parser.md](closed/421-client-router-url-path-query-peg-parser.md) |
 | **420** | 検索窓における Lucene PEG リアルタイム構文検証・エラーハイライト・オートコンプリートの実装 | Feature | 2026-10-03 | [closed/420-search-input-realtime-peg-validation-and-autocomplete.md](closed/420-search-input-realtime-peg-validation-and-autocomplete.md) |

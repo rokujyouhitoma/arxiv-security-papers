@@ -7,7 +7,7 @@
 - **作成日**: 2026-08-22
 - **最終更新日**: 2026-08-28
 - **【主査・報告】 Project Manager (PM) & Systems Architect (SA)**  
-- **【参画】 全13大専門エージェント (PM, Sec, SA, QA, DB, Net, IR, ST, SM, IoT, Aud, UI, Edu)**
+- **【参画】 全15大専門エージェント (PM, Sec, SA, QA, DB, Net, IR, ST, SM, IoT, Aud, UI, Edu, SWD, APS)**
 
 ---
 
@@ -16,14 +16,16 @@
 - [1. アーキテクチャ概要・設計思想・スコープ](#1-アーキテクチャ概要設計思想スコープ)
   - [1.1 背景とシステムミッション](#11-背景とシステムミッション)
   - [1.2 全体モジュール分割アーキテクチャ（6層レイヤード＆ドメイン境界）](#12-全体モジュール分割アーキテクチャ6層レイヤードドメイン境界)
-  - [1.3 4大設計原則と Python 3.14+ 原則](#13-4大設計原則と-python-314-原則)
+  - [1.3 5大設計原則と Python 3.14+ 原則](#13-5大設計原則と-python-314-原則)
   - [1.4 普遍的インテリジェンス・オーケストレーション中枢 (DSN-11)](#14-普遍的インテリジェンスオーケストレーション中枢-dsn-11)
-- [2. 全13大専門エージェント多角的多面協議議事録](#2-全13大専門エージェント多角的多面協議議事録)
+- [2. 全15大専門エージェント多角的多面協議議事録](#2-全15大専門エージェント多角的多面協議議事録)
 - [3. サブシステム間データフロー & C4 アーキテクチャ](#3-サブシステム間データフロー--c4-アーキテクチャ)
   - [3.1 C4 コンテナダイアグラム](#31-c4-コンテナダイアグラム)
   - [3.2 6大レイヤー・主要サブシステムの責務マトリクス](#32-6大レイヤー主要サブシステムの責務マトリクス)
 - [4. コア数理モデル & 共通アルゴリズム基盤](#4-コア数理モデル--共通アルゴリズム基盤)
 - [5. 公開インターフェース & システム共通プロトコル](#5-公開インターフェース--システム共通プロトコル)
+  - [5.1 サブシステム間連携プロトコル](#51-サブシステム間連携プロトコル)
+  - [5.2 CLI ストリームパイプラインプロトコル (Unix Composition Protocol)](#52-cli-ストリームパイプラインプロトコル-unix-composition-protocol)
 - [6. シーケンス図 & 6大フェーズ自律閉ループ E2E ライフサイクル](#6-シーケンス図--6大フェーズ自律閉ループ-e2e-ライフサイクル)
 - [7. セキュリティ堅牢化・脅威防御・耐障害性設計 (Saga)](#7-セキュリティ堅牢化脅威防御耐障害性設計-saga)
 - [8. 性能特性・メモリ制約・可観測性設計](#8-性能特性メモリ制約可観測性設計)
@@ -85,25 +87,26 @@
 +---------------------------------------------------------------------------------------------------+
 ```
 
-### 1.3 4大設計原則と Python 3.14+ 原則
+### 1.3 5大設計原則と Python 3.14+ 原則
 1. **Zero External Dependencies (ゼロ外部依存 & Python 3.14+)**: Python 3.14+ 標準ライブラリのみで完結し、外部バイナリ（Poppler/pdftotext）やクラウドDB（PostgreSQL/Elasticsearch/Redis）に依存せず完全な可搬性とセキュリティを担保。
 2. **Clean Architecture & 1:1 Domain Separation (クリーンアーキテクチャ・1:1 領域分離)**: `src/` の各モジュールが単一責任原則 (SRP) を遵守し、疎結合かつ高凝集に独立動作。
 3. **Google OKF v0.2 Strict Compliance (OKF 仕様完全準拠)**: 全論文データを YAML フロントマター付きのイミュータブルなナレッジドキュメントとして正規化。
 4. **Extreme Observability & Closed-Loop Quality Governance (極限の可観測性と閉ループ品質統制)**: Radon / Xenon (循環的複雑度 Rank A/B) / Mypy --strict / テストカバレッジ 80% 以上の品質ゲートと、IR 評価（NDCG/MAP）に基づく自律適応。
+5. **Unix Composition & Stream Interoperability (Unix的ツール間連携とストリーム相互運用性)**: 各コアサブシステム（クローラー、PDF抽出器、OKF変換器、サマライザー、インデクサー）は、Pure Pythonゼロ外部依存のエンジンとしての凝集度を保ちつつ、標準入出力（stdin/stdout）と JSON Lines (1行1JSON) によるパイプライン合成が可能な薄い CLI ストリームインターフェースを備える。診断ログ（stderr）とデータストリーム（stdout）を厳格に分離（Rule of Separation / Rule of Silence）し、単体デバッグの迅速化、Unix 標準ツール（`jq` / `grep` / `fzf` 等）との合流、外部スクリプト・AI エージェントからの柔軟な道具としての利活用（Rule of Composition）を実現する。
 
 ### 1.4 普遍的インテリジェンス・オーケストレーション中枢 (DSN-11)
 プラットフォーム全体は、[DSN-11-intelligence_orchestration_engine.md](DSN-11-intelligence_orchestration_engine.md) で規定される **Universal Autonomous Intelligence Orchestrator** によって統制される。意思決定者の優先情報要件（PIR）を起点とし、収集、構造化、相関分析、多層配布、そして利用評価結果を次期 PIR へ自動フィードバックする自律的閉ループ（Closed-Loop Adaptive Engine）を駆動する。
 
 ---
 
-# 2. 全13大専門エージェント多角的多面協議議事録
+# 2. 全15大専門エージェント多角的多面協議議事録
 
 ```mermaid
 mindmap
   root((全体システム設計合意))
     PM["1. Project Manager: スコープ統制・全16大設計書とモジュール分割の1:1整合・自律閉ループ"]
     Sec["2. InfoSec: ASTガード・パストラバーサル防御・ゼロトラストRBAC"]
-    Arch["3. Systems Architect: クリーンアーキテクチャ・DAGワークフロー・Saga補償トランザクション"]
+    Arch["3. Systems Architect: クリーンアーキテクチャ・DAGワークフロー・Saga補償・Unixストリーム連携"]
     QA["4. SQA: Xenon Rank A/B・Mypy Strict・80%カバレッジゲート・契約テスト"]
     DB["5. DB Specialist: SlottedPage・ARIES・分散合意・HNSWのゼロ依存完備"]
     Net["6. Network: AutoThrottle・Backoff・Gossip・Consistent Hashing"]
@@ -114,6 +117,8 @@ mindmap
     Audit["11. Systems Auditor: OKFデジタル署名・ハッシュチェーン・データ来歴保証"]
     UI["12. UI/UX: API GatewayとUIテンプレートの分離・CORS対応・qTime可観測性"]
     Edu["13. Education: 日本語100%サマリー・用語整合性・Markdown表形式"]
+    SWD["14. SWD: Pure-Python コアエンジンと stdin/stdout JSONL フィルタの直交設計"]
+    APS["15. APS: manage.py 経由の Unix パイプライン連携と外部エージェント呼び出し統制"]
 ```
 
 ---
@@ -244,6 +249,31 @@ graph TD
 - **Storage Protocol (DSN-05)**: `StorageEngine.execute_sql(sql: str, params: tuple) -> DBResult`
 - **Search Protocol (DSN-04)**: `SearchPlatform.handle_request(params: Dict[str, Any]) -> SolrResponse`
 - **MCP Protocol (DSN-08)**: JSON-RPC 2.0 (`tools/call`, `resources/read`, `prompts/get`)
+
+### 5.2 CLI ストリームパイプラインプロトコル (Unix Composition Protocol)
+システムは、各主要コンポーネントを標準入出力（stdin/stdout）経由で疎結合にパイプライン結合可能な **JSON Lines (JSONL)** ストリームプロトコルを規定・提供する。すべての診断メッセージおよび進捗ログは `stderr` へ完全分離し、純粋な処理結果データのみを `stdout` に流すことで、Unix ツール群（`jq`, `grep`, `fzf`, `xargs` 等）や他言語スクリプト、外部 AI エージェントとの自由な合成（Composition）を保証する。
+
+```text
+[arxiv-fetch] (stdout: JSONL)
+      │
+      ▼
+[pdf-extract] (stdin: JSONL ──► stdout: JSONL [全文テキスト抽出付加])
+      │
+      ▼
+[okf-convert] (stdin: JSONL ──► stdout: OKF v0.2 Markdown / JSONL)
+      │
+      ▼
+[sec-summarize] (stdin: OKF/JSONL ──► stdout: 100%日本語構造化要約)
+      │
+      ▼
+[sec-index] (stdin: JSONL ──► 4層DB / ベクトルエンジン永続化)
+```
+
+- **基本入出力契約**:
+  - `python manage.py <subcommand> --stream`: stdin から 1行1JSON（JSONL）を受け取り、処理結果を stdout に 1行1JSON で順次書き出す。
+  - 入力終端（EOF）検知時に正常終了コード `0` を返却する。
+  - 不正行検知時は stderr に構造化エラーを出力し、後続行のスキップまたは即時中断をフラグで制御可能とする（`--on-error=skip|abort`）。
+  - 各レコードは一意な識別子（`arxiv_id`）、メタデータ、ペイロード、プロバナンス追跡情報を含む。
 
 ---
 
