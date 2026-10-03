@@ -2,7 +2,7 @@
 ID: 421
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] クライアントサイドルーターの URL パス＆クエリ構文解析の PEG 化 (ID: 421)
@@ -97,11 +97,12 @@ Target Branch: `feat/421-client-router-url-path-query-peg-parser`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `site/js/frameworks/router.js` のルートマッチングおよびクエリパースが PEG ベースで動作すること。
-- [ ] パスパラメータ（`:id`）、ワイルドカード（`*`）、および重複クエリキー（配列化）が正確に抽出されること。
-- [ ] 不正なパーセントエンコードやプロトタイプ汚染キー（`__proto__`）に対して例外クラッシュせず堅牢に処理されること。
-- [ ] 既存のハッシュナビゲーション（`#papers`, `#trends`, `#product`, `#system`, `#database`, `#spiders`, `#mcp`）が回帰なく動作すること。
-- [ ] `tests/web/test_frontend_frameworks.py` の自動テストが全件 PASS すること。
-- [ ] `make build_js`（Google Closure Compiler `strict=True`）が 0 エラーで完了し、`site/app-min.js` および `site/dashboard-min.js` が生成されること。
-- [ ] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。
+- [x] `site/js/frameworks/router.js` のルートマッチングおよびクエリパースが PEG ベースで動作すること。
+- [x] パスパラメータ（`:id`）、ワイルドカード（`*`）、および重複クエリキー（配列化）が正確に抽出されること。
+- [x] 不正なパーセントエンコードやプロトタイプ汚染キー（`__proto__`）に対して例外クラッシュせず堅牢に処理されること。
+- [x] 既存のハッシュナビゲーション（`#papers`, `#trends`, `#product`, `#system`, `#database`, `#spiders`, `#mcp`）が回帰なく動作すること。
+- [x] `tests/web/test_frontend_frameworks.py` の自動テストが全件 PASS すること。
+- [x] `make build_js`（Google Closure Compiler `strict=True`）が 0 エラーで完了し、`site/app-min.js` および `site/dashboard-min.js` が生成されること。
+- [x] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。
+
 

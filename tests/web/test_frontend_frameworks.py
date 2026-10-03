@@ -946,3 +946,111 @@ def test_markdown_lexer_peg_table_and_list_parsing() -> None:
     assert data["renderedOrderedHasOl"] is True
     assert data["renderedUnorderedHasUl"] is True
     assert data["renderedTableHasTable"] is True
+
+
+def test_router_peg_path_and_query_parsing() -> None:
+    """Verifies that site/js/frameworks/router.js uses PEG parsing for paths, params, and queries (Issue 421)."""
+    import json
+    import shutil
+    import subprocess
+
+    import pytest
+
+    router_path = FRAMEWORKS_DIR / "router.js"
+    assert router_path.is_file()
+    content = router_path.read_text(encoding="utf-8")
+    assert "class Router" in content
+    assert "compilePattern_" in content
+    assert "matchRoute_" in content
+    assert "parseQuery_" in content
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        pytest.skip("Node.js runtime not installed")
+
+    script = """
+    const { Router } = require('./site/js/frameworks/router.js');
+    const router = new Router('papers');
+
+    const trace = [];
+
+    router.register('/papers', (p, ctx) => {
+        trace.push({ route: 'papers', params: p, ctx });
+    });
+    router.register('/papers/:id', (p, ctx) => {
+        trace.push({ route: 'paper_detail', params: p, ctx });
+    });
+    router.register('/docs/*filepath', (p, ctx) => {
+        trace.push({ route: 'docs', params: p, ctx });
+    });
+
+    // 1. Default fallback on empty hash
+    const okDefault = router.resolve('#');
+    const defaultTrace = trace[trace.length - 1];
+
+    // 2. Exact match with multi-value query array
+    router.currentHash = null;
+    const okArrayQuery = router.resolve('#/papers?tag=zero-trust&tag=ai&sort=desc');
+    const arrayQueryTrace = trace[trace.length - 1];
+
+    // 3. Path parameter extraction
+    router.currentHash = null;
+    const okPath = router.resolve('#/papers/2409.12345?view=full');
+    const pathTrace = trace[trace.length - 1];
+
+    // 4. Wildcard parameter extraction
+    router.currentHash = null;
+    const okWildcard = router.resolve('#/docs/guides/getting-started.md?v=2');
+    const wildcardTrace = trace[trace.length - 1];
+
+    // 5. Prototype pollution prevention
+    router.currentHash = null;
+    router.resolve('#/papers?__proto__[polluted]=true&constructor=evil&normal=safe');
+    const pollutedCheck = ({}).polluted === undefined;
+    const protoTrace = trace[trace.length - 1];
+
+    // 6. Malformed percent encoding resilience
+    router.currentHash = null;
+    router.resolve('#/papers?q=%E0%A4%A');
+    const malformedTrace = trace[trace.length - 1];
+
+    console.log(JSON.stringify({
+        okDefault,
+        defaultRouteName: defaultTrace.route,
+        okArrayQuery,
+        tagIsArray: Array.isArray(arrayQueryTrace.params.tag),
+        tagValues: arrayQueryTrace.params.tag,
+        sortValue: arrayQueryTrace.params.sort,
+        okPath,
+        extractedId: pathTrace.params.id,
+        pathParamInCtx: pathTrace.ctx.pathParams.id,
+        okWildcard,
+        extractedFilepath: wildcardTrace.params.filepath,
+        pollutedCheck,
+        hasNormalParam: protoTrace.params.normal === 'safe',
+        hasNoConstructorParam: protoTrace.params.constructor === undefined,
+        malformedPreserved: malformedTrace.params.q === '%E0%A4%A'
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["okDefault"] is True
+    assert data["defaultRouteName"] == "papers"
+    assert data["okArrayQuery"] is True
+    assert data["tagIsArray"] is True
+    assert data["tagValues"] == ["zero-trust", "ai"]
+    assert data["sortValue"] == "desc"
+    assert data["okPath"] is True
+    assert data["extractedId"] == "2409.12345"
+    assert data["pathParamInCtx"] == "2409.12345"
+    assert data["okWildcard"] is True
+    assert data["extractedFilepath"] == "guides/getting-started.md"
+    assert data["pollutedCheck"] is True
+    assert data["hasNormalParam"] is True
+    assert data["hasNoConstructorParam"] is True
+    assert data["malformedPreserved"] is True
