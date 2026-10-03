@@ -4,7 +4,9 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-*現在オープン中の Issue はありません。*
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **418** | Webフロントエンド構文解析基盤の全面PEG刷新 (マークダウンブロック・CTIクエリDSL・リアルタイム構文検証・ルーティング・Mermaidサニタイズ) | Feature | High | Open (New) | [418-web-frontend-comprehensive-peg-parser-migration.md](418-web-frontend-comprehensive-peg-parser-migration.md) |
 
 ---
 
