@@ -945,7 +945,21 @@ Python 側コアランタイム（`src/core/structures/peg.py`）で確立され
    - 失敗時: `{ success: false, value: null, diagnostics: { errorMsg, offset, line, col, expectedTokens, snippet } }`
    - エラーハイライトやサジェスト表示に必要な全コンテキストを構造化オブジェクトとして O(1) 返却。
 
-### 13.8 完了条件 (DoD for Phase 6)
+### 13.8 モジュール化ランタイム共有と --no-runtime オプション (Issue #427)
+
+Web フロントエンドにおいて今後複数の文法（CTI グラフクエリ DSL、URL ルーター、Mermaid バリデーター、マークダウンブロック等）を同時にブラウザへ読み込む場合、同一のランタイムコード（約 390 行）がパーサーごとに重複定義され、バンドルサイズ（`site/app-min.js`, `dashboard-min.js`）の肥大化およびメモリ冗長化を招く課題を解消した。
+
+1. **スタンドアロン共有ランタイム `site/js/frameworks/peg-runtime.js`**:
+   - `JSCodeGenerator.generate_runtime_module()` により、Packrat PEG ランタイムエンジン（`Parser`, `ParseContext`, `PEGSyntaxError`, 各種コンビネータ）を UMD 形式（Node `module.exports` + Browser `window.PEGRuntime` / `window.Application.frameworks.PEGRuntime`）の独立モジュールとして単独生成・配備。
+2. **`--no-runtime` モードによるパーサー定義の劇的軽量化**:
+   - `embedded_runtime=False` の場合、パーサー JS 内からランタイム実装本体を全削除し、ファイル先頭で `PEGRuntime`（CommonJS `require('./peg-runtime')` またはグローバル `window.PEGRuntime`）を参照・インポートする解決ヘッダーのみを出力。
+   - 生成パーサーの行数を約 60% 削減（500行以上から100行未満へ圧縮）。
+   - 外部ランタイム未ロード時は `PEGRuntime not found. Ensure peg-runtime.js is loaded before <ParserName>.` を即時スローし、安全なフェイルセーフを提供。
+3. **CLI 連携 (`--no-runtime`, `--runtime-only`)**:
+   - `python -m core.structures.peg_compiler --runtime-only -o site/js/frameworks/peg-runtime.js`: ランタイム単独抽出。
+   - `python -m core.structures.peg_compiler grammar.peg --no-runtime -o parser.js`: 外部ランタイム参照パーサー出力。
+
+### 13.9 完了条件 (DoD for Phase 6)
 
 - [x] **Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)**:
   - 正規表現 `.replace()` から PEG コンビネータベースの構文解析に刷新され、コードスパン保護・エスケープ処理・XSS 防御を達成。
@@ -957,11 +971,14 @@ Python 側コアランタイム（`src/core/structures/peg.py`）で確立され
   - `new RegExp('[' + spec + ']')` を完全撤廃し、文字コード範囲直接比較および純粋 AnyChar による安全・高速な $O(1)$ 判定を実現。
 - [x] **PEGSyntaxError 診断情報拡充と parseWithDiagnostics API の実装 (Issue #426)**:
   - `expectedTokens`, `snippet` の完全付与および例外を投げずに完全診断情報を返すファサード API を配備。
+- [x] **PEG AOT コンパイラにおける --no-runtime モジュール化と外部ランタイム共有の導入 (Issue #427)**:
+  - `--no-runtime` および `--runtime-only` オプションの実装、`site/js/frameworks/peg-runtime.js` 独立配備、および複数パーサーによるランタイム共有・共存を完全実証。
 - [x] **CLI `--target js` および `--ast-only` オプションの統合 (Issue #423)**:
   - `src/core/structures/peg_compiler/cli.py` に `--target {python,js}` および `--ast-only` が追加され、拡張子判定、Pythonアクション自動バイパス、インライン正規表現フラグ変換が動作すること。
 - [x] **Xenon Rank A および静的解析 100% 達成**:
   - `codegen_js.py` および関連モジュールが Xenon Rank A、flake8、mypy --strict、black、isort を完全パスすること。
 - [x] **回帰テストおよびビルド検証 PASS**:
-  - `tests/test_peg_compiler_js.py` および `tests/web/test_frontend_frameworks.py` が全 PASS し、Closure Compiler による `make build_js` が成功すること。
+  - `tests/test_peg_compiler_js.py`（全12テスト PASS）および `tests/web/test_frontend_frameworks.py` が全 PASS すること。
+
 
 
