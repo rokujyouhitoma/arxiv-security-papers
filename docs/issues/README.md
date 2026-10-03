@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **435** | src/intelligence/cli.py オーケストレータにおける診断ログ(stderr)とデータ(stdout)の完全分離 | Feature | New | [435-separate-orchestrator-stdout-and-stderr-streams.md](435-separate-orchestrator-stdout-and-stderr-streams.md) |
 | **436** | Unix ストリームパイプライン統合テストスイートおよびOSツール連携検証の実装 | Feature | New | [436-e2e-unix-stream-pipeline-test-suite.md](436-e2e-unix-stream-pipeline-test-suite.md) |
 
 ---
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **435** | src/intelligence/cli.py オーケストレータにおける診断ログ(stderr)とデータ(stdout)の完全分離 | Feature | 2026-10-04 | [closed/435-separate-orchestrator-stdout-and-stderr-streams.md](closed/435-separate-orchestrator-stdout-and-stderr-streams.md) |
 | **434** | manage.py db-index データベース・ベクトル検索インデクス登録シンクの実装 | Feature | 2026-10-04 | [closed/434-implement-manage-py-db-index-stream.md](closed/434-implement-manage-py-db-index-stream.md) |
 | **433** | manage.py summarize 日本語エグゼクティブ要約ストリームフィルタの実装 | Feature | 2026-10-04 | [closed/433-implement-manage-py-summarize-stream.md](closed/433-implement-manage-py-summarize-stream.md) |
 | **432** | manage.py okf-convert Google OKF構造化ストリームフィルタの実装 | Feature | 2026-10-04 | [closed/432-implement-manage-py-okf-convert-stream.md](closed/432-implement-manage-py-okf-convert-stream.md) |

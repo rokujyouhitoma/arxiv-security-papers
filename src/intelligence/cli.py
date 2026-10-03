@@ -27,7 +27,8 @@ def _print_banner() -> None:
    Closed-Loop 6-Phase Intelligence Lifecycle: Planning -> Feedback
 ================================================================================
 """
-    print(banner)
+    sys.stderr.write(banner + "\n")
+    sys.stderr.flush()
 
 
 def _seed_intelligence_requirements(
@@ -77,7 +78,7 @@ def _seed_intelligence_requirements(
 
 
 def _print_phase_matrix(context: PhaseContext) -> None:
-    print("    Phase Execution Matrix:")
+    sys.stderr.write("    Phase Execution Matrix:\n")
     for phase in [
         IntelligencePhase.PLANNING,
         IntelligencePhase.COLLECTION,
@@ -88,30 +89,34 @@ def _print_phase_matrix(context: PhaseContext) -> None:
     ]:
         status_enum = context.phase_statuses.get(phase, PhaseStatus.PENDING)
         symbol = "✓" if status_enum == PhaseStatus.COMPLETED else "✗"
-        print(f"      [{symbol}] {phase.value:<15} : {status_enum.value}")
+        sys.stderr.write(f"      [{symbol}] {phase.value:<15} : {status_enum.value}\n")
+    sys.stderr.flush()
 
 
 def _print_cycle_details(
     context: PhaseContext, cycle_id: str, elapsed_ms: float
 ) -> None:
-    """Prints verbose execution summary for an intelligence cycle."""
-    print(f"[+] Cycle {cycle_id} Completed in {elapsed_ms:.2f}ms")
+    """Prints verbose execution summary for an intelligence cycle to stderr."""
+    sys.stderr.write(f"[+] Cycle {cycle_id} Completed in {elapsed_ms:.2f}ms\n")
     _print_phase_matrix(context)
 
-    print(
+    sys.stderr.write(
         f"    Records Collected: {len(context.raw_records)} | "
         f"Processed: {len(context.processed_records)} | "
-        f"Products: {len(context.products)}"
+        f"Products: {len(context.products)}\n"
     )
     if context.products:
-        print("    Published Intelligence Products:")
+        sys.stderr.write("    Published Intelligence Products:\n")
         for prod in context.products:
-            print(f"      - [{prod.tier}] {prod.title} (sources: {prod.source_count})")
+            sys.stderr.write(
+                f"      - [{prod.tier}] {prod.title} (sources: {prod.source_count})\n"
+            )
 
     if context.errors:
-        print(f"    [!] Warnings/Errors encountered: {len(context.errors)}")
+        sys.stderr.write(f"    [!] Warnings/Errors encountered: {len(context.errors)}\n")
 
-    print("-" * 80)
+    sys.stderr.write("-" * 80 + "\n")
+    sys.stderr.flush()
 
 
 def _exec_orchestrator_cycle(
@@ -171,9 +176,10 @@ def _run_all_cycles(
     for i in range(cycles_to_run):
         cycle_id = _format_cycle_id(getattr(args, "cycle_id", None), i, cycles_to_run)
         if not args.quiet and not args.json:
-            print(
-                f"[*] Starting Intelligence Cycle [{i+1}/{cycles_to_run}]: {cycle_id}"
+            sys.stderr.write(
+                f"[*] Starting Intelligence Cycle [{i+1}/{cycles_to_run}]: {cycle_id}\n"
             )
+            sys.stderr.flush()
         cycle_result = _run_single_cycle(orchestrator, cycle_id, args)
         results_summary.append(cycle_result)
     return results_summary
