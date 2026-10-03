@@ -5,7 +5,7 @@
 grammar PDFCMap
 
 @header {
-from pdf_engine.cmap_helpers import (
+from pdf_engine.cmap.helpers import (
     _build_cmap_mapping,
     _decode_bfchar_pair,
     _decode_bfrange_array,

@@ -3,7 +3,7 @@
 grammar BibTeX
 
 @header {
-from pdf_engine.bibtex_helpers import (
+from pdf_engine.bibtex.helpers import (
     _build_bibtex_entry,
     _collect_bibtex_entries,
 )

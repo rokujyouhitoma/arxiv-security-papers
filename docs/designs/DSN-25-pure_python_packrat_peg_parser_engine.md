@@ -666,8 +666,14 @@ flowchart LR
 - 学術論文の引用情報（`@article`, `@inproceedings`, `@book`, `@misc`）をゼロ外部依存で構造化抽出。
 - 波括弧ネスト（`{...}`）、LaTeX 特殊エスケープ文字・アクセント・ダッシュ記号（`---` -> `—`, `--` -> `–`）の正規化。
 - `\cite{...}`, `\citep{...}`, `\citet{...}` 構文および arXiv 識別子抽出と `src/graph/citation_linker.py` への統合。
+- 独立サブパッケージ `src/pdf_engine/bibtex/` (`extractor.py`, `helpers.py`, `generated_parser.py`) へ集約し、後方互換性 shim を提供 (Issue #441)。
+
+#### 3. PDF CMap ToUnicode PEG 文法 (`grammars/pdf_cmap.peg`)
+- ISO 32000-1 準拠の CMap `/ToUnicode` マッピングテーブル (`bfchar`, `bfrange`) の構文解析。
+- 独立サブパッケージ `src/pdf_engine/cmap/` (`helpers.py`, `generated_parser.py`) へ集約し、後方互換性 shim を提供 (Issue #441)。
 
 ---
+
 
 
 ## 8. セキュリティ分析 (STRIDE Threat Model) と防御策

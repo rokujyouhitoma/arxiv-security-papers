@@ -3,8 +3,8 @@
 import threading
 from typing import Any, Dict, List, Optional
 
-from core.structures.peg import PEGSyntaxError
-from pdf_engine.generated_cmap_parser import PDFCMapParser
+from core.peg import PEGSyntaxError
+from pdf_engine.cmap.generated_parser import PDFCMapParser
 
 # Standard Adobe Glyph List (AGL) sample mappings for common font characters
 STANDARD_AGL: Dict[str, str] = {

@@ -94,3 +94,14 @@ def test_cmap_direct_parser_instance() -> None:
     """
     res = parser.parse(data)
     assert res == {0x48: "H", 0x69: "i"}
+
+
+def test_cmap_subpackage_and_shim_equivalence() -> None:
+    """Verifies that direct imports from pdf_engine.cmap and legacy shims are identical."""
+    import pdf_engine.cmap as cmap_pkg
+    import pdf_engine.cmap_helpers as legacy_cmap_helpers
+    import pdf_engine.generated_cmap_parser as legacy_cmap_parser
+    from pdf_engine.cmap.generated_parser import PDFCMapParser as SubpkgParser
+
+    assert cmap_pkg._build_cmap_mapping is legacy_cmap_helpers._build_cmap_mapping
+    assert SubpkgParser is legacy_cmap_parser.PDFCMapParser

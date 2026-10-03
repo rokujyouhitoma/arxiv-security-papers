@@ -84,3 +84,19 @@ Also referenced arxiv.org/pdf/2105.00001.
 def test_extract_bibtex_resilience_on_non_bibtex() -> None:
     assert extract_bibtex_entries("Just some text without any at signs.") == []
     assert extract_bibtex_entries("@invalid syntax without closing brace") == []
+
+
+def test_bibtex_subpackage_and_shim_equivalence() -> None:
+    """Verifies that direct imports from pdf_engine.bibtex and legacy shims are identical."""
+    import pdf_engine.bibtex as bibtex_pkg
+    import pdf_engine.bibtex_extractor as legacy_extractor
+    import pdf_engine.bibtex_helpers as legacy_helpers
+
+    assert bibtex_pkg.extract_bibtex_entries is legacy_extractor.extract_bibtex_entries
+    assert (
+        bibtex_pkg.extract_latex_citations is legacy_extractor.extract_latex_citations
+    )
+    assert (
+        bibtex_pkg.extract_arxiv_references is legacy_extractor.extract_arxiv_references
+    )
+    assert bibtex_pkg.BibTeXEntry is legacy_helpers.BibTeXEntry

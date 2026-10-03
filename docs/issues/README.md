@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **441** | src/pdf_engine 配下の BibTeX および CMap モジュールのサブパッケージ化 | Refactoring | 2026-10-04 | [closed/441-modularize-pdf-engine-bibtex-and-cmap-subpackages.md](closed/441-modularize-pdf-engine-bibtex-and-cmap-subpackages.md) |
 | **440** | src/ontology 配下の Turtle エンジンおよびパーサーのサブパッケージ化 | Refactoring | 2026-10-04 | [closed/440-modularize-ontology-turtle-engine-and-parser-subpackage.md](closed/440-modularize-ontology-turtle-engine-and-parser-subpackage.md) |
 | **439** | tools/ パッケージ・CLIの再編・統合と PEG コンパイラツールの近代化 | Refactoring | 2026-10-04 | [closed/439-modernize-and-restructure-tools-peg-and-cli.md](closed/439-modernize-and-restructure-tools-peg-and-cli.md) |
 | **438** | tests/core 配下の対称的サブディレクトリ再編 | Refactoring | 2026-10-04 | [closed/438-symmetrical-restructuring-of-core-tests.md](closed/438-symmetrical-restructuring-of-core-tests.md) |
