@@ -62,7 +62,7 @@ from .security import (
     export_security_ontology_turtle,
 )
 from .taxonomy import TaxonomyRegistry
-from .turtle_engine import (
+from .turtle import (
     URI,
     DatatypeProperty,
     Literal,
@@ -72,16 +72,14 @@ from .turtle_engine import (
     OntologyMetadata,
     RawTriple,
     RDFTerm,
-    TurtleDocumentBuilder,
-    build_full_spectrum_security_ontology,
-    build_sample_enterprise_ontology,
-    build_security_cti_ontology,
-)
-from .turtle_parser import (
     TurtleDocument,
+    TurtleDocumentBuilder,
     TurtlePEGParser,
     TurtleTerm,
     TurtleTriple,
+    build_full_spectrum_security_ontology,
+    build_sample_enterprise_ontology,
+    build_security_cti_ontology,
     parse_turtle,
 )
 

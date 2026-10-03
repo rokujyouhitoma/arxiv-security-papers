@@ -4,7 +4,9 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在、未着手・進行中の Open Issue はありません（全件 Closed）。
+| Issue ID | タイトル | 種別 | ステータス | 担当 | リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| - | なし (All current issues resolved) | - | - | - | - |
 
 ---
 
@@ -12,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **440** | src/ontology 配下の Turtle エンジンおよびパーサーのサブパッケージ化 | Refactoring | 2026-10-04 | [closed/440-modularize-ontology-turtle-engine-and-parser-subpackage.md](closed/440-modularize-ontology-turtle-engine-and-parser-subpackage.md) |
 | **439** | tools/ パッケージ・CLIの再編・統合と PEG コンパイラツールの近代化 | Refactoring | 2026-10-04 | [closed/439-modernize-and-restructure-tools-peg-and-cli.md](closed/439-modernize-and-restructure-tools-peg-and-cli.md) |
 | **438** | tests/core 配下の対称的サブディレクトリ再編 | Refactoring | 2026-10-04 | [closed/438-symmetrical-restructuring-of-core-tests.md](closed/438-symmetrical-restructuring-of-core-tests.md) |
 | **437** | PEG ランタイムおよびコンパイラの src/core/peg への移設と Backend 分離のアーキテクチャ刷新 | Refactoring | 2026-10-04 | [closed/437-migrate-peg-compiler-to-core-peg-with-backend-separation.md](closed/437-migrate-peg-compiler-to-core-peg-with-backend-separation.md) |

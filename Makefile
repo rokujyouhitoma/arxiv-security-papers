@@ -101,9 +101,9 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/peg_meta.peg -o src/core/peg/compiler/generated_meta_parser.py
 	${VENV_BIN}/isort src/core/peg/compiler/generated_meta_parser.py
 	${VENV_BIN}/black -q src/core/peg/compiler/generated_meta_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/turtle.peg -o src/ontology/generated_turtle_parser.py
-	${VENV_BIN}/isort src/ontology/generated_turtle_parser.py
-	${VENV_BIN}/black -q src/ontology/generated_turtle_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/turtle.peg -o src/ontology/turtle/generated_parser.py
+	${VENV_BIN}/isort src/ontology/turtle/generated_parser.py
+	${VENV_BIN}/black -q src/ontology/turtle/generated_parser.py
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/search_query.peg -o src/search/query/generated_search_query_parser.py
 	${VENV_BIN}/isort src/search/query/generated_search_query_parser.py
 	${VENV_BIN}/black -q src/search/query/generated_search_query_parser.py

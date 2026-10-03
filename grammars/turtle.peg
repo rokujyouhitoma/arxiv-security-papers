@@ -4,7 +4,7 @@
 grammar Turtle
 
 @header {
-from ontology.turtle_parser import (
+from ontology.turtle.parser import (
     RDF_TYPE_IRI,
     TurtleDocument,
     TurtleTerm,

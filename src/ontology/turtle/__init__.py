@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
 """
-Backward compatibility shim for ontology.turtle.engine.
-Canonical location: src/ontology/turtle/engine.py
+W3C RDF 1.1 Turtle (.ttl) Engine and Parser Subpackage.
 """
 
 from ontology.turtle.engine import (
@@ -15,12 +13,17 @@ from ontology.turtle.engine import (
     RawTriple,
     RDFTerm,
     TurtleDocumentBuilder,
-    _escape_turtle_string,
     build_full_spectrum_security_ontology,
     build_sample_enterprise_ontology,
     build_security_cti_ontology,
-    main,
-    serialize_vulnerability_entity,
+)
+from ontology.turtle.parser import (
+    RDF_TYPE_IRI,
+    TurtleDocument,
+    TurtlePEGParser,
+    TurtleTerm,
+    TurtleTriple,
+    parse_turtle,
 )
 
 __all__ = [
@@ -34,15 +37,13 @@ __all__ = [
     "RDFTerm",
     "TurtleDocumentBuilder",
     "URI",
-    "_escape_turtle_string",
     "build_full_spectrum_security_ontology",
     "build_sample_enterprise_ontology",
     "build_security_cti_ontology",
-    "main",
-    "serialize_vulnerability_entity",
+    "RDF_TYPE_IRI",
+    "TurtleDocument",
+    "TurtlePEGParser",
+    "TurtleTerm",
+    "TurtleTriple",
+    "parse_turtle",
 ]
-
-if __name__ == "__main__":
-    import sys
-
-    sys.exit(main())

@@ -1,6 +1,6 @@
 # [DSN-22] セキュリティおよび脅威知識オントロジー W3C Turtle/OWL 仕様書 (Security & Threat Ontology W3C Specification)
 
-本ドキュメントは、「`arxiv-security-papers`」における知識モデリングの最上位規格である **セキュリティ知識オントロジー（SKO: Security Knowledge Ontology）** の W3C RDF 1.1 Turtle / OWL 2 仕様、およびそれを純粋 Python で構築・シリアライズする **Turtle 生成エンジン (`src/ontology/turtle_engine.py`)** の詳細設計書です。
+本ドキュメントは、「`arxiv-security-papers`」における知識モデリングの最上位規格である **セキュリティ知識オントロジー（SKO: Security Knowledge Ontology）** の W3C RDF 1.1 Turtle / OWL 2 仕様、およびそれを純粋 Python で構築・シリアライズ・パースする **Turtle サブパッケージ (`src/ontology/turtle/`)** の詳細設計書です（※既存呼び出し元との完全互換性のため、`src/ontology/turtle_engine.py`, `src/ontology/turtle_parser.py`, `src/ontology/generated_turtle_parser.py` はシムとして透過的に維持されています）。
 
 ---
 
@@ -22,11 +22,13 @@ flowchart TD
         EIROM["EdgeInferenceRuleRegistry (推論ルール)"]
     end
 
-    subgraph TurtleEngineLayer ["オントロジー記述・出力層 (src/ontology/turtle_engine.py)"]
-        TBB["TurtleDocumentBuilder"]
+    subgraph TurtleSubpackageLayer ["オントロジー記述・構文解析層 (src/ontology/turtle/)"]
+        TBB["TurtleDocumentBuilder (engine.py)"]
         TBOX["TBox: Classes, Object/Datatype Properties"]
         ABOX["ABox: Instances, Standalone Triples"]
         SER["Pure-Python W3C Turtle Serializer"]
+        PARS["Turtle AOT Packrat Parser (parser.py)"]
+        GEN["Generated PEG Parser (generated_parser.py)"]
     end
 
     subgraph Downstream ["下流活用"]
@@ -47,6 +49,8 @@ flowchart TD
     TBOX --> SER
     ABOX --> SER
     SER --> TTL
+    TTL --> PARS
+    PARS --> GEN
     SER --> GRAP
     GRAP --> UI
     GRAP --> MCP
@@ -54,7 +58,16 @@ flowchart TD
 
 ---
 
-## 2. Turtle 生成エンジン内部設計 (`src/ontology/turtle_engine.py`)
+## 2. Turtle サブパッケージ内部設計 (`src/ontology/turtle/`)
+
+`src/ontology/turtle/` は、W3C RDF 1.1 Turtle の生成エンジン、PEG パックラット構文解析器、および CLI ユーティリティをカプセル化したモジュール構成です。
+
+- **`src/ontology/turtle/engine.py`**: Turtle ドキュメントビルダー、RDF 用語モデル、シリアライザ。
+- **`src/ontology/turtle/parser.py`**: Packrat PEG 構文解析器ラッパーおよび AST 変換。
+- **`src/ontology/turtle/generated_parser.py`**: `grammars/turtle.peg` から AOT コンパイルされた PEG パーサー。
+- **`src/ontology/turtle/__init__.py`**: 主要クラス・関数のファサードエクスポート。
+- **`src/ontology/turtle/__main__.py`**: `python -m ontology.turtle` 実行エントリーポイント。
+- **`src/ontology/turtle_engine.py`**, **`src/ontology/turtle_parser.py`**, **`src/ontology/generated_turtle_parser.py`**: 既存呼び出し元向けの 100% 透過的な後方互換シム。
 
 ### 2.1 クラス設計と型階層 (Class Hierarchy)
 
@@ -300,7 +313,9 @@ flowchart TD
 - [DSN-14: 次世代データベース・知識グラフエンジン設計書](DSN-14-graph_engineering_dashboard.md)
 - [src/ontology/core/](../../src/ontology/core/)
 - [src/ontology/security/](../../src/ontology/security/)
+- [src/ontology/turtle/](../../src/ontology/turtle/)
 - [src/ontology/turtle_engine.py](../../src/ontology/turtle_engine.py)
+- [src/ontology/turtle_parser.py](../../src/ontology/turtle_parser.py)
 - [src/ontology/extended_extractor.py](../../src/ontology/extended_extractor.py)
 - [outputs/ontology/security_ontology_v2.ttl](../../outputs/ontology/security_ontology_v2.ttl)
 - [tests/ontology/test_core_ast.py](../../tests/ontology/test_core_ast.py)
