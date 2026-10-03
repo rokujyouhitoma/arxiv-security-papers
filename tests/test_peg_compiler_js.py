@@ -140,3 +140,66 @@ def test_cli_target_js_option(node_bin: str) -> None:
         )
         data = json.loads(res.stdout)
         assert data["success"] is True
+
+
+def test_js_code_generator_ast_only_mode(node_bin: str) -> None:
+    """Verifies that --ast-only bypasses Python action code and yields generic AST nodes."""
+    grammar_with_python_action = """
+    grammar ActionTest
+    expr <- left:ident _ '+' _ right:ident {
+        return CustomPythonClass(left=left, right=right)
+    }
+    ident <- [a-zA-Z]+
+    _ <- [ \t]*
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_js = Path(tmp_dir) / "action_test_parser.js"
+        js_code = compile_grammar_to_code(
+            grammar_with_python_action, target="js", ast_only=True
+        )
+        out_js.write_text(js_code, encoding="utf-8")
+
+        test_script = f"""
+        const {{ ActionTestParser }} = require({json.dumps(str(out_js))});
+        const parser = new ActionTestParser();
+        const res = parser.parse("foo + bar");
+        console.log(JSON.stringify(res));
+        """
+        proc = subprocess.run(
+            [node_bin, "-e", test_script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        ast = json.loads(proc.stdout)
+        assert ast["type"] == "expr"
+        assert isinstance(ast["value"], list)
+
+
+def test_cli_ast_only_with_graph_query_peg(node_bin: str) -> None:
+    """Verifies CLI compilation of grammars/graph_query.peg with --ast-only."""
+    graph_query_peg = Path("grammars/graph_query.peg")
+    assert graph_query_peg.exists()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_js = Path(tmp_dir) / "graph_query_ast_parser.js"
+        exit_code = run_cli(
+            [str(graph_query_peg), "-o", str(out_js), "--target", "js", "--ast-only"]
+        )
+        assert exit_code == 0
+        assert out_js.is_file()
+
+        test_script = f"""
+        const {{ GraphQueryParser }} = require({json.dumps(str(out_js))});
+        const parser = new GraphQueryParser();
+        const res = parser.parse("(p:Paper) -> (c:CVE)");
+        console.log(JSON.stringify({{ success: res && res.type === 'query' }}));
+        """
+        proc = subprocess.run(
+            [node_bin, "-e", test_script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        data = json.loads(proc.stdout)
+        assert data["success"] is True

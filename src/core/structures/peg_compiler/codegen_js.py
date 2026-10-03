@@ -9,6 +9,7 @@ Zero external dependencies.
 from __future__ import annotations
 
 import json
+import re
 from typing import Callable, ClassVar, Dict, List, Optional, Tuple, Type, cast
 
 from core.structures.peg_compiler.ast_nodes import (
@@ -28,6 +29,22 @@ from core.structures.peg_compiler.ast_nodes import (
     RuleRefExpr,
     SeqExpr,
 )
+
+
+def _collect_flag_chars(raw_flags: str) -> str:
+    valid = {"i", "m", "s"}
+    return "".join(sorted({ch for ch in raw_flags.lower() if ch in valid}))
+
+
+def _extract_regex_flags(pattern: str) -> Tuple[str, str]:
+    """Extracts inline Python regex flags like (?i) and converts to JS RegExp flags."""
+    clean = pattern[1:] if pattern.startswith("^") else pattern
+    match = re.match(r"^\(\?([a-zA-Z]+)\)", clean)
+    if not match:
+        return clean.replace("/", "\\/"), ""
+    flags = _collect_flag_chars(match.group(1))
+    escaped = clean[match.end() :].replace("/", "\\/")
+    return escaped, flags
 
 
 def _format_repetition(inner: str, min_c: int, max_c: Optional[int]) -> str:
@@ -62,9 +79,15 @@ class JSCodeGenerator:
         ActionExpr: lambda self, e, r: self._emit_action(cast(ActionExpr, e), r),
     }
 
-    def __init__(self, grammar: GrammarDef, embedded_runtime: bool = True) -> None:
+    def __init__(
+        self,
+        grammar: GrammarDef,
+        embedded_runtime: bool = True,
+        ast_only: bool = False,
+    ) -> None:
         self.grammar = grammar
         self.embedded_runtime = embedded_runtime
+        self.ast_only = ast_only
         self.action_counter = 0
         self.action_methods: List[str] = []
 
@@ -190,8 +213,12 @@ class JSCodeGenerator:
             "  function jsonExpected(s) { return JSON.stringify(s); }",
             "",
             "  function Regex(pattern) {",
-            "    Parser.call(this, '/' + pattern.source + '/', false);",
-            "    this.pattern = new RegExp(pattern.source, 'y');",
+            "    var flags = 'y';",
+            "    if (pattern.ignoreCase) flags += 'i';",
+            "    if (pattern.multiline) flags += 'm';",
+            "    if (pattern.dotAll) flags += 's';",
+            "    Parser.call(this, '/' + pattern.source + '/' + flags, false);",
+            "    this.pattern = new RegExp(pattern.source, flags);",
             "    this.source = pattern.source;",
             "  }",
             "  Regex.prototype = Object.create(Parser.prototype);",
@@ -376,7 +403,12 @@ class JSCodeGenerator:
         lines: List[str] = []
         for rule in self.grammar.rules:
             expr_code = self._emit_expr(rule.expr, rule.name)
-            lines.append(f"    this._r_{rule.name}.define({expr_code});")
+            if self.ast_only:
+                qname = json.dumps(rule.name)
+                wrapped = f"({expr_code}).map(function(val) {{ return {{ type: {qname}, value: val }}; }})"
+                lines.append(f"    this._r_{rule.name}.define({wrapped});")
+            else:
+                lines.append(f"    this._r_{rule.name}.define({expr_code});")
         return lines
 
     def _emit_root_parser_setup(self) -> List[str]:
@@ -425,11 +457,8 @@ class JSCodeGenerator:
         return 'lit("")'
 
     def _emit_regex(self, expr: RegexExpr) -> str:
-        pattern = expr.pattern
-        if pattern.startswith("^"):
-            pattern = pattern[1:]
-        escaped_pattern = pattern.replace("/", "\\/")
-        return f"reg(/{escaped_pattern}/)"
+        escaped_pattern, flags = _extract_regex_flags(expr.pattern)
+        return f"reg(/{escaped_pattern}/{flags})"
 
     def _emit_char_class(self, expr: CharClassExpr) -> str:
         return f"charClass({json.dumps(expr.raw_spec)}, {json.dumps(expr.inverted)})"
@@ -451,6 +480,8 @@ class JSCodeGenerator:
         return f"choice([{', '.join(alts)}])"
 
     def _emit_action(self, expr: ActionExpr, rule_name: str) -> str:
+        if self.ast_only:
+            return self._emit_expr(expr.expr, rule_name)
         inner = self._emit_expr(expr.expr, rule_name)
         class_name = f"{self.grammar.name}Parser"
         method_name = f"_action_{rule_name}_{self.action_counter}"

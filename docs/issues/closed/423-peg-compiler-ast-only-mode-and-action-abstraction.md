@@ -2,7 +2,8 @@
 ID: 423
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-10-03
 ---
 
 # [FEAT/ENH] PEG AOT コンパイラにおける --ast-only 汎用構文木生成とアクション抽象化の実装 (ID: 423)
@@ -29,12 +30,12 @@ ID: 423
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
 ### コンパイラ基盤
-- [ ] [`src/core/structures/peg_compiler/codegen_js.py`](../../src/core/structures/peg_compiler/codegen_js.py)（`ast_only: bool` 引数の追加、アクションバイパス、AST ノード自動ラッピング）
-- [ ] [`src/core/structures/peg_compiler/cli.py`](../../src/core/structures/peg_compiler/cli.py)（`--ast-only` CLI 引数の追加と `compile_grammar_to_code` への配線）
-- [ ] [`src/core/structures/peg_compiler/__init__.py`](../../src/core/structures/peg_compiler/__init__.py)（公開シグネチャの整合性維持）
+- [x] [`src/core/structures/peg_compiler/codegen_js.py`](../../src/core/structures/peg_compiler/codegen_js.py)（`ast_only: bool` 引数の追加、アクションバイパス、AST ノード自動ラッピング）
+- [x] [`src/core/structures/peg_compiler/cli.py`](../../src/core/structures/peg_compiler/cli.py)（`--ast-only` CLI 引数の追加と `compile_grammar_to_code` への配線）
+- [x] [`src/core/structures/peg_compiler/__init__.py`](../../src/core/structures/peg_compiler/__init__.py)（公開シグネチャの整合性維持）
 
 ### テスト
-- [ ] [`tests/test_peg_compiler_js.py`](../../tests/test_peg_compiler_js.py)（`grammars/graph_query.peg` からの `--ast-only` コンパイルと Node.js 実行テスト）
+- [x] [`tests/test_peg_compiler_js.py`](../../tests/test_peg_compiler_js.py)（`grammars/graph_query.peg` からの `--ast-only` コンパイルと Node.js 実行テスト）
 
 ---
 
@@ -88,9 +89,9 @@ Target Branch: `feat/423-peg-compiler-ast-only-mode-and-action-abstraction`
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] `JSCodeGenerator` に `ast_only: bool` が追加され、アクションコードを無視して純粋な AST ノード `{ type, value }` を生成できること。
-- [ ] `cli.py` に `--ast-only` フラグが追加され、CLI から直接実行可能であること。
-- [ ] Python アクションを含む `grammars/graph_query.peg` が `--target js --ast-only` でエラーなくコンパイルされ、Node.js 上で正常に実行できること。
-- [ ] Xenon Rank A（循環的複雑度）を全関数・メソッドで維持すること。
-- [ ] `flake8`、`mypy --strict src`、`black`、`isort` を 0 エラーでパスすること。
-- [ ] `tests/test_peg_compiler_js.py` に新規テストが追加され、全 PASS すること。
+- [x] `JSCodeGenerator` に `ast_only: bool` が追加され、アクションコードを無視して純粋な AST ノード `{ type, value }` を生成できること。
+- [x] `cli.py` に `--ast-only` フラグが追加され、CLI から直接実行可能であること。
+- [x] Python アクションを含む `grammars/graph_query.peg` が `--target js --ast-only` でエラーなくコンパイルされ、Node.js 上で正常に実行できること。
+- [x] Xenon Rank A（循環的複雑度）を全関数・メソッドで維持すること。
+- [x] `flake8`、`mypy --strict src`、`black`、`isort` を 0 エラーでパスすること。
+- [x] `tests/test_peg_compiler_js.py` に新規テストが追加され、全 PASS すること。

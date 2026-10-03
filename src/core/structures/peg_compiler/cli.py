@@ -26,6 +26,7 @@ def compile_grammar_to_code(
     use_aot: bool = True,
     optimize: bool = True,
     target: str = "python",
+    ast_only: bool = False,
 ) -> str:
     """Compiles .peg grammar text into Python or JavaScript source code string."""
     parser = MetaGrammarParser(use_aot=use_aot)
@@ -40,7 +41,7 @@ def compile_grammar_to_code(
 
     normalized_target = target.lower().strip()
     if normalized_target in ("js", "javascript"):
-        generator_js = JSCodeGenerator(grammar_ast)
+        generator_js = JSCodeGenerator(grammar_ast, ast_only=ast_only)
         return generator_js.generate()
 
     generator_py = CodeGenerator(grammar_ast)
@@ -71,6 +72,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-aot", action="store_true", help="Disable AOT meta-parser")
     parser.add_argument(
         "--no-optimize", action="store_true", help="Disable AST optimization"
+    )
+    parser.add_argument(
+        "--ast-only",
+        action="store_true",
+        help="Bypass embedded actions and emit generic AST nodes ({type, value})",
     )
     return parser
 
@@ -112,6 +118,7 @@ def run_cli(args: Optional[List[str]] = None) -> int:
             use_aot=not parsed.no_aot,
             optimize=not parsed.no_optimize,
             target=target,
+            ast_only=parsed.ast_only,
         )
     except PEGSyntaxError as exc:
         sys.stderr.write(f"PEG Grammar Syntax Error:\n{exc}\n")
