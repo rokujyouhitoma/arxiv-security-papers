@@ -6,7 +6,11 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **418** | Webフロントエンド構文解析基盤の全面PEG刷新 (マークダウンブロック・CTIクエリDSL・リアルタイム構文検証・ルーティング・Mermaidサニタイズ) | Feature | High | Open (New) | [418-web-frontend-comprehensive-peg-parser-migration.md](418-web-frontend-comprehensive-peg-parser-migration.md) |
+| **418** | マークダウン・ブロック構文解析 (MarkdownLexer) の PEG 化と頑健性向上 | Feature | High | Open (New) | [418-markdown-block-lexer-peg-migration.md](418-markdown-block-lexer-peg-migration.md) |
+| **419** | クライアントサイド CTI グラフクエリ DSL の AOT 生成とダッシュボード統合 | Feature | High | Open (New) | [419-client-side-cti-query-dsl-aot-integration.md](419-client-side-cti-query-dsl-aot-integration.md) |
+| **420** | 検索窓における Lucene PEG リアルタイム構文検証・エラーハイライト・オートコンプリートの実装 | Feature | High | Open (New) | [420-search-input-realtime-peg-validation-and-autocomplete.md](420-search-input-realtime-peg-validation-and-autocomplete.md) |
+| **421** | クライアントサイドルーターの URL パス＆クエリ構文解析の PEG 化 | Feature | High | Open (New) | [421-client-router-url-path-query-peg-parser.md](421-client-router-url-path-query-peg-parser.md) |
+| **422** | Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 | Feature | High | Open (New) | [422-mermaid-diagram-pre-validation-and-sanitizer.md](422-mermaid-diagram-pre-validation-and-sanitizer.md) |
 
 ---
 
