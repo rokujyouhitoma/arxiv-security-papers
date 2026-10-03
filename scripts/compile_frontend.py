@@ -40,6 +40,7 @@ FRAMEWORK_SRCS = [
     "site/js/frameworks/cti-query-parser.js",
     "site/js/frameworks/cti-query-evaluator.js",
     "site/js/frameworks/query-validator.js",
+    "site/js/frameworks/mermaid-validator.js",
     "site/js/frameworks/graph-canvas.js",
 ]
 

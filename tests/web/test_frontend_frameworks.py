@@ -1054,3 +1054,129 @@ def test_router_peg_path_and_query_parsing() -> None:
     assert data["hasNormalParam"] is True
     assert data["hasNoConstructorParam"] is True
     assert data["malformedPreserved"] is True
+
+
+def test_mermaid_validator_and_safe_fallback() -> None:
+    """Verifies that site/js/frameworks/mermaid-validator.js validates, sanitizes,
+    and creates safe fallbacks for Mermaid diagrams (Issue 422).
+    """
+    import json
+    import shutil
+    import subprocess
+
+    import pytest
+
+    validator_path = FRAMEWORKS_DIR / "mermaid-validator.js"
+    assert validator_path.is_file()
+    content = validator_path.read_text(encoding="utf-8")
+    assert "class MermaidValidator" in content
+    assert "validate" in content
+    assert "sanitize" in content
+    assert "createFallbackHtml" in content
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        pytest.skip("Node.js runtime not installed")
+
+    script = """
+    const { MermaidValidator } = require('./site/js/frameworks/mermaid-validator.js');
+    const { MarkdownRenderer } = require('./site/js/renderer.js');
+
+    const validator = new MermaidValidator();
+    const renderer = new MarkdownRenderer();
+
+    // 1. Valid mindmap
+    const validMindmap = [
+        'mindmap',
+        '  root((Cybersecurity))',
+        '    Cryptography',
+        '      ZeroKnowledge',
+        '    Network'
+    ].join('\\n');
+    const resValidMindmap = validator.validate(validMindmap);
+
+    // 2. Valid flowchart
+    const validFlowchart = [
+        'graph TD',
+        '  A[Start] --> B(Process)',
+        '  B --> C{Decision}',
+        '  C -->|Yes| D[End]'
+    ].join('\\n');
+    const resValidFlowchart = validator.validate(validFlowchart);
+
+    // 3. Broken mindmap with unquoted nested parens and brackets
+    const brokenMindmap = [
+        'mindmap',
+        '  root((Threat Analysis))',
+        '    Node1(Unquoted (Nested) Text)',
+        '    Node2[Bracket [Nested] Text]'
+    ].join('\\n');
+    const resBrokenMindmap = validator.validate(brokenMindmap);
+    const sanitizedMindmap = validator.sanitize(brokenMindmap);
+    const resSanitizedMindmap = validator.validate(sanitizedMindmap);
+
+    // 4. Security violation: click directive and script tags
+    const maliciousDiagram = [
+        'graph TD',
+        '  A --> B',
+        '  click A "https://malicious.example.com" "Attack"',
+        '  <script>alert(1)</script>'
+    ].join('\\n');
+    const resMalicious = validator.validate(maliciousDiagram);
+    const sanitizedMalicious = validator.sanitize(maliciousDiagram);
+
+    // 5. Unrecoverable diagram fallback HTML
+    const unrecoverable = 'completely invalid diagram text without headers';
+    const fallbackHtml = validator.createFallbackHtml(unrecoverable, 'Missing header');
+
+    // 6. MarkdownRenderer integration: verify sanitized render & fallback render
+    const astWithRecoverable = {
+        type: 'DOCUMENT',
+        children: [{
+            type: 'MERMAID',
+            evaluated: { code: brokenMindmap, id: 'm1' }
+        }]
+    };
+    const renderedRecoverable = renderer.render(astWithRecoverable).html;
+
+    const astWithUnrecoverable = {
+        type: 'DOCUMENT',
+        children: [{
+            type: 'MERMAID',
+            evaluated: { code: unrecoverable, id: 'm2' }
+        }]
+    };
+    const renderedUnrecoverable = renderer.render(astWithUnrecoverable).html;
+
+    console.log(JSON.stringify({
+        validMindmapPass: resValidMindmap.valid,
+        validFlowchartPass: resValidFlowchart.valid,
+        brokenMindmapDetected: !resBrokenMindmap.valid,
+        sanitizedMindmapPass: resSanitizedMindmap.valid,
+        sanitizedHasQuotes: sanitizedMindmap.includes('("Unquoted (Nested) Text")'),
+        maliciousDetected: !resMalicious.valid,
+        sanitizedMaliciousNoClick: !sanitizedMalicious.includes('click A'),
+        sanitizedMaliciousNoScript: !sanitizedMalicious.includes('<script>'),
+        fallbackHasBadge: fallbackHtml.includes('md-mermaid-fallback-badge'),
+        renderedHasSanitizedDiv: renderedRecoverable.includes('class="mermaid"'),
+        renderedHasFallbackDiv: renderedUnrecoverable.includes('class="md-mermaid-fallback"')
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["validMindmapPass"] is True
+    assert data["validFlowchartPass"] is True
+    assert data["brokenMindmapDetected"] is True
+    assert data["sanitizedMindmapPass"] is True
+    assert data["sanitizedHasQuotes"] is True
+    assert data["maliciousDetected"] is True
+    assert data["sanitizedMaliciousNoClick"] is True
+    assert data["sanitizedMaliciousNoScript"] is True
+    assert data["fallbackHasBadge"] is True
+    assert data["renderedHasSanitizedDiv"] is True
+    assert data["renderedHasFallbackDiv"] is True

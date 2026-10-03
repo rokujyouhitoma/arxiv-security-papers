@@ -2,7 +2,7 @@
 ID: 422
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 (ID: 422)
@@ -92,10 +92,11 @@ Target Branch: `feat/422-mermaid-diagram-pre-validation-and-sanitizer`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `site/js/frameworks/mermaid-validator.js` が実装され、主要な Mermaid 構文の事前検証および自動サニタイズが動作すること。
-- [ ] 不正な構文が与えられた場合でも、Mermaid の巨大な赤文字構文エラーが出ず、洗練されたフォールバック表示またはサニタイズ描画が行われること。
-- [ ] `renderer.js` および `markdown_compiler.js` にて各ダイアグラムの例外が個別に隔離されること。
-- [ ] `tests/web/test_frontend_frameworks.py` の自動テストが全件 PASS すること。
-- [ ] `make build_js`（Google Closure Compiler `strict=True`）が 0 エラーで完了し、`site/app-min.js` および `site/dashboard-min.js` が生成されること。
-- [ ] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。
+- [x] `site/js/frameworks/mermaid-validator.js` が実装され、主要な Mermaid 構文の事前検証および自動サニタイズが動作すること。
+- [x] 不正な構文が与えられた場合でも、Mermaid の巨大な赤文字構文エラーが出ず、洗練されたフォールバック表示またはサニタイズ描画が行われること。
+- [x] `renderer.js` および `markdown_compiler.js` にて各ダイアグラムの例外が個別に隔離されること。
+- [x] `tests/web/test_frontend_frameworks.py` の自動テストが全件 PASS すること。
+- [x] `make build_js`（Google Closure Compiler `strict=True`）が 0 エラーで完了し、`site/app-min.js` および `site/dashboard-min.js` が生成されること。
+- [x] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。
+
 

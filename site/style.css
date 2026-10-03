@@ -1892,4 +1892,43 @@ mark.highlight {
   margin-left: 12px;
 }
 
+/* ==========================================================================
+   Mermaid Pre-validation & Safe Fallback Display (Issue #422)
+   ========================================================================== */
+.md-mermaid-fallback {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: var(--console-radius-sm, 6px);
+  margin: 14px 0;
+  overflow: hidden;
+}
+
+.md-mermaid-fallback-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+  font-size: 11px;
+}
+
+.md-mermaid-fallback-badge {
+  font-weight: 700;
+  color: #fbbf24;
+  font-family: var(--console-font-mono);
+}
+
+.md-mermaid-fallback-hint {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+
+.md-mermaid-fallback pre {
+  margin: 0;
+  padding: 12px;
+  background: transparent;
+}
+
+
 

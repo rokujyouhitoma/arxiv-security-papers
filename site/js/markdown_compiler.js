@@ -25,6 +25,7 @@ class MarkdownCompilerEngine {
   }
 
   /**
+   * Render Mermaid blocks individually with isolated error boundaries.
    * @param {!Element} containerElement
    * @return {!Promise<void>}
    */
@@ -36,11 +37,31 @@ class MarkdownCompilerEngine {
           theme: 'dark',
           securityLevel: 'loose'
         });
-        await mermaid.run({
-          nodes: containerElement.querySelectorAll('.mermaid')
-        });
-      } catch (err) {
-        console.warn("Mermaid rendering warning:", err);
+      } catch (initErr) {
+        console.warn("Mermaid initialize warning:", initErr);
+      }
+
+      const nodes = containerElement.querySelectorAll('.mermaid');
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        try {
+          await mermaid.run({
+            nodes: [node]
+          });
+        } catch (elemErr) {
+          console.warn("Individual Mermaid rendering failed on node:", node, elemErr);
+          // Fallback UI to prevent broken raw text or red screen
+          const rawCode = node.textContent || '';
+          node.className = 'md-mermaid-fallback-container';
+          node.innerHTML = `
+            <div class="md-mermaid-fallback">
+              <div class="md-mermaid-fallback-header">
+                <span class="md-mermaid-fallback-badge">⚠️ 描画フォールバック</span>
+              </div>
+              <pre class="md-code-block"><code class="language-mermaid">${rawCode}</code></pre>
+            </div>
+          `;
+        }
       }
     }
   }
