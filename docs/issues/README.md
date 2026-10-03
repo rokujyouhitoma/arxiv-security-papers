@@ -10,7 +10,7 @@
 | **419** | クライアントサイド CTI グラフクエリ DSL の AOT 生成とダッシュボード統合 | Feature | High | Closed (Completed) | [419-client-side-cti-query-dsl-aot-integration.md](closed/419-client-side-cti-query-dsl-aot-integration.md) |
 | **420** | 検索窓における Lucene PEG リアルタイム構文検証・エラーハイライト・オートコンプリートの実装 | Feature | High | Closed (Completed) | [420-search-input-realtime-peg-validation-and-autocomplete.md](closed/420-search-input-realtime-peg-validation-and-autocomplete.md) |
 | **421** | クライアントサイドルーターの URL パス＆クエリ構文解析の PEG 化 | Feature | High | Closed (Completed) | [421-client-router-url-path-query-peg-parser.md](closed/421-client-router-url-path-query-peg-parser.md) |
-| **422** | Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 | Feature | High | Open (New) | [422-mermaid-diagram-pre-validation-and-sanitizer.md](422-mermaid-diagram-pre-validation-and-sanitizer.md)
+| **422** | Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 | Feature | High | Open (In Progress) | [422-mermaid-diagram-pre-validation-and-sanitizer.md](422-mermaid-diagram-pre-validation-and-sanitizer.md) |
 
 ---
 
