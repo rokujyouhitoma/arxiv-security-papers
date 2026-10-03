@@ -237,3 +237,52 @@ def test_warth_left_recursion_in_generated_js(node_bin: str) -> None:
         )
         data = json.loads(proc.stdout)
         assert data["res"] == 10
+
+
+def test_char_class_range_evaluation_in_generated_js(node_bin: str) -> None:
+    """Verifies that CharClass uses direct character code range comparison instead of RegExp."""
+    grammar = r"""
+    grammar CharClassDemo
+    entry <- id:ident ':' _ content:non_digit _ sep:special {
+        return { id: id, val: content, sep: sep };
+    }
+    ident <- head:[a-zA-Z_] tail:[a-zA-Z0-9_]* {
+        return head + tail.join('');
+    }
+    non_digit <- [^0-9 \t\r\n]+ {
+        return val.join('');
+    }
+    special <- [\]\-\/\n\t]
+    _ <- [ \t]*
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_js = Path(tmp_dir) / "char_class_parser.js"
+        js_code = compile_grammar_to_code(grammar, target="js")
+        out_js.write_text(js_code, encoding="utf-8")
+
+        # 1. Verify no new RegExp('[') is emitted for CharClass
+        assert "new RegExp('[" not in js_code
+        assert 'new RegExp("[' not in js_code
+        assert "charClass([[65, 90], [97, 122]], [95], false" in js_code
+
+        # 2. Execute with Node.js
+        test_script = f"""
+        const {{ CharClassDemoParser }} = require({json.dumps(str(out_js))});
+        const parser = new CharClassDemoParser();
+        const res1 = parser.parse("foo_bar: hello_world /");
+        const res2 = parser.parse("_test123: abc-def ]");
+        console.log(JSON.stringify({{ res1: res1, res2: res2 }}));
+        """
+        proc = subprocess.run(
+            [node_bin, "-e", test_script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        data = json.loads(proc.stdout)
+        assert data["res1"]["id"] == "foo_bar"
+        assert data["res1"]["val"] == "hello_world"
+        assert data["res1"]["sep"] == "/"
+        assert data["res2"]["id"] == "_test123"
+        assert data["res2"]["val"] == "abc-def"
+        assert data["res2"]["sep"] == "]"

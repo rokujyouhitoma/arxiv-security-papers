@@ -918,7 +918,21 @@ Python 側コアランタイム（`src/core/structures/peg.py`）で確立され
 4. **数式・DSL の自然な左結合解析**:
    - `expr <- expr '+' num / num` のような標準的な左再帰算術文法を変換なしでそのままコンパイル可能とし、`1 + 2 + 3` を `((1 + 2) + 3)` の左結合ツリーとして正確に解析。
 
-### 13.6 完了条件 (DoD for Phase 6)
+### 13.6 文字クラス（CharClass）の文字コード範囲判定化と ReDoS 根絶 (Issue #425)
+
+従来の `JSCodeGenerator` 内蔵ランタイムにおける `new RegExp('[' + spec + ']')` による文字クラス判定を全面刷新し、Python 側コアランタイム（`src/core/structures/peg.py`）と同等の文字コード範囲直接判定方式を採用した。
+
+1. **AOT コンパイル時文字クラス仕様展開**:
+   - `_tokenize_class_spec` および `_parse_class_tokens` により、エスケープシーケンス（`\n`, `\t`, `\r`, `\\`, `\]`, `\-`, `\/`）を正確にデコード。
+   - エスケープされたハイフン `\-` と範囲区切り文字 `-` を厳格に分離。
+   - 連続文字範囲を `[min_ord, max_ord]` の昇順ソート済み整数配列 `ranges`、単一文字を `singles` 配列に事前解決。
+2. **純粋 $O(1)$ 直接文字コード比較 (`CharClass` クラス)**:
+   - `ctx.text.charCodeAt(pos)` を取得し、事前生成された `ranges` および `singles`（要素数 8 超過時は `Set`）に対して直接比較を実施。
+   - ブラウザおよび Node.js の正規表現エンジン呼出を完全撤廃し、ReDoS（破局的バックトラッキング）およびエスケープ漏れによる構文エラーを根絶。
+3. **純粋文字長判定 `AnyChar` への刷新**:
+   - 従来の `reg(/[\s\S]/)` を廃止し、`pos < ctx.length` の直接インデックス判定を行う `AnyChar` クラスを導入。不要な正規表現オブジェクト生成をゼロ化。
+
+### 13.7 完了条件 (DoD for Phase 6)
 
 - [x] **Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)**:
   - 正規表現 `.replace()` から PEG コンビネータベースの構文解析に刷新され、コードスパン保護・エスケープ処理・XSS 防御を達成。
@@ -926,6 +940,8 @@ Python 側コアランタイム（`src/core/structures/peg.py`）で確立され
   - `src/core/structures/peg_compiler/codegen_js.py` が実装され、内蔵ランタイムを含む UMD 互換の自己完結型 JS コードを出力可能であること。
 - [x] **内蔵 JS ランタイムにおける Warth ('08) 左再帰解消移植 (Issue #424)**:
   - 直接・間接左再帰文法におけるスタック枯渇（RangeError）を解消し、シード成長法による最長一致・左結合 AST 生成を完全保証。
+- [x] **JS コードジェネレータにおける CharClass の文字コード範囲判定化と ReDoS 根絶 (Issue #425)**:
+  - `new RegExp('[' + spec + ']')` を完全撤廃し、文字コード範囲直接比較および純粋 AnyChar による安全・高速な $O(1)$ 判定を実現。
 - [x] **CLI `--target js` および `--ast-only` オプションの統合 (Issue #423)**:
   - `src/core/structures/peg_compiler/cli.py` に `--target {python,js}` および `--ast-only` が追加され、拡張子判定、Pythonアクション自動バイパス、インライン正規表現フラグ変換が動作すること。
 - [x] **Xenon Rank A および静的解析 100% 達成**:

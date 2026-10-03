@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Callable, ClassVar, Dict, List, Optional, Tuple, Type, cast
+from typing import Callable, ClassVar, Dict, List, Optional, Set, Tuple, Type, cast
 
 from core.structures.peg_compiler.ast_nodes import (
     ActionExpr,
@@ -53,6 +53,60 @@ def _format_repetition(inner: str, min_c: int, max_c: Optional[int]) -> str:
         return f"plus({inner})" if min_c == 1 else f"star({inner})"
     max_str = "null" if max_c is None else str(max_c)
     return f"new Repetition({inner}, {min_c}, {max_str})"
+
+
+def _unescape_class_char(char: str) -> str:
+    escapes = {
+        "n": "\n",
+        "t": "\t",
+        "r": "\r",
+        "\\": "\\",
+        "]": "]",
+        "-": "-",
+        "/": "/",
+    }
+    return escapes.get(char, char)
+
+
+def _tokenize_class_spec(spec: str) -> List[Tuple[str, bool]]:
+    tokens: List[Tuple[str, bool]] = []
+    i = 0
+    n = len(spec)
+    while i < n:
+        if spec[i] == "\\" and i + 1 < n:
+            tokens.append((_unescape_class_char(spec[i + 1]), True))
+            i += 2
+        else:
+            tokens.append((spec[i], False))
+            i += 1
+    return tokens
+
+
+def _parse_class_tokens(
+    tokens: List[Tuple[str, bool]],
+) -> Tuple[List[List[int]], List[int]]:
+    ranges: List[List[int]] = []
+    singles: Set[int] = set()
+    i = 0
+    n = len(tokens)
+    while i < n:
+        if i + 2 < n and not tokens[i + 1][1] and tokens[i + 1][0] == "-":
+            s_ord = ord(tokens[i][0])
+            e_ord = ord(tokens[i + 2][0])
+            ranges.append([min(s_ord, e_ord), max(s_ord, e_ord)])
+            i += 3
+        else:
+            singles.add(ord(tokens[i][0]))
+            i += 1
+    ranges.sort(key=lambda r: r[0])
+    return ranges, sorted(list(singles))
+
+
+def _parse_char_class_spec(
+    spec: str,
+) -> Tuple[List[List[int]], List[int]]:
+    tokens = _tokenize_class_spec(spec)
+    return _parse_class_tokens(tokens)
 
 
 class JSCodeGenerator:
@@ -378,6 +432,56 @@ class JSCodeGenerator:
             "    return new ParseResult(true, null, pos, null, true);",
             "  };",
             "",
+            "  function AnyChar() { Parser.call(this, 'anyChar', false); }",
+            "  AnyChar.prototype = Object.create(Parser.prototype);",
+            "  AnyChar.prototype.parseAt = function(ctx, pos) {",
+            "    if (pos < ctx.length) {",
+            "      return new ParseResult(true, ctx.text[pos], pos + 1);",
+            "    }",
+            "    ctx.updateMaxPos(pos, 'any character');",
+            "    return new ParseResult(false, null, pos, 'Unexpected EOF');",
+            "  };",
+            "",
+            "  function CharClass(ranges, singles, inverted, name) {",
+            "    Parser.call(this, name || 'CharClass', false);",
+            "    this.ranges = ranges;",
+            "    this.singles = singles;",
+            "    this.inverted = inverted;",
+            "    this.singlesSet = singles.length > 8 ? new Set(singles) : null;",
+            "  }",
+            "  CharClass.prototype = Object.create(Parser.prototype);",
+            "  CharClass.prototype.parseAt = function(ctx, pos) {",
+            "    if (pos >= ctx.length) {",
+            "      ctx.updateMaxPos(pos, this.name);",
+            "      return new ParseResult(false, null, pos, 'Unexpected EOF');",
+            "    }",
+            "    var code = ctx.text.charCodeAt(pos);",
+            "    var matched = false;",
+            "    for (var i = 0; i < this.ranges.length; i++) {",
+            "      if (code >= this.ranges[i][0] && code <= this.ranges[i][1]) {",
+            "        matched = true;",
+            "        break;",
+            "      }",
+            "    }",
+            "    if (!matched) {",
+            "      if (this.singlesSet !== null) {",
+            "        matched = this.singlesSet.has(code);",
+            "      } else {",
+            "        for (var j = 0; j < this.singles.length; j++) {",
+            "          if (code === this.singles[j]) {",
+            "            matched = true;",
+            "            break;",
+            "          }",
+            "        }",
+            "      }",
+            "    }",
+            "    if (this.inverted ? !matched : matched) {",
+            "      return new ParseResult(true, ctx.text[pos], pos + 1);",
+            "    }",
+            "    ctx.updateMaxPos(pos, this.name);",
+            "    return new ParseResult(false, null, pos, 'Expected character matching ' + this.name);",
+            "  };",
+            "",
             "  function RuleRef(name) {",
             "    Parser.call(this, name, true);",
             "    this.name = name;",
@@ -418,10 +522,9 @@ class JSCodeGenerator:
             "  function andPred(p) { return new Predicate(p, true); }",
             "  function notPred(p) { return new Predicate(p, false); }",
             "  function cut() { return new Cut(); }",
-            "  function anyChar() { return reg(/[\\s\\S]/); }",
-            "  function charClass(spec, inverted) {",
-            "    var pattern = inverted ? '[^' + spec + ']' : '[' + spec + ']';",
-            "    return reg(new RegExp(pattern));",
+            "  function anyChar() { return new AnyChar(); }",
+            "  function charClass(ranges, singles, inverted, name) {",
+            "    return new CharClass(ranges, singles, inverted, name);",
             "  }",
             "",
         ]
@@ -514,7 +617,13 @@ class JSCodeGenerator:
         return f"reg(/{escaped_pattern}/{flags})"
 
     def _emit_char_class(self, expr: CharClassExpr) -> str:
-        return f"charClass({json.dumps(expr.raw_spec)}, {json.dumps(expr.inverted)})"
+        ranges, singles = _parse_char_class_spec(expr.raw_spec)
+        prefix = "^" if expr.inverted else ""
+        name = f"[{prefix}{expr.raw_spec}]"
+        return (
+            f"charClass({json.dumps(ranges)}, {json.dumps(singles)}, "
+            f"{json.dumps(expr.inverted)}, {json.dumps(name)})"
+        )
 
     def _emit_repeat(self, expr: RepeatExpr, rule_name: str) -> str:
         inner = self._emit_expr(expr.expr, rule_name)
