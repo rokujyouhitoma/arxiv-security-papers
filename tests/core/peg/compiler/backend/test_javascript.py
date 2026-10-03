@@ -17,9 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from core.structures.peg_compiler import compile_grammar_to_code
-from core.structures.peg_compiler.cli import run_cli
-from core.structures.peg_compiler.codegen_js import JSCodeGenerator
+from core.peg.compiler import compile_grammar_to_code, run_cli
+from core.peg.compiler.backend.javascript import JSCodeGenerator
 
 
 @pytest.fixture

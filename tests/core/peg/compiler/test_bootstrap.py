@@ -15,7 +15,7 @@ from core.structures.peg_compiler.meta_grammar import MetaGrammarParser
 
 
 def _get_grammars_dir() -> Path:
-    return Path(__file__).resolve().parent.parent.parent / "grammars"
+    return Path(__file__).resolve().parents[4] / "grammars"
 
 
 def test_self_hosting_parses_all_existing_grammars() -> None:

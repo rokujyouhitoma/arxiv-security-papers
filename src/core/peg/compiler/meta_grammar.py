@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Backward-compatibility shim. Use core.peg.compiler.parser instead."""
+"""
+Meta-Grammar Parser alias for backward compatibility.
+Use core.peg.compiler.parser instead.
+"""
 
 from __future__ import annotations
 

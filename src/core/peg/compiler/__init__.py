@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
 """
-Backward-compatibility shim for core.structures.peg_compiler.
-Migrated to core.peg.compiler as part of Issue #437.
-Please import from core.peg.compiler directly.
+DSN-25 Ahead-of-Time Packrat PEG Compiler package.
+Provides grammar specification parsing, AST representations, optimizer, backend code generators, and CLI tools.
+Zero external dependencies.
 """
 
 from __future__ import annotations
 
-from core.peg.compiler import (
+from core.peg.compiler.ast_nodes import (
     ActionExpr,
     AnyCharExpr,
-    BaseCodeGenerator,
     CharClassExpr,
     ChoiceExpr,
-    CodeGenerator,
     CutExpr,
     Expression,
     GrammarDef,
-    GrammarOptimizer,
-    JSCodeGenerator,
     LitExpr,
-    MetaGrammarParser,
     NamedExpr,
     OptExpr,
     PredExpr,
@@ -29,10 +24,15 @@ from core.peg.compiler import (
     RuleDef,
     RuleRefExpr,
     SeqExpr,
+)
+from core.peg.compiler.backend import BaseCodeGenerator, CodeGenerator, JSCodeGenerator
+from core.peg.compiler.cli import (
     compile_grammar_to_code,
     compile_runtime_to_code,
     run_cli,
 )
+from core.peg.compiler.optimizer import GrammarOptimizer
+from core.peg.compiler.parser import MetaGrammarParser
 
 __all__ = [
     "Expression",

@@ -4,14 +4,18 @@
 - **文書番号**: `DSN-25`
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**:
-  - `src/core/structures/peg.py` (Packrat PEG 共通コアランタイムエンジン)
+  - `src/core/peg/` (Packrat PEG コア統合パッケージ, Issue #437)
+    - `src/core/peg/runtime.py` (Packrat PEG 共通コアランタイムエンジン, 旧 `structures/peg.py`)
+    - `src/core/peg/compiler/` (AOT コンパイラ基盤: AST, Parser, Optimizer, CLI)
+    - `src/core/peg/compiler/backend/` (LLVM 風ターゲット別コード生成基盤: BaseCodeGenerator, Python, JavaScript)
+  - `src/core/structures/peg.py` (後方互換性 shim)
+  - `src/core/structures/peg_compiler/` (後方互換性 shim)
   - `src/core/structures/__init__.py` (共通構造公開エクスポート)
   - `src/search/query/query_parser.py` (Lucene 風ブーリアン・括弧ネスト検索クエリパーサー換装)
   - `src/database/sql/parser.py` (SQL 式・サブクエリ・構文要素の PEG 移行連携)
   - `src/graph/engine.py` (Canvas / REST API 向け CTI グラフクエリ DSL 拡張)
   - `src/ontology/` (W3C Turtle 1.1 / RDF インジェストパーサー基盤, Issue #199 連携)
-  - `tools/peg_compiler/` (将来の事前コード生成型パーサージェネレータ拡張ロードマップ)
-  - `src/core/structures/peg_compiler/codegen_js.py` (JavaScript 向け AOT コードジェネレータ基盤, Issue #417)
+  - `tools/peg_compiler/` (AOT パーサージェネレータ CLI ラッパー)
   - `site/js/evaluator.js` (Web フロントエンド MarkdownEvaluator PEG インライン構文解析基盤, Issue #417)
 - **【主査・報告】 Software Development (SWD) / Systems Architect (SA)**
 - **【共同主査】 IT Specialist (NLP & IR) / Database Specialist (DB)**
@@ -74,6 +78,11 @@
   - [13.3 CLI `--target js` および `--ast-only` オプション仕様](#133-cli---target-js-および---ast-only-オプション仕様)
   - [13.4 Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)](#134-web-フロントエンド-peg-インラインパーサー換装-sitejsevaluatorjs)
   - [13.5 完了条件 (DoD for Phase 6)](#135-完了条件-dod-for-phase-6)
+- [14. Phase 7: 言語処理系独立ドメイン `src/core/peg/` への移設および LLVM 風 Backend 分離アーキテクチャ (Issue #437)](#14-phase-7-言語処理系独立ドメイン-srccorepeg-への移設および-llvm-風-backend-分離アーキテクチャ-issue-437)
+  - [14.1 背景と設計動機 (SoC & SRP の回復)](#141-背景と設計動機-soc--srp-の回復)
+  - [14.2 LLVM 3 層思想に基づくパッケージ構成とクラス設計](#142-llvm-3-層思想に基づくパッケージ構成とクラス設計)
+  - [14.3 後方互換性設計 (Shim によるゼロディスラプション)](#143-後方互換性設計-shim-によるゼロディスラプション)
+  - [14.4 完了条件 (DoD for Phase 7)](#144-完了条件-dod-for-phase-7)
 
 ---
 
@@ -979,6 +988,90 @@ Web フロントエンドにおいて今後複数の文法（CTI グラフクエ
   - `codegen_js.py` および関連モジュールが Xenon Rank A、flake8、mypy --strict、black、isort を完全パスすること。
 - [x] **回帰テストおよびビルド検証 PASS**:
   - `tests/test_peg_compiler_js.py`（全12テスト PASS）および `tests/web/test_frontend_frameworks.py` が全 PASS すること。
+
+---
+
+## 14. Phase 7: 言語処理系独立ドメイン `src/core/peg/` への移設および LLVM 風 Backend 分離アーキテクチャ (Issue #437)
+
+### 14.1 背景と設計動機 (SoC & SRP の回復)
+
+当初、PEG パーサーコンビネータ（`peg.py`）は基本アルゴリズムの一環として `src/core/structures/`（BloomFilter, SkipList, RadixTrie 等）に配置された。
+しかし、その後の進化により、Packrat メモ化、Warth ('08) 左再帰解消、構文木最適化（`optimizer.py`）、セルフホスティングメタ文法パーサー（`parser.py`）、多言語 AOT コード生成（Python / JavaScript）、CLI ツールチェーンを備えた**本格的な「言語処理系・構文解析サブシステム」**へと拡張された。
+
+データ構造パッケージの中にコンパイラ（`peg_compiler/`）と同居する状態は、単一責任の原則（SRP）および関心の分離（SoC）に反し、ディレクトリ凝集度の低下を招いていた。
+本改定（Phase 7 / Issue #437）では、PEG ランタイムおよびコンパイラ群を独立したドメイン `src/core/peg/` に集約・再編し、LLVM のコンパイラ設計思想に基づく Backend 分離構造へと昇華させた。
+
+### 14.2 LLVM 3 層思想に基づくパッケージ構成とクラス設計
+
+LLVM の古典的 3 層設計（Frontend / Optimizer / Backend）を PEG コンパイラに適用し、ディレクトリの過剰な断片化を防ぎつつ、ターゲットコード生成の対称性と拡張性を極限まで高めた。
+
+```mermaid
+graph TD
+    subgraph Frontend ["Frontend (文法解析 & AST)"]
+        PEGFile[".peg 文法記述"] --> MetaParser["parser.py<br/>(MetaGrammarParser)"]
+        MetaParser --> AST["ast_nodes.py<br/>(GrammarDef / Expr AST)"]
+    end
+
+    subgraph Optimizer ["Middle-End (文法最適化)"]
+        AST --> OptPass["optimizer.py<br/>(GrammarOptimizer)"]
+        OptPass --> OptAST["最適化済み Grammar AST"]
+    end
+
+    subgraph Backend ["Backend (ターゲット別コード生成)"]
+        OptAST --> BaseCG["backend/base.py<br/>(BaseCodeGenerator)"]
+        BaseCG --> PyCG["backend/python.py<br/>(CodeGenerator)"]
+        BaseCG --> JSCG["backend/javascript.py<br/>(JSCodeGenerator)"]
+        PyCG --> PyOut["*.py パーサー<br/>(from core.peg import ...)"]
+        JSCG --> JSOut["*.js パーサー / UMD"]
+    end
+
+    subgraph Runtime ["Runtime Engine"]
+        CorePeg["src/core/peg/runtime.py<br/>(Packrat PEG エンジン)"] -.-> PyOut
+        SharedJSRuntime["site/js/frameworks/peg-runtime.js"] -.-> JSOut
+    end
+
+    Driver["cli.py / __main__.py<br/>(python -m core.peg.compiler)"] --> Frontend
+    Driver --> Optimizer
+    Driver --> Backend
+```
+
+#### 1. `BaseCodeGenerator` 抽象基底クラスの導入
+`src/core/peg/compiler/backend/base.py` に `BaseCodeGenerator` を定義。すべてのターゲットコード生成器は本クラスを継承し、統一された `generate() -> str` インターフェースを実装する。
+
+```python
+class BaseCodeGenerator(ABC):
+    def __init__(self, grammar: GrammarDef) -> None:
+        self.grammar = grammar
+
+    @abstractmethod
+    def generate(self) -> str:
+        raise NotImplementedError
+```
+
+#### 2. バックエンドの対称化
+- `backend/python.py`: Python 向け静的パーサークラスを出力。生成コード内のインポート文を `from core.peg import (...)` に自動設定。
+- `backend/javascript.py`: UMD / Node / ブラウザ環境向け JavaScript パーサーを出力。
+
+### 14.3 後方互換性設計 (Shim によるゼロディスラプション)
+
+大規模リファクタリングに伴う外部スクリプトや生成済みパーサーへの破壊的影響をゼロにするため、旧パスに透明な再エクスポート shim を配置：
+- `src/core/structures/peg.py`: `from core.peg.runtime import *`
+- `src/core/structures/peg_compiler/__init__.py`: `from core.peg.compiler import *`
+- `src/core/structures/peg_compiler/cli.py`, `codegen.py`, `codegen_js.py`, `optimizer.py`, `ast_nodes.py`: 各新モジュールを再エクスポート。
+
+### 14.4 完了条件 (DoD for Phase 7)
+
+- [x] **`src/core/peg/` への完全集約**:
+  - `src/core/peg/runtime.py`、`src/core/peg/compiler/`、`src/core/peg/compiler/backend/` の構築完了。
+- [x] **LLVM 風 Backend 分離と `BaseCodeGenerator` の導入**:
+  - `backend/base.py`、`backend/python.py`、`backend/javascript.py` の対称化と抽象化完了。
+- [x] **完全な後方互換性 shim の配備**:
+  - `src/core/structures/peg.py` および `src/core/structures/peg_compiler/` への shim 配備により既存参照が 100% 動作。
+- [x] **自動生成パーサー群の再生成 (`make compile_grammars`)**:
+  - 全パーサーが新パッケージ構成でクリーンに再生成され、書式整形・構文検証に合格。
+- [x] **テストスイート PASS**:
+  - `tests/core/test_peg*`、`tests/test_peg_compiler_js.py`、および新規アーキテクチャテスト `tests/core/test_peg_package_architecture.py` が全 PASS。
+
 
 
 

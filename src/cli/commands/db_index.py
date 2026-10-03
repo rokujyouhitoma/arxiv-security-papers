@@ -95,12 +95,14 @@ def _emit_summary_if_needed(
     """Emits JSON summary stats if passthrough mode is disabled."""
     if passthrough:
         return
-    writer.write_record({
-        "status": "success",
-        "indexed_count": count,
-        "target": target,
-        "duration_ms": round(elapsed_ms, 2),
-    })
+    writer.write_record(
+        {
+            "status": "success",
+            "indexed_count": count,
+            "target": target,
+            "duration_ms": round(elapsed_ms, 2),
+        }
+    )
 
 
 class DbIndexCommand(BaseCommand):
@@ -146,9 +148,7 @@ class DbIndexCommand(BaseCommand):
         catalog = _load_catalog(cat_path)
 
         logger.info(f"Starting database index sink (target: '{args.target}')...")
-        count = _consume_stream(
-            reader, writer, catalog, args.target, args.passthrough
-        )
+        count = _consume_stream(reader, writer, catalog, args.target, args.passthrough)
         _finalize_indexing(cat_path, catalog, args.target, count)
 
         elapsed_ms = (time.time() - start_time) * 1000.0

@@ -7,6 +7,7 @@ Conforms to DSN-01 Section 5.2 and REQ-FR-09.
 
 import io
 import json
+
 import pytest
 
 from src.cli.stream import (
@@ -54,10 +55,7 @@ def test_stream_writer_writes_jsonl() -> None:
 
 
 def test_stream_reader_parses_jsonl() -> None:
-    input_data = (
-        '{"id": 1, "name": "one"}\n\n'
-        '{"id": 2, "name": "two"}\n'
-    )
+    input_data = '{"id": 1, "name": "one"}\n\n' '{"id": 2, "name": "two"}\n'
     in_stream = io.StringIO(input_data)
     reader = StreamReader(stream=in_stream)
 
@@ -71,9 +69,7 @@ def test_stream_reader_parses_jsonl() -> None:
 
 def test_stream_reader_handles_malformed_json_skip() -> None:
     input_data = (
-        '{"id": 1, "name": "one"}\n'
-        'INVALID_JSON_LINE\n'
-        '{"id": 2, "name": "two"}\n'
+        '{"id": 1, "name": "one"}\n' "INVALID_JSON_LINE\n" '{"id": 2, "name": "two"}\n'
     )
     in_stream = io.StringIO(input_data)
     err_stream = io.StringIO()
@@ -92,10 +88,7 @@ def test_stream_reader_handles_malformed_json_skip() -> None:
 
 
 def test_stream_reader_handles_malformed_json_abort() -> None:
-    input_data = (
-        '{"id": 1, "name": "one"}\n'
-        'NOT_JSON\n'
-    )
+    input_data = '{"id": 1, "name": "one"}\n' "NOT_JSON\n"
     in_stream = io.StringIO(input_data)
     reader = StreamReader(stream=in_stream, on_error=StreamErrorPolicy.ABORT)
 

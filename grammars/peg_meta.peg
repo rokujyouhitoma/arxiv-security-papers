@@ -7,7 +7,7 @@ grammar MetaGrammar
 @header {
 import re
 from typing import Any
-from core.structures.peg_compiler.ast_nodes import (
+from core.peg.compiler.ast_nodes import (
     ActionExpr,
     AnyCharExpr,
     CharClassExpr,

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Backward-compatibility shim for core.structures.peg.
-Migrated to core.peg.runtime as part of Issue #437.
-Please import from core.peg or core.peg.runtime directly.
+Packrat PEG (Parsing Expression Grammar) framework for arxiv-security-papers.
+Provides linear-time parsing engine, AST combinators, and Ahead-of-Time (AOT) multi-target compiler.
+Conforms to DSN-25 specification.
+Zero external dependencies.
 """
 
 from __future__ import annotations
@@ -36,9 +37,6 @@ from core.peg.runtime import (
     Seq,
     Sequence,
     ZeroOrMore,
-    _diagnose_syntax_anomaly,
-    _humanize_token,
-    _levenshtein,
 )
 
 __all__ = [
@@ -70,7 +68,4 @@ __all__ = [
     "Seq",
     "Sequence",
     "ZeroOrMore",
-    "_diagnose_syntax_anomaly",
-    "_humanize_token",
-    "_levenshtein",
 ]

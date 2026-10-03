@@ -8,14 +8,22 @@ import io
 import json
 from unittest.mock import MagicMock, patch
 
-from src.intelligence.cli import _print_banner, _output_cycle_summary, run_cycle_command, build_parser
+from src.intelligence.cli import (
+    _output_cycle_summary,
+    _print_banner,
+    build_parser,
+    run_cycle_command,
+)
 
 
 def test_print_banner_outputs_strictly_to_stderr() -> None:
     with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
         with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
             _print_banner()
-            assert "UNIVERSAL AUTONOMOUS INTELLIGENCE ORCHESTRATOR" in mock_stderr.getvalue()
+            assert (
+                "UNIVERSAL AUTONOMOUS INTELLIGENCE ORCHESTRATOR"
+                in mock_stderr.getvalue()
+            )
             assert mock_stdout.getvalue() == ""
 
 
@@ -48,7 +56,9 @@ def test_cycle_command_json_separation(tmp_path: str) -> None:
     mock_engine.pir_manager.list_active_requirements.return_value = []
     mock_engine.get_current_topic_weights.return_value = {}
 
-    with patch("src.intelligence.cli.ClosedLoopIntelligenceEngine", return_value=mock_engine):
+    with patch(
+        "src.intelligence.cli.ClosedLoopIntelligenceEngine", return_value=mock_engine
+    ):
         with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
             with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
                 code = run_cycle_command(args)

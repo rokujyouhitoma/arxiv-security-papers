@@ -12,6 +12,7 @@ import argparse
 from typing import Any, Dict
 
 from pipeline.ingestion.adapters.arxiv_adapter import ArxivSourceAdapter
+
 from ..base import BaseCommand
 from ..stream import DiagnosticLogger, StreamWriter
 

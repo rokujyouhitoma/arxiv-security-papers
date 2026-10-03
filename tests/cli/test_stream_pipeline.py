@@ -19,7 +19,9 @@ from cli.commands.pdf_extract import PdfExtractCommand
 from cli.commands.summarize import SummarizeCommand
 
 
-def _run_stage(cmd: object, args_list: list[str], input_str: str) -> tuple[int, str, str]:
+def _run_stage(
+    cmd: object, args_list: list[str], input_str: str
+) -> tuple[int, str, str]:
     """Helper to execute a command with captured stdin, stdout, and stderr."""
     parser = argparse.ArgumentParser()
     getattr(cmd, "add_arguments")(parser)
@@ -98,17 +100,21 @@ def test_full_stream_pipeline_integration(tmp_path: str) -> None:
         catalog = json.load(f)
     assert "2401.1001" in catalog
     assert "2401.1002" in catalog
-    assert catalog["2401.1001"]["title"] == "Quantum Resistance in Cryptographic Protocols"
+    assert (
+        catalog["2401.1001"]["title"] == "Quantum Resistance in Cryptographic Protocols"
+    )
 
 
 def test_stream_pipeline_error_tolerance() -> None:
     malformed_input = (
         '{"arxiv_id": "2401.0001", "title": "Valid Record"}\n'
-        'NOT_A_VALID_JSON_LINE\n'
+        "NOT_A_VALID_JSON_LINE\n"
         '{"arxiv_id": "2401.0002", "title": "Second Valid Record"}\n'
     )
     okf_cmd = OkfConvertCommand()
-    code, out, err = _run_stage(okf_cmd, ["-f", "jsonl", "--on-error", "skip"], malformed_input)
+    code, out, err = _run_stage(
+        okf_cmd, ["-f", "jsonl", "--on-error", "skip"], malformed_input
+    )
     assert code == 0
     lines = out.strip().splitlines()
     assert len(lines) == 2

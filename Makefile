@@ -98,9 +98,9 @@ py_compile: activate ## py_compile syntax check for all python sources
 
 .PHONY: compile_grammars
 compile_grammars: activate ## Compile .peg grammar specifications to standalone Python parsers
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/peg_meta.peg -o src/core/structures/peg_compiler/generated_meta_parser.py
-	${VENV_BIN}/isort src/core/structures/peg_compiler/generated_meta_parser.py
-	${VENV_BIN}/black -q src/core/structures/peg_compiler/generated_meta_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/peg_meta.peg -o src/core/peg/compiler/generated_meta_parser.py
+	${VENV_BIN}/isort src/core/peg/compiler/generated_meta_parser.py
+	${VENV_BIN}/black -q src/core/peg/compiler/generated_meta_parser.py
 	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/turtle.peg -o src/ontology/generated_turtle_parser.py
 	${VENV_BIN}/isort src/ontology/generated_turtle_parser.py
 	${VENV_BIN}/black -q src/ontology/generated_turtle_parser.py
@@ -137,11 +137,11 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 
 .PHONY: build_cti_query_parser
 build_cti_query_parser: activate ## Build client-side CTI query PEG parser for web dashboard
-	PYTHONPATH=src ${VENV_PYTHON} -m core.structures.peg_compiler.cli grammars/graph_query.peg -o site/js/frameworks/cti-query-parser.js --target js --ast-only --no-runtime --class-name CTIQuery
+	PYTHONPATH=src ${VENV_PYTHON} -m core.peg.compiler grammars/graph_query.peg -o site/js/frameworks/cti-query-parser.js --target js --ast-only --no-runtime --class-name CTIQuery
 
 .PHONY: verify_peg_bootstrap
 verify_peg_bootstrap: activate ## Verify PEG AOT compiler self-hosting fixpoint
-	PYTHONPATH=src ${VENV_PYTHON} -m pytest tests/core/test_peg_bootstrap.py -v
+	PYTHONPATH=src ${VENV_PYTHON} -m pytest tests/core/peg/compiler/test_bootstrap.py -v
 
 .PHONY: build_js
 build_js: activate build_cti_query_parser ## Build minified JS bundles using pure Python pipeline & Closure Compiler

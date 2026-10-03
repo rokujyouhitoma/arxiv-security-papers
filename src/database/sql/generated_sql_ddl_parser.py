@@ -9,16 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any, List, Optional, Tuple
 
-from core.structures.peg import (
-    Choice,
-    Opt,
-    ParseContext,
-    Parser,
-    ParseResult,
-    Reg,
-    RuleRef,
-    Seq,
-)
+from core.peg import Choice, Opt, ParseContext, Parser, ParseResult, Reg, RuleRef, Seq
 
 # User header code
 
@@ -72,9 +63,6 @@ _ALLOWED_ENGINES: set[str] = {
     "fts5",
     "csv_table",
     "csv",
-    "slotted",
-    "slotted_page",
-    "pager",
 }
 
 

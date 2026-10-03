@@ -14,6 +14,7 @@ import os
 from typing import Any, Dict, Optional, Tuple, Union
 
 from pdf_engine.extractor import PurePdfTextExtractor
+
 from ..base import BaseCommand
 from ..stream import DiagnosticLogger, StreamErrorPolicy, StreamReader, StreamWriter
 

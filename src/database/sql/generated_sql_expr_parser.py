@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.structures.peg import (
+from core.peg import (
     Choice,
     Lit,
     OneOrMore,

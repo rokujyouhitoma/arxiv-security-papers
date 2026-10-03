@@ -13,6 +13,7 @@ from typing import Any, Dict
 
 from pipeline.transformer.structured_summarizer import generate_structured_summary
 from pipeline.transformer.translator import translate_title_ja
+
 from ..base import BaseCommand
 from ..stream import DiagnosticLogger, StreamErrorPolicy, StreamReader, StreamWriter
 

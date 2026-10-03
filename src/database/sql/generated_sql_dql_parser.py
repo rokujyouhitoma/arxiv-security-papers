@@ -10,7 +10,7 @@ import ast as py_ast
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.structures.peg import (
+from core.peg import (
     Choice,
     Lit,
     NotPred,

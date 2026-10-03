@@ -57,9 +57,7 @@ def test_summarize_command_stream_pipeline() -> None:
     cmd.add_arguments(parser)
     args = parser.parse_args(["--style", "structured"])
 
-    input_jsonl = (
-        '{"arxiv_id": "2401.0001", "title": "Hardware Trojans", "abstract": "Chip security"}\n'
-    )
+    input_jsonl = '{"arxiv_id": "2401.0001", "title": "Hardware Trojans", "abstract": "Chip security"}\n'
 
     with patch("sys.stdin", io.StringIO(input_jsonl)):
         with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:

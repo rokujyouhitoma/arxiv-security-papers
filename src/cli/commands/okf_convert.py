@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from pipeline.transformer.okf_serializer import generate_japanese_executive_summary
 from pipeline.transformer.tagger import determine_security_tags
 from pipeline.transformer.translator import translate_title_ja
+
 from ..base import BaseCommand
 from ..stream import DiagnosticLogger, StreamErrorPolicy, StreamReader, StreamWriter
 
@@ -50,27 +51,29 @@ def _build_okf_frontmatter(
     pub_date: str,
 ) -> str:
     """Renders Google OKF v0.2 YAML frontmatter block."""
-    now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_iso = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
     tag_lines = "\n".join([f'  - "{t}"' for t in tags])
     safe_title = title.replace('"', '\\"').replace("\n", " ")
     safe_title_ja = title_ja.replace('"', '\\"').replace("\n", " ")
     safe_desc = desc.replace('"', '\\"').replace("\n", " ")
     return (
-        f'---\n'
+        f"---\n"
         f'type: "security-paper"\n'
         f'title: "{safe_title}"\n'
         f'title_ja: "{safe_title_ja}"\n'
         f'description: "{safe_desc}"\n'
         f'resource: "{resource}"\n'
-        f'tags:\n{tag_lines}\n'
+        f"tags:\n{tag_lines}\n"
         f'timestamp: "{now_iso}"\n'
-        f'provenance:\n'
+        f"provenance:\n"
         f'  origin: "arxiv.org"\n'
         f'  published: "{pub_date}"\n'
-        f'trust:\n'
+        f"trust:\n"
         f'  attestation: "processed_by: arxiv-security-agent"\n'
         f'  confidence: "high"\n'
-        f'---'
+        f"---"
     )
 
 

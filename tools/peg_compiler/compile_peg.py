@@ -13,7 +13,7 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from core.structures.peg_compiler.cli import run_cli
+from core.peg.compiler.cli import run_cli
 
 if __name__ == "__main__":
     sys.exit(run_cli())

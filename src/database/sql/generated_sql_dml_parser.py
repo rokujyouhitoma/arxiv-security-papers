@@ -9,7 +9,7 @@ from __future__ import annotations
 import ast as py_ast
 from typing import Any, Dict, List, Optional, Tuple, cast
 
-from core.structures.peg import (
+from core.peg import (
     Choice,
     Lit,
     NotPred,

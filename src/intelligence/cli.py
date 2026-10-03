@@ -113,7 +113,9 @@ def _print_cycle_details(
             )
 
     if context.errors:
-        sys.stderr.write(f"    [!] Warnings/Errors encountered: {len(context.errors)}\n")
+        sys.stderr.write(
+            f"    [!] Warnings/Errors encountered: {len(context.errors)}\n"
+        )
 
     sys.stderr.write("-" * 80 + "\n")
     sys.stderr.flush()

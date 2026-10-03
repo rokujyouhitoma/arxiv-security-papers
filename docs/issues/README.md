@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **437** | PEG ランタイムおよびコンパイラの src/core/peg への移設と Backend 分離のアーキテクチャ刷新 | Refactoring | 2026-10-04 | [closed/437-migrate-peg-compiler-to-core-peg-with-backend-separation.md](closed/437-migrate-peg-compiler-to-core-peg-with-backend-separation.md) |
 | **436** | Unix ストリームパイプライン統合テストスイートおよびOSツール連携検証の実装 | Feature | 2026-10-04 | [closed/436-e2e-unix-stream-pipeline-test-suite.md](closed/436-e2e-unix-stream-pipeline-test-suite.md) |
 | **435** | src/intelligence/cli.py オーケストレータにおける診断ログ(stderr)とデータ(stdout)の完全分離 | Feature | 2026-10-04 | [closed/435-separate-orchestrator-stdout-and-stderr-streams.md](closed/435-separate-orchestrator-stdout-and-stderr-streams.md) |
 | **434** | manage.py db-index データベース・ベクトル検索インデクス登録シンクの実装 | Feature | 2026-10-04 | [closed/434-implement-manage-py-db-index-stream.md](closed/434-implement-manage-py-db-index-stream.md) |
