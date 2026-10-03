@@ -552,3 +552,58 @@ def test_no_runtime_missing_runtime_error(tmp_path: Path, node_bin: str) -> None
     data = json.loads(proc.stdout)
     assert data["error"] is not None
     assert "PEGRuntime not found" in data["error"]
+
+
+def test_cti_query_parser_and_evaluator_integration(node_bin: str) -> None:
+    """Verifies that generated CTIQueryParser and CTIQueryEvaluator execute in Node.js."""
+    parser_path = Path("site/js/frameworks/cti-query-parser.js")
+    evaluator_path = Path("site/js/frameworks/cti-query-evaluator.js")
+    assert parser_path.exists()
+    assert evaluator_path.exists()
+
+    test_script = f"""
+    const {{ CTIQueryParser }} = require({json.dumps(str(parser_path.resolve()))});
+    const {{ CTIQueryEvaluator }} = require({json.dumps(str(evaluator_path.resolve()))});
+
+    const parser = new CTIQueryParser();
+    const evaluator = new CTIQueryEvaluator();
+
+    const nodes = [
+      {{ id: 'paper:1', type: 'Paper', title: 'Zero Trust Study' }},
+      {{ id: 'cve:1', type: 'Vulnerability', severity: 'HIGH', label: 'CVE-2024-0001' }},
+      {{ id: 'cve:2', type: 'Vulnerability', severity: 'LOW', label: 'CVE-2024-0002' }},
+      {{ id: 'cwe:1', type: 'Weakness', label: 'CWE-79' }}
+    ];
+
+    const edges = [
+      {{ source: 'paper:1', target: 'cve:1', label: 'REFERENCES' }},
+      {{ source: 'cve:1', target: 'cwe:1', label: 'EXPLOITS' }}
+    ];
+
+    const res1 = evaluator.evaluateQuery(parser, 'type:Vulnerability AND severity:high', nodes, edges);
+    const res2 = evaluator.evaluateQuery(parser, '(p:Paper) -> (v:Vulnerability)', nodes, edges);
+    const res3 = evaluator.evaluateQuery(parser, '(p:Paper) -[:REFERENCES]-> (v:Vulnerability)', nodes, edges);
+    const res4 = evaluator.evaluateQuery(parser, '(p:Paper) ->', nodes, edges);
+
+    console.log(JSON.stringify({{
+      res1Count: res1.count,
+      res1Matched: Array.from(res1.matchedNodeIds),
+      res2Count: res2.count,
+      res3Count: res3.count,
+      res4Success: res4.success,
+      res4HasDiag: res4.diagnostics !== null
+    }}));
+    """
+    proc = subprocess.run(
+        [node_bin, "-e", test_script],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    data = json.loads(proc.stdout)
+    assert data["res1Count"] == 1
+    assert data["res1Matched"] == ["cve:1"]
+    assert data["res2Count"] == 2
+    assert data["res3Count"] == 2
+    assert data["res4Success"] is False
+    assert data["res4HasDiag"] is True

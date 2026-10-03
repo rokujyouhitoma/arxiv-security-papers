@@ -36,6 +36,9 @@ FRAMEWORK_SRCS = [
     "site/js/frameworks/hsm.js",
     "site/js/frameworks/modal.js",
     "site/js/frameworks/radix-trie.js",
+    "site/js/frameworks/peg-runtime.js",
+    "site/js/frameworks/cti-query-parser.js",
+    "site/js/frameworks/cti-query-evaluator.js",
     "site/js/frameworks/query-validator.js",
     "site/js/frameworks/graph-canvas.js",
 ]

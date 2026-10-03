@@ -7,6 +7,14 @@
 
 (function(global) {
   // --- Section 1: Embedded Packrat PEG Runtime Engine ---
+  /**
+   * @constructor
+   * @param {boolean} success
+   * @param {*} value
+   * @param {number} nextPos
+   * @param {?string=} errorMsg
+   * @param {boolean=} committed
+   */
   function ParseResult(success, value, nextPos, errorMsg, committed) {
     this.success = success;
     this.value = value;
@@ -15,6 +23,15 @@
     this.committed = committed || false;
   }
 
+  /**
+   * @constructor
+   * @param {string} message
+   * @param {number=} offset
+   * @param {number=} line
+   * @param {number=} col
+   * @param {Array<string>=} expectedTokens
+   * @param {string=} snippet
+   */
   function PEGSyntaxError(message, offset, line, col, expectedTokens, snippet) {
     this.name = 'PEGSyntaxError';
     var loc = offset !== undefined ? (' at offset ' + offset + ' (' + line + ':' + col + ')') : '';
@@ -28,6 +45,11 @@
   }
   PEGSyntaxError.prototype = Object.create(Error.prototype);
 
+  /**
+   * @constructor
+   * @param {string} text
+   * @param {number=} maxDepth
+   */
   function ParseContext(text, maxDepth) {
     this.text = text;
     this.length = text.length;
@@ -60,6 +82,11 @@
     return this.text.slice(start, end);
   };
 
+  /**
+   * @constructor
+   * @param {string=} name
+   * @param {boolean=} memoize
+   */
   function Parser(name, memoize) {
     this.name = name || 'Parser';
     this.memoize = memoize !== false;
@@ -174,6 +201,11 @@
   };
   Parser.prototype.map = function(fn) { return new MappedParser(this, fn); };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {string} expected
+   */
   function Literal(expected) {
     Parser.call(this, jsonExpected(expected), false);
     this.expected = expected;
@@ -189,6 +221,11 @@
   };
   function jsonExpected(s) { return JSON.stringify(s); }
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {!RegExp} pattern
+   */
   function Regex(pattern) {
     var flags = 'y';
     if (pattern.ignoreCase) flags += 'i';
@@ -209,6 +246,11 @@
     return new ParseResult(false, null, pos, 'Expected pattern /' + this.source + '/');
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {Array} parsers
+   */
   function Sequence(parsers) {
     Parser.call(this, 'Seq', true);
     this.parsers = parsers;
@@ -229,6 +271,11 @@
     return new ParseResult(true, values, currPos, null, isCommitted);
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {Array} alts
+   */
   function Choice(alts) {
     Parser.call(this, 'Choice', true);
     this.alts = alts;
@@ -245,6 +292,13 @@
     return new ParseResult(false, null, pos, lastErr || 'No choice alternative matched');
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {*} parser
+   * @param {number=} minCount
+   * @param {?number=} maxCount
+   */
   function Repetition(parser, minCount, maxCount) {
     Parser.call(this, 'Repeat', true);
     this.parser = parser;
@@ -268,6 +322,11 @@
     return new ParseResult(true, values, currPos);
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {*} parser
+   */
   function Optional(parser) {
     Parser.call(this, 'Opt', false);
     this.parser = parser;
@@ -279,6 +338,12 @@
     return new ParseResult(true, null, pos);
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {*} parser
+   * @param {boolean=} isPositive
+   */
   function Predicate(parser, isPositive) {
     Parser.call(this, isPositive ? 'AndPred' : 'NotPred', false);
     this.parser = parser;
@@ -296,12 +361,20 @@
     }
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   */
   function Cut() { Parser.call(this, '^', false); }
   Cut.prototype = Object.create(Parser.prototype);
   Cut.prototype.parseAt = function(ctx, pos) {
     return new ParseResult(true, null, pos, null, true);
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   */
   function AnyChar() { Parser.call(this, 'anyChar', false); }
   AnyChar.prototype = Object.create(Parser.prototype);
   AnyChar.prototype.parseAt = function(ctx, pos) {
@@ -312,6 +385,14 @@
     return new ParseResult(false, null, pos, 'Unexpected EOF');
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {Array} ranges
+   * @param {Array} singles
+   * @param {boolean=} inverted
+   * @param {string=} name
+   */
   function CharClass(ranges, singles, inverted, name) {
     Parser.call(this, name || 'CharClass', false);
     this.ranges = ranges;
@@ -352,6 +433,11 @@
     return new ParseResult(false, null, pos, 'Expected character matching ' + this.name);
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {string} name
+   */
   function RuleRef(name) {
     Parser.call(this, name, true);
     this.name = name;
@@ -364,6 +450,12 @@
     return this._inner._evalCached(ctx, pos);
   };
 
+  /**
+   * @constructor
+   * @extends {Parser}
+   * @param {*} parser
+   * @param {function(*): *} fn
+   */
   function MappedParser(parser, fn) {
     Parser.call(this, parser.name + '.map', parser.memoize);
     this.parser = parser;

@@ -2,7 +2,7 @@
 ID: 419
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] クライアントサイド CTI グラフクエリ DSL の AOT 生成とダッシュボード統合 (ID: 419)
@@ -101,11 +101,11 @@ Target Branch: `feat/419-client-side-cti-query-dsl-aot-integration`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `grammars/graph_query.peg` から `site/js/frameworks/cti-query-parser.js` が `--target js --ast-only --no-runtime` で決定論的に生成されること。
-- [ ] 生成パーサーが `peg-runtime.js` を外部解決し、Node.js およびブラウザ双方で例外なくロード・パース可能であること。
-- [ ] `site/js/frameworks/cti-query-evaluator.js` が実装され、フィルタクエリおよびパスクエリの双方がインメモリメッシュに対して $O(V + E)$ で正確に合致判定できること。
-- [ ] `site/js/dashboard.js` にてクエリ入力の事前検証とローカル評価が連動し、オフライン・即時プレビューが機能すること。
-- [ ] `Makefile` にビルドルールが追加され、`make build_js` が 0 エラーで完了すること。
-- [ ] `tests/test_peg_compiler_js.py` および `tests/web/test_frontend_frameworks.py` の全テストが PASS すること。
-- [ ] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。
+- [x] `grammars/graph_query.peg` から `site/js/frameworks/cti-query-parser.js` が `--target js --ast-only --no-runtime` で決定論的に生成されること。
+- [x] 生成パーサーが `peg-runtime.js` を外部解決し、Node.js およびブラウザ双方で例外なくロード・パース可能であること。
+- [x] `site/js/frameworks/cti-query-evaluator.js` が実装され、フィルタクエリおよびパスクエリの双方がインメモリメッシュに対して $O(V + E)$ で正確に合致判定できること。
+- [x] `site/js/dashboard.js` にてクエリ入力の事前検証とローカル評価が連動し、オフライン・即時プレビューが機能すること。
+- [x] `Makefile` にビルドルールが追加され、`make build_js` が 0 エラーで完了すること。
+- [x] `tests/test_peg_compiler_js.py` および `tests/web/test_frontend_frameworks.py` の全テストが PASS すること。
+- [x] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。
 

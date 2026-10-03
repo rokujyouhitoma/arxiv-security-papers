@@ -922,6 +922,28 @@
           badge.style.color = 'var(--accent-blue)';
         }
 
+        // Client-side PEG Validation & Local Fast Evaluation (Issue #419)
+        let localResult = null;
+        let ctiParser = null;
+        let ctiEvaluator = null;
+        if (typeof CTIQueryParser === 'function' && typeof CTIQueryEvaluator === 'function') {
+          try {
+            ctiParser = new CTIQueryParser();
+            ctiEvaluator = new CTIQueryEvaluator();
+            localResult = ctiEvaluator.evaluateQuery(ctiParser, query, ctiRawNodes, ctiRawEdges);
+            if (localResult && localResult.success && localResult.count > 0) {
+              activeTwoHopNodes = localResult.matchedNodeIds;
+              applyCtiFilter();
+              if (badge) {
+                badge.textContent = `⚡ ローカル一致: ${localResult.count} 件 (${localResult.matchedEdges.length} リンク)`;
+                badge.style.color = 'var(--accent-blue)';
+              }
+            }
+          } catch (e) {
+            // Non-blocking: continue to server query
+          }
+        }
+
         try {
           const queryUrl = '/api/graph/query?q=' + encodeURIComponent(query) + '&limit=100';
           const data = dashboardApiClient ? await dashboardApiClient.get(queryUrl) : await (await fetch(queryUrl)).json();
@@ -940,11 +962,24 @@
               badge.textContent = `✅ ${count} 件一致 (${ctiRawEdges.length} リンク)`;
               badge.style.color = 'var(--accent-green)';
             }
+          } else if (localResult && localResult.success && localResult.count > 0) {
+            if (badge) {
+              badge.textContent = `✅ ${localResult.count} 件一致 (ローカル)`;
+              badge.style.color = 'var(--accent-green)';
+            }
           }
         } catch (err) {
           if (activeGraphQuery === query && badge) {
-            badge.textContent = '❌ エラー';
-            badge.style.color = 'var(--accent-coral)';
+            if (localResult && localResult.success && localResult.count > 0) {
+              badge.textContent = `✅ ${localResult.count} 件一致 (オフライン)`;
+              badge.style.color = 'var(--accent-green)';
+            } else if (localResult && !localResult.success && localResult.diagnostics) {
+              badge.textContent = `⚠️ 構文エラー: ${localResult.diagnostics.errorMsg}`;
+              badge.style.color = 'var(--accent-coral)';
+            } else {
+              badge.textContent = '❌ エラー';
+              badge.style.color = 'var(--accent-coral)';
+            }
           }
         }
       };
@@ -2937,6 +2972,39 @@
           }
         }
       };
+
+      // Real-time CTI Query PEG Validation on Input (Issue #419)
+      const graphQueryInputEl = document.getElementById('graphQueryInput');
+      if (graphQueryInputEl) {
+        let queryValidateTimer = null;
+        graphQueryInputEl.addEventListener('input', function() {
+          const val = this.value.trim();
+          const badge = document.getElementById('graphQueryResultBadge');
+          if (queryValidateTimer) clearTimeout(queryValidateTimer);
+          if (!val) {
+            if (badge) {
+              badge.textContent = '全データ表示中';
+              badge.style.color = 'var(--fg-muted)';
+            }
+            return;
+          }
+          queryValidateTimer = setTimeout(function() {
+            if (typeof CTIQueryParser === 'function') {
+              try {
+                const parser = new CTIQueryParser();
+                const diag = parser.parseWithDiagnostics(val);
+                if (!diag.success && badge && val.length > 2) {
+                  badge.textContent = `⚠️ 構文確認中 (オフセット: ${diag.diagnostics.offset})`;
+                  badge.style.color = 'var(--accent-coral)';
+                } else if (diag.success && badge) {
+                  badge.textContent = '⚡ DSL構文OK (Enterで実行)';
+                  badge.style.color = 'var(--accent-blue)';
+                }
+              } catch (_) {}
+            }
+          }, 200);
+        });
+      }
 
       /**
        * Cross-tab Deep Linking Helper: Switch to Graph and prefill/execute query

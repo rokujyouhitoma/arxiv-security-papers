@@ -134,12 +134,16 @@ compile_grammars: activate ## Compile .peg grammar specifications to standalone 
 	${VENV_BIN}/black -q src/pdf_engine/generated_cmap_parser.py
 
 
+.PHONY: build_cti_query_parser
+build_cti_query_parser: activate ## Build client-side CTI query PEG parser for web dashboard
+	PYTHONPATH=src ${VENV_PYTHON} -m core.structures.peg_compiler.cli grammars/graph_query.peg -o site/js/frameworks/cti-query-parser.js --target js --ast-only --no-runtime --class-name CTIQuery
+
 .PHONY: verify_peg_bootstrap
 verify_peg_bootstrap: activate ## Verify PEG AOT compiler self-hosting fixpoint
 	PYTHONPATH=src ${VENV_PYTHON} -m pytest tests/core/test_peg_bootstrap.py -v
 
 .PHONY: build_js
-build_js: activate ## Build minified JS bundles using pure Python pipeline & Closure Compiler
+build_js: activate build_cti_query_parser ## Build minified JS bundles using pure Python pipeline & Closure Compiler
 	${VENV_PYTHON} tools/closure-compiler/setup_compiler.py
 	${VENV_PYTHON} scripts/compile_frontend.py
 
