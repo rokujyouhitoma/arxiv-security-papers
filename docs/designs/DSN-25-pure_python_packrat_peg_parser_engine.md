@@ -71,7 +71,7 @@
 - [13. Phase 6: Web フロントエンド連携 ＆ JavaScript コードジェネレータ基盤仕様 (Issue #417)](#13-phase-6-web-フロントエンド連携--javascript-コードジェネレータ基盤仕様-issue-417)
   - [13.1 背景と設計哲学 (Single Source of Truth)](#131-背景と設計哲学-single-source-of-truth)
   - [13.2 JavaScript コードジェネレータ (`JSCodeGenerator`) アーキテクチャ](#132-javascript-コードジェネレータ-jscodegenerator-アーキテクチャ)
-  - [13.3 CLI `--target js` オプション仕様](#133-cli---target-js-オプション仕様)
+  - [13.3 CLI `--target js` および `--ast-only` オプション仕様](#133-cli---target-js-および---ast-only-オプション仕様)
   - [13.4 Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)](#134-web-フロントエンド-peg-インラインパーサー換装-sitejsevaluatorjs)
   - [13.5 完了条件 (DoD for Phase 6)](#135-完了条件-dod-for-phase-6)
 
@@ -870,16 +870,21 @@ Bryan Ford 氏の原著論文 *"Parsing Expression Grammars: A Recognition-Based
 3. **Xenon Rank A 適合設計**:
    - AST 式ノード（`StrLiteral`, `CharClass`, `Seq`, `Alt`, `Rep`, `Opt`, `Not`, `And`, `RuleRef`）のコード生成ロジックを独立したヘルパー関数に分割し、循環的複雑度（Cyclomatic Complexity）を極小化。プロジェクト標準の静的解析（Xenon Rank A）を達成。
 
-### 13.3 CLI `--target js` オプション仕様
+### 13.3 CLI `--target js` および `--ast-only` オプション仕様
 
-[`src/core/structures/peg_compiler/cli.py`](../../src/core/structures/peg_compiler/cli.py) にターゲット言語指定オプションが統合された。
+[`src/core/structures/peg_compiler/cli.py`](../../src/core/structures/peg_compiler/cli.py) にターゲット言語指定および構文木抽象化オプションが統合された。
 
 - **構文**:
   ```bash
-  python -m src.core.structures.peg_compiler <grammar.peg> -o <output_file> [--target {python,js}] [--class-name <ClassName>] [--no-optimize]
+  python -m src.core.structures.peg_compiler <grammar.peg> -o <output_file> [--target {python,js}] [--class-name <ClassName>] [--no-optimize] [--ast-only]
   ```
 - **ターゲット推論**:
   - `--target` が明示されない場合、出力先ファイル名の拡張子が `.js` であれば自動的に JavaScript 生成モード（`--target js`）を選択。
+- **AST-Only 汎用構文木モード (`--ast-only`) (Issue #423)**:
+  - 文法定義内のセマンティックアクション `{ ... }`（Python 固有のコンストラクタや関数呼出、タプル等）を自動バイパス。
+  - 各非終端規則の評価結果を `.map(function(val) { return { type: ruleName, value: val }; })` で自動ラップし、決定論的でクリーンな階層型 JSON/AST を出力。Python と JavaScript 間の文法 Single Source of Truth を確立。
+- **インライン正規表現フラグ透過変換**:
+  - Python 構文の `(?i)`, `(?m)`, `(?s)` インラインフラグを AOT コンパイル時に自動抽出し、JavaScript RegExp フラグへ変換。内蔵ランタイムの sticky（`y`）モードと協調動作させ、キーワードの大文字小文字無視マッチを完全保証。
 - **最適化パス連携**:
   - `GrammarOptimizer`（Phase 5）によるリテラル畳み込み・左因数分解・冗長枝刈りパスを経由した最適化済 AST をそのまま JavaScript へコンパイル可能。
 
