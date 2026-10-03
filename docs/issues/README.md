@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **418** | マークダウン・ブロック構文解析 (MarkdownLexer) の PEG 化と頑健性向上 | Feature | High | Open (New) | [418-markdown-block-lexer-peg-migration.md](418-markdown-block-lexer-peg-migration.md) |
+| **418** | マークダウン・ブロック構文解析 (MarkdownLexer) の PEG 化と頑健性向上 | Feature | High | Open (In Progress) | [418-markdown-block-lexer-peg-migration.md](418-markdown-block-lexer-peg-migration.md) |
 | **419** | クライアントサイド CTI グラフクエリ DSL の AOT 生成とダッシュボード統合 | Feature | High | Closed (Completed) | [419-client-side-cti-query-dsl-aot-integration.md](closed/419-client-side-cti-query-dsl-aot-integration.md) |
 | **420** | 検索窓における Lucene PEG リアルタイム構文検証・エラーハイライト・オートコンプリートの実装 | Feature | High | Closed (Completed) | [420-search-input-realtime-peg-validation-and-autocomplete.md](closed/420-search-input-realtime-peg-validation-and-autocomplete.md) |
 | **421** | クライアントサイドルーターの URL パス＆クエリ構文解析の PEG 化 | Feature | High | Open (New) | [421-client-router-url-path-query-peg-parser.md](421-client-router-url-path-query-peg-parser.md) |

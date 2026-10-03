@@ -2,17 +2,20 @@
 ID: 418
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Open (In Progress)
 ---
 
 # [FEAT/ENH] マークダウン・ブロック構文解析 (MarkdownLexer) の PEG 化と頑健性向上 (ID: 418)
 
 ## 1. 概要 / Summary
 
-Web フロントエンドのマークダウンコンパイラ（`site/js/lexer.js`）は、現在行単位の文字列判定と正規表現（`startsWith('```')`, `match(/^#{1,6}\s+/)`, `split('|')` など）でトークナイズを行っている。
-特にテーブルセル内のエスケープされたパイプ（`\|`）やインラインコード内のパイプ（`` `|` ``）で列数が狂う問題、複数行引用やリストのネスト構造が欠落する問題が存在する。
+Web フロントエンドのマークダウンコンパイラ（`site/js/lexer.js`）は、これまで単純な行単位の文字列判定と正規表現（`startsWith('```')`, `match(/^#{1,6}\s+/)`, `split('|')` など）でブロックトークナイズを行っていた。
+このため、特に以下の課題が存在していた：
+1. **テーブルセル内のパイプ保護欠落**: セル内のエスケープされたパイプ（`\|`）やインラインコードスパン内のパイプ（`` `|` ``）で列数が狂い、テーブルレイアウトが完全に崩壊する。
+2. **リスト構文の限定性**: 番号付きリスト（`1. `, `2. `）や先頭インデントの対応が欠落している。
+3. **ReDoS リスク**: 複雑な行正規表現による潜在的なバックトラッキングリスク。
 
-本 Issue では、ブロック構文解析（FencedCodeBlock, Heading, Table, List, Blockquote, Paragraph, HR）を PEG 文法（または PEG コンビネータ）を用いて再構築し、Issue #417 で PEG 化された `evaluator.js`（インラインパーサー）と完全に整合する決定論的な 2 パス Markdown コンパイラを確立する。
+本 Issue では、ブロック構文解析（FencedCodeBlock, Heading, Table, List, Blockquote, Paragraph, HR）のトークナイズ処理に PEG (Parsing Expression Grammar) コンビネータおよび構文規則を導入し、特にテーブル行パースにおいてエスケープパイプおよびインラインコードスパンを決定論的に保護する。これにより、Issue #417 で PEG 化された `evaluator.js`（インラインパーサー）と完全に整合する決定論的な 2 パス Markdown コンパイラを確立する。
 
 ---
 
@@ -22,39 +25,74 @@ Web フロントエンドのマークダウンコンパイラ（`site/js/lexer.j
   - [`docs/designs/DSN-25-pure_python_packrat_peg_parser_engine.md`](../designs/DSN-25-pure_python_packrat_peg_parser_engine.md) (第13節 Phase 6: Web フロントエンド連携 ＆ JavaScript コードジェネレータ基盤仕様)
 - **関連 Issue**:
   - Issue #417: WebフロントエンドJS向けPEGインラインパーサー換装およびPEG AOTコンパイラ JavaScriptコードジェネレータ基盤の実装
+  - Issue #419: クライアントサイド CTI グラフクエリ DSL の AOT 生成とダッシュボード統合
+  - Issue #420: 検索窓における Lucene PEG リアルタイム構文検証・エラーハイライト・オートコンプリートの実装
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [`site/js/lexer.js`](../../site/js/lexer.js)（ブロックパーサーの PEG コンビネータ刷新）
+### フロントエンド JavaScript
+- [ ] [`site/js/lexer.js`](../../site/js/lexer.js)（PEG ベースのテーブル行・ブロックトークナイザー実装）
 - [ ] [`site/js/parser.js`](../../site/js/parser.js)（AST 構築とノード階層構造の整合）
 - [ ] [`site/js/markdown_compiler.js`](../../site/js/markdown_compiler.js)（パイプラインオーケストレーション）
-- [ ] [`site/app-min.js`](../../site/app-min.js)（Closure Compiler ビルド成果物）
-- [ ] [`site/dashboard-min.js`](../../site/dashboard-min.js)（Closure Compiler ビルド成果物）
-- [ ] [`tests/web/test_frontend_frameworks.py`](../../tests/web/test_frontend_frameworks.py)（ブロックパース単体・回帰テスト）
+- [ ] [`site/app-min.js`](../../site/app-min.js) & [`site/dashboard-min.js`](../../site/dashboard-min.js)（Closure Compiler ビルド成果物）
+
+### テストスイート & ビルド
+- [ ] [`tests/web/test_frontend_frameworks.py`](../../tests/web/test_frontend_frameworks.py)（エスケープパイプを含むテーブル、番号付きリスト、ブロックパースの自動テスト追加）
+- [ ] [`Makefile`](../../Makefile)（品質ゲート確認）
 
 ---
 
-## 4. 実装方針 / Implementation Plan
+## 4. セキュリティ分析 (STRIDE Threat Model) と防御策
+
+| 脅威分類 | 潜在的リスク | 防御策 |
+| :---: | --- | --- |
+| **Spoofing** | 不正な文字シーケンスによる別ブロック要素の偽装 | PEG の先頭一致・優先順序（Ordered Choice）により、コードブロック（最優先）、テーブル、見出し、リスト、パラグラフを厳格に順序付けて分類。 |
+| **Tampering** | エスケープ文字やパイプによるテーブル構造の改ざん | セルパーサーにおいてエスケープシーケンス（`\|`）とコードスパン（`` `...` ``）を独立した PEG 規則で認識・保護し、列構造を厳密に維持。 |
+| **Repudiation** | トークナイズ失敗時の不透明性 | 不正なテーブル行や不整合なブロックは安全に PARAGRAPH トークンへフォールバックし、パース例外によるレンダリング停止を防止。 |
+| **Information Disclosure** | パース例外によるスタックトレースの漏洩 | 例外を捕捉し、安全なフォールバックトークン列を返却。 |
+| **Denial of Service (ReDoS)** | ネストした記号や巨大テキストによるブラウザフリーズ | 正規表現バックトラッキングを排除し、Packrat PEG / 単一パス線形スキャンによる $O(N)$ パース時間を保証。 |
+| **Elevation of Privilege** | 特権昇格 / HTML インジェクション | セルおよびブロックの生テキストを安全に保持し、後段の `evaluator.js` における HTML エスケープと連携。 |
+
+---
+
+## 5. 実装方針 / Implementation Plan
 
 Target Branch: `feat/418-markdown-block-lexer-peg-migration`
 
-1. **テーブルパーサーの PEG 化**:
-   - 行を行単位でパースする際、セル境界パイプ（`|`）とエスケープ（`\|`）、コードスパン保護を厳密に区別する PEG 規則を導入。
-2. **ブロック要素の宣言的トークナイズ**:
-   - FencedCodeBlock（Mermaid 含む）、見出し（H1〜H6）、水平線（HR）、引用（Blockquote）、リスト（UL/OL）、段落（Paragraph）を PEG 規則で構造化。
-3. **AST 構築 (`parser.js`) の連携**:
-   - トークンストリームから階層型 AST を生成する処理の型定義・整合性を担保。
-4. **テスト作成 & ビルド**:
-   - `tests/web/test_frontend_frameworks.py` にエスケープパイプを含むテーブル、ネスト引用のテストケースを追加。
-   - `make build_js` で Closure Compiler 最適化ビルドを実行。
+### 5.1 PEG テーブル行パーサーの実装 (`site/js/lexer.js`)
+1. **PEG ランタイム連携**:
+   - `window.Application.frameworks.peg`、`require('./frameworks/query-validator.js').peg`、または内蔵コンビネータにより、PEG 規則を構築。
+2. **テーブルセル抽出の PEG 規則**:
+   - `EscapedPipe <- '\\|'` → エスケープされたパイプとしてセル内に保持。
+   - `CodeSpan <- '`' [^`\n]* '`'` → インラインコードスパン内のパイプは区切り文字とみなさない。
+   - `CellText <- [^|`\\\n]+` → 通常文字の連続。
+   - `CellItem <- EscapedPipe / CodeSpan / CellText / .`
+   - `Cell <- CellItem*`
+   - 行全体を `|` で区切りつつ各セルを正確に抽出。
+3. **ヘッダー・セパレータ行判定**:
+   - `| :---: | --- |` 等の境界区切り行を PEG で判定し、アライメント情報を正確に識別。
+
+### 5.2 ブロック要素のトークナイズ拡充
+1. **リストの拡張**:
+   - 箇条書き（`- `, `* `, `+ `）に加え、番号付きリスト（`1. `, `2. ` 等）をサポート。
+2. **Fenced Code Block & Mermaid**:
+   - 言語指定（` ```mermaid `, ` ```python ` 等）の抽出とコード行の完全保持。
+3. **見出し・引用・水平線**:
+   - H1〜H6、`>` 引用、`---` / `***` 水平線の正確なトークナイズ。
+
+### 5.3 テスト & ビルド検証
+1. `tests/web/test_frontend_frameworks.py` にテーブルエスケープパイプ（`\|`）およびコード内パイプ（`` `a | b` ``）のパース検証テストを追加。
+2. `make build_js`（Google Closure Compiler `strict=True`）による 0 エラーコンパイルの確認。
+3. `make check`（フォーマット、静的解析、全テスト）の 100% PASS を確認。
 
 ---
 
-## 5. 完了条件 / Success Criteria (DoD)
+## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `site/js/lexer.js` が PEG コンビネータベースで動作し、エスケープパイプ `\|` やインラインコードを含むテーブルが正確にパースされること。
-- [ ] 見出し、コードブロック、リスト、引用、段落のパースが回帰なく動作すること。
-- [ ] `make build_js` が 0 エラーで完了し、`app-min.js` および `dashboard-min.js` に正常にバンドルされること。
-- [ ] `tests/web/test_frontend_frameworks.py` のテストがすべて PASS すること。
+- [ ] `site/js/lexer.js` に PEG ベースのテーブル行パーサーが実装され、エスケープパイプ `\|` やインラインコード内のパイプを含むテーブルが正確にパースされること。
+- [ ] 番号付きリスト（`1. ` 等）を含むリストおよび FencedCodeBlock, Heading, Blockquote, HR が回帰なく動作すること。
+- [ ] `make build_js`（Google Closure Compiler）が 0 エラーで完了し、`site/app-min.js` および `site/dashboard-min.js` が正常に生成されること。
+- [ ] `tests/web/test_frontend_frameworks.py` の自動テストが全件 PASS すること。
+- [ ] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。
