@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **430** | manage.py fetch 論文メタデータ取得ストリームサブコマンドの実装 | Feature | New | [430-implement-manage-py-fetch-stream.md](430-implement-manage-py-fetch-stream.md) |
 | **431** | manage.py pdf-extract 全文テキスト抽出ストリームフィルタの実装 | Feature | New | [431-implement-manage-py-pdf-extract-stream.md](431-implement-manage-py-pdf-extract-stream.md) |
 | **432** | manage.py okf-convert Google OKF構造化ストリームフィルタの実装 | Feature | New | [432-implement-manage-py-okf-convert-stream.md](432-implement-manage-py-okf-convert-stream.md) |
 | **433** | manage.py summarize 日本語エグゼクティブ要約ストリームフィルタの実装 | Feature | New | [433-implement-manage-py-summarize-stream.md](433-implement-manage-py-summarize-stream.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **430** | manage.py fetch 論文メタデータ取得ストリームサブコマンドの実装 | Feature | 2026-10-04 | [closed/430-implement-manage-py-fetch-stream.md](closed/430-implement-manage-py-fetch-stream.md) |
 | **429** | CLI ストリーム基底プロトコルと JSONL 入出力ハンドラーの実装 | Feature | 2026-10-04 | [closed/429-implement-cli-stream-base-and-jsonl-protocol.md](closed/429-implement-cli-stream-base-and-jsonl-protocol.md) |
 | **428** | Unix哲学的ツール間連携（標準入出力・JSON Linesストリーム）の要求仕様・高位設計への統合 | Feature | 2026-10-04 | [closed/428-incorporate-unix-composition-into-requirements-and-design.md](closed/428-incorporate-unix-composition-into-requirements-and-design.md) |
 | **422** | Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 | Feature | 2026-10-03 | [closed/422-mermaid-diagram-pre-validation-and-sanitizer.md](closed/422-mermaid-diagram-pre-validation-and-sanitizer.md) |

@@ -63,6 +63,12 @@ def _load_migrations() -> Type[BaseCommand]:
     return cmd_cls
 
 
+def _load_fetch() -> Type[BaseCommand]:
+    from .commands.fetch import FetchCommand
+
+    return FetchCommand
+
+
 _BUILTINS_REGISTERED = False
 
 
@@ -75,4 +81,5 @@ def _ensure_builtins() -> None:
     _COMMAND_LOADERS["inspect"] = _load_inspect
     _COMMAND_LOADERS["dbsync"] = _load_dbsync
     _COMMAND_LOADERS["migrations"] = _load_migrations
+    _COMMAND_LOADERS["fetch"] = _load_fetch
     _BUILTINS_REGISTERED = True
