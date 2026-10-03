@@ -21,8 +21,8 @@
 | **427** | PEG AOT コンパイラにおける --no-runtime モジュール化と外部ランタイム共有の導入 | Feature | 2026-10-03 | [closed/427-peg-compiler-cli-modular-runtime-options.md](closed/427-peg-compiler-cli-modular-runtime-options.md) |
 | **426** | JS 生成パーサーにおける PEGSyntaxError 診断情報拡充と parseWithDiagnostics API の実装 | Feature | 2026-10-03 | [closed/426-peg-js-syntax-error-diagnostics-and-tolerant-api.md](closed/426-peg-js-syntax-error-diagnostics-and-tolerant-api.md) |
 
-| **425** | JS コードジェネレータにおける CharClass の文字コード範囲判定化と ReDoS 根絶 | Feature | 2026-10-03 | [425-peg-js-charclass-range-evaluation-and-redos-eradication.md](closed/425-peg-js-charclass-range-evaluation-and-redos-eradication.md) |
-| **424** | 内蔵 JavaScript PEG ランタイムへの Warth ('08) 左再帰解消アルゴリズムの移植 | Feature | 2026-10-03 | [424-peg-js-runtime-warth-left-recursion.md](closed/424-peg-js-runtime-warth-left-recursion.md) |
+| **425** | JS コードジェネレータにおける CharClass の文字コード範囲判定化と ReDoS 根絶 | Feature | 2026-10-03 | [closed/425-peg-js-charclass-range-evaluation-and-redos-eradication.md](closed/425-peg-js-charclass-range-evaluation-and-redos-eradication.md) |
+| **424** | 内蔵 JavaScript PEG ランタイムへの Warth ('08) 左再帰解消アルゴリズムの移植 | Feature | 2026-10-03 | [closed/424-peg-js-runtime-warth-left-recursion.md](closed/424-peg-js-runtime-warth-left-recursion.md) |
 | **423** | PEG AOT コンパイラにおける --ast-only 汎用構文木生成とアクション抽象化の実装 | Feature | 2026-10-03 | [423-peg-compiler-ast-only-mode-and-action-abstraction.md](closed/423-peg-compiler-ast-only-mode-and-action-abstraction.md) |
 | **417** | WebフロントエンドJS向けPEGインラインパーサー換装およびPEG AOTコンパイラ JavaScriptコードジェネレータ基盤の実装 (Phase 1 & Phase 2) | Feature | 2026-10-03 | [417-frontend-peg-inline-parser-and-js-aot-codegen.md](closed/417-frontend-peg-inline-parser-and-js-aot-codegen.md) |
 | **416** | 空 authors および OKF フロントマター PEG パース失敗による「unknown」タイトルおよびフロントマター漏洩要約の解消 | Bug | 2026-10-03 | [416-fix-okf-empty-authors-and-frontmatter-parser.md](closed/416-fix-okf-empty-authors-and-frontmatter-parser.md) |
