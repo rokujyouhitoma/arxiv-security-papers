@@ -75,6 +75,12 @@ def _load_pdf_extract() -> Type[BaseCommand]:
     return PdfExtractCommand
 
 
+def _load_okf_convert() -> Type[BaseCommand]:
+    from .commands.okf_convert import OkfConvertCommand
+
+    return OkfConvertCommand
+
+
 _BUILTINS_REGISTERED = False
 
 
@@ -89,4 +95,5 @@ def _ensure_builtins() -> None:
     _COMMAND_LOADERS["migrations"] = _load_migrations
     _COMMAND_LOADERS["fetch"] = _load_fetch
     _COMMAND_LOADERS["pdf-extract"] = _load_pdf_extract
+    _COMMAND_LOADERS["okf-convert"] = _load_okf_convert
     _BUILTINS_REGISTERED = True
