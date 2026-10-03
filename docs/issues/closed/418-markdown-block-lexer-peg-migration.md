@@ -2,7 +2,7 @@
 ID: 418
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] マークダウン・ブロック構文解析 (MarkdownLexer) の PEG 化と頑健性向上 (ID: 418)
@@ -91,8 +91,8 @@ Target Branch: `feat/418-markdown-block-lexer-peg-migration`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `site/js/lexer.js` に PEG ベースのテーブル行パーサーが実装され、エスケープパイプ `\|` やインラインコード内のパイプを含むテーブルが正確にパースされること。
-- [ ] 番号付きリスト（`1. ` 等）を含むリストおよび FencedCodeBlock, Heading, Blockquote, HR が回帰なく動作すること。
-- [ ] `make build_js`（Google Closure Compiler）が 0 エラーで完了し、`site/app-min.js` および `site/dashboard-min.js` が正常に生成されること。
-- [ ] `tests/web/test_frontend_frameworks.py` の自動テストが全件 PASS すること。
-- [ ] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。
+- [x] `site/js/lexer.js` に PEG ベースのテーブル行パーサーが実装され、エスケープパイプ `\|` やインラインコード内のパイプを含むテーブルが正確にパースされること。
+- [x] 番号付きリスト（`1. ` 等）を含むリストおよび FencedCodeBlock, Heading, Blockquote, HR が回帰なく動作すること。
+- [x] `make build_js`（Google Closure Compiler）が 0 エラーで完了し、`site/app-min.js` および `site/dashboard-min.js` が正常に生成されること。
+- [x] `tests/web/test_frontend_frameworks.py` の自動テストが全件 PASS すること。
+- [x] Xenon Rank A、flake8、mypy --strict src を 100% パスすること。

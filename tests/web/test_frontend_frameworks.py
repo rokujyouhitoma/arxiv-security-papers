@@ -848,3 +848,101 @@ def test_query_validator_suggest_and_diagnostics() -> None:
     assert data["hasTypoCorrection"] is True
     assert data["hasOperatorSuggestion"] is True
     assert data["hasQuoteSuggestion"] is True
+
+
+def test_markdown_lexer_peg_table_and_list_parsing() -> None:
+    """Verifies that site/js/lexer.js uses resilient PEG parsing for tables
+    and handles ordered/unordered lists (Issue 418).
+    """
+    import json
+    import shutil
+    import subprocess
+
+    import pytest
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        pytest.skip("Node.js runtime not installed")
+
+    script = """
+    const { MarkdownLexer } = require('./site/js/lexer.js');
+    const { MarkdownParser } = require('./site/js/parser.js');
+    const { MarkdownEvaluator } = require('./site/js/evaluator.js');
+    const { MarkdownRenderer } = require('./site/js/renderer.js');
+
+    const lexer = new MarkdownLexer();
+    const parser = new MarkdownParser();
+    const evaluator = new MarkdownEvaluator();
+    const renderer = new MarkdownRenderer();
+
+    function renderMarkdown(md) {
+        const tokens = lexer.tokenize(md);
+        const ast = parser.parse(tokens);
+        const evaluated = evaluator.evaluate(ast);
+        return renderer.render(evaluated).html;
+    }
+
+    // 1. Table row cell splitting with escaped pipes and code spans
+    const row1 = '| Header 1 | Header 2 \\\\| with pipe | `code | span` |';
+    const cells1 = lexer.parseTableRow(row1);
+
+    // 2. Table row without outer boundary pipes
+    const row2 = 'Col A | Col B \\\\| Escaped | Normal';
+    const cells2 = lexer.parseTableRow(row2);
+
+    // 3. Separator row detection
+    const isSep1 = lexer.isTableSeparator('| --- | :---: | ---: |');
+    const isSep2 = lexer.isTableSeparator('| not | separator |');
+
+    // 4. Tokenize complete table
+    const tableMd = [
+        '| Metric | Value | Description |',
+        '| :--- | :---: | ---: |',
+        '| A | 100 | First \\\\| item |',
+        '| B | 200 | `x | y` calculation |'
+    ].join('\\n');
+    const tableTokens = lexer.tokenize(tableMd);
+
+    // 5. Ordered and unordered lists
+    const orderedMd = '1. Step One\\n2. Step Two\\n3. Step Three';
+    const unorderedMd = '- Item Alpha\\n- Item Beta';
+    const orderedTokens = lexer.tokenize(orderedMd);
+    const unorderedTokens = lexer.tokenize(unorderedMd);
+
+    // 6. Renderer output verification
+    const renderedOrdered = renderMarkdown(orderedMd);
+    const renderedUnordered = renderMarkdown(unorderedMd);
+    const renderedTable = renderMarkdown(tableMd);
+
+    console.log(JSON.stringify({
+        cells1,
+        cells2,
+        isSep1,
+        isSep2,
+        tableTokenTypes: tableTokens.map(t => t.type),
+        orderedTokenType: orderedTokens[0].type,
+        orderedFlag: orderedTokens[0].ordered,
+        unorderedFlag: unorderedTokens[0].ordered,
+        renderedOrderedHasOl: renderedOrdered.includes('<ol class="md-list">'),
+        renderedUnorderedHasUl: renderedUnordered.includes('<ul class="md-list">'),
+        renderedTableHasTable: renderedTable.includes('<table class="md-table">')
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["cells1"] == ["Header 1", "Header 2 \\| with pipe", "`code | span`"]
+    assert data["cells2"] == ["Col A", "Col B \\| Escaped", "Normal"]
+    assert data["isSep1"] is True
+    assert data["isSep2"] is False
+    assert data["tableTokenTypes"] == ["TABLE"]
+    assert data["orderedTokenType"] == "LIST"
+    assert data["orderedFlag"] is True
+    assert data["unorderedFlag"] is False
+    assert data["renderedOrderedHasOl"] is True
+    assert data["renderedUnorderedHasUl"] is True
+    assert data["renderedTableHasTable"] is True

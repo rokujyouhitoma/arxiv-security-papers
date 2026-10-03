@@ -38,8 +38,9 @@ class MarkdownRenderer {
           break;
 
         case 'LIST':
+          const listTag = ev.ordered ? 'ol' : 'ul';
           const itemsHtml = ev.items.map(item => `<li>${item}</li>`).join('');
-          htmlParts.push(`<ul class="md-list">${itemsHtml}</ul>`);
+          htmlParts.push(`<${listTag} class="md-list">${itemsHtml}</${listTag}>`);
           break;
 
         case 'TABLE':
