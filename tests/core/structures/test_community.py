@@ -14,7 +14,9 @@ import pytest
 if "src" not in sys.path:
     sys.path.insert(
         0,
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src")),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "src")
+        ),
     )
 
 from core.structures import LouvainCommunityDetector, detect_louvain_communities

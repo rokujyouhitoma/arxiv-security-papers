@@ -20,7 +20,7 @@ class TestPyNYTProfCLIE2E(unittest.TestCase):
 
     def setUp(self):
         self.workspace_root = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         )
         self.launcher_prof = os.path.join(self.workspace_root, "tools", "pynytprof")
         self.launcher_html = os.path.join(self.workspace_root, "tools", "pynytprofhtml")

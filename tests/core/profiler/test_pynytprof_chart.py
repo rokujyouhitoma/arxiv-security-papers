@@ -259,7 +259,9 @@ class TestPyNYTProfChart:
 
             # tools/pynytprofchart スクリプトの実行確認
             chart_tool = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                ),
                 "tools",
                 "pynytprofchart",
             )
