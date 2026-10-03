@@ -11,7 +11,7 @@
 | **420** | 検索窓における Lucene PEG リアルタイム構文検証・エラーハイライト・オートコンプリートの実装 | Feature | High | Open (New) | [420-search-input-realtime-peg-validation-and-autocomplete.md](420-search-input-realtime-peg-validation-and-autocomplete.md) |
 | **421** | クライアントサイドルーターの URL パス＆クエリ構文解析の PEG 化 | Feature | High | Open (New) | [421-client-router-url-path-query-peg-parser.md](421-client-router-url-path-query-peg-parser.md) |
 | **422** | Mermaid ダイアグラムのクライアント側事前構文検証およびフォールバックサニタイザーの実装 | Feature | High | Open (New) | [422-mermaid-diagram-pre-validation-and-sanitizer.md](422-mermaid-diagram-pre-validation-and-sanitizer.md) |
-| **423** | PEG AOT コンパイラにおける --ast-only 汎用構文木生成とアクション抽象化の実装 | Feature | High | Open (New) | [423-peg-compiler-ast-only-mode-and-action-abstraction.md](423-peg-compiler-ast-only-mode-and-action-abstraction.md) |
+| **423** | PEG AOT コンパイラにおける --ast-only 汎用構文木生成とアクション抽象化の実装 | Feature | High | Open (In Progress) | [423-peg-compiler-ast-only-mode-and-action-abstraction.md](423-peg-compiler-ast-only-mode-and-action-abstraction.md) |
 | **424** | 内蔵 JavaScript PEG ランタイムへの Warth ('08) 左再帰解消アルゴリズムの移植 | Feature | High | Open (New) | [424-peg-js-runtime-warth-left-recursion.md](424-peg-js-runtime-warth-left-recursion.md) |
 | **425** | JS コードジェネレータにおける CharClass の文字コード範囲判定化と ReDoS 根絶 | Feature | High | Open (New) | [425-peg-js-charclass-range-evaluation-and-redos-eradication.md](425-peg-js-charclass-range-evaluation-and-redos-eradication.md) |
 | **426** | JS 生成パーサーにおける PEGSyntaxError 診断情報拡充と parseWithDiagnostics API の実装 | Feature | High | Open (New) | [426-peg-js-syntax-error-diagnostics-and-tolerant-api.md](426-peg-js-syntax-error-diagnostics-and-tolerant-api.md) |
