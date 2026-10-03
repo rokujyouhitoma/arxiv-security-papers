@@ -26,6 +26,7 @@ from core.structures.peg_compiler.ast_nodes import (
 )
 from core.structures.peg_compiler.cli import compile_grammar_to_code, run_cli
 from core.structures.peg_compiler.codegen import CodeGenerator
+from core.structures.peg_compiler.codegen_js import JSCodeGenerator
 from core.structures.peg_compiler.meta_grammar import MetaGrammarParser
 
 __all__ = [
@@ -46,6 +47,7 @@ __all__ = [
     "GrammarDef",
     "MetaGrammarParser",
     "CodeGenerator",
+    "JSCodeGenerator",
     "compile_grammar_to_code",
     "run_cli",
 ]

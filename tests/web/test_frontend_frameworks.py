@@ -737,3 +737,49 @@ def test_mcp_tab_scene_director_registration() -> None:
     assert (
         "syncMcpSandboxState" in app_js_text
     ), "site/app.js must call syncMcpSandboxState in mcpTab onEnter lifecycle"
+
+
+def test_markdown_evaluator_peg_inline_parsing() -> None:
+    """Verifies that site/js/evaluator.js uses PEG parser for inline syntax (Issue 417)."""
+    import json
+    import shutil
+    import subprocess
+
+    import pytest
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        pytest.skip("Node.js runtime not installed")
+
+    script = """
+    const { MarkdownEvaluator } = require('./site/js/evaluator.js');
+    const evaluator = new MarkdownEvaluator();
+
+    const sampleNode = {
+        type: 'PARAGRAPH',
+        payload: {
+            content: 'Check `**code with bold**` and \\\\*escaped\\\\* plus [**Bold Link**](https://example.com)'
+        }
+    };
+    const evaluated = evaluator.evaluate(sampleNode);
+    const html = evaluated.evaluated.content;
+
+    console.log(JSON.stringify({
+        hasPegParser: !!evaluator._pegParser,
+        html: html
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["hasPegParser"] is True
+    assert '<code class="inline-code">**code with bold**</code>' in data["html"]
+    assert "*escaped*" in data["html"]
+    assert (
+        '<a href="https://example.com" target="_blank" rel="noopener noreferrer"><strong>Bold Link</strong></a>'
+        in data["html"]
+    )

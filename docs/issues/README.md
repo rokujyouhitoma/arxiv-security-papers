@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **417** | WebフロントエンドJS向けPEGインラインパーサー換装およびPEG AOTコンパイラ JavaScriptコードジェネレータ基盤の実装 (Phase 1 & Phase 2) | Feature | 2026-10-03 | [417-frontend-peg-inline-parser-and-js-aot-codegen.md](closed/417-frontend-peg-inline-parser-and-js-aot-codegen.md) |
 | **416** | 空 authors および OKF フロントマター PEG パース失敗による「unknown」タイトルおよびフロントマター漏洩要約の解消 | Bug | 2026-10-03 | [416-fix-okf-empty-authors-and-frontmatter-parser.md](closed/416-fix-okf-empty-authors-and-frontmatter-parser.md) |
 | **415** | Mermaid mindmap 構文エラーの解消とトレンド分析マインドマップ描画の正常化 | Bug | 2026-10-03 | [415-fix-mermaid-mindmap-syntax-and-rendering.md](closed/415-fix-mermaid-mindmap-syntax-and-rendering.md) |
 | **414** | Webコンソール /api/trends における period パラメータ未反映およびサマリー切り替え不全の解消 | Bug | 2026-10-03 | [414-fix-trends-api-period-param-and-content-switching.md](closed/414-fix-trends-api-period-param-and-content-switching.md) |

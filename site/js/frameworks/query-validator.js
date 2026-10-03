@@ -961,4 +961,12 @@
   peg['notPred']       = notPred;
   peg['andPred']       = andPred;
 
-})(window);
+  // Export for Node.js / CommonJS testing
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      QueryValidator: QueryValidator,
+      peg: peg
+    };
+  }
+
+})(typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : this));
