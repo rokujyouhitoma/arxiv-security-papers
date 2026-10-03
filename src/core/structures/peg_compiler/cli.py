@@ -27,6 +27,7 @@ def compile_grammar_to_code(
     optimize: bool = True,
     target: str = "python",
     ast_only: bool = False,
+    embedded_runtime: bool = True,
 ) -> str:
     """Compiles .peg grammar text into Python or JavaScript source code string."""
     parser = MetaGrammarParser(use_aot=use_aot)
@@ -41,11 +42,23 @@ def compile_grammar_to_code(
 
     normalized_target = target.lower().strip()
     if normalized_target in ("js", "javascript"):
-        generator_js = JSCodeGenerator(grammar_ast, ast_only=ast_only)
+        generator_js = JSCodeGenerator(
+            grammar_ast,
+            embedded_runtime=embedded_runtime,
+            ast_only=ast_only,
+        )
         return generator_js.generate()
 
     generator_py = CodeGenerator(grammar_ast)
     return generator_py.generate()
+
+
+def compile_runtime_to_code(target: str = "js") -> str:
+    """Compiles standalone runtime engine source code."""
+    normalized_target = target.lower().strip()
+    if normalized_target in ("js", "javascript"):
+        return JSCodeGenerator.generate_runtime_module()
+    raise ValueError(f"Runtime extraction not supported for target '{target}'")
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -55,7 +68,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         description="DSN-25 Ahead-of-Time Packrat PEG Parser Compiler",
     )
     parser.add_argument(
-        "grammar_file", type=str, help="Path to input .peg grammar file"
+        "grammar_file",
+        nargs="?",
+        default=None,
+        type=str,
+        help="Path to input .peg grammar file (optional if --runtime-only)",
     )
     parser.add_argument(
         "-o", "--output", type=str, default=None, help="Path to output file"
@@ -77,6 +94,16 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--ast-only",
         action="store_true",
         help="Bypass embedded actions and emit generic AST nodes ({type, value})",
+    )
+    parser.add_argument(
+        "--no-runtime",
+        action="store_true",
+        help="Disable embedded runtime engine in generated JavaScript parser",
+    )
+    parser.add_argument(
+        "--runtime-only",
+        action="store_true",
+        help="Emit standalone Packrat PEG JavaScript runtime module and exit",
     )
     return parser
 
@@ -100,18 +127,34 @@ def _write_output(generated_code: str, output: Optional[str]) -> None:
         sys.stdout.write(generated_code)
 
 
-def run_cli(args: Optional[List[str]] = None) -> int:
-    """CLI execution entrypoint."""
-    parsed = _build_arg_parser().parse_args(args)
-    input_path = Path(parsed.grammar_file)
-    if not input_path.exists():
-        sys.stderr.write(f"Error: grammar file '{parsed.grammar_file}' not found.\n")
-        return 1
-
-    target = _resolve_target(parsed.target, parsed.output)
-
+def _handle_runtime_only(target: str, output: Optional[str]) -> int:
+    """Handles --runtime-only extraction request."""
     try:
-        content = input_path.read_text(encoding="utf-8")
+        runtime_code = compile_runtime_to_code(target=target)
+    except Exception as exc:
+        sys.stderr.write(f"Compiler Error: {exc}\n")
+        return 1
+    _write_output(runtime_code, output)
+    return 0
+
+
+def _load_grammar_file(path_str: Optional[str]) -> Optional[str]:
+    """Validates existence and loads input grammar file contents."""
+    if not path_str:
+        sys.stderr.write(
+            "Error: grammar_file is required unless --runtime-only is specified.\n"
+        )
+        return None
+    input_path = Path(path_str)
+    if not input_path.exists():
+        sys.stderr.write(f"Error: grammar file '{path_str}' not found.\n")
+        return None
+    return input_path.read_text(encoding="utf-8")
+
+
+def _compile_and_output(content: str, parsed: argparse.Namespace, target: str) -> int:
+    """Compiles grammar and writes output."""
+    try:
         generated_code = compile_grammar_to_code(
             content,
             class_name_override=parsed.class_name,
@@ -119,6 +162,7 @@ def run_cli(args: Optional[List[str]] = None) -> int:
             optimize=not parsed.no_optimize,
             target=target,
             ast_only=parsed.ast_only,
+            embedded_runtime=not parsed.no_runtime,
         )
     except PEGSyntaxError as exc:
         sys.stderr.write(f"PEG Grammar Syntax Error:\n{exc}\n")
@@ -129,6 +173,21 @@ def run_cli(args: Optional[List[str]] = None) -> int:
 
     _write_output(generated_code, parsed.output)
     return 0
+
+
+def run_cli(args: Optional[List[str]] = None) -> int:
+    """CLI execution entrypoint."""
+    parsed = _build_arg_parser().parse_args(args)
+    target = _resolve_target(parsed.target, parsed.output)
+
+    if parsed.runtime_only:
+        return _handle_runtime_only(target, parsed.output)
+
+    content = _load_grammar_file(parsed.grammar_file)
+    if content is None:
+        return 1
+
+    return _compile_and_output(content, parsed, target)
 
 
 if __name__ == "__main__":

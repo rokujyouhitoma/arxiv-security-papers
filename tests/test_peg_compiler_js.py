@@ -19,10 +19,12 @@ import pytest
 
 from core.structures.peg_compiler import compile_grammar_to_code
 from core.structures.peg_compiler.cli import run_cli
+from core.structures.peg_compiler.codegen_js import JSCodeGenerator
 
 
 @pytest.fixture
 def node_bin() -> str:
+
     path = shutil.which("node")
     if not path:
         pytest.skip("Node.js runtime not installed")
@@ -381,3 +383,172 @@ def test_parse_with_diagnostics_and_syntax_error_details(node_bin: str) -> None:
         assert err["col"] == 9
         assert isinstance(err["expectedTokens"], list)
         assert "12345" in err["snippet"]
+
+
+def test_generate_runtime_module(node_bin: str, tmp_path: Path) -> None:
+    """Verifies that JSCodeGenerator.generate_runtime_module emits valid UMD module."""
+    runtime_code = JSCodeGenerator.generate_runtime_module()
+    assert "Standalone Packrat PEG Runtime Engine" in runtime_code
+    assert "ParseResult: ParseResult" in runtime_code
+    assert "PEGSyntaxError: PEGSyntaxError" in runtime_code
+    assert "Parser: Parser" in runtime_code
+    assert "charClass: charClass" in runtime_code
+
+    runtime_file = tmp_path / "peg-runtime.js"
+    runtime_file.write_text(runtime_code, encoding="utf-8")
+
+    test_script = f"""
+    const runtime = require({json.dumps(str(runtime_file))});
+    const symbols = [
+        typeof runtime.ParseResult,
+        typeof runtime.PEGSyntaxError,
+        typeof runtime.ParseContext,
+        typeof runtime.Parser,
+        typeof runtime.lit,
+        typeof runtime.seq,
+        typeof runtime.choice,
+        typeof runtime.charClass
+    ];
+    console.log(JSON.stringify(symbols));
+    """
+    proc = subprocess.run(
+        [node_bin, "-e", test_script],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    symbols = json.loads(proc.stdout)
+    assert all(sym == "function" for sym in symbols)
+
+
+def test_compile_no_runtime_mode() -> None:
+    """Verifies that --no-runtime produces concise parser code referencing external runtime."""
+    embedded_code = compile_grammar_to_code(
+        SIMPLE_ARITH_GRAMMAR, target="js", embedded_runtime=True
+    )
+    modular_code = compile_grammar_to_code(
+        SIMPLE_ARITH_GRAMMAR, target="js", embedded_runtime=False
+    )
+
+    # Modular version should be significantly smaller (no runtime class body duplication)
+    assert len(modular_code) < len(embedded_code) * 0.4
+    assert "Section 1: External Packrat PEG Runtime Resolution" in modular_code
+    assert "PEGRuntime not found. Ensure peg-runtime.js is loaded" in modular_code
+    assert "function ParseResult(success" not in modular_code
+
+
+def test_cli_modular_runtime_and_shared_execution(
+    tmp_path: Path, node_bin: str
+) -> None:
+    """Verifies CLI --runtime-only and --no-runtime options with multiple cooperating parsers."""
+    # 1. Emit runtime via CLI --runtime-only
+    runtime_path = tmp_path / "peg-runtime.js"
+    rc_runtime = run_cli(["--runtime-only", "--target", "js", "-o", str(runtime_path)])
+    assert rc_runtime == 0
+    assert runtime_path.exists()
+
+    # 2. Emit two different parsers with --no-runtime
+    arith_grammar_file = tmp_path / "arith.peg"
+    arith_grammar_file.write_text(SIMPLE_ARITH_GRAMMAR, encoding="utf-8")
+    arith_parser_file = tmp_path / "arith_parser.js"
+    rc_arith = run_cli(
+        [
+            str(arith_grammar_file),
+            "-o",
+            str(arith_parser_file),
+            "--target",
+            "js",
+            "--no-runtime",
+        ]
+    )
+    assert rc_arith == 0
+    assert arith_parser_file.exists()
+
+    kv_grammar = """
+    grammar KeyVal
+    pair <- k:[a-zA-Z]+ "=" v:[a-zA-Z0-9]+ { return { key: k.join(""), val: v.join("") }; }
+    """
+    kv_grammar_file = tmp_path / "kv.peg"
+    kv_grammar_file.write_text(kv_grammar, encoding="utf-8")
+    kv_parser_file = tmp_path / "kv_parser.js"
+    rc_kv = run_cli(
+        [
+            str(kv_grammar_file),
+            "-o",
+            str(kv_parser_file),
+            "--target",
+            "js",
+            "--no-runtime",
+        ]
+    )
+    assert rc_kv == 0
+    assert kv_parser_file.exists()
+
+    # 3. Execute script requiring both parsers sharing peg-runtime.js in same directory
+    test_script = f"""
+    const {{ ArithmeticParser }} = require({json.dumps(str(arith_parser_file))});
+    const {{ KeyValParser }} = require({json.dumps(str(kv_parser_file))});
+
+    const p1 = new ArithmeticParser();
+    const res1 = p1.parse("10 + 20 * 3");
+
+    const p2 = new KeyValParser();
+    const res2 = p2.parseWithDiagnostics("user=alice");
+
+    console.log(JSON.stringify({{
+        res1: res1 !== null,
+        res2Success: res2.success,
+        res2Val: res2.value
+    }}));
+    """
+    proc = subprocess.run(
+        [node_bin, "-e", test_script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, f"Node execution failed:\n{proc.stderr}\n{proc.stdout}"
+    data = json.loads(proc.stdout)
+
+    assert data["res1"] is True
+    assert data["res2Success"] is True
+    assert data["res2Val"] == {"key": "user", "val": "alice"}
+
+
+def test_no_runtime_missing_runtime_error(tmp_path: Path, node_bin: str) -> None:
+    """Verifies that --no-runtime parser throws clear error when runtime is absent."""
+    isolated_dir = tmp_path / "isolated"
+    isolated_dir.mkdir(parents=True, exist_ok=True)
+    parser_file = isolated_dir / "isolated_parser.js"
+
+    grammar_file = isolated_dir / "test.peg"
+    grammar_file.write_text("grammar Test\nrule <- 'ok'\n", encoding="utf-8")
+
+    run_cli(
+        [
+            str(grammar_file),
+            "-o",
+            str(parser_file),
+            "--target",
+            "js",
+            "--no-runtime",
+        ]
+    )
+
+    test_script = f"""
+    try {{
+        require({json.dumps(str(parser_file))});
+        console.log(JSON.stringify({{ error: null }}));
+    }} catch (e) {{
+        console.log(JSON.stringify({{ error: e.message }}));
+    }}
+    """
+    proc = subprocess.run(
+        [node_bin, "-e", test_script],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    data = json.loads(proc.stdout)
+    assert data["error"] is not None
+    assert "PEGRuntime not found" in data["error"]
