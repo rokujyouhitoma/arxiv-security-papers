@@ -11,6 +11,8 @@
   - `src/graph/engine.py` (Canvas / REST API 向け CTI グラフクエリ DSL 拡張)
   - `src/ontology/` (W3C Turtle 1.1 / RDF インジェストパーサー基盤, Issue #199 連携)
   - `tools/peg_compiler/` (将来の事前コード生成型パーサージェネレータ拡張ロードマップ)
+  - `src/core/structures/peg_compiler/codegen_js.py` (JavaScript 向け AOT コードジェネレータ基盤, Issue #417)
+  - `site/js/evaluator.js` (Web フロントエンド MarkdownEvaluator PEG インライン構文解析基盤, Issue #417)
 - **【主査・報告】 Software Development (SWD) / Systems Architect (SA)**
 - **【共同主査】 IT Specialist (NLP & IR) / Database Specialist (DB)**
 - **【参画】 15 大専門エージェント全員**:
@@ -31,7 +33,7 @@
 - [2. 15 大専門エージェントによる多角的レビュー ＆ 合意事項](#2-15-大専門エージェントによる多角的レビュー--合意事項)
   - [2.1 エージェント別要求仕様マトリクス](#21-エージェント別要求仕様マトリクス)
   - [2.2 レビュー総括と合意承認](#22-レビュー総括と合意承認)
-- [3. 数理的基盤とアルゴリズム設計 (Mathematical Formulation)](#3-数理的基盤とアルゴリズム設計-mathematical-formulation)
+- [3. 数理的基盤とアルゴリズム設計 (Mathematical Formulation)](#3-数理的基盤とアルゴリズム設計-mathematical-formulation)"
   - [3.1 PEG 形式文法仕様と基本演算子](#31-peg-形式文法仕様と基本演算子)
   - [3.2 Packrat メモ化アルゴリズムと線形時間 $O(N)$ の証明](#32-packrat-メモ化アルゴリズムと線形時間-on-の証明)
   - [3.3 構文エラー追跡メカニズム (Max-Position Tracking)](#33-構文エラー追跡メカニズム-max-position-tracking)
@@ -64,6 +66,14 @@
   - [11.2 第一級構文 (`<-`, `[...]`, `.`) と実用拡張の調和](#112-第一級構文---実用拡張の調和)
   - [11.3 セルフホスティング Fixpoint 不変性と ReDoS 根絶](#113-セルフホスティング-fixpoint-不変性と-redos-根絶)
   - [11.4 完了条件 (DoD for Phase 4)](#114-完了条件-dod-for-phase-4)
+- [12. Phase 5: 次世代 PEG 高度化と可観測性・耐障害性確立 (Issue #304-#307)](#12-phase-5-次世代-peg-高度化と可観測性耐障害性確立-issue-304-307)
+  - [12.1 完了条件 (DoD for Phase 5)](#121-完了条件-dod-for-phase-5)
+- [13. Phase 6: Web フロントエンド連携 ＆ JavaScript コードジェネレータ基盤仕様 (Issue #417)](#13-phase-6-web-フロントエンド連携--javascript-コードジェネレータ基盤仕様-issue-417)
+  - [13.1 背景と設計哲学 (Single Source of Truth)](#131-背景と設計哲学-single-source-of-truth)
+  - [13.2 JavaScript コードジェネレータ (`JSCodeGenerator`) アーキテクチャ](#132-javascript-コードジェネレータ-jscodegenerator-アーキテクチャ)
+  - [13.3 CLI `--target js` オプション仕様](#133-cli---target-js-オプション仕様)
+  - [13.4 Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)](#134-web-フロントエンド-peg-インラインパーサー換装-sitejsevaluatorjs)
+  - [13.5 完了条件 (DoD for Phase 6)](#135-完了条件-dod-for-phase-6)
 
 ---
 
@@ -817,4 +827,88 @@ Bryan Ford 氏の原著論文 *"Parsing Expression Grammars: A Recognition-Based
   - `Parser.parse_resilient` によるトークンスキップ・エラー一括収集と、未終了引用符・括弧不整合のヒント診断が実装され、`tests/core/test_peg_cut_and_resilient.py` が 100% PASS すること。
 - [x] **LRU キャッシュ可観測性 MCP & ファジング基盤 (Issue #307)**:
   - Observability MCP サーバーに `get_parser_cache_metrics` ツールが統合され、境界値・ReDoS ファジングテスト `tests/core/test_peg_fuzzing.py` が 100% PASS すること。
+
+---
+
+## 13. Phase 6: Web フロントエンド連携 ＆ JavaScript コードジェネレータ基盤仕様 (Issue #417)
+
+### 13.1 背景と設計哲学 (Single Source of Truth)
+
+1. **背景と技術的課題**:
+   - 本プロジェクトでは、Python バックエンドにおいて Bryan Ford 論文（POPL '04）準拠の PEG AOT コンパイラ（`peg_compiler`）と Packrat パースエンジンが確立され、W3C Turtle、検索クエリ、CTI ナレッジグラフ DSL 等の宣言的構文解析が実用化されていた。
+   - 一方で、Web フロントエンド（`site/js/`）側のマークダウン描画やクエリ解釈は、正規表現による ad-hoc な `.replace()` 連鎖や手書きパーサーに依存していた。
+   - 特に [`site/js/evaluator.js`](../../site/js/evaluator.js) におけるインラインマークダウン変換では、正規表現置換の多段適用により、インラインコードスパン（`` `code` ``）内の構文文字誤変換、エスケープシーケンス（`\*` など）の不整合、入れ子リンクや複雑な書式でのパース破綻などの技術的負債が存在した。
+
+2. **設計哲学**:
+   - **Single Source of Truth (文法定義の一元化)**: バックエンド（Python）とフロントエンド（JavaScript）で文法や字句規則を二重管理するのではなく、共通の `.peg` 文法定義から AOT（事前コード生成）により各言語向けの決定論的パーサーを出力可能とする。
+   - **ゼロ外部依存 & 自己完結型ランタイム**: 生成される JavaScript コードは npm 等の外部依存を一切必要とせず、Packrat メモ化キャッシュと基本コンビネータを含む軽量ランタイムを内蔵する。
+   - **デュアル環境対応 (UMD)**: ブラウザグローバル（`window` / `globalThis`）および Node.js / CommonJS（`module.exports`）の双方でシームレスに動作する。
+
+### 13.2 JavaScript コードジェネレータ (`JSCodeGenerator`) アーキテクチャ
+
+[`src/core/structures/peg_compiler/codegen_js.py`](../../src/core/structures/peg_compiler/codegen_js.py) は、`GrammarAST` を受け取り、ブラウザおよび Node.js 環境でスタンドアロン動作する JavaScript パーサーコードを出力するコード生成器である。
+
+```
++--------------------+        +---------------------+        +-------------------------+
+|    GrammarAST      |  --->  |   JSCodeGenerator   |  --->  | Generated JavaScript    |
+| (Rules / ExprNodes)|        |  (codegen_js.py)    |        | (Self-contained Parser) |
++--------------------+        +---------------------+        +-------------------------+
+                                        |
+                 +----------------------+----------------------+
+                 |                      |                      |
+                 v                      v                      v
+         [Embedded Runtime]     [Rule Functions]      [UMD Wrapper]
+         - ParseResult          - Memoized packrat    - CommonJS
+         - Combinator helpers   - Terminal / NonTerm  - Browser Window
+         - CharClass / Cut      - Semantic actions    - Zero dependencies
+```
+
+1. **内蔵 PEG ランタイム**:
+   - 生成コードの冒頭に、パース結果オブジェクト `ParseResult` (`status`, `value`, `next_idx`, `error_msg`) と、文字列一致・文字クラス（`CharClass`）・カット（`Cut`）・セマンティックアクション等のコンビネータ関数群を内包。
+2. **Packrat メモ化キャッシュ**:
+   - 各非終端規則の評価結果を `(rule_name, index)` をキーとしたメモ化辞書にキャッシュし、線形時間 $O(n)$ でのパース実行を保証。
+3. **Xenon Rank A 適合設計**:
+   - AST 式ノード（`StrLiteral`, `CharClass`, `Seq`, `Alt`, `Rep`, `Opt`, `Not`, `And`, `RuleRef`）のコード生成ロジックを独立したヘルパー関数に分割し、循環的複雑度（Cyclomatic Complexity）を極小化。プロジェクト標準の静的解析（Xenon Rank A）を達成。
+
+### 13.3 CLI `--target js` オプション仕様
+
+[`src/core/structures/peg_compiler/cli.py`](../../src/core/structures/peg_compiler/cli.py) にターゲット言語指定オプションが統合された。
+
+- **構文**:
+  ```bash
+  python -m src.core.structures.peg_compiler <grammar.peg> -o <output_file> [--target {python,js}] [--class-name <ClassName>] [--no-optimize]
+  ```
+- **ターゲット推論**:
+  - `--target` が明示されない場合、出力先ファイル名の拡張子が `.js` であれば自動的に JavaScript 生成モード（`--target js`）を選択。
+- **最適化パス連携**:
+  - `GrammarOptimizer`（Phase 5）によるリテラル畳み込み・左因数分解・冗長枝刈りパスを経由した最適化済 AST をそのまま JavaScript へコンパイル可能。
+
+### 13.4 Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)
+
+Web フロントエンドのマークダウン評価エンジンにおいて、正規表現置換の連鎖を PEG ベースの構造化パーサーへ移行した。
+
+1. **正規表現 `.replace()` から PEG コンビネータへの刷新**:
+   - [`site/js/frameworks/query-validator.js`](../../site/js/frameworks/query-validator.js) の PEG コンビネータ（`regex`, `str`, `seq`, `alt`, `many`, `opt` など）を活用し、インラインマークダウン用の字句・構文解析器を構築。
+2. **コードスパン保護**:
+   - バッククォート（`` `code` ``）内のテキストを最優先で保護し、内部に含まれるマークダウン制御文字（`*`, `_`, `~`, `[` 等）の誤置換を完全に抑止。
+3. **エスケープシーケンスの完全処理**:
+   - `\*`, `\_`, `\[` などのバックスラッシュエスケープを字句解析段階でエスケープ解除し、通常の文字としてレンダリング。
+4. **XSS 防御の徹底**:
+   - パース処理の前段・後段で `escapeHtml` を確実に適用し、悪意あるスクリプト挿入を防止。
+5. **UMD / CommonJS デュアルエクスポート**:
+   - `query-validator.js` を UMD 化し、ブラウザ（`window.QueryValidator`）および Node.js（`require` / テスト自動化）の双方から利用可能とした。
+
+### 13.5 完了条件 (DoD for Phase 6)
+
+- [x] **Web フロントエンド PEG インラインパーサー換装 (`site/js/evaluator.js`)**:
+  - 正規表現 `.replace()` から PEG コンビネータベースの構文解析に刷新され、コードスパン保護・エスケープ処理・XSS 防御を達成。
+- [x] **JavaScript コードジェネレータ (`JSCodeGenerator`) 実装**:
+  - `src/core/structures/peg_compiler/codegen_js.py` が実装され、内蔵ランタイムを含む UMD 互換の自己完結型 JS コードを出力可能であること。
+- [x] **CLI `--target js` オプションの統合**:
+  - `src/core/structures/peg_compiler/cli.py` に `--target {python,js}` が追加され、拡張子判定および最適化連携が動作すること。
+- [x] **Xenon Rank A および静的解析 100% 達成**:
+  - `codegen_js.py` および関連モジュールが Xenon Rank A、flake8、mypy --strict、black、isort を完全パスすること。
+- [x] **回帰テストおよびビルド検証 PASS**:
+  - `tests/test_peg_compiler_js.py` および `tests/web/test_frontend_frameworks.py` が全 PASS し、Closure Compiler による `make build_js` が成功すること。
+
 
