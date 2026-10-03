@@ -185,6 +185,35 @@ Django スタイルの統合管理 CLI `manage.py`（DSN-24 準拠）により�
 ./manage.py dbsync
 ```
 
+### 3.6 Unix ストリームパイプライン CLI (`manage.py` Stream Composition)
+Unix哲学の「1つのことを上手に行う」「標準入出力（stdin/stdout）によるテキストストリーム合成」に基づき、独立したフィルタコマンド群をシェルパイプ（`|`）で自在に連結可能です。進捗・診断ログはすべて `stderr` に出力されるため、`stdout` に流れる純粋な JSON Lines (`.jsonl`) を Unix 標準ツール（`jq`, `grep`, `wc`, `awk`）と直接連携できます。
+
+#### サブコマンド一覧
+- **`manage.py fetch`**: arXiv / RSS から論文メタデータを取得し、JSONL を stdout にリアルタイム送出。
+- **`manage.py pdf-extract`**: stdin から論文メタデータを受信し、PDF から全文テキストを抽出して付加。
+- **`manage.py okf-convert`**: stdin から論文データを受信し、Google OKF v0.2 仕様に準拠した YAML フロントマター付きナレッジデータを生成（`--format=jsonl|markdown`）。
+- **`manage.py summarize`**: stdin から OKF 論文データを受信し、自然言語処理基盤で高品質な日本語構造化要約を生成・付加。
+- **`manage.py db-index`**: ストリーム終端のシンクとして、受信した論文データをデータベースカタログへアトミックにバルク登録（`--passthrough` で後続パイプへ転送可能）。
+
+#### パイプライン実行例
+```bash
+# 1. 論文取得から要約までを 1 パイプラインで直結実行
+./manage.py fetch --limit 5 \
+  | ./manage.py pdf-extract \
+  | ./manage.py okf-convert \
+  | ./manage.py summarize \
+  | ./manage.py db-index --passthrough
+
+# 2. jq を使って取得した論文のタイトルと日本語要約だけを抽出
+./manage.py fetch --limit 3 \
+  | ./manage.py okf-convert \
+  | ./manage.py summarize \
+  | jq -r '.title_ja + " : " + .summary_ja'
+
+# 3. 特定カテゴリの論文数を Unix の wc コマンドで計測
+./manage.py fetch --category "cs.CR" --limit 10 | wc -l
+```
+
 ---
 
 ## 4. 自律型閉ループ・インテリジェンス統合システム (Universal Intelligence Orchestrator)
@@ -626,6 +655,12 @@ make mcp_stats
 | | `./manage.py inspect <table>` | 指定テーブルのスキーマ定義・サンプル行表示 |
 | | `./manage.py dbshell` | 対話型 SQL シェル起動 / `-c` ワンライナー実行 |
 | | `./manage.py dbsync` | 物理ファイルと DB カタログの自動同期・修復 |
+| **ストリームパイプライン (`manage.py`)** | `./manage.py fetch` | arXiv/RSS 論文メタデータ取得ストリーム (JSONL) |
+| | `./manage.py pdf-extract` | PDF 全文テキスト抽出ストリームフィルタ |
+| | `./manage.py okf-convert` | Google OKF v0.2 構造化ストリームフィルタ |
+| | `./manage.py summarize` | 日本語エグゼクティブ要約ストリームフィルタ |
+| | `./manage.py db-index` | データベース・カタログ登録ストリームシンク |
+| | `make test_stream` | Unix ストリームパイプライン統合テストスイート実行 |
 | **検索 / RAG** | `make build_vector_db` | セマンティックベクトル検索インデックスのビルド |
 | | `make rag_query Q="..."` | セマンティック RAG 検索クエリ実行 |
 | **アナリティクス** | `make aggregate_analytics` | 戦略 KPI および脅威アナリティクスのバッチ事前集計 |

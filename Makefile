@@ -155,6 +155,10 @@ watch_js: activate ## Watch frontend JS sources and automatically recompile bund
 .PHONY: test
 test: pytest ## pytest
 
+.PHONY: test_stream
+test_stream: activate ## Run Unix stream CLI pipeline unit and integration tests
+	PYTHONPATH=src ${VENV_BIN}/pytest tests/cli/ -v
+
 .PHONY: check
 check: check_format static_analysis test ## Run mandatory format check, static_analysis, and test quality gates
 
