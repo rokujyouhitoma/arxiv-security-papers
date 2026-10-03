@@ -642,47 +642,229 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Search Events
+  // Search Events & Real-time PEG Syntax Validation (Issue #338, Issue #351, Issue #420)
   if (searchBtn && searchInput) {
-    searchBtn.addEventListener('click', () => performSearch(searchInput.value, true));
-    searchInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') performSearch(searchInput.value, true);
-    });
-    // Debounced query change, PEG syntax validation & prefix autocomplete (Issue 338, Issue 351)
-    searchInput.addEventListener('input', Timing.debounce(() => {
+    const searchSyntaxBadge = document.getElementById('searchSyntaxBadge');
+    const searchAutocompleteDropdown = document.getElementById('searchAutocompleteDropdown');
+    const inlineSearchBox = searchInput.closest('.inline-search-box');
+    let selectedAutocompleteIndex = -1;
+    let currentSuggestions = [];
+
+    const closeAutocomplete = () => {
+      if (searchAutocompleteDropdown) {
+        searchAutocompleteDropdown.classList.add('hidden');
+        searchAutocompleteDropdown.innerHTML = '';
+      }
+      selectedAutocompleteIndex = -1;
+      currentSuggestions = [];
+    };
+
+    const renderAutocomplete = (suggestions, tokenStart, tokenEnd) => {
+      if (!searchAutocompleteDropdown) return;
+      if (!suggestions || suggestions.length === 0) {
+        closeAutocomplete();
+        return;
+      }
+      currentSuggestions = suggestions;
+      selectedAutocompleteIndex = -1;
+      searchAutocompleteDropdown.innerHTML = '';
+
+      suggestions.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'search-autocomplete-item';
+        row.setAttribute('data-index', String(idx));
+
+        const mainDiv = document.createElement('div');
+        mainDiv.className = 'ac-main';
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'ac-label';
+        labelSpan.textContent = item.label || item.insertText;
+
+        const typeSpan = document.createElement('span');
+        typeSpan.className = 'ac-type ac-type-' + (item.type || 'field');
+        typeSpan.textContent = item.type || 'field';
+
+        mainDiv.appendChild(labelSpan);
+        mainDiv.appendChild(typeSpan);
+
+        const descSpan = document.createElement('span');
+        descSpan.className = 'ac-desc';
+        descSpan.textContent = item.description || '';
+
+        row.appendChild(mainDiv);
+        row.appendChild(descSpan);
+
+        row.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          applySuggestion(item, tokenStart, tokenEnd);
+        });
+
+        searchAutocompleteDropdown.appendChild(row);
+      });
+
+      searchAutocompleteDropdown.classList.remove('hidden');
+    };
+
+    const applySuggestion = (item, tokenStart, tokenEnd) => {
       const q = searchInput.value;
+      const start = typeof tokenStart === 'number' ? tokenStart : q.length;
+      const end = typeof tokenEnd === 'number' ? tokenEnd : q.length;
+      const before = q.slice(0, start);
+      const after = q.slice(end);
+      const insert = item.insertText || item.label || '';
+      searchInput.value = before + insert + after;
+      const newCursor = before.length + insert.length;
+      searchInput.setSelectionRange(newCursor, newCursor);
+      searchInput.focus();
+      closeAutocomplete();
+      validateAndSuggest(searchInput.value);
+    };
+
+    const validateAndSuggest = (q) => {
+      const trimmed = q.trim();
       appPublisher.publish('search:input', { query: q });
 
-      // 1. Real-time PEG syntax validation
-      if (appValidator) {
-        const trimmed = q.trim();
-        if (trimmed.length > 0) {
-          const vResult = appValidator.validate(trimmed);
-          if (!vResult.valid && vResult.error) {
-            searchInput.style.borderColor = '#ef4444';
-            searchInput.title = `構文警告: ${vResult.error.message || '構文エラー'}`;
-            appPublisher.publish('search:syntax_error', { query: trimmed, error: vResult.error });
-          } else {
-            searchInput.style.borderColor = '';
-            searchInput.title = '';
-            appPublisher.publish('search:valid', { query: trimmed });
-          }
-        } else {
-          searchInput.style.borderColor = '';
-          searchInput.title = '';
-        }
+      if (!appValidator) {
+        if (inlineSearchBox) inlineSearchBox.classList.remove('has-error');
+        if (searchSyntaxBadge) searchSyntaxBadge.classList.add('hidden');
+        closeAutocomplete();
+        return;
       }
 
-      // 2. Real-time RadixTrie prefix suggestion
-      if (appTrie) {
-        const words = q.trim().split(/\s+/);
+      if (trimmed.length === 0) {
+        if (inlineSearchBox) inlineSearchBox.classList.remove('has-error');
+        if (searchSyntaxBadge) searchSyntaxBadge.classList.add('hidden');
+        closeAutocomplete();
+        return;
+      }
+
+      // 1. Run Suggest & Validate via QueryValidator
+      const cursorOffset = searchInput.selectionStart != null ? searchInput.selectionStart : q.length;
+      const sResult = typeof appValidator.suggest === 'function'
+        ? appValidator.suggest(q, cursorOffset)
+        : null;
+      const vResult = sResult ? sResult.diagnostics : appValidator.validate(trimmed);
+
+      if (!vResult.valid) {
+        if (inlineSearchBox) inlineSearchBox.classList.add('has-error');
+        const errDetails = vResult.errorDetails || {};
+        const errMsg = vResult.hint || errDetails.hint || (typeof vResult.error === 'string' ? vResult.error : (vResult.error && vResult.error.message ? vResult.error.message : '構文エラー'));
+        if (searchSyntaxBadge) {
+          searchSyntaxBadge.textContent = '⚠️ ' + (vResult.hint ? 'ヒント: ' + vResult.hint : errMsg);
+          searchSyntaxBadge.title = errMsg;
+          searchSyntaxBadge.classList.remove('hidden');
+          if (vResult.hint) {
+            searchSyntaxBadge.classList.add('hint');
+          } else {
+            searchSyntaxBadge.classList.remove('hint');
+          }
+        }
+        searchInput.title = `構文警告: ${errMsg}`;
+        appPublisher.publish('search:syntax_error', { query: trimmed, error: vResult.error, diagnostics: vResult });
+      } else {
+        if (inlineSearchBox) inlineSearchBox.classList.remove('has-error');
+        if (searchSyntaxBadge) {
+          searchSyntaxBadge.classList.add('hidden');
+          searchSyntaxBadge.textContent = '';
+          searchSyntaxBadge.title = '';
+        }
+        searchInput.title = '';
+        appPublisher.publish('search:valid', { query: trimmed });
+      }
+
+      // 2. Render Suggestions if available
+      if (sResult && sResult.suggestions && sResult.suggestions.length > 0) {
+        renderAutocomplete(sResult.suggestions, sResult.tokenStart, sResult.tokenEnd);
+      } else if (appTrie) {
+        // Fallback to RadixTrie prefix suggestion
+        const words = trimmed.split(/\s+/);
         const lastWord = words[words.length - 1] || '';
         if (lastWord.length >= 2) {
           const suggestions = appTrie.searchPrefix(lastWord.toLowerCase(), 5);
-          appPublisher.publish('search:autocomplete', { prefix: lastWord, suggestions });
+          if (suggestions && suggestions.length > 0) {
+            const mapped = suggestions.map((s) => ({
+              label: s,
+              insertText: s,
+              type: 'field',
+              description: 'プレフィックス一致'
+            }));
+            const tStart = q.lastIndexOf(lastWord);
+            renderAutocomplete(mapped, tStart, tStart + lastWord.length);
+          } else {
+            closeAutocomplete();
+          }
+        } else {
+          closeAutocomplete();
+        }
+      } else {
+        closeAutocomplete();
+      }
+    };
+
+    searchBtn.addEventListener('click', () => {
+      closeAutocomplete();
+      performSearch(searchInput.value, true);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (searchAutocompleteDropdown && !searchAutocompleteDropdown.classList.contains('hidden') && currentSuggestions.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedAutocompleteIndex = (selectedAutocompleteIndex + 1) % currentSuggestions.length;
+          updateSelectedAutocomplete();
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedAutocompleteIndex = (selectedAutocompleteIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
+          updateSelectedAutocomplete();
+          return;
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          if (selectedAutocompleteIndex >= 0 && selectedAutocompleteIndex < currentSuggestions.length) {
+            e.preventDefault();
+            const item = currentSuggestions[selectedAutocompleteIndex];
+            applySuggestion(item, searchInput.selectionStart, searchInput.selectionEnd);
+            return;
+          }
+        } else if (e.key === 'Escape') {
+          closeAutocomplete();
+          return;
         }
       }
-    }, 250));
+
+      if (e.key === 'Enter') {
+        closeAutocomplete();
+        performSearch(searchInput.value, true);
+      }
+    });
+
+    const updateSelectedAutocomplete = () => {
+      if (!searchAutocompleteDropdown) return;
+      const items = searchAutocompleteDropdown.querySelectorAll('.search-autocomplete-item');
+      items.forEach((it, idx) => {
+        if (idx === selectedAutocompleteIndex) {
+          it.classList.add('selected');
+          it.scrollIntoView({ block: 'nearest' });
+        } else {
+          it.classList.remove('selected');
+        }
+      });
+    };
+
+    // Debounced query change, PEG syntax validation & autocomplete
+    searchInput.addEventListener('input', Timing.debounce(() => {
+      validateAndSuggest(searchInput.value);
+    }, 150));
+
+    // Close autocomplete when clicking outside
+    document.addEventListener('click', (e) => {
+      const container = searchInput.closest('.inline-search-box-container');
+      const targetNode = /** @type {?Node} */ (e.target);
+      if (container && targetNode && !container.contains(targetNode)) {
+        closeAutocomplete();
+      }
+    });
   }
 
   // Browser Navigation History (Popstate)

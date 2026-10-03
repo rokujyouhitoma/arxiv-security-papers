@@ -783,3 +783,68 @@ def test_markdown_evaluator_peg_inline_parsing() -> None:
         '<a href="https://example.com" target="_blank" rel="noopener noreferrer"><strong>Bold Link</strong></a>'
         in data["html"]
     )
+
+
+def test_query_validator_suggest_and_diagnostics() -> None:
+    """Verifies that QueryValidator provides real-time autocomplete suggestions and diagnostics (Issue 420)."""
+    import json
+    import shutil
+    import subprocess
+
+    import pytest
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        pytest.skip("Node.js runtime not installed")
+
+    script = """
+    const { QueryValidator } = require('./site/js/frameworks/query-validator.js');
+    const validator = new QueryValidator();
+
+    // 1. Valid Query
+    const resValid = validator.validate('title:pentest AND author:smith');
+
+    // 2. Unclosed quote detection
+    const resUnclosed = validator.validate('"unclosed string');
+
+    // 3. Invalid consecutive operators
+    const resInvalidOp = validator.validate('title:test AND AND author:alice');
+
+    // 4. Autocomplete suggest prefix
+    const sugPrefix = validator.suggest('tit', 3);
+
+    // 5. Autocomplete suggest typo correction
+    const sugTypo = validator.suggest('authr:', 6);
+
+    // 6. Autocomplete operator suggestion
+    const sugOp = validator.suggest('title:test AN', 12);
+
+    // 7. Autocomplete unclosed quote suggestion
+    const sugQuote = validator.suggest('"test phrase', 12);
+
+    console.log(JSON.stringify({
+        validPass: resValid.valid,
+        unclosedPass: !resUnclosed.valid && typeof resUnclosed.hint === 'string',
+        unclosedHint: resUnclosed.hint,
+        invalidOpPass: !resInvalidOp.valid,
+        hasPrefixField: sugPrefix.suggestions.some(s => s.insertText === 'title:'),
+        hasTypoCorrection: sugTypo.suggestions.some(s => s.insertText === 'author:'),
+        hasOperatorSuggestion: sugOp.suggestions.some(s => s.insertText === 'AND '),
+        hasQuoteSuggestion: sugQuote.suggestions.some(s => s.insertText === '"')
+    }));
+    """
+
+    res = subprocess.run(
+        [node_bin, "-e", script], capture_output=True, text=True, cwd=str(REPO_ROOT)
+    )
+    assert res.returncode == 0, f"Node.js script failed: {res.stderr}"
+
+    data = json.loads(res.stdout)
+    assert data["validPass"] is True
+    assert data["unclosedPass"] is True
+    assert "unclosed string literal" in data["unclosedHint"]
+    assert data["invalidOpPass"] is True
+    assert data["hasPrefixField"] is True
+    assert data["hasTypoCorrection"] is True
+    assert data["hasOperatorSuggestion"] is True
+    assert data["hasQuoteSuggestion"] is True

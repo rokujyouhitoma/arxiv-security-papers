@@ -858,6 +858,33 @@
   var ValidationResult;
 
   /**
+   * @typedef {{
+   *   label: string,
+   *   insertText: string,
+   *   type: string,
+   *   description: string
+   * }}
+   */
+  var AutocompleteSuggestion;
+
+  /**
+   * @typedef {{
+   *   prefix: string,
+   *   tokenStart: number,
+   *   tokenEnd: number,
+   *   suggestions: !Array<!AutocompleteSuggestion>,
+   *   diagnostics: !ValidationResult
+   * }}
+   */
+  var SuggestionResult;
+
+  /** @const {!Array<string>} */
+  var KNOWN_FIELDS = ['title:', 'author:', 'abstract:', 'category:', 'tags:', 'year:', 'type:'];
+
+  /** @const {!Array<string>} */
+  var KNOWN_OPERATORS = ['AND', 'OR', 'NOT'];
+
+  /**
    * QueryValidator — validates and parses Lucene-style boolean search queries.
    *
    * The grammar is pre-compiled (AOT) at module load time and shared across
@@ -878,7 +905,7 @@
    */
   QueryValidator.prototype.validate = function(queryString) {
     if (typeof queryString !== 'string') {
-      return {valid: false, error: 'Query must be a string', offset: null, line: null, col: null, expected: [], hint: null};
+      return {valid: false, error: 'Query must be a string', offset: null, line: null, col: null, expected: [], hint: null, ast: null};
     }
 
     // Empty query is valid (returns null AST)
@@ -891,19 +918,137 @@
       var ast = QUERY_GRAMMAR.parse(trimmed);
       return {valid: true, error: null, offset: null, line: null, col: null, expected: [], hint: null, ast: ast};
     } catch (e) {
-      if (e instanceof PEGSyntaxError || e.name === 'PEGSyntaxError') {
-        return {
-          valid: false,
-          error: e.message || e.formattedMessage || String(e),
-          offset: e.pos != null ? e.pos : null,
-          line: e.line != null ? e.line : null,
-          col: e.col != null ? e.col : null,
-          expected: e.expected || [],
-          hint: e.hint || null
-        };
-      }
-      return {valid: false, error: String(e), offset: null, line: null, col: null, expected: [], hint: null};
+      var errMsg = (e && (e.message || e.formattedMessage)) ? String(e.message || e.formattedMessage) : String(e);
+      var errPos = (e && e.pos != null) ? e.pos : null;
+      var errLine = (e && e.line != null) ? e.line : null;
+      var errCol = (e && e.col != null) ? e.col : null;
+      var errExp = (e && e.expected) ? e.expected : [];
+      var errHint = (e && e.hint) ? e.hint : null;
+
+      // Provide dual-access error (both string coercion and .message property access)
+      var errWrapped = new String(errMsg);
+      errWrapped['message'] = errMsg;
+      errWrapped['pos'] = errPos;
+      errWrapped['line'] = errLine;
+      errWrapped['col'] = errCol;
+      errWrapped['expected'] = errExp;
+      errWrapped['hint'] = errHint;
+
+      return {
+        valid: false,
+        error: errMsg,
+        errorDetails: errWrapped,
+        offset: errPos,
+        line: errLine,
+        col: errCol,
+        expected: errExp,
+        hint: errHint,
+        ast: null
+      };
     }
+  };
+
+  /**
+   * Generates autocomplete suggestions and diagnostics for search input.
+   *
+   * @param {string} queryString  The current query string.
+   * @param {number=} opt_cursorOffset  Current cursor index in queryString.
+   * @return {!SuggestionResult}
+   */
+  QueryValidator.prototype.suggest = function(queryString, opt_cursorOffset) {
+    var text = typeof queryString === 'string' ? queryString : '';
+    var offset = typeof opt_cursorOffset === 'number' ? Math.max(0, Math.min(opt_cursorOffset, text.length)) : text.length;
+    var diagnostics = this.validate(text);
+
+    // Extract token immediately preceding cursor
+    var beforeCursor = text.slice(0, offset);
+    var match = /[^\s()":]+:?$/.exec(beforeCursor);
+    var token = match ? match[0] : '';
+    var tokenStart = match ? match.index : offset;
+    var tokenEnd = offset;
+
+    /** @type {!Array<!AutocompleteSuggestion>} */
+    var suggestions = [];
+    var tokenLower = token.toLowerCase();
+
+    // 1. Unclosed quote / bracket auto-fix suggestions
+    var quoteCheck = checkUnclosedQuotes(text);
+    if (quoteCheck) {
+      suggestions.push({
+        label: '" (クォートを閉じる)',
+        insertText: '"',
+        type: 'syntax',
+        description: '未終了の文字列リテラルを閉じます'
+      });
+    }
+    var bracketCheck = checkUnmatchedBrackets(text);
+    if (bracketCheck && bracketCheck.indexOf(')') !== -1) {
+      suggestions.push({
+        label: ') (括弧を閉じる)',
+        insertText: ')',
+        type: 'syntax',
+        description: '未終了のグループ括弧を閉じます'
+      });
+    }
+
+    // 2. Field suggestions and typo corrections
+    if (token.length > 0) {
+      for (var f = 0; f < KNOWN_FIELDS.length; f++) {
+        var field = KNOWN_FIELDS[f];
+        if (field.indexOf(tokenLower) === 0 && field !== tokenLower) {
+          suggestions.push({
+            label: field,
+            insertText: field,
+            type: 'field',
+            description: field.slice(0, -1) + ' フィールド指定'
+          });
+        }
+      }
+
+      // Check typo for fields if token ends with colon or resembles a field
+      if (token.indexOf(':') !== -1 || token.length >= 3) {
+        var tokenField = token.indexOf(':') !== -1 ? token.slice(0, token.indexOf(':') + 1) : token + ':';
+        for (var k = 0; k < KNOWN_FIELDS.length; k++) {
+          var kf = KNOWN_FIELDS[k];
+          var dist = levenshtein(tokenField.toLowerCase(), kf);
+          if (dist > 0 && dist <= 2) {
+            suggestions.push({
+              label: kf + ' (修正候補)',
+              insertText: kf,
+              type: 'correction',
+              description: "'" + tokenField + "' の修正候補 (" + kf + ")"
+            });
+          }
+        }
+      }
+
+      // 3. Operator suggestions
+      for (var op = 0; op < KNOWN_OPERATORS.length; op++) {
+        var oper = KNOWN_OPERATORS[op];
+        if (oper.indexOf(token.toUpperCase()) === 0 && oper !== token.toUpperCase()) {
+          suggestions.push({
+            label: oper,
+            insertText: oper + ' ',
+            type: 'operator',
+            description: oper + ' 論理演算子'
+          });
+        }
+      }
+    } else {
+      // When token is empty, suggest default operators or popular fields
+      suggestions.push({ label: 'title:', insertText: 'title:', type: 'field', description: 'タイトル検索' });
+      suggestions.push({ label: 'author:', insertText: 'author:', type: 'field', description: '著者名検索' });
+      suggestions.push({ label: 'AND', insertText: 'AND ', type: 'operator', description: '積集合 (AND)' });
+      suggestions.push({ label: 'OR', insertText: 'OR ', type: 'operator', description: '和集合 (OR)' });
+    }
+
+    return {
+      prefix: token,
+      tokenStart: tokenStart,
+      tokenEnd: tokenEnd,
+      suggestions: suggestions,
+      diagnostics: diagnostics
+    };
   };
 
   /**

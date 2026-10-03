@@ -1765,3 +1765,131 @@ mark.highlight {
   font-family: var(--console-font-mono);
 }
 
+/* ==========================================================================
+   Realtime Search Syntax Validation & Autocomplete (Issue #420)
+   ========================================================================== */
+.inline-search-box-container {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.inline-search-box.has-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.4);
+}
+
+.search-syntax-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-family: var(--console-font-mono);
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  cursor: help;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+}
+
+.search-syntax-badge.hint {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.search-autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.search-autocomplete-dropdown.hidden {
+  display: none !important;
+}
+
+.search-autocomplete-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  cursor: pointer;
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.search-autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.search-autocomplete-item:hover,
+.search-autocomplete-item.selected {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+.search-autocomplete-item .ac-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-autocomplete-item .ac-label {
+  font-family: var(--console-font-mono);
+  font-weight: 600;
+}
+
+.search-autocomplete-item .ac-type {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.ac-type-field {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+}
+
+.ac-type-operator {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+.ac-type-correction {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.ac-type-syntax {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.search-autocomplete-item .ac-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-left: 12px;
+}
+
+

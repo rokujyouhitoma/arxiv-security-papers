@@ -207,9 +207,13 @@
           <!-- Component 4: Inline Search & Filter Deck -->
           <div class="console-filter-deck">
             <div class="filter-row-top">
-              <div class="inline-search-box">
-                <span>🔍</span>
-                <input type="text" id="searchInput" placeholder="検索クエリを入力（例: ペンテスト自動化, 自動運転 脆弱性, LLM jailbreak）..." autofocus>
+              <div class="inline-search-box-container">
+                <div class="inline-search-box">
+                  <span>🔍</span>
+                  <input type="text" id="searchInput" placeholder="検索クエリを入力（例: ペンテスト自動化, 自動運転 脆弱性, LLM jailbreak）..." autofocus autocomplete="off">
+                  <div id="searchSyntaxBadge" class="search-syntax-badge hidden" title="構文ステータス"></div>
+                </div>
+                <div id="searchAutocompleteDropdown" class="search-autocomplete-dropdown hidden"></div>
               </div>
               <button id="searchBtn" class="btn-console btn-console-primary">検索実行</button>
               <button id="clearFiltersBtn" class="btn-console" title="フィルターをリセット">リセット</button>
