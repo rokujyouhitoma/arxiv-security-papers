@@ -98,39 +98,40 @@ py_compile: activate ## py_compile syntax check for all python sources
 
 .PHONY: compile_grammars
 compile_grammars: activate ## Compile .peg grammar specifications to standalone Python parsers
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/peg_meta.peg -o src/core/peg/compiler/generated_meta_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/peg_meta.peg -o src/core/peg/compiler/generated_meta_parser.py
 	${VENV_BIN}/isort src/core/peg/compiler/generated_meta_parser.py
 	${VENV_BIN}/black -q src/core/peg/compiler/generated_meta_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/turtle.peg -o src/ontology/generated_turtle_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/turtle.peg -o src/ontology/generated_turtle_parser.py
 	${VENV_BIN}/isort src/ontology/generated_turtle_parser.py
 	${VENV_BIN}/black -q src/ontology/generated_turtle_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/search_query.peg -o src/search/query/generated_search_query_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/search_query.peg -o src/search/query/generated_search_query_parser.py
 	${VENV_BIN}/isort src/search/query/generated_search_query_parser.py
 	${VENV_BIN}/black -q src/search/query/generated_search_query_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/graph_query.peg -o src/graph/generated_graph_query_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/graph_query.peg -o src/graph/generated_graph_query_parser.py
 	${VENV_BIN}/isort src/graph/generated_graph_query_parser.py
 	${VENV_BIN}/black -q src/graph/generated_graph_query_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_expr.peg -o src/database/sql/generated_sql_expr_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_expr.peg -o src/database/sql/generated_sql_expr_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_expr_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_expr_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_dql.peg --no-aot -o src/database/sql/generated_sql_dql_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_dql.peg --no-aot -o src/database/sql/generated_sql_dql_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_dql_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_dql_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_dml.peg --no-aot -o src/database/sql/generated_sql_dml_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_dml.peg --no-aot -o src/database/sql/generated_sql_dml_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_dml_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_ddl.peg --no-aot -o src/database/sql/generated_sql_ddl_parser.py
+	${VENV_BIN}/black -q src/database/sql/generated_sql_dml_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_ddl.peg --no-aot -o src/database/sql/generated_sql_ddl_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_ddl_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_ddl_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/sql_admin.peg --no-aot -o src/database/sql/generated_sql_admin_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_admin.peg --no-aot -o src/database/sql/generated_sql_admin_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_admin_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_admin_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/yaml_frontmatter.peg -o src/pipeline/transformer/generated_yaml_frontmatter_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/yaml_frontmatter.peg -o src/pipeline/transformer/generated_yaml_frontmatter_parser.py
 	${VENV_BIN}/isort src/pipeline/transformer/generated_yaml_frontmatter_parser.py
 	${VENV_BIN}/black -q src/pipeline/transformer/generated_yaml_frontmatter_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/bibtex.peg -o src/pdf_engine/generated_bibtex_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/bibtex.peg -o src/pdf_engine/generated_bibtex_parser.py
 	${VENV_BIN}/isort src/pdf_engine/generated_bibtex_parser.py
 	${VENV_BIN}/black -q src/pdf_engine/generated_bibtex_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg_compiler/compile_peg.py grammars/pdf_cmap.peg -o src/pdf_engine/generated_cmap_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/pdf_cmap.peg -o src/pdf_engine/generated_cmap_parser.py
 	${VENV_BIN}/isort src/pdf_engine/generated_cmap_parser.py
 	${VENV_BIN}/black -q src/pdf_engine/generated_cmap_parser.py
 

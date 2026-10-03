@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Legacy CLI wrapper executable for DSN-25 Packrat PEG Ahead-of-Time Compiler.
-Preserved for backward compatibility. New canonical location: tools/peg/compile_peg.py
-or standard invocation: python -m core.peg.compiler
+CLI wrapper executable for DSN-25 Packrat PEG Ahead-of-Time Compiler.
+Usage: python tools/peg/compile_peg.py grammar.peg -o generated_parser.py
 """
 
 import sys

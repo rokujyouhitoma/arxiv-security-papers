@@ -1055,22 +1055,26 @@ class BaseCodeGenerator(ABC):
 ### 14.3 後方互換性設計 (Shim によるゼロディスラプション)
 
 大規模リファクタリングに伴う外部スクリプトや生成済みパーサーへの破壊的影響をゼロにするため、旧パスに透明な再エクスポート shim を配置：
-- `src/core/structures/peg.py`: `from core.peg.runtime import *`
-- `src/core/structures/peg_compiler/__init__.py`: `from core.peg.compiler import *`
+- `src/core/structures/peg.py`: `from core.peg.runtime import ...`
+- `src/core/structures/peg_compiler/__init__.py`: `from core.peg.compiler import ...`
 - `src/core/structures/peg_compiler/cli.py`, `codegen.py`, `codegen_js.py`, `optimizer.py`, `ast_nodes.py`: 各新モジュールを再エクスポート。
+- `tools/peg/compile_peg.py` を正式 CLI ラッパーとして新設し、`tools/peg_compiler/compile_peg.py` は後方互換 shim として維持。
+- `Makefile` 内の `compile_grammars` 規則を `tools/peg/compile_peg.py` に近代化更新。
 
-### 14.4 完了条件 (DoD for Phase 7)
+### 14.4 完了条件 (DoD for Phase 7 & Issue #439)
 
 - [x] **`src/core/peg/` への完全集約**:
   - `src/core/peg/runtime.py`、`src/core/peg/compiler/`、`src/core/peg/compiler/backend/` の構築完了。
 - [x] **LLVM 風 Backend 分離と `BaseCodeGenerator` の導入**:
   - `backend/base.py`、`backend/python.py`、`backend/javascript.py` の対称化と抽象化完了。
+- [x] **`tools/peg/` への CLI 移行と互換性 shim**:
+  - `tools/peg/compile_peg.py` の新設、`tools/peg_compiler/compile_peg.py` の shim 保持、および `Makefile` の更新完了。
 - [x] **完全な後方互換性 shim の配備**:
   - `src/core/structures/peg.py` および `src/core/structures/peg_compiler/` への shim 配備により既存参照が 100% 動作。
 - [x] **自動生成パーサー群の再生成 (`make compile_grammars`)**:
   - 全パーサーが新パッケージ構成でクリーンに再生成され、書式整形・構文検証に合格。
 - [x] **テストスイート PASS**:
-  - `tests/core/test_peg*`、`tests/test_peg_compiler_js.py`、および新規アーキテクチャテスト `tests/core/test_peg_package_architecture.py` が全 PASS。
+  - `tests/core/peg/` 配下の全テストスイートおよび新規アーキテクチャテストが全 PASS。
 
 
 
