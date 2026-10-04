@@ -122,6 +122,7 @@ from ilisp.types import (
     Parameter,
     Primitive,
     Procedure,
+    Promise,
     Record,
     RecordType,
     SchemeException,
@@ -134,6 +135,7 @@ from ilisp.types import (
     is_null,
     is_pair,
     is_parameter,
+    is_promise,
     is_record,
     is_record_type,
     string_val,
@@ -758,6 +760,48 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_parameter_p(x: Any) -> bool:
         return is_parameter(x)
 
+    # Procedure Application (R7RS 6.4)
+    def prim_apply(proc: Any, *args: Any) -> Any:
+        from ilisp.evaluator import _apply_procedure
+
+        if not args:
+            raise TypeError("apply requires at least 2 arguments (proc, args)")
+        call_args: List[Any] = list(args[:-1])
+        last_arg = args[-1]
+        call_args.extend(to_py_list(last_arg))
+        if isinstance(proc, Procedure):
+            return _apply_procedure(proc, call_args)
+        elif callable(proc):
+            return proc(*call_args)
+        raise TypeError(f"apply: expected procedure, got {proc!r}")
+
+    # Delayed Evaluation (R7RS 4.2.5 & 6.10)
+    def prim_promise_p(x: Any) -> bool:
+        return is_promise(x)
+
+    def prim_make_promise(x: Any) -> Promise:
+        if isinstance(x, Promise):
+            return x
+        return Promise(done=True, value=x)
+
+    def prim_make_promise_from_thunk(thunk: Any) -> Promise:
+        from ilisp.evaluator import _apply_procedure
+
+        if isinstance(thunk, Procedure):
+
+            def py_thunk() -> Any:
+                return _apply_procedure(thunk, [])
+
+            return Promise(thunk=py_thunk)
+        elif callable(thunk):
+            return Promise(thunk=thunk)
+        raise TypeError(f"make-promise-from-thunk: expected procedure, got {thunk!r}")
+
+    def prim_force(x: Any) -> Any:
+        if is_promise(x):
+            return x.force()
+        return x
+
     # --- Record Type Primitives (R7RS 5.5 & 6.x) ---
     def prim_make_record_type(name: Any, fields: Any) -> RecordType:
         if not isinstance(name, (str, Symbol)):
@@ -1105,6 +1149,13 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         # Parameters (R7RS)
         "make-parameter": prim_make_parameter,
         "parameter?": prim_parameter_p,
+        # Procedure Application (R7RS 6.4)
+        "apply": prim_apply,
+        # Delayed Evaluation (R7RS 4.2.5 & 6.10)
+        "promise?": prim_promise_p,
+        "make-promise": prim_make_promise,
+        "__make-promise-from-thunk": prim_make_promise_from_thunk,
+        "force": prim_force,
         # Records (R7RS 5.5 & 6.x)
         "make-record-type": prim_make_record_type,
         "record-type?": prim_record_type_p,

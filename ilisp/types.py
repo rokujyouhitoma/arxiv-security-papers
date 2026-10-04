@@ -787,3 +787,70 @@ def unwrap_values(val: Any) -> Any:
             return val.values[0]
         return NIL
     return val
+
+
+class Promise:
+    """R7RS 4.2.5 Delayed evaluation Promise object."""
+
+    __slots__ = ("_done", "_value", "_thunk")
+
+    def __init__(
+        self,
+        thunk: Optional[Callable[[], Any]] = None,
+        done: bool = False,
+        value: Any = None,
+    ) -> None:
+        self._done: bool = done
+        self._value: Any = value
+        self._thunk: Optional[Callable[[], Any]] = thunk
+
+    @property
+    def is_done(self) -> bool:
+        return self._done
+
+    @property
+    def value(self) -> Any:
+        return self._value
+
+    def force(self) -> Any:
+        """Force evaluation of this promise and memoize the result.
+
+        Implements iterative unrolling for delay-force to ensure stack safety
+        with lazy stream pipelines (R7RS 4.2.5).
+        """
+        curr: Any = self
+        while isinstance(curr, Promise):
+            if curr._done:
+                return curr._value
+            if curr._thunk is None:
+                return curr._value
+            thunk = curr._thunk
+            curr._thunk = None
+            res = thunk()
+            if isinstance(res, Promise):
+                if res._done:
+                    curr._done = True
+                    curr._value = res._value
+                    return curr._value
+                # Alias/chain to avoid deep promise stacks
+                curr._thunk = res._thunk
+                curr._done = res._done
+                curr._value = res._value
+                if not curr._done:
+                    continue
+                return curr._value
+            else:
+                curr._done = True
+                curr._value = res
+                return res
+        return curr
+
+    def __repr__(self) -> str:
+        if self._done:
+            return f"#<promise !{self._value!r}>"
+        return "#<promise ...>"
+
+
+def is_promise(val: Any) -> bool:
+    """Check if a value is a Promise."""
+    return isinstance(val, Promise)

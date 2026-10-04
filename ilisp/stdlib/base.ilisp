@@ -129,6 +129,7 @@
               (cons (cons '__do_loop (_ilisp_do_inits var_clauses)) '()))))
 
 ;; cond: (cond (test expr ...) ... (else expr ...))
+;; Supports R7RS 4.2.1 (test => recipient) and (test)
 (define-macro (cond . clauses)
   (if (null? clauses)
       '()
@@ -137,12 +138,34 @@
         (let ((test_expr (car first_clause))
               (body_exprs (cdr first_clause)))
           (if (eq? test_expr 'else)
-              (cons 'begin body_exprs)
-              (cons 'if
-                    (cons test_expr
-                          (cons (cons 'begin body_exprs)
-                                (cons (cons 'cond rest_clauses)
-                                      '())))))))))
+              (if (and (pair? body_exprs) (eq? (car body_exprs) '=>))
+                  (cons (car (cdr body_exprs)) '())
+                  (cons 'begin body_exprs))
+              (if (null? body_exprs)
+                  (let ((t_var '__cond_test))
+                    (cons 'let
+                          (cons (cons (cons t_var (cons test_expr '())) '())
+                                (cons (cons 'if
+                                            (cons t_var
+                                                  (cons t_var
+                                                        (cons (cons 'cond rest_clauses)
+                                                              '()))))
+                                      '()))))
+                  (if (eq? (car body_exprs) '=>)
+                      (let ((t_var '__cond_test))
+                        (cons 'let
+                              (cons (cons (cons t_var (cons test_expr '())) '())
+                                    (cons (cons 'if
+                                                (cons t_var
+                                                      (cons (cons (car (cdr body_exprs)) (cons t_var '()))
+                                                            (cons (cons 'cond rest_clauses)
+                                                                  '()))))
+                                          '()))))
+                      (cons 'if
+                            (cons test_expr
+                                  (cons (cons 'begin body_exprs)
+                                        (cons (cons 'cond rest_clauses)
+                                              '())))))))))))
 
 ;; and: (and expr ...) short-circuit boolean AND
 (define-macro (and . exprs)
@@ -171,6 +194,7 @@
                             '()))))))
 
 ;; case: (case key ((val ...) expr ...) ... (else expr ...))
+;; Supports R7RS 4.2.1 ((val ...) => recipient) and (else => recipient)
 (define-macro (case key . clauses)
   (let ((k_var '__case_key))
     (define (_ilisp_expand_case cls)
@@ -181,11 +205,16 @@
             (let ((datums (car first_cl))
                   (exprs (cdr first_cl)))
               (if (eq? datums 'else)
-                  (cons 'begin exprs)
-                  (cons 'if
-                        (cons (cons 'member (cons k_var (cons (cons 'quote (cons datums '())) '())))
-                              (cons (cons 'begin exprs)
-                                    (cons (_ilisp_expand_case rest_cl) '())))))))))
+                  (if (and (pair? exprs) (eq? (car exprs) '=>))
+                      (cons (car (cdr exprs)) (cons k_var '()))
+                      (cons 'begin exprs))
+                  (let ((action (if (and (pair? exprs) (eq? (car exprs) '=>))
+                                    (cons (car (cdr exprs)) (cons k_var '()))
+                                    (cons 'begin exprs))))
+                    (cons 'if
+                          (cons (cons 'member (cons k_var (cons (cons 'quote (cons datums '())) '())))
+                                (cons action
+                                      (cons (_ilisp_expand_case rest_cl) '()))))))))))
     (cons 'let
           (cons (cons (cons k_var (cons key '())) '())
                 (cons (_ilisp_expand_case clauses) '())))))
@@ -404,3 +433,58 @@
                 (cons (list 'define pred-name (list 'record-predicate type-name))
                       (cons (list 'define ctor-name (list 'record-constructor type-name (list 'quote ctor-fields)))
                             (_ilisp_expand_field_specs type-name field-specs)))))))
+
+;;; -------------------------------------------------------------
+;;; 6. Delayed Evaluation & Case-Lambda (R7RS 4.2.5 & 4.2.9)
+;;; -------------------------------------------------------------
+
+;; delay: (delay expr)
+(define-macro (delay expr)
+  (list '__make-promise-from-thunk (list 'lambda '() expr)))
+
+;; delay-force: (delay-force expr)
+(define-macro (delay-force expr)
+  (list '__make-promise-from-thunk (list 'lambda '() expr)))
+
+;; Helpers for case-lambda arity inspection
+(define (_ilisp_formals_min_arity formals)
+  (if (null? formals)
+      0
+      (if (symbol? formals)
+          0
+          (if (symbol? (cdr formals))
+              1
+              (+ 1 (_ilisp_formals_min_arity (cdr formals)))))))
+
+(define (_ilisp_formals_has_rest formals)
+  (if (null? formals)
+      #f
+      (if (symbol? formals)
+          #t
+          (if (symbol? (cdr formals))
+              #t
+              (_ilisp_formals_has_rest (cdr formals))))))
+
+(define (_ilisp_expand_case_lambda_clauses clauses args-var n-var)
+  (if (null? clauses)
+      (list (list 'else (list 'error "case-lambda: no matching clause for arguments" args-var)))
+      (let* ((cl (car clauses))
+             (formals (car cl))
+             (body (cdr cl))
+             (min-a (_ilisp_formals_min_arity formals))
+             (is-rest (_ilisp_formals_has_rest formals))
+             (test-cond (if is-rest
+                            (list '>= n-var min-a)
+                            (list '= n-var min-a)))
+             (action (list 'apply (cons 'lambda (cons formals body)) args-var)))
+        (cons (list test-cond action)
+              (_ilisp_expand_case_lambda_clauses (cdr clauses) args-var n-var)))))
+
+;; case-lambda: (case-lambda (formals body ...) ...)
+(define-macro (case-lambda . clauses)
+  (let ((args-var '__case_lambda_args)
+        (n-var '__case_lambda_n))
+    (list 'lambda args-var
+          (list 'let (list (list n-var (list 'length args-var)))
+                (cons 'cond (_ilisp_expand_case_lambda_clauses clauses args-var n-var))))))
+

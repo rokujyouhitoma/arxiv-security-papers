@@ -184,8 +184,10 @@ class PythonASTCompiler:
                 ast.alias(name="Parameter", asname=None),
                 ast.alias(name="Record", asname=None),
                 ast.alias(name="RecordType", asname=None),
+                ast.alias(name="Promise", asname=None),
                 ast.alias(name="SchemeException", asname=None),
                 ast.alias(name="Continuation", asname=None),
+                ast.alias(name="to_lisp_list", asname=None),
             ],
             level=0,
         )
@@ -426,17 +428,27 @@ class PythonASTCompiler:
     ) -> ast.FunctionDef:
         """Compile a Scheme procedure with Self-Tail Call Optimization (Self-TCO)."""
         param_names: List[str] = []
+        vararg_name: Optional[str] = None
         curr = params_expr
-        while isinstance(curr, Cons):
-            elem = curr.car
-            assert isinstance(elem, Symbol)
-            param_names.append(elem.name)
-            curr = curr.cdr
+        if isinstance(curr, Symbol):
+            vararg_name = curr.name
+        else:
+            while isinstance(curr, Cons):
+                elem = curr.car
+                assert isinstance(elem, Symbol)
+                param_names.append(elem.name)
+                curr = curr.cdr
+            if isinstance(curr, Symbol):
+                vararg_name = curr.name
 
         mangled_params = [mangle_symbol(p) for p in param_names]
+        vararg_ast = (
+            ast.arg(arg=mangle_symbol(vararg_name)) if vararg_name is not None else None
+        )
         args_ast = ast.arguments(
             posonlyargs=[],
             args=[ast.arg(arg=p) for p in mangled_params],
+            vararg=vararg_ast,
             kwonlyargs=[],
             kw_defaults=[],
             defaults=[],
@@ -445,8 +457,27 @@ class PythonASTCompiler:
         fn_body: List[ast.stmt] = []
         self._stmt_stack.append(fn_body)
 
+        # Convert vararg tuple to Scheme list if present
+        if vararg_name is not None:
+            m_vname = mangle_symbol(vararg_name)
+            to_list_stmt = ast.Assign(
+                targets=[ast.Name(id=m_vname, ctx=ast.Store())],
+                value=ast.Call(
+                    func=ast.Name(id="to_lisp_list", ctx=ast.Load()),
+                    args=[ast.Name(id=m_vname, ctx=ast.Load())],
+                    keywords=[],
+                ),
+            )
+            self.emit(to_list_stmt)
+
         # Box any parameter that is mutated by set!
-        for p_name, m_name in zip(param_names, mangled_params):
+        all_params = list(param_names)
+        all_mangled = list(mangled_params)
+        if vararg_name is not None:
+            all_params.append(vararg_name)
+            all_mangled.append(mangle_symbol(vararg_name))
+
+        for p_name, m_name in zip(all_params, all_mangled):
             if p_name in mutated_vars:
                 box_stmt = ast.Assign(
                     targets=[ast.Name(id=m_name, ctx=ast.Store())],

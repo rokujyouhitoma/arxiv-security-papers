@@ -16,19 +16,20 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 162
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 167
     "🔄 一部対応 (サブセット/基本版)" : 10
-    "⏳ 計画中 (Phase 3/4 予定)" : 31
+    "⏳ 計画中 (Phase 3/4 予定)" : 26
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
 
 | カテゴリ | 規格セクション | 規格機能数 | 実装済 (率) | ステータス | 備考 |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **特殊形式・コア構文** | 4.1, 4.2 | 18 | 17 (94%) | 🟢 ほぼ完全 | `quote`, `lambda`, `if`, `set!`, `cond`, `case`, `let`, `let*`, `letrec`, `letrec*`, `do`, `let-values`, `quasiquote` 完備 |
+| **特殊形式・コア構文** | 4.1, 4.2 | 18 | 18 (100%) | 🟢 完全準拠 | `quote`, `lambda`, `if`, `set!`, `cond` (`=>`), `case` (`=>`), `let`, `let*`, `letrec`, `letrec*`, `do`, `let-values`, `quasiquote`, `case-lambda`, `delay`, `delay-force` 完備 |
+| **遅延評価 (Lazy evaluation)** | 4.2.5, 6.10 | 5 | 5 (100%) | 🟢 完全準拠 | `delay`, `delay-force`, `force`, `make-promise`, `promise?` メモ化・末尾再帰ストリーム対応完備 |
 | **レコード型 (Record types)** | 5.5 | 8 | 8 (100%) | 🟢 完全準拠 | `define-record-type`, コンストラクタ, 型述語, アクセサ, モディファイア, 生成的一意型, 低レベルAPI完備 |
 | **等価性・真偽値** | 6.1, 6.3 | 5 | 5 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `not`（レコード等価比較対応） |
-| **ペアとリスト** | 6.4 | 26 | 18 (69%) | 🟢 充実 | 基本操作、リスト走査、高階関数 (`map`, `filter`, `fold-left`)、Alist 検索完備 |
+| **ペアとリスト** | 6.4 | 26 | 19 (73%) | 🟢 充実 | 基本操作、リスト走査、高階関数 (`map`, `filter`, `fold-left`)、`apply`、Alist 検索完備 |
 | **シンボル** | 6.5 | 4 | 3 (75%) | 🟢 完全準拠 | インターン保証、文字列相互変換 |
 | **ベクタ (Vectors)** | 6.8 | 14 | 14 (100%) | 🟢 完全準拠 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, `vector-copy`, `vector-copy!`, `vector-fill!`, `vector-append`, `vector-map`, `vector-for-each` 等完備 |
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
@@ -60,8 +61,8 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `unquote-splicing` (`,@`) | スプライシング | Kernel (Core) | ✅ 完全準拠 | リスト要素の平坦化インライン展開 |
 | `when` | 条件実行 | `stdlib/base.ilisp` | ✅ 完全準拠 | `(if test (begin body...))` へのマクロ展開 |
 | `unless` | 否定条件実行 | `stdlib/base.ilisp` | ✅ 完全準拠 | `(if test '() (begin body...))` へのマクロ展開 |
-| `cond` | 多分岐 | `stdlib/base.ilisp` | ✅ 完全準拠 | `else` 節対応、ネスト `if` へのマクロ展開 |
-| `case` | キー分岐 | `stdlib/base.ilisp` | ✅ 完全準拠 | キー一時変数束縛、`member` 照合、`else` 節対応 |
+| `cond` | 多分岐 | `stdlib/base.ilisp` | ✅ 完全準拠 | `else` 節、`=>` レシーバ構文 (`(test => recipient)`)、単一テスト値返却 (`(test)`) 完備 |
+| `case` | キー分岐 | `stdlib/base.ilisp` | ✅ 完全準拠 | キー一時変数束縛、`member` 照合、`else` 節、`=>` レシーバ構文完備 |
 | `and` | 短絡論理積 | `stdlib/base.ilisp` | ✅ 完全準拠 | 短絡評価、真値返却マクロ |
 | `or` | 短絡論理和 | `stdlib/base.ilisp` | ✅ 完全準拠 | 短絡評価、真値保持用一時変数束縛マクロ |
 | `let` | 局所束縛 | `stdlib/base.ilisp` | ✅ 完全準拠 | 即時適用 `((lambda (vars...) body...) vals...)` への脱糖 |
@@ -79,6 +80,8 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `do` | 構造化反復 | `stdlib/base.ilisp` | ✅ 完全準拠 | 変数更新ステップ、終了判定、結果式返却ループ脱糖 |
 | `parameterize` | 動的パラメータ一時束縛 | `stdlib/base.ilisp` | ✅ 完全準拠 | `dynamic-wind` 上で構築された動的スコープパラメータ一時束縛・確実復元マクロ |
 | `define-record-type` | レコード型定義 | `stdlib/base.ilisp` | ✅ 完全準拠 | 型記述子、コンストラクタ、型述語、フィールドアクセサ、モディファイアを自動生成・展開 |
+| `case-lambda` | 多重アリティ分岐 | `stdlib/base.ilisp` | ✅ 完全準拠 | 引数個数に応じた多重クロージャ節ディスパッチ構文（可変長・単一シンボル対応） |
+| `delay`, `delay-force` | 遅延評価構文 | `stdlib/base.ilisp` | ✅ 完全準拠 | 式評価の遅延・メモ化Promise生成、末尾再帰安全な遅延ストリーム展開 |
 | `syntax-error` | 構文エラー送出 | - | ⏳ 計画中 | Phase 3 実装予定 |
 
 ---
@@ -248,13 +251,22 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
 | `procedure?` | Kernel (Core) | 🔄 | 手続き（クロージャ・プリミティブ）判定 |
-| `apply` | Kernel (Core) | 🔄 | 引数リストを展開した関数適用 |
+| `apply` | Kernel (Core) | ✅ | 先行引数および末尾引数リストを展開した多引数手続き適用 |
 | `values` | Kernel (Core) | ✅ | 任意個の多値を生成・返却（単一値はアンラップ） |
 | `call-with-values` | Kernel (Core) | ✅ | 生産者 (producer) の多値を消費者 (consumer) に渡して呼出 |
 | `call/cc` (`call-with-current-continuation`) | Kernel (Core) | ✅ | **One-shot 脱出継続**。二重呼出 (`active` フラグ) ガード完備 |
 | `dynamic-wind` | Kernel (Core) | ✅ | `before`, `thunk`, `after` 保護構文（正常終了・例外・継続脱出時の確実なクリーンアップ保証） |
 | `make-parameter`, `parameter?` | Kernel (Core) | ✅ | スレッド安全・非同期コンテキスト対応動的パラメータ生成・判定 |
 | `parameterize` | `stdlib/base.ilisp`| ✅ | `dynamic-wind` 上で構築された動的スコープパラメータ一時束縛・確実復元構文 |
+
+### 3.10b 第4.2.5節 遅延評価 (Delayed evaluation & Promises)
+
+| 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
+| :--- | :---: | :---: | :--- |
+| `delay`, `delay-force` | `stdlib/base.ilisp`| ✅ | 式評価の遅延構文。末尾再帰的な遅延ストリーム展開に対応 |
+| `force` | Kernel (Core) | ✅ | Promise の強制評価・結果メモ化。非 Promise はそのまま返却 |
+| `promise?` | Kernel (Core) | ✅ | `Promise` 型判定述語 |
+| `make-promise` | Kernel (Core) | ✅ | 即座に値を保持する解決済 Promise の生成（Promise 引数はそのまま返却） |
 
 ### 3.11 第6.11節 例外機構 (Exceptions)
 
