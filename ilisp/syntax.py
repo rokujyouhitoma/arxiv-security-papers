@@ -218,6 +218,14 @@ def syntax_to_datum(stx: Any, use_scope: Optional[Scope] = None) -> Any:
                     "read-char",
                     "eof-object?",
                     "load",
+                    "current-second",
+                    "current-jiffy",
+                    "jiffies-per-second",
+                    "get-environment-variable",
+                    "get-environment-variables",
+                    "command-line",
+                    "exit",
+                    "emergency-exit",
                 }
                 if d.name in core_forms:
                     return d

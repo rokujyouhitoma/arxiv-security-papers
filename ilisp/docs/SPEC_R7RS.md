@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 183
-    "🔄 一部対応 (サブセット/基本版)" : 7
-    "⏳ 計画中 (Phase 3/4 予定)" : 13
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 189
+    "🔄 一部対応 (サブセット/基本版)" : 6
+    "⏳ 計画中 (Phase 3/4 予定)" : 8
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -38,7 +38,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **数値タワー (Numbers)** | 6.2 | 35 | 33 (94%) | 🟢 ほぼ完全 | 述語群、四則演算、極値/公約数、丸め、商余剰多値、基数変換完備 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
 | **マクロ機構** | 4.3 | 3 | 3 (100%) | 🟢 完全準拠 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules`、`syntax-error` 完備 |
-| **入出力・システム** | 6.13, 6.14 | 32 | 28 (88%) | 🟢 充実 | ポート抽象化, ファイル/文字列/バイナリI/O, `write-shared`, `write-simple`, `write-string` (スライス対応), `read` (Datum) |
+| **入出力・システム** | 6.13, 6.14 | 32 | 32 (100%) | 🟢 完全準拠 | ポート抽象化, ファイル/文字列/バイナリI/O, `write-shared`, `write-simple`, `read`, 時刻・単調jiffy, 環境変数Alist, コマンドライン完備 |
 | **バイトベクタ** | 6.9 | 11 | 11 (100%) | 🟢 完全準拠 | `#u8(...)`, `make-bytevector`, `bytevector-u8-ref/set!`, `utf8->string`, `string->utf8` 完備 |
 
 ---
@@ -317,8 +317,10 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `flush-output-port` | Kernel (Core) | ✅ | 出力バッファフラッシュ |
 | `eof-object`, `eof-object?` | Kernel (Core) | ✅ | EOF 終端オブジェクト生成および判定 |
 | `load` | `(scheme load)` | ✅ | ファイルから S 式を順次読み込み現在環境で評価 |
-| `exit` | Kernel (Core) | 🔄 | プロセス終了（Python `sys.exit` 連動） |
-| `current-second`, `current-jiffy` | - | ⏳ | 高精度時刻取得（Phase 3 予定） |
+| `exit`, `emergency-exit` | `(scheme process-context)` | ✅ | 終了コード/真偽値対応プロセス正常終了・即時強制終了 |
+| `current-second`, `current-jiffy`, `jiffies-per-second` | `(scheme time)` | ✅ | 高精度実数時刻 (UTC epoch), 単調増加高精度ティック整数, 周波数 (10^9) 完備 |
+| `get-environment-variable`, `get-environment-variables` | `(scheme process-context)` | ✅ | 環境変数文字列取得 (未定義時 `#f`) および連想リスト (Alist) 一括取得 |
+| `command-line` | `(scheme process-context)` | ✅ | コマンドライン引数文字列リスト取得 |
 
 ---
 
@@ -334,13 +336,13 @@ graph LR
         SR["(scheme read)<br>read (Datum リーダー)"]
         SF["(scheme file)<br>ファイルポートI/O, call-with-*, with-*"]
         SL["(scheme load)<br>load プリミティブ"]
+        ST["(scheme time)<br>current-second, current-jiffy, jiffies-per-second"]
+        SPC["(scheme process-context)<br>get-env-var(s), command-line, exit"]
     end
     subgraph Partially Supported
-        SPC["(scheme process-context)<br>exit, Python連携"]
         SC["(scheme char)<br>#\\リテラル, string-append"]
     end
     subgraph Planned for Phase 3
-        ST["(scheme time)<br>高精度タイマー"]
         SCXR["(scheme cxr)<br>4段合成アクセサ"]
         SCASE["(scheme case-lambda)<br>可変長ディスパッチ"]
     end
@@ -360,9 +362,9 @@ graph LR
 | `(scheme read)` | S式パーサ・Datum リーダー (`read`) | 🟢 100% | Kernel コア組込 (`ilisp/port.py`, `ilisp/reader.py`) |
 | `(scheme file)` | ファイルポート入出力・自動クローズ | 🟢 100% | Kernel コア組込 (`ilisp/port.py`) |
 | `(scheme load)` | スクリプト読込 (`load`) | 🟢 100% | Kernel コア組込 |
-| `(scheme process-context)` | コマンドライン・終了コード | 🟡 50% | `exit` 実装済（引数取得等は Phase 3） |
+| `(scheme process-context)` | コマンドライン・環境変数・終了 | 🟢 100% | Kernel コア組込 (`get-environment-variable(s)`, `command-line`, `exit`, `emergency-exit`) |
+| `(scheme time)` | 高精度タイマー・経過時刻 | 🟢 100% | Kernel コア組込 (`current-second`, `current-jiffy`, `jiffies-per-second`) |
 | `(scheme char)` | 文字種別判定・変換 | 🟡 30% | 文字リテラル・基本判定 |
-| `(scheme time)` | 高精度タイマー・経過時刻 | ⏳ 計画中 | Phase 3 (`current-second` 等) |
 | `(scheme cxr)` | 深層リストアクセサ (`caaar`..`cddddr`)| ⏳ 計画中 | Phase 3 (`stdlib/cxr.ilisp`) |
 | `(scheme case-lambda)` | 引数個数多重ディスパッチ | ⏳ 計画中 | Phase 3 マクロ提供予定 |
 | `(scheme lazy)` | 遅延評価 (`delay`, `force`) | ⏳ 計画中 | Phase 4 (`make-promise`) |

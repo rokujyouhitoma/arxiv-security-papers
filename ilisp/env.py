@@ -7,6 +7,9 @@ and standard R7RS-small core primitives plus Python zero-copy interop.
 from __future__ import annotations
 
 import importlib
+import os
+import sys
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
@@ -1228,6 +1231,52 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         err_obj = ErrorObject(message_str, irritants_list, kind="read")
         raise SchemeException(err_obj)
 
+    # --- System, Time, and Process-Context Primitives (R7RS 6.14) ---
+    def prim_current_second() -> float:
+        return time.time()
+
+    def prim_current_jiffy() -> int:
+        return time.monotonic_ns()
+
+    def prim_jiffies_per_second() -> int:
+        return 1_000_000_000
+
+    def prim_get_environment_variable(name: Any) -> Any:
+        if not isinstance(name, (str, MutableString)):
+            raise TypeError(f"get-environment-variable: expected string, got {name!r}")
+        s = string_val(name)
+        val = os.environ.get(s)
+        if val is None:
+            return False
+        return val
+
+    def prim_get_environment_variables() -> Any:
+        pairs = [Cons(k, v) for k, v in os.environ.items()]
+        return to_lisp_list(pairs)
+
+    def prim_command_line() -> Any:
+        return to_lisp_list(list(sys.argv))
+
+    def prim_exit(obj: Any = True) -> None:
+        code: int = 0
+        if obj is True:
+            code = 0
+        elif obj is False:
+            code = 1
+        elif isinstance(obj, int):
+            code = obj
+        sys.exit(code)
+
+    def prim_emergency_exit(obj: Any = True) -> None:
+        code: int = 0
+        if obj is True:
+            code = 0
+        elif obj is False:
+            code = 1
+        elif isinstance(obj, int):
+            code = obj
+        os._exit(code)
+
     # Register all primitives
     primitives: Dict[str, Callable[..., Any]] = {
         # Pairs and Lists (R7RS 6.4)
@@ -1489,6 +1538,16 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "read-bytevector!": prim_read_bytevector_bang,
         "write-bytevector": prim_write_bytevector,
         "load": prim_load,
+        # System & Time (R7RS 6.14, (scheme time))
+        "current-second": prim_current_second,
+        "current-jiffy": prim_current_jiffy,
+        "jiffies-per-second": prim_jiffies_per_second,
+        # Process Context (R7RS 6.14, (scheme process-context))
+        "get-environment-variable": prim_get_environment_variable,
+        "get-environment-variables": prim_get_environment_variables,
+        "command-line": prim_command_line,
+        "exit": prim_exit,
+        "emergency-exit": prim_emergency_exit,
         # Python Zero-Copy & Interop
         "sequence-view": prim_sequence_view,
         "py-import": prim_py_import,
