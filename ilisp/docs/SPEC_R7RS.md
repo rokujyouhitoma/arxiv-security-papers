@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 200
-    "🔄 一部対応 (サブセット/基本版)" : 3
-    "⏳ 計画中 (Phase 4 予定)" : 0
+    "✅ サポート済 (Phase 1/2/3/4 稼働中)" : 203
+    "🔄 一部対応 (サブセット/基本版)" : 0
+    "⏳ 計画中" : 0
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -35,11 +35,13 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
 | **継続・動的制御** | 6.10 | 6 | 6 (100%) | 🟢 完全準拠 | `call/cc`, `dynamic-wind`, `make-parameter`, `parameter?`, `parameterize` 完備 |
 | **例外機構 (Exceptions)** | 6.11 | 9 | 9 (100%) | 🟢 完全準拠 | `raise`, `raise-continuable`, `with-exception-handler`, `guard`, `error`, `error-object?`, `error-object-message`, `error-object-irritants`, `read-error?`, `file-error?` 完備 |
+| **動的評価・対話環境** | 6.12 | 3 | 3 (100%) | 🟢 完全準拠 | `eval`, `environment`, `interaction-environment`（分離環境構築・動的S式評価完備） |
 | **数値タワー (Numbers)** | 6.2 | 35 | 35 (100%) | 🟢 完全準拠 | `complex?`, `rational?`, `exact-integer-sqrt`, `make-rectangular`, `make-polar`, `real-part`, `imag-part`, `magnitude`, `angle`, 述語群、四則演算、極値/公約数、丸め、商余剰多値、基数変換完備 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
 | **マクロ機構** | 4.3 | 3 | 3 (100%) | 🟢 完全準拠 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules`、`syntax-error` 完備 |
 | **入出力・システム** | 6.13, 6.14 | 32 | 32 (100%) | 🟢 完全準拠 | ポート抽象化, ファイル/文字列/バイナリI/O, `write-shared`, `write-simple`, `read`, 時刻・単調jiffy, 環境変数Alist, コマンドライン完備 |
 | **バイトベクタ** | 6.9 | 11 | 11 (100%) | 🟢 完全準拠 | `#u8(...)`, `make-bytevector`, `bytevector-u8-ref/set!`, `utf8->string`, `string->utf8` 完備 |
+
 
 ---
 
@@ -353,10 +355,8 @@ graph LR
         SC["(scheme char)<br>分類, ci比較, up/down/foldcase (17手続き)"]
         SLAZY["(scheme lazy)<br>delay, force, delay-force, make-promise, promise?"]
         SCASE["(scheme case-lambda)<br>case-lambda (引数個数多重ディスパッチ)"]
-    end
-    subgraph Planned for Phase 4
-        SEVAL["(scheme eval)<br>動的環境eval"]
-        SREPL["(scheme repl)<br>REPL環境"]
+        SEVAL["(scheme eval)<br>eval, environment (動的環境評価)"]
+        SREPL["(scheme repl)<br>interaction-environment (REPL対話環境)"]
     end
 ```
 
@@ -375,8 +375,8 @@ graph LR
 | `(scheme char)` | 文字種別判定・変換 | 🟢 100% | Kernel コア組込 (`char-alphabetic?`, `char-ci=?`, `digit-value`, `char-foldcase`, `string-ci=?`, `string-foldcase` 等 17手続き完備) |
 | `(scheme lazy)` | 遅延評価 (`delay`, `force`, `make-promise`) | 🟢 100% | Kernel コア組込 + `stdlib/base.ilisp` (`delay`, `delay-force`, `force`, `make-promise`, `promise?`) |
 | `(scheme case-lambda)` | 引数個数多重ディスパッチ | 🟢 100% | `stdlib/base.ilisp` (`case-lambda` 構文マクロ) |
-| `(scheme eval)` | 実行時環境生成と動的評価 | ⏳ 計画中 | Phase 4 (`environment`, `eval`) |
-| `(scheme repl)` | 対話型セッション環境 | ⏳ 計画中 | Phase 4 |
+| `(scheme eval)` | 実行時環境生成と動的評価 | 🟢 100% | Kernel コア組込 (`eval`, `environment`) |
+| `(scheme repl)` | 対話型セッション環境 | 🟢 100% | Kernel コア組込 (`interaction-environment`) |
 
 ---
 

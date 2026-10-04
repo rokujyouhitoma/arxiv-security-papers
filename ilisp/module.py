@@ -265,6 +265,21 @@ class LibraryRegistry:
             case_lambda_exports[case_lambda_sym] = base_env.bindings[case_lambda_sym]
         self.register(Library(("scheme", "case-lambda"), case_lambda_exports, base_env))
 
+        # (scheme eval)
+        eval_exports: Dict[Symbol, Any] = {}
+        for name in ("eval", "environment"):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                eval_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "eval"), eval_exports, base_env))
+
+        # (scheme repl)
+        repl_exports: Dict[Symbol, Any] = {}
+        repl_sym = Symbol.intern("interaction-environment")
+        if repl_sym in base_env.bindings:
+            repl_exports[repl_sym] = base_env.bindings[repl_sym]
+        self.register(Library(("scheme", "repl"), repl_exports, base_env))
+
         # (ilisp python)
         py_exports: Dict[Symbol, Any] = {}
         for name in (

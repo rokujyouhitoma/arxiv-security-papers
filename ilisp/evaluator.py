@@ -49,6 +49,11 @@ class TailCall:
 
 def eval_expr(expr: Any, env: Environment) -> Any:
     """Evaluate an S-expression within an environment using a trampoline loop for TCO."""
+    from ilisp.env import get_interaction_environment, set_interaction_environment
+
+    if get_interaction_environment() is None:
+        set_interaction_environment(env.root)
+
     curr_expr: Any = expr
     curr_env: Environment = env
 

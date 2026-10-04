@@ -180,6 +180,14 @@ class Environment:
         self.parent: Optional[Environment] = parent
         self.bindings: Dict[Symbol, Any] = bindings if bindings is not None else {}
 
+    @property
+    def root(self) -> Environment:
+        """Return the root top-level environment in the lexical scope chain."""
+        curr: Environment = self
+        while curr.parent is not None:
+            curr = curr.parent
+        return curr
+
     def define(self, sym: Symbol, val: Any) -> None:
         """Bind variable in the current local environment frame."""
         self.bindings[sym] = val
@@ -230,6 +238,20 @@ class Environment:
             )
         new_bindings = {p: a for p, a in zip(params, args)}
         return Environment(parent=self, bindings=new_bindings)
+
+
+_CURRENT_INTERACTION_ENVIRONMENT: Optional[Environment] = None
+
+
+def get_interaction_environment() -> Optional[Environment]:
+    """Retrieve the currently active interactive REPL/session root environment."""
+    return _CURRENT_INTERACTION_ENVIRONMENT
+
+
+def set_interaction_environment(env: Optional[Environment]) -> None:
+    """Set the currently active interactive REPL/session root environment."""
+    global _CURRENT_INTERACTION_ENVIRONMENT
+    _CURRENT_INTERACTION_ENVIRONMENT = env
 
 
 def make_initial_env(preload_stdlib: bool = True) -> Environment:
@@ -802,6 +824,29 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         for expr in exprs:
             res = eval_expr(expr, env)
         return res
+
+    def prim_eval(expr: Any, env_spec: Any) -> Any:
+        if not isinstance(env_spec, Environment):
+            raise TypeError(f"eval: expected Environment, got {env_spec!r}")
+        from ilisp.evaluator import eval_expr
+
+        return eval_expr(expr, env_spec)
+
+    def prim_environment(*specs: Any) -> Environment:
+        from ilisp.module import resolve_import_set
+
+        new_env = Environment()
+        for spec in specs:
+            bindings = resolve_import_set(spec)
+            for sym, val in bindings.items():
+                new_env.define(sym, val)
+        return new_env
+
+    def prim_interaction_environment() -> Environment:
+        curr = get_interaction_environment()
+        if curr is not None:
+            return curr
+        return env
 
     def prim_num_le(*args: Union[int, float]) -> bool:
         if len(args) < 2:
@@ -1704,6 +1749,10 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "py-get": prim_py_get,
         "py-set!": prim_py_set_bang,
         "py-eval": prim_py_eval,
+        # Environments & Evaluation (R7RS 6.12, (scheme eval), (scheme repl))
+        "eval": prim_eval,
+        "environment": prim_environment,
+        "interaction-environment": prim_interaction_environment,
     }
 
     for name, fn in primitives.items():

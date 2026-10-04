@@ -295,6 +295,9 @@ def syntax_to_datum(stx: Any, use_scope: Optional[Scope] = None) -> Any:
                     "promise?",
                     "__make-promise-from-thunk",
                     "case-lambda",
+                    "eval",
+                    "environment",
+                    "interaction-environment",
                 }
                 if d.name in core_forms:
                     return d
