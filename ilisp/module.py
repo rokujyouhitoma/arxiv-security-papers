@@ -243,6 +243,21 @@ class LibraryRegistry:
                 inexact_exports[sym] = base_env.bindings[sym]
         self.register(Library(("scheme", "inexact"), inexact_exports, base_env))
 
+        # (scheme lazy)
+        lazy_exports: Dict[Symbol, Any] = {}
+        for name in (
+            "delay",
+            "delay-force",
+            "force",
+            "make-promise",
+            "promise?",
+            "__make-promise-from-thunk",
+        ):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                lazy_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "lazy"), lazy_exports, base_env))
+
         # (ilisp python)
         py_exports: Dict[Symbol, Any] = {}
         for name in (

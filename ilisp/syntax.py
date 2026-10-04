@@ -288,6 +288,12 @@ def syntax_to_datum(stx: Any, use_scope: Optional[Scope] = None) -> Any:
                     "string-ci>?",
                     "string-ci<=?",
                     "string-ci>=?",
+                    "delay",
+                    "delay-force",
+                    "force",
+                    "make-promise",
+                    "promise?",
+                    "__make-promise-from-thunk",
                 }
                 if d.name in core_forms:
                     return d

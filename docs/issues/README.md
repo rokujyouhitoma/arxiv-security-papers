@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **474** | R7RS (scheme lazy) 遅延評価ライブラリの独立モジュール化と完全準拠 | Feature | 2026-10-04 | [closed/474-implement-r7rs-scheme-lazy-library.md](closed/474-implement-r7rs-scheme-lazy-library.md) |
 | **473** | R7RS 文字・文字列完全網羅および (scheme char) ライブラリの検証・同期 | Feature | 2026-10-04 | [closed/473-complete-r7rs-scheme-char-library.md](closed/473-complete-r7rs-scheme-char-library.md) |
 | **472** | R7RS 超越関数・浮動小数点数学関数および (scheme inexact) ライブラリの実装 (sin..log) | Feature | 2026-10-04 | [closed/472-implement-r7rs-scheme-inexact-transcendental-math.md](closed/472-implement-r7rs-scheme-inexact-transcendental-math.md) |
 | **471** | R7RS 深層リストアクセサおよび (scheme cxr) ライブラリの実装 (caaar..cddddr) | Feature | 2026-10-04 | [closed/471-implement-r7rs-scheme-cxr-accessors.md](closed/471-implement-r7rs-scheme-cxr-accessors.md) |

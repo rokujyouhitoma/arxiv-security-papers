@@ -351,12 +351,12 @@ graph LR
         SCXR["(scheme cxr)<br>caaar..cddddr (24アクセサ)"]
         SI["(scheme inexact)<br>sin, cos, tan, exp, log, sqrt 等 (12手続き)"]
         SC["(scheme char)<br>分類, ci比較, up/down/foldcase (17手続き)"]
+        SLAZY["(scheme lazy)<br>delay, force, delay-force, make-promise, promise?"]
     end
     subgraph Planned for Phase 3
         SCASE["(scheme case-lambda)<br>可変長ディスパッチ"]
     end
     subgraph Planned for Phase 4
-        SLAZY["(scheme lazy)<br>delay, force"]
         SEVAL["(scheme eval)<br>動的環境eval"]
         SREPL["(scheme repl)<br>REPL環境"]
     end
@@ -375,8 +375,8 @@ graph LR
 | `(scheme cxr)` | 深層リストアクセサ (`caaar`..`cddddr`)| 🟢 100% | Kernel コア組込 (`caaar`〜`cddddr` 全24手続き完備) |
 | `(scheme inexact)` | 浮動小数点数学関数 (`sin`, `sqrt` 等) | 🟢 100% | Kernel コア組込 (`acos`, `asin`, `atan`, `cos`, `exp`, `finite?`, `infinite?`, `log`, `nan?`, `sin`, `sqrt`, `tan`) |
 | `(scheme char)` | 文字種別判定・変換 | 🟢 100% | Kernel コア組込 (`char-alphabetic?`, `char-ci=?`, `digit-value`, `char-foldcase`, `string-ci=?`, `string-foldcase` 等 17手続き完備) |
+| `(scheme lazy)` | 遅延評価 (`delay`, `force`, `make-promise`) | 🟢 100% | Kernel コア組込 + `stdlib/base.ilisp` (`delay`, `delay-force`, `force`, `make-promise`, `promise?`) |
 | `(scheme case-lambda)` | 引数個数多重ディスパッチ | ⏳ 計画中 | Phase 3 マクロ提供予定 |
-| `(scheme lazy)` | 遅延評価 (`delay`, `force`) | ⏳ 計画中 | Phase 4 (`make-promise`) |
 | `(scheme eval)` | 実行時環境生成と動的評価 | ⏳ 計画中 | Phase 4 (`environment`, `eval`) |
 | `(scheme repl)` | 対話型セッション環境 | ⏳ 計画中 | Phase 4 |
 
