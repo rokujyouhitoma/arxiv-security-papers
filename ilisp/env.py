@@ -799,19 +799,63 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
 
     def prim_py_import(mod_name: Union[Symbol, str]) -> Any:
         name = mod_name.name if isinstance(mod_name, Symbol) else str(mod_name)
-        return importlib.import_module(name)
+        try:
+            return importlib.import_module(name)
+        except Exception as e:
+            err = ErrorObject(
+                f"import-python: failed to import module {name!r}: {e}",
+                to_lisp_list([name]),
+                kind="import",
+            )
+            raise SchemeException(err) from e
 
-    def prim_py_call(obj: Any, method: Union[Symbol, str], *args: Any) -> Any:
-        method_name = method.name if isinstance(method, Symbol) else str(method)
+    def prim_py_call(obj: Any, method_or_arg: Any, *args: Any) -> Any:
+        # Check if obj is directly callable (e.g. math.sqrt function)
+        is_direct_call = callable(obj) and (
+            not isinstance(method_or_arg, (Symbol, str))
+            or not hasattr(
+                obj,
+                (
+                    method_or_arg.name
+                    if isinstance(method_or_arg, Symbol)
+                    else str(method_or_arg)
+                ),
+            )
+        )
+        if is_direct_call:
+            all_args = [method_or_arg, *args]
+            unwrapped_args = [
+                to_py_list(arg) if is_pair(arg) else arg for arg in all_args
+            ]
+            return obj(*unwrapped_args)
+
+        method_name = (
+            method_or_arg.name
+            if isinstance(method_or_arg, Symbol)
+            else str(method_or_arg)
+        )
         fn = getattr(obj, method_name)
-        # Convert Scheme lists to python collections if needed
         unwrapped_args = [to_py_list(arg) if is_pair(arg) else arg for arg in args]
         return fn(*unwrapped_args)
 
     def prim_py_get(obj: Any, attr: Union[Symbol, str]) -> Any:
         attr_name = attr.name if isinstance(attr, Symbol) else str(attr)
         if isinstance(obj, dict):
+            if attr_name not in obj:
+                err = ErrorObject(
+                    f"py-get: key {attr_name!r} not found in dict",
+                    to_lisp_list([attr_name]),
+                    kind="import",
+                )
+                raise SchemeException(err)
             return obj.get(attr_name)
+        if not hasattr(obj, attr_name):
+            err = ErrorObject(
+                f"py-get: object {obj!r} has no attribute {attr_name!r}",
+                to_lisp_list([attr_name]),
+                kind="import",
+            )
+            raise SchemeException(err)
         return getattr(obj, attr_name)
 
     def prim_py_set_bang(obj: Any, attr: Union[Symbol, str], val: Any) -> None:
@@ -1893,5 +1937,8 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         stdlib_path = Path(__file__).parent / "stdlib" / "base.ilisp"
         if stdlib_path.exists():
             prim_load(str(stdlib_path))
+        python_lib_path = Path(__file__).parent / "stdlib" / "python.ilisp"
+        if python_lib_path.exists():
+            prim_load(str(python_lib_path))
 
     return env

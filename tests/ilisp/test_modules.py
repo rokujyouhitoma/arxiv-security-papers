@@ -149,3 +149,98 @@ class TestBackendAModuleIntegration:
         env = make_initial_env()
         res = compile_ilisp(code, env=env)
         assert res == 42
+
+
+class TestImportPythonInterop:
+    """Test (import-python ...) syntax and seamless Python interoperability."""
+
+    def test_import_python_alias(self) -> None:
+        code = """
+        (import-python (math :as m))
+        (py-call m 'sqrt 16)
+        """
+        env = make_initial_env()
+        res = None
+        for e in read_all(code):
+            res = eval_expr(e, env)
+        assert res == 4.0
+
+    def test_import_python_members(self) -> None:
+        code = """
+        (import-python (math sqrt (pi :as py-pi)))
+        (list (py-call sqrt 25) py-pi)
+        """
+        env = make_initial_env()
+        res = None
+        for e in read_all(code):
+            res = eval_expr(e, env)
+        import math
+
+        assert res.car == 5.0
+        assert res.cdr.car == math.pi
+
+    def test_import_python_direct_and_list_module(self) -> None:
+        code = """
+        (import-python (json) os)
+        (list (py-call json 'dumps '(1 2 3)) (py-get os 'name))
+        """
+        env = make_initial_env()
+        res = None
+        for e in read_all(code):
+            res = eval_expr(e, env)
+        import os
+
+        assert res.car == "[1, 2, 3]"
+        assert res.cdr.car == os.name
+
+    def test_import_python_missing_module_error(self) -> None:
+        from ilisp.types import SchemeException
+
+        code = """
+        (import-python (torch :as th)(transformers AutoTokenizer))
+        """
+        env = make_initial_env()
+        with pytest.raises(SchemeException) as exc_info:
+            for e in read_all(code):
+                eval_expr(e, env)
+        assert "import-python: failed to import module 'torch'" in str(exc_info.value)
+
+    def test_import_python_in_define_library(self) -> None:
+        code = """
+        (define-library (app pymath)
+          (import (scheme base)
+                  (ilisp python))
+          (export calc-root)
+          (begin
+            (import-python (math sqrt))
+            (define (calc-root x) (py-call sqrt x))))
+
+        (import (app pymath))
+        (calc-root 49)
+        """
+        env = make_initial_env()
+        res = None
+        for e in read_all(code):
+            res = eval_expr(e, env)
+        assert res == 7.0
+
+    def test_import_python_backend_a(self) -> None:
+        code = """
+        (import-python (math sqrt))
+        (py-call sqrt 64)
+        """
+        env = make_initial_env()
+        res = compile_ilisp(code, env=env)
+        assert res == 8.0
+
+    def test_threading_macro(self) -> None:
+        code = """
+        (->> 10
+             (+ 5)
+             (* 2))
+        """
+        env = make_initial_env()
+        res = None
+        for e in read_all(code):
+            res = eval_expr(e, env)
+        assert res == 30

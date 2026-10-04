@@ -214,9 +214,16 @@ Scheme 固有の連結リスト（Cons セル）と Python の動的配列（`li
         (scheme write)
         (ilisp python))
 
-;; Python モジュールのインポート
+;; Python モジュールのインポート (モジュール・クラス・関数・エイリアス対応)
 (import-python (arxiv Search)
-               (pathlib Path))
+               (pathlib Path)
+               (torch :as th)
+               (transformers (AutoTokenizer :as Tok)))
+;; 高次マクロ展開器により以下へ安全に脱糖 (Desugaring):
+;;   (define Search (py-get (py-import 'arxiv) 'Search))
+;;   (define Path (py-get (py-import 'pathlib) 'Path))
+;;   (define th (py-import 'torch))
+;;   (define Tok (py-get (py-import 'transformers) 'AutoTokenizer))
 
 (define (fetch-crypto-papers limit)
   (let ((search (py-call Search :query "cat:cs.CR AND post-quantum" :max_results limit)))

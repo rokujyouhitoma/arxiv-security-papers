@@ -293,6 +293,8 @@ class LibraryRegistry:
             "py-set!",
             "sequence-view",
             "py-eval",
+            "import-python",
+            "|>>",
         ):
             sym = Symbol.intern(name)
             if sym in base_env.bindings:

@@ -47,28 +47,52 @@ class SequenceView:
 
 ## 3. ILISP から Python へのアクセス仕様
 
-### 3.1 `import-python` 構文
+### 3.1 `import-python` 構文とマクロ展開
 
 Python の標準ライブラリおよびサードパーティ製パッケージを ILISP の環境へ直接導入します。
+`import-python` は独立した標準拡張モジュール `(ilisp python)` 内で高次衛生的マクロとして実装されており、Scheme のコア評価器を汚染することなく低レベルのプリミティブ (`py-import`, `py-get`) へ展開されます。
 
 ```scheme
 (import (scheme base)
         (ilisp python))
 
-;; 特定の関数やクラスを直接インポート
+;; 1. モジュール全体をエイリアス付きでインポート
+(import-python (torch :as th)
+               (transformers AutoTokenizer))
+;; 展開後:
+;;   (define th (py-import 'torch))
+;;   (define AutoTokenizer (py-get (py-import 'transformers) 'AutoTokenizer))
+
+;; 2. 特定の関数やクラスを直接インポート
 (import-python (math sqrt sin pi)
                (pathlib Path)
                (json loads dumps))
 
-;; モジュール全体をエイリアス付きでインポート
-(import-python (torch :as th)
-               (transformers AutoTokenizer))
+;; 3. メンバのエイリアス指定
+(import-python (transformers (AutoTokenizer :as Tok))
+               (numpy (ndarray :as NDArray)))
+
+;; 4. 平坦形式のエイリアス指定
+(import-python (os path :as ospath))
+```
+
+#### エラーハンドリング・例外セマンティクス
+指定された Python モジュールがインストールされていない場合や、指定された属性・クラスが存在しない場合、低レベルの Python 例外（`ModuleNotFoundError`, `AttributeError`）は Scheme の条件付き例外 `&error-object(kind=import)` へと自動昇格されます。これにより、Scheme 側の `guard` や `with-exception-handler` で安全に捕捉可能です。
+
+```scheme
+(guard (err
+        ((and (error-object? err) (eq? (error-object-kind err) 'import))
+         (display "Optional library is not installed: ")
+         (display (error-object-message err))
+         (newline)
+         #f))
+  (import-python (torch :as th)))
 ```
 
 ### 3.2 透過呼び出し手続き (`py-call`, `py-get`, `py-set!`)
 
 - **`(py-call obj method/fn arg ...)`**:
-  - Python の関数・メソッドを直接実行。
+  - Python の関数・メソッドを直接実行。`obj` がすでに Callable の場合、メソッド名を省略して直接呼び出し可能。
   - キーワード引数は `:keyword value` ペアとして指定可能。
 - **`(py-get obj attr-symbol)`**:
   - Python オブジェクトの属性または辞書キーを取得。
@@ -83,6 +107,23 @@ Python の標準ライブラリおよびサードパーティ製パッケージ�
     (if (= status 200)
         (py-get resp 'text)
         (error "Failed to fetch arXiv metadata" arxiv-id status))))
+```
+
+### 3.3 パイプライン・スレッディングマクロ (`->>` / `|\|>>|`)
+
+データ変換パイプラインを直感的に記述するためのスレッディングマクロを提供します：
+
+```scheme
+;; 第一引数を後続の各式における「最後の引数」として順次渡す
+(->> (py-call requests 'get "https://example.com/api")
+     (py-get 'text)
+     (py-call json 'loads))
+
+;; R7RS シンボルエスケープ表記 |\|>>| も互換性のためエイリアス提供
+(|\|>>| '(1 2 3 4)
+        (map (lambda (x) (* x 2)))
+        (filter (lambda (x) (> x 4))))
+;; => (6 8)
 ```
 
 ---

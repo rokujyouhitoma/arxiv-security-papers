@@ -1,0 +1,125 @@
+;;; ILISP (Intelligence LISP) Extension Library - Python Interop Module
+;;; (ilisp python) bidirectional zero-copy interop macros and utilities.
+
+;; =============================================================================
+;; 1. import-python: Python 双方向相互運用マクロ
+;; =============================================================================
+;; 形式:
+;;   (import-python <import-spec> ...)
+;;
+;; 対応仕様:
+;;   1. (import-python (mod :as alias)) または (mod as alias)
+;;      例: (import-python (torch :as th))
+;;      => (define th (py-import 'torch))
+;;
+;;   2. (import-python (mod member1 member2 ...))
+;;      例: (import-python (transformers AutoTokenizer) (math sqrt (pi :as py-pi)))
+;;      => (begin
+;;           (define AutoTokenizer (py-get (py-import 'transformers) 'AutoTokenizer))
+;;           (define sqrt (py-get (py-import 'math) 'sqrt))
+;;           (define py-pi (py-get (py-import 'math) 'pi)))
+;;
+;;   3. (import-python (mod)) または (import-python mod)
+;;      例: (import-python (json) os)
+;;      => (begin
+;;           (define json (py-import 'json))
+;;           (define os (py-import 'os)))
+;; =============================================================================
+
+(define-macro (import-python . clauses)
+  (letrec ((parse-member
+            (lambda (mod m)
+              (cond
+                ((and (pair? m)
+                      (pair? (cdr m))
+                      (pair? (cddr m))
+                      (null? (cdddr m))
+                      (or (eq? (cadr m) ':as)
+                          (eq? (cadr m) 'as)))
+                 `(define ,(caddr m) (py-get (py-import ',mod) ',(car m))))
+                ((symbol? m)
+                 `(define ,m (py-get (py-import ',mod) ',m)))
+                (else
+                 (error "import-python: invalid member spec" m)))))
+           (expand-members
+            (lambda (mod mems)
+              (cond
+                ((null? mems)
+                 '())
+                ;; 平坦なエイリアス形式: (mod orig :as alias more ...)
+                ((and (pair? (cdr mems))
+                      (pair? (cddr mems))
+                      (or (eq? (cadr mems) ':as)
+                          (eq? (cadr mems) 'as)))
+                 (cons `(define ,(caddr mems) (py-get (py-import ',mod) ',(car mems)))
+                       (expand-members mod (cdddr mems))))
+                ;; カッコ括りのメンバ: (mod (orig :as alias) more ...)
+                ((pair? (car mems))
+                 (cons (parse-member mod (car mems))
+                       (expand-members mod (cdr mems))))
+                ;; 単一シンボルメンバ: (mod member more ...)
+                ((symbol? (car mems))
+                 (cons `(define ,(car mems) (py-get (py-import ',mod) ',(car mems)))
+                       (expand-members mod (cdr mems))))
+                (else
+                 (error "import-python: invalid member spec" (car mems))))))
+           (parse-clause
+            (lambda (clause)
+              (cond
+                ;; 単一シンボル: (import-python math)
+                ((symbol? clause)
+                 `(define ,clause (py-import ',clause)))
+
+                ;; 単一モジュールリスト: (import-python (math))
+                ((and (pair? clause) (null? (cdr clause)))
+                 (let ((mod (car clause)))
+                   `(define ,mod (py-import ',mod))))
+
+                ;; モジュールエイリアス: (import-python (torch :as th))
+                ((and (pair? clause)
+                      (pair? (cdr clause))
+                      (pair? (cddr clause))
+                      (null? (cdddr clause))
+                      (or (eq? (cadr clause) ':as)
+                          (eq? (cadr clause) 'as)))
+                 (let ((mod (car clause))
+                       (alias (caddr clause)))
+                   `(define ,alias (py-import ',mod))))
+
+                ;; メンバインポート: (import-python (transformers AutoTokenizer))
+                ((pair? clause)
+                 (let ((mod (car clause))
+                       (members (cdr clause)))
+                   (cons 'begin (expand-members mod members))))
+
+                (else
+                 (error "import-python: invalid clause" clause)))))
+           (expand-clauses
+            (lambda (cs)
+              (if (null? cs)
+                  ''()
+                  (if (null? (cdr cs))
+                      (parse-clause (car cs))
+                      `(begin
+                         ,(parse-clause (car cs))
+                         ,(expand-clauses (cdr cs))))))))
+    (expand-clauses clauses)))
+
+;; =============================================================================
+;; 2. ->> : パイプライン・スレッディングマクロ (Pipeline Threading Macro)
+;; =============================================================================
+;; ( ->> x (f a) (g b) ) => (g (f x a) b)
+(define-macro (->> initial . forms)
+  (letrec ((thread
+            (lambda (acc steps)
+              (if (null? steps)
+                  acc
+                  (let ((step (car steps)))
+                    (if (pair? step)
+                        (thread (cons (car step) (cons acc (cdr step))) (cdr steps))
+                        (thread (list step acc) (cdr steps))))))))
+    (thread initial forms)))
+
+(define-macro (|\|>>| initial . forms)
+  (cons '->> (cons initial forms)))
+
