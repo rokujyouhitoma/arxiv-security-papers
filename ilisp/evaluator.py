@@ -47,6 +47,41 @@ class TailCall:
         self.env = env
 
 
+def _build_syntax_transformer(name: str, trans_spec: Any, env: Environment) -> Any:
+    """Build a SyntaxRulesTransformer or evaluate macro transformer."""
+    from ilisp.syntax import SyntaxRulesTransformer
+
+    if (
+        is_pair(trans_spec)
+        and isinstance(car(trans_spec), Symbol)
+        and car(trans_spec).name == "syntax-rules"
+    ):
+        spec_args = cdr(trans_spec)
+        if not is_pair(spec_args):
+            raise SyntaxError("syntax-rules requires literals list and rules")
+        first_arg = car(spec_args)
+        if isinstance(first_arg, Symbol) and is_pair(cdr(spec_args)):
+            ellipsis_sym = first_arg.name
+            spec_args = cdr(spec_args)
+            literals_expr = car(spec_args)
+        else:
+            ellipsis_sym = "..."
+            literals_expr = first_arg
+
+        raw_literals = to_py_list(literals_expr)
+        literals = [lit.name for lit in raw_literals if isinstance(lit, Symbol)]
+        rules_raw = to_py_list(cdr(spec_args))
+        rules: List[Tuple[Any, Any]] = []
+        for r in rules_raw:
+            if not is_pair(r) or not is_pair(cdr(r)):
+                raise SyntaxError(
+                    f"syntax-rules rule must be (pattern template), got {r!r}"
+                )
+            rules.append((car(r), car(cdr(r))))
+        return SyntaxRulesTransformer(name, literals, rules, ellipsis=ellipsis_sym)
+    return eval_expr(trans_spec, env)
+
+
 def eval_expr(expr: Any, env: Environment) -> Any:
     """Evaluate an S-expression within an environment using a trampoline loop for TCO."""
     from ilisp.env import get_interaction_environment, set_interaction_environment
@@ -65,6 +100,7 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                 (
                     int,
                     float,
+                    complex,
                     str,
                     bool,
                     NilType,
@@ -252,7 +288,7 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     curr_env.define(macro_name, macro_proc)
                     return macro_name
 
-                # (define-syntax name (syntax-rules (literals...) (rule...)...))
+                # (define-syntax name transformer-spec)
                 if op_name == "define-syntax":
                     args = curr_expr.cdr
                     if not is_pair(args) or not is_pair(cdr(args)):
@@ -263,38 +299,40 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     if not isinstance(syn_name, Symbol):
                         raise SyntaxError("define-syntax target must be a symbol")
                     trans_spec = car(cdr(args))
-                    if not (
-                        is_pair(trans_spec)
-                        and isinstance(car(trans_spec), Symbol)
-                        and car(trans_spec).name == "syntax-rules"
-                    ):
-                        raise SyntaxError(
-                            "define-syntax currently supports (syntax-rules (literals...) ((pattern) template)...)"
-                        )
-
-                    spec_args = cdr(trans_spec)
-                    if not is_pair(spec_args):
-                        raise SyntaxError(
-                            "syntax-rules requires literals list and rules"
-                        )
-                    literals_expr = car(spec_args)
-                    raw_literals = to_py_list(literals_expr)
-                    literals = [
-                        lit.name for lit in raw_literals if isinstance(lit, Symbol)
-                    ]
-
-                    rules_raw = to_py_list(cdr(spec_args))
-                    rules: List[Tuple[Any, Any]] = []
-                    for r in rules_raw:
-                        if not is_pair(r) or not is_pair(cdr(r)):
-                            raise SyntaxError(
-                                f"syntax-rules rule must be (pattern template), got {r!r}"
-                            )
-                        rules.append((car(r), car(cdr(r))))
-
-                    transformer = SyntaxRulesTransformer(syn_name.name, literals, rules)
+                    transformer = _build_syntax_transformer(
+                        syn_name.name, trans_spec, curr_env
+                    )
                     curr_env.define(syn_name, transformer)
                     return syn_name
+
+                # (let-syntax ((name spec) ...) body ...)
+                # (letrec-syntax ((name spec) ...) body ...)
+                if op_name in ("let-syntax", "letrec-syntax"):
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError(f"{op_name} requires bindings and body")
+                    bindings_raw = to_py_list(car(args))
+                    body_exprs = to_py_list(cdr(args))
+                    sub_env = Environment(curr_env)
+                    spec_env = sub_env if op_name == "letrec-syntax" else curr_env
+                    for b in bindings_raw:
+                        b_list = to_py_list(b)
+                        if len(b_list) != 2:
+                            raise SyntaxError(f"Invalid binding in {op_name}: {b!r}")
+                        b_name, b_spec = b_list[0], b_list[1]
+                        if not isinstance(b_name, Symbol):
+                            raise SyntaxError(
+                                f"Binding target in {op_name} must be a symbol"
+                            )
+                        trans = _build_syntax_transformer(b_name.name, b_spec, spec_env)
+                        sub_env.define(b_name, trans)
+                    if not body_exprs:
+                        return NIL
+                    for step in body_exprs[:-1]:
+                        eval_expr(step, sub_env)
+                    curr_expr = body_exprs[-1]
+                    curr_env = sub_env
+                    continue
 
                 # (define-library (name ...) decl ...)
                 if op_name == "define-library":
@@ -321,7 +359,7 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                 continue
 
             if isinstance(fn, SyntaxRulesTransformer):
-                expanded_ast = fn.transform(curr_expr)
+                expanded_ast = fn.transform(curr_expr, curr_env)
                 curr_expr = expanded_ast
                 continue
 

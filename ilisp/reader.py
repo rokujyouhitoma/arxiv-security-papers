@@ -108,6 +108,31 @@ class Reader:
                 if next_ch == ";":
                     self._next_char()  # consume ';'
                     self.read()  # parse and discard next S-expression
+                elif next_ch == "|":
+                    self._next_char()  # consume '|'
+                    depth = 1
+                    while depth > 0:
+                        c = self._next_char()
+                        if c is None:
+                            raise LispSyntaxError(
+                                "Unterminated block comment '#|'", self._current_loc()
+                            )
+                        if c == "#":
+                            c2 = self._peek_char()
+                            if c2 == "|":
+                                self._next_char()
+                                depth += 1
+                        elif c == "|":
+                            c2 = self._peek_char()
+                            if c2 == "#":
+                                self._next_char()
+                                depth -= 1
+                elif next_ch == "!":
+                    # Directive comment like #!r7rs or shebang #!/usr/bin/env
+                    while True:
+                        c = self._next_char()
+                        if c is None or c == "\n":
+                            break
                 else:
                     if hash_ch is not None:
                         self._unread_char(hash_ch)
@@ -160,12 +185,66 @@ class Reader:
         if ch == '"':
             return self._read_string(loc)
 
+        # Vertical bar escaped symbol (R7RS 2.1: |...|)
+        if ch == "|":
+            return self._read_vertical_bar_symbol(loc)
+
         # Hash literals: #t, #f, #\char
         if ch == "#":
             return self._read_hash_literal(loc)
 
         # Atom (Number or Symbol)
         return self._read_atom(loc)
+
+    def _read_vertical_bar_symbol(self, loc: SourceLocation) -> Symbol:
+        self._next_char()  # consume opening '|'
+        chars: List[str] = []
+        while True:
+            ch = self._next_char()
+            if ch is None:
+                raise LispSyntaxError("Unterminated vertical bar symbol '|...|'", loc)
+            if ch == "|":
+                break
+            if ch == "\\":
+                esc = self._next_char()
+                if esc is None:
+                    raise LispSyntaxError(
+                        "Unterminated escape sequence in vertical bar symbol", loc
+                    )
+                if esc == "n":
+                    chars.append("\n")
+                elif esc == "t":
+                    chars.append("\t")
+                elif esc == "r":
+                    chars.append("\r")
+                elif esc == "|":
+                    chars.append("|")
+                elif esc == "\\":
+                    chars.append("\\")
+                elif esc == '"':
+                    chars.append('"')
+                elif esc == "x":
+                    hex_chars: List[str] = []
+                    while True:
+                        hc = self._next_char()
+                        if hc is None:
+                            raise LispSyntaxError(
+                                "Unterminated hex escape in symbol", loc
+                            )
+                        if hc == ";":
+                            break
+                        hex_chars.append(hc)
+                    try:
+                        chars.append(chr(int("".join(hex_chars), 16)))
+                    except Exception:
+                        raise LispSyntaxError(
+                            f"Invalid hex escape '\\x{''.join(hex_chars)};'", loc
+                        )
+                else:
+                    chars.append(esc)
+            else:
+                chars.append(ch)
+        return Symbol.intern("".join(chars))
 
     def _read_string(self, loc: SourceLocation) -> str:
         self._next_char()  # consume opening '"'
@@ -184,10 +263,42 @@ class Reader:
                     chars.append("\t")
                 elif esc == "r":
                     chars.append("\r")
+                elif esc == "a":
+                    chars.append("\a")
+                elif esc == "b":
+                    chars.append("\b")
                 elif esc == '"':
                     chars.append('"')
                 elif esc == "\\":
                     chars.append("\\")
+                elif esc == "|":
+                    chars.append("|")
+                elif esc == "x":
+                    hex_chars: List[str] = []
+                    while True:
+                        hc = self._next_char()
+                        if hc is None:
+                            raise LispSyntaxError(
+                                "Unterminated hex escape in string", loc
+                            )
+                        if hc == ";":
+                            break
+                        hex_chars.append(hc)
+                    try:
+                        chars.append(chr(int("".join(hex_chars), 16)))
+                    except Exception:
+                        raise LispSyntaxError(
+                            f"Invalid hex escape '\\x{''.join(hex_chars)};'", loc
+                        )
+                elif esc in (" ", "\t", "\r", "\n"):
+                    cur: Optional[str] = esc
+                    while cur in (" ", "\t"):
+                        cur = self._next_char()
+                    if cur == "\r":
+                        if self._peek_char() == "\n":
+                            self._next_char()
+                    while self._peek_char() in (" ", "\t"):
+                        self._next_char()
                 elif esc is None:
                     raise LispSyntaxError("Unterminated string escape sequence", loc)
                 else:
@@ -201,10 +312,42 @@ class Reader:
         ch = self._peek_char()
         if ch == "t" or ch == "T":
             self._next_char()
+            if self._peek_char() in ("r", "R"):
+                c1 = self._next_char()
+                c2 = self._next_char()
+                c3 = self._next_char()
+                if (
+                    (c1 or "").lower() == "r"
+                    and (c2 or "").lower() == "u"
+                    and (c3 or "").lower() == "e"
+                ):
+                    return True
+                raise LispSyntaxError("Invalid boolean literal '#t...'", loc)
             return True
         if ch == "f" or ch == "F":
             self._next_char()
+            if self._peek_char() in ("a", "A"):
+                c1 = self._next_char()
+                c2 = self._next_char()
+                c3 = self._next_char()
+                c4 = self._next_char()
+                if (
+                    (c1 or "").lower() == "a"
+                    and (c2 or "").lower() == "l"
+                    and (c3 or "").lower() == "s"
+                    and (c4 or "").lower() == "e"
+                ):
+                    return False
+                raise LispSyntaxError("Invalid boolean literal '#f...'", loc)
             return False
+        if ch in ("b", "B", "o", "O", "d", "D", "x", "X", "e", "E", "i", "I"):
+            tok_chars = ["#"]
+            while True:
+                pc = self._peek_char()
+                if pc is None or pc in " \t\r\n();\"'`":
+                    break
+                tok_chars.append(self._next_char() or "")
+            return self._parse_number_with_prefix("".join(tok_chars), loc)
         if ch == "\\":
             self._next_char()  # consume '\'
             return self._read_char_literal(loc)
@@ -221,6 +364,130 @@ class Reader:
                     return self._read_bytevector(loc)
             raise LispSyntaxError(f"Unsupported hash literal sequence '#u{next1}'", loc)
         raise LispSyntaxError(f"Unsupported hash literal sequence '#{ch}'", loc)
+
+    def _parse_complex(self, num_str: str, radix: int) -> Optional[complex]:
+        if not num_str.endswith("i") or num_str == "i":
+            return None
+        s = num_str[:-1]
+        if s == "+":
+            return complex(0.0, 1.0)
+        if s == "-":
+            return complex(0.0, -1.0)
+        if s == "":
+            return None
+        sign_idx = -1
+        for idx in range(len(s) - 1, 0, -1):
+            if s[idx] in ("+", "-"):
+                if radix == 10 and s[idx - 1] in ("e", "E"):
+                    continue
+                sign_idx = idx
+                break
+        if sign_idx == -1:
+            try:
+                if s == "+":
+                    im = 1.0
+                elif s == "-":
+                    im = -1.0
+                elif radix == 10 and ("." in s or "e" in s):
+                    im = float(s)
+                else:
+                    im = float(int(s, radix))
+                return complex(0.0, im)
+            except ValueError:
+                return None
+        else:
+            real_str = s[:sign_idx]
+            imag_str = s[sign_idx:]
+            try:
+                if real_str in ("+inf.0", "+inf"):
+                    re = float("inf")
+                elif real_str in ("-inf.0", "-inf"):
+                    re = float("-inf")
+                elif real_str in ("+nan.0", "-nan.0", "nan.0"):
+                    re = float("nan")
+                elif radix == 10 and ("." in real_str or "e" in real_str):
+                    re = float(real_str)
+                else:
+                    re = float(int(real_str, radix))
+
+                if imag_str in ("+", ""):
+                    im = 1.0
+                elif imag_str == "-":
+                    im = -1.0
+                elif imag_str in ("+inf.0", "+inf"):
+                    im = float("inf")
+                elif imag_str in ("-inf.0", "-inf"):
+                    im = float("-inf")
+                elif imag_str in ("+nan.0", "-nan.0", "nan.0"):
+                    im = float("nan")
+                elif radix == 10 and ("." in imag_str or "e" in imag_str):
+                    im = float(imag_str)
+                else:
+                    im = float(int(imag_str, radix))
+                return complex(re, im)
+            except ValueError:
+                return None
+
+    def _parse_number_with_prefix(self, token: str, loc: SourceLocation) -> Any:
+        tok = token.lower()
+        exactness: Optional[bool] = None
+        radix = 10
+        i = 0
+        while i < len(tok) and tok[i] == "#":
+            if i + 1 >= len(tok):
+                break
+            prefix = tok[i + 1]
+            if prefix == "e":
+                exactness = True
+                i += 2
+            elif prefix == "i":
+                exactness = False
+                i += 2
+            elif prefix == "b":
+                radix = 2
+                i += 2
+            elif prefix == "o":
+                radix = 8
+                i += 2
+            elif prefix == "d":
+                radix = 10
+                i += 2
+            elif prefix == "x":
+                radix = 16
+                i += 2
+            else:
+                break
+        num_str = tok[i:]
+        comp = self._parse_complex(num_str, radix)
+        if comp is not None:
+            return comp
+        try:
+            val: Any
+            if num_str in ("+inf.0", "+inf"):
+                val = float("inf")
+            elif num_str in ("-inf.0", "-inf"):
+                val = float("-inf")
+            elif num_str in ("+nan.0", "-nan.0", "nan.0", "+nan", "-nan"):
+                val = float("nan")
+            elif "/" in num_str:
+                parts = num_str.split("/")
+                if len(parts) == 2:
+                    num = int(parts[0], radix)
+                    den = int(parts[1], radix)
+                    val = num / den
+                else:
+                    raise ValueError("Invalid fraction")
+            elif radix == 10 and ("." in num_str or "e" in num_str):
+                val = float(num_str)
+            else:
+                val = int(num_str, radix)
+            if exactness is True and isinstance(val, float):
+                val = int(round(val)) if val.is_integer() else val
+            elif exactness is False and isinstance(val, int):
+                val = float(val)
+            return val
+        except ValueError:
+            raise LispSyntaxError(f"Invalid numeric syntax with prefix '{token}'", loc)
 
     def _read_vector(self, loc: SourceLocation) -> Any:
         elements: List[Any] = []
@@ -335,6 +602,23 @@ class Reader:
             return float("-inf")
         if low_tok in ("+nan.0", "-nan.0", "nan.0", "+nan", "-nan"):
             return float("nan")
+
+        # Try fraction (rational)
+        if "/" in token:
+            parts = token.split("/")
+            if len(parts) == 2:
+                try:
+                    num = int(parts[0])
+                    den = int(parts[1])
+                    if den != 0:
+                        return num / den
+                except ValueError:
+                    pass
+
+        # Try complex number
+        c_val = self._parse_complex(low_tok, 10)
+        if c_val is not None:
+            return c_val
 
         # Try float
         try:

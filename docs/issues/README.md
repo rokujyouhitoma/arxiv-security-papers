@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| - | *現在オープン中の Issue はありません* | - | - | - | - |
+現在オープンな Issue はありません。
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **477** | 外部公式 R7RS 適合性テストスイート (chibi-scheme) の厳格管理下での取り込み・検証環境の構築 | Feature | 2026-10-04 | [closed/477-import-chibi-scheme-r7rs-conformance-tests.md](closed/477-import-chibi-scheme-r7rs-conformance-tests.md) |
 | **476** | R7RS (scheme eval) および (scheme repl) 動的環境評価・対話セッションライブラリの実装と完全準拠 | Feature | 2026-10-04 | [closed/476-implement-r7rs-scheme-eval-and-repl-libraries.md](closed/476-implement-r7rs-scheme-eval-and-repl-libraries.md) |
 | **475** | R7RS (scheme case-lambda) 引数個数多重ディスパッチ構文ライブラリの独立モジュール化と完全準拠 | Feature | 2026-10-04 | [closed/475-implement-r7rs-scheme-case-lambda-library.md](closed/475-implement-r7rs-scheme-case-lambda-library.md) |
 | **474** | R7RS (scheme lazy) 遅延評価ライブラリの独立モジュール化と完全準拠 | Feature | 2026-10-04 | [closed/474-implement-r7rs-scheme-lazy-library.md](closed/474-implement-r7rs-scheme-lazy-library.md) |

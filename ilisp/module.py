@@ -280,6 +280,10 @@ class LibraryRegistry:
             repl_exports[repl_sym] = base_env.bindings[repl_sym]
         self.register(Library(("scheme", "repl"), repl_exports, base_env))
 
+        # (scheme r5rs)
+        r5rs_exports: Dict[Symbol, Any] = dict(base_exports)
+        self.register(Library(("scheme", "r5rs"), r5rs_exports, base_env))
+
         # (ilisp python)
         py_exports: Dict[Symbol, Any] = {}
         for name in (

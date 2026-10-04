@@ -114,7 +114,9 @@ def datum_to_syntax(
         return Syntax(datum, sc, loc)
 
 
-def syntax_to_datum(stx: Any, use_scope: Optional[Scope] = None) -> Any:
+def syntax_to_datum(
+    stx: Any, use_scope: Optional[Scope] = None, env: Optional[Any] = None
+) -> Any:
     """Convert a Syntax object back to a standard Lisp S-expression.
 
     If use_scope is provided, symbols bearing use_scope that were introduced
@@ -132,6 +134,10 @@ def syntax_to_datum(stx: Any, use_scope: Optional[Scope] = None) -> Any:
                     "set!",
                     "begin",
                     "define",
+                    "define-syntax",
+                    "let-syntax",
+                    "letrec-syntax",
+                    "syntax-rules",
                     "let",
                     "let*",
                     "cond",
@@ -301,23 +307,38 @@ def syntax_to_datum(stx: Any, use_scope: Optional[Scope] = None) -> Any:
                 }
                 if d.name in core_forms:
                     return d
+                if env is not None:
+                    try:
+                        env.root.lookup(d)
+                        return d
+                    except Exception:
+                        pass
+                from ilisp.env import get_interaction_environment
+
+                ienv = get_interaction_environment()
+                if ienv is not None:
+                    try:
+                        ienv.root.lookup(d)
+                        return d
+                    except Exception:
+                        pass
                 return Symbol.intern(f"{d.name}__hyg_{use_scope.id}")
             return d
         elif isinstance(d, Cons):
             return Cons(
-                syntax_to_datum(d.car, use_scope),
-                syntax_to_datum(d.cdr, use_scope),
+                syntax_to_datum(d.car, use_scope, env),
+                syntax_to_datum(d.cdr, use_scope, env),
             )
         elif isinstance(d, Vector):
-            return Vector([syntax_to_datum(e, use_scope) for e in d.elements])
+            return Vector([syntax_to_datum(e, use_scope, env) for e in d.elements])
         return d
     elif isinstance(stx, Cons):
         return Cons(
-            syntax_to_datum(stx.car, use_scope),
-            syntax_to_datum(stx.cdr, use_scope),
+            syntax_to_datum(stx.car, use_scope, env),
+            syntax_to_datum(stx.cdr, use_scope, env),
         )
     elif isinstance(stx, Vector):
-        return Vector([syntax_to_datum(e, use_scope) for e in stx.elements])
+        return Vector([syntax_to_datum(e, use_scope, env) for e in stx.elements])
     return stx
 
 
@@ -339,13 +360,15 @@ class SyntaxRulesTransformer:
         name: str,
         literals: List[str],
         rules: List[Tuple[Any, Any]],  # List of (pattern, template) S-expressions
+        ellipsis: str = "...",
     ) -> None:
         self.name: str = name
         self.literals: Set[str] = set(literals)
         self.rules: List[Tuple[Any, Any]] = rules
+        self.ellipsis: str = ellipsis
         self.def_scope: Scope = Scope(f"def_{name}")
 
-    def transform(self, input_form: Any) -> Any:
+    def transform(self, input_form: Any, env: Optional[Any] = None) -> Any:
         """Apply the first matching syntax-rule to the input form and return expanded S-expression."""
         use_scope = Scope(f"use_{self.name}")
 
@@ -371,7 +394,7 @@ class SyntaxRulesTransformer:
                 # Pattern matched! Expand template
                 expanded_stx = self._expand_template(tmpl, bindings, use_scope)
                 # Convert back to standard S-expression
-                return syntax_to_datum(expanded_stx, use_scope)
+                return syntax_to_datum(expanded_stx, use_scope, env=env)
 
         raise SyntaxError(
             f"No matching rule in syntax-rules for macro '{self.name}': {input_form!r}"
@@ -394,11 +417,11 @@ class SyntaxRulesTransformer:
             pat_car = car(pat)
             pat_cdr = cdr(pat)
 
-            # Check if followed by ellipsis '...'
+            # Check if followed by ellipsis
             if (
                 is_pair(pat_cdr)
                 and isinstance(car(pat_cdr), Symbol)
-                and car(pat_cdr).name == "..."
+                and car(pat_cdr).name == self.ellipsis
             ):
                 rest_pat = cdr(pat_cdr)
                 # Matches 0 or more occurrences of pat_car, followed by rest_pat
@@ -486,12 +509,45 @@ class SyntaxRulesTransformer:
         """Collect all pattern variables in a pattern."""
         res: List[str] = []
         if isinstance(pat, Symbol):
-            if pat.name not in self.literals and pat.name != "..." and pat.name != "_":
+            if (
+                pat.name not in self.literals
+                and pat.name != self.ellipsis
+                and pat.name != "_"
+            ):
                 res.append(pat.name)
         elif is_pair(pat):
             res.extend(self._collect_pattern_vars(car(pat)))
             res.extend(self._collect_pattern_vars(cdr(pat)))
         return res
+
+    def _expand_escaped_template(
+        self,
+        tmpl: Any,
+        bindings: Dict[str, PatternBinding],
+        use_scope: Scope,
+    ) -> Any:
+        """Expand a template where ellipsis is escaped (treated as literal)."""
+        if isinstance(tmpl, Symbol):
+            if tmpl.name in bindings:
+                b = bindings[tmpl.name]
+                if b.depth == 0:
+                    return b.value
+            return Syntax(tmpl, {self.def_scope, use_scope})
+        if is_pair(tmpl):
+            return Syntax(
+                Cons(
+                    self._expand_escaped_template(car(tmpl), bindings, use_scope),
+                    self._expand_escaped_template(cdr(tmpl), bindings, use_scope),
+                ),
+                {self.def_scope, use_scope},
+            )
+        if isinstance(tmpl, Vector):
+            new_elems = [
+                self._expand_escaped_template(e, bindings, use_scope)
+                for e in tmpl.elements
+            ]
+            return Syntax(Vector(new_elems), {self.def_scope, use_scope})
+        return Syntax(tmpl, {self.def_scope, use_scope})
 
     def _expand_template(
         self,
@@ -516,11 +572,20 @@ class SyntaxRulesTransformer:
             tmpl_car = car(tmpl)
             tmpl_cdr = cdr(tmpl)
 
-            # Check if followed by ellipsis '...'
+            # R7RS 4.3.2: (... <template>) escapes ellipsis in <template>
+            if (
+                isinstance(tmpl_car, Symbol)
+                and tmpl_car.name == self.ellipsis
+                and is_pair(tmpl_cdr)
+                and is_null(cdr(tmpl_cdr))
+            ):
+                return self._expand_escaped_template(car(tmpl_cdr), bindings, use_scope)
+
+            # Check if followed by ellipsis
             if (
                 is_pair(tmpl_cdr)
                 and isinstance(car(tmpl_cdr), Symbol)
-                and car(tmpl_cdr).name == "..."
+                and car(tmpl_cdr).name == self.ellipsis
             ):
                 # Ellipsis expansion!
                 expanded_list = self._expand_ellipsis(tmpl_car, bindings, use_scope)
@@ -560,9 +625,7 @@ class SyntaxRulesTransformer:
                 list_lengths.append(len(bindings[v].value))
 
         if not list_lengths:
-            raise SyntaxError(
-                "Ellipsis in template does not contain any pattern variables"
-            )
+            return [self._expand_template(tmpl, bindings, use_scope)]
 
         count = list_lengths[0]
         for length_val in list_lengths[1:]:

@@ -890,10 +890,11 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         vec[k] = val
         return NIL
 
-    def prim_vector_to_list(vec: Any) -> Any:
+    def prim_vector_to_list(vec: Any, start: int = 0, end: Optional[int] = None) -> Any:
         if not isinstance(vec, Vector):
             raise TypeError(f"vector->list expected vector, got {type(vec).__name__}")
-        return to_lisp_list(vec.elements)
+        end_idx = len(vec) if end is None else end
+        return to_lisp_list(vec.elements[start:end_idx])
 
     def prim_list_to_vector(lst: Any) -> Vector:
         return Vector(to_py_list(lst))
@@ -1425,6 +1426,66 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             code = obj
         os._exit(code)
 
+    def prim_procedure_p(x: Any) -> bool:
+        return isinstance(x, (Procedure, Primitive, Continuation))
+
+    def prim_string_to_symbol(s: Any) -> Symbol:
+        if not isinstance(s, (str, MutableString)):
+            raise TypeError(f"string->symbol expected string, got {type(s).__name__}")
+        return Symbol.intern(str(s))
+
+    def prim_numerator(q: Any) -> int:
+        from fractions import Fraction
+
+        f = Fraction(q).limit_denominator()
+        return f.numerator
+
+    def prim_denominator(q: Any) -> int:
+        from fractions import Fraction
+
+        f = Fraction(q).limit_denominator()
+        return f.denominator
+
+    def prim_rationalize(x: Any, eps: Any) -> float:
+        from fractions import Fraction
+
+        max_den = max(1, int(1.0 / float(eps))) if float(eps) > 0 else 1000000
+        return float(Fraction(x).limit_denominator(max_den))
+
+    def prim_null_environment(version: Any) -> Environment:
+        return make_initial_env(preload_stdlib=False)
+
+    def prim_features() -> Any:
+        feats = [
+            Symbol.intern("r7rs"),
+            Symbol.intern("r7rs-small"),
+            Symbol.intern("exact-closed"),
+            Symbol.intern("ieee-float"),
+            Symbol.intern("full-unicode"),
+            Symbol.intern("little-endian"),
+            Symbol.intern("posix"),
+            Symbol.intern("linux"),
+            Symbol.intern("ilisp"),
+        ]
+        return to_lisp_list(feats)
+
+    def prim_file_exists_p(path: Any) -> bool:
+        if not isinstance(path, (str, MutableString)):
+            raise TypeError(f"file-exists?: expected string, got {path!r}")
+        return os.path.exists(string_val(path))
+
+    def prim_delete_file(path: Any) -> None:
+        if not isinstance(path, (str, MutableString)):
+            raise TypeError(f"delete-file: expected string, got {path!r}")
+        p = string_val(path)
+        try:
+            os.remove(p)
+        except OSError as e:
+            err = ErrorObject(
+                f"delete-file failed: {e}", to_lisp_list([p]), kind="file"
+            )
+            raise SchemeException(err)
+
     # Register all primitives
     primitives: Dict[str, Callable[..., Any]] = {
         # Pairs and Lists (R7RS 6.4)
@@ -1753,6 +1814,15 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "eval": prim_eval,
         "environment": prim_environment,
         "interaction-environment": prim_interaction_environment,
+        "null-environment": prim_null_environment,
+        "procedure?": prim_procedure_p,
+        "string->symbol": prim_string_to_symbol,
+        "numerator": prim_numerator,
+        "denominator": prim_denominator,
+        "rationalize": prim_rationalize,
+        "features": prim_features,
+        "file-exists?": prim_file_exists_p,
+        "delete-file": prim_delete_file,
     }
 
     for name, fn in primitives.items():

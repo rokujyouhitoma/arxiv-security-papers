@@ -488,12 +488,21 @@
           (car alist)
           (assq key (cdr alist)))))
 
-(define (assoc key alist)
+(define (assv key alist)
   (if (null? alist)
       #f
       (if (eqv? key (car (car alist)))
           (car alist)
-          (assoc key (cdr alist)))))
+          (assv key (cdr alist)))))
+
+(define (assoc key alist . rest)
+  (let ((cmp (if (null? rest) equal? (car rest))))
+    (let loop ((ls alist))
+      (if (null? ls)
+          #f
+          (if (cmp key (car (car ls)))
+              (car ls)
+              (loop (cdr ls)))))))
 
 ;;; -------------------------------------------------------------
 ;;; 6. Record-Type Definitions (R7RS 5.5)
@@ -529,5 +538,21 @@
                 (cons (list 'define pred-name (list 'record-predicate type-name))
                       (cons (list 'define ctor-name (list 'record-constructor type-name (list 'quote ctor-fields)))
                             (_ilisp_expand_field_specs type-name field-specs)))))))
+
+(define (_ilisp_extract_proper_vars formals)
+  (cond ((null? formals) '())
+        ((pair? formals) (cons (car formals) (_ilisp_extract_proper_vars (cdr formals))))
+        (else (list formals))))
+
+(define-macro (define-values formals expr)
+  (let ((vars (_ilisp_extract_proper_vars formals)))
+    (let ((def-list (map (lambda (v) (list 'define v ''())) vars))
+          (set-list (map (lambda (v) (list 'set! v v)) vars)))
+      (cons 'begin
+            (append def-list
+                    (list (list 'call-with-values
+                                (list 'lambda '() expr)
+                                (list 'lambda formals
+                                      (cons 'begin set-list)))))))))
 
 

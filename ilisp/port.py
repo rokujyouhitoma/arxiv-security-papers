@@ -526,11 +526,13 @@ def close_output_port(port: Port) -> None:
 # --- String Port Operations ---
 
 
-def open_input_string(text: str) -> StringInputPort:
+def open_input_string(text: Any) -> StringInputPort:
     """Create and return a new input port reading from string."""
-    if not isinstance(text, str):
-        raise TypeError(f"open-input-string: expected str, got {type(text).__name__}")
-    return StringInputPort(text)
+    from ilisp.types import MutableString
+
+    if isinstance(text, (str, MutableString)):
+        return StringInputPort(str(text))
+    raise TypeError(f"open-input-string: expected str, got {type(text).__name__}")
 
 
 def open_output_string() -> StringOutputPort:
@@ -813,7 +815,51 @@ def format_datum(obj: Any, mode: str = "write") -> str:
 
     def format_node(node: Any) -> str:
         if isinstance(node, Symbol):
-            return node.name
+            if mode == "display":
+                return node.name
+            name = node.name
+            needs_pipe = False
+            if len(name) == 0:
+                needs_pipe = True
+            elif name in (".", "+inf.0", "-inf.0", "+nan.0", "-nan.0"):
+                needs_pipe = True
+            elif name.lower() in (
+                "+nan.0abc",
+                "+nan.0",
+                "-nan.0",
+                "+inf.0",
+                "-inf.0",
+                "+i",
+                "-i",
+            ):
+                needs_pipe = True
+            elif (
+                name.startswith(("+", "-", "."))
+                and len(name) > 1
+                and (name[1].isdigit() or name[1] in (".", "i"))
+            ):
+                needs_pipe = True
+            else:
+                try:
+                    int(name)
+                    needs_pipe = True
+                except ValueError:
+                    pass
+                if not needs_pipe:
+                    try:
+                        float(name)
+                        needs_pipe = True
+                    except ValueError:
+                        pass
+                if not needs_pipe:
+                    for ch in name:
+                        if ch in " \t\r\n();\"'`|\\#[]{}":
+                            needs_pipe = True
+                            break
+            if needs_pipe:
+                escaped = name.replace("\\", "\\\\").replace("|", "\\|")
+                return f"|{escaped}|"
+            return name
         elif isinstance(node, bool):
             return "#t" if node else "#f"
         elif isinstance(node, int):
