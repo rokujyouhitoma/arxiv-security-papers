@@ -88,6 +88,8 @@
   - `pylisp/` — contextvars 動的スコープ・現場復帰型コンディション機構・HAMT miniKanren・Free-threaded (No-GIL) 整合。
 - 🗄️ **[[DSN-30] 自作データベース (`src/database`) ファースト・生SQL駆動マイグレーションエンジンおよびスキーマライフサイクルガバナンス設計仕様書](designs/DSN-30-database_migration_engine_and_schema_lifecycle_governance.md)**
   - `src/cli.py`, `src/database/migrations/` (コア＋CLI), `migrations/` — 自作 Pure Python RDBMS（第一対象）＆ SQLite（第二対象）デュアルバックエンド・Single Source of Truth DDL統合・アトミックトランザクション・schema_migrations 履歴管理・migrations CLI統合。
+- 🔮 **[[DSN-31] ILISP (Intelligence LISP) R7RS コアアーキテクチャ設計仕様書](designs/DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)**
+  - `ilisp/` — R7RS-small Scheme準拠・Python双方向相互運用（Python Interop）・Native C-AOT デュアルバックエンド・現場復帰型コンディション・3段階自己完結ブートストラップ連鎖（セルフホスティング）。
 
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
@@ -100,7 +102,7 @@
 
 ### 5. Issue 台帳 ＆ 履歴 (Issues & Task Ledger)
 - 🎯 **[[ISS-00] Issue 台帳 (Issue Ledger)](issues/README.md)**
-  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — **Issue 001〜296 全296件完了**)。
+  - 新機能・タスク・障害の追跡台帳および完了済み Issue アーカイブ (`docs/issues/closed/` — **Issue 001〜442 全442件完了**)。
 
 ### 6. ベンチマーク ＆ 監査レポート (Benchmarks & Audits)
 - 📊 **[SOTA IR ベンチマーク評価レポート](benchmarks/sota_evaluation.md)**
