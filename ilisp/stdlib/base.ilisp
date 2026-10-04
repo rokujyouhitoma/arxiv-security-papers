@@ -223,6 +223,12 @@
 (define-macro (guard spec . body)
   (let ((var (car spec))
         (clauses (cdr spec)))
+    (define (_ilisp_guard_clauses cls)
+      (if (null? cls)
+          (cons (cons 'else (cons (cons 'raise-continuable (cons var '())) '())) '())
+          (if (eq? (car (car cls)) 'else)
+              cls
+              (cons (car cls) (_ilisp_guard_clauses (cdr cls))))))
     (cons 'call/cc
           (cons (cons 'lambda
                       (cons (cons '__guard_exit '())
@@ -230,7 +236,7 @@
                                         (cons (cons 'lambda
                                                     (cons (cons var '())
                                                           (cons (cons '__guard_exit
-                                                                      (cons (cons 'cond clauses) '()))
+                                                                      (cons (cons 'cond (_ilisp_guard_clauses clauses)) '()))
                                                                 '())))
                                               (cons (cons 'lambda
                                                           (cons '()

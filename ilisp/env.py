@@ -117,6 +117,7 @@ from ilisp.types import (
     Char,
     Cons,
     Continuation,
+    ErrorObject,
     EscapeContinuation,
     MutableString,
     Parameter,
@@ -132,10 +133,13 @@ from ilisp.types import (
     Vector,
     car,
     cdr,
+    is_error_object,
+    is_file_error,
     is_null,
     is_pair,
     is_parameter,
     is_promise,
+    is_read_error,
     is_record,
     is_record_type,
     set_car,
@@ -362,6 +366,12 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
                 return False
             return all(
                 prim_equal_p(a.slots[i], b.slots[i]) for i in range(len(a.slots))
+            )
+        if isinstance(a, ErrorObject) and isinstance(b, ErrorObject):
+            return (
+                a.kind == b.kind
+                and a.message == b.message
+                and prim_equal_p(a.irritants, b.irritants)
             )
         return False
 
@@ -1055,12 +1065,13 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
 
         return Primitive(f"make-{target_rtd.name}", constructor)
 
-    # Exceptions & Conditions (R7RS)
+    # Exceptions & Conditions (R7RS 6.11)
     def prim_raise(datum: Any) -> Any:
         raise SchemeException(datum)
 
     def prim_with_exception_handler(handler: Any, thunk: Any) -> Any:
         from ilisp.evaluator import _apply_procedure
+        from ilisp.reader import LispSyntaxError
 
         try:
             if isinstance(thunk, Procedure):
@@ -1074,15 +1085,68 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             elif callable(handler):
                 return handler(se.datum)
             raise
-        except Exception as py_err:
+        except (LispSyntaxError, SyntaxError) as syn_err:
+            err_obj = ErrorObject(str(syn_err), NIL, kind="read")
             if isinstance(handler, Procedure):
-                return _apply_procedure(handler, [str(py_err)])
+                return _apply_procedure(handler, [err_obj])
             elif callable(handler):
-                return handler(str(py_err))
+                return handler(err_obj)
+            raise
+        except (
+            FileNotFoundError,
+            PermissionError,
+            IsADirectoryError,
+            OSError,
+        ) as os_err:
+            err_obj = ErrorObject(str(os_err), NIL, kind="file")
+            if isinstance(handler, Procedure):
+                return _apply_procedure(handler, [err_obj])
+            elif callable(handler):
+                return handler(err_obj)
+            raise
+        except Exception as py_err:
+            err_obj = ErrorObject(str(py_err), NIL, kind="generic")
+            if isinstance(handler, Procedure):
+                return _apply_procedure(handler, [err_obj])
+            elif callable(handler):
+                return handler(err_obj)
             raise
 
-    def prim_error(msg: str, *args: Any) -> Any:
-        err_obj = Cons(Symbol.intern("error"), Cons(msg, to_lisp_list(args)))
+    def prim_error(msg: Any, *args: Any) -> Any:
+        message_str = msg if isinstance(msg, str) else str(msg)
+        irritants_list = to_lisp_list(args) if args else NIL
+        err_obj = ErrorObject(message_str, irritants_list, kind="generic")
+        raise SchemeException(err_obj)
+
+    def prim_error_object_p(x: Any) -> bool:
+        return is_error_object(x)
+
+    def prim_error_object_message(x: Any) -> str:
+        if not is_error_object(x):
+            raise TypeError(f"error-object-message: expected error-object, got {x!r}")
+        return str(x.message)
+
+    def prim_error_object_irritants(x: Any) -> Any:
+        if not is_error_object(x):
+            raise TypeError(f"error-object-irritants: expected error-object, got {x!r}")
+        return x.irritants
+
+    def prim_read_error_p(x: Any) -> bool:
+        return is_read_error(x)
+
+    def prim_file_error_p(x: Any) -> bool:
+        return is_file_error(x)
+
+    def prim_file_error(msg: Any, *args: Any) -> Any:
+        message_str = msg if isinstance(msg, str) else str(msg)
+        irritants_list = to_lisp_list(args) if args else NIL
+        err_obj = ErrorObject(message_str, irritants_list, kind="file")
+        raise SchemeException(err_obj)
+
+    def prim_read_error(msg: Any, *args: Any) -> Any:
+        message_str = msg if isinstance(msg, str) else str(msg)
+        irritants_list = to_lisp_list(args) if args else NIL
+        err_obj = ErrorObject(message_str, irritants_list, kind="read")
         raise SchemeException(err_obj)
 
     # Register all primitives
@@ -1264,11 +1328,18 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "record-accessor": prim_record_accessor,
         "record-modifier": prim_record_modifier,
         "record-constructor": prim_record_constructor,
-        # Exceptions (R7RS)
+        # Exceptions & Conditions (R7RS 6.11)
         "raise": prim_raise,
         "raise-continuable": prim_raise,
         "with-exception-handler": prim_with_exception_handler,
         "error": prim_error,
+        "error-object?": prim_error_object_p,
+        "error-object-message": prim_error_object_message,
+        "error-object-irritants": prim_error_object_irritants,
+        "read-error?": prim_read_error_p,
+        "file-error?": prim_file_error_p,
+        "read-error": prim_read_error,
+        "file-error": prim_file_error,
         # Ports and I/O (R7RS)
         "port?": port_mod.port_p,
         "input-port?": port_mod.input_port_p,

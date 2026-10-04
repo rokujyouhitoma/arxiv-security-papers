@@ -622,6 +622,47 @@ def is_record_type(obj: Any) -> bool:
     return isinstance(obj, RecordType)
 
 
+class ErrorObject:
+    """R7RS 6.11 Structured error object encapsulating message, irritants, and category."""
+
+    def __init__(
+        self,
+        message: str,
+        irritants: Any = NIL,
+        kind: str = "generic",
+    ) -> None:
+        self.message: str = message
+        self.irritants: Any = irritants
+        self.kind: str = kind
+
+    def __repr__(self) -> str:
+        return f"&error-object(kind={self.kind}, message={self.message!r}, irritants={self.irritants!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ErrorObject):
+            return False
+        return (
+            self.kind == other.kind
+            and self.message == other.message
+            and self.irritants == other.irritants
+        )
+
+
+def is_error_object(obj: Any) -> bool:
+    """Return True if obj is an ErrorObject."""
+    return isinstance(obj, ErrorObject)
+
+
+def is_read_error(obj: Any) -> bool:
+    """Return True if obj is an ErrorObject of kind 'read'."""
+    return isinstance(obj, ErrorObject) and obj.kind == "read"
+
+
+def is_file_error(obj: Any) -> bool:
+    """Return True if obj is an ErrorObject of kind 'file'."""
+    return isinstance(obj, ErrorObject) and obj.kind == "file"
+
+
 class SchemeException(Exception):
     """Exception raised by R7RS (raise datum)."""
 

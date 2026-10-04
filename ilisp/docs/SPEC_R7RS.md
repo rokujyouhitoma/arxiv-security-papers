@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 174
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 178
     "🔄 一部対応 (サブセット/基本版)" : 8
-    "⏳ 計画中 (Phase 3/4 予定)" : 21
+    "⏳ 計画中 (Phase 3/4 予定)" : 17
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -34,7 +34,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **ベクタ (Vectors)** | 6.8 | 14 | 14 (100%) | 🟢 完全準拠 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, `vector-copy`, `vector-copy!`, `vector-fill!`, `vector-append`, `vector-map`, `vector-for-each` 等完備 |
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
 | **継続・動的制御** | 6.10 | 6 | 6 (100%) | 🟢 完全準拠 | `call/cc`, `dynamic-wind`, `make-parameter`, `parameter?`, `parameterize` 完備 |
-| **例外機構 (Exceptions)** | 6.11 | 9 | 5 (56%) | 🟢 実用十分 | `raise`, `with-exception-handler`, `guard`, `error` |
+| **例外機構 (Exceptions)** | 6.11 | 9 | 9 (100%) | 🟢 完全準拠 | `raise`, `raise-continuable`, `with-exception-handler`, `guard`, `error`, `error-object?`, `error-object-message`, `error-object-irritants`, `read-error?`, `file-error?` 完備 |
 | **数値タワー (Numbers)** | 6.2 | 35 | 33 (94%) | 🟢 ほぼ完全 | 述語群、四則演算、極値/公約数、丸め、商余剰多値、基数変換完備 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
 | **マクロ機構** | 4.3 | 3 | 2 (67%) | 🟢 充実 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules` 稼働済 |
@@ -277,11 +277,14 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | :--- | :---: | :---: | :--- |
 | `raise` | Kernel (Core) | ✅ | 任意オブジェクト（Datum）を例外として送出 |
 | `raise-continuable` | Kernel (Core) | ✅ | 復帰可能例外（現行は `raise` と同等にハンドラ呼出） |
-| `with-exception-handler` | Kernel (Core) | ✅ | ハンドラ手続きを動的スコープに設定し `thunk` 実行 |
-| `guard` | `stdlib/base.ilisp`| ✅ | 構造化パターンマッチ例外捕捉構文 |
-| `error` | Kernel (Core) | ✅ | メッセージと引数リストからエラーオブジェクト生成・送出 |
-| `error-object?` | - | ⏳ | エラーオブジェクト判定（Phase 3 予定） |
-| `read-error?`, `file-error?` | - | ⏳ | I/O 例外判定（Phase 3 予定） |
+| `with-exception-handler` | Kernel (Core) | ✅ | ハンドラ手続きを動的スコープに設定し `thunk` 実行（Python 例外の自動エラーオブジェクト変換完備） |
+| `guard` | `stdlib/base.ilisp`| ✅ | 構造化パターンマッチ例外捕捉構文（節不一致時のフォールバック re-raise 完備） |
+| `error` | Kernel (Core) | ✅ | メッセージと任意個の irritants から構造化 `ErrorObject` を生成・送出 |
+| `error-object?` | Kernel (Core) | ✅ | `ErrorObject` 型判定述語 |
+| `error-object-message` | Kernel (Core) | ✅ | エラーオブジェクトにカプセル化されたメッセージ文字列の抽出 |
+| `error-object-irritants` | Kernel (Core) | ✅ | エラーオブジェクトにカプセル化された irritants（追加引数）Scheme リストの抽出 |
+| `read-error?` | Kernel (Core) | ✅ | 構文解析・パース・リーダー起因の例外判定述語 |
+| `file-error?` | Kernel (Core) | ✅ | ファイルオープン・I/O 障害起因の例外判定述語 |
 
 ### 3.12 第6.13節 & 第6.14節 入出力およびシステム (I/O & System)
 

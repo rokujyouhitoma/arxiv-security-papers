@@ -185,6 +185,7 @@ class PythonASTCompiler:
                 ast.alias(name="Record", asname=None),
                 ast.alias(name="RecordType", asname=None),
                 ast.alias(name="Promise", asname=None),
+                ast.alias(name="ErrorObject", asname=None),
                 ast.alias(name="SchemeException", asname=None),
                 ast.alias(name="Continuation", asname=None),
                 ast.alias(name="to_lisp_list", asname=None),
