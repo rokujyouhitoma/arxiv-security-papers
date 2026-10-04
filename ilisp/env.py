@@ -10,8 +10,9 @@ import importlib
 import os
 import sys
 import time
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from ilisp.char import (
     char_alphabetic_p,
@@ -168,6 +169,10 @@ from ilisp.types import (
     to_py_list,
 )
 
+_current_exception_handler: ContextVar[Optional[Any]] = ContextVar(
+    "_current_exception_handler", default=None
+)
+
 
 class Environment:
     """Lexical Environment frame with parent scoping chain."""
@@ -230,7 +235,11 @@ class Environment:
             curr = curr.parent
         raise NameError(f"Cannot set! unbound variable: '{sym.name}'")
 
-    def extend(self, params: Sequence[Symbol], args: Sequence[Any]) -> Environment:
+    def extend(
+        self,
+        params: Sequence[Symbol] = (),
+        args: Sequence[Any] = (),
+    ) -> Environment:
         """Create a child environment binding parameters to arguments."""
         if len(params) != len(args):
             raise TypeError(
@@ -474,11 +483,13 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         return a is b
 
     def prim_eqv_p(a: Any, b: Any) -> bool:
+        from fractions import Fraction
+
         if isinstance(a, Symbol) and isinstance(b, Symbol):
             return a is b
-        if isinstance(a, (int, float, str, bool, Char, complex)) and isinstance(
-            b, (int, float, str, bool, Char, complex)
-        ):
+        if isinstance(
+            a, (int, float, str, bool, Char, complex, Fraction)
+        ) and isinstance(b, (int, float, str, bool, Char, complex, Fraction)):
             return type(a) is type(b) and a == b
         if isinstance(a, MutableString) and isinstance(b, MutableString):
             return a is b
@@ -1027,12 +1038,15 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
 
     # Continuations (R7RS One-shot Escape)
     cont_counter = 0
+    _current_wind_stack: List[Tuple[Any, Any, Any]] = []
 
     def prim_call_cc(proc: Any) -> Any:
         nonlocal cont_counter
         cont_counter += 1
         cid = f"cc_{cont_counter}"
         cont = Continuation(cid)
+        if _current_wind_stack:
+            cont.wind_frame = _current_wind_stack[-1]
         try:
             if isinstance(proc, Procedure):
                 from ilisp.evaluator import _apply_procedure
@@ -1059,6 +1073,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         else:
             raise TypeError(f"dynamic-wind: before must be callable, got {before!r}")
 
+        _current_wind_stack.append((before, thunk, after))
         try:
             # 2. Run body thunk
             if isinstance(thunk, Procedure):
@@ -1067,6 +1082,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
                 return thunk()
             raise TypeError(f"dynamic-wind: thunk must be callable, got {thunk!r}")
         finally:
+            _current_wind_stack.pop()
             # 3. Always run after-thunk (upon normal exit, exception, or continuation escape)
             if isinstance(after, Procedure):
                 _apply_procedure(after, [])
@@ -1298,18 +1314,24 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         from ilisp.evaluator import _apply_procedure
         from ilisp.reader import LispSyntaxError
 
+        token = _current_exception_handler.set(handler)
         try:
             if isinstance(thunk, Procedure):
                 return _apply_procedure(thunk, [])
             elif callable(thunk):
                 return thunk()
-            raise TypeError(f"thunk must be callable, got {thunk!r}")
+        except EscapeContinuation:
+            raise
         except SchemeException as se:
             if isinstance(handler, Procedure):
-                return _apply_procedure(handler, [se.datum])
+                _apply_procedure(handler, [se.datum])
             elif callable(handler):
-                return handler(se.datum)
-            raise
+                handler(se.datum)
+            raise SchemeException(
+                ErrorObject(
+                    "non-continuable exception handler returned", NIL, kind="generic"
+                )
+            )
         except (LispSyntaxError, SyntaxError) as syn_err:
             err_obj = ErrorObject(str(syn_err), NIL, kind="read")
             if isinstance(handler, Procedure):
@@ -1336,6 +1358,19 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             elif callable(handler):
                 return handler(err_obj)
             raise
+        finally:
+            _current_exception_handler.reset(token)
+
+    def prim_raise_continuable(datum: Any) -> Any:
+        h = _current_exception_handler.get()
+        if h is not None:
+            from ilisp.evaluator import _apply_procedure
+
+            if isinstance(h, Procedure):
+                return _apply_procedure(h, [datum])
+            elif callable(h):
+                return h(datum)
+        raise SchemeException(datum)
 
     def prim_error(msg: Any, *args: Any) -> Any:
         message_str = msg if isinstance(msg, str) else str(msg)
@@ -1446,11 +1481,36 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         f = Fraction(q).limit_denominator()
         return f.denominator
 
-    def prim_rationalize(x: Any, eps: Any) -> float:
+    def prim_rationalize(x: Any, eps: Any) -> Any:
+        import math
         from fractions import Fraction
 
-        max_den = max(1, int(1.0 / float(eps))) if float(eps) > 0 else 1000000
-        return float(Fraction(x).limit_denominator(max_den))
+        is_exact = not isinstance(x, float) and not isinstance(eps, float)
+        fx = float(x)
+        feps = abs(float(eps))
+        low = fx - feps
+        high = fx + feps
+        if low <= 0.0 <= high:
+            return 0 if is_exact else 0.0
+
+        def simplest_between(a: float, b: float) -> Fraction:
+            if a > b:
+                a, b = b, a
+            low_ceil = math.ceil(a)
+            if low_ceil <= b:
+                return Fraction(low_ceil, 1)
+            int_part = math.floor(a)
+            rem = simplest_between(1.0 / (b - int_part), 1.0 / (a - int_part))
+            return Fraction(int_part, 1) + Fraction(1, 1) / rem
+
+        if low < 0.0 and high < 0.0:
+            res_frac = -simplest_between(-high, -low)
+        else:
+            res_frac = simplest_between(low, high)
+
+        if is_exact:
+            return res_frac.numerator if res_frac.denominator == 1 else res_frac
+        return float(res_frac)
 
     def prim_null_environment(version: Any) -> Environment:
         return make_initial_env(preload_stdlib=False)
@@ -1715,7 +1775,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "record-constructor": prim_record_constructor,
         # Exceptions & Conditions (R7RS 6.11)
         "raise": prim_raise,
-        "raise-continuable": prim_raise,
+        "raise-continuable": prim_raise_continuable,
         "with-exception-handler": prim_with_exception_handler,
         "error": prim_error,
         "syntax-error": prim_syntax_error,

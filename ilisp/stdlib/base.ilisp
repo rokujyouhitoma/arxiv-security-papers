@@ -248,7 +248,7 @@
 ;; let-values: (let-values (((var ...) expr) ...) body ...)
 (define-macro (let-values bindings . body)
   (if (null? bindings)
-      (cons 'begin body)
+      (cons 'let (cons '() body))
       (let ((first_b (car bindings))
             (rest_b (cdr bindings)))
         (let ((vars (car first_b))
@@ -264,7 +264,7 @@
 ;; let*-values: (let*-values (((var ...) expr) ...) body ...)
 (define-macro (let*-values bindings . body)
   (if (null? bindings)
-      (cons 'begin body)
+      (cons 'let (cons '() body))
       (cons 'let-values
             (cons (cons (car bindings) '())
                   (cons (cons 'let*-values (cons (cdr bindings) body))
@@ -467,12 +467,14 @@
           lst
           (memq item (cdr lst)))))
 
-(define (member item lst)
-  (if (null? lst)
-      #f
-      (if (eqv? item (car lst))
-          lst
-          (member item (cdr lst)))))
+(define (member item lst . compare-arg)
+  (let ((cmp (if (null? compare-arg) equal? (car compare-arg))))
+    (let loop ((rest lst))
+      (if (null? rest)
+          #f
+          (if (cmp item (car rest))
+              rest
+              (loop (cdr rest)))))))
 
 (define (memv item lst)
   (if (null? lst)

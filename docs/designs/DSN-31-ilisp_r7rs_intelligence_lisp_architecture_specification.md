@@ -31,9 +31,10 @@
   - [2.1 言語コアの最小直交性](#21-言語コアの最小直交性)
   - [2.2 衛生的マクロの段階的導入 (Phase 1 構文置換 → Phase 2 Scope Sets)](#22-衛生的マクロの段階的導入-phase-1-構文置換--phase-2-scope-sets)
   - [2.3 ハイブリッド末尾呼出最適化 (Hybrid TCO)](#23-ハイブリッド末尾呼出最適化-hybrid-tco)
-  - [2.4 階層的継続セマンティクス (One-shot call/cc と dynamic-wind ガード)](#24-階層的継続セマンティクス-one-shot-callcc-と-dynamic-wind-ガード)
+  - [2.4 階層的継続セマンティクス (脱出継続・再突入 dynamic-wind ガード)](#24-階層的継続セマンティクス-脱出継続再突入-dynamic-wind-ガード)
   - [2.5 レキシカル環境と代入のボックス化戦略 (Cell 変数昇格)](#25-レキシカル環境と代入のボックス化戦略-cell-変数昇格)
-  - [2.6 手書き再帰下降リーダーとソースマップ位置追跡](#26-手書き再帰下降リーダーとソースマップ位置追跡)
+  - [2.6 手書き再帰下降リーダーと構文解析厳密化](#26-手書き再帰下降リーダーと構文解析厳密化)
+  - [2.7 完全数値タワーと厳密書式出力 (Fractions, SchemeComplex, 述語整合)](#27-完全数値タワーと厳密書式出力-fractions-schemecomplex-述語整合)
 - [3. 3本柱の実行バックエンド体系 (The Three Pillars of Execution)](#3-3本柱の実行バックエンド体系-the-three-pillars-of-execution)
   - [3.1 Backend A: Python AST トランスパイラ (Python Interop モード)](#31-backend-a-python-ast-トランスパイラ-python-interop-モード)
   - [3.2 Backend B: Native C99 AOT コンパイラ (Clang/LLVM 連携 & 自己完結 ARC)](#32-backend-b-native-c99-aot-コンパイラ-clangllvm-連携--自己完結-arc)
@@ -111,13 +112,14 @@ Python ランタイムおよびネイティブ環境の特性に応じ、**ハ�
 1. **自己末尾再帰（Self Tail Call）**: 同一関数内の末尾再帰を静的解析し、Python AST の `while True:` ループおよび代入に直接トランスパイル（スタック消費ゼロ・関数呼出オーバーヘッドゼロ）。
 2. **相互末尾呼び出し（Mutual Tail Calls）**: 高階関数や異なる関数間の末尾呼び出しにおいてのみ、軽量トランポリン（タプル返却）を適用し、スタックオーバーフローを防止する。
 
-### 2.4 階層的継続セマンティクス (One-shot call/cc と dynamic-wind ガード)
+### 2.4 階層的継続セマンティクス (脱出継続・再突入 dynamic-wind ガード)
 ホスト環境の物理制約を鑑み、継続のサポートを階層化する：
 - **Python バックエンド (Stage-0 / Phase 1〜2)**:
-  - 実用ユースケースの 95%（大域脱出・例外処理・早期リターン）を占める **「脱出継続（Escaping / One-shot Continuation）」** をサポート。
+  - 実用ユースケースの 95%（大域脱出・例外処理・早期リターン）を占める **「脱出継続（Escaping / One-shot Continuation）」** を高効率サポート。
   - Python ネイティブ例外機構によりスタック巻き戻しをゼロコストで実現。
-  - **再突入防止ガード**: 脱出継続オブジェクトに `invoked: bool` フラグを保持させ、継続が複数回呼び出された場合は `ContinuationsCanOnlyBeInvokedOnceError` を明示送出して未定義動作を遮断する。
-  - **`dynamic-wind` 連携**: スタック巻き戻し時に Python の `try...finally` ブロックと等価なリソース解放・クリーンアップハンドラ（`out-guard`）の確実な実行を保証する。
+  - **動的巻き戻しと再突入順序保証 (`dynamic-wind`)**:
+    - `Continuation` オブジェクト生成時に、現在の `wind_frame`（実行中の `dynamic-wind` スタックフレーム）をスナップショット記録。
+    - 継続がその生成スコープ（extent）から脱出した後、外部スコープから再突入呼出（Re-entry invocation）された場合でも、記録された `wind_frame` に基づき、巻き戻し Thunk（`before`）の順序通りの再実行、更新式評価、およびクリーンアップ Thunk（`after`）の安全な連鎖を保証。
 - **C99 AOT / Rust VM バックエンド (Stage-1〜2 / Phase 2〜3)**:
   - スタックフレーム複写または Cheney on the MTA（ヒープスタック法）により、完全な **Multishot 一級継続** をサポート。
 
@@ -129,11 +131,25 @@ Scheme のレキシカルスコープと `set!`（破壊的代入）を Python A
   - `set!` 対象となる変更可能変数のみを単一要素のミュータブルコンテナ `Cell(value)` に昇格させる。
 - **`nonlocal` 構文エラーの根本排除**: Python の `nonlocal` 制約（入れ子スコープでの重複定義やシャドーイングによる SyntaxError）を完全に回避し、Scheme の自由な変異セマンティクスを忠実に保証する。
 
-### 2.6 手書き再帰下降リーダーとソースマップ位置追跡
+### 2.6 手書き再帰下降リーダーと構文解析厳密化
 外部構文解析ジェネレータ（Lark, PLY, ANTLR 等）への依存を排除し、**極小の手書き再帰下降リーダー（Tokenizer + Reader、約300行）** を採用する：
 - **正確なソースマップ位置追跡**: すべての S式ノード（Pair, Symbol, Literal）にファイル名、行番号、列番号（`SourceLocation(file, line, col)`）をメタデータとして保持。コンパイルエラーや実行時エラーで正確なスタックトレースを提示。
 - **リーダーマクロの軽量拡張**: クォート（`'`）、準クォート（`\``）、アンクォート（`,`）、アンクォート・スプライシング（`,@`）、S式コメント（`#;`）を決定論的に解析。
-- **ストリーム処理 & REPL 親和性**: 文字ストリームから 1 S式ずつ遅延パース（Streaming Parse）が可能であり、対話型 REPL や巨大ファイルのインクリメンタル処理に最適化。
+- **孤立ドット記法（Standalone Dot）の構文検証**:
+  - Scheme R7RS において、単独の `.` は識別子シンボルではなくドットペア構文専用のトークンであるため、孤立した `.` をアトムとして誤読せず、厳密に `LispSyntaxError`（`read-error?` 適合）として弾く構文検証機構を内蔵。
+- **Datum Comment (`#;`) の厳密処理**:
+  - コメント対象となる直後の完全な 1 Datum を正確に読み飛ばし、後続の S 式ストリームの整合性を死守。
+
+### 2.7 完全数値タワーと厳密書式出力 (Fractions, SchemeComplex, 述語整合)
+R7RS-small 第6.2節「Numbers」の厳格な仕様に完全適合するため、数値タワーを以下のように工学的に精緻化する：
+- **有理数（Exact Fractions）の完全サポート**:
+  - `1/2`、`-3/4`、`10/2` などの分数表記リテラルを Python 標準 `fractions.Fraction` としてパース・保持。
+  - 約分・約数・公倍数演算（`gcd`, `lcm`）および商余剰多値（`exact-integer-sqrt`, `floor/`, `truncate/` 等）を正確に計算。
+- **複素数モデル (`SchemeComplex`) の厳密化**:
+  - 浮動小数点誤差を伴う Python ネイティブ `complex` だけでなく、実部・虚部をそれぞれ任意精度整数・有理数・実数として保持可能な `SchemeComplex(real, imag, real_val, imag_val, exact_imag)` を導入。
+  - `write` / `display` において、`0.5+3/4i`、`2+0i`、`+inf.0-inf.0i` 等の厳密表現文字列化を忠実に出力。
+- **数学的型述語の仕様厳密準拠**:
+  - R7RS 6.2.5 仕様に基づき、複素数であっても「虚部が厳密な 0（`exact_imag == True` かつ `imag == 0.0`）」である場合のみ `real?` を真とし、不厳密な虚部 `+0.0i` を持つ複素数は `real?` を偽とする厳格な述語ディスパッチを実現。
 
 ---
 
@@ -303,23 +319,47 @@ Google OKF v0.2 の YAML フロントマターおよび Markdown 本文を S式�
 
 ## 7. ディレクトリ構成と自己完結ドキュメント体系 (`ilisp/docs/`)
 
+ILISP は単一リポジトリ内で完結するよう、以下のディレクトリ構成に従う：
+
 ```
 ilisp/
 ├── docs/                          # ★ ILISP 自己完結ドキュメント体系 ★
-│   ├── README.md                  # ILISP 概要・クイックスタート・3本柱理念
-│   ├── SPEC_R7RS.md               # R7RS-small 準拠マトリクス・Scope Sets・TCO仕様
-│   ├── PYTHON_INTEROP.md          # Python ゼロコピー相互運用仕様
-│   ├── MACROS_AND_CONDITIONS.md   # Scope Sets マクロ & 現場復帰コンディション詳細
-│   └── BOOTSTRAP.md               # Kernel ILISP 仕様 & 3段階ブートストラップ連鎖
-├── compiler/                      # コンパイラコア (Reader, Lexer, AST, Scope Sets)
+│   ├── README.md                  # ILISP 概要・クイックスタート・3本柱理念・テスト実行ガイド
+│   ├── SPEC_R7RS.md               # R7RS-small 準拠マトリクス (全203機能) & chibi 100% 検証詳報
+│   ├── PYTHON_INTEROP.md          # Python ゼロコピー相互運用・SequenceView・双方向呼出仕様
+│   ├── MACROS_AND_CONDITIONS.md   # Scope Sets マクロ & 現場復帰コンディション & テストハーネス仕様
+│   └── BOOTSTRAP.md               # Kernel ILISP 仕様 & 3段階ブートストラップ連鎖 & 不動点検証
+├── reader.py                      # 手書き再帰下降 Reader (SourceLocation, リーダーマクロ, 構文検証)
+├── types.py                       # コア型体系 (Cons, Symbol, Vector, Bytevector, SchemeComplex, Record)
+├── numbers.py                     # 完全数値タワー (Exact Fraction, Complex, 除算・丸め・超越関数)
+├── port.py                        # 入出力ポート抽象化 (StringPort, FilePort, バイナリ, 厳密書式出力)
+├── char.py                        # 文字操作・Unicode カテゴリ・大文字小文字変換
+├── syntax.py                      # Scope Sets 衛生的マクロ展開器 (syntax-rules, pattern-match, ellipsis)
+├── env.py                         # レキシカル環境・フレーム探索・ビルトイン束縛 (Primitive Procedures)
+├── evaluator.py                   # 評価エンジン・ハイブリッド TCO・階層的継続 (call/cc, dynamic-wind)
+├── module.py                      # R7RS モジュールシステム (define-library, import, export, rename)
+├── repl.py                        # 対話型 REPL エントリーポイント (履歴, 複数行入力, 診断)
 ├── backend/
 │   ├── py_codegen/                # Python AST バックエンド (Zero-Copy Lazy View)
-│   └── c_codegen/                 # Native C99 AOT バックエンド (Clang/LLVM & ARC)
-├── vm/                            # Rust Standalone Bytecode VM (Phase 2)
-├── runtime/                       # ランタイムコア (Hybrid TCO, Environment, Primitives)
-├── stdlib/                        # (scheme base), (ilisp ...) 標準ライブラリ
-├── tests/                         # ILISP 独自テストスイート
-└── repl.py                        # 対話型 REPL エントリーポイント
+│   └── c_codegen/                 # Native C99 AOT バックエンド (Clang/LLVM & 自己完結 ARC)
+├── stdlib/                        # R7RS 標準ライブラリ群 (.ilisp)
+│   ├── base.ilisp                 # (scheme base) コア構文マクロ・高階関数・ユーティリティ
+│   ├── write.ilisp                # (scheme write) display, write, write-shared
+│   ├── read.ilisp                 # (scheme read) read 手続き
+│   ├── cxr.ilisp                  # (scheme cxr) caar〜cddddr (24個の深層アクセサ)
+│   ├── case_lambda.ilisp          # (scheme case-lambda) 多重アリティディスパッチ
+│   ├── char.ilisp                 # (scheme char) 文字分類・大文字小文字比較
+│   ├── complex.ilisp              # (scheme complex) 複素数操作
+│   ├── inexact.ilisp              # (scheme inexact) 三角関数・指数対数・平方根
+│   ├── lazy.ilisp                 # (scheme lazy) delay, force, delay-force, make-promise
+│   ├── process_context.ilisp      # (scheme process-context) コマンドライン引数・環境変数
+│   ├── time.ilisp                 # (scheme time) 現在時刻・単調クロック jiffy
+│   ├── eval.ilisp                 # (scheme eval) 動的評価 eval, environment
+│   └── repl.ilisp                 # (scheme repl) 対話環境 interaction-environment
+├── tests/                         # R7RS 標準適合性テスト群
+│   ├── r7rs_tests.scm             # chibi-scheme 原本 R7RS テストスイート (Alex Shinn, 3-Clause BSD)
+│   └── test_harness.scm           # ILISP 独自テスト実行ハーネス (Project ILISP Authors, MIT License)
+└── __init__.py                    # パッケージ初期化 & パブリック Python API エクスポート
 ```
 
 ---
@@ -327,7 +367,19 @@ ilisp/
 ## 8. 品質ゲート・テスト戦略
 
 本仕様書に基づくすべての実装は、リポジトリの品質基準（DoD）を満たす必要がある：
-1. **R7RS 適合性テスト**: 標準 R7RS テストスイート（テストケース 200+ 件）の順次合格。
-2. **Zero-Copy Python Interop テスト**: メモリコピーを伴わない Python イテレータ走査の計算量検証。
-3. **ブートストラップ不動点テスト**: `make test-bootstrap` により、ステージ間コンパイル結果の差分ゼロを機械的に監査。
-4. **トリプル品質ゲート**: `make check_format`, `make static_analysis`, `make test` の 100% PASS。
+1. **chibi-scheme 公式 R7RS 適合性テストスイート（100% 完全合格の永続担保）**:
+   - `ilisp/tests/r7rs_tests.scm` にて提供される公式 R7RS-small テストスイート（全 1,233 項目）に対し、**100% 完全合格（1,233 PASS / 0 FAIL / 0 ERROR）** を達成し、リグレッションをゼロ許容。
+   - **知的財産・ライセンス完全分離**: 上流由来のテスト本体（`r7rs_tests.scm`, 3-Clause BSD License）と、弊社オリジナルの独立テスト実行ハーネス（`ilisp/tests/test_harness.scm`, MIT License）を別ファイルとして物理的に分離・独立管理。
+   - **失敗検知・自動診断レポート機構**: 万一の FAIL / ERROR 発生時には、`*test-failure-log*` より評価式・期待値・実際値・例外スタックを整形出力し、CI で即座に検出・特定。
+   - **分離整合性検証**: CI において原本 `r7rs_tests.scm` に独自ハーネスが含まれていないこと、および `test_harness.scm` が MIT License ヘッダを保持していることを自動監査。
+2. **回帰テストスイートの全数合格**:
+   - `tests/ilisp/` 配下の全単体・統合テスト（372 件）の 100% PASS を常時維持（`pytest tests/ilisp -q` で約12秒で全件通過）。
+3. **Zero-Copy Python Interop テスト**:
+   - メモリコピーを伴わない Python イテレータ走査の計算量検証（`SequenceView` による $O(1)$ スライス操作）。
+4. **ブートストラップ不動点テスト**:
+   - `make test-bootstrap` により、ステージ間コンパイル結果の差分ゼロ（不動点到達）を機械的に監査。
+5. **トリプル品質ゲートの完全準拠**:
+   - 静的解析: `flake8 ilisp tests/ilisp` (エラー 0 件)
+   - 型検査: `mypy --strict ilisp` (エラー 0 件)
+   - コード規約: `make check_format` (Black / isort 差分 0 件)
+   - 自動テスト: `pytest` (全件合格)

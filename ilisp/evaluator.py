@@ -7,9 +7,11 @@ and tail-call optimization via trampolining.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Any, List, Optional, Tuple
 
 from ilisp.env import Environment
+from ilisp.reader import LispSyntaxError
 from ilisp.syntax import SyntaxRulesTransformer
 from ilisp.types import (
     NIL,
@@ -18,6 +20,7 @@ from ilisp.types import (
     Cons,
     Continuation,
     ErrorObject,
+    EscapeContinuation,
     MutableString,
     NilType,
     Parameter,
@@ -27,6 +30,7 @@ from ilisp.types import (
     RecordType,
     SchemeException,
     Symbol,
+    Values,
     Vector,
     car,
     cdr,
@@ -78,7 +82,9 @@ def _build_syntax_transformer(name: str, trans_spec: Any, env: Environment) -> A
                     f"syntax-rules rule must be (pattern template), got {r!r}"
                 )
             rules.append((car(r), car(cdr(r))))
-        return SyntaxRulesTransformer(name, literals, rules, ellipsis=ellipsis_sym)
+        return SyntaxRulesTransformer(
+            name, literals, rules, ellipsis=ellipsis_sym, def_env=env
+        )
     return eval_expr(trans_spec, env)
 
 
@@ -114,6 +120,7 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     RecordType,
                     Record,
                     Continuation,
+                    Fraction,
                 ),
             )
             or curr_expr is NIL
@@ -170,19 +177,293 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                 if op_name == "if":
                     args = to_py_list(curr_expr.cdr)
                     if len(args) < 2 or len(args) > 3:
-                        raise SyntaxError(
-                            f"if requires 2 or 3 expressions, got {len(args)}"
-                        )
-                    test_val = eval_expr(args[0], curr_env)
-                    # In Scheme, only False is falsy
-                    if test_val is not False:
-                        curr_expr = args[1]
-                        continue
+                        is_lex_bound = False
+                        cur_e = curr_env
+                        while cur_e.parent is not None:
+                            if op in cur_e.bindings:
+                                is_lex_bound = True
+                                break
+                            cur_e = cur_e.parent
+                        if not is_lex_bound:
+                            raise SyntaxError(
+                                f"if requires 2 or 3 expressions, got {len(args)}"
+                            )
                     else:
-                        if len(args) == 3:
-                            curr_expr = args[2]
+                        test_val = eval_expr(args[0], curr_env)
+                        # In Scheme, only False is falsy
+                        if test_val is not False:
+                            curr_expr = args[1]
                             continue
+                        else:
+                            if len(args) == 3:
+                                curr_expr = args[2]
+                                continue
+                            return NIL
+
+                # (cond clause ...)
+                if op_name == "cond":
+                    clauses = to_py_list(curr_expr.cdr)
+                    has_match = False
+                    for clause in clauses:
+                        if not is_pair(clause):
+                            raise SyntaxError(f"cond: malformed clause: {clause!r}")
+                        test_or_else = car(clause)
+                        body_rest = cdr(clause)
+
+                        if test_or_else == Symbol.intern("else"):
+                            body_exprs = to_py_list(body_rest)
+                            if not body_exprs:
+                                return NIL
+                            for step in body_exprs[:-1]:
+                                eval_expr(step, curr_env)
+                            curr_expr = body_exprs[-1]
+                            has_match = True
+                            break
+
+                        t_val = eval_expr(test_or_else, curr_env)
+                        if t_val is not False:
+                            if is_null(body_rest):
+                                return t_val
+                            if is_pair(body_rest) and car(body_rest) == Symbol.intern(
+                                "=>"
+                            ):
+                                is_shadowed = False
+                                cur_e = curr_env
+                                while cur_e.parent is not None:
+                                    if Symbol.intern("=>") in cur_e.bindings:
+                                        is_shadowed = True
+                                        break
+                                    cur_e = cur_e.parent
+
+                                if not is_shadowed:
+                                    recip_expr = car(cdr(body_rest))
+                                    recip = eval_expr(recip_expr, curr_env)
+                                    curr_expr = Cons(
+                                        recip,
+                                        Cons(
+                                            Cons(
+                                                Symbol.intern("quote"),
+                                                Cons(t_val, NIL),
+                                            ),
+                                            NIL,
+                                        ),
+                                    )
+                                    has_match = True
+                                    break
+
+                            body_exprs = to_py_list(body_rest)
+                            if not body_exprs:
+                                return t_val
+                            for step in body_exprs[:-1]:
+                                eval_expr(step, curr_env)
+                            curr_expr = body_exprs[-1]
+                            has_match = True
+                            break
+
+                    if has_match:
+                        continue
+                    return NIL
+
+                # (guard (var clause ...) body ...)
+                if op_name == "guard":
+                    guard_args = curr_expr.cdr
+                    if not is_pair(guard_args) or not is_pair(guard_args.cdr):
+                        raise SyntaxError(
+                            "guard requires (guard (var clause ...) body ...)"
+                        )
+                    spec = car(guard_args)
+                    body_rest = cdr(guard_args)
+                    if not is_pair(spec):
+                        raise SyntaxError("guard: malformed spec")
+                    var_sym = car(spec)
+                    if not isinstance(var_sym, Symbol):
+                        raise SyntaxError("guard: variable must be a symbol")
+                    clauses = to_py_list(cdr(spec))
+                    body_exprs = to_py_list(body_rest)
+
+                    err_val: Any = None
+                    original_exc: Optional[Exception] = None
+                    try:
+                        res = NIL
+                        for step in body_exprs:
+                            res = eval_expr(step, curr_env)
+                        return res
+                    except EscapeContinuation:
+                        raise
+                    except SchemeException as se:
+                        err_val = se.datum
+                        original_exc = se
+                    except (LispSyntaxError, SyntaxError) as syn_err:
+                        err_val = ErrorObject(str(syn_err), NIL, kind="read")
+                        original_exc = syn_err
+                    except (
+                        FileNotFoundError,
+                        PermissionError,
+                        IsADirectoryError,
+                        OSError,
+                    ) as os_err:
+                        err_val = ErrorObject(str(os_err), NIL, kind="file")
+                        original_exc = os_err
+                    except Exception as py_err:
+                        err_val = ErrorObject(str(py_err), NIL, kind="generic")
+                        original_exc = py_err
+
+                    h_env = curr_env.extend()
+                    h_env.define(var_sym, err_val)
+                    for clause in clauses:
+                        if not is_pair(clause):
+                            raise SyntaxError(f"guard: malformed clause: {clause!r}")
+                        c_test = car(clause)
+                        c_body = cdr(clause)
+
+                        if c_test == Symbol.intern("else"):
+                            c_exprs = to_py_list(c_body)
+                            if not c_exprs:
+                                return NIL
+                            c_res = NIL
+                            for c_step in c_exprs:
+                                c_res = eval_expr(c_step, h_env)
+                            return c_res
+
+                        t_val = eval_expr(c_test, h_env)
+                        if t_val is not False:
+                            if is_null(c_body):
+                                return t_val
+                            if is_pair(c_body) and car(c_body) == Symbol.intern("=>"):
+                                recip_expr = car(cdr(c_body))
+                                recip = eval_expr(recip_expr, h_env)
+                                if isinstance(recip, Procedure):
+                                    return _apply_procedure(recip, [t_val])
+                                elif callable(recip):
+                                    return recip(t_val)
+                                raise TypeError(
+                                    f"guard => expected procedure, got {recip!r}"
+                                )
+                            c_exprs = to_py_list(c_body)
+                            c_res = NIL
+                            for c_step in c_exprs:
+                                c_res = eval_expr(c_step, h_env)
+                            return c_res
+
+                    if original_exc is not None:
+                        raise original_exc
+                    raise SchemeException(err_val)
+
+                # (let bindings body ...) or (let name bindings body ...)
+                if op_name == "let":
+                    args = curr_expr.cdr
+                    is_lex_bound = False
+                    cur_e = curr_env
+                    while cur_e.parent is not None:
+                        if op in cur_e.bindings:
+                            is_lex_bound = True
+                            break
+                        cur_e = cur_e.parent
+
+                    if not is_pair(args):
+                        if not is_lex_bound:
+                            raise SyntaxError("let requires bindings and body")
+                    else:
+                        first_arg = car(args)
+                        if isinstance(first_arg, Symbol) and not is_pair(cdr(args)):
+                            if not is_lex_bound:
+                                raise SyntaxError(
+                                    "Named let requires bindings and body"
+                                )
+                        elif isinstance(first_arg, Symbol):
+                            # Named let: (let name ((var val) ...) body ...)
+                            let_name = first_arg
+                            bindings = car(cdr(args))
+                            body = cdr(cdr(args))
+                            b_list = to_py_list(bindings)
+                            vars_list = [car(b) for b in b_list]
+                            vals_list = [
+                                eval_expr(car(cdr(b)), curr_env) for b in b_list
+                            ]
+                            new_env = curr_env.extend()
+                            proc = Procedure(
+                                vars_list, to_py_list(body), new_env, name=let_name.name
+                            )
+                            new_env.define(let_name, proc)
+                            return _apply_procedure(proc, vals_list)
+                        else:
+                            bindings = first_arg
+                            body = cdr(args)
+                            b_list = to_py_list(bindings)
+                            eval_bindings = []
+                            for b in b_list:
+                                if not is_pair(b) or not is_pair(cdr(b)):
+                                    raise SyntaxError(f"let: malformed binding: {b!r}")
+                                eval_bindings.append(
+                                    (car(b), eval_expr(car(cdr(b)), curr_env))
+                                )
+                            new_env = curr_env.extend()
+                            for var_s, val_v in eval_bindings:
+                                new_env.define(var_s, val_v)
+                            body_exprs = to_py_list(body)
+                            if not body_exprs:
+                                return NIL
+                            for step in body_exprs[:-1]:
+                                eval_expr(step, new_env)
+                            curr_expr = body_exprs[-1]
+                            curr_env = new_env
+                            continue
+
+                # (let* bindings body ...)
+                if op_name == "let*":
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError("let* requires bindings and body")
+                    bindings = car(args)
+                    body = cdr(args)
+                    b_list = to_py_list(bindings)
+                    new_env = curr_env.extend()
+                    for b in b_list:
+                        if not is_pair(b) or not is_pair(cdr(b)):
+                            raise SyntaxError(f"let*: malformed binding: {b!r}")
+                        val_e = eval_expr(car(cdr(b)), new_env)
+                        new_env = new_env.extend()
+                        new_env.define(car(b), val_e)
+                    body_exprs = to_py_list(body)
+                    if not body_exprs:
                         return NIL
+                    for step in body_exprs[:-1]:
+                        eval_expr(step, new_env)
+                    curr_expr = body_exprs[-1]
+                    curr_env = new_env
+                    continue
+
+                # (letrec bindings body ...) or (letrec* bindings body ...)
+                if op_name in ("letrec", "letrec*"):
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError(f"{op_name} requires bindings and body")
+                    bindings = car(args)
+                    body = cdr(args)
+                    b_list = to_py_list(bindings)
+                    new_env = curr_env.extend()
+                    for b in b_list:
+                        if not is_pair(b) or not is_pair(cdr(b)):
+                            raise SyntaxError(f"{op_name}: malformed binding: {b!r}")
+                        new_env.define(car(b), NIL)
+                    eval_rec_vals = []
+                    for b in b_list:
+                        val = eval_expr(car(cdr(b)), new_env)
+                        if op_name == "letrec*":
+                            new_env.define(car(b), val)
+                        else:
+                            eval_rec_vals.append((car(b), val))
+                    if op_name == "letrec":
+                        for var_s, val_v in eval_rec_vals:
+                            new_env.define(var_s, val_v)
+                    body_exprs = to_py_list(body)
+                    if not body_exprs:
+                        return NIL
+                    for step in body_exprs[:-1]:
+                        eval_expr(step, new_env)
+                    curr_expr = body_exprs[-1]
+                    curr_env = new_env
+                    continue
 
                 # (begin expr ...)
                 if op_name == "begin":
@@ -230,6 +511,72 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                         return fn_name
                     else:
                         raise SyntaxError(f"Invalid define target: {target!r}")
+
+                # (define-values formals expr)
+                if op_name == "define-values":
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError(
+                            "define-values requires formals and expression"
+                        )
+                    formals = car(args)
+                    body_rest = cdr(args)
+                    if not is_pair(body_rest):
+                        raise SyntaxError("define-values requires an expression")
+                    val_expr = car(body_rest)
+                    res = eval_expr(val_expr, curr_env)
+                    if isinstance(res, Values):
+                        res_vals: Tuple[Any, ...] = res.values
+                    else:
+                        res_vals = (res,)
+
+                    if isinstance(formals, Symbol):
+                        curr_env.define(formals, to_lisp_list(list(res_vals)))
+                        return NIL
+
+                    proper_vars: List[Symbol] = []
+                    rest_var: Optional[Symbol] = None
+                    curr_f: Any = formals
+                    while is_pair(curr_f):
+                        sym = car(curr_f)
+                        if not isinstance(sym, Symbol):
+                            raise SyntaxError(
+                                f"define-values formal must be a symbol, got {sym!r}"
+                            )
+                        proper_vars.append(sym)
+                        curr_f = cdr(curr_f)
+                    if isinstance(curr_f, Symbol):
+                        rest_var = curr_f
+                    elif not is_null(curr_f):
+                        raise SyntaxError(f"define-values invalid formals: {formals!r}")
+
+                    if rest_var is None:
+                        if len(res_vals) != len(proper_vars):
+                            raise SchemeException(
+                                ErrorObject(
+                                    f"define-values expected {len(proper_vars)} values, got {len(res_vals)}",
+                                    NIL,
+                                    kind="generic",
+                                )
+                            )
+                        for sym, v in zip(proper_vars, res_vals):
+                            curr_env.define(sym, v)
+                    else:
+                        if len(res_vals) < len(proper_vars):
+                            raise SchemeException(
+                                ErrorObject(
+                                    f"define-values expected at least {len(proper_vars)} values, got {len(res_vals)}",
+                                    NIL,
+                                    kind="generic",
+                                )
+                            )
+                        for sym, v in zip(proper_vars, res_vals[: len(proper_vars)]):
+                            curr_env.define(sym, v)
+                        curr_env.define(
+                            rest_var,
+                            to_lisp_list(list(res_vals[len(proper_vars) :])),
+                        )
+                    return NIL
 
                 # (set! var val)
                 if op_name == "set!":

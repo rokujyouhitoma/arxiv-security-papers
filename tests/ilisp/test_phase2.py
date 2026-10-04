@@ -145,7 +145,7 @@ class TestExceptionsAndGuard:
         code = """
         (with-exception-handler
           (lambda (err) (+ err 100))
-          (lambda () (raise 42)))
+          (lambda () (raise-continuable 42)))
         """
         assert run_string(code, env=env) == 142
 

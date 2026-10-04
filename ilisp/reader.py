@@ -7,9 +7,9 @@ Scheme reader macros (', `, ,, ,@, #;).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
-from ilisp.types import EOF, NIL, Cons, SourceLocation, Symbol
+from ilisp.types import EOF, NIL, Cons, SchemeComplex, SourceLocation, Symbol
 
 if TYPE_CHECKING:
     from ilisp.port import TextualInputPort
@@ -58,6 +58,8 @@ class Reader:
         self.line: int = 1
         self.col: int = 1
         self._unread_buf: List[str] = []
+        self.fold_case: bool = False
+        self.labels: Dict[int, Any] = {}
 
     def _current_loc(self) -> SourceLocation:
         return SourceLocation(self.filename, self.line, self.col)
@@ -128,11 +130,32 @@ class Reader:
                                 self._next_char()
                                 depth -= 1
                 elif next_ch == "!":
-                    # Directive comment like #!r7rs or shebang #!/usr/bin/env
+                    self._next_char()  # consume '!'
+                    dir_chars: List[str] = []
                     while True:
-                        c = self._next_char()
-                        if c is None or c == "\n":
+                        c = self._peek_char()
+                        if c is None or c in (
+                            " ",
+                            "\t",
+                            "\r",
+                            "\n",
+                            "(",
+                            ")",
+                            '"',
+                            ";",
+                        ):
                             break
+                        dir_chars.append(self._next_char() or "")
+                    dir_name = "".join(dir_chars).lower()
+                    if dir_name == "fold-case":
+                        self.fold_case = True
+                    elif dir_name == "no-fold-case":
+                        self.fold_case = False
+                    elif dir_name.startswith("/"):
+                        while True:
+                            c = self._next_char()
+                            if c is None or c == "\n":
+                                break
                 else:
                     if hash_ch is not None:
                         self._unread_char(hash_ch)
@@ -363,6 +386,37 @@ class Reader:
                     self._next_char()  # consume '('
                     return self._read_bytevector(loc)
             raise LispSyntaxError(f"Unsupported hash literal sequence '#u{next1}'", loc)
+        if ch is not None and ch.isdigit():
+            num_chars = [self._next_char() or ""]
+            while True:
+                pk = self._peek_char()
+                if pk is not None and pk.isdigit():
+                    num_chars.append(self._next_char() or "")
+                else:
+                    break
+            label_id = int("".join(num_chars))
+            marker = self._next_char()
+            if marker == "=":
+                placeholder = Cons(None, None, loc=loc)
+                self.labels[label_id] = placeholder
+                datum = self.read()
+                if isinstance(datum, Cons):
+                    placeholder.car = datum.car
+                    placeholder.cdr = datum.cdr
+                    return placeholder
+                else:
+                    self.labels[label_id] = datum
+                    return datum
+            elif marker == "#":
+                if label_id in self.labels:
+                    return self.labels[label_id]
+                raise LispSyntaxError(
+                    f"Undefined datum label reference '#{label_id}#'", loc
+                )
+            else:
+                raise LispSyntaxError(
+                    f"Invalid datum label syntax '#{label_id}{marker}'", loc
+                )
         raise LispSyntaxError(f"Unsupported hash literal sequence '#{ch}'", loc)
 
     def _parse_complex(self, num_str: str, radix: int) -> Optional[complex]:
@@ -370,63 +424,96 @@ class Reader:
             return None
         s = num_str[:-1]
         if s == "+":
-            return complex(0.0, 1.0)
+            return SchemeComplex(0.0, 1.0, exact_imag=True)
         if s == "-":
-            return complex(0.0, -1.0)
+            return SchemeComplex(0.0, -1.0, exact_imag=True)
         if s == "":
             return None
+
+        def parse_part(part_str: str) -> Optional[Tuple[float, bool, Any]]:
+            if not part_str:
+                return None
+            if part_str == "+":
+                return (1.0, True, 1)
+            if part_str == "-":
+                return (-1.0, True, -1)
+            if part_str in ("+inf.0", "+inf"):
+                return (float("inf"), False, float("inf"))
+            if part_str in ("-inf.0", "-inf"):
+                return (float("-inf"), False, float("-inf"))
+            if part_str in ("+nan.0", "-nan.0", "nan.0", "+nan", "-nan"):
+                return (float("nan"), False, float("nan"))
+            if "/" in part_str:
+                p = part_str.split("/")
+                if len(p) == 2:
+                    try:
+                        n = int(p[0], radix)
+                        d = int(p[1], radix)
+                        from fractions import Fraction
+
+                        frac = Fraction(n, d)
+                        orig = frac.numerator if frac.denominator == 1 else frac
+                        return (float(orig), True, orig)
+                    except (ValueError, ZeroDivisionError):
+                        return None
+            low = part_str.lower()
+            for exp_char in ("s", "f", "d", "l"):
+                if exp_char in low:
+                    low = low.replace(exp_char, "e")
+                    break
+            try:
+                if radix == 10 and ("." in low or "e" in low):
+                    fval = float(low)
+                    return (fval, False, fval)
+                ival = int(low, radix)
+                return (float(ival), "." not in part_str, ival)
+            except ValueError:
+                return None
+
         sign_idx = -1
         for idx in range(len(s) - 1, 0, -1):
             if s[idx] in ("+", "-"):
-                if radix == 10 and s[idx - 1] in ("e", "E"):
+                if radix == 10 and s[idx - 1] in (
+                    "e",
+                    "E",
+                    "s",
+                    "S",
+                    "f",
+                    "F",
+                    "d",
+                    "D",
+                    "l",
+                    "L",
+                ):
                     continue
                 sign_idx = idx
                 break
+
         if sign_idx == -1:
-            try:
-                if s == "+":
-                    im = 1.0
-                elif s == "-":
-                    im = -1.0
-                elif radix == 10 and ("." in s or "e" in s):
-                    im = float(s)
-                else:
-                    im = float(int(s, radix))
-                return complex(0.0, im)
-            except ValueError:
+            res = parse_part(s)
+            if res is None:
                 return None
+            val, exact, orig = res
+            return SchemeComplex(
+                0.0, val, exact_real=True, exact_imag=exact, real_val=0, imag_val=orig
+            )
         else:
             real_str = s[:sign_idx]
             imag_str = s[sign_idx:]
-            try:
-                if real_str in ("+inf.0", "+inf"):
-                    re = float("inf")
-                elif real_str in ("-inf.0", "-inf"):
-                    re = float("-inf")
-                elif real_str in ("+nan.0", "-nan.0", "nan.0"):
-                    re = float("nan")
-                elif radix == 10 and ("." in real_str or "e" in real_str):
-                    re = float(real_str)
-                else:
-                    re = float(int(real_str, radix))
-
-                if imag_str in ("+", ""):
-                    im = 1.0
-                elif imag_str == "-":
-                    im = -1.0
-                elif imag_str in ("+inf.0", "+inf"):
-                    im = float("inf")
-                elif imag_str in ("-inf.0", "-inf"):
-                    im = float("-inf")
-                elif imag_str in ("+nan.0", "-nan.0", "nan.0"):
-                    im = float("nan")
-                elif radix == 10 and ("." in imag_str or "e" in imag_str):
-                    im = float(imag_str)
-                else:
-                    im = float(int(imag_str, radix))
-                return complex(re, im)
-            except ValueError:
+            r_res = parse_part(real_str)
+            i_res = parse_part(imag_str)
+            if r_res is None or i_res is None:
                 return None
+            re_val, re_exact, re_orig = r_res
+            im_val, im_exact, im_orig = i_res
+            return SchemeComplex(
+                re_val,
+                im_val,
+                exact_real=re_exact,
+                exact_imag=im_exact,
+                real_val=re_orig,
+                imag_val=im_orig,
+            )
 
     def _parse_number_with_prefix(self, token: str, loc: SourceLocation) -> Any:
         tok = token.lower()
@@ -460,6 +547,14 @@ class Reader:
         num_str = tok[i:]
         comp = self._parse_complex(num_str, radix)
         if comp is not None:
+            if exactness is True:
+                return SchemeComplex(
+                    comp.real, comp.imag, exact_real=True, exact_imag=True
+                )
+            elif exactness is False:
+                return SchemeComplex(
+                    comp.real, comp.imag, exact_real=False, exact_imag=False
+                )
             return comp
         try:
             val: Any
@@ -472,9 +567,12 @@ class Reader:
             elif "/" in num_str:
                 parts = num_str.split("/")
                 if len(parts) == 2:
+                    from fractions import Fraction
+
                     num = int(parts[0], radix)
                     den = int(parts[1], radix)
-                    val = num / den
+                    frac = Fraction(num, den)
+                    val = frac.numerator if frac.denominator == 1 else frac
                 else:
                     raise ValueError("Invalid fraction")
             elif radix == 10 and ("." in num_str or "e" in num_str):
@@ -483,7 +581,7 @@ class Reader:
                 val = int(num_str, radix)
             if exactness is True and isinstance(val, float):
                 val = int(round(val)) if val.is_integer() else val
-            elif exactness is False and isinstance(val, int):
+            elif exactness is False:
                 val = float(val)
             return val
         except ValueError:
@@ -585,6 +683,10 @@ class Reader:
         if not token:
             raise LispSyntaxError("Unexpected empty token", loc)
 
+        # Check standalone '.' token (not a valid identifier or datum in R7RS)
+        if token == ".":
+            raise LispSyntaxError("Unexpected standalone '.' token", loc)
+
         # Number parsing
         # Try integer
         try:
@@ -611,9 +713,22 @@ class Reader:
                     num = int(parts[0])
                     den = int(parts[1])
                     if den != 0:
-                        return num / den
+                        from fractions import Fraction
+
+                        frac = Fraction(num, den)
+                        return frac.numerator if frac.denominator == 1 else frac
                 except ValueError:
                     pass
+
+        # Try Scheme exponent markers (s, f, d, l)
+        import re
+
+        m_exp = re.match(r"^([+-]?(?:\d+\.?\d*|\.\d+))[sfdl]([+-]?\d+)$", low_tok)
+        if m_exp:
+            try:
+                return float(f"{m_exp.group(1)}e{m_exp.group(2)}")
+            except ValueError:
+                pass
 
         # Try complex number
         c_val = self._parse_complex(low_tok, 10)
@@ -627,7 +742,10 @@ class Reader:
             pass
 
         # Otherwise intern as Symbol
-        return Symbol.intern(token)
+        sym_name = token
+        if self.fold_case:
+            sym_name = sym_name.lower()
+        return Symbol.intern(sym_name)
 
     def _read_list(self, loc: SourceLocation) -> Any:
         elements: List[Any] = []
@@ -658,6 +776,11 @@ class Reader:
                         )
                     is_dotted = True
                     dotted_cdr = self.read()
+                    if dotted_cdr is EOF:
+                        raise LispSyntaxError(
+                            "Expected cdr expression after '.' in pair",
+                            self._current_loc(),
+                        )
                     self._skip_whitespace_and_comments()
                     close_ch = self._peek_char()
                     if close_ch != ")":

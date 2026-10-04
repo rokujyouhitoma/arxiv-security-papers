@@ -8,20 +8,21 @@ from __future__ import annotations
 
 import cmath
 import math
+from fractions import Fraction
 from typing import Any, Union
 
 from ilisp.types import Values
 
-Real = Union[int, float]
-Number = Union[int, float, complex]
+Real = Union[int, float, Fraction]
+Number = Union[int, float, complex, Fraction]
 
 
 # --- 1. Numerical Predicates ---
 
 
 def number_p(x: Any) -> bool:
-    """Return True if x is a number (int, float, or complex)."""
-    return isinstance(x, (int, float, complex)) and not isinstance(x, bool)
+    """Return True if x is a number (int, float, complex, or Fraction)."""
+    return isinstance(x, (int, float, complex, Fraction)) and not isinstance(x, bool)
 
 
 def complex_p(x: Any) -> bool:
@@ -30,13 +31,13 @@ def complex_p(x: Any) -> bool:
 
 
 def real_p(x: Any) -> bool:
-    """Return True if x is a real number (including complex numbers with zero imaginary part)."""
+    """Return True if x is a real number (including Fraction and complex with exact zero imag)."""
     if isinstance(x, bool):
         return False
-    if isinstance(x, (int, float)):
+    if isinstance(x, (int, float, Fraction)):
         return True
     if isinstance(x, complex):
-        return x.imag == 0
+        return x.imag == 0.0 and getattr(x, "exact_imag", False)
     return False
 
 
@@ -44,6 +45,8 @@ def rational_p(x: Any) -> bool:
     """Return True if x is a rational number (all finite real numbers in ILISP)."""
     if not real_p(x):
         return False
+    if isinstance(x, Fraction):
+        return True
     if isinstance(x, complex):
         return math.isfinite(x.real)
     return math.isfinite(x)
@@ -57,17 +60,31 @@ def integer_p(x: Any) -> bool:
         return True
     if isinstance(x, float):
         return math.isfinite(x) and x.is_integer()
+    if isinstance(x, complex):
+        if getattr(x, "exact_imag", False):
+            return integer_p(x.real)
+        return False
     return False
 
 
 def exact_p(x: Any) -> bool:
-    """Return True if x is an exact number (int)."""
-    return isinstance(x, int) and not isinstance(x, bool)
+    """Return True if x is an exact number (int or Fraction)."""
+    if isinstance(x, bool):
+        return False
+    if isinstance(x, (int, Fraction)):
+        return True
+    if (
+        isinstance(x, complex)
+        and getattr(x, "exact_real", False)
+        and getattr(x, "exact_imag", False)
+    ):
+        return True
+    return False
 
 
 def inexact_p(x: Any) -> bool:
-    """Return True if x is an inexact number (float)."""
-    return isinstance(x, float)
+    """Return True if x is an inexact number (float or complex)."""
+    return isinstance(x, (float, complex))
 
 
 def exact_integer_p(x: Any) -> bool:
@@ -196,14 +213,14 @@ def num_ge(*nums: Any) -> bool:
 
 def num_div(first: Number, *rest: Number) -> Number:
     """Perform division (/ z) or (/ z1 z2 ...)."""
+    from fractions import Fraction
+
     if not rest:
-        if isinstance(first, int):
-            if first == 1:
-                return 1
-            if first == -1:
-                return -1
+        if isinstance(first, (int, Fraction)):
             if first == 0:
                 raise ZeroDivisionError("division by zero")
+            frac = Fraction(1, first)
+            return frac.numerator if frac.denominator == 1 else frac
         if first == 0:
             if isinstance(first, float):
                 return float("inf")
@@ -211,13 +228,11 @@ def num_div(first: Number, *rest: Number) -> Number:
         return 1.0 / first
     res: Number = first
     for n in rest:
-        if isinstance(res, int) and isinstance(n, int):
+        if isinstance(res, (int, Fraction)) and isinstance(n, (int, Fraction)):
             if n == 0:
                 raise ZeroDivisionError("division by zero")
-            if res % n == 0:
-                res = res // n
-            else:
-                res = res / n
+            frac = Fraction(res, n)
+            res = frac.numerator if frac.denominator == 1 else frac
         else:
             if n == 0:
                 if isinstance(res, (int, float)) and isinstance(n, (int, float)):
@@ -256,7 +271,13 @@ def num_min(*nums: Real) -> Real:
 
 def num_abs(x: Number) -> Number:
     """Return absolute value."""
-    return abs(x)
+    if isinstance(x, complex):
+        return float(abs(x))
+    if isinstance(x, Fraction):
+        return abs(x)
+    if isinstance(x, float):
+        return abs(x)
+    return abs(int(x))
 
 
 def num_gcd(*nums: int) -> int:
@@ -355,19 +376,28 @@ def num_modulo(n1: int, n2: int) -> int:
 # --- 6. Exactness and Exponentiation ---
 
 
-def num_exact(z: Number) -> int:
-    """Convert number to exact integer."""
+def num_exact(z: Number) -> Any:
+    """Convert number to exact representation (integer or Fraction)."""
     if isinstance(z, int):
+        return z
+    from fractions import Fraction
+
+    if isinstance(z, Fraction):
         return z
     if isinstance(z, float):
         if math.isinf(z) or math.isnan(z):
-            raise ValueError(f"exact: cannot convert {z} to exact integer")
-        return round(z)
+            raise ValueError(f"exact: cannot convert {z} to exact number")
+        if z.is_integer():
+            return int(z)
+        frac = Fraction(z).limit_denominator()
+        return frac.numerator if frac.denominator == 1 else frac
     raise TypeError(f"exact: expected number, got {z!r}")
 
 
-def num_inexact(z: Real) -> float:
-    """Convert number to inexact float."""
+def num_inexact(z: Any) -> Any:
+    """Convert number to inexact representation (R7RS 6.2.6)."""
+    if isinstance(z, complex):
+        return complex(float(z.real), float(z.imag))
     return float(z)
 
 
@@ -383,10 +413,12 @@ def num_sqrt(z: Number) -> Number:
     For negative real numbers or complex numbers, returns complex.
     """
     if isinstance(z, complex):
+        if z.imag == 0 and z.real < 0:
+            return complex(0.0, math.sqrt(-z.real))
         return cmath.sqrt(z)
     if isinstance(z, (int, float)):
         if z < 0:
-            return cmath.sqrt(z)
+            return complex(0.0, math.sqrt(-z))
         res = math.sqrt(z)
         if isinstance(z, int) and res.is_integer() and int(res) * int(res) == z:
             return int(res)
@@ -526,7 +558,13 @@ def make_rectangular(x1: Any, x2: Any) -> complex:
         )
     r = float(x1.real if isinstance(x1, complex) else x1)
     i = float(x2.real if isinstance(x2, complex) else x2)
-    return complex(r, i)
+    exact_r = exact_p(x1)
+    exact_i = exact_p(x2)
+    from ilisp.types import SchemeComplex
+
+    return SchemeComplex(
+        r, i, exact_real=exact_r, exact_imag=exact_i, real_val=x1, imag_val=x2
+    )
 
 
 def make_polar(x3: Any, x4: Any) -> complex:
@@ -538,20 +576,36 @@ def make_polar(x3: Any, x4: Any) -> complex:
     return cmath.rect(mag, ang)
 
 
-def real_part(z: Any) -> Union[int, float]:
+def real_part(z: Any) -> Any:
     """Return the real part of number z."""
+    from ilisp.types import SchemeComplex
+
+    if isinstance(z, SchemeComplex):
+        if z.real_val is not None:
+            return z.real_val
+        if z.exact_real:
+            return int(z.real) if z.real.is_integer() else z.real
+        return float(z.real)
     if isinstance(z, complex):
         return float(z.real)
-    if isinstance(z, (int, float)) and not isinstance(z, bool):
+    if isinstance(z, (int, float, Fraction)) and not isinstance(z, bool):
         return z
     raise TypeError(f"real-part: expected number, got {z!r}")
 
 
-def imag_part(z: Any) -> Union[int, float]:
+def imag_part(z: Any) -> Any:
     """Return the imaginary part of number z."""
+    from ilisp.types import SchemeComplex
+
+    if isinstance(z, SchemeComplex):
+        if z.imag_val is not None:
+            return z.imag_val
+        if z.exact_imag:
+            return int(z.imag) if z.imag.is_integer() else z.imag
+        return float(z.imag)
     if isinstance(z, complex):
         return float(z.imag)
-    if isinstance(z, (int, float)) and not isinstance(z, bool):
+    if isinstance(z, (int, float, Fraction)) and not isinstance(z, bool):
         return 0
     raise TypeError(f"imag-part: expected number, got {z!r}")
 
@@ -581,12 +635,24 @@ def number_to_string(z: Real, radix: int = 10) -> str:
         raise ValueError(
             f"number->string: unsupported radix {radix} (must be 2, 8, 10, or 16)"
         )
+    from fractions import Fraction
+
+    if isinstance(z, Fraction):
+        if radix != 10:
+            raise ValueError(
+                "number->string: non-decimal radix only supported for integers"
+            )
+        return f"{z.numerator}/{z.denominator}"
     if isinstance(z, float):
         if radix != 10:
             raise ValueError(
                 "number->string: non-decimal radix only supported for integers"
             )
-        return str(z)
+        s = str(z)
+        if "e" in s and "." not in s.split("e")[0]:
+            parts = s.split("e")
+            s = f"{parts[0]}.0e{parts[1]}"
+        return s
 
     n = int(z)
     is_neg = n < 0

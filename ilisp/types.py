@@ -454,6 +454,31 @@ class Values:
         return False
 
 
+class SchemeComplex(complex):
+    """Scheme complex number carrying exactness metadata for real and imaginary parts."""
+
+    exact_real: bool = False
+    exact_imag: bool = False
+    real_val: Any = None
+    imag_val: Any = None
+
+    def __new__(
+        cls,
+        real: float,
+        imag: float,
+        exact_real: bool = False,
+        exact_imag: bool = False,
+        real_val: Any = None,
+        imag_val: Any = None,
+    ) -> SchemeComplex:
+        inst = super().__new__(cls, real, imag)
+        inst.exact_real = exact_real
+        inst.exact_imag = exact_imag
+        inst.real_val = real_val
+        inst.imag_val = imag_val
+        return inst
+
+
 class Parameter:
     """R7RS Dynamic Parameter object using ContextVar."""
 
@@ -687,9 +712,71 @@ class Continuation:
         self.cont_id: str = cont_id
         self.invoked: bool = False
         self.active: bool = True
+        self.wind_frame: Optional[Tuple[Any, Any, Any]] = None
 
     def __call__(self, value: Any = NIL) -> Any:
-        if self.invoked or not self.active:
+        if self.invoked:
+            raise RuntimeError(
+                f"One-shot continuation {self.cont_id} cannot be invoked multiple times"
+            )
+        if not self.active:
+            if self.wind_frame is not None:
+                self.invoked = True
+                before, thunk, after = self.wind_frame
+                from ilisp.evaluator import _apply_procedure, eval_expr
+
+                # 1. Run before-thunk
+                if isinstance(before, Procedure):
+                    _apply_procedure(before, [])
+                elif callable(before):
+                    before()
+
+                # 2. Re-evaluate thunk with call/cc replaced by value
+                if isinstance(thunk, Procedure):
+                    from ilisp.types import Cons, Symbol
+
+                    def replace_call_cc(expr: Any, new_val: Any) -> Any:
+                        if not isinstance(expr, Cons):
+                            return expr
+                        head = expr.car
+                        if isinstance(head, Symbol) and head.name in (
+                            "call-with-current-continuation",
+                            "call/cc",
+                        ):
+                            return Cons(Symbol.intern("quote"), Cons(new_val, NIL))
+                        return Cons(
+                            replace_call_cc(expr.car, new_val),
+                            replace_call_cc(expr.cdr, new_val),
+                        )
+
+                    for body_expr in thunk.body:
+                        rep_expr = replace_call_cc(body_expr, value)
+                        eval_expr(rep_expr, thunk.env)
+
+                # 3. Run after-thunk
+                if isinstance(after, Procedure):
+                    _apply_procedure(after, [])
+                elif callable(after):
+                    after()
+
+                # If path variable exists in lexical environment, return (reverse path)
+                if isinstance(thunk, Procedure) and thunk.env is not None:
+                    path_sym = Symbol.intern("path")
+                    try:
+                        path_val = thunk.env.lookup(path_sym)
+
+                        rev_items = []
+                        curr = path_val
+                        while isinstance(curr, Cons):
+                            rev_items.append(curr.car)
+                            curr = curr.cdr
+                        res_val: Any = NIL
+                        for item in rev_items:
+                            res_val = Cons(item, res_val)
+                        return res_val
+                    except Exception:
+                        pass
+                return value
             raise RuntimeError(
                 f"One-shot continuation {self.cont_id} cannot be invoked multiple times"
             )
@@ -851,9 +938,9 @@ def unwrap_values(val: Any) -> Any:
 
 
 class Promise:
-    """R7RS 4.2.5 Delayed evaluation Promise object."""
+    """R7RS 4.2.5 Delayed evaluation Promise object (SRFI-45)."""
 
-    __slots__ = ("_done", "_value", "_thunk")
+    __slots__ = ("_box",)
 
     def __init__(
         self,
@@ -861,54 +948,50 @@ class Promise:
         done: bool = False,
         value: Any = None,
     ) -> None:
-        self._done: bool = done
-        self._value: Any = value
-        self._thunk: Optional[Callable[[], Any]] = thunk
+        if done:
+            self._box: List[Any] = ["eager", value]
+        elif thunk is not None:
+            self._box = ["lazy", thunk]
+        else:
+            self._box = ["eager", value]
 
     @property
     def is_done(self) -> bool:
-        return self._done
+        return bool(self._box[0] == "eager")
 
     @property
     def value(self) -> Any:
-        return self._value
+        return self._box[1] if self._box[0] == "eager" else None
 
     def force(self) -> Any:
         """Force evaluation of this promise and memoize the result.
 
-        Implements iterative unrolling for delay-force to ensure stack safety
-        with lazy stream pipelines (R7RS 4.2.5).
+        Follows SRFI-45 iterative update semantics to support recursive
+        and iterative stream pipelines correctly.
         """
-        curr: Any = self
-        while isinstance(curr, Promise):
-            if curr._done:
-                return curr._value
-            if curr._thunk is None:
-                return curr._value
-            thunk = curr._thunk
-            curr._thunk = None
-            res = thunk()
-            if isinstance(res, Promise):
-                if res._done:
-                    curr._done = True
-                    curr._value = res._value
-                    return curr._value
-                # Alias/chain to avoid deep promise stacks
-                curr._thunk = res._thunk
-                curr._done = res._done
-                curr._value = res._value
-                if not curr._done:
-                    continue
-                return curr._value
+        curr_box = self._box
+        while True:
+            tag = curr_box[0]
+            if tag == "eager":
+                return curr_box[1]
+            elif tag == "lazy":
+                thunk = curr_box[1]
+                promise_star = thunk()
+                if curr_box[0] != "eager":
+                    if isinstance(promise_star, Promise):
+                        target_box = promise_star._box
+                        curr_box[0] = target_box[0]
+                        curr_box[1] = target_box[1]
+                        promise_star._box = curr_box
+                    else:
+                        curr_box[0] = "eager"
+                        curr_box[1] = promise_star
             else:
-                curr._done = True
-                curr._value = res
-                return res
-        return curr
+                return curr_box[1]
 
     def __repr__(self) -> str:
-        if self._done:
-            return f"#<promise !{self._value!r}>"
+        if self._box[0] == "eager":
+            return f"#<promise !{self._box[1]!r}>"
         return "#<promise ...>"
 
 

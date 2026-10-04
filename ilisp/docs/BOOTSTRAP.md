@@ -99,3 +99,13 @@ Stage-1 の自己ホストコンパイラ（`compiler.ilisp`）および Phase 1
 2. `clang -O3 stage1.c -o ilisp_stage1` でビルド。
 3. `./ilisp_stage1 compiler.ilisp -o stage2.c` を実行。
 4. `assert file_content("stage1.c") == file_content("stage2.c")` を検証（差分 0 バイト）。
+
+---
+
+## 6. 関連ドキュメント体系
+
+- [README.md](README.md): ILISP 概要・クイックスタート・3本柱アーキテクチャ
+- [SPEC_R7RS.md](SPEC_R7RS.md): R7RS-small 全203機能の仕様準拠マトリクス & chibi-scheme 公式テスト 100% 適合検証レポート
+- [PYTHON_INTEROP.md](PYTHON_INTEROP.md): Python 双方向ゼロコピー相互運用・SequenceView・双方向呼出仕様
+- [MACROS_AND_CONDITIONS.md](MACROS_AND_CONDITIONS.md): Scope Sets マクロ & 現場復帰コンディション & テストハーネス仕様
+- [DSN-31 包括設計仕様書](../../docs/designs/DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md): ILISP R7RS コアアーキテクチャ包括設計仕様書

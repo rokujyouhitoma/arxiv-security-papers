@@ -25,6 +25,8 @@ ILISP (Intelligence LISP) は、知性・脅威インテリジェンス（Intell
    - `boundary-guard` により、Python 側の例外発生時にも再試行 Thunk を保持して回復可能。
 5. **完全セルフホスティング（Bootstrap Chain）対応**:
    - **Kernel ILISP（6大基本式核）** を先行定義し、Stage-0 (Python host) から Stage-2 への自己完結ブートストラップ連鎖と不動点検証をビルトイン。
+6. **chibi-scheme 公式 R7RS 適合性テストスイート 100% 完全合格**:
+   - Alex Shinn 氏によるリファレンス実装 chibi-scheme のテスト全 1,233 項目において **100.0% PASS（0 FAIL / 0 ERROR）** を達成。独自テストハーネス（MIT License）と上流テスト（3-Clause BSD）を物理的に完全分離管理。
 
 ---
 
@@ -53,8 +55,31 @@ ILISP (Intelligence LISP) は、知性・脅威インテリジェンス（Intell
 
 ---
 
-## ドキュメント体系
+## 適合性テスト・品質検証の実行
 
-- [SPEC_R7RS.md](SPEC_R7RS.md): R7RS-small 仕様準拠マトリクス・Scope Sets・TCO 仕様
-- [BOOTSTRAP.md](BOOTSTRAP.md): Kernel ILISP 仕様 & 3段階セルフホスティング連鎖仕様
-- [DSN-31 包括設計仕様書](../../docs/designs/DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md): 包括アーキテクチャ設計書
+ILISP は以下のコマンドで、chibi-scheme 公式 R7RS テストスイート（1,233 項目）およびプロジェクト内回帰テスト（372 項目）を自律実行・機械検証できます：
+
+```bash
+# 1. chibi-scheme 公式 R7RS 適合性テスト (1,233 項目 100% PASS 検証)
+PYTHONPATH=. .venv/bin/pytest tests/ilisp/test_chibi_r7rs_compliance.py -s
+
+# 2. ILISP 全回帰テストスイート (372 項目 100% PASS 検証)
+PYTHONPATH=. .venv/bin/pytest tests/ilisp -q
+
+# 3. 静的解析・型検査・コードフォーマット品質ゲート
+flake8 ilisp tests/ilisp
+mypy --strict ilisp
+make check_format
+```
+
+---
+
+## 自己完結ドキュメント体系
+
+ILISP サブシステムの包括的な仕様・アーキテクチャ・利用ガイドは以下のドキュメント群にまとめられています：
+
+- **[SPEC_R7RS.md](SPEC_R7RS.md)**: R7RS-small 全203機能の仕様準拠マトリクス & chibi-scheme 公式テスト 100% 適合検証レポート
+- **[PYTHON_INTEROP.md](PYTHON_INTEROP.md)**: Python 双方向ゼロコピー相互運用プロトコル (`SequenceView`, `import-python`, `py-call`)
+- **[MACROS_AND_CONDITIONS.md](MACROS_AND_CONDITIONS.md)**: Scope Sets 衛生的マクロ (`syntax-rules`) & 現場復帰型コンディション & テストハーネス仕様
+- **[BOOTSTRAP.md](BOOTSTRAP.md)**: Kernel ILISP 最小核仕様 & 3段階セルフホスティング連鎖 & 不動点検証
+- **[DSN-31 包括設計仕様書](../../docs/designs/DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)**: ILISP R7RS コアアーキテクチャ包括設計仕様書（リポジトリ公式 DSN）

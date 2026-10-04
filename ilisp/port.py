@@ -853,13 +853,19 @@ def format_datum(obj: Any, mode: str = "write") -> str:
                         pass
                 if not needs_pipe:
                     for ch in name:
-                        if ch in " \t\r\n();\"'`|\\#[]{}":
+                        if ch in " \t\r\n();\"'`|\\#[]{},":
                             needs_pipe = True
                             break
             if needs_pipe:
                 escaped = name.replace("\\", "\\\\").replace("|", "\\|")
                 return f"|{escaped}|"
             return name
+        elif (
+            hasattr(node, "numerator")
+            and hasattr(node, "denominator")
+            and not isinstance(node, int)
+        ):
+            return f"{node.numerator}/{node.denominator}"
         elif isinstance(node, bool):
             return "#t" if node else "#f"
         elif isinstance(node, int):
@@ -871,7 +877,94 @@ def format_datum(obj: Any, mode: str = "write") -> str:
                 return "+nan.0"
             elif math.isinf(node):
                 return "+inf.0" if node > 0 else "-inf.0"
-            return str(node)
+            s = str(node)
+            if "e" in s and "." not in s.split("e")[0]:
+                parts = s.split("e")
+                s = f"{parts[0]}.0e{parts[1]}"
+            return s
+        elif isinstance(node, complex):
+            import math
+            from fractions import Fraction
+
+            re = node.real
+            im = node.imag
+            re_str = ""
+            real_val = getattr(node, "real_val", None)
+            imag_val = getattr(node, "imag_val", None)
+
+            if math.isinf(re):
+                re_str = "+inf.0" if re > 0 else "-inf.0"
+            elif math.isnan(re):
+                re_str = "+nan.0"
+            elif real_val is not None:
+                if re == 0.0 and im != 0.0:
+                    re_str = ""
+                elif isinstance(real_val, Fraction):
+                    re_str = str(real_val)
+                elif isinstance(real_val, int):
+                    re_str = str(real_val)
+                else:
+                    re_s = str(real_val)
+                    if "e" in re_s and "." not in re_s.split("e")[0]:
+                        parts = re_s.split("e")
+                        re_s = f"{parts[0]}.0e{parts[1]}"
+                    re_str = re_s
+            elif getattr(node, "exact_real", False):
+                if re == 0.0 and im != 0.0:
+                    re_str = ""
+                else:
+                    re_str = str(int(re))
+            elif re != 0.0 or (im == 0.0 and getattr(node, "exact_imag", False)):
+                re_s = str(re)
+                if "e" in re_s and "." not in re_s.split("e")[0]:
+                    parts = re_s.split("e")
+                    re_s = f"{parts[0]}.0e{parts[1]}"
+                re_str = re_s
+
+            if math.isnan(im):
+                im_str = "+nan.0i"
+            elif math.isinf(im):
+                im_str = "+inf.0i" if im > 0 else "-inf.0i"
+            elif imag_val is not None:
+                if isinstance(imag_val, int) and imag_val == 1:
+                    im_str = "+i"
+                elif isinstance(imag_val, int) and imag_val == -1:
+                    im_str = "-i"
+                else:
+                    im_val_str = str(imag_val)
+                    if (
+                        isinstance(imag_val, float)
+                        and "e" in im_val_str
+                        and "." not in im_val_str.split("e")[0]
+                    ):
+                        parts = im_val_str.split("e")
+                        im_val_str = f"{parts[0]}.0e{parts[1]}"
+                    if not im_val_str.startswith(("-", "+")):
+                        im_str = f"+{im_val_str}i"
+                    else:
+                        im_str = f"{im_val_str}i"
+            elif im == 1.0 and getattr(node, "exact_imag", False):
+                im_str = "+i"
+            elif im == -1.0 and getattr(node, "exact_imag", False):
+                im_str = "-i"
+            else:
+                if getattr(node, "exact_imag", False):
+                    im_val_str = str(int(im))
+                else:
+                    im_val_str = str(im)
+                    if "e" in im_val_str and "." not in im_val_str.split("e")[0]:
+                        parts = im_val_str.split("e")
+                        im_val_str = f"{parts[0]}.0e{parts[1]}"
+                if not im_val_str.startswith(("-", "+")):
+                    im_str = f"+{im_val_str}i"
+                else:
+                    im_str = f"{im_val_str}i"
+
+            if not re_str:
+                return im_str if im_str.startswith(("-", "+")) else f"+{im_str}"
+            if not im_str.startswith(("-", "+")):
+                return f"{re_str}+{im_str}"
+            return f"{re_str}{im_str}"
         elif isinstance(node, Char):
             if mode == "display":
                 return node.val
@@ -906,31 +999,31 @@ def format_datum(obj: Any, mode: str = "write") -> str:
             slots = " ".join(format_node(sl) for sl in node.slots)
             return f"{prefix}#({node.record_type.name} {slots})"
         elif isinstance(node, Cons):
-            parts: list[str] = []
+            c_parts: list[str] = []
             curr: Any = node
             first = True
             visited_in_list: set[int] = set()
             while is_pair(curr):
                 curr_id = id(curr)
                 if not first and curr_id in labels:
-                    parts.append(".")
-                    parts.append(format_node(curr))
+                    c_parts.append(".")
+                    c_parts.append(format_node(curr))
                     curr = None
                     break
                 if curr_id in visited_in_list:
                     # Unlabeled cycle safeguard
-                    parts.append(".")
-                    parts.append("...")
+                    c_parts.append(".")
+                    c_parts.append("...")
                     curr = None
                     break
                 visited_in_list.add(curr_id)
                 first = False
-                parts.append(format_node(curr.car))
+                c_parts.append(format_node(curr.car))
                 curr = curr.cdr
             if curr is not None and not is_null(curr):
-                parts.append(".")
-                parts.append(format_node(curr))
-            return f"{prefix}({' '.join(parts)})"
+                c_parts.append(".")
+                c_parts.append(format_node(curr))
+            return f"{prefix}({' '.join(c_parts)})"
 
         return repr(node)
 
@@ -1082,12 +1175,14 @@ class BytesInputPort(BinaryInputPort):
 
     def read_bytevector_bang(
         self, bv: Bytevector, start: int = 0, end: Optional[int] = None
-    ) -> int:
+    ) -> Any:
         if not self.is_open:
             raise ValueError("I/O operation on closed port")
-        if self.pos >= len(self.data):
-            return 0
         target_end = len(bv) if end is None else end
+        if self.pos >= len(self.data):
+            if target_end > start:
+                return EOF
+            return 0
         avail = len(self.data) - self.pos
         count = min(target_end - start, avail)
         if count <= 0:

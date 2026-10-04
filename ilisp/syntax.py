@@ -8,17 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from ilisp.types import (
-    Cons,
-    SourceLocation,
-    Symbol,
-    Vector,
-    car,
-    cdr,
-    is_null,
-    is_pair,
-    to_lisp_list,
-)
+from ilisp.types import Cons, SourceLocation, Symbol, Vector, car, cdr, is_null, is_pair
 
 
 class Scope:
@@ -115,7 +105,10 @@ def datum_to_syntax(
 
 
 def syntax_to_datum(
-    stx: Any, use_scope: Optional[Scope] = None, env: Optional[Any] = None
+    stx: Any,
+    use_scope: Optional[Scope] = None,
+    env: Optional[Any] = None,
+    def_env: Optional[Any] = None,
 ) -> Any:
     """Convert a Syntax object back to a standard Lisp S-expression.
 
@@ -127,13 +120,18 @@ def syntax_to_datum(
         if isinstance(d, Symbol):
             # If the symbol has the macro use-scope, rename it hygienically
             if use_scope is not None and use_scope in stx.scopes:
+                if d.name in ("...", "_"):
+                    return d
                 core_forms = {
+                    "...",
+                    "_",
                     "quote",
                     "lambda",
                     "if",
                     "set!",
                     "begin",
                     "define",
+                    "define-values",
                     "define-syntax",
                     "let-syntax",
                     "letrec-syntax",
@@ -322,24 +320,48 @@ def syntax_to_datum(
                         return d
                     except Exception:
                         pass
-                return Symbol.intern(f"{d.name}__hyg_{use_scope.id}")
+                hyg_sym = Symbol.intern(f"{d.name}__hyg_{use_scope.id}")
+                if def_env is not None and env is not None:
+                    try:
+                        val = def_env.lookup(d)
+                        env.define(hyg_sym, val)
+                    except Exception:
+                        pass
+                return hyg_sym
             return d
         elif isinstance(d, Cons):
+            car_val = syntax_to_datum(d.car, use_scope, env, def_env)
+            if car_val == Symbol.intern("quote"):
+                return Cons(car_val, strip_syntax(d.cdr))
             return Cons(
-                syntax_to_datum(d.car, use_scope, env),
-                syntax_to_datum(d.cdr, use_scope, env),
+                car_val,
+                syntax_to_datum(d.cdr, use_scope, env, def_env),
             )
         elif isinstance(d, Vector):
-            return Vector([syntax_to_datum(e, use_scope, env) for e in d.elements])
+            return Vector([strip_syntax(e) for e in d.elements])
         return d
     elif isinstance(stx, Cons):
+        car_val = syntax_to_datum(stx.car, use_scope, env, def_env)
+        if car_val == Symbol.intern("quote"):
+            return Cons(car_val, strip_syntax(stx.cdr))
         return Cons(
-            syntax_to_datum(stx.car, use_scope, env),
-            syntax_to_datum(stx.cdr, use_scope, env),
+            car_val,
+            syntax_to_datum(stx.cdr, use_scope, env, def_env),
         )
     elif isinstance(stx, Vector):
-        return Vector([syntax_to_datum(e, use_scope, env) for e in stx.elements])
+        return Vector([strip_syntax(e) for e in stx.elements])
     return stx
+
+
+def strip_syntax(s: Any) -> Any:
+    """Recursively strip all Syntax wrappers without renaming symbols."""
+    if isinstance(s, Syntax):
+        return strip_syntax(s.datum)
+    elif isinstance(s, Cons):
+        return Cons(strip_syntax(s.car), strip_syntax(s.cdr))
+    elif isinstance(s, Vector):
+        return Vector([strip_syntax(e) for e in s.elements])
+    return s
 
 
 class PatternBinding:
@@ -361,12 +383,16 @@ class SyntaxRulesTransformer:
         literals: List[str],
         rules: List[Tuple[Any, Any]],  # List of (pattern, template) S-expressions
         ellipsis: str = "...",
+        def_env: Optional[Any] = None,
     ) -> None:
         self.name: str = name
         self.literals: Set[str] = set(literals)
         self.rules: List[Tuple[Any, Any]] = rules
         self.ellipsis: str = ellipsis
+        if self.ellipsis in self.literals:
+            self.ellipsis = "\x00"
         self.def_scope: Scope = Scope(f"def_{name}")
+        self.def_env: Optional[Any] = def_env
 
     def transform(self, input_form: Any, env: Optional[Any] = None) -> Any:
         """Apply the first matching syntax-rule to the input form and return expanded S-expression."""
@@ -394,7 +420,9 @@ class SyntaxRulesTransformer:
                 # Pattern matched! Expand template
                 expanded_stx = self._expand_template(tmpl, bindings, use_scope)
                 # Convert back to standard S-expression
-                return syntax_to_datum(expanded_stx, use_scope, env=env)
+                return syntax_to_datum(
+                    expanded_stx, use_scope, env=env, def_env=self.def_env
+                )
 
         raise SyntaxError(
             f"No matching rule in syntax-rules for macro '{self.name}': {input_form!r}"
@@ -501,8 +529,11 @@ class SyntaxRulesTransformer:
         for v in pat_vars:
             bindings[v] = PatternBinding(depth=1, value=collected_sub_bindings[v])
 
-        # Match rest_pat
-        rest_stx = to_lisp_list(rest_items)
+        # Match rest_pat preserving improper list tail
+        tail = curr
+        rest_stx = tail
+        for item in reversed(rest_items):
+            rest_stx = Cons(item, rest_stx)
         return self._match_pattern(rest_pat, rest_stx, bindings)
 
     def _collect_pattern_vars(self, pat: Any) -> List[str]:
