@@ -4,7 +4,9 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在進行中のオープン Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| - | *現在オープン中の Issue はありません* | - | - | - | - |
 
 ---
 
@@ -12,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **470** | R7RS 数値タワー拡張プリミティブおよび複素数算術の実装 (exact-integer-sqrt, complex, polar) | Feature | 2026-10-04 | [closed/470-implement-r7rs-numeric-tower-extensions.md](closed/470-implement-r7rs-numeric-tower-extensions.md) |
 | **469** | R7RS システム・プロセスコンテキストおよび高精度タイマーの実装 (time, environment, command-line) | Feature | 2026-10-04 | [closed/469-implement-r7rs-system-process-context-and-time.md](closed/469-implement-r7rs-system-process-context-and-time.md) |
 | **468** | R7RS 型固有等価判定述語および構文エラー構文の実装 (boolean=?, symbol=?, syntax-error) | Feature | 2026-10-04 | [closed/468-implement-r7rs-type-predicates-and-syntax-error.md](closed/468-implement-r7rs-type-predicates-and-syntax-error.md) |
 | **467** | R7RS 入出力拡張プリミティブの網羅 (R7RS 6.13 / Input and output) | Feature | 2026-10-04 | [closed/467-implement-r7rs-io-extensions.md](closed/467-implement-r7rs-io-extensions.md) |

@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 189
-    "🔄 一部対応 (サブセット/基本版)" : 6
-    "⏳ 計画中 (Phase 3/4 予定)" : 8
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 197
+    "🔄 一部対応 (サブセット/基本版)" : 5
+    "⏳ 計画中 (Phase 3/4 予定)" : 1
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -35,7 +35,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
 | **継続・動的制御** | 6.10 | 6 | 6 (100%) | 🟢 完全準拠 | `call/cc`, `dynamic-wind`, `make-parameter`, `parameter?`, `parameterize` 完備 |
 | **例外機構 (Exceptions)** | 6.11 | 9 | 9 (100%) | 🟢 完全準拠 | `raise`, `raise-continuable`, `with-exception-handler`, `guard`, `error`, `error-object?`, `error-object-message`, `error-object-irritants`, `read-error?`, `file-error?` 完備 |
-| **数値タワー (Numbers)** | 6.2 | 35 | 33 (94%) | 🟢 ほぼ完全 | 述語群、四則演算、極値/公約数、丸め、商余剰多値、基数変換完備 |
+| **数値タワー (Numbers)** | 6.2 | 35 | 35 (100%) | 🟢 完全準拠 | `complex?`, `rational?`, `exact-integer-sqrt`, `make-rectangular`, `make-polar`, `real-part`, `imag-part`, `magnitude`, `angle`, 述語群、四則演算、極値/公約数、丸め、商余剰多値、基数変換完備 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
 | **マクロ機構** | 4.3 | 3 | 3 (100%) | 🟢 完全準拠 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules`、`syntax-error` 完備 |
 | **入出力・システム** | 6.13, 6.14 | 32 | 32 (100%) | 🟢 完全準拠 | ポート抽象化, ファイル/文字列/バイナリI/O, `write-shared`, `write-simple`, `read`, 時刻・単調jiffy, 環境変数Alist, コマンドライン完備 |
@@ -100,18 +100,22 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
-| `number?`, `integer?`, `real?`, `rational?` | `ilisp/numbers.py` | ✅ | Python `int` / `float` による型判別・有限実数値判定 |
-| `complex?` | `ilisp/numbers.py` | 🔄 | 現行は実数値判定（完全複素数タワーは Phase 4 拡張予定） |
+| `number?`, `integer?`, `real?`, `rational?` | `ilisp/numbers.py` | ✅ | Python `int` / `float` / 虚部0の `complex` による型判別・有限実数値・有理数判定 |
+| `complex?` | `ilisp/numbers.py` | ✅ | 実数および Python `complex` 型の透過的判定 |
 | `exact?`, `inexact?`, `exact-integer?` | `ilisp/numbers.py` | ✅ | 正確数（int）および非正確数（float）判定 |
+| `exact-integer-sqrt` | `ilisp/numbers.py` | ✅ | 非負整数の正確な整数平方根と余りの多値返却 (`Values(s, r)`) |
+| `make-rectangular`, `make-polar` | `ilisp/numbers.py` | ✅ | 直交座標および極座標形式からの複素数生成 (`complex`, `cmath.rect`) |
+| `real-part`, `imag-part` | `ilisp/numbers.py` | ✅ | 複素数および実数の実部・虚部算出（実数の虚部は 0） |
+| `magnitude`, `angle` | `ilisp/numbers.py` | ✅ | 複素数および実数の絶対値（モジュラス）・偏角（ラジアン）算出 (`abs`, `cmath.phase`) |
 | `finite?`, `infinite?`, `nan?` | `ilisp/numbers.py` | ✅ | 有限数、無限大、非数 (NaN) 判定 |
 | `zero?`, `positive?`, `negative?` | `ilisp/numbers.py` | ✅ | ゼロ判定、正数・負数符号判定 |
 | `odd?`, `even?` | `ilisp/numbers.py` | ✅ | 整数偶奇判定 |
 | `=`, `<`, `>`, `<=`, `>=` | `ilisp/numbers.py` | ✅ | 数値大小・等価比較（可変長引数対応、単調増加/減少判定） |
-| `+`, `*` | Kernel (Core) | ✅ | 加算・乗算（任意個引数、単位元 `0` / `1` 対応） |
-| `-` | Kernel (Core) | ✅ | 減算（単項符号反転、多引数差分計算） |
-| `/` | `ilisp/numbers.py` | ✅ | 除算（単項逆数 `(/ z)`、多引数順次除算） |
+| `+`, `*` | Kernel (Core) | ✅ | 加算・乗算（任意個引数、単位元 `0` / `1`、複素数透過対応） |
+| `-` | Kernel (Core) | ✅ | 減算（単項符号反転、多引数差分計算、複素数透過対応） |
+| `/` | `ilisp/numbers.py` | ✅ | 除算（単項逆数 `(/ z)`、多引数順次除算、複素数透過対応） |
 | `max`, `min` | `ilisp/numbers.py` | ✅ | 最大値・最小値（任意個引数、inexact 伝播） |
-| `abs` | `ilisp/numbers.py` | ✅ | 絶対値計算 |
+| `abs` | `ilisp/numbers.py` | ✅ | 絶対値計算（実数・複素数のモジュラス共通） |
 | `gcd`, `lcm` | `ilisp/numbers.py` | ✅ | 最大公約数・最小公倍数（任意個引数対応） |
 | `floor`, `ceiling`, `truncate`, `round` | `ilisp/numbers.py` | ✅ | 床、天井、ゼロ方向切り捨て、最近接偶数丸め（Banker's rounding） |
 | `floor/`, `floor-quotient`, `floor-remainder` | `ilisp/numbers.py` | ✅ | 床関数に基づく整数除算（多値返却対応） |
@@ -338,6 +342,7 @@ graph LR
         SL["(scheme load)<br>load プリミティブ"]
         ST["(scheme time)<br>current-second, current-jiffy, jiffies-per-second"]
         SPC["(scheme process-context)<br>get-env-var(s), command-line, exit"]
+        SCOM["(scheme complex)<br>make-rect, make-polar, real/imag-part, mag, angle"]
     end
     subgraph Partially Supported
         SC["(scheme char)<br>#\\リテラル, string-append"]
@@ -348,7 +353,6 @@ graph LR
     end
     subgraph Planned for Phase 4
         SI["(scheme inexact)<br>三角関数・対数"]
-        SCOM["(scheme complex)<br>複素数"]
         SLAZY["(scheme lazy)<br>delay, force"]
         SEVAL["(scheme eval)<br>動的環境eval"]
         SREPL["(scheme repl)<br>REPL環境"]
@@ -364,13 +368,13 @@ graph LR
 | `(scheme load)` | スクリプト読込 (`load`) | 🟢 100% | Kernel コア組込 |
 | `(scheme process-context)` | コマンドライン・環境変数・終了 | 🟢 100% | Kernel コア組込 (`get-environment-variable(s)`, `command-line`, `exit`, `emergency-exit`) |
 | `(scheme time)` | 高精度タイマー・経過時刻 | 🟢 100% | Kernel コア組込 (`current-second`, `current-jiffy`, `jiffies-per-second`) |
+| `(scheme complex)` | 複素数タワー | 🟢 100% | Kernel コア組込 (`angle`, `imag-part`, `magnitude`, `make-polar`, `make-rectangular`, `real-part`) |
 | `(scheme char)` | 文字種別判定・変換 | 🟡 30% | 文字リテラル・基本判定 |
 | `(scheme cxr)` | 深層リストアクセサ (`caaar`..`cddddr`)| ⏳ 計画中 | Phase 3 (`stdlib/cxr.ilisp`) |
 | `(scheme case-lambda)` | 引数個数多重ディスパッチ | ⏳ 計画中 | Phase 3 マクロ提供予定 |
 | `(scheme lazy)` | 遅延評価 (`delay`, `force`) | ⏳ 計画中 | Phase 4 (`make-promise`) |
 | `(scheme eval)` | 実行時環境生成と動的評価 | ⏳ 計画中 | Phase 4 (`environment`, `eval`) |
 | `(scheme inexact)` | 浮動小数点数学関数 (`sin`, `sqrt` 等) | ⏳ 計画中 | Phase 4 (Python `math` 連携) |
-| `(scheme complex)` | 複素数タワー | ⏳ 計画中 | Phase 4 (Python `complex` 連携) |
 | `(scheme repl)` | 対話型セッション環境 | ⏳ 計画中 | Phase 4 |
 
 ---

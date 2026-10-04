@@ -68,19 +68,25 @@ from ilisp.char import (
     vector_to_string,
 )
 from ilisp.numbers import (
+    complex_p,
     even_p,
     exact_integer_p,
+    exact_integer_sqrt,
     exact_p,
     finite_p,
     floor_div,
     floor_quotient,
     floor_remainder,
+    imag_part,
     inexact_p,
     infinite_p,
     integer_p,
+    make_polar,
+    make_rectangular,
     nan_p,
     negative_p,
     num_abs,
+    num_angle,
     num_ceiling,
     num_div,
     num_eq,
@@ -94,6 +100,7 @@ from ilisp.numbers import (
     num_lcm,
     num_le,
     num_lt,
+    num_magnitude,
     num_max,
     num_min,
     num_modulo,
@@ -107,6 +114,7 @@ from ilisp.numbers import (
     positive_p,
     rational_p,
     real_p,
+    real_part,
     string_to_number,
     truncate_div,
     truncate_quotient,
@@ -351,8 +359,8 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_eqv_p(a: Any, b: Any) -> bool:
         if isinstance(a, Symbol) and isinstance(b, Symbol):
             return a is b
-        if isinstance(a, (int, float, str, bool, Char)) and isinstance(
-            b, (int, float, str, bool, Char)
+        if isinstance(a, (int, float, str, bool, Char, complex)) and isinstance(
+            b, (int, float, str, bool, Char, complex)
         ):
             return type(a) is type(b) and a == b
         if isinstance(a, MutableString) and isinstance(b, MutableString):
@@ -402,15 +410,15 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         return x is False
 
     # --- 4. Arithmetic & Comparison Primitives ---
-    def prim_add(*nums: Union[int, float]) -> Union[int, float]:
-        total: Union[int, float] = 0
+    def prim_add(*nums: Union[int, float, complex]) -> Union[int, float, complex]:
+        total: Union[int, float, complex] = 0
         for n in nums:
             total += n
         return total
 
     def prim_sub(
-        first: Union[int, float], *rest: Union[int, float]
-    ) -> Union[int, float]:
+        first: Union[int, float, complex], *rest: Union[int, float, complex]
+    ) -> Union[int, float, complex]:
         if not rest:
             return -first
         total = first
@@ -418,8 +426,8 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             total -= n
         return total
 
-    def prim_mul(*nums: Union[int, float]) -> Union[int, float]:
-        prod: Union[int, float] = 1
+    def prim_mul(*nums: Union[int, float, complex]) -> Union[int, float, complex]:
+        prod: Union[int, float, complex] = 1
         for n in nums:
             prod *= n
         return prod
@@ -1375,13 +1383,20 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "odd?": odd_p,
         "even?": even_p,
         "number?": number_p,
-        "complex?": number_p,
+        "complex?": complex_p,
         "real?": real_p,
         "rational?": rational_p,
         "integer?": integer_p,
         "exact?": exact_p,
         "inexact?": inexact_p,
         "exact-integer?": exact_integer_p,
+        "exact-integer-sqrt": exact_integer_sqrt,
+        "make-rectangular": make_rectangular,
+        "make-polar": make_polar,
+        "real-part": real_part,
+        "imag-part": imag_part,
+        "magnitude": num_magnitude,
+        "angle": num_angle,
         "finite?": finite_p,
         "infinite?": infinite_p,
         "nan?": nan_p,

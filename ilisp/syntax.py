@@ -226,6 +226,14 @@ def syntax_to_datum(stx: Any, use_scope: Optional[Scope] = None) -> Any:
                     "command-line",
                     "exit",
                     "emergency-exit",
+                    "exact-integer-sqrt",
+                    "complex?",
+                    "make-rectangular",
+                    "make-polar",
+                    "real-part",
+                    "imag-part",
+                    "magnitude",
+                    "angle",
                 }
                 if d.name in core_forms:
                     return d

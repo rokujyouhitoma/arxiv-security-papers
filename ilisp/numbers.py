@@ -6,30 +6,47 @@ exactness conversions, integer division/remainder variants, and radix-aware stri
 
 from __future__ import annotations
 
+import cmath
 import math
 from typing import Any, Union
 
 from ilisp.types import Values
 
-Number = Union[int, float]
+Real = Union[int, float]
+Number = Union[int, float, complex]
 
 
 # --- 1. Numerical Predicates ---
 
 
 def number_p(x: Any) -> bool:
-    """Return True if x is a number (int or float)."""
-    return isinstance(x, (int, float)) and not isinstance(x, bool)
+    """Return True if x is a number (int, float, or complex)."""
+    return isinstance(x, (int, float, complex)) and not isinstance(x, bool)
 
 
-def real_p(x: Any) -> bool:
-    """Return True if x is a real number."""
+def complex_p(x: Any) -> bool:
+    """Return True if x is a complex number (in Scheme, all numbers are complex)."""
     return number_p(x)
 
 
+def real_p(x: Any) -> bool:
+    """Return True if x is a real number (including complex numbers with zero imaginary part)."""
+    if isinstance(x, bool):
+        return False
+    if isinstance(x, (int, float)):
+        return True
+    if isinstance(x, complex):
+        return x.imag == 0
+    return False
+
+
 def rational_p(x: Any) -> bool:
-    """Return True if x is a rational number (all finite numbers in ILISP)."""
-    return number_p(x) and math.isfinite(x)
+    """Return True if x is a rational number (all finite real numbers in ILISP)."""
+    if not real_p(x):
+        return False
+    if isinstance(x, complex):
+        return math.isfinite(x.real)
+    return math.isfinite(x)
 
 
 def integer_p(x: Any) -> bool:
@@ -192,7 +209,7 @@ def num_div(first: Number, *rest: Number) -> Number:
     return res
 
 
-def num_max(*nums: Number) -> Number:
+def num_max(*nums: Real) -> Real:
     """Return maximum of arguments, preserving inexactness."""
     if not nums:
         raise TypeError("max: requires at least one argument")
@@ -202,7 +219,7 @@ def num_max(*nums: Number) -> Number:
     return m
 
 
-def num_min(*nums: Number) -> Number:
+def num_min(*nums: Real) -> Real:
     """Return minimum of arguments, preserving inexactness."""
     if not nums:
         raise TypeError("min: requires at least one argument")
@@ -243,25 +260,25 @@ def num_lcm(*nums: int) -> int:
 # --- 4. Rounding and Truncation ---
 
 
-def num_floor(x: Number) -> Number:
+def num_floor(x: Real) -> Real:
     """Return largest integer <= x."""
     res = math.floor(x)
     return float(res) if isinstance(x, float) else res
 
 
-def num_ceiling(x: Number) -> Number:
+def num_ceiling(x: Real) -> Real:
     """Return smallest integer >= x."""
     res = math.ceil(x)
     return float(res) if isinstance(x, float) else res
 
 
-def num_truncate(x: Number) -> Number:
+def num_truncate(x: Real) -> Real:
     """Truncate towards zero."""
     res = math.trunc(x)
     return float(res) if isinstance(x, float) else res
 
 
-def num_round(x: Number) -> Number:
+def num_round(x: Real) -> Real:
     """Round to nearest even integer."""
     res = round(x)
     return float(res) if isinstance(x, float) else res
@@ -324,7 +341,7 @@ def num_exact(z: Number) -> int:
     raise TypeError(f"exact: expected number, got {z!r}")
 
 
-def num_inexact(z: Number) -> float:
+def num_inexact(z: Real) -> float:
     """Convert number to inexact float."""
     return float(z)
 
@@ -334,7 +351,7 @@ def num_square(z: Number) -> Number:
     return z * z
 
 
-def num_sqrt(z: Number) -> Number:
+def num_sqrt(z: Real) -> Real:
     """Return square root of z."""
     if z < 0:
         raise ValueError(f"sqrt: real domain error for {z}")
@@ -347,15 +364,84 @@ def num_sqrt(z: Number) -> Number:
 def num_expt(z1: Number, z2: Number) -> Number:
     """Compute z1 raised to power z2."""
     res = z1**z2
-    if isinstance(res, (int, float)):
+    if isinstance(res, (int, float, complex)):
         return res
     return float(res)
+
+
+# --- 6b. Extended Roots and Complex Numbers (R7RS 6.2 & (scheme complex)) ---
+
+
+def exact_integer_sqrt(k: Any) -> Values:
+    """Return two non-negative exact integers s and r where k = s^2 + r and k < (s+1)^2."""
+    if not exact_integer_p(k):
+        raise TypeError(f"exact-integer-sqrt: expected exact integer, got {k!r}")
+    n = int(k)
+    if n < 0:
+        raise ValueError(f"exact-integer-sqrt: expected non-negative integer, got {n}")
+    s = math.isqrt(n)
+    r = n - s * s
+    return Values(s, r)
+
+
+def make_rectangular(x1: Any, x2: Any) -> complex:
+    """Construct a complex number from real and imaginary parts."""
+    if not real_p(x1) or not real_p(x2):
+        raise TypeError(
+            f"make-rectangular: expected real numbers, got ({x1!r}, {x2!r})"
+        )
+    r = float(x1.real if isinstance(x1, complex) else x1)
+    i = float(x2.real if isinstance(x2, complex) else x2)
+    return complex(r, i)
+
+
+def make_polar(x3: Any, x4: Any) -> complex:
+    """Construct a complex number from magnitude and angle (in radians)."""
+    if not real_p(x3) or not real_p(x4):
+        raise TypeError(f"make-polar: expected real numbers, got ({x3!r}, {x4!r})")
+    mag = float(x3.real if isinstance(x3, complex) else x3)
+    ang = float(x4.real if isinstance(x4, complex) else x4)
+    return cmath.rect(mag, ang)
+
+
+def real_part(z: Any) -> Union[int, float]:
+    """Return the real part of number z."""
+    if isinstance(z, complex):
+        return float(z.real)
+    if isinstance(z, (int, float)) and not isinstance(z, bool):
+        return z
+    raise TypeError(f"real-part: expected number, got {z!r}")
+
+
+def imag_part(z: Any) -> Union[int, float]:
+    """Return the imaginary part of number z."""
+    if isinstance(z, complex):
+        return float(z.imag)
+    if isinstance(z, (int, float)) and not isinstance(z, bool):
+        return 0
+    raise TypeError(f"imag-part: expected number, got {z!r}")
+
+
+def num_magnitude(z: Any) -> Union[int, float]:
+    """Return the magnitude (modulus / absolute value) of number z."""
+    if isinstance(z, complex):
+        return float(abs(z))
+    if isinstance(z, (int, float)) and not isinstance(z, bool):
+        return abs(z)
+    raise TypeError(f"magnitude: expected number, got {z!r}")
+
+
+def num_angle(z: Any) -> float:
+    """Return the angle (phase) of number z in radians."""
+    if not number_p(z):
+        raise TypeError(f"angle: expected number, got {z!r}")
+    return cmath.phase(z)
 
 
 # --- 7. Radix and String Conversions ---
 
 
-def number_to_string(z: Number, radix: int = 10) -> str:
+def number_to_string(z: Real, radix: int = 10) -> str:
     """Convert number z to a string in base radix (2, 8, 10, or 16)."""
     if radix not in (2, 8, 10, 16):
         raise ValueError(
