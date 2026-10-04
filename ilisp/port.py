@@ -9,9 +9,9 @@ from __future__ import annotations
 import io
 import sys
 from contextvars import ContextVar
-from typing import Any, Callable, Optional, TextIO
+from typing import Any, BinaryIO, Callable, Optional, TextIO, Union
 
-from ilisp.types import EOF, EOFType, is_eof_object
+from ilisp.types import EOF, Bytevector, EOFType, is_eof_object
 
 
 class Port:
@@ -719,3 +719,391 @@ def read_datum(port: Optional[TextualInputPort] = None) -> Any:
     p = port if port is not None else get_current_input_port()
     reader = Reader(p)
     return reader.read()
+
+
+# --- Binary Ports (R7RS 6.13) ---
+
+
+class BinaryInputPort(Port):
+    """Abstract base class for binary input ports."""
+
+    def __init__(self, name: str = "<binary-input-port>") -> None:
+        super().__init__(
+            name=name,
+            is_input=True,
+            is_output=False,
+            is_textual=False,
+            is_binary=True,
+        )
+
+    def read_u8(self) -> Optional[int]:
+        """Read and return next byte (0-255), or None on EOF."""
+        raise NotImplementedError
+
+    def peek_u8(self) -> Optional[int]:
+        """Peek next byte without consuming it, or None on EOF."""
+        raise NotImplementedError
+
+    def read_bytevector(self, k: int) -> Optional[Bytevector]:
+        """Read up to k bytes into a newly allocated Bytevector, or None on EOF."""
+        raise NotImplementedError
+
+    def read_bytevector_bang(
+        self, bv: Bytevector, start: int = 0, end: Optional[int] = None
+    ) -> int:
+        """Read bytes directly into existing Bytevector slice."""
+        raise NotImplementedError
+
+    def u8_ready(self) -> bool:
+        """Return True if an octet is ready for reading."""
+        return self.is_open
+
+
+class BinaryOutputPort(Port):
+    """Abstract base class for binary output ports."""
+
+    def __init__(self, name: str = "<binary-output-port>") -> None:
+        super().__init__(
+            name=name,
+            is_input=False,
+            is_output=True,
+            is_textual=False,
+            is_binary=True,
+        )
+
+    def write_u8(self, byte: int) -> None:
+        """Write a single octet (0-255) to the port."""
+        raise NotImplementedError
+
+    def write_bytevector(
+        self, bv: Bytevector, start: int = 0, end: Optional[int] = None
+    ) -> None:
+        """Write bytes from Bytevector to the port."""
+        raise NotImplementedError
+
+    def flush(self) -> None:
+        """Flush pending buffered binary output."""
+        pass
+
+
+class BytesInputPort(BinaryInputPort):
+    """Binary input port reading from in-memory Bytevector or bytes."""
+
+    __slots__ = ("data", "pos")
+
+    def __init__(
+        self, data: Union[Bytevector, bytes, bytearray], name: str = "<bytes-input>"
+    ) -> None:
+        super().__init__(name=name)
+        if isinstance(data, Bytevector):
+            self.data: bytearray = data.data
+        else:
+            self.data = bytearray(data)
+        self.pos: int = 0
+
+    def read_u8(self) -> Optional[int]:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if self.pos < len(self.data):
+            b = self.data[self.pos]
+            self.pos += 1
+            return b
+        return None
+
+    def peek_u8(self) -> Optional[int]:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if self.pos < len(self.data):
+            return self.data[self.pos]
+        return None
+
+    def read_bytevector(self, k: int) -> Optional[Bytevector]:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if self.pos >= len(self.data):
+            return None
+        end_pos = min(self.pos + k, len(self.data))
+        sub = self.data[self.pos : end_pos]
+        self.pos = end_pos
+        return Bytevector(sub)
+
+    def read_bytevector_bang(
+        self, bv: Bytevector, start: int = 0, end: Optional[int] = None
+    ) -> int:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if self.pos >= len(self.data):
+            return 0
+        target_end = len(bv) if end is None else end
+        avail = len(self.data) - self.pos
+        count = min(target_end - start, avail)
+        if count <= 0:
+            return 0
+        bv.data[start : start + count] = self.data[self.pos : self.pos + count]
+        self.pos += count
+        return count
+
+
+class BytesOutputPort(BinaryOutputPort):
+    """Binary output port writing to in-memory byte buffer."""
+
+    __slots__ = ("_buf",)
+
+    def __init__(self, name: str = "<bytes-output>") -> None:
+        super().__init__(name=name)
+        self._buf: io.BytesIO = io.BytesIO()
+
+    def write_u8(self, byte: int) -> None:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if not (0 <= byte <= 255):
+            raise ValueError(f"write-u8: byte out of range 0..255: {byte}")
+        self._buf.write(bytes([byte]))
+
+    def write_bytevector(
+        self, bv: Bytevector, start: int = 0, end: Optional[int] = None
+    ) -> None:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if not isinstance(bv, Bytevector):
+            raise TypeError(
+                f"write-bytevector: expected Bytevector, got {type(bv).__name__}"
+            )
+        sub = bv.data[start:end]
+        self._buf.write(sub)
+
+    def get_bytevector(self) -> Bytevector:
+        """Return accumulated bytes as a Bytevector."""
+        return Bytevector(self._buf.getvalue())
+
+
+class BinaryFileInputPort(BinaryInputPort):
+    """Binary input port reading from filesystem file."""
+
+    __slots__ = ("_file", "_peek_buf")
+
+    def __init__(self, filepath: str) -> None:
+        super().__init__(name=filepath)
+        self._file: BinaryIO = open(filepath, "rb")
+        self._peek_buf: Optional[int] = None
+
+    def read_u8(self) -> Optional[int]:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if self._peek_buf is not None:
+            b = self._peek_buf
+            self._peek_buf = None
+            return b
+        data = self._file.read(1)
+        return data[0] if data else None
+
+    def peek_u8(self) -> Optional[int]:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if self._peek_buf is not None:
+            return self._peek_buf
+        data = self._file.read(1)
+        if data:
+            self._peek_buf = data[0]
+            return data[0]
+        return None
+
+    def read_bytevector(self, k: int) -> Optional[Bytevector]:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        chunks = bytearray()
+        rem = k
+        if self._peek_buf is not None:
+            chunks.append(self._peek_buf)
+            self._peek_buf = None
+            rem -= 1
+        if rem > 0:
+            part = self._file.read(rem)
+            if part:
+                chunks.extend(part)
+        if not chunks:
+            return None
+        return Bytevector(chunks)
+
+    def read_bytevector_bang(
+        self, bv: Bytevector, start: int = 0, end: Optional[int] = None
+    ) -> int:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        target_end = len(bv) if end is None else end
+        needed = target_end - start
+        if needed <= 0:
+            return 0
+        written = 0
+        if self._peek_buf is not None:
+            bv.data[start] = self._peek_buf
+            self._peek_buf = None
+            written += 1
+            needed -= 1
+        if needed > 0:
+            data = self._file.read(needed)
+            if data:
+                bv.data[start + written : start + written + len(data)] = data
+                written += len(data)
+        return written
+
+    def close(self) -> None:
+        if self.is_open:
+            self._file.close()
+            super().close()
+
+
+class BinaryFileOutputPort(BinaryOutputPort):
+    """Binary output port writing to filesystem file."""
+
+    __slots__ = ("_file",)
+
+    def __init__(self, filepath: str) -> None:
+        super().__init__(name=filepath)
+        self._file: BinaryIO = open(filepath, "wb")
+
+    def write_u8(self, byte: int) -> None:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if not (0 <= byte <= 255):
+            raise ValueError(f"write-u8: byte out of range 0..255: {byte}")
+        self._file.write(bytes([byte]))
+
+    def write_bytevector(
+        self, bv: Bytevector, start: int = 0, end: Optional[int] = None
+    ) -> None:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        if not isinstance(bv, Bytevector):
+            raise TypeError(
+                f"write-bytevector: expected Bytevector, got {type(bv).__name__}"
+            )
+        sub = bv.data[start:end]
+        self._file.write(sub)
+
+    def flush(self) -> None:
+        if self.is_open:
+            self._file.flush()
+
+    def close(self) -> None:
+        if self.is_open:
+            self.flush()
+            self._file.close()
+            super().close()
+
+
+# --- Binary Port Operations ---
+
+
+def open_binary_input_file(filepath: str) -> BinaryFileInputPort:
+    """Open a file as a binary input port."""
+    if not isinstance(filepath, str):
+        raise TypeError(
+            f"open-binary-input-file: expected str, got {type(filepath).__name__}"
+        )
+    return BinaryFileInputPort(filepath)
+
+
+def open_binary_output_file(filepath: str) -> BinaryFileOutputPort:
+    """Open a file as a binary output port."""
+    if not isinstance(filepath, str):
+        raise TypeError(
+            f"open-binary-output-file: expected str, got {type(filepath).__name__}"
+        )
+    return BinaryFileOutputPort(filepath)
+
+
+def open_input_bytevector(bv: Bytevector) -> BytesInputPort:
+    """Open an input port reading from a Bytevector."""
+    if not isinstance(bv, Bytevector):
+        raise TypeError(
+            f"open-input-bytevector: expected Bytevector, got {type(bv).__name__}"
+        )
+    return BytesInputPort(bv)
+
+
+def open_output_bytevector() -> BytesOutputPort:
+    """Open an output port writing to an in-memory byte buffer."""
+    return BytesOutputPort()
+
+
+def get_output_bytevector(port: BytesOutputPort) -> Bytevector:
+    """Return the Bytevector accumulated in a BytesOutputPort."""
+    if not isinstance(port, BytesOutputPort):
+        raise TypeError(
+            f"get-output-bytevector: expected BytesOutputPort, got {type(port).__name__}"
+        )
+    return port.get_bytevector()
+
+
+def read_u8(port: Optional[BinaryInputPort] = None) -> Any:
+    """Read next octet from binary port (default: current input port)."""
+    p: Any = port if port is not None else get_current_input_port()
+    if not hasattr(p, "read_u8"):
+        raise TypeError(f"read-u8: port does not support binary reading: {p!r}")
+    res = p.read_u8()
+    return EOF if res is None else res
+
+
+def peek_u8(port: Optional[BinaryInputPort] = None) -> Any:
+    """Peek next octet from binary port (default: current input port)."""
+    p: Any = port if port is not None else get_current_input_port()
+    if not hasattr(p, "peek_u8"):
+        raise TypeError(f"peek-u8: port does not support binary reading: {p!r}")
+    res = p.peek_u8()
+    return EOF if res is None else res
+
+
+def u8_ready_p(port: Optional[BinaryInputPort] = None) -> bool:
+    """Return True if binary port is ready for reading."""
+    p: Any = port if port is not None else get_current_input_port()
+    if hasattr(p, "u8_ready"):
+        return bool(p.u8_ready())
+    return False
+
+
+def write_u8(byte: int, port: Optional[BinaryOutputPort] = None) -> None:
+    """Write an octet to binary port (default: current output port)."""
+    p: Any = port if port is not None else get_current_output_port()
+    if not hasattr(p, "write_u8"):
+        raise TypeError(f"write-u8: port does not support binary writing: {p!r}")
+    p.write_u8(byte)
+
+
+def read_bytevector(k: int, port: Optional[BinaryInputPort] = None) -> Any:
+    """Read up to k octets from binary port into a Bytevector."""
+    p: Any = port if port is not None else get_current_input_port()
+    if not hasattr(p, "read_bytevector"):
+        raise TypeError(f"read-bytevector: port does not support binary reading: {p!r}")
+    res = p.read_bytevector(k)
+    return EOF if res is None else res
+
+
+def read_bytevector_bang(
+    bv: Bytevector,
+    port: Optional[BinaryInputPort] = None,
+    start: int = 0,
+    end: Optional[int] = None,
+) -> Any:
+    """Read octets from binary port directly into existing Bytevector."""
+    p: Any = port if port is not None else get_current_input_port()
+    if not hasattr(p, "read_bytevector_bang"):
+        raise TypeError(
+            f"read-bytevector!: port does not support binary reading: {p!r}"
+        )
+    return p.read_bytevector_bang(bv, start, end)
+
+
+def write_bytevector(
+    bv: Bytevector,
+    port: Optional[BinaryOutputPort] = None,
+    start: int = 0,
+    end: Optional[int] = None,
+) -> None:
+    """Write Bytevector octets to binary port."""
+    p: Any = port if port is not None else get_current_output_port()
+    if not hasattr(p, "write_bytevector"):
+        raise TypeError(
+            f"write-bytevector: port does not support binary writing: {p!r}"
+        )
+    p.write_bytevector(bv, start, end)

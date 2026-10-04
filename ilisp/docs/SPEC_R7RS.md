@@ -193,10 +193,13 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
-| リテラル構文 (`#u8(...)`) | Reader | ⏳ | Phase 3 (バイナリ・PDF解析高速化) にて導入 |
-| `bytevector?`, `make-bytevector` | - | ⏳ | 8-bit バイト列型（Phase 3 予定） |
-| `bytevector-u8-ref`, `set!` | - | ⏳ | 単一バイトアクセス（Phase 3 予定） |
-| `utf8->string`, `string->utf8` | - | ⏳ | UTF-8 エンコード・デコード（Phase 3 予定） |
+| リテラル構文 (`#u8(...)`) | Reader | ✅ | `#u8(0 10 255)` 形式のバイトベクタ自己評価リテラル |
+| `bytevector?`, `make-bytevector`, `bytevector` | Kernel (Core) | ✅ | 8-bit バイト列型判定、初期値付き確保、要素並記コンストラクタ |
+| `bytevector-length` | Kernel (Core) | ✅ | バイトベクタ長取得 |
+| `bytevector-u8-ref`, `bytevector-u8-set!` | Kernel (Core) | ✅ | 単一バイトアクセス・インプレース更新（0〜255範囲ガード） |
+| `bytevector-copy`, `bytevector-copy!` | Kernel (Core) | ✅ | バイトベクタ範囲コピー・インプレース範囲代入 |
+| `bytevector-append` | Kernel (Core) | ✅ | 複数バイトベクタの連結 |
+| `utf8->string`, `string->utf8` | Kernel (Core) | ✅ | UTF-8 エンコード・デコード（部分文字列/部分バイト指定対応） |
 
 ### 3.10 第6.10節 制御構造・手続き・多値・継続 (Control features)
 
@@ -231,14 +234,19 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `close-port`, `close-input-port`, `close-output-port` | Kernel (Core) | ✅ | ポートクローズ操作 |
 | `current-input-port`, `current-output-port`, `current-error-port` | Kernel (Core) | ✅ | カレントポート動的取得・設定 (ContextVar) |
 | `open-input-string`, `open-output-string`, `get-output-string` | Kernel (Core) | ✅ | 文字列ポート生成・内容取得 |
+| `open-input-bytevector`, `open-output-bytevector`, `get-output-bytevector` | Kernel (Core) | ✅ | バイトベクタインメモリポート生成・内容取得 |
 | `open-input-file`, `open-output-file` | `(scheme file)` | ✅ | ファイルテキストポート生成 |
+| `open-binary-input-file`, `open-binary-output-file` | `(scheme file)` | ✅ | ファイルバイナリポート生成 |
 | `call-with-port`, `call-with-input-file`, `call-with-output-file` | `(scheme file)` | ✅ | 自動クローズ保証付き高階ポート呼び出し |
 | `with-input-from-file`, `with-output-to-file` | `(scheme file)` | ✅ | カレントポート一時切り替え実行 |
 | `read` | `(scheme read)` | ✅ | 入力ポートから S 式 Datum を 1 つ読み込みパース |
 | `read-char`, `peek-char` | Kernel (Core) | ✅ | 1文字読み込み / 覗き見 |
 | `read-line`, `read-string` | Kernel (Core) | ✅ | 行単位（改行除外）/ 指定長文字列読み込み |
-| `char-ready?` | Kernel (Core) | ✅ | 入力レディ状態判定 |
+| `read-u8`, `peek-u8` | Kernel (Core) | ✅ | 1バイト読み込み / 覗き見 |
+| `read-bytevector`, `read-bytevector!` | Kernel (Core) | ✅ | ブロックバイト読み込み / 既存バイトベクタへの読み込み代入 |
+| `char-ready?`, `u8-ready?` | Kernel (Core) | ✅ | 入力レディ状態判定 |
 | `write-char`, `write-string` | Kernel (Core) | ✅ | 文字・文字列ポート出力 |
+| `write-u8`, `write-bytevector` | Kernel (Core) | ✅ | 1バイト出力 / ブロックバイト出力 |
 | `display` | Kernel (Core) | ✅ | 人間可読形式出力 (ポート引数オプショナル対応) |
 | `write` | Kernel (Core) | ✅ | 機械可読形式出力 (`repr` 形式, ポート引数対応) |
 | `newline` | Kernel (Core) | ✅ | 改行出力およびフラッシュ (ポート引数対応) |

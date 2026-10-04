@@ -211,6 +211,15 @@ class Reader:
         if ch == "(":
             self._next_char()  # consume '('
             return self._read_vector(loc)
+        if ch == "u" or ch == "U":
+            self._next_char()  # consume 'u'
+            next1 = self._next_char()  # expect '8'
+            if next1 == "8":
+                next2 = self._peek_char()
+                if next2 == "(":
+                    self._next_char()  # consume '('
+                    return self._read_bytevector(loc)
+            raise LispSyntaxError(f"Unsupported hash literal sequence '#u{next1}'", loc)
         raise LispSyntaxError(f"Unsupported hash literal sequence '#{ch}'", loc)
 
     def _read_vector(self, loc: SourceLocation) -> Any:
@@ -227,6 +236,27 @@ class Reader:
         from ilisp.types import Vector
 
         return Vector(elements)
+
+    def _read_bytevector(self, loc: SourceLocation) -> Any:
+        elements: List[int] = []
+        while True:
+            self._skip_whitespace_and_comments()
+            ch = self._peek_char()
+            if ch is None:
+                raise LispSyntaxError("Unclosed bytevector '#u8('", loc)
+            if ch == ")":
+                self._next_char()
+                break
+            elem = self.read()
+            if not isinstance(elem, int) or not (0 <= elem <= 255):
+                raise LispSyntaxError(
+                    f"Bytevector element must be an octet (exact integer in 0..255), got {elem!r}",
+                    loc,
+                )
+            elements.append(elem)
+        from ilisp.types import Bytevector
+
+        return Bytevector(elements)
 
     def _read_char_literal(self, loc: SourceLocation) -> str:
         # Character literal, e.g. #\a, #\space, #\newline

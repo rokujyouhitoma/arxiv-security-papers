@@ -233,6 +233,46 @@ class Vector:
         return False
 
 
+class Bytevector:
+    """Fixed/variable-length byte vector (0-255 octets) adhering to R7RS-small."""
+
+    __slots__ = ("data",)
+
+    def __init__(self, data: Union[bytes, bytearray, Sequence[int]] = b"") -> None:
+        self.data: bytearray = bytearray(data)
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int) -> int:
+        return self.data[idx]
+
+    def __setitem__(self, idx: int, value: int) -> None:
+        if not (0 <= value <= 255):
+            raise ValueError(f"Bytevector value out of range (0-255): {value}")
+        self.data[idx] = value
+
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.data)
+
+    def __repr__(self) -> str:
+        elements = " ".join(str(b) for b in self.data)
+        return f"#u8({elements})"
+
+    def __str__(self) -> str:
+        return repr(self)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Bytevector):
+            return self.data == other.data
+        return False
+
+
+def is_bytevector(obj: Any) -> bool:
+    """Return True if obj is a Bytevector."""
+    return isinstance(obj, Bytevector)
+
+
 class Values:
     """R7RS multiple return values container."""
 

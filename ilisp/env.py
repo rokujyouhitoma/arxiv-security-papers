@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 from ilisp.types import (
     NIL,
+    Bytevector,
     Cell,
     Cons,
     Continuation,
@@ -251,7 +252,115 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_eof_object_p(x: Any) -> bool:
         return port_mod.eof_object_p(x)
 
-    # --- 6. Python Zero-Copy & Interop Primitives ---
+    # --- 6. Bytevector Primitives (R7RS 6.9) ---
+    def prim_bytevector_p(obj: Any) -> bool:
+        return isinstance(obj, Bytevector)
+
+    def prim_make_bytevector(k: int, byte: int = 0) -> Bytevector:
+        if not isinstance(k, int) or k < 0:
+            raise ValueError(
+                f"make-bytevector: expected non-negative integer length, got {k!r}"
+            )
+        if not (0 <= byte <= 255):
+            raise ValueError(
+                f"make-bytevector: fill byte out of range 0..255, got {byte!r}"
+            )
+        return Bytevector(bytearray([byte] * k))
+
+    def prim_bytevector(*bytes_args: int) -> Bytevector:
+        for b in bytes_args:
+            if not isinstance(b, int) or not (0 <= b <= 255):
+                raise ValueError(f"bytevector: octet out of range 0..255, got {b!r}")
+        return Bytevector(bytearray(bytes_args))
+
+    def prim_bytevector_length(bv: Bytevector) -> int:
+        if not isinstance(bv, Bytevector):
+            raise TypeError(
+                f"bytevector-length: expected Bytevector, got {type(bv).__name__}"
+            )
+        return len(bv)
+
+    def prim_bytevector_u8_ref(bv: Bytevector, k: int) -> int:
+        if not isinstance(bv, Bytevector):
+            raise TypeError(
+                f"bytevector-u8-ref: expected Bytevector, got {type(bv).__name__}"
+            )
+        if not (0 <= k < len(bv)):
+            raise IndexError(
+                f"bytevector-u8-ref: index {k} out of range (length {len(bv)})"
+            )
+        return bv[k]
+
+    def prim_bytevector_u8_set_bang(bv: Bytevector, k: int, byte: int) -> None:
+        if not isinstance(bv, Bytevector):
+            raise TypeError(
+                f"bytevector-u8-set!: expected Bytevector, got {type(bv).__name__}"
+            )
+        if not (0 <= k < len(bv)):
+            raise IndexError(
+                f"bytevector-u8-set!: index {k} out of range (length {len(bv)})"
+            )
+        if not (0 <= byte <= 255):
+            raise ValueError(
+                f"bytevector-u8-set!: byte out of range 0..255, got {byte!r}"
+            )
+        bv[k] = byte
+
+    def prim_bytevector_copy(
+        bv: Bytevector, start: int = 0, end: Optional[int] = None
+    ) -> Bytevector:
+        if not isinstance(bv, Bytevector):
+            raise TypeError(
+                f"bytevector-copy: expected Bytevector, got {type(bv).__name__}"
+            )
+        sub = bv.data[start:end]
+        return Bytevector(sub)
+
+    def prim_bytevector_copy_bang(
+        to: Bytevector,
+        at: int,
+        from_bv: Bytevector,
+        start: int = 0,
+        end: Optional[int] = None,
+    ) -> None:
+        if not isinstance(to, Bytevector) or not isinstance(from_bv, Bytevector):
+            raise TypeError("bytevector-copy!: expected Bytevector instances")
+        sub = from_bv.data[start:end]
+        if at + len(sub) > len(to):
+            raise IndexError(
+                "bytevector-copy!: target bytevector too short for copied segment"
+            )
+        to.data[at : at + len(sub)] = sub
+
+    def prim_bytevector_append(*bvs: Bytevector) -> Bytevector:
+        res = bytearray()
+        for bv in bvs:
+            if not isinstance(bv, Bytevector):
+                raise TypeError(
+                    f"bytevector-append: expected Bytevector, got {type(bv).__name__}"
+                )
+            res.extend(bv.data)
+        return Bytevector(res)
+
+    def prim_utf8_to_string(
+        bv: Bytevector, start: int = 0, end: Optional[int] = None
+    ) -> str:
+        if not isinstance(bv, Bytevector):
+            raise TypeError(
+                f"utf8->string: expected Bytevector, got {type(bv).__name__}"
+            )
+        sub = bv.data[start:end]
+        return sub.decode("utf-8")
+
+    def prim_string_to_utf8(
+        s: str, start: int = 0, end: Optional[int] = None
+    ) -> Bytevector:
+        if not isinstance(s, str):
+            raise TypeError(f"string->utf8: expected str, got {type(s).__name__}")
+        sub = s[start:end]
+        return Bytevector(sub.encode("utf-8"))
+
+    # --- 7. Python Zero-Copy & Interop Primitives ---
     def prim_sequence_view(seq: Sequence[Any], offset: int = 0) -> SequenceView:
         return SequenceView(seq, offset=offset)
 
@@ -514,6 +623,31 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "write": prim_write,
         "eof-object": prim_eof_object,
         "eof-object?": prim_eof_object_p,
+        # Bytevectors (R7RS 6.9)
+        "bytevector?": prim_bytevector_p,
+        "make-bytevector": prim_make_bytevector,
+        "bytevector": prim_bytevector,
+        "bytevector-length": prim_bytevector_length,
+        "bytevector-u8-ref": prim_bytevector_u8_ref,
+        "bytevector-u8-set!": prim_bytevector_u8_set_bang,
+        "bytevector-copy": prim_bytevector_copy,
+        "bytevector-copy!": prim_bytevector_copy_bang,
+        "bytevector-append": prim_bytevector_append,
+        "utf8->string": prim_utf8_to_string,
+        "string->utf8": prim_string_to_utf8,
+        # Binary Ports (R7RS 6.13)
+        "open-binary-input-file": port_mod.open_binary_input_file,
+        "open-binary-output-file": port_mod.open_binary_output_file,
+        "open-input-bytevector": port_mod.open_input_bytevector,
+        "open-output-bytevector": port_mod.open_output_bytevector,
+        "get-output-bytevector": port_mod.get_output_bytevector,
+        "read-u8": port_mod.read_u8,
+        "peek-u8": port_mod.peek_u8,
+        "u8-ready?": port_mod.u8_ready_p,
+        "write-u8": port_mod.write_u8,
+        "read-bytevector": port_mod.read_bytevector,
+        "read-bytevector!": port_mod.read_bytevector_bang,
+        "write-bytevector": port_mod.write_bytevector,
         "load": prim_load,
         # Python Zero-Copy & Interop
         "sequence-view": prim_sequence_view,

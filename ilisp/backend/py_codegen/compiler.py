@@ -16,6 +16,7 @@ from ilisp.reader import read_all
 from ilisp.syntax import SyntaxRulesTransformer
 from ilisp.types import (
     NIL,
+    Bytevector,
     Cons,
     NilType,
     Procedure,
@@ -176,6 +177,7 @@ class PythonASTCompiler:
                 ast.alias(name="SequenceView", asname=None),
                 ast.alias(name="Vector", asname=None),
                 ast.alias(name="Values", asname=None),
+                ast.alias(name="Bytevector", asname=None),
                 ast.alias(name="SchemeException", asname=None),
                 ast.alias(name="Continuation", asname=None),
             ],
@@ -256,6 +258,12 @@ class PythonASTCompiler:
             return ast.Call(
                 func=ast.Name(id="Vector", ctx=ast.Load()),
                 args=[ast.List(elts=elts, ctx=ast.Load())],
+                keywords=[],
+            )
+        if isinstance(expr, Bytevector):
+            return ast.Call(
+                func=ast.Name(id="Bytevector", ctx=ast.Load()),
+                args=[ast.Constant(value=bytes(expr.data))],
                 keywords=[],
             )
 
