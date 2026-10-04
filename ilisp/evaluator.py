@@ -17,6 +17,7 @@ from ilisp.types import (
     Char,
     Cons,
     Continuation,
+    ErrorObject,
     MutableString,
     NilType,
     Parameter,
@@ -24,6 +25,7 @@ from ilisp.types import (
     Procedure,
     Record,
     RecordType,
+    SchemeException,
     Symbol,
     Vector,
     car,
@@ -88,6 +90,26 @@ def eval_expr(expr: Any, env: Environment) -> Any:
             # --- Special Forms ---
             if isinstance(op, Symbol):
                 op_name = op.name
+
+                # (syntax-error message irritants...)
+                if op_name == "syntax-error":
+                    args = to_py_list(curr_expr.cdr)
+                    if not args:
+                        err_obj = ErrorObject(
+                            "syntax-error requires at least a message", NIL, kind="read"
+                        )
+                        raise SchemeException(err_obj)
+                    msg_raw = args[0]
+                    if isinstance(msg_raw, str):
+                        msg_str = msg_raw
+                    else:
+                        eval_msg = eval_expr(msg_raw, curr_env)
+                        msg_str = (
+                            str(eval_msg) if not isinstance(eval_msg, str) else eval_msg
+                        )
+                    irritants_list = to_lisp_list(args[1:]) if len(args) > 1 else NIL
+                    err_obj = ErrorObject(msg_str, irritants_list, kind="read")
+                    raise SchemeException(err_obj)
 
                 # (quote datum)
                 if op_name == "quote":

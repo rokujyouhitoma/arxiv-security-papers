@@ -329,6 +329,14 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             raise TypeError(f"symbol->string expected symbol, got {s!r}")
         return s.name
 
+    def prim_symbol_eq(s1: Any, s2: Any, *rest: Any) -> bool:
+        args = (s1, s2) + rest
+        for arg in args:
+            if not isinstance(arg, Symbol):
+                raise TypeError(f"symbol=? expected symbol argument, got {arg!r}")
+        first_name = args[0].name
+        return all(arg.name == first_name for arg in args[1:])
+
     # --- 3. Equality & Boolean Primitives ---
     def prim_eq_p(a: Any, b: Any) -> bool:
         if isinstance(a, Symbol) and isinstance(b, Symbol):
@@ -377,6 +385,14 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
 
     def prim_boolean_p(x: Any) -> bool:
         return isinstance(x, bool)
+
+    def prim_boolean_eq(b1: Any, b2: Any, *rest: Any) -> bool:
+        args = (b1, b2) + rest
+        for arg in args:
+            if not isinstance(arg, bool):
+                raise TypeError(f"boolean=? expected boolean argument, got {arg!r}")
+        first_val = args[0]
+        return all(arg == first_val for arg in args[1:])
 
     def prim_not(x: Any) -> bool:
         # In Scheme, only #f is false. Everything else (including 0 and '()) is truthy!
@@ -1175,6 +1191,12 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         err_obj = ErrorObject(message_str, irritants_list, kind="generic")
         raise SchemeException(err_obj)
 
+    def prim_syntax_error(msg: Any, *args: Any) -> Any:
+        message_str = msg if isinstance(msg, str) else str(msg)
+        irritants_list = to_lisp_list(args) if args else NIL
+        err_obj = ErrorObject(message_str, irritants_list, kind="read")
+        raise SchemeException(err_obj)
+
     def prim_error_object_p(x: Any) -> bool:
         return is_error_object(x)
 
@@ -1225,6 +1247,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "list-copy": prim_list_copy,
         # Symbols
         "symbol?": prim_symbol_p,
+        "symbol=?": prim_symbol_eq,
         "symbol->string": prim_symbol_to_string,
         # Characters (R7RS 6.6)
         "char?": char_p,
@@ -1285,6 +1308,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "eqv?": prim_eqv_p,
         "equal?": prim_equal_p,
         "boolean?": prim_boolean_p,
+        "boolean=?": prim_boolean_eq,
         "not": prim_not,
         # Arithmetic & Numeric comparison (R7RS 6.2)
         "+": prim_add,
@@ -1390,6 +1414,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "raise-continuable": prim_raise,
         "with-exception-handler": prim_with_exception_handler,
         "error": prim_error,
+        "syntax-error": prim_syntax_error,
         "error-object?": prim_error_object_p,
         "error-object-message": prim_error_object_message,
         "error-object-irritants": prim_error_object_irritants,

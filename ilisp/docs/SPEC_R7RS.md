@@ -16,28 +16,28 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 180
-    "🔄 一部対応 (サブセット/基本版)" : 8
-    "⏳ 計画中 (Phase 3/4 予定)" : 15
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 183
+    "🔄 一部対応 (サブセット/基本版)" : 7
+    "⏳ 計画中 (Phase 3/4 予定)" : 13
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
 
 | カテゴリ | 規格セクション | 規格機能数 | 実装済 (率) | ステータス | 備考 |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **特殊形式・コア構文** | 4.1, 4.2 | 18 | 18 (100%) | 🟢 完全準拠 | `quote`, `lambda`, `if`, `set!`, `cond` (`=>`), `case` (`=>`), `let`, `let*`, `letrec`, `letrec*`, `do`, `let-values`, `quasiquote`, `case-lambda`, `delay`, `delay-force` 完備 |
+| **特殊形式・コア構文** | 4.1, 4.2, 4.3 | 19 | 19 (100%) | 🟢 完全準拠 | `quote`, `lambda`, `if`, `set!`, `cond` (`=>`), `case` (`=>`), `let`, `let*`, `letrec`, `letrec*`, `do`, `let-values`, `quasiquote`, `case-lambda`, `delay`, `delay-force`, `syntax-error` 完備 |
 | **遅延評価 (Lazy evaluation)** | 4.2.5, 6.10 | 5 | 5 (100%) | 🟢 完全準拠 | `delay`, `delay-force`, `force`, `make-promise`, `promise?` メモ化・末尾再帰ストリーム対応完備 |
 | **レコード型 (Record types)** | 5.5 | 8 | 8 (100%) | 🟢 完全準拠 | `define-record-type`, コンストラクタ, 型述語, アクセサ, モディファイア, 生成的一意型, 低レベルAPI完備 |
-| **等価性・真偽値** | 6.1, 6.3 | 5 | 5 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `not`（レコード等価比較対応） |
+| **等価性・真偽値** | 6.1, 6.3 | 6 | 6 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `boolean=?`, `not`（レコード等価比較対応、型検証付き真偽値等価性判定） |
 | **ペアとリスト** | 6.4 | 26 | 26 (100%) | 🟢 完全準拠 | 基本操作、破壊的更新 (`set-car!`, `set-cdr!`, `list-set!`)、真正リスト判定 (`list?`)、`make-list`、`list-tail`、`list-ref`、`list-copy`、多引数 `map` / `for-each`、Alist 検索完備 |
-| **シンボル** | 6.5 | 4 | 3 (75%) | 🟢 完全準拠 | インターン保証、文字列相互変換 |
+| **シンボル** | 6.5 | 4 | 4 (100%) | 🟢 完全準拠 | インターン保証、多引数シンボル等価判定 (`symbol=?`)、文字列相互変換 |
 | **ベクタ (Vectors)** | 6.8 | 14 | 14 (100%) | 🟢 完全準拠 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, `vector-copy`, `vector-copy!`, `vector-fill!`, `vector-append`, `vector-map`, `vector-for-each` 等完備 |
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
 | **継続・動的制御** | 6.10 | 6 | 6 (100%) | 🟢 完全準拠 | `call/cc`, `dynamic-wind`, `make-parameter`, `parameter?`, `parameterize` 完備 |
 | **例外機構 (Exceptions)** | 6.11 | 9 | 9 (100%) | 🟢 完全準拠 | `raise`, `raise-continuable`, `with-exception-handler`, `guard`, `error`, `error-object?`, `error-object-message`, `error-object-irritants`, `read-error?`, `file-error?` 完備 |
 | **数値タワー (Numbers)** | 6.2 | 35 | 33 (94%) | 🟢 ほぼ完全 | 述語群、四則演算、極値/公約数、丸め、商余剰多値、基数変換完備 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
-| **マクロ機構** | 4.3 | 3 | 2 (67%) | 🟢 充実 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules` 稼働済 |
+| **マクロ機構** | 4.3 | 3 | 3 (100%) | 🟢 完全準拠 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules`、`syntax-error` 完備 |
 | **入出力・システム** | 6.13, 6.14 | 32 | 28 (88%) | 🟢 充実 | ポート抽象化, ファイル/文字列/バイナリI/O, `write-shared`, `write-simple`, `write-string` (スライス対応), `read` (Datum) |
 | **バイトベクタ** | 6.9 | 11 | 11 (100%) | 🟢 完全準拠 | `#u8(...)`, `make-bytevector`, `bytevector-u8-ref/set!`, `utf8->string`, `string->utf8` 完備 |
 
@@ -82,7 +82,7 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `define-record-type` | レコード型定義 | `stdlib/base.ilisp` | ✅ 完全準拠 | 型記述子、コンストラクタ、型述語、フィールドアクセサ、モディファイアを自動生成・展開 |
 | `case-lambda` | 多重アリティ分岐 | `stdlib/base.ilisp` | ✅ 完全準拠 | 引数個数に応じた多重クロージャ節ディスパッチ構文（可変長・単一シンボル対応） |
 | `delay`, `delay-force` | 遅延評価構文 | `stdlib/base.ilisp` | ✅ 完全準拠 | 式評価の遅延・メモ化Promise生成、末尾再帰安全な遅延ストリーム展開 |
-| `syntax-error` | 構文エラー送出 | - | ⏳ 計画中 | Phase 3 実装予定 |
+| `syntax-error` | 構文エラー送出 | Kernel (Core) | ✅ 完全準拠 | メッセージおよび未評価式/Datum（irritants）を伴う構文エラー送出・捕捉完備 |
 
 ---
 
@@ -127,7 +127,7 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | :--- | :---: | :---: | :--- |
 | `boolean?` | Kernel (Core) | ✅ | `#t` または `#f` の型判定 |
 | `not` | Kernel (Core) | ✅ | `#f` のみ `#t` を返し、それ以外の全オブジェクトで `#f` を返却 |
-| `boolean=?` | - | ⏳ | 真偽値等価述語（Phase 3 予定） |
+| `boolean=?` | Kernel (Core) | ✅ | 2引数以上の真偽値型厳格検証付き等価比較述語 |
 
 ### 3.4 第6.4節 ペアとリスト (Pairs and lists)
 
@@ -161,7 +161,7 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
 | `symbol?` | Kernel (Core) | ✅ | `Symbol` オブジェクト判定 |
-| `symbol=?` | Kernel (Core) | 🔄 | シンボル一致判定（`eq?` と同等） |
+| `symbol=?` | Kernel (Core) | ✅ | 2引数以上のシンボル型厳格検証付き等価比較述語（インターン保証） |
 | `symbol->string` | Kernel (Core) | ✅ | シンボル名から文字列取得 |
 | `string->symbol` | Kernel (Core) | ✅ | 文字列からのインターン済みシンボル生成 |
 
