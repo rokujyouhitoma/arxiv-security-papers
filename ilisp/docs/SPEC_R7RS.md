@@ -10,8 +10,8 @@ ILISP は、世界標準規格 **R7RS-small (Revised^7 Report on the Algorithmic
 
 | カテゴリ | R7RS 規格機能 | ILISP サポート方針 | 処理系工学的詳細・備考 |
 | :--- | :--- | :---: | :--- |
-| **式 (Expressions)** | `quote`, `lambda`, `if`, `set!` | ✅ 完全準拠 | 言語コアの基本形式（Kernel ILISP 核） |
-| | `cond`, `case`, `and`, `or`, `when`, `unless` | ✅ 完全準拠 | 衛生的マクロ展開による `if`/`lambda` への脱糖 |
+| **式 (Expressions)** | `quote`, `lambda`, `if`, `set!` | ✅ 完全準拠 | 言語コアの基本形式（Kernel ILISP 核）。`set!` 対象変数は静的解析により `Cell` へ昇格しボックス化 |
+| | `cond`, `case`, `and`, `or`, `when`, `unless` | ✅ 完全準拠 | Phase 1 は構文マクロ展開、Phase 2 は Scope Sets マクロ展開による `if`/`lambda` への脱糖 |
 | | `let`, `let*`, `letrec`, `letrec*` | ✅ 完全準拠 | レキシカルスコープの厳格保証（相互再帰バインド） |
 | | `begin`, `do` | ✅ 完全準拠 | 逐次実行・反復ループ |
 | **データ型** | 真偽値 (`#t`, `#f`) | ✅ 完全準拠 | Python `bool` / C `stdbool` と直接マッピング |
@@ -19,13 +19,13 @@ ILISP は、世界標準規格 **R7RS-small (Revised^7 Report on the Algorithmic
 | | 文字 (`#\a`, `#\newline`) | ✅ 完全準拠 | Unicode 準拠文字コードポイント |
 | | 文字列 (Strings) | ✅ 完全準拠 | 不変・可変文字列操作 |
 | | シンボル (Symbols) | ✅ 完全準拠 | グローバル・インターン保証 |
-| | ペアとリスト (`cons`, `car`, `cdr`) | ✅ 完全準拠 | 不動点走査の核（不変 Cons セル） |
+| | ペアとリスト (`cons`, `car`, `cdr`) | ✅ 完全準拠 | `Cons(car, cdr)` を基本とし、Python シーケンスは `SequenceView` で $O(1)$ ゼロコピー走査 |
 | | ベクタ (`#(1 2 3)`) | ✅ 完全準拠 | ランダムアクセス $O(1)$ 配列 |
 | | バイトベクタ (`#u8(...)`) | ✅ 完全準拠 | バイナリパース・PDF/フォント解析用 |
 | **制御構文** | 末尾呼び出し最適化 (TCO) | ✅ 必須要件 | **ハイブリッド TCO**: 自己再帰は Python/C ループ展開（ゼロコスト）、相互再帰は軽量トランポリン |
-| | 継続 (`call/cc`, `dynamic-wind`) | ✅ 階層的準拠 | **Python**: One-shot 脱出継続（例外ベース・ゼロコスト）<br>**C99**: スタック複写による完全 Multishot 継続 |
-| **マクロ** | `define-syntax`, `syntax-rules` | ✅ 必須要件 | **Scope Sets アルゴリズム** 採用。変数捕捉の完全防止とフェーズ分離 |
-| | `syntax-error` | ✅ 完全準拠 | コンパイル時診断・ソース位置（Span）追跡 |
+| | 継続 (`call/cc`, `dynamic-wind`) | ✅ 階層的準拠 | **Python**: One-shot 脱出継続（`invoked` 二重呼出ガード・`dynamic-wind` リソース保護付き例外ベース）<br>**C99/Rust**: 完全 Multishot 継続 |
+| **マクロ** | `define-syntax`, `syntax-rules` | ✅ 段階的導入 | **Phase 1**: 原始的構文置換（`define-macro` / 基本 `syntax-rules`）<br>**Phase 2**: **Scope Sets アルゴリズム** 採用（変数捕捉完全防止・フェーズ分離） |
+| | `syntax-error` | ✅ 完全準拠 | コンパイル時診断・手書きリーダーによる正確なソースマップ位置（`SourceLocation`）追跡 |
 | **モジュール** | `define-library`, `import`, `export` | ✅ 必須要件 | `(scheme base)` 等の完全分離・Python 透過インポート |
 
 ---
@@ -71,3 +71,24 @@ ILISP は、世界標準規格 **R7RS-small (Revised^7 Report on the Algorithmic
 | **継続** | One-shot 脱出継続 (例外ベース) | Multishot 一級継続 (MTA法) | 仮想マシンスタックフレーム保持 |
 | **メモリ管理** | CPython 参照カウント＋GC | 自己完結 ARC / 2空間コピーGC | NaN-Boxing 64bit 値＋並列 GC |
 | **Python Interop**| 直接 Python 呼出 ($O(1)$) | CPython C-API / ctypes | PyO3 ネイティブ Extension |
+
+---
+
+## 5. 3段階開発ロードマップ (Phased Roadmap)
+
+1. **Phase 1: Kernel ILISP 最小構成（現行マイルストーン）**
+   - 外部依存ゼロ（純粋 Python 標準ライブラリのみ）。
+   - 手書き再帰下降 Reader（ソース位置 `SourceLocation` 保持）。
+   - 最小 S式 AST、Tree-walk 評価器、基本環境フレーム。
+   - コア特殊形式（`quote`, `if`, `lambda`, `define`, `set!`）と基本プリミティブ 23 個。
+   - 原始的マクロ（`define-macro` / 基本 `syntax-rules`）。
+   - 対話型 REPL、基本 Python 相互運用。
+2. **Phase 2: Advanced Macro & Transpiler**
+   - Scope Sets 衛生的マクロ展開器。
+   - Python AST トランスパイラ (Backend A) による高速実行。
+   - Native C99 AOT トランスパイラ (Backend B) & Clang 最適化。
+   - S-OKF / ドキュメント同形性 / パイプライン連携。
+3. **Phase 3: Extreme Performance & VM**
+   - Rust Standalone Bytecode VM (Backend C)。
+   - NaN-Boxing 64bit 値表現、No-GIL マルチスレッド並行処理。
+   - PyO3 ネイティブ拡張提供、完全セルフホスティング。

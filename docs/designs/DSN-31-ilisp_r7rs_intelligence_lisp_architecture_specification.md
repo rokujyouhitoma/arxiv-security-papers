@@ -29,15 +29,18 @@
 - [1. 言語哲学とアイデンティティ (Intelligence + IKE + AI + LISP)](#1-言語哲学とアイデンティティ-intelligence--ike--ai--lisp)
 - [2. R7RS-small 言語仕様と処理系工学的精緻化](#2-r7rs-small-言語仕様と処理系工学的精緻化)
   - [2.1 言語コアの最小直交性](#21-言語コアの最小直交性)
-  - [2.2 Scope Sets アルゴリズムによる衛生的マクロとフェーズ分離](#22-scope-sets-アルゴリズムによる衛生的マクロとフェーズ分離)
+  - [2.2 衛生的マクロの段階的導入 (Phase 1 構文置換 → Phase 2 Scope Sets)](#22-衛生的マクロの段階的導入-phase-1-構文置換--phase-2-scope-sets)
   - [2.3 ハイブリッド末尾呼出最適化 (Hybrid TCO)](#23-ハイブリッド末尾呼出最適化-hybrid-tco)
-  - [2.4 階層的継続セマンティクス (Hierarchical call/cc)](#24-階層的継続セマンティクス-hierarchical-callcc)
+  - [2.4 階層的継続セマンティクス (One-shot call/cc と dynamic-wind ガード)](#24-階層的継続セマンティクス-one-shot-callcc-と-dynamic-wind-ガード)
+  - [2.5 レキシカル環境と代入のボックス化戦略 (Cell 変数昇格)](#25-レキシカル環境と代入のボックス化戦略-cell-変数昇格)
+  - [2.6 手書き再帰下降リーダーとソースマップ位置追跡](#26-手書き再帰下降リーダーとソースマップ位置追跡)
 - [3. 3本柱の実行バックエンド体系 (The Three Pillars of Execution)](#3-3本柱の実行バックエンド体系-the-three-pillars-of-execution)
   - [3.1 Backend A: Python AST トランスパイラ (Python Interop モード)](#31-backend-a-python-ast-トランスパイラ-python-interop-モード)
   - [3.2 Backend B: Native C99 AOT コンパイラ (Clang/LLVM 連携 & 自己完結 ARC)](#32-backend-b-native-c99-aot-コンパイラ-clangllvm-連携--自己完結-arc)
   - [3.3 Backend C: Rust Standalone Bytecode VM (No-GIL並行性 & NaN-Boxing & PyO3)](#33-backend-c-rust-standalone-bytecode-vm-no-gil並行性--nan-boxing--pyo3)
+  - [3.4 3段階開発ロードマップ (Phased Implementation Milestones)](#34-3段階開発ロードマップ-phased-implementation-milestones)
 - [4. Python 双方向ゼロコピー相互運用プロトコル (Zero-Copy Interop)](#4-python-双方向ゼロコピー相互運用プロトコル-zero-copy-interop)
-  - [4.1 Lazy View / Opaque Wrapper による $O(1)$ 型連携](#41-lazy-view--opaque-wrapper-による-o1-型連携)
+  - [4.1 Lazy View / SequenceView による $O(1)$ リスト相互運用プロトコル](#41-lazy-view--sequenceview-による-o1-リスト相互運用プロトコル)
   - [4.2 境界ラッパー (Boundary Guard) による現場復帰コンディション](#42-境界ラッパー-boundary-guard-による現場復帰コンディション)
   - [4.3 Python からの透過インポート (`sys.meta_path` / PyO3)](#43-python-からの透過インポート-sysmeta_path--pyo3)
 - [5. ドメイン特化機能 (Domain Primitives)](#5-ドメイン特化機能-domain-primitives)
@@ -93,22 +96,44 @@ ILISP は、2013年に策定された **R7RS-small (Revised^7 Report on the Algo
 - 巨大で方言差の激しい Common Lisp と比較して、言語コアが小さく無駄がない。
 - `define-library` による洗練されたモジュール境界が規格化されている。
 
-### 2.2 Scope Sets アルゴリズムによる衛生的マクロとフェーズ分離
-古典的な Kohlbecker のアルゴリズムや Syntax-case の複雑性を排し、Matthew Flatt (2016) によって確立された **Scope Sets アルゴリズム** をマクロ展開エンジンに採用する。
-- **識別子のスコープ集合**: すべての識別子は導入元の「スコープの集合」を保持し、マクロ展開後も変数の捕捉（Capture）が論理的に発生しない。
-- **フェーズ分離 (Phase Distinction)**:
-  - コンパイル時フェーズ（Phase 1: Macro Expansion Time）での Python 任意副作用呼び出しを初期段階では遮断し、純粋 AST 変換に限定する。
-  - これにより、マクロ展開の決定性とクロスコンパイル安全性を死守する。
+### 2.2 衛生的マクロの段階的導入 (Phase 1 構文置換 → Phase 2 Scope Sets)
+マクロ展開器の実装複雑性によるブートストラップの遅延を防ぐため、マクロ機能は以下の 2 段階で導入する：
+1. **Phase 1 (ブートストラップ期・Kernel ILISP)**:
+   - 原始的構文マクロ（`define-macro`）およびパターンマッチングによる基本形 `syntax-rules` を純粋 Python で実装。
+   - コンパイラや標準ライブラリの基本制御構文（`when`, `unless`, `cond`, `and`, `or`, `let*`, `letrec` 等）を自前で展開可能にする。
+2. **Phase 2 (成熟期・完全 R7RS 準拠)**:
+   - 古典的な Kohlbecker のアルゴリズムや Syntax-case の複雑性を排し、Matthew Flatt (2016) によって確立された **Scope Sets アルゴリズム** をマクロ展開エンジンに採用。
+   - **識別子のスコープ集合**: すべての識別子は導入元の「スコープの集合」を保持し、マクロ展開後も変数の捕捉（Capture）が論理的に発生しない。
+   - **フェーズ分離 (Phase Distinction)**: コンパイル時フェーズ（Macro Expansion Time）での Python 任意副作用呼び出しを遮断し、純粋 AST 変換に限定することで決定性とクロスコンパイル安全性を死守する。
 
 ### 2.3 ハイブリッド末尾呼出最適化 (Hybrid TCO)
 Python ランタイムおよびネイティブ環境の特性に応じ、**ハイブリッド TCO 戦略** を採用する：
 1. **自己末尾再帰（Self Tail Call）**: 同一関数内の末尾再帰を静的解析し、Python AST の `while True:` ループおよび代入に直接トランスパイル（スタック消費ゼロ・関数呼出オーバーヘッドゼロ）。
 2. **相互末尾呼び出し（Mutual Tail Calls）**: 高階関数や異なる関数間の末尾呼び出しにおいてのみ、軽量トランポリン（タプル返却）を適用し、スタックオーバーフローを防止する。
 
-### 2.4 階層的継続セマンティクス (Hierarchical call/cc)
+### 2.4 階層的継続セマンティクス (One-shot call/cc と dynamic-wind ガード)
 ホスト環境の物理制約を鑑み、継続のサポートを階層化する：
-- **Python バックエンド (Stage-0)**: 実用ユースケースの 95% を占める **「脱出継続（Escaping / One-shot Continuation）」** をサポート。Python ネイティブ例外機構によりスタック巻き戻しをゼロコストで実現。多重再突入時は `ContinuationsCanOnlyBeInvokedOnceError` を明示送出。
-- **C99 AOT バックエンド (Stage-1)**: スタックフレーム複写または Cheney on the MTA（ヒープスタック法）により、完全な **Multishot 一級継続** をサポート。
+- **Python バックエンド (Stage-0 / Phase 1〜2)**:
+  - 実用ユースケースの 95%（大域脱出・例外処理・早期リターン）を占める **「脱出継続（Escaping / One-shot Continuation）」** をサポート。
+  - Python ネイティブ例外機構によりスタック巻き戻しをゼロコストで実現。
+  - **再突入防止ガード**: 脱出継続オブジェクトに `invoked: bool` フラグを保持させ、継続が複数回呼び出された場合は `ContinuationsCanOnlyBeInvokedOnceError` を明示送出して未定義動作を遮断する。
+  - **`dynamic-wind` 連携**: スタック巻き戻し時に Python の `try...finally` ブロックと等価なリソース解放・クリーンアップハンドラ（`out-guard`）の確実な実行を保証する。
+- **C99 AOT / Rust VM バックエンド (Stage-1〜2 / Phase 2〜3)**:
+  - スタックフレーム複写または Cheney on the MTA（ヒープスタック法）により、完全な **Multishot 一級継続** をサポート。
+
+### 2.5 レキシカル環境と代入のボックス化戦略 (Cell 変数昇格)
+Scheme のレキシカルスコープと `set!`（破壊的代入）を Python AST 上で自然かつ安全に再現するため、**Cell（ボックス化）戦略** を採用する：
+- **静的代入解析（Mutated Variable Analysis）**: コンパイル時に各スコープで定義された識別子のうち、スコープ内外から `set!` で変更される変数のみを静的に検出する。
+- **Cell オブジェクトへの昇格**:
+  - 不変な変数（大多数）は、通常の Python ローカル変数として直接参照（オーバーヘッドゼロ）。
+  - `set!` 対象となる変更可能変数のみを単一要素のミュータブルコンテナ `Cell(value)` に昇格させる。
+- **`nonlocal` 構文エラーの根本排除**: Python の `nonlocal` 制約（入れ子スコープでの重複定義やシャドーイングによる SyntaxError）を完全に回避し、Scheme の自由な変異セマンティクスを忠実に保証する。
+
+### 2.6 手書き再帰下降リーダーとソースマップ位置追跡
+外部構文解析ジェネレータ（Lark, PLY, ANTLR 等）への依存を排除し、**極小の手書き再帰下降リーダー（Tokenizer + Reader、約300行）** を採用する：
+- **正確なソースマップ位置追跡**: すべての S式ノード（Pair, Symbol, Literal）にファイル名、行番号、列番号（`SourceLocation(file, line, col)`）をメタデータとして保持。コンパイルエラーや実行時エラーで正確なスタックトレースを提示。
+- **リーダーマクロの軽量拡張**: クォート（`'`）、準クォート（`\``）、アンクォート（`,`）、アンクォート・スプライシング（`,@`）、S式コメント（`#;`）を決定論的に解析。
+- **ストリーム処理 & REPL 親和性**: 文字ストリームから 1 S式ずつ遅延パース（Streaming Parse）が可能であり、対話型 REPL や巨大ファイルのインクリメンタル処理に最適化。
 
 ---
 
@@ -145,14 +170,28 @@ Python ランタイムおよびネイティブ環境の特性に応じ、**ハ�
 - **Fearless Concurrency**: Rust の所有権モデルにより、Python の GIL 制約を受けないマルチコア並列パイプラインを実現。
 - **PyO3 連携**: Rust 製 VM を Python ネイティブ拡張（`.so`）としてビルド可能にし、Ruff や Polars と同等のパフォーマンスを提供。
 
+### 3.4 3段階開発ロードマップ (Phased Implementation Milestones)
+ILISP の実装は、外部依存と不確実性を最小化するため、明確に定義された 3 段階のマイルストーンに沿って進める：
+
+| フェーズ | 名称 | 目的・主眼 | 主要コンポーネント | 依存関係 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Phase 1** | **Kernel ILISP 最小構成**<br>*(現行マイルストーン)* | 外部依存ゼロで即座に動作するコア言語基盤の確立 | 手書き Reader (S式パース)<br>最小 AST<br>Tree-walk 評価器<br>基本型 & プリミティブ (23個)<br>対話型 REPL<br>基本 Python interop | **純粋 Python のみ**<br>(標準ライブラリ以外ゼロ依存) |
+| **Phase 2** | **Advanced Macro & Transpiler** | 実用エコシステム統合とネイティブコード生成 | Scope Sets 衛生的マクロ展開器<br>Python AST トランスパイラ (Backend A)<br>C99 AOT トランスパイラ (Backend B)<br>Clang/LLVM 連携<br>S-OKF パイプライン連携 | Clang / LLVM (AOT時のみ) |
+| **Phase 3** | **Extreme Performance & VM** | 超高速実行・並行処理と完全セルフホスティング | Rust Standalone Bytecode VM (Backend C)<br>NaN-Boxing 値表現<br>No-GIL マルチコア並行エンジン<br>PyO3 バインディング<br>完全セルフホスティング検証 | Rust toolchain / cargo (VM時のみ) |
+
 ---
 
 ## 4. Python 双方向ゼロコピー相互運用プロトコル (Zero-Copy Interop)
 
-### 4.1 Lazy View / Opaque Wrapper による $O(1)$ 型連携
-Python の `list` や `dict` を Scheme の Cons セルや Alist へ一括ディープコピーする $O(N)$ 処理を廃止し、**不透明ラッパー（Opaque Wrapper / Lazy View）** を採用する。
-- Python オブジェクトをラップしたまま ILISP 側へ渡し、Scheme のベクタやマッププロトコルで $O(1)$ 参照。
-- 明示的に `(py->list ...)` を呼んだ場合のみ連結リストに変換。
+### 4.1 Lazy View / SequenceView による $O(1)$ リスト相互運用プロトコル
+Scheme 固有の連結リスト（Cons セル）と Python の動的配列（`list`）の間の変換コストを最小化するため、以下のハイブリッドデータ構造を採用する：
+- **基本リスト表現**: ILISP 内部では伝統的な `Cons(car, cdr)` によるペア構造を第一級市民とする。
+- **`SequenceView` (不透明ラッパー)**:
+  - Python の `list` や `tuple` をラップし、インデックスオフセットを保持する軽量イミュータブルビュー `SequenceView(seq, offset=0)` を提供。
+  - `(car view)` は `seq[offset]` を $O(1)$ で返却。
+  - `(cdr view)` は `SequenceView(seq, offset+1)` を $O(1)$（スライス複写なし）で返却。
+  - これにより、数万件の arXiv 論文リストを Scheme 関数に渡す際、一括ディープコピー（$O(N)$）を完全回避。
+- **Python 境界での自動アンラップ**: Python 側の関数に渡される際は、必要に応じて透過的に Python ネイティブコレクションへとアンラップされる。
 
 ```scheme
 (import (scheme base)
