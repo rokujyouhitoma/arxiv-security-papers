@@ -1445,7 +1445,12 @@ class GatewayHandlers:
         database_client: Optional[DatabaseClient] = None,
     ) -> None:
         self.workspace_dir = workspace_dir
-        self.site_dir = os.path.join(workspace_dir, "site")
+        cand_site = os.path.join(workspace_dir, "src", "web", "site")
+        self.site_dir = (
+            cand_site
+            if os.path.exists(cand_site)
+            else os.path.join(workspace_dir, "site")
+        )
         self._vector_engine = vector_engine
         self._search_client = search_client
         self._database_client = database_client

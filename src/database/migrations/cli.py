@@ -49,6 +49,9 @@ def _resolve_migrations_dir(
     if custom_dir:
         return str(custom_dir)
     if workspace_dir:
+        sql_cand = Path(workspace_dir) / "src" / "database" / "migrations" / "sql"
+        if sql_cand.exists():
+            return str(sql_cand)
         default_dir = Path(workspace_dir) / "migrations"
         if default_dir.exists():
             return str(default_dir)

@@ -178,8 +178,8 @@ def test_js_code_generator_ast_only_mode(node_bin: str) -> None:
 
 
 def test_cli_ast_only_with_graph_query_peg(node_bin: str) -> None:
-    """Verifies CLI compilation of grammars/graph_query.peg with --ast-only."""
-    graph_query_peg = Path("grammars/graph_query.peg")
+    """Verifies CLI compilation of tools/grammars/graph_query.peg with --ast-only."""
+    graph_query_peg = Path("tools/grammars/graph_query.peg")
     assert graph_query_peg.exists()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -555,8 +555,18 @@ def test_no_runtime_missing_runtime_error(tmp_path: Path, node_bin: str) -> None
 
 def test_cti_query_parser_and_evaluator_integration(node_bin: str) -> None:
     """Verifies that generated CTIQueryParser and CTIQueryEvaluator execute in Node.js."""
-    parser_path = Path("site/js/frameworks/cti-query-parser.js")
-    evaluator_path = Path("site/js/frameworks/cti-query-evaluator.js")
+    parser_cand = Path("src/web/site/js/frameworks/cti-query-parser.js")
+    parser_path = (
+        parser_cand
+        if parser_cand.exists()
+        else Path("site/js/frameworks/cti-query-parser.js")
+    )
+    eval_cand = Path("src/web/site/js/frameworks/cti-query-evaluator.js")
+    evaluator_path = (
+        eval_cand
+        if eval_cand.exists()
+        else Path("site/js/frameworks/cti-query-evaluator.js")
+    )
     assert parser_path.exists()
     assert evaluator_path.exists()
 

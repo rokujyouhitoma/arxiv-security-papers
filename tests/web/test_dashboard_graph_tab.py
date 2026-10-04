@@ -16,9 +16,25 @@ from web.gateway.app import WSGIApplication
 
 @pytest.fixture
 def dashboard_html() -> str:
-    path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "dashboard.html")
-    )
+    candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "src",
+                "web",
+                "site",
+                "dashboard.html",
+            )
+        ),
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "site", "dashboard.html"
+            )
+        ),
+    ]
+    path = next((p for p in candidates if os.path.exists(p)), candidates[0])
     assert os.path.exists(path), f"dashboard.html not found at {path}"
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()

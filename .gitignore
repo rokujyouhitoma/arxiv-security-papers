@@ -10,6 +10,7 @@ outputs/wal/
 *.db
 *.db-*
 *.vdb
+data/
 
 # Virtual Environment
 .venv/
@@ -36,6 +37,7 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+src/web/site/app-min.js
 
 # Logs & Temporary Files
 *.log

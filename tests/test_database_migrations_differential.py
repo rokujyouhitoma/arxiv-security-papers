@@ -15,6 +15,15 @@ from src.database.migrations import BackendType, MigrationManager
 
 
 def _get_migrations_dir() -> Path:
+    p = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "database"
+        / "migrations"
+        / "sql"
+    )
+    if p.exists():
+        return p
     return Path(__file__).resolve().parent.parent / "migrations"
 
 

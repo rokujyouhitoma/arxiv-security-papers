@@ -5,10 +5,15 @@ Tests for Frontend Frameworks Integration & Bundle Consistency (Issue 338).
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-FRAMEWORKS_DIR = REPO_ROOT / "site" / "js" / "frameworks"
-EXTERNS_FILE = REPO_ROOT / "site" / "externs.js"
+SITE_DIR = (
+    REPO_ROOT / "src" / "web" / "site"
+    if (REPO_ROOT / "src" / "web" / "site").exists()
+    else REPO_ROOT / "site"
+)
+FRAMEWORKS_DIR = SITE_DIR / "js" / "frameworks"
+EXTERNS_FILE = SITE_DIR / "externs.js"
 MAKEFILE = REPO_ROOT / "Makefile"
-APP_MIN_JS = REPO_ROOT / "site" / "app-min.js"
+APP_MIN_JS = SITE_DIR / "app-min.js"
 
 EXPECTED_MODULES = [
     "animation.js",
@@ -82,15 +87,18 @@ def test_makefile_includes_frameworks_in_js_srcs() -> None:
     assert MAKEFILE.is_file(), f"Missing Makefile: {MAKEFILE}"
     content = MAKEFILE.read_text(encoding="utf-8")
 
+    prefix = "src/web/site" if "src/web/site/app.js" in content else "site"
     for mod_name in EXPECTED_MODULES:
-        rel_path = f"site/js/frameworks/{mod_name}"
+        rel_path = f"{prefix}/js/frameworks/{mod_name}"
         assert rel_path in content, f"Makefile JS_SRCS missing: {rel_path}"
 
-    app_js_pos = content.find("site/app.js")
+    app_js_pos = content.find(f"{prefix}/app.js")
     for mod_name in EXPECTED_MODULES:
-        rel_path = f"site/js/frameworks/{mod_name}"
+        rel_path = f"{prefix}/js/frameworks/{mod_name}"
         mod_pos = content.find(rel_path)
-        assert mod_pos < app_js_pos, f"{rel_path} must be included before site/app.js"
+        assert (
+            mod_pos < app_js_pos
+        ), f"{rel_path} must be included before {prefix}/app.js"
 
 
 def test_app_min_js_contains_bundled_framework_classes() -> None:
@@ -242,7 +250,7 @@ def test_hsm_state_transitions_and_lcca() -> None:
         return
 
     script = """
-    const { HierarchicalStateMachine, StateNode, TransitionRule } = require('./site/js/frameworks/hsm.js');
+    const { HierarchicalStateMachine, StateNode, TransitionRule } = require('./src/web/site/js/frameworks/hsm.js');
 
     const root = new StateNode('ROOT', null, 'Operational');
     const op = new StateNode('Operational', root, 'Normal');
@@ -378,7 +386,7 @@ def test_disjoint_set_union_find_and_lcc() -> None:
         return
 
     script = """
-    const { DisjointSet } = require('./site/js/frameworks/disjoint-set.js');
+    const { DisjointSet } = require('./src/web/site/js/frameworks/disjoint-set.js');
 
     const ds = new DisjointSet();
 
@@ -473,7 +481,7 @@ def test_arc_cache_adaptive_replacement_and_scan_resistance() -> None:
         return
 
     script = """
-    const { ARCCache } = require('./site/js/frameworks/arc-cache.js');
+    const { ARCCache } = require('./src/web/site/js/frameworks/arc-cache.js');
 
     // 1. Basic operations & boundaries
     const cache = new ARCCache(5);
@@ -583,8 +591,8 @@ def test_graph_canvas_engine_simulation_and_spatial_transform() -> None:
         return
 
     script = """
-    const { GraphCanvasEngine } = require('./site/js/frameworks/graph-canvas.js');
-    const { DisjointSet } = require('./site/js/frameworks/disjoint-set.js');
+    const { GraphCanvasEngine } = require('./src/web/site/js/frameworks/graph-canvas.js');
+    const { DisjointSet } = require('./src/web/site/js/frameworks/disjoint-set.js');
     global.DisjointSet = DisjointSet;
 
     const engine = new GraphCanvasEngine(null, { width: 800, height: 600 });
@@ -664,8 +672,8 @@ def test_scene_and_tab_scene_lifecycle() -> None:
     import shutil
     import subprocess
 
-    app_js_text = (REPO_ROOT / "site" / "app.js").read_text(encoding="utf-8")
-    app_min_js_text = (REPO_ROOT / "site" / "app-min.js").read_text(encoding="utf-8")
+    app_js_text = (SITE_DIR / "app.js").read_text(encoding="utf-8")
+    app_min_js_text = (SITE_DIR / "app-min.js").read_text(encoding="utf-8")
 
     # Static guard: app.js must not reference undeclared SceneCtor
     assert (
@@ -680,7 +688,7 @@ def test_scene_and_tab_scene_lifecycle() -> None:
         return
 
     script = """
-    const { Scene, SceneDirector } = require('./site/js/frameworks/scene.js');
+    const { Scene, SceneDirector } = require('./src/web/site/js/frameworks/scene.js');
 
     const director = new SceneDirector();
     const trace = [];
@@ -729,7 +737,7 @@ def test_scene_and_tab_scene_lifecycle() -> None:
 
 def test_mcp_tab_scene_director_registration() -> None:
     """Verifies that site/app.js registers mcpTab with non-null onEnter lifecycle hook (Issue 399)."""
-    app_js_text = (REPO_ROOT / "site" / "app.js").read_text(encoding="utf-8")
+    app_js_text = (SITE_DIR / "app.js").read_text(encoding="utf-8")
     assert (
         "appSceneDirector.register('mcpTab', createTabScene(null, null));"
         not in app_js_text
@@ -752,7 +760,7 @@ def test_markdown_evaluator_peg_inline_parsing() -> None:
         pytest.skip("Node.js runtime not installed")
 
     script = """
-    const { MarkdownEvaluator } = require('./site/js/evaluator.js');
+    const { MarkdownEvaluator } = require('./src/web/site/js/evaluator.js');
     const evaluator = new MarkdownEvaluator();
 
     const sampleNode = {
@@ -798,7 +806,7 @@ def test_query_validator_suggest_and_diagnostics() -> None:
         pytest.skip("Node.js runtime not installed")
 
     script = """
-    const { QueryValidator } = require('./site/js/frameworks/query-validator.js');
+    const { QueryValidator } = require('./src/web/site/js/frameworks/query-validator.js');
     const validator = new QueryValidator();
 
     // 1. Valid Query
@@ -865,10 +873,10 @@ def test_markdown_lexer_peg_table_and_list_parsing() -> None:
         pytest.skip("Node.js runtime not installed")
 
     script = """
-    const { MarkdownLexer } = require('./site/js/lexer.js');
-    const { MarkdownParser } = require('./site/js/parser.js');
-    const { MarkdownEvaluator } = require('./site/js/evaluator.js');
-    const { MarkdownRenderer } = require('./site/js/renderer.js');
+    const { MarkdownLexer } = require('./src/web/site/js/lexer.js');
+    const { MarkdownParser } = require('./src/web/site/js/parser.js');
+    const { MarkdownEvaluator } = require('./src/web/site/js/evaluator.js');
+    const { MarkdownRenderer } = require('./src/web/site/js/renderer.js');
 
     const lexer = new MarkdownLexer();
     const parser = new MarkdownParser();
@@ -969,7 +977,7 @@ def test_router_peg_path_and_query_parsing() -> None:
         pytest.skip("Node.js runtime not installed")
 
     script = """
-    const { Router } = require('./site/js/frameworks/router.js');
+    const { Router } = require('./src/web/site/js/frameworks/router.js');
     const router = new Router('papers');
 
     const trace = [];
@@ -1079,8 +1087,8 @@ def test_mermaid_validator_and_safe_fallback() -> None:
         pytest.skip("Node.js runtime not installed")
 
     script = """
-    const { MermaidValidator } = require('./site/js/frameworks/mermaid-validator.js');
-    const { MarkdownRenderer } = require('./site/js/renderer.js');
+    const { MermaidValidator } = require('./src/web/site/js/frameworks/mermaid-validator.js');
+    const { MarkdownRenderer } = require('./src/web/site/js/renderer.js');
 
     const validator = new MermaidValidator();
     const renderer = new MarkdownRenderer();

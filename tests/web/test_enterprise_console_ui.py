@@ -3,10 +3,17 @@
 import re
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SITE_DIR = (
+    REPO_ROOT / "src" / "web" / "site"
+    if (REPO_ROOT / "src" / "web" / "site").exists()
+    else REPO_ROOT / "site"
+)
+
 
 def test_enterprise_console_html_structure() -> None:
     """Verify site/index.html contains Azure/AWS-style Enterprise Cloud Console layout."""
-    html_path = Path("site/index.html")
+    html_path = SITE_DIR / "index.html"
     assert html_path.exists(), "site/index.html must exist"
     content = html_path.read_text(encoding="utf-8")
 
@@ -96,7 +103,7 @@ def test_enterprise_console_html_structure() -> None:
 
 def test_enterprise_design_system_tokens() -> None:
     """Verify site/style.css defines Swiss Warm Enterprise tokens (DSN-21)."""
-    css_path = Path("site/style.css")
+    css_path = SITE_DIR / "style.css"
     assert css_path.exists(), "site/style.css must exist"
     css_text = css_path.read_text(encoding="utf-8")
 
@@ -135,7 +142,7 @@ def test_enterprise_design_system_tokens() -> None:
 
 def test_enterprise_console_interaction_scripts() -> None:
     """Verify site/app.js implements console interactions (shortcuts, accordion, routing)."""
-    app_js_path = Path("site/app.js")
+    app_js_path = SITE_DIR / "app.js"
     assert app_js_path.exists(), "site/app.js must exist"
     js_text = app_js_path.read_text(encoding="utf-8")
 
@@ -159,7 +166,7 @@ def test_enterprise_console_interaction_scripts() -> None:
 
 def test_ported_product_system_supervisor_views() -> None:
     """Verify ported tabs, canvas charts, and telemetry tables exist in index.html (Issue 169)."""
-    content = Path("site/index.html").read_text(encoding="utf-8")
+    content = (SITE_DIR / "index.html").read_text(encoding="utf-8")
 
     # 1. Navigation items
     assert 'id="navProduct"' in content, "navProduct nav item required"
@@ -196,7 +203,7 @@ def test_ported_product_system_supervisor_views() -> None:
 
 def test_ported_telemetry_script_handlers() -> None:
     """Verify site/app.js contains calculation, rendering, and SSE routines (Issue 169 & 195)."""
-    js_text = Path("site/app.js").read_text(encoding="utf-8")
+    js_text = (SITE_DIR / "app.js").read_text(encoding="utf-8")
 
     # Routing and tab config
     assert "TAB_CONFIG" in js_text, "TAB_CONFIG object required"
@@ -228,9 +235,9 @@ def test_ported_telemetry_script_handlers() -> None:
 
 def test_enterprise_console_help_drawer() -> None:
     """Verify Help & Guide Drawer implementation matching dashboard.html design and interactions (Issue 171)."""
-    index_html = Path("site/index.html").read_text(encoding="utf-8")
-    style_css = Path("site/style.css").read_text(encoding="utf-8")
-    app_js = Path("site/app.js").read_text(encoding="utf-8")
+    index_html = (SITE_DIR / "index.html").read_text(encoding="utf-8")
+    style_css = (SITE_DIR / "style.css").read_text(encoding="utf-8")
+    app_js = (SITE_DIR / "app.js").read_text(encoding="utf-8")
 
     # 1. HTML elements & structure in index.html
     assert 'id="consoleHelpOverlay"' in index_html, "Help overlay required"
@@ -277,8 +284,8 @@ def test_enterprise_console_help_drawer() -> None:
 
 def test_dashboard_url_query_param_support() -> None:
     """Verify site/dashboard.html parses ?q= parameter and dispatches to openGraphWithQuery (Issue 327)."""
-    dashboard_html = Path("site/dashboard.html").read_text(encoding="utf-8")
-    js_file = Path("site/js/dashboard.js")
+    dashboard_html = (SITE_DIR / "dashboard.html").read_text(encoding="utf-8")
+    js_file = SITE_DIR / "js" / "dashboard.js"
     if js_file.exists():
         dashboard_html += "\n" + js_file.read_text(encoding="utf-8")
     assert "openGraphWithQuery" in dashboard_html, "openGraphWithQuery helper required"
@@ -292,7 +299,7 @@ def test_dashboard_url_query_param_support() -> None:
 
 def test_spider_execution_interval_ui() -> None:
     """Verify site/index.html and site/app.js support dynamic spider execution intervals (Issue 331)."""
-    index_html = Path("site/index.html").read_text(encoding="utf-8")
+    index_html = (SITE_DIR / "index.html").read_text(encoding="utf-8")
     assert (
         'id="valSpiderInterval_arxiv"' in index_html
     ), "arXiv spider interval element required"
@@ -303,7 +310,7 @@ def test_spider_execution_interval_ui() -> None:
         'id="valSpiderInterval_kev_cve"' in index_html
     ), "KEV/CVE spider interval element required"
 
-    app_js = Path("site/app.js").read_text(encoding="utf-8")
+    app_js = (SITE_DIR / "app.js").read_text(encoding="utf-8")
     assert (
         "valSpiderInterval_" in app_js
     ), "app.js must dynamically target spider interval elements"
@@ -312,13 +319,13 @@ def test_spider_execution_interval_ui() -> None:
 
 def test_spider_supervisor_offline_banner() -> None:
     """Verify site/index.html and site/app.js contain Supervisor offline alert banner (Issue 332)."""
-    index_html = Path("site/index.html").read_text(encoding="utf-8")
+    index_html = (SITE_DIR / "index.html").read_text(encoding="utf-8")
     assert (
         'id="spiderSupervisorOfflineBanner"' in index_html
     ), "Supervisor offline warning banner required in index.html"
     assert "python -m supervisor.cli start -D" in index_html
 
-    app_js = Path("site/app.js").read_text(encoding="utf-8")
+    app_js = (SITE_DIR / "app.js").read_text(encoding="utf-8")
     assert (
         "spiderSupervisorOfflineBanner" in app_js
     ), "app.js must handle spiderSupervisorOfflineBanner visibility"

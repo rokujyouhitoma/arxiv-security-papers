@@ -17,7 +17,11 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
-_SITE = _ROOT / "site"
+_SITE = (
+    _ROOT / "src" / "web" / "site"
+    if (_ROOT / "src" / "web" / "site").exists()
+    else _ROOT / "site"
+)
 _FRAMEWORKS = _SITE / "js" / "frameworks"
 _JS_DIR = _SITE / "js"
 
@@ -144,11 +148,11 @@ class TestJsSyntaxAndContracts(unittest.TestCase):
     # 2. Namespace & Global Scope Encapsulation
     # ----------------------------------------------------------------------
     def test_framework_modules_are_iife_encapsulated(self) -> None:
-        """All 19 framework modules must be wrapped in IIFE to prevent window pollution."""
+        """All framework modules must be wrapped in IIFE to prevent window pollution."""
         self.assertEqual(
             len(self.all_framework_files),
-            19,
-            f"Expected 19 framework modules in {_FRAMEWORKS}, found {len(self.all_framework_files)}",
+            23,
+            f"Expected 23 framework modules in {_FRAMEWORKS}, found {len(self.all_framework_files)}",
         )
 
         unwrapped: List[str] = []
@@ -159,7 +163,7 @@ class TestJsSyntaxAndContracts(unittest.TestCase):
                 re.search(r"^\s*\(\s*function\s*\(", content, re.MULTILINE)
             )
             has_iife_end = bool(
-                re.search(r"\)\s*\(\s*(?:window)?\s*\)\s*;?\s*$", content.strip())
+                re.search(r"\}\s*\)\s*\(.*?\)\s*;?\s*$", content.strip(), re.DOTALL)
             )
             if not (has_iife_start and has_iife_end):
                 unwrapped.append(str(file_path.relative_to(_ROOT)))
@@ -342,7 +346,7 @@ class TestJsSyntaxAndContracts(unittest.TestCase):
         content = self.compile_script.read_text(encoding="utf-8")
 
         # Extract file paths from FRAMEWORK_SRCS, APP_SRCS, and DASHBOARD_SRCS
-        src_pattern = re.compile(r'"(site/[^"]+\.js)"')
+        src_pattern = re.compile(r'"((?:src/web/)?site/[^"]+\.js)"')
         referenced_sources = set(src_pattern.findall(content))
 
         self.assertGreater(

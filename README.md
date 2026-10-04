@@ -397,13 +397,8 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 .
 ├── .agents/                    # 16専門エージェント規約 (AGENTS.md) & スキル群
 ├── manage.py                   # 統合管理 CLI エントリポイント (DSN-24 / Unix ストリームパイプライン)
-├── migrations/                 # 自作 DB ファースト・生 SQL マイグレーション定義 (DSN-30)
 ├── config/                     # パイプライン設定・スーパーバイザー設定ファイル群
-├── data/                       # データベース永続化リソース (arxiv_papers.db)
-├── grammars/                   # 純粋 Python PEG 文法定義ファイル群 (DSN-25: 13文法)
-├── templates/                  # OKF v0.2 および 5階層サマリー Markdown テンプレート
-├── site/                       # 統合 Web コンソール & ダッシュボード (HTML / CSS / JS / Dashboard)
-├── tools/                      # 開発補助・PEG コンパイラ・プロファイラ (tools/peg, closure-compiler 等)
+├── tools/                      # 開発補助・PEG コンパイラ・プロファイラ (tools/grammars: 13文法, tools/peg 等)
 ├── scripts/                    # 各種ベンチマーク (DB, HNSW, IR) & シードスクリプト
 ├── ilisp/                      # ILISP (Intelligence LISP) R7RS Scheme 言語処理系基盤 (DSN-31)
 │   ├── docs/                   # ILISP 言語仕様・クイックスタート・ブートストラップ仕様
@@ -437,8 +432,8 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 │   ├── nlp/                    # 自然言語処理基盤 (形態素解析, 談話解析, トピッククラスタリング)
 │   ├── pdf_engine/             # ISO 32000 準拠 Pure Python PDF 抽出 & 空間レイアウト (DSN-13)
 │   ├── spider/                 # ゼロ依存 分散クローラー (DSN-06)
-│   ├── pipeline/               # ETL パイプライン (ingestion, transformer, reporter) (DSN-03, DSN-19)
-│   ├── database/               # 純粋 Python 4層ベクトル DB / ARIES / ChaosVFS / マイグレーション (DSN-05, DSN-30)
+│   ├── pipeline/               # ETL パイプライン (ingestion, transformer, reporter, templates) (DSN-03, DSN-19)
+│   ├── database/               # 純粋 Python 4層ベクトル DB / ARIES / ChaosVFS / migrations (DSN-05, DSN-30)
 │   ├── search/                 # 2層検索基盤 & SOTA IR ベンチマーク (DSN-04, DSN-10)
 │   ├── graph/                  # プロパティグラフ DB / GraphRAG (DSN-18)
 │   ├── ontology/               # W3C OWL セキュリティ知識オントロジー (SKO) & Turtle パーサ (DSN-17, DSN-22)
@@ -447,7 +442,7 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 │   ├── domain/                 # CTI / セキュリティドメインレジストリ
 │   ├── cli/                    # 統合管理 CLI サブコマンドディスパッチャ (DSN-24)
 │   ├── mcp/                    # 戦略的 MCP サーバー群 (DSN-08)
-│   ├── web/                    # API Gateway & 統合クラウドコンソール (DSN-09, DSN-21)
+│   ├── web/                    # API Gateway & 統合クラウドコンソール (site/ 含む) (DSN-09, DSN-21)
 │   ├── intelligence/           # 閉ループ・ドメインインテリジェンス (DSN-15)
 │   ├── workflow/               # 自律常駐スケジューラー & Streaming DAG (DSN-11 Rev 2.0)
 │   ├── supervisor/             # 汎用プロセススーパーバイザー & 調停基盤 (DSN-12)

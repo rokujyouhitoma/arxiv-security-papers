@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | ステータス | 担当 | リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| - | なし (All current issues resolved) | - | - | - | - |
+現在進行中の未着手 Issue はありません（全タスク完了）。
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **447** | トップレベルディレクトリの徹底的構造集約とサブシステム統合 | Refactoring | 2026-10-04 | [closed/447-refactor-root-directory-structure-subsystem-consolidation.md](closed/447-refactor-root-directory-structure-subsystem-consolidation.md) |
 | **446** | ILISP 包括アーキテクチャ設計 (DSN-31) および ilisp/docs の PLC 処理系工学・Rust VM ロードマップ反映 | Feature | 2026-10-04 | [closed/446-refine-ilisp-architecture-with-plc-and-rust-vm-spec.md](closed/446-refine-ilisp-architecture-with-plc-and-rust-vm-spec.md) |
 | **445** | ilisp 配下および設計書・エージェント定義における ischeme 残存名称の ilisp 名前空間統一 | Bug | 2026-10-04 | [closed/445-fix-ischeme-remnants-to-ilisp-namespace.md](closed/445-fix-ischeme-remnants-to-ilisp-namespace.md) |
 | **444** | ITスペシャリスト（プログラミング言語・コンパイラ処理系 / PLC）エージェントの創設と 16大専門エージェントガバナンスの同期 | Feature | 2026-10-04 | [closed/444-add-programming-languages-and-compilers-specialist-agent.md](closed/444-add-programming-languages-and-compilers-specialist-agent.md) |

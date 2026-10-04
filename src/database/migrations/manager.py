@@ -65,9 +65,13 @@ class MigrationManager:
         if migrations_dir is not None:
             self.migrations_dir = Path(migrations_dir).resolve()
         else:
-            self.migrations_dir = (
-                Path(__file__).resolve().parent.parent.parent.parent / "migrations"
-            ).resolve()
+            sql_cand = (Path(__file__).resolve().parent / "sql").resolve()
+            if sql_cand.exists():
+                self.migrations_dir = sql_cand
+            else:
+                self.migrations_dir = (
+                    Path(__file__).resolve().parent.parent.parent.parent / "migrations"
+                ).resolve()
 
         self.migrations_dir.mkdir(parents=True, exist_ok=True)
         self.adapter = (

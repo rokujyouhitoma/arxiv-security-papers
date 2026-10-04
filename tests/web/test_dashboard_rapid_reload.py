@@ -146,8 +146,26 @@ def test_concurrent_sse_and_rapid_dashboard_reload(
 
 def test_dashboard_html_contains_unload_cleanup() -> None:
     """Verifies that site/dashboard.html has eliminated SSE, and site/app.js contains unload cleanup."""
-    dashboard_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "dashboard.html")
+    dash_candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "src",
+                "web",
+                "site",
+                "dashboard.html",
+            )
+        ),
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "site", "dashboard.html"
+            )
+        ),
+    ]
+    dashboard_path = next(
+        (p for p in dash_candidates if os.path.exists(p)), dash_candidates[0]
     )
     with open(dashboard_path, "r", encoding="utf-8") as f:
         d_content = f.read()
@@ -157,8 +175,18 @@ def test_dashboard_html_contains_unload_cleanup() -> None:
     assert "EventSource" not in d_content
 
     # app.js must contain cleanup handlers
-    app_js_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
+    app_candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "src", "web", "site", "app.js"
+            )
+        ),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
+        ),
+    ]
+    app_js_path = next(
+        (p for p in app_candidates if os.path.exists(p)), app_candidates[0]
     )
     with open(app_js_path, "r", encoding="utf-8") as f:
         app_content = f.read()
