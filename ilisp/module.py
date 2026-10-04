@@ -72,11 +72,41 @@ class LibraryRegistry:
 
         # (scheme write)
         write_exports: Dict[Symbol, Any] = {}
-        for name in ("display", "write", "newline"):
+        for name in (
+            "display",
+            "write",
+            "newline",
+            "write-char",
+            "write-string",
+            "flush-output-port",
+        ):
             sym = Symbol.intern(name)
             if sym in base_env.bindings:
                 write_exports[sym] = base_env.bindings[sym]
         self.register(Library(("scheme", "write"), write_exports, base_env))
+
+        # (scheme read)
+        read_exports: Dict[Symbol, Any] = {}
+        read_sym = Symbol.intern("read")
+        if read_sym in base_env.bindings:
+            read_exports[read_sym] = base_env.bindings[read_sym]
+        self.register(Library(("scheme", "read"), read_exports, base_env))
+
+        # (scheme file)
+        file_exports: Dict[Symbol, Any] = {}
+        for name in (
+            "open-input-file",
+            "open-output-file",
+            "call-with-port",
+            "call-with-input-file",
+            "call-with-output-file",
+            "with-input-from-file",
+            "with-output-to-file",
+        ):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                file_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "file"), file_exports, base_env))
 
         # (scheme load)
         load_exports: Dict[Symbol, Any] = {}

@@ -36,7 +36,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **数値タワー (Numbers)** | 6.2 | 35 | 11 (31%) | 🟡 基本完備 | 基本四則演算、比較演算、商余剰、整数/小数対応 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 5 (18%) | 🟡 順次拡充 | 文字列結合、等価判定、文字リテラル `#\x` |
 | **マクロ機構** | 4.3 | 3 | 2 (67%) | 🟢 充実 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules` 稼働済 |
-| **入出力・システム** | 6.13, 6.14 | 30 | 7 (23%) | 🟡 順次拡充 | `display`, `write`, `newline`, `load`, `exit`, `read-char` |
+| **入出力・システム** | 6.13, 6.14 | 30 | 26 (87%) | 🟢 充実 | ポート抽象化, ファイル/文字列I/O, `read` (Datum), `display`, `write`, `call-with-port` |
 | **バイトベクタ** | 6.9 | 11 | 0 (0%) | ⏳ 次フェーズ | Phase 3 (バイナリパース・PDF解析) にて実装予定 |
 
 ---
@@ -225,15 +225,27 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
-| `display` | Kernel (Core) | ✅ | 人間可読形式出力 (標準出力へ文字列出力) |
-| `write` | Kernel (Core) | ✅ | 機械可読形式出力 (`repr` 形式) |
-| `newline` | Kernel (Core) | ✅ | 改行出力およびフラッシュ |
-| `read-char` | Kernel (Core) | ✅ | 1文字入力取得 |
-| `eof-object?` | Kernel (Core) | ✅ | EOF 終端オブジェクト判定 |
-| `load` | Kernel (Core) | ✅ | ファイルから S 式を順次読み込み現在環境で評価 |
+| `port?`, `input-port?`, `output-port?` | Kernel (Core) | ✅ | ポート型および入出力方向述語 |
+| `textual-port?`, `binary-port?` | Kernel (Core) | ✅ | テキスト/バイナリポート種別判定述語 |
+| `port-open?`, `input-port-open?`, `output-port-open?` | Kernel (Core) | ✅ | ポート開閉状態判定述語 |
+| `close-port`, `close-input-port`, `close-output-port` | Kernel (Core) | ✅ | ポートクローズ操作 |
+| `current-input-port`, `current-output-port`, `current-error-port` | Kernel (Core) | ✅ | カレントポート動的取得・設定 (ContextVar) |
+| `open-input-string`, `open-output-string`, `get-output-string` | Kernel (Core) | ✅ | 文字列ポート生成・内容取得 |
+| `open-input-file`, `open-output-file` | `(scheme file)` | ✅ | ファイルテキストポート生成 |
+| `call-with-port`, `call-with-input-file`, `call-with-output-file` | `(scheme file)` | ✅ | 自動クローズ保証付き高階ポート呼び出し |
+| `with-input-from-file`, `with-output-to-file` | `(scheme file)` | ✅ | カレントポート一時切り替え実行 |
+| `read` | `(scheme read)` | ✅ | 入力ポートから S 式 Datum を 1 つ読み込みパース |
+| `read-char`, `peek-char` | Kernel (Core) | ✅ | 1文字読み込み / 覗き見 |
+| `read-line`, `read-string` | Kernel (Core) | ✅ | 行単位（改行除外）/ 指定長文字列読み込み |
+| `char-ready?` | Kernel (Core) | ✅ | 入力レディ状態判定 |
+| `write-char`, `write-string` | Kernel (Core) | ✅ | 文字・文字列ポート出力 |
+| `display` | Kernel (Core) | ✅ | 人間可読形式出力 (ポート引数オプショナル対応) |
+| `write` | Kernel (Core) | ✅ | 機械可読形式出力 (`repr` 形式, ポート引数対応) |
+| `newline` | Kernel (Core) | ✅ | 改行出力およびフラッシュ (ポート引数対応) |
+| `flush-output-port` | Kernel (Core) | ✅ | 出力バッファフラッシュ |
+| `eof-object`, `eof-object?` | Kernel (Core) | ✅ | EOF 終端オブジェクト生成および判定 |
+| `load` | `(scheme load)` | ✅ | ファイルから S 式を順次読み込み現在環境で評価 |
 | `exit` | Kernel (Core) | 🔄 | プロセス終了（Python `sys.exit` 連動） |
-| `read` | - | ⏳ | S 式パース入力（`ilisp.reader.read_one` を公開予定） |
-| `open-input-file`, `open-output-file` | - | ⏳ | ファイルポートオープン（Phase 3 予定） |
 | `current-second`, `current-jiffy` | - | ⏳ | 高精度時刻取得（Phase 3 予定） |
 
 ---
@@ -245,17 +257,17 @@ R7RS-small で定義されている 16 個の標準ライブラリのサポー�
 ```mermaid
 graph LR
     subgraph Fully Supported
-        SB["(scheme base)<br>コア構文・リスト・ベクタ・多値・例外"]
-        SW["(scheme write)<br>display, write, newline"]
+        SB["(scheme base)<br>コア構文・リスト・ベクタ・多値・例外・ポート"]
+        SW["(scheme write)<br>display, write, newline, write-char"]
+        SR["(scheme read)<br>read (Datum リーダー)"]
+        SF["(scheme file)<br>ファイルポートI/O, call-with-*, with-*"]
+        SL["(scheme load)<br>load プリミティブ"]
     end
     subgraph Partially Supported
-        SL["(scheme load)<br>load プリミティブ"]
         SPC["(scheme process-context)<br>exit, Python連携"]
         SC["(scheme char)<br>#\\リテラル, string-append"]
     end
     subgraph Planned for Phase 3
-        SR["(scheme read)<br>Datum リーダー"]
-        SF["(scheme file)<br>ファイルポートI/O"]
         ST["(scheme time)<br>高精度タイマー"]
         SCXR["(scheme cxr)<br>4段合成アクセサ"]
         SCASE["(scheme case-lambda)<br>可変長ディスパッチ"]
@@ -271,13 +283,13 @@ graph LR
 
 | ライブラリ名 | 説明 | サポート状況 | 提供モジュール / 計画 |
 | :--- | :--- | :---: | :--- |
-| `(scheme base)` | 基礎言語機能・データ型・マクロ | 🟢 85% | Kernel コア + `stdlib/base.ilisp` |
-| `(scheme write)` | 出力機能 (`display`, `write`) | 🟢 100% | Kernel コア組込 |
+| `(scheme base)` | 基礎言語機能・データ型・マクロ・ポート基本 | 🟢 90% | Kernel コア + `stdlib/base.ilisp` |
+| `(scheme write)` | 出力機能 (`display`, `write`, `write-char` 等) | 🟢 100% | Kernel コア組込 |
+| `(scheme read)` | S式パーサ・Datum リーダー (`read`) | 🟢 100% | Kernel コア組込 (`ilisp/port.py`, `ilisp/reader.py`) |
+| `(scheme file)` | ファイルポート入出力・自動クローズ | 🟢 100% | Kernel コア組込 (`ilisp/port.py`) |
 | `(scheme load)` | スクリプト読込 (`load`) | 🟢 100% | Kernel コア組込 |
 | `(scheme process-context)` | コマンドライン・終了コード | 🟡 50% | `exit` 実装済（引数取得等は Phase 3） |
 | `(scheme char)` | 文字種別判定・変換 | 🟡 30% | 文字リテラル・基本判定 |
-| `(scheme read)` | S式パーサ・Datum リーダー | ⏳ 計画中 | Phase 3 (手書き Reader の Lisp API 公開) |
-| `(scheme file)` | ファイルポート入出力 | ⏳ 計画中 | Phase 3 (`open-input-file` 等) |
 | `(scheme time)` | 高精度タイマー・経過時刻 | ⏳ 計画中 | Phase 3 (`current-second` 等) |
 | `(scheme cxr)` | 深層リストアクセサ (`caaar`..`cddddr`)| ⏳ 計画中 | Phase 3 (`stdlib/cxr.ilisp`) |
 | `(scheme case-lambda)` | 引数個数多重ディスパッチ | ⏳ 計画中 | Phase 3 マクロ提供予定 |

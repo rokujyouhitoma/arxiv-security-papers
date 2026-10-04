@@ -13,6 +13,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **457** | R7RS 入出力ポートシステムと S式 Datum リーダーの実装 | Feature | 2026-10-04 | [closed/457-implement-io-ports-and-datum-reader.md](closed/457-implement-io-ports-and-datum-reader.md) |
 | **456** | R7RS コア構文の完全網羅 (letrec, letrec*, do) の実装 | Feature | 2026-10-04 | [closed/456-implement-letrec-letrec-star-and-do.md](closed/456-implement-letrec-letrec-star-and-do.md) |
 | **455** | R7RS モジュール機構 (define-library, import, export) の実装 | Feature | 2026-10-04 | [closed/455-implement-r7rs-module-system.md](closed/455-implement-r7rs-module-system.md) |
 | **454** | Scope Sets アルゴリズムによる R7RS 衛生的マクロ展開器 (define-syntax, syntax-rules) の実装 | Feature | 2026-10-04 | [closed/454-implement-scope-sets-hygienic-macro-expander.md](closed/454-implement-scope-sets-hygienic-macro-expander.md) |

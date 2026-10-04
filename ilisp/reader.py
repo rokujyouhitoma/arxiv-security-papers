@@ -7,9 +7,12 @@ Scheme reader macros (', `, ,, ,@, #;).
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 
-from ilisp.types import NIL, Cons, SourceLocation, Symbol
+from ilisp.types import EOF, NIL, Cons, SourceLocation, Symbol
+
+if TYPE_CHECKING:
+    from ilisp.port import TextualInputPort
 
 
 class LispSyntaxError(Exception):
@@ -39,53 +42,76 @@ class Token:
 class Reader:
     """Hand-written recursive descent parser for S-expressions."""
 
-    def __init__(self, text: str, filename: str = "<stdin>") -> None:
-        self.text: str = text
-        self.filename: str = filename
-        self.pos: int = 0
+    def __init__(
+        self,
+        source: Union[str, TextualInputPort],
+        filename: str = "<stdin>",
+    ) -> None:
+        if isinstance(source, str):
+            from ilisp.port import StringInputPort
+
+            self.port: TextualInputPort = StringInputPort(source, name=filename)
+            self.filename: str = filename
+        else:
+            self.port = source
+            self.filename = source.name
         self.line: int = 1
         self.col: int = 1
+        self._unread_buf: List[str] = []
 
     def _current_loc(self) -> SourceLocation:
         return SourceLocation(self.filename, self.line, self.col)
 
     def _peek_char(self) -> Optional[str]:
-        if self.pos < len(self.text):
-            return self.text[self.pos]
-        return None
+        if self._unread_buf:
+            return self._unread_buf[-1]
+        return self.port.peek_char()
 
     def _next_char(self) -> Optional[str]:
-        if self.pos < len(self.text):
-            ch = self.text[self.pos]
-            self.pos += 1
+        ch: Optional[str]
+        if self._unread_buf:
+            ch = self._unread_buf.pop()
+        else:
+            ch = self.port.read_char()
+        if ch is not None:
             if ch == "\n":
                 self.line += 1
                 self.col = 1
             else:
                 self.col += 1
-            return ch
-        return None
+        return ch
+
+    def _unread_char(self, ch: str) -> None:
+        self._unread_buf.append(ch)
+        if ch == "\n":
+            self.line = max(1, self.line - 1)
+            self.col = 1
+        else:
+            self.col = max(1, self.col - 1)
 
     def _skip_whitespace_and_comments(self) -> None:
-        while self.pos < len(self.text):
-            ch = self.text[self.pos]
+        while True:
+            ch = self._peek_char()
+            if ch is None:
+                break
             if ch in " \t\r\n":
                 self._next_char()
             elif ch == ";":
                 # Line comment
-                while self.pos < len(self.text) and self.text[self.pos] != "\n":
-                    self._next_char()
-                if self.pos < len(self.text) and self.text[self.pos] == "\n":
-                    self._next_char()
-            elif (
-                ch == "#"
-                and self.pos + 1 < len(self.text)
-                and self.text[self.pos + 1] == ";"
-            ):
-                # S-expression comment: discard the next S-expression
-                self._next_char()  # '#'
-                self._next_char()  # ';'
-                self.read()  # parse and discard
+                while True:
+                    c = self._next_char()
+                    if c is None or c == "\n":
+                        break
+            elif ch == "#":
+                hash_ch = self._next_char()  # consume '#'
+                next_ch = self._peek_char()
+                if next_ch == ";":
+                    self._next_char()  # consume ';'
+                    self.read()  # parse and discard next S-expression
+                else:
+                    if hash_ch is not None:
+                        self._unread_char(hash_ch)
+                    break
             else:
                 break
 
@@ -205,9 +231,9 @@ class Reader:
     def _read_char_literal(self, loc: SourceLocation) -> str:
         # Character literal, e.g. #\a, #\space, #\newline
         name_chars: List[str] = []
-        while self.pos < len(self.text):
-            ch = self.text[self.pos]
-            if ch in " \t\r\n();\"'`":
+        while True:
+            ch = self._peek_char()
+            if ch is None or ch in " \t\r\n();\"'`":
                 break
             name_chars.append(self._next_char() or "")
         name = "".join(name_chars)
@@ -228,9 +254,9 @@ class Reader:
 
     def _read_atom(self, loc: SourceLocation) -> Any:
         token_chars: List[str] = []
-        while self.pos < len(self.text):
-            ch = self.text[self.pos]
-            if ch in " \t\r\n();\"'`":
+        while True:
+            ch = self._peek_char()
+            if ch is None or ch in " \t\r\n();\"'`":
                 break
             token_chars.append(self._next_char() or "")
         token = "".join(token_chars)
@@ -270,9 +296,6 @@ class Reader:
                 break
             if ch == ".":
                 # Check if it's a dot separator or symbol starting with dot
-                save_pos = self.pos
-                save_line = self.line
-                save_col = self.col
                 self._next_char()  # consume '.'
                 next_ch = self._peek_char()
                 if next_ch is not None and next_ch in " \t\r\n();\"'`":
@@ -297,9 +320,7 @@ class Reader:
                     break
                 else:
                     # Symbol starting with dot (e.g. .ident)
-                    self.pos = save_pos
-                    self.line = save_line
-                    self.col = save_col
+                    self._unread_char(".")
 
             elem = self.read()
             elements.append(elem)
@@ -309,16 +330,6 @@ class Reader:
         for item in reversed(elements):
             result = Cons(item, result, loc=loc)
         return result
-
-
-class EOFType:
-    """Marker indicating end-of-file for reader."""
-
-    def __repr__(self) -> str:
-        return "#<eof>"
-
-
-EOF = EOFType()
 
 
 def read_one(text: str, filename: str = "<stdin>") -> Any:
