@@ -238,6 +238,93 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_cdr(p: Any) -> Any:
         return cdr(p)
 
+    # --- 2-step accessors (R7RS 6.4, (scheme base)) ---
+    def prim_caar(p: Any) -> Any:
+        return car(car(p))
+
+    def prim_cadr(p: Any) -> Any:
+        return car(cdr(p))
+
+    def prim_cdar(p: Any) -> Any:
+        return cdr(car(p))
+
+    def prim_cddr(p: Any) -> Any:
+        return cdr(cdr(p))
+
+    # --- 3-step accessors (R7RS 7.1.1, (scheme cxr)) ---
+    def prim_caaar(p: Any) -> Any:
+        return car(car(car(p)))
+
+    def prim_caadr(p: Any) -> Any:
+        return car(car(cdr(p)))
+
+    def prim_cadar(p: Any) -> Any:
+        return car(cdr(car(p)))
+
+    def prim_caddr(p: Any) -> Any:
+        return car(cdr(cdr(p)))
+
+    def prim_cdaar(p: Any) -> Any:
+        return cdr(car(car(p)))
+
+    def prim_cdadr(p: Any) -> Any:
+        return cdr(car(cdr(p)))
+
+    def prim_cddar(p: Any) -> Any:
+        return cdr(cdr(car(p)))
+
+    def prim_cdddr(p: Any) -> Any:
+        return cdr(cdr(cdr(p)))
+
+    # --- 4-step accessors (R7RS 7.1.1, (scheme cxr)) ---
+    def prim_caaaar(p: Any) -> Any:
+        return car(car(car(car(p))))
+
+    def prim_caaadr(p: Any) -> Any:
+        return car(car(car(cdr(p))))
+
+    def prim_caadar(p: Any) -> Any:
+        return car(car(cdr(car(p))))
+
+    def prim_caaddr(p: Any) -> Any:
+        return car(car(cdr(cdr(p))))
+
+    def prim_cadaar(p: Any) -> Any:
+        return car(cdr(car(car(p))))
+
+    def prim_cadadr(p: Any) -> Any:
+        return car(cdr(car(cdr(p))))
+
+    def prim_caddar(p: Any) -> Any:
+        return car(cdr(cdr(car(p))))
+
+    def prim_cadddr(p: Any) -> Any:
+        return car(cdr(cdr(cdr(p))))
+
+    def prim_cdaaar(p: Any) -> Any:
+        return cdr(car(car(car(p))))
+
+    def prim_cdaadr(p: Any) -> Any:
+        return cdr(car(car(cdr(p))))
+
+    def prim_cdadar(p: Any) -> Any:
+        return cdr(car(cdr(car(p))))
+
+    def prim_cdaddr(p: Any) -> Any:
+        return cdr(car(cdr(cdr(p))))
+
+    def prim_cddaar(p: Any) -> Any:
+        return cdr(cdr(car(car(p))))
+
+    def prim_cddadr(p: Any) -> Any:
+        return cdr(cdr(car(cdr(p))))
+
+    def prim_cdddar(p: Any) -> Any:
+        return cdr(cdr(cdr(car(p))))
+
+    def prim_cddddr(p: Any) -> Any:
+        return cdr(cdr(cdr(cdr(p))))
+
     def prim_set_car_bang(pair: Any, val: Any) -> Any:
         set_car(pair, val)
         return NIL
@@ -1291,6 +1378,37 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "cons": prim_cons,
         "car": prim_car,
         "cdr": prim_cdr,
+        # 2-step accessors (R7RS 6.4, (scheme base))
+        "caar": prim_caar,
+        "cadr": prim_cadr,
+        "cdar": prim_cdar,
+        "cddr": prim_cddr,
+        # 3-step accessors (R7RS 7.1.1, (scheme cxr))
+        "caaar": prim_caaar,
+        "caadr": prim_caadr,
+        "cadar": prim_cadar,
+        "caddr": prim_caddr,
+        "cdaar": prim_cdaar,
+        "cdadr": prim_cdadr,
+        "cddar": prim_cddar,
+        "cdddr": prim_cdddr,
+        # 4-step accessors (R7RS 7.1.1, (scheme cxr))
+        "caaaar": prim_caaaar,
+        "caaadr": prim_caaadr,
+        "caadar": prim_caadar,
+        "caaddr": prim_caaddr,
+        "cadaar": prim_cadaar,
+        "cadadr": prim_cadadr,
+        "caddar": prim_caddar,
+        "cadddr": prim_cadddr,
+        "cdaaar": prim_cdaaar,
+        "cdaadr": prim_cdaadr,
+        "cdadar": prim_cdadar,
+        "cdaddr": prim_cdaddr,
+        "cddaar": prim_cddaar,
+        "cddadr": prim_cddadr,
+        "cdddar": prim_cdddar,
+        "cddddr": prim_cddddr,
         "set-car!": prim_set_car_bang,
         "set-cdr!": prim_set_cdr_bang,
         "pair?": prim_pair_p,

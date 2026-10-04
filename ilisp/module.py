@@ -148,6 +148,80 @@ class LibraryRegistry:
                 char_exports[sym] = base_env.bindings[sym]
         self.register(Library(("scheme", "char"), char_exports, base_env))
 
+        # (scheme cxr)
+        cxr_exports: Dict[Symbol, Any] = {}
+        for name in (
+            "caaar",
+            "caadr",
+            "cadar",
+            "caddr",
+            "cdaar",
+            "cdadr",
+            "cddar",
+            "cdddr",
+            "caaaar",
+            "caaadr",
+            "caadar",
+            "caaddr",
+            "cadaar",
+            "cadadr",
+            "caddar",
+            "cadddr",
+            "cdaaar",
+            "cdaadr",
+            "cdadar",
+            "cdaddr",
+            "cddaar",
+            "cddadr",
+            "cdddar",
+            "cddddr",
+        ):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                cxr_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "cxr"), cxr_exports, base_env))
+
+        # (scheme complex)
+        complex_exports: Dict[Symbol, Any] = {}
+        for name in (
+            "angle",
+            "imag-part",
+            "magnitude",
+            "make-polar",
+            "make-rectangular",
+            "real-part",
+        ):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                complex_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "complex"), complex_exports, base_env))
+
+        # (scheme time)
+        time_exports: Dict[Symbol, Any] = {}
+        for name in (
+            "current-second",
+            "current-jiffy",
+            "jiffies-per-second",
+        ):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                time_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "time"), time_exports, base_env))
+
+        # (scheme process-context)
+        pc_exports: Dict[Symbol, Any] = {}
+        for name in (
+            "command-line",
+            "emergency-exit",
+            "exit",
+            "get-environment-variable",
+            "get-environment-variables",
+        ):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                pc_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "process-context"), pc_exports, base_env))
+
         # (ilisp python)
         py_exports: Dict[Symbol, Any] = {}
         for name in (

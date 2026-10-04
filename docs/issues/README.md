@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **471** | R7RS 深層リストアクセサおよび (scheme cxr) ライブラリの実装 (caaar..cddddr) | Feature | 2026-10-04 | [closed/471-implement-r7rs-scheme-cxr-accessors.md](closed/471-implement-r7rs-scheme-cxr-accessors.md) |
 | **470** | R7RS 数値タワー拡張プリミティブおよび複素数算術の実装 (exact-integer-sqrt, complex, polar) | Feature | 2026-10-04 | [closed/470-implement-r7rs-numeric-tower-extensions.md](closed/470-implement-r7rs-numeric-tower-extensions.md) |
 | **469** | R7RS システム・プロセスコンテキストおよび高精度タイマーの実装 (time, environment, command-line) | Feature | 2026-10-04 | [closed/469-implement-r7rs-system-process-context-and-time.md](closed/469-implement-r7rs-system-process-context-and-time.md) |
 | **468** | R7RS 型固有等価判定述語および構文エラー構文の実装 (boolean=?, symbol=?, syntax-error) | Feature | 2026-10-04 | [closed/468-implement-r7rs-type-predicates-and-syntax-error.md](closed/468-implement-r7rs-type-predicates-and-syntax-error.md) |

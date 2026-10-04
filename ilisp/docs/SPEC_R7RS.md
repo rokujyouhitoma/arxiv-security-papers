@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 197
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 198
     "🔄 一部対応 (サブセット/基本版)" : 5
-    "⏳ 計画中 (Phase 3/4 予定)" : 1
+    "⏳ 計画中 (Phase 4 予定)" : 0
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -29,7 +29,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **遅延評価 (Lazy evaluation)** | 4.2.5, 6.10 | 5 | 5 (100%) | 🟢 完全準拠 | `delay`, `delay-force`, `force`, `make-promise`, `promise?` メモ化・末尾再帰ストリーム対応完備 |
 | **レコード型 (Record types)** | 5.5 | 8 | 8 (100%) | 🟢 完全準拠 | `define-record-type`, コンストラクタ, 型述語, アクセサ, モディファイア, 生成的一意型, 低レベルAPI完備 |
 | **等価性・真偽値** | 6.1, 6.3 | 6 | 6 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `boolean=?`, `not`（レコード等価比較対応、型検証付き真偽値等価性判定） |
-| **ペアとリスト** | 6.4 | 26 | 26 (100%) | 🟢 完全準拠 | 基本操作、破壊的更新 (`set-car!`, `set-cdr!`, `list-set!`)、真正リスト判定 (`list?`)、`make-list`、`list-tail`、`list-ref`、`list-copy`、多引数 `map` / `for-each`、Alist 検索完備 |
+| **ペアとリスト** | 6.4, 7.1.1 | 50 | 50 (100%) | 🟢 完全準拠 | 基本操作、破壊的更新、真正リスト判定 (`list?`)、`make-list`、`list-tail`、`list-ref`、`list-copy`、多引数 `map`/`for-each`、Alist 検索、`(scheme cxr)` 深層アクセサ (24個) 完備 |
 | **シンボル** | 6.5 | 4 | 4 (100%) | 🟢 完全準拠 | インターン保証、多引数シンボル等価判定 (`symbol=?`)、文字列相互変換 |
 | **ベクタ (Vectors)** | 6.8 | 14 | 14 (100%) | 🟢 完全準拠 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, `vector-copy`, `vector-copy!`, `vector-fill!`, `vector-append`, `vector-map`, `vector-for-each` 等完備 |
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
@@ -141,7 +141,9 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `cons` | Kernel (Core) | ✅ | ペア生成（セル確保） |
 | `car`, `cdr` | Kernel (Core) | ✅ | 先頭要素・後続要素アクセス |
 | `set-car!`, `set-cdr!` | Kernel (Core) | ✅ | ペア破壊的変更（Python 内部参照更新、ミュータブルセマンティクス保証） |
-| `caar`, `cadr`, `cdar`, `cddr` | `stdlib/base.ilisp`| ✅ | 2段合成アクセサ |
+| `caar`, `cadr`, `cdar`, `cddr` | Kernel (Core) | ✅ | 2段合成アクセサ (Kernel 高速組込) |
+| `caaar` 〜 `cdddr` (8個) | Kernel (Core) | ✅ | 3段合成アクセサ (`(scheme cxr)` 準拠、全8通り完備) |
+| `caaaar` 〜 `cddddr` (16個) | Kernel (Core) | ✅ | 4段合成アクセサ (`(scheme cxr)` 準拠、全16通り完備) |
 | `null?` | Kernel (Core) | ✅ | 空リスト (`'()`) 判定 |
 | `list?` | Kernel (Core) | ✅ | フロイドの循環検出アルゴリズム（Tortoise and Hare）による循環リスト・不完全リスト対応の真正リスト判定 |
 | `list` | Kernel (Core) | ✅ | 可変長引数からのリスト生成 |
@@ -343,12 +345,12 @@ graph LR
         ST["(scheme time)<br>current-second, current-jiffy, jiffies-per-second"]
         SPC["(scheme process-context)<br>get-env-var(s), command-line, exit"]
         SCOM["(scheme complex)<br>make-rect, make-polar, real/imag-part, mag, angle"]
+        SCXR["(scheme cxr)<br>caaar..cddddr (24アクセサ)"]
     end
     subgraph Partially Supported
         SC["(scheme char)<br>#\\リテラル, string-append"]
     end
     subgraph Planned for Phase 3
-        SCXR["(scheme cxr)<br>4段合成アクセサ"]
         SCASE["(scheme case-lambda)<br>可変長ディスパッチ"]
     end
     subgraph Planned for Phase 4
@@ -369,8 +371,8 @@ graph LR
 | `(scheme process-context)` | コマンドライン・環境変数・終了 | 🟢 100% | Kernel コア組込 (`get-environment-variable(s)`, `command-line`, `exit`, `emergency-exit`) |
 | `(scheme time)` | 高精度タイマー・経過時刻 | 🟢 100% | Kernel コア組込 (`current-second`, `current-jiffy`, `jiffies-per-second`) |
 | `(scheme complex)` | 複素数タワー | 🟢 100% | Kernel コア組込 (`angle`, `imag-part`, `magnitude`, `make-polar`, `make-rectangular`, `real-part`) |
+| `(scheme cxr)` | 深層リストアクセサ (`caaar`..`cddddr`)| 🟢 100% | Kernel コア組込 (`caaar`〜`cddddr` 全24手続き完備) |
 | `(scheme char)` | 文字種別判定・変換 | 🟡 30% | 文字リテラル・基本判定 |
-| `(scheme cxr)` | 深層リストアクセサ (`caaar`..`cddddr`)| ⏳ 計画中 | Phase 3 (`stdlib/cxr.ilisp`) |
 | `(scheme case-lambda)` | 引数個数多重ディスパッチ | ⏳ 計画中 | Phase 3 マクロ提供予定 |
 | `(scheme lazy)` | 遅延評価 (`delay`, `force`) | ⏳ 計画中 | Phase 4 (`make-promise`) |
 | `(scheme eval)` | 実行時環境生成と動的評価 | ⏳ 計画中 | Phase 4 (`environment`, `eval`) |
