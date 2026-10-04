@@ -82,6 +82,31 @@ class NilType:
 NIL = NilType()
 
 
+class EOFType:
+    """Singleton representing the End-Of-File (EOF) marker."""
+
+    _instance: Optional[EOFType] = None
+
+    def __new__(cls) -> EOFType:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "#<eof>"
+
+    def __str__(self) -> str:
+        return "#<eof>"
+
+
+EOF = EOFType()
+
+
+def is_eof_object(obj: Any) -> bool:
+    """Return True if obj is the EOF object."""
+    return isinstance(obj, EOFType) or obj is EOF
+
+
 class Cell:
     """Mutable box for lexical variables mutated by set!."""
 

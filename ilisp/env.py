@@ -7,7 +7,6 @@ and standard R7RS-small core primitives plus Python zero-copy interop.
 from __future__ import annotations
 
 import importlib
-import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Union
 
@@ -199,28 +198,58 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_num_gt(a: Union[int, float], b: Union[int, float]) -> bool:
         return a > b
 
-    # --- 5. I/O Primitives ---
-    def prim_display(x: Any) -> None:
-        if isinstance(x, str):
-            sys.stdout.write(x)
-        else:
-            sys.stdout.write(str(x))
-        sys.stdout.flush()
+    # --- 5. I/O Primitives (R7RS) ---
+    from ilisp import port as port_mod
 
-    def prim_newline() -> None:
-        sys.stdout.write("\n")
-        sys.stdout.flush()
+    def prim_display(x: Any, port: Optional[port_mod.TextualOutputPort] = None) -> None:
+        port_mod.display(x, port)
 
-    def prim_write(x: Any) -> None:
-        sys.stdout.write(repr(x))
-        sys.stdout.flush()
+    def prim_newline(port: Optional[port_mod.TextualOutputPort] = None) -> None:
+        port_mod.newline(port)
 
-    def prim_read_char() -> Optional[str]:
-        ch = sys.stdin.read(1)
-        return ch if ch else None
+    def prim_write(x: Any, port: Optional[port_mod.TextualOutputPort] = None) -> None:
+        port_mod.write_val(x, port)
+
+    def prim_read(port: Optional[port_mod.TextualInputPort] = None) -> Any:
+        return port_mod.read_datum(port)
+
+    def prim_read_char(port: Optional[port_mod.TextualInputPort] = None) -> Any:
+        return port_mod.read_char(port)
+
+    def prim_peek_char(port: Optional[port_mod.TextualInputPort] = None) -> Any:
+        return port_mod.peek_char(port)
+
+    def prim_read_line(port: Optional[port_mod.TextualInputPort] = None) -> Any:
+        return port_mod.read_line(port)
+
+    def prim_read_string(
+        k: int, port: Optional[port_mod.TextualInputPort] = None
+    ) -> Any:
+        return port_mod.read_string(k, port)
+
+    def prim_char_ready_p(port: Optional[port_mod.TextualInputPort] = None) -> bool:
+        return port_mod.char_ready_p(port)
+
+    def prim_write_char(
+        ch: str, port: Optional[port_mod.TextualOutputPort] = None
+    ) -> None:
+        port_mod.write_char(ch, port)
+
+    def prim_write_string(
+        s: str, port: Optional[port_mod.TextualOutputPort] = None
+    ) -> None:
+        port_mod.write_string(s, port)
+
+    def prim_flush_output_port(
+        port: Optional[port_mod.TextualOutputPort] = None,
+    ) -> None:
+        port_mod.flush_output_port(port)
+
+    def prim_eof_object() -> Any:
+        return port_mod.eof_object()
 
     def prim_eof_object_p(x: Any) -> bool:
-        return x is None
+        return port_mod.eof_object_p(x)
 
     # --- 6. Python Zero-Copy & Interop Primitives ---
     def prim_sequence_view(seq: Sequence[Any], offset: int = 0) -> SequenceView:
@@ -446,11 +475,44 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "raise-continuable": prim_raise,
         "with-exception-handler": prim_with_exception_handler,
         "error": prim_error,
-        # I/O
-        "display": prim_display,
-        "newline": prim_newline,
-        "write": prim_write,
+        # Ports and I/O (R7RS)
+        "port?": port_mod.port_p,
+        "input-port?": port_mod.input_port_p,
+        "output-port?": port_mod.output_port_p,
+        "textual-port?": port_mod.textual_port_p,
+        "binary-port?": port_mod.binary_port_p,
+        "port-open?": port_mod.port_open_p,
+        "input-port-open?": port_mod.input_port_open_p,
+        "output-port-open?": port_mod.output_port_open_p,
+        "close-port": port_mod.close_port,
+        "close-input-port": port_mod.close_input_port,
+        "close-output-port": port_mod.close_output_port,
+        "current-input-port": port_mod.get_current_input_port,
+        "current-output-port": port_mod.get_current_output_port,
+        "current-error-port": port_mod.get_current_error_port,
+        "open-input-string": port_mod.open_input_string,
+        "open-output-string": port_mod.open_output_string,
+        "get-output-string": port_mod.get_output_string,
+        "open-input-file": port_mod.open_input_file,
+        "open-output-file": port_mod.open_output_file,
+        "call-with-port": port_mod.call_with_port,
+        "call-with-input-file": port_mod.call_with_input_file,
+        "call-with-output-file": port_mod.call_with_output_file,
+        "with-input-from-file": port_mod.with_input_from_file,
+        "with-output-to-file": port_mod.with_output_to_file,
+        "read": prim_read,
         "read-char": prim_read_char,
+        "peek-char": prim_peek_char,
+        "read-line": prim_read_line,
+        "read-string": prim_read_string,
+        "char-ready?": prim_char_ready_p,
+        "write-char": prim_write_char,
+        "write-string": prim_write_string,
+        "newline": prim_newline,
+        "flush-output-port": prim_flush_output_port,
+        "display": prim_display,
+        "write": prim_write,
+        "eof-object": prim_eof_object,
         "eof-object?": prim_eof_object_p,
         "load": prim_load,
         # Python Zero-Copy & Interop
