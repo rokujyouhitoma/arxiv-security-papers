@@ -218,6 +218,9 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                 curr_env = call_env
                 continue
 
+            if callable(fn):
+                return fn(*eval_args)
+
             raise TypeError(f"Attempted to apply non-procedure: {fn!r}")
 
         raise TypeError(f"Unknown AST node during evaluation: {curr_expr!r}")

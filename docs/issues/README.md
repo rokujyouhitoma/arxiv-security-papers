@@ -4,7 +4,8 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在進行中のオープン Issue はありません。
+| Issue ID | タイトル | 種別 | ステータス | 担当 | リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
 
 ---
 
@@ -12,6 +13,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **451** | Backend A: Python AST トランスパイラ (py_codegen) の実装 | Feature | 2026-10-04 | [closed/451-implement-backend-a-python-ast-transpiler.md](closed/451-implement-backend-a-python-ast-transpiler.md) |
 | **450** | ILISP 標準ライブラリと構文マクロ群 (stdlib/base.ilisp) の実装 | Feature | 2026-10-04 | [closed/450-implement-ilisp-stdlib-base.md](closed/450-implement-ilisp-stdlib-base.md) |
 | **449** | Phase 1: Kernel ILISP 最小構成の実装 | Feature | 2026-10-04 | [closed/449-implement-phase1-kernel-ilisp-pure-python.md](closed/449-implement-phase1-kernel-ilisp-pure-python.md) |
 | **448** | ILISP 実装前処理系工学仕様精緻化と段階的ロードマップ策定 | Documentation / Architecture | 2026-10-04 | [closed/448-refine-ilisp-specification-with-runtime-architecture-and-phased-roadmap.md](closed/448-refine-ilisp-specification-with-runtime-architecture-and-phased-roadmap.md) |

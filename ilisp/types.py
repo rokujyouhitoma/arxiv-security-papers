@@ -93,8 +93,9 @@ class Cell:
     def get(self) -> Any:
         return self.value
 
-    def set(self, new_val: Any) -> None:
+    def set(self, new_val: Any) -> Any:
         self.value = new_val
+        return new_val
 
     def __repr__(self) -> str:
         return f"#<cell {self.value!r}>"
@@ -212,6 +213,11 @@ class Procedure:
         self.is_macro: bool = is_macro
         self.rest_param: Optional[Symbol] = rest_param
         self.name: Optional[str] = name
+
+    def __call__(self, *args: Any) -> Any:
+        from ilisp.evaluator import _apply_procedure
+
+        return _apply_procedure(self, list(args))
 
     def __repr__(self) -> str:
         kind = "macro" if self.is_macro else "procedure"

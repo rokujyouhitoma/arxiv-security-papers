@@ -17,11 +17,19 @@ from ilisp.types import NIL, Symbol
 
 
 def run_string(
-    code: str, env: Optional[Environment] = None, filename: str = "<stdin>"
+    code: str,
+    env: Optional[Environment] = None,
+    filename: str = "<stdin>",
+    backend: str = "interp",
 ) -> Any:
     """Evaluate a sequence of S-expressions from code string within an environment."""
     if env is None:
         env = make_initial_env()
+
+    if backend == "py_ast":
+        from ilisp.backend.py_codegen.compiler import compile_ilisp
+
+        return compile_ilisp(code, env=env, filename=filename)
 
     expressions = read_all(code, filename=filename)
     result: Any = NIL
@@ -30,11 +38,13 @@ def run_string(
     return result
 
 
-def run_file(filepath: str, env: Optional[Environment] = None) -> Any:
+def run_file(
+    filepath: str, env: Optional[Environment] = None, backend: str = "interp"
+) -> Any:
     """Execute an ILISP source code file (.ilisp or .scm)."""
     with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()
-    return run_string(content, env=env, filename=filepath)
+    return run_string(content, env=env, filename=filepath, backend=backend)
 
 
 def repl(env: Optional[Environment] = None) -> None:
@@ -98,19 +108,27 @@ def main() -> None:
     )
     parser.add_argument("file", nargs="?", help="Path to .ilisp file to execute")
     parser.add_argument("-e", "--eval", help="Evaluate ILISP expression string")
+    parser.add_argument(
+        "--backend",
+        choices=["interp", "py_ast"],
+        default="interp",
+        help="Execution backend: 'interp' (tree-walk + trampoline) or 'py_ast' (Python AST transpiler)",
+    )
 
     args = parser.parse_args()
 
     env = make_initial_env()
 
     if args.eval:
-        res = run_string(args.eval, env=env, filename="<cli-eval>")
+        res = run_string(
+            args.eval, env=env, filename="<cli-eval>", backend=args.backend
+        )
         if res is not None and res is not NIL:
             print(repr(res))
         sys.exit(0)
 
     if args.file:
-        run_file(args.file, env=env)
+        run_file(args.file, env=env, backend=args.backend)
         sys.exit(0)
 
     repl(env=env)
