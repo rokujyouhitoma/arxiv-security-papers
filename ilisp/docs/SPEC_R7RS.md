@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全195機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 88
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 99
     "🔄 一部対応 (サブセット/基本版)" : 18
-    "⏳ 計画中 (Phase 3/4 予定)" : 89
+    "⏳ 計画中 (Phase 3/4 予定)" : 78
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -37,7 +37,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **文字・文字列** | 6.6, 6.7 | 28 | 5 (18%) | 🟡 順次拡充 | 文字列結合、等価判定、文字リテラル `#\x` |
 | **マクロ機構** | 4.3 | 3 | 2 (67%) | 🟢 充実 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules` 稼働済 |
 | **入出力・システム** | 6.13, 6.14 | 30 | 26 (87%) | 🟢 充実 | ポート抽象化, ファイル/文字列I/O, `read` (Datum), `display`, `write`, `call-with-port` |
-| **バイトベクタ** | 6.9 | 11 | 0 (0%) | ⏳ 次フェーズ | Phase 3 (バイナリパース・PDF解析) にて実装予定 |
+| **バイトベクタ** | 6.9 | 11 | 11 (100%) | 🟢 完全準拠 | `#u8(...)`, `make-bytevector`, `bytevector-u8-ref/set!`, `utf8->string`, `string->utf8` 完備 |
 
 ---
 
