@@ -7,7 +7,7 @@ adhering to R7RS-small Scheme semantics and Python zero-copy interop.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, List, Optional, Sequence, Union
+from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -179,6 +179,89 @@ class SequenceView:
         return f"({' '.join(elements)})"
 
 
+class Vector:
+    """Fixed-length O(1) random-access vector adhering to R7RS-small."""
+
+    __slots__ = ("elements",)
+
+    def __init__(self, elements: Sequence[Any]) -> None:
+        self.elements: List[Any] = list(elements)
+
+    def __len__(self) -> int:
+        return len(self.elements)
+
+    def __getitem__(self, idx: int) -> Any:
+        return self.elements[idx]
+
+    def __setitem__(self, idx: int, value: Any) -> None:
+        self.elements[idx] = value
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self.elements)
+
+    def __repr__(self) -> str:
+        return f"#({' '.join(repr(x) for x in self.elements)})"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Vector):
+            return self.elements == other.elements
+        return False
+
+
+class Values:
+    """R7RS multiple return values container."""
+
+    __slots__ = ("values",)
+
+    def __init__(self, *args: Any) -> None:
+        self.values: Tuple[Any, ...] = args
+
+    def __repr__(self) -> str:
+        return f"#<values ({' '.join(repr(x) for x in self.values)})>"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Values):
+            return self.values == other.values
+        return False
+
+
+class SchemeException(Exception):
+    """Exception raised by R7RS (raise datum)."""
+
+    def __init__(self, datum: Any) -> None:
+        super().__init__(repr(datum))
+        self.datum: Any = datum
+
+
+class EscapeContinuation(Exception):
+    """Exception thrown to unwind stack to a call/cc capture point."""
+
+    def __init__(self, cont_id: str, value: Any) -> None:
+        super().__init__(f"Escape to continuation {cont_id}")
+        self.cont_id: str = cont_id
+        self.value: Any = value
+
+
+class Continuation:
+    """One-shot first-class continuation created by call/cc."""
+
+    def __init__(self, cont_id: str) -> None:
+        self.cont_id: str = cont_id
+        self.invoked: bool = False
+        self.active: bool = True
+
+    def __call__(self, value: Any = NIL) -> Any:
+        if self.invoked or not self.active:
+            raise RuntimeError(
+                f"One-shot continuation {self.cont_id} cannot be invoked multiple times"
+            )
+        self.invoked = True
+        raise EscapeContinuation(self.cont_id, value)
+
+    def __repr__(self) -> str:
+        return f"#<continuation {self.cont_id}>"
+
+
 # Core Lisp Value type union
 LispVal = Union[
     int,
@@ -189,6 +272,9 @@ LispVal = Union[
     NilType,
     Cons,
     SequenceView,
+    Vector,
+    Values,
+    Continuation,
     Cell,
     "Procedure",
     "Primitive",
@@ -289,3 +375,12 @@ def to_py_list(val: Any) -> List[Any]:
     if not is_null(curr):
         raise TypeError(f"to_py_list expected proper list, got improper: {val!r}")
     return res
+
+
+def unwrap_values(val: Any) -> Any:
+    """Unwrap Values to its first element in single-value contexts, or NIL if empty."""
+    if isinstance(val, Values):
+        if len(val.values) >= 1:
+            return val.values[0]
+        return NIL
+    return val

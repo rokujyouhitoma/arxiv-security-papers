@@ -13,7 +13,19 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 from ilisp.env import Environment, make_initial_env
 from ilisp.evaluator import eval_expr
 from ilisp.reader import read_all
-from ilisp.types import NIL, Cons, NilType, Procedure, Symbol, car, cdr, to_py_list
+from ilisp.types import (
+    NIL,
+    Cons,
+    NilType,
+    Procedure,
+    Symbol,
+    Vector,
+    car,
+    cdr,
+    is_null,
+    is_pair,
+    to_py_list,
+)
 
 # Reserved words in Python requiring safe mangling
 PYTHON_KEYWORDS = {
@@ -161,6 +173,10 @@ class PythonASTCompiler:
                 ast.alias(name="Symbol", asname=None),
                 ast.alias(name="Cell", asname=None),
                 ast.alias(name="SequenceView", asname=None),
+                ast.alias(name="Vector", asname=None),
+                ast.alias(name="Values", asname=None),
+                ast.alias(name="SchemeException", asname=None),
+                ast.alias(name="Continuation", asname=None),
             ],
             level=0,
         )
@@ -226,6 +242,13 @@ class PythonASTCompiler:
             return ast.Constant(value=expr)
         if expr is NIL or isinstance(expr, NilType):
             return ast.Name(id="NIL", ctx=ast.Load())
+        if isinstance(expr, Vector):
+            elts = [self._compile_expr(elem, mutated_vars) for elem in expr.elements]
+            return ast.Call(
+                func=ast.Name(id="Vector", ctx=ast.Load()),
+                args=[ast.List(elts=elts, ctx=ast.Load())],
+                keywords=[],
+            )
 
         # 2. Variable reference
         if isinstance(expr, Symbol):
@@ -310,6 +333,11 @@ class PythonASTCompiler:
                 if op.name == "quote":
                     datum = car(expr.cdr)
                     return self._compile_quote(datum)
+
+                # (quasiquote template)
+                if op.name == "quasiquote":
+                    template = car(expr.cdr)
+                    return self._compile_quasiquote(template, mutated_vars)
 
                 # (if test then [else])
                 if op.name == "if":
@@ -570,7 +598,131 @@ class PythonASTCompiler:
                 args=[car_ast, cdr_ast],
                 keywords=[],
             )
+        if isinstance(datum, Vector):
+            elts = [self._compile_quote(x) for x in datum.elements]
+            return ast.Call(
+                func=ast.Name(id="Vector", ctx=ast.Load()),
+                args=[ast.List(elts=elts, ctx=ast.Load())],
+                keywords=[],
+            )
         return ast.Constant(value=datum)
+
+    def _compile_quasiquote(
+        self, template: Any, mutated_vars: Set[str], depth: int = 1
+    ) -> ast.expr:
+        """Compile a quasiquote template into an ast.expr."""
+        if not is_pair(template):
+            if isinstance(template, Vector):
+                elts = [
+                    self._compile_quasiquote(elem, mutated_vars, depth)
+                    for elem in template.elements
+                ]
+                return ast.Call(
+                    func=ast.Name(id="Vector", ctx=ast.Load()),
+                    args=[ast.List(elts=elts, ctx=ast.Load())],
+                    keywords=[],
+                )
+            if isinstance(template, Symbol):
+                return self._compile_quote(template)
+            return self._compile_expr(template, mutated_vars)
+
+        first = car(template)
+        if isinstance(first, Symbol):
+            if first.name == "quasiquote":
+                inner_ast = self._compile_quasiquote(
+                    car(cdr(template)), mutated_vars, depth + 1
+                )
+                return ast.Call(
+                    func=ast.Name(id="Cons", ctx=ast.Load()),
+                    args=[
+                        self._compile_quote(Symbol.intern("quasiquote")),
+                        ast.Call(
+                            func=ast.Name(id="Cons", ctx=ast.Load()),
+                            args=[inner_ast, ast.Name(id="NIL", ctx=ast.Load())],
+                            keywords=[],
+                        ),
+                    ],
+                    keywords=[],
+                )
+            if first.name == "unquote":
+                if depth == 1:
+                    return self._compile_expr(car(cdr(template)), mutated_vars)
+                else:
+                    inner_ast = self._compile_quasiquote(
+                        car(cdr(template)), mutated_vars, depth - 1
+                    )
+                    return ast.Call(
+                        func=ast.Name(id="Cons", ctx=ast.Load()),
+                        args=[
+                            self._compile_quote(Symbol.intern("unquote")),
+                            ast.Call(
+                                func=ast.Name(id="Cons", ctx=ast.Load()),
+                                args=[inner_ast, ast.Name(id="NIL", ctx=ast.Load())],
+                                keywords=[],
+                            ),
+                        ],
+                        keywords=[],
+                    )
+
+        # General list: desugar into append / cons calls
+        chunks: List[ast.expr] = []
+        normal_acc: List[ast.expr] = []
+
+        curr = template
+        while is_pair(curr):
+            item = car(curr)
+            if (
+                is_pair(item)
+                and isinstance(car(item), Symbol)
+                and car(item).name == "unquote-splicing"
+                and depth == 1
+            ):
+                if normal_acc:
+                    chunk_call = self._build_cons_list_ast(normal_acc)
+                    chunks.append(chunk_call)
+                    normal_acc = []
+                spliced_expr = self._compile_expr(car(cdr(item)), mutated_vars)
+                chunks.append(spliced_expr)
+                curr = cdr(curr)
+                continue
+
+            normal_acc.append(self._compile_quasiquote(item, mutated_vars, depth))
+            curr = cdr(curr)
+
+        if not is_null(curr):
+            tail_ast = self._compile_quasiquote(curr, mutated_vars, depth)
+            if normal_acc:
+                chunks.append(self._build_cons_list_ast(normal_acc, tail=tail_ast))
+            else:
+                chunks.append(tail_ast)
+        elif normal_acc:
+            chunks.append(self._build_cons_list_ast(normal_acc))
+
+        if not chunks:
+            return ast.Name(id="NIL", ctx=ast.Load())
+
+        if len(chunks) == 1:
+            return chunks[0]
+
+        m_append = mangle_symbol("append")
+        return ast.Call(
+            func=ast.Name(id=m_append, ctx=ast.Load()),
+            args=chunks,
+            keywords=[],
+        )
+
+    def _build_cons_list_ast(
+        self, elements: List[ast.expr], tail: Optional[ast.expr] = None
+    ) -> ast.expr:
+        """Helper to build Cons(...) chain AST from list of element ASTs."""
+        res: ast.expr = tail if tail is not None else ast.Name(id="NIL", ctx=ast.Load())
+        for elem in reversed(elements):
+            res = ast.Call(
+                func=ast.Name(id="Cons", ctx=ast.Load()),
+                args=[elem, res],
+                keywords=[],
+            )
+        return res
 
 
 def compile_ilisp(

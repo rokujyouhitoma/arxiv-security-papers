@@ -15,9 +15,15 @@ from ilisp.types import (
     NIL,
     Cell,
     Cons,
+    Continuation,
+    EscapeContinuation,
     Primitive,
+    Procedure,
+    SchemeException,
     SequenceView,
     Symbol,
+    Values,
+    Vector,
     car,
     cdr,
     is_null,
@@ -259,6 +265,136 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             res = eval_expr(expr, env)
         return res
 
+    def prim_num_le(*args: Union[int, float]) -> bool:
+        if len(args) < 2:
+            return True
+        for i in range(len(args) - 1):
+            if not (args[i] <= args[i + 1]):
+                return False
+        return True
+
+    def prim_num_ge(*args: Union[int, float]) -> bool:
+        if len(args) < 2:
+            return True
+        for i in range(len(args) - 1):
+            if not (args[i] >= args[i + 1]):
+                return False
+        return True
+
+    # Vectors (R7RS)
+    def prim_vector_p(x: Any) -> bool:
+        return isinstance(x, Vector)
+
+    def prim_make_vector(k: int, fill: Any = NIL) -> Vector:
+        return Vector([fill] * k)
+
+    def prim_vector(*args: Any) -> Vector:
+        return Vector(list(args))
+
+    def prim_vector_length(vec: Any) -> int:
+        if not isinstance(vec, Vector):
+            raise TypeError(f"vector-length expected vector, got {type(vec).__name__}")
+        return len(vec)
+
+    def prim_vector_ref(vec: Any, k: int) -> Any:
+        if not isinstance(vec, Vector):
+            raise TypeError(f"vector-ref expected vector, got {type(vec).__name__}")
+        return vec[k]
+
+    def prim_vector_set_bang(vec: Any, k: int, val: Any) -> Any:
+        if not isinstance(vec, Vector):
+            raise TypeError(f"vector-set! expected vector, got {type(vec).__name__}")
+        vec[k] = val
+        return NIL
+
+    def prim_vector_to_list(vec: Any) -> Any:
+        if not isinstance(vec, Vector):
+            raise TypeError(f"vector->list expected vector, got {type(vec).__name__}")
+        return to_lisp_list(vec.elements)
+
+    def prim_list_to_vector(lst: Any) -> Vector:
+        return Vector(to_py_list(lst))
+
+    # Multiple Return Values (R7RS)
+    def prim_values(*args: Any) -> Any:
+        if len(args) == 1:
+            return args[0]
+        return Values(*args)
+
+    def prim_call_with_values(producer: Any, consumer: Any) -> Any:
+        from ilisp.evaluator import _apply_procedure
+
+        if isinstance(producer, Procedure):
+            prod_val = _apply_procedure(producer, [])
+        elif callable(producer):
+            prod_val = producer()
+        else:
+            raise TypeError(f"producer must be callable, got {producer!r}")
+
+        if isinstance(prod_val, Values):
+            arg_list = list(prod_val.values)
+        else:
+            arg_list = [prod_val]
+
+        if isinstance(consumer, Procedure):
+            return _apply_procedure(consumer, arg_list)
+        elif callable(consumer):
+            return consumer(*arg_list)
+        raise TypeError(f"consumer must be callable, got {consumer!r}")
+
+    # Continuations (R7RS One-shot Escape)
+    cont_counter = 0
+
+    def prim_call_cc(proc: Any) -> Any:
+        nonlocal cont_counter
+        cont_counter += 1
+        cid = f"cc_{cont_counter}"
+        cont = Continuation(cid)
+        try:
+            if isinstance(proc, Procedure):
+                from ilisp.evaluator import _apply_procedure
+
+                return _apply_procedure(proc, [cont])
+            elif callable(proc):
+                return proc(cont)
+            raise TypeError(f"call/cc expects procedure, got {proc!r}")
+        except EscapeContinuation as esc:
+            if esc.cont_id == cid:
+                return esc.value
+            raise
+        finally:
+            cont.active = False
+
+    # Exceptions & Conditions (R7RS)
+    def prim_raise(datum: Any) -> Any:
+        raise SchemeException(datum)
+
+    def prim_with_exception_handler(handler: Any, thunk: Any) -> Any:
+        from ilisp.evaluator import _apply_procedure
+
+        try:
+            if isinstance(thunk, Procedure):
+                return _apply_procedure(thunk, [])
+            elif callable(thunk):
+                return thunk()
+            raise TypeError(f"thunk must be callable, got {thunk!r}")
+        except SchemeException as se:
+            if isinstance(handler, Procedure):
+                return _apply_procedure(handler, [se.datum])
+            elif callable(handler):
+                return handler(se.datum)
+            raise
+        except Exception as py_err:
+            if isinstance(handler, Procedure):
+                return _apply_procedure(handler, [str(py_err)])
+            elif callable(handler):
+                return handler(str(py_err))
+            raise
+
+    def prim_error(msg: str, *args: Any) -> Any:
+        err_obj = Cons(Symbol.intern("error"), Cons(msg, to_lisp_list(args)))
+        raise SchemeException(err_obj)
+
     # Register all primitives
     primitives: Dict[str, Callable[..., Any]] = {
         # Pairs and Lists
@@ -288,6 +424,28 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "=": prim_num_eq,
         "<": prim_num_lt,
         ">": prim_num_gt,
+        "<=": prim_num_le,
+        ">=": prim_num_ge,
+        # Vectors (R7RS)
+        "vector?": prim_vector_p,
+        "make-vector": prim_make_vector,
+        "vector": prim_vector,
+        "vector-ref": prim_vector_ref,
+        "vector-set!": prim_vector_set_bang,
+        "vector-length": prim_vector_length,
+        "vector->list": prim_vector_to_list,
+        "list->vector": prim_list_to_vector,
+        # Multiple Values (R7RS)
+        "values": prim_values,
+        "call-with-values": prim_call_with_values,
+        # Continuations (R7RS)
+        "call/cc": prim_call_cc,
+        "call-with-current-continuation": prim_call_cc,
+        # Exceptions (R7RS)
+        "raise": prim_raise,
+        "raise-continuable": prim_raise,
+        "with-exception-handler": prim_with_exception_handler,
+        "error": prim_error,
         # I/O
         "display": prim_display,
         "newline": prim_newline,

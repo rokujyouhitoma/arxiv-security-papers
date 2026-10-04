@@ -13,6 +13,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **452** | Phase 2: R7RS 仕様準拠のコア言語機能拡充 (準クォート、ベクタ型、例外機構、多値、脱出継続) | Feature | 2026-10-04 | [closed/452-implement-phase2-r7rs-core-features.md](closed/452-implement-phase2-r7rs-core-features.md) |
 | **451** | Backend A: Python AST トランスパイラ (py_codegen) の実装 | Feature | 2026-10-04 | [closed/451-implement-backend-a-python-ast-transpiler.md](closed/451-implement-backend-a-python-ast-transpiler.md) |
 | **450** | ILISP 標準ライブラリと構文マクロ群 (stdlib/base.ilisp) の実装 | Feature | 2026-10-04 | [closed/450-implement-ilisp-stdlib-base.md](closed/450-implement-ilisp-stdlib-base.md) |
 | **449** | Phase 1: Kernel ILISP 最小構成の実装 | Feature | 2026-10-04 | [closed/449-implement-phase1-kernel-ilisp-pure-python.md](closed/449-implement-phase1-kernel-ilisp-pure-python.md) |

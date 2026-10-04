@@ -13,12 +13,15 @@ from ilisp.env import Environment
 from ilisp.types import (
     NIL,
     Cons,
+    Continuation,
     NilType,
     Primitive,
     Procedure,
     Symbol,
+    Vector,
     car,
     cdr,
+    is_null,
     is_pair,
     to_lisp_list,
     to_py_list,
@@ -42,8 +45,22 @@ def eval_expr(expr: Any, env: Environment) -> Any:
 
     while True:
         # 1. Self-evaluating literals
-        if isinstance(
-            curr_expr, (int, float, str, bool, NilType, Primitive, Procedure)
+        if (
+            isinstance(
+                curr_expr,
+                (
+                    int,
+                    float,
+                    str,
+                    bool,
+                    NilType,
+                    Primitive,
+                    Procedure,
+                    Vector,
+                    Continuation,
+                ),
+            )
+            or curr_expr is NIL
         ):
             return curr_expr
 
@@ -65,6 +82,13 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     if not is_pair(args):
                         raise SyntaxError("quote requires 1 argument")
                     return car(args)
+
+                # (quasiquote template)
+                if op_name == "quasiquote":
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError("quasiquote requires 1 argument")
+                    return eval_quasiquote(car(args), curr_env)
 
                 # (if test then [else])
                 if op_name == "if":
@@ -289,3 +313,72 @@ def _apply_procedure(proc: Procedure, args: List[Any]) -> Any:
     for expr in proc.body:
         result = eval_expr(expr, call_env)
     return result
+
+
+def eval_quasiquote(template: Any, env: Environment, depth: int = 1) -> Any:
+    """Evaluate a quasiquote template supporting nested quasiquotes and splicing."""
+    if not is_pair(template):
+        if isinstance(template, Vector):
+            expanded_elements: List[Any] = []
+            for item in template.elements:
+                if is_pair(item) and isinstance(car(item), Symbol):
+                    if car(item).name == "unquote-splicing" and depth == 1:
+                        spliced = eval_expr(car(cdr(item)), env)
+                        if isinstance(spliced, (list, tuple, Vector)):
+                            expanded_elements.extend(spliced)
+                        else:
+                            expanded_elements.extend(to_py_list(spliced))
+                        continue
+                expanded_elements.append(eval_quasiquote(item, env, depth))
+            return Vector(expanded_elements)
+        return template
+
+    first = car(template)
+    if isinstance(first, Symbol):
+        if first.name == "quasiquote":
+            inner = eval_quasiquote(car(cdr(template)), env, depth + 1)
+            return Cons(Symbol.intern("quasiquote"), Cons(inner, NIL))
+        if first.name == "unquote":
+            if depth == 1:
+                return eval_expr(car(cdr(template)), env)
+            else:
+                inner = eval_quasiquote(car(cdr(template)), env, depth - 1)
+                return Cons(Symbol.intern("unquote"), Cons(inner, NIL))
+        if first.name == "unquote-splicing":
+            if depth == 1:
+                raise SyntaxError("unquote-splicing not in list context")
+            else:
+                inner = eval_quasiquote(car(cdr(template)), env, depth - 1)
+                return Cons(Symbol.intern("unquote-splicing"), Cons(inner, NIL))
+
+    # General list: expand elements with splicing support
+    result_elements: List[Any] = []
+    curr = template
+    while is_pair(curr):
+        item = car(curr)
+        if is_pair(item) and isinstance(car(item), Symbol):
+            sym_name = car(item).name
+            if sym_name == "unquote-splicing" and depth == 1:
+                spliced_val = eval_expr(car(cdr(item)), env)
+                if isinstance(spliced_val, (list, tuple, Vector)):
+                    for s in spliced_val:
+                        result_elements.append(s)
+                else:
+                    for s in to_py_list(spliced_val):
+                        result_elements.append(s)
+                curr = cdr(curr)
+                continue
+        result_elements.append(eval_quasiquote(item, env, depth))
+        curr = cdr(curr)
+
+    if not is_null(curr):
+        tail_val = eval_quasiquote(curr, env, depth)
+        res: Any = tail_val
+        for elem in reversed(result_elements):
+            res = Cons(elem, res)
+        return res
+
+    res = NIL
+    for elem in reversed(result_elements):
+        res = Cons(elem, res)
+    return res

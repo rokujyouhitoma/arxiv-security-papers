@@ -182,7 +182,25 @@ class Reader:
         if ch == "\\":
             self._next_char()  # consume '\'
             return self._read_char_literal(loc)
+        if ch == "(":
+            self._next_char()  # consume '('
+            return self._read_vector(loc)
         raise LispSyntaxError(f"Unsupported hash literal sequence '#{ch}'", loc)
+
+    def _read_vector(self, loc: SourceLocation) -> Any:
+        elements: List[Any] = []
+        while True:
+            self._skip_whitespace_and_comments()
+            ch = self._peek_char()
+            if ch is None:
+                raise LispSyntaxError("Unclosed vector '#('", loc)
+            if ch == ")":
+                self._next_char()
+                break
+            elements.append(self.read())
+        from ilisp.types import Vector
+
+        return Vector(elements)
 
     def _read_char_literal(self, loc: SourceLocation) -> str:
         # Character literal, e.g. #\a, #\space, #\newline

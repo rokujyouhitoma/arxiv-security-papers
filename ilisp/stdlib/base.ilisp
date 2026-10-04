@@ -91,6 +91,71 @@
                                                     '()))))
                             '()))))))
 
+;; case: (case key ((val ...) expr ...) ... (else expr ...))
+(define-macro (case key . clauses)
+  (let ((k_var '__case_key))
+    (define (_ilisp_expand_case cls)
+      (if (null? cls)
+          '()
+          (let ((first_cl (car cls))
+                (rest_cl (cdr cls)))
+            (let ((datums (car first_cl))
+                  (exprs (cdr first_cl)))
+              (if (eq? datums 'else)
+                  (cons 'begin exprs)
+                  (cons 'if
+                        (cons (cons 'member (cons k_var (cons (cons 'quote (cons datums '())) '())))
+                              (cons (cons 'begin exprs)
+                                    (cons (_ilisp_expand_case rest_cl) '())))))))))
+    (cons 'let
+          (cons (cons (cons k_var (cons key '())) '())
+                (cons (_ilisp_expand_case clauses) '())))))
+
+;; guard: (guard (var (test expr ...) ...) body ...)
+(define-macro (guard spec . body)
+  (let ((var (car spec))
+        (clauses (cdr spec)))
+    (cons 'call/cc
+          (cons (cons 'lambda
+                      (cons (cons '__guard_exit '())
+                            (cons (cons 'with-exception-handler
+                                        (cons (cons 'lambda
+                                                    (cons (cons var '())
+                                                          (cons (cons '__guard_exit
+                                                                      (cons (cons 'cond clauses) '()))
+                                                                '())))
+                                              (cons (cons 'lambda
+                                                          (cons '()
+                                                                body))
+                                                    '())))
+                                  '())))
+                '()))))
+
+;; let-values: (let-values (((var ...) expr) ...) body ...)
+(define-macro (let-values bindings . body)
+  (if (null? bindings)
+      (cons 'begin body)
+      (let ((first_b (car bindings))
+            (rest_b (cdr bindings)))
+        (let ((vars (car first_b))
+              (producer_expr (car (cdr first_b))))
+          (cons 'call-with-values
+                (cons (cons 'lambda (cons '() (cons producer_expr '())))
+                      (cons (cons 'lambda
+                                  (cons vars
+                                        (cons (cons 'let-values (cons rest_b body))
+                                              '())))
+                            '())))))))
+
+;; let*-values: (let*-values (((var ...) expr) ...) body ...)
+(define-macro (let*-values bindings . body)
+  (if (null? bindings)
+      (cons 'begin body)
+      (cons 'let-values
+            (cons (cons (car bindings) '())
+                  (cons (cons 'let*-values (cons (cdr bindings) body))
+                        '())))))
+
 ;;; -------------------------------------------------------------
 ;;; 2. Pair and List Accessors & Utilities
 ;;; -------------------------------------------------------------
@@ -114,10 +179,19 @@
         (loop (cdr l) (cons (car l) acc))))
   (loop lst '()))
 
-(define (append l1 l2)
+(define (_append2 l1 l2)
   (if (null? l1)
       l2
-      (cons (car l1) (append (cdr l1) l2))))
+      (cons (car l1) (_append2 (cdr l1) l2))))
+
+(define (append . lists)
+  (define (loop ls)
+    (if (null? ls)
+        '()
+        (if (null? (cdr ls))
+            (car ls)
+            (_append2 (car ls) (loop (cdr ls))))))
+  (loop lists))
 
 ;;; -------------------------------------------------------------
 ;;; 3. Higher-Order Functions
@@ -165,6 +239,13 @@
       (if (eqv? item (car lst))
           lst
           (member item (cdr lst)))))
+
+(define (memv item lst)
+  (if (null? lst)
+      #f
+      (if (eqv? item (car lst))
+          lst
+          (memv item (cdr lst)))))
 
 (define (assq key alist)
   (if (null? alist)
