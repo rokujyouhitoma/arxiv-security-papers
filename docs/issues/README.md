@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **467** | R7RS 入出力拡張プリミティブの網羅 (R7RS 6.13 / Input and output) | Feature | 2026-10-04 | [closed/467-implement-r7rs-io-extensions.md](closed/467-implement-r7rs-io-extensions.md) |
 | **466** | R7RS 構造化エラー例外機構・エラー述語・アクセサの完備 (R7RS 6.11 / Exceptions) | Feature | 2026-10-04 | [closed/466-implement-r7rs-structured-exceptions.md](closed/466-implement-r7rs-structured-exceptions.md) |
 | **465** | R7RS リスト拡張操作の網羅 (R7RS 6.4 / Pairs and lists) | Feature | 2026-10-04 | [closed/465-implement-r7rs-list-extension-operations.md](closed/465-implement-r7rs-list-extension-operations.md) |
 | **464** | R7RS 制御構造・派生構文の完備 (case-lambda, cond/case =>, lazy evaluation) | Feature | 2026-10-04 | [closed/464-implement-r7rs-derived-control-constructs.md](closed/464-implement-r7rs-derived-control-constructs.md) |

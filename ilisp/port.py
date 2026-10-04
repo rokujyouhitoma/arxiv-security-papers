@@ -685,10 +685,23 @@ def write_char(ch: Any, port: Optional[TextualOutputPort] = None) -> None:
     p.write_char(val)
 
 
-def write_string(s: str, port: Optional[TextualOutputPort] = None) -> None:
-    """Write a string to port (default: current output port)."""
+def write_string(
+    s: Any,
+    port: Optional[TextualOutputPort] = None,
+    start: int = 0,
+    end: Optional[int] = None,
+) -> None:
+    """Write string to port with optional slice [start:end] (default: current output port)."""
     p = port if port is not None else get_current_output_port()
-    p.write_string(s)
+    from ilisp.types import string_val
+
+    val = string_val(s) if hasattr(s, "val") else str(s)
+    end_idx = len(val) if end is None else end
+    if not (0 <= start <= end_idx <= len(val)):
+        raise IndexError(
+            f"write-string: invalid range [{start}:{end_idx}] for string of length {len(val)}"
+        )
+    p.write_string(val[start:end_idx])
 
 
 def newline(port: Optional[TextualOutputPort] = None) -> None:
@@ -704,20 +717,205 @@ def flush_output_port(port: Optional[TextualOutputPort] = None) -> None:
     p.flush()
 
 
+def format_datum(obj: Any, mode: str = "write") -> str:
+    """Format Scheme datum into string representation.
+
+    Modes:
+      - 'display': Human-readable (unquoted strings, raw characters).
+      - 'simple': Machine-readable, directly recursive without datum labels.
+      - 'shared': Machine-readable with datum labels for all shared/cyclic structures (#n=, #n#).
+      - 'write': Machine-readable with datum labels only for cyclic structures (#n=, #n#).
+    """
+    from ilisp.types import (
+        Bytevector,
+        Char,
+        Cons,
+        ErrorObject,
+        MutableString,
+        Record,
+        Symbol,
+        Vector,
+        is_null,
+        is_pair,
+        string_val,
+    )
+
+    if mode == "display":
+        if isinstance(obj, (str, MutableString)):
+            return string_val(obj)
+        elif isinstance(obj, Char):
+            return obj.val
+
+    # Pass 1: Label allocation for compound structures
+    labels: dict[int, int] = {}
+    if mode in ("shared", "write"):
+        counts: dict[int, int] = {}
+        cycles: set[int] = set()
+        visiting: set[int] = set()
+
+        def scan(node: Any) -> None:
+            if not isinstance(node, (Cons, Vector, Record)):
+                return
+            nid = id(node)
+            if nid in visiting:
+                cycles.add(nid)
+                counts[nid] = counts.get(nid, 0) + 1
+                return
+            counts[nid] = counts.get(nid, 0) + 1
+            if counts[nid] > 1:
+                return  # visited already
+
+            visiting.add(nid)
+            if isinstance(node, Cons):
+                scan(node.car)
+                scan(node.cdr)
+            elif isinstance(node, Vector):
+                for elem in node.elements:
+                    scan(elem)
+            elif isinstance(node, Record):
+                for slot in node.slots:
+                    scan(slot)
+            visiting.remove(nid)
+
+        scan(obj)
+
+        target_ids = (
+            cycles if mode == "write" else {nid for nid, c in counts.items() if c >= 2}
+        )
+        label_counter = 1
+        assigned_ids: set[int] = set()
+
+        def assign_labels(node: Any) -> None:
+            nonlocal label_counter
+            if not isinstance(node, (Cons, Vector, Record)):
+                return
+            nid = id(node)
+            if nid in target_ids and nid not in labels:
+                labels[nid] = label_counter
+                label_counter += 1
+            if nid in assigned_ids:
+                return
+            assigned_ids.add(nid)
+            if isinstance(node, Cons):
+                assign_labels(node.car)
+                assign_labels(node.cdr)
+            elif isinstance(node, Vector):
+                for elem in node.elements:
+                    assign_labels(elem)
+            elif isinstance(node, Record):
+                for slot in node.slots:
+                    assign_labels(slot)
+
+        assign_labels(obj)
+
+    # Pass 2: Output generation
+    seen_labels: set[int] = set()
+
+    def format_node(node: Any) -> str:
+        if isinstance(node, Symbol):
+            return node.name
+        elif isinstance(node, bool):
+            return "#t" if node else "#f"
+        elif isinstance(node, int):
+            return str(node)
+        elif isinstance(node, float):
+            import math
+
+            if math.isnan(node):
+                return "+nan.0"
+            elif math.isinf(node):
+                return "+inf.0" if node > 0 else "-inf.0"
+            return str(node)
+        elif isinstance(node, Char):
+            if mode == "display":
+                return node.val
+            return repr(node)
+        elif isinstance(node, (str, MutableString)):
+            val = string_val(node)
+            if mode == "display":
+                return val
+            escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+            return f'"{escaped}"'
+        elif is_null(node):
+            return "()"
+        elif isinstance(node, Bytevector):
+            bytes_str = " ".join(str(b) for b in node.data)
+            return f"#u8({bytes_str})"
+        elif isinstance(node, ErrorObject):
+            return repr(node)
+
+        # Compound objects with potential datum labels
+        nid = id(node)
+        prefix = ""
+        if nid in labels:
+            if nid in seen_labels:
+                return f"#{labels[nid]}#"
+            seen_labels.add(nid)
+            prefix = f"#{labels[nid]}="
+
+        if isinstance(node, Vector):
+            elems = " ".join(format_node(el) for el in node.elements)
+            return f"{prefix}#({elems})"
+        elif isinstance(node, Record):
+            slots = " ".join(format_node(sl) for sl in node.slots)
+            return f"{prefix}#({node.record_type.name} {slots})"
+        elif isinstance(node, Cons):
+            parts: list[str] = []
+            curr: Any = node
+            first = True
+            visited_in_list: set[int] = set()
+            while is_pair(curr):
+                curr_id = id(curr)
+                if not first and curr_id in labels:
+                    parts.append(".")
+                    parts.append(format_node(curr))
+                    curr = None
+                    break
+                if curr_id in visited_in_list:
+                    # Unlabeled cycle safeguard
+                    parts.append(".")
+                    parts.append("...")
+                    curr = None
+                    break
+                visited_in_list.add(curr_id)
+                first = False
+                parts.append(format_node(curr.car))
+                curr = curr.cdr
+            if curr is not None and not is_null(curr):
+                parts.append(".")
+                parts.append(format_node(curr))
+            return f"{prefix}({' '.join(parts)})"
+
+        return repr(node)
+
+    return format_node(obj)
+
+
 def display(x: Any, port: Optional[TextualOutputPort] = None) -> None:
     """Display x in human-readable form to port (default: current output port)."""
     p = port if port is not None else get_current_output_port()
-    if isinstance(x, str):
-        p.write_string(x)
-    else:
-        p.write_string(str(x))
+    p.write_string(format_datum(x, mode="display"))
     p.flush()
 
 
 def write_val(x: Any, port: Optional[TextualOutputPort] = None) -> None:
-    """Write x in machine-readable form to port (default: current output port)."""
+    """Write x in machine-readable form to port with cycle protection (default: current output port)."""
     p = port if port is not None else get_current_output_port()
-    p.write_string(repr(x))
+    p.write_string(format_datum(x, mode="write"))
+    p.flush()
+
+
+def write_simple(x: Any, port: Optional[TextualOutputPort] = None) -> None:
+    """Write x without datum labels (default: current output port)."""
+    p = port if port is not None else get_current_output_port()
+    p.write_string(format_datum(x, mode="simple"))
+    p.flush()
+
+
+def write_shared(x: Any, port: Optional[TextualOutputPort] = None) -> None:
+    """Write x with datum labels for all shared or cyclic structures (default: current output port)."""
+    p = port if port is not None else get_current_output_port()
+    p.write_string(format_datum(x, mode="shared"))
     p.flush()
 
 

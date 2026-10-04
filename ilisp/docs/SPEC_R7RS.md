@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 178
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 180
     "🔄 一部対応 (サブセット/基本版)" : 8
-    "⏳ 計画中 (Phase 3/4 予定)" : 17
+    "⏳ 計画中 (Phase 3/4 予定)" : 15
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -38,7 +38,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **数値タワー (Numbers)** | 6.2 | 35 | 33 (94%) | 🟢 ほぼ完全 | 述語群、四則演算、極値/公約数、丸め、商余剰多値、基数変換完備 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
 | **マクロ機構** | 4.3 | 3 | 2 (67%) | 🟢 充実 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules` 稼働済 |
-| **入出力・システム** | 6.13, 6.14 | 30 | 26 (87%) | 🟢 充実 | ポート抽象化, ファイル/文字列I/O, `read` (Datum), `display`, `write`, `call-with-port` |
+| **入出力・システム** | 6.13, 6.14 | 32 | 28 (88%) | 🟢 充実 | ポート抽象化, ファイル/文字列/バイナリI/O, `write-shared`, `write-simple`, `write-string` (スライス対応), `read` (Datum) |
 | **バイトベクタ** | 6.9 | 11 | 11 (100%) | 🟢 完全準拠 | `#u8(...)`, `make-bytevector`, `bytevector-u8-ref/set!`, `utf8->string`, `string->utf8` 完備 |
 
 ---
@@ -305,12 +305,14 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `read-char`, `peek-char` | Kernel (Core) | ✅ | 1文字読み込み / 覗き見 |
 | `read-line`, `read-string` | Kernel (Core) | ✅ | 行単位（改行除外）/ 指定長文字列読み込み |
 | `read-u8`, `peek-u8` | Kernel (Core) | ✅ | 1バイト読み込み / 覗き見 |
-| `read-bytevector`, `read-bytevector!` | Kernel (Core) | ✅ | ブロックバイト読み込み / 既存バイトベクタへの読み込み代入 |
+| `read-bytevector`, `read-bytevector!` | Kernel (Core) | ✅ | ブロックバイト読み込み / 既存バイトベクタへのスライス代入 (`port`, `start`, `end` オプショナル対応) |
 | `char-ready?`, `u8-ready?` | Kernel (Core) | ✅ | 入力レディ状態判定 |
-| `write-char`, `write-string` | Kernel (Core) | ✅ | 文字・文字列ポート出力 |
-| `write-u8`, `write-bytevector` | Kernel (Core) | ✅ | 1バイト出力 / ブロックバイト出力 |
-| `display` | Kernel (Core) | ✅ | 人間可読形式出力 (ポート引数オプショナル対応) |
-| `write` | Kernel (Core) | ✅ | 機械可読形式出力 (`repr` 形式, ポート引数対応) |
+| `write-char`, `write-string` | Kernel (Core) | ✅ | 文字出力 / 文字列スライス出力 (`[port [start [end]]]`) |
+| `write-u8`, `write-bytevector` | Kernel (Core) | ✅ | 1バイト出力 / バイトベクタスライス出力 (`[port [start [end]]]`) |
+| `display` | Kernel (Core) | ✅ | 人間可読形式出力 (非エスケープ文字列・文字、ポート引数対応) |
+| `write` | Kernel (Core) | ✅ | 機械可読形式出力 (循環参照のみ `#n=` / `#n#` ラベル化で無限ループ防止) |
+| `write-simple` | Kernel (Core) | ✅ | 高速単純再帰出力 (ラベル付与なし直接出力) |
+| `write-shared` | Kernel (Core) | ✅ | 共有・循環構造完全表記出力 (全共有構造・循環構造の `#n=` / `#n#` ラベル化) |
 | `newline` | Kernel (Core) | ✅ | 改行出力およびフラッシュ (ポート引数対応) |
 | `flush-output-port` | Kernel (Core) | ✅ | 出力バッファフラッシュ |
 | `eof-object`, `eof-object?` | Kernel (Core) | ✅ | EOF 終端オブジェクト生成および判定 |

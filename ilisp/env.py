@@ -432,6 +432,16 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_write(x: Any, port: Optional[port_mod.TextualOutputPort] = None) -> None:
         port_mod.write_val(x, port)
 
+    def prim_write_simple(
+        x: Any, port: Optional[port_mod.TextualOutputPort] = None
+    ) -> None:
+        port_mod.write_simple(x, port)
+
+    def prim_write_shared(
+        x: Any, port: Optional[port_mod.TextualOutputPort] = None
+    ) -> None:
+        port_mod.write_shared(x, port)
+
     def prim_read(port: Optional[port_mod.TextualInputPort] = None) -> Any:
         return port_mod.read_datum(port)
 
@@ -457,10 +467,57 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     ) -> None:
         port_mod.write_char(ch, port)
 
-    def prim_write_string(
-        s: str, port: Optional[port_mod.TextualOutputPort] = None
-    ) -> None:
-        port_mod.write_string(s, port)
+    def prim_write_string(s: Any, *args: Any) -> None:
+        port: Optional[port_mod.TextualOutputPort] = None
+        start: int = 0
+        end: Optional[int] = None
+        if len(args) == 1:
+            port = args[0]
+        elif len(args) == 2:
+            port, start = args[0], int(args[1])
+        elif len(args) == 3:
+            port, start, end = args[0], int(args[1]), int(args[2])
+        elif len(args) > 3:
+            raise TypeError(
+                f"write-string: expected 1 to 4 arguments, got {1 + len(args)}"
+            )
+        port_mod.write_string(s, port=port, start=start, end=end)
+
+    def prim_read_bytevector(k: int, *args: Any) -> Any:
+        port = args[0] if args else None
+        return port_mod.read_bytevector(k, port)
+
+    def prim_read_bytevector_bang(bv: Any, *args: Any) -> Any:
+        port = None
+        start = 0
+        end = None
+        if len(args) == 1:
+            port = args[0]
+        elif len(args) == 2:
+            port, start = args[0], int(args[1])
+        elif len(args) == 3:
+            port, start, end = args[0], int(args[1]), int(args[2])
+        elif len(args) > 3:
+            raise TypeError(
+                f"read-bytevector!: expected 1 to 4 arguments, got {1 + len(args)}"
+            )
+        return port_mod.read_bytevector_bang(bv, port=port, start=start, end=end)
+
+    def prim_write_bytevector(bv: Any, *args: Any) -> None:
+        port = None
+        start = 0
+        end = None
+        if len(args) == 1:
+            port = args[0]
+        elif len(args) == 2:
+            port, start = args[0], int(args[1])
+        elif len(args) == 3:
+            port, start, end = args[0], int(args[1]), int(args[2])
+        elif len(args) > 3:
+            raise TypeError(
+                f"write-bytevector: expected 1 to 4 arguments, got {1 + len(args)}"
+            )
+        port_mod.write_bytevector(bv, port=port, start=start, end=end)
 
     def prim_flush_output_port(
         port: Optional[port_mod.TextualOutputPort] = None,
@@ -1377,6 +1434,8 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "flush-output-port": prim_flush_output_port,
         "display": prim_display,
         "write": prim_write,
+        "write-simple": prim_write_simple,
+        "write-shared": prim_write_shared,
         "eof-object": prim_eof_object,
         "eof-object?": prim_eof_object_p,
         # Bytevectors (R7RS 6.9)
@@ -1401,9 +1460,9 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "peek-u8": port_mod.peek_u8,
         "u8-ready?": port_mod.u8_ready_p,
         "write-u8": port_mod.write_u8,
-        "read-bytevector": port_mod.read_bytevector,
-        "read-bytevector!": port_mod.read_bytevector_bang,
-        "write-bytevector": port_mod.write_bytevector,
+        "read-bytevector": prim_read_bytevector,
+        "read-bytevector!": prim_read_bytevector_bang,
+        "write-bytevector": prim_write_bytevector,
         "load": prim_load,
         # Python Zero-Copy & Interop
         "sequence-view": prim_sequence_view,
