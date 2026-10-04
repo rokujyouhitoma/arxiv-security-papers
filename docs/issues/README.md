@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **449** | Phase 1: Kernel ILISP 最小構成の実装 | Feature | 2026-10-04 | [closed/449-implement-phase1-kernel-ilisp-pure-python.md](closed/449-implement-phase1-kernel-ilisp-pure-python.md) |
 | **448** | ILISP 実装前処理系工学仕様精緻化と段階的ロードマップ策定 | Documentation / Architecture | 2026-10-04 | [closed/448-refine-ilisp-specification-with-runtime-architecture-and-phased-roadmap.md](closed/448-refine-ilisp-specification-with-runtime-architecture-and-phased-roadmap.md) |
 | **447** | トップレベルディレクトリの徹底的構造集約とサブシステム統合 | Refactoring | 2026-10-04 | [closed/447-refactor-root-directory-structure-subsystem-consolidation.md](closed/447-refactor-root-directory-structure-subsystem-consolidation.md) |
 | **446** | ILISP 包括アーキテクチャ設計 (DSN-31) および ilisp/docs の PLC 処理系工学・Rust VM ロードマップ反映 | Feature | 2026-10-04 | [closed/446-refine-ilisp-architecture-with-plc-and-rust-vm-spec.md](closed/446-refine-ilisp-architecture-with-plc-and-rust-vm-spec.md) |

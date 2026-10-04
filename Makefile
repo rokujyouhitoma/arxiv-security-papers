@@ -11,7 +11,7 @@ VENV_BIN=${VENV}/bin
 VENV_PYTHON=${VENV_BIN}/python
 
 SRC=src/intelligence/cli.py
-PYTHON_SRCS := $(shell find src -type f -name "*.py" | sort)
+PYTHON_SRCS := $(shell find src ilisp -type f -name "*.py" | sort)
 TESTS := $(shell find tests -type f -name "*.py" | sort)
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar

@@ -1,0 +1,288 @@
+"""Tree-walk Evaluator and Trampoline TCO Engine for Kernel ILISP.
+
+This module implements the core evaluation semantics of Kernel ILISP,
+supporting standard special forms (quote, if, lambda, define, set!, begin, define-macro)
+and tail-call optimization via trampolining.
+"""
+
+from __future__ import annotations
+
+from typing import Any, List, Optional, Tuple
+
+from ilisp.env import Environment
+from ilisp.types import (
+    NIL,
+    Cons,
+    NilType,
+    Primitive,
+    Procedure,
+    Symbol,
+    car,
+    cdr,
+    is_pair,
+    to_lisp_list,
+    to_py_list,
+)
+
+
+class TailCall:
+    """Trampoline token holding an expression and environment to be evaluated in tail position."""
+
+    __slots__ = ("expr", "env")
+
+    def __init__(self, expr: Any, env: Environment) -> None:
+        self.expr = expr
+        self.env = env
+
+
+def eval_expr(expr: Any, env: Environment) -> Any:
+    """Evaluate an S-expression within an environment using a trampoline loop for TCO."""
+    curr_expr: Any = expr
+    curr_env: Environment = env
+
+    while True:
+        # 1. Self-evaluating literals
+        if isinstance(
+            curr_expr, (int, float, str, bool, NilType, Primitive, Procedure)
+        ):
+            return curr_expr
+
+        # 2. Variable lookup
+        if isinstance(curr_expr, Symbol):
+            return curr_env.lookup(curr_expr)
+
+        # 3. Pair / Form evaluation
+        if isinstance(curr_expr, Cons):
+            op = curr_expr.car
+
+            # --- Special Forms ---
+            if isinstance(op, Symbol):
+                op_name = op.name
+
+                # (quote datum)
+                if op_name == "quote":
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError("quote requires 1 argument")
+                    return car(args)
+
+                # (if test then [else])
+                if op_name == "if":
+                    args = to_py_list(curr_expr.cdr)
+                    if len(args) < 2 or len(args) > 3:
+                        raise SyntaxError(
+                            f"if requires 2 or 3 expressions, got {len(args)}"
+                        )
+                    test_val = eval_expr(args[0], curr_env)
+                    # In Scheme, only False is falsy
+                    if test_val is not False:
+                        curr_expr = args[1]
+                        continue
+                    else:
+                        if len(args) == 3:
+                            curr_expr = args[2]
+                            continue
+                        return NIL
+
+                # (begin expr ...)
+                if op_name == "begin":
+                    body_exprs = to_py_list(curr_expr.cdr)
+                    if not body_exprs:
+                        return NIL
+                    for step in body_exprs[:-1]:
+                        eval_expr(step, curr_env)
+                    curr_expr = body_exprs[-1]
+                    continue
+
+                # (define var val) or (define (name params...) body...)
+                if op_name == "define":
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError("define requires target and body")
+                    target = car(args)
+                    body_rest = cdr(args)
+
+                    if isinstance(target, Symbol):
+                        # (define var val)
+                        val_expr = car(body_rest) if is_pair(body_rest) else NIL
+                        val = eval_expr(val_expr, curr_env)
+                        curr_env.define(target, val)
+                        return target
+
+                    elif isinstance(target, Cons):
+                        # (define (name params...) body...)
+                        fn_name = car(target)
+                        if not isinstance(fn_name, Symbol):
+                            raise SyntaxError(
+                                f"define function name must be a symbol, got {fn_name!r}"
+                            )
+                        params_expr = cdr(target)
+                        parsed_params, rest_p = _parse_params(params_expr)
+                        proc = Procedure(
+                            params=parsed_params,
+                            body=to_py_list(body_rest),
+                            env=curr_env,
+                            is_macro=False,
+                            rest_param=rest_p,
+                            name=fn_name.name,
+                        )
+                        curr_env.define(fn_name, proc)
+                        return fn_name
+                    else:
+                        raise SyntaxError(f"Invalid define target: {target!r}")
+
+                # (set! var val)
+                if op_name == "set!":
+                    args = to_py_list(curr_expr.cdr)
+                    if len(args) != 2:
+                        raise SyntaxError("set! requires exactly variable and value")
+                    var_sym = args[0]
+                    if not isinstance(var_sym, Symbol):
+                        raise SyntaxError(
+                            f"set! target must be a symbol, got {var_sym!r}"
+                        )
+                    val = eval_expr(args[1], curr_env)
+                    curr_env.set(var_sym, val)
+                    return val
+
+                # (lambda (params...) body...)
+                if op_name == "lambda":
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError("lambda requires parameters and body")
+                    params_expr = car(args)
+                    body_exprs = to_py_list(cdr(args))
+                    parsed_params, rest_p = _parse_params(params_expr)
+                    return Procedure(
+                        params=parsed_params,
+                        body=body_exprs,
+                        env=curr_env,
+                        is_macro=False,
+                        rest_param=rest_p,
+                    )
+
+                # (define-macro (name params...) body...)
+                if op_name == "define-macro":
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError("define-macro requires signature and body")
+                    target = car(args)
+                    body_rest = cdr(args)
+                    if not isinstance(target, Cons):
+                        raise SyntaxError(
+                            "define-macro syntax: (define-macro (name args...) body...)"
+                        )
+                    macro_name = car(target)
+                    if not isinstance(macro_name, Symbol):
+                        raise SyntaxError("macro name must be a symbol")
+                    params_expr = cdr(target)
+                    parsed_params, rest_p = _parse_params(params_expr)
+                    macro_proc = Procedure(
+                        params=parsed_params,
+                        body=to_py_list(body_rest),
+                        env=curr_env,
+                        is_macro=True,
+                        rest_param=rest_p,
+                        name=macro_name.name,
+                    )
+                    curr_env.define(macro_name, macro_proc)
+                    return macro_name
+
+            # --- Function or Macro Application ---
+            fn = eval_expr(op, curr_env)
+
+            # 1. Macro call: pass unevaluated AST, expand, and re-evaluate
+            if isinstance(fn, Procedure) and fn.is_macro:
+                unevaluated_args = to_py_list(curr_expr.cdr)
+                expanded_ast = _apply_procedure(fn, unevaluated_args)
+                curr_expr = expanded_ast
+                continue
+
+            # 2. Procedure / Primitive call: evaluate arguments first
+            raw_args = to_py_list(curr_expr.cdr)
+            eval_args = [eval_expr(a, curr_env) for a in raw_args]
+
+            if isinstance(fn, Primitive):
+                return fn(*eval_args)
+
+            if isinstance(fn, Procedure):
+                # Bind parameters
+                call_env = _bind_procedure_call(fn, eval_args)
+                body = fn.body
+                if not body:
+                    return NIL
+                for step in body[:-1]:
+                    eval_expr(step, call_env)
+                # Tail call optimization: jump to last expression in new environment
+                curr_expr = body[-1]
+                curr_env = call_env
+                continue
+
+            raise TypeError(f"Attempted to apply non-procedure: {fn!r}")
+
+        raise TypeError(f"Unknown AST node during evaluation: {curr_expr!r}")
+
+
+def _parse_params(params_expr: Any) -> Tuple[List[Symbol], Optional[Symbol]]:
+    """Parse Scheme parameter list including dotted rest arguments."""
+    params: List[Symbol] = []
+    rest_param: Optional[Symbol] = None
+
+    if isinstance(params_expr, Symbol):
+        # (lambda args body...)
+        return ([], params_expr)
+
+    curr = params_expr
+    while isinstance(curr, Cons):
+        elem = curr.car
+        if not isinstance(elem, Symbol):
+            raise SyntaxError(f"Parameter must be a symbol, got {elem!r}")
+        params.append(elem)
+        curr = curr.cdr
+
+    if isinstance(curr, Symbol):
+        # Dotted rest parameter: (lambda (a b . rest) body...)
+        rest_param = curr
+    elif curr is not NIL:
+        raise SyntaxError(f"Invalid parameter list ending with {curr!r}")
+
+    return (params, rest_param)
+
+
+def _bind_procedure_call(proc: Procedure, args: List[Any]) -> Environment:
+    """Create local call environment binding procedure parameters to arguments."""
+    new_bindings: dict[Symbol, Any] = {}
+    params = proc.params
+    if not isinstance(params, list):
+        # Varargs single symbol: (lambda args ...)
+        new_bindings[params] = to_lisp_list(args)
+        return Environment(parent=proc.env, bindings=new_bindings)
+
+    if proc.rest_param is None:
+        if len(params) != len(args):
+            raise TypeError(
+                f"Procedure {proc.name or 'lambda'} expected {len(params)} arguments, got {len(args)}"
+            )
+        for p, a in zip(params, args):
+            new_bindings[p] = a
+    else:
+        # Fixed params + rest param
+        if len(args) < len(params):
+            raise TypeError(
+                f"Procedure {proc.name or 'lambda'} expected at least {len(params)} arguments, got {len(args)}"
+            )
+        for i, p in enumerate(params):
+            new_bindings[p] = args[i]
+        rest_args = args[len(params) :]
+        new_bindings[proc.rest_param] = to_lisp_list(rest_args)
+
+    return Environment(parent=proc.env, bindings=new_bindings)
+
+
+def _apply_procedure(proc: Procedure, args: List[Any]) -> Any:
+    """Directly evaluate a procedure or macro body, returning the result."""
+    call_env = _bind_procedure_call(proc, args)
+    result: Any = NIL
+    for expr in proc.body:
+        result = eval_expr(expr, call_env)
+    return result
