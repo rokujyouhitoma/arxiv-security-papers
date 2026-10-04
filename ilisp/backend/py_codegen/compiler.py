@@ -207,7 +207,12 @@ class PythonASTCompiler:
             return expr
 
         op = expr.car
-        if isinstance(op, Symbol) and op.name in ("define-macro", "define-syntax"):
+        if isinstance(op, Symbol) and op.name in (
+            "define-macro",
+            "define-syntax",
+            "define-library",
+            "import",
+        ):
             eval_expr(expr, self.env)
             return expr
 
@@ -312,8 +317,13 @@ class PythonASTCompiler:
                         self.emit(fn_def)
                         return ast.Name(id=fn_name, ctx=ast.Load())
 
-                # (define-macro ...) or (define-syntax ...)
-                if op.name in ("define-macro", "define-syntax"):
+                # (define-macro ...) or (define-syntax ...) or (define-library ...) or (import ...)
+                if op.name in (
+                    "define-macro",
+                    "define-syntax",
+                    "define-library",
+                    "import",
+                ):
                     return ast.Name(id="NIL", ctx=ast.Load())
 
                 # (set! var val)

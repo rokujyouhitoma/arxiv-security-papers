@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全195機能)
-    "✅ サポート済 (Phase 1/2 稼働中)" : 82
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 85
     "🔄 一部対応 (サブセット/基本版)" : 18
-    "⏳ 計画中 (Phase 3/4 予定)" : 95
+    "⏳ 計画中 (Phase 3/4 予定)" : 92
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -70,6 +70,9 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `guard` | 例外捕捉構文 | `stdlib/base.ilisp` | ✅ 完全準拠 | `call/cc` と `with-exception-handler`、`cond` へのマクロ脱糖 |
 | `define-syntax` | 衛生的マクロ | `ilisp/syntax.py` | ✅ 完全準拠 | **Scope Sets アルゴリズム** (Flatt '16) による変数捕捉フリーなマクロ登録 |
 | `syntax-rules` | パターン置換 | `ilisp/syntax.py` | ✅ 完全準拠 | リテラル一致、パターン変数束縛、エリプシス (`...`) 反復展開完備 |
+| `define-library` | ライブラリ定義 | `ilisp/module.py` | ✅ 完全準拠 | 独立レキシカル環境による完全な名前空間カプセル化 |
+| `import` | モジュール読込 | `ilisp/module.py` | ✅ 完全準拠 | `only`, `except`, `prefix`, `rename` 修飾子対応 |
+| `export` | シンボル公開 | `ilisp/module.py` | ✅ 完全準拠 | 識別子公開および `(rename orig new)` エクスポート対応 |
 | `letrec` | 相互再帰束縛 | - | ⏳ 計画中 | Phase 3 実装予定（現状はトップレベル `define` / 内部 `define` で代替可能） |
 | `letrec*` | 逐次相互再帰 | - | ⏳ 計画中 | Phase 3 実装予定 |
 | `do` | 構造化反復 | - | ⏳ 計画中 | Phase 3 実装予定（現状は名前付き let や末尾再帰で記述可能） |

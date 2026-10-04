@@ -257,6 +257,20 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     curr_env.define(syn_name, transformer)
                     return syn_name
 
+                # (define-library (name ...) decl ...)
+                if op_name == "define-library":
+                    from ilisp.module import execute_define_library
+
+                    lib = execute_define_library(curr_expr)
+                    return Symbol.intern(".".join(lib.name))
+
+                # (import import-set ...)
+                if op_name == "import":
+                    from ilisp.module import execute_import
+
+                    execute_import(curr_expr, curr_env)
+                    return NIL
+
             # --- Function or Macro Application ---
             fn = eval_expr(op, curr_env)
 
