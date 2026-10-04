@@ -760,6 +760,26 @@ def cdr(pair: Any) -> Any:
     raise TypeError(f"cdr expected pair, got {type(pair).__name__}: {pair!r}")
 
 
+def set_car(pair: Any, val: Any) -> None:
+    """Set the car of a Cons cell. Raises TypeError if pair is not a mutable Cons pair."""
+    if isinstance(pair, Cons):
+        pair.car = val
+        return
+    raise TypeError(
+        f"set-car! expected mutable Cons pair, got {type(pair).__name__}: {pair!r}"
+    )
+
+
+def set_cdr(pair: Any, val: Any) -> None:
+    """Set the cdr of a Cons cell. Raises TypeError if pair is not a mutable Cons pair."""
+    if isinstance(pair, Cons):
+        pair.cdr = val
+        return
+    raise TypeError(
+        f"set-cdr! expected mutable Cons pair, got {type(pair).__name__}: {pair!r}"
+    )
+
+
 def to_lisp_list(elements: Sequence[Any], loc: Optional[SourceLocation] = None) -> Any:
     """Convert a Python sequence to a Scheme Cons list."""
     result: Any = NIL

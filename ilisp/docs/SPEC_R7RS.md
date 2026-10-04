@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 167
-    "🔄 一部対応 (サブセット/基本版)" : 10
-    "⏳ 計画中 (Phase 3/4 予定)" : 26
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 174
+    "🔄 一部対応 (サブセット/基本版)" : 8
+    "⏳ 計画中 (Phase 3/4 予定)" : 21
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -29,7 +29,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **遅延評価 (Lazy evaluation)** | 4.2.5, 6.10 | 5 | 5 (100%) | 🟢 完全準拠 | `delay`, `delay-force`, `force`, `make-promise`, `promise?` メモ化・末尾再帰ストリーム対応完備 |
 | **レコード型 (Record types)** | 5.5 | 8 | 8 (100%) | 🟢 完全準拠 | `define-record-type`, コンストラクタ, 型述語, アクセサ, モディファイア, 生成的一意型, 低レベルAPI完備 |
 | **等価性・真偽値** | 6.1, 6.3 | 5 | 5 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `not`（レコード等価比較対応） |
-| **ペアとリスト** | 6.4 | 26 | 19 (73%) | 🟢 充実 | 基本操作、リスト走査、高階関数 (`map`, `filter`, `fold-left`)、`apply`、Alist 検索完備 |
+| **ペアとリスト** | 6.4 | 26 | 26 (100%) | 🟢 完全準拠 | 基本操作、破壊的更新 (`set-car!`, `set-cdr!`, `list-set!`)、真正リスト判定 (`list?`)、`make-list`、`list-tail`、`list-ref`、`list-copy`、多引数 `map` / `for-each`、Alist 検索完備 |
 | **シンボル** | 6.5 | 4 | 3 (75%) | 🟢 完全準拠 | インターン保証、文字列相互変換 |
 | **ベクタ (Vectors)** | 6.8 | 14 | 14 (100%) | 🟢 完全準拠 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, `vector-copy`, `vector-copy!`, `vector-fill!`, `vector-append`, `vector-map`, `vector-for-each` 等完備 |
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
@@ -136,22 +136,25 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `pair?` | Kernel (Core) | ✅ | `Cons` オブジェクト判定 |
 | `cons` | Kernel (Core) | ✅ | ペア生成（セル確保） |
 | `car`, `cdr` | Kernel (Core) | ✅ | 先頭要素・後続要素アクセス |
-| `set-car!`, `set-cdr!` | Kernel (Core) | 🔄 | ペア破壊的変更（Python 内部参照更新） |
+| `set-car!`, `set-cdr!` | Kernel (Core) | ✅ | ペア破壊的変更（Python 内部参照更新、ミュータブルセマンティクス保証） |
 | `caar`, `cadr`, `cdar`, `cddr` | `stdlib/base.ilisp`| ✅ | 2段合成アクセサ |
 | `null?` | Kernel (Core) | ✅ | 空リスト (`'()`) 判定 |
-| `list?` | Kernel (Core) | 🔄 | 循環のない真正リスト (Proper list) 判定 |
+| `list?` | Kernel (Core) | ✅ | フロイドの循環検出アルゴリズム（Tortoise and Hare）による循環リスト・不完全リスト対応の真正リスト判定 |
 | `list` | Kernel (Core) | ✅ | 可変長引数からのリスト生成 |
+| `make-list` | Kernel (Core) | ✅ | 指定要素数 `k`、初期値 `fill`（省略時未定義値）によるリスト生成 |
 | `length` | `stdlib/base.ilisp`| ✅ | リスト長の再帰走査計算 (TCO 最適化) |
 | `append` | `stdlib/base.ilisp`| ✅ | 複数リストの連結（可変長対応、末尾リスト共有） |
 | `reverse` | `stdlib/base.ilisp`| ✅ | リスト反転 (TCO 最適化) |
-| `list-tail`, `list-ref` | - | ⏳ | インデックス指定要素参照（Phase 3 予定） |
+| `list-tail` | Kernel (Core) | ✅ | リスト `k` 番目以降のサブリスト取得（不完全リスト末尾対応） |
+| `list-ref` | Kernel (Core) | ✅ | 0-indexed インデックス指定要素参照（範囲外時は例外送出） |
+| `list-set!` | Kernel (Core) | ✅ | `k` 番目ペアの `car` 破壊的置換 |
 | `memq`, `memv`, `member` | `stdlib/base.ilisp`| ✅ | リスト内要素検索（等価述語別） |
 | `assq`, `assoc`, `assv` | `stdlib/base.ilisp`| ✅ | 連想リスト (Alist) キー検索 |
-| `map` | `stdlib/base.ilisp`| ✅ | 単一リストに対する関数マッピング（多引数版は Phase 3） |
-| `for-each` | `stdlib/base.ilisp`| ✅ | 副作用走査反復 |
+| `map` | `stdlib/base.ilisp`| ✅ | `case-lambda` による多引数最短長同期マッピング完備 |
+| `for-each` | `stdlib/base.ilisp`| ✅ | `case-lambda` による多引数最短長同期副作用反復完備 |
 | `filter` | `stdlib/base.ilisp`| ✅ | 述語によるリスト要素抽出 (R7RS 互換) |
 | `fold-left` | `stdlib/base.ilisp`| ✅ | 左畳み込み集約 (R7RS 互換) |
-| `list-copy` | - | ⏳ | リスト浅いコピー（Phase 3 予定） |
+| `list-copy` | Kernel (Core) | ✅ | スパイン（ペア鎖）の浅い複製（不完全リスト末尾保持） |
 
 ### 3.5 第6.5節 シンボル (Symbols)
 

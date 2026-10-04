@@ -332,110 +332,7 @@
   (loop lists))
 
 ;;; -------------------------------------------------------------
-;;; 3. Higher-Order Functions
-;;; -------------------------------------------------------------
-
-(define (map proc lst)
-  (if (null? lst)
-      '()
-      (cons (proc (car lst))
-            (map proc (cdr lst)))))
-
-(define (filter pred lst)
-  (if (null? lst)
-      '()
-      (if (pred (car lst))
-          (cons (car lst) (filter pred (cdr lst)))
-          (filter pred (cdr lst)))))
-
-(define (fold-left proc init lst)
-  (if (null? lst)
-      init
-      (fold-left proc (proc init (car lst)) (cdr lst))))
-
-(define (for-each proc lst)
-  (if (null? lst)
-      '()
-      (begin
-        (proc (car lst))
-        (for-each proc (cdr lst)))))
-
-;;; -------------------------------------------------------------
-;;; 4. Searching and Association Lists (Alist)
-;;; -------------------------------------------------------------
-
-(define (memq item lst)
-  (if (null? lst)
-      #f
-      (if (eq? item (car lst))
-          lst
-          (memq item (cdr lst)))))
-
-(define (member item lst)
-  (if (null? lst)
-      #f
-      (if (eqv? item (car lst))
-          lst
-          (member item (cdr lst)))))
-
-(define (memv item lst)
-  (if (null? lst)
-      #f
-      (if (eqv? item (car lst))
-          lst
-          (memv item (cdr lst)))))
-
-(define (assq key alist)
-  (if (null? alist)
-      #f
-      (if (eq? key (car (car alist)))
-          (car alist)
-          (assq key (cdr alist)))))
-
-(define (assoc key alist)
-  (if (null? alist)
-      #f
-      (if (eqv? key (car (car alist)))
-          (car alist)
-          (assoc key (cdr alist)))))
-
-;;; -------------------------------------------------------------
-;;; 5. Record-Type Definitions (R7RS 5.5)
-;;; -------------------------------------------------------------
-
-(define (_ilisp_extract_all_fields field-specs)
-  (if (null? field-specs)
-      '()
-      (cons (car (car field-specs))
-            (_ilisp_extract_all_fields (cdr field-specs)))))
-
-(define (_ilisp_expand_field_specs type-name field-specs)
-  (if (null? field-specs)
-      '()
-      (let* ((fspec (car field-specs))
-             (fname (car fspec))
-             (acc-name (car (cdr fspec)))
-             (acc-def (list 'define acc-name (list 'record-accessor type-name (list 'quote fname))))
-             (rest-defs (_ilisp_expand_field_specs type-name (cdr field-specs))))
-        (if (null? (cdr (cdr fspec)))
-            (cons acc-def rest-defs)
-            (let ((mod-name (car (cdr (cdr fspec)))))
-              (cons acc-def
-                    (cons (list 'define mod-name (list 'record-modifier type-name (list 'quote fname)))
-                          rest-defs)))))))
-
-(define-macro (define-record-type type-name ctor-spec pred-name . field-specs)
-  (let ((all-fields (_ilisp_extract_all_fields field-specs))
-        (ctor-name (car ctor-spec))
-        (ctor-fields (cdr ctor-spec)))
-    (cons 'begin
-          (cons (list 'define type-name (list 'make-record-type (list 'quote type-name) (list 'quote all-fields)))
-                (cons (list 'define pred-name (list 'record-predicate type-name))
-                      (cons (list 'define ctor-name (list 'record-constructor type-name (list 'quote ctor-fields)))
-                            (_ilisp_expand_field_specs type-name field-specs)))))))
-
-;;; -------------------------------------------------------------
-;;; 6. Delayed Evaluation & Case-Lambda (R7RS 4.2.5 & 4.2.9)
+;;; 3. Delayed Evaluation & Case-Lambda (R7RS 4.2.5 & 4.2.9)
 ;;; -------------------------------------------------------------
 
 ;; delay: (delay expr)
@@ -487,4 +384,144 @@
     (list 'lambda args-var
           (list 'let (list (list n-var (list 'length args-var)))
                 (cons 'cond (_ilisp_expand_case_lambda_clauses clauses args-var n-var))))))
+
+;;; -------------------------------------------------------------
+;;; 4. Higher-Order Functions
+;;; -------------------------------------------------------------
+
+(define (_ilisp_any_null? lists)
+  (if (null? lists)
+      #f
+      (if (null? (car lists))
+          #t
+          (_ilisp_any_null? (cdr lists)))))
+
+(define (_ilisp_cars lists)
+  (if (null? lists)
+      '()
+      (cons (car (car lists))
+            (_ilisp_cars (cdr lists)))))
+
+(define (_ilisp_cdrs lists)
+  (if (null? lists)
+      '()
+      (cons (cdr (car lists))
+            (_ilisp_cdrs (cdr lists)))))
+
+(define map
+  (case-lambda
+    ((proc lst)
+     (if (null? lst)
+         '()
+         (cons (proc (car lst))
+               (map proc (cdr lst)))))
+    ((proc lst1 . rest)
+     (let ((lists (cons lst1 rest)))
+       (if (_ilisp_any_null? lists)
+           '()
+           (cons (apply proc (_ilisp_cars lists))
+                 (apply map proc (_ilisp_cdrs lists))))))))
+
+(define (filter pred lst)
+  (if (null? lst)
+      '()
+      (if (pred (car lst))
+          (cons (car lst) (filter pred (cdr lst)))
+          (filter pred (cdr lst)))))
+
+(define (fold-left proc init lst)
+  (if (null? lst)
+      init
+      (fold-left proc (proc init (car lst)) (cdr lst))))
+
+(define for-each
+  (case-lambda
+    ((proc lst)
+     (if (null? lst)
+         '()
+         (begin
+           (proc (car lst))
+           (for-each proc (cdr lst)))))
+    ((proc lst1 . rest)
+     (let ((lists (cons lst1 rest)))
+       (if (_ilisp_any_null? lists)
+           '()
+           (begin
+             (apply proc (_ilisp_cars lists))
+             (apply for-each proc (_ilisp_cdrs lists))))))))
+
+;;; -------------------------------------------------------------
+;;; 5. Searching and Association Lists (Alist)
+;;; -------------------------------------------------------------
+
+(define (memq item lst)
+  (if (null? lst)
+      #f
+      (if (eq? item (car lst))
+          lst
+          (memq item (cdr lst)))))
+
+(define (member item lst)
+  (if (null? lst)
+      #f
+      (if (eqv? item (car lst))
+          lst
+          (member item (cdr lst)))))
+
+(define (memv item lst)
+  (if (null? lst)
+      #f
+      (if (eqv? item (car lst))
+          lst
+          (memv item (cdr lst)))))
+
+(define (assq key alist)
+  (if (null? alist)
+      #f
+      (if (eq? key (car (car alist)))
+          (car alist)
+          (assq key (cdr alist)))))
+
+(define (assoc key alist)
+  (if (null? alist)
+      #f
+      (if (eqv? key (car (car alist)))
+          (car alist)
+          (assoc key (cdr alist)))))
+
+;;; -------------------------------------------------------------
+;;; 6. Record-Type Definitions (R7RS 5.5)
+;;; -------------------------------------------------------------
+
+(define (_ilisp_extract_all_fields field-specs)
+  (if (null? field-specs)
+      '()
+      (cons (car (car field-specs))
+            (_ilisp_extract_all_fields (cdr field-specs)))))
+
+(define (_ilisp_expand_field_specs type-name field-specs)
+  (if (null? field-specs)
+      '()
+      (let* ((fspec (car field-specs))
+             (fname (car fspec))
+             (acc-name (car (cdr fspec)))
+             (acc-def (list 'define acc-name (list 'record-accessor type-name (list 'quote fname))))
+             (rest-defs (_ilisp_expand_field_specs type-name (cdr field-specs))))
+        (if (null? (cdr (cdr fspec)))
+            (cons acc-def rest-defs)
+            (let ((mod-name (car (cdr (cdr fspec)))))
+              (cons acc-def
+                    (cons (list 'define mod-name (list 'record-modifier type-name (list 'quote fname)))
+                          rest-defs)))))))
+
+(define-macro (define-record-type type-name ctor-spec pred-name . field-specs)
+  (let ((all-fields (_ilisp_extract_all_fields field-specs))
+        (ctor-name (car ctor-spec))
+        (ctor-fields (cdr ctor-spec)))
+    (cons 'begin
+          (cons (list 'define type-name (list 'make-record-type (list 'quote type-name) (list 'quote all-fields)))
+                (cons (list 'define pred-name (list 'record-predicate type-name))
+                      (cons (list 'define ctor-name (list 'record-constructor type-name (list 'quote ctor-fields)))
+                            (_ilisp_expand_field_specs type-name field-specs)))))))
+
 

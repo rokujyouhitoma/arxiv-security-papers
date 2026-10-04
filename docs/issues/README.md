@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | ステータス | 担当 | リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| - | 現在進行中のオープンな Issue はありません | - | - | - | - |
+現在進行中のオープン Issue はありません。
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **465** | R7RS リスト拡張操作の網羅 (R7RS 6.4 / Pairs and lists) | Feature | 2026-10-04 | [closed/465-implement-r7rs-list-extension-operations.md](closed/465-implement-r7rs-list-extension-operations.md) |
 | **464** | R7RS 制御構造・派生構文の完備 (case-lambda, cond/case =>, lazy evaluation) | Feature | 2026-10-04 | [closed/464-implement-r7rs-derived-control-constructs.md](closed/464-implement-r7rs-derived-control-constructs.md) |
 | **463** | R7RS ベクタ拡張プリミティブの網羅 (R7RS 6.8 / Vectors) | Feature | 2026-10-04 | [closed/463-implement-r7rs-vector-extension-primitives.md](closed/463-implement-r7rs-vector-extension-primitives.md) |
 | **462** | R7RS 数値タワー・算術プリミティブの拡充 (R7RS 6.2 / Numbers) | Feature | 2026-10-04 | [closed/462-implement-r7rs-numeric-tower-primitives.md](closed/462-implement-r7rs-numeric-tower-primitives.md) |

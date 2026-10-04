@@ -138,6 +138,8 @@ from ilisp.types import (
     is_promise,
     is_record,
     is_record_type,
+    set_car,
+    set_cdr,
     string_val,
     to_lisp_list,
     to_py_list,
@@ -221,6 +223,14 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_cdr(p: Any) -> Any:
         return cdr(p)
 
+    def prim_set_car_bang(pair: Any, val: Any) -> Any:
+        set_car(pair, val)
+        return NIL
+
+    def prim_set_cdr_bang(pair: Any, val: Any) -> Any:
+        set_cdr(pair, val)
+        return NIL
+
     def prim_pair_p(x: Any) -> bool:
         return is_pair(x)
 
@@ -229,6 +239,82 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
 
     def prim_list(*args: Any) -> Any:
         return to_lisp_list(args)
+
+    def prim_list_p(obj: Any) -> bool:
+        """R7RS 6.4 list? predicate with Floyd's cycle detection algorithm."""
+        if is_null(obj):
+            return True
+        if not is_pair(obj):
+            return False
+        slow = obj
+        fast = obj
+        while is_pair(fast):
+            fast = cdr(fast)
+            if is_null(fast):
+                return True
+            if not is_pair(fast):
+                return False
+            fast = cdr(fast)
+            if is_null(fast):
+                return True
+            slow = cdr(slow)
+            if slow is fast:
+                return False
+        return is_null(fast)
+
+    def prim_make_list(k: int, fill: Any = NIL) -> Any:
+        if not isinstance(k, int) or k < 0:
+            raise ValueError(
+                f"make-list: expected non-negative integer length, got {k!r}"
+            )
+        res: Any = NIL
+        for _ in range(k):
+            res = Cons(fill, res)
+        return res
+
+    def prim_list_tail(lst: Any, k: int) -> Any:
+        if not isinstance(k, int) or k < 0:
+            raise ValueError(
+                f"list-tail: expected non-negative integer index, got {k!r}"
+            )
+        curr = lst
+        for i in range(k):
+            if not is_pair(curr):
+                raise IndexError(
+                    f"list-tail: index {k} exceeds length of list (stopped at step {i})"
+                )
+            curr = cdr(curr)
+        return curr
+
+    def prim_list_ref(lst: Any, k: int) -> Any:
+        tail = prim_list_tail(lst, k)
+        if not is_pair(tail):
+            raise IndexError(f"list-ref: index {k} out of range")
+        return car(tail)
+
+    def prim_list_set_bang(lst: Any, k: int, val: Any) -> Any:
+        tail = prim_list_tail(lst, k)
+        set_car(tail, val)
+        return NIL
+
+    def prim_list_copy(obj: Any) -> Any:
+        if not is_pair(obj):
+            return obj
+        head: Optional[Cons] = None
+        tail: Optional[Cons] = None
+        curr = obj
+        while isinstance(curr, Cons):
+            new_cell = Cons(curr.car, NIL)
+            if head is None:
+                head = new_cell
+            else:
+                assert tail is not None
+                tail.cdr = new_cell
+            tail = new_cell
+            curr = curr.cdr
+        if tail is not None:
+            tail.cdr = curr
+        return head if head is not None else obj
 
     # --- 2. Symbol & String Primitives ---
     def prim_symbol_p(x: Any) -> bool:
@@ -1001,13 +1087,21 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
 
     # Register all primitives
     primitives: Dict[str, Callable[..., Any]] = {
-        # Pairs and Lists
+        # Pairs and Lists (R7RS 6.4)
         "cons": prim_cons,
         "car": prim_car,
         "cdr": prim_cdr,
+        "set-car!": prim_set_car_bang,
+        "set-cdr!": prim_set_cdr_bang,
         "pair?": prim_pair_p,
         "null?": prim_null_p,
+        "list?": prim_list_p,
         "list": prim_list,
+        "make-list": prim_make_list,
+        "list-tail": prim_list_tail,
+        "list-ref": prim_list_ref,
+        "list-set!": prim_list_set_bang,
+        "list-copy": prim_list_copy,
         # Symbols
         "symbol?": prim_symbol_p,
         "symbol->string": prim_symbol_to_string,
