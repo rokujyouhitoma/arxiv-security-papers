@@ -15,33 +15,33 @@ PYTHON_SRCS := $(shell find src -type f -name "*.py" | sort)
 TESTS := $(shell find tests -type f -name "*.py" | sort)
 
 COMPILER = tools/closure-compiler/closure-compiler-v20240317.jar
-JS_SRCS = site/js/frameworks/dom-utils.js \
-          site/js/frameworks/disjoint-set.js \
-          site/js/frameworks/arc-cache.js \
-          site/js/frameworks/timing.js \
-          site/js/frameworks/event.js \
-          site/js/frameworks/publisher.js \
-          site/js/frameworks/locator.js \
-          site/js/frameworks/scheduler.js \
-          site/js/frameworks/scene.js \
-          site/js/frameworks/router.js \
-          site/js/frameworks/animation.js \
-          site/js/frameworks/api-client.js \
-          site/js/frameworks/store.js \
-          site/js/frameworks/sse-manager.js \
-          site/js/frameworks/hsm.js \
-          site/js/frameworks/modal.js \
-          site/js/frameworks/radix-trie.js \
-          site/js/frameworks/query-validator.js \
-          site/js/frameworks/mermaid-validator.js \
-          site/js/frameworks/graph-canvas.js \
-          site/js/lexer.js \
-          site/js/parser.js \
-          site/js/evaluator.js \
-          site/js/renderer.js \
-          site/js/markdown_compiler.js \
-          site/app.js
-JS_OUT = site/app-min.js
+JS_SRCS = src/web/site/js/frameworks/dom-utils.js \
+          src/web/site/js/frameworks/disjoint-set.js \
+          src/web/site/js/frameworks/arc-cache.js \
+          src/web/site/js/frameworks/timing.js \
+          src/web/site/js/frameworks/event.js \
+          src/web/site/js/frameworks/publisher.js \
+          src/web/site/js/frameworks/locator.js \
+          src/web/site/js/frameworks/scheduler.js \
+          src/web/site/js/frameworks/scene.js \
+          src/web/site/js/frameworks/router.js \
+          src/web/site/js/frameworks/animation.js \
+          src/web/site/js/frameworks/api-client.js \
+          src/web/site/js/frameworks/store.js \
+          src/web/site/js/frameworks/sse-manager.js \
+          src/web/site/js/frameworks/hsm.js \
+          src/web/site/js/frameworks/modal.js \
+          src/web/site/js/frameworks/radix-trie.js \
+          src/web/site/js/frameworks/query-validator.js \
+          src/web/site/js/frameworks/mermaid-validator.js \
+          src/web/site/js/frameworks/graph-canvas.js \
+          src/web/site/js/lexer.js \
+          src/web/site/js/parser.js \
+          src/web/site/js/evaluator.js \
+          src/web/site/js/renderer.js \
+          src/web/site/js/markdown_compiler.js \
+          src/web/site/app.js
+JS_OUT = src/web/site/app-min.js
 
 all: clean setup format static_analysis test build run
 
@@ -100,47 +100,47 @@ py_compile: activate ## py_compile syntax check for all python sources
 
 .PHONY: compile_grammars
 compile_grammars: activate ## Compile .peg grammar specifications to standalone Python parsers
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/peg_meta.peg -o src/core/peg/compiler/generated_meta_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/peg_meta.peg -o src/core/peg/compiler/generated_meta_parser.py
 	${VENV_BIN}/isort src/core/peg/compiler/generated_meta_parser.py
 	${VENV_BIN}/black -q src/core/peg/compiler/generated_meta_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/turtle.peg -o src/ontology/turtle/generated_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/turtle.peg -o src/ontology/turtle/generated_parser.py
 	${VENV_BIN}/isort src/ontology/turtle/generated_parser.py
 	${VENV_BIN}/black -q src/ontology/turtle/generated_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/search_query.peg -o src/search/query/generated_search_query_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/search_query.peg -o src/search/query/generated_search_query_parser.py
 	${VENV_BIN}/isort src/search/query/generated_search_query_parser.py
 	${VENV_BIN}/black -q src/search/query/generated_search_query_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/graph_query.peg -o src/graph/generated_graph_query_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/graph_query.peg -o src/graph/generated_graph_query_parser.py
 	${VENV_BIN}/isort src/graph/generated_graph_query_parser.py
 	${VENV_BIN}/black -q src/graph/generated_graph_query_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_expr.peg -o src/database/sql/generated_sql_expr_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/sql_expr.peg -o src/database/sql/generated_sql_expr_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_expr_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_expr_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_dql.peg --no-aot -o src/database/sql/generated_sql_dql_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/sql_dql.peg --no-aot -o src/database/sql/generated_sql_dql_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_dql_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_dql_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_dml.peg --no-aot -o src/database/sql/generated_sql_dml_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/sql_dml.peg --no-aot -o src/database/sql/generated_sql_dml_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_dml_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_dml_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_ddl.peg --no-aot -o src/database/sql/generated_sql_ddl_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/sql_ddl.peg --no-aot -o src/database/sql/generated_sql_ddl_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_ddl_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_ddl_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/sql_admin.peg --no-aot -o src/database/sql/generated_sql_admin_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/sql_admin.peg --no-aot -o src/database/sql/generated_sql_admin_parser.py
 	${VENV_BIN}/isort src/database/sql/generated_sql_admin_parser.py
 	${VENV_BIN}/black -q src/database/sql/generated_sql_admin_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/yaml_frontmatter.peg -o src/pipeline/transformer/generated_yaml_frontmatter_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/yaml_frontmatter.peg -o src/pipeline/transformer/generated_yaml_frontmatter_parser.py
 	${VENV_BIN}/isort src/pipeline/transformer/generated_yaml_frontmatter_parser.py
 	${VENV_BIN}/black -q src/pipeline/transformer/generated_yaml_frontmatter_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/bibtex.peg -o src/pdf_engine/bibtex/generated_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/bibtex.peg -o src/pdf_engine/bibtex/generated_parser.py
 	${VENV_BIN}/isort src/pdf_engine/bibtex/generated_parser.py
 	${VENV_BIN}/black -q src/pdf_engine/bibtex/generated_parser.py
-	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py grammars/pdf_cmap.peg -o src/pdf_engine/cmap/generated_parser.py
+	PYTHONPATH=src ${VENV_PYTHON} tools/peg/compile_peg.py tools/grammars/pdf_cmap.peg -o src/pdf_engine/cmap/generated_parser.py
 	${VENV_BIN}/isort src/pdf_engine/cmap/generated_parser.py
 	${VENV_BIN}/black -q src/pdf_engine/cmap/generated_parser.py
 
 
 .PHONY: build_cti_query_parser
 build_cti_query_parser: activate ## Build client-side CTI query PEG parser for web dashboard
-	PYTHONPATH=src ${VENV_PYTHON} -m core.peg.compiler grammars/graph_query.peg -o site/js/frameworks/cti-query-parser.js --target js --ast-only --no-runtime --class-name CTIQuery
+	PYTHONPATH=src ${VENV_PYTHON} -m core.peg.compiler tools/grammars/graph_query.peg -o src/web/site/js/frameworks/cti-query-parser.js --target js --ast-only --no-runtime --class-name CTIQuery
 
 .PHONY: verify_peg_bootstrap
 verify_peg_bootstrap: activate ## Verify PEG AOT compiler self-hosting fixpoint

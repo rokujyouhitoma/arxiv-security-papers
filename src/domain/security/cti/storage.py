@@ -33,7 +33,16 @@ def _apply_cti_baseline_migration(conn: Any) -> None:
 
     adapter = SQLiteAdapter(db_path=Path(":memory:"), connection=conn)
     runner = MigrationRunner(adapter=adapter)
-    mig_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "migrations"
+    mig_dir = (
+        Path(__file__).resolve().parent.parent.parent.parent
+        / "database"
+        / "migrations"
+        / "sql"
+    )
+    if not mig_dir.exists():
+        mig_dir = (
+            Path(__file__).resolve().parent.parent.parent.parent.parent / "migrations"
+        )
     up_sql = mig_dir / "0001_baseline.up.sql"
     if up_sql.exists():
         mf = MigrationFile(

@@ -72,9 +72,25 @@ def test_api_graph_cti_mesh_endpoint() -> None:
 
 
 def _read_dashboard_content() -> str:
-    dash_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "dashboard.html")
-    )
+    candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "src",
+                "web",
+                "site",
+                "dashboard.html",
+            )
+        ),
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "site", "dashboard.html"
+            )
+        ),
+    ]
+    dash_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
     with open(dash_path, "r", encoding="utf-8") as f:
         content = f.read()
     js_path = os.path.join(os.path.dirname(dash_path), "js", "dashboard.js")
@@ -120,7 +136,15 @@ def test_dashboard_cti_mode_elements() -> None:
 
 def test_cti_filter_buttons_use_css_color_badges() -> None:
     """Verify Issue #182: CTI filter buttons use clean CSS .filter-dot badges without OS emojis."""
-    html_path = os.path.join(os.path.dirname(__file__), "../../site/dashboard.html")
+    candidates = [
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../src/web/site/dashboard.html")
+        ),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../site/dashboard.html")
+        ),
+    ]
+    html_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
     with open(html_path, "r", encoding="utf-8") as f:
         content = f.read()
 

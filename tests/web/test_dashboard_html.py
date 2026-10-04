@@ -15,9 +15,25 @@ from web.gateway.app import WSGIApplication
 
 @pytest.fixture
 def dashboard_html_content() -> str:
-    path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "dashboard.html")
-    )
+    candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "src",
+                "web",
+                "site",
+                "dashboard.html",
+            )
+        ),
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "site", "dashboard.html"
+            )
+        ),
+    ]
+    path = next((p for p in candidates if os.path.exists(p)), candidates[0])
     assert os.path.exists(path), f"dashboard.html not found at {path}"
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -302,9 +318,17 @@ def test_dashboard_sse_event_source_ui(dashboard_html_content: str) -> None:
 
 def test_app_js_sse_event_source_lifecycle() -> None:
     """Verifies that site/app.js manages EventSource for supervisor streaming with lifecycle guards."""
-    app_js_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
-    )
+    candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "src", "web", "site", "app.js"
+            )
+        ),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
+        ),
+    ]
+    app_js_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
     with open(app_js_path, "r", encoding="utf-8") as f:
         app_js = f.read()
 
@@ -393,16 +417,42 @@ timestamp: "2026-09-06"
     assert "IACR ePrint 原本 ↗" in html_preview
 
     # 4. Frontend app.js & index.html checks
-    app_js_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
+    app_candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "src", "web", "site", "app.js"
+            )
+        ),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "site", "app.js")
+        ),
+    ]
+    app_js_path = next(
+        (p for p in app_candidates if os.path.exists(p)), app_candidates[0]
     )
     with open(app_js_path, "r", encoding="utf-8") as f:
         app_js = f.read()
     assert "resolvePaperSourceInfo" in app_js
     assert "eprint.iacr.org" in app_js
 
-    index_html_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
+    index_candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "src",
+                "web",
+                "site",
+                "index.html",
+            )
+        ),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
+        ),
+    ]
+    index_html_path = next(
+        (p for p in index_candidates if os.path.exists(p)), index_candidates[0]
     )
     with open(index_html_path, "r", encoding="utf-8") as f:
         index_html = f.read()

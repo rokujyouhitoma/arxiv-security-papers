@@ -19,53 +19,53 @@ WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 
 # Framework base dependencies (ordered topologically)
 FRAMEWORK_SRCS = [
-    "site/js/frameworks/dom-utils.js",
-    "site/js/frameworks/disjoint-set.js",
-    "site/js/frameworks/arc-cache.js",
-    "site/js/frameworks/timing.js",
-    "site/js/frameworks/event.js",
-    "site/js/frameworks/publisher.js",
-    "site/js/frameworks/locator.js",
-    "site/js/frameworks/scheduler.js",
-    "site/js/frameworks/scene.js",
-    "site/js/frameworks/router.js",
-    "site/js/frameworks/animation.js",
-    "site/js/frameworks/api-client.js",
-    "site/js/frameworks/store.js",
-    "site/js/frameworks/sse-manager.js",
-    "site/js/frameworks/hsm.js",
-    "site/js/frameworks/modal.js",
-    "site/js/frameworks/radix-trie.js",
-    "site/js/frameworks/peg-runtime.js",
-    "site/js/frameworks/cti-query-parser.js",
-    "site/js/frameworks/cti-query-evaluator.js",
-    "site/js/frameworks/query-validator.js",
-    "site/js/frameworks/mermaid-validator.js",
-    "site/js/frameworks/graph-canvas.js",
+    "src/web/site/js/frameworks/dom-utils.js",
+    "src/web/site/js/frameworks/disjoint-set.js",
+    "src/web/site/js/frameworks/arc-cache.js",
+    "src/web/site/js/frameworks/timing.js",
+    "src/web/site/js/frameworks/event.js",
+    "src/web/site/js/frameworks/publisher.js",
+    "src/web/site/js/frameworks/locator.js",
+    "src/web/site/js/frameworks/scheduler.js",
+    "src/web/site/js/frameworks/scene.js",
+    "src/web/site/js/frameworks/router.js",
+    "src/web/site/js/frameworks/animation.js",
+    "src/web/site/js/frameworks/api-client.js",
+    "src/web/site/js/frameworks/store.js",
+    "src/web/site/js/frameworks/sse-manager.js",
+    "src/web/site/js/frameworks/hsm.js",
+    "src/web/site/js/frameworks/modal.js",
+    "src/web/site/js/frameworks/radix-trie.js",
+    "src/web/site/js/frameworks/peg-runtime.js",
+    "src/web/site/js/frameworks/cti-query-parser.js",
+    "src/web/site/js/frameworks/cti-query-evaluator.js",
+    "src/web/site/js/frameworks/query-validator.js",
+    "src/web/site/js/frameworks/mermaid-validator.js",
+    "src/web/site/js/frameworks/graph-canvas.js",
 ]
 
 # Console / Main application bundle
 APP_SRCS = (
     FRAMEWORK_SRCS
     + [
-        "site/js/lexer.js",
-        "site/js/parser.js",
-        "site/js/evaluator.js",
-        "site/js/renderer.js",
-        "site/js/markdown_compiler.js",
-        "site/app.js",
+        "src/web/site/js/lexer.js",
+        "src/web/site/js/parser.js",
+        "src/web/site/js/evaluator.js",
+        "src/web/site/js/renderer.js",
+        "src/web/site/js/markdown_compiler.js",
+        "src/web/site/app.js",
     ]
 )
-APP_OUT = "site/app-min.js"
+APP_OUT = "src/web/site/app-min.js"
 
 # Knowledge & CTI Graph Dashboard bundle
 DASHBOARD_SRCS = FRAMEWORK_SRCS + [
-    "site/js/dashboard.js",
+    "src/web/site/js/dashboard.js",
 ]
-DASHBOARD_OUT = "site/dashboard-min.js"
+DASHBOARD_OUT = "src/web/site/dashboard-min.js"
 
 COMPILER_JAR = "tools/closure-compiler/closure-compiler-v20240317.jar"
-EXTERNS_FILE = "site/externs.js"
+EXTERNS_FILE = "src/web/site/externs.js"
 
 
 def concat_files(src_paths: Sequence[str], dest_path: str) -> None:

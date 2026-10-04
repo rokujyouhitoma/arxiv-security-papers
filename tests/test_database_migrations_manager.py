@@ -250,7 +250,7 @@ class TestMigrationManagerExecutionSQLite:
         db_path = tmp_path / "test_default_dir.db"
         mgr = MigrationManager(db_path=db_path)
         try:
-            assert mgr.migrations_dir.name == "migrations"
+            assert mgr.migrations_dir.name in ("sql", "migrations")
             assert mgr.migrations_dir.exists()
         finally:
             mgr.close()

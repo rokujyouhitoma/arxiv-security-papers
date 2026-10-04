@@ -146,10 +146,16 @@ class TestDashboardExportUI:
         workspace_dir = os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
-        dashboard_path = os.path.join(workspace_dir, "site", "dashboard.html")
+        candidates = [
+            os.path.join(workspace_dir, "src", "web", "site", "dashboard.html"),
+            os.path.join(workspace_dir, "site", "dashboard.html"),
+        ]
+        dashboard_path = next(
+            (p for p in candidates if os.path.exists(p)), candidates[0]
+        )
         with open(dashboard_path, "r", encoding="utf-8") as f:
             content = f.read()
-        js_path = os.path.join(workspace_dir, "site", "js", "dashboard.js")
+        js_path = os.path.join(os.path.dirname(dashboard_path), "js", "dashboard.js")
         if os.path.exists(js_path):
             with open(js_path, "r", encoding="utf-8") as js_f:
                 content += "\n" + js_f.read()

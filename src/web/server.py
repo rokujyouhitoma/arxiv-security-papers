@@ -30,7 +30,10 @@ from web.gateway import (
 )
 from web.presentation import extract_paper_preview_metadata, render_okf_preview_html
 
-SITE_DIR = os.path.join(WORKSPACE_DIR, "site")
+_cand_site = os.path.join(WORKSPACE_DIR, "src", "web", "site")
+SITE_DIR = (
+    _cand_site if os.path.exists(_cand_site) else os.path.join(WORKSPACE_DIR, "site")
+)
 
 run_server = run_web_server
 

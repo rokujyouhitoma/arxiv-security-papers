@@ -23,6 +23,9 @@ from core.structures.peg_compiler.meta_grammar import MetaGrammarParser
 
 
 def _get_grammars_dir() -> Path:
+    p = Path(__file__).resolve().parents[4] / "tools" / "grammars"
+    if p.exists():
+        return p
     return Path(__file__).resolve().parents[4] / "grammars"
 
 

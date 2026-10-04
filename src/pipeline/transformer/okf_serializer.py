@@ -81,14 +81,24 @@ def load_template(
     config: Dict[str, Any],
 ) -> str:
     """Loads markdown template or returns default fallback content."""
-    templates_dir = config.get("paths", {}).get("templates_dir", "templates")
-    template_path = os.path.join(workspace_dir, templates_dir, template_name)
-    if os.path.exists(template_path):
-        try:
-            with open(template_path, "r", encoding="utf-8") as f:
-                return f.read()
-        except Exception:
-            pass
+    configured_dir = config.get("paths", {}).get("templates_dir")
+    candidate_paths = []
+    if configured_dir:
+        candidate_paths.append(
+            os.path.join(workspace_dir, configured_dir, template_name)
+        )
+    candidate_paths.append(
+        os.path.join(workspace_dir, "src", "pipeline", "templates", template_name)
+    )
+    candidate_paths.append(os.path.join(workspace_dir, "templates", template_name))
+
+    for path in candidate_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception:
+                pass
     return default_content
 
 

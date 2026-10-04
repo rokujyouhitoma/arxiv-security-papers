@@ -344,9 +344,23 @@ def test_index_html_mcp_sandbox_default_json_validity():
     """Verifies that the static textarea in index.html contains valid JSON with query and top_k."""
     import re
 
-    index_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
-    )
+    candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "src",
+                "web",
+                "site",
+                "index.html",
+            )
+        ),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
+        ),
+    ]
+    index_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
     assert os.path.exists(index_path), f"index.html not found at {index_path}"
     with open(index_path, "r", encoding="utf-8") as f:
         html_content = f.read()
@@ -369,9 +383,23 @@ def test_index_html_mcp_output_and_badge_guidance():
     """Verifies that index.html contains #mcpStatusBadge and #mcpOutput with status: ready (Issue 399)."""
     import re
 
-    index_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
-    )
+    candidates = [
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "src",
+                "web",
+                "site",
+                "index.html",
+            )
+        ),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "site", "index.html")
+        ),
+    ]
+    index_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
     with open(index_path, "r", encoding="utf-8") as f:
         html_content = f.read()
 

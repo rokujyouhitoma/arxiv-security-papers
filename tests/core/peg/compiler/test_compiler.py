@@ -25,6 +25,13 @@ from core.structures.peg_compiler import (
 )
 
 
+def _get_grammar_path(name: str) -> Path:
+    p = Path(__file__).resolve().parents[4] / "tools" / "grammars" / name
+    if p.exists():
+        return p
+    return Path(__file__).resolve().parents[4] / "grammars" / name
+
+
 def test_meta_grammar_ast_construction() -> None:
     """Verifies that MetaGrammarParser produces the expected AST hierarchy."""
     grammar_text = """
@@ -95,7 +102,7 @@ def test_meta_grammar_nested_action_block() -> None:
 
 def test_calc_grammar_execution() -> None:
     """Compiles and executes arithmetic calculator grammar."""
-    calc_path = Path(__file__).resolve().parents[4] / "grammars" / "calc.peg"
+    calc_path = _get_grammar_path("calc.peg")
     assert calc_path.exists()
 
     code = compile_grammar_to_code(calc_path.read_text(encoding="utf-8"))
@@ -115,7 +122,7 @@ def test_calc_grammar_execution() -> None:
 
 def test_search_query_grammar_execution() -> None:
     """Compiles and executes search query grammar."""
-    query_path = Path(__file__).resolve().parents[4] / "grammars" / "search_query.peg"
+    query_path = _get_grammar_path("search_query.peg")
     assert query_path.exists()
 
     code = compile_grammar_to_code(query_path.read_text(encoding="utf-8"))
@@ -147,7 +154,7 @@ def test_meta_grammar_syntax_error() -> None:
 
 def test_cli_output_file_and_override() -> None:
     """Tests compile_peg CLI with file output and class name override."""
-    calc_path = Path(__file__).resolve().parents[4] / "grammars" / "calc.peg"
+    calc_path = _get_grammar_path("calc.peg")
     with tempfile.TemporaryDirectory() as tmpdir:
         out_file = Path(tmpdir) / "custom_calc.py"
         ret = run_cli(

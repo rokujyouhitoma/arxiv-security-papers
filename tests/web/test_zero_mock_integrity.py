@@ -20,10 +20,15 @@ from pathlib import Path
 # Helpers
 # ---------------------------------------------------------------------------
 _ROOT = Path(__file__).parent.parent.parent
+_SITE_DIR = (
+    _ROOT / "src" / "web" / "site"
+    if (_ROOT / "src" / "web" / "site").exists()
+    else _ROOT / "site"
+)
 
 
 def _read_app_js() -> str:
-    return (_ROOT / "site" / "app.js").read_text(encoding="utf-8")
+    return (_SITE_DIR / "app.js").read_text(encoding="utf-8")
 
 
 def _read_handlers_py() -> str:
@@ -33,12 +38,12 @@ def _read_handlers_py() -> str:
 
 
 def _read_index_html() -> str:
-    return (_ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    return (_SITE_DIR / "index.html").read_text(encoding="utf-8")
 
 
 def _read_dashboard_html() -> str:
-    content = (_ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
-    js_file = _ROOT / "site" / "js" / "dashboard.js"
+    content = (_SITE_DIR / "dashboard.html").read_text(encoding="utf-8")
+    js_file = _SITE_DIR / "js" / "dashboard.js"
     if js_file.exists():
         content += "\n" + js_file.read_text(encoding="utf-8")
     return content
@@ -419,9 +424,9 @@ class TestZeroMockIntegrity(unittest.TestCase):
         """Issue 359: Verify all static DOM IDs referenced in dashboard.js exist in dashboard.html or index.html."""
         import re
 
-        dash_html = (_ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
+        dash_html = (_SITE_DIR / "dashboard.html").read_text(encoding="utf-8")
         index_html = _read_index_html()
-        dash_js = (_ROOT / "site" / "js" / "dashboard.js").read_text(encoding="utf-8")
+        dash_js = (_SITE_DIR / "js" / "dashboard.js").read_text(encoding="utf-8")
 
         all_html_ids = set(
             re.findall(r'\bid=["\']([a-zA-Z0-9_\-]+)["\']', dash_html)
