@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, List, Optional, Tuple
 
 from ilisp.env import Environment
+from ilisp.syntax import SyntaxRulesTransformer
 from ilisp.types import (
     NIL,
     Cons,
@@ -212,6 +213,50 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     curr_env.define(macro_name, macro_proc)
                     return macro_name
 
+                # (define-syntax name (syntax-rules (literals...) (rule...)...))
+                if op_name == "define-syntax":
+                    args = curr_expr.cdr
+                    if not is_pair(args) or not is_pair(cdr(args)):
+                        raise SyntaxError(
+                            "define-syntax requires name and transformer spec"
+                        )
+                    syn_name = car(args)
+                    if not isinstance(syn_name, Symbol):
+                        raise SyntaxError("define-syntax target must be a symbol")
+                    trans_spec = car(cdr(args))
+                    if not (
+                        is_pair(trans_spec)
+                        and isinstance(car(trans_spec), Symbol)
+                        and car(trans_spec).name == "syntax-rules"
+                    ):
+                        raise SyntaxError(
+                            "define-syntax currently supports (syntax-rules (literals...) ((pattern) template)...)"
+                        )
+
+                    spec_args = cdr(trans_spec)
+                    if not is_pair(spec_args):
+                        raise SyntaxError(
+                            "syntax-rules requires literals list and rules"
+                        )
+                    literals_expr = car(spec_args)
+                    raw_literals = to_py_list(literals_expr)
+                    literals = [
+                        lit.name for lit in raw_literals if isinstance(lit, Symbol)
+                    ]
+
+                    rules_raw = to_py_list(cdr(spec_args))
+                    rules: List[Tuple[Any, Any]] = []
+                    for r in rules_raw:
+                        if not is_pair(r) or not is_pair(cdr(r)):
+                            raise SyntaxError(
+                                f"syntax-rules rule must be (pattern template), got {r!r}"
+                            )
+                        rules.append((car(r), car(cdr(r))))
+
+                    transformer = SyntaxRulesTransformer(syn_name.name, literals, rules)
+                    curr_env.define(syn_name, transformer)
+                    return syn_name
+
             # --- Function or Macro Application ---
             fn = eval_expr(op, curr_env)
 
@@ -219,6 +264,11 @@ def eval_expr(expr: Any, env: Environment) -> Any:
             if isinstance(fn, Procedure) and fn.is_macro:
                 unevaluated_args = to_py_list(curr_expr.cdr)
                 expanded_ast = _apply_procedure(fn, unevaluated_args)
+                curr_expr = expanded_ast
+                continue
+
+            if isinstance(fn, SyntaxRulesTransformer):
+                expanded_ast = fn.transform(curr_expr)
                 curr_expr = expanded_ast
                 continue
 

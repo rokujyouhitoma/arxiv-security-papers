@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 from ilisp.env import Environment, make_initial_env
 from ilisp.evaluator import eval_expr
 from ilisp.reader import read_all
+from ilisp.syntax import SyntaxRulesTransformer
 from ilisp.types import (
     NIL,
     Cons,
@@ -206,7 +207,7 @@ class PythonASTCompiler:
             return expr
 
         op = expr.car
-        if isinstance(op, Symbol) and op.name == "define-macro":
+        if isinstance(op, Symbol) and op.name in ("define-macro", "define-syntax"):
             eval_expr(expr, self.env)
             return expr
 
@@ -218,6 +219,9 @@ class PythonASTCompiler:
 
                     unevaluated_args = to_py_list(expr.cdr)
                     expanded = _apply_procedure(binding, unevaluated_args)
+                    return self._expand_macros(expanded)
+                if isinstance(binding, SyntaxRulesTransformer):
+                    expanded = binding.transform(expr)
                     return self._expand_macros(expanded)
             except Exception:
                 pass
@@ -308,8 +312,8 @@ class PythonASTCompiler:
                         self.emit(fn_def)
                         return ast.Name(id=fn_name, ctx=ast.Load())
 
-                # (define-macro ...)
-                if op.name == "define-macro":
+                # (define-macro ...) or (define-syntax ...)
+                if op.name in ("define-macro", "define-syntax"):
                     return ast.Name(id="NIL", ctx=ast.Load())
 
                 # (set! var val)

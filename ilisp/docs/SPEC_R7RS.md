@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全195機能)
-    "✅ サポート済 (Phase 1/2 稼働中)" : 80
+    "✅ サポート済 (Phase 1/2 稼働中)" : 82
     "🔄 一部対応 (サブセット/基本版)" : 18
-    "⏳ 計画中 (Phase 3/4 予定)" : 97
+    "⏳ 計画中 (Phase 3/4 予定)" : 95
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -35,7 +35,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **例外機構 (Exceptions)** | 6.11 | 9 | 5 (56%) | 🟢 実用十分 | `raise`, `with-exception-handler`, `guard`, `error` |
 | **数値タワー (Numbers)** | 6.2 | 35 | 11 (31%) | 🟡 基本完備 | 基本四則演算、比較演算、商余剰、整数/小数対応 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 5 (18%) | 🟡 順次拡充 | 文字列結合、等価判定、文字リテラル `#\x` |
-| **マクロ機構** | 4.3 | 3 | 1 (33%) | 🟡 段階移行 | `define-macro` 実装済。Scope Sets `syntax-rules` 移行準備中 |
+| **マクロ機構** | 4.3 | 3 | 2 (67%) | 🟢 充実 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules` 稼働済 |
 | **入出力・システム** | 6.13, 6.14 | 30 | 7 (23%) | 🟡 順次拡充 | `display`, `write`, `newline`, `load`, `exit`, `read-char` |
 | **バイトベクタ** | 6.9 | 11 | 0 (0%) | ⏳ 次フェーズ | Phase 3 (バイナリパース・PDF解析) にて実装予定 |
 
@@ -68,11 +68,11 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `let-values` | 多値局所束縛 | `stdlib/base.ilisp` | ✅ 完全準拠 | `call-with-values` と `lambda` への脱糖展開 |
 | `let*-values` | 逐次多値局所束縛 | `stdlib/base.ilisp` | ✅ 完全準拠 | ネストした `let-values` への再帰的脱糖展開 |
 | `guard` | 例外捕捉構文 | `stdlib/base.ilisp` | ✅ 完全準拠 | `call/cc` と `with-exception-handler`、`cond` へのマクロ脱糖 |
+| `define-syntax` | 衛生的マクロ | `ilisp/syntax.py` | ✅ 完全準拠 | **Scope Sets アルゴリズム** (Flatt '16) による変数捕捉フリーなマクロ登録 |
+| `syntax-rules` | パターン置換 | `ilisp/syntax.py` | ✅ 完全準拠 | リテラル一致、パターン変数束縛、エリプシス (`...`) 反復展開完備 |
 | `letrec` | 相互再帰束縛 | - | ⏳ 計画中 | Phase 3 実装予定（現状はトップレベル `define` / 内部 `define` で代替可能） |
 | `letrec*` | 逐次相互再帰 | - | ⏳ 計画中 | Phase 3 実装予定 |
 | `do` | 構造化反復 | - | ⏳ 計画中 | Phase 3 実装予定（現状は名前付き let や末尾再帰で記述可能） |
-| `define-syntax` | 衛生的マクロ | - | ⏳ 計画中 | Phase 3 (Scope Sets アルゴリズム) 実装予定 |
-| `syntax-rules` | パターン置換 | - | ⏳ 計画中 | Phase 3 実装予定 |
 | `syntax-error` | 構文エラー送出 | - | ⏳ 計画中 | Phase 3 実装予定 |
 | `parameterize` | 動的パラメータ | - | ⏳ 計画中 | Phase 4 実装予定 |
 
