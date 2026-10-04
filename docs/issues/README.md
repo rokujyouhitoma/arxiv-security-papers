@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **442** | トップレベルディレクトリの整理・衛生化と ischeme 統合に向けた構造基盤整備 | Refactoring | 2026-10-04 | [closed/442-refactor-root-directory-structure-and-sanitize-for-ischeme.md](closed/442-refactor-root-directory-structure-and-sanitize-for-ischeme.md) |
 | **441** | src/pdf_engine 配下の BibTeX および CMap モジュールのサブパッケージ化 | Refactoring | 2026-10-04 | [closed/441-modularize-pdf-engine-bibtex-and-cmap-subpackages.md](closed/441-modularize-pdf-engine-bibtex-and-cmap-subpackages.md) |
 | **440** | src/ontology 配下の Turtle エンジンおよびパーサーのサブパッケージ化 | Refactoring | 2026-10-04 | [closed/440-modularize-ontology-turtle-engine-and-parser-subpackage.md](closed/440-modularize-ontology-turtle-engine-and-parser-subpackage.md) |
 | **439** | tools/ パッケージ・CLIの再編・統合と PEG コンパイラツールの近代化 | Refactoring | 2026-10-04 | [closed/439-modernize-and-restructure-tools-peg-and-cli.md](closed/439-modernize-and-restructure-tools-peg-and-cli.md) |

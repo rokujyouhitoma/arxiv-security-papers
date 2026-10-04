@@ -50,8 +50,10 @@ help: ## help command
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: clean
-clean: ## clean virtualenv and build artifacts
-	rm -rf dist/ __pycache__ src/__pycache__ tests/__pycache__ .pytest_cache .mypy_cache outputs/database/search_vector/ ${JS_OUT}
+clean: ## clean virtualenv, bytecode, pycache and build artifacts
+	find . -type d -name "__pycache__" -not -path "./.venv/*" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.py[cod]" -not -path "./.venv/*" -delete 2>/dev/null || true
+	rm -rf dist/ build/ *.egg-info .pytest_cache .mypy_cache .ruff_cache outputs/database/search_vector/ ${JS_OUT}
 
 .PHONY: setup
 setup: activate install setup_hooks ## setup venv, activate, install python libraries, and setup git hooks

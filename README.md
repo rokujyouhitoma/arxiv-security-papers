@@ -395,13 +395,22 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 
 ```text
 .
-├── .agents/                    # 13専門エージェント規約 (AGENTS.md) & スキル群
+├── .agents/                    # 15専門エージェント規約 (AGENTS.md) & スキル群
+├── manage.py                   # 統合管理 CLI エントリポイント (DSN-24 / Unix ストリームパイプライン)
+├── migrations/                 # 自作 DB ファースト・生 SQL マイグレーション定義 (DSN-30)
+├── config/                     # パイプライン設定・スーパーバイザー設定ファイル群
+├── data/                       # データベース永続化リソース (arxiv_papers.db)
+├── grammars/                   # 純粋 Python PEG 文法定義ファイル群 (DSN-25: 13文法)
+├── templates/                  # OKF v0.2 および 5階層サマリー Markdown テンプレート
+├── site/                       # 統合 Web コンソール & ダッシュボード (HTML / CSS / JS / Dashboard)
+├── tools/                      # 開発補助・PEG コンパイラ・プロファイラ (tools/peg, closure-compiler 等)
+├── scripts/                    # 各種ベンチマーク (DB, HNSW, IR) & シードスクリプト
 ├── docs/
 │   ├── audits/                 # 監査レポート (database_resilience_report.md 等)
 │   ├── benchmarks/             # 性能評価レポート (sota_evaluation.md 等)
-│   ├── designs/                # 22大包括設計書体系 (DSN-01 〜 DSN-22)
-│   ├── issues/                 # Issue 台帳 & クローズ済み履歴 (closed/ — 001〜295)
-│   ├── manuals/                # ユーザーマニュアル (USR-01)
+│   ├── designs/                # 30大包括設計書体系 (DSN-01 〜 DSN-30)
+│   ├── issues/                 # Issue 台帳 & クローズ済み履歴 (closed/ — 001〜441)
+│   ├── manuals/                # ユーザーマニュアル (USR-01) & 開発者マニュアル (DEV-01)
 │   ├── mcp/                    # MCP サーバ仕様書 (MCP-01)
 │   ├── processes/              # 文書管理台帳 (MNG-01, MNG-02)
 │   └── requirements/           # 要件定義書 (REQ-01〜REQ-03)
@@ -418,15 +427,20 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 │   ├── index.md                # OKF 論文統合インデックス
 │   └── log.md                  # パイプライン実行履歴ログ
 ├── src/
+│   ├── pylisp/                 # Python-LISP 統合基盤 (DSN-29: DynamicVar, Atom, Condition, miniKanren)
+│   ├── core/                   # 共通データ構造, PEG ランタイム, HSM, プロファイラ (DSN-23, DSN-25)
+│   ├── nlp/                    # 自然言語処理基盤 (形態素解析, 談話解析, トピッククラスタリング)
 │   ├── pdf_engine/             # ISO 32000 準拠 Pure Python PDF 抽出 & 空間レイアウト (DSN-13)
 │   ├── spider/                 # ゼロ依存 分散クローラー (DSN-06)
 │   ├── pipeline/               # ETL パイプライン (ingestion, transformer, reporter) (DSN-03, DSN-19)
-│   ├── database/               # 純粋 Python 4層ベクトル DB / ARIES / ChaosVFS (DSN-05)
+│   ├── database/               # 純粋 Python 4層ベクトル DB / ARIES / ChaosVFS / マイグレーション (DSN-05, DSN-30)
 │   ├── search/                 # 2層検索基盤 & SOTA IR ベンチマーク (DSN-04, DSN-10)
 │   ├── graph/                  # プロパティグラフ DB / GraphRAG (DSN-18)
-│   ├── ontology/               # W3C OWL セキュリティ知識オントロジー (SKO) (DSN-17, DSN-22)
+│   ├── ontology/               # W3C OWL セキュリティ知識オントロジー (SKO) & Turtle パーサ (DSN-17, DSN-22)
 │   ├── analytics/              # 事前集計アナリティクスエンジン
 │   ├── security/               # 共通セキュリティ・AST ガード & CTI インジェスト (DSN-07, DSN-20)
+│   ├── domain/                 # CTI / セキュリティドメインレジストリ
+│   ├── cli/                    # 統合管理 CLI サブコマンドディスパッチャ (DSN-24)
 │   ├── mcp/                    # 戦略的 MCP サーバー群 (DSN-08)
 │   ├── web/                    # API Gateway & 統合クラウドコンソール (DSN-09, DSN-21)
 │   ├── intelligence/           # 閉ループ・ドメインインテリジェンス (DSN-15)
@@ -434,25 +448,6 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 │   ├── supervisor/             # 汎用プロセススーパーバイザー & 調停基盤 (DSN-12)
 │   └── observability/          # Pure-Python W3C OTel & OpenInference 分散トレーシング (DSN-10)
 ├── tests/                      # 包括的テストスイート (1:1 ミラーリング)
-│   ├── pdf_engine/             # PDF エンジン単体・実証ベンチマークテスト
-│   ├── spider/                 # クローラーテスト
-│   ├── pipeline/               # パイプラインテスト
-│   ├── database/               # データベーステスト (scenarios/, chaos/ 含む)
-│   ├── search/                 # 2層検索エンジンテスト & SOTA 評価テスト
-│   ├── graph/                  # グラフエンジンテスト
-│   ├── ontology/               # オントロジー DSL & Turtle 生成テスト
-│   ├── analytics/              # アナリティクステスト
-│   ├── security/               # セキュリティ・AST・CTI テスト
-│   ├── mcp/                    # MCP サーバーテスト
-│   ├── web/                    # Web Gateway & 統合コンソールテスト
-│   ├── intelligence/           # インテリジェンスエンジンテスト
-│   ├── workflow/               # ワークフロー基盤・スケジューラーテスト
-│   ├── supervisor/             # スーパーバイザーテスト
-│   └── observability/          # OTel & OpenInference トレーシングテスト
-├── config/                     # パイプライン設定ファイル群
-├── templates/                  # サマリーレンダリングテンプレート
-├── site/                       # Web UI 静的ファイル (HTML / CSS / JS / Dashboard)
-├── tools/                      # 開発補助ツール (Closure Compiler 等)
 ├── Makefile                    # ビルド & 運用自動化ターゲット
 ├── pyproject.toml              # プロジェクトメタデータ & ツール設定
 └── README.md                   # 本ドキュメント
@@ -462,12 +457,12 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 
 ## 🔒 9. 品質管理とガバナンス (Governance & Quality Gates)
 
-本プロジェクトは **13専門エージェント・マルチエージェントガバナンス ([AGENTS.md](.agents/AGENTS.md))** の下、厳格な品質管理基準（DoD）を適用して開発・運用されています。
+本プロジェクトは **15専門エージェント・マルチエージェントガバナンス ([AGENTS.md](.agents/AGENTS.md))** の下、厳格な品質管理基準（DoD）を適用して開発・運用されています。
 
 1. **トリプル品質ゲート (Triple Quality Gates)**:
    - 全コード変更は `make check` (`make check_format`, `make static_analysis`, `make test`) を 100% 通過する必要があります。
 2. **Issue 駆動開発**:
-   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（**Issue 001〜295 全295件完了**）。
+   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（**Issue 001〜441 全441件完了**）。
 3. **循環的複雑度（Cyclomatic Complexity）厳格管理**:
    - 全モジュールにおいて `xenon --max-absolute A --max-modules A --max-average A` および `radon cc -s -n B`（全関数 CC $\le 5$）を達成しています。
 4. **相対パス厳守**:
