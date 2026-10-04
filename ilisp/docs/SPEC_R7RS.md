@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 134
-    "🔄 一部対応 (サブセット/基本版)" : 18
-    "⏳ 計画中 (Phase 3/4 予定)" : 51
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 156
+    "🔄 一部対応 (サブセット/基本版)" : 10
+    "⏳ 計画中 (Phase 3/4 予定)" : 37
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -34,7 +34,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
 | **継続・動的制御** | 6.10 | 6 | 6 (100%) | 🟢 完全準拠 | `call/cc`, `dynamic-wind`, `make-parameter`, `parameter?`, `parameterize` 完備 |
 | **例外機構 (Exceptions)** | 6.11 | 9 | 5 (56%) | 🟢 実用十分 | `raise`, `with-exception-handler`, `guard`, `error` |
-| **数値タワー (Numbers)** | 6.2 | 35 | 11 (31%) | 🟡 基本完備 | 基本四則演算、比較演算、商余剰、整数/小数対応 |
+| **数値タワー (Numbers)** | 6.2 | 35 | 33 (94%) | 🟢 ほぼ完全 | 述語群、四則演算、極値/公約数、丸め、商余剰多値、基数変換完備 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
 | **マクロ機構** | 4.3 | 3 | 2 (67%) | 🟢 充実 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules` 稼働済 |
 | **入出力・システム** | 6.13, 6.14 | 30 | 26 (87%) | 🟢 充実 | ポート抽象化, ファイル/文字列I/O, `read` (Datum), `display`, `write`, `call-with-port` |
@@ -97,20 +97,26 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
-| `number?`, `integer?`, `real?` | Kernel (Core) | 🔄 | Python `int` / `float` による型判別 |
-| `complex?`, `rational?` | - | ⏳ | 完全数値タワー（有理数・複素数）は Phase 4 拡張予定 |
-| `exact?`, `inexact?` | - | ⏳ | 精度述語は Phase 4 予定 |
-| `=` | Kernel (Core) | ✅ | 数値等価判定（可変長対応） |
-| `<`, `>`, `<=`, `>=` | Kernel (Core) | ✅ | 数値大小比較（単調増加・単調減少判定、可変長引数対応） |
+| `number?`, `integer?`, `real?`, `rational?` | `ilisp/numbers.py` | ✅ | Python `int` / `float` による型判別・有限実数値判定 |
+| `complex?` | `ilisp/numbers.py` | 🔄 | 現行は実数値判定（完全複素数タワーは Phase 4 拡張予定） |
+| `exact?`, `inexact?`, `exact-integer?` | `ilisp/numbers.py` | ✅ | 正確数（int）および非正確数（float）判定 |
+| `finite?`, `infinite?`, `nan?` | `ilisp/numbers.py` | ✅ | 有限数、無限大、非数 (NaN) 判定 |
+| `zero?`, `positive?`, `negative?` | `ilisp/numbers.py` | ✅ | ゼロ判定、正数・負数符号判定 |
+| `odd?`, `even?` | `ilisp/numbers.py` | ✅ | 整数偶奇判定 |
+| `=`, `<`, `>`, `<=`, `>=` | `ilisp/numbers.py` | ✅ | 数値大小・等価比較（可変長引数対応、単調増加/減少判定） |
 | `+`, `*` | Kernel (Core) | ✅ | 加算・乗算（任意個引数、単位元 `0` / `1` 対応） |
 | `-` | Kernel (Core) | ✅ | 減算（単項符号反転、多引数差分計算） |
-| `/` | Kernel (Core) | ✅ | 除算（実数除算） |
-| `quotient`, `remainder` | Kernel (Core) | ✅ | 整数商、整数剰余（切捨て丸め） |
-| `modulo` | Kernel (Core) | 🔄 | 床関数丸め剰余 |
-| `abs`, `max`, `min` | - | ⏳ | stdlib または Phase 3 で導入予定 |
-| `zero?`, `positive?`, `negative?` | - | ⏳ | 比較述語ラッパー（Phase 3 予定） |
-| `odd?`, `even?` | - | ⏳ | 偶数奇数述語（Phase 3 予定） |
-| `number->string`, `string->number` | - | ⏳ | 基数変換付き数値文字列変換（Phase 3 予定） |
+| `/` | `ilisp/numbers.py` | ✅ | 除算（単項逆数 `(/ z)`、多引数順次除算） |
+| `max`, `min` | `ilisp/numbers.py` | ✅ | 最大値・最小値（任意個引数、inexact 伝播） |
+| `abs` | `ilisp/numbers.py` | ✅ | 絶対値計算 |
+| `gcd`, `lcm` | `ilisp/numbers.py` | ✅ | 最大公約数・最小公倍数（任意個引数対応） |
+| `floor`, `ceiling`, `truncate`, `round` | `ilisp/numbers.py` | ✅ | 床、天井、ゼロ方向切り捨て、最近接偶数丸め（Banker's rounding） |
+| `floor/`, `floor-quotient`, `floor-remainder` | `ilisp/numbers.py` | ✅ | 床関数に基づく整数除算（多値返却対応） |
+| `truncate/`, `truncate-quotient`, `truncate-remainder` | `ilisp/numbers.py` | ✅ | ゼロ方向切り捨てに基づく整数除算（多値返却対応） |
+| `quotient`, `remainder`, `modulo` | `ilisp/numbers.py` | ✅ | 整数商、整数剰余、床関数丸め剰余 |
+| `exact`, `inexact` (`exact->inexact`, `inexact->exact`) | `ilisp/numbers.py` | ✅ | 正確数・非正確数相互型キャスト |
+| `square`, `sqrt`, `expt` | `ilisp/numbers.py` | ✅ | 平方、平方根（完全平方数の整数化対応）、べき乗計算 |
+| `number->string`, `string->number` | `ilisp/numbers.py` | ✅ | 基数 2, 8, 10, 16 指定対応の数値・文字列双方向変換（不正時 `#f` 返却） |
 
 ### 3.3 第6.3節 真偽値 (Booleans)
 

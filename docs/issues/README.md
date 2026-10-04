@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **462** | R7RS 数値タワー・算術プリミティブの拡充 (R7RS 6.2 / Numbers) | Feature | 2026-10-04 | [closed/462-implement-r7rs-numeric-tower-primitives.md](closed/462-implement-r7rs-numeric-tower-primitives.md) |
 | **461** | R7RS レコード型機構の実装 (define-record-type) | Feature | 2026-10-04 | [closed/461-implement-r7rs-record-types.md](closed/461-implement-r7rs-record-types.md) |
 | **460** | R7RS 動的環境と保護機構の実装 (dynamic-wind, make-parameter, parameterize) | Feature | 2026-10-04 | [closed/460-implement-r7rs-dynamic-wind-and-parameters.md](closed/460-implement-r7rs-dynamic-wind-and-parameters.md) |
 | **459** | R7RS 文字・文字列プリミティブの網羅的拡充 (R7RS 6.6 & 6.7) | Feature | 2026-10-04 | [closed/459-implement-r7rs-characters-and-strings.md](closed/459-implement-r7rs-characters-and-strings.md) |
