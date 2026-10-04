@@ -14,6 +14,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **444** | ITスペシャリスト（プログラミング言語・コンパイラ処理系 / PLC）エージェントの創設と 16大専門エージェントガバナンスの同期 | Feature | 2026-10-04 | [closed/444-add-programming-languages-and-compilers-specialist-agent.md](closed/444-add-programming-languages-and-compilers-specialist-agent.md) |
+| **443** | ILISP (Intelligence LISP) R7RS コアアーキテクチャ設計・包括仕様書策定および受入基盤の初期整備 | Feature | 2026-10-04 | [closed/443-design-and-initialize-ilisp-r7rs-core-runtime.md](closed/443-design-and-initialize-ilisp-r7rs-core-runtime.md) |
 | **442** | トップレベルディレクトリの整理・衛生化と ischeme 統合に向けた構造基盤整備 | Refactoring | 2026-10-04 | [closed/442-refactor-root-directory-structure-and-sanitize-for-ischeme.md](closed/442-refactor-root-directory-structure-and-sanitize-for-ischeme.md) |
 | **441** | src/pdf_engine 配下の BibTeX および CMap モジュールのサブパッケージ化 | Refactoring | 2026-10-04 | [closed/441-modularize-pdf-engine-bibtex-and-cmap-subpackages.md](closed/441-modularize-pdf-engine-bibtex-and-cmap-subpackages.md) |
 | **440** | src/ontology 配下の Turtle エンジンおよびパーサーのサブパッケージ化 | Refactoring | 2026-10-04 | [closed/440-modularize-ontology-turtle-engine-and-parser-subpackage.md](closed/440-modularize-ontology-turtle-engine-and-parser-subpackage.md) |

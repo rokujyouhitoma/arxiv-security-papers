@@ -395,7 +395,7 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 
 ```text
 .
-├── .agents/                    # 15専門エージェント規約 (AGENTS.md) & スキル群
+├── .agents/                    # 16専門エージェント規約 (AGENTS.md) & スキル群
 ├── manage.py                   # 統合管理 CLI エントリポイント (DSN-24 / Unix ストリームパイプライン)
 ├── migrations/                 # 自作 DB ファースト・生 SQL マイグレーション定義 (DSN-30)
 ├── config/                     # パイプライン設定・スーパーバイザー設定ファイル群
@@ -405,11 +405,16 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 ├── site/                       # 統合 Web コンソール & ダッシュボード (HTML / CSS / JS / Dashboard)
 ├── tools/                      # 開発補助・PEG コンパイラ・プロファイラ (tools/peg, closure-compiler 等)
 ├── scripts/                    # 各種ベンチマーク (DB, HNSW, IR) & シードスクリプト
+├── ilisp/                      # ILISP (Intelligence LISP) R7RS Scheme 言語処理系基盤 (DSN-31)
+│   ├── docs/                   # ILISP 言語仕様・クイックスタート・ブートストラップ仕様
+│   ├── compiler/               # S式 Reader / AST / 衛生的マクロ
+│   ├── backend/                # Python AST & Native C99 AOT デュアルバックエンド
+│   └── runtime/                # TCO / 現場復帰型コンディション / 環境
 ├── docs/
 │   ├── audits/                 # 監査レポート (database_resilience_report.md 等)
 │   ├── benchmarks/             # 性能評価レポート (sota_evaluation.md 等)
-│   ├── designs/                # 30大包括設計書体系 (DSN-01 〜 DSN-30)
-│   ├── issues/                 # Issue 台帳 & クローズ済み履歴 (closed/ — 001〜441)
+│   ├── designs/                # 31大包括設計書体系 (DSN-01 〜 DSN-31)
+│   ├── issues/                 # Issue 台帳 & クローズ済み履歴 (closed/ — 001〜443)
 │   ├── manuals/                # ユーザーマニュアル (USR-01) & 開発者マニュアル (DEV-01)
 │   ├── mcp/                    # MCP サーバ仕様書 (MCP-01)
 │   ├── processes/              # 文書管理台帳 (MNG-01, MNG-02)
@@ -457,12 +462,12 @@ make build_js           ## Google Closure Compiler による Web JS バンドル
 
 ## 🔒 9. 品質管理とガバナンス (Governance & Quality Gates)
 
-本プロジェクトは **15専門エージェント・マルチエージェントガバナンス ([AGENTS.md](.agents/AGENTS.md))** の下、厳格な品質管理基準（DoD）を適用して開発・運用されています。
+本プロジェクトは **16専門エージェント・マルチエージェントガバナンス ([AGENTS.md](.agents/AGENTS.md))** の下、厳格な品質管理基準（DoD）を適用して開発・運用されています。
 
 1. **トリプル品質ゲート (Triple Quality Gates)**:
    - 全コード変更は `make check` (`make check_format`, `make static_analysis`, `make test`) を 100% 通過する必要があります。
 2. **Issue 駆動開発**:
-   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（**Issue 001〜441 全441件完了**）。
+   - すべての機能追加・改善は [docs/issues/](docs/issues/) の Issue 台帳で管理され、DoD 達成後に [docs/issues/closed/](docs/issues/closed/) へアーカイブされます（**Issue 001〜443 全443件完了**）。
 3. **循環的複雑度（Cyclomatic Complexity）厳格管理**:
    - 全モジュールにおいて `xenon --max-absolute A --max-modules A --max-average A` および `radon cc -s -n B`（全関数 CC $\le 5$）を達成しています。
 4. **相対パス厳守**:

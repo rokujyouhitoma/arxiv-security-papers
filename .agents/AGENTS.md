@@ -6,7 +6,7 @@ This file contains project-scoped rules and instructions for all AI agents worki
 
 ## 1. Governance & PM-Led Multi-Agent Framework
 
-All major feature additions, pipeline modifications, schema changes, and documentation restructuring MUST be conducted under the leadership of the **Project Manager (PM)** agent, integrating multi-perspective reviews from all 15 specialized agents:
+All major feature additions, pipeline modifications, schema changes, and documentation restructuring MUST be conducted under the leadership of the **Project Manager (PM)** agent, integrating multi-perspective reviews from all 16 specialized agents:
 
 1. **Project Manager (PM)** (Chair / Governance)
 2. **Information Security Specialist** (Domain classification & Security Attestation)
@@ -23,6 +23,7 @@ All major feature additions, pipeline modifications, schema changes, and documen
 13. **Education Specialist** (Terminology Accuracy & Readability)
 14. **Software Development (SWD)** (Core Engine, Storage Backend & Low-Level Algorithms)
 15. **Application Specialist (APS)** (Business Workflows, Web Gateway & Presentation Services)
+16. **IT Specialist (Programming Languages & Compilers / PLC)** (Language Runtime, S-expression AST, Macro Expander, Native AOT Codegen & Self-Hosting Bootstrap)
 
 ---
 
