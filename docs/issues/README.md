@@ -7,6 +7,7 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **480** | Python 側からの ILISP 呼び出し API (ilisp.eval, ilisp.Evaluator, ilisp.interop) の実装 | Feature | High | Open (New) | [480-implement-python-facing-ilisp-api-and-interop.md](480-implement-python-facing-ilisp-api-and-interop.md) |
+| **481** | Python 相互運用の糖衣構文 (Clojure ライクな記法とドット参照) の実装 | Feature | Medium | Open (New) | [481-implement-clojure-style-and-dot-syntax-for-python-interop.md](481-implement-clojure-style-and-dot-syntax-for-python-interop.md) |
 
 ---
 
