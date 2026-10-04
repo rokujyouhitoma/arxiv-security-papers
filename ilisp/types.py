@@ -507,6 +507,121 @@ def is_parameter(obj: Any) -> bool:
     return isinstance(obj, Parameter)
 
 
+class RecordType:
+    """R7RS Record Type Descriptor (RTD)."""
+
+    __slots__ = ("name", "fields", "_field_indices", "_type_id")
+
+    def __init__(
+        self, name: Union[str, Symbol], fields: Sequence[Union[str, Symbol]]
+    ) -> None:
+        self.name: str = name.name if isinstance(name, Symbol) else str(name)
+        self.fields: Tuple[str, ...] = tuple(
+            f.name if isinstance(f, Symbol) else str(f) for f in fields
+        )
+        self._field_indices: dict[str, int] = {f: i for i, f in enumerate(self.fields)}
+        self._type_id: int = id(self)
+
+    def field_index(self, field: Union[str, Symbol]) -> int:
+        fname = field.name if isinstance(field, Symbol) else str(field)
+        if fname not in self._field_indices:
+            raise KeyError(f"Record type {self.name} has no field {fname}")
+        return self._field_indices[fname]
+
+    def has_field(self, field: Union[str, Symbol]) -> bool:
+        fname = field.name if isinstance(field, Symbol) else str(field)
+        return fname in self._field_indices
+
+    def __repr__(self) -> str:
+        return f"#<record-type {self.name}>"
+
+    def __eq__(self, other: object) -> bool:
+        return self is other
+
+    def __hash__(self) -> int:
+        return hash(self._type_id)
+
+
+class Record:
+    """R7RS Record instance."""
+
+    __slots__ = ("record_type", "slots")
+
+    def __init__(
+        self, record_type: RecordType, slots: Optional[List[Any]] = None
+    ) -> None:
+        self.record_type: RecordType = record_type
+        if slots is not None:
+            if len(slots) != len(record_type.fields):
+                raise ValueError(
+                    f"Record {record_type.name} expects {len(record_type.fields)} fields, got {len(slots)}"
+                )
+            self.slots: List[Any] = list(slots)
+        else:
+            self.slots = [False] * len(record_type.fields)
+
+    def get_field(self, field: Union[str, Symbol, int]) -> Any:
+        if isinstance(field, int):
+            idx = field
+        else:
+            idx = self.record_type.field_index(field)
+        if not (0 <= idx < len(self.slots)):
+            raise IndexError(
+                f"Record {self.record_type.name} field index out of range: {idx}"
+            )
+        return self.slots[idx]
+
+    def set_field(self, field: Union[str, Symbol, int], val: Any) -> None:
+        if isinstance(field, int):
+            idx = field
+        else:
+            idx = self.record_type.field_index(field)
+        if not (0 <= idx < len(self.slots)):
+            raise IndexError(
+                f"Record {self.record_type.name} field index out of range: {idx}"
+            )
+        self.slots[idx] = val
+
+    def __repr__(self) -> str:
+        field_strs = [
+            f"{f}={self.slots[i]!r}" for i, f in enumerate(self.record_type.fields)
+        ]
+        return f"#<{self.record_type.name} {' '.join(field_strs)}>"
+
+    def __getattr__(self, name: str) -> Any:
+        if (
+            "_field_indices" in dir(self.record_type)
+            and name in self.record_type._field_indices
+        ):
+            return self.slots[self.record_type._field_indices[name]]
+        raise AttributeError(f"Record {self.record_type.name} has no attribute {name}")
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in ("record_type", "slots"):
+            super().__setattr__(name, value)
+        elif hasattr(self, "record_type") and name in self.record_type._field_indices:
+            self.slots[self.record_type._field_indices[name]] = value
+        else:
+            super().__setattr__(name, value)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Record):
+            return False
+        if self.record_type is not other.record_type:
+            return False
+        return self.slots == other.slots
+
+
+def is_record(obj: Any) -> bool:
+    """Return True if obj is a Scheme Record instance."""
+    return isinstance(obj, Record)
+
+
+def is_record_type(obj: Any) -> bool:
+    """Return True if obj is a Scheme RecordType descriptor."""
+    return isinstance(obj, RecordType)
+
+
 class SchemeException(Exception):
     """Exception raised by R7RS (raise datum)."""
 
@@ -558,6 +673,12 @@ LispVal = Union[
     Values,
     Continuation,
     Cell,
+    Bytevector,
+    Char,
+    MutableString,
+    Parameter,
+    RecordType,
+    Record,
     "Procedure",
     "Primitive",
 ]

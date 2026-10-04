@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from ilisp.char import (
     char_alphabetic_p,
@@ -76,6 +76,8 @@ from ilisp.types import (
     Parameter,
     Primitive,
     Procedure,
+    Record,
+    RecordType,
     SchemeException,
     SequenceView,
     Symbol,
@@ -86,6 +88,8 @@ from ilisp.types import (
     is_null,
     is_pair,
     is_parameter,
+    is_record,
+    is_record_type,
     string_val,
     to_lisp_list,
     to_py_list,
@@ -219,6 +223,12 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             return all(prim_equal_p(a[i], b[i]) for i in range(len(a)))
         if isinstance(a, Bytevector) and isinstance(b, Bytevector):
             return a == b
+        if isinstance(a, Record) and isinstance(b, Record):
+            if a.record_type is not b.record_type:
+                return False
+            return all(
+                prim_equal_p(a.slots[i], b.slots[i]) for i in range(len(a.slots))
+            )
         return False
 
     def prim_boolean_p(x: Any) -> bool:
@@ -603,6 +613,173 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_parameter_p(x: Any) -> bool:
         return is_parameter(x)
 
+    # --- Record Type Primitives (R7RS 5.5 & 6.x) ---
+    def prim_make_record_type(name: Any, fields: Any) -> RecordType:
+        if not isinstance(name, (str, Symbol)):
+            raise TypeError(
+                f"make-record-type: name must be symbol or string, got {name!r}"
+            )
+        field_list: List[Union[str, Symbol]] = []
+        if is_pair(fields) or is_null(fields):
+            field_list = to_py_list(fields)
+        elif isinstance(fields, (list, tuple)):
+            field_list = list(fields)
+        else:
+            raise TypeError(f"make-record-type: fields must be a list, got {fields!r}")
+        for f in field_list:
+            if not isinstance(f, (str, Symbol)):
+                raise TypeError(
+                    f"make-record-type: field name must be symbol or string, got {f!r}"
+                )
+        return RecordType(name, field_list)
+
+    def prim_record_type_p(x: Any) -> bool:
+        return is_record_type(x)
+
+    def prim_record_p(x: Any) -> bool:
+        return is_record(x)
+
+    def prim_record_type(rec: Any) -> RecordType:
+        if not isinstance(rec, Record):
+            raise TypeError(f"record-type: expected Record, got {rec!r}")
+        return rec.record_type
+
+    def prim_record_type_name(rtd: Any) -> Symbol:
+        if not isinstance(rtd, RecordType):
+            raise TypeError(f"record-type-name: expected RecordType, got {rtd!r}")
+        return Symbol.intern(rtd.name)
+
+    def prim_record_type_field_names(rtd: Any) -> Any:
+        if not isinstance(rtd, RecordType):
+            raise TypeError(
+                f"record-type-field-names: expected RecordType, got {rtd!r}"
+            )
+        return to_lisp_list([Symbol.intern(f) for f in rtd.fields])
+
+    def prim_make_record(rtd: Any, *initial_slots: Any) -> Record:
+        if not isinstance(rtd, RecordType):
+            raise TypeError(f"make-record: expected RecordType, got {rtd!r}")
+        if initial_slots:
+            if len(initial_slots) == 1 and (
+                is_pair(initial_slots[0]) or is_null(initial_slots[0])
+            ):
+                slots = to_py_list(initial_slots[0])
+            else:
+                slots = list(initial_slots)
+            return Record(rtd, slots)
+        return Record(rtd)
+
+    def prim_record_ref(rec: Any, field: Any) -> Any:
+        if not isinstance(rec, Record):
+            raise TypeError(f"record-ref: expected Record, got {rec!r}")
+        if isinstance(field, (int, str, Symbol)):
+            return rec.get_field(field)
+        raise TypeError(
+            f"record-ref: field must be symbol, string, or integer index, got {field!r}"
+        )
+
+    def prim_record_set_bang(rec: Any, field: Any, val: Any) -> Any:
+        if not isinstance(rec, Record):
+            raise TypeError(f"record-set!: expected Record, got {rec!r}")
+        if isinstance(field, (int, str, Symbol)):
+            rec.set_field(field, val)
+            return val
+        raise TypeError(
+            f"record-set!: field must be symbol, string, or integer index, got {field!r}"
+        )
+
+    def prim_record_predicate(rtd: Any) -> Primitive:
+        if not isinstance(rtd, RecordType):
+            raise TypeError(f"record-predicate: expected RecordType, got {rtd!r}")
+        target_rtd = rtd
+
+        def pred(x: Any) -> bool:
+            return isinstance(x, Record) and x.record_type is target_rtd
+
+        return Primitive(f"{target_rtd.name}?", pred)
+
+    def prim_record_accessor(rtd: Any, field: Any) -> Primitive:
+        if not isinstance(rtd, RecordType):
+            raise TypeError(f"record-accessor: expected RecordType, got {rtd!r}")
+        fname = field.name if isinstance(field, Symbol) else str(field)
+        if not rtd.has_field(fname):
+            raise KeyError(
+                f"record-accessor: record type {rtd.name} has no field {fname}"
+            )
+        fidx = rtd.field_index(fname)
+        target_rtd = rtd
+
+        def accessor(rec: Any) -> Any:
+            if not isinstance(rec, Record) or rec.record_type is not target_rtd:
+                raise TypeError(
+                    f"accessor for {target_rtd.name}.{fname} expected {target_rtd.name} instance, got {rec!r}"
+                )
+            return rec.slots[fidx]
+
+        return Primitive(f"{target_rtd.name}-{fname}", accessor)
+
+    def prim_record_modifier(rtd: Any, field: Any) -> Primitive:
+        if not isinstance(rtd, RecordType):
+            raise TypeError(f"record-modifier: expected RecordType, got {rtd!r}")
+        fname = field.name if isinstance(field, Symbol) else str(field)
+        if not rtd.has_field(fname):
+            raise KeyError(
+                f"record-modifier: record type {rtd.name} has no field {fname}"
+            )
+        fidx = rtd.field_index(fname)
+        target_rtd = rtd
+
+        def modifier(rec: Any, val: Any) -> Any:
+            if not isinstance(rec, Record) or rec.record_type is not target_rtd:
+                raise TypeError(
+                    f"modifier for {target_rtd.name}.{fname} expected {target_rtd.name} instance, got {rec!r}"
+                )
+            rec.slots[fidx] = val
+            return val
+
+        return Primitive(f"{target_rtd.name}-{fname}-set!", modifier)
+
+    def prim_record_constructor(rtd: Any, fields_spec: Any = None) -> Primitive:
+        if not isinstance(rtd, RecordType):
+            raise TypeError(f"record-constructor: expected RecordType, got {rtd!r}")
+        target_rtd = rtd
+
+        if fields_spec is None:
+            field_names = list(target_rtd.fields)
+        elif is_pair(fields_spec) or is_null(fields_spec):
+            field_names = [
+                f.name if isinstance(f, Symbol) else str(f)
+                for f in to_py_list(fields_spec)
+            ]
+        elif isinstance(fields_spec, (list, tuple)):
+            field_names = [
+                f.name if isinstance(f, Symbol) else str(f) for f in fields_spec
+            ]
+        else:
+            raise TypeError(
+                f"record-constructor: fields must be a list or None, got {fields_spec!r}"
+            )
+
+        arg_to_slot: List[int] = []
+        for fn in field_names:
+            if not target_rtd.has_field(fn):
+                raise KeyError(
+                    f"record-constructor: record type {target_rtd.name} has no field {fn}"
+                )
+            arg_to_slot.append(target_rtd.field_index(fn))
+
+        def constructor(*args: Any) -> Record:
+            if len(args) != len(arg_to_slot):
+                raise TypeError(
+                    f"Constructor for {target_rtd.name} expected {len(arg_to_slot)} arguments, got {len(args)}"
+                )
+            rec = Record(target_rtd)
+            for slot_idx, val in zip(arg_to_slot, args):
+                rec.slots[slot_idx] = val
+            return rec
+
+        return Primitive(f"make-{target_rtd.name}", constructor)
+
     # Exceptions & Conditions (R7RS)
     def prim_raise(datum: Any) -> Any:
         raise SchemeException(datum)
@@ -735,6 +912,20 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         # Parameters (R7RS)
         "make-parameter": prim_make_parameter,
         "parameter?": prim_parameter_p,
+        # Records (R7RS 5.5 & 6.x)
+        "make-record-type": prim_make_record_type,
+        "record-type?": prim_record_type_p,
+        "record?": prim_record_p,
+        "record-type": prim_record_type,
+        "record-type-name": prim_record_type_name,
+        "record-type-field-names": prim_record_type_field_names,
+        "make-record": prim_make_record,
+        "record-ref": prim_record_ref,
+        "record-set!": prim_record_set_bang,
+        "record-predicate": prim_record_predicate,
+        "record-accessor": prim_record_accessor,
+        "record-modifier": prim_record_modifier,
+        "record-constructor": prim_record_constructor,
         # Exceptions (R7RS)
         "raise": prim_raise,
         "raise-continuable": prim_raise,

@@ -182,6 +182,8 @@ class PythonASTCompiler:
                 ast.alias(name="Char", asname=None),
                 ast.alias(name="MutableString", asname=None),
                 ast.alias(name="Parameter", asname=None),
+                ast.alias(name="Record", asname=None),
+                ast.alias(name="RecordType", asname=None),
                 ast.alias(name="SchemeException", asname=None),
                 ast.alias(name="Continuation", asname=None),
             ],

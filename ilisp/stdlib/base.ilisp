@@ -369,3 +369,38 @@
       (if (eqv? key (car (car alist)))
           (car alist)
           (assoc key (cdr alist)))))
+
+;;; -------------------------------------------------------------
+;;; 5. Record-Type Definitions (R7RS 5.5)
+;;; -------------------------------------------------------------
+
+(define (_ilisp_extract_all_fields field-specs)
+  (if (null? field-specs)
+      '()
+      (cons (car (car field-specs))
+            (_ilisp_extract_all_fields (cdr field-specs)))))
+
+(define (_ilisp_expand_field_specs type-name field-specs)
+  (if (null? field-specs)
+      '()
+      (let* ((fspec (car field-specs))
+             (fname (car fspec))
+             (acc-name (car (cdr fspec)))
+             (acc-def (list 'define acc-name (list 'record-accessor type-name (list 'quote fname))))
+             (rest-defs (_ilisp_expand_field_specs type-name (cdr field-specs))))
+        (if (null? (cdr (cdr fspec)))
+            (cons acc-def rest-defs)
+            (let ((mod-name (car (cdr (cdr fspec)))))
+              (cons acc-def
+                    (cons (list 'define mod-name (list 'record-modifier type-name (list 'quote fname)))
+                          rest-defs)))))))
+
+(define-macro (define-record-type type-name ctor-spec pred-name . field-specs)
+  (let ((all-fields (_ilisp_extract_all_fields field-specs))
+        (ctor-name (car ctor-spec))
+        (ctor-fields (cdr ctor-spec)))
+    (cons 'begin
+          (cons (list 'define type-name (list 'make-record-type (list 'quote type-name) (list 'quote all-fields)))
+                (cons (list 'define pred-name (list 'record-predicate type-name))
+                      (cons (list 'define ctor-name (list 'record-constructor type-name (list 'quote ctor-fields)))
+                            (_ilisp_expand_field_specs type-name field-specs)))))))

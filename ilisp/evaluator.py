@@ -22,6 +22,8 @@ from ilisp.types import (
     Parameter,
     Primitive,
     Procedure,
+    Record,
+    RecordType,
     Symbol,
     Vector,
     car,
@@ -66,6 +68,8 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     Char,
                     MutableString,
                     Parameter,
+                    RecordType,
+                    Record,
                     Continuation,
                 ),
             )

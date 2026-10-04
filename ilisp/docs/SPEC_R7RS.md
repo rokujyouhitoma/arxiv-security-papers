@@ -15,8 +15,8 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 ### 1.1 実装ステータス別割合 (Overall Compliance Ratio)
 
 ```mermaid
-pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全195機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 126
+pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 134
     "🔄 一部対応 (サブセット/基本版)" : 18
     "⏳ 計画中 (Phase 3/4 予定)" : 51
 ```
@@ -26,7 +26,8 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | カテゴリ | 規格セクション | 規格機能数 | 実装済 (率) | ステータス | 備考 |
 | :--- | :---: | :---: | :---: | :---: | :--- |
 | **特殊形式・コア構文** | 4.1, 4.2 | 18 | 17 (94%) | 🟢 ほぼ完全 | `quote`, `lambda`, `if`, `set!`, `cond`, `case`, `let`, `let*`, `letrec`, `letrec*`, `do`, `let-values`, `quasiquote` 完備 |
-| **等価性・真偽値** | 6.1, 6.3 | 5 | 5 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `not` |
+| **レコード型 (Record types)** | 5.5 | 8 | 8 (100%) | 🟢 完全準拠 | `define-record-type`, コンストラクタ, 型述語, アクセサ, モディファイア, 生成的一意型, 低レベルAPI完備 |
+| **等価性・真偽値** | 6.1, 6.3 | 5 | 5 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `not`（レコード等価比較対応） |
 | **ペアとリスト** | 6.4 | 26 | 18 (69%) | 🟢 充実 | 基本操作、リスト走査、高階関数 (`map`, `filter`, `fold-left`)、Alist 検索完備 |
 | **シンボル** | 6.5 | 4 | 3 (75%) | 🟢 完全準拠 | インターン保証、文字列相互変換 |
 | **ベクタ (Vectors)** | 6.8 | 13 | 8 (62%) | 🟢 基本完備 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, リスト相互変換等 |
@@ -76,8 +77,9 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `letrec` | 相互再帰束縛 | `stdlib/base.ilisp` | ✅ 完全準拠 | 相互再帰クロージャバインド脱糖マクロ |
 | `letrec*` | 逐次相互再帰 | `stdlib/base.ilisp` | ✅ 完全準拠 | 逐次初期化付き相互再帰バインド脱糖マクロ |
 | `do` | 構造化反復 | `stdlib/base.ilisp` | ✅ 完全準拠 | 変数更新ステップ、終了判定、結果式返却ループ脱糖 |
+| `parameterize` | 動的パラメータ一時束縛 | `stdlib/base.ilisp` | ✅ 完全準拠 | `dynamic-wind` 上で構築された動的スコープパラメータ一時束縛・確実復元マクロ |
+| `define-record-type` | レコード型定義 | `stdlib/base.ilisp` | ✅ 完全準拠 | 型記述子、コンストラクタ、型述語、フィールドアクセサ、モディファイアを自動生成・展開 |
 | `syntax-error` | 構文エラー送出 | - | ⏳ 計画中 | Phase 3 実装予定 |
-| `parameterize` | 動的パラメータ | - | ⏳ 計画中 | Phase 4 実装予定 |
 
 ---
 
@@ -201,6 +203,25 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `list->vector` | Kernel (Core) | ✅ | リストからベクタへの変換 |
 | `vector-copy`, `vector-copy!` | - | ⏳ | ベクタの部分コピー（Phase 3 予定） |
 | `vector-fill!` | - | ⏳ | ベクタ一括塗りつぶし（Phase 3 予定） |
+
+### 3.8b 第5.5節 レコード型 (Record types)
+
+| 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
+| :--- | :---: | :---: | :--- |
+| `define-record-type` | `stdlib/base.ilisp` | ✅ | 型記述子、コンストラクタ、型述語、フィールドアクセサ、モディファイアの一括生成・展開構文 |
+| `make-record-type` | Kernel (Core) | ✅ | 一意な型記述子 (`RecordType`) の生成（生成的一意性保証） |
+| `record-type?` | Kernel (Core) | ✅ | レコード型記述子判定述語 |
+| `record?` | Kernel (Core) | ✅ | レコードインスタンス判定述語（他型および他レコード型と排他的） |
+| `record-type` | Kernel (Core) | ✅ | インスタンスから所属型記述子を取得 |
+| `record-type-name` | Kernel (Core) | ✅ | 型記述子の型名シンボル取得 |
+| `record-type-field-names` | Kernel (Core) | ✅ | 型記述子の全フィールド名リスト取得 |
+| `make-record` | Kernel (Core) | ✅ | 初期値付きレコードインスタンス生成 |
+| `record-ref` | Kernel (Core) | ✅ | フィールド名またはスロットインデックスによる要素参照 |
+| `record-set!` | Kernel (Core) | ✅ | フィールド名またはスロットインデックスによるインプレース破壊的更新 |
+| `record-predicate` | Kernel (Core) | ✅ | 特定型専用の高速型判定述語手続きを生成 |
+| `record-accessor` | Kernel (Core) | ✅ | スロットインデックス直接解決による $O(1)$ 高速アクセサ手続きを生成 |
+| `record-modifier` | Kernel (Core) | ✅ | スロットインデックス直接解決による $O(1)$ 高速モディファイア手続きを生成 |
+| `record-constructor` | Kernel (Core) | ✅ | 指定フィールド順序で引数を取り未指定フィールドを `#f` 初期化するコンストラクタ手続きを生成 |
 
 ### 3.9 第6.9節 バイトベクタ (Bytevectors)
 
