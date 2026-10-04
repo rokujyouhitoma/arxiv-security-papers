@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 from ilisp.types import (
@@ -89,7 +90,7 @@ class Environment:
         return Environment(parent=self, bindings=new_bindings)
 
 
-def make_initial_env() -> Environment:
+def make_initial_env(preload_stdlib: bool = True) -> Environment:
     """Construct top-level global environment preloaded with 23 core primitives and Python interop."""
     env = Environment()
 
@@ -246,6 +247,18 @@ def make_initial_env() -> Environment:
     def prim_py_eval(expr_str: str) -> Any:
         return eval(expr_str)  # nosec
 
+    def prim_load(filepath: str) -> Any:
+        from ilisp.evaluator import eval_expr
+        from ilisp.reader import read_all
+
+        with open(filepath, "r", encoding="utf-8") as f:
+            code = f.read()
+        exprs = read_all(code, filename=filepath)
+        res: Any = NIL
+        for expr in exprs:
+            res = eval_expr(expr, env)
+        return res
+
     # Register all primitives
     primitives: Dict[str, Callable[..., Any]] = {
         # Pairs and Lists
@@ -281,6 +294,7 @@ def make_initial_env() -> Environment:
         "write": prim_write,
         "read-char": prim_read_char,
         "eof-object?": prim_eof_object_p,
+        "load": prim_load,
         # Python Zero-Copy & Interop
         "sequence-view": prim_sequence_view,
         "py-import": prim_py_import,
@@ -293,5 +307,10 @@ def make_initial_env() -> Environment:
     for name, fn in primitives.items():
         sym = Symbol.intern(name)
         env.define(sym, Primitive(name, fn))
+
+    if preload_stdlib:
+        stdlib_path = Path(__file__).parent / "stdlib" / "base.ilisp"
+        if stdlib_path.exists():
+            prim_load(str(stdlib_path))
 
     return env

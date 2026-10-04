@@ -1,0 +1,181 @@
+;;; ILISP (Intelligence LISP) Standard Library - Base Module
+;;; (scheme base) subset and core syntax macros adhering to R7RS-small.
+
+;;; -------------------------------------------------------------
+;;; 1. Core Control Syntax Macros
+;;; -------------------------------------------------------------
+
+;; when: (when test expr ...)
+(define-macro (when test . body)
+  (cons 'if
+        (cons test
+              (cons (cons 'begin body)
+                    '()))))
+
+;; unless: (unless test expr ...)
+(define-macro (unless test . body)
+  (cons 'if
+        (cons test
+              (cons '()
+                    (cons (cons 'begin body)
+                          '())))))
+
+;; Helper functions for let macro expansion
+(define (_ilisp_extract_vars bindings)
+  (if (null? bindings)
+      '()
+      (cons (car (car bindings))
+            (_ilisp_extract_vars (cdr bindings)))))
+
+(define (_ilisp_extract_vals bindings)
+  (if (null? bindings)
+      '()
+      (cons (car (cdr (car bindings)))
+            (_ilisp_extract_vals (cdr bindings)))))
+
+;; let: (let ((var val) ...) body ...)
+(define-macro (let bindings . body)
+  (cons (cons 'lambda
+              (cons (_ilisp_extract_vars bindings)
+                    body))
+        (_ilisp_extract_vals bindings)))
+
+;; let*: (let* ((var val) ...) body ...)
+(define-macro (let* bindings . body)
+  (if (null? bindings)
+      (cons 'begin body)
+      (cons 'let
+            (cons (cons (car bindings) '())
+                  (cons (cons 'let* (cons (cdr bindings) body))
+                        '())))))
+
+;; cond: (cond (test expr ...) ... (else expr ...))
+(define-macro (cond . clauses)
+  (if (null? clauses)
+      '()
+      (let ((first_clause (car clauses))
+            (rest_clauses (cdr clauses)))
+        (let ((test_expr (car first_clause))
+              (body_exprs (cdr first_clause)))
+          (if (eq? test_expr 'else)
+              (cons 'begin body_exprs)
+              (cons 'if
+                    (cons test_expr
+                          (cons (cons 'begin body_exprs)
+                                (cons (cons 'cond rest_clauses)
+                                      '())))))))))
+
+;; and: (and expr ...) short-circuit boolean AND
+(define-macro (and . exprs)
+  (if (null? exprs)
+      #t
+      (if (null? (cdr exprs))
+          (car exprs)
+          (cons 'if
+                (cons (car exprs)
+                      (cons (cons 'and (cdr exprs))
+                            (cons #f '())))))))
+
+;; or: (or expr ...) short-circuit boolean OR
+(define-macro (or . exprs)
+  (if (null? exprs)
+      #f
+      (if (null? (cdr exprs))
+          (car exprs)
+          (cons 'let
+                (cons (cons (cons '__or_val (cons (car exprs) '())) '())
+                      (cons (cons 'if
+                                  (cons '__or_val
+                                        (cons '__or_val
+                                              (cons (cons 'or (cdr exprs))
+                                                    '()))))
+                            '()))))))
+
+;;; -------------------------------------------------------------
+;;; 2. Pair and List Accessors & Utilities
+;;; -------------------------------------------------------------
+
+(define (caar p) (car (car p)))
+(define (cadr p) (car (cdr p)))
+(define (cdar p) (cdr (car p)))
+(define (cddr p) (cdr (cdr p)))
+
+(define (length lst)
+  (define (loop l acc)
+    (if (null? l)
+        acc
+        (loop (cdr l) (+ acc 1))))
+  (loop lst 0))
+
+(define (reverse lst)
+  (define (loop l acc)
+    (if (null? l)
+        acc
+        (loop (cdr l) (cons (car l) acc))))
+  (loop lst '()))
+
+(define (append l1 l2)
+  (if (null? l1)
+      l2
+      (cons (car l1) (append (cdr l1) l2))))
+
+;;; -------------------------------------------------------------
+;;; 3. Higher-Order Functions
+;;; -------------------------------------------------------------
+
+(define (map proc lst)
+  (if (null? lst)
+      '()
+      (cons (proc (car lst))
+            (map proc (cdr lst)))))
+
+(define (filter pred lst)
+  (if (null? lst)
+      '()
+      (if (pred (car lst))
+          (cons (car lst) (filter pred (cdr lst)))
+          (filter pred (cdr lst)))))
+
+(define (fold-left proc init lst)
+  (if (null? lst)
+      init
+      (fold-left proc (proc init (car lst)) (cdr lst))))
+
+(define (for-each proc lst)
+  (if (null? lst)
+      '()
+      (begin
+        (proc (car lst))
+        (for-each proc (cdr lst)))))
+
+;;; -------------------------------------------------------------
+;;; 4. Searching and Association Lists (Alist)
+;;; -------------------------------------------------------------
+
+(define (memq item lst)
+  (if (null? lst)
+      #f
+      (if (eq? item (car lst))
+          lst
+          (memq item (cdr lst)))))
+
+(define (member item lst)
+  (if (null? lst)
+      #f
+      (if (eqv? item (car lst))
+          lst
+          (member item (cdr lst)))))
+
+(define (assq key alist)
+  (if (null? alist)
+      #f
+      (if (eq? key (car (car alist)))
+          (car alist)
+          (assq key (cdr alist)))))
+
+(define (assoc key alist)
+  (if (null? alist)
+      #f
+      (if (eqv? key (car (car alist)))
+          (car alist)
+          (assoc key (cdr alist)))))
