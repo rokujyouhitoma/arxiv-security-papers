@@ -222,6 +222,27 @@ class LibraryRegistry:
                 pc_exports[sym] = base_env.bindings[sym]
         self.register(Library(("scheme", "process-context"), pc_exports, base_env))
 
+        # (scheme inexact)
+        inexact_exports: Dict[Symbol, Any] = {}
+        for name in (
+            "acos",
+            "asin",
+            "atan",
+            "cos",
+            "exp",
+            "finite?",
+            "infinite?",
+            "log",
+            "nan?",
+            "sin",
+            "sqrt",
+            "tan",
+        ):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                inexact_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "inexact"), inexact_exports, base_env))
+
         # (ilisp python)
         py_exports: Dict[Symbol, Any] = {}
         for name in (

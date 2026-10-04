@@ -258,6 +258,14 @@ def syntax_to_datum(stx: Any, use_scope: Optional[Scope] = None) -> Any:
                     "imag-part",
                     "magnitude",
                     "angle",
+                    "exp",
+                    "log",
+                    "sin",
+                    "cos",
+                    "tan",
+                    "asin",
+                    "acos",
+                    "atan",
                 }
                 if d.name in core_forms:
                     return d

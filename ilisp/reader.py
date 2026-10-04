@@ -327,6 +327,15 @@ class Reader:
         except ValueError:
             pass
 
+        # Try special float literals (R7RS 6.2.4: +inf.0, -inf.0, +nan.0)
+        low_tok = token.lower()
+        if low_tok in ("+inf.0", "+inf"):
+            return float("inf")
+        if low_tok in ("-inf.0", "-inf"):
+            return float("-inf")
+        if low_tok in ("+nan.0", "-nan.0", "nan.0", "+nan", "-nan"):
+            return float("nan")
+
         # Try float
         try:
             return float(token)

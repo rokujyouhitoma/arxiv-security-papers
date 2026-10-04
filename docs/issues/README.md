@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **472** | R7RS 超越関数・浮動小数点数学関数および (scheme inexact) ライブラリの実装 (sin..log) | Feature | 2026-10-04 | [closed/472-implement-r7rs-scheme-inexact-transcendental-math.md](closed/472-implement-r7rs-scheme-inexact-transcendental-math.md) |
 | **471** | R7RS 深層リストアクセサおよび (scheme cxr) ライブラリの実装 (caaar..cddddr) | Feature | 2026-10-04 | [closed/471-implement-r7rs-scheme-cxr-accessors.md](closed/471-implement-r7rs-scheme-cxr-accessors.md) |
 | **470** | R7RS 数値タワー拡張プリミティブおよび複素数算術の実装 (exact-integer-sqrt, complex, polar) | Feature | 2026-10-04 | [closed/470-implement-r7rs-numeric-tower-extensions.md](closed/470-implement-r7rs-numeric-tower-extensions.md) |
 | **469** | R7RS システム・プロセスコンテキストおよび高精度タイマーの実装 (time, environment, command-line) | Feature | 2026-10-04 | [closed/469-implement-r7rs-system-process-context-and-time.md](closed/469-implement-r7rs-system-process-context-and-time.md) |

@@ -79,6 +79,8 @@ def finite_p(x: Any) -> bool:
     """Return True if x is a finite number."""
     if not number_p(x):
         raise TypeError(f"finite?: expected number, got {x!r}")
+    if isinstance(x, complex):
+        return math.isfinite(x.real) and math.isfinite(x.imag)
     return math.isfinite(x)
 
 
@@ -86,6 +88,8 @@ def infinite_p(x: Any) -> bool:
     """Return True if x is positive or negative infinity."""
     if not number_p(x):
         raise TypeError(f"infinite?: expected number, got {x!r}")
+    if isinstance(x, complex):
+        return math.isinf(x.real) or math.isinf(x.imag)
     return math.isinf(x)
 
 
@@ -93,6 +97,8 @@ def nan_p(x: Any) -> bool:
     """Return True if x is NaN (Not a Number)."""
     if not number_p(x):
         raise TypeError(f"nan?: expected number, got {x!r}")
+    if isinstance(x, complex):
+        return math.isnan(x.real) or math.isnan(x.imag)
     return math.isnan(x)
 
 
@@ -196,16 +202,35 @@ def num_div(first: Number, *rest: Number) -> Number:
                 return 1
             if first == -1:
                 return -1
+            if first == 0:
+                raise ZeroDivisionError("division by zero")
+        if first == 0:
+            if isinstance(first, float):
+                return float("inf")
+            raise ZeroDivisionError("division by zero")
         return 1.0 / first
     res: Number = first
     for n in rest:
         if isinstance(res, int) and isinstance(n, int):
+            if n == 0:
+                raise ZeroDivisionError("division by zero")
             if res % n == 0:
                 res = res // n
             else:
                 res = res / n
         else:
-            res = res / n
+            if n == 0:
+                if isinstance(res, (int, float)) and isinstance(n, (int, float)):
+                    if res > 0:
+                        res = float("inf")
+                    elif res < 0:
+                        res = float("-inf")
+                    else:
+                        res = float("nan")
+                else:
+                    raise ZeroDivisionError("division by zero")
+            else:
+                res = res / n
     return res
 
 
@@ -351,14 +376,123 @@ def num_square(z: Number) -> Number:
     return z * z
 
 
-def num_sqrt(z: Real) -> Real:
-    """Return square root of z."""
-    if z < 0:
-        raise ValueError(f"sqrt: real domain error for {z}")
-    res = math.sqrt(z)
-    if isinstance(z, int) and res.is_integer() and int(res) * int(res) == z:
-        return int(res)
-    return res
+def num_sqrt(z: Number) -> Number:
+    """Return square root of z (R7RS 6.2.6).
+
+    For non-negative real numbers, returns real (or int if exact square).
+    For negative real numbers or complex numbers, returns complex.
+    """
+    if isinstance(z, complex):
+        return cmath.sqrt(z)
+    if isinstance(z, (int, float)):
+        if z < 0:
+            return cmath.sqrt(z)
+        res = math.sqrt(z)
+        if isinstance(z, int) and res.is_integer() and int(res) * int(res) == z:
+            return int(res)
+        return res
+    raise TypeError(f"sqrt: expected number, got {z!r}")
+
+
+def num_exp(z: Number) -> Number:
+    """Return the natural exponential of z."""
+    if isinstance(z, complex):
+        return cmath.exp(z)
+    if isinstance(z, (int, float)):
+        return math.exp(z)
+    raise TypeError(f"exp: expected number, got {z!r}")
+
+
+def num_log(z: Number, *base: Number) -> Number:
+    """Return the logarithm of z.
+
+    (log z) computes natural log ln(z).
+    (log z b) computes log_b(z) = ln(z) / ln(b).
+    """
+    if len(base) > 1:
+        raise TypeError(f"log: expected 1 or 2 arguments, got {len(base) + 1}")
+
+    def _single_log(val: Number) -> Number:
+        if isinstance(val, complex):
+            return cmath.log(val)
+        if isinstance(val, (int, float)):
+            if val > 0:
+                return math.log(val)
+            return cmath.log(val)
+        raise TypeError(f"log: expected number, got {val!r}")
+
+    res_z = _single_log(z)
+    if not base:
+        return res_z
+    res_b = _single_log(base[0])
+    return res_z / res_b
+
+
+def num_sin(z: Number) -> Number:
+    """Return the sine of z."""
+    if isinstance(z, complex):
+        return cmath.sin(z)
+    if isinstance(z, (int, float)):
+        return math.sin(z)
+    raise TypeError(f"sin: expected number, got {z!r}")
+
+
+def num_cos(z: Number) -> Number:
+    """Return the cosine of z."""
+    if isinstance(z, complex):
+        return cmath.cos(z)
+    if isinstance(z, (int, float)):
+        return math.cos(z)
+    raise TypeError(f"cos: expected number, got {z!r}")
+
+
+def num_tan(z: Number) -> Number:
+    """Return the tangent of z."""
+    if isinstance(z, complex):
+        return cmath.tan(z)
+    if isinstance(z, (int, float)):
+        return math.tan(z)
+    raise TypeError(f"tan: expected number, got {z!r}")
+
+
+def num_asin(z: Number) -> Number:
+    """Return the arcsine of z."""
+    if isinstance(z, complex):
+        return cmath.asin(z)
+    if isinstance(z, (int, float)):
+        if -1.0 <= z <= 1.0:
+            return math.asin(z)
+        return cmath.asin(z)
+    raise TypeError(f"asin: expected number, got {z!r}")
+
+
+def num_acos(z: Number) -> Number:
+    """Return the arccosine of z."""
+    if isinstance(z, complex):
+        return cmath.acos(z)
+    if isinstance(z, (int, float)):
+        if -1.0 <= z <= 1.0:
+            return math.acos(z)
+        return cmath.acos(z)
+    raise TypeError(f"acos: expected number, got {z!r}")
+
+
+def num_atan(*args: Number) -> Number:
+    """Return the arctangent of z (1 arg) or atan2(y, x) (2 args)."""
+    if len(args) == 1:
+        z = args[0]
+        if isinstance(z, complex):
+            return cmath.atan(z)
+        if isinstance(z, (int, float)):
+            return math.atan(z)
+        raise TypeError(f"atan: expected number, got {z!r}")
+    elif len(args) == 2:
+        y, x = args
+        if isinstance(y, (int, float)) and isinstance(x, (int, float)):
+            return math.atan2(y, x)
+        raise TypeError("atan (2 arguments): expected real numbers")
+    else:
+        raise TypeError(f"atan: expected 1 or 2 arguments, got {len(args)}")
 
 
 def num_expt(z1: Number, z2: Number) -> Number:

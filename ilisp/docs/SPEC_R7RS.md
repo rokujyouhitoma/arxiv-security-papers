@@ -16,8 +16,8 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 198
-    "🔄 一部対応 (サブセット/基本版)" : 5
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 199
+    "🔄 一部対応 (サブセット/基本版)" : 4
     "⏳ 計画中 (Phase 4 予定)" : 0
 ```
 
@@ -122,7 +122,10 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `truncate/`, `truncate-quotient`, `truncate-remainder` | `ilisp/numbers.py` | ✅ | ゼロ方向切り捨てに基づく整数除算（多値返却対応） |
 | `quotient`, `remainder`, `modulo` | `ilisp/numbers.py` | ✅ | 整数商、整数剰余、床関数丸め剰余 |
 | `exact`, `inexact` (`exact->inexact`, `inexact->exact`) | `ilisp/numbers.py` | ✅ | 正確数・非正確数相互型キャスト |
-| `square`, `sqrt`, `expt` | `ilisp/numbers.py` | ✅ | 平方、平方根（完全平方数の整数化対応）、べき乗計算 |
+| `square`, `sqrt`, `expt` | `ilisp/numbers.py` | ✅ | 平方、平方根（実数・負数・複素数の虚数単位対応）、べき乗計算 |
+| `exp`, `log` | `ilisp/numbers.py` | ✅ | 自然指数関数、1引数自然対数、2引数任意底対数 (`(log z b)`) |
+| `sin`, `cos`, `tan` | `ilisp/numbers.py` | ✅ | 三角関数（実数および複素数対応、`math`/`cmath` 連動） |
+| `asin`, `acos`, `atan` | `ilisp/numbers.py` | ✅ | 逆三角関数（1引数形式および象限考慮2引数 `(atan y x)` 形式完備） |
 | `number->string`, `string->number` | `ilisp/numbers.py` | ✅ | 基数 2, 8, 10, 16 指定対応の数値・文字列双方向変換（不正時 `#f` 返却） |
 
 ### 3.3 第6.3節 真偽値 (Booleans)
@@ -346,6 +349,7 @@ graph LR
         SPC["(scheme process-context)<br>get-env-var(s), command-line, exit"]
         SCOM["(scheme complex)<br>make-rect, make-polar, real/imag-part, mag, angle"]
         SCXR["(scheme cxr)<br>caaar..cddddr (24アクセサ)"]
+        SI["(scheme inexact)<br>sin, cos, tan, exp, log, sqrt 等 (12手続き)"]
     end
     subgraph Partially Supported
         SC["(scheme char)<br>#\\リテラル, string-append"]
@@ -354,7 +358,6 @@ graph LR
         SCASE["(scheme case-lambda)<br>可変長ディスパッチ"]
     end
     subgraph Planned for Phase 4
-        SI["(scheme inexact)<br>三角関数・対数"]
         SLAZY["(scheme lazy)<br>delay, force"]
         SEVAL["(scheme eval)<br>動的環境eval"]
         SREPL["(scheme repl)<br>REPL環境"]
@@ -372,11 +375,11 @@ graph LR
 | `(scheme time)` | 高精度タイマー・経過時刻 | 🟢 100% | Kernel コア組込 (`current-second`, `current-jiffy`, `jiffies-per-second`) |
 | `(scheme complex)` | 複素数タワー | 🟢 100% | Kernel コア組込 (`angle`, `imag-part`, `magnitude`, `make-polar`, `make-rectangular`, `real-part`) |
 | `(scheme cxr)` | 深層リストアクセサ (`caaar`..`cddddr`)| 🟢 100% | Kernel コア組込 (`caaar`〜`cddddr` 全24手続き完備) |
+| `(scheme inexact)` | 浮動小数点数学関数 (`sin`, `sqrt` 等) | 🟢 100% | Kernel コア組込 (`acos`, `asin`, `atan`, `cos`, `exp`, `finite?`, `infinite?`, `log`, `nan?`, `sin`, `sqrt`, `tan`) |
 | `(scheme char)` | 文字種別判定・変換 | 🟡 30% | 文字リテラル・基本判定 |
 | `(scheme case-lambda)` | 引数個数多重ディスパッチ | ⏳ 計画中 | Phase 3 マクロ提供予定 |
 | `(scheme lazy)` | 遅延評価 (`delay`, `force`) | ⏳ 計画中 | Phase 4 (`make-promise`) |
 | `(scheme eval)` | 実行時環境生成と動的評価 | ⏳ 計画中 | Phase 4 (`environment`, `eval`) |
-| `(scheme inexact)` | 浮動小数点数学関数 (`sin`, `sqrt` 等) | ⏳ 計画中 | Phase 4 (Python `math` 連携) |
 | `(scheme repl)` | 対話型セッション環境 | ⏳ 計画中 | Phase 4 |
 
 ---
