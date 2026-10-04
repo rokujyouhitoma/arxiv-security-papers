@@ -258,6 +258,13 @@ class LibraryRegistry:
                 lazy_exports[sym] = base_env.bindings[sym]
         self.register(Library(("scheme", "lazy"), lazy_exports, base_env))
 
+        # (scheme case-lambda)
+        case_lambda_exports: Dict[Symbol, Any] = {}
+        case_lambda_sym = Symbol.intern("case-lambda")
+        if case_lambda_sym in base_env.bindings:
+            case_lambda_exports[case_lambda_sym] = base_env.bindings[case_lambda_sym]
+        self.register(Library(("scheme", "case-lambda"), case_lambda_exports, base_env))
+
         # (ilisp python)
         py_exports: Dict[Symbol, Any] = {}
         for name in (
