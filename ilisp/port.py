@@ -640,14 +640,22 @@ def read_char(port: Optional[TextualInputPort] = None) -> Any:
     """Read next character from port (default: current input port)."""
     p = port if port is not None else get_current_input_port()
     ch = p.read_char()
-    return EOF if ch is None else ch
+    if ch is None:
+        return EOF
+    from ilisp.types import Char
+
+    return Char(ch)
 
 
 def peek_char(port: Optional[TextualInputPort] = None) -> Any:
     """Peek next character from port (default: current input port)."""
     p = port if port is not None else get_current_input_port()
     ch = p.peek_char()
-    return EOF if ch is None else ch
+    if ch is None:
+        return EOF
+    from ilisp.types import Char
+
+    return Char(ch)
 
 
 def read_line(port: Optional[TextualInputPort] = None) -> Any:
@@ -670,10 +678,11 @@ def char_ready_p(port: Optional[TextualInputPort] = None) -> bool:
     return p.char_ready()
 
 
-def write_char(ch: str, port: Optional[TextualOutputPort] = None) -> None:
+def write_char(ch: Any, port: Optional[TextualOutputPort] = None) -> None:
     """Write a character to port (default: current output port)."""
     p = port if port is not None else get_current_output_port()
-    p.write_char(ch)
+    val = ch.val if hasattr(ch, "val") else str(ch)
+    p.write_char(val)
 
 
 def write_string(s: str, port: Optional[TextualOutputPort] = None) -> None:

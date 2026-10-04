@@ -14,8 +14,10 @@ from ilisp.syntax import SyntaxRulesTransformer
 from ilisp.types import (
     NIL,
     Bytevector,
+    Char,
     Cons,
     Continuation,
+    MutableString,
     NilType,
     Primitive,
     Procedure,
@@ -60,6 +62,8 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     Procedure,
                     Vector,
                     Bytevector,
+                    Char,
+                    MutableString,
                     Continuation,
                 ),
             )

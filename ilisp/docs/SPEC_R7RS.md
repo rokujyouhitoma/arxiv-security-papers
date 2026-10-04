@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全195機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 99
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 122
     "🔄 一部対応 (サブセット/基本版)" : 18
-    "⏳ 計画中 (Phase 3/4 予定)" : 78
+    "⏳ 計画中 (Phase 3/4 予定)" : 55
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -34,7 +34,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **継続 (Continuations)** | 6.10 | 3 | 2 (67%) | 🟡 実用十分 | `call/cc` (One-shot 脱出継続・再利用ガード完備) |
 | **例外機構 (Exceptions)** | 6.11 | 9 | 5 (56%) | 🟢 実用十分 | `raise`, `with-exception-handler`, `guard`, `error` |
 | **数値タワー (Numbers)** | 6.2 | 35 | 11 (31%) | 🟡 基本完備 | 基本四則演算、比較演算、商余剰、整数/小数対応 |
-| **文字・文字列** | 6.6, 6.7 | 28 | 5 (18%) | 🟡 順次拡充 | 文字列結合、等価判定、文字リテラル `#\x` |
+| **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
 | **マクロ機構** | 4.3 | 3 | 2 (67%) | 🟢 充実 | Scope Sets アルゴリズムによる `define-syntax` & `syntax-rules` 稼働済 |
 | **入出力・システム** | 6.13, 6.14 | 30 | 26 (87%) | 🟢 充実 | ポート抽象化, ファイル/文字列I/O, `read` (Datum), `display`, `write`, `call-with-port` |
 | **バイトベクタ** | 6.9 | 11 | 11 (100%) | 🟢 完全準拠 | `#u8(...)`, `make-bytevector`, `bytevector-u8-ref/set!`, `utf8->string`, `string->utf8` 完備 |
@@ -155,23 +155,36 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
-| `char?` | Kernel (Core) | 🔄 | 単一文字 Unicode コードポイント判定 |
-| リテラル構文 (`#\a`, `#\newline`, `#\xNN`) | Reader | ✅ | Unicode エスケープおよび名前付き文字リーダー |
-| `char=?`, `char<?`, `char>?` | - | ⏳ | 文字コード比較述語（Phase 3 予定） |
-| `char-alphabetic?`, `char-numeric?` | - | ⏳ | 文字種別判定述語（Phase 3 予定） |
-| `char->integer`, `integer->char` | - | ⏳ | コードポイント整数相互変換（Phase 3 予定） |
+| `char?` | Kernel (Core) | ✅ | 単一文字 `Char` 型判定述語 |
+| リテラル構文 (`#\a`, `#\newline`, `#\xNN`) | Reader | ✅ | Unicode エスケープおよび名前付き文字 (`space`, `newline`, `tab`, `alarm`, `escape` 等) |
+| `char=?`, `char<?`, `char>?`, `char<=?`, `char>=?` | Kernel (Core) | ✅ | Unicode スカラー値による順序・等価比較（任意引数個数対応） |
+| `char-ci=?`, `char-ci<?`, `char-ci>?`, `char-ci<=?`, `char-ci>=?` | `(scheme char)` / Core | ✅ | Unicode 大文字小文字非区別 (`casefold`) 順序・等価比較 |
+| `char-alphabetic?`, `char-numeric?`, `char-whitespace?` | `(scheme char)` / Core | ✅ | Unicode 文字種別判定述語 |
+| `char-upper-case?`, `char-lower-case?` | `(scheme char)` / Core | ✅ | 大文字・小文字判定述語 |
+| `digit-value` | `(scheme char)` / Core | ✅ | 10進数字コードポイントの数値化（0-9、非数字時は `#f`） |
+| `char->integer`, `integer->char` | Kernel (Core) | ✅ | コードポイント整数相互変換（範囲外例外ハンドリング完備） |
+| `char-upcase`, `char-downcase`, `char-foldcase` | `(scheme char)` / Core | ✅ | Unicode 大文字・小文字・畳み込みケース変換 |
 
 ### 3.7 第6.7節 文字列 (Strings)
 
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
-| `string?` | Kernel (Core) | ✅ | 文字列型判定 |
+| `string?` | Kernel (Core) | ✅ | 文字列型（不変 `str` および可変 `MutableString`）判定 |
+| `make-string` | Kernel (Core) | ✅ | 初期化文字埋め指定長可変文字列生成 |
+| `string` | Kernel (Core) | ✅ | 可変長引数 `Char` 群からの可変文字列構築 |
+| `string-length` | Kernel (Core) | ✅ | $O(1)$ 文字列長取得 |
+| `string-ref` | Kernel (Core) | ✅ | インデックス文字 `Char` 参照 |
+| `string-set!` | Kernel (Core) | ✅ | インデックス文字破壊的代入（不変リテラルへの変更は厳格に拒否・エラー送出） |
+| `string=?`, `string<?`, `string>?`, `string<=?`, `string>=?` | Kernel (Core) | ✅ | 辞書順順序・等価比較 |
+| `string-ci=?`, `string-ci<?`, `string-ci>?`, `string-ci<=?`, `string-ci>=?` | `(scheme char)` / Core | ✅ | Unicode 大文字小文字非区別辞書順比較 |
+| `substring` | Kernel (Core) | ✅ | 部分文字列抽出（可変文字列返却） |
+| `string-copy`, `string-copy!` | Kernel (Core) | ✅ | 範囲複製およびインプレースブロック転送 |
+| `string-fill!` | Kernel (Core) | ✅ | 範囲文字インプレース塗りつぶし |
 | `string-append` | Kernel (Core) | ✅ | 任意個の文字列結合 |
-| `string=?` | Kernel (Core) | ✅ | 文字列内容の一致判定 |
-| `string-length` | - | ⏳ | 文字列長取得（Phase 3 予定） |
-| `string-ref`, `string-set!` | - | ⏳ | インデックス参照・可変操作（Phase 3 予定） |
-| `substring` | - | ⏳ | 部分文字列抽出（Phase 3 予定） |
-| `string->list`, `list->string` | - | ⏳ | 文字リスト相互変換（Phase 3 予定） |
+| `string->list`, `list->string` | Kernel (Core) | ✅ | `Char` リストとの相互変換（部分範囲指定対応） |
+| `string->vector`, `vector->string` | Kernel (Core) | ✅ | `Char` ベクタとの相互変換（部分範囲指定対応） |
+| `string-map`, `string-for-each` | Kernel (Core) | ✅ | 各文字への高階関数適用（新規文字列生成 / 副作用反復） |
+| `string-upcase`, `string-downcase`, `string-foldcase` | `(scheme char)` / Core | ✅ | Unicode 大文字・小文字・畳み込み文字列変換 |
 
 ### 3.8 第6.8節 ベクタ (Vectors)
 

@@ -117,6 +117,37 @@ class LibraryRegistry:
             load_exports[load_sym] = base_env.bindings[load_sym]
         self.register(Library(("scheme", "load"), load_exports, base_env))
 
+        # (scheme char)
+        char_exports: Dict[Symbol, Any] = {}
+        for name in (
+            "char-alphabetic?",
+            "char-ci<=?",
+            "char-ci<?",
+            "char-ci=?",
+            "char-ci>=?",
+            "char-ci>?",
+            "char-downcase",
+            "char-foldcase",
+            "char-lower-case?",
+            "char-numeric?",
+            "char-upcase",
+            "char-upper-case?",
+            "char-whitespace?",
+            "digit-value",
+            "string-ci<=?",
+            "string-ci<?",
+            "string-ci=?",
+            "string-ci>=?",
+            "string-ci>?",
+            "string-downcase",
+            "string-foldcase",
+            "string-upcase",
+        ):
+            sym = Symbol.intern(name)
+            if sym in base_env.bindings:
+                char_exports[sym] = base_env.bindings[sym]
+        self.register(Library(("scheme", "char"), char_exports, base_env))
+
         # (ilisp python)
         py_exports: Dict[Symbol, Any] = {}
         for name in (

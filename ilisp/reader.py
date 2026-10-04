@@ -258,28 +258,53 @@ class Reader:
 
         return Bytevector(elements)
 
-    def _read_char_literal(self, loc: SourceLocation) -> str:
-        # Character literal, e.g. #\a, #\space, #\newline
-        name_chars: List[str] = []
+    def _read_char_literal(self, loc: SourceLocation) -> Any:
+        from ilisp.types import Char
+
+        first_ch = self._next_char()
+        if first_ch is None:
+            raise LispSyntaxError("Unterminated character literal '#\\'", loc)
+
+        next_ch = self._peek_char()
+        if next_ch is None or next_ch in " \t\r\n();\"'`":
+            return Char(first_ch)
+
+        name_chars: List[str] = [first_ch]
         while True:
             ch = self._peek_char()
             if ch is None or ch in " \t\r\n();\"'`":
                 break
             name_chars.append(self._next_char() or "")
         name = "".join(name_chars)
-        if not name:
-            raise LispSyntaxError("Empty character literal", loc)
-        if len(name) == 1:
-            return name
+
         lower = name.lower()
         if lower == "space":
-            return " "
+            return Char(" ")
         if lower == "newline":
-            return "\n"
+            return Char("\n")
         if lower == "tab":
-            return "\t"
+            return Char("\t")
         if lower == "return":
-            return "\r"
+            return Char("\r")
+        if lower == "null":
+            return Char("\0")
+        if lower == "alarm":
+            return Char("\a")
+        if lower == "backspace":
+            return Char("\b")
+        if lower == "escape":
+            return Char("\x1b")
+        if lower == "delete":
+            return Char("\x7f")
+
+        if lower.startswith("x") and len(lower) > 1:
+            hex_str = lower[1:]
+            try:
+                codepoint = int(hex_str, 16)
+                return Char(chr(codepoint))
+            except (ValueError, OverflowError):
+                raise LispSyntaxError(f"Invalid hex character literal '#\\{name}'", loc)
+
         raise LispSyntaxError(f"Unknown named character literal '#\\{name}'", loc)
 
     def _read_atom(self, loc: SourceLocation) -> Any:

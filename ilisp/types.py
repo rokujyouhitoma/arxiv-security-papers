@@ -273,6 +273,169 @@ def is_bytevector(obj: Any) -> bool:
     return isinstance(obj, Bytevector)
 
 
+class Char:
+    """Scheme Character type adhering to R7RS-small."""
+
+    __slots__ = ("val",)
+
+    def __init__(self, val: str) -> None:
+        if len(val) != 1:
+            raise ValueError(f"Char must be a single character, got {val!r}")
+        self.val: str = val
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Char):
+            return self.val == other.val
+        if isinstance(other, str) and len(other) == 1:
+            return self.val == other
+        return False
+
+    def __lt__(self, other: object) -> bool:
+        if isinstance(other, Char):
+            return self.val < other.val
+        return NotImplemented
+
+    def __le__(self, other: object) -> bool:
+        if isinstance(other, Char):
+            return self.val <= other.val
+        return NotImplemented
+
+    def __gt__(self, other: object) -> bool:
+        if isinstance(other, Char):
+            return self.val > other.val
+        return NotImplemented
+
+    def __ge__(self, other: object) -> bool:
+        if isinstance(other, Char):
+            return self.val >= other.val
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.val)
+
+    def __repr__(self) -> str:
+        if self.val == " ":
+            return "#\\space"
+        if self.val == "\n":
+            return "#\\newline"
+        if self.val == "\t":
+            return "#\\tab"
+        if self.val == "\r":
+            return "#\\return"
+        if self.val == "\0":
+            return "#\\null"
+        if self.val == "\a":
+            return "#\\alarm"
+        if self.val == "\b":
+            return "#\\backspace"
+        if self.val == "\x1b":
+            return "#\\escape"
+        if self.val == "\x7f":
+            return "#\\delete"
+        if not self.val.isprintable():
+            return f"#\\x{ord(self.val):x}"
+        return f"#\\{self.val}"
+
+    def __str__(self) -> str:
+        return self.val
+
+
+def is_char(obj: Any) -> bool:
+    """Return True if obj is a Scheme Char."""
+    return isinstance(obj, Char)
+
+
+class MutableString:
+    """Mutable string container adhering to R7RS-small mutable string semantics."""
+
+    __slots__ = ("_chars",)
+
+    def __init__(
+        self, initial: Union[str, Sequence[str], Sequence[Char], MutableString] = ""
+    ) -> None:
+        chars: List[str] = []
+        if isinstance(initial, MutableString):
+            chars = list(initial._chars)
+        elif isinstance(initial, str):
+            chars = list(initial)
+        else:
+            for item in initial:
+                if isinstance(item, Char):
+                    chars.append(item.val)
+                elif isinstance(item, str):
+                    chars.extend(list(item))
+                else:
+                    raise TypeError(f"Invalid character for MutableString: {item!r}")
+        self._chars: List[str] = chars
+
+    def __len__(self) -> int:
+        return len(self._chars)
+
+    def __getitem__(self, idx: int) -> str:
+        return self._chars[idx]
+
+    def __setitem__(self, idx: int, value: Union[str, Char]) -> None:
+        val = value.val if isinstance(value, Char) else str(value)
+        if len(val) != 1:
+            raise ValueError(
+                f"Expected single character for string element, got {val!r}"
+            )
+        self._chars[idx] = val
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._chars)
+
+    def __str__(self) -> str:
+        return "".join(self._chars)
+
+    def __repr__(self) -> str:
+        return repr(self.__str__())
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, MutableString):
+            return self._chars == other._chars
+        if isinstance(other, str):
+            return str(self) == other
+        return False
+
+    def __lt__(self, other: object) -> bool:
+        if isinstance(other, (MutableString, str)):
+            return str(self) < str(other)
+        return NotImplemented
+
+    def __le__(self, other: object) -> bool:
+        if isinstance(other, (MutableString, str)):
+            return str(self) <= str(other)
+        return NotImplemented
+
+    def __gt__(self, other: object) -> bool:
+        if isinstance(other, (MutableString, str)):
+            return str(self) > str(other)
+        return NotImplemented
+
+    def __ge__(self, other: object) -> bool:
+        if isinstance(other, (MutableString, str)):
+            return str(self) >= str(other)
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
+def is_string(obj: Any) -> bool:
+    """Return True if obj is a Scheme string (immutable str or MutableString)."""
+    return isinstance(obj, (str, MutableString))
+
+
+def string_val(obj: Any) -> str:
+    """Return the raw Python str representation of a Scheme string."""
+    if isinstance(obj, MutableString):
+        return str(obj)
+    if isinstance(obj, str):
+        return obj
+    raise TypeError(f"Expected string, got {type(obj).__name__}: {obj!r}")
+
+
 class Values:
     """R7RS multiple return values container."""
 

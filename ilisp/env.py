@@ -10,13 +10,69 @@ import importlib
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Union
 
+from ilisp.char import (
+    char_alphabetic_p,
+    char_ci_eq_p,
+    char_ci_ge_p,
+    char_ci_gt_p,
+    char_ci_le_p,
+    char_ci_lt_p,
+    char_downcase,
+    char_eq_p,
+    char_foldcase,
+    char_ge_p,
+    char_gt_p,
+    char_le_p,
+    char_lower_case_p,
+    char_lt_p,
+    char_numeric_p,
+    char_p,
+    char_to_integer,
+    char_upcase,
+    char_upper_case_p,
+    char_whitespace_p,
+    digit_value,
+    integer_to_char,
+    list_to_string,
+    make_string,
+    string_append,
+    string_ci_eq_p,
+    string_ci_ge_p,
+    string_ci_gt_p,
+    string_ci_le_p,
+    string_ci_lt_p,
+    string_constructor,
+    string_copy,
+    string_copy_bang,
+    string_downcase,
+    string_eq_p,
+    string_fill_bang,
+    string_foldcase,
+    string_for_each,
+    string_ge_p,
+    string_gt_p,
+    string_le_p,
+    string_length,
+    string_lt_p,
+    string_map,
+    string_p,
+    string_ref,
+    string_set_bang,
+    string_to_list,
+    string_to_vector,
+    string_upcase,
+    substring,
+    vector_to_string,
+)
 from ilisp.types import (
     NIL,
     Bytevector,
     Cell,
+    Char,
     Cons,
     Continuation,
     EscapeContinuation,
+    MutableString,
     Primitive,
     Procedure,
     SchemeException,
@@ -28,6 +84,7 @@ from ilisp.types import (
     cdr,
     is_null,
     is_pair,
+    string_val,
     to_lisp_list,
     to_py_list,
 )
@@ -128,15 +185,6 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             raise TypeError(f"symbol->string expected symbol, got {s!r}")
         return s.name
 
-    def prim_string_p(x: Any) -> bool:
-        return isinstance(x, str)
-
-    def prim_string_append(*strs: str) -> str:
-        return "".join(strs)
-
-    def prim_string_eq_p(s1: str, s2: str) -> bool:
-        return s1 == s2
-
     # --- 3. Equality & Boolean Primitives ---
     def prim_eq_p(a: Any, b: Any) -> bool:
         if isinstance(a, Symbol) and isinstance(b, Symbol):
@@ -148,11 +196,28 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_eqv_p(a: Any, b: Any) -> bool:
         if isinstance(a, Symbol) and isinstance(b, Symbol):
             return a is b
-        if isinstance(a, (int, float, str, bool)) and isinstance(
-            b, (int, float, str, bool)
+        if isinstance(a, (int, float, str, bool, Char)) and isinstance(
+            b, (int, float, str, bool, Char)
         ):
             return type(a) is type(b) and a == b
+        if isinstance(a, MutableString) and isinstance(b, MutableString):
+            return a is b
         return a is b
+
+    def prim_equal_p(a: Any, b: Any) -> bool:
+        if prim_eqv_p(a, b):
+            return True
+        if isinstance(a, (str, MutableString)) and isinstance(b, (str, MutableString)):
+            return string_val(a) == string_val(b)
+        if is_pair(a) and is_pair(b):
+            return prim_equal_p(car(a), car(b)) and prim_equal_p(cdr(a), cdr(b))
+        if isinstance(a, Vector) and isinstance(b, Vector):
+            if len(a) != len(b):
+                return False
+            return all(prim_equal_p(a[i], b[i]) for i in range(len(a)))
+        if isinstance(a, Bytevector) and isinstance(b, Bytevector):
+            return a == b
+        return False
 
     def prim_boolean_p(x: Any) -> bool:
         return isinstance(x, bool)
@@ -542,15 +607,67 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "pair?": prim_pair_p,
         "null?": prim_null_p,
         "list": prim_list,
-        # Symbols and Strings
+        # Symbols
         "symbol?": prim_symbol_p,
         "symbol->string": prim_symbol_to_string,
-        "string?": prim_string_p,
-        "string-append": prim_string_append,
-        "string=?": prim_string_eq_p,
+        # Characters (R7RS 6.6)
+        "char?": char_p,
+        "char=?": char_eq_p,
+        "char<?": char_lt_p,
+        "char>?": char_gt_p,
+        "char<=?": char_le_p,
+        "char>=?": char_ge_p,
+        "char-ci=?": char_ci_eq_p,
+        "char-ci<?": char_ci_lt_p,
+        "char-ci>?": char_ci_gt_p,
+        "char-ci<=?": char_ci_le_p,
+        "char-ci>=?": char_ci_ge_p,
+        "char-alphabetic?": char_alphabetic_p,
+        "char-numeric?": char_numeric_p,
+        "char-whitespace?": char_whitespace_p,
+        "char-upper-case?": char_upper_case_p,
+        "char-lower-case?": char_lower_case_p,
+        "digit-value": digit_value,
+        "char->integer": char_to_integer,
+        "integer->char": integer_to_char,
+        "char-upcase": char_upcase,
+        "char-downcase": char_downcase,
+        "char-foldcase": char_foldcase,
+        # Strings (R7RS 6.7)
+        "string?": string_p,
+        "make-string": make_string,
+        "string": string_constructor,
+        "string-length": string_length,
+        "string-ref": string_ref,
+        "string-set!": string_set_bang,
+        "string=?": string_eq_p,
+        "string<?": string_lt_p,
+        "string>?": string_gt_p,
+        "string<=?": string_le_p,
+        "string>=?": string_ge_p,
+        "string-ci=?": string_ci_eq_p,
+        "string-ci<?": string_ci_lt_p,
+        "string-ci>?": string_ci_gt_p,
+        "string-ci<=?": string_ci_le_p,
+        "string-ci>=?": string_ci_ge_p,
+        "substring": substring,
+        "string-copy": string_copy,
+        "string-copy!": string_copy_bang,
+        "string-fill!": string_fill_bang,
+        "string-append": string_append,
+        "string->list": string_to_list,
+        "list->string": list_to_string,
+        "string->vector": string_to_vector,
+        "vector->string": vector_to_string,
+        "string-map": string_map,
+        "string-for-each": string_for_each,
+        "string-upcase": string_upcase,
+        "string-downcase": string_downcase,
+        "string-foldcase": string_foldcase,
         # Equality and Booleans
         "eq?": prim_eq_p,
         "eqv?": prim_eqv_p,
+        "equal?": prim_equal_p,
         "boolean?": prim_boolean_p,
         "not": prim_not,
         # Arithmetic & Numeric comparison

@@ -17,6 +17,7 @@ from ilisp.syntax import SyntaxRulesTransformer
 from ilisp.types import (
     NIL,
     Bytevector,
+    Char,
     Cons,
     NilType,
     Procedure,
@@ -178,6 +179,8 @@ class PythonASTCompiler:
                 ast.alias(name="Vector", asname=None),
                 ast.alias(name="Values", asname=None),
                 ast.alias(name="Bytevector", asname=None),
+                ast.alias(name="Char", asname=None),
+                ast.alias(name="MutableString", asname=None),
                 ast.alias(name="SchemeException", asname=None),
                 ast.alias(name="Continuation", asname=None),
             ],
@@ -264,6 +267,12 @@ class PythonASTCompiler:
             return ast.Call(
                 func=ast.Name(id="Bytevector", ctx=ast.Load()),
                 args=[ast.Constant(value=bytes(expr.data))],
+                keywords=[],
+            )
+        if isinstance(expr, Char):
+            return ast.Call(
+                func=ast.Name(id="Char", ctx=ast.Load()),
+                args=[ast.Constant(value=expr.val)],
                 keywords=[],
             )
 
