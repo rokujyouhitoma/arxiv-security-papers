@@ -4,7 +4,9 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在進行中・未着手の Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **480** | Python 側からの ILISP 呼び出し API (ilisp.eval, ilisp.Evaluator, ilisp.interop) の実装 | Feature | High | Open (New) | [480-implement-python-facing-ilisp-api-and-interop.md](480-implement-python-facing-ilisp-api-and-interop.md) |
 
 ---
 
