@@ -16,16 +16,16 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全195機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 85
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 88
     "🔄 一部対応 (サブセット/基本版)" : 18
-    "⏳ 計画中 (Phase 3/4 予定)" : 92
+    "⏳ 計画中 (Phase 3/4 予定)" : 89
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
 
 | カテゴリ | 規格セクション | 規格機能数 | 実装済 (率) | ステータス | 備考 |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **特殊形式・コア構文** | 4.1, 4.2 | 18 | 12 (67%) | 🟢 充実 | `quote`, `lambda`, `if`, `set!`, `cond`, `case`, `let`, `let*`, `let-values`, `quasiquote` 完備 |
+| **特殊形式・コア構文** | 4.1, 4.2 | 18 | 17 (94%) | 🟢 ほぼ完全 | `quote`, `lambda`, `if`, `set!`, `cond`, `case`, `let`, `let*`, `letrec`, `letrec*`, `do`, `let-values`, `quasiquote` 完備 |
 | **等価性・真偽値** | 6.1, 6.3 | 5 | 5 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `not` |
 | **ペアとリスト** | 6.4 | 26 | 18 (69%) | 🟢 充実 | 基本操作、リスト走査、高階関数 (`map`, `filter`, `fold-left`)、Alist 検索完備 |
 | **シンボル** | 6.5 | 4 | 3 (75%) | 🟢 完全準拠 | インターン保証、文字列相互変換 |
@@ -73,9 +73,9 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `define-library` | ライブラリ定義 | `ilisp/module.py` | ✅ 完全準拠 | 独立レキシカル環境による完全な名前空間カプセル化 |
 | `import` | モジュール読込 | `ilisp/module.py` | ✅ 完全準拠 | `only`, `except`, `prefix`, `rename` 修飾子対応 |
 | `export` | シンボル公開 | `ilisp/module.py` | ✅ 完全準拠 | 識別子公開および `(rename orig new)` エクスポート対応 |
-| `letrec` | 相互再帰束縛 | - | ⏳ 計画中 | Phase 3 実装予定（現状はトップレベル `define` / 内部 `define` で代替可能） |
-| `letrec*` | 逐次相互再帰 | - | ⏳ 計画中 | Phase 3 実装予定 |
-| `do` | 構造化反復 | - | ⏳ 計画中 | Phase 3 実装予定（現状は名前付き let や末尾再帰で記述可能） |
+| `letrec` | 相互再帰束縛 | `stdlib/base.ilisp` | ✅ 完全準拠 | 相互再帰クロージャバインド脱糖マクロ |
+| `letrec*` | 逐次相互再帰 | `stdlib/base.ilisp` | ✅ 完全準拠 | 逐次初期化付き相互再帰バインド脱糖マクロ |
+| `do` | 構造化反復 | `stdlib/base.ilisp` | ✅ 完全準拠 | 変数更新ステップ、終了判定、結果式返却ループ脱糖 |
 | `syntax-error` | 構文エラー送出 | - | ⏳ 計画中 | Phase 3 実装予定 |
 | `parameterize` | 動的パラメータ | - | ⏳ 計画中 | Phase 4 実装予定 |
 

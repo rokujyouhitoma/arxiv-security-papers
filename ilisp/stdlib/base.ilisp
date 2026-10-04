@@ -33,12 +33,22 @@
       (cons (car (cdr (car bindings)))
             (_ilisp_extract_vals (cdr bindings)))))
 
-;; let: (let ((var val) ...) body ...)
-(define-macro (let bindings . body)
-  (cons (cons 'lambda
-              (cons (_ilisp_extract_vars bindings)
-                    body))
-        (_ilisp_extract_vals bindings)))
+;; let: (let ((var val) ...) body ...) or Named let: (let name ((var val) ...) body ...)
+(define-macro (let arg1 . rest)
+  (if (symbol? arg1)
+      ;; Named let: (let name ((var val) ...) body ...)
+      (cons 'letrec
+            (cons (cons (cons arg1
+                              (cons (cons 'lambda (cons (_ilisp_extract_vars (car rest)) (cdr rest)))
+                                    '()))
+                        '())
+                  (cons (cons arg1 (_ilisp_extract_vals (car rest)))
+                        '())))
+      ;; Standard let: (let ((var val) ...) body ...)
+      (cons (cons 'lambda
+                  (cons (_ilisp_extract_vars arg1)
+                        rest))
+            (_ilisp_extract_vals arg1))))
 
 ;; let*: (let* ((var val) ...) body ...)
 (define-macro (let* bindings . body)
@@ -48,6 +58,75 @@
             (cons (cons (car bindings) '())
                   (cons (cons 'let* (cons (cdr bindings) body))
                         '())))))
+
+;; Helpers for letrec and letrec*
+(define (_ilisp_make_undef_bindings bindings)
+  (if (null? bindings)
+      '()
+      (cons (cons (car (car bindings)) (cons ''() '()))
+            (_ilisp_make_undef_bindings (cdr bindings)))))
+
+(define (_ilisp_make_set_list bindings)
+  (if (null? bindings)
+      '()
+      (cons (cons 'set! (cons (car (car bindings)) (cdr (car bindings))))
+            (_ilisp_make_set_list (cdr bindings)))))
+
+;; letrec*: (letrec* ((var val) ...) body ...)
+(define-macro (letrec* bindings . body)
+  (if (null? bindings)
+      (cons 'begin body)
+      (cons 'let
+            (cons (_ilisp_make_undef_bindings bindings)
+                  (append (_ilisp_make_set_list bindings) body)))))
+
+;; letrec: (letrec ((var val) ...) body ...)
+(define-macro (letrec bindings . body)
+  (if (null? bindings)
+      (cons 'begin body)
+      (cons 'letrec*
+            (cons bindings body))))
+
+;; Helpers for do iteration macro
+(define (_ilisp_do_vars var_clauses)
+  (if (null? var_clauses)
+      '()
+      (cons (car (car var_clauses))
+            (_ilisp_do_vars (cdr var_clauses)))))
+
+(define (_ilisp_do_inits var_clauses)
+  (if (null? var_clauses)
+      '()
+      (cons (car (cdr (car var_clauses)))
+            (_ilisp_do_inits (cdr var_clauses)))))
+
+(define (_ilisp_do_steps var_clauses)
+  (if (null? var_clauses)
+      '()
+      (cons (if (null? (cdr (cdr (car var_clauses))))
+                (car (car var_clauses))
+                (car (cdr (cdr (car var_clauses)))))
+            (_ilisp_do_steps (cdr var_clauses)))))
+
+;; do: (do ((<var> <init> [<step>]) ...) (<test> [<expr> ...]) <command> ...)
+(define-macro (do var_clauses test_clause . commands)
+  (cons 'letrec
+        (cons (cons (cons '__do_loop
+                          (cons (cons 'lambda
+                                      (cons (_ilisp_do_vars var_clauses)
+                                            (cons (cons 'if
+                                                        (cons (car test_clause)
+                                                              (cons (if (null? (cdr test_clause))
+                                                                        ''()
+                                                                        (cons 'begin (cdr test_clause)))
+                                                                    (cons (cons 'begin
+                                                                                (append commands
+                                                                                        (cons (cons '__do_loop (_ilisp_do_steps var_clauses)) '())))
+                                                                          '()))))
+                                                  '())))
+                                '()))
+                    '())
+              (cons (cons '__do_loop (_ilisp_do_inits var_clauses)) '()))))
 
 ;; cond: (cond (test expr ...) ... (else expr ...))
 (define-macro (cond . clauses)

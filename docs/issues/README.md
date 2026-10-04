@@ -13,6 +13,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **456** | R7RS コア構文の完全網羅 (letrec, letrec*, do) の実装 | Feature | 2026-10-04 | [closed/456-implement-letrec-letrec-star-and-do.md](closed/456-implement-letrec-letrec-star-and-do.md) |
 | **455** | R7RS モジュール機構 (define-library, import, export) の実装 | Feature | 2026-10-04 | [closed/455-implement-r7rs-module-system.md](closed/455-implement-r7rs-module-system.md) |
 | **454** | Scope Sets アルゴリズムによる R7RS 衛生的マクロ展開器 (define-syntax, syntax-rules) の実装 | Feature | 2026-10-04 | [closed/454-implement-scope-sets-hygienic-macro-expander.md](closed/454-implement-scope-sets-hygienic-macro-expander.md) |
 | **453** | R7RS-small 仕様網羅的機能一覧と実装準拠状況マトリクスの策定・可視化 | Documentation / Feature | 2026-10-04 | [closed/453-r7rs-specification-compliance-matrix.md](closed/453-r7rs-specification-compliance-matrix.md) |
