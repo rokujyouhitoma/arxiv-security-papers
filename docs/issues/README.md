@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **445** | ilisp 配下および設計書・エージェント定義における ischeme 残存名称の ilisp 名前空間統一 | Bug | 2026-10-04 | [closed/445-fix-ischeme-remnants-to-ilisp-namespace.md](closed/445-fix-ischeme-remnants-to-ilisp-namespace.md) |
 | **444** | ITスペシャリスト（プログラミング言語・コンパイラ処理系 / PLC）エージェントの創設と 16大専門エージェントガバナンスの同期 | Feature | 2026-10-04 | [closed/444-add-programming-languages-and-compilers-specialist-agent.md](closed/444-add-programming-languages-and-compilers-specialist-agent.md) |
 | **443** | ILISP (Intelligence LISP) R7RS コアアーキテクチャ設計・包括仕様書策定および受入基盤の初期整備 | Feature | 2026-10-04 | [closed/443-design-and-initialize-ilisp-r7rs-core-runtime.md](closed/443-design-and-initialize-ilisp-r7rs-core-runtime.md) |
 | **442** | トップレベルディレクトリの整理・衛生化と ischeme 統合に向けた構造基盤整備 | Refactoring | 2026-10-04 | [closed/442-refactor-root-directory-structure-and-sanitize-for-ischeme.md](closed/442-refactor-root-directory-structure-and-sanitize-for-ischeme.md) |

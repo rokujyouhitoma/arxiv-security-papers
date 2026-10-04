@@ -42,17 +42,17 @@ ILISP は、世界標準規格 **R7RS-small (Revised^7 Report on the Algorithmic
 
 ---
 
-## 3. ILISP 独自拡張ライブラリ (`(ischeme ...)`)
+## 3. ILISP 独自拡張ライブラリ (`(ilisp ...)`)
 
-- `(ischeme python)`:
+- `(ilisp python)`:
   - `import-python`: Python モジュールのインポート
   - `py-call`: Python オブジェクトのメソッド呼出・プロパティ参照
   - `py->list`, `list->py`: 透過型変換
-- `(ischeme condition)`:
+- `(ilisp condition)`:
   - `restart-case`, `handler-bind`, `invoke-restart`: 現場復帰型コンディション
-- `(ischeme okf)`:
+- `(ilisp okf)`:
   - S-OKF 構文、YAML フロントマター抽出、Markdown AST 変換
-- `(ischeme pipeline)`:
+- `(ilisp pipeline)`:
   - `|>>` (スレッディングマクロ), レート制限・指数バックオフ修飾子
-- `(ischeme logic)`:
+- `(ilisp logic)`:
   - miniKanren 記号推論エンジン (ATT&CK / STRIDE 知識オントロジー連動)

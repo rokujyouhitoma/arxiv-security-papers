@@ -9,7 +9,7 @@
   - `ilisp/backend/py_codegen/` (Python AST コード生成器 / Python Interop)
   - `ilisp/backend/c_codegen/` (Native C99 AOT コード生成器 / gcc・clang 連携)
   - `ilisp/runtime/` (TCO トランポリン, 環境 Environment, プリミティブ)
-  - `ilisp/stdlib/` (R7RS 標準ライブラリ & ischeme 拡張モジュール)
+  - `ilisp/stdlib/` (R7RS 標準ライブラリ & ILISP 拡張モジュール)
   - `ilisp/docs/` (ILISP 言語固有ドキュメント体系)
 - **関連設計書**:
   - [DSN-01 (High-Level Architecture)](DSN-01-high_level_design.md)
@@ -148,12 +148,12 @@ Common Lisp の `defmacro` で頻発する「変数捕捉（Variable Capture）�
 ## 4. Python 双方向相互運用プロトコル (Zero-Friction Interop)
 
 ### 4.1 ILISP から Python ライブラリの直接呼出
-R7RS の `define-library` 機構を拡張し、`(ischeme python)` ライブラリを導入する。
+R7RS の `define-library` 機構を拡張し、`(ilisp python)` ライブラリを導入する。
 
 ```scheme
 (import (scheme base)
         (scheme write)
-        (ischeme python))
+        (ilisp python))
 
 ;; Python モジュールのインポート
 (import-python (arxiv Search)
@@ -279,7 +279,7 @@ ilisp/
 │   ├── py_codegen/                # Python AST バックエンド
 │   └── c_codegen/                 # Native C99 AOT バックエンド
 ├── runtime/                       # ランタイムコア (TCO, Environment, Primitives)
-├── stdlib/                        # (scheme base), (ischeme ...) 標準ライブラリ
+├── stdlib/                        # (scheme base), (ilisp ...) 標準ライブラリ
 ├── tests/                         # ILISP 独自テストスイート
 └── repl.py                        # 対話型 REPL エントリーポイント
 ```

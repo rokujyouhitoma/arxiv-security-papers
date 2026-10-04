@@ -31,7 +31,7 @@ ILISP (Intelligence LISP) は、知性・脅威インテリジェンス（Intell
 ;; (scheme base) と Python 相互運用ライブラリの利用
 (import (scheme base)
         (scheme write)
-        (ischeme python))
+        (ilisp python))
 
 ;; Python モジュールのインポート
 (import-python (math sqrt)
