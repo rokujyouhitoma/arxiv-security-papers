@@ -1,14 +1,15 @@
-# [DSN-31] ILISP (Intelligence LISP) R7RS コアアーキテクチャ設計仕様書
-## 〜 R7RS-small Scheme準拠・Python双方向相互運用・ネイティブC-AOTデュアルバックエンド・現場復帰型コンディション・3段階セルフホスティングブートストラップ連鎖 〜
+# [DSN-31] ILISP (Intelligence LISP) R7RS コアアーキテクチャ包括設計仕様書
+## 〜 R7RS-small Scheme準拠・Python双方向ゼロコピー相互運用・C99 AOT / Rust VM 3本柱バックエンド・Scope Setsマクロ・3段階セルフホスティングブートストラップ連鎖 〜
 
 - **文書番号**: `DSN-31`
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**:
   - `ilisp/` (ILISP 言語処理系基盤)
-  - `ilisp/compiler/` (S式 Reader, Tokenizer, AST, Macro Expander)
-  - `ilisp/backend/py_codegen/` (Python AST コード生成器 / Python Interop)
-  - `ilisp/backend/c_codegen/` (Native C99 AOT コード生成器 / gcc・clang 連携)
-  - `ilisp/runtime/` (TCO トランポリン, 環境 Environment, プリミティブ)
+  - `ilisp/compiler/` (S式 Reader, Tokenizer, AST, Scope Sets Macro Expander)
+  - `ilisp/backend/py_codegen/` (Python AST コード生成器 / Zero-Copy Lazy View)
+  - `ilisp/backend/c_codegen/` (Native C99 AOT コード生成器 / Clang LLVM 連携 / 自己完結 ARC)
+  - `ilisp/vm/` (Rust Standalone Bytecode VM / NaN-Boxing / No-GIL 並行性 / PyO3)
+  - `ilisp/runtime/` (ハイブリッド TCO, 階層的 call/cc, 現場復帰コンディション)
   - `ilisp/stdlib/` (R7RS 標準ライブラリ & ILISP 拡張モジュール)
   - `ilisp/docs/` (ILISP 言語固有ドキュメント体系)
 - **関連設計書**:
@@ -16,9 +17,9 @@
   - [DSN-24 (Unified Management CLI & Database Shell)](DSN-24-unified_management_cli_and_interactive_database_shell.md)
   - [DSN-25 (Pure-Python Packrat PEG Parser Engine & Bootstrap)](DSN-25-pure_python_packrat_peg_parser_engine.md)
   - [DSN-29 (Python-LISP Integrated Architecture Specification - pylisp)](DSN-29-python_lisp_integrated_architecture_specification.md)
-- **【主査・報告】 Systems Architect (SA) / Software Development (SWD)**
-- **【共同主査】 Project Manager (PM) / Information Security Specialist (SEC) / Software Quality Assurance Specialist (QA)**
-- **【参画・協調】 15 大専門エージェント全員 (PM, SEC, SA, QA, DBA, NET, NLP, STR, SM, EMB, AUD, DES, EDU, SWD, APS)**
+- **【主査・報告】 IT Specialist (Programming Languages & Compilers / PLC) / Systems Architect (SA)**
+- **【共同主査】 Project Manager (PM) / Software Development (SWD) / Software Quality Assurance Specialist (QA)**
+- **【参画・協調】 16 大専門エージェント全員 (PM, SEC, SA, QA, DBA, NET, NLP, STR, SM, EMB, AUD, DES, EDU, SWD, APS, PLC)**
 
 ---
 
@@ -26,27 +27,28 @@
 
 - [0. 概要と基本方針 (Executive Summary)](#0-概要と基本方針-executive-summary)
 - [1. 言語哲学とアイデンティティ (Intelligence + IKE + AI + LISP)](#1-言語哲学とアイデンティティ-intelligence--ike--ai--lisp)
-- [2. R7RS-small 仕様準拠アーキテクチャ](#2-r7rs-small-仕様準拠アーキテクチャ)
-  - [2.1 言語コアの最小直交性と安全性](#21-言語コアの最小直交性と安全性)
-  - [2.2 衛生的マクロ (syntax-rules)](#22-衛生的マクロ-syntax-rules)
-  - [2.3 末尾呼び出し最適化 (TCO) と継続 (call/cc)](#23-末尾呼び出し最適化-tco-と継続-callcc)
-- [3. デュアル・コンパイル・バックエンド (Dual Compilation Backends)](#3-デュアルコンパイルバックエンド-dual-compilation-backends)
+- [2. R7RS-small 言語仕様と処理系工学的精緻化](#2-r7rs-small-言語仕様と処理系工学的精緻化)
+  - [2.1 言語コアの最小直交性](#21-言語コアの最小直交性)
+  - [2.2 Scope Sets アルゴリズムによる衛生的マクロとフェーズ分離](#22-scope-sets-アルゴリズムによる衛生的マクロとフェーズ分離)
+  - [2.3 ハイブリッド末尾呼出最適化 (Hybrid TCO)](#23-ハイブリッド末尾呼出最適化-hybrid-tco)
+  - [2.4 階層的継続セマンティクス (Hierarchical call/cc)](#24-階層的継続セマンティクス-hierarchical-callcc)
+- [3. 3本柱の実行バックエンド体系 (The Three Pillars of Execution)](#3-3本柱の実行バックエンド体系-the-three-pillars-of-execution)
   - [3.1 Backend A: Python AST トランスパイラ (Python Interop モード)](#31-backend-a-python-ast-トランスパイラ-python-interop-モード)
-  - [3.2 Backend B: Native C99 AOT コンパイラ (Chicken Scheme / Nim 方式)](#32-backend-b-native-c99-aot-コンパイラ-chicken-scheme--nim-方式)
-- [4. Python 双方向相互運用プロトコル (Zero-Friction Interop)](#4-python-双方向相互運用プロトコル-zero-friction-interop)
-  - [4.1 ILISP から Python ライブラリの直接呼出](#41-ilisp-から-python-ライブラリの直接呼出)
-  - [4.2 Python から ILISP モジュールの透過インポート](#42-python-から-ilisp-モジュールの透過インポート)
-- [5. 現場復帰型コンディションシステム (Conditions & Restarts)](#5-現場復帰型コンディションシステム-conditions--restarts)
-- [6. ドメイン特化機能 (Domain Primitives)](#6-ドメイン特化機能-domain-primitives)
-  - [6.1 S-OKF: ドキュメント同形性 (Document as S-Expression)](#61-s-okf-ドキュメント同形性-document-as-s-expression)
-  - [6.2 パイプライン・スレッディングマクロ (|>>)](#62-パイプラインスレッディングマクロ-)
-  - [6.3 記号推論 (miniKanren) 統合](#63-記号推論-minikanren-統合)
-- [7. 3段階セルフホスティング・ブートストラップ連鎖](#7-3段階セルフホスティングブートストラップ連鎖)
-  - [7.1 Stage-0: Python ホスト実装](#71-stage-0-python-ホスト実装)
-  - [7.2 Stage-1: ILISP-in-ILISP コンパイラ](#72-stage-1-ilisp-in-ilisp-コンパイラ)
-  - [7.3 Stage-2: 不動点検証 (Fixed-Point Verification)](#73-stage-2-不動点検証-fixed-point-verification)
-- [8. ディレクトリ構成と自己完結ドキュメント体系 (`ilisp/docs/`)](#8-ディレクトリ構成と自己完結ドキュメント体系-ilispdocs)
-- [9. 品質ゲート・テスト戦略](#9-品質ゲートテスト戦略)
+  - [3.2 Backend B: Native C99 AOT コンパイラ (Clang/LLVM 連携 & 自己完結 ARC)](#32-backend-b-native-c99-aot-コンパイラ-clangllvm-連携--自己完結-arc)
+  - [3.3 Backend C: Rust Standalone Bytecode VM (No-GIL並行性 & NaN-Boxing & PyO3)](#33-backend-c-rust-standalone-bytecode-vm-no-gil並行性--nan-boxing--pyo3)
+- [4. Python 双方向ゼロコピー相互運用プロトコル (Zero-Copy Interop)](#4-python-双方向ゼロコピー相互運用プロトコル-zero-copy-interop)
+  - [4.1 Lazy View / Opaque Wrapper による $O(1)$ 型連携](#41-lazy-view--opaque-wrapper-による-o1-型連携)
+  - [4.2 境界ラッパー (Boundary Guard) による現場復帰コンディション](#42-境界ラッパー-boundary-guard-による現場復帰コンディション)
+  - [4.3 Python からの透過インポート (`sys.meta_path` / PyO3)](#43-python-からの透過インポート-sysmeta_path--pyo3)
+- [5. ドメイン特化機能 (Domain Primitives)](#5-ドメイン特化機能-domain-primitives)
+  - [5.1 S-OKF: ドキュメント同形性 (Document as S-Expression)](#51-s-okf-ドキュメント同形性-document-as-s-expression)
+  - [5.2 パイプライン・スレッディングマクロ (|>>)](#52-パイプラインスレッディングマクロ-)
+  - [5.3 記号推論 (miniKanren) 統合](#53-記号推論-minikanren-統合)
+- [6. ブートストラップ連鎖と Kernel ILISP 仕様](#6-ブートストラップ連鎖と-kernel-ilisp-仕様)
+  - [6.1 Kernel ILISP (最小ブートストラップ核) の定義](#61-kernel-ilisp-最小ブートストラップ核-の定義)
+  - [6.2 3段階ブートストラップ手順と不動点検証](#62-3段階ブートストラップ手順と不動点検証)
+- [7. ディレクトリ構成と自己完結ドキュメント体系 (`ilisp/docs/`)](#7-ディレクトリ構成と自己完結ドキュメント体系-ilispdocs)
+- [8. 品質ゲート・テスト戦略](#8-品質ゲートテスト戦略)
 
 ---
 
@@ -54,9 +56,10 @@
 
 本仕様書は、学術論文セキュリティ解析・OKFナレッジベース構築プラットフォームにおけるコア言語基盤として、**ILISP (Intelligence LISP)** を設計・定義するものである。
 
-現在 Python で記述されているパイプラインは、NLP/AIライブラリの利便性を享受する一方で、PDFバイナリ解析（CMap/フォントデコード）のCPU負荷、GIL（Global Interpreter Lock）によるスレッド並列制約、および例外発生時のリカバリ柔軟性に課題を抱えている。
-
-ILISP は、世界標準規格 **R7RS-small Scheme** を厳格な規範とし、**「Pythonエコシステムとの摩擦ゼロ相互運用」** と **「C言語コード生成によるネイティブAOT単一バイナリ高速実行」** を両立する。さらに、本リポジトリの先例（DSN-25 PEGパーサ自己ホスティング）を継承し、**将来の完全自己完結セルフホスティング（Bootstrap Chain）** を前提としたアーキテクチャを確立する。
+ILISP は、世界標準規格 **R7RS-small Scheme** を厳格な規範とし、次の 3 つの課題を抜本的に解決する：
+1. **Python エコシステムとの摩擦ゼロ・ゼロコピー相互運用**: AI/NLP ライブラリを $O(1)$ コストでシームレスに直接呼び出す。
+2. **C99 AOT トランスパイルによるネイティブ単一バイナリ**: 外部依存ゼロの C99 を出力し、`clang -O3` を介して LLVM 最適化の恩恵を享受する。
+3. **Rust 製 Standalone Bytecode VM による極限の並列性能**: 将来のマルチコア並列処理・No-GIL 実行を担う NaN-Boxing バイトコード VM を提供する。
 
 ---
 
@@ -72,7 +75,7 @@ ILISP は、世界標準規格 **R7RS-small Scheme** を厳格な規範とし、
        ▼                            ▼                            ▼
 【 Intelligence 】              【 IKE 】                    【 AI / LISP 】
 ・脅威インテリジェンス          ・創設者アーキテクチャ哲学   ・S式・同形性・記号推論
-・知識オントロジー (SKO)        ・極限のシンプルさと自作主義 ・衛生的マクロ (syntax-rules)
+・知識オントロジー (SKO)        ・極限のシンプルさと自作主義 ・Scope Sets 衛生的マクロ
 ・耐量子暗号・セキュリティ検証  ・セルフホスティング指向    ・R7RS Scheme 世界標準規格
 ```
 
@@ -83,72 +86,73 @@ ILISP は、世界標準規格 **R7RS-small Scheme** を厳格な規範とし、
 
 ---
 
-## 2. R7RS-small 仕様準拠アーキテクチャ
+## 2. R7RS-small 言語仕様と処理系工学的精緻化
 
-### 2.1 言語コアの最小直交性と安全性
+### 2.1 言語コアの最小直交性
 ILISP は、2013年に策定された **R7RS-small (Revised^7 Report on the Algorithmic Language Scheme)** を言語仕様のコアに採用する。
 - 巨大で方言差の激しい Common Lisp と比較して、言語コアが小さく無駄がない。
 - `define-library` による洗練されたモジュール境界が規格化されている。
 
-### 2.2 衛生的マクロ (syntax-rules)
-Common Lisp の `defmacro` で頻発する「変数捕捉（Variable Capture）」事故を原理的に排除するため、パターンマッチングベースの衛生的マクロ（Hygienic Macro: `define-syntax`, `syntax-rules`）を標準搭載する。
+### 2.2 Scope Sets アルゴリズムによる衛生的マクロとフェーズ分離
+古典的な Kohlbecker のアルゴリズムや Syntax-case の複雑性を排し、Matthew Flatt (2016) によって確立された **Scope Sets アルゴリズム** をマクロ展開エンジンに採用する。
+- **識別子のスコープ集合**: すべての識別子は導入元の「スコープの集合」を保持し、マクロ展開後も変数の捕捉（Capture）が論理的に発生しない。
+- **フェーズ分離 (Phase Distinction)**:
+  - コンパイル時フェーズ（Phase 1: Macro Expansion Time）での Python 任意副作用呼び出しを初期段階では遮断し、純粋 AST 変換に限定する。
+  - これにより、マクロ展開の決定性とクロスコンパイル安全性を死守する。
 
-```scheme
-;; パイプライン・スレッディングマクロ (|>>) の衛生的定義例
-(define-syntax |>>
-  (syntax-rules ()
-    ((|>> x) x)
-    ((|>> x (f arg ...)) (f x arg ...))
-    ((|>> x f) (f x))
-    ((|>> x (f arg ...) rest ...)
-     (|>> (f x arg ...) rest ...))
-    ((|>> x f rest ...)
-     (|>> (f x) rest ...))))
-```
+### 2.3 ハイブリッド末尾呼出最適化 (Hybrid TCO)
+Python ランタイムおよびネイティブ環境の特性に応じ、**ハイブリッド TCO 戦略** を採用する：
+1. **自己末尾再帰（Self Tail Call）**: 同一関数内の末尾再帰を静的解析し、Python AST の `while True:` ループおよび代入に直接トランスパイル（スタック消費ゼロ・関数呼出オーバーヘッドゼロ）。
+2. **相互末尾呼び出し（Mutual Tail Calls）**: 高階関数や異なる関数間の末尾呼び出しにおいてのみ、軽量トランポリン（タプル返却）を適用し、スタックオーバーフローを防止する。
 
-### 2.3 末尾呼び出し最適化 (TCO) と継続 (call/cc)
-- **TCO (Tail Call Optimization)**: 末尾位置の関数呼び出しはスタックフレームを消費せず、ループと等価な $O(1)$ メモリ空間で実行されることを保証する。
-- **ファーストクラスの継続 (`call/cc`)**: コルーチン、非同期タスクの中断・再開、ジェネレータ制御を言語レベルで完全にサポートする。
+### 2.4 階層的継続セマンティクス (Hierarchical call/cc)
+ホスト環境の物理制約を鑑み、継続のサポートを階層化する：
+- **Python バックエンド (Stage-0)**: 実用ユースケースの 95% を占める **「脱出継続（Escaping / One-shot Continuation）」** をサポート。Python ネイティブ例外機構によりスタック巻き戻しをゼロコストで実現。多重再突入時は `ContinuationsCanOnlyBeInvokedOnceError` を明示送出。
+- **C99 AOT バックエンド (Stage-1)**: スタックフレーム複写または Cheney on the MTA（ヒープスタック法）により、完全な **Multishot 一級継続** をサポート。
 
 ---
 
-## 3. デュアル・コンパイル・バックエンド (Dual Compilation Backends)
+## 3. 3本柱の実行バックエンド体系 (The Three Pillars of Execution)
 
 ```
-                            ┌─────────────────────┐
-                            │  ILISP S-Expression │
-                            └──────────┬──────────┘
-                                       │ (Macro Expansion & Desugaring)
-                                       ▼
-                            ┌─────────────────────┐
-                            │  Core IR (CPS/ANF)  │
-                            └────┬───────────┬────┘
-                                 │           │
-            ┌────────────────────┘           └────────────────────┐
-            ▼                                                     ▼
-【 Backend A: Python AST 】                           【 Backend B: Native C99 AOT 】
- (ilisp.backend.py_codegen)                            (ilisp.backend.c_codegen)
- ─────────────────────────                             ─────────────────────────
- ・Python `ast.AST` ノード生成                         ・ポータブルな標準 C99 コード出力
- ・CPython 実行空間と 100% 透過結合                    ・gcc / clang による単一バイナリ生成
- ・開発・試行錯誤時の REPL 駆動                        ・GIL フリー・ミリ秒起動・極小メモリ
+                    ┌─────────────────────────┐
+                    │  ILISP ソースコード      │
+                    │  (R7RS-small + 独自拡張)│
+                    └────────────┬────────────┘
+                                 │
+         ┌───────────────────────┼───────────────────────┐
+         ▼                       ▼                       ▼
+【1. Python AST Backend】  【2. C99 AOT Backend】   【3. Rust Bytecode VM】
+  (初期〜現行開発)           (セルフホスティング)       (スタンドアロン超高速実行)
+  ・Python とのゼロ摩擦相互    ・外部依存ゼロの単一バイ    ・NaN-Boxing 64bit 高速VM
+    運用 (直接 import)          ナリ生成                 ・No-GIL マルチコア並列実行
+  ・開発 DX / 対話型 REPL      ・Clang 経由で LLVM 最適化  ・PyO3 による Python ネイティブ
+                               ・自己完結 ARC / コピー GC   Extension 提供
 ```
 
 ### 3.1 Backend A: Python AST トランスパイラ (Python Interop モード)
 - ILISP の AST を Python 標準の `ast.AST` にコンパイルし、`compile(tree, filename, 'exec')` を通じて CPython 上で実行。
-- TCO は Python AST レベルでループへ展開、またはトランポリン（Trampoline）関数により実現。
+- 既存の Python パイプライン（`arxiv_okf_fetcher.py` や `manage.py`）からシームレスに部品として呼び出し可能。
 
-### 3.2 Backend B: Native C99 AOT コンパイラ (Chicken Scheme / Nim 方式)
-- ILISP の AST（CPS または ANF 形式）から、依存関係のないクリーンな C99 コードを出力。
-- 各関数は C言語関数または関数ポインタテーブルに変換され、継続呼び出しは Chenc / Trampoline 方式により C スタックを消費しない。
-- 外部 CPython ランタイムへの依存がゼロのスタンドアロン ELF / Mach-O 実行ファイルを生成。
+### 3.2 Backend B: Native C99 AOT コンパイラ (Clang/LLVM 連携 & 自己完結 ARC)
+- 動的型、Cons セル、環境フレームを標準 C99 コードにトランスパイル。
+- **Clang 経由の実質 LLVM 最適化**: 生成された C99 コードを `clang -O3` でビルドすることで、自前で LLVM IR を記述することなく LLVM の最高峰最適化パス（インライン展開、定数伝播、SIMDベクトル化）を自動享受。
+- **自己完結型 ARC（Automatic Reference Counting）**: 外部の Boehm GC（`libgc`）に依存せず、ランタイムヘッダ単体で完結する決定論的メモリ管理を採用。
+
+### 3.3 Backend C: Rust Standalone Bytecode VM (No-GIL並行性 & NaN-Boxing & PyO3)
+- スタンドアロン実行および極限の並列処理を担う第 3 の柱（将来拡張・フェーズ 2）。
+- **NaN-Boxing**: 64ビット浮動小数点数の未使用領域にポインタやタグ値を詰め込む超高密度・高速メモリアーキテクチャ。
+- **Fearless Concurrency**: Rust の所有権モデルにより、Python の GIL 制約を受けないマルチコア並列パイプラインを実現。
+- **PyO3 連携**: Rust 製 VM を Python ネイティブ拡張（`.so`）としてビルド可能にし、Ruff や Polars と同等のパフォーマンスを提供。
 
 ---
 
-## 4. Python 双方向相互運用プロトコル (Zero-Friction Interop)
+## 4. Python 双方向ゼロコピー相互運用プロトコル (Zero-Copy Interop)
 
-### 4.1 ILISP から Python ライブラリの直接呼出
-R7RS の `define-library` 機構を拡張し、`(ilisp python)` ライブラリを導入する。
+### 4.1 Lazy View / Opaque Wrapper による $O(1)$ 型連携
+Python の `list` や `dict` を Scheme の Cons セルや Alist へ一括ディープコピーする $O(N)$ 処理を廃止し、**不透明ラッパー（Opaque Wrapper / Lazy View）** を採用する。
+- Python オブジェクトをラップしたまま ILISP 側へ渡し、Scheme のベクタやマッププロトコルで $O(1)$ 参照。
+- 明示的に `(py->list ...)` を呼んだ場合のみ連結リストに変換。
 
 ```scheme
 (import (scheme base)
@@ -161,59 +165,46 @@ R7RS の `define-library` 機構を拡張し、`(ilisp python)` ライブラリ�
 
 (define (fetch-crypto-papers limit)
   (let ((search (py-call Search :query "cat:cs.CR AND post-quantum" :max_results limit)))
-    (py->list (py-call search 'results))))
+    ;; search.results (Python generator) を Lazy View のまま走査 (Zero-Copy)
+    (py-for-each (lambda (paper)
+                   (display (py-get paper 'title))
+                   (newline))
+                 (py-call search 'results))))
 ```
 
-### 4.2 Python から ILISP モジュールの透過インポート
-Python の `sys.meta_path` に ILISP 用のファインダー・ローダー（`IlispFinder`）を登録することで、Python スクリプトから通常通り `.ilisp` ファイルを `import` 可能にする。
-
-```python
-# Python 側からの呼び出し
-import ilisp.interop  # meta_path フックを登録
-import my_pipeline  # my_pipeline.ilisp が透過的にロードされる
-
-result = my_pipeline.harvest_papers(limit=10)
-```
-
----
-
-## 5. 現場復帰型コンディションシステム (Conditions & Restarts)
-
-[DSN-29 (pylisp)](DSN-29-python_lisp_integrated_architecture_specification.md) で確立された「スタックを巻き戻さない現場復帰型例外機構」を、ILISP の言語機能として標準搭載する。
+### 4.2 境界ラッパー (Boundary Guard) による現場復帰コンディション
+Python の関数呼び出し時に例外が発生した場合でも、スタック巻き戻し前に「再試行クロージャ（Thunk）」を封入したコンディションオブジェクトを生成し、ILISP の `restart-case` へ引き渡す。
 
 ```scheme
-;; 論文フェッチ関数 (回復手段 Restarts を提供)
 (define (fetch-paper-resilient arxiv-id)
   (restart-case
-      (http-get (format "https://arxiv.org/abs/~a" arxiv-id))
+      (py-call requests 'get (format "https://arxiv.org/abs/~a" arxiv-id))
     (wait-and-retry (delay-sec)
       :report "指定秒数待機してリトライ"
       (sleep delay-sec)
       (fetch-paper-resilient arxiv-id))
     (fallback-to-rss ()
       :report "RSSフィードからメタデータを補完取得"
-      (fetch-rss-metadata arxiv-id))
-    (skip-paper ()
-      :report "この論文をスキップして記録"
-      (log-skipped-id arxiv-id)
-      #f)))
+      (fetch-rss-metadata arxiv-id))))
+```
 
-;; 運用ポリシー側でハンドリング
-(handler-bind
-    (((http-error rate-limit)
-      (lambda (c) (invoke-restart 'wait-and-retry 5)))
-     ((pdf-error font-corrupted)
-      (lambda (c) (invoke-restart 'fallback-to-rss))))
-  (harvest-daily-batch))
+### 4.3 Python からの透過インポート (`sys.meta_path` / PyO3)
+Python スクリプトから通常通り `.ilisp` ファイルを `import` 可能にする。
+
+```python
+# Python 側からの透過インポート
+import ilisp.interop
+import my_pipeline  # my_pipeline.ilisp が透過コンパイル・ロードされる
+
+result = my_pipeline.harvest_papers(limit=10)
 ```
 
 ---
 
-## 6. ドメイン特化機能 (Domain Primitives)
+## 5. ドメイン特化機能 (Domain Primitives)
 
-### 6.1 S-OKF: ドキュメント同形性 (Document as S-Expression)
+### 5.1 S-OKF: ドキュメント同形性 (Document as S-Expression)
 Google OKF v0.2 の YAML フロントマターおよび Markdown 本文を S式ツリーとしてネイティブ表現する。
-文字列の結合処理を排除し、ツリーの走査・結合・サマリー抽出を純粋関数で行う。
 
 ```scheme
 (define-okf-paper "2403.12345"
@@ -227,58 +218,66 @@ Google OKF v0.2 の YAML フロントマターおよび Markdown 本文を S式�
    (p "ゼロトラストネットワークにおける耐量子格子暗号の評価を行う。")))
 ```
 
-### 6.2 パイプライン・スレッディングマクロ (`|>>`)
+### 5.2 パイプライン・スレッディングマクロ (`|>>`)
 データの入力から加工、OKF変換、階層集計までを直感的なパイプラインとして結合。
 
-### 6.3 記号推論 (miniKanren) 統合
+### 5.3 記号推論 (miniKanren) 統合
 [DSN-29](DSN-29-python_lisp_integrated_architecture_specification.md) の `logic.py` を基盤とし、MITRE ATT&CK や STRIDE 脅威モデルのルールベース推論をファーストクラスで実行。
 
 ---
 
-## 7. 3段階セルフホスティング・ブートストラップ連鎖
+## 6. ブートストラップ連鎖と Kernel ILISP 仕様
+
+### 6.1 Kernel ILISP (最小ブートストラップ核) の定義
+セルフホスティング（Stage-1）のコンパイラ自身を記述するため、複雑なマクロや高度なデータ型に依存しない **最小仕様「Kernel ILISP」** を先行凍結する：
+- **構文要素 (6大基本式)**:
+  1. 変数参照 (`x`)
+  2. 定数リテラル (`quote`, 整数, 文字列, シンボル, 真偽値)
+  3. 手続き定義 (`lambda`)
+  4. 条件分岐 (`if`)
+  5. 代入 (`set!`)
+  6. 順序実行 (`begin`)
+- **コアプリミティブ**: `cons`, `car`, `cdr`, `pair?`, `symbol?`, `string?`, `eq?`, `+`, `-`, `<`, `write-char`, `read-char`
+- **制御構造**: 自己末尾再帰ループ（ループ構文はすべてこれに脱糖）
+
+### 6.2 3段階ブートストラップ手順と不動点検証
 
 ```
-[ compiler.ilisp ] ──────( Stage-0: Python compiler.py )──────▶ [ ilisp_stage1.c ]
-                                                                       │ (gcc compile)
-                                                                       ▼
-                                                                [ ilisp-stage1 (bin) ]
-                                                                       │
-[ compiler.ilisp ] ──────( Stage-1: ilisp-stage1 )────────────▶ [ ilisp_stage2.c ]
-                                                                       │ (gcc compile)
-                                                                       ▼
-                                                                [ ilisp-stage2 (bin) ]
-                                                                       │
-                         [ 不動点検証: diff ilisp_stage1.c ilisp_stage2.c == 0 ]
+[ compiler.ilisp (Kernel ILISP) ] ──( Stage-0: Python compiler.py )──▶ [ ilisp_stage1.c ]
+                                                                             │ (gcc/clang -O3)
+                                                                             ▼
+                                                                      [ ilisp-stage1 (bin) ]
+                                                                             │
+[ compiler.ilisp (Kernel ILISP) ] ──( Stage-1: ilisp-stage1 )────────▶ [ ilisp_stage2.c ]
+                                                                             │ (gcc/clang -O3)
+                                                                             ▼
+                                                                      [ ilisp-stage2 (bin) ]
+                                                                             │
+                               [ 不動点検証: diff ilisp_stage1.c ilisp_stage2.c == 0 ]
 ```
 
-1. **Stage-0 (Python Host)**:
-   - Pure Python で書かれた Reader、マクロ展開器、Cコード生成器。
-   - `compiler.ilisp` を読み込み、最初のネイティブ実行ファイル `ilisp-stage1` をブートストラップ出力。
-2. **Stage-1 (ILISP-in-ILISP)**:
-   - ILISP 自身で書かれた完全な ILISP コンパイラ。
-   - `ilisp-stage1` を使って自身を再コンパイルし、`ilisp-stage2` を生成。
-3. **Stage-2 (Fixed-Point Verification)**:
-   - `ilisp-stage1` が出力したコードと `ilisp-stage2` が出力したコードが完全一致（差分 0）することを自動テストで検証（不動点到達）。
+1. **Stage-0 (Python Host)**: Pure Python の最小コンパイラで `compiler.ilisp` を C99 コード `ilisp_stage1.c` にトランスパイル。
+2. **Stage-1 (ILISP-in-ILISP)**: `ilisp-stage1` 実行ファイルを用いて、自身（`compiler.ilisp`）を再コンパイルし `ilisp_stage2.c` を出力。
+3. **Stage-2 (Fixed-Point Verification)**: `diff ilisp_stage1.c ilisp_stage2.c` が差分ゼロ（不動点到達）であることを機械検証。
 
 ---
 
-## 8. ディレクトリ構成と自己完結ドキュメント体系 (`ilisp/docs/`)
-
-ILISP は独立したパッケージとしてトップレベル `ilisp/` に集約され、将来の単独リポジトリ化・OSS化・PyPI配布に完全対応する。
+## 7. ディレクトリ構成と自己完結ドキュメント体系 (`ilisp/docs/`)
 
 ```
 ilisp/
 ├── docs/                          # ★ ILISP 自己完結ドキュメント体系 ★
-│   ├── README.md                  # ILISP 概要・クイックスタート・理念
-│   ├── SPEC_R7RS.md               # R7RS-small 準拠マトリクス・文法仕様
-│   ├── PYTHON_INTEROP.md          # Python 双方向相互運用仕様
-│   ├── MACROS_AND_CONDITIONS.md   # syntax-rules マクロ & コンディション詳細
-│   └── BOOTSTRAP.md               # 3段階セルフホスティング連鎖仕様
-├── compiler/                      # コンパイラコア (Reader, Lexer, AST, Macro)
+│   ├── README.md                  # ILISP 概要・クイックスタート・3本柱理念
+│   ├── SPEC_R7RS.md               # R7RS-small 準拠マトリクス・Scope Sets・TCO仕様
+│   ├── PYTHON_INTEROP.md          # Python ゼロコピー相互運用仕様
+│   ├── MACROS_AND_CONDITIONS.md   # Scope Sets マクロ & 現場復帰コンディション詳細
+│   └── BOOTSTRAP.md               # Kernel ILISP 仕様 & 3段階ブートストラップ連鎖
+├── compiler/                      # コンパイラコア (Reader, Lexer, AST, Scope Sets)
 ├── backend/
-│   ├── py_codegen/                # Python AST バックエンド
-│   └── c_codegen/                 # Native C99 AOT バックエンド
-├── runtime/                       # ランタイムコア (TCO, Environment, Primitives)
+│   ├── py_codegen/                # Python AST バックエンド (Zero-Copy Lazy View)
+│   └── c_codegen/                 # Native C99 AOT バックエンド (Clang/LLVM & ARC)
+├── vm/                            # Rust Standalone Bytecode VM (Phase 2)
+├── runtime/                       # ランタイムコア (Hybrid TCO, Environment, Primitives)
 ├── stdlib/                        # (scheme base), (ilisp ...) 標準ライブラリ
 ├── tests/                         # ILISP 独自テストスイート
 └── repl.py                        # 対話型 REPL エントリーポイント
@@ -286,10 +285,10 @@ ilisp/
 
 ---
 
-## 9. 品質ゲート・テスト戦略
+## 8. 品質ゲート・テスト戦略
 
 本仕様書に基づくすべての実装は、リポジトリの品質基準（DoD）を満たす必要がある：
 1. **R7RS 適合性テスト**: 標準 R7RS テストスイート（テストケース 200+ 件）の順次合格。
-2. **Python Interop テスト**: Python クラスのインスタンス化、メソッド呼び出し、例外ハンドリングの透過性検証。
+2. **Zero-Copy Python Interop テスト**: メモリコピーを伴わない Python イテレータ走査の計算量検証。
 3. **ブートストラップ不動点テスト**: `make test-bootstrap` により、ステージ間コンパイル結果の差分ゼロを機械的に監査。
 4. **トリプル品質ゲート**: `make check_format`, `make static_analysis`, `make test` の 100% PASS。
