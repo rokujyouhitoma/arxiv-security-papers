@@ -13,6 +13,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **453** | R7RS-small 仕様網羅的機能一覧と実装準拠状況マトリクスの策定・可視化 | Documentation / Feature | 2026-10-04 | [closed/453-r7rs-specification-compliance-matrix.md](closed/453-r7rs-specification-compliance-matrix.md) |
 | **452** | Phase 2: R7RS 仕様準拠のコア言語機能拡充 (準クォート、ベクタ型、例外機構、多値、脱出継続) | Feature | 2026-10-04 | [closed/452-implement-phase2-r7rs-core-features.md](closed/452-implement-phase2-r7rs-core-features.md) |
 | **451** | Backend A: Python AST トランスパイラ (py_codegen) の実装 | Feature | 2026-10-04 | [closed/451-implement-backend-a-python-ast-transpiler.md](closed/451-implement-backend-a-python-ast-transpiler.md) |
 | **450** | ILISP 標準ライブラリと構文マクロ群 (stdlib/base.ilisp) の実装 | Feature | 2026-10-04 | [closed/450-implement-ilisp-stdlib-base.md](closed/450-implement-ilisp-stdlib-base.md) |
