@@ -235,6 +235,36 @@
                   (cons (cons 'let*-values (cons (cdr bindings) body))
                         '())))))
 
+;; parameterize: (parameterize ((param val) ...) body ...)
+(define-macro (parameterize bindings . body)
+  (if (null? bindings)
+      (cons 'begin body)
+      (let ((first_b (car bindings))
+            (rest_b (cdr bindings)))
+        (let ((param_expr (car first_b))
+              (val_expr (car (cdr first_b))))
+          (let ((p_sym '__param_obj)
+                (val_sym '__new_val)
+                (old_sym '__old_val))
+            (cons 'let
+                  (cons (cons (cons p_sym (cons param_expr '()))
+                              (cons (cons val_sym (cons val_expr '()))
+                                    '()))
+                        (cons (cons 'let
+                                    (cons (cons (cons old_sym (cons (cons p_sym '()) '()))
+                                                '())
+                                          (cons (cons 'dynamic-wind
+                                                      (cons (cons 'lambda (cons '() (cons (cons p_sym (cons val_sym '())) '())))
+                                                            (cons (cons 'lambda
+                                                                        (cons '()
+                                                                              (cons (cons 'parameterize (cons rest_b body))
+                                                                                    '())))
+                                                                  (cons (cons 'lambda (cons '() (cons (cons p_sym (cons old_sym '())) '())))
+                                                                        '()))))
+                                                '())))
+                              '()))))))))
+
+
 ;;; -------------------------------------------------------------
 ;;; 2. Pair and List Accessors & Utilities
 ;;; -------------------------------------------------------------

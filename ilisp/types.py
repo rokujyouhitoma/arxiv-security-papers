@@ -6,6 +6,7 @@ adhering to R7RS-small Scheme semantics and Python zero-copy interop.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Union
 
@@ -451,6 +452,59 @@ class Values:
         if isinstance(other, Values):
             return self.values == other.values
         return False
+
+
+class Parameter:
+    """R7RS Dynamic Parameter object using ContextVar."""
+
+    __slots__ = ("_var", "_converter", "_name")
+
+    def __init__(
+        self,
+        init: Any,
+        converter: Optional[Any] = None,
+        name: str = "<parameter>",
+    ) -> None:
+        self._converter = converter
+        self._name = name
+        val = self._convert(init)
+        self._var: ContextVar[Any] = ContextVar(f"param_{id(self)}", default=val)
+
+    def _convert(self, val: Any) -> Any:
+        if self._converter is None:
+            return val
+        if hasattr(self._converter, "params"):
+            from ilisp.evaluator import _apply_procedure
+
+            return _apply_procedure(self._converter, [val])
+        if callable(self._converter):
+            return self._converter(val)
+        return val
+
+    def __call__(self, *args: Any) -> Any:
+        if not args:
+            return self._var.get()
+        if len(args) == 1:
+            new_val = self._convert(args[0])
+            self._var.set(new_val)
+            return new_val
+        raise TypeError(f"Parameter expects 0 or 1 arguments, got {len(args)}")
+
+    def get(self) -> Any:
+        return self._var.get()
+
+    def set(self, val: Any) -> Any:
+        new_val = self._convert(val)
+        self._var.set(new_val)
+        return new_val
+
+    def __repr__(self) -> str:
+        return f"#<parameter {self.get()!r}>"
+
+
+def is_parameter(obj: Any) -> bool:
+    """Return True if obj is a Scheme Parameter."""
+    return isinstance(obj, Parameter)
 
 
 class SchemeException(Exception):

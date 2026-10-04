@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **460** | R7RS 動的環境と保護機構の実装 (dynamic-wind, make-parameter, parameterize) | Feature | 2026-10-04 | [closed/460-implement-r7rs-dynamic-wind-and-parameters.md](closed/460-implement-r7rs-dynamic-wind-and-parameters.md) |
 | **459** | R7RS 文字・文字列プリミティブの網羅的拡充 (R7RS 6.6 & 6.7) | Feature | 2026-10-04 | [closed/459-implement-r7rs-characters-and-strings.md](closed/459-implement-r7rs-characters-and-strings.md) |
 | **458** | R7RS バイトベクタ型 (#u8) とバイナリポートシステムの実装 | Feature | 2026-10-04 | [closed/458-implement-bytevectors-and-binary-ports.md](closed/458-implement-bytevectors-and-binary-ports.md) |
 | **457** | R7RS 入出力ポートシステムと S式 Datum リーダーの実装 | Feature | 2026-10-04 | [closed/457-implement-io-ports-and-datum-reader.md](closed/457-implement-io-ports-and-datum-reader.md) |

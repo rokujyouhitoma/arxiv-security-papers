@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全195機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 122
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 126
     "🔄 一部対応 (サブセット/基本版)" : 18
-    "⏳ 計画中 (Phase 3/4 予定)" : 55
+    "⏳ 計画中 (Phase 3/4 予定)" : 51
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -31,7 +31,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **シンボル** | 6.5 | 4 | 3 (75%) | 🟢 完全準拠 | インターン保証、文字列相互変換 |
 | **ベクタ (Vectors)** | 6.8 | 13 | 8 (62%) | 🟢 基本完備 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, リスト相互変換等 |
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
-| **継続 (Continuations)** | 6.10 | 3 | 2 (67%) | 🟡 実用十分 | `call/cc` (One-shot 脱出継続・再利用ガード完備) |
+| **継続・動的制御** | 6.10 | 6 | 6 (100%) | 🟢 完全準拠 | `call/cc`, `dynamic-wind`, `make-parameter`, `parameter?`, `parameterize` 完備 |
 | **例外機構 (Exceptions)** | 6.11 | 9 | 5 (56%) | 🟢 実用十分 | `raise`, `with-exception-handler`, `guard`, `error` |
 | **数値タワー (Numbers)** | 6.2 | 35 | 11 (31%) | 🟡 基本完備 | 基本四則演算、比較演算、商余剰、整数/小数対応 |
 | **文字・文字列** | 6.6, 6.7 | 28 | 28 (100%) | 🟢 完全準拠 | `Char` 型, `#\x`, 述語群, `(scheme char)`, `string-ref/set!`, `string-copy!`, `string-map` 等 完備 |
@@ -214,7 +214,7 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `bytevector-append` | Kernel (Core) | ✅ | 複数バイトベクタの連結 |
 | `utf8->string`, `string->utf8` | Kernel (Core) | ✅ | UTF-8 エンコード・デコード（部分文字列/部分バイト指定対応） |
 
-### 3.10 第6.10節 制御構造・手続き・多値・継続 (Control features)
+### 3.10 第6.10節 制御構造・手続き・多値・継続・動的環境 (Control & Dynamic features)
 
 | 識別子 (Identifier) | ILISP 提供元 | ステータス | 動作仕様・備考 |
 | :--- | :---: | :---: | :--- |
@@ -223,7 +223,9 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `values` | Kernel (Core) | ✅ | 任意個の多値を生成・返却（単一値はアンラップ） |
 | `call-with-values` | Kernel (Core) | ✅ | 生産者 (producer) の多値を消費者 (consumer) に渡して呼出 |
 | `call/cc` (`call-with-current-continuation`) | Kernel (Core) | ✅ | **One-shot 脱出継続**。二重呼出 (`active` フラグ) ガード完備 |
-| `dynamic-wind` | - | ⏳ | `before`, `thunk`, `after` 保護構文（Phase 3 予定） |
+| `dynamic-wind` | Kernel (Core) | ✅ | `before`, `thunk`, `after` 保護構文（正常終了・例外・継続脱出時の確実なクリーンアップ保証） |
+| `make-parameter`, `parameter?` | Kernel (Core) | ✅ | スレッド安全・非同期コンテキスト対応動的パラメータ生成・判定 |
+| `parameterize` | `stdlib/base.ilisp`| ✅ | `dynamic-wind` 上で構築された動的スコープパラメータ一時束縛・確実復元構文 |
 
 ### 3.11 第6.11節 例外機構 (Exceptions)
 

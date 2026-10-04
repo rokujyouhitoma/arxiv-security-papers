@@ -19,6 +19,7 @@ from ilisp.types import (
     Continuation,
     MutableString,
     NilType,
+    Parameter,
     Primitive,
     Procedure,
     Symbol,
@@ -64,6 +65,7 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                     Bytevector,
                     Char,
                     MutableString,
+                    Parameter,
                     Continuation,
                 ),
             )

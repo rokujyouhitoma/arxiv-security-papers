@@ -181,6 +181,7 @@ class PythonASTCompiler:
                 ast.alias(name="Bytevector", asname=None),
                 ast.alias(name="Char", asname=None),
                 ast.alias(name="MutableString", asname=None),
+                ast.alias(name="Parameter", asname=None),
                 ast.alias(name="SchemeException", asname=None),
                 ast.alias(name="Continuation", asname=None),
             ],

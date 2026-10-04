@@ -73,6 +73,7 @@ from ilisp.types import (
     Continuation,
     EscapeContinuation,
     MutableString,
+    Parameter,
     Primitive,
     Procedure,
     SchemeException,
@@ -84,6 +85,7 @@ from ilisp.types import (
     cdr,
     is_null,
     is_pair,
+    is_parameter,
     string_val,
     to_lisp_list,
     to_py_list,
@@ -568,6 +570,39 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         finally:
             cont.active = False
 
+    def prim_dynamic_wind(before: Any, thunk: Any, after: Any) -> Any:
+        from ilisp.evaluator import _apply_procedure
+
+        # 1. Run before-thunk
+        if isinstance(before, Procedure):
+            _apply_procedure(before, [])
+        elif callable(before):
+            before()
+        else:
+            raise TypeError(f"dynamic-wind: before must be callable, got {before!r}")
+
+        try:
+            # 2. Run body thunk
+            if isinstance(thunk, Procedure):
+                return _apply_procedure(thunk, [])
+            elif callable(thunk):
+                return thunk()
+            raise TypeError(f"dynamic-wind: thunk must be callable, got {thunk!r}")
+        finally:
+            # 3. Always run after-thunk (upon normal exit, exception, or continuation escape)
+            if isinstance(after, Procedure):
+                _apply_procedure(after, [])
+            elif callable(after):
+                after()
+            else:
+                raise TypeError(f"dynamic-wind: after must be callable, got {after!r}")
+
+    def prim_make_parameter(init: Any, converter: Optional[Any] = None) -> Parameter:
+        return Parameter(init, converter=converter)
+
+    def prim_parameter_p(x: Any) -> bool:
+        return is_parameter(x)
+
     # Exceptions & Conditions (R7RS)
     def prim_raise(datum: Any) -> Any:
         raise SchemeException(datum)
@@ -693,9 +728,13 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         # Multiple Values (R7RS)
         "values": prim_values,
         "call-with-values": prim_call_with_values,
-        # Continuations (R7RS)
+        # Continuations & Dynamic Control (R7RS)
         "call/cc": prim_call_cc,
         "call-with-current-continuation": prim_call_cc,
+        "dynamic-wind": prim_dynamic_wind,
+        # Parameters (R7RS)
+        "make-parameter": prim_make_parameter,
+        "parameter?": prim_parameter_p,
         # Exceptions (R7RS)
         "raise": prim_raise,
         "raise-continuable": prim_raise,
