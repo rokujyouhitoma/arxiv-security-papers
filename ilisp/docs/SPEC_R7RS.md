@@ -16,9 +16,9 @@ ILISP (Intelligence LISP) は、世界標準規格 **R7RS-small (Revised^7 Repor
 
 ```mermaid
 pie title R7RS-small 言語機能・プリミティブ 実装ステータス (全203機能)
-    "✅ サポート済 (Phase 1/2/3 稼働中)" : 156
+    "✅ サポート済 (Phase 1/2/3 稼働中)" : 162
     "🔄 一部対応 (サブセット/基本版)" : 10
-    "⏳ 計画中 (Phase 3/4 予定)" : 37
+    "⏳ 計画中 (Phase 3/4 予定)" : 31
 ```
 
 ### 1.2 カテゴリ別準拠進捗サマリー
@@ -30,7 +30,7 @@ pie title R7RS-small 言語機能・プリミティブ 実装ステータス (�
 | **等価性・真偽値** | 6.1, 6.3 | 5 | 5 (100%) | 🟢 完全準拠 | `eq?`, `eqv?`, `equal?`, `boolean?`, `not`（レコード等価比較対応） |
 | **ペアとリスト** | 6.4 | 26 | 18 (69%) | 🟢 充実 | 基本操作、リスト走査、高階関数 (`map`, `filter`, `fold-left`)、Alist 検索完備 |
 | **シンボル** | 6.5 | 4 | 3 (75%) | 🟢 完全準拠 | インターン保証、文字列相互変換 |
-| **ベクタ (Vectors)** | 6.8 | 13 | 8 (62%) | 🟢 基本完備 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, リスト相互変換等 |
+| **ベクタ (Vectors)** | 6.8 | 14 | 14 (100%) | 🟢 完全準拠 | `vector?`, `make-vector`, `vector-ref`, `vector-set!`, `vector-copy`, `vector-copy!`, `vector-fill!`, `vector-append`, `vector-map`, `vector-for-each` 等完備 |
 | **多値 (Multiple Values)** | 6.10 | 4 | 4 (100%) | 🟢 完全準拠 | `values`, `call-with-values`, `let-values`, `let*-values` |
 | **継続・動的制御** | 6.10 | 6 | 6 (100%) | 🟢 完全準拠 | `call/cc`, `dynamic-wind`, `make-parameter`, `parameter?`, `parameterize` 完備 |
 | **例外機構 (Exceptions)** | 6.11 | 9 | 5 (56%) | 🟢 実用十分 | `raise`, `with-exception-handler`, `guard`, `error` |
@@ -207,8 +207,10 @@ Scheme 言語の根幹をなす構文形式のサポート状況です。
 | `vector-set!` | Kernel (Core) | ✅ | $O(1)$ インデックス要素破壊的変更 |
 | `vector->list` | Kernel (Core) | ✅ | ベクタからリストへの変換 |
 | `list->vector` | Kernel (Core) | ✅ | リストからベクタへの変換 |
-| `vector-copy`, `vector-copy!` | - | ⏳ | ベクタの部分コピー（Phase 3 予定） |
-| `vector-fill!` | - | ⏳ | ベクタ一括塗りつぶし（Phase 3 予定） |
+| `vector-copy`, `vector-copy!` | Kernel (Core) | ✅ | ベクタの部分コピー（重複領域安全コピー・インプレース代入） |
+| `vector-fill!` | Kernel (Core) | ✅ | ベクタ要素の一括塗りつぶし（範囲指定対応） |
+| `vector-append` | Kernel (Core) | ✅ | 任意個数のベクタ連結 |
+| `vector-map`, `vector-for-each` | Kernel (Core) | ✅ | 高階関数ベクタ走査・写像（多引数・最短長同期対応） |
 
 ### 3.8b 第5.5節 レコード型 (Record types)
 

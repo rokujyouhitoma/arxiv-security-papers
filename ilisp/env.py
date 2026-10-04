@@ -576,6 +576,105 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_list_to_vector(lst: Any) -> Vector:
         return Vector(to_py_list(lst))
 
+    def prim_vector_copy(vec: Any, start: int = 0, end: Optional[int] = None) -> Vector:
+        if not isinstance(vec, Vector):
+            raise TypeError(f"vector-copy expected vector, got {type(vec).__name__}")
+        end_idx = len(vec) if end is None else end
+        if not (0 <= start <= end_idx <= len(vec)):
+            raise IndexError(
+                f"vector-copy: invalid range [{start}:{end_idx}] for vector of length {len(vec)}"
+            )
+        return Vector(vec.elements[start:end_idx])
+
+    def prim_vector_copy_bang(
+        to: Any,
+        at: int,
+        from_vec: Any,
+        start: int = 0,
+        end: Optional[int] = None,
+    ) -> None:
+        if not isinstance(to, Vector) or not isinstance(from_vec, Vector):
+            raise TypeError("vector-copy! expected vector arguments")
+        end_idx = len(from_vec) if end is None else end
+        if not (0 <= start <= end_idx <= len(from_vec)):
+            raise IndexError(
+                f"vector-copy!: invalid source range [{start}:{end_idx}] for length {len(from_vec)}"
+            )
+        count = end_idx - start
+        if not (0 <= at and at + count <= len(to)):
+            raise IndexError(
+                f"vector-copy!: destination index {at} with length {count} exceeds vector of length {len(to)}"
+            )
+        # Copy to temporary buffer to safely handle overlapping ranges
+        copied = list(from_vec.elements[start:end_idx])
+        to.elements[at : at + count] = copied
+
+    def prim_vector_fill_bang(
+        vec: Any, fill: Any, start: int = 0, end: Optional[int] = None
+    ) -> None:
+        if not isinstance(vec, Vector):
+            raise TypeError(f"vector-fill! expected vector, got {type(vec).__name__}")
+        end_idx = len(vec) if end is None else end
+        if not (0 <= start <= end_idx <= len(vec)):
+            raise IndexError(
+                f"vector-fill!: invalid range [{start}:{end_idx}] for length {len(vec)}"
+            )
+        for i in range(start, end_idx):
+            vec.elements[i] = fill
+
+    def prim_vector_append(*vecs: Any) -> Vector:
+        res_elements: List[Any] = []
+        for v in vecs:
+            if not isinstance(v, Vector):
+                raise TypeError(
+                    f"vector-append expected vector, got {type(v).__name__}"
+                )
+            res_elements.extend(v.elements)
+        return Vector(res_elements)
+
+    def prim_vector_map(proc: Any, *vecs: Any) -> Vector:
+        from ilisp.evaluator import _apply_procedure
+
+        if not vecs:
+            raise TypeError("vector-map requires at least one vector")
+        for v in vecs:
+            if not isinstance(v, Vector):
+                raise TypeError(f"vector-map expected vector, got {type(v).__name__}")
+        min_len = min(len(v) for v in vecs)
+        res_elements: List[Any] = []
+        for i in range(min_len):
+            args = [v[i] for v in vecs]
+            if isinstance(proc, Procedure):
+                val = _apply_procedure(proc, args)
+            elif callable(proc):
+                val = proc(*args)
+            else:
+                raise TypeError(f"vector-map: proc must be procedure, got {proc!r}")
+            res_elements.append(val)
+        return Vector(res_elements)
+
+    def prim_vector_for_each(proc: Any, *vecs: Any) -> None:
+        from ilisp.evaluator import _apply_procedure
+
+        if not vecs:
+            raise TypeError("vector-for-each requires at least one vector")
+        for v in vecs:
+            if not isinstance(v, Vector):
+                raise TypeError(
+                    f"vector-for-each expected vector, got {type(v).__name__}"
+                )
+        min_len = min(len(v) for v in vecs)
+        for i in range(min_len):
+            args = [v[i] for v in vecs]
+            if isinstance(proc, Procedure):
+                _apply_procedure(proc, args)
+            elif callable(proc):
+                proc(*args)
+            else:
+                raise TypeError(
+                    f"vector-for-each: proc must be procedure, got {proc!r}"
+                )
+
     # Multiple Return Values (R7RS)
     def prim_values(*args: Any) -> Any:
         if len(args) == 1:
@@ -990,6 +1089,12 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "vector-length": prim_vector_length,
         "vector->list": prim_vector_to_list,
         "list->vector": prim_list_to_vector,
+        "vector-copy": prim_vector_copy,
+        "vector-copy!": prim_vector_copy_bang,
+        "vector-fill!": prim_vector_fill_bang,
+        "vector-append": prim_vector_append,
+        "vector-map": prim_vector_map,
+        "vector-for-each": prim_vector_for_each,
         # Multiple Values (R7RS)
         "values": prim_values,
         "call-with-values": prim_call_with_values,
