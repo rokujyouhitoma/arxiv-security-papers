@@ -771,6 +771,12 @@ class Reader:
                             "Multiple '.' in pair expression", self._current_loc()
                         )
                     if not elements:
+                        # In Clojure, '(. ...)' is the dot interop operator.
+                        # Only accept '.' if it immediately followed '(' without intervening whitespace or comments.
+                        # In R7RS, '( . b)' or '(#;a . b)' is an error.
+                        if self.line == loc.line and self.col == loc.col + 2:
+                            elements.append(Symbol.intern("."))
+                            continue
                         raise LispSyntaxError(
                             "Unexpected '.' at start of list", self._current_loc()
                         )

@@ -7,6 +7,7 @@ and tail-call optimization via trampolining.
 
 from __future__ import annotations
 
+import importlib
 from fractions import Fraction
 from typing import Any, List, Optional, Tuple
 
@@ -88,6 +89,70 @@ def _build_syntax_transformer(name: str, trans_spec: Any, env: Environment) -> A
     return eval_expr(trans_spec, env)
 
 
+def _resolve_dotted_symbol(name: str, env: Environment) -> Any:
+    """Resolve a symbol with dot notation (e.g. math.pi, os.getcwd, resp.status_code).
+
+    1. If the root prefix is bound in `env`, traverse properties from the bound object.
+    2. Otherwise, attempt to import the module prefix via `importlib.import_module` and
+       traverse properties from the imported module.
+    """
+    if not name or name.startswith(".") or name.endswith(".") or ".." in name:
+        return None
+
+    parts = name.split(".")
+    if not all(p.isidentifier() for p in parts):
+        return None
+
+    # Step 1: Check if parts[0] is bound in lexical/global environment
+    first_sym = Symbol.intern(parts[0])
+    curr_obj: Any = None
+    resolved_root = False
+    try:
+        curr_obj = env.lookup(first_sym)
+        resolved_root = True
+    except NameError:
+        pass
+
+    if resolved_root:
+        for p in parts[1:]:
+            if isinstance(curr_obj, dict):
+                if p in curr_obj:
+                    curr_obj = curr_obj[p]
+                else:
+                    raise NameError(
+                        f"Dotted symbol '{name}': key {p!r} not found in dict"
+                    )
+            elif hasattr(curr_obj, p):
+                curr_obj = getattr(curr_obj, p)
+            else:
+                raise NameError(
+                    f"Dotted symbol '{name}': object {curr_obj!r} has no attribute {p!r}"
+                )
+        return curr_obj
+
+    # Step 2: Try importing module prefix
+    for k in range(len(parts) - 1, 0, -1):
+        mod_name = ".".join(parts[:k])
+        try:
+            mod = importlib.import_module(mod_name)
+        except Exception:
+            continue
+
+        curr_obj = mod
+        for p in parts[k:]:
+            if hasattr(curr_obj, p):
+                curr_obj = getattr(curr_obj, p)
+            elif isinstance(curr_obj, dict) and p in curr_obj:
+                curr_obj = curr_obj[p]
+            else:
+                raise NameError(
+                    f"Dotted symbol '{name}': attribute {p!r} not found in module {curr_obj!r}"
+                )
+        return curr_obj
+
+    return None
+
+
 def eval_expr(expr: Any, env: Environment) -> Any:
     """Evaluate an S-expression within an environment using a trampoline loop for TCO."""
     from ilisp.env import get_interaction_environment, set_interaction_environment
@@ -129,7 +194,14 @@ def eval_expr(expr: Any, env: Environment) -> Any:
 
         # 2. Variable lookup
         if isinstance(curr_expr, Symbol):
-            return curr_env.lookup(curr_expr)
+            try:
+                return curr_env.lookup(curr_expr)
+            except NameError:
+                if "." in curr_expr.name and not curr_expr.name.startswith("."):
+                    val = _resolve_dotted_symbol(curr_expr.name, curr_env)
+                    if val is not None:
+                        return val
+                raise
 
         # 3. Pair / Form evaluation
         if isinstance(curr_expr, Cons):
@@ -694,6 +766,178 @@ def eval_expr(expr: Any, env: Environment) -> Any:
 
                     execute_import(curr_expr, curr_env)
                     return NIL
+
+                # --- Clojure-style Python Interop Special Forms ---
+                # 1. Field / Property Accessor: (.-attr obj [val])
+                if op_name.startswith(".-") and len(op_name) > 2:
+                    attr_name = op_name[2:]
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError(f"{op_name} requires a target object")
+                    target_obj = car(args)
+                    rest = cdr(args)
+                    if is_null(rest):
+                        # Getter: (py-get target_obj 'attr)
+                        curr_expr = Cons(
+                            Symbol.intern("py-get"),
+                            Cons(
+                                target_obj,
+                                Cons(
+                                    Cons(
+                                        Symbol.intern("quote"),
+                                        Cons(Symbol.intern(attr_name), NIL),
+                                    ),
+                                    NIL,
+                                ),
+                            ),
+                        )
+                        continue
+                    elif is_pair(rest) and is_null(cdr(rest)):
+                        # Setter: (py-set! target_obj 'attr val)
+                        val_expr = car(rest)
+                        curr_expr = Cons(
+                            Symbol.intern("py-set!"),
+                            Cons(
+                                target_obj,
+                                Cons(
+                                    Cons(
+                                        Symbol.intern("quote"),
+                                        Cons(Symbol.intern(attr_name), NIL),
+                                    ),
+                                    Cons(val_expr, NIL),
+                                ),
+                            ),
+                        )
+                        continue
+                    else:
+                        raise SyntaxError(
+                            f"{op_name} expects 1 or 2 arguments, got {len(to_py_list(args))}"
+                        )
+
+                # 2. Method Invocation Shorthand: (.method obj arg ...)
+                if (
+                    op_name.startswith(".")
+                    and len(op_name) > 1
+                    and op_name != "..."
+                    and not op_name.startswith(".-")
+                ):
+                    method_name = op_name[1:]
+                    args = curr_expr.cdr
+                    if not is_pair(args):
+                        raise SyntaxError(f"{op_name} requires a target object")
+                    target_obj = car(args)
+                    call_args = cdr(args)
+                    curr_expr = Cons(
+                        Symbol.intern("py-call"),
+                        Cons(
+                            target_obj,
+                            Cons(
+                                Cons(
+                                    Symbol.intern("quote"),
+                                    Cons(Symbol.intern(method_name), NIL),
+                                ),
+                                call_args,
+                            ),
+                        ),
+                    )
+                    continue
+
+                # 3. Primitive Dot Form: (. obj member-spec arg ...)
+                if op_name == ".":
+                    args = curr_expr.cdr
+                    if not is_pair(args) or not is_pair(cdr(args)):
+                        raise SyntaxError(
+                            "'.' requires at least a target object and member specification"
+                        )
+                    target_obj = car(args)
+                    spec = car(cdr(args))
+                    rest_args = cdr(cdr(args))
+
+                    if isinstance(spec, Symbol):
+                        if spec.name.startswith("-") and len(spec.name) > 1:
+                            # Property getter: (. obj -attr)
+                            attr_name = spec.name[1:]
+                            if is_null(rest_args):
+                                curr_expr = Cons(
+                                    Symbol.intern("py-get"),
+                                    Cons(
+                                        target_obj,
+                                        Cons(
+                                            Cons(
+                                                Symbol.intern("quote"),
+                                                Cons(Symbol.intern(attr_name), NIL),
+                                            ),
+                                            NIL,
+                                        ),
+                                    ),
+                                )
+                                continue
+                            elif is_pair(rest_args) and is_null(cdr(rest_args)):
+                                # Property setter: (. obj -attr val)
+                                curr_expr = Cons(
+                                    Symbol.intern("py-set!"),
+                                    Cons(
+                                        target_obj,
+                                        Cons(
+                                            Cons(
+                                                Symbol.intern("quote"),
+                                                Cons(Symbol.intern(attr_name), NIL),
+                                            ),
+                                            Cons(car(rest_args), NIL),
+                                        ),
+                                    ),
+                                )
+                                continue
+                            else:
+                                count = len(to_py_list(rest_args)) + 1
+                                raise SyntaxError(
+                                    f"'.' attribute access expects 1 or 2 arguments, got {count}"
+                                )
+                        else:
+                            # Method call: (. obj method arg ...)
+                            curr_expr = Cons(
+                                Symbol.intern("py-call"),
+                                Cons(
+                                    target_obj,
+                                    Cons(
+                                        Cons(
+                                            Symbol.intern("quote"),
+                                            Cons(Symbol.intern(spec.name), NIL),
+                                        ),
+                                        rest_args,
+                                    ),
+                                ),
+                            )
+                            continue
+                    elif is_pair(spec):
+                        # List call spec: (. obj (method spec_arg ...) rest_args ...)
+                        method_sym = car(spec)
+                        if not isinstance(method_sym, Symbol):
+                            raise SyntaxError(
+                                f"Method in '.' member spec must be a symbol, got {method_sym!r}"
+                            )
+                        inner_args = cdr(spec)
+                        combined_args_list = to_py_list(inner_args) + to_py_list(
+                            rest_args
+                        )
+                        curr_expr = Cons(
+                            Symbol.intern("py-call"),
+                            Cons(
+                                target_obj,
+                                Cons(
+                                    Cons(
+                                        Symbol.intern("quote"),
+                                        Cons(Symbol.intern(method_sym.name), NIL),
+                                    ),
+                                    to_lisp_list(combined_args_list),
+                                ),
+                            ),
+                        )
+                        continue
+                    else:
+                        raise SyntaxError(
+                            f"Invalid member specification in '.' form: {spec!r}"
+                        )
 
             # --- Function or Macro Application ---
             fn = eval_expr(op, curr_env)

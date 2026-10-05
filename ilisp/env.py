@@ -868,6 +868,30 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_py_eval(expr_str: str) -> Any:
         return eval(expr_str)  # nosec
 
+    def prim_dot(obj: Any, member_spec: Any, *args: Any) -> Any:
+        if isinstance(member_spec, Symbol):
+            spec_name = member_spec.name
+            if spec_name.startswith("-") and len(spec_name) > 1:
+                attr_name = spec_name[1:]
+                if not args:
+                    return prim_py_get(obj, attr_name)
+                elif len(args) == 1:
+                    return prim_py_set_bang(obj, attr_name, args[0])
+                else:
+                    raise TypeError(
+                        f"'.' attribute access takes 1 or 2 arguments, got {len(args) + 1}"
+                    )
+            return prim_py_call(obj, spec_name, *args)
+        elif is_pair(member_spec):
+            method_sym = car(member_spec)
+            method_name = (
+                method_sym.name if isinstance(method_sym, Symbol) else str(method_sym)
+            )
+            all_args = to_py_list(cdr(member_spec)) + list(args)
+            return prim_py_call(obj, method_name, *all_args)
+        else:
+            return prim_py_call(obj, member_spec, *args)
+
     def prim_load(filepath: str) -> Any:
         from ilisp.evaluator import eval_expr
         from ilisp.reader import read_all
@@ -1914,6 +1938,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "py-get": prim_py_get,
         "py-set!": prim_py_set_bang,
         "py-eval": prim_py_eval,
+        ".": prim_dot,
         # Environments & Evaluation (R7RS 6.12, (scheme eval), (scheme repl))
         "eval": prim_eval,
         "environment": prim_environment,

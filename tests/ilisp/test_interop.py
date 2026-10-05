@@ -228,3 +228,97 @@ class TestTransparentImportHook:
             if "threat_scanner" in sys.modules:
                 del sys.modules["threat_scanner"]
             unregister_import_hook()
+
+
+class TestClojureInteropSyntax:
+    """Comprehensive tests for Issue 481: Clojure-style interop syntax and dotted symbol resolution."""
+
+    def test_method_call_shorthand(self) -> None:
+        assert ilisp.eval('(.upper "hello")') == "HELLO"
+        assert ilisp.eval('(.lower "WORLD")') == "world"
+        assert ilisp.eval('(.split "a,b,c" ",")') == ["a", "b", "c"]
+        assert ilisp.eval('(.strip "  test  ")') == "test"
+        assert ilisp.eval('(.startswith "https://arxiv.org" "https")') is True
+
+    def test_nested_method_call_shorthand(self) -> None:
+        res = ilisp.eval('(.lower (.strip "  HELLO  "))')
+        assert res == "hello"
+
+    def test_primitive_dot_method_call(self) -> None:
+        assert ilisp.eval('(. "hello" upper)') == "HELLO"
+        assert ilisp.eval('(. "a:b:c" split ":")') == ["a", "b", "c"]
+        # With nested call list spec: (. obj (method args...))
+        assert ilisp.eval('(. "a:b:c" (split ":"))') == ["a", "b", "c"]
+
+    def test_field_attribute_getter_and_setter(self) -> None:
+        from types import SimpleNamespace
+
+        obj = SimpleNamespace(status_code=200, label="ok")
+        env = ilisp.make_initial_env()
+        env.define(ilisp.Symbol.intern("resp"), obj)
+
+        # Clojure-style .-field
+        assert ilisp.eval("(.-status_code resp)", env=env) == 200
+        assert ilisp.eval("(.-label resp)", env=env) == "ok"
+
+        # Primitive dot field (. resp -field)
+        assert ilisp.eval("(. resp -status_code)", env=env) == 200
+
+        # Mutation via .-field
+        ilisp.eval("(.-status_code resp 404)", env=env)
+        assert obj.status_code == 404
+
+        # Mutation via (. resp -field val)
+        ilisp.eval('(. resp -label "not found")', env=env)
+        assert obj.label == "not found"
+
+    def test_dict_access_via_dot_and_dash(self) -> None:
+        env = ilisp.make_initial_env()
+        env.define(ilisp.Symbol.intern("cfg"), {"debug": True, "port": 8080})
+
+        assert ilisp.eval("cfg.debug", env=env) is True
+        assert ilisp.eval("(.-port cfg)", env=env) == 8080
+        assert ilisp.eval("(. cfg -port)", env=env) == 8080
+
+    def test_dotted_symbol_module_auto_resolution(self) -> None:
+        import math
+        import os
+
+        # Built-in math constants and functions
+        assert ilisp.eval("math.pi") == math.pi
+        assert ilisp.eval("(math.sqrt 16)") == 4.0
+        assert ilisp.eval("(os.getcwd)") == os.getcwd()
+
+        # Multi-segment module path
+        assert ilisp.eval('(os.path.join "data" "raw")') == os.path.join("data", "raw")
+
+    def test_dotted_symbol_local_variable_resolution(self) -> None:
+        from types import SimpleNamespace
+
+        code = """
+        (define (get-status response)
+          response.status_code)
+        (get-status mock-res)
+        """
+        env = ilisp.make_initial_env()
+        env.define(ilisp.Symbol.intern("mock-res"), SimpleNamespace(status_code=204))
+        assert ilisp.eval(code, env=env) == 204
+
+    def test_dotted_symbol_unbound_error(self) -> None:
+        with pytest.raises(NameError):
+            ilisp.eval("non_existent_module.no_attribute")
+
+    def test_threading_macro_with_clojure_syntax(self) -> None:
+        res1 = ilisp.eval('(->> "  hello  " .strip .upper)')
+        assert res1 == "HELLO"
+
+        res2 = ilisp.eval('(->> "a,b,c" (.split ","))')
+        assert res2 == ["a", "b", "c"]
+
+    def test_backend_a_codegen_with_clojure_syntax(self) -> None:
+        from ilisp.backend.py_codegen.compiler import compile_ilisp
+
+        assert compile_ilisp('(.upper "backend-a")') == "BACKEND-A"
+        assert compile_ilisp('(. "hello" upper)') == "HELLO"
+        assert compile_ilisp("math.pi") > 3.14
+        assert compile_ilisp("(math.sqrt 49)") == 7.0

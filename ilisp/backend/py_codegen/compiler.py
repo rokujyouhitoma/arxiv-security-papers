@@ -27,6 +27,7 @@ from ilisp.types import (
     cdr,
     is_null,
     is_pair,
+    to_lisp_list,
     to_py_list,
 )
 
@@ -228,6 +229,163 @@ class PythonASTCompiler:
             return expr
 
         if isinstance(op, Symbol):
+            op_name = op.name
+
+            # Clojure-style field/property accessor: (.-attr obj [val])
+            if op_name.startswith(".-") and len(op_name) > 2:
+                attr_name = op_name[2:]
+                args = expr.cdr
+                if not is_pair(args):
+                    raise SyntaxError(f"{op_name} requires a target object")
+                target_obj = car(args)
+                rest = cdr(args)
+                if is_null(rest):
+                    desugared = Cons(
+                        Symbol.intern("py-get"),
+                        Cons(
+                            target_obj,
+                            Cons(
+                                Cons(
+                                    Symbol.intern("quote"),
+                                    Cons(Symbol.intern(attr_name), NIL),
+                                ),
+                                NIL,
+                            ),
+                        ),
+                    )
+                    return self._expand_macros(desugared)
+                elif is_pair(rest) and is_null(cdr(rest)):
+                    val_expr = car(rest)
+                    desugared = Cons(
+                        Symbol.intern("py-set!"),
+                        Cons(
+                            target_obj,
+                            Cons(
+                                Cons(
+                                    Symbol.intern("quote"),
+                                    Cons(Symbol.intern(attr_name), NIL),
+                                ),
+                                Cons(val_expr, NIL),
+                            ),
+                        ),
+                    )
+                    return self._expand_macros(desugared)
+
+            # Clojure-style method shorthand: (.method obj arg ...)
+            if (
+                op_name.startswith(".")
+                and len(op_name) > 1
+                and op_name != "..."
+                and not op_name.startswith(".-")
+            ):
+                method_name = op_name[1:]
+                args = expr.cdr
+                if not is_pair(args):
+                    raise SyntaxError(f"{op_name} requires a target object")
+                target_obj = car(args)
+                call_args = cdr(args)
+                desugared = Cons(
+                    Symbol.intern("py-call"),
+                    Cons(
+                        target_obj,
+                        Cons(
+                            Cons(
+                                Symbol.intern("quote"),
+                                Cons(Symbol.intern(method_name), NIL),
+                            ),
+                            call_args,
+                        ),
+                    ),
+                )
+                return self._expand_macros(desugared)
+
+            # Clojure-style dot special form: (. obj member-spec arg ...)
+            if op_name == ".":
+                args = expr.cdr
+                if not is_pair(args) or not is_pair(cdr(args)):
+                    raise SyntaxError(
+                        "'.' requires at least a target object and member specification"
+                    )
+                target_obj = car(args)
+                spec = car(cdr(args))
+                rest_args = cdr(cdr(args))
+
+                if isinstance(spec, Symbol):
+                    if spec.name.startswith("-") and len(spec.name) > 1:
+                        attr_name = spec.name[1:]
+                        if is_null(rest_args):
+                            desugared = Cons(
+                                Symbol.intern("py-get"),
+                                Cons(
+                                    target_obj,
+                                    Cons(
+                                        Cons(
+                                            Symbol.intern("quote"),
+                                            Cons(Symbol.intern(attr_name), NIL),
+                                        ),
+                                        NIL,
+                                    ),
+                                ),
+                            )
+                            return self._expand_macros(desugared)
+                        elif is_pair(rest_args) and is_null(cdr(rest_args)):
+                            desugared = Cons(
+                                Symbol.intern("py-set!"),
+                                Cons(
+                                    target_obj,
+                                    Cons(
+                                        Cons(
+                                            Symbol.intern("quote"),
+                                            Cons(Symbol.intern(attr_name), NIL),
+                                        ),
+                                        Cons(car(rest_args), NIL),
+                                    ),
+                                ),
+                            )
+                            return self._expand_macros(desugared)
+                    else:
+                        desugared = Cons(
+                            Symbol.intern("py-call"),
+                            Cons(
+                                target_obj,
+                                Cons(
+                                    Cons(
+                                        Symbol.intern("quote"),
+                                        Cons(Symbol.intern(spec.name), NIL),
+                                    ),
+                                    rest_args,
+                                ),
+                            ),
+                        )
+                        return self._expand_macros(desugared)
+                elif is_pair(spec):
+                    method_sym = car(spec)
+                    inner_args = cdr(spec)
+                    combined = to_lisp_list(
+                        to_py_list(inner_args) + to_py_list(rest_args)
+                    )
+                    desugared = Cons(
+                        Symbol.intern("py-call"),
+                        Cons(
+                            target_obj,
+                            Cons(
+                                Cons(
+                                    Symbol.intern("quote"),
+                                    Cons(
+                                        Symbol.intern(
+                                            method_sym.name
+                                            if isinstance(method_sym, Symbol)
+                                            else str(method_sym)
+                                        ),
+                                        NIL,
+                                    ),
+                                ),
+                                combined,
+                            ),
+                        ),
+                    )
+                    return self._expand_macros(desugared)
+
             try:
                 binding = self.env.lookup(op)
                 if isinstance(binding, Procedure) and binding.is_macro:
@@ -284,6 +442,21 @@ class PythonASTCompiler:
 
         # 2. Variable reference
         if isinstance(expr, Symbol):
+            if "." in expr.name and not expr.name.startswith("."):
+                is_bound = False
+                cur_e: Optional[Environment] = self.env
+                while cur_e is not None:
+                    if expr in cur_e.bindings:
+                        is_bound = True
+                        break
+                    cur_e = cur_e.parent
+                if not is_bound and expr.name not in mutated_vars:
+                    return ast.Call(
+                        func=ast.Name(id="__ilisp_resolve_dotted__", ctx=ast.Load()),
+                        args=[ast.Constant(value=expr.name)],
+                        keywords=[],
+                    )
+
             m_name = mangle_symbol(expr.name)
             if expr.name in mutated_vars:
                 # Retrieve from Cell box
@@ -820,6 +993,12 @@ def compile_ilisp(
             if m_name not in namespace:
                 namespace[m_name] = val
         curr = curr.parent
+
+    from ilisp.evaluator import _resolve_dotted_symbol
+
+    namespace["__ilisp_resolve_dotted__"] = lambda name: _resolve_dotted_symbol(
+        name, env
+    )
 
     # Execute bytecode in the namespace
     exec(code_obj, namespace)  # nosec

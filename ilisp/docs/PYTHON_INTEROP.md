@@ -126,6 +126,53 @@ Python の標準ライブラリおよびサードパーティ製パッケージ�
 ;; => (6 8)
 ```
 
+### 3.4 Clojure 風糖衣構文とドット記法シンボルの動的自動解決 (Issue 481)
+
+Python 相互運用の記述性を高めるため、ILISP では Clojure ライクなドット記法およびドットを含むシンボルの動的インポート解決を標準サポートしています。
+
+#### 1. メソッド呼び出し構文 (`.method` / `.`)
+- **`(.method obj arg ...)`**: オブジェクト `obj` のメソッド `method` を呼び出します（`(py-call obj 'method arg ...)` に等価）。
+- **`(. obj method arg ...)`** または **`(. obj (method arg ...))`**: プリミティブなドット形式。
+
+```scheme
+(.upper "hello")              ;; => "HELLO"
+(.split "2026-10-05" "-")     ;; => ("2026" "10" "05")
+(.strip "  arXiv security  ") ;; => "arXiv security"
+
+;; スレッディングマクロとのシームレスな融合
+(->> "  arXiv,security,papers  "
+     .strip
+     (.split ",")
+     (map .strip))
+```
+
+#### 2. プロパティ・属性アクセス構文 (`.-attr`)
+- **`(.-attr obj)`** または **`(. obj -attr)`**: 属性・フィールド値を取得（`(py-get obj 'attr)` に等価）。
+- **`(.-attr obj val)`** または **`(. obj -attr val)`**: 属性値を更新（`(py-set! obj 'attr val)` に等価）。
+
+```scheme
+(.-status_code resp)          ;; => 200
+(.-shape tensor)              ;; => (32 512)
+(. resp -headers)             ;; => HTTP ヘッダー辞書
+```
+
+#### 3. ドット記法シンボルの自動解決 (Auto-Desugaring)
+シンボル名にピリオド（`.`）が含まれる場合、明示的な `import-python` を行わなくても自動的にモジュールをインポート・解決します。
+- スコープ内にルート変数が存在する場合、そのオブジェクトの属性を連続走査します。
+- スコープ内に存在しない場合、最長一致の Python モジュールを動的にインポートし、残余属性を解決します。
+
+```scheme
+;; 未インポートのモジュールから直接参照・呼び出し
+math.pi                       ;; => 3.141592653589793
+(math.sqrt 49)                ;; => 7.0
+(os.getcwd)                   ;; => カレントディレクトリ文字列
+(os.path.join "data" "raw")   ;; => "data/raw"
+
+;; ローカルオブジェクトの属性アクセス
+(define (get-status response)
+  response.status_code)
+```
+
 ---
 
 ## 4. Python 側からの ILISP 利用仕様

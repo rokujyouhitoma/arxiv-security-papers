@@ -123,3 +123,30 @@
 (define-macro (|\|>>| initial . forms)
   (cons '->> (cons initial forms)))
 
+;; =============================================================================
+;; 3. Clojure-style Python Interop & Dotted Symbol Resolution (Issue 481)
+;; =============================================================================
+;; ILISP は以下の Clojure ライクな Python 相互運用糖衣構文をコアサポートしています:
+;;
+;; 1. メソッド呼び出し構文:
+;;    (.method obj arg ...)   ; => (py-call obj 'method arg ...)
+;;    (. obj method arg ...)  ; => (py-call obj 'method arg ...)
+;;    (. obj (method arg ...)); => (py-call obj 'method arg ...)
+;;    例: (.upper "hello")    ; => "HELLO"
+;;        (.split text ",")   ; => ("item1" "item2")
+;;
+;; 2. フィールド・属性アクセス構文:
+;;    (.-attr obj)            ; => (py-get obj 'attr)
+;;    (.-attr obj val)        ; => (py-set! obj 'attr val)
+;;    (. obj -attr)           ; => (py-get obj 'attr)
+;;    (. obj -attr val)       ; => (py-set! obj 'attr val)
+;;    例: (.-status_code resp); => 200
+;;
+;; 3. ドット記法シンボルの動的自動解決:
+;;    未束縛の `mod.member` シンボルは自動的にモジュールをロードして参照解決します。
+;;    例: math.pi             ; => 3.141592653589793
+;;        (math.sqrt 16)      ; => 4.0
+;;        (os.getcwd)         ; => "/workspace"
+;;        (os.path.join "a" "b") ; => "a/b"
+;; =============================================================================
+
