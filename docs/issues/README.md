@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **482** | ALisp Phase 1: コア安全プリミティブ (with-fuel, define/c) と ILisp 評価器フック基盤の実装 | Feature | High | Open (New) | [482-implement-alisp-phase1-core-guard-and-metering.md](482-implement-alisp-phase1-core-guard-and-metering.md) |
 | **483** | ALisp Phase 2: Object-Capability (with-caps)・Managed Virtual Port・状態ロールバック基盤の実装 | Feature | High | Open (New) | [483-implement-alisp-phase2-ocaps-and-managed-port.md](483-implement-alisp-phase2-ocaps-and-managed-port.md) |
 | **484** | ALisp Phase 3: S-Path 決定論的 AST パッチ (patch)・CAS 置換・マクロ展開逆マッピング自己修復基盤の実装 | Feature | High | Open (New) | [484-implement-alisp-phase3-spath-patch-and-self-repair.md](484-implement-alisp-phase3-spath-patch-and-self-repair.md) |
 | **485** | ALisp Phase 4: Python FFI 物理的完全性 (SafePyProxy)・リソース制限・監査テレメトリ統合の実装 | Feature | High | Open (New) | [485-implement-alisp-phase4-safe-py-proxy-and-integration.md](485-implement-alisp-phase4-safe-py-proxy-and-integration.md) |
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **482** | ALisp Phase 1: コア安全プリミティブ (with-fuel, define/c) と ILisp 評価器フック基盤の実装 | Feature | 2026-10-05 | [closed/482-implement-alisp-phase1-core-guard-and-metering.md](closed/482-implement-alisp-phase1-core-guard-and-metering.md) |
 | **481** | Python 相互運用の糖衣構文 (Clojure ライクな記法とドット参照) の実装 | Feature | 2026-10-05 | [closed/481-implement-clojure-style-and-dot-syntax-for-python-interop.md](closed/481-implement-clojure-style-and-dot-syntax-for-python-interop.md) |
 | **480** | Python 側からの ILISP 呼び出し API (ilisp.eval, ilisp.Evaluator, ilisp.interop) の実装 | Feature | 2026-10-05 | [closed/480-implement-python-facing-ilisp-api-and-interop.md](closed/480-implement-python-facing-ilisp-api-and-interop.md) |
 | **479** | (ilisp python) ライブラリの独立分離と import-python マクロの実装 | Feature | 2026-10-04 | [closed/479-implement-import-python-macro-library.md](closed/479-implement-import-python-macro-library.md) |

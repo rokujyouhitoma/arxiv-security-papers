@@ -333,6 +333,12 @@ class Reader:
     def _read_hash_literal(self, loc: SourceLocation) -> Any:
         self._next_char()  # consume '#'
         ch = self._peek_char()
+        if ch == ":":
+            self._next_char()  # consume ':'
+            atom = self._read_atom(loc)
+            if isinstance(atom, Symbol):
+                return Symbol.intern(f":{atom.name}")
+            return Symbol.intern(f":{atom}")
         if ch == "t" or ch == "T":
             self._next_char()
             if self._peek_char() in ("r", "R"):

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import importlib
 from fractions import Fraction
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 from ilisp.env import Environment
 from ilisp.reader import LispSyntaxError
@@ -40,6 +40,49 @@ from ilisp.types import (
     to_lisp_list,
     to_py_list,
 )
+
+StepHook = Callable[[], None]
+
+_current_step_hook: Optional[StepHook] = None
+
+
+def get_step_hook() -> Optional[StepHook]:
+    """Return the currently active evaluation step hook, if any."""
+    return _current_step_hook
+
+
+def set_step_hook(hook: Optional[StepHook]) -> None:
+    """Set or clear the active evaluation step hook."""
+    global _current_step_hook
+    _current_step_hook = hook
+
+
+class StepHookContext:
+    """Context manager for scoped installation of an evaluation step hook."""
+
+    def __init__(self, hook: Optional[StepHook]) -> None:
+        self.hook = hook
+        self.old_hook: Optional[StepHook] = None
+
+    def __enter__(self) -> StepHookContext:
+        self.old_hook = get_step_hook()
+        set_step_hook(self.hook)
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        set_step_hook(self.old_hook)
+
+
+class Evaluator:
+    """R7RS Scheme Evaluator engine with DIP Step Hook support."""
+
+    def __init__(self, step_hook: Optional[StepHook] = None) -> None:
+        self.step_hook = step_hook
+
+    def eval(self, expr: Any, env: Environment) -> Any:
+        """Evaluate an expression within the given environment under this evaluator's hook."""
+        with StepHookContext(self.step_hook):
+            return eval_expr(expr, env)
 
 
 class TailCall:
@@ -153,8 +196,12 @@ def _resolve_dotted_symbol(name: str, env: Environment) -> Any:
     return None
 
 
-def eval_expr(expr: Any, env: Environment) -> Any:
+def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None) -> Any:
     """Evaluate an S-expression within an environment using a trampoline loop for TCO."""
+    if step_hook is not None:
+        with StepHookContext(step_hook):
+            return eval_expr(expr, env)
+
     from ilisp.env import get_interaction_environment, set_interaction_environment
 
     if get_interaction_environment() is None:
@@ -164,6 +211,9 @@ def eval_expr(expr: Any, env: Environment) -> Any:
     curr_env: Environment = env
 
     while True:
+        if _current_step_hook is not None:
+            _current_step_hook()
+
         # 1. Self-evaluating literals
         if (
             isinstance(
@@ -949,7 +999,7 @@ def eval_expr(expr: Any, env: Environment) -> Any:
                 curr_expr = expanded_ast
                 continue
 
-            if isinstance(fn, SyntaxRulesTransformer):
+            if isinstance(fn, SyntaxRulesTransformer) or hasattr(fn, "transform"):
                 expanded_ast = fn.transform(curr_expr, curr_env)
                 curr_expr = expanded_ast
                 continue

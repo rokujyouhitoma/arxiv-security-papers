@@ -6,7 +6,13 @@ An AI-native Lisp dialect adhering to R7RS-small Scheme with zero-copy Python in
 from typing import Any, Optional
 
 from ilisp.env import Environment, make_initial_env
-from ilisp.evaluator import eval_expr
+from ilisp.evaluator import (
+    StepHook,
+    StepHookContext,
+    eval_expr,
+    get_step_hook,
+    set_step_hook,
+)
 from ilisp.interop import (
     Evaluator,
     IlispModuleProxy,
@@ -53,6 +59,10 @@ __all__ = [
     "eval_expr",
     "eval",
     "Evaluator",
+    "StepHook",
+    "StepHookContext",
+    "get_step_hook",
+    "set_step_hook",
     "load_module",
     "load_ilisp_module",
     "IlispModuleProxy",

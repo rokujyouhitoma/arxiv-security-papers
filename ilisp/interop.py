@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence, Union, cast
 
 from ilisp.env import Environment, make_initial_env
+from ilisp.evaluator import StepHook, StepHookContext
 from ilisp.repl import run_file, run_string
 from ilisp.types import Cell, SequenceView, Symbol
 
@@ -49,6 +50,7 @@ class Evaluator:
         self,
         env: Optional[Environment] = None,
         preload_stdlib: bool = True,
+        step_hook: Optional[StepHook] = None,
     ) -> None:
         """Initialize an Evaluator session.
 
@@ -56,7 +58,9 @@ class Evaluator:
             env: Optional existing ILISP Environment. If None, a new global
                  environment is created.
             preload_stdlib: Whether to preload ILISP standard libraries (base, python).
+            step_hook: Optional step hook callable for execution monitoring and metering.
         """
+        self.step_hook = step_hook
         if env is not None:
             self.env = env
         else:
@@ -75,7 +79,8 @@ class Evaluator:
             filename: Source file name for error reporting and source maps.
             backend: Execution backend ('interp' or 'py_ast').
         """
-        return run_string(code, env=self.env, filename=filename, backend=backend)
+        with StepHookContext(self.step_hook):
+            return run_string(code, env=self.env, filename=filename, backend=backend)
 
     def eval(self, code: str, backend: str = "interp") -> Any:
         """Alias for eval_string."""
@@ -154,7 +159,8 @@ class Evaluator:
                 f"Symbol '{symbol_name}' is not callable, got {type(proc).__name__}: {proc!r}"
             )
         adapted_args = [_convert_py_arg_to_lisp(a) for a in args]
-        return proc(*adapted_args)
+        with StepHookContext(self.step_hook):
+            return proc(*adapted_args)
 
 
 class IlispModuleProxy:
