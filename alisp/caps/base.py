@@ -15,7 +15,7 @@ class CapabilityError(Exception):
     pass
 
 
-class AccessDeniedException(CapabilityError):
+class AccessDeniedException(CapabilityError, AttributeError):
     """Raised when an operation is performed without the required capability or authority."""
 
     pass

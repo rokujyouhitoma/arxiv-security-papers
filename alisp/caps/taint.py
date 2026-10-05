@@ -35,6 +35,9 @@ class TaintedValue:
     """Wrapper holding sensitive or untrusted values with provenance tracking."""
 
     __slots__ = ("_value", "_source", "_tags")
+    _value: Any
+    _source: str
+    _tags: Set[str]
 
     def __init__(
         self,

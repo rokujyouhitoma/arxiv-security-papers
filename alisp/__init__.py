@@ -17,19 +17,23 @@ from alisp.caps import (
     ManagedTextualOutputPort,
     NetworkCapability,
     PortQuotaExceededException,
+    SafePyProxy,
     TaintedValue,
     TaintLeakViolationException,
     WithCapsTransformer,
     check_sink,
     get_active_capabilities,
     get_active_capability,
+    is_safe_proxy,
     is_tainted,
     make_loopback_binary_port,
     make_loopback_textual_port,
     taint,
     untaint,
+    unwrap_safe_proxy,
     with_capabilities,
     wrap_managed_port,
+    wrap_safe_proxy,
 )
 from alisp.contracts import (
     BlameParty,
@@ -48,9 +52,12 @@ from alisp.core import ALispEngine, eval_alisp, make_alisp_env
 from alisp.metering import (
     FuelCounter,
     FuelExhaustedException,
+    MemoryQuotaExceededException,
     StepInterceptor,
     Transaction,
     WithFuelTransformer,
+    with_memory_quota,
+    with_wall_clock_timeout,
 )
 from alisp.repair import (
     ASTCursor,
@@ -70,6 +77,18 @@ from alisp.repair import (
     resolve_spath,
 )
 from alisp.repl import repl
+from alisp.telemetry import (
+    DEFAULT_AUDIT_LOG_PATH,
+    AuditEventType,
+    AuditLogger,
+    generate_span_id,
+    generate_trace_id,
+    get_audit_logger,
+    get_current_span_id,
+    get_current_trace_id,
+    record_audit_event,
+    with_trace,
+)
 
 __version__ = "0.1.0"
 
@@ -140,4 +159,22 @@ __all__ = [
     "format_diagnostic",
     "invert_source_location",
     "MacroExpansionRegistry",
+    # Phase 4: SafePyProxy, Resource Limits, and Telemetry
+    "SafePyProxy",
+    "wrap_safe_proxy",
+    "unwrap_safe_proxy",
+    "is_safe_proxy",
+    "MemoryQuotaExceededException",
+    "with_memory_quota",
+    "with_wall_clock_timeout",
+    "DEFAULT_AUDIT_LOG_PATH",
+    "AuditEventType",
+    "AuditLogger",
+    "get_audit_logger",
+    "record_audit_event",
+    "with_trace",
+    "generate_trace_id",
+    "generate_span_id",
+    "get_current_trace_id",
+    "get_current_span_id",
 ]

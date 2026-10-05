@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: | :---: |
-| **485** | ALisp Phase 4: Python FFI 物理的完全性 (SafePyProxy)・リソース制限・監査テレメトリ統合の実装 | Feature | High | Open (New) | [485-implement-alisp-phase4-safe-py-proxy-and-integration.md](485-implement-alisp-phase4-safe-py-proxy-and-integration.md) |
+*現在、オープンな Issue はありません。*
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **485** | ALisp Phase 4: Python FFI 物理的完全性 (SafePyProxy)・リソース制限・監査テレメトリ統合の実装 | Feature | 2026-10-06 | [closed/485-implement-alisp-phase4-safe-py-proxy-and-integration.md](closed/485-implement-alisp-phase4-safe-py-proxy-and-integration.md) |
 | **484** | ALisp Phase 3: S-Path 決定論的 AST パッチ (patch)・CAS 置換・マクロ展開逆マッピング自己修復基盤の実装 | Feature | 2026-10-06 | [closed/484-implement-alisp-phase3-spath-patch-and-self-repair.md](closed/484-implement-alisp-phase3-spath-patch-and-self-repair.md) |
 | **483** | ALisp Phase 2: Object-Capability (with-caps)・Managed Virtual Port・状態ロールバック基盤の実装 | Feature | 2026-10-05 | [closed/483-implement-alisp-phase2-ocaps-and-managed-port.md](closed/483-implement-alisp-phase2-ocaps-and-managed-port.md) |
 | **486** | ALisp 対話型 REPL (alisp.repl, python -m alisp) および CLI 実行インターフェースの実装 | Feature | 2026-10-05 | [closed/486-implement-alisp-interactive-repl-and-cli.md](closed/486-implement-alisp-interactive-repl-and-cli.md) |

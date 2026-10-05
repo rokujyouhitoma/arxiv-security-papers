@@ -93,6 +93,12 @@ def _load_db_index() -> Type[BaseCommand]:
     return DbIndexCommand
 
 
+def _load_alisp() -> Type[BaseCommand]:
+    from .commands.alisp import ALispCommand
+
+    return ALispCommand
+
+
 _BUILTINS_REGISTERED = False
 
 
@@ -110,4 +116,5 @@ def _ensure_builtins() -> None:
     _COMMAND_LOADERS["okf-convert"] = _load_okf_convert
     _COMMAND_LOADERS["summarize"] = _load_summarize
     _COMMAND_LOADERS["db-index"] = _load_db_index
+    _COMMAND_LOADERS["alisp"] = _load_alisp
     _BUILTINS_REGISTERED = True

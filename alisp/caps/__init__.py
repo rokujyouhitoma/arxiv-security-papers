@@ -24,6 +24,15 @@ from alisp.caps.port import (
     make_loopback_textual_port,
     wrap_managed_port,
 )
+from alisp.caps.safe_proxy import (
+    DANGEROUS_SYSTEM_MODULES,
+    FORBIDDEN_METADATA_ATTRIBUTES,
+    SafePyProxy,
+    install_sandboxed_py_primitives,
+    is_safe_proxy,
+    unwrap_safe_proxy,
+    wrap_safe_proxy,
+)
 from alisp.caps.taint import (
     TaintedValue,
     TaintLeakViolationException,
@@ -418,4 +427,12 @@ __all__ = [
     "make_net_cap_primitive",
     "make_attenuate_cap_primitive",
     "install_sandboxed_file_primitives",
+    # SafePyProxy & Python FFI Guards
+    "SafePyProxy",
+    "wrap_safe_proxy",
+    "unwrap_safe_proxy",
+    "is_safe_proxy",
+    "FORBIDDEN_METADATA_ATTRIBUTES",
+    "DANGEROUS_SYSTEM_MODULES",
+    "install_sandboxed_py_primitives",
 ]

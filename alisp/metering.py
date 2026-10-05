@@ -84,9 +84,9 @@ class Transaction:
             for c_id, entry in self.cell_snapshots.items():
                 if c_id not in self.parent.cell_snapshots:
                     self.parent.cell_snapshots[c_id] = entry
-            for key, entry in self.env_snapshots.items():
+            for key, env_entry in self.env_snapshots.items():
                 if key not in self.parent.env_snapshots:
-                    self.parent.env_snapshots[key] = entry
+                    self.parent.env_snapshots[key] = env_entry
             self.parent.managed_ports.update(self.managed_ports)
 
 
@@ -260,3 +260,117 @@ def make_with_fuel_primitive(interceptor: StepInterceptor) -> Primitive:
                 raise TypeError(f"with-fuel expected procedure thunk, got {thunk!r}")
 
     return Primitive("%with-fuel", _prim_with_fuel)
+
+
+# --- Physical Resource Limit & Wall-Clock Timeout Guards ---
+
+
+class MemoryQuotaExceededException(BaseException):
+    """Raised when memory allocation exceeds physical quota limit."""
+
+    pass
+
+
+@contextmanager
+def with_memory_quota(max_bytes: int) -> Iterator[None]:
+    """Scoped physical memory quota guard using resource.setrlimit(resource.RLIMIT_AS).
+
+    Prevents memory exhaustion DoS attacks from large allocations.
+    """
+    if max_bytes <= 0:
+        yield
+        return
+
+    try:
+        import resource
+    except ImportError:
+        # Resource limits not supported on this platform
+        yield
+        return
+
+    if not hasattr(resource, "RLIMIT_AS"):
+        yield
+        return
+
+    try:
+        orig_soft, orig_hard = resource.getrlimit(resource.RLIMIT_AS)
+        # Approximate current usage in bytes to prevent immediate crash
+        # ru_maxrss is in KB on Linux
+        rusage = resource.getrusage(resource.RUSAGE_SELF)
+        current_rss_bytes = rusage.ru_maxrss * 1024
+        # Effective limit must allow current resident memory plus quota margin
+        target_limit = max(current_rss_bytes + max_bytes, max_bytes)
+
+        effective_soft = (
+            min(target_limit, orig_hard)
+            if orig_hard != resource.RLIM_INFINITY
+            else target_limit
+        )
+
+        resource.setrlimit(resource.RLIMIT_AS, (effective_soft, orig_hard))
+    except (ValueError, OSError):
+        # Could not set limit; proceed without crashing
+        yield
+        return
+
+    try:
+        yield
+    except MemoryError as e:
+        raise MemoryQuotaExceededException(
+            f"Physical memory quota exceeded ({max_bytes} bytes limit): {e}"
+        ) from e
+    finally:
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (orig_soft, orig_hard))
+        except (ValueError, OSError):
+            pass
+
+
+@contextmanager
+def with_wall_clock_timeout(seconds: Optional[float]) -> Iterator[None]:
+    """Scoped physical wall-clock hard timeout using OS signals (SIGALRM) or thread interrupt."""
+    if seconds is None or seconds <= 0:
+        yield
+        return
+
+    import signal
+    import threading
+
+    is_main_thread = threading.current_thread() is threading.main_thread()
+    if is_main_thread and hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer"):
+
+        def _alarm_handler(signum: int, frame: Any) -> None:
+            raise TimeoutError(
+                f"Execution physical wall-clock timeout exceeded ({seconds}s)"
+            )
+
+        old_handler = signal.signal(signal.SIGALRM, _alarm_handler)
+        signal.setitimer(signal.ITIMER_REAL, seconds)
+        try:
+            yield
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, old_handler)
+    else:
+        # Fallback using threading.Timer and _thread.interrupt_main
+        import _thread
+
+        timed_out = threading.Event()
+
+        def _on_timeout() -> None:
+            timed_out.set()
+            _thread.interrupt_main()
+
+        timer = threading.Timer(seconds, _on_timeout)
+        timer.daemon = True
+        timer.start()
+        try:
+            yield
+        except KeyboardInterrupt:
+            if timed_out.is_set():
+                raise TimeoutError(
+                    f"Execution physical wall-clock timeout exceeded ({seconds}s)"
+                )
+            raise
+        finally:
+            timer.cancel()

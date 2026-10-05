@@ -119,14 +119,19 @@ class ManagedTextualOutputPort(TextualOutputPort, ManagedPortMixin):
             self.inner_port, StringOutputPort
         ):
             return self.inner_port.get_string()
-        return "".join(self._write_chunks)
+        return "".join(
+            c if isinstance(c, str) else c.decode("utf-8", errors="replace")
+            for c in self._write_chunks
+        )
 
     def rollback(self) -> None:
         super().rollback()
         if self.inner_port is not None and isinstance(
             self.inner_port, StringOutputPort
         ):
-            self.inner_port._buffer.clear()
+            buf = getattr(self.inner_port, "_buffer", None)
+            if buf is not None and hasattr(buf, "clear"):
+                buf.clear()
 
 
 class ManagedTextualInputPort(TextualInputPort, ManagedPortMixin):
@@ -233,7 +238,9 @@ class ManagedBinaryOutputPort(BinaryOutputPort, ManagedPortMixin):
     def rollback(self) -> None:
         super().rollback()
         if self.inner_port is not None and isinstance(self.inner_port, BytesOutputPort):
-            self.inner_port._buffer.clear()
+            buf = getattr(self.inner_port, "_buffer", None)
+            if buf is not None and hasattr(buf, "clear"):
+                buf.clear()
 
 
 class ManagedBinaryInputPort(BinaryInputPort, ManagedPortMixin):

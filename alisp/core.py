@@ -10,9 +10,11 @@ from __future__ import annotations
 from typing import Any, Optional, Sequence, Union
 
 from alisp.caps import (
+    AccessDeniedException,
     Capability,
     WithCapsTransformer,
     install_sandboxed_file_primitives,
+    install_sandboxed_py_primitives,
     is_tainted,
     make_attenuate_cap_primitive,
     make_fs_cap_primitive,
@@ -23,6 +25,7 @@ from alisp.caps import (
     with_capabilities,
 )
 from alisp.contracts import (
+    ContractViolationException,
     DefineContractTransformer,
     make_arrow_contract_primitive,
     make_contract_assert_primitive,
@@ -36,9 +39,13 @@ from alisp.contracts.predicates import (
     none_c,
 )
 from alisp.metering import (
+    FuelExhaustedException,
+    MemoryQuotaExceededException,
     StepInterceptor,
     WithFuelTransformer,
     make_with_fuel_primitive,
+    with_memory_quota,
+    with_wall_clock_timeout,
 )
 from alisp.repair import (
     Diagnostic,
@@ -46,6 +53,7 @@ from alisp.repair import (
     format_diagnostic,
     make_patch_primitive,
 )
+from alisp.telemetry import AuditEventType, record_audit_event, with_trace
 from ilisp.env import Environment, make_initial_env
 from ilisp.evaluator import Evaluator
 from ilisp.reader import read_all
@@ -96,9 +104,10 @@ def make_alisp_env(
     # Register Self-Repair primitives (Phase 3)
     env.define(Symbol.intern("patch"), make_patch_primitive())
 
-    # Apply sandbox: guard destructive I/O unless permitted by Capability
+    # Apply sandbox: guard destructive I/O and unsafe Python FFI
     if sandbox:
         install_sandboxed_file_primitives(env)
+        install_sandboxed_py_primitives(env)
 
     return env
 
@@ -133,19 +142,100 @@ class ALispEngine:
         source: Union[str, Any],
         fuel: Optional[int] = None,
         timeout: Optional[float] = None,
+        memory_limit: Optional[int] = None,
         caps: Optional[Sequence[Capability]] = None,
+        trace_id: Optional[str] = None,
     ) -> Any:
-        """Evaluate an ALisp source string or AST under fuel, contract, and capability boundaries."""
+        """Evaluate an ALisp source string or AST under fuel, contract, capability, and physical resource boundaries."""
         effective_fuel = fuel if fuel is not None else self.default_fuel
         effective_caps = list(self.initial_caps)
         if caps is not None:
             effective_caps.extend(caps)
 
-        if effective_caps:
-            with with_capabilities(effective_caps):
-                return self._eval_with_fuel(source, effective_fuel, timeout)
-        else:
-            return self._eval_with_fuel(source, effective_fuel, timeout)
+        with with_trace(trace_id=trace_id) as active_trace:
+            record_audit_event(
+                AuditEventType.EVAL_START,
+                "ALisp evaluation started",
+                details={
+                    "fuel_limit": effective_fuel,
+                    "timeout": timeout,
+                    "memory_limit": memory_limit,
+                    "sandbox": self.sandbox,
+                },
+                trace_id=active_trace,
+            )
+            try:
+                with with_wall_clock_timeout(timeout):
+                    with with_memory_quota(
+                        memory_limit if memory_limit is not None else 0
+                    ):
+                        if effective_caps:
+                            with with_capabilities(effective_caps):
+                                res = self._eval_with_fuel(
+                                    source, effective_fuel, timeout
+                                )
+                        else:
+                            res = self._eval_with_fuel(source, effective_fuel, timeout)
+
+                record_audit_event(
+                    AuditEventType.EVAL_SUCCESS,
+                    "ALisp evaluation completed successfully",
+                    details={"result_type": type(res).__name__},
+                    trace_id=active_trace,
+                )
+                return res
+            except FuelExhaustedException as e:
+                record_audit_event(
+                    AuditEventType.FUEL_EXHAUSTED,
+                    str(e),
+                    details={"consumed": e.steps, "limit": e.limit},
+                    trace_id=active_trace,
+                )
+                raise
+            except ContractViolationException as e:
+                blame_val = (
+                    getattr(e.blame, "value", str(e.blame))
+                    if hasattr(e, "blame") and e.blame is not None
+                    else None
+                )
+                record_audit_event(
+                    AuditEventType.CONTRACT_VIOLATION,
+                    str(e),
+                    details={"blame": blame_val},
+                    trace_id=active_trace,
+                )
+                raise
+            except AccessDeniedException as e:
+                record_audit_event(
+                    AuditEventType.ACCESS_DENIED,
+                    str(e),
+                    trace_id=active_trace,
+                )
+                raise
+            except TimeoutError as e:
+                record_audit_event(
+                    AuditEventType.TIMEOUT,
+                    str(e),
+                    details={"timeout": timeout},
+                    trace_id=active_trace,
+                )
+                raise
+            except MemoryQuotaExceededException as e:
+                record_audit_event(
+                    AuditEventType.MEMORY_LIMIT_EXCEEDED,
+                    str(e),
+                    details={"memory_limit": memory_limit},
+                    trace_id=active_trace,
+                )
+                raise
+            except Exception as e:
+                record_audit_event(
+                    AuditEventType.EXCEPTION,
+                    str(e),
+                    details={"exception_type": type(e).__name__},
+                    trace_id=active_trace,
+                )
+                raise
 
     def _eval_with_fuel(
         self,
@@ -166,10 +256,19 @@ class ALispEngine:
         source: Union[str, Any],
         fuel: Optional[int] = None,
         timeout: Optional[float] = None,
+        memory_limit: Optional[int] = None,
         caps: Optional[Sequence[Capability]] = None,
+        trace_id: Optional[str] = None,
     ) -> Any:
         """Alias for eval."""
-        return self.eval(source, fuel=fuel, timeout=timeout, caps=caps)
+        return self.eval(
+            source,
+            fuel=fuel,
+            timeout=timeout,
+            memory_limit=memory_limit,
+            caps=caps,
+            trace_id=trace_id,
+        )
 
     def _eval_internal(self, source: Union[str, Any]) -> Any:
         if isinstance(source, str):
@@ -205,9 +304,16 @@ def eval_alisp(
     env: Optional[Environment] = None,
     fuel: Optional[int] = None,
     timeout: Optional[float] = None,
+    memory_limit: Optional[int] = None,
     caps: Optional[Sequence[Capability]] = None,
     sandbox: bool = True,
+    trace_id: Optional[str] = None,
 ) -> Any:
     """Convenience function to evaluate an ALisp string or expression."""
     engine = ALispEngine(default_fuel=fuel, env=env, sandbox=sandbox, initial_caps=caps)
-    return engine.eval(source, timeout=timeout)
+    return engine.eval(
+        source,
+        timeout=timeout,
+        memory_limit=memory_limit,
+        trace_id=trace_id,
+    )

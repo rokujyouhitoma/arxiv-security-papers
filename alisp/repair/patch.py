@@ -103,7 +103,7 @@ class SPath:
     def __hash__(self) -> int:
         return hash(self.elements)
 
-    def to_sexpr(self) -> Cons:
+    def to_sexpr(self) -> Any:
         """Convert SPath to Scheme S-expression list: (root ...) or similar."""
         items: List[Any] = []
         for el in self.elements:

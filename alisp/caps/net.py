@@ -86,6 +86,7 @@ class NetworkCapability(Capability):
         allowed_hosts: Optional[Sequence[str]] = None,
         allowed_methods: Optional[Sequence[str]] = None,
         byte_budget: Optional[int] = None,
+        **kwargs: Any,
     ) -> NetworkCapability:
         """Derive an attenuated child NetworkCapability with narrower scope."""
         if allowed_hosts is not None:

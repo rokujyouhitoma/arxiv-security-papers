@@ -100,6 +100,7 @@ class FileSystemCapability(Capability):
         allowed_write_paths: Optional[Sequence[str]] = None,
         loopback_unauthorized_writes: Optional[bool] = None,
         byte_budget: Optional[int] = None,
+        **kwargs: Any,
     ) -> FileSystemCapability:
         """Derive an attenuated child FileSystemCapability with equal or narrower scope."""
         # Validate read paths: all child read paths must be covered by parent
