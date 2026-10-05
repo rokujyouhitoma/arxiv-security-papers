@@ -17,6 +17,7 @@
   - [DSN-24 (Unified Management CLI & Database Shell)](DSN-24-unified_management_cli_and_interactive_database_shell.md)
   - [DSN-25 (Pure-Python Packrat PEG Parser Engine & Bootstrap)](DSN-25-pure_python_packrat_peg_parser_engine.md)
   - [DSN-29 (Python-LISP Integrated Architecture Specification - pylisp)](DSN-29-python_lisp_integrated_architecture_specification.md)
+  - [DSN-32 (AILisp Agent Lisp Architecture Specification)](DSN-32-ailisp_agent_lisp_architecture_specification.md)
 - **【主査・報告】 IT Specialist (Programming Languages & Compilers / PLC) / Systems Architect (SA)**
 - **【共同主査】 Project Manager (PM) / Software Development (SWD) / Software Quality Assurance Specialist (QA)**
 - **【参画・協調】 16 大専門エージェント全員 (PM, SEC, SA, QA, DBA, NET, NLP, STR, SM, EMB, AUD, DES, EDU, SWD, APS, PLC)**
@@ -58,34 +59,35 @@
 
 ## 0. 概要と基本方針 (Executive Summary)
 
-本仕様書は、学術論文セキュリティ解析・OKFナレッジベース構築プラットフォームにおけるコア言語基盤として、**ILISP (Intelligence LISP)** を設計・定義するものである。
+本仕様書は、学術論文セキュリティ解析・OKFナレッジベース構築プラットフォームにおけるコア言語基盤として、**ILISP (Intelligence LISP / Infrastructure LISP)** を設計・定義するものである。
 
-ILISP は、世界標準規格 **R7RS-small Scheme** を厳格な規範とし、次の 3 つの課題を抜本的に解決する：
-1. **Python エコシステムとの摩擦ゼロ・ゼロコピー相互運用**: AI/NLP ライブラリを $O(1)$ コストでシームレスに直接呼び出す。
-2. **C99 AOT トランスパイルによるネイティブ単一バイナリ**: 外部依存ゼロの C99 を出力し、`clang -O3` を介して LLVM 最適化の恩恵を享受する。
-3. **Rust 製 Standalone Bytecode VM による極限の並列性能**: 将来のマルチコア並列処理・No-GIL 実行を担う NaN-Boxing バイトコード VM を提供する。
+ILISP は、世界標準規格 **R7RS-small Scheme** を厳格な規範とし、上位のAIエージェント安全制御レイヤー **ALisp (Agent Lisp / DSN-32)** と融合して **AILisp (AI Lisp)** の強固な基盤（Infrastructure）を形成するとともに、次の 4 つの課題を抜本的に解決する：
+1. **AILisp の基盤実行レイヤー (Infrastructure Engine)**: ALisp から委譲される検証済み AST を最高速度で実行し、`with-fuel` や `with-caps` に呼応する Managed Port・実行時サンドボックス基盤を提供する。
+2. **Python エコシステムとの摩擦ゼロ・ゼロコピー相互運用**: AI/NLP ライブラリを $O(1)$ コストでシームレスに直接呼び出す。
+3. **C99 AOT トランスパイルによるネイティブ単一バイナリ**: 外部依存ゼロの C99 を出力し、`clang -O3` を介して LLVM 最適化の恩恵を享受する。
+4. **Rust 製 Standalone Bytecode VM による極限の並列性能**: 将来のマルチコア並列処理・No-GIL 実行を担う NaN-Boxing バイトコード VM を提供する。
 
 ---
 
-## 1. 言語哲学とアイデンティティ (Intelligence + IKE + AI + LISP)
+## 1. 言語哲学とアイデンティティ (Intelligence + Infrastructure + IKE + AI + LISP)
 
 ```
         ┌────────────────────────────────────────────────────────┐
-        │                 ILISP (Intelligence LISP)              │
+        │        ILISP (Intelligence & Infrastructure LISP)      │
         │   ~ Next-Gen Lisp for AI, Security & Document Science ~│
         └───────────────────────────┬────────────────────────────┘
                                     │
-       ┌────────────────────────────┼────────────────────────────┐
-       ▼                            ▼                            ▼
-【 Intelligence 】              【 IKE 】                    【 AI / LISP 】
-・脅威インテリジェンス          ・創設者アーキテクチャ哲学   ・S式・同形性・記号推論
-・知識オントロジー (SKO)        ・極限のシンプルさと自作主義 ・Scope Sets 衛生的マクロ
-・耐量子暗号・セキュリティ検証  ・セルフホスティング指向    ・R7RS Scheme 世界標準規格
+       ┌───────────────┬────────────┴───────────┬───────────────┐
+       ▼               ▼                        ▼               ▼
+【 Intelligence 】 【 Infrastructure 】     【 IKE 】       【 AI / LISP 】
+・脅威インテリ     ・AILisp の強固な実行基盤   ・創設者哲学     ・S式・同図像性・記号推論
+・知識オントロジー ・Managed Port / FFI 境界   ・自作主義       ・Scope Sets 衛生的マクロ
+・耐量子暗号検証   ・決定論的高速ランタイム     ・セルフホスト   ・R7RS Scheme 世界標準規格
 ```
 
-- **Intelligence**: 論文から脅威情報・セキュリティ知見を抽出・構造化・推論する言語目的。
+- **Intelligence / Infrastructure**: 論文から脅威知見を抽出・推論する言語目的であると同時に、次世代 AI コーディングエージェント実行環境 **AILisp** の揺るぎない基盤（Infrastructure）を担う。
 - **IKE**: 創設者の哲学である「車輪の原理を理解し、自己完結した高信頼基盤を創出する」精神。
-- **AI**: LLM と記号推論（Symbolic AI / miniKanren）をシームレスに結合する AI ネイティブ構文。
+- **AI**: LLM と記号推論（Symbolic AI / miniKanren）をシームレスに結合し、上位 ALisp の自律実行を支える。
 - **LISP**: 半世紀以上の歴史を持つ同形性（Code is Data / Data is Code）の美学。
 
 ---

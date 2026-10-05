@@ -88,8 +88,10 @@
   - `pylisp/` — contextvars 動的スコープ・現場復帰型コンディション機構・HAMT miniKanren・Free-threaded (No-GIL) 整合。
 - 🗄️ **[[DSN-30] 自作データベース (`src/database`) ファースト・生SQL駆動マイグレーションエンジンおよびスキーマライフサイクルガバナンス設計仕様書](designs/DSN-30-database_migration_engine_and_schema_lifecycle_governance.md)**
   - `src/cli.py`, `src/database/migrations/` (コア＋CLI), `migrations/` — 自作 Pure Python RDBMS（第一対象）＆ SQLite（第二対象）デュアルバックエンド・Single Source of Truth DDL統合・アトミックトランザクション・schema_migrations 履歴管理・migrations CLI統合。
-- 🔮 **[[DSN-31] ILISP (Intelligence LISP) R7RS コアアーキテクチャ設計仕様書](designs/DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)**
-  - `ilisp/` — R7RS-small Scheme準拠・Python双方向相互運用（Python Interop）・Native C-AOT デュアルバックエンド・現場復帰型コンディション・3段階自己完結ブートストラップ連鎖（セルフホスティング）。
+- 🔮 **[[DSN-31] ILISP (Intelligence LISP / Infrastructure LISP) R7RS コアアーキテクチャ設計仕様書](designs/DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)**
+  - `ilisp/` — R7RS-small Scheme準拠・AILisp基盤実行エンジン・Python双方向相互運用（Python Interop）・Native C-AOT デュアルバックエンド・現場復帰型コンディション・3段階自己完結ブートストラップ連鎖（セルフホスティング）。
+- 🤖 **[[DSN-32] AILISP (ALisp + ILisp) 次世代AIコーディングエージェント実行環境包括設計仕様書](designs/DSN-32-ailisp_agent_lisp_architecture_specification.md)**
+  - `alisp/`, `ilisp/` — 3大境界制御プリミティブ（`with-fuel`, `with-caps`, `define/c`）・S式構造化自己修復プロトコル（`diagnostic` / `patch`）・Managed Virtual Port・Bounded Autonomy（無暴走・無破壊・超省トークン）保証。
 
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
