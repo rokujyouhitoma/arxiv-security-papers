@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **480** | Python 側からの ILISP 呼び出し API (ilisp.eval, ilisp.Evaluator, ilisp.interop) の実装 | Feature | High | Open (New) | [480-implement-python-facing-ilisp-api-and-interop.md](480-implement-python-facing-ilisp-api-and-interop.md) |
 | **481** | Python 相互運用の糖衣構文 (Clojure ライクな記法とドット参照) の実装 | Feature | Medium | Open (New) | [481-implement-clojure-style-and-dot-syntax-for-python-interop.md](481-implement-clojure-style-and-dot-syntax-for-python-interop.md) |
 | **482** | ALisp Phase 1: コア安全プリミティブ (with-fuel, define/c) と ILisp 評価器フック基盤の実装 | Feature | High | Open (New) | [482-implement-alisp-phase1-core-guard-and-metering.md](482-implement-alisp-phase1-core-guard-and-metering.md) |
 | **483** | ALisp Phase 2: Object-Capability (with-caps)・Managed Virtual Port・状態ロールバック基盤の実装 | Feature | High | Open (New) | [483-implement-alisp-phase2-ocaps-and-managed-port.md](483-implement-alisp-phase2-ocaps-and-managed-port.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **480** | Python 側からの ILISP 呼び出し API (ilisp.eval, ilisp.Evaluator, ilisp.interop) の実装 | Feature | 2026-10-05 | [closed/480-implement-python-facing-ilisp-api-and-interop.md](closed/480-implement-python-facing-ilisp-api-and-interop.md) |
 | **479** | (ilisp python) ライブラリの独立分離と import-python マクロの実装 | Feature | 2026-10-04 | [closed/479-implement-import-python-macro-library.md](closed/479-implement-import-python-macro-library.md) |
 | **478** | chibi-scheme 公式 R7RS 適合性テストスイートの 100% 完全合格化 (1229/1229 PASS) | Feature | 2026-10-04 | [closed/478-achieve-100-percent-chibi-r7rs-conformance.md](closed/478-achieve-100-percent-chibi-r7rs-conformance.md) |
 | **477** | 外部公式 R7RS 適合性テストスイート (chibi-scheme) の厳格管理下での取り込み・検証環境の構築 | Feature | 2026-10-04 | [closed/477-import-chibi-scheme-r7rs-conformance-tests.md](closed/477-import-chibi-scheme-r7rs-conformance-tests.md) |

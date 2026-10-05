@@ -130,23 +130,74 @@ Python の標準ライブラリおよびサードパーティ製パッケージ�
 
 ## 4. Python 側からの ILISP 利用仕様
 
-### 4.1 透過インポート機構 (`sys.meta_path`)
+### 4.1 直接評価と対話セッション (`ilisp.eval` / `ilisp.Evaluator`)
 
-Python 側から ILISP の `.ilisp` ファイルを通常の Python モジュールと同様に透過的にロードできます。
+Python 側から ILISP の式を即座にワンライナーで評価したり、持続的な状態（変数・関数定義）を持つセッション環境を対話的に利用できます。
 
 ```python
-# Python コード
 import ilisp
-from ilisp.interop import load_ilisp_module
 
-# 1. 直接評価
-evaluator = ilisp.Evaluator()
-result = evaluator.eval_string("(+ 1 2 3 4 5)")
+# 1. ワンライナー直接評価 (即時実行)
+result = ilisp.eval("(+ 1 2 3 4 5)")
 print(result)  # => 15
 
-# 2. .ilisp モジュールの動的ロード
+# Python AST トランスパイラバックエンドでの実行
+result_fast = ilisp.eval("(* 6 7)", backend="py_ast")
+print(result_fast)  # => 42
+
+# 2. 持続的セッション評価 (Evaluator)
+evaluator = ilisp.Evaluator()
+
+# 変数定義と計算
+evaluator.eval("(define base-threat-score 85)")
+evaluator.eval("(define (calc-adjusted-score factor) (* base-threat-score factor))")
+
+# Python 側から Scheme 手続きの直接実行
+final_score = evaluator.call("calc-adjusted-score", 1.2)  # スネークケース "calc_adjusted_score" でも呼出可能
+print(final_score)  # => 102.0
+
+# 変数のバインドと取得 (ケバブケース／スネークケース自動解決)
+evaluator.set("api_key", "sec-token-12345")
+print(evaluator.get("api-key"))  # => "sec-token-12345"
+```
+
+### 4.2 モジュールの動的ロード (`ilisp.load_ilisp_module`)
+
+外部の `.ilisp` または `.scm` ファイルを透過プロキシ（`IlispModuleProxy`）としてロードし、Python の属性アクセス形式で関数や定数へ直接アクセス可能です。
+
+```python
+from ilisp import load_ilisp_module
+
+# モジュールファイルの動的ロード
 sec_module = load_ilisp_module("path/to/threat_analyzer.ilisp")
-analysis = sec_module.analyze_cve("CVE-2026-12345")
+
+# Scheme のケバブケース識別子 (例: analyze-cve) を Python スネークケースで透過呼出
+report = sec_module.analyze_cve("CVE-2026-12345")
+print(sec_module.base_score)
+
+# モジュール名前空間内での追加式評価
+custom_metric = sec_module.eval("(calculate-cvss base-score 1.5)")
+```
+
+### 4.3 透過インポート機構 (`sys.meta_path`)
+
+`ilisp.register_import_hook()` を呼び出すことで、Python の標準 `import` 構文を用いて `sys.path` 上の `.ilisp` / `.scm` ファイルを通常の Python モジュールと同様に透過的にインポートできます。
+
+```python
+import ilisp
+
+# インポートフックの有効化
+ilisp.register_import_hook()
+
+# 通常の Python モジュールとしてインポート
+import threat_analyzer  # threat_analyzer.ilisp を自動解決
+
+# モジュール属性や関数を直接利用
+print(threat_analyzer.app_version)
+result = threat_analyzer.calculate_hash("data")
+
+# フックの安全な解除
+ilisp.unregister_import_hook()
 ```
 
 ---
