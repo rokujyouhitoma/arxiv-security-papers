@@ -2,7 +2,7 @@
 ID: 483
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] ALisp Phase 2: Object-Capability (with-caps)・Managed Virtual Port・状態ロールバック基盤の実装 (ID: 483)
@@ -24,13 +24,13 @@ ID: 483
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [alisp/caps/__init__.py](../../alisp/caps/__init__.py) (`Capability` 基底クラス, Attenuation ロジック, `with-caps` マクロ)
-- [ ] [alisp/caps/fs.py](../../alisp/caps/fs.py) (`FileSystemCapability`, パスプレフィックスホワイトリスト)
-- [ ] [alisp/caps/net.py](../../alisp/caps/net.py) (`NetworkCapability`, ホスト/メソッド制限)
-- [ ] [alisp/caps/port.py](../../alisp/caps/port.py) (`ManagedPort`, Byte Budget, インメモリ `bytevector-port` ループバック隔離)
-- [ ] [alisp/caps/taint.py](../../alisp/caps/taint.py) (`TaintedValue` ラッパー, `untaint` プリミティブ, Sink 遮断)
-- [ ] [alisp/metering.py](../../alisp/metering.py) (環境フレーム Cell および Port バッファの世代ロールバック)
-- [ ] [tests/alisp/test_phase2_caps_and_sandbox.py](../../tests/alisp/test_phase2_caps_and_sandbox.py) (単体・統合テスト)
+- [x] [alisp/caps/__init__.py](../../alisp/caps/__init__.py) (`Capability` 基底クラス, Attenuation ロジック, `with-caps` マクロ)
+- [x] [alisp/caps/fs.py](../../alisp/caps/fs.py) (`FileSystemCapability`, パスプレフィックスホワイトリスト)
+- [x] [alisp/caps/net.py](../../alisp/caps/net.py) (`NetworkCapability`, ホスト/メソッド制限)
+- [x] [alisp/caps/port.py](../../alisp/caps/port.py) (`ManagedPort`, Byte Budget, インメモリ `bytevector-port` ループバック隔離)
+- [x] [alisp/caps/taint.py](../../alisp/caps/taint.py) (`TaintedValue` ラッパー, `untaint` プリミティブ, Sink 遮断)
+- [x] [alisp/metering.py](../../alisp/metering.py) (環境フレーム Cell および Port バッファの世代ロールバック)
+- [x] [tests/alisp/test_phase2_caps_and_sandbox.py](../../tests/alisp/test_phase2_caps_and_sandbox.py) (単体・統合テスト)
 
 ---
 
@@ -53,7 +53,7 @@ Target Branch: `feat/483-implement-alisp-phase2-ocaps-and-managed-port`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `fs-cap` を持たないコードから `open-output-file` の呼び出しが 100% 遮断されること。
-- [ ] 認可パス外へのファイル書き込みがメモリ内バッファへ隔離され、実ファイルシステムが一切変更されないこと。
-- [ ] `with-fuel` 内で状態変更（`set!`）を行った後に意図的に Fuel 枯渇を起こした場合、すべての変数が実行前状態へ巻き戻ること。
-- [ ] `make format`, `make static_analysis`, `make test` が 100% PASS すること。
+- [x] `fs-cap` を持たないコードから `open-output-file` の呼び出しが 100% 遮断されること。
+- [x] 認可パス外へのファイル書き込みがメモリ内バッファへ隔離され、実ファイルシステムが一切変更されないこと。
+- [x] `with-fuel` 内で状態変更（`set!`）を行った後に意図的に Fuel 枯渇を起こした場合、すべての変数が実行前状態へ巻き戻ること。
+- [x] `make format`, `make static_analysis`, `make test` が 100% PASS すること。

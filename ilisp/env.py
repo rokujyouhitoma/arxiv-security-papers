@@ -177,6 +177,10 @@ _current_exception_handler: ContextVar[Optional[Any]] = ContextVar(
 class Environment:
     """Lexical Environment frame with parent scoping chain."""
 
+    _mutation_hook: Optional[Any] = None
+    parent: Optional[Environment]
+    bindings: Dict[Symbol, Any]
+
     def __init__(
         self,
         parent: Optional[Environment] = None,
@@ -230,6 +234,8 @@ class Environment:
                 if isinstance(bound, Cell):
                     bound.set(val)
                 else:
+                    if Environment._mutation_hook is not None:
+                        Environment._mutation_hook(curr, sym, bound)
                     curr.bindings[sym] = val
                 return
             curr = curr.parent

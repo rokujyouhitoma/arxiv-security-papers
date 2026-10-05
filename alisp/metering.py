@@ -1,17 +1,19 @@
 """ALisp Metering Subsystem.
 
 Provides computational step budgeting, hierarchical sub-budgeting,
-and FuelExhaustedException to guarantee bounded autonomy for AI coding agents.
+FuelExhaustedException, and automatic atomic transaction rollback for state mutations.
 """
 
 from __future__ import annotations
 
 import time
 from contextlib import contextmanager
-from typing import Any, Iterator, Optional
+from contextvars import ContextVar
+from typing import Any, Dict, Iterator, Optional, Set, Tuple
 
+from ilisp.env import Environment
 from ilisp.evaluator import _apply_procedure
-from ilisp.types import NIL, Cons, Primitive, Procedure, Symbol, car, cdr, is_pair
+from ilisp.types import NIL, Cell, Cons, Primitive, Procedure, Symbol, car, cdr, is_pair
 
 
 class FuelExhaustedException(BaseException):
@@ -37,6 +39,77 @@ class FuelExhaustedException(BaseException):
 
     def __str__(self) -> str:
         return self.message
+
+
+class Transaction:
+    """Manages transactional state mutations and atomic rollback upon fuel exhaustion."""
+
+    def __init__(self, parent: Optional[Transaction] = None) -> None:
+        self.parent = parent
+        self.cell_snapshots: Dict[int, Tuple[Cell, Any]] = {}
+        self.env_snapshots: Dict[
+            Tuple[int, Symbol], Tuple[Environment, Symbol, Any]
+        ] = {}
+        self.managed_ports: Set[Any] = set()
+
+    def record_cell(self, cell: Cell, old_val: Any) -> None:
+        """Record the initial value of a Cell before its first mutation in this scope."""
+        c_id = id(cell)
+        if c_id not in self.cell_snapshots:
+            self.cell_snapshots[c_id] = (cell, old_val)
+
+    def record_env(self, env: Environment, sym: Symbol, old_val: Any) -> None:
+        """Record the initial binding value in an Environment frame before mutation."""
+        key = (id(env), sym)
+        if key not in self.env_snapshots:
+            self.env_snapshots[key] = (env, sym, old_val)
+
+    def record_port(self, port: Any) -> None:
+        """Track a ManagedPort used during this transaction."""
+        self.managed_ports.add(port)
+
+    def rollback(self) -> None:
+        """Atomic rollback of all recorded mutations to their pre-transaction values."""
+        for cell, initial_val in self.cell_snapshots.values():
+            cell.value = initial_val
+        for env, sym, initial_val in self.env_snapshots.values():
+            env.bindings[sym] = initial_val
+        for port in self.managed_ports:
+            if hasattr(port, "rollback"):
+                port.rollback()
+
+    def merge_into_parent(self) -> None:
+        """Merge committed mutations into parent transaction scope."""
+        if self.parent is not None:
+            for c_id, entry in self.cell_snapshots.items():
+                if c_id not in self.parent.cell_snapshots:
+                    self.parent.cell_snapshots[c_id] = entry
+            for key, entry in self.env_snapshots.items():
+                if key not in self.parent.env_snapshots:
+                    self.parent.env_snapshots[key] = entry
+            self.parent.managed_ports.update(self.managed_ports)
+
+
+_current_transaction: ContextVar[Optional[Transaction]] = ContextVar(
+    "_current_transaction", default=None
+)
+
+
+def _global_cell_mutation_hook(cell: Cell, old_val: Any) -> None:
+    tx = _current_transaction.get()
+    if tx is not None:
+        tx.record_cell(cell, old_val)
+
+
+def _global_env_mutation_hook(env: Environment, sym: Symbol, old_val: Any) -> None:
+    tx = _current_transaction.get()
+    if tx is not None:
+        tx.record_env(env, sym, old_val)
+
+
+# Install global hooks on Cell and Environment
+Cell._mutation_hook = _global_cell_mutation_hook
+Environment._mutation_hook = _global_env_mutation_hook
 
 
 class FuelCounter:
@@ -86,10 +159,11 @@ class FuelCounter:
 
 
 class StepInterceptor:
-    """Manages active fuel counters and provides the step hook for ILisp."""
+    """Manages active fuel counters and transaction scopes, providing DIP step hook for ILisp."""
 
     def __init__(self) -> None:
         self.current_counter: Optional[FuelCounter] = None
+        self.current_transaction: Optional[Transaction] = None
 
     def __call__(self) -> None:
         """Callback invoked by ilisp.evaluator on each evaluation step."""
@@ -102,19 +176,40 @@ class StepInterceptor:
         steps: int,
         timeout_seconds: Optional[float] = None,
     ) -> Iterator[FuelCounter]:
-        """Scoped fuel budget context manager supporting hierarchical sub-budgeting."""
-        parent = self.current_counter
-        effective_steps = min(steps, parent.remaining) if parent is not None else steps
-        child = FuelCounter(
+        """Scoped fuel budget context manager supporting hierarchical sub-budgeting and rollback."""
+        parent_counter = self.current_counter
+        parent_tx = self.current_transaction
+
+        effective_steps = (
+            min(steps, parent_counter.remaining)
+            if parent_counter is not None
+            else steps
+        )
+        child_counter = FuelCounter(
             limit=effective_steps,
-            parent=parent,
+            parent=parent_counter,
             timeout_seconds=timeout_seconds,
         )
-        self.current_counter = child
+        child_tx = Transaction(parent=parent_tx)
+
+        self.current_counter = child_counter
+        self.current_transaction = child_tx
+        token = _current_transaction.set(child_tx)
+
         try:
-            yield child
+            yield child_counter
+        except (FuelExhaustedException, TimeoutError):
+            child_tx.rollback()
+            raise
+        except BaseException:
+            child_tx.rollback()
+            raise
+        else:
+            child_tx.merge_into_parent()
         finally:
-            self.current_counter = parent
+            self.current_counter = parent_counter
+            self.current_transaction = parent_tx
+            _current_transaction.reset(token)
 
 
 class WithFuelTransformer:

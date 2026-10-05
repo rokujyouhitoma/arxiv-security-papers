@@ -112,6 +112,7 @@ class Cell:
     """Mutable box for lexical variables mutated by set!."""
 
     __slots__ = ("value",)
+    _mutation_hook: Optional[Any] = None
 
     def __init__(self, value: Any) -> None:
         self.value: Any = value
@@ -120,6 +121,8 @@ class Cell:
         return self.value
 
     def set(self, new_val: Any) -> Any:
+        if Cell._mutation_hook is not None:
+            Cell._mutation_hook(self, self.value)
         self.value = new_val
         return new_val
 
