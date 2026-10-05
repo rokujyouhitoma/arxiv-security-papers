@@ -18,6 +18,7 @@ from alisp.metering import (
     StepInterceptor,
     WithFuelTransformer,
 )
+from alisp.repl import repl
 
 __version__ = "0.1.0"
 
@@ -25,6 +26,7 @@ __all__ = [
     "ALispEngine",
     "eval_alisp",
     "make_alisp_env",
+    "repl",
     "FuelExhaustedException",
     "FuelCounter",
     "StepInterceptor",

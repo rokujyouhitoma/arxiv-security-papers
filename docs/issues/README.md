@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **486** | ALisp 対話型 REPL (alisp.repl, python -m alisp) および CLI 実行インターフェースの実装 | Feature | 2026-10-05 | [closed/486-implement-alisp-interactive-repl-and-cli.md](closed/486-implement-alisp-interactive-repl-and-cli.md) |
 | **482** | ALisp Phase 1: コア安全プリミティブ (with-fuel, define/c) と ILisp 評価器フック基盤の実装 | Feature | 2026-10-05 | [closed/482-implement-alisp-phase1-core-guard-and-metering.md](closed/482-implement-alisp-phase1-core-guard-and-metering.md) |
 | **481** | Python 相互運用の糖衣構文 (Clojure ライクな記法とドット参照) の実装 | Feature | 2026-10-05 | [closed/481-implement-clojure-style-and-dot-syntax-for-python-interop.md](closed/481-implement-clojure-style-and-dot-syntax-for-python-interop.md) |
 | **480** | Python 側からの ILISP 呼び出し API (ilisp.eval, ilisp.Evaluator, ilisp.interop) の実装 | Feature | 2026-10-05 | [closed/480-implement-python-facing-ilisp-api-and-interop.md](closed/480-implement-python-facing-ilisp-api-and-interop.md) |
