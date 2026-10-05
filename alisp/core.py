@@ -22,7 +22,11 @@ from alisp.caps import (
     untaint,
     with_capabilities,
 )
-from alisp.contracts import DefineContractTransformer, make_contract_assert_primitive
+from alisp.contracts import (
+    DefineContractTransformer,
+    make_arrow_contract_primitive,
+    make_contract_assert_primitive,
+)
 from alisp.contracts.predicates import (
     any_c,
     make_and_c_primitive,
@@ -35,6 +39,12 @@ from alisp.metering import (
     StepInterceptor,
     WithFuelTransformer,
     make_with_fuel_primitive,
+)
+from alisp.repair import (
+    Diagnostic,
+    apply_patch,
+    format_diagnostic,
+    make_patch_primitive,
 )
 from ilisp.env import Environment, make_initial_env
 from ilisp.evaluator import Evaluator
@@ -61,6 +71,7 @@ def make_alisp_env(
     # Register Contract primitives and macros
     env.define(Symbol.intern("%contract-assert"), make_contract_assert_primitive())
     env.define(Symbol.intern("define/c"), DefineContractTransformer())
+    env.define(Symbol.intern("->"), make_arrow_contract_primitive())
 
     # Register Predicate combinators
     env.define(Symbol.intern("and/c"), make_and_c_primitive())
@@ -81,6 +92,9 @@ def make_alisp_env(
     env.define(Symbol.intern("taint"), Primitive("taint", taint))
     env.define(Symbol.intern("tainted?"), Primitive("tainted?", is_tainted))
     env.define(Symbol.intern("untaint"), Primitive("untaint", untaint))
+
+    # Register Self-Repair primitives (Phase 3)
+    env.define(Symbol.intern("patch"), make_patch_primitive())
 
     # Apply sandbox: guard destructive I/O unless permitted by Capability
     if sandbox:
@@ -168,6 +182,22 @@ class ALispEngine:
             return result
         else:
             return self.evaluator.eval(source, self.env)
+
+    def apply_patch(
+        self,
+        ast: Any,
+        patch_spec: Any,
+    ) -> Any:
+        """Apply an atomic CAS patch to an AST using S-Path deterministic selection."""
+        return apply_patch(ast, patch_spec)
+
+    def diagnose(
+        self,
+        exc: Exception,
+        ast: Optional[Any] = None,
+    ) -> Diagnostic:
+        """Generate a structured S-expression diagnostic for an exception."""
+        return format_diagnostic(exc, ast=ast)
 
 
 def eval_alisp(

@@ -88,20 +88,21 @@ def datum_to_syntax(
 ) -> Any:
     """Recursively wrap an S-expression into Syntax objects with initial scopes."""
     sc = set(scopes) if scopes else set()
+    node_loc = loc or getattr(datum, "loc", None)
     if isinstance(datum, Symbol):
-        return Syntax(datum, sc, loc)
+        return Syntax(datum, sc, node_loc)
     elif isinstance(datum, Cons):
-        new_car = datum_to_syntax(datum.car, sc, loc)
-        new_cdr = datum_to_syntax(datum.cdr, sc, loc)
-        return Syntax(Cons(new_car, new_cdr), sc, loc)
+        new_car = datum_to_syntax(datum.car, sc, node_loc)
+        new_cdr = datum_to_syntax(datum.cdr, sc, node_loc)
+        return Syntax(Cons(new_car, new_cdr, loc=datum.loc), sc, node_loc)
     elif isinstance(datum, Vector):
-        new_elems = [datum_to_syntax(e, sc, loc) for e in datum.elements]
-        return Syntax(Vector(new_elems), sc, loc)
+        new_elems = [datum_to_syntax(e, sc, node_loc) for e in datum.elements]
+        return Syntax(Vector(new_elems), sc, node_loc)
     elif isinstance(datum, Syntax):
         return datum
     else:
         # Self-evaluating literals
-        return Syntax(datum, sc, loc)
+        return Syntax(datum, sc, node_loc)
 
 
 def syntax_to_datum(
@@ -331,22 +332,26 @@ def syntax_to_datum(
             return d
         elif isinstance(d, Cons):
             car_val = syntax_to_datum(d.car, use_scope, env, def_env)
+            loc = getattr(d, "loc", None) or getattr(stx, "loc", None)
             if car_val == Symbol.intern("quote"):
-                return Cons(car_val, strip_syntax(d.cdr))
+                return Cons(car_val, strip_syntax(d.cdr), loc=loc)
             return Cons(
                 car_val,
                 syntax_to_datum(d.cdr, use_scope, env, def_env),
+                loc=loc,
             )
         elif isinstance(d, Vector):
             return Vector([strip_syntax(e) for e in d.elements])
         return d
     elif isinstance(stx, Cons):
         car_val = syntax_to_datum(stx.car, use_scope, env, def_env)
+        loc = getattr(stx, "loc", None)
         if car_val == Symbol.intern("quote"):
-            return Cons(car_val, strip_syntax(stx.cdr))
+            return Cons(car_val, strip_syntax(stx.cdr), loc=loc)
         return Cons(
             car_val,
             syntax_to_datum(stx.cdr, use_scope, env, def_env),
+            loc=loc,
         )
     elif isinstance(stx, Vector):
         return Vector([strip_syntax(e) for e in stx.elements])
@@ -420,9 +425,26 @@ class SyntaxRulesTransformer:
                 # Pattern matched! Expand template
                 expanded_stx = self._expand_template(tmpl, bindings, use_scope)
                 # Convert back to standard S-expression
-                return syntax_to_datum(
+                expanded_datum = syntax_to_datum(
                     expanded_stx, use_scope, env=env, def_env=self.def_env
                 )
+                if (
+                    isinstance(expanded_datum, Cons)
+                    and expanded_datum.loc is None
+                    and hasattr(input_form, "loc")
+                ):
+                    expanded_datum.loc = getattr(input_form, "loc", None)
+                try:
+                    from alisp.repair.diagnostic import MacroExpansionRegistry
+
+                    MacroExpansionRegistry.register(
+                        input_form,
+                        expanded_datum,
+                        loc=getattr(input_form, "loc", None),
+                    )
+                except Exception:
+                    pass
+                return expanded_datum
 
         raise SyntaxError(
             f"No matching rule in syntax-rules for macro '{self.name}': {input_form!r}"

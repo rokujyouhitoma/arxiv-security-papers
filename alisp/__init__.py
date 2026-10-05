@@ -32,9 +32,16 @@ from alisp.caps import (
     wrap_managed_port,
 )
 from alisp.contracts import (
+    BlameParty,
+    Contract,
     ContractViolationException,
+    ContractWrappedProcedure,
     DefineContractTransformer,
+    FlatContract,
+    FunctionContract,
     contract_assert,
+    make_arrow_contract_primitive,
+    swap_blame,
 )
 from alisp.contracts.predicates import and_c, any_c, equal_c, none_c, not_c, or_c
 from alisp.core import ALispEngine, eval_alisp, make_alisp_env
@@ -44,6 +51,23 @@ from alisp.metering import (
     StepInterceptor,
     Transaction,
     WithFuelTransformer,
+)
+from alisp.repair import (
+    ASTCursor,
+    CasMismatchError,
+    Diagnostic,
+    MacroExpansionRegistry,
+    PatchSpec,
+    SPath,
+    SPathError,
+    SPathNotFoundError,
+    apply_patch,
+    format_diagnostic,
+    invert_source_location,
+    is_ast_equal,
+    make_patch_primitive,
+    parse_spath,
+    resolve_spath,
 )
 from alisp.repl import repl
 
@@ -93,4 +117,27 @@ __all__ = [
     "get_active_capability",
     "get_active_capabilities",
     "WithCapsTransformer",
+    # Phase 3: Higher-Order Blame & Deterministic S-Path Repair
+    "BlameParty",
+    "Contract",
+    "FlatContract",
+    "FunctionContract",
+    "ContractWrappedProcedure",
+    "make_arrow_contract_primitive",
+    "swap_blame",
+    "SPath",
+    "SPathError",
+    "SPathNotFoundError",
+    "CasMismatchError",
+    "PatchSpec",
+    "apply_patch",
+    "is_ast_equal",
+    "make_patch_primitive",
+    "parse_spath",
+    "resolve_spath",
+    "ASTCursor",
+    "Diagnostic",
+    "format_diagnostic",
+    "invert_source_location",
+    "MacroExpansionRegistry",
 ]

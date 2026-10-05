@@ -8,6 +8,15 @@ from __future__ import annotations
 
 from typing import Any, List, Optional, Tuple
 
+from alisp.contracts.blame import (
+    BlameParty,
+    Contract,
+    ContractWrappedProcedure,
+    FlatContract,
+    FunctionContract,
+    make_arrow_contract_primitive,
+    swap_blame,
+)
 from alisp.contracts.predicates import _call_predicate
 from ilisp.types import (
     NIL,
@@ -88,6 +97,25 @@ def contract_assert(
     blame: str,
 ) -> Any:
     """Evaluate contract predicate on value, raising ContractViolationException on failure."""
+    idx_val: Optional[int] = (
+        arg_idx
+        if (isinstance(arg_idx, int) and not isinstance(arg_idx, bool))
+        else None
+    )
+
+    if isinstance(pred, Contract):
+        pos = BlameParty.from_value(blame)
+        neg = BlameParty(
+            BlameParty.CALLEE if pos.name == BlameParty.CALLER else BlameParty.CALLER
+        )
+        return pred.check(
+            value,
+            positive=pos,
+            negative=neg,
+            fn_name=fn_name,
+            arg_idx=idx_val,
+        )
+
     try:
         ok = _call_predicate(pred, value)
     except ContractViolationException:
@@ -98,11 +126,6 @@ def contract_assert(
     if not ok:
         pred_repr = (
             getattr(pred, "name", None) or getattr(pred, "__name__", None) or str(pred)
-        )
-        idx_val: Optional[int] = (
-            arg_idx
-            if (isinstance(arg_idx, int) and not isinstance(arg_idx, bool))
-            else None
         )
         if blame == ":caller":
             msg = (
@@ -243,7 +266,9 @@ class DefineContractTransformer:
                     ),
                 ),
             )
-            assert_forms.append(call_form)
+            # Rebind parameter with wrapped or asserted value
+            set_form = Cons(Symbol.intern("set!"), Cons(p_sym, Cons(call_form, NIL)))
+            assert_forms.append(set_form)
         return assert_forms
 
     @staticmethod
@@ -313,4 +338,11 @@ __all__ = [
     "contract_assert",
     "make_contract_assert_primitive",
     "DefineContractTransformer",
+    "BlameParty",
+    "Contract",
+    "FlatContract",
+    "FunctionContract",
+    "ContractWrappedProcedure",
+    "make_arrow_contract_primitive",
+    "swap_blame",
 ]

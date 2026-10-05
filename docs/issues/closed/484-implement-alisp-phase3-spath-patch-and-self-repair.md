@@ -2,7 +2,7 @@
 ID: 484
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] ALisp Phase 3: S-Path 決定論的 AST パッチ (patch)・CAS 置換・マクロ展開逆マッピング自己修復基盤の実装 (ID: 484)
@@ -24,11 +24,11 @@ ID: 484
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [alisp/repair/__init__.py](../../alisp/repair/__init__.py) (自己修復プロトコル公開インターフェース)
-- [ ] [alisp/repair/diagnostic.py](../../alisp/repair/diagnostic.py) (S式構造化診断生成器, マクロ展開逆マッピング)
-- [ ] [alisp/repair/patch.py](../../alisp/repair/patch.py) (S-Path パーサ, CAS 置換エンジン)
-- [ ] [alisp/contracts/blame.py](../../alisp/contracts/blame.py) (高階関数 Blame 帰属判定エンジン)
-- [ ] [tests/alisp/test_phase3_repair_and_patch.py](../../tests/alisp/test_phase3_repair_and_patch.py) (単体・統合テスト)
+- [x] [alisp/repair/__init__.py](../../alisp/repair/__init__.py) (自己修復プロトコル公開インターフェース)
+- [x] [alisp/repair/diagnostic.py](../../alisp/repair/diagnostic.py) (S式構造化診断生成器, マクロ展開逆マッピング)
+- [x] [alisp/repair/patch.py](../../alisp/repair/patch.py) (S-Path パーサ, CAS 置換エンジン)
+- [x] [alisp/contracts/blame.py](../../alisp/contracts/blame.py) (高階関数 Blame 帰属判定エンジン)
+- [x] [tests/alisp/test_phase3_repair_and_patch.py](../../tests/alisp/test_phase3_repair_and_patch.py) (単体・統合テスト)
 
 ---
 
@@ -50,7 +50,7 @@ Target Branch: `feat/484-implement-alisp-phase3-spath-patch-and-self-repair`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 同一シグネチャの関数呼び出しが複数存在するコードにおいて、S-Path により指定されたノードのみが正確に置換されること。
-- [ ] `expected-original` が現行コードと不一致の場合、置換が拒絶され CAS エラー診断が返却されること。
-- [ ] マクロ脱糖コードの例外発生時、診断 S 式がマクロ展開前のオリジナルソース行番号と式を提示できること。
-- [ ] `make format`, `make static_analysis`, `make test` が 100% PASS すること。
+- [x] 同一シグネチャの関数呼び出しが複数存在するコードにおいて、S-Path により指定されたノードのみが正確に置換されること。
+- [x] `expected-original` が現行コードと不一致の場合、置換が拒絶され CAS エラー診断が返却されること。
+- [x] マクロ脱糖コードの例外発生時、診断 S 式がマクロ展開前のオリジナルソース行番号と式を提示できること。
+- [x] `make format`, `make static_analysis`, `make test` が 100% PASS すること。
