@@ -1,5 +1,5 @@
 # [DSN-33] ULISP (Underlying LISP) x86-64 ネイティブ AOT コンパイラ包括設計仕様書
-## 〜 Gauche ブートストラップから x86-64 Linux ELF 直結・Tagged Pointer・バンプアロケータ・TCO/フラットクロージャ・ILisp AOT バックエンド統合 〜
+## 〜 ILisp ブートストラップから x86-64 Linux ELF 直結・Tagged Pointer・バンプアロケータ・TCO/フラットクロージャ・ILisp AOT バックエンド統合 〜
 
 - **文書番号**: `DSN-33`
 - **文書ステータス**: `APPROVED`
@@ -57,7 +57,7 @@
 
 本仕様書は、学術論文セキュリティ解析・OKF ナレッジベース構築プラットフォームにおける最下層の実行基盤として、**ULISP (Underlying LISP)** を設計・定義するものである。
 
-ULISP は、Abdulaziz Ghuloum 氏の古典的論文 *"An Incremental Approach to Compiler Construction"* および植山類氏の *compilerbook* によるインクリメンタル TDD 手法を直交統合し、**Gauche（`gosh`）によるブートストラップから開始して x86-64 Linux 向けネイティブアセンブリ（GAS / ELF）を出力する完全独立のセルフホスティングコンパイラ**である。
+ULISP は、Abdulaziz Ghuloum 氏の古典的論文 *"An Incremental Approach to Compiler Construction"* および植山類氏の *compilerbook* によるインクリメンタル TDD 手法を直交統合し、**三位一体のホスト処理系 ILisp（`python3 -m ilisp`）によるブートストラップから開始して x86-64 Linux 向けネイティブアセンブリ（GAS / ELF）を出力する完全独立のセルフホスティングコンパイラ**である。
 
 完成した ULISP は、単なる教育的・スタンドアロンなコンパイラにとどまらず、**[DSN-31 (ILISP)] の「Backend B: Native AOT コンパイラ」の中核コード生成エンジン**として正式に結合され、ILISP/ALisp で記述されたセキュリティ解析パイプライン・推論ロジックを極小・超高速なネイティブ単一バイナリへと AOT コンパイルする役割を担う。
 
@@ -211,7 +211,7 @@ ULisp は 64 ビットアーキテクチャ（x86-64）を前提とし、ポイ�
        ┌─────────────────────────────┘
        ▼
 [Phase 6: 自前リーダー・最小 I/O] ──▶ [Phase 7: セルフホスティング検証]
-  Step 21: read-char, write-char         Step 25: Stage 1 バイナリ生成 (Gauche 経由)
+  Step 21: read-char, write-char         Step 25: Stage 1 バイナリ生成 (ILisp 経由)
   Step 22: 自前 S式 read 実装             Step 26: Stage 2 バイナリ生成 (自前 Stage 1 経由)
   Step 23: 構文脱糖パス (cond, let*)      Step 27: 固定点検証 (Stage 2 vs Stage 3 完全一致)
   Step 24: compiler.scm リファクタリング
@@ -229,17 +229,17 @@ ULisp は 64 ビットアーキテクチャ（x86-64）を前提とし、ポイ�
                 ┌──────────────────────┴──────────────────────┐
                 ▼                                             ▼
        【 Stage 1 ブート 】                          【 Stage 2 生成 】
-gosh compiler.scm compiler.scm > stage1.s     ./scheme-stage1 compiler.scm > stage2.s
-gcc -o scheme-stage1 runtime.c stage1.s       gcc -o scheme-stage2 runtime.c stage2.s
+python3 -m ilisp compiler.scm < compiler.scm > stage1.s   ./scheme-stage1 < compiler.scm > stage2.s
+gcc -o scheme-stage1 runtime.o stage1.s                   gcc -o scheme-stage2 runtime.o stage2.s
                 │                                             │
                 └──────────────────────┬──────────────────────┘
                                        ▼
                              【 Stage 3 生成 ＆ 固定点検証 】
-                      ./scheme-stage2 compiler.scm > stage3.s
-                      diff stage2.s stage3.s  ===> 差分ゼロ (100% 一致)
+                      ./scheme-stage2 < compiler.scm > stage3.s
+                      cmp stage2.s stage3.s  ===> 差分ゼロ (100% 一致)
 ```
 
-1. **Stage 1**: Gauche（既知の安定した Scheme 処理系）上で `compiler.scm` を実行し、自分自身をコンパイルして `stage1.s` を生成。`gcc` でリンクして実行可能バイナリ `scheme-stage1` を作成。
+1. **Stage 1**: ILisp（プロジェクト標準の R7RS 準拠処理系 `python3 -m ilisp`）上で `compiler.scm` を実行し、自分自身をコンパイルして `stage1.s` を生成。`gcc` でリンクして実行可能バイナリ `scheme-stage1` を作成。
 2. **Stage 2**: ネイティブバイナリ `scheme-stage1` を実行し、再度 `compiler.scm` をコンパイルして `stage2.s` を生成。リンクして `scheme-stage2` を作成。
 3. **Stage 3 ＆ 不動点検証 (Fixed-Point Verification)**:
    `scheme-stage2` で `compiler.scm` をコンパイルして `stage3.s` を生成。
@@ -296,7 +296,7 @@ ULisp のセルフホスティング達成後、本コンパイラは **ILisp (D
 ```text
 ulisp/
 ├── Makefile          # compilerbook 準拠のテスト・ビルド自動化
-├── compiler.scm      # ULisp コンパイラ本体 (初期は Gauche スクリプトとして動作)
+├── compiler.scm      # ULisp コンパイラ本体 (ILisp およびネイティブ ULisp 上で動作する自己充足的 Scheme スクリプト)
 ├── runtime.c         # 表示用 printf, 16バイトスタック整列, 128MB バンプアロケータ
 ├── test.sh           # インクリメンタル自動テストランナー
 ├── bootstrap.sh      # 3段階ブートストラップ実行 ＆ diff 検証スクリプト
