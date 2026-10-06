@@ -18,6 +18,7 @@
   - [DSN-25 (Pure-Python Packrat PEG Parser Engine & Bootstrap)](DSN-25-pure_python_packrat_peg_parser_engine.md)
   - [DSN-29 (Python-LISP Integrated Architecture Specification - pylisp)](DSN-29-python_lisp_integrated_architecture_specification.md)
   - [DSN-32 (AILisp Agent Lisp Architecture Specification)](DSN-32-ailisp_agent_lisp_architecture_specification.md)
+  - [DSN-33 (ULisp Underlying x86-64 Native AOT Compiler Architecture Specification)](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **【主査・報告】 IT Specialist (Programming Languages & Compilers / PLC) / Systems Architect (SA)**
 - **【共同主査】 Project Manager (PM) / Software Development (SWD) / Software Quality Assurance Specialist (QA)**
 - **【参画・協調】 16 大専門エージェント全員 (PM, SEC, SA, QA, DBA, NET, NLP, STR, SM, EMB, AUD, DES, EDU, SWD, APS, PLC)**

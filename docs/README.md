@@ -21,7 +21,7 @@
 - 🎯 **[[REQ-03] プロジェクトユースケース台帳 (Project Use Case Ledger)](requirements/REQ-03-use_case_ledger.md)**
   - 6大ペルソナおよび国家サイバー統括室「サイバーセキュリティ人材フレームワーク2026」13役割に対応する全33ユースケース・業務価値創出フローを体系化。
 
-### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-30)
+### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-33)
 
 #### 上位・横断設計
 - 🏗️ **[[DSN-01] 全体高位アーキテクチャ設計書 (HLD)](designs/DSN-01-high_level_design.md)**
@@ -92,6 +92,8 @@
   - `ilisp/` — R7RS-small Scheme準拠・AILisp基盤実行エンジン・Python双方向相互運用（Python Interop）・Native C-AOT デュアルバックエンド・現場復帰型コンディション・3段階自己完結ブートストラップ連鎖（セルフホスティング）。
 - 🤖 **[[DSN-32] AILISP (ALisp + ILisp) 次世代AIコーディングエージェント実行環境包括設計仕様書](designs/DSN-32-ailisp_agent_lisp_architecture_specification.md)**
   - `alisp/`, `ilisp/` — 3大境界制御プリミティブ（`with-fuel`, `with-caps`, `define/c`）・S式構造化自己修復プロトコル（`diagnostic` / `patch`）・Managed Virtual Port・Bounded Autonomy（無暴走・無破壊・超省トークン）保証。
+- ⚡ **[[DSN-33] ULISP (Underlying LISP) x86-64 ネイティブ AOT コンパイラ包括設計仕様書](designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)**
+  - `ulisp/`, `ilisp/backend/ulisp_codegen/` — Gauche ブートストラップから x86-64 Linux ELF 直結・Tagged Pointer・バンプアロケータ・TCO/フラットクロージャ・ILisp AOT バックエンド統合・3段階セルフホスティング。
 
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)

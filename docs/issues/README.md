@@ -4,7 +4,9 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-*現在、オープンな Issue はありません。*
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| - | *(現在進行中・未着手の Issue はありません)* | - | - | - | - |
 
 ---
 
@@ -12,6 +14,13 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **493** | ULisp Phase 7: 3段階セルフホスティングブートストラップ連鎖と不動点検証 (diff stage2.s stage3.s == 0) の実装 | Feature | 2026-10-07 | [closed/493-implement-ulisp-phase7-self-hosting-bootstrap-and-fixed-point.md](closed/493-implement-ulisp-phase7-self-hosting-bootstrap-and-fixed-point.md) |
+| **492** | ULisp Phase 6: 自前パーサ (read)・最小 I/O・ポートプリミティブおよび構文脱糖 (cond, let*) の実装 | Feature | 2026-10-06 | [closed/492-implement-ulisp-phase6-reader-io-and-desugar.md](closed/492-implement-ulisp-phase6-reader-io-and-desugar.md) |
+| **491** | ULisp Phase 5: 手続き呼び出し・末尾呼び出し最適化 (TCO)・第一級関数とフラットクロージャの実装 | Feature | 2026-10-06 | [closed/491-implement-ulisp-phase5-procedures-tco-and-closures.md](closed/491-implement-ulisp-phase5-procedures-tco-and-closures.md) |
+| **490** | ULisp Phase 4: バンプアロケータ・リスト (cons, car, cdr, pair?)・破壊的代入・quote 構文の実装 | Feature | 2026-10-06 | [closed/490-implement-ulisp-phase4-heap-memory-and-data-structures.md](closed/490-implement-ulisp-phase4-heap-memory-and-data-structures.md) |
+| **489** | ULisp Phase 3: 条件分岐 (if)・論理脱糖 (and, or, not)・複文 (begin) の実装 | Feature | 2026-10-06 | [closed/489-implement-ulisp-phase3-conditionals-and-control-flow.md](closed/489-implement-ulisp-phase3-conditionals-and-control-flow.md) |
+| **488** | ULisp Phase 2: スタック管理・二項演算 (+, -, *)・局所変数 (let) の実装 | Feature | 2026-10-06 | [closed/488-implement-ulisp-phase2-stack-and-local-variables.md](closed/488-implement-ulisp-phase2-stack-and-local-variables.md) |
+| **487** | ULisp x86-64 ネイティブ AOT コンパイラ基盤構築と Phase 1 (即値・単項演算) の実装 | Feature | 2026-10-06 | [closed/487-initialize-ulisp-x86-native-aot-compiler-phase1.md](closed/487-initialize-ulisp-x86-native-aot-compiler-phase1.md) |
 | **485** | ALisp Phase 4: Python FFI 物理的完全性 (SafePyProxy)・リソース制限・監査テレメトリ統合の実装 | Feature | 2026-10-06 | [closed/485-implement-alisp-phase4-safe-py-proxy-and-integration.md](closed/485-implement-alisp-phase4-safe-py-proxy-and-integration.md) |
 | **484** | ALisp Phase 3: S-Path 決定論的 AST パッチ (patch)・CAS 置換・マクロ展開逆マッピング自己修復基盤の実装 | Feature | 2026-10-06 | [closed/484-implement-alisp-phase3-spath-patch-and-self-repair.md](closed/484-implement-alisp-phase3-spath-patch-and-self-repair.md) |
 | **483** | ALisp Phase 2: Object-Capability (with-caps)・Managed Virtual Port・状態ロールバック基盤の実装 | Feature | 2026-10-05 | [closed/483-implement-alisp-phase2-ocaps-and-managed-port.md](closed/483-implement-alisp-phase2-ocaps-and-managed-port.md) |

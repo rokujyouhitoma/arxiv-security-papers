@@ -644,6 +644,16 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             )
         port_mod.write_string(s, port=port, start=start, end=end)
 
+    def prim_escape_gas_string(s: Any) -> str:
+        s_str = str(s)
+        return (
+            s_str.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+            .replace("\r", "\\r")
+        )
+
     def prim_read_bytevector(k: int, *args: Any) -> Any:
         port = args[0] if args else None
         return port_mod.read_bytevector(k, port)
@@ -1893,6 +1903,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "char-ready?": prim_char_ready_p,
         "write-char": prim_write_char,
         "write-string": prim_write_string,
+        "escape-gas-string": prim_escape_gas_string,
         "newline": prim_newline,
         "flush-output-port": prim_flush_output_port,
         "display": prim_display,
