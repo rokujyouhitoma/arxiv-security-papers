@@ -12,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **495** | ILisp と ULisp の公式 Native AOT バックエンド統合 (ilisp/backend/ulisp_codegen/) と ELF 生成パイプラインの実装 | Feature | 2026-10-08 | [closed/495-implement-ilisp-backend-ulisp-codegen.md](closed/495-implement-ilisp-backend-ulisp-codegen.md) |
 | **494** | ULisp 標準ライブラリ (lib/) の独立分離と極小 C ランタイム (Thin Debug Runtime) への刷新 | Feature | 2026-10-08 | [closed/494-modularize-ulisp-stdlib-and-minimal-c-runtime.md](closed/494-modularize-ulisp-stdlib-and-minimal-c-runtime.md) |
 | **493** | ULisp Phase 7: 3段階セルフホスティングブートストラップ連鎖と不動点検証 (diff stage2.s stage3.s == 0) の実装 | Feature | 2026-10-07 | [closed/493-implement-ulisp-phase7-self-hosting-bootstrap-and-fixed-point.md](closed/493-implement-ulisp-phase7-self-hosting-bootstrap-and-fixed-point.md) |
 | **492** | ULisp Phase 6: 自前パーサ (read)・最小 I/O・ポートプリミティブおよび構文脱糖 (cond, let*) の実装 | Feature | 2026-10-06 | [closed/492-implement-ulisp-phase6-reader-io-and-desugar.md](closed/492-implement-ulisp-phase6-reader-io-and-desugar.md) |

@@ -31,6 +31,19 @@ def run_string(
 
         return compile_ilisp(code, env=env, filename=filename)
 
+    if backend in {"native", "ulisp"}:
+        import tempfile
+
+        from ilisp.backend.ulisp_codegen.compiler import compile_to_elf, run_elf
+
+        with tempfile.TemporaryDirectory(prefix="ilisp_native_") as tmpdir:
+            bin_path = f"{tmpdir}/tmp_exec"
+            compile_to_elf(code, bin_path)
+            proc = run_elf(bin_path)
+            if proc.returncode != 0:
+                print(proc.stderr, file=sys.stderr)
+            return proc.stdout.rstrip()
+
     expressions = read_all(code, filename=filename)
     result: Any = NIL
     for expr in expressions:
@@ -110,12 +123,66 @@ def main() -> None:
     parser.add_argument("-e", "--eval", help="Evaluate ILISP expression string")
     parser.add_argument(
         "--backend",
-        choices=["interp", "py_ast"],
+        choices=["interp", "py_ast", "native", "ulisp"],
         default="interp",
-        help="Execution backend: 'interp' (tree-walk + trampoline) or 'py_ast' (Python AST transpiler)",
+        help=(
+            "Execution backend: 'interp' (tree-walk), "
+            "'py_ast' (Python AST transpiler), or 'native'/'ulisp' (x86-64 Native AOT)"
+        ),
+    )
+    parser.add_argument(
+        "-c",
+        "--compile",
+        action="store_true",
+        help="Compile source file or -e expression to standalone native ELF executable",
+    )
+    parser.add_argument(
+        "-S",
+        "--assembly-only",
+        action="store_true",
+        help="Emit x86-64 GAS assembly code",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        help="Output binary/assembly file path (default: <stem> or a.out)",
     )
 
     args = parser.parse_args()
+
+    if args.compile or args.assembly_only:
+        from pathlib import Path
+
+        from ilisp.backend.ulisp_codegen.compiler import (
+            compile_to_assembly,
+            compile_to_elf,
+        )
+
+        if not args.file and not args.eval:
+            parser.error("Compilation requires an input file or -e expression")
+
+        if args.eval:
+            code_content = args.eval
+            default_out = "a.out"
+        else:
+            with open(args.file, "r", encoding="utf-8") as f:
+                code_content = f.read()
+            default_out = Path(args.file).stem
+
+        if args.assembly_only:
+            out_s = args.output
+            asm = compile_to_assembly(code_content)
+            if out_s:
+                Path(out_s).write_text(asm, encoding="utf-8")
+                print(f"Assembly written to: {out_s}")
+            else:
+                sys.stdout.write(asm)
+            sys.exit(0)
+
+        out_bin = args.output or default_out
+        target_path = compile_to_elf(code_content, out_bin)
+        print(f"Compiled native ELF binary: {target_path}")
+        sys.exit(0)
 
     env = make_initial_env()
 
@@ -128,7 +195,9 @@ def main() -> None:
         sys.exit(0)
 
     if args.file:
-        run_file(args.file, env=env, backend=args.backend)
+        res = run_file(args.file, env=env, backend=args.backend)
+        if args.backend in {"native", "ulisp"} and res:
+            print(res)
         sys.exit(0)
 
     repl(env=env)
