@@ -54,6 +54,18 @@
       '()
       (cons (f (car ls)) (map f (cdr ls)))))
 
+(define (for-each proc ls)
+  (if (not (null? ls))
+      (begin
+        (proc (car ls))
+        (for-each proc (cdr ls)))))
+
+(define (filter pred ls)
+  (cond
+    ((null? ls) '())
+    ((pred (car ls)) (cons (car ls) (filter pred (cdr ls))))
+    (else (filter pred (cdr ls)))))
+
 (define (error msg val)
   (display msg)
   (display " ")
@@ -67,6 +79,15 @@
   (let ((s (string->symbol (string-append prefix (number->string (car *symbol-counter*))))))
     (set-car! *symbol-counter* (+ (car *symbol-counter*) 1))
     s))
+
+;;; Deterministic label counter for assembly and lifted function labels
+(define *label-counter* (cons 0 '()))
+(define (unique-label prefix)
+  (let ((l (string-append "." prefix "_" (number->string (car *label-counter*)))))
+    (set-car! *label-counter* (+ (car *label-counter*) 1))
+    l))
+(define (unique-label-sym prefix)
+  (string->symbol (unique-label prefix)))
 
 ;;; Set operations for variable scope analysis
 (define (set-diff s1 s2)
@@ -102,10 +123,13 @@
              make-string string-length)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?)))
+  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=? %closure-ref)))
 
 (define (triop-prim? op)
-  (memq op '(string-set!)))
+  (memq op '(string-set! %closure-set!)))
+
+(define (closure-prim? op)
+  (memq op '(%make-closure %closure-ref %closure-set!)))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 1: Syntax Desugaring & Normalization Pass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -311,6 +335,10 @@
                  (body (caddr expr))
                  (new-bound (set-union params bound)))
             (free-vars body new-bound)))
+         ((%make-closure)
+          (let loop ((es (cddr expr)) (acc '()))
+            (if (null? es) acc
+                (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
          (else
           (cond
             ((zero-arg-prim? op) '())
@@ -324,16 +352,191 @@
                    (loop (cdr es) (set-union acc (free-vars (car es) bound)))))))))))
     (else '())))
 ;;; =======================================================================
-;;; ULisp Compiler Pass 3: Low-Level Assembly Emitter & Symbol/String Tables
+;;; ULisp Compiler Pass 3: Explicit Closure Conversion Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
+;;; Note: Lifts nested lambdas to flat %function definitions, transforms
+;;;       closure instantiation to %make-closure, free variable accesses
+;;;       to %closure-ref, and mutual recursion (letrec) to %closure-set!.
 ;;; =======================================================================
 
-;;; Boxed global counters and tables for closure sharing
-(define *label-counter* (cons 0 '()))
-(define (unique-label prefix)
-  (let ((l (string-append "." prefix "_" (number->string (car *label-counter*)))))
-    (set-car! *label-counter* (+ (car *label-counter*) 1))
-    l))
+;;; Boxed global accumulator for lambda-lifted procedure definitions
+(define *lifted-functions* (cons '() '()))
+
+(define (reset-lifted-functions!)
+  (set-car! *lifted-functions* '()))
+
+(define (add-lifted-function! fn)
+  (set-car! *lifted-functions* (cons fn (car *lifted-functions*))))
+
+;;; Variable environment lookup (linear alist, latest bindings shadow older ones)
+(define (lookup-var var var-map)
+  (let ((entry (assq var var-map)))
+    (if entry (cdr entry) var)))
+
+;;; Forward declarations / helpers for mutual recursion in closure conversion
+(define (convert-expr expr var-map)
+  (cond
+    ((symbol? expr)
+     (lookup-var expr var-map))
+    ((not (pair? expr))
+     expr)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote)
+          (let ((datum (cadr expr)))
+            (cond
+              ((symbol? datum)
+               (convert-expr (list 'string->symbol (symbol->string datum)) var-map))
+              ((and (pair? datum) (has-symbol? datum))
+               (convert-expr (list 'cons
+                                   (list 'quote (car datum))
+                                   (list 'quote (cdr datum)))
+                             var-map))
+              (else
+               expr))))
+         ((if)
+          (let ((test (convert-expr (cadr expr) var-map))
+                (then (convert-expr (caddr expr) var-map))
+                (else-expr (if (null? (cdddr expr))
+                               #f
+                               (convert-expr (cadddr expr) var-map))))
+            (list 'if test then else-expr)))
+         ((begin)
+          (cons 'begin (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+         ((let)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr))
+                 (new-bindings
+                  (map (lambda (b)
+                         (list (car b) (convert-expr (cadr b) var-map)))
+                       bindings))
+                 ;; Shadow let-bound variables in body by pushing identity mappings
+                 (body-var-map
+                  (let loop ((bs bindings) (acc var-map))
+                    (if (null? bs) acc
+                        (let ((v (caar bs)))
+                          (loop (cdr bs) (cons (cons v v) acc))))))
+                 (new-body (convert-expr body body-var-map)))
+            (list 'let new-bindings new-body)))
+         ((letrec)
+          (convert-letrec (cadr expr) (caddr expr) var-map))
+         ((lambda)
+          (convert-lambda #f (cadr expr) (caddr expr) var-map))
+         (else
+          (cons (convert-expr op var-map)
+                (map (lambda (e) (convert-expr e var-map)) (cdr expr)))))))))
+
+;;; Convert a lambda expression, lift it as a top-level %function, and return %make-closure
+(define (convert-lambda self-name params body var-map)
+  (let* ((bound-vars (if self-name (cons self-name params) params))
+         (frees (free-vars body bound-vars))
+         (label (unique-label-sym "L_lambda"))
+         ;; Build callee inner var-map:
+         ;; 1. Params shadow outer bindings (map to themselves)
+         (env-p (let loop ((ps params) (acc '()))
+                  (if (null? ps) acc
+                      (loop (cdr ps) (cons (cons (car ps) (car ps)) acc)))))
+         ;; 2. Self name (if recursive) maps to %self
+         (env-s (if self-name
+                    (cons (cons self-name '%self) env-p)
+                    env-p))
+         ;; 3. Free variables map to (%closure-ref %self idx)
+         (inner-var-map
+          (let loop ((fs frees) (idx 1) (acc env-s))
+            (if (null? fs)
+                acc
+                (let ((fv (car fs)))
+                  (loop (cdr fs) (+ idx 1)
+                        (cons (cons fv (list '%closure-ref '%self idx)) acc))))))
+         (new-body (convert-expr body inner-var-map))
+         (fn-def (list '%function label params new-body)))
+    (add-lifted-function! fn-def)
+    ;; Instantiation expression: (%make-closure 'label captured-args...)
+    (let ((captured-args
+           (map (lambda (fv) (convert-expr fv var-map)) frees)))
+      (cons '%make-closure (cons label captured-args)))))
+
+;;; Convert letrec expression into let + %make-closure + backpatching %closure-set!
+(define (convert-letrec bindings body var-map)
+  (let* ((rec-vars (map car* bindings))
+         ;; Shadow rec-vars in outer-var-map by binding them to themselves
+         (outer-var-map
+          (let loop ((rvs rec-vars) (acc var-map))
+            (if (null? rvs) acc
+                (loop (cdr rvs) (cons (cons (car rvs) (car rvs)) acc)))))
+         (processed-bindings
+          (map (lambda (b)
+                 (let ((var (car b))
+                       (val (cadr b)))
+                   (if (and (pair? val) (eq? (car val) 'lambda))
+                       (let* ((params (cadr val))
+                              (lbody (caddr val))
+                              (bound (cons var params))
+                              (frees (free-vars lbody bound))
+                              (label (unique-label-sym "L_lambda"))
+                              ;; Callee inner environment:
+                              ;; Params map to themselves
+                              (env-p (let loop ((ps params) (acc '()))
+                                       (if (null? ps) acc
+                                           (loop (cdr ps) (cons (cons (car ps) (car ps)) acc)))))
+                              ;; Self-name maps to %self
+                              (env-s (cons (cons var '%self) env-p))
+                              ;; Free variables map to (%closure-ref %self idx)
+                              (inner-var-map
+                               (let loop ((fs frees) (idx 1) (acc env-s))
+                                 (if (null? fs) acc
+                                     (let ((fv (car fs)))
+                                       (loop (cdr fs) (+ idx 1)
+                                             (cons (cons fv (list '%closure-ref '%self idx)) acc))))))
+                              (new-lbody (convert-expr lbody inner-var-map))
+                              (fn-def (list '%function label params new-lbody)))
+                         (add-lifted-function! fn-def)
+                         (let ((init-args
+                                (map (lambda (fv)
+                                       (if (memq fv rec-vars)
+                                           #f
+                                           (convert-expr fv outer-var-map)))
+                                     frees)))
+                           (list var
+                                 (cons '%make-closure (cons label init-args))
+                                 frees)))
+                       (list var (convert-expr val outer-var-map) '()))))
+               bindings))
+         (let-bindings
+          (map (lambda (pb) (list (car pb) (cadr pb))) processed-bindings))
+         (backpatches
+          (let loop-b ((pbs processed-bindings) (acc '()))
+            (if (null? pbs)
+                (reverse acc)
+                (let* ((pb (car pbs))
+                       (var (car pb))
+                       (frees (caddr pb))
+                       (patches
+                        (let loop-f ((fs frees) (idx 1) (p-acc '()))
+                          (if (null? fs)
+                              (reverse p-acc)
+                              (let ((fv (car fs)))
+                                (if (memq fv rec-vars)
+                                    (loop-f (cdr fs) (+ idx 1)
+                                            (cons (list '%closure-set! var idx fv) p-acc))
+                                    (loop-f (cdr fs) (+ idx 1) p-acc)))))))
+                  (loop-b (cdr pbs) (append (reverse patches) acc))))))
+         (new-body (convert-expr body outer-var-map)))
+    (if (null? backpatches)
+        (list 'let let-bindings new-body)
+        (list 'let let-bindings
+              (cons 'begin (append backpatches (list new-body)))))))
+
+;;; Pass 3 Entrypoint: Takes Canonical Core AST, returns (%program functions main-expr)
+(define (closure-convert ast)
+  (reset-lifted-functions!)
+  (let ((main-expr (convert-expr ast '())))
+    (list '%program (reverse (car *lifted-functions*)) main-expr)))
+;;; =======================================================================
+;;; ULisp Compiler Pass 4: Low-Level Assembly Emitter & Symbol/String Tables
+;;; Conforms to DSN-33 Architecture Specification
+;;; =======================================================================
 
 (define *symbol-table* (cons '() '()))
 (define (intern-symbol sym)
@@ -355,9 +558,6 @@
 (define (emit-string-literal str)
   (let ((label (intern-string str)))
     (emit (string-append "    lea rax, [rip + " label " + 3]"))))
-
-;;; Accumulated compiled lambda code blocks (boxed list)
-(define *lambdas* (cons '() '()))
 
 (define (emit line)
   (display line)
@@ -382,8 +582,10 @@
       needed
       (+ needed 8)))
 ;;; =======================================================================
-;;; ULisp Compiler Pass 4: Native x86-64 Code Generation Pass
+;;; ULisp Compiler Pass 5: Native x86-64 Code Generation Pass
 ;;; Conforms to DSN-33 Architecture Specification
+;;; Note: Codegen is purely a straightforward instruction emitter for flat
+;;;       %function definitions and canonical primitive expressions.
 ;;; =======================================================================
 
 (define (immediate? expr)
@@ -588,7 +790,12 @@
      (emit "    mov rax, 0x3F"))
     ((eq? char=?)
      (emit (string-append "    cmp [rsp " (offset->string si) "], rax"))
-     (emit-boolean))))
+     (emit-boolean))
+    ((%closure-ref)
+     (let ((idx e2))
+       (let ((offset (- (* idx 8) 1)))
+         (emit (string-append "    mov rax, [rsp " (offset->string si) "]"))
+         (emit (string-append "    mov rax, [rax + " (number->string offset) "]")))))))
 
 (define (compile-triop op e1 e2 e3 si env)
   (compile-expr e1 si env #f)
@@ -604,64 +811,67 @@
      (emit (string-append "    mov rcx, [rsp " (offset->string (- si 8)) "]"))
      (emit "    sar rcx, 2")
      (emit "    mov [rdx + rcx], al")
-     (emit "    mov rax, 0x3F"))))
+     (emit "    mov rax, 0x3F"))
+    ((%closure-set!)
+     (let ((idx-offset (- (* e2 8) 1)))
+       (emit (string-append "    mov rdx, [rsp " (offset->string si) "]"))
+       (emit (string-append "    mov [rdx + " (number->string idx-offset) "], rax"))
+       (emit "    mov rax, 0x3F")))))
 
-(define (compile-lambda-named name params body si env)
-  (let* ((label (unique-label "L_lambda"))
-         (bound-vars (if name (cons name params) params))
-         (frees (free-vars body bound-vars))
-         (num-frees (length frees))
-         (num-params (length params))
-         (closure-size (* (+ num-frees 1) 8))
+(define (compile-make-closure expr si env)
+  (let* ((label-arg (cadr expr))
+         (label-str (if (and (pair? label-arg) (eq? (car label-arg) 'quote))
+                        (symbol->string (cadr label-arg))
+                        (if (symbol? label-arg)
+                            (symbol->string label-arg)
+                            (error "Invalid closure label:" label-arg))))
+         (args (cddr expr))
+         (num-args (length args))
+         (closure-size (* (+ num-args 1) 8))
          (aligned-size (if (= (modulo closure-size 16) 0) closure-size (+ closure-size 8))))
-    ;; 1. Compile and save lambda procedure body into *lambdas*
-    (set-car! *lambdas*
-              (cons (lambda ()
-                      (emit "    .p2align 3")
-                      (emit (string-append label ":"))
-                      ;; Callee prologue: self closure pointer was in r10
-                      ;; Store self closure pointer at [rsp - 8]
-                      (let ((self-offset -8))
-                        (emit "    mov [rsp - 8], r10")
-                        ;; Build callee env:
-                        ;; params at [rsp + 8 * (num-params - i)] for i = 0..(num-params - 1)
-                        (let* ((param-env
-                                (let loop ((ps params) (i 0) (acc '()))
-                                  (if (null? ps) acc
-                                      (let ((offset (* 8 (- num-params i))))
-                                        (loop (cdr ps) (+ i 1)
-                                              (cons (cons (car ps) (cons 'param offset)) acc))))))
-                               ;; free vars accessed via self closure saved at [rsp - 8]
-                               (free-env
-                                (let loop ((fs frees) (f-idx 1) (acc '()))
-                                  (if (null? fs) acc
-                                      (loop (cdr fs) (+ f-idx 1)
-                                            (cons (cons (car fs) (cons 'free (cons self-offset (* f-idx 8)))) acc)))))
-                               (self-binding (if name (list (cons name (cons 'self self-offset))) '()))
-                               (callee-env (cons (cons '%num-params num-params)
-                                                 (append self-binding (append param-env free-env))))
-                               (callee-si -16))
-                          (compile-expr body callee-si callee-env #t)
-                          (emit "    ret"))))
-                    (car *lambdas*)))
-
+    ;; 1. Evaluate arguments sequentially and place into temporary stack slots
+    (let loop ((as args) (curr-si si))
+      (if (not (null? as))
+          (begin
+            (compile-expr (car as) curr-si env #f)
+            (emit (string-append "    mov [rsp " (offset->string curr-si) "], rax"))
+            (loop (cdr as) (- curr-si 8)))))
     ;; 2. Allocate closure on heap at runtime (r12)
     ;; Store code pointer label into [r12]
-    (emit (string-append "    lea rax, [rip + " label "]"))
+    (emit (string-append "    lea rax, [rip + " label-str "]"))
     (emit "    mov [r12], rax")
-    ;; Store captured free variables into [r12 + 8 * i]
-    (let loop ((fs frees) (idx 1))
-      (if (not (null? fs))
-          (let ((f (car fs)))
-            (compile-variable f env)
-            (emit (string-append "    mov [r12 + " (number->string (* idx 8)) "], rax"))
-            (loop (cdr fs) (+ idx 1)))))
-    ;; Tag closure pointer with 0x01 (Heap object)
+    ;; 3. Copy captured arguments from stack to heap [r12 + 8 * i]
+    (let loop ((i 1) (curr-si si))
+      (if (<= i num-args)
+          (begin
+            (emit (string-append "    mov rax, [rsp " (offset->string curr-si) "]"))
+            (emit (string-append "    mov [r12 + " (number->string (* i 8)) "], rax"))
+            (loop (+ i 1) (- curr-si 8)))))
+    ;; 4. Tag closure pointer with 0x01 (Heap object tag)
     (emit "    lea rax, [r12 + 1]")
     (emit (string-append "    add r12, " (number->string aligned-size)))))
 
-(define (compile-lambda params body si env)
-  (compile-lambda-named #f params body si env))
+(define (compile-closure-ref-expr expr si env)
+  (let ((c-expr (cadr expr))
+        (idx (caddr expr)))
+    (compile-expr c-expr si env #f)
+    (let ((offset (- (* idx 8) 1)))
+      (emit (string-append "    mov rax, [rax + " (number->string offset) "]")))))
+
+(define (compile-closure-set-expr expr si env)
+  (let ((c-expr (cadr expr))
+        (idx (caddr expr))
+        (val-expr (cadddr expr)))
+    ;; 1. Evaluate closure expression -> stack
+    (compile-expr c-expr si env #f)
+    (emit (string-append "    mov [rsp " (offset->string si) "], rax"))
+    ;; 2. Evaluate val-expr -> rax
+    (compile-expr val-expr (- si 8) env #f)
+    ;; 3. Store into closure heap slot
+    (let ((offset (- (* idx 8) 1)))
+      (emit (string-append "    mov rdx, [rsp " (offset->string si) "]"))
+      (emit (string-append "    mov [rdx + " (number->string offset) "], rax"))
+      (emit "    mov rax, 0x3F"))))
 
 (define (compile-variable var env)
   (let ((binding (assq var env)))
@@ -678,12 +888,6 @@
             ((and (pair? info) (eq? (car info) 'self))
              ;; Self closure reference in recursion
              (emit (string-append "    mov rax, [rsp " (offset->string (cdr info)) "]")))
-            ((and (pair? info) (eq? (car info) 'free))
-             ;; Free variable accessed via self-closure slot on stack
-             (let ((self-offset (cadr info))
-                   (free-idx (cddr info)))
-                (emit (string-append "    mov rdx, [rsp " (offset->string self-offset) "]"))
-                (emit (string-append "    mov rax, [rdx + " (number->string (- free-idx 1)) "]"))))
             (else
              (error "Invalid binding format:" binding)))))))
 
@@ -701,55 +905,6 @@
           (loop (cdr bs)
                 (- curr-si 8)
                 (cons (cons var curr-si) new-env))))))
-
-(define (compile-letrec bindings body si env tail?)
-  (let* ((vars (map car* bindings))
-         (slots (let loop ((vs vars) (curr-si si) (acc '()))
-                  (if (null? vs) acc
-                      (loop (cdr vs) (- curr-si 8)
-                            (cons (cons (car vs) curr-si) acc)))))
-         (extended-env (append slots env))
-         (end-si (- si (* (length vars) 8))))
-    ;; 1. Evaluate and store each closure into its stack slot
-    (let loop ((bs bindings))
-      (if (not (null? bs))
-          (let* ((b (car bs))
-                 (var (car b))
-                 (val (cadr b))
-                 (slot (cdr (assq var extended-env))))
-            (if (and (pair? val) (eq? (car val) 'lambda))
-                ;; Named lambda for recursion
-                (compile-lambda-named var (cadr val) (make-body-expr (cddr val)) end-si extended-env)
-                (compile-expr val end-si extended-env #f))
-            (emit (string-append "    mov [rsp " (offset->string slot) "], rax"))
-            (loop (cdr bs)))))
-    ;; 2. Backpatch mutual references between closures on the heap!
-    (let loop-b ((bs bindings))
-      (if (not (null? bs))
-          (let* ((b (car bs))
-                 (var (car b))
-                 (val (cadr b))
-                 (c-slot (cdr (assq var extended-env))))
-            (if (and (pair? val) (eq? (car val) 'lambda))
-                (let* ((params (cadr val))
-                       (lbody (make-body-expr (cddr val)))
-                       (frees (free-vars lbody (cons var params))))
-                  ;; Check each free variable of this lambda
-                  (let loop-f ((fs frees) (idx 1))
-                    (if (not (null? fs))
-                        (let* ((f (car fs))
-                               (target-entry (assq f slots)))
-                          (if target-entry
-                              ;; f is one of the letrec-bound variables!
-                              (let ((target-slot (cdr target-entry))
-                                    (heap-offset (- (* idx 8) 1)))
-                                (emit (string-append "    mov rax, [rsp " (offset->string target-slot) "]"))
-                                (emit (string-append "    mov rdx, [rsp " (offset->string c-slot) "]"))
-                                (emit (string-append "    mov [rdx + " (number->string heap-offset) "], rax"))))
-                          (loop-f (cdr fs) (+ idx 1)))))))
-            (loop-b (cdr bs)))))
-    ;; 3. Compile body
-    (compile-expr body end-si extended-env tail?)))
 
 (define (compile-if test then else-opt si env tail?)
   (let ((else-label (unique-label "L_else"))
@@ -779,15 +934,13 @@
   (cond
     ((immediate? datum)
      (emit-immediate datum))
-    ((symbol? datum)
-     (compile-expr (list 'string->symbol (symbol->string datum)) si env #f))
     ((pair? datum)
      (compile-expr (list 'cons
                          (list 'quote (car datum))
                          (list 'quote (cdr datum)))
                    si env #f))
     (else
-     (error "Unknown quoted datum:" datum))))
+     (error "Invalid quoted datum in codegen:" datum))))
 
 ;;; General Procedure Call (Tail Call vs Non-tail Call)
 (define (compile-call proc args si env tail?)
@@ -858,12 +1011,14 @@
           (compile-binop op (cadr expr) (caddr expr) si env))
          ((triop-prim? op)
           (compile-triop op (cadr expr) (caddr expr) (cadddr expr) si env))
+         ((eq? op '%make-closure)
+          (compile-make-closure expr si env))
+         ((eq? op '%closure-ref)
+          (compile-closure-ref-expr expr si env))
+         ((eq? op '%closure-set!)
+          (compile-closure-set-expr expr si env))
          ((eq? op 'let)
           (compile-let (cadr expr) (caddr expr) si env tail?))
-         ((eq? op 'letrec)
-          (compile-letrec (cadr expr) (caddr expr) si env tail?))
-         ((eq? op 'lambda)
-          (compile-lambda (cadr expr) (caddr expr) si env))
          ((eq? op 'if)
           (compile-if (cadr expr) (caddr expr) (cdddr expr) si env tail?))
          ((eq? op 'begin)
@@ -876,46 +1031,70 @@
     (else
      (error "Invalid syntax:" expr))))
 
-(define (compile-program expr)
-  (set-car! *label-counter* 0)
-  (set-car! *symbol-counter* 0)
-  (set-car! *symbol-table* '())
-  (set-car! *string-counter* 0)
-  (set-car! *strings* '())
-  (set-car! *lambdas* '())
-  (emit "    .intel_syntax noprefix")
-  (emit "    .text")
-  (emit "    .globl scheme_entry")
-  (emit "    .type scheme_entry, @function")
-  (emit "scheme_entry:")
-  (emit "    push r12")
-  (emit "    sub rsp, 8")
-  (emit "    mov r12, rdi")          ; rdi contains heap_base from C runtime
-  (compile-expr expr -8 '() #f)
-  (emit "    add rsp, 8")
-  (emit "    pop r12")
-  (emit "    ret")
-  ;; Emit all compiled lambda procedures (including nested ones)
-  (let loop ()
-    (if (not (null? (car *lambdas*)))
-        (let ((fn (car (car *lambdas*))))
-          (set-car! *lambdas* (cdr (car *lambdas*)))
-          (fn)
-          (loop))))
-  ;; Emit all string literals in .rodata section
-  (if (not (null? (car *strings*)))
-      (begin
-        (emit "    .section .rodata")
-        (let loop ((ss (reverse (car *strings*))))
-          (if (not (null? ss))
-              (let ((entry (car ss)))
-                (emit "    .p2align 3")
-                (emit (string-append (car entry) ":"))
-                (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
-                (loop (cdr ss)))))))
-  (emit "    .section .note.GNU-stack,\"\",@progbits"))
+;;; Compiles a single lifted %function definition
+(define (compile-function fn)
+  (let* ((label (cadr fn))
+         (label-str (if (symbol? label) (symbol->string label) label))
+         (params (caddr fn))
+         (body (cadddr fn))
+         (num-params (length params)))
+    (emit "    .p2align 3")
+    (emit (string-append label-str ":"))
+    ;; Callee prologue: self closure pointer was in r10
+    ;; Store self closure pointer at [rsp - 8]
+    (emit "    mov [rsp - 8], r10")
+    ;; Build callee env:
+    ;; %self at [rsp - 8]
+    ;; params at [rsp + 8 * (num-params - i)]
+    (let* ((self-env (list (cons '%self (cons 'self -8))))
+           (param-env
+            (let loop ((ps params) (i 0) (acc '()))
+              (if (null? ps) acc
+                  (let ((offset (* 8 (- num-params i))))
+                    (loop (cdr ps) (+ i 1)
+                          (cons (cons (car ps) (cons 'param offset)) acc))))))
+           (callee-env (cons (cons '%num-params num-params)
+                             (append self-env param-env)))
+           (callee-si -16))
+      (compile-expr body callee-si callee-env #t)
+      (emit "    ret"))))
+
+(define (compile-program prog)
+  (let ((funcs (cadr prog))
+        (main-expr (caddr prog)))
+    (set-car! *label-counter* 0)
+    (set-car! *symbol-counter* 0)
+    (set-car! *symbol-table* '())
+    (set-car! *string-counter* 0)
+    (set-car! *strings* '())
+    (emit "    .intel_syntax noprefix")
+    (emit "    .text")
+    (emit "    .globl scheme_entry")
+    (emit "    .type scheme_entry, @function")
+    (emit "scheme_entry:")
+    (emit "    push r12")
+    (emit "    sub rsp, 8")
+    (emit "    mov r12, rdi")          ; rdi contains heap_base from C runtime
+    (compile-expr main-expr -8 '() #f)
+    (emit "    add rsp, 8")
+    (emit "    pop r12")
+    (emit "    ret")
+    ;; Emit all lifted procedure definitions in sequence
+    (for-each compile-function funcs)
+    ;; Emit all string literals in .rodata section
+    (if (not (null? (car *strings*)))
+        (begin
+          (emit "    .section .rodata")
+          (let loop ((ss (reverse (car *strings*))))
+            (if (not (null? ss))
+                (let ((entry (car ss)))
+                  (emit "    .p2align 3")
+                  (emit (string-append (car entry) ":"))
+                  (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
+                  (loop (cdr ss)))))))
+    (emit "    .section .note.GNU-stack,\"\",@progbits")))
 ;;; =======================================================================
-;;; ULisp Compiler Pass 5: Compilation Driver & CLI Entrypoint
+;;; ULisp Compiler Pass 6: Compilation Driver & CLI Entrypoint
 ;;; Conforms to DSN-33 Architecture Specification
 ;;; =======================================================================
 
@@ -930,5 +1109,6 @@
 (let ((forms (read-all-forms)))
   (if (not (null? forms))
       (let* ((ast0 (rewrite-top-level forms))
-             (ast1 (desugar-all ast0)))
-        (compile-program ast1))))
+             (ast1 (desugar-all ast0))
+             (ast2 (closure-convert ast1)))
+        (compile-program ast2))))

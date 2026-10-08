@@ -54,6 +54,18 @@
       '()
       (cons (f (car ls)) (map f (cdr ls)))))
 
+(define (for-each proc ls)
+  (if (not (null? ls))
+      (begin
+        (proc (car ls))
+        (for-each proc (cdr ls)))))
+
+(define (filter pred ls)
+  (cond
+    ((null? ls) '())
+    ((pred (car ls)) (cons (car ls) (filter pred (cdr ls))))
+    (else (filter pred (cdr ls)))))
+
 (define (error msg val)
   (display msg)
   (display " ")
@@ -67,6 +79,15 @@
   (let ((s (string->symbol (string-append prefix (number->string (car *symbol-counter*))))))
     (set-car! *symbol-counter* (+ (car *symbol-counter*) 1))
     s))
+
+;;; Deterministic label counter for assembly and lifted function labels
+(define *label-counter* (cons 0 '()))
+(define (unique-label prefix)
+  (let ((l (string-append "." prefix "_" (number->string (car *label-counter*)))))
+    (set-car! *label-counter* (+ (car *label-counter*) 1))
+    l))
+(define (unique-label-sym prefix)
+  (string->symbol (unique-label prefix)))
 
 ;;; Set operations for variable scope analysis
 (define (set-diff s1 s2)
@@ -102,7 +123,10 @@
              make-string string-length)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?)))
+  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=? %closure-ref)))
 
 (define (triop-prim? op)
-  (memq op '(string-set!)))
+  (memq op '(string-set! %closure-set!)))
+
+(define (closure-prim? op)
+  (memq op '(%make-closure %closure-ref %closure-set!)))

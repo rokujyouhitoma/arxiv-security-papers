@@ -44,6 +44,10 @@
                  (body (caddr expr))
                  (new-bound (set-union params bound)))
             (free-vars body new-bound)))
+         ((%make-closure)
+          (let loop ((es (cddr expr)) (acc '()))
+            (if (null? es) acc
+                (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
          (else
           (cond
             ((zero-arg-prim? op) '())

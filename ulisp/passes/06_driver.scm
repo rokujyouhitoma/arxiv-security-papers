@@ -1,5 +1,5 @@
 ;;; =======================================================================
-;;; ULisp Compiler Pass 5: Compilation Driver & CLI Entrypoint
+;;; ULisp Compiler Pass 6: Compilation Driver & CLI Entrypoint
 ;;; Conforms to DSN-33 Architecture Specification
 ;;; =======================================================================
 
@@ -14,5 +14,6 @@
 (let ((forms (read-all-forms)))
   (if (not (null? forms))
       (let* ((ast0 (rewrite-top-level forms))
-             (ast1 (desugar-all ast0)))
-        (compile-program ast1))))
+             (ast1 (desugar-all ast0))
+             (ast2 (closure-convert ast1)))
+        (compile-program ast2))))

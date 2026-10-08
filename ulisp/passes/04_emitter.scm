@@ -1,14 +1,7 @@
 ;;; =======================================================================
-;;; ULisp Compiler Pass 3: Low-Level Assembly Emitter & Symbol/String Tables
+;;; ULisp Compiler Pass 4: Low-Level Assembly Emitter & Symbol/String Tables
 ;;; Conforms to DSN-33 Architecture Specification
 ;;; =======================================================================
-
-;;; Boxed global counters and tables for closure sharing
-(define *label-counter* (cons 0 '()))
-(define (unique-label prefix)
-  (let ((l (string-append "." prefix "_" (number->string (car *label-counter*)))))
-    (set-car! *label-counter* (+ (car *label-counter*) 1))
-    l))
 
 (define *symbol-table* (cons '() '()))
 (define (intern-symbol sym)
@@ -30,9 +23,6 @@
 (define (emit-string-literal str)
   (let ((label (intern-string str)))
     (emit (string-append "    lea rax, [rip + " label " + 3]"))))
-
-;;; Accumulated compiled lambda code blocks (boxed list)
-(define *lambdas* (cons '() '()))
 
 (define (emit line)
   (display line)

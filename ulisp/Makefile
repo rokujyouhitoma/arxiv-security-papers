@@ -8,9 +8,10 @@ ROOT_DIR = $(shell dirname $(CURDIR))
 PASSES = passes/00_helpers.scm \
          passes/01_desugar.scm \
          passes/02_analysis.scm \
-         passes/03_emitter.scm \
-         passes/04_codegen.scm \
-         passes/05_driver.scm
+         passes/03_closure_convert.scm \
+         passes/04_emitter.scm \
+         passes/05_codegen.scm \
+         passes/06_driver.scm
 
 compiler: compiler.scm
 
