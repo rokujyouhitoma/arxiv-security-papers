@@ -12,6 +12,10 @@ CFLAGS="-Wall -Wextra -O0 -g"
 
 TMP_S="tmp.s"
 TMP_BIN="tmp_bin"
+COMPILER="compiler.scm"
+
+mkdir -p build
+cat lib/string.scm lib/printer.scm lib/reader.scm compiler.scm > build/ulisp_core.scm
 
 cleanup() {
     rm -f "$TMP_S" "$TMP_BIN"
@@ -22,8 +26,14 @@ assert() {
     expected="$1"
     input="$2"
 
+    if [[ "$input" =~ \'[a-zA-Z] || "$input" =~ string-\>symbol ]]; then
+        full_input="$(cat lib/string.scm)"$'\n'"$input"
+    else
+        full_input="$input"
+    fi
+
     # 1. Compile S-expression to x86-64 assembly
-    $ILISP compiler.scm <<< "$input" > "$TMP_S"
+    $ILISP "$COMPILER" <<< "$full_input" > "$TMP_S"
 
     # 2. Assemble and link with minimal C runtime
     $CC $CFLAGS -o "$TMP_BIN" runtime.c "$TMP_S"
@@ -44,9 +54,10 @@ assert_stdin() {
     program="$2"
     stdin_input="$3"
 
-    $ILISP compiler.scm <<< "$program" > "$TMP_S"
+    $ILISP "$COMPILER" <<< "$program" > "$TMP_S"
     $CC $CFLAGS -o "$TMP_BIN" runtime.c "$TMP_S"
     actual=$(printf "%s" "$stdin_input" | "./$TMP_BIN")
+
 
     if [ "$actual" = "$expected" ]; then
         printf "\033[32m[PASS]\033[0m %s (stdin: %s) => %s\n" "$program" "$stdin_input" "$actual"
@@ -417,10 +428,23 @@ assert_stdin "((10 20) (30 40))" "$PARSER_CODE" "((10 20) (30 40))"
 assert_stdin "(1 #t #f)" "$PARSER_CODE" "(1 #t #f)"
 assert_stdin "42" "$PARSER_CODE" "42"
 
+# --- Step 24: Low-level string & arithmetic primitives (Issue 494) ---
+echo "-- Step 24: Issue 494 Low-level String & Arithmetic Primitives --"
+assert "7" "(quotient 42 6)"
+assert "3" "(quotient 10 3)"
+assert "-3" "(quotient -10 3)"
+assert "6" "(/ 42 7)"
+assert "5" '(string-length "hello")'
+assert "0" '(string-length "")'
+assert '#\h' '(string-ref "hello" 0)'
+assert '#\o' '(string-ref "hello" 4)'
+assert '"abc"' '(let ((s (make-string 3))) (begin (string-set! s 0 #\a) (string-set! s 1 #\b) (string-set! s 2 #\c) s))'
+
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification
 # =======================================================================
 echo "=== Running ULisp Phase 7 Self-Hosting Bootstrap Test ==="
 ./bootstrap.sh
+
 
 echo -e "\033[32m=== All Phase 1 through Phase 7 tests & Self-Hosting Bootstrap passed successfully! ===\033[0m"

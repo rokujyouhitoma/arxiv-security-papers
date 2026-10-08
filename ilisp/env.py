@@ -472,6 +472,12 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             raise TypeError(f"symbol->string expected symbol, got {s!r}")
         return s.name
 
+    def prim_integer_to_symbol(n: int) -> Symbol:
+        return Symbol(f"sym_{n}")
+
+    def prim_symbol_to_integer(s: Any) -> int:
+        return 0
+
     def prim_symbol_eq(s1: Any, s2: Any, *rest: Any) -> bool:
         args = (s1, s2) + rest
         for arg in args:
@@ -1682,6 +1688,9 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "symbol?": prim_symbol_p,
         "symbol=?": prim_symbol_eq,
         "symbol->string": prim_symbol_to_string,
+        "symbol-name": prim_symbol_to_string,
+        "integer->symbol": prim_integer_to_symbol,
+        "symbol->integer": prim_symbol_to_integer,
         # Characters (R7RS 6.6)
         "char?": char_p,
         "char=?": char_eq_p,

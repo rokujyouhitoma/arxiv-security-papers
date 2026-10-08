@@ -1,17 +1,23 @@
-.PHONY: test bootstrap clean run_42
+.PHONY: test bootstrap clean run_42 core
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
 ILISP = python3 -m ilisp
 ROOT_DIR = $(shell dirname $(CURDIR))
 
-test:
+core: build/ulisp_core.scm
+
+build/ulisp_core.scm: lib/string.scm lib/printer.scm lib/reader.scm compiler.scm
+	@mkdir -p build
+	cat $^ > $@
+
+test: core
 	./test.sh
 
-bootstrap:
+bootstrap: core
 	./bootstrap.sh
 
-run_42:
+run_42: core
 	@echo "42" | PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm > tmp.s
 	@$(CC) $(CFLAGS) -o tmp runtime.c tmp.s
 	@./tmp

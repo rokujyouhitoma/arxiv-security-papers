@@ -6,7 +6,8 @@
 - **対象サブシステム**:
   - `ulisp/` (ULISP コアプロジェクト / 独立サンドボックス・リポジトリ)
   - `ulisp/compiler.scm` (x86-64 Scheme ネイティブ AOT コンパイラ本体)
-  - `ulisp/runtime.c` (初期 C ミニマルランタイム / 16バイトアライメント / バンプアロケータ)
+  - `ulisp/lib/` (Scheme 標準ライブラリ: `string.scm`, `printer.scm`, `reader.scm`)
+  - `ulisp/runtime.c` (Thin Debug Runtime / SIGSEGV backtrace / 16バイトアライメント / 1GB バンプアロケータ / 最小 3 I/O primitives)
   - `ulisp/test.sh` (compilerbook 準拠・インクリメンタル自動テストランナー)
   - `ilisp/backend/ulisp_codegen/` (ILisp 連携: DSN-31 Backend B 向け ULisp AOT トランスパイラ)
   - `docs/designs/` (設計書体系)
@@ -297,9 +298,13 @@ ULisp のセルフホスティング達成後、本コンパイラは **ILisp (D
 ulisp/
 ├── Makefile          # compilerbook 準拠のテスト・ビルド自動化
 ├── compiler.scm      # ULisp コンパイラ本体 (ILisp およびネイティブ ULisp 上で動作する自己充足的 Scheme スクリプト)
-├── runtime.c         # 表示用 printf, 16バイトスタック整列, 128MB バンプアロケータ
+├── lib/              # Scheme 自前標準ライブラリ
+│   ├── string.scm    # 文字列・数値変換, シンボル管理 (string->symbol, symbol->string, number->string)
+│   ├── printer.scm   # Scheme 出力フォーマッタ (display, write, newline)
+│   └── reader.scm    # 手書き再帰下降 S 式リーダー (read)
+├── runtime.c         # Thin Debug Runtime (SIGSEGV backtrace, 1GB バンプアロケータ, 最小 3 I/O primitives)
 ├── test.sh           # インクリメンタル自動テストランナー
-├── bootstrap.sh      # 3段階ブートストラップ実行 ＆ diff 検証スクリプト
+├── bootstrap.sh      # 3段階ブートストラップ実行 ＆ 固定点検証スクリプト
 └── README.md         # プロジェクト仕様とステップ進行ログ
 ```
 
