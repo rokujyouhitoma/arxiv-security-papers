@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **498** | ULisp コンパイラへの明示的クロージャ変換 (Closure Conversion) Nanopass の実装 | Refactor | Open (New) | [498-implement-ulisp-closure-conversion-nanopass.md](498-implement-ulisp-closure-conversion-nanopass.md) |
+| **498** | ULisp コンパイラへの明示的クロージャ変換 (Closure Conversion) Nanopass の実装 | Refactor | In Progress | [498-implement-ulisp-closure-conversion-nanopass.md](498-implement-ulisp-closure-conversion-nanopass.md) |
 | **499** | ULisp コンパイラへの ANF (A-Normal Form) 正規化および CP0 最適化パスの実装 | Feature | Open (New) | [499-implement-ulisp-anf-and-cp0-optimization.md](499-implement-ulisp-anf-and-cp0-optimization.md) |
 | **500** | ULisp コンパイラへのメタサーキュラー・マクロ展開器 (Macro Expander) の実装 | Feature | Open (New) | [500-implement-ulisp-metacircular-macro-expander.md](500-implement-ulisp-metacircular-macro-expander.md) |
 | **501** | ULisp ターゲットランタイム向けガベージコレクタ (2空間 Copying GC) の実装 | Feature | Open (New) | [501-implement-ulisp-target-garbage-collector.md](501-implement-ulisp-target-garbage-collector.md) |
