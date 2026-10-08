@@ -10,7 +10,9 @@
           (reverse acc)
           (loop (cons expr acc))))))
 
-;;; Entry point: read all S-expressions from standard input and compile
+;;; Entry point: read all S-expressions from standard input and compile through serial pipeline
 (let ((forms (read-all-forms)))
   (if (not (null? forms))
-      (compile-program (rewrite-top-level forms))))
+      (let* ((ast0 (rewrite-top-level forms))
+             (ast1 (desugar-all ast0)))
+        (compile-program ast1))))

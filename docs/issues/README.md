@@ -14,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **497** | ULisp コンパイラの直列 Nanopass 型アーキテクチャへの刷新 (Pass 1 完全脱糖・Core AST 純化・直列パイプライン結合) | Refactor | 2026-10-08 | [closed/497-implement-serial-nanopass-compiler-pipeline.md](closed/497-implement-serial-nanopass-compiler-pipeline.md) |
 | **496** | ULisp コンパイラ内部構造のステップ別モジュール分割 (Desugar / Analysis / Codegen / Driver の Pass 分離) | Refactor | 2026-10-08 | [closed/496-modularize-ulisp-compiler-passes.md](closed/496-modularize-ulisp-compiler-passes.md) |
 | **495** | ILisp と ULisp の公式 Native AOT バックエンド統合 (ilisp/backend/ulisp_codegen/) と ELF 生成パイプラインの実装 | Feature | 2026-10-08 | [closed/495-implement-ilisp-backend-ulisp-codegen.md](closed/495-implement-ilisp-backend-ulisp-codegen.md) |
 | **494** | ULisp 標準ライブラリ (lib/) の独立分離と極小 C ランタイム (Thin Debug Runtime) への刷新 | Feature | 2026-10-08 | [closed/494-modularize-ulisp-stdlib-and-minimal-c-runtime.md](closed/494-modularize-ulisp-stdlib-and-minimal-c-runtime.md) |

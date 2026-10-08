@@ -101,3 +101,59 @@
                             bodies))))
               ;; Normal expression
               (loop (cdr fs) bindings (cons f bodies)))))))
+
+;;; Pass 1: Canonical AST Desugaring Pass
+;;; Recursively transforms an AST so that all high-level syntactic sugar
+;;; (cond, case, let*, named-let, and, or, string-append, list) is expanded
+;;; into canonical Core Scheme constructs (if, let, letrec, lambda, begin, primitives).
+(define (desugar-all expr)
+  (cond
+    ((not (pair? expr)) expr)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote)
+          expr)
+         ((cond)
+          (desugar-all (desugar-cond (cdr expr))))
+         ((case)
+          (desugar-all (desugar-case (cadr expr) (cddr expr))))
+         ((let*)
+          (desugar-all (desugar-let* (cadr expr) (cddr expr))))
+         ((string-append)
+          (desugar-all (desugar-string-append (cdr expr))))
+         ((list)
+          (desugar-all (desugar-list (cdr expr))))
+         ((and)
+          (desugar-all (desugar-and (cdr expr))))
+         ((or)
+          (desugar-all (desugar-or (cdr expr))))
+         ((let)
+          (if (symbol? (cadr expr))
+              (desugar-all (desugar-named-let expr))
+              (let ((bindings (cadr expr))
+                    (bodies (cddr expr)))
+                (list 'let
+                      (map (lambda (b) (list (car b) (desugar-all (cadr b)))) bindings)
+                      (desugar-all (make-body-expr bodies))))))
+         ((letrec)
+          (let ((bindings (cadr expr))
+                (bodies (cddr expr)))
+            (list 'letrec
+                  (map (lambda (b) (list (car b) (desugar-all (cadr b)))) bindings)
+                  (desugar-all (make-body-expr bodies)))))
+         ((lambda)
+          (let ((params (cadr expr))
+                (bodies (cddr expr)))
+            (list 'lambda params (desugar-all (make-body-expr bodies)))))
+         ((if)
+          (let ((test (desugar-all (cadr expr)))
+                (then (desugar-all (caddr expr)))
+                (else-expr (if (null? (cdddr expr))
+                               #f
+                               (desugar-all (cadddr expr)))))
+            (list 'if test then else-expr)))
+         ((begin)
+          (cons 'begin (map desugar-all (cdr expr))))
+         (else
+          (cons (desugar-all op) (map desugar-all (cdr expr)))))))))
