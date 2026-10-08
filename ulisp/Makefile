@@ -1,9 +1,21 @@
-.PHONY: test bootstrap clean run_42 core
+.PHONY: test bootstrap clean run_42 core compiler
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
 ILISP = python3 -m ilisp
 ROOT_DIR = $(shell dirname $(CURDIR))
+
+PASSES = passes/00_helpers.scm \
+         passes/01_desugar.scm \
+         passes/02_analysis.scm \
+         passes/03_emitter.scm \
+         passes/04_codegen.scm \
+         passes/05_driver.scm
+
+compiler: compiler.scm
+
+compiler.scm: $(PASSES)
+	cat $(PASSES) > $@
 
 core: build/ulisp_core.scm
 

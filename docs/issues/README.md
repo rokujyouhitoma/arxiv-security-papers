@@ -4,7 +4,9 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在進行中・未着手の Issue はありません。
+| Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: |
+| - | *現在進行中の Issue はありません* | - | - | - |
 
 ---
 
@@ -12,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **496** | ULisp コンパイラ内部構造のステップ別モジュール分割 (Desugar / Analysis / Codegen / Driver の Pass 分離) | Refactor | 2026-10-08 | [closed/496-modularize-ulisp-compiler-passes.md](closed/496-modularize-ulisp-compiler-passes.md) |
 | **495** | ILisp と ULisp の公式 Native AOT バックエンド統合 (ilisp/backend/ulisp_codegen/) と ELF 生成パイプラインの実装 | Feature | 2026-10-08 | [closed/495-implement-ilisp-backend-ulisp-codegen.md](closed/495-implement-ilisp-backend-ulisp-codegen.md) |
 | **494** | ULisp 標準ライブラリ (lib/) の独立分離と極小 C ランタイム (Thin Debug Runtime) への刷新 | Feature | 2026-10-08 | [closed/494-modularize-ulisp-stdlib-and-minimal-c-runtime.md](closed/494-modularize-ulisp-stdlib-and-minimal-c-runtime.md) |
 | **493** | ULisp Phase 7: 3段階セルフホスティングブートストラップ連鎖と不動点検証 (diff stage2.s stage3.s == 0) の実装 | Feature | 2026-10-07 | [closed/493-implement-ulisp-phase7-self-hosting-bootstrap-and-fixed-point.md](closed/493-implement-ulisp-phase7-self-hosting-bootstrap-and-fixed-point.md) |

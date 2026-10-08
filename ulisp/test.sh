@@ -15,6 +15,7 @@ TMP_BIN="tmp_bin"
 COMPILER="compiler.scm"
 
 mkdir -p build
+make compiler
 cat lib/string.scm lib/printer.scm lib/reader.scm compiler.scm > build/ulisp_core.scm
 
 cleanup() {
