@@ -130,6 +130,24 @@
 
 (define (closure-prim? op)
   (memq op '(%make-closure %closure-ref %closure-set!)))
+
+(define (pure-prim? op)
+  (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
+             integer->symbol symbol->integer
+             zero? fixnum? integer? number? boolean? char? null? not symbol?
+             car cdr pair? procedure? string? string-length
+             + - * = < <= > >= modulo quotient / eq? char=? %closure-ref)))
+
+(define (const? x)
+  (or (number? x)
+      (boolean? x)
+      (char? x)
+      (null? x)
+      (and (pair? x) (eq? (car x) 'quote))))
+
+(define (atomic-expr? expr)
+  (or (symbol? expr)
+      (const? expr)))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 1: Syntax Desugaring & Normalization Pass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -351,6 +369,306 @@
                (if (null? es) acc
                    (loop (cdr es) (set-union acc (free-vars (car es) bound)))))))))))
     (else '())))
+;;; =======================================================================
+;;; ULisp Compiler Pass 3: CP0 Source-Level Optimization Nanopass
+;;; Conforms to DSN-33 Architecture Specification
+;;; Note: Performs Constant Folding, Dead Branch Pruning, and Dead Let
+;;;       Elimination on Canonical Core AST.
+;;; =======================================================================
+
+;;; Extracts the literal constant value from a constant AST node
+(define (extract-const-val c)
+  (if (and (pair? c) (eq? (car c) 'quote))
+      (cadr c)
+      c))
+
+;;; Wraps a literal value back into a canonical constant AST node
+(define (val->ast-const v)
+  (cond
+    ((number? v) v)
+    ((boolean? v) v)
+    ((char? v) v)
+    ((null? v) '(quote ()))
+    (else (list 'quote v))))
+
+;;; Checks if an expression is completely side-effect free (pure)
+(define (pure-expr? expr)
+  (cond
+    ((atomic-expr? expr) #t)
+    ((pair? expr)
+     (let ((op (car expr)))
+       (case op
+         ((quote) #t)
+         ((lambda) #t)
+         ((if) (and (pure-expr? (cadr expr))
+                    (pure-expr? (caddr expr))
+                    (if (null? (cdddr expr)) #t (pure-expr? (cadddr expr)))))
+         ((begin)
+          (let loop ((es (cdr expr)))
+            (if (null? es) #t
+                (and (pure-expr? (car es)) (loop (cdr es))))))
+         ((let)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (and (let loop ((bs bindings))
+                   (if (null? bs) #t
+                       (and (pure-expr? (cadar bs)) (loop (cdr bs)))))
+                 (pure-expr? body))))
+         (else
+          (and (pure-prim? op)
+               (let loop ((args (cdr expr)))
+                 (if (null? args) #t
+                     (and (pure-expr? (car args)) (loop (cdr args))))))))))
+    (else #f)))
+
+;;; Tries to fold a constant binary or unary operation
+(define (fold-const-op op args)
+  (let ((nargs (length args)))
+    (cond
+      ;; Unary arithmetic / predicates
+      ((and (= nargs 1) (const? (car args)))
+       (let ((v (extract-const-val (car args))))
+         (case op
+           ((fxadd1) (if (number? v) (val->ast-const (+ v 1)) #f))
+           ((fxsub1) (if (number? v) (val->ast-const (- v 1)) #f))
+           ((zero?) (if (number? v) (val->ast-const (= v 0)) #f))
+           ((not) (val->ast-const (if (eq? v #f) #t #f)))
+           ((null?) (val->ast-const (null? v)))
+           ((pair?) (val->ast-const (pair? v)))
+           ((number? fixnum? integer?) (val->ast-const (number? v)))
+           ((boolean?) (val->ast-const (boolean? v)))
+           ((char?) (val->ast-const (char? v)))
+           ((symbol?) (val->ast-const (symbol? v)))
+           ((car) (if (pair? v) (val->ast-const (car v)) #f))
+           ((cdr) (if (pair? v) (val->ast-const (cdr v)) #f))
+           (else #f))))
+      ;; Binary arithmetic / predicates
+      ((and (= nargs 2) (const? (car args)) (const? (cadr args)))
+       (let ((v1 (extract-const-val (car args)))
+             (v2 (extract-const-val (cadr args))))
+         (case op
+           ((+) (if (and (number? v1) (number? v2)) (val->ast-const (+ v1 v2)) #f))
+           ((-) (if (and (number? v1) (number? v2)) (val->ast-const (- v1 v2)) #f))
+           ((*) (if (and (number? v1) (number? v2)) (val->ast-const (* v1 v2)) #f))
+           ((quotient /)
+            (if (and (number? v1) (number? v2) (not (= v2 0)))
+                (val->ast-const (quotient v1 v2))
+                #f))
+           ((modulo)
+            (if (and (number? v1) (number? v2) (not (= v2 0)))
+                (val->ast-const (modulo v1 v2))
+                #f))
+           ((=) (if (and (number? v1) (number? v2)) (val->ast-const (= v1 v2)) #f))
+           ((<) (if (and (number? v1) (number? v2)) (val->ast-const (< v1 v2)) #f))
+           ((<=) (if (and (number? v1) (number? v2)) (val->ast-const (<= v1 v2)) #f))
+           ((>) (if (and (number? v1) (number? v2)) (val->ast-const (> v1 v2)) #f))
+           ((>=) (if (and (number? v1) (number? v2)) (val->ast-const (>= v1 v2)) #f))
+           ((eq?) (val->ast-const (eq? v1 v2)))
+           ((char=?) (if (and (char? v1) (char? v2)) (val->ast-const (char=? v1 v2)) #f))
+           ((cons) (val->ast-const (cons v1 v2)))
+           (else #f))))
+      (else #f))))
+
+;;; Bottom-up CP0 optimization of a single expression
+(define (cp0-expr expr)
+  (cond
+    ((not (pair? expr)) expr)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) expr)
+         ((if)
+          (let* ((test (cp0-expr (cadr expr)))
+                 (then (cp0-expr (caddr expr)))
+                 (else-val (if (null? (cdddr expr)) #f (cp0-expr (cadddr expr)))))
+            (cond
+              ;; Dead branch pruning
+              ((const? test)
+               (let ((v (extract-const-val test)))
+                 (if (eq? v #f) else-val then)))
+              (else
+               (list 'if test then else-val)))))
+         ((begin)
+          (let* ((body (map cp0-expr (cdr expr)))
+                 ;; Flatten nested begins
+                 (flat-body
+                  (let loop ((es body) (acc '()))
+                    (cond
+                      ((null? es) (reverse acc))
+                      ((and (pair? (car es)) (eq? (caar es) 'begin))
+                       (loop (append (cdar es) (cdr es)) acc))
+                      (else (loop (cdr es) (cons (car es) acc)))))))
+            (cond
+              ((null? flat-body) #f)
+              ((null? (cdr flat-body)) (car flat-body))
+              (else (cons 'begin flat-body)))))
+         ((let)
+          (let* ((bindings (cadr expr))
+                 (body (cp0-expr (caddr expr)))
+                 (opt-bindings
+                  (map (lambda (b) (list (car b) (cp0-expr (cadr b)))) bindings)))
+            ;; Dead let elimination for single pure binding
+            (if (and (= (length opt-bindings) 1)
+                     (pure-expr? (cadar opt-bindings))
+                     (not (memq (caar opt-bindings) (free-vars body '()))))
+                body
+                (list 'let opt-bindings body))))
+         ((letrec)
+          (let* ((bindings (cadr expr))
+                 (body (cp0-expr (caddr expr)))
+                 (opt-bindings
+                  (map (lambda (b) (list (car b) (cp0-expr (cadr b)))) bindings)))
+            (list 'letrec opt-bindings body)))
+         ((lambda)
+          (let ((params (cadr expr))
+                (body (cp0-expr (caddr expr))))
+            (list 'lambda params body)))
+         ((%make-closure)
+          (cons '%make-closure (cons (cadr expr) (map cp0-expr (cddr expr)))))
+         (else
+          ;; Primitive or application: optimize arguments first (bottom-up)
+          (let* ((opt-op (if (symbol? op) op (cp0-expr op)))
+                 (opt-args (map cp0-expr (cdr expr))))
+            (or (and (symbol? opt-op) (fold-const-op opt-op opt-args))
+                (cons opt-op opt-args)))))))))
+
+;;; Top-level entrypoint for CP0 optimization
+(define (cp0-optimize form)
+  (cond
+    ((not (pair? form)) form)
+    ((eq? (car form) '%program)
+     (let ((defs (cadr form))
+           (main (caddr form)))
+       (list '%program
+             (map (lambda (d)
+                    (if (and (pair? d) (eq? (car d) 'define))
+                        (list 'define (cadr d) (cp0-expr (caddr d)))
+                        (cp0-expr d)))
+                  defs)
+             (cp0-expr main))))
+    ((eq? (car form) 'define)
+     (list 'define (cadr form) (cp0-expr (caddr form))))
+    (else
+     (cp0-expr form))))
+;;; =======================================================================
+;;; ULisp Compiler Pass 4: ANF (A-Normal Form) Normalization Nanopass
+;;; Conforms to DSN-33 Architecture Specification
+;;; Note: Normalizes complex expressions so that all function/primitive
+;;;       arguments are atomic (symbols or immediate constants).
+;;;       Uses a scoped temporary variable pool (%t0..%t8) to eliminate
+;;;       string->symbol heap allocation overhead during bootstrap.
+;;; =======================================================================
+
+;;; Fixed pool of temporary variables by nesting depth (Zero heap allocation)
+(define (%t-var depth)
+  (case depth
+    ((0) '%t0)
+    ((1) '%t1)
+    ((2) '%t2)
+    ((3) '%t3)
+    ((4) '%t4)
+    ((5) '%t5)
+    ((6) '%t6)
+    ((7) '%t7)
+    (else '%t8)))
+
+;;; Collects bindings for non-atomic expressions among a list of arguments.
+;;; Returns a pair (bindings . atomic-args).
+(define (anf-flatten-args args depth)
+  (let loop ((rest args) (d depth) (bindings '()) (atom-args '()))
+    (if (null? rest)
+        (cons (reverse bindings) (reverse atom-args))
+        (let ((arg (car rest)))
+          (if (atomic-expr? arg)
+              (loop (cdr rest) d bindings (cons arg atom-args))
+              (let* ((flat-arg (anf-expr-depth arg (+ d 1)))
+                     (tmp (%t-var d)))
+                (loop (cdr rest)
+                      (+ d 1)
+                      (cons (list tmp flat-arg) bindings)
+                      (cons tmp atom-args))))))))
+
+;;; Wraps an expression with let-bindings if any exist
+(define (anf-wrap-bindings bindings body)
+  (if (null? bindings)
+      body
+      (list 'let bindings body)))
+
+;;; Recursively normalizes an arbitrary expression into A-Normal Form with nesting depth tracking
+(define (anf-expr-depth expr depth)
+  (cond
+    ((atomic-expr? expr) expr)
+    ((pair? expr)
+     (let ((op (car expr)))
+       (case op
+         ((quote) expr)
+         ((if)
+          (let ((test (cadr expr))
+                (then (caddr expr))
+                (else-val (if (null? (cdddr expr)) #f (cadddr expr))))
+            (if (atomic-expr? test)
+                (list 'if test (anf-expr-depth then depth) (anf-expr-depth else-val depth))
+                (let* ((flat-test (anf-expr-depth test (+ depth 1)))
+                       (tmp (%t-var depth)))
+                  (list 'let (list (list tmp flat-test))
+                        (list 'if tmp (anf-expr-depth then depth) (anf-expr-depth else-val depth)))))))
+         ((begin)
+          (let ((body (cdr expr)))
+            (cond
+              ((null? body) #f)
+              ((null? (cdr body)) (anf-expr-depth (car body) depth))
+              (else (cons 'begin (map (lambda (e) (anf-expr-depth e depth)) body))))))
+         ((let)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (list 'let
+                  (map (lambda (b) (list (car b) (anf-expr-depth (cadr b) depth))) bindings)
+                  (anf-expr-depth body depth))))
+         ((letrec)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (list 'letrec
+                  (map (lambda (b) (list (car b) (anf-expr-depth (cadr b) depth))) bindings)
+                  (anf-expr-depth body depth))))
+         ((lambda)
+          (let ((params (cadr expr))
+                (body (caddr expr)))
+            (list 'lambda params (anf-expr-depth body 0))))
+         ((%make-closure)
+          (let* ((label (cadr expr))
+                 (env-args (cddr expr))
+                 (res (anf-flatten-args env-args depth))
+                 (bindings (car res))
+                 (atom-env (cdr res)))
+            (anf-wrap-bindings bindings (cons '%make-closure (cons label atom-env)))))
+         (else
+          ;; Primitive or function application: (op e1 e2 ...)
+          (let* ((args-res (anf-flatten-args (cdr expr) depth))
+                 (args-bindings (car args-res))
+                 (atom-args (cdr args-res))
+                 (flat-op (if (atomic-expr? op) op (anf-expr-depth op (+ depth (length args-bindings)))))
+                 (call (cons flat-op atom-args)))
+            (anf-wrap-bindings args-bindings call))))))
+    (else expr)))
+
+;;; Top-level entrypoint for ANF normalization
+(define (anf-all form)
+  (cond
+    ((not (pair? form)) form)
+    ((eq? (car form) '%program)
+     (let ((defs (cadr form))
+           (main (caddr form)))
+       (list '%program
+             (map (lambda (d)
+                    (if (and (pair? d) (eq? (car d) 'define))
+                        (list 'define (cadr d) (anf-expr-depth (caddr d) 0))
+                        (anf-expr-depth d 0)))
+                  defs)
+             (anf-expr-depth main 0))))
+    ((eq? (car form) 'define)
+     (list 'define (cadr form) (anf-expr-depth (caddr form) 0)))
+    (else
+     (anf-expr-depth form 0))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: Explicit Closure Conversion Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -1094,7 +1412,7 @@
                   (loop (cdr ss)))))))
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
 ;;; =======================================================================
-;;; ULisp Compiler Pass 6: Compilation Driver & CLI Entrypoint
+;;; ULisp Compiler Pass 8: Compilation Driver & CLI Entrypoint
 ;;; Conforms to DSN-33 Architecture Specification
 ;;; =======================================================================
 
@@ -1110,5 +1428,7 @@
   (if (not (null? forms))
       (let* ((ast0 (rewrite-top-level forms))
              (ast1 (desugar-all ast0))
-             (ast2 (closure-convert ast1)))
-        (compile-program ast2))))
+             (ast2 (cp0-optimize ast1))
+             (ast3 (anf-all ast2))
+             (ast4 (closure-convert ast3)))
+        (compile-program ast4))))

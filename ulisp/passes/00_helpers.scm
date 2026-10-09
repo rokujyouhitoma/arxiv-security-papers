@@ -130,3 +130,21 @@
 
 (define (closure-prim? op)
   (memq op '(%make-closure %closure-ref %closure-set!)))
+
+(define (pure-prim? op)
+  (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
+             integer->symbol symbol->integer
+             zero? fixnum? integer? number? boolean? char? null? not symbol?
+             car cdr pair? procedure? string? string-length
+             + - * = < <= > >= modulo quotient / eq? char=? %closure-ref)))
+
+(define (const? x)
+  (or (number? x)
+      (boolean? x)
+      (char? x)
+      (null? x)
+      (and (pair? x) (eq? (car x) 'quote))))
+
+(define (atomic-expr? expr)
+  (or (symbol? expr)
+      (const? expr)))

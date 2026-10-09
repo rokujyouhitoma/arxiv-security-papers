@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **499** | ULisp コンパイラへの ANF (A-Normal Form) 正規化および CP0 最適化パスの実装 | Feature | Open (New) | [499-implement-ulisp-anf-and-cp0-optimization.md](499-implement-ulisp-anf-and-cp0-optimization.md) |
 | **500** | ULisp コンパイラへのメタサーキュラー・マクロ展開器 (Macro Expander) の実装 | Feature | Open (New) | [500-implement-ulisp-metacircular-macro-expander.md](500-implement-ulisp-metacircular-macro-expander.md) |
 | **501** | ULisp ターゲットランタイム向けガベージコレクタ (2空間 Copying GC) の実装 | Feature | Open (New) | [501-implement-ulisp-target-garbage-collector.md](501-implement-ulisp-target-garbage-collector.md) |
 
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **499** | ULisp コンパイラへの ANF (A-Normal Form) 正規化および CP0 最適化パスの実装 | Feature | 2026-10-09 | [closed/499-implement-ulisp-anf-and-cp0-optimization.md](closed/499-implement-ulisp-anf-and-cp0-optimization.md) |
 | **498** | ULisp コンパイラへの明示的クロージャ変換 (Closure Conversion) Nanopass の実装 | Refactor | 2026-10-09 | [closed/498-implement-ulisp-closure-conversion-nanopass.md](closed/498-implement-ulisp-closure-conversion-nanopass.md) |
 | **497** | ULisp コンパイラの直列 Nanopass 型アーキテクチャへの刷新 (Pass 1 完全脱糖・Core AST 純化・直列パイプライン結合) | Refactor | 2026-10-08 | [closed/497-implement-serial-nanopass-compiler-pipeline.md](closed/497-implement-serial-nanopass-compiler-pipeline.md) |
 | **496** | ULisp コンパイラ内部構造のステップ別モジュール分割 (Desugar / Analysis / Codegen / Driver の Pass 分離) | Refactor | 2026-10-08 | [closed/496-modularize-ulisp-compiler-passes.md](closed/496-modularize-ulisp-compiler-passes.md) |
