@@ -33,6 +33,7 @@
   - [2.2 レジスタ割り当て・スタックフレーム・ABI 規約](#22-レジスタ割り当てスタックフレームabi-規約)
   - [2.3 ゼロGC・高速バンプアロケータ戦略](#23-ゼロgc高速バンプアロケータ戦略)
   - [2.4 シンボル表現と決定論的インターン（Interning）テーブル](#24-シンボル表現と決定論的インターンinterningテーブル)
+  - [2.5 直列 Nanopass 型アーキテクチャと 2 段階 IR（HIR / LIR）設計](#25-直列-nanopass-型アーキテクチャと-2-段階-irhir--lir設計)
 - [3. 言語機能と低レイヤコード生成仕様](#3-言語機能と低レイヤコード生成仕様)
   - [3.1 即値・単項演算・述語](#31-即値単項演算述語)
   - [3.2 局所変数 (`let`) とスタックマッピング](#32-局所変数-let-とスタックマッピング)
@@ -41,6 +42,7 @@
   - [3.5 末尾呼び出し最適化 (Tail Call Optimization: TCO)](#35-末尾呼び出し最適化-tail-call-optimization-tco)
   - [3.6 第一級関数とフラットクロージャ (Flat Closures)](#36-第一級関数とフラットクロージャ-flat-closures)
   - [3.7 手書き再帰下降 S式リーダー (`read`) とシステムコール I/O](#37-手書き再帰下降-s式リーダー-read-とシステムコール-io)
+  - [3.8 Pass 0〜Pass 8 直列 Nanopass パイプライン仕様](#38-pass-0pass-8-直列-nanopass-パイプライン仕様)
 - [4. インクリメンタル開発ロードマップ (全7フェーズ・27ステップ)](#4-インクリメンタル開発ロードマップ-全7フェーズ27ステップ)
 - [5. 3段階セルフホスティングブートストラップ連鎖と不動点検証](#5-3段階セルフホスティングブートストラップ連鎖と不動点検証)
   - [5.1 ブートストラップ連鎖 (Stage 1 〜 Stage 3)](#51-ブートストラップ連鎖-stage-1--stage-3)
@@ -50,6 +52,7 @@
   - [6.2 ILisp S式 AST から ULisp 入力へのコンパイルパイプライン](#62-ilisp-s式-ast-から-ulisp-入力へのコンパイルパイプライン)
   - [6.3 ランタイム共有とネイティブ ELF 単一バイナリ生成](#63-ランタイム共有とネイティブ-elf-単一バイナリ生成)
 - [7. ディレクトリ構成と開発運用プロトコル](#7-ディレクトリ構成と開発運用プロトコル)
+  - [7.1 開発者向けテクニカルリファレンス (`ulisp/docs/`) との役割分担](#71-開発者向けテクニカルリファレンス-ulispdocs-との役割分担)
 - [8. 品質ゲート・テスト自動化](#8-品質ゲートテスト自動化)
 
 ---
@@ -144,6 +147,32 @@ ULisp は 64 ビットアーキテクチャ（x86-64）を前提とし、ポイ�
 * 文字列比較による低速化を防ぐため、コンパイル時および実行時ランタイムに**決定論的シンボルテーブル**を保持する。
 * シンボルはインターン（一度出現した文字列は同一ポインタを共有）され、`eq?` は単なるポインタ比較（`cmp rax, rdx` / 1命令）で $O(1)$ 動作する。
 
+### 2.5 直列 Nanopass 型アーキテクチャと 2 段階 IR（HIR / LIR）設計
+
+Chez Scheme の設計思想に基づき、ULisp はコンパイラを単一のモノリシック走査から**直列 Nanopass パイプライン**へとモジュール分離している。
+さらに、マルチバックエンド（x86-64, AArch64, C/Wasm）への拡張を可能にするため、以下の **2 段階 IR（Intermediate Representation）** を境界線として設ける。
+
+```text
+[ソースコード (S式)]
+      │
+      ▼ [高レベル IR フェーズ (HIR: Canonical Core AST & ANF)]
+  Pass 1: desugar.scm           (構文脱糖)
+  Pass 2: analysis.scm          (静的スコープ・自由変数解析)
+  Pass 3: cp0.scm               (CP0 高レベル最適化: 定数畳み込み・自明分岐剪定)
+  Pass 4: anf.scm               (ANF 3番地正規化: Scoped Pool によるゼロアロケーション)
+  Pass 5: closure_convert.scm   (クロージャ変換 & ラムダリフティング)
+      │
+      ▼ [★ IR 境界パス: 低レベル IR フェーズ (LIR: 機械抽象 3番地命令列)]
+  Pass 6: lir.scm               (ターゲット非依存 LIR 生成)
+      │
+      ▼ [バックエンドフェーズ (ターゲット別コード生成)]
+  Pass 7: backend_x86_64.scm    (x86-64 GNU アセンブリ生成)
+  (将来) backend_aarch64.scm    (ARM64 / Apple Silicon / Graviton アセンブリ)
+  (将来) backend_c.scm          (ANSI C99 / WebAssembly トランスパイル)
+```
+
+詳細な各パス仕様および LIR 命令セット仕様については、[ulisp/docs/pipeline_architecture.md](../../ulisp/docs/pipeline_architecture.md) および [ulisp/docs/lir_specification.md](../../ulisp/docs/lir_specification.md) を参照のこと。
+
 ---
 
 ## 3. 言語機能と低レイヤコード生成仕様
@@ -184,6 +213,22 @@ ULisp は 64 ビットアーキテクチャ（x86-64）を前提とし、ポイ�
 ### 3.7 手書き再帰下降 S式リーダー (`read`) とシステムコール I/O
 * 外部ライブラリを完全排除するため、Scheme 自身で記述された極小の再帰下降 S式リーダーを搭載。
 * Linux システムコール（`sys_read` = 0, `sys_write` = 1）または C ランタイムの `getchar` / `putchar` を直接バインドし、`read-char`, `write-char`, `peek-char` から `read` を構築。
+
+### 3.8 Pass 0〜Pass 8 直列 Nanopass パイプライン仕様
+
+各パスは単一の責務を持つ独立した Scheme ソースファイル（`passes/` 配下）として分離され、`Makefile` にて `cat $(PASSES) > compiler.scm` で単一コンパイラに結合される。
+
+| パス番号 | ファイル名 | 責務と主要変換内容 | 不変条件 (Invariant) |
+| :--- | :--- | :--- | :--- |
+| **Pass 0** | `00_helpers.scm` | 共通述語（`atomic-expr?`, `pure-prim?`, `closure-prim?`）、一意ラベル生成 | 依存なし共通基盤 |
+| **Pass 1** | `01_desugar.scm` | 構文脱糖（`cond`, `case`, `let*`, `named-let`, `and`, `or`, `string-append`, `list`） | 複合構文糖の完全排除 |
+| **Pass 2** | `02_analysis.scm` | 静的スコープ解析および自由変数集合（`free-vars`）の正確な抽出 | レキシカル環境の確定 |
+| **Pass 3** | `03_cp0.scm` | 定数畳み込み（四則・比較・述語）、自明分岐剪定、不要 let 束縛削除 | 意味論・副作用順序の保持 |
+| **Pass 4** | `04_anf.scm` | A-Normal Form 正規化（引数位置のアトミック化、Scoped Pool 一意変数） | 関数の全引数がアトミック値 |
+| **Pass 5** | `05_closure_convert.scm` | ラムダリフティング、フラットクロージャ生成（`%make-closure`, `%closure-ref`） | ネストした lambda の完全排除 |
+| **Pass 6** | `06_lir.scm` | 機械抽象 3 番地低レベル IR 命令列の生成 | ターゲット非依存命令表現 |
+| **Pass 7** | `07_backend_x86_64.scm` | LIR 命令列から GNU x86-64 アセンブリテキストへの直接マッピング | ABI 整合・ELF 直結 |
+| **Pass 8** | `08_driver.scm` | 標準入力からの S 式読み込みと直列パイプライン結合 | エントリポイント完結 |
 
 ---
 
@@ -290,28 +335,43 @@ ULisp のセルフホスティング達成後、本コンパイラは **ILisp (D
 
 ## 7. ディレクトリ構成と開発運用プロトコル
 
-### 7.1 初期プロジェクトツリー (`ulisp/`)
+### 7.1 プロジェクトツリー (`ulisp/`) と技術資料の役割分担
 
-本リポジトリ内の独立サンドボックス、または独立リポジトリとして以下の構成で開始する：
+リポジトリ全体の設計仕様正典（Single Source of Truth: SSOT）は本仕様書（`DSN-33`）に集約し、コンパイラ実装者向けの技術リファレンスは `ulisp/docs/` 配下に配置して相互参照する。
 
 ```text
 ulisp/
-├── Makefile          # compilerbook 準拠のテスト・ビルド自動化
-├── compiler.scm      # ULisp コンパイラ本体 (ILisp およびネイティブ ULisp 上で動作する自己充足的 Scheme スクリプト)
-├── lib/              # Scheme 自前標準ライブラリ
-│   ├── string.scm    # 文字列・数値変換, シンボル管理 (string->symbol, symbol->string, number->string)
-│   ├── printer.scm   # Scheme 出力フォーマッタ (display, write, newline)
-│   └── reader.scm    # 手書き再帰下降 S 式リーダー (read)
-├── runtime.c         # Thin Debug Runtime (SIGSEGV backtrace, 1GB バンプアロケータ, 最小 3 I/O primitives)
-├── test.sh           # インクリメンタル自動テストランナー
-├── bootstrap.sh      # 3段階ブートストラップ実行 ＆ 固定点検証スクリプト
-└── README.md         # プロジェクト仕様とステップ進行ログ
+├── Makefile                 # compiler.scm 結合・ビルド・テスト自動化
+├── compiler.scm             # $(PASSES) を結合して自動生成されるコンパイラ本体
+├── runtime.c                # Thin Debug Runtime (SIGSEGV backtrace, 1GB バンプアロケータ, 最小 3 I/O primitives)
+├── test.sh                  # インクリメンタル自動テストランナー (Phase 1〜7)
+├── bootstrap.sh             # 3 段階ブートストラップ実行 ＆ 不動点検証スクリプト
+├── lib/                     # Scheme 自前標準ライブラリ
+│   ├── string.scm           # 文字列・数値変換, シンボル管理 (string->symbol, number->string)
+│   ├── printer.scm          # Scheme 出力フォーマッタ (display, write, newline)
+│   └── reader.scm           # 手書き再帰下降 S 式リーダー (read)
+├── passes/                  # 直列 Nanopass モジュール群 (Pass 0〜Pass 8)
+│   ├── 00_helpers.scm       # 共通述語・アキュムレータ
+│   ├── 01_desugar.scm       # Pass 1: 構文脱糖 (cond, case, let*, and, or)
+│   ├── 02_analysis.scm      # Pass 2: 静的スコープ・自由変数解析
+│   ├── 03_cp0.scm           # Pass 3: CP0 最適化 (定数畳み込み, 自明分岐剪定, DCE)
+│   ├── 04_anf.scm           # Pass 4: ANF 正規化 (3 番地コード化, Scoped Pool)
+│   ├── 05_closure_convert.scm # Pass 5: クロージャ変換 (ラムダリフティング, フラット環境)
+│   ├── 06_lir.scm           # Pass 6: 低レベル IR (LIR) 生成 (Issue #502)
+│   ├── 07_backend_x86_64.scm# Pass 7: ターゲット別コード生成 (x86-64 / AArch64 / C)
+│   └── 08_driver.scm        # Pass 8: コンパイルドライバ・CLI
+├── docs/                    # コンパイラ開発者向けテクニカルリファレンス
+│   ├── README.md            # 開発者総合ガイド & DSN-33 へのリンク
+│   ├── pipeline_architecture.md # パス別入出力 S 式仕様 & 不変条件
+│   ├── lir_specification.md # 低レベル IR (LIR) 命令セット仕様書
+│   └── testing_guide.md     # パス別単体テスト & ブートストラップ検証手順
+└── README.md                # 簡易概要とクイックスタート
 ```
 
 ### 7.2 開発運用プロトコル
 
-1. **コミット粒度**: 1 ステップ（または 1 プリミティブ追加）ごとに 1 コミット。コミットメッセージにはテストケースの入出力（例: `feat: compile (+ 1 2) to x86-64 add`）を明記。
-2. **グリーン維持**: すべてのコミットで `./test.sh` が全件パス（PASS）していることを義務付ける。
+1. **コミット粒度**: 1 ステップ（または 1 パス追加）ごとに 1 コミット。Conventional Commits（例: `refactor(ulisp): implement closure conversion nanopass (Issue #498)`）を厳守。
+2. **グリーン維持**: すべてのコミットで `./test.sh`（Phase 1〜7 全件パス）および `./bootstrap.sh`（不動点完全一致 `diff stage2.s stage3.s == 0`）が合格していることを義務付ける。
 
 ---
 

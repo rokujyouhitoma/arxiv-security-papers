@@ -2,7 +2,11 @@
 
 **ULisp** は、Abdulaziz Ghuloum 氏の古典的論文 *"An Incremental Approach to Compiler Construction"* および植山類氏の *compilerbook* のインクリメンタル TDD 手法に基づき、Scheme サブセットから **x86-64 Linux 向けネイティブコード（GAS / ELF）** を出力する自己完結型セルフホスティングコンパイラです。
 
-設計仕様書: [DSN-33 (ULISP Underlying x86-64 Native AOT Compiler Architecture Specification)](../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- **包括設計仕様書（正典）**: [DSN-33 (ULISP 包括設計仕様書)](../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- **開発者テクニカルリファレンス**: [ulisp/docs/README.md](docs/README.md)
+  - [パイプライン・Nanopass 詳細仕様書](docs/pipeline_architecture.md)
+  - [低レベル IR (LIR) 命令セット仕様書](docs/lir_specification.md)
+  - [テストおよび検証ガイド](docs/testing_guide.md)
 
 ---
 
