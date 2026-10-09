@@ -8,6 +8,9 @@
 | :---: | --- | :---: | :---: | :---: |
 | **500** | ULisp コンパイラへのメタサーキュラー・マクロ展開器 (Macro Expander) の実装 | Feature | Open (New) | [500-implement-ulisp-metacircular-macro-expander.md](500-implement-ulisp-metacircular-macro-expander.md) |
 | **501** | ULisp ターゲットランタイム向けガベージコレクタ (2空間 Copying GC) の実装 | Feature | Open (New) | [501-implement-ulisp-target-garbage-collector.md](501-implement-ulisp-target-garbage-collector.md) |
+| **502** | ULisp コンパイラへの低レベルIR (LIR) の導入とバックエンド分離およびパス別テスト拡充 | Refactor | Open (New) | [502-introduce-ulisp-low-level-ir-and-decouple-backend.md](502-introduce-ulisp-low-level-ir-and-decouple-backend.md) |
+| **503** | 低レベルIR (LIR) を入力とする AArch64 (ARM64) ネイティブコード生成バックエンドの実装 | Feature | Open (New) | [503-implement-ulisp-aarch64-backend-via-lir.md](503-implement-ulisp-aarch64-backend-via-lir.md) |
+| **504** | 低レベルIR (LIR) を入力とする Portable C / WebAssembly バックエンドの実装 | Feature | Open (New) | [504-implement-ulisp-c-and-wasm-backend-via-lir.md](504-implement-ulisp-c-and-wasm-backend-via-lir.md) |
 
 ---
 
