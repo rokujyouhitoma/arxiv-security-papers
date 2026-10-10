@@ -1,24 +1,34 @@
-.PHONY: test bootstrap clean run_42 core compiler
+.PHONY: test bootstrap clean run_42 core compiler test_passes
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
 ILISP = python3 -m ilisp
 ROOT_DIR = $(shell dirname $(CURDIR))
 
-PASSES = passes/00_helpers.scm \
-         passes/01_desugar.scm \
-         passes/02_analysis.scm \
-         passes/03_cp0.scm \
-         passes/04_anf.scm \
-         passes/05_closure_convert.scm \
-         passes/06_emitter.scm \
-         passes/07_codegen.scm \
-         passes/08_driver.scm
+PASSES_LIB = passes/00_helpers.scm \
+             passes/01_desugar.scm \
+             passes/02_analysis.scm \
+             passes/03_cp0.scm \
+             passes/04_anf.scm \
+             passes/05_closure_convert.scm \
+             passes/06_lir.scm \
+             passes/07_backend_x86_64.scm
+
+PASSES = $(PASSES_LIB) passes/08_driver.scm
 
 compiler: compiler.scm
 
 compiler.scm: $(PASSES)
 	cat $(PASSES) > $@
+
+build/compiler_passes.scm: $(PASSES_LIB)
+	@mkdir -p build
+	cat $^ > $@
+
+test_passes: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_passes_runner.scm
 
 core: build/ulisp_core.scm
 

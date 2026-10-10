@@ -17,5 +17,6 @@
              (ast1 (desugar-all ast0))
              (ast2 (cp0-optimize ast1))
              (ast3 (anf-all ast2))
-             (ast4 (closure-convert ast3)))
-        (compile-program ast4))))
+             (ast4 (closure-convert ast3))
+             (lir  (generate-lir ast4)))
+        (emit-x86-64 lir))))

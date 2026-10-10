@@ -123,10 +123,10 @@
              make-string string-length)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=? %closure-ref)))
+  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! %closure-set!)))
+  (memq op '(string-set!)))
 
 (define (closure-prim? op)
   (memq op '(%make-closure %closure-ref %closure-set!)))
@@ -148,3 +148,32 @@
 (define (atomic-expr? expr)
   (or (symbol? expr)
       (const? expr)))
+
+;;; Symbol table for interned symbols
+(define *symbol-table* (cons '() '()))
+(define (intern-symbol sym)
+  (let ((entry (assq sym (car *symbol-table*))))
+    (if entry
+        (cdr entry)
+        (let ((id (+ (* (length (car *symbol-table*)) 256) 2)))
+          (set-car! *symbol-table* (cons (cons sym id) (car *symbol-table*)))
+          id))))
+
+;;; String table for interned string literals
+(define *string-counter* (cons 0 '()))
+(define *strings* (cons '() '()))
+(define (intern-string str)
+  (let ((label (string-append ".L_str_" (number->string (car *string-counter*)))))
+    (set-car! *string-counter* (+ (car *string-counter*) 1))
+    (set-car! *strings* (cons (cons label str) (car *strings*)))
+    label))
+
+(define (offset->string offset)
+  (if (< offset 0)
+      (string-append "- " (number->string (- 0 offset)))
+      (string-append "+ " (number->string offset))))
+
+(define (align-frame-shift needed)
+  (if (= (modulo needed 16) 8)
+      needed
+      (+ needed 8)))

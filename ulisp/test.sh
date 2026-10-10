@@ -18,6 +18,9 @@ mkdir -p build
 make compiler
 cat lib/string.scm lib/printer.scm lib/reader.scm compiler.scm > build/ulisp_core.scm
 
+echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
+make test_passes
+
 cleanup() {
     rm -f "$TMP_S" "$TMP_BIN"
 }

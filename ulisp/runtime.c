@@ -56,7 +56,7 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
 #define EMPTY_LIST      0x3F
 #define EOF_OBJECT      0x4F
 
-#define HEAP_SIZE       (1024ULL * 1024 * 1024)
+#define HEAP_SIZE       (4096ULL * 1024 * 1024)
 
 /* Minimal 3 I/O Primitives bound directly to libc stdin/stdout */
 uint64_t ulisp_read_char(void) {
