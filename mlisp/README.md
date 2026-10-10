@@ -28,18 +28,28 @@ C 言語の外部コンパイラやトランスパイラを極力排除し、内
 
 ## 2. 実行・テスト・ネイティブバイナリビルド方法
 
-### A. RPython スタイル: ワンバイナリ AOT ビルド (`make bin`)
-RPython の `rpython target.py` と同様に、ULisp の AOT コンパイラを利用して、ターゲット言語処理系を **スタンドアロンな単一 Linux ELF バイナリ** に直接コンパイルします。
+### A. JIT 内蔵型スタンドアロンワンバイナリ AOT ビルド (`make scheme-jit`)
+RPython における PyPy+JIT の AOT コンパイル（`pypy-c` 生成）と同様に、ULisp の自己ホスティング AOT コンパイラ（Pass 0〜7）を用いて、MLisp のメタトレーサ・最適化エンジン・LIR ブリッジ・JIT ランタイムおよび言語インタプリタを丸ごとコンパイルし、**「JIT コンパイラを内蔵した単一自己完結バイナリ (`bin/scheme-jit`)」** を生成します。
 
 ```bash
-# スタンドアロンネイティブバイナリのビルド
-make -C mlisp bin
+# JIT 内蔵型スタンドアロンネイティブバイナリのビルド
+make -C mlisp scheme-jit
 
-# ビルドされたワンバイナリの直接実行（Python/外部依存なし）
+# ビルドされたワンバイナリの直接実行（Python/外部依存なし、42KB〜106KB超軽量ELF）
+./mlisp/bin/scheme-jit
+# または Makefile 経由:
+make -C mlisp run_scheme_jit
+```
+
+### B. RPython スタイル: TinyVM ワンバイナリ AOT ビルド (`make bin`)
+ULisp の AOT コンパイラを利用して、TinyVM インタプリタをスタンドアロンな単一 Linux ELF バイナリに直接コンパイルします。
+
+```bash
+make -C mlisp bin
 ./mlisp/bin/tiny_vm
 ```
 
-### B. インタラクティブ実動デモ (`make demo`)
+### C. インタラクティブ実動デモ (`make demo`)
 TinyVM のバイトコード実行、JIT 生トレース自動合成、PE & Virtuals によるトレース最適化、ULisp Pass 6 LIR への変換、および自己適用メタ循環 Scheme 評価器の一連の流れを対話的に実行します。
 
 ```bash

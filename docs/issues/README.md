@@ -6,7 +6,8 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **508** | MLisp の AOT 統合および JIT 内蔵型ワンバイナリ (scheme-jit) の生成 | Feature | Open (New) | [508-integrate-mlisp-with-ulisp-aot-compiler.md](508-integrate-mlisp-with-ulisp-aot-compiler.md) |
+
+*現在、オープンな Issue はありません。*
 
 ---
 
@@ -14,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **508** | MLisp の AOT 統合および JIT 内蔵型ワンバイナリ (scheme-jit) の生成 | Feature | 2026-10-10 | [closed/508-integrate-mlisp-with-ulisp-aot-compiler.md](closed/508-integrate-mlisp-with-ulisp-aot-compiler.md) |
 | **507** | 限定継続（shift/reset）とULisp LIRに基づく内因的メタトレーシングJITツールチェーン (MLisp) の実装 | Feature | 2026-10-10 | [closed/507-implement-mlisp-endogenous-meta-tracing-jit.md](closed/507-implement-mlisp-endogenous-meta-tracing-jit.md) |
 | **503** | 低レベルIR (LIR) を入力とする AArch64 (ARM64) ネイティブコード生成バックエンドの実装 | Feature | 2026-10-10 | [closed/503-implement-ulisp-aarch64-backend-via-lir.md](closed/503-implement-ulisp-aarch64-backend-via-lir.md) |
 | **501** | ULisp ターゲットランタイム向けガベージコレクタ (2空間 Copying GC) の実装 | Feature | 2026-10-10 | [closed/501-implement-ulisp-target-garbage-collector.md](closed/501-implement-ulisp-target-garbage-collector.md) |
