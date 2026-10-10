@@ -6,8 +6,7 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-
-*現在、オープンな Issue はありません。*
+| **508** | MLisp の AOT 統合および JIT 内蔵型ワンバイナリ (scheme-jit) の生成 | Feature | Open (New) | [508-integrate-mlisp-with-ulisp-aot-compiler.md](508-integrate-mlisp-with-ulisp-aot-compiler.md) |
 
 ---
 
