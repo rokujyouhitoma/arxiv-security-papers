@@ -1,4 +1,4 @@
-.PHONY: test bootstrap clean run_42 core compiler test_passes stage1
+.PHONY: test test_c bootstrap clean run_42 run_c_42 core compiler test_passes stage1
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -14,7 +14,8 @@ PASSES_LIB = passes/00_helpers.scm \
              passes/04_anf.scm \
              passes/05_closure_convert.scm \
              passes/06_lir.scm \
-             passes/07_backend_x86_64.scm
+             passes/07_backend_x86_64.scm \
+             passes/07_backend_c.scm
 
 PASSES = $(PASSES_LIB) passes/08_driver.scm
 
@@ -54,6 +55,9 @@ stage1: build/scheme-stage1
 test: core
 	./test.sh
 
+test_c: compiler
+	./test_c.sh
+
 bootstrap: core
 	./bootstrap.sh
 
@@ -62,6 +66,13 @@ run_42: core
 	@$(CC) $(CFLAGS) -o tmp runtime.c tmp.s
 	@./tmp
 	@rm -f tmp tmp.s
+
+run_c_42: core
+	@mkdir -p build
+	@printf "(!target c)\n42\n" | PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm > build/tmp_c_42.c
+	@$(CC) $(CFLAGS) -o build/tmp_c_42 runtime.c build/tmp_c_42.c
+	@./build/tmp_c_42
+	@rm -f build/tmp_c_42.c build/tmp_c_42
 
 clean:
 	rm -f tmp tmp_bin *.s *.o

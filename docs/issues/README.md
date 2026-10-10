@@ -8,7 +8,6 @@
 | :---: | --- | :---: | :---: | :---: |
 | **501** | ULisp ターゲットランタイム向けガベージコレクタ (2空間 Copying GC) の実装 | Feature | Open (New) | [501-implement-ulisp-target-garbage-collector.md](501-implement-ulisp-target-garbage-collector.md) |
 | **503** | 低レベルIR (LIR) を入力とする AArch64 (ARM64) ネイティブコード生成バックエンドの実装 | Feature | Open (New) | [503-implement-ulisp-aarch64-backend-via-lir.md](503-implement-ulisp-aarch64-backend-via-lir.md) |
-| **504** | 低レベルIR (LIR) を入力とする Portable C / WebAssembly バックエンドの実装 | Feature | Open (New) | [504-implement-ulisp-c-and-wasm-backend-via-lir.md](504-implement-ulisp-c-and-wasm-backend-via-lir.md) |
 
 ---
 
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **504** | 低レベルIR (LIR) を入力とする Portable C / WebAssembly バックエンドの実装 | Feature | 2026-10-10 | [closed/504-implement-ulisp-c-and-wasm-backend-via-lir.md](closed/504-implement-ulisp-c-and-wasm-backend-via-lir.md) |
 | **500** | ULisp コンパイラへのメタサーキュラー・マクロ展開器 (Macro Expander) の実装 | Feature | 2026-10-10 | [closed/500-implement-ulisp-metacircular-macro-expander.md](closed/500-implement-ulisp-metacircular-macro-expander.md) |
 | **506** | ILisp 実行速度のプロファイリングと Stage 1 コンパイル高速化 | Bug | 2026-10-10 | [closed/506-profile-and-optimize-ilisp-performance.md](closed/506-profile-and-optimize-ilisp-performance.md) |
 | **505** | ULisp テストランナー (test.sh) のネイティブコンパイラ実行移行と高速化 | Feature | 2026-10-10 | [closed/505-migrate-test-runner-to-native-ulisp-compiler.md](closed/505-migrate-test-runner-to-native-ulisp-compiler.md) |

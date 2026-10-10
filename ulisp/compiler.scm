@@ -1916,8 +1916,357 @@
                   (loop (cdr ss)))))))
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
 ;;; =======================================================================
+;;; ULisp Compiler Pass 7b: Portable C / WebAssembly Backend Code Generator
+;;; Conforms to DSN-33 Architecture Specification & Issue #504
+;;; Consumes Pass 6 %lir-program and emits ANSI C99 source code.
+;;; =======================================================================
+
+(define (c-target-directive? form)
+  (and (pair? form)
+       (eq? (car form) '!target)
+       (pair? (cdr form))
+       (eq? (cadr form) 'c)))
+
+(define (c-sanitize-label lbl)
+  (let* ((str (if (symbol? lbl) (symbol->string lbl) lbl))
+         (len (string-length str)))
+    (if (and (> len 0) (char=? (string-ref str 0) #\.))
+        (let ((res (make-string (+ len 5))))
+          (string-set! res 0 #\u)
+          (string-set! res 1 #\l)
+          (string-set! res 2 #\i)
+          (string-set! res 3 #\s)
+          (string-set! res 4 #\p)
+          (string-set! res 5 #\_)
+          (let loop ((i 1))
+            (if (< i len)
+                (let ((c (string-ref str i)))
+                  (string-set! res (+ i 5) (if (char=? c #\.) #\_ c))
+                  (loop (+ i 1)))
+                res)))
+        str)))
+
+(define (c-reg->str reg)
+  (case reg
+    ((%rax) "reg_rax")
+    ((%rdx) "reg_rdx")
+    ((%rcx) "reg_rcx")
+    ((%r10) "reg_r10")
+    ((%rdi) "reg_rdi")
+    ((%r12) "reg_r12")
+    ((%rsp) "reg_rsp")
+    ((%al)  "((uint8_t)reg_rax)")
+    (else (c-sanitize-label reg))))
+
+(define (c-base-ptr-str base)
+  (case base
+    ((%rsp) "reg_rsp")
+    ((%r12) "reg_r12")
+    (else (string-append "((char *)(uintptr_t)" (c-reg->str base) ")"))))
+
+(define (c-mem-ref base offset)
+  (let ((base-str (c-base-ptr-str base))
+        (off-str (if (number? offset) (number->string offset) (c-reg->str offset))))
+    (string-append "(*(uint64_t *)(" base-str " + (" off-str ")))")))
+
+(define (c-mem-byte-ref base offset)
+  (let ((base-str (c-base-ptr-str base))
+        (off-str (if (number? offset) (number->string offset) (c-reg->str offset))))
+    (string-append "(*(uint8_t *)(" base-str " + (" off-str ")))")))
+
+(define (c-operand->str opnd)
+  (cond
+    ((symbol? opnd)
+     (c-reg->str opnd))
+    ((integer? opnd)
+     (number->string opnd))
+    ((pair? opnd)
+     (let ((tag (car opnd)))
+       (case tag
+         ((%stack)
+          (c-mem-ref '%rsp (cadr opnd)))
+         ((%mem)
+          (c-mem-ref (cadr opnd) (caddr opnd)))
+         (else
+          (error "Unknown operand in C backend:" opnd)))))
+    (else
+     (error "Invalid operand type in C backend:" opnd))))
+
+;;; Emits a single LIR instruction to ANSI C statement
+(define (emit-c-instruction inst)
+  (let ((op (car inst)))
+    (case op
+      ((%label)
+       (let ((lbl (cadr inst)))
+         (emit (string-append (c-sanitize-label lbl) ":;"))))
+
+      ((%jump)
+       (let ((lbl (cadr inst)))
+         (if (or (eq? lbl '%rdx) (eq? lbl '%rax) (eq? lbl '%rcx))
+             (emit (string-append "    ((void (*)(void))(uintptr_t)" (c-reg->str lbl) ")(); return;"))
+             (emit (string-append "    goto " (c-sanitize-label lbl) ";")))))
+
+      ((%jump-if-false)
+       (let ((reg (cadr inst))
+             (lbl (caddr inst)))
+         (emit (string-append "    if (" (c-reg->str reg) " == 0x2F) goto " (c-sanitize-label lbl) ";"))))
+
+      ((%jump-if-zero)
+       (let ((lbl (cadr inst)))
+         (emit (string-append "    if (cmp_s1 == cmp_s2) goto " (c-sanitize-label lbl) ";"))))
+
+      ((%return)
+       (emit "    return;"))
+
+      ((%mov)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (cond
+           ((eq? dst '%r12)
+            (emit (string-append "    reg_r12 = (char *)(uintptr_t)(" (c-operand->str src) ");")))
+           ((eq? dst '%rsp)
+            (emit (string-append "    reg_rsp = (char *)(uintptr_t)(" (c-operand->str src) ");")))
+           ((eq? src '%r12)
+            (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uintptr_t)reg_r12;")))
+           ((eq? src '%rsp)
+            (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uintptr_t)reg_rsp;")))
+           (else
+            (emit (string-append "    " (c-operand->str dst) " = " (c-operand->str src) ";"))))))
+
+      ((%load)
+       (let ((dst (cadr inst))
+             (base (caddr inst))
+             (offset (cadddr inst)))
+         (emit (string-append "    " (c-reg->str dst) " = " (c-mem-ref base offset) ";"))))
+
+      ((%store)
+       (let ((base (cadr inst))
+             (offset (caddr inst))
+             (src (cadddr inst)))
+         (emit (string-append "    " (c-mem-ref base offset) " = " (c-operand->str src) ";"))))
+
+      ((%store-byte)
+       (let ((base (cadr inst))
+             (offset (caddr inst))
+             (src (cadddr inst)))
+         (let ((src-str (if (number? src) (number->string src) (c-reg->str src))))
+           (emit (string-append "    " (c-mem-byte-ref base offset) " = (uint8_t)(" src-str ");")))))
+
+      ((%load-byte-zx)
+       (let ((dst (cadr inst))
+             (base (caddr inst))
+             (offset (cadddr inst)))
+         (emit (string-append "    " (c-reg->str dst) " = (uint64_t)(" (c-mem-byte-ref base offset) ");"))))
+
+      ((%add)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (if (eq? dst '%r12)
+             (emit (string-append "    reg_r12 += " (c-operand->str src) ";"))
+             (emit (string-append "    " (c-operand->str dst) " += " (c-operand->str src) ";")))))
+
+      ((%sub)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " -= " (c-operand->str src) ";"))))
+
+      ((%neg)
+       (let ((dst (cadr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(-(int64_t)" (c-operand->str dst) ");"))))
+
+      ((%imul)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)" (c-operand->str dst) " * (int64_t)" (c-operand->str src) ");"))))
+
+      ((%cqo)
+       (emit "    /* cqo */"))
+
+      ((%idiv)
+       (let ((src (cadr inst)))
+         (emit (string-append "    reg_rax = (uint64_t)((int64_t)reg_rax / (int64_t)" (c-operand->str src) ");"))))
+
+      ((%inc)
+       (let ((dst (cadr inst)))
+         (emit (string-append "    " (c-operand->str dst) "++;"))))
+
+      ((%shl)
+       (let ((dst (cadr inst))
+             (count (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " <<= " (number->string count) ";"))))
+
+      ((%shr)
+       (let ((dst (cadr inst))
+             (count (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " >>= " (number->string count) ";"))))
+
+      ((%sar)
+       (let ((dst (cadr inst))
+             (count (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(((int64_t)" (c-operand->str dst) ") >> " (number->string count) ");"))))
+
+      ((%bit-and)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " &= " (c-operand->str src) ";"))))
+
+      ((%bit-or)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " |= " (c-operand->str src) ";"))))
+
+      ((%bit-xor)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " ^= " (c-operand->str src) ";"))))
+
+      ((%cmp)
+       (let ((s1 (cadr inst))
+             (s2 (caddr inst)))
+         (emit (string-append "    cmp_s1 = " (c-operand->str s1) "; cmp_s2 = " (c-operand->str s2) ";"))))
+
+      ((%set-boolean)
+       (let ((dst (cadr inst))
+             (cc (caddr inst)))
+         (cond
+           ((string=? cc "sete")
+            (emit (string-append "    " (c-reg->str dst) " = (cmp_s1 == cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "setne")
+            (emit (string-append "    " (c-reg->str dst) " = (cmp_s1 != cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "setl")
+            (emit (string-append "    " (c-reg->str dst) " = ((int64_t)cmp_s1 < (int64_t)cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "setle")
+            (emit (string-append "    " (c-reg->str dst) " = ((int64_t)cmp_s1 <= (int64_t)cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "setg")
+            (emit (string-append "    " (c-reg->str dst) " = ((int64_t)cmp_s1 > (int64_t)cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "setge")
+            (emit (string-append "    " (c-reg->str dst) " = ((int64_t)cmp_s1 >= (int64_t)cmp_s2) ? 0x6F : 0x2F;")))
+           (else
+            (error "Unknown condition code in C backend:" cc)))))
+
+      ((%alloc)
+       (let ((dst (cadr inst))
+             (bytes (caddr inst))
+             (tag (cadddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = ((uint64_t)(uintptr_t)reg_r12) + " (number->string tag) ";"))
+         (emit (string-append "    reg_r12 += " (number->string bytes) ";"))))
+
+      ((%code-ref)
+       (let ((dst (cadr inst))
+             (lbl (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uintptr_t)" (c-sanitize-label lbl) ";"))))
+
+      ((%str-ref)
+       (let ((dst (cadr inst))
+             (lbl (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = ((uint64_t)(uintptr_t)" (c-sanitize-label lbl) ") + 3;"))))
+
+      ((%c-call)
+       (let ((func (cadr inst))
+             (frame-shift (caddr inst)))
+         (cond
+           ((eq? func 'ulisp_read_char)
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
+            (emit "    reg_rax = ulisp_read_char();")
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
+           ((eq? func 'ulisp_peek_char)
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
+            (emit "    reg_rax = ulisp_peek_char();")
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
+           ((eq? func 'ulisp_write_char)
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
+            (emit "    reg_rax = ulisp_write_char(reg_rdi);")
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
+           (else
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
+            (emit (string-append "    reg_rax = " (symbol->string func) "();"))
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";")))))))
+
+      ((%call-closure)
+       (let ((frame-shift (cadr inst)))
+         (emit "    reg_rdx = *(uint64_t *)((char *)(uintptr_t)reg_r10 - 1);")
+         (emit (string-append "    reg_rsp -= " (number->string (+ frame-shift 8)) ";"))
+         (emit "    ((void (*)(void))(uintptr_t)reg_rdx)();")
+         (emit (string-append "    reg_rsp += " (number->string (+ frame-shift 8)) ";"))))
+
+      (else
+       (error "Unknown LIR opcode in C backend:" inst)))))
+
+;;; Emits C code for a single %lir-function
+(define (emit-c-function fn)
+  (let* ((label (cadr fn))
+         (label-str (c-sanitize-label label))
+         (body (cdr (assq 'body (cddr fn)))))
+    (emit (string-append "static void " label-str "(void) {"))
+    (emit "    *(uint64_t *)(reg_rsp - 8) = reg_r10;")
+    (for-each emit-c-instruction body)
+    (emit "}")
+    (emit "")))
+
+;;; Pass 7b Entrypoint: Takes %lir-program and emits complete ANSI C99 source
+(define (emit-c prog)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
+         (funcs (if funcs-clause (cdr funcs-clause) '()))
+         (main-clause (assq '%lir-main (cdr prog)))
+         (main-body (cdr (assq 'body (cdr main-clause)))))
+    (emit "/* Generated by ULisp Portable C / WebAssembly Backend */")
+    (emit "#include <stdint.h>")
+    (emit "#include <stdio.h>")
+    (emit "#include <stdlib.h>")
+    (emit "")
+    (emit "extern uint64_t ulisp_read_char(void);")
+    (emit "extern uint64_t ulisp_peek_char(void);")
+    (emit "extern uint64_t ulisp_write_char(uint64_t val);")
+    (emit "#if defined(__GNUC__) || defined(__clang__)")
+    (emit "#define ULISP_UNUSED __attribute__((unused))")
+    (emit "#else")
+    (emit "#define ULISP_UNUSED")
+    (emit "#endif")
+    (emit "")
+    (emit "static uint64_t reg_rax ULISP_UNUSED;")
+    (emit "static uint64_t reg_rdx ULISP_UNUSED;")
+    (emit "static uint64_t reg_rcx ULISP_UNUSED;")
+    (emit "static uint64_t reg_r10 ULISP_UNUSED;")
+    (emit "static uint64_t reg_rdi ULISP_UNUSED;")
+    (emit "static char *reg_r12 ULISP_UNUSED;")
+    (emit "static char *reg_rsp ULISP_UNUSED;")
+    (emit "static uint64_t cmp_s1 ULISP_UNUSED;")
+    (emit "static uint64_t cmp_s2 ULISP_UNUSED;")
+    (emit "static char stack_mem[64 * 1024 * 1024];")
+    (emit "")
+    ;; Forward declarations of lifted functions
+    (for-each (lambda (fn)
+                (let* ((lbl (cadr fn))
+                       (lbl-str (c-sanitize-label lbl)))
+                  (emit (string-append "static void " lbl-str "(void);"))))
+              funcs)
+    (emit "")
+    ;; Emit string literals
+    (if (not (null? (car *strings*)))
+        (let loop ((ss (reverse (car *strings*))))
+          (if (not (null? ss))
+              (let* ((entry (car ss))
+                     (lbl-str (c-sanitize-label (car entry)))
+                     (escaped (escape-gas-string (cdr entry))))
+                (emit (string-append "static const char " lbl-str "[] = \"" escaped "\";"))
+                (loop (cdr ss))))))
+    (emit "")
+    ;; Emit lifted function bodies
+    (for-each emit-c-function funcs)
+    ;; Emit scheme_entry
+    (emit "uint64_t scheme_entry(char *heap_base) {")
+    (emit "    reg_r12 = heap_base;")
+    (emit "    reg_rsp = stack_mem + sizeof(stack_mem) - 1024;")
+    (for-each (lambda (inst)
+                (if (not (eq? (car inst) '%return))
+                    (emit-c-instruction inst)))
+              main-body)
+    (emit "    return reg_rax;")
+    (emit "}")
+    (emit "")))
+;;; =======================================================================
 ;;; ULisp Compiler Pass 8: Compilation Driver & CLI Entrypoint
-;;; Conforms to DSN-33 Architecture Specification
+;;; Conforms to DSN-33 Architecture Specification & Issue #504
 ;;; =======================================================================
 
 (define (read-all-forms)
@@ -1927,8 +2276,18 @@
           (reverse acc)
           (loop (cons expr acc))))))
 
+(define (extract-target-and-forms raw-forms)
+  (if (and (pair? raw-forms)
+           (pair? (car raw-forms))
+           (eq? (caar raw-forms) '!target))
+      (cons (cadar raw-forms) (cdr raw-forms))
+      (cons 'x86_64 raw-forms)))
+
 ;;; Entry point: read all S-expressions from standard input and compile through serial pipeline
-(let ((forms (read-all-forms)))
+(let* ((raw (read-all-forms))
+       (target-and-forms (extract-target-and-forms raw))
+       (target (car target-and-forms))
+       (forms (cdr target-and-forms)))
   (if (not (null? forms))
       (let* ((macro-expanded (expand-macros-in-forms forms))
              (ast0 (rewrite-top-level macro-expanded))
@@ -1937,4 +2296,6 @@
              (ast3 (anf-all ast2))
              (ast4 (closure-convert ast3))
              (lir  (generate-lir ast4)))
-        (emit-x86-64 lir))))
+        (if (eq? target 'c)
+            (emit-c lir)
+            (emit-x86-64 lir)))))
