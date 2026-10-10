@@ -479,6 +479,13 @@ assert '#\h' '(string-ref "hello" 0)'
 assert '#\o' '(string-ref "hello" 4)'
 assert '"abc"' '(let ((s (make-string 3))) (begin (string-set! s 0 #\a) (string-set! s 1 #\b) (string-set! s 2 #\c) s))'
 
+# --- Step 25: Metacircular Macro Expander (Issue 500) ---
+echo "-- Step 25: Issue 500 Metacircular Macro Expander --"
+assert "42" "(define-macro (when c . body) (list 'if c (cons 'begin body) #f)) (when (= 5 5) 42)"
+assert "100" "(define-macro (unless c . body) (list 'if c #f (cons 'begin body))) (unless (= 5 6) 100)"
+assert "81" "(defmacro my-square (x) (list '* x x)) (my-square 9)"
+assert "42" "(defmacro inc (x) (list '+ x 1)) (inc (inc 40))"
+
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification
 # =======================================================================

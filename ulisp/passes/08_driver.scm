@@ -13,7 +13,8 @@
 ;;; Entry point: read all S-expressions from standard input and compile through serial pipeline
 (let ((forms (read-all-forms)))
   (if (not (null? forms))
-      (let* ((ast0 (rewrite-top-level forms))
+      (let* ((macro-expanded (expand-macros-in-forms forms))
+             (ast0 (rewrite-top-level macro-expanded))
              (ast1 (desugar-all ast0))
              (ast2 (cp0-optimize ast1))
              (ast3 (anf-all ast2))

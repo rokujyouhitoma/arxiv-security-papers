@@ -7,6 +7,7 @@ PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.
 ILISP = $(PYTHON) -m ilisp
 
 PASSES_LIB = passes/00_helpers.scm \
+             passes/00b_macro_expander.scm \
              passes/01_desugar.scm \
              passes/02_analysis.scm \
              passes/03_cp0.scm \
