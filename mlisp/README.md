@@ -14,6 +14,8 @@ C 言語の外部コンパイラやトランスパイラを極力排除し、内
 - `core/`: 限定継続（`shift`/`reset`）コアおよびメタ循環評価器
   - `delimcc.scm`: ポータブル限定継続プリミティブ
 - `tracer/`: 内因的 S 式トレース抽出器（`jit-merge-point`）
+  - `tracer.scm`: メタトレーサ・ホットループ検知・トレース記録
+  - `auto_instrument.scm`: ループ自動検知（Named `let`、自己末尾再帰）＆ `jit-merge-point` ゼロ侵入自動計装パス
 - `optimizer/`: トレース部分評価・エスケープ解析・仮想オブジェクト縮退
 - `bridge/`: トレースから ULisp LIR への変換アダプタ
 - `emitter/`: **Pure Scheme 製ダイレクト機械語エミッタ**
@@ -23,6 +25,7 @@ C 言語の外部コンパイラやトランスパイラを極力排除し、内
   - `jit_buffer.scm`: 実行可能バッファ管理
 - `tests/`: 単体・結合テストスイート
   - `test_delimcc.scm`: 限定継続セマンティクス検証テスト
+  - `test_auto_instrument.scm`: ループ自動検知・自動計装検証テスト
 
 ---
 
@@ -68,8 +71,23 @@ make -C mlisp compile_ulisp
 make -C ulisp run_mlisp_stage
 ```
 
-### E. 全テストスイートの実行 (`make test`)
+### E. ゼロ侵入型 自動 JIT 計装 (Auto-Instrumentation)
+ULisp やユーザーが記述した純粋な Scheme コードに対して、手動で `jit-merge-point` を記述・汚染する必要はありません（Zero-Invasive）。
+`mlisp/tracer/auto_instrument.scm` が AST 前処理層において Named `let` や自己末尾再帰関数を自動検出し、ループ先頭に `(jit-merge-point '<tag> (list <vars>...))` を透過的に自動注入します。
+
+```scheme
+;; ユーザーが書くコード（JIT アノテーションなし）:
+(let loop ((i 0) (acc 0))
+  (if (>= i 1000) acc (loop (+ i 1) (+ acc i))))
+
+;; MLisp が自動展開する AST（透過的に JIT がフックされる）:
+(let loop ((i 0) (acc 0))
+  (jit-merge-point 'loop_0 (list i acc))
+  (if (>= i 1000) acc (loop (+ i 1) (+ acc i))))
+```
+
+### F. 全テストスイートの実行 (`make test`)
 ```bash
-# 全テストの一括実行
+# 全テスト（94項目）の一括実行
 make -C mlisp test
 ```

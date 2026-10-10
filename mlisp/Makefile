@@ -1,4 +1,4 @@
-.PHONY: all test test_delimcc test_tracer test_optimizer test_bridge test_examples clean demo bin run_bin scheme-jit run_scheme_jit compile_ulisp
+.PHONY: all test test_delimcc test_tracer test_auto_instrument test_optimizer test_bridge test_examples clean demo bin run_bin scheme-jit run_scheme_jit compile_ulisp
 
 ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
@@ -19,6 +19,13 @@ build/test_tracer_runner.scm: core/delimcc.scm tracer/tracer.scm tests/test_trac
 
 test_tracer: build/test_tracer_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_tracer_runner.scm
+
+build/test_auto_instrument_runner.scm: core/delimcc.scm tracer/tracer.scm tracer/auto_instrument.scm tests/test_auto_instrument.scm
+	@mkdir -p build
+	cat $^ > $@
+
+test_auto_instrument: build/test_auto_instrument_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_auto_instrument_runner.scm
 
 build/test_optimizer_runner.scm: core/delimcc.scm tracer/tracer.scm optimizer/pe.scm optimizer/virtuals.scm tests/test_optimizer.scm
 	@mkdir -p build
@@ -93,7 +100,7 @@ run_bin: bin/tiny_vm
 compile_ulisp:
 	$(MAKE) -C $(ROOT_DIR)/ulisp stage_mlisp
 
-test: test_delimcc test_tracer test_optimizer test_bridge test_examples
+test: test_delimcc test_tracer test_auto_instrument test_optimizer test_bridge test_examples
 
 clean:
 	rm -rf build bin tmp*
