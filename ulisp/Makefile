@@ -1,4 +1,4 @@
-.PHONY: test bootstrap clean run_42 core compiler test_passes
+.PHONY: test bootstrap clean run_42 core compiler test_passes stage1
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -35,6 +35,19 @@ core: build/ulisp_core.scm
 build/ulisp_core.scm: lib/string.scm lib/printer.scm lib/reader.scm compiler.scm
 	@mkdir -p build
 	cat $^ > $@
+
+build/runtime.o: runtime.c
+	@mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/stage1.s: compiler.scm build/ulisp_core.scm
+	@mkdir -p build
+	PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < build/ulisp_core.scm > $@
+
+build/scheme-stage1: build/stage1.s build/runtime.o
+	$(CC) -no-pie $^ -o $@
+
+stage1: build/scheme-stage1
 
 test: core
 	./test.sh

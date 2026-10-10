@@ -13,6 +13,7 @@ CFLAGS="-Wall -Wextra -O0 -g"
 TMP_S="tmp.s"
 TMP_BIN="tmp_bin"
 COMPILER="compiler.scm"
+ULISP_STAGE1="build/scheme-stage1"
 
 mkdir -p build
 make compiler
@@ -20,6 +21,35 @@ cat lib/string.scm lib/printer.scm lib/reader.scm compiler.scm > build/ulisp_cor
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
+
+# Determine compiler engine: prefer native scheme-stage1, fallback to ILisp
+USE_NATIVE_ULISP=false
+
+if [ "${FORCE_ILISP:-0}" != "1" ]; then
+    if [ ! -f "$ULISP_STAGE1" ]; then
+        echo "=== [Bootstrap] Native Stage 1 compiler not found. Building scheme-stage1... ==="
+        make stage1 >/dev/null 2>&1 || true
+    fi
+
+    if [ -x "$ULISP_STAGE1" ]; then
+        # Smoke test: verify scheme-stage1 can compile a trivial integer form on this architecture
+        if echo "42" | ULISP_QUIET=1 "$ULISP_STAGE1" >/dev/null 2>&1; then
+            USE_NATIVE_ULISP=true
+        fi
+    fi
+fi
+
+if [ "$USE_NATIVE_ULISP" = true ]; then
+    echo "=== Compiler Engine: ULisp Native AOT Compiler (Fast mode: < 1s) ==="
+    compile_scheme() {
+        ULISP_QUIET=1 "$ULISP_STAGE1" <<< "$1" > "$2"
+    }
+else
+    echo "=== Compiler Engine: ILisp Python Interpreter (Fallback mode) ==="
+    compile_scheme() {
+        $ILISP "$COMPILER" <<< "$1" > "$2"
+    }
+fi
 
 cleanup() {
     rm -f "$TMP_S" "$TMP_BIN"
@@ -37,7 +67,7 @@ assert() {
     fi
 
     # 1. Compile S-expression to x86-64 assembly
-    $ILISP "$COMPILER" <<< "$full_input" > "$TMP_S"
+    compile_scheme "$full_input" "$TMP_S"
 
     # 2. Assemble and link with minimal C runtime
     $CC $CFLAGS -o "$TMP_BIN" runtime.c "$TMP_S"
@@ -58,7 +88,7 @@ assert_stdin() {
     program="$2"
     stdin_input="$3"
 
-    $ILISP "$COMPILER" <<< "$program" > "$TMP_S"
+    compile_scheme "$program" "$TMP_S"
     $CC $CFLAGS -o "$TMP_BIN" runtime.c "$TMP_S"
     actual=$(printf "%s" "$stdin_input" | "./$TMP_BIN")
 
