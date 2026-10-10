@@ -91,29 +91,47 @@ ULisp は Chez Scheme に着想を得た**直列 Nanopass アーキテクチャ*
 - **不変条件**: ネストした `lambda` および `letrec` は完全に消滅し、すべての手続きはフラットな独立定義となる。
 
 ### Pass 6: 低レベル IR (LIR) 生成 (`passes/06_lir.scm`)
-- **入力**: フラットな `%program` 表現。
+- **入力**: 平坦化された `%program` 表現。
 - **出力**: ターゲット非依存の 3 番地 LIR 命令列。
+- **責務**:
+  - `Pair`、`Closure`、`String` アロケーション時における 8 バイト統一プレフィックスヘッダ（Fixnum エンコード）の生成。
+  - 低レベルメモリアクセス（`%raw-load`, `%raw-store!`）およびポインタ/タグ抽象化（`%ptr-tag`, `%ptr-untag`, `%ptr-add`, `%ptr-tag-add`）の生成。
+  - GC 状態制御イントリンシック（`%get-rsp`, `%get-heap-ptr`, `%set-heap-ptr!`, `%get-gc-state-ptr`）の展開。
 - **詳細**: [lir_specification.md](lir_specification.md) 参照。
 
-### Pass 7: バックエンドコード生成 (`passes/07_backend_x86_64.scm`)
+### Pass 7: x86-64 バックエンドコード生成 (`passes/07_backend_x86_64.scm`)
 - **入力**: 3 番地 LIR 命令列。
 - **出力**: x86-64 GNU アセンブリテキスト。
 - **責務**:
-  - LIR 命令をネイティブ命令（`mov`, `add`, `cmp`, `jmp`, `call`, `ret`）へ 1 対 1 マッピング。
-  - ABI 準拠のプロローグ・エピローグ生成およびヒープポインタ（`r12`）の整合性維持。
+  - LIR 命令を x86-64 ネイティブ命令（`mov`, `add`, `cmp`, `jmp`, `call`, `ret` 等）へ 1 対 1 マッピング。
+  - ABI 準拠の 16 バイトスタックアライメントおよびヒープポインタ（`r12`）の整合性維持。
+  - `%alloc` プレフィックスヘッダ加算および GAS アセンブラ構文互換性保証。
 
-### Pass 8: コンパイルドライバ (`passes/08_driver.scm`)
+### Pass 7b: Portable C99 バックエンドコード生成 (`passes/07_backend_c.scm` - Issue #504)
+- **入力**: 3 番地 LIR 命令列。
+- **出力**: ANSI C99 / WebAssembly 互換 C ソースコード。
+- **責務**:
+  - LIR 命令を ANSI C99 文へトランスパイル（`-Wall -Wextra -Werror` ゼロ警告準拠）。
+  - レジスタ配列およびスタック配列による仮想実行モデル。
+
+### Pass 8: コンパイルドライバ・CLI 入口 (`passes/08_driver.scm`)
 - **入力**: 標準入力からの S 式ストリーム。
-- **出力**: 標準出力へのアセンブリ出力。
+- **出力**: 標準出力へのアセンブリまたは C コード出力。
 - **パイプライン結合**:
   ```scheme
-  (let ((forms (read-all-forms)))
+  (let* ((raw (read-all-forms))
+         (target-and-forms (extract-target-and-forms raw))
+         (target (car target-and-forms))
+         (forms (cdr target-and-forms)))
     (if (not (null? forms))
-        (let* ((ast0 (rewrite-top-level forms))
+        (let* ((macro-expanded (expand-macros-in-forms forms))
+               (ast0 (rewrite-top-level macro-expanded))
                (ast1 (desugar-all ast0))
                (ast2 (cp0-optimize ast1))
                (ast3 (anf-all ast2))
                (ast4 (closure-convert ast3))
                (lir  (generate-lir ast4)))
-          (emit-assembly lir))))
+          (if (eq? target 'c)
+              (emit-c lir)
+              (emit-x86-64 lir)))))
   ```

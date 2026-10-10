@@ -37,8 +37,10 @@ LIR は、Scheme 特有の高水準セマンティクス（ラムダ式、クロ
 | `%mov` | `(%mov dst src)` | レジスタ/即値間の値転送 | `mov dst, src` | `mov dst, src` | `dst = src;` |
 | `%load` | `(%load dst base offset)` | メモリ読み出し: `base + offset` 番地からロード | `mov dst, [base + offset]` | `ldr dst, [base, #offset]` | `dst = *(uint64_t*)(base + offset);` |
 | `%store` | `(%store base offset src)` | メモリ書き込み: `base + offset` 番地へストア | `mov [base + offset], src` | `str src, [base, #offset]` | `*(uint64_t*)(base + offset) = src;` |
+| `%raw-load` | `(%raw-load base offset)` | 64ビット生メモリロード（`offset` は Fixnum バイト数） | `sar rax, 2; add rdx, rax; mov rax, [rdx]` | `asr x1, x1, 2; add x2, x0, x1; ldr x0, [x2]` | `*(uint64_t*)(base + (offset >> 2))` |
+| `%raw-store!` | `(%raw-store! base offset val)` | 64ビット生メモリストア（`offset` は Fixnum バイト数） | `sar rcx, 2; add rdx, rcx; mov [rdx], r10` | `asr x1, x1, 2; add x3, x0, x1; str x2, [x3]` | `*(uint64_t*)(base + (offset >> 2)) = val` |
 
-### 2.3 算術・論理・タグ演算命令 (Arithmetic & Logic)
+### 2.3 算術・論理・ポインタタグ演算命令 (Arithmetic, Logic & Pointer Tags)
 
 | オペコード | 構文例 | 意味論 (Semantics) |
 | :--- | :--- | :--- |
@@ -51,22 +53,31 @@ LIR は、Scheme 特有の高水準セマンティクス（ラムダ式、クロ
 | `%bit-or` | `(%bit-or dst s1 s2)` | ビット単位論理和: `dst = s1 \| s2`（タグ付与用） |
 | `%shl` | `(%shl dst s1 n)` | 左シフト: `dst = s1 << n`（Fixnum 化: `n=2`） |
 | `%sar` | `(%sar dst s1 n)` | 算術右シフト: `dst = s1 >> n`（Fixnum 復元: `n=2`） |
+| `%ptr-tag` | `(%ptr-tag val)` | 下位 2 ビットを抽出し Fixnum（0, 1, 2, 3）として返却: `(val & 3) << 2` |
+| `%ptr-untag` | `(%ptr-untag val)` | 下位 3 ビットをクリアし、生のアドレス（aligned pointer）を返却: `val & ~7` |
+| `%ptr-add` | `(%ptr-add ptr bytes)` | 生アドレスに Fixnum バイト数を加算: `ptr + (bytes >> 2)` |
+| `%ptr-tag-add` | `(%ptr-tag-add ptr tag)` | 生アドレスにタグ（1〜3）を合成: `ptr + (tag >> 2)` |
 
-### 2.4 ランタイム・ヒープアロケーション命令 (Runtime Allocation)
+### 2.4 ランタイム・GC制御・ヒープアロケーション命令 (Runtime & GC Control)
 
-| オペコード | 構文例 | 意味論 (Semantics) |
-| :--- | :--- | :--- |
-| `%alloc` | `(%alloc dst bytes tag)` | ヒープから `bytes` バイトを確保し、下位ビットに `tag` を付与して `dst` に格納 |
+| オペコード | 構文例 | 意味論 (Semantics) | x86-64 対応 |
+| :--- | :--- | :--- | :--- |
+| `%get-rsp` | `(%get-rsp)` | 現在のマシンスタックポインタを取得 | `mov rax, rsp` |
+| `%get-heap-ptr`| `(%get-heap-ptr)` | 現在のヒープアロケーションポインタを取得 | `mov rax, r12` |
+| `%set-heap-ptr!`| `(%set-heap-ptr! new_ptr)` | ヒープアロケーションポインタを更新 | `mov r12, rax` |
+| `%get-gc-state-ptr` | `(%get-gc-state-ptr)` | 静的GC状態バッファのアドレスを取得 | `lea rax, [rip + ulisp_gc_state]` |
+| `%alloc` | `(%alloc dst bytes tag)` | ヒープから `bytes` バイトを確保し、下位ビットに `tag` を付与して `dst` に格納 | `lea dst, [r12 + tag]; add r12, bytes` |
 
-- **x86-64 での展開**:
+- **Prefix Header 付与規約**:
+  ヒープオブジェクト生成時、直前 8 バイトに Fixnum タグ付きメタデータヘッダをストアする：
   ```nasm
-  lea dst, [r12 + tag]
-  add r12, bytes
-  ```
-- **AArch64 での展開**:
-  ```asm
-  add dst, x19, #tag
-  add x19, x19, #bytes
+  # cons (Pair: 24B = 8B Header + 16B payload)
+  mov rdx, 4196356       # ((16 << 16) | (2 << 8) | 1) * 4
+  mov [r12 + 0], rdx     # 8B 接頭辞ヘッダ
+  mov [r12 + 8], rax     # car
+  mov [r12 + 16], rbx    # cdr
+  lea rax, [r12 + 9]     # tag 0x01 (ヘッダスキップ +8 + tag 1)
+  add r12, 24
   ```
 
 ---
