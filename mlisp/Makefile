@@ -1,4 +1,4 @@
-.PHONY: all test test_delimcc test_tracer test_optimizer test_bridge test_examples clean
+.PHONY: all test test_delimcc test_tracer test_optimizer test_bridge test_examples clean demo bin run_bin
 
 ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
@@ -48,7 +48,31 @@ build/demo_runner.scm: core/delimcc.scm tracer/tracer.scm optimizer/pe.scm optim
 demo: build/demo_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/demo_runner.scm
 
+CC ?= gcc
+CFLAGS ?= -no-pie -Wall -O2
+
+ULISP_STAGE2 = $(ROOT_DIR)/ulisp/build/scheme-stage2
+ULISP_STAGE1 = $(ROOT_DIR)/ulisp/build/scheme-stage1
+
+bin: bin/tiny_vm
+
+bin/tiny_vm: examples/tiny_vm_aot.scm
+	@mkdir -p bin build
+	@if [ -x $(ULISP_STAGE2) ]; then \
+		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $< | $(ULISP_STAGE2) > build/tiny_vm.s; \
+	elif [ -x $(ULISP_STAGE1) ]; then \
+		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $< | $(ULISP_STAGE1) > build/tiny_vm.s; \
+	else \
+		$(MAKE) -C $(ROOT_DIR)/ulisp stage1; \
+		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $< | $(ULISP_STAGE1) > build/tiny_vm.s; \
+	fi
+	$(CC) $(CFLAGS) -o $@ $(ROOT_DIR)/ulisp/runtime.c build/tiny_vm.s
+	@echo "Successfully compiled native standalone binary: $@"
+
+run_bin: bin/tiny_vm
+	./bin/tiny_vm
+
 test: test_delimcc test_tracer test_optimizer test_bridge test_examples
 
 clean:
-	rm -rf build tmp*
+	rm -rf build bin tmp*
