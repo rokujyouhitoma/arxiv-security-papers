@@ -56,8 +56,20 @@ TinyVM のバイトコード実行、JIT 生トレース自動合成、PE & Virt
 make -C mlisp demo
 ```
 
-### C. 全テストスイートの実行 (`make test`)
+### D. MLisp JIT 基盤による ULisp コンパイラのコンパイル (`make compile_ulisp`)
+MLisp の内因的メタトレーシング JIT 基盤（`driver/compile_ulisp_runner.scm`）を用いて、ULisp の自己ホスティングコンパイラ（`ulisp/build/ulisp_core.scm`）を丸ごとコンパイルし、スタンドアロンネイティブバイナリ `ulisp/build/scheme-from-mlisp` を生成します。
+これにより、Python（ILisp）に依存していた Stage 1 ブートストラップコンパイラを MLisp 実行基盤へと置き換え、完全な自己ホスティング循環コンパイルを実証します。
+
 ```bash
-# 全テスト（70項目）の一括実行
+# MLisp JIT 基盤経由で ULisp コンパイラをネイティブコンパイル
+make -C mlisp compile_ulisp
+
+# 生成されたネイティブコンパイラバイナリの動作検証
+make -C ulisp run_mlisp_stage
+```
+
+### E. 全テストスイートの実行 (`make test`)
+```bash
+# 全テストの一括実行
 make -C mlisp test
 ```

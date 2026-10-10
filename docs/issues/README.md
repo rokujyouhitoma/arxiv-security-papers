@@ -7,14 +7,13 @@
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
 
-*現在、オープンな Issue はありません。*
-
 ---
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **509** | MLisp JIT 実行基盤による ULisp コンパイラ (compiler.scm) のコンパイルと自己ホスティングバイナリ出力 | Feature | 2026-10-11 | [closed/509-compile-ulisp-compiler-via-mlisp-jit.md](closed/509-compile-ulisp-compiler-via-mlisp-jit.md) |
 | **508** | MLisp の AOT 統合および JIT 内蔵型ワンバイナリ (scheme-jit) の生成 | Feature | 2026-10-10 | [closed/508-integrate-mlisp-with-ulisp-aot-compiler.md](closed/508-integrate-mlisp-with-ulisp-aot-compiler.md) |
 | **507** | 限定継続（shift/reset）とULisp LIRに基づく内因的メタトレーシングJITツールチェーン (MLisp) の実装 | Feature | 2026-10-10 | [closed/507-implement-mlisp-endogenous-meta-tracing-jit.md](closed/507-implement-mlisp-endogenous-meta-tracing-jit.md) |
 | **503** | 低レベルIR (LIR) を入力とする AArch64 (ARM64) ネイティブコード生成バックエンドの実装 | Feature | 2026-10-10 | [closed/503-implement-ulisp-aarch64-backend-via-lir.md](closed/503-implement-ulisp-aarch64-backend-via-lir.md) |

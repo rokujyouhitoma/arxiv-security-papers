@@ -1,4 +1,4 @@
-.PHONY: test test_c test_aarch64 bootstrap clean run_42 run_c_42 core compiler test_passes stage1
+.PHONY: test test_c test_aarch64 bootstrap clean run_42 run_c_42 core compiler test_passes stage1 stage_mlisp run_mlisp_stage
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -57,6 +57,35 @@ build/scheme-stage1: build/stage1.s build/runtime.o
 	$(CC) -no-pie $^ -o $@
 
 stage1: build/scheme-stage1
+
+MLISP_RUNNER = $(ROOT_DIR)/mlisp/driver/compile_ulisp_runner.scm
+
+$(MLISP_RUNNER):
+	@mkdir -p $(ROOT_DIR)/mlisp/driver
+	cat $(ROOT_DIR)/mlisp/core/delimcc.scm \
+	    $(ROOT_DIR)/mlisp/tracer/tracer.scm \
+	    $(ROOT_DIR)/mlisp/optimizer/pe.scm \
+	    $(ROOT_DIR)/mlisp/optimizer/virtuals.scm \
+	    $(ROOT_DIR)/mlisp/bridge/to_lir.scm \
+	    $(ROOT_DIR)/mlisp/runtime/jit_buffer.scm \
+	    compiler.scm > $@
+
+build/stage_mlisp.s: $(MLISP_RUNNER) build/ulisp_core.scm
+	@mkdir -p build
+	PYTHONPATH=$(ROOT_DIR) $(ILISP) $< < build/ulisp_core.scm > $@
+
+build/scheme-from-mlisp: build/stage_mlisp.s build/runtime.o
+	$(CC) -no-pie $^ -o $@
+
+stage_mlisp: build/scheme-from-mlisp
+
+run_mlisp_stage: stage_mlisp
+	@echo "Verifying scheme-from-mlisp binary..."
+	@echo "(+ 40 2)" | ./build/scheme-from-mlisp > build/test_mlisp.s
+	@$(CC) $(CFLAGS) -no-pie -o build/test_mlisp runtime.c build/test_mlisp.s
+	@test "$$(./build/test_mlisp)" = "42"
+	@echo "SUCCESS: scheme-from-mlisp verified (+ 40 2) = 42"
+	@rm -f build/test_mlisp build/test_mlisp.s
 
 test: core
 	./test.sh

@@ -25,6 +25,16 @@
                   (loop2 (+ j 1)))
                 res))))))
 
+(define (substring str start end)
+  (let* ((len (- end start))
+         (res (make-string len)))
+    (let loop ((i 0))
+      (if (< i len)
+          (begin
+            (string-set! res i (string-ref str (+ start i)))
+            (loop (+ i 1)))
+          res))))
+
 (define (number->string n)
   (if (= n 0)
       "0"

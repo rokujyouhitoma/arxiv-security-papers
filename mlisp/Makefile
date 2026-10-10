@@ -1,4 +1,4 @@
-.PHONY: all test test_delimcc test_tracer test_optimizer test_bridge test_examples clean demo bin run_bin scheme-jit run_scheme_jit
+.PHONY: all test test_delimcc test_tracer test_optimizer test_bridge test_examples clean demo bin run_bin scheme-jit run_scheme_jit compile_ulisp
 
 ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
@@ -89,6 +89,9 @@ run_scheme_jit: bin/scheme-jit
 
 run_bin: bin/tiny_vm
 	./bin/tiny_vm
+
+compile_ulisp:
+	$(MAKE) -C $(ROOT_DIR)/ulisp stage_mlisp
 
 test: test_delimcc test_tracer test_optimizer test_bridge test_examples
 
