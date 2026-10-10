@@ -30,6 +30,10 @@
              (ast3 (anf-all ast2))
              (ast4 (closure-convert ast3))
              (lir  (generate-lir ast4)))
-        (if (eq? target 'c)
-            (emit-c lir)
-            (emit-x86-64 lir)))))
+        (cond
+          ((eq? target 'c)
+           (emit-c lir))
+          ((eq? target 'aarch64)
+           (emit-aarch64 lir))
+          (else
+           (emit-x86-64 lir))))))

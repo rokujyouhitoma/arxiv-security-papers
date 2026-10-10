@@ -327,6 +327,56 @@
     (assert-equal "lir tag" '%lir-program (car lir))))
 
 ;;; =======================================================================
+;;; Pass 7c: AArch64 (ARM64) Backend Codegen Tests (07_backend_aarch64.scm)
+;;; =======================================================================
+(define (test-pass7c-backend-aarch64)
+  (display "=== Running Pass 7c (AArch64 Backend) Tests ===")
+  (newline)
+
+  ;; 1. Register formatting
+  (assert-equal "arm reg rax" "x0" (arm-reg->str '%rax))
+  (assert-equal "arm reg rdx" "x1" (arm-reg->str '%rdx))
+  (assert-equal "arm reg rcx" "x2" (arm-reg->str '%rcx))
+  (assert-equal "arm reg r10" "x10" (arm-reg->str '%r10))
+  (assert-equal "arm reg r12" "x19" (arm-reg->str '%r12))
+  (assert-equal "arm reg rsp" "sp" (arm-reg->str '%rsp))
+  (assert-equal "arm reg al" "w0" (arm-reg->str '%al))
+
+  ;; 2. 32-bit register formatting
+  (assert-equal "arm w reg rax" "w0" (arm-w-reg->str '%rax))
+  (assert-equal "arm w reg rdx" "w1" (arm-w-reg->str '%rdx))
+  (assert-equal "arm w reg rcx" "w2" (arm-w-reg->str '%rcx))
+  (assert-equal "arm w reg r10" "w10" (arm-w-reg->str '%r10))
+  (assert-equal "arm w reg r12" "w19" (arm-w-reg->str '%r12))
+
+  ;; 3. Memory operand formatting
+  (assert-equal "arm mem op rsp -8" "[sp, #-8]" (arm-mem-op->str '%rsp -8))
+  (assert-equal "arm mem op rax 7" "[x0, #7]" (arm-mem-op->str '%rax 7))
+  (assert-equal "arm mem op rdx rax" "[x1, x0]" (arm-mem-op->str '%rdx '%rax))
+
+  ;; 4. Operand formatting
+  (assert-equal "arm operand int" "#42" (arm-operand->str 42))
+  (assert-equal "arm operand stack" "[sp, #-8]" (arm-operand->str '(%stack -8)))
+  (assert-equal "arm operand mem" "[x19, #16]" (arm-operand->str '(%mem %r12 16)))
+
+  ;; 5. Condition code mapping
+  (assert-equal "arm cc sete" "eq" (arm-condition-code "sete"))
+  (assert-equal "arm cc setl" "lt" (arm-condition-code "setl"))
+  (assert-equal "arm cc setle" "le" (arm-condition-code "setle"))
+  (assert-equal "arm cc setg" "gt" (arm-condition-code "setg"))
+  (assert-equal "arm cc setge" "ge" (arm-condition-code "setge"))
+  (assert-equal "arm cc setne" "ne" (arm-condition-code "setne"))
+
+  ;; 6. End-to-end pipeline to LIR verification for AArch64 backend
+  (let* ((core-ast (desugar-all '(let ((x 10)) (+ x 32))))
+         (opt-ast (cp0-optimize core-ast))
+         (anf-ast (anf-all opt-ast))
+         (clos-ast (closure-convert anf-ast))
+         (lir (generate-lir clos-ast)))
+    (assert-true "lir generated for aarch64 backend" (pair? lir))
+    (assert-equal "lir tag" '%lir-program (car lir))))
+
+;;; =======================================================================
 ;;; Main Test Suite Runner
 ;;; =======================================================================
 (display "=======================================================")
@@ -345,6 +395,7 @@
 (test-pass6-lir)
 (test-pass7-backend)
 (test-pass7b-backend-c)
+(test-pass7c-backend-aarch64)
 
 (display "=======================================================")
 (newline)

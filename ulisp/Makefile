@@ -1,4 +1,4 @@
-.PHONY: test test_c bootstrap clean run_42 run_c_42 core compiler test_passes stage1
+.PHONY: test test_c test_aarch64 bootstrap clean run_42 run_c_42 core compiler test_passes stage1
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -15,6 +15,7 @@ PASSES_LIB = passes/00_helpers.scm \
              passes/05_closure_convert.scm \
              passes/06_lir.scm \
              passes/07_backend_x86_64.scm \
+             passes/07_backend_aarch64.scm \
              passes/07_backend_c.scm
 
 PASSES = $(PASSES_LIB) passes/08_driver.scm
@@ -32,6 +33,11 @@ test_passes: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_passes_runner.scm
+
+test_aarch64: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/test_backend_aarch64.scm > build/test_aarch64_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_aarch64_runner.scm
 
 core: build/ulisp_core.scm
 

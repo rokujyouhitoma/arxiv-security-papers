@@ -14,20 +14,35 @@
 
 static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
     ucontext_t *uc = (ucontext_t *)ucontext;
+#if defined(__x86_64__)
     uint64_t rip = uc->uc_mcontext.gregs[REG_RIP];
     uint64_t rsp = uc->uc_mcontext.gregs[REG_RSP];
     uint64_t rax = uc->uc_mcontext.gregs[REG_RAX];
     uint64_t rdx = uc->uc_mcontext.gregs[REG_RDX];
     fprintf(stderr, "*** CRASH: signal %d at fault addr %p (RIP=0x%lx, RSP=0x%lx, RAX=0x%lx, RDX=0x%lx) ***\n",
             sig, info->si_addr, rip, rsp, rax, rdx);
-    void *bt[32];
-    int size = backtrace(bt, 32);
-    
     fprintf(stderr, "=== STACK DUMP AT CRASH (RSP=0x%lx) ===\n", rsp);
     uint64_t *sp = (uint64_t *)rsp;
     for (int i = -8; i < 16; i++) {
         fprintf(stderr, "  [RSP%+4d (0x%lx)]: 0x%016lx\n", i*8, (uint64_t)&sp[i], sp[i]);
     }
+#elif defined(__aarch64__)
+    uint64_t pc = (uint64_t)uc->uc_mcontext.pc;
+    uint64_t sp_val = (uint64_t)uc->uc_mcontext.sp;
+    uint64_t x0 = (uint64_t)uc->uc_mcontext.regs[0];
+    uint64_t x1 = (uint64_t)uc->uc_mcontext.regs[1];
+    fprintf(stderr, "*** CRASH: signal %d at fault addr %p (PC=0x%lx, SP=0x%lx, X0=0x%lx, X1=0x%lx) ***\n",
+            sig, info->si_addr, pc, sp_val, x0, x1);
+    fprintf(stderr, "=== STACK DUMP AT CRASH (SP=0x%lx) ===\n", sp_val);
+    uint64_t *sp = (uint64_t *)sp_val;
+    for (int i = -8; i < 16; i++) {
+        fprintf(stderr, "  [SP%+4d (0x%lx)]: 0x%016lx\n", i*8, (uint64_t)&sp[i], sp[i]);
+    }
+#else
+    fprintf(stderr, "*** CRASH: signal %d at fault addr %p ***\n", sig, info->si_addr);
+#endif
+    void *bt[32];
+    int size = backtrace(bt, 32);
     backtrace_symbols_fd(bt, size, 2);
 
     exit(139);
