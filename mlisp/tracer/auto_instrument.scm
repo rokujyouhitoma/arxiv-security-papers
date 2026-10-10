@@ -109,15 +109,14 @@
                         (list (car b) (auto-instrument-form (cadr b)))
                         b))
                   raw-bindings))
-            (inst-body (map auto-instrument-form raw-body)))
+            (inst-body (map (lambda (e) (auto-instrument-form e)) raw-body)))
        (if (already-instrumented? inst-body)
            ;; Already has jit-merge-point (idempotent)
-           `(let ,loop-name ,inst-bindings ,@inst-body)
+           (cons 'let (cons loop-name (cons inst-bindings inst-body)))
            ;; Inject automatic jit-merge-point
-           (let ((tag (next-auto-loop-tag loop-name)))
-             `(let ,loop-name ,inst-bindings
-                (jit-merge-point ',tag (list ,@vars))
-                ,@inst-body)))))
+           (let* ((tag (next-auto-loop-tag loop-name))
+                  (jmp (list 'jit-merge-point (list 'quote tag) (cons 'list vars))))
+             (cons 'let (cons loop-name (cons inst-bindings (cons jmp inst-body))))))))
 
     ;; -------------------------------------------------------------------
     ;; Case 2: Standard let / let* / letrec
@@ -132,8 +131,8 @@
                         (list (car b) (auto-instrument-form (cadr b)))
                         b))
                   raw-bindings))
-            (inst-body (map auto-instrument-form raw-body)))
-       `(,op ,inst-bindings ,@inst-body)))
+            (inst-body (map (lambda (e) (auto-instrument-form e)) raw-body)))
+       (cons op (cons inst-bindings inst-body))))
 
     ;; -------------------------------------------------------------------
     ;; Case 3: define with function syntax (Tail-recursive Pattern B)
@@ -146,18 +145,18 @@
      (let* ((func-name (caadr form))
             (params (cdadr form))
             (raw-body (cddr form))
-            (inst-body (map auto-instrument-form raw-body))
+            (inst-body (map (lambda (e) (auto-instrument-form e)) raw-body))
             (is-tail-rec? (tail-calls? (if (= (length raw-body) 1)
                                            (car raw-body)
                                            (cons 'begin raw-body))
                                        func-name)))
        (if (and is-tail-rec? (not (already-instrumented? inst-body)))
            ;; Tail-recursive loop detected! Inject jit-merge-point
-           `(define (,func-name ,@params)
-              (jit-merge-point ',func-name (list ,@params))
-              ,@inst-body)
+           (let* ((head (cons func-name params))
+                  (jmp (list 'jit-merge-point (list 'quote func-name) (cons 'list params))))
+             (cons 'define (cons head (cons jmp inst-body))))
            ;; Standard non-recursive or already instrumented function
-           `(define (,func-name ,@params) ,@inst-body))))
+           (cons 'define (cons (cons func-name params) inst-body)))))
 
     ;; -------------------------------------------------------------------
     ;; Case 4: lambda abstraction
@@ -165,7 +164,7 @@
     ((eq? (car form) 'lambda)
      (let ((params (cadr form))
            (body (cddr form)))
-       `(lambda ,params ,@(map auto-instrument-form body))))
+       (cons 'lambda (cons params (map (lambda (e) (auto-instrument-form e)) body)))))
 
     ;; -------------------------------------------------------------------
     ;; Case 5: conditionals (if, cond)
@@ -176,31 +175,34 @@
            (else (if (pair? (cdddr form))
                      (list (auto-instrument-form (cadddr form)))
                      '())))
-       `(if ,test ,then ,@else)))
+       (if (null? else)
+           (list 'if test then)
+           (list 'if test then (car else)))))
 
     ((eq? (car form) 'cond)
      (let ((clauses
             (map (lambda (cl)
                    (cons (auto-instrument-form (car cl))
-                         (map auto-instrument-form (cdr cl))))
+                         (map (lambda (e) (auto-instrument-form e)) (cdr cl))))
                  (cdr form))))
-       `(cond ,@clauses)))
+       (cons 'cond clauses)))
 
     ;; -------------------------------------------------------------------
     ;; Case 6: sequencing and assignment (begin, set!)
     ;; -------------------------------------------------------------------
     ((eq? (car form) 'begin)
-     `(begin ,@(map auto-instrument-form (cdr form))))
+     (cons 'begin (map (lambda (e) (auto-instrument-form e)) (cdr form))))
 
     ((eq? (car form) 'set!)
-     `(set! ,(cadr form) ,(auto-instrument-form (caddr form))))
+     (list 'set! (cadr form) (auto-instrument-form (caddr form))))
 
     ;; -------------------------------------------------------------------
     ;; Case 7: standard application or other form
     ;; -------------------------------------------------------------------
     (else
-     (map auto-instrument-form form))))
+     (map (lambda (e) (auto-instrument-form e)) form))))
 
 ;;; Batch transform a list of top-level S-expressions
 (define (auto-instrument-forms forms)
-  (map auto-instrument-form forms))
+  (map (lambda (f) (auto-instrument-form f)) forms))
+

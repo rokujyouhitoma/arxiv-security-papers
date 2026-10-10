@@ -1,4 +1,4 @@
-.PHONY: all test test_delimcc test_tracer test_auto_instrument test_optimizer test_bridge test_examples clean demo bin run_bin scheme-jit run_scheme_jit compile_ulisp
+.PHONY: all test test_delimcc test_tracer test_auto_instrument test_optimizer test_bridge test_examples clean demo bin run_bin scheme-jit run_scheme_jit ulisp-jit run_ulisp_jit compile_ulisp
 
 ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
@@ -96,6 +96,25 @@ run_scheme_jit: bin/scheme-jit
 
 run_bin: bin/tiny_vm
 	./bin/tiny_vm
+
+ulisp-jit: bin/ulisp-jit
+
+bin/ulisp-jit: driver/ulisp_jit.scm
+	@mkdir -p bin build
+	@if [ -x $(ULISP_STAGE2) ]; then \
+		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $(ROOT_DIR)/ulisp/lib/reader.scm $< | $(ULISP_STAGE2) > build/ulisp_jit.s; \
+	elif [ -x $(ULISP_STAGE1) ]; then \
+		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $(ROOT_DIR)/ulisp/lib/reader.scm $< | $(ULISP_STAGE1) > build/ulisp_jit.s; \
+	else \
+		$(MAKE) -C $(ROOT_DIR)/ulisp stage1; \
+		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $(ROOT_DIR)/ulisp/lib/reader.scm $< | $(ULISP_STAGE1) > build/ulisp_jit.s; \
+	fi
+	$(CC) $(CFLAGS) -o $@ $(ROOT_DIR)/ulisp/runtime.c build/ulisp_jit.s
+	@echo "Successfully compiled native standalone ulisp-jit binary: $@"
+
+run_ulisp_jit: bin/ulisp-jit
+	@echo "Running ulisp-jit verification loop..."
+	@echo "(let loop ((i 0) (sum 0)) (if (< i 10) (loop (+ i 1) (+ sum i)) sum))" | ./bin/ulisp-jit
 
 compile_ulisp:
 	$(MAKE) -C $(ROOT_DIR)/ulisp stage_mlisp

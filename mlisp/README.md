@@ -86,7 +86,38 @@ ULisp やユーザーが記述した純粋な Scheme コードに対して、手
   (if (>= i 1000) acc (loop (+ i 1) (+ acc i))))
 ```
 
-### F. 全テストスイートの実行 (`make test`)
+### G. ゼロ侵入 JIT 搭載スタンドアロン Scheme VM バイナリ生成 (`make ulisp-jit`)
+ユーザーコードへの手動アノテーションを一切不要とし、標準入力（stdin）から任意の純粋 Scheme 式を読み込んで実行・自動 JIT コンパイルするスタンドアロンネイティブ VM バイナリ `bin/ulisp-jit` を生成します。
+
+```bash
+# ulisp-jit ネイティブバイナリのビルド
+make -C mlisp ulisp-jit
+# (または ulisp ディレクトリから)
+make -C ulisp ulisp-jit
+
+# 任意の Scheme ループコード（アノテーションなし）をパイプで渡して実行
+echo "(let loop ((i 0) (sum 0)) (if (< i 10) (loop (+ i 1) (+ sum i)) sum))" | ./mlisp/bin/ulisp-jit
+
+# 実行検証ターゲット (Makefile)
+make -C mlisp run_ulisp_jit
+```
+
+**実行結果:**
+```text
+==================================================================
+       ULisp-JIT: Standalone Scheme VM with Automatic JIT         
+               Powered by MLisp Meta-Tracing Engine               
+==================================================================
+[JIT] Hot loop detected! Recording trace: loop_0
+[JIT] Compiled and installed native trace for loop: loop_0
+
+=> Result: 45
+==================================================================
+ [JIT Stats] Dispatched Native JIT Loops: 8
+==================================================================
+```
+
+### H. 全テストスイートの実行 (`make test`)
 ```bash
 # 全テスト（94項目）の一括実行
 make -C mlisp test

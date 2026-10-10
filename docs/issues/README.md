@@ -4,8 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: |
+現在、進行中・未着手の Issue はありません。
 
 ---
 
@@ -13,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **511** | 任意の Scheme コードを動的 JIT 実行するスタンドアロンバイナリ (ulisp-jit) の生成コマンド実装 | Feature | 2026-10-11 | [closed/511-implement-ulisp-jit-binary-generation.md](closed/511-implement-ulisp-jit-binary-generation.md) |
 | **510** | MLisp によるループ構文の自動検知と jit-merge-point 自動計装機能の実装 | Feature | 2026-10-11 | [closed/510-implement-mlisp-auto-instrumentation-for-jit-merge-points.md](closed/510-implement-mlisp-auto-instrumentation-for-jit-merge-points.md) |
 | **509** | MLisp JIT 実行基盤による ULisp コンパイラ (compiler.scm) のコンパイルと自己ホスティングバイナリ出力 | Feature | 2026-10-11 | [closed/509-compile-ulisp-compiler-via-mlisp-jit.md](closed/509-compile-ulisp-compiler-via-mlisp-jit.md) |
 | **508** | MLisp の AOT 統合および JIT 内蔵型ワンバイナリ (scheme-jit) の生成 | Feature | 2026-10-10 | [closed/508-integrate-mlisp-with-ulisp-aot-compiler.md](closed/508-integrate-mlisp-with-ulisp-aot-compiler.md) |

@@ -1,4 +1,4 @@
-.PHONY: test test_c test_aarch64 bootstrap clean run_42 run_c_42 core compiler test_passes stage1 stage_mlisp run_mlisp_stage
+.PHONY: test test_c test_aarch64 bootstrap clean run_42 run_c_42 core compiler test_passes stage1 stage_mlisp run_mlisp_stage ulisp-jit run_ulisp_jit
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -85,7 +85,11 @@ run_mlisp_stage: stage_mlisp
 	@$(CC) $(CFLAGS) -no-pie -o build/test_mlisp runtime.c build/test_mlisp.s
 	@test "$$(./build/test_mlisp)" = "42"
 	@echo "SUCCESS: scheme-from-mlisp verified (+ 40 2) = 42"
-	@rm -f build/test_mlisp build/test_mlisp.s
+ulisp-jit:
+	$(MAKE) -C $(ROOT_DIR)/mlisp ulisp-jit
+
+run_ulisp_jit:
+	$(MAKE) -C $(ROOT_DIR)/mlisp run_ulisp_jit
 
 test: core
 	./test.sh
