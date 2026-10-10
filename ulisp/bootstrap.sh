@@ -19,8 +19,12 @@ cat "$ULISP_DIR/lib/string.scm" \
 echo "[1/4] Compiling runtime.c (Thin Debug Runtime)..."
 gcc -O2 -c "$ULISP_DIR/runtime.c" -o "$BUILD_DIR/runtime.o"
 
-echo "[2/4] Stage 1: Compiling ulisp_core.scm with ILisp (Python)..."
-PYTHONPATH="$ROOT_DIR" python3 -m ilisp "$ULISP_DIR/compiler.scm" < "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
+PYTHON_BIN="python3"
+if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
+    PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+fi
+echo "[2/4] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."
+PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm" < "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
 gcc -no-pie "$BUILD_DIR/stage1.s" "$BUILD_DIR/runtime.o" -o "$BUILD_DIR/scheme-stage1"
 
 echo "[3/4] Stage 2: Compiling ulisp_core.scm with Stage 1 compiler..."

@@ -95,6 +95,68 @@ class TailCall:
         self.env = env
 
 
+_SELF_EVALUATING_TYPES = (
+    int,
+    float,
+    complex,
+    str,
+    bool,
+    NilType,
+    Primitive,
+    Procedure,
+    Vector,
+    Bytevector,
+    Char,
+    MutableString,
+    Parameter,
+    RecordType,
+    Record,
+    Continuation,
+    Fraction,
+)
+
+_SPECIAL_FORM_NAMES = {
+    "syntax-error",
+    "quote",
+    "quasiquote",
+    "if",
+    "cond",
+    "guard",
+    "let",
+    "let*",
+    "letrec",
+    "letrec*",
+    "begin",
+    "define",
+    "define-values",
+    "set!",
+    "lambda",
+    "define-macro",
+    "define-syntax",
+    "let-syntax",
+    "letrec-syntax",
+    "define-library",
+    "import",
+    "case-lambda",
+    "delay",
+    "delay-force",
+    "parameterize",
+    "do",
+    "define-record-type",
+    "let-values",
+    "let*-values",
+    "raise",
+    "raise-continuable",
+    "with-exception-handler",
+    "macroexpand-1",
+    "macroexpand",
+    ".",
+}
+_SPECIAL_FORM_SYMBOLS = {Symbol.intern(s) for s in _SPECIAL_FORM_NAMES}
+
+_interaction_environment_ready = False
+
+
 def _build_syntax_transformer(name: str, trans_spec: Any, env: Environment) -> Any:
     """Build a SyntaxRulesTransformer or evaluate macro transformer."""
     from ilisp.syntax import SyntaxRulesTransformer
@@ -202,10 +264,13 @@ def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None)
         with StepHookContext(step_hook):
             return eval_expr(expr, env)
 
-    from ilisp.env import get_interaction_environment, set_interaction_environment
+    global _interaction_environment_ready
+    if not _interaction_environment_ready:
+        from ilisp.env import get_interaction_environment, set_interaction_environment
 
-    if get_interaction_environment() is None:
-        set_interaction_environment(env.root)
+        if get_interaction_environment() is None:
+            set_interaction_environment(env.root)
+        _interaction_environment_ready = True
 
     curr_expr: Any = expr
     curr_env: Environment = env
@@ -214,51 +279,16 @@ def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None)
         if _current_step_hook is not None:
             _current_step_hook()
 
-        # 1. Self-evaluating literals
-        if (
-            isinstance(
-                curr_expr,
-                (
-                    int,
-                    float,
-                    complex,
-                    str,
-                    bool,
-                    NilType,
-                    Primitive,
-                    Procedure,
-                    Vector,
-                    Bytevector,
-                    Char,
-                    MutableString,
-                    Parameter,
-                    RecordType,
-                    Record,
-                    Continuation,
-                    Fraction,
-                ),
-            )
-            or curr_expr is NIL
-        ):
-            return curr_expr
+        expr_type = type(curr_expr)
 
-        # 2. Variable lookup
-        if isinstance(curr_expr, Symbol):
-            try:
-                return curr_env.lookup(curr_expr)
-            except NameError:
-                if "." in curr_expr.name and not curr_expr.name.startswith("."):
-                    val = _resolve_dotted_symbol(curr_expr.name, curr_env)
-                    if val is not None:
-                        return val
-                raise
-
-        # 3. Pair / Form evaluation
-        if isinstance(curr_expr, Cons):
+        # 1. Pair / Form evaluation
+        if expr_type is Cons:
             op = curr_expr.car
 
             # --- Special Forms ---
-            if isinstance(op, Symbol):
+            if type(op) is Symbol and (
+                op in _SPECIAL_FORM_SYMBOLS or op.name.startswith(".")
+            ):
                 op_name = op.name
 
                 # (syntax-error message irritants...)
@@ -297,6 +327,25 @@ def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None)
 
                 # (if test then [else])
                 if op_name == "if":
+                    cdr1 = curr_expr.cdr
+                    if type(cdr1) is Cons:
+                        cdr2 = cdr1.cdr
+                        if type(cdr2) is Cons:
+                            cdr3 = cdr2.cdr
+                            if cdr3 is NIL:
+                                test_val = eval_expr(cdr1.car, curr_env)
+                                if test_val is not False:
+                                    curr_expr = cdr2.car
+                                    continue
+                                return NIL
+                            elif type(cdr3) is Cons and cdr3.cdr is NIL:
+                                test_val = eval_expr(cdr1.car, curr_env)
+                                if test_val is not False:
+                                    curr_expr = cdr2.car
+                                else:
+                                    curr_expr = cdr3.car
+                                continue
+
                     args = to_py_list(curr_expr.cdr)
                     if len(args) < 2 or len(args) > 3:
                         is_lex_bound = False
@@ -1004,9 +1053,18 @@ def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None)
                 curr_expr = expanded_ast
                 continue
 
-            # 2. Procedure / Primitive call: evaluate arguments first
-            raw_args = to_py_list(curr_expr.cdr)
-            eval_args = [eval_expr(a, curr_env) for a in raw_args]
+            # 2. Procedure / Primitive call: evaluate arguments directly from Cons chain
+            eval_args = []
+            curr_arg = curr_expr.cdr
+            while type(curr_arg) is Cons:
+                eval_args.append(eval_expr(curr_arg.car, curr_env))
+                curr_arg = curr_arg.cdr
+            if curr_arg is not NIL:
+                while is_pair(curr_arg):
+                    eval_args.append(eval_expr(car(curr_arg), curr_env))
+                    curr_arg = cdr(curr_arg)
+                if not is_null(curr_arg):
+                    raise TypeError(f"Improper argument list: {curr_expr.cdr!r}")
 
             if isinstance(fn, Primitive):
                 return fn(*eval_args)
@@ -1029,7 +1087,31 @@ def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None)
 
             raise TypeError(f"Attempted to apply non-procedure: {fn!r}")
 
-        raise TypeError(f"Unknown AST node during evaluation: {curr_expr!r}")
+        # 2. Variable lookup
+        elif expr_type is Symbol:
+            try:
+                return curr_env.lookup(curr_expr)
+            except NameError:
+                if "." in curr_expr.name and not curr_expr.name.startswith("."):
+                    val = _resolve_dotted_symbol(curr_expr.name, curr_env)
+                    if val is not None:
+                        return val
+                raise
+
+        # 3. NIL singleton
+        elif curr_expr is NIL:
+            return NIL
+
+        # 4. Builtin scalar types
+        elif expr_type in (int, bool, str, float):
+            return curr_expr
+
+        # 5. Other self-evaluating literals
+        elif isinstance(curr_expr, _SELF_EVALUATING_TYPES):
+            return curr_expr
+
+        else:
+            raise TypeError(f"Unknown AST node during evaluation: {curr_expr!r}")
 
 
 def _parse_params(params_expr: Any) -> Tuple[List[Symbol], Optional[Symbol]]:
@@ -1060,11 +1142,10 @@ def _parse_params(params_expr: Any) -> Tuple[List[Symbol], Optional[Symbol]]:
 
 def _bind_procedure_call(proc: Procedure, args: List[Any]) -> Environment:
     """Create local call environment binding procedure parameters to arguments."""
-    new_bindings: dict[Symbol, Any] = {}
     params = proc.params
     if not isinstance(params, list):
         # Varargs single symbol: (lambda args ...)
-        new_bindings[params] = to_lisp_list(args)
+        new_bindings = {params: to_lisp_list(args)}
         return Environment(parent=proc.env, bindings=new_bindings)
 
     if proc.rest_param is None:
@@ -1072,16 +1153,14 @@ def _bind_procedure_call(proc: Procedure, args: List[Any]) -> Environment:
             raise TypeError(
                 f"Procedure {proc.name or 'lambda'} expected {len(params)} arguments, got {len(args)}"
             )
-        for p, a in zip(params, args):
-            new_bindings[p] = a
+        new_bindings = dict(zip(params, args))
     else:
         # Fixed params + rest param
         if len(args) < len(params):
             raise TypeError(
                 f"Procedure {proc.name or 'lambda'} expected at least {len(params)} arguments, got {len(args)}"
             )
-        for i, p in enumerate(params):
-            new_bindings[p] = args[i]
+        new_bindings = dict(zip(params, args[: len(params)]))
         rest_args = args[len(params) :]
         new_bindings[proc.rest_param] = to_lisp_list(rest_args)
 

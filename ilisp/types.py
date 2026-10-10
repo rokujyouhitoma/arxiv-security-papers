@@ -26,17 +26,21 @@ class SourceLocation:
 class Symbol:
     """Interned Symbol for Lisp identifiers."""
 
+    __slots__ = ("name", "_hash")
     _table: dict[str, Symbol] = {}
 
     def __init__(self, name: str) -> None:
         self.name: str = name
+        self._hash: int = hash(name)
 
     @classmethod
     def intern(cls, name: str) -> Symbol:
         """Retrieve or create a globally unique interned Symbol."""
-        if name not in cls._table:
-            cls._table[name] = cls(name)
-        return cls._table[name]
+        sym = cls._table.get(name)
+        if sym is None:
+            sym = cls(name)
+            cls._table[name] = sym
+        return sym
 
     def __repr__(self) -> str:
         return self.name
@@ -45,12 +49,14 @@ class Symbol:
         return self.name
 
     def __eq__(self, other: object) -> bool:
+        if self is other:
+            return True
         if isinstance(other, Symbol):
             return self.name == other.name
         return False
 
     def __hash__(self) -> int:
-        return hash(self.name)
+        return self._hash
 
 
 class NilType:
@@ -861,39 +867,39 @@ class Primitive:
 
 def is_pair(val: Any) -> bool:
     """Check if a value is a Cons pair or non-empty SequenceView."""
-    if isinstance(val, Cons):
+    if type(val) is Cons:
         return True
-    if isinstance(val, SequenceView) and len(val) > 0:
+    if type(val) is SequenceView and len(val) > 0:
         return True
     return False
 
 
 def is_null(val: Any) -> bool:
     """Check if a value is the empty list NIL or empty SequenceView."""
-    return val is NIL or (isinstance(val, SequenceView) and len(val) == 0)
+    return val is NIL or (type(val) is SequenceView and len(val) == 0)
 
 
 def car(pair: Any) -> Any:
     """Return the car of a Cons cell or SequenceView."""
-    if isinstance(pair, Cons):
+    if type(pair) is Cons:
         return pair.car
-    if isinstance(pair, SequenceView):
+    if type(pair) is SequenceView:
         return pair.car
     raise TypeError(f"car expected pair, got {type(pair).__name__}: {pair!r}")
 
 
 def cdr(pair: Any) -> Any:
     """Return the cdr of a Cons cell or SequenceView."""
-    if isinstance(pair, Cons):
+    if type(pair) is Cons:
         return pair.cdr
-    if isinstance(pair, SequenceView):
+    if type(pair) is SequenceView:
         return pair.cdr
     raise TypeError(f"cdr expected pair, got {type(pair).__name__}: {pair!r}")
 
 
 def set_car(pair: Any, val: Any) -> None:
     """Set the car of a Cons cell. Raises TypeError if pair is not a mutable Cons pair."""
-    if isinstance(pair, Cons):
+    if type(pair) is Cons:
         pair.car = val
         return
     raise TypeError(
@@ -903,7 +909,7 @@ def set_car(pair: Any, val: Any) -> None:
 
 def set_cdr(pair: Any, val: Any) -> None:
     """Set the cdr of a Cons cell. Raises TypeError if pair is not a mutable Cons pair."""
-    if isinstance(pair, Cons):
+    if type(pair) is Cons:
         pair.cdr = val
         return
     raise TypeError(
@@ -923,12 +929,18 @@ def to_py_list(val: Any) -> List[Any]:
     """Convert a Scheme proper list or SequenceView to a Python list."""
     res: List[Any] = []
     curr = val
-    while is_pair(curr):
-        res.append(car(curr))
-        curr = cdr(curr)
-    if not is_null(curr):
-        raise TypeError(f"to_py_list expected proper list, got improper: {val!r}")
-    return res
+    while type(curr) is Cons:
+        res.append(curr.car)
+        curr = curr.cdr
+    if curr is NIL:
+        return res
+    if type(curr) is SequenceView:
+        while len(curr) > 0:
+            res.append(curr.car)
+            curr = curr.cdr
+        if len(curr) == 0:
+            return res
+    raise TypeError(f"to_py_list expected proper list, got improper: {val!r}")
 
 
 def unwrap_values(val: Any) -> Any:

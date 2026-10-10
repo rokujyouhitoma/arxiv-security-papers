@@ -2,8 +2,9 @@
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
-ILISP = python3 -m ilisp
 ROOT_DIR = $(shell dirname $(CURDIR))
+PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
+ILISP = $(PYTHON) -m ilisp
 
 PASSES_LIB = passes/00_helpers.scm \
              passes/01_desugar.scm \

@@ -17,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **506** | ILisp 実行速度のプロファイリングと Stage 1 コンパイル高速化 | Bug | 2026-10-10 | [closed/506-profile-and-optimize-ilisp-performance.md](closed/506-profile-and-optimize-ilisp-performance.md) |
 | **505** | ULisp テストランナー (test.sh) のネイティブコンパイラ実行移行と高速化 | Feature | 2026-10-10 | [closed/505-migrate-test-runner-to-native-ulisp-compiler.md](closed/505-migrate-test-runner-to-native-ulisp-compiler.md) |
 | **502** | ULisp コンパイラへの低レベルIR (LIR) の導入とバックエンド分離およびパス別テスト拡充 | Refactor | 2026-10-10 | [closed/502-introduce-ulisp-low-level-ir-and-decouple-backend.md](closed/502-introduce-ulisp-low-level-ir-and-decouple-backend.md) |
 | **499** | ULisp コンパイラへの ANF (A-Normal Form) 正規化および CP0 最適化パスの実装 | Feature | 2026-10-09 | [closed/499-implement-ulisp-anf-and-cp0-optimization.md](closed/499-implement-ulisp-anf-and-cp0-optimization.md) |

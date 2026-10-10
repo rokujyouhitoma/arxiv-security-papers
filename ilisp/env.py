@@ -172,6 +172,7 @@ from ilisp.types import (
 _current_exception_handler: ContextVar[Optional[Any]] = ContextVar(
     "_current_exception_handler", default=None
 )
+_SENTINEL = object()
 
 
 class Environment:
@@ -186,8 +187,8 @@ class Environment:
         parent: Optional[Environment] = None,
         bindings: Optional[Dict[Symbol, Any]] = None,
     ) -> None:
-        self.parent: Optional[Environment] = parent
-        self.bindings: Dict[Symbol, Any] = bindings if bindings is not None else {}
+        self.parent = parent
+        self.bindings = bindings if bindings is not None else {}
 
     @property
     def root(self) -> Environment:
@@ -205,11 +206,11 @@ class Environment:
         """Lookup variable recursively through lexical chain; unwrap Cell if boxed."""
         curr: Optional[Environment] = self
         while curr is not None:
-            if sym in curr.bindings:
-                bound = curr.bindings[sym]
-                if isinstance(bound, Cell):
-                    return bound.get()
-                return bound
+            val = curr.bindings.get(sym, _SENTINEL)
+            if val is not _SENTINEL:
+                if type(val) is Cell:
+                    return val.get()
+                return val
             curr = curr.parent
         raise NameError(f"Unbound variable: '{sym.name}'")
 
@@ -217,10 +218,10 @@ class Environment:
         """Lookup Cell container for variable if it is boxed."""
         curr: Optional[Environment] = self
         while curr is not None:
-            if sym in curr.bindings:
-                bound = curr.bindings[sym]
-                if isinstance(bound, Cell):
-                    return bound
+            val = curr.bindings.get(sym, _SENTINEL)
+            if val is not _SENTINEL:
+                if type(val) is Cell:
+                    return val
                 return None
             curr = curr.parent
         return None
@@ -229,9 +230,9 @@ class Environment:
         """Mutate existing variable via set!; updates Cell value if boxed."""
         curr: Optional[Environment] = self
         while curr is not None:
-            if sym in curr.bindings:
-                bound = curr.bindings[sym]
-                if isinstance(bound, Cell):
+            bound = curr.bindings.get(sym, _SENTINEL)
+            if bound is not _SENTINEL:
+                if type(bound) is Cell:
                     bound.set(val)
                 else:
                     if Environment._mutation_hook is not None:

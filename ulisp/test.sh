@@ -6,7 +6,12 @@ ROOT_DIR="$(cd "$DIR/.." && pwd)"
 export PYTHONPATH="$ROOT_DIR"
 cd "$DIR"
 
-ILISP="python3 -m ilisp"
+if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
+    PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+else
+    PYTHON_BIN="python3"
+fi
+ILISP="${ILISP:-$PYTHON_BIN -m ilisp}"
 CC="gcc"
 CFLAGS="-Wall -Wextra -O0 -g"
 
