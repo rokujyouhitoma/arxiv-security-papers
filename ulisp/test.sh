@@ -20,9 +20,8 @@ TMP_BIN="tmp_bin"
 COMPILER="compiler.scm"
 ULISP_STAGE1="build/scheme-stage1"
 
-mkdir -p build
 make compiler
-cat lib/string.scm lib/printer.scm lib/reader.scm compiler.scm > build/ulisp_core.scm
+cat lib/string.scm lib/printer.scm lib/reader.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
@@ -65,7 +64,9 @@ assert() {
     expected="$1"
     input="$2"
 
-    if [[ "$input" =~ \'[a-zA-Z] || "$input" =~ string-\>symbol ]]; then
+    if [[ "$input" =~ gc- ]]; then
+        full_input="$(cat lib/gc.scm)"$'\n'"$input"
+    elif [[ "$input" =~ \'[a-zA-Z] || "$input" =~ string-\>symbol ]]; then
         full_input="$(cat lib/string.scm)"$'\n'"$input"
     else
         full_input="$input"
@@ -485,6 +486,14 @@ assert "42" "(define-macro (when c . body) (list 'if c (cons 'begin body) #f)) (
 assert "100" "(define-macro (unless c . body) (list 'if c #f (cons 'begin body))) (unless (= 5 6) 100)"
 assert "81" "(defmacro my-square (x) (list '* x x)) (my-square 9)"
 assert "42" "(defmacro inc (x) (list '+ x 1)) (inc (inc 40))"
+
+# --- Step 26: Target Runtime Cheney Garbage Collector (Issue 501) ---
+echo "-- Step 26: Issue 501 Target Garbage Collector --"
+assert "7" "(bitwise-and 15 7)"
+assert "9" "(bitwise-ior 8 1)"
+assert "60" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig half))) (begin (gc-init! from to half (%get-rsp)) (let ((lst (cons 10 (cons 20 (cons 30 (quote ())))))) (begin (gc-collect! (%get-rsp)) (+ (car lst) (+ (car (cdr lst)) (car (cdr (cdr lst)))))))))"
+assert "300" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig half))) (begin (gc-init! from to half (%get-rsp)) (let ((lst (cons 100 200))) (begin (gc-collect! (%get-rsp)) (gc-collect! (%get-rsp)) (gc-collect! (%get-rsp)) (+ (car lst) (cdr lst))))))"
+assert "10" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig half))) (begin (gc-init! from to half (%get-rsp)) (let ((p (cons 10 (quote ())))) (begin (gc-collect! (%get-rsp)) (car p)))))"
 
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification

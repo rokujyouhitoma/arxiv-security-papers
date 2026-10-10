@@ -112,7 +112,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char peek-char)))
+  (memq op '(read-char peek-char %get-rsp %get-heap-ptr %get-gc-state-ptr)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -120,13 +120,15 @@
              zero? fixnum? integer? number? boolean? char? null? not symbol?
              car cdr pair? procedure? string?
              write-char eof-object?
-             make-string string-length)))
+             make-string string-length
+             %set-heap-ptr! %ptr-tag %ptr-untag)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?)))
+  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?
+             %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift)))
 
 (define (triop-prim? op)
-  (memq op '(string-set!)))
+  (memq op '(string-set! %raw-store!)))
 
 (define (closure-prim? op)
   (memq op '(%make-closure %closure-ref %closure-set!)))
@@ -135,7 +137,7 @@
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
              integer->symbol symbol->integer
              zero? fixnum? integer? number? boolean? char? null? not symbol?
-             car cdr pair? procedure? string? string-length
+             car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
              + - * = < <= > >= modulo quotient / eq? char=? %closure-ref)))
 
 (define (const? x)

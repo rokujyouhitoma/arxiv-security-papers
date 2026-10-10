@@ -251,7 +251,17 @@
          (let ((op (car inst)))
            (assert-true (string-append "valid LIR opcode: " (symbol->string op))
                         (memq op valid-opcodes))))
-       body))))
+       body))
+    ;; Check GC and low-level memory intrinsics LIR generation
+    (let* ((ast-get-rsp (closure-convert (anf-all (cp0-optimize (desugar-all '(%get-rsp))))))
+           (lir-get-rsp (generate-lir ast-get-rsp)))
+      (assert-true "lir %get-rsp generates lir-program" (pair? lir-get-rsp)))
+    (let* ((ast-bitwise (closure-convert (anf-all (cp0-optimize (desugar-all '(bitwise-and 15 7))))))
+           (lir-bitwise (generate-lir ast-bitwise)))
+      (assert-true "lir bitwise-and generates lir-program" (pair? lir-bitwise)))
+    (let* ((ast-raw-load (closure-convert (anf-all (cp0-optimize (desugar-all '(%raw-load 100 0))))))
+           (lir-raw-load (generate-lir ast-raw-load)))
+      (assert-true "lir %raw-load generates lir-program" (pair? lir-raw-load)))))
 
 ;;; =======================================================================
 ;;; Pass 7: Backend x86-64 Codegen Tests (07_backend_x86_64.scm)

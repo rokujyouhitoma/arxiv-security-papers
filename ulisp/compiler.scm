@@ -112,7 +112,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char peek-char)))
+  (memq op '(read-char peek-char %get-rsp %get-heap-ptr %get-gc-state-ptr)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -120,13 +120,15 @@
              zero? fixnum? integer? number? boolean? char? null? not symbol?
              car cdr pair? procedure? string?
              write-char eof-object?
-             make-string string-length)))
+             make-string string-length
+             %set-heap-ptr! %ptr-tag %ptr-untag)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?)))
+  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?
+             %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift)))
 
 (define (triop-prim? op)
-  (memq op '(string-set!)))
+  (memq op '(string-set! %raw-store!)))
 
 (define (closure-prim? op)
   (memq op '(%make-closure %closure-ref %closure-set!)))
@@ -135,7 +137,7 @@
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
              integer->symbol symbol->integer
              zero? fixnum? integer? number? boolean? char? null? not symbol?
-             car cdr pair? procedure? string? string-length
+             car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
              + - * = < <= > >= modulo quotient / eq? char=? %closure-ref)))
 
 (define (const? x)
@@ -1229,6 +1231,12 @@
 (define (lir-compile-zero-arg op si env)
   (let ((frame-shift (align-frame-shift (- si))))
     (case op
+      ((%get-rsp)
+       (emit-lir! '(%mov %rax %rsp)))
+      ((%get-heap-ptr)
+       (emit-lir! '(%mov %rax %r12)))
+      ((%get-gc-state-ptr)
+       (emit-lir! (list '%code-ref '%rax 'ulisp_gc_state)))
       ((read-char)
        (emit-lir! (list '%c-call 'ulisp_read_char frame-shift)))
       ((peek-char)
@@ -1299,12 +1307,26 @@
     ((eof-object?)
      (emit-lir! '(%cmp %rax 79))
      (emit-lir! '(%set-boolean %rax "sete")))
+    ((%set-heap-ptr!)
+     (emit-lir! '(%mov %r12 %rax)))
+    ((%ptr-tag)
+     (emit-lir! '(%bit-and %rax 3))
+     (emit-lir! '(%shl %rax 2)))
+    ((%ptr-untag)
+     (emit-lir! '(%bit-and %rax -8)))
     ((make-string)
      (emit-lir! '(%sar %rax 2))
      (emit-lir! '(%mov %rcx %rax))
      (emit-lir! '(%add %rax 8))
      (emit-lir! '(%bit-and %rax -8))
+     (emit-lir! '(%mov %rdx %rax))
+     (emit-lir! '(%shl %rdx 16))
+     (emit-lir! '(%bit-or %rdx 3))
+      (emit-lir! '(%shl %rdx 2))
+     (emit-lir! '(%store %r12 0 %rdx))
      (emit-lir! '(%mov %rdx %r12))
+     (emit-lir! '(%add %rdx 8))
+     (emit-lir! '(%add %rax 8))
      (emit-lir! '(%add %r12 %rax))
      (emit-lir! '(%store-byte %rdx %rcx 0))
      (emit-lir! '(%add %rdx 3))
@@ -1379,13 +1401,27 @@
     ((>=)
      (emit-lir! (list '%cmp (list '%stack si) '%rax))
      (emit-lir! '(%set-boolean %rax "setge")))
+    ((bitwise-and)
+     (emit-lir! (list '%bit-and '%rax (list '%stack si))))
+    ((bitwise-ior)
+     (emit-lir! (list '%bit-or '%rax (list '%stack si))))
+    ((%raw-load)
+     (emit-lir! '(%sar %rax 2))
+     (emit-lir! (list '%load '%rdx '%rsp si))
+     (emit-lir! '(%add %rdx %rax))
+     (emit-lir! '(%load %rax %rdx 0)))
+    ((%ptr-add %ptr-tag-add)
+     (emit-lir! '(%sar %rax 2))
+     (emit-lir! (list '%add '%rax (list '%stack si))))
     ((cons)
      (emit-lir! (list '%store '%rsp (- si 8) '%rax))
      (emit-lir! (list '%load '%rax '%rsp si))
-     (emit-lir! '(%store %r12 0 %rax))
-     (emit-lir! (list '%load '%rax '%rsp (- si 8)))
+     (emit-lir! '(%mov %rdx 4196356))
+     (emit-lir! '(%store %r12 0 %rdx))
      (emit-lir! '(%store %r12 8 %rax))
-     (emit-lir! '(%alloc %rax 16 1)))
+     (emit-lir! (list '%load '%rax '%rsp (- si 8)))
+     (emit-lir! '(%store %r12 16 %rax))
+     (emit-lir! '(%alloc %rax 24 9)))
     ((set-car!)
      (emit-lir! (list '%load '%rdx '%rsp si))
      (emit-lir! '(%store %rdx -1 %rax))
@@ -1415,6 +1451,14 @@
      (emit-lir! (list '%load '%rcx '%rsp (- si 8)))
      (emit-lir! '(%sar %rcx 2))
      (emit-lir! '(%store-byte %rdx %rcx %al))
+     (emit-lir! '(%mov %rax 63)))
+    ((%raw-store!)
+     (emit-lir! '(%mov %r10 %rax))
+     (emit-lir! (list '%load '%rcx '%rsp (- si 8)))
+     (emit-lir! '(%sar %rcx 2))
+     (emit-lir! (list '%load '%rdx '%rsp si))
+     (emit-lir! '(%add %rdx %rcx))
+     (emit-lir! '(%store %rdx 0 %r10))
      (emit-lir! '(%mov %rax 63)))))
 
 (define (lir-compile-make-closure expr si env)
@@ -1434,18 +1478,22 @@
             (lir-compile-expr (car as) curr-si env #f)
             (emit-lir! (list '%store '%rsp curr-si '%rax))
             (loop (cdr as) (- curr-si 8)))))
-    ;; 2. Allocate closure on heap at runtime (%r12)
+    ;; 2. Allocate closure with 8B prefix header on heap at runtime (%r12)
+    (let* ((hdr-val (+ (* aligned-size 65536) (* (+ num-args 1) 256) 2))
+           (hdr-fixnum (* hdr-val 4)))
+      (emit-lir! (list '%mov '%rdx hdr-fixnum))
+      (emit-lir! '(%store %r12 0 %rdx)))
     (emit-lir! (list '%code-ref '%rax label-sym))
-    (emit-lir! '(%store %r12 0 %rax))
-    ;; 3. Copy captured arguments from stack to heap [%r12 + 8 * i]
+    (emit-lir! '(%store %r12 8 %rax))
+    ;; 3. Copy captured arguments from stack to heap [%r12 + 8 + 8 * i]
     (let loop ((i 1) (curr-si si))
       (if (<= i num-args)
           (begin
             (emit-lir! (list '%load '%rax '%rsp curr-si))
-            (emit-lir! (list '%store '%r12 (* i 8) '%rax))
+            (emit-lir! (list '%store '%r12 (+ 8 (* i 8)) '%rax))
             (loop (+ i 1) (- curr-si 8)))))
-    ;; 4. Tag closure pointer with 0x01
-    (emit-lir! (list '%alloc '%rax aligned-size 1))))
+    ;; 4. Tag closure pointer with 0x01 (offset +8 from header)
+    (emit-lir! (list '%alloc '%rax (+ aligned-size 8) 9))))
 
 (define (lir-compile-let bindings body si env tail?)
   (let loop ((bs bindings)
@@ -1847,7 +1895,8 @@
        (let ((dst (cadr inst))
              (lbl (caddr inst)))
          (let ((lbl-str (if (symbol? lbl) (symbol->string lbl) lbl)))
-           (emit (string-append "    lea " (operand->str dst) ", [rip + " lbl-str " + 3]")))))
+           (emit (string-append "    lea " (operand->str dst) ", [rip + " lbl-str "]"))
+           (emit (string-append "    add " (operand->str dst) ", 3")))))
 
       ((%c-call)
        (let ((func (cadr inst))

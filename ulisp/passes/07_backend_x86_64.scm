@@ -191,7 +191,8 @@
        (let ((dst (cadr inst))
              (lbl (caddr inst)))
          (let ((lbl-str (if (symbol? lbl) (symbol->string lbl) lbl)))
-           (emit (string-append "    lea " (operand->str dst) ", [rip + " lbl-str " + 3]")))))
+           (emit (string-append "    lea " (operand->str dst) ", [rip + " lbl-str "]"))
+           (emit (string-append "    add " (operand->str dst) ", 3")))))
 
       ((%c-call)
        (let ((func (cadr inst))

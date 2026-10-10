@@ -14,6 +14,7 @@ make -C "$ULISP_DIR" compiler
 cat "$ULISP_DIR/lib/string.scm" \
     "$ULISP_DIR/lib/printer.scm" \
     "$ULISP_DIR/lib/reader.scm" \
+    "$ULISP_DIR/lib/gc.scm" \
     "$ULISP_DIR/compiler.scm" > "$BUILD_DIR/ulisp_core.scm"
 
 echo "[1/4] Compiling runtime.c (Thin Debug Runtime)..."

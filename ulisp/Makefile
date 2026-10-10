@@ -35,7 +35,7 @@ test_passes: build/compiler_passes.scm
 
 core: build/ulisp_core.scm
 
-build/ulisp_core.scm: lib/string.scm lib/printer.scm lib/reader.scm compiler.scm
+build/ulisp_core.scm: lib/string.scm lib/printer.scm lib/reader.scm lib/gc.scm compiler.scm
 	@mkdir -p build
 	cat $^ > $@
 

@@ -2,13 +2,13 @@
   "spider_name": "mock_spider",
   "status": "COMPLETED",
   "is_active": false,
-  "start_time": 1790857775.278494,
-  "updated_at": 1790857775.27973,
+  "start_time": 1791614569.458622,
+  "updated_at": 1791614569.460034,
   "processed": 2,
   "pending": 0,
   "total": 2,
   "ratio_pct": 100.0,
-  "pages_per_second": 1626.01,
+  "pages_per_second": 1422.52,
   "eta_seconds": 0.0,
   "elapsed_seconds": 0.0
 }
