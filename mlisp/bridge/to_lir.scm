@@ -179,9 +179,9 @@
               (append (list (list '%label (string->symbol (string-append "jit_func_" pc-str))))
                       lir-insts
                       (list '(%return)))))
-        `(%lir-program
-           (strings ())
-           (%lir-functions ())
-           (%lir-main
-             (frame-size 32)
-             (body ,full-body))))))
+        (list '%lir-program
+              '(strings ())
+              '(%lir-functions ())
+              (list '%lir-main
+                    '(frame-size 32)
+                    (list 'body full-body))))))

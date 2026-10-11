@@ -92,7 +92,7 @@
                  (if (and v-desc (eq? (virtual-type (cdr v-desc)) 'pair))
                      ;; Virtualized read! Rewrite to direct move from virtual car field
                      (let* ((car-val (virtual-pair-car (cdr v-desc)))
-                            (opt-inst `(%mov ,dst ,car-val)))
+                            (opt-inst (list '%mov dst car-val)))
                        (loop (cdr rest) v-map (cons opt-inst acc)))
                      ;; Not virtualized: keep instruction
                      (loop (cdr rest) v-map (cons inst acc)))))
@@ -105,7 +105,7 @@
                  (if (and v-desc (eq? (virtual-type (cdr v-desc)) 'pair))
                      ;; Virtualized read! Rewrite to direct move from virtual cdr field
                      (let* ((cdr-val (virtual-pair-cdr (cdr v-desc)))
-                            (opt-inst `(%mov ,dst ,cdr-val)))
+                            (opt-inst (list '%mov dst cdr-val)))
                        (loop (cdr rest) v-map (cons opt-inst acc)))
                      ;; Not virtualized: keep instruction
                      (loop (cdr rest) v-map (cons inst acc)))))
@@ -123,9 +123,9 @@
              (body-entry (assq '%body fields))
              (body (if body-entry (cadr body-entry) '()))
              (opt-body (optimize-virtuals-body body)))
-        `(%trace-loop
-           ,pc
-           (%body ,opt-body)))))
+        (list '%trace-loop
+              pc
+              (list '%body opt-body)))))
 
 ;;; Combined Full Optimizer Pipeline:
 ;;; 1. Partial Evaluation & Constant Folding (pe.scm)

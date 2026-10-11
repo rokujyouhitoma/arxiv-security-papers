@@ -82,9 +82,9 @@
              (values #f env)
              (if (pe-constant? resolved-src)
                  ;; Propagate constant
-                 (values `(%mov ,dst ,resolved-src) (bind-const env dst resolved-src))
+                 (values (list '%mov dst resolved-src) (bind-const env dst resolved-src))
                  ;; Unknown assignment: invalidate dst
-                 (values `(%mov ,dst ,resolved-src) (unbind-const env dst))))))
+                 (values (list '%mov dst resolved-src) (unbind-const env dst))))))
 
       ;; Binary arithmetic
       ((%add %sub %mul %div %mod)
@@ -96,9 +96,9 @@
               (folded (fold-binary-op op r1 r2)))
          (if (number? folded)
              ;; Successfully folded! Convert to %mov dst constant
-             (values `(%mov ,dst ,folded) (bind-const env dst folded))
+             (values (list '%mov dst folded) (bind-const env dst folded))
              ;; Keep instruction with resolved operands
-             (values `(,op ,dst ,r1 ,r2) (unbind-const env dst)))))
+             (values (list op dst r1 r2) (unbind-const env dst)))))
 
       ;; Guards
       ((%guard)
@@ -115,7 +115,7 @@
             (values #f env))
            (else
             ;; Keep guard with resolved operands
-            (values `(%guard ,cond-type ,r1 ,r2 ,fail-lbl) env)))))
+            (values (list '%guard cond-type r1 r2 fail-lbl) env)))))
 
       ;; Other instructions
       (else
@@ -145,6 +145,6 @@
              (body-entry (assq '%body fields))
              (body (if body-entry (cadr body-entry) '()))
              (opt-body (optimize-pe-body body)))
-        `(%trace-loop
-           ,pc
-           (%body ,opt-body)))))
+        (list '%trace-loop
+              pc
+              (list '%body opt-body)))))

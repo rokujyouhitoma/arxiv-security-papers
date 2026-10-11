@@ -65,21 +65,21 @@
 ;;; Record a speculative type / branch guard
 (define (trace-guard! cond-type var expected fail-k)
   (when (eq? *tracer-state* *TRACER-STATE-RECORDING*)
-    (let ((inst `(%guard ,cond-type ,var ,expected ,fail-k)))
+    (let ((inst (list '%guard cond-type var expected fail-k)))
       (set! *current-trace-buffer* (cons inst *current-trace-buffer*)))))
 
 ;;; Start recording a trace for given PC
 (define (start-recording! pc)
   (set! *tracer-state* *TRACER-STATE-RECORDING*)
   (set! *current-recording-pc* pc)
-  (set! *current-trace-buffer* (list `(%trace-loop-entry ,pc))))
+  (set! *current-trace-buffer* (list (list '%trace-loop-entry pc))))
 
 ;;; Complete trace recording and return finalized trace S-expression
 (define (finish-recording! pc)
-  (let* ((insts (reverse (cons `(%trace-loop-jump ,pc) *current-trace-buffer*)))
-         (trace `(%trace-loop
-                   (%pc ,pc)
-                   (%body ,insts))))
+  (let* ((insts (reverse (cons (list '%trace-loop-jump pc) *current-trace-buffer*)))
+         (trace (list '%trace-loop
+                      (list '%pc pc)
+                      (list '%body insts))))
     (set! *compiled-traces* (cons (cons pc trace) *compiled-traces*))
     (set! *tracer-state* *TRACER-STATE-COMPILED*)
     (set! *current-recording-pc* #f)

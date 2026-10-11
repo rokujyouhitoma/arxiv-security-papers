@@ -13,6 +13,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **513** | MLisp コードベースの純化・重複解消および不要コードの完全排除 | Refactor | 2026-10-11 | [closed/513-refactor-mlisp-remove-dead-code-and-pure-scheme.md](closed/513-refactor-mlisp-remove-dead-code-and-pure-scheme.md) |
 | **512** | ULisp AOT コンパイラと MLisp JIT エンジンを統合したワンバイナリ (ulisp-jit) の構築と性能比較評価 | Feature | 2026-10-11 | [closed/512-integrate-ulisp-aot-and-mlisp-jit-one-binary.md](closed/512-integrate-ulisp-aot-and-mlisp-jit-one-binary.md) |
 | **511** | 任意の Scheme コードを動的 JIT 実行するスタンドアロンバイナリ (ulisp-jit) の生成コマンド実装 | Feature | 2026-10-11 | [closed/511-implement-ulisp-jit-binary-generation.md](closed/511-implement-ulisp-jit-binary-generation.md) |
 | **510** | MLisp によるループ構文の自動検知と jit-merge-point 自動計装機能の実装 | Feature | 2026-10-11 | [closed/510-implement-mlisp-auto-instrumentation-for-jit-merge-points.md](closed/510-implement-mlisp-auto-instrumentation-for-jit-merge-points.md) |
