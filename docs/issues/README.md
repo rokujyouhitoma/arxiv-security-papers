@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: |
-| **514** | ULisp と MLisp の完全統合による統一 RPython スタイルメタプログラミング言語基盤の確立 | Refactor | In Progress | [514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md](514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md) |
+*現在進行中・未着手のIssueはありません。*
 
 ---
 
@@ -14,6 +12,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **515** | ILisp・ULisp AOT・ULisp JIT 3種実行系性能評価および継続的ベンチマーク基盤の構築 | Feature | 2026-10-11 | [closed/515-ilisp-ulisp-aot-jit-performance-benchmark-framework.md](closed/515-ilisp-ulisp-aot-jit-performance-benchmark-framework.md) |
+| **514** | ULisp と MLisp の完全統合による統一 RPython スタイルメタプログラミング言語基盤の確立 | Refactor | 2026-10-11 | [closed/514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md](closed/514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md) |
 | **513** | MLisp コードベースの純化・重複解消および不要コードの完全排除 | Refactor | 2026-10-11 | [closed/513-refactor-mlisp-remove-dead-code-and-pure-scheme.md](closed/513-refactor-mlisp-remove-dead-code-and-pure-scheme.md) |
 | **512** | ULisp AOT コンパイラと MLisp JIT エンジンを統合したワンバイナリ (ulisp-jit) の構築と性能比較評価 | Feature | 2026-10-11 | [closed/512-integrate-ulisp-aot-and-mlisp-jit-one-binary.md](closed/512-integrate-ulisp-aot-and-mlisp-jit-one-binary.md) |
 | **511** | 任意の Scheme コードを動的 JIT 実行するスタンドアロンバイナリ (ulisp-jit) の生成コマンド実装 | Feature | 2026-10-11 | [closed/511-implement-ulisp-jit-binary-generation.md](closed/511-implement-ulisp-jit-binary-generation.md) |

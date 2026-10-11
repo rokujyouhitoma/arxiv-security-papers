@@ -386,4 +386,11 @@ migrations-create: activate ## Create new migration skeleton (Usage: make migrat
 migrations-diff-test: activate ## Run Dual-Backend Differential Test (PyDB vs SQLite schema & DML parity)
 	${VENV_BIN}/pytest -v tests/test_database_migrations_differential.py
 
+.PHONY: benchmark_trio bench_ci
+benchmark_trio: activate ## Run 3-way performance benchmark: ILisp vs ULisp AOT vs ULisp JIT
+	${VENV_PYTHON} tools/benchmark_ilisp_ulisp.py --iterations 10
+
+bench_ci: activate ## Run 3-way benchmark with regression checking against baseline
+	${VENV_PYTHON} tools/benchmark_ilisp_ulisp.py --iterations 5 --compare outputs/benchmarks/latest.json --threshold 2.5
+
 

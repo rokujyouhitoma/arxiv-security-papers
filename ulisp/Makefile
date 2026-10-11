@@ -154,6 +154,12 @@ run_jit: bin/ulisp-jit
 bench: bin/ulisp-jit
 	$(PYTHON) benchmarks/benchmark_stage2_vs_ulisp_jit.py
 
+bench_trio: bin/ulisp-jit
+	$(PYTHON) $(ROOT_DIR)/tools/benchmark_ilisp_ulisp.py --iterations 10
+
+bench_ci: bin/ulisp-jit
+	$(PYTHON) $(ROOT_DIR)/tools/benchmark_ilisp_ulisp.py --iterations 5 --compare $(ROOT_DIR)/outputs/benchmarks/latest.json --threshold 2.5
+
 # --- Comprehensive Test Suite ---
 test_aot: core
 	./test.sh

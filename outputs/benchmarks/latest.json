@@ -1,0 +1,211 @@
+{
+  "timestamp": "2026-10-11 11:50:28",
+  "system": {
+    "os": "Linux",
+    "arch": "x86_64",
+    "processor": "x86_64",
+    "python_version": "3.14.7"
+  },
+  "config": {
+    "iterations": 5,
+    "compiler": "/workspace/arxiv-security-papers/ulisp/bin/ulisp-jit",
+    "jit_bin": "/workspace/arxiv-security-papers/ulisp/bin/ulisp-jit"
+  },
+  "results": [
+    {
+      "workload_id": "fib_loop",
+      "title": "Iterative Fibonacci (fib 20)",
+      "description": "Multi-variable state transition and sequential additions",
+      "iterations": 5,
+      "correctness": {
+        "ilisp_valid": true,
+        "aot_valid": true,
+        "jit_valid": true,
+        "expected": "6765",
+        "actual_ilisp": "6765",
+        "actual_aot": "6765",
+        "actual_jit": "6765"
+      },
+      "ilisp": {
+        "mean_ms": 68.96088999928907,
+        "std_ms": 1.4945592537520673,
+        "min_ms": 67.74860799487215,
+        "max_ms": 71.50578399887308
+      },
+      "ulisp_aot": {
+        "compile_ms": 90.46107999165542,
+        "mean_ms": 0.5687045952072367,
+        "std_ms": 0.11519953118745188,
+        "min_ms": 0.4755059926537797,
+        "max_ms": 0.7633779896423221
+      },
+      "ulisp_jit": {
+        "mean_ms": 1.7717523965984583,
+        "std_ms": 0.037347813924761684,
+        "min_ms": 1.7401249933755025,
+        "max_ms": 1.8350269965594634
+      },
+      "speedups": {
+        "aot_vs_ilisp": 121.25959695148872,
+        "jit_vs_ilisp": 38.92241948236407,
+        "aot_vs_jit": 3.1154177608725484
+      }
+    },
+    {
+      "workload_id": "fact_loop",
+      "title": "Iterative Factorial (fact 12)",
+      "description": "64-bit integer multiplication and accumulator updates",
+      "iterations": 5,
+      "correctness": {
+        "ilisp_valid": true,
+        "aot_valid": true,
+        "jit_valid": true,
+        "expected": "479001600",
+        "actual_ilisp": "479001600",
+        "actual_aot": "479001600",
+        "actual_jit": "479001600"
+      },
+      "ilisp": {
+        "mean_ms": 73.6487668036716,
+        "std_ms": 2.881545333981428,
+        "min_ms": 70.40539299487136,
+        "max_ms": 77.80407200334594
+      },
+      "ulisp_aot": {
+        "compile_ms": 92.89911900123116,
+        "mean_ms": 0.5792601994471624,
+        "std_ms": 0.09320127389102735,
+        "min_ms": 0.5084680014988407,
+        "max_ms": 0.7111199956852943
+      },
+      "ulisp_jit": {
+        "mean_ms": 1.4825007965555415,
+        "std_ms": 0.029350563947778904,
+        "min_ms": 1.4423090033233166,
+        "max_ms": 1.521393991424702
+      },
+      "speedups": {
+        "aot_vs_ilisp": 127.14280538169362,
+        "jit_vs_ilisp": 49.678736749948435,
+        "aot_vs_jit": 2.5593002902157247
+      }
+    },
+    {
+      "workload_id": "sum_loop",
+      "title": "Hot Loop Accumulation (5,000 iters)",
+      "description": "Named-let hot loop: tests JIT loop trace recording & branch prediction",
+      "iterations": 5,
+      "correctness": {
+        "ilisp_valid": true,
+        "aot_valid": true,
+        "jit_valid": true,
+        "expected": "12497500",
+        "actual_ilisp": "12497500",
+        "actual_aot": "12497500",
+        "actual_jit": "12497500"
+      },
+      "ilisp": {
+        "mean_ms": 106.96109059790615,
+        "std_ms": 2.4918214014377846,
+        "min_ms": 104.08901299524587,
+        "max_ms": 110.59436299547087
+      },
+      "ulisp_aot": {
+        "compile_ms": 87.13145401270594,
+        "mean_ms": 0.5724086018744856,
+        "std_ms": 0.07472453777603949,
+        "min_ms": 0.5070699990028515,
+        "max_ms": 0.6967049994273111
+      },
+      "ulisp_jit": {
+        "mean_ms": 305.89318060083315,
+        "std_ms": 20.445945432222462,
+        "min_ms": 291.5630890056491,
+        "max_ms": 341.3743959972635
+      },
+      "speedups": {
+        "aot_vs_ilisp": 186.86143123572407,
+        "jit_vs_ilisp": 0.34966811090006633,
+        "aot_vs_jit": 534.3965474996611
+      }
+    },
+    {
+      "workload_id": "poly_loop",
+      "title": "Polynomial Loop 3x^2+5x+7 (1,000 iters)",
+      "description": "Heavy arithmetic instruction pipeline, register allocation, and loop optimization",
+      "iterations": 5,
+      "correctness": {
+        "ilisp_valid": true,
+        "aot_valid": true,
+        "jit_valid": true,
+        "expected": "1001005000",
+        "actual_ilisp": "1001005000",
+        "actual_aot": "1001005000",
+        "actual_jit": "1001005000"
+      },
+      "ilisp": {
+        "mean_ms": 87.84314199583605,
+        "std_ms": 4.67948004062697,
+        "min_ms": 84.69286898616701,
+        "max_ms": 95.90399700391572
+      },
+      "ulisp_aot": {
+        "compile_ms": 90.12691999669187,
+        "mean_ms": 0.5725096038077027,
+        "std_ms": 0.07284640906812662,
+        "min_ms": 0.49364499864168465,
+        "max_ms": 0.6792780040996149
+      },
+      "ulisp_jit": {
+        "mean_ms": 94.07808879914228,
+        "std_ms": 1.594965954929822,
+        "min_ms": 91.42283900291659,
+        "max_ms": 95.74797601089813
+      },
+      "speedups": {
+        "aot_vs_ilisp": 153.43522870463713,
+        "jit_vs_ilisp": 0.9337258347518315,
+        "aot_vs_jit": 164.3257827876398
+      }
+    },
+    {
+      "workload_id": "tri_loop",
+      "title": "Triangular Sum (tri 500)",
+      "description": "Linear iteration counter decrement and accumulator addition",
+      "iterations": 5,
+      "correctness": {
+        "ilisp_valid": true,
+        "aot_valid": true,
+        "jit_valid": true,
+        "expected": "125250",
+        "actual_ilisp": "125250",
+        "actual_aot": "125250",
+        "actual_jit": "125250"
+      },
+      "ilisp": {
+        "mean_ms": 87.53544640203472,
+        "std_ms": 20.050011357210856,
+        "min_ms": 71.77147098991554,
+        "max_ms": 121.54853199899662
+      },
+      "ulisp_aot": {
+        "compile_ms": 92.26762400066946,
+        "mean_ms": 0.7211877993540838,
+        "std_ms": 0.17152442198352763,
+        "min_ms": 0.5399399960879236,
+        "max_ms": 0.9206039976561442
+      },
+      "ulisp_jit": {
+        "mean_ms": 34.02275540283881,
+        "std_ms": 1.954452724792224,
+        "min_ms": 32.22626500064507,
+        "max_ms": 37.28580199822318
+      },
+      "speedups": {
+        "aot_vs_ilisp": 121.37677104414958,
+        "jit_vs_ilisp": 2.5728500048156264,
+        "aot_vs_jit": 47.17599969565563
+      }
+    }
+  ]
+}

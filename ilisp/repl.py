@@ -143,6 +143,12 @@ def main() -> None:
         help="Emit x86-64 GAS assembly code",
     )
     parser.add_argument(
+        "-p",
+        "--print-result",
+        action="store_true",
+        help="Print the evaluation result of the last expression in file execution",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         help="Output binary/assembly file path (default: <stem> or a.out)",
@@ -197,6 +203,8 @@ def main() -> None:
     if args.file:
         res = run_file(args.file, env=env, backend=args.backend)
         if args.backend in {"native", "ulisp"} and res:
+            print(res)
+        elif args.print_result and res is not None and res is not NIL:
             print(res)
         sys.exit(0)
 
