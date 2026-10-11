@@ -21,7 +21,7 @@ COMPILER="compiler.scm"
 ULISP_STAGE1="build/scheme-stage1"
 
 make compiler
-cat lib/string.scm lib/printer.scm lib/reader.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
@@ -75,8 +75,8 @@ assert() {
     # 1. Compile S-expression to x86-64 assembly
     compile_scheme "$full_input" "$TMP_S"
 
-    # 2. Assemble and link with minimal C runtime
-    $CC $CFLAGS -o "$TMP_BIN" runtime.c "$TMP_S"
+    # 2. Assemble and link freestanding zero-libc binary
+    $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S"
 
     # 3. Execute and compare output
     actual=$("./$TMP_BIN")
@@ -95,7 +95,7 @@ assert_stdin() {
     stdin_input="$3"
 
     compile_scheme "$program" "$TMP_S"
-    $CC $CFLAGS -o "$TMP_BIN" runtime.c "$TMP_S"
+    $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S"
     actual=$(printf "%s" "$stdin_input" | "./$TMP_BIN")
 
 

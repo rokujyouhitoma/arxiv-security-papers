@@ -6,10 +6,16 @@
 #include <signal.h>
 #include <ucontext.h>
 #include <execinfo.h>
+#include <sys/mman.h>
 
 /* =======================================================================
+ * [DEPRECATED / LEGACY REFERENCE ONLY]
  * ULisp Thin Debug Runtime (Conforms to DSN-33 / Issue 494)
- * Minimal C cushion providing crash backtraces and basic I/O primitives.
+ * NOTE: As of Issue 516 / DSN-36, ULisp has fully transitioned to a 100%
+ * Pure Scheme Bare-Metal Freestanding architecture (-nostdlib -static).
+ * All I/O, memory mapping (mmap), and formatting are now performed natively
+ * via Scheme (lib/posix.scm) and assembly syscalls without C or libc.
+ * This file is retained only for legacy reference and debugging fallback.
  * ======================================================================= */
 
 static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
@@ -71,7 +77,7 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
 #define EMPTY_LIST      0x3F
 #define EOF_OBJECT      0x4F
 
-#define HEAP_SIZE       (8192ULL * 1024 * 1024)
+#define HEAP_SIZE       (16384ULL * 1024 * 1024)
 
 /* Static GC state buffer: from, to, size, bottom, count */
 uint64_t ulisp_gc_state[8];
@@ -172,9 +178,9 @@ int main(int argc, char **argv) {
         }
     }
 
-    char *heap = (char *)malloc(HEAP_SIZE);
-    if (!heap) {
-        fprintf(stderr, "Failed to allocate %zu bytes of heap\n", (size_t)HEAP_SIZE);
+    char *heap = (char *)mmap(NULL, HEAP_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (heap == MAP_FAILED) {
+        fprintf(stderr, "Failed to mmap %zu bytes of heap\n", (size_t)HEAP_SIZE);
         return 1;
     }
 
@@ -183,6 +189,6 @@ int main(int argc, char **argv) {
         print_scheme_value(result);
     }
 
-    free(heap);
+    munmap(heap, HEAP_SIZE);
     return 0;
 }

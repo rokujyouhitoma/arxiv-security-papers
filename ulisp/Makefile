@@ -54,20 +54,16 @@ test_c: compiler
 
 core: build/ulisp_core.scm
 
-build/ulisp_core.scm: lib/string.scm lib/printer.scm lib/reader.scm lib/gc.scm compiler.scm
+build/ulisp_core.scm: lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/gc.scm compiler.scm
 	@mkdir -p build
 	cat $^ > $@
-
-build/runtime.o: runtime.c
-	@mkdir -p build
-	$(CC) $(CFLAGS) -c $< -o $@
 
 build/stage1.s: compiler.scm build/ulisp_core.scm
 	@mkdir -p build
 	PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < build/ulisp_core.scm > $@
 
-build/scheme-stage1: build/stage1.s build/runtime.o
-	$(CC) -no-pie $^ -o $@
+build/scheme-stage1: build/stage1.s
+	$(CC) -nostdlib -static $< -o $@
 
 stage1: build/scheme-stage1
 

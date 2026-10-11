@@ -11,28 +11,26 @@ mkdir -p "$BUILD_DIR"
 
 echo "[0/4] Preparing unified compiler (lib/ + compiler.scm)..."
 make -C "$ULISP_DIR" compiler
-cat "$ULISP_DIR/lib/string.scm" \
+cat "$ULISP_DIR/lib/posix.scm" \
+    "$ULISP_DIR/lib/string.scm" \
     "$ULISP_DIR/lib/printer.scm" \
     "$ULISP_DIR/lib/reader.scm" \
     "$ULISP_DIR/lib/gc.scm" \
     "$ULISP_DIR/compiler.scm" > "$BUILD_DIR/ulisp_core.scm"
 
-echo "[1/4] Compiling runtime.c (Thin Debug Runtime)..."
-gcc -O2 -c "$ULISP_DIR/runtime.c" -o "$BUILD_DIR/runtime.o"
-
 PYTHON_BIN="python3"
 if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
     PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
 fi
-echo "[2/4] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."
+echo "[1/3] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."
 PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm" < "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
-gcc -no-pie "$BUILD_DIR/stage1.s" "$BUILD_DIR/runtime.o" -o "$BUILD_DIR/scheme-stage1"
+gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
 
-echo "[3/4] Stage 2: Compiling ulisp_core.scm with Stage 1 compiler..."
+echo "[2/3] Stage 2: Compiling ulisp_core.scm with Stage 1 compiler..."
 "$BUILD_DIR/scheme-stage1" "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage2.s"
-gcc -no-pie "$BUILD_DIR/stage2.s" "$BUILD_DIR/runtime.o" -o "$BUILD_DIR/scheme-stage2"
+gcc -nostdlib -static "$BUILD_DIR/stage2.s" -o "$BUILD_DIR/scheme-stage2"
 
-echo "[4/4] Stage 3: Compiling ulisp_core.scm with Stage 2 compiler..."
+echo "[3/3] Stage 3: Compiling ulisp_core.scm with Stage 2 compiler..."
 "$BUILD_DIR/scheme-stage2" "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage3.s"
 
 echo "=== Verifying Fixed Point (diff stage2.s stage3.s) ==="
