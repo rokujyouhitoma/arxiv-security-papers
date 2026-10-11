@@ -14,30 +14,10 @@
 ;;; -----------------------------------------------------------------------
 
 
-(define (memq item ls)
-  (cond
-    ((null? ls) #f)
-    ((eq? (car ls) item) ls)
-    (else (memq item (cdr ls)))))
-
-(define (cadr x) (car (cdr x)))
-(define (cddr x) (cdr (cdr x)))
-(define (caddr x) (car (cdr (cdr x))))
-(define (cadddr x) (car (cdr (cdr (cdr x)))))
 (define (cddddr x) (cdr (cdr (cdr (cdr x)))))
-(define (caar x) (car (car x)))
-(define (cadar x) (car (cdr (car x))))
-(define (cdddr x) (cdr (cdr (cdr x))))
 (define (caadr x) (car (car (cdr x))))
 (define (cdadr x) (cdr (car (cdr x))))
 (define (list? x) (or (null? x) (pair? x)))
-
-(define (assq key ls)
-  (cond
-    ((null? ls) #f)
-    ((not (pair? (car ls))) (assq key (cdr ls)))
-    ((eq? (car (car ls)) key) (car ls))
-    (else (assq key (cdr ls)))))
 
 (define (equal? a b)
   (cond
@@ -46,34 +26,6 @@
      (and (equal? (car a) (car b))
           (equal? (cdr a) (cdr b))))
     (else #f)))
-
-(define (reverse ls)
-  (let loop ((l ls) (acc '()))
-    (if (null? l)
-        acc
-        (loop (cdr l) (cons (car l) acc)))))
-
-(define (append l1 l2)
-  (if (null? l1)
-      l2
-      (cons (car l1) (append (cdr l1) l2))))
-
-(define (filter pred ls)
-  (cond
-    ((null? ls) '())
-    ((pred (car ls)) (cons (car ls) (filter pred (cdr ls))))
-    (else (filter pred (cdr ls)))))
-
-(define (map f ls)
-  (if (null? ls)
-      '()
-      (cons (f (car ls)) (map f (cdr ls)))))
-
-(define (for-each proc ls)
-  (if (not (null? ls))
-      (begin
-        (proc (car ls))
-        (for-each proc (cdr ls)))))
 
 (define (list-ref ls n)
   (if (= n 0)
@@ -750,37 +702,70 @@
           (reverse acc)
           (loop (cons form acc))))))
 
-(define (main)
+(define (is-compile-request? forms)
+  (and (pair? forms)
+       (pair? (car forms))
+       (or (eq? (caar forms) '!target)
+           (eq? (caar forms) '!compile))))
+
+(define (run-aot-compile forms)
+  (let* ((first (car forms))
+         (target (if (eq? (car first) '!target)
+                     (cadar forms)
+                     'x86_64))
+         (clean-forms (if (or (eq? (car first) '!target)
+                              (eq? (car first) '!compile))
+                          (cdr forms)
+                          forms)))
+    (if (null? clean-forms)
+        0
+        (let* ((macro-expanded (expand-macros-in-forms clean-forms))
+               (ast0 (rewrite-top-level macro-expanded))
+               (ast1 (desugar-all ast0))
+               (ast2 (cp0-optimize ast1))
+               (ast3 (anf-all ast2))
+               (ast4 (closure-convert ast3))
+               (lir  (generate-lir ast4)))
+          (cond
+            ((eq? target 'c) (emit-c lir))
+            ((eq? target 'aarch64) (emit-aarch64 lir))
+            (else (emit-x86-64 lir)))))))
+
+(define (run-jit-execute forms)
   (display-string "==================================================================\n")
   (display-string "       ULisp-JIT: Standalone Scheme VM with Automatic JIT         \n")
   (display-string "               Powered by MLisp Meta-Tracing Engine               \n")
   (display-string "==================================================================\n")
-
   (tracer-reset!)
   (set-hot-threshold! 3)
   (jit-runtime-reset!)
   (reset-auto-loop-counter!)
+  (let* ((inst-forms (auto-instrument-forms forms))
+         (last-res
+          (let loop ((fs inst-forms) (res #f))
+            (if (null? fs)
+                res
+                (let ((v (mini-eval (car fs) '())))
+                  (loop (cdr fs) v))))))
+    (display-string "\n=> Result: ")
+    (display last-res)
+    (newline)
+    (display-string "==================================================================\n")
+    (display-string " [JIT Stats] Dispatched Native JIT Loops: ")
+    (display (car *jit-stats-executed*))
+    (newline)
+    (display-string "==================================================================\n")
+    0))
 
-  (let ((raw-forms (read-all-forms-stdin)))
-    (if (null? raw-forms)
+(define (main)
+  (let ((forms (read-all-forms-stdin)))
+    (if (null? forms)
         (begin
-          (display-string "No input expressions provided on stdin.\n")
+          (display-string "ulisp-jit: No input expressions provided on stdin.\n")
           0)
-        (let* ((inst-forms (auto-instrument-forms raw-forms))
-               (last-res
-                (let loop ((forms inst-forms) (res #f))
-                  (if (null? forms)
-                      res
-                      (let ((v (mini-eval (car forms) '())))
-                        (loop (cdr forms) v))))))
-          (display-string "\n=> Result: ")
-          (display last-res)
-          (newline)
-          (display-string "==================================================================\n")
-          (display-string " [JIT Stats] Dispatched Native JIT Loops: ")
-          (display (car *jit-stats-executed*))
-          (newline)
-          (display-string "==================================================================\n")
-          0))))
+        (if (is-compile-request? forms)
+            (run-aot-compile forms)
+            (run-jit-execute forms)))))
 
 (main)
+

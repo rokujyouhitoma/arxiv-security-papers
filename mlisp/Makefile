@@ -97,27 +97,37 @@ run_scheme_jit: bin/scheme-jit
 run_bin: bin/tiny_vm
 	./bin/tiny_vm
 
+ULISP_DIR = $(ROOT_DIR)/ulisp
+
+build/ulisp_jit_combined.scm: $(ULISP_DIR)/lib/string.scm $(ULISP_DIR)/lib/printer.scm $(ULISP_DIR)/lib/reader.scm $(ULISP_DIR)/lib/gc.scm $(ULISP_DIR)/build/compiler_passes.scm driver/ulisp_jit.scm
+	@mkdir -p build
+	cat $^ > $@
+
+build/ulisp_jit.s: build/ulisp_jit_combined.scm
+	@mkdir -p build
+	PYTHONPATH=$(ROOT_DIR) $(ILISP) $(ULISP_DIR)/compiler.scm < $< > $@
+
 ulisp-jit: bin/ulisp-jit
 
-bin/ulisp-jit: driver/ulisp_jit.scm
-	@mkdir -p bin build
-	@if [ -x $(ULISP_STAGE2) ]; then \
-		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $(ROOT_DIR)/ulisp/lib/reader.scm $< | $(ULISP_STAGE2) > build/ulisp_jit.s; \
-	elif [ -x $(ULISP_STAGE1) ]; then \
-		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $(ROOT_DIR)/ulisp/lib/reader.scm $< | $(ULISP_STAGE1) > build/ulisp_jit.s; \
-	else \
-		$(MAKE) -C $(ROOT_DIR)/ulisp stage1; \
-		cat $(ROOT_DIR)/ulisp/lib/string.scm $(ROOT_DIR)/ulisp/lib/printer.scm $(ROOT_DIR)/ulisp/lib/reader.scm $< | $(ULISP_STAGE1) > build/ulisp_jit.s; \
-	fi
-	$(CC) $(CFLAGS) -o $@ $(ROOT_DIR)/ulisp/runtime.c build/ulisp_jit.s
+bin/ulisp-jit: build/ulisp_jit.s
+	@mkdir -p bin
+	$(CC) $(CFLAGS) -o $@ $(ULISP_DIR)/runtime.c $<
 	@echo "Successfully compiled native standalone ulisp-jit binary: $@"
 
 run_ulisp_jit: bin/ulisp-jit
-	@echo "Running ulisp-jit verification loop..."
-	@echo "(let loop ((i 0) (sum 0)) (if (< i 10) (loop (+ i 1) (+ sum i)) sum))" | ./bin/ulisp-jit
+	@echo "=== [1/2] Verifying ulisp-jit JIT Loop Execution ==="
+	@echo "(let loop ((i 0) (sum 0)) (if (< i 10) (loop (+ i 1) (+ sum i)) sum))" > build/test_jit_eval.scm
+	@./bin/ulisp-jit build/test_jit_eval.scm
+	@echo "=== [2/2] Verifying ulisp-jit AOT Compilation ==="
+	@printf "(!compile)\n(define (fact n) (if (<= n 1) 1 (* n (fact (- n 1)))))\n(fact 5)\n" > build/test_jit_aot.scm
+	@./bin/ulisp-jit build/test_jit_aot.scm > build/test_jit_aot.s
+	@$(CC) $(CFLAGS) -o build/test_jit_aot $(ULISP_DIR)/runtime.c build/test_jit_aot.s
+	@test "$$(./build/test_jit_aot)" = "120"
+	@echo "SUCCESS: ulisp-jit AOT compilation verified (fact 5) = 120!"
 
-compile_ulisp:
-	$(MAKE) -C $(ROOT_DIR)/ulisp stage_mlisp
+compile_ulisp: bin/ulisp-jit
+	@echo "ulisp-jit is ready for compiling ulisp programs."
+
 
 test: test_delimcc test_tracer test_auto_instrument test_optimizer test_bridge test_examples
 

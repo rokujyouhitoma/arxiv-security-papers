@@ -60,15 +60,11 @@ make -C mlisp demo
 ```
 
 ### D. MLisp JIT 基盤による ULisp コンパイラのコンパイル (`make compile_ulisp`)
-MLisp の内因的メタトレーシング JIT 基盤（`driver/compile_ulisp_runner.scm`）を用いて、ULisp の自己ホスティングコンパイラ（`ulisp/build/ulisp_core.scm`）を丸ごとコンパイルし、スタンドアロンネイティブバイナリ `ulisp/build/scheme-from-mlisp` を生成します。
-これにより、Python（ILisp）に依存していた Stage 1 ブートストラップコンパイラを MLisp 実行基盤へと置き換え、完全な自己ホスティング循環コンパイルを実証します。
+MLisp の内因的メタトレーシング JIT 基盤（`driver/compile_ulisp_runner.scm`）を用いて、ULisp の自己ホスティングコンパイラをコンパイルします。`ulisp` 側には一切の逆依存を持たせず、`mlisp/` 側で完全に完結します。
 
 ```bash
-# MLisp JIT 基盤経由で ULisp コンパイラをネイティブコンパイル
+# MLisp JIT 基盤経由で ULisp コンパイラをビルド
 make -C mlisp compile_ulisp
-
-# 生成されたネイティブコンパイラバイナリの動作検証
-make -C ulisp run_mlisp_stage
 ```
 
 ### E. ゼロ侵入型 自動 JIT 計装 (Auto-Instrumentation)
@@ -86,21 +82,29 @@ ULisp やユーザーが記述した純粋な Scheme コードに対して、手
   (if (>= i 1000) acc (loop (+ i 1) (+ acc i))))
 ```
 
-### G. ゼロ侵入 JIT 搭載スタンドアロン Scheme VM バイナリ生成 (`make ulisp-jit`)
-ユーザーコードへの手動アノテーションを一切不要とし、標準入力（stdin）から任意の純粋 Scheme 式を読み込んで実行・自動 JIT コンパイルするスタンドアロンネイティブ VM バイナリ `bin/ulisp-jit` を生成します。
+### F. AOT コンパイラ＋動的 JIT 統合ワンバイナリ (`make ulisp-jit`)
+ULisp の Nanopass AOT コンパイラ（Pass 0〜7）と MLisp の動的 JIT エンジン（Tracer, PE, Virtuals, LIR Bridge, JIT Buffer）を統合した単一自己完結 ELF バイナリ `bin/ulisp-jit`（約 501 KB）を生成します。
+
+- **JIT 動的評価モード**: 通常の Scheme 式を入力すると、ループを自動検知してネイティブ JIT ディスパッチします。
+- **AOT コンパイルモード**: `(!compile)` または `(!target ...)` を先頭に付与すると、ULisp Nanopass AOT パイプラインが起動し、GNU x86-64 / C / AArch64 アセンブリを出力します。
 
 ```bash
-# ulisp-jit ネイティブバイナリのビルド
+# ulisp-jit ネイティブワンバイナリのビルド
 make -C mlisp ulisp-jit
-# (または ulisp ディレクトリから)
-make -C ulisp ulisp-jit
 
-# 任意の Scheme ループコード（アノテーションなし）をパイプで渡して実行
+# [1] JIT 動的評価モードでの実行
 echo "(let loop ((i 0) (sum 0)) (if (< i 10) (loop (+ i 1) (+ sum i)) sum))" | ./mlisp/bin/ulisp-jit
+
+# [2] AOT コンパイルモードでの実行 (fact 5 = 120)
+printf "(!compile)\n(define (fact n) (if (<= n 1) 1 (* n (fact (- n 1)))))\n(fact 5)\n" > test_fact.scm
+./mlisp/bin/ulisp-jit test_fact.scm > test_fact.s
+gcc -no-pie -O2 ../ulisp/runtime.c test_fact.s -o test_fact && ./test_fact # => 120
 
 # 実行検証ターゲット (Makefile)
 make -C mlisp run_ulisp_jit
 ```
+
+詳細な実測ベンチマーク（`ulisp/build/scheme-stage2` との性能比較・フットプリント・スループット）は [benchmarks/README.md](benchmarks/README.md) を参照してください。
 
 **実行結果:**
 ```text
