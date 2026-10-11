@@ -6,7 +6,9 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| - | *(現在進行中のオープン Issue はありません)* | - | - | - |
+| **518** | ULisp 低水準IR具象化器 (S-RTyper) とアンボクシングによるタグ検査完全消去 | Feature | Open (New) | [518-implement-ulisp-s-rtyper-unboxing-and-typed-lir.md](518-implement-ulisp-s-rtyper-unboxing-and-typed-lir.md) |
+| **519** | アンボクシング混在環境向け Exact GC スタックマップ (Stackmap) 自動生成機構の実装 | Feature | Open (New) | [519-implement-ulisp-exact-gc-stackmap-generation.md](519-implement-ulisp-exact-gc-stackmap-generation.md) |
+| **520** | 静的型知識に基づく JIT ガード命令事前消去 (Guard Elimination) と OSR 復元コード合成の実装 | Feature | Open (New) | [520-integrate-ulisp-jit-guard-elimination-and-osr.md](520-integrate-ulisp-jit-guard-elimination-and-osr.md) |
 
 ---
 
@@ -14,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **517** | ULisp コンパイラへの抽象解釈型推論器 (S-Annotator) と型格子 (Lattice) の実装 | Feature | 2026-10-11 | [closed/517-implement-ulisp-s-annotator-abstract-interpretation.md](closed/517-implement-ulisp-s-annotator-abstract-interpretation.md) |
 | **516** | libc/C依存完全排除と 100% Pure Scheme ベアメタル Linux ランタイム (%syscall・_start) の実装 | Feature | 2026-10-11 | [closed/516-implement-zero-libc-pure-scheme-bare-metal-runtime.md](closed/516-implement-zero-libc-pure-scheme-bare-metal-runtime.md) |
 | **515** | ILisp・ULisp AOT・ULisp JIT 3種実行系性能評価および継続的ベンチマーク基盤の構築 | Feature | 2026-10-11 | [closed/515-ilisp-ulisp-aot-jit-performance-benchmark-framework.md](closed/515-ilisp-ulisp-aot-jit-performance-benchmark-framework.md) |
 | **514** | ULisp と MLisp の完全統合による統一 RPython スタイルメタプログラミング言語基盤の確立 | Refactor | 2026-10-11 | [closed/514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md](closed/514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md) |

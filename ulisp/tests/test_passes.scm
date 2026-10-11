@@ -176,6 +176,63 @@
                  (and (pair? anf-if) (eq? (car anf-if) 'let)))))
 
 ;;; =======================================================================
+;;; Pass 4b: S-Annotator Abstract Interpretation Tests (04b_annotator.scm)
+;;; =======================================================================
+(define (test-pass4b-annotator)
+  (display "=== Running Pass 4b (S-Annotator) Tests ===")
+  (newline)
+
+  ;; 1. Lattice operations
+  (assert-equal "type-lub bot fixnum"
+                'fixnum
+                (type-lub (type-bot) (type-fixnum)))
+
+  (assert-equal "type-lub fixnum ranges"
+                '(fixnum 1 10)
+                (type-lub (type-fixnum-range 1 5) (type-fixnum-range 3 10)))
+
+  (assert-equal "type-lub disjoint types"
+                'top
+                (type-lub (type-fixnum) (type-boolean)))
+
+  ;; 2. Arithmetic abstract evaluation
+  (assert-equal "eval fixnum literal"
+                '(fixnum 42 42)
+                (abstract-eval-expr 42 '()))
+
+  (assert-equal "eval arithmetic addition"
+                '(fixnum 30 30)
+                (abstract-eval-expr '(+ 10 20) '()))
+
+  ;; 3. Conditional LUB merge
+  (let ((if-type (abstract-eval-expr '(if c 10 20) '((c . boolean)))))
+    (assert-equal "eval conditional merge"
+                  '(fixnum 10 20)
+                  if-type))
+
+  ;; 4. Let variable type recording
+  (reset-type-annotations!)
+  (let ((let-type (abstract-eval-expr '(let ((x 42)) (+ x 1)) '())))
+    (assert-true "let body fixnum type" (type-fixnum? let-type))
+    (assert-equal "recorded variable type" '(fixnum 42 42) (get-var-type 'x)))
+
+  ;; 5. Named-let fixpoint iteration
+  (reset-type-annotations!)
+  (let ((loop-res (abstract-eval-expr '(let loop ((n 10) (acc 0))
+                                         (if (= n 0)
+                                             acc
+                                             (loop (- n 1) (+ acc n))))
+                                      '())))
+    (assert-true "loop result is fixnum" (type-fixnum? loop-res))
+    (assert-true "loop var n is fixnum" (type-fixnum? (get-var-type 'n)))
+    (assert-true "loop var acc is fixnum" (type-fixnum? (get-var-type 'acc))))
+
+  ;; 6. annotate-all whole program pass
+  (let ((forms (annotate-all '((define (square x) (* x x))
+                               (square 5)))))
+    (assert-equal "annotate-all preserves forms" 2 (length forms))))
+
+;;; =======================================================================
 ;;; Pass 5: Explicit Closure Conversion Tests (05_closure_convert.scm)
 ;;; =======================================================================
 (define (test-pass5-closure)
@@ -391,6 +448,7 @@
 (test-pass2-analysis)
 (test-pass3-cp0)
 (test-pass4-anf)
+(test-pass4b-annotator)
 (test-pass5-closure)
 (test-pass6-lir)
 (test-pass7-backend)

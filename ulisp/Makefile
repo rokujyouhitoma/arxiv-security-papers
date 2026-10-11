@@ -15,6 +15,7 @@ PASSES_LIB = passes/00_helpers.scm \
              passes/02_analysis.scm \
              passes/03_cp0.scm \
              passes/04_anf.scm \
+             passes/04b_annotator.scm \
              passes/05_closure_convert.scm \
              passes/06_lir.scm \
              passes/07_backend_x86_64.scm \
