@@ -51,7 +51,7 @@
          (else
           (cond
             ((zero-arg-prim? op) '())
-            ((or (unary-prim? op) (or (binop-prim? op) (triop-prim? op)))
+            ((or (unary-prim? op) (or (binop-prim? op) (or (triop-prim? op) (septop-prim? op))))
              (let loop ((es (cdr expr)) (acc '()))
                (if (null? es) acc
                    (loop (cdr es) (set-union acc (free-vars (car es) bound))))))

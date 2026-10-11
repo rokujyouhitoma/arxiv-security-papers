@@ -112,7 +112,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char peek-char %get-rsp %get-heap-ptr %get-gc-state-ptr)))
+  (memq op '(read-char peek-char eof-object %get-rsp %get-heap-ptr %get-gc-state-ptr)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -121,7 +121,8 @@
              car cdr pair? procedure? string?
              write-char eof-object?
              make-string string-length
-             %set-heap-ptr! %ptr-tag %ptr-untag)))
+             %set-heap-ptr! %ptr-tag %ptr-untag
+             %to-raw %to-fixnum)))
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?
@@ -129,6 +130,9 @@
 
 (define (triop-prim? op)
   (memq op '(string-set! %raw-store!)))
+
+(define (septop-prim? op)
+  (memq op '(%raw-syscall)))
 
 (define (closure-prim? op)
   (memq op '(%make-closure %closure-ref %closure-set!)))
@@ -138,6 +142,7 @@
              integer->symbol symbol->integer
              zero? fixnum? integer? number? boolean? char? null? not symbol?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
+             %to-raw %to-fixnum
              + - * = < <= > >= modulo quotient / eq? char=? %closure-ref)))
 
 (define (const? x)
@@ -681,7 +686,7 @@
          (else
           (cond
             ((zero-arg-prim? op) '())
-            ((or (unary-prim? op) (or (binop-prim? op) (triop-prim? op)))
+            ((or (unary-prim? op) (or (binop-prim? op) (or (triop-prim? op) (septop-prim? op))))
              (let loop ((es (cdr expr)) (acc '()))
                (if (null? es) acc
                    (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
@@ -1237,6 +1242,8 @@
        (emit-lir! '(%mov %rax %r12)))
       ((%get-gc-state-ptr)
        (emit-lir! (list '%code-ref '%rax 'ulisp_gc_state)))
+      ((eof-object)
+       (emit-lir! '(%mov %rax 79)))
       ((read-char)
        (emit-lir! (list '%c-call 'ulisp_read_char frame-shift)))
       ((peek-char)
@@ -1314,6 +1321,10 @@
      (emit-lir! '(%shl %rax 2)))
     ((%ptr-untag)
      (emit-lir! '(%bit-and %rax -8)))
+    ((%to-raw)
+     (emit-lir! '(%sar %rax 2)))
+    ((%to-fixnum)
+     (emit-lir! '(%shl %rax 2)))
     ((make-string)
      (emit-lir! '(%sar %rax 2))
      (emit-lir! '(%mov %rcx %rax))
@@ -1460,6 +1471,44 @@
      (emit-lir! '(%add %rdx %rcx))
      (emit-lir! '(%store %rdx 0 %r10))
      (emit-lir! '(%mov %rax 63)))))
+
+(define (lir-compile-raw-syscall args si env)
+  (let ((num (car args))
+        (a1 (car (cdr args)))
+        (a2 (car (cdr (cdr args))))
+        (a3 (car (cdr (cdr (cdr args)))))
+        (a4 (car (cdr (cdr (cdr (cdr args))))))
+        (a5 (car (cdr (cdr (cdr (cdr (cdr args)))))))
+        (a6 (car (cdr (cdr (cdr (cdr (cdr (cdr args)))))))))
+    (track-lir-si! si)
+    (lir-compile-expr num si env #f)
+    (emit-lir! (list '%store '%rsp si '%rax))
+    (track-lir-si! (- si 8))
+    (lir-compile-expr a1 (- si 8) env #f)
+    (emit-lir! (list '%store '%rsp (- si 8) '%rax))
+    (track-lir-si! (- si 16))
+    (lir-compile-expr a2 (- si 16) env #f)
+    (emit-lir! (list '%store '%rsp (- si 16) '%rax))
+    (track-lir-si! (- si 24))
+    (lir-compile-expr a3 (- si 24) env #f)
+    (emit-lir! (list '%store '%rsp (- si 24) '%rax))
+    (track-lir-si! (- si 32))
+    (lir-compile-expr a4 (- si 32) env #f)
+    (emit-lir! (list '%store '%rsp (- si 32) '%rax))
+    (track-lir-si! (- si 40))
+    (lir-compile-expr a5 (- si 40) env #f)
+    (emit-lir! (list '%store '%rsp (- si 40) '%rax))
+    (track-lir-si! (- si 48))
+    (lir-compile-expr a6 (- si 48) env #f)
+    (emit-lir! (list '%store '%rsp (- si 48) '%rax))
+    (emit-lir! (list '%load '%rax '%rsp si))
+    (emit-lir! (list '%load '%rdi '%rsp (- si 8)))
+    (emit-lir! (list '%load '%rsi '%rsp (- si 16)))
+    (emit-lir! (list '%load '%rdx '%rsp (- si 24)))
+    (emit-lir! (list '%load '%r10 '%rsp (- si 32)))
+    (emit-lir! (list '%load '%r8 '%rsp (- si 40)))
+    (emit-lir! (list '%load '%r9 '%rsp (- si 48)))
+    (emit-lir! '(%syscall))))
 
 (define (lir-compile-make-closure expr si env)
   (let* ((label-arg (cadr expr))
@@ -1621,6 +1670,8 @@
           (lir-compile-binop op (cadr expr) (caddr expr) si env))
          ((triop-prim? op)
           (lir-compile-triop op (cadr expr) (caddr expr) (cadddr expr) si env))
+         ((septop-prim? op)
+          (lir-compile-raw-syscall (cdr expr) si env))
          ((eq? op 'let)
           (lir-compile-let (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'if)
@@ -1725,6 +1776,9 @@
     ((%rcx) "rcx")
     ((%r10) "r10")
     ((%rdi) "rdi")
+    ((%rsi) "rsi")
+    ((%r8)  "r8")
+    ((%r9)  "r9")
     ((%r12) "r12")
     ((%rsp) "rsp")
     ((%al)  "al")
@@ -1778,6 +1832,9 @@
 
       ((%return)
        (emit "    ret"))
+
+      ((%syscall)
+       (emit "    syscall"))
 
       ((%mov)
        (let ((dst (cadr inst))
@@ -1937,6 +1994,19 @@
          (main-body (cdr (assq 'body (cdr main-clause)))))
     (emit "    .intel_syntax noprefix")
     (emit "    .text")
+    (emit "    .globl _start")
+    (emit "    .weak _start")
+    (emit "    .type _start, @function")
+    (emit "_start:")
+    (emit "    mov rbp, rsp")
+    (emit "    and rsp, -16")
+    (emit "    lea rdi, [rip + ulisp_initial_heap]")
+    (emit "    call scheme_entry")
+    (emit "    mov rdi, rax")
+    (emit "    sar rdi, 2")
+    (emit "    mov rax, 60")
+    (emit "    syscall")
+    (emit "")
     (emit "    .globl scheme_entry")
     (emit "    .type scheme_entry, @function")
     (emit "scheme_entry:")
@@ -1963,6 +2033,11 @@
                   (emit (string-append (car entry) ":"))
                   (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
                   (loop (cdr ss)))))))
+    (emit "    .bss")
+    (emit "    .align 16")
+    (emit "    .globl ulisp_initial_heap")
+    (emit "ulisp_initial_heap:")
+    (emit "    .space 16777216")
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native AArch64 (ARM64) Backend Code Generator

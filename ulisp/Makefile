@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 bootstrap clean run_42 run_c_42 core compiler test_passes stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes stage1 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_bridge test_examples
 
 CC = gcc
@@ -44,6 +44,10 @@ test_aarch64: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_backend_aarch64.scm > build/test_aarch64_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_aarch64_runner.scm
+
+test_freestanding: compiler
+	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="
+	@PYTHONPATH=$(ROOT_DIR) $(PYTHON) -m pytest $(ROOT_DIR)/tests/test_bare_metal_ulisp.py -v
 
 test_c: compiler
 	./test_c.sh

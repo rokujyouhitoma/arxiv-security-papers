@@ -4,7 +4,9 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-*現在進行中・未着手のIssueはありません。*
+| Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: |
+| - | *(現在進行中のオープン Issue はありません)* | - | - | - |
 
 ---
 
@@ -12,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **516** | libc/C依存完全排除と 100% Pure Scheme ベアメタル Linux ランタイム (%syscall・_start) の実装 | Feature | 2026-10-11 | [closed/516-implement-zero-libc-pure-scheme-bare-metal-runtime.md](closed/516-implement-zero-libc-pure-scheme-bare-metal-runtime.md) |
 | **515** | ILisp・ULisp AOT・ULisp JIT 3種実行系性能評価および継続的ベンチマーク基盤の構築 | Feature | 2026-10-11 | [closed/515-ilisp-ulisp-aot-jit-performance-benchmark-framework.md](closed/515-ilisp-ulisp-aot-jit-performance-benchmark-framework.md) |
 | **514** | ULisp と MLisp の完全統合による統一 RPython スタイルメタプログラミング言語基盤の確立 | Refactor | 2026-10-11 | [closed/514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md](closed/514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md) |
 | **513** | MLisp コードベースの純化・重複解消および不要コードの完全排除 | Refactor | 2026-10-11 | [closed/513-refactor-mlisp-remove-dead-code-and-pure-scheme.md](closed/513-refactor-mlisp-remove-dead-code-and-pure-scheme.md) |

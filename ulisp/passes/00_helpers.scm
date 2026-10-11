@@ -112,7 +112,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char peek-char %get-rsp %get-heap-ptr %get-gc-state-ptr)))
+  (memq op '(read-char peek-char eof-object %get-rsp %get-heap-ptr %get-gc-state-ptr)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -121,7 +121,8 @@
              car cdr pair? procedure? string?
              write-char eof-object?
              make-string string-length
-             %set-heap-ptr! %ptr-tag %ptr-untag)))
+             %set-heap-ptr! %ptr-tag %ptr-untag
+             %to-raw %to-fixnum)))
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?
@@ -129,6 +130,9 @@
 
 (define (triop-prim? op)
   (memq op '(string-set! %raw-store!)))
+
+(define (septop-prim? op)
+  (memq op '(%raw-syscall)))
 
 (define (closure-prim? op)
   (memq op '(%make-closure %closure-ref %closure-set!)))
@@ -138,6 +142,7 @@
              integer->symbol symbol->integer
              zero? fixnum? integer? number? boolean? char? null? not symbol?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
+             %to-raw %to-fixnum
              + - * = < <= > >= modulo quotient / eq? char=? %closure-ref)))
 
 (define (const? x)
