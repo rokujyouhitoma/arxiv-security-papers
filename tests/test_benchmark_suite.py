@@ -36,7 +36,11 @@ def test_markdown_report_generation():
             "processor": "x86_64",
             "python_version": "3.11.0",
         },
-        "config": {"iterations": 5, "compiler": "scheme-stage2", "jit_bin": "ulisp-jit"},
+        "config": {
+            "iterations": 5,
+            "compiler": "scheme-stage2",
+            "jit_bin": "ulisp-jit",
+        },
         "results": [
             {
                 "workload_id": "test_add",
@@ -52,10 +56,30 @@ def test_markdown_report_generation():
                     "actual_aot": "42",
                     "actual_jit": "42",
                 },
-                "ilisp": {"mean_ms": 10.0, "std_ms": 1.0, "min_ms": 9.0, "max_ms": 11.0},
-                "ulisp_aot": {"compile_ms": 50.0, "mean_ms": 1.0, "std_ms": 0.1, "min_ms": 0.9, "max_ms": 1.1},
-                "ulisp_jit": {"mean_ms": 2.0, "std_ms": 0.2, "min_ms": 1.8, "max_ms": 2.2},
-                "speedups": {"aot_vs_ilisp": 10.0, "jit_vs_ilisp": 5.0, "aot_vs_jit": 2.0},
+                "ilisp": {
+                    "mean_ms": 10.0,
+                    "std_ms": 1.0,
+                    "min_ms": 9.0,
+                    "max_ms": 11.0,
+                },
+                "ulisp_aot": {
+                    "compile_ms": 50.0,
+                    "mean_ms": 1.0,
+                    "std_ms": 0.1,
+                    "min_ms": 0.9,
+                    "max_ms": 1.1,
+                },
+                "ulisp_jit": {
+                    "mean_ms": 2.0,
+                    "std_ms": 0.2,
+                    "min_ms": 1.8,
+                    "max_ms": 2.2,
+                },
+                "speedups": {
+                    "aot_vs_ilisp": 10.0,
+                    "jit_vs_ilisp": 5.0,
+                    "aot_vs_jit": 2.0,
+                },
             }
         ],
     }
@@ -111,7 +135,13 @@ def test_full_suite_single_iteration():
         pytest.skip("ulisp-jit binary not compiled yet")
 
     spec = WORKLOADS["sum_loop"]
-    res = measure_workload("sum_loop", spec, iterations=1, compiler_path=ULISP_JIT_BIN, jit_bin=ULISP_JIT_BIN)
+    res = measure_workload(
+        "sum_loop",
+        spec,
+        iterations=1,
+        compiler_path=ULISP_JIT_BIN,
+        jit_bin=ULISP_JIT_BIN,
+    )
     assert res["correctness"]["ilisp_valid"] is True
     assert res["correctness"]["aot_valid"] is True
     assert res["correctness"]["jit_valid"] is True
