@@ -734,7 +734,7 @@
 (define (run-jit-execute forms)
   (display-string "==================================================================\n")
   (display-string "       ULisp-JIT: Standalone Scheme VM with Automatic JIT         \n")
-  (display-string "               Powered by MLisp Meta-Tracing Engine               \n")
+  (display-string "               Powered by ULisp Meta-Tracing Engine               \n")
   (display-string "==================================================================\n")
   (tracer-reset!)
   (set-hot-threshold! 3)

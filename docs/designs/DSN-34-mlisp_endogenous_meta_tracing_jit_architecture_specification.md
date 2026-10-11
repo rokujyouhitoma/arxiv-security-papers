@@ -1,11 +1,17 @@
 # [DSN-34] MLisp: 限定継続（shift/reset）と ULisp LIR に基づく内因的メタトレーシング JIT アーキテクチャ包括的設計書
 
+> [!IMPORTANT]
+> **【統合完了・移行案内 (Consolidated into DSN-33)】**  
+> 本設計書（DSN-34）は、**Issue #514** の決定（「ulisp と mlisp を RPython スタイルの単一統合フレームワークへ一本化し、`/mlisp/` ディレクトリを完全消去する」方針）に基づき、**[[DSN-33] ULISP 包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) の第 7 章（RPython スタイル 3 層統合アーキテクチャと内因的メタトレーシング JIT）へと昇格・完全統合されました。**  
+> 旧 `mlisp/` 配下の全モジュールは `ulisp/jit/` および `ulisp/driver/` へ移設され、`/mlisp/` ディレクトリは完全消去されています。今後の最新仕様・アーキテクチャ正典（SSOT）はすべて **[DSN-33](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)** を参照してください。
+
 - **文書番号**: `DSN-34`
-- **文書ステータス**: `APPROVED / IN-IMPLEMENTATION`
-- **対象サブシステム**: `mlisp/` (Delimited Continuations, Endogenous Meta-Tracer, Virtualization Optimizer, ULisp LIR Bridge, Pure Scheme Machine Code Emitter)
+- **文書ステータス**: `CONSOLIDATED_INTO_DSN_33 / ARCHIVED`
+- **対象サブシステム**: `ulisp/jit/` (旧 `mlisp/`: Delimited Continuations, Endogenous Meta-Tracer, Virtualization Optimizer, ULisp LIR Bridge, Pure Scheme JIT Runtime)
 - **設計基本原則**: **【Pure Scheme 原則】C 言語での実装を極限まで排除し、トレーサ・オプティマイザ・JIT アセンブラ・メモリバッファ管理に至る全パイプラインを 100% Scheme 自身で実装しきる同図像的（Homoiconic）自己完結アーキテクチャ。**
+- **統合先・正典仕様書**:
+  - **[[DSN-33] ULISP 包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)（第 7 章に全理論・設計を完全統合）**
 - **関連仕様書**:
-  - [[DSN-33] ULisp underlying x86-64 / Multi-Backend Native AOT Compiler Architecture Specification](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
   - [[DSN-31] ILisp R7RS Intelligence Lisp Architecture Specification](DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)
   - [[DSN-05] 次世代データベースエンジン包括的アーキテクチャ設計書](DSN-05-database_engine_architecture.md)
 
@@ -20,21 +26,21 @@
   - [1.1 RPython / PyPy の功績と構造的課題](#11-rpython--pypy-の功績と構造的課題)
   - [1.2 Scheme が切り拓く「真のメタ循環（内因的メタトレーシング）」](#12-scheme-が切り拓く真のメタ循環内因的メタトレーシング)
   - [1.3 部分評価・限定継続・多段階計算の融合](#13-部分評価限定継続多段階計算の融合)
-- [2. ハイブリッド分離モデルと ULisp 連携アーキテクチャ](#2-ハイブリッド分離モデルと-ulisp-連携アーキテクチャ)
-  - [2.1 なぜ「論理分離・基盤共有（ハイブリッド）」なのか](#21-なぜ論理分離基盤共有ハイブリッドなのか)
-  - [2.2 システム全体俯瞰図（MLisp on ULisp LIR）](#22-システム全体俯瞰図mlisp-on-ulisp-lir)
-  - [2.3 ディレクトリトポロジと責務境界](#23-ディレクトリトポロジと責務境界)
+- [2. 統合 RPython モデルと ULisp 連携アーキテクチャ](#2-統合-rpython-モデルと-ulisp-連携アーキテクチャ)
+  - [2.1 統合の経緯（論理分離から RPython スタイル 3 層統合へ）](#21-統合の経緯論理分離から-rpython-スタイル-3-層統合へ)
+  - [2.2 システム全体俯瞰図（JIT on ULisp LIR）](#22-システム全体俯瞰図jit-on-ulisp-lir)
+  - [2.3 ディレクトリトポロジと統合配置](#23-ディレクトリトポロジと統合配置)
 - [3. 数理的・理論的定式化](#3-数理的理論的定式化)
   - [3.1 限定継続の操作的意味論（shift / reset）](#31-限定継続の操作的意味論shift--reset)
   - [3.2 抽象解釈とシンボリックトレース抽出モデル](#32-抽象解釈とシンボリックトレース抽出モデル)
   - [3.3 仮想オブジェクト縮退（Virtual Allocation / Escape Analysis）代数系](#33-仮想オブジェクト縮退virtual-allocation--escape-analysis代数系)
   - [3.4 ガード判定と脱出（Deoptimization / Bailout）の健全性証明](#34-ガード判定と脱出deoptimization--bailoutの健全性証明)
 - [4. コアサブシステム詳細設計](#4-コアサブシステム詳細設計)
-  - [4.1 限定継続コア (`mlisp/core/delimcc.scm`)](#41-限定継続コア-mlispcoredelimccscm)
-  - [4.2 内因的メタトレーサ (`mlisp/tracer/tracer.scm` & `jit-merge-point`)](#42-内因的メタトレーサ-mlisptracertracerscm--jit-merge-point)
-  - [4.3 トレースオプティマイザ & 仮想化エンジン (`mlisp/optimizer/`)](#43-トレースオプティマイザ--仮想化エンジン-mlispoptimizer)
-  - [4.4 ULisp LIR 変換ブリッジ (`mlisp/bridge/to_lir.scm`)](#44-ulisp-lir-変換ブリッジ-mlispbridgeto_lirscm)
-  - [4.5 ネイティブ JIT 実行ランタイム & メモリマネージャ (`mlisp/runtime/`)](#45-ネイティブ-jit-実行ランタイム--メモリマネージャ-mlispruntime)
+  - [4.1 限定継続コア (`ulisp/jit/core/delimcc.scm`)](#41-限定継続コア-ulispjitcoredelimccscm)
+  - [4.2 内因的メタトレーサ (`ulisp/jit/tracer/tracer.scm` & `jit-merge-point`)](#42-内因的メタトレーサ-ulispjittracertracerscm--jit-merge-point)
+  - [4.3 トレースオプティマイザ & 仮想化エンジン (`ulisp/jit/optimizer/`)](#43-トレースオプティマイザ--仮想化エンジン-ulispjitoptimizer)
+  - [4.4 ULisp LIR 変換ブリッジ (`ulisp/jit/bridge/to_lir.scm`)](#44-ulisp-lir-変換ブリッジ-ulispjitbridgeto_lirscm)
+  - [4.5 ネイティブ JIT 実行ランタイム & メモリマネージャ (`ulisp/jit/runtime/`)](#45-ネイティブ-jit-実行ランタイム--メモリマネージャ-ulispjitruntime)
 - [5. 単一自己完結バイナリ（Single Standalone Executable）設計](#5-単一自己完結バイナリsingle-standalone-executable設計)
   - [5.1 ビルド時パイプラインと AOT/JIT 統合リンケージ](#51-ビルド時パイプラインと-aotjit-統合リンケージ)
   - [5.2 実行時 W^X メモリ保護（mmap / mprotect）と動的コードディスパッチ](#52-実行時-wx-メモリ保護mmap--mprotectと動的コードディスパッチ)
@@ -65,37 +71,39 @@ MLisp は、Olivier Danvy の **限定継続に基づく型主導部分評価（
 
 ---
 
-## 2. ハイブリッド分離モデルと ULisp 連携アーキテクチャ
+## 2. 統合 RPython モデルと ULisp 連携アーキテクチャ
 
-### 2.1 なぜ「論理分離・基盤共有（ハイブリッド）」なのか
-- **ULisp の責務**: 最小限の Scheme 仕様を Native AOT マシン語へ変換する、極めて安定した決定論的コンパイラ（[DSN-33](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)）。
-- **MLisp の責務**: 任意の動的言語インタプリタを JIT 化し、動的にトレースを刈り取って自己最適化する上位メタフレームワーク。
-- **共有基盤**: ULisp が提供する **Pass 6: Low-Level IR (LIR)**（[lir_specification.md](../../ulisp/docs/lir_specification.md)）および **Pass 7: Multi-Backend Codegen (C99, AArch64, x86-64)** をそのまま流用することで、車輪の再発明を完全に排除する。
+### 2.1 統合の経緯（論理分離から RPython スタイル 3 層統合へ）
+当初は ULisp（AOT）と MLisp（JIT）を別ディレクトリとして論理分離するハイブリッド設計を策定した。しかし、PyPy / RPython ツールチェーンの成熟モデルに鑑み、**「AOT コンパイラ（Layer 1）、メタトレーシング JIT（Layer 2）、ユーザー言語（Layer 3）を単一フレームワーク `ulisp/` 配下に包含し、`/mlisp/` ディレクトリを完全消去する」** という決定（Issue #514）がなされた。
 
-### 2.2 システム全体俯瞰図（MLisp on ULisp LIR）
+- **Layer 1 (ULisp AOT Core)**: `< 5,000` 行の決定論的 Nanopass AOT コンパイラ（Pass 00〜08, `lib/`, `runtime.c`）。セルフホスティング固定点検証（`diff stage2.s stage3.s == 0`）を担う。
+- **Layer 2 (Meta-Tracing JIT)**: 限定継続（`shift`/`reset`）による内因的メタトレーサ、トレース最適化、LIR 変換、W^X メモリ保護（`ulisp/jit/`）。
+- **Layer 3 (Endogenous Substrate)**: JIT 自動計装を備えたインタプリタ、DSL、ユーザー言語。
+
+### 2.2 システム全体俯瞰図（JIT on ULisp LIR）
 
 ```mermaid
 flowchart TD
-    subgraph UserSpace ["ユーザー言語実行レイヤ (User Language Layer)"]
+    subgraph UserSpace ["ユーザー言語実行レイヤ (Layer 3: User Language Layer)"]
         INTERP["ユーザー定義の言語インタプリタ (eval-expr / dispatch)<br/>(Scheme, Tiny-Python, Wasm, SQL, etc.)"]
         USER_CODE["実行対象スクリプト / プログラム"]
     end
 
-    subgraph MLispCore ["MLisp メタトレーシングコア (mlisp/)"]
-        DELIM["1. 限定継続コア (mlisp/core/delimcc.scm)<br/>reset / shift 制御境界"]
-        TRACER["2. 内因的メタトレーサ (mlisp/tracer/tracer.scm)<br/>jit-merge-point フック & S式トレース自動抽出"]
-        OPT["3. トレースオプティマイザ (mlisp/optimizer/)<br/>ディスパッチ消去・定数畳み込み・仮想化 (Virtuals)"]
-        BRIDGE["4. LIR 変換ブリッジ (mlisp/bridge/to_lir.scm)<br/>最適化トレース → %lir-program への写像"]
+    subgraph JITCore ["メタトレーシング JIT コア (Layer 2: ulisp/jit/)"]
+        DELIM["1. 限定継続コア (ulisp/jit/core/delimcc.scm)<br/>reset / shift 制御境界"]
+        TRACER["2. 内因的メタトレーサ (ulisp/jit/tracer/tracer.scm)<br/>jit-merge-point フック & S式トレース自動抽出"]
+        OPT["3. トレースオプティマイザ (ulisp/jit/optimizer/)<br/>ディスパッチ消去・定数畳み込み・仮想化 (Virtuals)"]
+        BRIDGE["4. LIR 変換ブリッジ (ulisp/jit/bridge/to_lir.scm)<br/>最適化トレース → %lir-program への写像"]
     end
 
-    subgraph ULispCore ["ULisp 共有コンパイラ基盤 (ulisp/)"]
+    subgraph ULispCore ["ULisp 共有コンパイラ基盤 (Layer 1: ulisp/)"]
         LIR["Pass 6: Low-Level IR (3番地仮想レジスタ機械)"]
         BACK_C["Pass 7b: Portable C99 Backend"]
         BACK_ARM["Pass 7c: AArch64 Backend"]
         BACK_X86["Pass 7: x86-64 Backend"]
     end
 
-    subgraph JITRuntime ["実行時 JIT 実行基盤 (Single Standalone Binary)"]
+    subgraph JITRuntime ["実行時 JIT 実行基盤 (ulisp/bin/ulisp-jit)"]
         EXEC_MEM["W^X 実行可能メモリバッファ (mmap: PROT_EXEC)"]
         NATIVE_CALL["直接関数ポインタ呼出 ((void (*)(void))code)()"]
         BAILOUT["ガード脱出 (Bailout) 復帰ハンドラ"]
@@ -113,40 +121,23 @@ flowchart TD
     NATIVE_CALL -.->|"Guard Failure"| BAILOUT --> INTERP
 ```
 
-### 2.3 ディレクトリトポロジと責務境界
+### 2.3 ディレクトリトポロジと統合配置
 
-```
+```text
 /workspace/arxiv-security-papers/
-├── ulisp/                      # 【既存】ULisp Scheme AOT コンパイラコア (共有インフラ)
-│   ├── passes/
-│   │   ├── 06_lir.scm          # ★ 3番地 LIR 定義・検証器
-│   │   ├── 07_backend_c.scm    # ★ ANSI C99 コードジェネレータ
-│   │   ├── 07_backend_aarch64.scm # ★ ARM64 アセンブリジェネレータ
-│   │   └── 07_backend_x86_64.scm  # ★ x86-64 アセンブリジェネレータ
-│   └── runtime.c               # ★ Cheney Copying GC, 極小 OS プリミティブ
-│
-└── mlisp/                      # 【新設】MLisp メタトレーシング JIT ツールチェーン (100% Pure Scheme)
-    ├── core/                   # 限定継続 (shift/reset) & コア評価器 (Pure Scheme)
-    │   └── delimcc.scm         # shift/reset プリミティブ
-    ├── tracer/                 # 内因的S式トレース抽出器 (Pure Scheme)
-    │   └── tracer.scm          # jit-merge-point & シンボリックレコーダ
-    ├── optimizer/              # トレース最適化 (Pure Scheme)
-    │   ├── pe.scm              # 部分評価・定数畳み込み
-    │   └── virtuals.scm        # 仮想オブジェクト・エスケープ解析
-    ├── bridge/                 # トレースから ULisp LIR へのアダプタ (Pure Scheme)
-    │   └── to_lir.scm          # S式トレース → %lir-program 変換
-    ├── emitter/                # ★ 100% Scheme 製ダイレクト機械語エミッタ
-    │   ├── asm_x86_64.scm      # x86-64 バイトコードアセンブラ (Scheme)
-    │   └── asm_aarch64.scm     # AArch64 バイトコードアセンブラ (Scheme)
-    ├── runtime/                # JIT 実行時メモリ・ディスパッチャ (Pure Scheme)
-    │   └── jit_buffer.scm      # W^X メモリ管理 & ジャンプディスパッチ (Scheme)
-    ├── examples/               # 実証用ミニ言語処理系 (Pure Scheme)
-    │   ├── tiny_vm.scm         # スタック型バイトコード VM
-    │   └── scheme_eval.scm     # メタサーキュラー Scheme 評価器
-    ├── tests/                  # MLisp 統合テストスイート (Pure Scheme)
-    │   ├── test_delimcc.scm    # 限定継続単体テスト
-    │   └── test_tracer.scm     # トレース抽出テスト
-    └── Makefile                # MLisp 独立ビルド・テスト定義
+└── ulisp/                      # 【統合フレームワーク】(旧 mlisp/ は完全統合・消去)
+    ├── bin/ulisp-jit           # AOT / JIT 統合ワンバイナリ
+    ├── passes/                 # Layer 1: Nanopass AOT パイプライン (Pass 00〜08)
+    ├── jit/                    # Layer 2: メタトレーシング JIT コア (100% Pure Scheme)
+    │   ├── core/delimcc.scm    # 限定継続 (shift/reset) プリミティブ
+    │   ├── tracer/             # 内因的トレース抽出 & auto_instrument
+    │   ├── optimizer/          # トレース最適化 (pe.scm, virtuals.scm)
+    │   ├── bridge/to_lir.scm   # S式トレース → %lir-program 変換
+    │   ├── runtime/            # W^X メモリ保護 & JIT ディスパッチ
+    │   └── examples/           # tiny_vm.scm, scheme_eval.scm
+    ├── driver/jit.scm          # AOT / JIT デュアルモードドライバ
+    ├── tests/jit/              # 包括的 JIT テストスイート (全 94 件 PASS)
+    └── benchmarks/             # AOT vs JIT 性能評価スイート
 ```
 
 ---
@@ -183,11 +174,11 @@ $$\neg \text{Escapes}(o, \mathcal{T}) \implies \text{Alloc}(o) \mapsto \emptyset
 
 ## 4. コアサブシステム詳細設計
 
-### 4.1 限定継続コア (`mlisp/core/delimcc.scm`)
+### 4.1 限定継続コア (`ulisp/jit/core/delimcc.scm`)
 マクロおよびクロージャによる純粋 Scheme での実装（CPS 変換を用いずに、浅い継続キャプチャで `shift`/`reset` をエミュレート可能にするポータブルな設計）：
 
 ```scheme
-;;; mlisp/core/delimcc.scm - 限定継続プリミティブの標準定義
+;;; ulisp/jit/core/delimcc.scm - 限定継続プリミティブの標準定義
 (define *meta-continuation-stack* '())
 
 (define (reset-thunk thunk)
@@ -208,19 +199,19 @@ $$\neg \text{Escapes}(o, \mathcal{T}) \implies \text{Alloc}(o) \mapsto \emptyset
         (k-exit (receiver delimited-k))))))
 ```
 
-### 4.2 内因的メタトレーサ (`mlisp/tracer/tracer.scm` & `jit-merge-point`)
+### 4.2 内因的メタトレーサ (`ulisp/jit/tracer/tracer.scm` & `jit-merge-point`)
 インタプリタのループ頭部に挿入される `(jit-merge-point pc env ...)`：
 - ループ実行回数カウンタをインクリメント。
 - 閾値（例: 50 回）を超えた場合、モードを `RECORDING` に切り替え。
 - 限定継続 `shift` により、ループ 1 周期分のシンボリックトレースを抽出して `OPTIMIZING` へ移行。
 
-### 4.3 トレースオプティマイザ & 仮想化エンジン (`mlisp/optimizer/`)
+### 4.3 トレースオプティマイザ & 仮想化エンジン (`ulisp/jit/optimizer/`)
 1. **定数畳み込み・ディスパッチ平坦化 (`pe.scm`)**:
    インタプリタのバイトコード読み出しや `case` 分岐をインライン展開し、実行対象プログラムの純粋な計算のみを抽出。
 2. **仮想化 (`virtuals.scm`)**:
    `cons`, `car`, `cdr` の連鎖を検出し、レジスタ間の `%mov` 命令に縮退。
 
-### 4.4 ULisp LIR 変換ブリッジ (`mlisp/bridge/to_lir.scm`)
+### 4.4 ULisp LIR 変換ブリッジ (`ulisp/jit/bridge/to_lir.scm`)
 最適化されたトレース命令列を、ULisp の規定フォーマットである `%lir-program`（[lir_specification.md](../../ulisp/docs/lir_specification.md)）へ変換：
 
 ```scheme
@@ -235,11 +226,9 @@ $$\neg \text{Escapes}(o, \mathcal{T}) \implies \text{Alloc}(o) \mapsto \emptyset
     (%jump jit_loop_entry)))
 ```
 
-### 4.5 Pure Scheme ネイティブ機械語エミッタ & JIT バッファ管理 (`mlisp/emitter/`, `mlisp/runtime/`)
+### 4.5 Pure Scheme ネイティブ機械語エミッタ & JIT バッファ管理 (`ulisp/jit/runtime/`)
 C 言語の外部コンパイラやトランスパイラを一切介さず、**Scheme 自身が直接 bytevector（バイト配列）へ x86-64 / AArch64 のマシンコードをエンコード・出力する純 Scheme 製アセンブラ** を備える：
-- `mlisp/emitter/asm_x86_64.scm`: LIR 命令から REX プレフィックス、ModR/M、SIB、ディスプレースメント、即値を計算して直接バイナリバイト列を出力。
-- `mlisp/emitter/asm_aarch64.scm`: 32 ビット固定長 ARM64 命令ワードを直接ビット演算（シフト・論理和）で合成してバイナリ列を出力。
-- `mlisp/runtime/jit_buffer.scm`: 確保された実行可能バッファ（POSIX `mmap` によるページ）へ Scheme のバイト列を書き込み、W^X 原則に従って実行可能フラグを付与して直接呼び出し。
+- `ulisp/jit/runtime/jit_buffer.scm`: 確保された実行可能バッファ（POSIX `mmap` によるページ）へ Scheme のバイト列を書き込み、W^X 原則に従って実行可能フラグを付与して直接呼び出し。
 - **C 言語コードの局所化**: OS システムコール呼出（`mmap`, `mprotect`, `sys_call_jit`）を行う数十行の極小グルー関数のみを ULisp ランタイムが提供し、コンパイル・エンコード・レジスタ割当・脱出制御の 99% 以上のロジックは **100% Pure Scheme で完結** する。
 
 ---
@@ -249,15 +238,15 @@ C 言語の外部コンパイラやトランスパイラを一切介さず、**S
 ### 5.1 ビルド時パイプライン（Pure Scheme JIT VM）
 ```
 [ユーザー言語インタプリタ (Pure Scheme)]
-    + [mlisp/core/delimcc.scm (Pure Scheme)]
-    + [mlisp/tracer/tracer.scm (Pure Scheme)]
-    + [mlisp/optimizer/ (Pure Scheme)]
-    + [mlisp/emitter/ (Pure Scheme: ダイレクト機械語エンコーダ)]
-    + [mlisp/runtime/jit_buffer.scm (Pure Scheme)]
+    + [ulisp/jit/core/delimcc.scm (Pure Scheme)]
+    + [ulisp/jit/tracer/tracer.scm (Pure Scheme)]
+    + [ulisp/jit/optimizer/ (Pure Scheme)]
+    + [ulisp/jit/bridge/to_lir.scm (Pure Scheme)]
+    + [ulisp/jit/runtime/jit_buffer.scm (Pure Scheme)]
         │
         ▼ (ULisp ネイティブ AOT コンパイラ: Pass 1-7)
 ┌──────────────────────────────────────────────┐
-│  単一自己完結バイナリ (例: build/scheme-jit)   │
+│  単一自己完結バイナリ (ulisp/bin/ulisp-jit)   │
 │  ※ 内部に Pure Scheme 製 JIT エミッタを内蔵   │
 └──────────────────────────────────────────────┘
 ```
@@ -286,22 +275,24 @@ C 言語の外部コンパイラやトランスパイラを一切介さず、**S
 
 ```mermaid
 gantt
-    title MLisp メタトレーシング JIT 実装ロードマップ
+    title MLisp メタトレーシング JIT 実装ロードマップ (Issue #514 統合完了)
     dateFormat  YYYY-MM-DD
     section Phase 1
-    基盤整備 & 限定継続コア設計・実装       :active, p1, 2026-10-10, 2d
+    基盤整備 & 限定継続コア設計・実装       :done, p1, 2026-10-10, 2d
     section Phase 2
-    内因的S式トレーサ & ループフック        :p2, after p1, 3d
+    内因的S式トレーサ & ループフック        :done, p2, after p1, 3d
     section Phase 3
-    トレース部分評価 & 仮想オブジェクト縮退  :p3, after p2, 3d
+    トレース部分評価 & 仮想オブジェクト縮退  :done, p3, after p2, 3d
     section Phase 4
-    ULisp LIR ブリッジ & JIT 実行ランタイム :p4, after p3, 3d
+    ULisp LIR ブリッジ & JIT 実行ランタイム :done, p4, after p3, 3d
     section Phase 5
-    サンプル VM ベンチマーク & 単一バイナリ検証:p5, after p4, 2d
+    サンプル VM ベンチマーク & 単一バイナリ検証:done, p5, after p4, 2d
+    section Phase 6 (Issue #514)
+    ulisp/ への完全統合 & /mlisp/ 消去      :done, p6, 2026-10-11, 1d
 ```
 
 ### 品質管理ゲート（Quality Gates）
-- **Gate 1**: `make -C mlisp test` で限定継続およびトレース単体テスト 100% PASS。
+- **Gate 1**: `make -C ulisp test_jit` で限定継続およびトレース単体テスト全 94 件 100% PASS。
 - **Gate 2**: `make check_format` および `make py_compile` ゼロエラー。
 - **Gate 3**: 相対パスリンク 100% 準拠（絶対パス 0 件）。
 - **Gate 4**: メモリリークおよび AddressSanitizer ゼロ警告（ASan/UBSan）。

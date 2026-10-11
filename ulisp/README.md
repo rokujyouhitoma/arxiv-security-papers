@@ -76,36 +76,46 @@ make run_42
 
 ---
 
-## 4. ULisp と MLisp (JIT) のアーキテクチャ境界と分離方針
+## 4. 統一 RPython スタイル 3 層アーキテクチャ (Issue #514)
 
-ULisp と MLisp は統合せず、**「役割と責務を厳格に分離したまま独立して発展させる」** 設計方針を採用しています。
+ULisp は AOT 単体コンパイラから、RPython の設計思想（`translator` + `jit` + `memory` + `rlib`）を直接取り入れた **統一ハイパフォーマンス・メタプログラミング言語基盤** へと統合・昇格されました。
 
-### (1) 役割と責務の境界線
+### (1) 3層アーキテクチャ階層構造
+
 ```text
-┌────────────────────────────────────────────────────────┐
-│  ULisp (Underlying Lisp): 静的 AOT コンパイラ基盤       │
-│  - 役割: C言語コンパイラ (GCC) / RPython AOT 変換系に相当 │
-│  - 性質: ステートレス、純粋関数型、決定論的             │
-│  - 保証: セルフホスティング不動点（diff stage2 stage3 == 0）│
-│  - 入力: S式 ──► 出力: x86-64 / ARM / C アセンブリ      │
-└──────────────────────────┬─────────────────────────────┘
-                           │ 単方向依存 (ULisp は MLisp に依存しない)
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│  MLisp (Meta Lisp): 動的 JIT 実行環境 / 言語 VM         │
-│  - 役割: Python (PyPy) や Node.js 等のランタイム VM に相当│
-│  - 性質: ステートフル、動的、投機的最適化               │
-│  - 機能: mini-eval、メタトレーサ、PE、JITバッファ管理    │
-│  - 入力: S式 ──► 出力: インプロセス即時実行とJIT加速   │
-└────────────────────────────────────────────────────────┘
+ulisp/
+├── passes/       ; [Layer 1: AOT Substrate] Nanopass コンパイラ (Pass 00〜07)
+│                 ; 決定論的自己ホスティング (diff stage2.s stage3.s == 0) を死守
+├── jit/          ; [Layer 3: Meta-Tracing JIT] (旧 MLisp から完全統合)
+│   ├── core/     ; 限定継続 shift/reset, mini-eval
+│   ├── tracer/   ; メタトレーサ, auto_instrument (ループ自動検知)
+│   ├── optimizer/; 部分評価器 (PE), 仮想オブジェクト除去 (Virtuals)
+│   ├── bridge/   ; トレース -> ULisp Canonical LIR 変換アダプタ
+│   └── runtime/  ; W^X 実行可能 JIT バッファ管理
+├── gc/           ; [Layer 2: Memory & GC] プラガブルGC (2空間 Copying GC, Bump)
+├── lib/          ; [Layer 2: Standard Substrate] rlib 相当 (rposix, rstring, rdict, rjit スタブ)
+├── driver/       ; 統一 CLI ドライバ
+│   ├── compile.scm ; AOT Nanopass バッチコンパイラ
+│   └── jit.scm     ; JIT 対応動的ランタイム & AOT デュアルディスパッチャ
+├── tests/        ; 統合テストスイート (AOT パステスト + JIT 94テスト)
+├── benchmarks/   ; 性能評価スイート (scheme-stage2 vs ulisp-jit)
+└── Makefile      ; 統一ビルド (bootstrap, test, jit, bench, clean)
 ```
 
-### (2) 厳格な依存関係ルール
-- **`mlisp` -> `ulisp` (許可)**: MLisp が ULisp の標準ライブラリ（`lib/`）や Nanopass パス（00〜07）を読み取り専用で利用することは適格。
-- **`ulisp` -> `mlisp` (厳格に禁止)**: ULisp のコード、Makefile、ビルドスクリプトは `mlisp/` に一切依存してはならない（逆依存 0 件の維持）。
+### (2) RPython との対応マッピング
 
-### (3) 分離を維持する理由
-- **セルフホスティング不動点保証の保護**: ULisp のコード規模を極小に保ち、動的 JIT の副作用やメモリ管理を混入させないことで、決定論的なセルフホスティング完全同一性（`diff == 0`）を永久に保証するため。
-- **関心事の分離**: 静的 AOT コンパイラ（ステートレス）と動的 JIT 実行環境（ステートフル）の関心事を分離し、それぞれ独立したペースで最適化・機能拡張を推進するため。
+| RPython コンポーネント | ULisp 統合アーキテクチャ | 役割 |
+| :--- | :--- | :--- |
+| **`rpython.translator`** | **`ulisp/passes/` & `compiler.scm`** | AST 脱糖・CP0・ANF・クロージャ変換・LIR・ネイティブアセンブリ生成 |
+| **`rpython.jit`** | **`ulisp/jit/`** | 限定継続、ホットループ検知、トレース記録、部分評価、LIR ブリッジ |
+| **`rpython.memory`** | **`ulisp/gc/` & `lib/gc.scm`** | バンプアロケータ、2空間 Cheney Copying GC、アロケーションバリア |
+| **`rpython.rlib`** | **`ulisp/lib/`** | `rposix` (I/O, プロセス), `rstring`, `rdict`, `rjit` (JIT ヒント/スタブ) |
+| **`pypy-c` / CLI** | **`ulisp/bin/ulisp-jit`** | AOT コンパイルと JIT 動的評価を単一バイナリで提供するワンバイナリ |
+
+### (3) レイヤード・ブートストラップ（Layered Bootstrap）の保証
+- **自己ホスティング不動点保証の保護**:
+  `make bootstrap` は極小・決定論的な **Layer 1 (`passes/` + `lib/`)** のみで実行され、`stage2.s` と `stage3.s` のビット完全一致（`diff == 0`）を永久に保証します。
+- **プラグイン型 JIT 拡張**:
+  Layer 3 の JIT エンジンは、Layer 1 の自己ホスティング AOT コンパイラによってネイティブ ELF バイナリ `bin/ulisp-jit` としてコンパイル・生成されます。
 
 

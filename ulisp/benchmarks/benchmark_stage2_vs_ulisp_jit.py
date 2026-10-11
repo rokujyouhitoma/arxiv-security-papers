@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Performance Evaluation & Comparison Suite:
-  ulisp/build/scheme-stage2 vs mlisp/bin/ulisp-jit
-Conforms to Issue #512 & DSN-33 / DSN-34
+  ulisp/build/scheme-stage2 vs ulisp/bin/ulisp-jit
+Conforms to Issue #512, Issue #514 & DSN-33
 """
 
 import os
@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 STAGE2_BIN = ROOT_DIR / "ulisp" / "build" / "scheme-stage2"
-ULISP_JIT_BIN = ROOT_DIR / "mlisp" / "bin" / "ulisp-jit"
+ULISP_JIT_BIN = ROOT_DIR / "ulisp" / "bin" / "ulisp-jit"
 RUNTIME_C = ROOT_DIR / "ulisp" / "runtime.c"
 
 def get_binary_metrics(bin_path):
@@ -134,7 +134,7 @@ def benchmark_aot_compiled_binary(compiler_bin, code, iterations=50, is_jit=Fals
 
 def main():
     print("==========================================================================")
-    print(" Benchmarking: ulisp/build/scheme-stage2 vs mlisp/bin/ulisp-jit")
+    print(" Benchmarking: ulisp/build/scheme-stage2 vs ulisp/bin/ulisp-jit")
     print("==========================================================================")
 
     # 1. Binary Size & Segment Comparison
@@ -145,7 +145,7 @@ def main():
     print(f"| Binary | File Size (bytes) | Text Segment | Data Segment | BSS Segment |")
     print(f"|---|---|---|---|---|")
     print(f"| `ulisp/build/scheme-stage2` | {stage2_meta['file_size']:,} | {stage2_meta['text']:,} | {stage2_meta['data']:,} | {stage2_meta['bss']:,} |")
-    print(f"| `mlisp/bin/ulisp-jit`       | {jit_meta['file_size']:,} | {jit_meta['text']:,} | {jit_meta['data']:,} | {jit_meta['bss']:,} |")
+    print(f"| `ulisp/bin/ulisp-jit`       | {jit_meta['file_size']:,} | {jit_meta['text']:,} | {jit_meta['data']:,} | {jit_meta['bss']:,} |")
 
     # 2. AOT Compilation Throughput
     # Workload A: Minimal constant expression

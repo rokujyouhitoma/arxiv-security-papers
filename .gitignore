@@ -37,8 +37,8 @@ htmlcov/
 dist/
 build/
 bin/
-mlisp/bin/
-mlisp/build/
+ulisp/bin/
+ulisp/build/
 *.egg-info/
 src/web/site/app-min.js
 

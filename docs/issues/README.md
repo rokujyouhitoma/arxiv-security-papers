@@ -6,6 +6,7 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **514** | ULisp と MLisp の完全統合による統一 RPython スタイルメタプログラミング言語基盤の確立 | Refactor | In Progress | [514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md](514-consolidate-ulisp-and-mlisp-into-unified-rpython-framework.md) |
 
 ---
 

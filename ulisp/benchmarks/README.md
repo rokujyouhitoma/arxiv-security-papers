@@ -1,30 +1,23 @@
-# ULisp AOT vs MLisp JIT Performance Evaluation & Architecture Report
+# ULisp AOT vs JIT Performance Evaluation & Architecture Report
 
-本ドキュメントは、**Issue #512** および **DSN-33 / DSN-34 仕様** に基づき、以下 2 つの実行可能バイナリのアーキテクチャ分離、依存性検証、および性能評価結果をまとめたものです。
+本ドキュメントは、**Issue #512, Issue #514** および **DSN-33 (統合仕様書)** に基づき、以下 2 つの実行可能バイナリのアーキテクチャ特性、自己完結性、および性能評価結果をまとめたものです。
 
-1. **`ulisp/build/scheme-stage2`**: ULisp の純粋な Nanopass AOT ネイティブコンパイラバイナリ
-2. **`mlisp/bin/ulisp-jit`**: ULisp AOT コンパイラ基盤と MLisp JIT 動的評価系を統合したワンバイナリ
-
----
-
-## 1. アーキテクチャ不変条件（Dependency Invariants）
-
-### 原則: 単方向依存性の厳格な徹底
-- **`mlisp` -> `ulisp` (許可)**: `mlisp` が `ulisp` のコード（`lib/` 標準ライブラリ、Nanopass パス 00〜07）を読み取り専用で参照・利用することは完全に適格。
-- **`ulisp` -> `mlisp` (厳格に禁止)**: `ulisp` のいかなるソースコード、Makefile、ビルドスクリプトも `mlisp/` に依存してはならない。
-
-### 依存性排除の検証結果
-- `ulisp/Makefile` から `mlisp` 参照（`stage_mlisp`, `run_mlisp_stage`, `MLISP_RUNNER`, `ulisp-jit` 等）を完全に削除。
-- `grep_search` による `ulisp/` 配下の全文走査を実施:
-  ```
-  Query: "mlisp" in SearchPath: /workspace/arxiv-security-papers/ulisp
-  => 0 matches (検出ゼロ件)
-  ```
-- `ulisp/` は完全に自己完結した独立 AOT 処理系として維持されています。
+1. **`ulisp/build/scheme-stage2`**: ULisp の純粋な Nanopass AOT ネイティブコンパイラバイナリ (Layer 1)
+2. **`ulisp/bin/ulisp-jit`**: ULisp AOT コンパイラ基盤とメタトレーシング JIT 動的評価系を統合したワンバイナリ (Layer 2)
 
 ---
 
-## 2. ワンバイナリ (`mlisp/bin/ulisp-jit`) のアーキテクチャ
+## 1. アーキテクチャ不変条件（Unified Architecture Invariants）
+
+### 原則: RPython スタイル 3 層統合アーキテクチャ
+- **完全内包**: 旧 `mlisp/` はすべて `ulisp/jit/` へ完全統合され、`/mlisp/` ディレクトリは完全消去された。
+- **ブートストラップの完全性 (Layer 1)**: `ulisp` のセルフホスティング固定点検証 (`stage2.s` と `stage3.s` の `diff == 0`) は純粋な Nanopass パイプライン (< 5,000行) のみで完結し、JIT ランタイムに依存しない。
+- **統合 JIT バイナリ (Layer 2)**: `ulisp/bin/ulisp-jit` は、AOT コンパイラとメタトレーシング JIT の双方を単一のネイティブバイナリで提供する。
+- **ゼロ外部依存**: 全コンポーネントが `ulisp/` 配下のみで自己完結し、外部ディレクトリへの依存はゼロである。
+
+---
+
+## 2. ワンバイナリ (`ulisp/bin/ulisp-jit`) のアーキテクチャ
 
 `ulisp-jit` は以下のコンポーネントを 1 つのネイティブ ELF バイナリに包含しています：
 
@@ -66,7 +59,7 @@ graph TD
 | バイナリ | ファイルサイズ | `.text` セグメント | `.data` セグメント | `.bss` セグメント |
 |---|---|---|---|---|
 | **`ulisp/build/scheme-stage2`** | 374,152 bytes (374 KB) | 359,005 bytes | 664 bytes | 128 bytes |
-| **`mlisp/bin/ulisp-jit`**       | 501,296 bytes (501 KB) | 490,192 bytes | 664 bytes | 128 bytes |
+| **`ulisp/bin/ulisp-jit`**       | 501,296 bytes (501 KB) | 490,192 bytes | 664 bytes | 128 bytes |
 | **差分（Δ JIT エンジン追加分）** | **+127,144 bytes (+127 KB)** | **+131,187 bytes** | **0 bytes** | **0 bytes** |
 
 > **知見**:
@@ -107,22 +100,22 @@ Scheme ソースコードから x86-64 アセンブリ（`.s`）を生成する�
 ### JIT 動的評価モード（デフォルト）
 S 式を直接評価し、ホットループを自動検出してネイティブ JIT ディスパッチします：
 ```bash
-./mlisp/bin/ulisp-jit program.scm
+./ulisp/bin/ulisp-jit program.scm
 # または標準入力から
-echo "(let loop ((i 0) (s 0)) (if (< i 10) (loop (+ i 1) (+ s i)) s))" | ./mlisp/bin/ulisp-jit
+echo "(let loop ((i 0) (s 0)) (if (< i 10) (loop (+ i 1) (+ s i)) s))" | ./ulisp/bin/ulisp-jit
 ```
 
 ### AOT コンパイルモード (`(!compile)` または `(!target ...)`)
 S 式先頭に `(!compile)` を指定することで、ULisp の Nanopass パイプライン経由でネイティブ x86-64 アセンブリを出力します：
 ```bash
-echo "(!compile) (define (fact n) (if (<= n 1) 1 (* n (fact (- n 1))))) (fact 5)" | ./mlisp/bin/ulisp-jit > fact.s
+echo "(!compile) (define (fact n) (if (<= n 1) 1 (* n (fact (- n 1))))) (fact 5)" | ./ulisp/bin/ulisp-jit > fact.s
 gcc -no-pie -O2 ulisp/runtime.c fact.s -o fact
 ./fact # => 120
 ```
 
 C 言語バックエンド出力：
 ```bash
-echo "(!target c) (+ 40 2)" | ./mlisp/bin/ulisp-jit > out.c
+echo "(!target c) (+ 40 2)" | ./ulisp/bin/ulisp-jit > out.c
 gcc -O2 ulisp/runtime.c out.c -o out
 ./out # => 42
 ```

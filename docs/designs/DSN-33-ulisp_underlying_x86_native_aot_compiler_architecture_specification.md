@@ -1,16 +1,21 @@
-# [DSN-33] ULISP (Underlying LISP) x86-64 ネイティブ AOT コンパイラ包括設計仕様書
-## 〜 ILisp ブートストラップから x86-64 Linux ELF 直結・Tagged Pointer・バンプアロケータ・TCO/フラットクロージャ・ILisp AOT バックエンド統合 〜
+# [DSN-33] ULISP 包括設計仕様書: ネイティブ AOT コンパイラ ＆ RPython スタイル内因的メタトレーシング JIT 統合アーキテクチャ
+## 〜 ILisp ブートストラップから x86-64/AArch64/C99 ネイティブ直結・限定継続（shift/reset）メタトレーサ・3段階固定点ブートストラップ・単一バイナリ (ulisp-jit) 統合 〜
 
 - **文書番号**: `DSN-33`
-- **文書ステータス**: `APPROVED`
+- **文書ステータス**: `APPROVED / FULLY-CONSOLIDATED`
 - **対象サブシステム**:
-  - `ulisp/` (ULISP コアプロジェクト / 独立サンドボックス・リポジトリ)
-  - `ulisp/compiler.scm` (x86-64 Scheme ネイティブ AOT コンパイラ本体)
+  - `ulisp/` (ULISP コアプロジェクト / RPython スタイル統合フレームワーク)
+  - `ulisp/compiler.scm` (x86-64 / AArch64 / C99 Scheme ネイティブ AOT コンパイラ本体)
+  - `ulisp/jit/` (内因的メタトレーシング JIT コア: `core/`, `tracer/`, `optimizer/`, `bridge/`, `runtime/`, `examples/`)
+  - `ulisp/driver/` (統合ディスパッチャドライバ: `jit.scm`)
   - `ulisp/lib/` (Scheme 標準ライブラリ: `string.scm`, `printer.scm`, `reader.scm`)
-  - `ulisp/runtime.c` (Thin Debug Runtime / SIGSEGV backtrace / 16バイトアライメント / 1GB バンプアロケータ / 最小 3 I/O primitives)
-  - `ulisp/test.sh` (compilerbook 準拠・インクリメンタル自動テストランナー)
+  - `ulisp/runtime.c` (Thin Debug Runtime / W^X mmap メモリ保護 / 1GB バンプアロケータ)
+  - `ulisp/tests/` (AOT ユニットテスト 93 件 & JIT 包括テストスイート 94 件)
+  - `ulisp/benchmarks/` (AOT vs JIT ベンチマークスイート)
   - `ilisp/backend/ulisp_codegen/` (ILisp 連携: DSN-31 Backend B 向け ULisp AOT トランスパイラ)
   - `docs/designs/` (設計書体系)
+- **統合設計書**:
+  - **[DSN-34 (内因的メタトレーシング JIT 設計書)](DSN-34-mlisp_endogenous_meta_tracing_jit_architecture_specification.md) は Issue #514 の決定に基づき本 DSN-33 第 7 章へ完全統合・昇格完了。**
 - **関連設計書**:
   - [DSN-01 (High-Level Architecture)](DSN-01-high_level_design.md)
   - [DSN-29 (Python-LISP Integrated Architecture Specification - pylisp)](DSN-29-python_lisp_integrated_architecture_specification.md)
@@ -51,9 +56,18 @@
   - [6.1 統合アーキテクチャと依存性境界](#61-統合アーキテクチャと依存性境界)
   - [6.2 ILisp S式 AST から ULisp 入力へのコンパイルパイプライン](#62-ilisp-s式-ast-から-ulisp-入力へのコンパイルパイプライン)
   - [6.3 ランタイム共有とネイティブ ELF 単一バイナリ生成](#63-ランタイム共有とネイティブ-elf-単一バイナリ生成)
-- [7. ディレクトリ構成と開発運用プロトコル](#7-ディレクトリ構成と開発運用プロトコル)
-  - [7.1 開発者向けテクニカルリファレンス (`ulisp/docs/`) との役割分担](#71-開発者向けテクニカルリファレンス-ulispdocs-との役割分担)
-- [8. 品質ゲート・テスト自動化](#8-品質ゲートテスト自動化)
+- [7. RPython スタイル 3 層統合アーキテクチャと内因的メタトレーシング JIT (旧 DSN-34 統合)](#7-rpython-スタイル-3-層統合アーキテクチャと内因的メタトレーシング-jit-旧-dsn-34-統合)
+  - [7.1 背景・設計哲学と二村射影（限定継続による内因的メタトレーシング）](#71-背景設計哲学と二村射影限定継続による内因的メタトレーシング)
+  - [7.2 3 層統合レイヤーモデルと依存性不変条件](#72-3-層統合レイヤーモデルと依存性不変条件)
+  - [7.3 数理的・理論的定式化 (限定継続・シンボリックトレース・仮想オブジェクト縮退)](#73-数理的理論的定式化-限定継続シンボリックトレース仮想オブジェクト縮退)
+  - [7.4 コアサブシステム詳細設計 (`ulisp/jit/`)](#74-コアサブシステム詳細設計-ulispjit)
+  - [7.5 単一自己完結バイナリ (`ulisp/bin/ulisp-jit`) とデュアルモードディスパッチ](#75-単一自己完結バイナリ-ulispbinulisp-jit-とデュアルモードディスパッチ)
+  - [7.6 脅威モデルとメモリ安全性 (W^X・ASLR・Spectre 防御)](#76-脅威モデルとメモリ安全性-wxaslrspectre-防御)
+- [8. ディレクトリ構成と開発運用プロトコル](#8-ディレクトリ構成と開発運用プロトコル)
+  - [8.1 プロジェクトツリー (`ulisp/`) と統合構成](#81-プロジェクトツリー-ulisp-と統合構成)
+  - [8.2 開発運用プロトコル](#82-開発運用プロトコル)
+- [9. 品質ゲート・テスト自動化](#9-品質ゲートテスト自動化)
+- [10. 結論と統合完了ステータス](#10-結論と統合完了ステータス)
 
 ---
 
@@ -359,61 +373,205 @@ ULisp のセルフホスティング達成後、本コンパイラは **ILisp (D
 
 ---
 
-## 7. ディレクトリ構成と開発運用プロトコル
+---
 
-### 7.1 プロジェクトツリー (`ulisp/`) と技術資料の役割分担
+## 7. RPython スタイル 3 層統合アーキテクチャと内因的メタトレーシング JIT (旧 DSN-34 統合)
 
-リポジトリ全体の設計仕様正典（Single Source of Truth: SSOT）は本仕様書（`DSN-33`）に集約し、コンパイラ実装者向けの技術リファレンスは `ulisp/docs/` 配下に配置して相互参照する。
+### 7.1 背景・設計哲学と二村射影（限定継続による内因的メタトレーシング）
+
+本節は、Issue #514 の決定に基づき、旧 `DSN-34`（MLisp メタトレーシング JIT 設計書）を本仕様書へと昇格・完全統合したものである。
+
+RPython（Restricted Python）は、「任意の言語インタプリタを記述すると、コンパイラおよびメタトレーシング JIT（Meta-Tracing JIT）を備えた高速 VM バイナリが自動生成される」というパラダイムを実用化した。しかし、RPython は C 言語レベルで外部から物理レジスタやスタックフレームを覗き見る「外因的トレーシング」に依存しており、実装の泥臭さと脆弱性を抱えていた。
+
+ULISP では、Scheme の同図像性（Homoiconicity）と第一級限定継続（Delimited Continuations: `shift`/`reset`）を活かし、**「インタプリタ自身の内部から、限定継続によって将来の実行経路（S式）を切り取る」** という **内因的メタトレーシング（Endogenous Meta-Tracing）** を世界で初めて体系化した。
+
+1971 年の二村射影（Futamura Projections）理論：
+$$\alpha(I, S) = T \quad (\text{第1二村射影: インタプリタ } I \text{ をソースコード } S \text{ で部分評価するとターゲットコード } T \text{ が得られる})$$
+$$\alpha(\alpha, I) = C \quad (\text{第2二村射影: 部分評価器 } \alpha \text{ をインタプリタ } I \text{ に適用すると専用コンパイラ } C \text{ が得られる})$$
+
+ULISP は、限定継続に基づく型主導部分評価（Type-Directed Partial Evaluation: TDPE）と **Collapsing Towers of Interpreters（インタプリタの塔の崩壊）** を単一の自己完結フレームワークとして実装する。
+
+### 7.2 3 層統合レイヤーモデルと依存性不変条件
+
+PyPy / RPython ツールチェーンの階層構造に倣い、ULISP は以下の 3 層垂直統合モデルを採用する：
+
+```mermaid
+flowchart TD
+    subgraph Layer3 ["Layer 3: Endogenous Substrate & User Languages (ユーザー言語・組込DSL)"]
+        L3_EVAL["mini-eval / S式スクリプト"]
+        L3_VM["スタック型バイトコード VM (tiny_vm.scm)"]
+        L3_DSL["将来言語: セキュリティポリシーDSL, SQL, Wasm"]
+    end
+
+    subgraph Layer2 ["Layer 2: Meta-Tracing JIT Engine (ulisp/jit/ & ulisp/driver/)"]
+        L2_DELIM["限定継続コア (shift/reset: delimcc.scm)"]
+        L2_TRACER["内因的メタトレーサ (tracer.scm & auto_instrument.scm)"]
+        L2_OPT["トレース最適化 (pe.scm: 部分評価 / virtuals.scm: エスケープ解析)"]
+        L2_BRIDGE["LIR 変換ブリッジ (to_lir.scm)"]
+        L2_RUNTIME["JIT 実行時メモリバッファ & W^X 保護 (jit_buffer.scm)"]
+    end
+
+    subgraph Layer1 ["Layer 1: Minimal Nanopass AOT Compiler & Runtime (ulisp/passes/, lib/, runtime.c)"]
+        L1_EXP["Pass 00b: Macro Expander"]
+        L1_DESUGAR["Pass 01: Desugar"]
+        L1_ANF["Pass 04: ANF 正規化"]
+        L1_LIR["Pass 06: Low-Level IR (3番地仮想レジスタ機械)"]
+        L1_CODEGEN["Pass 07: Multi-Backend Codegen (x86-64 / AArch64 / C99)"]
+        L1_GC["runtime.c (Cheney 2-Space GC / 1GB バンプアロケータ)"]
+    end
+
+    Layer3 -->|jit-merge-point フック| Layer2
+    Layer2 -->|最適化トレース出力| L1_LIR
+    L1_LIR --> L1_CODEGEN
+    Layer2 -.->|ブートストラップ非依存| Layer1
+```
+
+#### レイヤー間の不変条件 (Invariants)
+1. **Layer 1 の独立性**: Layer 1（Nanopass AOT コンパイラ本体 `< 5,000` 行）は、Layer 2 や Layer 3 のいかなるモジュールにも依存しない。これにより、セルフホスティングの 3 段階ブートストラップ固定点検証（`diff stage2.s stage3.s == 0`）の決定論性と超高速性を永久に維持する。
+2. **完全同図像性**: Layer 2（JIT エンジン）は 100% Pure Scheme で記述され、C 言語の外部 JIT ライブラリ（LLVM, libjit）を一切必要としない。
+3. **共有バックエンド**: JIT は Layer 1 の Pass 06 (LIR) と Pass 07 (Codegen) をそのまま共有し、多重実装を完全に排除する。
+
+### 7.3 数理的・理論的定式化
+
+#### 7.3.1 限定継続の操作的意味論（shift / reset）
+限定継続演算子 $\text{reset}$ ($\langle \cdot \rangle$) と $\text{shift}$ ($\mathcal{S}$) の簡約規則：
+$$\langle V \rangle \longrightarrow V$$
+$$\langle E[\mathcal{S} k. e] \rangle \longrightarrow \langle e[k \mapsto \lambda x. \langle E[x] \rangle] \rangle$$
+
+ここで $E$ は最も内側の $\text{reset}$ までの評価文脈を表す。$\text{shift}$ は現在の限定継続 $E$ を第一級の関数として捕獲し、評価文脈を $\text{reset}$ の位置まで巻き戻す。JIT は、捕獲された $k$ にシンボリックな引数を渡すことで、**「将来実行されるループ 1 周期分の式」を副作用なく一本の直線命令トレースとして具現化** する。
+
+#### 7.3.2 抽象解釈とシンボリックトレース抽出モデル
+ホットループ検出点 $\text{PC}_{hot}$ において、抽象値 $\hat{v} \in \text{AbstractVal}$ を注入する：
+$$\text{AbstractVal} ::= \text{Const}(c) \mid \text{SymReg}(r) \mid \text{VirtualPair}(\hat{v}_1, \hat{v}_2) \mid \text{VirtualClosure}(f, \vec{\hat{v}})$$
+
+インタプリタが 1 ステップ進むごとに、トレース $\mathcal{T}$ に線形命令が追記される：
+$$\mathcal{T} \vdash \text{Step}(op, \text{args}) \implies \mathcal{T}' = \mathcal{T} \circ [ (op, \text{args}) ]$$
+
+#### 7.3.3 仮想オブジェクト縮退（Virtual Allocation / Escape Analysis）代数系
+トレース $\mathcal{T}$ 内で生成されるオブジェクト $o$ に対し、エスケープ述語 $\text{Escapes}(o, \mathcal{T})$ を定義：
+$$\text{Escapes}(o, \mathcal{T}) \iff \exists inst \in \mathcal{T}. \, (\text{inst} \in \{\text{store-global}, \text{call-foreign}\} \land o \in \text{args}(inst))$$
+$$\neg \text{Escapes}(o, \mathcal{T}) \implies \text{Alloc}(o) \mapsto \emptyset, \quad \text{FieldAccess}(o, f) \mapsto \text{Reg}(r_{o, f})$$
+
+この縮退により、ループ内で生成される中間ペア（`cons`）や環境クロージャのヒープアロケーションは **完全にゼロ（$O(0)$）** に消滅し、すべて仮想レジスタ間の直接転送へと最適化される。
+
+### 7.4 コアサブシステム詳細設計 (`ulisp/jit/`)
+
+1. **限定継続コア (`ulisp/jit/core/delimcc.scm`)**:
+   CPS 変換を行わずに、浅い継続キャプチャ（`call/cc`）とメタ継続スタックにより、ポータブルかつ決定論的に `shift`/`reset` を提供。
+2. **内因的メタトレーサ (`ulisp/jit/tracer/tracer.scm` & `auto_instrument.scm`)**:
+   `jit-merge-point` によるループ頭部のホットスポット検出（実行頻度カウンタ）。閾値到達時に自動でトレースモードへ遷移し、ループ本体をシンボリックにトレース。
+   `auto_instrument.scm` は任意の Scheme S 式 AST を静的解析し、再帰関数やループ構造を検知して自動的に `jit-merge-point` を計装する。
+3. **トレースオプティマイザ (`ulisp/jit/optimizer/`)**:
+   - `pe.scm`: 部分評価によるディスパッチ消去、定数畳み込み、自明ガードの除去。
+   - `virtuals.scm`: エスケープ解析による中間オブジェクトの仮想化・レジスタ昇格。
+4. **ULisp LIR 変換ブリッジ (`ulisp/jit/bridge/to_lir.scm`)**:
+   最適化されたトレース命令列を、ULisp Pass 6 規定の `%lir-program`（3番地仮想レジスタ形式）へ変換。
+5. **JIT 実行時ランタイム & W^X メモリ保護 (`ulisp/jit/runtime/jit_buffer.scm`)**:
+   `mmap` により確保したメモリバッファに対し、W^X 原則（Write XOR Execute）を遵守してコードを配置・保護し、関数ポインタとして直接ディスパッチ。
+
+### 7.5 単一自己完結バイナリ (`ulisp/bin/ulisp-jit`) とデュアルモードディスパッチ
+
+`ulisp/driver/jit.scm` を Stage 2 AOT コンパイラでコンパイル・リンクすることで、単一のネイティブ ELF バイナリ `bin/ulisp-jit` が生成される。このバイナリは起動時に入力 S 式の形式を判定し、最適なパイプラインを選択する：
+
+```text
+               ┌─── [ 入力 S 式の解析 ] ───┐
+               │                           │
+  先頭が (!compile ...) または       通常の式・ループコード
+     (!target ...) の場合                    │
+               │                             ▼
+               ▼                  [ Layer 2: JIT モード ]
+  [ Layer 1: AOT コンパイル ]     S式 mini-eval 評価
+  Nanopass 全パス (Pass 00〜08)   ホットループ自動検知
+  ネイティブアセンブリ直接出力    限定継続による動的トレース
+                                  LIR 生成 & W^X ネイティブ実行
+```
+
+このデュアルモード設計により、ユーザーは 1 つのバイナリで「事前ネイティブコンパイル」と「高速 JIT インタプリタ実行」の双方を享受できる。
+
+### 7.6 脅威モデルとメモリ安全性 (W^X・ASLR・Spectre 防御)
+
+| 脅威分類 | 脆弱性内容 | ULisp 統合フレームワークにおける具体的防御策 |
+| :--- | :--- | :--- |
+| **メモリ破壊 (CWE-119 / CWE-787)** | JIT バッファオーバーフローによる任意コード実行 | `mmap` ガードページ（`PROT_NONE`）をアロケーション境界に配置。W^X 原則により、書き込み可能（`PROT_WRITE`）な状態での実行をハードウェアレベルで完全遮断。 |
+| **JIT スプレー攻撃 (CWE-94)** | 即値埋め込みを用いたシェルコード実行 | コード配置に ASLR（Address Space Layout Randomization）を適用し、予測可能なメモリアドレスへの配置を防止。 |
+| **投機的実行漏洩 (CWE-200 / Spectre)** | ガード失敗時の分岐予測ミスによる情報漏洩 | ガード命令（`%jump-if-*`）直後に明示的シリアライゼーション命令（`lfence` / `isb`）を挿入可能。 |
+| **GC ルート破壊** | JIT 実行中の生ポインタ退避漏れによる Use-After-Free | JIT ループ境界でスタックフレームに明示的シャドウスタックを維持し、Cheney GC との完全なポインタ追跡整合性を保証。 |
+
+---
+
+## 8. ディレクトリ構成と開発運用プロトコル
+
+### 8.1 プロジェクトツリー (`ulisp/`) と統合構成
+
+Issue #514 の統合により、旧 `mlisp/` ディレクトリは完全に廃止・消去され、全コンポーネントが `ulisp/` 配下へと一元化された。
 
 ```text
 ulisp/
-├── Makefile                 # compiler.scm 結合・ビルド・テスト自動化
-├── compiler.scm             # $(PASSES) を結合して自動生成されるコンパイラ本体
-├── runtime.c                # Thin Debug Runtime (SIGSEGV backtrace, 1GB バンプアロケータ, 最小 3 I/O primitives)
+├── Makefile                 # 統合ビルド: bootstrap, test, test_jit, jit, bench, clean
+├── compiler.scm             # $(PASSES) を結合して自動生成される AOT コンパイラ本体
+├── runtime.c                # Thin Debug Runtime (Cheney GC, W^X メモリ保護, 1GB バンプアロケータ)
 ├── test.sh                  # インクリメンタル自動テストランナー (Phase 1〜7)
 ├── bootstrap.sh             # 3 段階ブートストラップ実行 ＆ 不動点検証スクリプト
-├── lib/                     # Scheme 自前標準ライブラリ
-│   ├── string.scm           # 文字列・数値変換, シンボル管理 (string->symbol, number->string)
-│   ├── printer.scm          # Scheme 出力フォーマッタ (display, write, newline)
-│   └── reader.scm           # 手書き再帰下降 S 式リーダー (read)
-├── passes/                  # 直列 Nanopass モジュール群 (Pass 0〜Pass 8)
+├── bin/                     # 生成バイナリ (ulisp-jit)
+├── build/                   # 中間生成物 (scheme-stage1, scheme-stage2, stage*.s)
+├── passes/                  # Layer 1: 直列 Nanopass モジュール群 (Pass 00〜Pass 08)
 │   ├── 00_helpers.scm       # 共通述語・アキュムレータ
+│   ├── 00b_macro_expander.scm # 衛生的マクロ展開器
 │   ├── 01_desugar.scm       # Pass 1: 構文脱糖 (cond, case, let*, and, or)
 │   ├── 02_analysis.scm      # Pass 2: 静的スコープ・自由変数解析
 │   ├── 03_cp0.scm           # Pass 3: CP0 最適化 (定数畳み込み, 自明分岐剪定, DCE)
 │   ├── 04_anf.scm           # Pass 4: ANF 正規化 (3 番地コード化, Scoped Pool)
 │   ├── 05_closure_convert.scm # Pass 5: クロージャ変換 (ラムダリフティング, フラット環境)
-│   ├── 06_lir.scm           # Pass 6: 低レベル IR (LIR) 生成 (Issue #502)
-│   ├── 07_backend_x86_64.scm# Pass 7: ターゲット別コード生成 (x86-64 / AArch64 / C)
-│   └── 08_driver.scm        # Pass 8: コンパイルドライバ・CLI
+│   ├── 06_lir.scm           # Pass 6: 低レベル IR (LIR) 生成
+│   ├── 07_backend_c.scm     # Pass 7b: C99 ポータブルバックエンド
+│   ├── 07_backend_aarch64.scm # Pass 7c: ARM64 ネイティブバックエンド
+│   ├── 07_backend_x86_64.scm# Pass 7: x86-64 ネイティブバックエンド
+│   └── 08_driver.scm        # Pass 8: AOT コンパイルドライバ・CLI
+├── jit/                     # Layer 2: 内因的メタトレーシング JIT コア (100% Pure Scheme)
+│   ├── core/                # 限定継続プリミティブ (delimcc.scm)
+│   ├── tracer/              # 内因的トレース抽出 & ループ自動計装 (tracer.scm, auto_instrument.scm)
+│   ├── optimizer/           # トレース最適化 (pe.scm, virtuals.scm)
+│   ├── bridge/              # トレース → ULisp LIR 変換アダプタ (to_lir.scm)
+│   ├── runtime/             # W^X メモリ保護 & JIT ディスパッチャ (jit_buffer.scm)
+│   └── examples/            # サンプル言語 (tiny_vm.scm, scheme_eval.scm)
+├── driver/                  # 統合実行ドライバ
+│   └── jit.scm              # AOT / JIT デュアルモード統合エントリポイント
+├── lib/                     # Scheme 自前標準ライブラリ (string.scm, printer.scm, reader.scm)
+├── tests/                   # 包括的テストスイート
+│   ├── passes/              # AOT Nanopass ユニットテスト (93 件)
+│   └── jit/                 # JIT テスト (delimcc, tracer, auto_instrument, optimizer, bridge, examples: 94 件)
+├── benchmarks/              # AOT vs JIT 性能評価ベンチマークスイート
 ├── docs/                    # コンパイラ開発者向けテクニカルリファレンス
-│   ├── README.md            # 開発者総合ガイド & DSN-33 へのリンク
-│   ├── pipeline_architecture.md # パス別入出力 S 式仕様 & 不変条件
-│   ├── lir_specification.md # 低レベル IR (LIR) 命令セット仕様書
-│   └── testing_guide.md     # パス別単体テスト & ブートストラップ検証手順
-└── README.md                # 簡易概要とクイックスタート
+└── README.md                # 統合アーキテクチャ概要・ビルド手順
 ```
 
-### 7.2 開発運用プロトコル
+### 8.2 開発運用プロトコル
 
-1. **コミット粒度**: 1 ステップ（または 1 パス追加）ごとに 1 コミット。Conventional Commits（例: `refactor(ulisp): implement closure conversion nanopass (Issue #498)`）を厳守。
-2. **グリーン維持**: すべてのコミットで `./test.sh`（Phase 1〜7 全件パス）および `./bootstrap.sh`（不動点完全一致 `diff stage2.s stage3.s == 0`）が合格していることを義務付ける。
+1. **コミット粒度**: 1 機能・1 バグ修正ごとに 1 コミット。Conventional Commits（例: `refactor(ulisp): consolidate mlisp and dsn into unified rpython framework (Issue #514)`）を厳守。
+2. **グリーン維持**: すべての変更において以下の品質ゲートを 100% パスすることを義務付ける。
+   - `make -C ulisp test_passes`: AOT ユニットテスト 93 件 PASS
+   - `make -C ulisp test_jit`: JIT 包括テスト 94 件 PASS
+   - `make -C ulisp bootstrap`: Stage 2 と Stage 3 のアセンブリ出力がビット単位で完全一致（`diff stage2.s stage3.s == 0`）
 
 ---
 
-## 8. 品質ゲート・テスト自動化
+## 9. 品質ゲート・テスト自動化
 
 | テストスイート | 実行コマンド | 合格基準 (Gate Criteria) |
 | :--- | :--- | :--- |
-| **ユニット機能テスト** | `./test.sh` | Phase 1〜6 の全ステップ（即値・演算・分岐・リスト・クロージャ・I/O）100% PASS |
-| **TCO 深度テスト** | `./test.sh tco` | 100万回以上の末尾再帰がスタックオーバーフロー（SIGSEGV）を起こさず完走 |
-| **メモリ健全性テスト** | `valgrind ./tmp` | アライメント不正、不正領域アクセス（Crash）ゼロ件 |
-| **セルフホスト固定点テスト**| `./bootstrap.sh` | `diff stage2.s stage3.s` が終了コード 0（完全一致・差分ゼロ） |
+| **AOT ユニット機能テスト** | `make -C ulisp test_passes` | Pass 00〜08 の全単体テスト 93 件 100% PASS |
+| **JIT 包括テスト** | `make -C ulisp test_jit` | delimcc, tracer, auto_instrument, optimizer, bridge, examples 全 94 件 100% PASS |
+| **マルチバックエンド検証** | `make -C ulisp test_c test_aarch64` | C99 (42件), AArch64 (13件) 100% PASS (-Werror 警告ゼロ) |
+| **セルフホスト固定点テスト**| `make -C ulisp bootstrap` | `diff stage2.s stage3.s` が終了コード 0（ビット単位完全一致） |
+| **ワンバイナリ E2E 検証** | `make -C ulisp run_jit` | `bin/ulisp-jit` が AOT コンパイルおよび JIT ループ実行の双方で正常終了 |
+| **AOT vs JIT ベンチマーク** | `make -C ulisp bench` | バイナリサイズ、セグメント使用量、AOT スループットの測定完走 |
+| **コードフォーマット・静的解析** | `make check_format && make py_compile` | 構文エラー・リント違反 0 件 |
 
 ---
 
-## 9. 結論と移行計画
+## 10. 結論と統合完了ステータス
 
-本 [DSN-33] 仕様書の承認により、**「ALisp（エージェント）── ILisp（インフラ）── ULisp（アンダーライング/最底層）」** の三層垂直統合アーキテクチャが完成した。
+本 [DSN-33] 包括設計仕様書への統合改訂により、ULISP は「シンプルな AOT ネイティブコンパイラ」から **「RPython の設計思想を Scheme の同図像性と限定継続によって昇華させた、AOT ＆ メタトレーシング JIT 統合フレームワーク」** へと進化を遂げた。
 
-まずは Phase 1（Step 1: 整数 `42` のコンパイル）から独立サンドボックスにて着手し、Step 27（セルフホスティング固定点検証）の達成をもって ULisp を ILisp の公式 AOT コンパイラバックエンドへと正式編入する。
+Issue #514 の完遂により、旧 `mlisp/` ディレクトリは完全に廃止・消去され、すべてのリソースと責任境界は `ulisp/` 配下に美しく一本化された。これにより、リポジトリ全体の構造的簡潔性、保守性、および 3 段階ブートストラップの決定論性が恒久的に担保される。
+
