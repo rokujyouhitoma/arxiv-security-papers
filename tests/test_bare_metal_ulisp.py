@@ -219,3 +219,71 @@ def test_bare_metal_exact_gc_stackmap_unboxed():
         output = run_res.stdout.decode("utf-8")
         assert "EXACT_GC_RAW_PRESERVED" in output
         assert "PAIR_FIELDS_PRESERVED" in output
+
+
+def test_buffered_io_syscall_reduction():
+    """Verify that emitting 10,000 characters triggers <= 10 write syscalls via 4KB buffering."""
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+
+    test_scm_code = f"""
+{posix_code}
+
+(ulisp-init-heap! 65536)
+
+(define (emit-chars n)
+  (if (> n 0)
+      (begin
+        (sys-write-char #\\A)
+        (emit-chars (- n 1)))))
+
+(emit-chars 10000)
+(sys-exit 0)
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "buf_io.scm")
+        s_path = os.path.join(tmpdir, "buf_io.s")
+        bin_path = os.path.join(tmpdir, "buf_io_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(test_scm_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                ["python3", "-m", "ilisp", COMPILER_SCM],
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        link_res = subprocess.run(
+            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
+            capture_output=True,
+            text=True,
+        )
+        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+
+        # Run with strace counting write syscalls
+        strace_res = subprocess.run(
+            ["strace", "-e", "trace=write", bin_path],
+            capture_output=True,
+            text=True,
+        )
+        assert strace_res.returncode == 0
+        # Check standard output contains 10,000 'A's
+        assert len(strace_res.stdout) == 10000
+        assert strace_res.stdout == "A" * 10000
+
+        # In unbuffered execution, write syscall is called 10,000 times.
+        # With 4KB buffer (4096 bytes), 10,000 / 4096 = 2 full flushes + 1 final flush on exit = 3 writes!
+        write_syscall_lines = [
+            line for line in strace_res.stderr.splitlines() if line.startswith("write(")
+        ]
+        num_writes = len(write_syscall_lines)
+        assert num_writes <= 5, f"Expected <= 5 write syscalls, got {num_writes}"

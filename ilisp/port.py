@@ -6,6 +6,7 @@ dynamic current ports management, and port predicates conforming to R7RS-small.
 
 from __future__ import annotations
 
+import atexit
 import io
 import sys
 from contextvars import ContextVar
@@ -254,25 +255,36 @@ class FileInputPort(TextualInputPort):
 class FileOutputPort(TextualOutputPort):
     """Textual output port writing to a filesystem file."""
 
-    __slots__ = ("_file",)
+    __slots__ = ("_file", "_buf_len", "_buffer_size")
 
-    def __init__(self, filepath: str, encoding: str = "utf-8") -> None:
+    def __init__(
+        self, filepath: str, encoding: str = "utf-8", buffer_size: int = 4096
+    ) -> None:
         super().__init__(name=filepath)
         self._file: TextIO = open(filepath, "w", encoding=encoding)
+        self._buf_len: int = 0
+        self._buffer_size: int = buffer_size
 
     def write_char(self, ch: str) -> None:
         if not self.is_open:
             raise ValueError("I/O operation on closed port")
         self._file.write(ch)
+        self._buf_len += len(ch)
+        if self._buf_len >= self._buffer_size:
+            self.flush()
 
     def write_string(self, s: str) -> None:
         if not self.is_open:
             raise ValueError("I/O operation on closed port")
         self._file.write(s)
+        self._buf_len += len(s)
+        if self._buf_len >= self._buffer_size:
+            self.flush()
 
     def flush(self) -> None:
         if self.is_open:
             self._file.flush()
+            self._buf_len = 0
 
     def close(self) -> None:
         if self.is_open:
@@ -357,25 +369,38 @@ class StandardInputPort(TextualInputPort):
 class StandardOutputPort(TextualOutputPort):
     """Textual output port wrapping sys.stdout."""
 
-    def __init__(self) -> None:
+    __slots__ = ("_buf_len", "_buffer_size")
+
+    def __init__(self, buffer_size: int = 4096) -> None:
         super().__init__(name="<stdout>")
+        self._buf_len: int = 0
+        self._buffer_size: int = buffer_size
 
     def write_char(self, ch: str) -> None:
         if not self.is_open:
             raise ValueError("I/O operation on closed port")
         sys.stdout.write(ch)
+        self._buf_len += len(ch)
+        if self._buf_len >= self._buffer_size:
+            self.flush()
 
     def write_string(self, s: str) -> None:
         if not self.is_open:
             raise ValueError("I/O operation on closed port")
         sys.stdout.write(s)
+        self._buf_len += len(s)
+        if self._buf_len >= self._buffer_size:
+            self.flush()
 
     def flush(self) -> None:
         if self.is_open:
             sys.stdout.flush()
+            self._buf_len = 0
 
     def close(self) -> None:
-        self.is_open = False
+        if self.is_open:
+            self.flush()
+            self.is_open = False
 
 
 class StandardErrorPort(TextualOutputPort):
@@ -406,6 +431,7 @@ class StandardErrorPort(TextualOutputPort):
 DEFAULT_STDIN: TextualInputPort = StandardInputPort()
 DEFAULT_STDOUT: TextualOutputPort = StandardOutputPort()
 DEFAULT_STDERR: TextualOutputPort = StandardErrorPort()
+atexit.register(DEFAULT_STDOUT.flush)
 
 # Dynamic current ports (context-local)
 _cv_current_input: ContextVar[TextualInputPort] = ContextVar(
@@ -710,7 +736,6 @@ def newline(port: Optional[TextualOutputPort] = None) -> None:
     """Write a newline to port (default: current output port)."""
     p = port if port is not None else get_current_output_port()
     p.write_char("\n")
-    p.flush()
 
 
 def flush_output_port(port: Optional[TextualOutputPort] = None) -> None:
@@ -1034,28 +1059,24 @@ def display(x: Any, port: Optional[TextualOutputPort] = None) -> None:
     """Display x in human-readable form to port (default: current output port)."""
     p = port if port is not None else get_current_output_port()
     p.write_string(format_datum(x, mode="display"))
-    p.flush()
 
 
 def write_val(x: Any, port: Optional[TextualOutputPort] = None) -> None:
     """Write x in machine-readable form to port with cycle protection (default: current output port)."""
     p = port if port is not None else get_current_output_port()
     p.write_string(format_datum(x, mode="write"))
-    p.flush()
 
 
 def write_simple(x: Any, port: Optional[TextualOutputPort] = None) -> None:
     """Write x without datum labels (default: current output port)."""
     p = port if port is not None else get_current_output_port()
     p.write_string(format_datum(x, mode="simple"))
-    p.flush()
 
 
 def write_shared(x: Any, port: Optional[TextualOutputPort] = None) -> None:
     """Write x with datum labels for all shared or cyclic structures (default: current output port)."""
     p = port if port is not None else get_current_output_port()
     p.write_string(format_datum(x, mode="shared"))
-    p.flush()
 
 
 def read_datum(port: Optional[TextualInputPort] = None) -> Any:

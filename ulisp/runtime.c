@@ -85,23 +85,39 @@ uint64_t ulisp_gc_state[8];
 /* Stackmap metadata table exported from compiler in .rodata */
 __attribute__((weak)) uint64_t __ulisp_stackmap_table[1] = {0};
 
-/* Minimal 3 I/O Primitives bound directly to libc stdin/stdout */
-uint64_t ulisp_read_char(void) {
+/* Minimal I/O Primitives bound directly to libc stdin/stdout */
+__attribute__((weak)) uint64_t ulisp_read_char(void) {
     int c = getchar();
     if (c == EOF) return EOF_OBJECT;
     return ((uint64_t)c << CHAR_SHIFT) | CHAR_TAG;
 }
 
-uint64_t ulisp_peek_char(void) {
+__attribute__((weak)) uint64_t ulisp_peek_char(void) {
     int c = getchar();
     if (c == EOF) return EOF_OBJECT;
     ungetc(c, stdin);
     return ((uint64_t)c << CHAR_SHIFT) | CHAR_TAG;
 }
 
-uint64_t ulisp_write_char(uint64_t val) {
+__attribute__((weak)) uint64_t ulisp_write_char(uint64_t val) {
     char c = (char)(val >> CHAR_SHIFT);
     putchar(c);
+    return BOOL_TRUE;
+}
+
+__attribute__((weak)) uint64_t ulisp_flush(void) {
+    fflush(stdout);
+    return BOOL_TRUE;
+}
+
+__attribute__((weak)) uint64_t ulisp_emit_str(const char *s) {
+    if (s) fputs(s, stdout);
+    return BOOL_TRUE;
+}
+
+__attribute__((weak)) uint64_t ulisp_write_string(uint64_t val) {
+    const char *s = (const char *)(val - STRING_TAG);
+    if (s) fputs(s, stdout);
     return BOOL_TRUE;
 }
 

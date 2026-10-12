@@ -7,13 +7,7 @@
   (write-char #\newline))
 
 (define (display-string s)
-  (let ((len (string-length s)))
-    (let loop ((i 0))
-      (if (< i len)
-          (begin
-            (write-char (string-ref s i))
-            (loop (+ i 1)))
-          #t))))
+  (write-string s))
 
 (define (display val)
   (cond

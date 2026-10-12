@@ -10,6 +10,7 @@
 
 ;; sys-exit: sys_exit(status) -> syscall 60
 (define (sys-exit code)
+  (flush-output-port)
   (%raw-syscall (%to-raw 60) (%to-raw code) 0 0 0 0 0))
 
 ;; sys-write: sys_write(fd, buf_ptr, count) -> syscall 1
@@ -44,19 +45,17 @@
 (define (raw-buf-ptr)
   (%ptr-untag *io-buf-cell*))
 
-;; Write a single character directly to stdout without libc
-(define (sys-write-char ch)
-  (let ((byte-val (%to-raw (char->integer ch))))
-    (%raw-store! (raw-buf-ptr) 0 byte-val)
-    (sys-write 1 (raw-buf-ptr) 1)
-    #t))
+;; Flush any pending output in 4KB buffer
+(define (sys-flush)
+  (flush-output-port))
 
-;; Write an entire Scheme string to stdout
+;; Write a single character directly to stdout (buffered)
+(define (sys-write-char ch)
+  (write-char ch))
+
+;; Write an entire Scheme string to stdout (buffered)
 (define (sys-write-string str)
-  (let ((len (string-length str))
-        (data-ptr (%ptr-untag str)))
-    (sys-write 1 data-ptr len)
-    #t))
+  (write-string str))
 
 ;; Read a single character directly from stdin without libc
 (define (sys-read-char)

@@ -186,13 +186,10 @@ def compile_to_elf(
 
         compile_cmd = [
             cc,
-            opt_level,
-            "-g",
-            "-Wall",
-            "-Wextra",
+            "-nostdlib",
+            "-static",
             "-o",
             str(out_file),
-            str(runtime_c),
             str(tmp_s),
         ]
 

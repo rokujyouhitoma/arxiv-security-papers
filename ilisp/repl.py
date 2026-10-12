@@ -50,6 +50,12 @@ def run_string(
     result: Any = NIL
     for expr in expressions:
         result = eval_expr(expr, env)
+    try:
+        from ilisp.port import get_current_output_port
+
+        get_current_output_port().flush()
+    except Exception:
+        pass
     return result
 
 
