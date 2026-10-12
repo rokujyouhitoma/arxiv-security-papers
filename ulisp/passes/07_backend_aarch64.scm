@@ -145,7 +145,7 @@
              (offset (cadddr inst)))
          (emit (string-append "    ldrb " (arm-w-reg->str dst) ", " (arm-mem-op->str base offset)))))
 
-      ((%add)
+      ((%add %raw-add)
        (let ((dst (cadr inst))
              (src (caddr inst)))
          (if (number? src)
@@ -156,7 +156,7 @@
                    (emit (string-append "    add " (arm-reg->str dst) ", " (arm-reg->str dst) ", x9"))))
              (emit (string-append "    add " (arm-reg->str dst) ", " (arm-reg->str dst) ", " (arm-operand->str src))))))
 
-      ((%sub)
+      ((%sub %raw-sub)
        (let ((dst (cadr inst))
              (src (caddr inst)))
          (if (number? src)
@@ -171,7 +171,7 @@
        (let ((dst (cadr inst)))
          (emit (string-append "    neg " (arm-reg->str dst) ", " (arm-reg->str dst)))))
 
-      ((%imul)
+      ((%imul %raw-mul)
        (let ((dst (cadr inst))
              (src (caddr inst)))
          (cond
@@ -183,6 +183,16 @@
             (emit (string-append "    mul " (arm-reg->str dst) ", " (arm-reg->str dst) ", x9")))
            (else
             (emit (string-append "    mul " (arm-reg->str dst) ", " (arm-reg->str dst) ", " (arm-reg->str src)))))))
+
+      ((%box-fixnum)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    lsl " (arm-reg->str dst) ", " (arm-reg->str src) ", #2"))))
+
+      ((%unbox-fixnum)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    asr " (arm-reg->str dst) ", " (arm-reg->str src) ", #2"))))
 
       ((%cqo)
        ;; In AArch64, 64-bit sdiv does not require cqo sign extension; no-op.
@@ -241,7 +251,7 @@
                (emit (string-append "    eor " (arm-reg->str dst) ", " (arm-reg->str dst) ", x9")))
              (emit (string-append "    eor " (arm-reg->str dst) ", " (arm-reg->str dst) ", " (arm-reg->str src))))))
 
-      ((%cmp)
+      ((%cmp %raw-cmp)
        (let ((s1 (cadr inst))
              (s2 (caddr inst)))
          (if (number? s2)

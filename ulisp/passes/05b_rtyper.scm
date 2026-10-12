@@ -1,0 +1,194 @@
+;;; =======================================================================
+;;; ULisp Compiler Pass 5b: S-RTyper (Representation Typer & Unboxing Lowering)
+;;; Conforms to DSN-33 Architecture Specification & Issue #518
+;;; Note: Lowers high-level abstract types (inferred by S-Annotator Pass 4b)
+;;;       to concrete hardware representations (%raw-i64, untagged registers).
+;;;       Eliminates sar/sal tagging overhead in pure arithmetic loops and
+;;;       inserts explicit boxing/unboxing boundaries at Scheme dynamic edges.
+;;; =======================================================================
+
+(define *unboxed-functions* (cons '() '()))
+
+(define (reset-rtyper!)
+  (set-car! *unboxed-functions* '()))
+
+(define (record-unboxed-fn! name)
+  (set-car! *unboxed-functions* (cons name (car *unboxed-functions*))))
+
+(define (unboxed-fn? name)
+  (memq name (car *unboxed-functions*)))
+
+(define (raw-var? var raw-env)
+  (memq var raw-env))
+
+(define (all-fixnum-params? params)
+  (let loop ((ps params))
+    (if (null? ps)
+        #t
+        (let ((t (get-var-type (car ps))))
+          (if (and t (type-fixnum? t))
+              (loop (cdr ps))
+              #f)))))
+
+;;; Fast O(1) detection of pure tail-recursive loops (maximum depth 30)
+(define (pure-tail-loop? fn-name lbody)
+  (let loop-chk ((e lbody) (depth 0))
+    (cond
+      ((> depth 30) #f)
+      ((not (pair? e)) #f)
+      ((eq? (car e) fn-name) #t)
+      ((eq? (car e) 'let)
+       (loop-chk (caddr e) (+ depth 1)))
+      ((eq? (car e) 'if)
+       (let ((test (cadr e))
+             (then (caddr e))
+             (else-opt (if (null? (cdddr e)) '() (cadddr e))))
+         (and (not (and (pair? test) (eq? (car test) fn-name)))
+              (or (loop-chk then (+ depth 1))
+                  (if (null? else-opt) #f (loop-chk else-opt (+ depth 1)))))))
+      (else #f))))
+
+;;; Traverses loop body to box any raw loop-variable returned at loop exit boundaries
+(define (box-raw-exit expr raw-vars fn-name)
+  (cond
+    ((not (pair? expr))
+     (if (and (symbol? expr) (memq expr raw-vars))
+         (list '%box-fixnum expr)
+         expr))
+    ((eq? (car expr) fn-name)
+     ;; Tail-recursive loop jump: keep unboxed raw integers
+     expr)
+    ((eq? (car expr) 'if)
+     (let ((test (cadr expr))
+           (then (caddr expr))
+           (else-part (if (null? (cdddr expr)) '() (cadddr expr))))
+       (list 'if test
+             (box-raw-exit then raw-vars fn-name)
+             (if (null? else-part) '() (box-raw-exit else-part raw-vars fn-name)))))
+    ((eq? (car expr) 'let)
+     (let ((bindings (cadr expr))
+           (body (caddr expr)))
+       (list 'let bindings (box-raw-exit body raw-vars fn-name))))
+    ((eq? (car expr) 'begin)
+     (let ((stmts (cdr expr)))
+       (let loop ((rest stmts) (acc '()))
+         (if (null? (cdr rest))
+             (cons 'begin (append (reverse acc) (list (box-raw-exit (car rest) raw-vars fn-name))))
+             (loop (cdr rest) (cons (car rest) acc))))))
+    (else
+     expr)))
+
+;;; Lowers binary arithmetic operators to raw integer primitives when operands are raw
+(define (rtyper-binop op e1 e2 raw-env)
+  (cond
+    ((memq op '(+ - *))
+     (let ((raw1? (or (integer? e1) (and (symbol? e1) (raw-var? e1 raw-env))))
+           (raw2? (or (integer? e2) (and (symbol? e2) (raw-var? e2 raw-env)))))
+       (if (and raw1? raw2?)
+           (case op
+             ((+) (list '%raw-add e1 e2))
+             ((-) (list '%raw-sub e1 e2))
+             ((*) (list '%raw-mul e1 e2)))
+           (list op e1 e2))))
+    (else
+     (list op e1 e2))))
+
+;;; Recursively rewrites ANF AST to Typed LIR representation
+(define (rtyper-expr expr raw-env)
+  (cond
+    ((not (pair? expr)) expr)
+    (else
+     (let ((op (car expr)))
+       (cond
+         ((eq? op 'quote) expr)
+         ((eq? op 'if)
+          (let ((test (rtyper-expr (cadr expr) raw-env))
+                (then (rtyper-expr (caddr expr) raw-env))
+                (else-expr (if (null? (cdddr expr)) '() (rtyper-expr (cadddr expr) raw-env))))
+            (if (null? else-expr)
+                (list 'if test then)
+                (list 'if test then else-expr))))
+         ((eq? op 'begin)
+          (cons 'begin (map (lambda (e) (rtyper-expr e raw-env)) (cdr expr))))
+         ((memq op '(let letrec))
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr)))
+            (if (and (= (length bindings) 1)
+                     (let* ((b (car bindings))
+                            (val (cadr b)))
+                       (and (pair? val)
+                            (eq? (car val) 'lambda)
+                            (pair? (cadr val))
+                            (all-fixnum-params? (cadr val))
+                            (pure-tail-loop? (car b) (caddr val)))))
+                ;; Named-let loop with 100% fixnum parameters and pure tail-recursion:
+                ;; Lower all loop variables to raw %raw-i64 hardware representation.
+                (let* ((b (car bindings))
+                       (fn-name (car b))
+                       (fn-val (cadr b))
+                       (params (cadr fn-val))
+                       (lbody (caddr fn-val))
+                       (loop-raw-env (append params raw-env)))
+                  (record-unboxed-fn! fn-name)
+                  (let* ((typed-lbody (rtyper-expr lbody loop-raw-env))
+                         (boxed-lbody (box-raw-exit typed-lbody params fn-name))
+                         (new-fn-val (list 'lambda params boxed-lbody))
+                         (new-body (rtyper-expr body raw-env)))
+                    (list op (list (list fn-name new-fn-val)) new-body)))
+                ;; Standard let bindings: propagate raw variables
+                (let* ((new-bindings
+                        (map (lambda (b)
+                               (list (car b) (rtyper-expr (cadr b) raw-env)))
+                             bindings))
+                       ;; Extend raw-env with newly bound variables that hold raw values
+                       (extended-raw-env
+                        (let loop ((bs new-bindings) (acc raw-env))
+                          (if (null? bs) acc
+                              (let* ((b (car bs))
+                                     (var (car b))
+                                     (val (cadr b)))
+                                (if (and (pair? val)
+                                         (memq (car val) '(%raw-add %raw-sub %raw-mul %unbox-fixnum)))
+                                    (loop (cdr bs) (cons var acc))
+                                    (loop (cdr bs) acc))))))
+                       (new-body (rtyper-expr body extended-raw-env)))
+                  (list op new-bindings new-body)))))
+         ((eq? op '-)
+          (if (null? (cddr expr))
+              (list '- (rtyper-expr (cadr expr) raw-env))
+              (rtyper-binop op (rtyper-expr (cadr expr) raw-env) (rtyper-expr (caddr expr) raw-env) raw-env)))
+         ((binop-prim? op)
+          (rtyper-binop op (rtyper-expr (cadr expr) raw-env) (rtyper-expr (caddr expr) raw-env) raw-env))
+         ((unboxed-fn? op)
+          ;; Boundary call into an unboxed loop: unbox non-raw arguments at entry
+          (let ((args (cdr expr)))
+            (cons op
+                  (map (lambda (arg)
+                         (if (and (symbol? arg) (raw-var? arg raw-env))
+                             arg
+                             (list '%unbox-fixnum (rtyper-expr arg raw-env))))
+                       args))))
+         (else
+          ;; General procedure call or syntax
+          (cons op (map (lambda (e) (rtyper-expr e raw-env)) (cdr expr)))))))))
+
+;;; Pass 5b Entrypoint: Transforms S-Annotated AST into Lowered Typed AST
+(define (rtyper-all form-or-forms)
+  (reset-rtyper!)
+  (cond
+    ((null? form-or-forms) '())
+    ((not (pair? form-or-forms)) form-or-forms)
+    ((eq? (car form-or-forms) '%program)
+     (let ((defs (cadr form-or-forms))
+           (main (caddr form-or-forms)))
+       (list '%program
+             (map (lambda (d) (rtyper-expr d '())) defs)
+             (rtyper-expr main '()))))
+    ((eq? (car form-or-forms) 'define)
+     (let ((head (cadr form-or-forms))
+           (body (cddr form-or-forms)))
+       (cons 'define
+             (cons head
+                   (map (lambda (e) (rtyper-expr e '())) body)))))
+    (else
+     (rtyper-expr form-or-forms '()))))

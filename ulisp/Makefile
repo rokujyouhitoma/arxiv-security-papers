@@ -16,6 +16,7 @@ PASSES_LIB = passes/00_helpers.scm \
              passes/03_cp0.scm \
              passes/04_anf.scm \
              passes/04b_annotator.scm \
+             passes/05b_rtyper.scm \
              passes/05_closure_convert.scm \
              passes/06_lir.scm \
              passes/07_backend_x86_64.scm \
@@ -40,6 +41,11 @@ test_passes: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_passes_runner.scm
+
+test_rtyper: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_rtyper.scm > build/test_rtyper_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_rtyper_runner.scm
 
 test_aarch64: build/compiler_passes.scm
 	@mkdir -p build

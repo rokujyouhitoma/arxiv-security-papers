@@ -233,6 +233,68 @@
     (assert-equal "annotate-all preserves forms" 2 (length forms))))
 
 ;;; =======================================================================
+;;; Pass 5b: S-RTyper Representation Typing & Unboxing Tests (05b_rtyper.scm)
+;;; =======================================================================
+(define (test-pass5b-rtyper)
+  (display "=== Running Pass 5b (S-RTyper) Tests ===")
+  (newline)
+
+  ;; 1. Binary arithmetic lowering on integer constants
+  (assert-equal "rtyper lower add constants"
+                '(%raw-add 10 20)
+                (rtyper-binop '+ 10 20 '()))
+
+  (assert-equal "rtyper lower sub constants"
+                '(%raw-sub 30 10)
+                (rtyper-binop '- 30 10 '()))
+
+  (assert-equal "rtyper lower mul constants"
+                '(%raw-mul 5 6)
+                (rtyper-binop '* 5 6 '()))
+
+  ;; 2. Binary arithmetic lowering on raw variables
+  (assert-equal "rtyper lower add raw variables"
+                '(%raw-add x y)
+                (rtyper-binop '+ 'x 'y '(x y)))
+
+  (assert-equal "rtyper preserve dynamic add"
+                '(+ x y)
+                (rtyper-binop '+ 'x 'y '()))
+
+  ;; 3. Loop exit boundary boxing
+  (assert-equal "box raw exit variable"
+                '(%box-fixnum x)
+                (box-raw-exit 'x '(x) 'loop))
+
+  (assert-equal "preserve recursive call unboxed"
+                '(loop 1 2)
+                (box-raw-exit '(loop 1 2) '(x) 'loop))
+
+  ;; 4. End-to-end unboxed loop transformation
+  (reset-type-annotations!)
+  (let* ((orig-ast (desugar-all '(let loop ((i 0) (sum 0))
+                                   (if (< i 10)
+                                       (loop (+ i 1) (+ sum i))
+                                       sum))))
+         (anf-ast (anf-all (cp0-optimize orig-ast)))
+         (ann-ast (annotate-all anf-ast))
+         (typed-ast (rtyper-all ann-ast)))
+    (assert-true "typed ast is pair" (pair? typed-ast))
+    ;; Verify that typed-ast contains %raw-add and %box-fixnum
+    (assert-true "contains %raw-add"
+                 (let rec ((e typed-ast))
+                   (cond
+                     ((not (pair? e)) #f)
+                     ((eq? (car e) '%raw-add) #t)
+                     (else (or (rec (car e)) (rec (cdr e)))))))
+    (assert-true "contains %box-fixnum"
+                 (let rec ((e typed-ast))
+                   (cond
+                     ((not (pair? e)) #f)
+                     ((eq? (car e) '%box-fixnum) #t)
+                     (else (or (rec (car e)) (rec (cdr e)))))))))
+
+;;; =======================================================================
 ;;; Pass 5: Explicit Closure Conversion Tests (05_closure_convert.scm)
 ;;; =======================================================================
 (define (test-pass5-closure)
@@ -299,6 +361,7 @@
     (assert-true "main body contains instructions" (not (null? body)))
     ;; Check valid LIR opcodes
     (let ((valid-opcodes '(%mov %load %store %store-byte %load-byte-zx %add %sub
+                          %raw-add %raw-sub %raw-mul %raw-cmp %box-fixnum %unbox-fixnum
                           %neg %imul %cqo %idiv %inc %shl %shr %sar %bit-and
                           %bit-or %bit-xor %cmp %set-boolean %alloc %code-ref
                           %str-ref %c-call %call-closure %label %jump
@@ -318,7 +381,13 @@
       (assert-true "lir bitwise-and generates lir-program" (pair? lir-bitwise)))
     (let* ((ast-raw-load (closure-convert (anf-all (cp0-optimize (desugar-all '(%raw-load 100 0))))))
            (lir-raw-load (generate-lir ast-raw-load)))
-      (assert-true "lir %raw-load generates lir-program" (pair? lir-raw-load)))))
+      (assert-true "lir %raw-load generates lir-program" (pair? lir-raw-load)))
+    (let* ((ast-raw-add (closure-convert (anf-all (cp0-optimize (desugar-all '(%raw-add 10 20))))))
+           (lir-raw-add (generate-lir ast-raw-add)))
+      (assert-true "lir %raw-add generates lir-program" (pair? lir-raw-add)))
+    (let* ((ast-box (closure-convert (anf-all (cp0-optimize (desugar-all '(%box-fixnum 42))))))
+           (lir-box (generate-lir ast-box)))
+      (assert-true "lir %box-fixnum generates lir-program" (pair? lir-box)))))
 
 ;;; =======================================================================
 ;;; Pass 7: Backend x86-64 Codegen Tests (07_backend_x86_64.scm)
@@ -449,6 +518,7 @@
 (test-pass3-cp0)
 (test-pass4-anf)
 (test-pass4b-annotator)
+(test-pass5b-rtyper)
 (test-pass5-closure)
 (test-pass6-lir)
 (test-pass7-backend)

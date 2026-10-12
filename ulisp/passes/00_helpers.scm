@@ -122,11 +122,13 @@
              write-char eof-object?
              make-string string-length
              %set-heap-ptr! %ptr-tag %ptr-untag
-             %to-raw %to-fixnum)))
+             %to-raw %to-fixnum
+             %box-fixnum %unbox-fixnum)))
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?
-             %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift)))
+             %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
+             %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (triop-prim? op)
   (memq op '(string-set! %raw-store!)))
@@ -142,8 +144,9 @@
              integer->symbol symbol->integer
              zero? fixnum? integer? number? boolean? char? null? not symbol?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
-             %to-raw %to-fixnum
-             + - * = < <= > >= modulo quotient / eq? char=? %closure-ref)))
+             %to-raw %to-fixnum %box-fixnum %unbox-fixnum
+             + - * = < <= > >= modulo quotient / eq? char=? %closure-ref
+             %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (const? x)
   (or (number? x)

@@ -29,7 +29,8 @@
              (ast2 (cp0-optimize ast1))
              (ast3 (anf-all ast2))
              (ast3b (annotate-all ast3))
-             (ast4 (closure-convert ast3b))
+             (ast3c (rtyper-all ast3b))
+             (ast4 (closure-convert ast3c))
              (lir  (generate-lir ast4)))
         (cond
           ((eq? target 'c)

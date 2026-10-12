@@ -103,43 +103,52 @@
                      (loop (+ i 1) (+ out-idx 1)))))
                 res))))))
 
+(define (%string-eq-loop s1 s2 i len)
+  (if (< i len)
+      (if (char=? (string-ref s1 i) (string-ref s2 i))
+          (%string-eq-loop s1 s2 (+ i 1) len)
+          #f)
+      #t))
+
 (define (string=? s1 s2)
   (let ((len1 (string-length s1))
         (len2 (string-length s2)))
     (if (= len1 len2)
-        (let loop ((i 0))
-          (if (< i len1)
-              (if (char=? (string-ref s1 i) (string-ref s2 i))
-                  (loop (+ i 1))
-                  #f)
-              #t))
+        (%string-eq-loop s1 s2 0 len1)
         #f)))
 
 ;;; Dynamic Symbol Registry in pure Scheme (shared across quoted literals and reader)
 (define *symbol-registry* (cons '() '()))
 (define *next-sym-id* (cons 100 '()))
 
+(define (%string-find-symbol str entries)
+  (if (null? entries)
+      #f
+      (let ((entry (car entries)))
+        (if (string=? (car entry) str)
+            (cdr entry)
+            (%string-find-symbol str (cdr entries))))))
+
 (define (string->symbol str)
-  (let loop ((entries (car *symbol-registry*)))
-    (if (null? entries)
+  (let ((found (%string-find-symbol str (car *symbol-registry*))))
+    (if found
+        found
         (let* ((curr-id (car *next-sym-id*))
                (sym (integer->symbol curr-id)))
           (set-car! *next-sym-id* (+ curr-id 1))
           (set-car! *symbol-registry* (cons (cons str sym) (car *symbol-registry*)))
-          sym)
-        (let ((entry (car entries)))
-          (if (string=? (car entry) str)
-              (cdr entry)
-              (loop (cdr entries)))))))
+          sym))))
+
+(define (%symbol-find-string sym entries)
+  (if (null? entries)
+      "?"
+      (let ((entry (car entries)))
+        (if (eq? (cdr entry) sym)
+            (car entry)
+            (%symbol-find-string sym (cdr entries))))))
 
 (define (symbol->string sym)
-  (let loop ((entries (car *symbol-registry*)))
-    (if (null? entries)
-        "?"
-        (let ((entry (car entries)))
-          (if (eq? (cdr entry) sym)
-              (car entry)
-              (loop (cdr entries)))))))
+  (%symbol-find-string sym (car *symbol-registry*)))
 
 
 

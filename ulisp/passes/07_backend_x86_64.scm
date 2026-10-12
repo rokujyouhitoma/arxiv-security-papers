@@ -116,7 +116,17 @@
              (src (caddr inst)))
          (emit (string-append "    add " (operand->str dst) ", " (operand->str src)))))
 
+      ((%raw-add)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    add " (operand->str dst) ", " (operand->str src)))))
+
       ((%sub)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    sub " (operand->str dst) ", " (operand->str src)))))
+
+      ((%raw-sub)
        (let ((dst (cadr inst))
              (src (caddr inst)))
          (emit (string-append "    sub " (operand->str dst) ", " (operand->str src)))))
@@ -129,6 +139,25 @@
        (let ((dst (cadr inst))
              (src (caddr inst)))
          (emit (string-append "    imul " (operand->str dst) ", " (operand->str src)))))
+
+      ((%raw-mul)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (emit (string-append "    imul " (operand->str dst) ", " (operand->str src)))))
+
+      ((%box-fixnum)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (if (not (eq? dst src))
+             (emit (string-append "    mov " (operand->str dst) ", " (operand->str src))))
+         (emit (string-append "    shl " (operand->str dst) ", 2"))))
+
+      ((%unbox-fixnum)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (if (not (eq? dst src))
+             (emit (string-append "    mov " (operand->str dst) ", " (operand->str src))))
+         (emit (string-append "    sar " (operand->str dst) ", 2"))))
 
       ((%cqo)
        (emit "    cqo"))
@@ -171,7 +200,7 @@
              (src (caddr inst)))
          (emit (string-append "    xor " (operand->str dst) ", " (operand->str src)))))
 
-      ((%cmp)
+      ((%cmp %raw-cmp)
        (let ((s1 (cadr inst))
              (s2 (caddr inst)))
          (emit (string-append "    cmp " (operand->str s1) ", " (operand->str s2)))))
