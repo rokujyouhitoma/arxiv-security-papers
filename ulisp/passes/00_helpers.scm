@@ -32,6 +32,35 @@
     ((eq? (caar ls) item) (car ls))
     (else (assq item (cdr ls)))))
 
+(define (string-equal? s1 s2)
+  (and (string? s1) (string? s2)
+       (not (boolean? s1)) (not (boolean? s2))
+       (= (string-length s1) (string-length s2))
+       (let loop ((i 0) (len (string-length s1)))
+         (if (= i len)
+             #t
+             (if (char=? (string-ref s1 i) (string-ref s2 i))
+                 (loop (+ i 1) len)
+                 #f)))))
+
+(define (equal? a b)
+  (cond
+    ((eq? a b) #t)
+    ((and (number? a) (number? b)) (= a b))
+    ((and (string? a) (string? b)) (string-equal? a b))
+    ((and (char? a) (char? b)) (char=? a b))
+    ((and (pair? a) (pair? b))
+     (and (equal? (car a) (car b))
+          (equal? (cdr a) (cdr b))))
+    (else #f)))
+
+(define (assoc item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((not (pair? (car ls))) (assoc item (cdr ls)))
+    ((equal? (caar ls) item) (car ls))
+    (else (assoc item (cdr ls)))))
+
 (define (length ls)
   (let loop ((l ls) (n 0))
     (if (null? l)
@@ -50,21 +79,24 @@
       (cons (car l1) (append (cdr l1) l2))))
 
 (define (map f ls)
-  (if (null? ls)
-      '()
-      (cons (f (car ls)) (map f (cdr ls)))))
+  (let loop ((cur ls) (acc '()))
+    (if (null? cur)
+        (reverse acc)
+        (loop (cdr cur) (cons (f (car cur)) acc)))))
 
 (define (for-each proc ls)
-  (if (not (null? ls))
-      (begin
-        (proc (car ls))
-        (for-each proc (cdr ls)))))
+  (let loop ((cur ls))
+    (if (not (null? cur))
+        (begin
+          (proc (car cur))
+          (loop (cdr cur))))))
 
 (define (filter pred ls)
-  (cond
-    ((null? ls) '())
-    ((pred (car ls)) (cons (car ls) (filter pred (cdr ls))))
-    (else (filter pred (cdr ls)))))
+  (let loop ((cur ls) (acc '()))
+    (cond
+      ((null? cur) (reverse acc))
+      ((pred (car cur)) (loop (cdr cur) (cons (car cur) acc)))
+      (else (loop (cdr cur) acc)))))
 
 (define (error msg val)
   (display msg)
@@ -145,7 +177,7 @@
              zero? fixnum? integer? number? boolean? char? null? not symbol?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-             + - * = < <= > >= modulo quotient / eq? char=? %closure-ref
+             + - * = < <= > >= modulo quotient / eq? char=? cons %closure-ref
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (const? x)
@@ -158,6 +190,104 @@
 (define (atomic-expr? expr)
   (or (symbol? expr)
       (const? expr)))
+
+(define (extract-const-val c)
+  (if (and (pair? c) (eq? (car c) 'quote))
+      (cadr c)
+      c))
+
+(define (val->ast-const v)
+  (cond
+    ((number? v) v)
+    ((boolean? v) v)
+    ((char? v) v)
+    ((null? v) '(quote ()))
+    (else (list 'quote v))))
+
+(define (commutative-op? op)
+  (memq op '(+ * = eq? char=?)))
+
+(define (type-predicate-op? op)
+  (memq op '(fixnum? integer? number? pair? null? boolean? char? symbol? zero? procedure? string?)))
+
+(define (pure-accessor-op? op)
+  (memq op '(car cdr)))
+
+(define (pure-expr? expr)
+  (cond
+    ((atomic-expr? expr) #t)
+    ((pair? expr)
+     (let ((op (car expr)))
+       (case op
+         ((quote) #t)
+         ((lambda) #t)
+         ((if) (and (pure-expr? (cadr expr))
+                    (pure-expr? (caddr expr))
+                    (if (null? (cdddr expr)) #t (pure-expr? (cadddr expr)))))
+         ((begin)
+          (let loop ((es (cdr expr)))
+            (if (null? es) #t
+                (and (pure-expr? (car es)) (loop (cdr es))))))
+         ((let)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (and (let loop ((bs bindings))
+                   (if (null? bs) #t
+                       (and (pure-expr? (cadar bs)) (loop (cdr bs)))))
+                 (pure-expr? body))))
+         (else
+          (and (pure-prim? op)
+               (let loop ((args (cdr expr)))
+                 (if (null? args) #t
+                     (and (pure-expr? (car args)) (loop (cdr args))))))))))
+    (else #f)))
+
+(define (fold-const-op op args)
+  (let ((nargs (length args)))
+    (cond
+      ;; Unary arithmetic / predicates
+      ((and (= nargs 1) (const? (car args)))
+       (let ((v (extract-const-val (car args))))
+         (case op
+           ((fxadd1) (if (number? v) (val->ast-const (+ v 1)) #f))
+           ((fxsub1) (if (number? v) (val->ast-const (- v 1)) #f))
+           ((zero?) (if (number? v) (val->ast-const (= v 0)) #f))
+           ((not) (val->ast-const (if (eq? v #f) #t #f)))
+           ((null?) (val->ast-const (null? v)))
+           ((pair?) (val->ast-const (pair? v)))
+           ((number? fixnum? integer?) (val->ast-const (number? v)))
+           ((boolean?) (val->ast-const (boolean? v)))
+           ((char?) (val->ast-const (char? v)))
+           ((symbol?) (val->ast-const (symbol? v)))
+           ((car) (if (pair? v) (val->ast-const (car v)) #f))
+           ((cdr) (if (pair? v) (val->ast-const (cdr v)) #f))
+           (else #f))))
+      ;; Binary arithmetic / predicates
+      ((and (= nargs 2) (const? (car args)) (const? (cadr args)))
+       (let ((v1 (extract-const-val (car args)))
+             (v2 (extract-const-val (cadr args))))
+         (case op
+           ((+) (if (and (number? v1) (number? v2)) (val->ast-const (+ v1 v2)) #f))
+           ((-) (if (and (number? v1) (number? v2)) (val->ast-const (- v1 v2)) #f))
+           ((*) (if (and (number? v1) (number? v2)) (val->ast-const (* v1 v2)) #f))
+           ((quotient /)
+            (if (and (number? v1) (number? v2) (not (= v2 0)))
+                (val->ast-const (quotient v1 v2))
+                #f))
+           ((modulo)
+            (if (and (number? v1) (number? v2) (not (= v2 0)))
+                (val->ast-const (modulo v1 v2))
+                #f))
+           ((=) (if (and (number? v1) (number? v2)) (val->ast-const (= v1 v2)) #f))
+           ((<) (if (and (number? v1) (number? v2)) (val->ast-const (< v1 v2)) #f))
+           ((<=) (if (and (number? v1) (number? v2)) (val->ast-const (<= v1 v2)) #f))
+           ((>) (if (and (number? v1) (number? v2)) (val->ast-const (> v1 v2)) #f))
+           ((>=) (if (and (number? v1) (number? v2)) (val->ast-const (>= v1 v2)) #f))
+           ((eq?) (val->ast-const (eq? v1 v2)))
+           ((char=?) (if (and (char? v1) (char? v2)) (val->ast-const (char=? v1 v2)) #f))
+           ((cons) (val->ast-const (cons v1 v2)))
+           (else #f))))
+      (else #f))))
 
 ;;; Symbol table for interned symbols
 (define *symbol-table* (cons '() '()))

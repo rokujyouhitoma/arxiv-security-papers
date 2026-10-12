@@ -132,16 +132,17 @@
                            (bitmap (%to-fixnum (%raw-load tbl (+ entry-offset 16))))
                            (slot-count (quotient frame-size 8))
                            (frame-base (%ptr-add sp 8)))
-                      ;; Scan only the slots where bitmap bit is 1
+                      ;; Scan only the slots where bitmap bit is 1 (for k >= 60, scan conservatively)
                       (let slot-loop ((k 0) (mask bitmap))
                         (if (< k slot-count)
                             (begin
-                              (if (= (modulo mask 2) 1)
+                              (if (or (and (< k 60) (= (modulo mask 2) 1))
+                                      (>= k 60))
                                   (let* ((slot-addr (%ptr-add frame-base (* k 8)))
                                          (val (%raw-load slot-addr 0)))
                                     (if (gc-heap-pointer? val)
                                         (%raw-store! slot-addr 0 (gc-copy-object val)))))
-                              (slot-loop (+ k 1) (quotient mask 2)))))
+                              (slot-loop (+ k 1) (if (< k 60) (quotient mask 2) 0)))))
                       ;; Step directly to next frame above this one
                       (walk-loop (%ptr-add frame-base frame-size)))
                     ;; Not a safepoint return address; advance by 8 bytes

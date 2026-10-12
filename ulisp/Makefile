@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_lvn stage1 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
 
 CC = gcc
@@ -14,6 +14,7 @@ PASSES_LIB = passes/00_helpers.scm \
              passes/01_desugar.scm \
              passes/02_analysis.scm \
              passes/03_cp0.scm \
+             passes/03b_lvn.scm \
              passes/04_anf.scm \
              passes/04b_annotator.scm \
              passes/05b_rtyper.scm \
@@ -41,6 +42,11 @@ test_passes: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_passes_runner.scm
+
+test_lvn: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_lvn.scm > build/test_lvn_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_lvn_runner.scm
 
 test_rtyper: build/compiler_passes.scm
 	@mkdir -p build

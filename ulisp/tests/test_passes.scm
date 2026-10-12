@@ -154,6 +154,39 @@
                 (cp0-optimize '(zero? 0))))
 
 ;;; =======================================================================
+;;; Pass 3b: Extended LVN & Accessor Memoization Tests (03b_lvn.scm)
+;;; =======================================================================
+(define (test-pass3b-lvn)
+  (display "=== Running Pass 3b (Extended LVN) Tests ===")
+  (newline)
+
+  ;; 1. Pair accessor deduplication
+  (let* ((input '(let ((a (car p))) (let ((b (car p))) (+ a b))))
+         (opt (lvn-all input)))
+    (assert-equal "lvn deduplicate (car p)" '(let ((a (car p))) (+ a a)) opt))
+
+  ;; 2. Pair constructor reduction
+  (let* ((input '(let ((p (cons 10 20))) (car p)))
+         (opt (lvn-all input)))
+    (assert-equal "lvn (car (cons 10 20)) -> 10" 10 opt))
+
+  ;; 3. Algebraic identities
+  (assert-equal "lvn (+ x 0) -> x" 'x (lvn-all '(+ x 0)))
+  (assert-equal "lvn (* x 1) -> x" 'x (lvn-all '(* x 1)))
+  (assert-equal "lvn (- x x) -> 0" 0 (lvn-all '(- x x)))
+  (assert-equal "lvn (= x x) -> #t" #t (lvn-all '(= x x)))
+
+  ;; 4. Commutative normalization & CSE
+  (let* ((input '(let ((x (+ b a))) (let ((y (+ a b))) (- x y))))
+         (opt (lvn-all input)))
+    (assert-equal "lvn commutative (- x y) -> 0" '(let ((x (+ b a))) 0) opt))
+
+  ;; 5. Dominance predicate folding
+  (let* ((input '(if (fixnum? x) (if (fixnum? x) (+ x 0) 42) 99))
+         (opt (lvn-all input)))
+    (assert-equal "lvn dominance type check" '(if (fixnum? x) x 99) opt)))
+
+;;; =======================================================================
 ;;; Pass 4: A-Normal Form (ANF) Normalization Tests (04_anf.scm)
 ;;; =======================================================================
 (define (test-pass4-anf)
@@ -520,6 +553,7 @@
 (test-pass1-desugar)
 (test-pass2-analysis)
 (test-pass3-cp0)
+(test-pass3b-lvn)
 (test-pass4-anf)
 (test-pass4b-annotator)
 (test-pass5b-rtyper)

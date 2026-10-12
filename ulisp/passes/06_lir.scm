@@ -164,7 +164,7 @@
      (emit-lir! '(%cmp %rax 1))
      (emit-lir! '(%set-boolean %rax "sete")))
     ((string?)
-     (emit-lir! '(%bit-and %rax 3))
+     (emit-lir! '(%bit-and %rax 7))
      (emit-lir! '(%cmp %rax 3))
      (emit-lir! '(%set-boolean %rax "sete")))
     ((write-char)
@@ -427,7 +427,7 @@
   (let* ((slot-count (quotient frame-shift 8))
          (rvars (get-raw-vars env)))
     (let loop ((k 0) (bitmap 0))
-      (if (>= k slot-count)
+      (if (or (>= k slot-count) (>= k 60))
           bitmap
           (let* ((slot-offset (- (* k 8) frame-shift))
                  (is-ptr
