@@ -154,6 +154,37 @@
                              args)))
           (loop (cdr rest) (append syms acc))))))
 
+;;; Collect all failure labels from remaining guards in a trace
+(define (collect-guard-fail-labels body)
+  (let loop ((rest body) (acc '()))
+    (if (null? rest)
+        (reverse acc)
+        (let ((inst (car rest)))
+          (if (and (pair? inst) (eq? (car inst) '%guard))
+              (let ((fail-lbl (car (cddddr inst))))
+                (if (memq fail-lbl acc)
+                    (loop (cdr rest) acc)
+                    (loop (cdr rest) (cons fail-lbl acc))))
+              (loop (cdr rest) acc))))))
+
+;;; Synthesize an On-Stack Replacement (OSR) bailout adapter block (Issue #520)
+;;; Restores VM frame/registers and exits JIT trace back to Scheme interpreter
+(define (synthesize-osr-adapter fail-lbl vmap)
+  (let* ((lbl-sym (if (symbol? fail-lbl) fail-lbl (string->symbol (number->string fail-lbl))))
+         ;; Rebox unboxed integer virtual registers if needed (val << 2 for Fixnum tagging)
+         (rebox-insts
+          (map (lambda (entry)
+                 (let ((loc (cdr entry)))
+                   (if (and (symbol? loc) (not (eq? loc '%rax)))
+                       (list '%sal loc 2)
+                       #f)))
+               vmap))
+         (valid-rebox (filter (lambda (x) x) rebox-insts)))
+    (append (list (list '%label lbl-sym))
+            valid-rebox
+            (list (list '%mov '%rax 255) ; OSR deopt bailout sentinel
+                  (list '%return)))))
+
 ;;; Translate complete MLisp trace S-expression to canonical ULisp %lir-program
 (define (trace->lir-program trace)
   (if (not (and (pair? trace) (eq? (car trace) '%trace-loop)))
@@ -172,13 +203,19 @@
              (lir-insts
               (apply append
                      (map (lambda (inst)
-                            (trace-inst->lir inst vmap loop-entry-lbl loop-jump-lbl))
+                             (trace-inst->lir inst vmap loop-entry-lbl loop-jump-lbl))
                           body)))
-             ;; Add entry initialization and exit return
+             ;; Collect guard bailout targets and synthesize OSR bailout adapters
+             (fail-lbls (collect-guard-fail-labels body))
+             (osr-blocks
+              (apply append
+                     (map (lambda (lbl) (synthesize-osr-adapter lbl vmap)) fail-lbls)))
+             ;; Add entry initialization, main trace loop, exit return, and OSR blocks
              (full-body
               (append (list (list '%label (string->symbol (string-append "jit_func_" pc-str))))
                       lir-insts
-                      (list '(%return)))))
+                      (list '(%return))
+                      osr-blocks)))
         (list '%lir-program
               '(strings ())
               '(%lir-functions ())

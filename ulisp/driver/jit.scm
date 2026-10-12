@@ -120,25 +120,39 @@
   (let ((entry (assq var env)))
     (if entry (cdr entry) #f)))
 
+(define (pe-find-type var tenv)
+  (cond
+    ((number? var) 'fixnum)
+    ((symbol? var)
+     (let ((entry (assq var tenv)))
+       (if entry (cdr entry) #f)))
+    (else #f)))
+
 (define (optimize-pe-pure trace)
   (let* ((body (cadr (caddr trace)))
          (opt-body
-          (let loop ((insts body) (known '()) (acc '()))
+          (let loop ((insts body) (known '()) (tenv '()) (acc '()))
             (if (null? insts)
                 (reverse acc)
                 (let* ((inst (car insts))
                        (op (car inst)))
-                  (case op
+                   (case op
                     ((%mov)
                      (let* ((dst (cadr inst))
                             (src (caddr inst))
-                            (k-src (if (constant? src) src (pe-find-known src known))))
+                            (k-src (if (constant? src) src (pe-find-known src known)))
+                            (t-src (if k-src (pe-find-type k-src tenv) (pe-find-type src tenv)))
+                            (new-tenv (if t-src
+                                          (cons (cons dst t-src) (filter (lambda (e) (not (eq? (car e) dst))) tenv))
+                                          (filter (lambda (e) (not (eq? (car e) dst))) tenv))))
                        (if k-src
                            (loop (cdr insts)
                                  (cons (cons dst k-src) (filter (lambda (e) (not (eq? (car e) dst))) known))
+                                 new-tenv
                                  (cons (list '%mov dst k-src) acc))
                            (loop (cdr insts)
                                  (filter (lambda (e) (not (eq? (car e) dst))) known)
+                                 new-tenv
                                  (cons inst acc)))))
 
                     ((%add %sub %mul)
@@ -147,20 +161,43 @@
                             (a2 (cadddr inst))
                             (v1 (if (constant? a1) a1 (pe-find-known a1 known)))
                             (v2 (if (constant? a2) a2 (pe-find-known a2 known)))
-                            (res (if (and v1 v2) (pe-eval-op op v1 v2) #f)))
+                            (t1 (or (if v1 (pe-find-type v1 tenv) #f) (pe-find-type a1 tenv)))
+                            (t2 (or (if v2 (pe-find-type v2 tenv) #f) (pe-find-type a2 tenv)))
+                            (res (if (and v1 v2) (pe-eval-op op v1 v2) #f))
+                            (is-fixnum (or (number? res)
+                                           (and (or (number? a1) (eq? t1 'fixnum))
+                                                (or (number? a2) (eq? t2 'fixnum)))))
+                            (new-tenv (if is-fixnum
+                                          (cons (cons dst 'fixnum) (filter (lambda (e) (not (eq? (car e) dst))) tenv))
+                                          (filter (lambda (e) (not (eq? (car e) dst))) tenv))))
                        (if res
                            (loop (cdr insts)
                                  (cons (cons dst res) (filter (lambda (e) (not (eq? (car e) dst))) known))
+                                 new-tenv
                                  (cons (list '%mov dst res) acc))
                            (loop (cdr insts)
                                  (filter (lambda (e) (not (eq? (car e) dst))) known)
+                                 new-tenv
                                  (cons inst acc)))))
 
                     ((%guard)
-                     (loop (cdr insts) known (cons inst acc)))
+                     (let* ((cond-type (cadr inst))
+                            (arg1 (caddr inst))
+                            (v1 (if (symbol? arg1) (pe-find-known arg1 known) arg1))
+                            (t1 (pe-find-type (if v1 v1 arg1) tenv)))
+                       (cond
+                         ;; Type guard elimination (Issue #520)
+                         ((memq cond-type '(type-fixnum fixnum-check))
+                          (if (or (number? arg1) (number? v1) (eq? t1 'fixnum))
+                              ;; Statically guaranteed to be fixnum -> ELIMINATE guard!
+                              (loop (cdr insts) known (if (symbol? arg1) (cons (cons arg1 'fixnum) tenv) tenv) acc)
+                              ;; First-time guard: keep guard, bind type for future instructions
+                              (loop (cdr insts) known (if (symbol? arg1) (cons (cons arg1 'fixnum) tenv) tenv) (cons inst acc))))
+                         (else
+                          (loop (cdr insts) known tenv (cons inst acc))))))
 
                     (else
-                     (loop (cdr insts) known (cons inst acc)))))))))
+                     (loop (cdr insts) known tenv (cons inst acc)))))))))
     (list '%trace-loop (cadr trace) (list '%body opt-body))))
 
 (define (optimize-virtuals-pure trace)

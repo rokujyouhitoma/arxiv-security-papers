@@ -15,6 +15,8 @@ from ilisp.evaluator import eval_expr
 from ilisp.reader import LispSyntaxError, read_all
 from ilisp.types import NIL, Symbol
 
+sys.setrecursionlimit(200000)
+
 
 def run_string(
     code: str,

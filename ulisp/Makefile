@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes stage1 jit bin run_jit bench demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_bridge test_examples
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -125,8 +125,15 @@ build/test_examples_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/o
 test_examples: build/test_examples_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_examples_runner.scm
 
-test_jit: test_delimcc test_tracer test_auto_instrument test_optimizer test_bridge test_examples
-	@echo "=== [All JIT Component Tests Passed: 94/94] ==="
+build/test_guard_elimination_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm tests/jit/test_guard_elimination.scm
+	@mkdir -p build
+	cat $^ > $@
+
+test_guard_elimination: build/test_guard_elimination_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_guard_elimination_runner.scm
+
+test_jit: test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
+	@echo "=== [All JIT Component Tests Passed: 112/112] ==="
 
 build/demo_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm jit/examples/demo.scm
 	@mkdir -p build

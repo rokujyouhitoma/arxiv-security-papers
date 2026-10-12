@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **520** | 静的型知識に基づく JIT ガード命令事前消去 (Guard Elimination) と OSR 復元コード合成の実装 | Feature | Open (New) | [520-integrate-ulisp-jit-guard-elimination-and-osr.md](520-integrate-ulisp-jit-guard-elimination-and-osr.md) |
 | **521** | 拡張局所値番号付け (Extended LVN) による不変アクセサメモ化と代数的等価性最適化の実装 | Feature | Open (New) | [521-implement-ulisp-extended-lvn-and-accessor-memoization.md](521-implement-ulisp-extended-lvn-and-accessor-memoization.md) |
 | **522** | ドミネータ解析に基づくコンティフィケーション (Contification) と局所クロージャ割当完全消去の実装 | Feature | Open (New) | [522-implement-ulisp-contification-and-closure-elimination.md](522-implement-ulisp-contification-and-closure-elimination.md) |
 | **523** | 基本ブロック引数 (Block Arguments) 型 SSA 中間表現と Braun 法オンザフライ構築の実装 | Feature | Open (New) | [523-implement-ulisp-block-arguments-ssa-and-braun-construction.md](523-implement-ulisp-block-arguments-ssa-and-braun-construction.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **520** | 静的型知識に基づく JIT ガード命令事前消去 (Guard Elimination) と OSR 復元コード合成の実装 | Feature | 2026-10-12 | [closed/520-integrate-ulisp-jit-guard-elimination-and-osr.md](closed/520-integrate-ulisp-jit-guard-elimination-and-osr.md) |
 | **519** | アンボクシング混在環境向け Exact GC スタックマップ (Stackmap) 自動生成機構の実装 | Feature | 2026-10-12 | [closed/519-implement-ulisp-exact-gc-stackmap-generation.md](closed/519-implement-ulisp-exact-gc-stackmap-generation.md) |
 | **518** | ULisp 低水準IR具象化器 (S-RTyper) とアンボクシングによるタグ検査完全消去 | Feature | 2026-10-12 | [closed/518-implement-ulisp-s-rtyper-unboxing-and-typed-lir.md](closed/518-implement-ulisp-s-rtyper-unboxing-and-typed-lir.md) |
 | **517** | ULisp コンパイラへの抽象解釈型推論器 (S-Annotator) と型格子 (Lattice) の実装 | Feature | 2026-10-11 | [closed/517-implement-ulisp-s-annotator-abstract-interpretation.md](closed/517-implement-ulisp-s-annotator-abstract-interpretation.md) |
