@@ -110,3 +110,27 @@ Antigravity IDE の `schedule` ツールまたはシステムの Cron を用い�
 `tools/benchmark_ilisp_ulisp.py` は `--compare <baseline_json>` フラグを備え：
 $$\text{Ratio} = \frac{\text{Current Mean (ms)}}{\text{Baseline Mean (ms)}}$$
 $\text{Ratio} > \text{threshold}$（デフォルト 2.5 倍）となった場合、終了コード `1` で異常終了し、CI パイプラインをブロックする。
+
+---
+
+## 6. Mytkowicz 測定バイアス排除プロトコルおよび動的命令カウント差分テスト仕様
+
+コーネル大学 CS 6120 で必読とされる Mytkowicz らの古典論文 *"Producing Wrong Data Without Doing Anything Obviously Wrong!"* (ASPLOS 2009) に基づき、マイクロアーキテクチャ起因の測定バイアスを排除した客観的性能評価基準を規定する。
+
+### 6.1 測定バイアス要因と排除プロトコル
+1. **コード配置バイアス (Placement Bias)**:
+   - 最適化パスの有無によって関数のコード配置が変わり、偶然 L1 命令キャッシュライン境界に合致した見かけ上の高速化を排除するため、すべての関数エントリおよびループヘッダに `.p2align 4`（16バイト境界パディング）を強制する。
+2. **スタック配置・環境変数バイアス (Stack Alignment Bias)**:
+   - 環境変数の文字列長によってスタック底（Stack Base）が変動し、スタックフレーム変数のキャッシュ衝突が偶発的に変化するのを防止するため、ベンチマークテストハーネス起動時に環境変数を固定長（4KB パディング）に正規化する。
+3. **実行ノイズの排除**:
+   - 単一の Wall-clock 経過時間のみに依存せず、動的周波数スケーリング（DVFS）やバックグラウンドノイズの影響を受けにくいハードウェア性能カウンタを活用する。
+
+### 6.2 ハードウェア性能カウンタと動的命令カウント
+`tools/benchmark_ilisp_ulisp.py` において、Linux `perf stat` 連携インターフェースを拡張し、以下の指標を同時取得・記録する：
+- **Dynamic Instruction Count (`instructions:u`)**: 各最適化パスが意図通り冗長命令を消去できているかを直接評価する最重要指標。
+- **Branch Misses (`branch-misses:u`)**: 型ガード除去やインライン展開による分岐予測改善度。
+- **Cache Misses (`L1-dcache-load-misses`, `L1-icache-load-misses`)**: データ局所性とコード肥大化（Bloat）の相関分析。
+
+### 6.3 差分テスト (Differential Testing: brench 哲学)
+CS 6120 で用いられる `brench` 評価ツールの設計思想に倣い、最適化を施した ULisp ネイティブバイナリと既存の成熟処理系（Chez Scheme, Chibi Scheme, Gauche）の間で、同一ワークロードにおける標準出力、戻り値、終了ステータスが 100% 一致することを自動検証する差分テスト基盤を CI に配備する。
+
