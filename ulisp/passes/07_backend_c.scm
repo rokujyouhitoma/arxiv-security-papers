@@ -341,6 +341,7 @@
     (emit "static uint64_t cmp_s1 ULISP_UNUSED;")
     (emit "static uint64_t cmp_s2 ULISP_UNUSED;")
     (emit "static char stack_mem[64 * 1024 * 1024];")
+    (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     ;; Forward declarations of lifted functions
     (for-each (lambda (fn)

@@ -82,6 +82,9 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
 /* Static GC state buffer: from, to, size, bottom, count */
 uint64_t ulisp_gc_state[8];
 
+/* Stackmap metadata table exported from compiler in .rodata */
+__attribute__((weak)) uint64_t __ulisp_stackmap_table[1] = {0};
+
 /* Minimal 3 I/O Primitives bound directly to libc stdin/stdout */
 uint64_t ulisp_read_char(void) {
     int c = getchar();

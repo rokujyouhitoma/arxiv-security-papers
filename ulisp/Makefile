@@ -47,6 +47,11 @@ test_rtyper: build/compiler_passes.scm
 	cat build/compiler_passes.scm tests/passes/test_rtyper.scm > build/test_rtyper_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_rtyper_runner.scm
 
+test_stackmap: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_stackmap.scm > build/test_stackmap_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_stackmap_runner.scm
+
 test_aarch64: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_backend_aarch64.scm > build/test_aarch64_runner.scm

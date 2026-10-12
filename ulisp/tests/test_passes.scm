@@ -387,7 +387,11 @@
       (assert-true "lir %raw-add generates lir-program" (pair? lir-raw-add)))
     (let* ((ast-box (closure-convert (anf-all (cp0-optimize (desugar-all '(%box-fixnum 42))))))
            (lir-box (generate-lir ast-box)))
-      (assert-true "lir %box-fixnum generates lir-program" (pair? lir-box)))))
+      (assert-true "lir %box-fixnum generates lir-program" (pair? lir-box)))
+    (let* ((ast-sm (closure-convert (anf-all (cp0-optimize (desugar-all '(%get-stackmap-table))))))
+           (lir-sm (generate-lir ast-sm)))
+      (assert-true "lir %get-stackmap-table generates lir-program" (pair? lir-sm))
+      (assert-true "lir has stackmaps clause" (not (eq? (assq 'stackmaps (cdr lir-sm)) #f))))))
 
 ;;; =======================================================================
 ;;; Pass 7: Backend x86-64 Codegen Tests (07_backend_x86_64.scm)

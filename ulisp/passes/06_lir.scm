@@ -6,6 +6,43 @@
 ;;; Boxed accumulators for LIR instructions and stack tracking
 (define *lir-instructions* (cons '() '()))
 (define *lir-min-si* (cons 0 '()))
+(define *lir-safepoints* (cons '() '()))
+(define *safepoint-counter* (cons 0 '()))
+
+(define (reset-safepoints!)
+  (set-car! *lir-safepoints* '())
+  (set-car! *safepoint-counter* 0))
+
+(define (new-safepoint-label!)
+  (let* ((cnt (+ (car *safepoint-counter*) 1))
+         (lbl-sym (string->symbol (string-append "__safepoint_" (number->string cnt)))))
+    (set-car! *safepoint-counter* cnt)
+    lbl-sym))
+
+(define (record-safepoint! lbl frame-size bitmap)
+  (set-car! *lir-safepoints*
+            (cons (list lbl frame-size bitmap) (car *lir-safepoints*))))
+
+(define (power-of-2 k)
+  (let loop ((i 0) (acc 1))
+    (if (< i k)
+        (loop (+ i 1) (* acc 2))
+        acc)))
+
+(define (get-raw-vars env)
+  (let ((entry (assq '%raw-vars env)))
+    (if entry (cdr entry) '())))
+
+(define (set-raw-vars rvars env)
+  (cons (cons '%raw-vars rvars) env))
+
+(define (raw-expr? expr raw-env)
+  (cond
+    ((not (pair? expr))
+     (and (symbol? expr) (memq expr raw-env)))
+    ((memq (car expr) '(%raw-add %raw-sub %raw-mul %raw-cmp %raw-load %raw-syscall %to-raw %unbox-fixnum))
+     #t)
+    (else #f)))
 
 (define (reset-lir!)
   (set-car! *lir-instructions* '())
@@ -63,6 +100,8 @@
        (emit-lir! '(%mov %rax %r12)))
       ((%get-gc-state-ptr)
        (emit-lir! (list '%code-ref '%rax 'ulisp_gc_state)))
+      ((%get-stackmap-table)
+       (emit-lir! (list '%code-ref '%rax '__ulisp_stackmap_table)))
       ((eof-object)
        (emit-lir! '(%mov %rax 79)))
       ((read-char)
@@ -384,6 +423,48 @@
     ;; 4. Tag closure pointer with 0x01 (offset +8 from header)
     (emit-lir! (list '%alloc '%rax (+ aligned-size 8) 9))))
 
+(define (compute-stackmap-bitmap frame-shift aligned-si args env)
+  (let* ((slot-count (quotient frame-shift 8))
+         (rvars (get-raw-vars env)))
+    (let loop ((k 0) (bitmap 0))
+      (if (>= k slot-count)
+          bitmap
+          (let* ((slot-offset (- (* k 8) frame-shift))
+                 (is-ptr
+                  (if (= slot-offset -8)
+                      #t
+                      (let ((arg-res
+                             (let check-arg ((cur-args args) (i 0))
+                               (if (null? cur-args)
+                                   #f
+                                   (let ((arg-si (- aligned-si (* i 8))))
+                                     (if (= slot-offset arg-si)
+                                         (cons #t (not (raw-expr? (car cur-args) rvars)))
+                                         (check-arg (cdr cur-args) (+ i 1))))))))
+                        (if arg-res
+                            (cdr arg-res)
+                            (let ((var-res
+                                   (let check-var ((e env))
+                                     (if (null? e)
+                                         #f
+                                         (let ((entry (car e)))
+                                           (if (and (pair? entry)
+                                                    (not (eq? (car entry) '%num-params))
+                                                    (not (eq? (car entry) '%raw-vars)))
+                                               (let ((v (car entry))
+                                                     (info (cdr entry)))
+                                                 (if (and (number? info) (= info slot-offset))
+                                                     (cons #t (not (memq v rvars)))
+                                                     (if (and (pair? info) (eq? (car info) 'param) (= (cdr info) slot-offset))
+                                                         (cons #t (not (memq v rvars)))
+                                                         (check-var (cdr e)))))
+                                               (check-var (cdr e))))))))
+                              (if var-res
+                                  (cdr var-res)
+                                  #f)))))))
+            (loop (+ k 1)
+                  (if is-ptr (+ bitmap (power-of-2 k)) bitmap)))))))
+
 (define (lir-compile-let bindings body si env tail?)
   (let loop ((bs bindings)
              (curr-si si)
@@ -392,13 +473,16 @@
         (lir-compile-expr body curr-si new-env tail?)
         (let* ((b (car bs))
                (var (car b))
-               (val (cadr b)))
+               (val (cadr b))
+               (rvars (get-raw-vars new-env))
+               (is-raw (raw-expr? val rvars))
+               (next-rvars (if is-raw (cons var rvars) rvars)))
           (track-lir-si! curr-si)
           (lir-compile-expr val curr-si env #f)
           (emit-lir! (list '%store '%rsp curr-si '%rax))
           (loop (cdr bs)
                 (- curr-si 8)
-                (cons (cons var curr-si) new-env))))))
+                (cons (cons var curr-si) (set-raw-vars next-rvars new-env)))))))
 
 (define (lir-compile-if test then else-opt si env tail?)
   (let ((else-label (unique-label-sym "L_else"))
@@ -463,8 +547,10 @@
             (emit-lir! '(%jump %rdx)))
 
           ;; --- NON-TAIL CALL ---
-          (begin
-            (emit-lir! (list '%call-closure frame-shift)))))))
+          (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
+                 (safepoint-lbl (new-safepoint-label!)))
+            (record-safepoint! safepoint-lbl frame-shift bitmap)
+            (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
 (define (lir-compile-expr expr si env tail?)
   (cond
@@ -547,7 +633,8 @@
   (let* ((label (cadr fn))
          (params (caddr fn))
          (body (cadddr fn))
-         (num-params (length params)))
+         (num-params (length params))
+         (initial-raw-vars (if (unboxed-fn? label) params '())))
     (reset-lir!)
     ;; Build callee env:
     ;; %self at [rsp - 8]
@@ -560,7 +647,8 @@
                     (loop (cdr ps) (+ i 1)
                           (cons (cons (car ps) (cons 'param offset)) acc))))))
            (callee-env (cons (cons '%num-params num-params)
-                             (append self-env param-env)))
+                             (cons (cons '%raw-vars initial-raw-vars)
+                                   (append self-env param-env))))
            (callee-si -16))
       (track-lir-si! -8)
       (track-lir-si! callee-si)
@@ -577,19 +665,22 @@
 
 ;;; Pass 6 Entrypoint: Transforms Pass 5 %program AST into %lir-program
 (define (generate-lir prog)
+  (reset-safepoints!)
   (let ((funcs (cadr prog))
         (main-expr (caddr prog)))
     (reset-lir!)
     (track-lir-si! -8)
-    (lir-compile-expr main-expr -8 '() #f)
+    (lir-compile-expr main-expr -8 (list (cons '%raw-vars '())) #f)
     (emit-lir! '(%return))
     (let* ((main-insts (reverse (car *lir-instructions*)))
            (main-frame (align-frame-shift (- 0 (car *lir-min-si*))))
            (lir-main (list '%lir-main
                            (list 'frame-size main-frame)
                            (cons 'body main-insts)))
-           (lir-funcs (map lir-compile-function funcs)))
+           (lir-funcs (map lir-compile-function funcs))
+           (safepoints (reverse (car *lir-safepoints*))))
       (list '%lir-program
             (list 'strings (car *strings*))
+            (list 'stackmaps safepoints)
             (cons '%lir-functions lir-funcs)
             lir-main))))

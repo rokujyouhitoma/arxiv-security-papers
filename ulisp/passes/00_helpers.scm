@@ -112,7 +112,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char peek-char eof-object %get-rsp %get-heap-ptr %get-gc-state-ptr)))
+  (memq op '(read-char peek-char eof-object %get-rsp %get-heap-ptr %get-gc-state-ptr %get-stackmap-table)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer

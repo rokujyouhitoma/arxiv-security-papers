@@ -103,18 +103,64 @@
             (else #t))
           (scan-loop (%ptr-add scan (+ payload-bytes 8)))))))
 
+;;; Stackmap table lookup: returns entry index or -1 if not found
+(define (gc-find-stackmap pc tbl)
+  (let ((count (%to-fixnum (%raw-load tbl 0))))
+    (let loop ((i 0))
+      (if (< i count)
+          (let* ((entry-offset (+ 8 (* i 24)))
+                 (entry-pc (%raw-load tbl entry-offset)))
+            (if (= entry-pc pc)
+                i
+                (loop (+ i 1))))
+          -1))))
+
+;;; Exact Stackmap-Guided GC Root Scanner
+(define (gc-scan-roots! deepest-sp bottom)
+  (let* ((tbl (%get-stackmap-table))
+         (tbl-count (%to-fixnum (%raw-load tbl 0))))
+    (if (> tbl-count 0)
+        ;; --- Exact Stackmap Walk ---
+        (let walk-loop ((sp deepest-sp))
+          (if (< sp bottom)
+              (let* ((word (%raw-load sp 0))
+                     (sm-idx (gc-find-stackmap word tbl)))
+                (if (>= sm-idx 0)
+                    ;; Found safepoint return address!
+                    (let* ((entry-offset (+ 8 (* sm-idx 24)))
+                           (frame-size (%to-fixnum (%raw-load tbl (+ entry-offset 8))))
+                           (bitmap (%to-fixnum (%raw-load tbl (+ entry-offset 16))))
+                           (slot-count (quotient frame-size 8))
+                           (frame-base (%ptr-add sp 8)))
+                      ;; Scan only the slots where bitmap bit is 1
+                      (let slot-loop ((k 0) (mask bitmap))
+                        (if (< k slot-count)
+                            (begin
+                              (if (= (modulo mask 2) 1)
+                                  (let* ((slot-addr (%ptr-add frame-base (* k 8)))
+                                         (val (%raw-load slot-addr 0)))
+                                    (if (gc-heap-pointer? val)
+                                        (%raw-store! slot-addr 0 (gc-copy-object val)))))
+                              (slot-loop (+ k 1) (quotient mask 2)))))
+                      ;; Step directly to next frame above this one
+                      (walk-loop (%ptr-add frame-base frame-size)))
+                    ;; Not a safepoint return address; advance by 8 bytes
+                    (walk-loop (%ptr-add sp 8))))))
+        ;; --- Fallback Conservative Walk ---
+        (let conserv-loop ((sp deepest-sp))
+          (if (< sp bottom)
+              (let ((val (%raw-load sp 0)))
+                (if (gc-heap-pointer? val)
+                    (%raw-store! sp 0 (gc-copy-object val)))
+                (conserv-loop (%ptr-add sp 8))))))))
+
 ;;; Perform full garbage collection: root scan -> Cheney scan -> space swap
 (define (gc-collect! current-rsp)
   (set-gc-free! (gc-to))
   (let ((scan-start (gc-to))
         (deepest-sp (%get-rsp)))
-    ;; 1. Scan execution stack from deepest-sp up to stack-bottom
-    (let stack-loop ((sp deepest-sp))
-      (if (< sp (gc-bottom))
-          (let ((val (%raw-load sp 0)))
-            (if (gc-heap-pointer? val)
-                (%raw-store! sp 0 (gc-copy-object val)))
-            (stack-loop (%ptr-add sp 8)))))
+    ;; 1. Scan execution stack using Exact GC Stackmaps
+    (gc-scan-roots! deepest-sp (gc-bottom))
     ;; 2. Cheney breadth-first scan to transitively copy reachable subgraph
     (gc-cheney-scan! scan-start)
     ;; 3. Swap from-space and to-space
