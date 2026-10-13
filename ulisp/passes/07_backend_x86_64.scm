@@ -232,9 +232,10 @@
       ((%c-call)
        (let ((func (cadr inst))
              (frame-shift (caddr inst)))
-         (emit (string-append "    sub rsp, " (number->string frame-shift)))
-         (emit (string-append "    call " (symbol->string func)))
-         (emit (string-append "    add rsp, " (number->string frame-shift)))))
+         (let ((fname (if (symbol? func) (symbol->raw-name func) func)))
+           (emit (string-append "    sub rsp, " (number->string frame-shift)))
+           (emit (string-append "    call " fname))
+           (emit (string-append "    add rsp, " (number->string frame-shift))))))
 
       ((%call-closure)
        (let ((frame-shift (cadr inst))

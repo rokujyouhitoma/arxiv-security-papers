@@ -151,7 +151,36 @@
   ;; 3. Primitive predicate folding
   (assert-equal "fold zero?"
                 #t
-                (cp0-optimize '(zero? 0))))
+                (cp0-optimize '(zero? 0)))
+
+  ;; 4. Dead Code Elimination (DCE) on letrec
+  (assert-equal "dce letrec eliminate unused binding"
+                '(letrec ((f (lambda (x) (+ x 1)))) (f 10))
+                (cp0-optimize '(letrec ((f (lambda (x) (+ x 1)))
+                                        (g (lambda (y) (* y 2))))
+                                 (f 10))))
+
+  (assert-equal "dce letrec eliminate dead mutual recursion cycle"
+                '(letrec ((live (lambda (z) (+ z 1)))) (live 5))
+                (cp0-optimize '(letrec ((dead-a (lambda (x) (dead-b x)))
+                                        (dead-b (lambda (y) (dead-a y)))
+                                        (live (lambda (z) (+ z 1))))
+                                 (live 5))))
+
+  (assert-equal "dce letrec degenerate to body when all bindings unused"
+                100
+                (cp0-optimize '(letrec ((unused (lambda (x) (* x 2)))
+                                        (val 42))
+                                 100)))
+
+  ;; 5. Dead Code Elimination on let
+  (assert-equal "dce let eliminate dead pure bindings"
+                '(let ((x 1)) x)
+                (cp0-optimize '(let ((x 1) (y (+ 2 3))) x)))
+
+  (assert-equal "dce let degenerate to body when all bindings dead"
+                42
+                (cp0-optimize '(let ((a 10) (b 20)) 42))))
 
 ;;; =======================================================================
 ;;; Pass 3b: Extended LVN & Accessor Memoization Tests (03b_lvn.scm)
@@ -168,7 +197,7 @@
   ;; 2. Pair constructor reduction
   (let* ((input '(let ((p (cons 10 20))) (car p)))
          (opt (lvn-all input)))
-    (assert-equal "lvn (car (cons 10 20)) -> 10" 10 opt))
+    (assert-equal "lvn (car (cons 10 20)) -> 10" '(let ((p (cons 10 20))) 10) opt))
 
   ;; 3. Algebraic identities
   (assert-equal "lvn (+ x 0) -> x" 'x (lvn-all '(+ x 0)))
@@ -358,7 +387,11 @@
                      (cond
                        ((not (pair? e)) #f)
                        ((eq? (car e) '%closure-ref) #t)
-                       (else (or (rec (car e)) (rec (cdr e))))))))))
+                       (else (or (rec (car e)) (rec (cdr e)))))))))
+
+  ;; 4. Quoted symbol literal preservation (static interning without string->symbol)
+  (let ((res (closure-convert ''a)))
+    (assert-equal "preserves quoted symbol" ''a (caddr res))))
 
 ;;; =======================================================================
 ;;; Pass 6: Low-Level Intermediate Representation (LIR) Tests (06_lir.scm)

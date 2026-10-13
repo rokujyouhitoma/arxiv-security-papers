@@ -129,13 +129,21 @@
             (cdr entry)
             (%string-find-symbol str (cdr entries))))))
 
+(define (%symbol-hash-str str)
+  (let ((len (string-length str)))
+    (let loop ((i 0) (h 5381))
+      (if (= i len)
+          (modulo h 16777213)
+          (let ((c (char->integer (string-ref str i))))
+            (loop (+ i 1)
+                  (modulo (+ (* h 33) c) 16777213)))))))
+
 (define (string->symbol str)
   (let ((found (%string-find-symbol str (car *symbol-registry*))))
     (if found
         found
-        (let* ((curr-id (car *next-sym-id*))
-               (sym (integer->symbol curr-id)))
-          (set-car! *next-sym-id* (+ curr-id 1))
+        (let* ((h (%symbol-hash-str str))
+               (sym (integer->symbol h)))
           (set-car! *symbol-registry* (cons (cons str sym) (car *symbol-registry*)))
           sym))))
 

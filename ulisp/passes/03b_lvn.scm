@@ -109,12 +109,23 @@
         #f)))
 
 (define (lvn-invalidate-pairs env)
-  (let ((tuples (lvn-env-tuples env)))
-    (lvn-set-tuples env
-      (filter (lambda (entry)
-                (let ((key (car entry)))
-                  (not (and (pair? key) (memq (car key) '(car cdr))))))
-              tuples))))
+  (let* ((tuples (lvn-env-tuples env))
+         (vns (lvn-env-vns env))
+         (env1 (lvn-set-tuples env
+                 (filter (lambda (entry)
+                           (let ((key (car entry)))
+                             (not (and (pair? key) (memq (car key) '(car cdr))))))
+                         tuples)))
+         (env2 (lvn-set-vns env1
+                 (map (lambda (entry)
+                        (let* ((vn (car entry))
+                               (canon (cadr entry))
+                               (info (cddr entry)))
+                          (if (and (pair? info) (eq? (car info) 'pair))
+                              (cons vn (cons canon '(type pair)))
+                              entry)))
+                      vns))))
+    env2))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Literal & Variable Value Evaluation
@@ -370,7 +381,9 @@
                                            (alloc-res (lvn-alloc-vn env (cons op sorted-args) ret-info))
                                            (new-vn (car alloc-res))
                                            (env1 (cdr alloc-res))
-                                           (env2 (lvn-record-tuple env1 tuple-key new-vn)))
+                                           (env2 (if (eq? op 'cons)
+                                                     env1
+                                                     (lvn-record-tuple env1 tuple-key new-vn))))
                                       (list (cons op sorted-args) new-vn env2))))
                               ;; Non-pure or side-effecting call
                               (let* ((env1 (if (memq op '(set-car! set-cdr!))

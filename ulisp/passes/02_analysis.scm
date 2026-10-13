@@ -13,9 +13,7 @@
      (let ((op (car expr)))
        (case op
          ((quote)
-          (if (has-symbol? (cadr expr))
-              (if (memq 'string->symbol bound) '() '(string->symbol))
-              '()))
+          '())
          ((if)
           (set-union (free-vars (cadr expr) bound)
                      (set-union (free-vars (caddr expr) bound)

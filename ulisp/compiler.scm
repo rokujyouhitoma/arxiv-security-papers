@@ -235,6 +235,13 @@
                    (if (null? bs) #t
                        (and (pure-expr? (cadar bs)) (loop (cdr bs)))))
                  (pure-expr? body))))
+         ((letrec)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (and (let loop ((bs bindings))
+                   (if (null? bs) #t
+                       (and (pure-expr? (cadar bs)) (loop (cdr bs)))))
+                 (pure-expr? body))))
          (else
           (and (pure-prim? op)
                (let loop ((args (cdr expr)))
@@ -285,19 +292,38 @@
            ((>=) (if (and (number? v1) (number? v2)) (val->ast-const (>= v1 v2)) #f))
            ((eq?) (val->ast-const (eq? v1 v2)))
            ((char=?) (if (and (char? v1) (char? v2)) (val->ast-const (char=? v1 v2)) #f))
-           ((cons) (val->ast-const (cons v1 v2)))
            (else #f))))
       (else #f))))
 
 ;;; Symbol table for interned symbols
 (define *symbol-table* (cons '() '()))
+(define (reset-symbol-table!)
+  (set-car! *symbol-table* '()))
+
+(define (symbol-hash-str str)
+  (let ((len (string-length str)))
+    (let loop ((i 0) (h 5381))
+      (if (= i len)
+          (modulo h 16777213)
+          (let ((c (char->integer (string-ref str i))))
+            (loop (+ i 1)
+                  (modulo (+ (* h 33) c) 16777213)))))))
+
 (define (intern-symbol sym)
   (let ((entry (assq sym (car *symbol-table*))))
     (if entry
-        (cdr entry)
-        (let ((id (+ (* (length (car *symbol-table*)) 256) 2)))
-          (set-car! *symbol-table* (cons (cons sym id) (car *symbol-table*)))
+        (cadr entry)
+        (let* ((str (symbol->string sym))
+               (h (symbol-hash-str str))
+               (id (+ (* h 256) 2)))
+          (set-car! *symbol-table* (cons (list sym id str) (car *symbol-table*)))
           id))))
+
+(define (symbol->raw-name sym)
+  (let ((entry (assq sym (car *symbol-table*))))
+    (if (and entry (pair? (cdr entry)) (pair? (cddr entry)))
+        (caddr entry)
+        (symbol->string sym))))
 
 ;;; String table for interned string literals
 (define *string-counter* (cons 0 '()))
@@ -781,9 +807,7 @@
      (let ((op (car expr)))
        (case op
          ((quote)
-          (if (has-symbol? (cadr expr))
-              (if (memq 'string->symbol bound) '() '(string->symbol))
-              '()))
+          '())
          ((if)
           (set-union (free-vars (cadr expr) bound)
                      (set-union (free-vars (caddr expr) bound)
@@ -838,6 +862,46 @@
 ;;; Note: extract-const-val, val->ast-const, pure-expr?, and fold-const-op
 ;;;       are provided canonically by passes/00_helpers.scm.
 
+;;; Top-level & nested letrec Dead Code Elimination (DCE) based on Reachability Call Graph
+(define (dce-letrec bindings body)
+  (let* ((rec-vars (map car* bindings))
+         (rec-filter (lambda (vars)
+                       (filter (lambda (v) (memq v rec-vars)) vars)))
+         ;; Map each binding var to its immediate dependencies within rec-vars
+         (dep-alist (map (lambda (b)
+                           (cons (car b) (rec-filter (free-vars (cadr b) '()))))
+                         bindings))
+         ;; Root variables:
+         ;; 1. Variables in rec-vars that appear free in the body
+         (body-roots (rec-filter (free-vars body '())))
+         ;; 2. Variables in rec-vars whose initialization is impure (has side effects)
+         (impure-roots (let loop ((bs bindings) (acc '()))
+                         (cond
+                           ((null? bs) acc)
+                           ((not (pure-expr? (cadar bs)))
+                            (loop (cdr bs) (cons (caar bs) acc)))
+                           (else
+                            (loop (cdr bs) acc)))))
+         (initial-roots (set-union body-roots impure-roots)))
+    ;; Transitive closure via worklist
+    (let ((reachable
+           (let loop ((worklist initial-roots) (visited '()))
+             (if (null? worklist)
+                 visited
+                 (let ((v (car worklist))
+                       (rest (cdr worklist)))
+                   (if (memq v visited)
+                       (loop rest visited)
+                       (let* ((v-deps (let ((entry (assq v dep-alist)))
+                                        (if entry (cdr entry) '())))
+                              (new-worklist (append v-deps rest)))
+                         (loop new-worklist (cons v visited)))))))))
+      ;; Retain only bindings in reachable set
+      (let ((kept-bindings (filter (lambda (b) (memq (car b) reachable)) bindings)))
+        (if (null? kept-bindings)
+            body
+            (list 'letrec kept-bindings body))))))
+
 ;;; Bottom-up CP0 optimization of a single expression
 (define (cp0-expr expr)
   (cond
@@ -875,19 +939,22 @@
           (let* ((bindings (cadr expr))
                  (body (cp0-expr (caddr expr)))
                  (opt-bindings
-                  (map (lambda (b) (list (car b) (cp0-expr (cadr b)))) bindings)))
-            ;; Dead let elimination for single pure binding
-            (if (and (= (length opt-bindings) 1)
-                     (pure-expr? (cadar opt-bindings))
-                     (not (memq (caar opt-bindings) (free-vars body '()))))
+                  (map (lambda (b) (list (car b) (cp0-expr (cadr b)))) bindings))
+                 (body-frees (free-vars body '()))
+                 (kept-bindings
+                  (filter (lambda (b)
+                            (or (not (pure-expr? (cadr b)))
+                                (memq (car b) body-frees)))
+                          opt-bindings)))
+            (if (null? kept-bindings)
                 body
-                (list 'let opt-bindings body))))
+                (list 'let kept-bindings body))))
          ((letrec)
           (let* ((bindings (cadr expr))
                  (body (cp0-expr (caddr expr)))
                  (opt-bindings
                   (map (lambda (b) (list (car b) (cp0-expr (cadr b)))) bindings)))
-            (list 'letrec opt-bindings body)))
+            (dce-letrec opt-bindings body)))
          ((lambda)
           (let ((params (cadr expr))
                 (body (cp0-expr (caddr expr))))
@@ -1030,12 +1097,23 @@
         #f)))
 
 (define (lvn-invalidate-pairs env)
-  (let ((tuples (lvn-env-tuples env)))
-    (lvn-set-tuples env
-      (filter (lambda (entry)
-                (let ((key (car entry)))
-                  (not (and (pair? key) (memq (car key) '(car cdr))))))
-              tuples))))
+  (let* ((tuples (lvn-env-tuples env))
+         (vns (lvn-env-vns env))
+         (env1 (lvn-set-tuples env
+                 (filter (lambda (entry)
+                           (let ((key (car entry)))
+                             (not (and (pair? key) (memq (car key) '(car cdr))))))
+                         tuples)))
+         (env2 (lvn-set-vns env1
+                 (map (lambda (entry)
+                        (let* ((vn (car entry))
+                               (canon (cadr entry))
+                               (info (cddr entry)))
+                          (if (and (pair? info) (eq? (car info) 'pair))
+                              (cons vn (cons canon '(type pair)))
+                              entry)))
+                      vns))))
+    env2))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Literal & Variable Value Evaluation
@@ -1291,7 +1369,9 @@
                                            (alloc-res (lvn-alloc-vn env (cons op sorted-args) ret-info))
                                            (new-vn (car alloc-res))
                                            (env1 (cdr alloc-res))
-                                           (env2 (lvn-record-tuple env1 tuple-key new-vn)))
+                                           (env2 (if (eq? op 'cons)
+                                                     env1
+                                                     (lvn-record-tuple env1 tuple-key new-vn))))
                                       (list (cons op sorted-args) new-vn env2))))
                               ;; Non-pure or side-effecting call
                               (let* ((env1 (if (memq op '(set-car! set-cdr!))
@@ -2263,17 +2343,7 @@
      (let ((op (car expr)))
        (case op
          ((quote)
-          (let ((datum (cadr expr)))
-            (cond
-              ((symbol? datum)
-               (convert-expr (list 'string->symbol (symbol->string datum)) var-map))
-              ((and (pair? datum) (has-symbol? datum))
-               (convert-expr (list 'cons
-                                   (list 'quote (car datum))
-                                   (list 'quote (cdr datum)))
-                             var-map))
-              (else
-               expr))))
+          expr)
          ((if)
           (let ((test (convert-expr (cadr expr) var-map))
                 (then (convert-expr (caddr expr) var-map))
@@ -2513,17 +2583,17 @@
       ((%get-heap-ptr)
        (emit-lir! '(%mov %rax %r12)))
       ((%get-gc-state-ptr)
-       (emit-lir! (list '%code-ref '%rax 'ulisp_gc_state)))
+       (emit-lir! (list '%code-ref '%rax "ulisp_gc_state")))
       ((%get-stackmap-table)
-       (emit-lir! (list '%code-ref '%rax '__ulisp_stackmap_table)))
+       (emit-lir! (list '%code-ref '%rax "__ulisp_stackmap_table")))
       ((eof-object)
        (emit-lir! '(%mov %rax 79)))
       ((read-char)
-       (emit-lir! (list '%c-call 'ulisp_read_char frame-shift)))
+       (emit-lir! (list '%c-call "ulisp_read_char" frame-shift)))
       ((peek-char)
-       (emit-lir! (list '%c-call 'ulisp_peek_char frame-shift)))
+       (emit-lir! (list '%c-call "ulisp_peek_char" frame-shift)))
       ((flush-output-port ulisp-flush)
-       (emit-lir! (list '%c-call 'ulisp_flush frame-shift))))))
+       (emit-lir! (list '%c-call "ulisp_flush" frame-shift))))))
 
 (define (lir-compile-unary op arg si env)
   (lir-compile-expr arg si env #f)
@@ -2586,14 +2656,14 @@
     ((write-char)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! '(%mov %rdi %rax))
-       (emit-lir! (list '%c-call 'ulisp_write_char frame-shift))))
+       (emit-lir! (list '%c-call "ulisp_write_char" frame-shift))))
     ((write-string)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! '(%mov %rdi %rax))
-       (emit-lir! (list '%c-call 'ulisp_write_string frame-shift))))
+       (emit-lir! (list '%c-call "ulisp_write_string" frame-shift))))
     ((flush-output-port ulisp-flush)
      (let ((frame-shift (align-frame-shift (- si))))
-       (emit-lir! (list '%c-call 'ulisp_flush frame-shift))))
+       (emit-lir! (list '%c-call "ulisp_flush" frame-shift))))
     ((eof-object?)
      (emit-lir! '(%cmp %rax 79))
      (emit-lir! '(%set-boolean %rax "sete")))
@@ -3089,6 +3159,7 @@
 ;;; Pass 6 Entrypoint: Transforms Pass 5 %program AST into %lir-program
 (define (generate-lir prog)
   (reset-safepoints!)
+  (reset-symbol-table!)
   (let ((funcs (cadr prog))
         (main-expr (caddr prog)))
     (reset-lir!)
@@ -3341,9 +3412,10 @@
       ((%c-call)
        (let ((func (cadr inst))
              (frame-shift (caddr inst)))
-         (emit (string-append "    sub rsp, " (number->string frame-shift)))
-         (emit (string-append "    call " (symbol->string func)))
-         (emit (string-append "    add rsp, " (number->string frame-shift)))))
+         (let ((fname (if (symbol? func) (symbol->raw-name func) func)))
+           (emit (string-append "    sub rsp, " (number->string frame-shift)))
+           (emit (string-append "    call " fname))
+           (emit (string-append "    add rsp, " (number->string frame-shift))))))
 
       ((%call-closure)
        (let ((frame-shift (cadr inst))
@@ -4110,7 +4182,7 @@
               (total-shift (+ frame-shift 8)))
          (emit (string-append "    sub sp, sp, #" (number->string total-shift)))
          (emit "    str x30, [sp]")
-         (emit (string-append "    bl " (symbol->string func)))
+         (emit (string-append "    bl " (if (symbol? func) (symbol->raw-name func) func)))
          (emit "    ldr x30, [sp]")
          (emit (string-append "    add sp, sp, #" (number->string total-shift)))))
 
@@ -4463,24 +4535,25 @@
          (emit (string-append "    " (c-operand->str dst) " = ((uint64_t)(uintptr_t)" (c-sanitize-label lbl) ") + 3;"))))
 
       ((%c-call)
-       (let ((func (cadr inst))
-             (frame-shift (caddr inst)))
+       (let* ((func (cadr inst))
+              (frame-shift (caddr inst))
+              (fname (if (symbol? func) (symbol->raw-name func) func)))
          (cond
-           ((eq? func 'ulisp_read_char)
+           ((or (eq? func 'ulisp_read_char) (string=? fname "ulisp_read_char"))
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
             (emit "    reg_rax = ulisp_read_char();")
             (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
-           ((eq? func 'ulisp_peek_char)
+           ((or (eq? func 'ulisp_peek_char) (string=? fname "ulisp_peek_char"))
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
             (emit "    reg_rax = ulisp_peek_char();")
             (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
-           ((eq? func 'ulisp_write_char)
+           ((or (eq? func 'ulisp_write_char) (string=? fname "ulisp_write_char"))
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
             (emit "    reg_rax = ulisp_write_char(reg_rdi);")
             (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
            (else
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
-            (emit (string-append "    reg_rax = " (symbol->string func) "();"))
+            (emit (string-append "    reg_rax = " fname "();"))
             (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";")))))))
 
       ((%call-closure)

@@ -235,6 +235,13 @@
                    (if (null? bs) #t
                        (and (pure-expr? (cadar bs)) (loop (cdr bs)))))
                  (pure-expr? body))))
+         ((letrec)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (and (let loop ((bs bindings))
+                   (if (null? bs) #t
+                       (and (pure-expr? (cadar bs)) (loop (cdr bs)))))
+                 (pure-expr? body))))
          (else
           (and (pure-prim? op)
                (let loop ((args (cdr expr)))
@@ -285,19 +292,38 @@
            ((>=) (if (and (number? v1) (number? v2)) (val->ast-const (>= v1 v2)) #f))
            ((eq?) (val->ast-const (eq? v1 v2)))
            ((char=?) (if (and (char? v1) (char? v2)) (val->ast-const (char=? v1 v2)) #f))
-           ((cons) (val->ast-const (cons v1 v2)))
            (else #f))))
       (else #f))))
 
 ;;; Symbol table for interned symbols
 (define *symbol-table* (cons '() '()))
+(define (reset-symbol-table!)
+  (set-car! *symbol-table* '()))
+
+(define (symbol-hash-str str)
+  (let ((len (string-length str)))
+    (let loop ((i 0) (h 5381))
+      (if (= i len)
+          (modulo h 16777213)
+          (let ((c (char->integer (string-ref str i))))
+            (loop (+ i 1)
+                  (modulo (+ (* h 33) c) 16777213)))))))
+
 (define (intern-symbol sym)
   (let ((entry (assq sym (car *symbol-table*))))
     (if entry
-        (cdr entry)
-        (let ((id (+ (* (length (car *symbol-table*)) 256) 2)))
-          (set-car! *symbol-table* (cons (cons sym id) (car *symbol-table*)))
+        (cadr entry)
+        (let* ((str (symbol->string sym))
+               (h (symbol-hash-str str))
+               (id (+ (* h 256) 2)))
+          (set-car! *symbol-table* (cons (list sym id str) (car *symbol-table*)))
           id))))
+
+(define (symbol->raw-name sym)
+  (let ((entry (assq sym (car *symbol-table*))))
+    (if (and entry (pair? (cdr entry)) (pair? (cddr entry)))
+        (caddr entry)
+        (symbol->string sym))))
 
 ;;; String table for interned string literals
 (define *string-counter* (cons 0 '()))

@@ -31,17 +31,7 @@
      (let ((op (car expr)))
        (case op
          ((quote)
-          (let ((datum (cadr expr)))
-            (cond
-              ((symbol? datum)
-               (convert-expr (list 'string->symbol (symbol->string datum)) var-map))
-              ((and (pair? datum) (has-symbol? datum))
-               (convert-expr (list 'cons
-                                   (list 'quote (car datum))
-                                   (list 'quote (cdr datum)))
-                             var-map))
-              (else
-               expr))))
+          expr)
          ((if)
           (let ((test (convert-expr (cadr expr) var-map))
                 (then (convert-expr (caddr expr) var-map))

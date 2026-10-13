@@ -11,7 +11,6 @@
 | **524** | フロー依存型推論 (Flow-Sensitive Narrowing) と合流点メッセージ分割 (Path Splitting) の実装 | Feature | Open (New) | [524-implement-ulisp-flow-sensitive-narrowing-and-path-splitting.md](524-implement-ulisp-flow-sensitive-narrowing-and-path-splitting.md) |
 | **525** | TBAA・エスケープ解析に基づくスタック割当昇格とナーサリ世代別コピーGCの実装 | Feature | Open (New) | [525-implement-ulisp-tbaa-escape-analysis-and-generational-gc.md](525-implement-ulisp-tbaa-escape-analysis-and-generational-gc.md) |
 | **526** | Mytkowicz 測定バイアス排除機構と動的命令数差分テスト基盤 (DSN-35) の統合 | Feature | Open (New) | [526-integrate-mytkowicz-bias-elimination-and-differential-testing.md](526-integrate-mytkowicz-bias-elimination-and-differential-testing.md) |
-| **528** | 静的シンボル Intern テーブルおよび到達不能関数デッドコード除去 (DCE) による最適化 | Feature | Open (New) | [528-implement-static-symbol-interning-and-dead-code-elimination.md](528-implement-static-symbol-interning-and-dead-code-elimination.md) |
 | **529** | トップレベル定義の独立コンパイル構造化および自由変数解析集合演算の高速化 | Feature | Open (New) | [529-implement-toplevel-separate-compilation-and-fast-free-vars.md](529-implement-toplevel-separate-compilation-and-fast-free-vars.md) |
 
 ---
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **528** | 静的シンボル Intern テーブルおよび到達不能関数デッドコード除去 (DCE) による最適化 | Feature | 2026-10-13 | [closed/528-implement-static-symbol-interning-and-dead-code-elimination.md](closed/528-implement-static-symbol-interning-and-dead-code-elimination.md) |
 | **527** | アセンブリ出力およびランタイムの 4KB ブロック I/O バッファリング化によるシステムコール削減 | Feature | 2026-10-12 | [closed/527-implement-buffered-io-for-assembly-emission-and-runtime.md](closed/527-implement-buffered-io-for-assembly-emission-and-runtime.md) |
 | **521** | 拡張局所値番号付け (Extended LVN) による不変アクセサメモ化と代数的等価性最適化の実装 | Feature | 2026-10-12 | [closed/521-implement-ulisp-extended-lvn-and-accessor-memoization.md](closed/521-implement-ulisp-extended-lvn-and-accessor-memoization.md) |
 | **520** | 静的型知識に基づく JIT ガード命令事前消去 (Guard Elimination) と OSR 復元コード合成の実装 | Feature | 2026-10-12 | [closed/520-integrate-ulisp-jit-guard-elimination-and-osr.md](closed/520-integrate-ulisp-jit-guard-elimination-and-osr.md) |

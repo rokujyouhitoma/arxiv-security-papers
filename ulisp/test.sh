@@ -66,7 +66,7 @@ assert() {
 
     if [[ "$input" =~ gc- ]]; then
         full_input="$(cat lib/gc.scm)"$'\n'"$input"
-    elif [[ "$input" =~ \'[a-zA-Z] || "$input" =~ string-\>symbol ]]; then
+    elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string ]]; then
         full_input="$(cat lib/string.scm)"$'\n'"$input"
     else
         full_input="$input"

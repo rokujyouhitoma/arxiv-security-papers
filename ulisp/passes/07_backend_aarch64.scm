@@ -298,7 +298,7 @@
               (total-shift (+ frame-shift 8)))
          (emit (string-append "    sub sp, sp, #" (number->string total-shift)))
          (emit "    str x30, [sp]")
-         (emit (string-append "    bl " (symbol->string func)))
+         (emit (string-append "    bl " (if (symbol? func) (symbol->raw-name func) func)))
          (emit "    ldr x30, [sp]")
          (emit (string-append "    add sp, sp, #" (number->string total-shift)))))
 
