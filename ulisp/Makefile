@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_lvn stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_lvn test_contify stage1 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
 
 CC = gcc
@@ -18,6 +18,7 @@ PASSES_LIB = passes/00_helpers.scm \
              passes/04_anf.scm \
              passes/04b_annotator.scm \
              passes/05b_rtyper.scm \
+             passes/04c_contify.scm \
              passes/05_closure_convert.scm \
              passes/06_lir.scm \
              passes/07_backend_x86_64.scm \
@@ -57,6 +58,11 @@ test_stackmap: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_stackmap.scm > build/test_stackmap_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_stackmap_runner.scm
+
+test_contify: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_contify.scm > build/test_contify_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_contify_runner.scm
 
 test_aarch64: build/compiler_passes.scm
 	@mkdir -p build

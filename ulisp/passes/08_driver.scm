@@ -31,7 +31,8 @@
              (ast3 (anf-all ast2b))
              (ast3b (annotate-all ast3))
              (ast3c (rtyper-all ast3b))
-             (ast4 (closure-convert ast3c))
+             (ast3d (contify-all ast3c))
+             (ast4 (closure-convert ast3d))
              (lir  (generate-lir ast4)))
         (cond
           ((eq? target 'c)

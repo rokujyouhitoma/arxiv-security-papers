@@ -58,6 +58,22 @@
             (list 'let new-bindings new-body)))
          ((letrec)
           (convert-letrec (cadr expr) (caddr expr) var-map))
+         ((%cont-fun)
+          (let* ((f-name (cadr expr))
+                 (params (caddr expr))
+                 (f-body (cadddr expr))
+                 (in-body (cadr (cdddr expr)))
+                 (lbody-map
+                  (let loop ((ps params) (acc var-map))
+                    (if (null? ps) acc
+                        (loop (cdr ps) (cons (cons (car ps) (car ps)) acc)))))
+                 (new-f-body (convert-expr f-body lbody-map))
+                 (new-in-body (convert-expr in-body var-map)))
+            (list '%cont-fun f-name params new-f-body new-in-body)))
+         ((%cont-call)
+          (cons '%cont-call
+                (cons (cadr expr)
+                      (map (lambda (e) (convert-expr e var-map)) (cddr expr)))))
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else

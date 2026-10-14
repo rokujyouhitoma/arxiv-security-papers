@@ -357,6 +357,32 @@
                      (else (or (rec (car e)) (rec (cdr e)))))))))
 
 ;;; =======================================================================
+;;; Pass 4c: Contification & Local Closure Elimination Tests (04c_contify.scm)
+;;; =======================================================================
+(define (test-pass4c-contify)
+  (display "=== Running Pass 4c (Contification) Tests ===")
+  (newline)
+
+  ;; 1. Escape analysis
+  (assert-true "operator does not escape" (not (escapes? 'loop '(loop 10 0))))
+  (assert-true "argument escapes" (escapes? 'loop '(cons loop '())))
+
+  ;; 2. Tail calls only
+  (assert-true "tail call only" (tail-calls-only? 'loop '(loop 10 0)))
+  (assert-true "non-tail call rejected" (not (tail-calls-only? 'loop '(+ 1 (loop 10 0)))))
+
+  ;; 3. Contifiable binding
+  (let ((l '(lambda (n acc) (if (= n 0) acc (loop (- n 1) (+ acc n))))))
+    (assert-true "tail loop is contifiable" (contifiable-binding? 'loop l '(loop 10 0))))
+
+  ;; 4. AST transformation
+  (let* ((orig '(letrec ((loop (lambda (n acc) (if (= n 0) acc (loop (- n 1) (+ acc n)))))) (loop 10 0)))
+         (contified (contify-all orig)))
+    (assert-true "contified AST is %cont-fun"
+                 (and (pair? contified) (eq? (car contified) '%cont-fun)))
+    (assert-equal "retains loop symbol" 'loop (cadr contified))))
+
+;;; =======================================================================
 ;;; Pass 5: Explicit Closure Conversion Tests (05_closure_convert.scm)
 ;;; =======================================================================
 (define (test-pass5-closure)
@@ -590,6 +616,7 @@
 (test-pass4-anf)
 (test-pass4b-annotator)
 (test-pass5b-rtyper)
+(test-pass4c-contify)
 (test-pass5-closure)
 (test-pass6-lir)
 (test-pass7-backend)

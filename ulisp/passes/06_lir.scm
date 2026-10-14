@@ -561,6 +561,67 @@
             (record-safepoint! safepoint-lbl frame-shift bitmap)
             (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
+(define (lir-compile-cont-fun f-name params f-body in-body si env tail?)
+  (let* ((entry-lbl (unique-label-sym "L_cont_entry_"))
+         (exit-lbl  (unique-label-sym "L_cont_exit_"))
+         ;; Allocate stack slots for each parameter
+         (param-slots
+          (let loop ((ps params) (curr-si si) (acc-slots '()) (acc-env env))
+            (if (null? ps)
+                (cons (reverse acc-slots) acc-env)
+                (begin
+                  (track-lir-si! curr-si)
+                  (loop (cdr ps)
+                        (- curr-si 8)
+                        (cons (cons (car ps) curr-si) acc-slots)
+                        (cons (cons (car ps) curr-si) acc-env))))))
+         (p-offsets (car param-slots))
+         (raw-vars (if (unboxed-fn? f-name)
+                       (append params (get-raw-vars env))
+                       (get-raw-vars env)))
+         (body-env (set-raw-vars raw-vars (cdr param-slots)))
+         (next-si (- si (* (length params) 8)))
+         ;; Record contification target info in env
+         (cont-info (list '%cont-target entry-lbl p-offsets))
+         (full-env (cons (cons f-name cont-info) body-env)))
+    ;; Compile in-body first
+    (lir-compile-expr in-body next-si full-env tail?)
+    (emit-lir! (list '%jump exit-lbl))
+    ;; Continuation function body entry
+    (emit-lir! (list '%label entry-lbl))
+    (lir-compile-expr f-body next-si full-env tail?)
+    (emit-lir! (list '%label exit-lbl))))
+
+(define (lir-compile-cont-call f-name args si env)
+  (let ((binding (assq f-name env)))
+    (if (not (and binding (pair? (cdr binding)) (eq? (cadr binding) '%cont-target)))
+        (error "Unresolved %cont-call target:" f-name)
+        (let* ((target-info (cdr binding))
+               (entry-lbl (cadr target-info))
+               (p-offsets (caddr target-info))
+               (num-args (length args)))
+          (if (not (= num-args (length p-offsets)))
+              (error "Arity mismatch in %cont-call:" f-name)
+              ;; Evaluate arguments sequentially into temporary stack slots
+              (let eval-loop ((as args) (curr-si si) (temp-sis '()))
+                (if (pair? as)
+                    (begin
+                      (track-lir-si! curr-si)
+                      (lir-compile-expr (car as) curr-si env #f)
+                      (emit-lir! (list '%store '%rsp curr-si '%rax))
+                      (eval-loop (cdr as) (- curr-si 8) (cons curr-si temp-sis)))
+                    (begin
+                      ;; Transfer temporary values to parameter slots to prevent clobbering
+                      (let xfer-loop ((ts (reverse temp-sis)) (pos p-offsets))
+                        (if (and (pair? ts) (pair? pos))
+                            (let ((t-si (car ts))
+                                  (p-offset (cdar pos)))
+                              (emit-lir! (list '%load '%rdx '%rsp t-si))
+                              (emit-lir! (list '%store '%rsp p-offset '%rdx))
+                              (xfer-loop (cdr ts) (cdr pos)))))
+                      ;; Directly jump to continuation target!
+                      (emit-lir! (list '%jump entry-lbl))))))))))
+
 (define (lir-compile-expr expr si env tail?)
   (cond
     ((immediate? expr)
@@ -607,6 +668,10 @@
           (lir-compile-triop op (cadr expr) (caddr expr) (cadddr expr) si env))
          ((septop-prim? op)
           (lir-compile-raw-syscall (cdr expr) si env))
+         ((eq? op '%cont-fun)
+          (lir-compile-cont-fun (cadr expr) (caddr expr) (cadddr expr) (cadr (cdddr expr)) si env tail?))
+         ((eq? op '%cont-call)
+          (lir-compile-cont-call (cadr expr) (cddr expr) si env))
          ((eq? op 'let)
           (lir-compile-let (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'if)

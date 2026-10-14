@@ -90,6 +90,16 @@
              ((-) (list '%raw-sub e1 e2))
              ((*) (list '%raw-mul e1 e2)))
            (list op e1 e2))))
+    ((memq op '(= < <= > >=))
+     (let ((raw1? (and (symbol? e1) (raw-var? e1 raw-env)))
+           (raw2? (and (symbol? e2) (raw-var? e2 raw-env))))
+       (cond
+         ((and raw1? (integer? e2))
+          (list op e1 (list '%unbox-fixnum e2)))
+         ((and (integer? e1) raw2?)
+          (list op (list '%unbox-fixnum e1) e2))
+         (else
+          (list op e1 e2)))))
     (else
      (list op e1 e2))))
 

@@ -30,10 +30,8 @@ make test_passes
 USE_NATIVE_ULISP=false
 
 if [ "${FORCE_ILISP:-0}" != "1" ]; then
-    if [ ! -f "$ULISP_STAGE1" ]; then
-        echo "=== [Bootstrap] Native Stage 1 compiler not found. Building scheme-stage1... ==="
-        make stage1 >/dev/null 2>&1 || true
-    fi
+    echo "=== Building scheme-stage1... ==="
+    make stage1 >/dev/null 2>&1 || true
 
     if [ -x "$ULISP_STAGE1" ]; then
         # Smoke test: verify scheme-stage1 can compile a trivial integer form on this architecture
@@ -42,6 +40,7 @@ if [ "${FORCE_ILISP:-0}" != "1" ]; then
         fi
     fi
 fi
+
 
 if [ "$USE_NATIVE_ULISP" = true ]; then
     echo "=== Compiler Engine: ULisp Native AOT Compiler (Fast mode: < 1s) ==="
@@ -494,6 +493,12 @@ assert "9" "(bitwise-ior 8 1)"
 assert "60" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig half))) (begin (gc-init! from to half (%get-rsp)) (let ((lst (cons 10 (cons 20 (cons 30 (quote ())))))) (begin (gc-collect! (%get-rsp)) (+ (car lst) (+ (car (cdr lst)) (car (cdr (cdr lst)))))))))"
 assert "300" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig half))) (begin (gc-init! from to half (%get-rsp)) (let ((lst (cons 100 200))) (begin (gc-collect! (%get-rsp)) (gc-collect! (%get-rsp)) (gc-collect! (%get-rsp)) (+ (car lst) (cdr lst))))))"
 assert "10" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig half))) (begin (gc-init! from to half (%get-rsp)) (let ((p (cons 10 (quote ())))) (begin (gc-collect! (%get-rsp)) (car p)))))"
+
+# --- Step 27: Contification & Local Closure Elimination (Issue 522) ---
+echo "-- Step 27: Issue 522 Contification & Local Closure Elimination --"
+assert "55" "(let loop ((n 10) (acc 0)) (if (= n 0) acc (loop (- n 1) (+ acc n))))"
+assert "120" "(letrec ((fact (lambda (n acc) (if (= n 1) acc (fact (- n 1) (* acc n)))))) (fact 5 1))"
+assert "45" "(letrec ((sum (lambda (i total) (if (= i 10) total (sum (+ i 1) (+ total i)))))) (sum 0 0))"
 
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification

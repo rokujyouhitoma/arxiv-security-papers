@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **522** | ドミネータ解析に基づくコンティフィケーション (Contification) と局所クロージャ割当完全消去の実装 | Feature | Open (New) | [522-implement-ulisp-contification-and-closure-elimination.md](522-implement-ulisp-contification-and-closure-elimination.md) |
 | **523** | 基本ブロック引数 (Block Arguments) 型 SSA 中間表現と Braun 法オンザフライ構築の実装 | Feature | Open (New) | [523-implement-ulisp-block-arguments-ssa-and-braun-construction.md](523-implement-ulisp-block-arguments-ssa-and-braun-construction.md) |
 | **524** | フロー依存型推論 (Flow-Sensitive Narrowing) と合流点メッセージ分割 (Path Splitting) の実装 | Feature | Open (New) | [524-implement-ulisp-flow-sensitive-narrowing-and-path-splitting.md](524-implement-ulisp-flow-sensitive-narrowing-and-path-splitting.md) |
 | **525** | TBAA・エスケープ解析に基づくスタック割当昇格とナーサリ世代別コピーGCの実装 | Feature | Open (New) | [525-implement-ulisp-tbaa-escape-analysis-and-generational-gc.md](525-implement-ulisp-tbaa-escape-analysis-and-generational-gc.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **522** | ドミネータ解析に基づくコンティフィケーション (Contification) と局所クロージャ割当完全消去の実装 | Feature | 2026-10-15 | [closed/522-implement-ulisp-contification-and-closure-elimination.md](closed/522-implement-ulisp-contification-and-closure-elimination.md) |
 | **528** | 静的シンボル Intern テーブルおよび到達不能関数デッドコード除去 (DCE) による最適化 | Feature | 2026-10-13 | [closed/528-implement-static-symbol-interning-and-dead-code-elimination.md](closed/528-implement-static-symbol-interning-and-dead-code-elimination.md) |
 | **527** | アセンブリ出力およびランタイムの 4KB ブロック I/O バッファリング化によるシステムコール削減 | Feature | 2026-10-12 | [closed/527-implement-buffered-io-for-assembly-emission-and-runtime.md](closed/527-implement-buffered-io-for-assembly-emission-and-runtime.md) |
 | **521** | 拡張局所値番号付け (Extended LVN) による不変アクセサメモ化と代数的等価性最適化の実装 | Feature | 2026-10-12 | [closed/521-implement-ulisp-extended-lvn-and-accessor-memoization.md](closed/521-implement-ulisp-extended-lvn-and-accessor-memoization.md) |

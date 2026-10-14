@@ -840,6 +840,17 @@
           (let loop ((es (cddr expr)) (acc '()))
             (if (null? es) acc
                 (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
+         ((%cont-fun)
+          (let* ((params (caddr expr))
+                 (f-body (cadddr expr))
+                 (in-body (cadr (cdddr expr)))
+                 (f-bound (set-union params bound)))
+            (set-union (free-vars f-body f-bound)
+                       (free-vars in-body bound))))
+         ((%cont-call)
+          (let loop ((es (cddr expr)) (acc '()))
+            (if (null? es) acc
+                (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
          (else
           (cond
             ((zero-arg-prim? op) '())
@@ -852,6 +863,138 @@
                (if (null? es) acc
                    (loop (cdr es) (set-union acc (free-vars (car es) bound)))))))))))
     (else '())))
+
+;;; Checks whether `var` escapes (appears in non-operator position) within `expr`.
+(define (escapes? var expr)
+  (cond
+    ((symbol? expr)
+     (eq? expr var))
+    ((not (pair? expr))
+     #f)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) #f)
+         ((if)
+          (or (escapes? var (cadr expr))
+              (or (escapes? var (caddr expr))
+                  (if (null? (cdddr expr)) #f (escapes? var (cadddr expr))))))
+         ((begin)
+          (let loop ((es (cdr expr)))
+            (and (pair? es)
+                 (or (escapes? var (car es))
+                     (loop (cdr es))))))
+         ((let)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr)))
+            (or (let loop ((bs bindings))
+                  (and (pair? bs)
+                       (or (escapes? var (cadar bs))
+                           (loop (cdr bs)))))
+                (if (assq var bindings)
+                    #f
+                    (escapes? var body)))))
+         ((letrec)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr)))
+            (if (assq var bindings)
+                #f
+                (or (let loop ((bs bindings))
+                      (and (pair? bs)
+                           (or (escapes? var (cadar bs))
+                               (loop (cdr bs)))))
+                    (escapes? var body)))))
+         ((lambda)
+          (let ((params (cadr expr))
+                (body (caddr expr)))
+            (if (memq var params)
+                #f
+                ;; Crossing lambda boundary requires closure capture, thus escapes local CFG
+                (if (memq var (free-vars body params))
+                    #t
+                    (escapes? var body)))))
+         ((%make-closure)
+          (let loop ((es (cddr expr)))
+            (and (pair? es)
+                 (or (escapes? var (car es))
+                     (loop (cdr es))))))
+         (else
+          (if (eq? op var)
+              ;; Operator position is safe; check arguments
+              (let loop ((args (cdr expr)))
+                (and (pair? args)
+                     (or (escapes? var (car args))
+                         (loop (cdr args)))))
+              ;; Non-var operator: check operator and arguments
+              (or (escapes? var op)
+                  (let loop ((args (cdr expr)))
+                    (and (pair? args)
+                         (or (escapes? var (car args))
+                             (loop (cdr args)))))))))))))
+
+;;; Checks whether all call sites of `var` in `expr` are in tail position.
+(define (tail-calls-only? var expr)
+  (let check ((e expr) (tail? #t))
+    (cond
+      ((not (pair? e)) #t)
+      (else
+       (let ((op (car e)))
+         (case op
+           ((quote) #t)
+           ((if)
+            (and (check (cadr e) #f)
+                 (check (caddr e) tail?)
+                 (if (null? (cdddr e)) #t (check (cadddr e) tail?))))
+           ((begin)
+            (let loop ((es (cdr e)))
+              (cond
+                ((null? es) #t)
+                ((null? (cdr es)) (check (car es) tail?))
+                (else (and (check (car es) #f) (loop (cdr es)))))))
+           ((let)
+            (let ((bindings (cadr e))
+                  (body (caddr e)))
+              (and (let loop ((bs bindings))
+                     (or (null? bs)
+                         (and (check (cadar bs) #f) (loop (cdr bs)))))
+                   (if (assq var bindings) #t (check body tail?)))))
+           ((letrec)
+            (let ((bindings (cadr e))
+                  (body (caddr e)))
+              (if (assq var bindings)
+                  #t
+                  (and (let loop ((bs bindings))
+                         (or (null? bs)
+                             (and (check (cadar bs) #f) (loop (cdr bs)))))
+                       (check body tail?)))))
+           ((lambda)
+            (let ((params (cadr e))
+                  (body (caddr e)))
+              (if (memq var params) #t (check body #t))))
+           (else
+            (if (eq? op var)
+                ;; Call site of var: must be in tail position
+                (and tail?
+                     (let loop ((args (cdr e)))
+                       (or (null? args)
+                           (and (check (car args) #f) (loop (cdr args))))))
+                ;; Other call: operator and arguments are not in tail position
+                (and (check op #f)
+                     (let loop ((args (cdr e)))
+                       (or (null? args)
+                           (and (check (car args) #f) (loop (cdr args))))))))))))))
+
+;;; Checks whether a binding `(var val)` in `(letrec ... body)` is contifiable.
+(define (contifiable-binding? var val body)
+  (and (pair? val)
+       (eq? (car val) 'lambda)
+       (pair? (cdr val))
+       (pair? (cddr val))
+       (not (escapes? var body))
+       (not (escapes? var (caddr val)))
+       (tail-calls-only? var body)
+       (tail-calls-only? var (caddr val))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: CP0 Source-Level Optimization Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -2208,6 +2351,16 @@
              ((-) (list '%raw-sub e1 e2))
              ((*) (list '%raw-mul e1 e2)))
            (list op e1 e2))))
+    ((memq op '(= < <= > >=))
+     (let ((raw1? (and (symbol? e1) (raw-var? e1 raw-env)))
+           (raw2? (and (symbol? e2) (raw-var? e2 raw-env))))
+       (cond
+         ((and raw1? (integer? e2))
+          (list op e1 (list '%unbox-fixnum e2)))
+         ((and (integer? e1) raw2?)
+          (list op (list '%unbox-fixnum e1) e2))
+         (else
+          (list op e1 e2)))))
     (else
      (list op e1 e2))))
 
@@ -2311,6 +2464,167 @@
     (else
      (rtyper-expr form-or-forms '()))))
 ;;; =======================================================================
+;;; ULisp Compiler Pass 4c: Contification & Local Closure Elimination Nanopass
+;;; Conforms to DSN-33 Architecture Specification & Issue #522
+;;; Note: Identifies local functions whose call sites are dominated by a
+;;;       common continuation context and transforms them into local control
+;;;       flow (%cont-fun / %cont-call), eliminating flat closure allocation
+;;;       and indirect calls completely.
+;;; =======================================================================
+
+;;; Substitutes call sites of `var` into `(%cont-call var . args)` within `expr`.
+(define (contify-calls var expr)
+  (cond
+    ((not (pair? expr)) expr)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) expr)
+         ((if)
+          (list 'if
+                (contify-calls var (cadr expr))
+                (contify-calls var (caddr expr))
+                (if (null? (cdddr expr)) #f (contify-calls var (cadddr expr)))))
+         ((begin)
+          (cons 'begin (map (lambda (e) (contify-calls var e)) (cdr expr))))
+         ((let)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (list 'let
+                  (map (lambda (b) (list (car b) (contify-calls var (cadr b)))) bindings)
+                  (if (assq var bindings)
+                      body  ; shadowed
+                      (contify-calls var body)))))
+         ((letrec)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (if (assq var bindings)
+                expr ; shadowed
+                (list 'letrec
+                      (map (lambda (b) (list (car b) (contify-calls var (cadr b)))) bindings)
+                      (contify-calls var body)))))
+         ((lambda)
+          expr) ; Do not cross lambda boundaries into separate procedure CFGs
+         ((%cont-fun)
+          (let ((f-name (cadr expr))
+                (params (caddr expr))
+                (f-body (cadddr expr))
+                (in-body (cadr (cdddr expr))))
+            (if (eq? f-name var)
+                expr ; shadowed
+                (list '%cont-fun f-name params
+                      (contify-calls var f-body)
+                      (contify-calls var in-body)))))
+         ((%cont-call)
+          (cons '%cont-call
+                (cons (cadr expr)
+                      (map (lambda (e) (contify-calls var e)) (cddr expr)))))
+         (else
+          (if (eq? op var)
+              (cons '%cont-call (cons var (map (lambda (e) (contify-calls var e)) (cdr expr))))
+              (map (lambda (e) (contify-calls var e)) expr))))))))
+
+;;; Recursively transforms an expression, converting eligible letrec bindings into %cont-fun.
+(define (contify-expr expr)
+  (cond
+    ((not (pair? expr)) expr)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) expr)
+         ((if)
+          (list 'if
+                (contify-expr (cadr expr))
+                (contify-expr (caddr expr))
+                (if (null? (cdddr expr)) #f (contify-expr (cadddr expr)))))
+         ((begin)
+          (cons 'begin (map contify-expr (cdr expr))))
+         ((let)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (list 'let
+                  (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
+                  (contify-expr body))))
+         ((letrec)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr)))
+            (contify-letrec bindings body)))
+         ((lambda)
+          (let ((params (cadr expr))
+                (body (caddr expr)))
+            (list 'lambda params (contify-expr body))))
+         ((%cont-fun)
+          (list '%cont-fun
+                (cadr expr)
+                (caddr expr)
+                (contify-expr (cadddr expr))
+                (contify-expr (cadr (cdddr expr)))))
+         ((%cont-call)
+          (cons '%cont-call
+                (cons (cadr expr)
+                      (map contify-expr (cddr expr)))))
+         (else
+          (map contify-expr expr)))))))
+
+(define (occurs-in? var expr)
+  (cond
+    ((symbol? expr) (eq? expr var))
+    ((not (pair? expr)) #f)
+    (else
+     (or (occurs-in? var (car expr))
+         (occurs-in? var (cdr expr))))))
+
+(define (occurs-in-other-bindings? var bindings)
+  (let loop ((bs bindings))
+    (if (null? bs)
+        #f
+        (let ((b (car bs)))
+          (if (eq? (car b) var)
+              (loop (cdr bs))
+              (if (occurs-in? var (cadr b))
+                  #t
+                  (loop (cdr bs))))))))
+
+(define (has-call? var expr)
+  (cond
+    ((not (pair? expr)) #f)
+    (else
+     (if (eq? (car expr) var)
+         #t
+         (let loop ((es expr))
+           (and (pair? es)
+                (or (has-call? var (car es))
+                    (loop (cdr es)))))))))
+
+;;; Processes a letrec form, lifting contifiable local bindings into %cont-fun wrappers.
+(define (contify-letrec bindings orig-body)
+  (if (= (length bindings) 1)
+      (let* ((b (car bindings))
+             (var (car b))
+             (val (cadr b)))
+        (if (and (has-call? var orig-body)
+                 (contifiable-binding? var val orig-body))
+            (let* ((params (cadr val))
+                   (lbody (caddr val))
+                   (opt-lbody (contify-calls var lbody))
+                   (opt-body (contify-calls var orig-body)))
+              (list '%cont-fun var params
+                    (contify-expr opt-lbody)
+                    (contify-expr opt-body)))
+            (list 'letrec
+                  (list (list var (contify-expr val)))
+                  (contify-expr orig-body))))
+      ;; Multi-binding letrec (top-level procedures or mutual recursion):
+      ;; Preserve letrec structure to maintain inter-procedure references,
+      ;; while recursively contifying local loops inside each procedure body.
+      (list 'letrec
+            (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
+            (contify-expr orig-body))))
+
+;;; Pass 4c Entrypoint: Contification & local closure elimination across all expressions.
+(define (contify-all expr)
+  (contify-expr expr))
+;;; =======================================================================
 ;;; ULisp Compiler Pass 3: Explicit Closure Conversion Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
 ;;; Note: Lifts nested lambdas to flat %function definitions, transforms
@@ -2370,6 +2684,22 @@
             (list 'let new-bindings new-body)))
          ((letrec)
           (convert-letrec (cadr expr) (caddr expr) var-map))
+         ((%cont-fun)
+          (let* ((f-name (cadr expr))
+                 (params (caddr expr))
+                 (f-body (cadddr expr))
+                 (in-body (cadr (cdddr expr)))
+                 (lbody-map
+                  (let loop ((ps params) (acc var-map))
+                    (if (null? ps) acc
+                        (loop (cdr ps) (cons (cons (car ps) (car ps)) acc)))))
+                 (new-f-body (convert-expr f-body lbody-map))
+                 (new-in-body (convert-expr in-body var-map)))
+            (list '%cont-fun f-name params new-f-body new-in-body)))
+         ((%cont-call)
+          (cons '%cont-call
+                (cons (cadr expr)
+                      (map (lambda (e) (convert-expr e var-map)) (cddr expr)))))
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else
@@ -3045,6 +3375,67 @@
             (record-safepoint! safepoint-lbl frame-shift bitmap)
             (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
+(define (lir-compile-cont-fun f-name params f-body in-body si env tail?)
+  (let* ((entry-lbl (unique-label-sym "L_cont_entry_"))
+         (exit-lbl  (unique-label-sym "L_cont_exit_"))
+         ;; Allocate stack slots for each parameter
+         (param-slots
+          (let loop ((ps params) (curr-si si) (acc-slots '()) (acc-env env))
+            (if (null? ps)
+                (cons (reverse acc-slots) acc-env)
+                (begin
+                  (track-lir-si! curr-si)
+                  (loop (cdr ps)
+                        (- curr-si 8)
+                        (cons (cons (car ps) curr-si) acc-slots)
+                        (cons (cons (car ps) curr-si) acc-env))))))
+         (p-offsets (car param-slots))
+         (raw-vars (if (unboxed-fn? f-name)
+                       (append params (get-raw-vars env))
+                       (get-raw-vars env)))
+         (body-env (set-raw-vars raw-vars (cdr param-slots)))
+         (next-si (- si (* (length params) 8)))
+         ;; Record contification target info in env
+         (cont-info (list '%cont-target entry-lbl p-offsets))
+         (full-env (cons (cons f-name cont-info) body-env)))
+    ;; Compile in-body first
+    (lir-compile-expr in-body next-si full-env tail?)
+    (emit-lir! (list '%jump exit-lbl))
+    ;; Continuation function body entry
+    (emit-lir! (list '%label entry-lbl))
+    (lir-compile-expr f-body next-si full-env tail?)
+    (emit-lir! (list '%label exit-lbl))))
+
+(define (lir-compile-cont-call f-name args si env)
+  (let ((binding (assq f-name env)))
+    (if (not (and binding (pair? (cdr binding)) (eq? (cadr binding) '%cont-target)))
+        (error "Unresolved %cont-call target:" f-name)
+        (let* ((target-info (cdr binding))
+               (entry-lbl (cadr target-info))
+               (p-offsets (caddr target-info))
+               (num-args (length args)))
+          (if (not (= num-args (length p-offsets)))
+              (error "Arity mismatch in %cont-call:" f-name)
+              ;; Evaluate arguments sequentially into temporary stack slots
+              (let eval-loop ((as args) (curr-si si) (temp-sis '()))
+                (if (pair? as)
+                    (begin
+                      (track-lir-si! curr-si)
+                      (lir-compile-expr (car as) curr-si env #f)
+                      (emit-lir! (list '%store '%rsp curr-si '%rax))
+                      (eval-loop (cdr as) (- curr-si 8) (cons curr-si temp-sis)))
+                    (begin
+                      ;; Transfer temporary values to parameter slots to prevent clobbering
+                      (let xfer-loop ((ts (reverse temp-sis)) (pos p-offsets))
+                        (if (and (pair? ts) (pair? pos))
+                            (let ((t-si (car ts))
+                                  (p-offset (cdar pos)))
+                              (emit-lir! (list '%load '%rdx '%rsp t-si))
+                              (emit-lir! (list '%store '%rsp p-offset '%rdx))
+                              (xfer-loop (cdr ts) (cdr pos)))))
+                      ;; Directly jump to continuation target!
+                      (emit-lir! (list '%jump entry-lbl))))))))))
+
 (define (lir-compile-expr expr si env tail?)
   (cond
     ((immediate? expr)
@@ -3091,6 +3482,10 @@
           (lir-compile-triop op (cadr expr) (caddr expr) (cadddr expr) si env))
          ((septop-prim? op)
           (lir-compile-raw-syscall (cdr expr) si env))
+         ((eq? op '%cont-fun)
+          (lir-compile-cont-fun (cadr expr) (caddr expr) (cadddr expr) (cadr (cdddr expr)) si env tail?))
+         ((eq? op '%cont-call)
+          (lir-compile-cont-call (cadr expr) (cddr expr) si env))
          ((eq? op 'let)
           (lir-compile-let (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'if)
@@ -4672,7 +5067,8 @@
              (ast3 (anf-all ast2b))
              (ast3b (annotate-all ast3))
              (ast3c (rtyper-all ast3b))
-             (ast4 (closure-convert ast3c))
+             (ast3d (contify-all ast3c))
+             (ast4 (closure-convert ast3d))
              (lir  (generate-lir ast4)))
         (cond
           ((eq? target 'c)
