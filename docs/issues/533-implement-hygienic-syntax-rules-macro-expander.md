@@ -9,8 +9,8 @@ ID: 533
 
 ## 1. 概要 / Summary
 現在の ULisp は、Common Lisp 由来の非衛生的 S 式変換マクロ（`define-macro` / `defmacro`）のみをサポートしており、複雑な構文糖や DSL を定義する際に一時変数の名前衝突（Variable Capture）が発生するリスクがある。
-また、外部の成熟した R7RS ライブラリコードの多くは `define-syntax` と `syntax-rules` を前提として設計されているため、移植性の障壁となっている。
-本 Issue では、R7RS Section 4.3（Macros: `syntax-rules`）に準拠したパターンマッチング型衛生的マクロ展開器のサブセット（リテラルリスト、エリプシス `...` パターン反復、およびローカルスコープ名の自動リネーミング）を自前実装し、`ulisp/passes/01_macro_expander.scm` に統合する。
+また、R7RS-small 標準仕様との準拠性を最大化し、外部の成熟した Scheme ライブラリとの互換性を確保するためには、非標準マクロを温存せず完全撤廃することが求められる。
+本 Issue では、後方互換性をあえて維持せず、従来の `define-macro` / `defmacro` をコードベースから完全に消去・廃止する。その上で、R7RS Section 4.3（Macros: `syntax-rules`）に準拠したパターンマッチング型衛生的マクロ展開器（リテラルリスト、エリプシス `...` パターン反復、およびローカルスコープ名の自動リネーミング）を自前実装し、コンパイラおよび全標準ライブラリ（`when`, `unless`, `let*`, `and`, `or`, `cond` 等）を 100% `define-syntax` へ移行する。
 
 ---
 
@@ -41,9 +41,9 @@ Target Branch: `feat/533-ulisp-hygienic-syntax-rules-macro-expander`
    - アンダースコア `_`、ワイルドカード、および可変長反復エリプシス（`...`）のバインド環境抽出。
 2. **テンプレート展開器とスコープリネーミング（Renamer）**:
    - マクロ展開時に新しく導入される束縛変数に対し、ユニークな内部識別子（`gensym` またはインデックス付きシンボル）を自動割り当てし、呼出元の自由変数との意図しない衝突を防止。
-3. **既存パイプラインとの共存**:
-   - トップレベルの `rewrite-top-level` において、`define-syntax` を検出し、マクロ環境テーブルにルールを登録。
-   - 従来の `define-macro` も後方互換性のため維持。
+3. **`define-macro` の完全撤廃・R7RS への完全移行**:
+   - 後方互換性は維持せず、非標準の `define-macro` および `defmacro` をコードベースから完全に削除する。
+   - コンパイラ内部および標準ライブラリ（`when`, `unless`, `let*`, `and`, `or`, `cond` 等）で定義されているすべてのマクロを、R7RS-small 準拠の `(define-syntax name (syntax-rules ...))` に 100% 移行する。
 
 ---
 
@@ -51,4 +51,5 @@ Target Branch: `feat/533-ulisp-hygienic-syntax-rules-macro-expander`
 - [ ] `(define-syntax my-when (syntax-rules () ((_ test body ...) (if test (begin body ...)))))` が正しく定義・展開されること。
 - [ ] 変数捕捉（Variable Capture）が発生するテストケースにおいて、呼出元の変数が保護されること。
 - [ ] エリプシス `...` による 0 個以上の式列の展開が正確に動作すること。
+- [ ] 非標準の `define-macro` / `defmacro` が完全に削除され、全マクロが R7RS `define-syntax` に移行していること。
 - [ ] 自己ホスティングコンパイラのビルドおよび全単体テストが完全一致でパスすること。
