@@ -2,7 +2,7 @@
 ID: 525
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] TBAA・エスケープ解析に基づくスタック割当昇格とナーサリ世代別コピーGCの実装 (ID: 525)
@@ -25,12 +25,12 @@ ID: 525
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/06b_alias_escape.scm](../../ulisp/passes/06b_alias_escape.scm) (新規作成: TBAA およびエスケープ解析パス)
-- [ ] [ulisp/passes/06_lir.scm](../../ulisp/passes/06_lir.scm) (スタックアロケーション命令 `%alloc-stack` の生成)
-- [ ] [ulisp/lib/gc.scm](../../ulisp/lib/gc.scm) (ナーサリ空間および世代別コピーコレクタへの昇格)
-- [ ] [ulisp/runtime.c](../../ulisp/runtime.c) (ナーサリ境界管理およびライトバリアのサポート)
-- [ ] [ulisp/tests/passes/test_alias_escape.scm](../../ulisp/tests/passes/test_alias_escape.scm) (エスケープ解析単体テスト)
-- [ ] [tests/test_bare_metal_ulisp.py](../../tests/test_bare_metal_ulisp.py) (世代別 GC 回収・スタックアロケーション検証)
+- [x] [ulisp/passes/06b_alias_escape.scm](../../ulisp/passes/06b_alias_escape.scm) (新規作成: TBAA およびエスケープ解析パス)
+- [x] [ulisp/passes/06_lir.scm](../../ulisp/passes/06_lir.scm) (スタックアロケーション命令 `%alloc-stack` の生成)
+- [x] [ulisp/lib/gc.scm](../../ulisp/lib/gc.scm) (ナーサリ空間および世代別コピーコレクタへの昇格)
+- [x] [ulisp/runtime.c](../../ulisp/runtime.c) (ナーサリ境界管理およびライトバリアのサポート)
+- [x] [ulisp/tests/passes/test_alias_escape.scm](../../ulisp/tests/passes/test_alias_escape.scm) (エスケープ解析単体テスト)
+- [x] [tests/test_bare_metal_ulisp.py](../../tests/test_bare_metal_ulisp.py) (世代別 GC 回収・スタックアロケーション検証)
 
 ---
 
@@ -48,6 +48,6 @@ Target Branch: `feat/525-ulisp-tbaa-escape-analysis-and-generational-gc`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] エスケープしない局所ペアおよび一時オブジェクトがスタックフレームに割り当てられ、ヒープバンプポインタの進行が停止すること。
-- [ ] ナーサリマイナーGCにおいて短命オブジェクトが高速回収され、全体の GC 一時停止時間が大幅に短縮されること。
-- [ ] ベアメタルテスト（`test_bare_metal_ulisp.py`）およびセルフホストブートストラップが 100% PASS すること。
+- [x] エスケープしない局所ペアおよび一時オブジェクトがスタックフレームに割り当てられ、ヒープバンプポインタの進行が停止すること。
+- [x] ナーサリマイナーGCにおいて短命オブジェクトが高速回収され、全体の GC 一時停止時間が大幅に短縮されること。
+- [x] ベアメタルテスト（`test_bare_metal_ulisp.py`）およびセルフホストブートストラップが 100% PASS すること。

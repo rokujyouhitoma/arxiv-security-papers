@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_lir stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
 
 CC = gcc
@@ -20,6 +20,7 @@ PASSES_LIB = passes/00_helpers.scm \
              passes/05b_rtyper.scm \
              passes/04c_contify.scm \
              passes/05_closure_convert.scm \
+             passes/06b_alias_escape.scm \
              passes/06_lir.scm \
              passes/07_backend_x86_64.scm \
              passes/07_backend_aarch64.scm \
@@ -68,6 +69,11 @@ test_contify: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_contify.scm > build/test_contify_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_contify_runner.scm
+
+test_alias_escape: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_alias_escape.scm > build/test_alias_escape_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_alias_escape_runner.scm
 
 test_lir: build/compiler_passes.scm
 	@mkdir -p build

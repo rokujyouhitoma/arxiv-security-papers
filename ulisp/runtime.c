@@ -79,8 +79,29 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
 
 #define HEAP_SIZE       (16384ULL * 1024 * 1024)
 
-/* Static GC state buffer: from, to, size, bottom, count */
-uint64_t ulisp_gc_state[8];
+/* Static Generational GC state buffer (16 words):
+ * [0]: nursery_base, [1]: nursery_size, [2]: mature_from, [3]: mature_to
+ * [4]: mature_size, [5]: mature_free, [6]: stack_bottom, [7]: gc_minor_count
+ * [8]: gc_major_count, [9]: remset_ptr, [10]: remset_count, [11]: generational_mode
+ */
+uint64_t ulisp_gc_state[16];
+
+/* Minimal write barrier hook for C debug runtime (conforms to DSN-33 / Issue 525) */
+__attribute__((weak)) void ulisp_gc_write_barrier(uint64_t mature_obj_addr, uint64_t val) {
+    if (ulisp_gc_state[11] == 1) { /* generational mode */
+        uint64_t n_base = ulisp_gc_state[0];
+        uint64_t n_size = ulisp_gc_state[1];
+        uint64_t val_addr = val & ~7ULL;
+        if (val_addr >= n_base && val_addr < (n_base + n_size)) {
+            uint64_t *remset = (uint64_t *)ulisp_gc_state[9];
+            uint64_t count = ulisp_gc_state[10];
+            if (remset && count < 4096) {
+                remset[count] = mature_obj_addr;
+                ulisp_gc_state[10] = count + 1;
+            }
+        }
+    }
+}
 
 /* Stackmap metadata table exported from compiler in .rodata */
 __attribute__((weak)) uint64_t __ulisp_stackmap_table[1] = {0};

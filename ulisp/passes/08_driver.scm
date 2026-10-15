@@ -33,7 +33,8 @@
              (ast3c (rtyper-all ast3b))
              (ast3d (contify-all ast3c))
              (ast4 (closure-convert ast3d))
-             (lir  (generate-lir ast4)))
+             (ast4b (alias-escape-all ast4))
+             (lir  (generate-lir ast4b)))
         (cond
           ((eq? target 'c)
            (emit-c lir))

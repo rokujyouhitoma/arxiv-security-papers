@@ -340,6 +340,12 @@
          (emit (string-append "    " (c-operand->str dst) " = ((uint64_t)(uintptr_t)reg_r12) + " (number->string tag) ";"))
          (emit (string-append "    reg_r12 += " (number->string bytes) ";"))))
 
+      ((%alloc-stack)
+       (let ((dst (cadr inst))
+             (offset (caddr inst))
+             (tag (cadddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = ((uint64_t)(uintptr_t)(reg_rsp + (" (number->string offset) "))) + " (number->string tag) ";"))))
+
       ((%code-ref)
        (let ((dst (cadr inst))
              (lbl (caddr inst)))

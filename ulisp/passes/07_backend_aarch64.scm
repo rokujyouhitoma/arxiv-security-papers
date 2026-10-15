@@ -372,6 +372,15 @@
              (emit (string-append "    add " (arm-reg->str dst) ", x19, #" (number->string tag))))
          (emit (string-append "    add x19, x19, #" (number->string bytes)))))
 
+      ((%alloc-stack)
+       (let ((dst (cadr inst))
+             (offset (caddr inst))
+             (tag (cadddr inst)))
+         (let ((disp (+ offset tag)))
+           (if (>= disp 0)
+               (emit (string-append "    add " (arm-reg->str dst) ", sp, #" (number->string disp)))
+               (emit (string-append "    sub " (arm-reg->str dst) ", sp, #" (number->string (- 0 disp))))))))
+
       ((%code-ref)
        (let ((dst (cadr inst))
              (lbl (caddr inst)))

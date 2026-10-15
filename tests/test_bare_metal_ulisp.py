@@ -287,3 +287,162 @@ def test_buffered_io_syscall_reduction():
         ]
         num_writes = len(write_syscall_lines)
         assert num_writes <= 5, f"Expected <= 5 write syscalls, got {num_writes}"
+
+
+def test_bare_metal_escape_analysis_stack_promotion():
+    """Verify that non-escaping pairs are stack-promoted with ZERO heap bump allocation."""
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+
+    test_scm_code = f"""
+{posix_code}
+
+(ulisp-init-heap! 65536)
+
+;; Loop 100 times creating local non-escaping pairs and computing their sum
+(define (run-loop n acc)
+  (if (<= n 0)
+      acc
+      (let ((p (cons n acc)))
+        (run-loop (- n 1) (+ (car p) (cdr p))))))
+
+(define (test-stack-alloc)
+  (let ((before-heap (%get-heap-ptr)))
+    (let ((result (run-loop 100 0)))
+      (let ((after-heap (%get-heap-ptr)))
+        (sys-write-string "LOOP_RESULT: ")
+        (sys-write-fixnum result)
+        (sys-newline)
+        (if (= before-heap after-heap)
+            (sys-write-string "STACK_PROMOTION_HEAP_DELTA_ZERO\\n")
+            (begin
+              (sys-write-string "HEAP_ADVANCED_BYTES: ")
+              (sys-write-fixnum (%raw-sub after-heap before-heap))
+              (sys-newline)))))))
+
+(test-stack-alloc)
+(sys-exit 0)
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "stack_alloc.scm")
+        s_path = os.path.join(tmpdir, "stack_alloc.s")
+        bin_path = os.path.join(tmpdir, "stack_alloc_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(test_scm_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                ["python3", "-m", "ilisp", COMPILER_SCM],
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        link_res = subprocess.run(
+            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
+            capture_output=True,
+            text=True,
+        )
+        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+
+        run_res = subprocess.run([bin_path], capture_output=True)
+        assert run_res.returncode == 0
+        output = run_res.stdout.decode("utf-8")
+        assert "LOOP_RESULT: 5050" in output
+        assert "STACK_PROMOTION_HEAP_DELTA_ZERO" in output
+
+
+def test_bare_metal_nursery_generational_gc():
+    """Verify that Generational Copying GC promotes surviving objects and resets nursery."""
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+    with open(GC_SCM, "r", encoding="utf-8") as f:
+        gc_code = f.read()
+
+    test_scm_code = f"""
+{posix_code}
+{gc_code}
+
+(define (deep-frame-minor-gc-trigger root-pair mature-from nursery-base)
+  ;; 3. Trigger minor GC explicitly from deep frame where root-pair is live in caller
+  (gc-minor-collect! (%get-rsp))
+
+  ;; 4. Verify that root-pair was promoted into mature-from space
+  (let ((addr (%ptr-untag root-pair)))
+    (if (and (>= addr mature-from) (< addr (%ptr-add mature-from 16384)))
+        (sys-write-string "ROOT_PROMOTED_TO_MATURE\\n")
+        (sys-write-string "ROOT_NOT_PROMOTED\\n")))
+
+  ;; 5. Verify field integrity after promotion
+  (if (and (= (car root-pair) 42) (= (cdr root-pair) 99))
+      (sys-write-string "NURSERY_PROMOTION_SUCCESS\\n")
+      (sys-write-string "FIELD_CORRUPTION\\n"))
+
+  ;; 6. Verify that nursery bump pointer was reset to nursery-base
+  (if (= (%get-heap-ptr) nursery-base)
+      (sys-write-string "NURSERY_RESET_ZERO_COST\\n")
+      (sys-write-string "NURSERY_NOT_RESET\\n"))
+
+  ;; 7. Verify minor collection count is 1
+  (if (= (gc-minor-count) 1)
+      (sys-write-string "MINOR_COUNT_IS_ONE\\n")
+      (sys-write-string "MINOR_COUNT_INVALID\\n")))
+
+(define (run-generational-test)
+  (let* ((nursery-base (sys-mmap 4096))
+         (mature-from  (sys-mmap 16384))
+         (mature-to    (sys-mmap 16384))
+         (remset       (sys-mmap 4096)))
+    ;; 1. Initialize generational GC
+    (gc-init-generational! nursery-base 4096 mature-from mature-to 16384 (%get-rsp) remset)
+
+    ;; 2. Allocate surviving root object in nursery
+    (let ((root-pair (cons 42 99)))
+      (deep-frame-minor-gc-trigger root-pair mature-from nursery-base))))
+
+(run-generational-test)
+(sys-exit 0)
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "gen_gc.scm")
+        s_path = os.path.join(tmpdir, "gen_gc.s")
+        bin_path = os.path.join(tmpdir, "gen_gc_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(test_scm_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                ["python3", "-m", "ilisp", COMPILER_SCM],
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        link_res = subprocess.run(
+            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
+            capture_output=True,
+            text=True,
+        )
+        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+
+        run_res = subprocess.run([bin_path], capture_output=True)
+        assert run_res.returncode == 0
+        output = run_res.stdout.decode("utf-8")
+        assert "ROOT_PROMOTED_TO_MATURE" in output
+        assert "NURSERY_PROMOTION_SUCCESS" in output
+        assert "NURSERY_RESET_ZERO_COST" in output
+        assert "MINOR_COUNT_IS_ONE" in output
