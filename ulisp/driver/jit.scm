@@ -764,9 +764,10 @@
                (ast4 (closure-convert ast3))
                (lir  (generate-lir ast4)))
           (cond
-            ((eq? target 'c) (emit-c lir))
-            ((eq? target 'aarch64) (emit-aarch64 lir))
-            (else (emit-x86-64 lir)))))))
+            ((eq? target 'c) (emit-c lir 'all))
+            ((eq? target 'aarch64) (emit-aarch64 lir 'all))
+            (else (emit-x86-64 lir 'all)))
+          (flush-output-port)))))
 
 (define (run-jit-execute forms)
   (display-string "==================================================================\n")
@@ -792,6 +793,7 @@
     (display (car *jit-stats-executed*))
     (newline)
     (display-string "==================================================================\n")
+    (flush-output-port)
     0))
 
 (define (main)

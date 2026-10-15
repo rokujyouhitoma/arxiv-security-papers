@@ -11,9 +11,7 @@
           (loop (cons expr acc))))))
 
 (define (extract-directives-and-forms raw-forms)
-  (let ((initial-gc (or (let ((v (get-environment-variable "ULISP_GC")))
-                          (if (and v (string? v)) (string->symbol v) #f))
-                        'all)))
+  (let ((initial-gc 'all))
     (let loop ((forms raw-forms)
                (target 'x86_64)
                (gc-mode initial-gc))

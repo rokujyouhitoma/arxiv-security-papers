@@ -7,6 +7,8 @@
 #include <ucontext.h>
 #include <execinfo.h>
 #include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 /* =======================================================================
  * [DEPRECATED / LEGACY REFERENCE ONLY]
@@ -212,10 +214,17 @@ int main(int argc, char **argv) {
     }
     if (argc > 1) {
         quiet = 1;
-        if (!freopen(argv[1], "r", stdin)) {
+        int fd = open(argv[1], O_RDONLY);
+        if (fd < 0) {
             perror(argv[1]);
             return 1;
         }
+        if (dup2(fd, STDIN_FILENO) < 0) {
+            perror("dup2");
+            close(fd);
+            return 1;
+        }
+        close(fd);
     }
 
     char *heap = (char *)mmap(NULL, HEAP_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);

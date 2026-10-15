@@ -138,6 +138,7 @@
     (case op
       ((%label)
        (let ((lbl (cadr inst)))
+         (emit "    .p2align 4")
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))))
 
       ((%block)
@@ -145,6 +146,7 @@
              (params (caddr inst))
              (body (cdddr inst)))
          (record-arm-block-params! lbl params)
+         (emit "    .p2align 4")
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))
          (for-each emit-arm-lir-instruction body)))
 
@@ -430,7 +432,7 @@
          (label-str (if (symbol? label) (symbol->string label) label))
          (body (cdr (assq 'body (cddr fn)))))
     (scan-arm-blocks! body)
-    (emit "    .p2align 2")
+    (emit "    .p2align 4")
     (emit (string-append label-str ":"))
     ;; Callee prologue: self closure pointer was in x10
     ;; Store self closure pointer at [sp, #-8]
@@ -438,15 +440,15 @@
     (for-each emit-arm-lir-instruction body)))
 
 ;;; Pass 7 Entrypoint: Takes %lir-program and emits complete GNU AArch64 assembly
-(define (emit-aarch64 prog . opt-gc-mode)
-  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
-         (funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-aarch64 prog gc-mode)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))
     (emit "    .text")
     (emit "    .globl scheme_entry")
     (emit "    .type scheme_entry, @function")
+    (emit "    .p2align 4")
     (emit "scheme_entry:")
     (emit "    stp x29, x30, [sp, #-32]!")
     (emit "    mov x29, sp")

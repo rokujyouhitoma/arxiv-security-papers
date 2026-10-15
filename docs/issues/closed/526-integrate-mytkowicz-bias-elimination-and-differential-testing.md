@@ -2,7 +2,8 @@
 ID: 526
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (Completed)
+完了日: 2026-10-16
 ---
 
 # [FEAT/ENH] Mytkowicz 測定バイアス排除機構と動的命令数差分テスト基盤 (DSN-35) の統合 (ID: 526)
@@ -24,11 +25,11 @@ ID: 526
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [tools/benchmark_ilisp_ulisp.py](../../tools/benchmark_ilisp_ulisp.py) (環境変数パディング、`perf stat` 連携、命令カウント取得)
-- [ ] [ulisp/passes/07_backend_x86_64.scm](../../ulisp/passes/07_backend_x86_64.scm) (関数・ループヘッダへの `.p2align 4` 強制)
-- [ ] [ulisp/passes/07_backend_aarch64.scm](../../ulisp/passes/07_backend_aarch64.scm) (AArch64 向け命令アライメント)
-- [ ] [tools/differential_test_ulisp.py](../../tools/differential_test_ulisp.py) (新規作成: Chez/Chibi/Gauche 差分テストランナー)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`make bench_perf`, `make diff_test` ターゲット追加)
+- [x] [tools/benchmark_ilisp_ulisp.py](../../tools/benchmark_ilisp_ulisp.py) (環境変数パディング、`perf stat` 連携、命令カウント取得)
+- [x] [ulisp/passes/07_backend_x86_64.scm](../../ulisp/passes/07_backend_x86_64.scm) (関数・ループヘッダへの `.p2align 4` 強制)
+- [x] [ulisp/passes/07_backend_aarch64.scm](../../ulisp/passes/07_backend_aarch64.scm) (AArch64 向け命令アライメント)
+- [x] [tools/differential_test_ulisp.py](../../tools/differential_test_ulisp.py) (新規作成: Chez/Chibi/Gauche 差分テストランナー)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`make bench_perf`, `make diff_test` ターゲット追加)
 
 ---
 
@@ -46,6 +47,6 @@ Target Branch: `feat/526-ulisp-mytkowicz-bias-elimination-and-differential-testi
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] バックエンド生成アセンブリに関数・ループの 16 バイトアライメントが正確に出力されること。
-- [ ] `make -C ulisp bench_perf` により、動的実行命令数（Instructions）の測定結果がレポートに出力されること。
-- [ ] 差分テストにおいて、Chez Scheme / Chibi Scheme との出力一致率が 100% であること。
+- [x] バックエンド生成アセンブリに関数・ループの 16 バイトアライメントが正確に出力されること。
+- [x] `make -C ulisp bench_perf` により、動的実行命令数（Instructions）の測定結果がレポートに出力されること。
+- [x] 差分テストにおいて、Chez Scheme / Chibi Scheme との出力一致率が 100% であること。

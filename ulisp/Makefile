@@ -177,7 +177,11 @@ build/ulisp_jit_combined.scm: lib/string.scm lib/printer.scm lib/reader.scm lib/
 
 build/ulisp_jit.s: build/ulisp_jit_combined.scm compiler.scm
 	@mkdir -p build
-	PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < $< > $@
+	@if [ -x build/scheme-stage2 ]; then \
+		./build/scheme-stage2 < build/ulisp_jit_combined.scm > $@; \
+	else \
+		PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < $< > $@; \
+	fi
 
 bin/ulisp-jit: build/ulisp_jit.s runtime.c
 	@mkdir -p bin
@@ -204,8 +208,14 @@ bench: bin/ulisp-jit
 bench_trio: bin/ulisp-jit
 	$(PYTHON) $(ROOT_DIR)/tools/benchmark_ilisp_ulisp.py --iterations 10
 
+bench_perf: bin/ulisp-jit
+	$(PYTHON) $(ROOT_DIR)/tools/benchmark_ilisp_ulisp.py --iterations 10 --perf
+
 bench_ci: bin/ulisp-jit
 	$(PYTHON) $(ROOT_DIR)/tools/benchmark_ilisp_ulisp.py --iterations 5 --compare $(ROOT_DIR)/outputs/benchmarks/latest.json --threshold 2.5
+
+diff_test: bin/ulisp-jit
+	$(PYTHON) $(ROOT_DIR)/tools/differential_test_ulisp.py
 
 # --- Comprehensive Test Suite ---
 test_aot: core

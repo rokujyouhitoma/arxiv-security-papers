@@ -401,9 +401,8 @@
     (emit "")))
 
 ;;; Pass 7b Entrypoint: Takes %lir-program and emits complete ANSI C99 source
-(define (emit-c prog . opt-gc-mode)
-  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
-         (funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-c prog gc-mode)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))

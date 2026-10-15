@@ -1,0 +1,298 @@
+{
+  "timestamp": "2026-10-16 10:02:14",
+  "system": {
+    "os": "Linux",
+    "arch": "x86_64",
+    "processor": "x86_64",
+    "python_version": "3.12.3"
+  },
+  "available_runners": [
+    "ULisp-AOT",
+    "ULisp-JIT",
+    "ILisp",
+    "ChezScheme",
+    "ChibiScheme"
+  ],
+  "results": [
+    {
+      "workload_id": "fib_loop",
+      "title": "Iterative Fibonacci (fib 20)",
+      "category": "State Transition",
+      "expected": "6765",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "6765",
+        "ULisp-JIT": "6765",
+        "ILisp": "6765",
+        "ChezScheme": "6765",
+        "ChibiScheme": "6765"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.9556360018905252,
+        "ULisp-JIT": 0.8119740086840466,
+        "ILisp": 83.51833101187367,
+        "ChezScheme": 53.73856700316537,
+        "ChibiScheme": 281.1506160069257
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "fact_loop",
+      "title": "Iterative Factorial (fact 12)",
+      "category": "64-bit Arithmetic",
+      "expected": "479001600",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "479001600",
+        "ULisp-JIT": "479001600",
+        "ILisp": "479001600",
+        "ChezScheme": "479001600",
+        "ChibiScheme": "479001600"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.7658879912924021,
+        "ULisp-JIT": 0.7416709995595738,
+        "ILisp": 79.12665999901947,
+        "ChezScheme": 52.21749399788678,
+        "ChibiScheme": 260.533435997786
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "sum_loop",
+      "title": "Accumulation Loop (5,000 iters)",
+      "category": "Hot Loop",
+      "expected": "12497500",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "12497500",
+        "ULisp-JIT": "12497500",
+        "ILisp": "12497500",
+        "ChezScheme": "12497500",
+        "ChibiScheme": "12497500"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.7390760001726449,
+        "ULisp-JIT": 12.50681201054249,
+        "ILisp": 131.9005680124974,
+        "ChezScheme": 48.765629006084055,
+        "ChibiScheme": 229.53143100312445
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "poly_loop",
+      "title": "Polynomial 3x^2+5x+7 (1,000 iters)",
+      "category": "Pipeline Arithmetic",
+      "expected": "1001005000",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "1001005000",
+        "ULisp-JIT": "1001005000",
+        "ILisp": "1001005000",
+        "ChezScheme": "1001005000",
+        "ChibiScheme": "1001005000"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.9883070015348494,
+        "ULisp-JIT": 3.5135069920215756,
+        "ILisp": 82.22506800666451,
+        "ChezScheme": 47.57669099490158,
+        "ChibiScheme": 229.67983198759612
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "tri_loop",
+      "title": "Triangular Sum (tri 500)",
+      "category": "Linear Recursion",
+      "expected": "125250",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "125250",
+        "ULisp-JIT": "125250",
+        "ILisp": "125250",
+        "ChezScheme": "125250",
+        "ChibiScheme": "125250"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.7558700017398223,
+        "ULisp-JIT": 1.5642159996787086,
+        "ILisp": 73.15857599314768,
+        "ChezScheme": 47.21683499519713,
+        "ChibiScheme": 228.644570990582
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "tak",
+      "title": "Gabriel Benchmark: Takeuchi Function (tak 18 12 6)",
+      "category": "Deep Recursion / Gabriel",
+      "expected": "7",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "7",
+        "ULisp-JIT": "N/A (Loop-only JIT)",
+        "ILisp": "7",
+        "ChezScheme": "7",
+        "ChibiScheme": "7"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.9357719973195344,
+        "ULisp-JIT": 0.0,
+        "ILisp": 1095.165281003574,
+        "ChezScheme": 47.88734899193514,
+        "ChibiScheme": 224.35461399436463
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "cpstak",
+      "title": "CPS Takeuchi Function (cpstak 16 12 8)",
+      "category": "Continuation / Closures",
+      "expected": "9",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "9",
+        "ULisp-JIT": "N/A (Loop-only JIT)",
+        "ILisp": "9",
+        "ChezScheme": "9",
+        "ChibiScheme": "9"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.9283319959649816,
+        "ULisp-JIT": 0.0,
+        "ILisp": 88.07889300805982,
+        "ChezScheme": 49.63259999931324,
+        "ChibiScheme": 239.2774189938791
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "ackermann",
+      "title": "Ackermann Function (ack 3 4)",
+      "category": "Hyper-exponential Recursion",
+      "expected": "125",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "125",
+        "ULisp-JIT": "N/A (Loop-only JIT)",
+        "ILisp": "125",
+        "ChezScheme": "125",
+        "ChibiScheme": "125"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.9809890034375712,
+        "ULisp-JIT": 0.0,
+        "ILisp": 226.28960300062317,
+        "ChezScheme": 46.68402299284935,
+        "ChibiScheme": 223.27512300398666
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "diviter",
+      "title": "Division Iteration & Remainder Loop (diviter 10000)",
+      "category": "Division / Remainder",
+      "expected": "16665000",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "16665000",
+        "ULisp-JIT": "16665000",
+        "ILisp": "16665000",
+        "ChezScheme": "16665000",
+        "ChibiScheme": "16665000"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.7496960024582222,
+        "ULisp-JIT": 21.646759007126093,
+        "ILisp": 154.146180007956,
+        "ChezScheme": 46.20618000626564,
+        "ChibiScheme": 220.45686400088016
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    },
+    {
+      "workload_id": "list_sum",
+      "title": "List Accumulator & Traversal (iota 100)",
+      "category": "Heap / Pairs / List",
+      "expected": "5050",
+      "passed": true,
+      "outputs": {
+        "ULisp-AOT": "5050",
+        "ULisp-JIT": "N/A (Loop-only JIT)",
+        "ILisp": "5050",
+        "ChezScheme": "5050",
+        "ChibiScheme": "5050"
+      },
+      "latencies_ms": {
+        "ULisp-AOT": 0.7098469941411167,
+        "ULisp-JIT": 0.0,
+        "ILisp": 72.87008200364653,
+        "ChezScheme": 46.26735700003337,
+        "ChibiScheme": 225.791061995551
+      },
+      "statuses": {
+        "ULisp-AOT": true,
+        "ULisp-JIT": true,
+        "ILisp": true,
+        "ChezScheme": true,
+        "ChibiScheme": true
+      }
+    }
+  ]
+}

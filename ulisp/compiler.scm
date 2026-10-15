@@ -4655,6 +4655,7 @@
     (case op
       ((%label)
        (let ((lbl (cadr inst)))
+         (emit "    .p2align 4")
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))))
 
       ((%block)
@@ -4662,6 +4663,7 @@
              (params (caddr inst))
              (body (cdddr inst)))
          (record-x86-block-params! lbl params)
+         (emit "    .p2align 4")
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))
          (for-each emit-lir-instruction body)))
 
@@ -4901,7 +4903,7 @@
          (label-str (if (symbol? label) (symbol->string label) label))
          (body (cdr (assq 'body (cddr fn)))))
     (scan-x86-blocks! body)
-    (emit "    .p2align 3")
+    (emit "    .p2align 4")
     (emit (string-append label-str ":"))
     ;; Callee prologue: self closure pointer was in r10
     ;; Store self closure pointer at [rsp - 8]
@@ -4909,9 +4911,8 @@
     (for-each emit-lir-instruction body)))
 
 ;;; Pass 7 Entrypoint: Takes %lir-program and emits complete GNU x86-64 assembly
-(define (emit-x86-64 prog . opt-gc-mode)
-  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
-         (funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-x86-64 prog gc-mode)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))
@@ -4920,6 +4921,7 @@
     (emit "    .globl _start")
     (emit "    .weak _start")
     (emit "    .type _start, @function")
+    (emit "    .p2align 4")
     (emit "_start:")
     (emit "    mov r14, [rsp]")                ; argc
     (emit "    cmp r14, 1")
@@ -4965,6 +4967,7 @@
     (emit "")
     (emit "    .globl scheme_entry")
     (emit "    .type scheme_entry, @function")
+    (emit "    .p2align 4")
     (emit "scheme_entry:")
     (emit "    push r12")
     (emit "    sub rsp, 8")
@@ -5008,17 +5011,16 @@
                 (loop (cdr ss))))))
     (emit "    .bss")
     (emit "    .align 8")
+    (emit "    .globl ulisp_gc_state")
+    (emit "    .weak ulisp_gc_state")
     (cond
       ((eq? gc-mode 'none)
-       (emit "    .globl ulisp_gc_state")
        (emit "ulisp_gc_state:"))
       ((eq? gc-mode 'dual-space)
-       (emit "    .globl ulisp_gc_state")
        (emit "ulisp_gc_state:")
        (emit "    .space 64"))
       (else
        ;; all or generational (128 bytes)
-       (emit "    .globl ulisp_gc_state")
        (emit "ulisp_gc_state:")
        (emit "    .space 128")))
     (emit "ulisp_peek_buf:")
@@ -5038,6 +5040,7 @@
   ;; 1. I/O primitives: ulisp_read_char, ulisp_peek_char, ulisp_write_char
   (emit "    .globl ulisp_read_char")
   (emit "    .type ulisp_read_char, @function")
+  (emit "    .p2align 4")
   (emit "ulisp_read_char:")
   (emit "    lea rdx, [rip + ulisp_has_peek]")
   (emit "    cmp byte ptr [rdx], 0")
@@ -5067,6 +5070,7 @@
   (emit "")
   (emit "    .globl ulisp_peek_char")
   (emit "    .type ulisp_peek_char, @function")
+  (emit "    .p2align 4")
   (emit "ulisp_peek_char:")
   (emit "    lea rdx, [rip + ulisp_has_peek]")
   (emit "    cmp byte ptr [rdx], 0")
@@ -5092,6 +5096,7 @@
   (emit "")
   (emit "    .globl ulisp_flush")
   (emit "    .type ulisp_flush, @function")
+  (emit "    .p2align 4")
   (emit "ulisp_flush:")
   (emit "    lea rcx, [rip + ulisp_out_buf_len]")
   (emit "    mov rdx, [rcx]")
@@ -5108,6 +5113,7 @@
   (emit "")
   (emit "    .globl ulisp_emit_byte")
   (emit "    .type ulisp_emit_byte, @function")
+  (emit "    .p2align 4")
   (emit "ulisp_emit_byte:")
   (emit "    lea rcx, [rip + ulisp_out_buf_len]")
   (emit "    mov rdx, [rcx]")
@@ -5126,12 +5132,14 @@
   (emit "")
   (emit "    .globl ulisp_write_char")
   (emit "    .type ulisp_write_char, @function")
+  (emit "    .p2align 4")
   (emit "ulisp_write_char:")
   (emit "    sar rdi, 8")
   (emit "    jmp ulisp_emit_byte")
   (emit "")
   (emit "    .globl ulisp_emit_str")
   (emit "    .type ulisp_emit_str, @function")
+  (emit "    .p2align 4")
   (emit "ulisp_emit_str:")
   (emit "    push rbx")
   (emit "    sub rsp, 8")
@@ -5151,6 +5159,7 @@
   (emit "")
   (emit "    .globl ulisp_write_string")
   (emit "    .type ulisp_write_string, @function")
+  (emit "    .p2align 4")
   (emit "ulisp_write_string:")
   (emit "    sub rdi, 3")              ; untag string (tag 3)
   (emit "    jmp ulisp_emit_str")
@@ -5158,6 +5167,7 @@
   ;; 3. Scheme Value Printer: ulisp_print_value
   (emit "    .globl ulisp_print_value")
   (emit "    .type ulisp_print_value, @function")
+  (emit "    .p2align 4")
   (emit "ulisp_print_value:")
   (emit "    push rbx")
   (emit "    push r12")
@@ -5238,6 +5248,7 @@
   (emit "    pop rbx")
   (emit "    ret")
   (emit "")
+  (emit "    .p2align 4")
   (emit "ulisp_print_fixnum:")
   (emit "    push rbx")
   (emit "    push r12")
@@ -5281,6 +5292,7 @@
   (emit "    pop rbx")
   (emit "    ret")
   (emit "")
+  (emit "    .p2align 4")
   (emit "ulisp_print_char:")
   (emit "    push rbx")
   (emit "    mov rbx, rdi")
@@ -5312,6 +5324,7 @@
   (emit "    pop rbx")
   (emit "    ret")
   (emit "")
+  (emit "    .p2align 4")
   (emit "ulisp_print_pair:")
   (emit "    push rbx")
   (emit "    push r12")
@@ -5498,6 +5511,7 @@
     (case op
       ((%label)
        (let ((lbl (cadr inst)))
+         (emit "    .p2align 4")
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))))
 
       ((%block)
@@ -5505,6 +5519,7 @@
              (params (caddr inst))
              (body (cdddr inst)))
          (record-arm-block-params! lbl params)
+         (emit "    .p2align 4")
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))
          (for-each emit-arm-lir-instruction body)))
 
@@ -5790,7 +5805,7 @@
          (label-str (if (symbol? label) (symbol->string label) label))
          (body (cdr (assq 'body (cddr fn)))))
     (scan-arm-blocks! body)
-    (emit "    .p2align 2")
+    (emit "    .p2align 4")
     (emit (string-append label-str ":"))
     ;; Callee prologue: self closure pointer was in x10
     ;; Store self closure pointer at [sp, #-8]
@@ -5798,15 +5813,15 @@
     (for-each emit-arm-lir-instruction body)))
 
 ;;; Pass 7 Entrypoint: Takes %lir-program and emits complete GNU AArch64 assembly
-(define (emit-aarch64 prog . opt-gc-mode)
-  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
-         (funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-aarch64 prog gc-mode)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))
     (emit "    .text")
     (emit "    .globl scheme_entry")
     (emit "    .type scheme_entry, @function")
+    (emit "    .p2align 4")
     (emit "scheme_entry:")
     (emit "    stp x29, x30, [sp, #-32]!")
     (emit "    mov x29, sp")
@@ -6251,9 +6266,8 @@
     (emit "")))
 
 ;;; Pass 7b Entrypoint: Takes %lir-program and emits complete ANSI C99 source
-(define (emit-c prog . opt-gc-mode)
-  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
-         (funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-c prog gc-mode)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))
@@ -6327,9 +6341,7 @@
           (loop (cons expr acc))))))
 
 (define (extract-directives-and-forms raw-forms)
-  (let ((initial-gc (or (let ((v (get-environment-variable "ULISP_GC")))
-                          (if (and v (string? v)) (string->symbol v) #f))
-                        'all)))
+  (let ((initial-gc 'all))
     (let loop ((forms raw-forms)
                (target 'x86_64)
                (gc-mode initial-gc))
