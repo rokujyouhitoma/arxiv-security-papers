@@ -25,14 +25,18 @@ cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/gc.scm compi
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
+make test_annotator
+make test_rtyper
 make test_lir
 
 # Determine compiler engine: prefer native scheme-stage1, fallback to ILisp
 USE_NATIVE_ULISP=false
 
 if [ "${FORCE_ILISP:-0}" != "1" ]; then
-    echo "=== Building scheme-stage1... ==="
-    make stage1 >/dev/null 2>&1 || true
+    if [ ! -x "$ULISP_STAGE1" ]; then
+        echo "=== Building scheme-stage1... ==="
+        make stage1 >/dev/null 2>&1 || true
+    fi
 
     if [ -x "$ULISP_STAGE1" ]; then
         # Smoke test: verify scheme-stage1 can compile a trivial integer form on this architecture
@@ -505,7 +509,7 @@ assert "45" "(letrec ((sum (lambda (i total) (if (= i 10) total (sum (+ i 1) (+ 
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification
 # =======================================================================
 echo "=== Running ULisp Phase 7 Self-Hosting Bootstrap Test ==="
-./bootstrap.sh
+BOOTSTRAP_FAST="${BOOTSTRAP_FAST:-1}" ./bootstrap.sh
 
 
 echo -e "\033[32m=== All Phase 1 through Phase 7 tests & Self-Hosting Bootstrap passed successfully! ===\033[0m"

@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_lvn test_contify test_lir stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_lir stage1 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
 
 CC = gcc
@@ -48,6 +48,11 @@ test_lvn: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_lvn.scm > build/test_lvn_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_lvn_runner.scm
+
+test_annotator: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_annotator.scm > build/test_annotator_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_annotator_runner.scm
 
 test_rtyper: build/compiler_passes.scm
 	@mkdir -p build
@@ -200,7 +205,7 @@ bench_ci: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_lir test_aarch64 test_jit test_c test_aot
+test: test_passes test_annotator test_rtyper test_lir test_aarch64 test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o

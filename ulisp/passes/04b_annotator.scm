@@ -51,7 +51,7 @@
               (char=? (string-ref str 1) #\t)))))
 
 ;;; -----------------------------------------------------------------------
-;;; 2. Lattice Join (Least Upper Bound: LUB, \sqcup)
+;;; 2. Lattice Join (Least Upper Bound: LUB, \sqcup) & Meet (GLB, \sqcap)
 ;;; -----------------------------------------------------------------------
 
 (define (type-equal? t1 t2)
@@ -93,8 +93,41 @@
     ;; Disjoint types join to Top (dynamic / any)
     (else (type-top))))
 
+(define (type-meet t1 t2)
+  (cond
+    ((type-bot? t1) (type-bot))
+    ((type-bot? t2) (type-bot))
+    ((type-top? t1) t2)
+    ((type-top? t2) t1)
+    ((type-equal? t1 t2) t1)
+    ;; Range & Fixnum meet
+    ((and (type-fixnum? t1) (type-fixnum? t2))
+     (cond
+       ((and (type-has-range? t1) (type-has-range? t2))
+        (let* ((min1 (type-range-min t1))
+               (max1 (type-range-max t1))
+               (min2 (type-range-min t2))
+               (max2 (type-range-max t2))
+               (new-min (if (> min1 min2) min1 min2))
+               (new-max (if (< max1 max2) max1 max2)))
+          (if (> new-min new-max)
+              (type-bot)
+              (type-fixnum-range new-min new-max))))
+       ((type-has-range? t1) t1)
+       ((type-has-range? t2) t2)
+       (else (type-fixnum))))
+    ;; Pair meet
+    ((and (type-pair? t1) (type-pair? t2))
+     (let ((car-m (type-meet (type-pair-car t1) (type-pair-car t2)))
+           (cdr-m (type-meet (type-pair-cdr t1) (type-pair-cdr t2))))
+       (if (or (type-bot? car-m) (type-bot? cdr-m))
+           (type-bot)
+           (type-pair car-m cdr-m))))
+    ;; Disjoint types meet to Bottom
+    (else (type-bot))))
+
 ;;; -----------------------------------------------------------------------
-;;; 3. Type Environment Management
+;;; 3. Type Environment Management & Predicate Extraction
 ;;; -----------------------------------------------------------------------
 
 (define (type-env-lookup var env)
@@ -103,8 +136,23 @@
         (cdr entry)
         (type-top))))
 
+(define (type-env-lookup-fact var env)
+  (let loop ((rest env))
+    (cond
+      ((null? rest) #f)
+      ((and (pair? (car rest))
+            (pair? (caar rest))
+            (eq? (car (caar rest)) '%fact)
+            (eq? (cdr (caar rest)) var))
+       (cdar rest))
+      (else (loop (cdr rest))))))
+
 (define (type-env-extend var type env)
   (cons (cons var type) env))
+
+(define (type-env-extend-with-fact var type fact env)
+  (cons (cons (cons '%fact var) fact)
+        (cons (cons var type) env)))
 
 (define (type-env-extend-multi vars types env)
   (if (or (null? vars) (null? types))
@@ -117,9 +165,106 @@
     (if (null? rest)
         acc
         (let* ((var (caar rest))
-               (t1 (cdar rest))
+               (t1 (type-env-lookup var env1))
                (t2 (type-env-lookup var env2)))
           (loop (cdr rest) (cons (cons var (type-lub t1 t2)) acc))))))
+
+(define (predicate-op? op)
+  (memq op '(fixnum? integer? number? pair? boolean? null? symbol? string? char? procedure? zero? = < <= > >= not)))
+
+(define (extract-predicate-narrowing test env)
+  (cond
+    ;; Variable lookup: check if variable was bound to a predicate fact in ANF let
+    ((symbol? test)
+     (let ((fact (type-env-lookup-fact test env)))
+       (if fact
+           (extract-predicate-narrowing fact env)
+           (cons #f #f))))
+    ((not (pair? test))
+     (cons #f #f))
+    (else
+     (let ((op (car test)))
+       (cond
+         ((memq op '(fixnum? integer? number?))
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-fixnum))
+                      (cons var (if (type-fixnum? (type-env-lookup var env)) (type-bot) (type-env-lookup var env)))))
+              (cons #f #f)))
+         ((eq? op 'pair?)
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-pair (type-top) (type-top)))
+                      (cons var (if (type-pair? (type-env-lookup var env)) (type-bot) (type-env-lookup var env)))))
+              (cons #f #f)))
+         ((eq? op 'boolean?)
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-boolean))
+                      (cons var (if (type-boolean? (type-env-lookup var env)) (type-bot) (type-env-lookup var env)))))
+              (cons #f #f)))
+         ((eq? op 'null?)
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-null))
+                      (cons var (if (type-null? (type-env-lookup var env)) (type-bot) (type-env-lookup var env)))))
+              (cons #f #f)))
+         ((eq? op 'symbol?)
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-symbol))
+                      (cons var (if (type-symbol? (type-env-lookup var env)) (type-bot) (type-env-lookup var env)))))
+              (cons #f #f)))
+         ((eq? op 'string?)
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-string))
+                      (cons var (if (type-string? (type-env-lookup var env)) (type-bot) (type-env-lookup var env)))))
+              (cons #f #f)))
+         ((eq? op 'char?)
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-char))
+                      (cons var (if (type-char? (type-env-lookup var env)) (type-bot) (type-env-lookup var env)))))
+              (cons #f #f)))
+         ((eq? op 'procedure?)
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-closure 'any '() (type-top)))
+                      (cons var (type-env-lookup var env))))
+              (cons #f #f)))
+         ((eq? op 'zero?)
+          (if (and (pair? (cdr test)) (symbol? (cadr test)))
+              (let ((var (cadr test)))
+                (cons (cons var (type-fixnum-range 0 0))
+                      (cons var (type-env-lookup var env))))
+              (cons #f #f)))
+         ((eq? op '=)
+          (cond
+            ((and (pair? (cdr test)) (pair? (cddr test))
+                  (symbol? (cadr test)) (number? (caddr test)))
+             (let ((var (cadr test)) (n (caddr test)))
+               (cons (cons var (type-fixnum-range n n))
+                     (cons var (type-env-lookup var env)))))
+            ((and (pair? (cdr test)) (pair? (cddr test))
+                  (number? (cadr test)) (symbol? (caddr test)))
+             (let ((var (caddr test)) (n (cadr test)))
+               (cons (cons var (type-fixnum-range n n))
+                     (cons var (type-env-lookup var env)))))
+            (else (cons #f #f))))
+         ((eq? op 'not)
+          (if (pair? (cdr test))
+              (let ((sub (extract-predicate-narrowing (cadr test) env)))
+                (cons (cdr sub) (car sub)))
+              (cons #f #f)))
+         (else (cons #f #f)))))))
+
+(define (narrow-var-in-branch var test branch-then? env)
+  (let* ((narrowing (extract-predicate-narrowing test env))
+         (info (if branch-then? (car narrowing) (cdr narrowing))))
+    (if (and (pair? info) (eq? (car info) var))
+        (type-meet (type-env-lookup var env) (cdr info))
+        (type-env-lookup var env))))
 
 ;;; Global Type Tables for Whole-Program Traceability
 (define *global-type-env* (cons '() '()))
@@ -230,12 +375,28 @@
     ((pair? expr)
      (let ((op (car expr)))
        (case op
-         ;; Conditional branching
+         ;; Conditional branching with flow-sensitive narrowing
          ((if)
-          (let* ((then-t (abstract-eval-expr (caddr expr) env))
+          (let* ((test-expr (cadr expr))
+                 (narrowing (extract-predicate-narrowing test-expr env))
+                 (then-narrow (car narrowing))
+                 (else-narrow (cdr narrowing))
+                 (then-env (if (pair? then-narrow)
+                               (let* ((var (car then-narrow))
+                                      (curr-t (type-env-lookup var env))
+                                      (new-t (type-meet curr-t (cdr then-narrow))))
+                                 (type-env-extend var new-t env))
+                               env))
+                 (else-env (if (pair? else-narrow)
+                               (let* ((var (car else-narrow))
+                                      (curr-t (type-env-lookup var env))
+                                      (new-t (type-meet curr-t (cdr else-narrow))))
+                                 (type-env-extend var new-t env))
+                               env))
+                 (then-t (abstract-eval-expr (caddr expr) then-env))
                  (else-t (if (null? (cdddr expr))
                              (type-boolean)
-                             (abstract-eval-expr (cadddr expr) env))))
+                             (abstract-eval-expr (cadddr expr) else-env))))
             (type-lub then-t else-t)))
          ;; Sequential execution
          ((begin)
@@ -256,10 +417,17 @@
                                     e
                                     (let* ((b (car bs))
                                            (var (car b))
-                                           (val-t (abstract-eval-expr (cadr b) env)))
+                                           (rhs (cadr b))
+                                           (val-t (abstract-eval-expr rhs env))
+                                           (fact (if (and (pair? rhs) (predicate-op? (car rhs)))
+                                                     rhs
+                                                     #f)))
                                       (if (not (temp-var? var))
                                           (record-var-type! var val-t))
-                                      (bind-loop (cdr bs) (type-env-extend var val-t e)))))))
+                                      (bind-loop (cdr bs)
+                                                 (if fact
+                                                     (type-env-extend-with-fact var val-t fact e)
+                                                     (type-env-extend var val-t e))))))))
                 (let body-loop ((rest body) (last-t (type-top)))
                   (if (null? rest)
                       last-t

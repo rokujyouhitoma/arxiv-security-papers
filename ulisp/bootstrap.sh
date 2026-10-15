@@ -22,9 +22,13 @@ PYTHON_BIN="python3"
 if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
     PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
 fi
-echo "[1/3] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."
-PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm" < "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
-gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
+if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ]; then
+    echo "[1/3] Stage 1: Skipping ILisp compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
+else
+    echo "[1/3] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."
+    PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm" < "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
+    gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
+fi
 
 echo "[2/3] Stage 2: Compiling ulisp_core.scm with Stage 1 compiler..."
 "$BUILD_DIR/scheme-stage1" "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage2.s"

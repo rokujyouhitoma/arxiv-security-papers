@@ -2,7 +2,7 @@
 ID: 524
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] フロー依存型推論 (Flow-Sensitive Narrowing) と合流点メッセージ分割 (Path Splitting) の実装 (ID: 524)
@@ -24,11 +24,11 @@ ID: 524
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/04b_annotator.scm](../../ulisp/passes/04b_annotator.scm) (エッジ特化型伝達関数およびフロー依存 Narrowing の実装)
-- [ ] [ulisp/passes/05b_rtyper.scm](../../ulisp/passes/05b_rtyper.scm) (分岐パス特化アンボックス化の連携)
-- [ ] [ulisp/passes/06_lir.scm](../../ulisp/passes/06_lir.scm) (パス分割ノードの複製と合流点バイパス)
-- [ ] [ulisp/tests/passes/test_annotator.scm](../../ulisp/tests/passes/test_annotator.scm) (フロー依存型推論テストの拡充)
-- [ ] [ulisp/tests/passes/test_rtyper.scm](../../ulisp/tests/passes/test_rtyper.scm) (メッセージ分割アンボックス単体テスト)
+- [x] [ulisp/passes/04b_annotator.scm](../../ulisp/passes/04b_annotator.scm) (エッジ特化型伝達関数およびフロー依存 Narrowing の実装)
+- [x] [ulisp/passes/05b_rtyper.scm](../../ulisp/passes/05b_rtyper.scm) (分岐パス特化アンボックス化の連携)
+- [x] [ulisp/passes/06_lir.scm](../../ulisp/passes/06_lir.scm) (パス分割ノードの複製と合流点バイパス)
+- [x] [ulisp/tests/passes/test_annotator.scm](../../ulisp/tests/passes/test_annotator.scm) (フロー依存型推論テストの拡充)
+- [x] [ulisp/tests/passes/test_rtyper.scm](../../ulisp/tests/passes/test_rtyper.scm) (メッセージ分割アンボックス単体テスト)
 
 ---
 
@@ -45,6 +45,7 @@ Target Branch: `feat/524-ulisp-flow-sensitive-narrowing-and-path-splitting`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 条件分岐内において、先行の型述語判定に続く算術演算のタグ検査命令が 100% 除去されること。
-- [ ] 合流点における不要な多相的ディスパッチがパス分割によって排除され、実行時分岐が削減されること。
-- [ ] 全ユニットテストスイートおよびセルフホスティング固定点検証（`diff stage2.s stage3.s == 0`）が合格すること。
+- [x] 条件分岐内において、先行の型述語判定に続く算術演算のタグ検査命令が 100% 除去されること。
+- [x] 合流点における不要な多相的ディスパッチがパス分割によって排除され、実行時分岐が削減されること。
+- [x] 全ユニットテストスイートおよびセルフホスティング固定点検証（`diff stage2.s stage3.s == 0`）が合格すること。
+

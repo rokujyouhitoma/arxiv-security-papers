@@ -18,6 +18,10 @@
 (define (cdddr x) (safe-cdr (safe-cdr (safe-cdr x))))
 (define (cadar x) (safe-car (safe-cdr (safe-car x))))
 (define (cadddr x) (safe-car (safe-cdr (safe-cdr (safe-cdr x)))))
+(define (caaar x) (safe-car (safe-car (safe-car x))))
+(define (cdaar x) (safe-cdr (safe-car (safe-car x))))
+(define (caadar x) (safe-car (safe-car (safe-cdr (safe-car x)))))
+(define (cddar x) (safe-cdr (safe-cdr (safe-car x))))
 
 (define (memq item ls)
   (cond
@@ -343,3 +347,28 @@
   (if (= (modulo needed 16) 8)
       needed
       (+ needed 8)))
+
+(define (expr-has-arithmetic-on-var? expr var)
+  (cond
+    ((not (pair? expr)) #f)
+    ((and (memq (car expr) '(+ - *)) (memq var (cdr expr))) #t)
+    (else (or (expr-has-arithmetic-on-var? (car expr) var)
+              (expr-has-arithmetic-on-var? (cdr expr) var)))))
+
+(define (expr-has-conditional-or-pred-on-var? expr var)
+  (cond
+    ((not (pair? expr)) #f)
+    ((and (memq (car expr) '(fixnum? integer? number? pair? boolean? null? symbol? string? char?))
+          (memq var (cdr expr)))
+     #t)
+    ((and (eq? (car expr) 'if) (pair? (cdr expr)))
+     (or (expr-has-conditional-or-pred-on-var? (cadr expr) var)
+         (expr-has-conditional-or-pred-on-var? (caddr expr) var)
+         (if (null? (cdddr expr)) #f (expr-has-conditional-or-pred-on-var? (cadddr expr) var))))
+    (else (or (expr-has-conditional-or-pred-on-var? (car expr) var)
+              (expr-has-conditional-or-pred-on-var? (cdr expr) var)))))
+
+(define (expr-size expr)
+  (cond
+    ((not (pair? expr)) 1)
+    (else (+ 1 (expr-size (car expr)) (expr-size (cdr expr))))))

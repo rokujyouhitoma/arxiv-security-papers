@@ -292,7 +292,17 @@
   ;; 6. annotate-all whole program pass
   (let ((forms (annotate-all '((define (square x) (* x x))
                                (square 5)))))
-    (assert-equal "annotate-all preserves forms" 2 (length forms))))
+    (assert-equal "annotate-all preserves forms" 2 (length forms)))
+
+  ;; 7. Lattice GLB / Meet operation
+  (assert-equal "type-meet ranges"
+                '(fixnum 5 10)
+                (type-meet (type-fixnum-range 0 10) (type-fixnum-range 5 20)))
+
+  ;; 8. Flow-sensitive narrowing transfer function
+  (assert-equal "flow-sensitive narrowing then"
+                (type-fixnum)
+                (narrow-var-in-branch 'x '(fixnum? x) #t '((x . top)))))
 
 ;;; =======================================================================
 ;;; Pass 5b: S-RTyper Representation Typing & Unboxing Tests (05b_rtyper.scm)
@@ -354,7 +364,15 @@
                    (cond
                      ((not (pair? e)) #f)
                      ((eq? (car e) '%box-fixnum) #t)
-                     (else (or (rec (car e)) (rec (cdr e)))))))))
+                     (else (or (rec (car e)) (rec (cdr e)))))))
+
+    ;; 5. Flow-sensitive narrowing unboxing in branch
+    (let ((narrow-res (rtyper-expr '(if (fixnum? x) (+ x 1) 0) '())))
+      (assert-true "narrowing unbox in branch" (pair? narrow-res)))
+
+    ;; 6. Path Splitting on join nodes
+    (let ((split-res (rtyper-expr '(let ((v (if c 10 "s"))) (if (fixnum? v) (+ v 1) 0)) '())))
+      (assert-equal "path splitting let-if" 'if (car split-res)))))
 
 ;;; =======================================================================
 ;;; Pass 4c: Contification & Local Closure Elimination Tests (04c_contify.scm)

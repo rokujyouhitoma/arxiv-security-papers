@@ -109,6 +109,62 @@
                    ((eq? (car e) '%box-fixnum) #t)
                    (else (or (rec (car e)) (rec (cdr e))))))))
 
+;; Test 7: Flow-sensitive narrowing unboxing in conditional branches
+(reset-type-annotations!)
+(let* ((orig '(if (fixnum? x) (+ x 1) 0))
+       (typed (rtyper-expr orig '())))
+  (assert-true "narrowing unbox typed is pair" (pair? typed))
+  (assert-true "narrowing inserts %unbox-fixnum for x"
+               (let rec ((e typed))
+                 (cond
+                   ((not (pair? e)) #f)
+                   ((and (eq? (car e) '%unbox-fixnum) (pair? (cdr e)) (eq? (cadr e) 'x)) #t)
+                   (else (or (rec (car e)) (rec (cdr e)))))))
+  (assert-true "narrowing lowers + to %raw-add"
+               (let rec ((e typed))
+                 (cond
+                   ((not (pair? e)) #f)
+                   ((eq? (car e) '%raw-add) #t)
+                   (else (or (rec (car e)) (rec (cdr e)))))))
+  (assert-true "narrowing wraps raw add result in %box-fixnum"
+               (let rec ((e typed))
+                 (cond
+                   ((not (pair? e)) #f)
+                   ((eq? (car e) '%box-fixnum) #t)
+                   (else (or (rec (car e)) (rec (cdr e))))))))
+
+;; Test 8: Path Splitting on join nodes (SELF Chambers & Ungar 1989)
+(reset-type-annotations!)
+(let* ((orig '(let ((v (if c 10 "str")))
+                (if (fixnum? v)
+                    (+ v 1)
+                    (string-length v))))
+       (typed (rtyper-expr orig '())))
+  (assert-true "path-split typed is pair" (pair? typed))
+  ;; Check that the outer node is now an `if` branching on `c`
+  (assert-equal "path-split turns let-if into top if" 'if (car typed))
+  ;; Check that the fixnum branch contains %raw-add 10 1
+  (assert-true "path-split specialized path uses %raw-add"
+               (let rec ((e (caddr typed)))
+                 (cond
+                   ((not (pair? e)) #f)
+                   ((eq? (car e) '%raw-add) #t)
+                   (else (or (rec (car e)) (rec (cdr e)))))))
+  ;; Check that the redundant dynamic check (fixnum? v) was pruned from then branch
+  (assert-true "path-split pruned (fixnum? v) from then path"
+               (let rec ((e (caddr typed)))
+                 (cond
+                   ((not (pair? e)) #t)
+                   ((eq? (car e) 'fixnum?) #f)
+                   (else (and (rec (car e)) (rec (cdr e)))))))
+  ;; Check that else branch calls string-length directly
+  (assert-true "path-split specialized path uses string-length"
+               (let rec ((e (cadddr typed)))
+                 (cond
+                   ((not (pair? e)) #f)
+                   ((eq? (car e) 'string-length) #t)
+                   (else (or (rec (car e)) (rec (cdr e))))))))
+
 (display "=======================================================")
 (newline)
 (display " All ") (display *rtyper-tests-passed*)
