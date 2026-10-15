@@ -8,6 +8,7 @@
 | :---: | --- | :---: | :---: | :---: |
 | **526** | Mytkowicz 測定バイアス排除機構と動的命令数差分テスト基盤 (DSN-35) の統合 | Feature | Open (New) | [526-integrate-mytkowicz-bias-elimination-and-differential-testing.md](526-integrate-mytkowicz-bias-elimination-and-differential-testing.md) |
 | **529** | トップレベル定義の独立コンパイル構造化および自由変数解析集合演算の高速化 | Feature | Open (New) | [529-implement-toplevel-separate-compilation-and-fast-free-vars.md](529-implement-toplevel-separate-compilation-and-fast-free-vars.md) |
+| **530** | コンパイル時 GC 切り替え機構 (!gc ディレクティブ / --gc オプション) および Arena (GC-None) モードの実装 | Feature | Open (New) | [530-implement-compile-time-gc-selection-directive-and-arena-mode.md](530-implement-compile-time-gc-selection-directive-and-arena-mode.md) |
 
 ---
 
