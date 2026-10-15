@@ -2,7 +2,8 @@
 ID: 523
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed (Completed)
+完了日: 2026-10-15
 ---
 
 # [FEAT/ENH] 基本ブロック引数 (Block Arguments) 型 SSA 中間表現と Braun 法オンザフライ構築の実装 (ID: 523)
@@ -23,12 +24,13 @@ ID: 523
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/06_lir.scm](../../ulisp/passes/06_lir.scm) (基本ブロック引数型 SSA LIR 表現への拡張)
-- [ ] [ulisp/passes/04_anf.scm](../../ulisp/passes/04_anf.scm) (Braun 法によるオンザフライ変数束縛解決)
-- [ ] [ulisp/passes/07_backend_x86_64.scm](../../ulisp/passes/07_backend_x86_64.scm) (ブロック引数ジャンプのアセンブリコード生成)
-- [ ] [ulisp/passes/07_backend_aarch64.scm](../../ulisp/passes/07_backend_aarch64.scm) (AArch64 向けブロック引数ハンドリング)
-- [ ] [ulisp/docs/lir_specification.md](../../ulisp/docs/lir_specification.md) (LIR 仕様書の改定)
-- [ ] [ulisp/tests/passes/test_lir.scm](../../ulisp/tests/passes/test_lir.scm) (ブロック引数 SSA 単体テスト)
+- [x] [ulisp/passes/06_lir.scm](../../ulisp/passes/06_lir.scm) (基本ブロック引数型 SSA LIR 表現への拡張)
+- [x] [ulisp/passes/04_anf.scm](../../ulisp/passes/04_anf.scm) (Braun 法によるオンザフライ変数束縛解決)
+- [x] [ulisp/passes/07_backend_x86_64.scm](../../ulisp/passes/07_backend_x86_64.scm) (ブロック引数ジャンプのアセンブリコード生成)
+- [x] [ulisp/passes/07_backend_aarch64.scm](../../ulisp/passes/07_backend_aarch64.scm) (AArch64 向けブロック引数ハンドリング)
+- [x] [ulisp/passes/07_backend_c.scm](../../ulisp/passes/07_backend_c.scm) (Portable C 向けブロック引数ハンドリング)
+- [x] [ulisp/docs/lir_specification.md](../../ulisp/docs/lir_specification.md) (LIR 仕様書の改定)
+- [x] [ulisp/tests/passes/test_lir.scm](../../ulisp/tests/passes/test_lir.scm) (ブロック引数 SSA 単体テスト)
 
 ---
 
@@ -48,6 +50,6 @@ Target Branch: `feat/523-ulisp-block-arguments-ssa-and-braun-construction`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] $\phi$ 疑似命令を介さず、Block Arguments 形式で LIR が表現・出力されること。
-- [ ] Braun 法により、支配フロンティア計算なしで最小・刈り込み済み SSA がオンザフライ生成されること。
-- [ ] x86-64 および AArch64 バックエンドテストが全件 PASS し、3 段階ブートストラップの決定論的不動点が維持されること。
+- [x] $\phi$ 疑似命令を介さず、Block Arguments 形式で LIR が表現・出力されること。
+- [x] Braun 法により、支配フロンティア計算なしで最小・刈り込み済み SSA がオンザフライ生成されること。
+- [x] x86-64 および AArch64 バックエンドテストが全件 PASS し、3 段階ブートストラップの決定論的不動点が維持されること。

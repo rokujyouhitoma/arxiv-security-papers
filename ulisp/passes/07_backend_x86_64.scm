@@ -53,6 +53,62 @@
     (else
      (error "Invalid operand type in x86-64 backend:" opnd))))
 
+;;; Block Arguments tracking and parallel copy for SSA LIR
+(define *x86-block-params* (cons '() '()))
+
+(define (reset-x86-block-params!)
+  (set-car! *x86-block-params* '()))
+
+(define (record-x86-block-params! lbl params)
+  (let ((entry (assq lbl (car *x86-block-params*))))
+    (if entry
+        (set-cdr! entry params)
+        (set-car! *x86-block-params* (cons (cons lbl params) (car *x86-block-params*))))))
+
+(define (get-x86-block-params lbl)
+  (let ((entry (assq lbl (car *x86-block-params*))))
+    (if entry (cdr entry) '())))
+
+(define (scan-x86-blocks! insts)
+  (reset-x86-block-params!)
+  (for-each
+   (lambda (inst)
+     (if (and (pair? inst) (eq? (car inst) '%block))
+         (let ((lbl (cadr inst))
+               (params (caddr inst)))
+           (record-x86-block-params! lbl params))))
+   insts))
+
+(define (x86-param-location idx param)
+  (cond
+    ((eq? param '%rax) '%rax)
+    ((eq? param '%rdx) '%rdx)
+    ((eq? param '%rcx) '%rcx)
+    ((and (pair? param) (eq? (car param) '%stack)) param)
+    (else
+     (list '%stack (* -8 (+ idx 2))))))
+
+(define (emit-x86-parallel-copy target-lbl args)
+  (let ((params (get-x86-block-params target-lbl)))
+    (let loop ((ps params) (as args) (i 0))
+      (if (and (pair? ps) (pair? as))
+          (let* ((param (car ps))
+                 (arg (car as))
+                 (loc (x86-param-location i param)))
+            (cond
+              ((equal? loc arg) #f)
+              ((eq? loc '%rax)
+               (emit (string-append "    mov rax, " (operand->str arg))))
+              ((and (pair? loc) (eq? (car loc) '%stack))
+               (if (pair? arg)
+                   (begin
+                     (emit (string-append "    mov r10, " (operand->str arg)))
+                     (emit (string-append "    mov " (operand->str loc) ", r10")))
+                   (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg)))))
+              (else
+               (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg)))))
+            (loop (cdr ps) (cdr as) (+ i 1)))))))
+
 ;;; Emits a single LIR instruction to x86-64 assembly
 (define (emit-lir-instruction inst)
   (let ((op (car inst)))
@@ -61,15 +117,53 @@
        (let ((lbl (cadr inst)))
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))))
 
+      ((%block)
+       (let ((lbl (cadr inst))
+             (params (caddr inst))
+             (body (cdddr inst)))
+         (record-x86-block-params! lbl params)
+         (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))
+         (for-each emit-lir-instruction body)))
+
       ((%jump)
-       (let ((lbl (cadr inst)))
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (if (pair? args)
+             (emit-x86-parallel-copy lbl args))
          (emit (string-append "    jmp " (reg->str lbl)))))
 
       ((%jump-if-false)
-       (let ((reg (cadr inst))
-             (lbl (caddr inst)))
+       (let* ((reg (cadr inst))
+              (lbl (caddr inst))
+              (args (if (pair? (cdddr inst)) (cadddr inst) '())))
+         (if (null? args)
+             (begin
+               (emit (string-append "    cmp " (reg->str reg) ", 0x2F"))
+               (emit (string-append "    je " (if (symbol? lbl) (symbol->string lbl) lbl))))
+             (let ((cont-lbl (unique-label-sym "L_cont_")))
+               (emit (string-append "    cmp " (reg->str reg) ", 0x2F"))
+               (emit (string-append "    jne " (symbol->string cont-lbl)))
+               (emit-x86-parallel-copy lbl args)
+               (emit (string-append "    jmp " (reg->str lbl)))
+               (emit (string-append (symbol->string cont-lbl) ":"))))))
+
+      ((%jump-if)
+       (let* ((reg (cadr inst))
+              (then-lbl (caddr inst))
+              (then-args (cadddr inst))
+              (rest-else (cdr (cdddr inst)))
+              (else-lbl (car rest-else))
+              (else-args (cadr rest-else))
+              (else-tramline (unique-label-sym "L_else_tramline_")))
          (emit (string-append "    cmp " (reg->str reg) ", 0x2F"))
-         (emit (string-append "    je " (if (symbol? lbl) (symbol->string lbl) lbl)))))
+         (emit (string-append "    je " (symbol->string else-tramline)))
+         (if (pair? then-args)
+             (emit-x86-parallel-copy then-lbl then-args))
+         (emit (string-append "    jmp " (reg->str then-lbl)))
+         (emit (string-append (symbol->string else-tramline) ":"))
+         (if (pair? else-args)
+             (emit-x86-parallel-copy else-lbl else-args))
+         (emit (string-append "    jmp " (reg->str else-lbl)))))
 
       ((%jump-if-zero)
        (let ((lbl (cadr inst)))
@@ -257,6 +351,7 @@
   (let* ((label (cadr fn))
          (label-str (if (symbol? label) (symbol->string label) label))
          (body (cdr (assq 'body (cddr fn)))))
+    (scan-x86-blocks! body)
     (emit "    .p2align 3")
     (emit (string-append label-str ":"))
     ;; Callee prologue: self closure pointer was in r10
@@ -324,6 +419,7 @@
     (emit "    push r12")
     (emit "    sub rsp, 8")
     (emit "    mov r12, rdi")          ; rdi contains heap_base
+    (scan-x86-blocks! main-body)
     (for-each (lambda (inst)
                 (if (not (eq? (car inst) '%return))
                     (emit-lir-instruction inst)))

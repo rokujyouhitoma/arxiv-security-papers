@@ -73,6 +73,65 @@
     (emit "    lsl x0, x0, 6")
     (emit "    add x0, x0, 0x2F")))
 
+;;; Block Arguments tracking and parallel copy for SSA LIR (AArch64)
+(define *arm-block-params* (cons '() '()))
+
+(define (reset-arm-block-params!)
+  (set-car! *arm-block-params* '()))
+
+(define (record-arm-block-params! lbl params)
+  (let ((entry (assq lbl (car *arm-block-params*))))
+    (if entry
+        (set-cdr! entry params)
+        (set-car! *arm-block-params* (cons (cons lbl params) (car *arm-block-params*))))))
+
+(define (get-arm-block-params lbl)
+  (let ((entry (assq lbl (car *arm-block-params*))))
+    (if entry (cdr entry) '())))
+
+(define (scan-arm-blocks! insts)
+  (reset-arm-block-params!)
+  (for-each
+   (lambda (inst)
+     (if (and (pair? inst) (eq? (car inst) '%block))
+         (record-arm-block-params! (cadr inst) (caddr inst))))
+   insts))
+
+(define (arm-param-location idx param)
+  (cond
+    ((or (eq? param '%rax) (eq? param 'x0)) 'x0)
+    ((and (pair? param) (eq? (car param) '%stack)) param)
+    (else
+     (list '%stack (* -8 (+ idx 2))))))
+
+(define (emit-arm-parallel-copy target-lbl args)
+  (let ((params (get-arm-block-params target-lbl)))
+    (let loop ((ps params) (as args) (i 0))
+      (if (and (pair? ps) (pair? as))
+          (let* ((param (car ps))
+                 (arg (car as))
+                 (loc (arm-param-location i param)))
+            (cond
+              ((equal? loc arg) #f)
+              ((or (eq? loc 'x0) (eq? loc '%rax))
+               (if (integer? arg)
+                   (emit (string-append "    mov x0, #" (number->string arg)))
+                   (emit (string-append "    mov x0, " (arm-operand->str arg)))))
+              ((and (pair? loc) (eq? (car loc) '%stack))
+               (let ((offset (cadr loc)))
+                 (cond
+                   ((integer? arg)
+                    (emit (string-append "    mov x1, #" (number->string arg)))
+                    (emit (string-append "    str x1, [sp, #" (number->string offset) "]")))
+                   ((pair? arg)
+                    (emit (string-append "    ldr x1, " (arm-operand->str arg)))
+                    (emit (string-append "    str x1, [sp, #" (number->string offset) "]")))
+                   (else
+                    (emit (string-append "    str " (arm-reg->str arg) ", [sp, #" (number->string offset) "]"))))))
+              (else
+               (emit (string-append "    mov " (arm-reg->str loc) ", " (arm-operand->str arg)))))
+            (loop (cdr ps) (cdr as) (+ i 1)))))))
+
 ;;; Emits a single LIR instruction to AArch64 assembly
 (define (emit-arm-lir-instruction inst)
   (let ((op (car inst)))
@@ -81,18 +140,56 @@
        (let ((lbl (cadr inst)))
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))))
 
+      ((%block)
+       (let ((lbl (cadr inst))
+             (params (caddr inst))
+             (body (cdddr inst)))
+         (record-arm-block-params! lbl params)
+         (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))
+         (for-each emit-arm-lir-instruction body)))
+
       ((%jump)
-       (let ((lbl (cadr inst)))
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (if (pair? args)
+             (emit-arm-parallel-copy lbl args))
          (if (and (symbol? lbl)
                   (memq lbl '(%rax %rdx %rcx %rbx %r10 %r12 x0 x1 x2 x3 x10 x19)))
              (emit (string-append "    br " (arm-reg->str lbl)))
              (emit (string-append "    b " (if (symbol? lbl) (symbol->string lbl) lbl))))))
 
       ((%jump-if-false)
-       (let ((reg (cadr inst))
-             (lbl (caddr inst)))
+       (let* ((reg (cadr inst))
+              (lbl (caddr inst))
+              (args (if (pair? (cdddr inst)) (cadddr inst) '())))
+         (if (null? args)
+             (begin
+               (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
+               (emit (string-append "    b.eq " (if (symbol? lbl) (symbol->string lbl) lbl))))
+             (let ((cont-lbl (unique-label-sym "L_cont_")))
+               (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
+               (emit (string-append "    b.ne " (symbol->string cont-lbl)))
+               (emit-arm-parallel-copy lbl args)
+               (emit (string-append "    b " (if (symbol? lbl) (symbol->string lbl) lbl)))
+               (emit (string-append (symbol->string cont-lbl) ":"))))))
+
+      ((%jump-if)
+       (let* ((reg (cadr inst))
+              (then-lbl (caddr inst))
+              (then-args (cadddr inst))
+              (rest-else (cdr (cdddr inst)))
+              (else-lbl (car rest-else))
+              (else-args (cadr rest-else))
+              (else-tramline (unique-label-sym "L_else_tramline_")))
          (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
-         (emit (string-append "    b.eq " (if (symbol? lbl) (symbol->string lbl) lbl)))))
+         (emit (string-append "    b.eq " (symbol->string else-tramline)))
+         (if (pair? then-args)
+             (emit-arm-parallel-copy then-lbl then-args))
+         (emit (string-append "    b " (if (symbol? then-lbl) (symbol->string then-lbl) then-lbl)))
+         (emit (string-append (symbol->string else-tramline) ":"))
+         (if (pair? else-args)
+             (emit-arm-parallel-copy else-lbl else-args))
+         (emit (string-append "    b " (if (symbol? else-lbl) (symbol->string else-lbl) else-lbl)))))
 
       ((%jump-if-zero)
        (let ((lbl (cadr inst)))
@@ -323,6 +420,7 @@
   (let* ((label (cadr fn))
          (label-str (if (symbol? label) (symbol->string label) label))
          (body (cdr (assq 'body (cddr fn)))))
+    (scan-arm-blocks! body)
     (emit "    .p2align 2")
     (emit (string-append label-str ":"))
     ;; Callee prologue: self closure pointer was in x10
@@ -344,6 +442,7 @@
     (emit "    mov x29, sp")
     (emit "    str x19, [sp, #16]")
     (emit "    mov x19, x0")          ; x0 contains heap_base from C runtime
+    (scan-arm-blocks! main-body)
     (for-each (lambda (inst)
                 (if (not (eq? (car inst) '%return))
                     (emit-arm-lir-instruction inst)))

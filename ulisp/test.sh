@@ -25,6 +25,7 @@ cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/gc.scm compi
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
+make test_lir
 
 # Determine compiler engine: prefer native scheme-stage1, fallback to ILisp
 USE_NATIVE_ULISP=false

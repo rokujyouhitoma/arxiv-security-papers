@@ -24,8 +24,10 @@ LIR は、Scheme 特有の高水準セマンティクス（ラムダ式、クロ
 | オペコード | 構文例 | 意味論 (Semantics) | x86-64 対応 | AArch64 対応 | C言語対応 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `%label` | `(%label .L_0)` | 基本ブロックのラベル定義 | `.L_0:` | `.L_0:` | `.L_0:` |
-| `%jump` | `(%jump .L_0)` | 無条件ジャンプ | `jmp .L_0` | `b .L_0` | `goto .L_0;` |
-| `%jump-if-false` | `(%jump-if-false %v .L_0)` | `%v` が `#f` (0x2F) の場合ジャンプ | `cmp %v, 0x2F; je .L_0` | `cmp %v, #0x2F; b.eq .L_0` | `if (%v == 0x2F) goto .L_0;` |
+| `%block` | `(%block .L_0 (p1 ...) inst...)` | 基本ブロック定義（仮引数シグネチャ付き） | `.L_0:` (引数割当) | `.L_0:` (引数割当) | `.L_0:;` (引数割当) |
+| `%jump` | `(%jump .L_0 (a1 ...))` | 無条件ジャンプ（実引数渡し付き） | 平行代入後 `jmp .L_0` | 平行代入後 `b .L_0` | 平行代入後 `goto .L_0;` |
+| `%jump-if-false` | `(%jump-if-false %v .L_0 (a1 ...))` | `%v` が `#f` (0x2F) の場合ジャンプ | `cmp %v, 0x2F; je .L_0` | `cmp %v, #0x2F; b.eq .L_0` | `if (%v == 0x2F) goto .L_0;` |
+| `%jump-if` | `(%jump-if %v .L_then (t...) .L_else (e...))` | 真偽値分岐（両枝実引数渡し付き） | `cmp; je else_tram; jmp then` | `cmp; b.eq else_tram; b then` | `if (%v != 0x2F) goto then; else goto else;` |
 | `%return` | `(%return %v)` | 手続きからのリターン（戻り値 `%v`） | `mov rax, %v; ret` | `mov x0, %v; ret` | `return %v;` |
 | `%tail-call` | `(%tail-call target (args...))` | 末尾呼び出し最適化（フレーム再利用ジャンプ） | 引数上書き後 `jmp target` | 引数上書き後 `br target` | `goto` または 引数更新後末尾呼出 |
 | `%call` | `(%call dst target (args...))` | 通常の関数呼び出し | スタック退避後 `call target` | スタック退避後 `bl target` | `dst = target(args...);` |
@@ -79,6 +81,32 @@ LIR は、Scheme 特有の高水準セマンティクス（ラムダ式、クロ
   lea rax, [r12 + 9]     # tag 0x01 (ヘッダスキップ +8 + tag 1)
   add r12, 24
   ```
+
+### 2.5 基本ブロック引数 (Block Arguments) 型 SSA と Braun 法オンザフライ構築 (CS 6120 / Issue #523)
+
+コーネル大学 CS 6120（Advanced Compilers）の設計に基づき、変則的な $\phi$ 疑似命令ノードを完全に排除し、MLIR / Swift IL と同様の基本ブロック引数（Block Arguments）型 SSA を導入している。
+
+1. **基本ブロック構文**:
+   ```scheme
+   (%block <label> (<param1> ...) <instr> ...)
+   ```
+   各基本ブロックは仮引数シグネチャを持ち、エントリ時に値を受け取る。
+
+2. **引数付きジャンプ構文**:
+   ```scheme
+   (%jump <target_label> (<arg1> ...))
+   (%jump-if <cond> <then_lbl> (<then_args> ...) <else_lbl> (<else_args> ...))
+   (%jump-if-false <cond> <else_lbl> (<else_args> ...))
+   ```
+   ターゲットブロックの仮引数に対し、ジャンプ命令が直接実引数を渡す。バックエンドは平行代入（Parallel Copy）としてターゲットレジスタまたはスタック位置へ転送するため、従来の $\phi$ 命令消去フェーズが完全に不要となる。
+
+3. **Braun らのオンザフライ最小 SSA 構築 (2013)**:
+   支配フロンティア（DF）およびドミネータ木の事前計算を排除し、AST/CFG 走査中に最小・刈り込み済み SSA を構築する：
+   - `writeVariable(var, block, val)`: ブロック局所定義を追跡。
+   - `readVariable(var, block)`: 局所定義があれば即座に返却。
+   - `readVariableRecursive(var, block)`: 単一先行ブロックの場合は先行ブロックから直接透過読み出し（Block Argument 生成を抑制）。複数先行ブロックの場合は Block Argument を配置。
+   - `sealBlock(block)`: 先行エッジ確定時に未解決プロキシ引数を再帰解決。
+   - `tryRemoveTrivialArgument`: すべての先行オペランドが同一値 `same` である自明引数を自動検知し、置換・剪定を実行。
 
 ---
 

@@ -456,8 +456,8 @@
                           %raw-add %raw-sub %raw-mul %raw-cmp %box-fixnum %unbox-fixnum
                           %neg %imul %cqo %idiv %inc %shl %shr %sar %bit-and
                           %bit-or %bit-xor %cmp %set-boolean %alloc %code-ref
-                          %str-ref %c-call %call-closure %label %jump
-                          %jump-if-false %jump-if-zero %return)))
+                          %str-ref %c-call %call-closure %label %block %jump
+                          %jump-if %jump-if-false %jump-if-zero %return)))
       (for-each
        (lambda (inst)
          (let ((op (car inst)))
@@ -483,7 +483,36 @@
     (let* ((ast-sm (closure-convert (anf-all (cp0-optimize (desugar-all '(%get-stackmap-table))))))
            (lir-sm (generate-lir ast-sm)))
       (assert-true "lir %get-stackmap-table generates lir-program" (pair? lir-sm))
-      (assert-true "lir has stackmaps clause" (not (eq? (assq 'stackmaps (cdr lir-sm)) #f))))))
+      (assert-true "lir has stackmaps clause" (not (eq? (assq 'stackmaps (cdr lir-sm)) #f))))
+
+    ;; Check Block Arguments in conditional if LIR generation
+    (let* ((ast-if (closure-convert (anf-all (cp0-optimize (desugar-all '(if (zero? (read-char)) 10 20))))))
+           (lir-if (generate-lir ast-if))
+           (main-body (cdr (assq 'body (cdr (assq '%lir-main (cdr lir-if)))))))
+      (assert-true "lir if contains %block"
+                   (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%block))) main-body))))
+
+    ;; Check Braun SSA On-the-Fly Construction Engine
+    (let ((cfg (make-braun-cfg)))
+      (braun-new-block! cfg 'entry)
+      (braun-new-block! cfg 'b_then)
+      (braun-new-block! cfg 'b_else)
+      (braun-new-block! cfg 'b_join)
+      (braun-add-edge! cfg 'entry 'b_then)
+      (braun-add-edge! cfg 'entry 'b_else)
+      (braun-add-edge! cfg 'b_then 'b_join)
+      (braun-add-edge! cfg 'b_else 'b_join)
+      (braun-write-variable! cfg 'x 'b_then 100)
+      (braun-write-variable! cfg 'x 'b_else 200)
+      (braun-seal-block! cfg 'entry)
+      (braun-seal-block! cfg 'b_then)
+      (braun-seal-block! cfg 'b_else)
+      (braun-seal-block! cfg 'b_join)
+      (let ((val (braun-read-variable cfg 'x 'b_join)))
+        (assert-true "braun join creates block argument symbol" (symbol? val))
+        (assert-equal "braun b_join has 1 parameter" 1 (length (braun-get-params cfg 'b_join)))
+        (assert-equal "braun incoming from then is 100" 100 (braun-get-incoming cfg val 'b_then))
+        (assert-equal "braun incoming from else is 200" 200 (braun-get-incoming cfg val 'b_else))))))
 
 ;;; =======================================================================
 ;;; Pass 7: Backend x86-64 Codegen Tests (07_backend_x86_64.scm)

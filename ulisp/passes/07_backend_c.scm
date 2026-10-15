@@ -75,6 +75,52 @@
     (else
      (error "Invalid operand type in C backend:" opnd))))
 
+;;; Block Arguments tracking and parallel copy for SSA LIR (C Backend)
+(define *c-block-params* (cons '() '()))
+
+(define (reset-c-block-params!)
+  (set-car! *c-block-params* '()))
+
+(define (record-c-block-params! lbl params)
+  (let ((entry (assq lbl (car *c-block-params*))))
+    (if entry
+        (set-cdr! entry params)
+        (set-car! *c-block-params* (cons (cons lbl params) (car *c-block-params*))))))
+
+(define (get-c-block-params lbl)
+  (let ((entry (assq lbl (car *c-block-params*))))
+    (if entry (cdr entry) '())))
+
+(define (scan-c-blocks! insts)
+  (reset-c-block-params!)
+  (for-each
+   (lambda (inst)
+     (if (and (pair? inst) (eq? (car inst) '%block))
+         (record-c-block-params! (cadr inst) (caddr inst))))
+   insts))
+
+(define (c-param-location idx param)
+  (cond
+    ((eq? param '%rax) '%rax)
+    ((and (pair? param) (eq? (car param) '%stack)) param)
+    (else
+     (list '%stack (* -8 (+ idx 2))))))
+
+(define (emit-c-parallel-copy target-lbl args)
+  (let ((params (get-c-block-params target-lbl)))
+    (let loop ((ps params) (as args) (i 0))
+      (if (and (pair? ps) (pair? as))
+          (let* ((param (car ps))
+                 (arg (car as))
+                 (loc (c-param-location i param)))
+            (cond
+              ((equal? loc arg) #f)
+              ((eq? loc '%rax)
+               (emit (string-append "    reg_rax = " (c-operand->str arg) ";")))
+              (else
+               (emit (string-append "    " (c-operand->str loc) " = " (c-operand->str arg) ";"))))
+            (loop (cdr ps) (cdr as) (+ i 1)))))))
+
 ;;; Emits a single LIR instruction to ANSI C statement
 (define (emit-c-instruction inst)
   (let ((op (car inst)))
@@ -83,16 +129,51 @@
        (let ((lbl (cadr inst)))
          (emit (string-append (c-sanitize-label lbl) ":;"))))
 
+      ((%block)
+       (let ((lbl (cadr inst))
+             (params (caddr inst))
+             (body (cdddr inst)))
+         (record-c-block-params! lbl params)
+         (emit (string-append (c-sanitize-label lbl) ":;"))
+         (for-each emit-c-instruction body)))
+
       ((%jump)
-       (let ((lbl (cadr inst)))
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (if (pair? args)
+             (emit-c-parallel-copy lbl args))
          (if (or (eq? lbl '%rdx) (eq? lbl '%rax) (eq? lbl '%rcx))
              (emit (string-append "    ((void (*)(void))(uintptr_t)" (c-reg->str lbl) ")(); return;"))
              (emit (string-append "    goto " (c-sanitize-label lbl) ";")))))
 
       ((%jump-if-false)
-       (let ((reg (cadr inst))
-             (lbl (caddr inst)))
-         (emit (string-append "    if (" (c-reg->str reg) " == 0x2F) goto " (c-sanitize-label lbl) ";"))))
+       (let* ((reg (cadr inst))
+              (lbl (caddr inst))
+              (args (if (pair? (cdddr inst)) (cadddr inst) '())))
+         (if (null? args)
+             (emit (string-append "    if (" (c-reg->str reg) " == 0x2F) goto " (c-sanitize-label lbl) ";"))
+             (begin
+               (emit (string-append "    if (" (c-reg->str reg) " == 0x2F) {"))
+               (emit-c-parallel-copy lbl args)
+               (emit (string-append "        goto " (c-sanitize-label lbl) ";"))
+               (emit "    }")))))
+
+      ((%jump-if)
+       (let* ((reg (cadr inst))
+              (then-lbl (caddr inst))
+              (then-args (cadddr inst))
+              (rest-else (cdr (cdddr inst)))
+              (else-lbl (car rest-else))
+              (else-args (cadr rest-else)))
+         (emit (string-append "    if (" (c-reg->str reg) " != 0x2F) {"))
+         (if (pair? then-args)
+             (emit-c-parallel-copy then-lbl then-args))
+         (emit (string-append "        goto " (c-sanitize-label then-lbl) ";"))
+         (emit "    } else {")
+         (if (pair? else-args)
+             (emit-c-parallel-copy else-lbl else-args))
+         (emit (string-append "        goto " (c-sanitize-label else-lbl) ";"))
+         (emit "    }")))
 
       ((%jump-if-zero)
        (let ((lbl (cadr inst)))
@@ -306,6 +387,7 @@
   (let* ((label (cadr fn))
          (label-str (c-sanitize-label label))
          (body (cdr (assq 'body (cddr fn)))))
+    (scan-c-blocks! body)
     (emit (string-append "static void " label-str "(void) {"))
     (emit "    *(uint64_t *)(reg_rsp - 8) = reg_r10;")
     (for-each emit-c-instruction body)
@@ -367,6 +449,7 @@
     (emit "uint64_t scheme_entry(char *heap_base) {")
     (emit "    reg_r12 = heap_base;")
     (emit "    reg_rsp = stack_mem + sizeof(stack_mem) - 1024;")
+    (scan-c-blocks! main-body)
     (for-each (lambda (inst)
                 (if (not (eq? (car inst) '%return))
                     (emit-c-instruction inst)))

@@ -3313,12 +3313,12 @@
     (lir-compile-expr test si env #f)
     (emit-lir! (list '%jump-if-false '%rax else-label))
     (lir-compile-expr then si env tail?)
-    (emit-lir! (list '%jump end-label))
-    (emit-lir! (list '%label else-label))
+    (emit-lir! (list '%jump end-label (list '%rax)))
+    (emit-lir! (list '%block else-label '()))
     (if (null? else-opt)
         (emit-lir! '(%mov %rax 47))
         (lir-compile-expr (car else-opt) si env tail?))
-    (emit-lir! (list '%label end-label))))
+    (emit-lir! (list '%block end-label (list '%rax)))))
 
 (define (lir-compile-begin exprs si env tail?)
   (if (null? exprs)
@@ -3401,8 +3401,8 @@
     ;; Compile in-body first
     (lir-compile-expr in-body next-si full-env tail?)
     (emit-lir! (list '%jump exit-lbl))
-    ;; Continuation function body entry
-    (emit-lir! (list '%label entry-lbl))
+    ;; Continuation function body entry: emitted as %block with block arguments!
+    (emit-lir! (list '%block entry-lbl (map (lambda (po) (list '%stack (cdr po))) p-offsets)))
     (lir-compile-expr f-body next-si full-env tail?)
     (emit-lir! (list '%label exit-lbl))))
 
@@ -3433,8 +3433,8 @@
                               (emit-lir! (list '%load '%rdx '%rsp t-si))
                               (emit-lir! (list '%store '%rsp p-offset '%rdx))
                               (xfer-loop (cdr ts) (cdr pos)))))
-                      ;; Directly jump to continuation target!
-                      (emit-lir! (list '%jump entry-lbl))))))))))
+                      ;; Directly jump to continuation target with block arguments!
+                      (emit-lir! (list '%jump entry-lbl (map (lambda (po) (list '%stack (cdr po))) p-offsets)))))))))))
 
 (define (lir-compile-expr expr si env tail?)
   (cond
@@ -3556,7 +3556,7 @@
   (reset-safepoints!)
   (reset-symbol-table!)
   (let ((funcs (cadr prog))
-        (main-expr (caddr prog)))
+         (main-expr (caddr prog)))
     (reset-lir!)
     (track-lir-si! -8)
     (lir-compile-expr main-expr -8 (list (cons '%raw-vars '())) #f)
@@ -3573,6 +3573,276 @@
             (list 'stackmaps safepoints)
             (cons '%lir-functions lir-funcs)
             lir-main))))
+
+;;; =======================================================================
+;;; Braun et al. (2013) On-The-Fly SSA Construction & Block Arguments Engine
+;;; "Simple and Efficient Construction of Static Single Assignment Form"
+;;; Conforms to DSN-33 Section 8.1 & Issue #523
+;;; =======================================================================
+
+(define (make-braun-cfg)
+  (list (cons 'blocks '())            ; (label . (insts ...))
+        (cons 'order '())             ; (lbl1 lbl2 ...)
+        (cons 'preds '())             ; (label . (pred1 pred2 ...))
+        (cons 'sealed '())            ; (lbl1 lbl2 ...)
+        (cons 'params '())            ; (label . (p1 p2 ...))
+        (cons 'defs '())              ; ((var . lbl) . val)
+        (cons 'incomplete '())        ; (label . ((param . var) ...))
+        (cons 'incoming '())          ; ((param . pred) . val)
+        (cons 'replacements '())      ; (param . canonical-val)
+        (cons 'terminators '())       ; (label . terminator-inst)
+        (cons 'current-block #f)))
+
+(define (braun-cfg-ref cfg key)
+  (let ((entry (assq key cfg)))
+    (if entry (cdr entry) '())))
+
+(define (braun-cfg-set! cfg key val)
+  (let ((entry (assq key cfg)))
+    (if entry
+        (set-cdr! entry val)
+        (error "Unknown Braun CFG key:" key))))
+
+(define (braun-new-block! cfg label)
+  (let ((order (braun-cfg-ref cfg 'order))
+        (blocks (braun-cfg-ref cfg 'blocks))
+        (preds (braun-cfg-ref cfg 'preds))
+        (params (braun-cfg-ref cfg 'params))
+        (incomplete (braun-cfg-ref cfg 'incomplete))
+        (terms (braun-cfg-ref cfg 'terminators)))
+    (braun-cfg-set! cfg 'order (append order (list label)))
+    (braun-cfg-set! cfg 'blocks (cons (cons label '()) blocks))
+    (braun-cfg-set! cfg 'preds (cons (cons label '()) preds))
+    (braun-cfg-set! cfg 'params (cons (cons label '()) params))
+    (braun-cfg-set! cfg 'incomplete (cons (cons label '()) incomplete))
+    (braun-cfg-set! cfg 'terminators (cons (cons label #f) terms))
+    (braun-cfg-set! cfg 'current-block label)
+    label))
+
+(define (braun-add-edge! cfg from-lbl to-lbl)
+  (let* ((preds (braun-cfg-ref cfg 'preds))
+         (entry (assq to-lbl preds)))
+    (if entry
+        (if (not (memq from-lbl (cdr entry)))
+            (set-cdr! entry (append (cdr entry) (list from-lbl))))
+        (braun-cfg-set! cfg 'preds (cons (list to-lbl from-lbl) preds)))))
+
+(define (braun-get-preds cfg block-lbl)
+  (let ((entry (assq block-lbl (braun-cfg-ref cfg 'preds))))
+    (if entry (cdr entry) '())))
+
+(define (braun-get-params cfg block-lbl)
+  (let ((entry (assq block-lbl (braun-cfg-ref cfg 'params))))
+    (if entry (cdr entry) '())))
+
+(define (braun-add-param! cfg block-lbl param)
+  (let* ((params (braun-cfg-ref cfg 'params))
+         (entry (assq block-lbl params)))
+    (if entry
+        (if (not (memq param (cdr entry)))
+            (set-cdr! entry (append (cdr entry) (list param))))
+        (braun-cfg-set! cfg 'params (cons (list block-lbl param) params)))))
+
+(define (braun-write-variable! cfg var block-lbl val)
+  (let* ((defs (braun-cfg-ref cfg 'defs))
+         (key (cons var block-lbl))
+         (entry (assoc key defs)))
+    (if entry
+        (set-cdr! entry val)
+        (braun-cfg-set! cfg 'defs (cons (cons key val) defs)))))
+
+(define (braun-resolve-val cfg val)
+  (let* ((reps (braun-cfg-ref cfg 'replacements))
+         (entry (assq val reps)))
+    (if entry
+        (braun-resolve-val cfg (cdr entry))
+        val)))
+
+(define (braun-set-incoming! cfg param pred val)
+  (let* ((inc (braun-cfg-ref cfg 'incoming))
+         (key (cons param pred))
+         (entry (assoc key inc)))
+    (if entry
+        (set-cdr! entry val)
+        (braun-cfg-set! cfg 'incoming (cons (cons key val) inc)))))
+
+(define (braun-get-incoming cfg param pred)
+  (let* ((inc (braun-cfg-ref cfg 'incoming))
+         (key (cons param pred))
+         (entry (assoc key inc)))
+    (if entry (cdr entry) #f)))
+
+(define (braun-try-remove-trivial! cfg block-lbl param)
+  (let* ((preds (braun-get-preds cfg block-lbl))
+         (same #f)
+         (trivial? #t))
+    (let loop ((ps preds))
+      (if (null? ps)
+          (if trivial?
+              (let ((replacement (if same same param)))
+                (if (not (equal? replacement param))
+                    (begin
+                      (let ((reps (braun-cfg-ref cfg 'replacements)))
+                        (braun-cfg-set! cfg 'replacements (cons (cons param replacement) reps)))
+                      (let* ((params (braun-cfg-ref cfg 'params))
+                             (p-entry (assq block-lbl params)))
+                        (if p-entry
+                            (set-cdr! p-entry (filter (lambda (p) (not (eq? p param))) (cdr p-entry)))))
+                      replacement)
+                    param))
+              param)
+          (let* ((pred (car ps))
+                 (op (braun-resolve-val cfg (braun-get-incoming cfg param pred))))
+            (cond
+              ((or (equal? op param) (equal? op same))
+               (loop (cdr ps)))
+              ((eq? same #f)
+               (set! same op)
+               (loop (cdr ps)))
+              (else
+               (set! trivial? #f)
+               (loop '()))))))))
+
+(define (braun-add-arguments! cfg block-lbl param var)
+  (let ((preds (braun-get-preds cfg block-lbl)))
+    (for-each
+     (lambda (pred)
+       (let ((val (braun-read-variable cfg var pred)))
+         (braun-set-incoming! cfg param pred val)))
+     preds)
+    (braun-try-remove-trivial! cfg block-lbl param)))
+
+(define (braun-read-variable-recursive cfg var block-lbl)
+  (let* ((sealed (braun-cfg-ref cfg 'sealed))
+         (is-sealed? (memq block-lbl sealed)))
+    (if (not is-sealed?)
+        ;; Incomplete CFG: block not sealed yet
+        (let ((param (unique-label-sym (string-append "ba_" (symbol->string var) "_"))))
+          (braun-add-param! cfg block-lbl param)
+          (let* ((incomp (braun-cfg-ref cfg 'incomplete))
+                 (entry (assq block-lbl incomp)))
+            (if entry
+                (set-cdr! entry (cons (cons param var) (cdr entry)))
+                (braun-cfg-set! cfg 'incomplete (cons (list block-lbl (cons param var)) incomp))))
+          (braun-write-variable! cfg var block-lbl param)
+          param)
+        ;; Sealed block
+        (let ((preds (braun-get-preds cfg block-lbl)))
+          (cond
+            ((null? preds)
+             var)
+            ((null? (cdr preds))
+             ;; Single predecessor optimization: no block argument needed!
+             (let ((val (braun-read-variable cfg var (car preds))))
+               (braun-write-variable! cfg var block-lbl val)
+               val))
+            (else
+             ;; Multiple predecessors: create block argument
+             (let ((param (unique-label-sym (string-append "ba_" (symbol->string var) "_"))))
+               (braun-add-param! cfg block-lbl param)
+               (braun-write-variable! cfg var block-lbl param)
+               (let ((resolved (braun-add-arguments! cfg block-lbl param var)))
+                 (braun-write-variable! cfg var block-lbl resolved)
+                 resolved))))))))
+
+(define (braun-read-variable cfg var block-lbl)
+  (let* ((defs (braun-cfg-ref cfg 'defs))
+         (key (cons var block-lbl))
+         (entry (assoc key defs)))
+    (if entry
+        (braun-resolve-val cfg (cdr entry))
+        (braun-read-variable-recursive cfg var block-lbl))))
+
+(define (braun-seal-block! cfg block-lbl)
+  (let ((sealed (braun-cfg-ref cfg 'sealed)))
+    (if (not (memq block-lbl sealed))
+        (begin
+          (braun-cfg-set! cfg 'sealed (cons block-lbl sealed))
+          (let* ((incomp-entry (assq block-lbl (braun-cfg-ref cfg 'incomplete)))
+                 (incomps (if incomp-entry (cdr incomp-entry) '())))
+            (if incomp-entry (set-cdr! incomp-entry '()))
+            (for-each
+             (lambda (pair)
+               (let ((param (car pair))
+                     (var (cdr pair)))
+                 (braun-add-arguments! cfg block-lbl param var)))
+             (reverse incomps)))))))
+
+(define (braun-emit-inst! cfg block-lbl inst)
+  (let* ((blocks (braun-cfg-ref cfg 'blocks))
+         (entry (assq block-lbl blocks)))
+    (if entry
+        (set-cdr! entry (append (cdr entry) (list inst)))
+        (braun-cfg-set! cfg 'blocks (cons (list block-lbl inst) blocks)))))
+
+(define (braun-get-insts cfg block-lbl)
+  (let ((entry (assq block-lbl (braun-cfg-ref cfg 'blocks))))
+    (if entry (cdr entry) '())))
+
+(define (braun-set-terminator! cfg block-lbl term)
+  (let* ((terms (braun-cfg-ref cfg 'terminators))
+         (entry (assq block-lbl terms)))
+    (if entry
+        (set-cdr! entry term)
+        (braun-cfg-set! cfg 'terminators (cons (cons block-lbl term) terms)))))
+
+(define (braun-get-terminator cfg block-lbl)
+  (let ((entry (assq block-lbl (braun-cfg-ref cfg 'terminators))))
+    (if entry (cdr entry) #f)))
+
+;;; Converts a Braun CFG into structured Block Arguments LIR
+(define (braun-cfg->lir cfg)
+  (let ((order (braun-cfg-ref cfg 'order)))
+    (map
+     (lambda (lbl)
+       (let* ((params (braun-get-params cfg lbl))
+              (raw-insts (braun-get-insts cfg lbl))
+              ;; Resolve any variables in instructions
+              (insts
+               (map (lambda (inst)
+                      (map (lambda (elem) (braun-resolve-val cfg elem)) inst))
+                    raw-insts))
+              (term (braun-get-terminator cfg lbl))
+              (term-inst
+               (cond
+                 ((not term) '())
+                 ((eq? (car term) '%jump)
+                  (let* ((target (cadr term))
+                         (target-params (braun-get-params cfg target))
+                         (args (map (lambda (p)
+                                      (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
+                                    target-params)))
+                    (list (list '%jump target args))))
+                 ((eq? (car term) '%jump-if-false)
+                  (let* ((cond-var (braun-resolve-val cfg (cadr term)))
+                         (else-lbl (caddr term))
+                         (else-params (braun-get-params cfg else-lbl))
+                         (else-args (map (lambda (p)
+                                           (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
+                                         else-params)))
+                    (list (list '%jump-if-false cond-var else-lbl else-args))))
+                 ((eq? (car term) '%jump-if)
+                  (let* ((cond-var (braun-resolve-val cfg (cadr term)))
+                         (then-lbl (caddr term))
+                         (else-lbl (cadddr term))
+                         (then-params (braun-get-params cfg then-lbl))
+                         (then-args (map (lambda (p)
+                                           (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
+                                         then-params))
+                         (else-params (braun-get-params cfg else-lbl))
+                         (else-args (map (lambda (p)
+                                           (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
+                                         else-params)))
+                    (list (list '%jump-if cond-var then-lbl then-args else-lbl else-args))))
+                 ((eq? (car term) '%return)
+                  (let ((val (if (pair? (cdr term))
+                                 (braun-resolve-val cfg (cadr term))
+                                 '%rax)))
+                    (list (list '%return val))))
+                 (else (list term))))
+              (block-body (append insts term-inst)))
+         (cons '%block (cons lbl (cons params block-body)))))
+     order)))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native x86-64 Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & ulisp/docs/lir_specification.md
@@ -3628,6 +3898,62 @@
     (else
      (error "Invalid operand type in x86-64 backend:" opnd))))
 
+;;; Block Arguments tracking and parallel copy for SSA LIR
+(define *x86-block-params* (cons '() '()))
+
+(define (reset-x86-block-params!)
+  (set-car! *x86-block-params* '()))
+
+(define (record-x86-block-params! lbl params)
+  (let ((entry (assq lbl (car *x86-block-params*))))
+    (if entry
+        (set-cdr! entry params)
+        (set-car! *x86-block-params* (cons (cons lbl params) (car *x86-block-params*))))))
+
+(define (get-x86-block-params lbl)
+  (let ((entry (assq lbl (car *x86-block-params*))))
+    (if entry (cdr entry) '())))
+
+(define (scan-x86-blocks! insts)
+  (reset-x86-block-params!)
+  (for-each
+   (lambda (inst)
+     (if (and (pair? inst) (eq? (car inst) '%block))
+         (let ((lbl (cadr inst))
+               (params (caddr inst)))
+           (record-x86-block-params! lbl params))))
+   insts))
+
+(define (x86-param-location idx param)
+  (cond
+    ((eq? param '%rax) '%rax)
+    ((eq? param '%rdx) '%rdx)
+    ((eq? param '%rcx) '%rcx)
+    ((and (pair? param) (eq? (car param) '%stack)) param)
+    (else
+     (list '%stack (* -8 (+ idx 2))))))
+
+(define (emit-x86-parallel-copy target-lbl args)
+  (let ((params (get-x86-block-params target-lbl)))
+    (let loop ((ps params) (as args) (i 0))
+      (if (and (pair? ps) (pair? as))
+          (let* ((param (car ps))
+                 (arg (car as))
+                 (loc (x86-param-location i param)))
+            (cond
+              ((equal? loc arg) #f)
+              ((eq? loc '%rax)
+               (emit (string-append "    mov rax, " (operand->str arg))))
+              ((and (pair? loc) (eq? (car loc) '%stack))
+               (if (pair? arg)
+                   (begin
+                     (emit (string-append "    mov r10, " (operand->str arg)))
+                     (emit (string-append "    mov " (operand->str loc) ", r10")))
+                   (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg)))))
+              (else
+               (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg)))))
+            (loop (cdr ps) (cdr as) (+ i 1)))))))
+
 ;;; Emits a single LIR instruction to x86-64 assembly
 (define (emit-lir-instruction inst)
   (let ((op (car inst)))
@@ -3636,15 +3962,53 @@
        (let ((lbl (cadr inst)))
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))))
 
+      ((%block)
+       (let ((lbl (cadr inst))
+             (params (caddr inst))
+             (body (cdddr inst)))
+         (record-x86-block-params! lbl params)
+         (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))
+         (for-each emit-lir-instruction body)))
+
       ((%jump)
-       (let ((lbl (cadr inst)))
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (if (pair? args)
+             (emit-x86-parallel-copy lbl args))
          (emit (string-append "    jmp " (reg->str lbl)))))
 
       ((%jump-if-false)
-       (let ((reg (cadr inst))
-             (lbl (caddr inst)))
+       (let* ((reg (cadr inst))
+              (lbl (caddr inst))
+              (args (if (pair? (cdddr inst)) (cadddr inst) '())))
+         (if (null? args)
+             (begin
+               (emit (string-append "    cmp " (reg->str reg) ", 0x2F"))
+               (emit (string-append "    je " (if (symbol? lbl) (symbol->string lbl) lbl))))
+             (let ((cont-lbl (unique-label-sym "L_cont_")))
+               (emit (string-append "    cmp " (reg->str reg) ", 0x2F"))
+               (emit (string-append "    jne " (symbol->string cont-lbl)))
+               (emit-x86-parallel-copy lbl args)
+               (emit (string-append "    jmp " (reg->str lbl)))
+               (emit (string-append (symbol->string cont-lbl) ":"))))))
+
+      ((%jump-if)
+       (let* ((reg (cadr inst))
+              (then-lbl (caddr inst))
+              (then-args (cadddr inst))
+              (rest-else (cdr (cdddr inst)))
+              (else-lbl (car rest-else))
+              (else-args (cadr rest-else))
+              (else-tramline (unique-label-sym "L_else_tramline_")))
          (emit (string-append "    cmp " (reg->str reg) ", 0x2F"))
-         (emit (string-append "    je " (if (symbol? lbl) (symbol->string lbl) lbl)))))
+         (emit (string-append "    je " (symbol->string else-tramline)))
+         (if (pair? then-args)
+             (emit-x86-parallel-copy then-lbl then-args))
+         (emit (string-append "    jmp " (reg->str then-lbl)))
+         (emit (string-append (symbol->string else-tramline) ":"))
+         (if (pair? else-args)
+             (emit-x86-parallel-copy else-lbl else-args))
+         (emit (string-append "    jmp " (reg->str else-lbl)))))
 
       ((%jump-if-zero)
        (let ((lbl (cadr inst)))
@@ -3832,6 +4196,7 @@
   (let* ((label (cadr fn))
          (label-str (if (symbol? label) (symbol->string label) label))
          (body (cdr (assq 'body (cddr fn)))))
+    (scan-x86-blocks! body)
     (emit "    .p2align 3")
     (emit (string-append label-str ":"))
     ;; Callee prologue: self closure pointer was in r10
@@ -3899,6 +4264,7 @@
     (emit "    push r12")
     (emit "    sub rsp, 8")
     (emit "    mov r12, rdi")          ; rdi contains heap_base
+    (scan-x86-blocks! main-body)
     (for-each (lambda (inst)
                 (if (not (eq? (car inst) '%return))
                     (emit-lir-instruction inst)))
@@ -4352,6 +4718,65 @@
     (emit "    lsl x0, x0, 6")
     (emit "    add x0, x0, 0x2F")))
 
+;;; Block Arguments tracking and parallel copy for SSA LIR (AArch64)
+(define *arm-block-params* (cons '() '()))
+
+(define (reset-arm-block-params!)
+  (set-car! *arm-block-params* '()))
+
+(define (record-arm-block-params! lbl params)
+  (let ((entry (assq lbl (car *arm-block-params*))))
+    (if entry
+        (set-cdr! entry params)
+        (set-car! *arm-block-params* (cons (cons lbl params) (car *arm-block-params*))))))
+
+(define (get-arm-block-params lbl)
+  (let ((entry (assq lbl (car *arm-block-params*))))
+    (if entry (cdr entry) '())))
+
+(define (scan-arm-blocks! insts)
+  (reset-arm-block-params!)
+  (for-each
+   (lambda (inst)
+     (if (and (pair? inst) (eq? (car inst) '%block))
+         (record-arm-block-params! (cadr inst) (caddr inst))))
+   insts))
+
+(define (arm-param-location idx param)
+  (cond
+    ((or (eq? param '%rax) (eq? param 'x0)) 'x0)
+    ((and (pair? param) (eq? (car param) '%stack)) param)
+    (else
+     (list '%stack (* -8 (+ idx 2))))))
+
+(define (emit-arm-parallel-copy target-lbl args)
+  (let ((params (get-arm-block-params target-lbl)))
+    (let loop ((ps params) (as args) (i 0))
+      (if (and (pair? ps) (pair? as))
+          (let* ((param (car ps))
+                 (arg (car as))
+                 (loc (arm-param-location i param)))
+            (cond
+              ((equal? loc arg) #f)
+              ((or (eq? loc 'x0) (eq? loc '%rax))
+               (if (integer? arg)
+                   (emit (string-append "    mov x0, #" (number->string arg)))
+                   (emit (string-append "    mov x0, " (arm-operand->str arg)))))
+              ((and (pair? loc) (eq? (car loc) '%stack))
+               (let ((offset (cadr loc)))
+                 (cond
+                   ((integer? arg)
+                    (emit (string-append "    mov x1, #" (number->string arg)))
+                    (emit (string-append "    str x1, [sp, #" (number->string offset) "]")))
+                   ((pair? arg)
+                    (emit (string-append "    ldr x1, " (arm-operand->str arg)))
+                    (emit (string-append "    str x1, [sp, #" (number->string offset) "]")))
+                   (else
+                    (emit (string-append "    str " (arm-reg->str arg) ", [sp, #" (number->string offset) "]"))))))
+              (else
+               (emit (string-append "    mov " (arm-reg->str loc) ", " (arm-operand->str arg)))))
+            (loop (cdr ps) (cdr as) (+ i 1)))))))
+
 ;;; Emits a single LIR instruction to AArch64 assembly
 (define (emit-arm-lir-instruction inst)
   (let ((op (car inst)))
@@ -4360,18 +4785,56 @@
        (let ((lbl (cadr inst)))
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))))
 
+      ((%block)
+       (let ((lbl (cadr inst))
+             (params (caddr inst))
+             (body (cdddr inst)))
+         (record-arm-block-params! lbl params)
+         (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))
+         (for-each emit-arm-lir-instruction body)))
+
       ((%jump)
-       (let ((lbl (cadr inst)))
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (if (pair? args)
+             (emit-arm-parallel-copy lbl args))
          (if (and (symbol? lbl)
                   (memq lbl '(%rax %rdx %rcx %rbx %r10 %r12 x0 x1 x2 x3 x10 x19)))
              (emit (string-append "    br " (arm-reg->str lbl)))
              (emit (string-append "    b " (if (symbol? lbl) (symbol->string lbl) lbl))))))
 
       ((%jump-if-false)
-       (let ((reg (cadr inst))
-             (lbl (caddr inst)))
+       (let* ((reg (cadr inst))
+              (lbl (caddr inst))
+              (args (if (pair? (cdddr inst)) (cadddr inst) '())))
+         (if (null? args)
+             (begin
+               (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
+               (emit (string-append "    b.eq " (if (symbol? lbl) (symbol->string lbl) lbl))))
+             (let ((cont-lbl (unique-label-sym "L_cont_")))
+               (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
+               (emit (string-append "    b.ne " (symbol->string cont-lbl)))
+               (emit-arm-parallel-copy lbl args)
+               (emit (string-append "    b " (if (symbol? lbl) (symbol->string lbl) lbl)))
+               (emit (string-append (symbol->string cont-lbl) ":"))))))
+
+      ((%jump-if)
+       (let* ((reg (cadr inst))
+              (then-lbl (caddr inst))
+              (then-args (cadddr inst))
+              (rest-else (cdr (cdddr inst)))
+              (else-lbl (car rest-else))
+              (else-args (cadr rest-else))
+              (else-tramline (unique-label-sym "L_else_tramline_")))
          (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
-         (emit (string-append "    b.eq " (if (symbol? lbl) (symbol->string lbl) lbl)))))
+         (emit (string-append "    b.eq " (symbol->string else-tramline)))
+         (if (pair? then-args)
+             (emit-arm-parallel-copy then-lbl then-args))
+         (emit (string-append "    b " (if (symbol? then-lbl) (symbol->string then-lbl) then-lbl)))
+         (emit (string-append (symbol->string else-tramline) ":"))
+         (if (pair? else-args)
+             (emit-arm-parallel-copy else-lbl else-args))
+         (emit (string-append "    b " (if (symbol? else-lbl) (symbol->string else-lbl) else-lbl)))))
 
       ((%jump-if-zero)
        (let ((lbl (cadr inst)))
@@ -4602,6 +5065,7 @@
   (let* ((label (cadr fn))
          (label-str (if (symbol? label) (symbol->string label) label))
          (body (cdr (assq 'body (cddr fn)))))
+    (scan-arm-blocks! body)
     (emit "    .p2align 2")
     (emit (string-append label-str ":"))
     ;; Callee prologue: self closure pointer was in x10
@@ -4623,6 +5087,7 @@
     (emit "    mov x29, sp")
     (emit "    str x19, [sp, #16]")
     (emit "    mov x19, x0")          ; x0 contains heap_base from C runtime
+    (scan-arm-blocks! main-body)
     (for-each (lambda (inst)
                 (if (not (eq? (car inst) '%return))
                     (emit-arm-lir-instruction inst)))
@@ -4735,6 +5200,52 @@
     (else
      (error "Invalid operand type in C backend:" opnd))))
 
+;;; Block Arguments tracking and parallel copy for SSA LIR (C Backend)
+(define *c-block-params* (cons '() '()))
+
+(define (reset-c-block-params!)
+  (set-car! *c-block-params* '()))
+
+(define (record-c-block-params! lbl params)
+  (let ((entry (assq lbl (car *c-block-params*))))
+    (if entry
+        (set-cdr! entry params)
+        (set-car! *c-block-params* (cons (cons lbl params) (car *c-block-params*))))))
+
+(define (get-c-block-params lbl)
+  (let ((entry (assq lbl (car *c-block-params*))))
+    (if entry (cdr entry) '())))
+
+(define (scan-c-blocks! insts)
+  (reset-c-block-params!)
+  (for-each
+   (lambda (inst)
+     (if (and (pair? inst) (eq? (car inst) '%block))
+         (record-c-block-params! (cadr inst) (caddr inst))))
+   insts))
+
+(define (c-param-location idx param)
+  (cond
+    ((eq? param '%rax) '%rax)
+    ((and (pair? param) (eq? (car param) '%stack)) param)
+    (else
+     (list '%stack (* -8 (+ idx 2))))))
+
+(define (emit-c-parallel-copy target-lbl args)
+  (let ((params (get-c-block-params target-lbl)))
+    (let loop ((ps params) (as args) (i 0))
+      (if (and (pair? ps) (pair? as))
+          (let* ((param (car ps))
+                 (arg (car as))
+                 (loc (c-param-location i param)))
+            (cond
+              ((equal? loc arg) #f)
+              ((eq? loc '%rax)
+               (emit (string-append "    reg_rax = " (c-operand->str arg) ";")))
+              (else
+               (emit (string-append "    " (c-operand->str loc) " = " (c-operand->str arg) ";"))))
+            (loop (cdr ps) (cdr as) (+ i 1)))))))
+
 ;;; Emits a single LIR instruction to ANSI C statement
 (define (emit-c-instruction inst)
   (let ((op (car inst)))
@@ -4743,16 +5254,51 @@
        (let ((lbl (cadr inst)))
          (emit (string-append (c-sanitize-label lbl) ":;"))))
 
+      ((%block)
+       (let ((lbl (cadr inst))
+             (params (caddr inst))
+             (body (cdddr inst)))
+         (record-c-block-params! lbl params)
+         (emit (string-append (c-sanitize-label lbl) ":;"))
+         (for-each emit-c-instruction body)))
+
       ((%jump)
-       (let ((lbl (cadr inst)))
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (if (pair? args)
+             (emit-c-parallel-copy lbl args))
          (if (or (eq? lbl '%rdx) (eq? lbl '%rax) (eq? lbl '%rcx))
              (emit (string-append "    ((void (*)(void))(uintptr_t)" (c-reg->str lbl) ")(); return;"))
              (emit (string-append "    goto " (c-sanitize-label lbl) ";")))))
 
       ((%jump-if-false)
-       (let ((reg (cadr inst))
-             (lbl (caddr inst)))
-         (emit (string-append "    if (" (c-reg->str reg) " == 0x2F) goto " (c-sanitize-label lbl) ";"))))
+       (let* ((reg (cadr inst))
+              (lbl (caddr inst))
+              (args (if (pair? (cdddr inst)) (cadddr inst) '())))
+         (if (null? args)
+             (emit (string-append "    if (" (c-reg->str reg) " == 0x2F) goto " (c-sanitize-label lbl) ";"))
+             (begin
+               (emit (string-append "    if (" (c-reg->str reg) " == 0x2F) {"))
+               (emit-c-parallel-copy lbl args)
+               (emit (string-append "        goto " (c-sanitize-label lbl) ";"))
+               (emit "    }")))))
+
+      ((%jump-if)
+       (let* ((reg (cadr inst))
+              (then-lbl (caddr inst))
+              (then-args (cadddr inst))
+              (rest-else (cdr (cdddr inst)))
+              (else-lbl (car rest-else))
+              (else-args (cadr rest-else)))
+         (emit (string-append "    if (" (c-reg->str reg) " != 0x2F) {"))
+         (if (pair? then-args)
+             (emit-c-parallel-copy then-lbl then-args))
+         (emit (string-append "        goto " (c-sanitize-label then-lbl) ";"))
+         (emit "    } else {")
+         (if (pair? else-args)
+             (emit-c-parallel-copy else-lbl else-args))
+         (emit (string-append "        goto " (c-sanitize-label else-lbl) ";"))
+         (emit "    }")))
 
       ((%jump-if-zero)
        (let ((lbl (cadr inst)))
@@ -4966,6 +5512,7 @@
   (let* ((label (cadr fn))
          (label-str (c-sanitize-label label))
          (body (cdr (assq 'body (cddr fn)))))
+    (scan-c-blocks! body)
     (emit (string-append "static void " label-str "(void) {"))
     (emit "    *(uint64_t *)(reg_rsp - 8) = reg_r10;")
     (for-each emit-c-instruction body)
@@ -5027,6 +5574,7 @@
     (emit "uint64_t scheme_entry(char *heap_base) {")
     (emit "    reg_r12 = heap_base;")
     (emit "    reg_rsp = stack_mem + sizeof(stack_mem) - 1024;")
+    (scan-c-blocks! main-body)
     (for-each (lambda (inst)
                 (if (not (eq? (car inst) '%return))
                     (emit-c-instruction inst)))
