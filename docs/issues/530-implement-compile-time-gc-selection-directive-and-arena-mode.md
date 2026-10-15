@@ -9,12 +9,26 @@ ID: 530
 
 ## 1. 概要 / Summary
 ULisp コンパイラ（`ulisp/passes/08_driver.scm`）およびビルドシステムを拡張し、ターゲット環境やフットプリント要件に応じてコンパイル時に GC アルゴリズムを選択可能にする。
-1. **`generational` モード（デフォルト）**:
-   - ナーサリ空間（第0世代）と成熟空間（第1世代）を備えた世代別コピーGC（Issue #525）。高スループット・低一時停止時間を実現。
-2. **`dual-space` モード（組み込み・小メモリ向け）**:
-   - 最小限の Cheney 型 2 空間コピーGC。ナーサリ、ライトバリア、記憶集合（Remembered Set）のメタデータを一切含まず、バイナリサイズと BSS 領域を極小化。
-3. **`none` モード（Arena / Bump-only）**:
-   - 一時実行 CLI ツールや OS カーネル起動初期・マイクロコントローラ向け。GC コードを一切含まず、`R12` バンプアロケータのみで動作する極小バイナリを出力。
+
+### 3つの GC モードのサポート
+1. **`(!gc generational)` (デフォルト / 高スループット)**:
+   - 第 0 世代ナーサリ＋第 1 世代成熟空間を備えた世代別コピー GC（Issue #525）。高スループット・低一時停止時間を実現。
+2. **`(!gc dual-space)` (組み込み・極小メモリ向け)**:
+   - 最小限の Cheney 型 2 空間コピー GC。IoT / 組み込み・極小メモリ環境向けに、ライトバリアおよび記憶集合（Remembered Set）のフットプリントを完全排除。
+3. **`(!gc none)` (Arena / ゼロオーバーヘッド)**:
+   - GC コードを一切リンクしない Arena バンプアロケータのみのゼロオーバーヘッドモード。一時実行 CLI / マイクロバイナリや OS カーネル起動初期向け。
+
+### コンパイル時ディレクティブ & CLI オプション
+- **ソースコード内ディレクティブ**:
+  - ソースコード内先頭の `(!gc <mode>)` ディレクティブの構文解析（`ulisp/passes/08_driver.scm`）。
+- **CLI オプション**:
+  - コマンドライン引数 `--gc=generational|dual-space|none` のサポート。
+
+### 条件付きコード生成 & E2E 差分テスト
+- **アセンブリ・BSS 最適化**:
+  - 選択された GC モードに応じた `ulisp_gc_state`（0B / 64B / 128B）およびアセンブリシンボルの条件付き生成と最適化。
+- **E2E 差分テスト**:
+  - `tests/test_bare_metal_ulisp.py` における各モードの実行・バイナリサイズ削減効果の検証。
 
 ---
 
@@ -30,30 +44,30 @@ ULisp コンパイラ（`ulisp/passes/08_driver.scm`）およびビルドシス�
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/08_driver.scm](../../ulisp/passes/08_driver.scm) (`!gc` ディレクティブの構文解析および GC モード伝播)
-- [ ] [ulisp/passes/07_backend_x86_64.scm](../../ulisp/passes/07_backend_x86_64.scm) (選択された GC モードに応じた `ulisp_gc_state` サイズおよび初期化の最適化)
+- [ ] [ulisp/passes/08_driver.scm](../../ulisp/passes/08_driver.scm) (`!gc` ディレクティブおよび `--gc` オプションの構文解析と GC モード伝播)
+- [ ] [ulisp/passes/07_backend_x86_64.scm](../../ulisp/passes/07_backend_x86_64.scm) (選択された GC モードに応じた `ulisp_gc_state`（0B / 64B / 128B）およびアセンブリシンボルの最適化)
 - [ ] [ulisp/lib/gc.scm](../../ulisp/lib/gc.scm) (モジュール単位での独立利用およびリンク互換性)
 - [ ] [ulisp/Makefile](../../ulisp/Makefile) (ビルドターゲットおよびテスト連携)
-- [ ] [tests/test_bare_metal_ulisp.py](../../tests/test_bare_metal_ulisp.py) (各 GC モードの E2E コンパイル・バイナリサイズ比較・動作検証テスト)
+- [ ] [tests/test_bare_metal_ulisp.py](../../tests/test_bare_metal_ulisp.py) (各 GC モードの E2E コンパイル・バイナリサイズ削減効果・動作検証テスト)
 
 ---
 
 ## 4. 実装方針 / Implementation Plan
 Target Branch: `feat/530-ulisp-compile-time-gc-selection-directive`
 
-1. **`!gc` ソースコード内ディレクティブの構文解析**:
-   - `08_driver.scm` の `extract-target-and-forms` を拡張し、フォーム先頭の `(!gc <mode>)`（`generational`, `dual-space`, `none`）を抽出。
-2. **バックエンドおよびランタイムの条件付きコード生成**:
-   - `none` モード時は GC 関連シンボルや `ulisp_gc_state` を極小化し、完全な Arena 割り当てバイナリを出力。
-   - `dual-space` モード時は `ulisp_gc_state` を 64 バイトとし、ライトバリアフックを完全除外。
-   - `generational` モード時はフル機能（128 バイト状態配列＋ライトバリア）を維持。
+1. **`!gc` ディレクティブおよび `--gc` CLI オプションの実装**:
+   - `08_driver.scm` の `extract-target-and-forms` を拡張し、フォーム先頭の `(!gc <mode>)`（`generational`, `dual-space`, `none`）およびコマンドライン引数 `--gc=generational|dual-space|none` を抽出・統合。
+2. **条件付きコード生成 & BSS サイズ最適化**:
+   - `none` モード時: GC 関連シンボルや `ulisp_gc_state`（0B）を完全除去し、極小 Arena バンプアロケーションバイナリを出力。
+   - `dual-space` モード時: `ulisp_gc_state` を 64 バイトとし、ライトバリアフックを完全除外。
+   - `generational` モード時: 128 バイト状態配列＋ライトバリアフックをフル配備。
 3. **E2E 差分検証テストの配備**:
-   - `tests/test_bare_metal_ulisp.py` にて、各モード（`none`, `dual-space`, `generational`）でのコンパイル・実行・バイナリサイズ削減効果を検証。
+   - `tests/test_bare_metal_ulisp.py` にて、各モード（`none`, `dual-space`, `generational`）でのコンパイル・実行・バイナリサイズ削減効果の検証テストを追加。
 
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `(!gc none)` 指定時に GC コードを含まない極小静的バイナリが生成され、正常に実行完了すること。
-- [ ] `(!gc dual-space)` 指定時に従来の Cheney 2 空間 GC のみで動作し、ナーサリ/ライトバリア関連フットプリントが排除されること。
-- [ ] `(!gc generational)` 指定時に第 0 世代ナーサリ＋第 1 世代成熟空間の世代別コピー GC が有効になること。
-- [ ] `tests/test_bare_metal_ulisp.py` および既存の AOT テストスイートがすべて 100% PASS すること。
+- [ ] `(!gc none)` または `--gc=none` 指定時に GC コードを含まない極小静的バイナリが生成され、正常に実行完了すること。
+- [ ] `(!gc dual-space)` または `--gc=dual-space` 指定時に従来の Cheney 2 空間 GC のみで動作し、ナーサリ/ライトバリア関連フットプリント（BSS 64B）が保証されること。
+- [ ] `(!gc generational)` または `--gc=generational` 指定時に第 0 世代ナーサリ＋第 1 世代成熟空間の世代別コピー GC（BSS 128B）が有効になること。
+- [ ] `tests/test_bare_metal_ulisp.py` において各モードの実行およびバイナリサイズ削減効果が自動検証され、100% PASS すること。
