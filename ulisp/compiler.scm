@@ -4909,8 +4909,9 @@
     (for-each emit-lir-instruction body)))
 
 ;;; Pass 7 Entrypoint: Takes %lir-program and emits complete GNU x86-64 assembly
-(define (emit-x86-64 prog)
-  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-x86-64 prog . opt-gc-mode)
+  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
+         (funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))
@@ -5007,9 +5008,19 @@
                 (loop (cdr ss))))))
     (emit "    .bss")
     (emit "    .align 8")
-    (emit "    .globl ulisp_gc_state")
-    (emit "ulisp_gc_state:")
-    (emit "    .space 128")
+    (cond
+      ((eq? gc-mode 'none)
+       (emit "    .globl ulisp_gc_state")
+       (emit "ulisp_gc_state:"))
+      ((eq? gc-mode 'dual-space)
+       (emit "    .globl ulisp_gc_state")
+       (emit "ulisp_gc_state:")
+       (emit "    .space 64"))
+      (else
+       ;; all or generational (128 bytes)
+       (emit "    .globl ulisp_gc_state")
+       (emit "ulisp_gc_state:")
+       (emit "    .space 128")))
     (emit "ulisp_peek_buf:")
     (emit "    .byte 0")
     (emit "ulisp_has_peek:")
@@ -5787,8 +5798,9 @@
     (for-each emit-arm-lir-instruction body)))
 
 ;;; Pass 7 Entrypoint: Takes %lir-program and emits complete GNU AArch64 assembly
-(define (emit-aarch64 prog)
-  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-aarch64 prog . opt-gc-mode)
+  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
+         (funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))
@@ -6239,8 +6251,9 @@
     (emit "")))
 
 ;;; Pass 7b Entrypoint: Takes %lir-program and emits complete ANSI C99 source
-(define (emit-c prog)
-  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-c prog . opt-gc-mode)
+  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
+         (funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))
@@ -6313,18 +6326,34 @@
           (reverse acc)
           (loop (cons expr acc))))))
 
+(define (extract-directives-and-forms raw-forms)
+  (let ((initial-gc (or (let ((v (get-environment-variable "ULISP_GC")))
+                          (if (and v (string? v)) (string->symbol v) #f))
+                        'all)))
+    (let loop ((forms raw-forms)
+               (target 'x86_64)
+               (gc-mode initial-gc))
+      (if (null? forms)
+          (list target gc-mode '())
+          (let ((first (car forms)))
+            (cond
+              ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
+               (loop (cdr forms) (cadr first) gc-mode))
+              ((and (pair? first) (eq? (car first) '!gc) (pair? (cdr first)))
+               (loop (cdr forms) target (cadr first)))
+              (else
+               (list target gc-mode forms))))))))
+
 (define (extract-target-and-forms raw-forms)
-  (if (and (pair? raw-forms)
-           (pair? (car raw-forms))
-           (eq? (caar raw-forms) '!target))
-      (cons (cadar raw-forms) (cdr raw-forms))
-      (cons 'x86_64 raw-forms)))
+  (let ((res (extract-directives-and-forms raw-forms)))
+    (cons (car res) (caddr res))))
 
 ;;; Entry point: read all S-expressions from standard input and compile through serial pipeline
 (let* ((raw (read-all-forms))
-       (target-and-forms (extract-target-and-forms raw))
-       (target (car target-and-forms))
-       (forms (cdr target-and-forms)))
+       (directives (extract-directives-and-forms raw))
+       (target (car directives))
+       (gc-mode (cadr directives))
+       (forms (caddr directives)))
   (if (not (null? forms))
       (let* ((macro-expanded (expand-macros-in-forms forms))
              (ast0 (rewrite-top-level macro-expanded))
@@ -6340,8 +6369,8 @@
              (lir  (generate-lir ast4b)))
         (cond
           ((eq? target 'c)
-           (emit-c lir))
+           (emit-c lir gc-mode))
           ((eq? target 'aarch64)
-           (emit-aarch64 lir))
+           (emit-aarch64 lir gc-mode))
           (else
-           (emit-x86-64 lir))))))
+           (emit-x86-64 lir gc-mode))))))

@@ -438,8 +438,9 @@
     (for-each emit-arm-lir-instruction body)))
 
 ;;; Pass 7 Entrypoint: Takes %lir-program and emits complete GNU AArch64 assembly
-(define (emit-aarch64 prog)
-  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
+(define (emit-aarch64 prog . opt-gc-mode)
+  (let* ((gc-mode (if (pair? opt-gc-mode) (car opt-gc-mode) 'all))
+         (funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))

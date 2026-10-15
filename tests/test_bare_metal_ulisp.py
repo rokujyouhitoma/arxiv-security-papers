@@ -446,3 +446,171 @@ def test_bare_metal_nursery_generational_gc():
         assert "NURSERY_PROMOTION_SUCCESS" in output
         assert "NURSERY_RESET_ZERO_COST" in output
         assert "MINOR_COUNT_IS_ONE" in output
+
+
+def test_bare_metal_gc_directive_default_all():
+    """Verify that default (no directive) selects 'all' GC mode with 128-byte state in BSS."""
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+
+    test_scm_code = f"""
+{posix_code}
+
+(sys-write-string "DEFAULT_ALL_GC_SUCCESS\\n")
+(sys-exit 0)
+"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "default_gc.scm")
+        s_path = os.path.join(tmpdir, "default_gc.s")
+        bin_path = os.path.join(tmpdir, "default_gc_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(test_scm_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                ["python3", "-m", "ilisp", COMPILER_SCM],
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        # Verify assembly contains .space 128 for ulisp_gc_state
+        with open(s_path, "r", encoding="utf-8") as f_asm:
+            asm_content = f_asm.read()
+            assert "ulisp_gc_state:" in asm_content
+            assert ".space 128" in asm_content
+
+        link_res = subprocess.run(
+            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
+            capture_output=True,
+            text=True,
+        )
+        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+
+        run_res = subprocess.run([bin_path], capture_output=True)
+        assert run_res.returncode == 0
+        output = run_res.stdout.decode("utf-8")
+        assert "DEFAULT_ALL_GC_SUCCESS" in output
+
+
+def test_bare_metal_gc_directive_none_arena():
+    """Verify that (!gc none) emits 0-byte GC state in BSS for arena bump allocation."""
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+
+    test_scm_code = f"""
+(!gc none)
+{posix_code}
+
+;; Allocate objects purely with arena bump pointer
+(let ((p1 (cons 10 20))
+      (p2 (cons 30 40)))
+  (if (and (= (car p1) 10) (= (cdr p2) 40))
+      (sys-write-string "ARENA_NONE_SUCCESS\\n")
+      (sys-write-string "ARENA_FAIL\\n")))
+(sys-exit 0)
+"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "none_gc.scm")
+        s_path = os.path.join(tmpdir, "none_gc.s")
+        bin_path = os.path.join(tmpdir, "none_gc_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(test_scm_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                ["python3", "-m", "ilisp", COMPILER_SCM],
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        # Verify assembly contains ulisp_gc_state: without .space (0-byte)
+        with open(s_path, "r", encoding="utf-8") as f_asm:
+            asm_content = f_asm.read()
+            assert "ulisp_gc_state:" in asm_content
+            # Neither .space 64 nor .space 128 should follow ulisp_gc_state
+            gc_state_idx = asm_content.find("ulisp_gc_state:")
+            peek_buf_idx = asm_content.find("ulisp_peek_buf:")
+            between = asm_content[gc_state_idx:peek_buf_idx]
+            assert ".space" not in between
+
+        link_res = subprocess.run(
+            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
+            capture_output=True,
+            text=True,
+        )
+        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+
+        run_res = subprocess.run([bin_path], capture_output=True)
+        assert run_res.returncode == 0
+        output = run_res.stdout.decode("utf-8")
+        assert "ARENA_NONE_SUCCESS" in output
+
+
+def test_bare_metal_gc_directive_dual_space():
+    """Verify that (!gc dual-space) emits 64-byte GC state in BSS for Cheney 2-space GC."""
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+
+    test_scm_code = f"""
+(!gc dual-space)
+{posix_code}
+
+(sys-write-string "DUAL_SPACE_SUCCESS\\n")
+(sys-exit 0)
+"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "dual_space_gc.scm")
+        s_path = os.path.join(tmpdir, "dual_space_gc.s")
+        bin_path = os.path.join(tmpdir, "dual_space_gc_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(test_scm_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                ["python3", "-m", "ilisp", COMPILER_SCM],
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        # Verify assembly contains .space 64 for ulisp_gc_state
+        with open(s_path, "r", encoding="utf-8") as f_asm:
+            asm_content = f_asm.read()
+            assert "ulisp_gc_state:" in asm_content
+            gc_state_idx = asm_content.find("ulisp_gc_state:")
+            peek_buf_idx = asm_content.find("ulisp_peek_buf:")
+            between = asm_content[gc_state_idx:peek_buf_idx]
+            assert ".space 64" in between
+            assert ".space 128" not in between
+
+        link_res = subprocess.run(
+            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
+            capture_output=True,
+            text=True,
+        )
+        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+
+        run_res = subprocess.run([bin_path], capture_output=True)
+        assert run_res.returncode == 0
+        output = run_res.stdout.decode("utf-8")
+        assert "DUAL_SPACE_SUCCESS" in output

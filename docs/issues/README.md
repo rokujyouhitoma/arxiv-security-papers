@@ -8,7 +8,6 @@
 | :---: | --- | :---: | :---: | :---: |
 | **526** | Mytkowicz 測定バイアス排除機構と動的命令数差分テスト基盤 (DSN-35) の統合 | Feature | Open (New) | [526-integrate-mytkowicz-bias-elimination-and-differential-testing.md](526-integrate-mytkowicz-bias-elimination-and-differential-testing.md) |
 | **529** | トップレベル定義の独立コンパイル構造化および自由変数解析集合演算の高速化 | Feature | Open (New) | [529-implement-toplevel-separate-compilation-and-fast-free-vars.md](529-implement-toplevel-separate-compilation-and-fast-free-vars.md) |
-| **530** | コンパイル時 GC 切り替え機構 (!gc ディレクティブ / --gc オプション) および Arena (GC-None) モードの実装 | Feature | Open (New) | [530-implement-compile-time-gc-selection-directive-and-arena-mode.md](530-implement-compile-time-gc-selection-directive-and-arena-mode.md) |
 
 ---
 
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **530** | コンパイル時 GC 切り替え機構 (!gc ディレクティブ / --gc オプション) および Arena (GC-None) モードの実装 | Feature | 2026-10-16 | [closed/530-implement-compile-time-gc-selection-directive-and-arena-mode.md](closed/530-implement-compile-time-gc-selection-directive-and-arena-mode.md) |
 | **525** | TBAA・エスケープ解析に基づくスタック割当昇格とナーサリ世代別コピーGCの実装 | Feature | 2026-10-16 | [closed/525-implement-ulisp-tbaa-escape-analysis-and-generational-gc.md](closed/525-implement-ulisp-tbaa-escape-analysis-and-generational-gc.md) |
 | **524** | フロー依存型推論 (Flow-Sensitive Narrowing) と合流点メッセージ分割 (Path Splitting) の実装 | Feature | 2026-10-15 | [closed/524-implement-ulisp-flow-sensitive-narrowing-and-path-splitting.md](closed/524-implement-ulisp-flow-sensitive-narrowing-and-path-splitting.md) |
 | **523** | 基本ブロック引数 (Block Arguments) 型 SSA 中間表現と Braun 法オンザフライ構築の実装 | Feature | 2026-10-15 | [closed/523-implement-ulisp-block-arguments-ssa-and-braun-construction.md](closed/523-implement-ulisp-block-arguments-ssa-and-braun-construction.md) |
