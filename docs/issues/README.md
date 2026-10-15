@@ -6,8 +6,10 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **526** | Mytkowicz 測定バイアス排除機構と動的命令数差分テスト基盤 (DSN-35) の統合 | Feature | Closed (Completed) | [526-integrate-mytkowicz-bias-elimination-and-differential-testing.md](closed/526-integrate-mytkowicz-bias-elimination-and-differential-testing.md) |
 | **529** | トップレベル定義の独立コンパイル構造化および自由変数解析集合演算の高速化 | Feature | Open (New) | [529-implement-toplevel-separate-compilation-and-fast-free-vars.md](529-implement-toplevel-separate-compilation-and-fast-free-vars.md) |
+| **531** | 軽量大域脱出ハンドラスタックに基づく R7RS 例外処理機構 (guard / raise) の実装 | Feature | Open (New) | [531-implement-lightweight-exception-handling-guard-raise.md](531-implement-lightweight-exception-handling-guard-raise.md) |
+| **532** | R7RS 準拠の等価性比較述語 eqv? および標準型述語群の仕様整合化 | Feature | Open (New) | [532-implement-r7rs-eqv-and-standard-type-predicates.md](532-implement-r7rs-eqv-and-standard-type-predicates.md) |
+| **533** | パターンマッチング型衛生的マクロ展開器 (define-syntax / syntax-rules) のサブセット実装 | Feature | Open (New) | [533-implement-hygienic-syntax-rules-macro-expander.md](533-implement-hygienic-syntax-rules-macro-expander.md) |
 
 ---
 
@@ -15,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **526** | Mytkowicz 測定バイアス排除機構と動的命令数差分テスト基盤 (DSN-35) の統合 | Feature | 2026-10-16 | [closed/526-integrate-mytkowicz-bias-elimination-and-differential-testing.md](closed/526-integrate-mytkowicz-bias-elimination-and-differential-testing.md) |
 | **530** | コンパイル時 GC 切り替え機構 (!gc ディレクティブ / --gc オプション) および Arena (GC-None) モードの実装 | Feature | 2026-10-16 | [closed/530-implement-compile-time-gc-selection-directive-and-arena-mode.md](closed/530-implement-compile-time-gc-selection-directive-and-arena-mode.md) |
 | **525** | TBAA・エスケープ解析に基づくスタック割当昇格とナーサリ世代別コピーGCの実装 | Feature | 2026-10-16 | [closed/525-implement-ulisp-tbaa-escape-analysis-and-generational-gc.md](closed/525-implement-ulisp-tbaa-escape-analysis-and-generational-gc.md) |
 | **524** | フロー依存型推論 (Flow-Sensitive Narrowing) と合流点メッセージ分割 (Path Splitting) の実装 | Feature | 2026-10-15 | [closed/524-implement-ulisp-flow-sensitive-narrowing-and-path-splitting.md](closed/524-implement-ulisp-flow-sensitive-narrowing-and-path-splitting.md) |
