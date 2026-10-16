@@ -129,12 +129,16 @@
 (define (set-diff s1 s2)
   (cond
     ((null? s1) '())
+    ((null? s2) s1)
+    ((eq? s1 s2) '())
     ((memq (car s1) s2) (set-diff (cdr s1) s2))
     (else (cons (car s1) (set-diff (cdr s1) s2)))))
 
 (define (set-union s1 s2)
   (cond
     ((null? s1) s2)
+    ((null? s2) s1)
+    ((eq? s1 s2) s1)
     ((memq (car s1) s2) (set-union (cdr s1) s2))
     (else (cons (car s1) (set-union (cdr s1) s2)))))
 

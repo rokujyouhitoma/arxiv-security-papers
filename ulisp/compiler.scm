@@ -129,12 +129,16 @@
 (define (set-diff s1 s2)
   (cond
     ((null? s1) '())
+    ((null? s2) s1)
+    ((eq? s1 s2) '())
     ((memq (car s1) s2) (set-diff (cdr s1) s2))
     (else (cons (car s1) (set-diff (cdr s1) s2)))))
 
 (define (set-union s1 s2)
   (cond
     ((null? s1) s2)
+    ((null? s2) s1)
+    ((eq? s1 s2) s1)
     ((memq (car s1) s2) (set-union (cdr s1) s2))
     (else (cons (car s1) (set-union (cdr s1) s2)))))
 
@@ -828,70 +832,87 @@
 ;;; =======================================================================
 
 ;;; Extracts the list of free variables in canonical `expr` given currently bound variables `bound`.
-(define (free-vars expr bound)
+;;; Uses a single-pass depth-first accumulator to eliminate intermediate list allocations and quadratic set-union overhead.
+(define (free-vars-acc expr bound acc)
   (cond
     ((symbol? expr)
-     (if (memq expr bound) '() (list expr)))
+     (if (or (memq expr bound) (memq expr acc))
+         acc
+         (cons expr acc)))
     ((pair? expr)
      (let ((op (car expr)))
        (case op
          ((quote)
-          '())
+          acc)
          ((if)
-          (set-union (free-vars (cadr expr) bound)
-                     (set-union (free-vars (caddr expr) bound)
-                                (if (null? (cdddr expr)) '() (free-vars (cadddr expr) bound)))))
+          (let* ((a1 (free-vars-acc (cadr expr) bound acc))
+                 (a2 (free-vars-acc (caddr expr) bound a1)))
+            (if (null? (cdddr expr))
+                a2
+                (free-vars-acc (cadddr expr) bound a2))))
          ((begin)
-          (let loop ((es (cdr expr)) (acc '()))
-            (if (null? es) acc
-                (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
+          (let loop ((es (cdr expr)) (cur-acc acc))
+            (if (null? es)
+                cur-acc
+                (loop (cdr es) (free-vars-acc (car es) bound cur-acc)))))
          ((let)
           (let* ((bindings (cadr expr))
                  (body (caddr expr))
-                 (new-bound (set-union (map car* bindings) bound))
-                 (val-frees (let loop ((bs bindings) (acc '()))
-                              (if (null? bs) acc
-                                  (loop (cdr bs) (set-union acc (free-vars (cadar bs) bound)))))))
-            (set-union val-frees (free-vars body new-bound))))
+                 (b-acc (let loop ((bs bindings) (cur-acc acc))
+                          (if (null? bs)
+                              cur-acc
+                              (loop (cdr bs) (free-vars-acc (cadar bs) bound cur-acc)))))
+                 (new-bound (set-union (map car* bindings) bound)))
+            (free-vars-acc body new-bound b-acc)))
          ((letrec)
           (let* ((bindings (cadr expr))
                  (body (caddr expr))
-                 (new-bound (set-union (map car* bindings) bound)))
-            (let loop ((bs bindings) (acc (free-vars body new-bound)))
-              (if (null? bs) acc
-                  (loop (cdr bs) (set-union acc (free-vars (cadar bs) new-bound)))))))
+                 (new-bound (set-union (map car* bindings) bound))
+                 (b-acc (let loop ((bs bindings) (cur-acc acc))
+                          (if (null? bs)
+                              cur-acc
+                              (loop (cdr bs) (free-vars-acc (cadar bs) new-bound cur-acc))))))
+            (free-vars-acc body new-bound b-acc)))
          ((lambda)
           (let* ((params (cadr expr))
                  (body (caddr expr))
                  (new-bound (set-union params bound)))
-            (free-vars body new-bound)))
+            (free-vars-acc body new-bound acc)))
          ((%make-closure)
-          (let loop ((es (cddr expr)) (acc '()))
-            (if (null? es) acc
-                (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
+          (let loop ((es (cddr expr)) (cur-acc acc))
+            (if (null? es)
+                cur-acc
+                (loop (cdr es) (free-vars-acc (car es) bound cur-acc)))))
          ((%cont-fun)
           (let* ((params (caddr expr))
                  (f-body (cadddr expr))
                  (in-body (cadr (cdddr expr)))
-                 (f-bound (set-union params bound)))
-            (set-union (free-vars f-body f-bound)
-                       (free-vars in-body bound))))
+                 (f-bound (set-union params bound))
+                 (f-acc (free-vars-acc f-body f-bound acc)))
+            (free-vars-acc in-body bound f-acc)))
          ((%cont-call)
-          (let loop ((es (cddr expr)) (acc '()))
-            (if (null? es) acc
-                (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
+          (let loop ((es (cddr expr)) (cur-acc acc))
+            (if (null? es)
+                cur-acc
+                (loop (cdr es) (free-vars-acc (car es) bound cur-acc)))))
          (else
           (cond
-            ((zero-arg-prim? op) '())
+            ((zero-arg-prim? op)
+             acc)
             ((or (unary-prim? op) (or (binop-prim? op) (or (triop-prim? op) (septop-prim? op))))
-             (let loop ((es (cdr expr)) (acc '()))
-               (if (null? es) acc
-                   (loop (cdr es) (set-union acc (free-vars (car es) bound))))))
+             (let loop ((es (cdr expr)) (cur-acc acc))
+               (if (null? es)
+                   cur-acc
+                   (loop (cdr es) (free-vars-acc (car es) bound cur-acc)))))
             (else
-             (let loop ((es expr) (acc '()))
-               (if (null? es) acc
-                   (loop (cdr es) (set-union acc (free-vars (car es) bound)))))))))))
-    (else '())))
+             (let loop ((es expr) (cur-acc acc))
+               (if (null? es)
+                   cur-acc
+                   (loop (cdr es) (free-vars-acc (car es) bound cur-acc))))))))))
+    (else acc)))
+
+(define (free-vars expr bound)
+  (reverse (free-vars-acc expr bound '())))
 
 ;;; Checks whether `var` escapes (appears in non-operator position) within `expr`.
 (define (escapes? var expr)
