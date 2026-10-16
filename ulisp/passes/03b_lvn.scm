@@ -217,9 +217,9 @@
                (let ((zero-res (lvn-eval-const 0 env)))
                  (list #t (car zero-res) (cadr zero-res) (caddr zero-res))))
               (else (list #f #f #f env))))
-           ((= eq? char=?)
+           ((= eq? eqv? char=? boolean=? symbol=?)
             (cond
-              ;; (= x x) -> #t, (eq? x x) -> #t
+              ;; (= x x) -> #t, (eq? x x) -> #t, (eqv? x x) -> #t
               ((= vn1 vn2)
                (let ((true-res (lvn-eval-const #t env)))
                  (list #t (car true-res) (cadr true-res) (caddr true-res))))

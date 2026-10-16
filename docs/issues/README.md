@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **532** | R7RS 準拠の等価性比較述語 eqv? および標準型述語群の仕様整合化 | Feature | Open (New) | [532-implement-r7rs-eqv-and-standard-type-predicates.md](532-implement-r7rs-eqv-and-standard-type-predicates.md) |
 | **533** | パターンマッチング型衛生的マクロ展開器 (define-syntax / syntax-rules) のサブセット実装 | Feature | Open (New) | [533-implement-hygienic-syntax-rules-macro-expander.md](533-implement-hygienic-syntax-rules-macro-expander.md) |
 | **534** | メモリ上インメモリ構文解析および書式化のための R7RS 文字列ポート (open-input-string / open-output-string) の実装 | Feature | Open (New) | [534-implement-r7rs-string-ports.md](534-implement-r7rs-string-ports.md) |
 | **535** | 低レベルバイナリ・暗号ハッシュ・生パケット解析向け R7RS バイトベクタ (bytevector) 型の実装 | Feature | Open (New) | [535-implement-r7rs-bytevectors-for-binary-security.md](535-implement-r7rs-bytevectors-for-binary-security.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **532** | R7RS 準拠の等価性比較述語 eqv? および標準型述語群の仕様整合化 | Feature | 2026-10-16 | [closed/532-implement-r7rs-eqv-and-standard-type-predicates.md](closed/532-implement-r7rs-eqv-and-standard-type-predicates.md) |
 | **540** | スタック退避・復元および動的巻き戻し (dynamic-wind) に基づく完全第一級 call/cc の実装 | Feature | 2026-10-16 | [closed/540-implement-full-first-class-call-with-current-continuation-call-cc.md](closed/540-implement-full-first-class-call-with-current-continuation-call-cc.md) |
 | **538** | ゼロヒープ割当複数値返却のための R7RS 多値機構 (values / call-with-values / let-values) の実装 | Feature | 2026-10-16 | [closed/538-implement-r7rs-multiple-values-call-with-values.md](closed/538-implement-r7rs-multiple-values-call-with-values.md) |
 | **531** | 軽量大域脱出ハンドラスタックに基づく R7RS 例外処理機構 (guard / raise) の実装 | Feature | 2026-10-16 | [closed/531-implement-lightweight-exception-handling-guard-raise.md](closed/531-implement-lightweight-exception-handling-guard-raise.md) |

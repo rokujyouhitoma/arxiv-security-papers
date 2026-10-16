@@ -173,6 +173,18 @@ assert "#f" "(zero? 1)"
 assert "#f" "(zero? -1)"
 assert "#t" "(zero? (fxsub1 1))"
 
+# R7RS Numerical Predicates
+assert "#t" "(number? 42)"
+assert "#f" "(number? #t)"
+assert "#t" "(integer? 42)"
+assert "#f" "(integer? #\\a)"
+assert "#t" "(exact? 42)"
+assert "#t" "(exact-integer? 42)"
+assert "#f" "(inexact? 42)"
+assert "#t" "(real? 42)"
+assert "#t" "(rational? 42)"
+assert "#t" "(complex? 42)"
+
 # =======================================================================
 # Phase 2: Stack Management & Local Variables
 # =======================================================================
@@ -341,6 +353,21 @@ assert "#t" "(eq? 'a 'a)"
 assert "#f" "(eq? 'a 'b)"
 assert "#t" "(let ((x 'foo)) (eq? x 'foo))"
 assert "#f" "(let ((x 'foo)) (eq? x 'bar))"
+
+# R7RS eqv? comparisons
+assert "#t" "(eqv? 42 42)"
+assert "#f" "(eqv? 42 43)"
+assert "#t" "(eqv? #\\a #\\a)"
+assert "#f" "(eqv? #\\a #\\b)"
+assert "#t" "(eqv? 'foo 'foo)"
+assert "#f" "(eqv? 'foo 'bar)"
+assert "#t" "(let ((p (cons 1 2))) (eqv? p p))"
+assert "#f" "(eqv? (cons 1 2) (cons 1 2))"
+assert "#t" "(boolean=? #t #t)"
+assert "#t" "(boolean=? #f #f)"
+assert "#f" "(boolean=? #t #f)"
+assert "#t" "(symbol=? 'foo 'foo)"
+assert "#f" "(symbol=? 'foo 'bar)"
 
 # =======================================================================
 # Phase 5: Procedures, Closures & Tail Call Optimization (TCO)

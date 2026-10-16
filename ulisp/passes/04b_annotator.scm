@@ -317,7 +317,7 @@
     ((memq op '(fxadd1 fxsub1 %to-raw %to-fixnum))
      (type-fixnum))
     ;; Predicates -> Boolean
-    ((memq op '(= < <= > >= eq? char=? zero? fixnum? integer? number? boolean? char? null? not symbol? pair? procedure? string? eof-object?))
+    ((memq op '(= < <= > >= eq? eqv? char=? boolean=? symbol=? zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex? boolean? char? null? not symbol? pair? procedure? string? list? eof-object?))
      (type-boolean))
     ;; Data structure primitives
     ((eq? op 'cons)

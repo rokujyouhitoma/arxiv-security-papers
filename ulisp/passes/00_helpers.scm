@@ -157,7 +157,8 @@
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
              integer->symbol symbol->integer
-             zero? fixnum? integer? number? boolean? char? null? not symbol?
+             zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+             boolean? char? null? not symbol?
              car cdr pair? procedure? string?
              write-char write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
@@ -167,7 +168,7 @@
              %box-fixnum %unbox-fixnum)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?
+  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
              %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
@@ -183,10 +184,11 @@
 (define (pure-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
              integer->symbol symbol->integer
-             zero? fixnum? integer? number? boolean? char? null? not symbol?
+             zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+             boolean? char? null? not symbol? list?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-             + - * = < <= > >= modulo quotient / eq? char=? cons %closure-ref
+             + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (const? x)
@@ -214,10 +216,11 @@
     (else (list 'quote v))))
 
 (define (commutative-op? op)
-  (memq op '(+ * = eq? char=?)))
+  (memq op '(+ * = eq? eqv? char=? boolean=? symbol=?)))
 
 (define (type-predicate-op? op)
-  (memq op '(fixnum? integer? number? pair? null? boolean? char? symbol? zero? procedure? string?)))
+  (memq op '(fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+             pair? null? boolean? char? symbol? list? zero? procedure? string?)))
 
 (define (pure-accessor-op? op)
   (memq op '(car cdr)))
@@ -271,7 +274,9 @@
            ((not) (val->ast-const (if (eq? v #f) #t #f)))
            ((null?) (val->ast-const (null? v)))
            ((pair?) (val->ast-const (pair? v)))
-           ((number? fixnum? integer?) (val->ast-const (number? v)))
+           ((number? fixnum? integer? exact? exact-integer? real? rational? complex?)
+            (val->ast-const (number? v)))
+           ((inexact?) (val->ast-const #f))
            ((boolean?) (val->ast-const (boolean? v)))
            ((char?) (val->ast-const (char? v)))
            ((symbol?) (val->ast-const (symbol? v)))
@@ -299,8 +304,10 @@
            ((<=) (if (and (number? v1) (number? v2)) (val->ast-const (<= v1 v2)) #f))
            ((>) (if (and (number? v1) (number? v2)) (val->ast-const (> v1 v2)) #f))
            ((>=) (if (and (number? v1) (number? v2)) (val->ast-const (>= v1 v2)) #f))
-           ((eq?) (val->ast-const (eq? v1 v2)))
+           ((eq? eqv?) (val->ast-const (eq? v1 v2)))
            ((char=?) (if (and (char? v1) (char? v2)) (val->ast-const (char=? v1 v2)) #f))
+           ((boolean=?) (if (and (boolean? v1) (boolean? v2)) (val->ast-const (eq? v1 v2)) #f))
+           ((symbol=?) (if (and (symbol? v1) (symbol? v2)) (val->ast-const (eq? v1 v2)) #f))
            (else #f))))
       (else #f))))
 
