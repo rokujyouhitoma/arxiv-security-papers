@@ -109,6 +109,8 @@
           (cons '%make-closure (cons (cadr expr) (map cp0-expr (cddr expr)))))
          ((%with-handler)
           (list '%with-handler (cp0-expr (cadr expr)) (cp0-expr (caddr expr))))
+         ((%raw-call/cc)
+          (list '%raw-call/cc (cp0-expr (cadr expr))))
          ((%call-with-values)
           (list '%call-with-values (cp0-expr (cadr expr)) (cp0-expr (caddr expr))))
          ((%values)

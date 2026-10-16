@@ -2,7 +2,7 @@
 ID: 540
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] スタックコピー方式および dynamic-wind 統合に基づく完全な第一級継続 (call/cc) の実装 (ID: 540)
@@ -79,9 +79,9 @@ Target Branch: `feat/540-ulisp-first-class-call-cc-dynamic-wind`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `(call/cc (lambda (k) (+ 1 (k 41))))` が `41` を返すこと（通常の大域脱出）。
-- [ ] 継続 `k` を変数に保存し、関数の終了後に再度 `(k 100)` を複数回呼び出してもスタック破壊・クラッシュせず正しい結果を返すこと（Multi-shot Reentrancy）。
-- [ ] `dynamic-wind` の `before` / `after` ハンドラが、継続によるスコープの脱出・再突入時に仕様通り正しく発火すること。
-- [ ] `call/cc` と `values`（Issue #538）が連携し、多値を受け取って継続復帰できること。
-- [ ] 協調型コルーチン（Coroutine generator）が `call/cc` を用いて正常に動作すること。
-- [ ] セルフホスティング固定点ブートストラップ（`bootstrap.sh`）および差分テスト（`make -C ulisp diff_test`）が 100% 合格すること。
+- [x] `(call/cc (lambda (k) (+ 1 (k 41))))` が `41` を返すこと（通常の大域脱出）。
+- [x] 継続 `k` を変数に保存し、関数の終了後に再度 `(k 100)` を複数回呼び出してもスタック破壊・クラッシュせず正しい結果を返すこと（Multi-shot Reentrancy）。
+- [x] `dynamic-wind` の `before` / `after` ハンドラが、継続によるスコープの脱出・再突入時に仕様通り正しく発火すること。
+- [x] `call/cc` と `values`（Issue #538）が連携し、多値を受け取って継続復帰できること。
+- [x] 協調型コルーチン（Coroutine generator）が `call/cc` を用いて正常に動作すること。
+- [x] セルフホスティング固定点ブートストラップ（`bootstrap.sh`）および差分テスト（`make -C ulisp diff_test`）が 100% 合格すること。

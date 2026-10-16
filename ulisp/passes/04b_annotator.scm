@@ -474,7 +474,7 @@
          ((lambda)
           (let ((params (cadr expr)))
             (type-closure (unique-label-sym "lam") params (type-top))))
-         ((%with-handler %call-with-values %values)
+         ((%with-handler %call-with-values %values %raw-call/cc)
           (type-top))
          ;; Procedure call or primitive
          (else

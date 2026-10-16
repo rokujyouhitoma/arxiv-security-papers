@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-10-16 16:43:55",
+  "timestamp": "2026-10-16 20:59:29",
   "system": {
     "os": "Linux",
     "arch": "x86_64",
     "processor": "x86_64",
-    "python_version": "3.14.7"
+    "python_version": "3.12.3"
   },
   "available_runners": [
     "ULisp-AOT",
@@ -28,11 +28,11 @@
         "ChibiScheme": "6765"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7714130042586476,
-        "ULisp-JIT": 1.6830670065246522,
-        "ILisp": 74.90711100399494,
-        "ChezScheme": 64.62910899426788,
-        "ChibiScheme": 254.1669940110296
+        "ULisp-AOT": 0.7186779985204339,
+        "ULisp-JIT": 0.7962620002217591,
+        "ILisp": 78.45900300890207,
+        "ChezScheme": 61.150652007199824,
+        "ChibiScheme": 282.4144189944491
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -56,11 +56,11 @@
         "ChibiScheme": "479001600"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.8569240017095581,
-        "ULisp-JIT": 0.790163001511246,
-        "ILisp": 77.32674801081885,
-        "ChezScheme": 59.86693099839613,
-        "ChibiScheme": 248.30302999180276
+        "ULisp-AOT": 0.7322400051634759,
+        "ULisp-JIT": 0.7111790182534605,
+        "ILisp": 64.44507598644122,
+        "ChezScheme": 42.06636099843308,
+        "ChibiScheme": 217.8924060135614
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -84,11 +84,11 @@
         "ChibiScheme": "12497500"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.8149060013238341,
-        "ULisp-JIT": 11.1849459935911,
-        "ILisp": 113.58768999343738,
-        "ChezScheme": 49.826531001599506,
-        "ChibiScheme": 235.22386499098502
+        "ULisp-AOT": 0.7482939981855452,
+        "ULisp-JIT": 10.00887801637873,
+        "ILisp": 102.62264500488527,
+        "ChezScheme": 51.138586015440524,
+        "ChibiScheme": 217.5426270114258
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -103,20 +103,20 @@
       "title": "Polynomial 3x^2+5x+7 (1,000 iters)",
       "category": "Pipeline Arithmetic",
       "expected": "1001005000",
-      "passed": false,
+      "passed": true,
       "outputs": {
-        "ULisp-AOT": "999002",
+        "ULisp-AOT": "1001005000",
         "ULisp-JIT": "1001005000",
         "ILisp": "1001005000",
         "ChezScheme": "1001005000",
         "ChibiScheme": "1001005000"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7173789927037433,
-        "ULisp-JIT": 3.6643860075855628,
-        "ILisp": 90.87111400731374,
-        "ChezScheme": 51.1912410001969,
-        "ChibiScheme": 246.86819298949558
+        "ULisp-AOT": 0.7296889962162822,
+        "ULisp-JIT": 3.1316720123868436,
+        "ILisp": 77.50782201765105,
+        "ChezScheme": 41.558147000614554,
+        "ChibiScheme": 213.52813800331205
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -140,11 +140,11 @@
         "ChibiScheme": "125250"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.8447309955954552,
-        "ULisp-JIT": 1.7489010060671717,
-        "ILisp": 81.0286729974905,
-        "ChezScheme": 56.6250459960429,
-        "ChibiScheme": 243.3155440085102
+        "ULisp-AOT": 0.7494080055039376,
+        "ULisp-JIT": 1.6702239809092134,
+        "ILisp": 68.8021760142874,
+        "ChezScheme": 51.93487601354718,
+        "ChibiScheme": 233.70968899689615
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -168,11 +168,11 @@
         "ChibiScheme": "7"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.8472640038235113,
+        "ULisp-AOT": 0.9054120164364576,
         "ULisp-JIT": 0.0,
-        "ILisp": 621.0160030022962,
-        "ChezScheme": 56.75192900525872,
-        "ChibiScheme": 244.95626700809225
+        "ILisp": 1016.3405619969126,
+        "ChezScheme": 42.63447000994347,
+        "ChibiScheme": 217.03471598448232
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -196,11 +196,11 @@
         "ChibiScheme": "9"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.8518620015820488,
+        "ULisp-AOT": 0.9421370050404221,
         "ULisp-JIT": 0.0,
-        "ILisp": 101.98433299956378,
-        "ChezScheme": 49.20454400416929,
-        "ChibiScheme": 243.0818129942054
+        "ILisp": 79.36735198018141,
+        "ChezScheme": 48.9441939862445,
+        "ChibiScheme": 218.21475902106613
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -215,23 +215,23 @@
       "title": "Ackermann Function (ack 3 4)",
       "category": "Hyper-exponential Recursion",
       "expected": "125",
-      "passed": false,
+      "passed": true,
       "outputs": {
-        "ULisp-AOT": "(",
+        "ULisp-AOT": "125",
         "ULisp-JIT": "N/A (Loop-only JIT)",
         "ILisp": "125",
         "ChezScheme": "125",
         "ChibiScheme": "125"
       },
       "latencies_ms": {
-        "ULisp-AOT": 1.7742499912856147,
+        "ULisp-AOT": 0.7577200012747198,
         "ULisp-JIT": 0.0,
-        "ILisp": 184.78584500553552,
-        "ChezScheme": 53.58649499248713,
-        "ChibiScheme": 244.0237819973845
+        "ILisp": 201.1489430151414,
+        "ChezScheme": 54.31402800604701,
+        "ChibiScheme": 213.44635699642822
       },
       "statuses": {
-        "ULisp-AOT": false,
+        "ULisp-AOT": true,
         "ULisp-JIT": true,
         "ILisp": true,
         "ChezScheme": true,
@@ -243,20 +243,20 @@
       "title": "Division Iteration & Remainder Loop (diviter 10000)",
       "category": "Division / Remainder",
       "expected": "16665000",
-      "passed": false,
+      "passed": true,
       "outputs": {
-        "ULisp-AOT": "0",
+        "ULisp-AOT": "16665000",
         "ULisp-JIT": "16665000",
         "ILisp": "16665000",
         "ChezScheme": "16665000",
         "ChibiScheme": "16665000"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7579189987154678,
-        "ULisp-JIT": 21.101040998473763,
-        "ILisp": 186.17845000699162,
-        "ChezScheme": 54.02629000309389,
-        "ChibiScheme": 249.23892901279032
+        "ULisp-AOT": 0.7559630030300468,
+        "ULisp-JIT": 19.168505008565262,
+        "ILisp": 176.16904998430982,
+        "ChezScheme": 41.6789669834543,
+        "ChibiScheme": 226.6421940003056
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -280,11 +280,11 @@
         "ChibiScheme": "5050"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7501679938286543,
+        "ULisp-AOT": 0.7343789911828935,
         "ULisp-JIT": 0.0,
-        "ILisp": 79.10919400455896,
-        "ChezScheme": 57.28095999802463,
-        "ChibiScheme": 258.7269009964075
+        "ILisp": 65.7840890053194,
+        "ChezScheme": 42.299108987208456,
+        "ChibiScheme": 218.87481398880482
       },
       "statuses": {
         "ULisp-AOT": true,

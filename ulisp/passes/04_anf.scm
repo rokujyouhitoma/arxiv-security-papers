@@ -89,7 +89,7 @@
                  (bindings (car res))
                  (atom-env (cdr res)))
             (anf-wrap-bindings bindings (cons '%make-closure (cons label atom-env)))))
-         ((%with-handler %call-with-values %values)
+         ((%with-handler %call-with-values %values %raw-call/cc)
           (let* ((res (anf-flatten-args (cdr expr) depth))
                  (bindings (car res))
                  (atom-args (cdr res)))

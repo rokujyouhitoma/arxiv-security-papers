@@ -78,6 +78,9 @@
           (list '%with-handler
                 (convert-expr (cadr expr) var-map)
                 (convert-expr (caddr expr) var-map)))
+         ((%raw-call/cc)
+          (list '%raw-call/cc
+                (convert-expr (cadr expr) var-map)))
          ((%call-with-values)
           (list '%call-with-values
                 (convert-expr (cadr expr) var-map)

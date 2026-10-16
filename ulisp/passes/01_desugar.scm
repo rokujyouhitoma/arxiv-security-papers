@@ -175,6 +175,8 @@
           (desugar-all (desugar-let-values (cadr expr) (cddr expr))))
          ((let*-values)
           (desugar-all (desugar-let*-values (cadr expr) (cddr expr))))
+         ((%raw-call/cc)
+          (list '%raw-call/cc (desugar-all (cadr expr))))
          ((call-with-values %call-with-values)
           (list '%call-with-values (desugar-all (cadr expr)) (desugar-all (caddr expr))))
          ((values)

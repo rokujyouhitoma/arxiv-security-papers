@@ -79,7 +79,7 @@
 (define (lir-compile-variable var env)
   (let ((binding (assq var env)))
     (if (not binding)
-        (error (string-append "Unbound variable in LIR: " (symbol->string var)))
+        (error "Unbound variable in LIR:" var)
         (let ((info (cdr binding)))
           (cond
             ((number? info)
@@ -800,6 +800,33 @@
       (track-lir-si! (- aligned-si 32))
       (emit-lir! (list '%dispatch-consumer consumer-si aligned-si frame-shift)))))
 
+(define (lir-compile-raw-call-cc proc-expr si env tail?)
+  (let* ((proc-si si)
+         (k-si (- si 8))
+         (call-si (- k-si 8))
+         (ret-lbl (unique-label-sym "L_callcc_ret_")))
+    (track-lir-si! proc-si)
+    (track-lir-si! k-si)
+    (track-lir-si! call-si)
+    ;; 1. Evaluate proc-expr and store at proc-si
+    (lir-compile-expr proc-expr proc-si env #f)
+    (emit-lir! (list '%store '%rsp proc-si '%rax))
+    ;; 2. Capture continuation: creates continuation object in %rax and stores to k-si
+    (emit-lir! (list '%capture-cc ret-lbl k-si))
+    ;; 3. Call proc with 1 argument (k)
+    (emit-lir! (list '%load '%rax '%rsp k-si))
+    (emit-lir! (list '%load '%r10 '%rsp proc-si))
+    (let* ((frame-shift (align-frame-shift (- 0 call-si)))
+           (aligned-si (- 0 frame-shift)))
+      (track-lir-si! aligned-si)
+      (emit-lir! (list '%store '%rsp aligned-si '%rax))
+      (let* ((safepoint-lbl (new-safepoint-label!))
+             (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
+        (record-safepoint! safepoint-lbl frame-shift bitmap)
+        (emit-lir! (list '%call-closure frame-shift safepoint-lbl))))
+    ;; 4. Return label: both normal return and (k val) jump here!
+    (emit-lir! (list '%block ret-lbl '()))))
+
 (define (lir-compile-expr expr si env tail?)
   (cond
     ((immediate? expr)
@@ -856,6 +883,8 @@
           (lir-compile-cont-call (cadr expr) (cddr expr) si env))
          ((eq? op '%with-handler)
           (lir-compile-with-handler (cadr expr) (caddr expr) si env tail?))
+         ((eq? op '%raw-call/cc)
+          (lir-compile-raw-call-cc (cadr expr) si env tail?))
          ((eq? op '%values)
           (lir-compile-values (cdr expr) si env))
          ((eq? op '%call-with-values)

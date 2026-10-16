@@ -21,7 +21,7 @@ COMPILER="compiler.scm"
 ULISP_STAGE1="build/scheme-stage1"
 
 make compiler
-cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
