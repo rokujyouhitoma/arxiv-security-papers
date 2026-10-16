@@ -89,6 +89,11 @@
                  (bindings (car res))
                  (atom-env (cdr res)))
             (anf-wrap-bindings bindings (cons '%make-closure (cons label atom-env)))))
+         ((%with-handler)
+          (let* ((res (anf-flatten-args (cdr expr) depth))
+                 (bindings (car res))
+                 (atom-args (cdr res)))
+            (anf-wrap-bindings bindings (cons '%with-handler atom-args))))
          (else
           ;; Primitive or function application: (op e1 e2 ...)
           (let* ((args-res (anf-flatten-args (cdr expr) depth))

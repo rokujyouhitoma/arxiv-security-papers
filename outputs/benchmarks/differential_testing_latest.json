@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-16 10:02:14",
+  "timestamp": "2026-10-16 15:24:38",
   "system": {
     "os": "Linux",
     "arch": "x86_64",
@@ -28,11 +28,11 @@
         "ChibiScheme": "6765"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.9556360018905252,
-        "ULisp-JIT": 0.8119740086840466,
-        "ILisp": 83.51833101187367,
-        "ChezScheme": 53.73856700316537,
-        "ChibiScheme": 281.1506160069257
+        "ULisp-AOT": 0.8192999957827851,
+        "ULisp-JIT": 1.6398989973822609,
+        "ILisp": 76.24527599546127,
+        "ChezScheme": 69.65611700434238,
+        "ChibiScheme": 248.78167400311213
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -56,11 +56,11 @@
         "ChibiScheme": "479001600"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7658879912924021,
-        "ULisp-JIT": 0.7416709995595738,
-        "ILisp": 79.12665999901947,
-        "ChezScheme": 52.21749399788678,
-        "ChibiScheme": 260.533435997786
+        "ULisp-AOT": 0.7609919994138181,
+        "ULisp-JIT": 0.7124190015019849,
+        "ILisp": 83.53248600906227,
+        "ChezScheme": 49.73364400211722,
+        "ChibiScheme": 238.49251799401827
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -84,11 +84,11 @@
         "ChibiScheme": "12497500"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7390760001726449,
-        "ULisp-JIT": 12.50681201054249,
-        "ILisp": 131.9005680124974,
-        "ChezScheme": 48.765629006084055,
-        "ChibiScheme": 229.53143100312445
+        "ULisp-AOT": 0.7911839929874986,
+        "ULisp-JIT": 9.028610002133064,
+        "ILisp": 110.0882369937608,
+        "ChezScheme": 49.93821900279727,
+        "ChibiScheme": 237.62535498826765
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -112,11 +112,11 @@
         "ChibiScheme": "1001005000"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.9883070015348494,
-        "ULisp-JIT": 3.5135069920215756,
-        "ILisp": 82.22506800666451,
-        "ChezScheme": 47.57669099490158,
-        "ChibiScheme": 229.67983198759612
+        "ULisp-AOT": 1.0522049997234717,
+        "ULisp-JIT": 3.8053879979997873,
+        "ILisp": 90.78076000150759,
+        "ChezScheme": 51.060982994385995,
+        "ChibiScheme": 222.07354400597978
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -140,11 +140,11 @@
         "ChibiScheme": "125250"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7558700017398223,
-        "ULisp-JIT": 1.5642159996787086,
-        "ILisp": 73.15857599314768,
-        "ChezScheme": 47.21683499519713,
-        "ChibiScheme": 228.644570990582
+        "ULisp-AOT": 0.8413720061071217,
+        "ULisp-JIT": 1.586008002050221,
+        "ILisp": 78.58631599810906,
+        "ChezScheme": 45.32375499547925,
+        "ChibiScheme": 234.50735899677966
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -168,11 +168,11 @@
         "ChibiScheme": "7"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.9357719973195344,
+        "ULisp-AOT": 0.8483300043735653,
         "ULisp-JIT": 0.0,
-        "ILisp": 1095.165281003574,
-        "ChezScheme": 47.88734899193514,
-        "ChibiScheme": 224.35461399436463
+        "ILisp": 1305.034010001691,
+        "ChezScheme": 48.96188199927565,
+        "ChibiScheme": 237.6044289994752
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -196,11 +196,11 @@
         "ChibiScheme": "9"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.9283319959649816,
+        "ULisp-AOT": 0.8643539913464338,
         "ULisp-JIT": 0.0,
-        "ILisp": 88.07889300805982,
-        "ChezScheme": 49.63259999931324,
-        "ChibiScheme": 239.2774189938791
+        "ILisp": 89.95865000179037,
+        "ChezScheme": 61.701536003965884,
+        "ChibiScheme": 239.99907799588982
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -224,11 +224,11 @@
         "ChibiScheme": "125"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.9809890034375712,
+        "ULisp-AOT": 0.7959960057632998,
         "ULisp-JIT": 0.0,
-        "ILisp": 226.28960300062317,
-        "ChezScheme": 46.68402299284935,
-        "ChibiScheme": 223.27512300398666
+        "ILisp": 220.41806700872257,
+        "ChezScheme": 64.44340098823886,
+        "ChibiScheme": 229.63512400747277
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -252,11 +252,11 @@
         "ChibiScheme": "16665000"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7496960024582222,
-        "ULisp-JIT": 21.646759007126093,
-        "ILisp": 154.146180007956,
-        "ChezScheme": 46.20618000626564,
-        "ChibiScheme": 220.45686400088016
+        "ULisp-AOT": 0.779513007728383,
+        "ULisp-JIT": 20.2263649989618,
+        "ILisp": 154.59617700253148,
+        "ChezScheme": 47.536269994452596,
+        "ChibiScheme": 222.1076220012037
       },
       "statuses": {
         "ULisp-AOT": true,
@@ -280,11 +280,11 @@
         "ChibiScheme": "5050"
       },
       "latencies_ms": {
-        "ULisp-AOT": 0.7098469941411167,
+        "ULisp-AOT": 0.7530570001108572,
         "ULisp-JIT": 0.0,
-        "ILisp": 72.87008200364653,
-        "ChezScheme": 46.26735700003337,
-        "ChibiScheme": 225.791061995551
+        "ILisp": 71.64513599127531,
+        "ChezScheme": 48.60388700035401,
+        "ChibiScheme": 223.4997299965471
       },
       "statuses": {
         "ULisp-AOT": true,

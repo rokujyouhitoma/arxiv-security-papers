@@ -15,6 +15,7 @@ cat "$ULISP_DIR/lib/posix.scm" \
     "$ULISP_DIR/lib/string.scm" \
     "$ULISP_DIR/lib/printer.scm" \
     "$ULISP_DIR/lib/reader.scm" \
+    "$ULISP_DIR/lib/exception.scm" \
     "$ULISP_DIR/lib/gc.scm" \
     "$ULISP_DIR/compiler.scm" > "$BUILD_DIR/ulisp_core.scm"
 

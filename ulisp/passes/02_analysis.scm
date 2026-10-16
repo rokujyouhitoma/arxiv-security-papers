@@ -68,6 +68,8 @@
             (if (null? es)
                 cur-acc
                 (loop (cdr es) (free-vars-acc (car es) bound cur-acc)))))
+         ((%with-handler)
+          (free-vars-acc (caddr expr) bound (free-vars-acc (cadr expr) bound acc)))
          (else
           (cond
             ((zero-arg-prim? op)
@@ -141,6 +143,9 @@
             (and (pair? es)
                  (or (escapes? var (car es))
                      (loop (cdr es))))))
+         ((%with-handler)
+          (or (escapes? var (cadr expr))
+              (escapes? var (caddr expr))))
          (else
           (if (eq? op var)
               ;; Operator position is safe; check arguments
@@ -194,6 +199,9 @@
             (let ((params (cadr e))
                   (body (caddr e)))
               (if (memq var params) #t (check body #t))))
+           ((%with-handler)
+            (and (check (cadr e) #f)
+                 (check (caddr e) #f)))
            (else
             (if (eq? op var)
                 ;; Call site of var: must be in tail position

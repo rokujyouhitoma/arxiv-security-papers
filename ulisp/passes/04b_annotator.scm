@@ -474,6 +474,8 @@
          ((lambda)
           (let ((params (cadr expr)))
             (type-closure (unique-label-sym "lam") params (type-top))))
+         ((%with-handler)
+          (type-top))
          ;; Procedure call or primitive
          (else
           (let ((arg-types (map (lambda (a) (abstract-eval-expr a env)) (cdr expr))))

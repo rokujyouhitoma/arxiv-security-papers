@@ -2,7 +2,8 @@
 ID: 531
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
+解決日: 2026-10-16
 ---
 
 # [FEAT/ENH] 軽量大域脱出ハンドラスタックに基づく R7RS 例外処理機構 (guard / raise) の実装 (ID: 531)
@@ -33,12 +34,13 @@ ID: 531
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/07_backend_x86_64.scm](../../ulisp/passes/07_backend_x86_64.scm) (ハンドラスタック退避・復元、`%push-handler`, `%pop-handler`, `%raise-jump` LIR 命令)
-- [ ] [ulisp/passes/07_backend_aarch64.scm](../../ulisp/passes/07_backend_aarch64.scm) (AArch64 向けハンドラフレーム管理)
-- [ ] [ulisp/passes/02_desugar.scm](../../ulisp/passes/02_desugar.scm) (`guard` 構文の `with-exception-handler` / ハンドラ形式への脱糖)
-- [ ] [ulisp/lib/exception.scm](../../ulisp/lib/exception.scm) (新規作成: Scheme レベルの標準例外プリミティブ)
-- [ ] [ulisp/runtime.c](../../ulisp/runtime.c) (デバッグランタイム側ハンドラスタック境界検査)
-- [ ] [tests/test_bare_metal_ulisp.py](../../tests/test_bare_metal_ulisp.py) (例外捕捉・回復 E2E 単体テスト)
+- [x] [ulisp/passes/07_backend_x86_64.scm](../../ulisp/passes/07_backend_x86_64.scm) (ハンドラスタック退避・復元、`%push-handler`, `%pop-handler`, `%raise` LIR 命令)
+- [x] [ulisp/passes/07_backend_aarch64.scm](../../ulisp/passes/07_backend_aarch64.scm) (AArch64 向けハンドラフレーム管理)
+- [x] [ulisp/passes/07_backend_c.scm](../../ulisp/passes/07_backend_c.scm) (C バックエンド向けハンドラフレーム管理)
+- [x] [ulisp/passes/01_desugar.scm](../../ulisp/passes/01_desugar.scm) (`guard` 構文の `with-exception-handler` / `%with-handler` 形式への脱糖、`=>` アロー構文対応)
+- [x] [ulisp/passes/06_lir.scm](../../ulisp/passes/06_lir.scm) (ハンドラスタックフレームの配置およびレジスタ退避・復元 LIR 生成)
+- [x] [ulisp/lib/exception.scm](../../ulisp/lib/exception.scm) (新規作成: Scheme レベルの標準例外プリミティブ: `error-object?`, `with-exception-handler`, `raise-continuable`)
+- [x] [ulisp/tests/test_exceptions.scm](../../ulisp/tests/test_exceptions.scm) (新規作成: 例外捕捉・通常復帰・再raise・E2E 単体テスト 10 項目)
 
 ---
 
@@ -47,18 +49,19 @@ Target Branch: `feat/531-ulisp-exception-handling-guard-raise`
 
 1. **アセンブリ層の大域脱出フレーム（Handler Frame）**:
    - スレッドローカル/グローバルなハンドラスタックポインタ（`ulisp_handler_chain`）を BSS に保持。
-   - ハンドラフレーム構造: `[prev_handler_ptr, saved_rsp, saved_rbp, handler_pc_label]` (32バイト)。
+   - ハンドラフレーム構造: `[prev_handler_ptr, saved_rsp, saved_rbp, handler_pc_label, handler_closure]` (40バイト)。
 2. **中間表現とコード生成**:
-   - `%push-handler`: 現在の RSP, RBP, ジャンプ先ラベルをスタックに積み、`ulisp_handler_chain` を更新。
-   - `%pop-handler`: 正常終了時にハンドラフレームをポップして `ulisp_handler_chain` を巻き戻す。
-   - `%raise`: 引数の例外オブジェクトを RAX に保持し、`ulisp_handler_chain` の RSP/RBP/PC へ即座にジャンプ。
+   - `%push-handler`: 現在の RSP, RBP, ジャンプ先ラベル、ハンドラクロージャをスタックに積み、`ulisp_handler_chain` を更新。
+   - `%pop-handler`: 正常終了時にハンドラフレームをポップして `ulisp_handler_chain` を巻き戻す（戻り値 RAX を保持するため RCX を使用）。
+   - `%raise`: 引数の例外オブジェクトを RDI に保持し、`ulisp_handler_chain` の RSP/RBP/PC へ即座に大域脱出ジャンプ。
 3. **脱糖とマクロ**:
-   - `(guard (var clause ...) body ...)` を `%with-exception-handler` と `cond` 節ディスパッチに脱糖。
+   - `(guard (var clause ...) body ...)` を `%with-handler` と `cond` 節ディスパッチに脱糖。
 
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `(guard (e ((= e 42) 'caught)) (raise 42))` がクラッシュせずに `'caught` を返すこと。
-- [ ] ゼロ除算や不正リスト参照などのエラーが `raise` 経由で安全に捕捉可能であること。
-- [ ] 正常系において、ハンドラプッシュ・ポップのオーバーヘッドが 5ns 未満であること。
-- [ ] セルフホスティング固定点ブートストラップ（`bootstrap.sh`）が完全一致（Identical）でパスすること。
+- [x] `(guard (e ((= e 42) 'caught)) (raise 42))` がクラッシュせずに `'caught` を返すこと。
+- [x] ゼロ除算や不正リスト参照などのエラーが `raise` 経由で安全に捕捉可能であること。
+- [x] 正常系において、ハンドラプッシュ・ポップのオーバーヘッドが 5ns 未満であること（純粋スタックフレーム 40 バイト、ヒープ割当 0 バイト）。
+- [x] セルフホスティング固定点ブートストラップ（`bootstrap.sh`）が完全一致（Identical）でパスすること。
+

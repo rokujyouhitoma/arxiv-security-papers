@@ -161,6 +161,7 @@
              car cdr pair? procedure? string?
              write-char write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
+             raise %raise
              %set-heap-ptr! %ptr-tag %ptr-untag
              %to-raw %to-fixnum
              %box-fixnum %unbox-fixnum)))

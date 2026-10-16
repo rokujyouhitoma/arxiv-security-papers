@@ -1,6 +1,6 @@
 # ULisp 差分テスト (Differential Testing: brench 哲学) 検証レポート
 
-- **測定日時**: `2026-10-16 10:02:14`
+- **測定日時**: `2026-10-16 15:24:38`
 - **実行環境**: `Linux x86_64` (CPU: `x86_64`)
 - **テストハーネス**: Mytkowicz 4KB 環境変数パディング適用 (`BENCHMARK_ENV_PAD`)
 - **評価対象ランナー**: `ULisp-AOT`, `ULisp-JIT`, `ILisp`, `ChezScheme`, `ChibiScheme`
@@ -28,16 +28,16 @@
 
 | ワークロード | ULisp-AOT (ms) | ULisp-JIT (ms) | ILisp (ms) | ChezScheme (ms) | ChibiScheme (ms) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| Iterative Fibonacci (fib 20) | 0.96 | 0.81 | 83.52 | 53.74 | 281.15 |
-| Iterative Factorial (fact 12) | 0.77 | 0.74 | 79.13 | 52.22 | 260.53 |
-| Accumulation Loop (5,000 iters) | 0.74 | 12.51 | 131.90 | 48.77 | 229.53 |
-| Polynomial 3x^2+5x+7 (1,000 iters) | 0.99 | 3.51 | 82.23 | 47.58 | 229.68 |
-| Triangular Sum (tri 500) | 0.76 | 1.56 | 73.16 | 47.22 | 228.64 |
-| Gabriel Benchmark: Takeuchi Function (tak 18 12 6) | 0.94 | 0.00 | 1095.17 | 47.89 | 224.35 |
-| CPS Takeuchi Function (cpstak 16 12 8) | 0.93 | 0.00 | 88.08 | 49.63 | 239.28 |
-| Ackermann Function (ack 3 4) | 0.98 | 0.00 | 226.29 | 46.68 | 223.28 |
-| Division Iteration & Remainder Loop (diviter 10000) | 0.75 | 21.65 | 154.15 | 46.21 | 220.46 |
-| List Accumulator & Traversal (iota 100) | 0.71 | 0.00 | 72.87 | 46.27 | 225.79 |
+| Iterative Fibonacci (fib 20) | 0.82 | 1.64 | 76.25 | 69.66 | 248.78 |
+| Iterative Factorial (fact 12) | 0.76 | 0.71 | 83.53 | 49.73 | 238.49 |
+| Accumulation Loop (5,000 iters) | 0.79 | 9.03 | 110.09 | 49.94 | 237.63 |
+| Polynomial 3x^2+5x+7 (1,000 iters) | 1.05 | 3.81 | 90.78 | 51.06 | 222.07 |
+| Triangular Sum (tri 500) | 0.84 | 1.59 | 78.59 | 45.32 | 234.51 |
+| Gabriel Benchmark: Takeuchi Function (tak 18 12 6) | 0.85 | 0.00 | 1305.03 | 48.96 | 237.60 |
+| CPS Takeuchi Function (cpstak 16 12 8) | 0.86 | 0.00 | 89.96 | 61.70 | 240.00 |
+| Ackermann Function (ack 3 4) | 0.80 | 0.00 | 220.42 | 64.44 | 229.64 |
+| Division Iteration & Remainder Loop (diviter 10000) | 0.78 | 20.23 | 154.60 | 47.54 | 222.11 |
+| List Accumulator & Traversal (iota 100) | 0.75 | 0.00 | 71.65 | 48.60 | 223.50 |
 
 ---
 

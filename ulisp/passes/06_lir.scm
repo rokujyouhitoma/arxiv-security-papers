@@ -180,6 +180,8 @@
     ((flush-output-port ulisp-flush)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! (list '%c-call "ulisp_flush" frame-shift))))
+    ((raise %raise)
+     (emit-lir! '(%raise)))
     ((eof-object?)
      (emit-lir! '(%cmp %rax 79))
      (emit-lir! '(%set-boolean %rax "sete")))
@@ -700,6 +702,50 @@
                       ;; Directly jump to continuation target with block arguments!
                       (emit-lir! (list '%jump entry-lbl (map (lambda (po) (list '%stack (cdr po))) p-offsets)))))))))))
 
+(define (lir-compile-with-handler handler-expr thunk-expr si env tail?)
+  (let* ((exit-lbl (unique-label-sym "L_handler_exit_"))
+         (catch-lbl (unique-label-sym "L_handler_catch_"))
+         (handler-si si)
+         (thunk-si (- si 8))
+         (frame-si (- si 48))
+         (call-si (- frame-si 8)))
+    (track-lir-si! handler-si)
+    (track-lir-si! thunk-si)
+    (track-lir-si! frame-si)
+    (track-lir-si! call-si)
+    ;; 1. Evaluate handler closure and store at handler-si
+    (lir-compile-expr handler-expr handler-si env #f)
+    (emit-lir! (list '%store '%rsp handler-si '%rax))
+    ;; 2. Evaluate thunk closure and store at thunk-si
+    (lir-compile-expr thunk-expr thunk-si env #f)
+    (emit-lir! (list '%store '%rsp thunk-si '%rax))
+    ;; 3. Push handler frame: %push-handler catch-lbl frame-si handler-si
+    (emit-lir! (list '%push-handler catch-lbl frame-si handler-si))
+    ;; 4. Call thunk closure with 0 arguments
+    (emit-lir! (list '%load '%rax '%rsp thunk-si))
+    (emit-lir! '(%mov %r10 %rax))
+    (let* ((frame-shift (align-frame-shift (- 0 call-si)))
+           (safepoint-lbl (new-safepoint-label!))
+           (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
+      (record-safepoint! safepoint-lbl frame-shift bitmap)
+      (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))
+    ;; 5. Normal return from thunk: Pop handler frame and jump to exit
+    (emit-lir! (list '%pop-handler frame-si))
+    (emit-lir! (list '%jump exit-lbl))
+    ;; 6. Exception catch entry: control arrives here on %raise
+    (emit-lir! (list '%label catch-lbl))
+    (let* ((frame-shift (align-frame-shift (- 0 call-si)))
+           (aligned-si (- 0 frame-shift)))
+      (track-lir-si! aligned-si)
+      (emit-lir! (list '%store '%rsp aligned-si '%rdi))
+      (emit-lir! '(%mov %r10 %rax))
+      (let* ((safepoint-lbl (new-safepoint-label!))
+             (bitmap (compute-stackmap-bitmap frame-shift aligned-si (list '%rdi) env)))
+        (record-safepoint! safepoint-lbl frame-shift bitmap)
+        (emit-lir! (list '%call-closure frame-shift safepoint-lbl))))
+    ;; 7. Exit label
+    (emit-lir! (list '%label exit-lbl))))
+
 (define (lir-compile-expr expr si env tail?)
   (cond
     ((immediate? expr)
@@ -754,6 +800,8 @@
           (lir-compile-cont-fun (cadr expr) (caddr expr) (cadddr expr) (cadr (cdddr expr)) si env tail?))
          ((eq? op '%cont-call)
           (lir-compile-cont-call (cadr expr) (cddr expr) si env))
+         ((eq? op '%with-handler)
+          (lir-compile-with-handler (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'let)
           (lir-compile-let (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'if)

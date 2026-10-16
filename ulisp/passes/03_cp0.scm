@@ -107,6 +107,8 @@
             (list 'lambda params body)))
          ((%make-closure)
           (cons '%make-closure (cons (cadr expr) (map cp0-expr (cddr expr)))))
+         ((%with-handler)
+          (list '%with-handler (cp0-expr (cadr expr)) (cp0-expr (caddr expr))))
          (else
           ;; Primitive or application: optimize arguments first (bottom-up)
           (let* ((opt-op (if (symbol? op) op (cp0-expr op)))

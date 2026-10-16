@@ -385,6 +385,28 @@
          (emit "    ((void (*)(void))(uintptr_t)reg_rdx)();")
          (emit (string-append "    reg_rsp += " (number->string (+ frame-shift 8)) ";"))))
 
+      ((%push-handler)
+       (let ((catch-lbl (cadr inst))
+             (frame-si (caddr inst))
+             (handler-si (cadddr inst)))
+         (let ((lbl-str (c-sanitize-label catch-lbl)))
+           (emit (string-append "    *(void **)(reg_rsp + (" (number->string frame-si) ")) = ulisp_handler_chain;"))
+           (emit (string-append "    *(char **)(reg_rsp + (" (number->string (+ frame-si 8)) ")) = reg_rsp;"))
+           (emit (string-append "    *(uint64_t *)(reg_rsp + (" (number->string (+ frame-si 32)) ")) = *(uint64_t *)(reg_rsp + (" (number->string handler-si) "));"))
+           (emit (string-append "    ulisp_handler_chain = (void *)(reg_rsp + (" (number->string frame-si) "));")))))
+
+      ((%pop-handler)
+       (let ((frame-si (cadr inst)))
+         (emit (string-append "    ulisp_handler_chain = *(void **)(reg_rsp + (" (number->string frame-si) "));"))))
+
+      ((%raise)
+       (emit "    if (!ulisp_handler_chain) { fprintf(stderr, \"*** ERROR: unhandled exception\\n\"); exit(1); }")
+       (emit "    reg_rdi = reg_rax;")
+       (emit "    reg_rsp = *(char **)((char *)ulisp_handler_chain + 8);")
+       (emit "    reg_rax = *(uint64_t *)((char *)ulisp_handler_chain + 32);")
+       (emit "    ulisp_handler_chain = *(void **)ulisp_handler_chain;")
+       (emit "    reg_r10 = reg_rax;"))
+
       (else
        (error "Unknown LIR opcode in C backend:" inst)))))
 
@@ -430,6 +452,7 @@
     (emit "static uint64_t cmp_s1 ULISP_UNUSED;")
     (emit "static uint64_t cmp_s2 ULISP_UNUSED;")
     (emit "static char stack_mem[64 * 1024 * 1024];")
+    (emit "static void *ulisp_handler_chain = NULL;")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     ;; Forward declarations of lifted functions

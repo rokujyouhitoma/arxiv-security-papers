@@ -161,6 +161,7 @@
              car cdr pair? procedure? string?
              write-char write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
+             raise %raise
              %set-heap-ptr! %ptr-tag %ptr-untag
              %to-raw %to-fixnum
              %box-fixnum %unbox-fixnum)))
@@ -687,11 +688,37 @@
   (if (null? clauses)
       #f
       (let ((c (car clauses)))
-        (if (eq? (car c) 'else)
-            (cons 'begin (cdr c))
-            (list 'if (car c)
-                  (cons 'begin (cdr c))
-                  (desugar-cond (cdr clauses)))))))
+        (cond
+          ((eq? (car c) 'else)
+           (cons 'begin (cdr c)))
+          ((and (pair? (cdr c)) (eq? (cadr c) '=>))
+           (let ((tmp (unique-symbol "cond_tmp_")))
+             (list 'let (list (list tmp (car c)))
+                   (list 'if tmp
+                         (list (caddr c) tmp)
+                         (desugar-cond (cdr clauses))))))
+          (else
+           (list 'if (car c)
+                 (cons 'begin (cdr c))
+                 (desugar-cond (cdr clauses))))))))
+
+(define (desugar-guard-clauses var clauses)
+  (let loop ((cls clauses))
+    (cond
+      ((null? cls)
+       (list (list 'else (list 'raise var))))
+      ((eq? (caar cls) 'else)
+       cls)
+      (else
+       (cons (car cls) (loop (cdr cls)))))))
+
+(define (desugar-guard spec bodies)
+  (let ((var (car spec))
+        (clauses (cdr spec)))
+    (list '%with-handler
+          (list 'lambda (list var)
+                (cons 'cond (desugar-guard-clauses var clauses)))
+          (cons 'lambda (cons '() bodies)))))
 
 (define (desugar-case key clauses)
   (let ((k-var (unique-symbol "case_key_")))
@@ -796,6 +823,26 @@
           (desugar-all (desugar-and (cdr expr))))
          ((or)
           (desugar-all (desugar-or (cdr expr))))
+         ((guard)
+          (desugar-all (desugar-guard (cadr expr) (cddr expr))))
+         ((error)
+          (let ((msg (cadr expr))
+                (irritants (cddr expr)))
+            (desugar-all (list 'raise (cons 'list (cons ''error-object (cons msg irritants)))))))
+         ((%with-handler with-exception-handler)
+          (list '%with-handler (desugar-all (cadr expr)) (desugar-all (caddr expr))))
+         ((caar)
+          (desugar-all (list 'car (list 'car (cadr expr)))))
+         ((cadr)
+          (desugar-all (list 'car (list 'cdr (cadr expr)))))
+         ((cdar)
+          (desugar-all (list 'cdr (list 'car (cadr expr)))))
+         ((cddr)
+          (desugar-all (list 'cdr (list 'cdr (cadr expr)))))
+         ((caddr)
+          (desugar-all (list 'car (list 'cdr (list 'cdr (cadr expr))))))
+         ((cadddr)
+          (desugar-all (list 'car (list 'cdr (list 'cdr (list 'cdr (cadr expr)))))))
          ((let)
           (if (symbol? (cadr expr))
               (desugar-all (desugar-named-let expr))
@@ -895,6 +942,8 @@
             (if (null? es)
                 cur-acc
                 (loop (cdr es) (free-vars-acc (car es) bound cur-acc)))))
+         ((%with-handler)
+          (free-vars-acc (caddr expr) bound (free-vars-acc (cadr expr) bound acc)))
          (else
           (cond
             ((zero-arg-prim? op)
@@ -968,6 +1017,9 @@
             (and (pair? es)
                  (or (escapes? var (car es))
                      (loop (cdr es))))))
+         ((%with-handler)
+          (or (escapes? var (cadr expr))
+              (escapes? var (caddr expr))))
          (else
           (if (eq? op var)
               ;; Operator position is safe; check arguments
@@ -1021,6 +1073,9 @@
             (let ((params (cadr e))
                   (body (caddr e)))
               (if (memq var params) #t (check body #t))))
+           ((%with-handler)
+            (and (check (cadr e) #f)
+                 (check (caddr e) #f)))
            (else
             (if (eq? op var)
                 ;; Call site of var: must be in tail position
@@ -1154,6 +1209,8 @@
             (list 'lambda params body)))
          ((%make-closure)
           (cons '%make-closure (cons (cadr expr) (map cp0-expr (cddr expr)))))
+         ((%with-handler)
+          (list '%with-handler (cp0-expr (cadr expr)) (cp0-expr (caddr expr))))
          (else
           ;; Primitive or application: optimize arguments first (bottom-up)
           (let* ((opt-op (if (symbol? op) op (cp0-expr op)))
@@ -1860,6 +1917,11 @@
                  (bindings (car res))
                  (atom-env (cdr res)))
             (anf-wrap-bindings bindings (cons '%make-closure (cons label atom-env)))))
+         ((%with-handler)
+          (let* ((res (anf-flatten-args (cdr expr) depth))
+                 (bindings (car res))
+                 (atom-args (cdr res)))
+            (anf-wrap-bindings bindings (cons '%with-handler atom-args))))
          (else
           ;; Primitive or function application: (op e1 e2 ...)
           (let* ((args-res (anf-flatten-args (cdr expr) depth))
@@ -2364,6 +2426,8 @@
          ((lambda)
           (let ((params (cadr expr)))
             (type-closure (unique-label-sym "lam") params (type-top))))
+         ((%with-handler)
+          (type-top))
          ;; Procedure call or primitive
          (else
           (let ((arg-types (map (lambda (a) (abstract-eval-expr a env)) (cdr expr))))
@@ -3036,6 +3100,10 @@
           (cons '%cont-call
                 (cons (cadr expr)
                       (map (lambda (e) (convert-expr e var-map)) (cddr expr)))))
+         ((%with-handler)
+          (list '%with-handler
+                (convert-expr (cadr expr) var-map)
+                (convert-expr (caddr expr) var-map)))
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else
@@ -3593,6 +3661,8 @@
     ((flush-output-port ulisp-flush)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! (list '%c-call "ulisp_flush" frame-shift))))
+    ((raise %raise)
+     (emit-lir! '(%raise)))
     ((eof-object?)
      (emit-lir! '(%cmp %rax 79))
      (emit-lir! '(%set-boolean %rax "sete")))
@@ -4113,6 +4183,50 @@
                       ;; Directly jump to continuation target with block arguments!
                       (emit-lir! (list '%jump entry-lbl (map (lambda (po) (list '%stack (cdr po))) p-offsets)))))))))))
 
+(define (lir-compile-with-handler handler-expr thunk-expr si env tail?)
+  (let* ((exit-lbl (unique-label-sym "L_handler_exit_"))
+         (catch-lbl (unique-label-sym "L_handler_catch_"))
+         (handler-si si)
+         (thunk-si (- si 8))
+         (frame-si (- si 48))
+         (call-si (- frame-si 8)))
+    (track-lir-si! handler-si)
+    (track-lir-si! thunk-si)
+    (track-lir-si! frame-si)
+    (track-lir-si! call-si)
+    ;; 1. Evaluate handler closure and store at handler-si
+    (lir-compile-expr handler-expr handler-si env #f)
+    (emit-lir! (list '%store '%rsp handler-si '%rax))
+    ;; 2. Evaluate thunk closure and store at thunk-si
+    (lir-compile-expr thunk-expr thunk-si env #f)
+    (emit-lir! (list '%store '%rsp thunk-si '%rax))
+    ;; 3. Push handler frame: %push-handler catch-lbl frame-si handler-si
+    (emit-lir! (list '%push-handler catch-lbl frame-si handler-si))
+    ;; 4. Call thunk closure with 0 arguments
+    (emit-lir! (list '%load '%rax '%rsp thunk-si))
+    (emit-lir! '(%mov %r10 %rax))
+    (let* ((frame-shift (align-frame-shift (- 0 call-si)))
+           (safepoint-lbl (new-safepoint-label!))
+           (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
+      (record-safepoint! safepoint-lbl frame-shift bitmap)
+      (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))
+    ;; 5. Normal return from thunk: Pop handler frame and jump to exit
+    (emit-lir! (list '%pop-handler frame-si))
+    (emit-lir! (list '%jump exit-lbl))
+    ;; 6. Exception catch entry: control arrives here on %raise
+    (emit-lir! (list '%label catch-lbl))
+    (let* ((frame-shift (align-frame-shift (- 0 call-si)))
+           (aligned-si (- 0 frame-shift)))
+      (track-lir-si! aligned-si)
+      (emit-lir! (list '%store '%rsp aligned-si '%rdi))
+      (emit-lir! '(%mov %r10 %rax))
+      (let* ((safepoint-lbl (new-safepoint-label!))
+             (bitmap (compute-stackmap-bitmap frame-shift aligned-si (list '%rdi) env)))
+        (record-safepoint! safepoint-lbl frame-shift bitmap)
+        (emit-lir! (list '%call-closure frame-shift safepoint-lbl))))
+    ;; 7. Exit label
+    (emit-lir! (list '%label exit-lbl))))
+
 (define (lir-compile-expr expr si env tail?)
   (cond
     ((immediate? expr)
@@ -4167,6 +4281,8 @@
           (lir-compile-cont-fun (cadr expr) (caddr expr) (cadddr expr) (cadr (cdddr expr)) si env tail?))
          ((eq? op '%cont-call)
           (lir-compile-cont-call (cadr expr) (cddr expr) si env))
+         ((eq? op '%with-handler)
+          (lir-compile-with-handler (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'let)
           (lir-compile-let (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'if)
@@ -4915,6 +5031,43 @@
          (if (> frame-shift 0)
              (emit (string-append "    add rsp, " (number->string frame-shift))))))
 
+      ((%push-handler)
+       (let ((catch-lbl (cadr inst))
+             (frame-si (caddr inst))
+             (handler-si (cadddr inst)))
+         (let ((lbl-str (if (symbol? catch-lbl) (symbol->string catch-lbl) catch-lbl)))
+           (emit (string-append "    lea rax, [rip + " lbl-str "]"))
+           (emit (string-append "    mov [rsp " (offset->string (+ frame-si 24)) "], rax"))
+           (emit "    lea rdx, [rip + ulisp_handler_chain]")
+           (emit "    mov rcx, [rdx]")
+           (emit (string-append "    mov [rsp " (offset->string frame-si) "], rcx"))
+           (emit (string-append "    mov [rsp " (offset->string (+ frame-si 8)) "], rsp"))
+           (emit (string-append "    mov [rsp " (offset->string (+ frame-si 16)) "], rbp"))
+           (emit (string-append "    mov rax, [rsp " (offset->string handler-si) "]"))
+           (emit (string-append "    mov [rsp " (offset->string (+ frame-si 32)) "], rax"))
+           (emit (string-append "    lea rax, [rsp " (offset->string frame-si) "]"))
+           (emit "    mov [rdx], rax"))))
+
+      ((%pop-handler)
+       (let ((frame-si (cadr inst)))
+         (emit "    lea rdx, [rip + ulisp_handler_chain]")
+         (emit (string-append "    mov rcx, [rsp " (offset->string frame-si) "]"))
+         (emit "    mov [rdx], rcx")))
+
+      ((%raise)
+       (emit "    lea rdx, [rip + ulisp_handler_chain]")
+       (emit "    mov rbx, [rdx]")
+       (emit "    test rbx, rbx")
+       (emit "    jz .L_unhandled_exn")
+       (emit "    mov rcx, [rbx]")
+       (emit "    mov [rdx], rcx")
+       (emit "    mov rdi, rax")
+       (emit "    mov rsp, [rbx + 8]")
+       (emit "    mov rbp, [rbx + 16]")
+       (emit "    mov r10, [rbx + 24]")
+       (emit "    mov rax, [rbx + 32]")
+       (emit "    jmp r10"))
+
       (else
        (error "Unknown LIR opcode in x86-64 backend:" inst)))))
 
@@ -5031,6 +5184,11 @@
                 (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
                 (loop (cdr ss))))))
     (emit "    .bss")
+    (emit "    .align 8")
+    (emit "    .globl ulisp_handler_chain")
+    (emit "    .weak ulisp_handler_chain")
+    (emit "ulisp_handler_chain:")
+    (emit "    .quad 0")
     (emit "    .align 8")
     (emit "    .globl ulisp_gc_state")
     (emit "    .weak ulisp_gc_state")
@@ -5380,6 +5538,30 @@
   (emit "    pop rbx")
   (emit "    ret")
   (emit "")
+  (emit "    .p2align 4")
+  (emit ".L_unhandled_exn:")
+  (emit "    mov rdi, rax")
+  (emit "    call ulisp_unhandled_exception")
+  (emit "")
+  (emit "    .globl ulisp_unhandled_exception")
+  (emit "    .type ulisp_unhandled_exception, @function")
+  (emit "    .p2align 4")
+  (emit "ulisp_unhandled_exception:")
+  (emit "    push rbx")
+  (emit "    mov rbx, rdi")
+  (emit "    lea rdi, [rip + .L_str_unhandled_exn]")
+  (emit "    call ulisp_emit_str")
+  (emit "    mov rdi, rbx")
+  (emit "    call ulisp_print_value")
+  (emit "    mov dil, 10")
+  (emit "    call ulisp_emit_byte")
+  (emit "    call ulisp_flush")
+  (emit "    pop rbx")
+  (emit "    mov rdi, 1")
+  (emit "    mov rax, 60")
+  (emit "    syscall")
+  (emit "")
+  (emit ".L_str_unhandled_exn: .asciz \"*** ERROR: unhandled exception: \"")
   (emit ".L_str_false: .asciz \"#f\"")
   (emit ".L_str_true: .asciz \"#t\"")
   (emit ".L_str_nil: .asciz \"()\"")
@@ -5817,6 +5999,48 @@
          (emit "    ldr x30, [sp]")
          (emit (string-append "    add sp, sp, #" (number->string total-shift)))))
 
+      ((%push-handler)
+       (let ((catch-lbl (cadr inst))
+             (frame-si (caddr inst))
+             (handler-si (cadddr inst)))
+         (let ((lbl-str (if (symbol? catch-lbl) (symbol->string catch-lbl) catch-lbl)))
+           (emit (string-append "    adrp x9, " lbl-str))
+           (emit (string-append "    add x9, x9, :lo12:" lbl-str))
+           (emit (string-append "    str x9, " (arm-mem-op->str '%rsp (+ frame-si 24))))
+           (emit "    adrp x1, ulisp_handler_chain")
+           (emit "    add x1, x1, :lo12:ulisp_handler_chain")
+           (emit "    ldr x2, [x1]")
+           (emit (string-append "    str x2, " (arm-mem-op->str '%rsp frame-si)))
+           (emit "    mov x9, sp")
+           (emit (string-append "    str x9, " (arm-mem-op->str '%rsp (+ frame-si 8))))
+           (emit (string-append "    str x29, " (arm-mem-op->str '%rsp (+ frame-si 16))))
+           (emit (string-append "    ldr x9, " (arm-mem-op->str '%rsp handler-si)))
+           (emit (string-append "    str x9, " (arm-mem-op->str '%rsp (+ frame-si 32))))
+           (emit (string-append "    sub x9, sp, #" (number->string (- 0 frame-si))))
+           (emit "    str x9, [x1]"))))
+
+      ((%pop-handler)
+       (let ((frame-si (cadr inst)))
+         (emit "    adrp x1, ulisp_handler_chain")
+         (emit "    add x1, x1, :lo12:ulisp_handler_chain")
+         (emit (string-append "    ldr x2, " (arm-mem-op->str '%rsp frame-si)))
+         (emit "    str x2, [x1]")))
+
+      ((%raise)
+       (emit "    adrp x1, ulisp_handler_chain")
+       (emit "    add x1, x1, :lo12:ulisp_handler_chain")
+       (emit "    ldr x3, [x1]")
+       (emit "    cbz x3, .L_arm_unhandled_exn")
+       (emit "    ldr x2, [x3]")
+       (emit "    str x2, [x1]")
+       (emit "    ldr x9, [x3, #8]")
+       (emit "    mov sp, x9")
+       (emit "    ldr x29, [x3, #16]")
+       (emit "    ldr x10, [x3, #24]")
+       (emit "    ldr x1, [x3, #32]")
+       (emit "    mov x10, x1")
+       (emit "    br x10"))
+
       (else
        (error "Unknown LIR opcode in AArch64 backend:" inst)))))
 
@@ -5883,6 +6107,16 @@
                 (emit (string-append (car entry) ":"))
                 (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
                 (loop (cdr ss))))))
+    (emit "    .p2align 2")
+    (emit ".L_arm_unhandled_exn:")
+    (emit "    mov x0, #1")
+    (emit "    mov x8, #93")               ; sys_exit on aarch64
+    (emit "    svc #0")
+    (emit "    .bss")
+    (emit "    .align 3")
+    (emit "    .globl ulisp_handler_chain")
+    (emit "ulisp_handler_chain:")
+    (emit "    .xword 0")
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7b: Portable C / WebAssembly Backend Code Generator
@@ -6271,6 +6505,28 @@
          (emit "    ((void (*)(void))(uintptr_t)reg_rdx)();")
          (emit (string-append "    reg_rsp += " (number->string (+ frame-shift 8)) ";"))))
 
+      ((%push-handler)
+       (let ((catch-lbl (cadr inst))
+             (frame-si (caddr inst))
+             (handler-si (cadddr inst)))
+         (let ((lbl-str (c-sanitize-label catch-lbl)))
+           (emit (string-append "    *(void **)(reg_rsp + (" (number->string frame-si) ")) = ulisp_handler_chain;"))
+           (emit (string-append "    *(char **)(reg_rsp + (" (number->string (+ frame-si 8)) ")) = reg_rsp;"))
+           (emit (string-append "    *(uint64_t *)(reg_rsp + (" (number->string (+ frame-si 32)) ")) = *(uint64_t *)(reg_rsp + (" (number->string handler-si) "));"))
+           (emit (string-append "    ulisp_handler_chain = (void *)(reg_rsp + (" (number->string frame-si) "));")))))
+
+      ((%pop-handler)
+       (let ((frame-si (cadr inst)))
+         (emit (string-append "    ulisp_handler_chain = *(void **)(reg_rsp + (" (number->string frame-si) "));"))))
+
+      ((%raise)
+       (emit "    if (!ulisp_handler_chain) { fprintf(stderr, \"*** ERROR: unhandled exception\\n\"); exit(1); }")
+       (emit "    reg_rdi = reg_rax;")
+       (emit "    reg_rsp = *(char **)((char *)ulisp_handler_chain + 8);")
+       (emit "    reg_rax = *(uint64_t *)((char *)ulisp_handler_chain + 32);")
+       (emit "    ulisp_handler_chain = *(void **)ulisp_handler_chain;")
+       (emit "    reg_r10 = reg_rax;"))
+
       (else
        (error "Unknown LIR opcode in C backend:" inst)))))
 
@@ -6316,6 +6572,7 @@
     (emit "static uint64_t cmp_s1 ULISP_UNUSED;")
     (emit "static uint64_t cmp_s2 ULISP_UNUSED;")
     (emit "static char stack_mem[64 * 1024 * 1024];")
+    (emit "static void *ulisp_handler_chain = NULL;")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     ;; Forward declarations of lifted functions
