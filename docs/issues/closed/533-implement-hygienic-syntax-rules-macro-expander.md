@@ -2,7 +2,7 @@
 ID: 533
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] パターンマッチング型衛生的マクロ展開器 (define-syntax / syntax-rules) のサブセット実装 (ID: 533)
@@ -26,10 +26,11 @@ ID: 533
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/01_macro_expander.scm](../../ulisp/passes/01_macro_expander.scm) (`syntax-rules` パターンマッチャおよびテンプレート展開エンジンの実装)
-- [ ] [ulisp/lib/syntax.scm](../../ulisp/lib/syntax.scm) (新規作成: `syntax-rules` サポートライブラリ)
-- [ ] [ulisp/tests/test_syntax_rules.scm](../../ulisp/tests/test_syntax_rules.scm) (新規作成: 衛生的マクロ単体テスト)
-- [ ] [tests/test_bare_metal_ulisp.py](../../tests/test_bare_metal_ulisp.py) (AOT バイナリ実行検証)
+- [x] [ulisp/passes/00b_macro_expander.scm](../../ulisp/passes/00b_macro_expander.scm) (`syntax-rules` パターンマッチャおよびテンプレート展開エンジンの実装)
+- [x] [ulisp/tests/test_syntax_rules.scm](../../ulisp/tests/test_syntax_rules.scm) (新規作成: 衛生的マクロ単体テスト)
+- [x] [ulisp/test.sh](../../ulisp/test.sh) (Step 25 衛生的マクロ AOT 総合テスト)
+- [x] [ulisp/test_c.sh](../../ulisp/test_c.sh) (Step 8 衛生的マクロ C バックエンドテスト)
+- [x] [ulisp/lib/gc.scm](../../ulisp/lib/gc.scm) (Cheney コピー GC の複数ラウンドフォワーディング判定バグ修正)
 
 ---
 
@@ -48,8 +49,8 @@ Target Branch: `feat/533-ulisp-hygienic-syntax-rules-macro-expander`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `(define-syntax my-when (syntax-rules () ((_ test body ...) (if test (begin body ...)))))` が正しく定義・展開されること。
-- [ ] 変数捕捉（Variable Capture）が発生するテストケースにおいて、呼出元の変数が保護されること。
-- [ ] エリプシス `...` による 0 個以上の式列の展開が正確に動作すること。
-- [ ] 非標準の `define-macro` / `defmacro` が完全に削除され、全マクロが R7RS `define-syntax` に移行していること。
-- [ ] 自己ホスティングコンパイラのビルドおよび全単体テストが完全一致でパスすること。
+- [x] `(define-syntax my-when (syntax-rules () ((_ test body ...) (if test (begin body ...)))))` が正しく定義・展開されること。
+- [x] 変数捕捉（Variable Capture）が発生するテストケースにおいて、呼出元の変数が保護されること。
+- [x] エリプシス `...` による 0 個以上の式列の展開が正確に動作すること。
+- [x] 非標準の `define-macro` / `defmacro` が完全に削除され、全マクロが R7RS `define-syntax` に移行していること。
+- [x] 自己ホスティングコンパイラのビルドおよび全単体テストが完全一致でパスすること。

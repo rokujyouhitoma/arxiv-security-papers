@@ -122,10 +122,10 @@ echo "--- Step 7: Recursion & Tail Call Optimization ---"
 assert_c "55" "(letrec ((fib (lambda (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))))) (fib 10))"
 assert_c "120" "(letrec ((fact (lambda (n acc) (if (= n 0) acc (fact (- n 1) (* n acc)))))) (fact 5 1))"
 
-echo "--- Step 8: Metacircular Macros ---"
-assert_c "42" "(define-macro (when c . body) (list 'if c (cons 'begin body) #f)) (when (= 5 5) 42)"
-assert_c "100" "(define-macro (unless c . body) (list 'if c #f (cons 'begin body))) (unless (= 5 6) 100)"
-assert_c "81" "(defmacro my-sq (x) (list '* x x)) (my-sq 9)"
+echo "--- Step 8: Hygienic syntax-rules Macros ---"
+assert_c "42" "(define-syntax when (syntax-rules () ((_ c body ...) (if c (begin body ...) #f)))) (when (= 5 5) 42)"
+assert_c "100" "(define-syntax unless (syntax-rules () ((_ c body ...) (if c #f (begin body ...))))) (unless (= 5 6) 100)"
+assert_c "81" "(define-syntax my-sq (syntax-rules () ((_ x) (* x x)))) (my-sq 9)"
 
 rm -f "$TMP_C" "$TMP_BIN"
 

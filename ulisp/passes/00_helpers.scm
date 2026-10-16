@@ -102,6 +102,11 @@
       ((pred (car cur)) (loop (cdr cur) (cons (car cur) acc)))
       (else (loop (cdr cur) acc)))))
 
+(define (list-ref ls n)
+  (if (<= n 0)
+      (car ls)
+      (list-ref (cdr ls) (- n 1))))
+
 (define (error msg val)
   (display msg)
   (display " ")

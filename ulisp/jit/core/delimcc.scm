@@ -60,13 +60,17 @@
 
 ;;; Macro helper for reset
 ;;; Syntax: (reset body ...)
-(define-macro (reset . body)
-  (list 'reset-thunk (cons 'lambda (cons '() body))))
+(define-syntax reset
+  (syntax-rules ()
+    ((_ body ...)
+     (reset-thunk (lambda () body ...)))))
 
 ;;; Macro helper for shift
 ;;; Syntax: (shift k body ...)
-(define-macro (shift k . body)
-  (list 'shift-thunk (cons 'lambda (cons (list k) body))))
+(define-syntax shift
+  (syntax-rules ()
+    ((_ k body ...)
+     (shift-thunk (lambda (k) body ...)))))
 
 ;;; Abort helper: discards the delimited continuation and returns val directly
 (define (abort-delimited val)

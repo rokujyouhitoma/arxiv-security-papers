@@ -98,11 +98,11 @@
          (orig (%ptr-untag val))
          ;; Read 8-byte prefix header located at [orig - 8]
          (hdr (%raw-load (%ptr-add orig -8) 0)))
-    ;; Check if already forwarded in current GC cycle
+    ;; Check if already forwarded in current GC cycle (must be allocated within current [gc-to, gc-free))
     (if (and (not (= (%ptr-tag hdr) 0))
              (let ((addr (%ptr-untag hdr)))
                (and (>= addr (gc-to))
-                    (< addr (%ptr-add (gc-to) (gc-size))))))
+                    (< addr (gc-free)))))
         hdr
         ;; Not yet copied: allocate in to-space
         (let* ((to-free (gc-free))

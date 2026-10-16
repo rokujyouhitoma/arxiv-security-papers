@@ -102,6 +102,11 @@
       ((pred (car cur)) (loop (cdr cur) (cons (car cur) acc)))
       (else (loop (cdr cur) acc)))))
 
+(define (list-ref ls n)
+  (if (<= n 0)
+      (car ls)
+      (list-ref (cdr ls) (- n 1))))
+
 (define (error msg val)
   (display msg)
   (display " ")
@@ -157,7 +162,8 @@
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
              integer->symbol symbol->integer
-             zero? fixnum? integer? number? boolean? char? null? not symbol?
+             zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+             boolean? char? null? not symbol?
              car cdr pair? procedure? string?
              write-char write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
@@ -167,7 +173,7 @@
              %box-fixnum %unbox-fixnum)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? char=?
+  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
              %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
@@ -183,10 +189,11 @@
 (define (pure-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
              integer->symbol symbol->integer
-             zero? fixnum? integer? number? boolean? char? null? not symbol?
+             zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+             boolean? char? null? not symbol? list?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-             + - * = < <= > >= modulo quotient / eq? char=? cons %closure-ref
+             + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (const? x)
@@ -214,10 +221,11 @@
     (else (list 'quote v))))
 
 (define (commutative-op? op)
-  (memq op '(+ * = eq? char=?)))
+  (memq op '(+ * = eq? eqv? char=? boolean=? symbol=?)))
 
 (define (type-predicate-op? op)
-  (memq op '(fixnum? integer? number? pair? null? boolean? char? symbol? zero? procedure? string?)))
+  (memq op '(fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+             pair? null? boolean? char? symbol? list? zero? procedure? string?)))
 
 (define (pure-accessor-op? op)
   (memq op '(car cdr)))
@@ -271,7 +279,9 @@
            ((not) (val->ast-const (if (eq? v #f) #t #f)))
            ((null?) (val->ast-const (null? v)))
            ((pair?) (val->ast-const (pair? v)))
-           ((number? fixnum? integer?) (val->ast-const (number? v)))
+           ((number? fixnum? integer? exact? exact-integer? real? rational? complex?)
+            (val->ast-const (number? v)))
+           ((inexact?) (val->ast-const #f))
            ((boolean?) (val->ast-const (boolean? v)))
            ((char?) (val->ast-const (char? v)))
            ((symbol?) (val->ast-const (symbol? v)))
@@ -299,8 +309,10 @@
            ((<=) (if (and (number? v1) (number? v2)) (val->ast-const (<= v1 v2)) #f))
            ((>) (if (and (number? v1) (number? v2)) (val->ast-const (> v1 v2)) #f))
            ((>=) (if (and (number? v1) (number? v2)) (val->ast-const (>= v1 v2)) #f))
-           ((eq?) (val->ast-const (eq? v1 v2)))
+           ((eq? eqv?) (val->ast-const (eq? v1 v2)))
            ((char=?) (if (and (char? v1) (char? v2)) (val->ast-const (char=? v1 v2)) #f))
+           ((boolean=?) (if (and (boolean? v1) (boolean? v2)) (val->ast-const (eq? v1 v2)) #f))
+           ((symbol=?) (if (and (symbol? v1) (symbol? v2)) (val->ast-const (eq? v1 v2)) #f))
            (else #f))))
       (else #f))))
 
@@ -378,265 +390,335 @@
     ((not (pair? expr)) 1)
     (else (+ 1 (expr-size (car expr)) (expr-size (cdr expr))))))
 ;;; =======================================================================
-;;; ULisp Compiler Pass 0b: Metacircular Macro Expander
-;;; Conforms to DSN-33 Architecture Specification & Issue #500
+;;; ULisp Compiler Pass 0b: Hygienic syntax-rules Macro Expander
+;;; Conforms to DSN-33 Architecture Specification & Issue #533 (R7RS 4.3)
 ;;;
-;;; Provides self-contained compile-time macro expansion without relying
-;;; on host runtime `eval`. Fully operational in both host Scheme (ILisp)
-;;; and self-hosted native AOT binaries (Stage 1/2/3).
+;;; Provides self-contained compile-time hygienic macro expansion
+;;; without relying on host runtime eval. Fully operational in both host
+;;; Scheme (ILisp) and self-hosted native AOT binaries (Stage 1/2/3).
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
-;;; 1. Macro Environment Operations
+;;; 1. Hygiene & Unique Identifier Generation
 ;;; -----------------------------------------------------------------------
 
-(define (macro-env-lookup sym env)
-  (let ((pair (assq sym env)))
-    (if pair (cdr pair) 'unbound)))
+(define *hygiene-counter* (cons 0 '()))
 
-(define (macro-bind-params params args env)
+(define (reset-hygiene-counter!)
+  (set-car! *hygiene-counter* 0))
+
+(define (hygiene-gensym sym)
+  (let ((cnt (car *hygiene-counter*)))
+    (set-car! *hygiene-counter* (+ cnt 1))
+    (string->symbol (string-append "__hyg_" (symbol->string sym) "_" (number->string cnt)))))
+
+;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
+(define (core-form-or-primitive? sym)
+  (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules
+              cond case and or when unless
+              cons car cdr pair? null? list append not eq? eqv? equal?
+              + - * = < > <= >= modulo quotient /
+              zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+              boolean? char? symbol? string? list?
+              write-char write-string read-char peek-char eof-object?
+              values call-with-values dynamic-wind call/cc call-with-current-continuation
+              guard raise %raw-call/cc %with-handler)))
+
+;;; -----------------------------------------------------------------------
+;;; 2. Pattern Matching Utilities
+;;; -----------------------------------------------------------------------
+
+(define (ellipsis? x)
+  (and (symbol? x) (eq? x '...)))
+
+(define (underscore? x)
+  (and (symbol? x) (eq? x '_)))
+
+(define (literal? sym literals)
+  (and (symbol? sym) (memq sym literals)))
+
+;;; Extract all pattern variables from a pattern
+(define (extract-pattern-vars pat literals)
   (cond
-    ((null? params)
-     (if (null? args)
-         env
-         (error "macro-bind-params: too many arguments" args)))
-    ((symbol? params)
-     (cons (cons params args) env))
-    ((pair? params)
-     (if (null? args)
-         (error "macro-bind-params: too few arguments" params)
-         (macro-bind-params (cdr params) (cdr args)
-                            (cons (cons (car params) (car args)) env))))
-    (else env)))
-
-;;; Closure representation: ('macro-closure params body env)
-(define (macro-closure? obj)
-  (and (pair? obj) (eq? (car obj) 'macro-closure)))
-
-;;; -----------------------------------------------------------------------
-;;; 2. Built-in Primitive Procedures for Compile-time Evaluation
-;;; -----------------------------------------------------------------------
-
-(define (macro-prim? op)
-  (memq op '(cons car cdr pair? null? list append eq? equal? not
-             + - * = < > <= >= symbol? number? boolean? string?
-             reverse length cadr cddr cdar caar caddr cdddr)))
-
-(define (macro-equal? a b)
-  (cond
-    ((eq? a b) #t)
-    ((and (pair? a) (pair? b))
-     (and (macro-equal? (car a) (car b))
-          (macro-equal? (cdr a) (cdr b))))
-    (else #f)))
-
-(define (macro-apply-prim op args)
-  (case op
-    ((cons)
-     (cons (car args) (cadr args)))
-    ((car)
-     (car (car args)))
-    ((cdr)
-     (cdr (car args)))
-    ((pair?)
-     (pair? (car args)))
-    ((null?)
-     (null? (car args)))
-    ((list)
-     args)
-    ((append)
-     (if (null? args)
+    ((null? pat) '())
+    ((underscore? pat) '())
+    ((ellipsis? pat) '())
+    ((symbol? pat)
+     (if (literal? pat literals)
          '()
-         (if (null? (cdr args))
-             (car args)
-             (append (car args) (cadr args)))))
-    ((eq?)
-     (eq? (car args) (cadr args)))
-    ((equal?)
-     (macro-equal? (car args) (cadr args)))
-    ((not)
-     (not (car args)))
-    ((+)
-     (if (null? args)
-         0
-         (if (null? (cdr args))
-             (car args)
-             (+ (car args) (cadr args)))))
-    ((-)
-     (if (null? (cdr args))
-         (- 0 (car args))
-         (- (car args) (cadr args))))
-    ((*)
-     (if (null? args)
-         1
-         (if (null? (cdr args))
-             (car args)
-             (* (car args) (cadr args)))))
-    ((=)
-     (= (car args) (cadr args)))
-    ((<)
-     (< (car args) (cadr args)))
-    ((>)
-     (> (car args) (cadr args)))
-    ((<=)
-     (<= (car args) (cadr args)))
-    ((>=)
-     (>= (car args) (cadr args)))
-    ((symbol?)
-     (symbol? (car args)))
-    ((number?)
-     (number? (car args)))
-    ((boolean?)
-     (boolean? (car args)))
-    ((string?)
-     (string? (car args)))
-    ((reverse)
-     (reverse (car args)))
-    ((length)
-     (length (car args)))
-    ((cadr)
-     (cadr (car args)))
-    ((cddr)
-     (cddr (car args)))
-    ((cdar)
-     (cdar (car args)))
-    ((caar)
-     (caar (car args)))
-    ((caddr)
-     (caddr (car args)))
-    ((cdddr)
-     (cdddr (car args)))
+         (list pat)))
+    ((pair? pat)
+     (append (extract-pattern-vars (car pat) literals)
+             (extract-pattern-vars (cdr pat) literals)))
+    (else '())))
+
+;;; Compute length of a proper or dotted list
+(define (pattern-length p)
+  (let loop ((cur p) (len 0))
+    (cond
+      ((null? cur) len)
+      ((pair? cur) (loop (cdr cur) (+ len 1)))
+      (else (+ len 1)))))
+
+;;; Match a single element pattern against input
+(define (match-element pat input literals env)
+  (cond
+    ((underscore? pat)
+     (cons #t env))
+    ((literal? pat literals)
+     (if (and (symbol? input) (eq? pat input))
+         (cons #t env)
+         (cons #f '())))
+    ((symbol? pat)
+     (cons #t (cons (cons pat input) env)))
+    ((pair? pat)
+     (if (pair? input)
+         (match-pattern-sequence pat input literals env)
+         (cons #f '())))
     (else
-     (error "macro-apply-prim: unsupported primitive" op))))
+     (if (equal? pat input)
+         (cons #t env)
+         (cons #f '())))))
+
+;;; Match a sequence of pattern elements against input list
+(define (match-pattern-sequence pat input literals env)
+  (cond
+    ((and (null? pat) (null? input))
+     (cons #t env))
+    ((null? pat)
+     (cons #f '()))
+    ((not (pair? pat))
+     ;; Dotted tail match
+     (match-element pat input literals env))
+    ;; Ellipsis pattern: (elem ... . rest-pat)
+    ((and (pair? (cdr pat)) (ellipsis? (cadr pat)))
+     (let* ((elem-pat (car pat))
+            (rest-pat (cddr pat))
+            (elem-vars (extract-pattern-vars elem-pat literals))
+            (min-rest-len (length (if (pair? rest-pat) rest-pat '())))
+            (input-len (if (list? input) (length input) 0)))
+       (if (< input-len min-rest-len)
+           (cons #f '())
+           (let* ((num-ellipsis (- input-len min-rest-len))
+                  ;; Split input into ellipsis items and rest items
+                  (ellipsis-items (let take ((n num-ellipsis) (cur input))
+                                    (if (<= n 0) '()
+                                        (cons (car cur) (take (- n 1) (cdr cur))))))
+                  (rest-items (let drop ((n num-ellipsis) (cur input))
+                                (if (<= n 0) cur
+                                    (drop (- n 1) (cdr cur))))))
+             ;; Match each ellipsis item against elem-pat
+             (let loop ((items ellipsis-items) (matched-envs '()))
+               (if (null? items)
+                   ;; Aggregate matched variables into lists
+                   (let* ((agg-bindings
+                           (map (lambda (var)
+                                  (cons var
+                                        (map (lambda (sub-env)
+                                               (let ((p (assq var sub-env)))
+                                                 (if p (cdr p) #f)))
+                                             (reverse matched-envs))))
+                                elem-vars))
+                          (env-with-ellipsis (append agg-bindings env)))
+                     ;; Match rest of pattern
+                     (match-pattern-sequence rest-pat rest-items literals env-with-ellipsis))
+                   (let ((sub-match (match-element elem-pat (car items) literals '())))
+                     (if (car sub-match)
+                         (loop (cdr items) (cons (cdr sub-match) matched-envs))
+                         (cons #f '())))))))))
+    ;; Normal element
+    ((pair? input)
+     (let ((head-match (match-element (car pat) (car input) literals env)))
+       (if (car head-match)
+           (match-pattern-sequence (cdr pat) (cdr input) literals (cdr head-match))
+           (cons #f '()))))
+    (else
+     (cons #f '()))))
+
+;;; Match an entire macro pattern against input form
+;;; Pattern starts with keyword or underscore: (_ a b ...)
+(define (match-macro-pattern pat input literals)
+  (if (and (pair? pat) (pair? input))
+      (match-pattern-sequence (cdr pat) (cdr input) literals '())
+      (cons #f '())))
 
 ;;; -----------------------------------------------------------------------
-;;; 3. Metacircular Evaluator for Macro Transformations
+;;; 3. Template Expansion and Hygienic Renaming
 ;;; -----------------------------------------------------------------------
 
-(define (eval-macro-sequence exprs env)
+(define (extract-formals formals pat-vars)
   (cond
-    ((null? exprs) '())
-    ((null? (cdr exprs)) (eval-macro-expr (car exprs) env))
-    (else
-     (eval-macro-expr (car exprs) env)
-     (eval-macro-sequence (cdr exprs) env))))
+    ((null? formals) '())
+    ((symbol? formals)
+     (if (memq formals pat-vars) '() (list formals)))
+    ((pair? formals)
+     (append (extract-formals (car formals) pat-vars)
+             (extract-formals (cdr formals) pat-vars)))
+    (else '())))
 
-(define (apply-macro-proc proc args)
+(define (extract-binding-vars bindings pat-vars)
   (cond
-    ((symbol? proc)
-     (if (macro-prim? proc)
-         (macro-apply-prim proc args)
-         (error "apply-macro-proc: unknown primitive symbol" proc)))
-    ((macro-closure? proc)
-     (let ((params (cadr proc))
-           (body (caddr proc))
-           (env (cadddr proc)))
-       (let ((call-env (macro-bind-params params args env)))
-         (eval-macro-sequence body call-env))))
-    (else
-     (error "apply-macro-proc: object is not applicable" proc))))
+    ((null? bindings) '())
+    ((pair? bindings)
+     (let ((b (car bindings)))
+       (append (if (and (pair? b) (symbol? (car b)) (not (memq (car b) pat-vars)))
+                   (list (car b))
+                   '())
+               (extract-binding-vars (cdr bindings) pat-vars))))
+    (else '())))
 
-(define (eval-macro-expr expr env)
+;;; Collect all variables introduced by binding forms in a template that need renaming (macro-introduced local identifiers)
+(define (collect-template-binders tmpl pat-vars literals)
   (cond
-    ((number? expr) expr)
-    ((boolean? expr) expr)
-    ((char? expr) expr)
-    ((string? expr) expr)
-    ((null? expr) '())
-    ((symbol? expr)
-     (let ((val (macro-env-lookup expr env)))
-       (if (eq? val 'unbound)
-           (error "eval-macro-expr: unbound variable in macro definition" expr)
-           val)))
-    ((not (pair? expr)) expr)
+    ((not (pair? tmpl)) '())
+    ((eq? (car tmpl) 'quote) '())
+    ;; (lambda <formals> <body> ...)
+    ((and (eq? (car tmpl) 'lambda) (pair? (cdr tmpl)))
+     (let ((formals (cadr tmpl))
+           (body (cddr tmpl)))
+       (append (extract-formals formals pat-vars)
+               (collect-template-binders body pat-vars literals))))
+    ;; (let ((<var> <init>) ...) <body> ...)
+    ;; or named let: (let <name> ((<var> <init>) ...) <body> ...)
+    ((and (memq (car tmpl) '(let let* letrec)) (pair? (cdr tmpl)))
+     (cond
+       ;; named let: (let <name> ((<var> <init>) ...) ...)
+       ((and (eq? (car tmpl) 'let) (symbol? (cadr tmpl)) (pair? (cddr tmpl)))
+        (let ((name (cadr tmpl))
+              (bindings (caddr tmpl))
+              (body (cdddr tmpl)))
+          (append (if (memq name pat-vars) '() (list name))
+                  (append (extract-binding-vars bindings pat-vars)
+                          (append (collect-template-binders bindings pat-vars literals)
+                                  (collect-template-binders body pat-vars literals))))))
+       ;; normal let / let* / letrec: (let ((<var> <init>) ...) ...)
+       ((pair? (cdr tmpl))
+        (let ((bindings (cadr tmpl))
+              (body (cddr tmpl)))
+          (append (extract-binding-vars bindings pat-vars)
+                  (append (collect-template-binders bindings pat-vars literals)
+                          (collect-template-binders body pat-vars literals)))))
+       (else '())))
     (else
-     (let ((op (car expr)))
-       (case op
-         ((quote)
-          (cadr expr))
-         ((if)
-          (let ((test-val (eval-macro-expr (cadr expr) env)))
-            (if test-val
-                (eval-macro-expr (caddr expr) env)
-                (if (pair? (cdddr expr))
-                    (eval-macro-expr (cadddr expr) env)
-                    #f))))
-         ((begin)
-          (eval-macro-sequence (cdr expr) env))
-         ((let)
-          (if (symbol? (cadr expr))
-              (error "eval-macro-expr: named let not supported in macro transformer" expr)
-              (let* ((bindings (cadr expr))
-                     (body (cddr expr))
-                     (vars (map car* bindings))
-                     (vals (map (lambda (b) (eval-macro-expr (cadr b) env)) bindings))
-                     (new-env (macro-bind-params vars vals env)))
-                (eval-macro-sequence body new-env))))
-         ((let*)
-          (let ((bindings (cadr expr))
-                (body (cddr expr)))
-            (let loop ((bs bindings) (e env))
-              (if (null? bs)
-                  (eval-macro-sequence body e)
-                  (let* ((b (car bs))
-                         (var (car b))
-                         (val (eval-macro-expr (cadr b) e)))
-                    (loop (cdr bs) (cons (cons var val) e)))))))
-         ((lambda)
-          (let ((params (cadr expr))
-                (body (cddr expr)))
-            (list 'macro-closure params body env)))
-         (else
-          (let ((proc (if (symbol? op)
-                          (if (macro-prim? op)
-                              op
-                              (eval-macro-expr op env))
-                          (eval-macro-expr op env))))
-            (let ((args (map (lambda (a) (eval-macro-expr a env)) (cdr expr))))
-              (apply-macro-proc proc args)))))))))
+     (append (collect-template-binders (car tmpl) pat-vars literals)
+             (collect-template-binders (cdr tmpl) pat-vars literals)))))
+
+(define (remove-duplicates ls)
+  (let loop ((cur ls) (res '()))
+    (cond
+      ((null? cur) (reverse res))
+      ((memq (car cur) res) (loop (cdr cur) res))
+      (else (loop (cdr cur) (cons (car cur) res))))))
+
+;;; Expand a template with given pattern environment and renaming map
+(define (expand-template tmpl env literals rename-map)
+  (cond
+    ((null? tmpl) '())
+    ((symbol? tmpl)
+     (let ((p (assq tmpl env)))
+       (if p
+           (cdr p)
+           (let ((r (assq tmpl rename-map)))
+             (if r
+                 (cdr r)
+                 tmpl)))))
+    ((pair? tmpl)
+     (cond
+       ;; Quote remains untransformed except for variables if not pure
+       ((eq? (car tmpl) 'quote)
+        tmpl)
+       ;; Ellipsis repetition in template: (elem ... . rest)
+       ((and (pair? (cdr tmpl)) (ellipsis? (cadr tmpl)))
+        (let* ((elem-tmpl (car tmpl))
+               (rest-tmpl (cddr tmpl))
+               ;; Find variables used in elem-tmpl that are lists in env
+               (vars-in-elem (remove-duplicates (extract-pattern-vars elem-tmpl literals)))
+               (ellipsis-vars (filter (lambda (v)
+                                        (let ((p (assq v env)))
+                                          (and p (list? (cdr p)))))
+                                      vars-in-elem)))
+          (if (null? ellipsis-vars)
+              ;; Zero repetitions or non-ellipsis variable
+              (expand-template rest-tmpl env literals rename-map)
+              (let* ((first-v (car ellipsis-vars))
+                     (repeat-count (length (cdr (assq first-v env))))
+                     (repeated-elements
+                      (let loop ((i 0) (acc '()))
+                        (if (>= i repeat-count)
+                            (reverse acc)
+                            (let* ((sub-env
+                                    (map (lambda (v)
+                                           (cons v (list-ref (cdr (assq v env)) i)))
+                                         ellipsis-vars))
+                                   (merged-env (append sub-env env))
+                                   (expanded-elem (expand-template elem-tmpl merged-env literals rename-map)))
+                              (loop (+ i 1) (cons expanded-elem acc)))))))
+                (append repeated-elements (expand-template rest-tmpl env literals rename-map))))))
+       (else
+        (cons (expand-template (car tmpl) env literals rename-map)
+              (expand-template (cdr tmpl) env literals rename-map)))))
+    (else tmpl)))
 
 ;;; -----------------------------------------------------------------------
-;;; 4. Macro Definition Parsing and Expansion
+;;; 4. syntax-rules Macro Transformer
+;;; -----------------------------------------------------------------------
+
+;;; Representation: ('syntax-rules-macro name literals rules)
+;;; rule: (pattern template)
+(define (syntax-rules-macro? obj)
+  (and (pair? obj) (eq? (car obj) 'syntax-rules-macro)))
+
+(define (macro-name m) (cadr m))
+(define (macro-literals m) (caddr m))
+(define (macro-rules m) (cadddr m))
+
+(define (apply-syntax-rules-macro m input)
+  (let ((literals (macro-literals m))
+        (rules (macro-rules m)))
+    (let loop ((rls rules))
+      (if (null? rls)
+          (error "apply-syntax-rules-macro: no matching syntax-rules pattern for" input)
+          (let* ((rule (car rls))
+                 (pat (car rule))
+                 (tmpl (cadr rule))
+                 (match-res (match-macro-pattern pat input literals)))
+            (if (car match-res)
+                (let* ((env (cdr match-res))
+                       (pat-vars (extract-pattern-vars pat literals))
+                       (binders-to-rename (remove-duplicates (collect-template-binders tmpl pat-vars literals)))
+                       (rename-map (map (lambda (s) (cons s (hygiene-gensym s))) binders-to-rename)))
+                  (expand-template tmpl env literals rename-map))
+                (loop (cdr rls))))))))
+
+;;; -----------------------------------------------------------------------
+;;; 5. Macro Definition Parsing and Top-level Expansion Pass
 ;;; -----------------------------------------------------------------------
 
 (define (macro-def? form)
   (and (pair? form)
-       (or (eq? (car form) 'define-macro)
-           (eq? (car form) 'defmacro))))
+       (eq? (car form) 'define-syntax)))
 
-(define (parse-macro-def form)
-  (let ((op (car form))
-        (spec (cadr form)))
-    (cond
-      ((pair? spec)
-       ;; (define-macro (name . params) body ...)
-       ;; (defmacro (name . params) body ...)
-       (let ((name (car spec))
-             (params (cdr spec))
-             (body (cddr form)))
-         (cons name (list 'macro-closure params body '()))))
-      ((symbol? spec)
-       ;; (defmacro name params body ...)
-       (if (eq? op 'defmacro)
-           (let ((name spec)
-                 (params (caddr form))
-                 (body (cdddr form)))
-             (cons name (list 'macro-closure params body '())))
-           ;; (define-macro name (lambda params body ...))
-           (let* ((name spec)
-                  (val-expr (caddr form))
-                  (closure (eval-macro-expr val-expr '())))
-             (cons name closure))))
-      (else
-       (error "parse-macro-def: invalid macro syntax" form)))))
+(define (parse-syntax-rules-def form)
+  ;; (define-syntax <name> (syntax-rules (<literal> ...) (<pattern> <template>) ...))
+  (if (and (pair? (cdr form))
+           (symbol? (cadr form))
+           (pair? (cddr form))
+           (pair? (caddr form))
+           (eq? (car (caddr form)) 'syntax-rules))
+      (let* ((name (cadr form))
+             (sr-spec (caddr form))
+             (literals (cadr sr-spec))
+             (rules (cddr sr-spec)))
+        (list 'syntax-rules-macro name literals rules))
+      (error "parse-syntax-rules-def: invalid define-syntax syntax" form)))
 
 (define (macro-expand-1 expr macro-table)
   (if (and (pair? expr) (symbol? (car expr)))
       (let ((entry (assq (car expr) macro-table)))
         (if entry
-            (let ((closure (cdr entry))
-                  (args (cdr expr)))
-              (cons #t (apply-macro-proc closure args)))
+            (let* ((macro-desc (cdr entry))
+                   (expanded (apply-syntax-rules-macro macro-desc expr)))
+              (cons #t expanded))
             (cons #f expr)))
       (cons #f expr)))
 
@@ -663,8 +745,9 @@
         (reverse res)
         (let ((f (car fs)))
           (if (macro-def? f)
-              (let ((entry (parse-macro-def f)))
-                (loop (cdr fs) (cons entry macro-table) res))
+              (let* ((macro-desc (parse-syntax-rules-def f))
+                     (name (macro-name macro-desc)))
+                (loop (cdr fs) (cons (cons name macro-desc) macro-table) res))
               (let ((exp-f (macro-expand-all f macro-table)))
                 (loop (cdr fs) macro-table (cons exp-f res))))))))
 ;;; =======================================================================
@@ -1523,9 +1606,9 @@
                (let ((zero-res (lvn-eval-const 0 env)))
                  (list #t (car zero-res) (cadr zero-res) (caddr zero-res))))
               (else (list #f #f #f env))))
-           ((= eq? char=?)
+           ((= eq? eqv? char=? boolean=? symbol=?)
             (cond
-              ;; (= x x) -> #t, (eq? x x) -> #t
+              ;; (= x x) -> #t, (eq? x x) -> #t, (eqv? x x) -> #t
               ((= vn1 vn2)
                (let ((true-res (lvn-eval-const #t env)))
                  (list #t (car true-res) (cadr true-res) (caddr true-res))))
@@ -2337,7 +2420,7 @@
     ((memq op '(fxadd1 fxsub1 %to-raw %to-fixnum))
      (type-fixnum))
     ;; Predicates -> Boolean
-    ((memq op '(= < <= > >= eq? char=? zero? fixnum? integer? number? boolean? char? null? not symbol? pair? procedure? string? eof-object?))
+    ((memq op '(= < <= > >= eq? eqv? char=? boolean=? symbol=? zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex? boolean? char? null? not symbol? pair? procedure? string? list? eof-object?))
      (type-boolean))
     ;; Data structure primitives
     ((eq? op 'cons)
@@ -3692,10 +3775,12 @@
     ((zero?)
      (emit-lir! '(%cmp %rax 0))
      (emit-lir! '(%set-boolean %rax "sete")))
-    ((fixnum? integer? number?)
+    ((fixnum? integer? number? exact? exact-integer? real? rational? complex?)
      (emit-lir! '(%bit-and %rax 3))
      (emit-lir! '(%cmp %rax 0))
      (emit-lir! '(%set-boolean %rax "sete")))
+    ((inexact?)
+     (emit-lir! '(%mov %rax 47)))
     ((boolean?)
      (emit-lir! '(%mov %rdx %rax))
      (emit-lir! '(%bit-xor %rdx 47))
@@ -3890,7 +3975,7 @@
      (emit-lir! (list '%load '%rdx '%rsp si))
      (emit-lir! '(%store %rdx 7 %rax))
      (emit-lir! '(%mov %rax 63)))
-    ((eq? char=?)
+    ((eq? eqv? char=? boolean=? symbol=?)
      (emit-lir! (list '%cmp (list '%stack si) '%rax))
      (emit-lir! '(%set-boolean %rax "sete")))))
 

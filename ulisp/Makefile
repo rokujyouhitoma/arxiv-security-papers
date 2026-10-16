@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -112,6 +112,13 @@ test_eqv: build/scheme-stage2
 	./build/scheme-stage2 build/test_eqv_input.scm > build/test_eqv.s
 	$(CC) -nostdlib -static build/test_eqv.s -o build/test_eqv
 	./build/test_eqv
+
+test_syntax_rules: build/scheme-stage2
+	@mkdir -p build
+	cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
+	./build/scheme-stage2 build/test_syntax_rules_input.scm > build/test_syntax_rules.s
+	$(CC) -nostdlib -static build/test_syntax_rules.s -o build/test_syntax_rules
+	./build/test_syntax_rules
 
 test_freestanding: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="

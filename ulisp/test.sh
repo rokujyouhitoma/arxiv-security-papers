@@ -511,12 +511,13 @@ assert '#\h' '(string-ref "hello" 0)'
 assert '#\o' '(string-ref "hello" 4)'
 assert '"abc"' '(let ((s (make-string 3))) (begin (string-set! s 0 #\a) (string-set! s 1 #\b) (string-set! s 2 #\c) s))'
 
-# --- Step 25: Metacircular Macro Expander (Issue 500) ---
-echo "-- Step 25: Issue 500 Metacircular Macro Expander --"
-assert "42" "(define-macro (when c . body) (list 'if c (cons 'begin body) #f)) (when (= 5 5) 42)"
-assert "100" "(define-macro (unless c . body) (list 'if c #f (cons 'begin body))) (unless (= 5 6) 100)"
-assert "81" "(defmacro my-square (x) (list '* x x)) (my-square 9)"
-assert "42" "(defmacro inc (x) (list '+ x 1)) (inc (inc 40))"
+# --- Step 25: Hygienic syntax-rules Macro Expander (Issue 533) ---
+echo "-- Step 25: Issue 533 Hygienic syntax-rules Macro Expander --"
+assert "42" "(define-syntax when (syntax-rules () ((_ c body ...) (if c (begin body ...) #f)))) (when (= 5 5) 42)"
+assert "100" "(define-syntax unless (syntax-rules () ((_ c body ...) (if c #f (begin body ...))))) (unless (= 5 6) 100)"
+assert "81" "(define-syntax my-square (syntax-rules () ((_ x) (* x x)))) (my-square 9)"
+assert "42" "(define-syntax inc (syntax-rules () ((_ x) (+ x 1)))) (inc (inc 40))"
+assert "105" "(define-syntax with-tmp (syntax-rules () ((_ val expr) (let ((temp val)) (+ temp expr))))) (let ((temp 100)) (with-tmp 5 temp))"
 
 # --- Step 26: Target Runtime Cheney Garbage Collector (Issue 501) ---
 echo "-- Step 26: Issue 501 Target Garbage Collector --"

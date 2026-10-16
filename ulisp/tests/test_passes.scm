@@ -35,34 +35,32 @@
   (display "=== Running Pass 0b (Macro Expander) Tests ===")
   (newline)
 
-  ;; 1. eval-macro-expr basic evaluation
-  (assert-equal "eval quote in macro expr"
-                '(if x 1 2)
-                (eval-macro-expr '(list 'if 'x 1 2) '()))
+  ;; 1. parse-syntax-rules-def
+  (let ((m (parse-syntax-rules-def '(define-syntax when
+                                      (syntax-rules ()
+                                        ((_ c body ...)
+                                         (if c (begin body ...) #f)))))))
+    (assert-equal "macro name" 'when (macro-name m))
+    (assert-true "is syntax-rules macro" (syntax-rules-macro? m)))
 
-  ;; 2. eval-macro-expr with bindings
-  (assert-equal "eval macro expr with env"
-                '(+ 10 20)
-                (eval-macro-expr '(list '+ a b) '((a . 10) (b . 20))))
-
-  ;; 3. parse-macro-def
-  (let ((m (parse-macro-def '(define-macro (when c . body)
-                               (list 'if c (cons 'begin body) #f)))))
-    (assert-equal "macro name" 'when (car m))
-    (assert-true "is macro closure" (macro-closure? (cdr m))))
-
-  ;; 4. expand-macros-in-forms
-  (let* ((forms '((define-macro (when c . body)
-                    (list 'if c (cons 'begin body) #f))
+  ;; 2. expand-macros-in-forms with basic when macro
+  (let* ((forms '((define-syntax when
+                    (syntax-rules ()
+                      ((_ c body ...)
+                       (if c (begin body ...) #f))))
                   (when (= x 1) (+ x 10))))
          (expanded (expand-macros-in-forms forms)))
     (assert-equal "expand when macro in forms"
                   '((if (= x 1) (begin (+ x 10)) #f))
                   expanded))
 
-  ;; 5. Nested macro definitions & expansion
-  (let* ((forms '((defmacro my-const () 42)
-                  (define-macro (twice x) (list '+ x x))
+  ;; 3. Nested syntax-rules macro expansion
+  (let* ((forms '((define-syntax my-const
+                    (syntax-rules ()
+                      ((_) 42)))
+                  (define-syntax twice
+                    (syntax-rules ()
+                      ((_ x) (+ x x))))
                   (+ (twice 5) (my-const))))
          (expanded (expand-macros-in-forms forms)))
     (assert-equal "expand multi-macros in forms"
