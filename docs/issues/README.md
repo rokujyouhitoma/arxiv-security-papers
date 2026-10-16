@@ -15,6 +15,7 @@
 | **537** | コンパイラコンテキスト動的スコープ制御のための R7RS パラメータ (make-parameter / parameterize) の実装 | Feature | Open (New) | [537-implement-r7rs-parameters-and-parameterize.md](537-implement-r7rs-parameters-and-parameterize.md) |
 | **538** | ゼロヒープ割当複数値返却のための R7RS 多値機構 (values / call-with-values / let-values) の実装 | Feature | Open (New) | [538-implement-r7rs-multiple-values-call-with-values.md](538-implement-r7rs-multiple-values-call-with-values.md) |
 | **539** | トップレベル定義の完全直列パイプライン分離および直接呼出 (%direct-call) 最適化 | Feature | Open (New) | [539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md](539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md) |
+| **540** | スタック退避・復元および動的巻き戻し (dynamic-wind) に基づく完全第一級 call/cc の実装 | Feature | Open (New) | [540-implement-full-first-class-call-with-current-continuation-call-cc.md](540-implement-full-first-class-call-with-current-continuation-call-cc.md) |
 
 ---
 

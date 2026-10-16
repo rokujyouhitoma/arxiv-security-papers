@@ -10,7 +10,7 @@ ID: 531
 ## 1. 概要 / Summary
 現在の ULisp は、型不一致、ゼロ除算、リスト外参照、未定義変数アクセス等のランタイムエラーが発生した際に OS レベルのシグナル（SIGSEGV / abort）でプロセスが即座にクラッシュする仕様となっている。
 本 Issue では、R7RS Section 6.11（Exceptions）に準拠した例外捕捉構文 `(guard (var (cond-clause ...)) body ...)` および例外送出プリミティブ `(raise obj)` / `(raise-continuable obj)` を導入する。
-ベアメタル・外部依存ゼロ（`-nostdlib -static`）の軽量性を維持するため、重厚な全スタックディープコピー型 `call/cc` ではなく、C 言語の `setjmp` / `longjmp` に類似した「軽量大域脱出ハンドラスタック（Exception Handler Stack Frame）」をランタイムおよびアセンブリ層に配備し、構文木パースやバッチ実行における堅牢なエラー回復を実現する。
+なお、本実装は将来の完全な第一級継続（`call/cc`, Issue #540）を見据えた「3段階継続ロードマップ」の【ステップ1: 単方向・1回限り大域脱出（Escape Continuation）】に位置づけられる。ベアメタル・外部依存ゼロ（`-nostdlib -static`）の極限軽量性を維持するため、スタックディープコピーを伴わず、C 言語の `setjmp` / `longjmp` に類似した「軽量大域脱出ハンドラスタック（Exception Handler Stack Frame）」をランタイムおよびアセンブリ層に配備し、構文木パースやバッチ実行における堅牢なエラー回復を実現する。
 
 ---
 
@@ -18,11 +18,17 @@ ID: 531
 - **関連規格**:
   - R7RS Section 6.11 (Exceptions: `guard`, `raise`, `with-exception-handler`)
   - R7RS Section 6.12 (Environments and Evaluation)
+- **継続アーキテクチャ・ロードマップ**:
+  - 【ステップ1（本Issue #531）】: 軽量大域脱出フレームによる例外処理 (`guard` / `raise`)
+  - 【ステップ2（Issue #538 / #540）】: ゼロヒープ多値受渡し (`values` / `call-with-values`) および `dynamic-wind` リソース保護
+  - 【ステップ3（Issue #540）】: スタックコピー方式による多重複帰可能な第一級継続 (`call/cc`)
 - **関連設計書**:
   - [DSN-33: ULISP 包括設計仕様書 (第4章 ランタイム機構)](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
   - [DSN-36: 完全ベアメタル自己完結型 Freestanding 実行基盤](../designs/DSN-36-ulisp_baremetal_freestanding_pure_scheme_runtime.md)
-- **関連先行 Issue**:
+- **関連先行・後続 Issue**:
   - Issue #526: Mytkowicz 測定バイアス排除機構と動的命令数差分テスト基盤の統合
+  - Issue #538: ゼロヒープ割当複数値返却のための R7RS 多値機構の実装
+  - Issue #540: スタックコピー方式および dynamic-wind 統合に基づく完全な第一級継続 (call/cc) の実装
 
 ---
 

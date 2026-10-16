@@ -12,6 +12,7 @@ ID: 538
 現在、複数の値を返すにはリストやペア（`cons`）をヒープに割り当てる必要があり、一時的なオブジェクトの破棄による GC 負荷とメモリアロケーションのオーバーヘッドが生じている。
 本 Issue では、R7RS Section 6.10（Control features: `values`, `call-with-values`）および Section 4.2.2（Binding constructs: `let-values`, `let*-values`）に準拠した多値返却機構を実装する。
 ネイティブレジスタ（RAX, RDX 等）および軽量スレッドローカル多値バッファを活用することで、ヒープ割当ゼロ（Zero-allocation）での複数値受渡しを実現する。
+なお本機構は、将来の完全な第一級継続（`call/cc`, Issue #540）において継続が多値を受け取って過去フレームへ復帰するための必須プロトコル基盤（3段階継続ロードマップの【ステップ2】）となる。
 
 ---
 
@@ -19,9 +20,16 @@ ID: 538
 - **関連規格**:
   - R7RS Section 6.10 (Control features: `values`, `call-with-values`)
   - R7RS Section 4.2.2 (Binding constructs: `let-values`, `let*-values`)
+- **継続アーキテクチャ・ロードマップ**:
+  - 【ステップ1（Issue #531）】: 軽量大域脱出フレームによる例外処理 (`guard` / `raise`)
+  - 【ステップ2（本Issue #538）】: ゼロヒープ多値受渡し (`values` / `call-with-values`)
+  - 【ステップ3（Issue #540）】: スタックコピー方式による多重複帰可能な第一級継続 (`call/cc`)
 - **関連設計書**:
   - [DSN-33: ULISP 包括設計仕様書 (第3章 ABI および呼出規約)](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
   - [DSN-36: 完全ベアメタル自己完結型 Freestanding 実行基盤](../designs/DSN-36-ulisp_baremetal_freestanding_pure_scheme_runtime.md)
+- **関連先行・後続 Issue**:
+  - Issue #531: 軽量大域脱出ハンドラスタックに基づく R7RS 例外処理機構の実装
+  - Issue #540: スタックコピー方式および dynamic-wind 統合に基づく完全な第一級継続 (call/cc) の実装
 
 ---
 
