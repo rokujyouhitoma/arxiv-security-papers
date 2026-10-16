@@ -6,6 +6,7 @@
 - **開発者テクニカルリファレンス**: [ulisp/docs/README.md](docs/README.md)
   - [パイプライン・Nanopass 詳細仕様書](docs/pipeline_architecture.md)
   - [低レベル IR (LIR) 命令セット仕様書](docs/lir_specification.md)
+  - [ファーストクラス継続 & dynamic-wind 詳細技術仕様書](docs/continuations_and_unwind.md)
   - [テストおよび検証ガイド](docs/testing_guide.md)
 
 ---
@@ -33,8 +34,14 @@ ULisp は将来的に **ILisp の「Backend B: Native AOT コンパイラ」** �
 cd ulisp
 make test
 
+# R7RS ファーストクラス継続 & dynamic-wind テスト (7 シナリオ 100% PASS)
+make test_call_cc
+
 # 3段階セルフホスティングブートストラップ連鎖および不動点検証
 make bootstrap
+
+# Mytkowicz バイアス排除 差分テスト (Gauche / Chibi / Chez 100% 一致)
+python3 tools/differential_test_ulisp.py
 
 # 整数 42 のコンパイル＆実行デモ
 make run_42
@@ -73,6 +80,13 @@ make run_42
 | **Phase 7** | **Step 25** | コンパイラの自己充足化 (`compiler.scm` が ULisp 自己構文で記述) | 🟢 **完了** |
 | | **Step 26** | 3段階ブートストラップ連鎖 (`ILisp` $\to$ `stage1` $\to$ `stage2` $\to$ `stage3`) | 🟢 **完了** |
 | | **Step 27** | アセンブリ不動点検証 (`cmp stage2.s stage3.s` 差分ゼロ) | 🟢 **完了** |
+| **Phase 8** | **Step 28** | 静的シンボルテーブルのインターン化と不要コード削除 (Issue #528) | 🟢 **完了** |
+| | **Step 29** | 自由変数解析のビットセット最適化と高速モジュール分離 (Issue #529) | 🟢 **完了** |
+| | **Step 30** | プラガブル GC 指向および Arena モード切替ディレクティブ (Issue #530) | 🟢 **完了** |
+| | **Step 31** | Mytkowicz バイアス排除フレームワークと外部 Scheme 差分テスト (Issue #526) | 🟢 **完了** |
+| **Phase 9** | **Step 32** | R7RS 準拠 例外ハンドリング機構 (`guard`, `raise`) (Issue #531) | 🟢 **完了** |
+| | **Step 33** | R7RS 準拠 多値ゼロヒープ受け渡し (`values`, `call-with-values`) (Issue #538) | 🟢 **完了** |
+| | **Step 34** | R7RS 準拠 完全なファーストクラス継続 (`call/cc`, `dynamic-wind`) (Issue #540) | 🟢 **完了** |
 
 ---
 

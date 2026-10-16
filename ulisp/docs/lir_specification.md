@@ -108,6 +108,22 @@ LIR は、Scheme 特有の高水準セマンティクス（ラムダ式、クロ
    - `sealBlock(block)`: 先行エッジ確定時に未解決プロキシ引数を再帰解決。
    - `tryRemoveTrivialArgument`: すべての先行オペランドが同一値 `same` である自明引数を自動検知し、置換・剪定を実行。
 
+### 2.6 ファーストクラス継続制御命令 (First-Class Continuations / Issue #540)
+
+| オペコード | 構文例 | 意味論 (Semantics) | x86-64 対応 |
+| :--- | :--- | :--- | :--- |
+| `%capture-cc` | `(%capture-cc dst receiver-fn)` | 現在のスタック領域をヒープへ退避し、継続クロージャを構築して `receiver-fn` を呼び出す。復帰アンカーラベルを配置。 | `ulisp_stack_base - rsp` よりスタック長計算、8MBクランプ、ヒープ複写、復帰ラベル配置 |
+| `%continuation-invoke` | (通常関数呼出規約) | 継続オブジェクト呼び出し時、`ulisp_continuation_invoke` へジャンプしてヒープからスタックを復元し、復帰ラベルへジャンプ | スタック復元 (`rep movsb`)、例外チェーンリセット、`jmp *target_rip` |
+
+- **詳細動作仕様**: [continuations_and_unwind.md](continuations_and_unwind.md) 参照。
+
+### 2.7 R7RS 多値ゼロヒープ受け渡し命令 (Multiple Values / Issue #538)
+
+| オペコード | 構文例 | 意味論 (Semantics) |
+| :--- | :--- | :--- |
+| `%values` | `(%values val1 val2 ...)` | 多値を一時レジスタ/スタック多値スロットへ配置し、多値シグネチャをセットしてリターン |
+| `%call-with-values`| `(%call-with-values producer consumer)` | `producer` を多値受信コンテキストで実行し、返却値を `consumer` の仮引数へ展開して適用 |
+
 ---
 
 ## 3. LIR プログラム全体の構文木構造

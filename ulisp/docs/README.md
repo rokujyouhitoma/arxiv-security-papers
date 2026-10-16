@@ -11,16 +11,22 @@
 1. [パイプライン・Nanopass 詳細仕様書](pipeline_architecture.md)
    - Pass 0〜Pass 8 の直列データフロー
    - 各パスの入出力 S 式形式と不変条件（Invariants）
-   - パス間の疎結合性とセルフホスティング制約
+   - 最適化パス（CP0, LVN, ANF, Annotator, RTyper, Contification, TBAA/Escape）
 2. [低レベル IR (LIR) 命令セット仕様書](lir_specification.md)
    - 機械抽象 3 番地 LIR の S 式表現
    - 制御フロー、レジスタ/スタック転送、算術論理演算、ヒープアロケーション
    - マルチバックエンド（x86-64, AArch64, C/Wasm）マッピング規約
-3. [テストおよび検証ガイド](testing_guide.md)
+3. [ファーストクラス継続 (`call/cc`) & dynamic-wind 詳細技術仕様書](continuations_and_unwind.md)
+   - R7RS Section 6.10 準拠の完全なファーストクラス継続
+   - スタックセグメントコピー（Stack-Segment Copying）方式と 8MB クランプガード
+   - LCA (Lowest Common Ancestor) 探索による unwind/rewind アルゴリズム
+   - 多値連携・協調型コルーチン（Coroutine Generator）
+4. [テストおよび検証ガイド](testing_guide.md)
    - パス別単体テスト（`tests/test_passes.scm`）
    - インクリメンタル E2E テスト（Phase 1〜7 / `test.sh`）
    - 3 段階ブートストラップ不動点検証（`diff stage2.s stage3.s == 0` / `bootstrap.sh`）
-   - ILisp AOT バックエンド統合テスト（`pytest tests/ilisp/`）
+   - ファーストクラス継続 & dynamic-wind テスト（`test_call_cc.scm`）
+   - Mytkowicz バイアス排除 差分テスト（`tools/differential_test_ulisp.py`）
 
 ---
 
@@ -36,26 +42,41 @@ ulisp/
 ├── test_c.sh                # Portable C バックエンド統合テスト
 ├── bootstrap.sh             # 3 段階セルフホスティング不動点検証スクリプト
 ├── lib/                     # Scheme 標準ライブラリ
-│   ├── string.scm           # 文字列操作・number->string
-│   ├── printer.scm          # S 式シリアライザ
+│   ├── continuation.scm     # ファーストクラス継続 call/cc & dynamic-wind (Issue #540)
+│   ├── values.scm           # R7RS 多値 values & call-with-values (Issue #538)
+│   ├── exception.scm        # R7RS 例外 guard & raise (Issue #531)
+│   ├── gc.scm               # Cheney's 2-Space コピー GC (完全ゼロアロケーション, Issue #501)
+│   ├── posix.scm            # POSIX システムコール & I/O
 │   ├── reader.scm           # 自前再帰下降 S 式パーサ (read)
-│   └── gc.scm               # Cheney's 2-Space コピー GC (完全ゼロアロケーション, Issue #501)
+│   ├── printer.scm          # S 式シリアライザ
+│   └── string.scm           # 文字列操作・number->string
 ├── passes/                  # 直列 Nanopass モジュール群
 │   ├── 00_helpers.scm       # 共通述語・アキュムレータ
 │   ├── 00b_macro_expander.scm # Pass 0b: メタサーキュラー・マクロ展開器 (Issue #500)
-│   ├── 01_desugar.scm       # Pass 1: 構文脱糖 (cond, case, let*, and, or)
-│   ├── 02_analysis.scm      # Pass 2: 静的スコープ・自由変数解析
+│   ├── 01_desugar.scm       # Pass 1: 構文脱糖 (cond, case, let*, and, or, %raw-call/cc)
+│   ├── 02_analysis.scm      # Pass 2: 静的スコープ・高速自由変数解析 (Issue #529)
 │   ├── 03_cp0.scm           # Pass 3: CP0 最適化 (定数畳み込み, 自明分岐剪定, DCE)
+│   ├── 03b_lvn.scm          # Pass 3b: ローカル値番号付け LVN (Issue #521)
 │   ├── 04_anf.scm           # Pass 4: ANF 正規化 (3 番地コード化, Scoped Pool)
+│   ├── 04b_annotator.scm    # Pass 4b: 抽象解釈型アノテータ (Issue #517)
+│   ├── 04c_contify.scm      # Pass 4c: Contification 最適化 (Issue #522)
 │   ├── 05_closure_convert.scm # Pass 5: クロージャ変換 (ラムダリフティング, フラット環境)
+│   ├── 05b_rtyper.scm       # Pass 5b: RType 推論 & アンボクシング (Issue #518)
 │   ├── 06_lir.scm           # Pass 6: 低レベル IR (LIR) 生成 & ポインタ/ヘッダ命令 (Issue #502)
+│   ├── 06b_alias_escape.scm # Pass 6b: TBAA & エスケープ解析 (Issue #525)
 │   ├── 07_backend_x86_64.scm # Pass 7: x86-64 GNU アセンブリコード生成
 │   ├── 07_backend_c.scm     # Pass 7b: Portable C99 コード生成 (Issue #504)
+│   ├── 07_backend_aarch64.scm # Pass 7c: AArch64 GNU アセンブリコード生成
 │   └── 08_driver.scm        # Pass 8: コンパイルドライバ・CLI
+├── tests/                   # 統合テストスイート
+│   ├── test_call_cc.scm     # call/cc & dynamic-wind テスト (Issue #540)
+│   ├── test_passes.scm      # Nanopass 単体テスト
+│   └── ...
 └── docs/                    # 本技術リファレンス
     ├── README.md
     ├── pipeline_architecture.md
     ├── lir_specification.md
+    ├── continuations_and_unwind.md
     └── testing_guide.md
 ```
 

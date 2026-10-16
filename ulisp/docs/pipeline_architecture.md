@@ -1,38 +1,61 @@
 # ULisp パイプライン・Nanopass 詳細仕様書
 
-本ドキュメントは、ULisp コンパイラ内部の各 Nanopass の役割、入出力データ構造、およびパス間で維持される不変条件（Invariants）を定義する。
+本ドキュメントは、ULisp コンパイラ内部の各 Nanopass の役割、入出力データ構造、最適化パス、およびパス間で維持される不変条件（Invariants）を定義する。
 
-正典アーキテクチャ仕様書: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- 正典アーキテクチャ仕様書: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- 関連仕様書:
+  - [LIR 命令セット仕様書](lir_specification.md)
+  - [継続・dynamic-wind 仕様書](continuations_and_unwind.md)
+  - [テストおよび検証ガイド](testing_guide.md)
 
 ---
 
-## 1. パイプライン全体像 (Pipeline Overview)
+## 1. パイプライン全体像 (Pipeline Architecture Overview)
 
-ULisp は Chez Scheme に着想を得た**直列 Nanopass アーキテクチャ**を採用している。各パスは単一の責務のみを持ち、前段のパスが出力した S 式木を次の S 式木へと決定論的に変換する。
+ULisp は Chez Scheme および RPython に着想を得た**直列 Nanopass アーキテクチャ**を採用している。各パスは単一の明確な責務のみを持ち、前段のパスが出力した S 式木を次の S 式木へと決定論的に変換する。
 
 ```text
-[入力: Scheme ソースコード文字列]
+[入力: Scheme ソースコード forms / ディレクティブ (!target, !gc)]
       │
-      ▼ (lib/reader.scm)
-[Raw S-expressions] (forms)
+      ▼ (passes/08_driver.scm: extract-directives-and-forms)
+      │
+      ▼ Pass 0b: expand-macros-in-forms (passes/00b_macro_expander.scm)
+[Macro-Expanded S-expressions]
       │
       ▼ Pass 1: rewrite-top-level & desugar-all (passes/01_desugar.scm)
 [Canonical Core Scheme AST]
       │
       ▼ Pass 3: cp0-optimize (passes/03_cp0.scm)
-[Optimized Core Scheme AST]
+[Optimized Core Scheme AST (Constant Folding, DCE)]
+      │
+      ▼ Pass 3b: lvn-all (passes/03b_lvn.scm - Issue #521)
+[LVN GVN Optimized AST (Local Value Numbering / Accessor Memoization)]
       │
       ▼ Pass 4: anf-all (passes/04_anf.scm)
-[A-Normal Form (ANF) AST]
+[A-Normal Form (ANF) 3-Address AST]
+      │
+      ▼ Pass 4b: annotate-all (passes/04b_annotator.scm - Issue #517)
+[Type-Annotated AST (Abstract Interpretation)]
+      │
+      ▼ Pass 5b: rtyper-all (passes/05b_rtyper.scm - Issue #518)
+[Unboxed / Typed LIR-Ready AST (RType Inference)]
+      │
+      ▼ Pass 4c: contify-all (passes/04c_contify.scm - Issue #522)
+[Contified AST (Known-Call to Direct Jumps / Closure Elimination)]
       │
       ▼ Pass 5: closure-convert (passes/05_closure_convert.scm)
-[Flat %program / %function AST]
+[Flat %program / %function AST (Lambda Lifting, Env Tuples)]
       │
-      ▼ Pass 6: generate-lir (passes/06_lir.scm - Issue #502)
-[Low-Level IR (LIR) Instructions]
+      ▼ Pass 6b: alias-escape-all (passes/06b_alias_escape.scm - Issue #525)
+[TBAA & Escape Analyzed AST (Stack Allocation Candidates)]
       │
-      ▼ Pass 7: compile-backend (passes/07_backend_x86_64.scm)
-[x86-64 GNU Assembler Text]
+      ▼ Pass 6: generate-lir (passes/06_lir.scm - Issue #502, #538, #540)
+[Low-Level IR (LIR) 3-Address Instructions]
+      │
+      ├───────────────────────┬───────────────────────┐
+      ▼                       ▼                       ▼
+ Pass 7 (x86-64)         Pass 7b (C99)           Pass 7c (AArch64)
+ [x86_64 GNU Asm]        [ANSI C99 / Wasm]       [AArch64 GNU Asm]
 ```
 
 ---
@@ -40,98 +63,66 @@ ULisp は Chez Scheme に着想を得た**直列 Nanopass アーキテクチャ*
 ## 2. 各パスの詳細仕様 (Pass Specifications)
 
 ### Pass 0: 共通述語・ヘルパー (`passes/00_helpers.scm`)
-- **責務**: 全パス共通の述語、リスト走査、一意シンボル/ラベル生成ルーチンの提供。
-- **主要手続き**:
-  - `atomic-expr?`: シンボル、数値、真偽値、文字、空リスト、`quote` リテラルの判定。
-  - `pure-prim?`: 副作用のない純粋プリミティブ（`+`, `-`, `*`, `car`, `cdr` 等）の判定。
-  - `closure-prim?`: `%make-closure`, `%closure-ref`, `%closure-set!` の判定。
-  - `unique-label`: アセンブリラベル生成。
+- **責務**: 全パス共通の述語、アキュムレータ、一意シンボル/ラベル生成ルーチンの提供。
+- **主要機能**:
+  - `atomic-expr?`, `pure-prim?`, `closure-prim?`
+  - `unique-label`, `unique-var`
+  - ビットマスク・型タグ定数（Fixnum, Pair, Closure, String, Vector, Continuation）
+
+### Pass 0b: メタサーキュラー・マクロ展開器 (`passes/00b_macro_expander.scm`)
+- **責務**: `define-macro` によるコンパイル時マクロ定義の評価と AST 展開。
+- **不変条件**: 本パス通過後、ユーザー定義マクロはすべて基本構文へ置換される。
 
 ### Pass 1: 構文脱糖 (`passes/01_desugar.scm`)
-- **入力**: ユーザー記述の任意の高水準 Scheme 式リスト。
-- **出力**: 最小限の Canonical Core Scheme AST。
-- **変換内容**:
-  - `rewrite-top-level`: トップレベルの `(define ...)` 群を単一の `(letrec (...) body)` に巻き上げる。
-  - `desugar-all`: `cond`, `case`, `let*`, `named-let`, `and`, `or`, `string-append`, `list` を基本構文（`if`, `let`, `letrec`, `lambda`, `begin`, 基本プリミティブ）へ展開。
-- **不変条件**: 本パス以降、複合構文糖は完全に消滅し、構文木にはコア 6 構文のみが存在する。
-
-### Pass 2: 静的スコープ・自由変数解析 (`passes/02_analysis.scm`)
-- **入力**: Canonical Core Scheme AST。
-- **出力**: 式内の自由変数リスト（`free-vars`）。
 - **責務**:
-  - 現在のレキシカル環境 `bound` を考慮しながら、式 `expr` が参照している未束縛の自由変数の集合を正確に算出。
-  - `quote` 内のシンボル参照（`string->symbol` 呼び出し）を透過的に検出。
+  - `rewrite-top-level`: トップレベル `(define ...)` 群を単一の `(letrec (...) body)` に巻き上げる。
+  - `desugar-all`: `cond`, `case`, `let*`, `named-let`, `and`, `or`, `begin`, `values`, `guard` 等を高水準構文から Core 構文（`if`, `let`, `letrec`, `lambda`, 基本プリミティブ）へ展開。
+  - `%raw-call/cc`: ファーストクラス継続プリミティブの透過的パイプライン伝搬。
+
+### Pass 2: 静的スコープ・高速自由変数解析 (`passes/02_analysis.scm`)
+- **責務**: 式内の自由変数集合（`free-vars`）の正確な算出。ビットセットおよび順序付きリストによる高速集合演算（Issue #529）。
+- **エスケープ解析**: 関数が外部へエスケープするか、直接呼び出し（Contification）可能かを判定。
 
 ### Pass 3: CP0 ソースレベル最適化 (`passes/03_cp0.scm`)
-- **入力**: Canonical Core Scheme AST。
-- **出力**: 最適化された Core Scheme AST。
-- **最適化内容**:
-  1. **定数畳み込み (Constant Folding)**: 静的に確定可能な基本演算（`(+ 1 2)` $\to$ `3`, `(* 6 7)` $\to$ `42`, `(not #f)` $\to$ `#t` 等）のボトムアップ事前評価。
-  2. **自明分岐剪定 (Dead Branch Pruning)**: `(if #t then else)` $\to$ `then`, `(if #f then else)` $\to$ `else` の静的剪定。
-  3. **自明 begin 平坦化**: ネストした `begin` の結合、単一式 `begin` の解除。
-  4. **不要束縛削除 (Dead Let Elimination)**: 副作用のない純粋式を束縛する `let` のうち、本体で参照されない未使用変数の安全な削除。
-- **不変条件**: プログラムの意味論および副作用の発生順序が 100% 保持される。
+- **責務**:
+  1. **定数畳み込み (Constant Folding)**: 四則演算、ビット演算、論理述語のボトムアップ事前計算。
+  2. **自明分岐剪定 (Dead Branch Pruning)**: `(if #t ...)` / `(if #f ...)` の静的剪定。
+  3. **自明 begin 平坦化**: ネストした `begin` 式の解除。
+  4. **不要束縛削除 (Dead Let Elimination)**: 未使用な純粋束縛の削除。
+
+### Pass 3b: ローカル値番号付け LVN (`passes/03b_lvn.scm` - Issue #521)
+- **責務**: 基本ブロック内における共通部分式除去（CSE）およびペア・クロージャアクセサ（`car`, `cdr`, `%closure-ref`）のメモ化・冗長ロード削除。
 
 ### Pass 4: ANF 正規化 (`passes/04_anf.scm`)
-- **入力**: 最適化済み Core Scheme AST。
-- **出力**: A-Normal Form（3番地コード形式）AST。
-- **変換内容**:
-  - 二項演算や関数適用の引数位置にある複合式を、一時変数束縛 `(let ((%t0 ...)) ...)` へ持ち上げる。
-  - **Scoped Temporary Variable Pool (`%t0`〜`%t8`)**: セルフホスティング時の `string->symbol` ヒープアロケーションをゼロにするため、ネスト深さに応じた固定予約シンボルを割り当てる。
-- **不変条件**: すべての関数呼び出し・プリミティブ適用の引数はアトミックな値（シンボルまたは即値）のみとなる。
+- **責務**: 式を 3 番地コード形式（A-Normal Form）へ平坦化。
+- **Scoped Temporary Variable Pool (`%t0`〜`%t8`)**: セルフホスティング時のシンボルアロケーションを抑制。
+
+### Pass 4b: 抽象解釈型アノテータ (`passes/04b_annotator.scm` - Issue #517)
+- **責務**: 式ごとの型・値域制約（Fixnum, Boolean, Pair, Non-Null）を抽象解釈により推論し、型アノテーションタグを付与。
+
+### Pass 5b: RType 推論 & アンボクシング (`passes/05b_rtyper.scm` - Issue #518)
+- **責務**: RPython 型推論エンジンに準拠し、純粋な数値演算ループにおいて Tagged Pointer のタグ付け/外しを省略（Raw Integer 演算の選定）。
+
+### Pass 4c: Contification & クロージャ除去 (`passes/04c_contify.scm` - Issue #522)
+- **責務**: エスケープしない既知のローカル関数呼び出しを、ヒープクロージャアロケーションを伴わない直接ジャンプ（継続化）へ最適化。
 
 ### Pass 5: 明示的クロージャ変換 (`passes/05_closure_convert.scm`)
-- **入力**: ANF AST。
-- **出力**: 平坦化されたプログラム表現 `(%program (%functions (%function label params body) ...) main-expr)`。
-- **変換内容**:
-  - **Lambda Lifting**: ネストした無名 `lambda` をすべてトップレベルの `%function` 定義へ持ち上げる。
+- **責務**:
+  - **Lambda Lifting**: ネストした無名 `lambda` をトップレベルの `%function` へ巻き上げ。
   - **Flat Closures**: 自由変数を環境タプルとしてキャプチャする `%make-closure` の生成。
-  - **明示的環境参照**: キャプチャされた変数へのアクセスを `(%closure-ref %self index)` へ置換。
-  - **相互再帰の平坦化**: `letrec` を初期 `%make-closure` 生成と `%closure-set!` によるバックパッチシーケンスへ正規化。
-- **不変条件**: ネストした `lambda` および `letrec` は完全に消滅し、すべての手続きはフラットな独立定義となる。
+  - **相互再帰の正規化**: `letrec` を初期化と `%closure-set!` バックパッチシーケンスへ平坦化。
+
+### Pass 6b: TBAA & エスケープ解析 (`passes/06b_alias_escape.scm` - Issue #525)
+- **責務**: 型ベースのエイリアス解析（TBAA）とローカルオブジェクトのエスケープ解析。短命オブジェクトのスタック配置最適化の判定。
 
 ### Pass 6: 低レベル IR (LIR) 生成 (`passes/06_lir.scm`)
-- **入力**: 平坦化された `%program` 表現。
-- **出力**: ターゲット非依存の 3 番地 LIR 命令列。
 - **責務**:
-  - `Pair`、`Closure`、`String` アロケーション時における 8 バイト統一プレフィックスヘッダ（Fixnum エンコード）の生成。
-  - 低レベルメモリアクセス（`%raw-load`, `%raw-store!`）およびポインタ/タグ抽象化（`%ptr-tag`, `%ptr-untag`, `%ptr-add`, `%ptr-tag-add`）の生成。
-  - GC 状態制御イントリンシック（`%get-rsp`, `%get-heap-ptr`, `%set-heap-ptr!`, `%get-gc-state-ptr`）の展開。
-- **詳細**: [lir_specification.md](lir_specification.md) 参照。
+  - 機械抽象 3 番地 LIR 命令列の生成。
+  - **ファーストクラス継続 LIR 展開**: `%raw-call/cc` からの継続オブジェクト割当、復帰ラベル `.Lcc_ret_XXXX` 生成、レシーバ呼び出し。
+  - **多値 LIR 展開**: `values` レシーバへのゼロヒープ多値伝搬。
+  - **GC 制御**: `%get-rsp`, `%get-heap-ptr`, `%set-heap-ptr!`, `%get-gc-state-ptr` の展開。
 
-### Pass 7: x86-64 バックエンドコード生成 (`passes/07_backend_x86_64.scm`)
-- **入力**: 3 番地 LIR 命令列。
-- **出力**: x86-64 GNU アセンブリテキスト。
-- **責務**:
-  - LIR 命令を x86-64 ネイティブ命令（`mov`, `add`, `cmp`, `jmp`, `call`, `ret` 等）へ 1 対 1 マッピング。
-  - ABI 準拠の 16 バイトスタックアライメントおよびヒープポインタ（`r12`）の整合性維持。
-  - `%alloc` プレフィックスヘッダ加算および GAS アセンブラ構文互換性保証。
-
-### Pass 7b: Portable C99 バックエンドコード生成 (`passes/07_backend_c.scm` - Issue #504)
-- **入力**: 3 番地 LIR 命令列。
-- **出力**: ANSI C99 / WebAssembly 互換 C ソースコード。
-- **責務**:
-  - LIR 命令を ANSI C99 文へトランスパイル（`-Wall -Wextra -Werror` ゼロ警告準拠）。
-  - レジスタ配列およびスタック配列による仮想実行モデル。
-
-### Pass 8: コンパイルドライバ・CLI 入口 (`passes/08_driver.scm`)
-- **入力**: 標準入力からの S 式ストリーム。
-- **出力**: 標準出力へのアセンブリまたは C コード出力。
-- **パイプライン結合**:
-  ```scheme
-  (let* ((raw (read-all-forms))
-         (target-and-forms (extract-target-and-forms raw))
-         (target (car target-and-forms))
-         (forms (cdr target-and-forms)))
-    (if (not (null? forms))
-        (let* ((macro-expanded (expand-macros-in-forms forms))
-               (ast0 (rewrite-top-level macro-expanded))
-               (ast1 (desugar-all ast0))
-               (ast2 (cp0-optimize ast1))
-               (ast3 (anf-all ast2))
-               (ast4 (closure-convert ast3))
-               (lir  (generate-lir ast4)))
-          (if (eq? target 'c)
-              (emit-c lir)
-              (emit-x86-64 lir)))))
-  ```
+### Pass 7 / 7b / 7c: マルチターゲットコード生成
+- **`07_backend_x86_64.scm`**: x86-64 GNU アセンブラテキスト生成。`%capture-cc` スタック退避および `ulisp_continuation_invoke` スタック復元。
+- **`07_backend_c.scm`**: ANSI C99 ソースコード生成。`setjmp` / `longjmp` 連携。
+- **`07_backend_aarch64.scm`**: AArch64 (ARM64) GNU アセンブラテキスト生成。
