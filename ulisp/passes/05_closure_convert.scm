@@ -78,6 +78,13 @@
           (list '%with-handler
                 (convert-expr (cadr expr) var-map)
                 (convert-expr (caddr expr) var-map)))
+         ((%call-with-values)
+          (list '%call-with-values
+                (convert-expr (cadr expr) var-map)
+                (convert-expr (caddr expr) var-map)))
+         ((%values)
+          (cons '%values
+                (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else

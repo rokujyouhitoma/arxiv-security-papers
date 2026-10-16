@@ -12,7 +12,6 @@
 | **535** | 低レベルバイナリ・暗号ハッシュ・生パケット解析向け R7RS バイトベクタ (bytevector) 型の実装 | Feature | Open (New) | [535-implement-r7rs-bytevectors-for-binary-security.md](535-implement-r7rs-bytevectors-for-binary-security.md) |
 | **536** | O(1) ランダムアクセス配列および高速ハッシュ辞書基盤向け R7RS ベクタ (vector) の完全実装 | Feature | Open (New) | [536-implement-complete-r7rs-vectors-and-indexing.md](536-implement-complete-r7rs-vectors-and-indexing.md) |
 | **537** | コンパイラコンテキスト動的スコープ制御のための R7RS パラメータ (make-parameter / parameterize) の実装 | Feature | Open (New) | [537-implement-r7rs-parameters-and-parameterize.md](537-implement-r7rs-parameters-and-parameterize.md) |
-| **538** | ゼロヒープ割当複数値返却のための R7RS 多値機構 (values / call-with-values / let-values) の実装 | Feature | Open (New) | [538-implement-r7rs-multiple-values-call-with-values.md](538-implement-r7rs-multiple-values-call-with-values.md) |
 | **539** | トップレベル定義の完全直列パイプライン分離および直接呼出 (%direct-call) 最適化 | Feature | Open (New) | [539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md](539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md) |
 | **540** | スタック退避・復元および動的巻き戻し (dynamic-wind) に基づく完全第一級 call/cc の実装 | Feature | Open (New) | [540-implement-full-first-class-call-with-current-continuation-call-cc.md](540-implement-full-first-class-call-with-current-continuation-call-cc.md) |
 
@@ -22,6 +21,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **538** | ゼロヒープ割当複数値返却のための R7RS 多値機構 (values / call-with-values / let-values) の実装 | Feature | 2026-10-16 | [closed/538-implement-r7rs-multiple-values-call-with-values.md](closed/538-implement-r7rs-multiple-values-call-with-values.md) |
 | **531** | 軽量大域脱出ハンドラスタックに基づく R7RS 例外処理機構 (guard / raise) の実装 | Feature | 2026-10-16 | [closed/531-implement-lightweight-exception-handling-guard-raise.md](closed/531-implement-lightweight-exception-handling-guard-raise.md) |
 | **529** | トップレベル定義の独立コンパイル構造化および自由変数解析集合演算の高速化 | Feature | 2026-10-16 | [closed/529-implement-toplevel-separate-compilation-and-fast-free-vars.md](closed/529-implement-toplevel-separate-compilation-and-fast-free-vars.md) |
 | **526** | Mytkowicz 測定バイアス排除機構と動的命令数差分テスト基盤 (DSN-35) の統合 | Feature | 2026-10-16 | [closed/526-integrate-mytkowicz-bias-elimination-and-differential-testing.md](closed/526-integrate-mytkowicz-bias-elimination-and-differential-testing.md) |

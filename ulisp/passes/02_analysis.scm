@@ -70,6 +70,13 @@
                 (loop (cdr es) (free-vars-acc (car es) bound cur-acc)))))
          ((%with-handler)
           (free-vars-acc (caddr expr) bound (free-vars-acc (cadr expr) bound acc)))
+         ((%call-with-values)
+          (free-vars-acc (caddr expr) bound (free-vars-acc (cadr expr) bound acc)))
+         ((%values)
+          (let loop ((es (cdr expr)) (cur-acc acc))
+            (if (null? es)
+                cur-acc
+                (loop (cdr es) (free-vars-acc (car es) bound cur-acc)))))
          (else
           (cond
             ((zero-arg-prim? op)
@@ -146,6 +153,14 @@
          ((%with-handler)
           (or (escapes? var (cadr expr))
               (escapes? var (caddr expr))))
+         ((%call-with-values)
+          (or (escapes? var (cadr expr))
+              (escapes? var (caddr expr))))
+         ((%values)
+          (let loop ((es (cdr expr)))
+            (and (pair? es)
+                 (or (escapes? var (car es))
+                     (loop (cdr es))))))
          (else
           (if (eq? op var)
               ;; Operator position is safe; check arguments
@@ -202,6 +217,13 @@
            ((%with-handler)
             (and (check (cadr e) #f)
                  (check (caddr e) #f)))
+           ((%call-with-values)
+            (and (check (cadr e) #f)
+                 (check (caddr e) #f)))
+           ((%values)
+            (let loop ((es (cdr e)))
+              (or (null? es)
+                  (and (check (car es) #f) (loop (cdr es))))))
            (else
             (if (eq? op var)
                 ;; Call site of var: must be in tail position

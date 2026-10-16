@@ -79,7 +79,7 @@
 (define (lir-compile-variable var env)
   (let ((binding (assq var env)))
     (if (not binding)
-        (error "Unbound variable in LIR:" var)
+        (error (string-append "Unbound variable in LIR: " (symbol->string var)))
         (let ((info (cdr binding)))
           (cond
             ((number? info)
@@ -746,6 +746,60 @@
     ;; 7. Exit label
     (emit-lir! (list '%label exit-lbl))))
 
+(define (lir-compile-values args si env)
+  (let ((count (length args)))
+    (cond
+      ((= count 0)
+       (emit-lir! (list '%set-values-count 0))
+       (emit-lir! '(%mov %rax 63)))
+      ((= count 1)
+       (lir-compile-expr (car args) si env #f)
+       (emit-lir! (list '%set-values-count 1)))
+      (else
+       ;; Evaluate each argument and save on stack
+       (let loop ((as args) (curr-si si))
+         (if (not (null? as))
+             (begin
+               (track-lir-si! curr-si)
+               (lir-compile-expr (car as) curr-si env #f)
+               (emit-lir! (list '%store '%rsp curr-si '%rax))
+               (loop (cdr as) (- curr-si 8)))))
+       (emit-lir! (list '%store-values-buf si count))
+       (emit-lir! (list '%set-values-count count))
+       ;; Load first argument to RAX
+       (emit-lir! (list '%load '%rax '%rsp si))
+       ;; Load second argument to RDX
+       (emit-lir! (list '%load '%rdx '%rsp (- si 8)))))))
+
+(define (lir-compile-call-with-values producer-expr consumer-expr si env tail?)
+  (let* ((consumer-si si)
+         (producer-si (- si 8))
+         (call-si (- producer-si 8)))
+    (track-lir-si! consumer-si)
+    (track-lir-si! producer-si)
+    (track-lir-si! call-si)
+    ;; 1. Evaluate consumer closure and store at consumer-si
+    (lir-compile-expr consumer-expr consumer-si env #f)
+    (emit-lir! (list '%store '%rsp consumer-si '%rax))
+    ;; 2. Evaluate producer closure and store at producer-si
+    (lir-compile-expr producer-expr producer-si env #f)
+    (emit-lir! (list '%store '%rsp producer-si '%rax))
+    ;; 3. Call producer with 0 arguments (initialize default count to 1)
+    (emit-lir! (list '%set-values-count 1))
+    (emit-lir! (list '%load '%rax '%rsp producer-si))
+    (emit-lir! '(%mov %r10 %rax))
+    (let* ((frame-shift (align-frame-shift (- 0 call-si)))
+           (safepoint-lbl (new-safepoint-label!))
+           (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
+      (record-safepoint! safepoint-lbl frame-shift bitmap)
+      (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))
+    ;; 4. Dispatch to consumer based on ulisp_values_count
+    (let* ((frame-shift (align-frame-shift (- 0 call-si)))
+           (aligned-si (- 0 frame-shift)))
+      (track-lir-si! aligned-si)
+      (track-lir-si! (- aligned-si 32))
+      (emit-lir! (list '%dispatch-consumer consumer-si aligned-si frame-shift)))))
+
 (define (lir-compile-expr expr si env tail?)
   (cond
     ((immediate? expr)
@@ -802,6 +856,10 @@
           (lir-compile-cont-call (cadr expr) (cddr expr) si env))
          ((eq? op '%with-handler)
           (lir-compile-with-handler (cadr expr) (caddr expr) si env tail?))
+         ((eq? op '%values)
+          (lir-compile-values (cdr expr) si env))
+         ((eq? op '%call-with-values)
+          (lir-compile-call-with-values (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'let)
           (lir-compile-let (cadr expr) (caddr expr) si env tail?))
          ((eq? op 'if)

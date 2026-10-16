@@ -92,6 +92,13 @@ test_exceptions: build/scheme-stage2
 	$(CC) -nostdlib -static build/test_exn.s -o build/test_exn
 	./build/test_exn
 
+test_values: build/scheme-stage2
+	@mkdir -p build
+	cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
+	./build/scheme-stage2 build/test_values_input.scm > build/test_values.s
+	$(CC) -nostdlib -static build/test_values.s -o build/test_values
+	./build/test_values
+
 test_freestanding: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="
 	@PYTHONPATH=$(ROOT_DIR) $(PYTHON) -m pytest $(ROOT_DIR)/tests/test_bare_metal_ulisp.py -v
@@ -101,7 +108,7 @@ test_c: compiler
 
 core: build/ulisp_core.scm
 
-build/ulisp_core.scm: lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm compiler.scm
+build/ulisp_core.scm: lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm compiler.scm
 	@mkdir -p build
 	cat $^ > $@
 
@@ -178,7 +185,7 @@ demo: build/demo_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/demo_runner.scm
 
 # --- Unified JIT Binary: bin/ulisp-jit ---
-build/ulisp_jit_combined.scm: lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
+build/ulisp_jit_combined.scm: lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
 	@mkdir -p build
 	cat $^ > $@
 
@@ -228,7 +235,7 @@ diff_test: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_jit test_c test_aot
+test: test_passes test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o

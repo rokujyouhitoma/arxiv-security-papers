@@ -109,6 +109,10 @@
           (cons '%make-closure (cons (cadr expr) (map cp0-expr (cddr expr)))))
          ((%with-handler)
           (list '%with-handler (cp0-expr (cadr expr)) (cp0-expr (caddr expr))))
+         ((%call-with-values)
+          (list '%call-with-values (cp0-expr (cadr expr)) (cp0-expr (caddr expr))))
+         ((%values)
+          (cons '%values (map cp0-expr (cdr expr))))
          (else
           ;; Primitive or application: optimize arguments first (bottom-up)
           (let* ((opt-op (if (symbol? op) op (cp0-expr op)))
