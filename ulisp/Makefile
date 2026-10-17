@@ -89,6 +89,15 @@ test_loop_reg: build/compiler_passes.scm
 	@res=$$(./build/test_loop_reg); echo "Output: $$res"; test "$$res" = "499999500000"
 	@echo "SUCCESS: loop_sum output 499999500000 matches expected exactly!"
 
+test_branch_fusion: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_branch_fusion.scm > build/test_branch_fusion_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_branch_fusion_runner.scm
+	$(CC) $(CFLAGS_JIT) -o build/test_predicates_fusion runtime.c build/test_predicates_fusion.s
+	@echo "=== Executing compiled predicates fusion binary ==="
+	@res=$$(./build/test_predicates_fusion); echo "Output: $$res"; test "$$res" = "255"
+	@echo "SUCCESS: branch fusion predicates output 255 (1+2+4+8+16+32+64+128) matches expected!"
+
 test_lir: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_lir.scm > build/test_lir_runner.scm

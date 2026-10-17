@@ -158,6 +158,11 @@
                (emit (string-append "    jmp " (reg->str lbl)))
                (emit (string-append (symbol->string cont-lbl) ":"))))))
 
+      ((%jump-cond)
+       (let ((jmp-op (cadr inst))
+             (lbl (caddr inst)))
+         (emit (string-append "    " jmp-op " " (if (symbol? lbl) (symbol->string lbl) (reg->str lbl))))))
+
       ((%jump-if)
        (let* ((reg (cadr inst))
               (then-lbl (caddr inst))

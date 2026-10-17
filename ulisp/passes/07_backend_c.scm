@@ -169,6 +169,20 @@
                (emit (string-append "        goto " (c-sanitize-label lbl) ";"))
                (emit "    }")))))
 
+      ((%jump-cond)
+       (let* ((cc (cadr inst))
+              (lbl (caddr inst))
+              (cond-expr
+               (cond
+                 ((string=? cc "jne") "cmp_s1 != cmp_s2")
+                 ((string=? cc "je")  "cmp_s1 == cmp_s2")
+                 ((string=? cc "jge") "(int64_t)cmp_s1 >= (int64_t)cmp_s2")
+                 ((string=? cc "jg")  "(int64_t)cmp_s1 > (int64_t)cmp_s2")
+                 ((string=? cc "jle") "(int64_t)cmp_s1 <= (int64_t)cmp_s2")
+                 ((string=? cc "jl")  "(int64_t)cmp_s1 < (int64_t)cmp_s2")
+                 (else (error "Unknown jump-cond in C backend:" cc)))))
+         (emit (string-append "    if (" cond-expr ") goto " (c-sanitize-label lbl) ";"))))
+
       ((%jump-if)
        (let* ((reg (cadr inst))
               (then-lbl (caddr inst))

@@ -4788,6 +4788,22 @@
 
 (define (lir-compile-let bindings body si env tail?)
   (cond
+    ;; Flag / Branch Fusion on ANF: (let ((var (cmp-or-pred-expr ...))) (if var then-e else-e))
+    ((and (= (length bindings) 1)
+          (let* ((b (car bindings))
+                 (var (car b))
+                 (val (cadr b)))
+            (and (pair? val)
+                 (memq (car val) '(= < <= > >= eq? null? zero? pair? not))
+                 (pair? body)
+                 (eq? (car body) 'if)
+                 (eq? (cadr body) var))))
+     (let* ((b (car bindings))
+            (val (cadr b))
+            (then-e (caddr body))
+            (else-opt (cdddr body)))
+       (lir-compile-if val then-e else-opt si env tail?)))
+
     ;; Path Splitting on join nodes: (let ((var (if cond then-e else-e))) body)
     ((and (= (length bindings) 1)
           (let* ((b (car bindings))
@@ -4826,11 +4842,114 @@
                    (- curr-si 8)
                    (cons (cons var curr-si) (set-raw-vars next-rvars new-env)))))))))
 
+(define (lir-cmp-false-cc op)
+  (case op
+    ((= eq?) "jne")
+    ((<)     "jge")
+    ((<=)    "jg")
+    ((>)     "jle")
+    ((>=)    "jl")
+    (else    "jne")))
+
+(define (extract-fused-cmp-int e)
+  (cond
+    ((integer? e) (* e 4))
+    ((and (pair? e) (eq? (car e) '%unbox-fixnum) (integer? (cadr e))) (cadr e))
+    (else #f)))
+
+(define (lir-compile-fused-cmp op e1 e2 else-label si env)
+  (let* ((jmp-op (lir-cmp-false-cc op))
+         (r1 (env-reg-var? e1 env))
+         (r2 (env-reg-var? e2 env))
+         (c1 (extract-fused-cmp-int e1))
+         (c2 (extract-fused-cmp-int e2)))
+    (cond
+      ;; 1. e1 is reg, e2 is integer constant -> direct cmp reg, c2
+      ((and r1 c2)
+       (emit-lir! (list '%cmp r1 c2))
+       (emit-lir! (list '%jump-cond jmp-op else-label)))
+
+      ;; 2. e2 is reg, e1 is integer constant -> reverse comparison
+      ((and r2 c1)
+       (let ((rev-op (case op
+                       ((= eq?) '=)
+                       ((<)     '>)
+                       ((<=)    '>=)
+                       ((>)     '<)
+                       ((>=)    '<=)
+                       (else    op))))
+         (emit-lir! (list '%cmp r2 c1))
+         (emit-lir! (list '%jump-cond (lir-cmp-false-cc rev-op) else-label))))
+
+      ;; 3. Both are register variables -> cmp r1, r2
+      ((and r1 r2)
+       (emit-lir! (list '%cmp r1 r2))
+       (emit-lir! (list '%jump-cond jmp-op else-label)))
+
+      ;; 4. e1 is reg, e2 is expr -> evaluate e2 to rax, then cmp r1, rax
+      (r1
+       (lir-compile-expr e2 si env #f)
+       (emit-lir! (list '%cmp r1 '%rax))
+       (emit-lir! (list '%jump-cond jmp-op else-label)))
+
+      ;; 5. e2 is reg, e1 is expr -> evaluate e1 to rax, then cmp rax, r2
+      (r2
+       (lir-compile-expr e1 si env #f)
+       (emit-lir! (list '%cmp '%rax r2))
+       (emit-lir! (list '%jump-cond jmp-op else-label)))
+
+      ;; 6. General fallback: evaluate e1 to stack, evaluate e2 to rax, then cmp (stack si), rax
+      (else
+       (track-lir-si! si)
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%store '%rsp si '%rax))
+       (track-lir-si! (- si 8))
+       (lir-compile-operand-for-op op e2 (- si 8) env)
+       (emit-lir! (list '%cmp (list '%stack si) '%rax))
+       (emit-lir! (list '%jump-cond jmp-op else-label))))))
+
 (define (lir-compile-if test then else-opt si env tail?)
   (let ((else-label (unique-label-sym "L_else"))
         (end-label (unique-label-sym "L_end")))
-    (lir-compile-expr test si env #f)
-    (emit-lir! (list '%jump-if-false '%rax else-label))
+    (cond
+      ;; 1. Branch Fusion: binary comparisons (=, <, <=, >, >=, eq?)
+      ((and (pair? test) (memq (car test) '(= < <= > >= eq?)) (= (length test) 3))
+       (lir-compile-fused-cmp (car test) (cadr test) (caddr test) else-label si env))
+
+      ;; 2. Branch Fusion: null?
+      ((and (pair? test) (eq? (car test) 'null?) (= (length test) 2))
+       (lir-compile-expr (cadr test) si env #f)
+       (emit-lir! (list '%cmp '%rax 63))
+       (emit-lir! (list '%jump-cond "jne" else-label)))
+
+      ;; 3. Branch Fusion: zero?
+      ((and (pair? test) (eq? (car test) 'zero?) (= (length test) 2))
+       (let ((r (env-reg-var? (cadr test) env)))
+         (if r
+             (emit-lir! (list '%cmp r 0))
+             (begin
+               (lir-compile-expr (cadr test) si env #f)
+               (emit-lir! (list '%cmp '%rax 0))))
+         (emit-lir! (list '%jump-cond "jne" else-label))))
+
+      ;; 4. Branch Fusion: pair?
+      ((and (pair? test) (eq? (car test) 'pair?) (= (length test) 2))
+       (lir-compile-expr (cadr test) si env #f)
+       (emit-lir! '(%bit-and %rax 3))
+       (emit-lir! (list '%cmp '%rax 1))
+       (emit-lir! (list '%jump-cond "jne" else-label)))
+
+      ;; 5. Branch Fusion: not
+      ((and (pair? test) (eq? (car test) 'not) (= (length test) 2))
+       (lir-compile-expr (cadr test) si env #f)
+       (emit-lir! (list '%cmp '%rax 47))
+       (emit-lir! (list '%jump-cond "jne" else-label)))
+
+      ;; 6. Standard boolean expression fallback
+      (else
+       (lir-compile-expr test si env #f)
+       (emit-lir! (list '%jump-if-false '%rax else-label))))
+
     (lir-compile-expr then si env tail?)
     (emit-lir! (list '%jump end-label (list '%rax)))
     (emit-lir! (list '%block else-label '()))
@@ -5845,6 +5964,11 @@
                (emit-x86-parallel-copy lbl args)
                (emit (string-append "    jmp " (reg->str lbl)))
                (emit (string-append (symbol->string cont-lbl) ":"))))))
+
+      ((%jump-cond)
+       (let ((jmp-op (cadr inst))
+             (lbl (caddr inst)))
+         (emit (string-append "    " jmp-op " " (if (symbol? lbl) (symbol->string lbl) (reg->str lbl))))))
 
       ((%jump-if)
        (let* ((reg (cadr inst))
@@ -7882,6 +8006,20 @@
                (emit-c-parallel-copy lbl args)
                (emit (string-append "        goto " (c-sanitize-label lbl) ";"))
                (emit "    }")))))
+
+      ((%jump-cond)
+       (let* ((cc (cadr inst))
+              (lbl (caddr inst))
+              (cond-expr
+               (cond
+                 ((string=? cc "jne") "cmp_s1 != cmp_s2")
+                 ((string=? cc "je")  "cmp_s1 == cmp_s2")
+                 ((string=? cc "jge") "(int64_t)cmp_s1 >= (int64_t)cmp_s2")
+                 ((string=? cc "jg")  "(int64_t)cmp_s1 > (int64_t)cmp_s2")
+                 ((string=? cc "jle") "(int64_t)cmp_s1 <= (int64_t)cmp_s2")
+                 ((string=? cc "jl")  "(int64_t)cmp_s1 < (int64_t)cmp_s2")
+                 (else (error "Unknown jump-cond in C backend:" cc)))))
+         (emit (string-append "    if (" cond-expr ") goto " (c-sanitize-label lbl) ";"))))
 
       ((%jump-if)
        (let* ((reg (cadr inst))
