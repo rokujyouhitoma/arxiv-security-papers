@@ -157,7 +157,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-gc-state-ptr %get-stackmap-table)))
+  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-gc-state-ptr %get-stackmap-table)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -165,7 +165,7 @@
              zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
              boolean? char? null? not symbol?
              car cdr pair? procedure? string?
-             write-char write-string flush-output-port ulisp-flush eof-object?
+             write-char %write-char write-string %write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
              raise %raise
              %set-heap-ptr! %ptr-tag %ptr-untag
@@ -420,7 +420,7 @@
               + - * = < > <= >= modulo quotient /
               zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
               boolean? char? symbol? string? list?
-              write-char write-string read-char peek-char eof-object?
+              write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
               values call-with-values dynamic-wind call/cc call-with-current-continuation
               guard raise %raw-call/cc %with-handler)))
 
@@ -735,8 +735,45 @@
        expanded)
       ((eq? (car expanded) 'quote)
        expanded)
+      ((eq? (car expanded) 'case)
+       (cons 'case
+             (cons (macro-expand-all (cadr expanded) macro-table)
+                   (map (lambda (clause)
+                          (if (and (pair? clause) (not (eq? (car clause) 'else)))
+                              (cons (car clause)
+                                    (map (lambda (e) (macro-expand-all e macro-table)) (cdr clause)))
+                              (map (lambda (e) (macro-expand-all e macro-table)) clause)))
+                        (cddr expanded)))))
+      ((eq? (car expanded) 'lambda)
+       (cons 'lambda
+             (cons (cadr expanded)
+                   (map (lambda (e) (macro-expand-all e macro-table)) (cddr expanded)))))
+      ((eq? (car expanded) 'define)
+       (cons 'define
+             (cons (cadr expanded)
+                   (map (lambda (e) (macro-expand-all e macro-table)) (cddr expanded)))))
+      ((or (eq? (car expanded) 'let)
+           (eq? (car expanded) 'let*)
+           (eq? (car expanded) 'letrec))
+       (if (symbol? (cadr expanded))
+           (cons (car expanded)
+                 (cons (cadr expanded)
+                       (cons (map (lambda (b)
+                                    (if (pair? b)
+                                        (cons (car b) (map (lambda (e) (macro-expand-all e macro-table)) (cdr b)))
+                                        b))
+                                  (caddr expanded))
+                             (map (lambda (e) (macro-expand-all e macro-table)) (cdddr expanded)))))
+           (cons (car expanded)
+                 (cons (map (lambda (b)
+                              (if (pair? b)
+                                  (cons (car b) (map (lambda (e) (macro-expand-all e macro-table)) (cdr b)))
+                                  b))
+                            (cadr expanded))
+                       (map (lambda (e) (macro-expand-all e macro-table)) (cddr expanded))))))
       (else
        (map (lambda (sub) (macro-expand-all sub macro-table)) expanded)))))
+
 
 ;;; Expand all macro definitions and usages in top-level forms
 (define (expand-macros-in-forms forms)
@@ -3746,9 +3783,9 @@
        (emit-lir! (list '%code-ref '%rax "__ulisp_stackmap_table")))
       ((eof-object)
        (emit-lir! '(%mov %rax 79)))
-      ((read-char)
+      ((read-char %read-char)
        (emit-lir! (list '%c-call "ulisp_read_char" frame-shift)))
-      ((peek-char)
+      ((peek-char %peek-char)
        (emit-lir! (list '%c-call "ulisp_peek_char" frame-shift)))
       ((flush-output-port ulisp-flush)
        (emit-lir! (list '%c-call "ulisp_flush" frame-shift))))))
@@ -3813,11 +3850,11 @@
      (emit-lir! '(%bit-and %rax 7))
      (emit-lir! '(%cmp %rax 3))
      (emit-lir! '(%set-boolean %rax "sete")))
-    ((write-char)
+    ((write-char %write-char)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! '(%mov %rdi %rax))
        (emit-lir! (list '%c-call "ulisp_write_char" frame-shift))))
-    ((write-string)
+    ((write-string %write-string)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! '(%mov %rdi %rax))
        (emit-lir! (list '%c-call "ulisp_write_string" frame-shift))))

@@ -1,6 +1,7 @@
 ;;; =======================================================================
 ;;; ULisp Standard Library: reader.scm
 ;;; Hand-written recursive descent S-expression reader in pure Scheme
+;;; Extended with R7RS Port Specification & Issue #534
 ;;; =======================================================================
 
 (define (ulisp-char=? c expected)
@@ -26,19 +27,19 @@
        (let ((code (char->integer c)))
          (and (>= code 48) (<= code 57)))))
 
-(define (ulisp-skip-ws)
-  (let ((c (peek-char)))
+(define (ulisp-skip-ws-port p)
+  (let ((c (port-peek-char p)))
     (cond
       ((eof-object? c) c)
       ((ulisp-is-whitespace? c)
-       (read-char)
-       (ulisp-skip-ws))
+       (port-read-char p)
+       (ulisp-skip-ws-port p))
       ((ulisp-char=? c #\;)
        (let skip-comment ()
-         (let ((ch (read-char)))
+         (let ((ch (port-read-char p)))
            (cond
              ((eof-object? ch) ch)
-             ((ulisp-char=? ch #\newline) (ulisp-skip-ws))
+             ((ulisp-char=? ch #\newline) (ulisp-skip-ws-port p))
              (else (skip-comment))))))
       (else c))))
 
@@ -52,46 +53,46 @@
             (string-set! res i (car cs))
             (loop (+ i 1) (cdr cs)))))))
 
-(define (read)
-  (let ((c (ulisp-skip-ws)))
+(define (port-read p)
+  (let ((c (ulisp-skip-ws-port p)))
     (cond
       ((eof-object? c) c)
 
       ;; List or Empty list: ( ... )
       ((ulisp-char=? c #\()
-       (read-char) ; consume '('
+       (port-read-char p) ; consume '('
        (let read-list ()
-         (let ((c2 (ulisp-skip-ws)))
+         (let ((c2 (ulisp-skip-ws-port p)))
            (cond
              ((eof-object? c2) c2)
              ((ulisp-char=? c2 #\))
-              (read-char) ; consume ')'
+              (port-read-char p) ; consume ')'
               '())
              ((ulisp-char=? c2 #\.)
-              (read-char) ; consume '.'
-              (let ((cdr-val (read)))
-                (ulisp-skip-ws)
-                (read-char) ; consume ')'
+              (port-read-char p) ; consume '.'
+              (let ((cdr-val (port-read p)))
+                (ulisp-skip-ws-port p)
+                (port-read-char p) ; consume ')'
                 cdr-val))
              (else
-              (let ((elem (read)))
+              (let ((elem (port-read p)))
                 (cons elem (read-list))))))))
 
       ;; Quote: 'datum => (quote datum)
       ((ulisp-char=? c #\')
-       (read-char) ; consume '\''
-       (list 'quote (read)))
+       (port-read-char p) ; consume '\''
+       (list 'quote (port-read p)))
 
       ;; String: "..."
       ((ulisp-char=? c #\")
-       (read-char) ; consume '"'
+       (port-read-char p) ; consume '"'
        (let read-str ((acc '()))
-         (let ((ch (read-char)))
+         (let ((ch (port-read-char p)))
            (cond
              ((or (eof-object? ch) (ulisp-char=? ch #\"))
               (ulisp-chars->string (reverse acc)))
              ((ulisp-char=? ch #\\)
-              (let ((escaped (read-char)))
+              (let ((escaped (port-read-char p)))
                 (cond
                   ((ulisp-char=? escaped #\n) (read-str (cons #\newline acc)))
                   ((ulisp-char=? escaped #\t) (read-str (cons #\tab acc)))
@@ -102,15 +103,15 @@
 
       ;; Boolean or Character Literal: #t, #f, #\newline, #\space, #\c
       ((ulisp-char=? c #\#)
-       (read-char) ; consume '#'
-       (let ((c2 (read-char)))
+       (port-read-char p) ; consume '#'
+       (let ((c2 (port-read-char p)))
          (cond
            ((ulisp-char=? c2 #\t) #t)
            ((ulisp-char=? c2 #\f) #f)
            ((ulisp-char=? c2 #\\)
-            (let ((c3 (read-char)))
+            (let ((c3 (port-read-char p)))
               (let read-char-name ((acc (list c3)))
-                (let ((next (peek-char)))
+                (let ((next (port-peek-char p)))
                   (if (or (ulisp-is-delimiter? next) (eof-object? next))
                       (let ((name (ulisp-chars->string (reverse acc))))
                         (cond
@@ -120,14 +121,14 @@
                           ((string=? name "tab")     #\tab)
                           (else c3)))
                       (begin
-                        (read-char)
+                        (port-read-char p)
                         (read-char-name (cons next acc))))))))
            (else #f))))
 
       ;; Numbers and Symbols / Identifiers
       (else
        (let read-token ((acc '()))
-         (let ((next (peek-char)))
+         (let ((next (port-peek-char p)))
            (if (or (ulisp-is-delimiter? next) (eof-object? next))
                (let* ((chars (reverse acc))
                       (len (length chars)))
@@ -150,5 +151,17 @@
                    (else
                     (string->symbol (ulisp-chars->string chars)))))
                (begin
-                 (read-char)
+                 (port-read-char p)
                  (read-token (cons next acc))))))))))
+
+;;; -----------------------------------------------------------------------
+;;; R7RS Standard Macros and Compatibility Wrappers
+;;; -----------------------------------------------------------------------
+
+(define (read-from-port p)
+  (port-read p))
+
+(define-syntax read
+  (syntax-rules ()
+    ((read) (port-read *stdin-port*))
+    ((read p) (port-read p))))

@@ -1,76 +1,96 @@
 ;;; =======================================================================
 ;;; ULisp Standard Library: printer.scm
 ;;; Formatted Scheme output procedures implemented purely in Scheme
+;;; Extended with R7RS Port Specification & Issue #534
 ;;; =======================================================================
 
-(define (newline)
-  (write-char #\newline))
+(define (port-newline p)
+  (port-write-char #\newline p))
 
-(define (display-string s)
-  (write-string s))
+(define (port-display-string s p)
+  (port-write-string s p))
 
-(define (display val)
+(define (port-display val p)
   (cond
     ((string? val)
-     (display-string val))
+     (port-display-string val p))
     ((char? val)
-     (write-char val))
+     (port-write-char val p))
     ((boolean? val)
-     (if val (display-string "#t") (display-string "#f")))
+     (if val (port-display-string "#t" p) (port-display-string "#f" p)))
     ((null? val)
-     (display-string "()"))
+     (port-display-string "()" p))
     ((number? val)
-     (display-string (number->string val)))
+     (port-display-string (number->string val) p))
     ((symbol? val)
-     (display-string (symbol->string val)))
+     (port-display-string (symbol->string val) p))
     ((pair? val)
-     (write-char #\()
+     (port-write-char #\( p)
      (let loop ((curr val) (first? #t))
        (cond
          ((null? curr)
-          (write-char #\)))
+          (port-write-char #\) p))
          ((pair? curr)
-          (if (not first?) (write-char #\space))
-          (display (car curr))
+          (if (not first?) (port-write-char #\space p))
+          (port-display (car curr) p)
           (loop (cdr curr) #f))
          (else
-          (write-char #\space)
-          (write-char #\.)
-          (write-char #\space)
-          (display curr)
-          (write-char #\))))))
+          (port-write-char #\space p)
+          (port-write-char #\. p)
+          (port-write-char #\space p)
+          (port-display curr p)
+          (port-write-char #\) p)))))
     ((eof-object? val)
-     (display-string "#<eof>"))
+     (port-display-string "#<eof>" p))
     (else
-     (display-string "#<unknown>"))))
+     (port-display-string "#<unknown>" p))))
 
-(define (write-char-literal c)
-  (display-string "#\\")
+(define (port-write-char-literal c p)
+  (port-display-string "#\\" p)
   (cond
-    ((char=? c #\newline) (display-string "newline"))
-    ((char=? c #\space)   (display-string "space"))
-    ((char=? c #\tab)     (display-string "tab"))
-    (else                 (write-char c))))
+    ((char=? c #\newline) (port-display-string "newline" p))
+    ((char=? c #\space)   (port-display-string "space" p))
+    ((char=? c #\tab)     (port-display-string "tab" p))
+    (else                 (port-write-char c p))))
 
-(define (write val)
+(define (port-write val p)
   (cond
     ((string? val)
-     (write-char #\")
+     (port-write-char #\" p)
      (let ((len (string-length val)))
        (let loop ((i 0))
          (if (< i len)
              (let ((c (string-ref val i)))
                (cond
-                 ((char=? c #\newline) (display-string "\\n"))
-                 ((char=? c #\tab)     (display-string "\\t"))
-                 ((char=? c (integer->char 13)) (display-string "\\r"))
-                 ((char=? c #\\)       (display-string "\\\\"))
-                 ((char=? c #\")       (display-string "\\\""))
-                 (else                 (write-char c)))
+                 ((char=? c #\newline) (port-display-string "\\n" p))
+                 ((char=? c #\tab)     (port-display-string "\\t" p))
+                 ((char=? c (integer->char 13)) (port-display-string "\\r" p))
+                 ((char=? c #\\)       (port-display-string "\\\\" p))
+                 ((char=? c #\")       (port-display-string "\\\"" p))
+                 (else                 (port-write-char c p)))
                (loop (+ i 1)))
              #t)))
-     (write-char #\"))
+     (port-write-char #\" p))
     ((char? val)
-     (write-char-literal val))
+     (port-write-char-literal val p))
     (else
-     (display val))))
+     (port-display val p))))
+
+;;; -----------------------------------------------------------------------
+;;; R7RS Standard Macros and Compatibility Wrappers
+;;; -----------------------------------------------------------------------
+
+(define-syntax newline
+  (syntax-rules ()
+    ((newline) (port-newline *stdout-port*))
+    ((newline p) (port-newline p))))
+
+(define-syntax display
+  (syntax-rules ()
+    ((display val) (port-display val *stdout-port*))
+    ((display val p) (port-display val p))))
+
+(define-syntax write
+  (syntax-rules ()
+    ((write val) (port-write val *stdout-port*))
+    ((write val p) (port-write val p))))

@@ -21,7 +21,7 @@ COMPILER="compiler.scm"
 ULISP_STAGE1="build/scheme-stage1"
 
 make compiler
-cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
@@ -72,6 +72,8 @@ assert() {
         full_input="$(cat lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string ]]; then
         full_input="$(cat lib/string.scm)"$'\n'"$input"
+    elif [[ "$input" =~ open-input-string || "$input" =~ open-output-string || "$input" =~ "port\?" || "$input" =~ "input-port\?" || "$input" =~ "output-port\?" || "$input" =~ "textual-port\?" || "$input" =~ "get-output-string" ]]; then
+        full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm)"$'\n'"$input"
     else
         full_input="$input"
     fi
@@ -532,6 +534,24 @@ echo "-- Step 27: Issue 522 Contification & Local Closure Elimination --"
 assert "55" "(let loop ((n 10) (acc 0)) (if (= n 0) acc (loop (- n 1) (+ acc n))))"
 assert "120" "(letrec ((fact (lambda (n acc) (if (= n 1) acc (fact (- n 1) (* acc n)))))) (fact 5 1))"
 assert "45" "(letrec ((sum (lambda (i total) (if (= i 10) total (sum (+ i 1) (+ total i)))))) (sum 0 0))"
+
+# --- Step 28: R7RS String Ports (Issue 534) ---
+echo "-- Step 28: Issue 534 R7RS String Ports --"
+assert "(1 2 3)" '(read (open-input-string "(1 2 3)"))'
+assert '"(+ 1 2)"' '(let ((p (open-output-string))) (begin (display (read (open-input-string "(+ 1 2)")) p) (get-output-string p)))'
+assert '"hello"' '(let ((p (open-output-string))) (begin (display "hello" p) (get-output-string p)))'
+assert '""hello""' '(let ((p (open-output-string))) (begin (write "hello" p) (get-output-string p)))'
+assert '"123 world"' '(let ((p (open-output-string))) (begin (display 123 p) (write-char #\space p) (display "world" p) (get-output-string p)))'
+assert "#t" '(port? (open-input-string "abc"))'
+assert "#t" '(input-port? (open-input-string "abc"))'
+assert "#f" '(output-port? (open-input-string "abc"))'
+assert "#t" '(output-port? (open-output-string))'
+assert "#f" '(input-port? (open-output-string))'
+assert "#t" '(textual-port? (open-output-string))'
+assert "#\\b" '(let ((p (open-input-string "abc"))) (begin (read-char p) (read-char p)))'
+assert "#\\x" '(let ((p (open-input-string "xyz"))) (begin (peek-char p) (read-char p)))'
+assert "#t" '(let ((p (open-input-string ""))) (eof-object? (read-char p)))'
+
 
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification

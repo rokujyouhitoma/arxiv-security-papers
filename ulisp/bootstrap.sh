@@ -13,6 +13,7 @@ echo "[0/4] Preparing unified compiler (lib/ + compiler.scm)..."
 make -C "$ULISP_DIR" compiler
 cat "$ULISP_DIR/lib/posix.scm" \
     "$ULISP_DIR/lib/string.scm" \
+    "$ULISP_DIR/lib/port.scm" \
     "$ULISP_DIR/lib/printer.scm" \
     "$ULISP_DIR/lib/reader.scm" \
     "$ULISP_DIR/lib/equality.scm" \

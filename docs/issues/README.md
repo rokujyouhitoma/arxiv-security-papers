@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **534** | メモリ上インメモリ構文解析および書式化のための R7RS 文字列ポート (open-input-string / open-output-string) の実装 | Feature | Open (New) | [534-implement-r7rs-string-ports.md](534-implement-r7rs-string-ports.md) |
 | **535** | 低レベルバイナリ・暗号ハッシュ・生パケット解析向け R7RS バイトベクタ (bytevector) 型の実装 | Feature | Open (New) | [535-implement-r7rs-bytevectors-for-binary-security.md](535-implement-r7rs-bytevectors-for-binary-security.md) |
 | **536** | O(1) ランダムアクセス配列および高速ハッシュ辞書基盤向け R7RS ベクタ (vector) の完全実装 | Feature | Open (New) | [536-implement-complete-r7rs-vectors-and-indexing.md](536-implement-complete-r7rs-vectors-and-indexing.md) |
 | **537** | コンパイラコンテキスト動的スコープ制御のための R7RS パラメータ (make-parameter / parameterize) の実装 | Feature | Open (New) | [537-implement-r7rs-parameters-and-parameterize.md](537-implement-r7rs-parameters-and-parameterize.md) |
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **534** | メモリ上インメモリ構文解析および書式化のための R7RS 文字列ポート (open-input-string / open-output-string) の実装 | Feature | 2026-10-17 | [closed/534-implement-r7rs-string-ports.md](closed/534-implement-r7rs-string-ports.md) |
 | **533** | パターンマッチング型衛生的マクロ展開器 (define-syntax / syntax-rules) のサブセット実装 | Feature | 2026-10-16 | [closed/533-implement-hygienic-syntax-rules-macro-expander.md](closed/533-implement-hygienic-syntax-rules-macro-expander.md) |
 | **532** | R7RS 準拠の等価性比較述語 eqv? および標準型述語群の仕様整合化 | Feature | 2026-10-16 | [closed/532-implement-r7rs-eqv-and-standard-type-predicates.md](closed/532-implement-r7rs-eqv-and-standard-type-predicates.md) |
 | **540** | スタック退避・復元および動的巻き戻し (dynamic-wind) に基づく完全第一級 call/cc の実装 | Feature | 2026-10-16 | [closed/540-implement-full-first-class-call-with-current-continuation-call-cc.md](closed/540-implement-full-first-class-call-with-current-continuation-call-cc.md) |

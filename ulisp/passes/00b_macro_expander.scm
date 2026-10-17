@@ -29,7 +29,7 @@
               + - * = < > <= >= modulo quotient /
               zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
               boolean? char? symbol? string? list?
-              write-char write-string read-char peek-char eof-object?
+              write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
               values call-with-values dynamic-wind call/cc call-with-current-continuation
               guard raise %raw-call/cc %with-handler)))
 
@@ -344,8 +344,45 @@
        expanded)
       ((eq? (car expanded) 'quote)
        expanded)
+      ((eq? (car expanded) 'case)
+       (cons 'case
+             (cons (macro-expand-all (cadr expanded) macro-table)
+                   (map (lambda (clause)
+                          (if (and (pair? clause) (not (eq? (car clause) 'else)))
+                              (cons (car clause)
+                                    (map (lambda (e) (macro-expand-all e macro-table)) (cdr clause)))
+                              (map (lambda (e) (macro-expand-all e macro-table)) clause)))
+                        (cddr expanded)))))
+      ((eq? (car expanded) 'lambda)
+       (cons 'lambda
+             (cons (cadr expanded)
+                   (map (lambda (e) (macro-expand-all e macro-table)) (cddr expanded)))))
+      ((eq? (car expanded) 'define)
+       (cons 'define
+             (cons (cadr expanded)
+                   (map (lambda (e) (macro-expand-all e macro-table)) (cddr expanded)))))
+      ((or (eq? (car expanded) 'let)
+           (eq? (car expanded) 'let*)
+           (eq? (car expanded) 'letrec))
+       (if (symbol? (cadr expanded))
+           (cons (car expanded)
+                 (cons (cadr expanded)
+                       (cons (map (lambda (b)
+                                    (if (pair? b)
+                                        (cons (car b) (map (lambda (e) (macro-expand-all e macro-table)) (cdr b)))
+                                        b))
+                                  (caddr expanded))
+                             (map (lambda (e) (macro-expand-all e macro-table)) (cdddr expanded)))))
+           (cons (car expanded)
+                 (cons (map (lambda (b)
+                              (if (pair? b)
+                                  (cons (car b) (map (lambda (e) (macro-expand-all e macro-table)) (cdr b)))
+                                  b))
+                            (cadr expanded))
+                       (map (lambda (e) (macro-expand-all e macro-table)) (cddr expanded))))))
       (else
        (map (lambda (sub) (macro-expand-all sub macro-table)) expanded)))))
+
 
 ;;; Expand all macro definitions and usages in top-level forms
 (define (expand-macros-in-forms forms)

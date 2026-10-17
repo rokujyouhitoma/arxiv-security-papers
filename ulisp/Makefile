@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -87,38 +87,45 @@ test_aarch64: build/compiler_passes.scm
 
 test_exceptions: build/scheme-stage2
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm tests/test_exceptions.scm > build/test_exn_input.scm
+	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm tests/test_exceptions.scm > build/test_exn_input.scm
 	./build/scheme-stage2 build/test_exn_input.scm > build/test_exn.s
 	$(CC) -nostdlib -static build/test_exn.s -o build/test_exn
 	./build/test_exn
 
 test_values: build/scheme-stage2
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
+	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
 	./build/scheme-stage2 build/test_values_input.scm > build/test_values.s
 	$(CC) -nostdlib -static build/test_values.s -o build/test_values
 	./build/test_values
 
 test_call_cc: build/scheme-stage2
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_call_cc.scm > build/test_call_cc_input.scm
+	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_call_cc.scm > build/test_call_cc_input.scm
 	./build/scheme-stage2 build/test_call_cc_input.scm > build/test_call_cc.s
 	$(CC) -nostdlib -static build/test_call_cc.s -o build/test_call_cc
 	./build/test_call_cc
 
 test_eqv: build/scheme-stage2
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_eqv.scm > build/test_eqv_input.scm
+	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_eqv.scm > build/test_eqv_input.scm
 	./build/scheme-stage2 build/test_eqv_input.scm > build/test_eqv.s
 	$(CC) -nostdlib -static build/test_eqv.s -o build/test_eqv
 	./build/test_eqv
 
 test_syntax_rules: build/scheme-stage2
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
+	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
 	./build/scheme-stage2 build/test_syntax_rules_input.scm > build/test_syntax_rules.s
 	$(CC) -nostdlib -static build/test_syntax_rules.s -o build/test_syntax_rules
 	./build/test_syntax_rules
+
+test_ports: build/scheme-stage2
+	@mkdir -p build
+	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_ports.scm > build/test_ports_input.scm
+	./build/scheme-stage2 build/test_ports_input.scm > build/test_ports.s
+	$(CC) -nostdlib -static build/test_ports.s -o build/test_ports
+	./build/test_ports
 
 test_freestanding: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="
@@ -129,7 +136,7 @@ test_c: compiler
 
 core: build/ulisp_core.scm
 
-build/ulisp_core.scm: lib/posix.scm lib/string.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm
+build/ulisp_core.scm: lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm
 	@mkdir -p build
 	cat $^ > $@
 
@@ -206,7 +213,7 @@ demo: build/demo_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/demo_runner.scm
 
 # --- Unified JIT Binary: bin/ulisp-jit ---
-build/ulisp_jit_combined.scm: lib/string.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
+build/ulisp_jit_combined.scm: lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
 	@mkdir -p build
 	cat $^ > $@
 
@@ -256,7 +263,7 @@ diff_test: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_jit test_c test_aot
+test: test_passes test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o

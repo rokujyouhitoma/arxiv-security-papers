@@ -8,6 +8,12 @@
     (if (null? l) n
         (loop (cdr l) (+ n 1)))))
 
+(define (reverse ls)
+  (let loop ((l ls) (acc '()))
+    (if (null? l)
+        acc
+        (loop (cdr l) (cons (car l) acc)))))
+
 (define (string-append2 s1 s2)
   (let* ((len1 (string-length s1))
          (len2 (string-length s2))
