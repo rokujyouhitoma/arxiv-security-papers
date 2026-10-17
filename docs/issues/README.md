@@ -6,7 +6,11 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| - | *現在対応中のオープン Issue はありません* | - | - | - |
+| **547** | ULisp x86における末尾再帰ループ (loop 10M) の高速化（ループヘッダ回転・直結バックワード分岐・アンローリング） | Feature | Open (New) | [547-optimize-ulisp-x86-tail-loop-to-match-c-backend.md](547-optimize-ulisp-x86-tail-loop-to-match-c-backend.md) |
+| **548** | R7RS ライブラリ構文 (define-library / import) の静的脱糖・フラット名前空間インクルード機構の実装 | Feature | Open (New) | [548-implement-r7rs-define-library-and-import-syntax.md](548-implement-r7rs-define-library-and-import-syntax.md) |
+| **549** | R7RS 準拠の構造化レコード型 (define-record-type) のマクロ脱糖および高速フィールドアクセス機構の実装 | Feature | Open (New) | [549-implement-r7rs-define-record-type-macro.md](549-implement-r7rs-define-record-type-macro.md) |
+| **550** | R7RS 準拠の遅延評価機構 (delay / force / delay-force / promise?) の実装 | Feature | Open (New) | [550-implement-r7rs-lazy-evaluation-delay-force.md](550-implement-r7rs-lazy-evaluation-delay-force.md) |
+| **551** | R7RS 標準シーケンス操作・変換手続き群 (vector-copy / list-copy / string-copy! 等) の拡充 | Feature | Open (New) | [551-expand-r7rs-standard-library-procedures.md](551-expand-r7rs-standard-library-procedures.md) |
 
 ---
 
