@@ -157,5 +157,18 @@
             (contify-expr orig-body))))
 
 ;;; Pass 4c Entrypoint: Contification & local closure elimination across all expressions.
-(define (contify-all expr)
-  (contify-expr expr))
+(define (contify-all form)
+  (cond
+    ((not (pair? form)) form)
+    ((eq? (car form) '%program)
+     (let ((defs (cadr form))
+           (main (caddr form)))
+       (list '%program
+             (map (lambda (d)
+                    (if (and (pair? d) (eq? (car d) 'define))
+                        (list 'define (cadr d) (contify-expr (caddr d)))
+                        (contify-expr d)))
+                  defs)
+             (contify-expr main))))
+    (else
+     (contify-expr form))))

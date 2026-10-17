@@ -393,3 +393,28 @@
   (cond
     ((not (pair? expr)) 1)
     (else (+ 1 (expr-size (car expr)) (expr-size (cdr expr))))))
+
+(define (%program? form)
+  (and (pair? form) (eq? (car form) '%program)))
+
+(define (sanitize-label-str str)
+  (let* ((len (string-length str))
+         (res (make-string len)))
+    (let loop ((i 0))
+      (if (< i len)
+          (let ((c (string-ref str i)))
+            (string-set! res i
+              (cond
+                ((char=? c #\-) #\_)
+                ((char=? c #\?) #\_)
+                ((char=? c #\!) #\_)
+                ((char=? c #\*) #\_)
+                ((char=? c #\/) #\_)
+                ((char=? c #\<) #\_)
+                ((char=? c #\>) #\_)
+                ((char=? c #\=) #\_)
+                ((char=? c #\%) #\_)
+                ((char=? c #\:) #\_)
+                (else c)))
+            (loop (+ i 1)))
+          res))))

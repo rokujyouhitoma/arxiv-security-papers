@@ -752,6 +752,46 @@
             (emit-lir! (list '%mov '%rax (* num-args 4)))
             (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
+(define (lir-compile-direct-call label args si env tail?)
+  (let* ((num-args (length args))
+         (cur-params-entry (assq '%num-params env))
+         (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
+         (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
+         (frame-shift (align-frame-shift (if (= num-args 0)
+                                             (- 0 si)
+                                             (- (* 8 (- num-args 1)) si))))
+         (aligned-si (if (= num-args 0)
+                         (- 0 frame-shift)
+                         (- (* 8 (- num-args 1)) frame-shift))))
+    ;; 1. Evaluate arguments sequentially and place into temporary stack slots
+    (let loop ((as args) (curr-si aligned-si))
+      (if (not (null? as))
+          (begin
+            (track-lir-si! curr-si)
+            (lir-compile-expr (car as) curr-si env #f)
+            (emit-lir! (list '%store '%rsp curr-si '%rax))
+            (loop (cdr as) (- curr-si 8)))))
+
+    (if can-tco?
+        ;; --- TAIL CALL OPTIMIZATION (TCO) via Direct Jump ---
+        (begin
+          (let loop ((i 0))
+            (if (< i num-args)
+                (let ((temp-offset (- aligned-si (* i 8)))
+                      (param-offset (* 8 (- num-args i))))
+                  (emit-lir! (list '%load '%rdx '%rsp temp-offset))
+                  (emit-lir! (list '%store '%rsp param-offset '%rdx))
+                  (loop (+ i 1)))))
+          (emit-lir! (list '%mov '%rax (* num-args 4)))
+          (emit-lir! (list '%direct-jump label)))
+
+        ;; --- NON-TAIL DIRECT CALL ---
+        (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
+               (safepoint-lbl (new-safepoint-label!)))
+          (record-safepoint! safepoint-lbl frame-shift bitmap)
+          (emit-lir! (list '%mov '%rax (* num-args 4)))
+          (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))
+
 (define (lir-compile-cont-fun f-name params f-body in-body si env tail?)
   (let* ((entry-lbl (unique-label-sym "L_cont_entry_"))
          (exit-lbl  (unique-label-sym "L_cont_exit_"))
@@ -1028,6 +1068,14 @@
                                  si env #f))
               (else
                (error "Invalid quoted datum in LIR:" datum)))))
+         ((eq? op '%direct-call)
+          (lir-compile-direct-call (cadr expr) (cddr expr) si env tail?))
+         ((eq? op '%global-ref)
+          (emit-lir! (list '%global-ref '%rax (cadr expr))))
+         ((eq? op '%global-set!)
+          (track-lir-si! si)
+          (lir-compile-expr (caddr expr) si env #f)
+          (emit-lir! (list '%global-set! (cadr expr) '%rax)))
          (else
           ;; General procedure call
           (lir-compile-call op (cdr expr) si env tail?)))))
@@ -1193,10 +1241,8 @@
     (if entry (cdr entry) #f)))
 
 (define (braun-try-remove-trivial! cfg block-lbl param)
-  (let* ((preds (braun-get-preds cfg block-lbl))
-         (same #f)
-         (trivial? #t))
-    (let loop ((ps preds))
+  (let* ((preds (braun-get-preds cfg block-lbl)))
+    (let loop ((ps preds) (same #f) (trivial? #t))
       (if (null? ps)
           (if trivial?
               (let ((replacement (if same same param)))
@@ -1215,13 +1261,11 @@
                  (op (braun-resolve-val cfg (braun-get-incoming cfg param pred))))
             (cond
               ((or (equal? op param) (equal? op same))
-               (loop (cdr ps)))
+               (loop (cdr ps) same trivial?))
               ((eq? same #f)
-               (set! same op)
-               (loop (cdr ps)))
+               (loop (cdr ps) op trivial?))
               (else
-               (set! trivial? #f)
-               (loop '()))))))))
+               (loop '() same #f))))))))
 
 (define (braun-add-arguments! cfg block-lbl param var)
   (let ((preds (braun-get-preds cfg block-lbl)))

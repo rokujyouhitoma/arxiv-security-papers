@@ -75,6 +75,11 @@ test_alias_escape: build/compiler_passes.scm
 	cat build/compiler_passes.scm tests/passes/test_alias_escape.scm > build/test_alias_escape_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_alias_escape_runner.scm
 
+test_toplevel: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_toplevel_direct_call.scm > build/test_toplevel_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_toplevel_runner.scm
+
 test_lir: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_lir.scm > build/test_lir_runner.scm

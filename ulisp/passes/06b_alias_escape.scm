@@ -113,6 +113,21 @@
           (collect-escaped-vars (cadr expr) #f))
          ((%closure-ref)
           '())
+         ((%global-ref)
+          '())
+         ((%direct-call)
+          (let loop ((args (cddr expr)) (acc '()))
+            (if (null? args) acc
+                (let ((arg (car args)))
+                  (loop (cdr args)
+                        (if (symbol? arg)
+                            (cons arg acc)
+                            (append (collect-escaped-vars arg #f) acc)))))))
+         ((%global-set!)
+          (let ((stored-val (caddr expr)))
+            (if (symbol? stored-val)
+                (list stored-val)
+                (collect-escaped-vars stored-val #f))))
          ;; Mutations: if storing a value into a heap object, the stored value escapes!
          ((set-car! set-cdr!)
           (let ((stored-val (caddr expr)))
@@ -165,6 +180,19 @@
          ((set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store!)
           (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
                         (cdr expr))))
+
+         ((%direct-call)
+          (cons '%direct-call
+                (cons (cadr expr)
+                      (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                           (cddr expr)))))
+
+         ((%global-ref)
+          expr)
+
+         ((%global-set!)
+          (list '%global-set! (cadr expr)
+                (alias-escape-transform-expr (caddr expr) escaped-set avail-loads)))
 
          ((if)
           (let* ((test (alias-escape-transform-expr (cadr expr) escaped-set avail-loads))

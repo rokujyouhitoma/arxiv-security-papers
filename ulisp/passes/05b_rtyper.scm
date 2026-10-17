@@ -310,7 +310,11 @@
      (let ((defs (cadr form-or-forms))
            (main (caddr form-or-forms)))
        (list '%program
-             (map (lambda (d) (rtyper-expr d '())) defs)
+             (map (lambda (d)
+                    (if (and (pair? d) (eq? (car d) 'define))
+                        (list 'define (cadr d) (rtyper-expr (caddr d) '()))
+                        (rtyper-expr d '())))
+                  defs)
              (rtyper-expr main '()))))
     ((eq? (car form-or-forms) 'define)
      (let ((head (cadr form-or-forms))

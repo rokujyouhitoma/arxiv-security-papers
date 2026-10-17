@@ -393,6 +393,31 @@
   (cond
     ((not (pair? expr)) 1)
     (else (+ 1 (expr-size (car expr)) (expr-size (cdr expr))))))
+
+(define (%program? form)
+  (and (pair? form) (eq? (car form) '%program)))
+
+(define (sanitize-label-str str)
+  (let* ((len (string-length str))
+         (res (make-string len)))
+    (let loop ((i 0))
+      (if (< i len)
+          (let ((c (string-ref str i)))
+            (string-set! res i
+              (cond
+                ((char=? c #\-) #\_)
+                ((char=? c #\?) #\_)
+                ((char=? c #\!) #\_)
+                ((char=? c #\*) #\_)
+                ((char=? c #\/) #\_)
+                ((char=? c #\<) #\_)
+                ((char=? c #\>) #\_)
+                ((char=? c #\=) #\_)
+                ((char=? c #\%) #\_)
+                ((char=? c #\:) #\_)
+                (else c)))
+            (loop (+ i 1)))
+          res))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 0b: Hygienic syntax-rules Macro Expander
 ;;; Conforms to DSN-33 Architecture Specification & Issue #533 (R7RS 4.3)
@@ -1009,11 +1034,21 @@
                           restore)))))))
 
 (define (rewrite-top-level forms)
-  (let loop ((fs forms) (bindings '()) (bodies '()))
+  (let loop ((fs forms) (defs '()) (bodies '()))
     (if (null? fs)
-        (if (null? bindings)
+        (if (null? defs)
             (make-body-expr (reverse bodies))
-            (list 'letrec (reverse bindings) (make-body-expr (reverse bodies))))
+            (let* ((rev-defs (reverse defs))
+                   (unique-defs
+                    (let dedup ((ds (reverse rev-defs)) (seen '()) (acc '()))
+                      (if (null? ds)
+                          acc
+                          (let* ((d (car ds))
+                                 (name (cadr d)))
+                            (if (memq name seen)
+                                (dedup (cdr ds) seen acc)
+                                (dedup (cdr ds) (cons name seen) (cons d acc))))))))
+              (list '%program unique-defs (make-body-expr (reverse bodies)))))
         (let ((f (car fs)))
           (if (and (pair? f) (eq? (car f) 'define))
               (let ((def-spec (cadr f)))
@@ -1023,16 +1058,16 @@
                           (params (cdr def-spec))
                           (lbody (cddr f)))
                       (loop (cdr fs)
-                            (cons (list name (cons 'lambda (cons params lbody))) bindings)
+                            (cons (list 'define name (cons 'lambda (cons params lbody))) defs)
                             bodies))
                     ;; (define name val)
                     (let ((name def-spec)
                           (val (caddr f)))
                       (loop (cdr fs)
-                            (cons (list name val) bindings)
+                            (cons (list 'define name val) defs)
                             bodies))))
               ;; Normal expression
-              (loop (cdr fs) bindings (cons f bodies)))))))
+              (loop (cdr fs) defs (cons f bodies)))))))
 
 ;;; Pass 1: Canonical AST Desugaring Pass
 ;;; Recursively transforms an AST so that all high-level syntactic sugar
@@ -1046,6 +1081,16 @@
        (case op
          ((quote)
           expr)
+         ((%program)
+          (let ((defs (cadr expr))
+                (main (caddr expr)))
+            (list '%program
+                  (map (lambda (d)
+                         (if (and (pair? d) (eq? (car d) 'define))
+                             (list 'define (cadr d) (desugar-all (caddr d)))
+                             (desugar-all d)))
+                       defs)
+                  (desugar-all main))))
          ((cond)
           (desugar-all (desugar-cond (cdr expr))))
          ((case)
@@ -1206,6 +1251,8 @@
           (desugar-all (list 'cdr (list 'cdr (cadr expr)))))
          ((caddr)
           (desugar-all (list 'car (list 'cdr (list 'cdr (cadr expr))))))
+         ((cdddr)
+          (desugar-all (list 'cdr (list 'cdr (list 'cdr (cadr expr))))))
          ((cadddr)
           (desugar-all (list 'car (list 'cdr (list 'cdr (list 'cdr (cadr expr)))))))
          ((let)
@@ -1313,6 +1360,17 @@
           (free-vars-acc (cadr expr) bound acc))
          ((%call-with-values)
           (free-vars-acc (caddr expr) bound (free-vars-acc (cadr expr) bound acc)))
+         ((%program)
+          (let* ((defs (cadr expr))
+                 (main (caddr expr))
+                 (d-acc (let loop ((ds defs) (cur-acc acc))
+                          (if (null? ds) cur-acc
+                              (let ((d (car ds)))
+                                (loop (cdr ds)
+                                      (if (and (pair? d) (eq? (car d) 'define))
+                                          (free-vars-acc (caddr d) bound cur-acc)
+                                          (free-vars-acc d bound cur-acc))))))))
+            (free-vars-acc main bound d-acc)))
          ((%values)
           (let loop ((es (cdr expr)) (cur-acc acc))
             (if (null? es)
@@ -1348,6 +1406,15 @@
      (let ((op (car expr)))
        (case op
          ((quote) #f)
+         ((%program)
+          (or (let loop ((ds (cadr expr)))
+                (and (pair? ds)
+                     (or (let ((d (car ds)))
+                           (if (and (pair? d) (eq? (car d) 'define))
+                               (escapes? var (caddr d))
+                               (escapes? var d)))
+                         (loop (cdr ds)))))
+              (escapes? var (caddr expr))))
          ((if)
           (or (escapes? var (cadr expr))
               (or (escapes? var (caddr expr))
@@ -1427,6 +1494,15 @@
        (let ((op (car e)))
          (case op
            ((quote) #t)
+           ((%program)
+            (and (let loop ((ds (cadr e)))
+                   (or (null? ds)
+                       (let ((d (car ds)))
+                         (and (if (and (pair? d) (eq? (car d) 'define))
+                                  (check (caddr d) #f)
+                                  (check d #f))
+                              (loop (cdr ds))))))
+                 (check (caddr e) tail?)))
            ((if)
             (and (check (cadr e) #f)
                  (check (caddr e) tail?)
@@ -3262,7 +3338,11 @@
      (let ((defs (cadr form-or-forms))
            (main (caddr form-or-forms)))
        (list '%program
-             (map (lambda (d) (rtyper-expr d '())) defs)
+             (map (lambda (d)
+                    (if (and (pair? d) (eq? (car d) 'define))
+                        (list 'define (cadr d) (rtyper-expr (caddr d) '()))
+                        (rtyper-expr d '())))
+                  defs)
              (rtyper-expr main '()))))
     ((eq? (car form-or-forms) 'define)
      (let ((head (cadr form-or-forms))
@@ -3431,8 +3511,21 @@
             (contify-expr orig-body))))
 
 ;;; Pass 4c Entrypoint: Contification & local closure elimination across all expressions.
-(define (contify-all expr)
-  (contify-expr expr))
+(define (contify-all form)
+  (cond
+    ((not (pair? form)) form)
+    ((eq? (car form) '%program)
+     (let ((defs (cadr form))
+           (main (caddr form)))
+       (list '%program
+             (map (lambda (d)
+                    (if (and (pair? d) (eq? (car d) 'define))
+                        (list 'define (cadr d) (contify-expr (caddr d)))
+                        (contify-expr d)))
+                  defs)
+             (contify-expr main))))
+    (else
+     (contify-expr form))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: Explicit Closure Conversion Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -3450,10 +3543,30 @@
 (define (add-lifted-function! fn)
   (set-car! *lifted-functions* (cons fn (car *lifted-functions*))))
 
+;;; Top-level functions & variables registry for %direct-call optimization
+(define *top-level-fns* (cons '() '()))   ; ((name . label) ...)
+(define *top-level-vars* (cons '() '()))  ; (name ...)
+
+(define (reset-top-level-env!)
+  (set-car! *top-level-fns* '())
+  (set-car! *top-level-vars* '()))
+
+(define (free-vars-with-globals expr bound)
+  (let ((top-bound (append (map car* (car *top-level-fns*)) (car *top-level-vars*))))
+    (free-vars expr (set-union bound top-bound))))
+
 ;;; Variable environment lookup (linear alist, latest bindings shadow older ones)
 (define (lookup-var var var-map)
   (let ((entry (assq var var-map)))
-    (if entry (cdr entry) var)))
+    (cond
+      (entry (cdr entry))
+      ((assq var (car *top-level-fns*))
+       ;; Top-level function referenced as first-class value: instantiate static closure
+       (list '%make-closure (cdr (assq var (car *top-level-fns*)))))
+      ((memq var (car *top-level-vars*))
+       ;; Top-level global variable reference
+       (list '%global-ref var))
+      (else var))))
 
 ;;; Forward declarations / helpers for mutual recursion in closure conversion
 (define (convert-expr expr var-map)
@@ -3526,13 +3639,19 @@
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else
-          (cons (convert-expr op var-map)
-                (map (lambda (e) (convert-expr e var-map)) (cdr expr)))))))))
+          (if (and (symbol? op)
+                   (not (assq op var-map))
+                   (assq op (car *top-level-fns*)))
+              (let ((label (cdr (assq op (car *top-level-fns*))))
+                    (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+                (cons '%direct-call (cons label args)))
+              (cons (convert-expr op var-map)
+                    (map (lambda (e) (convert-expr e var-map)) (cdr expr))))))))))
 
 ;;; Convert a lambda expression, lift it as a top-level %function, and return %make-closure
 (define (convert-lambda self-name params body var-map)
   (let* ((bound-vars (if self-name (cons self-name params) params))
-         (frees (free-vars body bound-vars))
+         (frees (free-vars-with-globals body bound-vars))
          (label (unique-label-sym "L_lambda"))
          ;; Build callee inner var-map:
          ;; 1. Params shadow outer bindings (map to themselves)
@@ -3575,7 +3694,7 @@
                        (let* ((params (cadr val))
                               (lbody (caddr val))
                               (bound (cons var params))
-                              (frees (free-vars lbody bound))
+                              (frees (free-vars-with-globals lbody bound))
                               (label (unique-label-sym "L_lambda"))
                               ;; Callee inner environment:
                               ;; Params map to themselves
@@ -3630,11 +3749,58 @@
         (list 'let let-bindings
               (cons 'begin (append backpatches (list new-body)))))))
 
-;;; Pass 3 Entrypoint: Takes Canonical Core AST, returns (%program functions main-expr)
+;;; Pass 5 Entrypoint: Takes Canonical Core AST or (%program defs main-expr), returns (%program functions main-expr)
 (define (closure-convert ast)
   (reset-lifted-functions!)
-  (let ((main-expr (convert-expr ast '())))
-    (list '%program (reverse (car *lifted-functions*)) main-expr)))
+  (reset-top-level-env!)
+  (if (and (pair? ast) (eq? (car ast) '%program))
+      (let* ((defs (cadr ast))
+             (main-expr (caddr ast)))
+        ;; 1. Scan defs and populate *top-level-fns* and *top-level-vars*
+        (let loop ((ds defs))
+          (if (pair? ds)
+              (begin
+                (let ((d (car ds)))
+                  (if (and (pair? d) (eq? (car d) 'define))
+                      (let ((name (cadr d))
+                            (val (caddr d)))
+                        (if (and (pair? val) (eq? (car val) 'lambda))
+                            (if (not (assq name (car *top-level-fns*)))
+                                (let ((label (unique-label-sym (string-append "L_top_" (sanitize-label-str (symbol->string name))))))
+                                  (set-car! *top-level-fns* (cons (cons name label) (car *top-level-fns*)))))
+                            (if (not (memq name (car *top-level-vars*)))
+                                (set-car! *top-level-vars* (cons name (car *top-level-vars*))))))))
+                (loop (cdr ds)))))
+        ;; 2. Convert each top-level function and add to lifted-functions
+        (let loop ((ds defs))
+          (if (pair? ds)
+              (begin
+                (let ((d (car ds)))
+                  (if (and (pair? d) (eq? (car d) 'define))
+                      (let ((name (cadr d))
+                            (val (caddr d)))
+                        (if (and (pair? val) (eq? (car val) 'lambda))
+                            (let* ((label (cdr (assq name (car *top-level-fns*))))
+                                   (params (cadr val))
+                                   (lbody (caddr val))
+                                   (inner-map (map (lambda (p) (cons p p)) params))
+                                   (new-body (convert-expr lbody inner-map))
+                                   (fn-def (list '%function label params new-body)))
+                              (add-lifted-function! fn-def))))))
+                (loop (cdr ds)))))
+        ;; 3. Convert variable inits and main-expr
+        (let* ((inits (let loop ((ds defs) (acc '()))
+                        (if (null? ds)
+                            (reverse acc)
+                            (let ((d (car ds)))
+                              (if (and (pair? d) (eq? (car d) 'define) (not (assq (cadr d) (car *top-level-fns*))))
+                                  (loop (cdr ds) (cons (list '%global-set! (cadr d) (convert-expr (caddr d) '())) acc))
+                                  (loop (cdr ds) acc))))))
+               (conv-main (convert-expr main-expr '()))
+               (final-main (if (null? inits) conv-main (cons 'begin (append inits (list conv-main))))))
+          (list '%program (reverse (car *lifted-functions*)) final-main)))
+      (let ((main-expr (convert-expr ast '())))
+        (list '%program (reverse (car *lifted-functions*)) main-expr))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 6b: TBAA & Escape Analysis Nanopass
 ;;; Conforms to DSN-33 Section 8.5 & Issue #525
@@ -3750,6 +3916,21 @@
           (collect-escaped-vars (cadr expr) #f))
          ((%closure-ref)
           '())
+         ((%global-ref)
+          '())
+         ((%direct-call)
+          (let loop ((args (cddr expr)) (acc '()))
+            (if (null? args) acc
+                (let ((arg (car args)))
+                  (loop (cdr args)
+                        (if (symbol? arg)
+                            (cons arg acc)
+                            (append (collect-escaped-vars arg #f) acc)))))))
+         ((%global-set!)
+          (let ((stored-val (caddr expr)))
+            (if (symbol? stored-val)
+                (list stored-val)
+                (collect-escaped-vars stored-val #f))))
          ;; Mutations: if storing a value into a heap object, the stored value escapes!
          ((set-car! set-cdr!)
           (let ((stored-val (caddr expr)))
@@ -3802,6 +3983,19 @@
          ((set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store!)
           (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
                         (cdr expr))))
+
+         ((%direct-call)
+          (cons '%direct-call
+                (cons (cadr expr)
+                      (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                           (cddr expr)))))
+
+         ((%global-ref)
+          expr)
+
+         ((%global-set!)
+          (list '%global-set! (cadr expr)
+                (alias-escape-transform-expr (caddr expr) escaped-set avail-loads)))
 
          ((if)
           (let* ((test (alias-escape-transform-expr (cadr expr) escaped-set avail-loads))
@@ -4653,6 +4847,46 @@
             (emit-lir! (list '%mov '%rax (* num-args 4)))
             (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
+(define (lir-compile-direct-call label args si env tail?)
+  (let* ((num-args (length args))
+         (cur-params-entry (assq '%num-params env))
+         (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
+         (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
+         (frame-shift (align-frame-shift (if (= num-args 0)
+                                             (- 0 si)
+                                             (- (* 8 (- num-args 1)) si))))
+         (aligned-si (if (= num-args 0)
+                         (- 0 frame-shift)
+                         (- (* 8 (- num-args 1)) frame-shift))))
+    ;; 1. Evaluate arguments sequentially and place into temporary stack slots
+    (let loop ((as args) (curr-si aligned-si))
+      (if (not (null? as))
+          (begin
+            (track-lir-si! curr-si)
+            (lir-compile-expr (car as) curr-si env #f)
+            (emit-lir! (list '%store '%rsp curr-si '%rax))
+            (loop (cdr as) (- curr-si 8)))))
+
+    (if can-tco?
+        ;; --- TAIL CALL OPTIMIZATION (TCO) via Direct Jump ---
+        (begin
+          (let loop ((i 0))
+            (if (< i num-args)
+                (let ((temp-offset (- aligned-si (* i 8)))
+                      (param-offset (* 8 (- num-args i))))
+                  (emit-lir! (list '%load '%rdx '%rsp temp-offset))
+                  (emit-lir! (list '%store '%rsp param-offset '%rdx))
+                  (loop (+ i 1)))))
+          (emit-lir! (list '%mov '%rax (* num-args 4)))
+          (emit-lir! (list '%direct-jump label)))
+
+        ;; --- NON-TAIL DIRECT CALL ---
+        (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
+               (safepoint-lbl (new-safepoint-label!)))
+          (record-safepoint! safepoint-lbl frame-shift bitmap)
+          (emit-lir! (list '%mov '%rax (* num-args 4)))
+          (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))
+
 (define (lir-compile-cont-fun f-name params f-body in-body si env tail?)
   (let* ((entry-lbl (unique-label-sym "L_cont_entry_"))
          (exit-lbl  (unique-label-sym "L_cont_exit_"))
@@ -4929,6 +5163,14 @@
                                  si env #f))
               (else
                (error "Invalid quoted datum in LIR:" datum)))))
+         ((eq? op '%direct-call)
+          (lir-compile-direct-call (cadr expr) (cddr expr) si env tail?))
+         ((eq? op '%global-ref)
+          (emit-lir! (list '%global-ref '%rax (cadr expr))))
+         ((eq? op '%global-set!)
+          (track-lir-si! si)
+          (lir-compile-expr (caddr expr) si env #f)
+          (emit-lir! (list '%global-set! (cadr expr) '%rax)))
          (else
           ;; General procedure call
           (lir-compile-call op (cdr expr) si env tail?)))))
@@ -5094,10 +5336,8 @@
     (if entry (cdr entry) #f)))
 
 (define (braun-try-remove-trivial! cfg block-lbl param)
-  (let* ((preds (braun-get-preds cfg block-lbl))
-         (same #f)
-         (trivial? #t))
-    (let loop ((ps preds))
+  (let* ((preds (braun-get-preds cfg block-lbl)))
+    (let loop ((ps preds) (same #f) (trivial? #t))
       (if (null? ps)
           (if trivial?
               (let ((replacement (if same same param)))
@@ -5116,13 +5356,11 @@
                  (op (braun-resolve-val cfg (braun-get-incoming cfg param pred))))
             (cond
               ((or (equal? op param) (equal? op same))
-               (loop (cdr ps)))
+               (loop (cdr ps) same trivial?))
               ((eq? same #f)
-               (set! same op)
-               (loop (cdr ps)))
+               (loop (cdr ps) op trivial?))
               (else
-               (set! trivial? #f)
-               (loop '()))))))))
+               (loop '() same #f))))))))
 
 (define (braun-add-arguments! cfg block-lbl param var)
   (let ((preds (braun-get-preds cfg block-lbl)))
@@ -5655,6 +5893,39 @@
          (if (> frame-shift 0)
              (emit (string-append "    add rsp, " (number->string frame-shift))))))
 
+      ((%direct-call)
+       (let ((label (cadr inst))
+             (frame-shift (caddr inst))
+             (safepoint (if (pair? (cdddr inst)) (cadddr inst) #f)))
+         (let ((lbl-str (if (symbol? label) (symbol->string label) label)))
+           (if (> frame-shift 0)
+               (emit (string-append "    sub rsp, " (number->string frame-shift))))
+           (emit "    xor r10, r10")
+           (emit (string-append "    call " lbl-str))
+           (if safepoint
+               (emit (string-append (if (symbol? safepoint) (symbol->string safepoint) safepoint) ":")))
+           (if (> frame-shift 0)
+               (emit (string-append "    add rsp, " (number->string frame-shift)))))))
+
+      ((%direct-jump)
+       (let ((label (cadr inst)))
+         (emit "    xor r10, r10")
+         (emit (string-append "    jmp " (if (symbol? label) (symbol->string label) label)))))
+
+      ((%global-ref)
+       (let ((reg (cadr inst))
+             (var (caddr inst)))
+         (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string var)))))
+           (emit (string-append "    lea r11, [rip + " g-lbl "]"))
+           (emit (string-append "    mov " (reg->str reg) ", [r11]")))))
+
+      ((%global-set!)
+       (let ((var (cadr inst))
+             (reg (caddr inst)))
+         (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string var)))))
+           (emit (string-append "    lea r11, [rip + " g-lbl "]"))
+           (emit (string-append "    mov [r11], " (reg->str reg))))))
+
       ((%push-handler)
        (let ((catch-lbl (cadr inst))
              (frame-si (caddr inst))
@@ -5987,6 +6258,16 @@
     (emit "    .weak ulisp_values_buf")
     (emit "ulisp_values_buf:")
     (emit "    .zero 512")
+    (let loop ((gvs (car *top-level-vars*)))
+      (if (pair? gvs)
+          (let ((v (car gvs)))
+            (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string v)))))
+              (emit "    .align 8")
+              (emit (string-append "    .globl " g-lbl))
+              (emit (string-append "    .weak " g-lbl))
+              (emit (string-append g-lbl ":"))
+              (emit "    .quad 0")
+              (loop (cdr gvs))))))
     (emit "    .align 8")
     (emit "    .globl ulisp_gc_state")
     (emit "    .weak ulisp_gc_state")
@@ -6903,6 +7184,43 @@
          (emit "    ldr x30, [sp]")
          (emit (string-append "    add sp, sp, #" (number->string total-shift)))))
 
+      ((%direct-call)
+       (let* ((label (cadr inst))
+              (lbl-str (if (symbol? label) (symbol->string label) label))
+              (frame-shift (caddr inst))
+              (safepoint (if (pair? (cdddr inst)) (cadddr inst) #f))
+              (total-shift (+ frame-shift 8)))
+         (emit (string-append "    sub sp, sp, #" (number->string total-shift)))
+         (emit "    str x30, [sp]")
+         (emit "    mov x10, #0")
+         (emit (string-append "    bl " lbl-str))
+         (if safepoint
+             (emit (string-append (if (symbol? safepoint) (symbol->string safepoint) safepoint) ":")))
+         (emit "    ldr x30, [sp]")
+         (emit (string-append "    add sp, sp, #" (number->string total-shift)))))
+
+      ((%direct-jump)
+       (let* ((label (cadr inst))
+              (lbl-str (if (symbol? label) (symbol->string label) label)))
+         (emit "    mov x10, #0")
+         (emit (string-append "    b " lbl-str))))
+
+      ((%global-ref)
+       (let ((reg (cadr inst))
+             (var (caddr inst)))
+         (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string var)))))
+           (emit (string-append "    adrp x9, " g-lbl))
+           (emit (string-append "    add x9, x9, :lo12:" g-lbl))
+           (emit (string-append "    ldr " (arm-reg->str reg) ", [x9]")))))
+
+      ((%global-set!)
+       (let ((var (cadr inst))
+             (reg (caddr inst)))
+         (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string var)))))
+           (emit (string-append "    adrp x9, " g-lbl))
+           (emit (string-append "    add x9, x9, :lo12:" g-lbl))
+           (emit (string-append "    str " (arm-reg->str reg) ", [x9]")))))
+
       ((%push-handler)
        (let ((catch-lbl (cadr inst))
              (frame-si (caddr inst))
@@ -7217,6 +7535,16 @@
     (emit "    .globl ulisp_values_buf")
     (emit "ulisp_values_buf:")
     (emit "    .zero 512")
+    (let loop ((gvs (car *top-level-vars*)))
+      (if (pair? gvs)
+          (let ((v (car gvs)))
+            (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string v)))))
+              (emit "    .align 3")
+              (emit (string-append "    .globl " g-lbl))
+              (emit (string-append "    .weak " g-lbl))
+              (emit (string-append g-lbl ":"))
+              (emit "    .xword 0")
+              (loop (cdr gvs))))))
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7b: Portable C / WebAssembly Backend Code Generator
@@ -7232,8 +7560,9 @@
 
 (define (c-sanitize-label lbl)
   (let* ((str (if (symbol? lbl) (symbol->string lbl) lbl))
-         (len (string-length str)))
-    (if (and (> len 0) (char=? (string-ref str 0) #\.))
+         (clean (sanitize-label-str str))
+         (len (string-length clean)))
+    (if (and (> len 0) (char=? (string-ref clean 0) #\.))
         (let ((res (make-string (+ len 5))))
           (string-set! res 0 #\u)
           (string-set! res 1 #\l)
@@ -7243,11 +7572,11 @@
           (string-set! res 5 #\_)
           (let loop ((i 1))
             (if (< i len)
-                (let ((c (string-ref str i)))
+                (let ((c (string-ref clean i)))
                   (string-set! res (+ i 5) (if (char=? c #\.) #\_ c))
                   (loop (+ i 1)))
                 res)))
-        str)))
+        clean)))
 
 (define (c-reg->str reg)
   (case reg
@@ -7609,6 +7938,33 @@
          (emit "    ((void (*)(void))(uintptr_t)reg_rdx)();")
          (emit (string-append "    reg_rsp += " (number->string (+ frame-shift 8)) ";"))))
 
+      ((%direct-call)
+       (let ((label (cadr inst))
+             (frame-shift (caddr inst)))
+         (let ((fn-name (c-sanitize-label label)))
+           (emit "    reg_r10 = 0;")
+           (emit (string-append "    reg_rsp -= " (number->string (+ frame-shift 8)) ";"))
+           (emit (string-append "    " fn-name "();"))
+           (emit (string-append "    reg_rsp += " (number->string (+ frame-shift 8)) ";")))))
+
+      ((%direct-jump)
+       (let ((label (cadr inst)))
+         (let ((fn-name (c-sanitize-label label)))
+           (emit "    reg_r10 = 0;")
+           (emit (string-append "    " fn-name "(); return;")))))
+
+      ((%global-ref)
+       (let ((reg (cadr inst))
+             (var (caddr inst)))
+         (let ((g-lbl (string-append "ulisp_gvar_" (c-sanitize-label var))))
+           (emit (string-append "    " (c-reg->str reg) " = " g-lbl ";")))))
+
+      ((%global-set!)
+       (let ((var (cadr inst))
+             (reg (caddr inst)))
+         (let ((g-lbl (string-append "ulisp_gvar_" (c-sanitize-label var))))
+           (emit (string-append "    " g-lbl " = " (c-reg->str reg) ";")))))
+
       ((%push-handler)
        (let ((catch-lbl (cadr inst))
              (frame-si (caddr inst))
@@ -7718,6 +8074,7 @@
          (label-str (c-sanitize-label label))
          (body (cdr (assq 'body (cddr fn)))))
     (scan-c-blocks! body)
+    (emit (string-append "static void " label-str "(void) ULISP_UNUSED;"))
     (emit (string-append "static void " label-str "(void) {"))
     (emit "    *(uint64_t *)(reg_rsp - 8) = reg_r10;")
     (for-each emit-c-instruction body)
@@ -7762,6 +8119,12 @@
     (emit "static uint64_t ulisp_values_count ULISP_UNUSED = 1;")
     (emit "static uint64_t ulisp_values_buf[64] ULISP_UNUSED = {0};")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
+    (let loop ((gvs (car *top-level-vars*)))
+      (if (pair? gvs)
+          (let* ((v (car gvs))
+                 (g-lbl (string-append "ulisp_gvar_" (c-sanitize-label v))))
+            (emit (string-append "static uint64_t " g-lbl " ULISP_UNUSED = 63;"))
+            (loop (cdr gvs)))))
     (emit "")
     (emit "static void ulisp_continuation_invoke(void) ULISP_UNUSED;")
     (emit "static void ulisp_continuation_invoke(void) {")
