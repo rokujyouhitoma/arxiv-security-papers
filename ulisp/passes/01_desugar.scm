@@ -12,8 +12,17 @@
   (cond
     ((null? args) "")
     ((null? (cdr args)) (car args))
+    ((null? (cddr args)) (list 'string-append2 (car args) (cadr args)))
     (else
-     (list 'string-append2 (car args) (desugar-string-append (cdr args))))))
+     ;; Split args into two halves to keep tree depth O(log N)
+     (let* ((len (length args))
+            (half (quotient len 2)))
+       (let loop ((rest args) (i 0) (left '()))
+         (if (< i half)
+             (loop (cdr rest) (+ i 1) (cons (car rest) left))
+             (list 'string-append2
+                   (desugar-string-append (reverse left))
+                   (desugar-string-append rest))))))))
 
 (define (desugar-cond clauses)
   (if (null? clauses)

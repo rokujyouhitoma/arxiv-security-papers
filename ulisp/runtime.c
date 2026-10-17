@@ -209,7 +209,7 @@ static void print_scheme_value_raw(uint64_t val) {
     }
 }
 
-static void print_scheme_value(uint64_t val) {
+void print_scheme_value(uint64_t val) {
     print_scheme_value_raw(val);
     printf("\n");
 }

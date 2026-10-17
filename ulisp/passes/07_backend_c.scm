@@ -373,6 +373,10 @@
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
             (emit "    reg_rax = ulisp_write_char(reg_rdi);")
             (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
+           ((or (eq? func 'ulisp_write_string) (string=? fname "ulisp_write_string"))
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
+            (emit "    reg_rax = ulisp_write_string(reg_rdi);")
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
            (else
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
             (emit (string-append "    reg_rax = " fname "();"))
@@ -400,7 +404,7 @@
          (emit (string-append "    ulisp_handler_chain = *(void **)(reg_rsp + (" (number->string frame-si) "));"))))
 
       ((%raise)
-       (emit "    if (!ulisp_handler_chain) { fprintf(stderr, \"*** ERROR: unhandled exception\\n\"); exit(1); }")
+       (emit "    if (!ulisp_handler_chain) { fprintf(stderr, \"*** ERROR: unhandled exception: \"); print_scheme_value(reg_rax); exit(1); }")
        (emit "    reg_rdi = reg_rax;")
        (emit "    reg_rsp = *(char **)((char *)ulisp_handler_chain + 8);")
        (emit "    reg_rax = *(uint64_t *)((char *)ulisp_handler_chain + 32);")
@@ -514,6 +518,8 @@
     (emit "extern uint64_t ulisp_read_char(void);")
     (emit "extern uint64_t ulisp_peek_char(void);")
     (emit "extern uint64_t ulisp_write_char(uint64_t val);")
+    (emit "extern uint64_t ulisp_write_string(uint64_t val);")
+    (emit "extern void print_scheme_value(uint64_t val);")
     (emit "#if defined(__GNUC__) || defined(__clang__)")
     (emit "#define ULISP_UNUSED __attribute__((unused))")
     (emit "#else")

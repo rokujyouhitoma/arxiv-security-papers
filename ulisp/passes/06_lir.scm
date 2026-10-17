@@ -79,7 +79,7 @@
 (define (lir-compile-variable var env)
   (let ((binding (assq var env)))
     (if (not binding)
-        (error "Unbound variable in LIR:" var)
+        (error (string-append "Unbound variable in LIR: " (symbol->string var)) var)
         (let ((info (cdr binding)))
           (cond
             ((number? info)

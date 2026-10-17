@@ -7,18 +7,26 @@
 ;;;       string->symbol heap allocation overhead during bootstrap.
 ;;; =======================================================================
 
-;;; Fixed pool of temporary variables by nesting depth (Zero heap allocation)
+;;; Fixed pool of temporary variables by nesting depth (Zero heap allocation for depth < 64)
 (define (%t-var depth)
   (case depth
-    ((0) '%t0)
-    ((1) '%t1)
-    ((2) '%t2)
-    ((3) '%t3)
-    ((4) '%t4)
-    ((5) '%t5)
-    ((6) '%t6)
-    ((7) '%t7)
-    (else '%t8)))
+    ((0) '%t0)   ((1) '%t1)   ((2) '%t2)   ((3) '%t3)
+    ((4) '%t4)   ((5) '%t5)   ((6) '%t6)   ((7) '%t7)
+    ((8) '%t8)   ((9) '%t9)   ((10) '%t10) ((11) '%t11)
+    ((12) '%t12) ((13) '%t13) ((14) '%t14) ((15) '%t15)
+    ((16) '%t16) ((17) '%t17) ((18) '%t18) ((19) '%t19)
+    ((20) '%t20) ((21) '%t21) ((22) '%t22) ((23) '%t23)
+    ((24) '%t24) ((25) '%t25) ((26) '%t26) ((27) '%t27)
+    ((28) '%t28) ((29) '%t29) ((30) '%t30) ((31) '%t31)
+    ((32) '%t32) ((33) '%t33) ((34) '%t34) ((35) '%t35)
+    ((36) '%t36) ((37) '%t37) ((38) '%t38) ((39) '%t39)
+    ((40) '%t40) ((41) '%t41) ((42) '%t42) ((43) '%t43)
+    ((44) '%t44) ((45) '%t45) ((46) '%t46) ((47) '%t47)
+    ((48) '%t48) ((49) '%t49) ((50) '%t50) ((51) '%t51)
+    ((52) '%t52) ((53) '%t53) ((54) '%t54) ((55) '%t55)
+    ((56) '%t56) ((57) '%t57) ((58) '%t58) ((59) '%t59)
+    ((60) '%t60) ((61) '%t61) ((62) '%t62) ((63) '%t63)
+    (else (string->symbol (string-append "__anf_t_" (number->string depth))))))
 
 ;;; Collects bindings for non-atomic expressions among a list of arguments.
 ;;; Returns a pair (bindings . atomic-args).

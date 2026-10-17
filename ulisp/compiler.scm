@@ -801,8 +801,17 @@
   (cond
     ((null? args) "")
     ((null? (cdr args)) (car args))
+    ((null? (cddr args)) (list 'string-append2 (car args) (cadr args)))
     (else
-     (list 'string-append2 (car args) (desugar-string-append (cdr args))))))
+     ;; Split args into two halves to keep tree depth O(log N)
+     (let* ((len (length args))
+            (half (quotient len 2)))
+       (let loop ((rest args) (i 0) (left '()))
+         (if (< i half)
+             (loop (cdr rest) (+ i 1) (cons (car rest) left))
+             (list 'string-append2
+                   (desugar-string-append (reverse left))
+                   (desugar-string-append rest))))))))
 
 (define (desugar-cond clauses)
   (if (null? clauses)
@@ -2023,18 +2032,26 @@
 ;;;       string->symbol heap allocation overhead during bootstrap.
 ;;; =======================================================================
 
-;;; Fixed pool of temporary variables by nesting depth (Zero heap allocation)
+;;; Fixed pool of temporary variables by nesting depth (Zero heap allocation for depth < 64)
 (define (%t-var depth)
   (case depth
-    ((0) '%t0)
-    ((1) '%t1)
-    ((2) '%t2)
-    ((3) '%t3)
-    ((4) '%t4)
-    ((5) '%t5)
-    ((6) '%t6)
-    ((7) '%t7)
-    (else '%t8)))
+    ((0) '%t0)   ((1) '%t1)   ((2) '%t2)   ((3) '%t3)
+    ((4) '%t4)   ((5) '%t5)   ((6) '%t6)   ((7) '%t7)
+    ((8) '%t8)   ((9) '%t9)   ((10) '%t10) ((11) '%t11)
+    ((12) '%t12) ((13) '%t13) ((14) '%t14) ((15) '%t15)
+    ((16) '%t16) ((17) '%t17) ((18) '%t18) ((19) '%t19)
+    ((20) '%t20) ((21) '%t21) ((22) '%t22) ((23) '%t23)
+    ((24) '%t24) ((25) '%t25) ((26) '%t26) ((27) '%t27)
+    ((28) '%t28) ((29) '%t29) ((30) '%t30) ((31) '%t31)
+    ((32) '%t32) ((33) '%t33) ((34) '%t34) ((35) '%t35)
+    ((36) '%t36) ((37) '%t37) ((38) '%t38) ((39) '%t39)
+    ((40) '%t40) ((41) '%t41) ((42) '%t42) ((43) '%t43)
+    ((44) '%t44) ((45) '%t45) ((46) '%t46) ((47) '%t47)
+    ((48) '%t48) ((49) '%t49) ((50) '%t50) ((51) '%t51)
+    ((52) '%t52) ((53) '%t53) ((54) '%t54) ((55) '%t55)
+    ((56) '%t56) ((57) '%t57) ((58) '%t58) ((59) '%t59)
+    ((60) '%t60) ((61) '%t61) ((62) '%t62) ((63) '%t63)
+    (else (string->symbol (string-append "__anf_t_" (number->string depth))))))
 
 ;;; Collects bindings for non-atomic expressions among a list of arguments.
 ;;; Returns a pair (bindings . atomic-args).
@@ -3758,7 +3775,7 @@
 (define (lir-compile-variable var env)
   (let ((binding (assq var env)))
     (if (not binding)
-        (error "Unbound variable in LIR:" var)
+        (error (string-append "Unbound variable in LIR: " (symbol->string var)) var)
         (let ((info (cdr binding)))
           (cond
             ((number? info)
@@ -7180,6 +7197,10 @@
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
             (emit "    reg_rax = ulisp_write_char(reg_rdi);")
             (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
+           ((or (eq? func 'ulisp_write_string) (string=? fname "ulisp_write_string"))
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
+            (emit "    reg_rax = ulisp_write_string(reg_rdi);")
+            (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
            (else
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
             (emit (string-append "    reg_rax = " fname "();"))
@@ -7207,7 +7228,7 @@
          (emit (string-append "    ulisp_handler_chain = *(void **)(reg_rsp + (" (number->string frame-si) "));"))))
 
       ((%raise)
-       (emit "    if (!ulisp_handler_chain) { fprintf(stderr, \"*** ERROR: unhandled exception\\n\"); exit(1); }")
+       (emit "    if (!ulisp_handler_chain) { fprintf(stderr, \"*** ERROR: unhandled exception: \"); print_scheme_value(reg_rax); exit(1); }")
        (emit "    reg_rdi = reg_rax;")
        (emit "    reg_rsp = *(char **)((char *)ulisp_handler_chain + 8);")
        (emit "    reg_rax = *(uint64_t *)((char *)ulisp_handler_chain + 32);")
@@ -7321,6 +7342,8 @@
     (emit "extern uint64_t ulisp_read_char(void);")
     (emit "extern uint64_t ulisp_peek_char(void);")
     (emit "extern uint64_t ulisp_write_char(uint64_t val);")
+    (emit "extern uint64_t ulisp_write_string(uint64_t val);")
+    (emit "extern void print_scheme_value(uint64_t val);")
     (emit "#if defined(__GNUC__) || defined(__clang__)")
     (emit "#define ULISP_UNUSED __attribute__((unused))")
     (emit "#else")
