@@ -418,7 +418,6 @@
                 (else c)))
             (loop (+ i 1)))
           res))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 0b: Hygienic syntax-rules Macro Expander
 ;;; Conforms to DSN-33 Architecture Specification & Issue #533 (R7RS 4.3)
@@ -817,7 +816,6 @@
                 (loop (cdr fs) (cons (cons name macro-desc) macro-table) res))
               (let ((exp-f (macro-expand-all f macro-table)))
                 (loop (cdr fs) macro-table (cons exp-f res))))))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 1: Syntax Desugaring & Normalization Pass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -1286,7 +1284,6 @@
           (cons 'begin (map desugar-all (cdr expr))))
          (else
           (cons (desugar-all op) (map desugar-all (cdr expr)))))))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 2: Static Scope & Free-Variable Analysis Pass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -1572,7 +1569,6 @@
        (tail-calls-only? var body)
        (tail-calls-only? var (caddr val))))
 
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: CP0 Source-Level Optimization Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -1715,7 +1711,6 @@
      (list 'define (cadr form) (cp0-expr (caddr form))))
     (else
      (cp0-expr form))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3b: Extended Local Value Numbering (LVN) Nanopass
 ;;; Conforms to DSN-33 Architecture Specification (Section 8.2) & Issue #521
@@ -2306,7 +2301,6 @@
      (list 'define (cadr form) (lvn-expr (caddr form) (make-lvn-env))))
     (else
      (lvn-expr form (make-lvn-env)))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 4: ANF (A-Normal Form) Normalization Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -2439,7 +2433,6 @@
      (list 'define (cadr form) (anf-expr-depth (caddr form) 0)))
     (else
      (anf-expr-depth form 0))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 4b: S-Annotator (Abstract Interpretation Type Inference)
 ;;; Conforms to DSN-33 Architecture Specification & Issue #517
@@ -3033,7 +3026,6 @@
     (else
      (abstract-eval-expr form-or-forms '())
      form-or-forms)))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 5b: S-RTyper (Representation Typer & Unboxing Lowering)
 ;;; Conforms to DSN-33 Architecture Specification & Issue #518
@@ -3360,7 +3352,6 @@
                    (map (lambda (e) (rtyper-expr e '())) body)))))
     (else
      (rtyper-expr form-or-forms '()))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 4c: Contification & Local Closure Elimination Nanopass
 ;;; Conforms to DSN-33 Architecture Specification & Issue #522
@@ -3535,7 +3526,6 @@
              (contify-expr main))))
     (else
      (contify-expr form))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: Explicit Closure Conversion Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -3811,7 +3801,6 @@
           (list '%program (reverse (car *lifted-functions*)) final-main)))
       (let ((main-expr (convert-expr ast '())))
         (list '%program (reverse (car *lifted-functions*)) main-expr))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 6b: TBAA & Escape Analysis Nanopass
 ;;; Conforms to DSN-33 Section 8.5 & Issue #525
@@ -4104,7 +4093,6 @@
       ;; Fallback if single expression
       (let ((esc (collect-escaped-vars program #t)))
         (alias-escape-transform-expr program esc '()))))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 6: Low-Level Intermediate Representation (LIR) Generator
 ;;; Conforms to DSN-33 Architecture Specification & ulisp/docs/lir_specification.md
@@ -4122,9 +4110,9 @@
 
 (define (new-safepoint-label!)
   (let* ((cnt (+ (car *safepoint-counter*) 1))
-         (lbl-sym (string->symbol (string-append "__safepoint_" (number->string cnt)))))
+         (lbl-str (string-append "__safepoint_" (number->string cnt))))
     (set-car! *safepoint-counter* cnt)
-    lbl-sym))
+    lbl-str))
 
 (define (record-safepoint! lbl frame-size bitmap)
   (set-car! *lir-safepoints*
@@ -4806,11 +4794,27 @@
          (expr-references-var? (cdr expr) var)))
     (else #f)))
 
+(define (extract-in-place-const op e)
+  (let* ((raw-c (if (integer? (cadr e)) (cadr e) (caddr e)))
+         (is-raw? (memq op '(%raw-add %raw-sub))))
+    (if is-raw? raw-c (* raw-c 4))))
+
+(define (cont-target-all-regs? target-info)
+  (let* ((p-bindings (caddr target-info))
+         (num-args (length p-bindings)))
+    (and (> num-args 0)
+         (let check-regs ((pbs p-bindings))
+           (if (null? pbs) #t
+               (let ((info (cdar pbs)))
+                 (and (or (and (pair? info) (eq? (car info) 'reg))
+                          (memq info '(%rbx %r13 %r14 %r15)))
+                      (check-regs (cdr pbs)))))))))
+
 (define (lir-compile-in-place-cont-call f-name exprs target-info si env)
   (let* ((entry-lbl (cadr target-info))
          (p-bindings (caddr target-info))
          (num-args (length exprs))
-         (p-names (map car p-bindings))
+         (p-names (map car* p-bindings))
          (p-regs (map (lambda (pb)
                         (let ((info (cdr pb)))
                           (if (pair? info) (cdr info) info)))
@@ -4843,13 +4847,14 @@
                     (memq (car e0) '(+ %raw-add))
                     (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
                         (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
-               (let ((c (if (integer? (cadr e0)) (cadr e0) (caddr e0))))
+               (let ((c (extract-in-place-const (car e0) e0)))
                  (emit-lir! (list '%add r0 c))))
               ((and (pair? e0)
                     (memq (car e0) '(- %raw-sub))
                     (eq? (cadr e0) p0)
                     (integer? (caddr e0)))
-               (emit-lir! (list '%sub r0 (caddr e0))))
+               (let ((c (extract-in-place-const (car e0) e0)))
+                 (emit-lir! (list '%sub r0 c))))
               (else
                (lir-compile-expr e0 si env #f)
                (if (not (eq? r0 '%rax))
@@ -4862,13 +4867,14 @@
                     (memq (car e1) '(+ %raw-add))
                     (or (and (eq? (cadr e1) p1) (integer? (caddr e1)))
                         (and (integer? (cadr e1)) (eq? (caddr e1) p1))))
-               (let ((c (if (integer? (cadr e1)) (cadr e1) (caddr e1))))
+               (let ((c (extract-in-place-const (car e1) e1)))
                  (emit-lir! (list '%add r1 c))))
               ((and (pair? e1)
                     (memq (car e1) '(- %raw-sub))
                     (eq? (cadr e1) p1)
                     (integer? (caddr e1)))
-               (emit-lir! (list '%sub r1 (caddr e1))))
+               (let ((c (extract-in-place-const (car e1) e1)))
+                 (emit-lir! (list '%sub r1 c))))
               (else
                (lir-compile-expr e1 si env #f)
                (if (not (eq? r1 '%rax))
@@ -4900,13 +4906,14 @@
                     (memq (car e0) '(+ %raw-add))
                     (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
                         (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
-               (let ((c (if (integer? (cadr e0)) (cadr e0) (caddr e0))))
+               (let ((c (extract-in-place-const (car e0) e0)))
                  (emit-lir! (list '%add r0 c))))
               ((and (pair? e0)
                     (memq (car e0) '(- %raw-sub))
                     (eq? (cadr e0) p0)
                     (integer? (caddr e0)))
-               (emit-lir! (list '%sub r0 (caddr e0))))
+               (let ((c (extract-in-place-const (car e0) e0)))
+                 (emit-lir! (list '%sub r0 c))))
               (else
                (lir-compile-expr e0 si env #f)
                (if (not (eq? r0 '%rax))
@@ -4932,22 +4939,29 @@
                     (memq (car e1) '(+ %raw-add))
                     (or (and (eq? (cadr e1) p1) (integer? (caddr e1)))
                         (and (integer? (cadr e1)) (eq? (caddr e1) p1))))
-               (let ((c (if (integer? (cadr e1)) (cadr e1) (caddr e1))))
+               (let ((c (extract-in-place-const (car e1) e1)))
                  (emit-lir! (list '%add r1 c))))
+              ((and (pair? e1)
+                    (memq (car e1) '(- %raw-sub))
+                    (eq? (cadr e1) p1)
+                    (integer? (caddr e1)))
+               (let ((c (extract-in-place-const (car e1) e1)))
+                 (emit-lir! (list '%sub r1 c))))
               (else
                (lir-compile-expr e1 si env #f)
                (if (not (eq? r1 '%rax))
                    (emit-lir! (list '%mov r1 '%rax)))))
             (emit-lir! (list '%jump entry-lbl (list r0 r1))))
 
-           ;; Case 4: General 2-argument parallel update using %r10 and %rax without stack!
+           ;; Case 4: General 2-argument parallel update: preserve e0 on stack slot si across e1 evaluation
            (else
+            (track-lir-si! si)
             (lir-compile-expr e0 si env #f)
-            (emit-lir! '(%mov %r10 %rax))
+            (emit-lir! (list '%store '%rsp si '%rax))
             (lir-compile-expr e1 (- si 8) env #f)
-            (emit-lir! (list '%mov r0 '%r10))
             (if (not (eq? r1 '%rax))
                 (emit-lir! (list '%mov r1 '%rax)))
+            (emit-lir! (list '%load r0 '%rsp si))
             (emit-lir! (list '%jump entry-lbl (list r0 r1)))))))
 
       ;; === 1-Argument In-Place Update ===
@@ -4960,8 +4974,14 @@
                  (memq (car e0) '(+ %raw-add))
                  (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
                      (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
-            (let ((c (if (integer? (cadr e0)) (cadr e0) (caddr e0))))
+            (let ((c (extract-in-place-const (car e0) e0)))
               (emit-lir! (list '%add r0 c))))
+           ((and (pair? e0)
+                 (memq (car e0) '(- %raw-sub))
+                 (eq? (cadr e0) p0)
+                 (integer? (caddr e0)))
+            (let ((c (extract-in-place-const (car e0) e0)))
+              (emit-lir! (list '%sub r0 c))))
            (else
             (lir-compile-expr e0 si env #f)
             (if (not (eq? r0 '%rax))
@@ -4994,7 +5014,13 @@
                (emit-lir! (list '%jump entry-lbl
                                 (map (lambda (pb)
                                        (let ((p-info (cdr pb)))
-                                         (if (pair? p-info) (cdr p-info) p-info)))
+                                         (cond
+                                           ((and (pair? p-info) (eq? (car p-info) 'reg))
+                                            (cdr p-info))
+                                           ((memq p-info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
+                                            p-info)
+                                           (else
+                                            (list '%stack p-info)))))
                                      p-bindings))))))))))
 
 (define (lir-compile-let bindings body si env tail?)
@@ -5004,12 +5030,13 @@
           (eq? (car body) '%cont-call)
           (let* ((f-name (cadr body))
                  (call-args (cddr body))
-                 (binding-vars (map car bindings))
+                 (binding-vars (map car* bindings))
                  (b-entry (assq f-name env)))
             (and (equal? call-args binding-vars)
                  b-entry
                  (pair? (cdr b-entry))
-                 (eq? (cadr b-entry) '%cont-target))))
+                 (eq? (cadr b-entry) '%cont-target)
+                 (cont-target-all-regs? (cdr b-entry)))))
      (let* ((f-name (cadr body))
             (target-info (cdr (assq f-name env)))
             (exprs (map cadr bindings)))
@@ -5024,7 +5051,9 @@
                  (memq (car val) '(= < <= > >= eq? null? zero? pair? not))
                  (pair? body)
                  (eq? (car body) 'if)
-                 (eq? (cadr body) var))))
+                 (eq? (cadr body) var)
+                 (not (expr-references-var? (caddr body) var))
+                 (not (expr-references-var? (cdddr body) var)))))
      (let* ((b (car bindings))
             (val (cadr b))
             (then-e (caddr body))
@@ -5287,7 +5316,7 @@
          (exit-lbl  (unique-label-sym "L_cont_exit_"))
          (num-params (length params))
          ;; Allocate callee-saved registers (%rbx, %r13, %r14) for loops with <= 3 parameters
-         (use-reg-alloc? (and (> num-params 0) (<= num-params 3)))
+         (use-reg-alloc? #f)
          (callee-saved-regs '(%rbx %r13 %r14)))
     (if use-reg-alloc?
         ;; === Loop Variable Register Allocation Path ===
@@ -5370,14 +5399,7 @@
                (entry-lbl (cadr target-info))
                (p-bindings (caddr target-info))
                (num-args (length args))
-               (all-reg-targets?
-                (let check-regs ((pbs p-bindings))
-                  (if (null? pbs)
-                      (> num-args 0)
-                      (let ((info (cdar pbs)))
-                        (and (or (and (pair? info) (eq? (car info) 'reg))
-                                 (memq info '(%rbx %r13 %r14 %r15)))
-                             (check-regs (cdr pbs))))))))
+               (all-reg-targets? (cont-target-all-regs? target-info)))
           (if (not (= num-args (length p-bindings)))
               (error "Arity mismatch in %cont-call:" f-name)
               (cond
@@ -6011,7 +6033,6 @@
               (block-body (append insts term-inst)))
          (cons '%block (cons lbl (cons params block-body)))))
      order)))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native x86-64 Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & ulisp/docs/lir_specification.md
@@ -6123,11 +6144,14 @@
               ((eq? loc '%rax)
                (emit (string-append "    mov rax, " (operand->str arg))))
               ((and (pair? loc) (eq? (car loc) '%stack))
-               (if (pair? arg)
-                   (begin
-                     (emit (string-append "    mov r10, " (operand->str arg)))
-                     (emit (string-append "    mov " (operand->str loc) ", r10")))
-                   (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg)))))
+               (cond
+                 ((pair? arg)
+                  (emit (string-append "    mov r10, " (operand->str arg)))
+                  (emit (string-append "    mov " (operand->str loc) ", r10")))
+                 ((integer? arg)
+                  (emit (string-append "    mov qword ptr " (operand->str loc) ", " (number->string arg))))
+                 (else
+                  (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg))))))
               (else
                (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg)))))
             (loop (cdr ps) (cdr as) (+ i 1)))))))
@@ -6228,7 +6252,9 @@
        (let ((base (cadr inst))
              (offset (caddr inst))
              (src (cadddr inst)))
-         (emit (string-append "    mov " (mem-op->str base offset) ", " (operand->str src)))))
+         (if (integer? src)
+             (emit (string-append "    mov qword ptr " (mem-op->str base offset) ", " (number->string src)))
+             (emit (string-append "    mov " (mem-op->str base offset) ", " (operand->str src))))))
 
       ((%store-byte)
        (let ((base (cadr inst))
@@ -7256,7 +7282,6 @@
   (emit ".L_str_u8_prefix: .asciz \"#u8(\"")
   (emit ".L_str_vec_prefix: .asciz \"#(\"")
   (emit ""))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native AArch64 (ARM64) Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #503
@@ -8044,7 +8069,6 @@
               (emit "    .xword 0")
               (loop (cdr gvs))))))
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7b: Portable C / WebAssembly Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #504
@@ -8705,7 +8729,6 @@
     (emit "    return reg_rax;")
     (emit "}")
     (emit "")))
-
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 8: Compilation Driver & CLI Entrypoint
 ;;; Conforms to DSN-33 Architecture Specification & Issue #504
@@ -8764,4 +8787,3 @@
            (emit-aarch64 lir gc-mode))
           (else
            (emit-x86-64 lir gc-mode))))))
-

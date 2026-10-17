@@ -22,7 +22,7 @@ ULISP_STAGE1="build/scheme-stage1"
 ULISP_BOOT="bin/ulisp-boot"
 
 make compiler
-cat lib/posix.scm lib/string.scm lib/bytevector.scm lib/vector.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes

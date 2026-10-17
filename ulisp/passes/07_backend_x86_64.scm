@@ -109,11 +109,14 @@
               ((eq? loc '%rax)
                (emit (string-append "    mov rax, " (operand->str arg))))
               ((and (pair? loc) (eq? (car loc) '%stack))
-               (if (pair? arg)
-                   (begin
-                     (emit (string-append "    mov r10, " (operand->str arg)))
-                     (emit (string-append "    mov " (operand->str loc) ", r10")))
-                   (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg)))))
+               (cond
+                 ((pair? arg)
+                  (emit (string-append "    mov r10, " (operand->str arg)))
+                  (emit (string-append "    mov " (operand->str loc) ", r10")))
+                 ((integer? arg)
+                  (emit (string-append "    mov qword ptr " (operand->str loc) ", " (number->string arg))))
+                 (else
+                  (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg))))))
               (else
                (emit (string-append "    mov " (operand->str loc) ", " (operand->str arg)))))
             (loop (cdr ps) (cdr as) (+ i 1)))))))
@@ -214,7 +217,9 @@
        (let ((base (cadr inst))
              (offset (caddr inst))
              (src (cadddr inst)))
-         (emit (string-append "    mov " (mem-op->str base offset) ", " (operand->str src)))))
+         (if (integer? src)
+             (emit (string-append "    mov qword ptr " (mem-op->str base offset) ", " (number->string src)))
+             (emit (string-append "    mov " (mem-op->str base offset) ", " (operand->str src))))))
 
       ((%store-byte)
        (let ((base (cadr inst))

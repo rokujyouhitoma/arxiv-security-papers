@@ -144,14 +144,24 @@
             (loop (+ i 1)
                   (modulo (+ (* h 33) c) 16777213)))))))
 
+(define (%sym-id-taken? sym entries)
+  (if (null? entries)
+      #f
+      (if (eq? (cdr (car entries)) sym)
+          #t
+          (%sym-id-taken? sym (cdr entries)))))
+
 (define (string->symbol str)
   (let ((found (%string-find-symbol str (car *symbol-registry*))))
     (if found
         found
-        (let* ((h (%symbol-hash-str str))
-               (sym (integer->symbol h)))
-          (set-car! *symbol-registry* (cons (cons str sym) (car *symbol-registry*)))
-          sym))))
+        (let loop ((h (%symbol-hash-str str)))
+          (let ((candidate (integer->symbol h)))
+            (if (%sym-id-taken? candidate (car *symbol-registry*))
+                (loop (modulo (+ (* h 33) 1) 16777213))
+                (begin
+                  (set-car! *symbol-registry* (cons (cons str candidate) (car *symbol-registry*)))
+                  candidate)))))))
 
 (define (%symbol-find-string sym entries)
   (if (null? entries)
