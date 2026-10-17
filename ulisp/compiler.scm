@@ -168,6 +168,7 @@
              write-char %write-char write-string %write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
              bytevector? bytevector-length make-bytevector %make-bytevector
+             vector? vector-length make-vector %make-vector
              raise %raise
              %set-heap-ptr! %ptr-tag %ptr-untag
              %to-raw %to-fixnum
@@ -175,12 +176,12 @@
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
-             bytevector-u8-ref
+             bytevector-u8-ref vector-ref
              %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! bytevector-u8-set! %raw-store!)))
+  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store!)))
 
 (define (septop-prim? op)
   (memq op '(%raw-syscall)))
@@ -194,7 +195,7 @@
              zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
              boolean? char? null? not symbol? list?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
-             bytevector? bytevector-length
+             bytevector? bytevector-length vector? vector-length
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
              %raw-add %raw-sub %raw-mul %raw-cmp)))
@@ -842,6 +843,32 @@
                    (desugar-bytevector-append (reverse left))
                    (desugar-bytevector-append rest))))))))
 
+(define (desugar-vector args)
+  (let* ((len (length args))
+         (vec-sym (unique-symbol "vec_")))
+    (let loop ((rest args) (idx 0) (sets '()))
+      (if (null? rest)
+          (list 'let (list (list vec-sym (list '%make-vector len)))
+                (cons 'begin (reverse (cons vec-sym sets))))
+          (loop (cdr rest)
+                (+ idx 1)
+                (cons (list 'vector-set! vec-sym idx (car rest)) sets))))))
+
+(define (desugar-vector-append args)
+  (cond
+    ((null? args) (list '%make-vector 0))
+    ((null? (cdr args)) (car args))
+    ((null? (cddr args)) (list 'vector-append2 (car args) (cadr args)))
+    (else
+     (let* ((len (length args))
+            (half (quotient len 2)))
+       (let loop ((rest args) (i 0) (left '()))
+         (if (< i half)
+             (loop (cdr rest) (+ i 1) (cons (car rest) left))
+             (list 'vector-append2
+                   (desugar-vector-append (reverse left))
+                   (desugar-vector-append rest))))))))
+
 (define (desugar-cond clauses)
   (if (null? clauses)
       #f
@@ -1035,6 +1062,63 @@
                   (list 'let (list (list bv-sym (desugar-all (car args))))
                         (list 'utf8->string-range bv-sym 0 (list 'bytevector-length bv-sym))))
                 (list 'utf8->string-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args))))))
+         ((vector)
+          (desugar-all (desugar-vector (cdr expr))))
+         ((vector-append)
+          (desugar-all (desugar-vector-append (cdr expr))))
+         ((make-vector)
+          (let ((args (cdr expr)))
+            (if (null? (cdr args))
+                (list '%make-vector (desugar-all (car args)))
+                (list 'make-vector-fill (desugar-all (car args)) (desugar-all (cadr args))))))
+         ((vector-copy)
+          (let ((args (cdr expr)))
+            (cond
+              ((null? (cdr args))
+               (let ((v-sym (unique-symbol "v_")))
+                 (list 'let (list (list v-sym (desugar-all (car args))))
+                       (list 'vector-copy-range v-sym 0 (list 'vector-length v-sym)))))
+              ((null? (cddr args))
+               (let ((v-sym (unique-symbol "v_")))
+                 (list 'let (list (list v-sym (desugar-all (car args))))
+                       (list 'vector-copy-range v-sym (desugar-all (cadr args)) (list 'vector-length v-sym)))))
+              (else
+               (list 'vector-copy-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
+         ((vector-copy!)
+          (let ((args (cdr expr)))
+            (if (null? (cdddr args))
+                (let ((from-sym (unique-symbol "from_")))
+                  (list 'let (list (list from-sym (desugar-all (caddr args))))
+                        (list 'vector-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
+                              from-sym 0 (list 'vector-length from-sym))))
+                (list 'vector-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
+                      (desugar-all (caddr args)) (desugar-all (car (cdddr args))) (desugar-all (cadr (cdddr args)))))))
+         ((vector-fill!)
+          (let ((args (cdr expr)))
+            (cond
+              ((null? (cddr args))
+               (let ((v-sym (unique-symbol "v_")))
+                 (list 'let (list (list v-sym (desugar-all (car args))))
+                       (list 'vector-fill-range! v-sym (desugar-all (cadr args)) 0 (list 'vector-length v-sym)))))
+              ((null? (cdddr args))
+               (let ((v-sym (unique-symbol "v_")))
+                 (list 'let (list (list v-sym (desugar-all (car args))))
+                       (list 'vector-fill-range! v-sym (desugar-all (cadr args)) (desugar-all (caddr args)) (list 'vector-length v-sym)))))
+              (else
+               (list 'vector-fill-range! (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)) (desugar-all (cadddr args)))))))
+         ((vector->list)
+          (let ((args (cdr expr)))
+            (cond
+              ((null? (cdr args))
+               (let ((v-sym (unique-symbol "v_")))
+                 (list 'let (list (list v-sym (desugar-all (car args))))
+                       (list 'vector->list-range v-sym 0 (list 'vector-length v-sym)))))
+              ((null? (cddr args))
+               (let ((v-sym (unique-symbol "v_")))
+                 (list 'let (list (list v-sym (desugar-all (car args))))
+                       (list 'vector->list-range v-sym (desugar-all (cadr args)) (list 'vector-length v-sym)))))
+              (else
+               (list 'vector->list-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
          ((list)
           (desugar-all (desugar-list (cdr expr))))
          ((and)
@@ -2561,9 +2645,9 @@
     ((eq? op 'cdr)
      (let ((t (if (pair? arg-types) (car arg-types) (type-top))))
        (type-pair-cdr t)))
-    ((memq op '(string-length bytevector-length bytevector-u8-ref))
+    ((memq op '(string-length bytevector-length bytevector-u8-ref vector-length))
      (type-fixnum))
-    ((memq op '(bytevector?))
+    ((memq op '(bytevector? vector?))
      (type-boolean))
     ((memq op '(make-string string-ref))
      (if (eq? op 'make-string) (type-string) (type-char)))
@@ -3948,6 +4032,10 @@
      (emit-lir! '(%bit-and %rax 7))
      (emit-lir! '(%cmp %rax 7))
      (emit-lir! '(%set-boolean %rax "sete")))
+    ((vector?)
+     (emit-lir! '(%bit-and %rax 7))
+     (emit-lir! '(%cmp %rax 5))
+     (emit-lir! '(%set-boolean %rax "sete")))
     ((write-char %write-char)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! '(%mov %rdi %rax))
@@ -4041,6 +4129,38 @@
        (emit-lir! '(%add %rcx 15))
        (emit-lir! '(%add %rax 8))
        (emit-lir! '(%add %r12 %rax))
+       (emit-lir! '(%mov %rax %rcx))))
+    ((vector-length)
+     (emit-lir! '(%sub %rax 5))
+     (emit-lir! '(%load %rax %rax 0)))
+    ((make-vector %make-vector)
+     (let ((l-loop (unique-label-sym "vec_init_loop"))
+           (l-done (unique-label-sym "vec_init_done")))
+       (emit-lir! '(%sar %rax 2))
+       (emit-lir! '(%mov %rcx %rax))
+       (emit-lir! '(%shl %rax 3))
+       (emit-lir! '(%add %rax 8))
+       (emit-lir! '(%mov %rdx %rax))
+       (emit-lir! '(%shl %rdx 16))
+       (emit-lir! '(%bit-or %rdx 5))
+       (emit-lir! '(%shl %rdx 2))
+       (emit-lir! '(%store %r12 0 %rdx))
+       (emit-lir! '(%mov %rdx %rcx))
+       (emit-lir! '(%shl %rdx 2))
+       (emit-lir! '(%store %r12 8 %rdx))
+       (emit-lir! '(%mov %r10 47))
+       (emit-lir! '(%mov %rdx %rax))
+       (emit-lir! (list '%label l-loop))
+       (emit-lir! (list '%cmp '%rdx 8))
+       (emit-lir! (list '%jump-if-zero l-done))
+       (emit-lir! '(%store %r12 %rdx %r10))
+       (emit-lir! '(%sub %rdx 8))
+       (emit-lir! (list '%jump l-loop))
+       (emit-lir! (list '%label l-done))
+       (emit-lir! '(%mov %rcx %r12))
+       (emit-lir! '(%add %rcx 13))
+       (emit-lir! '(%add %rax 8))
+       (emit-lir! '(%add %r12 %rax))
        (emit-lir! '(%mov %rax %rcx))))))
 
 (define (lir-compile-operand-for-op op e si env)
@@ -4105,6 +4225,13 @@
      (emit-lir! '(%add %rdx 8))
      (emit-lir! (list '%load-byte-zx '%rax '%rdx '%rax))
      (emit-lir! '(%shl %rax 2)))
+    ((vector-ref)
+     (emit-lir! '(%sar %rax 2))
+     (emit-lir! '(%shl %rax 3))
+     (emit-lir! (list '%load '%rdx '%rsp si))
+     (emit-lir! '(%sub %rdx 5))
+     (emit-lir! '(%add %rdx 8))
+     (emit-lir! (list '%load '%rax '%rdx '%rax)))
     ((=)
      (emit-lir! (list '%cmp (list '%stack si) '%rax))
      (emit-lir! '(%set-boolean %rax "sete")))
@@ -4179,6 +4306,16 @@
      (emit-lir! (list '%load '%rcx '%rsp (- si 8)))
      (emit-lir! '(%sar %rcx 2))
      (emit-lir! '(%store-byte %rdx %rcx %al))
+     (emit-lir! '(%mov %rax 63)))
+    ((vector-set!)
+     (emit-lir! '(%mov %r10 %rax))
+     (emit-lir! (list '%load '%rdx '%rsp si))
+     (emit-lir! '(%sub %rdx 5))
+     (emit-lir! '(%add %rdx 8))
+     (emit-lir! (list '%load '%rcx '%rsp (- si 8)))
+     (emit-lir! '(%sar %rcx 2))
+     (emit-lir! '(%shl %rcx 3))
+     (emit-lir! '(%store %rdx %rcx %r10))
      (emit-lir! '(%mov %rax 63)))
     ((%raw-store!)
      (emit-lir! '(%mov %r10 %rax))
@@ -6018,6 +6155,12 @@
   (emit "    call ulisp_print_bytevector")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_bytevector:")
+  (emit "    cmp rax, 5")              ; vector tag
+  (emit "    jne .L_pv_not_vector")
+  (emit "    mov rdi, rbx")
+  (emit "    call ulisp_print_vector")
+  (emit "    jmp .L_pv_done")
+  (emit ".L_pv_not_vector:")
   (emit "    cmp rax, 1")              ; pair tag
   (emit "    jne .L_pv_not_pair")
   (emit "    mov rdi, rbx")
@@ -6183,6 +6326,37 @@
   (emit "    ret")
   (emit "")
   (emit "    .p2align 4")
+  (emit "ulisp_print_vector:")
+  (emit "    push rbx")
+  (emit "    push r12")
+  (emit "    push r13")
+  (emit "    mov rbx, rdi")            ; tagged vector (tag 5)
+  (emit "    lea rdi, [rip + .L_str_vec_prefix]")
+  (emit "    call ulisp_emit_str")
+  (emit "    mov r12, [rbx - 5]")      ; len (fixnum)
+  (emit "    sar r12, 2")              ; raw len
+  (emit "    xor r13, r13")            ; index = 0
+  (emit ".L_pvec_loop:")
+  (emit "    cmp r13, r12")
+  (emit "    jge .L_pvec_done")
+  (emit "    test r13, r13")
+  (emit "    jz .L_pvec_elem")
+  (emit "    mov dil, 32")             ; ' '
+  (emit "    call ulisp_emit_byte")
+  (emit ".L_pvec_elem:")
+  (emit "    mov rdi, [rbx - 5 + 8 + r13*8]")
+  (emit "    call ulisp_print_value")
+  (emit "    inc r13")
+  (emit "    jmp .L_pvec_loop")
+  (emit ".L_pvec_done:")
+  (emit "    mov dil, 41")             ; ')'
+  (emit "    call ulisp_emit_byte")
+  (emit "    pop r13")
+  (emit "    pop r12")
+  (emit "    pop rbx")
+  (emit "    ret")
+  (emit "")
+  (emit "    .p2align 4")
   (emit ".L_unhandled_exn:")
   (emit "    mov rdi, rax")
   (emit "    call ulisp_unhandled_exception")
@@ -6248,6 +6422,7 @@
   (emit ".L_str_symbol: .asciz \"#<symbol>\"")
   (emit ".L_str_unknown: .asciz \"#<unknown>\"")
   (emit ".L_str_u8_prefix: .asciz \"#u8(\"")
+  (emit ".L_str_vec_prefix: .asciz \"#(\"")
   (emit ""))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native AArch64 (ARM64) Backend Code Generator

@@ -136,7 +136,7 @@ test_c: compiler
 
 core: build/ulisp_core.scm
 
-build/ulisp_core.scm: lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm
+build/ulisp_core.scm: lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm
 	@mkdir -p build
 	cat $^ > $@
 

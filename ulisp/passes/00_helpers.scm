@@ -168,6 +168,7 @@
              write-char %write-char write-string %write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
              bytevector? bytevector-length make-bytevector %make-bytevector
+             vector? vector-length make-vector %make-vector
              raise %raise
              %set-heap-ptr! %ptr-tag %ptr-untag
              %to-raw %to-fixnum
@@ -175,12 +176,12 @@
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
-             bytevector-u8-ref
+             bytevector-u8-ref vector-ref
              %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! bytevector-u8-set! %raw-store!)))
+  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store!)))
 
 (define (septop-prim? op)
   (memq op '(%raw-syscall)))
@@ -194,7 +195,7 @@
              zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
              boolean? char? null? not symbol? list?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
-             bytevector? bytevector-length
+             bytevector? bytevector-length vector? vector-length
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
              %raw-add %raw-sub %raw-mul %raw-cmp)))

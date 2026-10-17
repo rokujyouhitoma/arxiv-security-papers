@@ -73,11 +73,14 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
 #define FIXNUM_TAG      0x00
 #define FIXNUM_SHIFT    2
 
-#define PAIR_MASK       0x03
+#define PAIR_MASK       0x07
 #define PAIR_TAG        0x01
 
 #define STRING_MASK     0x07
 #define STRING_TAG      0x03
+
+#define VECTOR_MASK     0x07
+#define VECTOR_TAG      0x05
 
 #define BYTEVECTOR_MASK 0x07
 #define BYTEVECTOR_TAG  0x07
@@ -205,6 +208,15 @@ static void print_scheme_value_raw(uint64_t val) {
         printf(")");
     } else if ((val & STRING_MASK) == STRING_TAG) {
         printf("\"%s\"", (const char *)(val - STRING_TAG));
+    } else if ((val & VECTOR_MASK) == VECTOR_TAG) {
+        uint64_t *base = (uint64_t *)(val - VECTOR_TAG);
+        uint64_t len = base[0] >> 2;
+        printf("#(");
+        for (uint64_t i = 0; i < len; i++) {
+            if (i > 0) printf(" ");
+            print_scheme_value_raw(base[1 + i]);
+        }
+        printf(")");
     } else if ((val & BYTEVECTOR_MASK) == BYTEVECTOR_TAG) {
         uint64_t *base = (uint64_t *)(val - BYTEVECTOR_TAG);
         uint64_t len = base[0] >> 2;

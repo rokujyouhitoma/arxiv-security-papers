@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **536** | O(1) ランダムアクセス配列および高速ハッシュ辞書基盤向け R7RS ベクタ (vector) の完全実装 | Feature | Open (New) | [536-implement-complete-r7rs-vectors-and-indexing.md](536-implement-complete-r7rs-vectors-and-indexing.md) |
 | **537** | コンパイラコンテキスト動的スコープ制御のための R7RS パラメータ (make-parameter / parameterize) の実装 | Feature | Open (New) | [537-implement-r7rs-parameters-and-parameterize.md](537-implement-r7rs-parameters-and-parameterize.md) |
 | **539** | トップレベル定義の完全直列パイプライン分離および直接呼出 (%direct-call) 最適化 | Feature | Open (New) | [539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md](539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md) |
 
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **536** | O(1) ランダムアクセス配列および高速ハッシュ辞書基盤向け R7RS ベクタ (vector) の完全実装 | Feature | 2026-10-17 | [closed/536-implement-complete-r7rs-vectors-and-indexing.md](closed/536-implement-complete-r7rs-vectors-and-indexing.md) |
 | **535** | 低レベルバイナリ・暗号ハッシュ・生パケット解析向け R7RS バイトベクタ (bytevector) 型の実装 | Feature | 2026-10-17 | [closed/535-implement-r7rs-bytevectors-for-binary-security.md](closed/535-implement-r7rs-bytevectors-for-binary-security.md) |
 | **543** | ULisp Portable C バックエンドにおける自己ホスティング・算術LIR出力構文エラーの修正 | Bug | 2026-10-17 | [closed/543-fix-c-backend-syntax-error-in-self-hosting-compiler-emission.md](closed/543-fix-c-backend-syntax-error-in-self-hosting-compiler-emission.md) |
 | **542** | MacOS 向け Portable C バックエンドの互換性強化（Darwin ucontext/mmap対応）とクロスプラットフォームビルド手順書の整備 | Feature | 2026-10-17 | [closed/542-prepare-macos-portability-for-c-backend-and-documentation.md](closed/542-prepare-macos-portability-for-c-backend-and-documentation.md) |

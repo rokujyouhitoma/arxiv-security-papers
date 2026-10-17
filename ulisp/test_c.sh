@@ -44,6 +44,8 @@ assert_c() {
     local code
     if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$expr"
+    elif [[ "$expr" =~ vector ]]; then
+        code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm)"$'\n'"$expr"
     else
         code="(!target c) $expr"
     fi
@@ -169,6 +171,29 @@ assert_c "#u8(65 66 67)" '(string->utf8 "ABC")'
 assert_c '"Hello"' "(utf8->string (bytevector 72 101 108 108 111))"
 assert_c "5" "(bytevector-length (bytevector 0 1 0 2 0))"
 assert_c "0" "(bytevector-u8-ref (bytevector 0 1 0 2 0) 2)"
+
+echo "--- Step 10: R7RS Vectors ---"
+assert_c "#t" "(vector? (make-vector 5))"
+assert_c "#f" '(vector? "hello")'
+assert_c "#f" "(vector? '(1 2 3))"
+assert_c "#f" "(vector? 123)"
+assert_c "10" "(vector-length (make-vector 10))"
+assert_c "0" "(vector-length (make-vector 0))"
+assert_c "#(#f #f #f)" "(make-vector 3)"
+assert_c "#(42 42 42)" "(make-vector 3 42)"
+assert_c "20" "(let ((v (make-vector 3))) (begin (vector-set! v 0 10) (vector-set! v 1 20) (vector-set! v 2 30) (vector-ref v 1)))"
+assert_c "#(10 20 30)" "(let ((v (make-vector 3))) (begin (vector-set! v 0 10) (vector-set! v 1 20) (vector-set! v 2 30) v))"
+assert_c "#(1 2 3)" "(vector 1 2 3)"
+assert_c "#(10 20 30)" "(vector-copy (vector 10 20 30))"
+assert_c "#(20 30)" "(vector-copy (vector 10 20 30 40) 1 3)"
+assert_c "#(9 9 9)" "(let ((v (make-vector 3))) (begin (vector-fill! v 9) v))"
+assert_c "#(1 2 3 4 5)" "(vector-append (vector 1 2) (vector 3 4 5))"
+assert_c "#(0 1 2 3 0)" "(let ((to (make-vector 5 0)) (from (vector 1 2 3))) (begin (vector-copy! to 1 from) to))"
+assert_c "(1 2 3)" "(vector->list (vector 1 2 3))"
+assert_c "(2 3)" "(vector->list (vector 1 2 3 4) 1 3)"
+assert_c "#(1 2 3)" "(list->vector '(1 2 3))"
+assert_c "#(1 #(2 3) 4)" "(vector 1 (vector 2 3) 4)"
+assert_c "2" "(vector-ref (vector-ref (vector 1 (vector 2 3) 4) 1) 0)"
 
 rm -f "$TMP_C" "$TMP_BIN"
 

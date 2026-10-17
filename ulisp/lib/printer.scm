@@ -53,6 +53,17 @@
                (loop (+ i 1)))
              #t)))
      (port-write-char #\) p))
+    ((vector? val)
+     (port-display-string "#(" p)
+     (let ((len (vector-length val)))
+       (let loop ((i 0))
+         (if (< i len)
+             (begin
+               (if (> i 0) (port-write-char #\space p))
+               (port-write (vector-ref val i) p)
+               (loop (+ i 1)))
+             #t)))
+     (port-write-char #\) p))
     (else
      (port-display-string "#<unknown>" p))))
 

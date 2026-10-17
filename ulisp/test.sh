@@ -22,7 +22,7 @@ ULISP_STAGE1="build/scheme-stage1"
 ULISP_BOOT="bin/ulisp-boot"
 
 make compiler
-cat lib/posix.scm lib/string.scm lib/bytevector.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/string.scm lib/bytevector.scm lib/vector.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
@@ -84,6 +84,8 @@ assert() {
         full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ bytevector || "$input" =~ utf8 ]]; then
         full_input="$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$input"
+    elif [[ "$input" =~ vector ]]; then
+        full_input="$(cat lib/string.scm lib/vector.scm)"$'\n'"$input"
     else
         full_input="$input"
     fi
@@ -585,6 +587,31 @@ assert "#u8(65 66 67)" '(string->utf8 "ABC")'
 assert '"Hello"' "(utf8->string (bytevector 72 101 108 108 111))"
 assert "5" "(bytevector-length (bytevector 0 1 0 2 0))"
 assert "0" "(bytevector-u8-ref (bytevector 0 1 0 2 0) 2)"
+
+# --- Step 30: R7RS Vectors (Issue 536) ---
+echo "-- Step 30: Issue 536 R7RS Vectors --"
+assert "#t" "(vector? (make-vector 5))"
+assert "#f" '(vector? "hello")'
+assert "#f" "(vector? '(1 2 3))"
+assert "#f" "(vector? 123)"
+assert "10" "(vector-length (make-vector 10))"
+assert "0" "(vector-length (make-vector 0))"
+assert "#(#f #f #f)" "(make-vector 3)"
+assert "#(42 42 42)" "(make-vector 3 42)"
+assert "20" "(let ((v (make-vector 3))) (begin (vector-set! v 0 10) (vector-set! v 1 20) (vector-set! v 2 30) (vector-ref v 1)))"
+assert "#(10 20 30)" "(let ((v (make-vector 3))) (begin (vector-set! v 0 10) (vector-set! v 1 20) (vector-set! v 2 30) v))"
+assert "#(1 2 3)" "(vector 1 2 3)"
+assert "#(10 20 30)" "(vector-copy (vector 10 20 30))"
+assert "#(20 30)" "(vector-copy (vector 10 20 30 40) 1 3)"
+assert "#(9 9 9)" "(let ((v (make-vector 3))) (begin (vector-fill! v 9) v))"
+assert "#(1 2 3 4 5)" "(vector-append (vector 1 2) (vector 3 4 5))"
+assert "#(0 1 2 3 0)" "(let ((to (make-vector 5 0)) (from (vector 1 2 3))) (begin (vector-copy! to 1 from) to))"
+assert "(1 2 3)" "(vector->list (vector 1 2 3))"
+assert "(2 3)" "(vector->list (vector 1 2 3 4) 1 3)"
+assert "#(1 2 3)" "(list->vector '(1 2 3))"
+assert "#(1 #(2 3) 4)" "(vector 1 (vector 2 3) 4)"
+assert "2" "(vector-ref (vector-ref (vector 1 (vector 2 3) 4) 1) 0)"
+assert "#(100 200)" "(let loop ((i 0) (last-v (vector 0 0))) (if (< i 50) (loop (+ i 1) (vector 100 200)) last-v))"
 
 
 # =======================================================================
