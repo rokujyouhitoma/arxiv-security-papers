@@ -418,6 +418,7 @@
                 (else c)))
             (loop (+ i 1)))
           res))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 0b: Hygienic syntax-rules Macro Expander
 ;;; Conforms to DSN-33 Architecture Specification & Issue #533 (R7RS 4.3)
@@ -816,6 +817,7 @@
                 (loop (cdr fs) (cons (cons name macro-desc) macro-table) res))
               (let ((exp-f (macro-expand-all f macro-table)))
                 (loop (cdr fs) macro-table (cons exp-f res))))))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 1: Syntax Desugaring & Normalization Pass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -1284,6 +1286,7 @@
           (cons 'begin (map desugar-all (cdr expr))))
          (else
           (cons (desugar-all op) (map desugar-all (cdr expr)))))))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 2: Static Scope & Free-Variable Analysis Pass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -1569,6 +1572,7 @@
        (tail-calls-only? var body)
        (tail-calls-only? var (caddr val))))
 
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: CP0 Source-Level Optimization Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -1711,6 +1715,7 @@
      (list 'define (cadr form) (cp0-expr (caddr form))))
     (else
      (cp0-expr form))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3b: Extended Local Value Numbering (LVN) Nanopass
 ;;; Conforms to DSN-33 Architecture Specification (Section 8.2) & Issue #521
@@ -2301,6 +2306,7 @@
      (list 'define (cadr form) (lvn-expr (caddr form) (make-lvn-env))))
     (else
      (lvn-expr form (make-lvn-env)))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 4: ANF (A-Normal Form) Normalization Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -2433,6 +2439,7 @@
      (list 'define (cadr form) (anf-expr-depth (caddr form) 0)))
     (else
      (anf-expr-depth form 0))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 4b: S-Annotator (Abstract Interpretation Type Inference)
 ;;; Conforms to DSN-33 Architecture Specification & Issue #517
@@ -3026,6 +3033,7 @@
     (else
      (abstract-eval-expr form-or-forms '())
      form-or-forms)))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 5b: S-RTyper (Representation Typer & Unboxing Lowering)
 ;;; Conforms to DSN-33 Architecture Specification & Issue #518
@@ -3352,6 +3360,7 @@
                    (map (lambda (e) (rtyper-expr e '())) body)))))
     (else
      (rtyper-expr form-or-forms '()))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 4c: Contification & Local Closure Elimination Nanopass
 ;;; Conforms to DSN-33 Architecture Specification & Issue #522
@@ -3526,6 +3535,7 @@
              (contify-expr main))))
     (else
      (contify-expr form))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: Explicit Closure Conversion Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -3801,6 +3811,7 @@
           (list '%program (reverse (car *lifted-functions*)) final-main)))
       (let ((main-expr (convert-expr ast '())))
         (list '%program (reverse (car *lifted-functions*)) main-expr))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 6b: TBAA & Escape Analysis Nanopass
 ;;; Conforms to DSN-33 Section 8.5 & Issue #525
@@ -4093,6 +4104,7 @@
       ;; Fallback if single expression
       (let ((esc (collect-escaped-vars program #t)))
         (alias-escape-transform-expr program esc '()))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 6: Low-Level Intermediate Representation (LIR) Generator
 ;;; Conforms to DSN-33 Architecture Specification & ulisp/docs/lir_specification.md
@@ -4786,8 +4798,223 @@
             (loop (+ k 1)
                   (if is-ptr (+ bitmap (power-of-2 k)) bitmap)))))))
 
+(define (expr-references-var? expr var)
+  (cond
+    ((eq? expr var) #t)
+    ((pair? expr)
+     (or (expr-references-var? (car expr) var)
+         (expr-references-var? (cdr expr) var)))
+    (else #f)))
+
+(define (lir-compile-in-place-cont-call f-name exprs target-info si env)
+  (let* ((entry-lbl (cadr target-info))
+         (p-bindings (caddr target-info))
+         (num-args (length exprs))
+         (p-names (map car p-bindings))
+         (p-regs (map (lambda (pb)
+                        (let ((info (cdr pb)))
+                          (if (pair? info) (cdr info) info)))
+                      p-bindings)))
+    (cond
+      ;; === 2-Argument Hot Loop In-Place Shuffle ===
+      ((= num-args 2)
+       (let* ((p0 (car p-names))
+              (p1 (cadr p-names))
+              (r0 (car p-regs))
+              (r1 (cadr p-regs))
+              (e0 (car exprs))
+              (e1 (cadr exprs))
+              ;; Check if e0 references p1
+              (e0-refs-p1? (expr-references-var? e0 p1))
+              ;; Check if e1 references p0
+              (e1-refs-p0? (expr-references-var? e1 p0)))
+         (cond
+           ;; Case 1: Swap (loop p1 p0)
+           ((and (eq? e0 p1) (eq? e1 p0))
+            (emit-lir! (list '%mov '%r10 r0))
+            (emit-lir! (list '%mov r0 r1))
+            (emit-lir! (list '%mov r1 '%r10))
+            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+
+           ;; Case 1b: Identity on one variable
+           ((and (eq? e1 p1) (not e0-refs-p1?))
+            (cond
+              ((and (pair? e0)
+                    (memq (car e0) '(+ %raw-add))
+                    (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
+                        (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
+               (let ((c (if (integer? (cadr e0)) (cadr e0) (caddr e0))))
+                 (emit-lir! (list '%add r0 c))))
+              ((and (pair? e0)
+                    (memq (car e0) '(- %raw-sub))
+                    (eq? (cadr e0) p0)
+                    (integer? (caddr e0)))
+               (emit-lir! (list '%sub r0 (caddr e0))))
+              (else
+               (lir-compile-expr e0 si env #f)
+               (if (not (eq? r0 '%rax))
+                   (emit-lir! (list '%mov r0 '%rax)))))
+            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+
+           ((and (eq? e0 p0) (not e1-refs-p0?))
+            (cond
+              ((and (pair? e1)
+                    (memq (car e1) '(+ %raw-add))
+                    (or (and (eq? (cadr e1) p1) (integer? (caddr e1)))
+                        (and (integer? (cadr e1)) (eq? (caddr e1) p1))))
+               (let ((c (if (integer? (cadr e1)) (cadr e1) (caddr e1))))
+                 (emit-lir! (list '%add r1 c))))
+              ((and (pair? e1)
+                    (memq (car e1) '(- %raw-sub))
+                    (eq? (cadr e1) p1)
+                    (integer? (caddr e1)))
+               (emit-lir! (list '%sub r1 (caddr e1))))
+              (else
+               (lir-compile-expr e1 si env #f)
+               (if (not (eq? r1 '%rax))
+                   (emit-lir! (list '%mov r1 '%rax)))))
+            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+
+           ;; Case 2: DAG dependency (e1 depends on p0, e0 does NOT depend on p1)
+           ;; e.g. e0 = (+ i 1), e1 = (+ acc i). Evaluate e1 into r1 first, then e0 into r0!
+           ((and e1-refs-p0? (not e0-refs-p1?))
+            ;; Fast path: e1 is (%raw-add i acc) or (+ acc i) -> direct in-place add!
+            (cond
+              ((and (pair? e1)
+                    (memq (car e1) '(+ %raw-add))
+                    (or (and (eq? (cadr e1) p0) (eq? (caddr e1) p1))
+                        (and (eq? (cadr e1) p1) (eq? (caddr e1) p0))))
+               (emit-lir! (list '%add r1 r0)))
+              ((and (pair? e1)
+                    (memq (car e1) '(- %raw-sub))
+                    (eq? (cadr e1) p1)
+                    (eq? (caddr e1) p0))
+               (emit-lir! (list '%sub r1 r0)))
+              (else
+               (lir-compile-expr e1 si env #f)
+               (if (not (eq? r1 '%rax))
+                   (emit-lir! (list '%mov r1 '%rax)))))
+            ;; Now evaluate e0 into r0 in-place!
+            (cond
+              ((and (pair? e0)
+                    (memq (car e0) '(+ %raw-add))
+                    (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
+                        (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
+               (let ((c (if (integer? (cadr e0)) (cadr e0) (caddr e0))))
+                 (emit-lir! (list '%add r0 c))))
+              ((and (pair? e0)
+                    (memq (car e0) '(- %raw-sub))
+                    (eq? (cadr e0) p0)
+                    (integer? (caddr e0)))
+               (emit-lir! (list '%sub r0 (caddr e0))))
+              (else
+               (lir-compile-expr e0 si env #f)
+               (if (not (eq? r0 '%rax))
+                   (emit-lir! (list '%mov r0 '%rax)))))
+            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+
+           ;; Case 3: DAG dependency (e0 depends on p1, e1 does NOT depend on p0)
+           ;; Evaluate e0 into r0 first, then e1 into r1!
+           ((and e0-refs-p1? (not e1-refs-p0?))
+            (cond
+              ((and (pair? e0)
+                    (memq (car e0) '(+ %raw-add))
+                    (or (and (eq? (cadr e0) p0) (eq? (caddr e0) p1))
+                        (and (eq? (cadr e0) p1) (eq? (caddr e0) p0))))
+               (emit-lir! (list '%add r0 r1)))
+              (else
+               (lir-compile-expr e0 si env #f)
+               (if (not (eq? r0 '%rax))
+                   (emit-lir! (list '%mov r0 '%rax)))))
+            ;; Now evaluate e1 into r1 in-place!
+            (cond
+              ((and (pair? e1)
+                    (memq (car e1) '(+ %raw-add))
+                    (or (and (eq? (cadr e1) p1) (integer? (caddr e1)))
+                        (and (integer? (cadr e1)) (eq? (caddr e1) p1))))
+               (let ((c (if (integer? (cadr e1)) (cadr e1) (caddr e1))))
+                 (emit-lir! (list '%add r1 c))))
+              (else
+               (lir-compile-expr e1 si env #f)
+               (if (not (eq? r1 '%rax))
+                   (emit-lir! (list '%mov r1 '%rax)))))
+            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+
+           ;; Case 4: General 2-argument parallel update using %r10 and %rax without stack!
+           (else
+            (lir-compile-expr e0 si env #f)
+            (emit-lir! '(%mov %r10 %rax))
+            (lir-compile-expr e1 (- si 8) env #f)
+            (emit-lir! (list '%mov r0 '%r10))
+            (if (not (eq? r1 '%rax))
+                (emit-lir! (list '%mov r1 '%rax)))
+            (emit-lir! (list '%jump entry-lbl (list r0 r1)))))))
+
+      ;; === 1-Argument In-Place Update ===
+      ((= num-args 1)
+       (let ((r0 (car p-regs))
+             (p0 (car p-names))
+             (e0 (car exprs)))
+         (cond
+           ((and (pair? e0)
+                 (memq (car e0) '(+ %raw-add))
+                 (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
+                     (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
+            (let ((c (if (integer? (cadr e0)) (cadr e0) (caddr e0))))
+              (emit-lir! (list '%add r0 c))))
+           (else
+            (lir-compile-expr e0 si env #f)
+            (if (not (eq? r0 '%rax))
+                (emit-lir! (list '%mov r0 '%rax)))))
+         (emit-lir! (list '%jump entry-lbl (list r0)))))
+
+      ;; === Fallback for >= 3 arguments using stack-free %cont-call ===
+      (else
+       (let loop ((es exprs) (curr-si si) (temp-sis '()))
+         (if (pair? es)
+             (begin
+               (track-lir-si! curr-si)
+               (lir-compile-expr (car es) curr-si env #f)
+               (emit-lir! (list '%store '%rsp curr-si '%rax))
+               (loop (cdr es) (- curr-si 8) (cons curr-si temp-sis)))
+             (begin
+               (let xfer ((ts (reverse temp-sis)) (pbs p-bindings))
+                 (if (and (pair? ts) (pair? pbs))
+                     (let ((t-si (car ts))
+                           (p-info (cdar pbs)))
+                       (cond
+                         ((and (pair? p-info) (eq? (car p-info) 'reg))
+                          (emit-lir! (list '%load (cdr p-info) '%rsp t-si)))
+                         ((memq p-info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
+                          (emit-lir! (list '%load p-info '%rsp t-si)))
+                         (else
+                          (emit-lir! (list '%load '%rdx '%rsp t-si))
+                          (emit-lir! (list '%store '%rsp p-info '%rdx))))
+                       (xfer (cdr ts) (cdr pbs)))))
+               (emit-lir! (list '%jump entry-lbl
+                                (map (lambda (pb)
+                                       (let ((p-info (cdr pb)))
+                                         (if (pair? p-info) (cdr p-info) p-info)))
+                                     p-bindings))))))))))
+
 (define (lir-compile-let bindings body si env tail?)
   (cond
+    ;; In-place Tail Loop Argument Shuffle: (let ((t0 e0) (t1 e1) ...) (%cont-call loop t0 t1 ...))
+    ((and (pair? body)
+          (eq? (car body) '%cont-call)
+          (let* ((f-name (cadr body))
+                 (call-args (cddr body))
+                 (binding-vars (map car bindings))
+                 (b-entry (assq f-name env)))
+            (and (equal? call-args binding-vars)
+                 b-entry
+                 (pair? (cdr b-entry))
+                 (eq? (cadr b-entry) '%cont-target))))
+     (let* ((f-name (cadr body))
+            (target-info (cdr (assq f-name env)))
+            (exprs (map cadr bindings)))
+       (lir-compile-in-place-cont-call f-name exprs target-info si env)))
+
     ;; Flag / Branch Fusion on ANF: (let ((var (cmp-or-pred-expr ...))) (if var then-e else-e))
     ((and (= (length bindings) 1)
           (let* ((b (car bindings))
@@ -5154,30 +5381,9 @@
           (if (not (= num-args (length p-bindings)))
               (error "Arity mismatch in %cont-call:" f-name)
               (cond
-                ;; === Fast Register-Only Transfer Path (1 or 2 args) ===
-                ((and all-reg-targets? (= num-args 1))
-                 (let ((dst-reg (let ((info (cdar p-bindings)))
-                                  (if (pair? info) (cdr info) info))))
-                   (lir-compile-expr (car args) si env #f)
-                   (if (not (eq? dst-reg '%rax))
-                       (emit-lir! (list '%mov dst-reg '%rax)))
-                   (emit-lir! (list '%jump entry-lbl (list dst-reg)))))
-
-                ((and all-reg-targets? (= num-args 2))
-                 (let* ((dst-reg0 (let ((info (cdr (car p-bindings))))
-                                    (if (pair? info) (cdr info) info)))
-                        (dst-reg1 (let ((info (cdr (cadr p-bindings))))
-                                    (if (pair? info) (cdr info) info))))
-                   ;; Evaluate arg0 into %rax, then save to scratch %r10
-                   (lir-compile-expr (car args) si env #f)
-                   (emit-lir! '(%mov %r10 %rax))
-                   ;; Evaluate arg1 into %rax
-                   (lir-compile-expr (cadr args) (- si 8) env #f)
-                   ;; Transfer both to target registers!
-                   (emit-lir! (list '%mov dst-reg0 '%r10))
-                   (if (not (eq? dst-reg1 '%rax))
-                       (emit-lir! (list '%mov dst-reg1 '%rax)))
-                   (emit-lir! (list '%jump entry-lbl (list dst-reg0 dst-reg1)))))
+                ;; === In-Place / Register-Only Transfer Path ===
+                (all-reg-targets?
+                 (lir-compile-in-place-cont-call f-name args target-info si env))
 
                 (else
                  ;; === General Transfer Path (sequential stack evaluation) ===
@@ -5805,6 +6011,7 @@
               (block-body (append insts term-inst)))
          (cons '%block (cons lbl (cons params block-body)))))
      order)))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native x86-64 Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & ulisp/docs/lir_specification.md
@@ -7049,6 +7256,7 @@
   (emit ".L_str_u8_prefix: .asciz \"#u8(\"")
   (emit ".L_str_vec_prefix: .asciz \"#(\"")
   (emit ""))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native AArch64 (ARM64) Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #503
@@ -7836,6 +8044,7 @@
               (emit "    .xword 0")
               (loop (cdr gvs))))))
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7b: Portable C / WebAssembly Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #504
@@ -8496,6 +8705,7 @@
     (emit "    return reg_rax;")
     (emit "}")
     (emit "")))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 8: Compilation Driver & CLI Entrypoint
 ;;; Conforms to DSN-33 Architecture Specification & Issue #504
@@ -8554,3 +8764,4 @@
            (emit-aarch64 lir gc-mode))
           (else
            (emit-x86-64 lir gc-mode))))))
+

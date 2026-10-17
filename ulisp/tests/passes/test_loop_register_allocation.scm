@@ -67,10 +67,15 @@
     (assert-true "callee-saved registers %rbx and %r13 are restored after loop"
                  (= (length restored-loads) 2)))
 
-  ;; 4. Verify variable reads use register moves instead of stack loads
-  (let ((var-moves (filter (lambda (i) (and (pair? i) (eq? (car i) '%mov) (memq (caddr i) '(%rbx %r13)))) main-body)))
+  ;; 4. Verify variable reads use direct registers (%rbx and %r13) instead of stack loads
+  (let ((var-uses (filter (lambda (i) (and (pair? i)
+                                           (or (and (eq? (car i) '%mov) (memq (caddr i) '(%rbx %r13)))
+                                               (and (eq? (car i) '%cmp) (memq (cadr i) '(%rbx %r13)))
+                                               (and (eq? (car i) '%add) (or (memq (cadr i) '(%rbx %r13))
+                                                                            (memq (caddr i) '(%rbx %r13)))))))
+                          main-body)))
     (assert-true "variables i and acc are read directly from %rbx and %r13"
-                 (>= (length var-moves) 2)))
+                 (>= (length var-uses) 2)))
 
   ;; 5. Emit x86-64 assembly to build/test_loop_reg.s
   (with-output-to-file "build/test_loop_reg.s"

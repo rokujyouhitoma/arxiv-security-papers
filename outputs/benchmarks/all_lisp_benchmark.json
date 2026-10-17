@@ -1,0 +1,281 @@
+{
+  "timestamp": "2026-10-17 19:44:53",
+  "system": {
+    "os": "Linux",
+    "arch": "x86_64",
+    "processor": "x86_64",
+    "python": "3.12.3"
+  },
+  "workloads": [
+    {
+      "id": "loop_sum",
+      "title": "Hot Loop Accumulation (1,000,000 iters)",
+      "description": "Tail-recursive loop accumulation testing branch prediction and register allocation",
+      "expected": "499999500000",
+      "iterations": 5,
+      "results": {
+        "ilisp": {
+          "mean": 7409.923560806783,
+          "std": 267.20527868789185,
+          "out": "499999500000",
+          "valid": true
+        },
+        "ulisp_x86": {
+          "mean": 2.621640806319192,
+          "std": 0.194820566001131,
+          "out": "499999500000",
+          "valid": true,
+          "compile_ms": 105.74337298749015
+        },
+        "ulisp_c": {
+          "mean": 0.5447200033813715,
+          "std": 0.08305762512595503,
+          "out": "499999500000",
+          "valid": true,
+          "compile_ms": 121.37032300233841
+        },
+        "gauche": {
+          "mean": 27.772175997961313,
+          "std": 1.020643721957883,
+          "out": "499999500000",
+          "valid": true
+        },
+        "guile": {
+          "mean": 154.0450259926729,
+          "std": 16.419514874540372,
+          "out": "499999500000",
+          "valid": true
+        },
+        "chibi": {
+          "mean": 248.39227300835773,
+          "std": 2.9442869645113525,
+          "out": "499999500000",
+          "valid": true
+        }
+      },
+      "speedups_vs_ilisp": {
+        "ulisp_x86": 2826.4450045734466,
+        "ulisp_c": 13603.178724499527,
+        "gauche": 266.8110543930993,
+        "guile": 48.10232276606733,
+        "chibi": 29.831538119374024
+      }
+    },
+    {
+      "id": "fib_rec",
+      "title": "Recursive Fibonacci (fib 25)",
+      "description": "Deep call tree testing function call overhead, stack frame management, and register spilling",
+      "expected": "75025",
+      "iterations": 5,
+      "results": {
+        "ilisp": {
+          "mean": 2018.8686385925394,
+          "std": 52.298590092476815,
+          "out": "75025",
+          "valid": true
+        },
+        "ulisp_x86": {
+          "mean": 1.1549742077477276,
+          "std": 0.11743041794364954,
+          "out": "75025",
+          "valid": true,
+          "compile_ms": 105.15075299190357
+        },
+        "ulisp_c": {
+          "mean": 1.4106002112384886,
+          "std": 0.09344530140837157,
+          "out": "75025",
+          "valid": true,
+          "compile_ms": 129.38454200048
+        },
+        "gauche": {
+          "mean": 16.681009210878983,
+          "std": 0.6618448418710016,
+          "out": "75025",
+          "valid": true
+        },
+        "guile": {
+          "mean": 33.848819392733276,
+          "std": 1.2421008139639504,
+          "out": "75025",
+          "valid": true
+        },
+        "chibi": {
+          "mean": 229.2620643915143,
+          "std": 7.324924609505751,
+          "out": "75025",
+          "valid": true
+        }
+      },
+      "speedups_vs_ilisp": {
+        "ulisp_x86": 1747.9772492317904,
+        "ulisp_c": 1431.2124884909801,
+        "gauche": 121.02796737717033,
+        "guile": 59.64369436843501,
+        "chibi": 8.80594285823444
+      }
+    },
+    {
+      "id": "closure_iter",
+      "title": "Higher-Order Closure Iteration (200,000 iters)",
+      "description": "Passing lambda closures across iterations testing closure captures and indirect calls",
+      "expected": "200000",
+      "iterations": 5,
+      "results": {
+        "ilisp": {
+          "mean": 1901.6479972051457,
+          "std": 42.86004878605286,
+          "out": "200000",
+          "valid": true
+        },
+        "ulisp_x86": {
+          "mean": 1.1406129924580455,
+          "std": 0.1233549914684904,
+          "out": "200000",
+          "valid": true,
+          "compile_ms": 99.18743799789809
+        },
+        "ulisp_c": {
+          "mean": 1.3663012068718672,
+          "std": 0.07217362351791957,
+          "out": "200000",
+          "valid": true,
+          "compile_ms": 129.1324089979753
+        },
+        "gauche": {
+          "mean": 17.064026003936306,
+          "std": 0.5874313039731262,
+          "out": "200000",
+          "valid": true
+        },
+        "guile": {
+          "mean": 51.621812995290384,
+          "std": 0.4411744817691107,
+          "out": "200000",
+          "valid": true
+        },
+        "chibi": {
+          "mean": 224.40138180973008,
+          "std": 4.2611823637901365,
+          "out": "200000",
+          "valid": true
+        }
+      },
+      "speedups_vs_ilisp": {
+        "ulisp_x86": 1667.2157951726058,
+        "ulisp_c": 1391.8219406092376,
+        "gauche": 111.44193033733518,
+        "guile": 36.83807070818374,
+        "chibi": 8.474315005856573
+      }
+    },
+    {
+      "id": "poly_loop",
+      "title": "Polynomial 3x^2+5x+7 Loop (1,000 iters)",
+      "description": "Multi-variable arithmetic evaluation testing ALU pipeline and register pressure",
+      "expected": "1001005000",
+      "iterations": 5,
+      "results": {
+        "ilisp": {
+          "mean": 83.16235419479199,
+          "std": 2.721487118961783,
+          "out": "1001005000",
+          "valid": true
+        },
+        "ulisp_x86": {
+          "mean": 0.5364017968531698,
+          "std": 0.08979820281764973,
+          "out": "999002",
+          "valid": false,
+          "compile_ms": 104.17236801004037
+        },
+        "ulisp_c": {
+          "mean": 0.6363696069456637,
+          "std": 0.12189606737993924,
+          "out": "999002",
+          "valid": false,
+          "compile_ms": 128.91938802204095
+        },
+        "gauche": {
+          "mean": 13.936004403512925,
+          "std": 0.5081431412037675,
+          "out": "1001005000",
+          "valid": true
+        },
+        "guile": {
+          "mean": 8.740848390152678,
+          "std": 0.44899759266755557,
+          "out": "1001005000",
+          "valid": true
+        },
+        "chibi": {
+          "mean": 218.05101060308516,
+          "std": 3.2792684948092434,
+          "out": "1001005000",
+          "valid": true
+        }
+      },
+      "speedups_vs_ilisp": {
+        "ulisp_x86": 155.03742657587733,
+        "ulisp_c": 130.6824733411456,
+        "gauche": 5.967446033084547,
+        "guile": 9.514219957010303,
+        "chibi": 0.38138944628039867
+      }
+    },
+    {
+      "id": "list_traverse",
+      "title": "List Construction & Traversal (50,000 elements)",
+      "description": "Dynamic cons pair allocation and sequential cdr traversal testing heap allocation & GC",
+      "expected": "1250025000",
+      "iterations": 5,
+      "results": {
+        "ilisp": {
+          "mean": 841.1508721997961,
+          "std": 41.01907778107794,
+          "out": "1250025000",
+          "valid": true
+        },
+        "ulisp_x86": {
+          "mean": 1.2840363953728229,
+          "std": 0.240724190649634,
+          "out": "1250025000",
+          "valid": true,
+          "compile_ms": 103.8372440089006
+        },
+        "ulisp_c": {
+          "mean": 1.2735227996017784,
+          "std": 0.06643535006107112,
+          "out": "1250025000",
+          "valid": true,
+          "compile_ms": 132.80196697451174
+        },
+        "gauche": {
+          "mean": 14.662181597668678,
+          "std": 0.5809911438901222,
+          "out": "1250025000",
+          "valid": true
+        },
+        "guile": {
+          "mean": 23.353754199342802,
+          "std": 2.391417201864911,
+          "out": "1250025000",
+          "valid": true
+        },
+        "chibi": {
+          "mean": 222.8327433927916,
+          "std": 4.220559189178281,
+          "out": "1250025000",
+          "valid": true
+        }
+      },
+      "speedups_vs_ilisp": {
+        "ulisp_x86": 655.0833568510852,
+        "ulisp_c": 660.4914120601674,
+        "gauche": 57.36873920137104,
+        "guile": 36.01780103618059,
+        "chibi": 3.7748082233905955
+      }
+    }
+  ]
+}

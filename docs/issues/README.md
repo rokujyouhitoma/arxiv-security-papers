@@ -6,8 +6,7 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **546** | ULisp AOT x86における末尾ループ引数インプレース更新 (In-place Tail Loop Argument Shuffle) の最適化 | Feature | Open (New) | [546-implement-in-place-tail-loop-argument-shuffle-optimization.md](546-implement-in-place-tail-loop-argument-shuffle-optimization.md) |
-| **539** | トップレベル定義の完全直列パイプライン分離および直接呼出 (%direct-call) 最適化 | Feature | Closed (Fixed) | [539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md](closed/539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md) |
+| - | *現在対応中のオープン Issue はありません* | - | - | - |
 
 ---
 
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **546** | ULisp AOT x86における末尾ループ引数インプレース更新 (In-place Tail Loop Argument Shuffle) の最適化 | Feature | 2026-10-17 | [closed/546-implement-in-place-tail-loop-argument-shuffle-optimization.md](closed/546-implement-in-place-tail-loop-argument-shuffle-optimization.md) |
 | **545** | ULisp AOT x86における条件分岐融合 (Flag / Branch Fusion) によるブール値実体化の完全排除 | Feature | 2026-10-17 | [closed/545-implement-condition-branch-flag-fusion.md](closed/545-implement-condition-branch-flag-fusion.md) |
 | **544** | ULisp AOT x86における末尾再帰ループ変数の汎用レジスタピン留め割付 | Feature | 2026-10-17 | [closed/544-implement-loop-variable-register-allocation.md](closed/544-implement-loop-variable-register-allocation.md) |
 | **537** | コンパイラコンテキスト動的スコープ制御のための R7RS パラメータ (make-parameter / parameterize) の実装 | Feature | 2026-10-17 | [closed/537-implement-r7rs-parameters-and-parameterize.md](closed/537-implement-r7rs-parameters-and-parameterize.md) |

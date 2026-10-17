@@ -98,6 +98,23 @@ test_branch_fusion: build/compiler_passes.scm
 	@res=$$(./build/test_predicates_fusion); echo "Output: $$res"; test "$$res" = "255"
 	@echo "SUCCESS: branch fusion predicates output 255 (1+2+4+8+16+32+64+128) matches expected!"
 
+test_inplace_shuffle: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_inplace_shuffle.scm > build/test_inplace_shuffle_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_inplace_shuffle_runner.scm
+	$(CC) $(CFLAGS_JIT) -o build/test_inplace_shuffle runtime.c build/test_inplace_shuffle.s
+	@echo "=== Executing compiled inplace shuffle loop_sum binary ==="
+	@res=$$(./build/test_inplace_shuffle); echo "Output: $$res"; test "$$res" = "499999500000"
+	@echo "SUCCESS: inplace shuffle loop_sum output 499999500000 matches expected exactly!"
+	$(CC) $(CFLAGS_JIT) -o build/test_swap_loop runtime.c build/test_swap_loop.s
+	@echo "=== Executing compiled swap_loop binary ==="
+	@res=$$(./build/test_swap_loop); echo "Output: $$res"; test "$$res" = "10"
+	@echo "SUCCESS: swap_loop output 10 (swap 10 20 -> 20 10 -> returns b=10) matches expected exactly!"
+	$(CC) $(CFLAGS_JIT) -o build/test_countdown runtime.c build/test_countdown.s
+	@echo "=== Executing compiled countdown binary ==="
+	@res=$$(./build/test_countdown); echo "Output: $$res"; test "$$res" = "5050"
+	@echo "SUCCESS: countdown sum(1..100) output 5050 matches expected exactly!"
+
 test_lir: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_lir.scm > build/test_lir_runner.scm
