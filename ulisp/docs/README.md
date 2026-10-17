@@ -27,6 +27,11 @@
    - 3 段階ブートストラップ不動点検証（`diff stage2.s stage3.s == 0` / `bootstrap.sh`）
    - ファーストクラス継続 & dynamic-wind テスト（`test_call_cc.scm`）
    - Mytkowicz バイアス排除 差分テスト（`tools/differential_test_ulisp.py`）
+5. [クロスプラットフォーム・コンパイル＆ビルド手順書 (macOS / Linux / BSD)](PORTABLE_BUILD_GUIDE.md)
+   - Portable C バックエンド (`passes/07_backend_c.scm`) の利用方法
+   - macOS (Apple Silicon / Intel Mac) および Linux/BSD でのコンパイル・ビルド・実行手順
+   - `(!target c)` ディレクティブによるワンライナー生成と Clang/GCC によるネイティブバイナリ作成
+   - メモリモデル、TCO、Darwin 固有のクラッシュハンドラ・`mmap` 互換性
 
 ---
 

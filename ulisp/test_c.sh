@@ -12,7 +12,12 @@ else
     PYTHON_BIN="python3"
 fi
 ILISP="${ILISP:-$PYTHON_BIN -m ilisp}"
-CC="${CC:-gcc}"
+OS_NAME="$(uname -s)"
+if [ "$OS_NAME" = "Darwin" ]; then
+    CC="${CC:-clang}"
+else
+    CC="${CC:-gcc}"
+fi
 CFLAGS="-Wall -Wextra -Werror -O2"
 
 TMP_C="build/tmp_c_test.c"

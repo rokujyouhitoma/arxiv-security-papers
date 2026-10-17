@@ -8,6 +8,7 @@
   - [低レベル IR (LIR) 命令セット仕様書](docs/lir_specification.md)
   - [ファーストクラス継続 & dynamic-wind 詳細技術仕様書](docs/continuations_and_unwind.md)
   - [テストおよび検証ガイド](docs/testing_guide.md)
+  - [クロスプラットフォーム・コンパイル＆ビルド手順書 (macOS / Linux / BSD)](docs/PORTABLE_BUILD_GUIDE.md)
 
 ---
 
@@ -24,18 +25,22 @@
 ```
 
 ULisp は将来的に **ILisp の「Backend B: Native AOT コンパイラ」** として結合され、ILisp/ALisp のコードを外部依存ゼロの単一 ELF バイナリへ直接コンパイルします。
+また、**Portable C バックエンド (`(!target c)`)** により、macOS (Apple Silicon / Intel Mac) や BSD など Linux 以外の OS 環境でも Clang/GCC を通じてネイティブバイナリを容易にビルド・実行できます。
 
 ---
 
 ## 2. クイックスタート
 
 ```bash
-# Phase 1〜7 テストスイートの実行
+# Phase 1〜7 テストスイートの実行 (Linux x86-64 ネイティブ)
 cd ulisp
 make test
 
 # R7RS ファーストクラス継続 & dynamic-wind テスト (7 シナリオ 100% PASS)
 make test_call_cc
+
+# Portable C バックエンド 全 42 テスト実行 (macOS / Linux 共通)
+make test_c
 
 # 3段階セルフホスティングブートストラップ連鎖および不動点検証 (シード駆動 Fast Bootstrap: ~15秒)
 make bootstrap
@@ -46,9 +51,11 @@ FULL_BOOTSTRAP=1 make bootstrap
 # Mytkowicz バイアス排除 差分テスト (Gauche / Chibi / Chez 100% 一致)
 python3 tools/differential_test_ulisp.py
 
-# 整数 42 のコンパイル＆実行デモ
+# 整数 42 のコンパイル＆実行デモ (x86-64 ネイティブ / C バックエンド)
 make run_42
+make run_c_42
 ```
+
 
 ---
 

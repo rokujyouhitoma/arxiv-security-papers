@@ -1,4 +1,6 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,19 +12,27 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#ifndef MAP_ANONYMOUS
+#if defined(MAP_ANON)
+#define MAP_ANONYMOUS MAP_ANON
+#else
+#define MAP_ANONYMOUS 0x20
+#endif
+#endif
+
 /* =======================================================================
- * [DEPRECATED / LEGACY REFERENCE ONLY]
- * ULisp Thin Debug Runtime (Conforms to DSN-33 / Issue 494)
- * NOTE: As of Issue 516 / DSN-36, ULisp has fully transitioned to a 100%
- * Pure Scheme Bare-Metal Freestanding architecture (-nostdlib -static).
- * All I/O, memory mapping (mmap), and formatting are now performed natively
- * via Scheme (lib/posix.scm) and assembly syscalls without C or libc.
- * This file is retained only for legacy reference and debugging fallback.
+ * ULisp Thin C Debug & Portable Runtime (Conforms to DSN-33 / Issue 504 / Issue 542)
+ * Supports cross-platform execution on Linux (x86_64, aarch64) and macOS
+ * (Apple Silicon / Intel Mac via Clang or GCC).
  * ======================================================================= */
 
 static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
+#if defined(__APPLE__)
+    /* macOS (Darwin) cross-platform safe crash notification */
+    fprintf(stderr, "*** CRASH: signal %d at fault addr %p (macOS/Darwin) ***\n", sig, info->si_addr);
+    (void)ucontext;
+#elif defined(__x86_64__)
     ucontext_t *uc = (ucontext_t *)ucontext;
-#if defined(__x86_64__)
     uint64_t rip = uc->uc_mcontext.gregs[REG_RIP];
     uint64_t rsp = uc->uc_mcontext.gregs[REG_RSP];
     uint64_t rax = uc->uc_mcontext.gregs[REG_RAX];
@@ -35,6 +45,7 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
         fprintf(stderr, "  [RSP%+4d (0x%lx)]: 0x%016lx\n", i*8, (uint64_t)&sp[i], sp[i]);
     }
 #elif defined(__aarch64__)
+    ucontext_t *uc = (ucontext_t *)ucontext;
     uint64_t pc = (uint64_t)uc->uc_mcontext.pc;
     uint64_t sp_val = (uint64_t)uc->uc_mcontext.sp;
     uint64_t x0 = (uint64_t)uc->uc_mcontext.regs[0];
@@ -48,6 +59,7 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
     }
 #else
     fprintf(stderr, "*** CRASH: signal %d at fault addr %p ***\n", sig, info->si_addr);
+    (void)ucontext;
 #endif
     void *bt[32];
     int size = backtrace(bt, 32);
@@ -55,6 +67,7 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
 
     exit(139);
 }
+
 
 #define FIXNUM_MASK     0x03
 #define FIXNUM_TAG      0x00

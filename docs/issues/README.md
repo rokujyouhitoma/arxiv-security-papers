@@ -17,7 +17,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **542** | MacOS 向け Portable C バックエンドの互換性強化（Darwin ucontext/mmap対応）とクロスプラットフォームビルド手順書の整備 | Feature | 2026-10-17 | [closed/542-prepare-macos-portability-for-c-backend-and-documentation.md](closed/542-prepare-macos-portability-for-c-backend-and-documentation.md) |
 | **541** | ブートストラップシード (bin/ulisp-boot) 導入による ULisp 開発サイクル「即時0.3秒化」および高速ビルドパイプラインの構築 | Feature | 2026-10-17 | [closed/541-implement-fast-bootstrap-seed-and-subsecond-build-pipeline.md](closed/541-implement-fast-bootstrap-seed-and-subsecond-build-pipeline.md) |
+
 | **534** | メモリ上インメモリ構文解析および書式化のための R7RS 文字列ポート (open-input-string / open-output-string) の実装 | Feature | 2026-10-17 | [closed/534-implement-r7rs-string-ports.md](closed/534-implement-r7rs-string-ports.md) |
 | **533** | パターンマッチング型衛生的マクロ展開器 (define-syntax / syntax-rules) のサブセット実装 | Feature | 2026-10-16 | [closed/533-implement-hygienic-syntax-rules-macro-expander.md](closed/533-implement-hygienic-syntax-rules-macro-expander.md) |
 | **532** | R7RS 準拠の等価性比較述語 eqv? および標準型述語群の仕様整合化 | Feature | 2026-10-16 | [closed/532-implement-r7rs-eqv-and-standard-type-predicates.md](closed/532-implement-r7rs-eqv-and-standard-type-predicates.md) |
