@@ -25,6 +25,7 @@
         ((car cdr set-car! set-cdr!) 'pair)
         ((%closure-ref %closure-set!) 'closure)
         ((vector-ref vector-set!) 'vector)
+        ((bytevector-u8-ref bytevector-u8-set!) 'bytevector)
         ((%raw-load %raw-store!) 'raw)
         (else 'unknown))))
 
@@ -161,7 +162,7 @@
                               (cdr expr))))))
 
          ;; TBAA Store: invalidates only non-disjoint types
-         ((set-car! set-cdr! %closure-set! vector-set! %raw-store!)
+         ((set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store!)
           (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
                         (cdr expr))))
 
@@ -180,7 +181,7 @@
                 (let* ((e (car es))
                        (transformed (alias-escape-transform-expr e escaped-set cur-loads))
                        (next-loads
-                        (if (and (pair? e) (memq (car e) '(set-car! set-cdr! %closure-set! vector-set! %raw-store!)))
+                        (if (and (pair? e) (memq (car e) '(set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store!)))
                             (tbaa-invalidate-loads e cur-loads)
                             cur-loads)))
                   (loop (cdr es) next-loads (cons transformed acc))))))

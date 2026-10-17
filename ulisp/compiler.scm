@@ -167,6 +167,7 @@
              car cdr pair? procedure? string?
              write-char %write-char write-string %write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
+             bytevector? bytevector-length make-bytevector %make-bytevector
              raise %raise
              %set-heap-ptr! %ptr-tag %ptr-untag
              %to-raw %to-fixnum
@@ -174,11 +175,12 @@
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
+             bytevector-u8-ref
              %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! %raw-store!)))
+  (memq op '(string-set! bytevector-u8-set! %raw-store!)))
 
 (define (septop-prim? op)
   (memq op '(%raw-syscall)))
@@ -192,6 +194,7 @@
              zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
              boolean? char? null? not symbol? list?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
+             bytevector? bytevector-length
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
              %raw-add %raw-sub %raw-mul %raw-cmp)))
@@ -813,6 +816,32 @@
                    (desugar-string-append (reverse left))
                    (desugar-string-append rest))))))))
 
+(define (desugar-bytevector args)
+  (let* ((len (length args))
+         (bv-sym (unique-symbol "bv_")))
+    (let loop ((rest args) (idx 0) (sets '()))
+      (if (null? rest)
+          (list 'let (list (list bv-sym (list '%make-bytevector len)))
+                (cons 'begin (reverse (cons bv-sym sets))))
+          (loop (cdr rest)
+                (+ idx 1)
+                (cons (list 'bytevector-u8-set! bv-sym idx (car rest)) sets))))))
+
+(define (desugar-bytevector-append args)
+  (cond
+    ((null? args) (list '%make-bytevector 0))
+    ((null? (cdr args)) (car args))
+    ((null? (cddr args)) (list 'bytevector-append2 (car args) (cadr args)))
+    (else
+     (let* ((len (length args))
+            (half (quotient len 2)))
+       (let loop ((rest args) (i 0) (left '()))
+         (if (< i half)
+             (loop (cdr rest) (+ i 1) (cons (car rest) left))
+             (list 'bytevector-append2
+                   (desugar-bytevector-append (reverse left))
+                   (desugar-bytevector-append rest))))))))
+
 (define (desugar-cond clauses)
   (if (null? clauses)
       #f
@@ -961,6 +990,51 @@
           (desugar-all (desugar-let* (cadr expr) (cddr expr))))
          ((string-append)
           (desugar-all (desugar-string-append (cdr expr))))
+         ((bytevector)
+          (desugar-all (desugar-bytevector (cdr expr))))
+         ((bytevector-append)
+          (desugar-all (desugar-bytevector-append (cdr expr))))
+         ((make-bytevector)
+          (let ((args (cdr expr)))
+            (if (null? (cdr args))
+                (list '%make-bytevector (desugar-all (car args)))
+                (list 'make-bytevector-fill (desugar-all (car args)) (desugar-all (cadr args))))))
+         ((bytevector-copy)
+          (let ((args (cdr expr)))
+            (cond
+              ((null? (cdr args))
+               (let ((bv-sym (unique-symbol "bv_")))
+                 (list 'let (list (list bv-sym (desugar-all (car args))))
+                       (list 'bytevector-copy-range bv-sym 0 (list 'bytevector-length bv-sym)))))
+              ((null? (cddr args))
+               (let ((bv-sym (unique-symbol "bv_")))
+                 (list 'let (list (list bv-sym (desugar-all (car args))))
+                       (list 'bytevector-copy-range bv-sym (desugar-all (cadr args)) (list 'bytevector-length bv-sym)))))
+              (else
+               (list 'bytevector-copy-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
+         ((bytevector-copy!)
+          (let ((args (cdr expr)))
+            (if (null? (cdddr args))
+                (let ((from-sym (unique-symbol "from_")))
+                  (list 'let (list (list from-sym (desugar-all (caddr args))))
+                        (list 'bytevector-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
+                              from-sym 0 (list 'bytevector-length from-sym))))
+                (list 'bytevector-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
+                      (desugar-all (caddr args)) (desugar-all (car (cdddr args))) (desugar-all (cadr (cdddr args)))))))
+         ((string->utf8)
+          (let ((args (cdr expr)))
+            (if (null? (cdr args))
+                (let ((str-sym (unique-symbol "str_")))
+                  (list 'let (list (list str-sym (desugar-all (car args))))
+                        (list 'string->utf8-range str-sym 0 (list 'string-length str-sym))))
+                (list 'string->utf8-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args))))))
+         ((utf8->string)
+          (let ((args (cdr expr)))
+            (if (null? (cdr args))
+                (let ((bv-sym (unique-symbol "bv_")))
+                  (list 'let (list (list bv-sym (desugar-all (car args))))
+                        (list 'utf8->string-range bv-sym 0 (list 'bytevector-length bv-sym))))
+                (list 'utf8->string-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args))))))
          ((list)
           (desugar-all (desugar-list (cdr expr))))
          ((and)
@@ -2487,8 +2561,10 @@
     ((eq? op 'cdr)
      (let ((t (if (pair? arg-types) (car arg-types) (type-top))))
        (type-pair-cdr t)))
-    ((eq? op 'string-length)
+    ((memq op '(string-length bytevector-length bytevector-u8-ref))
      (type-fixnum))
+    ((memq op '(bytevector?))
+     (type-boolean))
     ((memq op '(make-string string-ref))
      (if (eq? op 'make-string) (type-string) (type-char)))
     ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %raw-load %ptr-add %ptr-tag-add))
@@ -3458,6 +3534,7 @@
         ((car cdr set-car! set-cdr!) 'pair)
         ((%closure-ref %closure-set!) 'closure)
         ((vector-ref vector-set!) 'vector)
+        ((bytevector-u8-ref bytevector-u8-set!) 'bytevector)
         ((%raw-load %raw-store!) 'raw)
         (else 'unknown))))
 
@@ -3594,7 +3671,7 @@
                               (cdr expr))))))
 
          ;; TBAA Store: invalidates only non-disjoint types
-         ((set-car! set-cdr! %closure-set! vector-set! %raw-store!)
+         ((set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store!)
           (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
                         (cdr expr))))
 
@@ -3613,7 +3690,7 @@
                 (let* ((e (car es))
                        (transformed (alias-escape-transform-expr e escaped-set cur-loads))
                        (next-loads
-                        (if (and (pair? e) (memq (car e) '(set-car! set-cdr! %closure-set! vector-set! %raw-store!)))
+                        (if (and (pair? e) (memq (car e) '(set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store!)))
                             (tbaa-invalidate-loads e cur-loads)
                             cur-loads)))
                   (loop (cdr es) next-loads (cons transformed acc))))))
@@ -3867,6 +3944,10 @@
      (emit-lir! '(%bit-and %rax 7))
      (emit-lir! '(%cmp %rax 3))
      (emit-lir! '(%set-boolean %rax "sete")))
+    ((bytevector?)
+     (emit-lir! '(%bit-and %rax 7))
+     (emit-lir! '(%cmp %rax 7))
+     (emit-lir! '(%set-boolean %rax "sete")))
     ((write-char %write-char)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! '(%mov %rdi %rax))
@@ -3886,7 +3967,7 @@
     ((%set-heap-ptr!)
      (emit-lir! '(%mov %r12 %rax)))
     ((%ptr-tag)
-     (emit-lir! '(%bit-and %rax 3))
+     (emit-lir! '(%bit-and %rax 7))
      (emit-lir! '(%shl %rax 2)))
     ((%ptr-untag)
      (emit-lir! '(%bit-and %rax -8)))
@@ -3928,7 +4009,39 @@
        (emit-lir! '(%inc %rax))
        (emit-lir! (list '%jump l-loop))
        (emit-lir! (list '%label l-done))
-       (emit-lir! '(%shl %rax 2))))))
+       (emit-lir! '(%shl %rax 2))))
+    ((bytevector-length)
+     (emit-lir! '(%sub %rax 7))
+     (emit-lir! '(%load %rax %rax 0)))
+    ((make-bytevector %make-bytevector)
+     (let ((l-loop (unique-label-sym "bv_zero_loop"))
+           (l-done (unique-label-sym "bv_zero_done")))
+       (emit-lir! '(%sar %rax 2))
+       (emit-lir! '(%mov %rcx %rax))
+       (emit-lir! '(%add %rax 15))
+       (emit-lir! '(%bit-and %rax -8))
+       (emit-lir! '(%mov %rdx %rax))
+       (emit-lir! '(%shl %rdx 16))
+       (emit-lir! '(%bit-or %rdx 4))
+       (emit-lir! '(%shl %rdx 2))
+       (emit-lir! '(%store %r12 0 %rdx))
+       (emit-lir! '(%mov %rdx %rcx))
+       (emit-lir! '(%shl %rdx 2))
+       (emit-lir! '(%store %r12 8 %rdx))
+       (emit-lir! '(%mov %r10 0))
+       (emit-lir! '(%mov %rdx %rax))
+       (emit-lir! (list '%label l-loop))
+       (emit-lir! (list '%cmp '%rdx 8))
+       (emit-lir! (list '%jump-if-zero l-done))
+       (emit-lir! '(%store %r12 %rdx %r10))
+       (emit-lir! '(%sub %rdx 8))
+       (emit-lir! (list '%jump l-loop))
+       (emit-lir! (list '%label l-done))
+       (emit-lir! '(%mov %rcx %r12))
+       (emit-lir! '(%add %rcx 15))
+       (emit-lir! '(%add %rax 8))
+       (emit-lir! '(%add %r12 %rax))
+       (emit-lir! '(%mov %rax %rcx))))))
 
 (define (lir-compile-operand-for-op op e si env)
   (if (and (integer? e) (memq op '(%raw-add %raw-sub %raw-mul %raw-cmp)))
@@ -3985,6 +4098,13 @@
      (emit-lir! (list '%load-byte-zx '%rax '%rdx '%rax))
      (emit-lir! '(%shl %rax 8))
      (emit-lir! '(%bit-or %rax 14)))
+    ((bytevector-u8-ref)
+     (emit-lir! '(%sar %rax 2))
+     (emit-lir! (list '%load '%rdx '%rsp si))
+     (emit-lir! '(%sub %rdx 7))
+     (emit-lir! '(%add %rdx 8))
+     (emit-lir! (list '%load-byte-zx '%rax '%rdx '%rax))
+     (emit-lir! '(%shl %rax 2)))
     ((=)
      (emit-lir! (list '%cmp (list '%stack si) '%rax))
      (emit-lir! '(%set-boolean %rax "sete")))
@@ -4047,6 +4167,15 @@
      (emit-lir! '(%shr %rax 8))
      (emit-lir! (list '%load '%rdx '%rsp si))
      (emit-lir! '(%sub %rdx 3))
+     (emit-lir! (list '%load '%rcx '%rsp (- si 8)))
+     (emit-lir! '(%sar %rcx 2))
+     (emit-lir! '(%store-byte %rdx %rcx %al))
+     (emit-lir! '(%mov %rax 63)))
+    ((bytevector-u8-set!)
+     (emit-lir! '(%sar %rax 2))
+     (emit-lir! (list '%load '%rdx '%rsp si))
+     (emit-lir! '(%sub %rdx 7))
+     (emit-lir! '(%add %rdx 8))
      (emit-lir! (list '%load '%rcx '%rsp (- si 8)))
      (emit-lir! '(%sar %rcx 2))
      (emit-lir! '(%store-byte %rdx %rcx %al))
@@ -5871,7 +6000,7 @@
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_char:")
   (emit "    mov rax, rbx")
-  (emit "    and rax, 3")
+  (emit "    and rax, 7")
   (emit "    cmp rax, 3")              ; string tag
   (emit "    jne .L_pv_not_string")
   (emit "    mov rdi, 34")             ; '\"'
@@ -5883,6 +6012,12 @@
   (emit "    call ulisp_emit_byte")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_string:")
+  (emit "    cmp rax, 7")              ; bytevector tag
+  (emit "    jne .L_pv_not_bytevector")
+  (emit "    mov rdi, rbx")
+  (emit "    call ulisp_print_bytevector")
+  (emit "    jmp .L_pv_done")
+  (emit ".L_pv_not_bytevector:")
   (emit "    cmp rax, 1")              ; pair tag
   (emit "    jne .L_pv_not_pair")
   (emit "    mov rdi, rbx")
@@ -6002,7 +6137,7 @@
   (emit "    cmp rbx, 63")             ; EMPTY_LIST
   (emit "    je .L_pair_done")
   (emit "    mov rax, rbx")
-  (emit "    and rax, 3")
+  (emit "    and rax, 7")
   (emit "    cmp rax, 1")              ; PAIR_TAG
   (emit "    je .L_pair_loop")
   (emit "    lea rdi, [rip + .L_str_dot]")
@@ -6012,6 +6147,37 @@
   (emit ".L_pair_done:")
   (emit "    mov rdi, 41")             ; ')'
   (emit "    call ulisp_emit_byte")
+  (emit "    pop r12")
+  (emit "    pop rbx")
+  (emit "    ret")
+  (emit "")
+  (emit "    .p2align 4")
+  (emit "ulisp_print_bytevector:")
+  (emit "    push rbx")
+  (emit "    push r12")
+  (emit "    push r13")
+  (emit "    mov rbx, rdi")            ; tagged bytevector (tag 7)
+  (emit "    lea rdi, [rip + .L_str_u8_prefix]")
+  (emit "    call ulisp_emit_str")
+  (emit "    mov r12, [rbx - 7]")      ; len (fixnum)
+  (emit "    sar r12, 2")              ; raw len
+  (emit "    xor r13, r13")            ; index = 0
+  (emit ".L_pbv_loop:")
+  (emit "    cmp r13, r12")
+  (emit "    jge .L_pbv_done")
+  (emit "    test r13, r13")
+  (emit "    jz .L_pbv_elem")
+  (emit "    mov dil, 32")             ; ' '
+  (emit "    call ulisp_emit_byte")
+  (emit ".L_pbv_elem:")
+  (emit "    movzx rdi, byte ptr [rbx - 7 + 8 + r13]")
+  (emit "    call ulisp_print_fixnum")
+  (emit "    inc r13")
+  (emit "    jmp .L_pbv_loop")
+  (emit ".L_pbv_done:")
+  (emit "    mov dil, 41")             ; ')'
+  (emit "    call ulisp_emit_byte")
+  (emit "    pop r13")
   (emit "    pop r12")
   (emit "    pop rbx")
   (emit "    ret")
@@ -6081,6 +6247,7 @@
   (emit ".L_str_dot: .asciz \" . \"")
   (emit ".L_str_symbol: .asciz \"#<symbol>\"")
   (emit ".L_str_unknown: .asciz \"#<unknown>\"")
+  (emit ".L_str_u8_prefix: .asciz \"#u8(\"")
   (emit ""))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native AArch64 (ARM64) Backend Code Generator

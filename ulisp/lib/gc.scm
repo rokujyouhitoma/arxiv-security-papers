@@ -77,7 +77,7 @@
 ;;; Predicate: is value a pointer pointing into nursery?
 (define (gc-nursery-pointer? val)
   (let ((tag (%ptr-tag val)))
-    (if (or (= tag 1) (= tag 3))
+    (if (or (= tag 1) (= tag 3) (= tag 7))
         (let ((addr (%ptr-untag val)))
           (and (>= addr (gc-nursery-base))
                (< addr (%ptr-add (gc-nursery-base) (gc-nursery-size)))))
@@ -86,7 +86,7 @@
 ;;; Predicate: is the value a heap pointer pointing into current from-space?
 (define (gc-heap-pointer? val)
   (let ((tag (%ptr-tag val)))
-    (if (or (= tag 1) (= tag 3))
+    (if (or (= tag 1) (= tag 3) (= tag 7))
         (let ((addr (%ptr-untag val)))
           (and (>= addr (gc-from))
                (< addr (%ptr-add (gc-from) (gc-size)))))

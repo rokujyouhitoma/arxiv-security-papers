@@ -76,8 +76,11 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
 #define PAIR_MASK       0x03
 #define PAIR_TAG        0x01
 
-#define STRING_MASK     0x03
+#define STRING_MASK     0x07
 #define STRING_TAG      0x03
+
+#define BYTEVECTOR_MASK 0x07
+#define BYTEVECTOR_TAG  0x07
 
 #define CHAR_MASK       0xFF
 #define CHAR_TAG        0x0E
@@ -202,6 +205,16 @@ static void print_scheme_value_raw(uint64_t val) {
         printf(")");
     } else if ((val & STRING_MASK) == STRING_TAG) {
         printf("\"%s\"", (const char *)(val - STRING_TAG));
+    } else if ((val & BYTEVECTOR_MASK) == BYTEVECTOR_TAG) {
+        uint64_t *base = (uint64_t *)(val - BYTEVECTOR_TAG);
+        uint64_t len = base[0] >> 2;
+        const uint8_t *bytes = (const uint8_t *)(base + 1);
+        printf("#u8(");
+        for (uint64_t i = 0; i < len; i++) {
+            if (i > 0) printf(" ");
+            printf("%u", bytes[i]);
+        }
+        printf(")");
     } else if ((val & SYMBOL_MASK) == SYMBOL_TAG) {
         printf("#<symbol-%ld>", val >> SYMBOL_SHIFT);
     } else {

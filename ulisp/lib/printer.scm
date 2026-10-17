@@ -42,6 +42,17 @@
           (port-write-char #\) p)))))
     ((eof-object? val)
      (port-display-string "#<eof>" p))
+    ((bytevector? val)
+     (port-display-string "#u8(" p)
+     (let ((len (bytevector-length val)))
+       (let loop ((i 0))
+         (if (< i len)
+             (begin
+               (if (> i 0) (port-write-char #\space p))
+               (port-display-string (number->string (bytevector-u8-ref val i)) p)
+               (loop (+ i 1)))
+             #t)))
+     (port-write-char #\) p))
     (else
      (port-display-string "#<unknown>" p))))
 

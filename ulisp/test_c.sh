@@ -40,15 +40,30 @@ assert_c() {
     local expr="$2"
     local stdin_input="${3:-}"
 
-    # Prepend (!target c) to instruct driver to emit C
-    local code="(!target c) $expr"
+    # Prepend (!target c) and optional stdlib
+    local code
+    if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
+        code="(!target c)"$'\n'"$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$expr"
+    else
+        code="(!target c) $expr"
+    fi
 
-    printf '%s\n' "$code" | $ILISP "$COMPILER" > "$TMP_C" 2>build/compile_err.log || {
-        echo -e "\033[31m[COMPILE FAIL]\033[0m $expr"
-        cat build/compile_err.log
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        exit 1
-    }
+    if [ -x "bin/ulisp-boot" ]; then
+        printf '%s\n' "$code" > build/tmp_c_in.scm
+        ULISP_QUIET=1 bin/ulisp-boot build/tmp_c_in.scm > "$TMP_C" 2>build/compile_err.log || {
+            echo -e "\033[31m[COMPILE FAIL]\033[0m $expr"
+            cat build/compile_err.log
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            exit 1
+        }
+    else
+        printf '%s\n' "$code" | $ILISP "$COMPILER" > "$TMP_C" 2>build/compile_err.log || {
+            echo -e "\033[31m[COMPILE FAIL]\033[0m $expr"
+            cat build/compile_err.log
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            exit 1
+        }
+    fi
 
     $CC $CFLAGS runtime.c "$TMP_C" -o "$TMP_BIN" 2>build/gcc_err.log || {
         echo -e "\033[31m[GCC BUILD FAIL]\033[0m $expr"
@@ -131,6 +146,29 @@ echo "--- Step 8: Hygienic syntax-rules Macros ---"
 assert_c "42" "(define-syntax when (syntax-rules () ((_ c body ...) (if c (begin body ...) #f)))) (when (= 5 5) 42)"
 assert_c "100" "(define-syntax unless (syntax-rules () ((_ c body ...) (if c #f (begin body ...))))) (unless (= 5 6) 100)"
 assert_c "81" "(define-syntax my-sq (syntax-rules () ((_ x) (* x x)))) (my-sq 9)"
+
+echo "--- Step 9: R7RS Bytevectors for Binary Security ---"
+assert_c "#t" "(bytevector? (make-bytevector 5))"
+assert_c "#f" '(bytevector? "hello")'
+assert_c "#f" "(bytevector? 123)"
+assert_c "10" "(bytevector-length (make-bytevector 10))"
+assert_c "0" "(bytevector-length (make-bytevector 0))"
+assert_c "#u8(0 0 0)" "(make-bytevector 3)"
+assert_c "#u8(42 42 42)" "(make-bytevector 3 42)"
+assert_c "66" "(let ((bv (make-bytevector 3))) (begin (bytevector-u8-set! bv 0 65) (bytevector-u8-set! bv 1 66) (bytevector-u8-set! bv 2 67) (bytevector-u8-ref bv 1)))"
+assert_c "#u8(65 66 67)" "(let ((bv (make-bytevector 3))) (begin (bytevector-u8-set! bv 0 65) (bytevector-u8-set! bv 1 66) (bytevector-u8-set! bv 2 67) bv))"
+assert_c "#u8(1 2 3)" "(bytevector 1 2 3)"
+assert_c "#u8(10 20 30)" "(bytevector-copy (bytevector 10 20 30))"
+assert_c "#u8(20 30)" "(bytevector-copy (bytevector 10 20 30 40) 1 3)"
+assert_c "#t" "(bytevector=? (bytevector 1 2 3) (bytevector 1 2 3))"
+assert_c "#f" "(bytevector=? (bytevector 1 2 3) (bytevector 1 2 4))"
+assert_c "#f" "(bytevector=? (bytevector 1 2) (bytevector 1 2 3))"
+assert_c "#u8(1 2 3 4 5)" "(bytevector-append (bytevector 1 2) (bytevector 3 4 5))"
+assert_c "#u8(0 1 2 3 0)" "(let ((to (make-bytevector 5 0)) (from (bytevector 1 2 3))) (begin (bytevector-copy! to 1 from) to))"
+assert_c "#u8(65 66 67)" '(string->utf8 "ABC")'
+assert_c '"Hello"' "(utf8->string (bytevector 72 101 108 108 111))"
+assert_c "5" "(bytevector-length (bytevector 0 1 0 2 0))"
+assert_c "0" "(bytevector-u8-ref (bytevector 0 1 0 2 0) 2)"
 
 rm -f "$TMP_C" "$TMP_BIN"
 

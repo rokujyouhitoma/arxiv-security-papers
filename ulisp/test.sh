@@ -22,7 +22,7 @@ ULISP_STAGE1="build/scheme-stage1"
 ULISP_BOOT="bin/ulisp-boot"
 
 make compiler
-cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/string.scm lib/bytevector.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
@@ -82,6 +82,8 @@ assert() {
         full_input="$(cat lib/string.scm)"$'\n'"$input"
     elif [[ "$input" =~ open-input-string || "$input" =~ open-output-string || "$input" =~ "port\?" || "$input" =~ "input-port\?" || "$input" =~ "output-port\?" || "$input" =~ "textual-port\?" || "$input" =~ "get-output-string" ]]; then
         full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm)"$'\n'"$input"
+    elif [[ "$input" =~ bytevector || "$input" =~ utf8 ]]; then
+        full_input="$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$input"
     else
         full_input="$input"
     fi
@@ -559,6 +561,30 @@ assert "#t" '(textual-port? (open-output-string))'
 assert "#\\b" '(let ((p (open-input-string "abc"))) (begin (read-char p) (read-char p)))'
 assert "#\\x" '(let ((p (open-input-string "xyz"))) (begin (peek-char p) (read-char p)))'
 assert "#t" '(let ((p (open-input-string ""))) (eof-object? (read-char p)))'
+
+# --- Step 29: R7RS Bytevectors for Binary Security (Issue 535) ---
+echo "-- Step 29: Issue 535 R7RS Bytevectors for Binary Security --"
+assert "#t" "(bytevector? (make-bytevector 5))"
+assert "#f" '(bytevector? "hello")'
+assert "#f" "(bytevector? 123)"
+assert "10" "(bytevector-length (make-bytevector 10))"
+assert "0" "(bytevector-length (make-bytevector 0))"
+assert "#u8(0 0 0)" "(make-bytevector 3)"
+assert "#u8(42 42 42)" "(make-bytevector 3 42)"
+assert "66" "(let ((bv (make-bytevector 3))) (begin (bytevector-u8-set! bv 0 65) (bytevector-u8-set! bv 1 66) (bytevector-u8-set! bv 2 67) (bytevector-u8-ref bv 1)))"
+assert "#u8(65 66 67)" "(let ((bv (make-bytevector 3))) (begin (bytevector-u8-set! bv 0 65) (bytevector-u8-set! bv 1 66) (bytevector-u8-set! bv 2 67) bv))"
+assert "#u8(1 2 3)" "(bytevector 1 2 3)"
+assert "#u8(10 20 30)" "(bytevector-copy (bytevector 10 20 30))"
+assert "#u8(20 30)" "(bytevector-copy (bytevector 10 20 30 40) 1 3)"
+assert "#t" "(bytevector=? (bytevector 1 2 3) (bytevector 1 2 3))"
+assert "#f" "(bytevector=? (bytevector 1 2 3) (bytevector 1 2 4))"
+assert "#f" "(bytevector=? (bytevector 1 2) (bytevector 1 2 3))"
+assert "#u8(1 2 3 4 5)" "(bytevector-append (bytevector 1 2) (bytevector 3 4 5))"
+assert "#u8(0 1 2 3 0)" "(let ((to (make-bytevector 5 0)) (from (bytevector 1 2 3))) (begin (bytevector-copy! to 1 from) to))"
+assert "#u8(65 66 67)" '(string->utf8 "ABC")'
+assert '"Hello"' "(utf8->string (bytevector 72 101 108 108 111))"
+assert "5" "(bytevector-length (bytevector 0 1 0 2 0))"
+assert "0" "(bytevector-u8-ref (bytevector 0 1 0 2 0) 2)"
 
 
 # =======================================================================

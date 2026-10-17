@@ -890,7 +890,7 @@
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_char:")
   (emit "    mov rax, rbx")
-  (emit "    and rax, 3")
+  (emit "    and rax, 7")
   (emit "    cmp rax, 3")              ; string tag
   (emit "    jne .L_pv_not_string")
   (emit "    mov rdi, 34")             ; '\"'
@@ -902,6 +902,12 @@
   (emit "    call ulisp_emit_byte")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_string:")
+  (emit "    cmp rax, 7")              ; bytevector tag
+  (emit "    jne .L_pv_not_bytevector")
+  (emit "    mov rdi, rbx")
+  (emit "    call ulisp_print_bytevector")
+  (emit "    jmp .L_pv_done")
+  (emit ".L_pv_not_bytevector:")
   (emit "    cmp rax, 1")              ; pair tag
   (emit "    jne .L_pv_not_pair")
   (emit "    mov rdi, rbx")
@@ -1021,7 +1027,7 @@
   (emit "    cmp rbx, 63")             ; EMPTY_LIST
   (emit "    je .L_pair_done")
   (emit "    mov rax, rbx")
-  (emit "    and rax, 3")
+  (emit "    and rax, 7")
   (emit "    cmp rax, 1")              ; PAIR_TAG
   (emit "    je .L_pair_loop")
   (emit "    lea rdi, [rip + .L_str_dot]")
@@ -1031,6 +1037,37 @@
   (emit ".L_pair_done:")
   (emit "    mov rdi, 41")             ; ')'
   (emit "    call ulisp_emit_byte")
+  (emit "    pop r12")
+  (emit "    pop rbx")
+  (emit "    ret")
+  (emit "")
+  (emit "    .p2align 4")
+  (emit "ulisp_print_bytevector:")
+  (emit "    push rbx")
+  (emit "    push r12")
+  (emit "    push r13")
+  (emit "    mov rbx, rdi")            ; tagged bytevector (tag 7)
+  (emit "    lea rdi, [rip + .L_str_u8_prefix]")
+  (emit "    call ulisp_emit_str")
+  (emit "    mov r12, [rbx - 7]")      ; len (fixnum)
+  (emit "    sar r12, 2")              ; raw len
+  (emit "    xor r13, r13")            ; index = 0
+  (emit ".L_pbv_loop:")
+  (emit "    cmp r13, r12")
+  (emit "    jge .L_pbv_done")
+  (emit "    test r13, r13")
+  (emit "    jz .L_pbv_elem")
+  (emit "    mov dil, 32")             ; ' '
+  (emit "    call ulisp_emit_byte")
+  (emit ".L_pbv_elem:")
+  (emit "    movzx rdi, byte ptr [rbx - 7 + 8 + r13]")
+  (emit "    call ulisp_print_fixnum")
+  (emit "    inc r13")
+  (emit "    jmp .L_pbv_loop")
+  (emit ".L_pbv_done:")
+  (emit "    mov dil, 41")             ; ')'
+  (emit "    call ulisp_emit_byte")
+  (emit "    pop r13")
   (emit "    pop r12")
   (emit "    pop rbx")
   (emit "    ret")
@@ -1100,4 +1137,5 @@
   (emit ".L_str_dot: .asciz \" . \"")
   (emit ".L_str_symbol: .asciz \"#<symbol>\"")
   (emit ".L_str_unknown: .asciz \"#<unknown>\"")
+  (emit ".L_str_u8_prefix: .asciz \"#u8(\"")
   (emit ""))
