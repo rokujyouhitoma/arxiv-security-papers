@@ -17,15 +17,21 @@
 (define (reg->str reg)
   (case reg
     ((%rax) "rax")
-    ((%rdx) "rdx")
+    ((%rbx) "rbx")
     ((%rcx) "rcx")
-    ((%r10) "r10")
-    ((%rdi) "rdi")
+    ((%rdx) "rdx")
     ((%rsi) "rsi")
+    ((%rdi) "rdi")
+    ((%rbp) "rbp")
+    ((%rsp) "rsp")
     ((%r8)  "r8")
     ((%r9)  "r9")
+    ((%r10) "r10")
+    ((%r11) "r11")
     ((%r12) "r12")
-    ((%rsp) "rsp")
+    ((%r13) "r13")
+    ((%r14) "r14")
+    ((%r15) "r15")
     ((%al)  "al")
     (else (symbol->string reg))))
 
@@ -44,6 +50,8 @@
     ((pair? opnd)
      (let ((tag (car opnd)))
        (case tag
+         ((%reg)
+          (reg->str (cadr opnd)))
          ((%stack)
           (string-append "[rsp " (offset->string (cadr opnd)) "]"))
          ((%mem)
@@ -81,9 +89,10 @@
 
 (define (x86-param-location idx param)
   (cond
-    ((eq? param '%rax) '%rax)
-    ((eq? param '%rdx) '%rdx)
-    ((eq? param '%rcx) '%rcx)
+    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
+     param)
+    ((and (pair? param) (eq? (car param) '%reg))
+     (cadr param))
     ((and (pair? param) (eq? (car param) '%stack)) param)
     (else
      (list '%stack (* -8 (+ idx 2))))))
@@ -173,6 +182,14 @@
 
       ((%return)
        (emit "    ret"))
+
+      ((%push)
+       (let ((src (cadr inst)))
+         (emit (string-append "    push " (reg->str src)))))
+
+      ((%pop)
+       (let ((dst (cadr inst)))
+         (emit (string-append "    pop " (reg->str dst)))))
 
       ((%syscall)
        (emit "    syscall"))

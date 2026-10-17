@@ -6,6 +6,8 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **545** | ULisp AOT x86における条件分岐融合 (Flag / Branch Fusion) によるブール値実体化の完全排除 | Feature | Open (New) | [545-implement-condition-branch-flag-fusion.md](545-implement-condition-branch-flag-fusion.md) |
+| **546** | ULisp AOT x86における末尾ループ引数インプレース更新 (In-place Tail Loop Argument Shuffle) の最適化 | Feature | Open (New) | [546-implement-in-place-tail-loop-argument-shuffle-optimization.md](546-implement-in-place-tail-loop-argument-shuffle-optimization.md) |
 | **539** | トップレベル定義の完全直列パイプライン分離および直接呼出 (%direct-call) 最適化 | Feature | Closed (Fixed) | [539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md](closed/539-implement-toplevel-separate-pipeline-and-direct-call-optimization.md) |
 
 ---
@@ -14,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **544** | ULisp AOT x86における末尾再帰ループ変数の汎用レジスタピン留め割付 | Feature | 2026-10-17 | [closed/544-implement-loop-variable-register-allocation.md](closed/544-implement-loop-variable-register-allocation.md) |
 | **537** | コンパイラコンテキスト動的スコープ制御のための R7RS パラメータ (make-parameter / parameterize) の実装 | Feature | 2026-10-17 | [closed/537-implement-r7rs-parameters-and-parameterize.md](closed/537-implement-r7rs-parameters-and-parameterize.md) |
 | **536** | O(1) ランダムアクセス配列および高速ハッシュ辞書基盤向け R7RS ベクタ (vector) の完全実装 | Feature | 2026-10-17 | [closed/536-implement-complete-r7rs-vectors-and-indexing.md](closed/536-implement-complete-r7rs-vectors-and-indexing.md) |
 | **535** | 低レベルバイナリ・暗号ハッシュ・生パケット解析向け R7RS バイトベクタ (bytevector) 型の実装 | Feature | 2026-10-17 | [closed/535-implement-r7rs-bytevectors-for-binary-security.md](closed/535-implement-r7rs-bytevectors-for-binary-security.md) |

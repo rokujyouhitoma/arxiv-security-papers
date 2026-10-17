@@ -80,6 +80,15 @@ test_toplevel: build/compiler_passes.scm
 	cat build/compiler_passes.scm tests/passes/test_toplevel_direct_call.scm > build/test_toplevel_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_toplevel_runner.scm
 
+test_loop_reg: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_loop_register_allocation.scm > build/test_loop_reg_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_loop_reg_runner.scm
+	$(CC) $(CFLAGS_JIT) -o build/test_loop_reg runtime.c build/test_loop_reg.s
+	@echo "=== Executing compiled loop_sum binary (1,000,000 iters) ==="
+	@res=$$(./build/test_loop_reg); echo "Output: $$res"; test "$$res" = "499999500000"
+	@echo "SUCCESS: loop_sum output 499999500000 matches expected exactly!"
+
 test_lir: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_lir.scm > build/test_lir_runner.scm

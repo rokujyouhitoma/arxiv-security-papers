@@ -33,11 +33,16 @@
 (define (c-reg->str reg)
   (case reg
     ((%rax) "reg_rax")
-    ((%rdx) "reg_rdx")
+    ((%rbx) "reg_rbx")
     ((%rcx) "reg_rcx")
-    ((%r10) "reg_r10")
+    ((%rdx) "reg_rdx")
+    ((%rsi) "reg_rsi")
     ((%rdi) "reg_rdi")
+    ((%r10) "reg_r10")
     ((%r12) "reg_r12")
+    ((%r13) "reg_r13")
+    ((%r14) "reg_r14")
+    ((%r15) "reg_r15")
     ((%rsp) "reg_rsp")
     ((%al)  "((uint8_t)reg_rax)")
     (else (c-sanitize-label reg))))
@@ -67,6 +72,8 @@
     ((pair? opnd)
      (let ((tag (car opnd)))
        (case tag
+         ((%reg)
+          (c-reg->str (cadr opnd)))
          ((%stack)
           (c-mem-ref '%rsp (cadr opnd)))
          ((%mem)
@@ -102,7 +109,10 @@
 
 (define (c-param-location idx param)
   (cond
-    ((eq? param '%rax) '%rax)
+    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
+     param)
+    ((and (pair? param) (eq? (car param) '%reg))
+     (cadr param))
     ((and (pair? param) (eq? (car param) '%stack)) param)
     (else
      (list '%stack (* -8 (+ idx 2))))))
@@ -182,6 +192,14 @@
 
       ((%return)
        (emit "    return;"))
+
+      ((%push)
+       (let ((src (cadr inst)))
+         (emit (string-append "    reg_rsp -= 8; *(uint64_t *)reg_rsp = " (c-operand->str src) ";"))))
+
+      ((%pop)
+       (let ((dst (cadr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = *(uint64_t *)reg_rsp; reg_rsp += 8;"))))
 
       ((%mov)
        (let ((dst (cadr inst))
@@ -558,11 +576,16 @@
     (emit "#endif")
     (emit "")
     (emit "static uint64_t reg_rax ULISP_UNUSED;")
-    (emit "static uint64_t reg_rdx ULISP_UNUSED;")
+    (emit "static uint64_t reg_rbx ULISP_UNUSED;")
     (emit "static uint64_t reg_rcx ULISP_UNUSED;")
-    (emit "static uint64_t reg_r10 ULISP_UNUSED;")
+    (emit "static uint64_t reg_rdx ULISP_UNUSED;")
+    (emit "static uint64_t reg_rsi ULISP_UNUSED;")
     (emit "static uint64_t reg_rdi ULISP_UNUSED;")
+    (emit "static uint64_t reg_r10 ULISP_UNUSED;")
     (emit "static char *reg_r12 ULISP_UNUSED;")
+    (emit "static uint64_t reg_r13 ULISP_UNUSED;")
+    (emit "static uint64_t reg_r14 ULISP_UNUSED;")
+    (emit "static uint64_t reg_r15 ULISP_UNUSED;")
     (emit "static char *reg_rsp ULISP_UNUSED;")
     (emit "static uint64_t cmp_s1 ULISP_UNUSED;")
     (emit "static uint64_t cmp_s2 ULISP_UNUSED;")

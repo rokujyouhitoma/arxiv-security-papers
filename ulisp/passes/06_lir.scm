@@ -84,6 +84,13 @@
           (cond
             ((number? info)
              (emit-lir! (list '%load '%rax '%rsp info)))
+            ((and (pair? info) (eq? (car info) 'reg))
+             (let ((reg (cdr info)))
+               (if (not (eq? reg '%rax))
+                   (emit-lir! (list '%mov '%rax reg)))))
+            ((and (symbol? info) (memq info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)))
+             (if (not (eq? info '%rax))
+                 (emit-lir! (list '%mov '%rax info))))
             ((and (pair? info) (eq? (car info) 'param))
              (emit-lir! (list '%load '%rax '%rsp (cdr info))))
             ((and (pair? info) (eq? (car info) 'self))
@@ -313,19 +320,61 @@
       (emit-lir! (list '%mov '%rax e))
       (lir-compile-expr e si env #f)))
 
+(define (env-reg-var? e env)
+  (and (symbol? e)
+       (let ((b (assq e env)))
+         (and b
+              (let ((info (cdr b)))
+                (cond
+                  ((and (pair? info) (eq? (car info) 'reg)) (cdr info))
+                  ((memq info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)) info)
+                  (else #f)))))))
+
 (define (lir-compile-binop op e1 e2 si env)
-  (track-lir-si! si)
-  (lir-compile-operand-for-op op e1 si env)
-  (emit-lir! (list '%store '%rsp si '%rax))
-  (track-lir-si! (- si 8))
-  (lir-compile-operand-for-op op e2 (- si 8) env)
-  (case op
-    ((+)
-     (emit-lir! (list '%add '%rax (list '%stack si))))
-    ((-)
-     (emit-lir! (list '%mov '%rdx (list '%stack si)))
-     (emit-lir! '(%sub %rdx %rax))
-     (emit-lir! '(%mov %rax %rdx)))
+  (let ((r1 (env-reg-var? e1 env))
+        (r2 (env-reg-var? e2 env)))
+    (cond
+      ;; Fast path: op is + and e2 is a register variable
+      ((and (eq? op '+) r2)
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%add '%rax r2)))
+      ;; Fast path: op is + and e1 is a register variable
+      ((and (eq? op '+) r1)
+       (lir-compile-operand-for-op op e2 si env)
+       (emit-lir! (list '%add '%rax r1)))
+      ;; Fast path: op is - and e2 is a register variable
+      ((and (eq? op '-) r2)
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%sub '%rax r2)))
+      ;; Fast path: op is * and e2 is a register variable
+      ((and (eq? op '*) r2)
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! '(%sar %rax 2))
+       (emit-lir! (list '%imul '%rax r2)))
+      ;; Fast path: op is = and e1 is a register variable
+      ((and (eq? op '=) r1)
+       (lir-compile-operand-for-op op e2 si env)
+       (emit-lir! (list '%cmp r1 '%rax))
+       (emit-lir! '(%set-boolean %rax "sete")))
+      ;; Fast path: op is = and e2 is a register variable
+      ((and (eq? op '=) r2)
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%cmp '%rax r2))
+       (emit-lir! '(%set-boolean %rax "sete")))
+      (else
+       ;; Standard stack-based path
+       (track-lir-si! si)
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%store '%rsp si '%rax))
+       (track-lir-si! (- si 8))
+       (lir-compile-operand-for-op op e2 (- si 8) env)
+       (case op
+         ((+)
+          (emit-lir! (list '%add '%rax (list '%stack si))))
+         ((-)
+          (emit-lir! (list '%mov '%rdx (list '%stack si)))
+          (emit-lir! '(%sub %rdx %rax))
+          (emit-lir! '(%mov %rax %rdx)))
     ((*)
      (emit-lir! '(%sar %rax 2))
      (emit-lir! (list '%imul '%rax (list '%stack si))))
@@ -423,7 +472,7 @@
      (emit-lir! '(%mov %rax 63)))
     ((eq? eqv? char=? boolean=? symbol=?)
      (emit-lir! (list '%cmp (list '%stack si) '%rax))
-     (emit-lir! '(%set-boolean %rax "sete")))))
+     (emit-lir! '(%set-boolean %rax "sete"))))))))
 
 (define (lir-compile-triop op e1 e2 e3 si env)
   (track-lir-si! si)
@@ -795,33 +844,82 @@
 (define (lir-compile-cont-fun f-name params f-body in-body si env tail?)
   (let* ((entry-lbl (unique-label-sym "L_cont_entry_"))
          (exit-lbl  (unique-label-sym "L_cont_exit_"))
-         ;; Allocate stack slots for each parameter
-         (param-slots
-          (let loop ((ps params) (curr-si si) (acc-slots '()) (acc-env env))
-            (if (null? ps)
-                (cons (reverse acc-slots) acc-env)
-                (begin
-                  (track-lir-si! curr-si)
-                  (loop (cdr ps)
-                        (- curr-si 8)
-                        (cons (cons (car ps) curr-si) acc-slots)
-                        (cons (cons (car ps) curr-si) acc-env))))))
-         (p-offsets (car param-slots))
-         (raw-vars (if (unboxed-fn? f-name)
-                       (append params (get-raw-vars env))
-                       (get-raw-vars env)))
-         (body-env (set-raw-vars raw-vars (cdr param-slots)))
-         (next-si (- si (* (length params) 8)))
-         ;; Record contification target info in env
-         (cont-info (list '%cont-target entry-lbl p-offsets))
-         (full-env (cons (cons f-name cont-info) body-env)))
-    ;; Compile in-body first
-    (lir-compile-expr in-body next-si full-env tail?)
-    (emit-lir! (list '%jump exit-lbl))
-    ;; Continuation function body entry: emitted as %block with block arguments!
-    (emit-lir! (list '%block entry-lbl (map (lambda (po) (list '%stack (cdr po))) p-offsets)))
-    (lir-compile-expr f-body next-si full-env tail?)
-    (emit-lir! (list '%label exit-lbl))))
+         (num-params (length params))
+         ;; Allocate callee-saved registers (%rbx, %r13, %r14) for loops with <= 3 parameters
+         (use-reg-alloc? (and (> num-params 0) (<= num-params 3)))
+         (callee-saved-regs '(%rbx %r13 %r14)))
+    (if use-reg-alloc?
+        ;; === Loop Variable Register Allocation Path ===
+        (let* ((assigned-regs
+                (let loop ((i 0) (acc '()))
+                  (if (< i num-params)
+                      (loop (+ i 1) (cons (list-ref callee-saved-regs i) acc))
+                      (reverse acc))))
+               ;; 1. Save original callee-saved registers to frame stack slots
+               (saved-slots
+                (let loop ((rs assigned-regs) (curr-si si) (acc '()))
+                  (if (null? rs)
+                      acc
+                      (begin
+                        (track-lir-si! curr-si)
+                        (emit-lir! (list '%store '%rsp curr-si (car rs)))
+                        (loop (cdr rs) (- curr-si 8) (cons (cons (car rs) curr-si) acc))))))
+               (p-bindings
+                (let loop ((ps params) (rs assigned-regs) (acc '()))
+                  (if (null? ps)
+                      (reverse acc)
+                      (loop (cdr ps) (cdr rs)
+                            (cons (cons (car ps) (cons 'reg (car rs))) acc)))))
+               (raw-vars (if (unboxed-fn? f-name)
+                             (append params (get-raw-vars env))
+                             (get-raw-vars env)))
+               (body-env (set-raw-vars raw-vars (append p-bindings env)))
+               (next-si (- si (* num-params 8)))
+               ;; Record contification target info in env
+               (cont-info (list '%cont-target entry-lbl p-bindings))
+               (full-env (cons (cons f-name cont-info) body-env)))
+          ;; Compile in-body first (evaluates initial call into registers and jumps to entry-lbl)
+          (lir-compile-expr in-body next-si full-env tail?)
+          (emit-lir! (list '%jump exit-lbl))
+          ;; Continuation function body entry: emitted as %block with register block arguments!
+          (emit-lir! (list '%block entry-lbl assigned-regs))
+          (lir-compile-expr f-body next-si full-env tail?)
+          (emit-lir! (list '%label exit-lbl))
+          ;; Restore saved callee-saved registers upon exiting the loop
+          (for-each
+           (lambda (entry)
+             (let ((reg (car entry))
+                   (slot (cdr entry)))
+               (emit-lir! (list '%load reg '%rsp slot))))
+           (reverse saved-slots)))
+
+        ;; === Stack-based Fallback Path (> 3 params) ===
+        (let* ((param-slots
+                (let loop ((ps params) (curr-si si) (acc-slots '()) (acc-env env))
+                  (if (null? ps)
+                      (cons (reverse acc-slots) acc-env)
+                      (begin
+                        (track-lir-si! curr-si)
+                        (loop (cdr ps)
+                              (- curr-si 8)
+                              (cons (cons (car ps) curr-si) acc-slots)
+                              (cons (cons (car ps) curr-si) acc-env))))))
+               (p-offsets (car param-slots))
+               (raw-vars (if (unboxed-fn? f-name)
+                             (append params (get-raw-vars env))
+                             (get-raw-vars env)))
+               (body-env (set-raw-vars raw-vars (cdr param-slots)))
+               (next-si (- si (* (length params) 8)))
+               ;; Record contification target info in env
+               (cont-info (list '%cont-target entry-lbl p-offsets))
+               (full-env (cons (cons f-name cont-info) body-env)))
+          ;; Compile in-body first
+          (lir-compile-expr in-body next-si full-env tail?)
+          (emit-lir! (list '%jump exit-lbl))
+          ;; Continuation function body entry: emitted as %block with block arguments!
+          (emit-lir! (list '%block entry-lbl (map (lambda (po) (list '%stack (cdr po))) p-offsets)))
+          (lir-compile-expr f-body next-si full-env tail?)
+          (emit-lir! (list '%label exit-lbl))))))
 
 (define (lir-compile-cont-call f-name args si env)
   (let ((binding (assq f-name env)))
@@ -829,29 +927,80 @@
         (error "Unresolved %cont-call target:" f-name)
         (let* ((target-info (cdr binding))
                (entry-lbl (cadr target-info))
-               (p-offsets (caddr target-info))
-               (num-args (length args)))
-          (if (not (= num-args (length p-offsets)))
+               (p-bindings (caddr target-info))
+               (num-args (length args))
+               (all-reg-targets?
+                (let check-regs ((pbs p-bindings))
+                  (if (null? pbs)
+                      (> num-args 0)
+                      (let ((info (cdar pbs)))
+                        (and (or (and (pair? info) (eq? (car info) 'reg))
+                                 (memq info '(%rbx %r13 %r14 %r15)))
+                             (check-regs (cdr pbs))))))))
+          (if (not (= num-args (length p-bindings)))
               (error "Arity mismatch in %cont-call:" f-name)
-              ;; Evaluate arguments sequentially into temporary stack slots
-              (let eval-loop ((as args) (curr-si si) (temp-sis '()))
-                (if (pair? as)
-                    (begin
-                      (track-lir-si! curr-si)
-                      (lir-compile-expr (car as) curr-si env #f)
-                      (emit-lir! (list '%store '%rsp curr-si '%rax))
-                      (eval-loop (cdr as) (- curr-si 8) (cons curr-si temp-sis)))
-                    (begin
-                      ;; Transfer temporary values to parameter slots to prevent clobbering
-                      (let xfer-loop ((ts (reverse temp-sis)) (pos p-offsets))
-                        (if (and (pair? ts) (pair? pos))
-                            (let ((t-si (car ts))
-                                  (p-offset (cdar pos)))
-                              (emit-lir! (list '%load '%rdx '%rsp t-si))
-                              (emit-lir! (list '%store '%rsp p-offset '%rdx))
-                              (xfer-loop (cdr ts) (cdr pos)))))
-                      ;; Directly jump to continuation target with block arguments!
-                      (emit-lir! (list '%jump entry-lbl (map (lambda (po) (list '%stack (cdr po))) p-offsets)))))))))))
+              (cond
+                ;; === Fast Register-Only Transfer Path (1 or 2 args) ===
+                ((and all-reg-targets? (= num-args 1))
+                 (let ((dst-reg (let ((info (cdar p-bindings)))
+                                  (if (pair? info) (cdr info) info))))
+                   (lir-compile-expr (car args) si env #f)
+                   (if (not (eq? dst-reg '%rax))
+                       (emit-lir! (list '%mov dst-reg '%rax)))
+                   (emit-lir! (list '%jump entry-lbl (list dst-reg)))))
+
+                ((and all-reg-targets? (= num-args 2))
+                 (let* ((dst-reg0 (let ((info (cdr (car p-bindings))))
+                                    (if (pair? info) (cdr info) info)))
+                        (dst-reg1 (let ((info (cdr (cadr p-bindings))))
+                                    (if (pair? info) (cdr info) info))))
+                   ;; Evaluate arg0 into %rax, then save to scratch %r10
+                   (lir-compile-expr (car args) si env #f)
+                   (emit-lir! '(%mov %r10 %rax))
+                   ;; Evaluate arg1 into %rax
+                   (lir-compile-expr (cadr args) (- si 8) env #f)
+                   ;; Transfer both to target registers!
+                   (emit-lir! (list '%mov dst-reg0 '%r10))
+                   (if (not (eq? dst-reg1 '%rax))
+                       (emit-lir! (list '%mov dst-reg1 '%rax)))
+                   (emit-lir! (list '%jump entry-lbl (list dst-reg0 dst-reg1)))))
+
+                (else
+                 ;; === General Transfer Path (sequential stack evaluation) ===
+                 (let eval-loop ((as args) (curr-si si) (temp-sis '()))
+                   (if (pair? as)
+                       (begin
+                         (track-lir-si! curr-si)
+                         (lir-compile-expr (car as) curr-si env #f)
+                         (emit-lir! (list '%store '%rsp curr-si '%rax))
+                         (eval-loop (cdr as) (- curr-si 8) (cons curr-si temp-sis)))
+                       (begin
+                         ;; Transfer temporary values to parameter slots or registers
+                         (let xfer-loop ((ts (reverse temp-sis)) (pbs p-bindings))
+                           (if (and (pair? ts) (pair? pbs))
+                               (let ((t-si (car ts))
+                                     (p-info (cdar pbs)))
+                                 (cond
+                                   ((and (pair? p-info) (eq? (car p-info) 'reg))
+                                    (emit-lir! (list '%load (cdr p-info) '%rsp t-si)))
+                                   ((memq p-info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
+                                    (emit-lir! (list '%load p-info '%rsp t-si)))
+                                   (else
+                                    (emit-lir! (list '%load '%rdx '%rsp t-si))
+                                    (emit-lir! (list '%store '%rsp p-info '%rdx))))
+                                 (xfer-loop (cdr ts) (cdr pbs)))))
+                         ;; Directly jump to continuation target with block arguments!
+                         (emit-lir! (list '%jump entry-lbl
+                                          (map (lambda (pb)
+                                                 (let ((p-info (cdr pb)))
+                                                   (cond
+                                                     ((and (pair? p-info) (eq? (car p-info) 'reg))
+                                                      (cdr p-info))
+                                                     ((memq p-info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
+                                                      p-info)
+                                                     (else
+                                                      (list '%stack p-info)))))
+                                               p-bindings)))))))))))))
 
 (define (lir-compile-with-handler handler-expr thunk-expr si env tail?)
   (let* ((exit-lbl (unique-label-sym "L_handler_exit_"))
