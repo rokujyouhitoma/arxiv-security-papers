@@ -23,6 +23,7 @@ cat "$ULISP_DIR/lib/posix.scm" \
     "$ULISP_DIR/lib/exception.scm" \
     "$ULISP_DIR/lib/values.scm" \
     "$ULISP_DIR/lib/continuation.scm" \
+    "$ULISP_DIR/lib/parameter.scm" \
     "$ULISP_DIR/lib/gc.scm" \
     "$ULISP_DIR/compiler.scm" > "$BUILD_DIR/ulisp_core.scm"
 

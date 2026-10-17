@@ -104,6 +104,8 @@
        (emit-lir! (list '%code-ref '%rax "__ulisp_stackmap_table")))
       ((eof-object)
        (emit-lir! '(%mov %rax 79)))
+      ((%num-args)
+       (emit-lir! '(%load %rax %rsp -16)))
       ((read-char %read-char)
        (emit-lir! (list '%c-call "ulisp_read_char" frame-shift)))
       ((peek-char %peek-char)
@@ -740,12 +742,14 @@
                     (emit-lir! (list '%store '%rsp param-offset '%rdx))
                     (loop (+ i 1)))))
             (emit-lir! '(%load %rdx %r10 -1))
+            (emit-lir! (list '%mov '%rax (* num-args 4)))
             (emit-lir! '(%jump %rdx)))
 
           ;; --- NON-TAIL CALL ---
           (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
                  (safepoint-lbl (new-safepoint-label!)))
             (record-safepoint! safepoint-lbl frame-shift bitmap)
+            (emit-lir! (list '%mov '%rax (* num-args 4)))
             (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
 (define (lir-compile-cont-fun f-name params f-body in-body si env tail?)
@@ -835,6 +839,7 @@
            (safepoint-lbl (new-safepoint-label!))
            (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
       (record-safepoint! safepoint-lbl frame-shift bitmap)
+      (emit-lir! (list '%mov '%rax 0))
       (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))
     ;; 5. Normal return from thunk: Pop handler frame and jump to exit
     (emit-lir! (list '%pop-handler frame-si))
@@ -849,6 +854,7 @@
       (let* ((safepoint-lbl (new-safepoint-label!))
              (bitmap (compute-stackmap-bitmap frame-shift aligned-si (list '%rdi) env)))
         (record-safepoint! safepoint-lbl frame-shift bitmap)
+        (emit-lir! (list '%mov '%rax 4))
         (emit-lir! (list '%call-closure frame-shift safepoint-lbl))))
     ;; 7. Exit label
     (emit-lir! (list '%label exit-lbl))))
@@ -899,6 +905,7 @@
            (safepoint-lbl (new-safepoint-label!))
            (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
       (record-safepoint! safepoint-lbl frame-shift bitmap)
+      (emit-lir! (list '%mov '%rax 0))
       (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))
     ;; 4. Dispatch to consumer based on ulisp_values_count
     (let* ((frame-shift (align-frame-shift (- 0 call-si)))
@@ -930,6 +937,7 @@
       (let* ((safepoint-lbl (new-safepoint-label!))
              (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
         (record-safepoint! safepoint-lbl frame-shift bitmap)
+        (emit-lir! (list '%mov '%rax 4))
         (emit-lir! (list '%call-closure frame-shift safepoint-lbl))))
     ;; 4. Return label: both normal return and (k val) jump here!
     (emit-lir! (list '%block ret-lbl '()))))
@@ -1047,9 +1055,11 @@
            (callee-env (cons (cons '%num-params num-params)
                              (cons (cons '%raw-vars initial-raw-vars)
                                    (append self-env param-env))))
-           (callee-si -16))
+           (callee-si -24))
       (track-lir-si! -8)
+      (track-lir-si! -16)
       (track-lir-si! callee-si)
+      (emit-lir! '(%store %rsp -16 %rax))
       (lir-compile-expr body callee-si callee-env #t)
       (emit-lir! '(%return))
       (let* ((needed-frame (- 0 (car *lir-min-si*)))

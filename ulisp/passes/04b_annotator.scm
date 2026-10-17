@@ -330,7 +330,7 @@
     ((eq? op 'cdr)
      (let ((t (if (pair? arg-types) (car arg-types) (type-top))))
        (type-pair-cdr t)))
-    ((memq op '(string-length bytevector-length bytevector-u8-ref vector-length))
+    ((memq op '(string-length bytevector-length bytevector-u8-ref vector-length %num-args))
      (type-fixnum))
     ((memq op '(bytevector? vector?))
      (type-boolean))

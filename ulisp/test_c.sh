@@ -46,6 +46,8 @@ assert_c() {
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ vector ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm)"$'\n'"$expr"
+    elif [[ "$expr" =~ parameter || "$expr" =~ dynamic-wind ]]; then
+        code="(!target c)"$'\n'"$(cat lib/string.scm lib/continuation.scm lib/parameter.scm)"$'\n'"$expr"
     else
         code="(!target c) $expr"
     fi
@@ -194,6 +196,16 @@ assert_c "(2 3)" "(vector->list (vector 1 2 3 4) 1 3)"
 assert_c "#(1 2 3)" "(list->vector '(1 2 3))"
 assert_c "#(1 #(2 3) 4)" "(vector 1 (vector 2 3) 4)"
 assert_c "2" "(vector-ref (vector-ref (vector 1 (vector 2 3) 4) 1) 0)"
+
+echo "--- Step 11: R7RS Parameters & Parameterize ---"
+assert_c "10" "(let ((p (make-parameter 10))) (p))"
+assert_c "42" "(let ((p (make-parameter 10))) (begin (p 42) (p)))"
+assert_c "10" "(let ((p (make-parameter 5 (lambda (x) (* x 2))))) (p))"
+assert_c "14" "(let ((p (make-parameter 5 (lambda (x) (* x 2))))) (begin (p 7) (p)))"
+assert_c "(20 . 10)" "(let ((p (make-parameter 10))) (let ((res (parameterize ((p 20)) (p)))) (cons res (p))))"
+assert_c "33" "(let ((p1 (make-parameter 1)) (p2 (make-parameter 2))) (let ((res (parameterize ((p1 10) (p2 20)) (+ (p1) (p2))))) (+ res (+ (p1) (p2)))))"
+assert_c "(1 (2 3 2) 1)" "(let ((p (make-parameter 1))) (cons (p) (cons (parameterize ((p 2)) (cons (p) (cons (parameterize ((p 3)) (p)) (cons (p) '())))) (cons (p) '()))))"
+assert_c "42" "(parameterize () 42)"
 
 rm -f "$TMP_C" "$TMP_BIN"
 

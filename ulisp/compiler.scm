@@ -157,7 +157,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-gc-state-ptr %get-stackmap-table)))
+  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-gc-state-ptr %get-stackmap-table %num-args)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -195,7 +195,7 @@
              zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
              boolean? char? null? not symbol? list?
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
-             bytevector? bytevector-length vector? vector-length
+             bytevector? bytevector-length vector? vector-length %num-args
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
              %raw-add %raw-sub %raw-mul %raw-cmp)))
@@ -971,6 +971,43 @@
        (list 'let (list (list tmp (car args)))
              (list 'if tmp tmp (desugar-or (cdr args))))))))
 
+(define (desugar-parameterize bindings bodies)
+  (if (null? bindings)
+      (make-body-expr bodies)
+      (let loop ((rest bindings)
+                 (let-bindings '())
+                 (save-and-set '())
+                 (restore '()))
+        (if (null? rest)
+            (let* ((before-thunk
+                    (list 'lambda '() (cons 'begin (reverse save-and-set))))
+                   (after-thunk
+                    (list 'lambda '() (cons 'begin (reverse restore))))
+                   (exc-sym (unique-symbol "exc_"))
+                   (body-expr
+                    (list 'guard (list exc-sym (list 'else (cons 'begin (append (reverse restore) (list (list 'raise exc-sym))))))
+                          (make-body-expr bodies)))
+                   (body-thunk
+                    (list 'lambda '() body-expr)))
+              (list 'let (reverse let-bindings)
+                    (list 'dynamic-wind before-thunk body-thunk after-thunk)))
+            (let* ((b (car rest))
+                   (param-expr (car b))
+                   (val-expr (cadr b))
+                   (p-sym (unique-symbol "param_"))
+                   (v-sym (unique-symbol "newval_"))
+                   (old-sym (unique-symbol "oldcell_")))
+              (loop (cdr rest)
+                    (cons (list old-sym (list 'cons #f ''()))
+                          (cons (list v-sym val-expr)
+                                (cons (list p-sym param-expr)
+                                      let-bindings)))
+                    (cons (list p-sym v-sym)
+                          (cons (list 'set-car! old-sym (list p-sym))
+                                save-and-set))
+                    (cons (list p-sym (list 'car old-sym))
+                          restore)))))))
+
 (define (rewrite-top-level forms)
   (let loop ((fs forms) (bindings '()) (bodies '()))
     (if (null? fs)
@@ -1131,6 +1168,13 @@
           (desugar-all (desugar-let-values (cadr expr) (cddr expr))))
          ((let*-values)
           (desugar-all (desugar-let*-values (cadr expr) (cddr expr))))
+         ((make-parameter)
+          (let ((args (cdr expr)))
+            (if (null? (cdr args))
+                (list 'make-parameter-1 (desugar-all (car args)))
+                (list 'make-parameter-2 (desugar-all (car args)) (desugar-all (cadr args))))))
+         ((parameterize)
+          (desugar-all (desugar-parameterize (cadr expr) (cddr expr))))
          ((%raw-call/cc)
           (list '%raw-call/cc (desugar-all (cadr expr))))
          ((call-with-values %call-with-values)
@@ -2645,7 +2689,7 @@
     ((eq? op 'cdr)
      (let ((t (if (pair? arg-types) (car arg-types) (type-top))))
        (type-pair-cdr t)))
-    ((memq op '(string-length bytevector-length bytevector-u8-ref vector-length))
+    ((memq op '(string-length bytevector-length bytevector-u8-ref vector-length %num-args))
      (type-fixnum))
     ((memq op '(bytevector? vector?))
      (type-boolean))
@@ -3961,6 +4005,8 @@
        (emit-lir! (list '%code-ref '%rax "__ulisp_stackmap_table")))
       ((eof-object)
        (emit-lir! '(%mov %rax 79)))
+      ((%num-args)
+       (emit-lir! '(%load %rax %rsp -16)))
       ((read-char %read-char)
        (emit-lir! (list '%c-call "ulisp_read_char" frame-shift)))
       ((peek-char %peek-char)
@@ -4597,12 +4643,14 @@
                     (emit-lir! (list '%store '%rsp param-offset '%rdx))
                     (loop (+ i 1)))))
             (emit-lir! '(%load %rdx %r10 -1))
+            (emit-lir! (list '%mov '%rax (* num-args 4)))
             (emit-lir! '(%jump %rdx)))
 
           ;; --- NON-TAIL CALL ---
           (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
                  (safepoint-lbl (new-safepoint-label!)))
             (record-safepoint! safepoint-lbl frame-shift bitmap)
+            (emit-lir! (list '%mov '%rax (* num-args 4)))
             (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
 (define (lir-compile-cont-fun f-name params f-body in-body si env tail?)
@@ -4692,6 +4740,7 @@
            (safepoint-lbl (new-safepoint-label!))
            (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
       (record-safepoint! safepoint-lbl frame-shift bitmap)
+      (emit-lir! (list '%mov '%rax 0))
       (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))
     ;; 5. Normal return from thunk: Pop handler frame and jump to exit
     (emit-lir! (list '%pop-handler frame-si))
@@ -4706,6 +4755,7 @@
       (let* ((safepoint-lbl (new-safepoint-label!))
              (bitmap (compute-stackmap-bitmap frame-shift aligned-si (list '%rdi) env)))
         (record-safepoint! safepoint-lbl frame-shift bitmap)
+        (emit-lir! (list '%mov '%rax 4))
         (emit-lir! (list '%call-closure frame-shift safepoint-lbl))))
     ;; 7. Exit label
     (emit-lir! (list '%label exit-lbl))))
@@ -4756,6 +4806,7 @@
            (safepoint-lbl (new-safepoint-label!))
            (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
       (record-safepoint! safepoint-lbl frame-shift bitmap)
+      (emit-lir! (list '%mov '%rax 0))
       (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))
     ;; 4. Dispatch to consumer based on ulisp_values_count
     (let* ((frame-shift (align-frame-shift (- 0 call-si)))
@@ -4787,6 +4838,7 @@
       (let* ((safepoint-lbl (new-safepoint-label!))
              (bitmap (compute-stackmap-bitmap frame-shift call-si '() env)))
         (record-safepoint! safepoint-lbl frame-shift bitmap)
+        (emit-lir! (list '%mov '%rax 4))
         (emit-lir! (list '%call-closure frame-shift safepoint-lbl))))
     ;; 4. Return label: both normal return and (k val) jump here!
     (emit-lir! (list '%block ret-lbl '()))))
@@ -4904,9 +4956,11 @@
            (callee-env (cons (cons '%num-params num-params)
                              (cons (cons '%raw-vars initial-raw-vars)
                                    (append self-env param-env))))
-           (callee-si -16))
+           (callee-si -24))
       (track-lir-si! -8)
+      (track-lir-si! -16)
       (track-lir-si! callee-si)
+      (emit-lir! '(%store %rsp -16 %rax))
       (lir-compile-expr body callee-si callee-env #t)
       (emit-lir! '(%return))
       (let* ((needed-frame (- 0 (car *lir-min-si*)))
@@ -7562,6 +7616,7 @@
          (let ((lbl-str (c-sanitize-label catch-lbl)))
            (emit (string-append "    *(void **)(reg_rsp + (" (number->string frame-si) ")) = ulisp_handler_chain;"))
            (emit (string-append "    *(char **)(reg_rsp + (" (number->string (+ frame-si 8)) ")) = reg_rsp;"))
+            (emit (string-append "    *(void **)(reg_rsp + (" (number->string (+ frame-si 24)) ")) = &&" lbl-str ";"))
            (emit (string-append "    *(uint64_t *)(reg_rsp + (" (number->string (+ frame-si 32)) ")) = *(uint64_t *)(reg_rsp + (" (number->string handler-si) "));"))
            (emit (string-append "    ulisp_handler_chain = (void *)(reg_rsp + (" (number->string frame-si) "));")))))
 
@@ -7570,13 +7625,14 @@
          (emit (string-append "    ulisp_handler_chain = *(void **)(reg_rsp + (" (number->string frame-si) "));"))))
 
       ((%raise)
-       (emit "    if (!ulisp_handler_chain) { fprintf(stderr, \"*** ERROR: unhandled exception: \"); print_scheme_value(reg_rax); exit(1); }")
-       (emit "    reg_rdi = reg_rax;")
-       (emit "    reg_rsp = *(char **)((char *)ulisp_handler_chain + 8);")
-       (emit "    reg_rax = *(uint64_t *)((char *)ulisp_handler_chain + 32);")
-       (emit "    ulisp_handler_chain = *(void **)ulisp_handler_chain;")
-       (emit "    reg_r10 = reg_rax;"))
-
+        (emit "    if (!ulisp_handler_chain) { fprintf(stderr, \"*** ERROR: unhandled exception: \"); print_scheme_value(reg_rax); exit(1); }")
+        (emit "    reg_rdi = reg_rax;")
+        (emit "    reg_rsp = *(char **)((char *)ulisp_handler_chain + 8);")
+        (emit "    void *catch_target = *(void **)((char *)ulisp_handler_chain + 24);")
+        (emit "    reg_rax = *(uint64_t *)((char *)ulisp_handler_chain + 32);")
+        (emit "    ulisp_handler_chain = *(void **)ulisp_handler_chain;")
+        (emit "    reg_r10 = reg_rax;")
+        (emit "    goto *catch_target;"))
       ((%set-values-count)
        (let ((cnt (cadr inst)))
          (emit (string-append "    ulisp_values_count = " (number->string cnt) ";"))))

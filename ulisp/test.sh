@@ -22,7 +22,7 @@ ULISP_STAGE1="build/scheme-stage1"
 ULISP_BOOT="bin/ulisp-boot"
 
 make compiler
-cat lib/posix.scm lib/string.scm lib/bytevector.scm lib/vector.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/string.scm lib/bytevector.scm lib/vector.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
@@ -81,7 +81,9 @@ assert() {
     elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string ]]; then
         full_input="$(cat lib/string.scm)"$'\n'"$input"
     elif [[ "$input" =~ open-input-string || "$input" =~ open-output-string || "$input" =~ "port\?" || "$input" =~ "input-port\?" || "$input" =~ "output-port\?" || "$input" =~ "textual-port\?" || "$input" =~ "get-output-string" ]]; then
-        full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm)"$'\n'"$input"
+        full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
+    elif [[ "$input" =~ parameter || "$input" =~ dynamic-wind ]]; then
+        full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ bytevector || "$input" =~ utf8 ]]; then
         full_input="$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$input"
     elif [[ "$input" =~ vector ]]; then
@@ -612,6 +614,19 @@ assert "#(1 2 3)" "(list->vector '(1 2 3))"
 assert "#(1 #(2 3) 4)" "(vector 1 (vector 2 3) 4)"
 assert "2" "(vector-ref (vector-ref (vector 1 (vector 2 3) 4) 1) 0)"
 assert "#(100 200)" "(let loop ((i 0) (last-v (vector 0 0))) (if (< i 50) (loop (+ i 1) (vector 100 200)) last-v))"
+
+# --- Step 31: R7RS Parameters & Parameterize (Issue 537) ---
+echo "-- Step 31: Issue 537 R7RS Parameters & Parameterize --"
+assert "10" "(let ((p (make-parameter 10))) (p))"
+assert "42" "(let ((p (make-parameter 10))) (begin (p 42) (p)))"
+assert "10" "(let ((p (make-parameter 5 (lambda (x) (* x 2))))) (p))"
+assert "14" "(let ((p (make-parameter 5 (lambda (x) (* x 2))))) (begin (p 7) (p)))"
+assert "(20 . 10)" "(let ((p (make-parameter 10))) (let ((res (parameterize ((p 20)) (p)))) (cons res (p))))"
+assert "33" "(let ((p1 (make-parameter 1)) (p2 (make-parameter 2))) (let ((res (parameterize ((p1 10) (p2 20)) (+ (p1) (p2))))) (+ res (+ (p1) (p2)))))"
+assert "(1 (2 3 2) 1)" "(let ((p (make-parameter 1))) (cons (p) (cons (parameterize ((p 2)) (cons (p) (cons (parameterize ((p 3)) (p)) (cons (p) '())))) (cons (p) '()))))"
+assert "10" "(let ((p (make-parameter 10))) (guard (e (else (p))) (parameterize ((p 99)) (raise 'error))))"
+assert "100" "(let ((p (make-parameter 100)) (saved-k (cons #f '()))) (let ((res (call/cc (lambda (k) (set-car! saved-k k) 0)))) (if (= res 0) (parameterize ((p 200)) ((car saved-k) 1)) (p))))"
+assert "42" "(parameterize () 42)"
 
 
 # =======================================================================
