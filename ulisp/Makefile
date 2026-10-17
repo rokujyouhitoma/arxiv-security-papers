@@ -140,9 +140,17 @@ build/ulisp_core.scm: lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm 
 	@mkdir -p build
 	cat $^ > $@
 
+ULISP_BOOT = bin/ulisp-boot
+
 build/stage1.s: compiler.scm build/ulisp_core.scm
 	@mkdir -p build
-	PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < build/ulisp_core.scm > $@
+	@if [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
+		echo "=== Stage 1: Fast compiling with native seed $(ULISP_BOOT) ==="; \
+		./$(ULISP_BOOT) build/ulisp_core.scm > $@; \
+	else \
+		echo "=== Stage 1: Compiling with ILisp $(ILISP) ==="; \
+		PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < build/ulisp_core.scm > $@; \
+	fi
 
 build/scheme-stage1: build/stage1.s
 	$(CC) -nostdlib -static $< -o $@
@@ -267,4 +275,7 @@ test: test_passes test_annotator test_rtyper test_lir test_aarch64 test_exceptio
 
 clean:
 	rm -f tmp tmp_bin *.s *.o
-	rm -rf build bin
+	rm -rf build
+
+distclean: clean
+	rm -rf bin

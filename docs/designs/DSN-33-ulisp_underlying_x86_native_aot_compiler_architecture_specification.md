@@ -52,6 +52,7 @@
 - [5. 3段階セルフホスティングブートストラップ連鎖と不動点検証](#5-3段階セルフホスティングブートストラップ連鎖と不動点検証)
   - [5.1 ブートストラップ連鎖 (Stage 1 〜 Stage 3)](#51-ブートストラップ連鎖-stage-1--stage-3)
   - [5.2 決定論的コード生成と完全一致検証 (`diff` ゼロ保証)](#52-決定論的コード生成と完全一致検証-diff-ゼロ保証)
+  - [5.3 シードバイナリによる Fast Bootstrap プロトコルおよびリポジトリ独立性境界 (Issue #541)](#53-シードバイナリによる-fast-bootstrap-プロトコルおよびリポジトリ独立性境界-issue-541)
 - [6. ILisp AOT バックエンド統合仕様 (DSN-31 Backend B への昇格)](#6-ilisp-aot-バックエンド統合仕様-dsn-31-backend-b-への昇格)
   - [6.1 統合アーキテクチャと依存性境界](#61-統合アーキテクチャと依存性境界)
   - [6.2 ILisp S式 AST から ULisp 入力へのコンパイルパイプライン](#62-ilisp-s式-ast-から-ulisp-入力へのコンパイルパイプライン)
@@ -341,6 +342,27 @@ gcc -o scheme-stage1 runtime.o stage1.s                   gcc -o scheme-stage2 r
 
 * セルフホスト検証で差分が生じる原因（ハッシュテーブル走査順の非決定性、ポインタ値の直接文字列化など）を徹底排除する。
 * ラベル命名カウンタ（`.L1`, `.L2`）および環境リスト走査は、常に出現順序に従う決定論的アルゴリズムを採用する。
+
+### 5.3 シードバイナリによる Fast Bootstrap プロトコルおよびリポジトリ独立性境界 (Issue #541)
+
+コンパイラ機能の拡充に伴うコード規模増大に対処し、日々の開発サイクルにおけるコンパイル待ち時間を極小化するため、GCC / Chez Scheme 準拠の **Fast Bootstrap プロトコル（シードバイナリ駆動方式）** を導入する。
+
+1. **ブートストラップシード (`bin/ulisp-boot`) の役割**:
+   - 不動点検証を通過した安定版ネイティブコンパイラバイナリを `ulisp/bin/ulisp-boot` として配備・固定化する。
+   - 外部ライブラリ依存ゼロ（`gcc -nostdlib -static`）の単一 ELF バイナリであり、Python や外部環境の制約を受けずにミリ秒単位で起動する。
+2. **高速ビルドフロー (Fast Bootstrap)**:
+   - 日常の開発時（`./bootstrap.sh` または `make stage1`）は、Python / ILisp を介さず、シードバイナリ `bin/ulisp-boot` を直接起動して最新の `ulisp_core.scm` をコンパイルする。
+   - 所要時間は **約 0.3 秒〜数秒** で完了し、従来の Python インタプリタ実行（数分以上）と比較して数百倍の高速化を達成する。
+3. **二重ブートストラップ検証 (Dual-Mode Verification)**:
+   - **日常開発（Fast Mode / デフォルト）**: `bin/ulisp-boot` $\to$ `scheme-stage1` $\to$ `scheme-stage2` $\to$ 不動点検証。
+   - **完全検証（Full Bootstrap Mode / CI・タグ時）**: `FULL_BOOTSTRAP=1` または `BOOTSTRAP_FROM_ILISP=1` を指定することで、基盤層 ILisp (`python3 -m ilisp`) からの 3 段階ブートストラップ連鎖を厳密に検証する。
+4. **ローカルキャッシュ運用とクリーンルール (Local Cache Management)**:
+   - リポジトリの肥大化防止および他アーキテクチャへの移植性維持のため、`bin/ulisp-boot` は Git にコミットせずローカルキャッシュとして運用（`.gitignore` 適用）する。
+   - `make clean` では一時ビルド成果物（`build/`）のみを削除し、`bin/ulisp-boot` は保護・維持される。
+   - 完全なクリーンアップを行いたい場合のみ `make distclean` により `bin/` を消去する。
+5. **リポジトリ独立性境界 (Repository Decoupling Ready)**:
+   - `bin/ulisp-boot` の配備により、`ulisp/` は Python や親リポジトリ（`arxiv-security-papers`）への実行時・ビルド時依存を完全に遮断できる。
+   - これにより、将来的に `ulisp/` をスタンドアロンの独立した言語処理系リポジトリとして切り出す（`git submodule` / 別リポジトリ化）ための完全なポータビリティが確立される。
 
 ---
 

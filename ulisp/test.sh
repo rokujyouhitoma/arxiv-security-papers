@@ -19,6 +19,7 @@ TMP_S="tmp.s"
 TMP_BIN="tmp_bin"
 COMPILER="compiler.scm"
 ULISP_STAGE1="build/scheme-stage1"
+ULISP_BOOT="bin/ulisp-boot"
 
 make compiler
 cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
@@ -29,28 +30,35 @@ make test_annotator
 make test_rtyper
 make test_lir
 
-# Determine compiler engine: prefer native scheme-stage1, fallback to ILisp
+# Determine compiler engine: prefer native scheme-stage1 / ulisp-boot, fallback to ILisp
 USE_NATIVE_ULISP=false
+ACTIVE_NATIVE=""
 
 if [ "${FORCE_ILISP:-0}" != "1" ]; then
-    if [ ! -x "$ULISP_STAGE1" ]; then
+    if [ -x "$ULISP_STAGE1" ]; then
+        ACTIVE_NATIVE="$ULISP_STAGE1"
+    elif [ -x "$ULISP_BOOT" ]; then
+        ACTIVE_NATIVE="$ULISP_BOOT"
+    else
         echo "=== Building scheme-stage1... ==="
         make stage1 >/dev/null 2>&1 || true
+        if [ -x "$ULISP_STAGE1" ]; then
+            ACTIVE_NATIVE="$ULISP_STAGE1"
+        fi
     fi
 
-    if [ -x "$ULISP_STAGE1" ]; then
-        # Smoke test: verify scheme-stage1 can compile a trivial integer form on this architecture
-        if echo "42" | ULISP_QUIET=1 "$ULISP_STAGE1" >/dev/null 2>&1; then
+    if [ -n "$ACTIVE_NATIVE" ]; then
+        # Smoke test: verify native compiler can compile a trivial integer form on this architecture
+        if echo "42" | ULISP_QUIET=1 "$ACTIVE_NATIVE" >/dev/null 2>&1; then
             USE_NATIVE_ULISP=true
         fi
     fi
 fi
 
-
 if [ "$USE_NATIVE_ULISP" = true ]; then
-    echo "=== Compiler Engine: ULisp Native AOT Compiler (Fast mode: < 1s) ==="
+    echo "=== Compiler Engine: ULisp Native AOT Compiler ($ACTIVE_NATIVE, Fast mode: < 1s) ==="
     compile_scheme() {
-        ULISP_QUIET=1 "$ULISP_STAGE1" <<< "$1" > "$2"
+        ULISP_QUIET=1 "$ACTIVE_NATIVE" <<< "$1" > "$2"
     }
 else
     echo "=== Compiler Engine: ILisp Python Interpreter (Fallback mode) ==="

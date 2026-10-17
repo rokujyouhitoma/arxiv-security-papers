@@ -37,8 +37,11 @@ make test
 # R7RS ファーストクラス継続 & dynamic-wind テスト (7 シナリオ 100% PASS)
 make test_call_cc
 
-# 3段階セルフホスティングブートストラップ連鎖および不動点検証
+# 3段階セルフホスティングブートストラップ連鎖および不動点検証 (シード駆動 Fast Bootstrap: ~15秒)
 make bootstrap
+
+# 完全検証ブートストラップ (ILisp / Python 経由)
+FULL_BOOTSTRAP=1 make bootstrap
 
 # Mytkowicz バイアス排除 差分テスト (Gauche / Chibi / Chez 100% 一致)
 python3 tools/differential_test_ulisp.py

@@ -28,8 +28,14 @@ PYTHON_BIN="python3"
 if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
     PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
 fi
+BOOT_BIN="$ULISP_DIR/bin/ulisp-boot"
+
 if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ]; then
-    echo "[1/3] Stage 1: Skipping ILisp compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
+    echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
+elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
+    echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using native seed ($BOOT_BIN)..."
+    "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
+    gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
 else
     echo "[1/3] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."
     PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm" < "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
@@ -47,6 +53,10 @@ echo "=== Verifying Fixed Point (diff stage2.s stage3.s) ==="
 if cmp -s "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s"; then
     echo "SUCCESS: Stage 2 and Stage 3 outputs are bit-for-bit IDENTICAL!"
     echo "Fixed-point bootstrap verified successfully with Thin Debug Runtime & Scheme stdlib."
+    mkdir -p "$ULISP_DIR/bin"
+    cp -f "$BUILD_DIR/scheme-stage2" "$BOOT_BIN"
+    chmod +x "$BOOT_BIN"
+    echo "Updated local bootstrap seed cache ($BOOT_BIN)."
     exit 0
 else
     echo "FAILURE: Discrepancy detected between stage2.s and stage3.s"
