@@ -1,11 +1,12 @@
-# [DSN-33] ULISP 包括設計仕様書: ネイティブ AOT コンパイラ ＆ RPython スタイル内因的メタトレーシング JIT 統合アーキテクチャ
-## 〜 ILisp ブートストラップから x86-64/AArch64/C99 ネイティブ直結・限定継続（shift/reset）メタトレーサ・3段階固定点ブートストラップ・単一バイナリ (ulisp-jit) 統合 〜
+# [DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンド（C99 / LLVM IR / ネイティブマシン語）トランスレーションアーキテクチャ
+## 〜 「S式で書かれた小さなインタプリタ」を Lisp トランスレータが解析・部分評価し、最適化された C99 / LLVM IR / x86-64 / AArch64 ネイティブへと導く RPython / Truffle 超越型メタコンパイラ基盤 〜
 
 - **文書番号**: `DSN-33`
 - **文書ステータス**: `APPROVED / FULLY-CONSOLIDATED`
 - **対象サブシステム**:
-  - `ulisp/` (ULISP コアプロジェクト / RPython スタイル統合フレームワーク)
-  - `ulisp/compiler.scm` (x86-64 / AArch64 / C99 Scheme ネイティブ AOT コンパイラ本体)
+  - `ulisp/` (ULISP コアプロジェクト / S式メタコンパイラ統合フレームワーク)
+  - `ulisp/compiler.scm` (x86-64 / AArch64 / C99 / LLVM IR 多重バックエンド Scheme ネイティブ AOT コンパイラ本体)
+  - `ulisp/passes/` (Nanopass トランスレータ群: マクロ展開・脱糖・抽象解釈・型付与・部分評価・LIR・多重コード生成)
   - `ulisp/jit/` (内因的メタトレーシング JIT コア: `core/`, `tracer/`, `optimizer/`, `bridge/`, `runtime/`, `examples/`)
   - `ulisp/driver/` (統合ディスパッチャドライバ: `jit.scm`)
   - `ulisp/lib/` (Scheme 標準ライブラリ: `string.scm`, `printer.scm`, `reader.scm`)
@@ -30,9 +31,10 @@
 ## 体系目次
 
 - [0. 概要と基本方針 (Executive Summary)](#0-概要と基本方針-executive-summary)
-- [1. 「A, I, U」三位一体（Trinity）言語アーキテクチャ](#1-a-i-u-三位一体trinity言語アーキテクチャ)
+- [1. 「A, I, U」三位一体（Trinity）言語アーキテクチャとメタコンパイラ統御](#1-a-i-u-三位一体trinity言語アーキテクチャとメタコンパイラ統御)
   - [1.1 命名哲学とレイヤー役割分担 (Agent ── Infrastructure ── Underlying)](#11-命名哲学とレイヤー役割分担-agent----infrastructure----underlying)
-  - [1.2 ULisp のアイデンティティと責務](#12-ulisp-のアイデンティティと責務)
+  - [1.2 ULisp のアイデンティティ: Underlying / Ultimate / Meta-Compiler Substrate](#12-ulisp-のアイデンティティ-underlying--ultimate--meta-compiler-substrate)
+  - [1.3 メタコンパイラとしての「S式インタプリタ → 多重バックエンド」データフロー](#13-メタコンパイラとしてのs式インタプリタ--多重バックエンドデータフロー)
 - [2. アーキテクチャ基本設計とハードウェア・ABI 整合](#2-アーキテクチャ基本設計とハードウェアabi-整合)
   - [2.1 64ビット Tagged Pointer メモリモデル](#21-64ビット-tagged-pointer-メモリモデル)
   - [2.2 レジスタ割り当て・スタックフレーム・ABI 規約](#22-レジスタ割り当てスタックフレームabi-規約)
@@ -57,12 +59,12 @@
   - [6.1 統合アーキテクチャと依存性境界](#61-統合アーキテクチャと依存性境界)
   - [6.2 ILisp S式 AST から ULisp 入力へのコンパイルパイプライン](#62-ilisp-s式-ast-から-ulisp-入力へのコンパイルパイプライン)
   - [6.3 ランタイム共有とネイティブ ELF 単一バイナリ生成](#63-ランタイム共有とネイティブ-elf-単一バイナリ生成)
-- [7. RPython スタイル 3 層統合アーキテクチャと内因的メタトレーシング JIT (旧 DSN-34 統合)](#7-rpython-スタイル-3-層統合アーキテクチャと内因的メタトレーシング-jit-旧-dsn-34-統合)
-  - [7.1 背景・設計哲学と二村射影（限定継続による内因的メタトレーシング）](#71-背景設計哲学と二村射影限定継続による内因的メタトレーシング)
-  - [7.2 3 層統合レイヤーモデルと依存性不変条件](#72-3-層統合レイヤーモデルと依存性不変条件)
-  - [7.3 数理的・理論的定式化 (限定継続・シンボリックトレース・仮想オブジェクト縮退)](#73-数理的理論的定式化-限定継続シンボリックトレース仮想オブジェクト縮退)
-  - [7.4 コアサブシステム詳細設計 (`ulisp/jit/`)](#74-コアサブシステム詳細設計-ulispjit)
-  - [7.5 単一自己完結バイナリ (`ulisp/bin/ulisp-jit`) とデュアルモードディスパッチ](#75-単一自己完結バイナリ-ulispbinulisp-jit-とデュアルモードディスパッチ)
+- [7. RPython / Truffle 超越型メタコンパイラ・フレームワーク仕様](#7-rpython--truffle-超越型メタコンパイラフレームワーク仕様)
+  - [7.1 メタコンパイラ設計哲学と二村射影（Collapsing Towers of Interpreters）](#71-メタコンパイラ設計哲学と二村射影collapsing-towers-of-interpreters)
+  - [7.2 S式マイクロインタプリタ（Micro-Interpreters）設計（R7RS コア / Micro-Python / DSL）](#72-s式マイクロインタプリタmicro-interpreters設計r7rs-コア--micro-python--dsl)
+  - [7.3 Lisp トランスレータ・解析パイプライン（S-Annotator / S-RTyper / PE / エスケープ解析）](#73-lisp-トランスレータ解析パイプラインs-annotator--s-rtyper--pe--エスケープ解析)
+  - [7.4 多重ターゲットバックエンド（最適化 C99 / LLVM IR / x86-64 / AArch64 / 特殊化S式）](#74-多重ターゲットバックエンド最適化-c99--llvm-ir--x86-64--aarch64--特殊化s式)
+  - [7.5 内因的メタトレーシング JIT（限定継続 shift/reset 連携）](#75-内因的メタトレーシング-jit限定継続-shiftreset-連携)
   - [7.6 脅威モデルとメモリ安全性 (W^X・ASLR・Spectre 防御)](#76-脅威モデルとメモリ安全性-wxaslrspectre-防御)
 - [8. CS 6120 先端コンパイラ理論統合仕様 (Advanced Compiler Integration)](#8-cs-6120-先端コンパイラ理論統合仕様-advanced-compiler-integration)
   - [8.1 基本ブロック引数型 SSA と Braun 法オンザフライ構築](#81-基本ブロック引数型-ssa-と-braun-法オンザフライ構築)
@@ -80,15 +82,21 @@
 
 ## 0. 概要と基本方針 (Executive Summary)
 
-本仕様書は、学術論文セキュリティ解析・OKF ナレッジベース構築プラットフォームにおける最下層の実行基盤として、**ULISP (Underlying LISP)** を設計・定義するものである。
+本仕様書は、学術論文セキュリティ解析・OKF ナレッジベース構築プラットフォームにおける最下層の実行・変換基盤として、**ULISP (Underlying LISP / Universal Meta-Compiler Substrate)** を設計・定義するものである。
 
-ULISP は、Abdulaziz Ghuloum 氏の古典的論文 *"An Incremental Approach to Compiler Construction"* および植山類氏の *compilerbook* によるインクリメンタル TDD 手法を直交統合し、**三位一体のホスト処理系 ILisp（`python3 -m ilisp`）によるブートストラップから開始して x86-64 Linux 向けネイティブアセンブリ（GAS / ELF）を出力する完全独立のセルフホスティングコンパイラ**である。
+ULISP は、単一の静的言語をコンパイルするだけの古典的 AOT コンパイラにとどまらない。その真の目的は、**「S式で書かれた小さなインタプリタ（Micro-Interpreters）を、Lispで書かれたトランスレータが静的解析・抽象解釈・部分評価し、最適化された C99 コード、LLVM IR、あるいは直接ネイティブマシン語（x86-64 / AArch64）へとトランスレートする究極のメタコンパイラ（Meta-Compiler）」** として機能することにある。
 
-完成した ULISP は、単なる教育的・スタンドアロンなコンパイラにとどまらず、**[DSN-31 (ILISP)] の「Backend B: Native AOT コンパイラ」の中核コード生成エンジン**として正式に結合され、ILISP/ALisp で記述されたセキュリティ解析パイプライン・推論ロジックを極小・超高速なネイティブ単一バイナリへと AOT コンパイルする役割を担う。
+### 【基本方針の進化：メタコンパイラへの昇格】
+1. **多重インタプリタ・オーバーヘッドの根絶**:
+   動的言語（R7RS-small Scheme や Python、セキュリティDSL）をネイティブな Lisp 評価器の上で愚直に二重解釈（Double Interpretation）すると、数千倍〜数万倍の速度低下と激しいメモリ消費が発生する。ULISP は、言語を「二重に実行する」のではなく、**「S式で定義された評価器 $I$ をターゲットプログラム $P$ と共に Lisp トランスレータへ投入し、部分評価（第1二村射影）と型特化を施してネイティブコードへ直接射影する」** というメタコンパイラ・パラダイムを採用する。
+2. **RPython / Truffle の思想的昇華**:
+   - **PyPy / RPython**: 制限付き Python で書かれたインタプリタを解析し C コードを吐き出すが、C言語レベルの外因的スタック走査に頼る。
+   - **Truffle / GraalVM**: Java 上で自己特殊化 AST を記述し、部分評価で JIT 機械語を得るが、重厚な JVM ランタイムに強く依存する。
+   - **ULISP**: **Scheme の完全な同図像性（Homoiconicity）** を最大限に活用し、純粋な S 式による抽象解釈（Pass 04b S-Annotator）、型付与（Pass 05b S-RTyper）、限定継続（`shift`/`reset`）による内因的メタトレーシング、および多重バックエンド（C99, LLVM IR, x86-64, AArch64）を単一の極小・自律フレームワークとして完結させる。
 
 ---
 
-## 1. 「A, I, U」三位一体（Trinity）言語アーキテクチャ
+## 1. 「A, I, U」三位一体（Trinity）言語アーキテクチャとメタコンパイラ統御
 
 ### 1.1 命名哲学とレイヤー役割分担 (Agent ── Infrastructure ── Underlying)
 
@@ -111,24 +119,55 @@ ULISP は、Abdulaziz Ghuloum 氏の古典的論文 *"An Incremental Approach to
 |   - Tree-walk 高速評価器 & 段階的バックエンド統括                             |
 +===============================================================================+
                                        │
-                                       ▼ [AOT コンパイル委譲 (DSN-31 Backend B)]
+                                       ▼ [AOT コンパイル / メタコンパイル委譲]
 +===============================================================================+
-|                   ULisp (Underlying & Ultimate Layer / DSN-33)                |
-|   - 最下層（Underlying）ベアメタル・x86-64 Linux ネイティブコード生成         |
-|   - 64bit Tagged Pointer, バンプアロケータ, 末尾再帰 (TCO), フラットクロージャ|
+|               ULisp (Underlying, Ultimate & Meta-Compiler / DSN-33)           |
+|   - 最下層（Underlying）ベアメタル・多重ターゲットコード生成                   |
+|   - S式マイクロインタプリタ解析基盤 (R7RS-small, Tiny-Python, Security-DSL)   |
+|   - Lisp トランスレータ (S-Annotator 抽象解釈, S-RTyper, 二村射影部分評価)     |
+|   - 多重バックエンド: 最適化 C99 / LLVM IR / x86-64 / AArch64 ネイティブ      |
 |   - 外部依存ゼロのセルフホスティング (3-Stage Bootstrap 完全一致)             |
-|   - 高速ネイティブ ELF 単一バイナリ出力 (GCC / GAS 連携)                      |
 +===============================================================================+
 ```
 
-### 1.2 ULisp のアイデンティティと責務
+### 1.2 ULisp のアイデンティティ: Underlying / Ultimate / Meta-Compiler Substrate
 
 1. **Underlying（最下層・基底）**:
-   Python や高級 VM を介さず、CPU レジスタ（`RAX`, `RSP`, `R12` 等）と OS のスタックフレームを直接制御する極限の低レイヤ層。
+   CPU レジスタ、OS スタックフレーム、あるいは C99 / LLVM IR の低レベル抽象を直接制御する極限の基盤層。
 2. **Ultimate（究極・独立性）**:
-   外部のいかなるランタイム（Python, Boehm GC, LLVM 等）にも依存せず、自分自身のソースコード（`compiler.scm`）を自分自身でコンパイルして完結する完全自律性。
-3. **Unified Backend（ILisp AOT 昇格）**:
-   セルフホスト完了後、ILisp の上位抽象（Scope Sets マクロやライブラリ構文）から脱糖された純粋 S 式を受け取り、瞬時に x86-64 アセンブリへと変換するネイティブバックエンドとして機能する。
+   外部のいかなる巨大ランタイム（JVM, Python, LLVM, Boehm GC 等）にも依存せず、自分自身のソースコード（`compiler.scm`）を自分自身でコンパイルして完結する完全自律性。
+3. **Meta-Compiler Substrate（万能メタコンパイラ基盤）**:
+   S式で記述されたあらゆる言語処理系（インタプリタ・VM・DSL）を入力として受け取り、構文解析と抽象解釈・特殊化を経て、高効率な C99 / LLVM IR / ネイティブマシン語へ昇華させるメタプログラミング中枢。
+
+### 1.3 メタコンパイラとしての「S式インタプリタ → 多重バックエンド」データフロー
+
+```text
+[ ユーザー言語ソース ] (R7RS-small, Pythonコード, セキュリティポリシーDSL)
+         │
+         ▼
+[ S式マイクロインタプリタ ] (微小な eval-step 関数・環境・AST 定義)
+         │
+         ▼ (S式 AST 投入)
++─────────────────────────────────────────────────────────────────────────────+
+|                     ULisp メタコンパイラ・パイプライン                      |
+|                                                                             |
+|  [ Pass 00〜01: マクロ展開 & 構文脱糖 ]                                     |
+|         │                                                                   |
+|  [ Pass 04b: S-Annotator ] ── 抽象解釈・フロー依存型推論・制御フロー復元    |
+|         │                                                                   |
+|  [ Pass 03 / JIT PE: 部分評価器 ] ── インタプリタの塔の崩壊 (二村射影)     |
+|         │                     (ディスパッチループ除去 & 特殊化)             |
+|  [ Pass 05b: S-RTyper ] ── アンボックス化 & 具象型低レベル射影              |
+|         │                                                                   |
+|  [ Pass 06: LIR (Low-level IR) ] ── SSA 形式 3 番地仮想レジスタ機械         |
++─────────────────────────────────────────────────────────────────────────────+
+         │
+         ├───────────────────────┬────────────────────────┬───────────────────┐
+         ▼                       ▼                        ▼                   ▼
+   [ Pass 07b: C99 ]     [ Pass 07d: LLVM IR ]    [ Pass 07: x86-64 ]   [ 特殊化S式 ]
+  ポータブル C コード       SSA 形式 .ll ファイル   ELF ネイティブマシン語 高速Lisp評価
+  (GCC/Clang -O3)        (LLVM 最適化 / JIT)      (スタンドアロン即時実行)
+```
 
 ---
 
@@ -403,127 +442,175 @@ ULisp のセルフホスティング達成後、本コンパイラは **ILisp (D
 
 ---
 
-## 7. RPython スタイル 3 層統合アーキテクチャと内因的メタトレーシング JIT (旧 DSN-34 統合)
+## 7. RPython / Truffle 超越型メタコンパイラ・フレームワーク仕様
 
-### 7.1 背景・設計哲学と二村射影（限定継続による内因的メタトレーシング）
+### 7.1 メタコンパイラ設計哲学と二村射影（Collapsing Towers of Interpreters）
 
-本節は、Issue #514 の決定に基づき、旧 `DSN-34`（MLisp メタトレーシング JIT 設計書）を本仕様書へと昇格・完全統合したものである。
+本節は、Issue #514 の決定に基づき統合された JIT コアを発展させ、**「S式で書かれた小さなインタプリタを、Lispで書かれたトランスレータが解析し、最適化された C言語や LLVM IR、あるいは部分評価済みコードに変換する」** という万能メタコンパイラ（Meta-Compiler）仕様として体系化したものである。
 
-RPython（Restricted Python）は、「任意の言語インタプリタを記述すると、コンパイラおよびメタトレーシング JIT（Meta-Tracing JIT）を備えた高速 VM バイナリが自動生成される」というパラダイムを実用化した。しかし、RPython は C 言語レベルで外部から物理レジスタやスタックフレームを覗き見る「外因的トレーシング」に依存しており、実装の泥臭さと脆弱性を抱えていた。
+#### 7.1.1 言語開発パラダイムの変革
+従来の言語開発では、新しい言語ごとに字句解析・構文解析・型検査・最適化・コード生成（x86/ARM/C等）のフルスタックコンパイラをゼロから実装する必要があった。これに対し、メタコンパイラ・アプローチでは：
+1. **開発者は「S式で表現されたターゲット言語の小さなインタプリタ（Micro-Interpreter）」を1つ記述するだけでよい**。
+2. **ULisp のメタコンパイラ・トランスレータがそのインタプリタを解析し、二村射影（部分評価）と型特化を適用して、最適化された C99、LLVM IR、またはネイティブマシン語を自動生成する**。
 
-ULISP では、Scheme の同図像性（Homoiconicity）と第一級限定継続（Delimited Continuations: `shift`/`reset`）を活かし、**「インタプリタ自身の内部から、限定継続によって将来の実行経路（S式）を切り取る」** という **内因的メタトレーシング（Endogenous Meta-Tracing）** を世界で初めて体系化した。
+```text
+[ 従来手法: N 言語 × M バックエンドの重労働 ]
+Language A ──▶ Compiler A ──▶ x86-64 / ARM / C / LLVM
+Language B ──▶ Compiler B ──▶ x86-64 / ARM / C / LLVM  (O(N × M) の開発コスト)
 
-1971 年の二村射影（Futamura Projections）理論：
+[ ULisp メタコンパイラ手法: 1 つのトランスレータ基盤 ]
+S式インタプリタ A (R7RS) ──┐
+S式インタプリタ B (Python) ──┼──▶ [ ULisp トランスレータ ] ──▶ C99 / LLVM IR / Native
+S式インタプリタ C (DSL)    ──┘       (解析・部分評価・型特化)        (O(N + M) に集約)
+```
+
+#### 7.1.2 二村射影（Futamura Projections）の完全具現化
+1971 年の二村射影理論において、部分評価器 $\alpha$ は以下の変換を実現する：
 $$\alpha(I, S) = T \quad (\text{第1二村射影: インタプリタ } I \text{ をソースコード } S \text{ で部分評価するとターゲットコード } T \text{ が得られる})$$
 $$\alpha(\alpha, I) = C \quad (\text{第2二村射影: 部分評価器 } \alpha \text{ をインタプリタ } I \text{ に適用すると専用コンパイラ } C \text{ が得られる})$$
+$$\alpha(\alpha, \alpha) = CG \quad (\text{第3二村射影: コンパイラジェネレータ } CG \text{ が得られる})$$
 
-ULISP は、限定継続に基づく型主導部分評価（Type-Directed Partial Evaluation: TDPE）と **Collapsing Towers of Interpreters（インタプリタの塔の崩壊）** を単一の自己完結フレームワークとして実装する。
+ULISP は、Scheme の完全同図像性（Homoiconicity）と限定継続（`shift`/`reset`）を武器に、この二村射影と **「インタプリタの塔の崩壊（Collapsing Towers of Interpreters）」** を C++ や Java などの外部言語を一切介さず、100% Pure Lisp の自律コードとして達成する。
 
-### 7.2 3 層統合レイヤーモデルと依存性不変条件
+---
 
-PyPy / RPython ツールチェーンの階層構造に倣い、ULISP は以下の 3 層垂直統合モデルを採用する：
+### 7.2 S式マイクロインタプリタ（Micro-Interpreters）設計
+
+ULisp メタコンパイラが入力として受け取る「S式マイクロインタプリタ」は、対象言語の評価ステップ関数 `(eval-step expr env)` を純粋な Scheme S 式として定義したものである。
+
+#### 7.2.1 ターゲット例 1: R7RS-small コアインタプリタ (`interpreters/r7rs_core.scm`)
+* **言語仕様**: Lisp-1、第一級レキシカルクロージャ、末尾呼び出し最適化（TCO）、局所環境フレーム。
+* **インタプリタ構造**:
+  ```scheme
+  (define (eval-r7rs expr env)
+    (cond
+      ((self-evaluating? expr) expr)
+      ((variable? expr) (lookup-env expr env))
+      ((eq? (car expr) 'quote) (cadr expr))
+      ((eq? (car expr) 'if)
+       (if (eval-r7rs (cadr expr) env)
+           (eval-r7rs (caddr expr) env)
+           (eval-r7rs (cadddr expr) env)))
+      ((eq? (car expr) 'lambda)
+       (make-closure (cadr expr) (cddr expr) env))
+      (else
+       (apply-r7rs (eval-r7rs (car expr) env)
+                   (map (lambda (arg) (eval-r7rs arg env)) (cdr expr))))))
+  ```
+* **メタコンパイルの効果**: 対象プログラム `P` が与えられると、部分評価器が `(eval-r7rs P '())` の構文分岐（`cond`）を完全に定数畳み込み・インライン展開し、構文解釈オーバーヘッドが 0 の純粋なネイティブコードへと縮退する。
+
+#### 7.2.2 ターゲット例 2: Micro-Python インタプリタ (`interpreters/micro_python.scm`)
+* **言語仕様**: Python の基本データ型（整数・浮動小数・リスト・辞書）、変数代入、制御構文（`if`, `while`, `for`）、関数定義および属性ルックアップ。
+* **S式 AST 表現**:
+  Python の構文木を直接 S 式で表現する（例: `def add(a, b): return a + b` $\rightarrow$ `(py-def add (a b) (py-return (py-+ a b)))`）。
+* **動的型付けと辞書アクセスの特殊化**:
+  Python の重厚な属性辞書アクセスや多態的演算子（`+` が数値加算か文字列連結か）に対し、ULisp の **S-Annotator（フロー依存型推論）** と **S-RTyper（アンボックス化）** が作用し、整数演算に確定したパスはネイティブの 1 機械語命令（`add`）へと特化される。
+
+#### 7.2.3 ターゲット例 3: スタック型バイトコード VM (`ulisp/jit/examples/tiny_vm.scm`)
+* オペコードのフェッチ・デコード・ディスパッチループ `(while running (case (fetch-op) ...))` に対し、静的に確定しているバイトコード列を部分評価することで、ディスパッチループを完全消去し、直線的なネイティブ命令列を生成する。
+
+---
+
+### 7.3 Lisp トランスレータ・解析パイプライン
+
+ULisp のコアトランスレータは、多段階の Nanopass モジュール群（`ulisp/passes/`）によって構成され、純粋 S 式から低レベルコードへの安全かつ超高速な抽象射影を実行する。
 
 ```mermaid
 flowchart TD
-    subgraph Layer3 ["Layer 3: Endogenous Substrate & User Languages (ユーザー言語・組込DSL)"]
-        L3_EVAL["mini-eval / S式スクリプト"]
-        L3_VM["スタック型バイトコード VM (tiny_vm.scm)"]
-        L3_DSL["将来言語: セキュリティポリシーDSL, SQL, Wasm"]
+    INTERP["S式マイクロインタプリタ (eval-step)"]
+    PROG["対象言語プログラム (AST)"]
+
+    INTERP --> COMPOSE["部分評価投入: (eval-step PROG env)"]
+    PROG --> COMPOSE
+
+    subgraph Translator ["ULisp Lispトランスレータ・パイプライン"]
+        P0["Pass 00/01: マクロ展開 & 脱糖"]
+        P4B["Pass 04b: S-Annotator (抽象解釈 & フロー依存型推論)"]
+        PE["トレース / 部分評価器 (二村射影・ディスパッチ消去)"]
+        P4C["Pass 04c: Contification (クロージャ消去)"]
+        P5B["Pass 05b: S-RTyper (アンボックス化 & 型特化)"]
+        P6B["Pass 06b: エスケープ解析 & 仮想オブジェクト縮退"]
+        P6["Pass 06: LIR (SSA形式 3番地仮想レジスタ中間表現)"]
+
+        P0 --> P4B
+        P4B --> PE
+        PE --> P4C
+        P4C --> P5B
+        P5B --> P6B
+        P6B --> P6
     end
 
-    subgraph Layer2 ["Layer 2: Meta-Tracing JIT Engine (ulisp/jit/ & ulisp/driver/)"]
-        L2_DELIM["限定継続コア (shift/reset: delimcc.scm)"]
-        L2_TRACER["内因的メタトレーサ (tracer.scm & auto_instrument.scm)"]
-        L2_OPT["トレース最適化 (pe.scm: 部分評価 / virtuals.scm: エスケープ解析)"]
-        L2_BRIDGE["LIR 変換ブリッジ (to_lir.scm)"]
-        L2_RUNTIME["JIT 実行時メモリバッファ & W^X 保護 (jit_buffer.scm)"]
+    COMPOSE --> P0
+
+    subgraph Backends ["多重コード生成バックエンド (Pass 07)"]
+        B_C["Pass 07b: 最適化 C99 バックエンド (.c)"]
+        B_LLVM["Pass 07d: LLVM IR バックエンド (.ll)"]
+        B_X86["Pass 07: x86-64 ネイティブアセンブラ (.s / ELF)"]
+        B_ARM["Pass 07c: AArch64 ネイティブアセンブラ (.s / ELF)"]
+        B_SPEC["特殊化 S式コード (.scm)"]
     end
 
-    subgraph Layer1 ["Layer 1: Minimal Nanopass AOT Compiler & Runtime (ulisp/passes/, lib/, runtime.c)"]
-        L1_EXP["Pass 00b: Macro Expander"]
-        L1_DESUGAR["Pass 01: Desugar"]
-        L1_ANF["Pass 04: ANF 正規化"]
-        L1_LIR["Pass 06: Low-Level IR (3番地仮想レジスタ機械)"]
-        L1_CODEGEN["Pass 07: Multi-Backend Codegen (x86-64 / AArch64 / C99)"]
-        L1_GC["runtime.c (Cheney 2-Space GC / 1GB バンプアロケータ)"]
-    end
-
-    Layer3 -->|jit-merge-point フック| Layer2
-    Layer2 -->|最適化トレース出力| L1_LIR
-    L1_LIR --> L1_CODEGEN
-    Layer2 -.->|ブートストラップ非依存| Layer1
+    P6 --> B_C
+    P6 --> B_LLVM
+    P6 --> B_X86
+    P6 --> B_ARM
+    PE --> B_SPEC
 ```
 
-#### レイヤー間の不変条件 (Invariants)
-1. **Layer 1 の独立性**: Layer 1（Nanopass AOT コンパイラ本体 `< 5,000` 行）は、Layer 2 や Layer 3 のいかなるモジュールにも依存しない。これにより、セルフホスティングの 3 段階ブートストラップ固定点検証（`diff stage2.s stage3.s == 0`）の決定論性と超高速性を永久に維持する。
-2. **完全同図像性**: Layer 2（JIT エンジン）は 100% Pure Scheme で記述され、C 言語の外部 JIT ライブラリ（LLVM, libjit）を一切必要としない。
-3. **共有バックエンド**: JIT は Layer 1 の Pass 06 (LIR) と Pass 07 (Codegen) をそのまま共有し、多重実装を完全に排除する。
+#### 7.3.1 Pass 04b: S-Annotator（抽象解釈とフロー依存型推論）
+* 単調データフロー解析により、各変数や式の取りうる値の範囲・型を束（Lattice）上で追跡。
+* 型述語（`fixnum?`, `pair?` 等）や条件分岐のエッジにおいて型を絞り込み（Type Narrowing）、後続パスでの不要なタグ検査を静的に剪定する。
 
-### 7.3 数理的・理論的定式化
+#### 7.3.2 トレース / 部分評価器（PE: Partial Evaluator）
+* インタプリタの `(case (car expr) ...)` や `(lookup-env var env)` に対し、静的既知である `expr` の各ノードを展開。
+* インタプリタ自体の再帰呼び出しをすべてインライン化し、対象プログラムのロジックのみを抽出した直線命令列を形成する。
 
-#### 7.3.1 限定継続の操作的意味論（shift / reset）
-限定継続演算子 $\text{reset}$ ($\langle \cdot \rangle$) と $\text{shift}$ ($\mathcal{S}$) の簡約規則：
-$$\langle V \rangle \longrightarrow V$$
-$$\langle E[\mathcal{S} k. e] \rangle \longrightarrow \langle e[k \mapsto \lambda x. \langle E[x] \rangle] \rangle$$
+#### 7.3.3 Pass 05b: S-RTyper（アンボックス化と具象型表現射影）
+* RPython の RTyper に倣い、高レベルな Lisp オブジェクト（Tagged Pointer）を、可能な限りネイティブな生整数（64bit int）、生ポインタ、C 構造体レイアウトへと変換する。
+* ループカウンタやインデックス計算におけるタグの付け外し（シフト・マスク処理）を完全に排除する。
 
-ここで $E$ は最も内側の $\text{reset}$ までの評価文脈を表す。$\text{shift}$ は現在の限定継続 $E$ を第一級の関数として捕獲し、評価文脈を $\text{reset}$ の位置まで巻き戻す。JIT は、捕獲された $k$ にシンボリックな引数を渡すことで、**「将来実行されるループ 1 周期分の式」を副作用なく一本の直線命令トレースとして具現化** する。
+#### 7.3.4 Pass 06b: 仮想オブジェクト縮退（Virtual Allocation / Escape Analysis）
+* トレース内で生成される一時ペア、タプル、環境フレームレコードに対しエスケープ解析を適用。
+* 関数の外へ漏洩しないオブジェクトはヒープ確保（`cons`）を消去し、仮想レジスタ間の代入へと縮退させる（**ヒープ確保ゼロ化**）。
 
-#### 7.3.2 抽象解釈とシンボリックトレース抽出モデル
-ホットループ検出点 $\text{PC}_{hot}$ において、抽象値 $\hat{v} \in \text{AbstractVal}$ を注入する：
-$$\text{AbstractVal} ::= \text{Const}(c) \mid \text{SymReg}(r) \mid \text{VirtualPair}(\hat{v}_1, \hat{v}_2) \mid \text{VirtualClosure}(f, \vec{\hat{v}})$$
+---
 
-インタプリタが 1 ステップ進むごとに、トレース $\mathcal{T}$ に線形命令が追記される：
-$$\mathcal{T} \vdash \text{Step}(op, \text{args}) \implies \mathcal{T}' = \mathcal{T} \circ [ (op, \text{args}) ]$$
+### 7.4 多重ターゲットバックエンド（C99 / LLVM IR / ネイティブマシン語）
 
-#### 7.3.3 仮想オブジェクト縮退（Virtual Allocation / Escape Analysis）代数系
-トレース $\mathcal{T}$ 内で生成されるオブジェクト $o$ に対し、エスケープ述語 $\text{Escapes}(o, \mathcal{T})$ を定義：
-$$\text{Escapes}(o, \mathcal{T}) \iff \exists inst \in \mathcal{T}. \, (\text{inst} \in \{\text{store-global}, \text{call-foreign}\} \land o \in \text{args}(inst))$$
-$$\neg \text{Escapes}(o, \mathcal{T}) \implies \text{Alloc}(o) \mapsto \emptyset, \quad \text{FieldAccess}(o, f) \mapsto \text{Reg}(r_{o, f})$$
+ULisp Pass 06 で生成された SSA 形式 3 番地 LIR（`%lir-program`）は、要求される運用環境や最適化要件に応じて、以下の多重バックエンドから選択してコード出力される。
 
-この縮退により、ループ内で生成される中間ペア（`cons`）や環境クロージャのヒープアロケーションは **完全にゼロ（$O(0)$）** に消滅し、すべて仮想レジスタ間の直接転送へと最適化される。
+| バックエンド | 出力形式 | 適用ユースケース | 最適化・実行特性 |
+| :--- | :--- | :--- | :--- |
+| **Pass 07b: 最適化 C99** (`07_backend_c.scm`) | ANSI C99 ソース (`.c`) | ポータブルな組み込みシステム、WebAssembly (Emscripten)、既存 C/C++ コードベースへの統合 | GCC/Clang の極限最適化（`-O3`, SIMD 自動ベクトル化, LTO）をそのまま享受可能。外部依存は標準 C ライブラリのみ。 |
+| **Pass 07d: LLVM IR** (`07_backend_llvm.scm`) | LLVM アセンブリ (`.ll`) | 先端 JIT インフラ連携、LLVM エコシステム最適化（Polly, ThinLTO） | SSA 形式 LIR と LLVM IR の完全な同型性を活かし、ゼロオーバーヘッドで LLVM パスパイプライン（`opt`, `llc`）へ直結。 |
+| **Pass 07: x86-64 ネイティブ** (`07_backend_x86_64.scm`) | GAS アセンブリ (`.s`) / ELF | スタンドアロン高速実行、即座なローカルコンパイル | 外部コンパイラ不要で超高速にネイティブ実行ファイルを直接出力。 |
+| **Pass 07c: AArch64 ネイティブ** (`07_backend_aarch64.scm`) | ARM64 アセンブリ (`.s`) / ELF | Apple Silicon (macOS), AWS Graviton, Raspberry Pi | ARM64 ABI に完全準拠したネイティブコード生成。 |
+| **特殊化 S式コード** | 最適化 Pure S式 (`.scm`) | ILisp / ALisp 上での即時動的評価、シンボリック検証 | ディスパッチ除去済みの展開された Lisp AST。 |
 
-### 7.4 コアサブシステム詳細設計 (`ulisp/jit/`)
+---
+
+### 7.5 内因的メタトレーシング JIT（限定継続 shift/reset 連携）
+
+静的 AOT コンパイルのみならず、実行時に動的にホットスポットを検知して最適化コードを生成する JIT 機構も、完全な同図像性を維持したまま組み込まれている。
 
 1. **限定継続コア (`ulisp/jit/core/delimcc.scm`)**:
-   CPS 変換を行わずに、浅い継続キャプチャ（`call/cc`）とメタ継続スタックにより、ポータブルかつ決定論的に `shift`/`reset` を提供。
-2. **内因的メタトレーサ (`ulisp/jit/tracer/tracer.scm` & `auto_instrument.scm`)**:
-   `jit-merge-point` によるループ頭部のホットスポット検出（実行頻度カウンタ）。閾値到達時に自動でトレースモードへ遷移し、ループ本体をシンボリックにトレース。
-   `auto_instrument.scm` は任意の Scheme S 式 AST を静的解析し、再帰関数やループ構造を検知して自動的に `jit-merge-point` を計装する。
-3. **トレースオプティマイザ (`ulisp/jit/optimizer/`)**:
-   - `pe.scm`: 部分評価によるディスパッチ消去、定数畳み込み、自明ガードの除去。
-   - `virtuals.scm`: エスケープ解析による中間オブジェクトの仮想化・レジスタ昇格。
-4. **ULisp LIR 変換ブリッジ (`ulisp/jit/bridge/to_lir.scm`)**:
-   最適化されたトレース命令列を、ULisp Pass 6 規定の `%lir-program`（3番地仮想レジスタ形式）へ変換。
-5. **JIT 実行時ランタイム & W^X メモリ保護 (`ulisp/jit/runtime/jit_buffer.scm`)**:
-   `mmap` により確保したメモリバッファに対し、W^X 原則（Write XOR Execute）を遵守してコードを配置・保護し、関数ポインタとして直接ディスパッチ。
+   `shift`/`reset` により、実行中のインタプリタのスタックから「ループ 1 周期分の継続」を第一級関数として切り取る。
+2. **内因的メタトレーサ (`ulisp/jit/tracer/tracer.scm`)**:
+   切り取られた継続にシンボリックな引数を与えることで、副作用なく一本の直線命令トレースを抽出。
+3. **LIR ブリッジ (`ulisp/jit/bridge/to_lir.scm`)**:
+   抽出されたトレースを Pass 06 の LIR 形式へと変換し、JIT メモリバッファ（W^X 保護）へ機械語として直接書き込んで即時実行する。
 
-### 7.5 単一自己完結バイナリ (`ulisp/bin/ulisp-jit`) とデュアルモードディスパッチ
-
-`ulisp/driver/jit.scm` を Stage 2 AOT コンパイラでコンパイル・リンクすることで、単一のネイティブ ELF バイナリ `bin/ulisp-jit` が生成される。このバイナリは起動時に入力 S 式の形式を判定し、最適なパイプラインを選択する：
-
-```text
-               ┌─── [ 入力 S 式の解析 ] ───┐
-               │                           │
-  先頭が (!compile ...) または       通常の式・ループコード
-     (!target ...) の場合                    │
-               │                             ▼
-               ▼                  [ Layer 2: JIT モード ]
-  [ Layer 1: AOT コンパイル ]     S式 mini-eval 評価
-  Nanopass 全パス (Pass 00〜08)   ホットループ自動検知
-  ネイティブアセンブリ直接出力    限定継続による動的トレース
-                                  LIR 生成 & W^X ネイティブ実行
-```
-
-このデュアルモード設計により、ユーザーは 1 つのバイナリで「事前ネイティブコンパイル」と「高速 JIT インタプリタ実行」の双方を享受できる。
+---
 
 ### 7.6 脅威モデルとメモリ安全性 (W^X・ASLR・Spectre 防御)
 
-| 脅威分類 | 脆弱性内容 | ULisp 統合フレームワークにおける具体的防御策 |
+| 脅威分類 | 脆弱性内容 | ULisp メタコンパイラ統合フレームワークにおける具体的防御策 |
 | :--- | :--- | :--- |
 | **メモリ破壊 (CWE-119 / CWE-787)** | JIT バッファオーバーフローによる任意コード実行 | `mmap` ガードページ（`PROT_NONE`）をアロケーション境界に配置。W^X 原則により、書き込み可能（`PROT_WRITE`）な状態での実行をハードウェアレベルで完全遮断。 |
 | **JIT スプレー攻撃 (CWE-94)** | 即値埋め込みを用いたシェルコード実行 | コード配置に ASLR（Address Space Layout Randomization）を適用し、予測可能なメモリアドレスへの配置を防止。 |
 | **投機的実行漏洩 (CWE-200 / Spectre)** | ガード失敗時の分岐予測ミスによる情報漏洩 | ガード命令（`%jump-if-*`）直後に明示的シリアライゼーション命令（`lfence` / `isb`）を挿入可能。 |
 | **GC ルート破壊** | JIT 実行中の生ポインタ退避漏れによる Use-After-Free | JIT ループ境界でスタックフレームに明示的シャドウスタックを維持し、Cheney GC との完全なポインタ追跡整合性を保証。 |
+| **C言語生成コードの未定義動作 (UB)** | 型変換やバッファ操作に伴う UB | Pass 07b C99 出力において、厳格な型キャスト、アライメント保証、および整数オーバーフロー検査コードを静的生成。 |
 
 ---
 
