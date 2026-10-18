@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -185,6 +185,13 @@ test_ports: build/scheme-stage2
 	./build/scheme-stage2 build/test_ports_input.scm > build/test_ports.s
 	$(CC) -nostdlib -static build/test_ports.s -o build/test_ports
 	./build/test_ports
+
+test_record: build/scheme-stage2
+	@mkdir -p build
+	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_record.scm > build/test_record_input.scm
+	./build/scheme-stage2 build/test_record_input.scm > build/test_record.s
+	$(CC) -nostdlib -static build/test_record.s -o build/test_record
+	./build/test_record
 
 test_freestanding: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="

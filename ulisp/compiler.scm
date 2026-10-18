@@ -655,6 +655,32 @@
                 (new-name (if entry (cdr entry) orig-name)))
            (cons 'define-syntax (cons new-name (cddr expr))))
          expr))
+    ((eq? (car expr) 'define-record-type)
+     ;; (define-record-type <name> (<ctor> <ctor-args> ...) <pred> (<f> <getter> [<setter>]) ...)
+     (let* ((type-name (cadr expr))
+            (ctor-spec (caddr expr))
+            (ctor-name (if (pair? ctor-spec) (car ctor-spec) ctor-spec))
+            (ctor-args (if (pair? ctor-spec) (cdr ctor-spec) '()))
+            (new-ctor-name (let ((e (assq ctor-name subst))) (if e (cdr e) ctor-name)))
+            (pred-name (cadddr expr))
+            (new-pred-name (let ((e (assq pred-name subst))) (if e (cdr e) pred-name)))
+            (field-specs (cddddr expr))
+            (new-field-specs
+             (map (lambda (spec)
+                    (let* ((fname (car spec))
+                           (getter (cadr spec))
+                           (new-getter (let ((e (assq getter subst))) (if e (cdr e) getter)))
+                           (has-setter? (pair? (cddr spec))))
+                      (if has-setter?
+                          (let* ((setter (caddr spec))
+                                 (new-setter (let ((e (assq setter subst))) (if e (cdr e) setter))))
+                            (list fname new-getter new-setter))
+                          (list fname new-getter))))
+                  field-specs)))
+       (cons 'define-record-type
+             (cons type-name
+                   (cons (cons new-ctor-name ctor-args)
+                         (cons new-pred-name new-field-specs))))))
     (else
      (cons (alpha-rename-expr (car expr) subst)
            (alpha-rename-expr (cdr expr) subst)))))
@@ -673,6 +699,21 @@
                    (loop (cdr rest) (cons def-target acc)))))
             ((and (pair? form) (eq? (car form) 'define-syntax) (pair? (cdr form)))
              (loop (cdr rest) (cons (cadr form) acc)))
+            ((and (pair? form) (eq? (car form) 'define-record-type) (pair? (cdr form)))
+             (let* ((ctor-spec (caddr form))
+                    (ctor-name (if (pair? ctor-spec) (car ctor-spec) ctor-spec))
+                    (pred-name (cadddr form))
+                    (field-specs (cddddr form))
+                    (acc1 (cons pred-name (cons ctor-name acc))))
+               (let field-loop ((specs field-specs) (acc2 acc1))
+                 (if (null? specs)
+                     (loop (cdr rest) acc2)
+                     (let* ((spec (car specs))
+                            (getter (cadr spec))
+                            (has-setter? (pair? (cddr spec)))
+                            (acc3 (cons getter acc2))
+                            (acc4 (if has-setter? (cons (caddr spec) acc3) acc3)))
+                       (field-loop (cdr specs) acc4))))))
             (else
              (loop (cdr rest) acc)))))))
 
@@ -814,7 +855,7 @@
 
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
-  (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules
+  (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules define-record-type
               cond case and or when unless
               cons car cdr pair? null? list append not eq? eqv? equal?
               + - * = < > <= >= modulo quotient /
@@ -1152,6 +1193,8 @@
        (cons 'define
              (cons (cadr expanded)
                    (map (lambda (e) (macro-expand-all e macro-table)) (cddr expanded)))))
+      ((eq? (car expanded) 'define-record-type)
+       expanded)
       ((or (eq? (car expanded) 'let)
            (eq? (car expanded) 'let*)
            (eq? (car expanded) 'letrec))
@@ -1404,6 +1447,58 @@
                     (cons (list p-sym (list 'car old-sym))
                           restore)))))))
 
+(define (record-type-tag-symbol type-name)
+  (string->symbol (string-append "%%record-type-" (symbol->string type-name))))
+
+(define (expand-define-record-type form)
+  ;; form: (define-record-type <name> (<ctor> <ctor-args> ...) <pred> <field-spec> ...)
+  ;; each field-spec: (<fname> <getter>) or (<fname> <getter> <setter>)
+  (let* ((type-name (cadr form))
+         (ctor-spec (caddr form))
+         (ctor-name (if (pair? ctor-spec) (car ctor-spec) ctor-spec))
+         (ctor-args (if (pair? ctor-spec) (cdr ctor-spec) '()))
+         (pred-name (cadddr form))
+         (field-specs (cddddr form))
+         (tag (record-type-tag-symbol type-name))
+         (field-names (map car* field-specs)))
+    (let* ((ctor-def
+            (let ((vec-args
+                   (map (lambda (f)
+                          (if (memq f ctor-args)
+                              f
+                              #f))
+                        field-names)))
+              (list 'define (cons ctor-name ctor-args)
+                    (cons 'vector (cons (list 'quote tag) vec-args)))))
+           (pred-arg (unique-symbol "rec_"))
+           (pred-def
+            (list 'define (list pred-name pred-arg)
+                  (list 'and
+                        (list 'vector? pred-arg)
+                        (list '> (list 'vector-length pred-arg) 0)
+                        (list 'eq? (list 'vector-ref pred-arg 0) (list 'quote tag))))))
+      (let loop ((specs field-specs) (idx 1) (acc (list ctor-def pred-def)))
+        (if (null? specs)
+            (reverse acc)
+            (let* ((spec (car specs))
+                   (fname (car spec))
+                   (getter (cadr spec))
+                   (has-setter? (pair? (cddr spec)))
+                   (setter (if has-setter? (caddr spec) #f))
+                   (get-arg (unique-symbol "rec_"))
+                   (get-def (list 'define (list getter get-arg)
+                                  (list 'vector-ref get-arg idx)))
+                   (set-defs
+                    (if has-setter?
+                        (let ((set-arg (unique-symbol "rec_"))
+                              (val-arg (unique-symbol "val_")))
+                          (list (list 'define (list setter set-arg val-arg)
+                                      (list 'vector-set! set-arg idx val-arg))))
+                        '())))
+              (loop (cdr specs)
+                    (+ idx 1)
+                    (append (reverse set-defs) (cons get-def acc)))))))))
+
 (define (rewrite-top-level forms)
   (let loop ((fs forms) (defs '()) (bodies '()))
     (if (null? fs)
@@ -1421,24 +1516,31 @@
                                 (dedup (cdr ds) (cons name seen) (cons d acc))))))))
               (list '%program unique-defs (make-body-expr (reverse bodies)))))
         (let ((f (car fs)))
-          (if (and (pair? f) (eq? (car f) 'define))
-              (let ((def-spec (cadr f)))
-                (if (pair? def-spec)
-                    ;; (define (name . params) . body)
-                    (let ((name (car def-spec))
-                          (params (cdr def-spec))
-                          (lbody (cddr f)))
-                      (loop (cdr fs)
-                            (cons (list 'define name (cons 'lambda (cons params lbody))) defs)
-                            bodies))
-                    ;; (define name val)
-                    (let ((name def-spec)
-                          (val (caddr f)))
-                      (loop (cdr fs)
-                            (cons (list 'define name val) defs)
-                            bodies))))
-              ;; Normal expression
-              (loop (cdr fs) defs (cons f bodies)))))))
+          (cond
+            ((and (pair? f) (eq? (car f) 'begin))
+             (loop (append (cdr f) (cdr fs)) defs bodies))
+            ((and (pair? f) (eq? (car f) 'define-record-type))
+             (let ((expanded-defs (expand-define-record-type f)))
+               (loop (append expanded-defs (cdr fs)) defs bodies)))
+            ((and (pair? f) (eq? (car f) 'define))
+             (let ((def-spec (cadr f)))
+               (if (pair? def-spec)
+                   ;; (define (name . params) . body)
+                   (let ((name (car def-spec))
+                         (params (cdr def-spec))
+                         (lbody (cddr f)))
+                     (loop (cdr fs)
+                           (cons (list 'define name (cons 'lambda (cons params lbody))) defs)
+                           bodies))
+                   ;; (define name val)
+                   (let ((name def-spec)
+                         (val (caddr f)))
+                     (loop (cdr fs)
+                           (cons (list 'define name val) defs)
+                           bodies)))))
+            (else
+             ;; Normal expression
+             (loop (cdr fs) defs (cons f bodies))))))))
 
 ;;; Pass 1: Canonical AST Desugaring Pass
 ;;; Recursively transforms an AST so that all high-level syntactic sugar

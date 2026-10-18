@@ -13,6 +13,9 @@
   (flush-output-port)
   (%raw-syscall (%to-raw 60) (%to-raw code) 0 0 0 0 0))
 
+(define (exit code)
+  (sys-exit code))
+
 ;; sys-write: sys_write(fd, buf_ptr, count) -> syscall 1
 (define (sys-write fd buf-ptr count)
   (%to-fixnum (%raw-syscall (%to-raw 1) (%to-raw fd) buf-ptr (%to-raw count) 0 0 0)))

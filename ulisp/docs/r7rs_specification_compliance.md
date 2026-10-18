@@ -74,7 +74,7 @@
 | **5.3.2** | 内部定義 (Internal definitions) | ブロック先頭の `(define ...)` | **◎** | `letrec*` 構造への自動巻き直し (`Pass 030`) |
 | **5.3.3** | 多値定義 | `(define-values <formals> <expression>)` | **×** | 未実装 |
 | **5.4** | マクロ定義 (Syntax definitions)| `(define-syntax <keyword> <transformer>)` | **◎** | コンパイル時マクロテーブル登録 (`Pass 020`) |
-| **5.5** | レコード型定義 (Record-types) | `(define-record-type <name> (<ctor> ...) <pred> ...)` | **×** (△) | [Issue #549](../../docs/issues/549-implement-r7rs-define-record-type-macro.md) でベクタ脱糖マクロとして実装予定 |
+| **5.5** | レコード型定義 (Record-types) | `(define-record-type <name> (<ctor> ...) <pred> ...)` | **◎** | 固定長ベクタ脱糖マクロ・型述語・アクセサ・ミューテータ完備 (`Pass 030`, Issue #549) |
 | **5.6** | ライブラリ定義 (Libraries) | `(define-library (<name> ...) <lib-decl> ...)` | **◎** | R7RS-small モジュール宣言・フラット展開 (`Pass 010`, Issue #548) |
 | **5.6** | シンボルエクスポート | `(export <export-spec> ...)` | **◎** | 名前空間公開設定・`rename` 対応 (`Pass 010`) |
 
@@ -250,7 +250,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | 仕様番号 (SRFI) | 名称・対象機能 | ステータス | ULisp での対応状況・代替手段 |
 | :--- | :--- | :---: | :--- |
 | **SRFI 1** | Lists (高機能リスト処理: `fold`, `unfold`, `filter`, `take`, `drop` 等) | **△** | 基本関数（`append`, `reverse`, `length`, `memq`, `assq`）のみ。高階畳み込み系は未提供 |
-| **SRFI 9** | Records (`define-record-type`) | **×** (△) | [Issue #549](../../docs/issues/549-implement-r7rs-define-record-type-macro.md) にてベクタ脱糖マクロとして実装予定 |
+| **SRFI 9** | Records (`define-record-type`) | **◎** | 完全サポート (`Pass 030`, Issue #549) |
 | **SRFI 11** | Syntax for multiple values (`let-values`, `let*-values`) | **◎** | 完全サポート (`Pass 030`, Issue #538) |
 | **SRFI 39** | Parameter objects (`make-parameter`, `parameterize`) | **◎** | 完全サポート (`ulisp/lib/parameter.scm`, Issue #539) |
 | **SRFI 111** | Boxes (単一要素可変セル: `box`, `unbox`, `set-box!`) | **△** | 1要素ベクタまたはペア `(cons val '())` で代用可能（専用関数は未提供） |
@@ -298,7 +298,6 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 1. **R7RS-small コア言語としての達成度**:
    - 構文、第一級継続 (`call/cc` + `dynamic-wind`)、多値 (`values` / `call-with-values`)、完全ゼロアロケーション 2-Space GC、ベクタ、バイトベクタ、衛生的マクロ展開器、自前 S 式パーサ/プリンタなど、スタンドアロンな Scheme ネイティブ実行系として **基盤機能の約 85% を完備**。
 2. **直近の実装予定 (Open Issues)**:
-   - [Issue #549](../../docs/issues/549-implement-r7rs-define-record-type-macro.md): `define-record-type` (構造化レコード型)
    - [Issue #550](../../docs/issues/550-implement-r7rs-lazy-evaluation-delay-force.md): `delay`, `force`, `delay-force`, `promise?` (遅延評価)
    - [Issue #551](../../docs/issues/551-expand-r7rs-standard-library-procedures.md): `list-copy`, `make-list`, `string-copy!`, `string-fill!` 等のシーケンス操作拡充
 3. **アーキテクチャ特性に基づく設計トレードオフ**:

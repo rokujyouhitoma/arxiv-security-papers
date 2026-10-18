@@ -44,7 +44,7 @@ assert_c() {
     local code
     if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$expr"
-    elif [[ "$expr" =~ vector ]]; then
+    elif [[ "$expr" =~ define-record-type || "$expr" =~ vector ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ parameter || "$expr" =~ dynamic-wind ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/continuation.scm lib/parameter.scm)"$'\n'"$expr"
@@ -206,6 +206,16 @@ assert_c "(20 . 10)" "(let ((p (make-parameter 10))) (let ((res (parameterize ((
 assert_c "33" "(let ((p1 (make-parameter 1)) (p2 (make-parameter 2))) (let ((res (parameterize ((p1 10) (p2 20)) (+ (p1) (p2))))) (+ res (+ (p1) (p2)))))"
 assert_c "(1 (2 3 2) 1)" "(let ((p (make-parameter 1))) (cons (p) (cons (parameterize ((p 2)) (cons (p) (cons (parameterize ((p 3)) (p)) (cons (p) '())))) (cons (p) '()))))"
 assert_c "42" "(parameterize () 42)"
+
+echo "--- Step 12: R7RS Record-Type Definitions (Issue 549) ---"
+assert_c "10" "(define-record-type point (make-point x y) point? (x point-x point-set-x!) (y point-y)) (let ((p (make-point 10 20))) (point-x p))"
+assert_c "20" "(define-record-type point (make-point x y) point? (x point-x point-set-x!) (y point-y)) (let ((p (make-point 10 20))) (point-y p))"
+assert_c "99" "(define-record-type point (make-point x y) point? (x point-x point-set-x!) (y point-y)) (let ((p (make-point 10 20))) (begin (point-set-x! p 99) (point-x p)))"
+assert_c "#t" "(define-record-type point (make-point x y) point? (x point-x) (y point-y)) (point? (make-point 1 2))"
+assert_c "#f" "(define-record-type point (make-point x y) point? (x point-x) (y point-y)) (point? (vector 1 2 3))"
+assert_c "#f" "(define-record-type point (make-point x y) point? (x point-x) (y point-y)) (point? 42)"
+assert_c "(100 . #f)" "(define-record-type task (create-task title) task? (title task-title) (completed? task-completed? task-set-completed!)) (let ((t (create-task 100))) (cons (task-title t) (task-completed? t)))"
+assert_c "42" "(define-record-type task (create-task title) task? (title task-title) (completed? task-completed? task-set-completed!)) (let ((t (create-task 100))) (begin (task-set-completed! t 42) (task-completed? t)))"
 
 rm -f "$TMP_C" "$TMP_BIN"
 

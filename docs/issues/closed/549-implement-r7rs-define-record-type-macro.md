@@ -2,7 +2,7 @@
 ID: 549
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] R7RS 準拠の構造化レコード型 (define-record-type) のマクロ脱糖および高速フィールドアクセス機構の実装 (ID: 549)
@@ -21,11 +21,15 @@ ULisp は既にベクタ型（Issue #536）および衛生的マクロ展開器�
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/record.scm](../../ulisp/lib/record.scm) (新規作成: `define-record-type` 標準マクロ定義)
-- [ ] [ulisp/compiler.scm](../../ulisp/compiler.scm) (標準ライブラリの自動プリロードまたはマクロ組込み)
-- [ ] [ulisp/tests/test_record.scm](../../ulisp/tests/test_record.scm) (新規作成: レコード型ユニットテスト)
-- [ ] [ulisp/test.sh](../../ulisp/test.sh) (x86 テストランナー追加)
-- [ ] [ulisp/test_c.sh](../../ulisp/test_c.sh) (Portable C テストランナー追加)
+- [x] [ulisp/passes/030_desugar.scm](../../ulisp/passes/030_desugar.scm) (`define-record-type` 脱糖展開エンジン)
+- [x] [ulisp/passes/010_library.scm](../../ulisp/passes/010_library.scm) (ライブラリ名前空間リネーム & エクスポート対応)
+- [x] [ulisp/passes/020_macro_expander.scm](../../ulisp/passes/020_macro_expander.scm) (コア形式保護)
+- [x] [ulisp/compiler.scm](../../ulisp/compiler.scm) (Nanopass 結合ドライバ)
+- [x] [ulisp/tests/test_record.scm](../../ulisp/tests/test_record.scm) (新規作成: レコード型ユニットテスト)
+- [x] [ulisp/test.sh](../../ulisp/test.sh) (x86 テストランナー追加 & スモークテスト強化)
+- [x] [ulisp/test_c.sh](../../ulisp/test_c.sh) (Portable C テストランナー追加)
+- [x] [ulisp/bootstrap.sh](../../ulisp/bootstrap.sh) (自己ホストブートストラップのタイムスタンプ依存検証)
+- [x] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (R7RS 適合表更新)
 
 ---
 
@@ -47,8 +51,8 @@ Target Branch: `feat/549-r7rs-define-record-type`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `(define-record-type ...)` によって正しくコンストラクタ、述語、アクセサ、ミューテータが生成されること
-- [ ] 生成されたレコード型に対して `predicate?` が型安全に真偽値を判定できること
-- [ ] フィールドの読み書き（不変・可変）が意図通り行えること
-- [ ] x86-64 および Portable C の両バックエンドで動作すること
-- [ ] `make test`, `make test_c`, `make bootstrap` が 100% PASS すること
+- [x] `(define-record-type ...)` によって正しくコンストラクタ、述語、アクセサ、ミューテータが生成されること
+- [x] 生成されたレコード型に対して `predicate?` が型安全に真偽値を判定できること
+- [x] フィールドの読み書き（不変・可変）が意図通り行えること
+- [x] x86-64 および Portable C の両バックエンドで動作すること
+- [x] `make test`, `make test_c`, `make bootstrap` が 100% PASS すること

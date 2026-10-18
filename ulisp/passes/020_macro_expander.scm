@@ -23,7 +23,7 @@
 
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
-  (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules
+  (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules define-record-type
               cond case and or when unless
               cons car cdr pair? null? list append not eq? eqv? equal?
               + - * = < > <= >= modulo quotient /
@@ -361,6 +361,8 @@
        (cons 'define
              (cons (cadr expanded)
                    (map (lambda (e) (macro-expand-all e macro-table)) (cddr expanded)))))
+      ((eq? (car expanded) 'define-record-type)
+       expanded)
       ((or (eq? (car expanded) 'let)
            (eq? (car expanded) 'let*)
            (eq? (car expanded) 'letrec))

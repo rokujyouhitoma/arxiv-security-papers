@@ -48,10 +48,15 @@ if [ "${FORCE_ILISP:-0}" != "1" ]; then
     fi
 
     if [ -n "$ACTIVE_NATIVE" ]; then
-        # Smoke test: verify native compiler can compile a trivial integer form on this architecture
-        if echo "42" | ULISP_QUIET=1 "$ACTIVE_NATIVE" >/dev/null 2>&1; then
+        # Smoke test: verify native compiler can compile and execute a trivial integer form correctly
+        if echo "42" | ULISP_QUIET=1 "$ACTIVE_NATIVE" > "$TMP_S" 2>/dev/null && \
+           $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S" 2>/dev/null && \
+           [ "$("./$TMP_BIN" 2>/dev/null)" = "42" ]; then
             USE_NATIVE_ULISP=true
+        else
+            rm -f "$ULISP_STAGE1"
         fi
+        rm -f "$TMP_S" "$TMP_BIN"
     fi
 fi
 
@@ -86,20 +91,34 @@ assert() {
         full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ bytevector || "$input" =~ utf8 ]]; then
         full_input="$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$input"
-    elif [[ "$input" =~ vector ]]; then
+    elif [[ "$input" =~ define-record-type || "$input" =~ vector ]]; then
         full_input="$(cat lib/string.scm lib/vector.scm)"$'\n'"$input"
     else
         full_input="$input"
     fi
 
+    mkdir -p build
+
     # 1. Compile S-expression to x86-64 assembly
-    compile_scheme "$full_input" "$TMP_S"
+    if ! compile_scheme "$full_input" "$TMP_S" 2>build/compile_err.log; then
+        printf "\033[31m[COMPILE FAIL]\033[0m %s\n" "$input"
+        cat build/compile_err.log
+        exit 1
+    fi
 
     # 2. Assemble and link freestanding zero-libc binary
-    $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S"
+    if ! $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S" 2>build/asm_err.log; then
+        printf "\033[31m[ASSEMBLE FAIL]\033[0m %s\n" "$input"
+        cat build/asm_err.log
+        exit 1
+    fi
 
     # 3. Execute and compare output
-    actual=$("./$TMP_BIN")
+    if ! actual=$("./$TMP_BIN" 2>build/run_err.log); then
+        printf "\033[31m[EXEC FAIL]\033[0m %s (exit code $?)\n" "$input"
+        cat build/run_err.log
+        exit 1
+    fi
 
     if [ "$actual" = "$expected" ]; then
         printf "\033[32m[PASS]\033[0m %s => %s\n" "$input" "$actual"
@@ -628,6 +647,16 @@ assert "10" "(let ((p (make-parameter 10))) (guard (e (else (p))) (parameterize 
 assert "100" "(let ((p (make-parameter 100)) (saved-k (cons #f '()))) (let ((res (call/cc (lambda (k) (set-car! saved-k k) 0)))) (if (= res 0) (parameterize ((p 200)) ((car saved-k) 1)) (p))))"
 assert "42" "(parameterize () 42)"
 
+# --- Step 32: R7RS Record-Type Definitions (Issue 549) ---
+echo "-- Step 32: Issue 549 R7RS define-record-type --"
+assert "10" "(define-record-type point (make-point x y) point? (x point-x point-set-x!) (y point-y)) (let ((p (make-point 10 20))) (point-x p))"
+assert "20" "(define-record-type point (make-point x y) point? (x point-x point-set-x!) (y point-y)) (let ((p (make-point 10 20))) (point-y p))"
+assert "99" "(define-record-type point (make-point x y) point? (x point-x point-set-x!) (y point-y)) (let ((p (make-point 10 20))) (begin (point-set-x! p 99) (point-x p)))"
+assert "#t" "(define-record-type point (make-point x y) point? (x point-x) (y point-y)) (point? (make-point 1 2))"
+assert "#f" "(define-record-type point (make-point x y) point? (x point-x) (y point-y)) (point? (vector 1 2 3))"
+assert "#f" "(define-record-type point (make-point x y) point? (x point-x) (y point-y)) (point? 42)"
+assert "(100 . #f)" "(define-record-type task (create-task title) task? (title task-title) (completed? task-completed? task-set-completed!)) (let ((t (create-task 100))) (cons (task-title t) (task-completed? t)))"
+assert "42" "(define-record-type task (create-task title) task? (title task-title) (completed? task-completed? task-set-completed!)) (let ((t (create-task 100))) (begin (task-set-completed! t 42) (task-completed? t)))"
 
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification
