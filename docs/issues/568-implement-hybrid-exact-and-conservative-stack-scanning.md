@@ -20,10 +20,10 @@ Exact スタックマップを主軸としつつ、スタック境界（RSP〜RB
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/131_stackmap.scm](file:///workspace/arxiv-security-papers/ulisp/passes/131_stackmap.scm)
-- [ ] [ulisp/runtime/gc.s](file:///workspace/arxiv-security-papers/ulisp/runtime/gc.s)
-- [ ] [ulisp/runtime/runtime.c](file:///workspace/arxiv-security-papers/ulisp/runtime/runtime.c)
-- [ ] [ulisp/test.sh](file:///workspace/arxiv-security-papers/ulisp/test.sh)
+- [ ] [ulisp/passes/131_stackmap.scm](../../ulisp/passes/131_stackmap.scm)
+- [ ] [ulisp/runtime/gc.s](../../ulisp/runtime/gc.s)
+- [ ] [ulisp/runtime/runtime.c](../../ulisp/runtime/runtime.c)
+- [ ] [ulisp/test.sh](../../ulisp/test.sh)
 
 ---
 

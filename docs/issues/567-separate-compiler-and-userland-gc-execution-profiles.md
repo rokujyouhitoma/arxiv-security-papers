@@ -20,10 +20,10 @@ ID: 567
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/compiler.scm](file:///workspace/arxiv-security-papers/ulisp/compiler.scm)
-- [ ] [ulisp/Makefile](file:///workspace/arxiv-security-papers/ulisp/Makefile)
-- [ ] [ulisp/bootstrap.sh](file:///workspace/arxiv-security-papers/ulisp/bootstrap.sh)
-- [ ] [ulisp/test.sh](file:///workspace/arxiv-security-papers/ulisp/test.sh)
+- [ ] [ulisp/compiler.scm](../../ulisp/compiler.scm)
+- [ ] [ulisp/Makefile](../../ulisp/Makefile)
+- [ ] [ulisp/bootstrap.sh](../../ulisp/bootstrap.sh)
+- [ ] [ulisp/test.sh](../../ulisp/test.sh)
 
 ---
 

@@ -20,10 +20,10 @@ ID: 566
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/runtime/gc.s](file:///workspace/arxiv-security-papers/ulisp/runtime/gc.s)
-- [ ] [ulisp/runtime/runtime.c](file:///workspace/arxiv-security-papers/ulisp/runtime/runtime.c)
-- [ ] [ulisp/compiler/primitives.scm](file:///workspace/arxiv-security-papers/ulisp/compiler/primitives.scm)
-- [ ] [ulisp/test.sh](file:///workspace/arxiv-security-papers/ulisp/test.sh)
+- [ ] [ulisp/runtime/gc.s](../../ulisp/runtime/gc.s)
+- [ ] [ulisp/runtime/runtime.c](../../ulisp/runtime/runtime.c)
+- [ ] [ulisp/compiler/primitives.scm](../../ulisp/compiler/primitives.scm)
+- [ ] [ulisp/test.sh](../../ulisp/test.sh)
 
 ---
 
