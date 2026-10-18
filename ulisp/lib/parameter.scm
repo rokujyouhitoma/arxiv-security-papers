@@ -1,8 +1,12 @@
 ;;; =======================================================================
-;;; ULisp Standard Library: Parameters (R7RS Section 4.2.6)
-;;; Conforms to DSN-33 Architecture Specification & Issue #537
+;;; ULisp Standard Library: Parameters (R7RS Section 4.2.6, SRFI-39)
+;;; Conforms to DSN-33 Architecture Specification, Issue #537 & Issue #561
+;;; Traceability: ulisp/docs/r7rs_specification_compliance.md
 ;;; =======================================================================
 
+;; ---------------------------------------------------------------------
+;; §4.2.6 Dynamic bindings: make-parameter
+;; ---------------------------------------------------------------------
 (define (make-parameter-1 init)
   (let ((val (cons init '())))
     (lambda (arg)

@@ -1,17 +1,22 @@
 ;;; =======================================================================
-;;; ULisp Standard Library: Equivalence Predicates (R7RS Section 6.1)
-;;; Conforms to DSN-33 Architecture Specification & Issue #532
+;;; ULisp Standard Library: Equivalence Predicates (R7RS Section 6.1, 6.3, 6.5)
+;;; Conforms to DSN-33 Architecture Specification, Issue #532 & Issue #561
+;;; Traceability: ulisp/docs/r7rs_specification_compliance.md
 ;;; =======================================================================
 
-;;; eqv?: R7RS Section 6.1
-;;; In ULisp, all numbers (fixnums), characters, booleans, empty list,
-;;; and eof objects are immediate tagged values. Heap objects (pairs,
-;;; vectors, strings, symbols, closures, continuations) are uniquely
-;;; addressed. Therefore, pointer identity (eq?) satisfies R7RS eqv?.
+;; ---------------------------------------------------------------------
+;; §6.1 Equivalence predicates: eqv?
+;; ---------------------------------------------------------------------
+;; In ULisp, all numbers (fixnums), characters, booleans, empty list,
+;; and eof objects are immediate tagged values. Heap objects (pairs,
+;; vectors, strings, symbols, closures, continuations) are uniquely
+;; addressed. Therefore, pointer identity (eq?) satisfies R7RS eqv?.
 (define (eqv? a b)
   (eq? a b))
 
-;;; boolean=?: R7RS Section 6.3
+;; ---------------------------------------------------------------------
+;; §6.3 Booleans: boolean=?
+;; ---------------------------------------------------------------------
 (define (boolean=? a b)
   (if (boolean? a)
       (if (boolean? b)
@@ -19,7 +24,9 @@
           #f)
       #f))
 
-;;; symbol=?: R7RS Section 6.5
+;; ---------------------------------------------------------------------
+;; §6.5 Symbols: symbol=?
+;; ---------------------------------------------------------------------
 (define (symbol=? a b)
   (if (symbol? a)
       (if (symbol? b)

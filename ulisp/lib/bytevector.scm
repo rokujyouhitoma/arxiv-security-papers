@@ -1,8 +1,12 @@
 ;;; =======================================================================
 ;;; ULisp Standard Library: Bytevectors (R7RS Section 6.9)
-;;; Conforms to DSN-33 Architecture Specification & Issue #535
+;;; Conforms to DSN-33 Architecture Specification, Issue #535 & Issue #561
+;;; Traceability: ulisp/docs/r7rs_specification_compliance.md
 ;;; =======================================================================
 
+;; ---------------------------------------------------------------------
+;; §6.9 Bytevectors: make-bytevector-fill
+;; ---------------------------------------------------------------------
 (define (make-bytevector-fill len fill)
   (let ((bv (%make-bytevector len)))
     (if (= fill 0)
@@ -14,6 +18,9 @@
                 (loop (+ i 1)))
               bv)))))
 
+;; ---------------------------------------------------------------------
+;; §6.9 Bytevectors: bytevector-copy-range / bytevector-copy-range!
+;; ---------------------------------------------------------------------
 (define (bytevector-copy-range bv start end)
   (let* ((count (- end start))
          (new-bv (%make-bytevector count)))
@@ -42,6 +49,9 @@
                 (loop (+ i 1)))
               63)))))
 
+;; ---------------------------------------------------------------------
+;; §6.9 Bytevectors: bytevector=?
+;; ---------------------------------------------------------------------
 (define (bytevector=? bv1 bv2)
   (let ((l1 (bytevector-length bv1))
         (l2 (bytevector-length bv2)))
@@ -54,6 +64,9 @@
                   (loop (+ i 1))
                   #f))))))
 
+;; ---------------------------------------------------------------------
+;; §6.9 Bytevectors: bytevector-append2
+;; ---------------------------------------------------------------------
 (define (bytevector-append2 bv1 bv2)
   (let* ((len1 (bytevector-length bv1))
          (len2 (bytevector-length bv2))
@@ -62,6 +75,9 @@
     (bytevector-copy-range! res len1 bv2 0 len2)
     res))
 
+;; ---------------------------------------------------------------------
+;; §6.9 Bytevectors: string->utf8-range / utf8->string-range
+;; ---------------------------------------------------------------------
 (define (string->utf8-range str start end)
   (let* ((count (- end start))
          (bv (%make-bytevector count)))

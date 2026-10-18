@@ -1,8 +1,12 @@
 ;;; =======================================================================
-;;; ULisp Standard Library: Vectors (R7RS Section 6.8)
-;;; Conforms to DSN-33 Architecture Specification & Issue #536
+;;; ULisp Standard Library: Vectors (R7RS Section 6.8, SRFI-133)
+;;; Conforms to DSN-33 Architecture Specification, Issue #536 & Issue #561
+;;; Traceability: ulisp/docs/r7rs_specification_compliance.md
 ;;; =======================================================================
 
+;; ---------------------------------------------------------------------
+;; §6.8 Vectors: make-vector-fill
+;; ---------------------------------------------------------------------
 (define (make-vector-fill len fill)
   (let ((v (%make-vector len)))
     (let loop ((i 0))
@@ -12,6 +16,9 @@
             (loop (+ i 1)))
           v))))
 
+;; ---------------------------------------------------------------------
+;; §6.8 Vectors: vector-copy-range / vector-copy-range!
+;; ---------------------------------------------------------------------
 (define (vector-copy-range vec start end)
   (let* ((count (- end start))
          (new-v (%make-vector count)))
@@ -40,6 +47,9 @@
                 (loop (+ i 1)))
               63)))))
 
+;; ---------------------------------------------------------------------
+;; §6.8 Vectors: vector-fill-range!
+;; ---------------------------------------------------------------------
 (define (vector-fill-range! vec fill start end)
   (let loop ((i start))
     (if (< i end)
@@ -48,6 +58,9 @@
           (loop (+ i 1)))
         63)))
 
+;; ---------------------------------------------------------------------
+;; §6.8 Vectors: vector-append2
+;; ---------------------------------------------------------------------
 (define (vector-append2 v1 v2)
   (let* ((len1 (vector-length v1))
          (len2 (vector-length v2))
@@ -56,6 +69,9 @@
     (vector-copy-range! res len1 v2 0 len2)
     res))
 
+;; ---------------------------------------------------------------------
+;; §6.8 Vectors: vector->list-range / list->vector
+;; ---------------------------------------------------------------------
 (define (vector->list-range vec start end)
   (let loop ((i (- end 1)) (acc '()))
     (if (< i start)
@@ -72,6 +88,9 @@
             (vector-set! v i (car curr))
             (loop (cdr curr) (+ i 1)))))))
 
+;; ---------------------------------------------------------------------
+;; §6.8 Vectors: vector-map / vector-for-each
+;; ---------------------------------------------------------------------
 (define (vector-map proc vec)
   (let* ((len (vector-length vec))
          (res (%make-vector len)))

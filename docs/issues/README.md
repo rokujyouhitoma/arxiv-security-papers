@@ -19,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **561** | R7RS ライブラリメタデータ管理規約（パターンB＋コメントハイブリッド）の策定と準拠表実装リンクの網羅的整備 | Feature | 2026-10-18 | [closed/561-establish-r7rs-library-metadata-standard-and-link-compliance-tables.md](closed/561-establish-r7rs-library-metadata-standard-and-link-compliance-tables.md) |
 | **551** | R7RS 標準シーケンス操作・変換手続き群 (vector-copy / list-copy / string-copy! 等) の拡充 | Feature | 2026-10-18 | [closed/551-expand-r7rs-standard-library-procedures.md](closed/551-expand-r7rs-standard-library-procedures.md) |
 | **550** | R7RS 準拠の遅延評価機構 (delay / force / delay-force / promise?) の実装 | Feature | 2026-10-18 | [closed/550-implement-r7rs-lazy-evaluation-delay-force.md](closed/550-implement-r7rs-lazy-evaluation-delay-force.md) |
 | **549** | R7RS 準拠の構造化レコード型 (define-record-type) のマクロ脱糖および高速フィールドアクセス機構の実装 | Feature | 2026-10-18 | [closed/549-implement-r7rs-define-record-type-macro.md](closed/549-implement-r7rs-define-record-type-macro.md) |

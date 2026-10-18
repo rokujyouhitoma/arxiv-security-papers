@@ -1,21 +1,34 @@
 ;;; =======================================================================
-;;; R7RS Section 4.2.5: Delayed Evaluation (Promise Runtime)
-;;; Conforms to SRFI-45 (Primitives for Expressing Iterative Lazy Algorithms)
+;;; ULisp Standard Library: Delayed Evaluation (R7RS Section 4.2.5, SRFI-45)
+;;; Conforms to DSN-33 Architecture Specification, Issue #550 & Issue #561
+;;; Traceability: ulisp/docs/r7rs_specification_compliance.md
 ;;; =======================================================================
 
+;; ---------------------------------------------------------------------
+;; §4.2.5 Delayed evaluation: %%make-promise (Internal)
+;; ---------------------------------------------------------------------
 (define (%%make-promise tag val)
   (vector '%%promise (cons tag val)))
 
+;; ---------------------------------------------------------------------
+;; §4.2.5 Delayed evaluation: promise?
+;; ---------------------------------------------------------------------
 (define (promise? obj)
   (and (vector? obj)
        (= (vector-length obj) 2)
        (eq? (vector-ref obj 0) '%%promise)))
 
+;; ---------------------------------------------------------------------
+;; §4.2.5 Delayed evaluation: make-promise
+;; ---------------------------------------------------------------------
 (define (make-promise obj)
   (if (promise? obj)
       obj
       (vector '%%promise (cons 'eager obj))))
 
+;; ---------------------------------------------------------------------
+;; §4.2.5 Delayed evaluation: force
+;; ---------------------------------------------------------------------
 (define (force promise)
   (let loop ((p promise))
     (if (not (promise? p))

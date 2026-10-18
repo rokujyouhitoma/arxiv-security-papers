@@ -1,6 +1,7 @@
 ;;; =======================================================================
 ;;; ULisp Standard Library: First-Class Continuations & dynamic-wind (R7RS Section 6.10)
-;;; Conforms to DSN-33 Architecture Specification & Issue #540
+;;; Conforms to DSN-33 Architecture Specification, Issue #540 & Issue #561
+;;; Traceability: ulisp/docs/r7rs_specification_compliance.md
 ;;; =======================================================================
 
 ;; Mutable cell holding the active dynamic-wind chain
@@ -12,7 +13,9 @@
 (define (set-wind-chain! c)
   (set-car! *ulisp-wind-cell* c))
 
-;;; dynamic-wind: R7RS Section 6.10
+;; ---------------------------------------------------------------------
+;; §6.10 Control features: dynamic-wind
+;; ---------------------------------------------------------------------
 (define (dynamic-wind before thunk after)
   (before)
   (set-wind-chain! (cons (cons before after) (get-wind-chain)))
@@ -59,7 +62,9 @@
                               (after-fn))
                             (find-lca (cdr c1) (cdr c2) (- l 1) (cons (car c2) to-rewind))))))))))))
 
-;;; call-with-current-continuation (call/cc)
+;; ---------------------------------------------------------------------
+;; §6.10 Control features: call-with-current-continuation / call/cc
+;; ---------------------------------------------------------------------
 (define (call-with-current-continuation proc)
   (let ((captured-wind (get-wind-chain)))
     (%raw-call/cc
