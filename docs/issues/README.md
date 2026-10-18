@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **547** | ULisp x86における末尾再帰ループ (loop 10M) の高速化（ループヘッダ回転・直結バックワード分岐・アンローリング） | Feature | Open (New) | [547-optimize-ulisp-x86-tail-loop-to-match-c-backend.md](547-optimize-ulisp-x86-tail-loop-to-match-c-backend.md) |
 | **548** | R7RS ライブラリ構文 (define-library / import) の静的脱糖・フラット名前空間インクルード機構の実装 | Feature | Open (New) | [548-implement-r7rs-define-library-and-import-syntax.md](548-implement-r7rs-define-library-and-import-syntax.md) |
 | **549** | R7RS 準拠の構造化レコード型 (define-record-type) のマクロ脱糖および高速フィールドアクセス機構の実装 | Feature | Open (New) | [549-implement-r7rs-define-record-type-macro.md](549-implement-r7rs-define-record-type-macro.md) |
 | **550** | R7RS 準拠の遅延評価機構 (delay / force / delay-force / promise?) の実装 | Feature | Open (New) | [550-implement-r7rs-lazy-evaluation-delay-force.md](550-implement-r7rs-lazy-evaluation-delay-force.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **547** | ULisp x86における末尾再帰ループ (loop 10M) の高速化（ループヘッダ回転・直結バックワード分岐・アンローリング） | Feature | 2026-10-18 | [closed/547-optimize-ulisp-x86-tail-loop-to-match-c-backend.md](closed/547-optimize-ulisp-x86-tail-loop-to-match-c-backend.md) |
 | **546** | ULisp AOT x86における末尾ループ引数インプレース更新 (In-place Tail Loop Argument Shuffle) の最適化 | Feature | 2026-10-17 | [closed/546-implement-in-place-tail-loop-argument-shuffle-optimization.md](closed/546-implement-in-place-tail-loop-argument-shuffle-optimization.md) |
 | **545** | ULisp AOT x86における条件分岐融合 (Flag / Branch Fusion) によるブール値実体化の完全排除 | Feature | 2026-10-17 | [closed/545-implement-condition-branch-flag-fusion.md](closed/545-implement-condition-branch-flag-fusion.md) |
 | **544** | ULisp AOT x86における末尾再帰ループ変数の汎用レジスタピン留め割付 | Feature | 2026-10-17 | [closed/544-implement-loop-variable-register-allocation.md](closed/544-implement-loop-variable-register-allocation.md) |

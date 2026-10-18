@@ -699,6 +699,42 @@
          (expr-references-var? (cdr expr) var)))
     (else #f)))
 
+(define (expr-free-references-var? expr var)
+  (cond
+    ((eq? expr var) #t)
+    ((not (pair? expr)) #f)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) #f)
+         ((let letrec)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr))
+                 (shadowed? (assq var bindings)))
+            (or (let loop ((bs bindings))
+                  (and (pair? bs)
+                       (or (expr-free-references-var? (cadar bs) var)
+                           (loop (cdr bs)))))
+                (if shadowed?
+                    #f
+                    (expr-free-references-var? body var)))))
+         ((lambda)
+          (let ((params (cadr expr))
+                (body (caddr expr)))
+            (if (memq var params)
+                #f
+                (expr-free-references-var? body var))))
+         ((%cont-fun)
+          (let ((f-name (cadr expr))
+                (params (caddr expr))
+                (f-body (cadddr expr))
+                (in-body (cadr (cdddr expr))))
+            (or (if (memq var params) #f (expr-free-references-var? f-body var))
+                (expr-free-references-var? in-body var))))
+         (else
+          (or (expr-free-references-var? (car expr) var)
+              (expr-free-references-var? (cdr expr) var))))))))
+
 (define (extract-in-place-const op e)
   (let* ((raw-c (if (integer? (cadr e)) (cadr e) (caddr e)))
          (is-raw? (memq op '(%raw-add %raw-sub))))
@@ -714,6 +750,10 @@
                  (and (or (and (pair? info) (eq? (car info) 'reg))
                           (memq info '(%rbx %r13 %r14 %r15)))
                       (check-regs (cdr pbs)))))))))
+
+(define (emit-in-place-jump! entry-lbl regs)
+  (if entry-lbl
+      (emit-lir! (list '%jump entry-lbl regs))))
 
 (define (lir-compile-in-place-cont-call f-name exprs target-info si env)
   (let* ((entry-lbl (cadr target-info))
@@ -743,7 +783,7 @@
             (emit-lir! (list '%mov '%r10 r0))
             (emit-lir! (list '%mov r0 r1))
             (emit-lir! (list '%mov r1 '%r10))
-            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+            (emit-in-place-jump! entry-lbl (list r0 r1)))
 
            ;; Case 1b: Identity on one variable
            ((and (eq? e1 p1) (not e0-refs-p1?))
@@ -764,7 +804,7 @@
                (lir-compile-expr e0 si env #f)
                (if (not (eq? r0 '%rax))
                    (emit-lir! (list '%mov r0 '%rax)))))
-            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+            (emit-in-place-jump! entry-lbl (list r0 r1)))
 
            ((and (eq? e0 p0) (not e1-refs-p0?))
             (cond
@@ -784,7 +824,7 @@
                (lir-compile-expr e1 si env #f)
                (if (not (eq? r1 '%rax))
                    (emit-lir! (list '%mov r1 '%rax)))))
-            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+            (emit-in-place-jump! entry-lbl (list r0 r1)))
 
            ;; Case 2: DAG dependency (e1 depends on p0, e0 does NOT depend on p1)
            ;; e.g. e0 = (+ i 1), e1 = (+ acc i). Evaluate e1 into r1 first, then e0 into r0!
@@ -823,7 +863,7 @@
                (lir-compile-expr e0 si env #f)
                (if (not (eq? r0 '%rax))
                    (emit-lir! (list '%mov r0 '%rax)))))
-            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+            (emit-in-place-jump! entry-lbl (list r0 r1)))
 
            ;; Case 3: DAG dependency (e0 depends on p1, e1 does NOT depend on p0)
            ;; Evaluate e0 into r0 first, then e1 into r1!
@@ -856,7 +896,7 @@
                (lir-compile-expr e1 si env #f)
                (if (not (eq? r1 '%rax))
                    (emit-lir! (list '%mov r1 '%rax)))))
-            (emit-lir! (list '%jump entry-lbl (list r0 r1))))
+            (emit-in-place-jump! entry-lbl (list r0 r1)))
 
            ;; Case 4: General 2-argument parallel update: preserve e0 on stack slot si across e1 evaluation
            (else
@@ -867,7 +907,7 @@
             (if (not (eq? r1 '%rax))
                 (emit-lir! (list '%mov r1 '%rax)))
             (emit-lir! (list '%load r0 '%rsp si))
-            (emit-lir! (list '%jump entry-lbl (list r0 r1)))))))
+            (emit-in-place-jump! entry-lbl (list r0 r1))))))
 
       ;; === 1-Argument In-Place Update ===
       ((= num-args 1)
@@ -891,7 +931,7 @@
             (lir-compile-expr e0 si env #f)
             (if (not (eq? r0 '%rax))
                 (emit-lir! (list '%mov r0 '%rax)))))
-         (emit-lir! (list '%jump entry-lbl (list r0)))))
+         (emit-in-place-jump! entry-lbl (list r0))))
 
       ;; === Fallback for >= 3 arguments using stack-free %cont-call ===
       (else
@@ -916,7 +956,7 @@
                           (emit-lir! (list '%load '%rdx '%rsp t-si))
                           (emit-lir! (list '%store '%rsp p-info '%rdx))))
                        (xfer (cdr ts) (cdr pbs)))))
-               (emit-lir! (list '%jump entry-lbl
+               (emit-in-place-jump! entry-lbl
                                 (map (lambda (pb)
                                        (let ((p-info (cdr pb)))
                                          (cond
@@ -926,7 +966,7 @@
                                             p-info)
                                            (else
                                             (list '%stack p-info)))))
-                                     p-bindings))))))))))
+                                     p-bindings)))))))))
 
 (define (lir-compile-let bindings body si env tail?)
   (cond
@@ -957,8 +997,8 @@
                  (pair? body)
                  (eq? (car body) 'if)
                  (eq? (cadr body) var)
-                 (not (expr-references-var? (caddr body) var))
-                 (not (expr-references-var? (cdddr body) var)))))
+                 (not (expr-free-references-var? (caddr body) var))
+                 (not (expr-free-references-var? (cdddr body) var)))))
      (let* ((b (car bindings))
             (val (cadr b))
             (then-e (caddr body))
@@ -1012,14 +1052,23 @@
     ((>=)    "jl")
     (else    "jne")))
 
+(define (lir-cmp-true-cc op)
+  (case op
+    ((= eq?) "je")
+    ((<)     "jl")
+    ((<=)    "jle")
+    ((>)     "jg")
+    ((>=)    "jge")
+    (else    "je")))
+
 (define (extract-fused-cmp-int e)
   (cond
     ((integer? e) (* e 4))
     ((and (pair? e) (eq? (car e) '%unbox-fixnum) (integer? (cadr e))) (cadr e))
     (else #f)))
 
-(define (lir-compile-fused-cmp op e1 e2 else-label si env)
-  (let* ((jmp-op (lir-cmp-false-cc op))
+(define (lir-compile-fused-cmp-cond op e1 e2 target-label jmp-cc-fn si env)
+  (let* ((jmp-op (jmp-cc-fn op))
          (r1 (env-reg-var? e1 env))
          (r2 (env-reg-var? e2 env))
          (c1 (extract-fused-cmp-int e1))
@@ -1028,7 +1077,7 @@
       ;; 1. e1 is reg, e2 is integer constant -> direct cmp reg, c2
       ((and r1 c2)
        (emit-lir! (list '%cmp r1 c2))
-       (emit-lir! (list '%jump-cond jmp-op else-label)))
+       (emit-lir! (list '%jump-cond jmp-op target-label)))
 
       ;; 2. e2 is reg, e1 is integer constant -> reverse comparison
       ((and r2 c1)
@@ -1040,24 +1089,24 @@
                        ((>=)    '<=)
                        (else    op))))
          (emit-lir! (list '%cmp r2 c1))
-         (emit-lir! (list '%jump-cond (lir-cmp-false-cc rev-op) else-label))))
+         (emit-lir! (list '%jump-cond (jmp-cc-fn rev-op) target-label))))
 
       ;; 3. Both are register variables -> cmp r1, r2
       ((and r1 r2)
        (emit-lir! (list '%cmp r1 r2))
-       (emit-lir! (list '%jump-cond jmp-op else-label)))
+       (emit-lir! (list '%jump-cond jmp-op target-label)))
 
       ;; 4. e1 is reg, e2 is expr -> evaluate e2 to rax, then cmp r1, rax
       (r1
        (lir-compile-expr e2 si env #f)
        (emit-lir! (list '%cmp r1 '%rax))
-       (emit-lir! (list '%jump-cond jmp-op else-label)))
+       (emit-lir! (list '%jump-cond jmp-op target-label)))
 
       ;; 5. e2 is reg, e1 is expr -> evaluate e1 to rax, then cmp rax, r2
       (r2
        (lir-compile-expr e1 si env #f)
        (emit-lir! (list '%cmp '%rax r2))
-       (emit-lir! (list '%jump-cond jmp-op else-label)))
+       (emit-lir! (list '%jump-cond jmp-op target-label)))
 
       ;; 6. General fallback: evaluate e1 to stack, evaluate e2 to rax, then cmp (stack si), rax
       (else
@@ -1067,7 +1116,58 @@
        (track-lir-si! (- si 8))
        (lir-compile-operand-for-op op e2 (- si 8) env)
        (emit-lir! (list '%cmp (list '%stack si) '%rax))
-       (emit-lir! (list '%jump-cond jmp-op else-label))))))
+       (emit-lir! (list '%jump-cond jmp-op target-label))))))
+
+(define (lir-compile-fused-cmp op e1 e2 else-label si env)
+  (lir-compile-fused-cmp-cond op e1 e2 else-label lir-cmp-false-cc si env))
+
+(define (cont-recurse-tail? f-name expr)
+  (cond
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) '%cont-call)
+     (eq? (cadr expr) f-name))
+    ((eq? (car expr) 'let)
+     (cont-recurse-tail? f-name (caddr expr)))
+    (else #f)))
+
+(define (cont-loop-rotation-candidate? f-name f-body)
+  (cond
+     ;; Pattern A: (let ((var (cmp-op lhs rhs))) (if var then-exit else-recurse))
+    ((and (pair? f-body)
+          (eq? (car f-body) 'let)
+          (= (length (cadr f-body)) 1))
+     (let* ((b (car (cadr f-body)))
+            (var (car b))
+            (val (cadr b))
+            (inner (caddr f-body)))
+       (if (and (pair? val)
+                (memq (car val) '(= < <= > >= eq?))
+                (= (length val) 3)
+                (pair? inner)
+                (eq? (car inner) 'if)
+                (eq? (cadr inner) var)
+                (not (expr-free-references-var? (caddr inner) var))
+                (not (expr-free-references-var? (cdddr inner) var))
+                (not (occurs-in? '%cont-call (caddr inner)))
+                (pair? (cdddr inner))
+                (cont-recurse-tail? f-name (car (cdddr inner))))
+           (list val (caddr inner) (car (cdddr inner)))
+           #f)))
+    ;; Pattern B: (if (cmp-op lhs rhs) then-exit else-recurse)
+    ((and (pair? f-body)
+          (eq? (car f-body) 'if)
+          (pair? (cadr f-body))
+          (memq (car (cadr f-body)) '(= < <= > >= eq?))
+          (= (length (cadr f-body)) 3))
+     (let ((val (cadr f-body))
+           (then-exit (caddr f-body))
+           (else-recurse (if (pair? (cdddr f-body)) (car (cdddr f-body)) #f)))
+       (if (and else-recurse
+                (not (occurs-in? '%cont-call then-exit))
+                (cont-recurse-tail? f-name else-recurse))
+           (list val then-exit else-recurse)
+           #f)))
+    (else #f)))
 
 (define (lir-compile-if test then else-opt si env tail?)
   (let ((else-label (unique-label-sym "L_else"))
@@ -1216,59 +1316,177 @@
           (emit-lir! (list '%mov '%rax (* num-args 4)))
           (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))
 
+(define (cont-body-has-external-call? expr f-name)
+  (cond
+    ((null? expr) #f)
+    ((not (pair? expr)) #f)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) #f)
+         ((%cont-call)
+          (if (eq? (cadr expr) f-name)
+              (let loop ((args (cddr expr)))
+                (and (pair? args)
+                     (or (cont-body-has-external-call? (car args) f-name)
+                         (loop (cdr args)))))
+              #t))
+         ((%direct-call %call %closure-call %c-call %syscall %raw-call/cc %make-closure)
+          #t)
+         ((if)
+          (or (cont-body-has-external-call? (cadr expr) f-name)
+              (cont-body-has-external-call? (caddr expr) f-name)
+              (if (null? (cdddr expr)) #f (cont-body-has-external-call? (cadddr expr) f-name))))
+         ((begin)
+          (let loop ((es (cdr expr)))
+            (and (pair? es)
+                 (or (cont-body-has-external-call? (car es) f-name)
+                     (loop (cdr es))))))
+         ((let letrec)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr))
+                 (b-calls (let loop ((bs bindings))
+                            (and (pair? bs)
+                                 (or (cont-body-has-external-call? (cadar bs) f-name)
+                                     (loop (cdr bs)))))))
+            (or b-calls (cont-body-has-external-call? body f-name))))
+         ((%cont-fun)
+          (or (cont-body-has-external-call? (cadddr expr) f-name)
+              (cont-body-has-external-call? (cadr (cdddr expr)) f-name)))
+         ((%box-fixnum %unbox-fixnum %raw-add %raw-sub %raw-mul %raw-div %raw-cmp
+           %bitwise-and %bitwise-ior %shift-left %shift-right %store %load
+           + - * / = < <= > >= eq? null? zero? pair? not)
+          (let loop ((args (cdr expr)))
+            (and (pair? args)
+                 (or (cont-body-has-external-call? (car args) f-name)
+                     (loop (cdr args))))))
+         (else
+          (if (symbol? op)
+              #t
+              (or (cont-body-has-external-call? (car expr) f-name)
+                  (cont-body-has-external-call? (cdr expr) f-name)))))))))
+
 (define (lir-compile-cont-fun f-name params f-body in-body si env tail?)
   (let* ((entry-lbl (unique-label-sym "L_cont_entry_"))
          (exit-lbl  (unique-label-sym "L_cont_exit_"))
          (num-params (length params))
-         ;; Allocate callee-saved registers (%rbx, %r13, %r14) for loops with <= 3 parameters
-         (use-reg-alloc? #f)
+         ;; Allocate callee-saved registers (%rbx, %r13, %r14) for leaf loops with <= 3 parameters
+         (use-reg-alloc? (and (<= num-params 3)
+                              (not (cont-body-has-external-call? f-body f-name))))
+         (rot-cand (and use-reg-alloc? (cont-loop-rotation-candidate? f-name f-body)))
          (callee-saved-regs '(%rbx %r13 %r14)))
-    (if use-reg-alloc?
-        ;; === Loop Variable Register Allocation Path ===
-        (let* ((assigned-regs
-                (let loop ((i 0) (acc '()))
-                  (if (< i num-params)
-                      (loop (+ i 1) (cons (list-ref callee-saved-regs i) acc))
-                      (reverse acc))))
-               ;; 1. Save original callee-saved registers to frame stack slots
-               (saved-slots
-                (let loop ((rs assigned-regs) (curr-si si) (acc '()))
-                  (if (null? rs)
-                      acc
-                      (begin
-                        (track-lir-si! curr-si)
-                        (emit-lir! (list '%store '%rsp curr-si (car rs)))
-                        (loop (cdr rs) (- curr-si 8) (cons (cons (car rs) curr-si) acc))))))
-               (p-bindings
-                (let loop ((ps params) (rs assigned-regs) (acc '()))
-                  (if (null? ps)
-                      (reverse acc)
-                      (loop (cdr ps) (cdr rs)
-                            (cons (cons (car ps) (cons 'reg (car rs))) acc)))))
-               (raw-vars (if (unboxed-fn? f-name)
-                             (append params (get-raw-vars env))
-                             (get-raw-vars env)))
-               (body-env (set-raw-vars raw-vars (append p-bindings env)))
-               (next-si (- si (* num-params 8)))
-               ;; Record contification target info in env
-               (cont-info (list '%cont-target entry-lbl p-bindings))
-               (full-env (cons (cons f-name cont-info) body-env)))
-          ;; Compile in-body first (evaluates initial call into registers and jumps to entry-lbl)
-          (lir-compile-expr in-body next-si full-env tail?)
-          (emit-lir! (list '%jump exit-lbl))
-          ;; Continuation function body entry: emitted as %block with register block arguments!
-          (emit-lir! (list '%block entry-lbl assigned-regs))
-          (lir-compile-expr f-body next-si full-env tail?)
-          (emit-lir! (list '%label exit-lbl))
-          ;; Restore saved callee-saved registers upon exiting the loop
-          (for-each
-           (lambda (entry)
-             (let ((reg (car entry))
-                   (slot (cdr entry)))
-               (emit-lir! (list '%load reg '%rsp slot))))
-           (reverse saved-slots)))
+    (cond
+      ;; === Path 1: Rotated Do-While Loop (Loop Rotation / Inversion) ===
+      (rot-cand
+       (let* ((assigned-regs
+               (let loop ((i 0) (acc '()))
+                 (if (< i num-params)
+                     (loop (+ i 1) (cons (list-ref callee-saved-regs i) acc))
+                     (reverse acc))))
+              (saved-slots
+               (let loop ((rs assigned-regs) (curr-si si) (acc '()))
+                 (if (null? rs)
+                     acc
+                     (begin
+                       (track-lir-si! curr-si)
+                       (emit-lir! (list '%store '%rsp curr-si (car rs)))
+                       (loop (cdr rs) (- curr-si 8) (cons (cons (car rs) curr-si) acc))))))
+              (p-bindings
+               (let loop ((ps params) (rs assigned-regs) (acc '()))
+                 (if (null? ps)
+                     (reverse acc)
+                     (loop (cdr ps) (cdr rs)
+                           (cons (cons (car ps) (cons 'reg (car rs))) acc)))))
+              (raw-vars (if (unboxed-fn? f-name)
+                            (append params (get-raw-vars env))
+                            (get-raw-vars env)))
+              (body-env (set-raw-vars raw-vars (append p-bindings env)))
+              (next-si (- si (* num-params 8)))
+              (cmp-expr (car rot-cand))
+              (then-exit (cadr rot-cand))
+              (else-recurse (caddr rot-cand))
+              (body-lbl (unique-label-sym "L_loop_body_"))
+              (done-lbl (unique-label-sym "L_loop_done_"))
+              ;; Note: in rot-env, target entry-lbl is #f so in-place update omits terminal %jump!
+              (rot-cont-info (list '%cont-target #f p-bindings))
+              (rot-env (cons (cons f-name rot-cont-info) body-env))
+              ;; In init-env, initial call jumps to entry-lbl
+              (init-cont-info (list '%cont-target entry-lbl p-bindings))
+              (init-env (cons (cons f-name init-cont-info) body-env)))
+         ;; 1. Compile in-body first: evaluates initial args into registers and jumps to entry-lbl
+         (lir-compile-expr in-body next-si init-env tail?)
+         (emit-lir! (list '%jump exit-lbl))
 
-        ;; === Stack-based Fallback Path (> 3 params) ===
+         ;; 2. Loop entry with guard check: if condition true, jump to done-lbl!
+         (emit-lir! (list '%block entry-lbl assigned-regs))
+         (lir-compile-fused-cmp-cond (car cmp-expr) (cadr cmp-expr) (caddr cmp-expr)
+                                     done-lbl lir-cmp-true-cc next-si rot-env)
+
+         ;; 3. Loop body: in-place update args, then backward conditional branch!
+         (emit-lir! (list '%block body-lbl '()))
+         (lir-compile-expr else-recurse next-si rot-env #f)
+         (lir-compile-fused-cmp-cond (car cmp-expr) (cadr cmp-expr) (caddr cmp-expr)
+                                     body-lbl lir-cmp-false-cc next-si rot-env)
+
+         ;; 4. Loop exit / termination
+         (emit-lir! (list '%block done-lbl '()))
+         (lir-compile-expr then-exit next-si rot-env tail?)
+         (emit-lir! (list '%label exit-lbl))
+         ;; 5. Restore saved callee-saved registers upon exiting the loop
+         (for-each
+          (lambda (entry)
+            (let ((reg (car entry))
+                  (slot (cdr entry)))
+              (emit-lir! (list '%load reg '%rsp slot))))
+          (reverse saved-slots))))
+
+      ;; === Path 2: Standard Leaf Loop Register Allocation ===
+      (use-reg-alloc?
+       (let* ((assigned-regs
+               (let loop ((i 0) (acc '()))
+                 (if (< i num-params)
+                     (loop (+ i 1) (cons (list-ref callee-saved-regs i) acc))
+                     (reverse acc))))
+              ;; 1. Save original callee-saved registers to frame stack slots
+              (saved-slots
+               (let loop ((rs assigned-regs) (curr-si si) (acc '()))
+                 (if (null? rs)
+                     acc
+                     (begin
+                       (track-lir-si! curr-si)
+                       (emit-lir! (list '%store '%rsp curr-si (car rs)))
+                       (loop (cdr rs) (- curr-si 8) (cons (cons (car rs) curr-si) acc))))))
+              (p-bindings
+               (let loop ((ps params) (rs assigned-regs) (acc '()))
+                 (if (null? ps)
+                     (reverse acc)
+                     (loop (cdr ps) (cdr rs)
+                           (cons (cons (car ps) (cons 'reg (car rs))) acc)))))
+              (raw-vars (if (unboxed-fn? f-name)
+                            (append params (get-raw-vars env))
+                            (get-raw-vars env)))
+              (body-env (set-raw-vars raw-vars (append p-bindings env)))
+              (next-si (- si (* num-params 8)))
+              ;; Record contification target info in env
+              (cont-info (list '%cont-target entry-lbl p-bindings))
+              (full-env (cons (cons f-name cont-info) body-env)))
+         ;; Compile in-body first (evaluates initial call into registers and jumps to entry-lbl)
+         (lir-compile-expr in-body next-si full-env tail?)
+         (emit-lir! (list '%jump exit-lbl))
+         ;; Continuation function body entry: emitted as %block with register block arguments!
+         (emit-lir! (list '%block entry-lbl assigned-regs))
+         (lir-compile-expr f-body next-si full-env tail?)
+         (emit-lir! (list '%label exit-lbl))
+         ;; Restore saved callee-saved registers upon exiting the loop
+         (for-each
+          (lambda (entry)
+            (let ((reg (car entry))
+                  (slot (cdr entry)))
+              (emit-lir! (list '%load reg '%rsp slot))))
+          (reverse saved-slots))))
+
+      ;; === Path 3: Stack-based Fallback Path (> 3 params or non-leaf) ===
+      (else
         (let* ((param-slots
                 (let loop ((ps params) (curr-si si) (acc-slots '()) (acc-env env))
                   (if (null? ps)
@@ -1294,7 +1512,7 @@
           ;; Continuation function body entry: emitted as %block with block arguments!
           (emit-lir! (list '%block entry-lbl (map (lambda (po) (list '%stack (cdr po))) p-offsets)))
           (lir-compile-expr f-body next-si full-env tail?)
-          (emit-lir! (list '%label exit-lbl))))))
+          (emit-lir! (list '%label exit-lbl)))))))
 
 (define (lir-compile-cont-call f-name args si env)
   (let ((binding (assq f-name env)))

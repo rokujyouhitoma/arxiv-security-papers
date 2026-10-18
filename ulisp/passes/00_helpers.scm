@@ -21,6 +21,7 @@
 (define (caaar x) (safe-car (safe-car (safe-car x))))
 (define (cdaar x) (safe-cdr (safe-car (safe-car x))))
 (define (caadar x) (safe-car (safe-car (safe-cdr (safe-car x)))))
+(define (caadr x) (safe-car (safe-car (safe-cdr x))))
 (define (cddar x) (safe-cdr (safe-cdr (safe-car x))))
 
 (define (memq item ls)
