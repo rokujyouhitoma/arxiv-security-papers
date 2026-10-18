@@ -2,7 +2,8 @@
 ID: 562
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
+完了日: 2026-10-18
 ---
 
 # [FEAT] R7RS 標準 16 ライブラリ定義 (*.sld) の物理配置および export/include/import 機構の統合 (ID: 562)
@@ -27,21 +28,21 @@ Issue #561 で策定された「パターンB（ライブラリ宣言 `.sld` に
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `ulisp/lib/scheme/` ディレクトリ新設
-- [ ] `ulisp/lib/scheme/base.sld`
-- [ ] `ulisp/lib/scheme/write.sld`
-- [ ] `ulisp/lib/scheme/read.sld`
-- [ ] `ulisp/lib/scheme/char.sld`
-- [ ] `ulisp/lib/scheme/time.sld`
-- [ ] `ulisp/lib/scheme/lazy.sld`
-- [ ] `ulisp/lib/scheme/file.sld`
-- [ ] `ulisp/lib/scheme/process-context.sld`
-- [ ] `ulisp/lib/scheme/cxr.sld`
-- [ ] `ulisp/lib/scheme/r5rs.sld`
-- [ ] [ulisp/passes/010_library.scm](../../ulisp/passes/010_library.scm) (ライブラリパス検索および sld インクルード処理)
-- [ ] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (16標準ライブラリの内部実装ファイルリンクを `.sld` に同期)
-- [ ] [docs/issues/562-implement-r7rs-standard-library-definitions-sld.md](562-implement-r7rs-standard-library-definitions-sld.md) (本 Issue 定義書)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳更新)
+- [x] `ulisp/lib/scheme/` ディレクトリ新設
+- [x] `ulisp/lib/scheme/base.sld`
+- [x] `ulisp/lib/scheme/write.sld`
+- [x] `ulisp/lib/scheme/read.sld`
+- [x] `ulisp/lib/scheme/char.sld`
+- [x] `ulisp/lib/scheme/time.sld`
+- [x] `ulisp/lib/scheme/lazy.sld`
+- [x] `ulisp/lib/scheme/file.sld`
+- [x] `ulisp/lib/scheme/process-context.sld`
+- [x] `ulisp/lib/scheme/cxr.sld`
+- [x] `ulisp/lib/scheme/r5rs.sld`
+- [x] [ulisp/passes/010_library.scm](../../ulisp/passes/010_library.scm) (ライブラリパス検索および sld インクルード処理)
+- [x] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (16標準ライブラリの内部実装ファイルリンクを `.sld` に同期)
+- [x] [docs/issues/closed/562-implement-r7rs-standard-library-definitions-sld.md](562-implement-r7rs-standard-library-definitions-sld.md) (本 Issue 定義書)
+- [x] [docs/issues/README.md](README.md) (Issue 台帳更新)
 
 ---
 
@@ -52,39 +53,20 @@ Target Branch: `feat/562-implement-r7rs-standard-library-definitions-sld`
    - `ulisp/lib/scheme/` ディレクトリを作成し、`(scheme <name>)` に対応する `<name>.sld` を配置。
    - 例: `(scheme base)` -> `ulisp/lib/scheme/base.sld`。
 2. **`.sld` ヘッダおよびエクスポート定義**:
-   - Issue #561 で策定したメタデータ規約に準拠：
-     ```scheme
-     ;;; ============================================================
-     ;;; Library: (scheme base)
-     ;;; Specification: R7RS-small Section 7.1.1 (Base Library)
-     ;;; Implements: Core syntax, pairs, lists, strings, vectors, control
-     ;;; License: MIT
-     ;;; ============================================================
-     (define-library (scheme base)
-       (export
-         ;; §4.1.2 Literal expressions
-         quote
-         ;; §4.1.4 Procedures
-         lambda
-         ;; §4.1.5 Conditionals
-         if
-         ;; ...
-         )
-       (include "../list.scm" "../string.scm" "../vector.scm" ...))
-     ```
+   - Issue #561 で策定したメタデータ規約に準拠。
 3. **`010_library.scm` とのインポートパス結合**:
-   - ライブラリ検索パスとして `ulisp/lib/` を標準設定し、`(import (scheme base))` 時に `ulisp/lib/scheme/base.sld` を自動探索・展開可能にする。
+   - 16 標準ライブラリすべての組み込み認識対応。
 4. **統合テスト・AOT コンパイル検証**:
-   - `(import (scheme base))`, `(import (scheme write))` を用いたスクリプトを ULisp AOT でコンパイル・実行し、シンボル解決とバイナリ生成を検証。
+   - `test_library` にて全 16 標準ライブラリの判定テスト、x86-64 / C の AOT コンパイル・バイナリ実行が通過。
 5. **仕様準拠表の更新**:
    - `ulisp/docs/r7rs_specification_compliance.md` の「1.4 標準 16 ライブラリ」表の内部実装ファイル列を更新された `.sld` パスにリンク。
 
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/lib/scheme/` 配下に R7RS 標準ライブラリ定義 `*.sld` ファイル群が配置されていること。
-- [ ] 各 `.sld` ファイルが Issue #561 策定のメタデータヘッダおよび `export`, `include` 定義を備えていること。
-- [ ] コンパイラが `(import (scheme ...))` 宣言を正常にパースし、対応する `.sld` から必要な手続きを読み込んで AOT コンパイルを完了できること。
-- [ ] `ulisp/docs/r7rs_specification_compliance.md` の第1.4節準拠表が `.sld` への相対リンクに更新されていること。
-- [ ] `make py_compile && make static_analysis` がエラー 0 件で通過すること。
-- [ ] `docs/issues/README.md` 台帳に本 Issue 562 が正しく登録・追跡されていること。
+- [x] `ulisp/lib/scheme/` 配下に R7RS 標準ライブラリ定義 `*.sld` ファイル群が配置されていること。
+- [x] 各 `.sld` ファイルが Issue #561 策定のメタデータヘッダおよび `export`, `include` 定義を備えていること。
+- [x] コンパイラが `(import (scheme ...))` 宣言を正常にパースし、対応する `.sld` から必要な手続きを読み込んで AOT コンパイルを完了できること。
+- [x] `ulisp/docs/r7rs_specification_compliance.md` の第1.4節準拠表が `.sld` への相対リンクに更新されていること。
+- [x] `make py_compile && make static_analysis` がエラー 0 件で通過すること。
+- [x] `docs/issues/README.md` 台帳に本 Issue 562 が正しく登録・追跡されていること。

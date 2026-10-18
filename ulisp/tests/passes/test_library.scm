@@ -56,6 +56,16 @@
 (assert-true "builtin-library-name? positive scheme write"
              (builtin-library-name? '(scheme write)))
 
+(assert-true "builtin-library-name? positive scheme r5rs"
+             (builtin-library-name? '(scheme r5rs)))
+
+(assert-true "builtin-library-name? positive scheme load"
+             (builtin-library-name? '(scheme load)))
+
+(assert-true "builtin-library-name? all 16 standard libraries"
+             (let ((std-libs '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load)))
+               (null? (filter (lambda (name) (not (builtin-library-name? (list 'scheme name)))) std-libs))))
+
 (assert-true "builtin-library-name? negative user lib"
              (not (builtin-library-name? '(my math core))))
 

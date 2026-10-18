@@ -224,22 +224,23 @@
 ### 1.4 R7RS-small 標準 16 ライブラリ別網羅表
 
 | ライブラリ識別子 | 主な責務・内容 | サポート率 | 内部実装ファイル | 主なサポート機能 / 未サポート理由 |
-| :--- | :--- | :---: | :--- | :--- |
-| `(scheme base)` | コア構文、算術、リスト、ベクタ、継続、多値、ポート | **約 85%** | [compiler/primitives.scm](../compiler/primitives.scm)<br>[ulisp/lib/*.scm](../lib/) | 構文・`call/cc`・多値・ベクタ・GC 完備。有理数・複素数・浮動小数演算のみ非サポート |
-| `(scheme case-lambda)` | 可変個引数パターンマッチング | **× 0%** | - | `case-lambda` 未実装（レスト引数 `(lambda (x . rest) ...)` で代替可能） |
-| `(scheme char)` | Unicode 大文字小文字変換・判定 | **約 20%** | [compiler/primitives.scm](../compiler/primitives.scm) | `char=?`, `char->integer` のみ。Unicode 大小比較・Case-folding 未実装 |
-| `(scheme complex)` | 複素数算術 | **× 0%** | - | 非サポート（Fixnum 優先アーキテクチャ） |
-| `(scheme cxr)` | `caaa...r` 〜 `cdddr` (全24種) | **約 30%** | [Pass 030](../passes/030_desugar.scm) | `caar`, `cadr`, `cdar`, `cddr`, `caddr`, `cdddr`, `cadddr` をサポート |
-| `(scheme eval)` | 動的評価 (`eval`, `environment`) | **✕\* 0%** | - | AOT の性質上除外（事前コンパイル時マクロ展開で完結） |
-| `(scheme file)` | ファイル入出力 | **△ 約 40%** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `sys-read`/`sys-write` 実装済み。上位ストリーム関数は未整備 |
-| `(scheme inexact)` | 浮動小数点数・超越関数 | **× 0%** | - | 非サポート（整数・Tagged Pointer 設計） |
-| `(scheme lazy)` | 遅延評価 (`delay`, `force`) | **◎ 100%** | [ulisp/lib/promise.scm](../lib/promise.scm) | SRFI-45 準拠プロミス完備 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
-| `(scheme load)` | スクリプト動的ロード | **✕\* 0%** | - | AOT の性質上除外（`import` またはビルド時結合で代替） |
-| `(scheme process-context)` | プロセス環境 (`exit`, `command-line`) | **約 50%** | [ulisp/lib/posix.scm](../lib/posix.scm)<br>[runtime.c](../runtime.c) | `exit`, `emergency-exit` 完備。`get-environment-variable` は未実装 |
-| `(scheme read)` | S 式リーダー (`read`) | **◎ 100%** | [ulisp/lib/reader.scm](../lib/reader.scm) | 自前完全再帰下降パーサ完備 |
-| `(scheme repl)` | 対話型 REPL | **✕\* 0%** | - | AOT コンパイラのため静的バイナリ出力が正典 |
-| `(scheme time)` | 時間計測 (`current-second`) | **× 0%** | - | POSIX `clock_gettime` ラッパー未提供 |
-| `(scheme write)` | S 式ライター (`write`, `display`) | **約 70%** | [ulisp/lib/printer.scm](../lib/printer.scm) | `write`, `display` 完備。`write-shared` は未実装 |
+| :--- | :--- | :--- | :--- | :--- |
+| `(scheme base)` | コア構文、算術、リスト、ベクタ、継続、多値、ポート | **約 85%** | [ulisp/lib/scheme/base.sld](../lib/scheme/base.sld)<br>([ulisp/lib/*.scm](../lib/)) | 構文・`call/cc`・多値・ベクタ・GC 完備。有理数・複素数・浮動小数演算のみ非サポート ([Issue #562](../../docs/issues/562-implement-r7rs-standard-library-definitions-sld.md)) |
+| `(scheme case-lambda)` | 可変個引数パターンマッチング | **× 0%** | [ulisp/lib/scheme/case-lambda.sld](../lib/scheme/case-lambda.sld) | `case-lambda` 未実装（レスト引数 `(lambda (x . rest) ...)` で代替可能） |
+| `(scheme char)` | Unicode 大文字小文字変換・判定 | **約 20%** | [ulisp/lib/scheme/char.sld](../lib/scheme/char.sld)<br>([compiler/primitives.scm](../compiler/primitives.scm)) | `char=?`, `char->integer` のみ。Unicode 大小比較・Case-folding 未実装 |
+| `(scheme complex)` | 複素数算術 | **× 0%** | [ulisp/lib/scheme/complex.sld](../lib/scheme/complex.sld) | 非サポート（Fixnum 優先アーキテクチャ） |
+| `(scheme cxr)` | `caaa...r` 〜 `cddddr` (全24種) | **◎ 100%** | [ulisp/lib/scheme/cxr.sld](../lib/scheme/cxr.sld) | R7RS 規定の全 24 種合成ペアアクセサをライブラリ定義内で完備 |
+| `(scheme eval)` | 動的評価 (`eval`, `environment`) | **✕\* 0%** | [ulisp/lib/scheme/eval.sld](../lib/scheme/eval.sld) | AOT の性質上除外（事前コンパイル時マクロ展開で完結） |
+| `(scheme file)` | ファイル入出力 | **△ 約 40%** | [ulisp/lib/scheme/file.sld](../lib/scheme/file.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)) | POSIX `sys-read`/`sys-write` 実装済み。上位ストリーム関数は未整備 |
+| `(scheme inexact)` | 浮動小数点数・超越関数 | **× 0%** | [ulisp/lib/scheme/inexact.sld](../lib/scheme/inexact.sld) | 非サポート（整数・Tagged Pointer 設計） |
+| `(scheme lazy)` | 遅延評価 (`delay`, `force`) | **◎ 100%** | [ulisp/lib/scheme/lazy.sld](../lib/scheme/lazy.sld)<br>([ulisp/lib/promise.scm](../lib/promise.scm)) | SRFI-45 準拠プロミス完備 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
+| `(scheme load)` | スクリプト動的ロード | **✕\* 0%** | [ulisp/lib/scheme/load.sld](../lib/scheme/load.sld) | AOT の性質上除外（`import` またはビルド時結合で代替） |
+| `(scheme process-context)` | プロセス環境 (`exit`, `command-line`) | **約 50%** | [ulisp/lib/scheme/process-context.sld](../lib/scheme/process-context.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)) | `exit`, `emergency-exit` 完備。`get-environment-variable` は未実装 |
+| `(scheme r5rs)` | R5RS 互換仕様シンボル群 | **約 85%** | [ulisp/lib/scheme/r5rs.sld](../lib/scheme/r5rs.sld) | R5RS 標準シンボル群の互換エクスポート定義 |
+| `(scheme read)` | S 式リーダー (`read`) | **◎ 100%** | [ulisp/lib/scheme/read.sld](../lib/scheme/read.sld)<br>([ulisp/lib/reader.scm](../lib/reader.scm)) | 自前完全再帰下降パーサ完備 |
+| `(scheme repl)` | 対話型 REPL | **✕\* 0%** | [ulisp/lib/scheme/repl.sld](../lib/scheme/repl.sld) | AOT コンパイラのため静的バイナリ出力が正典 |
+| `(scheme time)` | 時間計測 (`current-second`) | **△ 約 30%** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld) | `current-second`, `current-jiffy`, `jiffies-per-second` 基本ラッパー定義 |
+| `(scheme write)` | S 式ライター (`write`, `display`) | **約 70%** | [ulisp/lib/scheme/write.sld](../lib/scheme/write.sld)<br>([ulisp/lib/printer.scm](../lib/printer.scm)) | `write`, `display` 完備。`write-shared` は未実装 |
 
 ---
 

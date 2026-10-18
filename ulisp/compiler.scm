@@ -449,7 +449,7 @@
 (define (builtin-library-name? name)
   (and (pair? name)
        (or (and (eq? (car name) 'scheme)
-                (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl)))
+                (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load)))
            (and (eq? (car name) 'ulisp)
                 (memq (cadr name) '(base core native))))))
 
