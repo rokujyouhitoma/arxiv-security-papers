@@ -112,6 +112,14 @@
                 (cons 'cond (desugar-guard-clauses var clauses)))
           (cons 'lambda (cons '() bodies)))))
 
+(define (desugar-case-test k-var datum-list)
+  (cond
+    ((null? datum-list) #f)
+    ((null? (cdr datum-list))
+     (list 'eqv? k-var (list 'quote (car datum-list))))
+    (else
+     (cons 'or (map (lambda (d) (list 'eqv? k-var (list 'quote d))) datum-list)))))
+
 (define (desugar-case key clauses)
   (let ((k-var (unique-symbol "case_key_")))
     (list 'let (list (list k-var key))
@@ -121,7 +129,7 @@
                 (let ((c (car cls)))
                   (if (eq? (car c) 'else)
                       (cons 'begin (cdr c))
-                      (list 'if (list 'memq k-var (list 'quote (car c)))
+                      (list 'if (desugar-case-test k-var (car c))
                             (cons 'begin (cdr c))
                             (loop (cdr cls))))))))))
 
@@ -177,6 +185,27 @@
      (let ((tmp (unique-symbol "or_tmp_")))
        (list 'let (list (list tmp (car args)))
              (list 'if tmp tmp (desugar-or (cdr args))))))))
+
+(define (desugar-chain-cmp op args)
+  (cond
+    ((null? args) #t)
+    ((null? (cdr args)) #t)
+    ((null? (cddr args))
+     (cons op (map desugar-all args)))
+    (else
+     (let* ((vars (map (lambda (a) (unique-symbol "cmp_")) args))
+            (bindings (let b-loop ((vs vars) (as args))
+                        (if (null? vs)
+                            '()
+                            (cons (list (car vs) (desugar-all (car as)))
+                                  (b-loop (cdr vs) (cdr as))))))
+            (pairs (let loop ((vs vars))
+                     (if (null? (cdr vs))
+                         '()
+                         (cons (list op (car vs) (cadr vs))
+                               (loop (cdr vs)))))))
+       (list 'let bindings
+             (cons 'and pairs))))))
 
 (define (desugar-parameterize bindings bodies)
   (if (null? bindings)
@@ -484,6 +513,11 @@
             (if (null? (cdr args))
                 (list 'make-list-fill (desugar-all (car args)) #f)
                 (list 'make-list-fill (desugar-all (car args)) (desugar-all (cadr args))))))
+         ((char<? char>? char<=? char>=? char=?)
+          (let ((args (cdr expr)))
+            (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+                (cons op (map desugar-all args))
+                (desugar-all (desugar-chain-cmp op args)))))
          ((and)
           (desugar-all (desugar-and (cdr expr))))
          ((or)

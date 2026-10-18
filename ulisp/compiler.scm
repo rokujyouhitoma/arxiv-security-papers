@@ -1348,6 +1348,14 @@
                 (cons 'cond (desugar-guard-clauses var clauses)))
           (cons 'lambda (cons '() bodies)))))
 
+(define (desugar-case-test k-var datum-list)
+  (cond
+    ((null? datum-list) #f)
+    ((null? (cdr datum-list))
+     (list 'eqv? k-var (list 'quote (car datum-list))))
+    (else
+     (cons 'or (map (lambda (d) (list 'eqv? k-var (list 'quote d))) datum-list)))))
+
 (define (desugar-case key clauses)
   (let ((k-var (unique-symbol "case_key_")))
     (list 'let (list (list k-var key))
@@ -1357,7 +1365,7 @@
                 (let ((c (car cls)))
                   (if (eq? (car c) 'else)
                       (cons 'begin (cdr c))
-                      (list 'if (list 'memq k-var (list 'quote (car c)))
+                      (list 'if (desugar-case-test k-var (car c))
                             (cons 'begin (cdr c))
                             (loop (cdr cls))))))))))
 
@@ -1413,6 +1421,27 @@
      (let ((tmp (unique-symbol "or_tmp_")))
        (list 'let (list (list tmp (car args)))
              (list 'if tmp tmp (desugar-or (cdr args))))))))
+
+(define (desugar-chain-cmp op args)
+  (cond
+    ((null? args) #t)
+    ((null? (cdr args)) #t)
+    ((null? (cddr args))
+     (cons op (map desugar-all args)))
+    (else
+     (let* ((vars (map (lambda (a) (unique-symbol "cmp_")) args))
+            (bindings (let b-loop ((vs vars) (as args))
+                        (if (null? vs)
+                            '()
+                            (cons (list (car vs) (desugar-all (car as)))
+                                  (b-loop (cdr vs) (cdr as))))))
+            (pairs (let loop ((vs vars))
+                     (if (null? (cdr vs))
+                         '()
+                         (cons (list op (car vs) (cadr vs))
+                               (loop (cdr vs)))))))
+       (list 'let bindings
+             (cons 'and pairs))))))
 
 (define (desugar-parameterize bindings bodies)
   (if (null? bindings)
@@ -1720,6 +1749,11 @@
             (if (null? (cdr args))
                 (list 'make-list-fill (desugar-all (car args)) #f)
                 (list 'make-list-fill (desugar-all (car args)) (desugar-all (cadr args))))))
+         ((char<? char>? char<=? char>=? char=?)
+          (let ((args (cdr expr)))
+            (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+                (cons op (map desugar-all args))
+                (desugar-all (desugar-chain-cmp op args)))))
          ((and)
           (desugar-all (desugar-and (cdr expr))))
          ((or)
@@ -7123,7 +7157,9 @@
              (bytes (caddr inst))
              (tag (cadddr inst)))
          (emit (string-append "    lea " (operand->str dst) ", [r12 + " (number->string tag) "]"))
-         (emit (string-append "    add r12, " (number->string bytes)))))
+         (emit (string-append "    add r12, " (number->string bytes)))
+         (emit "    cmp r12, [rip + ulisp_heap_limit]")
+         (emit "    ja ulisp_oom_panic")))
 
       ((%alloc-stack)
        (let ((dst (cadr inst))
@@ -7447,6 +7483,11 @@
     (emit "    test rax, rax")
     (emit "    js .L_start_exit")
     (emit "    mov rdi, rax")                   ; rdi = heap_base
+    (emit "    mov rcx, rax")
+    (emit "    mov rdx, 12884901888")
+    (emit "    add rcx, rdx")
+    (emit "    lea rdx, [rip + ulisp_heap_limit]")
+    (emit "    mov [rdx], rcx")
     (emit "    call scheme_entry")
     (emit "    mov r15, rax")
     (emit "    cmp r14, 1")
@@ -7486,6 +7527,7 @@
     (for-each emit-x86-function funcs)
     ;; Emit freestanding zero-libc runtime routines
     (emit-freestanding-runtime)
+    (emit-oom-panic)
     ;; Emit stackmap metadata table in .rodata section
     (let* ((stackmaps-clause (assq 'stackmaps (cdr prog)))
            (safepoints (if stackmaps-clause (cadr stackmaps-clause) '())))
@@ -7512,6 +7554,11 @@
                 (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
                 (loop (cdr ss))))))
     (emit "    .bss")
+    (emit "    .align 8")
+    (emit "    .globl ulisp_heap_limit")
+    (emit "    .weak ulisp_heap_limit")
+    (emit "ulisp_heap_limit:")
+    (emit "    .quad 0")
     (emit "    .align 8")
     (emit "    .globl ulisp_stack_base")
     (emit "    .weak ulisp_stack_base")
@@ -7567,6 +7614,23 @@
     (emit "ulisp_io_buf:")
     (emit "    .space 32")
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
+
+(define (emit-oom-panic)
+  (emit "    .globl ulisp_oom_panic")
+  (emit "    .type ulisp_oom_panic, @function")
+  (emit "    .p2align 4")
+  (emit "ulisp_oom_panic:")
+  (emit "    lea rsi, [rip + .L_str_oom_panic]")
+  (emit "    mov rdx, 46")                      ; string length
+  (emit "    mov rax, 1")                       ; sys_write
+  (emit "    mov rdi, 2")                       ; stderr
+  (emit "    syscall")
+  (emit "    mov rax, 60")                      ; sys_exit
+  (emit "    mov rdi, 1")                       ; exit code 1
+  (emit "    syscall")
+  (emit ".L_str_oom_panic:")
+  (emit "    .asciz \"Fatal Error: ULisp Heap Limit Exhausted (OOM)\\n\"")
+  (emit "    .p2align 3"))
 
 (define (emit-freestanding-runtime)
   ;; 1. I/O primitives: ulisp_read_char, ulisp_peek_char, ulisp_write_char

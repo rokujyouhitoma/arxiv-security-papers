@@ -2,7 +2,8 @@
 ID: 556
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (Completed)
+完了日: 2026-10-18
 ---
 
 # [FEAT] R7RS 文字順序比較述語 (char<? / char>? / char<=? / char>=?) の実装 (ID: 556)
@@ -50,8 +51,8 @@ Target Branch: `feat/556-implement-r7rs-character-comparison-predicates`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `char<?`, `char>?`, `char<=?`, `char>=?` が実装されていること。
-- [ ] 2引数および可変長引数（3引数以上）で正確に判定できること。
-- [ ] `tests/test_stdlib_r7rs.scm` にテストが追加され合格すること。
-- [ ] `./test.sh` および `./test_c.sh` がエラーなく 100% PASS すること。
-- [ ] `ulisp/docs/r7rs_specification_compliance.md` の該当項目が更新されていること。
+- [x] `char<?`, `char>?`, `char<=?`, `char>=?` が実装されていること。
+- [x] 2引数および可変長引数（3引数以上）で正確に判定できること。
+- [x] `tests/test_stdlib_r7rs.scm` にテストが追加され合格すること。
+- [x] `./test.sh` および `./test_c.sh` がエラーなく 100% PASS すること。
+- [x] `ulisp/docs/r7rs_specification_compliance.md` の該当項目が更新されていること。

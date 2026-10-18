@@ -1,6 +1,6 @@
 ;;; =======================================================================
-;;; ULisp Standard Library: Equivalence Predicates (R7RS Section 6.1, 6.3, 6.5)
-;;; Conforms to DSN-33 Architecture Specification, Issue #532 & Issue #561
+;;; ULisp Standard Library: Equivalence and Comparison Predicates (R7RS Section 6.1, 6.3, 6.5, 6.6)
+;;; Conforms to DSN-33 Architecture Specification, Issue #532, #556 & Issue #561
 ;;; Traceability: ulisp/docs/r7rs_specification_compliance.md
 ;;; =======================================================================
 
@@ -33,3 +33,20 @@
           (eq? a b)
           #f)
       #f))
+
+;; ---------------------------------------------------------------------
+;; §6.6 Characters: char<?, char>?, char<=?, char>=?
+;; ---------------------------------------------------------------------
+(define (char<? a b)
+  (< (char->integer a) (char->integer b)))
+
+(define (char>? a b)
+  (> (char->integer a) (char->integer b)))
+
+(define (char<=? a b)
+  (<= (char->integer a) (char->integer b)))
+
+(define (char>=? a b)
+  (>= (char->integer a) (char->integer b)))
+
+

@@ -227,6 +227,47 @@
 ;; bytevector-append
 (assert-equal "bytevector-append 2 bvs" (bytevector 1 2 3 4) (bytevector-append (bytevector 1 2) (bytevector 3 4)))
 
+;;; =======================================================================
+;;; 5. Character Comparison Operations (R7RS Section 6.6)
+;;; =======================================================================
+(write-string "--- 5. Character Comparison Procedures ---")
+(write-char #\newline)
+(flush-output-port)
+
+;; char<? tests (2 arguments & chained)
+(assert-equal "char<? 2 args true" #t (char<? #\a #\b))
+(assert-equal "char<? 2 args false" #f (char<? #\b #\a))
+(assert-equal "char<? 2 args equal false" #f (char<? #\a #\a))
+(assert-equal "char<? uppercase < lowercase" #t (char<? #\A #\a))
+(assert-equal "char<? 3 args chain true" #t (char<? #\a #\b #\c))
+(assert-equal "char<? 4 args chain true" #t (char<? #\a #\b #\c #\d))
+(assert-equal "char<? 3 args chain false (unordered)" #f (char<? #\a #\c #\b))
+(assert-equal "char<? 3 args chain false (duplicate)" #f (char<? #\a #\b #\b))
+
+;; char>? tests (2 arguments & chained)
+(assert-equal "char>? 2 args true" #t (char>? #\z #\a))
+(assert-equal "char>? 2 args false" #f (char>? #\a #\z))
+(assert-equal "char>? 2 args equal false" #f (char>? #\z #\z))
+(assert-equal "char>? 3 args chain true" #t (char>? #\z #\y #\x))
+(assert-equal "char>? 3 args chain false (unordered)" #f (char>? #\z #\x #\y))
+(assert-equal "char>? 3 args chain false (duplicate)" #f (char>? #\z #\y #\y))
+
+;; char<=? tests (2 arguments & chained)
+(assert-equal "char<=? 2 args less true" #t (char<=? #\a #\b))
+(assert-equal "char<=? 2 args equal true" #t (char<=? #\a #\a))
+(assert-equal "char<=? 2 args greater false" #f (char<=? #\b #\a))
+(assert-equal "char<=? 3 args chain true" #t (char<=? #\a #\b #\c))
+(assert-equal "char<=? 4 args chain with duplicate true" #t (char<=? #\a #\b #\b #\c))
+(assert-equal "char<=? 3 args chain false" #f (char<=? #\a #\c #\b))
+
+;; char>=? tests (2 arguments & chained)
+(assert-equal "char>=? 2 args greater true" #t (char>=? #\b #\a))
+(assert-equal "char>=? 2 args equal true" #t (char>=? #\a #\a))
+(assert-equal "char>=? 2 args less false" #f (char>=? #\a #\b))
+(assert-equal "char>=? 3 args chain true" #t (char>=? #\c #\b #\a))
+(assert-equal "char>=? 4 args chain with duplicate true" #t (char>=? #\c #\b #\b #\a))
+(assert-equal "char>=? 3 args chain false" #f (char>=? #\b #\c #\a))
+
 ;;; Summary
 (write-string "=== ULisp R7RS Standard Library Tests Completed: ")
 (if (= (vector-ref *test-failures* 0) 0)

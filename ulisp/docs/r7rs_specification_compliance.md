@@ -138,7 +138,7 @@
 | :--- | :--- | :---: | :--- | :--- |
 | **6.6** | `char?`, `char=?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 即値文字タグ判定・比較 |
 | **6.6** | `char->integer`, `integer->char` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | コードポイント相互変換 |
-| **6.6** | `char<?`, `char>?`, `char<=?`, `char>=?` | **×** | - | [Issue #556](../../docs/issues/556-implement-r7rs-character-comparison-predicates.md) にて実装予定 |
+| **6.6** | `char<?`, `char>?`, `char<=?`, `char>=?` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm)<br>[Pass 030](../passes/030_desugar.scm) | 複数引数対応文字順序比較述語 ([Issue #556](../../docs/issues/closed/556-implement-r7rs-character-comparison-predicates.md)) |
 | **6.6** | `char-ci=?`, `char-alphabetic?`, `char-numeric?` 等 | **×** | - | Unicode 特性判定 (未実装) |
 
 #### 6.7 文字列 (Strings)
