@@ -123,7 +123,8 @@
 | **6.4** | `list?`, `list`, `length`, `reverse`, `append` | **◎** | 基本リスト操作 (`ulisp/lib/predicates.scm`, `ulisp/lib/string.scm`) |
 | **6.4** | `memq`, `memv`, `member` | **◎** | 要素探索 (`compiler/primitives.scm`) |
 | **6.4** | `assq`, `assv`, `assoc` | **◎** | 連想リストキー探索 (`compiler/primitives.scm`) |
-| **6.4** | `make-list`, `list-tail`, `list-ref`, `list-set!`, `list-copy` | **×** (△) | 拡張リスト操作 ([Issue #551](../../docs/issues/551-expand-r7rs-standard-library-procedures.md) で追加予定) |
+| **6.4** | `make-list`, `list-copy` | **◎** | 浅いスパイン複製・充填生成 (`ulisp/lib/list.scm`, `Pass 030`, Issue #551) |
+| **6.4** | `list-tail`, `list-ref`, `list-set!` | **×** (△) | インデックス指定アクセス (未実装) |
 
 #### 6.5 シンボル (Symbols)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装 / 技術仕様 |
@@ -147,8 +148,9 @@
 | **6.7** | `string-ref`, `string-set!` | **◎** | インデックスアクセスおよびインプレース更新 (`compiler/primitives.scm`) |
 | **6.7** | `string=?` | **◎** | 文字列内容比較 (`ulisp/lib/string.scm`) |
 | **6.7** | `substring`, `string-append` | **◎** | スライシング・2分木分割結合脱糖 (`Pass 030`, `ulisp/lib/string.scm`) |
+| **6.7** | `string-copy`, `string-copy!`, `string-fill!`, `string-map`, `string-for-each` | **◎** | オーバーラップ安全コピー・充填・反復マッピング (`ulisp/lib/string.scm`, `Pass 030`, Issue #551) |
 | **6.7** | `string`, `string<?`, `string>?`, `string<=?`, `string>=?` | **×** | 辞書順比較 (未実装) |
-| **6.7** | `string->list`, `list->string`, `string-copy!`, `string-fill!` | **×** (△) | 相互変換・破壊的充填 ([Issue #551](../../docs/issues/551-expand-r7rs-standard-library-procedures.md) で追加予定) |
+| **6.7** | `string->list`, `list->string` | **×** | 相互変換 (未実装) |
 
 #### 6.8 ベクタ (Vectors)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装 / 技術仕様 |

@@ -101,13 +101,55 @@
              (else
               (read-str (cons ch acc)))))))
 
-      ;; Boolean or Character Literal: #t, #f, #\newline, #\space, #\c
+      ;; Boolean, Character, Vector, or Bytevector Literal: #t, #f, #\c, #( ... ), #u8( ... )
       ((ulisp-char=? c #\#)
        (port-read-char p) ; consume '#'
        (let ((c2 (port-read-char p)))
          (cond
            ((ulisp-char=? c2 #\t) #t)
            ((ulisp-char=? c2 #\f) #f)
+           ((ulisp-char=? c2 #\() ; Vector literal #( ... )
+            (let read-vec-list ()
+              (let ((c3 (ulisp-skip-ws-port p)))
+                (cond
+                  ((eof-object? c3) c3)
+                  ((ulisp-char=? c3 #\))
+                   (port-read-char p) ; consume ')'
+                   '(vector))
+                  (else
+                   (cons 'vector
+                         (let read-elems ()
+                           (let ((elem (port-read p)))
+                             (let ((c4 (ulisp-skip-ws-port p)))
+                               (if (or (eof-object? c4) (ulisp-char=? c4 #\)))
+                                   (begin
+                                     (if (not (eof-object? c4)) (port-read-char p))
+                                     (list elem))
+                                   (cons elem (read-elems))))))))))))
+           ((and (ulisp-char=? c2 #\u) (ulisp-char=? (port-peek-char p) #\8))
+            (port-read-char p) ; consume '8'
+            (let ((c3 (ulisp-skip-ws-port p)))
+              (if (ulisp-char=? c3 #\()
+                  (begin
+                    (port-read-char p) ; consume '('
+                    (let read-bv-list ()
+                      (let ((c4 (ulisp-skip-ws-port p)))
+                        (cond
+                          ((eof-object? c4) c4)
+                          ((ulisp-char=? c4 #\))
+                           (port-read-char p)
+                           '(bytevector))
+                          (else
+                           (cons 'bytevector
+                                 (let read-bv-elems ()
+                                   (let ((elem (port-read p)))
+                                     (let ((c5 (ulisp-skip-ws-port p)))
+                                       (if (or (eof-object? c5) (ulisp-char=? c5 #\)))
+                                           (begin
+                                             (if (not (eof-object? c5)) (port-read-char p))
+                                             (list elem))
+                                           (cons elem (read-bv-elems))))))))))))
+                  #f)))
            ((ulisp-char=? c2 #\\)
             (let ((c3 (port-read-char p)))
               (let read-char-name ((acc (list c3)))
@@ -133,7 +175,11 @@
                (let* ((chars (reverse acc))
                       (len (length chars)))
                  (cond
-                   ((= len 0) #f)
+                   ((= len 0)
+                    ;; Safe advance if encountered isolated delimiter to prevent infinite loop
+                    (if (not (eof-object? next))
+                        (port-read-char p))
+                    #f)
                    ;; Check if number
                    ((and (>= len 1)
                          (or (ulisp-is-digit? (car chars))

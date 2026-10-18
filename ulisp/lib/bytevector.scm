@@ -26,12 +26,21 @@
 
 (define (bytevector-copy-range! to at from start end)
   (let ((count (- end start)))
-    (let loop ((i 0))
-      (if (< i count)
-          (begin
-            (bytevector-u8-set! to (+ at i) (bytevector-u8-ref from (+ start i)))
-            (loop (+ i 1)))
-          63))))
+    (if (and (eq? to from) (> at start))
+        ;; Backward copy to handle overlapping regions
+        (let loop ((i (- count 1)))
+          (if (>= i 0)
+              (begin
+                (bytevector-u8-set! to (+ at i) (bytevector-u8-ref from (+ start i)))
+                (loop (- i 1)))
+              63))
+        ;; Forward copy
+        (let loop ((i 0))
+          (if (< i count)
+              (begin
+                (bytevector-u8-set! to (+ at i) (bytevector-u8-ref from (+ start i)))
+                (loop (+ i 1)))
+              63)))))
 
 (define (bytevector=? bv1 bv2)
   (let ((l1 (bytevector-length bv1))

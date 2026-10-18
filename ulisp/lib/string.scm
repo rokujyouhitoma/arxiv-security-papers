@@ -174,6 +174,56 @@
 (define (symbol->string sym)
   (%symbol-find-string sym (car *symbol-registry*)))
 
+(define (string-copy-range str start end)
+  (substring str start end))
 
+(define (string-copy-range! to at from start end)
+  (let ((count (- end start)))
+    (if (and (eq? to from) (> at start))
+        ;; Backward copy to handle overlapping regions
+        (let loop ((i (- count 1)))
+          (if (>= i 0)
+              (begin
+                (string-set! to (+ at i) (string-ref from (+ start i)))
+                (loop (- i 1)))
+              63))
+        ;; Forward copy
+        (let loop ((i 0))
+          (if (< i count)
+              (begin
+                (string-set! to (+ at i) (string-ref from (+ start i)))
+                (loop (+ i 1)))
+              63)))))
 
+(define (string-fill-range! str fill start end)
+  (let loop ((i start))
+    (if (< i end)
+        (begin
+          (string-set! str i fill)
+          (loop (+ i 1)))
+        63)))
 
+(define (string-map proc str)
+  (let* ((len (string-length str))
+         (res (make-string len)))
+    (let loop ((i 0))
+      (if (< i len)
+          (begin
+            (string-set! res i (proc (string-ref str i)))
+            (loop (+ i 1)))
+          res))))
+
+(define (string-for-each proc str)
+  (let ((len (string-length str)))
+    (let loop ((i 0))
+      (if (< i len)
+          (begin
+            (proc (string-ref str i))
+            (loop (+ i 1)))
+          63))))
+
+(define (string-copy str)
+  (string-copy-range str 0 (string-length str)))
+
+(define (string-fill! str fill)
+  (string-fill-range! str fill 0 (string-length str)))

@@ -4,9 +4,7 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: |
-| **551** | R7RS 標準シーケンス操作・変換手続き群 (vector-copy / list-copy / string-copy! 等) の拡充 | Feature | Open (New) | [551-expand-r7rs-standard-library-procedures.md](551-expand-r7rs-standard-library-procedures.md) |
+現在、未着手のオープンな Issue はありません。
 
 ---
 
@@ -14,6 +12,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **551** | R7RS 標準シーケンス操作・変換手続き群 (vector-copy / list-copy / string-copy! 等) の拡充 | Feature | 2026-10-18 | [closed/551-expand-r7rs-standard-library-procedures.md](closed/551-expand-r7rs-standard-library-procedures.md) |
 | **550** | R7RS 準拠の遅延評価機構 (delay / force / delay-force / promise?) の実装 | Feature | 2026-10-18 | [closed/550-implement-r7rs-lazy-evaluation-delay-force.md](closed/550-implement-r7rs-lazy-evaluation-delay-force.md) |
 | **549** | R7RS 準拠の構造化レコード型 (define-record-type) のマクロ脱糖および高速フィールドアクセス機構の実装 | Feature | 2026-10-18 | [closed/549-implement-r7rs-define-record-type-macro.md](closed/549-implement-r7rs-define-record-type-macro.md) |
 | **554** | ULisp メタコンパイラの R7RS-small および R7RS-large 仕様準拠状況一覧ドキュメントの策定 | Documentation | 2026-10-18 | [closed/554-document-ulisp-r7rs-small-and-large-specification-compliance.md](closed/554-document-ulisp-r7rs-small-and-large-specification-compliance.md) |

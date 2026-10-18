@@ -24,12 +24,21 @@
 
 (define (vector-copy-range! to at from start end)
   (let ((count (- end start)))
-    (let loop ((i 0))
-      (if (< i count)
-          (begin
-            (vector-set! to (+ at i) (vector-ref from (+ start i)))
-            (loop (+ i 1)))
-          63))))
+    (if (and (eq? to from) (> at start))
+        ;; Backward copy to handle overlapping regions
+        (let loop ((i (- count 1)))
+          (if (>= i 0)
+              (begin
+                (vector-set! to (+ at i) (vector-ref from (+ start i)))
+                (loop (- i 1)))
+              63))
+        ;; Forward copy
+        (let loop ((i 0))
+          (if (< i count)
+              (begin
+                (vector-set! to (+ at i) (vector-ref from (+ start i)))
+                (loop (+ i 1)))
+              63)))))
 
 (define (vector-fill-range! vec fill start end)
   (let loop ((i start))

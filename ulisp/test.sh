@@ -22,7 +22,7 @@ ULISP_STAGE1="build/scheme-stage1"
 ULISP_BOOT="bin/ulisp-boot"
 
 make compiler
-cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
@@ -78,12 +78,14 @@ assert() {
 
     if [[ "$input" =~ gc- ]]; then
         full_input="$(cat lib/gc.scm)"$'\n'"$input"
-    elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string ]]; then
+    elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string || "$input" =~ string-copy || "$input" =~ string-fill || "$input" =~ string-map || "$input" =~ string-for-each ]]; then
         full_input="$(cat lib/string.scm)"$'\n'"$input"
+    elif [[ "$input" =~ list-copy || "$input" =~ make-list ]]; then
+        full_input="$(cat lib/list.scm)"$'\n'"$input"
     elif [[ "$input" =~ open-input-string || "$input" =~ open-output-string || "$input" =~ "port\?" || "$input" =~ "input-port\?" || "$input" =~ "output-port\?" || "$input" =~ "textual-port\?" || "$input" =~ "get-output-string" ]]; then
-        full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
+        full_input="$(cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ parameter || "$input" =~ dynamic-wind ]]; then
-        full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
+        full_input="$(cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ bytevector || "$input" =~ utf8 ]]; then
         full_input="$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$input"
     elif [[ "$input" =~ delay || "$input" =~ force || "$input" =~ promise ]]; then
@@ -678,6 +680,9 @@ assert "100" "(force (force (delay (delay 100))))"
 
 echo "-- Step 33b: Standalone R7RS Lazy Evaluation Test Suite (tests/test_promise.scm) --"
 make test_promise
+
+echo "-- Step 34: Standalone R7RS Standard Library Sequence Test Suite (tests/test_stdlib_r7rs.scm) --"
+make test_stdlib
 
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification

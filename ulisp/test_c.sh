@@ -44,6 +44,10 @@ assert_c() {
     local code
     if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$expr"
+    elif [[ "$expr" =~ string-copy || "$expr" =~ string-fill || "$expr" =~ string-map || "$expr" =~ string-for-each ]]; then
+        code="(!target c)"$'\n'"$(cat lib/string.scm)"$'\n'"$expr"
+    elif [[ "$expr" =~ list-copy || "$expr" =~ make-list ]]; then
+        code="(!target c)"$'\n'"$(cat lib/list.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ delay || "$expr" =~ force || "$expr" =~ promise ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm lib/promise.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ define-record-type || "$expr" =~ vector ]]; then
@@ -285,6 +289,7 @@ assert_c "100" "(force (force (delay (delay 100))))"
 echo "--- Step 14: Standalone R7RS Test Suites (test_*.scm) ---"
 run_test_file_c "tests/test_record.scm" "lib/string.scm lib/vector.scm" "R7RS define-record-type suite"
 run_test_file_c "tests/test_promise.scm" "lib/string.scm lib/vector.scm lib/promise.scm" "R7RS delay/force/promise suite"
+run_test_file_c "tests/test_stdlib_r7rs.scm" "lib/list.scm lib/string.scm lib/vector.scm lib/bytevector.scm" "R7RS standard sequence library suite"
 
 rm -f "$TMP_C" "$TMP_BIN"
 

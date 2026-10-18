@@ -26,9 +26,13 @@
   (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules define-record-type
               cond case and or when unless delay delay-force
               cons car cdr pair? null? list append not eq? eqv? equal?
+              list-copy make-list
+              vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector
+              string string-ref string-set! string-length make-string string-append string-copy string-copy! string-fill! string-map string-for-each substring string=? string->symbol symbol->string
+              bytevector bytevector-u8-ref bytevector-u8-set! bytevector-length make-bytevector bytevector-copy bytevector-copy! bytevector-append bytevector=?
               + - * = < > <= >= modulo quotient /
               zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-              boolean? char? symbol? string? list?
+              boolean? char? symbol? string? list? vector? bytevector?
               write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
               values call-with-values dynamic-wind call/cc call-with-current-continuation
               guard raise %raw-call/cc %with-handler)))

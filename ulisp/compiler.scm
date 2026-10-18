@@ -858,9 +858,13 @@
   (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules define-record-type
               cond case and or when unless delay delay-force
               cons car cdr pair? null? list append not eq? eqv? equal?
+              list-copy make-list
+              vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector
+              string string-ref string-set! string-length make-string string-append string-copy string-copy! string-fill! string-map string-for-each substring string=? string->symbol symbol->string
+              bytevector bytevector-u8-ref bytevector-u8-set! bytevector-length make-bytevector bytevector-copy bytevector-copy! bytevector-append bytevector=?
               + - * = < > <= >= modulo quotient /
               zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-              boolean? char? symbol? string? list?
+              boolean? char? symbol? string? list? vector? bytevector?
               write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
               values call-with-values dynamic-wind call/cc call-with-current-continuation
               guard raise %raw-call/cc %with-handler)))
@@ -1572,6 +1576,41 @@
           (desugar-all (desugar-let* (cadr expr) (cddr expr))))
          ((string-append)
           (desugar-all (desugar-string-append (cdr expr))))
+         ((string-copy)
+          (let ((args (cdr expr)))
+            (cond
+              ((null? (cdr args))
+               (let ((s-sym (unique-symbol "s_")))
+                 (list 'let (list (list s-sym (desugar-all (car args))))
+                       (list 'string-copy-range s-sym 0 (list 'string-length s-sym)))))
+              ((null? (cddr args))
+               (let ((s-sym (unique-symbol "s_")))
+                 (list 'let (list (list s-sym (desugar-all (car args))))
+                       (list 'string-copy-range s-sym (desugar-all (cadr args)) (list 'string-length s-sym)))))
+              (else
+               (list 'string-copy-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
+         ((string-copy!)
+          (let ((args (cdr expr)))
+            (if (null? (cdddr args))
+                (let ((from-sym (unique-symbol "from_")))
+                  (list 'let (list (list from-sym (desugar-all (caddr args))))
+                        (list 'string-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
+                              from-sym 0 (list 'string-length from-sym))))
+                (list 'string-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
+                      (desugar-all (caddr args)) (desugar-all (car (cdddr args))) (desugar-all (cadr (cdddr args)))))))
+         ((string-fill!)
+          (let ((args (cdr expr)))
+            (cond
+              ((null? (cddr args))
+               (let ((s-sym (unique-symbol "s_")))
+                 (list 'let (list (list s-sym (desugar-all (car args))))
+                       (list 'string-fill-range! s-sym (desugar-all (cadr args)) 0 (list 'string-length s-sym)))))
+              ((null? (cdddr args))
+               (let ((s-sym (unique-symbol "s_")))
+                 (list 'let (list (list s-sym (desugar-all (car args))))
+                       (list 'string-fill-range! s-sym (desugar-all (cadr args)) (desugar-all (caddr args)) (list 'string-length s-sym)))))
+              (else
+               (list 'string-fill-range! (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)) (desugar-all (cadddr args)))))))
          ((bytevector)
           (desugar-all (desugar-bytevector (cdr expr))))
          ((bytevector-append)
@@ -1676,6 +1715,11 @@
                (list 'vector->list-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
          ((list)
           (desugar-all (desugar-list (cdr expr))))
+         ((make-list)
+          (let ((args (cdr expr)))
+            (if (null? (cdr args))
+                (list 'make-list-fill (desugar-all (car args)) #f)
+                (list 'make-list-fill (desugar-all (car args)) (desugar-all (cadr args))))))
          ((and)
           (desugar-all (desugar-and (cdr expr))))
          ((or)
