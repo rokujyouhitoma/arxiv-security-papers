@@ -125,16 +125,8 @@
           (loop (cdr ps) (append (reverse forms) acc))))))
 
 (define (slurp-single-file path)
-  (if (not (string? path))
-      '()
-      (let ((p (open-input-file path)))
-        (let read-loop ((acc '()))
-          (let ((expr (read p)))
-            (if (eof-object? expr)
-                (begin
-                  (close-port p)
-                  (reverse acc))
-                (read-loop (cons expr acc))))))))
+  ;; File inclusion is not yet supported in bare-metal self-hosting without posix open syscall.
+  '())
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. Import-Set Resolution & Name Mapping

@@ -18,6 +18,8 @@
 (define (cdddr x) (safe-cdr (safe-cdr (safe-cdr x))))
 (define (cadar x) (safe-car (safe-cdr (safe-car x))))
 (define (cadddr x) (safe-car (safe-cdr (safe-cdr (safe-cdr x)))))
+(define (cddddr x) (safe-cdr (safe-cdr (safe-cdr (safe-cdr x)))))
+(define (open-input-file path) #f)
 (define (caaar x) (safe-car (safe-car (safe-car x))))
 (define (cdaar x) (safe-cdr (safe-car (safe-car x))))
 (define (caadar x) (safe-car (safe-car (safe-cdr (safe-car x)))))
@@ -546,16 +548,8 @@
           (loop (cdr ps) (append (reverse forms) acc))))))
 
 (define (slurp-single-file path)
-  (if (not (string? path))
-      '()
-      (let ((p (open-input-file path)))
-        (let read-loop ((acc '()))
-          (let ((expr (read p)))
-            (if (eof-object? expr)
-                (begin
-                  (close-port p)
-                  (reverse acc))
-                (read-loop (cons expr acc))))))))
+  ;; File inclusion is not yet supported in bare-metal self-hosting without posix open syscall.
+  '())
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. Import-Set Resolution & Name Mapping

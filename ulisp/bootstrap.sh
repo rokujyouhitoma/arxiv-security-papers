@@ -40,35 +40,47 @@ check_asm_output() {
         echo -e "\033[1;31m[ERROR] $stage_name produced an empty assembly file: $asm_file\033[0m" >&2
         exit 1
     fi
-    if head -n 5 "$asm_file" | grep -q "^\*\*\* ERROR:"; then
+    if grep -q "^\*\*\* ERROR:" "$asm_file"; then
         echo -e "\033[1;31m[ERROR] $stage_name failed with Scheme runtime exception:\033[0m" >&2
         cat "$asm_file" >&2
         exit 1
     fi
 }
 
+run_stage() {
+    local stage_name="$1"
+    local asm_file="$2"
+    shift 2
+    local rc=0
+    "$@" < "$BUILD_DIR/ulisp_core.scm" > "$asm_file" 2>&1 || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo -e "\033[1;31m[ERROR] $stage_name execution failed with exit code $rc:\033[0m" >&2
+        if [ -s "$asm_file" ]; then
+            cat "$asm_file" >&2
+        fi
+        exit 1
+    fi
+    check_asm_output "$stage_name" "$asm_file"
+}
+
 if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ]; then
     echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
 elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
     echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using native seed ($BOOT_BIN)..."
-    "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
-    check_asm_output "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s"
+    run_stage "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s" "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm"
     gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
 else
     echo "[1/3] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."
-    PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm" < "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage1.s"
-    check_asm_output "Stage 1 (ILisp)" "$BUILD_DIR/stage1.s"
+    run_stage "Stage 1 (ILisp)" "$BUILD_DIR/stage1.s" env PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm"
     gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
 fi
 
 echo "[2/3] Stage 2: Compiling ulisp_core.scm with Stage 1 compiler..."
-"$BUILD_DIR/scheme-stage1" "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage2.s"
-check_asm_output "Stage 2 (scheme-stage1)" "$BUILD_DIR/stage2.s"
+run_stage "Stage 2 (scheme-stage1)" "$BUILD_DIR/stage2.s" "$BUILD_DIR/scheme-stage1" "$BUILD_DIR/ulisp_core.scm"
 gcc -nostdlib -static "$BUILD_DIR/stage2.s" -o "$BUILD_DIR/scheme-stage2"
 
 echo "[3/3] Stage 3: Compiling ulisp_core.scm with Stage 2 compiler..."
-"$BUILD_DIR/scheme-stage2" "$BUILD_DIR/ulisp_core.scm" > "$BUILD_DIR/stage3.s"
-check_asm_output "Stage 3 (scheme-stage2)" "$BUILD_DIR/stage3.s"
+run_stage "Stage 3 (scheme-stage2)" "$BUILD_DIR/stage3.s" "$BUILD_DIR/scheme-stage2" "$BUILD_DIR/ulisp_core.scm"
 
 echo "=== Verifying Fixed Point (diff stage2.s stage3.s) ==="
 if cmp -s "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s"; then

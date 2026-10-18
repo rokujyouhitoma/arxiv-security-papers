@@ -18,6 +18,8 @@
 (define (cdddr x) (safe-cdr (safe-cdr (safe-cdr x))))
 (define (cadar x) (safe-car (safe-cdr (safe-car x))))
 (define (cadddr x) (safe-car (safe-cdr (safe-cdr (safe-cdr x)))))
+(define (cddddr x) (safe-cdr (safe-cdr (safe-cdr (safe-cdr x)))))
+(define (open-input-file path) #f)
 (define (caaar x) (safe-car (safe-car (safe-car x))))
 (define (cdaar x) (safe-cdr (safe-car (safe-car x))))
 (define (caadar x) (safe-car (safe-car (safe-cdr (safe-car x)))))
