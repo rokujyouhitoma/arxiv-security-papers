@@ -2,7 +2,7 @@
 ID: 555
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] R7RS リスト要素アクセス・更新手続き (list-tail / list-ref / list-set!) の実装 (ID: 555)
@@ -23,9 +23,9 @@ ULisp のランタイムには既に `set-car!` / `set-cdr!` などのプリミ�
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/list.scm](../../ulisp/lib/list.scm) (`list-tail`, `list-ref`, `list-set!` 実装)
-- [ ] [ulisp/tests/test_stdlib_r7rs.scm](../../ulisp/tests/test_stdlib_r7rs.scm) (単体テストケース追加)
-- [ ] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (適合状況更新)
+- [x] [ulisp/lib/list.scm](../../ulisp/lib/list.scm) (`list-tail`, `list-ref`, `list-set!` 実装)
+- [x] [ulisp/tests/test_stdlib_r7rs.scm](../../ulisp/tests/test_stdlib_r7rs.scm) (単体テストケース追加)
+- [x] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (適合状況更新)
 
 ---
 
@@ -45,7 +45,7 @@ Target Branch: `feat/555-implement-r7rs-list-accessors-list-tail-ref-set`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `list-tail`, `list-ref`, `list-set!` が `ulisp/lib/list.scm` に実装されていること。
-- [ ] `tests/test_stdlib_r7rs.scm` で全テストが合格すること。
-- [ ] `./test.sh` および `./test_c.sh` がエラーなく 100% PASS すること。
-- [ ] `ulisp/docs/r7rs_specification_compliance.md` のチェックリストが更新されていること。
+- [x] `list-tail`, `list-ref`, `list-set!` が `ulisp/lib/list.scm` に実装されていること。
+- [x] `tests/test_stdlib_r7rs.scm` で全テストが合格すること。
+- [x] `./test.sh` および `./test_c.sh` がエラーなく 100% PASS すること。
+- [x] `ulisp/docs/r7rs_specification_compliance.md` のチェックリストが更新されていること。

@@ -124,7 +124,7 @@
 | **6.4** | `memq`, `memv`, `member` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 要素探索 |
 | **6.4** | `assq`, `assv`, `assoc` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 連想リストキー探索 |
 | **6.4** | `make-list`, `list-copy` | **◎** | [ulisp/lib/list.scm](../lib/list.scm)<br>[Pass 030](../passes/030_desugar.scm) | 浅いスパイン複製・充填生成 ([Issue #551](../../docs/issues/closed/551-expand-r7rs-standard-library-procedures.md)) |
-| **6.4** | `list-tail`, `list-ref`, `list-set!` | **×** (△) | - | [Issue #555](../../docs/issues/555-implement-r7rs-list-accessors-list-tail-ref-set.md) にて実装予定 |
+| **6.4** | `list-tail`, `list-ref`, `list-set!` | **◎** | [ulisp/lib/list.scm](../lib/list.scm) | リスト末尾参照・インデックス取得・破壊的更新 ([Issue #555](../../docs/issues/closed/555-implement-r7rs-list-accessors-list-tail-ref-set.md)) |
 
 #### 6.5 シンボル (Symbols)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -360,8 +360,8 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
 2. **実装完了済みの主要機能 (Recently Closed Issues)**:
    - [Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md): `delay`, `force`, `delay-force`, `promise?` (遅延評価)
    - [Issue #551](../../docs/issues/closed/551-expand-r7rs-standard-library-procedures.md): `list-copy`, `make-list`, `string-copy!`, `string-fill!` 等のシーケンス操作拡充
+   - [Issue #555](../../docs/issues/closed/555-implement-r7rs-list-accessors-list-tail-ref-set.md): `list-tail`, `list-ref`, `list-set!` (リストインデックス操作)
 3. **進行中および直近の実装予定 (Open Issues)**:
-   - [Issue #555](../../docs/issues/555-implement-r7rs-list-accessors-list-tail-ref-set.md): `list-tail`, `list-ref`, `list-set!` (リストインデックス操作)
    - [Issue #556](../../docs/issues/556-implement-r7rs-character-comparison-predicates.md): `char<?`, `char>?`, `char<=?`, `char>=?` (文字順序比較)
    - [Issue #557](../../docs/issues/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md): 文字列・ベクタ・リスト相互変換および文字列順序比較述語
    - [Issue #558](../../docs/issues/558-implement-r7rs-elementary-integer-math-procedures.md): `square`, `gcd`, `lcm`, `expt`, `remainder` (基本整数算術)

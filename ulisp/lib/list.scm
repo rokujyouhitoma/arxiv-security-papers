@@ -23,3 +23,29 @@
 
 (define (make-list k)
   (make-list-fill k #f))
+
+;; ---------------------------------------------------------------------
+;; §6.4 Pairs and lists: list-tail
+;; ---------------------------------------------------------------------
+(define (list-tail lst k)
+  (let loop ((l lst) (i k))
+    (if (<= i 0)
+        l
+        (if (pair? l)
+            (loop (cdr l) (- i 1))
+            (error "list-tail: index out of bounds" k)))))
+
+;; ---------------------------------------------------------------------
+;; §6.4 Pairs and lists: list-ref
+;; ---------------------------------------------------------------------
+(define (list-ref lst k)
+  (car (list-tail lst k)))
+
+;; ---------------------------------------------------------------------
+;; §6.4 Pairs and lists: list-set!
+;; ---------------------------------------------------------------------
+(define (list-set! lst k obj)
+  (let ((p (list-tail lst k)))
+    (if (pair? p)
+        (set-car! p obj)
+        (error "list-set!: index out of bounds" k))))

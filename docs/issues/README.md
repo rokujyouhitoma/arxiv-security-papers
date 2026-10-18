@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **555** | R7RS リスト要素アクセス・更新手続き (list-tail / list-ref / list-set!) の実装 | Feature | Medium | [555-implement-r7rs-list-accessors-list-tail-ref-set.md](555-implement-r7rs-list-accessors-list-tail-ref-set.md) |
 | **556** | R7RS 文字順序比較述語 (char<? / char>? / char<=? / char>=?) の実装 | Feature | Medium | [556-implement-r7rs-character-comparison-predicates.md](556-implement-r7rs-character-comparison-predicates.md) |
 | **557** | R7RS 文字列・リスト・ベクタ相互変換および文字列辞書順比較述語の実装 | Feature | Medium | [557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md](557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) |
 | **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **555** | R7RS リスト要素アクセス・更新手続き (list-tail / list-ref / list-set!) の実装 | Feature | 2026-10-18 | [closed/555-implement-r7rs-list-accessors-list-tail-ref-set.md](closed/555-implement-r7rs-list-accessors-list-tail-ref-set.md) |
 | **562** | R7RS 標準 16 ライブラリ定義 (*.sld) の物理配置および export/include/import 機構の統合 | Feature | 2026-10-18 | [closed/562-implement-r7rs-standard-library-definitions-sld.md](closed/562-implement-r7rs-standard-library-definitions-sld.md) |
 | **561** | R7RS ライブラリメタデータ管理規約（パターンB＋コメントハイブリッド）の策定と準拠表実装リンクの網羅的整備 | Feature | 2026-10-18 | [closed/561-establish-r7rs-library-metadata-standard-and-link-compliance-tables.md](closed/561-establish-r7rs-library-metadata-standard-and-link-compliance-tables.md) |
 | **551** | R7RS 標準シーケンス操作・変換手続き群 (vector-copy / list-copy / string-copy! 等) の拡充 | Feature | 2026-10-18 | [closed/551-expand-r7rs-standard-library-procedures.md](closed/551-expand-r7rs-standard-library-procedures.md) |

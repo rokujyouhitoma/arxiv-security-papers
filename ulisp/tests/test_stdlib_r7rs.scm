@@ -83,6 +83,25 @@
 (assert-equal "make-list 3 fill 'a" '(a a a) (make-list 3 'a))
 (assert-equal "make-list 2 default fill #f" '(#f #f) (make-list 2))
 
+;; list-tail tests
+(assert-equal "list-tail 0" '(a b c) (list-tail '(a b c) 0))
+(assert-equal "list-tail 1" '(b c) (list-tail '(a b c) 1))
+(assert-equal "list-tail 3 (end of list)" '() (list-tail '(a b c) 3))
+
+;; list-ref tests
+(assert-equal "list-ref 0" 'a (list-ref '(a b c) 0))
+(assert-equal "list-ref 1" 'b (list-ref '(a b c) 1))
+(assert-equal "list-ref 2" 'c (list-ref '(a b c) 2))
+
+;; list-set! tests
+(let ((lst (list 'x 'y 'z)))
+  (list-set! lst 0 'first)
+  (assert-equal "list-set! index 0" '(first y z) lst)
+  (list-set! lst 1 'second)
+  (assert-equal "list-set! index 1" '(first second z) lst)
+  (list-set! lst 2 'third)
+  (assert-equal "list-set! index 2" '(first second third) lst))
+
 ;;; =======================================================================
 ;;; 2. String Operations (R7RS Section 6.7)
 ;;; =======================================================================
