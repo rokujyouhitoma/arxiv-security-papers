@@ -10,6 +10,7 @@ PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.
 ILISP = $(PYTHON) -m ilisp
 
 PASSES_LIB = passes/00_helpers.scm \
+             passes/00a_library.scm \
              passes/00b_macro_expander.scm \
              passes/01_desugar.scm \
              passes/02_analysis.scm \
@@ -44,6 +45,19 @@ test_passes: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_passes_runner.scm
+
+test_library: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/passes/test_library.scm > build/test_library_runner.scm
+	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_library_runner.scm
+	$(CC) $(CFLAGS_JIT) -o build/test_library runtime.c build/test_library.s
+	@echo "=== Executing compiled library x86-64 binary ==="
+	@res=$$(./build/test_library); echo "Output: $$res"; test "$$res" = "260"
+	@echo "SUCCESS: library x86-64 output 260 matches expected!"
+	$(CC) $(CFLAGS_JIT) -o build/test_library_c runtime.c build/test_library.c
+	@echo "=== Executing compiled library Portable C binary ==="
+	@res_c=$$(./build/test_library_c); echo "Output: $$res_c"; test "$$res_c" = "260"
+	@echo "SUCCESS: library C output 260 matches expected!"
 
 test_lvn: build/compiler_passes.scm
 	@mkdir -p build
