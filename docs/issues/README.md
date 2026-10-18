@@ -12,6 +12,7 @@
 | **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
 | **559** | R7RS 反復構文 (do) のマクロ脱糖実装 | Feature | Medium | [559-implement-r7rs-do-loop-syntax.md](559-implement-r7rs-do-loop-syntax.md) |
 | **560** | R7RS 多値定義構文 (define-values) のマクロ脱糖実装 | Feature | Medium | [560-implement-r7rs-define-values-syntax.md](560-implement-r7rs-define-values-syntax.md) |
+| **562** | R7RS 標準 16 ライブラリ定義 (*.sld) の物理配置および export/include/import 機構の統合 | Feature | High | [562-implement-r7rs-standard-library-definitions-sld.md](562-implement-r7rs-standard-library-definitions-sld.md) |
 
 ---
 
