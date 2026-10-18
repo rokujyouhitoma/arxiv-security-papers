@@ -856,7 +856,7 @@
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
   (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules define-record-type
-              cond case and or when unless
+              cond case and or when unless delay delay-force
               cons car cdr pair? null? list append not eq? eqv? equal?
               + - * = < > <= >= modulo quotient /
               zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
@@ -1686,6 +1686,16 @@
           (desugar-all (desugar-let-values (cadr expr) (cddr expr))))
          ((let*-values)
           (desugar-all (desugar-let*-values (cadr expr) (cddr expr))))
+         ((delay)
+          (let ((body (if (null? (cddr expr))
+                          (cadr expr)
+                          (cons 'begin (cdr expr)))))
+            (desugar-all (list '%%make-promise ''lazy (list 'lambda '() (list '%%make-promise ''eager body))))))
+         ((delay-force)
+          (let ((body (if (null? (cddr expr))
+                          (cadr expr)
+                          (cons 'begin (cdr expr)))))
+            (desugar-all (list '%%make-promise ''lazy (list 'lambda '() body)))))
          ((make-parameter)
           (let ((args (cdr expr)))
             (if (null? (cdr args))
@@ -9074,6 +9084,7 @@
 
       ((%idiv)
        (let ((src (cadr inst)))
+         (emit (string-append "    reg_rdx = (uint64_t)((int64_t)reg_rax % (int64_t)" (c-operand->str src) ");"))
          (emit (string-append "    reg_rax = (uint64_t)((int64_t)reg_rax / (int64_t)" (c-operand->str src) ");"))))
 
       ((%inc)
@@ -9350,6 +9361,7 @@
     (emit "extern uint64_t ulisp_peek_char(void);")
     (emit "extern uint64_t ulisp_write_char(uint64_t val);")
     (emit "extern uint64_t ulisp_write_string(uint64_t val);")
+    (emit "extern uint64_t ulisp_flush(void);")
     (emit "extern void print_scheme_value(uint64_t val);")
     (emit "#if defined(__GNUC__) || defined(__clang__)")
     (emit "#define ULISP_UNUSED __attribute__((unused))")
@@ -9409,7 +9421,7 @@
               (let* ((entry (car ss))
                      (lbl-str (c-sanitize-label (car entry)))
                      (escaped (escape-gas-string (cdr entry))))
-                (emit (string-append "static const char " lbl-str "[] = \"" escaped "\";"))
+                (emit (string-append "static const char " lbl-str "[] __attribute__((aligned(8))) = \"" escaped "\";"))
                 (loop (cdr ss))))))
     (emit "")
     ;; Emit lifted function bodies

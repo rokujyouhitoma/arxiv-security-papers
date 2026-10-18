@@ -44,6 +44,8 @@ assert_c() {
     local code
     if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$expr"
+    elif [[ "$expr" =~ delay || "$expr" =~ force || "$expr" =~ promise ]]; then
+        code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm lib/promise.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ define-record-type || "$expr" =~ vector ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ parameter || "$expr" =~ dynamic-wind ]]; then
@@ -91,6 +93,52 @@ assert_c() {
         FAIL_COUNT=$((FAIL_COUNT + 1))
         exit 1
     fi
+}
+
+run_test_file_c() {
+    local test_file="$1"
+    local stdlib="$2"
+    local desc="$3"
+
+    local in_file="build/tmp_file_c_in.scm"
+    local out_c="build/tmp_file_c.c"
+    local out_bin="build/tmp_file_c_bin"
+
+    cat <(echo "(!target c)") $stdlib "$test_file" > "$in_file"
+    if [ -x "bin/ulisp-boot" ]; then
+        ULISP_QUIET=1 bin/ulisp-boot "$in_file" > "$out_c" 2>build/compile_err.log || {
+            echo -e "\033[31m[COMPILE FAIL]\033[0m $test_file"
+            cat build/compile_err.log
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            exit 1
+        }
+    else
+        printf '%s\n' "$(cat "$in_file")" | $ILISP "$COMPILER" > "$out_c" 2>build/compile_err.log || {
+            echo -e "\033[31m[COMPILE FAIL]\033[0m $test_file"
+            cat build/compile_err.log
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            exit 1
+        }
+    fi
+
+    $CC $CFLAGS runtime.c "$out_c" -o "$out_bin" 2>build/gcc_err.log || {
+        echo -e "\033[31m[GCC BUILD FAIL]\033[0m $test_file"
+        cat build/gcc_err.log
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        exit 1
+    }
+
+    local actual
+    actual=$("./$out_bin" 2>build/run_err.log | tail -n 1)
+    if [ "$actual" = "#t" ]; then
+        echo -e "  \033[32m[PASS]\033[0m $desc ($test_file) => #t"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    else
+        echo -e "  \033[31m[FAIL]\033[0m $desc ($test_file) failed (got: '$actual')"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        exit 1
+    fi
+    rm -f "$in_file" "$out_c" "$out_bin"
 }
 
 echo "--- Step 1: Immediate Values & Types ---"
@@ -216,6 +264,27 @@ assert_c "#f" "(define-record-type point (make-point x y) point? (x point-x) (y 
 assert_c "#f" "(define-record-type point (make-point x y) point? (x point-x) (y point-y)) (point? 42)"
 assert_c "(100 . #f)" "(define-record-type task (create-task title) task? (title task-title) (completed? task-completed? task-set-completed!)) (let ((t (create-task 100))) (cons (task-title t) (task-completed? t)))"
 assert_c "42" "(define-record-type task (create-task title) task? (title task-title) (completed? task-completed? task-set-completed!)) (let ((t (create-task 100))) (begin (task-set-completed! t 42) (task-completed? t)))"
+
+echo "--- Step 13: R7RS Lazy Evaluation (Issue 550) ---"
+assert_c "#t" "(promise? (delay 42))"
+assert_c "#t" "(promise? (delay-force (delay 42)))"
+assert_c "#t" "(promise? (make-promise 42))"
+assert_c "#f" "(promise? 42)"
+assert_c "#f" "(promise? (vector 1 2 3))"
+assert_c "42" "(force (delay 42))"
+assert_c "7" "(force (delay (+ 3 4)))"
+assert_c "42" "(force (make-promise 42))"
+assert_c "99" "(let ((p (delay 99))) (force (make-promise p)))"
+assert_c "42" "(force (delay-force (delay 42)))"
+assert_c "1" "(let ((count (vector 0))) (let ((p (delay (begin (vector-set! count 0 (+ (vector-ref count 0) 1)) 42)))) (let ((v1 (force p))) (let ((v2 (force p))) (vector-ref count 0)))))"
+assert_c "6" "(define count (vector 0)) (define p (delay (begin (vector-set! count 0 (+ (vector-ref count 0) 1)) (if (> (vector-ref count 0) 5) (vector-ref count 0) (force p))))) (force p)"
+assert_c "(0 1 2)" "(letrec ((integers (lambda (n) (delay (cons n (integers (+ n 1))))))) (let ((s (integers 0))) (let ((v0 (car (force s)))) (let ((v1 (car (force (cdr (force s)))))) (let ((v2 (car (force (cdr (force (cdr (force s)))))))) (list v0 v1 v2))))))"
+assert_c "42" "(letrec ((loop (lambda (n) (delay-force (if (= n 0) (delay 42) (loop (- n 1))))))) (force (loop 2000)))"
+assert_c "100" "(force (force (delay (delay 100))))"
+
+echo "--- Step 14: Standalone R7RS Test Suites (test_*.scm) ---"
+run_test_file_c "tests/test_record.scm" "lib/string.scm lib/vector.scm" "R7RS define-record-type suite"
+run_test_file_c "tests/test_promise.scm" "lib/string.scm lib/vector.scm lib/promise.scm" "R7RS delay/force/promise suite"
 
 rm -f "$TMP_C" "$TMP_BIN"
 

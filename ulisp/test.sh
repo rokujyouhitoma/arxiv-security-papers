@@ -22,7 +22,7 @@ ULISP_STAGE1="build/scheme-stage1"
 ULISP_BOOT="bin/ulisp-boot"
 
 make compiler
-cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
+cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm > build/ulisp_core.scm
 
 echo "=== Step 0: Running Isolated Nanopass Unit Tests (Pass 1-7) ==="
 make test_passes
@@ -35,16 +35,11 @@ USE_NATIVE_ULISP=false
 ACTIVE_NATIVE=""
 
 if [ "${FORCE_ILISP:-0}" != "1" ]; then
+    make stage1 >/dev/null 2>&1 || true
     if [ -x "$ULISP_STAGE1" ]; then
         ACTIVE_NATIVE="$ULISP_STAGE1"
     elif [ -x "$ULISP_BOOT" ]; then
         ACTIVE_NATIVE="$ULISP_BOOT"
-    else
-        echo "=== Building scheme-stage1... ==="
-        make stage1 >/dev/null 2>&1 || true
-        if [ -x "$ULISP_STAGE1" ]; then
-            ACTIVE_NATIVE="$ULISP_STAGE1"
-        fi
     fi
 
     if [ -n "$ACTIVE_NATIVE" ]; then
@@ -91,6 +86,8 @@ assert() {
         full_input="$(cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ bytevector || "$input" =~ utf8 ]]; then
         full_input="$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$input"
+    elif [[ "$input" =~ delay || "$input" =~ force || "$input" =~ promise ]]; then
+        full_input="$(cat lib/string.scm lib/vector.scm lib/promise.scm)"$'\n'"$input"
     elif [[ "$input" =~ define-record-type || "$input" =~ vector ]]; then
         full_input="$(cat lib/string.scm lib/vector.scm)"$'\n'"$input"
     else
@@ -657,6 +654,30 @@ assert "#f" "(define-record-type point (make-point x y) point? (x point-x) (y po
 assert "#f" "(define-record-type point (make-point x y) point? (x point-x) (y point-y)) (point? 42)"
 assert "(100 . #f)" "(define-record-type task (create-task title) task? (title task-title) (completed? task-completed? task-set-completed!)) (let ((t (create-task 100))) (cons (task-title t) (task-completed? t)))"
 assert "42" "(define-record-type task (create-task title) task? (title task-title) (completed? task-completed? task-set-completed!)) (let ((t (create-task 100))) (begin (task-set-completed! t 42) (task-completed? t)))"
+
+echo "-- Step 32b: Standalone R7RS Record-Type Test Suite (tests/test_record.scm) --"
+make test_record
+
+# --- Step 33: R7RS Lazy Evaluation (Issue 550) ---
+echo "-- Step 33: Issue 550 R7RS delay, force, delay-force, make-promise, promise? --"
+assert "#t" "(promise? (delay 42))"
+assert "#t" "(promise? (delay-force (delay 42)))"
+assert "#t" "(promise? (make-promise 42))"
+assert "#f" "(promise? 42)"
+assert "#f" "(promise? (vector 1 2 3))"
+assert "42" "(force (delay 42))"
+assert "7" "(force (delay (+ 3 4)))"
+assert "42" "(force (make-promise 42))"
+assert "99" "(let ((p (delay 99))) (force (make-promise p)))"
+assert "42" "(force (delay-force (delay 42)))"
+assert "1" "(let ((count (vector 0))) (let ((p (delay (begin (vector-set! count 0 (+ (vector-ref count 0) 1)) 42)))) (let ((v1 (force p))) (let ((v2 (force p))) (vector-ref count 0)))))"
+assert "6" "(define count (vector 0)) (define p (delay (begin (vector-set! count 0 (+ (vector-ref count 0) 1)) (if (> (vector-ref count 0) 5) (vector-ref count 0) (force p))))) (force p)"
+assert "(0 1 2)" "(letrec ((integers (lambda (n) (delay (cons n (integers (+ n 1))))))) (let ((s (integers 0))) (let ((v0 (car (force s)))) (let ((v1 (car (force (cdr (force s)))))) (let ((v2 (car (force (cdr (force (cdr (force s)))))))) (list v0 v1 v2))))))"
+assert "42" "(letrec ((loop (lambda (n) (delay-force (if (= n 0) (delay 42) (loop (- n 1))))))) (force (loop 2000)))"
+assert "100" "(force (force (delay (delay 100))))"
+
+echo "-- Step 33b: Standalone R7RS Lazy Evaluation Test Suite (tests/test_promise.scm) --"
+make test_promise
 
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification

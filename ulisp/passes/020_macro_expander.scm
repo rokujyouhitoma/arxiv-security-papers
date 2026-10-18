@@ -24,7 +24,7 @@
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
   (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules define-record-type
-              cond case and or when unless
+              cond case and or when unless delay delay-force
               cons car cdr pair? null? list append not eq? eqv? equal?
               + - * = < > <= >= modulo quotient /
               zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?

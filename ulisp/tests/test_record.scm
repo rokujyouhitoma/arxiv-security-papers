@@ -42,34 +42,40 @@
 
 (import (geometry circle))
 
+(define *test-record-failures* (vector 0))
+
 (define (assert-true val msg)
   (if (not val)
       (begin
-        (display "FAIL: ")
-        (display msg)
-        (newline)
-        (exit 1))
+        (vector-set! *test-record-failures* 0 (+ (vector-ref *test-record-failures* 0) 1))
+        (write-string "FAIL: ")
+        (write-string msg)
+        (write-char #\newline)
+        (flush-output-port)
+        #f)
       (begin
-        (display "PASS: ")
-        (display msg)
-        (newline))))
+        (write-string "PASS: ")
+        (write-string msg)
+        (write-char #\newline)
+        (flush-output-port)
+        #t)))
 
 (define (assert-equal actual expected msg)
   (if (not (or (eqv? actual expected)
                (and (string? actual) (string? expected) (string=? actual expected))))
       (begin
-        (display "FAIL: ")
-        (display msg)
-        (display " - expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))
+        (vector-set! *test-record-failures* 0 (+ (vector-ref *test-record-failures* 0) 1))
+        (write-string "FAIL: ")
+        (write-string msg)
+        (write-char #\newline)
+        (flush-output-port)
+        #f)
       (begin
-        (display "PASS: ")
-        (display msg)
-        (newline))))
+        (write-string "PASS: ")
+        (write-string msg)
+        (write-char #\newline)
+        (flush-output-port)
+        #t)))
 
 ;; =======================================================================
 ;; テスト実行
@@ -142,5 +148,12 @@
   (assert-equal (circle-radius c) 5 "circle-radius updated to 5")
   (assert-equal (circle-area-approx c) 75 "circle-area-approx is 3*5*5=75"))
 
-(display "ALL DEFINE-RECORD-TYPE TESTS PASSED!")
-(newline)
+(if (= (vector-ref *test-record-failures* 0) 0)
+    (begin
+      (write-string "ALL DEFINE-RECORD-TYPE TESTS PASSED!\n")
+      (flush-output-port)
+      #t)
+    (begin
+      (write-string "SOME DEFINE-RECORD-TYPE TESTS FAILED!\n")
+      (flush-output-port)
+      #f))

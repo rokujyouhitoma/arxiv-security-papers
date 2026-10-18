@@ -306,6 +306,7 @@
 
       ((%idiv)
        (let ((src (cadr inst)))
+         (emit (string-append "    reg_rdx = (uint64_t)((int64_t)reg_rax % (int64_t)" (c-operand->str src) ");"))
          (emit (string-append "    reg_rax = (uint64_t)((int64_t)reg_rax / (int64_t)" (c-operand->str src) ");"))))
 
       ((%inc)
@@ -582,6 +583,7 @@
     (emit "extern uint64_t ulisp_peek_char(void);")
     (emit "extern uint64_t ulisp_write_char(uint64_t val);")
     (emit "extern uint64_t ulisp_write_string(uint64_t val);")
+    (emit "extern uint64_t ulisp_flush(void);")
     (emit "extern void print_scheme_value(uint64_t val);")
     (emit "#if defined(__GNUC__) || defined(__clang__)")
     (emit "#define ULISP_UNUSED __attribute__((unused))")
@@ -641,7 +643,7 @@
               (let* ((entry (car ss))
                      (lbl-str (c-sanitize-label (car entry)))
                      (escaped (escape-gas-string (cdr entry))))
-                (emit (string-append "static const char " lbl-str "[] = \"" escaped "\";"))
+                (emit (string-append "static const char " lbl-str "[] __attribute__((aligned(8))) = \"" escaped "\";"))
                 (loop (cdr ss))))))
     (emit "")
     ;; Emit lifted function bodies

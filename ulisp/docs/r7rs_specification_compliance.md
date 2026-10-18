@@ -47,11 +47,11 @@
 | **4.2.2** | 直列多値束縛 | `(let*-values (<mv-binding> ...) <body>)` | **◎** | ネストした `let-values` に脱糖 (`Pass 030`, Issue #538) |
 | **4.2.3** | 順序実行 (Sequencing) | `(begin <expression1> ...)` | **◎** | 直列実行ブロック (`Pass 030`, `Pass 070`) |
 | **4.2.4** | 反復実行 (Iteration) | `(do ((<var> <init> <step>) ...) ...)` | **×** | 未実装 (named-let への書き換えで代替可能) |
-| **4.2.5** | 遅延評価 (Delayed evaluation) | `(delay <expression>)` | **×** (△) | [Issue #550](../../docs/issues/550-implement-r7rs-lazy-evaluation-delay-force.md) で実装予定 |
-| **4.2.5** | プロミス強制評価 | `(force <promise>)` | **×** (△) | 同上 |
-| **4.2.5** | 末尾遅延評価 | `(delay-force <expression>)` | **×** (△) | トランポリン平坦化メモ化構造として実装予定 (Issue #550) |
-| **4.2.5** | プロミス生成 | `(make-promise <obj>)` | **×** (△) | 同上 |
-| **4.2.5** | プロミス述語 | `(promise? <obj>)` | **×** (△) | 同上 |
+| **4.2.5** | 遅延評価 (Delayed evaluation) | `(delay <expression>)` | **◎** | SRFI-45 準拠プロミス脱糖 (`Pass 030`, `ulisp/lib/promise.scm`, Issue #550) |
+| **4.2.5** | プロミス強制評価 | `(force <promise>)` | **◎** | メモ化・再入可能・トランポリン平坦化評価 (`ulisp/lib/promise.scm`, Issue #550) |
+| **4.2.5** | 末尾遅延評価 | `(delay-force <expression>)` | **◎** | 定数空間反復遅延評価・空間リーク防止 (`Pass 030`, `ulisp/lib/promise.scm`, Issue #550) |
+| **4.2.5** | プロミス生成 | `(make-promise <obj>)` | **◎** | 既存プロミス透過・即値プロミス化 (`ulisp/lib/promise.scm`, Issue #550) |
+| **4.2.5** | プロミス述語 | `(promise? <obj>)` | **◎** | プロミスタグ検査述語 (`ulisp/lib/promise.scm`, Issue #550) |
 | **4.2.6** | 動的パラメータ (Dynamic bindings)| `(make-parameter <init> [<conv>])` | **◎** | 動的環境セル生成 (`ulisp/lib/parameter.scm`, Issue #539) |
 | **4.2.6** | パラメータ一時束縛 | `(parameterize ((<param> <val>) ...) <body>)` | **◎** | `dynamic-wind` と連携する復元保証脱糖 (`Pass 030`) |
 | **4.2.7** | 例外処理 (Exception handling) | `(guard (<var> <clause1> ...) <body>)` | **◎** | 動的例外スタック脱糖 (`Pass 030`, Issue #531) |

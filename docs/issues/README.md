@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **550** | R7RS 準拠の遅延評価機構 (delay / force / delay-force / promise?) の実装 | Feature | Open (New) | [550-implement-r7rs-lazy-evaluation-delay-force.md](550-implement-r7rs-lazy-evaluation-delay-force.md) |
 | **551** | R7RS 標準シーケンス操作・変換手続き群 (vector-copy / list-copy / string-copy! 等) の拡充 | Feature | Open (New) | [551-expand-r7rs-standard-library-procedures.md](551-expand-r7rs-standard-library-procedures.md) |
 
 ---
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **550** | R7RS 準拠の遅延評価機構 (delay / force / delay-force / promise?) の実装 | Feature | 2026-10-18 | [closed/550-implement-r7rs-lazy-evaluation-delay-force.md](closed/550-implement-r7rs-lazy-evaluation-delay-force.md) |
 | **549** | R7RS 準拠の構造化レコード型 (define-record-type) のマクロ脱糖および高速フィールドアクセス機構の実装 | Feature | 2026-10-18 | [closed/549-implement-r7rs-define-record-type-macro.md](closed/549-implement-r7rs-define-record-type-macro.md) |
 | **554** | ULisp メタコンパイラの R7RS-small および R7RS-large 仕様準拠状況一覧ドキュメントの策定 | Documentation | 2026-10-18 | [closed/554-document-ulisp-r7rs-small-and-large-specification-compliance.md](closed/554-document-ulisp-r7rs-small-and-large-specification-compliance.md) |
 | **553** | ULisp コンパイラアーキテクチャのモジュール分離（compiler基盤切り出し・3桁ナンバリング・LIRパス解体） | Refactor | 2026-10-18 | [closed/553-refactor-ulisp-passes-and-compiler-architecture.md](closed/553-refactor-ulisp-passes-and-compiler-architecture.md) |

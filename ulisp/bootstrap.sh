@@ -20,6 +20,7 @@ cat "$ULISP_DIR/lib/posix.scm" \
     "$ULISP_DIR/lib/predicates.scm" \
     "$ULISP_DIR/lib/bytevector.scm" \
     "$ULISP_DIR/lib/vector.scm" \
+    "$ULISP_DIR/lib/promise.scm" \
     "$ULISP_DIR/lib/exception.scm" \
     "$ULISP_DIR/lib/values.scm" \
     "$ULISP_DIR/lib/continuation.scm" \
