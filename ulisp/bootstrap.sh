@@ -11,6 +11,7 @@ mkdir -p "$BUILD_DIR"
 
 echo "[0/4] Preparing unified compiler (lib/ + compiler.scm)..."
 make -C "$ULISP_DIR" compiler
+echo '(!gc none)' > "$BUILD_DIR/ulisp_core.scm"
 cat "$ULISP_DIR/lib/posix.scm" \
     "$ULISP_DIR/lib/list.scm" \
     "$ULISP_DIR/lib/string.scm" \
@@ -27,7 +28,7 @@ cat "$ULISP_DIR/lib/posix.scm" \
     "$ULISP_DIR/lib/continuation.scm" \
     "$ULISP_DIR/lib/parameter.scm" \
     "$ULISP_DIR/lib/gc.scm" \
-    "$ULISP_DIR/compiler.scm" > "$BUILD_DIR/ulisp_core.scm"
+    "$ULISP_DIR/compiler.scm" >> "$BUILD_DIR/ulisp_core.scm"
 
 PYTHON_BIN="python3"
 if [ -x "$ROOT_DIR/.venv/bin/python" ]; then

@@ -108,7 +108,10 @@ run_test_file_c() {
     local out_c="build/tmp_file_c.c"
     local out_bin="build/tmp_file_c_bin"
 
-    cat <(echo "(!target c)") $stdlib "$test_file" > "$in_file"
+    echo "(!target c)" > "$in_file"
+    for f in $stdlib "$test_file"; do
+        cat "$f" >> "$in_file"
+    done
     if [ -x "bin/ulisp-boot" ]; then
         ULISP_QUIET=1 bin/ulisp-boot "$in_file" > "$out_c" 2>build/compile_err.log || {
             echo -e "\033[31m[COMPILE FAIL]\033[0m $test_file"
@@ -289,7 +292,7 @@ assert_c "100" "(force (force (delay (delay 100))))"
 echo "--- Step 14: Standalone R7RS Test Suites (test_*.scm) ---"
 run_test_file_c "tests/test_record.scm" "lib/string.scm lib/vector.scm" "R7RS define-record-type suite"
 run_test_file_c "tests/test_promise.scm" "lib/string.scm lib/vector.scm lib/promise.scm" "R7RS delay/force/promise suite"
-run_test_file_c "tests/test_stdlib_r7rs.scm" "lib/list.scm lib/string.scm lib/vector.scm lib/bytevector.scm" "R7RS standard sequence library suite"
+run_test_file_c "tests/test_stdlib_r7rs.scm" "lib/list.scm lib/string.scm lib/vector.scm lib/bytevector.scm lib/equality.scm" "R7RS standard sequence library suite"
 
 rm -f "$TMP_C" "$TMP_BIN"
 

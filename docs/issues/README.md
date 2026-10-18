@@ -10,7 +10,6 @@
 | **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
 | **559** | R7RS 反復構文 (do) のマクロ脱糖実装 | Feature | Medium | [559-implement-r7rs-do-loop-syntax.md](559-implement-r7rs-do-loop-syntax.md) |
 | **560** | R7RS 多値定義構文 (define-values) のマクロ脱糖実装 | Feature | Medium | [560-implement-r7rs-define-values-syntax.md](560-implement-r7rs-define-values-syntax.md) |
-| **564** | バックエンド %alloc からの世代別コピーGC自動トリガーおよびスタックマップ回収ルーチンの直接結線 | Feature | Medium | [564-wire-automatic-copying-gc-trigger-in-backend.md](564-wire-automatic-copying-gc-trigger-in-backend.md) |
 
 ---
 
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **564** | バックエンド %alloc からの世代別コピーGC自動トリガーおよびスタックマップ回収ルーチンの直接結線 | Feature | 2026-10-18 | [closed/564-wire-automatic-copying-gc-trigger-in-backend.md](closed/564-wire-automatic-copying-gc-trigger-in-backend.md) |
 | **556** | R7RS 文字順序比較述語 (char<? / char>? / char<=? / char>=?) の実装 | Feature | 2026-10-18 | [closed/556-implement-r7rs-character-comparison-predicates.md](closed/556-implement-r7rs-character-comparison-predicates.md) |
 | **563** | コンパイラの大規模AST変換時における12GBヒープ枯渇とOOMセーフガード欠如によるSEGVクラッシュの解消 | Bug | 2026-10-18 | [closed/563-fix-compiler-heap-exhaustion-and-oom-safeguard.md](closed/563-fix-compiler-heap-exhaustion-and-oom-safeguard.md) |
 | **555** | R7RS リスト要素アクセス・更新手続き (list-tail / list-ref / list-set!) の実装 | Feature | 2026-10-18 | [closed/555-implement-r7rs-list-accessors-list-tail-ref-set.md](closed/555-implement-r7rs-list-accessors-list-tail-ref-set.md) |

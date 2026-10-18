@@ -8,6 +8,8 @@ CFLAGS_JIT = -no-pie -Wall -O2
 ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
 ILISP = $(PYTHON) -m ilisp
+ULISP_BOOT = bin/ulisp-boot
+ULISP_COMPILER ?= $(shell if [ -x $(ULISP_BOOT) ]; then echo $(ULISP_BOOT); elif [ -x build/scheme-stage1 ]; then echo build/scheme-stage1; else echo build/scheme-stage2; fi)
 
 COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm
@@ -144,66 +146,66 @@ test_aarch64: build/compiler_passes.scm
 	cat build/compiler_passes.scm tests/test_backend_aarch64.scm > build/test_aarch64_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_aarch64_runner.scm
 
-test_exceptions: build/scheme-stage2
+test_exceptions: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm tests/test_exceptions.scm > build/test_exn_input.scm
-	./build/scheme-stage2 build/test_exn_input.scm > build/test_exn.s
+	./$(ULISP_COMPILER) build/test_exn_input.scm > build/test_exn.s
 	$(CC) -nostdlib -static build/test_exn.s -o build/test_exn
 	./build/test_exn
 
-test_values: build/scheme-stage2
+test_values: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
-	./build/scheme-stage2 build/test_values_input.scm > build/test_values.s
+	./$(ULISP_COMPILER) build/test_values_input.scm > build/test_values.s
 	$(CC) -nostdlib -static build/test_values.s -o build/test_values
 	./build/test_values
 
-test_call_cc: build/scheme-stage2
+test_call_cc: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_call_cc.scm > build/test_call_cc_input.scm
-	./build/scheme-stage2 build/test_call_cc_input.scm > build/test_call_cc.s
+	./$(ULISP_COMPILER) build/test_call_cc_input.scm > build/test_call_cc.s
 	$(CC) -nostdlib -static build/test_call_cc.s -o build/test_call_cc
 	./build/test_call_cc
 
-test_eqv: build/scheme-stage2
+test_eqv: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_eqv.scm > build/test_eqv_input.scm
-	./build/scheme-stage2 build/test_eqv_input.scm > build/test_eqv.s
+	./$(ULISP_COMPILER) build/test_eqv_input.scm > build/test_eqv.s
 	$(CC) -nostdlib -static build/test_eqv.s -o build/test_eqv
 	./build/test_eqv
 
-test_syntax_rules: build/scheme-stage2
+test_syntax_rules: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
-	./build/scheme-stage2 build/test_syntax_rules_input.scm > build/test_syntax_rules.s
+	./$(ULISP_COMPILER) build/test_syntax_rules_input.scm > build/test_syntax_rules.s
 	$(CC) -nostdlib -static build/test_syntax_rules.s -o build/test_syntax_rules
 	./build/test_syntax_rules
 
-test_ports: build/scheme-stage2
+test_ports: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_ports.scm > build/test_ports_input.scm
-	./build/scheme-stage2 build/test_ports_input.scm > build/test_ports.s
+	./$(ULISP_COMPILER) build/test_ports_input.scm > build/test_ports.s
 	$(CC) -nostdlib -static build/test_ports.s -o build/test_ports
 	./build/test_ports
 
-test_record: build/scheme-stage2
+test_record: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_record.scm > build/test_record_input.scm
-	./build/scheme-stage2 build/test_record_input.scm > build/test_record.s
+	./$(ULISP_COMPILER) build/test_record_input.scm > build/test_record.s
 	$(CC) -nostdlib -static build/test_record.s -o build/test_record
 	./build/test_record
 
-test_promise: build/scheme-stage2
+test_promise: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_promise.scm > build/test_promise_input.scm
-	./build/scheme-stage2 build/test_promise_input.scm > build/test_promise.s
+	./$(ULISP_COMPILER) build/test_promise_input.scm > build/test_promise.s
 	$(CC) -nostdlib -static build/test_promise.s -o build/test_promise
 	./build/test_promise
 
-test_stdlib: build/scheme-stage2
+test_stdlib: $(ULISP_COMPILER)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_stdlib_r7rs.scm > build/test_stdlib_input.scm
-	./build/scheme-stage2 build/test_stdlib_input.scm > build/test_stdlib.s
+	./$(ULISP_COMPILER) build/test_stdlib_input.scm > build/test_stdlib.s
 	$(CC) -nostdlib -static build/test_stdlib.s -o build/test_stdlib
 	./build/test_stdlib
 
@@ -218,7 +220,8 @@ core: build/ulisp_core.scm
 
 build/ulisp_core.scm: lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm
 	@mkdir -p build
-	cat $^ > $@
+	echo '(!gc none)' > $@
+	cat $^ >> $@
 
 ULISP_BOOT = bin/ulisp-boot
 

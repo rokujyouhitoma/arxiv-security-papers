@@ -6,6 +6,7 @@
 ;;; Standard Helper Procedures (Self-hosting primitives)
 (define (fixnum->char n) (integer->char n))
 (define (char->fixnum c) (char->integer c))
+(define (abs x) (if (< x 0) (- 0 x) x))
 (define (safe-car x) (if (pair? x) (car x) '()))
 (define (safe-cdr x) (if (pair? x) (cdr x) '()))
 

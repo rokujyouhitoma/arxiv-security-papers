@@ -614,3 +614,69 @@ def test_bare_metal_gc_directive_dual_space():
         assert run_res.returncode == 0
         output = run_res.stdout.decode("utf-8")
         assert "DUAL_SPACE_SUCCESS" in output
+
+
+def test_bare_metal_automatic_gc_stress():
+    """Verify that %alloc slowpath automatically triggers copying GC repeatedly under small heap."""
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+
+    test_scm_code = f"""
+(!gc dual-space)
+{posix_code}
+
+(define (stress-loop count acc)
+  (if (<= count 0)
+      acc
+      (stress-loop (- count 1) (cons (car acc) count))))
+
+;; Restrict heap to a tiny 16KB from-space and 16KB to-space
+(let* ((st-ptr (%get-gc-state-ptr))
+       (lim-ptr (%get-heap-limit-ptr))
+       (from (%raw-load st-ptr 0))
+       (small-size 16384))
+  (%raw-store! st-ptr 16 (%to-raw small-size))
+  (let ((to (%raw-load st-ptr 8)))
+    (%raw-store! st-ptr 40 to)
+    (%raw-store! lim-ptr 0 (%ptr-add from small-size)))
+
+  ;; Allocate 10,000 cons cells (240,000 bytes) in a 16KB heap (~15 automatic GC cycles)
+  (let ((res (stress-loop 10000 (cons 1 2))))
+    (if (and (pair? res) (= (car res) 1))
+        (sys-write-string "AUTO_GC_STRESS_SUCCESS\\n")
+        (sys-write-string "AUTO_GC_CORRUPTION\\n"))))
+
+(sys-exit 0)
+"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "stress_gc.scm")
+        s_path = os.path.join(tmpdir, "stress_gc.s")
+        bin_path = os.path.join(tmpdir, "stress_gc_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(test_scm_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                ["python3", "-m", "ilisp", COMPILER_SCM],
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        link_res = subprocess.run(
+            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
+            capture_output=True,
+            text=True,
+        )
+        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+
+        run_res = subprocess.run([bin_path], capture_output=True)
+        assert run_res.returncode == 0
+        output = run_res.stdout.decode("utf-8")
+        assert "AUTO_GC_STRESS_SUCCESS" in output
