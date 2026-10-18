@@ -32,6 +32,10 @@
    - macOS (Apple Silicon / Intel Mac) および Linux/BSD でのコンパイル・ビルド・実行手順
    - `(!target c)` ディレクティブによるワンライナー生成と Clang/GCC によるネイティブバイナリ作成
    - メモリモデル、TCO、Darwin 固有のクラッシュハンドラ・`mmap` 互換性
+6. [R7RS 仕様準拠状況リファレンス (R7RS-small / R7RS-large)](r7rs_specification_compliance.md)
+   - R7RS-small (Section 4〜6 / 全16標準ライブラリ) の完全対応・部分対応・未対応機能一覧
+   - R7RS-large (Red Edition, Tangerine Edition, 主要SRFI) の対応状況
+   - AOT コンパイラとしての設計トレードオフと未実装機能ロードマップ
 
 ---
 
@@ -87,7 +91,8 @@ ulisp/
     ├── pipeline_architecture.md
     ├── lir_specification.md
     ├── continuations_and_unwind.md
-    └── testing_guide.md
+    ├── testing_guide.md
+    └── r7rs_specification_compliance.md
 ```
 
 ### 主要コマンド

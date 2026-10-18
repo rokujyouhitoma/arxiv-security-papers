@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **554** | ULisp メタコンパイラの R7RS-small および R7RS-large 仕様準拠状況一覧ドキュメントの策定 | Documentation | 2026-10-18 | [closed/554-document-ulisp-r7rs-small-and-large-specification-compliance.md](closed/554-document-ulisp-r7rs-small-and-large-specification-compliance.md) |
 | **553** | ULisp コンパイラアーキテクチャのモジュール分離（compiler基盤切り出し・3桁ナンバリング・LIRパス解体） | Refactor | 2026-10-18 | [closed/553-refactor-ulisp-passes-and-compiler-architecture.md](closed/553-refactor-ulisp-passes-and-compiler-architecture.md) |
 | **552** | ULisp自己ホストブートストラップにおけるLIR内car未束縛変数例外の修正 | Bug | 2026-10-18 | [closed/552-fix-unbound-variable-car-in-lir-bootstrap.md](closed/552-fix-unbound-variable-car-in-lir-bootstrap.md) |
 | **548** | R7RS ライブラリ構文 (define-library / import) の静的脱糖・フラット名前空間インクルード機構の実装 | Feature | 2026-10-18 | [closed/548-implement-r7rs-define-library-and-import-syntax.md](closed/548-implement-r7rs-define-library-and-import-syntax.md) |
