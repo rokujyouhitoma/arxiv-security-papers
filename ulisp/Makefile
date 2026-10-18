@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports
 
 CC = gcc
@@ -328,8 +328,12 @@ test_aot: core
 test: test_passes test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_jit test_c test_aot
 
 clean:
-	rm -f tmp tmp_bin *.s *.o
-	rm -rf build
+	rm -f tmp tmp_bin *.s *.o *.log
+	@if [ -d build ]; then \
+		find build -mindepth 1 ! -name 'scheme-stage*' ! -name 'stage*.s' -delete; \
+	fi
 
-distclean: clean
-	rm -rf bin
+distclean:
+	rm -f tmp tmp_bin *.s *.o *.log
+	rm -rf build bin
+
