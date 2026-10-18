@@ -4,7 +4,14 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在、未着手のオープンな Issue はありません。
+| Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: |
+| **555** | R7RS リスト要素アクセス・更新手続き (list-tail / list-ref / list-set!) の実装 | Feature | Medium | [555-implement-r7rs-list-accessors-list-tail-ref-set.md](555-implement-r7rs-list-accessors-list-tail-ref-set.md) |
+| **556** | R7RS 文字順序比較述語 (char<? / char>? / char<=? / char>=?) の実装 | Feature | Medium | [556-implement-r7rs-character-comparison-predicates.md](556-implement-r7rs-character-comparison-predicates.md) |
+| **557** | R7RS 文字列・リスト・ベクタ相互変換および文字列辞書順比較述語の実装 | Feature | Medium | [557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md](557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) |
+| **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
+| **559** | R7RS 反復構文 (do) のマクロ脱糖実装 | Feature | Medium | [559-implement-r7rs-do-loop-syntax.md](559-implement-r7rs-do-loop-syntax.md) |
+| **560** | R7RS 多値定義構文 (define-values) のマクロ脱糖実装 | Feature | Medium | [560-implement-r7rs-define-values-syntax.md](560-implement-r7rs-define-values-syntax.md) |
 
 ---
 
