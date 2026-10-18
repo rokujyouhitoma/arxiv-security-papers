@@ -55,24 +55,29 @@ ulisp/
 │   ├── reader.scm           # 自前再帰下降 S 式パーサ (read)
 │   ├── printer.scm          # S 式シリアライザ
 │   └── string.scm           # 文字列操作・number->string
-├── passes/                  # 直列 Nanopass モジュール群
-│   ├── 00_helpers.scm       # 共通述語・アキュムレータ
-│   ├── 00b_macro_expander.scm # Pass 0b: メタサーキュラー・マクロ展開器 (Issue #500)
-│   ├── 01_desugar.scm       # Pass 1: 構文脱糖 (cond, case, let*, and, or, %raw-call/cc)
-│   ├── 02_analysis.scm      # Pass 2: 静的スコープ・高速自由変数解析 (Issue #529)
-│   ├── 03_cp0.scm           # Pass 3: CP0 最適化 (定数畳み込み, 自明分岐剪定, DCE)
-│   ├── 03b_lvn.scm          # Pass 3b: ローカル値番号付け LVN (Issue #521)
-│   ├── 04_anf.scm           # Pass 4: ANF 正規化 (3 番地コード化, Scoped Pool)
-│   ├── 04b_annotator.scm    # Pass 4b: 抽象解釈型アノテータ (Issue #517)
-│   ├── 04c_contify.scm      # Pass 4c: Contification 最適化 (Issue #522)
-│   ├── 05_closure_convert.scm # Pass 5: クロージャ変換 (ラムダリフティング, フラット環境)
-│   ├── 05b_rtyper.scm       # Pass 5b: RType 推論 & アンボクシング (Issue #518)
-│   ├── 06_lir.scm           # Pass 6: 低レベル IR (LIR) 生成 & ポインタ/ヘッダ命令 (Issue #502)
-│   ├── 06b_alias_escape.scm # Pass 6b: TBAA & エスケープ解析 (Issue #525)
-│   ├── 07_backend_x86_64.scm # Pass 7: x86-64 GNU アセンブリコード生成
-│   ├── 07_backend_c.scm     # Pass 7b: Portable C99 コード生成 (Issue #504)
-│   ├── 07_backend_aarch64.scm # Pass 7c: AArch64 GNU アセンブリコード生成
-│   └── 08_driver.scm        # Pass 8: コンパイルドライバ・CLI
+├── compiler/                # コンパイラ基盤ユーティリティ & ドライバ
+│   ├── helpers.scm          # 共通AST操作・シンボル/ラベル生成
+│   ├── primitives.scm       # プリミティブ述語分類・定数畳み込み
+│   └── driver.scm           # コンパイルドライバ・CLI
+├── passes/                  # 直列 Nanopass モジュール群 (3桁プレフィックス)
+│   ├── 010_library.scm      # Pass 010: R7RS define-library & import (Issue #548)
+│   ├── 020_macro_expander.scm # Pass 020: 衛生的マクロ展開器 (Issue #533)
+│   ├── 030_desugar.scm      # Pass 030: 構文脱糖 (cond, case, let*, and, or, %raw-call/cc)
+│   ├── 040_analysis.scm     # Pass 040: 静的スコープ・高速自由変数解析 (Issue #529)
+│   ├── 050_cp0.scm          # Pass 050: CP0 最適化 (定数畳み込み, 自明分岐剪定, DCE)
+│   ├── 060_lvn.scm          # Pass 060: ローカル値番号付け LVN (Issue #521)
+│   ├── 070_anf.scm          # Pass 070: ANF 正規化 (3 番地コード化, Scoped Pool)
+│   ├── 080_annotator.scm    # Pass 080: 抽象解釈型アノテータ (Issue #517)
+│   ├── 090_rtyper.scm       # Pass 090: RType 推論 & アンボクシング (Issue #518)
+│   ├── 100_contify.scm      # Pass 100: Contification 最適化 (Issue #522)
+│   ├── 110_closure_convert.scm # Pass 110: クロージャ変換 (ラムダリフティング, フラット環境)
+│   ├── 120_alias_escape.scm # Pass 120: TBAA & エスケープ解析 (Issue #525)
+│   ├── 130_lir.scm          # Pass 130: 低レベル IR (LIR) 生成 (Issue #502)
+│   ├── 131_lir_safepoint.scm # Pass 131: GC Safepoint & スタックマップ生成 (Issue #519)
+│   ├── 132_lir_braun_ssa.scm # Pass 132: Braun SSA & ブロック引数 (Issue #523)
+│   ├── 140_backend_x86_64.scm # Pass 140: x86-64 GNU アセンブリコード生成
+│   ├── 150_backend_aarch64.scm # Pass 150: AArch64 GNU アセンブリコード生成
+│   └── 160_backend_c.scm    # Pass 160: Portable C99 コード生成 (Issue #504)
 ├── tests/                   # 統合テストスイート
 │   ├── test_call_cc.scm     # call/cc & dynamic-wind テスト (Issue #540)
 │   ├── test_passes.scm      # Nanopass 単体テスト

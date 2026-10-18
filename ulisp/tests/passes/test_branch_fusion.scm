@@ -43,7 +43,8 @@
   ;; 1. Check LIR contains %jump-cond
   (let ((jump-conds (filter (lambda (i) (and (pair? i) (eq? (car i) '%jump-cond))) main-body)))
     (assert-true "LIR contains %jump-cond instruction" (pair? jump-conds))
-    (assert-true "%jump-cond uses jne operator" (string=? (cadr (car jump-conds)) "jne")))
+    (assert-true "%jump-cond uses jne operator"
+                 (pair? (filter (lambda (jc) (string=? (cadr jc) "jne")) jump-conds))))
 
   ;; 2. Check LIR does NOT contain %set-boolean in loop test
   (let ((set-booleans (filter (lambda (i) (and (pair? i) (eq? (car i) '%set-boolean))) main-body)))

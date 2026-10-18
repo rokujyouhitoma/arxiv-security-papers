@@ -9,25 +9,30 @@ ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
 ILISP = $(PYTHON) -m ilisp
 
-PASSES_LIB = passes/00_helpers.scm \
-             passes/00a_library.scm \
-             passes/00b_macro_expander.scm \
-             passes/01_desugar.scm \
-             passes/02_analysis.scm \
-             passes/03_cp0.scm \
-             passes/03b_lvn.scm \
-             passes/04_anf.scm \
-             passes/04b_annotator.scm \
-             passes/05b_rtyper.scm \
-             passes/04c_contify.scm \
-             passes/05_closure_convert.scm \
-             passes/06b_alias_escape.scm \
-             passes/06_lir.scm \
-             passes/07_backend_x86_64.scm \
-             passes/07_backend_aarch64.scm \
-             passes/07_backend_c.scm
+COMPILER_BASE = compiler/helpers.scm \
+                compiler/primitives.scm
 
-PASSES = $(PASSES_LIB) passes/08_driver.scm
+PASSES_LIB = $(COMPILER_BASE) \
+             passes/010_library.scm \
+             passes/020_macro_expander.scm \
+             passes/030_desugar.scm \
+             passes/040_analysis.scm \
+             passes/050_cp0.scm \
+             passes/060_lvn.scm \
+             passes/070_anf.scm \
+             passes/080_annotator.scm \
+             passes/090_rtyper.scm \
+             passes/100_contify.scm \
+             passes/110_closure_convert.scm \
+             passes/120_alias_escape.scm \
+             passes/130_lir.scm \
+             passes/131_lir_safepoint.scm \
+             passes/132_lir_braun_ssa.scm \
+             passes/140_backend_x86_64.scm \
+             passes/150_backend_aarch64.scm \
+             passes/160_backend_c.scm
+
+PASSES = $(PASSES_LIB) compiler/driver.scm
 
 all: test
 
@@ -148,7 +153,7 @@ test_exceptions: build/scheme-stage2
 
 test_values: build/scheme-stage2
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
+	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
 	./build/scheme-stage2 build/test_values_input.scm > build/test_values.s
 	$(CC) -nostdlib -static build/test_values.s -o build/test_values
 	./build/test_values

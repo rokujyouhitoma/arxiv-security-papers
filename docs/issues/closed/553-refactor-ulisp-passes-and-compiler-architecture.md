@@ -2,7 +2,7 @@
 ID: 553
 種別: Refactor
 優先度: High
-ステータス: Open (New)
+ステータス: Closed (Done)
 ---
 
 # [REFACTOR] ULisp コンパイラアーキテクチャのモジュール分離（compiler基盤切り出し・3桁ナンバリング・LIRパス解体） (ID: 553)
@@ -82,9 +82,10 @@ Target Branch: `refactor/553-refactor-ulisp-passes-and-compiler-architecture`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/compiler/` に基盤ユーティリティ・ドライバが分離されていること
-- [ ] `ulisp/passes/` 配下のファイル名がすべて 3 桁（10刻み）でパイプライン順序と完全一致していること
-- [ ] `06_lir.scm` が 3 つの単一責務ファイルに分割されていること
-- [ ] `ulisp/Makefile` で `compiler.scm` が正常に結合・生成できること
-- [ ] 既存の全 Nanopass 単体テストおよび統合テストが 100% PASS すること
-- [ ] 3-stage 自己ホストブートストラップが正常に bit-for-bit で完了すること
+- [x] `ulisp/compiler/` に基盤ユーティリティ・ドライバが分離されていること
+- [x] `ulisp/passes/` 配下のファイル名がすべて 3 桁（10刻み）でパイプライン順序と完全一致していること
+- [x] `06_lir.scm` が 3 つの単一責務ファイルに分割されていること
+- [x] `ulisp/Makefile` で `compiler.scm` が正常に結合・生成できること
+- [x] 既存の全 Nanopass 単体テストおよび統合テストが 100% PASS すること
+- [x] 3-stage 自己ホストブートストラップが正常に bit-for-bit で完了すること
+

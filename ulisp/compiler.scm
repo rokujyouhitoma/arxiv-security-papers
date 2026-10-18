@@ -158,6 +158,110 @@
          (has-symbol? (cdr datum))))
     (else #f)))
 
+
+;;; Symbol and String intern tables, frame alignment and utilities
+;;; Symbol table for interned symbols
+(define *symbol-table* (cons '() '()))
+(define (reset-symbol-table!)
+  (set-car! *symbol-table* '()))
+
+(define (symbol-hash-str str)
+  (let ((len (string-length str)))
+    (let loop ((i 0) (h 5381))
+      (if (= i len)
+          (modulo h 16777213)
+          (let ((c (char->integer (string-ref str i))))
+            (loop (+ i 1)
+                  (modulo (+ (* h 33) c) 16777213)))))))
+
+(define (intern-symbol sym)
+  (let ((entry (assq sym (car *symbol-table*))))
+    (if entry
+        (cadr entry)
+        (let* ((str (symbol->string sym))
+               (h (symbol-hash-str str))
+               (id (+ (* h 256) 2)))
+          (set-car! *symbol-table* (cons (list sym id str) (car *symbol-table*)))
+          id))))
+
+(define (symbol->raw-name sym)
+  (let ((entry (assq sym (car *symbol-table*))))
+    (if (and entry (pair? (cdr entry)) (pair? (cddr entry)))
+        (caddr entry)
+        (symbol->string sym))))
+
+;;; String table for interned string literals
+(define *string-counter* (cons 0 '()))
+(define *strings* (cons '() '()))
+(define (intern-string str)
+  (let ((label (string-append ".L_str_" (number->string (car *string-counter*)))))
+    (set-car! *string-counter* (+ (car *string-counter*) 1))
+    (set-car! *strings* (cons (cons label str) (car *strings*)))
+    label))
+
+(define (offset->string offset)
+  (if (< offset 0)
+      (string-append "- " (number->string (- 0 offset)))
+      (string-append "+ " (number->string offset))))
+
+(define (align-frame-shift needed)
+  (if (= (modulo needed 16) 8)
+      needed
+      (+ needed 8)))
+
+(define (expr-has-arithmetic-on-var? expr var)
+  (cond
+    ((not (pair? expr)) #f)
+    ((and (memq (car expr) '(+ - *)) (memq var (cdr expr))) #t)
+    (else (or (expr-has-arithmetic-on-var? (car expr) var)
+              (expr-has-arithmetic-on-var? (cdr expr) var)))))
+
+(define (expr-has-conditional-or-pred-on-var? expr var)
+  (cond
+    ((not (pair? expr)) #f)
+    ((and (memq (car expr) '(fixnum? integer? number? pair? boolean? null? symbol? string? char?))
+          (memq var (cdr expr)))
+     #t)
+    ((and (eq? (car expr) 'if) (pair? (cdr expr)))
+     (or (expr-has-conditional-or-pred-on-var? (cadr expr) var)
+         (expr-has-conditional-or-pred-on-var? (caddr expr) var)
+         (if (null? (cdddr expr)) #f (expr-has-conditional-or-pred-on-var? (cadddr expr) var))))
+    (else (or (expr-has-conditional-or-pred-on-var? (car expr) var)
+              (expr-has-conditional-or-pred-on-var? (cdr expr) var)))))
+
+(define (expr-size expr)
+  (cond
+    ((not (pair? expr)) 1)
+    (else (+ 1 (expr-size (car expr)) (expr-size (cdr expr))))))
+
+(define (%program? form)
+  (and (pair? form) (eq? (car form) '%program)))
+
+(define (sanitize-label-str str)
+  (let* ((len (string-length str))
+         (res (make-string len)))
+    (let loop ((i 0))
+      (if (< i len)
+          (let ((c (string-ref str i)))
+            (string-set! res i
+              (cond
+                ((char=? c #\-) #\_)
+                ((char=? c #\?) #\_)
+                ((char=? c #\!) #\_)
+                ((char=? c #\*) #\_)
+                ((char=? c #\/) #\_)
+                ((char=? c #\<) #\_)
+                ((char=? c #\>) #\_)
+                ((char=? c #\=) #\_)
+                ((char=? c #\%) #\_)
+                ((char=? c #\:) #\_)
+                (else c)))
+            (loop (+ i 1)))
+          res))))
+;;; =======================================================================
+;;; ULisp Compiler Primitives & Predicate Categorization
+;;; =======================================================================
+
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
   (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-gc-state-ptr %get-stackmap-table %num-args)))
@@ -323,104 +427,6 @@
            (else #f))))
       (else #f))))
 
-;;; Symbol table for interned symbols
-(define *symbol-table* (cons '() '()))
-(define (reset-symbol-table!)
-  (set-car! *symbol-table* '()))
-
-(define (symbol-hash-str str)
-  (let ((len (string-length str)))
-    (let loop ((i 0) (h 5381))
-      (if (= i len)
-          (modulo h 16777213)
-          (let ((c (char->integer (string-ref str i))))
-            (loop (+ i 1)
-                  (modulo (+ (* h 33) c) 16777213)))))))
-
-(define (intern-symbol sym)
-  (let ((entry (assq sym (car *symbol-table*))))
-    (if entry
-        (cadr entry)
-        (let* ((str (symbol->string sym))
-               (h (symbol-hash-str str))
-               (id (+ (* h 256) 2)))
-          (set-car! *symbol-table* (cons (list sym id str) (car *symbol-table*)))
-          id))))
-
-(define (symbol->raw-name sym)
-  (let ((entry (assq sym (car *symbol-table*))))
-    (if (and entry (pair? (cdr entry)) (pair? (cddr entry)))
-        (caddr entry)
-        (symbol->string sym))))
-
-;;; String table for interned string literals
-(define *string-counter* (cons 0 '()))
-(define *strings* (cons '() '()))
-(define (intern-string str)
-  (let ((label (string-append ".L_str_" (number->string (car *string-counter*)))))
-    (set-car! *string-counter* (+ (car *string-counter*) 1))
-    (set-car! *strings* (cons (cons label str) (car *strings*)))
-    label))
-
-(define (offset->string offset)
-  (if (< offset 0)
-      (string-append "- " (number->string (- 0 offset)))
-      (string-append "+ " (number->string offset))))
-
-(define (align-frame-shift needed)
-  (if (= (modulo needed 16) 8)
-      needed
-      (+ needed 8)))
-
-(define (expr-has-arithmetic-on-var? expr var)
-  (cond
-    ((not (pair? expr)) #f)
-    ((and (memq (car expr) '(+ - *)) (memq var (cdr expr))) #t)
-    (else (or (expr-has-arithmetic-on-var? (car expr) var)
-              (expr-has-arithmetic-on-var? (cdr expr) var)))))
-
-(define (expr-has-conditional-or-pred-on-var? expr var)
-  (cond
-    ((not (pair? expr)) #f)
-    ((and (memq (car expr) '(fixnum? integer? number? pair? boolean? null? symbol? string? char?))
-          (memq var (cdr expr)))
-     #t)
-    ((and (eq? (car expr) 'if) (pair? (cdr expr)))
-     (or (expr-has-conditional-or-pred-on-var? (cadr expr) var)
-         (expr-has-conditional-or-pred-on-var? (caddr expr) var)
-         (if (null? (cdddr expr)) #f (expr-has-conditional-or-pred-on-var? (cadddr expr) var))))
-    (else (or (expr-has-conditional-or-pred-on-var? (car expr) var)
-              (expr-has-conditional-or-pred-on-var? (cdr expr) var)))))
-
-(define (expr-size expr)
-  (cond
-    ((not (pair? expr)) 1)
-    (else (+ 1 (expr-size (car expr)) (expr-size (cdr expr))))))
-
-(define (%program? form)
-  (and (pair? form) (eq? (car form) '%program)))
-
-(define (sanitize-label-str str)
-  (let* ((len (string-length str))
-         (res (make-string len)))
-    (let loop ((i 0))
-      (if (< i len)
-          (let ((c (string-ref str i)))
-            (string-set! res i
-              (cond
-                ((char=? c #\-) #\_)
-                ((char=? c #\?) #\_)
-                ((char=? c #\!) #\_)
-                ((char=? c #\*) #\_)
-                ((char=? c #\/) #\_)
-                ((char=? c #\<) #\_)
-                ((char=? c #\>) #\_)
-                ((char=? c #\=) #\_)
-                ((char=? c #\%) #\_)
-                ((char=? c #\:) #\_)
-                (else c)))
-            (loop (+ i 1)))
-          res))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 0a: R7RS define-library & import Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Issue #548 (R7RS 5.6)
@@ -4459,36 +4465,13 @@
       (let ((esc (collect-escaped-vars program #t)))
         (alias-escape-transform-expr program esc '()))))
 ;;; =======================================================================
-;;; ULisp Compiler Pass 6: Low-Level Intermediate Representation (LIR) Generator
-;;; Conforms to DSN-33 Architecture Specification & ulisp/docs/lir_specification.md
+;;; ULisp Compiler Pass 130: Low-Level Intermediate Representation (LIR)
 ;;; =======================================================================
+
 
 ;;; Boxed accumulators for LIR instructions and stack tracking
 (define *lir-instructions* (cons '() '()))
 (define *lir-min-si* (cons 0 '()))
-(define *lir-safepoints* (cons '() '()))
-(define *safepoint-counter* (cons 0 '()))
-
-(define (reset-safepoints!)
-  (set-car! *lir-safepoints* '())
-  (set-car! *safepoint-counter* 0))
-
-(define (new-safepoint-label!)
-  (let* ((cnt (+ (car *safepoint-counter*) 1))
-         (lbl-str (string-append "__safepoint_" (number->string cnt))))
-    (set-car! *safepoint-counter* cnt)
-    lbl-str))
-
-(define (record-safepoint! lbl frame-size bitmap)
-  (set-car! *lir-safepoints*
-            (cons (list lbl frame-size bitmap) (car *lir-safepoints*))))
-
-(define (power-of-2 k)
-  (let loop ((i 0) (acc 1))
-    (if (< i k)
-        (loop (+ i 1) (* acc 2))
-        acc)))
-
 (define (get-raw-vars env)
   (let ((entry (assq '%raw-vars env)))
     (if entry (cdr entry) '())))
@@ -5108,48 +5091,6 @@
             (loop (+ i 1) (- curr-si 8)))))
     ;; 4. Tag closure pointer with 0x01 (offset +8 from header)
     (emit-lir! (list '%alloc-stack '%rax (+ base-si 8) 1))))
-
-(define (compute-stackmap-bitmap frame-shift aligned-si args env)
-  (let* ((slot-count (quotient frame-shift 8))
-         (rvars (get-raw-vars env)))
-    (let loop ((k 0) (bitmap 0))
-      (if (or (>= k slot-count) (>= k 60))
-          bitmap
-          (let* ((slot-offset (- (* k 8) frame-shift))
-                 (is-ptr
-                  (if (= slot-offset -8)
-                      #t
-                      (let ((arg-res
-                             (let check-arg ((cur-args args) (i 0))
-                               (if (null? cur-args)
-                                   #f
-                                   (let ((arg-si (- aligned-si (* i 8))))
-                                     (if (= slot-offset arg-si)
-                                         (cons #t (not (raw-expr? (car cur-args) rvars)))
-                                         (check-arg (cdr cur-args) (+ i 1))))))))
-                        (if arg-res
-                            (cdr arg-res)
-                            (let ((var-res
-                                   (let check-var ((e env))
-                                     (if (null? e)
-                                         #f
-                                         (let ((entry (car e)))
-                                           (if (and (pair? entry)
-                                                    (not (eq? (car entry) '%num-params))
-                                                    (not (eq? (car entry) '%raw-vars)))
-                                               (let ((v (car entry))
-                                                     (info (cdr entry)))
-                                                 (if (and (number? info) (= info slot-offset))
-                                                     (cons #t (not (memq v rvars)))
-                                                     (if (and (pair? info) (eq? (car info) 'param) (= (cdr info) slot-offset))
-                                                         (cons #t (not (memq v rvars)))
-                                                         (check-var (cdr e)))))
-                                               (check-var (cdr e))))))))
-                              (if var-res
-                                  (cdr var-res)
-                                  #f)))))))
-            (loop (+ k 1)
-                  (if is-ptr (+ bitmap (power-of-2 k)) bitmap)))))))
 
 (define (expr-references-var? expr var)
   (cond
@@ -6317,8 +6258,79 @@
             lir-main))))
 
 ;;; =======================================================================
-;;; Braun et al. (2013) On-The-Fly SSA Construction & Block Arguments Engine
-;;; "Simple and Efficient Construction of Static Single Assignment Form"
+;;; ULisp Compiler Pass 131: GC Safepoint & Stackmap Bitmaps
+;;; =======================================================================
+
+(define *lir-safepoints* (cons '() '()))
+(define *safepoint-counter* (cons 0 '()))
+
+(define (reset-safepoints!)
+  (set-car! *lir-safepoints* '())
+  (set-car! *safepoint-counter* 0))
+
+(define (new-safepoint-label!)
+  (let* ((cnt (+ (car *safepoint-counter*) 1))
+         (lbl-str (string-append "__safepoint_" (number->string cnt))))
+    (set-car! *safepoint-counter* cnt)
+    lbl-str))
+
+(define (record-safepoint! lbl frame-size bitmap)
+  (set-car! *lir-safepoints*
+            (cons (list lbl frame-size bitmap) (car *lir-safepoints*))))
+
+(define (power-of-2 k)
+  (let loop ((i 0) (acc 1))
+    (if (< i k)
+        (loop (+ i 1) (* acc 2))
+        acc)))
+
+
+(define (compute-stackmap-bitmap frame-shift aligned-si args env)
+  (let* ((slot-count (quotient frame-shift 8))
+         (rvars (get-raw-vars env)))
+    (let loop ((k 0) (bitmap 0))
+      (if (or (>= k slot-count) (>= k 60))
+          bitmap
+          (let* ((slot-offset (- (* k 8) frame-shift))
+                 (is-ptr
+                  (if (= slot-offset -8)
+                      #t
+                      (let ((arg-res
+                             (let check-arg ((cur-args args) (i 0))
+                               (if (null? cur-args)
+                                   #f
+                                   (let ((arg-si (- aligned-si (* i 8))))
+                                     (if (= slot-offset arg-si)
+                                         (cons #t (not (raw-expr? (car cur-args) rvars)))
+                                         (check-arg (cdr cur-args) (+ i 1))))))))
+                        (if arg-res
+                            (cdr arg-res)
+                            (let ((var-res
+                                   (let check-var ((e env))
+                                     (if (null? e)
+                                         #f
+                                         (let ((entry (car e)))
+                                           (if (and (pair? entry)
+                                                    (not (eq? (car entry) '%num-params))
+                                                    (not (eq? (car entry) '%raw-vars)))
+                                               (let ((v (car entry))
+                                                     (info (cdr entry)))
+                                                 (if (and (number? info) (= info slot-offset))
+                                                     (cons #t (not (memq v rvars)))
+                                                     (if (and (pair? info) (eq? (car info) 'param) (= (cdr info) slot-offset))
+                                                         (cons #t (not (memq v rvars)))
+                                                         (check-var (cdr e)))))
+                                               (check-var (cdr e))))))))
+                              (if var-res
+                                  (cdr var-res)
+                                  #f)))))))
+            (loop (+ k 1)
+                  (if is-ptr (+ bitmap (power-of-2 k)) bitmap)))))))
+
+;;; =======================================================================
+;;; ULisp Compiler Pass 132: Braun et al. (2013) SSA & Block Arguments Engine
+;;; =======================================================================
+
 ;;; Conforms to DSN-33 Section 8.1 & Issue #523
 ;;; =======================================================================
 
@@ -9351,23 +9363,24 @@
        (gc-mode (cadr directives))
        (forms (caddr directives)))
   (if (not (null? forms))
-      (let* ((lib-expanded (desugar-libraries-and-imports forms))
-             (macro-expanded (expand-macros-in-forms lib-expanded))
-             (ast0 (rewrite-top-level macro-expanded))
-             (ast1 (desugar-all ast0))
-             (ast2 (cp0-optimize ast1))
-             (ast2b (lvn-all ast2))
-             (ast3 (anf-all ast2b))
-             (ast3b (annotate-all ast3))
-             (ast3c (rtyper-all ast3b))
-             (ast3d (contify-all ast3c))
-             (ast4 (closure-convert ast3d))
-             (ast4b (alias-escape-all ast4))
-             (lir  (generate-lir ast4b)))
+      (let* ((ast010     (desugar-libraries-and-imports forms))
+             (ast020     (expand-macros-in-forms ast010))
+             (ast030-top (rewrite-top-level ast020))
+             (ast030     (desugar-all ast030-top))
+             (ast050     (cp0-optimize ast030))
+             (ast060     (lvn-all ast050))
+             (ast070     (anf-all ast060))
+             (ast080     (annotate-all ast070))
+             (ast090     (rtyper-all ast080))
+             (ast100     (contify-all ast090))
+             (ast110     (closure-convert ast100))
+             (ast120     (alias-escape-all ast110))
+             (lir130     (generate-lir ast120)))
         (cond
           ((eq? target 'c)
-           (emit-c lir gc-mode))
+           (emit-c lir130 gc-mode))
           ((eq? target 'aarch64)
-           (emit-aarch64 lir gc-mode))
+           (emit-aarch64 lir130 gc-mode))
           (else
-           (emit-x86-64 lir gc-mode))))))
+           (emit-x86-64 lir130 gc-mode))))))
+
