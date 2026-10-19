@@ -28,6 +28,7 @@ PASSES_LIB = $(COMPILER_BASE) \
              passes/100_contify.scm \
              passes/110_closure_convert.scm \
              passes/120_alias_escape.scm \
+             passes/128_lir_branch_fusion.scm \
              passes/130_lir.scm \
              passes/131_lir_safepoint.scm \
              passes/132_lir_braun_ssa.scm \

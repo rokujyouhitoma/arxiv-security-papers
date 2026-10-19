@@ -46,6 +46,9 @@
       ▼ Pass 120: alias-escape-all (passes/120_alias_escape.scm - Issue #525)
 [TBAA & Escape Analyzed AST (Stack Allocation Candidates)]
       │
+      ▼ Pass 128: lir-branch-fusion (passes/128_lir_branch_fusion.scm - Issue #571)
+[Fused Condition Lowering & Flag-Based Branch Jumps]
+      │
       ▼ Pass 130/131/132: generate-lir (passes/130_lir.scm, 131_lir_safepoint.scm, 132_lir_braun_ssa.scm)
 [Low-Level IR (LIR) 3-Address Instructions & SSA CFG]
       │
@@ -117,6 +120,12 @@
 
 ### Pass 120: TBAA & エスケープ解析 (`passes/120_alias_escape.scm` - Issue #525)
 - **責務**: 型ベースのエイリアス解析（TBAA）とローカルオブジェクトのエスケープ解析。短命オブジェクトのスタック配置最適化の判定。
+
+### Pass 128: LIR 分岐融合 & 条件比較低レベル化 (`passes/128_lir_branch_fusion.scm` - Issue #571)
+- **責務**:
+  - `if` 条件式における比較述語（`=`, `<`, `>`, `<=`, `>=`, `eq?`, `eqv?`, `zero?`, `null?`, `pair?`, `boolean?`, `symbol?`, `string?`, `vector?`, `bytevector?`, `port?`, `procedure?`, `promise?` 等）を直接 LIR 条件分岐命令 (`%jump-cond cc label`) へ直接融合。
+  - 中間ブール値（`#t`/`#f`）のヒープ・レジスタアロケーション（`%set-boolean`）および無駄な再判定ジャンプ（`%jump-if-false`）を完全に排除。
+  - `lir-cmp-false-cc`, `lir-cmp-true-cc`, `extract-fused-cmp-int`, `lir-compile-fused-cmp-cond`, `lir-compile-fused-cmp` の独立モジュール化。
 
 ### Pass 130 / 131 / 132: 低レベル IR (LIR) 生成 & SSA
 - **`130_lir.scm`**: 機械抽象 3 番地 LIR 命令列の生成、命令選択、環境追跡。

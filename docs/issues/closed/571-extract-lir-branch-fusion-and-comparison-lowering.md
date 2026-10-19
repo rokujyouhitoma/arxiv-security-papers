@@ -2,7 +2,7 @@
 ID: 571
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] LIR パスからの条件分岐・比較融合 (Branch Fusion) ロジックの独立モジュール分離 (ID: 571)
@@ -22,10 +22,10 @@ ID: 571
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/128_lir_branch_fusion.scm](../../ulisp/passes/128_lir_branch_fusion.scm)
-- [ ] [ulisp/passes/130_lir.scm](../../ulisp/passes/130_lir.scm)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile)
-- [ ] [ulisp/tests/passes/test_branch_fusion.scm](../../ulisp/tests/passes/test_branch_fusion.scm)
+- [x] [ulisp/passes/128_lir_branch_fusion.scm](../../ulisp/passes/128_lir_branch_fusion.scm)
+- [x] [ulisp/passes/130_lir.scm](../../ulisp/passes/130_lir.scm)
+- [x] [ulisp/Makefile](../../ulisp/Makefile)
+- [x] [ulisp/tests/passes/test_branch_fusion.scm](../../ulisp/tests/passes/test_branch_fusion.scm)
 
 ---
 
@@ -40,6 +40,6 @@ Target Branch: `feat/571-extract-lir-branch-fusion-and-comparison-lowering`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] Branch Fusion ロジックが `128_lir_branch_fusion.scm` に独立して配置されていること。
-- [ ] `130_lir.scm` がスリム化され、責務が明確化されていること。
-- [ ] `make test_branch_fusion` および `make test` が PASS すること。
+- [x] Branch Fusion ロジックが `128_lir_branch_fusion.scm` に独立して配置されていること。
+- [x] `130_lir.scm` がスリム化され、責務が明確化されていること。
+- [x] `make test_branch_fusion` および `make test` が PASS すること。
