@@ -34,6 +34,10 @@ PASSES_LIB = $(COMPILER_BASE) \
              passes/010_library.scm \
              passes/020_macro_expander.scm \
              passes/025_top_level.scm \
+             passes/026_desugar_constructors.scm \
+             passes/027_desugar_conditionals.scm \
+             passes/028_desugar_bindings.scm \
+             passes/029_desugar_dynamic.scm \
              passes/030_desugar.scm \
              passes/040_analysis.scm \
              passes/050_cp0.scm \
@@ -77,6 +81,10 @@ test_passes: build/compiler_passes.scm test_all_passes
 NANOPASS_TESTS = tests/passes/test_010_library.scm \
                  tests/passes/test_020_macro_expander.scm \
                  tests/passes/test_025_top_level.scm \
+                 tests/passes/test_026_desugar_constructors.scm \
+                 tests/passes/test_027_desugar_conditionals.scm \
+                 tests/passes/test_028_desugar_bindings.scm \
+                 tests/passes/test_029_desugar_dynamic.scm \
                  tests/passes/test_030_desugar.scm \
                  tests/passes/test_040_analysis.scm \
                  tests/passes/test_050_cp0.scm \
@@ -88,7 +96,7 @@ NANOPASS_TESTS = tests/passes/test_010_library.scm \
                  tests/passes/test_110_closure_convert.scm \
                  tests/passes/test_120_alias_escape.scm \
                  tests/passes/test_128_lir_branch_fusion.scm \
-                  tests/passes/test_129_lir_primitives.scm \
+                 tests/passes/test_129_lir_primitives.scm \
                  tests/passes/test_130_lir.scm \
                  tests/passes/test_131_lir_safepoint.scm \
                  tests/passes/test_132_lir_braun_ssa.scm \
@@ -99,13 +107,13 @@ NANOPASS_TESTS = tests/passes/test_010_library.scm \
                  tests/passes/test_160_backend_c.scm
 
 test_all_passes: build/compiler_passes.scm
-	@echo "=== Running 1:1 Nanopass Unit Tests (23 Passes) ==="
+	@echo "=== Running 1:1 Nanopass Unit Tests (27 Passes) ==="
 	@for t in $(NANOPASS_TESTS); do \
 		echo "Running $$t..."; \
 		cat build/compiler_passes.scm $$t > build/runner_temp.scm && \
 		$(RUN_SCHEME) build/runner_temp.scm || exit 1; \
 	done
-	@echo "SUCCESS: All 23 1:1 Nanopass Unit Tests PASSED!"
+	@echo "SUCCESS: All 27 1:1 Nanopass Unit Tests PASSED!"
 
 
 

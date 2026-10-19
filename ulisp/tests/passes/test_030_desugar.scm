@@ -60,7 +60,7 @@
 
 ;; 7. let-values desugaring
 (let ((res (desugar-all '(let-values (((a b) (values 1 2))) (+ a b)))))
-  (assert-equal "let-values expands to call-with-values" 'call-with-values (car res)))
+  (assert-equal "let-values expands to %call-with-values" '%call-with-values (car res)))
 
 (display "=======================================================") (newline)
 (display " Pass 030: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
