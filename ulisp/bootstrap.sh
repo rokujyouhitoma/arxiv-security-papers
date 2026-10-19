@@ -9,6 +9,9 @@ BUILD_DIR="$ULISP_DIR/build"
 
 mkdir -p "$BUILD_DIR"
 
+# Apply compiler profile for self-hosting compiler execution (Issue #567)
+export ULISP_GC_PROFILE=compiler
+
 echo "[0/4] Preparing unified compiler (lib/ + compiler.scm)..."
 make -C "$ULISP_DIR" compiler
 echo '(!gc none)' > "$BUILD_DIR/ulisp_core.scm"

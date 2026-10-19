@@ -78,7 +78,7 @@ assert() {
     input="$2"
 
     if [[ "$input" =~ gc- ]]; then
-        full_input="$(cat lib/gc.scm)"$'\n'"$input"
+        full_input="$(cat lib/posix.scm lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string || "$input" =~ string-copy || "$input" =~ string-fill || "$input" =~ string-map || "$input" =~ string-for-each ]]; then
         full_input="$(cat lib/string.scm)"$'\n'"$input"
     elif [[ "$input" =~ list-copy || "$input" =~ make-list ]]; then
@@ -566,6 +566,11 @@ assert "10" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig h
 echo "-- Step 26b: Issue 566 Generational Dynamic Heap Growth & mremap --"
 assert "42" "(let* ((orig (%get-heap-ptr)) (n-sz 16384) (m-sz 32768) (n-base orig) (m-from (%ptr-add n-base n-sz)) (m-to (%ptr-add m-from m-sz)) (rem (%ptr-add m-to m-sz))) (begin (gc-init-generational! n-base n-sz m-from m-to m-sz (%get-rsp) rem) (let ((lst (cons 40 2))) (begin (gc-minor-collect! (%get-rsp)) (+ (car lst) (cdr lst))))))"
 make test_gc_growth
+
+# --- Step 26c: Generational GC Execution Profiles (Issue 567) ---
+echo "-- Step 26c: Issue 567 Generational GC Execution Profiles --"
+make test_gc_profile
+
 
 
 

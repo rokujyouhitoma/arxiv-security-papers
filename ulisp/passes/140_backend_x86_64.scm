@@ -718,43 +718,136 @@
        (emit "    mov qword ptr [rbx + 32], 0")    ; count = 0
        (emit "    mov [rbx + 40], rcx")            ; free_ptr = to
        (emit "    mov qword ptr [rbx + 88], 0")    ; gen_mode = 0
+       (emit "    mov qword ptr [rbx + 112], 4")   ; profile_id = 4 (dual-space)
        (emit "    mov rdi, rax")                   ; rdi = from
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
        (emit "    mov [rdx], rcx"))                ; limit = from + 64MB
       (else
-       ;; 'all or 'generational: 4MB nursery + 64MB mature from + 64MB mature to + 32KB remset
+       ;; Generational GC with Execution Profiles (Issue #567)
+       ;; Scan envp for ULISP_GC_PROFILE (precedence over compile-time default)
+       (emit "    mov r8, [rbp]")                  ; argc
+       (emit "    lea r9, [rbp + r8*8 + 16]")      ; envp = argv + argc + 1
+       (emit "    xor r10, r10")                   ; r10 = 0 (unset / standard)
+       (emit ".L_env_scan_loop:")
+       (emit "    mov rsi, [r9]")
+       (emit "    test rsi, rsi")
+       (emit "    jz .L_env_scan_done")
+       (emit "    add r9, 8")
+       (emit "    mov rax, [rsi]")
+       (emit "    mov r11, 0x43475f5053494c55")    ; "ULISP_GC"
+       (emit "    cmp rax, r11")
+       (emit "    jne .L_env_scan_loop")
+       (emit "    mov rax, [rsi + 8]")
+       (emit "    mov r11, 0x454c49464f52505f")    ; "_PROFILE"
+       (emit "    cmp rax, r11")
+       (emit "    jne .L_env_scan_loop")
+       (emit "    cmp byte ptr [rsi + 16], 0x3d")  ; '='
+       (emit "    jne .L_env_scan_loop")
+       (emit "    movzx eax, byte ptr [rsi + 17]")
+       (emit "    cmp al, 'c'")                    ; compiler
+       (emit "    je .L_env_set_compiler")
+       (emit "    cmp al, 'C'")
+       (emit "    je .L_env_set_compiler")
+       (emit "    cmp al, 's'")                    ; server
+       (emit "    je .L_env_set_server")
+       (emit "    cmp al, 'S'")
+       (emit "    je .L_env_set_server")
+       (emit "    cmp al, 'd'")                    ; default / standard
+       (emit "    je .L_env_set_standard")
+       (emit "    cmp al, 'D'")
+       (emit "    je .L_env_set_standard")
+       (emit "    jmp .L_env_scan_loop")
+       (emit ".L_env_set_compiler:")
+       (emit "    mov r10, 1")
+       (emit "    jmp .L_env_scan_done")
+       (emit ".L_env_set_server:")
+       (emit "    mov r10, 2")
+       (emit "    jmp .L_env_scan_done")
+       (emit ".L_env_set_standard:")
+       (emit "    mov r10, 0")
+       (emit "    jmp .L_env_scan_done")
+       (emit ".L_env_scan_done:")
+       (cond
+         ((eq? gc-mode 'compiler)
+          (emit "    test r10, r10")
+          (emit "    jnz .L_profile_decided")
+          (emit "    mov r10, 1")                  ; compile-time default: compiler
+          (emit ".L_profile_decided:"))
+         ((eq? gc-mode 'server)
+          (emit "    test r10, r10")
+          (emit "    jnz .L_profile_decided")
+          (emit "    mov r10, 2")                  ; compile-time default: server
+          (emit ".L_profile_decided:"))
+         (else
+          (emit ".L_profile_decided:")))
+       (emit "    cmp r10, 1")
+       (emit "    je .L_profile_compiler")
+       (emit "    cmp r10, 2")
+       (emit "    je .L_profile_server")
+       ;; Standard Profile (4MB Nursery, 64MB Mature, 1GB Max)
+       (emit "    mov r12, 4194304")               ; nursery_size = 4MB
+       (emit "    mov r13, 67108864")              ; mature_size = 64MB
+       (emit "    mov rsi, 138444800")             ; total_mmap = ~132MB
+       (emit "    mov r8, 1073741824")             ; max_mature = 1GB
+       (emit "    xor r10, r10")                   ; profile_id = 0
+       (emit "    jmp .L_profile_setup")
+       ;; Compiler Profile (256MB Nursery, 256MB Mature, 4GB Max)
+       (emit ".L_profile_compiler:")
+       (emit "    mov r12, 268435456")             ; nursery_size = 256MB
+       (emit "    mov r13, 268435456")             ; mature_size = 256MB
+       (emit "    mov rsi, 805371904")             ; total_mmap = ~768MB
+       (emit "    mov r8, 4294967296")             ; max_mature = 4GB
+       (emit "    mov r10, 1")                     ; profile_id = 1
+       (emit "    jmp .L_profile_setup")
+       ;; Server Profile (16MB Nursery, 256MB Mature, 4GB Max)
+       (emit ".L_profile_server:")
+       (emit "    mov r12, 16777216")              ; nursery_size = 16MB
+       (emit "    mov r13, 268435456")             ; mature_size = 256MB
+       (emit "    mov rsi, 553713664")             ; total_mmap = ~528MB
+       (emit "    mov r8, 4294967296")             ; max_mature = 4GB
+       (emit "    mov r10, 2")                     ; profile_id = 2
+       (emit "    jmp .L_profile_setup")
+       (emit ".L_profile_setup:")
+       (emit "    push r10")                       ; save profile_id
+       (emit "    push r8")                        ; save max_mature
+       (emit "    push r13")                       ; save mature_size
+       (emit "    push r12")                       ; save nursery_size
        (emit "    mov rax, 9")                     ; sys_mmap
        (emit "    xor rdi, rdi")                   ; addr = NULL
-       (emit "    mov rsi, 138444800")             ; ~132MB
        (emit "    mov rdx, 3")                     ; PROT_READ|PROT_WRITE
        (emit "    mov r10, 34")                    ; MAP_PRIVATE|MAP_ANONYMOUS
        (emit "    mov r8, -1")                     ; fd = -1
        (emit "    xor r9, r9")                     ; offset = 0
        (emit "    syscall")
+       (emit "    pop r12")                        ; restore nursery_size
+       (emit "    pop r13")                        ; restore mature_size
+       (emit "    pop r8")                         ; restore max_mature
+       (emit "    pop r10")                        ; restore profile_id
        (emit "    test rax, rax")
        (emit "    js .L_start_exit")
        (emit "    lea rbx, [rip + ulisp_gc_state]")
        (emit "    mov [rbx + 0], rax")             ; nursery_base
-       (emit "    mov qword ptr [rbx + 8], 4194304") ; nursery_size = 4MB
-       (emit "    lea rcx, [rax + 4194304]")
+       (emit "    mov [rbx + 8], r12")             ; nursery_size
+       (emit "    lea rcx, [rax + r12]")
        (emit "    mov [rbx + 16], rcx")            ; mature_from
-       (emit "    lea rdx, [rcx + 67108864]")
+       (emit "    lea rdx, [rcx + r13]")
        (emit "    mov [rbx + 24], rdx")            ; mature_to
-       (emit "    mov qword ptr [rbx + 32], 67108864") ; mature_size = 64MB
+       (emit "    mov [rbx + 32], r13")            ; mature_size
        (emit "    mov [rbx + 40], rcx")            ; mature_free = mature_from
        (emit "    mov [rbx + 48], rbp")            ; stack_bottom
        (emit "    mov qword ptr [rbx + 56], 0")    ; minor_count = 0
        (emit "    mov qword ptr [rbx + 64], 0")    ; major_count = 0
-       (emit "    lea r8, [rdx + 67108864]")
-       (emit "    mov [rbx + 72], r8")             ; remset_ptr
+       (emit "    lea r9, [rdx + r13]")
+       (emit "    mov [rbx + 72], r9")             ; remset_ptr
        (emit "    mov qword ptr [rbx + 80], 0")    ; remset_count = 0
        (emit "    mov qword ptr [rbx + 88], 1")    ; gen_mode = 1
-       (emit "    mov qword ptr [rbx + 96], 1073741824") ; max_size = 1GB
+       (emit "    mov [rbx + 96], r8")             ; max_size
        (emit "    mov qword ptr [rbx + 104], 0")   ; growth_count = 0
+       (emit "    mov [rbx + 112], r10")           ; profile_id (0: standard, 1: compiler, 2: server)
        (emit "    mov rdi, rax")                   ; rdi = nursery_base
-       (emit "    lea rcx, [rax + 4194304]")
+       (emit "    lea rcx, [rax + r12]")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
-       (emit "    mov [rdx], rcx")))               ; limit = nursery_base + 4MB
+       (emit "    mov [rdx], rcx")))               ; limit = nursery_base + nursery_size
     (emit "    call scheme_entry")
     (emit "    mov r15, rax")
     (emit "    cmp r14, 1")

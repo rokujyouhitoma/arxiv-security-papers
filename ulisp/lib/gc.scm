@@ -33,25 +33,38 @@
 
 ;; Generational mode accessors
 (define (gc-nursery-base) (%raw-load (%get-gc-state-ptr) 0))
-(define (gc-nursery-size) (%raw-load (%get-gc-state-ptr) 8))
+(define (gc-nursery-size) (%to-fixnum (%raw-load (%get-gc-state-ptr) 8)))
 (define (gc-mature-from)  (%raw-load (%get-gc-state-ptr) 16))
 (define (gc-mature-to)    (%raw-load (%get-gc-state-ptr) 24))
-(define (gc-mature-size)  (%raw-load (%get-gc-state-ptr) 32))
+(define (gc-mature-size)  (%to-fixnum (%raw-load (%get-gc-state-ptr) 32)))
 (define (gc-mature-free)  (%raw-load (%get-gc-state-ptr) 40))
 (define (gc-gen-bottom)   (%raw-load (%get-gc-state-ptr) 48))
-(define (gc-minor-count)  (%raw-load (%get-gc-state-ptr) 56))
-(define (gc-major-count)  (%raw-load (%get-gc-state-ptr) 64))
+(define (gc-minor-count)  (%to-fixnum (%raw-load (%get-gc-state-ptr) 56)))
+(define (gc-major-count)  (%to-fixnum (%raw-load (%get-gc-state-ptr) 64)))
 (define (gc-remset-ptr)   (%raw-load (%get-gc-state-ptr) 72))
-(define (gc-remset-count) (%raw-load (%get-gc-state-ptr) 80))
-(define (gc-gen-mode)     (%raw-load (%get-gc-state-ptr) 88))
-(define (gc-max-size)     (%raw-load (%get-gc-state-ptr) 96))
-(define (gc-growth-count) (%raw-load (%get-gc-state-ptr) 104))
+(define (gc-remset-count) (%to-fixnum (%raw-load (%get-gc-state-ptr) 80)))
+(define (gc-gen-mode)     (%to-fixnum (%raw-load (%get-gc-state-ptr) 88)))
+(define (gc-max-size)     (%to-fixnum (%raw-load (%get-gc-state-ptr) 96)))
+(define (gc-growth-count) (%to-fixnum (%raw-load (%get-gc-state-ptr) 104)))
+(define (gc-profile-id)   (%to-fixnum (%raw-load (%get-gc-state-ptr) 112)))
 
 (define (set-gc-mature-from! v) (%raw-store! (%get-gc-state-ptr) 16 v))
-(define (set-gc-mature-size! v) (%raw-store! (%get-gc-state-ptr) 32 v))
+(define (set-gc-mature-size! v) (%raw-store! (%get-gc-state-ptr) 32 (%to-raw v)))
 (define (set-gc-mature-free! v) (%raw-store! (%get-gc-state-ptr) 40 v))
-(define (set-gc-max-size! v)    (%raw-store! (%get-gc-state-ptr) 96 v))
-(define (set-gc-growth-count! v)(%raw-store! (%get-gc-state-ptr) 104 v))
+(define (set-gc-max-size! v)    (%raw-store! (%get-gc-state-ptr) 96 (%to-raw v)))
+(define (set-gc-growth-count! v)(%raw-store! (%get-gc-state-ptr) 104 (%to-raw v)))
+(define (set-gc-profile-id! v)  (%raw-store! (%get-gc-state-ptr) 112 (%to-raw v)))
+
+;;; Query current GC execution profile (Issue #567)
+;;; Returns symbol: 'standard, 'compiler, 'server, 'none, or 'dual-space
+(define (gc-current-profile)
+  (let ((id (gc-profile-id)))
+    (cond
+      ((= id 1) 'compiler)
+      ((= id 2) 'server)
+      ((= id 3) 'none)
+      ((= id 4) 'dual-space)
+      (else 'standard))))
 
 ;;; Initialize classic dual-space copying garbage collector
 (define (gc-init! from-space to-space heap-size stack-bottom)
@@ -62,15 +75,16 @@
   (set-gc-bottom! stack-bottom)
   (set-gc-count! 0)
   (set-gc-free! to-space)
+  (set-gc-profile-id! 4)                ; profile 4: dual-space
   (%set-heap-ptr! from-space))
 
 ;;; Initialize Nursery & Generational Copying Garbage Collector
 (define (gc-init-generational! nursery-base nursery-size mature-from mature-to mature-size stack-bottom remset-ptr)
   (%raw-store! (%get-gc-state-ptr) 0 nursery-base)
-  (%raw-store! (%get-gc-state-ptr) 8 nursery-size)
+  (%raw-store! (%get-gc-state-ptr) 8 (%to-raw nursery-size))
   (%raw-store! (%get-gc-state-ptr) 16 mature-from)
   (%raw-store! (%get-gc-state-ptr) 24 mature-to)
-  (%raw-store! (%get-gc-state-ptr) 32 mature-size)
+  (%raw-store! (%get-gc-state-ptr) 32 (%to-raw mature-size))
   (%raw-store! (%get-gc-state-ptr) 40 mature-from)   ; mature-free starts at mature-from
   (%raw-store! (%get-gc-state-ptr) 48 stack-bottom)
   (%raw-store! (%get-gc-state-ptr) 56 0)             ; minor count = 0
@@ -78,9 +92,55 @@
   (%raw-store! (%get-gc-state-ptr) 72 remset-ptr)
   (%raw-store! (%get-gc-state-ptr) 80 0)             ; remset count = 0
   (%raw-store! (%get-gc-state-ptr) 88 1)             ; generational mode = 1
-  (%raw-store! (%get-gc-state-ptr) 96 (* mature-size 32)) ; default max mature size: 32x
+  (%raw-store! (%get-gc-state-ptr) 96 (%to-raw (* mature-size 32))) ; default max mature size: 32x
   (%raw-store! (%get-gc-state-ptr) 104 0)            ; mature growth count = 0
+  (set-gc-profile-id! 0)                             ; profile 0: standard default
   (%set-heap-ptr! nursery-base))
+
+;;; Initialize Generational GC with named execution profile (Issue #567)
+;;; Supported profiles: 'standard, 'compiler, 'server
+(define (gc-init-profile! profile)
+  (let ((stack-bottom (gc-bottom)))
+    (cond
+      ((eq? profile 'compiler)
+       ;; Compiler profile: 256MB Nursery, 256MB Mature, 4GB Max (Sub-second AST compilation)
+       (let* ((n-size 268435456)
+              (m-size 268435456)
+              (max-size 4294967296)
+              (total (+ n-size (+ (* m-size 2) 65536)))
+              (base (sys-mmap total))
+              (m-from (%ptr-add base n-size))
+              (m-to (%ptr-add m-from m-size))
+              (remset (%ptr-add m-to m-size)))
+         (gc-init-generational! base n-size m-from m-to m-size stack-bottom remset)
+         (set-gc-max-size! max-size)
+         (set-gc-profile-id! 1)))
+      ((eq? profile 'server)
+       ;; Server profile: 16MB Nursery, 256MB Mature, 4GB Max (Long-lived server/daemon)
+       (let* ((n-size 16777216)
+              (m-size 268435456)
+              (max-size 4294967296)
+              (total (+ n-size (+ (* m-size 2) 65536)))
+              (base (sys-mmap total))
+              (m-from (%ptr-add base n-size))
+              (m-to (%ptr-add m-from m-size))
+              (remset (%ptr-add m-to m-size)))
+         (gc-init-generational! base n-size m-from m-to m-size stack-bottom remset)
+         (set-gc-max-size! max-size)
+         (set-gc-profile-id! 2)))
+      (else
+       ;; Standard profile: 4MB Nursery, 64MB Mature, 1GB Max (Low memory footprint script)
+       (let* ((n-size 4194304)
+              (m-size 67108864)
+              (max-size 1073741824)
+              (total (+ n-size (+ (* m-size 2) 32768)))
+              (base (sys-mmap total))
+              (m-from (%ptr-add base n-size))
+              (m-to (%ptr-add m-from m-size))
+              (remset (%ptr-add m-to m-size)))
+         (gc-init-generational! base n-size m-from m-to m-size stack-bottom remset)
+         (set-gc-max-size! max-size)
+         (set-gc-profile-id! 0))))))
 
 ;;; Predicate: is value a pointer pointing into nursery?
 (define (gc-nursery-pointer? val)

@@ -317,6 +317,38 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    /* Initialize Generational GC state & profile (Issue #567) */
+    uint64_t n_size = 4194304ULL;       /* 4MB default */
+    uint64_t m_size = 67108864ULL;      /* 64MB default */
+    uint64_t max_size = 1073741824ULL;  /* 1GB default */
+    uint64_t profile_id = 0;            /* 0: standard */
+
+    char *prof = getenv("ULISP_GC_PROFILE");
+    if (prof != NULL) {
+        if (prof[0] == 'c' || prof[0] == 'C') {
+            n_size = 268435456ULL;      /* 256MB */
+            m_size = 268435456ULL;      /* 256MB */
+            max_size = 4294967296ULL;   /* 4GB */
+            profile_id = 1;
+        } else if (prof[0] == 's' || prof[0] == 'S') {
+            n_size = 16777216ULL;       /* 16MB */
+            m_size = 268435456ULL;      /* 256MB */
+            max_size = 4294967296ULL;   /* 4GB */
+            profile_id = 2;
+        }
+    }
+    ulisp_gc_state[0] = (uint64_t)heap;
+    ulisp_gc_state[1] = n_size;
+    ulisp_gc_state[2] = (uint64_t)heap + n_size;
+    ulisp_gc_state[3] = (uint64_t)heap + n_size + m_size;
+    ulisp_gc_state[4] = m_size;
+    ulisp_gc_state[5] = (uint64_t)heap + n_size;
+    ulisp_gc_state[8] = 0;
+    ulisp_gc_state[11] = 1; /* generational mode */
+    ulisp_gc_state[12] = max_size;
+    ulisp_gc_state[13] = 0;
+    ulisp_gc_state[14] = profile_id;
+
     uint64_t result = scheme_entry(heap);
     if (!quiet) {
         print_scheme_value(result);
