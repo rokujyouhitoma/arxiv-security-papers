@@ -52,7 +52,8 @@
     (let ((entry (car (cadr sm-clause))))
       (assert-true "safepoint has 3 fields (label, frame-size, bitmap)"
                    (= (length entry) 3))
-      (assert-true "safepoint label is a symbol" (symbol? (car entry)))
+      (assert-true "safepoint label is a string or symbol"
+                   (or (symbol? (car entry)) (string? (car entry))))
       (assert-true "frame-size is positive" (> (cadr entry) 0))
       (assert-true "frame-size is 8-byte aligned" (= (modulo (cadr entry) 8) 0))
       (assert-true "bitmap is an integer" (integer? (caddr entry)))))
@@ -118,7 +119,8 @@
                      ((null? insts) #f)
                      ((and (pair? (car insts))
                            (eq? (caar insts) '%code-ref)
-                           (eq? (caddar insts) '__ulisp_stackmap_table))
+                           (or (eq? (caddar insts) '__ulisp_stackmap_table)
+                               (string-equal? (caddar insts) "__ulisp_stackmap_table")))
                       #t)
                      (else (loop (cdr insts)))))))
 
@@ -135,7 +137,7 @@
     (assert-true "has at least one safepoint" (pair? safepoints))
     (let ((first-sp (car safepoints)))
       (assert-true "safepoint label starts with __safepoint_"
-                   (let ((str (symbol->string (car first-sp))))
+                   (let ((str (if (symbol? (car first-sp)) (symbol->string (car first-sp)) (car first-sp))))
                      (and (>= (string-length str) 12)
                           (string=? (substring str 0 12) "__safepoint_"))))))
 

@@ -48,6 +48,39 @@
 (define (gc-growth-count) (%to-fixnum (%raw-load (%get-gc-state-ptr) 104)))
 (define (gc-profile-id)   (%to-fixnum (%raw-load (%get-gc-state-ptr) 112)))
 
+;; Hybrid Exact-Conservative Scanning State (Issue #568)
+;; [120]: bit 0 = debug_gc mode, bits 1..63 = rescued unmapped pointers count
+(define (gc-debug-mode?)
+  (= (bitwise-and (%to-fixnum (%raw-load (%get-gc-state-ptr) 120)) 1) 1))
+
+(define (set-gc-debug-mode! v)
+  (let ((cur (%to-fixnum (%raw-load (%get-gc-state-ptr) 120))))
+    (%raw-store! (%get-gc-state-ptr) 120
+                 (%to-raw (if v (bitwise-ior cur 1) (bitwise-and cur -2))))))
+
+(define (gc-hybrid-rescued-count)
+  (quotient (%to-fixnum (%raw-load (%get-gc-state-ptr) 120)) 2))
+
+(define (set-gc-hybrid-rescued-count! cnt)
+  (let ((dbg (if (gc-debug-mode?) 1 0)))
+    (%raw-store! (%get-gc-state-ptr) 120
+                 (%to-raw (+ (* cnt 2) dbg)))))
+
+(define (gc-inc-hybrid-rescued!)
+  (let ((cur (%to-fixnum (%raw-load (%get-gc-state-ptr) 120))))
+    (%raw-store! (%get-gc-state-ptr) 120 (%to-raw (+ cur 2)))))
+
+(define (gc-log-unmapped-pointer! sp val)
+  (gc-inc-hybrid-rescued!)
+  (if (gc-debug-mode?)
+      (begin
+        (sys-write-string "[DEBUG_GC] Hybrid scanner rescued unmapped pointer at SP=")
+        (sys-write-fixnum (%to-fixnum sp))
+        (sys-write-string " val=")
+        (sys-write-fixnum (%to-fixnum val))
+        (sys-write-char #\newline)
+        (sys-flush))))
+
 (define (set-gc-mature-from! v) (%raw-store! (%get-gc-state-ptr) 16 v))
 (define (set-gc-mature-size! v) (%raw-store! (%get-gc-state-ptr) 32 (%to-raw v)))
 (define (set-gc-mature-free! v) (%raw-store! (%get-gc-state-ptr) 40 v))
@@ -456,12 +489,12 @@
                 (loop (+ i 1))))
           -1))))
 
-;;; Exact Stackmap-Guided GC Root Scanner (Dual-Space)
+;;; Hybrid Exact-Conservative GC Root Scanner (Dual-Space) (Issue #568)
 (define (gc-scan-roots! deepest-sp bottom)
   (let* ((tbl (%get-stackmap-table))
          (tbl-count (%to-fixnum (%raw-load tbl 0))))
+    ;; --- Pass 1: Exact Stackmap Primary Scan ---
     (if (> tbl-count 0)
-        ;; --- Exact Stackmap Walk ---
         (let walk-loop ((sp deepest-sp))
           (if (< sp bottom)
               (let* ((word (%raw-load sp 0))
@@ -484,21 +517,24 @@
                                         (%raw-store! slot-addr 0 (gc-copy-object val)))))
                               (slot-loop (+ k 1) (if (< k 60) (quotient mask 2) 0)))))
                       (walk-loop (%ptr-add frame-base frame-size)))
-                    (walk-loop (%ptr-add sp 8))))))
-        ;; --- Fallback Conservative Walk ---
-        (let conserv-loop ((sp deepest-sp))
-          (if (< sp bottom)
-              (let ((val (%raw-load sp 0)))
-                (if (gc-heap-pointer? val)
-                    (%raw-store! sp 0 (gc-copy-object val)))
-                (conserv-loop (%ptr-add sp 8))))))))
+                    (walk-loop (%ptr-add sp 8)))))))
+    ;; --- Pass 2: Conservative Fallback Secondary Scan ---
+    (let conserv-loop ((sp deepest-sp))
+      (if (< sp bottom)
+          (let ((val (%raw-load sp 0)))
+            (if (gc-heap-pointer? val)
+                (begin
+                  (if (> tbl-count 0)
+                      (gc-log-unmapped-pointer! sp val))
+                  (%raw-store! sp 0 (gc-copy-object val))))
+            (conserv-loop (%ptr-add sp 8)))))))
 
-;;; Exact Stackmap-Guided GC Root Scanner for Generational Nursery (Minor GC)
+;;; Hybrid Exact-Conservative GC Root Scanner for Generational Nursery (Minor GC) (Issue #568)
 (define (gc-scan-roots-generational! deepest-sp bottom)
   (let* ((tbl (%get-stackmap-table))
          (tbl-count (%to-fixnum (%raw-load tbl 0))))
+    ;; --- Pass 1: Exact Stackmap Primary Scan ---
     (if (> tbl-count 0)
-        ;; --- Exact Stackmap Walk ---
         (let walk-loop ((sp deepest-sp))
           (if (< sp bottom)
               (let* ((word (%raw-load sp 0))
@@ -520,14 +556,17 @@
                                         (%raw-store! slot-addr 0 (gc-promote-object val)))))
                               (slot-loop (+ k 1) (if (< k 60) (quotient mask 2) 0)))))
                       (walk-loop (%ptr-add frame-base frame-size)))
-                    (walk-loop (%ptr-add sp 8))))))
-        ;; --- Fallback Conservative Walk ---
-        (let conserv-loop ((sp deepest-sp))
-          (if (< sp bottom)
-              (let ((val (%raw-load sp 0)))
-                (if (gc-nursery-pointer? val)
-                    (%raw-store! sp 0 (gc-promote-object val)))
-                (conserv-loop (%ptr-add sp 8))))))))
+                    (walk-loop (%ptr-add sp 8)))))))
+    ;; --- Pass 2: Conservative Fallback Secondary Scan ---
+    (let conserv-loop ((sp deepest-sp))
+      (if (< sp bottom)
+          (let ((val (%raw-load sp 0)))
+            (if (gc-nursery-pointer? val)
+                (begin
+                  (if (> tbl-count 0)
+                      (gc-log-unmapped-pointer! sp val))
+                  (%raw-store! sp 0 (gc-promote-object val))))
+            (conserv-loop (%ptr-add sp 8)))))))
 
 ;;; Scan Remembered Set (slots in mature objects pointing to nursery)
 (define (gc-scan-remset!)

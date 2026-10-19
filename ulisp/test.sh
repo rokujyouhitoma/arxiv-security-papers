@@ -36,11 +36,15 @@ USE_NATIVE_ULISP=false
 ACTIVE_NATIVE=""
 
 if [ "${FORCE_ILISP:-0}" != "1" ]; then
-    make stage1 >/dev/null 2>&1 || true
-    if [ -x "$ULISP_STAGE1" ]; then
-        ACTIVE_NATIVE="$ULISP_STAGE1"
-    elif [ -x "$ULISP_BOOT" ]; then
+    if [ -x "$ULISP_BOOT" ]; then
         ACTIVE_NATIVE="$ULISP_BOOT"
+    elif [ -x "$ULISP_STAGE1" ]; then
+        ACTIVE_NATIVE="$ULISP_STAGE1"
+    else
+        make stage1 >/dev/null 2>&1 || true
+        if [ -x "$ULISP_STAGE1" ]; then
+            ACTIVE_NATIVE="$ULISP_STAGE1"
+        fi
     fi
 
     if [ -n "$ACTIVE_NATIVE" ]; then
@@ -571,8 +575,9 @@ make test_gc_growth
 echo "-- Step 26c: Issue 567 Generational GC Execution Profiles --"
 make test_gc_profile
 
-
-
+# --- Step 26d: Hybrid Exact & Conservative Stack Scanning (Issue 568) ---
+echo "-- Step 26d: Issue 568 Hybrid Exact & Conservative Stack Scanning --"
+make test_gc_hybrid
 
 # --- Step 27: Contification & Local Closure Elimination (Issue 522) ---
 echo "-- Step 27: Issue 522 Contification & Local Closure Elimination --"

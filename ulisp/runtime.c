@@ -337,6 +337,9 @@ int main(int argc, char **argv) {
             profile_id = 2;
         }
     }
+    char *dbg = getenv("DEBUG_GC");
+    uint64_t debug_gc = (dbg != NULL && dbg[0] != '0') ? 1ULL : 0ULL;
+
     ulisp_gc_state[0] = (uint64_t)heap;
     ulisp_gc_state[1] = n_size;
     ulisp_gc_state[2] = (uint64_t)heap + n_size;
@@ -348,10 +351,16 @@ int main(int argc, char **argv) {
     ulisp_gc_state[12] = max_size;
     ulisp_gc_state[13] = 0;
     ulisp_gc_state[14] = profile_id;
+    ulisp_gc_state[15] = debug_gc; /* Issue #568: bit 0 = debug_gc, bits 1..63 = rescued count */
 
     uint64_t result = scheme_entry(heap);
     if (!quiet) {
         print_scheme_value(result);
+    }
+
+    if (ulisp_gc_state[15] & 1) {
+        fprintf(stderr, "[DEBUG_GC] Execution complete. Rescued unmapped pointers: %llu\n",
+                (unsigned long long)(ulisp_gc_state[15] >> 1));
     }
 
     munmap(heap, HEAP_SIZE);
