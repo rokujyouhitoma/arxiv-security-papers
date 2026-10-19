@@ -9,22 +9,23 @@ ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
 ILISP = $(PYTHON) -m ilisp
 ULISP_BOOT = bin/ulisp-boot
+RUN_SCHEME = PYTHONPATH=$(ROOT_DIR) $(ILISP)
 
-# --- 処理系エンジンの決定 (ULISP_BOOT があれば優先、なければ ILISP) ---
+# --- 処理系エンジンの決定 (ULISP_BOOT があれば優先、なければ ILISP を使用) ---
 ifeq ($(shell test -x $(ULISP_BOOT) && echo yes),yes)
-    ACTIVE_ENGINE = $(ULISP_BOOT)
-    ULISP_COMPILER ?= $(ULISP_BOOT)
-    USE_NATIVE_BOOT = 1
-else ifeq ($(shell test -x build/scheme-stage1 && echo yes),yes)
-    ACTIVE_ENGINE = build/scheme-stage1
-    ULISP_COMPILER ?= build/scheme-stage1
+    ULISP_COMPILER ?= ./$(ULISP_BOOT)
+    COMPILER_DEP = $(ULISP_BOOT)
     USE_NATIVE_BOOT = 1
 else
-    ACTIVE_ENGINE = $(ILISP)
-    ULISP_COMPILER ?= $(ILISP)
+    ULISP_COMPILER ?= $(RUN_SCHEME) compiler.scm <
+    COMPILER_DEP =
     USE_NATIVE_BOOT = 0
 endif
 
+ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm \
+                 lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm \
+                 lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
+                 lib/continuation.scm lib/parameter.scm lib/gc.scm
 
 COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm
@@ -44,6 +45,7 @@ PASSES_LIB = $(COMPILER_BASE) \
              passes/110_closure_convert.scm \
              passes/120_alias_escape.scm \
              passes/128_lir_branch_fusion.scm \
+             passes/129_lir_primitives.scm \
              passes/130_lir.scm \
              passes/131_lir_safepoint.scm \
              passes/132_lir_braun_ssa.scm \
@@ -70,7 +72,7 @@ build/compiler_passes.scm: $(PASSES_LIB)
 test_passes: build/compiler_passes.scm test_all_passes
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_passes_runner.scm
+	@$(RUN_SCHEME) build/test_passes_runner.scm
 
 NANOPASS_TESTS = tests/passes/test_010_library.scm \
                  tests/passes/test_020_macro_expander.scm \
@@ -86,6 +88,7 @@ NANOPASS_TESTS = tests/passes/test_010_library.scm \
                  tests/passes/test_110_closure_convert.scm \
                  tests/passes/test_120_alias_escape.scm \
                  tests/passes/test_128_lir_branch_fusion.scm \
+                  tests/passes/test_129_lir_primitives.scm \
                  tests/passes/test_130_lir.scm \
                  tests/passes/test_131_lir_safepoint.scm \
                  tests/passes/test_132_lir_braun_ssa.scm \
@@ -96,19 +99,20 @@ NANOPASS_TESTS = tests/passes/test_010_library.scm \
                  tests/passes/test_160_backend_c.scm
 
 test_all_passes: build/compiler_passes.scm
-	@echo "=== Running 1:1 Nanopass Unit Tests (22 Passes) ==="
+	@echo "=== Running 1:1 Nanopass Unit Tests (23 Passes) ==="
 	@for t in $(NANOPASS_TESTS); do \
 		echo "Running $$t..."; \
 		cat build/compiler_passes.scm $$t > build/runner_temp.scm && \
-		PYTHONPATH=$(ROOT_DIR) $(ILISP) build/runner_temp.scm || exit 1; \
+		$(RUN_SCHEME) build/runner_temp.scm || exit 1; \
 	done
-	@echo "SUCCESS: All 22 1:1 Nanopass Unit Tests PASSED!"
+	@echo "SUCCESS: All 23 1:1 Nanopass Unit Tests PASSED!"
+
 
 
 test_library: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_library.scm > build/test_library_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_library_runner.scm
+	@$(RUN_SCHEME) build/test_library_runner.scm
 	$(CC) $(CFLAGS_JIT) -o build/test_library runtime.c build/test_library.s
 	@echo "=== Executing compiled library x86-64 binary ==="
 	@res=$$(./build/test_library); echo "Output: $$res"; test "$$res" = "260"
@@ -121,42 +125,42 @@ test_library: build/compiler_passes.scm
 test_lvn: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_lvn.scm > build/test_lvn_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_lvn_runner.scm
+	@$(RUN_SCHEME) build/test_lvn_runner.scm
 
 test_annotator: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_annotator.scm > build/test_annotator_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_annotator_runner.scm
+	@$(RUN_SCHEME) build/test_annotator_runner.scm
 
 test_rtyper: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_rtyper.scm > build/test_rtyper_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_rtyper_runner.scm
+	@$(RUN_SCHEME) build/test_rtyper_runner.scm
 
 test_stackmap: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_stackmap.scm > build/test_stackmap_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_stackmap_runner.scm
+	@$(RUN_SCHEME) build/test_stackmap_runner.scm
 
 test_contify: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_contify.scm > build/test_contify_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_contify_runner.scm
+	@$(RUN_SCHEME) build/test_contify_runner.scm
 
 test_alias_escape: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_alias_escape.scm > build/test_alias_escape_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_alias_escape_runner.scm
+	@$(RUN_SCHEME) build/test_alias_escape_runner.scm
 
 test_toplevel: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_toplevel_direct_call.scm > build/test_toplevel_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_toplevel_runner.scm
+	@$(RUN_SCHEME) build/test_toplevel_runner.scm
 
 test_loop_reg: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_loop_register_allocation.scm > build/test_loop_reg_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_loop_reg_runner.scm
+	@$(RUN_SCHEME) build/test_loop_reg_runner.scm
 	$(CC) $(CFLAGS_JIT) -o build/test_loop_reg runtime.c build/test_loop_reg.s
 	@echo "=== Executing compiled loop_sum binary (1,000,000 iters) ==="
 	@res=$$(./build/test_loop_reg); echo "Output: $$res"; test "$$res" = "499999500000"
@@ -165,7 +169,7 @@ test_loop_reg: build/compiler_passes.scm
 test_branch_fusion: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_branch_fusion.scm > build/test_branch_fusion_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_branch_fusion_runner.scm
+	@$(RUN_SCHEME) build/test_branch_fusion_runner.scm
 	$(CC) $(CFLAGS_JIT) -o build/test_predicates_fusion runtime.c build/test_predicates_fusion.s
 	@echo "=== Executing compiled predicates fusion binary ==="
 	@res=$$(./build/test_predicates_fusion); echo "Output: $$res"; test "$$res" = "255"
@@ -174,7 +178,7 @@ test_branch_fusion: build/compiler_passes.scm
 test_inplace_shuffle: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_inplace_shuffle.scm > build/test_inplace_shuffle_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_inplace_shuffle_runner.scm
+	@$(RUN_SCHEME) build/test_inplace_shuffle_runner.scm
 	$(CC) $(CFLAGS_JIT) -o build/test_inplace_shuffle runtime.c build/test_inplace_shuffle.s
 	@echo "=== Executing compiled inplace shuffle loop_sum binary ==="
 	@res=$$(./build/test_inplace_shuffle); echo "Output: $$res"; test "$$res" = "499999500000"
@@ -191,87 +195,88 @@ test_inplace_shuffle: build/compiler_passes.scm
 test_lir: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_lir.scm > build/test_lir_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_lir_runner.scm
+	@$(RUN_SCHEME) build/test_lir_runner.scm
 
 test_aarch64: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_backend_aarch64.scm > build/test_aarch64_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_aarch64_runner.scm
+	@$(RUN_SCHEME) build/test_aarch64_runner.scm
 
-test_exceptions: $(ULISP_COMPILER)
+
+test_exceptions: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm tests/test_exceptions.scm > build/test_exn_input.scm
-	./$(ULISP_COMPILER) build/test_exn_input.scm > build/test_exn.s
+	$(ULISP_COMPILER) build/test_exn_input.scm > build/test_exn.s
 	$(CC) -nostdlib -static build/test_exn.s -o build/test_exn
 	./build/test_exn
 
-test_values: $(ULISP_COMPILER)
+test_values: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
-	./$(ULISP_COMPILER) build/test_values_input.scm > build/test_values.s
+	$(ULISP_COMPILER) build/test_values_input.scm > build/test_values.s
 	$(CC) -nostdlib -static build/test_values.s -o build/test_values
 	./build/test_values
 
-test_call_cc: $(ULISP_COMPILER)
+test_call_cc: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_call_cc.scm > build/test_call_cc_input.scm
-	./$(ULISP_COMPILER) build/test_call_cc_input.scm > build/test_call_cc.s
+	$(ULISP_COMPILER) build/test_call_cc_input.scm > build/test_call_cc.s
 	$(CC) -nostdlib -static build/test_call_cc.s -o build/test_call_cc
 	./build/test_call_cc
 
-test_eqv: $(ULISP_COMPILER)
+test_eqv: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_eqv.scm > build/test_eqv_input.scm
-	./$(ULISP_COMPILER) build/test_eqv_input.scm > build/test_eqv.s
+	$(ULISP_COMPILER) build/test_eqv_input.scm > build/test_eqv.s
 	$(CC) -nostdlib -static build/test_eqv.s -o build/test_eqv
 	./build/test_eqv
 
-test_syntax_rules: $(ULISP_COMPILER)
+test_syntax_rules: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
-	./$(ULISP_COMPILER) build/test_syntax_rules_input.scm > build/test_syntax_rules.s
+	$(ULISP_COMPILER) build/test_syntax_rules_input.scm > build/test_syntax_rules.s
 	$(CC) -nostdlib -static build/test_syntax_rules.s -o build/test_syntax_rules
 	./build/test_syntax_rules
 
-test_ports: $(ULISP_COMPILER)
+test_ports: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_ports.scm > build/test_ports_input.scm
-	./$(ULISP_COMPILER) build/test_ports_input.scm > build/test_ports.s
+	$(ULISP_COMPILER) build/test_ports_input.scm > build/test_ports.s
 	$(CC) -nostdlib -static build/test_ports.s -o build/test_ports
 	./build/test_ports
 
-test_record: $(ULISP_COMPILER)
+test_record: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_record.scm > build/test_record_input.scm
-	./$(ULISP_COMPILER) build/test_record_input.scm > build/test_record.s
+	cat $(ULISP_STD_LIBS) tests/test_record.scm > build/test_record_input.scm
+	$(ULISP_COMPILER) build/test_record_input.scm > build/test_record.s
 	$(CC) -nostdlib -static build/test_record.s -o build/test_record
 	./build/test_record
 
-test_promise: $(ULISP_COMPILER)
+test_promise: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_promise.scm > build/test_promise_input.scm
-	./$(ULISP_COMPILER) build/test_promise_input.scm > build/test_promise.s
+	cat $(ULISP_STD_LIBS) tests/test_promise.scm > build/test_promise_input.scm
+	$(ULISP_COMPILER) build/test_promise_input.scm > build/test_promise.s
 	$(CC) -nostdlib -static build/test_promise.s -o build/test_promise
 	./build/test_promise
 
-test_stdlib: $(ULISP_COMPILER)
+test_stdlib: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_stdlib_r7rs.scm > build/test_stdlib_input.scm
-	./$(ULISP_COMPILER) build/test_stdlib_input.scm > build/test_stdlib.s
+	cat $(ULISP_STD_LIBS) tests/test_stdlib_r7rs.scm > build/test_stdlib_input.scm
+	$(ULISP_COMPILER) build/test_stdlib_input.scm > build/test_stdlib.s
 	$(CC) -nostdlib -static build/test_stdlib.s -o build/test_stdlib
 	./build/test_stdlib
 
-test_gc_growth: $(ULISP_COMPILER)
+test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_gc_growth.scm > build/test_gc_growth_input.scm
-	./$(ULISP_COMPILER) build/test_gc_growth_input.scm > build/test_gc_growth.s
+	cat $(ULISP_STD_LIBS) tests/test_gc_growth.scm > build/test_gc_growth_input.scm
+	$(ULISP_COMPILER) build/test_gc_growth_input.scm > build/test_gc_growth.s
 	$(CC) -nostdlib -static build/test_gc_growth.s -o build/test_gc_growth
 	./build/test_gc_growth
 
-test_gc_profile: $(ULISP_COMPILER)
+test_gc_profile: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_gc_profile.scm > build/test_gc_profile_input.scm
-	./$(ULISP_COMPILER) build/test_gc_profile_input.scm > build/test_gc_profile.s
+	cat $(ULISP_STD_LIBS) tests/test_gc_profile.scm > build/test_gc_profile_input.scm
+	$(ULISP_COMPILER) build/test_gc_profile_input.scm > build/test_gc_profile.s
 	$(CC) -nostdlib -static build/test_gc_profile.s -o build/test_gc_profile
 	@echo "--- 1. Testing Default (Standard) Profile ---"
 	./build/test_gc_profile
@@ -281,10 +286,10 @@ test_gc_profile: $(ULISP_COMPILER)
 	ULISP_GC_PROFILE=server ./build/test_gc_profile
 	@echo "=== All GC Execution Profile Tests Passed! ==="
 
-test_gc_hybrid: $(ULISP_COMPILER)
+test_gc_hybrid: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_gc_hybrid.scm > build/test_gc_hybrid_input.scm
-	./$(ULISP_COMPILER) build/test_gc_hybrid_input.scm > build/test_gc_hybrid.s
+	cat $(ULISP_STD_LIBS) tests/test_gc_hybrid.scm > build/test_gc_hybrid_input.scm
+	$(ULISP_COMPILER) build/test_gc_hybrid_input.scm > build/test_gc_hybrid.s
 	$(CC) -nostdlib -static build/test_gc_hybrid.s -o build/test_gc_hybrid
 	@echo "--- 1. Testing Hybrid Exact-Conservative Scanning (Standard) ---"
 	./build/test_gc_hybrid
@@ -313,8 +318,9 @@ build/stage1.s: compiler.scm build/ulisp_core.scm
 		./$(ULISP_BOOT) build/ulisp_core.scm > $@; \
 	else \
 		echo "=== Stage 1: Compiling with ILisp $(ILISP) ==="; \
-		PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < build/ulisp_core.scm > $@; \
+		$(RUN_SCHEME) compiler.scm < build/ulisp_core.scm > $@; \
 	fi
+
 
 build/scheme-stage1: build/stage1.s
 	$(CC) -nostdlib -static $< -o $@
@@ -339,59 +345,60 @@ build/test_delimcc_runner.scm: jit/core/delimcc.scm tests/jit/test_delimcc.scm
 	cat $^ > $@
 
 test_delimcc: build/test_delimcc_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_delimcc_runner.scm
+	@$(RUN_SCHEME) build/test_delimcc_runner.scm
 
 build/test_tracer_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm tests/jit/test_tracer.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_tracer: build/test_tracer_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_tracer_runner.scm
+	@$(RUN_SCHEME) build/test_tracer_runner.scm
 
 build/test_auto_instrument_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/tracer/auto_instrument.scm tests/jit/test_auto_instrument.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_auto_instrument: build/test_auto_instrument_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_auto_instrument_runner.scm
+	@$(RUN_SCHEME) build/test_auto_instrument_runner.scm
 
 build/test_optimizer_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm tests/jit/test_optimizer.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_optimizer: build/test_optimizer_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_optimizer_runner.scm
+	@$(RUN_SCHEME) build/test_optimizer_runner.scm
 
-build/test_bridge_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm tests/jit/test_bridge.scm
+build/test_bridge_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm tests/jit/test_bridge.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_bridge: build/test_bridge_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_bridge_runner.scm
+	@$(RUN_SCHEME) build/test_bridge_runner.scm
 
-build/test_examples_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm tests/jit/test_examples.scm
+build/test_examples_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm tests/jit/test_examples.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_examples: build/test_examples_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_examples_runner.scm
+	@$(RUN_SCHEME) build/test_examples_runner.scm
 
-build/test_guard_elimination_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm tests/jit/test_guard_elimination.scm
+build/test_guard_elimination_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm tests/jit/test_guard_elimination.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_guard_elimination: build/test_guard_elimination_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_guard_elimination_runner.scm
+	@$(RUN_SCHEME) build/test_guard_elimination_runner.scm
 
 test_jit: test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
 	@echo "=== [All JIT Component Tests Passed: 112/112] ==="
 
-build/demo_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm jit/examples/demo.scm
+build/demo_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm jit/examples/demo.scm
 	@mkdir -p build
 	cat $^ > $@
 
 demo: build/demo_runner.scm
-	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/demo_runner.scm
+	@$(RUN_SCHEME) build/demo_runner.scm
+
 
 # --- Unified JIT Binary: bin/ulisp-jit ---
 build/ulisp_jit_combined.scm: lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
@@ -400,14 +407,17 @@ build/ulisp_jit_combined.scm: lib/string.scm lib/port.scm lib/printer.scm lib/re
 
 build/ulisp_jit.s: build/ulisp_jit_combined.scm compiler.scm
 	@mkdir -p build
-	@if [ -x "$(ULISP_BOOT)" ]; then \
+	@if [ -x build/scheme-stage2 ]; then \
+		echo "=== Compiling ulisp_jit using Stage 2 compiler ==="; \
+		./build/scheme-stage2 < build/ulisp_jit_combined.scm > $@; \
+	elif [ -x "$(ULISP_BOOT)" ]; then \
 		echo "=== Compiling ulisp_jit using native seed $(ULISP_BOOT) ==="; \
 		./$(ULISP_BOOT) < build/ulisp_jit_combined.scm > $@; \
-	elif [ -x build/scheme-stage2 ]; then \
-		./build/scheme-stage2 < build/ulisp_jit_combined.scm > $@; \
 	else \
-		PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < $< > $@; \
+		echo "=== Compiling ulisp_jit with ILisp $(ILISP) ==="; \
+		$(RUN_SCHEME) compiler.scm < $< > $@; \
 	fi
+
 
 
 bin/ulisp-jit: build/ulisp_jit.s runtime.c
