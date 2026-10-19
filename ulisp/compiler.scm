@@ -7575,6 +7575,8 @@
        (emit "    mov [rbx + 72], r8")             ; remset_ptr
        (emit "    mov qword ptr [rbx + 80], 0")    ; remset_count = 0
        (emit "    mov qword ptr [rbx + 88], 1")    ; gen_mode = 1
+       (emit "    mov qword ptr [rbx + 96], 1073741824") ; max_size = 1GB
+       (emit "    mov qword ptr [rbx + 104], 0")   ; growth_count = 0
        (emit "    mov rdi, rax")                   ; rdi = nursery_base
        (emit "    lea rcx, [rax + 4194304]")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
@@ -8291,6 +8293,65 @@
   (emit "    jmp .L_gc_minor_cheney_loop")
   (emit ".L_gc_minor_finish:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
+  ;; Issue #566: Check mature occupancy & dynamic growth
+  (emit "    mov rax, [r11 + 40]")              ; mature_free
+  (emit "    sub rax, [r11 + 16]")              ; mature_from (rax = used)
+  (emit "    imul rax, 10")
+  (emit "    mov rdx, [r11 + 32]")              ; mature_size
+  (emit "    imul rdx, 7")
+  (emit "    cmp rax, rdx")
+  (emit "    jbe .L_gc_minor_growth_done")      ; used * 10 <= size * 7, no growth
+  (emit "    mov rsi, [r11 + 32]")              ; old_size
+  (emit "    mov rdx, rsi")
+  (emit "    shl rdx, 1")                       ; new_size = old_size * 2
+  (emit "    mov r8, [r11 + 96]")               ; max_size
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_minor_do_mremap")
+  (emit "    cmp rdx, r8")
+  (emit "    jbe .L_gc_minor_do_mremap")
+  (emit "    mov rdx, r8")                      ; cap at max_size
+  (emit ".L_gc_minor_do_mremap:")
+  (emit "    cmp rdx, rsi")
+  (emit "    jbe .L_gc_minor_growth_done")
+  (emit "    mov rdi, [r11 + 16]")              ; mature_from
+  (emit "    push r11")
+  (emit "    push rdx")
+  (emit "    push rsi")
+  (emit "    mov rax, 25")                      ; sys_mremap
+  (emit "    xor r10, r10")                     ; flags = 0 (in-place)
+  (emit "    xor r8, r8")
+  (emit "    xor r9, r9")
+  (emit "    syscall")
+  (emit "    pop rsi")
+  (emit "    pop rdx")
+  (emit "    pop r11")
+  (emit "    cmp rax, [r11 + 16]")
+  (emit "    je .L_gc_minor_mremap_ok")
+  ;; In-place failed, try MREMAP_MAYMOVE (flags = 1)
+  (emit "    mov rdi, [r11 + 16]")
+  (emit "    push r11")
+  (emit "    push rdx")
+  (emit "    push rsi")
+  (emit "    mov rax, 25")
+  (emit "    mov r10, 1")                       ; MREMAP_MAYMOVE = 1
+  (emit "    xor r8, r8")
+  (emit "    xor r9, r9")
+  (emit "    syscall")
+  (emit "    pop rsi")
+  (emit "    pop rdx")
+  (emit "    pop r11")
+  (emit "    cmp rax, -4096")
+  (emit "    jae .L_gc_minor_growth_done")      ; syscall error
+  (emit "    cmp rax, [r11 + 16]")
+  (emit "    je .L_gc_minor_mremap_ok")
+  (emit "    mov rcx, [r11 + 16]")
+  (emit "    mov [r11 + 16], rax")              ; update mature_from
+  (emit "    sub rax, rcx")                     ; diff = new - old
+  (emit "    add [r11 + 40], rax")              ; mature_free += diff
+  (emit ".L_gc_minor_mremap_ok:")
+  (emit "    mov [r11 + 32], rdx")              ; mature_size = new_size
+  (emit "    inc qword ptr [r11 + 104]")        ; growth_count++
+  (emit ".L_gc_minor_growth_done:")
   (emit "    mov r12, [r11 + 0]")              ; r12 = nursery_base
   (emit "    mov rax, r12")
   (emit "    add rax, [r11 + 8]")

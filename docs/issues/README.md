@@ -10,7 +10,6 @@
 | **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
 | **559** | R7RS 反復構文 (do) のマクロ脱糖実装 | Feature | Medium | [559-implement-r7rs-do-loop-syntax.md](559-implement-r7rs-do-loop-syntax.md) |
 | **560** | R7RS 多値定義構文 (define-values) のマクロ脱糖実装 | Feature | Medium | [560-implement-r7rs-define-values-syntax.md](560-implement-r7rs-define-values-syntax.md) |
-| **566** | 成熟空間使用率に応じた動的ヒープ拡張（Growth Policy / mremap）による巨大バッチ・コンパイラOOM防止 | Feature | Medium | [566-implement-dynamic-heap-growth-policy-and-mremap.md](566-implement-dynamic-heap-growth-policy-and-mremap.md) |
 | **567** | コンパイラ自己ホスト実行環境と一般ユーザースクリプト実行環境のGC実行プロファイル分離 | Feature | Medium | [567-separate-compiler-and-userland-gc-execution-profiles.md](567-separate-compiler-and-userland-gc-execution-profiles.md) |
 | **568** | Pass 131 スタックマップと保守的スタック走査のフォールバック・ハイブリッド化によるポインタ保護強化 | Feature | Medium | [568-implement-hybrid-exact-and-conservative-stack-scanning.md](568-implement-hybrid-exact-and-conservative-stack-scanning.md) |
 
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **566** | 成熟空間使用率に応じた動的ヒープ拡張（Growth Policy / mremap）による巨大バッチ・コンパイラOOM防止 | Feature | 2026-10-19 | [closed/566-implement-dynamic-heap-growth-policy-and-mremap.md](closed/566-implement-dynamic-heap-growth-policy-and-mremap.md) |
 | **565** | %alloc インライン割当スローパスのランタイム・トランポリン集約化によるコードサイズ肥大化解消 | Feature | 2026-10-19 | [closed/565-consolidate-alloc-slowpath-into-runtime-trampoline.md](closed/565-consolidate-alloc-slowpath-into-runtime-trampoline.md) |
 | **564** | バックエンド %alloc からの世代別コピーGC自動トリガーおよびスタックマップ回収ルーチンの直接結線 | Feature | 2026-10-18 | [closed/564-wire-automatic-copying-gc-trigger-in-backend.md](closed/564-wire-automatic-copying-gc-trigger-in-backend.md) |
 | **556** | R7RS 文字順序比較述語 (char<? / char>? / char<=? / char>=?) の実装 | Feature | 2026-10-18 | [closed/556-implement-r7rs-character-comparison-predicates.md](closed/556-implement-r7rs-character-comparison-predicates.md) |

@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -208,6 +208,14 @@ test_stdlib: $(ULISP_COMPILER)
 	./$(ULISP_COMPILER) build/test_stdlib_input.scm > build/test_stdlib.s
 	$(CC) -nostdlib -static build/test_stdlib.s -o build/test_stdlib
 	./build/test_stdlib
+
+test_gc_growth: $(ULISP_COMPILER)
+	@mkdir -p build
+	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm tests/test_gc_growth.scm > build/test_gc_growth_input.scm
+	./$(ULISP_COMPILER) build/test_gc_growth_input.scm > build/test_gc_growth.s
+	$(CC) -nostdlib -static build/test_gc_growth.s -o build/test_gc_growth
+	./build/test_gc_growth
+
 
 test_freestanding: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="

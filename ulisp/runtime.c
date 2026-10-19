@@ -104,8 +104,54 @@ static void crash_handler(int sig, siginfo_t *info, void *ucontext) {
  * [0]: nursery_base, [1]: nursery_size, [2]: mature_from, [3]: mature_to
  * [4]: mature_size, [5]: mature_free, [6]: stack_bottom, [7]: gc_minor_count
  * [8]: gc_major_count, [9]: remset_ptr, [10]: remset_count, [11]: generational_mode
+ * [12]: mature_max_size, [13]: mature_growth_count
  */
 uint64_t ulisp_gc_state[16];
+
+/* Dynamic Mature Heap Growth Policy (Issue #566) */
+__attribute__((weak)) int ulisp_gc_grow_mature(void) {
+    if (ulisp_gc_state[11] != 1) return 0; /* Only in generational mode */
+    uint64_t m_from = ulisp_gc_state[2];
+    uint64_t m_size = ulisp_gc_state[4];
+    uint64_t m_free = ulisp_gc_state[5];
+    uint64_t max_size = ulisp_gc_state[12];
+    if (max_size == 0) max_size = HEAP_SIZE;
+
+    uint64_t used = m_free - m_from;
+    if (used * 10 <= m_size * 7) return 0; /* Occupancy <= 70%, no growth needed */
+
+    uint64_t new_size = m_size * 2;
+    if (new_size > max_size) new_size = max_size;
+    if (new_size <= m_size) return 0;
+
+#if defined(__linux__) && defined(MREMAP_MAYMOVE)
+    /* Try Linux mremap in-place first */
+    void *new_addr = mremap((void *)m_from, (size_t)m_size, (size_t)new_size, 0);
+    if (new_addr != MAP_FAILED && new_addr == (void *)m_from) {
+        ulisp_gc_state[4] = new_size;
+        ulisp_gc_state[13]++;
+        return 1;
+    }
+    /* Try with MREMAP_MAYMOVE */
+    new_addr = mremap((void *)m_from, (size_t)m_size, (size_t)new_size, MREMAP_MAYMOVE);
+    if (new_addr != MAP_FAILED) {
+        if (new_addr != (void *)m_from) {
+            int64_t diff = (char *)new_addr - (char *)m_from;
+            ulisp_gc_state[2] = (uint64_t)new_addr;
+            ulisp_gc_state[5] += diff;
+        }
+        ulisp_gc_state[4] = new_size;
+        ulisp_gc_state[13]++;
+        return 1;
+    }
+#endif
+    return 0;
+}
+
+__attribute__((weak)) void ulisp_oom_exit(void) {
+    fprintf(stderr, "Fatal Error: ULisp Heap Limit Exhausted (OOM)\n");
+    exit(1);
+}
 
 /* Minimal write barrier hook for C debug runtime (conforms to DSN-33 / Issue 525) */
 __attribute__((weak)) void ulisp_gc_write_barrier(uint64_t mature_obj_addr, uint64_t val) {

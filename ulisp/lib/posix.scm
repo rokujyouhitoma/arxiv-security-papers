@@ -29,6 +29,12 @@
 (define (sys-mmap length)
   (%raw-syscall (%to-raw 9) 0 (%to-raw length) (%to-raw 3) (%to-raw 34) (%to-raw -1) 0))
 
+;; sys-mremap: sys_mremap(old_address, old_size, new_size, flags) -> syscall 25
+;; MREMAP_MAYMOVE = 1
+(define (sys-mremap old-addr old-size new-size flags)
+  (%raw-syscall (%to-raw 25) old-addr (%to-raw old-size) (%to-raw new-size) (%to-raw flags) 0 0))
+
+
 ;;; -----------------------------------------------------------------------
 ;;; 2. Pure Scheme Heap Management (Direct Kernel MMap)
 ;;; -----------------------------------------------------------------------

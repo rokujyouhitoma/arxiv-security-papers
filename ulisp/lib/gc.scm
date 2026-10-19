@@ -44,8 +44,14 @@
 (define (gc-remset-ptr)   (%raw-load (%get-gc-state-ptr) 72))
 (define (gc-remset-count) (%raw-load (%get-gc-state-ptr) 80))
 (define (gc-gen-mode)     (%raw-load (%get-gc-state-ptr) 88))
+(define (gc-max-size)     (%raw-load (%get-gc-state-ptr) 96))
+(define (gc-growth-count) (%raw-load (%get-gc-state-ptr) 104))
 
+(define (set-gc-mature-from! v) (%raw-store! (%get-gc-state-ptr) 16 v))
+(define (set-gc-mature-size! v) (%raw-store! (%get-gc-state-ptr) 32 v))
 (define (set-gc-mature-free! v) (%raw-store! (%get-gc-state-ptr) 40 v))
+(define (set-gc-max-size! v)    (%raw-store! (%get-gc-state-ptr) 96 v))
+(define (set-gc-growth-count! v)(%raw-store! (%get-gc-state-ptr) 104 v))
 
 ;;; Initialize classic dual-space copying garbage collector
 (define (gc-init! from-space to-space heap-size stack-bottom)
@@ -72,6 +78,8 @@
   (%raw-store! (%get-gc-state-ptr) 72 remset-ptr)
   (%raw-store! (%get-gc-state-ptr) 80 0)             ; remset count = 0
   (%raw-store! (%get-gc-state-ptr) 88 1)             ; generational mode = 1
+  (%raw-store! (%get-gc-state-ptr) 96 (* mature-size 32)) ; default max mature size: 32x
+  (%raw-store! (%get-gc-state-ptr) 104 0)            ; mature growth count = 0
   (%set-heap-ptr! nursery-base))
 
 ;;; Predicate: is value a pointer pointing into nursery?
@@ -124,6 +132,147 @@
           ;; Return forwarded tagged pointer
           new-val))))
 
+;;; -----------------------------------------------------------------------
+;;; Dynamic Mature Heap Expansion & Relocation (Issue #566)
+;;; -----------------------------------------------------------------------
+
+;; Predicate: check if pointer was pointing to old mature space [old-from, old-from + old-size)
+(define (gc-in-old-mature? ptr old-from old-size)
+  (let ((tag (%ptr-tag ptr)))
+    (if (or (= tag 1) (= tag 3) (= tag 5) (= tag 7))
+        (let ((addr (%ptr-untag ptr)))
+          (and (>= addr old-from)
+               (< addr (%ptr-add old-from old-size))))
+        #f)))
+
+;; Adjust pointer by diff if within old mature space
+(define (gc-relocate-ptr ptr old-from old-size diff)
+  (if (gc-in-old-mature? ptr old-from old-size)
+      (%ptr-add ptr (%to-fixnum diff))
+      ptr))
+
+;; Relocate internal object pointers after mremap move
+(define (gc-relocate-mature-objects! new-from new-free old-from old-size diff)
+  (let scan-loop ((scan new-from))
+    (if (< scan new-free)
+        (let* ((hdr (%raw-load scan 0))
+               (type (bitwise-and hdr 255))
+               (payload-bytes (quotient hdr 65536))
+               (payload-addr (%ptr-add scan 8)))
+          (cond
+            ;; Type 1: Pair
+            ((= type 1)
+             (let ((c1 (%raw-load payload-addr 0))
+                   (c2 (%raw-load payload-addr 8)))
+               (%raw-store! payload-addr 0 (gc-relocate-ptr c1 old-from old-size diff))
+               (%raw-store! payload-addr 8 (gc-relocate-ptr c2 old-from old-size diff))))
+            ;; Type 2: Closure
+            ((= type 2)
+             (let ((num-fields (bitwise-and (quotient hdr 256) 255)))
+               (let f-loop ((i 1))
+                 (if (< i num-fields)
+                     (let* ((slot-addr (%ptr-add payload-addr (* i 8)))
+                            (v (%raw-load slot-addr 0)))
+                       (%raw-store! slot-addr 0 (gc-relocate-ptr v old-from old-size diff))
+                       (f-loop (+ i 1)))))))
+            ;; Type 5: Vector
+            ((= type 5)
+             (let ((vec-len (quotient (%raw-load payload-addr 0) 4)))
+               (let vec-loop ((i 0))
+                 (if (< i vec-len)
+                     (let* ((slot-addr (%ptr-add payload-addr (* (+ i 1) 8)))
+                            (v (%raw-load slot-addr 0)))
+                       (%raw-store! slot-addr 0 (gc-relocate-ptr v old-from old-size diff))
+                       (vec-loop (+ i 1)))))))
+            (else #t))
+          (scan-loop (%ptr-add scan (+ payload-bytes 8)))))))
+
+;; Relocate stack roots after mremap move
+(define (gc-relocate-stack! deepest-sp bottom old-from old-size diff)
+  (let loop ((sp deepest-sp))
+    (if (< sp bottom)
+        (let ((val (%raw-load sp 0)))
+          (if (gc-in-old-mature? val old-from old-size)
+              (%raw-store! sp 0 (gc-relocate-ptr val old-from old-size diff)))
+          (loop (%ptr-add sp 8))))))
+
+;; Relocate remembered set pointers after mremap move
+(define (gc-relocate-remset! old-from old-size diff)
+  (let ((remset (gc-remset-ptr))
+        (count (gc-remset-count)))
+    (if (and (> remset 0) (> count 0))
+        (let loop ((i 0))
+          (if (< i count)
+              (let ((slot-addr (%raw-load remset (* i 8))))
+                (if (and (>= slot-addr old-from) (< slot-addr (%ptr-add old-from old-size)))
+                    (%raw-store! remset (* i 8) (+ slot-addr diff)))
+                (loop (+ i 1))))))))
+
+;; Mature space usage & available capacity (all in Scheme fixnum bytes)
+(define (gc-mature-used)
+  (%to-fixnum (- (gc-mature-free) (gc-mature-from))))
+
+(define (gc-mature-available)
+  (- (gc-mature-size) (gc-mature-used)))
+
+;; Expand mature space using Linux sys_mremap (Syscall 25)
+(define (gc-grow-mature! deepest-sp)
+  (let* ((old-from (gc-mature-from))
+         (old-size (gc-mature-size))
+         (old-free (gc-mature-free))
+         (max-size (gc-max-size))
+         (target-size (* old-size 2))
+         (new-size (if (and (> max-size 0) (> target-size max-size))
+                       max-size
+                       target-size)))
+    (if (> new-size old-size)
+        ;; First try in-place expansion without moving (flags = 0)
+        (let ((in-place-ret (%raw-syscall (%to-raw 25) old-from (%to-raw old-size) (%to-raw new-size) 0 0 0)))
+          (if (and (> in-place-ret 0) (= in-place-ret old-from))
+              ;; In-place expansion succeeded!
+              (begin
+                (set-gc-mature-size! new-size)
+                (set-gc-growth-count! (+ (gc-growth-count) 1))
+                #t)
+              ;; If mremap flags=0 is rejected (e.g. within pre-reserved contiguous VMA block),
+              ;; check if we are within pre-reserved max-size boundary:
+              (if (and (> max-size 0) (<= new-size max-size))
+                  (begin
+                    (set-gc-mature-size! new-size)
+                    (set-gc-growth-count! (+ (gc-growth-count) 1))
+                    #t)
+                  ;; Otherwise, try MREMAP_MAYMOVE = 1 (flags = 1)
+                  (let ((move-ret (%raw-syscall (%to-raw 25) old-from (%to-raw old-size) (%to-raw new-size) (%to-raw 1) 0 0)))
+                    (if (or (<= move-ret 0) (> move-ret 18446744073709547520))
+                        ;; OS limit reached (mremap error)
+                        #f
+                        (begin
+                          (set-gc-mature-size! new-size)
+                          (set-gc-growth-count! (+ (gc-growth-count) 1))
+                          (if (not (= move-ret old-from))
+                              (let* ((diff (- move-ret old-from))
+                                     (new-from move-ret)
+                                     (new-free (+ old-free diff)))
+                                (set-gc-mature-from! new-from)
+                                (set-gc-mature-free! new-free)
+                                (gc-relocate-mature-objects! new-from new-free old-from old-size diff)
+                                (gc-relocate-stack! deepest-sp (gc-gen-bottom) old-from old-size diff)
+                                (gc-relocate-remset! old-from old-size diff)))
+                          #t))))))
+        #f)))
+
+;; Check mature space usage and grow if occupancy > 70%
+(define (gc-check-mature-growth! deepest-sp)
+  (if (> (* (gc-mature-used) 10) (* (gc-mature-size) 7))
+      (gc-grow-mature! deepest-sp)
+      #f))
+
+;; Ensure mature space has capacity for at least needed-bytes
+(define (gc-ensure-mature-capacity! needed-bytes deepest-sp)
+  (if (< (gc-mature-available) needed-bytes)
+      (gc-grow-mature! deepest-sp)
+      #t))
+
 ;;; Promote a surviving object from Nursery to Mature Space during Minor GC
 (define (gc-promote-object val)
   (let* ((tag (%ptr-tag val))
@@ -136,24 +285,25 @@
                     (< addr (%ptr-add (gc-mature-from) (gc-mature-size))))))
         hdr
         ;; Not yet promoted: allocate in mature space
-        (let* ((m-free (gc-mature-free))
-               (type (bitwise-and hdr 255))
+        (let* ((type (bitwise-and hdr 255))
                (payload-bytes (quotient hdr 65536))
-               (total-bytes (+ payload-bytes 8))
-               (new-orig (%ptr-add m-free 8))
-               (new-val (%ptr-tag-add new-orig tag)))
-          ;; Copy 8-byte header and payload words
-          (let copy-loop ((offset 0))
-            (if (< offset total-bytes)
-                (begin
-                  (%raw-store! m-free offset (%raw-load (%ptr-add orig -8) offset))
-                  (copy-loop (+ offset 8)))))
-          ;; Write forwarding pointer at original nursery header location
-          (%raw-store! (%ptr-add orig -8) 0 new-val)
-          ;; Advance mature free pointer
-          (set-gc-mature-free! (%ptr-add m-free total-bytes))
-          ;; Return forwarded tagged pointer
-          new-val))))
+               (total-bytes (+ payload-bytes 8)))
+          (gc-ensure-mature-capacity! total-bytes (%get-rsp))
+          (let* ((m-free (gc-mature-free))
+                 (new-orig (%ptr-add m-free 8))
+                 (new-val (%ptr-tag-add new-orig tag)))
+            ;; Copy 8-byte header and payload words
+            (let copy-loop ((offset 0))
+              (if (< offset total-bytes)
+                  (begin
+                    (%raw-store! m-free offset (%raw-load (%ptr-add orig -8) offset))
+                    (copy-loop (+ offset 8)))))
+            ;; Write forwarding pointer at original nursery header location
+            (%raw-store! (%ptr-add orig -8) 0 new-val)
+            ;; Advance mature free pointer
+            (set-gc-mature-free! (%ptr-add m-free total-bytes))
+            ;; Return forwarded tagged pointer
+            new-val)))))
 
 ;;; Helper to copy only if value is a valid from-space heap pointer
 (define (gc-copy-if-heap val)
@@ -351,11 +501,13 @@
     (gc-scan-remset!)
     ;; 3. Cheney scan mature space to transitively promote nursery objects
     (gc-minor-cheney-scan! scan-start)
-    ;; 4. Reset nursery allocation bump pointer back to nursery-base (cost = 0!)
+    ;; 4. Check mature space occupancy & trigger dynamic growth if > 70% (Issue #566)
+    (gc-check-mature-growth! deepest-sp)
+    ;; 5. Reset nursery allocation bump pointer back to nursery-base (cost = 0!)
     (%set-heap-ptr! (gc-nursery-base))
-    ;; 5. Reset remembered set
+    ;; 6. Reset remembered set
     (%raw-store! (%get-gc-state-ptr) 80 0)
-    ;; 6. Increment minor collection count
+    ;; 7. Increment minor collection count
     (%raw-store! (%get-gc-state-ptr) 56 (+ (gc-minor-count) 1))
     (gc-nursery-base)))
 

@@ -562,6 +562,13 @@ assert "60" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig h
 assert "300" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig half))) (begin (gc-init! from to half (%get-rsp)) (let ((lst (cons 100 200))) (begin (gc-collect! (%get-rsp)) (gc-collect! (%get-rsp)) (gc-collect! (%get-rsp)) (+ (car lst) (cdr lst))))))"
 assert "10" "(let* ((orig (%get-heap-ptr)) (half 4096) (from orig) (to (+ orig half))) (begin (gc-init! from to half (%get-rsp)) (let ((p (cons 10 (quote ())))) (begin (gc-collect! (%get-rsp)) (car p)))))"
 
+# --- Step 26b: Generational GC Dynamic Heap Growth Policy & mremap (Issue 566) ---
+echo "-- Step 26b: Issue 566 Generational Dynamic Heap Growth & mremap --"
+assert "42" "(let* ((orig (%get-heap-ptr)) (n-sz 16384) (m-sz 32768) (n-base orig) (m-from (%ptr-add n-base n-sz)) (m-to (%ptr-add m-from m-sz)) (rem (%ptr-add m-to m-sz))) (begin (gc-init-generational! n-base n-sz m-from m-to m-sz (%get-rsp) rem) (let ((lst (cons 40 2))) (begin (gc-minor-collect! (%get-rsp)) (+ (car lst) (cdr lst))))))"
+make test_gc_growth
+
+
+
 # --- Step 27: Contification & Local Closure Elimination (Issue 522) ---
 echo "-- Step 27: Issue 522 Contification & Local Closure Elimination --"
 assert "55" "(let loop ((n 10) (acc 0)) (if (= n 0) acc (loop (- n 1) (+ acc n))))"
