@@ -2,7 +2,7 @@
 ID: 570
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] 構文脱糖パスの分離：トップレベル巻き上げ (025) と Core 構文脱糖 (030) の独立 Nanopass 化 (ID: 570)
@@ -22,11 +22,11 @@ ID: 570
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/passes/025_top_level.scm](../../ulisp/passes/025_top_level.scm)
-- [ ] [ulisp/passes/030_desugar.scm](../../ulisp/passes/030_desugar.scm)
-- [ ] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile)
-- [ ] [ulisp/docs/pipeline_architecture.md](../../ulisp/docs/pipeline_architecture.md)
+- [x] [ulisp/passes/025_top_level.scm](../../ulisp/passes/025_top_level.scm)
+- [x] [ulisp/passes/030_desugar.scm](../../ulisp/passes/030_desugar.scm)
+- [x] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm)
+- [x] [ulisp/Makefile](../../ulisp/Makefile)
+- [x] [ulisp/docs/pipeline_architecture.md](../../ulisp/docs/pipeline_architecture.md)
 
 ---
 
@@ -42,7 +42,8 @@ Target Branch: `feat/570-split-desugar-pass-into-toplevel-lifting-and-core-desug
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `rewrite-top-level` が `025_top_level.scm` に独立して存在し、Pass 025 として機能すること。
-- [ ] `030_desugar.scm` からトップレベル巻き上げロジックが排除され、式脱糖に専念していること。
-- [ ] `driver.scm` および `ulisp/Makefile` が新パイプライン構成に対応していること。
-- [ ] 全テストスイート (`make test`) が PASS すること。
+- [x] `rewrite-top-level` が `025_top_level.scm` に独立して存在し、Pass 025 として機能すること。
+- [x] `030_desugar.scm` からトップレベル巻き上げロジックが排除され、式脱糖に専念していること。
+- [x] `driver.scm` および `ulisp/Makefile` が新パイプライン構成に対応していること。
+- [x] 全テストスイート (`make test`) が PASS すること。
+

@@ -16,7 +16,10 @@
       ▼ Pass 020: expand-macros-in-forms (passes/020_macro_expander.scm)
 [Macro-Expanded S-expressions]
       │
-      ▼ Pass 030: rewrite-top-level & desugar-all (passes/030_desugar.scm)
+      ▼ Pass 025: rewrite-top-level (passes/025_top_level.scm)
+[Hoisted Top-Level %program AST]
+      │
+      ▼ Pass 030: desugar-all (passes/030_desugar.scm)
 [Canonical Core Scheme AST]
       │
       ▼ Pass 050: cp0-optimize (passes/050_cp0.scm)
@@ -70,9 +73,12 @@
 - **責務**: `define-syntax` / `syntax-rules` によるコンパイル時マクロ定義の評価と AST 展開。
 - **不変条件**: 本パス通過後、ユーザー定義マクロはすべて基本構文へ置換される。
 
+### Pass 025: トップレベル定義巻き上げ (`passes/025_top_level.scm` - Issue #570)
+- **責務**:
+  - `rewrite-top-level`: トップレベル `(define ...)` および `(define-record-type ...)` 群を解析し、単一の正規化された `(%program unique-defs body)` へ巻き上げる。
+
 ### Pass 030: 構文脱糖 (`passes/030_desugar.scm`)
 - **責務**:
-  - `rewrite-top-level`: トップレベル `(define ...)` 群を単一の `(letrec (...) body)` に巻き上げる。
   - `desugar-all`: `cond`, `case`, `let*`, `named-let`, `and`, `or`, `begin`, `values`, `guard` 等を高水準構文から Core 構文（`if`, `let`, `letrec`, `lambda`, 基本プリミティブ）へ展開。
   - `%raw-call/cc`: ファーストクラス継続プリミティブの透過的パイプライン伝搬。
 

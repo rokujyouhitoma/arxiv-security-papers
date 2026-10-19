@@ -259,3 +259,10 @@
                 (else c)))
             (loop (+ i 1)))
           res))))
+
+(define (make-body-expr bodies)
+  (cond
+    ((null? bodies) (list 'begin))
+    ((null? (cdr bodies)) (car bodies))
+    (else (cons 'begin bodies))))
+

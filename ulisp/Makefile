@@ -17,6 +17,7 @@ COMPILER_BASE = compiler/helpers.scm \
 PASSES_LIB = $(COMPILER_BASE) \
              passes/010_library.scm \
              passes/020_macro_expander.scm \
+             passes/025_top_level.scm \
              passes/030_desugar.scm \
              passes/040_analysis.scm \
              passes/050_cp0.scm \
