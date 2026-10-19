@@ -607,7 +607,7 @@
     ;; 6. Reset remembered set
     (%raw-store! (%get-gc-state-ptr) 80 0)
     ;; 7. Increment minor collection count
-    (%raw-store! (%get-gc-state-ptr) 56 (+ (gc-minor-count) 1))
+    (%raw-store! (%get-gc-state-ptr) 56 (%to-raw (+ (gc-minor-count) 1)))
     (gc-nursery-base)))
 
 ;;; Perform classic full dual-space garbage collection

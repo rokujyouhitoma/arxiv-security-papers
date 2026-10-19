@@ -14,8 +14,15 @@ import tempfile
 WORKSPACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 ULISP_DIR = os.path.join(WORKSPACE_DIR, "ulisp")
 COMPILER_SCM = os.path.join(ULISP_DIR, "compiler.scm")
+ULISP_BOOT = os.path.join(ULISP_DIR, "bin/ulisp-boot")
 POSIX_SCM = os.path.join(ULISP_DIR, "lib/posix.scm")
 GC_SCM = os.path.join(ULISP_DIR, "lib/gc.scm")
+
+
+def get_compiler_cmd():
+    if os.path.exists(ULISP_BOOT) and os.access(ULISP_BOOT, os.X_OK):
+        return [ULISP_BOOT]
+    return ["python3", "-m", "ilisp", COMPILER_SCM]
 
 
 def test_bare_metal_freestanding_execution():
@@ -51,7 +58,7 @@ def test_bare_metal_freestanding_execution():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -115,7 +122,7 @@ def test_bare_metal_recursive_computation():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -198,7 +205,7 @@ def test_bare_metal_exact_gc_stackmap_unboxed():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -253,7 +260,7 @@ def test_buffered_io_syscall_reduction():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -336,7 +343,7 @@ def test_bare_metal_escape_analysis_stack_promotion():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -423,7 +430,7 @@ def test_bare_metal_nursery_generational_gc():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -471,7 +478,7 @@ def test_bare_metal_gc_directive_default_all():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -528,7 +535,7 @@ def test_bare_metal_gc_directive_none_arena():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -584,7 +591,7 @@ def test_bare_metal_gc_directive_dual_space():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,
@@ -660,7 +667,7 @@ def test_bare_metal_automatic_gc_stress():
             s_path, "w", encoding="utf-8"
         ) as f_out:
             ret = subprocess.run(
-                ["python3", "-m", "ilisp", COMPILER_SCM],
+                get_compiler_cmd(),
                 stdin=f_in,
                 stdout=f_out,
                 stderr=subprocess.PIPE,

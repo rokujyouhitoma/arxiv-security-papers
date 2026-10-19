@@ -7813,6 +7813,12 @@
     (emit "    .space 32")
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
 
+;;; =======================================================================
+;;; ULisp Compiler Pass 141: Native x86-64 Garbage Collector Code Generator
+;;; Conforms to DSN-33 Architecture Specification & Issue #569
+;;; Emits inline copying/mark-sweep GC collector and OOM panic routines.
+;;; =======================================================================
+
 (define (emit-oom-panic)
   (emit "    .globl ulisp_oom_panic")
   (emit "    .type ulisp_oom_panic, @function")
@@ -8609,6 +8615,12 @@
   (emit ".L_gc_ret_nursery_orig:")
   (emit "    mov rax, rdi")
   (emit "    ret"))
+
+;;; =======================================================================
+;;; ULisp Compiler Pass 142: Native x86-64 Freestanding Runtime Generator
+;;; Conforms to DSN-33 Architecture Specification & Issue #569
+;;; Emits low-level I/O and runtime primitives for bare-metal/libc-free environments.
+;;; =======================================================================
 
 (define (emit-freestanding-runtime)
   ;; 1. I/O primitives: ulisp_read_char, ulisp_peek_char, ulisp_write_char

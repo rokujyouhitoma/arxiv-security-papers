@@ -31,6 +31,8 @@ PASSES_LIB = $(COMPILER_BASE) \
              passes/131_lir_safepoint.scm \
              passes/132_lir_braun_ssa.scm \
              passes/140_backend_x86_64.scm \
+             passes/141_backend_x86_gc.scm \
+             passes/142_backend_x86_freestanding.scm \
              passes/150_backend_aarch64.scm \
              passes/160_backend_c.scm
 

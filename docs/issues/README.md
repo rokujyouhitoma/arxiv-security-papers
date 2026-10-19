@@ -10,6 +10,8 @@
 | **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
 | **559** | R7RS 反復構文 (do) のマクロ脱糖実装 | Feature | Medium | [559-implement-r7rs-do-loop-syntax.md](559-implement-r7rs-do-loop-syntax.md) |
 | **560** | R7RS 多値定義構文 (define-values) のマクロ脱糖実装 | Feature | Medium | [560-implement-r7rs-define-values-syntax.md](560-implement-r7rs-define-values-syntax.md) |
+| **570** | 構文脱糖パスの分離：トップレベル巻き上げ (025) と Core 構文脱糖 (030) の独立 Nanopass 化 | Feature | High | [570-split-desugar-pass-into-toplevel-lifting-and-core-desugaring.md](570-split-desugar-pass-into-toplevel-lifting-and-core-desugaring.md) |
+| **571** | LIR パスからの条件分岐・比較融合 (Branch Fusion) ロジックの独立モジュール分離 | Feature | Medium | [571-extract-lir-branch-fusion-and-comparison-lowering.md](571-extract-lir-branch-fusion-and-comparison-lowering.md) |
 
 ---
 
@@ -17,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **569** | x86-64 バックエンドからの GC コレクタおよびフリースタンディングランタイムの物理的パス分離 | Feature | 2026-10-19 | [closed/569-separate-x86-gc-collector-and-freestanding-runtime-passes.md](closed/569-separate-x86-gc-collector-and-freestanding-runtime-passes.md) |
 | **568** | Pass 131 スタックマップと保守的スタック走査のフォールバック・ハイブリッド化によるポインタ保護強化 | Feature | 2026-10-19 | [closed/568-implement-hybrid-exact-and-conservative-stack-scanning.md](closed/568-implement-hybrid-exact-and-conservative-stack-scanning.md) |
 | **567** | コンパイラ自己ホスト実行環境と一般ユーザースクリプト実行環境のGC実行プロファイル分離 | Feature | 2026-10-19 | [closed/567-separate-compiler-and-userland-gc-execution-profiles.md](closed/567-separate-compiler-and-userland-gc-execution-profiles.md) |
 | **566** | 成熟空間使用率に応じた動的ヒープ拡張（Growth Policy / mremap）による巨大バッチ・コンパイラOOM防止 | Feature | 2026-10-19 | [closed/566-implement-dynamic-heap-growth-policy-and-mremap.md](closed/566-implement-dynamic-heap-growth-policy-and-mremap.md) |

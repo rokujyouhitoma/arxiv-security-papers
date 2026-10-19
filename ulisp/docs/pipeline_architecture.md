@@ -117,8 +117,11 @@
 - **`131_lir_safepoint.scm`**: GC Safepoint 追跡・スタックマップビットマップ生成。
 - **`132_lir_braun_ssa.scm`**: Braun et al. (2013) オンザフライ SSA 構築 & ブロック引数エンジン。
 
-### Pass 140 / 150 / 160: マルチターゲットコード生成
-- **`140_backend_x86_64.scm`**: x86-64 GNU アセンブラテキスト生成。`%capture-cc` スタック退避および `ulisp_continuation_invoke` スタック復元。
+### Pass 140 / 141 / 142 / 150 / 160: マルチターゲットコード生成
+- **`140_backend_x86_64.scm`**: x86-64 GNU アセンブラテキスト生成。LIR命令選択、プロローグ/エピローグ、`%capture-cc` スタック退避および `ulisp_continuation_invoke` スタック復元。
+- **`141_backend_x86_gc.scm`**: x86-64 インラインGCコレクタ (`emit-gc-collector`) および OOM パニックルーチン生成。
+- **`142_backend_x86_freestanding.scm`**: ベアメタル環境向けフリースタンディングランタイムルーチン (`emit-freestanding-runtime`) 生成。
 - **`150_backend_aarch64.scm`**: AArch64 (ARM64) GNU アセンブラテキスト生成。
 - **`160_backend_c.scm`**: ANSI C99 ソースコード生成。`setjmp` / `longjmp` 連携。
+
 
