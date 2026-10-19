@@ -6,6 +6,8 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **573** | LIR パス (130_lir.scm) の機能責務別ナノパス分割（即値・プリミティブ・ABI呼出・ランタイム機能） | Feature | High | [573-nanopass-decomposition-of-lir-pass-130.md](573-nanopass-decomposition-of-lir-pass-130.md) |
+| **574** | 構文脱糖パス (030_desugar.scm) の構文別ナノパス分割（条件分岐・束縛・多値・動的環境） | Feature | Medium | [574-nanopass-decomposition-of-desugar-pass-030.md](574-nanopass-decomposition-of-desugar-pass-030.md) |
 | **557** | R7RS 文字列・リスト・ベクタ相互変換および文字列辞書順比較述語の実装 | Feature | Medium | [557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md](557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) |
 | **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
 | **559** | R7RS 反復構文 (do) のマクロ脱糖実装 | Feature | Medium | [559-implement-r7rs-do-loop-syntax.md](559-implement-r7rs-do-loop-syntax.md) |
@@ -17,7 +19,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **572** | ulisp/passes と ulisp/tests/passes の 1:1 完全対応テストスイート網羅および命名整合化 | Feature | 2026-10-20 | [closed/572-unify-pass-tests-to-one-to-one-mapping-with-ulisp-passes.md](closed/572-unify-pass-tests-to-one-to-one-mapping-with-ulisp-passes.md) |
 | **571** | LIR パスからの条件分岐・比較融合 (Branch Fusion) ロジックの独立モジュール分離 | Feature | 2026-10-20 | [closed/571-extract-lir-branch-fusion-and-comparison-lowering.md](closed/571-extract-lir-branch-fusion-and-comparison-lowering.md) |
+
 | **570** | 構文脱糖パスの分離：トップレベル巻き上げ (025) と Core 構文脱糖 (030) の独立 Nanopass 化 | Feature | 2026-10-20 | [closed/570-split-desugar-pass-into-toplevel-lifting-and-core-desugaring.md](closed/570-split-desugar-pass-into-toplevel-lifting-and-core-desugaring.md) |
 | **569** | x86-64 バックエンドからの GC コレクタおよびフリースタンディングランタイムの物理的パス分離 | Feature | 2026-10-19 | [closed/569-separate-x86-gc-collector-and-freestanding-runtime-passes.md](closed/569-separate-x86-gc-collector-and-freestanding-runtime-passes.md) |
 | **568** | Pass 131 スタックマップと保守的スタック走査のフォールバック・ハイブリッド化によるポインタ保護強化 | Feature | 2026-10-19 | [closed/568-implement-hybrid-exact-and-conservative-stack-scanning.md](closed/568-implement-hybrid-exact-and-conservative-stack-scanning.md) |

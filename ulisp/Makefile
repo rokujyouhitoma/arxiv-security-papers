@@ -9,7 +9,22 @@ ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
 ILISP = $(PYTHON) -m ilisp
 ULISP_BOOT = bin/ulisp-boot
-ULISP_COMPILER ?= $(shell if [ -x $(ULISP_BOOT) ]; then echo $(ULISP_BOOT); elif [ -x build/scheme-stage1 ]; then echo build/scheme-stage1; else echo build/scheme-stage2; fi)
+
+# --- 処理系エンジンの決定 (ULISP_BOOT があれば優先、なければ ILISP) ---
+ifeq ($(shell test -x $(ULISP_BOOT) && echo yes),yes)
+    ACTIVE_ENGINE = $(ULISP_BOOT)
+    ULISP_COMPILER ?= $(ULISP_BOOT)
+    USE_NATIVE_BOOT = 1
+else ifeq ($(shell test -x build/scheme-stage1 && echo yes),yes)
+    ACTIVE_ENGINE = build/scheme-stage1
+    ULISP_COMPILER ?= build/scheme-stage1
+    USE_NATIVE_BOOT = 1
+else
+    ACTIVE_ENGINE = $(ILISP)
+    ULISP_COMPILER ?= $(ILISP)
+    USE_NATIVE_BOOT = 0
+endif
+
 
 COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm
@@ -52,10 +67,43 @@ build/compiler_passes.scm: $(PASSES_LIB)
 	cat $^ > $@
 
 # --- AOT Nanopass Tests ---
-test_passes: build/compiler_passes.scm
+test_passes: build/compiler_passes.scm test_all_passes
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
 	@PYTHONPATH=$(ROOT_DIR) $(ILISP) build/test_passes_runner.scm
+
+NANOPASS_TESTS = tests/passes/test_010_library.scm \
+                 tests/passes/test_020_macro_expander.scm \
+                 tests/passes/test_025_top_level.scm \
+                 tests/passes/test_030_desugar.scm \
+                 tests/passes/test_040_analysis.scm \
+                 tests/passes/test_050_cp0.scm \
+                 tests/passes/test_060_lvn.scm \
+                 tests/passes/test_070_anf.scm \
+                 tests/passes/test_080_annotator.scm \
+                 tests/passes/test_090_rtyper.scm \
+                 tests/passes/test_100_contify.scm \
+                 tests/passes/test_110_closure_convert.scm \
+                 tests/passes/test_120_alias_escape.scm \
+                 tests/passes/test_128_lir_branch_fusion.scm \
+                 tests/passes/test_130_lir.scm \
+                 tests/passes/test_131_lir_safepoint.scm \
+                 tests/passes/test_132_lir_braun_ssa.scm \
+                 tests/passes/test_140_backend_x86_64.scm \
+                 tests/passes/test_141_backend_x86_gc.scm \
+                 tests/passes/test_142_backend_x86_freestanding.scm \
+                 tests/passes/test_150_backend_aarch64.scm \
+                 tests/passes/test_160_backend_c.scm
+
+test_all_passes: build/compiler_passes.scm
+	@echo "=== Running 1:1 Nanopass Unit Tests (22 Passes) ==="
+	@for t in $(NANOPASS_TESTS); do \
+		echo "Running $$t..."; \
+		cat build/compiler_passes.scm $$t > build/runner_temp.scm && \
+		PYTHONPATH=$(ROOT_DIR) $(ILISP) build/runner_temp.scm || exit 1; \
+	done
+	@echo "SUCCESS: All 22 1:1 Nanopass Unit Tests PASSED!"
+
 
 test_library: build/compiler_passes.scm
 	@mkdir -p build
@@ -258,8 +306,6 @@ build/ulisp_core.scm: lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib
 	echo '(!gc none)' > $@
 	cat $^ >> $@
 
-ULISP_BOOT = bin/ulisp-boot
-
 build/stage1.s: compiler.scm build/ulisp_core.scm
 	@mkdir -p build
 	@if [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
@@ -354,11 +400,15 @@ build/ulisp_jit_combined.scm: lib/string.scm lib/port.scm lib/printer.scm lib/re
 
 build/ulisp_jit.s: build/ulisp_jit_combined.scm compiler.scm
 	@mkdir -p build
-	@if [ -x build/scheme-stage2 ]; then \
+	@if [ -x "$(ULISP_BOOT)" ]; then \
+		echo "=== Compiling ulisp_jit using native seed $(ULISP_BOOT) ==="; \
+		./$(ULISP_BOOT) < build/ulisp_jit_combined.scm > $@; \
+	elif [ -x build/scheme-stage2 ]; then \
 		./build/scheme-stage2 < build/ulisp_jit_combined.scm > $@; \
 	else \
 		PYTHONPATH=$(ROOT_DIR) $(ILISP) compiler.scm < $< > $@; \
 	fi
+
 
 bin/ulisp-jit: build/ulisp_jit.s runtime.c
 	@mkdir -p bin
