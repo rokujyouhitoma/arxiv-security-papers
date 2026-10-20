@@ -75,7 +75,7 @@ assert_c() {
         }
     fi
 
-    $CC $CFLAGS runtime.c "$TMP_C" -o "$TMP_BIN" 2>build/gcc_err.log || {
+    $CC $CFLAGS "$TMP_C" -o "$TMP_BIN" 2>build/gcc_err.log || {
         echo -e "\033[31m[GCC BUILD FAIL]\033[0m $expr"
         cat build/gcc_err.log
         FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -128,7 +128,7 @@ run_test_file_c() {
         }
     fi
 
-    $CC $CFLAGS runtime.c "$out_c" -o "$out_bin" 2>build/gcc_err.log || {
+    $CC $CFLAGS "$out_c" -o "$out_bin" 2>build/gcc_err.log || {
         echo -e "\033[31m[GCC BUILD FAIL]\033[0m $test_file"
         cat build/gcc_err.log
         FAIL_COUNT=$((FAIL_COUNT + 1))

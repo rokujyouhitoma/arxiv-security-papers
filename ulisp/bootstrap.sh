@@ -31,6 +31,10 @@ cat "$ULISP_DIR/lib/posix.scm" \
     "$ULISP_DIR/lib/continuation.scm" \
     "$ULISP_DIR/lib/parameter.scm" \
     "$ULISP_DIR/lib/gc.scm" \
+    "$ULISP_DIR/runtime/gc.scm" \
+    "$ULISP_DIR/runtime/io.scm" \
+    "$ULISP_DIR/runtime/printer.scm" \
+    "$ULISP_DIR/runtime/entry.scm" \
     "$ULISP_DIR/compiler.scm" >> "$BUILD_DIR/ulisp_core.scm"
 
 PYTHON_BIN="python3"

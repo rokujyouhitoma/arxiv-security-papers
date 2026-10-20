@@ -27,7 +27,6 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 ULISP_DIR = ROOT_DIR / "ulisp"
 BIN_DIR = ULISP_DIR / "bin"
 BUILD_DIR = ULISP_DIR / "build"
-RUNTIME_C = ULISP_DIR / "runtime.c"
 ULISP_JIT_BIN = BIN_DIR / "ulisp-jit"
 STAGE2_BIN = BUILD_DIR / "scheme-stage2"
 
@@ -207,7 +206,7 @@ def compile_and_run_aot(code: str, compiler_path: Path) -> Tuple[float, float, s
             raise RuntimeError(f"AOT compilation failed: {comp_res.stderr}")
 
         gcc_res = subprocess.run(
-            ["gcc", "-no-pie", "-O2", str(RUNTIME_C), s_path, "-o", exe_path],
+            ["gcc", "-nostdlib", "-static", s_path, "-o", exe_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -297,7 +296,7 @@ def measure_workload(
         t0_comp = time.perf_counter()
         with open(s_p, "w") as out_s:
             subprocess.run([str(compiler_path), in_p], stdout=out_s, check=True)
-        subprocess.run(["gcc", "-no-pie", "-O2", str(RUNTIME_C), s_p, "-o", exe_p], check=True)
+        subprocess.run(["gcc", "-nostdlib", "-static", s_p, "-o", exe_p], check=True)
         t1_comp = time.perf_counter()
         aot_comp_ms = (t1_comp - t0_comp) * 1000.0
 

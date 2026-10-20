@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid
 
 CC = gcc
@@ -22,10 +22,13 @@ else
     USE_NATIVE_BOOT = 0
 endif
 
+ULISP_RUNTIME_LIBS = runtime/gc.scm runtime/io.scm runtime/printer.scm runtime/entry.scm
+
 ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm \
                  lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm \
                  lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
-                 lib/continuation.scm lib/parameter.scm lib/gc.scm
+                 lib/continuation.scm lib/parameter.scm lib/gc.scm \
+                 $(ULISP_RUNTIME_LIBS)
 
 COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm
@@ -121,14 +124,21 @@ test_library: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_library.scm > build/test_library_runner.scm
 	@$(RUN_SCHEME) build/test_library_runner.scm
-	$(CC) $(CFLAGS_JIT) -o build/test_library runtime.c build/test_library.s
+	$(CC) -nostdlib -static -o build/test_library build/test_library.s
 	@echo "=== Executing compiled library x86-64 binary ==="
 	@res=$$(./build/test_library); echo "Output: $$res"; test "$$res" = "260"
 	@echo "SUCCESS: library x86-64 output 260 matches expected!"
-	$(CC) $(CFLAGS_JIT) -o build/test_library_c runtime.c build/test_library.c
+	$(CC) $(CFLAGS_JIT) -o build/test_library_c build/test_library.c
 	@echo "=== Executing compiled library Portable C binary ==="
 	@res_c=$$(./build/test_library_c); echo "Output: $$res_c"; test "$$res_c" = "260"
 	@echo "SUCCESS: library C output 260 matches expected!"
+
+test_runtime: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_scheme_runtime.scm > build/test_runtime_input.scm
+	$(ULISP_COMPILER) build/test_runtime_input.scm > build/test_runtime.s
+	$(CC) -nostdlib -static build/test_runtime.s -o build/test_runtime
+	./build/test_runtime < /dev/null
 
 test_lvn: build/compiler_passes.scm
 	@mkdir -p build
@@ -169,7 +179,7 @@ test_loop_reg: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_loop_register_allocation.scm > build/test_loop_reg_runner.scm
 	@$(RUN_SCHEME) build/test_loop_reg_runner.scm
-	$(CC) $(CFLAGS_JIT) -o build/test_loop_reg runtime.c build/test_loop_reg.s
+	$(CC) -nostdlib -static -o build/test_loop_reg build/test_loop_reg.s
 	@echo "=== Executing compiled loop_sum binary (1,000,000 iters) ==="
 	@res=$$(./build/test_loop_reg); echo "Output: $$res"; test "$$res" = "499999500000"
 	@echo "SUCCESS: loop_sum output 499999500000 matches expected exactly!"
@@ -178,7 +188,7 @@ test_branch_fusion: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_branch_fusion.scm > build/test_branch_fusion_runner.scm
 	@$(RUN_SCHEME) build/test_branch_fusion_runner.scm
-	$(CC) $(CFLAGS_JIT) -o build/test_predicates_fusion runtime.c build/test_predicates_fusion.s
+	$(CC) -nostdlib -static -o build/test_predicates_fusion build/test_predicates_fusion.s
 	@echo "=== Executing compiled predicates fusion binary ==="
 	@res=$$(./build/test_predicates_fusion); echo "Output: $$res"; test "$$res" = "255"
 	@echo "SUCCESS: branch fusion predicates output 255 (1+2+4+8+16+32+64+128) matches expected!"
@@ -187,15 +197,15 @@ test_inplace_shuffle: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_inplace_shuffle.scm > build/test_inplace_shuffle_runner.scm
 	@$(RUN_SCHEME) build/test_inplace_shuffle_runner.scm
-	$(CC) $(CFLAGS_JIT) -o build/test_inplace_shuffle runtime.c build/test_inplace_shuffle.s
+	$(CC) -nostdlib -static -o build/test_inplace_shuffle build/test_inplace_shuffle.s
 	@echo "=== Executing compiled inplace shuffle loop_sum binary ==="
 	@res=$$(./build/test_inplace_shuffle); echo "Output: $$res"; test "$$res" = "499999500000"
 	@echo "SUCCESS: inplace shuffle loop_sum output 499999500000 matches expected exactly!"
-	$(CC) $(CFLAGS_JIT) -o build/test_swap_loop runtime.c build/test_swap_loop.s
+	$(CC) -nostdlib -static -o build/test_swap_loop build/test_swap_loop.s
 	@echo "=== Executing compiled swap_loop binary ==="
 	@res=$$(./build/test_swap_loop); echo "Output: $$res"; test "$$res" = "10"
 	@echo "SUCCESS: swap_loop output 10 (swap 10 20 -> 20 10 -> returns b=10) matches expected exactly!"
-	$(CC) $(CFLAGS_JIT) -o build/test_countdown runtime.c build/test_countdown.s
+	$(CC) -nostdlib -static -o build/test_countdown build/test_countdown.s
 	@echo "=== Executing compiled countdown binary ==="
 	@res=$$(./build/test_countdown); echo "Output: $$res"; test "$$res" = "5050"
 	@echo "SUCCESS: countdown sum(1..100) output 5050 matches expected exactly!"
@@ -314,7 +324,7 @@ test_c: compiler
 
 core: build/ulisp_core.scm
 
-build/ulisp_core.scm: lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm compiler.scm
+build/ulisp_core.scm: $(ULISP_STD_LIBS) compiler.scm
 	@mkdir -p build
 	echo '(!gc none)' > $@
 	cat $^ >> $@
@@ -428,9 +438,9 @@ build/ulisp_jit.s: build/ulisp_jit_combined.scm compiler.scm
 
 
 
-bin/ulisp-jit: build/ulisp_jit.s runtime.c
+bin/ulisp-jit: build/ulisp_jit.s
 	@mkdir -p bin
-	$(CC) $(CFLAGS_JIT) -o $@ runtime.c $<
+	$(CC) -nostdlib -static -o $@ $<
 	@echo "Successfully compiled native standalone ulisp-jit binary: $@"
 
 jit: bin/ulisp-jit
@@ -442,7 +452,7 @@ run_jit: bin/ulisp-jit
 	@echo "=== [2/2] Verifying ulisp-jit AOT Compilation ==="
 	@printf "(!compile)\n(define (fact n) (if (<= n 1) 1 (* n (fact (- n 1)))))\n(fact 5)\n" > build/test_jit_aot.scm
 	@./bin/ulisp-jit build/test_jit_aot.scm > build/test_jit_aot.s
-	@$(CC) $(CFLAGS_JIT) -o build/test_jit_aot runtime.c build/test_jit_aot.s
+	@$(CC) -nostdlib -static -o build/test_jit_aot build/test_jit_aot.s
 	@test "$$(./build/test_jit_aot)" = "120"
 	@echo "SUCCESS: ulisp-jit AOT compilation verified (fact 5) = 120!"
 
@@ -466,7 +476,7 @@ diff_test: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_jit test_c test_aot
+test: test_passes test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log

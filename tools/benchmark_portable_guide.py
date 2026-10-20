@@ -34,7 +34,6 @@ from typing import Any, Dict, List, Optional, Tuple
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ULISP_DIR = ROOT_DIR / "ulisp"
 BUILD_DIR = ULISP_DIR / "build"
-RUNTIME_C = ULISP_DIR / "runtime.c"
 COMPILER_SCM = ULISP_DIR / "compiler.scm"
 PYTHON_BIN = sys.executable
 
@@ -131,7 +130,7 @@ def measure_ulisp_x86(expr: str, iters: int) -> Tuple[Optional[float], str]:
             return None, f"Compile Error: {cp.stderr[:40]}"
         with open(s_path, "w") as f:
             f.write(cp.stdout)
-        gcc_res = subprocess.run(["gcc", "-no-pie", "-O2", str(RUNTIME_C), s_path, "-o", bin_path],
+        gcc_res = subprocess.run(["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
                                  capture_output=True, text=True, timeout=10)
         if gcc_res.returncode != 0:
             return None, f"Link Error: {gcc_res.stderr[:40]}"
@@ -167,7 +166,7 @@ def measure_ulisp_c(expr: str, iters: int) -> Tuple[Optional[float], str]:
         c_lines = [l for l in cp.stdout.splitlines() if l.strip() not in ("#t", "#f") and not l.strip().startswith(";")]
         with open(c_path, "w") as f:
             f.write("\n".join(c_lines) + "\n")
-        gcc_res = subprocess.run(["gcc", "-O2", str(RUNTIME_C), c_path, "-o", bin_path],
+        gcc_res = subprocess.run(["gcc", "-O2", c_path, "-o", bin_path],
                                  capture_output=True, text=True, timeout=10)
         if gcc_res.returncode != 0:
             return None, f"Link Error: {gcc_res.stderr[:40]}"

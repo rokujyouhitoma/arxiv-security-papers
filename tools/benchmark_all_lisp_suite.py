@@ -26,7 +26,6 @@ from typing import Any, Dict, List, Optional, Tuple
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ULISP_DIR = ROOT_DIR / "ulisp"
 BUILD_DIR = ULISP_DIR / "build"
-RUNTIME_C = ULISP_DIR / "runtime.c"
 STAGE2_BIN = BUILD_DIR / "scheme-stage2"
 ULISP_BOOT = ULISP_DIR / "bin" / "ulisp-boot"
 ULISP_JIT_BIN = ULISP_DIR / "bin" / "ulisp-jit"
@@ -128,7 +127,7 @@ def measure_ulisp_aot_x86(expr: str, iters: int, comp_bin: Path) -> Tuple[Option
             return None, f"AOT Compile Error: {comp_res.stderr[:50]}", 0.0
         with open(s_path, "w") as f:
             f.write(comp_res.stdout)
-        gcc_res = subprocess.run(["gcc", "-no-pie", "-O2", str(RUNTIME_C), s_path, "-o", bin_path],
+        gcc_res = subprocess.run(["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
                                  capture_output=True, text=True)
         t_c1 = time.perf_counter()
         comp_ms = (t_c1 - t_c0) * 1000.0
@@ -175,7 +174,7 @@ def measure_ulisp_aot_c(expr: str, iters: int, comp_bin: Path) -> Tuple[Optional
 
         with open(c_path, "w") as f:
             f.write(clean_c_code)
-        gcc_res = subprocess.run(["gcc", "-O2", str(RUNTIME_C), c_path, "-o", bin_path],
+        gcc_res = subprocess.run(["gcc", "-O2", c_path, "-o", bin_path],
                                  capture_output=True, text=True)
         t_c1 = time.perf_counter()
         comp_ms = (t_c1 - t_c0) * 1000.0

@@ -2,7 +2,7 @@
 ID: 580
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ARCH] runtime.c の完全廃止と低水準 Scheme (Pre-Scheme 思想) による完全自己完結ランタイムの実現 (ID: 580)
@@ -22,11 +22,11 @@ ID: 580
 - 先行研究系譜: Chicken Scheme / Gambit Scheme におけるランタイム自言語化
 - DSN-33 アーキテクチャ仕様
 - 関連 Issue:
-  - [closed/542-prepare-macos-portability-for-c-and-documentation.md](closed/542-prepare-macos-portability-for-c-and-documentation.md)
-  - [closed/566-implement-dynamic-heap-growth-policy-and-mremap.md](closed/566-implement-dynamic-heap-growth-policy-and-mremap.md)
-  - [closed/569-separate-x86-gc-collector-and-freestanding-runtime-passes.md](closed/569-separate-x86-gc-collector-and-freestanding-runtime-passes.md)
-  - [577-implement-gc-stress-testing-mode-for-c-and-native-backends.md](577-implement-gc-stress-testing-mode-for-c-and-native-backends.md)
-  - [579-establish-3-stage-bootstrap-fixed-point-verification-protocol.md](579-establish-3-stage-bootstrap-fixed-point-verification-protocol.md)
+  - [542-prepare-macos-portability-for-c-and-documentation.md](542-prepare-macos-portability-for-c-and-documentation.md)
+  - [566-implement-dynamic-heap-growth-policy-and-mremap.md](566-implement-dynamic-heap-growth-policy-and-mremap.md)
+  - [569-separate-x86-gc-collector-and-freestanding-runtime-passes.md](569-separate-x86-gc-collector-and-freestanding-runtime-passes.md)
+  - [../577-implement-gc-stress-testing-mode-for-c-and-native-backends.md](../577-implement-gc-stress-testing-mode-for-c-and-native-backends.md)
+  - [../579-establish-3-stage-bootstrap-fixed-point-verification-protocol.md](../579-establish-3-stage-bootstrap-fixed-point-verification-protocol.md)
 - 関連ファイル:
   - [ulisp/runtime.c](../../ulisp/runtime.c)
   - [ulisp/passes/142_backend_x86_freestanding.scm](../../ulisp/passes/142_backend_x86_freestanding.scm)
@@ -78,9 +78,9 @@ Target Branch: `feat/580-deprecate-runtime-c-and-implement-pure-scheme-runtime`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/runtime.c` が完全に削除され、リポジトリ内に C 言語手書きランタイムが存在しないこと
-- [ ] `ulisp/runtime/` 配下の Scheme モジュールによって、ヒープ確保・GCステート管理・動的拡張・低水準 I/O・値表示・`main` エントリポイントが 100% Scheme で実装されていること
-- [ ] C バックエンド（`make -C ulisp test_c`）および x86-64 バックエンド（`make -C ulisp test_aot`）が `runtime.c` なしで 100% ビルド・実行可能であること
-- [ ] 既存の全テストスイート（`test_all_passes`, `test_record`, `test_promise`, `test_gc_growth` 等）がデグレードなく PASS すること
-- [ ] `bootstrap.sh` による自己ホストビルドが Scheme ランタイムのみで完結すること
-- [ ] 相対パスのみを使用し、絶対パスが含まれないこと
+- [x] `ulisp/runtime.c` が完全に削除され、リポジトリ内に C 言語手書きランタイムが存在しないこと
+- [x] `ulisp/runtime/` 配下の Scheme モジュールによって、ヒープ確保・GCステート管理・動的拡張・低水準 I/O・値表示・`main` エントリポイントが 100% Scheme で実装されていること
+- [x] C バックエンド（`make -C ulisp test_c`）および x86-64 バックエンド（`make -C ulisp test_aot`）が `runtime.c` なしで 100% ビルド・実行可能であること
+- [x] 既存の全テストスイート（`test_all_passes`, `test_record`, `test_promise`, `test_gc_growth` 等）がデグレードなく PASS すること
+- [x] `bootstrap.sh` による自己ホストビルドが Scheme ランタイムのみで完結すること
+- [x] 相対パスのみを使用し、絶対パスが含まれないこと

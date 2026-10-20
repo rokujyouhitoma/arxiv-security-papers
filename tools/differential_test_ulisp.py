@@ -29,7 +29,6 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 ULISP_DIR = ROOT_DIR / "ulisp"
 BIN_DIR = ULISP_DIR / "bin"
 BUILD_DIR = ULISP_DIR / "build"
-RUNTIME_C = ULISP_DIR / "runtime.c"
 ULISP_JIT_BIN = BIN_DIR / "ulisp-jit"
 STAGE2_BIN = BUILD_DIR / "scheme-stage2"
 PYTHON_BIN = sys.executable
@@ -284,7 +283,7 @@ def run_ulisp_aot(code: str, compiler_path: Path, env: Dict[str, str]) -> Tuple[
             return 0.0, f"Compile Error: {comp_res.stderr}", False
 
         gcc_res = subprocess.run(
-            ["gcc", "-no-pie", "-O2", str(RUNTIME_C), s_p, "-o", exe_p],
+            ["gcc", "-nostdlib", "-static", s_p, "-o", exe_p],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
