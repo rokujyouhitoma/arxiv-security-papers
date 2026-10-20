@@ -2,7 +2,7 @@
 ID: 576
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] 軽量 IR Verifier（Pass Checker）フレームワークの導入による中間不変条件の機械的検証 (ID: 576)
@@ -61,8 +61,8 @@ Target Branch: `feat/576-implement-lightweight-ir-verifier-framework`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `compiler/verifier.scm` が新設され、主要 5 段階（Desugar, ANF, Closure, Safepoint, SSA）の検証関数が実装されていること
-- [ ] 不正な構文・構造を含む AST を注入した際に、Verifier が期待通りエラーを捕捉・通報すること
-- [ ] `ULISP_VERIFY=1` を有効にした状態で既存の `make -C ulisp test_all_passes`（全27パス）が 100% PASS すること
-- [ ] 既存の AOT テストスイート（`make -C ulisp test_aot`）がデグレードなく正常動作すること
-- [ ] 相対パスのみを使用し、絶対パスが含まれないこと
+- [x] `compiler/verifier.scm` が新設され、主要 5 段階（Desugar, ANF, Closure, Safepoint, SSA）の検証関数が実装されていること
+- [x] 不正な構文・構造を含む AST を注入した際に、Verifier が期待通りエラーを捕捉・通報すること
+- [x] `ULISP_VERIFY=1` を有効にした状態で既存の `make -C ulisp test_all_passes`（全27パス）が 100% PASS すること
+- [x] 既存の AOT テストスイート（`make -C ulisp test_aot`）がデグレードなく正常動作すること
+- [x] 相対パスのみを使用し、絶対パスが含まれないこと

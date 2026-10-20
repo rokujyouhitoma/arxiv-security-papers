@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_verifier test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid
 
 CC = gcc
@@ -31,7 +31,8 @@ ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/prin
                  $(ULISP_RUNTIME_LIBS)
 
 COMPILER_BASE = compiler/helpers.scm \
-                compiler/primitives.scm
+                compiler/primitives.scm \
+                compiler/verifier.scm
 
 PASSES_LIB = $(COMPILER_BASE) \
              passes/010_library.scm \
@@ -229,6 +230,11 @@ test_aarch64: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_backend_aarch64.scm > build/test_aarch64_runner.scm
 	@$(RUN_SCHEME) build/test_aarch64_runner.scm
+
+test_verifier: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/test_verifier.scm > build/test_verifier_runner.scm
+	@$(RUN_SCHEME) build/test_verifier_runner.scm
 
 
 test_exceptions: $(COMPILER_DEP)
