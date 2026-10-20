@@ -76,3 +76,15 @@
              (list 'vector-append2
                    (desugar-vector-append (reverse left))
                    (desugar-vector-append rest))))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Constructors
+;;; -----------------------------------------------------------------------
+(define-pass desugar-constructors : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((list . ,args) (desugar-list (map Expr args)))
+    ((string-append . ,args) (desugar-string-append (map Expr args)))
+    ((vector . ,args) (desugar-vector (map Expr args)))
+    ((vector-append . ,args) (desugar-vector-append (map Expr args)))
+    ((bytevector . ,args) (desugar-bytevector (map Expr args)))
+    ((bytevector-append . ,args) (desugar-bytevector-append (map Expr args)))))

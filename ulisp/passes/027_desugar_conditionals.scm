@@ -79,3 +79,13 @@
                                (loop (cdr vs)))))))
        (list 'let bindings
              (cons 'and pairs))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Conditionals
+;;; -----------------------------------------------------------------------
+(define-pass desugar-conditionals : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((cond . ,clauses) (Expr (desugar-cond clauses)))
+    ((case ,key . ,clauses) (Expr (desugar-case key clauses)))
+    ((and . ,args) (Expr (desugar-and args)))
+    ((or . ,args) (Expr (desugar-or args)))))

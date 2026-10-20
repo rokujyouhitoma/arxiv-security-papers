@@ -436,6 +436,857 @@
       (else #f))))
 
 ;;; =======================================================================
+;;; ULisp Compiler: Nanopass Framework Metadata & Reflection Engine
+;;; Conforms to DSN-33 Architecture Specification & Keep & Dybvig (2013)
+;;; =======================================================================
+
+;;; Global language repository
+(define *nanopass-languages* '())
+
+(define (nanopass-clear-languages!)
+  (set! *nanopass-languages* '()))
+
+;;; Language Record Constructor
+;;; name: symbol
+;;; nongenerative-id: symbol or #f
+;;; entry: symbol
+;;; terminals: list of (pred-sym (meta-vars ...))
+;;; nonterminals: list of (nt-sym (meta-vars ...) (productions ...))
+;;; keywords: list of symbols (production heads)
+;;; removed-prods: list of symbols (removed production heads)
+(define (nanopass-make-language name nongenerative-id entry terminals nonterminals keywords removed-prods)
+  (list 'nanopass-language name nongenerative-id entry terminals nonterminals keywords removed-prods))
+
+(define (nanopass-language? obj)
+  (and (pair? obj) (eq? (car obj) 'nanopass-language)))
+
+(define (nanopass-lang-name l) (cadr l))
+(define (nanopass-lang-nongenerative-id l) (caddr l))
+(define (nanopass-lang-entry l) (cadddr l))
+(define (nanopass-lang-terminals l) (car (cddddr l)))
+(define (nanopass-lang-nonterminals l) (cadr (cddddr l)))
+(define (nanopass-lang-keywords l) (caddr (cddddr l)))
+(define (nanopass-lang-removed-prods l) (cadddr (cddddr l)))
+
+;;; Registration & Lookup
+(define (nanopass-register-language! lang)
+  (let ((name (nanopass-lang-name lang)))
+    (set! *nanopass-languages*
+          (cons (cons name lang)
+                (let loop ((rest *nanopass-languages*))
+                  (cond ((null? rest) '())
+                        ((eq? (caar rest) name) (cdr rest))
+                        (else (cons (car rest) (loop (cdr rest))))))))
+    name))
+
+(define (nanopass-lookup-language name)
+  (let ((entry (assq name *nanopass-languages*)))
+    (if entry
+        (cdr entry)
+        (error "nanopass-lookup-language: unknown language" name))))
+
+;;; Meta-variable Prefix Matcher
+;;; Given a pattern variable name (e.g. 'e1, 'body, 'test_2, 'c) and a list of meta-variable prefixes,
+;;; determines if the symbol begins with any of the declared prefixes.
+(define (nanopass-meta-var-matches? sym prefixes)
+  (let ((s (symbol->string sym)))
+    (let loop ((prefs prefixes))
+      (if (null? prefs)
+          #f
+          (let* ((p (symbol->string (car prefs)))
+                 (p-len (string-length p))
+                 (s-len (string-length s)))
+            (if (and (>= s-len p-len)
+                     (string=? (substring s 0 p-len) p))
+                ;; Suffix check: after prefix, only digits, underscores, or asterisks are allowed
+                (let suffix-check ((i p-len))
+                  (if (>= i s-len)
+                      #t
+                      (let ((ch (string-ref s i)))
+                        (if (or (char-numeric? ch) (char=? ch #\_) (char=? ch #\*))
+                            (suffix-check (+ i 1))
+                            (loop (cdr prefs))))))
+                (loop (cdr prefs))))))))
+
+;;; Identify nonterminal or terminal for a pattern variable
+;;; Returns (terminal pred) or (nonterminal nt-sym) or #f
+(define (nanopass-classify-meta-var var lang)
+  (let ((terminals (nanopass-lang-terminals lang))
+        (nonterminals (nanopass-lang-nonterminals lang)))
+    (let check-terms ((ts terminals))
+      (if (not (null? ts))
+          (let ((term (car ts)))
+            (if (nanopass-meta-var-matches? var (cadr term))
+                (list 'terminal (car term))
+                (check-terms (cdr ts))))
+          (let check-nts ((nts nonterminals))
+            (if (not (null? nts))
+                (let ((nt (car nts)))
+                  (if (nanopass-meta-var-matches? var (cadr nt))
+                      (list 'nonterminal (car nt))
+                      (check-nts (cdr nts))))
+                #f))))))
+
+;;; Production Normalization and Matching Equality
+(define (nanopass-canonicalize-production prod)
+  (cond
+    ((and (pair? prod) (or (eq? (car prod) '+) (eq? (car prod) '-)))
+     (cdr prod))
+    (else prod)))
+
+(define (nanopass-production-equal? p1 p2)
+  (equal? (nanopass-canonicalize-production p1)
+          (nanopass-canonicalize-production p2)))
+
+;;; Terminal Derivation via `extends`
+(define (nanopass-derive-terminals parent-terms delta-clauses)
+  (let ((term-table (map (lambda (t) (cons (car t) (cadr t))) parent-terms)))
+    (for-each
+     (lambda (item)
+       (cond
+         ((and (pair? item) (eq? (car item) '+))
+          (for-each
+           (lambda (sub)
+             (let* ((pred (car sub))
+                    (vars (cadr sub))
+                    (existing (assq pred term-table)))
+               (if existing
+                   (set-cdr! existing (append (cdr existing) vars))
+                   (set! term-table (cons (cons pred vars) term-table)))))
+           (cdr item)))
+         ((and (pair? item) (eq? (car item) '-))
+          (for-each
+           (lambda (sub)
+             (let* ((pred (if (pair? sub) (car sub) sub)))
+               (set! term-table
+                     (let remove-loop ((ts term-table))
+                       (cond ((null? ts) '())
+                             ((eq? (caar ts) pred) (cdr ts))
+                             (else (cons (car ts) (remove-loop (cdr ts)))))))))
+           (cdr item)))
+         ((and (pair? item) (symbol? (car item)))
+          (let* ((pred (car item))
+                 (vars (cadr item))
+                 (existing (assq pred term-table)))
+            (if existing
+                (set-cdr! existing vars)
+                (set! term-table (cons (cons pred vars) term-table)))))))
+     delta-clauses)
+    (map (lambda (e) (list (car e) (cdr e))) (reverse term-table))))
+
+;;; Language Derivation via `extends`
+;;; Computes child language nonterminals and tracks removed production heads
+(define (nanopass-derive-nonterminals-and-removed parent-nts delta-clauses)
+  (let ((nt-table (map (lambda (nt)
+                         (cons (car nt) (cons (cadr nt) (caddr nt))))
+                       parent-nts))
+        (removed-heads '()))
+    (for-each
+     (lambda (clause)
+       (let* ((nt-name (car clause))
+              (meta-vars (cadr clause))
+              (body-clauses (cddr clause))
+              (existing (assq nt-name nt-table)))
+         (if existing
+             (let ((current-prods (cddr existing))
+                   (current-vars (cadr existing)))
+               (let ((new-vars (append current-vars
+                                       (let filter-vars ((v meta-vars))
+                                         (cond ((null? v) '())
+                                               ((memq (car v) current-vars) (filter-vars (cdr v)))
+                                               (else (cons (car v) (filter-vars (cdr v)))))))))
+                 (let loop ((rest body-clauses) (prods current-prods))
+                   (if (null? rest)
+                       (set-cdr! existing (cons new-vars prods))
+                       (let ((item (car rest)))
+                         (cond
+                           ((and (pair? item) (eq? (car item) '+))
+                            (loop (cdr rest) (append prods (cdr item))))
+                           ((and (pair? item) (eq? (car item) '-))
+                            (let ((to-remove (cdr item)))
+                              (for-each
+                               (lambda (rm)
+                                 (let ((c (nanopass-canonicalize-production rm)))
+                                   (if (and (pair? c) (symbol? (car c)))
+                                       (set! removed-heads (cons (car c) removed-heads)))))
+                               to-remove)
+                              (loop (cdr rest)
+                                    (let remove-loop ((ps prods))
+                                      (cond ((null? ps) '())
+                                            ((let has-match? ((rm to-remove))
+                                               (and (pair? rm)
+                                                    (or (nanopass-production-equal? (car ps) (car rm))
+                                                        (has-match? (cdr rm)))))
+                                             (remove-loop (cdr ps)))
+                                            (else (cons (car ps) (remove-loop (cdr ps)))))))))
+                           (else
+                            (loop (cdr rest) (append prods (list item))))))))))
+             (let ((prods (let loop ((rest body-clauses) (acc '()))
+                            (if (null? rest)
+                                acc
+                                (let ((item (car rest)))
+                                  (cond ((and (pair? item) (eq? (car item) '+))
+                                         (loop (cdr rest) (append acc (cdr item))))
+                                        ((and (pair? item) (eq? (car item) '-))
+                                         (loop (cdr rest) acc))
+                                        (else
+                                         (loop (cdr rest) (append acc (list item))))))))))
+               (set! nt-table (cons (cons nt-name (cons meta-vars prods)) nt-table))))))
+     delta-clauses)
+    (list (map (lambda (entry)
+                 (list (car entry) (cadr entry) (cddr entry)))
+               (reverse nt-table))
+          removed-heads)))
+
+(define (nanopass-derive-nonterminals parent-nts delta-clauses)
+  (car (nanopass-derive-nonterminals-and-removed parent-nts delta-clauses)))
+
+;;; Extract keyword heads from nonterminals
+(define (nanopass-extract-keywords-from-nts nts terminals)
+  (let loop ((rest nts) (acc '()))
+    (if (null? rest)
+        acc
+        (let* ((prods (caddr (car rest)))
+               (kw-in-prods
+                (let p-loop ((ps prods) (k-acc '()))
+                  (if (null? ps)
+                      k-acc
+                      (let ((p (car ps)))
+                        (if (and (pair? p) (symbol? (car p)))
+                            (let ((head (car p)))
+                              ;; Exclude if head matches any terminal or nonterminal meta-var
+                              (let ((is-meta?
+                                     (or (let t-chk ((ts terminals))
+                                           (and (pair? ts)
+                                                (or (nanopass-meta-var-matches? head (cadr (car ts)))
+                                                    (t-chk (cdr ts)))))
+                                         (let nt-chk ((ns nts))
+                                           (and (pair? ns)
+                                                (or (nanopass-meta-var-matches? head (cadr (car ns)))
+                                                    (nt-chk (cdr ns))))))))
+                                (if (or is-meta? (memq head k-acc))
+                                    (p-loop (cdr ps) k-acc)
+                                    (p-loop (cdr ps) (cons head k-acc)))))
+                            (p-loop (cdr ps) k-acc)))))))
+          (loop (cdr rest) (append kw-in-prods acc))))))
+
+;;; Language Specification Builder
+(define (nanopass-parse-language-spec name clauses)
+  (let loop ((rest clauses)
+             (parent #f)
+             (entry-sym #f)
+             (nongenerative-id #f)
+             (terminal-clauses '())
+             (nonterminal-clauses '()))
+    (if (null? rest)
+        (if parent
+            (let* ((parent-lang (nanopass-lookup-language parent))
+                   (parent-entry (nanopass-lang-entry parent-lang))
+                   (parent-id (nanopass-lang-nongenerative-id parent-lang))
+                   (parent-terms (nanopass-lang-terminals parent-lang))
+                   (parent-nts (nanopass-lang-nonterminals parent-lang))
+                   (parent-kws (nanopass-lang-keywords parent-lang))
+                   (parent-removed (nanopass-lang-removed-prods parent-lang))
+                   (final-entry (if entry-sym entry-sym parent-entry))
+                   (final-id (if nongenerative-id nongenerative-id (string->symbol (string-append (symbol->string parent) "->" (symbol->string name)))))
+                   (final-terms (if (null? terminal-clauses) parent-terms (nanopass-derive-terminals parent-terms terminal-clauses)))
+                   (nts-and-rm (nanopass-derive-nonterminals-and-removed parent-nts nonterminal-clauses))
+                   (final-nts (car nts-and-rm))
+                   (new-removed (cadr nts-and-rm))
+                   (final-removed (append new-removed parent-removed))
+                   (raw-kws (nanopass-extract-keywords-from-nts final-nts final-terms))
+                   (final-kws (append raw-kws (let filter-kws ((ks parent-kws))
+                                                (cond ((null? ks) '())
+                                                      ((memq (car ks) raw-kws) (filter-kws (cdr ks)))
+                                                      (else (cons (car ks) (filter-kws (cdr ks)))))))))
+              (nanopass-make-language name final-id final-entry final-terms final-nts final-kws final-removed))
+            (let* ((parsed-terms (if (null? terminal-clauses) '() terminal-clauses))
+                   (final-entry (if entry-sym
+                                    entry-sym
+                                    (if (not (null? nonterminal-clauses))
+                                        (caar nonterminal-clauses)
+                                        'Expr)))
+                   (parsed-nts (map (lambda (nt)
+                                      (list (car nt) (cadr nt) (cddr nt)))
+                                    nonterminal-clauses))
+                   (kws (nanopass-extract-keywords-from-nts parsed-nts parsed-terms)))
+              (nanopass-make-language name nongenerative-id final-entry parsed-terms parsed-nts kws '())))
+        (let ((c (car rest)))
+          (cond
+            ((and (pair? c) (eq? (car c) 'extends))
+             (loop (cdr rest) (cadr c) entry-sym nongenerative-id terminal-clauses nonterminal-clauses))
+            ((and (pair? c) (eq? (car c) 'entry))
+             (loop (cdr rest) parent (cadr c) nongenerative-id terminal-clauses nonterminal-clauses))
+            ((and (pair? c) (eq? (car c) 'nongenerative-id))
+             (loop (cdr rest) parent entry-sym (cadr c) terminal-clauses nonterminal-clauses))
+            ((and (pair? c) (eq? (car c) 'terminals))
+             (loop (cdr rest) parent entry-sym nongenerative-id (append terminal-clauses (cdr c)) nonterminal-clauses))
+            ((and (pair? c) (symbol? (car c)))
+             (loop (cdr rest) parent entry-sym nongenerative-id terminal-clauses (append nonterminal-clauses (list c))))
+            (else
+             (loop (cdr rest) parent entry-sym nongenerative-id terminal-clauses nonterminal-clauses)))))))
+
+;;; Terminal Predicate Checker
+(define (nanopass-terminal-matches? pred val)
+  (case pred
+    ((symbol symbol?) (symbol? val))
+    ((number number?) (number? val))
+    ((integer integer?) (and (number? val) (integer? val)))
+    ((fixnum fixnum?) (number? val))
+    ((string string?) (string? val))
+    ((boolean boolean?) (boolean? val))
+    ((char char?) (char? val))
+    ((pair pair?) (pair? val))
+    ((null null?) (null? val))
+    ((constant constant?)
+     (or (number? val) (string? val) (boolean? val) (char? val)))
+    (else #t)))
+
+;;; AST Validation & Parser Engine
+(define (nanopass-ast-valid? lang-name expr . opt-nt)
+  (let* ((lang (nanopass-lookup-language lang-name))
+         (nt-name (if (pair? opt-nt) (car opt-nt) (nanopass-lang-entry lang))))
+    (nanopass-check-valid-node expr nt-name lang)))
+
+(define (nanopass-check-valid-node expr nt-name lang)
+  ;; Check if expr is a list starting with an explicitly removed production head
+  (if (and (pair? expr) (symbol? (car expr)) (memq (car expr) (nanopass-lang-removed-prods lang)))
+      #f
+      ;; 1. Check terminals
+      (let ((terminals (nanopass-lang-terminals lang)))
+        (let check-t ((ts terminals))
+          (if (not (null? ts))
+              (let* ((term (car ts))
+                     (pred (car term)))
+                (if (nanopass-terminal-matches? pred expr)
+                    #t
+                    (check-t (cdr ts))))
+              ;; 2. Check nonterminal productions
+              (let* ((nts (nanopass-lang-nonterminals lang))
+                     (nt-entry (assq nt-name nts)))
+                (if (not nt-entry)
+                    #f
+                    (let ((prods (caddr nt-entry)))
+                      (let check-p ((ps prods))
+                        (if (null? ps)
+                            #f
+                            (let ((p (car ps)))
+                              (if (nanopass-production-matches? p expr lang nt-name)
+                                  #t
+                                  (check-p (cdr ps))))))))))))))
+
+(define (nanopass-production-matches? prod expr lang curr-nt)
+  (cond
+    ((symbol? prod)
+     (let ((cls (nanopass-classify-meta-var prod lang)))
+       (cond
+         ((not cls) (eq? prod expr))
+         ((eq? (car cls) 'terminal)
+          (nanopass-terminal-matches? (cadr cls) expr))
+         ((eq? (car cls) 'nonterminal)
+          (nanopass-check-valid-node expr (cadr cls) lang))
+         (else #f))))
+    ((pair? prod)
+     (if (not (pair? expr))
+         #f
+         (let ((head (car prod)))
+           (cond
+             ((eq? head 'quote)
+              (and (eq? (car expr) 'quote)
+                   (pair? (cdr expr))
+                   (null? (cddr expr))))
+             ((symbol? head)
+              (let ((cls (nanopass-classify-meta-var head lang)))
+                (if cls
+                    ;; Function call / application: (e0 e1 ...)
+                    ;; Only valid if (car expr) is NOT a reserved keyword of the language family
+                    (if (memq (car expr) (nanopass-lang-keywords lang))
+                        #f
+                        (and (nanopass-check-valid-node (car expr) curr-nt lang)
+                             (let check-args ((args (cdr expr)))
+                               (or (null? args)
+                                   (and (pair? args)
+                                        (nanopass-check-valid-node (car args) curr-nt lang)
+                                        (check-args (cdr args)))))))
+                    ;; Keyword-headed production: (if ...), (cond ...), (let ...), etc.
+                    (if (eq? head (car expr))
+                        (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)
+                        #f))))
+             (else #f)))))
+    (else (equal? prod expr))))
+
+(define (nanopass-match-subforms prod-rest expr-rest lang curr-nt)
+  (cond
+    ((and (null? prod-rest) (null? expr-rest)) #t)
+    ((or (null? prod-rest) (null? expr-rest))
+     (and (pair? prod-rest)
+          (or (eq? (car prod-rest) '...)
+              (and (pair? (cdr prod-rest)) (eq? (cadr prod-rest) '...)))
+          (null? expr-rest)))
+    ((eq? (car prod-rest) '...) #t)
+    ((and (pair? (cdr prod-rest)) (eq? (cadr prod-rest) '...))
+     (let ((item-pat (car prod-rest)))
+       (let loop ((es expr-rest))
+         (if (null? es)
+             #t
+             (and (pair? es)
+                  (nanopass-match-subpattern item-pat (car es) lang curr-nt)
+                  (loop (cdr es)))))))
+    ((pair? (car prod-rest))
+     (and (pair? expr-rest)
+          (nanopass-match-subpattern (car prod-rest) (car expr-rest) lang curr-nt)
+          (nanopass-match-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt)))
+    (else
+     (and (pair? expr-rest)
+          (let* ((p (car prod-rest))
+                 (cls (nanopass-classify-meta-var p lang)))
+            (if cls
+                (nanopass-check-valid-node (car expr-rest) (if (eq? (car cls) 'nonterminal) (cadr cls) curr-nt) lang)
+                (equal? p (car expr-rest))))
+          (nanopass-match-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt)))))
+
+(define (nanopass-match-subpattern pat val lang curr-nt)
+  (cond
+    ((symbol? pat)
+     (let ((cls (nanopass-classify-meta-var pat lang)))
+       (if cls
+           (nanopass-check-valid-node val (if (eq? (car cls) 'nonterminal) (cadr cls) curr-nt) lang)
+           (equal? pat val))))
+    ((pair? pat)
+     (and (pair? val)
+          (nanopass-match-subforms pat val lang curr-nt)))
+    (else (equal? pat val))))
+
+;;; Parser & Unparser Procs
+(define (nanopass-parse lang-name expr . opt-nt)
+  (let* ((nt-name (if (pair? opt-nt) (car opt-nt) (nanopass-lang-entry (nanopass-lookup-language lang-name))))
+         (is-valid? (nanopass-ast-valid? lang-name expr nt-name)))
+    (if is-valid?
+        expr
+        (error "nanopass-parse: invalid expression for language" lang-name expr))))
+
+(define (nanopass-unparse lang-name ir . opt-nt)
+  ir)
+
+;;; S-Expression Reflection API
+(define (language->s-expression lang-name)
+  (let ((lang (nanopass-lookup-language lang-name)))
+    (list 'language
+          (nanopass-lang-name lang)
+          (list 'entry (nanopass-lang-entry lang))
+          (list 'nongenerative-id (nanopass-lang-nongenerative-id lang))
+          (cons 'terminals (nanopass-lang-terminals lang))
+          (cons 'nonterminals (nanopass-lang-nonterminals lang))
+          (cons 'keywords (nanopass-lang-keywords lang))
+          (cons 'removed (nanopass-lang-removed-prods lang)))))
+
+;;; Language Invariant Diff Analysis API
+(define (language-diff lang1-name lang2-name)
+  (let* ((l1 (nanopass-lookup-language lang1-name))
+         (l2 (nanopass-lookup-language lang2-name))
+         (nts1 (nanopass-lang-nonterminals l1))
+         (nts2 (nanopass-lang-nonterminals l2))
+         (all-prods (lambda (nts)
+                      (let loop ((rest nts) (acc '()))
+                        (if (null? rest)
+                            acc
+                            (loop (cdr rest) (append acc (caddr (car rest))))))))
+         (p1 (all-prods nts1))
+         (p2 (all-prods nts2)))
+    (list (list 'removed
+                (let loop ((ps p1) (acc '()))
+                  (cond ((null? ps) (reverse acc))
+                        ((let exists? ((cur p2))
+                           (and (pair? cur)
+                                (or (nanopass-production-equal? (car ps) (car cur))
+                                    (exists? (cdr cur)))))
+                         (loop (cdr ps) acc))
+                        (else (loop (cdr ps) (cons (car ps) acc))))))
+          (list 'added
+                (let loop ((ps p2) (acc '()))
+                  (cond ((null? ps) (reverse acc))
+                        ((let exists? ((cur p1))
+                           (and (pair? cur)
+                                (or (nanopass-production-equal? (car ps) (car cur))
+                                    (exists? (cdr cur)))))
+                         (loop (cdr ps) acc))
+                        (else (loop (cdr ps) (cons (car ps) acc)))))))))
+
+;;; Pattern Matching and Variable Binding for `define-pass`
+;;; A pattern variable can be:
+;;;   (unquote var)        -> binds var = val
+;;;   (unquote (var))      -> catamorphism: binds var = (recurse-fn val)
+;;;   _                    -> wildcard, binds nothing
+;;; Returns (cons #t env-alist) on match, #f on mismatch
+(define (nanopass-match-pattern-inner pat expr recurse-fn)
+  (cond
+    ((eq? pat '_)
+     (cons #t '()))
+    ((symbol? pat)
+     (let ((s (symbol->string pat)))
+       (cond
+         ;; Comma prefix variable `,var`
+         ((and (> (string-length s) 1) (char=? (string-ref s 0) #\,))
+          (let ((vname (string->symbol (substring s 1 (string-length s)))))
+            (cons #t (list (cons vname expr)))))
+         (else
+          (if (eq? pat expr)
+              (cons #t '())
+              #f)))))
+    ((pair? pat)
+     (cond
+       ;; (unquote ...)
+       ((eq? (car pat) 'unquote)
+        (let ((sub (cadr pat)))
+          (cond
+            ((pair? sub)
+             ;; Catamorphism: (unquote (var)) -> recurse!
+             (let ((vname (car sub)))
+               (cons #t (list (cons vname (recurse-fn expr))))))
+            ((symbol? sub)
+             (cons #t (list (cons sub expr))))
+            (else #f))))
+       (else
+        (if (not (pair? expr))
+            #f
+            (let ((car-match (nanopass-match-pattern-inner (car pat) (car expr) recurse-fn)))
+              (if (not car-match)
+                  #f
+                  (let ((cdr-match (nanopass-match-pattern-inner (cdr pat) (cdr expr) recurse-fn)))
+                    (if (not cdr-match)
+                        #f
+                        (cons #t (append (cdr car-match) (cdr cdr-match)))))))))))
+    (else
+     (if (equal? pat expr)
+         (cons #t '())
+         #f))))
+
+;;; Extract bound variable names from pattern in declaration order
+(define (nanopass-extract-pattern-vars pat)
+  (cond
+    ((eq? pat '_) '())
+    ((symbol? pat)
+     (let ((s (symbol->string pat)))
+       (if (and (> (string-length s) 1) (char=? (string-ref s 0) #\,))
+           (list (string->symbol (substring s 1 (string-length s))))
+           '())))
+    ((pair? pat)
+     (if (eq? (car pat) 'unquote)
+         (let ((sub (cadr pat)))
+           (cond
+             ((pair? sub) (list (car sub)))
+             ((symbol? sub) (list sub))
+             (else '())))
+         (append (nanopass-extract-pattern-vars (car pat))
+                 (nanopass-extract-pattern-vars (cdr pat)))))
+    (else '())))
+
+;;; Match clause helper: returns list of values for expected vars, or #f
+(define (nanopass-match-clause pat expr expected-vars recurse-fn)
+  (let ((res (nanopass-match-pattern-inner pat expr recurse-fn)))
+    (if (not res)
+        #f
+        (let ((env (cdr res)))
+          (let loop ((vars expected-vars) (vals '()))
+            (if (null? vars)
+                (reverse vals)
+                (let ((entry (assq (car vars) env)))
+                  (if entry
+                      (loop (cdr vars) (cons (cdr entry) vals))
+                      (loop (cdr vars) (cons #f vals))))))))))
+
+;;; Try matching clause and evaluate handler proc
+(define (nanopass-try-clause pat vars expr recurse-fn proc)
+  (let ((vals (nanopass-match-clause pat expr vars recurse-fn)))
+    (if (not vals)
+        #f
+        (apply proc vals))))
+
+;;; Catamorphism Automatic Traversal Code Synthesizer
+;;; Automatically traverses non-matching AST nodes recursively.
+(define (nanopass-catamorphism-step lang-in lang-out nt-name ir recurse-fn)
+  (cond
+    ((not (pair? ir))
+     ir)
+    (else
+     (let ((op (car ir)))
+       (case op
+         ((quote)
+          ir)
+         ((if)
+          (if (null? (cdddr ir))
+              (list 'if (recurse-fn (cadr ir)) (recurse-fn (caddr ir)))
+              (list 'if (recurse-fn (cadr ir)) (recurse-fn (caddr ir)) (recurse-fn (cadddr ir)))))
+         ((begin)
+          (cons 'begin (map recurse-fn (cdr ir))))
+         ((lambda)
+          (cons 'lambda (cons (cadr ir) (map recurse-fn (cddr ir)))))
+         ((let)
+          (if (symbol? (cadr ir))
+              (list 'let (cadr ir)
+                    (map (lambda (b) (list (car b) (recurse-fn (cadr b)))) (caddr ir))
+                    (if (null? (cddddr ir))
+                        (recurse-fn (cadddr ir))
+                        (cons 'begin (map recurse-fn (cdddr ir)))))
+              (list 'let
+                    (map (lambda (b) (list (car b) (recurse-fn (cadr b)))) (cadr ir))
+                    (if (null? (cdddr ir))
+                        (recurse-fn (caddr ir))
+                        (cons 'begin (map recurse-fn (cddr ir)))))))
+         ((letrec)
+          (list 'letrec
+                (map (lambda (b) (list (car b) (recurse-fn (cadr b)))) (cadr ir))
+                (if (null? (cdddr ir))
+                    (recurse-fn (caddr ir))
+                    (cons 'begin (map recurse-fn (cddr ir))))))
+         ((set!)
+          (list 'set! (cadr ir) (recurse-fn (caddr ir))))
+         ((%program)
+          (list '%program
+                (map (lambda (d)
+                       (if (and (pair? d) (eq? (car d) 'define))
+                           (list 'define (cadr d) (recurse-fn (caddr d)))
+                           (recurse-fn d)))
+                     (cadr ir))
+                (recurse-fn (caddr ir))))
+         (else
+          ;; General function application
+          (cons (recurse-fn op) (map recurse-fn (cdr ir)))))))))
+;;; =======================================================================
+;;; ULisp Compiler: Nanopass Framework Core DSL (define-language / define-pass)
+;;; Conforms to DSN-33 Architecture Specification & Keep & Dybvig (2013)
+;;; =======================================================================
+
+;;; Helper to parse header of define-pass
+;;; (define-pass pass-name : L_in (ir) -> L_out () body ...)
+;;; or (define-pass pass-name (ir) body ...)
+(define (nanopass-parse-pass-header form)
+  (let ((name (cadr form))
+        (rest (cddr form)))
+    (if (and (pair? rest) (eq? (car rest) ':))
+        (let* ((l-in (cadr rest))
+               (var (car (caddr rest)))
+               (after-arrow (cddddr rest))
+               (l-out (car after-arrow))
+               (opts (cadr after-arrow))
+               (clauses (cddr after-arrow)))
+          (list name l-in var l-out clauses))
+        (list name 'L_src (car (car rest)) 'L_core (cdr rest)))))
+
+;;; Expand a single rule in a nonterminal transformer
+(define (nanopass-expand-rule rule nt-name)
+  (let* ((pat (car rule))
+         (rest (cdr rule))
+         (has-guard? (and (pair? rest)
+                          (pair? (car rest))
+                          (eq? (car (car rest)) 'guard)))
+         (guard-expr (if has-guard? (cadr (car rest)) #t))
+         (body-expr (if has-guard?
+                        (if (null? (cddr rest)) (cadr rest) (cons 'begin (cdr rest)))
+                        (if (null? (cdr rest)) (car rest) (cons 'begin rest))))
+         (vars (nanopass-extract-pattern-vars pat)))
+    (list pat vars guard-expr body-expr)))
+
+;;; Build cascaded if-expression for nonterminal transformer rules
+(define (nanopass-build-rules-cascade rules l-in l-out nt-name var-name)
+  (let loop ((rs rules))
+    (if (null? rs)
+        (list 'nanopass-catamorphism-step
+              (list 'quote l-in)
+              (list 'quote l-out)
+              (list 'quote nt-name)
+              var-name
+              nt-name)
+        (let* ((r (car rs))
+               (pat (car r))
+               (vars (cadr r))
+               (guard-expr (caddr r))
+               (body-expr (cadddr r))
+               (c-var (unique-symbol "__c_")))
+          (list 'let (list (list c-var
+                                 (list 'nanopass-try-clause
+                                       (list 'quote pat)
+                                       (list 'quote vars)
+                                       var-name
+                                       nt-name
+                                       (list 'lambda vars
+                                             (list 'if guard-expr
+                                                   (list 'cons #t body-expr)
+                                                   #f)))))
+                (list 'if c-var
+                      (list 'cdr c-var)
+                      (loop (cdr rs))))))))
+
+;;; Normalize rules whether passed as list of rules or single wrapped list
+(define (nanopass-normalize-rules raw-rules)
+  (if (and (= (length raw-rules) 1)
+           (pair? (car raw-rules))
+           (pair? (caar raw-rules)))
+      (car raw-rules)
+      raw-rules))
+
+;;; Parse a nonterminal clause in define-pass
+(define (nanopass-parse-nt-clause clause)
+  (let ((nt-name (car clause))
+        (rest (cdr clause)))
+    (if (and (pair? rest) (eq? (car rest) ':))
+        ;; (NT : NT_in (ir) -> NT_out () rules ...)
+        (let* ((ir-var (car (caddr rest)))
+               (after-arrow (cddddr rest))
+               (rules (nanopass-normalize-rules (cddr after-arrow))))
+          (list nt-name ir-var rules))
+        ;; Shorthand: (NT (ir) rules ...)
+        (let ((ir-var (car (car rest)))
+              (rules (nanopass-normalize-rules (cdr rest))))
+          (list nt-name ir-var rules)))))
+
+;;; Expand define-pass AST
+(define (nanopass-expand-define-pass form)
+  (let* ((parsed (nanopass-parse-pass-header form))
+         (name (car parsed))
+         (l-in (cadr parsed))
+         (input-var (caddr parsed))
+         (l-out (cadddr parsed))
+         (clauses (car (cddddr parsed))))
+    (let loop ((rest clauses)
+               (defs '())
+               (nt-procs '())
+               (entry-nt #f))
+      (if (null? rest)
+          (let ((final-entry (if entry-nt entry-nt 'Expr)))
+            (list 'define (list name input-var)
+                  (list 'letrec
+                        (append (reverse defs) (reverse nt-procs))
+                        (list final-entry input-var))))
+          (let ((c (car rest)))
+            (cond
+              ;; (definitions def1 def2 ...)
+              ((and (pair? c) (eq? (car c) 'definitions))
+               (loop (cdr rest) (append (reverse (cdr c)) defs) nt-procs entry-nt))
+              ;; (NT : NT_in (ir) -> NT_out () rules ...)
+              ;; or (NT (ir) rules ...)
+              ((and (pair? c) (symbol? (car c)))
+               (let* ((parsed-nt (nanopass-parse-nt-clause c))
+                      (nt-name (car parsed-nt))
+                      (ir-var (cadr parsed-nt))
+                      (raw-rules (caddr parsed-nt))
+                      (expanded-rules (map (lambda (r) (nanopass-expand-rule r nt-name)) raw-rules))
+                      (body-expr (nanopass-build-rules-cascade expanded-rules l-in l-out nt-name ir-var))
+                      (proc-binding (list nt-name (list 'lambda (list ir-var) body-expr))))
+                 (loop (cdr rest)
+                       defs
+                       (cons proc-binding nt-procs)
+                       (if entry-nt entry-nt nt-name))))
+              (else
+               (loop (cdr rest) defs nt-procs entry-nt))))))))
+
+;;; Expand define-language AST
+(define (nanopass-expand-define-language form)
+  (let* ((name (cadr form))
+         (clauses (cddr form)))
+    (list 'begin
+          (list 'define (string->symbol (string-append "__lang_" (symbol->string name)))
+                (list 'nanopass-register-language!
+                      (list 'nanopass-parse-language-spec
+                            (list 'quote name)
+                            (list 'quote clauses))))
+          (list 'define (string->symbol (string-append "parse-" (symbol->string name)))
+                (list 'lambda (list 'expr)
+                      (list 'nanopass-parse (list 'quote name) 'expr)))
+          (list 'define (string->symbol (string-append "unparse-" (symbol->string name)))
+                (list 'lambda (list 'ir)
+                      (list 'nanopass-unparse (list 'quote name) 'ir)))
+          (list 'define (string->symbol (string-append (symbol->string name) "?"))
+                (list 'lambda (list 'expr)
+                      (list 'nanopass-ast-valid? (list 'quote name) 'expr))))))
+
+;;; Expand define-parser AST
+(define (nanopass-expand-define-parser form)
+  (let ((proc-name (cadr form))
+        (lang-name (caddr form)))
+    (list 'define (list proc-name 'expr)
+          (list 'nanopass-parse (list 'quote lang-name) 'expr))))
+
+;;; Expand define-unparser AST
+(define (nanopass-expand-define-unparser form)
+  (let ((proc-name (cadr form))
+        (lang-name (caddr form)))
+    (list 'define (list proc-name 'ir)
+          (list 'nanopass-unparse (list 'quote lang-name) 'ir))))
+
+;;; -----------------------------------------------------------------------
+;;; Host / Interpreter Macros (for ilisp and interactive environments)
+;;; -----------------------------------------------------------------------
+(define-macro (define-language . args)
+  (nanopass-expand-define-language (cons 'define-language args)))
+
+(define-macro (define-pass . args)
+  (nanopass-expand-define-pass (cons 'define-pass args)))
+
+(define-macro (define-parser . args)
+  (nanopass-expand-define-parser (cons 'define-parser args)))
+
+(define-macro (define-unparser . args)
+  (nanopass-expand-define-unparser (cons 'define-unparser args)))
+
+;;; -----------------------------------------------------------------------
+;;; Canonical Compiler Pipeline Languages: L_src and L_core
+;;; -----------------------------------------------------------------------
+
+;;; L_src: Source intermediate language containing full high-level syntactic sugar
+(define-language L_src
+  (terminals
+    (symbol (x))
+    (constant (c)))
+  (Expr (e)
+    x
+    c
+    (quote datum)
+    (if e1 e2 e3)
+    (if e1 e2)
+    (begin e ...)
+    (lambda (x ...) e ...)
+    (set! x e)
+    (let ((x e1) ...) e ...)
+    (letrec ((x e1) ...) e ...)
+    (let* ((x e1) ...) e ...)
+    (cond (e1 e2) ... (else e_else))
+    (case key (dat e ...) ... (else e_else))
+    (and e ...)
+    (or e ...)
+    (list e ...)
+    (vector e ...)
+    (bytevector e ...)
+    (vector-append e ...)
+    (bytevector-append e ...)
+    (string-append e ...)
+    (guard (x c ...) e ...)
+    (let-values (((x ...) e1) ...) e ...)
+    (let*-values (((x ...) e1) ...) e ...)
+    (parameterize ((x e1) ...) e ...)
+    (%program defs main)
+    (e0 e1 ...)))
+
+;;; L_core: Core intermediate language where all syntactic sugar has been removed
+(define-language L_core
+  (extends L_src)
+  (Expr (e)
+    (- (cond (e1 e2) ... (else e_else)))
+    (- (case key (dat e ...) ... (else e_else)))
+    (- (let* ((x e1) ...) e ...))
+    (- (and e ...))
+    (- (or e ...))
+    (- (list e ...))
+    (- (vector e ...))
+    (- (bytevector e ...))
+    (- (vector-append e ...))
+    (- (bytevector-append e ...))
+    (- (string-append e ...))
+    (- (guard (x c ...) e ...))
+    (- (let-values (((x ...) e1) ...) e ...))
+    (- (let*-values (((x ...) e1) ...) e ...))
+    (- (parameterize ((x e1) ...) e ...))))
+;;; =======================================================================
 ;;; ULisp Compiler: Lightweight IR Verifier & Invariant Pass Checker
 ;;; Conforms to DSN-33 Architecture Specification & Issue #576
 ;;; =======================================================================
@@ -1568,6 +2419,26 @@
           (cond
             ((and (pair? f) (eq? (car f) 'begin))
              (loop (append (cdr f) (cdr fs)) defs bodies))
+            ((and (pair? f) (eq? (car f) 'define-language))
+             (let ((expanded (nanopass-expand-define-language f)))
+               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
+                                 (cdr expanded)
+                                 (list expanded))
+                             (cdr fs))
+                     defs bodies)))
+            ((and (pair? f) (eq? (car f) 'define-pass))
+             (let ((expanded (nanopass-expand-define-pass f)))
+               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
+                                 (cdr expanded)
+                                 (list expanded))
+                             (cdr fs))
+                     defs bodies)))
+            ((and (pair? f) (eq? (car f) 'define-parser))
+             (let ((expanded (nanopass-expand-define-parser f)))
+               (loop (cons expanded (cdr fs)) defs bodies)))
+            ((and (pair? f) (eq? (car f) 'define-unparser))
+             (let ((expanded (nanopass-expand-define-unparser f)))
+               (loop (cons expanded (cdr fs)) defs bodies)))
             ((and (pair? f) (eq? (car f) 'define-record-type))
              (let ((expanded-defs (expand-define-record-type f)))
                (loop (append expanded-defs (cdr fs)) defs bodies)))
@@ -1668,6 +2539,18 @@
              (list 'vector-append2
                    (desugar-vector-append (reverse left))
                    (desugar-vector-append rest))))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Constructors
+;;; -----------------------------------------------------------------------
+(define-pass desugar-constructors : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((list . ,args) (desugar-list (map Expr args)))
+    ((string-append . ,args) (desugar-string-append (map Expr args)))
+    ((vector . ,args) (desugar-vector (map Expr args)))
+    ((vector-append . ,args) (desugar-vector-append (map Expr args)))
+    ((bytevector . ,args) (desugar-bytevector (map Expr args)))
+    ((bytevector-append . ,args) (desugar-bytevector-append (map Expr args)))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 027: Conditionals Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -1749,6 +2632,16 @@
                                (loop (cdr vs)))))))
        (list 'let bindings
              (cons 'and pairs))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Conditionals
+;;; -----------------------------------------------------------------------
+(define-pass desugar-conditionals : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((cond . ,clauses) (Expr (desugar-cond clauses)))
+    ((case ,key . ,clauses) (Expr (desugar-case key clauses)))
+    ((and . ,args) (Expr (desugar-and args)))
+    ((or . ,args) (Expr (desugar-or args)))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 028: Local Bindings Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -1776,6 +2669,15 @@
     (list 'letrec
           (list (list name (cons 'lambda (cons params bodies))))
           (cons name inits))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Bindings
+;;; -----------------------------------------------------------------------
+(define-pass desugar-bindings : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
+    ((let ,name ,bindings . ,bodies) (guard (symbol? name))
+     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 029: Dynamic Environment & Multiple Values Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -1851,283 +2753,267 @@
                                 save-and-set))
                     (cons (list p-sym (list 'car old-sym))
                           restore)))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Dynamic
+;;; -----------------------------------------------------------------------
+(define-pass desugar-dynamic : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((let-values ,bindings . ,bodies) (Expr (desugar-let-values bindings bodies)))
+    ((let*-values ,bindings . ,bodies) (Expr (desugar-let*-values bindings bodies)))
+    ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))
+    ((parameterize ,bindings . ,bodies) (Expr (desugar-parameterize bindings bodies)))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 030: Core Syntax Desugaring & Normalization Pass
-;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
-;;; Orchestrates canonical recursive AST desugaring across all expressions
-;;; utilizing modular sub-passes (Pass 026-029).
+;;; Conforms to DSN-33 Architecture Specification & Nanopass Framework Standard
+;;; Migrated to Nanopass DSL (Phase 1) per Issue #581.
+;;; Eliminates manual Catamorphism recursion boilerplate for Core constructs
+;;; (if, begin, lambda, let, letrec, quote, set!, %program, applications).
 ;;; =======================================================================
 
-;;; Pass 030: Canonical AST Desugaring Pass
-;;; Recursively transforms an AST so that all high-level syntactic sugar
-;;; (cond, case, let*, named-let, and, or, string-append, list, etc.) is expanded
-;;; into canonical Core Scheme constructs (if, let, letrec, lambda, begin, primitives).
-(define (desugar-all expr)
+;;; Helper transformations for composite types and runtime forms
+(define (desugar-string-copy args)
   (cond
-    ((not (pair? expr)) expr)
+    ((null? (cdr args))
+     (let ((s-sym (unique-symbol "s_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string-copy-range s-sym 0 (list 'string-length s-sym)))))
+    ((null? (cddr args))
+     (let ((s-sym (unique-symbol "s_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string-copy-range s-sym (cadr args) (list 'string-length s-sym)))))
     (else
-     (let ((op (car expr)))
-       (case op
-         ((quote)
-          expr)
-         ((%program)
-          (let ((defs (cadr expr))
-                (main (caddr expr)))
-            (list '%program
-                  (map (lambda (d)
-                         (if (and (pair? d) (eq? (car d) 'define))
-                             (list 'define (cadr d) (desugar-all (caddr d)))
-                             (desugar-all d)))
-                       defs)
-                  (desugar-all main))))
-         ((cond)
-          (desugar-all (desugar-cond (cdr expr))))
-         ((case)
-          (desugar-all (desugar-case (cadr expr) (cddr expr))))
-         ((let*)
-          (desugar-all (desugar-let* (cadr expr) (cddr expr))))
-         ((string-append)
-          (desugar-all (desugar-string-append (cdr expr))))
-         ((string-copy)
-          (let ((args (cdr expr)))
-            (cond
-              ((null? (cdr args))
-               (let ((s-sym (unique-symbol "s_")))
-                 (list 'let (list (list s-sym (desugar-all (car args))))
-                       (list 'string-copy-range s-sym 0 (list 'string-length s-sym)))))
-              ((null? (cddr args))
-               (let ((s-sym (unique-symbol "s_")))
-                 (list 'let (list (list s-sym (desugar-all (car args))))
-                       (list 'string-copy-range s-sym (desugar-all (cadr args)) (list 'string-length s-sym)))))
-              (else
-               (list 'string-copy-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
-         ((string-copy!)
-          (let ((args (cdr expr)))
-            (if (null? (cdddr args))
-                (let ((from-sym (unique-symbol "from_")))
-                  (list 'let (list (list from-sym (desugar-all (caddr args))))
-                        (list 'string-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
-                              from-sym 0 (list 'string-length from-sym))))
-                (list 'string-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
-                      (desugar-all (caddr args)) (desugar-all (car (cdddr args))) (desugar-all (cadr (cdddr args)))))))
-         ((string-fill!)
-          (let ((args (cdr expr)))
-            (cond
-              ((null? (cddr args))
-               (let ((s-sym (unique-symbol "s_")))
-                 (list 'let (list (list s-sym (desugar-all (car args))))
-                       (list 'string-fill-range! s-sym (desugar-all (cadr args)) 0 (list 'string-length s-sym)))))
-              ((null? (cdddr args))
-               (let ((s-sym (unique-symbol "s_")))
-                 (list 'let (list (list s-sym (desugar-all (car args))))
-                       (list 'string-fill-range! s-sym (desugar-all (cadr args)) (desugar-all (caddr args)) (list 'string-length s-sym)))))
-              (else
-               (list 'string-fill-range! (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)) (desugar-all (cadddr args)))))))
-         ((bytevector)
-          (desugar-all (desugar-bytevector (cdr expr))))
-         ((bytevector-append)
-          (desugar-all (desugar-bytevector-append (cdr expr))))
-         ((make-bytevector)
-          (let ((args (cdr expr)))
-            (if (null? (cdr args))
-                (list '%make-bytevector (desugar-all (car args)))
-                (list 'make-bytevector-fill (desugar-all (car args)) (desugar-all (cadr args))))))
-         ((bytevector-copy)
-          (let ((args (cdr expr)))
-            (cond
-              ((null? (cdr args))
-               (let ((bv-sym (unique-symbol "bv_")))
-                 (list 'let (list (list bv-sym (desugar-all (car args))))
-                       (list 'bytevector-copy-range bv-sym 0 (list 'bytevector-length bv-sym)))))
-              ((null? (cddr args))
-               (let ((bv-sym (unique-symbol "bv_")))
-                 (list 'let (list (list bv-sym (desugar-all (car args))))
-                       (list 'bytevector-copy-range bv-sym (desugar-all (cadr args)) (list 'bytevector-length bv-sym)))))
-              (else
-               (list 'bytevector-copy-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
-         ((bytevector-copy!)
-          (let ((args (cdr expr)))
-            (if (null? (cdddr args))
-                (let ((from-sym (unique-symbol "from_")))
-                  (list 'let (list (list from-sym (desugar-all (caddr args))))
-                        (list 'bytevector-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
-                              from-sym 0 (list 'bytevector-length from-sym))))
-                (list 'bytevector-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
-                      (desugar-all (caddr args)) (desugar-all (car (cdddr args))) (desugar-all (cadr (cdddr args)))))))
-         ((string->utf8)
-          (let ((args (cdr expr)))
-            (if (null? (cdr args))
-                (let ((str-sym (unique-symbol "str_")))
-                  (list 'let (list (list str-sym (desugar-all (car args))))
-                        (list 'string->utf8-range str-sym 0 (list 'string-length str-sym))))
-                (list 'string->utf8-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args))))))
-         ((utf8->string)
-          (let ((args (cdr expr)))
-            (if (null? (cdr args))
-                (let ((bv-sym (unique-symbol "bv_")))
-                  (list 'let (list (list bv-sym (desugar-all (car args))))
-                        (list 'utf8->string-range bv-sym 0 (list 'bytevector-length bv-sym))))
-                (list 'utf8->string-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args))))))
-         ((vector)
-          (desugar-all (desugar-vector (cdr expr))))
-         ((vector-append)
-          (desugar-all (desugar-vector-append (cdr expr))))
-         ((make-vector)
-          (let ((args (cdr expr)))
-            (if (null? (cdr args))
-                (list '%make-vector (desugar-all (car args)))
-                (list 'make-vector-fill (desugar-all (car args)) (desugar-all (cadr args))))))
-         ((vector-copy)
-          (let ((args (cdr expr)))
-            (cond
-              ((null? (cdr args))
-               (let ((v-sym (unique-symbol "v_")))
-                 (list 'let (list (list v-sym (desugar-all (car args))))
-                       (list 'vector-copy-range v-sym 0 (list 'vector-length v-sym)))))
-              ((null? (cddr args))
-               (let ((v-sym (unique-symbol "v_")))
-                 (list 'let (list (list v-sym (desugar-all (car args))))
-                       (list 'vector-copy-range v-sym (desugar-all (cadr args)) (list 'vector-length v-sym)))))
-              (else
-               (list 'vector-copy-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
-         ((vector-copy!)
-          (let ((args (cdr expr)))
-            (if (null? (cdddr args))
-                (let ((from-sym (unique-symbol "from_")))
-                  (list 'let (list (list from-sym (desugar-all (caddr args))))
-                        (list 'vector-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
-                              from-sym 0 (list 'vector-length from-sym))))
-                (list 'vector-copy-range! (desugar-all (car args)) (desugar-all (cadr args))
-                      (desugar-all (caddr args)) (desugar-all (car (cdddr args))) (desugar-all (cadr (cdddr args)))))))
-         ((vector-fill!)
-          (let ((args (cdr expr)))
-            (cond
-              ((null? (cddr args))
-               (let ((v-sym (unique-symbol "v_")))
-                 (list 'let (list (list v-sym (desugar-all (car args))))
-                       (list 'vector-fill-range! v-sym (desugar-all (cadr args)) 0 (list 'vector-length v-sym)))))
-              ((null? (cdddr args))
-               (let ((v-sym (unique-symbol "v_")))
-                 (list 'let (list (list v-sym (desugar-all (car args))))
-                       (list 'vector-fill-range! v-sym (desugar-all (cadr args)) (desugar-all (caddr args)) (list 'vector-length v-sym)))))
-              (else
-               (list 'vector-fill-range! (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)) (desugar-all (cadddr args)))))))
-         ((vector->list)
-          (let ((args (cdr expr)))
-            (cond
-              ((null? (cdr args))
-               (let ((v-sym (unique-symbol "v_")))
-                 (list 'let (list (list v-sym (desugar-all (car args))))
-                       (list 'vector->list-range v-sym 0 (list 'vector-length v-sym)))))
-              ((null? (cddr args))
-               (let ((v-sym (unique-symbol "v_")))
-                 (list 'let (list (list v-sym (desugar-all (car args))))
-                       (list 'vector->list-range v-sym (desugar-all (cadr args)) (list 'vector-length v-sym)))))
-              (else
-               (list 'vector->list-range (desugar-all (car args)) (desugar-all (cadr args)) (desugar-all (caddr args)))))))
-         ((list)
-          (desugar-all (desugar-list (cdr expr))))
-         ((make-list)
-          (let ((args (cdr expr)))
-            (if (null? (cdr args))
-                (list 'make-list-fill (desugar-all (car args)) #f)
-                (list 'make-list-fill (desugar-all (car args)) (desugar-all (cadr args))))))
-         ((char<? char>? char<=? char>=? char=?)
-          (let ((args (cdr expr)))
-            (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
-                (cons op (map desugar-all args))
-                (desugar-all (desugar-chain-cmp op args)))))
-         ((and)
-          (desugar-all (desugar-and (cdr expr))))
-         ((or)
-          (desugar-all (desugar-or (cdr expr))))
-         ((guard)
-          (desugar-all (desugar-guard (cadr expr) (cddr expr))))
-         ((let-values)
-          (desugar-all (desugar-let-values (cadr expr) (cddr expr))))
-         ((let*-values)
-          (desugar-all (desugar-let*-values (cadr expr) (cddr expr))))
-         ((delay)
-          (let ((body (if (null? (cddr expr))
-                          (cadr expr)
-                          (cons 'begin (cdr expr)))))
-            (desugar-all (list '%%make-promise ''lazy (list 'lambda '() (list '%%make-promise ''eager body))))))
-         ((delay-force)
-          (let ((body (if (null? (cddr expr))
-                          (cadr expr)
-                          (cons 'begin (cdr expr)))))
-            (desugar-all (list '%%make-promise ''lazy (list 'lambda '() body)))))
-         ((make-parameter)
-          (let ((args (cdr expr)))
-            (if (null? (cdr args))
-                (list 'make-parameter-1 (desugar-all (car args)))
-                (list 'make-parameter-2 (desugar-all (car args)) (desugar-all (cadr args))))))
-         ((parameterize)
-          (desugar-all (desugar-parameterize (cadr expr) (cddr expr))))
-         ((%raw-call/cc)
-          (list '%raw-call/cc (desugar-all (cadr expr))))
-         ((call-with-values %call-with-values)
-          (list '%call-with-values (desugar-all (cadr expr)) (desugar-all (caddr expr))))
-         ((values)
-          (let ((args (cdr expr)))
-            (cond
-              ((null? args)
-               (list '%values))
-              ((null? (cdr args))
-               (desugar-all (car args)))
-              (else
-               (cons '%values (map desugar-all args))))))
-         ((%values)
-          (cons '%values (map desugar-all (cdr expr))))
-         ((error)
-          (let ((msg (cadr expr))
-                (irritants (cddr expr)))
-            (desugar-all (list 'raise (cons 'list (cons ''error-object (cons msg irritants)))))))
-         ((%with-handler with-exception-handler)
-          (list '%with-handler (desugar-all (cadr expr)) (desugar-all (caddr expr))))
-         ((caar)
-          (desugar-all (list 'car (list 'car (cadr expr)))))
-         ((cadr)
-          (desugar-all (list 'car (list 'cdr (cadr expr)))))
-         ((cdar)
-          (desugar-all (list 'cdr (list 'car (cadr expr)))))
-         ((cddr)
-          (desugar-all (list 'cdr (list 'cdr (cadr expr)))))
-         ((caddr)
-          (desugar-all (list 'car (list 'cdr (list 'cdr (cadr expr))))))
-         ((cdddr)
-          (desugar-all (list 'cdr (list 'cdr (list 'cdr (cadr expr))))))
-         ((cadddr)
-          (desugar-all (list 'car (list 'cdr (list 'cdr (list 'cdr (cadr expr)))))))
-         ((let)
-          (if (symbol? (cadr expr))
-              (desugar-all (desugar-named-let expr))
-              (let ((bindings (cadr expr))
-                    (bodies (cddr expr)))
-                (list 'let
-                      (map (lambda (b) (list (car b) (desugar-all (cadr b)))) bindings)
-                      (desugar-all (make-body-expr bodies))))))
-         ((letrec)
-          (let ((bindings (cadr expr))
-                (bodies (cddr expr)))
-            (list 'letrec
-                  (map (lambda (b) (list (car b) (desugar-all (cadr b)))) bindings)
-                  (desugar-all (make-body-expr bodies)))))
-         ((lambda)
-          (let ((params (cadr expr))
-                (bodies (cddr expr)))
-            (list 'lambda params (desugar-all (make-body-expr bodies)))))
-         ((if)
-          (let ((test (desugar-all (cadr expr)))
-                (then (desugar-all (caddr expr)))
-                (else-expr (if (null? (cdddr expr))
-                               #f
-                               (desugar-all (cadddr expr)))))
-            (list 'if test then else-expr)))
-         ((begin)
-          (cons 'begin (map desugar-all (cdr expr))))
-         (else
-          (cons (desugar-all op) (map desugar-all (cdr expr)))))))))
+     (cons 'string-copy-range args))))
+
+(define (desugar-string-copy! args)
+  (if (null? (cdddr args))
+      (let ((from-sym (unique-symbol "from_")))
+        (list 'let (list (list from-sym (caddr args)))
+              (list 'string-copy-range! (car args) (cadr args)
+                    from-sym 0 (list 'string-length from-sym))))
+      (cons 'string-copy-range! args)))
+
+(define (desugar-string-fill! args)
+  (cond
+    ((null? (cddr args))
+     (let ((s-sym (unique-symbol "s_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string-fill-range! s-sym (cadr args) 0 (list 'string-length s-sym)))))
+    ((null? (cdddr args))
+     (let ((s-sym (unique-symbol "s_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string-fill-range! s-sym (cadr args) (caddr args) (list 'string-length s-sym)))))
+    (else
+     (cons 'string-fill-range! args))))
+
+(define (desugar-make-bytevector args)
+  (if (null? (cdr args))
+      (list '%make-bytevector (car args))
+      (list 'make-bytevector-fill (car args) (cadr args))))
+
+(define (desugar-bytevector-copy args)
+  (cond
+    ((null? (cdr args))
+     (let ((bv-sym (unique-symbol "bv_")))
+       (list 'let (list (list bv-sym (car args)))
+             (list 'bytevector-copy-range bv-sym 0 (list 'bytevector-length bv-sym)))))
+    ((null? (cddr args))
+     (let ((bv-sym (unique-symbol "bv_")))
+       (list 'let (list (list bv-sym (car args)))
+             (list 'bytevector-copy-range bv-sym (cadr args) (list 'bytevector-length bv-sym)))))
+    (else
+     (cons 'bytevector-copy-range args))))
+
+(define (desugar-bytevector-copy! args)
+  (if (null? (cdddr args))
+      (let ((from-sym (unique-symbol "from_")))
+        (list 'let (list (list from-sym (caddr args)))
+              (list 'bytevector-copy-range! (car args) (cadr args)
+                    from-sym 0 (list 'bytevector-length from-sym))))
+      (cons 'bytevector-copy-range! args)))
+
+(define (desugar-string->utf8 args)
+  (if (null? (cdr args))
+      (let ((str-sym (unique-symbol "str_")))
+        (list 'let (list (list str-sym (car args)))
+              (list 'string->utf8-range str-sym 0 (list 'string-length str-sym))))
+      (cons 'string->utf8-range args)))
+
+(define (desugar-utf8->string args)
+  (if (null? (cdr args))
+      (let ((bv-sym (unique-symbol "bv_")))
+        (list 'let (list (list bv-sym (car args)))
+              (list 'utf8->string-range bv-sym 0 (list 'bytevector-length bv-sym))))
+      (cons 'utf8->string-range args)))
+
+(define (desugar-make-vector args)
+  (if (null? (cdr args))
+      (list '%make-vector (car args))
+      (list 'make-vector-fill (car args) (cadr args))))
+
+(define (desugar-vector-copy args)
+  (cond
+    ((null? (cdr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector-copy-range v-sym 0 (list 'vector-length v-sym)))))
+    ((null? (cddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector-copy-range v-sym (cadr args) (list 'vector-length v-sym)))))
+    (else
+     (cons 'vector-copy-range args))))
+
+(define (desugar-vector-copy! args)
+  (if (null? (cdddr args))
+      (let ((from-sym (unique-symbol "from_")))
+        (list 'let (list (list from-sym (caddr args)))
+              (list 'vector-copy-range! (car args) (cadr args)
+                    from-sym 0 (list 'vector-length from-sym))))
+      (cons 'vector-copy-range! args)))
+
+(define (desugar-vector-fill! args)
+  (cond
+    ((null? (cddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector-fill-range! v-sym (cadr args) 0 (list 'vector-length v-sym)))))
+    ((null? (cdddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector-fill-range! v-sym (cadr args) (caddr args) (list 'vector-length v-sym)))))
+    (else
+     (cons 'vector-fill-range! args))))
+
+(define (desugar-vector->list args)
+  (cond
+    ((null? (cdr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector->list-range v-sym 0 (list 'vector-length v-sym)))))
+    ((null? (cddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector->list-range v-sym (cadr args) (list 'vector-length v-sym)))))
+    (else
+     (cons 'vector->list-range args))))
+
+(define (desugar-make-list args)
+  (if (null? (cdr args))
+      (list 'make-list-fill (car args) #f)
+      (list 'make-list-fill (car args) (cadr args))))
+
+(define (desugar-delay expr)
+  (let ((body (if (null? (cddr expr))
+                  (cadr expr)
+                  (cons 'begin (cdr expr)))))
+    (list '%%make-promise ''lazy (list 'lambda '() (list '%%make-promise ''eager body)))))
+
+(define (desugar-delay-force expr)
+  (let ((body (if (null? (cddr expr))
+                  (cadr expr)
+                  (cons 'begin (cdr expr)))))
+    (list '%%make-promise ''lazy (list 'lambda '() body))))
+
+(define (desugar-make-parameter args)
+  (if (null? (cdr args))
+      (list 'make-parameter-1 (car args))
+      (list 'make-parameter-2 (car args) (cadr args))))
+
+(define (desugar-values args)
+  (cond
+    ((null? args) (list '%values))
+    ((null? (cdr args)) (car args))
+    (else (cons '%values args))))
+
+(define (desugar-error expr)
+  (let ((msg (cadr expr))
+        (irritants (cddr expr)))
+    (list 'raise (cons 'list (cons ''error-object (cons msg irritants))))))
+
+;;; =======================================================================
+;;; Canonical Nanopass DSL Pass: desugar-all
+;;; Transforms high-level L_src AST into canonical L_core AST
+;;; =======================================================================
+(define-pass desugar-all : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ;; 1. Conditionals (Pass 027)
+    ((cond . ,clauses) (Expr (desugar-cond clauses)))
+    ((case ,key . ,clauses) (Expr (desugar-case key clauses)))
+    ((and . ,args) (Expr (desugar-and args)))
+    ((or . ,args) (Expr (desugar-or args)))
+    ((char<? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char<? (map Expr args))
+         (Expr (desugar-chain-cmp 'char<? args))))
+    ((char>? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char>? (map Expr args))
+         (Expr (desugar-chain-cmp 'char>? args))))
+    ((char<=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char<=? (map Expr args))
+         (Expr (desugar-chain-cmp 'char<=? args))))
+    ((char>=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char>=? (map Expr args))
+         (Expr (desugar-chain-cmp 'char>=? args))))
+    ((char=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char=? (map Expr args))
+         (Expr (desugar-chain-cmp 'char=? args))))
+
+    ;; 2. Local Bindings (Pass 028)
+    ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
+    ((let ,name ,bindings . ,bodies) (guard (symbol? name))
+     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
+
+    ;; 3. Constructors (Pass 026)
+    ((list . ,args) (Expr (desugar-list args)))
+    ((string-append . ,args) (Expr (desugar-string-append args)))
+    ((string-copy . ,args) (Expr (desugar-string-copy (map Expr args))))
+    ((string-copy! . ,args) (Expr (desugar-string-copy! (map Expr args))))
+    ((string-fill! . ,args) (Expr (desugar-string-fill! (map Expr args))))
+    ((string->utf8 . ,args) (Expr (desugar-string->utf8 (map Expr args))))
+    ((utf8->string . ,args) (Expr (desugar-utf8->string (map Expr args))))
+    ((vector . ,args) (Expr (desugar-vector args)))
+    ((vector-append . ,args) (Expr (desugar-vector-append args)))
+    ((make-vector . ,args) (Expr (desugar-make-vector (map Expr args))))
+    ((vector-copy . ,args) (Expr (desugar-vector-copy (map Expr args))))
+    ((vector-copy! . ,args) (Expr (desugar-vector-copy! (map Expr args))))
+    ((vector-fill! . ,args) (Expr (desugar-vector-fill! (map Expr args))))
+    ((vector->list . ,args) (Expr (desugar-vector->list (map Expr args))))
+    ((make-list . ,args) (Expr (desugar-make-list (map Expr args))))
+    ((bytevector . ,args) (Expr (desugar-bytevector args)))
+    ((bytevector-append . ,args) (Expr (desugar-bytevector-append args)))
+    ((make-bytevector . ,args) (Expr (desugar-make-bytevector (map Expr args))))
+    ((bytevector-copy . ,args) (Expr (desugar-bytevector-copy (map Expr args))))
+    ((bytevector-copy! . ,args) (Expr (desugar-bytevector-copy! (map Expr args))))
+
+    ;; 4. Dynamic & Multiple Values (Pass 029)
+    ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))
+    ((let-values ,bindings . ,bodies) (Expr (desugar-let-values bindings bodies)))
+    ((let*-values ,bindings . ,bodies) (Expr (desugar-let*-values bindings bodies)))
+    ((parameterize ,bindings . ,bodies) (Expr (desugar-parameterize bindings bodies)))
+    ((delay . ,args) (Expr (desugar-delay (cons 'delay args))))
+    ((delay-force . ,args) (Expr (desugar-delay-force (cons 'delay-force args))))
+    ((make-parameter . ,args) (Expr (desugar-make-parameter (map Expr args))))
+    ((values . ,args) (Expr (desugar-values (map Expr args))))
+    ((%raw-call/cc ,arg) (list '%raw-call/cc (Expr arg)))
+    ((call-with-values ,p1 ,p2) (list '%call-with-values (Expr p1) (Expr p2)))
+    ((%call-with-values ,p1 ,p2) (list '%call-with-values (Expr p1) (Expr p2)))
+    ((error . ,args) (Expr (desugar-error (cons 'error args))))
+    ((%with-handler ,h ,b) (list '%with-handler (Expr h) (Expr b)))
+    ((with-exception-handler ,h ,b) (list '%with-handler (Expr h) (Expr b)))
+
+    ;; 5. List Accessor Shortcuts
+    ((caar ,arg) (Expr (list 'car (list 'car arg))))
+    ((cadr ,arg) (Expr (list 'car (list 'cdr arg))))
+    ((cdar ,arg) (Expr (list 'cdr (list 'car arg))))
+    ((cddr ,arg) (Expr (list 'cdr (list 'cdr arg))))
+    ((caddr ,arg) (Expr (list 'car (list 'cdr (list 'cdr arg)))))
+    ((cdddr ,arg) (Expr (list 'cdr (list 'cdr (list 'cdr arg)))))
+    ((cadddr ,arg) (Expr (list 'car (list 'cdr (list 'cdr (list 'cdr arg))))))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 2: Static Scope & Free-Variable Analysis Pass
 ;;; Conforms to DSN-33 Architecture Specification

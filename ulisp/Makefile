@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_verify clean distclean run_42 run_c_42 core compiler test_passes test_verifier test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress
 
 CC = gcc
@@ -32,6 +32,8 @@ ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/prin
 
 COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm \
+                compiler/nanopass_meta.scm \
+                compiler/nanopass.scm \
                 compiler/verifier.scm
 
 PASSES_LIB = $(COMPILER_BASE) \
@@ -82,6 +84,11 @@ build/compiler_passes.scm: $(PASSES_LIB)
 	cat $^ > $@
 
 # --- AOT Nanopass Tests ---
+test_nanopass: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/test_nanopass_framework.scm > build/test_nanopass_runner.scm
+	@$(RUN_SCHEME) build/test_nanopass_runner.scm
+
 test_passes: build/compiler_passes.scm test_all_passes
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm

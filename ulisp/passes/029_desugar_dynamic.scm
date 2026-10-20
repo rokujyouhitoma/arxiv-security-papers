@@ -73,3 +73,13 @@
                                 save-and-set))
                     (cons (list p-sym (list 'car old-sym))
                           restore)))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Dynamic
+;;; -----------------------------------------------------------------------
+(define-pass desugar-dynamic : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((let-values ,bindings . ,bodies) (Expr (desugar-let-values bindings bodies)))
+    ((let*-values ,bindings . ,bodies) (Expr (desugar-let*-values bindings bodies)))
+    ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))
+    ((parameterize ,bindings . ,bodies) (Expr (desugar-parameterize bindings bodies)))))

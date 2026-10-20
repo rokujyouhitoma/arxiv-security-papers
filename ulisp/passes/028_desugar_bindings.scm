@@ -25,3 +25,12 @@
     (list 'letrec
           (list (list name (cons 'lambda (cons params bodies))))
           (cons name inits))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Bindings
+;;; -----------------------------------------------------------------------
+(define-pass desugar-bindings : L_src (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
+    ((let ,name ,bindings . ,bodies) (guard (symbol? name))
+     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))))
