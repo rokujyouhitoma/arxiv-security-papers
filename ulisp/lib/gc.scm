@@ -336,7 +336,7 @@
                     #t)
                   ;; Otherwise, try MREMAP_MAYMOVE = 1 (flags = 1)
                   (let ((move-ret (%raw-syscall (%to-raw 25) old-from (%to-raw old-size) (%to-raw new-size) (%to-raw 1) 0 0)))
-                    (if (or (<= move-ret 0) (> move-ret 18446744073709547520))
+                    (if (or (<= move-ret 0) (< move-ret -4096))
                         ;; OS limit reached (mremap error)
                         #f
                         (begin

@@ -6,19 +6,16 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **582** | let-values 反復ループにおける RTyper アンボックス不整合と call-with-values スタックオーバーフロー SEGV クラッシュの解消 | Bug | High | [582-fix-let-values-unboxing-mismatch-and-infinite-loop-stack-overflow.md](582-fix-let-values-unboxing-mismatch-and-infinite-loop-stack-overflow.md) |
 | **581** | Nanopass Framework DSL (define-language / define-pass) の自律実装とコンパイラパスの全面刷新 | Feature | High | [581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md](581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md) |
 | **576** | 軽量 IR Verifier（Pass Checker）フレームワークの導入による中間不変条件の機械的検証 | Feature | High | [576-implement-lightweight-ir-verifier-framework.md](576-implement-lightweight-ir-verifier-framework.md) |
 | **577** | Cバックエンドおよびネイティブ後端共通 GC ストレステストモード (--gc-stress) の実装 | Feature | High | [577-implement-gc-stress-testing-mode-for-c-and-native-backends.md](577-implement-gc-stress-testing-mode-for-c-and-native-backends.md) |
 | **578** | Pass 110 (Closure) / 120 (Escape) / 130 (LIR) の連携による非エスケープオブジェクトのスタック配置最適化 | Refactor | Medium | [578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md](578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md) |
 | **579** | 3-Stage Bootstrap の固定点（Fixed-Point）自動検証プロトコルの確立 | Feature | Medium | [579-establish-3-stage-bootstrap-fixed-point-verification-protocol.md](579-establish-3-stage-bootstrap-fixed-point-verification-protocol.md) |
 
-
 | **557** | R7RS 文字列・リスト・ベクタ相互変換および文字列辞書順比較述語の実装 | Feature | Medium | [557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md](557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) |
 | **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
 | **559** | R7RS 反復構文 (do) のマクロ脱糖実装 | Feature | Medium | [559-implement-r7rs-do-loop-syntax.md](559-implement-r7rs-do-loop-syntax.md) |
 | **560** | R7RS 多値定義構文 (define-values) のマクロ脱糖実装 | Feature | Medium | [560-implement-r7rs-define-values-syntax.md](560-implement-r7rs-define-values-syntax.md) |
-
 
 ---
 
@@ -26,6 +23,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **582** | let-values 反復ループにおける RTyper アンボックス不整合と call-with-values スタックオーバーフロー SEGV クラッシュの解消 | Bug | 2026-10-20 | [closed/582-fix-let-values-unboxing-mismatch-and-infinite-loop-stack-overflow.md](closed/582-fix-let-values-unboxing-mismatch-and-infinite-loop-stack-overflow.md) |
 | **583** | LIR パス (130_lir.scm) の機能責務別ナノパス分割（クロージャ・ABI呼出・継続・制御構文・ランタイム機能） | Feature | 2026-10-20 | [closed/583-nanopass-decomposition-of-lir-pass-130.md](closed/583-nanopass-decomposition-of-lir-pass-130.md) |
 | **580** | runtime.c の完全廃止と低水準 Scheme (Pre-Scheme 思想) による完全自己完結ランタイムの実現 | Feature | 2026-10-20 | [closed/580-deprecate-runtime-c-and-implement-pure-scheme-runtime.md](closed/580-deprecate-runtime-c-and-implement-pure-scheme-runtime.md) |
 | **574** | 構文脱糖パス (030_desugar.scm) の構文別ナノパス分割（条件分岐・束縛・多値・動的環境） | Feature | 2026-10-20 | [closed/574-nanopass-decomposition-of-desugar-pass-030.md](closed/574-nanopass-decomposition-of-desugar-pass-030.md) |

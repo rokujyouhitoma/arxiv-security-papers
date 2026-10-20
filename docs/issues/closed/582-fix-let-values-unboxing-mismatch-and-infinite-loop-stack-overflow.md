@@ -2,7 +2,7 @@
 ID: 582
 種別: Bug
 優先度: High
-ステータス: Open (New)
+ステータス: Closed (Resolved)
 ---
 
 # [BUG/SEC] let-values 反復ループにおける RTyper アンボックス不整合と call-with-values スタックオーバーフロー SEGV クラッシュの解消 (ID: 582)
@@ -77,6 +77,6 @@ Target Branch: `fix/582-fix-let-values-unboxing-mismatch-and-infinite-loop-stack
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/tests/test_values.scm` の全 10 テスト（Test 10 `multi-value-loop` を含む）が SEGV せず 100% PASS すること
-- [ ] `make -C ulisp test_values` が Exit Code 0 で完走すること
-- [ ] `make -C ulisp test_all_passes` が全件 PASS を維持すること
+- [x] `ulisp/tests/test_values.scm` の全 10 テスト（Test 10 `multi-value-loop` を含む）が SEGV せず 100% PASS すること
+- [x] `make -C ulisp test_values` が Exit Code 0 で完走すること
+- [x] `make -C ulisp test_all_passes` が全件 PASS を維持すること

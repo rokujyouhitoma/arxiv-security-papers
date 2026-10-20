@@ -175,9 +175,9 @@
      (list op e1 e2))))
 
 ;;; Recursively rewrites ANF AST to Typed LIR representation
-(define (rtyper-expr expr raw-env)
-  (cond
-    ((not (pair? expr)) expr)
+(define (rtyper-expr-scoped expr raw-env unboxed-fns)
+    (cond
+      ((not (pair? expr)) expr)
     (else
      (let ((op (car expr)))
        (cond
@@ -191,26 +191,26 @@
                 ;; Flow-sensitive narrowing: fvar is proven to be Fixnum in then-branch!
                 ;; Unbox fvar at the then-branch boundary and lower internal arithmetic to raw ops.
                 (let* ((then-raw-env (cons fvar raw-env))
-                       (lowered-then (rtyper-expr then then-raw-env))
+                       (lowered-then (rtyper-expr-scoped then then-raw-env unboxed-fns))
                        (boxed-then (if (and (pair? lowered-then)
                                             (memq (car lowered-then) '(%raw-add %raw-sub %raw-mul)))
                                        (list '%box-fixnum lowered-then)
                                        (box-raw-exit lowered-then (list fvar) '%no-fn)))
                        (unboxed-then (list 'let (list (list fvar (list '%unbox-fixnum fvar))) boxed-then))
-                       (r-test (rtyper-expr test raw-env))
-                       (r-else (if (null? else-expr) '() (rtyper-expr else-expr raw-env))))
+                       (r-test (rtyper-expr-scoped test raw-env unboxed-fns))
+                       (r-else (if (null? else-expr) '() (rtyper-expr-scoped else-expr raw-env unboxed-fns))))
                   (if (null? r-else)
                       (list 'if r-test unboxed-then)
                       (list 'if r-test unboxed-then r-else)))
                 ;; Standard if
-                (let ((r-test (rtyper-expr test raw-env))
-                      (r-then (rtyper-expr then raw-env))
-                      (r-else (if (null? else-expr) '() (rtyper-expr else-expr raw-env))))
+                (let ((r-test (rtyper-expr-scoped test raw-env unboxed-fns))
+                      (r-then (rtyper-expr-scoped then raw-env unboxed-fns))
+                      (r-else (if (null? else-expr) '() (rtyper-expr-scoped else-expr raw-env unboxed-fns))))
                   (if (null? r-else)
                       (list 'if r-test r-then)
                       (list 'if r-test r-then r-else))))))
          ((eq? op 'begin)
-          (cons 'begin (map (lambda (e) (rtyper-expr e raw-env)) (cdr expr))))
+          (cons 'begin (map (lambda (e) (rtyper-expr-scoped e raw-env unboxed-fns)) (cdr expr))))
          ((memq op '(let letrec))
           (let* ((bindings (cadr expr))
                  (body (caddr expr)))
@@ -233,9 +233,9 @@
                       ;; Specialize body along both paths
                       (spec-then (specialize-var-in-body body var e1))
                       (spec-else (specialize-var-in-body body var e2))
-                      (split-then (rtyper-expr (list 'let (list (list var e1)) spec-then) raw-env))
-                      (split-else (rtyper-expr (list 'let (list (list var e2)) spec-else) raw-env)))
-                 (list 'if (rtyper-expr cond-part raw-env) split-then split-else)))
+                      (split-then (rtyper-expr-scoped (list 'let (list (list var e1)) spec-then) raw-env unboxed-fns))
+                      (split-else (rtyper-expr-scoped (list 'let (list (list var e2)) spec-else) raw-env unboxed-fns)))
+                 (list 'if (rtyper-expr-scoped cond-part raw-env unboxed-fns) split-then split-else)))
               ((and (= (length bindings) 1)
                     (let* ((b (car bindings))
                            (val (cadr b)))
@@ -246,17 +246,19 @@
                            (pure-tail-loop? (car b) (caddr val)))))
                ;; Named-let loop with 100% fixnum parameters and pure tail-recursion:
                ;; Lower all loop variables to raw %raw-i64 hardware representation.
+               ;; Lexically scope fn-name to its definition body and continuation.
                (let* ((b (car bindings))
                       (fn-name (car b))
                       (fn-val (cadr b))
                       (params (cadr fn-val))
                       (lbody (caddr fn-val))
-                      (loop-raw-env (append params raw-env)))
+                      (loop-raw-env (append params raw-env))
+                      (inner-unboxed-fns (cons fn-name unboxed-fns)))
                  (record-unboxed-fn! fn-name)
-                 (let* ((typed-lbody (rtyper-expr lbody loop-raw-env))
+                 (let* ((typed-lbody (rtyper-expr-scoped lbody loop-raw-env inner-unboxed-fns))
                         (boxed-lbody (box-raw-exit typed-lbody params fn-name))
                         (new-fn-val (list 'lambda params boxed-lbody))
-                        (new-body (rtyper-expr body raw-env)))
+                        (new-body (rtyper-expr-scoped body raw-env inner-unboxed-fns)))
                    (list op (list (list fn-name new-fn-val)) new-body))))
               (else
                ;; Standard let bindings: propagate raw variables and record facts
@@ -266,7 +268,7 @@
                                 (if (and (pair? rhs) (memq (car rhs) '(fixnum? integer? number?))
                                          (pair? (cdr rhs)) (symbol? (cadr rhs)))
                                     (record-rtyper-fact! v (cadr rhs)))
-                                (list v (rtyper-expr rhs raw-env))))
+                                (list v (rtyper-expr-scoped rhs raw-env unboxed-fns))))
                             bindings))
                       ;; Extend raw-env with newly bound variables that hold raw values
                       (extended-raw-env
@@ -279,26 +281,30 @@
                                         (memq (car val) '(%raw-add %raw-sub %raw-mul %unbox-fixnum)))
                                    (loop (cdr bs) (cons var acc))
                                    (loop (cdr bs) acc))))))
-                      (new-body (rtyper-expr body extended-raw-env)))
+                      (new-body (rtyper-expr-scoped body extended-raw-env unboxed-fns)))
                  (list op new-bindings new-body))))))
          ((eq? op '-)
           (if (null? (cddr expr))
-              (list '- (rtyper-expr (cadr expr) raw-env))
-              (rtyper-binop op (rtyper-expr (cadr expr) raw-env) (rtyper-expr (caddr expr) raw-env) raw-env)))
+              (list '- (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns))
+              (rtyper-binop op (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns) (rtyper-expr-scoped (caddr expr) raw-env unboxed-fns) raw-env)))
          ((binop-prim? op)
-          (rtyper-binop op (rtyper-expr (cadr expr) raw-env) (rtyper-expr (caddr expr) raw-env) raw-env))
-         ((unboxed-fn? op)
+          (rtyper-binop op (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns) (rtyper-expr-scoped (caddr expr) raw-env unboxed-fns) raw-env))
+         ((memq op unboxed-fns)
           ;; Boundary call into an unboxed loop: unbox non-raw arguments at entry
           (let ((args (cdr expr)))
             (cons op
                   (map (lambda (arg)
                          (if (and (symbol? arg) (raw-var? arg raw-env))
                              arg
-                             (list '%unbox-fixnum (rtyper-expr arg raw-env))))
+                             (list '%unbox-fixnum (rtyper-expr-scoped arg raw-env unboxed-fns))))
                        args))))
          (else
           ;; General procedure call or syntax
-          (cons op (map (lambda (e) (rtyper-expr e raw-env)) (cdr expr)))))))))
+          (cons op (map (lambda (e) (rtyper-expr-scoped e raw-env unboxed-fns)) (cdr expr)))))))))
+
+
+(define (rtyper-expr expr raw-env)
+  (rtyper-expr-scoped expr raw-env '()))
 
 ;;; Pass 5b Entrypoint: Transforms S-Annotated AST into Lowered Typed AST
 (define (rtyper-all form-or-forms)
@@ -312,15 +318,15 @@
        (list '%program
              (map (lambda (d)
                     (if (and (pair? d) (eq? (car d) 'define))
-                        (list 'define (cadr d) (rtyper-expr (caddr d) '()))
-                        (rtyper-expr d '())))
+                        (list 'define (cadr d) (rtyper-expr-scoped (caddr d) '() '()))
+                        (rtyper-expr-scoped d '() '())))
                   defs)
-             (rtyper-expr main '()))))
+             (rtyper-expr-scoped main '() '()))))
     ((eq? (car form-or-forms) 'define)
      (let ((head (cadr form-or-forms))
            (body (cddr form-or-forms)))
        (cons 'define
              (cons head
-                   (map (lambda (e) (rtyper-expr e '())) body)))))
+                   (map (lambda (e) (rtyper-expr-scoped e '() '())) body)))))
     (else
-     (rtyper-expr form-or-forms '()))))
+     (rtyper-expr-scoped form-or-forms '() '()))))
