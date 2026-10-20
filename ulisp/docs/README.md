@@ -36,6 +36,10 @@
    - R7RS-small (Section 4〜6 / 全16標準ライブラリ) の完全対応・部分対応・未対応機能一覧
    - R7RS-large (Red Edition, Tangerine Edition, 主要SRFI) の対応状況
    - AOT コンパイラとしての設計トレードオフと未実装機能ロードマップ
+7. [3-Stage Bootstrap & 不動点自動検証プロトコル仕様書](bootstrap.md)
+   - META II および不動点理論に基づくコンパイラ自己ホスト性（Self-Hosting）の数学的証明
+   - Stage 0（シード）→ Stage 1 → Stage 2 → Stage 3 パイプライン
+   - `make -C ulisp bootstrap_verify` ワンコマンド自動検証と bit-for-bit 完全一致判定（`diff stage2.s stage3.s == 0`）
 
 ---
 

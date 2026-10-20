@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_verifier test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_verify clean distclean run_42 run_c_42 core compiler test_passes test_verifier test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress
 
 CC = gcc
@@ -388,6 +388,7 @@ build/scheme-stage1: build/stage1.s
 	$(CC) -nostdlib -static $< -o $@
 
 stage1: build/scheme-stage1
+bootstrap_stage1: stage1
 
 build/stage2.s: build/scheme-stage1 build/ulisp_core.scm
 	@mkdir -p build
@@ -397,6 +398,31 @@ build/scheme-stage2: build/stage2.s
 	$(CC) -nostdlib -static $< -o $@
 
 stage2: build/scheme-stage2
+bootstrap_stage2: stage2
+
+build/stage3.s: build/scheme-stage2 build/ulisp_core.scm
+	@mkdir -p build
+	./build/scheme-stage2 build/ulisp_core.scm > $@
+
+build/scheme-stage3: build/stage3.s
+	$(CC) -nostdlib -static $< -o $@
+
+stage3: build/scheme-stage3
+bootstrap_stage3: stage3
+
+bootstrap_verify: stage2 stage3
+	@echo "=== Verifying 3-Stage Bootstrap Fixed Point (stage2.s vs stage3.s) ==="
+	@if cmp -s build/stage2.s build/stage3.s; then \
+		echo "SUCCESS: Fixed-point convergence confirmed (Stage 2 and Stage 3 outputs are bit-for-bit identical)!"; \
+		mkdir -p bin; \
+		cp -f build/scheme-stage2 bin/ulisp-boot; \
+		chmod +x bin/ulisp-boot; \
+		echo "Seed binary bin/ulisp-boot updated successfully."; \
+	else \
+		echo "FAILURE: Discrepancy detected between stage2.s and stage3.s"; \
+		diff -u build/stage2.s build/stage3.s | head -n 50; \
+		exit 1; \
+	fi
 
 bootstrap: core
 	./bootstrap.sh

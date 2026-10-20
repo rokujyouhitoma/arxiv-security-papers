@@ -2,7 +2,7 @@
 ID: 579
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/CI] 3-Stage Bootstrap の固定点（Fixed-Point）自動検証プロトコルの確立 (ID: 579)
@@ -60,8 +60,8 @@ Target Branch: `feat/579-establish-3-stage-bootstrap-fixed-point-verification-pr
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `bootstrap.sh` に 3-Stage ビルドおよび Stage 2 vs Stage 3 の diff 検証ロジックが組み込まれていること
-- [ ] `make -C ulisp bootstrap_verify` が正常に実行され、差分 0 バイト（固定点到達）が確認できること
-- [ ] 生成された自己ホストバイナリが全テストスイート（`test_all_passes`, `test_aot`）を通過すること
-- [ ] ブートストラップ理論と検証手順が `ulisp/docs/` 内に文書化されていること
-- [ ] 相対パスのみを使用し、絶対パスが含まれないこと
+- [x] `bootstrap.sh` に 3-Stage ビルドおよび Stage 2 vs Stage 3 の diff 検証ロジックが組み込まれていること
+- [x] `make -C ulisp bootstrap_verify` が正常に実行され、差分 0 バイト（固定点到達）が確認できること
+- [x] 生成された自己ホストバイナリが全テストスイート（`test_all_passes`, `test_aot`）を通過すること
+- [x] ブートストラップ理論と検証手順が `ulisp/docs/` 内に文書化されていること
+- [x] 相対パスのみを使用し、絶対パスが含まれないこと
