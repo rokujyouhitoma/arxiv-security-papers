@@ -6,7 +6,10 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **581** | Nanopass Framework DSL (define-language / define-pass) の自律実装とコンパイラパスの全面刷新 | Feature | High | [581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md](581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md) |
+| **581** | Nanopass Framework DSL Phase 1: コア DSL マクロ基盤 (define-language / define-pass) の自律実装と構文脱糖パス刷新 | Feature | High | [581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md](581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md) |
+| **584** | Nanopass Framework DSL Phase 2: エリップシス反復展開 (Ellipsis) とサブフォーム局所ハンドラ (in-context) の実装および正規化パス移行 | Feature | High | [584-nanopass-framework-phase2-ellipsis-subforms-and-normalization.md](584-nanopass-framework-phase2-ellipsis-subforms-and-normalization.md) |
+| **585** | Nanopass Framework DSL Phase 3: Catamorphism Extra Values (上流集約 / 下流伝播) と解析・最適化パス刷新 | Feature | High | [585-nanopass-framework-phase3-catamorphism-extra-values-and-analysis-passes.md](585-nanopass-framework-phase3-catamorphism-extra-values-and-analysis-passes.md) |
+| **586** | Nanopass Framework DSL Phase 4: パイプライン統御・AST Diff トレーサおよび不変条件 Verifier 自動フック統合 | Feature | High | [586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md](586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md) |
 | **578** | Pass 110 (Closure) / 120 (Escape) / 130 (LIR) の連携による非エスケープオブジェクトのスタック配置最適化 | Refactor | Medium | [578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md](578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md) |
 
 | **557** | R7RS 文字列・リスト・ベクタ相互変換および文字列辞書順比較述語の実装 | Feature | Medium | [557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md](557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) |

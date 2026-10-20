@@ -5,14 +5,20 @@ ID: 581
 ステータス: Open (In Progress)
 ---
 
-# [FEAT/ARCH] Nanopass Framework DSL (define-language / define-pass) の自律実装とコンパイラパスの全面刷新 (ID: 581)
+# [FEAT/ARCH] Nanopass Framework DSL Phase 1: コア DSL マクロ基盤 (define-language / define-pass) の自律実装と構文脱糖パス刷新 (ID: 581)
 
 ## 1. 概要 / Summary
 現在 uLisp は 27 個の分割パス（010〜160）によって Nanopass 思想を実践しているが、すべて生の S 式木に対する手書きの再帰走査（Catamorphism）関数によって実装されている。
 そのため、各パスにおいて「そのパスで変換したい構文（例: `cond`）」以外の変化しない無数の構文（`lambda`, `if`, `set!`, 関数呼び出し等）を全木走査・再構築する定型ボイラープレートコードが大量に重複し、パスのメンテナンス性を阻害していた。さらに、中間言語（IR）の境界で「何が除去され何が追加されたか」という言語不変条件（Invariants）が機械的に検査されず、暗黙知となっていた。
 
-本 Issue では、Chez Scheme の中核基盤である Andrew W. Keep & R. Kent Dybvig (2013) の **Nanopass Framework DSL 仕様** を uLisp にネイティブ実装する。
-自律的なマクロ基盤として `define-language`（差分継承 `extends`、構文の追加 `+` / 削除 `-`、型付き構文検証器の自動導出）および `define-pass`（パターンマッチングによる局所変換規則記述、未変更構文の再帰走査コードの完全自動生成）を構築し、まずは手書きボイラープレートが最も多い脱糖・正規化パス群（Pass 026〜030）から順次 Nanopass DSL 記述へと刷新・載せ替える。
+本 Issue（Phase 1）では、Andrew W. Keep & R. Kent Dybvig (2013) の **Nanopass Framework DSL 仕様** の中核基盤を uLisp にネイティブ自律実装する。
+自律的なマクロ基盤として `define-language`（終端記号 `terminals`、エントリ記号 `entry`、非生成的UID `nongenerative-id`、メタ変数エイリアス規則、差分継承 `extends` による構文の追加 `+` / 削除 `-`）および `define-pass`（パターンマッチング、ガード節 `guard`、未変更構文の Catamorphism 自動再帰走査コードの完全合成）を構築し、パーサ/アンパーサ（`define-parser`, `define-unparser`）を提供する。
+その上で、手書きボイラープレートが最も多い脱糖パス群（Pass 026_desugar_constructors.scm 〜 Pass 030_desugar.scm）を Nanopass DSL 記述へと刷新・スリム化する。
+
+なお、後続フェーズは以下の通り分割して順次展開する：
+- Phase 2 (Issue #584): エリップシス反復展開（`...`）とサブフォーム局所ハンドラ（`in-context`）および正規化パス移行
+- Phase 3 (Issue #585): Catamorphism アナライザ支援（上流集約 `synthesized` / 下流伝播 `inherited` 多値連携）と解析・最適化パス刷新
+- Phase 4 (Issue #586): パイプライン統御・AST Diff ステップトレーサ（`trace-define-pass`）および不変条件 Verifier 自動フック統合
 
 ---
 
