@@ -2,7 +2,7 @@
 ID: 577
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/TEST] Cバックエンドおよびネイティブ後端共通 GC ストレステストモード (--gc-stress) の実装 (ID: 577)
@@ -60,8 +60,8 @@ Target Branch: `feat/577-implement-gc-stress-testing-mode-for-c-and-native-backe
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `runtime.c` およびネイティブランタイムに `ULISP_GC_STRESS` 制御フラグが実装されていること
-- [ ] `make -C ulisp test_gc_stress` ターゲットが新設され、ストレステストが自動実行できること
-- [ ] Cバックエンドおよび AOT x86-64 バックエンドの双方で `test_gc_stress.scm` が 100% PASS すること
-- [ ] 既存の GC テストスイート（`test_gc_growth`, `test_gc_profile`, `test_gc_hybrid`）がデグレードなく PASS すること
-- [ ] 相対パスのみを使用し、絶対パスが含まれないこと
+- [x] `runtime.c` およびネイティブランタイムに `ULISP_GC_STRESS` 制御フラグが実装されていること
+- [x] `make -C ulisp test_gc_stress` ターゲットが新設され、ストレステストが自動実行できること
+- [x] Cバックエンドおよび AOT x86-64 バックエンドの双方で `test_gc_stress.scm` が 100% PASS すること
+- [x] 既存の GC テストスイート（`test_gc_growth`, `test_gc_profile`, `test_gc_hybrid`）がデグレードなく PASS すること
+- [x] 相対パスのみを使用し、絶対パスが含まれないこと

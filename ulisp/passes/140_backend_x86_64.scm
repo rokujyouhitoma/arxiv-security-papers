@@ -347,25 +347,39 @@
               (shift (let* ((needed (+ pos-si 96))
                             (rem (modulo needed 16)))
                        (if (= rem 0) needed (+ needed (- 16 rem))))))
-         (if (eq? (car *backend-gc-mode*) 'none)
-             (begin
-               (emit (string-append "    lea " (operand->str dst) ", [r12 + " (number->string tag) "]"))
-               (emit (string-append "    add r12, " (number->string bytes)))
-               (emit "    cmp r12, [rip + ulisp_heap_limit]")
-               (emit "    ja ulisp_oom_panic"))
-             (let ((lbl-fast (string-append ".L_alloc_fast_" (number->string (new-alloc-id!)))))
-               (emit (string-append "    lea r11, [r12 + " (number->string bytes) "]"))
-               (emit "    cmp r11, [rip + ulisp_heap_limit]")
-               (emit (string-append "    jbe " lbl-fast))
-                ;; Slow path: shift rsp past active frame variables and invoke common trampoline
-                (emit (string-append "    sub rsp, " (number->string shift)))
-                (emit "    call ulisp_alloc_slow_trampoline")
-                (emit (string-append "    add rsp, " (number->string shift)))
-               (emit (string-append lbl-fast ":"))
-               (emit (string-append "    lea " (operand->str dst) ", [r12 + " (number->string tag) "]"))
-               (emit (string-append "    add r12, " (number->string bytes)))
-               (emit "    cmp r12, [rip + ulisp_heap_limit]")
-               (emit "    ja ulisp_oom_panic")))))
+         (cond
+           ((eq? (car *backend-gc-mode*) 'none)
+            (emit (string-append "    lea " (operand->str dst) ", [r12 + " (number->string tag) "]"))
+            (emit (string-append "    add r12, " (number->string bytes)))
+            (emit "    cmp r12, [rip + ulisp_heap_limit]")
+            (emit "    ja ulisp_oom_panic"))
+           ((eq? (car *backend-gc-mode*) 'stress)
+            ;; Stress mode: unconditionally invoke GC slow trampoline on every allocation
+            (emit (string-append "    sub rsp, " (number->string shift)))
+            (emit "    call ulisp_alloc_slow_trampoline")
+            (emit (string-append "    add rsp, " (number->string shift)))
+            (emit (string-append "    lea " (operand->str dst) ", [r12 + " (number->string tag) "]"))
+            (emit (string-append "    add r12, " (number->string bytes)))
+            (emit "    cmp r12, [rip + ulisp_heap_limit]")
+            (emit "    ja ulisp_oom_panic"))
+           (else
+            (let ((lbl-fast (string-append ".L_alloc_fast_" (number->string (new-alloc-id!))))
+                  (lbl-slow (string-append ".L_alloc_slow_" (number->string (car *alloc-counter*)))))
+              (emit "    cmp byte ptr [rip + ulisp_gc_stress_mode], 0")
+              (emit (string-append "    jne " lbl-slow))
+              (emit (string-append "    lea r11, [r12 + " (number->string bytes) "]"))
+              (emit "    cmp r11, [rip + ulisp_heap_limit]")
+              (emit (string-append "    jbe " lbl-fast))
+              (emit (string-append lbl-slow ":"))
+              ;; Slow path: shift rsp past active frame variables and invoke common trampoline
+              (emit (string-append "    sub rsp, " (number->string shift)))
+              (emit "    call ulisp_alloc_slow_trampoline")
+              (emit (string-append "    add rsp, " (number->string shift)))
+              (emit (string-append lbl-fast ":"))
+              (emit (string-append "    lea " (operand->str dst) ", [r12 + " (number->string tag) "]"))
+              (emit (string-append "    add r12, " (number->string bytes)))
+              (emit "    cmp r12, [rip + ulisp_heap_limit]")
+              (emit "    ja ulisp_oom_panic"))))))
 
       ((%alloc-stack)
        (let ((dst (cadr inst))
@@ -703,7 +717,7 @@
        (emit "    add rcx, rdx")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
        (emit "    mov [rdx], rcx"))
-      ((eq? gc-mode 'dual-space)
+      ((or (eq? gc-mode 'dual-space) (eq? gc-mode 'stress))
        (emit "    mov rax, 9")                     ; sys_mmap
        (emit "    xor rdi, rdi")                   ; addr = NULL
        (emit "    mov rsi, 134217728")             ; 128MB (2 x 64MB)
@@ -716,6 +730,7 @@
        (emit "    js .L_start_exit")
        (emit "    lea rbx, [rip + ulisp_gc_state]")
        (emit "    mov [rbx + 0], rax")             ; from
+       (emit "    mov rdi, rax")                   ; rdi = from
        (emit "    lea rcx, [rax + 67108864]")
        (emit "    mov [rbx + 8], rcx")             ; to
        (emit "    mov qword ptr [rbx + 16], 67108864") ; size = 64MB
@@ -724,9 +739,13 @@
        (emit "    mov [rbx + 40], rcx")            ; free_ptr = to
        (emit "    mov qword ptr [rbx + 88], 0")    ; gen_mode = 0
        (emit "    mov qword ptr [rbx + 112], 4")   ; profile_id = 4 (dual-space)
-       (emit "    mov rdi, rax")                   ; rdi = from
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
-       (emit "    mov [rdx], rcx"))                ; limit = from + 64MB
+       (emit "    mov [rdx], rcx")                 ; limit = from + 64MB
+       (if (eq? gc-mode 'stress)
+           (begin
+             (emit "    mov qword ptr [rbx + 128], 1") ; stress_mode = 1
+             (emit "    lea rax, [rip + ulisp_gc_stress_mode]")
+             (emit "    mov byte ptr [rax], 1"))))
       (else
        ;; Generational GC with Execution Profiles (Issue #567)
        ;; Scan envp for ULISP_GC_PROFILE (precedence over compile-time default)
@@ -743,6 +762,20 @@
        (emit "    cmp rax, r11")
        (emit "    jne .L_env_scan_loop")
        (emit "    mov rax, [rsi + 8]")
+       (emit "    mov r11, 0x3d5353455254535f")    ; "_STRESS="
+       (emit "    cmp rax, r11")
+       (emit "    jne .L_env_check_profile")
+       (emit "    cmp byte ptr [rsi + 16], '0'")
+       (emit "    je .L_env_scan_loop")
+       (emit "    cmp byte ptr [rsi + 16], 0")
+       (emit "    je .L_env_scan_loop")
+       (emit "    lea rax, [rip + ulisp_gc_stress_mode]")
+       (emit "    mov byte ptr [rax], 1")
+       (emit "    lea rax, [rip + ulisp_gc_state]")
+       (emit "    mov qword ptr [rax + 128], 1")
+       (emit "    mov r10, 4")                     ; profile_id = 4 (stress mode)
+       (emit "    jmp .L_env_scan_done")
+       (emit ".L_env_check_profile:")
        (emit "    mov r11, 0x454c49464f52505f")    ; "_PROFILE"
        (emit "    cmp rax, r11")
        (emit "    jne .L_env_scan_loop")
@@ -785,6 +818,8 @@
           (emit ".L_profile_decided:"))
          (else
           (emit ".L_profile_decided:")))
+       (emit "    cmp r10, 4")
+       (emit "    je .L_profile_stress")
        (emit "    cmp r10, 1")
        (emit "    je .L_profile_compiler")
        (emit "    cmp r10, 2")
@@ -795,6 +830,14 @@
        (emit "    mov rsi, 138444800")             ; total_mmap = ~132MB
        (emit "    mov r8, 1073741824")             ; max_mature = 1GB
        (emit "    xor r10, r10")                   ; profile_id = 0
+       (emit "    jmp .L_profile_setup")
+       ;; Stress Profile (Dual-Space Semi-Space 64MB + 64MB = 128MB)
+       (emit ".L_profile_stress:")
+       (emit "    mov r12, 67108864")              ; size = 64MB
+       (emit "    mov r13, 67108864")              ; size = 64MB
+       (emit "    mov rsi, 134217728")             ; total_mmap = 128MB
+       (emit "    mov r8, 134217728")
+       (emit "    mov r10, 4")                     ; profile_id = 4
        (emit "    jmp .L_profile_setup")
        ;; Compiler Profile (256MB Nursery, 256MB Mature, 4GB Max)
        (emit ".L_profile_compiler:")
@@ -831,6 +874,8 @@
        (emit "    test rax, rax")
        (emit "    js .L_start_exit")
        (emit "    lea rbx, [rip + ulisp_gc_state]")
+       (emit "    cmp r10, 4")
+       (emit "    je .L_gc_state_stress_setup")
        (emit "    mov [rbx + 0], rax")             ; nursery_base
        (emit "    mov [rbx + 8], r12")             ; nursery_size
        (emit "    lea rcx, [rax + r12]")
@@ -852,7 +897,23 @@
        (emit "    mov rdi, rax")                   ; rdi = nursery_base
        (emit "    lea rcx, [rax + r12]")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
-       (emit "    mov [rdx], rcx")))               ; limit = nursery_base + nursery_size
+       (emit "    mov [rdx], rcx")                 ; limit = nursery_base + nursery_size
+       (emit "    jmp .L_gc_state_setup_done")
+       (emit ".L_gc_state_stress_setup:")
+       (emit "    mov [rbx + 0], rax")             ; from
+       (emit "    mov rdi, rax")                   ; rdi = from
+       (emit "    lea rcx, [rax + 67108864]")
+       (emit "    mov [rbx + 8], rcx")             ; to
+       (emit "    mov qword ptr [rbx + 16], 67108864") ; size = 64MB
+       (emit "    mov [rbx + 24], rbp")            ; bottom
+       (emit "    mov qword ptr [rbx + 32], 0")    ; count = 0
+       (emit "    mov [rbx + 40], rcx")            ; free_ptr = to
+       (emit "    mov qword ptr [rbx + 88], 0")    ; gen_mode = 0
+       (emit "    mov qword ptr [rbx + 112], 4")   ; profile_id = 4
+       (emit "    mov qword ptr [rbx + 128], 1")   ; stress_mode = 1
+       (emit "    lea rdx, [rip + ulisp_heap_limit]")
+       (emit "    mov [rdx], rcx")                 ; limit = from + 64MB
+       (emit ".L_gc_state_setup_done:")))
     (emit "    call scheme_entry")
     (emit "    mov r15, rax")
     (emit "    cmp r14, 1")
@@ -967,18 +1028,19 @@
               (emit "    .quad 0")
               (loop (cdr gvs))))))
     (emit "    .align 8")
+    (emit "    .globl ulisp_gc_stress_mode")
+    (emit "    .type ulisp_gc_stress_mode, @object")
+    (emit "ulisp_gc_stress_mode:")
+    (emit "    .byte 0")
+    (emit "    .align 8")
     (emit "    .globl ulisp_gc_state")
     (emit "    .weak ulisp_gc_state")
     (cond
       ((eq? gc-mode 'none)
        (emit "ulisp_gc_state:"))
-      ((eq? gc-mode 'dual-space)
-       (emit "ulisp_gc_state:")
-       (emit "    .space 64"))
       (else
-       ;; all or generational (128 bytes)
        (emit "ulisp_gc_state:")
-       (emit "    .space 128")))
+       (emit "    .space 256")))
     (emit "ulisp_peek_buf:")
     (emit "    .byte 0")
     (emit "ulisp_has_peek:")

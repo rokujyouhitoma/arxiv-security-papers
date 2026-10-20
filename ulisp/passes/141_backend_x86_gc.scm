@@ -209,8 +209,8 @@
   (emit "    jmp .L_gc_dual_globals_loop")
   ;; Cheney scan To-space
   (emit ".L_gc_dual_cheney:")
-  (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit ".L_gc_dual_cheney_loop:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    cmp rbx, [r11 + 40]")
   (emit "    jae .L_gc_dual_finish")
   (emit "    mov r10, [rbx]")
@@ -489,8 +489,8 @@
   (emit "    jmp .L_gc_minor_remset_loop")
   ;; Cheney scan mature space
   (emit ".L_gc_minor_cheney:")
-  (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit ".L_gc_minor_cheney_loop:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    cmp rbx, [r11 + 40]")
   (emit "    jae .L_gc_minor_finish")
   (emit "    mov r10, [rbx]")

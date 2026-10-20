@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap clean distclean run_42 run_c_42 core compiler test_passes test_verifier test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir stage1 jit bin run_jit bench demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O0 -g
@@ -331,6 +331,34 @@ test_gc_hybrid: $(COMPILER_DEP)
 	DEBUG_GC=1 ./build/test_gc_hybrid
 	@echo "=== All Hybrid Scanning Tests Passed! ==="
 
+test_gc_stress: $(COMPILER_DEP)
+	@mkdir -p build
+	@echo "--- 1. Testing Native x86-64 Backend with ULISP_GC_STRESS=1 ---"
+	cat $(ULISP_STD_LIBS) tests/test_gc_stress.scm > build/test_gc_stress_input.scm
+	$(ULISP_COMPILER) build/test_gc_stress_input.scm > build/test_gc_stress_native.s
+	$(CC) -nostdlib -static build/test_gc_stress_native.s -o build/test_gc_stress_native
+	ULISP_GC_STRESS=1 ./build/test_gc_stress_native
+	@echo "--- 2. Testing Native x86-64 Backend with (!gc stress) Directive ---"
+	echo '(!gc stress)' > build/test_gc_stress_directive_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_gc_stress.scm >> build/test_gc_stress_directive_input.scm
+	$(ULISP_COMPILER) build/test_gc_stress_directive_input.scm > build/test_gc_stress_directive.s
+	$(CC) -nostdlib -static build/test_gc_stress_directive.s -o build/test_gc_stress_directive
+	./build/test_gc_stress_directive
+	@echo "--- 3. Testing Portable C Backend with ULISP_GC_STRESS=1 ---"
+	echo '(!target c)' > build/test_gc_stress_c_input.scm
+	cat lib/string.scm lib/vector.scm tests/test_gc_stress.scm >> build/test_gc_stress_c_input.scm
+	$(ULISP_COMPILER) build/test_gc_stress_c_input.scm > build/test_gc_stress_c.c
+	$(CC) $(CFLAGS) build/test_gc_stress_c.c -o build/test_gc_stress_c
+	ULISP_GC_STRESS=1 ./build/test_gc_stress_c
+	@echo "--- 4. Testing Portable C Backend with (!gc stress) Directive ---"
+	echo '(!target c)' > build/test_gc_stress_c_directive_input.scm
+	echo '(!gc stress)' >> build/test_gc_stress_c_directive_input.scm
+	cat lib/string.scm lib/vector.scm tests/test_gc_stress.scm >> build/test_gc_stress_c_directive_input.scm
+	$(ULISP_COMPILER) build/test_gc_stress_c_directive_input.scm > build/test_gc_stress_c_directive.c
+	$(CC) $(CFLAGS) build/test_gc_stress_c_directive.c -o build/test_gc_stress_c_directive
+	./build/test_gc_stress_c_directive
+	@echo "=== All GC Stress Tests Passed Successfully! ==="
+
 test_freestanding: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="
 	@PYTHONPATH=$(ROOT_DIR) $(PYTHON) -m pytest $(ROOT_DIR)/tests/test_bare_metal_ulisp.py -v
@@ -492,7 +520,7 @@ diff_test: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_jit test_c test_aot
+test: test_passes test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log

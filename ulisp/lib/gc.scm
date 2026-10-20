@@ -88,16 +88,28 @@
 (define (set-gc-growth-count! v)(%raw-store! (%get-gc-state-ptr) 104 (%to-raw v)))
 (define (set-gc-profile-id! v)  (%raw-store! (%get-gc-state-ptr) 112 (%to-raw v)))
 
+;; GC Stress Testing Mode (Issue #577)
+;; [128]: bit 0 = stress mode enabled (1), disabled (0)
+(define (gc-stress-mode?)
+  (= (bitwise-and (%to-fixnum (%raw-load (%get-gc-state-ptr) 128)) 1) 1))
+
+(define (set-gc-stress-mode! v)
+  (let ((cur (%to-fixnum (%raw-load (%get-gc-state-ptr) 128))))
+    (%raw-store! (%get-gc-state-ptr) 128
+                 (%to-raw (if v (bitwise-ior cur 1) (bitwise-and cur -2))))))
+
 ;;; Query current GC execution profile (Issue #567)
-;;; Returns symbol: 'standard, 'compiler, 'server, 'none, or 'dual-space
+;;; Returns symbol: 'standard, 'compiler, 'server, 'none, 'dual-space, or 'stress
 (define (gc-current-profile)
-  (let ((id (gc-profile-id)))
-    (cond
-      ((= id 1) 'compiler)
-      ((= id 2) 'server)
-      ((= id 3) 'none)
-      ((= id 4) 'dual-space)
-      (else 'standard))))
+  (if (gc-stress-mode?)
+      'stress
+      (let ((id (gc-profile-id)))
+        (cond
+          ((= id 1) 'compiler)
+          ((= id 2) 'server)
+          ((= id 3) 'none)
+          ((= id 4) 'dual-space)
+          (else 'standard)))))
 
 ;;; Initialize classic dual-space copying garbage collector
 (define (gc-init! from-space to-space heap-size stack-bottom)

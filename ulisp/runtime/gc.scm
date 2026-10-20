@@ -37,6 +37,9 @@
 (define (runtime-gc-growth-count) (%to-fixnum (runtime-gc-state-ref 13)))
 (define (runtime-gc-profile-id)   (%to-fixnum (runtime-gc-state-ref 14)))
 (define (runtime-gc-debug-gc)     (%to-fixnum (runtime-gc-state-ref 15)))
+(define (runtime-gc-stress-mode)  (%to-fixnum (runtime-gc-state-ref 16)))
+(define (runtime-set-gc-stress-mode! v)
+  (runtime-gc-state-set! 16 (if v 1 0)))
 
 ;; Initialize generational GC heap with profile
 (define (runtime-init-heap size-bytes profile-id debug-gc)

@@ -24,6 +24,8 @@
                (loop (cdr forms) (cadr first) gc-mode verify))
               ((and (pair? first) (eq? (car first) '!gc) (pair? (cdr first)))
                (loop (cdr forms) target (cadr first) verify))
+              ((or (eq? first '--gc-stress) (eq? first '!gc-stress))
+               (loop (cdr forms) target 'stress verify))
               ((and (pair? first) (eq? (car first) '!verify))
                (let ((vmode (if (pair? (cdr first)) (cadr first) #t)))
                  (loop (cdr forms) target gc-mode vmode)))

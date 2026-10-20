@@ -26,7 +26,7 @@
     (let ((lowest-si (- si (* num-args 8))))
       (emit-lir! (list '%alloc '%r10 (+ aligned-size 8) 9 lowest-si)))
     ;; 3. Write 8-byte prefix header to [%r10 - 9]
-    (let* ((hdr-val (+ (* aligned-size 65536) (* (+ num-args 1) 256) 2))
+    (let* ((hdr-val (+ (+ (* aligned-size 65536) (* (+ num-args 1) 256)) 2))
            (hdr-fixnum (* hdr-val 4)))
       (emit-lir! (list '%mov '%rdx hdr-fixnum))
       (emit-lir! '(%store %r10 -9 %rdx)))
@@ -83,7 +83,7 @@
             (loop (cdr as) (- curr-si 8)))))
     ;; 2. Format header and store onto stack frame
     (track-lir-si! base-si)
-    (let* ((hdr-val (+ (* aligned-size 65536) (* (+ num-args 1) 256) 2))
+    (let* ((hdr-val (+ (+ (* aligned-size 65536) (* (+ num-args 1) 256)) 2))
            (hdr-fixnum (* hdr-val 4)))
       (emit-lir! (list '%mov '%rdx hdr-fixnum))
       (emit-lir! (list '%store '%rsp base-si '%rdx)))
