@@ -76,6 +76,9 @@
           (cond
             ((and (pair? f) (eq? (car f) 'begin))
              (loop (append (cdr f) (cdr fs)) defs bodies))
+            ((and (pair? f) (eq? (car f) 'define-macro))
+             ;; Ignore host macro definitions
+             (loop (cdr fs) defs bodies))
             ((and (pair? f) (eq? (car f) 'define-language))
              (let ((expanded (nanopass-expand-define-language f)))
                (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))

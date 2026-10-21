@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **584** | Nanopass Framework DSL Phase 2: エリップシス反復展開 (Ellipsis) とサブフォーム局所ハンドラ (in-context) の実装および正規化パス移行 | Feature | High | [584-nanopass-framework-phase2-ellipsis-subforms-and-normalization.md](584-nanopass-framework-phase2-ellipsis-subforms-and-normalization.md) |
 | **585** | Nanopass Framework DSL Phase 3: Catamorphism Extra Values (上流集約 / 下流伝播) と解析・最適化パス刷新 | Feature | High | [585-nanopass-framework-phase3-catamorphism-extra-values-and-analysis-passes.md](585-nanopass-framework-phase3-catamorphism-extra-values-and-analysis-passes.md) |
 | **586** | Nanopass Framework DSL Phase 4: パイプライン統御・AST Diff トレーサおよび不変条件 Verifier 自動フック統合 | Feature | High | [586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md](586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md) |
 | **578** | Pass 110 (Closure) / 120 (Escape) / 130 (LIR) の連携による非エスケープオブジェクトのスタック配置最適化 | Refactor | Medium | [578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md](578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md) |
@@ -22,6 +21,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **584** | Nanopass Framework DSL Phase 2: エリップシス反復展開 (Ellipsis) とサブフォーム局所ハンドラ (in-context) の実装および正規化パス移行 | Feature | 2026-10-21 | [closed/584-nanopass-framework-phase2-ellipsis-subforms-and-normalization.md](closed/584-nanopass-framework-phase2-ellipsis-subforms-and-normalization.md) |
 | **581** | Nanopass Framework DSL Phase 1: コア DSL マクロ基盤 (define-language / define-pass) の自律実装と構文脱糖パス刷新 | Feature | 2026-10-20 | [closed/581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md](closed/581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md) |
 | **579** | 3-Stage Bootstrap の固定点（Fixed-Point）自動検証プロトコルの確立 | Feature | 2026-10-20 | [closed/579-establish-3-stage-bootstrap-fixed-point-verification-protocol.md](closed/579-establish-3-stage-bootstrap-fixed-point-verification-protocol.md) |
 | **577** | Cバックエンドおよびネイティブ後端共通 GC ストレステストモード (--gc-stress) の実装 | Feature | 2026-10-20 | [closed/577-implement-gc-stress-testing-mode-for-c-and-native-backends.md](closed/577-implement-gc-stress-testing-mode-for-c-and-native-backends.md) |

@@ -27,10 +27,11 @@
                           (pair? (car rest))
                           (eq? (car (car rest)) 'guard)))
          (guard-expr (if has-guard? (cadr (car rest)) #t))
-         (body-expr (if has-guard?
-                        (if (null? (cddr rest)) (cadr rest) (cons 'begin (cdr rest)))
-                        (if (null? (cdr rest)) (car rest) (cons 'begin rest))))
-         (vars (nanopass-extract-pattern-vars pat)))
+         (raw-body (if has-guard?
+                       (if (null? (cddr rest)) (cadr rest) (cons 'begin (cdr rest)))
+                       (if (null? (cdr rest)) (car rest) (cons 'begin rest))))
+         (vars (nanopass-extract-pattern-vars pat))
+         (body-expr (nanopass-expand-template raw-body vars)))
     (list pat vars guard-expr body-expr)))
 
 ;;; Build cascaded if-expression for nonterminal transformer rules
@@ -67,7 +68,10 @@
 (define (nanopass-normalize-rules raw-rules)
   (if (and (= (length raw-rules) 1)
            (pair? (car raw-rules))
-           (pair? (caar raw-rules)))
+           (> (length (car raw-rules)) 1)
+           (pair? (caar raw-rules))
+           (pair? (cadar raw-rules))
+           (pair? (cddar raw-rules)))
       (car raw-rules)
       raw-rules))
 
@@ -109,6 +113,9 @@
               ;; (definitions def1 def2 ...)
               ((and (pair? c) (eq? (car c) 'definitions))
                (loop (cdr rest) (append (reverse (cdr c)) defs) nt-procs entry-nt))
+              ;; (entry EntryNT)
+              ((and (pair? c) (eq? (car c) 'entry))
+               (loop (cdr rest) defs nt-procs (cadr c)))
               ;; (NT : NT_in (ir) -> NT_out () rules ...)
               ;; or (NT (ir) rules ...)
               ((and (pair? c) (symbol? (car c)))
@@ -174,6 +181,14 @@
 
 (define-macro (define-unparser . args)
   (nanopass-expand-define-unparser (cons 'define-unparser args)))
+
+(define-macro (in-context . args)
+  (if (= (length args) 2)
+      (list (car args) (cadr args))
+      (list 'nanopass-parse-nt (list 'quote (car args)) (caddr args) (list 'quote (cadr args)))))
+
+(define-macro (nanopass-template . args)
+  (nanopass-expand-template (car args) '()))
 
 ;;; -----------------------------------------------------------------------
 ;;; Canonical Compiler Pipeline Languages: L_src and L_core

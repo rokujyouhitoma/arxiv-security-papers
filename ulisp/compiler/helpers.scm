@@ -6,6 +6,7 @@
 ;;; Standard Helper Procedures (Self-hosting primitives)
 (define (fixnum->char n) (integer->char n))
 (define (char->fixnum c) (char->integer c))
+(define (char-numeric? c) (let ((n (char->integer c))) (and (>= n 48) (<= n 57))))
 (define (abs x) (if (< x 0) (- 0 x) x))
 (define (safe-car x) (if (pair? x) (car x) '()))
 (define (safe-cdr x) (if (pair? x) (cdr x) '()))
@@ -51,6 +52,51 @@
                  (loop (+ i 1) len)
                  #f)))))
 
+(define (escape-gas-string s)
+  (let* ((len (string-length s))
+         (extra (let count-loop ((i 0) (acc 0))
+                  (if (< i len)
+                      (let ((c (string-ref s i)))
+                        (if (or (char=? c #\newline)
+                                (or (char=? c #\tab)
+                                    (or (char=? c (integer->char 13))
+                                        (or (char=? c #\\)
+                                            (char=? c #\")))))
+                            (count-loop (+ i 1) (+ acc 1))
+                            (count-loop (+ i 1) acc)))
+                      acc))))
+    (if (= extra 0)
+        s
+        (let ((res (make-string (+ len extra))))
+          (let loop ((i 0) (out-idx 0))
+            (if (< i len)
+                (let ((c (string-ref s i)))
+                  (cond
+                    ((char=? c #\newline)
+                     (string-set! res out-idx #\\)
+                     (string-set! res (+ out-idx 1) #\n)
+                     (loop (+ i 1) (+ out-idx 2)))
+                    ((char=? c #\tab)
+                     (string-set! res out-idx #\\)
+                     (string-set! res (+ out-idx 1) #\t)
+                     (loop (+ i 1) (+ out-idx 2)))
+                    ((char=? c (integer->char 13))
+                     (string-set! res out-idx #\\)
+                     (string-set! res (+ out-idx 1) #\r)
+                     (loop (+ i 1) (+ out-idx 2)))
+                    ((char=? c #\\)
+                     (string-set! res out-idx #\\)
+                     (string-set! res (+ out-idx 1) #\\)
+                     (loop (+ i 1) (+ out-idx 2)))
+                    ((char=? c #\")
+                     (string-set! res out-idx #\\)
+                     (string-set! res (+ out-idx 1) #\")
+                     (loop (+ i 1) (+ out-idx 2)))
+                    (else
+                     (string-set! res out-idx c)
+                     (loop (+ i 1) (+ out-idx 1)))))
+                res))))))
+
 (define (equal? a b)
   (cond
     ((eq? a b) #t)
@@ -88,13 +134,15 @@
 
 (define (map f ls)
   (let loop ((cur ls) (acc '()))
-    (if (null? cur)
-        (reverse acc)
-        (loop (cdr cur) (cons (f (car cur)) acc)))))
+    (cond
+      ((null? cur) (reverse acc))
+      ((not (pair? cur)) (reverse acc))
+      (else
+       (loop (cdr cur) (cons (f (car cur)) acc))))))
 
 (define (for-each proc ls)
   (let loop ((cur ls))
-    (if (not (null? cur))
+    (if (and (not (null? cur)) (pair? cur))
         (begin
           (proc (car cur))
           (loop (cdr cur))))))
@@ -103,6 +151,7 @@
   (let loop ((cur ls) (acc '()))
     (cond
       ((null? cur) (reverse acc))
+      ((not (pair? cur)) (reverse acc))
       ((pred (car cur)) (loop (cdr cur) (cons (car cur) acc)))
       (else (loop (cdr cur) acc)))))
 

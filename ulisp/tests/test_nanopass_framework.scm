@@ -29,6 +29,29 @@
 (display "=======================================================") (newline)
 
 ;;; -----------------------------------------------------------------------
+;;; Host / Interpreter Macros (for ilisp and test environments)
+;;; -----------------------------------------------------------------------
+(define-macro (define-language . args)
+  (nanopass-expand-define-language (cons 'define-language args)))
+
+(define-macro (define-pass . args)
+  (nanopass-expand-define-pass (cons 'define-pass args)))
+
+(define-macro (define-parser . args)
+  (nanopass-expand-define-parser (cons 'define-parser args)))
+
+(define-macro (define-unparser . args)
+  (nanopass-expand-define-unparser (cons 'define-unparser args)))
+
+(define-macro (in-context . args)
+  (if (= (length args) 2)
+      (list (car args) (cadr args))
+      (list 'nanopass-parse-nt (list 'quote (car args)) (caddr args) (list 'quote (cadr args)))))
+
+(define-macro (nanopass-template . args)
+  (nanopass-expand-template (car args) '()))
+
+;;; -----------------------------------------------------------------------
 ;;; 1. define-language & Language Reflection
 ;;; -----------------------------------------------------------------------
 
@@ -158,8 +181,100 @@
 (assert-true "Canonical L_core accepts canonical core forms"
              (L_core? '(let ((x 1)) (let ((y 2)) (if x y #f)))))
 
+;;; -----------------------------------------------------------------------
+;;; 7. Ellipsis (...) Pattern Matching & Template Splice Reconstruction
+;;; -----------------------------------------------------------------------
+
+;; Pass that matches let bindings via ellipsis and rewrites them
+(define-pass test-ellipsis-let : L_test_src (ir) -> L_test_src ()
+  (Expr : Expr (ir) -> Expr ()
+    ((let ((,x* ,e*) ...) ,body)
+     `(let ((,x* (* ,e* 2)) ...) ,body))))
+
+
+(assert-equal "test-ellipsis-let unpacks and reconstructs multiple bindings"
+              '(let ((a (* 10 2)) (b (* 20 2))) (+ a b))
+              (test-ellipsis-let '(let ((a 10) (b 20)) (+ a b))))
+
+(assert-equal "test-ellipsis-let handles empty bindings list"
+              '(let () 42)
+              (test-ellipsis-let '(let () 42)))
+
+;; Trailing elements after ellipsis: (foo ,x ... ,y)
+(define-pass test-ellipsis-trailing : L_test_src (ir) -> L_test_src ()
+  (Expr : Expr (ir) -> Expr ()
+    ((sum-last ,x ... ,y)
+     (list 'result-sum (cons 'list x) y))))
+
+(assert-equal "test-ellipsis-trailing matches prefix list and tail element"
+              '(result-sum (list 1 2 3) 4)
+              (test-ellipsis-trailing '(sum-last 1 2 3 4)))
+
+(assert-equal "test-ellipsis-trailing matches empty prefix with tail"
+              '(result-sum (list) 99)
+              (test-ellipsis-trailing '(sum-last 99)))
+
+;; Template splice with ellipsis: (result ,(map ...) ...)
+(define-pass test-template-splice : L_test_src (ir) -> L_test_src ()
+  (Expr : Expr (ir) -> Expr ()
+    ((double-all ,x* ...)
+     `(result ,(map (lambda (x) (* x 2)) x*) ...))))
+
+(assert-equal "test-template-splice expands ellipsis in output template"
+              '(result 2 4 6)
+              (test-template-splice '(double-all 1 2 3)))
+
+;; Nested ellipsis: ((,x ...) ...)
+(let ((m (nanopass-match-pattern-inner '((,x ...) ...) '((1 2) (3 4 5) ()) (lambda (x) x))))
+  (assert-true "nested ellipsis matches list of lists" (and (pair? m) (car m)))
+  (assert-equal "nested ellipsis binds multi-level list"
+                '((1 2) (3 4 5) ())
+                (cdr (assq 'x (cdr m)))))
+
+;;; -----------------------------------------------------------------------
+;;; 8. Subform Local Handlers (in-context) and Multi-Nonterminal Passes
+;;; -----------------------------------------------------------------------
+
+(define-language L_test_prog
+  (terminals
+    (symbol (x))
+    (constant (c)))
+  (Program (p)
+    (%program (d ...) e))
+  (Def (d)
+    (define x e))
+  (Expr (e)
+    x
+    c
+    (if e1 e2 e3)
+    (+ e1 e2)
+    (e0 e1 ...)))
+
+(define-pass test-multi-nt-pass : L_test_prog (ir) -> L_test_prog ()
+  (entry Program)
+  (Program : Program (ir) -> Program ()
+    ((%program ,defs ,main)
+     (list '%program
+           (map (lambda (d) (in-context Def d)) defs)
+           (in-context Expr main))))
+  (Def : Def (ir) -> Def ()
+    ((define ,x ,e)
+     (list 'define x (in-context Expr e))))
+  (Expr : Expr (ir) -> Expr ()
+    ((+ ,a ,b)
+     (list '+ (in-context Expr a) (in-context Expr b)))
+    (,c (guard (number? c))
+     (* c 10))))
+
+(let* ((input '(%program ((define val 5) (define base 2)) (+ 5 2)))
+       (res (test-multi-nt-pass input)))
+  (assert-equal "in-context transforms subforms at Program, Def, and Expr levels"
+                '(%program ((define val 50) (define base 20)) (+ 50 20))
+                res))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)
 (display " tests passed!") (newline)
 (display "=======================================================") (newline)
+

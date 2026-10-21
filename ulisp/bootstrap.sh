@@ -42,6 +42,7 @@ if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
     PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
 fi
 BOOT_BIN="$ULISP_DIR/bin/ulisp-boot"
+GOSH_BIN="$(command -v gosh 2>/dev/null || true)"
 
 check_asm_output() {
     local stage_name="$1"
@@ -75,9 +76,13 @@ run_stage() {
 
 if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ] && [ "$BUILD_DIR/scheme-stage1" -nt "$BUILD_DIR/ulisp_core.scm" ]; then
     echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
-elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
+elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ "${BOOTSTRAP_WITH_GOSH:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
     echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using native seed ($BOOT_BIN)..."
     run_stage "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s" "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm"
+    gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
+elif [ "${BOOTSTRAP_WITH_GOSH:-0}" = "1" ] && [ -n "$GOSH_BIN" ]; then
+    echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using Gauche ($GOSH_BIN)..."
+    run_stage "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
     gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
 else
     echo "[1/3] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."

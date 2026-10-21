@@ -53,6 +53,16 @@
             (string-set! res i (car cs))
             (loop (+ i 1) (cdr cs)))))))
 
+;;; Read the rest of a symbol whose leading '.' has already been consumed
+(define (ulisp-read-dot-symbol p)
+  (let loop ((acc (list #\.)))
+    (let ((next (port-peek-char p)))
+      (if (ulisp-is-delimiter? next)
+          (string->symbol (ulisp-chars->string (reverse acc)))
+          (begin
+            (port-read-char p)
+            (loop (cons next acc)))))))
+
 (define (port-read p)
   (let ((c (ulisp-skip-ws-port p)))
     (cond
@@ -70,10 +80,15 @@
               '())
              ((ulisp-char=? c2 #\.)
               (port-read-char p) ; consume '.'
-              (let ((cdr-val (port-read p)))
-                (ulisp-skip-ws-port p)
-                (port-read-char p) ; consume ')'
-                cdr-val))
+              (if (ulisp-is-delimiter? (port-peek-char p))
+                  ;; Lone '.': dotted pair tail
+                  (let ((cdr-val (port-read p)))
+                    (ulisp-skip-ws-port p)
+                    (port-read-char p) ; consume ')'
+                    cdr-val)
+                  ;; Token starting with '.' (e.g. the ellipsis '...')
+                  (let ((elem (ulisp-read-dot-symbol p)))
+                    (cons elem (read-list)))))
              (else
               (let ((elem (port-read p)))
                 (cons elem (read-list))))))))

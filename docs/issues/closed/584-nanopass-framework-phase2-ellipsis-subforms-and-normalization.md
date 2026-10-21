@@ -2,7 +2,8 @@
 ID: 584
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed
+完了日: 2026-10-21
 ---
 
 # [FEAT/ARCH] Nanopass Framework DSL Phase 2: エリップシス反復展開 (Ellipsis) とサブフォーム局所ハンドラ (in-context) の実装および正規化パス移行 (ID: 584)
@@ -62,8 +63,8 @@ Target Branch: `feat/584-nanopass-framework-phase2-ellipsis-subforms-and-normali
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `...`（エリップシス）による並行アンパックおよびリスト再構築が DSL 内で正しく動作すること
-- [ ] `in-context` / 複数非終端記号ハンドラが 1 つの `define-pass` 内で相互再帰的に機能すること
-- [ ] Pass 010, 025, 070 が Nanopass DSL で書き直され、手書き再帰ボイラープレートが大幅に削減されること
-- [ ] 全パス単体テスト（`make -C ulisp test_all_passes`）および 3-Stage Bootstrap 固定点検証（`make -C ulisp bootstrap_verify`）が 100% PASS すること
-- [ ] 相対パスのみを使用し、絶対パスが含まれないこと
+- [x] `...`（エリップシス）による並行アンパックおよびリスト再構築が DSL 内で正しく動作すること
+- [x] `in-context` / 複数非終端記号ハンドラが 1 つの `define-pass` 内で相互再帰的に機能すること
+- [x] Pass 010, 025, 070 が Nanopass DSL で書き直され、手書き再帰ボイラープレートが大幅に削減されること
+- [x] 全パス単体テスト（`make -C ulisp test_all_passes`）および 3-Stage Bootstrap 固定点検証（`make -C ulisp bootstrap_verify`）が 100% PASS すること
+- [x] 相対パスのみを使用し、絶対パスが含まれないこと

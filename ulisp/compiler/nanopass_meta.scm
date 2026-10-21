@@ -4,10 +4,13 @@
 ;;; =======================================================================
 
 ;;; Global language repository
-(define *nanopass-languages* '())
+(define *nanopass-languages* (cons '() '()))
 
 (define (nanopass-clear-languages!)
-  (set! *nanopass-languages* '()))
+  (set-car! *nanopass-languages* '()))
+
+(define (nanopass-get-languages)
+  (car *nanopass-languages*))
 
 ;;; Language Record Constructor
 ;;; name: symbol
@@ -34,16 +37,16 @@
 ;;; Registration & Lookup
 (define (nanopass-register-language! lang)
   (let ((name (nanopass-lang-name lang)))
-    (set! *nanopass-languages*
-          (cons (cons name lang)
-                (let loop ((rest *nanopass-languages*))
-                  (cond ((null? rest) '())
-                        ((eq? (caar rest) name) (cdr rest))
-                        (else (cons (car rest) (loop (cdr rest))))))))
+    (set-car! *nanopass-languages*
+              (cons (cons name lang)
+                    (let loop ((rest (car *nanopass-languages*)))
+                      (cond ((null? rest) '())
+                            ((eq? (caar rest) name) (cdr rest))
+                            (else (cons (car rest) (loop (cdr rest))))))))
     name))
 
 (define (nanopass-lookup-language name)
-  (let ((entry (assq name *nanopass-languages*)))
+  (let ((entry (assq name (car *nanopass-languages*))))
     (if entry
         (cdr entry)
         (error "nanopass-lookup-language: unknown language" name))))
@@ -66,7 +69,7 @@
                   (if (>= i s-len)
                       #t
                       (let ((ch (string-ref s i)))
-                        (if (or (char-numeric? ch) (char=? ch #\_) (char=? ch #\*))
+                        (if (or (and (char>=? ch #\0) (char<=? ch #\9)) (char=? ch #\_) (char=? ch #\*))
                             (suffix-check (+ i 1))
                             (loop (cdr prefs))))))
                 (loop (cdr prefs))))))))
@@ -103,7 +106,7 @@
 
 ;;; Terminal Derivation via `extends`
 (define (nanopass-derive-terminals parent-terms delta-clauses)
-  (let ((term-table (map (lambda (t) (cons (car t) (cadr t))) parent-terms)))
+  (let ((term-table-cell (cons (map (lambda (t) (cons (car t) (cadr t))) parent-terms) '())))
     (for-each
      (lambda (item)
        (cond
@@ -112,44 +115,45 @@
            (lambda (sub)
              (let* ((pred (car sub))
                     (vars (cadr sub))
-                    (existing (assq pred term-table)))
+                    (existing (assq pred (car term-table-cell))))
                (if existing
                    (set-cdr! existing (append (cdr existing) vars))
-                   (set! term-table (cons (cons pred vars) term-table)))))
+                   (set-car! term-table-cell (cons (cons pred vars) (car term-table-cell))))))
            (cdr item)))
          ((and (pair? item) (eq? (car item) '-))
           (for-each
            (lambda (sub)
              (let* ((pred (if (pair? sub) (car sub) sub)))
-               (set! term-table
-                     (let remove-loop ((ts term-table))
-                       (cond ((null? ts) '())
-                             ((eq? (caar ts) pred) (cdr ts))
-                             (else (cons (car ts) (remove-loop (cdr ts)))))))))
+               (set-car! term-table-cell
+                         (let remove-loop ((ts (car term-table-cell)))
+                           (cond ((null? ts) '())
+                                 ((eq? (caar ts) pred) (cdr ts))
+                                 (else (cons (car ts) (remove-loop (cdr ts)))))))))
            (cdr item)))
          ((and (pair? item) (symbol? (car item)))
           (let* ((pred (car item))
                  (vars (cadr item))
-                 (existing (assq pred term-table)))
+                 (existing (assq pred (car term-table-cell))))
             (if existing
                 (set-cdr! existing vars)
-                (set! term-table (cons (cons pred vars) term-table)))))))
+                (set-car! term-table-cell (cons (cons pred vars) (car term-table-cell))))))))
      delta-clauses)
-    (map (lambda (e) (list (car e) (cdr e))) (reverse term-table))))
+    (map (lambda (e) (list (car e) (cdr e))) (reverse (car term-table-cell)))))
 
 ;;; Language Derivation via `extends`
 ;;; Computes child language nonterminals and tracks removed production heads
 (define (nanopass-derive-nonterminals-and-removed parent-nts delta-clauses)
-  (let ((nt-table (map (lambda (nt)
-                         (cons (car nt) (cons (cadr nt) (caddr nt))))
-                       parent-nts))
-        (removed-heads '()))
+  (let ((nt-table-cell (cons (map (lambda (nt)
+                                    (cons (car nt) (cons (cadr nt) (caddr nt))))
+                                  parent-nts)
+                             '()))
+        (removed-heads-cell (cons '() '())))
     (for-each
      (lambda (clause)
        (let* ((nt-name (car clause))
               (meta-vars (cadr clause))
               (body-clauses (cddr clause))
-              (existing (assq nt-name nt-table)))
+              (existing (assq nt-name (car nt-table-cell))))
          (if existing
              (let ((current-prods (cddr existing))
                    (current-vars (cadr existing)))
@@ -171,7 +175,7 @@
                                (lambda (rm)
                                  (let ((c (nanopass-canonicalize-production rm)))
                                    (if (and (pair? c) (symbol? (car c)))
-                                       (set! removed-heads (cons (car c) removed-heads)))))
+                                       (set-car! removed-heads-cell (cons (car c) (car removed-heads-cell))))))
                                to-remove)
                               (loop (cdr rest)
                                     (let remove-loop ((ps prods))
@@ -194,12 +198,12 @@
                                          (loop (cdr rest) acc))
                                         (else
                                          (loop (cdr rest) (append acc (list item))))))))))
-               (set! nt-table (cons (cons nt-name (cons meta-vars prods)) nt-table))))))
+               (set-car! nt-table-cell (cons (cons nt-name (cons meta-vars prods)) (car nt-table-cell)))))))
      delta-clauses)
     (list (map (lambda (entry)
                  (list (car entry) (cadr entry) (cddr entry)))
-               (reverse nt-table))
-          removed-heads)))
+               (reverse (car nt-table-cell)))
+          (car removed-heads-cell))))
 
 (define (nanopass-derive-nonterminals parent-nts delta-clauses)
   (car (nanopass-derive-nonterminals-and-removed parent-nts delta-clauses)))
@@ -306,10 +310,14 @@
     (else #t)))
 
 ;;; AST Validation & Parser Engine
-(define (nanopass-ast-valid? lang-name expr . opt-nt)
-  (let* ((lang (nanopass-lookup-language lang-name))
-         (nt-name (if (pair? opt-nt) (car opt-nt) (nanopass-lang-entry lang))))
-    (nanopass-check-valid-node expr nt-name lang)))
+;;; NOTE: the self-hosted compiler has no rest-argument lambdas, so the
+;;; optional nonterminal is split into a separate fixed-arity entry point.
+(define (nanopass-ast-valid-nt? lang-name expr nt-name)
+  (nanopass-check-valid-node expr nt-name (nanopass-lookup-language lang-name)))
+
+(define (nanopass-ast-valid? lang-name expr)
+  (nanopass-ast-valid-nt? lang-name expr
+                          (nanopass-lang-entry (nanopass-lookup-language lang-name))))
 
 (define (nanopass-check-valid-node expr nt-name lang)
   ;; Check if expr is a list starting with an explicitly removed production head
@@ -421,14 +429,16 @@
     (else (equal? pat val))))
 
 ;;; Parser & Unparser Procs
-(define (nanopass-parse lang-name expr . opt-nt)
-  (let* ((nt-name (if (pair? opt-nt) (car opt-nt) (nanopass-lang-entry (nanopass-lookup-language lang-name))))
-         (is-valid? (nanopass-ast-valid? lang-name expr nt-name)))
-    (if is-valid?
-        expr
-        (error "nanopass-parse: invalid expression for language" lang-name expr))))
+(define (nanopass-parse-nt lang-name expr nt-name)
+  (if (nanopass-ast-valid-nt? lang-name expr nt-name)
+      expr
+      (error "nanopass-parse: invalid expression for language" lang-name expr)))
 
-(define (nanopass-unparse lang-name ir . opt-nt)
+(define (nanopass-parse lang-name expr)
+  (nanopass-parse-nt lang-name expr
+                     (nanopass-lang-entry (nanopass-lookup-language lang-name))))
+
+(define (nanopass-unparse lang-name ir)
   ir)
 
 ;;; S-Expression Reflection API
@@ -475,11 +485,161 @@
                          (loop (cdr ps) acc))
                         (else (loop (cdr ps) (cons (car ps) acc)))))))))
 
+(define (nanopass-proper-list? x)
+  (let loop ((cur x))
+    (cond
+      ((null? cur) #t)
+      ((pair? cur) (loop (cdr cur)))
+      (else #f))))
+
+;;; Helper sequence operations for ellipsis matching
+(define (nanopass-take lst n)
+  (let loop ((l lst) (i n) (acc '()))
+    (if (or (null? l) (not (pair? l)) (<= i 0))
+        (reverse acc)
+        (loop (cdr l) (- i 1) (cons (car l) acc)))))
+
+(define (nanopass-drop lst n)
+  (let loop ((l lst) (i n))
+    (if (or (null? l) (not (pair? l)) (<= i 0))
+        l
+        (loop (cdr l) (- i 1)))))
+
+(define (nanopass-tail-min-length rest)
+  (cond
+    ((null? rest) 0)
+    ((pair? rest)
+     (if (eq? (car rest) '...)
+         0
+         (+ 1 (nanopass-tail-min-length (cdr rest)))))
+    (else 0)))
+
+;;; Match a repeated pattern against an expression list via ellipsis (...)
+;;; Returns (cons #t env-alist) where each variable in item-pat maps to a list of values, or #f
+(define (nanopass-match-ellipsis item-pat expr-list recurse-fn)
+  (let ((vars (nanopass-extract-pattern-vars item-pat)))
+    (if (not (nanopass-proper-list? expr-list))
+        #f
+        (let loop ((es expr-list) (acc '()))
+          (if (null? es)
+              (cons #t
+                    (map (lambda (v)
+                           (cons v (map (lambda (env)
+                                          (let ((entry (assq v env)))
+                                            (if entry (cdr entry) #f)))
+                                        (reverse acc))))
+                         vars))
+              (let ((m (nanopass-match-pattern-inner item-pat (car es) recurse-fn)))
+                (if (not m)
+                    #f
+                    (loop (cdr es) (cons (cdr m) acc)))))))))
+
+
+;;; Helper to test if a symbol occurs anywhere in an expression tree
+(define (nanopass-expr-contains-symbol? expr sym)
+  (cond
+    ((eq? expr sym) #t)
+    ((pair? expr)
+     (or (nanopass-expr-contains-symbol? (car expr) sym)
+         (nanopass-expr-contains-symbol? (cdr expr) sym)))
+    (else #f)))
+
+(define (nanopass-map2 f l1 l2)
+  (let loop ((c1 l1) (c2 l2) (acc '()))
+    (if (or (null? c1) (null? c2))
+        (reverse acc)
+        (loop (cdr c1) (cdr c2) (cons (f (car c1) (car c2)) acc)))))
+
+(define (nanopass-map3 f l1 l2 l3)
+  (let loop ((c1 l1) (c2 l2) (c3 l3) (acc '()))
+    (if (or (null? c1) (null? c2) (null? c3))
+        (reverse acc)
+        (loop (cdr c1) (cdr c2) (cdr c3) (cons (f (car c1) (car c2) (car c3)) acc)))))
+
+(define (nanopass-build-map-expr proc-expr arg-vars)
+  (cond
+    ((= (length arg-vars) 1)
+     (list 'map proc-expr (car arg-vars)))
+    ((= (length arg-vars) 2)
+     (list 'nanopass-map2 proc-expr (car arg-vars) (cadr arg-vars)))
+    ((= (length arg-vars) 3)
+     (list 'nanopass-map3 proc-expr (car arg-vars) (cadr arg-vars) (caddr arg-vars)))
+    (else
+     (cons 'map (cons proc-expr arg-vars)))))
+
+;;; Expand quasiquote templates with ellipsis (...) splicing
+(define (nanopass-expand-qq tmpl vars depth)
+  (cond
+    ((not (pair? tmpl)) tmpl)
+    ((eq? (car tmpl) 'quasiquote)
+     (list 'quasiquote (nanopass-expand-qq (cadr tmpl) vars (+ depth 1))))
+    ((eq? (car tmpl) 'unquote)
+     (if (= depth 1)
+         (list 'unquote (nanopass-expand-template (cadr tmpl) vars))
+         (list 'unquote (nanopass-expand-qq (cadr tmpl) vars (- depth 1)))))
+    ((eq? (car tmpl) 'unquote-splicing)
+     (if (= depth 1)
+         (list 'unquote-splicing (nanopass-expand-template (cadr tmpl) vars))
+         (list 'unquote-splicing (nanopass-expand-qq (cadr tmpl) vars (- depth 1)))))
+    ((and (= depth 1) (pair? (cdr tmpl)) (eq? (cadr tmpl) '...))
+     ;; Splicing element at current list level: (item ... . rest)
+     (let* ((item (car tmpl))
+            (rest (cddr tmpl))
+            (expanded-rest (nanopass-expand-qq rest vars depth))
+            (matched-vars (filter (lambda (v) (nanopass-expr-contains-symbol? item v)) vars)))
+       (cond
+         ((and (pair? item) (eq? (car item) 'unquote))
+          (cons (list 'unquote-splicing (nanopass-expand-template (cadr item) vars))
+                expanded-rest))
+         ((not (null? matched-vars))
+          (let ((proc (list 'lambda matched-vars
+                            (list 'quasiquote (nanopass-expand-qq item vars depth)))))
+            (cons (list 'unquote-splicing (nanopass-build-map-expr proc matched-vars))
+                  expanded-rest)))
+         (else
+          (cons item (cons '... expanded-rest))))))
+    (else
+     (let ((head (car tmpl))
+           (tail (cdr tmpl)))
+       ;; Special check: if head is a list of the form (sub ...)
+       (if (and (= depth 1)
+                (pair? head)
+                (pair? (cdr head))
+                (eq? (cadr head) '...)
+                (null? (cddr head)))
+           (let* ((sub (car head))
+                  (matched-vars (filter (lambda (v) (nanopass-expr-contains-symbol? sub v)) vars)))
+             (if (not (null? matched-vars))
+                 (let ((proc (list 'lambda matched-vars
+                                   (list 'quasiquote (nanopass-expand-qq sub vars depth)))))
+                   (cons (list 'unquote (nanopass-build-map-expr proc matched-vars))
+                         (nanopass-expand-qq tail vars depth)))
+                 (cons (nanopass-expand-qq head vars depth)
+                       (nanopass-expand-qq tail vars depth))))
+           (cons (nanopass-expand-qq head vars depth)
+                 (nanopass-expand-qq tail vars depth)))))))
+
+;;; Output template expander: processes quasiquote and ellipsis expressions in rule bodies
+(define (nanopass-expand-template expr vars)
+  (cond
+    ((not (pair? expr)) expr)
+    ((eq? (car expr) 'quasiquote)
+     (list 'quasiquote (nanopass-expand-qq (cadr expr) vars 1)))
+    ((eq? (car expr) 'in-context)
+     (let ((args (cdr expr)))
+       (if (= (length args) 2)
+           (list (car args) (nanopass-expand-template (cadr args) vars))
+           (list 'nanopass-parse-nt (list 'quote (car args)) (nanopass-expand-template (caddr args) vars) (list 'quote (cadr args))))))
+    (else
+     (cons (nanopass-expand-template (car expr) vars)
+           (nanopass-expand-template (cdr expr) vars)))))
+
 ;;; Pattern Matching and Variable Binding for `define-pass`
 ;;; A pattern variable can be:
 ;;;   (unquote var)        -> binds var = val
 ;;;   (unquote (var))      -> catamorphism: binds var = (recurse-fn val)
 ;;;   _                    -> wildcard, binds nothing
+;;;   (item ... . rest)    -> ellipsis repetition: binds variables in item to lists of values
 ;;; Returns (cons #t env-alist) on match, #f on mismatch
 (define (nanopass-match-pattern-inner pat expr recurse-fn)
   (cond
@@ -509,6 +669,25 @@
             ((symbol? sub)
              (cons #t (list (cons sub expr))))
             (else #f))))
+       ;; Ellipsis: (item ... . rest)
+       ((and (pair? (cdr pat)) (eq? (cadr pat) '...))
+        (let* ((item (car pat))
+               (rest (cddr pat)))
+          (if (null? rest)
+              (nanopass-match-ellipsis item expr recurse-fn)
+              (let* ((k (nanopass-tail-min-length rest)))
+                (if (or (not (nanopass-proper-list? expr)) (< (length expr) k))
+                    #f
+                    (let* ((split-idx (- (length expr) k))
+                           (prefix (nanopass-take expr split-idx))
+                           (suffix (nanopass-drop expr split-idx))
+                           (m-pre (nanopass-match-ellipsis item prefix recurse-fn)))
+                      (if (not m-pre)
+                          #f
+                          (let ((m-suf (nanopass-match-pattern-inner rest suffix recurse-fn)))
+                            (if (not m-suf)
+                                #f
+                                (cons #t (append (cdr m-pre) (cdr m-suf))))))))))))
        (else
         (if (not (pair? expr))
             #f
@@ -528,6 +707,7 @@
 (define (nanopass-extract-pattern-vars pat)
   (cond
     ((eq? pat '_) '())
+    ((eq? pat '...) '())
     ((symbol? pat)
      (let ((s (symbol->string pat)))
        (if (and (> (string-length s) 1) (char=? (string-ref s 0) #\,))
@@ -558,12 +738,30 @@
                       (loop (cdr vars) (cons (cdr entry) vals))
                       (loop (cdr vars) (cons #f vals))))))))))
 
+;;; Manual `apply` for clause handlers (arity 0-8)
+(define (nanopass-apply-list proc vals)
+  (let ((n (length vals)))
+    (cond
+      ((= n 0) (proc))
+      ((= n 1) (proc (car vals)))
+      ((= n 2) (proc (car vals) (cadr vals)))
+      ((= n 3) (proc (car vals) (cadr vals) (caddr vals)))
+      ((= n 4) (proc (car vals) (cadr vals) (caddr vals) (cadddr vals)))
+      ((= n 5) (proc (car vals) (cadr vals) (caddr vals) (cadddr vals) (car (cddddr vals))))
+      ((= n 6) (proc (car vals) (cadr vals) (caddr vals) (cadddr vals) (car (cddddr vals))
+                     (cadr (cddddr vals))))
+      ((= n 7) (proc (car vals) (cadr vals) (caddr vals) (cadddr vals) (car (cddddr vals))
+                     (cadr (cddddr vals)) (caddr (cddddr vals))))
+      ((= n 8) (proc (car vals) (cadr vals) (caddr vals) (cadddr vals) (car (cddddr vals))
+                     (cadr (cddddr vals)) (caddr (cddddr vals)) (cadddr (cddddr vals))))
+      (else (error "nanopass-apply-list: too many pattern variables" n)))))
+
 ;;; Try matching clause and evaluate handler proc
 (define (nanopass-try-clause pat vars expr recurse-fn proc)
   (let ((vals (nanopass-match-clause pat expr vars recurse-fn)))
     (if (not vals)
         #f
-        (apply proc vals))))
+        (nanopass-apply-list proc vals))))
 
 ;;; Catamorphism Automatic Traversal Code Synthesizer
 ;;; Automatically traverses non-matching AST nodes recursively.
@@ -583,7 +781,11 @@
          ((begin)
           (cons 'begin (map recurse-fn (cdr ir))))
          ((lambda)
-          (cons 'lambda (cons (cadr ir) (map recurse-fn (cddr ir)))))
+          ;; Later passes expect a single-expression lambda body.
+          (list 'lambda (cadr ir)
+                (cond ((null? (cddr ir)) (list 'begin))
+                      ((null? (cdddr ir)) (recurse-fn (caddr ir)))
+                      (else (cons 'begin (map recurse-fn (cddr ir)))))))
          ((let)
           (if (symbol? (cadr ir))
               (list 'let (cadr ir)
@@ -613,5 +815,10 @@
                      (cadr ir))
                 (recurse-fn (caddr ir))))
          (else
-          ;; General function application
-          (cons (recurse-fn op) (map recurse-fn (cdr ir)))))))))
+          ;; General function application or compound form
+          (let loop ((cur (cdr ir)) (acc (list (recurse-fn op))))
+            (cond
+              ((null? cur) (reverse acc))
+              ((not (pair? cur)) (append (reverse acc) (recurse-fn cur)))
+              (else
+               (loop (cdr cur) (cons (recurse-fn (car cur)) acc)))))))))))

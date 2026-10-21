@@ -5,10 +5,12 @@
 ;;; =======================================================================
 
 (define (desugar-cond clauses)
-  (if (null? clauses)
+  (if (or (null? clauses) (not (pair? clauses)))
       #f
       (let ((c (car clauses)))
         (cond
+          ((not (pair? c))
+           (desugar-cond (cdr clauses)))
           ((eq? (car c) 'else)
            (cons 'begin (cdr c)))
           ((and (pair? (cdr c)) (eq? (cadr c) '=>))
@@ -25,6 +27,8 @@
 (define (desugar-case-test k-var datum-list)
   (cond
     ((null? datum-list) #f)
+    ((not (pair? datum-list))
+     (list 'eqv? k-var (list 'quote datum-list)))
     ((null? (cdr datum-list))
      (list 'eqv? k-var (list 'quote (car datum-list))))
     (else
@@ -34,18 +38,21 @@
   (let ((k-var (unique-symbol "case_key_")))
     (list 'let (list (list k-var key))
           (let loop ((cls clauses))
-            (if (null? cls)
+            (if (or (null? cls) (not (pair? cls)))
                 #f
                 (let ((c (car cls)))
-                  (if (eq? (car c) 'else)
-                      (cons 'begin (cdr c))
-                      (list 'if (desugar-case-test k-var (car c))
-                            (cons 'begin (cdr c))
-                            (loop (cdr cls))))))))))
+                  (if (not (pair? c))
+                      (loop (cdr cls))
+                      (if (eq? (car c) 'else)
+                          (cons 'begin (cdr c))
+                          (list 'if (desugar-case-test k-var (car c))
+                                (cons 'begin (cdr c))
+                                (loop (cdr cls)))))))))))
 
 (define (desugar-and args)
   (cond
     ((null? args) #t)
+    ((not (pair? args)) args)
     ((null? (cdr args)) (car args))
     (else
      (list 'if (car args) (desugar-and (cdr args)) #f))))
@@ -53,6 +60,7 @@
 (define (desugar-or args)
   (cond
     ((null? args) #f)
+    ((not (pair? args)) args)
     ((null? (cdr args)) (car args))
     (else
      (let ((tmp (unique-symbol "or_tmp_")))
@@ -62,23 +70,24 @@
 (define (desugar-chain-cmp op args)
   (cond
     ((null? args) #t)
+    ((not (pair? args)) #t)
     ((null? (cdr args)) #t)
     ((null? (cddr args))
      (cons op (map desugar-all args)))
     (else
      (let* ((vars (map (lambda (a) (unique-symbol "cmp_")) args))
             (bindings (let b-loop ((vs vars) (as args))
-                        (if (null? vs)
+                        (if (or (null? vs) (not (pair? vs)))
                             '()
                             (cons (list (car vs) (desugar-all (car as)))
                                   (b-loop (cdr vs) (cdr as))))))
             (pairs (let loop ((vs vars))
-                     (if (null? (cdr vs))
+                     (if (or (null? (cdr vs)) (not (pair? (cdr vs))))
                          '()
                          (cons (list op (car vs) (cadr vs))
                                (loop (cdr vs)))))))
-       (list 'let bindings
-             (cons 'and pairs))))))
+        (list 'let bindings
+              (cons 'and pairs))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Conditionals
