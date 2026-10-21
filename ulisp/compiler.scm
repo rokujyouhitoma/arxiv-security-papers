@@ -2209,6 +2209,49 @@
                                    lib-aliases
                                    (cons f out-forms))))))))))
 ;;; =======================================================================
+;;; ULisp Compiler Pass 015: Nanopass DSL Procedural Expander
+;;; Conforms to DSN-33 Architecture Specification & Issue #587
+;;;
+;;; Pre-emptively expands Nanopass DSL forms (define-language, define-pass,
+;;; define-parser, define-unparser) into canonical Scheme definitions
+;;; before syntax-rules macro expansion (Pass 020). Also filters out
+;;; host-only define-macro declarations to keep downstream passes pure.
+;;; =======================================================================
+
+(define (expand-dsl-forms forms)
+  (let loop ((fs forms) (res '()))
+    (if (null? fs)
+        (reverse res)
+        (let ((f (car fs)))
+          (cond
+            ((and (pair? f) (eq? (car f) 'begin))
+             (loop (append (cdr f) (cdr fs)) res))
+            ((and (pair? f) (eq? (car f) 'define-macro))
+             ;; Discard host-only macro definitions in compiler pipeline
+             (loop (cdr fs) res))
+            ((and (pair? f) (eq? (car f) 'define-language))
+             (let ((expanded (nanopass-expand-define-language f)))
+               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
+                                 (cdr expanded)
+                                 (list expanded))
+                             (cdr fs))
+                     res)))
+            ((and (pair? f) (eq? (car f) 'define-pass))
+             (let ((expanded (nanopass-expand-define-pass f)))
+               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
+                                 (cdr expanded)
+                                 (list expanded))
+                             (cdr fs))
+                     res)))
+            ((and (pair? f) (eq? (car f) 'define-parser))
+             (let ((expanded (nanopass-expand-define-parser f)))
+               (loop (cons expanded (cdr fs)) res)))
+            ((and (pair? f) (eq? (car f) 'define-unparser))
+             (let ((expanded (nanopass-expand-define-unparser f)))
+               (loop (cons expanded (cdr fs)) res)))
+            (else
+             (loop (cdr fs) (cons f res))))))))
+;;; =======================================================================
 ;;; ULisp Compiler Pass 0b: Hygienic syntax-rules Macro Expander
 ;;; Conforms to DSN-33 Architecture Specification & Issue #533 (R7RS 4.3)
 ;;;
@@ -2593,13 +2636,7 @@
     (cond
       ((not (pair? expanded))
        expanded)
-      ((or (eq? (car expanded) (quote quote))
-           ;; Nanopass DSL forms carry grammar/patterns ('...', dotted ., ,x'),
-           ;; not expressions; they are expanded later by rewrite-top-level.
-           (eq? (car expanded) 'define-language)
-           (eq? (car expanded) 'define-pass)
-           (eq? (car expanded) 'define-parser)
-           (eq? (car expanded) 'define-unparser))
+      ((eq? (car expanded) (quote quote))
        expanded)
       ((eq? (car expanded) (quote case))
        (if (and (pair? (cdr expanded)) (pair? (cddr expanded)))
@@ -2647,10 +2684,6 @@
         (reverse res)
         (let ((f (car fs)))
           (cond
-            ((and (pair? f) (eq? (car f) 'define-macro))
-             ;; define-macro is host-interpreter-only (nanopass DSL entry points);
-             ;; the compiler expands those forms itself in rewrite-top-level.
-             (loop (cdr fs) macro-table res))
             ((macro-def? f)
              (let* ((macro-desc (parse-syntax-rules-def f))
                     (name (macro-name macro-desc)))
@@ -2737,29 +2770,6 @@
           (cond
             ((and (pair? f) (eq? (car f) 'begin))
              (loop (append (cdr f) (cdr fs)) defs bodies))
-            ((and (pair? f) (eq? (car f) 'define-macro))
-             ;; Ignore host macro definitions
-             (loop (cdr fs) defs bodies))
-            ((and (pair? f) (eq? (car f) 'define-language))
-             (let ((expanded (nanopass-expand-define-language f)))
-               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
-                                 (cdr expanded)
-                                 (list expanded))
-                             (cdr fs))
-                     defs bodies)))
-            ((and (pair? f) (eq? (car f) 'define-pass))
-             (let ((expanded (nanopass-expand-define-pass f)))
-               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
-                                 (cdr expanded)
-                                 (list expanded))
-                             (cdr fs))
-                     defs bodies)))
-            ((and (pair? f) (eq? (car f) 'define-parser))
-             (let ((expanded (nanopass-expand-define-parser f)))
-               (loop (cons expanded (cdr fs)) defs bodies)))
-            ((and (pair? f) (eq? (car f) 'define-unparser))
-             (let ((expanded (nanopass-expand-define-unparser f)))
-               (loop (cons expanded (cdr fs)) defs bodies)))
             ((and (pair? f) (eq? (car f) 'define-record-type))
              (let ((expanded-defs (expand-define-record-type f)))
                (loop (append expanded-defs (cdr fs)) defs bodies)))
@@ -12720,7 +12730,8 @@
             (set-verifier-strict! #t))))
   (if (not (null? forms))
       (let* ((ast010     (desugar-libraries-and-imports forms))
-             (ast020     (expand-macros-in-forms ast010))
+             (ast015     (expand-dsl-forms ast010))
+             (ast020     (expand-macros-in-forms ast015))
              (ast025     (rewrite-top-level ast020))
              (ast030     (desugar-all ast025))
              (_v030      (if verify-mode (verify-pass-output 'desugar ast030) #t))

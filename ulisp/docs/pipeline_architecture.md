@@ -13,6 +13,9 @@
       ▼ Pass 010: desugar-libraries-and-imports (passes/010_library.scm)
 [R7RS Libraries Desugared]
       │
+      ▼ Pass 015: expand-dsl-forms (passes/015_dsl_expander.scm - Issue #587)
+[Nanopass DSL Expanded S-expressions]
+      │
       ▼ Pass 020: expand-macros-in-forms (passes/020_macro_expander.scm)
 [Macro-Expanded S-expressions]
       │
@@ -71,6 +74,10 @@
 
 ### Pass 010: R7RS ライブラリ構文脱糖 (`passes/010_library.scm`)
 - **責務**: `define-library`, `import`, `export` の解析と静的名前空間プレフィックス化。
+
+### Pass 015: Nanopass DSL 手続き型展開器 (`passes/015_dsl_expander.scm` - Issue #587)
+- **責務**: `define-language`, `define-pass`, `define-parser`, `define-unparser` の手続き型展開、およびホスト専用 `define-macro` の除去。
+- **不変条件**: 本パス通過後、DSL 構文およびホスト専用マクロはすべて標準 Scheme 構文（`define`, `lambda` 等）へ展開され、下流のマクロ展開器（Pass 020）へ純粋な式列として渡される。
 
 ### Pass 020: 衛生的マクロ展開器 (`passes/020_macro_expander.scm`)
 - **責務**: `define-syntax` / `syntax-rules` によるコンパイル時マクロ定義の評価と AST 展開。

@@ -383,13 +383,7 @@
     (cond
       ((not (pair? expanded))
        expanded)
-      ((or (eq? (car expanded) (quote quote))
-           ;; Nanopass DSL forms carry grammar/patterns ('...', dotted ., ,x'),
-           ;; not expressions; they are expanded later by rewrite-top-level.
-           (eq? (car expanded) 'define-language)
-           (eq? (car expanded) 'define-pass)
-           (eq? (car expanded) 'define-parser)
-           (eq? (car expanded) 'define-unparser))
+      ((eq? (car expanded) (quote quote))
        expanded)
       ((eq? (car expanded) (quote case))
        (if (and (pair? (cdr expanded)) (pair? (cddr expanded)))
@@ -437,10 +431,6 @@
         (reverse res)
         (let ((f (car fs)))
           (cond
-            ((and (pair? f) (eq? (car f) 'define-macro))
-             ;; define-macro is host-interpreter-only (nanopass DSL entry points);
-             ;; the compiler expands those forms itself in rewrite-top-level.
-             (loop (cdr fs) macro-table res))
             ((macro-def? f)
              (let* ((macro-desc (parse-syntax-rules-def f))
                     (name (macro-name macro-desc)))
